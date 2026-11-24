@@ -1,4 +1,4 @@
-//! (kuna `vectorabi`) The SysV x86-64 vector-register calling convention.
+//! (unlace `vectorabi`) The SysV x86-64 vector-register calling convention.
 //!
 //! The vendored `x86-64-gcc.cspec` describes XMM0-7 only as 8-byte float slots
 //! (`XMMn_Qa`), so a 16-byte `__m128`, a 32-byte `__m256` or a 64-byte `__m512`
@@ -46,7 +46,7 @@ fn add_vectors(list: &mut ParamListStandard, manager: &AddrSpaceManager, limit: 
                 list.get_entry(),
                 manager,
             ) {
-                entry.kuna_whole_register(slot.is_first_in_class());
+                entry.unlace_whole_register(slot.is_first_in_class());
                 list.push_entry(entry);
             }
         }
@@ -66,6 +66,6 @@ pub fn model(model: &Rc<ProtoModel>, manager: &AddrSpaceManager) -> Rc<ProtoMode
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.vectorabi_model = Some(model);
 }

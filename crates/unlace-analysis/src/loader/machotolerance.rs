@@ -1,4 +1,4 @@
-//! (kuna) Mach-O load tolerance: a segment or section that claims bytes past the
+//! (unlace) Mach-O load tolerance: a segment or section that claims bytes past the
 //! end of the file, and an image whose code is still FairPlay-encrypted.
 //!
 //! `object` reads a segment's file range eagerly when the loader maps it, so a

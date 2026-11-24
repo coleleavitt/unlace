@@ -6,12 +6,12 @@
 //! These are PROTOCOL ids: the numbers must match upstream Ghidra exactly
 //! for wire compatibility (the Java side dispatches queries on the numeric
 //! element id, `DecompileProcess.java` query switch).  They therefore use
-//! the upstream numbers, NOT the kuna-invented 4000+ range.
+//! the upstream numbers, NOT the unlace-invented 4000+ range.
 //!
 //! Cross-checked against the Java tables (`ElementId.java:371-427,433-440`):
 //! every number agrees.  One name skew exists: id 255 is named
 //! `"command_getstringdata"` in C++ but `"command_getstring"` in Java —
-//! only the number travels on the wire, and kuna ports the C++ name.
+//! only the number travels on the wire, and unlace ports the C++ name.
 //!
 //! unlace-decomp already owns the neighboring signature ids 258-260, 263,
 //! 265-267, 269 (`unlace-decomp/src/infra/signature.rs`) with upstream
@@ -35,7 +35,7 @@ pub const ELEM_DOC: ElementId = ElementId::new("doc", 229);
 /// Marshaling element \<unimpl> — the getPcode response for an instruction
 /// the host cannot translate (C++ `ELEM_UNIMPL`, `decompiler/cpp/op.cc:22`).
 ///
-/// kuna's `ELEM_INST` (id 98) / `ELEM_OP` (id 27) live in unlace-decomp /
+/// unlace's `ELEM_INST` (id 98) / `ELEM_OP` (id 27) live in unlace-decomp /
 /// unlace-sleigh; only `ELEM_UNIMPL` is missing, and `GhidraTranslate` compares
 /// it by numeric id alone (the packed decoder returns raw ids from
 /// `open_element`), so it is defined here rather than pulled from another
@@ -123,7 +123,7 @@ pub const ELEM_SIGSETTINGS: ElementId = ElementId::new("sigsettings", 268);
 // ATTRIB_UNIQBASE=46) — with ONE exception:
 
 /// Marshaling attribute "maxsize" (upstream `fspec.cc:27`, id 120), used by
-/// the getStringData query.  kuna's port of this id lives in
+/// the getStringData query.  unlace's port of this id lives in
 /// `unlace-middle/src/spec/modelrules.rs`, which phase 1 deliberately
 /// does not depend on; the constant is duplicated here with the same
 /// upstream number.  TODO(phase-2): drop this duplicate once unlace-ghidra

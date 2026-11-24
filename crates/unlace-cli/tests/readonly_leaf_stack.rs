@@ -74,7 +74,7 @@ fn conditional_store_remains_associated_with_its_return_load() {
         String::from_utf8_lossy(&output.stderr)
     );
     let (body, err, status) =
-        common::run_kuna(&["decompile", binary.to_str().unwrap(), "frame_choice"]);
+        common::run_unlace(&["decompile", binary.to_str().unwrap(), "frame_choice"]);
     assert_eq!(status, 0, "{err}");
     assert!(body.contains("0x11"), "{body}");
     let code = format!(
@@ -133,7 +133,7 @@ fn conditional_store_remains_associated_with_its_return_load() {
                 .success()
         );
         let (body, err, status) =
-            common::run_kuna(&["decompile", binary.to_str().unwrap(), "frame_choice"]);
+            common::run_unlace(&["decompile", binary.to_str().unwrap(), "frame_choice"]);
         assert_eq!(status, 0, "{err}");
         assert!(
             !body.contains("0x11"),

@@ -62,7 +62,7 @@ fn bootstrap_aggressive() -> ConsoleProgram {
         .expect("bootstrap fixture with built processor specs");
     for opt in ["listing", "fast_funcdisc", "funcstart_patterns"] {
         prog.arch_mut()
-            .set_kuna_option(opt, "on")
+            .set_unlace_option(opt, "on")
             .expect("the discovery gate flips on");
     }
     prog.commit_pending_analysis()

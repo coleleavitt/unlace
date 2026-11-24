@@ -3,7 +3,7 @@
 //! These pin the predicate on hand-built summaries: what a complete probe is
 //! allowed to prove, and every way it must fail closed. The end-to-end witness
 //! -- an i386 PIE whose get-PC thunk ate a live argument -- lives in
-//! `tests/stages/kuna-calleepreserves.toml` and `tests/cli/get-pc-helper-loses.json`.
+//! `tests/stages/unlace-calleepreserves.toml` and `tests/cli/get-pc-helper-loses.json`.
 
 use super::*;
 use crate::rustabi::FuncdataRustabiExt;
@@ -109,7 +109,7 @@ fn a_complete_probe_proves_an_unwritten_register_preserved() {
     let (fc, entry) = build_call(&mut fd, 0x2000);
     let ram = space(&fd, "ram").get_index();
     // The get-PC thunk writes EBX (here 0x10) and nothing else.
-    fd.kuna_set_callee_ret_writes(
+    fd.unlace_set_callee_ret_writes(
         &entry,
         Rc::new(CalleeReturnWrites::from_parts(
             vec![(ram, 0x10, 4)],
@@ -137,7 +137,7 @@ fn an_incomplete_or_missing_probe_narrows_nothing() {
         !callee_preserves_range(&fd, &fc, &edx, 4),
         "no probe recorded"
     );
-    fd.kuna_set_callee_ret_writes(
+    fd.unlace_set_callee_ret_writes(
         &entry,
         Rc::new(CalleeReturnWrites::from_parts(
             Vec::new(),
@@ -158,7 +158,7 @@ fn an_incomplete_or_missing_probe_narrows_nothing() {
 fn a_stack_range_is_never_narrowed() {
     let mut fd = build_fd();
     let (fc, entry) = build_call(&mut fd, 0x2000);
-    fd.kuna_set_callee_ret_writes(
+    fd.unlace_set_callee_ret_writes(
         &entry,
         Rc::new(CalleeReturnWrites::from_parts(
             vec![(space(&fd, "ram").get_index(), 0x10, 4)],
@@ -176,7 +176,7 @@ fn a_stack_range_is_never_narrowed() {
 fn an_explicit_effect_override_wins() {
     let mut fd = build_fd();
     let (mut fc, entry) = build_call(&mut fd, 0x2000);
-    fd.kuna_set_callee_ret_writes(
+    fd.unlace_set_callee_ret_writes(
         &entry,
         Rc::new(CalleeReturnWrites::from_parts(
             vec![(space(&fd, "ram").get_index(), 0x10, 4)],
@@ -216,7 +216,7 @@ fn a_body_that_departs_from_nothing_narrows_nothing() {
     let ram = space(&fd, "ram").get_index();
     // ESP (0x20) is not in the convention's effect list at all, and neither is
     // EAX (0x00) -- the return register a bare `ret` leaves alone.
-    fd.kuna_set_callee_ret_writes(
+    fd.unlace_set_callee_ret_writes(
         &entry,
         Rc::new(CalleeReturnWrites::from_parts(
             vec![(ram, 0x20, 4), (ram, 0x00, 4)],
@@ -274,12 +274,12 @@ fn a_mode_switched_walk_keeps_no_argument_register() {
         || CalleeReturnWrites::from_parts(vec![(ram.get_index(), 0x10, 4)], Vec::new(), true);
     let argument = Address::new(Rc::clone(&ram), 0x08);
     let scratch = Address::new(Rc::clone(&ram), 0x0c);
-    fd.kuna_set_callee_ret_writes(&entry, Rc::new(body()));
+    fd.unlace_set_callee_ret_writes(&entry, Rc::new(body()));
     assert!(
         callee_preserves_range(&fd, &fc, &argument, 4),
         "a walk that needed no switch"
     );
-    fd.kuna_set_callee_ret_writes(&entry, Rc::new(body().through_a_mode_switch()));
+    fd.unlace_set_callee_ret_writes(&entry, Rc::new(body().through_a_mode_switch()));
     assert!(!callee_preserves_range(&fd, &fc, &argument, 4));
     assert!(callee_preserves_range(&fd, &fc, &scratch, 4));
 }
@@ -291,7 +291,7 @@ fn the_program_counter_a_return_writes_is_no_departure() {
     let mut fd = build_fd();
     let (fc, entry) = build_call(&mut fd, 0x2000);
     let ram = space(&fd, "ram").get_index();
-    fd.kuna_set_callee_ret_writes(
+    fd.unlace_set_callee_ret_writes(
         &entry,
         Rc::new(
             CalleeReturnWrites::from_parts(vec![(ram, 0x10, 4)], Vec::new(), true)

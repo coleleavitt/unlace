@@ -9,7 +9,7 @@ fn boolean_conversions_preserve_narrowing_and_single_call_evaluation() {
     if process::optional_output(Command::new("cc").arg("--version")).is_none() {
         return;
     }
-    let kuna = unlace_base::env::var_os("UNLACE_TEST_BIN")
+    let unlace = unlace_base::env::var_os("UNLACE_TEST_BIN")
         .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let declarations = [
         "prototype as_unsigned8 bool as_unsigned8(uint1 value)",
@@ -22,7 +22,7 @@ fn boolean_conversions_preserve_narrowing_and_single_call_evaluation() {
     ];
     let names = "as_unsigned8,as_signed8,masked8,call_unsigned,call_signed";
     let bodies = |language: &str| {
-        let mut command = Command::new(&kuna);
+        let mut command = Command::new(&unlace);
         command.args([
             "decompile-all",
             &common::fixture("rust_integer_conversions_x86_64"),

@@ -452,7 +452,7 @@ fn ppc32_pic_recovery_leaves_default_fde_filtering_alone() {
     let inventories: Vec<String> = ["off", "on", "abi"]
         .iter()
         .map(|mode| {
-            let (out, err, status) = common::run_kuna(&[
+            let (out, err, status) = common::run_unlace(&[
                 "functions",
                 path.to_str().unwrap(),
                 "--option",
@@ -679,7 +679,7 @@ fn ppc32_default_unwind_retains_the_pc_read_body() {
     bytes[frame + 32..frame + 36].copy_from_slice(&f.word(36));
     let path = common::scratch_file("ppc32-unwind-default", "so");
     std::fs::write(&path, bytes).unwrap();
-    let (out, err, status) = common::run_kuna(&[
+    let (out, err, status) = common::run_unlace(&[
         "decompile-all",
         path.to_str().unwrap(),
         "--mode",

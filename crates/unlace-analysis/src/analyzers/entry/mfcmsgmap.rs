@@ -1,4 +1,4 @@
-//! (kuna `mfcmsgmap`) MFC message-map handlers as function entries (P1
+//! (unlace `mfcmsgmap`) MFC message-map handlers as function entries (P1
 //! code/data partition), on 32-bit PE images.
 //!
 //! An MFC window class routes Windows messages through a static message map:
@@ -34,7 +34,7 @@ const ENTRY: u32 = 24;
 /// The most entries one map is read for.
 const MAX_ENTRIES: u32 = 4096;
 
-/// (kuna) The MFC message-map pass (`mfcmsgmap`), gated at the commit.
+/// (unlace) The MFC message-map pass (`mfcmsgmap`), gated at the commit.
 pub struct MfcMsgMapPass;
 
 impl AnalysisPass for MfcMsgMapPass {

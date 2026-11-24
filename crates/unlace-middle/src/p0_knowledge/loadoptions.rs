@@ -1,4 +1,4 @@
-//! (kuna) Load-time options: the settings the loader, the analysis tier and the
+//! (unlace) Load-time options: the settings the loader, the analysis tier and the
 //! architecture build read before any `option` command can run.
 //!
 //! A caller fills a [`LoadOptions`] and passes it to a bootstrap
@@ -211,7 +211,7 @@ impl LoadOptions {
     }
 
     /// Write the named option's value to the environment variable a later
-    /// `load file` in this process reads. `Architecture::set_kuna_option`
+    /// `load file` in this process reads. `Architecture::set_unlace_option`
     /// already does this for the option it sets; this serves a caller that
     /// changed the options through `Architecture::load_options_mut`. A load
     /// with explicit options never needs it. A name that is not a load-time

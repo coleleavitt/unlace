@@ -1071,7 +1071,7 @@ fn check_abi_tar_helper(summarized: bool) {
         );
         let path = common::scratch_file("ppc32-abi-tar", "elf");
         std::fs::write(&path, f.bytes()).unwrap();
-        let (code, err, status) = common::run_kuna(&[
+        let (code, err, status) = common::run_unlace(&[
             "decompile",
             path.to_str().unwrap(),
             "check",
@@ -1194,7 +1194,7 @@ fn abi_and_on_agree_on_which_imports_never_return() {
             let path = common::scratch_file("ppc32-noreturn-agreement", "elf");
             std::fs::write(&path, f.bytes()).unwrap();
             for mode in ["on", "abi"] {
-                let (code, err, status) = common::run_kuna(&[
+                let (code, err, status) = common::run_unlace(&[
                     "decompile",
                     path.to_str().unwrap(),
                     "check",

@@ -75,22 +75,22 @@ fn bootstrap(aif: &str) -> unlace_console::engine::ConsoleProgram {
     let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
     prog.arch_mut()
-        .set_kuna_option("listing", "on")
+        .set_unlace_option("listing", "on")
         .expect("listing flips on");
     prog.arch_mut()
-        .set_kuna_option("funcstart_patterns", "on")
+        .set_unlace_option("funcstart_patterns", "on")
         .expect("funcstart_patterns flips on");
     prog.arch_mut()
-        .set_kuna_option("aif", aif)
+        .set_unlace_option("aif", aif)
         .expect("aif takes its value");
     // `aifpoolslide` (default-on) moves the phantom this file pins onto the real
     // function by itself; it is pinned off so the two passes isolate the cursor.
     prog.arch_mut()
-        .set_kuna_option("aifpoolslide", "off")
+        .set_unlace_option("aifpoolslide", "off")
         .expect("aifpoolslide flips off");
     // `poolentry` (default-on) retires the same phantom; pinned off for the same reason.
     prog.arch_mut()
-        .set_kuna_option("poolentry", "off")
+        .set_unlace_option("poolentry", "off")
         .expect("poolentry flips off");
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");

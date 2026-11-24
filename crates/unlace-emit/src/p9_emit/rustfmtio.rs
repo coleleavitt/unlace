@@ -78,13 +78,13 @@ pub static WITH_SIGNED_RESULT: OpToken = OpToken {
 #[doc(hidden)]
 pub fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
     if !arch
-        .kuna_options
+        .unlace_options
         .get::<crate::rustfmt::RustFmtMode>()
         .writers()
         || arch.source_lang() != crate::sourcelang::SourceLang::Rust
         || arch.rustc_stable_version != Some((1, 93, 1))
         || arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::rustfmtio::WriterProfiles>()
             .is_empty()
     {
@@ -96,7 +96,7 @@ pub fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
     }
     let spec = fd.get_call_specs(fd.get_call_specs_index(id)?);
     let profile = arch
-        .kuna_tables
+        .unlace_tables
         .get::<crate::rustfmtio::WriterProfiles>()
         .get(&spec.get_entry_address().get_offset())?;
     let output = fd.vbank().get(call.get_out()?)?;
@@ -243,7 +243,7 @@ pub fn push_writer(
     ));
 }
 
-/// (kuna `rustfmtio`) The image's `io::Write` writer profiles, by address; an
+/// (unlace `rustfmtio`) The image's `io::Write` writer profiles, by address; an
 /// [`ArchTable`](crate::archstate::ArchTable) on the architecture.
 pub type WriterProfiles = std::collections::BTreeMap<u64, WriterProfile>;
-crate::kuna_arch_table!(WriterProfiles);
+crate::unlace_arch_table!(WriterProfiles);

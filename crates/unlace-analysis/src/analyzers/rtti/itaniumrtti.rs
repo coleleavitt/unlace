@@ -1,4 +1,4 @@
-//! (kuna, NOVEL) S1 Itanium (GCC/Clang) RTTI + vtable recovery — the capability
+//! (unlace, NOVEL) S1 Itanium (GCC/Clang) RTTI + vtable recovery — the capability
 //! **Ghidra does not have at all**.
 //!
 //! Ghidra's `RttiAnalyzer` is a *Microsoft*-PE analyzer; on a GCC/Clang C++ binary
@@ -7,7 +7,7 @@
 //! `RTTIGccClassRecoverer`), never run by default. Measured on a stripped
 //! `g++ -O0` probe, Ghidra resolves the `Shape` vtable to `DAT_00107a80`. IDA Pro
 //! *does* reconstruct `_ZTV6Widget` / `_ZTI6Widget` / `_ZTS8Drawable` from
-//! `.rodata` + `.data.rel.ro` alone, and this pass is the kuna analog of that
+//! `.rodata` + `.data.rel.ro` alone, and this pass is the unlace analog of that
 //! behaviour, built against the Itanium C++ ABI rather than a port of either tool.
 //!
 //! # The graph (Itanium C++ ABI §2.9.5, §2.5.2)
@@ -929,7 +929,7 @@ fn emit(typeinfos: &[TypeInfo], subs: &[SubVtable], rk: &RefKind, out: &mut Anal
 /// class still nests under its namespace scope) but the kind suffix is joined with
 /// `_`, not `::`.
 ///
-/// kuna's scope splitter splits a symbol name on every `::` and the C printer emits
+/// unlace's scope splitter splits a symbol name on every `::` and the C printer emits
 /// a global by its LEAF name, so `Shape::vptr` and `Circle::vptr` would both render
 /// as a bare `vptr` at the vptr store that is this recovery's most visible use site.
 /// Joining with `_` puts the class in the leaf — `Shape_vptr`, `leveldb::Env_vtable`
@@ -1064,7 +1064,7 @@ fn ancestors_of(addr: u64, by_addr: &HashMap<u64, &TypeInfo>) -> HashSet<u64> {
 /// Turn a demangled class name into a `::`-qualified chain of C identifiers, keeping
 /// **distinct classes distinct**.
 ///
-/// kuna's scope splitter splits a symbol name on every `::` and each component must
+/// unlace's scope splitter splits a symbol name on every `::` and each component must
 /// be a legal identifier, so the raw demangled text cannot be used as-is. The obvious
 /// reduction — the module-wide [`strip_bracket_groups`](crate::demangle) that
 /// `demangle_name` applies — is wrong *here*: `Vec<int>` and `Vec<double>` are two

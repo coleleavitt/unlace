@@ -1,6 +1,6 @@
 {
  "opportunity": "At -O0 each C local has its own spill slot. The dataflow folds the stored value into its readers, so framelayout reports the emptied slot from an early pass as the width-only undefinedN while the C body prints the value as char * (or FILE *, passwd *, ...). 805 of the 1,625 ground-truth char * variables Binary Ninja gets and kuna missed on the campaign's 444 slices were such slots.",
- "test_name": "kuna-console verify_slotptr (two-pass e2e over every function of fauxware) + 6 unit tests in slotptr/tests.rs + the tests/cli probe pair slotptr-types-a-spilled-string-slot{,-option-off}",
+ "test_name": "console verify_slotptr (two-pass e2e over every function of fauxware) + 6 unit tests in slotptr/tests.rs + the tests/cli probe pair slotptr-types-a-spilled-string-slot{,-option-off}",
  "binary": "decompiler/crates/kuna-analysis/tests/fixtures/fauxware",
  "selector": "authenticate",
  "func_addr": "0x400664",
@@ -252,8 +252,8 @@
   "decompiler/crates/kuna-decomp/src/substrate/context.rs",
   "decompiler/crates/kuna-decomp/src/infra/architecture.rs",
   "decompiler/crates/kuna-decomp/phases.toml",
-  "decompiler/crates/kuna-console/tests/verify_slotptr.rs",
-  "decompiler/crates/kuna-console/tests/verify_framelayout.rs",
+  "decompiler/crates/console/tests/verify_slotptr.rs",
+  "decompiler/crates/console/tests/verify_framelayout.rs",
   "tests/cli/slotptr-types-a-spilled-string-slot.json",
   "tests/cli/slotptr-types-a-spilled-string-slot-option-off.json",
   "docs/spec/06-variables-and-merge.md"

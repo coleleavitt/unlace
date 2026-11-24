@@ -1,0 +1,97 @@
+# kuna `dirtypool`, `latecse`, `implweight` (all default off).  dirtypool
+# lets a repeated rule-pool sweep visit only the ops near the previous
+# sweep's rewrites (a speed option: lua -O0 decompiles 2.5x faster);
+# latecse merges identical pure ops reading one varnode once the rules
+# settle; implweight N lets an expression read by more than two ops print
+# inline while its terms times its readers is at most N.
+#
+# Stage / sub-stage: P3 "simplification-quiescence" (dirtypool, latecse),
+# P6 "variable-merging" (implweight).
+#
+# The bytes are the gcc build of
+# crates/unlace-analysis/tests/fixtures/gotonext.c (see
+# gotonext.xml).  Pass 1 is the default; pass 2 turns all three on and
+# must print the same switch arms, division and loop.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x401010', name = 'sink' },
+    { space = 'ram', offset = '0x401030', name = 'power' },
+    { space = 'ram', offset = '0x401070', name = 'fall' },
+    { space = 'ram', offset = '0x401120', name = 'arith' },
+    { space = 'ram', offset = '0x4011a0', name = 'strcase' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401000'
+hex = '''
+b8ffffffffc331c0c30f1f8000000000f30f1efa8d04fd0000000029f883c003c30f1f400066662e0f1f840000000000f30f1efa85f67e288d56ffb801000000
+40f6c601740a89f88d56fe83fe0174160fafc783ea020fafc783faff75f2c390b801000000c3c3660f1f840000000000f30f1efa83ff070f8783ffffff89f848
+89c23eff24c500204000660f1f440000bf03000000e876ffffff894608bf04000000e869ffffff89460c89d7e85fffffff8946108b4614c30f1f840000000000
+bf01000000e846ffffff8906bf02000000e83affffff8946048b4614c30f1f00bf05000000e826ffffff894620bf04000000e819ffffff8946248b4614c36690
+bf09000000e806ffffff89461c8b4614c30f1f400066662e0f1f840000000000f30f1efa89f089d683ff070f87d5feffff89ff3eff24fd402040000f1f440000
+89c7e8c9feffff29f0c3660f1f44000001d0c30f1f4400000fafc2c30f1f400083fa02742b89c7e9c4feffff0f1f400099f7fec30f1f400099f7fe89c7e98efe
+ffff660f1f440000f7d8c30f1f4400000fafc0c39066662e0f1f840000000000f30f1efa4989f94531d24531c0eb149083e82083f919770383ea2038c2753149
+83c001430fb63c01420fb60c0689f883ef6189ca83e96183ff1976d483f91976d738d0750b84c075d64489d0c30f1f004183c2014883c6104183fa0675ac41ba
+ffffffff4489d0c3
+'''
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x402000'
+readonly = true
+hex = '''
+c010400000000000cc1040000000000090104000000000009d10400000000000aa104000000000000011400000000000e010400000000000ed10400000000000
+50114000000000004711400000000000581140000000000040114000000000006011400000000000701140000000000078114000000000008811400000000000
+'''
+
+[script]
+commands = [
+    'lo fu fall',
+    'decompile',
+    'print C',
+    'lo fu arith',
+    'decompile',
+    'print C',
+    'lo fu strcase',
+    'decompile',
+    'print C',
+    'option dirtypool on',
+    'option latecse on',
+    'option implweight 8',
+    'lo fu fall',
+    'decompile',
+    'print C',
+    'lo fu arith',
+    'decompile',
+    'print C',
+    'lo fu strcase',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'p69 #1: both passes keep the case fall-through of fall'
+count = 2
+regex = [
+    '^    case 0:$',
+    '^      \*a1 = sink\(1\);$',
+    '^    case 1:$',
+]
+
+[[match]]
+name = 'p69 #2: both passes keep the division by 4 of the power argument path'
+count = 2
+literal = 'return power(a1,a2); // tail-call'
+
+[[match]]
+name = "p69 #3: both passes keep strcase's outer loop exit"
+count = 2
+regex = '^    if \(v4 == 6\)$'
+
+[[match]]
+name = 'p69 #4: fall tests 8 <= a0 in both passes; with the options on arith does too, before its switch'
+count = 3
+regex = '^  if \(8 <= a0\)$'

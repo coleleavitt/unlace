@@ -1,4 +1,4 @@
-//! (kuna) The `symbolnamechars` option gate — stop a symbol name's raw bytes
+//! (unlace) The `symbolnamechars` option gate — stop a symbol name's raw bytes
 //! from restructuring the C document they are printed into, and stop two
 //! distinct names from collapsing onto one `String`.
 //!
@@ -161,7 +161,7 @@ pub fn symbolnamechars_mode() -> NameChars {
         .unwrap_or_else(crate::loadoptions::env::symbolnamechars)
 }
 
-/// Export a `set_kuna_option("symbolnamechars", val)` choice to
+/// Export a `set_unlace_option("symbolnamechars", val)` choice to
 /// [`SYMBOLNAMECHARS_ENV`] so a later `load file` in the *same* process sees it
 /// (the interactive `option symbolnamechars … ` before `load file` path, and the
 /// in-process CLI drivers).
@@ -374,9 +374,9 @@ pub fn sanitize_ident_chain(name: &str) -> String {
         .join("::")
 }
 
-impl crate::optionset::KunaOption for NameChars {
+impl crate::optionset::UnlaceOption for NameChars {
     const NAME: &'static str = "symbolnamechars";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         NameChars::Off
@@ -386,9 +386,9 @@ impl crate::optionset::KunaOption for NameChars {
         NameChars::Safe
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let mode = NameChars::parse(value).ok_or_else(|| {
-            unlace_base::error::KunaError::lowlevel(format!(
+            unlace_base::error::UnlaceError::lowlevel(format!(
                 "symbolnamechars must be off|safe|ident, got `{value}`"
             ))
         })?;

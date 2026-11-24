@@ -5,7 +5,7 @@
   "option": "declaredlibcproto",
   "div": "DIV-139",
   "phase": "P1",
-  "module": "decompiler/crates/kuna-analysis/src/analyzers/protos/mod.rs (declared_libc_prototype) + decompiler/crates/kuna-console/src/engine.rs (ConsoleProgram::seed_declared_libc_prototype)",
+  "module": "decompiler/crates/kuna-analysis/src/analyzers/protos/mod.rs (declared_libc_prototype) + decompiler/crates/console/src/engine.rs (ConsoleProgram::seed_declared_libc_prototype)",
   "default": "on",
   "decisions": [
     "The refuter's overturn is upheld and is the whole diagnosis. Caller-side stack-argument recovery is NOT defeated on the witness: with a prototype declared, the same loop-carried esp accesses yield ptrace(v18[-0xc],v18[-0xb],(void *)v18[-10],(void *)v18[-9]) at every one of the 13 sites. Nothing in stack-arg recovery or the esp/alignment model was touched.",
@@ -15,7 +15,7 @@
     "ptrace went into the BASE table rather than the measured extension: the extension's membership rule is a measured frequency bar over the decbench C corpus and ptrace clears neither (0 of 1709 decbench ELFs carry the symbol at all), so adding it there would contradict that module's stated selection rule. The base table is the one whose documented job is 'common libc signatures, conservative and correct', and it already grew this way once (setlocale, docs/features/setlocale-rettype).",
     "The 4-slot signature is not written from memory, which this module forbids: glibc DECLARES `long ptrace(enum __ptrace_request, ...)` and its own wrapper (sysdeps/unix/sysv/linux/ptrace.c) fetches pid_t, void *, void * after the request with va_arg. Those three plus the request are the four slots, and every one is width-stable on ILP32 and LP64.",
     "The declaration seam runs BEFORE the assertion plane (the generated console script emits `function bounds` then `map prototype`), so an explicit --assert prototype on the same function still wins -- verified: `--assert 'prototype ptrace int ptrace(int a)'` renders ptrace(0) on the witness.",
-    "Not a tooling-track change despite living in kuna-console: it moves emitted C, so it ships behind a phases.toml option with a DIV row. Default ON because the acceptance probe passes no --option, and because the flip is structurally inert without a declaration.",
+    "Not a tooling-track change despite living in console: it moves emitted C, so it ships behind a phases.toml option with a DIV row. Default ON because the acceptance probe passes no --option, and because the flip is structurally inert without a declaration.",
     "A stages XML IS possible here, contrary to the usual analysis-tier rule: `function bounds ... as NAME` is a console command and the XML `<com>` plane reaches it over a plain <bytechunk>, no object file needed. The two-pass case is therefore a real gate test, not just a cargo test.",
     "SALVAGE (round 10, second session): the work was committed but unpushed and never gated against current main. Rebased onto 81ea1078 with zero conflicts and re-ran every gate. One real defect was found and fixed in the rebase check: the DIV-139 registry row had been appended to the SAME LINE as the sibling's DIV-138 row, so it would not have rendered as a table row and mergecheck read it as DIV-138 being deleted. docs/history.md is now purely additive (1 insertion, 0 deletions) vs origin/main."
   ],

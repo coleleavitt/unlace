@@ -33,7 +33,7 @@
     }
   ],
   "inertness": {
-    "method": "the only non-test source changed is `kuna-cli/src/{optname.rs,main.rs,decompile.rs,decompile_all.rs,disassemble.rs,xrefs.rs,strings.rs}` -- one new module plus one call in each `--option` parse arm, all of which run before a binary is opened. The kuna-decomp change is a `#[test]` only. No kuna-analysis or kuna-console source is touched.",
+    "method": "the only non-test source changed is `kuna-cli/src/{optname.rs,main.rs,decompile.rs,decompile_all.rs,disassemble.rs,xrefs.rs,strings.rs}` -- one new module plus one call in each `--option` parse arm, all of which run before a binary is opened. The kuna-decomp change is a `#[test]` only. No kuna-analysis or console source is touched.",
     "note": "make test 675/675 PARITY OK and make test-stages 640/640 PARITY OK confirm it; `kuna decompile fauxware main --option loweredswitch off` still produces the same bytes it did before."
   },
   "sweep": {

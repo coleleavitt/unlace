@@ -23,7 +23,7 @@ use crate::unionresolve::FuncdataUnionresolveExt;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
@@ -33,7 +33,7 @@ use crate::funcdata::Funcdata;
 use crate::unionresolve::{ResolveEdge, ResolvedUnion};
 
 /// Fill the union-resolution hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.apply_union_facet = Some(Funcdata::apply_union_facet);
     hooks.force_facing_type = Some(Funcdata::force_facing_type);
     hooks.inherit_union_field = Some(Funcdata::inherit_union_field);
@@ -73,7 +73,7 @@ pub trait FuncdataUnionExt {
         slot: int4,
         resolve: ResolvedUnion,
     ) -> bool;
-    fn apply_union_facet(&mut self, entry: &crate::database::SymbolEntry) -> KunaResult<bool>;
+    fn apply_union_facet(&mut self, entry: &crate::database::SymbolEntry) -> UnlaceResult<bool>;
     fn update_union_field(
         &mut self,
         unres_type: &Datatype,
@@ -87,7 +87,7 @@ pub trait FuncdataUnionExt {
         field_num: int4,
         op: OpId,
         slot: int4,
-    ) -> KunaResult<()>;
+    ) -> UnlaceResult<()>;
     fn inherit_union_field(
         &mut self,
         unres_type: &Datatype,
@@ -103,7 +103,7 @@ pub trait FuncdataUnionExt {
         slot: int4,
         old_op: OpId,
         old_slot: int4,
-    ) -> KunaResult<int4>;
+    ) -> UnlaceResult<int4>;
 }
 
 /// [`Funcdata`] methods for the per-function union-field resolution cache private to this module.
@@ -277,7 +277,7 @@ impl FuncdataUnionExt for Funcdata {
     /// Reached from [`attempt_dynamic_mapping`](Funcdata::attempt_dynamic_mapping)
     /// and [`attempt_dynamic_mapping_late`](Funcdata::attempt_dynamic_mapping_late)
     /// for a `union_facet`-category SymbolEntry.
-    fn apply_union_facet(&mut self, entry: &crate::database::SymbolEntry) -> KunaResult<bool> {
+    fn apply_union_facet(&mut self, entry: &crate::database::SymbolEntry) -> UnlaceResult<bool> {
         let sym_id = entry.symbol;
         let (sym_type, field_number, addr_based) = {
             let localmap = match self.get_scope_local() {
@@ -402,29 +402,31 @@ impl FuncdataUnionExt for Funcdata {
         field_num: int4,
         op: OpId,
         slot: int4,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let base_type = if unres_type.get_metatype() == type_metatype::TYPE_PTR {
             unres_type.get_ptr_to().ok_or_else(|| {
-                unlace_base::error::KunaError::lowlevel("forceFacingType: pointer missing ptrto")
+                unlace_base::error::UnlaceError::lowlevel("forceFacingType: pointer missing ptrto")
             })?
         } else {
             Rc::clone(&unres_type)
         };
         let unres_type = if unres_type.is_pointer_rel() {
             let typegrp = self.get_arch().types_rc().ok_or_else(|| {
-                unlace_base::error::KunaError::lowlevel(
+                unlace_base::error::UnlaceError::lowlevel(
                     "forceFacingType: TypeFactory unavailable for relative-pointer conversion",
                 )
             })?;
             let wordsize = unres_type.get_word_size().ok_or_else(|| {
-                unlace_base::error::KunaError::lowlevel("forceFacingType: pointer missing wordsize")
+                unlace_base::error::UnlaceError::lowlevel(
+                    "forceFacingType: pointer missing wordsize",
+                )
             })?;
             typegrp.get_type_pointer(unres_type.get_size(), base_type, wordsize)?
         } else {
             unres_type
         };
         let typegrp = self.get_arch().types_rc().ok_or_else(|| {
-            unlace_base::error::KunaError::lowlevel("forceFacingType: TypeFactory unavailable")
+            unlace_base::error::UnlaceError::lowlevel("forceFacingType: TypeFactory unavailable")
         })?;
         let resolve =
             ResolvedUnion::new_field(Rc::clone(&unres_type), field_num, typegrp.as_ref())?;
@@ -478,9 +480,9 @@ impl FuncdataUnionExt for Funcdata {
         slot: int4,
         old_op: OpId,
         old_slot: int4,
-    ) -> KunaResult<int4> {
+    ) -> UnlaceResult<int4> {
         let parent = unres_ptr.get_depend(0).ok_or_else(|| {
-            unlace_base::error::KunaError::lowlevel(
+            unlace_base::error::UnlaceError::lowlevel(
                 "inheritUnionFieldPtr: pointer missing depend(0)",
             )
         })?;
@@ -501,7 +503,9 @@ impl FuncdataUnionExt for Funcdata {
             None => return Ok(-1),
         };
         let typegrp = self.get_arch().types_rc().ok_or_else(|| {
-            unlace_base::error::KunaError::lowlevel("inheritUnionFieldPtr: TypeFactory unavailable")
+            unlace_base::error::UnlaceError::lowlevel(
+                "inheritUnionFieldPtr: TypeFactory unavailable",
+            )
         })?;
         let ptrres =
             ResolvedUnion::new_field(Rc::clone(&unres_ptr), inherited_field, typegrp.as_ref())?;

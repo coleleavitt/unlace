@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the DEX container fixtures of tests/stages/kuna-dex-containers.xml.
+"""Build the DEX container fixtures of tests/stages/dex-containers.xml.
 
   python3 containers.py        # writes hello.odex, hello.vdex, hello.oat, tries.cdex
 

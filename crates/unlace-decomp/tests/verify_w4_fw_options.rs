@@ -16,7 +16,7 @@
 //! The C++ oracle values used below were produced with a standalone
 //! `istringstream >> int/unsigned int` harness (see the verdict file).
 
-use unlace_base::error::KunaError;
+use unlace_base::error::UnlaceError;
 use unlace_base::types::{int4, uint4};
 use unlace_decomp::options::{
     ArchOption, ArchOptionContext, BraceCategory, BraceStyle, NamespaceStrategy, OptionDatabase,
@@ -87,19 +87,19 @@ impl ArchOptionContext for Ctx {
     fn set_default_extra_pop(&mut self, v: int4) {
         self.default_extra_pop = v;
     }
-    fn set_function_extra_pop(&mut self, _n: &str, _v: int4) -> Result<(), KunaError> {
+    fn set_function_extra_pop(&mut self, _n: &str, _v: int4) -> Result<(), UnlaceError> {
         Ok(())
     }
-    fn set_default_model(&mut self, _n: &str) -> Result<(), KunaError> {
+    fn set_default_model(&mut self, _n: &str) -> Result<(), UnlaceError> {
         Ok(())
     }
-    fn set_eval_current_model(&mut self, _n: &str) -> Result<(), KunaError> {
+    fn set_eval_current_model(&mut self, _n: &str) -> Result<(), UnlaceError> {
         Ok(())
     }
-    fn set_function_inline(&mut self, _n: &str, _v: bool) -> Result<(), KunaError> {
+    fn set_function_inline(&mut self, _n: &str, _v: bool) -> Result<(), UnlaceError> {
         Ok(())
     }
-    fn set_function_no_return(&mut self, _n: &str, _v: bool) -> Result<(), KunaError> {
+    fn set_function_no_return(&mut self, _n: &str, _v: bool) -> Result<(), UnlaceError> {
         Ok(())
     }
     fn print_is_c_language(&self) -> bool {
@@ -110,12 +110,12 @@ impl ArchOptionContext for Ctx {
     fn set_convention_printing(&mut self, _v: bool) {}
     fn set_no_cast_printing(&mut self, _v: bool) {}
     fn set_hide_implied_exts(&mut self, _v: bool) {}
-    fn set_max_line_size(&mut self, v: int4) -> Result<(), KunaError> {
+    fn set_max_line_size(&mut self, v: int4) -> Result<(), UnlaceError> {
         self.log.push(format!("max_line={v}"));
         Ok(())
     }
     fn set_indent_increment(&mut self, _v: int4) {}
-    fn set_line_comment_indent(&mut self, _v: int4) -> Result<(), KunaError> {
+    fn set_line_comment_indent(&mut self, _v: int4) -> Result<(), UnlaceError> {
         Ok(())
     }
     fn set_comment_style(&mut self, _s: &str) {}
@@ -290,7 +290,7 @@ fn dispatch_unknown_id_is_parse_error_and_stable() {
     let e2 = db2.set(&mut g2, 123_456_789, "", "", "").unwrap_err();
     assert_eq!(e1.explain(), "Unknown option");
     assert_eq!(e2.explain(), e1.explain());
-    assert!(matches!(e1, KunaError::Parse { .. }));
+    assert!(matches!(e1, UnlaceError::Parse { .. }));
 }
 
 // ---------------------------------------------------------------------------

@@ -13,12 +13,12 @@ const PMGR: &[&str] = &["--option", "kernelcache", "com.example.driver.PMGR"];
 const WAIT: u64 = 0xfffffe00_07007840;
 const KERNEL_ADD: u64 = 0xfffffe00_07007000;
 
-fn kuna(sub: &str, args: &[&str], entry: &[&str]) -> (String, String) {
+fn unlace(sub: &str, args: &[&str], entry: &[&str]) -> (String, String) {
     let fixture = common::fixture("kernelcache/fileset_calls.macho");
     let mut argv = vec![sub, fixture.as_str()];
     argv.extend_from_slice(args);
     argv.extend_from_slice(entry);
-    let (stdout, stderr, rc) = common::run_kuna(&argv);
+    let (stdout, stderr, rc) = common::run_unlace(&argv);
     assert_eq!(rc, 0, "{argv:?}\n{stderr}\n{stdout}");
     (stdout, stderr)
 }
@@ -26,7 +26,7 @@ fn kuna(sub: &str, args: &[&str], entry: &[&str]) -> (String, String) {
 fn json(sub: &str, args: &[&str], entry: &[&str]) -> serde_json::Value {
     let mut args = args.to_vec();
     args.push("--json");
-    serde_json::from_str(&kuna(sub, &args, entry).0).unwrap()
+    serde_json::from_str(&unlace(sub, &args, entry).0).unwrap()
 }
 
 fn sites(doc: &serde_json::Value) -> Vec<(u64, String, u64)> {
@@ -73,7 +73,7 @@ fn the_selected_entry_is_walked_by_address_and_by_name() {
         assert_eq!(coverage["section"], "__TEXT_EXEC,__text", "{coverage}");
         assert_eq!(coverage["notes"], serde_json::json!([]), "{coverage}");
     }
-    let (text, _) = kuna("xrefs", &["--to", "pmgr_wait_pending"], PMGR);
+    let (text, _) = unlace("xrefs", &["--to", "pmgr_wait_pending"], PMGR);
     assert!(
         text.starts_with("# 5 references to pmgr_wait_pending @ 0xfffffe0007007840\n"),
         "{text}"
@@ -86,7 +86,7 @@ fn the_selected_entry_is_walked_by_address_and_by_name() {
     let doc = json("xrefs", &["--from", "pmgr_set_perf_state"], PMGR);
     let targets: Vec<u64> = sites(&doc).iter().map(|s| s.2).collect();
     assert_eq!(targets, [KERNEL_ADD, WAIT, WAIT, WAIT, WAIT], "{doc}");
-    let (text, _) = kuna("xrefs", &["--from", "0xfffffe0007007800"], PMGR);
+    let (text, _) = unlace("xrefs", &["--from", "0xfffffe0007007800"], PMGR);
     assert!(
         text.starts_with("# 5 references from pmgr_set_perf_state @ 0xfffffe0007007800\n"),
         "{text}"
@@ -117,7 +117,7 @@ fn an_address_another_entry_holds_names_that_entry() {
         "{coverage}"
     );
 
-    let (text, stderr) = kuna("xrefs", &["--from", "0xfffffe0007007008"], PMGR);
+    let (text, stderr) = unlace("xrefs", &["--from", "0xfffffe0007007008"], PMGR);
     assert!(
         text.starts_with("# 0 references from 0xfffffe0007007008"),
         "{text}"
@@ -161,7 +161,7 @@ fn image_scans_read_the_selected_entry() {
     assert_eq!(texts(PMGR), ["AppleExamplePMGR"]);
     assert_eq!(texts(&[]), ["xnu-example-kernel"]);
 
-    let (graph, _) = kuna("decompile-graph", &[], PMGR);
+    let (graph, _) = unlace("decompile-graph", &[], PMGR);
     let graph: serde_json::Value = serde_json::from_str(&graph).unwrap();
     let edges: Vec<(u64, u64)> = graph["edges"]
         .as_array()
@@ -186,7 +186,7 @@ fn image_scans_read_the_selected_entry() {
 fn kernelcache_off_finding_no_functions_is_an_error() {
     let fixture = common::fixture("kernelcache/fileset_calls.macho");
     let (_, stderr, rc) =
-        common::run_kuna(&["functions", &fixture, "--option", "kernelcache", "off"]);
+        common::run_unlace(&["functions", &fixture, "--option", "kernelcache", "off"]);
     assert_eq!(rc, 1, "{stderr}");
     assert!(stderr.contains("no functions discovered"), "{stderr}");
 }
@@ -208,7 +208,7 @@ fn a_data_only_macho_object_keeps_its_empty_success() {
     image.extend([1, 2, 3, 4]);
     let path = common::scratch_file("dataonly-macho", "o");
     std::fs::write(&path, image).unwrap();
-    let (stdout, stderr, rc) = common::run_kuna(&["functions", path.to_str().unwrap(), "--json"]);
+    let (stdout, stderr, rc) = common::run_unlace(&["functions", path.to_str().unwrap(), "--json"]);
     assert_eq!(rc, 0, "{stderr}");
     assert!(stdout.contains("\"error\": null"), "{stdout}");
 }
@@ -217,7 +217,7 @@ fn a_data_only_macho_object_keeps_its_empty_success() {
 #[test]
 fn a_dyldimage_option_selects_the_image_xrefs_reads() {
     let cache = common::fixture("dyld_cache_arm64e/dyld_shared_cache_arm64e");
-    let (stdout, stderr, rc) = common::run_kuna(&[
+    let (stdout, stderr, rc) = common::run_unlace(&[
         "xrefs",
         &cache,
         "--from",
@@ -240,7 +240,7 @@ fn a_dyldimage_option_selects_the_image_xrefs_reads() {
 #[test]
 fn text_decompile_names_the_linked_collection_it_read() {
     let aux = common::fixture("kernelcache/linked/AuxiliaryKernelExtensions.kc");
-    let (stdout, stderr, rc) = common::run_kuna(&["decompile", &aux, "gadget_start"]);
+    let (stdout, stderr, rc) = common::run_unlace(&["decompile", &aux, "gadget_start"]);
     assert_eq!(rc, 0, "{stderr}");
     assert!(stdout.contains("kernel_add(a0,7);"), "{stdout}");
     assert!(

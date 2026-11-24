@@ -1,4 +1,4 @@
-//! (kuna `armframes`) Share decodes across the passes and rebuilds of one frame
+//! (unlace `armframes`) Share decodes across the passes and rebuilds of one frame
 //! recovery.
 //!
 //! Frame validation, the AIF gap walks, prefix reconciliation and every Listing

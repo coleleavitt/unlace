@@ -11,12 +11,12 @@
 //! exit and every `?` early return.  None of it is in the source, none of it
 //! carries program meaning for a reader, and on a real binary it is the single
 //! largest source of emitted lines in a Rust function.  Oxidizer removes those
-//! calls; this is the same transform on kuna's p-code.
+//! calls; this is the same transform on unlace's p-code.
 //!
 //! # The name list, and the one entry that is deliberately missing
 //!
 //! Oxidizer's `CLEANUP_FUNCTIONS` also lists `free`, `close` and `_close`.
-//! kuna's primary corpus is C binaries, where deleting `free()` would be a
+//! unlace's primary corpus is C binaries, where deleting `free()` would be a
 //! catastrophically wrong answer, so this port carries only names that **cannot**
 //! occur in a C program:
 //!
@@ -48,7 +48,7 @@
 //!
 //! # Matching: normalize, then compare exactly
 //!
-//! The recovered display name is whatever kuna's demangler produced, which for
+//! The recovered display name is whatever unlace's demangler produced, which for
 //! the legacy rustc mangling keeps the generic arguments in their escaped form:
 //!
 //! ```text
@@ -119,7 +119,7 @@ use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyRes
 use crate::context::OpId;
 use crate::funcdata::Funcdata;
 
-/// Marshaling element `<cleanupcode>` (kuna). ElementIds live in the 4000+
+/// Marshaling element `<cleanupcode>` (unlace). ElementIds live in the 4000+
 /// range; 4130 is the previous max.
 pub const ELEM_CLEANUPCODE: ElementId = ElementId::new("cleanupcode", 4131);
 
@@ -342,7 +342,7 @@ fn cleanup_call_ops(data: &Funcdata) -> Vec<OpId> {
     victims
 }
 
-/// (kuna) `ActionRemoveCleanupCode` — delete Rust drop/deallocate call sites
+/// (unlace) `ActionRemoveCleanupCode` — delete Rust drop/deallocate call sites
 /// (option `cleanupcode`, default on, DIV-81).
 pub struct ActionRemoveCleanupCode {
     base: ActionBase,
@@ -375,7 +375,7 @@ impl Action for ActionRemoveCleanupCode {
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::cleanupcode::RemoveCleanupCode>()
             .0
         {
@@ -403,8 +403,8 @@ impl Action for ActionRemoveCleanupCode {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna `cleanupcode`) Delete the Rust drop/deallocate call sites (the
+crate::unlace_flag!(
+    /// (unlace `cleanupcode`) Delete the Rust drop/deallocate call sites (the
     /// `core::ptr::drop_in_place` / `Drop::drop` / `RawVecInner::deallocate` /
     /// `__rust_dealloc` family) from the pre-SSA op graph, so the drop glue and
     /// the argument setup that only feeds it never reach the output

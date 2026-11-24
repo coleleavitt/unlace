@@ -19,7 +19,7 @@ fn reference_layout(arch: &Architecture, ty: &Datatype) -> Option<()> {
     {
         return None;
     }
-    let layout = arch.types().kuna_variant_layout(OPTION_REF_U64)?;
+    let layout = arch.types().unlace_variant_layout(OPTION_REF_U64)?;
     if layout.type_name != OPTION_REF_U64
         || layout.union_type != OPTION_REF_U64
         || !layout.niche
@@ -101,8 +101,8 @@ impl PrintC {
         let high_id = node.get_high()?;
         let high = fd.high_bank().get(high_id)?;
         if high.num_instances() != 1
-            || high.kuna_global()
-            || high.kuna_ref_symbol().is_some()
+            || high.unlace_global()
+            || high.unlace_ref_symbol().is_some()
             || self.local_name_aliases.contains_key(&high_id)
         {
             return None;

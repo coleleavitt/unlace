@@ -1,4 +1,4 @@
-//! (kuna) `unflaggedcode` — memory the image maps executable in a section whose
+//! (unlace) `unflaggedcode` — memory the image maps executable in a section whose
 //! own flags do not say it holds instructions.
 //!
 //! The reference walk ([`super::xrefs`]) decodes the sections the linker marked

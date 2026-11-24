@@ -486,7 +486,7 @@ fn no_replace() -> impl FnMut(
     &mut VarnodeBank,
     unlace_decomp::context::VarnodeId,
     unlace_decomp::context::VarnodeId,
-) -> unlace_base::error::KunaResult<()> {
+) -> unlace_base::error::UnlaceResult<()> {
     |_: &mut VarnodeBank, _, _| Ok(())
 }
 

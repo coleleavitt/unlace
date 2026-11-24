@@ -37,7 +37,7 @@ fn ffree_preserves_each_register_identity_without_numeric_inputs() {
     for i in 0..8 {
         let name = format!("_sample{i}");
         let prototype = format!("prototype {name} unsigned int {name}(void)");
-        let (body, err, status) = common::run_kuna(&[
+        let (body, err, status) = common::run_unlace(&[
             "decompile",
             binary.to_str().unwrap(),
             &name,

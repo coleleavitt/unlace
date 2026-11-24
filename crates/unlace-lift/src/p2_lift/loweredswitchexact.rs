@@ -1,4 +1,4 @@
-//! (kuna `loweredswitchexact`) Install a re-rolled lowered switch only when it is
+//! (unlace `loweredswitchexact`) Install a re-rolled lowered switch only when it is
 //! the compare tree it replaces.
 //!
 //! [`crate::loweredswitch`] recovers a case map and a default from a
@@ -28,9 +28,9 @@ use unlace_num::opcodes::OpCode;
 use crate::block::{BlockType, block_get_start};
 use crate::context::{BlockId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::p2_lift::loweredswitch::KunaLoweredSwitchRecord;
+use crate::p2_lift::loweredswitch::UnlaceLoweredSwitchRecord;
 
-/// Marshaling element `<loweredswitchexact>` (kuna 4000+ range).
+/// Marshaling element `<loweredswitchexact>` (unlace 4000+ range).
 pub const ELEM_LOWEREDSWITCHEXACT: ElementId = ElementId::new("loweredswitchexact", 4171);
 
 /// True when the switch built from `rec` behaves as the compare tree at `head`:
@@ -41,7 +41,7 @@ pub fn record_is_exact(
     head: BlockId,
     spine: &BTreeSet<BlockId>,
     swvar: VarnodeId,
-    rec: &KunaLoweredSwitchRecord,
+    rec: &UnlaceLoweredSwitchRecord,
 ) -> bool {
     let mut targets: Vec<BlockId> = Vec::with_capacity(rec.case_targets.len() + 1);
     for addr in rec
@@ -85,7 +85,7 @@ pub fn switch_routes_like_cascade(
     head: BlockId,
     spine: &BTreeSet<BlockId>,
     swvar: VarnodeId,
-    rec: &KunaLoweredSwitchRecord,
+    rec: &UnlaceLoweredSwitchRecord,
 ) -> bool {
     let size = match data.vbank().get(swvar) {
         Some(v) => v.get_size(),
@@ -504,7 +504,7 @@ pub fn block_at_start(data: &Funcdata, addr: &Address) -> Option<BlockId> {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.loweredswitchexact_raw_install_keeps_values = Some(raw_install_keeps_values);
 }
 

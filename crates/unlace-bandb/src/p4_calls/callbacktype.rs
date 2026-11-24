@@ -1,6 +1,6 @@
-//! (kuna `callbacktype`) A callback takes the prototype of the slot it is passed to.
+//! (unlace `callbacktype`) A callback takes the prototype of the slot it is passed to.
 //!
-//! kuna resolves a declared prototype at a call site, so `qsort(a, n, 0x10,
+//! unlace resolves a declared prototype at a call site, so `qsort(a, n, 0x10,
 //! sub_3a72)` already renders with the library's name. Nothing was ever said
 //! about `sub_3a72` itself: a function reached only through a function pointer
 //! has no call site to recover from, so its own body is all it has, and a
@@ -106,7 +106,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::types::{int4, uintb};
 
 use unlace_base::space::spacetype;
@@ -145,7 +145,7 @@ impl CallbackTypeMode {
     }
 }
 
-/// (kuna) Parse `option callbacktype on|off`.
+/// (unlace) Parse `option callbacktype on|off`.
 pub struct OptionCallbackType;
 
 impl OptionCallbackType {
@@ -153,12 +153,12 @@ impl OptionCallbackType {
     pub const NAME: &'static str = "callbacktype";
 
     /// Parse + validate the value.
-    pub fn apply(&self, p1: &str) -> KunaResult<(CallbackTypeMode, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(CallbackTypeMode, String)> {
         let mode = match p1 {
             "on" => CallbackTypeMode::On,
             "off" => CallbackTypeMode::Off,
             other => {
-                return Err(KunaError::parse(format!(
+                return Err(UnlaceError::parse(format!(
                     "Unknown callbacktype value: {other} (expected on|off)"
                 )));
             }
@@ -256,7 +256,7 @@ const I: Ty = Ty::Int;
 /// The library entry points that declare a function-pointer parameter.
 ///
 /// Each signature is the POSIX/glibc declaration reduced to [`Ty`] by the rule
-/// `kuna_libcsigs` uses: a `const void *` is a `void *`, an opaque handle is a
+/// `unlace_libcsigs` uses: a `const void *` is a `void *`, an opaque handle is a
 /// `void *`, and a slot with no width-stable spelling would keep the entry out.
 /// `sigaction` is absent on purpose -- its handler is a member of a structure,
 /// not an argument -- and so is `qsort` from the library prototype tables,
@@ -617,7 +617,7 @@ pub fn is_callback_slot(name: &str, index: usize) -> bool {
     entry_for(name).is_some_and(|e| e.slots.iter().any(|(i, _)| *i == index))
 }
 
-/// Build the kuna [`Datatype`] for a [`Ty`].
+/// Build the unlace [`Datatype`] for a [`Ty`].
 fn build_ty(t: Ty, arch: &Architecture) -> Option<Rc<Datatype>> {
     let types = arch.types();
     let ptr = types.get_size_of_pointer();
@@ -659,7 +659,7 @@ fn pieces_of(sig: &Sig, name: &str, arch: &Architecture) -> Option<PrototypePiec
         first_var_arg_slot: -1,
         output_storage: None,
         input_storage: Vec::new(),
-        kuna_library_names: None,
+        unlace_library_names: None,
     })
 }
 
@@ -745,7 +745,7 @@ pub fn record(arch: &mut Architecture, entry: &Address, fd: &Funcdata) {
     let reads = return_reads(fd);
     let calls = direct_calls(fd);
     let own = if arch
-        .kuna_tables
+        .unlace_tables
         .get::<crate::callbacktype::Ledger>()
         .own
         .contains_key(&me)
@@ -788,7 +788,7 @@ pub fn record(arch: &mut Architecture, entry: &Address, fd: &Funcdata) {
             printed: printed_sig(proto),
         })
     };
-    let ledger = arch.kuna_tables.get_mut::<crate::callbacktype::Ledger>();
+    let ledger = arch.unlace_tables.get_mut::<crate::callbacktype::Ledger>();
     let mut row = CallerFacts {
         facts: found,
         other_use,
@@ -1758,7 +1758,7 @@ pub fn park(
     image: ImageFacts,
 ) -> Result<PrototypePieces, Decline> {
     let Some(row) = arch
-        .kuna_tables
+        .unlace_tables
         .get::<crate::callbacktype::Ledger>()
         .decided()
         .remove(&entry.get_offset())
@@ -1783,7 +1783,7 @@ pub fn park(
     }
     let key = key_of(entry).ok_or(Decline::StorageUnderivable)?;
     let own = arch
-        .kuna_tables
+        .unlace_tables
         .get::<crate::callbacktype::Ledger>()
         .own
         .get(&key)
@@ -1807,7 +1807,7 @@ pub fn park(
         return Err(why);
     }
     if arch
-        .kuna_tables
+        .unlace_tables
         .get::<crate::callbacktype::Ledger>()
         .reads_of(entry.get_offset())
         .any(|read| declared_out.is_none_or(|declared| !contains(declared, read)))
@@ -1817,7 +1817,7 @@ pub fn park(
     if image.called_directly {
         let returns = row.sig.ret != Ty::Void;
         let callers = image.callers.as_deref();
-        let ledger = arch.kuna_tables.get::<crate::callbacktype::Ledger>();
+        let ledger = arch.unlace_tables.get::<crate::callbacktype::Ledger>();
         if let Some(why) =
             ledger.direct_calls_disagree(entry.get_offset(), callers, pieces.intypes.len(), returns)
         {
@@ -1844,13 +1844,13 @@ pub fn park(
     // statement and `calleevote`'s decision would otherwise still type the
     // parameters, and a parked callback that calls another reads both.
     if let Some(key) = crate::protoorder::stated_key(entry) {
-        arch.kuna_tables
+        arch.unlace_tables
             .get_mut::<crate::protoorder::CalleeTypes>()
             .remove(&key);
-        arch.kuna_tables
+        arch.unlace_tables
             .get_mut::<crate::calleevote::Ledger>()
             .forget(key);
-        arch.kuna_tables
+        arch.unlace_tables
             .get_mut::<crate::calleevote::Ledger>()
             .own
             .remove(&key);
@@ -1858,9 +1858,9 @@ pub fn park(
     Ok(pieces)
 }
 
-impl crate::optionset::KunaOption for CallbackTypeMode {
+impl crate::optionset::UnlaceOption for CallbackTypeMode {
     const NAME: &'static str = "callbacktype";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         crate::callbacktype::CallbackTypeMode::Off
@@ -1870,12 +1870,12 @@ impl crate::optionset::KunaOption for CallbackTypeMode {
         crate::callbacktype::CallbackTypeMode::On
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         Ok(crate::callbacktype::OptionCallbackType.apply(value)?)
     }
 }
 
-crate::kuna_arch_table!(Ledger);
+crate::unlace_arch_table!(Ledger);
 
 #[cfg(test)]
 mod tests;

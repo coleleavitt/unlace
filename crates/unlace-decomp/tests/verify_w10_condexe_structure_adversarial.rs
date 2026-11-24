@@ -19,7 +19,7 @@ use std::process::Command;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::IdRegistry;
 use unlace_base::space::AddrSpaceManager;
 use unlace_base::xml::{DocumentStorage, Element};
@@ -122,8 +122,8 @@ impl LoadImage for DummyImg {
     fn get_file_name(&self) -> &str {
         "dummy"
     }
-    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> KunaResult<()> {
-        Err(KunaError::data_unavail("dummy"))
+    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> UnlaceResult<()> {
+        Err(UnlaceError::data_unavail("dummy"))
     }
     fn get_arch_type(&self) -> Vec<u8> {
         Vec::new()
@@ -203,10 +203,10 @@ fn rust_render(stem: &str) -> Result<String, String> {
             None => continue,
         };
         let entry = Address::new(space, sym.offset);
-        base.kuna_options
-            .set(unlace_decomp::earlyreturn::EarlyReturn(false)); // (kuna) C++-parity test: opt out of earlyreturn (DIV-23 default-on)
-        base.kuna_options
-            .set(unlace_decomp::switchreturn::SwitchReturn(false)); // (kuna) also opt out of switchreturn (DIV-25 default-on)
+        base.unlace_options
+            .set(unlace_decomp::earlyreturn::EarlyReturn(false)); // (unlace) C++-parity test: opt out of earlyreturn (DIV-23 default-on)
+        base.unlace_options
+            .set(unlace_decomp::switchreturn::SwitchReturn(false)); // (unlace) also opt out of switchreturn (DIV-25 default-on)
         if let Ok(fd) = decompile_func(base, &sym.name, entry, 0) {
             out.push_str(&print_c(base, &fd));
             out.push('\n');
@@ -231,10 +231,10 @@ fn rust_decompile_first(stem: &str) -> Result<(XmlArchitecture, Funcdata), Strin
         .ok_or(format!("no space {space_name}"))?
         .clone();
     let entry = Address::new(space, off);
-    base.kuna_options
-        .set(unlace_decomp::earlyreturn::EarlyReturn(false)); // (kuna) C++-parity test: opt out of earlyreturn (DIV-23 default-on)
-    base.kuna_options
-        .set(unlace_decomp::switchreturn::SwitchReturn(false)); // (kuna) also opt out of switchreturn (DIV-25 default-on)
+    base.unlace_options
+        .set(unlace_decomp::earlyreturn::EarlyReturn(false)); // (unlace) C++-parity test: opt out of earlyreturn (DIV-23 default-on)
+    base.unlace_options
+        .set(unlace_decomp::switchreturn::SwitchReturn(false)); // (unlace) also opt out of switchreturn (DIV-25 default-on)
     let fd = decompile_func(base, &name, entry, 0).map_err(|e| format!("decompile: {e}"))?;
     Ok((xarch, fd))
 }
@@ -575,10 +575,10 @@ fn probe_scan_corpus_for_any_condition_node() {
                 None => continue,
             };
             let entry_addr = Address::new(space, sym.offset);
-            base.kuna_options
-                .set(unlace_decomp::earlyreturn::EarlyReturn(false)); // (kuna) C++-parity test: opt out of earlyreturn (DIV-23 default-on)
-            base.kuna_options
-                .set(unlace_decomp::switchreturn::SwitchReturn(false)); // (kuna) also opt out of switchreturn (DIV-25 default-on)
+            base.unlace_options
+                .set(unlace_decomp::earlyreturn::EarlyReturn(false)); // (unlace) C++-parity test: opt out of earlyreturn (DIV-23 default-on)
+            base.unlace_options
+                .set(unlace_decomp::switchreturn::SwitchReturn(false)); // (unlace) also opt out of switchreturn (DIV-25 default-on)
             if let Ok(fd) = decompile_func(base, &sym.name, entry_addr, 0) {
                 total_funcs += 1;
                 let opcs = condition_opcodes(&fd);

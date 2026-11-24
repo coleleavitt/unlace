@@ -43,8 +43,8 @@ impl LoadImage for DummyImg {
         &mut self,
         _ptr: &mut [u8],
         _addr: &Address,
-    ) -> unlace_base::error::KunaResult<()> {
-        Err(unlace_base::error::KunaError::data_unavail("dummy"))
+    ) -> unlace_base::error::UnlaceResult<()> {
+        Err(unlace_base::error::UnlaceError::data_unavail("dummy"))
     }
     fn get_arch_type(&self) -> Vec<u8> {
         Vec::new()

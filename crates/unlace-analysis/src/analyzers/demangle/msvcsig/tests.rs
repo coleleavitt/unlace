@@ -1,4 +1,4 @@
-//! (kuna `msvcsig`) Hermetic tests for the MSVC declaration parse and the
+//! (unlace `msvcsig`) Hermetic tests for the MSVC declaration parse and the
 //! prototype it builds: the convention, `this`, the hidden return pointer and
 //! the by-value parameter cut are each a place a mistake moves every argument.
 

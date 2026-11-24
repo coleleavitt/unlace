@@ -1,4 +1,4 @@
-//! (kuna) The empty-string-constant sub-stage — no upstream Ghidra equivalent.
+//! (unlace) The empty-string-constant sub-stage — no upstream Ghidra equivalent.
 //!
 //! `PrintC::pushConstant`'s pointer arm hands a constant whose pointed-to type is
 //! character-printable to `pushPtrCharConstant`, which renders the readonly bytes
@@ -28,8 +28,8 @@
 use unlace_base::marshal::ElementId;
 use unlace_base::types::{int4, uint1};
 
-/// Marshaling element `<emptystrconst>` (kuna 4000+ range; 4147 = the previous
-/// highest kuna id).
+/// Marshaling element `<emptystrconst>` (unlace 4000+ range; 4147 = the previous
+/// highest unlace id).
 pub const ELEM_EMPTYSTRCONST: ElementId = ElementId::new("emptystrconst", 4148);
 
 /// How many bytes at the constant's address are inspected for string evidence.

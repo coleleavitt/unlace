@@ -40,7 +40,7 @@ fn flow_with(
     )
     .unwrap();
     for (name, value) in options {
-        program.arch_mut().set_kuna_option(name, value).unwrap();
+        program.arch_mut().set_unlace_option(name, value).unwrap();
     }
     program.commit_pending_analysis().unwrap();
     let entry = Address::new(

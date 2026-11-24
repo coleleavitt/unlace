@@ -1,4 +1,4 @@
-//! (kuna `cil`) A managed .NET assembly as a decodable image: the PE's CLI
+//! (unlace `cil`) A managed .NET assembly as a decodable image: the PE's CLI
 //! header and ECMA-335 metadata read into the methods, their bodies and the
 //! references they name, laid out for the `CIL:LE:64:default` language.
 //!
@@ -27,7 +27,7 @@ pub mod sig;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::rc::Rc;
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_decomp::architecture::Architecture;
 use unlace_decomp::dtype::{Datatype, TypeField, type_metatype};
 use unlace_decomp::fspec::PrototypePieces;
@@ -632,8 +632,8 @@ impl Resolve for Loader<'_> {
 
 impl CilImage {
     /// Map the assembly, resolve its tokens and type its method bodies.
-    pub fn parse(file: &[u8]) -> KunaResult<CilImage> {
-        let bad = |what: &str| KunaError::lowlevel(format!("managed .NET assembly: {what}"));
+    pub fn parse(file: &[u8]) -> UnlaceResult<CilImage> {
+        let bad = |what: &str| UnlaceError::lowlevel(format!("managed .NET assembly: {what}"));
         let pe = PeLayout::parse(file).ok_or_else(|| bad("no CLI header"))?;
         let md = Metadata::parse(file, &pe).ok_or_else(|| bad("unreadable metadata"))?;
         let backed = |s: &metadata::Section| {
@@ -1004,7 +1004,7 @@ impl CilImage {
         for (&rid, record) in &self.records {
             let declared = match factory.find_by_name(&record.name) {
                 Ok(Some(held)) => Some(held),
-                _ => factory.kuna_declare_record(&record.name, false).ok(),
+                _ => factory.unlace_declare_record(&record.name, false).ok(),
             };
             if let Some(shell) = declared {
                 records.insert(rid, shell);
@@ -1135,7 +1135,7 @@ impl Types<'_> {
     /// The C type standing for a CIL type: a reference is a pointer (to the
     /// struct of a class this image lays out), an array reference a pointer
     /// to its element and a string one to UTF-16 text.
-    fn datatype(&self, ty: &CilType) -> KunaResult<Rc<Datatype>> {
+    fn datatype(&self, ty: &CilType) -> UnlaceResult<Rc<Datatype>> {
         let types = self.arch.types();
         let pointer = |to: Rc<Datatype>| types.get_type_pointer(8, to, 1);
         let int = |size, signed| {

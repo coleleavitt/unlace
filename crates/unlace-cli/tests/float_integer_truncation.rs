@@ -22,7 +22,7 @@ fn narrowing_before_integer_truncation_matches_native() {
         [0xf2, 0x0f, 0x5a, 0xc0, 0xf3, 0x0f, 0x2c, 0xc0, 0xc3],
     )
     .unwrap();
-    let (printed, stderr, rc) = common::run_kuna(&[
+    let (printed, stderr, rc) = common::run_unlace(&[
         "decompile",
         image.to_str().unwrap(),
         "0x1000",

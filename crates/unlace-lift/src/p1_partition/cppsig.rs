@@ -1,4 +1,4 @@
-//! (kuna `cppsig`) The three-valued gate on applying a DEMANGLED C++ signature.
+//! (unlace `cppsig`) The three-valued gate on applying a DEMANGLED C++ signature.
 //!
 //! The recovering pass lives in the analyzer tier
 //! (`unlace_analysis::demangle::cppsig`); what lives here is the *decision*
@@ -20,7 +20,7 @@
 //!
 //! (Ghidra 12.1's own `this` decision on the same binary runs at precision 0.85.)
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 
 /// The resolved `option cppsig off|proven|inferred` mode.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -60,12 +60,12 @@ impl CppSigMode {
 /// Parse the `option cppsig off|proven|inferred` argument, producing the
 /// resolved mode plus the confirmation message (the established value-option
 /// idiom — cf. `parse_return_pair_form`).
-pub fn parse_cppsig_mode(p1: &str) -> KunaResult<(CppSigMode, String)> {
+pub fn parse_cppsig_mode(p1: &str) -> UnlaceResult<(CppSigMode, String)> {
     let mode = match p1 {
         "off" => CppSigMode::Off,
         "proven" => CppSigMode::Proven,
         "inferred" => CppSigMode::Inferred,
-        _ => return Err(KunaError::parse("Must specify off, proven or inferred")),
+        _ => return Err(UnlaceError::parse("Must specify off, proven or inferred")),
     };
     Ok((
         mode,
@@ -73,9 +73,9 @@ pub fn parse_cppsig_mode(p1: &str) -> KunaResult<(CppSigMode, String)> {
     ))
 }
 
-impl crate::optionset::KunaOption for CppSigMode {
+impl crate::optionset::UnlaceOption for CppSigMode {
     const NAME: &'static str = "cppsig";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         crate::cppsig::CppSigMode::Off
@@ -85,7 +85,7 @@ impl crate::optionset::KunaOption for CppSigMode {
         crate::cppsig::CppSigMode::Proven
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         Ok(crate::cppsig::parse_cppsig_mode(value)?)
     }
 }

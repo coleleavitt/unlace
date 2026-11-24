@@ -2,7 +2,7 @@
 //! takes the `RISCV:LE:<size>:Zcmp` language and decodes the Zc stack and
 //! jump-table instructions, where the default language reads `c.fsdsp`.
 use crate::common;
-use common::{repo_root, run_kuna};
+use common::{repo_root, run_unlace};
 
 fn fixture(name: &str) -> String {
     repo_root()
@@ -27,7 +27,7 @@ fn rows(stdout: &str) -> Vec<String> {
 }
 
 fn disassemble(args: &[&str]) -> Vec<String> {
-    let (stdout, stderr, code) = run_kuna(&[&["disassemble"][..], args].concat());
+    let (stdout, stderr, code) = run_unlace(&[&["disassemble"][..], args].concat());
     assert_eq!(code, 0, "unlace disassemble {args:?}: {stderr}");
     rows(&stdout)
 }
@@ -81,7 +81,7 @@ fn zcmp_prologue_and_epilogue_recover_an_ordinary_function() {
         listing.last().map(String::as_str),
         Some("cm.popret {ra,s0-s1},0x10")
     );
-    let (stdout, stderr, code) = run_kuna(&["decompile", &elf, "keep"]);
+    let (stdout, stderr, code) = run_unlace(&["decompile", &elf, "keep"]);
     assert_eq!(code, 0, "{stderr}");
     assert!(!stdout.contains("jump-as-call"), "{stdout}");
     assert!(!stdout.contains("fs8"), "{stdout}");
@@ -104,7 +104,7 @@ fn rv64_zcmp_saves_eight_byte_registers() {
         ("popsep", "return ext() + a0;"),
     ] {
         for file in [fixture("zc_ops.elf"), elf.clone()] {
-            let (stdout, stderr, code) = run_kuna(&["decompile", &file, function]);
+            let (stdout, stderr, code) = run_unlace(&["decompile", &file, function]);
             assert_eq!(code, 0, "{stderr}");
             assert!(stdout.contains(body), "{function} in {file}:\n{stdout}");
         }

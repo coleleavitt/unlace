@@ -162,7 +162,7 @@ fn specs() -> PathBuf {
         .unwrap_or_else(|| root().join("specs"))
 }
 
-fn kuna() -> Command {
+fn unlace() -> Command {
     Command::new(
         unlace_base::env::var_os("UNLACE_TEST_BIN")
             .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into()),
@@ -183,7 +183,7 @@ fn decompile(image: &[u8], asserts: &[&str], options: &[&str]) -> String {
     let scratch = tempfile::tempdir().unwrap();
     let binary = scratch.path().join("fixture.elf");
     std::fs::write(&binary, image).unwrap();
-    let mut command = kuna();
+    let mut command = unlace();
     command.args(["decompile-all"]).arg(&binary);
     for option in options {
         command.args(["--option", option, "off"]);
@@ -463,7 +463,7 @@ fn repeated_absolute_table_row_does_not_label_a_map_byte() {
 #[test]
 fn a_switch_whose_cases_all_loop_back_keeps_its_loop() {
     let binary = common::fixture("switchtable_gcc_x86_64");
-    let mut command = kuna();
+    let mut command = unlace();
     command
         .args([
             "decompile",
@@ -865,7 +865,7 @@ fn fixtures() -> PathBuf {
 }
 
 fn source_decompile(fixture: &SourceFixture) -> String {
-    let mut command = kuna();
+    let mut command = unlace();
     command
         .arg("decompile-all")
         .arg(fixtures().join(fixture.name))

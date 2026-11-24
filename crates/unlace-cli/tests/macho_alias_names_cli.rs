@@ -25,7 +25,7 @@ fn fixture(name: &str) -> String {
     path.to_str().unwrap().to_string()
 }
 
-fn kuna(args: &[&str]) -> Output {
+fn unlace(args: &[&str]) -> Output {
     let specs = repo_root().join("specs");
     Command::new(env!("CARGO_BIN_EXE_unlace"))
         .env_remove("UNLACE_DECOMP_DBG")
@@ -40,7 +40,7 @@ fn kuna(args: &[&str]) -> Output {
 
 /// The address `decompile <image> <name> --json` lifted, or its stderr.
 fn selected(image: &str, name: &str) -> Result<u64, String> {
-    let out = kuna(&["decompile", image, name, "--json"]);
+    let out = unlace(&["decompile", image, name, "--json"]);
     let doc: serde_json::Value = serde_json::from_slice(&out.stdout)
         .map_err(|e| format!("{name}: {e}: {}", String::from_utf8_lossy(&out.stderr)))?;
     match doc["functions"][0]["address"].as_u64() {
@@ -52,7 +52,7 @@ fn selected(image: &str, name: &str) -> Result<u64, String> {
 #[test]
 fn every_macho_name_at_an_entry_selects_it() {
     let image = fixture("macho_alias_names_arm64");
-    let out = kuna(&["functions", &image]);
+    let out = unlace(&["functions", &image]);
     let listing = String::from_utf8_lossy(&out.stdout);
     assert!(
         out.status.success(),
@@ -99,7 +99,7 @@ fn every_macho_name_at_an_entry_selects_it() {
         );
     }
 
-    let out = kuna(&["decompile-all", &image]);
+    let out = unlace(&["decompile-all", &image]);
     let c = String::from_utf8_lossy(&out.stdout);
     assert_eq!(
         c.matches("// Function:").count(),

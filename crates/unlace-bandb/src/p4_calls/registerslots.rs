@@ -5,7 +5,7 @@ use crate::{
     funcdata::Funcdata,
 };
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_num::{opcodes::OpCode, pcoderaw::VarnodeData};
 
 fn overlaps(extension: &Extension, entry: &ParamEntry) -> bool {
@@ -48,21 +48,21 @@ pub fn decode(
     size: i32,
     alignment: i32,
     flags: u32,
-) -> KunaResult<Option<Extension>> {
+) -> UnlaceResult<Option<Extension>> {
     let explicit = element.get_attribute_value("registerextension").ok();
     let flags = match explicit {
         None => flags,
         Some(b"sign") => param_entry_flags::SMALLSIZE_SEXT,
         Some(b"zero") => param_entry_flags::SMALLSIZE_ZEXT,
         _ => {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Bad <pentry> registerextension attribute",
             ));
         }
     };
     let extension = declared(register, size, alignment, flags);
     if explicit.is_some() && extension.is_none() {
-        return Err(KunaError::lowlevel(
+        return Err(UnlaceError::lowlevel(
             "registerextension requires a slot in a wider register",
         ));
     }
@@ -120,9 +120,9 @@ pub fn declared(
 /// Canonicalize incoming argument words before SSA, for both inferred and locked
 /// prototypes. Entries sharing the physical container cannot state this unconditionally.
 #[doc(hidden)]
-pub fn apply(data: &mut Funcdata) -> KunaResult<()> {
+pub fn apply(data: &mut Funcdata) -> UnlaceResult<()> {
     if data
-        .kuna_state::<crate::callmechanisms::State>()
+        .unlace_state::<crate::callmechanisms::State>()
         .register_slots
         || data.bblocks_get_size() == 0
         || data.get_func_proto().has_custom_storage()
@@ -136,7 +136,7 @@ pub fn apply(data: &mut Funcdata) -> KunaResult<()> {
         return Ok(());
     };
     let candidates: Vec<_> = extensions(input.get_entry()).cloned().collect();
-    data.kuna_state_mut::<crate::callmechanisms::State>()
+    data.unlace_state_mut::<crate::callmechanisms::State>()
         .register_slots = true;
     if candidates.is_empty() {
         return Ok(());
@@ -188,7 +188,7 @@ pub fn apply(data: &mut Funcdata) -> KunaResult<()> {
 /// extended to its slot by the existing type-aware rule. Install before that
 /// rule so its word definition precedes the physical-register definition.
 #[doc(hidden)]
-pub fn apply_return(data: &mut Funcdata, index: i32) -> KunaResult<()> {
+pub fn apply_return(data: &mut Funcdata, index: i32) -> UnlaceResult<()> {
     let call = data.get_call_specs(index);
     let proto = call.proto();
     if !proto.has_model()
@@ -336,7 +336,7 @@ pub fn guard_output(
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.registerslots_assumed = Some(assumed);
     hooks.registerslots_decode = Some(decode);
     hooks.registerslots_guard_output = Some(guard_output);

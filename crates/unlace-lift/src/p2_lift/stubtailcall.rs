@@ -1,4 +1,4 @@
-//! (kuna) Flow a loader-proven lazy-binding stub as a tail call.
+//! (unlace) Flow a loader-proven lazy-binding stub as a tail call.
 //!
 //! A MIPS `.MIPS.stubs` entry loads the lazy resolver, saves the caller's return
 //! address in t7, calls the resolver and passes the dynamic-symbol index in the
@@ -6,7 +6,7 @@
 //! address restored, so control never comes back to the stub. Decoded as an
 //! ordinary call, flow falls through into the next stub, or past the end of the
 //! section after the last one. The object loader validates each
-//! stub (`kuna_mipsstubs`); flow keeps the resolver call and ends the stub with
+//! stub (`unlace_mipsstubs`); flow keeps the resolver call and ends the stub with
 //! a return after it. An explicit per-function flow override always wins.
 
 use unlace_base::address::Address;

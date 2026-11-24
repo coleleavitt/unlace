@@ -1,4 +1,4 @@
-//! (kuna `thunknames`) Name a placeholder jump thunk after the function it jumps to.
+//! (unlace `thunknames`) Name a placeholder jump thunk after the function it jumps to.
 //!
 //! A function whose first instruction is a direct unconditional branch to another
 //! function's entry, and does nothing else, is a jump thunk: its whole body is
@@ -81,7 +81,7 @@ pub(super) fn commit(
     prog: &mut ConsoleProgram,
     code_space: &Rc<AddrSpace>,
     jumps: &BTreeMap<u64, u64>,
-) -> KunaResult<BTreeSet<u64>> {
+) -> UnlaceResult<BTreeSet<u64>> {
     let mut renamed = BTreeSet::new();
     for _ in 0..MAX_CHAIN_HOPS {
         let mut names: Vec<(SymbolId, Address, String)> = Vec::new();
@@ -127,7 +127,7 @@ pub(super) fn commit(
     Ok(renamed)
 }
 
-/// (kuna `nullsubs`) Whether the function at `vma` is empty: after at most one
+/// (unlace `nullsubs`) Whether the function at `vma` is empty: after at most one
 /// instruction that emits no p-code (`endbr64`, `bti`), its first instruction is
 /// a return that does nothing else. A return's own stack and link-register work
 /// (`LOAD`, `INT_ADD`, `INT_AND`, `COPY` into the program counter) is allowed,
@@ -174,7 +174,7 @@ fn is_nullsub(arch: &Architecture, code_space: &Rc<AddrSpace>, vma: u64) -> bool
     false
 }
 
-/// (kuna `nullsubs`) Rename every discovered entry still named by a placeholder
+/// (unlace `nullsubs`) Rename every discovered entry still named by a placeholder
 /// whose body is a bare return (see [`is_nullsub`]) `nullsub_<addr>`, keeping the
 /// placeholder's address spelling (`sub_401000` becomes `nullsub_401000`), IDA's
 /// `AF_NULLSUB`. A name already in use is left alone.
@@ -182,7 +182,7 @@ pub(super) fn name_nullsubs(
     prog: &mut ConsoleProgram,
     code_space: &Rc<AddrSpace>,
     entries: &[u64],
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     let mut names: Vec<(SymbolId, Address, String)> = Vec::new();
     for &vma in entries {
         let addr = Address::new(Rc::clone(code_space), vma);
@@ -225,7 +225,7 @@ pub(super) fn inherit_prototypes(
     let mut models = (*prog.arch().loader_proto_models).clone();
     let mut abi = prog
         .arch()
-        .kuna_states
+        .unlace_states
         .get::<unlace_decomp::swiftcall::SwiftAbi>()
         .cloned();
     for &thunk in renamed {
@@ -269,7 +269,7 @@ pub(super) fn inherit_prototypes(
     }
     prog.arch_mut().loader_proto_models = Rc::new(models);
     if let Some(abi) = abi {
-        prog.arch_mut().kuna_states.set(Rc::new(abi));
+        prog.arch_mut().unlace_states.set(Rc::new(abi));
     }
 }
 

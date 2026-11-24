@@ -24,7 +24,7 @@
 //!
 //! The C++ `AssignAction` holds a `const ParamListStandard *resource`
 //! back-pointer, and `ParamListStandard::modelRules` owns a
-//! `vector<ModelRule>`.  In the kuna port `fspec.rs`'s `ParamListStandard`
+//! `vector<ModelRule>`.  In the unlace port `fspec.rs`'s `ParamListStandard`
 //! carries an **uninhabitable** placeholder `ModelRule` enum (the documented
 //! boundary), and `fspec.rs` is **not** owned by this item — so the real
 //! [`ModelRule`] here cannot be planted into `ParamListStandard::model_rules`
@@ -42,7 +42,7 @@
 //! The `Architecture *glb` reach in the C++ (`tlist.getArch()`,
 //! `tlist.getArch()->getDefaultDataSpace()`) is replaced by the
 //! [`AddrSpaceManager`] threaded through `assign_address`, matching the
-//! `fspec-2` boundary (`ProtoModel` has no `glb` back-pointer in the kuna port).
+//! `fspec-2` boundary (`ProtoModel` has no `glb` back-pointer in the unlace port).
 //!
 //! Integer model per ADR 0003: `uintb->u64`, `intb->i64`, `int4->i32`,
 //! `uint4->u32`; the `uint4` AssignAction response is modeled by the fspec
@@ -50,7 +50,7 @@
 
 use std::rc::Rc;
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::{
     ATTRIB_ALIGN, ATTRIB_INDEX, ATTRIB_NAME, ATTRIB_STACKSPILL, ATTRIB_STORAGE, AttributeId,
     Decoder, ElementId,
@@ -91,13 +91,13 @@ pub const ATTRIB_AFTER_BYTES: AttributeId = AttributeId::new("afterbytes", 156);
 pub const ATTRIB_AFTER_STORAGE: AttributeId = AttributeId::new("afterstorage", 157);
 /// Marshalling attribute "fillalternate" (modelrules.cc:27).
 pub const ATTRIB_FILL_ALTERNATE: AttributeId = AttributeId::new("fillalternate", 158);
-/// (kuna) `<join stackalign="false">`: the stack spill of a join ignores the
+/// (unlace) `<join stackalign="false">`: the stack spill of a join ignores the
 /// data-type alignment and takes the next free slot.
 pub const ATTRIB_STACKALIGN: AttributeId = AttributeId::new("stackalign", 4002);
 /// Classify direct struct fields instead of recursively flattened primitives.
 pub const ATTRIB_DIRECTFIELDS: AttributeId = AttributeId::new("directfields", 4003);
 
-// Borrowed from fspec.cc / architecture.cc (their kuna ids are not yet defined;
+// Borrowed from fspec.cc / architecture.cc (their unlace ids are not yet defined;
 // the modelrules decode references them, so they are carried here with their
 // upstream id numbers — fspec.cc:29-38, architecture.cc:48).
 /// Marshaling attribute "maxsize" (fspec.cc:29).
@@ -154,7 +154,7 @@ pub const ELEM_RULE: ElementId = ElementId::new("rule", 153);
 /// `ModelRule`/`AssignAction`/`DatatypeFilter`/`QualifierFilter` decoders consult,
 /// so an [`IdRegistry`](unlace_base::marshal::IdRegistry) configured for cspec
 /// decoding can drive `ModelRule::decode`.  Registration is keyed by name and is
-/// idempotent, matching the C++ static `ElementId`/`AttributeId` table (the kuna
+/// idempotent, matching the C++ static `ElementId`/`AttributeId` table (the unlace
 /// registry is the explicit form of the C++ global id space).
 pub fn register_ids(reg: &mut unlace_base::marshal::IdRegistry) {
     for e in [
@@ -582,7 +582,7 @@ impl SizeRestriction {
 
     /// Initialize filter from enumerated list of sizes (C++ `initFromSizeList`,
     /// modelrules.cc:277-301).
-    fn init_from_size_list(&mut self, str: &[u8]) -> KunaResult<()> {
+    fn init_from_size_list(&mut self, str: &[u8]) -> UnlaceResult<()> {
         let parsed = parse_size_list(str)?;
         for &val in parsed.iter() {
             self.sizes.insert(val);
@@ -608,7 +608,7 @@ impl SizeRestriction {
 
     /// Decode the size attributes from the stream (C++
     /// `SizeRestrictedFilter::decode`, modelrules.cc:337-364).
-    fn decode(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    fn decode(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         loop {
             let attrib_id = decoder.get_next_attribute_id()?;
             if attrib_id == 0 {
@@ -616,21 +616,21 @@ impl SizeRestriction {
             }
             if attrib_id == ATTRIB_MINSIZE {
                 if !self.sizes.is_empty() {
-                    return Err(KunaError::decoder(
+                    return Err(UnlaceError::decoder(
                         "Mixing \"sizes\" with \"minsize\" and \"maxsize\"",
                     ));
                 }
                 self.min_size = decoder.read_unsigned_integer()? as int4; // cast: int4 member
             } else if attrib_id == ATTRIB_MAXSIZE {
                 if !self.sizes.is_empty() {
-                    return Err(KunaError::decoder(
+                    return Err(UnlaceError::decoder(
                         "Mixing \"sizes\" with \"minsize\" and \"maxsize\"",
                     ));
                 }
                 self.max_size = decoder.read_unsigned_integer()? as int4; // cast: int4 member
             } else if attrib_id == ATTRIB_SIZES {
                 if self.min_size != 0 || self.max_size != 0 {
-                    return Err(KunaError::decoder(
+                    return Err(UnlaceError::decoder(
                         "Mixing \"sizes\" with \"minsize\" and \"maxsize\"",
                     ));
                 }
@@ -700,7 +700,7 @@ impl DatatypeFilter {
 
     /// Instantiate a filter from the given stream (C++
     /// `DatatypeFilter::decodeFilter`, modelrules.cc:252-272).
-    pub fn decode_filter(decoder: &mut dyn Decoder) -> KunaResult<DatatypeFilter> {
+    pub fn decode_filter(decoder: &mut dyn Decoder) -> UnlaceResult<DatatypeFilter> {
         let elem_id = decoder.open_element_id(&ELEM_DATATYPE)?;
         let nm = decoder.read_string_id(&ATTRIB_NAME)?;
         let mut filter = if nm == b"any" {
@@ -719,7 +719,7 @@ impl DatatypeFilter {
         } else {
             // If no other name matches, assume this is a metatype.
             let s = std::str::from_utf8(&nm)
-                .map_err(|_| KunaError::decoder("Non-UTF8 metatype name"))?;
+                .map_err(|_| UnlaceError::decoder("Non-UTF8 metatype name"))?;
             let meta = string2metatype(s)?;
             DatatypeFilter::MetaType {
                 meta_type: meta,
@@ -733,7 +733,7 @@ impl DatatypeFilter {
 
     /// Configure details of the data-type class from the stream (C++ `decode`,
     /// per-subclass).
-    fn decode(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    fn decode(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         match self {
             DatatypeFilter::SizeRestricted(sz) => sz.decode(decoder),
             DatatypeFilter::MetaType { size, .. } => size.decode(decoder),
@@ -842,7 +842,7 @@ impl QualifierFilter {
     /// Try to instantiate a qualifier filter from the stream (C++
     /// `QualifierFilter::decodeFilter`, modelrules.cc:451-466).  Returns `None`
     /// (C++ null) if the next element is not a qualifier filter.
-    pub fn decode_filter(decoder: &mut dyn Decoder) -> KunaResult<Option<QualifierFilter>> {
+    pub fn decode_filter(decoder: &mut dyn Decoder) -> UnlaceResult<Option<QualifierFilter>> {
         let elem_id = decoder.peek_element()?;
         let mut filter = if elem_id == ELEM_VARARGS.get_id() {
             // VarargsFilter() — firstPos = 0x80000000; lastPos = 0x7fffffff.
@@ -869,7 +869,7 @@ impl QualifierFilter {
 
     /// Configure details of the criteria from the stream (C++ `decode`,
     /// per-subclass).
-    fn decode(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    fn decode(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         match self {
             // AndFilter::decode is empty (modelrules.hh:206).
             QualifierFilter::And(_) => Ok(()),
@@ -950,7 +950,7 @@ pub enum AssignAction {
         consume_most_sig: bool,
         enforce_alignment: bool,
         justify_right: bool,
-        /// (kuna) Whether the stack spill honors the data-type alignment.
+        /// (unlace) Whether the stack spill honors the data-type alignment.
         stack_align: bool,
         /// Indices of joinable register entries (C++ `tiles`).
         tiles: Vec<usize>,
@@ -1024,15 +1024,15 @@ impl AssignAction {
 
     /// Resolve the cached `ParamEntry` indices against `resource` (C++
     /// `initializeEntries`/`initializeEntry`, called from the constructors and
-    /// the `decode` tails).  Separated out because the kuna actions hold no
+    /// the `decode` tails).  Separated out because the unlace actions hold no
     /// `resource` back-pointer.
-    pub fn initialize(&mut self, resource: &ParamListStandard) -> KunaResult<()> {
+    pub fn initialize(&mut self, resource: &ParamListStandard) -> UnlaceResult<()> {
         match self {
             // GotoStack::initializeEntry (modelrules.cc:696-702).
             AssignAction::GotoStack { stack_entry } => {
                 *stack_entry = resource.get_stack_entry();
                 if stack_entry.is_none() {
-                    return Err(KunaError::lowlevel(
+                    return Err(UnlaceError::lowlevel(
                         "Cannot find matching <pentry> for action: goto_stack",
                     ));
                 }
@@ -1050,12 +1050,12 @@ impl AssignAction {
                 resource.extract_tiles(tiles, *resource_type);
                 *stack_entry = resource.get_stack_entry();
                 if tiles.is_empty() {
-                    return Err(KunaError::lowlevel(
+                    return Err(UnlaceError::lowlevel(
                         "Could not find matching resources for action: join",
                     ));
                 }
                 if *consume_from_stack && stack_entry.is_none() {
-                    return Err(KunaError::lowlevel(
+                    return Err(UnlaceError::lowlevel(
                         "Cannot find matching <pentry> for action: join",
                     ));
                 }
@@ -1079,19 +1079,19 @@ impl AssignAction {
                 resource.extract_tiles(alt_tiles, *alt_type);
                 *stack_entry = resource.get_stack_entry();
                 if base_tiles.is_empty() || alt_tiles.is_empty() {
-                    return Err(KunaError::lowlevel(
+                    return Err(UnlaceError::lowlevel(
                         "Could not find matching resources for action: join_dual_class",
                     ));
                 }
                 let entries = resource.get_entry();
                 *tile_size = entries[base_tiles[0]].get_size();
                 if *tile_size != entries[alt_tiles[0]].get_size() {
-                    return Err(KunaError::lowlevel(
+                    return Err(UnlaceError::lowlevel(
                         "Storage class register sizes do not match for action: join_dual_class",
                     ));
                 }
                 if *consume_from_stack && stack_entry.is_none() {
-                    return Err(KunaError::lowlevel(
+                    return Err(UnlaceError::lowlevel(
                         "Cannot find matching stack resource for action: join_dual_class",
                     ));
                 }
@@ -1102,7 +1102,7 @@ impl AssignAction {
                                 || entries[a].get_size() != entries[b].get_size()
                         }))
                 {
-                    return Err(KunaError::lowlevel(
+                    return Err(UnlaceError::lowlevel(
                         "Aligned join_dual_class requires shared argument slots",
                     ));
                 }
@@ -1117,7 +1117,7 @@ impl AssignAction {
                 tiles.clear();
                 resource.extract_tiles(tiles, *resource_type);
                 if tiles.is_empty() {
-                    return Err(KunaError::lowlevel(
+                    return Err(UnlaceError::lowlevel(
                         "Could not find matching resources for action: consume_extra",
                     ));
                 }
@@ -1131,7 +1131,7 @@ impl AssignAction {
                 tiles.clear();
                 resource.extract_tiles(tiles, *resource_type);
                 if tiles.is_empty() {
-                    return Err(KunaError::lowlevel(
+                    return Err(UnlaceError::lowlevel(
                         "Could not find matching resources for action: consume_remaining",
                     ));
                 }
@@ -1141,7 +1141,7 @@ impl AssignAction {
             AssignAction::ExtraStack { stack_entry, .. } => {
                 *stack_entry = resource.get_stack_entry();
                 if stack_entry.is_none() {
-                    return Err(KunaError::lowlevel(
+                    return Err(UnlaceError::lowlevel(
                         "Cannot find matching <pentry> for action: extra_stack",
                     ));
                 }
@@ -1166,7 +1166,7 @@ impl AssignAction {
         res: &mut ParameterPieces,
         resource: &ParamListStandard,
         manager: &AddrSpaceManager,
-    ) -> KunaResult<AssignActionResponse> {
+    ) -> UnlaceResult<AssignActionResponse> {
         match self {
             AssignAction::GotoStack { stack_entry } => {
                 assign_goto_stack(*stack_entry, dt, status, res, resource, manager)
@@ -1209,7 +1209,7 @@ impl AssignAction {
         res: &mut ParameterPieces,
         resource: &ParamListStandard,
         manager: &AddrSpaceManager,
-    ) -> KunaResult<AssignActionResponse> {
+    ) -> UnlaceResult<AssignActionResponse> {
         let (
             resource_type,
             is_big_endian,
@@ -1343,7 +1343,7 @@ impl AssignAction {
         res: &mut ParameterPieces,
         resource: &ParamListStandard,
         manager: &AddrSpaceManager,
-    ) -> KunaResult<AssignActionResponse> {
+    ) -> UnlaceResult<AssignActionResponse> {
         let (resource_type, consume_from_stack, consume_most_sig, direct_fields) = match self {
             AssignAction::MultiMemberAssign {
                 resource_type,
@@ -1414,7 +1414,7 @@ impl AssignAction {
         res: &mut ParameterPieces,
         resource: &ParamListStandard,
         manager: &AddrSpaceManager,
-    ) -> KunaResult<AssignActionResponse> {
+    ) -> UnlaceResult<AssignActionResponse> {
         let (
             is_big_endian,
             consume_from_stack,
@@ -1639,7 +1639,7 @@ impl AssignAction {
         dt: &Rc<Datatype>,
         status: &mut [int4],
         resource: &ParamListStandard,
-    ) -> KunaResult<AssignActionResponse> {
+    ) -> UnlaceResult<AssignActionResponse> {
         let (match_size, tiles) = match self {
             AssignAction::ConsumeExtra {
                 match_size, tiles, ..
@@ -1669,7 +1669,7 @@ impl AssignAction {
         &self,
         status: &mut [int4],
         resource: &ParamListStandard,
-    ) -> KunaResult<AssignActionResponse> {
+    ) -> UnlaceResult<AssignActionResponse> {
         let tiles = match self {
             AssignAction::ConsumeRemaining { tiles, .. } => tiles,
             _ => unreachable!(),
@@ -1695,7 +1695,7 @@ impl AssignAction {
         res: &mut ParameterPieces,
         resource: &ParamListStandard,
         manager: &AddrSpaceManager,
-    ) -> KunaResult<AssignActionResponse> {
+    ) -> UnlaceResult<AssignActionResponse> {
         let (after_bytes, after_storage, stack_entry) = match self {
             AssignAction::ExtraStack {
                 after_bytes,
@@ -1879,7 +1879,7 @@ impl AssignAction {
     pub fn decode_action(
         decoder: &mut dyn Decoder,
         resource: &ParamListStandard,
-    ) -> KunaResult<AssignAction> {
+    ) -> UnlaceResult<AssignAction> {
         let elem_id = decoder.peek_element()?;
         let mut action = if elem_id == ELEM_GOTO_STACK.get_id() {
             new_goto_stack_decode()
@@ -1908,7 +1908,7 @@ impl AssignAction {
         } else if elem_id == ELEM_JOIN_DUAL_CLASS.get_id() {
             new_multi_slot_dual_default(resource)
         } else {
-            return Err(KunaError::decoder("Expecting model rule action"));
+            return Err(UnlaceError::decoder("Expecting model rule action"));
         };
         action.decode(decoder, resource)?;
         Ok(action)
@@ -1920,7 +1920,7 @@ impl AssignAction {
     pub fn decode_precondition(
         decoder: &mut dyn Decoder,
         resource: &ParamListStandard,
-    ) -> KunaResult<Option<AssignAction>> {
+    ) -> UnlaceResult<Option<AssignAction>> {
         let elem_id = decoder.peek_element()?;
         let mut action = if elem_id == ELEM_CONSUME_EXTRA.get_id() {
             new_consume_extra_decode()
@@ -1936,7 +1936,7 @@ impl AssignAction {
     pub fn decode_sideeffect(
         decoder: &mut dyn Decoder,
         resource: &ParamListStandard,
-    ) -> KunaResult<AssignAction> {
+    ) -> UnlaceResult<AssignAction> {
         let elem_id = decoder.peek_element()?;
         let mut action = if elem_id == ELEM_CONSUME_EXTRA.get_id() {
             new_consume_extra_decode()
@@ -1945,7 +1945,7 @@ impl AssignAction {
         } else if elem_id == ELEM_CONSUME_REMAINING.get_id() {
             new_consume_remaining_decode()
         } else {
-            return Err(KunaError::decoder("Expecting model rule sideeffect"));
+            return Err(UnlaceError::decoder("Expecting model rule sideeffect"));
         };
         action.decode(decoder, resource)?;
         Ok(action)
@@ -1958,7 +1958,7 @@ impl AssignAction {
         &mut self,
         decoder: &mut dyn Decoder,
         resource: &ParamListStandard,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         match self {
             // GotoStack::decode (modelrules.cc:748-754).
             AssignAction::GotoStack { .. } => {
@@ -2034,7 +2034,7 @@ impl AssignAction {
                         ParamListType::StandardOut | ParamListType::RegisterOut
                     )
                 {
-                    return Err(KunaError::decoder(
+                    return Err(UnlaceError::decoder(
                         "Direct-field member joins require output resources",
                     ));
                 }
@@ -2106,7 +2106,7 @@ impl AssignAction {
                             *ret_code = RES_HIDDENRET_SPECIALREG;
                         } else {
                             let s = String::from_utf8_lossy(&strategy_string);
-                            return Err(KunaError::decoder(format!(
+                            return Err(UnlaceError::decoder(format!(
                                 "Bad <hidden_return> strategy: {s}"
                             )));
                         }
@@ -2267,7 +2267,7 @@ fn assign_goto_stack(
     res: &mut ParameterPieces,
     resource: &ParamListStandard,
     manager: &AddrSpaceManager,
-) -> KunaResult<AssignActionResponse> {
+) -> UnlaceResult<AssignActionResponse> {
     let se = stack_entry.expect("GotoStack stack entry");
     let entry = &resource.get_entry()[se];
     let grp = entry.get_group() as usize;
@@ -2291,13 +2291,13 @@ fn assign_convert_to_pointer(
     res: &mut ParameterPieces,
     resource: &ParamListStandard,
     manager: &AddrSpaceManager,
-) -> KunaResult<AssignActionResponse> {
+) -> UnlaceResult<AssignActionResponse> {
     let _ = (proto, pos);
     let spc = match space {
         Some(s) => Rc::clone(s),
         None => manager
             .get_default_data_space()
-            .ok_or_else(|| KunaError::lowlevel("No default data space"))?
+            .ok_or_else(|| UnlaceError::lowlevel("No default data space"))?
             .clone(),
     };
     let pointersize = spc.get_addr_size() as int4;
@@ -2484,24 +2484,24 @@ fn justify_pieces(
 
 /// Read a `type_class` from the current attribute (C++
 /// `string2typeclass(decoder.readString())`).
-fn read_typeclass(decoder: &mut dyn Decoder) -> KunaResult<type_class> {
+fn read_typeclass(decoder: &mut dyn Decoder) -> UnlaceResult<type_class> {
     let s = decoder.read_string()?;
-    let s = std::str::from_utf8(&s).map_err(|_| KunaError::decoder("Non-UTF8 storage class"))?;
+    let s = std::str::from_utf8(&s).map_err(|_| UnlaceError::decoder("Non-UTF8 storage class"))?;
     string2typeclass(s)
 }
 
 /// Read a `type_class` from a named attribute (C++
 /// `string2typeclass(decoder.readString(ATTRIB_STORAGE))`).
-fn read_typeclass_id(decoder: &mut dyn Decoder, attrib: &AttributeId) -> KunaResult<type_class> {
+fn read_typeclass_id(decoder: &mut dyn Decoder, attrib: &AttributeId) -> UnlaceResult<type_class> {
     let s = decoder.read_string_id(attrib)?;
-    let s = std::str::from_utf8(&s).map_err(|_| KunaError::decoder("Non-UTF8 storage class"))?;
+    let s = std::str::from_utf8(&s).map_err(|_| UnlaceError::decoder("Non-UTF8 storage class"))?;
     string2typeclass(s)
 }
 
 /// Parse a comma/space separated list of positive decimal integers (C++
 /// `SizeRestrictedFilter::initFromSizeList`'s `istringstream` loop,
 /// modelrules.cc:280-294).  Errors on a non-positive value ("Bad filter size").
-fn parse_size_list(str: &[u8]) -> KunaResult<Vec<int4>> {
+fn parse_size_list(str: &[u8]) -> UnlaceResult<Vec<int4>> {
     let mut out = Vec::new();
     let mut i = 0usize;
     let n = str.len();
@@ -2537,7 +2537,7 @@ fn parse_size_list(str: &[u8]) -> KunaResult<Vec<int4>> {
             -1 // failed extraction leaves val == -1
         };
         if val <= 0 {
-            return Err(KunaError::decoder("Bad filter size"));
+            return Err(UnlaceError::decoder("Bad filter size"));
         }
         out.push(val);
         if i == start {
@@ -2574,7 +2574,7 @@ pub struct ModelRule {
 impl ModelRule {
     /// Construct from components (C++
     /// `ModelRule(const DatatypeFilter&,const AssignAction&,const ParamListStandard*)`,
-    /// modelrules.cc:1615-1621).  The C++ clones the filter/action; the kuna
+    /// modelrules.cc:1615-1621).  The C++ clones the filter/action; the unlace
     /// port takes them by value (the caller's copy is moved in).
     pub fn from_components(type_filter: DatatypeFilter, action: AssignAction) -> ModelRule {
         ModelRule {
@@ -2615,7 +2615,7 @@ impl ModelRule {
         res: &mut ParameterPieces,
         resource: &ParamListStandard,
         manager: &AddrSpaceManager,
-    ) -> KunaResult<AssignActionResponse> {
+    ) -> UnlaceResult<AssignActionResponse> {
         if !self.filter.filter(dt) {
             return Ok(RES_FAIL);
         }
@@ -2661,7 +2661,7 @@ impl ModelRule {
     pub fn decode(
         decoder: &mut dyn Decoder,
         resource: &ParamListStandard,
-    ) -> KunaResult<ModelRule> {
+    ) -> UnlaceResult<ModelRule> {
         let mut qualifiers: Vec<QualifierFilter> = Vec::new();
         let elem_id = decoder.open_element_id(&ELEM_RULE)?;
         let filter = DatatypeFilter::decode_filter(decoder)?;
@@ -2702,7 +2702,7 @@ impl ModelRule {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.modelrules_register_ids = Some(register_ids);
 }
 

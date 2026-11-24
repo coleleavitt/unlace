@@ -40,7 +40,7 @@ worked example in `docs/cli.md` was one of the rejected forms.
 
 ## The tests
 
-Seven unit tests in `kuna-console/src/grammar/tests.rs` (the 20-spelling
+Seven unit tests in `console/src/grammar/tests.rs` (the 20-spelling
 resolution table, `long` under LP64 vs LLP64, `char` vs `signed char`, nine
 impossible combinations, and the `findByName`-still-wins guarantee), two
 end-to-end tests in `verify_assertplane.rs` driving the real `--assert` path,

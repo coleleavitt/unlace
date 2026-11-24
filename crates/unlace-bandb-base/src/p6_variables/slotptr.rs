@@ -1,4 +1,4 @@
-//! (kuna `slotptr`) Type a `framelayout` filler slot from the pointer stored
+//! (unlace `slotptr`) Type a `framelayout` filler slot from the pointer stored
 //! into it (P6, JSON surface only).
 //!
 //! At -O0 every C local has its own spill slot.  The dataflow copy-propagates the
@@ -283,30 +283,30 @@ pub fn admit(ty: &Datatype, size: int4) -> Result<(), Decline> {
     }
 }
 
-/// (kuna `slotptr`) What each `restructure_varnode` pass saw stored into, and touched in, the
+/// (unlace `slotptr`) What each `restructure_varnode` pass saw stored into, and touched in, the
 /// stack frame; read only by `extract_variables`. Reset by `Funcdata::clear`: the evidence names
 /// ops by SeqNum, which a rebuilt op bank reissues.
 #[derive(Default)]
 struct EvidenceSlot(std::cell::RefCell<SlotEvidence>);
-crate::kuna_func_state!(EvidenceSlot, keep_across_clear: false);
+crate::unlace_func_state!(EvidenceSlot, keep_across_clear: false);
 
-/// The `kuna_slotptr` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// The `unlace_slotptr` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataSlotptrExt {
-    /// (kuna `slotptr`) Fold one pass's stack-store evidence into the running record.
+    /// (unlace `slotptr`) Fold one pass's stack-store evidence into the running record.
     fn with_slot_evidence(&self, f: impl FnOnce(&mut SlotEvidence));
-    /// (kuna `slotptr`) The stack-store evidence every pass recorded.
+    /// (unlace `slotptr`) The stack-store evidence every pass recorded.
     fn slot_evidence(&self) -> std::cell::Ref<'_, SlotEvidence>;
 }
 
 impl FuncdataSlotptrExt for crate::funcdata::Funcdata {
-    /// (kuna `slotptr`) Fold one pass's stack-store evidence into the running record.
+    /// (unlace `slotptr`) Fold one pass's stack-store evidence into the running record.
     fn with_slot_evidence(&self, f: impl FnOnce(&mut SlotEvidence)) {
-        f(&mut self.kuna_state::<EvidenceSlot>().0.borrow_mut());
+        f(&mut self.unlace_state::<EvidenceSlot>().0.borrow_mut());
     }
-    /// (kuna `slotptr`) The stack-store evidence every pass recorded.
+    /// (unlace `slotptr`) The stack-store evidence every pass recorded.
     fn slot_evidence(&self) -> std::cell::Ref<'_, SlotEvidence> {
-        self.kuna_state::<EvidenceSlot>().0.borrow()
+        self.unlace_state::<EvidenceSlot>().0.borrow()
     }
 }
 

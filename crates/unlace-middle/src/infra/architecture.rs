@@ -9,17 +9,17 @@
 //!
 //! The C++ `Architecture` is the single largest class in the decompiler and
 //! reaches into nearly every subsystem.  This port faithfully ports the parts
-//! whose dependencies already exist in the kuna Rust tree, and stub-notes the
+//! whose dependencies already exist in the unlace Rust tree, and stub-notes the
 //! rest:
 //!
-//! - **Wired now**: the configuration fields and the kuna anchor flags (a
+//! - **Wired now**: the configuration fields and the unlace anchor flags (a
 //!   verbatim transcription of `resetDefaultsInternal`, `architecture.cc:1420`);
 //!   ownership of the `Translate` engine, the [`Database`] symbol table (with its
 //!   global scope, C++ `buildDatabase`), the [`OptionDatabase`], the
 //!   [`ActionDatabase`], the [`UserOpManage`], and the SLEIGH-backed p-code
 //!   injection library; the `getModel`/`hasModel` registry lookups; the
 //!   `getMinimumLanedRegisterSize`/`getLanedRegister` laned-register lookups;
-//!   `nameFunction` (the kuna angr-style and upstream `func_` policies); and the
+//!   `nameFunction` (the unlace angr-style and upstream `func_` policies); and the
 //!   construction of a [`Funcdata`] tied to this architecture (the W3 boot boundary:
 //!   `vbank`'s analysis unique-start comes from `Translate::getUniqueStart`).
 //!
@@ -33,13 +33,13 @@
 //!   likewise deferred to their dependency waves.  Each is documented inline with
 //!   `// STUB(...)`.
 //!
-//! ## The kuna anchor flags
+//! ## The unlace anchor flags
 //!
-//! `architecture.cc`/`.hh` carry a block of kuna-specific boolean flags (the
-//! `(kuna)`-marked members `present_lessequal`,
-//! `strip_stack_guard`, …) that the kuna stage-model sub-stage fixes read.  They
+//! `architecture.cc`/`.hh` carry a block of unlace-specific boolean flags (the
+//! `(unlace)`-marked members `present_lessequal`,
+//! `strip_stack_guard`, …) that the unlace stage-model sub-stage fixes read.  They
 //! are ported here as plain `bool` fields on [`Architecture`] (defaulted by
-//! `resetDefaultsInternal`); the `w4-kuna-p0-pack` item's `OptionValues` alias
+//! `resetDefaultsInternal`); the `w4-unlace-p0-pack` item's `OptionValues` alias
 //! them through the option surface.  Public getters/setters are provided so the
 //! p0-pack can read/flip each without owning the struct layout.
 
@@ -48,7 +48,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::{AddrSpace, AddrSpaceManager};
 use unlace_base::types::{int4, uint4, uintb};
 
@@ -102,15 +102,15 @@ fn decode_bool_attr(v: &str) -> bool {
 /// Build a named copy of an already-registered model (C++
 /// `Architecture::createModelAlias`, architecture.cc:1137).  A merged model and
 /// an alias-of-an-alias are both refused, exactly as upstream.
-fn create_model_alias(alias: &str, parent: &Rc<ProtoModel>) -> KunaResult<ProtoModel> {
+fn create_model_alias(alias: &str, parent: &Rc<ProtoModel>) -> UnlaceResult<ProtoModel> {
     if parent.is_merged() {
-        return Err(KunaError::lowlevel(format!(
+        return Err(UnlaceError::lowlevel(format!(
             "Cannot make alias of merged model: {}",
             parent.get_name()
         )));
     }
     if parent.get_alias_parent().is_some() {
-        return Err(KunaError::lowlevel(format!(
+        return Err(UnlaceError::lowlevel(format!(
             "Cannot make alias of an alias: {}",
             parent.get_name()
         )));
@@ -245,7 +245,7 @@ impl CommentDatabase {
 // Architecture
 // ---------------------------------------------------------------------------
 
-/// (kuna `arm64evcall`) What an arm64e virtual call site's slot can hold.
+/// (unlace `arm64evcall`) What an arm64e virtual call site's slot can hold.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct VcallTargets {
     /// The general register the call branches through (`blraa x8, x17`: 8).
@@ -268,8 +268,8 @@ pub struct Architecture {
     /// ID string uniquely describing this architecture (C++ `archid`).
     pub archid: String,
 
-    /// The registered kuna options' current values.
-    pub kuna_options: crate::optionset::OptionSet,
+    /// The registered unlace options' current values.
+    pub unlace_options: crate::optionset::OptionSet,
 
     /// File input explicitly selected ARM/Thumb state; metadata must not repaint TMode.
     pub input_arm_isa_override: bool,
@@ -313,7 +313,7 @@ pub struct Architecture {
     pub aggressive_ext_trim: bool,
     /// Treat readonly values as constants (C++ `readonlypropagate`).
     pub readonlypropagate: bool,
-    /// (kuna `dynrelocs`) `[start, stop]` (inclusive) offsets whose read-only
+    /// (unlace `dynrelocs`) `[start, stop]` (inclusive) offsets whose read-only
     /// contents fold even with [`Self::readonlypropagate`] off — the loader's
     /// `PT_GNU_RELRO`-frozen dynamic-relocation slots
     /// (`ObjectLoadImage::dynreloc_const_ranges`). Installed by the ELF bootstrap
@@ -321,12 +321,12 @@ pub struct Architecture {
     /// every per-function handle by `build_arch_handle`. Empty on every other
     /// path, so it is inert for the XML datatest oracle.
     pub dynreloc_const: Rc<Vec<(u64, u64)>>,
-    /// (kuna `pltlocal`) `(stub, definition)` for each PLT stub the image's own
+    /// (unlace `pltlocal`) `(stub, definition)` for each PLT stub the image's own
     /// dynamic relocations bind to a function it defines, ascending by stub
     /// (`ObjectLoadImage::plt_local_targets`). Installed by the ELF bootstrap;
     /// empty on every other path. See [`crate::p4_calls::pltlocal`].
     pub plt_local: Rc<Vec<(u64, u64)>>,
-    /// (kuna `litpoolconst`) `[start, stop]` (inclusive) offsets of the image's
+    /// (unlace `litpoolconst`) `[start, stop]` (inclusive) offsets of the image's
     /// allocated, executable, non-writable, file-backed regions — the program's
     /// own instruction stream, and so the ARM/MIPS/PPC literal pools embedded in
     /// it. A read that lies entirely inside one folds with
@@ -335,34 +335,34 @@ pub struct Architecture {
     /// object bootstrap beside [`Self::dynreloc_const`]. Empty on every other
     /// path, so it is inert for the XML datatest oracle.
     pub litpool_const: Rc<Vec<(u64, u64)>>,
-    /// (kuna `poolextents`) Sorted, disjoint `[lo, hi)` word runs of the ARM32
+    /// (unlace `poolextents`) Sorted, disjoint `[lo, hi)` word runs of the ARM32
     /// literal pools the analysis tier's Listing proves from trusted
     /// references (`unlace-analysis` `listing/poolextents.rs`), committed
     /// with the Listing's facts. The `funcboundflow` bound ends an
     /// unconditional call's fall-through at one
-    /// ([`crate::funcboundflow::kuna_pool_pad`]). Empty without the
+    /// ([`crate::funcboundflow::unlace_pool_pad`]). Empty without the
     /// Listing and on every other target, so it is inert for the XML datatest
     /// oracle.
     pub arm_pool_extents: Rc<Vec<(u64, u64)>>,
-    /// (kuna `bejoin callers`) The image's exception-table sections
+    /// (unlace `bejoin callers`) The image's exception-table sections
     /// (`.eh_frame`, `.gcc_except_table*`, `.ARM.exidx*`, `.ARM.extab*`) as
     /// `(name, address, size)`, which the object bootstrap installs beside
     /// [`Self::litpool_const`]; `None` on a path without a section table. The
     /// caller evidence reads the landing pads from them.
     pub eh_sections: Option<Rc<Vec<(String, u64, u64)>>>,
-    /// (kuna `bejoin callers`) The `(address, size)` of each function symbol
+    /// (unlace `bejoin callers`) The `(address, size)` of each function symbol
     /// whose symbol table states a size, sorted by address, which the object
     /// bootstrap installs beside [`Self::eh_sections`]; empty on a path without
     /// a symbol table. The caller evidence ends a function's extent there.
     pub func_sizes: Rc<Vec<(u64, u64)>>,
-    /// (kuna `globalref`) Sorted, merged `[start, stop]` (inclusive) byte ranges
+    /// (unlace `globalref`) Sorted, merged `[start, stop]` (inclusive) byte ranges
     /// of the loaded sections a program's own data objects live in, as the
     /// object loader classifies them (`ObjectLoadImage::data_object_ranges`).
     /// A pointer-typed constant prints as `&dat_<addr>` only inside one. Empty
     /// on every path without a section table, so it is inert for the XML
     /// datatest oracle.
     pub globalref_ranges: Rc<Vec<(u64, u64)>>,
-    /// (kuna `cstringconst`) The `[start, end)` ranges of the loaded sections
+    /// (unlace `cstringconst`) The `[start, end)` ranges of the loaded sections
     /// that hold only C string literals (a Mach-O `__cstring` section of type
     /// `S_CSTRING_LITERALS`). Empty without a section table.
     pub cstring_ranges: Rc<Vec<(u64, u64)>>,
@@ -397,83 +397,83 @@ pub struct Architecture {
     /// shared LOSS-132 space identities).
     pub infer_ptr_spaces: Vec<Rc<AddrSpace>>,
 
-    // --- kuna anchor flags (architecture.hh:179-201, the `(kuna)` members) -
+    // --- unlace anchor flags (architecture.hh:179-201, the `(unlace)` members) -
     /// Single-function bodies (FDEs, or Go `pclntab` extents) whose interiors the
     /// loader suppressed as separate entries.
-    pub kuna_function_bodies: Vec<(u64, u64)>,
-    /// (kuna `floatglobals`) A multi-function run scans images of any size.
-    pub kuna_float_scan_batch: bool,
+    pub unlace_function_bodies: Vec<(u64, u64)>,
+    /// (unlace `floatglobals`) A multi-function run scans images of any size.
+    pub unlace_float_scan_batch: bool,
     /// The callee-first driver settles return values from its decompiled callers.
-    pub kuna_settle_caller_reads: bool,
-    /// (kuna `callerreads`) Every direct call the Listing walked, as `(callee
+    pub unlace_settle_caller_reads: bool,
+    /// (unlace `callerreads`) Every direct call the Listing walked, as `(callee
     /// entry, address the call returns to)`, sorted. Empty without the Listing.
-    pub kuna_call_returns: Vec<(u64, u64)>,
-    /// (kuna `vectorabi`) The widened models, built once per default model.
+    pub unlace_call_returns: Vec<(u64, u64)>,
+    /// (unlace `vectorabi`) The widened models, built once per default model.
     pub vector_models:
         std::cell::RefCell<Vec<(Rc<crate::fspec::ProtoModel>, Rc<crate::fspec::ProtoModel>)>>,
-    /// (kuna `vectorabi`) The vector user-ops and their element kinds, built once.
+    /// (unlace `vectorabi`) The vector user-ops and their element kinds, built once.
     pub vector_userop_kinds: std::cell::OnceCell<Rc<Vec<(unlace_base::types::uint4, u8)>>>,
 
-    /// (kuna) The kuna passes' architecture-wide tables ([`crate::archstate`]): the
+    /// (unlace) The unlace passes' architecture-wide tables ([`crate::archstate`]): the
     /// compiled `<segmentop>` definitions, call mechanisms and jump assists, built while the
     /// specs load and shared with every per-function context.
-    pub kuna_states: crate::archstate::ArchStates,
-    /// (kuna) The kuna passes' run-wide ledgers and caches ([`crate::archstate::ArchTables`]),
+    pub unlace_states: crate::archstate::ArchStates,
+    /// (unlace) The unlace passes' run-wide ledgers and caches ([`crate::archstate::ArchTables`]),
     /// one per table type, created on first use.
-    pub kuna_tables: crate::archstate::ArchTables,
-    /// (kuna `fpuemu`) The loader found 8087-emulator code in the image, which
+    pub unlace_tables: crate::archstate::ArchTables,
+    /// (unlace `fpuemu`) The loader found 8087-emulator code in the image, which
     /// `auto` decodes by.
     pub fpu_emu_evidence: bool,
-    /// (kuna `dwarfscopes`) Register-held DWARF locals by function entry:
+    /// (unlace `dwarfscopes`) Register-held DWARF locals by function entry:
     /// name, type, register storage, and the PC the register holds it from.
     pub dwarf_reg_locals:
         std::collections::BTreeMap<u64, Vec<(String, Rc<crate::dtype::Datatype>, Address, u64)>>,
-    /// (kuna) Did the loader identify the image as a Windows GUI/console PE?  A
+    /// (unlace) Did the loader identify the image as a Windows GUI/console PE?  A
     /// FACT, not an option: written once at `load file` and the thing `option
     /// pebnames auto` tests.  The XML `<binaryimage>` bootstrap never sets it.
     pub image_windows_user: bool,
-    /// (kuna) Did the loader identify the image as a program for an operating
+    /// (unlace) Did the loader identify the image as a program for an operating
     /// system's user space (an ELF with a program interpreter, a dynamic section
     /// naming a shared object, an ABI-tag note, or a Linux/BSD `EI_OSABI`)?  A
     /// FACT, not an option: written once at `load file` and the thing `option
     /// syscallregs auto` tests.  The XML `<binaryimage>` bootstrap never sets it.
     pub image_os_userland: bool,
-    /// (kuna) Did the loader identify the image as an ELF built for Linux (an
+    /// (unlace) Did the loader identify the image as an ELF built for Linux (an
     /// `EI_OSABI` of System V or GNU with no other system's ABI-tag note)?  A
     /// FACT, not an option: written once at `load file` and the thing `option
     /// linuxsyscall auto` tests.  The XML `<binaryimage>` bootstrap never sets it.
     pub image_linux_elf: bool,
-    /// (kuna) Is the image an ELF?  A FACT, not an option: written once at
+    /// (unlace) Is the image an ELF?  A FACT, not an option: written once at
     /// `load file` and the target gate of `option spsolve`.  The XML
     /// `<binaryimage>` bootstrap never sets it.
     pub image_elf: bool,
-    /// (kuna) Is the image an Apple container (Mach-O, fat Mach-O or a dyld
+    /// (unlace) Is the image an Apple container (Mach-O, fat Mach-O or a dyld
     /// shared cache)?  A FACT, not an option: written once at `load file` and
     /// the target gate of `option chkstkdarwin`.  The XML `<binaryimage>`
     /// bootstrap never sets it.
     pub image_apple: bool,
 
-    /// (kuna `objcresolve`) Message sends a first decompile resolved, by call
+    /// (unlace `objcresolve`) Message sends a first decompile resolved, by call
     /// site: the IMP the second decompile's CALL goes to instead of the runtime
     /// entry point (`FlowInfo::setup_call_specs`), and for an `objc_msgSend$<sel>`
     /// stub site the prototype the call keeps (the stub's shape, `self` typed).
-    pub kuna_objc_retargets: std::collections::HashMap<u64, u64>,
-    pub kuna_objc_site_pieces: std::collections::HashMap<u64, crate::fspec::PrototypePieces>,
+    pub unlace_objc_retargets: std::collections::HashMap<u64, u64>,
+    pub unlace_objc_site_pieces: std::collections::HashMap<u64, crate::fspec::PrototypePieces>,
     /// Mapped ELF x86 flow recovery: load-time container/target eligibility;
     /// XML, raw, and remote images abstain.
     pub mapped_flow_boundary_image: bool,
 
-    /// (kuna `octeoneffects`) The inject ids of the upstream-lifting fixups this
+    /// (unlace `octeoneffects`) The inject ids of the upstream-lifting fixups this
     /// architecture registered for its Octeon reservation and ordering
     /// operations; `decompile_drive::is_injected_userop` applies them only under
     /// `option octeoneffects off`.
     pub octeon_upstream_inject: Vec<int4>,
-    /// (kuna) The halves of the image's MIPS unaligned load/store pairs, once
+    /// (unlace) The halves of the image's MIPS unaligned load/store pairs, once
     /// scanned ([`crate::mipsunaligned`]).
-    pub kuna_mips_pairs: Option<Rc<Vec<u64>>>,
-    /// (kuna) Whether those halves carry the pair flag.
-    pub kuna_mips_pairs_painted: bool,
-    /// (kuna) The loader's source-language verdict for the image being
+    pub unlace_mips_pairs: Option<Rc<Vec<u64>>>,
+    /// (unlace) Whether those halves carry the pair flag.
+    pub unlace_mips_pairs_painted: bool,
+    /// (unlace) The loader's source-language verdict for the image being
     /// decompiled.  A FACT, not an option: written once at `load file` from
     /// `unlace_analysis::sourcelang` (the `UNLACE_SOURCELANG` override already
     /// applied), and the thing `option rustabi auto` tests and
@@ -493,7 +493,7 @@ pub struct Architecture {
     pub rust_str_display_formatters: std::collections::BTreeSet<u64>,
     pub rust_fmt_write_relro: Option<(u64, u64)>,
 
-    /// (kuna) The default models `armfloatreturn` has widened, with the model
+    /// (unlace) The default models `armfloatreturn` has widened, with the model
     /// each was built from and whether it skips back-fill holes, so every
     /// function reuses one instead of rebuilding it.
     pub arm_widened_models: std::cell::RefCell<
@@ -503,28 +503,28 @@ pub struct Architecture {
             Rc<crate::fspec::ProtoModel>,
         )>,
     >,
-    /// (kuna `armfloatreturn`) Library prototypes declaring a `float` or `double`
+    /// (unlace `armfloatreturn`) Library prototypes declaring a `float` or `double`
     /// that an ARM image's load held back, by name or by entry address, until a
     /// decompile shows whether the option applies. See
     /// [`crate::p4_calls::armfloatreturn::park_float_library_prototypes`].
     pub arm_float_library_prototypes: Vec<(Option<Address>, crate::fspec::PrototypePieces)>,
 
-    /// (kuna `fdeflowbound`) Every single-function unwind-table extent
+    /// (unlace `fdeflowbound`) Every single-function unwind-table extent
     /// `[start, end)`, sorted, committed by the analysis tier.
-    pub kuna_fde_extents: Rc<Vec<(u64, u64)>>,
+    pub unlace_fde_extents: Rc<Vec<(u64, u64)>>,
 
-    /// (kuna, Phase 3) Ghidra-convention default naming (`FUN_`/`DAT_`/`LAB_` +
+    /// (unlace, Phase 3) Ghidra-convention default naming (`FUN_`/`DAT_`/`LAB_` +
     /// `%08x`) for entities no Symbol covers — set (with `name_style_angr` off)
-    /// by the ghidra-mode registerProgram so kuna's fallback names match what
+    /// by the ghidra-mode registerProgram so unlace's fallback names match what
     /// Java's `isDynamicSymbolName`/`GlobalSymbolMap` expect
     /// (ghidra_arch.cc:928-947).  Never set on the standalone path.  Takes
-    /// precedence over `name_style_angr` in [`Self::kuna_name_style`].
+    /// precedence over `name_style_angr` in [`Self::unlace_name_style`].
     pub name_style_ghidra: bool,
-    /// (kuna `importdata`) `(space index, offset)` of each import slot whose
+    /// (unlace `importdata`) `(space index, offset)` of each import slot whose
     /// import is a data object (`machodataslots`): a read of the slot's own
     /// value renders `&<import>`.
     pub data_import_slots: std::collections::BTreeSet<(int4, uintb)>,
-    /// (kuna `cortexmpriv`) The inject id of the `isCurrentModePrivileged`
+    /// (unlace `cortexmpriv`) The inject id of the `isCurrentModePrivileged`
     /// callother-fixup this architecture registered, or `None` on a language that
     /// does not declare the user-op. Identifies the one payload
     /// `option cortexmpriv off` suppresses.
@@ -535,61 +535,61 @@ pub struct Architecture {
     /// path never sets it, so the datatest pipeline is structurally unaffected.
     /// Driver policy, NOT a stage-model settable: it changes zero output for a
     /// function that converges — it only bounds a non-converging one.
-    pub kuna_fn_budget: Option<std::time::Duration>,
+    pub unlace_fn_budget: Option<std::time::Duration>,
     /// (unlace decompile-all watchdog) The live deadline for the CURRENT
-    /// function's drive, computed from [`kuna_fn_budget`](Self::kuna_fn_budget)
+    /// function's drive, computed from [`unlace_fn_budget`](Self::unlace_fn_budget)
     /// at the top of `decompile_func_full_with_override_dyn` and consulted
     /// cooperatively at the action/rule-pool/heritage loop boundaries
     /// ([`ActionContext::deadline`](crate::action::ActionContext)).  Always
     /// `None` when no budget is set.
-    pub kuna_fn_deadline: Option<std::time::Instant>,
-    /// (kuna `calleeretpurge`) Per-image cache of each direct callee's decoded
+    pub unlace_fn_deadline: Option<std::time::Instant>,
+    /// (unlace `calleeretpurge`) Per-image cache of each direct callee's decoded
     /// return purge, keyed by `(space index, entry offset)`.
-    pub kuna_callee_purge_cache: std::collections::HashMap<(int4, uintb), Option<int4>>,
-    /// (kuna `importvote`) The direct call sites of each PLT import, by stub
+    pub unlace_callee_purge_cache: std::collections::HashMap<(int4, uintb), Option<int4>>,
+    /// (unlace `importvote`) The direct call sites of each PLT import, by stub
     /// `(space index, offset)`, committed by the analysis tier.
-    pub kuna_import_sites: Rc<std::collections::HashMap<(int4, u64), Vec<u64>>>,
-    /// (kuna `swiftcall`) Per-image cache of whether a callee's body leaves
+    pub unlace_import_sites: Rc<std::collections::HashMap<(int4, u64), Vec<u64>>>,
+    /// (unlace `swiftcall`) Per-image cache of whether a callee's body leaves
     /// `swiftself` unread ([`crate::swiftcall::seed_self_readers`]).
-    pub kuna_swift_self_first_cache: std::collections::HashMap<(int4, uintb), bool>,
-    /// (kuna `swiftcall`) Whether the body at an entry reads `swiftself`
+    pub unlace_swift_self_first_cache: std::collections::HashMap<(int4, uintb), bool>,
+    /// (unlace `swiftcall`) Whether the body at an entry reads `swiftself`
     /// before writing it, other than to save it
     /// ([`crate::swiftinfer::seed`]).
-    pub kuna_swift_self_reads: std::collections::BTreeMap<(int4, uintb), bool>,
-    /// (kuna `swiftcall`) The same for `swiftasync`.
-    pub kuna_swift_async_reads: std::collections::BTreeMap<(int4, uintb), bool>,
-    /// (kuna `protoorder`) A batch drive with no callee-first order behind it
+    pub unlace_swift_self_reads: std::collections::BTreeMap<(int4, uintb), bool>,
+    /// (unlace `swiftcall`) The same for `swiftasync`.
+    pub unlace_swift_async_reads: std::collections::BTreeMap<(int4, uintb), bool>,
+    /// (unlace `protoorder`) A batch drive with no callee-first order behind it
     /// (a narrowed `decompile-all`, `unlace decompile --json`) states its tail
     /// callees first as a single-function drive does.  Driver state, not an
     /// option: the front-end sets it around such a batch.
-    pub kuna_tail_callee_batch: bool,
-    /// (kuna `vfpvariadic`) The default model with the variadic return rules,
+    pub unlace_tail_callee_batch: bool,
+    /// (unlace `vfpvariadic`) The default model with the variadic return rules,
     /// keyed by the default model it was derived from.
-    pub kuna_vfp_variadic: RefCell<Option<(Rc<ProtoModel>, Option<Rc<ProtoModel>>)>>,
-    /// (kuna) Each x86-32 callee's register inputs read off its own entry, keyed
+    pub unlace_vfp_variadic: RefCell<Option<(Rc<ProtoModel>, Option<Rc<ProtoModel>>)>>,
+    /// (unlace) Each x86-32 callee's register inputs read off its own entry, keyed
     /// by entry offset; see [`crate::calleereginputs`].
-    pub kuna_callee_reginputs: RefCell<std::collections::HashMap<uintb, Option<u8>>>,
-    /// (kuna `calleereginputs custom`) Per-callee-entry input-register key (the
+    pub unlace_callee_reginputs: RefCell<std::collections::HashMap<uintb, Option<u8>>>,
+    /// (unlace `calleereginputs custom`) Per-callee-entry input-register key (the
     /// ECX/EDX/EBX/ESI/EDI set the whole-image two-sided rule decided): bit 0
     /// ECX, 1 EDX, 2 EBX, 3 ESI, 4 EDI. Built once over the whole image by the
     /// callee-first driver ([`crate::p4_calls::calleereginputs`]); empty in
     /// single-function mode (then no custom register is an argument, consistently
     /// on both sides) and empty with the `custom` extension off.
-    pub kuna_custom_reg_callers: Rc<std::collections::HashMap<uintb, u16>>,
-    /// (kuna `calleereginputs custom`) The synthesized model for each input-register
+    pub unlace_custom_reg_callers: Rc<std::collections::HashMap<uintb, u16>>,
+    /// (unlace `calleereginputs custom`) The synthesized model for each input-register
     /// key, built once beside the map so the caller call site and the callee's
     /// own evaluation share one model instance.
-    pub kuna_custom_reg_models: Rc<std::collections::HashMap<u16, Rc<ProtoModel>>>,
-    /// (kuna `calleereginputs custom`) Per-callee-entry mask of the callee-saved
+    pub unlace_custom_reg_models: Rc<std::collections::HashMap<u16, Rc<ProtoModel>>>,
+    /// (unlace `calleereginputs custom`) Per-callee-entry mask of the callee-saved
     /// registers (EBX 1, ESI 2, EDI 4) the function's own body read on entry,
     /// plus 8 when it also read ECX or EDX, recorded after each decompile from
     /// the post-heritage entry reads. The callee half of the two-sided decision.
-    pub kuna_custom_reg_reads: std::collections::HashMap<uintb, u8>,
-    /// (kuna `calleereginputs custom`) Per callee entry, every `(caller entry,
+    pub unlace_custom_reg_reads: std::collections::HashMap<uintb, u8>,
+    /// (unlace `calleereginputs custom`) Per callee entry, every `(caller entry,
     /// call instruction)` a decompile printed a direct call to it from: a callee
     /// some decompile reaches from a site the call graph does not attribute to
     /// that caller states nothing.
-    pub kuna_custom_reg_calls:
+    pub unlace_custom_reg_calls:
         std::collections::HashMap<uintb, std::collections::BTreeSet<(uintb, uintb)>>,
     /// (ghidra-mode, Phase 4) Name recommendations staged for the NEXT
     /// decompile drive — `(name, storage addr, usepoint, size)`, taken (and
@@ -599,55 +599,55 @@ pub struct Architecture {
     /// variables), which C++ keeps as `ScopeLocal::nameRecommend` entries
     /// rather than Symbols.  Always empty outside ghidra mode, so the
     /// standalone pipeline is structurally unaffected.
-    pub kuna_pending_name_recs: Vec<(String, Address, Address, int4)>,
+    pub unlace_pending_name_recs: Vec<(String, Address, Address, int4)>,
     /// (ghidra-mode, Phase 4) The DYNAMIC (hash-storage) half of the same
     /// staging — `(name, first-use address, hash)`; see
-    /// [`Self::kuna_pending_name_recs`].  Always empty outside ghidra mode.
-    pub kuna_pending_dyn_recs: Vec<(String, Address, u64)>,
+    /// [`Self::unlace_pending_name_recs`].  Always empty outside ghidra mode.
+    pub unlace_pending_dyn_recs: Vec<(String, Address, u64)>,
     /// (ghidra-mode, Phase 4) The prototype MODEL the host declared for the
     /// next decompiled function (`<prototype model=…>`), staged the same way.
     /// The host assigned its committed parameter storage under this
-    /// convention, so re-deriving storage from kuna's default model would
+    /// convention, so re-deriving storage from unlace's default model would
     /// disagree with the database and make Java's `checkFullCommit` rewrite
     /// the user's signature on any rename.  `None` outside ghidra mode.
-    pub kuna_pending_proto_model: Option<Rc<crate::fspec::ProtoModel>>,
-    /// (kuna `--assert`) Whether the next drive records the numbering its
+    pub unlace_pending_proto_model: Option<Rc<crate::fspec::ProtoModel>>,
+    /// (unlace `--assert`) Whether the next drive records the numbering its
     /// naming pass hands out, because a directive batch may be replayed
     /// against it; set and cleared by that caller.
-    pub kuna_record_names: bool,
+    pub unlace_record_names: bool,
 
-    // --- kuna analysis-pass gates (per-run `--option <id> on|off`) ----------
+    // --- unlace analysis-pass gates (per-run `--option <id> on|off`) ----------
     // One boolean per `unlace_analysis::passes` pass id; the console's
     // `commit_analysis_output` consults these at `read symbols` and skips a
-    // disabled pass's facts.  The kuna analog of Ghidra's
+    // disabled pass's facts.  The unlace analog of Ghidra's
     // `AbstractAnalyzer.setDefaultEnablement` per-analyzer enablement (a Run
     // Analysis on/off toggle), bound to the real-ELF path only (the XML datatest
     // path never produces analysis facts, so these are structurally inert there).
     // Default-on (matching Ghidra's default-on analyzers) except `addrtable`,
     // which Ghidra ships off (`AddressTableAnalyzer.setDefaultEnablement(false)`).
-    /// (kuna `arm64evcall`) `call site → methods its vtable slot can hold`,
+    /// (unlace `arm64evcall`) `call site → methods its vtable slot can hold`,
     /// committed from the analysis tier; read when flow builds the CALLIND.
-    pub kuna_vcall_targets: Rc<std::collections::BTreeMap<u64, VcallTargets>>,
+    pub unlace_vcall_targets: Rc<std::collections::BTreeMap<u64, VcallTargets>>,
 
     /// Caller-local PPC32 PIC import proof, applied during flow following.
     pub analysis_ppc32picimports: crate::ppc32picimports::Mode,
-    /// (kuna) The load-time options this program was loaded with: the ones in
+    /// (unlace) The load-time options this program was loaded with: the ones in
     /// force when it was built, updated by a load-time `option` command.
     /// [`Self::load_scope`] puts them back in force for later analysis.
     load_options: Rc<crate::loadoptions::LoadOptions>,
-    /// (kuna) Built with no options in force: an entry point that takes none
+    /// (unlace) Built with no options in force: an entry point that takes none
     /// loaded this program, so its gates keep reading the environment live.
     load_options_from_env: bool,
 
-    /// (kuna `msvcsig`) The entries, as `(space index, offset)`, whose MSVC
+    /// (unlace `msvcsig`) The entries, as `(space index, offset)`, whose MSVC
     /// prototype the analysis commit locked onto the FunctionSymbol. A call
     /// through one of these import slots is made direct while the flow is
     /// followed ([`crate::msvcimportcall`]). Empty unless `msvcsig` applied.
     pub msvcsig_import_slots: std::collections::BTreeSet<(int4, uintb)>,
-    /// (kuna `guarddispatch`) The Control Flow Guard dispatch pointer slots a PE
+    /// (unlace `guarddispatch`) The Control Flow Guard dispatch pointer slots a PE
     /// load configuration names, as `(space index, offset)`.
     pub guard_dispatch_slots: std::collections::BTreeSet<(int4, uintb)>,
-    /// (kuna `pushpadread`) The number of STACK arguments each printf-family
+    /// (unlace `pushpadread`) The number of STACK arguments each printf-family
     /// format call consumes, keyed by the call instruction's VMA -- derived from
     /// the format resolver's per-site conversion count. The callee-body probe
     /// uses it to tell a real stack argument a callee forwards (pushed below this
@@ -656,84 +656,84 @@ pub struct Architecture {
     /// reaches the varargs-override path, so it is independent of `--option
     /// formatstring`.
     pub format_stack_args: std::rc::Rc<std::collections::BTreeMap<u64, usize>>,
-    /// (kuna `elfmain`) The C runtime's `int main(int argc, char **argv, char
+    /// (unlace `elfmain`) The C runtime's `int main(int argc, char **argv, char
     /// **envp)` for an executable's own symbol-named `main`, with its entry.
     /// Not parked on the symbol: the drive locks only its `int` return and names
     /// and types the parameters `main`'s own analysis recovers
     /// ([`crate::elfmaindecl`]).
     pub elfmain_main_decl: Option<(Address, crate::fspec::PrototypePieces)>,
-    /// (kuna `fid`) The entries whose parked prototype came from a `.fid`
+    /// (unlace `fid`) The entries whose parked prototype came from a `.fid`
     /// record ([`crate::fidproto`]).
     pub fid_prototypes: std::collections::BTreeSet<u64>,
-    /// (kuna `formatstring`) The call points, among the prototype overrides of
+    /// (unlace `formatstring`) The call points, among the prototype overrides of
     /// the drive in progress, whose override a resolved format string produced.
     /// Set by the console's decompile step around each drive; the flow build
     /// installs those overrides with an open tail
     /// ([`crate::p4_calls::formattail`]).
     pub format_override_callpoints: std::collections::BTreeSet<u64>,
-    /// (kuna `--assert callee`) Caller-stated destinations of indirect calls:
+    /// (unlace `--assert callee`) Caller-stated destinations of indirect calls:
     /// function entry -> call site -> callee entry
     /// ([`crate::calleeoverride`]).
-    pub kuna_callee_overrides:
+    pub unlace_callee_overrides:
         std::collections::BTreeMap<Address, std::collections::BTreeMap<Address, Address>>,
-    /// (kuna) Loader-stated prototypes of single call instructions, by the
+    /// (unlace) Loader-stated prototypes of single call instructions, by the
     /// instruction's address ([`crate::callsiteproto`]).
-    pub kuna_callsite_protos: std::collections::BTreeMap<u64, crate::fspec::PrototypePieces>,
-    /// (kuna `uefi`) The interface instances the EFI module installs
+    pub unlace_callsite_protos: std::collections::BTreeMap<u64, crate::fspec::PrototypePieces>,
+    /// (unlace `uefi`) The interface instances the EFI module installs
     /// ([`crate::uefiprotocols`]).
-    pub kuna_uefi_installs: Vec<crate::uefiprotocols::InstalledInterface>,
-    /// (kuna `varargstackargs`) Per-run cache of the callee `va_start` probe,
+    pub unlace_uefi_installs: Vec<crate::uefiprotocols::InstalledInterface>,
+    /// (unlace `varargstackargs`) Per-run cache of the callee `va_start` probe,
     /// keyed by the callee's `(space index, entry offset)`.
-    pub kuna_darwin_variadic_cache: std::collections::HashMap<(int4, uintb), bool>,
-    /// (kuna `lazyfuncs`) Entry starts the commit installed as NAMES only, sorted, so
+    pub unlace_darwin_variadic_cache: std::collections::HashMap<(int4, uintb), bool>,
+    /// (unlace `lazyfuncs`) Entry starts the commit installed as NAMES only, sorted, so
     /// flow reads a branch to one as a transfer, not code to follow into.
     pub lazy_entry_starts: Rc<Vec<u64>>,
 
-    /// (kuna, Ghidra-gap) `call error(nonzero,…)` call-site addresses whose fall-through
+    /// (unlace, Ghidra-gap) `call error(nonzero,…)` call-site addresses whose fall-through
     /// the decompile stage must prune (as `CALL_RETURN` flow overrides). Populated at the
     /// analysis commit from `AnalysisOutput::no_fallthru_calls` (empty unless `listing` +
     /// `noreturn_known` are on); read by `decompile-all` per function. glibc `error()`
     /// with a nonzero status never returns, so without the prune the flow-follower walks
     /// past the call into the next function and absorbs it. Sorted/deduped.
     pub error_noreturn_callsites: Vec<u64>,
-    /// (kuna #1288) The MS-DOS exit interrupts (`INT 20h`, `INT 27h`, `INT 21h`
+    /// (unlace #1288) The MS-DOS exit interrupts (`INT 20h`, `INT 27h`, `INT 21h`
     /// with AH 00h/31h/4Ch) of a real-mode raw or MZ load, sorted. The raw
     /// discovery finds them (`unlace_analysis::listing::dosexit`); flow ends
     /// at each ([`FlowEnvironment::is_dos_exit_callind`](crate::flow::FlowEnvironment::is_dos_exit_callind)).
     pub dos_exit_sites: Vec<u64>,
 
-    /// (kuna) Check FID matches against callee names, several rounds, tiny-stub guard (`fidcallees`). Default on.
+    /// (unlace) Check FID matches against callee names, several rounds, tiny-stub guard (`fidcallees`). Default on.
     pub analysis_fidcallees: bool,
-    /// (kuna) The Aggressive Instruction Finder gap-walk (`aif`), the third
+    /// (unlace) The Aggressive Instruction Finder gap-walk (`aif`), the third
 
-    /// (kuna) FLIRT reference-site checks and arbitration (`flirtsites`). Default on.
+    /// (unlace) FLIRT reference-site checks and arbitration (`flirtsites`). Default on.
     pub analysis_flirtsites: bool,
 
-    /// (kuna `blobs`) The first address of each committed blob. A constant equal
+    /// (unlace `blobs`) The first address of each committed blob. A constant equal
     /// to one is weighed as a pointer even below the space's pointer lower bound.
     pub blob_entries: Rc<std::collections::BTreeSet<u64>>,
-    /// (kuna `swifttypes`) Register-pinned parameters the analysis tier
+    /// (unlace `swifttypes`) Register-pinned parameters the analysis tier
     /// declared, by function entry: `(slot, name, storage + type)`, the
     /// shape of a console `map param`. The decompile drive seeds a
     /// function's own decompile with them ahead of the console's.
     pub loader_param_locks:
         std::collections::BTreeMap<Address, Vec<(int4, String, crate::fspec::ParameterPieces)>>,
-    /// (kuna `cfstrings`) The `__cfstring` entry addresses the commit seeded, so
+    /// (unlace `cfstrings`) The `__cfstring` entry addresses the commit seeded, so
     /// the printer renders a literal at one of them as `CFSTR("...")`.
     pub cfstring_entries: std::collections::BTreeSet<u64>,
-    /// (kuna) The calling convention the analysis tier bound to a function
+    /// (unlace) The calling convention the analysis tier bound to a function
     /// without declaring its signature, by entry `(space index, offset)`.
     /// The function's own parameters, and those of every direct call to it,
     /// are recovered under it ([`crate::context::ArchContext::bound_proto_models`]).
     pub loader_proto_models: Rc<std::collections::BTreeMap<(int4, uintb), Rc<ProtoModel>>>,
-    /// (kuna `swiftmetadata`) Each local Swift enum's case count by its
+    /// (unlace `swiftmetadata`) Each local Swift enum's case count by its
     /// metadata accessor's entry offset (`p2_lift/switchextent.rs`).
     pub loader_swift_enum_cases: Rc<std::collections::BTreeMap<u64, u32>>,
 
     // --- Owned subsystems (architecture.hh:211-233) -----------------------
     /// Memory map of global variables and functions (C++ `symboltab`).
     pub symboltab: Database,
-    /// (kuna, Phase 3) The ghidra-mode lazy symbol provider (the `ScopeGhidra`
+    /// (unlace, Phase 3) The ghidra-mode lazy symbol provider (the `ScopeGhidra`
     /// port, [`crate::remote_provider::RemoteScope`]), installed by the
     /// ghidra-mode registerProgram via [`Self::install_remote_provider`];
     /// `None` on the standalone path.  Threaded into every per-function
@@ -747,12 +747,12 @@ pub struct Architecture {
     symbol_snapshots: RefCell<SymbolSnapshots>,
     /// False re-derives both on every handle (`UNLACE_NO_SYMBOL_SNAPSHOT_CACHE`),
     /// so the memoized and re-derived paths can be compared.
-    kuna_snapshot_cache: bool,
+    unlace_snapshot_cache: bool,
     /// Options that can be configured (C++ `options`).
     pub options: OptionDatabase,
     /// Actions that can be applied in this architecture (C++ `allacts`).
     pub allacts: ActionDatabase,
-    /// (kuna) Per-program restart-trigger side table (C++ file-static
+    /// (unlace) Per-program restart-trigger side table (C++ file-static
     /// `restartTable`, owned here per `docs/rust-port/README.md` — one log per loaded
     /// program; survives `Funcdata::clear()` because it lives outside the
     /// Funcdata).  The `restarts` console command renders it.
@@ -769,14 +769,14 @@ pub struct Architecture {
     pub string_manager: Rc<std::cell::RefCell<crate::stringmanage::StringManagerUnicode>>,
     /// P-code injection manager (C++ `pcodeinjectlib`).  SLEIGH-backed.
     pub pcodeinjectlib: PcodeInjectLibrarySleigh,
-    /// (kuna) Did the loader validate PPC64 ELFv1 function descriptors?  A FACT,
+    /// (unlace) Did the loader validate PPC64 ELFv1 function descriptors?  A FACT,
     /// not an option: written once at `load file` and the thing `option
     /// callmechanisms auto` tests.  The XML `<binaryimage>` bootstrap never sets it.
     pub image_elfv1_toc: bool,
-    /// (kuna `dexmodel`) The loaded DEX files, when the image is one (or an
+    /// (unlace `dexmodel`) The loaded DEX files, when the image is one (or an
     /// APK holding several).
     pub dex: Vec<Rc<crate::dex::DexModel>>,
-    /// (kuna `jvmmodel`) The loaded class files, when the image is one (or a
+    /// (unlace `jvmmodel`) The loaded class files, when the image is one (or a
     /// JAR holding several).
     pub jvm: Vec<Rc<crate::jvm::JvmModel>>,
     /// Comments for this architecture (C++ `commentdb`).  // STUB(comment.cc)
@@ -855,27 +855,27 @@ pub struct Architecture {
     /// code-space label such as ARM's `Reset` at 0 is not kept, so a call to an
     /// unresolved weak function at 0 does not print as the reset vector.
     pspec_symbols: std::collections::HashMap<(int4, uintb), String>,
-    /// (kuna, Phase 3) Raw `<coretypes>` XML (the fourth ghidra-mode
+    /// (unlace, Phase 3) Raw `<coretypes>` XML (the fourth ghidra-mode
     /// registerProgram spec document), set by [`Self::set_coretypes_xml`]
     /// before [`init_post_engine`](Architecture::init_post_engine) so
     /// [`build_core_types`](Architecture::build_core_types) decodes the host's
     /// core-type set (with the HOST ids) instead of the defaults.  `None` on
     /// the standalone path.
     coretypes_xml: Option<Vec<u8>>,
-    /// (kuna) The cspec `<prefersplit>` rows (C++ `Architecture::splitrecords`):
+    /// (unlace) The cspec `<prefersplit>` rows (C++ `Architecture::splitrecords`):
     /// a whole register that the spec prefers to read as two independent pieces.
     /// Decoded once in [`build_default_proto`](Architecture::build_default_proto)
     /// and inherited by every per-function handle, where heritage pass 0 hands
     /// them to the [`PreferSplitManager`](crate::prefersplit::PreferSplitManager).
     split_records: Vec<PreferSplitRecord>,
-    /// (kuna) How many decompile drives are active: 0 outside a drive, 1 for the
+    /// (unlace) How many decompile drives are active: 0 outside a drive, 1 for the
     /// drive the caller asked for, and more when a drive runs a recovery drive
     /// inside itself (the P4 callee-contract bootstrap).  The outermost drive
     /// owns the Architecture's externally visible output, so only it publishes
     /// analysis comments; a nested drive's statements are private to the caller
-    /// it is typed for.  Shared with the [`KunaDriveScope`] guard so an unwinding
+    /// it is typed for.  Shared with the [`UnlaceDriveScope`] guard so an unwinding
     /// drive still leaves it balanced.
-    kuna_drive_depth: std::rc::Rc<std::cell::Cell<u32>>,
+    unlace_drive_depth: std::rc::Rc<std::cell::Cell<u32>>,
     /// Vector registers that have preferred lane sizes (C++
     /// `Architecture::lanerecords`), built by [`decode_register_data`] from the
     /// pspec `<register_data>` `vector_lane_sizes` attributes during
@@ -914,36 +914,36 @@ pub struct Architecture {
     /// Only `Sleigh` implements the trait today.
     translate: Box<dyn EngineTranslate>,
 
-    /// (kuna) The `.sla` bytes [`crate::sleigh_arch::SleighArchitecture::build_translator`]
+    /// (unlace) The `.sla` bytes [`crate::sleigh_arch::SleighArchitecture::build_translator`]
     /// decoded this engine from, kept so a decode-equivalent engine can be
     /// rebuilt elsewhere (see [`crate::decodekit::EngineRecipe`]). `None`
     /// for an `Architecture` whose engine was not built from local `.sla` bytes
     /// -- the ghidra-mode bridge, where there is nothing to rebuild from.
     decode_sla: Option<Arc<[u8]>>,
-    /// (kuna) The active language's `.ldefs` `<truncate_space>` records, in
+    /// (unlace) The active language's `.ldefs` `<truncate_space>` records, in
     /// ldefs order -- the second half of the rebuild instructions, recorded
     /// where `modify_spaces` applies them. `None` until that bootstrap step has
     /// run; an empty list is a valid, complete recipe for most languages.
     decode_truncations: Option<Arc<[(String, u32)]>>,
 }
 
-/// One active decompile drive, from [`Architecture::kuna_drive_scope`].
+/// One active decompile drive, from [`Architecture::unlace_drive_scope`].
 ///
 /// Dropping it leaves the scope; the depth is shared with the `Architecture`, so
 /// an unwinding drive still balances the count.
 #[doc(hidden)]
-pub struct KunaDriveScope {
+pub struct UnlaceDriveScope {
     depth: std::rc::Rc<std::cell::Cell<u32>>,
 }
 
-impl Drop for KunaDriveScope {
+impl Drop for UnlaceDriveScope {
     fn drop(&mut self) {
         self.depth.set(self.depth.get().saturating_sub(1));
     }
 }
 
 impl Architecture {
-    /// (kuna) Record the `.sla` bytes this engine was decoded from.
+    /// (unlace) Record the `.sla` bytes this engine was decoded from.
     ///
     /// Called by the one construction path that has them
     /// ([`crate::sleigh_arch::SleighArchitecture::build_translator`]).
@@ -951,13 +951,13 @@ impl Architecture {
         self.decode_sla = Some(sla);
     }
 
-    /// (kuna) Record the active language's `.ldefs` space truncations, where
+    /// (unlace) Record the active language's `.ldefs` space truncations, where
     /// `modify_spaces` applies them.
     pub fn set_decode_truncations(&mut self, truncations: Vec<(String, u32)>) {
         self.decode_truncations = Some(Arc::from(truncations));
     }
 
-    /// (kuna) The instructions for rebuilding a decode-equivalent engine on
+    /// (unlace) The instructions for rebuilding a decode-equivalent engine on
     /// another thread, or `None` when this architecture cannot supply them.
     ///
     /// `None` for an engine that is not a local `Sleigh` over decoded `.sla`
@@ -980,7 +980,7 @@ impl Architecture {
 ///
 /// Both are pure functions of the [`Database`], and re-deriving them is the
 /// dominant per-function cost once the symbol table is large.  `generation` is
-/// the [`Database::kuna_generation`] they were taken at; a mismatch means the
+/// the [`Database::unlace_generation`] they were taken at; a mismatch means the
 /// symbol table moved and both are stale.
 #[derive(Default)]
 struct SymbolSnapshots {
@@ -1005,14 +1005,14 @@ pub use crate::passhooks::default_pass_hooks;
 
 impl Architecture {
     /// The pass hooks this architecture's contexts start with ([`crate::passhooks`]).
-    pub fn pass_hooks(&self) -> &'static crate::passhooks::KunaHooks {
+    pub fn pass_hooks(&self) -> &'static crate::passhooks::UnlaceHooks {
         default_pass_hooks()
     }
 
-    /// Validate and apply a named kuna option to its live configuration (the driver's
-    /// dispatch, `kuna_option_dispatch`, through the pass hooks).
-    pub fn set_kuna_option(&mut self, name: &str, value: &str) -> KunaResult<String> {
-        (self.pass_hooks().set_kuna_option)(self, name, value)
+    /// Validate and apply a named unlace option to its live configuration (the driver's
+    /// dispatch, `unlace_option_dispatch`, through the pass hooks).
+    pub fn set_unlace_option(&mut self, name: &str, value: &str) -> UnlaceResult<String> {
+        (self.pass_hooks().set_unlace_option)(self, name, value)
     }
 
     /// Construct an `Architecture` over an already-initialized disassembly
@@ -1066,7 +1066,7 @@ impl Architecture {
 
         let mut arch = Architecture {
             archid: archid.to_string(),
-            kuna_options: crate::optionset::OptionSet::new(),
+            unlace_options: crate::optionset::OptionSet::new(),
             input_arm_isa_override: false,
             arm_inventory_modes: Vec::new(),
             loader_entry_tracks: std::collections::BTreeMap::new(),
@@ -1076,7 +1076,7 @@ impl Architecture {
             nullable_literal_values: Rc::default(),
 
             symbol_snapshots: RefCell::new(SymbolSnapshots::default()),
-            kuna_snapshot_cache: unlace_base::env::var_os("UNLACE_NO_SYMBOL_SNAPSHOT_CACHE")
+            unlace_snapshot_cache: unlace_base::env::var_os("UNLACE_NO_SYMBOL_SNAPSHOT_CACHE")
                 .is_none(),
             load_options: crate::loadoptions::LoadOptions::in_force(),
             load_options_from_env: !crate::loadoptions::options_in_force(),
@@ -1112,73 +1112,73 @@ impl Architecture {
             loadersymbols_parsed: false,
             infer_ptr_spaces: Vec::new(),
 
-            kuna_function_bodies: Vec::new(),
-            kuna_float_scan_batch: false,
-            kuna_settle_caller_reads: false,
-            kuna_call_returns: Vec::new(),
+            unlace_function_bodies: Vec::new(),
+            unlace_float_scan_batch: false,
+            unlace_settle_caller_reads: false,
+            unlace_call_returns: Vec::new(),
             vector_models: std::cell::RefCell::new(Vec::new()),
             vector_userop_kinds: std::cell::OnceCell::new(),
 
             fpu_emu_evidence: false,
-            kuna_states: Default::default(),
-            kuna_tables: Default::default(),
-            image_os_userland: false, // (kuna) a load-time fact; set by the console's `load file`
-            image_linux_elf: false,   // (kuna) a load-time fact; set by the console's `load file`
-            image_elf: false,         // (kuna) a load-time fact; set by the console's `load file`
-            image_apple: false,       // (kuna) a load-time fact; set by the console's `load file`
+            unlace_states: Default::default(),
+            unlace_tables: Default::default(),
+            image_os_userland: false, // (unlace) a load-time fact; set by the console's `load file`
+            image_linux_elf: false,   // (unlace) a load-time fact; set by the console's `load file`
+            image_elf: false,         // (unlace) a load-time fact; set by the console's `load file`
+            image_apple: false,       // (unlace) a load-time fact; set by the console's `load file`
 
             dwarf_reg_locals: std::collections::BTreeMap::new(),
-            image_windows_user: false, // (kuna) a load-time fact; set by the console's `load file`
+            image_windows_user: false, // (unlace) a load-time fact; set by the console's `load file`
 
-            kuna_objc_retargets: Default::default(),
-            kuna_objc_site_pieces: Default::default(),
+            unlace_objc_retargets: Default::default(),
+            unlace_objc_site_pieces: Default::default(),
             mapped_flow_boundary_image: false,
 
-            octeon_upstream_inject: Vec::new(), // (kuna) set by init_userops_and_fixups on an Octeon language
-            kuna_mips_pairs: None,
-            kuna_mips_pairs_painted: false,
+            octeon_upstream_inject: Vec::new(), // (unlace) set by init_userops_and_fixups on an Octeon language
+            unlace_mips_pairs: None,
+            unlace_mips_pairs_painted: false,
             rustc_stable_version: None,
             rustc_pieces_layout: false,
             rust_fmt_pieces_relro: None,
             rust_display_formatters: std::collections::BTreeMap::new(),
             rust_str_display_formatters: std::collections::BTreeSet::new(),
             rust_fmt_write_relro: None,
-            source_lang_detected: Default::default(), // (kuna) a load-time fact; set by the console's `load file`
+            source_lang_detected: Default::default(), // (unlace) a load-time fact; set by the console's `load file`
             go_chanrecv2: None,
             go_chanrecv_status_sites: Default::default(),
 
             arm_widened_models: std::cell::RefCell::new(Vec::new()),
             arm_float_library_prototypes: Vec::new(),
 
-            kuna_fde_extents: Rc::new(Vec::new()),
+            unlace_fde_extents: Rc::new(Vec::new()),
 
             name_style_ghidra: false,
             data_import_slots: std::collections::BTreeSet::new(),
-            cortexmpriv_inject: None, // (kuna) set by init_userops_and_fixups when the language declares the user-op
-            kuna_fn_budget: None,     // (kuna) decompile-all watchdog: no budget by default
-            kuna_fn_deadline: None,   // (kuna) set per drive from kuna_fn_budget
-            kuna_callee_purge_cache: std::collections::HashMap::new(),
-            kuna_import_sites: Rc::new(std::collections::HashMap::new()),
-            kuna_swift_self_first_cache: std::collections::HashMap::new(),
-            kuna_swift_self_reads: std::collections::BTreeMap::new(),
-            kuna_swift_async_reads: std::collections::BTreeMap::new(),
-            kuna_tail_callee_batch: false,
-            kuna_vfp_variadic: RefCell::new(None),
-            kuna_callee_reginputs: RefCell::new(std::collections::HashMap::new()),
-            kuna_custom_reg_callers: Rc::new(std::collections::HashMap::new()),
-            kuna_custom_reg_models: Rc::new(std::collections::HashMap::new()),
-            kuna_custom_reg_reads: std::collections::HashMap::new(),
-            kuna_custom_reg_calls: std::collections::HashMap::new(),
-            kuna_pending_name_recs: Vec::new(), // (ghidra Phase 4) staged per drive
-            kuna_pending_dyn_recs: Vec::new(),  // (ghidra Phase 4) staged per drive
-            kuna_pending_proto_model: None,     // (ghidra Phase 4) staged per drive
-            kuna_record_names: false,
+            cortexmpriv_inject: None, // (unlace) set by init_userops_and_fixups when the language declares the user-op
+            unlace_fn_budget: None,   // (unlace) decompile-all watchdog: no budget by default
+            unlace_fn_deadline: None, // (unlace) set per drive from unlace_fn_budget
+            unlace_callee_purge_cache: std::collections::HashMap::new(),
+            unlace_import_sites: Rc::new(std::collections::HashMap::new()),
+            unlace_swift_self_first_cache: std::collections::HashMap::new(),
+            unlace_swift_self_reads: std::collections::BTreeMap::new(),
+            unlace_swift_async_reads: std::collections::BTreeMap::new(),
+            unlace_tail_callee_batch: false,
+            unlace_vfp_variadic: RefCell::new(None),
+            unlace_callee_reginputs: RefCell::new(std::collections::HashMap::new()),
+            unlace_custom_reg_callers: Rc::new(std::collections::HashMap::new()),
+            unlace_custom_reg_models: Rc::new(std::collections::HashMap::new()),
+            unlace_custom_reg_reads: std::collections::HashMap::new(),
+            unlace_custom_reg_calls: std::collections::HashMap::new(),
+            unlace_pending_name_recs: Vec::new(), // (ghidra Phase 4) staged per drive
+            unlace_pending_dyn_recs: Vec::new(),  // (ghidra Phase 4) staged per drive
+            unlace_pending_proto_model: None,     // (ghidra Phase 4) staged per drive
+            unlace_record_names: false,
 
             // Analysis-pass gates: placeholder values -- `Architecture::new` calls
             // `reset_defaults_internal()` below, the SINGLE source of every
             // effective default (phases.toml's `default` column mirrors it;
             // asserted equal by phases/tests.rs `live_value` parity).
-            kuna_vcall_targets: Rc::default(),
+            unlace_vcall_targets: Rc::default(),
 
             analysis_ppc32picimports: Default::default(),
 
@@ -1188,10 +1188,10 @@ impl Architecture {
             elfmain_main_decl: None,
             fid_prototypes: std::collections::BTreeSet::new(),
             format_override_callpoints: std::collections::BTreeSet::new(),
-            kuna_callee_overrides: std::collections::BTreeMap::new(),
-            kuna_callsite_protos: std::collections::BTreeMap::new(),
-            kuna_uefi_installs: Vec::new(),
-            kuna_darwin_variadic_cache: std::collections::HashMap::new(),
+            unlace_callee_overrides: std::collections::BTreeMap::new(),
+            unlace_callsite_protos: std::collections::BTreeMap::new(),
+            unlace_uefi_installs: Vec::new(),
+            unlace_darwin_variadic_cache: std::collections::HashMap::new(),
             lazy_entry_starts: Rc::default(),
 
             error_noreturn_callsites: Vec::new(),
@@ -1218,7 +1218,7 @@ impl Architecture {
                 crate::stringmanage::StringManagerUnicode::new(2048),
             )),
             pcodeinjectlib: PcodeInjectLibrarySleigh::new(inject_tempbase),
-            image_elfv1_toc: false, // (kuna) a load-time fact; set by the console's `load file`
+            image_elfv1_toc: false, // (unlace) a load-time fact; set by the console's `load file`
             dex: Vec::new(),
             jvm: Vec::new(),
             commentdb: CommentDatabase::new(),
@@ -1237,7 +1237,7 @@ impl Architecture {
             pspec_symbols: std::collections::HashMap::new(),
             coretypes_xml: None,
             split_records: Vec::new(),
-            kuna_drive_depth: std::rc::Rc::new(std::cell::Cell::new(0)),
+            unlace_drive_depth: std::rc::Rc::new(std::cell::Cell::new(0)),
             lanerecords: Vec::new(),
             inst: Vec::new(),
             opbehaviors: Vec::new(),
@@ -1258,13 +1258,13 @@ impl Architecture {
 
     /// Reset default values for the options owned by `Architecture` (verbatim
     /// transcription of C++ `Architecture::resetDefaultsInternal`,
-    /// `architecture.cc:1420`).  The kuna defaults follow DIV-2/DIV-3
+    /// `architecture.cc:1420`).  The unlace defaults follow DIV-2/DIV-3
     /// (`docs/divergences.md`).
-    /// (kuna) The effective source language for this image: the per-run
+    /// (unlace) The effective source language for this image: the per-run
     /// `option sourcelang` override when one is set, else the detected fact.
     #[inline]
     pub fn source_lang(&self) -> crate::sourcelang::SourceLang {
-        self.kuna_options
+        self.unlace_options
             .get::<crate::sourcelang::SourceLangForced>()
             .0
             .unwrap_or(self.source_lang_detected)
@@ -1272,11 +1272,11 @@ impl Architecture {
 
     pub fn reset_defaults_internal(&mut self) {
         // The load-time ppcapu and ifuncfpret requests outlive a reset, as the env vars they set do.
-        let ppcapu = self.kuna_options.get::<crate::ppcapu::PpcApu>();
-        let ifuncfpret = self.kuna_options.get::<crate::ifuncfpret::IfuncFpRet>();
-        self.kuna_options.reset_shipped();
-        self.kuna_options.set(ppcapu);
-        self.kuna_options.set(ifuncfpret);
+        let ppcapu = self.unlace_options.get::<crate::ppcapu::PpcApu>();
+        let ifuncfpret = self.unlace_options.get::<crate::ifuncfpret::IfuncFpRet>();
+        self.unlace_options.reset_shipped();
+        self.unlace_options.set(ppcapu);
+        self.unlace_options.set(ifuncfpret);
         self.trim_recurse_max = 5;
         self.max_implied_ref = 2; // 2 is best, in specific cases a higher number might be good
         self.max_term_duplication = 2; // 2 and 3 (4) are reasonable
@@ -1288,7 +1288,7 @@ impl Architecture {
         (self.pass_hooks().fpuemu_apply)(self);
         (self.pass_hooks().mzdgroup_apply)(self);
 
-        (self.pass_hooks().callwide_clear)(&mut self.kuna_tables);
+        (self.pass_hooks().callwide_clear)(&mut self.unlace_tables);
 
         self.analyze_for_loops = true;
         self.readonlypropagate = false;
@@ -1300,84 +1300,84 @@ impl Architecture {
             | split_datatype::OPTION_POINTER;
         self.max_jumptable_size = 1024;
 
-        // (kuna) Analysis-pass gates — default-on (matching Ghidra's default-on
+        // (unlace) Analysis-pass gates — default-on (matching Ghidra's default-on
         // analyzers), except addrtable which Ghidra ships off. Bound to the
         // real-ELF analysis tier; inert on the XML datatest path.
 
-        // (kuna) DIV-65 measured libc signature extension — default-ON.
-        // (kuna) libgcc `__divdi3` contract -- default-OFF: a caller returning
+        // (unlace) DIV-65 measured libc signature extension — default-ON.
+        // (unlace) libgcc `__divdi3` contract -- default-OFF: a caller returning
         // arithmetic on the quotient still loses a word.
-        // (kuna) Go `_type` descriptor globals -- default-ON: on a Go image the
+        // (unlace) Go `_type` descriptor globals -- default-ON: on a Go image the
         // harvested names appear at every allocation/conversion site; a non-Go
         // image produces no facts, so the gate is structurally inert there.
-        // (kuna) Named libc/POSIX aggregate pointers in the prototype tables --
+        // (unlace) Named libc/POSIX aggregate pointers in the prototype tables --
         // default-ON (`opaque`). Real-ELF analysis tier only, so the XML corpora
         // cannot observe it; the evidence is the corpus sweep in
         // docs/features/libctypes/record.json. The pass itself reads the
         // load-time env bridge, which defaults on to match this.
         // and the layout value defaults to `opaque`: the field layouts are the
         // `glibc` value, which is opt-in.
-        // (kuna) The prebuilt type library -- default `auto`: the built-in
+        // (unlace) The prebuilt type library -- default `auto`: the built-in
         // library on a target that has one, nothing anywhere else.
-        // (kuna) DIV-141 built-in Win32 API signature table -- default-ON.
+        // (unlace) DIV-141 built-in Win32 API signature table -- default-ON.
 
-        // (kuna) DIV-139 declared-name libc prototype lookup -- default-ON.
-        // (kuna) Unmapped-CALL-target entry suppression -- default-ON (it only ever
+        // (unlace) DIV-139 declared-name libc prototype lookup -- default-ON.
+        // (unlace) Unmapped-CALL-target entry suppression -- default-ON (it only ever
         // withholds an entry the walk already refused to decode).
-        // (kuna, GH-299) Thumb tbb/tbh switch-table read -- default-ON (ARM only).
-        // (kuna) Register-chain jump-table reach in the reference walk -- default-ON.
-        // (kuna) Jump-thunk target function entries -- default-ON (x86 only).
-        // (kuna) Address-taken code function entries -- default-ON (x86-64 only).
-        // (kuna) PPC64 ELFv2 local-entry entry suppression -- default-ON (it only
+        // (unlace, GH-299) Thumb tbb/tbh switch-table read -- default-ON (ARM only).
+        // (unlace) Register-chain jump-table reach in the reference walk -- default-ON.
+        // (unlace) Jump-thunk target function entries -- default-ON (x86 only).
+        // (unlace) Address-taken code function entries -- default-ON (x86-64 only).
+        // (unlace) PPC64 ELFv2 local-entry entry suppression -- default-ON (it only
         // ever withholds the duplicate second entry over a function whose global
         // entry is already a seed, so no body can be lost).
-        // (kuna) Go pclntab functions out of the fast inventory walk -- default-ON.
-        // (kuna) ARM flow-proven decode-mode paints -- default-OFF (GH-780): the
+        // (unlace) Go pclntab functions out of the fast inventory walk -- default-ON.
+        // (unlace) ARM flow-proven decode-mode paints -- default-OFF (GH-780): the
         // proof trusts a fall-through the compiler may leave unreachable.
-        // (kuna) PIC base-register folding in the xref index -- default-ON. It is
+        // (unlace) PIC base-register folding in the xref index -- default-ON. It is
         // a query surface only (no p-code, no emitted C), so no parity gate can
         // observe it; it only ever ADDS an edge, and only one it can prove.
-        // (kuna) PE CRT entry-function prototype recovery -- default-ON.
-        // (kuna) Mach-O `LC_MAIN` entry naming + prototype -- default-ON (DIV-111).
-        // (kuna) PE user-entry naming -- default-ON.
-        // (kuna) non-PIE ARM crt1 `_start`->`main` recovery -- default-ON (DIV-132).
-        // (kuna) ELF libc-start `main` naming + prototype -- default-ON.
-        // (kuna) `.eh_frame` LSDA landing-pad discovery — default-OFF (opt-in,
+        // (unlace) PE CRT entry-function prototype recovery -- default-ON.
+        // (unlace) Mach-O `LC_MAIN` entry naming + prototype -- default-ON (DIV-111).
+        // (unlace) PE user-entry naming -- default-ON.
+        // (unlace) non-PIE ARM crt1 `_start`->`main` recovery -- default-ON (DIV-132).
+        // (unlace) ELF libc-start `main` naming + prototype -- default-ON.
+        // (unlace) `.eh_frame` LSDA landing-pad discovery — default-OFF (opt-in,
         // output-changing: adds the discovered exception landing pads as entries).
-        // (kuna) Mach-O `__unwind_info` function-start discovery — default-OFF
+        // (unlace) Mach-O `__unwind_info` function-start discovery — default-OFF
         // (opt-in, output-changing: adds the unwind-recorded function starts).
 
-        // (kuna) Mach-O `__eh_frame` FDE starts — default-ON, as `.eh_frame` is on ELF.
-        // (kuna) Mach-O bound pointer slots named for their import — default-ON
+        // (unlace) Mach-O `__eh_frame` FDE starts — default-ON, as `.eh_frame` is on ELF.
+        // (unlace) Mach-O bound pointer slots named for their import — default-ON
         // (symbol-table names only; the function inventory is unchanged).
-        // (kuna) DIV-61 `.eh_frame` FDE-interior entry suppression — default-ON.
+        // (unlace) DIV-61 `.eh_frame` FDE-interior entry suppression — default-ON.
 
-        // (kuna) `.pdata` RUNTIME_FUNCTION-interior entry suppression — default-ON.
-        // (kuna) PDB-procedure-interior entry suppression — default-ON.
+        // (unlace) `.pdata` RUNTIME_FUNCTION-interior entry suppression — default-ON.
+        // (unlace) PDB-procedure-interior entry suppression — default-ON.
         self.analysis_ppc32picimports = if self.load_options_from_env {
             crate::ppc32picimports::Mode::loaded()
         } else {
             crate::ppc32picimports::Mode::loaded_with(self.load_options.ppc32picimports)
-        }; // (kuna) abi when the loader applied it, else off
+        }; // (unlace) abi when the loader applied it, else off
 
-        // (kuna) DIV: demangled C++ signatures default to the PROVEN tier — only
+        // (unlace) DIV: demangled C++ signatures default to the PROVEN tier — only
         // the prototypes the mangling entails (ctor/dtor/cv-qualified member/
         // unqualified global), measured at precision 1.0000 on google/leveldb.
         // Real-object path only, so every parity gate is byte-identical.
         self.lazy_entry_starts = Rc::default();
 
         self.analysis_fidcallees = true;
-        // (kuna, GH-299) AIF bracketed-candidate reject -- default-ON; inert without `aif`.
-        // (kuna, GH-299) AIF filler reject -- default-ON; inert without `aif`.
-        // (kuna, GH-299) AIF literal-pool slide -- default-ON; inert without `aif`.
+        // (unlace, GH-299) AIF bracketed-candidate reject -- default-ON; inert without `aif`.
+        // (unlace, GH-299) AIF filler reject -- default-ON; inert without `aif`.
+        // (unlace, GH-299) AIF literal-pool slide -- default-ON; inert without `aif`.
 
         self.analysis_flirtsites = true;
     }
 
     /// Apply a named, concrete decompiler *mode* preset (`reliable` |
     /// `aggressive` | `fast`): a batch of `(option, value)` overrides fanned out
-    /// through [`Self::set_kuna_option`]. Overrides apply in table order; any
-    /// later `set_kuna_option` -- another override or a user
+    /// through [`Self::set_unlace_option`]. Overrides apply in table order; any
+    /// later `set_unlace_option` -- another override or a user
     /// `option`/`--option` -- wins (last-write). `reliable` is the shipped
     /// defaults (empty override list, a no-op alias); `aggressive` turns on
     /// every off-by-default pass; `fast` disables expensive whole-program
@@ -1385,21 +1385,21 @@ impl Architecture {
     /// See [`crate::modes`]. The frontend-only `auto` policy errors here because
     /// an Architecture has no input-file size; file frontends resolve it to a
     /// concrete preset before this method. Errors on an unknown mode name.
-    pub fn apply_mode(&mut self, name: &str) -> KunaResult<String> {
+    pub fn apply_mode(&mut self, name: &str) -> UnlaceResult<String> {
         if crate::modes::mode_is_automatic(name) {
-            return Err(KunaError::parse(
+            return Err(UnlaceError::parse(
                 "Decompiler mode auto requires input binary size; resolve it in a file frontend",
             ));
         }
         let overrides = crate::modes::mode_overrides(name).ok_or_else(|| {
             let known: Vec<&str> = crate::modes::mode_names().collect();
-            KunaError::parse(format!(
+            UnlaceError::parse(format!(
                 "Unknown decompiler mode: {name} (known: {})",
                 known.join(", ")
             ))
         })?;
         for (opt, val) in overrides {
-            self.set_kuna_option(opt, val)?;
+            self.set_unlace_option(opt, val)?;
         }
         Ok(format!(
             "mode {name} applied ({} option override{})",
@@ -1415,12 +1415,12 @@ impl Architecture {
     /// `ActionDatabase` default-group reset, a W5 surface not yet exposed) and
     /// resets every `PrintLanguage` in `printlist` (W8).  Only the internal
     /// option reset runs here; the action/print resets land with their waves.
-    /// (kuna `lazyfuncs`) Is `vma` an entry the commit installed as a name only?
+    /// (unlace `lazyfuncs`) Is `vma` an entry the commit installed as a name only?
     pub fn is_lazy_entry(&self, vma: u64) -> bool {
         self.lazy_entry_starts.binary_search(&vma).is_ok()
     }
 
-    /// (kuna `lazyfuncs`) Record the entry starts the commit left as names.
+    /// (unlace `lazyfuncs`) Record the entry starts the commit left as names.
     pub fn set_lazy_entry_starts(&mut self, mut starts: Vec<u64>) {
         starts.sort_unstable();
         starts.dedup();
@@ -1433,7 +1433,7 @@ impl Architecture {
         // for printlang in printlist: printlang.reset_defaults();  -- STUB(W8)
     }
 
-    /// (kuna, Phase 3) The ghidra-mode `SetOptions` reset (the upstream
+    /// (unlace, Phase 3) The ghidra-mode `SetOptions` reset (the upstream
     /// `ghidra->resetDefaults()` at the top of `SetOptions::rawAction`,
     /// ghidra_process.cc:435-445): Java DELTA-encodes its option list — only
     /// values differing from the Java default constants travel — so an option
@@ -1486,7 +1486,7 @@ impl Architecture {
 
     /// Mutably borrow the disassembly engine.
     pub fn translate_mut(&mut self) -> &mut dyn EngineTranslate {
-        (self.pass_hooks().callwide_clear)(&mut self.kuna_tables);
+        (self.pass_hooks().callwide_clear)(&mut self.unlace_tables);
         &mut *self.translate
     }
 
@@ -1543,7 +1543,7 @@ impl Architecture {
         &self.archid
     }
 
-    /// (kuna, Phase 3) Install the ghidra-mode lazy providers over the wire
+    /// (unlace, Phase 3) Install the ghidra-mode lazy providers over the wire
     /// fetch seams (the `buildDatabase`/`buildTypegrp` `ScopeGhidra`/
     /// `TypeFactoryGhidra` analog, ghidra_arch.cc:301-314).  Must run AFTER
     /// `init_post_engine` (the cspec `<global>` ranges and pspec property
@@ -1597,7 +1597,7 @@ impl Architecture {
         }
     }
 
-    /// (kuna, Phase 3) The printer's active comment filter — the union of the
+    /// (unlace, Phase 3) The printer's active comment filter — the union of the
     /// header and per-instruction comment-type masks (C++
     /// `CommentDatabaseGhidra::fillCache`'s `ghidra->print->getHeaderComment()
     /// | getInstructionComment()`, comment_ghidra.cc:38).  The getComments
@@ -1607,10 +1607,10 @@ impl Architecture {
         self.print.comment_filter()
     }
 
-    /// (kuna, Phase 3) The ghidra-mode flushNative reset, in the upstream order
+    /// (unlace, Phase 3) The ghidra-mode flushNative reset, in the upstream order
     /// (`FlushNative::rawAction`, ghidra_process.cc:262-273): the lazy symbol
     /// cache (+ its property-map rollback), the non-core data-types, the
-    /// comment database, and the decoded-string cache.  kuna has no live
+    /// comment database, and the decoded-string cache.  unlace has no live
     /// sub-scopes to delete (namespaces are cached path strings inside the
     /// RemoteScope, cleared with it) and no wired constant pool yet.  The
     /// x86-32 callee walks read the host's names and no-return facts, so they
@@ -1619,26 +1619,26 @@ impl Architecture {
         if let Some(remote) = &self.remote_scope {
             remote.clear();
         }
-        (self.pass_hooks().calleepurge_forget_walks)(&mut self.kuna_tables);
+        (self.pass_hooks().calleepurge_forget_walks)(&mut self.unlace_tables);
         self.types.clear_noncore();
         self.commentdb.clear();
         self.string_manager.borrow_mut().base.clear();
     }
 
-    /// (kuna, Phase 3) The active fallback naming vocabulary (see
-    /// [`KunaNameStyle`](crate::database::KunaNameStyle)): `Ghidra` wins over
+    /// (unlace, Phase 3) The active fallback naming vocabulary (see
+    /// [`UnlaceNameStyle`](crate::database::UnlaceNameStyle)): `Ghidra` wins over
     /// `Angr` wins over the upstream `Func` default.
-    pub fn kuna_name_style(&self) -> crate::database::KunaNameStyle {
+    pub fn unlace_name_style(&self) -> crate::database::UnlaceNameStyle {
         if self.name_style_ghidra {
-            crate::database::KunaNameStyle::Ghidra
+            crate::database::UnlaceNameStyle::Ghidra
         } else if self
-            .kuna_options
+            .unlace_options
             .get::<crate::coreoptions::NameStyleAngr>()
             .0
         {
-            crate::database::KunaNameStyle::Angr
+            crate::database::UnlaceNameStyle::Angr
         } else {
-            crate::database::KunaNameStyle::Func
+            crate::database::UnlaceNameStyle::Func
         }
     }
 
@@ -1649,21 +1649,21 @@ impl Architecture {
     /// Pick a default name for a function at `addr` (C++
     /// `Architecture::nameFunction`, `architecture.cc:539`).
     ///
-    /// When the kuna angr-style naming is active (`name_style_angr`), the name is
-    /// `sub_<addr>` (C++ `kunaFunctionName`, transcribed in [`Database`]); the
+    /// When the unlace angr-style naming is active (`name_style_angr`), the name is
+    /// `sub_<addr>` (C++ `unlaceFunctionName`, transcribed in [`Database`]); the
     /// upstream policy is `func_<raw-addr>`.
     pub fn name_function(&self, addr: &Address) -> String {
         if self.name_style_ghidra {
-            // (kuna, Phase 3) ghidra-mode: FUN_%08x (the Java-side dynamic shape)
+            // (unlace, Phase 3) ghidra-mode: FUN_%08x (the Java-side dynamic shape)
             return crate::database::ghidra_function_name(addr);
         }
         if self
-            .kuna_options
+            .unlace_options
             .get::<crate::coreoptions::NameStyleAngr>()
             .0
         {
-            // (kuna) angr-style: sub_<addr>
-            return crate::database::kuna_function_name(addr);
+            // (unlace) angr-style: sub_<addr>
+            return crate::database::unlace_function_name(addr);
         }
         // unlace-base `Address::print_raw` is the faithful transcription of
         // `Address::printRaw` -> `AddrSpace::printRaw` (zero-padded `0x<offset>`,
@@ -1683,19 +1683,19 @@ impl Architecture {
     /// FunctionSymbol of that name exists (the C++ `OptionInline`/`OptionNoReturn`
     /// contract).  Used by the per-function property setters; the loader symbols
     /// are read into the global scope at load (`read_loader_symbols`).
-    pub fn query_global_function(&self, name: &str) -> KunaResult<crate::database::SymbolId> {
+    pub fn query_global_function(&self, name: &str) -> UnlaceResult<crate::database::SymbolId> {
         let scope = self
             .symboltab
             .get_global_scope()
-            .ok_or_else(|| KunaError::recov(format!("Unknown function name: {name}")))?;
+            .ok_or_else(|| UnlaceError::recov(format!("Unknown function name: {name}")))?;
         self.symboltab
             .query_function_by_name(scope, name)
-            .ok_or_else(|| KunaError::recov(format!("Unknown function name: {name}")))
+            .ok_or_else(|| UnlaceError::recov(format!("Unknown function name: {name}")))
     }
 
-    /// (kuna `dexmodel`) The DEX models the engine may consult.
+    /// (unlace `dexmodel`) The DEX models the engine may consult.
     pub fn dex_models(&self) -> &[Rc<crate::dex::DexModel>] {
-        if self.kuna_options.get::<crate::coreoptions::DexModel>().0 {
+        if self.unlace_options.get::<crate::coreoptions::DexModel>().0 {
             &self.dex
         } else {
             &[]
@@ -1707,7 +1707,7 @@ impl Architecture {
     /// from the parsed declaration).  A caller's `ActionDefaultParams::apply` later
     /// `fc->copy(otherfunc->getFuncProto())` (`coreaction.cc:2385`) reads it back via
     /// [`Database::function_proto_pieces`].  Silently no-ops when no FunctionSymbol of
-    /// that name exists (the kuna console re-applies the queried function's own
+    /// that name exists (the unlace console re-applies the queried function's own
     /// prototype through `apply_locked_prototype`; this path is for the *callees*).
     pub fn set_function_prototype_pieces(
         &mut self,
@@ -1719,7 +1719,7 @@ impl Architecture {
         }
     }
 
-    /// (kuna `cppproto`) Park a recovered prototype on the FunctionSymbol at
+    /// (unlace `cppproto`) Park a recovered prototype on the FunctionSymbol at
     /// `addr`, in whatever scope it lives (`find_function_across_scopes`) — the
     /// address-keyed companion of [`Self::set_function_prototype_pieces`].
     ///
@@ -1740,7 +1740,7 @@ impl Architecture {
         }
     }
 
-    /// (kuna `protomerge`) Park a load-time prototype like
+    /// (unlace `protomerge`) Park a load-time prototype like
     /// [`Self::set_function_prototype_pieces_at`], merged slot by slot with the
     /// one already parked there (`protomerge::merge`) when the option is on.
     pub fn merge_function_prototype_pieces_at(
@@ -1770,7 +1770,12 @@ impl Architecture {
         pieces: crate::fspec::PrototypePieces,
     ) {
         let merged = match self.symboltab.function_proto_pieces_of(sid) {
-            Some(old) if self.kuna_options.get::<crate::coreoptions::Protomerge>().0 => {
+            Some(old)
+                if self
+                    .unlace_options
+                    .get::<crate::coreoptions::Protomerge>()
+                    .0 =>
+            {
                 (self.pass_hooks().protomerge_merge)(old, pieces)
             }
             _ => pieces,
@@ -1806,7 +1811,7 @@ impl Architecture {
     /// manager is built fresh from this architecture's const/unique/iop/fspec
     /// spaces, and the analysis unique-start comes from
     /// `Translate::getUniqueStart(ANALYSIS)`.
-    pub fn new_funcdata(&self, name: &str, addr: Address, size: int4) -> KunaResult<Funcdata> {
+    pub fn new_funcdata(&self, name: &str, addr: Address, size: int4) -> UnlaceResult<Funcdata> {
         let uniq_start = self.translate.get_unique_start(UniqueLayout::ANALYSIS);
         let glb = self.build_arch_handle_for_entry(Some(&addr));
         // C++: nm == "" => filled in by decode (localmap None); else a real name.
@@ -1826,7 +1831,7 @@ impl Architecture {
         self.build_arch_handle_for_entry(None)
     }
 
-    /// (kuna `jvmmodel`) The class-file models the engine may consult.
+    /// (unlace `jvmmodel`) The class-file models the engine may consult.
     pub fn jvm_models(&self) -> &[Rc<crate::jvm::JvmModel>] {
         &self.jvm
     }
@@ -1834,11 +1839,11 @@ impl Architecture {
     fn build_arch_handle_for_entry(&self, entry: Option<&Address>) -> ArchHandle {
         let manage = self.translate.manager_rc();
         let mut ctx = ArchContext::new_shared(manage);
-        ctx.kuna_options = self.kuna_options.clone();
-        ctx.kuna_states = self.kuna_states.clone();
+        ctx.unlace_options = self.unlace_options.clone();
+        ctx.unlace_states = self.unlace_states.clone();
         let (effects, reload_only) = (crate::architecture::default_pass_hooks()
             .callmechanisms_effects)(
-            &self.kuna_options, self.image_elfv1_toc
+            &self.unlace_options, self.image_elfv1_toc
         );
         ctx.call_mechanism_effects = effects; // callmechanisms
         ctx.call_mechanism_reload_only = reload_only;
@@ -1854,8 +1859,8 @@ impl Architecture {
                 .find(|model| model.contains(addr.get_offset()))
                 .cloned()
         }); // jvmmodel
-        ctx.kuna_options.set(crate::coreoptions::JavaTry(
-            self.kuna_options.get::<crate::coreoptions::JavaTry>().0 && ctx.dex.is_some(),
+        ctx.unlace_options.set(crate::coreoptions::JavaTry(
+            self.unlace_options.get::<crate::coreoptions::JavaTry>().0 && ctx.dex.is_some(),
         )); // javatry
         ctx.min_laned_register_size = self.get_minimum_laned_register_size();
         // Carry the laned-register table so the per-function Funcdata reaches
@@ -1879,7 +1884,7 @@ impl Architecture {
         // Share the prototype-model registry handles (C++ `glb->defaultfp` /
         // `evalfp_current`) so the proto-recovery actions can set the function's
         // model and run output recovery against the real param lists.
-        // (kuna) `armfloatreturn` widens the default model with the d-registers.
+        // (unlace) `armfloatreturn` widens the default model with the d-registers.
         let helper = (self.pass_hooks().armfloatreturn_applies)(self)
             && entry
                 .and_then(|e| self.symboltab.function_display_name_across_scopes(e))
@@ -1958,36 +1963,36 @@ impl Architecture {
         ctx.x87_empty_storage =
             (crate::architecture::default_pass_hooks().x87emptyreturn_storage)(self);
         ctx.vararg_regs = (crate::architecture::default_pass_hooks().varargsave_regs)(self);
-        ctx.kuna_options.set(crate::coreoptions::TrapAfterCall(
-            self.kuna_options
+        ctx.unlace_options.set(crate::coreoptions::TrapAfterCall(
+            self.unlace_options
                 .get::<crate::coreoptions::TrapAfterCall>()
                 .0
                 && self.get_description().starts_with("x86:"),
         ));
-        ctx.vcall_targets = Rc::clone(&self.kuna_vcall_targets);
+        ctx.vcall_targets = Rc::clone(&self.unlace_vcall_targets);
         ctx.retsysreg_userops = ids(crate::specnames::RETSYSREG_STATE_USEROPS);
         ctx.retsysreg_cop_userops = ids(crate::specnames::RETSYSREG_COP_USEROPS);
-        // (kuna) carry the Rust return-ABI gate and the detected source language
-        // so `kuna_rustabi` reaches both via `glb`.
+        // (unlace) carry the Rust return-ABI gate and the detected source language
+        // so `unlace_rustabi` reaches both via `glb`.
         ctx.source_lang = self.source_lang();
-        ctx.kuna_options.set(crate::coreoptions::ChkstkDarwin(
-            self.kuna_options
+        ctx.unlace_options.set(crate::coreoptions::ChkstkDarwin(
+            self.unlace_options
                 .get::<crate::coreoptions::ChkstkDarwin>()
                 .0
                 && self.image_apple
                 && (self.pass_hooks().chkstkdarwin_applies_to)(&self.archid),
         ));
-        ctx.kuna_options.set(crate::coreoptions::SpSolve((self
+        ctx.unlace_options.set(crate::coreoptions::SpSolve((self
             .pass_hooks()
             .spsolve_applies)(
             self
         )));
         ctx.swift_metadata_results = self
-            .kuna_options
+            .unlace_options
             .get::<crate::analysisgates::Swifttypes>()
             .0;
         ctx.ptrauth_trap_userop = self
-            .kuna_options
+            .unlace_options
             .get::<crate::coreoptions::PtrauthTrap>()
             .0
             .then(|| {
@@ -1998,25 +2003,27 @@ impl Architecture {
             .map(|u| u.get_index() as unlace_base::types::uint4);
         ctx.arm64e = self.archid.starts_with("AARCH64:LE:64:AppleSilicon:");
         ctx.name_style_angr = self
-            .kuna_options
+            .unlace_options
             .get::<crate::coreoptions::NameStyleAngr>()
             .0;
         ctx.name_style_ghidra = self.name_style_ghidra;
-        // (kuna) carry the duplicate-declaration collapse gate so `emit_local_var_decls`
+        // (unlace) carry the duplicate-declaration collapse gate so `emit_local_var_decls`
         // (which reads the ArchContext `arch`) sees `option dedupvardecls`.
-        // (kuna GH-558) carry the comparison-presentation gate so the
+        // (unlace GH-558) carry the comparison-presentation gate so the
         // `compareform canonical|original` option reaches
         // `ActionPresentCompareForm` via `glb` (the ArchContext read site).
-        // (kuna) carry the remaining stage-model rule gates so their `option
+        // (unlace) carry the remaining stage-model rule gates so their `option
         // <name> on|off` reaches the consuming Rule/Action via `glb` (each rule
         // reads `data.get_arch().<flag>`; the rule is registered `enabled=false`
         // so the live flag drives both the DIV default and the toggle).
 
-        ctx.kuna_options.set(crate::coreoptions::GuardedLoop(
-            self.kuna_options.get::<crate::coreoptions::GuardedLoop>().0
+        ctx.unlace_options.set(crate::coreoptions::GuardedLoop(
+            self.unlace_options
+                .get::<crate::coreoptions::GuardedLoop>()
+                .0
                 && self.print.out_lang() == crate::outlang::OutLang::C,
         ));
-        // (kuna) resolve the byte-shuffle user-op ids ONCE per program, so the
+        // (unlace) resolve the byte-shuffle user-op ids ONCE per program, so the
         // rule can name a CALLOTHER through the ArchSeam (the boundary
         // ArchContext carries no userop table).
         ctx.simd_shuffle_userops = crate::specnames::SIMDLANE_SHUFFLE_USEROPS
@@ -2050,69 +2057,74 @@ impl Architecture {
                     .map(|u| u.get_index() as unlace_base::types::uint4)
             })
             .collect();
-        ctx.kuna_options.set(crate::coreoptions::CallTargetType(
-            self.kuna_options
+        ctx.unlace_options.set(crate::coreoptions::CallTargetType(
+            self.unlace_options
                 .get::<crate::coreoptions::CallTargetType>()
                 .0
-                && self.kuna_options.get::<crate::coreoptions::CTypes>().0,
-        )); // (kuna) calltargettype: only C's own spelling needs it
+                && self.unlace_options.get::<crate::coreoptions::CTypes>().0,
+        )); // (unlace) calltargettype: only C's own spelling needs it
         ctx.call_target_c = ctx
-            .kuna_options
+            .unlace_options
             .get::<crate::coreoptions::CallTargetType>()
             .0
-            && self.print.out_lang() == crate::outlang::OutLang::C; // (kuna) calltargettype
+            && self.print.out_lang() == crate::outlang::OutLang::C; // (unlace) calltargettype
         ctx.java_casts = self.print.out_lang() == crate::outlang::OutLang::Java;
-        ctx.unknown_byte_is_char = self.kuna_options.get::<crate::coreoptions::Realtypes>().0
+        ctx.unknown_byte_is_char = self.unlace_options.get::<crate::coreoptions::Realtypes>().0
             && self.print.out_lang() == crate::outlang::OutLang::C;
-        ctx.unknown_is_integer = self.kuna_options.get::<crate::coreoptions::Realtypes>().0
+        ctx.unknown_is_integer = self.unlace_options.get::<crate::coreoptions::Realtypes>().0
             || self.print.out_lang() != crate::outlang::OutLang::C;
         ctx.int_promotion = (self.pass_hooks().lang_int_promotion)(self.print.out_lang());
-        ctx.kuna_options.set(crate::coreoptions::CastArith(
-            self.kuna_options.get::<crate::coreoptions::CastArith>().0
+        ctx.unlace_options.set(crate::coreoptions::CastArith(
+            self.unlace_options.get::<crate::coreoptions::CastArith>().0
                 && self.print.out_lang() == crate::outlang::OutLang::C,
-        )); // (kuna) castarith
-        ctx.kuna_options.set(crate::coreoptions::CastIndex(
-            self.kuna_options.get::<crate::coreoptions::CastIndex>().0
+        )); // (unlace) castarith
+        ctx.unlace_options.set(crate::coreoptions::CastIndex(
+            self.unlace_options.get::<crate::coreoptions::CastIndex>().0
                 && self.print.out_lang() == crate::outlang::OutLang::C,
-        )); // (kuna) castindex
-        ctx.elem_ptr_ranges = std::rc::Rc::clone(&self.globalref_ranges); // (kuna) elemptr
-        ctx.libctypes = self.kuna_options.get::<crate::libctypes::LibcTypesLayout>()
-            != crate::libctypes::LibcTypesLayout::Off; // (kuna) libctypes (kuna_libcfit)
+        )); // (unlace) castindex
+        ctx.elem_ptr_ranges = std::rc::Rc::clone(&self.globalref_ranges); // (unlace) elemptr
+        ctx.libctypes = self
+            .unlace_options
+            .get::<crate::libctypes::LibcTypesLayout>()
+            != crate::libctypes::LibcTypesLayout::Off; // (unlace) libctypes (unlace_libcfit)
 
-        ctx.vtable_types = self.kuna_options.get::<crate::coreoptions::Vtabletypes>().0
-            || (self.pass_hooks().inputhints_has_this_hints)(&self.kuna_tables);
-        // (kuna `calleereginputs custom`) a function's own evaluation sees the
+        ctx.vtable_types = self
+            .unlace_options
+            .get::<crate::coreoptions::Vtabletypes>()
+            .0
+            || (self.pass_hooks().inputhints_has_this_hints)(&self.unlace_tables);
+        // (unlace `calleereginputs custom`) a function's own evaluation sees the
         // same per-callee models its callers' flow does.
-        ctx.kuna_custom_reg_callers = Rc::clone(&self.kuna_custom_reg_callers);
-        ctx.kuna_custom_reg_models = Rc::clone(&self.kuna_custom_reg_models);
+        ctx.unlace_custom_reg_callers = Rc::clone(&self.unlace_custom_reg_callers);
+        ctx.unlace_custom_reg_models = Rc::clone(&self.unlace_custom_reg_models);
 
         ctx.do_while_continue = (self.pass_hooks().lang_do_while_continue)(self.print.out_lang());
-        ctx.kuna_options.set(crate::coreoptions::PostIncrement(
-            self.kuna_options
+        ctx.unlace_options.set(crate::coreoptions::PostIncrement(
+            self.unlace_options
                 .get::<crate::coreoptions::PostIncrement>()
                 .0
                 && self.print.out_lang() == crate::outlang::OutLang::C,
         ));
-        ctx.image_linux_elf = self.image_linux_elf; // (kuna) linuxsyscall
+        ctx.image_linux_elf = self.image_linux_elf; // (unlace) linuxsyscall
         ctx.octeon_memory_userops = crate::octeonops::userop_ids(
             &self.userops,
-            self.kuna_options
+            self.unlace_options
                 .get::<crate::octeonops::OcteonEffectsMode>(),
             &self.octeon_upstream_inject,
         );
         ctx.atomic_userops = crate::atomicops::AtomicUserops::resolve(&self.archid, &self.userops);
         ctx.x64_syscall_memory_target = self.archid == "x86:LE:64:default:gcc";
         ctx.syscall_regs = self
-            .kuna_options
+            .unlace_options
             .get::<crate::coreoptions::SyscallRegsMode>()
-            .fires(self.image_os_userland); // (kuna) syscallregs
+            .fires(self.image_os_userland); // (unlace) syscallregs
         ctx.syscall_regs_family = crate::context::SyscallFamily::from_archid(&self.archid);
         ctx.syscall_regs_userops =
             (self.pass_hooks().syscallregs_userop_ids)(&self.userops, ctx.syscall_regs_family);
         ctx.windows_cspec =
-            (self.pass_hooks().fastfailnoreturn_archid_is_windows)(self.get_description()); // (kuna) pebnames
+            (self.pass_hooks().fastfailnoreturn_archid_is_windows)(self.get_description()); // (unlace) pebnames
         ctx.image_windows_user = self.image_windows_user;
-        // (kuna) resolve the `SYSCALL` user-op ids ONCE per program, for the same
+        // (unlace) resolve the `SYSCALL` user-op ids ONCE per program, for the same
         // reason `simd_shuffle_userops` above is resolved here: the boundary
         // ArchContext carries no userop table.  An op a compiler spec has
         // specialized with its own `<callotherfixup>` carries an injection id and
@@ -2124,10 +2136,10 @@ impl Architecture {
             .map(|u| vec![u.get_index() as unlace_base::types::uint4])
             .unwrap_or_default();
         ctx.go_keep_divide_checks = self.archid.starts_with("AARCH64:");
-        // (kuna) carry the whiledo->for reroll gate (C++ `glb->analyze_for_loops`)
+        // (unlace) carry the whiledo->for reroll gate (C++ `glb->analyze_for_loops`)
         // so `ActionStructureTransform` reaches it for
         // `Funcdata::finalize_forloop_transform`.
-        // (kuna outlang) A language with no C-style `for` header must not have the
+        // (unlace outlang) A language with no C-style `for` header must not have the
         // reroll run at all. `finalize_forloop_transform` physically MOVES the
         // initializer and increment ops into the header's slots and suppresses
         // them from the body; rendering that as a `while` would drop them, and
@@ -2154,47 +2166,47 @@ impl Architecture {
         ctx.max_jumptable_size = self.max_jumptable_size;
         ctx.alias_block_level = self.alias_block_level;
         ctx.funcptr_align = self.funcptr_align;
-        // (kuna) GH-9191: carry the modulo/and-mask jump-table index-bound gate
+        // (unlace) GH-9191: carry the modulo/and-mask jump-table index-bound gate
         // (`option switchmodbound`) so `JumpBasic::recoverModel` reaches it.
         ctx.lazy_entry_starts = Rc::clone(&self.lazy_entry_starts);
-        // (kuna, angr) carry the CBRANCH-guard jump-table index-bound gate
+        // (unlace, angr) carry the CBRANCH-guard jump-table index-bound gate
         // (`option switchguardbound`) so `JumpBasic::recoverModel` reaches it.
-        // (kuna, angr) carry the loop-carried-base relative-offset jump-table gate
+        // (unlace, angr) carry the loop-carried-base relative-offset jump-table gate
         // (`option switchsharedcase`) so `JumpBasic::recoverModel` reaches it.
-        // (kuna, angr) carry the multi-predecessor unrolled-guard jump-table gate
+        // (unlace, angr) carry the multi-predecessor unrolled-guard jump-table gate
         // (`option switchmultipred`) so `JumpBasic::checkUnrolledGuard` reaches it.
-        ctx.kuna_fde_extents = Rc::clone(&self.kuna_fde_extents);
-        // (kuna, angr) carry the interleaved unrolled-guard partial-flow gate
+        ctx.unlace_fde_extents = Rc::clone(&self.unlace_fde_extents);
+        // (unlace, angr) carry the interleaved unrolled-guard partial-flow gate
         // (`option unrolledguard`) so `FlowInfo::collectEdges` reaches it.
-        // (kuna) carry the shared-partial gate (`option jtsharepartial`) so
+        // (unlace) carry the shared-partial gate (`option jtsharepartial`) so
         // `Funcdata::stage_jump_table` reaches it.
         ctx.loader = Some(self.translate.loader_rc());
         // Carry the read-only-propagation switch (C++ `glb->readonlypropagate`,
         // flipped by `option readonly`) so `ActionVarnodeProps` reaches it to gate
         // `Funcdata::fillinReadOnly` (the readonly-RAM-global constant fold).
         ctx.readonlypropagate = self.readonlypropagate;
-        // (kuna `dynrelocs`) Carry the PT_GNU_RELRO-frozen dynamic-relocation
+        // (unlace `dynrelocs`) Carry the PT_GNU_RELRO-frozen dynamic-relocation
         // slots so `ActionVarnodeProps` folds those loads with global read-only
         // propagation still off. `Rc` clone: the list is built once at load.
         ctx.dynreloc_const = Rc::clone(&self.dynreloc_const);
-        ctx.kuna_options.set(crate::coreoptions::VexZeroUpper(
-            self.kuna_options
+        ctx.unlace_options.set(crate::coreoptions::VexZeroUpper(
+            self.unlace_options
                 .get::<crate::coreoptions::VexZeroUpper>()
                 .0
                 && self.archid.starts_with("x86:LE:64"),
         ));
-        let neon = self.kuna_options.get::<crate::neonintrin::NeonIntrin>();
+        let neon = self.unlace_options.get::<crate::neonintrin::NeonIntrin>();
         let aarch64 = self.archid.starts_with("AARCH64:");
-        ctx.kuna_options.set(crate::neonintrin::NeonIntrin {
+        ctx.unlace_options.set(crate::neonintrin::NeonIntrin {
             on: neon.on && aarch64,
             fuse: neon.fuse && aarch64,
         });
-        let lane_fuse = self.kuna_options.get::<crate::coreoptions::LaneFuse>();
-        ctx.kuna_options.set(crate::coreoptions::LaneFuse {
+        let lane_fuse = self.unlace_options.get::<crate::coreoptions::LaneFuse>();
+        ctx.unlace_options.set(crate::coreoptions::LaneFuse {
             on: lane_fuse.on && self.archid.starts_with("x86:LE:64"),
             all: lane_fuse.all,
         });
-        ctx.vector_fp = if self.kuna_options.get::<crate::coreoptions::VectorAbi>().0
+        ctx.vector_fp = if self.unlace_options.get::<crate::coreoptions::VectorAbi>().0
             && self.archid == "x86:LE:64:default:gcc"
         {
             ctx.defaultfp.as_ref().map(|model| {
@@ -2209,9 +2221,12 @@ impl Architecture {
         } else {
             None
         };
-        ctx.vector_userops = if self.kuna_options.get::<crate::coreoptions::VectorAbi>().0
+        ctx.vector_userops = if self.unlace_options.get::<crate::coreoptions::VectorAbi>().0
             && self.archid.starts_with("x86:LE:64")
-            || self.kuna_options.get::<crate::neonintrin::NeonIntrin>().on
+            || self
+                .unlace_options
+                .get::<crate::neonintrin::NeonIntrin>()
+                .on
                 && self.archid.starts_with("AARCH64:")
         {
             Rc::clone(self.vector_userop_kinds.get_or_init(|| {
@@ -2259,7 +2274,7 @@ impl Architecture {
         } else {
             Rc::new(Vec::new())
         };
-        ctx.vector_fp = if self.kuna_options.get::<crate::coreoptions::VectorAbi>().0
+        ctx.vector_fp = if self.unlace_options.get::<crate::coreoptions::VectorAbi>().0
             && self.archid == "x86:LE:64:default:gcc"
         {
             ctx.defaultfp.as_ref().map(|model| {
@@ -2281,14 +2296,14 @@ impl Architecture {
         // Snapshot the global symbol table onto `glb` so the per-function
         // `setVarnodeProperties` can run `localmap->queryProperties`'s walk into
         // the global scope (C++ `glb` reaches the live `symboltab`; the merged
-        // kuna `glb` is a skeleton, so the global scope is wired here, after every
+        // unlace `glb` is a skeleton, so the global scope is wired here, after every
         // `map addr`).  Global-mapped varnodes then pick up `persist`/`addrtied`
         // and their stores survive `ActionDeadCode`.
         // Both whole-`symboltab` derivations come from one memoized read, so they
         // are always the same generation of the database as each other.
         let (global_query, callee_protos) = self.symbol_snapshots();
         ctx.global_query = Some(global_query);
-        // (kuna, Phase 3) the ghidra-mode lazy provider rides the handle so the
+        // (unlace, Phase 3) the ghidra-mode lazy provider rides the handle so the
         // global reads above query through it; None on the standalone path.
         ctx.remote_scope = self.remote_scope.clone();
         // Snapshot every source-declared callee prototype (parked on the global
@@ -2299,7 +2314,7 @@ impl Architecture {
         ctx.loader_transfer_sites = Rc::clone(&self.loader_transfer_sites);
         ctx.loader_mips_imports = Rc::clone(&self.loader_mips_imports);
         ctx.nullable_literal_values = Rc::clone(&self.nullable_literal_values);
-        // (kuna) The convention each of those callees was DECLARED under, keyed
+        // (unlace) The convention each of those callees was DECLARED under, keyed
         // the same way the pieces are (entry address).  The declaration names the
         // function, the parked pieces carry that name, and the read side
         // (`ArchContext::callee_proto_model`) is address-keyed — so the join
@@ -2366,16 +2381,16 @@ impl Architecture {
 
     /// The two whole-`symboltab` derivations for the `Funcdata` being built,
     /// reusing the ones the previous function got while `symboltab` has not
-    /// moved since (`Database::kuna_generation`).
+    /// moved since (`Database::unlace_generation`).
     fn symbol_snapshots(&self) -> (Rc<crate::context::GlobalQuery>, CalleeProtoSnapshot) {
-        if !self.kuna_snapshot_cache {
+        if !self.unlace_snapshot_cache {
             return (
                 Rc::new(self.symboltab.build_global_query()),
                 Rc::new(self.symboltab.build_callee_proto_pieces()),
             );
         }
         let mut slot = self.symbol_snapshots.borrow_mut();
-        let generation = self.symboltab.kuna_generation();
+        let generation = self.symboltab.unlace_generation();
         if slot.generation != Some(generation) {
             *slot = SymbolSnapshots {
                 generation: Some(generation),
@@ -2398,7 +2413,7 @@ impl Architecture {
     /// default; `UNLACE_NO_SYMBOL_SNAPSHOT_CACHE` turns it off at construction).
     /// The two paths must agree -- this exists so a test can compare them.
     pub fn set_symbol_snapshot_cache(&mut self, on: bool) {
-        self.kuna_snapshot_cache = on;
+        self.unlace_snapshot_cache = on;
         *self.symbol_snapshots.borrow_mut() = SymbolSnapshots::default();
     }
 
@@ -2407,7 +2422,7 @@ impl Architecture {
     /// (architecture.cc:638-640): `FspecSpace`, then `IopSpace`, then
     /// `JoinSpace`, each appended at `numSpaces()`.  Idempotent — re-running
     /// init must not double-insert (the manager rejects a duplicate name).
-    fn insert_ir_call_spaces(&mut self) -> KunaResult<()> {
+    fn insert_ir_call_spaces(&mut self) -> UnlaceResult<()> {
         use unlace_base::space::{FspecSpace, IopSpace, JoinSpace};
         let big_end = self
             .manage()
@@ -2454,7 +2469,7 @@ impl Architecture {
         isreversejustified: bool,
         stack_growth: bool,
         is_formal: bool,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         use unlace_base::space::SpacebaseSpace;
         // C++: `int4 ind = numSpaces();` then `new SpacebaseSpace(this, translate,
         // nm, ind, truncSize, basespace, ptrdata.space->getDelay()+1, isFormal)`.
@@ -2504,7 +2519,7 @@ impl Architecture {
     /// The cspec XML is the one [`set_cspec_xml`](Architecture::set_cspec_xml)
     /// recorded; this borrows it (it must stay available for the later
     /// `<default_proto>` decode in [`build_default_proto`](Architecture::build_default_proto)).
-    fn decode_stack_pointer(&mut self) -> KunaResult<()> {
+    fn decode_stack_pointer(&mut self) -> UnlaceResult<()> {
         use unlace_base::xml::DocumentStorage;
         let Some(xml) = self.cspec_xml.clone() else {
             return Ok(()); // no cspec recorded: nothing to decode (degrade gracefully)
@@ -2533,14 +2548,14 @@ impl Architecture {
 
         // C++: `if (basespace == 0) throw "missing space attribute"`.
         let space_name = space_name.ok_or_else(|| {
-            KunaError::lowlevel("stackpointer element missing \"space\" attribute")
+            UnlaceError::lowlevel("stackpointer element missing \"space\" attribute")
         })?;
         let basespace = self
             .manage()
             .get_space_by_name(&space_name)
             .cloned()
             .ok_or_else(|| {
-                KunaError::lowlevel(format!("stackpointer space \"{space_name}\" not found"))
+                UnlaceError::lowlevel(format!("stackpointer space \"{space_name}\" not found"))
             })?;
 
         // C++ `translate->getRegister(registerName)` -> the base-register location.
@@ -2582,11 +2597,11 @@ impl Architecture {
     /// `align="2"` → `funcptr_align = 1`), exactly as the C++ `while((align&1)==0)`
     /// loop computes.  An absent element leaves `funcptr_align = 0` (no alignment),
     /// matching the C++ default.  General over any cspec — no processor special-
-    /// casing.  Feeds the kuna GH-8471 `RulePtrsubUndo` thumb-funcptr guard (and
+    /// casing.  Feeds the unlace GH-8471 `RulePtrsubUndo` thumb-funcptr guard (and
     /// the already-ported `RuleFuncPtrEncoding`/jumptable readers of this field).
     ///
     /// [`funcptr_align`]: Architecture::funcptr_align
-    fn decode_funcptr_align(&mut self) -> KunaResult<()> {
+    fn decode_funcptr_align(&mut self) -> UnlaceResult<()> {
         use unlace_base::xml::DocumentStorage;
         let Some(xml) = self.cspec_xml.clone() else {
             return Ok(()); // no cspec recorded: leave funcptr_align = 0
@@ -2629,7 +2644,7 @@ impl Architecture {
         sz: int4,
         point: &Address,
         full_encoding: &mut uintb,
-    ) -> KunaResult<Address> {
+    ) -> UnlaceResult<Address> {
         if let Some(seg) = self.segment_def(spc.get_index()) {
             return Ok(seg.resolve(val, sz, point, full_encoding, |mem, at| {
                 self.with_context_db(|db| db.get_tracked_value(mem, at))
@@ -2640,20 +2655,20 @@ impl Architecture {
     }
 
     /// Compile each registered `<segmentop>` into a [`SegmentDef`] and apply
-    /// the option (the kuna half of C++ `initializeSegments`; the resolvers it
+    /// the option (the unlace half of C++ `initializeSegments`; the resolvers it
     /// installs live in the per-function snapshot).  A segment op whose snippet
     /// has no local template (ghidra mode) is left out.
     ///
     /// [`SegmentDef`]: crate::segmentize::SegmentDef
-    fn initialize_segments(&mut self) -> KunaResult<()> {
-        let mut states = std::mem::take(&mut self.kuna_states);
+    fn initialize_segments(&mut self) -> UnlaceResult<()> {
+        let mut states = std::mem::take(&mut self.unlace_states);
         let built = (crate::architecture::default_pass_hooks().segmentize_build)(
             self,
             self.translate.manager_rc(),
             &self.opbehaviors,
             &mut states,
         );
-        self.kuna_states = states;
+        self.unlace_states = states;
         built?;
         self.apply_segmentize();
         Ok(())
@@ -2800,7 +2815,7 @@ impl Architecture {
     /// pointer inference (a separate stub).  General over any processor's cspec:
     /// the space names are read from the XML and resolved through the engine, with
     /// NO processor-name special-casing.
-    /// (kuna `goreg`) Name and type the golang cspec's goroutine register.
+    /// (unlace `goreg`) Name and type the golang cspec's goroutine register.
     ///
     /// Mirrors `decode_global`'s `<register>` arm — the register's storage
     /// joins the global scope — then maps a type+name-locked `g` symbol typed
@@ -2808,7 +2823,7 @@ impl Architecture {
     /// being the active compiler spec (the `archid` compiler field); a
     /// no-register golang target (x86-32 reaches `g` through TLS) and every
     /// other image are untouched.
-    fn kuna_install_goreg(&mut self) -> KunaResult<()> {
+    fn unlace_install_goreg(&mut self) -> UnlaceResult<()> {
         let Some(reg) =
             (self.pass_hooks().goreg_goroutine_register)(&self.archid, self.go_version())
         else {
@@ -2840,7 +2855,7 @@ impl Architecture {
         Ok(())
     }
 
-    fn decode_global(&mut self) -> KunaResult<()> {
+    fn decode_global(&mut self) -> UnlaceResult<()> {
         use unlace_base::address::{Range, RangeProperties};
         use unlace_base::marshal::{IdRegistry, XmlDecode};
         use unlace_base::xml::DocumentStorage;
@@ -2939,7 +2954,7 @@ impl Architecture {
     /// The SLEIGH compile of each fixup body (`parseInject`) stays deferred
     /// (LOSS-031); only the decode/registration runs here, which is all
     /// `getPayloadId`/`setInjectId` need.  General over any processor's cspec.
-    fn decode_call_fixups(&mut self) -> KunaResult<()> {
+    fn decode_call_fixups(&mut self) -> UnlaceResult<()> {
         use unlace_base::marshal::{IdRegistry, XmlDecode};
         use unlace_base::xml::DocumentStorage;
 
@@ -2965,7 +2980,7 @@ impl Architecture {
         crate::pcodeinject::register_ids(&mut registry);
         for fixup in fixups.iter() {
             let mut decoder = XmlDecode::new_with_root(&manager, &registry, fixup, 0);
-            // C++ src = archid+" : compiler spec"; the kuna engine carries no archid
+            // C++ src = archid+" : compiler spec"; the unlace engine carries no archid
             // string here, so the source label is the constant suffix (only surfaces
             // in error messages / debug dumps, never in test output).
             self.pcodeinjectlib.decode_inject(
@@ -2978,11 +2993,11 @@ impl Architecture {
         Ok(())
     }
 
-    /// (kuna) Register the models of the MSVC x87 intrinsics
+    /// (unlace) Register the models of the MSVC x87 intrinsics
     /// (`p4_calls::x87intrinsic`). x86-32 only: the models name `ST0`/`ST1`,
     /// and the intrinsics exist nowhere else. Skipped when the registry already
     /// holds the one-operand model.
-    fn register_kuna_x87_intrinsic_model(&mut self, root: &Rc<unlace_base::xml::Element>) {
+    fn register_unlace_x87_intrinsic_model(&mut self, root: &Rc<unlace_base::xml::Element>) {
         let code_addr_size = self
             .manage()
             .get_default_code_space()
@@ -3010,7 +3025,7 @@ impl Architecture {
         }
     }
 
-    /// (kuna) Register the synthesized MSVC `__ftol`-family call-fixup
+    /// (unlace) Register the synthesized MSVC `__ftol`-family call-fixup
     /// (`p2_lift::msvcftol`), the arithmetic runtime-helper fixups
     /// (`p2_lift::arithhelpers`) and the ObjC ARC fixups
     /// (`p2_lift::objcarc`) alongside the cspec's own `<callfixup>`
@@ -3025,7 +3040,7 @@ impl Architecture {
     /// Skipped entirely in ghidra mode, exactly as `register_cortexmpriv_fixup`
     /// is: with no local `.sla`, step 3 never compiles the payload, so the
     /// registration could not pay off there anyway.
-    fn decode_kuna_call_fixups(&mut self) -> KunaResult<()> {
+    fn decode_unlace_call_fixups(&mut self) -> UnlaceResult<()> {
         use unlace_base::marshal::{IdRegistry, XmlDecode};
 
         if self.translate.as_sleigh().is_none() {
@@ -3105,7 +3120,7 @@ impl Architecture {
     /// `self.userops`, so the manager is moved out with `mem::take`, driven
     /// against the rest of `self` (which still owns `pcodeinjectlib`), then
     /// restored — the established split-borrow convention.
-    fn init_userops_and_fixups(&mut self) -> KunaResult<()> {
+    fn init_userops_and_fixups(&mut self) -> UnlaceResult<()> {
         use unlace_base::marshal::{IdRegistry, XmlDecode};
         use unlace_base::xml::DocumentStorage;
 
@@ -3128,7 +3143,7 @@ impl Architecture {
 
         // 2. parseCompilerConfig: dispatch each cspec `<callotherfixup>` child to
         //    userops.decodeCallOtherFixup(decoder,this).
-        let fixup_res = (|| -> KunaResult<()> {
+        let fixup_res = (|| -> UnlaceResult<()> {
             let Some(xml) = self.cspec_xml.clone() else {
                 return Ok(());
             };
@@ -3185,7 +3200,7 @@ impl Architecture {
         self.userops = userops;
         fixup_res?;
 
-        // 2b. (kuna `cortexmpriv`) Register the synthesized
+        // 2b. (unlace `cortexmpriv`) Register the synthesized
         //     `isCurrentModePrivileged` callother-fixup alongside the cspec's own,
         //     so step 3 compiles it with the rest. Unconditional on any language
         //     that declares the user-op (the option is not readable at bootstrap);
@@ -3235,7 +3250,7 @@ impl Architecture {
         userops: &mut UserOpManage,
         xml: Option<&[u8]>,
         root_name: &str,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         use unlace_base::marshal::{IdRegistry, XmlDecode};
         use unlace_base::xml::DocumentStorage;
         let Some(xml) = xml else { return Ok(()) };
@@ -3272,7 +3287,7 @@ impl Architecture {
         Ok(())
     }
 
-    /// (kuna `cortexmpriv`) Install the `isCurrentModePrivileged` callother-fixup
+    /// (unlace `cortexmpriv`) Install the `isCurrentModePrivileged` callother-fixup
     /// that reports privileged, parking its inject id on
     /// [`cortexmpriv_inject`](Self::cortexmpriv_inject).
     ///
@@ -3281,7 +3296,7 @@ impl Architecture {
     /// ARM), and on one where a compiler spec already specialized it — the cspec's
     /// own `<callotherfixup>` wins, exactly as it does for the vendored
     /// `setISAMode` fixups.
-    fn register_cortexmpriv_fixup(&mut self) -> KunaResult<()> {
+    fn register_cortexmpriv_fixup(&mut self) -> UnlaceResult<()> {
         use crate::specnames as names;
         if let Some(injectid) = self.register_manual_fixup(
             names::CORTEXMPRIV_USEROP,
@@ -3295,12 +3310,12 @@ impl Architecture {
         Ok(())
     }
 
-    /// (kuna `octeoneffects`) Register a callother fixup holding upstream's
+    /// (unlace `octeoneffects`) Register a callother fixup holding upstream's
     /// lifting for each Octeon reservation and ordering operation the language
     /// declares unspecialized ([`crate::octeonops::UPSTREAM`]), as
     /// step 2b does for `cortexmpriv`; `decompile_drive::is_injected_userop`
     /// applies them only under `option octeoneffects off`.
-    fn register_octeon_upstream_fixups(&mut self) -> KunaResult<()> {
+    fn register_octeon_upstream_fixups(&mut self) -> UnlaceResult<()> {
         self.octeon_upstream_inject.clear();
         for fixup in crate::octeonops::UPSTREAM {
             let inputs: Vec<Vec<u8>> = fixup.inputs.iter().map(|input| input.to_vec()).collect();
@@ -3313,7 +3328,7 @@ impl Architecture {
         Ok(())
     }
 
-    /// (kuna) Make `body` the callother fixup of the unspecialized user-op `name`
+    /// (unlace) Make `body` the callother fixup of the unspecialized user-op `name`
     /// and return its inject id; `named` registers the payload under `name`
     /// rather than C++'s shared "unknown". Returns `None`, leaving the op as it
     /// is, when the language does not declare it or a compiler spec already
@@ -3327,7 +3342,7 @@ impl Architecture {
         inputs: &[Vec<u8>],
         body: &[u8],
         named: bool,
-    ) -> KunaResult<Option<int4>> {
+    ) -> UnlaceResult<Option<int4>> {
         if self.translate.as_sleigh().is_none()
             || !self
                 .userops
@@ -3350,14 +3365,14 @@ impl Architecture {
         Ok(Some(injectid))
     }
 
-    /// (kuna) Register the fixed set of string-copy builtin user-ops into
+    /// (unlace) Register the fixed set of string-copy builtin user-ops into
     /// `userops` so the printer's `opCallother` path resolves their name,
     /// display, and typed parameters.  Mirrors the lazy
     /// `userops.registerBuiltin(BUILTIN_*)` calls in `ArraySequence::buildStringCopy`
     /// and `Funcdata::getInternalString` (C++ does these on demand during the
-    /// transform; the kuna ArchContext can't reach the real `userops`, so they are
+    /// transform; the unlace ArchContext can't reach the real `userops`, so they are
     /// front-loaded here).
-    fn register_string_builtins(&mut self) -> KunaResult<()> {
+    fn register_string_builtins(&mut self) -> UnlaceResult<()> {
         use crate::userop::{
             BUILTIN_ABS, BUILTIN_ALLOCA, BUILTIN_BITREV, BUILTIN_BSWAP, BUILTIN_CTZ,
             BUILTIN_KERNEL_BUG, BUILTIN_KERNEL_WARN, BUILTIN_LABS, BUILTIN_MEMCMP, BUILTIN_MEMCPY,
@@ -3377,7 +3392,7 @@ impl Architecture {
                 .unwrap_or(1),
         };
         let mut userops = std::mem::take(&mut self.userops);
-        let res = (|| -> KunaResult<()> {
+        let res = (|| -> UnlaceResult<()> {
             userops.register_builtin(BUILTIN_STRINGDATA, &adapter)?;
             // The volatile builtins (`read_volatile`/`write_volatile`) are
             // registered lazily by `Funcdata::replaceVolatile`'s
@@ -3391,11 +3406,11 @@ impl Architecture {
             userops.register_builtin(BUILTIN_MEMCPY, &adapter)?;
             userops.register_builtin(BUILTIN_STRNCPY, &adapter)?;
             userops.register_builtin(BUILTIN_WCSNCPY, &adapter)?;
-            // (kuna GH-9230/1537) the constant-fill recovery CALLOTHER.
+            // (unlace GH-9230/1537) the constant-fill recovery CALLOTHER.
             userops.register_builtin(BUILTIN_MEMSET, &adapter)?;
-            // (kuna syscallregs) the MIPS/PowerPC system-call failure flag.
+            // (unlace syscallregs) the MIPS/PowerPC system-call failure flag.
             userops.register_builtin(BUILTIN_SYSCALL_ERROR, &adapter)?;
-            // (kuna strlenscan) the length an inline `repnz scasb` computes.
+            // (unlace strlenscan) the length an inline `repnz scasb` computes.
             userops.register_builtin(BUILTIN_STRLEN, &adapter)?;
             for (id, name) in (self.pass_hooks().lanefuse_builtins)() {
                 userops.register_named_builtin(id, &name);
@@ -3409,7 +3424,7 @@ impl Architecture {
             ) {
                 userops.register_named_builtin(id, &name);
             }
-            // (kuna itaniumeh, swiftcall) the exceptional-edge test, the pad values
+            // (unlace itaniumeh, swiftcall) the exceptional-edge test, the pad values
             // and the Swift error register.
             for id in [
                 crate::userop::BUILTIN_EH_UNWINDING,
@@ -3417,32 +3432,32 @@ impl Architecture {
                 crate::userop::BUILTIN_EH_SELECTOR,
                 crate::userop::BUILTIN_SWIFT_ERROR,
                 crate::userop::BUILTIN_SWIFT_THROW,
-                // (kuna javatry) the DEX try dispatch, exceptional edge and caught value.
+                // (unlace javatry) the DEX try dispatch, exceptional edge and caught value.
                 crate::userop::BUILTIN_JAVA_TRY,
                 crate::userop::BUILTIN_JAVA_THROWS,
                 crate::userop::BUILTIN_JAVA_CAUGHT,
             ] {
                 userops.register_builtin(id, &adapter)?;
             }
-            // (kuna bitidioms) byte swap and rotate.
+            // (unlace bitidioms) byte swap and rotate.
             userops.register_builtin(BUILTIN_BSWAP, &adapter)?;
             userops.register_builtin(BUILTIN_ROTL, &adapter)?;
-            // (kuna alloca, varargsave) the dynamic allocation and va_list set-up.
+            // (unlace alloca, varargsave) the dynamic allocation and va_list set-up.
             userops.register_builtin(BUILTIN_ALLOCA, &adapter)?;
             userops.register_builtin(BUILTIN_VA_START, &adapter)?;
-            // (kuna bitidioms, helperroles) abs, bit reverse, count trailing zeros, strcpy.
+            // (unlace bitidioms, helperroles) abs, bit reverse, count trailing zeros, strcpy.
             userops.register_builtin(BUILTIN_ABS, &adapter)?;
             userops.register_builtin(BUILTIN_LABS, &adapter)?;
             userops.register_builtin(BUILTIN_BITREV, &adapter)?;
             userops.register_builtin(BUILTIN_CTZ, &adapter)?;
             userops.register_builtin(BUILTIN_STRCPY, &adapter)?;
             userops.register_builtin(BUILTIN_VAARG, &adapter)?;
-            // (kuna satmul) the overflow-saturating multiply before operator new[].
+            // (unlace satmul) the overflow-saturating multiply before operator new[].
             userops.register_builtin(crate::userop::BUILTIN_SATURATED_MUL, &adapter)?;
-            // (kuna kernelbug) the Linux `__bug_table` trap statements.
+            // (unlace kernelbug) the Linux `__bug_table` trap statements.
             userops.register_builtin(BUILTIN_KERNEL_BUG, &adapter)?;
             userops.register_builtin(BUILTIN_KERNEL_WARN, &adapter)?;
-            // (kuna repstring) the fills and the compare a repeated string
+            // (unlace repstring) the fills and the compare a repeated string
             // instruction prints as.
             for id in [
                 BUILTIN_MEMSET16,
@@ -3452,7 +3467,7 @@ impl Architecture {
             ] {
                 userops.register_builtin(id, &adapter)?;
             }
-            // (kuna atomics) the locked and LSE read-modify-write builtins.
+            // (unlace atomics) the locked and LSE read-modify-write builtins.
             for (id, _) in crate::userop::ATOMIC_BUILTINS {
                 userops.register_builtin(id, &adapter)?;
             }
@@ -3473,17 +3488,17 @@ impl Architecture {
     // ifacedecomp porter confirmed were absent — w9x-arch-engine-glue)
     // -----------------------------------------------------------------------
 
-    /// (kuna) The load-time options this program was loaded with.
+    /// (unlace) The load-time options this program was loaded with.
     pub fn load_options(&self) -> &crate::loadoptions::LoadOptions {
         &self.load_options
     }
 
-    /// (kuna) Change a load-time option for this program's later analysis.
+    /// (unlace) Change a load-time option for this program's later analysis.
     pub fn load_options_mut(&mut self) -> &mut crate::loadoptions::LoadOptions {
         Rc::make_mut(&mut self.load_options)
     }
 
-    /// (kuna) Put this program's load-time options in force on this thread until
+    /// (unlace) Put this program's load-time options in force on this thread until
     /// the scope drops, so the gates that run after the load read them. A
     /// program loaded with no options defers to the environment instead, so its
     /// gates read their variables live.
@@ -3495,7 +3510,7 @@ impl Architecture {
         }
     }
 
-    /// (kuna) The image's Go toolchain release, when the load stated one.
+    /// (unlace) The image's Go toolchain release, when the load stated one.
     fn go_version(&self) -> Option<(u16, u16)> {
         if self.load_options_from_env {
             crate::loadoptions::env::go_version()
@@ -3504,7 +3519,7 @@ impl Architecture {
         }
     }
 
-    /// (kuna `goreg`) The runtime layouts of the image's Go toolchain release.
+    /// (unlace `goreg`) The runtime layouts of the image's Go toolchain release.
     fn go_layout(&self) -> GoLayout {
         match self.go_version() {
             Some((major, minor)) => GoLayout::from_version(major, minor),
@@ -3512,9 +3527,9 @@ impl Architecture {
         }
     }
 
-    /// (kuna `goabi`) Make the stack model `abi0` the default of a golang-cspec
+    /// (unlace `goabi`) Make the stack model `abi0` the default of a golang-cspec
     /// image built before the register ABI reached its CPU.
-    fn kuna_go_stack_default(&mut self) -> KunaResult<()> {
+    fn unlace_go_stack_default(&mut self) -> UnlaceResult<()> {
         if self.archid.ends_with(":golang")
             && self.proto_models.contains_key("abi0")
             && !(self.pass_hooks().goreg_register_abi)(&self.archid, self.go_version())
@@ -3550,13 +3565,13 @@ impl Architecture {
         &*self.print
     }
 
-    /// (kuna) Borrow the per-program restart-trigger log (read by the `restarts`
+    /// (unlace) Borrow the per-program restart-trigger log (read by the `restarts`
     /// console command).
     pub fn restart_log(&self) -> &crate::restartlog::RestartLog {
         &self.restart_log
     }
 
-    /// (kuna) Mutably borrow the restart-trigger log (the trigger sites record
+    /// (unlace) Mutably borrow the restart-trigger log (the trigger sites record
     /// into it).
     pub fn restart_log_mut(&mut self) -> &mut crate::restartlog::RestartLog {
         &mut self.restart_log
@@ -3578,15 +3593,15 @@ impl Architecture {
         self.print = print;
     }
 
-    /// (kuna outlang) Select the output language by name, rejecting one no
+    /// (unlace outlang) Select the output language by name, rejecting one no
     /// back-end claims.
     ///
     /// The `ArchOptionContext::set_print_language` sibling is infallible because
     /// it mirrors the upstream setter; this is the surface a front-end should
     /// use, so a typo is an error rather than a silent fall back to C.
-    pub fn set_print_language_checked(&mut self, name: &str) -> KunaResult<()> {
+    pub fn set_print_language_checked(&mut self, name: &str) -> UnlaceResult<()> {
         let lang = crate::outlang::OutLang::from_print_name(name).ok_or_else(|| {
-            KunaError::parse(format!(
+            UnlaceError::parse(format!(
                 "unknown output language {name:?} (expected one of: {})",
                 crate::outlang::OutLang::names().join(", ")
             ))
@@ -3605,7 +3620,7 @@ impl Architecture {
     /// `Sleigh::set_loader`, matching the C++ `restoreFromSpec` handing the
     /// loader to the translator.
     pub fn set_loader(&mut self, loader: Box<dyn unlace_sleigh::loadimage::LoadImage>) {
-        (self.pass_hooks().callwide_clear)(&mut self.kuna_tables);
+        (self.pass_hooks().callwide_clear)(&mut self.unlace_tables);
         self.translate.set_loader(loader);
     }
 
@@ -3614,7 +3629,7 @@ impl Architecture {
     /// loader is owned by the engine in the Rust port, so this forwards to the
     /// `Sleigh` engine's [`read_loadimage_value`](unlace_sleigh::sleigh::Sleigh::read_loadimage_value).
     /// Drives jump-table LOAD emulation.
-    pub fn read_loadimage_value(&self, addr: &Address, sz: int4) -> KunaResult<uintb> {
+    pub fn read_loadimage_value(&self, addr: &Address, sz: int4) -> UnlaceResult<uintb> {
         self.translate.read_loadimage_value(addr, sz)
     }
 
@@ -3633,7 +3648,7 @@ impl Architecture {
         &self,
         f: impl FnOnce(&mut dyn unlace_sleigh::globalcontext::ContextDatabase) -> R,
     ) -> R {
-        (self.pass_hooks().callwide_revoke)(&self.kuna_tables);
+        (self.pass_hooks().callwide_revoke)(&self.unlace_tables);
         // The engine boundary exposes the object-safe `with_context_db_dyn` (a
         // `&mut dyn FnMut`, so it survives the `Box<dyn EngineTranslate>` trait
         // object); adapt the generic, value-returning closure over it.  The
@@ -3665,7 +3680,10 @@ impl Architecture {
     /// Resolve a register by name to its storage (C++
     /// `glb->translate->getRegister(name)`); used by `set track`.
     #[inline]
-    pub fn get_register_varnode(&self, nm: &[u8]) -> KunaResult<unlace_num::pcoderaw::VarnodeData> {
+    pub fn get_register_varnode(
+        &self,
+        nm: &[u8],
+    ) -> UnlaceResult<unlace_num::pcoderaw::VarnodeData> {
         self.translate.get_register_varnode(nm)
     }
 
@@ -3731,7 +3749,7 @@ impl Architecture {
             .get(name)
             .is_some_and(|old| Rc::ptr_eq(old, &model))
         {
-            (self.pass_hooks().callwide_clear)(&mut self.kuna_tables);
+            (self.pass_hooks().callwide_clear)(&mut self.unlace_tables);
         }
         self.declared_proto_models.insert(name.to_string(), model);
     }
@@ -3750,7 +3768,7 @@ impl Architecture {
                 .get(&(space.get_index(), addr.get_offset()))
                 .is_some_and(|old| Rc::ptr_eq(old, &model))
             {
-                (self.pass_hooks().callwide_clear)(&mut self.kuna_tables);
+                (self.pass_hooks().callwide_clear)(&mut self.unlace_tables);
             }
             self.declared_proto_models_at
                 .insert((space.get_index(), addr.get_offset()), model);
@@ -3764,7 +3782,7 @@ impl Architecture {
             .get(model.get_name())
             .is_some_and(|old| Rc::ptr_eq(old, &model))
         {
-            (self.pass_hooks().callwide_clear)(&mut self.kuna_tables);
+            (self.pass_hooks().callwide_clear)(&mut self.unlace_tables);
         }
         self.proto_models
             .insert(model.get_name().to_string(), model);
@@ -3778,7 +3796,7 @@ impl Architecture {
             .as_ref()
             .is_some_and(|old| Rc::ptr_eq(old, &model))
         {
-            (self.pass_hooks().callwide_clear)(&mut self.kuna_tables);
+            (self.pass_hooks().callwide_clear)(&mut self.unlace_tables);
         }
         self.defaultfp = Some(model);
     }
@@ -3811,7 +3829,7 @@ impl Architecture {
     /// branch) decode it, so the core-type IDS match the host's and every later
     /// `<typeref>`/getDataType exchange resolves; else the verbatim default
     /// `setCoreType` sequence + `cacheCoreTypes`.
-    pub fn build_core_types(&mut self) -> KunaResult<()> {
+    pub fn build_core_types(&mut self) -> UnlaceResult<()> {
         use type_metatype::*;
         if let Some(xml) = self.coretypes_xml.clone() {
             use unlace_base::marshal::{IdRegistry, XmlDecode};
@@ -3863,7 +3881,7 @@ impl Architecture {
     /// `setupSizes` then only fills the elements the spec left unset.  The
     /// `<size_alignment_map>` is left to the existing `set_default_alignment_map`
     /// (a separate cspec item); only the scalar sizes are read here.
-    fn decode_data_organization(&self) -> KunaResult<()> {
+    fn decode_data_organization(&self) -> UnlaceResult<()> {
         use unlace_base::xml::DocumentStorage;
         let Some(xml) = self.cspec_xml.clone() else {
             return Ok(());
@@ -3911,8 +3929,8 @@ impl Architecture {
                         self.types.set_size_of_wchar(v);
                     }
                 }
-                // (kuna) The remaining scalar widths.  Upstream's
-                // `decodeDataOrganization` reads these too; kuna had only ever
+                // (unlace) The remaining scalar widths.  Upstream's
+                // `decodeDataOrganization` reads these too; unlace had only ever
                 // needed int/long/pointer/char/wchar, so the rest fell through the
                 // `_ => {}` arm and no consumer could ask for them.  `<float_size>`
                 // (60 cspecs), `<double_size>` (61), `<long_double_size>` (56),
@@ -4035,7 +4053,7 @@ impl Architecture {
     /// alongside it.  Otherwise a name-only default model is registered so the
     /// engine still has a non-null `defaultfp`.
     pub fn build_default_proto(&mut self) {
-        (self.pass_hooks().callwide_clear)(&mut self.kuna_tables);
+        (self.pass_hooks().callwide_clear)(&mut self.unlace_tables);
         // One parse of the cspec document feeds all three readers below: the
         // top-level <returnaddress> (C++ `Architecture::decodeReturnAddress`,
         // architecture.cc:902), the <default_proto> model, and the named models.
@@ -4063,8 +4081,8 @@ impl Architecture {
                     for m in named {
                         self.register_model(m);
                     }
-                    self.register_kuna_x87_intrinsic_model(&root);
-                    // (kuna `evalcurrentproto`) The spec's `<eval_current_prototype>`
+                    self.register_unlace_x87_intrinsic_model(&root);
+                    // (unlace `evalcurrentproto`) The spec's `<eval_current_prototype>`
                     // nomination (C++ `parseCompilerConfig`'s
                     // `ELEM_EVAL_CURRENT_PROTOTYPE` arm, architecture.cc:1321):
                     // which registered model a function's OWN unlocked prototype is
@@ -4101,11 +4119,11 @@ impl Architecture {
     /// from `SleighArchitecture::build_spec_file`) and hands it here before
     /// [`init_post_engine`](Architecture::init_post_engine).
     pub fn set_cspec_xml(&mut self, xml: Vec<u8>) {
-        (self.pass_hooks().callwide_clear)(&mut self.kuna_tables);
+        (self.pass_hooks().callwide_clear)(&mut self.unlace_tables);
         self.cspec_xml = Some(xml);
     }
 
-    /// (kuna, Phase 3) Record the wire `<coretypes>` XML for the ghidra-mode
+    /// (unlace, Phase 3) Record the wire `<coretypes>` XML for the ghidra-mode
     /// [`build_core_types`](Architecture::build_core_types) decode.  Must be
     /// set before [`init_post_engine`](Architecture::init_post_engine).
     pub fn set_coretypes_xml(&mut self, xml: Vec<u8>) {
@@ -4150,7 +4168,7 @@ impl Architecture {
     /// lanes.  Faithful to `parseProcessorConfig`'s dispatch; the other branches
     /// are no-ops here (the C++ `peekElement` loop simply skips them in our
     /// `find_child` walk).
-    pub fn parse_processor_config(&mut self) -> KunaResult<()> {
+    pub fn parse_processor_config(&mut self) -> UnlaceResult<()> {
         use unlace_base::marshal::{IdRegistry, XmlDecode};
         use unlace_base::xml::DocumentStorage;
         use unlace_sleigh::globalcontext::register_globalcontext_ids;
@@ -4216,13 +4234,13 @@ impl Architecture {
         // the 675 x86 datatests (which need `addrsize`/`opsize` for 64-bit
         // disassembly) require.
         //
-        // (kuna, Phase 3) The `<tracked_set>` children are DIFFERENT: they name
+        // (unlace, Phase 3) The `<tracked_set>` children are DIFFERENT: they name
         // whole registers with pinned values (x86-64: `DF = 0`), feed only the
         // engine-side `trackbase` (no context variables involved), and are what
         // `ActionConstbase` reads to plant `DF = COPY 0` — without which every
         // string op renders the `(uint8)DF * -2 + 1` direction garbage.  Upstream
         // ghidra-mode recovers the same facts via the getTrackedRegisters query
-        // (`ContextGhidra::getTrackedSet`); kuna decodes them straight from the
+        // (`ContextGhidra::getTrackedSet`); unlace decodes them straight from the
         // wire pspec it was already handed, resolving register names through the
         // query-backed translator (a getRegister query, legal during
         // registerProgram).  A register the host cannot resolve is skipped, never
@@ -4244,7 +4262,7 @@ impl Architecture {
         Ok(())
     }
 
-    /// (kuna, Phase 3) Decode ONLY the `<tracked_set>` children of the pspec
+    /// (unlace, Phase 3) Decode ONLY the `<tracked_set>` children of the pspec
     /// `<context_data>` into the engine context database's trackbase — the
     /// ghidra-mode arm of [`parse_processor_config`](Self::parse_processor_config).
     ///
@@ -4255,7 +4273,7 @@ impl Architecture {
     fn decode_ghidra_tracked_sets(
         &mut self,
         context_data: &Rc<unlace_base::xml::Element>,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         use unlace_base::address::Range;
         use unlace_base::marshal::{ATTRIB_NAME, ATTRIB_VAL, Decoder, IdRegistry, XmlDecode};
         use unlace_sleigh::globalcontext::{
@@ -4311,14 +4329,14 @@ impl Architecture {
     ///
     /// The C++ `userops.decodeVolatile` half (reading `inputop`/`outputop` and
     /// registering the `VolatileReadOp`/`VolatileWriteOp` builtins with those
-    /// names) is already satisfied: kuna pre-seeds `BUILTIN_VOLATILE_READ`/
+    /// names) is already satisfied: unlace pre-seeds `BUILTIN_VOLATILE_READ`/
     /// `BUILTIN_VOLATILE_WRITE` with the canonical `read_volatile`/`write_volatile`
     /// names (and the non-functional display = `annotation_assignment`/`no_operator`)
     /// in `register_string_builtins`, matching every vendored pspec's `<volatile
     /// outputop="write_volatile" inputop="read_volatile">`.  This method ports the
     /// range-painting half: for each `<range>` child,
     /// `symboltab->setPropertyRange(Varnode::volatil, range)`.
-    fn decode_volatile(&mut self, volatile_el: &Rc<unlace_base::xml::Element>) -> KunaResult<()> {
+    fn decode_volatile(&mut self, volatile_el: &Rc<unlace_base::xml::Element>) -> UnlaceResult<()> {
         use crate::varnode::varnode_flags;
         use unlace_base::address::{Range, RangeProperties};
         use unlace_base::marshal::{IdRegistry, XmlDecode};
@@ -4355,7 +4373,7 @@ impl Architecture {
     /// addresses their names (`P0`@SFR:80, `P1`@SFR:90), so an SFR write renders
     /// `P0 = 1` rather than `dat_80 = 1`.  Run after `adjust_caches` so the global
     /// scope's per-space maptable already covers every spec-created space.
-    fn build_symbols(&mut self) -> KunaResult<()> {
+    fn build_symbols(&mut self) -> UnlaceResult<()> {
         use crate::dtype::type_metatype::TYPE_UNKNOWN;
         use crate::varnode::varnode_flags;
         use unlace_base::address::{Address, Range};
@@ -4393,7 +4411,7 @@ impl Architecture {
             let name = match attr_str(child, "name") {
                 Some(n) if !n.is_empty() => n,
                 _ => {
-                    return Err(KunaError::lowlevel(
+                    return Err(UnlaceError::lowlevel(
                         "Missing name attribute in <symbol> element",
                     ));
                 }
@@ -4405,7 +4423,7 @@ impl Architecture {
                 self.manage().parse_address_simple(&addr_str)?
             };
             if addr.is_invalid() {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "Missing address attribute in <symbol> element",
                 ));
             }
@@ -4477,7 +4495,7 @@ impl Architecture {
     fn decode_register_data(
         &mut self,
         register_data: &Rc<unlace_base::xml::Element>,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         use crate::transform::LanedRegister;
 
         // vector<uint4> maskList;  (indexed by register whole size in bytes)
@@ -4573,23 +4591,23 @@ impl Architecture {
     /// Enter a decompile drive.  Every [`decompile_func_full_with_objects`] call
     /// nests one deeper; the drive that started from 0 is the outermost one.
     ///
-    /// The returned [`KunaDriveScope`] leaves the scope on drop, so a drive that
+    /// The returned [`UnlaceDriveScope`] leaves the scope on drop, so a drive that
     /// unwinds still keeps the depth balanced.
     ///
     /// [`decompile_func_full_with_objects`]: crate::decompile_drive::decompile_func_full_with_objects
     #[doc(hidden)]
-    pub fn kuna_drive_scope(&self) -> KunaDriveScope {
-        let depth = std::rc::Rc::clone(&self.kuna_drive_depth);
+    pub fn unlace_drive_scope(&self) -> UnlaceDriveScope {
+        let depth = std::rc::Rc::clone(&self.unlace_drive_depth);
         depth.set(depth.get() + 1);
-        KunaDriveScope { depth }
+        UnlaceDriveScope { depth }
     }
 
     /// Does the active drive own the Architecture's externally visible output?
     /// True outside a drive (a standalone flow build keeps its old behaviour)
     /// and for the outermost drive; false for a nested recovery drive.
     #[doc(hidden)]
-    pub fn kuna_drive_publishes(&self) -> bool {
-        self.kuna_drive_depth.get() <= 1
+    pub fn unlace_drive_publishes(&self) -> bool {
+        self.unlace_drive_depth.get() <= 1
     }
 
     /// Decode the cspec's `<prefersplit style="...">` block into the
@@ -4634,7 +4652,7 @@ impl Architecture {
         out
     }
 
-    /// (kuna `calleereginputs custom`) Build a synthesized `x86win.cspec`-shaped
+    /// (unlace `calleereginputs custom`) Build a synthesized `x86win.cspec`-shaped
     /// prototype model whose input is the given registers (`ECX`/`EDX` first, in
     /// the spec's `__fastcall` order, then the callee-saved customs `EBX`,`ESI`,
     /// `EDI` in register order) followed by the ordinary stack argument slot. A
@@ -4644,7 +4662,7 @@ impl Architecture {
     /// registers stay unaffected. Decoded through the same path as the spec's own
     /// models, so it carries identical storage/effect fidelity. `None` on a spec
     /// whose `__stdcall` cannot be found/parsed.
-    pub fn kuna_build_reginput_model(
+    pub fn unlace_build_reginput_model(
         &self,
         name: &str,
         regs: &[&str],
@@ -4699,12 +4717,15 @@ impl Architecture {
 
     /// Locate the cspec's `<default_proto><prototype>` and decode it (C++
     /// `Architecture::decodeDefaultProto`, architecture.cc:793).
-    fn decode_default_proto(&self, root: &Rc<unlace_base::xml::Element>) -> KunaResult<ProtoModel> {
+    fn decode_default_proto(
+        &self,
+        root: &Rc<unlace_base::xml::Element>,
+    ) -> UnlaceResult<ProtoModel> {
         // Find <default_proto><prototype>.
         let dp = find_child(root, "default_proto")
-            .ok_or_else(|| KunaError::lowlevel("cspec has no <default_proto>"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("cspec has no <default_proto>"))?;
         let proto = find_child(&dp, "prototype")
-            .ok_or_else(|| KunaError::lowlevel("<default_proto> has no <prototype>"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("<default_proto> has no <prototype>"))?;
         self.decode_proto_model(&proto, root)
     }
 
@@ -4725,7 +4746,7 @@ impl Architecture {
         &self,
         proto: &Rc<unlace_base::xml::Element>,
         root: &Rc<unlace_base::xml::Element>,
-    ) -> KunaResult<ProtoModel> {
+    ) -> UnlaceResult<ProtoModel> {
         let mut model = ProtoModel::new(self.manage());
         let name = attr_str(proto, "name").unwrap_or_else(|| "__stdcall".to_string());
         // extrapop="unknown" -> EXTRAPOP_UNKNOWN; numeric otherwise.
@@ -4843,8 +4864,8 @@ impl Architecture {
                 )?;
             }
         }
-        // (kuna, ida) State the x86 direction-flag guarantee the compiler spec
-        // leaves implicit. See `kuna_dfunaffected`: without it every call plants
+        // (unlace, ida) State the x86 direction-flag guarantee the compiler spec
+        // leaves implicit. See `unlace_dfunaffected`: without it every call plants
         // `DF = INDIRECT(DF, <call>)`, the entry-block `DF = 0` never reaches the
         // string-op stride, and `1 - 2*DF` survives into the output as
         // `(uint8)v18 * -2 + 1`. Applied only where the spec is silent, and a
@@ -4861,7 +4882,7 @@ impl Architecture {
     fn decode_proto_ranges(
         &self,
         block: &Rc<unlace_base::xml::Element>,
-    ) -> KunaResult<Vec<(Rc<AddrSpace>, uintb, uintb)>> {
+    ) -> UnlaceResult<Vec<(Rc<AddrSpace>, uintb, uintb)>> {
         use unlace_base::address::{Range, RangeProperties};
         use unlace_base::marshal::{IdRegistry, XmlDecode};
         let manager = self.translate.manager_rc();
@@ -4936,7 +4957,7 @@ impl Architecture {
             byname.insert(rc.get_name().to_string(), Rc::clone(&rc));
             out.push(rc);
         }
-        // (kuna `swiftcall`) Swift's four models, derived from the default one
+        // (unlace `swiftcall`) Swift's four models, derived from the default one
         // on a language Swift targets when the spec declares neither.
         let default_el =
             find_child(root, "default_proto").and_then(|dp| find_child(&dp, "prototype"));
@@ -4983,9 +5004,9 @@ impl Architecture {
         &self,
         el: &Rc<unlace_base::xml::Element>,
         byname: &std::collections::BTreeMap<String, Rc<ProtoModel>>,
-    ) -> KunaResult<ProtoModel> {
+    ) -> UnlaceResult<ProtoModel> {
         let name = attr_str(el, "name")
-            .ok_or_else(|| KunaError::lowlevel("<resolveprototype> has no name"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("<resolveprototype> has no name"))?;
         let mut model = ProtoModel::new_merged(self.manage());
         model.set_name(&name);
         let mut count = 0;
@@ -4994,15 +5015,15 @@ impl Architecture {
                 continue;
             }
             let sub = attr_str(child, "name")
-                .ok_or_else(|| KunaError::lowlevel("<model> has no name"))?;
+                .ok_or_else(|| UnlaceError::lowlevel("<model> has no name"))?;
             let constituent = byname
                 .get(&sub)
-                .ok_or_else(|| KunaError::lowlevel(format!("Missing prototype model: {sub}")))?;
+                .ok_or_else(|| UnlaceError::lowlevel(format!("Missing prototype model: {sub}")))?;
             model.merged_push(Rc::clone(constituent))?;
             count += 1;
         }
         if count == 0 {
-            return Err(KunaError::lowlevel("<resolveprototype> has no <model>"));
+            return Err(UnlaceError::lowlevel("<resolveprototype> has no <model>"));
         }
         model.merged_finalize();
         Ok(model)
@@ -5018,23 +5039,23 @@ impl Architecture {
         block: &Rc<unlace_base::xml::Element>,
         model: &mut ProtoModel,
         eff_type: u32,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         for child in block.get_children().iter() {
             let vd = match child.get_name() {
                 // <register name=".."/>  ->  getTrans()->getRegister(name)
                 "register" => {
                     let nm = attr_str(child, "name")
-                        .ok_or_else(|| KunaError::lowlevel("<register> has no name"))?;
+                        .ok_or_else(|| UnlaceError::lowlevel("<register> has no name"))?;
                     self.translate.get_register_varnode(nm.as_bytes())?
                 }
                 // <varnode space=".." offset=".." size=".."/> or <addr .../>
                 "varnode" | "addr" => {
                     let spname = attr_str(child, "space")
-                        .ok_or_else(|| KunaError::lowlevel("<varnode> effect has no space"))?;
+                        .ok_or_else(|| UnlaceError::lowlevel("<varnode> effect has no space"))?;
                     let space = self
                         .manage()
                         .get_space_by_name(&spname)
-                        .ok_or_else(|| KunaError::lowlevel("<varnode> effect unknown space"))?
+                        .ok_or_else(|| UnlaceError::lowlevel("<varnode> effect unknown space"))?
                         .clone();
                     let offset = attr_str(child, "offset")
                         .and_then(|s| parse_int(&s))
@@ -5063,23 +5084,23 @@ impl Architecture {
         &self,
         block: &Rc<unlace_base::xml::Element>,
         model: &mut ProtoModel,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         for child in block.get_children().iter() {
             let vd = match child.get_name() {
                 "register" => {
                     let nm = attr_str(child, "name")
-                        .ok_or_else(|| KunaError::lowlevel("<register> has no name"))?;
+                        .ok_or_else(|| UnlaceError::lowlevel("<register> has no name"))?;
                     self.translate.get_register_varnode(nm.as_bytes())?
                 }
                 "varnode" | "addr" => {
                     let spname = attr_str(child, "space").ok_or_else(|| {
-                        KunaError::lowlevel("<varnode> internal_storage has no space")
+                        UnlaceError::lowlevel("<varnode> internal_storage has no space")
                     })?;
                     let space = self
                         .manage()
                         .get_space_by_name(&spname)
                         .ok_or_else(|| {
-                            KunaError::lowlevel("<varnode> internal_storage unknown space")
+                            UnlaceError::lowlevel("<varnode> internal_storage unknown space")
                         })?
                         .clone();
                     let offset = attr_str(child, "offset")
@@ -5112,7 +5133,7 @@ impl Architecture {
         list_el: &Rc<unlace_base::xml::Element>,
         model: &mut ProtoModel,
         is_input: bool,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         // C++ ParamListStandard::decode: normalstack = !reverse; the model's
         // stackgrowsnegative drives it (the default cspec stack convention).
         let normalstack = true;
@@ -5157,7 +5178,7 @@ impl Architecture {
                             self.decode_pentry(gchild, basegroup, normalstack, true, &pentries)?;
                         if entry.get_space().get_type() == unlace_base::space::spacetype::IPTR_JOIN
                         {
-                            return Err(KunaError::lowlevel(
+                            return Err(UnlaceError::lowlevel(
                                 "<pentry> in the join space not allowed in <group> tag",
                             ));
                         }
@@ -5248,7 +5269,7 @@ impl Architecture {
         normalstack: bool,
         grouped: bool,
         prev: &[crate::fspec::ParamEntry],
-    ) -> KunaResult<crate::fspec::ParamEntry> {
+    ) -> UnlaceResult<crate::fspec::ParamEntry> {
         use crate::dtype::{string2typeclass, type_class};
         use crate::fspec::param_entry_flags;
         let mut size: int4 = -1;
@@ -5259,23 +5280,23 @@ impl Architecture {
         if let Some(v) = attr_str(pentry, "minsize") {
             minsize = v
                 .parse()
-                .map_err(|_| KunaError::lowlevel("bad <pentry> minsize"))?;
+                .map_err(|_| UnlaceError::lowlevel("bad <pentry> minsize"))?;
         }
         if let Some(v) = attr_str(pentry, "maxsize") {
             size = v
                 .parse()
-                .map_err(|_| KunaError::lowlevel("bad <pentry> maxsize"))?;
+                .map_err(|_| UnlaceError::lowlevel("bad <pentry> maxsize"))?;
         }
         // size="..." (old) and align="..." (new) both set alignment.
         if let Some(v) = attr_str(pentry, "size") {
             alignment = v
                 .parse()
-                .map_err(|_| KunaError::lowlevel("bad <pentry> size"))?;
+                .map_err(|_| UnlaceError::lowlevel("bad <pentry> size"))?;
         }
         if let Some(v) = attr_str(pentry, "align") {
             alignment = v
                 .parse()
-                .map_err(|_| KunaError::lowlevel("bad <pentry> align"))?;
+                .map_err(|_| UnlaceError::lowlevel("bad <pentry> align"))?;
         }
         if let Some(v) = attr_str(pentry, "storage").or_else(|| attr_str(pentry, "metatype")) {
             type_ = string2typeclass(&v)?;
@@ -5290,11 +5311,11 @@ impl Architecture {
                 "inttype" => flags |= param_entry_flags::SMALLSIZE_INTTYPE,
                 "float" => flags |= param_entry_flags::SMALLSIZE_FLOATEXT,
                 "none" => {}
-                _ => return Err(KunaError::lowlevel("Bad <pentry> extension attribute")),
+                _ => return Err(UnlaceError::lowlevel("Bad <pentry> extension attribute")),
             }
         }
         if size == -1 || minsize == -1 {
-            return Err(KunaError::lowlevel("ParamEntry not fully specified"));
+            return Err(UnlaceError::lowlevel("ParamEntry not fully specified"));
         }
         // Storage address: <register name=".."/> or <addr space=".." offset=".."/>.
         let (space, mut addressbase, register) = self.decode_pentry_storage(pentry)?;
@@ -5327,7 +5348,7 @@ impl Architecture {
     fn decode_pentry_storage(
         &self,
         pentry: &Rc<unlace_base::xml::Element>,
-    ) -> KunaResult<(
+    ) -> UnlaceResult<(
         Rc<unlace_base::space::AddrSpace>,
         uintb,
         Option<unlace_num::pcoderaw::VarnodeData>,
@@ -5336,21 +5357,21 @@ impl Architecture {
             match child.get_name() {
                 "register" => {
                     let nm = attr_str(child, "name")
-                        .ok_or_else(|| KunaError::lowlevel("<register> has no name"))?;
+                        .ok_or_else(|| UnlaceError::lowlevel("<register> has no name"))?;
                     let vd = self.translate.get_register_varnode(nm.as_bytes())?;
                     let space = vd
                         .space
                         .clone()
-                        .ok_or_else(|| KunaError::lowlevel("register has no space"))?;
+                        .ok_or_else(|| UnlaceError::lowlevel("register has no space"))?;
                     return Ok((space, vd.offset, Some(vd)));
                 }
                 "addr" => {
                     let spname = attr_str(child, "space")
-                        .ok_or_else(|| KunaError::lowlevel("<addr> has no space"))?;
+                        .ok_or_else(|| UnlaceError::lowlevel("<addr> has no space"))?;
                     let space = self
                         .manage()
                         .get_space_by_name(&spname)
-                        .ok_or_else(|| KunaError::lowlevel("<addr> unknown space"))?
+                        .ok_or_else(|| UnlaceError::lowlevel("<addr> unknown space"))?
                         .clone();
                     // C++ `VarnodeData::decodeFromAttributes` (pcoderaw.cc:33) reads the
                     // `space` attribute, then dispatches `space->decodeAttributes(...)`.
@@ -5372,7 +5393,7 @@ impl Architecture {
                 _ => {}
             }
         }
-        Err(KunaError::lowlevel(
+        Err(UnlaceError::lowlevel(
             "<pentry> has no <register>/<addr> storage",
         ))
     }
@@ -5392,7 +5413,7 @@ impl Architecture {
     /// over `xml::Element`s, not a `Decoder`), reproducing the C++
     /// `getNextAttributeId` / `getIndexedAttributeId(ATTRIB_PIECE)` loop: the
     /// legacy `pieceN` attribute name maps to `ATTRIB_PIECE` index `N-1`.
-    fn decode_join_addr(&self, addr_el: &Rc<unlace_base::xml::Element>) -> KunaResult<uintb> {
+    fn decode_join_addr(&self, addr_el: &Rc<unlace_base::xml::Element>) -> UnlaceResult<uintb> {
         use unlace_base::space::VarnodeStorage;
         let mut pieces: Vec<VarnodeStorage> = Vec::new();
         let mut logicalsize: u32 = 0;
@@ -5404,7 +5425,7 @@ impl Architecture {
             if name == "logicalsize" {
                 let raw = String::from_utf8_lossy(addr_el.get_attribute_value_at(i)).into_owned();
                 logicalsize = parse_int(&raw)
-                    .ok_or_else(|| KunaError::lowlevel("bad join logicalsize"))?
+                    .ok_or_else(|| UnlaceError::lowlevel("bad join logicalsize"))?
                     as u32; // cast: uintb -> uint4 member (C++ readUnsignedInteger)
                 continue;
             }
@@ -5443,7 +5464,7 @@ impl Architecture {
                 Some(offpos) => {
                     let rest = &attr_val[offpos + 1..];
                     let szrel = rest.find(':').ok_or_else(|| {
-                        KunaError::lowlevel("join address piece attribute is malformed")
+                        UnlaceError::lowlevel("join address piece attribute is malformed")
                     })?;
                     let szpos = offpos + 1 + szrel;
                     let spcname = &attr_val[..offpos];
@@ -5499,7 +5520,7 @@ impl Architecture {
     /// Rebuild the universal tree after a hook registration and re-derive the
     /// current root from it.  The group lists are kept; breakpoints and
     /// disabled rules set on the old roots are not.
-    fn rebuild_hooked_actions(&mut self) -> KunaResult<()> {
+    fn rebuild_hooked_actions(&mut self) -> UnlaceResult<()> {
         self.build_universal();
         self.allacts.drop_derived();
         let current = self.allacts.get_current_name().to_string();
@@ -5509,7 +5530,7 @@ impl Architecture {
         self.allacts.set_current(&current)
     }
 
-    /// (kuna) Add `rule` to the default pipeline, behind the last rule of
+    /// (unlace) Add `rule` to the default pipeline, behind the last rule of
     /// `after_group` in the pool that holds that group
     /// ([`HookRegistry::add_rule`](crate::hooks::HookRegistry::add_rule)).
     pub fn add_rule(
@@ -5517,19 +5538,19 @@ impl Architecture {
         after_group: &str,
         state: crate::action::RuleState,
         rule: Box<dyn crate::action::Rule>,
-    ) -> KunaResult<()> {
-        (self.pass_hooks().hooks_add_rule)(&mut self.kuna_tables, after_group, state, rule)?;
+    ) -> UnlaceResult<()> {
+        (self.pass_hooks().hooks_add_rule)(&mut self.unlace_tables, after_group, state, rule)?;
         self.rebuild_hooked_actions()
     }
 
-    /// (kuna) Run `callback` on every function at the boundary of `phase`
+    /// (unlace) Run `callback` on every function at the boundary of `phase`
     /// ([`HookRegistry::on_phase`](crate::hooks::HookRegistry::on_phase)).
     pub fn on_phase(
         &mut self,
-        phase: crate::phases::KunaPhase,
+        phase: crate::phases::UnlacePhase,
         callback: impl FnMut(&mut Funcdata) + 'static,
-    ) -> KunaResult<()> {
-        (self.pass_hooks().hooks_on_phase)(&mut self.kuna_tables, phase, Box::new(callback))?;
+    ) -> UnlaceResult<()> {
+        (self.pass_hooks().hooks_on_phase)(&mut self.unlace_tables, phase, Box::new(callback))?;
         self.rebuild_hooked_actions()
     }
 
@@ -5601,7 +5622,7 @@ impl Architecture {
     /// reading the pspec/cspec tags) is the W6 cspec item; this wires the
     /// subsystem *construction* + ordering so a decoded engine becomes a
     /// decompilation-ready `Architecture`.
-    pub fn init_post_engine(&mut self) -> KunaResult<()> {
+    pub fn init_post_engine(&mut self) -> UnlaceResult<()> {
         // C++ `Architecture::restoreFromSpec` (architecture.cc:636-640), right
         // after `copySpaces(newtrans)`: insert the analysis-only fspec/iop/join
         // spaces into the **single** engine manager (LOSS-132).  The engine's
@@ -5653,10 +5674,10 @@ impl Architecture {
         // elements register their injections into pcodeinjectlib.  Run this BEFORE
         // build_default_proto, which `take()`s the cspec XML.
         self.decode_call_fixups()?;
-        // (kuna) The kuna-owned compiler-helper fixups, registered right after the
+        // (unlace) The unlace-owned compiler-helper fixups, registered right after the
         // cspec's own so `init_userops_and_fixups`'s `parse_inject_all` compiles
         // them together.  Keeps the vendored spec tree byte-identical to upstream.
-        self.decode_kuna_call_fixups()?;
+        self.decode_unlace_call_fixups()?;
         // C++ restoreFromSpec: userops.initialize(this) (architecture.cc:641) +
         // the `<callotherfixup>` dispatch inside parseCompilerConfig
         // (architecture.cc:1294).  Run after the call-fixups are registered so
@@ -5668,7 +5689,7 @@ impl Architecture {
             .as_deref()
             .map(std::str::from_utf8)
             .transpose()
-            .map_err(|_| KunaError::lowlevel("Compiler specification is not UTF-8"))?
+            .map_err(|_| UnlaceError::lowlevel("Compiler specification is not UTF-8"))?
             .map(str::to_owned);
         let manager = self.translate.manager_rc();
         (crate::architecture::default_pass_hooks().callmechanisms_register)(
@@ -5677,7 +5698,7 @@ impl Architecture {
             self,
         )?;
         self.init_userops_and_fixups()?;
-        // (kuna) Eagerly register the string-copy builtins (C++ lazy
+        // (unlace) Eagerly register the string-copy builtins (C++ lazy
         // `userops.registerBuiltin` is called from
         // `ArraySequence::buildStringCopy` / `Funcdata::getInternalString` during
         // the `RuleStringStore`/`RuleStringCopy` transform).  Those transforms run
@@ -5699,18 +5720,18 @@ impl Architecture {
         // `mapped|addrtied|persist`.  Must run before `adjust_caches` (which only
         // resizes per-scope maptables, not the rangetree) — ordering matches C++.
         self.decode_global()?;
-        // (kuna `goreg`) With the golang cspec active, make the goroutine
+        // (unlace `goreg`) With the golang cspec active, make the goroutine
         // register a named, typed global (`g: runtime.g *`) — the same
         // global-scope mechanism as a cspec `<global><register/>`, applied
-        // kuna-side so the vendored spec stays pristine.
-        self.kuna_install_goreg()?;
+        // unlace-side so the vendored spec stays pristine.
+        self.unlace_install_goreg()?;
         self.build_default_proto();
-        self.kuna_go_stack_default()?;
+        self.unlace_go_stack_default()?;
         // Share `defaultfp` + the engine address-space manager into the type
         // factory so the C-declaration grammar's nested function-pointer
         // `buildType` path (`FunctionModifier::modType` -> `getTypeCode(
         // PrototypePieces)` -> `TypeCode::setPrototype`) can run.  The C++
-        // `TypeFactory` reaches both through its `Architecture *glb`; the kuna
+        // `TypeFactory` reaches both through its `Architecture *glb`; the unlace
         // factory is standalone, so the link is established once here, right
         // after `defaultfp` is finalized.
         self.types.set_proto_context(self.translate.manager_rc());
@@ -5792,7 +5813,7 @@ impl ArchOptionContext for Architecture {
     }
     fn set_flow_options(&mut self, val: uint4) {
         if self.flowoptions != val {
-            (self.pass_hooks().callwide_clear)(&mut self.kuna_tables);
+            (self.pass_hooks().callwide_clear)(&mut self.unlace_tables);
         }
         self.flowoptions = val;
     }
@@ -5821,7 +5842,7 @@ impl ArchOptionContext for Architecture {
 
     // --- prototype models (C++ defaultfp / evalfp_current) -----------------
     fn set_default_extra_pop(&mut self, expop: int4) {
-        (self.pass_hooks().callwide_clear)(&mut self.kuna_tables);
+        (self.pass_hooks().callwide_clear)(&mut self.unlace_tables);
         // C++ `glb->defaultfp->setExtraPop(expop)` (+ eval-model spreads).
         // The registry holds the model behind `Rc`; mutate the shared model
         // (and keep the registry entry pointing at the same data via the same
@@ -5835,15 +5856,15 @@ impl ArchOptionContext for Architecture {
             self.share_proto_models();
         }
     }
-    fn set_function_extra_pop(&mut self, name: &str, expop: int4) -> KunaResult<()> {
+    fn set_function_extra_pop(&mut self, name: &str, expop: int4) -> UnlaceResult<()> {
         // C++ `OptionExtraPop::apply`: queryFunction(name), then
         // `getFuncProto().setExtraPop(expop)`; parked on the symbol like inline.
         let sid = self.query_global_function(name)?;
-        (self.pass_hooks().callwide_clear)(&mut self.kuna_tables);
+        (self.pass_hooks().callwide_clear)(&mut self.unlace_tables);
         self.symboltab.set_function_extra_pop(sid, expop);
         Ok(())
     }
-    fn set_default_model(&mut self, name: &str) -> KunaResult<()> {
+    fn set_default_model(&mut self, name: &str) -> UnlaceResult<()> {
         // C++ `glb->setDefaultModel(getModel(p1))`.
         match self.proto_models.get(name).cloned() {
             Some(model) => {
@@ -5851,12 +5872,12 @@ impl ArchOptionContext for Architecture {
                 self.share_proto_models();
                 Ok(())
             }
-            None => Err(KunaError::lowlevel(format!(
+            None => Err(UnlaceError::lowlevel(format!(
                 "Unknown prototype model :{name}"
             ))),
         }
     }
-    fn set_eval_current_model(&mut self, name: &str) -> KunaResult<()> {
+    fn set_eval_current_model(&mut self, name: &str) -> UnlaceResult<()> {
         // C++ `glb->evalfp_current = getModel(p1)`.
         match self.proto_models.get(name).cloned() {
             Some(model) => {
@@ -5865,29 +5886,31 @@ impl ArchOptionContext for Architecture {
                     .as_ref()
                     .is_some_and(|old| Rc::ptr_eq(old, &model))
                 {
-                    (self.pass_hooks().callwide_clear)(&mut self.kuna_tables);
+                    (self.pass_hooks().callwide_clear)(&mut self.unlace_tables);
                 }
                 self.evalfp_current = Some(model);
                 Ok(())
             }
-            None => Err(KunaError::parse(format!("Unknown prototype model: {name}"))),
+            None => Err(UnlaceError::parse(format!(
+                "Unknown prototype model: {name}"
+            ))),
         }
     }
 
     // --- per-function properties (C++ OptionInline / OptionNoReturn) -------
-    fn set_function_inline(&mut self, name: &str, val: bool) -> KunaResult<()> {
+    fn set_function_inline(&mut self, name: &str, val: bool) -> UnlaceResult<()> {
         // C++ `OptionInline::apply`: query the global function, then set its proto inline flag.
         // The FunctionSymbol's lazily-built Funcdata/FuncProto is W5; the inline flag
         // is parked on the symbol (read back by FlowInfo::queryCall at flow time).
         let sid = self.query_global_function(name)?;
-        (self.pass_hooks().callwide_clear)(&mut self.kuna_tables);
+        (self.pass_hooks().callwide_clear)(&mut self.unlace_tables);
         self.symboltab.set_function_inline(sid, val);
         Ok(())
     }
-    fn set_function_no_return(&mut self, name: &str, val: bool) -> KunaResult<()> {
+    fn set_function_no_return(&mut self, name: &str, val: bool) -> UnlaceResult<()> {
         // C++ `OptionNoReturn::apply`: same shape as OptionInline, but setNoReturn.
         let sid = self.query_global_function(name)?;
-        (self.pass_hooks().callwide_clear)(&mut self.kuna_tables);
+        (self.pass_hooks().callwide_clear)(&mut self.unlace_tables);
         self.symboltab.set_function_no_return(sid, val);
         Ok(())
     }
@@ -5914,13 +5937,13 @@ impl ArchOptionContext for Architecture {
     fn set_hide_implied_exts(&mut self, val: bool) {
         self.print.set_hide_implied_exts(val);
     }
-    fn set_max_line_size(&mut self, val: int4) -> KunaResult<()> {
+    fn set_max_line_size(&mut self, val: int4) -> UnlaceResult<()> {
         self.print.set_max_line_size(val)
     }
     fn set_indent_increment(&mut self, val: int4) {
         self.print.set_indent_increment(val);
     }
-    fn set_line_comment_indent(&mut self, val: int4) -> KunaResult<()> {
+    fn set_line_comment_indent(&mut self, val: int4) -> UnlaceResult<()> {
         self.print.set_line_comment_indent(val)
     }
     fn set_comment_style(&mut self, style: &str) {
@@ -6040,7 +6063,7 @@ impl crate::userop::UseropArchitecture for Architecture {
         suffix: &[u8],
         tp: int4,
         decoder: &mut dyn unlace_base::marshal::Decoder,
-    ) -> KunaResult<int4> {
+    ) -> UnlaceResult<int4> {
         // C++ `glb->pcodeinjectlib->decodeInject(src,suffix,tp,decoder)`.
         self.pcodeinjectlib.decode_inject(src, suffix, tp, decoder)
     }
@@ -6050,7 +6073,7 @@ impl crate::userop::UseropArchitecture for Architecture {
         self.pcodeinjectlib.base.get_call_other_target(injectid)
     }
 
-    fn payload_io_sizes(&self, injectid: int4) -> KunaResult<(int4, int4, int4, int4)> {
+    fn payload_io_sizes(&self, injectid: int4) -> UnlaceResult<(int4, int4, int4, int4)> {
         // C++ `SegmentOp::decode` reads payload->sizeOutput/sizeInput plus the
         // first two input sizes after the `<pcode>` child is parsed.
         let core = self.pcodeinjectlib.get_payload(injectid).core();
@@ -6105,7 +6128,7 @@ impl unlace_num::opbehavior::FloatFormatProvider for OwnedFloatFormats {
     }
 }
 
-/// (kuna) Adapter implementing [`UseropTypeArchitecture`] over the architecture's
+/// (unlace) Adapter implementing [`UseropTypeArchitecture`] over the architecture's
 /// populated [`TypeFactoryImpl`], used by [`Architecture::register_string_builtins`]
 /// to build the typed builtin signatures without aliasing the `&mut userops`
 /// borrow.  Maps the trait's `glb->types->...` / `glb->getDefaultDataSpace()`

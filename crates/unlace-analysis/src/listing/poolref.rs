@@ -1,4 +1,4 @@
-//! (kuna) `poolref` — follow a read-only pointer word, so a literal-pool load is
+//! (unlace) `poolref` — follow a read-only pointer word, so a literal-pool load is
 //! a reference to the thing the pool points at.
 //!
 //! # The gap
@@ -169,7 +169,7 @@ impl<'a> PoolImage<'a> {
     }
 
     /// The target's pointer width in bytes, which is also the stride of any
-    /// array of pointers in the image (`kuna_switchtable`'s table).
+    /// array of pointers in the image (`unlace_switchtable`'s table).
     pub(super) fn ptr_width(&self) -> u32 {
         self.ptr
     }

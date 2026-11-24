@@ -1,6 +1,6 @@
 {
  "opportunity": "A 64-bit value a function builds in its one return register from two 32-bit halves lost a half and the argument that fed it: `((u64)hi << 32) | lo` at gcc/clang -O0 printed `unsigned int join_lo_hi(unsigned int a0) { return a0; }`, and `((u64)(a + 1) << 32) | b` at -O2 printed `int join_hi_sum(int a0) { return a0 + 1; }` (the high half returned as the whole value).",
- "test_name": "tests/stages/kuna-returnpiece.xml (10 assertions; 9 fail on main, the control passes on both) + kuna-cli/tests/decompile_all_cli.rs a_value_built_in_one_return_register_round_trips_through_the_printed_c + returnuncomputed/tests.rs (3 new unit tests)",
+ "test_name": "tests/stages/returnpiece.xml (10 assertions; 9 fail on main, the control passes on both) + kuna-cli/tests/decompile_all_cli.rs a_value_built_in_one_return_register_round_trips_through_the_printed_c + returnuncomputed/tests.rs (3 new unit tests)",
  "binary": "decompiler/crates/kuna-analysis/tests/fixtures/piecehi_{gcc,clang}_{O0,O2}_x86_64 built from piecehi_x86_64.c",
  "selector": "join_lo_hi",
  "func_addr": "0x1189 (gcc -O0)",
@@ -118,7 +118,7 @@
  "gates": {
   "base": "origin/main 63dfb436c (#748) after rebase; measurements (footprint, typesweep, castbench, speed) taken on 632437155",
   "make test": "datatests: 675/675 assertions passed; PARITY OK (no datatest assertion moved)",
-  "make test-stages": "datatests: 1477/1477 assertions passed; PARITY OK (+10 kuna-returnpiece keys over main's 1467, none removed; re-recorded after the rebase, identical)",
+  "make test-stages": "datatests: 1477/1477 assertions passed; PARITY OK (+10 returnpiece keys over main's 1467, none removed; re-recorded after the rebase, identical)",
   "make rust-test": "RUST_TEST_RC=0 via rust-test-lane.sh (441 `test result: ok`, 0 failed)",
   "make test-cli": "tests/cli: 269/269 passed",
   "make lint": "RC=0",
@@ -141,7 +141,7 @@
   "decompiler/crates/kuna-analysis/tests/fixtures/piecehi_clang_O2_x86_64",
   "decompiler/crates/kuna-analysis/tests/fixtures/README.md",
   "decompiler/crates/kuna-base/src/xml.rs",
-  "tests/stages/kuna-returnpiece.xml",
+  "tests/stages/returnpiece.xml",
   "docs/baseline-stages.json",
   "docs/spec/04-calls-and-prototypes.md",
   "docs/features/piecehi/plan.md",

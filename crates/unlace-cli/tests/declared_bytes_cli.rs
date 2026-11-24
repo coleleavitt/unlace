@@ -1,4 +1,4 @@
-//! (kuna, issue #1438) A `--define-function` the input does not wholly map is
+//! (unlace, issue #1438) A `--define-function` the input does not wholly map is
 //! kept as the assertion it is, and said to be on every surface: one stderr
 //! `warning:`, a JSON `notes` entry, and a `declared` marker on the entry's
 //! record. Before, `functions --json` listed it exactly like a discovered
@@ -37,7 +37,7 @@ fn an_unmapped_declaration_is_listed_marked_and_warned_once() {
     ] {
         let bin = common::fixture(fixture);
         let (stdout, stderr, code) =
-            common::run_kuna(&["functions", &bin, "--json", "--define-function", UNMAPPED]);
+            common::run_unlace(&["functions", &bin, "--json", "--define-function", UNMAPPED]);
         assert_eq!(code, 0, "{fixture}: {stderr}");
         assert_eq!(warnings(&stderr), 1, "{fixture}: {stderr}");
         let doc = json(&stdout);
@@ -66,7 +66,7 @@ fn an_unmapped_declaration_is_listed_marked_and_warned_once() {
 fn a_partial_and_a_mapped_declaration_are_told_apart() {
     // `.fini` ends the R E segment at 0x1231; 0x1100 is `_start`.
     let bin = common::fixture("protoorder_narrowvote_x86_64");
-    let (stdout, stderr, code) = common::run_kuna(&[
+    let (stdout, stderr, code) = common::run_unlace(&[
         "functions",
         &bin,
         "--json",
@@ -99,11 +99,11 @@ fn a_partial_and_a_mapped_declaration_are_told_apart() {
 }
 
 /// A segment the image declares inaccessible (arm64 Mach-O `__PAGEZERO`, which
-/// kuna reads as zero fill) holds no bytes; the Mach header after it does.
+/// unlace reads as zero fill) holds no bytes; the Mach header after it does.
 #[test]
 fn an_inaccessible_segment_is_unmapped() {
     let bin = common::fixture("macho_imports_arm64");
-    let (stdout, stderr, code) = common::run_kuna(&[
+    let (stdout, stderr, code) = common::run_unlace(&[
         "functions",
         &bin,
         "--json",
@@ -132,7 +132,7 @@ fn an_inaccessible_segment_is_unmapped() {
 #[test]
 fn the_top_byte_of_the_address_space_is_unmapped() {
     let bin = common::fixture("protoorder_narrowvote_x86_64");
-    let (stdout, stderr, code) = common::run_kuna(&[
+    let (stdout, stderr, code) = common::run_unlace(&[
         "functions",
         &bin,
         "--json",
@@ -154,7 +154,7 @@ fn the_top_byte_of_the_address_space_is_unmapped() {
 #[test]
 fn an_inventory_without_declarations_gains_no_key() {
     let bin = common::fixture("protoorder_narrowvote_x86_64");
-    let (stdout, stderr, code) = common::run_kuna(&["functions", &bin, "--json"]);
+    let (stdout, stderr, code) = common::run_unlace(&["functions", &bin, "--json"]);
     assert_eq!(code, 0, "{stderr}");
     let doc = json(&stdout);
     assert!(doc.get("notes").is_none(), "{doc}");
@@ -174,7 +174,7 @@ fn every_surface_that_takes_the_flag_warns_once() {
     let run = |args: &[&str]| {
         let mut argv = args.to_vec();
         argv.extend(decl);
-        common::run_kuna(&argv)
+        common::run_unlace(&argv)
     };
 
     let (stdout, stderr, code) = run(&["decompile", &bin, "main"]);
@@ -229,7 +229,7 @@ fn an_unmapped_declaration_still_names_its_call_sites() {
     let raw = common::scratch_file("declared-rom-call", "bin");
     std::fs::write(&raw, [0xe8, 0xfb, 0xff, 0x03, 0x00, 0xc3]).unwrap();
     let raw_path = raw.to_str().unwrap();
-    let (stdout, stderr, code) = common::run_kuna(&[
+    let (stdout, stderr, code) = common::run_unlace(&[
         "decompile",
         raw_path,
         "0x10000",

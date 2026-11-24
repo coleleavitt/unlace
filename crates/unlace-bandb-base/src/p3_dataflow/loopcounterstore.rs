@@ -67,7 +67,7 @@
 //! arithmetic hanging off it as an implied expression.  `PrintC::emitInplaceOp`
 //! matches only a bare two-input op, so 85 statements across the arena corpus
 //! came out as `v = v + 1` instead of `v += 1` — correct C, and exactly what
-//! upstream Ghidra prints, but a silent loss of kuna's DIV-36 sugar in loops
+//! upstream Ghidra prints, but a silent loss of unlace's DIV-36 sugar in loops
 //! that were never broken.  `PrintC::inplace_through_copy` closes that: a `COPY`
 //! of an **implied** two-input value is rendered from the inner op.  An explicit
 //! input is left alone, because there the statement really is `out = <name>`.
@@ -124,7 +124,7 @@ pub fn declines(data: &Funcdata, op: OpId, vn: VarnodeId, invn: VarnodeId) -> bo
 
 /// Does `x` reach `target` through a chain of `CPUI_COPY`s?
 ///
-/// `RulePropagateCopy` fires in an order kuna does not control, so at the moment
+/// `RulePropagateCopy` fires in an order unlace does not control, so at the moment
 /// the counter's write-back is under consideration the load side may or may not
 /// have been folded yet: the increment reads either the phi output directly or a
 /// register `COPY` of it.  Both are the same counter, so the predicate must see

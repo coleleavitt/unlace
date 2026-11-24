@@ -1,10 +1,10 @@
-//! (kuna `castwiden`) A 64-bit widening C performs by itself keeps no cast.
+//! (unlace `castwiden`) A 64-bit widening C performs by itself keeps no cast.
 //!
 //! An `INT_SEXT`/`INT_ZEXT` to eight bytes prints as `(long)x` or
 //! `(unsigned long)x` wherever `CastStrategyC::isExtensionCastImplied`
 //! (cast.cc:249) declines it, and that predicate accepts only an arithmetic
 //! reader whose other operand is an explicit variable of the same metatype.  So
-//! kuna prints `v3 = (long)v8 * 0xc + (long)v9;`, `v1 + (long)i` where `v1` is a
+//! unlace prints `v3 = (long)v8 * 0xc + (long)v9;`, `v1 + (long)i` where `v1` is a
 //! `*(unsigned long *)` load, and `v = (unsigned long)i;` into an `unsigned long
 //! v`, where C converts the operand to the very same type by itself.
 //!
@@ -95,9 +95,9 @@ pub enum CastWidenMode {
     Literal,
 }
 
-impl crate::optionset::KunaOption for CastWidenMode {
+impl crate::optionset::UnlaceOption for CastWidenMode {
     const NAME: &'static str = "castwiden";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         CastWidenMode::Off
@@ -107,7 +107,7 @@ impl crate::optionset::KunaOption for CastWidenMode {
         CastWidenMode::Literal
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         OptionCastWiden.apply(value)
     }
 }
@@ -128,13 +128,13 @@ pub struct OptionCastWiden;
 impl OptionCastWiden {
     pub const NAME: &'static str = "castwiden";
 
-    pub fn apply(&self, p1: &str) -> unlace_base::error::KunaResult<(CastWidenMode, String)> {
+    pub fn apply(&self, p1: &str) -> unlace_base::error::UnlaceResult<(CastWidenMode, String)> {
         let mode = match p1 {
             "off" => CastWidenMode::Off,
             "on" => CastWidenMode::On,
             "literal" => CastWidenMode::Literal,
             other => {
-                return Err(unlace_base::error::KunaError::parse(format!(
+                return Err(unlace_base::error::UnlaceError::parse(format!(
                     "Unknown castwiden value: {other} (expected off|on|literal)"
                 )));
             }

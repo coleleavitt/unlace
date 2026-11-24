@@ -1,4 +1,4 @@
-//! (kuna `syscallregs`) Give the system-call instruction of ARM, AArch64,
+//! (unlace `syscallregs`) Give the system-call instruction of ARM, AArch64,
 //! RISC-V, MIPS and PowerPC the registers it reads and writes.
 //!
 //! # The defect
@@ -6,7 +6,7 @@
 //! The SLEIGH specs lower `svc` (ARM, AArch64), `ecall` (RISC-V), `syscall`
 //! (MIPS) and `sc` (PowerPC) to a `CALLOTHER` with no register inputs and no
 //! output. The Linux and BSD kernels these instructions trap into return their
-//! result in a register (`r0`, `x0`, `a0`, `v0`, `r3`), but kuna is told nothing
+//! result in a register (`r0`, `x0`, `a0`, `v0`, `r3`), but unlace is told nothing
 //! changes, so whatever the function put in that register to set the call up is
 //! still there afterwards:
 //!
@@ -25,7 +25,7 @@
 //! # The fix
 //!
 //! Before heritage, the `CALLOTHER` is rewritten in place, as
-//! [`crate::kuna_x64syscall`] does for x86-64:
+//! [`crate::unlace_x64syscall`] does for x86-64:
 //!
 //! - it writes the result register;
 //! - it reads the number register when the function writes it on every path to
@@ -86,7 +86,7 @@
 
 use std::collections::HashMap;
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::types::{int4, uint4};
 use unlace_num::opcodes::OpCode;
 
@@ -466,7 +466,7 @@ fn read_set(data: &Funcdata, op: OpId, regs: &SyscallStorage) -> Vec<(Address, i
 }
 
 /// Give one matched `CALLOTHER` its register effects.
-fn rewrite(data: &mut Funcdata, op: OpId, regs: &SyscallStorage) -> KunaResult<()> {
+fn rewrite(data: &mut Funcdata, op: OpId, regs: &SyscallStorage) -> UnlaceResult<()> {
     let reads = read_set(data, op, regs);
     let base = data.obank().get(op).map(|o| o.num_input()).unwrap_or(1);
     for (i, (addr, size)) in reads.iter().enumerate() {
@@ -483,12 +483,17 @@ fn rewrite(data: &mut Funcdata, op: OpId, regs: &SyscallStorage) -> KunaResult<(
 /// Write the error-flag register right after the system call at `op` with an
 /// opaque `syscall_error()`. Without the call flag the op has no side effect,
 /// so it dies with its last reader.
-fn define_error_flag(data: &mut Funcdata, op: OpId, addr: &Address, size: int4) -> KunaResult<()> {
+fn define_error_flag(
+    data: &mut Funcdata,
+    op: OpId,
+    addr: &Address,
+    size: int4,
+) -> UnlaceResult<()> {
     let pc = data
         .obank()
         .get(op)
         .map(|o| o.get_addr().clone())
-        .ok_or_else(|| KunaError::lowlevel("syscallregs: stale system call"))?;
+        .ok_or_else(|| UnlaceError::lowlevel("syscallregs: stale system call"))?;
     let flag = data.new_op(1, pc);
     data.op_set_opcode_code(flag, OpCode::CPUI_CALLOTHER);
     if let Some(o) = data.obank_mut().get_mut(flag) {
@@ -501,7 +506,7 @@ fn define_error_flag(data: &mut Funcdata, op: OpId, addr: &Address, size: int4) 
     Ok(())
 }
 
-/// (kuna) `ActionSyscallRegs`: give the ARM, AArch64, RISC-V, MIPS and PowerPC
+/// (unlace) `ActionSyscallRegs`: give the ARM, AArch64, RISC-V, MIPS and PowerPC
 /// system-call user-op its register effects (option `syscallregs`).
 pub struct ActionSyscallRegs {
     base: ActionBase,
@@ -611,7 +616,7 @@ pub fn userop_ids(
 mod mips_args;
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.syscallregs_is_error_flag_op = Some(is_error_flag_op);
     hooks.syscallregs_is_error_flag = Some(is_error_flag);
     hooks.syscallregs_reads_as_argument = Some(reads_as_argument);

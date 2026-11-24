@@ -45,7 +45,7 @@ use std::rc::Rc;
 
 use unlace_base::address::{Address, RangeList};
 use unlace_base::crc32::crc_update;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::partmap::PartMap;
 use unlace_base::rangemap::{RangeMap, RangeRecord, RecordIdx, Subsort};
 use unlace_base::space::AddrSpace;
@@ -80,7 +80,7 @@ pub trait TypeFactoryAccess {
 /// Access trait for the `Translate`/`Architecture` register-name lookup
 /// (`glb->translate->getRegisterName`, W5).
 ///
-/// STUB(W5): `buildVariableName` and the kuna storage-comment helper render
+/// STUB(W5): `buildVariableName` and the unlace storage-comment helper render
 /// register-backed storage by name.  W5 routes this onto the real `Translate`.
 pub trait TranslateAccess {
     /// C++ `Translate::getRegisterName(spc,off,sz)` — the register name covering
@@ -94,7 +94,7 @@ pub trait TranslateAccess {
 /// fw-architecture serial porter).  `database.cc` reaches it for: the address
 /// space count (`numSpaces`), the type factory (`types`), the translator
 /// (`translate`), the minimum function-symbol size (`min_funcsymbol_size`), and
-/// the kuna angr-naming toggle (`name_style_angr`).  This local trait carries
+/// the unlace angr-naming toggle (`name_style_angr`).  This local trait carries
 /// exactly that slice so `database.rs` compiles and tests standalone; the
 /// architecture porter implements it on the real `Architecture`.
 pub trait DatabaseArch {
@@ -107,7 +107,7 @@ pub trait DatabaseArch {
     /// Minimum bytes a FunctionSymbol map consumes (C++
     /// `Architecture::min_funcsymbol_size`).
     fn min_funcsymbol_size(&self) -> int4;
-    /// C++ (kuna) `glb->name_style_angr` (option `namestyle`) — is angr-style naming active?
+    /// C++ (unlace) `glb->name_style_angr` (option `namestyle`) — is angr-style naming active?
     /// STUB(W4-p0pack): namestyle.  Default angr (per the `settableTable`
     /// registration in `kuna_stages.cc`); the architecture porter wires this to
     /// the `option namestyle` toggle.
@@ -121,70 +121,70 @@ pub trait DatabaseArch {
 }
 
 // ===========================================================================
-// Kuna angr-style naming (DIV-5; port of decompiler/cpp/kuna_naming.cc).
+// Unlace angr-style naming (DIV-5; port of decompiler/cpp/kuna_naming.cc).
 // ===========================================================================
 //
-// This is a kuna-owned policy file in the C++ tree; its address-rendering
+// This is a unlace-owned policy file in the C++ tree; its address-rendering
 // helpers are pure and self-contained, so they are ported inline here (the
 // database is their only consumer at the boundary this porter owns).
 
 /// Render an address as lowercase hex with no leading zeros and no "0x" prefix
-/// (C++ `kunaPrintBareAddr`): the angr address form used by `dat_`/`sub_`/`label_`.
-fn kuna_bare_addr(addr: &Address) -> String {
+/// (C++ `unlacePrintBareAddr`): the angr address form used by `dat_`/`sub_`/`label_`.
+fn unlace_bare_addr(addr: &Address) -> String {
     let space = addr.get_space().expect("kuna_bare_addr on invalid address");
     // byteToAddress(off, wordsize): the word-addressed offset.
     let off = AddrSpace::byte_to_address(addr.get_offset(), space.get_word_size());
     format!("{off:x}")
 }
 
-/// (kuna, Phase 3) The fallback naming vocabulary for entities no Symbol
-/// covers.  `Angr` is the shipped kuna default (`name_style_angr` on); `Func`
+/// (unlace, Phase 3) The fallback naming vocabulary for entities no Symbol
+/// covers.  `Angr` is the shipped unlace default (`name_style_angr` on); `Func`
 /// is the upstream C++ spelling (`name_style_angr` off); `Ghidra` is the
 /// ghidra-mode GUI convention — `FUN_`/`DAT_`/`LAB_` with zero-padded
 /// lowercase hex, the shapes Java's `isDynamicSymbolName` /
 /// `GlobalSymbolMap` recognize as dynamic (ghidra_arch.cc:928-947).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum KunaNameStyle {
+pub enum UnlaceNameStyle {
     /// Upstream C++ default naming (`func_<raw-addr>`).
     Func,
-    /// angr-style naming (`sub_`/`dat_`/`label_` + bare hex) — kuna default.
+    /// angr-style naming (`sub_`/`dat_`/`label_` + bare hex) — unlace default.
     Angr,
     /// Ghidra GUI naming (`FUN_`/`DAT_`/`LAB_` + `%08x`) — ghidra mode.
     Ghidra,
 }
 
-/// (kuna, Phase 3) Ghidra-convention dynamic function name: `FUN_%08x`.
+/// (unlace, Phase 3) Ghidra-convention dynamic function name: `FUN_%08x`.
 pub fn ghidra_function_name(addr: &Address) -> String {
     format!("FUN_{:08x}", addr.get_offset())
 }
 
-/// (kuna, Phase 3) Ghidra-convention dynamic data name: `DAT_%08x`.
+/// (unlace, Phase 3) Ghidra-convention dynamic data name: `DAT_%08x`.
 pub fn ghidra_global_data_name(addr: &Address) -> String {
     format!("DAT_{:08x}", addr.get_offset())
 }
 
-/// (kuna, Phase 3) Ghidra-convention code label: `LAB_%08x`.
+/// (unlace, Phase 3) Ghidra-convention code label: `LAB_%08x`.
 pub fn ghidra_label_name(addr: &Address) -> String {
     format!("LAB_{:08x}", addr.get_offset())
 }
 
-/// C++ `kunaGlobalDataName`: `dat_<addr>`.
-pub fn kuna_global_data_name(addr: &Address) -> String {
-    format!("dat_{}", kuna_bare_addr(addr))
+/// C++ `unlaceGlobalDataName`: `dat_<addr>`.
+pub fn unlace_global_data_name(addr: &Address) -> String {
+    format!("dat_{}", unlace_bare_addr(addr))
 }
 
-/// C++ `kunaFunctionName`: `sub_<addr>`.
-pub fn kuna_function_name(addr: &Address) -> String {
-    format!("sub_{}", kuna_bare_addr(addr))
+/// C++ `unlaceFunctionName`: `sub_<addr>`.
+pub fn unlace_function_name(addr: &Address) -> String {
+    format!("sub_{}", unlace_bare_addr(addr))
 }
 
-/// C++ `kunaLabelName`: `label_<addr>`.
-pub fn kuna_label_name(addr: &Address) -> String {
-    format!("label_{}", kuna_bare_addr(addr))
+/// C++ `unlaceLabelName`: `label_<addr>`.
+pub fn unlace_label_name(addr: &Address) -> String {
+    format!("label_{}", unlace_bare_addr(addr))
 }
 
-/// C++ `kunaArgName`: `a<catindex>` (0-indexed; negative clamps to 0).
-pub fn kuna_arg_name(mut catindex: int4) -> String {
+/// C++ `unlaceArgName`: `a<catindex>` (0-indexed; negative clamps to 0).
+pub fn unlace_arg_name(mut catindex: int4) -> String {
     if catindex < 0 {
         catindex = 0;
     }
@@ -192,7 +192,7 @@ pub fn kuna_arg_name(mut catindex: int4) -> String {
 }
 
 /// Materialize a prototype parameter name under the local naming policy.
-pub fn kuna_materialized_param_name(
+pub fn unlace_materialized_param_name(
     name_style_angr: bool,
     catindex: int4,
     recovered_name: &str,
@@ -200,7 +200,7 @@ pub fn kuna_materialized_param_name(
     if !recovered_name.is_empty() {
         recovered_name.to_string()
     } else if name_style_angr {
-        kuna_arg_name(catindex)
+        unlace_arg_name(catindex)
     } else {
         format!("param_{}", catindex + 1)
     }
@@ -378,13 +378,13 @@ impl SymbolEntry {
     /// `database.cc:98-110`: a minimal subsort for an address-tied symbol;
     /// otherwise the first `uselimit` range's space index + first offset.  An
     /// empty `uselimit` on a non-tied symbol is a `LowlevelError`.
-    pub fn get_subsort(&self, sym_flags: uint4) -> KunaResult<EntrySubsort> {
+    pub fn get_subsort(&self, sym_flags: uint4) -> UnlaceResult<EntrySubsort> {
         let mut res = EntrySubsort::minimal(); // Minimal subsort
         if (sym_flags & varnode_flags::addrtied) == 0 {
             let range = self
                 .uselimit
                 .get_first_range()
-                .ok_or_else(|| KunaError::lowlevel("Map entry with empty uselimit"))?;
+                .ok_or_else(|| UnlaceError::lowlevel("Map entry with empty uselimit"))?;
             res.useindex = range.get_space().get_index();
             res.useoffset = range.get_first();
         }
@@ -448,7 +448,7 @@ impl SymbolEntry {
 /// The C++ rangemap stores `SymbolEntry` directly; the `(EntryInitData, a, b)`
 /// constructor (`database.cc:85-94`) sets `addr = Address(space, a)`,
 /// `size = (b-a)+1`, and copies the symbol/flags/offset/uselimit.  Because
-/// kuna's [`RangeMap`] requires the subsort to be computed from the *record*
+/// unlace's [`RangeMap`] requires the subsort to be computed from the *record*
 /// without external state, but the C++ `getSubsort` consults the owning Symbol's
 /// `addrtied` flag, the record caches that flag (`addrtied_hint`) at insert time
 /// (the flag is set on the Symbol before `addMap` runs — `database.cc:1131-1185`).
@@ -606,7 +606,7 @@ pub enum SymbolKind {
         /// `queryFunction(name)->getFuncProto()`), parked on the FunctionSymbol so a
         /// caller's `ActionDefaultParams::apply` can `fc->copy(otherfunc->getFuncProto())`
         /// (`coreaction.cc:2385`).  The C++ owns the locked `FuncProto` on the
-        /// callee's lazily-built `Funcdata` (W5); the kuna console rebuilds each
+        /// callee's lazily-built `Funcdata` (W5); the unlace console rebuilds each
         /// queried `Funcdata` fresh, so the declared prototype is stashed here (by
         /// name+address) and re-seeded into a `FuncProto` on demand.  `None` = no
         /// source-declared prototype (the default-model recovery applies).
@@ -652,10 +652,10 @@ pub enum EntryRef {
 }
 
 /// A re-seed spec for a console-added dynamic symbol (`map hash` / `map convert`),
-/// carried across the kuna console's `Funcdata` rebuild on `decompile`.
+/// carried across the unlace console's `Funcdata` rebuild on `decompile`.
 ///
-/// (kuna) The C++ console reuses the same `Funcdata` across `decompile`, so its
-/// `ScopeLocal` dynamic symbols simply persist; the kuna console rebuilds the IR,
+/// (unlace) The C++ console reuses the same `Funcdata` across `decompile`, so its
+/// `ScopeLocal` dynamic symbols simply persist; the unlace console rebuilds the IR,
 /// so each dynamic symbol must be re-created on the fresh scope.  This spec
 /// preserves the FULL symbol identity — in particular `category` (so an
 /// `EquateSymbol` stays `Symbol::equate`, the arm `ActionDynamicMapping` keys on)
@@ -985,7 +985,7 @@ struct NameKey {
 // Scope  (database.hh:464-870, merging Scope + ScopeInternal)
 // ===========================================================================
 //
-// The C++ has an abstract `Scope` base and a concrete `ScopeInternal`; kuna only
+// The C++ has an abstract `Scope` base and a concrete `ScopeInternal`; unlace only
 // ever instantiates `ScopeInternal` (`buildSubScope` returns `new
 // ScopeInternal`).  The arena model merges the two into one `Scope` struct
 // holding both the base members (rangetree, parent/children, glb/name/fd/
@@ -1133,7 +1133,7 @@ impl Scope {
 // ===========================================================================
 //
 // The C++ `ScopeResolve` is a `rangemap<ScopeMapper>` with `linetype = Address`
-// and a `NullSubsort` (no sub-sorting of overlapping ranges).  kuna's `RangeMap`
+// and a `NullSubsort` (no sub-sorting of overlapping ranges).  unlace's `RangeMap`
 // keys on integer `Line` types, and `Address` is a W1 type this porter does not
 // own, so the resolve-map is transcribed directly as a sorted set of
 // (first,last,scope) ranges.  `find(addr)` returns the first range that contains
@@ -1189,7 +1189,7 @@ impl ScopeResolve {
 // DuplicateFunctionError (database.hh:434-439)
 // ===========================================================================
 
-/// A duplicate function's address and name. Conversion to [`KunaError`]
+/// A duplicate function's address and name. Conversion to [`UnlaceError`]
 /// discards this payload and returns `Recov("Duplicate Function")`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DuplicateFunctionError {
@@ -1209,10 +1209,10 @@ impl DuplicateFunctionError {
     }
 }
 
-impl From<DuplicateFunctionError> for KunaError {
+impl From<DuplicateFunctionError> for UnlaceError {
     /// Maps onto `RecovError("Duplicate Function")` (the C++ base explanation).
-    fn from(_e: DuplicateFunctionError) -> KunaError {
-        KunaError::recov("Duplicate Function")
+    fn from(_e: DuplicateFunctionError) -> UnlaceError {
+        UnlaceError::recov("Duplicate Function")
     }
 }
 
@@ -1236,9 +1236,9 @@ pub struct Database {
     /// snapshot — [`Architecture::build_arch_handle`](crate::architecture::Architecture::build_arch_handle),
     /// once per decompiled function — reuses the previous snapshot while this
     /// has not moved.  Correctness rests on the bump being exhaustive;
-    /// `tests::kuna_gen_bumped_by_every_mutator` enforces that against the
+    /// `tests::unlace_gen_bumped_by_every_mutator` enforces that against the
     /// source of this file.
-    kuna_gen: u64,
+    unlace_gen: u64,
     /// All scopes, owned by the database (replaces the C++ scope `delete` graph).
     scopes: slotmap::SlotMap<ScopeId, Scope>,
     /// All symbols, owned by the database (the C++ `nametree` owns `Symbol *`;
@@ -1254,7 +1254,7 @@ pub struct Database {
     flagbase: PartMap<Address, uint4>,
     /// True if scope ids are built from hash of name (C++ `idByNameHash`).
     id_by_name_hash: bool,
-    /// (kuna) The scopes that ever mapped a function at each `(space, entry)`,
+    /// (unlace) The scopes that ever mapped a function at each `(space, entry)`,
     /// so [`Database::find_function_across_scopes`] visits those instead of
     /// every scope (a demangled C++ image has one per class). Mappings erased
     /// later stay listed; the lookup re-checks each scope.
@@ -1262,15 +1262,15 @@ pub struct Database {
 }
 
 impl Database {
-    /// The snapshot-invalidation generation (see [`Database::kuna_gen`]).
-    pub fn kuna_generation(&self) -> u64 {
-        self.kuna_gen
+    /// The snapshot-invalidation generation (see [`Database::unlace_gen`]).
+    pub fn unlace_generation(&self) -> u64 {
+        self.unlace_gen
     }
 
     /// C++ `Database(Architecture *g,bool idByName)` (`database.cc:2954-2961`).
     pub fn new(id_by_name: bool) -> Database {
         Database {
-            kuna_gen: 0,
+            unlace_gen: 0,
             scopes: slotmap::SlotMap::with_key(),
             symbols: slotmap::SlotMap::with_key(),
             globalscope: None,
@@ -1300,7 +1300,7 @@ impl Database {
     /// stack space indexes past the maptable end.  Growing only (C++ `resize`
     /// never shrinks a populated table here, since spaces are only added).
     pub fn adjust_caches(&mut self, num_spaces: int4) {
-        self.kuna_gen += 1;
+        self.unlace_gen += 1;
         let n = if num_spaces < 0 {
             0
         } else {
@@ -1319,7 +1319,7 @@ impl Database {
         &self.scopes[id]
     }
 
-    /// (kuna) How many `Scope`s this database holds. Each is ~1.5 KB resident,
+    /// (unlace) How many `Scope`s this database holds. Each is ~1.5 KB resident,
     /// so this is the number the symbol-name scope bound exists to bound; the
     /// `verify_symbolnamebound` test measures the bound through it rather than
     /// through a flaky wall clock.
@@ -1329,7 +1329,7 @@ impl Database {
 
     /// Mutably borrow a scope by id.
     pub fn scope_mut(&mut self, id: ScopeId) -> &mut Scope {
-        self.kuna_gen += 1;
+        self.unlace_gen += 1;
         &mut self.scopes[id]
     }
 
@@ -1345,7 +1345,7 @@ impl Database {
 
     /// Mutably borrow a symbol by id.
     pub fn symbol_mut(&mut self, id: SymbolId) -> &mut Symbol {
-        self.kuna_gen += 1;
+        self.unlace_gen += 1;
         &mut self.symbols[id]
     }
 
@@ -1361,7 +1361,7 @@ impl Database {
 
     /// Replace the property map (C++ `setProperties`).
     pub fn set_properties(&mut self, newflags: PartMap<Address, uint4>) {
-        self.kuna_gen += 1;
+        self.unlace_gen += 1;
         self.flagbase = newflags;
     }
 
@@ -1369,7 +1369,7 @@ impl Database {
     /// `new ScopeInternal(id,nm,glb)`); the id/name/space-count come from the
     /// caller.  Inserted into the arena; *not* yet attached.
     fn build_sub_scope(&mut self, id: uint8, nm: &str, num_spaces: int4) -> ScopeId {
-        self.kuna_gen += 1;
+        self.unlace_gen += 1;
         self.scopes.insert(Scope::new(id, nm, num_spaces))
     }
 
@@ -1377,17 +1377,19 @@ impl Database {
     ///
     /// The new Scope must be initially empty.  Passing `None` for `parent`
     /// registers the global Scope (which must have an empty name and be unique).
-    pub fn attach_scope(&mut self, newscope: ScopeId, parent: Option<ScopeId>) -> KunaResult<()> {
-        self.kuna_gen += 1;
+    pub fn attach_scope(&mut self, newscope: ScopeId, parent: Option<ScopeId>) -> UnlaceResult<()> {
+        self.unlace_gen += 1;
         let unique_id = self.scopes[newscope].unique_id;
         let name_empty = self.scopes[newscope].name.is_empty();
         match parent {
             None => {
                 if self.globalscope.is_some() {
-                    return Err(KunaError::lowlevel("Multiple global scopes"));
+                    return Err(UnlaceError::lowlevel("Multiple global scopes"));
                 }
                 if !name_empty {
-                    return Err(KunaError::lowlevel("Global scope does not have empty name"));
+                    return Err(UnlaceError::lowlevel(
+                        "Global scope does not have empty name",
+                    ));
                 }
                 self.globalscope = Some(newscope);
                 self.idmap.insert(unique_id, newscope);
@@ -1395,11 +1397,11 @@ impl Database {
             }
             Some(par) => {
                 if name_empty {
-                    return Err(KunaError::lowlevel("Non-global scope has empty name"));
+                    return Err(UnlaceError::lowlevel("Non-global scope has empty name"));
                 }
                 if self.idmap.contains_key(&unique_id) {
                     let full = self.get_full_name(newscope);
-                    return Err(KunaError::recov(format!("Duplicate scope id: {full}")));
+                    return Err(UnlaceError::recov(format!("Duplicate scope id: {full}")));
                 }
                 self.idmap.insert(unique_id, newscope);
                 // C++ parent->attachScope.
@@ -1423,8 +1425,8 @@ impl Database {
         nm: &str,
         parent: Option<ScopeId>,
         num_spaces: int4,
-    ) -> KunaResult<ScopeId> {
-        self.kuna_gen += 1;
+    ) -> UnlaceResult<ScopeId> {
+        self.unlace_gen += 1;
         if let Some(res) = self.resolve_scope(id) {
             return Ok(res);
         }
@@ -1592,8 +1594,8 @@ impl Database {
 
     /// C++ `ScopeInternal::insertNameTree` (`database.cc:2742-2757`): insert a
     /// Symbol into the nametree, establishing a dedup id on name collision.
-    fn insert_name_tree(&mut self, scope: ScopeId, sym: SymbolId) -> KunaResult<()> {
-        self.kuna_gen += 1;
+    fn insert_name_tree(&mut self, scope: ScopeId, sym: SymbolId) -> UnlaceResult<()> {
+        self.unlace_gen += 1;
         use std::collections::btree_map::Entry;
         use std::ops::Bound::Included;
         self.symbols[sym].name_dedup = 0;
@@ -1631,7 +1633,7 @@ impl Database {
                 slot.insert(sym);
                 Ok(())
             }
-            Entry::Occupied(_) => Err(KunaError::lowlevel(format!(
+            Entry::Occupied(_) => Err(UnlaceError::lowlevel(format!(
                 "Could  not deduplicate symbol: {}",
                 self.symbols[sym].name
             ))),
@@ -1641,8 +1643,8 @@ impl Database {
     /// C++ `ScopeInternal::addSymbolInternal` (`database.cc:1838-1869`): assign a
     /// symbol id, fill an undefined name, validate the type, and enter the symbol
     /// into the nametree and category tables.
-    fn add_symbol_internal(&mut self, scope: ScopeId, sym: SymbolId) -> KunaResult<()> {
-        self.kuna_gen += 1;
+    fn add_symbol_internal(&mut self, scope: ScopeId, sym: SymbolId) -> UnlaceResult<()> {
+        self.unlace_gen += 1;
         if self.symbols[sym].symbol_id == 0 {
             let unique_id = self.scopes[scope].unique_id;
             let next = self.scopes[scope].next_unique_id;
@@ -1658,14 +1660,14 @@ impl Database {
         }
         match &self.symbols[sym].dtype {
             None => {
-                return Err(KunaError::lowlevel(format!(
+                return Err(UnlaceError::lowlevel(format!(
                     "{} symbol created with no type",
                     self.symbols[sym].get_name()
                 )));
             }
             Some(t) => {
                 if t.get_size() < 1 {
-                    return Err(KunaError::lowlevel(format!(
+                    return Err(UnlaceError::lowlevel(format!(
                         "{} symbol created with zero size type",
                         self.symbols[sym].get_name()
                     )));
@@ -1698,7 +1700,7 @@ impl Database {
     /// `cat == 0` (function parameters) the caller's `ind` is honored so a recovered
     /// parameter lands at its 0-based slot.
     pub fn set_category(&mut self, scope: ScopeId, sym: SymbolId, cat: int4, ind: int4) {
-        self.kuna_gen += 1;
+        self.unlace_gen += 1;
         let old_cat = self.symbols[sym].category;
         if old_cat >= 0 {
             let oc = old_cat as usize;
@@ -1734,7 +1736,7 @@ impl Database {
 
     /// C++ `ScopeInternal::buildUndefinedName` (`database.cc:2550-2581`): the next
     /// `$$undefXXXXXXXX` name not yet used in `scope`.
-    fn build_undefined_name(&self, scope: ScopeId) -> KunaResult<String> {
+    fn build_undefined_name(&self, scope: ScopeId) -> UnlaceResult<String> {
         use std::ops::Bound::{Included, Unbounded};
         let probe = NameKey {
             name: "$$undefz".to_string(),
@@ -1748,9 +1750,9 @@ impl Database {
             if symname.len() == 15 && symname.starts_with("$$undef") {
                 let hexpart = &symname[7..15];
                 let uniq = uint4::from_str_radix(hexpart, 16)
-                    .map_err(|_| KunaError::lowlevel("Error creating undefined name"))?;
+                    .map_err(|_| UnlaceError::lowlevel("Error creating undefined name"))?;
                 if uniq == u32::MAX {
-                    return Err(KunaError::lowlevel("Error creating undefined name"));
+                    return Err(UnlaceError::lowlevel("Error creating undefined name"));
                 }
                 let uniq = uniq + 1;
                 return Ok(format!("$$undef{uniq:08x}"));
@@ -1761,7 +1763,7 @@ impl Database {
 
     /// C++ `ScopeInternal::makeNameUnique` (`database.cc:2583-2644`): produce a
     /// version of `nm` that won't collide with other names in `scope`.
-    fn make_name_unique(&self, scope: ScopeId, nm: &str) -> KunaResult<String> {
+    fn make_name_unique(&self, scope: ScopeId, nm: &str) -> UnlaceResult<String> {
         use std::ops::Bound::{Included, Unbounded};
         let first = self.find_first_by_name(scope, nm);
         if first.is_none() {
@@ -1837,7 +1839,7 @@ impl Database {
             }
         };
         if self.find_first_by_name(scope, &res_string).is_some() {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "Unable to uniquify name: {res_string}"
             )));
         }
@@ -1874,12 +1876,12 @@ impl Database {
         off: int4,
         sz: int4,
         uselim: &RangeList,
-    ) -> KunaResult<EntryRef> {
-        self.kuna_gen += 1;
+    ) -> UnlaceResult<EntryRef> {
+        self.unlace_gen += 1;
         let space = addr
             .get_space()
             .cloned()
-            .ok_or_else(|| KunaError::lowlevel("addMapInternal on invalid address"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("addMapInternal on invalid address"))?;
         let space_index = space.get_index() as usize;
         // Find or create the appropriate rangemap.
         if self.scopes[scope].maptable[space_index].is_none() {
@@ -1893,7 +1895,7 @@ impl Database {
         // below its start and is rejected (database.cc:1883-1889).
         let last_offset = (addr + (sz - 1) as i64).get_offset();
         if last_offset < addr.get_offset() {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "Symbol {} extends beyond the end of the address space",
                 self.symbols[sym].get_name()
             )));
@@ -1944,7 +1946,7 @@ impl Database {
         sz: int4,
         uselim: &RangeList,
     ) -> EntryRef {
-        self.kuna_gen += 1;
+        self.unlace_gen += 1;
         let entry = SymbolEntry::new_dynamic(sym, exfl, hash, off, sz, uselim.clone());
         let slot = self.scopes[scope].dynamicentry.len();
         self.scopes[scope].dynamicentry.push(Some(entry));
@@ -1975,7 +1977,7 @@ impl Database {
     /// Snapshot the console-added dynamic symbols of `scope` as re-seed specs
     /// (the `map hash` / `map convert` forms, parallel to
     /// [`scope_space_symbol_specs`](Self::scope_space_symbol_specs) for `map addr`).
-    /// The kuna console rebuilds the `Funcdata` on `decompile`, so the dynamic
+    /// The unlace console rebuilds the `Funcdata` on `decompile`, so the dynamic
     /// symbols must be carried across and re-added to the fresh scope.
     ///
     /// The spec carries the symbol's [`category`](Symbol::category),
@@ -2049,9 +2051,9 @@ impl Database {
     /// STUB(W5): the join-address arm (`addr.isJoin()` → split into pieces via
     /// `glb->findJoin`) needs the `JoinRecord` table, a W5 subsystem.  Until W5
     /// supplies it, a join address is mapped as a single entry and a
-    /// [`KunaError`]-free note is returned via `joined_pieces == false`.
-    fn add_map(&mut self, scope: ScopeId, mut entry: SymbolEntry) -> KunaResult<EntryRef> {
-        self.kuna_gen += 1;
+    /// [`UnlaceError`]-free note is returned via `joined_pieces == false`.
+    fn add_map(&mut self, scope: ScopeId, mut entry: SymbolEntry) -> UnlaceResult<EntryRef> {
+        self.unlace_gen += 1;
         let sym = entry.symbol;
         // First set persistence based on scope (database.cc:1136-1147).
         if self.scopes[scope].is_global() {
@@ -2061,7 +2063,7 @@ impl Database {
             // range, still mark persistent.  C++ tests against the architecture's
             // real global scope (`glb->symboltab->getGlobalScope()`, database.cc:1141),
             // which is never functional and whose rangetree covers only the
-            // ram/data discovery range — never the stack.  (kuna) A `ScopeLocal`
+            // ram/data discovery range — never the stack.  (unlace) A `ScopeLocal`
             // owns a *private* `Database` whose root ("globalscope") IS the
             // functional local stack scope itself (varmap.rs `ScopeLocal::new`
             // creates it parentless); using it here would mark every mapped stack
@@ -2079,7 +2081,7 @@ impl Database {
                 };
                 if in_global {
                     self.symbols[sym].flags |= varnode_flags::persist;
-                    entry.uselimit.clear(); // FIXME (kuna upstream): kludge for bad XML
+                    entry.uselimit.clear(); // FIXME (unlace upstream): kludge for bad XML
                 }
             }
         }
@@ -2128,7 +2130,7 @@ impl Database {
                 let join_space = addr
                     .get_space()
                     .cloned()
-                    .ok_or_else(|| KunaError::lowlevel("addMap join address has no space"))?;
+                    .ok_or_else(|| UnlaceError::lowlevel("addMap join address has no space"))?;
                 let rec = join_space.find_join(addr.get_offset())?;
                 let num = rec.num_pieces();
                 let bigendian = addr.is_big_endian();
@@ -2181,8 +2183,8 @@ impl Database {
         sym: SymbolId,
         addr: &Address,
         usepoint: &Address,
-    ) -> KunaResult<EntryRef> {
-        self.kuna_gen += 1;
+    ) -> UnlaceResult<EntryRef> {
+        self.unlace_gen += 1;
         let mut entry = SymbolEntry::new_unintegrated(sym);
         if !usepoint.is_invalid() {
             let space = usepoint
@@ -2210,8 +2212,8 @@ impl Database {
         scope: ScopeId,
         nm: &str,
         ct: Rc<Datatype>,
-    ) -> KunaResult<SymbolId> {
-        self.kuna_gen += 1;
+    ) -> UnlaceResult<SymbolId> {
+        self.unlace_gen += 1;
         let sym = self.symbols.insert(Symbol::new(scope, nm, Some(ct)));
         self.add_symbol_internal(scope, sym)?;
         Ok(sym)
@@ -2226,8 +2228,8 @@ impl Database {
         ct: Rc<Datatype>,
         addr: &Address,
         usepoint: &Address,
-    ) -> KunaResult<(SymbolId, EntryRef)> {
-        self.kuna_gen += 1;
+    ) -> UnlaceResult<(SymbolId, EntryRef)> {
+        self.unlace_gen += 1;
         // C++ strips a "stripped" type first; the W6 Datatype stub has no
         // hasStripped yet, so it is a no-op here (STUB(W6)).
         let sym = self.symbols.insert(Symbol::new(scope, nm, Some(ct)));
@@ -2249,8 +2251,8 @@ impl Database {
         ct: Rc<Datatype>,
         addr: &Address,
         usepoint: &Address,
-    ) -> KunaResult<(SymbolId, EntryRef)> {
-        self.kuna_gen += 1;
+    ) -> UnlaceResult<(SymbolId, EntryRef)> {
+        self.unlace_gen += 1;
         if ct.get_size() > 0 {
             if let Some(space) = addr.get_space() {
                 let first = u128::from(addr.get_offset());
@@ -2293,7 +2295,7 @@ impl Database {
         self.rename_symbol(sym, nm)?;
         let entry = self
             .find_addr(scope, addr, usepoint)
-            .ok_or_else(|| KunaError::lowlevel("retyped data symbol lost its mapping"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("retyped data symbol lost its mapping"))?;
         Ok((sym, entry))
     }
 
@@ -2306,8 +2308,8 @@ impl Database {
         nm: &str,
         min_funcsymbol_size: int4,
         type_code: Rc<Datatype>,
-    ) -> KunaResult<SymbolId> {
-        self.kuna_gen += 1;
+    ) -> UnlaceResult<SymbolId> {
+        self.unlace_gen += 1;
         // C++ warns (printMessage) on overlap; the message channel is W5, so the
         // overlap query is performed but the warning is dropped (STUB(W5)).
         let mut sym = Symbol::new_empty(scope);
@@ -2332,16 +2334,16 @@ impl Database {
     }
 
     /// Map another address to the same function identity and declared prototype.
-    pub fn add_function_alias(&mut self, entry: &Address, alias: &Address) -> KunaResult<()> {
-        self.kuna_gen += 1;
+    pub fn add_function_alias(&mut self, entry: &Address, alias: &Address) -> UnlaceResult<()> {
+        self.unlace_gen += 1;
         let (symbol, scope) = self
             .find_function_across_scopes(entry)
-            .ok_or_else(|| KunaError::lowlevel("Function alias has no canonical function"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("Function alias has no canonical function"))?;
         if let Some((other, _)) = self.find_function_across_scopes(alias) {
             return if other == symbol {
                 Ok(())
             } else {
-                Err(KunaError::lowlevel(
+                Err(UnlaceError::lowlevel(
                     "Function alias overlaps a different function",
                 ))
             };
@@ -2355,7 +2357,7 @@ impl Database {
     /// recompute its `size_typelock`.  The console `map` commands lock the symbols
     /// they create as name/type-locked.
     pub fn set_attribute(&mut self, sym: SymbolId, attr: uint4) {
-        self.kuna_gen += 1;
+        self.unlace_gen += 1;
         let mask = varnode_flags::typelock
             | varnode_flags::namelock
             | varnode_flags::readonly
@@ -2375,8 +2377,8 @@ impl Database {
         addr: &Address,
         nm: &str,
         lab_type: Rc<Datatype>,
-    ) -> KunaResult<SymbolId> {
-        self.kuna_gen += 1;
+    ) -> UnlaceResult<SymbolId> {
+        self.unlace_gen += 1;
         let mut sym = Symbol::new_empty(scope);
         sym.dtype = Some(lab_type); // LabSymbol::buildType -> getBase(1, TYPE_UNKNOWN)
         sym.name = nm.to_string();
@@ -2397,8 +2399,8 @@ impl Database {
         ct: Rc<Datatype>,
         caddr: &Address,
         hash: uint8,
-    ) -> KunaResult<SymbolId> {
-        self.kuna_gen += 1;
+    ) -> UnlaceResult<SymbolId> {
+        self.unlace_gen += 1;
         let sz = ct.get_size();
         let sym = self.symbols.insert(Symbol::new(scope, nm, Some(ct)));
         self.add_symbol_internal(scope, sym)?;
@@ -2422,8 +2424,8 @@ impl Database {
         addr: &Address,
         hash: uint8,
         base1_unknown: Rc<Datatype>,
-    ) -> KunaResult<SymbolId> {
-        self.kuna_gen += 1;
+    ) -> UnlaceResult<SymbolId> {
+        self.unlace_gen += 1;
         // C++ EquateSymbol ctor.
         let mut sym = Symbol::new(scope, nm, Some(base1_unknown));
         sym.category = symbol_category::EQUATE;
@@ -2449,8 +2451,8 @@ impl Database {
         field_num: int4,
         addr: &Address,
         hash: uint8,
-    ) -> KunaResult<SymbolId> {
-        self.kuna_gen += 1;
+    ) -> UnlaceResult<SymbolId> {
+        self.unlace_gen += 1;
         let mut sym = Symbol::new(scope, nm, Some(dt));
         sym.category = symbol_category::UNION_FACET;
         sym.kind = SymbolKind::UnionFacet {
@@ -2558,7 +2560,7 @@ impl Database {
         out
     }
 
-    /// (kuna) The `(name, type, addr, category)` specs for every whole-symbol entry
+    /// (unlace) The `(name, type, addr, category)` specs for every whole-symbol entry
     /// mapped into a scope's space, for an out-of-pipeline JSON/benchmark consumer
     /// (the `unlace decompile-all --json` variable extractor).  Like
     /// [`Self::scope_space_symbol_specs`] but surfaces the symbol *category* (see
@@ -2609,7 +2611,7 @@ impl Database {
     /// the function's local scope (`getScopeLocal()->addSymbol`, `ifacedecomp.cc:562`);
     /// `Scope::addMap` (`database.cc:1154`) marks it addr-tied.  Such a symbol lives
     /// in the ram (processor) space, not the stack space, so the stack-only
-    /// [`scope_space_symbol_specs`] carrier misses it and it is lost when the kuna
+    /// [`scope_space_symbol_specs`] carrier misses it and it is lost when the unlace
     /// console rebuilds the `Funcdata` on `decompile` (C++ reuses the same `fd`).
     /// This carries those non-stack addr-tied `map addr` symbols so the rebuilt-IR
     /// `linkSymbol` query (`queryProperties(addr,1,usepoint)`) binds the global
@@ -2727,7 +2729,7 @@ impl Database {
                     entry.get_addr().clone(),
                     symbol.flags,
                     usepoint,
-                    // (kuna L4) Carry `Symbol::isIsolated()` (dispflags, not the
+                    // (unlace L4) Carry `Symbol::isIsolated()` (dispflags, not the
                     // varnode `flags`) so the `type varnode` isolated `tmp` Symbol
                     // survives the `decompile` ScopeLocal rebuild — otherwise the
                     // re-seeded Symbol has iso=false and `mergeAdjacent` over-merges
@@ -2836,7 +2838,7 @@ impl Database {
     /// declaration emitter (`Printer::emitScopeVarDecls`, printc.cc:2696) walks the
     /// local Scope's Symbol *table* by category and never does a usepoint query, so
     /// it always recognizes the parameter Symbol.  This containment-only lookup
-    /// gives the kuna high-walking printer the same category answer (the parameter
+    /// gives the unlace high-walking printer the same category answer (the parameter
     /// Symbol's `function_parameter` category is a property of the Symbol, not of
     /// any single use-point).
     pub fn find_container_ignore_usepoint(
@@ -2993,7 +2995,7 @@ impl Database {
     /// `infd->getFuncProto().setInline(val)` reached via `OptionInline::apply`).
     /// No-op on a non-Function symbol.
     pub fn set_function_inline(&mut self, sid: SymbolId, val: bool) {
-        self.kuna_gen += 1;
+        self.unlace_gen += 1;
         if let SymbolKind::Function { inline_func, .. } = &mut self.symbols[sid].kind {
             *inline_func = val;
         }
@@ -3003,7 +3005,7 @@ impl Database {
     /// `infd->getFuncProto().setNoReturn(val)` reached via `OptionNoReturn::apply`).
     /// No-op on a non-Function symbol.
     pub fn set_function_no_return(&mut self, sid: SymbolId, val: bool) {
-        self.kuna_gen += 1;
+        self.unlace_gen += 1;
         if let SymbolKind::Function { no_return, .. } = &mut self.symbols[sid].kind {
             *no_return = val;
         }
@@ -3013,7 +3015,7 @@ impl Database {
     /// `fd->getFuncProto().setExtraPop(expop)` reached via `OptionExtraPop::apply`).
     /// No-op on a non-Function symbol.
     pub fn set_function_extra_pop(&mut self, sid: SymbolId, expop: int4) {
-        self.kuna_gen += 1;
+        self.unlace_gen += 1;
         if let SymbolKind::Function { extra_pop, .. } = &mut self.symbols[sid].kind {
             *extra_pop = Some(expop);
         }
@@ -3034,7 +3036,7 @@ impl Database {
     /// `fd->getFuncProto().setInjectId(injectid)` reached via `IfcFixupApply`).
     /// No-op on a non-Function symbol.
     pub fn set_function_inject_id(&mut self, sid: SymbolId, injectid: int4) {
-        self.kuna_gen += 1;
+        self.unlace_gen += 1;
         if let SymbolKind::Function { inject_id, .. } = &mut self.symbols[sid].kind {
             *inject_id = injectid;
         }
@@ -3062,7 +3064,7 @@ impl Database {
         sid: SymbolId,
         pieces: crate::fspec::PrototypePieces,
     ) {
-        self.kuna_gen += 1;
+        self.unlace_gen += 1;
         Self::write_function_prototype(
             &mut self.symbols[sid].kind,
             FunctionPrototype {
@@ -3079,7 +3081,7 @@ impl Database {
         pieces: crate::fspec::PrototypePieces,
         go_string_input: Option<crate::gostringinput::GoStringInput>,
     ) {
-        self.kuna_gen += 1;
+        self.unlace_gen += 1;
         Self::write_function_prototype(
             &mut self.symbols[sid].kind,
             FunctionPrototype {
@@ -3124,7 +3126,7 @@ impl Database {
         addr: &Address,
         receiver: crate::gopointermethod::Receiver,
     ) {
-        self.kuna_gen += 1;
+        self.unlace_gen += 1;
         let Some((id, _)) = self.find_function_across_scopes(addr) else {
             return;
         };
@@ -3161,7 +3163,7 @@ impl Database {
 
     /// Remove the prototype pieces parked on FunctionSymbol `sid`.
     pub fn clear_function_proto_pieces(&mut self, sid: SymbolId) {
-        self.kuna_gen += 1;
+        self.unlace_gen += 1;
         if let SymbolKind::Function { proto_pieces, .. } = &mut self.symbols[sid].kind {
             *proto_pieces = None;
         }
@@ -3199,7 +3201,7 @@ impl Database {
         }
     }
 
-    /// (kuna `cppproto`) The declared prototype parked on the FunctionSymbol at
+    /// (unlace `cppproto`) The declared prototype parked on the FunctionSymbol at
     /// `addr` in ANY scope, not just the global one.
     ///
     /// A demangled C++ name is filed in a nested scope
@@ -3273,7 +3275,7 @@ impl Database {
 
     /// Resolve the FunctionSymbol at `addr` across **all** scopes, returning the
     /// symbol and the scope it lives in.  C++ `Scope::queryFunction(Address)`
-    /// resolves through the scope tree (`mapScope`/`findFunction`); kuna keeps a
+    /// resolves through the scope tree (`mapScope`/`findFunction`); unlace keeps a
     /// per-scope address `maptable`, so [`Self::find_function`] only sees the one
     /// queried scope.  A function installed in a *namespace* scope — e.g. a
     /// demangled `foo::Bar::baz` placed by `find_create_scope_from_symbol_name`,
@@ -3607,7 +3609,7 @@ impl Database {
     /// `glb` [`ArchHandle`](crate::context::ArchHandle) carries.
     ///
     /// This is the wire for `localmap->queryProperties`'s walk up to the global
-    /// scope: the C++ `glb` reaches the live `Database`, but the merged kuna `glb`
+    /// scope: the C++ `glb` reaches the live `Database`, but the merged unlace `glb`
     /// is a separate skeleton, so the global symbol/property data is snapshot onto
     /// it at [`Architecture::build_arch_handle`](crate::architecture::Architecture::
     /// build_arch_handle).  Faithful because the global scope is frozen by the time
@@ -3625,7 +3627,7 @@ impl Database {
         // The C++ `getGlobalScope()->queryContainer` descends into namespace child
         // scopes via the `resolvemap` (`Scope::mapScope`), so a Symbol mapped inside
         // a namespace (`map addr ... a::spam`) is reachable through the global query.
-        // The kuna snapshot reproduces this by flattening every NON-FUNCTIONAL scope
+        // The unlace snapshot reproduces this by flattening every NON-FUNCTIONAL scope
         // rooted at the global scope (global itself + each namespace descendant), not
         // just the global scope's own maptable.  Each entry records its scope's
         // display-name chain (innermost first, global excluded) for the printer's
@@ -3692,7 +3694,7 @@ impl Database {
                             SymbolKind::Function { inject_id, .. } => inject_id,
                             _ => -1,
                         },
-                        // (kuna) The callee's no-return flow effect; see
+                        // (unlace) The callee's no-return flow effect; see
                         // `GlobalEntry::func_no_return`.
                         func_no_return: matches!(
                             sym.kind,
@@ -3714,14 +3716,14 @@ impl Database {
     }
 
     /// Snapshot every global FunctionSymbol's source-declared prototype, keyed by
-    /// `(space_index, entry_offset)`, for the ArchContext (the kuna stand-in
+    /// `(space_index, entry_offset)`, for the ArchContext (the unlace stand-in
     /// for the C++ callee `Funcdata`'s lazily-built locked `FuncProto`, read by
     /// `ActionDefaultParams::apply`'s `fc->copy(otherfunc->getFuncProto())`).  Only
     /// functions whose prototype was parked by `set_function_proto_pieces` (i.e.
     /// declared via `parse line extern`) appear; the rest recover with the default
     /// model.  Frozen at `build_arch_handle`, after every `parse line` has run.
     ///
-    /// (kuna `cppproto`) Every scope is walked, not only the global one: a
+    /// (unlace `cppproto`) Every scope is walked, not only the global one: a
     /// demangled C++ callee is filed under its namespace/class scope, so a
     /// global-only sweep would drop the DWARF-recovered signature of every member
     /// function at every call site.  Inert before that arm — nothing outside the
@@ -3788,7 +3790,7 @@ impl Database {
     /// C++ `Database::clearResolve` (`database.cc:2900-2919`): remove a namespace
     /// scope's owned ranges from the resolve map.
     fn clear_resolve(&mut self, scope: ScopeId) {
-        self.kuna_gen += 1;
+        self.unlace_gen += 1;
         if Some(scope) == self.globalscope {
             return;
         }
@@ -3807,7 +3809,7 @@ impl Database {
 
     /// C++ `Database::fillResolve` (`database.cc:2938-2949`).
     fn fill_resolve(&mut self, scope: ScopeId) {
-        self.kuna_gen += 1;
+        self.unlace_gen += 1;
         if Some(scope) == self.globalscope {
             return;
         }
@@ -3826,7 +3828,7 @@ impl Database {
 
     /// C++ `Database::setRange` (`database.cc:3062-3068`).
     pub fn set_range(&mut self, scope: ScopeId, rlist: RangeList) {
-        self.kuna_gen += 1;
+        self.unlace_gen += 1;
         self.clear_resolve(scope);
         self.scopes[scope].rangetree = rlist;
         self.fill_resolve(scope);
@@ -3839,7 +3841,7 @@ impl Database {
     }
 
     pub fn add_range(&mut self, scope: ScopeId, spc: Rc<AddrSpace>, first: uintb, last: uintb) {
-        self.kuna_gen += 1;
+        self.unlace_gen += 1;
         self.clear_resolve(scope);
         self.scopes[scope].rangetree.insert_range(spc, first, last);
         self.fill_resolve(scope);
@@ -3847,7 +3849,7 @@ impl Database {
 
     /// C++ `Database::removeRange` (`database.cc:3090-3096`).
     pub fn remove_range(&mut self, scope: ScopeId, spc: Rc<AddrSpace>, first: uintb, last: uintb) {
-        self.kuna_gen += 1;
+        self.unlace_gen += 1;
         self.clear_resolve(scope);
         self.scopes[scope].rangetree.remove_range(spc, first, last);
         self.fill_resolve(scope);
@@ -3878,7 +3880,7 @@ impl Database {
         sz: int4,
         parameter: bool,
     ) {
-        self.kuna_gen += 1;
+        self.unlace_gen += 1;
         let addr = Address::new(Rc::clone(&space), first);
         // Remove any symbols under range (C++ findOverlap/removeSymbol loop).
         while let Some(eref) = self.find_overlap(scope, &addr, sz) {
@@ -3911,7 +3913,7 @@ impl Database {
     /// (the architecture-relative one-past-the-end address; the caller supplies it
     /// since the AddrSpaceManager lives in the ArchContext).
     pub fn set_property_range(&mut self, flags: uint4, addr1: &Address, addr2: &Address) {
-        self.kuna_gen += 1;
+        self.unlace_gen += 1;
         self.flagbase.split(addr1);
         if !addr2.is_invalid() {
             self.flagbase.split(addr2);
@@ -3927,7 +3929,7 @@ impl Database {
 
     /// C++ `Database::clearPropertyRange` (`database.cc:3271-3291`).
     pub fn clear_property_range(&mut self, flags: uint4, addr1: &Address, addr2: &Address) {
-        self.kuna_gen += 1;
+        self.unlace_gen += 1;
         self.flagbase.split(addr1);
         if !addr2.is_invalid() {
             self.flagbase.split(addr2);
@@ -3971,7 +3973,7 @@ impl Database {
         index: &mut int4,
         flags: uint4,
         arch: &dyn DatabaseArch,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         use std::fmt::Write;
         let sz = ct.map(|c| c.get_size()).unwrap_or(1);
         let mut s = String::new();
@@ -3999,8 +4001,8 @@ impl Database {
                 s.push_str(&spacename);
             } else {
                 if arch.name_style_angr() {
-                    // (kuna) angr-style: global data -> dat_<addr>
-                    return self.make_name_unique(scope, &kuna_global_data_name(addr));
+                    // (unlace) angr-style: global data -> dat_<addr>
+                    return self.make_name_unique(scope, &unlace_global_data_name(addr));
                 }
                 if let Some(c) = ct {
                     s.push_str(&arch.type_name_base(c));
@@ -4071,7 +4073,7 @@ impl Database {
         self.make_name_unique(scope, &s)
     }
 
-    /// C++ `Scope::buildDefaultName` (`database.cc:1761-1814`) — the kuna anchor
+    /// C++ `Scope::buildDefaultName` (`database.cc:1761-1814`) — the unlace anchor
     /// (DIV-5) with the angr-style branch (aN / dat_ / vN) and the upstream
     /// branch.  The Varnode-representative arm of the upstream branch needs the
     /// Funcdata/Varnode/HighVariable subsystems (W5/W7); it is taken via the
@@ -4086,13 +4088,13 @@ impl Database {
         base: &mut int4,
         vn: Option<&VnRepresentative>,
         arch: &dyn DatabaseArch,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         use std::fmt::Write;
         let category = self.symbols[sym].category;
         if arch.name_style_angr() {
-            // (kuna) angr-style default naming: aN / dat_ / vN
+            // (unlace) angr-style default naming: aN / dat_ / vN
             if category == symbol_category::FUNCTION_PARAMETER {
-                let nm = kuna_arg_name(self.symbols[sym].get_category_index() as int4);
+                let nm = unlace_arg_name(self.symbols[sym].get_category_index() as int4);
                 return self.make_name_unique(scope, &nm);
             }
             let mut naddr = Address::new_invalid();
@@ -4125,7 +4127,7 @@ impl Database {
                     .is_empty()
                 {
                     // global data -> dat_<addr>
-                    return self.make_name_unique(scope, &kuna_global_data_name(&naddr));
+                    return self.make_name_unique(scope, &unlace_global_data_name(&naddr));
                 }
             }
             // everything else -> vN
@@ -4314,7 +4316,7 @@ impl Database {
         delim: &str,
         start: Option<ScopeId>,
     ) -> (Option<ScopeId>, String) {
-        // (kuna) The READ half of the `symbolnamebound` seam. It must apply the
+        // (unlace) The READ half of the `symbolnamebound` seam. It must apply the
         // SAME rewrite as the create path below: a symbol installed under a
         // folded scope path would otherwise be unfindable by the name the binary
         // spells, and every call to it would render `sub_<addr>`.
@@ -4354,13 +4356,13 @@ impl Database {
         delim: &str,
         start: Option<ScopeId>,
         num_spaces: int4,
-    ) -> KunaResult<(ScopeId, String)> {
-        self.kuna_gen += 1;
-        // (kuna) The CREATE half of the `symbolnamebound` seam: one Scope per
+    ) -> UnlaceResult<(ScopeId, String)> {
+        self.unlace_gen += 1;
+        // (unlace) The CREATE half of the `symbolnamebound` seam: one Scope per
         // `::` component at ~1.5 KB each makes an unbounded name a ~498x
         // input-to-RSS amplifier on attacker-controlled `.strtab` bytes. Shared
         // verbatim with `resolve_scope_from_symbol_name` above so the two
-        // round-trip -- see `kuna_symbolnamebound`.
+        // round-trip -- see `unlace_symbolnamebound`.
         let fullname = &*crate::symbolnamebound::bound_scope_path(fullname, delim);
         let mut start = start.or(self.globalscope).expect("a global scope exists");
         let mut mark = 0usize;
@@ -4370,12 +4372,12 @@ impl Database {
                 Some(rel) => mark + rel,
             };
             if !self.id_by_name_hash {
-                return Err(KunaError::lowlevel("Scope name hashes not allowed"));
+                return Err(UnlaceError::lowlevel("Scope name hashes not allowed"));
             }
             let scopename = fullname[mark..endmark].to_string();
-            // (kuna) An empty component would be rejected by attach_scope, and
+            // (unlace) An empty component would be rejected by attach_scope, and
             // that error aborts the whole architecture build rather than one
-            // symbol -- see `kuna_symbolnamerepair`.
+            // symbol -- see `unlace_symbolnamerepair`.
             if crate::symbolnamerepair::skip_scope_component(&scopename) {
                 mark = endmark + delim.len();
                 continue;
@@ -4396,8 +4398,8 @@ impl Database {
 impl Database {
     /// C++ `ScopeInternal::renameSymbol` (`database.cc:2180-2192`): rename `sym`
     /// within its scope, re-keying the name tree (and the multi-entry set).
-    pub fn rename_symbol(&mut self, sym: SymbolId, newname: &str) -> KunaResult<()> {
-        self.kuna_gen += 1;
+    pub fn rename_symbol(&mut self, sym: SymbolId, newname: &str) -> UnlaceResult<()> {
+        self.unlace_gen += 1;
         let scope = self.symbols[sym].scope;
         let oldkey = self.name_key(sym);
         self.scopes[scope].nametree.remove(&oldkey);
@@ -4420,8 +4422,8 @@ impl Database {
     /// same size as the old (or the symbol has no storage mappings) the type is
     /// swapped in place and the size/type lock recomputed; otherwise, for a
     /// single address-tied mapping, the mapping is rebuilt at the new size.
-    pub fn retype_symbol(&mut self, sym: SymbolId, ct: Rc<Datatype>) -> KunaResult<()> {
-        self.kuna_gen += 1;
+    pub fn retype_symbol(&mut self, sym: SymbolId, ct: Rc<Datatype>) -> UnlaceResult<()> {
+        self.unlace_gen += 1;
         let ct = if ct.has_stripped() {
             ct.get_stripped().unwrap_or(ct)
         } else {
@@ -4459,7 +4461,7 @@ impl Database {
                 return Ok(());
             }
         }
-        Err(KunaError::recov(format!(
+        Err(UnlaceError::recov(format!(
             "Unable to retype symbol: {}",
             self.symbols[sym].name
         )))
@@ -4468,7 +4470,7 @@ impl Database {
     /// Erase one SymbolEntry mapping of `sym` from its scope rangemap / dynamic
     /// list (the per-entry half of [`remove_symbol_mappings`]).
     fn erase_mapentry(&mut self, scope: ScopeId, _sym: SymbolId, eref: EntryRef) {
-        self.kuna_gen += 1;
+        self.unlace_gen += 1;
         match eref {
             EntryRef::Dynamic(slot) => {
                 self.scopes[scope].dynamicentry[slot] = None;
@@ -4484,7 +4486,7 @@ impl Database {
     /// C++ `ScopeInternal::removeSymbolMappings` (`database.cc:2145-2164`): drop
     /// all SymbolEntry mappings of `sym`.
     fn remove_symbol_mappings(&mut self, sym: SymbolId) {
-        self.kuna_gen += 1;
+        self.unlace_gen += 1;
         let scope = self.symbols[sym].scope;
         if self.symbols[sym].whole_count > 1 {
             let key = self.name_key(sym);
@@ -4509,7 +4511,7 @@ impl Database {
     /// C++ `ScopeInternal::removeSymbol` (`database.cc:2166-2178`): remove `sym`
     /// entirely (category slot, mappings, name tree, and the object).
     pub fn remove_symbol(&mut self, sym: SymbolId) {
-        self.kuna_gen += 1;
+        self.unlace_gen += 1;
         let scope = self.symbols[sym].scope;
         let cat = self.symbols[sym].category;
         if cat >= 0 {
@@ -4540,8 +4542,8 @@ impl Database {
     /// folded the STORE into a sized stack COPY) persists and `gatherSymbols`
     /// re-injects it as a competing fixed-array `RangeHint`, overriding the scalar
     /// hint the converted Varnode then supplies.
-    pub fn clear_unlocked_category_negative(&mut self, scope: ScopeId) -> KunaResult<()> {
-        self.kuna_gen += 1;
+    pub fn clear_unlocked_category_negative(&mut self, scope: ScopeId) -> UnlaceResult<()> {
+        self.unlace_gen += 1;
         // C++ iterates `nametree` advancing the iterator before acting on the
         // symbol (the act mutates the tree).  Collect first, then act — the arena
         // equivalent of "advance before remove".
@@ -4579,8 +4581,8 @@ impl Database {
         &mut self,
         scope: ScopeId,
         types: Option<&dyn crate::dtype::TypeFactory>,
-    ) -> KunaResult<()> {
-        self.kuna_gen += 1;
+    ) -> UnlaceResult<()> {
+        self.unlace_gen += 1;
         let candidates: Vec<SymbolId> = self.scopes[scope].nametree.values().copied().collect();
         for sid in candidates {
             let (type_locked, name_locked, size_locked, keep) = {
@@ -4634,7 +4636,7 @@ impl Database {
         alias: &[uintb],
         alias_block_level: int4,
     ) {
-        self.kuna_gen += 1;
+        self.unlace_gen += 1;
         // EntryMap *rangemap = maptable[space->getIndex()]; if 0 return;
         let mut entries: Vec<(SymbolId, uintb, uintb)> = {
             let rangemap = match self.scopes[scope]
@@ -4679,7 +4681,7 @@ impl Database {
         let mut curalias: uintb = 0;
         let mut i = 0usize; // alias cursor
         let mut rcur = 0usize; // range cursor
-        if crate::heritage::kuna_jt_trace() {
+        if crate::heritage::unlace_jt_trace() {
             eprintln!(
                 "jt-trace mark_unaliased alias={:x?} ranges={:x?}",
                 alias,
@@ -4733,7 +4735,7 @@ impl Database {
             if symbol_aliased && (curoff.wrapping_sub(symbol_alias) > 0xffff) {
                 symbol_aliased = false;
             }
-            if crate::heritage::kuna_jt_trace() {
+            if crate::heritage::unlace_jt_trace() {
                 eprintln!(
                     "jt-trace mark_unaliased sym first={:#x} last={:#x} aliased={} curalias={:#x}",
                     first, curoff, symbol_aliased, symbol_alias
@@ -4773,8 +4775,8 @@ impl Database {
         scope: ScopeId,
         base: &mut int4,
         arch: &dyn DatabaseArch,
-    ) -> KunaResult<()> {
-        self.kuna_gen += 1;
+    ) -> UnlaceResult<()> {
+        self.unlace_gen += 1;
         for sid in self.undefined_symbols(scope) {
             self.assign_default_name(scope, sid, base, arch)?;
         }
@@ -4788,8 +4790,8 @@ impl Database {
         sid: SymbolId,
         base: &mut int4,
         arch: &dyn DatabaseArch,
-    ) -> KunaResult<()> {
-        self.kuna_gen += 1;
+    ) -> UnlaceResult<()> {
+        self.unlace_gen += 1;
         let nm = self.build_default_name(scope, sid, base, None, arch)?;
         self.rename_symbol(sid, &nm)
     }
@@ -4815,7 +4817,7 @@ impl Database {
             .collect()
     }
 
-    /// (kuna) Each Symbol of `scope` with its first mapped entry's storage,
+    /// (unlace) Each Symbol of `scope` with its first mapped entry's storage,
     /// width and name; Symbols without a mapped entry are left out.
     pub fn scope_symbol_storage(&self, scope: ScopeId) -> Vec<(SymbolId, Address, int4, String)> {
         self.scopes[scope]
@@ -4851,7 +4853,7 @@ impl Database {
 /// `HighSymbol` (and therefore a rename/retype target) for a variable, without
 /// the symbol ever entering the analysis scope.
 ///
-/// The distinction is load-bearing.  kuna's naming pass leaves some named
+/// The distinction is load-bearing.  unlace's naming pass leaves some named
 /// variables symbol-less on purpose — a register/unique temp with no covering
 /// entry, or a high the conflict scan deliberately separated from the
 /// parameter whose storage it overlaps.  Java still needs an id for them, but
@@ -4886,7 +4888,7 @@ impl WireSymbol {
     /// entry whose data-type has size 0 makes Java's `MappedEntry.decode` throw
     /// "Invalid symbol 0-sized data-type" and DISCARD the whole decompile
     /// result.  (`DynamicEntry.decode` has no such check, so a hashed symbol is
-    /// always encodable.)  `kuna_link_high_symbols` steers a 0-size high to the
+    /// always encodable.)  `unlace_link_high_symbols` steers a 0-size high to the
     /// hashed shape, so this is the same defensive backstop the scope symbols
     /// have — and, like theirs, it also withholds the id from
     /// `<high symref>`/`<vardecl symref>` so a skip cannot orphan a reference.
@@ -4896,7 +4898,7 @@ impl WireSymbol {
 
     /// Encode as a `<mapsym>` — the same shape `Symbol::encode` +
     /// `SymbolEntry::encode` produce for a scope symbol.
-    fn encode(&self, encoder: &mut dyn unlace_base::marshal::Encoder) -> KunaResult<()> {
+    fn encode(&self, encoder: &mut dyn unlace_base::marshal::Encoder) -> UnlaceResult<()> {
         use crate::remote_provider::{ATTRIB_CAT, ELEM_HASH, ELEM_MAPSYM};
         use unlace_base::marshal::{ATTRIB_ID, ATTRIB_NAME, ATTRIB_TYPE, ATTRIB_VAL};
         encoder.open_element(&ELEM_MAPSYM);
@@ -4934,7 +4936,7 @@ impl SymbolEntry {
     /// Encode this entry as a (`<addr>` | `<hash>`) + uselimit `<rangelist>`
     /// pair (C++ `SymbolEntry::encode`, database.cc:187-199).  A piece entry
     /// encodes nothing.
-    pub fn encode(&self, encoder: &mut dyn unlace_base::marshal::Encoder) -> KunaResult<()> {
+    pub fn encode(&self, encoder: &mut dyn unlace_base::marshal::Encoder) -> UnlaceResult<()> {
         if self.is_piece() {
             return Ok(()); // Don't save a piece
         }
@@ -4954,7 +4956,10 @@ impl Symbol {
     /// Encode the symbol attributes (C++ `Symbol::encodeHeader`,
     /// database.cc:363-391).  The id is written UNCONDITIONALLY — Java's
     /// `HighSymbol.decodeHeader` throws "missing unique symbol id" without it.
-    pub fn encode_header(&self, encoder: &mut dyn unlace_base::marshal::Encoder) -> KunaResult<()> {
+    pub fn encode_header(
+        &self,
+        encoder: &mut dyn unlace_base::marshal::Encoder,
+    ) -> UnlaceResult<()> {
         use unlace_base::marshal::{
             ATTRIB_FORMAT, ATTRIB_HIDDENRETPARM, ATTRIB_ID, ATTRIB_INDEX, ATTRIB_INDIRECTSTORAGE,
             ATTRIB_NAME, ATTRIB_NAMELOCK, ATTRIB_READONLY, ATTRIB_THISPTR, ATTRIB_TYPELOCK,
@@ -5001,10 +5006,10 @@ impl Symbol {
 
     /// Encode the symbol description body (C++ `Symbol::encodeBody`,
     /// database.cc:466-470): the data-type reference.
-    pub fn encode_body(&self, encoder: &mut dyn unlace_base::marshal::Encoder) -> KunaResult<()> {
+    pub fn encode_body(&self, encoder: &mut dyn unlace_base::marshal::Encoder) -> UnlaceResult<()> {
         match &self.dtype {
             Some(t) => t.encode_ref(encoder),
-            None => Err(KunaError::lowlevel(
+            None => Err(UnlaceError::lowlevel(
                 "Symbol::encode: symbol has no data-type",
             )),
         }
@@ -5015,7 +5020,7 @@ impl Symbol {
     /// subclasses never appear in a function-local scope; they degrade to the
     /// plain `<symbol>` form (Java's `decodeMapSym` dispatches only on
     /// `<equatesymbol>` vs everything-else).
-    pub fn encode(&self, encoder: &mut dyn unlace_base::marshal::Encoder) -> KunaResult<()> {
+    pub fn encode(&self, encoder: &mut dyn unlace_base::marshal::Encoder) -> UnlaceResult<()> {
         if let SymbolKind::Equate { value } = &self.kind {
             encoder.open_element(&crate::remote_provider::ELEM_EQUATESYMBOL);
             self.encode_header(encoder)?;
@@ -5041,7 +5046,7 @@ impl Database {
     /// scope writes its own id), then the `<symbollist>` of `<mapsym>`s in
     /// nametree order.
     ///
-    /// Symbols with NO storage entry are skipped (kuna divergence): Java's
+    /// Symbols with NO storage entry are skipped (unlace divergence): Java's
     /// `LocalSymbolMap.insertSymbol` dereferences `entryList[0]`, so an
     /// entry-less mapsym would NPE the whole decode.  Upstream never encodes
     /// one because every C++ Symbol acquires an entry at creation.
@@ -5052,7 +5057,7 @@ impl Database {
     /// rename on, but that must not enter the analysis scope — adding it there
     /// would feed the printer's scope queries and change the emitted C.
     pub fn reserve_internal_symbol_id(&mut self, scope: ScopeId) -> uint8 {
-        self.kuna_gen += 1;
+        self.unlace_gen += 1;
         let unique_id = self.scopes[scope].unique_id;
         let next = self.scopes[scope].next_unique_id;
         self.scopes[scope].next_unique_id += 1;
@@ -5104,7 +5109,7 @@ impl Database {
         &self,
         scope: ScopeId,
         encoder: &mut dyn unlace_base::marshal::Encoder,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         self.encode_scope_with_wire_symbols(scope, &[], encoder)
     }
 
@@ -5116,7 +5121,7 @@ impl Database {
         scope: ScopeId,
         wire_symbols: &[WireSymbol],
         encoder: &mut dyn unlace_base::marshal::Encoder,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         self.encode_scope_with_storage(scope, wire_symbols, &BTreeMap::new(), encoder)
     }
 
@@ -5144,7 +5149,7 @@ impl Database {
         wire_symbols: &[WireSymbol],
         wrapped_storage: &BTreeMap<uint8, (Address, int4)>,
         encoder: &mut dyn unlace_base::marshal::Encoder,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         use crate::remote_provider::{ELEM_MAPSYM, ELEM_PARENT, ELEM_SCOPE, ELEM_SYMBOLLIST};
         use unlace_base::marshal::{ATTRIB_ID, ATTRIB_NAME, ATTRIB_TYPE};
         let sc = &self.scopes[scope];
@@ -5154,7 +5159,7 @@ impl Database {
         // C++ emits <parent> only when a parent exists, but the Java consumer
         // skips two positional children unconditionally — upstream scopes on
         // the decompileAt path always have a parent (the global scope).  A
-        // kuna ScopeLocal's private Database is parentless; write the scope's
+        // unlace ScopeLocal's private Database is parentless; write the scope's
         // own id so the positional contract holds.
         {
             let pid = match sc.parent {
@@ -5170,10 +5175,10 @@ impl Database {
             encoder.open_element(&ELEM_SYMBOLLIST);
             for (_, &sid) in sc.nametree.iter() {
                 let sym = &self.symbols[sid];
-                // (kuna divergence, defensive) Java-side hard throws: a symbol
+                // (unlace divergence, defensive) Java-side hard throws: a symbol
                 // with no id ("missing unique symbol id"), and a mapped entry
                 // whose data-type has size 0 (MappedEntry.decode).  Neither
-                // occurs through the kuna creation paths (add_symbol_internal
+                // occurs through the unlace creation paths (add_symbol_internal
                 // always assigns an internal id; local symbols carry sized
                 // types) — but one bad symbol must not kill the whole result.
                 // A skipped symbol is ALSO withheld from `<high symref>` (see
@@ -6212,9 +6217,9 @@ mod tests {
         let alias = Address::new(space(&m, 2), 0x3000);
         let first = db.add_function(g, &a, "optional", 1, dt(1)).unwrap();
         let second = db.add_function(g, &b, "optional", 1, dt(1)).unwrap();
-        let generation = db.kuna_generation();
+        let generation = db.unlace_generation();
         db.add_function_alias(&a, &alias).unwrap();
-        assert!(db.kuna_generation() > generation);
+        assert!(db.unlace_generation() > generation);
         assert_eq!(db.find_by_name(g, "optional").len(), 2);
         assert_eq!(db.find_function_across_scopes(&alias), Some((first, g)));
         assert!(db.add_function_alias(&a, &b).is_err());
@@ -6311,13 +6316,13 @@ mod tests {
         assert_eq!(snap_pieces.intypes.len(), 1);
     }
 
-    /// `Database::kuna_gen` is what `Architecture::build_arch_handle` keys its
+    /// `Database::unlace_gen` is what `Architecture::build_arch_handle` keys its
     /// per-function `GlobalQuery`/callee-proto snapshot cache on, so a mutator
     /// that forgets to bump it makes that cache serve stale symbols.  Enforce
     /// the invariant structurally: every `&mut self` method in every
     /// `impl Database` block of this file opens with the bump.
     #[test]
-    fn kuna_gen_bumped_by_every_mutator() {
+    fn unlace_gen_bumped_by_every_mutator() {
         let src = include_str!("database.rs");
         let lines: Vec<&str> = src.lines().collect();
         // Every `impl Database` block must be one the block walk below enters --
@@ -6473,23 +6478,23 @@ mod tests {
     /// The generation moves on a mutation and stands still on a read — the two
     /// halves of the snapshot cache's contract.
     #[test]
-    fn kuna_generation_tracks_mutation() {
+    fn unlace_generation_tracks_mutation() {
         let m = build_manager();
         let ram = space(&m, 2);
         let (mut db, g) = db_with_global(m.num_spaces());
 
-        let after_setup = db.kuna_generation();
+        let after_setup = db.unlace_generation();
         // Pure reads leave the generation alone.
         let before = db.build_global_query();
-        assert_eq!(db.kuna_generation(), after_setup);
+        assert_eq!(db.unlace_generation(), after_setup);
         let _ = db.build_callee_proto_pieces();
-        assert_eq!(db.kuna_generation(), after_setup);
+        assert_eq!(db.unlace_generation(), after_setup);
 
         // A mapped global moves it, and the snapshot with it.
         let addr = Address::new(Rc::clone(&ram), 0x4000);
         db.add_symbol_mapped(g, "gvar", dt(4), &addr, &Address::new_invalid())
             .expect("map global");
-        assert!(db.kuna_generation() > after_setup);
+        assert!(db.unlace_generation() > after_setup);
         let after = db.build_global_query();
         assert_ne!(format!("{before:?}"), format!("{after:?}"));
     }

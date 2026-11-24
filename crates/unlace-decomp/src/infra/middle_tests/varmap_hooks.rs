@@ -7,7 +7,7 @@
 mod module_scope {
     pub(super) use crate::dtype::{Datatype, TypeFactory, type_metatype};
     pub(super) use unlace_base::address::{Address, sign_extend};
-    pub(super) use unlace_base::error::{KunaError, KunaResult};
+    pub(super) use unlace_base::error::{UnlaceError, UnlaceResult};
     pub(super) use unlace_base::space::AddrSpace;
     pub(super) use unlace_base::types::{Wrap, int4, int8, intb, uint4, uint8, uintb};
 }

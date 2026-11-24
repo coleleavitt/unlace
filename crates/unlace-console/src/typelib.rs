@@ -1,4 +1,4 @@
-//! (kuna `typelib`) The prebuilt type library: a platform C library's
+//! (unlace `typelib`) The prebuilt type library: a platform C library's
 //! declarations, read for the functions an image imports.
 //!
 //! Three libraries are built in: the libc of an x86-64 Linux ELF (from musl,
@@ -10,7 +10,7 @@
 //! them is one function, one typedef or one record:
 //!
 //! ```text
-//! kuna-typelib 1
+//! unlace-typelib 1
 //! target linux x86_64
 //! source musl 1.2.6
 //! T nfds_t *<TAB>unsigned long
@@ -57,7 +57,7 @@ use crate::grammar::{DataOrg, parse_protopieces, parse_type};
 /// The format version this reader accepts.
 const FORMAT: &str = unlace_decomp::typelib::MAGIC;
 
-/// The libraries built into kuna, by target.
+/// The libraries built into unlace, by target.
 const BUILTIN: &[(&str, &str)] = &[
     ("linux x86_64", include_str!("../typelib/linux-x86_64.ktl")),
     ("windows x86", include_str!("../typelib/windows-x86.ktl")),
@@ -320,7 +320,7 @@ impl<'l, 'a> Reader<'l, 'a> {
 
     /// A named record of a known width whose members are not.
     fn shell(&self, name: &str, union: bool, size: int4, align: int4) -> bool {
-        let Ok(shell) = self.types.kuna_declare_record(name, union) else {
+        let Ok(shell) = self.types.unlace_declare_record(name, union) else {
             return false;
         };
         let done = if union {
@@ -399,7 +399,7 @@ impl<'l, 'a> Reader<'l, 'a> {
         members: &'l [Member<'a>],
         depth: usize,
     ) -> bool {
-        let Ok(shell) = self.types.kuna_declare_record(name, union) else {
+        let Ok(shell) = self.types.unlace_declare_record(name, union) else {
             return false;
         };
         self.asked.insert(name, true);
@@ -667,7 +667,7 @@ pub fn seed(
     facts: &TypeLibFacts,
     merged: &mut AnalysisOutput,
 ) -> Result<(usize, Option<String>), String> {
-    let typelib = arch.kuna_options.get::<unlace_decomp::typelib::TypeLib>();
+    let typelib = arch.unlace_options.get::<unlace_decomp::typelib::TypeLib>();
     let (addr_size, word_size) = arch.data_org();
     let til_dir = std::env::var_os(TIL_DIR_ENV)
         .filter(|d| !d.is_empty())
@@ -756,14 +756,14 @@ pub fn seed(
             .prototypes_at
             .iter()
             .filter(|(_, pieces)| replaced.contains(pieces.name.as_str()))
-            .filter_map(|(_, pieces)| Some((pieces.name.clone(), pieces.kuna_library_names?)))
+            .filter_map(|(_, pieces)| Some((pieces.name.clone(), pieces.unlace_library_names?)))
             .collect();
         let carry = |pieces: &mut PrototypePieces| {
-            if pieces.kuna_library_names.is_none()
+            if pieces.unlace_library_names.is_none()
                 && let Some(&names) = carried.get(&pieces.name)
                 && names.params.len() == pieces.intypes.len()
             {
-                pieces.kuna_library_names = Some(names);
+                pieces.unlace_library_names = Some(names);
             }
         };
         read.values_mut().flatten().for_each(&carry);

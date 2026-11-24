@@ -1,4 +1,4 @@
-//! (kuna) Apple firmware containers and kernel collections, peeled at load.
+//! (unlace) Apple firmware containers and kernel collections, peeled at load.
 //!
 //! An iOS kernelcache ships as an IMG4 (or bare IM4P) DER container whose payload
 //! is an LZFSE or `complzss` stream, and the decoded image is an `MH_FILESET`

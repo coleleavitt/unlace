@@ -3,7 +3,7 @@
 //!
 //! A `-fPIC` reference to data another image defines (`stdout`, `environ`, a
 //! library's global) loads a GOT slot the dynamic loader fills with the symbol's
-//! address (`R_*_GLOB_DAT`), then loads through it. kuna names PLT stubs and paints
+//! address (`R_*_GLOB_DAT`), then loads through it. unlace names PLT stubs and paints
 //! PE/Mach-O import slots `externref`, but an ELF GOT data slot was neither, so the
 //! read printed as `*dat_<slot>`. [`resolve`] lists those slots with the symbol each
 //! one holds. [`crate::loader::format::elf::ElfFormat`] reports them as import slots

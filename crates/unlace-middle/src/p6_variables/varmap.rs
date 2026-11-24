@@ -25,7 +25,7 @@
 //! `attemptJoin`/`isConstAbsorbable`) is the rest of the output-determining
 //! logic and is transcribed in full, including the mixed-sign `int8` modulus
 //! in `reconcile` and the `resType` 0/1/2 dispatch in `merge`.
-//! Kuna additionally preserves an indexed integer array's byte coverage across
+//! Unlace additionally preserves an indexed integer array's byte coverage across
 //! element retyping and keeps partial integer reads in that shared storage.
 //!
 //! ## Cross-wave boundaries
@@ -46,12 +46,12 @@
 //! Per ADR 0002 all collections are ordered; per ADR 0003 every legitimate
 //! wrap is an explicit `w*` call (`intb`/`uintb` arithmetic in the offset and
 //! merge math).  Per ADR 0004 the one error the C++ throws here
-//! (`"Overlapping forced variable types"`) becomes a `KunaError`.
+//! (`"Overlapping forced variable types"`) becomes a `UnlaceError`.
 
 use std::rc::Rc;
 
 use unlace_base::address::{Address, sign_extend};
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::AddrSpace;
 use unlace_base::types::{Wrap, int4, int8, intb, uint4, uint8, uintb};
 
@@ -197,7 +197,7 @@ impl RangeHint {
     /// Determine if the data-type information in the two ranges \e line \e up
     /// properly, in which case the union of the two ranges can exist without
     /// destroying data-type information.
-    pub fn reconcile(&self, b: &RangeHint) -> KunaResult<bool> {
+    pub fn reconcile(&self, b: &RangeHint) -> UnlaceResult<bool> {
         // C++ swaps `a`/`b` so that `b` is the smaller-aligned of the two.
         let (a, b): (&RangeHint, &RangeHint) =
             if self.type_.get_align_size() < b.type_.get_align_size() {
@@ -272,7 +272,7 @@ impl RangeHint {
     ///
     /// A locked data-type is preferred over unlocked. A \e fixed size over
     /// \e open size. Otherwise data-type ordering is used.
-    pub fn preferred(&self, b: &RangeHint, reconcile: bool) -> KunaResult<bool> {
+    pub fn preferred(&self, b: &RangeHint, reconcile: bool) -> UnlaceResult<bool> {
         if self.start != b.start {
             return Ok(true); // Something must occupy a->start to b->start
         }
@@ -504,7 +504,7 @@ impl RangeHint {
         b: &RangeHint,
         _space: &Rc<AddrSpace>,
         type_factory: &dyn TypeFactory,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         let did_reconcile: bool;
         let res_type: i32; // 0=this, 1=b, 2=confuse
 
@@ -527,7 +527,7 @@ impl RangeHint {
         // Check for really problematic cases
         if !did_reconcile && self.is_type_lock() {
             if b.is_type_lock() {
-                return Err(KunaError::lowlevel(format!(
+                return Err(UnlaceError::lowlevel(format!(
                     "Overlapping forced variable types : {}   {}",
                     self.type_.get_name(),
                     b.type_.get_name()
@@ -612,7 +612,7 @@ fn component_aligns(
     offset: int8,
     align_size: int4,
     union_path: bool,
-) -> KunaResult<bool> {
+) -> UnlaceResult<bool> {
     if ct.get_align_size() <= align_size {
         return Ok(ct.get_align_size() == align_size && (!union_path || offset == 0));
     }
@@ -694,9 +694,9 @@ pub struct AliasChecker {
     alias_boundary: uintb,
     /// 1 = stack grows negative, -1 = positive (C++ `direction`).
     direction: int4,
-    /// (kuna) [`Self::split_direct`]'s answer for the current gather.
+    /// (unlace) [`Self::split_direct`]'s answer for the current gather.
     direct_split: Option<(uintb, Vec<(uintb, uintb)>)>,
-    /// (kuna) The `(pointer, bytes)` of each gathered pointer `direct_split` took as direct.
+    /// (unlace) The `(pointer, bytes)` of each gathered pointer `direct_split` took as direct.
     direct_bases: Vec<(crate::context::VarnodeId, uintb)>,
 }
 
@@ -796,7 +796,7 @@ impl AliasChecker {
         };
 
         access.gather_additive_base(spacebase, &mut self.add_base);
-        if crate::heritage::kuna_jt_trace() {
+        if crate::heritage::unlace_jt_trace() {
             eprintln!(
                 "jt-trace alias gather spacebase={:?} bases={}",
                 spacebase,
@@ -855,7 +855,7 @@ impl AliasChecker {
         vn_offset >= self.alias_boundary
     }
 
-    /// (kuna) The gathered pointers split by `direct`: [`Self::has_local_alias`]'s
+    /// (unlace) The gathered pointers split by `direct`: [`Self::has_local_alias`]'s
     /// boundary drawn from the local ones it rejects, and `(start, bytes)` for
     /// each it accepts. Computed once per gather, and again after
     /// [`Self::refresh_split_for`] finds a pointer's answer changed; call after
@@ -891,12 +891,12 @@ impl AliasChecker {
         })
     }
 
-    /// (kuna) Is [`Self::split_direct`]'s answer cached?
+    /// (unlace) Is [`Self::split_direct`]'s answer cached?
     pub fn split_drawn(&self) -> bool {
         self.direct_split.is_some()
     }
 
-    /// (kuna) `vn` gained or lost a use: drop [`Self::split_direct`]'s answer
+    /// (unlace) `vn` gained or lost a use: drop [`Self::split_direct`]'s answer
     /// when `vn` is a gathered pointer whose `direct` answer, `now`, is no
     /// longer the one the split was drawn with.
     pub fn refresh_split_for(
@@ -917,7 +917,7 @@ impl AliasChecker {
         }
     }
 
-    /// (kuna) Whether a pointer formed into the parameter area could reach the
+    /// (unlace) Whether a pointer formed into the parameter area could reach the
     /// slot at `offset`: an address taken there at or below it.  `hasLocalAlias`
     /// answers only for locals, so a caller slot above the return address whose
     /// address is passed on (an MSVC home slot) needs this test.
@@ -1015,7 +1015,7 @@ pub struct SyncOverlap {
     /// C++ `entry->extraflags` — the per-entry extra flags.  For a join-piece
     /// SymbolEntry (the extra maps `Scope::addMap` registers over each piece of
     /// a join-address Symbol, database.cc:1161-1180) these carry precislo/precishi
-    /// and NOT `mapped`; the kuna addrtied pre-tie consults this to avoid tying a
+    /// and NOT `mapped`; the unlace addrtied pre-tie consults this to avoid tying a
     /// partial (SUBPIECE-extracted) piece access, matching C++ where the heritage
     /// pre-tie only ties whole-symbol storage.
     pub extraflags: uint4,
@@ -1049,14 +1049,14 @@ pub struct LinkEntryInfo {
     /// `entry->getSymbol()->isNameUndefined()` — the C++ `linkSpacebaseSymbol`
     /// namerec discriminator (coreaction.cc:3015): an undefined-named Symbol is
     /// the auto-created local that the C++ later renames via `buildDefaultName`.
-    /// The kuna namerec rename only reaches whole-symbol-cover locals
+    /// The unlace namerec rename only reaches whole-symbol-cover locals
     /// (`resolve_default_name`), so a spacebase-reference into an undefined-named
     /// composite (an unmapped array auto-local) must NOT render its raw
     /// `$$undefNN` placeholder; the caller falls back to the functional form.
     pub is_name_undefined: bool,
     /// `entry->getSymbol()->isIsolated()` — the C++ `Symbol::isIsolated` flag
     /// (database.hh:241) read by `Merge::mergeTestAdjacent` (merge.cc:198-205):
-    /// an isolated covering Symbol refuses any speculative tie. (kuna L2)
+    /// an isolated covering Symbol refuses any speculative tie. (unlace L2)
     pub is_isolated: bool,
 }
 
@@ -1129,7 +1129,7 @@ pub struct ScopeLocal {
     /// typelocked Symbols, which do not survive `clearUnlockedCategory(-1)` at
     /// restructure — C++ collects them (`collectNameRecs`) and re-applies at
     /// naming time (`recoverNameRecommendationsForSymbols`, the mechanism that
-    /// makes a GUI rename of an untyped local persist).  kuna's ghidra-mode
+    /// makes a GUI rename of an untyped local persist).  unlace's ghidra-mode
     /// seeds these directly from the host `<localdb>` answer.
     name_recommend: Vec<NameRecommend>,
     /// Dynamic-storage name recommendations (C++ `list<DynamicRecommend>
@@ -1141,11 +1141,11 @@ pub struct ScopeLocal {
     /// `DynamicHash::find_varnode` (`recoverNameRecommendationsForSymbols`,
     /// varmap.cc:1557-1573).
     dyn_recommend: Vec<DynamicRecommend>,
-    /// (kuna) Whether any Symbol in this scope has ever been marked isolated
+    /// (unlace) Whether any Symbol in this scope has ever been marked isolated
     /// (C++ `Symbol::setIsolated`).  Read by
     /// [`Self::has_isolated_symbols`]; see that method for why it is monotone.
     isolated_present: bool,
-    /// (kuna `--assert`) The previous decompile's numbering, for
+    /// (unlace `--assert`) The previous decompile's numbering, for
     /// [`Self::next_default_name`].
     name_state: NameState,
 }
@@ -1161,7 +1161,7 @@ impl ScopeLocal {
         spc: Rc<AddrSpace>,
         fname: &str,
         num_spaces: int4,
-    ) -> KunaResult<ScopeLocal> {
+    ) -> UnlaceResult<ScopeLocal> {
         let mut db = crate::database::Database::new(true);
         // The local scope is the *global* scope of this private database (empty
         // parent), but it IS functional (C++ ScopeLocal has a non-null `fd`).
@@ -1385,7 +1385,7 @@ impl ScopeLocal {
     /// inner `<scope>` document.  Also stands in for the C++
     /// `encodeRecursive(encoder,false)` call site (`Funcdata::encode`) — a
     /// `ScopeLocal`'s private database has no child scopes to recurse into.
-    pub fn encode(&self, encoder: &mut dyn unlace_base::marshal::Encoder) -> KunaResult<()> {
+    pub fn encode(&self, encoder: &mut dyn unlace_base::marshal::Encoder) -> UnlaceResult<()> {
         self.encode_with_wire_symbols(&[], encoder)
     }
 
@@ -1395,7 +1395,7 @@ impl ScopeLocal {
         &self,
         wire_symbols: &[crate::database::WireSymbol],
         encoder: &mut dyn unlace_base::marshal::Encoder,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         self.encode_with_storage(wire_symbols, &std::collections::BTreeMap::new(), encoder)
     }
 
@@ -1405,7 +1405,7 @@ impl ScopeLocal {
         wire_symbols: &[crate::database::WireSymbol],
         wrapped_storage: &std::collections::BTreeMap<u64, (Address, int4)>,
         encoder: &mut dyn unlace_base::marshal::Encoder,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         use crate::remote_provider::{ATTRIB_LOCK, ATTRIB_MAIN, ELEM_LOCALDB};
         encoder.open_element(&ELEM_LOCALDB);
         encoder.write_space(&ATTRIB_MAIN, &self.space);
@@ -1430,7 +1430,7 @@ impl ScopeLocal {
         &mut self,
         base: &mut int4,
         arch: &dyn crate::database::DatabaseArch,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         if !self.name_state.active() {
             return self.db.assign_default_names(self.scope, base, arch);
         }
@@ -1515,7 +1515,7 @@ impl ScopeLocal {
         ct: Rc<Datatype>,
         addr: &Address,
         usepoint: &Address,
-    ) -> KunaResult<crate::database::SymbolId> {
+    ) -> UnlaceResult<crate::database::SymbolId> {
         let (sym, _eref) = self
             .db
             .add_symbol_mapped(self.scope, name, ct, addr, usepoint)?;
@@ -1525,7 +1525,7 @@ impl ScopeLocal {
     /// Materialize a recovered/locked function parameter as a Symbol in this
     /// scope, mirroring `ProtoStoreSymbol::setInput`'s `scope->addSymbol(nm,type,
     /// addr,usepoint)` + `scope->setCategory(sym, function_parameter, i)`
-    /// (`fspec.cc:3174`).  The kuna `FuncProto` stores its parameters in a
+    /// (`fspec.cc:3174`).  The unlace `FuncProto` stores its parameters in a
     /// `ProtoStoreInternal` (no backing symbol scope, the `setScope` stub), so the
     /// param Symbols that `Funcdata::linkSymbol`/`Scope::queryProperties` would
     /// otherwise find do not exist; this method creates them so the body Varnodes
@@ -1542,7 +1542,7 @@ impl ScopeLocal {
         ct: Rc<Datatype>,
         addr: &Address,
         restricted_usepoint: &Address,
-    ) -> KunaResult<Option<crate::database::SymbolId>> {
+    ) -> UnlaceResult<Option<crate::database::SymbolId>> {
         if addr.is_invalid() || ct.get_size() < 1 {
             return Ok(None);
         }
@@ -1551,7 +1551,7 @@ impl ScopeLocal {
             self.db
                 .find_container(self.scope, addr, ct.get_size(), restricted_usepoint)
         {
-            // (kuna, ghidra Phase 4) An EXACT-storage match is this parameter's
+            // (unlace, ghidra Phase 4) An EXACT-storage match is this parameter's
             // own symbol under another guise — a host local seeded at the very
             // same address and width, or a prior call's creation — so it carries
             // the slot.  Upstream reaches the same state from the other end
@@ -1598,7 +1598,7 @@ impl ScopeLocal {
         // `uselimit` NON-empty so `addMapInternal` does NOT mark the register
         // parameter `addrtied` (database.cc:1154) — matching C++, where `a0(i)` is
         // `mapped` but not `tied`.  Passing an invalid usepoint here (the prior
-        // kuna behavior) made every register parameter `addrtied`, which let
+        // unlace behavior) made every register parameter `addrtied`, which let
         // `mergeAddrTied` over-merge the input register version with any later
         // same-register value (the LOSS-247 Gp-#2 `&v1`->`a0` over-merge).
         // C++ `ProtoStoreSymbol::setInput` (fspec.cc:3170): usepoint stays empty
@@ -1649,7 +1649,7 @@ impl ScopeLocal {
         ct: Rc<Datatype>,
         addr: &Address,
         restricted_usepoint: &Address,
-    ) -> KunaResult<Option<crate::database::SymbolId>> {
+    ) -> UnlaceResult<Option<crate::database::SymbolId>> {
         if addr
             .get_space()
             .is_none_or(|space| space.get_index() != self.space.get_index())
@@ -1714,7 +1714,7 @@ impl ScopeLocal {
         addr: &Address,
         name: &str,
         lab_type: Rc<Datatype>,
-    ) -> KunaResult<crate::database::SymbolId> {
+    ) -> UnlaceResult<crate::database::SymbolId> {
         self.db.add_code_label(self.scope, addr, name, lab_type)
     }
 
@@ -1727,7 +1727,7 @@ impl ScopeLocal {
         ct: Rc<Datatype>,
         caddr: &Address,
         hash: uint8,
-    ) -> KunaResult<crate::database::SymbolId> {
+    ) -> UnlaceResult<crate::database::SymbolId> {
         self.db
             .add_dynamic_symbol(self.scope, name, ct, caddr, hash)
     }
@@ -1743,7 +1743,7 @@ impl ScopeLocal {
         field_num: int4,
         addr: &Address,
         hash: uint8,
-    ) -> KunaResult<crate::database::SymbolId> {
+    ) -> UnlaceResult<crate::database::SymbolId> {
         self.db
             .add_union_facet_symbol(self.scope, name, dt, field_num, addr, hash)
     }
@@ -1772,7 +1772,7 @@ impl ScopeLocal {
         self.db.symbol_mut(sym).dispflags |= crate::database::symbol_dispflags::ISOLATE;
     }
 
-    /// (kuna) Can any Symbol in this scope answer `true` to
+    /// (unlace) Can any Symbol in this scope answer `true` to
     /// [`Symbol::is_isolated`](crate::database::Symbol::is_isolated)?
     ///
     /// `false` lets a caller skip a containment query it already knows the
@@ -1818,7 +1818,7 @@ impl ScopeLocal {
         &mut self,
         sym: crate::database::SymbolId,
         newname: &str,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         self.db.rename_symbol(sym, newname)
     }
 
@@ -1827,7 +1827,7 @@ impl ScopeLocal {
         &mut self,
         sym: crate::database::SymbolId,
         ct: Rc<Datatype>,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         self.db.retype_symbol(sym, ct)
     }
 
@@ -1842,7 +1842,7 @@ impl ScopeLocal {
         addr: &Address,
         hash: uint8,
         base1: Rc<Datatype>,
-    ) -> KunaResult<crate::database::SymbolId> {
+    ) -> UnlaceResult<crate::database::SymbolId> {
         self.db
             .add_equate_symbol(self.scope, nm, format, value, addr, hash, base1)
     }
@@ -1899,14 +1899,14 @@ impl ScopeLocal {
     /// C++ `ScopeLocal::createEntry` (`varmap.cc:617`): construct a concrete
     /// data-type (and an array if the range holds more than one element) for the
     /// `RangeHint` and enter it as a Symbol.
-    fn create_entry(&mut self, a: &RangeHint, types: &dyn TypeFactory) -> KunaResult<()> {
+    fn create_entry(&mut self, a: &RangeHint, types: &dyn TypeFactory) -> UnlaceResult<()> {
         let addr = Address::new(self.space.clone(), a.start);
         let usepoint = Address::new_invalid();
         let mut ct = types.concretize(Rc::clone(&a.type_))?;
         let align = ct.get_align_size();
         // C++ `a.size / ct->getAlignSize()` (int4 division); guard a 0 align.
         let num = if align != 0 { a.size / align } else { a.size };
-        // (kuna `vtabletypes`) A record of open-ended size (a C++ class whose
+        // (unlace `vtabletypes`) A record of open-ended size (a C++ class whose
         // object size nothing states) cannot be an array element.
         let open_record =
             ct.get_metatype() == type_metatype::TYPE_STRUCT && ct.is_variable_length();
@@ -1924,7 +1924,7 @@ impl ScopeLocal {
         &mut self,
         state: &mut MapState,
         types: &dyn TypeFactory,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         let mut overlap_problems = false;
         if !state.initialize()? {
             return Ok(overlap_problems); // No references to stack at all
@@ -2013,14 +2013,14 @@ impl ScopeLocal {
     /// `ScopeLocal::restructureVarnode`, `varmap.cc:1259`): drop the unlocked
     /// auto-recovered stack Symbols so each restructure pass re-derives the layout
     /// from the current Varnodes.
-    pub fn clear_unlocked_category_negative(&mut self) -> KunaResult<()> {
+    pub fn clear_unlocked_category_negative(&mut self) -> UnlaceResult<()> {
         self.db.clear_unlocked_category_negative(self.scope)
     }
 
     /// C++ `localmap->clearUnlocked()` (`Funcdata::clear`, `funcdata.cc:95`):
     /// drop the symbols the analysis recovered (see
     /// [`crate::database::Database::clear_unlocked`]).
-    pub fn clear_unlocked(&mut self, types: Option<&dyn TypeFactory>) -> KunaResult<()> {
+    pub fn clear_unlocked(&mut self, types: Option<&dyn TypeFactory>) -> UnlaceResult<()> {
         self.db.clear_unlocked(self.scope, types)
     }
 
@@ -2031,7 +2031,7 @@ impl ScopeLocal {
     }
 
     /// The console-mapped Symbol specs in this scope, so they can be re-seeded
-    /// into a freshly-built `Funcdata` (the kuna console rebuilds the IR on
+    /// into a freshly-built `Funcdata` (the unlace console rebuilds the IR on
     /// `decompile`, where C++ reuses the same `fd`; this carries the `map addr`
     /// symbols across that rebuild).  Returns `(name, type, addr, all_flags)`
     /// per non-dynamic, address-tied SymbolEntry.
@@ -2042,7 +2042,7 @@ impl ScopeLocal {
         // Symbol into this (functional) local scope (C++ `IfcMapaddress`,
         // `getScopeLocal()->addSymbol`).  `Scope::addMap` marks it addr-tied, but it
         // lives in the ram space, not the stack space scanned above — so it is lost
-        // on the kuna IR rebuild unless carried here.  Append the addr-tied mapped
+        // on the unlace IR rebuild unless carried here.  Append the addr-tied mapped
         // symbols from every NON-stack space so they are re-seeded into the rebuilt
         // local scope and `linkSymbol` binds the global Varnode's name.
         out.extend(self.db.scope_nonstack_addrtied_specs(self.scope, idx));
@@ -2052,7 +2052,7 @@ impl ScopeLocal {
     /// The usepoint-scoped Symbol specs in this scope (across all spaces) — the
     /// register-storage locals a `type varnode %REG(pc) <type> <name>` directive
     /// creates, whose `SymbolEntry::inUse` is restricted to a code address range.
-    /// Carried (WITH the use address) across the kuna console's IR rebuild so the
+    /// Carried (WITH the use address) across the unlace console's IR rebuild so the
     /// rebuilt-IR `linkSymbol` query still binds them at the read they scope
     /// (see [`crate::database::Database::scope_usepoint_symbol_specs`]).
     pub fn usepoint_symbol_specs(
@@ -2137,7 +2137,7 @@ impl ScopeLocal {
         self.name_state.pick(render, &free)
     }
 
-    /// (kuna `--assert`) Start a naming pass that keeps `prior`'s numbering.
+    /// (unlace `--assert`) Start a naming pass that keeps `prior`'s numbering.
     pub fn install_prior_names(&mut self, seed: NameSeed) {
         self.name_state = NameState::new(seed);
     }
@@ -2233,7 +2233,7 @@ impl ScopeLocal {
     /// C++ `ActionNameVars`'s namerec rename (coreaction.cc:3087-3094): if the
     /// Symbol covering `(addr, size)` has an undefined name and the access covers
     /// the whole Symbol (the high `getSymbolOffset() < 0` gate), rename it to the
-    /// angr default (`v<base++>`, via `Scope::buildDefaultName`'s `kunaAngrNaming`
+    /// angr default (`v<base++>`, via `Scope::buildDefaultName`'s `unlaceAngrNaming`
     /// stack/local arm) and return the new name.  Returns `None` when there is no
     /// covering Symbol; returns the existing (already-defined) name unchanged
     /// otherwise.  `base` is the running `int4 base` of `ActionNameVars`.
@@ -2395,7 +2395,7 @@ impl ScopeLocal {
     /// `else` arm creates a fresh local Symbol — the angr `vN` path the caller's
     /// `resolve_default_name`/`vN` tail already implements).
     /// Identity of the smallest containing SymbolEntry for a storage location —
-    /// the kuna analog of C++ `Varnode::getSymbolEntry()` (the `mapentry` pointer)
+    /// the unlace analog of C++ `Varnode::getSymbolEntry()` (the `mapentry` pointer)
     /// used by `PieceNode::isLeaf` / `RulePieceStructure::determineDatatype` to
     /// decide whether two Varnodes share a Symbol.
     ///
@@ -2486,7 +2486,7 @@ impl ScopeLocal {
 
     /// Read `Symbol::isIsolated()` for a SymbolId in this scope (C++
     /// `sym->isIsolated()`).  Used by the merge's `bank_symbol_isolated` for a
-    /// dynamic-hash / equate Symbol bound directly on a HighVariable. (kuna L2)
+    /// dynamic-hash / equate Symbol bound directly on a HighVariable. (unlace L2)
     pub fn symbol_isolated(&self, sym: crate::database::SymbolId) -> bool {
         self.db.symbol(sym).is_isolated()
     }
@@ -2866,7 +2866,7 @@ impl ScopeLocal {
         &self,
         off: int8,
         types: &dyn TypeFactory,
-    ) -> KunaResult<(Rc<Datatype>, int8)> {
+    ) -> UnlaceResult<(Rc<Datatype>, int8)> {
         // addrOff = byteToAddress(off, wordSize); addr = resolveConstant(...) for the
         // stack space reduces to Address(space, wrapOffset(off)).
         let word_size = self.space.get_word_size();
@@ -3189,22 +3189,22 @@ pub struct MapState {
     default_type: Rc<Datatype>,
     /// A collection of pointer Varnodes into our address space (C++ `checker`).
     checker: AliasChecker,
-    /// (kuna `nulterminator`) Per constant-COPY `(offset, size)`: is every such
+    /// (unlace `nulterminator`) Per constant-COPY `(offset, size)`: is every such
     /// write an unread zero?  Empty unless the option is on.
     terminator_stores: std::collections::BTreeMap<(uintb, int4), bool>,
-    /// (kuna `stackstoreguard`) The sorted signed offsets where an open range
+    /// (unlace `stackstoreguard`) The sorted signed offsets where an open range
     /// absorbs every unlocked hint that starts inside a hint it already absorbed.
     absorbing_bases: Vec<intb>,
-    /// (kuna `arrayextent`) The arrays `extend_unbounded` lengthened, settled
+    /// (unlace `arrayextent`) The arrays `extend_unbounded` lengthened, settled
     /// once the hints are sorted.
     extended: Vec<Extended>,
-    /// (kuna `arraysize`) Per signed offset an escaped address starts at, what
+    /// (unlace `arraysize`) Per signed offset an escaped address starts at, what
     /// the calls receiving it and the accesses through it say about its size.
     stated_sizes: std::collections::BTreeMap<intb, Evidence>,
-    /// (kuna `arraysize`) The sorted signed offsets of index bases whose reach is
+    /// (unlace `arraysize`) The sorted signed offsets of index bases whose reach is
     /// not proven.
     unproven_indexes: Vec<intb>,
-    /// (kuna `arraysize`) Where the accesses through each escaped address land.
+    /// (unlace `arraysize`) Where the accesses through each escaped address land.
     reaches: Vec<Reach>,
 }
 
@@ -3330,7 +3330,7 @@ impl MapState {
     ///
     /// Order-determining: this walks the `stable_sort`ed `maplist` and is part
     /// of the layout output.
-    fn reconcile_datatypes(&mut self) -> KunaResult<()> {
+    fn reconcile_datatypes(&mut self) -> UnlaceResult<()> {
         let old = std::mem::take(&mut self.maplist);
         let mut new_list: Vec<RangeHint> = Vec::with_capacity(old.len());
 
@@ -3385,7 +3385,7 @@ impl MapState {
     /// Returns `true` if the collection isn't empty (and iteration can begin).
     /// The `stable_sort` here and the subsequent `reconcileDatatypes` fix the
     /// final layout order.
-    pub fn initialize(&mut self) -> KunaResult<bool> {
+    pub fn initialize(&mut self) -> UnlaceResult<bool> {
         // Enforce boundaries of local variables
         let Some((high, sst)) = self.endpoint() else {
             return Ok(false);
@@ -3424,7 +3424,7 @@ impl MapState {
         Some((high, sst))
     }
 
-    /// (kuna `castobject`) The signed offset of the terminating hint, where
+    /// (unlace `castobject`) The signed offset of the terminating hint, where
     /// `restructure` ends an open range no other hint follows.
     pub fn end_sstart(&self) -> Option<intb> {
         self.endpoint().map(|(_, sst)| sst)
@@ -3443,12 +3443,12 @@ impl MapState {
         self.iter != self.maplist.len()
     }
 
-    /// (kuna `nulterminator`) The hint sorted immediately after the current one.
+    /// (unlace `nulterminator`) The hint sorted immediately after the current one.
     pub fn peek_after_next(&self) -> Option<&RangeHint> {
         self.maplist.get(self.iter + 1)
     }
 
-    /// (kuna `nulterminator`) Does an open hint with no index evidence (a plain
+    /// (unlace `nulterminator`) Does an open hint with no index evidence (a plain
     /// address into the frame), sorted before the current one, start strictly
     /// between `lo` and `hi`?
     pub fn swept_address_inside(&self, lo: intb, hi: intb) -> bool {
@@ -3504,32 +3504,32 @@ impl MapState {
         self.add_fixed_type(start, ct, flags, types);
     }
 
-    /// (kuna `stackstoreguard`) Let an open range starting at one of the sorted
+    /// (unlace `stackstoreguard`) Let an open range starting at one of the sorted
     /// `bases` absorb the unlocked hints that start inside a hint it already
     /// absorbed, instead of ending there.
     pub fn set_absorbing_bases(&mut self, bases: Vec<intb>) {
         self.absorbing_bases = bases;
     }
 
-    /// (kuna `stackstoreguard`) Does an open range starting at `sstart` absorb
+    /// (unlace `stackstoreguard`) Does an open range starting at `sstart` absorb
     /// the hints inside what it absorbed?
     pub fn is_absorbing(&self, sstart: intb) -> bool {
         self.absorbing_bases.binary_search(&sstart).is_ok()
     }
 
-    /// (kuna `arrayextent`) Record the arrays `extend_unbounded` lengthened.
+    /// (unlace `arrayextent`) Record the arrays `extend_unbounded` lengthened.
     #[doc(hidden)]
     pub fn set_extended(&mut self, extended: Vec<Extended>) {
         self.extended = extended;
     }
 
-    /// (kuna `arrayextent`) Take the recorded lengthened arrays.
+    /// (unlace `arrayextent`) Take the recorded lengthened arrays.
     #[doc(hidden)]
     pub fn take_extended(&mut self) -> Vec<Extended> {
         std::mem::take(&mut self.extended)
     }
 
-    /// (kuna `arraysize`) Record what calls say per escaped start, the sorted
+    /// (unlace `arraysize`) Record what calls say per escaped start, the sorted
     /// offsets of index bases whose reach is not proven, and where the accesses
     /// through each escaped address land.
     #[doc(hidden)]
@@ -3544,19 +3544,19 @@ impl MapState {
         self.reaches = reaches;
     }
 
-    /// (kuna `arraysize`) Where the accesses through each escaped address land.
+    /// (unlace `arraysize`) Where the accesses through each escaped address land.
     #[doc(hidden)]
     pub fn reaches(&self) -> &[Reach] {
         &self.reaches
     }
 
-    /// (kuna `arraysize`) What calls and accesses say about the address at `sstart`.
+    /// (unlace `arraysize`) What calls and accesses say about the address at `sstart`.
     #[doc(hidden)]
     pub fn stated_sizes(&self, sstart: intb) -> Option<&Evidence> {
         self.stated_sizes.get(&sstart)
     }
 
-    /// (kuna `arraysize`) Does an index base whose reach is not proven start in
+    /// (unlace `arraysize`) Does an index base whose reach is not proven start in
     /// `[lo, hi)`?
     #[doc(hidden)]
     pub fn unproven_index_in(&self, lo: intb, hi: intb) -> bool {
@@ -3564,14 +3564,14 @@ impl MapState {
         self.unproven_indexes.get(i).is_some_and(|&o| o < hi)
     }
 
-    /// (kuna `nulterminator`) Record one constant COPY into `(start, size)`;
+    /// (unlace `nulterminator`) Record one constant COPY into `(start, size)`;
     /// `terminator` is whether it writes a zero no op reads directly.
     pub fn note_terminator_store(&mut self, start: uintb, size: int4, terminator: bool) {
         let entry = self.terminator_stores.entry((start, size)).or_insert(true);
         *entry = *entry && terminator;
     }
 
-    /// (kuna `nulterminator`) Is every constant COPY into `(start, size)` an
+    /// (unlace `nulterminator`) Is every constant COPY into `(start, size)` an
     /// unread zero?
     pub fn is_terminator_store(&self, start: uintb, size: int4) -> bool {
         self.terminator_stores
@@ -3594,8 +3594,8 @@ impl MapState {
         self.add_range(st, ct, fl, rt, hi);
     }
 
-    /// The collected hints, for the kuna passes that rewrite them before
-    /// `restructure` (`kuna_endptrbound`).
+    /// The collected hints, for the unlace passes that rewrite them before
+    /// `restructure` (`unlace_endptrbound`).
     pub fn hints_mut(&mut self) -> &mut Vec<RangeHint> {
         &mut self.maplist
     }
@@ -3607,7 +3607,7 @@ impl MapState {
     }
 }
 
-/// (kuna `--assert`) What the naming pass keeps of a previous decompile's numbering
+/// (unlace `--assert`) What the naming pass keeps of a previous decompile's numbering
 /// (`stablenames::PriorNames::name_seed`).
 #[derive(Clone, Debug, Default)]
 pub struct NameSeed {
@@ -3625,7 +3625,7 @@ pub struct NameSeed {
     pub symbol_renames: std::collections::BTreeMap<(Address, int4), String>,
 }
 
-/// (kuna `--assert`) The allocator's view of a [`NameSeed`] during one naming pass.
+/// (unlace `--assert`) The allocator's view of a [`NameSeed`] during one naming pass.
 #[derive(Clone, Debug, Default)]
 pub struct NameState {
     prior: NameSeed,

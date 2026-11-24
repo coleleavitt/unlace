@@ -13,11 +13,11 @@
 //!   i 16   → int  n      (arg 2 at frame offset 16)
 //! ```
 //!
-//! This is the kuna analog of Ghidra's `ObjectiveC1_TypeEncodings` /
+//! This is the unlace analog of Ghidra's `ObjectiveC1_TypeEncodings` /
 //! `ObjectiveC2_DecompilerMessageAnalyzer` encoding parser (the *naming-tier*
 //! subset). It is **not a demangler** — selectors are plain ASCII; this only maps
 //! the single-character primitive type codes (+ a pointer/struct fallback) to a
-//! kuna [`Datatype`] so an IMP gets a typed `PrototypePieces` (`id self, SEL
+//! unlace [`Datatype`] so an IMP gets a typed `PrototypePieces` (`id self, SEL
 //! _cmd, int n`) and an ivar gets its element type.
 //!
 //! ## Scope (design §3.2 LOSS)
@@ -85,7 +85,7 @@ pub fn decode_method(
         first_var_arg_slot: -1,
         output_storage: None,
         input_storage: Vec::new(),
-        kuna_library_names: None,
+        unlace_library_names: None,
     })
 }
 
@@ -159,7 +159,7 @@ pub fn struct_type(encoding: &str, tctx: &TypeCtx) -> Option<Rc<Datatype>> {
             return Some(t);
         }
         Some(t) => t,
-        None => types.kuna_declare_record(&name, union).ok()?,
+        None => types.unlace_declare_record(&name, union).ok()?,
     };
     let Some(members) = members else {
         return Some(shell);
@@ -476,7 +476,7 @@ impl<'a> TypeCtx<'a> {
     /// A pointer to the named struct (`objc_object*` for `id`, `objc_class*` for
     /// `Class`, `objc_selector*` for `SEL`, `Foo*` for `@"Foo"`, a Swift class
     /// under its shown name): the struct of that name when one exists, else a declared record so a pointer built
-    /// before the class's layout lands (`kuna_objcivars`) reads the completion
+    /// before the class's layout lands (`unlace_objcivars`) reads the completion
     /// afterwards; a plain `void*` if the record cannot be created (the name
     /// already belongs to a type that is not a struct).
     pub(super) fn opaque_ptr(&self, struct_name: &str) -> Option<Rc<Datatype>> {
@@ -490,7 +490,7 @@ impl<'a> TypeCtx<'a> {
             .ok()
             .flatten()
             .filter(|t| t.get_metatype() == type_metatype::TYPE_STRUCT)
-            .or_else(|| self.types.kuna_declare_record(&shown, false).ok())
+            .or_else(|| self.types.unlace_declare_record(&shown, false).ok())
             .or_else(|| self.types.get_type_void().ok())?;
         let ptr = self
             .types

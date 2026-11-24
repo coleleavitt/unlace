@@ -34,7 +34,7 @@
 use std::collections::BTreeMap;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::{ATTRIB_NAME, Decoder, ElementId, Encoder};
 use unlace_base::types::{int4, uint4};
 
@@ -143,7 +143,7 @@ impl CallGraphEdge {
     }
 
     /// Encode this edge as an \<edge> element (C++ `CallGraphEdge::encode`).
-    pub fn encode(&self, encoder: &mut dyn Encoder, graph: &CallGraph) -> KunaResult<()> {
+    pub fn encode(&self, encoder: &mut dyn Encoder, graph: &CallGraph) -> UnlaceResult<()> {
         encoder.open_element(&ELEM_EDGE);
         graph.nodes[self.from].entryaddr.encode(encoder)?;
         graph.nodes[self.to].entryaddr.encode(encoder)?;
@@ -154,7 +154,7 @@ impl CallGraphEdge {
 
     /// Decode an \<edge> element and add it to the graph
     /// (C++ static `CallGraphEdge::decode`).
-    pub fn decode(decoder: &mut dyn Decoder, graph: &mut CallGraph) -> KunaResult<()> {
+    pub fn decode(decoder: &mut dyn Decoder, graph: &mut CallGraph) -> UnlaceResult<()> {
         let elem_id = decoder.open_element_id(&ELEM_EDGE)?;
         let fromaddr = Address::decode(decoder)?;
         let toaddr = Address::decode(decoder)?;
@@ -163,10 +163,10 @@ impl CallGraphEdge {
 
         let fromnode = graph
             .find_node(&fromaddr)
-            .ok_or_else(|| KunaError::lowlevel("Could not find from node"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("Could not find from node"))?;
         let tonode = graph
             .find_node(&toaddr)
-            .ok_or_else(|| KunaError::lowlevel("Could not find to node"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("Could not find to node"))?;
 
         graph.add_edge(fromnode, tonode, &siteaddr);
         Ok(())
@@ -289,7 +289,7 @@ impl CallGraphNode {
     }
 
     /// Encode this node as a \<node> element (C++ `CallGraphNode::encode`).
-    pub fn encode(&self, encoder: &mut dyn Encoder) -> KunaResult<()> {
+    pub fn encode(&self, encoder: &mut dyn Encoder) -> UnlaceResult<()> {
         encoder.open_element(&ELEM_NODE);
         if !self.name.is_empty() {
             encoder.write_string(&ATTRIB_NAME, &self.name);
@@ -301,7 +301,7 @@ impl CallGraphNode {
 
     /// Decode a \<node> element and add it to the graph
     /// (C++ static `CallGraphNode::decode`).
-    pub fn decode(decoder: &mut dyn Decoder, graph: &mut CallGraph) -> KunaResult<()> {
+    pub fn decode(decoder: &mut dyn Decoder, graph: &mut CallGraph) -> UnlaceResult<()> {
         let elem_id = decoder.open_element_id(&ELEM_NODE)?;
         let mut name: Vec<u8> = Vec::new();
         loop {
@@ -398,7 +398,7 @@ impl CallGraph {
     ///
     /// STUB(W4): takes the `Funcdata`-shaped seam plus the [`FuncId`] token to
     /// store in `fd` (the C++ stores the `Funcdata *` itself).
-    pub fn add_node_func(&mut self, f: &dyn CallGraphFunc, fid: FuncId) -> KunaResult<NodeIndex> {
+    pub fn add_node_func(&mut self, f: &dyn CallGraphFunc, fid: FuncId) -> UnlaceResult<NodeIndex> {
         let addr = f.get_address().clone();
         let idx = self.node_slot(&addr);
         if let Some(existing) = self.nodes[idx].fd {
@@ -407,7 +407,7 @@ impl CallGraph {
                 msg.push_str(&String::from_utf8_lossy(f.get_name()));
                 msg.push(' ');
                 msg.push_str(&String::from_utf8_lossy(self.nodes[idx].get_name()));
-                return Err(KunaError::lowlevel(msg));
+                return Err(UnlaceError::lowlevel(msg));
             }
         }
         self.nodes[idx].entryaddr = addr;
@@ -432,16 +432,16 @@ impl CallGraph {
         node: NodeIndex,
         f: &dyn CallGraphFunc,
         fid: FuncId,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         if let Some(existing) = self.nodes[node].fd {
             if existing != fid {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "Multiple functions at one address in callgraph",
                 ));
             }
         }
         if *f.get_address() != self.nodes[node].entryaddr {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Setting function data at wrong address in callgraph",
             ));
         }
@@ -757,9 +757,9 @@ impl CallGraph {
     /// (`iterateScopesRecursive`/`iterateFunctionsAddrOrder`), which is a W4
     /// subsystem.  Deferred: the W4 driver iterates the global scope and calls
     /// [`CallGraph::add_node_func`] for each `FunctionSymbol`, in address order.
-    pub fn build_all_nodes(&mut self, _glb: &dyn CallGraphArch) -> KunaResult<()> {
+    pub fn build_all_nodes(&mut self, _glb: &dyn CallGraphArch) -> UnlaceResult<()> {
         // STUB(W4): requires Architecture::symboltab + Scope iteration.
-        Err(KunaError::lowlevel(
+        Err(UnlaceError::lowlevel(
             "CallGraph::build_all_nodes requires the W4 symbol table (STUB)",
         ))
     }
@@ -776,9 +776,9 @@ impl CallGraph {
         &mut self,
         _fd: &dyn CallGraphFunc,
         _glb: &dyn CallGraphArch,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         // STUB(W4): requires FuncProto / FuncCallSpecs.
-        Err(KunaError::lowlevel(
+        Err(UnlaceError::lowlevel(
             "CallGraph::build_edges requires the W4 prototype/call-spec model (STUB)",
         ))
     }
@@ -789,7 +789,7 @@ impl CallGraph {
     ///
     /// Nodes are emitted in Address order, then every node's in-edges (also in
     /// Address order of the owning node).
-    pub fn encode(&self, encoder: &mut dyn Encoder) -> KunaResult<()> {
+    pub fn encode(&self, encoder: &mut dyn Encoder) -> UnlaceResult<()> {
         encoder.open_element(&ELEM_CALLGRAPH);
 
         for idx in self.iter_graph() {
@@ -808,7 +808,7 @@ impl CallGraph {
     }
 
     /// Decode a whole call graph (C++ `CallGraph::decoder`).
-    pub fn decoder(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    pub fn decoder(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         let elem_id = decoder.open_element_id(&ELEM_CALLGRAPH)?;
         loop {
             let sub_id = decoder.peek_element()?;

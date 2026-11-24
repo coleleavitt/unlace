@@ -1,4 +1,4 @@
-//! (kuna `libctypes glibc`) The PUBLISHED glibc x86-64 field layouts of the nine
+//! (unlace `libctypes glibc`) The PUBLISHED glibc x86-64 field layouts of the nine
 //! aggregates whose members are part of the platform's API.
 //!
 //! [`super`]'s `opaque` value gives each named aggregate a real width and no
@@ -57,7 +57,7 @@
 //!   construction rather than by a depth counter.
 
 use std::rc::Rc;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::types::{int4, uint4};
 use unlace_decomp::dtype::{Datatype, TypeFactory, TypeField, type_metatype};
 
@@ -250,7 +250,7 @@ pub(super) fn layout_for(name: &str) -> Option<&'static [GlibcField]> {
 }
 
 /// Intern the type of one field.
-fn field_type(ty: &FTy, types: &dyn TypeFactory, word_size: uint4) -> KunaResult<Rc<Datatype>> {
+fn field_type(ty: &FTy, types: &dyn TypeFactory, word_size: uint4) -> UnlaceResult<Rc<Datatype>> {
     let ptr = types.get_size_of_pointer();
     match ty {
         FTy::Int => types.get_base(4, type_metatype::TYPE_INT),
@@ -294,7 +294,7 @@ pub(super) fn build_fields(
     fields: &'static [GlibcField],
     types: &dyn TypeFactory,
     word_size: uint4,
-) -> KunaResult<Vec<TypeField>> {
+) -> UnlaceResult<Vec<TypeField>> {
     let mut out = Vec::with_capacity(fields.len());
     for field in fields {
         let ty = field_type(&field.ty, types, word_size)?;

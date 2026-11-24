@@ -1,4 +1,4 @@
-//! (kuna `cortexmpriv`) Fold the Cortex-M `isCurrentModePrivileged()` guard that
+//! (unlace `cortexmpriv`) Fold the Cortex-M `isCurrentModePrivileged()` guard that
 //! the vendored ARM SLEIGH wraps around every MRS/MSR.
 //!
 //! # The defect
@@ -15,7 +15,7 @@
 //! ```
 //!
 //! Twelve constructors do this (`mrs`/`msr` against `ipsr`, `primask`,
-//! `basepri`, `basepri_max`, `faultmask`, `control`). kuna lowers the model
+//! `basepri`, `basepri_max`, `faultmask`, `control`). unlace lowers the model
 //! literally, so **each MRS/MSR contributes one extra basic block and two extra
 //! CFG edges that exist in no source**. On RIOT's `thread_sleep` — four
 //! instructions' worth of guard around an `irq_disable`/`irq_restore` pair —
@@ -46,7 +46,7 @@
 //! right after the cspec's own, so `parse_inject_all` compiles it with the rest.
 //!
 //! Registration is unconditional (on any language that declares the user-op) for
-//! the same reason `kuna_msvcftol`'s is: the architecture is bootstrapped at
+//! the same reason `unlace_msvcftol`'s is: the architecture is bootstrapped at
 //! `load file`, before the `option` lines are applied, so the flag is not
 //! readable here. A registered payload is inert until something consumes it, and
 //! the consumption gate — `FlowInfo`'s `is_injected_userop` predicate in
@@ -71,10 +71,10 @@ pub fn is_our_fixup(registered: Option<int4>, injectid: int4) -> bool {
     registered == Some(injectid)
 }
 
-crate::kuna_flag!(
-    /// (kuna `cortexmpriv`) Assume the Cortex-M core is privileged, folding away
+crate::unlace_flag!(
+    /// (unlace `cortexmpriv`) Assume the Cortex-M core is privileged, folding away
     /// the `isCurrentModePrivileged()` guard the vendored ARM SLEIGH wraps around
-    /// every VERSION_7M MRS/MSR (`kuna_cortexmpriv`).
+    /// every VERSION_7M MRS/MSR (`unlace_cortexmpriv`).
     ///
     /// Twelve `ARMTHUMBinstructions.sinc` constructors lower as
     /// `b:1 = isCurrentModePrivileged(); if (!b) goto <notPriv>; <effect>`, so

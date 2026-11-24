@@ -1,4 +1,4 @@
-//! (kuna) `cachereturn` -- a function whose return register holds the value of
+//! (unlace) `cachereturn` -- a function whose return register holds the value of
 //! one memory cell on every path returns it (P4 output prototype).
 //!
 //! A lazy accessor reads a cache cell, returns what it found when it is set,
@@ -25,7 +25,7 @@
 //! accessors of a global are not taken.
 
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
@@ -42,7 +42,7 @@ impl OptionCacheReturn {
 
     /// Resolve the flag and its confirmation message; the caller writes it into
     /// the registered option `CacheReturn`.
-    pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((val, format!("Cache-cell return recovery turned {prop}")))
@@ -67,7 +67,7 @@ pub fn returns_cached(
 ) -> bool {
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::cachereturn::CacheReturn>()
         .0
         || !data.get_arch().source_lang.is_swift()
@@ -311,15 +311,15 @@ fn constant(data: &Funcdata, vn: VarnodeId, depth: usize) -> Option<u64> {
     }
 }
 
-/// (kuna) A return register that holds one memory cell's value on every
+/// (unlace) A return register that holds one memory cell's value on every
 /// path is the return value (option `cachereturn`).  See
 /// [`crate::cachereturn`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct CacheReturn(pub bool);
 
-impl crate::optionset::KunaOption for CacheReturn {
+impl crate::optionset::UnlaceOption for CacheReturn {
     const NAME: &'static str = "cachereturn";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         CacheReturn(true)
@@ -329,7 +329,7 @@ impl crate::optionset::KunaOption for CacheReturn {
         CacheReturn(true)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (v, msg) = crate::cachereturn::OptionCacheReturn.apply(value)?;
         Ok((CacheReturn(v), msg))
     }

@@ -26,7 +26,7 @@ use std::collections::BTreeMap;
 
 use std::rc::Rc;
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::{
     ATTRIB_FORMAT, ATTRIB_NAME, ATTRIB_SPACE, AttributeId, Decoder, ElementId, IdRegistry,
 };
@@ -128,74 +128,74 @@ pub const BUILTIN_MEMCPY: uint4 = 0x10000003;
 pub const BUILTIN_STRNCPY: uint4 = 0x10000004;
 /// Built-in id for wcsncpy (`userop.cc:35`).
 pub const BUILTIN_WCSNCPY: uint4 = 0x10000005;
-/// (kuna) Built-in id for memset, GH-9230 constant-fill recovery
-/// (`userop.cc:36`; a kuna anchor edit — see UPSTREAM.md *Divergence*).
+/// (unlace) Built-in id for memset, GH-9230 constant-fill recovery
+/// (`userop.cc:36`; a unlace anchor edit — see UPSTREAM.md *Divergence*).
 pub const BUILTIN_MEMSET: uint4 = 0x10000006;
-/// (kuna) Built-in id for `syscall_error`, the failure flag a MIPS or PowerPC
+/// (unlace) Built-in id for `syscall_error`, the failure flag a MIPS or PowerPC
 /// kernel leaves after a system call (`syscallregs`).
 pub const BUILTIN_SYSCALL_ERROR: uint4 = 0x10000007;
-/// (kuna) Built-in id for `strlen`, the length an inline `repnz scasb` scan
+/// (unlace) Built-in id for `strlen`, the length an inline `repnz scasb` scan
 /// computes (`strlenscan`).
 pub const BUILTIN_STRLEN: uint4 = 0x10000008;
-/// (kuna) Built-in id for `BUG`, a Linux kernel `__bug_table` trap the handler
+/// (unlace) Built-in id for `BUG`, a Linux kernel `__bug_table` trap the handler
 /// does not resume after (`kernelbug`).
 pub const BUILTIN_KERNEL_BUG: uint4 = 0x10000009;
-/// (kuna) Built-in id for `__WARN`, a Linux kernel `__bug_table` trap the
+/// (unlace) Built-in id for `__WARN`, a Linux kernel `__bug_table` trap the
 /// handler resumes after (`kernelbug`).
 pub const BUILTIN_KERNEL_WARN: uint4 = 0x1000000a;
-/// (kuna) Built-in ids for `builtin_memset16`/`32`/`64`, a `rep stos` fill of
+/// (unlace) Built-in ids for `builtin_memset16`/`32`/`64`, a `rep stos` fill of
 /// 2-, 4- or 8-byte elements whose bytes differ (`repstring`).
 pub const BUILTIN_MEMSET16: uint4 = 0x1000000b;
 pub const BUILTIN_MEMSET32: uint4 = 0x1000000c;
 pub const BUILTIN_MEMSET64: uint4 = 0x1000000d;
-/// (kuna) Built-in id for `builtin_memcmp`, the comparison a `repz cmpsb`
+/// (unlace) Built-in id for `builtin_memcmp`, the comparison a `repz cmpsb`
 /// computes (`repstring`).
 pub const BUILTIN_MEMCMP: uint4 = 0x1000000e;
-/// (kuna) Built-in id for `eh_unwinding`, the opaque "this call threw" test on an
+/// (unlace) Built-in id for `eh_unwinding`, the opaque "this call threw" test on an
 /// Itanium exceptional edge (`itaniumeh`).
 pub const BUILTIN_EH_UNWINDING: uint4 = 0x1000000f;
-/// (kuna) Built-in id for `eh_exception`, the exception pointer at a landing pad.
+/// (unlace) Built-in id for `eh_exception`, the exception pointer at a landing pad.
 pub const BUILTIN_EH_EXCEPTION: uint4 = 0x10000010;
-/// (kuna) Built-in id for `eh_selector`, the catch-clause selector at a landing pad.
+/// (unlace) Built-in id for `eh_selector`, the catch-clause selector at a landing pad.
 pub const BUILTIN_EH_SELECTOR: uint4 = 0x10000011;
-/// (kuna) Built-in id for `java_try`, the opaque test that sends a DEX `try`
+/// (unlace) Built-in id for `java_try`, the opaque test that sends a DEX `try`
 /// block's entry to one of its catch handlers (`javatry`).
 pub const BUILTIN_JAVA_TRY: uint4 = 0x10000014;
-/// (kuna) Built-in id for `java_throws`, the opaque "this instruction threw"
+/// (unlace) Built-in id for `java_throws`, the opaque "this instruction threw"
 /// test on a DEX exceptional edge (`javatry`).
 pub const BUILTIN_JAVA_THROWS: uint4 = 0x10000015;
-/// (kuna) Built-in id for `java_caught`, the exception a DEX catch handler
+/// (unlace) Built-in id for `java_caught`, the exception a DEX catch handler
 /// receives (`move-exception`).
 pub const BUILTIN_JAVA_CAUGHT: uint4 = 0x10000016;
-/// (kuna) Built-in id for `bswap`, a byte reversal (`bitidioms`).
+/// (unlace) Built-in id for `bswap`, a byte reversal (`bitidioms`).
 pub const BUILTIN_BSWAP: uint4 = 0x10000012;
-/// (kuna) Built-in id for `rotl`, a left rotate by a constant (`bitidioms`).
+/// (unlace) Built-in id for `rotl`, a left rotate by a constant (`bitidioms`).
 pub const BUILTIN_ROTL: uint4 = 0x10000013;
-/// (kuna swiftcall) The error a throwing Swift call left in the error register.
+/// (unlace swiftcall) The error a throwing Swift call left in the error register.
 pub const BUILTIN_SWIFT_ERROR: uint4 = 0x10000017;
-/// (kuna swiftcall) The error a throwing Swift function hands back.
+/// (unlace swiftcall) The error a throwing Swift function hands back.
 pub const BUILTIN_SWIFT_THROW: uint4 = 0x10000018;
-/// (kuna) Built-in id for `alloca`, a dynamic stack allocation (`alloca`, `dynalloca`).
+/// (unlace) Built-in id for `alloca`, a dynamic stack allocation (`alloca`, `dynalloca`).
 pub const BUILTIN_ALLOCA: uint4 = 0x10000019;
-/// (kuna) Built-in id for `va_start`, a `va_list` set-up (`varargsave`, `vastart`).
+/// (unlace) Built-in id for `va_start`, a `va_list` set-up (`varargsave`, `vastart`).
 pub const BUILTIN_VA_START: uint4 = 0x1000001a;
-/// (kuna) Built-in id for `abs` (`bitidioms`).
+/// (unlace) Built-in id for `abs` (`bitidioms`).
 pub const BUILTIN_ABS: uint4 = 0x1000001b;
-/// (kuna) Built-in id for `bitreverse` (`bitidioms`).
+/// (unlace) Built-in id for `bitreverse` (`bitidioms`).
 pub const BUILTIN_BITREV: uint4 = 0x1000001c;
-/// (kuna) Built-in id for `ctz`, the count of trailing zero bits (`bitidioms`).
+/// (unlace) Built-in id for `ctz`, the count of trailing zero bits (`bitidioms`).
 pub const BUILTIN_CTZ: uint4 = 0x1000001d;
-/// (kuna) Built-in id for `labs`, the 64-bit `abs` (`bitidioms`).
+/// (unlace) Built-in id for `labs`, the 64-bit `abs` (`bitidioms`).
 pub const BUILTIN_LABS: uint4 = 0x1000001e;
-/// (kuna) Built-in id for `strcpy` (`helperroles`).
+/// (unlace) Built-in id for `strcpy` (`helperroles`).
 pub const BUILTIN_STRCPY: uint4 = 0x1000001f;
-/// (kuna) Built-in id for `va_arg` (`vaarg`).
+/// (unlace) Built-in id for `va_arg` (`vaarg`).
 pub const BUILTIN_VAARG: uint4 = 0x10000020;
-/// (kuna) Built-in id for `saturated_mul`, a multiply that yields all-ones on
+/// (unlace) Built-in id for `saturated_mul`, a multiply that yields all-ones on
 /// overflow (`satmul`).
 pub const BUILTIN_SATURATED_MUL: uint4 = 0x10000038;
-/// (kuna) Built-in ids for the atomic read-modify-write builtins one locked x86
-/// instruction, AArch64 LSE atomic or RISC-V AMO lifts to (`kuna_atomics`), in
+/// (unlace) Built-in ids for the atomic read-modify-write builtins one locked x86
+/// instruction, AArch64 LSE atomic or RISC-V AMO lifts to (`unlace_atomics`), in
 /// [`ATOMIC_BUILTINS`] order.
 pub const BUILTIN_ATOMIC_FETCH_ADD: uint4 = 0x10000040;
 pub const BUILTIN_ATOMIC_FETCH_SUB: uint4 = 0x10000041;
@@ -204,7 +204,7 @@ pub const BUILTIN_ATOMIC_FETCH_OR: uint4 = 0x10000043;
 pub const BUILTIN_ATOMIC_FETCH_XOR: uint4 = 0x10000044;
 pub const BUILTIN_ATOMIC_EXCHANGE: uint4 = 0x10000045;
 pub const BUILTIN_ATOMIC_COMPARE_SWAP: uint4 = 0x10000046;
-/// (kuna) Each atomic builtin and the GCC/Clang `__sync` builtin it prints as.
+/// (unlace) Each atomic builtin and the GCC/Clang `__sync` builtin it prints as.
 pub const ATOMIC_BUILTINS: [(uint4, &[u8]); 7] = [
     (BUILTIN_ATOMIC_FETCH_ADD, b"__sync_fetch_and_add"),
     (BUILTIN_ATOMIC_FETCH_SUB, b"__sync_fetch_and_sub"),
@@ -215,7 +215,7 @@ pub const ATOMIC_BUILTINS: [(uint4, &[u8]); 7] = [
     (BUILTIN_ATOMIC_COMPARE_SWAP, b"__sync_val_compare_and_swap"),
 ];
 
-/// (kuna) The MSVC intrinsic spelling of the atomic builtins (option `atomics
+/// (unlace) The MSVC intrinsic spelling of the atomic builtins (option `atomics
 /// msvc`): id, the `__sync` builtin it stands for, the location width and the
 /// name. `_InterlockedCompareExchange` takes its new value before the expected
 /// one, as MSVC declares it.
@@ -326,7 +326,7 @@ pub const MSVC_ATOMIC_BUILTINS: [(uint4, uint4, i32, &[u8]); 24] = [
     ),
 ];
 
-/// (kuna) The C11 `<stdatomic.h>` spelling of the atomic builtins (option
+/// (unlace) The C11 `<stdatomic.h>` spelling of the atomic builtins (option
 /// `atomics c11`): id, the `__sync` builtin it stands for, whether it is the
 /// `_explicit` form (whose last operand is the `memory_order`) and the name.
 /// C11 has no value-returning compare-and-swap, so that one keeps its `__sync`
@@ -406,7 +406,7 @@ pub const C11_ATOMIC_BUILTINS: [(uint4, uint4, bool, &[u8]); 12] = [
     ),
 ];
 
-/// (kuna) The C11 `memory_order` values, as `<stdatomic.h>` numbers them.
+/// (unlace) The C11 `memory_order` values, as `<stdatomic.h>` numbers them.
 pub const MEMORY_ORDERS: [(u64, &str); 6] = [
     (0, "memory_order_relaxed"),
     (1, "memory_order_consume"),
@@ -418,7 +418,7 @@ pub const MEMORY_ORDERS: [(u64, &str); 6] = [
 /// `memory_order_seq_cst`: the order the non-`_explicit` forms imply.
 pub const MEMORY_ORDER_SEQ_CST: u8 = 5;
 
-/// (kuna) The name of atomic builtin `id`, in any spelling.
+/// (unlace) The name of atomic builtin `id`, in any spelling.
 pub fn atomic_builtin_name(id: uint4) -> Option<&'static [u8]> {
     ATOMIC_BUILTINS
         .iter()
@@ -438,7 +438,7 @@ pub fn atomic_builtin_name(id: uint4) -> Option<&'static [u8]> {
         })
 }
 
-/// (kuna) The C11 builtin for `__sync` builtin `generic`, `_explicit` or not;
+/// (unlace) The C11 builtin for `__sync` builtin `generic`, `_explicit` or not;
 /// `None` for the compare-and-swap.
 pub fn c11_atomic_builtin(generic: uint4, explicit: bool) -> Option<uint4> {
     C11_ATOMIC_BUILTINS
@@ -447,7 +447,7 @@ pub fn c11_atomic_builtin(generic: uint4, explicit: bool) -> Option<uint4> {
         .map(|(b, ..)| *b)
 }
 
-/// (kuna) Whether builtin `id` is a C11 `_explicit` form, whose last operand is
+/// (unlace) Whether builtin `id` is a C11 `_explicit` form, whose last operand is
 /// its `memory_order`.
 pub fn atomic_builtin_explicit(id: uint4) -> bool {
     C11_ATOMIC_BUILTINS
@@ -455,7 +455,7 @@ pub fn atomic_builtin_explicit(id: uint4) -> bool {
         .any(|(b, _, e, _)| *b == id && *e)
 }
 
-/// (kuna) The `__sync` builtin atomic builtin `id` performs: itself, or the one
+/// (unlace) The `__sync` builtin atomic builtin `id` performs: itself, or the one
 /// an MSVC intrinsic stands for.
 pub fn atomic_builtin_generic(id: uint4) -> Option<uint4> {
     if ATOMIC_BUILTINS.iter().any(|(b, _)| *b == id) {
@@ -473,7 +473,7 @@ pub fn atomic_builtin_generic(id: uint4) -> Option<uint4> {
         })
 }
 
-/// (kuna) The MSVC intrinsic for `__sync` builtin `generic` at `width` bytes;
+/// (unlace) The MSVC intrinsic for `__sync` builtin `generic` at `width` bytes;
 /// `None` for `__sync_fetch_and_sub`, which MSVC has no intrinsic for.
 pub fn msvc_atomic_builtin(generic: uint4, width: i32) -> Option<uint4> {
     MSVC_ATOMIC_BUILTINS
@@ -885,7 +885,7 @@ impl UserPcodeOp {
         decoder: &mut dyn Decoder,
         arch: &mut A,
         names: &NameLookup,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         match self.base.utype {
             userop_type::injected => self.decode_injected(decoder, arch, names),
             userop_type::segment => self.decode_segment(decoder, arch, names),
@@ -902,19 +902,19 @@ impl UserPcodeOp {
         decoder: &mut dyn Decoder,
         arch: &mut A,
         names: &NameLookup,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let injectid = arch.decode_inject(b"userop", b"", CALLOTHERFIXUP_TYPE, decoder)?;
         let name = arch.get_call_other_target(injectid);
         // This tag overrides the base functionality of a userop, so the core
         // userop name and index may already be defined.
         let base = names.get_by_name(&name).ok_or_else(|| {
-            KunaError::lowlevel(format!(
+            UnlaceError::lowlevel(format!(
                 "Unknown userop name in <callotherfixup>: {}",
                 String::from_utf8_lossy(&name)
             ))
         })?;
         if !base.unspecialized {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "<callotherfixup> overloads userop with another purpose: {}",
                 String::from_utf8_lossy(&name)
             )));
@@ -933,7 +933,7 @@ impl UserPcodeOp {
         decoder: &mut dyn Decoder,
         arch: &mut A,
         names: &NameLookup,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let elem_id = decoder.open_element_id(&ELEM_SEGMENTOP)?;
         let mut spc: Option<Rc<AddrSpace>> = None;
         let mut inject_id: int4 = -1;
@@ -957,16 +957,16 @@ impl UserPcodeOp {
             }
         }
         let spc =
-            spc.ok_or_else(|| KunaError::lowlevel("<segmentop> expecting space attribute"))?;
+            spc.ok_or_else(|| UnlaceError::lowlevel("<segmentop> expecting space attribute"))?;
         let otherop = names.get_by_name(&self.base.name).ok_or_else(|| {
-            KunaError::lowlevel(format!(
+            UnlaceError::lowlevel(format!(
                 "<segmentop> unknown userop {}",
                 String::from_utf8_lossy(&self.base.name)
             ))
         })?;
         self.base.useropindex = otherop.index;
         if !otherop.unspecialized {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "Redefining userop {}",
                 String::from_utf8_lossy(&self.base.name)
             )));
@@ -1004,13 +1004,13 @@ impl UserPcodeOp {
         }
         decoder.close_element(elem_id)?;
         if inject_id < 0 {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Missing <pcode> child in <segmentop> tag",
             ));
         }
         let (size_output, size_input, in0, in1) = arch.payload_io_sizes(inject_id)?;
         if size_output != 1 {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "<pcode> child of <segmentop> tag must declare one <output>",
             ));
         }
@@ -1020,7 +1020,7 @@ impl UserPcodeOp {
             baseinsize = in0;
             innerinsize = in1;
         } else {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "<pcode> child of <segmentop> tag must declare one or two <input> tags",
             ));
         }
@@ -1041,7 +1041,7 @@ impl UserPcodeOp {
         decoder: &mut dyn Decoder,
         arch: &mut A,
         names: &NameLookup,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let elem_id = decoder.open_element_id(&ELEM_JUMPASSIST)?;
         self.base.name = decoder.read_string_id(&ATTRIB_NAME)?;
         let mut index2case: int4 = -1; // Mark as not present until we see a tag
@@ -1055,28 +1055,28 @@ impl UserPcodeOp {
             }
             if sub_id == ELEM_CASE_PCODE {
                 if index2case != -1 {
-                    return Err(KunaError::lowlevel("Too many <case_pcode> tags"));
+                    return Err(UnlaceError::lowlevel("Too many <case_pcode> tags"));
                 }
                 let nm = suffixed(&self.base.name, b"_index2case");
                 index2case =
                     arch.decode_inject(b"jumpassistop", &nm, EXECUTABLEPCODE_TYPE, decoder)?;
             } else if sub_id == ELEM_ADDR_PCODE {
                 if index2addr != -1 {
-                    return Err(KunaError::lowlevel("Too many <addr_pcode> tags"));
+                    return Err(UnlaceError::lowlevel("Too many <addr_pcode> tags"));
                 }
                 let nm = suffixed(&self.base.name, b"_index2addr");
                 index2addr =
                     arch.decode_inject(b"jumpassistop", &nm, EXECUTABLEPCODE_TYPE, decoder)?;
             } else if sub_id == ELEM_DEFAULT_PCODE {
                 if defaultaddr != -1 {
-                    return Err(KunaError::lowlevel("Too many <default_pcode> tags"));
+                    return Err(UnlaceError::lowlevel("Too many <default_pcode> tags"));
                 }
                 let nm = suffixed(&self.base.name, b"_defaultaddr");
                 defaultaddr =
                     arch.decode_inject(b"jumpassistop", &nm, EXECUTABLEPCODE_TYPE, decoder)?;
             } else if sub_id == ELEM_SIZE_PCODE {
                 if calcsize != -1 {
-                    return Err(KunaError::lowlevel("Too many <size_pcode> tags"));
+                    return Err(UnlaceError::lowlevel("Too many <size_pcode> tags"));
                 }
                 let nm = suffixed(&self.base.name, b"_calcsize");
                 calcsize =
@@ -1088,25 +1088,25 @@ impl UserPcodeOp {
         decoder.close_element(elem_id)?;
 
         if index2addr == -1 {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "userop: {} is missing <addr_pcode>",
                 String::from_utf8_lossy(&self.base.name)
             )));
         }
         if defaultaddr == -1 {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "userop: {} is missing <default_pcode>",
                 String::from_utf8_lossy(&self.base.name)
             )));
         }
         let base = names.get_by_name(&self.base.name).ok_or_else(|| {
-            KunaError::lowlevel(format!(
+            UnlaceError::lowlevel(format!(
                 "Unknown userop name in <jumpassist>: {}",
                 String::from_utf8_lossy(&self.base.name)
             ))
         })?;
         if !base.unspecialized {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "<jumpassist> overloads userop with another purpose: {}",
                 String::from_utf8_lossy(&self.base.name)
             )));
@@ -1169,7 +1169,7 @@ pub trait UseropArchitecture: InjectArchitecture {
         suffix: &[u8],
         tp: int4,
         decoder: &mut dyn Decoder,
-    ) -> KunaResult<int4>;
+    ) -> UnlaceResult<int4>;
 
     /// C++ `glb->pcodeinjectlib->getCallOtherTarget(injectid)`: the
     /// callother-fixup target-op name for a registered injection id (used by
@@ -1179,7 +1179,7 @@ pub trait UseropArchitecture: InjectArchitecture {
     /// Return `(sizeOutput, sizeInput, input0Size, input1Size)` for a decoded
     /// payload, the four `payload->size*()`/`getInput(k).getSize()` reads
     /// `SegmentOp::decode` performs after the `<pcode>` child is parsed.
-    fn payload_io_sizes(&self, injectid: int4) -> KunaResult<(int4, int4, int4, int4)>;
+    fn payload_io_sizes(&self, injectid: int4) -> UnlaceResult<(int4, int4, int4, int4)>;
 }
 
 /// STUB(W6): the type-factory slice that builds the BUILTIN_MEM* DatatypeUserOp
@@ -1210,7 +1210,7 @@ pub trait UseropTypeArchitecture {
     fn get_type_wchar(&self) -> Rc<crate::dtype::Datatype>;
     /// C++ `glb->types->getBase(1,TYPE_BOOL)`.
     fn get_type_bool(&self) -> Rc<crate::dtype::Datatype>;
-    /// (kuna) A pointer to the System V x86-64 `__va_list_tag`, when pointers
+    /// (unlace) A pointer to the System V x86-64 `__va_list_tag`, when pointers
     /// are 8 bytes.
     fn get_va_list_pointer(&self) -> Option<Rc<crate::dtype::Datatype>> {
         None
@@ -1313,7 +1313,7 @@ impl UserOpManage {
     ///
     /// Every user-defined p-code op presented by the architecture's translator
     /// is assigned a default `UnspecializedPcodeOp` description.
-    pub fn initialize<A: UseropArchitecture>(&mut self, arch: &A) -> KunaResult<()> {
+    pub fn initialize<A: UseropArchitecture>(&mut self, arch: &A) -> UnlaceResult<()> {
         let basicops = arch.get_user_op_names();
         for (i, nm) in basicops.iter().enumerate() {
             if nm.is_empty() {
@@ -1368,7 +1368,7 @@ impl UserOpManage {
         &mut self,
         i: uint4,
         types: &T,
-    ) -> KunaResult<&UserPcodeOp> {
+    ) -> UnlaceResult<&UserPcodeOp> {
         if self.builtinmap.contains_key(&i) {
             return Ok(self.builtinmap.get(&i).unwrap());
         }
@@ -1416,7 +1416,7 @@ impl UserOpManage {
                 )
             }
             BUILTIN_MEMSET => {
-                // (kuna) GH-9230 void *memset(void *dst,int val,int len)
+                // (unlace) GH-9230 void *memset(void *dst,int val,int len)
                 let ptr_size = types.get_size_of_pointer();
                 let word_size = types.get_default_data_space_word_size();
                 let v_type = types.get_type_void();
@@ -1572,14 +1572,14 @@ impl UserOpManage {
             }
             _ => match atomic_builtin_name(i) {
                 Some(name) => UserPcodeOp::new_unspecialized(name, i as int4),
-                None => return Err(KunaError::lowlevel("Bad built-in userop id")),
+                None => return Err(UnlaceError::lowlevel("Bad built-in userop id")),
             },
         };
         self.builtinmap.insert(i, res);
         Ok(self.builtinmap.get(&i).unwrap())
     }
 
-    /// (kuna) Register an unspecialized built-in user-op under `name` (the
+    /// (unlace) Register an unspecialized built-in user-op under `name` (the
     /// `lanefuse` intrinsics, whose ids are generated).
     pub fn register_named_builtin(&mut self, i: uint4, name: &str) {
         self.builtinmap
@@ -1592,16 +1592,16 @@ impl UserOpManage {
     ///
     /// Sanity-checks conflicting indices and duplicate ops; if a `SegmentOp` is
     /// registered, also records it in the per-space `segmentop` table.
-    pub fn register_op(&mut self, op: UserPcodeOp) -> KunaResult<()> {
+    pub fn register_op(&mut self, op: UserPcodeOp) -> UnlaceResult<()> {
         let ind = op.get_index();
         if ind < 0 {
-            return Err(KunaError::lowlevel("UserOp not assigned an index"));
+            return Err(UnlaceError::lowlevel("UserOp not assigned an index"));
         }
 
         if let Some(&other_id) = self.useropmap.get(op.get_name()) {
             if let Some(Some(other)) = self.useroplist.get(other_id as usize) {
                 if other.get_index() != ind {
-                    return Err(KunaError::lowlevel(format!(
+                    return Err(UnlaceError::lowlevel(format!(
                         "Conflicting indices for userop name {}",
                         String::from_utf8_lossy(op.get_name())
                     )));
@@ -1614,7 +1614,7 @@ impl UserOpManage {
         }
         if let Some(existing) = &self.useroplist[ind as usize] {
             if existing.get_name() != op.get_name() {
-                return Err(KunaError::lowlevel(format!(
+                return Err(UnlaceError::lowlevel(format!(
                     "User op {} has same index as {}",
                     String::from_utf8_lossy(op.get_name()),
                     String::from_utf8_lossy(existing.get_name())
@@ -1636,7 +1636,7 @@ impl UserOpManage {
                 self.segmentop.push(None);
             }
             if self.segmentop[index as usize].is_some() {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "Multiple segmentops defined for same space",
                 ));
             }
@@ -1651,7 +1651,7 @@ impl UserOpManage {
         &mut self,
         decoder: &mut dyn Decoder,
         arch: &mut A,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let mut s_op = UserPcodeOp::new_segment(b"", self.useroplist.len() as int4);
         let names = self.name_lookup();
         s_op.decode(decoder, arch, &names)?;
@@ -1664,7 +1664,7 @@ impl UserOpManage {
     /// The C++ reads only the `inputop`/`outputop`/`format` attributes here
     /// (the `<range>` children are consumed by the caller). The two
     /// VolatileRead/Write ops are placed directly into `builtinmap`.
-    pub fn decode_volatile(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    pub fn decode_volatile(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         let mut read_op_name: Vec<u8> = Vec::new();
         let mut write_op_name: Vec<u8> = Vec::new();
         let mut functional_display = false;
@@ -1685,17 +1685,17 @@ impl UserOpManage {
             }
         }
         if read_op_name.is_empty() || write_op_name.is_empty() {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Missing inputop/outputop attributes in <volatile> element",
             ));
         }
         if self.builtinmap.contains_key(&BUILTIN_VOLATILE_READ) {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "read_volatile user-op registered more than once",
             ));
         }
         if self.builtinmap.contains_key(&BUILTIN_VOLATILE_WRITE) {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "write_volatile user-op registered more than once",
             ));
         }
@@ -1712,7 +1712,7 @@ impl UserOpManage {
         &mut self,
         decoder: &mut dyn Decoder,
         arch: &mut A,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let mut op = UserPcodeOp::new_injected(b"", 0, 0);
         let names = self.name_lookup();
         op.decode(decoder, arch, &names)?;
@@ -1725,7 +1725,7 @@ impl UserOpManage {
         &mut self,
         decoder: &mut dyn Decoder,
         arch: &mut A,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let mut op = UserPcodeOp::new_jump_assist();
         let names = self.name_lookup();
         op.decode(decoder, arch, &names)?;
@@ -1738,19 +1738,23 @@ impl UserOpManage {
     /// STUB(`inject_sleigh.rs`): the actual snippet compile
     /// (`pcodeinjectlib->manualCallOtherFixup`) is the SLEIGH library's; the
     /// caller passes the resulting injectid through.
-    pub fn manual_call_other_fixup(&mut self, useropname: &[u8], injectid: int4) -> KunaResult<()> {
+    pub fn manual_call_other_fixup(
+        &mut self,
+        useropname: &[u8],
+        injectid: int4,
+    ) -> UnlaceResult<()> {
         let (exists, unspecialized, index) = match self.get_op_by_name(useropname) {
             Some(op) => (true, op.is_unspecialized(), op.get_index()),
             None => (false, false, 0),
         };
         if !exists {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "Unknown userop: {}",
                 String::from_utf8_lossy(useropname)
             )));
         }
         if !unspecialized {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "Cannot fixup userop: {}",
                 String::from_utf8_lossy(useropname)
             )));

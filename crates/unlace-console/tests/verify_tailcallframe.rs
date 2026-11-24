@@ -55,7 +55,7 @@ fn load(tailcallframe: bool) -> ConsoleProgram {
         bootstrap_from_object(bin.to_str().expect("UTF-8 fixture path"), "", &spec_roots)
             .expect("bootstrap fixture with built processor specs");
     prog.arch_mut()
-        .set_kuna_option("tailcallframe", if tailcallframe { "on" } else { "off" })
+        .set_unlace_option("tailcallframe", if tailcallframe { "on" } else { "off" })
         .expect("tailcallframe flips");
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");

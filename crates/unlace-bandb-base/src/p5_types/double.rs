@@ -1131,7 +1131,7 @@ fn adjacent_offsets(data: &Funcdata, vn1: VarnodeId, vn2: VarnodeId, size1: uint
 ///
 /// C++ `Varnode::getSpaceFromConst` (`varnode.hh:427`) does
 /// `getSpace()->getManager()->getSpace((int4)getOffset())` — it reinterprets the
-/// constant's offset as the space-id and indexes the manager.  The kuna port
+/// constant's offset as the space-id and indexes the manager.  The unlace port
 /// (LOSS-015) stores the space's manager *index* in that offset (exactly the
 /// representation decoded by the real `RuleLoadVarnode` helper
 /// `space_from_const` in `ruleaction_4.rs`), so here we read that index back.

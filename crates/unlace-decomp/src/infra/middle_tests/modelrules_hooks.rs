@@ -18,7 +18,7 @@ mod module_scope {
         hiddenret_specialreg as RES_HIDDENRET_SPECIALREG,
         hiddenret_specialreg_void as RES_HIDDENRET_SPECIALREG_VOID, success as RES_SUCCESS,
     };
-    pub(super) use unlace_base::error::{KunaError, KunaResult};
+    pub(super) use unlace_base::error::{UnlaceError, UnlaceResult};
     pub(super) use unlace_base::marshal::{
         ATTRIB_ALIGN, ATTRIB_INDEX, ATTRIB_NAME, ATTRIB_STACKSPILL, ATTRIB_STORAGE, AttributeId,
         Decoder, ElementId,
@@ -37,7 +37,7 @@ use crate::fspec::{
 use crate::modelrules::*;
 use module_scope::*;
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::marshal::{Decoder, IdRegistry, XmlDecode};
 use unlace_base::space::{AddrSpace, AddrSpaceManager, spacetype};
 use unlace_base::types::int4;
@@ -310,7 +310,7 @@ fn decode_rule(
     xml: &str,
     resource: &ParamListStandard,
     mgr: &AddrSpaceManager,
-) -> KunaResult<ModelRule> {
+) -> UnlaceResult<ModelRule> {
     let registry = modelrules_registry();
     let mut decoder = XmlDecode::new(mgr, &registry);
     decoder.ingest_stream(xml.as_bytes())?;
@@ -337,47 +337,47 @@ macro_rules! impl_type_factory {
             fn get_size_of_wchar(&self) -> int4 { panic!("type factory reached") }
             fn get_size_of_pointer(&self) -> int4 { panic!("type factory reached") }
             fn get_size_of_alt_pointer(&self) -> int4 { panic!("type factory reached") }
-            fn get_alignment(&self, size: u32) -> KunaResult<int4> { panic!("type factory reached") }
-            fn get_primitive_align_size(&self, size: u32) -> KunaResult<int4> { panic!("type factory reached") }
-            fn get_type_void(&self) -> KunaResult<Rc<Datatype>> { panic!("type factory reached") }
-            fn get_base_no_char(&self, s: int4, m: type_metatype) -> KunaResult<Rc<Datatype>> { panic!("type factory reached") }
-            fn get_base(&self, s: int4, m: type_metatype) -> KunaResult<Rc<Datatype>> { panic!("type factory reached") }
-            fn get_base_named(&self, s: int4, m: type_metatype, n: &str) -> KunaResult<Rc<Datatype>> { panic!("type factory reached") }
-            fn get_type_char(&self, s: int4) -> KunaResult<Rc<Datatype>> { panic!("type factory reached") }
-            fn get_type_code(&self) -> KunaResult<Rc<Datatype>> { panic!("type factory reached") }
-            fn get_type_pointer_strip_array(&self, s: int4, pt: Rc<Datatype>, ws: u32) -> KunaResult<Rc<Datatype>> { panic!("type factory reached") }
+            fn get_alignment(&self, size: u32) -> UnlaceResult<int4> { panic!("type factory reached") }
+            fn get_primitive_align_size(&self, size: u32) -> UnlaceResult<int4> { panic!("type factory reached") }
+            fn get_type_void(&self) -> UnlaceResult<Rc<Datatype>> { panic!("type factory reached") }
+            fn get_base_no_char(&self, s: int4, m: type_metatype) -> UnlaceResult<Rc<Datatype>> { panic!("type factory reached") }
+            fn get_base(&self, s: int4, m: type_metatype) -> UnlaceResult<Rc<Datatype>> { panic!("type factory reached") }
+            fn get_base_named(&self, s: int4, m: type_metatype, n: &str) -> UnlaceResult<Rc<Datatype>> { panic!("type factory reached") }
+            fn get_type_char(&self, s: int4) -> UnlaceResult<Rc<Datatype>> { panic!("type factory reached") }
+            fn get_type_code(&self) -> UnlaceResult<Rc<Datatype>> { panic!("type factory reached") }
+            fn get_type_pointer_strip_array(&self, s: int4, pt: Rc<Datatype>, ws: u32) -> UnlaceResult<Rc<Datatype>> { panic!("type factory reached") }
             $ptr_body
-            fn get_type_pointer_named(&self, s: int4, pt: Rc<Datatype>, ws: u32, n: &str) -> KunaResult<Rc<Datatype>> { panic!("type factory reached") }
-            fn resize_pointer(&self, ptr: Rc<Datatype>, new_size: int4) -> KunaResult<Rc<Datatype>> { panic!("type factory reached") }
-            fn get_type_pointer_rel(&self, parent_ptr: Rc<Datatype>, ptr_to: Rc<Datatype>, off: int4) -> KunaResult<Rc<Datatype>> { panic!("type factory reached") }
-            fn get_type_pointer_rel_full(&self, sz: int4, parent: Rc<Datatype>, ptr_to: Rc<Datatype>, ws: int4, off: int4, nm: &str) -> KunaResult<Rc<Datatype>> { panic!("type factory reached") }
-            fn get_type_pointer_with_space(&self, ptr_to: Rc<Datatype>, spc: Rc<AddrSpace>, nm: &str) -> KunaResult<Rc<Datatype>> { panic!("type factory reached") }
-            fn get_type_array(&self, as_: int4, ao: Rc<Datatype>) -> KunaResult<Rc<Datatype>> { panic!("type factory reached") }
-            fn get_type_struct(&self, n: &str) -> KunaResult<Rc<Datatype>> { panic!("type factory reached") }
-            fn get_type_partial_struct(&self, contain: Rc<Datatype>, off: int4, sz: int4) -> KunaResult<Rc<Datatype>> { panic!("type factory reached") }
-            fn get_type_union(&self, n: &str) -> KunaResult<Rc<Datatype>> { panic!("type factory reached") }
-            fn get_type_partial_union(&self, contain: Rc<Datatype>, off: int4, sz: int4) -> KunaResult<Rc<Datatype>> { panic!("type factory reached") }
-            fn get_type_partial_enum(&self, contain: Rc<Datatype>, off: int4, sz: int4) -> KunaResult<Rc<Datatype>> { panic!("type factory reached") }
-            fn get_type_enum(&self, n: &str) -> KunaResult<Rc<Datatype>> { panic!("type factory reached") }
-            fn get_type_spacebase(&self, id: Rc<AddrSpace>, addr: &Address) -> KunaResult<Rc<Datatype>> { panic!("type factory reached") }
-            fn resize_integer(&self, ct: Rc<Datatype>, new_size: int4) -> KunaResult<Rc<Datatype>> { panic!("type factory reached") }
-            fn get_exact_piece(&self, ct: Rc<Datatype>, offset: int4, size: int4) -> KunaResult<Option<Rc<Datatype>>> { panic!("type factory reached") }
-            fn find_by_name(&self, n: &str) -> KunaResult<Option<Rc<Datatype>>> { panic!("type factory reached") }
-            fn concretize(&self, ct: Rc<Datatype>) -> KunaResult<Rc<Datatype>> { panic!("type factory reached") }
+            fn get_type_pointer_named(&self, s: int4, pt: Rc<Datatype>, ws: u32, n: &str) -> UnlaceResult<Rc<Datatype>> { panic!("type factory reached") }
+            fn resize_pointer(&self, ptr: Rc<Datatype>, new_size: int4) -> UnlaceResult<Rc<Datatype>> { panic!("type factory reached") }
+            fn get_type_pointer_rel(&self, parent_ptr: Rc<Datatype>, ptr_to: Rc<Datatype>, off: int4) -> UnlaceResult<Rc<Datatype>> { panic!("type factory reached") }
+            fn get_type_pointer_rel_full(&self, sz: int4, parent: Rc<Datatype>, ptr_to: Rc<Datatype>, ws: int4, off: int4, nm: &str) -> UnlaceResult<Rc<Datatype>> { panic!("type factory reached") }
+            fn get_type_pointer_with_space(&self, ptr_to: Rc<Datatype>, spc: Rc<AddrSpace>, nm: &str) -> UnlaceResult<Rc<Datatype>> { panic!("type factory reached") }
+            fn get_type_array(&self, as_: int4, ao: Rc<Datatype>) -> UnlaceResult<Rc<Datatype>> { panic!("type factory reached") }
+            fn get_type_struct(&self, n: &str) -> UnlaceResult<Rc<Datatype>> { panic!("type factory reached") }
+            fn get_type_partial_struct(&self, contain: Rc<Datatype>, off: int4, sz: int4) -> UnlaceResult<Rc<Datatype>> { panic!("type factory reached") }
+            fn get_type_union(&self, n: &str) -> UnlaceResult<Rc<Datatype>> { panic!("type factory reached") }
+            fn get_type_partial_union(&self, contain: Rc<Datatype>, off: int4, sz: int4) -> UnlaceResult<Rc<Datatype>> { panic!("type factory reached") }
+            fn get_type_partial_enum(&self, contain: Rc<Datatype>, off: int4, sz: int4) -> UnlaceResult<Rc<Datatype>> { panic!("type factory reached") }
+            fn get_type_enum(&self, n: &str) -> UnlaceResult<Rc<Datatype>> { panic!("type factory reached") }
+            fn get_type_spacebase(&self, id: Rc<AddrSpace>, addr: &Address) -> UnlaceResult<Rc<Datatype>> { panic!("type factory reached") }
+            fn resize_integer(&self, ct: Rc<Datatype>, new_size: int4) -> UnlaceResult<Rc<Datatype>> { panic!("type factory reached") }
+            fn get_exact_piece(&self, ct: Rc<Datatype>, offset: int4, size: int4) -> UnlaceResult<Option<Rc<Datatype>>> { panic!("type factory reached") }
+            fn find_by_name(&self, n: &str) -> UnlaceResult<Option<Rc<Datatype>>> { panic!("type factory reached") }
+            fn concretize(&self, ct: Rc<Datatype>) -> UnlaceResult<Rc<Datatype>> { panic!("type factory reached") }
         }
     };
 }
 
 impl_type_factory!(
     PanicFactory,
-    fn get_type_pointer(&self, s: int4, pt: Rc<Datatype>, ws: u32) -> KunaResult<Rc<Datatype>> {
+    fn get_type_pointer(&self, s: int4, pt: Rc<Datatype>, ws: u32) -> UnlaceResult<Rc<Datatype>> {
         panic!("type factory reached")
     }
 );
 
 impl_type_factory!(
     PointerFactory,
-    fn get_type_pointer(&self, s: int4, pt: Rc<Datatype>, ws: u32) -> KunaResult<Rc<Datatype>> {
+    fn get_type_pointer(&self, s: int4, pt: Rc<Datatype>, ws: u32) -> UnlaceResult<Rc<Datatype>> {
         let mut d = Datatype::new_with_align(s, s, type_metatype::TYPE_PTR);
         d.kind = DatatypeKind::Pointer {
             ptrto: pt,

@@ -1,4 +1,4 @@
-//! (kuna `javasync`) Java `synchronized` and `finally` in a DEX method's
+//! (unlace `javasync`) Java `synchronized` and `finally` in a DEX method's
 //! catch-all handlers.
 //!
 //! javac and D8 compile `synchronized (x) { body }` to `monitor-enter x` just
@@ -22,8 +22,8 @@ use std::collections::BTreeMap;
 use crate::dex::{DexModel, TryBlock};
 use crate::funcdata::Funcdata;
 
-crate::kuna_flag!(
-    /// (kuna) Print a DEX catch-all that releases a monitor as `synchronized`
+crate::unlace_flag!(
+    /// (unlace) Print a DEX catch-all that releases a monitor as `synchronized`
     /// and one that repeats the normal path's code as `finally` (option
     /// `javasync`).
     JavaSync,
@@ -306,7 +306,7 @@ pub fn idioms(
 /// `javasync` is on.
 pub fn method_idioms(data: &Funcdata) -> BTreeMap<u64, JavaIdiom> {
     let arch = data.get_arch();
-    if !arch.kuna_options.get::<JavaSync>().0 {
+    if !arch.unlace_options.get::<JavaSync>().0 {
         return BTreeMap::new();
     }
     let Some(model) = arch.dex.as_deref() else {

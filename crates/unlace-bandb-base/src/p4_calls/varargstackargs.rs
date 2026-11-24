@@ -1,4 +1,4 @@
-//! (kuna) The stack resource is its own section at a variadic call site.
+//! (unlace) The stack resource is its own section at a variadic call site.
 //!
 //! # The gap
 //!
@@ -85,7 +85,7 @@ use unlace_base::types::int4;
 
 use crate::fspec::ParamActive;
 
-/// Marshaling element `<varargstackargs>` (kuna 4000+ range; 4131 = cleanupcode).
+/// Marshaling element `<varargstackargs>` (unlace 4000+ range; 4131 = cleanupcode).
 pub const ELEM_VARARGSTACKARGS: ElementId = ElementId::new("varargstackargs", 4132);
 
 /// Where a `fillinMap` resource section should be cut in two, or `None` to
@@ -128,7 +128,7 @@ pub fn stack_section_split(active: &ParamActive, start: int4, stop: int4) -> Opt
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.varargstackargs_stack_section_split = Some(stack_section_split);
 }
 

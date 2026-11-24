@@ -77,11 +77,11 @@ fn load_fixture(fixture: &str, on: bool) -> ConsoleProgram {
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
     prog.arch_mut()
-        .set_kuna_option("swiftmetadata", "on")
+        .set_unlace_option("swiftmetadata", "on")
         .expect("swiftmetadata flips on");
     if !on {
         prog.arch_mut()
-            .set_kuna_option("valuewitness", "off")
+            .set_unlace_option("valuewitness", "off")
             .expect("valuewitness flips off");
     }
     prog.commit_pending_analysis()

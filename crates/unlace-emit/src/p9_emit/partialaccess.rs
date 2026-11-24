@@ -1,11 +1,11 @@
-//! (kuna `partialaccess`) Print a partial access of a variable that no member
+//! (unlace `partialaccess`) Print a partial access of a variable that no member
 //! names as C instead of Ghidra's `name._<off>_<size>_`.
 //!
 //! `PrintC::pushPartialSymbol` (printc.cc:2106-2117) renders the bytes of a
 //! variable that no field covers as an artificial member, `v1._4_2_` for the two
 //! bytes at offset 4. That is not C: no compiler accepts it and a reader has to
 //! know the convention. With the option on, an access of a width C has a scalar
-//! for prints as the pointer access it is, the spelling kuna already uses for
+//! for prints as the pointer access it is, the spelling unlace already uses for
 //! the same bytes reached through a pointer:
 //!
 //! * `((T *)&v1)[k]` when the offset is a multiple of the width (`k` = offset /

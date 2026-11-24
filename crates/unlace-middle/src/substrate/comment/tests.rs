@@ -413,7 +413,7 @@ impl SorterFuncdata for FakeFd {
             Some(OpCursor(lower - 1))
         }
     }
-    fn op_block_info(&self, cursor: &OpCursor, addr: &Address) -> KunaResult<OpBlockInfo> {
+    fn op_block_info(&self, cursor: &OpCursor, addr: &Address) -> UnlaceResult<OpBlockInfo> {
         let (_, idx, order) = self.ops[cursor.0 as usize];
         let off = addr.get_offset();
         let mut contains = false;

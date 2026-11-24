@@ -21,7 +21,7 @@
 //! output buffer), and stubs the console plumbing.  When W9 lands, the
 //! `IfaceDecompCommand::execute` wrappers parse their `istream` and call these.
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::Encoder;
 
 use crate::funcdata::Funcdata;
@@ -84,9 +84,9 @@ pub enum AnalyzeSigsCommand {
 /// zero value is rejected (the C++ `throw IfaceParseError("Must specify settings
 /// integer")`).  On success the process-global settings are updated and a
 /// confirmation line is returned for the caller to print to `status->optr`.
-pub fn signature_settings(mysetting: u32) -> KunaResult<String> {
+pub fn signature_settings(mysetting: u32) -> UnlaceResult<String> {
     if mysetting == 0 {
-        return Err(KunaError::parse("Must specify settings integer"));
+        return Err(UnlaceError::parse("Must specify settings integer"));
     }
     set_settings(mysetting);
     Ok(format!("Signature settings set to {mysetting:x}"))
@@ -112,9 +112,11 @@ pub fn signature_settings(mysetting: u32) -> KunaResult<String> {
 /// generic feature prints its bare hash, so the printed text is built from
 /// [`GraphSigManager::get_signature_vector`] (the sorted hash list) — the same
 /// hashes, without the per-feature origin string (STUB(W8)).
-pub fn print_signatures(fd: &Funcdata, maxiter_override: Option<i32>) -> KunaResult<String> {
+pub fn print_signatures(fd: &Funcdata, maxiter_override: Option<i32>) -> UnlaceResult<String> {
     if !fd.is_proc_complete() {
-        return Err(KunaError::lowlevel("Function has not been fully analyzed"));
+        return Err(UnlaceError::lowlevel(
+            "Function has not been fully analyzed",
+        ));
     }
     let mut smanage = GraphSigManager::new()?;
     smanage.initialize_from_stream(maxiter_override);
@@ -148,9 +150,11 @@ pub fn save_signatures(
     fd: &Funcdata,
     maxiter_override: Option<i32>,
     encoder: &mut dyn Encoder,
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     if !fd.is_proc_complete() {
-        return Err(KunaError::lowlevel("Function has not been fully analyzed"));
+        return Err(UnlaceError::lowlevel(
+            "Function has not been fully analyzed",
+        ));
     }
     let mut smanage = GraphSigManager::new()?;
     smanage.initialize_from_stream(maxiter_override);
@@ -171,7 +175,10 @@ pub fn save_signatures(
 /// already-decompiled `&Funcdata` and the parsed `maxiter_override`, generates,
 /// and returns the formatted line (the re-decompilation + file write are the W9
 /// surface).
-pub fn produce_signature_line(fd: &Funcdata, maxiter_override: Option<i32>) -> KunaResult<String> {
+pub fn produce_signature_line(
+    fd: &Funcdata,
+    maxiter_override: Option<i32>,
+) -> UnlaceResult<String> {
     let mut smanage = GraphSigManager::new()?;
     smanage.initialize_from_stream(maxiter_override);
     smanage.set_current_function(fd)?;
@@ -198,7 +205,7 @@ pub fn saveall_signature_record(
     fd: &Funcdata,
     maxiter_override: Option<i32>,
     encoder: &mut dyn Encoder,
-) -> KunaResult<i32> {
+) -> UnlaceResult<i32> {
     let mut smanage = GraphSigManager::new()?;
     smanage.initialize_from_stream(maxiter_override);
     smanage.set_current_function(fd)?;
@@ -215,7 +222,7 @@ pub fn saveall_signature_record(
 /// behind a future `IfcSaveSignatures` debug mode.  Kept as a thin wrapper over
 /// [`debug_signature`](crate::signature::debug_signature) so callers have a
 /// single entry point that mirrors the C++ free function.
-pub fn save_debug_signatures(fd: &Funcdata, encoder: &mut dyn Encoder) -> KunaResult<()> {
+pub fn save_debug_signatures(fd: &Funcdata, encoder: &mut dyn Encoder) -> UnlaceResult<()> {
     debug_signature(fd, encoder)
 }
 

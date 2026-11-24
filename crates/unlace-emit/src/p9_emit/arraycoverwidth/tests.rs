@@ -1,4 +1,4 @@
-//! (kuna) array-cover width-predicate tests.
+//! (unlace) array-cover width-predicate tests.
 
 use std::rc::Rc;
 
@@ -19,7 +19,7 @@ fn factory() -> TypeFactoryImpl {
 }
 
 #[test]
-fn element_id_is_in_the_kuna_range() {
+fn element_id_is_in_the_unlace_range() {
     assert_eq!(ELEM_ARRAYCOVERWIDTH.get_id(), 4145);
     assert_eq!(ELEM_ARRAYCOVERWIDTH.get_name(), "arraycoverwidth");
 }

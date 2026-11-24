@@ -4,7 +4,7 @@
 //! tail ([`plan_tail`]) and which argument locations the witness leaves
 //! unclaimed ([`uncovered_argument_locations`]) — the second being what refuses
 //! a variadic callee.  The end-to-end behaviour is
-//! `tests/stages/kuna-calleearitylive.toml`.
+//! `tests/stages/unlace-calleearitylive.toml`.
 
 use super::*;
 

@@ -97,7 +97,7 @@ pair:
             base.replace("</compiler_spec>", &(custom + "</compiler_spec>")),
         )
         .unwrap();
-        let (output, error, status) = common::run_kuna(&[
+        let (output, error, status) = common::run_unlace(&[
             "decompile-all",
             original.to_str().unwrap(),
             "--functions",
@@ -270,7 +270,7 @@ int main(int argc, char **argv) {
             base.replace("</compiler_spec>", &(custom + "</compiler_spec>")),
         )
         .unwrap();
-        let (output, error, status) = common::run_kuna(&[
+        let (output, error, status) = common::run_unlace(&[
             "decompile-all",
             original.to_str().unwrap(),
             "--functions",

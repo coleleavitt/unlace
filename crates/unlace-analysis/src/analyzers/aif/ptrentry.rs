@@ -1,4 +1,4 @@
-//! (kuna) `ptrentry` — pointer-referenced ARM function entries (P1 code/data
+//! (unlace) `ptrentry` — pointer-referenced ARM function entries (P1 code/data
 //! partition, ARM discovery Stage 3b).
 //!
 //! Step 2 of the ARM entry-recall sequence (`[PROPOSAL]` PR #239). That proposal
@@ -46,7 +46,7 @@
 //! | + no site is instruction bytes | 2,143 | 1,992 (**93.0%**) | **0** |
 //!
 //! 1. **[`Guard::SameFunction`]** — reject a target when any pointer word that
-//!    references it falls in the same discovered kuna function as the target
+//!    references it falls in the same discovered unlace function as the target
 //!    itself. This is the switch table exactly: table and cases share a body. It
 //!    removes 1,253 of the 1,261 splits and costs 12 ground-truth entries.
 //! 2. **[`Guard::SiteIsInstruction`]** — reject a target when any referencing word
@@ -54,10 +54,10 @@
 //!    bytes read four-aligned, not a table slot. It removes the remaining 8 splits
 //!    and costs 5 ground-truth entries.
 //!
-//! This is the kuna form of the guard Ghidra draws between
+//! This is the unlace form of the guard Ghidra draws between
 //! `OperandReferenceAnalyzer` (creates functions, from **instruction operands**)
 //! and `DataOperandReferenceAnalyzer`, which overrides `createFunctions` to a
-//! no-op — *"don't ever create a function from a data pointer"*. kuna cannot use
+//! no-op — *"don't ever create a function from a data pointer"*. unlace cannot use
 //! Ghidra's version directly: the Listing tier records only control-flow
 //! references (`RefKind::Call`/`Code`; the design leaves the data kinds
 //! unpopulated), so "which instruction loaded this word" is not available. The
@@ -260,7 +260,7 @@ pub(super) fn check_terminating_routine(
     Some(body)
 }
 
-/// (kuna, ARM discovery Stage 3b) The `ptrentry` scan: the accepted
+/// (unlace, ARM discovery Stage 3b) The `ptrentry` scan: the accepted
 /// pointer-referenced function entries, address-sorted and deduped, ready to emit
 /// as [`crate::pass::AnalysisOutput::entries`].
 ///
@@ -300,7 +300,7 @@ pub fn pointer_entry_seeds(
 /// into.
 const MAX_SHRINKWRAP_INSNS: usize = 8;
 
-/// (kuna) The accepted pointer targets whose straight-line code runs into one of
+/// (unlace) The accepted pointer targets whose straight-line code runs into one of
 /// `roots`, the starts only the raw Thumb prologue scan found, as
 /// `(target, root)`. GCC delays a Thumb `push {..., lr}` until after the first
 /// instructions (`ldr.w r12,[r0,#0xdc]; push.w {...}`), the scan reports the

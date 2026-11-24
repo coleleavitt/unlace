@@ -1,4 +1,4 @@
-//! (kuna `prunedssa`) Heritage markers only where the range is still read.
+//! (unlace `prunedssa`) Heritage markers only where the range is still read.
 //!
 //! Heritage builds minimal SSA: a MULTIEQUAL at every join in the iterated
 //! dominance frontier of a range's writes, and an INDIRECT at every call with
@@ -276,7 +276,7 @@ fn call_reads(
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.prunedssa_applies = Some(applies);
     hooks.prunedssa_applies_to_calls = Some(applies_to_calls);
     hooks.prunedssa_live_calls = Some(live_calls);

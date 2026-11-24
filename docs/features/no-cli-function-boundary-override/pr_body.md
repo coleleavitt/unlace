@@ -4,7 +4,7 @@
 
 > The console has `map function <addr> [name] [nocode]` and `load addr <addr> [name]`, both
 > functional. The `kuna` binary can emit neither […] Worse, `function F spans [start,end)`
-> does not exist ANYWHERE — extent is derived in `kuna-console/src/funcextent.rs` as
+> does not exist ANYWHERE — extent is derived in `console/src/funcextent.rs` as
 > `[entry, min(next_entry, section_end))` with no override […] On an obfuscated or packed
 > image, where discovery is exactly what fails, the agent has no lever.
 

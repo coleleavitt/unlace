@@ -1,7 +1,7 @@
 //! The uPD7725 / uPD96050 languages load a raw program ROM (24-bit words as three
 //! little-endian bytes) and decompile it.
 use crate::common;
-use common::{repo_root, run_kuna};
+use common::{repo_root, run_unlace};
 
 fn decompile(fixture: &str, target: &str) -> String {
     let bin = repo_root()
@@ -10,7 +10,7 @@ fn decompile(fixture: &str, target: &str) -> String {
         .to_str()
         .unwrap()
         .to_owned();
-    let (stdout, stderr, code) = run_kuna(&[
+    let (stdout, stderr, code) = run_unlace(&[
         "decompile",
         &bin,
         "0x0",

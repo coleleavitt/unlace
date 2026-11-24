@@ -26,7 +26,7 @@
     "decompiler/crates/kuna-analysis/tests/fixtures/switchtable_x86_64",
     "decompiler/crates/kuna-analysis/tests/fixtures/switchtable_x86_64.s",
     "decompiler/crates/kuna-analysis/tests/fixtures/README.md",
-    "decompiler/crates/kuna-console/tests/verify_switchtable.rs",
+    "decompiler/crates/console/tests/verify_switchtable.rs",
     "tests/cli/string-ownership-misses-literal.json",
     "docs/spec/01-program-prep.md",
     "docs/cli.md",

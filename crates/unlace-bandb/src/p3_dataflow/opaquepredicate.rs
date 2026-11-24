@@ -416,7 +416,7 @@ impl Rule for RuleOpaquePredicate {
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::coreoptions::OpaquePredicate>()
             .on
             || data.is_jumptable_recovery_on()

@@ -204,7 +204,7 @@ impl FloatFormat {
     /// Construct default IEEE 754 standard settings for a given encoding
     /// size `sz` in bytes.
     ///
-    /// (kuna) Size 2 is IEEE 754 binary16 (half precision), which upstream lacks.
+    /// (unlace) Size 2 is IEEE 754 binary16 (half precision), which upstream lacks.
     /// The C++ constructor leaves every field uninitialized for other sizes
     /// (undefined behavior downstream); the port treats that as an internal
     /// invariant violation and panics (ADR 0004).

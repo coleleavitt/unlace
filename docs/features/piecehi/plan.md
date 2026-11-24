@@ -34,7 +34,7 @@ half beside an argument low half kept the high half alone (`return a0 + 1;` at
 - `returnuncomputed/tests.rs`: the slot mapping on little- and big-endian
   registers; a never-written high half of one register is still dropped; a
   computed high half of one register is never returned alone.
-- `tests/stages/kuna-returnpiece.toml`: seven gcc -O0 functions and gcc -O2
+- `tests/stages/returnpiece.toml`: seven gcc -O0 functions and gcc -O2
   `join_hi_sum` (10 assertions; 9 fail on main, the control passes on both).
 - `kuna-cli/tests/decompile_all_cli.rs`
   `a_value_built_in_one_return_register_round_trips_through_the_printed_c`:

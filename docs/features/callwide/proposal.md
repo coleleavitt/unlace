@@ -223,7 +223,7 @@ Paths below are relative to `decompiler/crates/`.
 | `kuna-decomp/src/p4_calls/coreaction_protos.rs` | narrow proven-pair retention hook before output-map derivation |
 | `kuna-decomp/src/infra/{architecture,decompile_drive}.rs`, `substrate/funcdata.rs` | dependency lifetime, per-drive views and restart seeding |
 | `kuna-analysis/src/analyzers/dwarf/callwide.rs` (new) | bounded explicit scalar declaration provenance; ordinary DWARF behavior unchanged |
-| `kuna-console/src/{engine,project}.rs` | positive declaration provenance, shared preflight before rendering, invalidation |
+| `console/src/{engine,project}.rs` | positive declaration provenance, shared preflight before rendering, invalidation |
 | `kuna-cli/src/decompile_all.rs`, `decompile.rs`, worker/project drivers | full proof before selection or export; text console and JSON agreement |
 
 Single JSON uses `decompile_json -> load_program`; plain text launches the

@@ -3,7 +3,7 @@
 //! languages as LLVM names them, and compiler-selected uses lift; before, every
 //! custom-0 word was an opaque `custom0` placeholder.
 use crate::common;
-use common::{repo_root, run_kuna};
+use common::{repo_root, run_unlace};
 
 fn fixture(name: &str) -> String {
     repo_root()
@@ -28,7 +28,7 @@ fn rows(stdout: &str) -> Vec<String> {
 }
 
 fn decompile(args: &[&str]) -> String {
-    let (stdout, stderr, code) = run_kuna(&[&["decompile"][..], args].concat());
+    let (stdout, stderr, code) = run_unlace(&[&["decompile"][..], args].concat());
     assert_eq!(code, 0, "unlace decompile {args:?}: {stderr}");
     let lower = stdout.to_lowercase();
     assert!(!lower.contains("unimplemented"), "{args:?}:\n{stdout}");
@@ -45,7 +45,7 @@ const LANGUAGES: [(&str, &str, &str); 2] = [
 fn every_xthead_encoding_decodes_as_llvm_names_it() {
     for (elf, expected, target) in LANGUAGES {
         let (stdout, stderr, code) =
-            run_kuna(&["disassemble", &fixture(elf), "probe", "--target", target]);
+            run_unlace(&["disassemble", &fixture(elf), "probe", "--target", target]);
         assert_eq!(code, 0, "{elf}: {stderr}");
         let want = std::fs::read_to_string(fixture(expected)).unwrap();
         let want: Vec<&str> = want.lines().collect();

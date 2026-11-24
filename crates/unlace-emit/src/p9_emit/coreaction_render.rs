@@ -110,7 +110,7 @@ use std::collections::HashSet;
 use std::rc::Rc;
 
 use unlace_base::address::{Address, bit_transitions};
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::AddrSpace;
 use unlace_base::types::uintb;
 
@@ -391,7 +391,7 @@ fn lane_divide_collect_lane_sizes(
 /// ops; 1: same, allowing SUBPIECE downcasts; 2: default pointer-derived size).
 /// Returns `true` if the Varnode (and its data-flow) was successfully split. A
 /// split that fails part way has already rewritten the function, so the error
-/// fails the function, as the C++ exception does. (kuna) A trace whose
+/// fails the function, as the C++ exception does. (unlace) A trace whose
 /// transform `apply` would refuse before rewriting anything counts as a failed
 /// trace. A failure is recorded in `failed`, and a split is reported to it
 /// before it is applied ([`super::lanetrace::FailedTraces`]).
@@ -401,7 +401,7 @@ fn lane_divide_process_varnode(
     laned_register: &LanedRegister,
     mode: int4,
     failed: &mut super::lanetrace::FailedTraces,
-) -> KunaResult<bool> {
+) -> UnlaceResult<bool> {
     let mut check_lanes = LanedRegister::new(); // Lanes we are going to try, no lanes initially
     let allow_downcast = mode > 0;
     if mode < 2 {
@@ -432,7 +432,7 @@ fn lane_divide_process_varnode(
                 read
             });
             lane_divide.apply(data).map_err(|e| {
-                KunaError::lowlevel(format!("laned register split failed part way: {e}"))
+                UnlaceError::lowlevel(format!("laned register split failed part way: {e}"))
             })?;
             return Ok(true); // Indicate a change was made
         }
@@ -782,9 +782,9 @@ impl Action for ActionConstantPtr {
     /// C++ `ActionConstantPtr::reset`: `{ localcount = 0; }`.
     fn reset(&mut self, data: &mut Funcdata) {
         self.localcount = 0;
-        data.kuna_global_array_anchor_passes = data
+        data.unlace_global_array_anchor_passes = data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::globalarrayanchor::GlobalArrayAnchor>()
             .0
             .then_some(0);
@@ -801,11 +801,11 @@ impl Action for ActionConstantPtr {
         self.localcount += 1;
         if data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::globalarrayanchor::GlobalArrayAnchor>()
             .0
         {
-            data.kuna_global_array_anchor_passes = Some(self.localcount as u8);
+            data.unlace_global_array_anchor_passes = Some(self.localcount as u8);
         }
 
         // C++ iterates `beginLoc(cspc)..endLoc(cspc)` (the constant space) with a
@@ -832,7 +832,7 @@ impl Action for ActionConstantPtr {
             })
             .collect();
 
-        // (kuna) Which constant VALUES this function reads as numbers.  The
+        // (unlace) Which constant VALUES this function reads as numbers.  The
         // function-entry escape below suspends the `bit_transitions` guard for a
         // constant that lands on a function entry, and a round buffer size lands on
         // one whenever `.init` sits at a low offset; a value the function also
@@ -932,11 +932,11 @@ impl Action for ActionConstantPtr {
                 .expect("constantptr: stale vn")
                 .set_ptr_check();
             if let Some((entry, rampoint)) = resolved {
-                // (kuna) A Swift string object lands 32 bytes before its literal.
+                // (unlace) A Swift string object lands 32 bytes before its literal.
                 if crate::swiftstrobj::is_string_object(data, vn, &rampoint) {
                     continue;
                 }
-                // (kuna) Mid-string char pointer. `is_pointer` admits a constant
+                // (unlace) Mid-string char pointer. `is_pointer` admits a constant
                 // that lands in the MIDDLE of a read-only character array (it
                 // clears `needexacthit` for exactly that case), which is how a
                 // compiler shares one literal's tail: `"coreutils"` at 0x68d8 is
@@ -1128,7 +1128,7 @@ fn select_infer_space(data: &Funcdata, vn: VarnodeId, op: OpId) -> Option<Rc<Add
 /// as a pointer: `Some(true)` for a pointer or unknown (regardless of
 /// `infer_pointers`), `Some(false)` for a scalar that cannot hold a data pointer
 /// (a float, bool, enum, or an integer narrower than a pointer), `None` (defer to
-/// `infer_pointers`) otherwise.  Upstream refuses every non-pointer type; kuna
+/// `infer_pointers`) otherwise.  Upstream refuses every non-pointer type; unlace
 /// keeps the pointer-wide integer (`(long)&table`) and the aggregate passed by
 /// value (`(S)msg`).
 fn declared_slot_infers(data: &Funcdata, dt: &Datatype) -> Option<bool> {
@@ -1280,7 +1280,7 @@ fn is_pointer(
                 }
             }
             OpCode::CPUI_CALLOTHER => {
-                let rep = glb.kuna_options.get::<crate::repstring::RepString>().0
+                let rep = glb.unlace_options.get::<crate::repstring::RepString>().0
                     && crate::repstring::input_type(data, op, slot).is_some();
                 if !rep && crate::atomics::input_type(data, op, slot).is_none() {
                     return None;
@@ -1289,7 +1289,7 @@ fn is_pointer(
             _ => return None,
         }
         // Make sure the constant is in the expected range for a pointer.
-        // (kuna `blobs`) The first byte of an embedded file is an address even
+        // (unlace `blobs`) The first byte of an embedded file is an address even
         // in the low page a shared object's read-only data starts in, and
         // even when its value has the bit pattern of a mask.
         let blob_start = glb.blob_entries.contains(&vn_offset)
@@ -1300,13 +1300,13 @@ fn is_pointer(
         if spc.get_pointer_upper_bound() < vn_offset {
             return None;
         }
-        // Check if the constant looks like a single bit or mask.  The kuna GH-6930
+        // Check if the constant looks like a single bit or mask.  The unlace GH-6930
         // divergence keeps single-bit values that are EXACT function entries; reuse
-        // kuna_is_function_entry (no re-special-casing).
+        // unlace_is_function_entry (no re-special-casing).
         if bit_transitions(vn_offset, vn_size) < 3
             && !blob_start
             && !(crate::inferfuncentry::entry_escape_applies(opc, numeric.contains(&vn_offset))
-                && kuna_const_is_function_entry(data, spc, vn_offset, vn_size, &op_addr))
+                && unlace_const_is_function_entry(data, spc, vn_offset, vn_size, &op_addr))
         {
             return None;
         }
@@ -1347,7 +1347,7 @@ fn is_pointer(
     if needexacthit && entry.entry_addr != rampoint {
         return None;
     }
-    // (kuna) An import slot holds the import's function Symbol so a call through
+    // (unlace) An import slot holds the import's function Symbol so a call through
     // the slot binds to it, but a constant equal to the slot is the slot's own
     // address, which the function's name would misstate.
     let code = entry
@@ -1364,15 +1364,15 @@ fn is_pointer(
     Some((entry, rampoint))
 }
 
-/// The `ActionConstantPtr::isPointer` `bit_transitions < 3` kuna GH-6930 escape
+/// The `ActionConstantPtr::isPointer` `bit_transitions < 3` unlace GH-6930 escape
 /// (coreaction.cc:1159): a single-bit constant that resolves to an exact function
-/// entry stays a pointer.  Wraps [`kuna_is_function_entry`](crate::
-/// inferfuncentry::kuna_is_function_entry) — the function-entry query is the
+/// entry stays a pointer.  Wraps [`unlace_is_function_entry`](crate::
+/// inferfuncentry::unlace_is_function_entry) — the function-entry query is the
 /// global-scope `queryFunction(rampoint)`, reached through `glb`'s snapshot: a
 /// covering global Symbol whose type is `TYPE_CODE` and whose entry address equals
 /// `rampoint`.  For ordinary data constants (no function there) this is `false`, so
 /// a single-bit data constant is never made a pointer (the switch-cluster guard).
-fn kuna_const_is_function_entry(
+fn unlace_const_is_function_entry(
     data: &Funcdata,
     spc: &Rc<AddrSpace>,
     vn_offset: uintb,
@@ -1404,7 +1404,7 @@ fn kuna_const_is_function_entry(
                 None
             }
         });
-    crate::inferfuncentry::kuna_is_function_entry(Some(&rampoint), function_entry.as_ref())
+    crate::inferfuncentry::unlace_is_function_entry(Some(&rampoint), function_entry.as_ref())
 }
 
 // =============================================================================
@@ -1525,7 +1525,7 @@ impl Action for ActionDeindirect {
                 // merge), then re-insert it at the same index to keep `qlst` ordering.
                 let no_return = proto.is_no_return();
                 let inline = proto.is_inline();
-                // (kuna) A declaration the early slot query locked outranks the
+                // (unlace) A declaration the early slot query locked outranks the
                 // symbol's recovered prototype.
                 let proto = if data.get_call_specs(i).proto().is_input_locked()
                     && !proto.is_input_locked()
@@ -1573,7 +1573,7 @@ impl Action for ActionDeindirect {
                     recovered.copy(fc.proto());
                     let mut restartlog = crate::restartlog::RestartLog::new();
                     let result = fc.force_set(data, &proto, &mut restartlog);
-                    // (kuna `valuewitness`) A value witness slot learned this
+                    // (unlace `valuewitness`) A value witness slot learned this
                     // late, when the call's inputs no longer fit it, keeps the
                     // inputs already recovered rather than restart the function.
                     // See `valuewitness::call_prototype`.
@@ -1604,7 +1604,7 @@ impl Action for ActionDeindirect {
 /// Mark Varnodes built out of legal parameters with the `directwrite` attribute
 /// (C++ `ActionDirectWrite`, `coreaction.hh:243`).  `flags = 0`; carries the
 /// `propagateIndirect` config (whether to taint through `CPUI_INDIRECT`).
-/// (kuna) Whether the input `[addr, addr+sz)` is a lane of a floating-point or
+/// (unlace) Whether the input `[addr, addr+sz)` is a lane of a floating-point or
 /// vector argument register: wholly inside one of the model's `TYPECLASS_FLOAT`
 /// input entries, though not at its start. `possibleInputParam` accepts only a
 /// value justified in its entry, but AArch64 code reads a vector argument's lane
@@ -1723,7 +1723,7 @@ fn directwrite_apply(data: &mut Funcdata, propagate_indirect: bool) -> ApplyResu
                 || vector_lane_input(data, &addr, sz)
             {
                 // C++ `getFuncProto().possibleInputParam(...)`, called
-                // unconditionally. The kuna `has_store() &&` pre-guard was
+                // unconditionally. The unlace `has_store() &&` pre-guard was
                 // dropped (L1): `possible_input_param` is now no-store/no-model
                 // robust, so a recovered register input (e.g. ESI) whose
                 // `ProtoStoreInternal` is not yet attached at main-loop time is
@@ -1958,7 +1958,7 @@ impl Action for ActionRestructureVarnode {
         // l1->restructureVarnode(aliasyes): re-derive the stack-frame layout from
         // the live (stack, off) Varnodes that RuleLoad/StoreVarnode produced.
         count += data.restructure_varnode(aliasyes);
-        // (kuna `stackstoreguard`) The drive analyzes a function whose layout
+        // (unlace `stackstoreguard`) The drive analyzes a function whose layout
         // spoiled the guard again without it, so this analysis stops here.
         if data.stack_store_guard_spoiled() && !data.is_jumptable_recovery_on() {
             ctx.abandon = true;
@@ -2080,7 +2080,7 @@ impl Action for ActionMapGlobals {
 /// typed like upstream's `DAT_` Symbol (the widest Varnode's type when it spans
 /// the group, else `undefined<N>`), and with `mapglobalsyms` on the driver adds
 /// it to the global scope once the function is done
-/// ([`crate::mapglobalsyms::persist`]); kuna names it `dat_<addr>` either way.
+/// ([`crate::mapglobalsyms::persist`]); unlace names it `dat_<addr>` either way.
 fn map_globals(data: &mut Funcdata) {
     let vbank = data.vbank();
     let arch = data.get_arch();
@@ -2115,7 +2115,7 @@ fn map_globals(data: &mut Funcdata) {
         }
         let Some((first, esize, name)) = arch.global_data_symbol_at(addr) else {
             if arch
-                .kuna_options
+                .unlace_options
                 .get::<crate::mapglobalsyms::Mapglobalsyms>()
                 .0
                 && arch.global_symbol_extent(addr).is_none()
@@ -2180,7 +2180,7 @@ fn same_space(a: &Address, b: &Address) -> bool {
 /// `ActionDeadCode`, `coreaction.hh:565`).  `flags = 0`.
 pub struct ActionDeadCode {
     base: ActionBase,
-    /// (kuna `narrowargs`) This pass, after `mainloop` settles, also narrows
+    /// (unlace `narrowargs`) This pass, after `mainloop` settles, also narrows
     /// the function's register inputs ([`crate::narrowargs`]).
     narrow_inputs: bool,
 }
@@ -2194,7 +2194,7 @@ impl ActionDeadCode {
         })
     }
 
-    /// (kuna `narrowargs`) The `fullloop` pass that also narrows register inputs.
+    /// (unlace `narrowargs`) The `fullloop` pass that also narrows register inputs.
     pub fn boxed_narrowing(g: impl Into<String>) -> Box<dyn Action> {
         Box::new(ActionDeadCode {
             base: ActionBase::new(0, "deadcode", g),
@@ -3367,7 +3367,7 @@ impl Action for ActionUnjustifiedParams {
                             vdata.size = (endpoint.wrapping_sub(vdata.offset)) as u32;
                         }
                     }
-                    // (kuna GH-9218) forward scan UPWARD: absorb an input
+                    // (unlace GH-9218) forward scan UPWARD: absorb an input
                     // that overlaps the container and extends above its end.
                     for &fvn in inputs[idx..].iter() {
                         let v = match data.vbank().get(fvn) {
@@ -3687,7 +3687,7 @@ impl Action for ActionInferTypes {
         // propagateAcrossReturns -> writeBack.  `writeBack` returning a change
         // bumps `localcount` (it is deliberately NOT counted as a data-flow change,
         // so `count` is left untouched).
-        // (kuna `structsynth`) `count` is deliberately not bumped, so nothing in
+        // (unlace `structsynth`) `count` is deliberately not bumped, so nothing in
         // the schedule can observe that propagation has stopped moving.  A pass
         // that needs a decided lattice reads this plateau flag instead: set once
         // a full pass has run and changed nothing.  A function whose first pass
@@ -3696,9 +3696,9 @@ impl Action for ActionInferTypes {
         if crate::floatreg::with_moved_memo(|| crate::coreaction_infertypes::run_infer_types(data))
         {
             self.localcount += 1;
-            data.set_kuna_infertypes_settled(false);
+            data.set_unlace_infertypes_settled(false);
         } else {
-            data.set_kuna_infertypes_settled(true);
+            data.set_unlace_infertypes_settled(true);
         }
         0
     }

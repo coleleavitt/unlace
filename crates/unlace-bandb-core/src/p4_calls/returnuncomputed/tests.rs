@@ -107,7 +107,7 @@ fn a_global_read_is_computed_only_in_a_pair_joined_in_the_abis_order() {
         computes_a_value(&fd, reg, 0),
         "`mov dx,[g+2]` hands back the program's own data"
     );
-    fd.kuna_set_pairs_first_low(true);
+    fd.unlace_set_pairs_first_low(true);
     assert!(
         !computes_a_value(&fd, reg, 0),
         "a pair joined against its ABI's order keeps its second register only on proof",
@@ -455,7 +455,7 @@ fn the_folded_form_of_a_zero_low_half_is_read_as_the_pair() {
 #[test]
 fn a_leftover_beside_a_folded_zero_is_dropped_from_a_pair_joined_against_the_abi() {
     let (mut fd, ret, whole) = folded_zero_pair(false);
-    fd.kuna_set_pairs_first_low(true);
+    fd.unlace_set_pairs_first_low(true);
     assert!(strip_uncomputed_return_piece(&mut fd));
     let kept = fd.obank().get(ret).unwrap().get_in(1).unwrap();
     assert_ne!(kept, whole);
@@ -479,7 +479,7 @@ fn a_folded_zero_is_left_alone_where_the_pair_joins_in_the_abis_order() {
 #[test]
 fn a_computed_high_half_beside_a_folded_zero_keeps_the_pair() {
     let (mut fd, ret, whole) = folded_zero_pair(true);
-    fd.kuna_set_pairs_first_low(true);
+    fd.unlace_set_pairs_first_low(true);
     assert!(!strip_uncomputed_return_piece(&mut fd));
     assert_eq!(fd.obank().get(ret).unwrap().get_in(1), Some(whole));
 }

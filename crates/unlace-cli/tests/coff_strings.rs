@@ -80,7 +80,7 @@ fn query(path: &std::path::Path, extra: &[&str]) -> Value {
         "nul",
     ];
     args.extend_from_slice(extra);
-    let (out, err, status) = common::run_kuna(&args);
+    let (out, err, status) = common::run_unlace(&args);
     assert_eq!(status, 0, "{args:?}: {err}");
     serde_json::from_str(&out).unwrap()
 }

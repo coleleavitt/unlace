@@ -61,7 +61,7 @@ $ gcc -nostdlib -no-pie -o gs gs.s -Wl,-e,caller && kuna decompile ./gs caller
 
 ## The tests
 
-`tests/stages/kuna-cookiescramble.toml` — two-pass on the assembly above: option
+`tests/stages/cookiescramble.toml` — two-pass on the assembly above: option
 off truncates the call and leaves the two arguments as dead stores; the default
 recovers `callee(1,2,3,4,5,6,a0,a1)`. Promoted probe
 `tests/cli/variadic-prototype-still-drops.json` against the vendored

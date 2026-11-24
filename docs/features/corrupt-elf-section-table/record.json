@@ -56,7 +56,7 @@
     "decompiler/crates/kuna-analysis/src/analyzers/entry/mod.rs",
     "decompiler/crates/kuna-analysis/tests/fixtures/corruptshdr_i386",
     "decompiler/crates/kuna-analysis/tests/fixtures/corruptshdr_i386.py",
-    "decompiler/crates/kuna-console/src/engine.rs",
+    "decompiler/crates/console/src/engine.rs",
     "decompiler/crates/kuna-cli/src/strings.rs",
     "decompiler/crates/kuna-cli/src/xrefs.rs",
     "decompiler/crates/kuna-cli/src/decompile_graph.rs",

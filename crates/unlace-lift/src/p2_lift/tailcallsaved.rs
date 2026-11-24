@@ -1,10 +1,10 @@
-//! (kuna) `kuna_tailcallsaved` — a stack teardown that never restores what the
+//! (unlace) `unlace_tailcallsaved` — a stack teardown that never restores what the
 //! entry block saved is argument cleanup, not a frame teardown (S2 flow
-//! classification).  Narrows [`kuna_tailcallframe`](crate::tailcallframe).
+//! classification).  Narrows [`unlace_tailcallframe`](crate::tailcallframe).
 //!
 //! ## The shape this rejects
 //!
-//! [`kuna_tailcallframe`](crate::tailcallframe) reads a direct `jmp` as a
+//! [`unlace_tailcallframe`](crate::tailcallframe) reads a direct `jmp` as a
 //! tail call when the straight-line run ending at it raises the stack pointer by
 //! exactly what the straight-line run leaving the entry address lowered it by.
 //! Those two runs are measured where they sit, and on a cdecl caller the second
@@ -63,7 +63,7 @@ use crate::funcdata::Funcdata;
 /// Bytes the instruction at `at` pushed onto the stack, given that its net
 /// stack-pointer motion is `delta`.  Zero unless the instruction lowers the
 /// stack pointer *and* stores through it.
-pub fn kuna_stack_saved_bytes(
+pub fn unlace_stack_saved_bytes(
     data: &Funcdata,
     at: &Address,
     sp: &VarnodeStorage,
@@ -78,7 +78,7 @@ pub fn kuna_stack_saved_bytes(
 /// Bytes the instruction at `at` took back off the stack, given that its net
 /// stack-pointer motion is `delta`.  Zero unless the instruction raises the
 /// stack pointer *and* loads through it.
-pub fn kuna_stack_restored_bytes(
+pub fn unlace_stack_restored_bytes(
     data: &Funcdata,
     at: &Address,
     sp: &VarnodeStorage,
@@ -90,9 +90,9 @@ pub fn kuna_stack_restored_bytes(
     transfer_bytes(data, at, sp, OpCode::CPUI_LOAD).min(delta as u64)
 }
 
-/// (kuna) Does the run ending at the branch give back everything the entry run
+/// (unlace) Does the run ending at the branch give back everything the entry run
 /// put on the stack?
-pub fn kuna_teardown_restores_saves(saved: u64, restored: u64) -> bool {
+pub fn unlace_teardown_restores_saves(saved: u64, restored: u64) -> bool {
     restored >= saved
 }
 

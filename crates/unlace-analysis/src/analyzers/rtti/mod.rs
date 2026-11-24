@@ -1,4 +1,4 @@
-//! S1 MSVC RTTI / vftable recovery — the kuna analog of Ghidra's
+//! S1 MSVC RTTI / vftable recovery — the unlace analog of Ghidra's
 //! `RttiAnalyzer` (`Ghidra/Features/MicrosoftCodeAnalyzer/.../rtti/`).
 //!
 //! A polymorphic C++ class compiled by MSVC carries, **entirely inside the PE
@@ -332,7 +332,7 @@ pub(super) fn find_cols(
 }
 
 /// Build the [`RefKind`] for a PE `ctx`: 64-bitness from the file, the image base
-/// from the typed PE optional header, endianness little (every PE arch kuna
+/// from the typed PE optional header, endianness little (every PE arch unlace
 /// supports). `None` if the PE width/header is unparsable.
 pub(super) fn ref_kind_for(ctx: &AnalysisCtx) -> Option<RefKind> {
     let is64 = ctx.file.is_64();

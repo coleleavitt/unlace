@@ -1,4 +1,4 @@
-//! (kuna `rettriangle`) Decline a `returndup` split at the join of a one-block
+//! (unlace `rettriangle`) Decline a `returndup` split at the join of a one-block
 //! `if`.
 //!
 //! [`returndup`](crate::returndup) gives every predecessor of
@@ -25,7 +25,7 @@
 //! candidates of the same function still split.  The option can only make
 //! `returndup` fire less, and is inert with `option returndup off`.
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 
 use crate::context::BlockId;
 use crate::funcdata::Funcdata;
@@ -66,7 +66,7 @@ pub struct OptionRetTriangle;
 impl OptionRetTriangle {
     pub const NAME: &'static str = "rettriangle";
 
-    pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((
@@ -77,6 +77,6 @@ impl OptionRetTriangle {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.rettriangle_is_triangle_join = Some(is_triangle_join);
 }

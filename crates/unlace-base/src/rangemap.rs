@@ -27,7 +27,7 @@
 //!   sentinels.  The mutable, non-ordering fields of `AddrRange` (`first`,
 //!   `a`, `b`, `value`) live in the map's value half.  (A build against a
 //!   different C++ standard library could legally order exact-duplicate
-//!   keys differently; kuna's oracle is libstdc++.)
+//!   keys differently; unlace's oracle is libstdc++.)
 //! - The C++ `std::list<_recordtype>` (whose order is observable through
 //!   `begin_list`, and which `insert` splices into (b, subsort) position)
 //!   becomes a slab (`Vec<Option<...>>` + free list) threaded with an
@@ -147,7 +147,7 @@ pub struct RecordIdx(usize);
 pub struct SubRangeKey<L, S> {
     last: L,    // End of the disjoint sub-range
     subsort: S, // How this should be sub-sorted
-    seq: u64,   // kuna: multiset duplicate tiebreak (gap-allocated, see hinted_seq)
+    seq: u64,   // unlace: multiset duplicate tiebreak (gap-allocated, see hinted_seq)
 }
 
 /// The mutable (non-ordering) half of the C++ `AddrRange`.

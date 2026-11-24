@@ -4,7 +4,7 @@
 
 use std::path::PathBuf;
 
-use unlace_console::console::register_kuna_commands;
+use unlace_console::console::register_unlace_commands;
 use unlace_console::ifacedecomp::{
     DECOMPILE_MODULE, IfaceDecompData, execute, register_console_commands, register_decomp_commands,
 };
@@ -15,7 +15,7 @@ fn run(commands: &[String]) -> String {
     let specs = root.join("specs").to_str().unwrap().to_string();
     let mut status = ConsoleCommands::into_status(commands.to_vec());
     register_decomp_commands(&mut status);
-    register_kuna_commands(&mut status);
+    register_unlace_commands(&mut status);
     register_console_commands(&mut status);
     status
         .get_data_mut(DECOMPILE_MODULE)

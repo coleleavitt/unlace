@@ -46,7 +46,7 @@
 use std::rc::Rc;
 
 use unlace_base::address::{calc_mask, leastsigbit_set, pcode_left, pcode_right};
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::types::{Wrap, int4, uintb};
 use unlace_num::opcodes::OpCode;
 
@@ -512,7 +512,7 @@ impl Rule for RuleSelectCse {
             }
         }
 
-        // (kuna) `getCseHash`/`cseEliminateList`/`cseElimination` are ported
+        // (unlace) `getCseHash`/`cseEliminateList`/`cseElimination` are ported
         // (op.rs / funcdata_op.rs), and the `isHeritaged(outvn)` test —
         // `Funcdata::isHeritaged(vn) = heritage.heritagePass(vn->getAddr()) >= 0`
         // (funcdata.hh:274) — is now satisfiable via the owned Heritage engine
@@ -1982,7 +1982,7 @@ impl RulePullsubMulti {
         basevn: VarnodeId,
         outsize: u32,
         shift: u32,
-    ) -> KunaResult<VarnodeId> {
+    ) -> UnlaceResult<VarnodeId> {
         // Address newaddr; PcodeOp *new_op; Varnode *outvn;
         let basev = data
             .vbank()
@@ -2159,7 +2159,7 @@ impl RulePullsubMulti {
         new_vn: VarnodeId,
         _max_byte: int4,
         min_byte: int4,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let new_size = data
             .vbank()
             .get(new_vn)
@@ -2938,7 +2938,7 @@ impl Rule for RulePushMulti {
             if res == 0 {
                 return 0;
             }
-            // (kuna) a global's join of stores kept for its loads stays; see
+            // (unlace) a global's join of stores kept for its loads stays; see
             // [`crate::pointeestorekeep::keeps_join`].
             if crate::pointeestorekeep::keeps_join(data, op) {
                 return 0;

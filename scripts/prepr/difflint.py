@@ -21,7 +21,7 @@ Checks the changes from the merge base of BASE and HEAD to the working tree
   in a stage test that already exists on BASE. An expectation that moves is a behaviour
   change to justify, not a test to adjust: add a commit-message trailer
   `Assertion-change: <test name>: <why the new expectation is right>`.
-  `kuna-catalog.xml` is exempt: every new option bumps its registry counts.
+  `catalog.xml` is exempt: every new option bumps its registry counts.
 * warning `option-policy`: a new `kuna_*.rs` module with no `phases.toml`
   change. That is right only for a strict correctness fix (docs/agents.md,
   "Adding features").
@@ -37,7 +37,7 @@ from typing import Optional
 LOCAL_PATH = re.compile(rb"/home/[A-Za-z0-9._-]+/|/Users/[A-Za-z0-9._-]+/|[A-Za-z]:\\Users\\|\.claude/jobs/")
 INTERMEDIATE = {".obj", ".o", ".lib"}
 TRAILER = re.compile(r"^Assertion-change:\s*(.+)$", re.M | re.I)
-COUNTED_REGISTRY = {"kuna-catalog"}
+COUNTED_REGISTRY = {"catalog"}
 TOML_MATCH_KEY = re.compile(r"\s*(name|count|min|max|regex|literal)\s*=")
 
 

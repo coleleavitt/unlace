@@ -64,7 +64,7 @@ range and only a declared extent calls it.
 re-aimed at the in-repo fixture above (the dataset witness is a 7 MB PE CI has
 no copy of; same shape, same clauses). Plus three cargo tests, each failing
 without the change: the branch-cut case and the declared-derived-extent oracle
-in `kuna-console/tests/verify_funcbounds.rs`, and the in-extent/out-of-extent
+in `console/tests/verify_funcbounds.rs`, and the in-extent/out-of-extent
 split in `kuna-decomp/tests/verify_w3_ir_flow.rs`.
 
 Measured over the 112 binary fixtures under `kuna-analysis/tests/fixtures`,

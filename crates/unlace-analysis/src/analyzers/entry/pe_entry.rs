@@ -1,4 +1,4 @@
-//! PE function-entry discovery — the kuna analog of the ELF entry oracles
+//! PE function-entry discovery — the unlace analog of the ELF entry oracles
 //! (`super`'s oracles 1-3), adapted to the Windows PE container so a **stripped**
 //! PE recovers its function starts without a supplied `--addr` (design §4.1 /
 //! §5.3 / §8 PR-12).
@@ -514,7 +514,7 @@ mod tests {
 
     /// The other half of that rule: an entry inside a section the image flags
     /// non-executable is NOT exempt. There the flag is a statement about those
-    /// bytes, and kuna answers it by naming the cause and the
+    /// bytes, and unlace answers it by naming the cause and the
     /// `--define-function` that overrides it, which is what
     /// `docs/re-needs/batch-silently-omits-explicitly.md` shipped.
     #[test]

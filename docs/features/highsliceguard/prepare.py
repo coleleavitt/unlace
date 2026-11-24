@@ -1,7 +1,7 @@
 from common import *
 import datetime,subprocess
 base=Path('/home/mahaloz/kwt/angr-rust-empty-match');sha=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest()
-run(r,w,['cargo','build','--release','-p','kuna-cli','-p','kuna-console','-p','kuna-harness'],'build-final.log',r/'decompiler')
+run(r,w,['cargo','build','--release','-p','kuna-cli','-p','console','-p','kuna-harness'],'build-final.log',r/'decompiler')
 k=r/'decompiler/target/release/kuna'
 with(r/'docs/options.md').open('w')as f:subprocess.run([str(k),'catalog','--markdown'],cwd=r,stdout=f,check=True)
 fixture=r/'decompiler/crates/kuna-decomp/tests/fixtures/phase_catalog.json';script=f'openfile write {fixture}\nphase catalog\nclosefile\nquit\n';p=subprocess.run([str(r/'decompiler/target/release/decomp_dbg'),'-s',str(r/'specs')],input=script,capture_output=True,text=True,cwd=r,env=env);(w/'catalog-fixture.log').write_text(p.stdout+p.stderr);assert p.returncode==0;assert len(json.loads(fixture.read_text()))==372

@@ -5,7 +5,7 @@
 //! `$(...)` macro expansion run before tokenization. Directive recognition is
 //! anchored at the start of a line.
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 
 /// Lexer start-conditions, mirroring the flex `%x` states (slghscan.l:483-488).
 ///
@@ -410,7 +410,7 @@ impl SleighScanner {
     /// Produce the next token, switching start-conditions and driving the
     /// preprocessor as the flex rules do.  Returns [`TokenKind::Eof`] at end of
     /// the outermost file.  `host` receives the embedded `slgh->...` side effects.
-    pub fn next_token(&mut self, host: &mut dyn ScannerHost) -> KunaResult<Token> {
+    pub fn next_token(&mut self, host: &mut dyn ScannerHost) -> UnlaceResult<Token> {
         loop {
             // End-of-buffer: flex's <<EOF>> rule -- pop an include/macro buffer
             // or terminate at the outermost file.
@@ -733,7 +733,7 @@ impl SleighScanner {
             self.actionon = false;
             return Some(Token::bare(TokenKind::IsKey));
         }
-        // (kuna) `0x1f` / `0b10`: one literal piece, as Ghidra's Java display lexer
+        // (unlace) `0x1f` / `0b10`: one literal piece, as Ghidra's Java display lexer
         // reads HEX_INT/BIN_INT; the C++ rules split it into the CHAR `0` and the
         // SYMBOLSTRING `x1f`, which then names an undefined operand.
         if let Some(len) = print_radix_literal(rest) {
@@ -1586,7 +1586,7 @@ fn match_keyword_sem(rest: &[u8]) -> Option<(TokenKind, usize)> {
     Some((kind, len))
 }
 
-/// (kuna) The p-code intrinsics spelled as words (`zext` .. `lzcount`).
+/// (unlace) The p-code intrinsics spelled as words (`zext` .. `lzcount`).
 fn is_intrinsic(kind: TokenKind) -> bool {
     matches!(
         kind,
@@ -1612,7 +1612,7 @@ fn is_intrinsic(kind: TokenKind) -> bool {
     )
 }
 
-/// (kuna) Whether the text after an intrinsic's name applies it: its next
+/// (unlace) Whether the text after an intrinsic's name applies it: its next
 /// non-space byte is `(`. Ghidra's Java SleighCompiler lexes these names as
 /// identifiers and treats one as an intrinsic only in a call
 /// (`PcodeCompile.findInternalFunction`), so a register, macro parameter or
@@ -1755,7 +1755,7 @@ fn check_to_endofline(host: &mut dyn ScannerHost, s: &mut ByteStream) {
     }
 }
 
-/// (kuna) The value of an `@define NAME value` line, as Ghidra's Java
+/// (unlace) The value of an `@define NAME value` line, as Ghidra's Java
 /// `SleighPreprocessor` reads it (`DEFINE1`/`DEFINE2`): a quoted value runs from
 /// the first double quote to the LAST one on the line, so `""_b32""` is
 /// `"_b32"`, and an unquoted value is the whole run of non-space characters

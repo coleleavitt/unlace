@@ -1,0 +1,41 @@
+# `elf-unwind-pcread.toml` checks an authored PowerPC PC-relative literal read: with FDE
+# ownership disabled it remains a call; with ownership enabled the complete body returns `a0 * 3 +
+# 7`. The fixture generator is `crates/unlace-cli/tests/fixtures/elf_unwind_fixture.rs`.
+
+[image]
+arch = 'PowerPC:BE:32:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = '4e800020'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/ppc-pc-read.elf',
+    'read symbols',
+    'load function bump',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'ELFUNWIND #1: the PC read is never kept as a call'
+count = 0
+literal = 'sub_100c('
+
+[[match]]
+name = 'ELFUNWIND #2: the body is never cut short'
+count = 0
+literal = 'halt_baddata();'
+
+[[match]]
+name = 'ELFUNWIND #3: the owned body is included'
+count = 1
+literal = 'return a0 * 3 + 7;'

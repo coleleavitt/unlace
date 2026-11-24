@@ -29,7 +29,7 @@ fn successive_float_narrowing_matches_native() {
             .arg("-o")
             .arg(&native),
     );
-    let (printed, stderr, rc) = common::run_kuna(&[
+    let (printed, stderr, rc) = common::run_unlace(&[
         "decompile-all",
         native.to_str().unwrap(),
         "--functions",

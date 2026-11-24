@@ -80,13 +80,13 @@ fn bootstrap(on: bool) -> unlace_console::engine::ConsoleProgram {
     let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
     prog.arch_mut()
-        .set_kuna_option("listing", "on")
+        .set_unlace_option("listing", "on")
         .expect("listing flips on");
     prog.arch_mut()
-        .set_kuna_option("funcstart_patterns", "on")
+        .set_unlace_option("funcstart_patterns", "on")
         .expect("funcstart_patterns flips on");
     prog.arch_mut()
-        .set_kuna_option("tailcallentry", if on { "on" } else { "off" })
+        .set_unlace_option("tailcallentry", if on { "on" } else { "off" })
         .expect("tailcallentry flips");
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");

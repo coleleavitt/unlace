@@ -735,7 +735,7 @@ replace its address-to-op record and make earlier return edges target the later
 predecessor's body. In a switch with a return-only entry and a last case sharing
 that `RET`, this incorrectly moves the last case's write after the switch and
 executes it for the return-only entry and out-of-range selectors as well.
-`tests/stages/kuna-switch-return-paths.toml` and the CLI native round trip pin
+`tests/stages/switch-return-paths.toml` and the CLI native round trip pin
 this join across both structurers and the return-duplication settings.
 
 Continuing quietly would be the wrong contract for a *declared* bound, because the
@@ -1373,7 +1373,7 @@ recovered switch table.
   by stub and slot address: `id objc_retain(id)`, `void objc_storeStrong(id *, id)`,
   `id objc_alloc_init(Class)`, …, and `id objc_retain_x19(id obj @ x19)` returning
   in `x0`), so `obj = objc_retainAutoreleasedReturnValue((objc_object *)objc_msgSend(arg1,sel_inner))`
-  reads with its argument. The stage test `tests/stages/kuna-objcarc.toml` runs
+  reads with its argument. The stage test `tests/stages/objcarc.toml` runs
   `macho_objc_arc_arm64` (clang `-fobjc-arc -O2`) both ways: default,
   `-[Holder total:]` is `v1 = objc_msgSend(arg1,sel_count); v2 = objc_msgSend(arg1,sel_inner); return objc_msgSend(v2,sel_count) + v1;`
   with no release left; off, the five ARC calls are shown typed.
@@ -1483,7 +1483,7 @@ conditional with remaining p-code in its instruction keeps the original flow,
 as does an unbounded conditional. `off` retains clipping for an out-of-extent
 conditional even when its target is declared. A false edge that itself crosses
 the bound still receives the missing halt and out-of-bounds warning.
-`tests/stages/kuna-conditional-tail.toml` pins argument order, both direct modes,
+`tests/stages/conditional-tail.toml` pins argument order, both direct modes,
 backward value-returning tails, no-return callees, inlining, and these refusals.
 
 `option tailcalljump` takes three values. `off` disables the rule, `direct`
@@ -1647,9 +1647,9 @@ decompiled once more with the body copied in. Only a drive where some
 one-destination table reached a known function pays for the extra
 decompiles. A nested drive (a callee being decompiled for its contract),
 `protoorder off` and `tailcalljump direct|off` keep the copied-in body.
-`tests/stages/kuna-gottailcall.toml` pins the extern arm, with
+`tests/stages/gottailcall.toml` pins the extern arm, with
 an unmapped non-function and a jump to the function's own code as controls,
-`tests/stages/kuna-xnutables.toml` (#15) and `tests/stages/kuna-veneer-tailcall.toml`
+`tests/stages/xnutables.toml` (#15) and `tests/stages/veneer-tailcall.toml`
 (#10) the single-function arm, and
 `tests/cli/gottailcall-*.json` pin the callee-first arm on an x86-64
 `-fno-plt` library and a MIPS PIC object.
@@ -2093,11 +2093,11 @@ statement and the fabricated return value goes away; that is not the default,
 because an `int3` does return to a debugger that steps past it, and the value of
 naming the pad does not depend on asserting that the process dies there. `option
 int3pad off` restores the unannotated rendering. Exercised by
-`tests/stages/kuna-int3pad.toml`.
+`tests/stages/int3pad.toml`.
 
-**(kuna) A `ud2` after a call is a no-return call site — `option trapaftercall`, default on, `crates/unlace-lift/src/p2_lift/flow.rs (trap_follows_call)`.** clang with trap-unreachable (the Darwin and rustc default) emits `ud2` after every call it knows cannot return. A stripped image gives such a callee no name, so no name list marks it no-return, and flow walks into the trap. `FlowInfo::check_for_flow_modification` checks that the instruction is a machine `call` (E8, or FF /2, after prefixes; a tail `jmp` turned into a call does not count) and reads the two bytes after it (its size is the visited record's); `0F 0B` plants the artificial halt, the same path a named no-return callee takes, and marks a direct call's spec no-return. An indirect call (rustc calls through GOT slots) gets the halt only: `ActionDeindirect` would find a no-return mark disagreeing with the resolved callee's prototype and restart the function, doubling its cost. IDA also reads two `int3` bytes (MSVC) this way; kuna does not, because anti-debug code returns into an `int3` pad on purpose (`int3pad` above). The evidence is per call site and x86 language ids only (`ctx.trap_after_call`). Exercised by `tests/stages/kuna-trapaftercall.toml`.
+**(kuna) A `ud2` after a call is a no-return call site — `option trapaftercall`, default on, `crates/unlace-lift/src/p2_lift/flow.rs (trap_follows_call)`.** clang with trap-unreachable (the Darwin and rustc default) emits `ud2` after every call it knows cannot return. A stripped image gives such a callee no name, so no name list marks it no-return, and flow walks into the trap. `FlowInfo::check_for_flow_modification` checks that the instruction is a machine `call` (E8, or FF /2, after prefixes; a tail `jmp` turned into a call does not count) and reads the two bytes after it (its size is the visited record's); `0F 0B` plants the artificial halt, the same path a named no-return callee takes, and marks a direct call's spec no-return. An indirect call (rustc calls through GOT slots) gets the halt only: `ActionDeindirect` would find a no-return mark disagreeing with the resolved callee's prototype and restart the function, doubling its cost. IDA also reads two `int3` bytes (MSVC) this way; kuna does not, because anti-debug code returns into an `int3` pad on purpose (`int3pad` above). The evidence is per call site and x86 language ids only (`ctx.trap_after_call`). Exercised by `tests/stages/trapaftercall.toml`.
 
-**(kuna) A retpoline thunk is an indirect call — `option retpolinethunk`, default on, `crates/unlace-lift/src/p2_lift/retpolinethunk.rs (thunk_register)`.** `-mretpoline` (clang) and `-mindirect-branch=thunk` (gcc) compile each indirect call into a direct call to a per-register thunk, `call 1f; 2: pause; lfence; jmp 2b; 1: mov %reg,(%rsp); ret`, which returns into the target the register holds. The cspecs model it as the `x86_indirect_thunk_<reg>` call-fixups, which the call-fixup installer tags onto functions by gcc's thunk name only; clang names its thunks `__llvm_retpoline_<reg>`, and a stripped image names neither. When the flow builder asks for a direct callee's inject id and the callee has none, the decompile driver (`decompile_drive.rs (query_call_inject_id)`) reads the callee's first bytes: an `E8` call over the `F3 90 0F AE E8 EB F9` spin to a `[REX] 89 /r 24` store of a register over the return address followed by `C3`. The register picks the `x86_indirect_thunk_<reg>` fixup, which is then injected like any other call-fixup. x86 language ids only; a register the cspec has no fixup for keeps the plain call. Exercised by `tests/stages/kuna-retpolinethunk.toml`.
+**(kuna) A retpoline thunk is an indirect call — `option retpolinethunk`, default on, `crates/unlace-lift/src/p2_lift/retpolinethunk.rs (thunk_register)`.** `-mretpoline` (clang) and `-mindirect-branch=thunk` (gcc) compile each indirect call into a direct call to a per-register thunk, `call 1f; 2: pause; lfence; jmp 2b; 1: mov %reg,(%rsp); ret`, which returns into the target the register holds. The cspecs model it as the `x86_indirect_thunk_<reg>` call-fixups, which the call-fixup installer tags onto functions by gcc's thunk name only; clang names its thunks `__llvm_retpoline_<reg>`, and a stripped image names neither. When the flow builder asks for a direct callee's inject id and the callee has none, the decompile driver (`decompile_drive.rs (query_call_inject_id)`) reads the callee's first bytes: an `E8` call over the `F3 90 0F AE E8 EB F9` spin to a `[REX] 89 /r 24` store of a register over the return address followed by `C3`. The register picks the `x86_indirect_thunk_<reg>` fixup, which is then injected like any other call-fixup. x86 language ids only; a register the cspec has no fixup for keeps the plain call. Exercised by `tests/stages/retpolinethunk.toml`.
 
 **(kuna) A compiler's AArch64 `brk` trap ends the flow — always on,
 `crates/unlace-lift/src/p2_lift/brktrap.rs
@@ -2150,7 +2150,7 @@ for `BUG`/`WARN`, KGDB, kprobes, KASAN, KCFI). They keep the jump-as-call,
 except for a `#0x800` the image's `__bug_table` names (next paragraph). Only
 the AArch64 specs define `SoftwareBreakpoint`; elsewhere the lookup of its
 user-op index fails before any op is walked. Exercised by
-`tests/stages/kuna-brktrap.toml`.
+`tests/stages/brktrap.toml`.
 
 **(kuna) A Linux kernel `WARN`/`BUG` site prints as the statement it is — always
 on, `crates/unlace-lift/src/p2_lift/kernelbug.rs (rewrite)`.**
@@ -2184,7 +2184,7 @@ no-return halt a call that never returns gets, as `brktrap` does. A trap the
 table does not name (an `__builtin_trap`, a KGDB or kprobes breakpoint) keeps
 its rendering, and an image with no `__bug_table` pays one empty-list test per
 BRANCHIND. The AArch64 `#0x800` the previous paragraph leaves alone is matched
-here only through a table entry. Exercised by `tests/stages/kuna-kernelbug.toml`.
+here only through a table entry. Exercised by `tests/stages/kernelbug.toml`.
 
 **(kuna) The x86-64 `SYSCALL` user-op's ABI effects — `option x64syscall`,
 default `on`, x86-64-gated (DIV-152),
@@ -2257,7 +2257,7 @@ read and written under both: the number is in it by definition, and the output i
 the half that retires the false return. Inert on every language but x86-64 —
 `RAX` and all six argument registers must resolve at eight bytes and the default
 code space must be eight bytes wide — and on any function with no `SYSCALL`.
-Exercised by `tests/stages/kuna-x64syscall.toml`, whose functions include the
+Exercised by `tests/stages/x64syscall.toml`, whose functions include the
 register witness, a no-`SYSCALL` control, a split-block wrapper that separates
 `on` from `abi`, and a saved pointer value across a buffer-writing system call.
 `crates/unlace-cli/tests/x64_syscall_memory.rs` compares native code
@@ -2433,7 +2433,7 @@ return guards for that register. On MIPS, every call in a function with a
 caveat as for the result register.
 `option syscallregs off` restores the vendored zero-effect `CALLOTHER`.
 
-Exercised by `tests/stages/kuna-syscallregs-arm.toml`, `-aarch64.xml`,
+Exercised by `tests/stages/syscallregs-arm.toml`, `-aarch64.xml`,
 `-riscv.xml`, `-mips.xml` and `-ppc.xml`, each with the pair or number witness
 under `on`, a use of the result after the call, a barrier `CALLOTHER` as the
 control, and a pass under the default `auto` that keeps the vendored model on a
@@ -2441,7 +2441,7 @@ byte chunk. The ARM test adds a call whose result is discarded, a call followed
 by a use of the kept `r1`, and a call that writes `r1` but not `r0`; the RISC-V
 test adds a loop that passes `a1`/`a2` through and keeps scratch values in
 `a3`/`a4`, none of which takes an argument position.
-`tests/stages/kuna-syscallregs-mips-a3.toml` (a clang `movz` and a gcc branch on
+`tests/stages/syscallregs-mips-a3.toml` (a clang `movz` and a gcc branch on
 `a3`, the latter followed by a call while `a3` still holds the flag) and
 `-ppc-cr0.xml` (an `mfcr` and a `bns` test, and a compare of the result as the
 control) check the error flag under `on` and the phantom parameter or the
@@ -2451,7 +2451,7 @@ a `reboot` after a call whose `a3` is not read;
 the PowerPC test adds a flag that each branch sets and that is saved across a
 call after the join. In `-mips.xml`, `number` makes a `write` (4004) with two
 registers set, so it also passes the kernel the `a2` its caller left.
-`tests/stages/kuna-syscallregs-cortexm.toml` is the bare-metal control: FreeRTOS's
+`tests/stages/syscallregs-cortexm.toml` is the bare-metal control: FreeRTOS's
 `xPortRaisePrivilege` keeps its returned `r0` under `auto` and `off`.
 `crates/unlace-cli/tests/syscall_regs_cli.rs` loads the ARM witness as
 an object with and without a GNU ABI-tag note: the note turns the default on.
@@ -3876,7 +3876,7 @@ unbounded `MULTIEQUAL` first would read past the table into the code after
 it, fail its sanity check, and leave the switch a
 `(*(code *)(*(int *)&table[i * 4] + base))()` computed call; model 2 recovers
 it as `switch(a0 >> 0x3e)` with every case
-(`tests/stages/kuna-relswitch-a64.toml`).
+(`tests/stages/relswitch-a64.toml`).
 
 **`fdeflowbound`, default on** (`flow.rs (leaves_own_fde)`). An unwind-table
 extent (an `.eh_frame` FDE or a Go `functab` entry: the extents the analysis tier
@@ -4337,7 +4337,7 @@ An `append` whose count the grow arm takes from a register set outside the head
 library name the image does not contain, on the strength of the grow call's
 argument shape alone, and no MSVC C++ corpus in the tree can measure it;
 `msvcstrappend` is on the `EXCLUDED_ON_PURPOSE` list in `p0_knowledge/modes.rs`,
-so `--mode aggressive` does not turn it on either. Exercised by `tests/stages/kuna-msvcstrappend.toml`: four constant appends, a loop
+so `--mode aggressive` does not turn it on either. Exercised by `tests/stages/msvcstrappend.toml`: four constant appends, a loop
 appending a register-carried byte through a specialized grow helper, a two-byte
 literal append whose returned reference is used, an unprovable register-count
 append, a collapse whose continuation zeroes the changed registers, and 29 near
@@ -4424,7 +4424,7 @@ registers are opaque (`lr`/`sr`/`aex` lift to `aux_read`/`aux_write`), as are
 registers, which nothing sets; `bi`/`bih` are computed jumps. The DSP, FPU and
 64-bit multiply-accumulate extensions (major opcodes 6 and 7 and the
 accumulator forms of 5) and ARCompact are not decoded. Exercised by
-`tests/stages/kuna-arcv2-zeroloop.toml` and
+`tests/stages/arcv2-zeroloop.toml` and
 `kuna-sleigh/tests/arcv2_decode.rs` (one vector per instruction class and
 operand form, assembled by the GNU ARC assembler).
 
@@ -5237,7 +5237,7 @@ copies `a0`, `a1` into two `s0..s7` registers, `cm.mva01s` copies them back.
 `cm.push {ra,s0-s1},-0x10`. Before this the issue's `-Os` prologue decoded as
 `c.fsdsp fs8,0x30(sp)` and its epilogue as a float store followed by a jump
 through whatever `ra` held, so the saves, the stack adjustment and the return
-were lost. Exercised by `tests/stages/kuna-riscv-zcmp.toml` (the issue's
+were lost. Exercised by `tests/stages/riscv-zcmp.toml` (the issue's
 `keep`, hand-written `swapcall`/`zret`/`popsep`, the raw push/popret p-code)
 and `unlace-cli/tests/riscv_zcmp.rs` (one decode per encoding shape against
 LLVM's names, RV32 and RV64). Zcb and the T-Head vendor extensions the
@@ -5961,7 +5961,7 @@ or `f0`, the return address in `r14`. A `float` is the leftmost four bytes of
 its register, so each floating-point register is listed as its short view and
 then whole. The caller's 160-byte register save area at `0(r15)` is in the
 callee's local range, because the callee's prologue stores into it.
-Exercised by `tests/stages/kuna-s390x.toml`.
+Exercised by `tests/stages/s390x.toml`.
 
 The module also decodes, with exact p-code: the high-word facility (`aih`, `alsih`,
 `alsihn`, `ahhhr`/`ahhlr`, `alhhhr`/`alhhlr`, `shhhr`/`shhlr`, `slhhhr`/`slhhlr`,
@@ -6293,12 +6293,12 @@ is Go — the `sourcelang` fact (chapter 01), so the pass is a structural no-op
 on every non-Go binary and the XML datatest corpus cannot see it; `always`
 drops the language test for corpora with no detection signal (the stage test's
 bytechunk); `off` keeps the guard for auditing a hand-patched stackguard.
-Pinned by `tests/stages/kuna-gomorestack.toml` (four passes: off/always over
+Pinned by `tests/stages/gomorestack.toml` (four passes: off/always over
 the loop form, then `option noreturn runtime.morestack_noctxt` reproduces the
 truncated form and off/always pin it) and by the unlace-console
 `verify_go_morestack` gate, which builds a real stripped Go binary and proves
 the detection-driven `auto` path end to end.
-Pinned by `tests/stages/kuna-gomorestack.toml` (two-pass, off = the `while` loop
+Pinned by `tests/stages/gomorestack.toml` (two-pass, off = the `while` loop
 and the `morestack_noctxt()` call render, always = both gone and the body
 survives) and by the unlace-console `verify_go_morestack` gate, which builds a
 real stripped Go binary and proves the detection-driven `auto` path end to end.
@@ -6342,7 +6342,7 @@ dropped.
 language is Go (the `sourcelang` fact, chapter 01); `always` drops the
 language test for no-signal corpora (the stage test's bytechunk); `off` keeps
 the barrier for auditing GC behavior. Pinned by
-`tests/stages/kuna-gowritebarrier.toml` (two-pass, hand-assembled diamond in
+`tests/stages/gowritebarrier.toml` (two-pass, hand-assembled diamond in
 the compiler's own polarity) and by the unlace-console `verify_go_writebarrier`
 gate, which builds a real stripped Go binary and proves the detection-driven
 `auto` path end to end.
@@ -6408,7 +6408,7 @@ left to fall through to.
 pre-SSA, registered after `gowritebarrier` in the same window. The `eor` and
 the `x30` read lose their only reader and die to dead-code elimination.
 `off` keeps the checks, to audit where the compiler authenticates. Pinned by
-`tests/stages/kuna-ptrauthtrap.toml` (two passes over the `macho_arm64e_auth`
+`tests/stages/ptrauthtrap.toml` (two passes over the `macho_arm64e_auth`
 fixture, one over `macho_arm64e_brk`, whose `brk #0xc470` and `brk #0xc472`
 traps sit behind a `w0` compare and an `x0` bit test and stay, and plain-AArch64
 bytechunks of the real check, the same compare, a `mov x30` forgery in the
@@ -6485,7 +6485,7 @@ clone keeps the fragment's own RETURN as the caller's. A fragment whose flow
 reaches unmapped memory, which happens in a dyld-cache extract when it
 tail-branches into another library, is not inlined and stays a call. The
 detection is name based, like IDA's: a stripped image keeps its fragments as
-calls. Pinned by `tests/stages/kuna-outlined.toml`.
+calls. Pinned by `tests/stages/outlined.toml`.
 
 ## 2.14 AArch64 system registers and Apple instructions
 
@@ -6513,7 +6513,7 @@ opaque pcodeop over its register operands, because the semantics are not
 documented. An iOS kernelcache function that used to stop at its first
 `GENTER` with a bad-instruction halt now decodes through it. These are
 decode-table corrections with no option. Pinned by
-`tests/stages/kuna-a64-sysregs.toml`.
+`tests/stages/a64-sysregs.toml`.
 
 
 ## 2.15 Itanium exception edges
@@ -6650,13 +6650,13 @@ loop condition prints `while (readFile(...), !eh_unwinding()) { ... }` with the 
 after the loop, not a `try` (`eh4_x86_64.elf` `probe`), and a negated edge whose pad
 falls out of an enclosing `if` (a g++ `-fno-reorder-blocks-and-partition` build of
 the same source) stays an `if`. Pinned by
-`tests/stages/kuna-itaniumeh.toml` (two passes over the `itaniumeh/eh_x86_64.elf`
-fixture), `tests/stages/kuna-itaniumeh-cold.toml` (the partitioned build),
-`tests/stages/kuna-itaniumeh-a64.toml` (AArch64, x0/x1),
-`tests/stages/kuna-itaniumeh-arm.toml` (ARM32 and stripped Thumb EHABI tables,
+`tests/stages/itaniumeh.toml` (two passes over the `itaniumeh/eh_x86_64.elf`
+fixture), `tests/stages/itaniumeh-cold.toml` (the partitioned build),
+`tests/stages/itaniumeh-a64.toml` (AArch64, x0/x1),
+`tests/stages/itaniumeh-arm.toml` (ARM32 and stripped Thumb EHABI tables,
 a type named only by its `type_info` string) and
-`tests/stages/kuna-itaniumeh-clang.toml` (clang ranges that start before the
-call, the multi-clause header) and `tests/stages/kuna-itaniumeh-sharedpad.toml`
+`tests/stages/itaniumeh-clang.toml` (clang ranges that start before the
+call, the multi-clause header) and `tests/stages/itaniumeh-sharedpad.toml`
 (pads folded into a shared handler).
 
 **(kuna) MSVC x64 catch funclets as pads** (`option msvceh on`, with
@@ -6799,7 +6799,7 @@ mask is passed at the intrinsic's width (`__mmask16`), and a following
 as `_mm512_mask_add_ps(src, k, a, b)` / `_mm512_maskz_add_ps(k, a, b)`. A
 function in which either step finds a whole-register vector run is marked
 `Funcdata::kuna_vector_code`, which `vectorabi` (chapter 04) keys on.
-Pinned by `tests/stages/kuna-vectorabi.toml`.
+Pinned by `tests/stages/vectorabi.toml`.
 
 
 ## 2.16 DEX exception edges

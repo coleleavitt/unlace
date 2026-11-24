@@ -12,16 +12,16 @@ use crate::common;
 
 const CALLEE_BODY: &str = "return a0 + a1;";
 
-fn kuna(sub: &str, args: &[&str]) -> (String, String, i32) {
+fn unlace(sub: &str, args: &[&str]) -> (String, String, i32) {
     let cache = common::fixture("dyld_cache_arm64e/dyld_shared_cache_arm64e");
     let mut argv = vec![sub, cache.as_str()];
     argv.extend_from_slice(args);
-    common::run_kuna(&argv)
+    common::run_unlace(&argv)
 }
 
 #[test]
 fn two_images_load_as_one_program() {
-    let (stdout, stderr, rc) = kuna(
+    let (stdout, stderr, rc) = unlace(
         "decompile",
         &["0x180002800", "--addr", "--image", "libcaller+libcallee"],
     );
@@ -32,7 +32,7 @@ fn two_images_load_as_one_program() {
     );
     assert!(!stderr.contains("[kuna]"), "nothing was followed: {stderr}");
 
-    let (stdout, stderr, rc) = kuna(
+    let (stdout, stderr, rc) = unlace(
         "functions",
         &["--option", "dyldimage", "libcallee+libcaller"],
     );
@@ -48,7 +48,7 @@ fn two_images_load_as_one_program() {
 
 #[test]
 fn an_address_in_another_image_loads_that_image() {
-    let (stdout, stderr, rc) = kuna(
+    let (stdout, stderr, rc) = unlace(
         "decompile",
         &["0x180002800", "--addr", "--image", "libcaller"],
     );
@@ -59,7 +59,7 @@ fn an_address_in_another_image_loads_that_image() {
         "{stderr}"
     );
 
-    let (stdout, stderr, rc) = kuna(
+    let (stdout, stderr, rc) = unlace(
         "xrefs",
         &[
             "--from",
@@ -76,7 +76,7 @@ fn an_address_in_another_image_loads_that_image() {
 #[test]
 fn a_stub_island_is_followed_to_its_function() {
     for sub in ["decompile", "disassemble"] {
-        let (stdout, stderr, rc) = kuna(sub, &["0x180008800", "--addr", "--image", "libcaller"]);
+        let (stdout, stderr, rc) = unlace(sub, &["0x180008800", "--addr", "--image", "libcaller"]);
         assert_eq!(rc, 0, "{sub}: {stderr}");
         assert!(stdout.contains("_callee_add"), "{sub}: {stdout}");
         assert!(
@@ -84,7 +84,7 @@ fn a_stub_island_is_followed_to_its_function() {
             "{sub}: {stderr}"
         );
     }
-    let (stdout, stderr, rc) = kuna("xrefs", &["--to", "0x180008800", "--image", "libcaller"]);
+    let (stdout, stderr, rc) = unlace("xrefs", &["--to", "0x180008800", "--image", "libcaller"]);
     assert_eq!(rc, 0, "{stderr}");
     assert!(
         stdout.contains("1 reference to callee_entry @ 0x180008800"),
@@ -95,7 +95,7 @@ fn a_stub_island_is_followed_to_its_function() {
 
 #[test]
 fn follow_images_zero_keeps_the_selection() {
-    let (_, stderr, rc) = kuna(
+    let (_, stderr, rc) = unlace(
         "decompile",
         &[
             "0x180002800",

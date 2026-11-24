@@ -1,4 +1,4 @@
-//! (kuna) The order a two-register return value is joined in on an ABI that
+//! (unlace) The order a two-register return value is joined in on an ABI that
 //! puts its HIGH word in the first register.
 //!
 //! PowerPC (r3:r4), MIPS o32 big-endian (v0:v1), SPARC (o0:o1), ARM big-endian
@@ -141,9 +141,9 @@ pub enum BeJoinMode {
     On,
 }
 
-impl crate::optionset::KunaOption for BeJoinMode {
+impl crate::optionset::UnlaceOption for BeJoinMode {
     const NAME: &'static str = "bejoin";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         BeJoinMode::Off
@@ -153,7 +153,7 @@ impl crate::optionset::KunaOption for BeJoinMode {
         BeJoinMode::Callers
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         BeJoinMode::parse(value)
     }
 }
@@ -174,14 +174,14 @@ impl BeJoinMode {
     }
 
     /// Parse an `option bejoin` value.
-    pub fn parse(p1: &str) -> unlace_base::error::KunaResult<(BeJoinMode, String)> {
+    pub fn parse(p1: &str) -> unlace_base::error::UnlaceResult<(BeJoinMode, String)> {
         let mode = match p1 {
             "off" => BeJoinMode::Off,
             "evidence" => BeJoinMode::Evidence,
             "callers" => BeJoinMode::Callers,
             "on" => BeJoinMode::On,
             other => {
-                return Err(unlace_base::error::KunaError::parse(format!(
+                return Err(unlace_base::error::UnlaceError::parse(format!(
                     "Unknown bejoin value: {other} (expected off|evidence|callers|on)"
                 )));
             }
@@ -223,7 +223,9 @@ pub fn keep_proven_pair(data: &Funcdata, active: &mut ParamActive, return_ops: &
     if !mode(data).proves() || data.get_func_proto().is_output_locked() {
         return;
     }
-    let Some(view) = data.kuna_wide() else { return };
+    let Some(view) = data.unlace_wide() else {
+        return;
+    };
     if evidence::proven(data, data.get_address()) {
         mark_written_pair(data, active, return_ops, &view.pair, true);
     }
@@ -345,7 +347,7 @@ pub fn proven_callee(data: &Funcdata, entry: &Address) -> bool {
 
 /// The `option bejoin` mode in force.
 pub fn mode(data: &Funcdata) -> BeJoinMode {
-    data.get_arch().kuna_options.get::<BeJoinMode>()
+    data.get_arch().unlace_options.get::<BeJoinMode>()
 }
 
 /// May a pair join in the ABI's order at all? Off, every pair joins first
@@ -368,7 +370,7 @@ pub fn call_join_order(
 ) -> (int4, int4) {
     let abi = match mode(data) {
         BeJoinMode::Off => false,
-        BeJoinMode::On => !data.kuna_pairs_first_low(),
+        BeJoinMode::On => !data.unlace_pairs_first_low(),
         BeJoinMode::Evidence | BeJoinMode::Callers => {
             callee.is_some_and(|e| evidence::proven(data, e))
         }
@@ -3255,43 +3257,43 @@ pub use evidence::{
     seed as seed_wide_returns, wide_pair,
 };
 
-/// (kuna `bejoin evidence`) The wide-return verdicts the driver took for this function and its
+/// (unlace `bejoin evidence`) The wide-return verdicts the driver took for this function and its
 /// callees, kept across `Funcdata::clear`.
 #[derive(Default)]
 struct WideSlot(Option<crate::bejoin::WideView>);
-crate::kuna_func_state!(WideSlot, keep_across_clear: true);
+crate::unlace_func_state!(WideSlot, keep_across_clear: true);
 
-/// The `kuna_bejoin` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// The `unlace_bejoin` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataBejoinExt {
-    /// (kuna `bejoin evidence`) Hold the wide-return verdicts the driver took
+    /// (unlace `bejoin evidence`) Hold the wide-return verdicts the driver took
     /// for this function and its callees.
-    fn kuna_set_wide(&mut self, wide: crate::bejoin::WideView);
-    /// (kuna `bejoin evidence`) The wide-return verdicts and the model's pair,
+    fn unlace_set_wide(&mut self, wide: crate::bejoin::WideView);
+    /// (unlace `bejoin evidence`) The wide-return verdicts and the model's pair,
     /// when the driver took them.
-    fn kuna_wide(&self) -> Option<&crate::bejoin::WideView>;
+    fn unlace_wide(&self) -> Option<&crate::bejoin::WideView>;
 }
 
 impl FuncdataBejoinExt for crate::funcdata::Funcdata {
-    /// (kuna `bejoin evidence`) Hold the wide-return verdicts the driver took
+    /// (unlace `bejoin evidence`) Hold the wide-return verdicts the driver took
     /// for this function and its callees.
-    fn kuna_set_wide(&mut self, wide: crate::bejoin::WideView) {
-        self.kuna_state_mut::<WideSlot>().0 = Some(wide);
+    fn unlace_set_wide(&mut self, wide: crate::bejoin::WideView) {
+        self.unlace_state_mut::<WideSlot>().0 = Some(wide);
     }
-    /// (kuna `bejoin evidence`) The wide-return verdicts and the model's pair,
+    /// (unlace `bejoin evidence`) The wide-return verdicts and the model's pair,
     /// when the driver took them.
-    fn kuna_wide(&self) -> Option<&crate::bejoin::WideView> {
-        self.kuna_state::<WideSlot>().0.as_ref()
+    fn unlace_wide(&self) -> Option<&crate::bejoin::WideView> {
+        self.unlace_state::<WideSlot>().0.as_ref()
     }
 }
 
-crate::kuna_arch_table!(crate::bejoin::WideCache);
+crate::unlace_arch_table!(crate::bejoin::WideCache);
 
 #[cfg(test)]
 #[path = "bejoin/tests.rs"]
 mod tests;
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.bejoin_wide_pair = Some(wide_pair);
 }

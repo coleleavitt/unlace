@@ -5,7 +5,7 @@
 //!      ([`decompile_func`] -> [`print_c`]) and captures the `print C` text, and
 //!   2. captures the **C++ oracle** `print C` for the same function by driving
 //!      the committed C++ `decomp_test_dbg` (under `decompiler/cpp/`) with
-//!      `UNLACE_DUMP=1`, slicing the `===KUNA_DUMP_BEGIN===..===KUNA_DUMP_MID===`
+//!      `UNLACE_DUMP=1`, slicing the `===UNLACE_DUMP_BEGIN===..===UNLACE_DUMP_MID===`
 //!      block,
 //! then **byte-compares** the two and reports how many match.
 //!
@@ -37,7 +37,7 @@ use std::process::Command;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::IdRegistry;
 use unlace_base::space::AddrSpaceManager;
 use unlace_base::xml::{DocumentStorage, Element};
@@ -160,8 +160,8 @@ impl LoadImage for DummyImg {
     fn get_file_name(&self) -> &str {
         "dummy"
     }
-    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> KunaResult<()> {
-        Err(KunaError::data_unavail("dummy"))
+    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> UnlaceResult<()> {
+        Err(UnlaceError::data_unavail("dummy"))
     }
     fn get_arch_type(&self) -> Vec<u8> {
         Vec::new()
@@ -268,7 +268,7 @@ fn rust_print_c(stem: &str, sym_name: &str) -> Result<String, String> {
 
 /// Path to the committed C++ `decomp_test_dbg` oracle binary.  Honors the
 /// `UNLACE_DECOMP_TEST` override (so a worktree without a built C++ tree can point
-/// at the main checkout's binary, exactly like `kuna/paths.py`), else
+/// at the main checkout's binary, exactly like `unlace/paths.py`), else
 /// `<repo>/decompiler/cpp/decomp_test_dbg`.
 fn cpp_oracle() -> PathBuf {
     if let Some(p) = unlace_base::env::var_os("UNLACE_DECOMP_TEST") {
@@ -309,12 +309,12 @@ fn cpp_print_c(stem: &str) -> Option<String> {
         .output()
         .ok()?;
     let text = String::from_utf8_lossy(&out.stdout);
-    slice_kuna_dump(&text)
+    slice_unlace_dump(&text)
 }
 
-/// Slice the first `===KUNA_DUMP_BEGIN <file>===\n .. \n===KUNA_DUMP_MID===`
+/// Slice the first `===UNLACE_DUMP_BEGIN <file>===\n .. \n===UNLACE_DUMP_MID===`
 /// block's body (the captured bulk `print C` output).
-fn slice_kuna_dump(text: &str) -> Option<String> {
+fn slice_unlace_dump(text: &str) -> Option<String> {
     let begin = text.find("===KUNA_DUMP_BEGIN")?;
     // Skip to the end of the BEGIN marker line.
     let after_begin = text[begin..].find('\n')? + begin + 1;

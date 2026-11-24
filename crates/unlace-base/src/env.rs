@@ -1,8 +1,8 @@
 //! Environment variables under the `UNLACE_` prefix, with the legacy `KUNA_` prefix
 //! still read as a deprecated alias.
 //!
-//! A name given with either prefix (`"UNLACE_SPECS"` or `"KUNA_SPECS"`) reads
-//! `UNLACE_SPECS` first and falls back to `KUNA_SPECS`; a name with neither prefix is
+//! A name given with either prefix (`"UNLACE_SPECS"` or `"UNLACE_SPECS"`) reads
+//! `UNLACE_SPECS` first and falls back to `UNLACE_SPECS`; a name with neither prefix is
 //! read as written.
 
 use std::env::VarError;
@@ -56,7 +56,7 @@ mod tests {
     }
 
     #[test]
-    fn unlace_wins_and_kuna_is_the_fallback() {
+    fn unlace_wins_and_unlace_is_the_fallback() {
         let (new, old) = ("UNLACE_ENVHELPER_TEST", "KUNA_ENVHELPER_TEST");
         // SAFETY: test-only variables no other test reads.
         unsafe {

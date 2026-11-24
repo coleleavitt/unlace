@@ -145,7 +145,7 @@ struct TransformState {
     count: int4,
     /// Scratch space for opDestroyRecursive (C++ `deadScratch`).
     dead_scratch: Vec<OpId>,
-    /// (kuna) Unshifted pulls of a LOAD already placed after it, keyed by
+    /// (unlace) Unshifted pulls of a LOAD already placed after it, keyed by
     /// position, width, signedness and output size.
     loaded: Vec<(int4, int4, OpCode, int4, VarnodeId)>,
 }
@@ -884,7 +884,7 @@ impl BitFieldPullTransform {
         state.count += 1;
     }
 
-    /// (kuna) Every pull of a LOAD sits right after it, so a second pull of the
+    /// (unlace) Every pull of a LOAD sits right after it, so a second pull of the
     /// same bits reads the same value: feed the record's reader from the first
     /// one (shifted when the record asks for it), so the field is read once.
     fn reuse_loaded_pull(

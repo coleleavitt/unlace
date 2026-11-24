@@ -1,4 +1,4 @@
-//! (kuna `rawdiscover`) Function discovery for a headerless raw image.
+//! (unlace `rawdiscover`) Function discovery for a headerless raw image.
 //!
 //! `--raw-image` loads a file that carries no object header, so the whole
 //! discovery tier declines: [`crate::passes::run_listing_consumers`] opens with
@@ -50,9 +50,9 @@ use crate::listing::{Listing, ListingDetail};
 pub struct RawDiscovery {
     /// Every function entry, sorted.
     pub entries: Vec<u64>,
-    /// The DOS exits of the code the descent decoded ([`kuna_dosexit`]).
+    /// The DOS exits of the code the descent decoded ([`unlace_dosexit`]).
     pub dos_exits: DosExits,
-    /// Where each entry's flow ends ([`kuna_rawextent`]), on x86 real mode.
+    /// Where each entry's flow ends ([`unlace_rawextent`]), on x86 real mode.
     pub flow_ends: Option<BTreeMap<u64, u64>>,
 }
 

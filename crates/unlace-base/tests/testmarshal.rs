@@ -24,7 +24,7 @@
 use std::rc::Rc;
 
 use unlace_base::address::ELEM_ADDR;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::{
     ATTRIB_ALIGN, ATTRIB_BIGENDIAN, ATTRIB_CONSTRUCTOR, ATTRIB_CONTENT, ATTRIB_DESTRUCTOR,
     ATTRIB_EXTRAPOP, ATTRIB_FORMAT, ATTRIB_ID, ATTRIB_INDEX, ATTRIB_METATYPE, ATTRIB_MODEL,
@@ -466,10 +466,10 @@ fn test_unexpected_eof_encode<E: Encoder>(encoder: &mut E) {
 
 // C++ `test_unexpected_eof`, decode half.  The C++ try block becomes a
 // `?`-propagating closure; `catch(DecoderError &err)` becomes the
-// `KunaError::Decoder` match (any other error variant would leave the flag
+// `UnlaceError::Decoder` match (any other error variant would leave the flag
 // unset and fail the assert, exactly like an uncaught C++ exception).
 fn test_unexpected_eof_decode<D: Decoder>(decoder: &mut D, out_stream: &[u8]) {
-    let result = (|| -> KunaResult<()> {
+    let result = (|| -> UnlaceResult<()> {
         decoder.ingest_stream(out_stream)?;
         let el1 = decoder.open_element_id(&ELEM_DATA)?;
         let el2 = decoder.open_element_id(&ELEM_INPUT)?;
@@ -477,7 +477,7 @@ fn test_unexpected_eof_decode<D: Decoder>(decoder: &mut D, out_stream: &[u8]) {
         decoder.close_element(el1)?;
         Ok(())
     })();
-    let saw_unexpected_error = matches!(result, Err(KunaError::Decoder { .. }));
+    let saw_unexpected_error = matches!(result, Err(UnlaceError::Decoder { .. }));
     assert!(saw_unexpected_error);
 }
 
@@ -525,7 +525,7 @@ fn test_noremaining_decode<D: Decoder>(decoder: &mut D, out_stream: &[u8]) {
     // C++: try { el2 = decoder.openElement(ELEM_OFF); } catch(DecoderError&)
     let saw_no_remaining = matches!(
         decoder.open_element_id(&ELEM_OFF),
-        Err(KunaError::Decoder { .. })
+        Err(UnlaceError::Decoder { .. })
     );
     assert!(saw_no_remaining);
 }
@@ -537,7 +537,7 @@ fn test_openmismatch_decode<D: Decoder>(decoder: &mut D, out_stream: &[u8]) {
     // C++: try { decoder.openElement(ELEM_OUTPUT); } catch(DecoderError&)
     let saw_open_mismatch = matches!(
         decoder.open_element_id(&ELEM_OUTPUT),
-        Err(KunaError::Decoder { .. })
+        Err(UnlaceError::Decoder { .. })
     );
     assert!(saw_open_mismatch);
 }
@@ -547,7 +547,7 @@ fn test_closemismatch_decode<D: Decoder>(decoder: &mut D, out_stream: &[u8]) {
     decoder.ingest_stream(out_stream).unwrap();
     let el1 = decoder.open_element_id(&ELEM_INPUT).unwrap();
     // C++: try { decoder.closeElement(el1); } catch(DecoderError&)
-    let saw_close_mismatch = matches!(decoder.close_element(el1), Err(KunaError::Decoder { .. }));
+    let saw_close_mismatch = matches!(decoder.close_element(el1), Err(UnlaceError::Decoder { .. }));
     assert!(saw_close_mismatch);
 }
 

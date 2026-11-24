@@ -1,4 +1,4 @@
-//! (kuna `swiftcall`) Swift calls: the ones that may throw, the `self` a
+//! (unlace `swiftcall`) Swift calls: the ones that may throw, the `self` a
 //! method hands on, and the `self` a call to a struct member does not pass.
 //!
 //! A throwing Swift function returns its error in the `swifterror` register
@@ -214,7 +214,7 @@ fn zeroes(data: &Funcdata, id: OpId, depth: u32) -> bool {
 pub fn throwing_call(data: &Funcdata, call: OpId) -> Option<Rc<ProtoModel>> {
     let abi = data
         .get_arch()
-        .kuna_states
+        .unlace_states
         .get::<crate::swiftcall::SwiftAbi>()?;
     let (reg, size) = &abi.error_reg;
     (zeroed_before(data, call, reg, *size) && tested_after(data, call, reg, *size))
@@ -398,7 +398,7 @@ fn tested_after(data: &Funcdata, call: OpId, reg: &Address, size: int4) -> bool 
 pub fn stale_self(data: &Funcdata, idx: int4, slot: int4, addr: &Address, size: int4) -> bool {
     let Some(abi) = data
         .get_arch()
-        .kuna_states
+        .unlace_states
         .get::<crate::swiftcall::SwiftAbi>()
     else {
         return false;
@@ -434,7 +434,7 @@ pub fn stale_self(data: &Funcdata, idx: int4, slot: int4, addr: &Address, size: 
 /// Is `(addr, size)` the image's `swiftself` register?
 pub fn is_self_storage(data: &Funcdata, addr: &Address, size: int4) -> bool {
     data.get_arch()
-        .kuna_states
+        .unlace_states
         .get::<crate::swiftcall::SwiftAbi>()
         .is_some_and(|abi| &abi.self_reg.0 == addr && abi.self_reg.1 == size)
 }
@@ -455,7 +455,7 @@ fn is_swift(model: &ProtoModel) -> bool {
 pub fn passes_own_self(data: &Funcdata, idx: int4, slot: int4, addr: &Address, size: int4) -> bool {
     let Some(abi) = data
         .get_arch()
-        .kuna_states
+        .unlace_states
         .get::<crate::swiftcall::SwiftAbi>()
     else {
         return false;
@@ -520,7 +520,7 @@ pub fn indirect_self(
 ) -> Option<bool> {
     let abi = data
         .get_arch()
-        .kuna_states
+        .unlace_states
         .get::<crate::swiftcall::SwiftAbi>()?;
     if addr != &abi.self_reg.0 || size != abi.self_reg.1 {
         return None;
@@ -595,7 +595,7 @@ fn dispatches_on(data: &Funcdata, op: OpId, obj: crate::context::VarnodeId) -> b
 pub fn indirect_call(data: &Funcdata, call: OpId) -> Option<Rc<ProtoModel>> {
     let abi = data
         .get_arch()
-        .kuna_states
+        .unlace_states
         .get::<crate::swiftcall::SwiftAbi>()?;
     let op = data.obank().get(call)?;
     if op.code() != OpCode::CPUI_CALLIND {
@@ -706,12 +706,12 @@ fn may_take_self(data: &Funcdata, id: OpId) -> bool {
     };
     let call = data.get_call_specs(i);
     let entry = call.get_entry_address();
-    if data.kuna_swift_self_unread(entry) {
+    if data.unlace_swift_self_unread(entry) {
         return false;
     }
     let free = data
         .get_arch()
-        .kuna_states
+        .unlace_states
         .get::<crate::swiftcall::SwiftAbi>()
         .is_some_and(|abi| {
             entry
@@ -886,7 +886,7 @@ fn first_touch(
 /// per-function `ArchContext` carries no translator, so the bodies are read
 /// here, once per image. Inert outside an image the convention is bound in.
 pub fn seed_self_readers(arch: &mut crate::architecture::Architecture, data: &mut Funcdata) {
-    let Some(abi) = arch.kuna_states.get_rc::<crate::swiftcall::SwiftAbi>() else {
+    let Some(abi) = arch.unlace_states.get_rc::<crate::swiftcall::SwiftAbi>() else {
         return;
     };
     if abi.maybe_self.is_empty() || data.num_calls() < 2 {
@@ -913,18 +913,18 @@ pub fn seed_self_readers(arch: &mut crate::architecture::Architecture, data: &mu
             continue;
         }
         let key = (code.get_index(), entry.get_offset());
-        let unread = match arch.kuna_swift_self_first_cache.get(&key) {
+        let unread = match arch.unlace_swift_self_first_cache.get(&key) {
             Some(&v) => v,
             None => {
                 let (first, straight) =
                     first_touch(arch.translate(), &code, &reg, entry.get_offset());
                 let v = straight && first != Some(true);
-                arch.kuna_swift_self_first_cache.insert(key, v);
+                arch.unlace_swift_self_first_cache.insert(key, v);
                 v
             }
         };
         if unread {
-            data.kuna_set_swift_self_unread(&entry);
+            data.unlace_set_swift_self_unread(&entry);
         }
     }
 }
@@ -1142,8 +1142,8 @@ pub fn derive_model(
     out
 }
 
-crate::kuna_flag!(
-    /// (kuna) Gate the Swift calling-convention arm of the metadata pass
+crate::unlace_flag!(
+    /// (unlace) Gate the Swift calling-convention arm of the metadata pass
     /// (`swiftcall`): methods, initializers and accessors bound to the
     /// `__swiftcall` model with their `self` named and typed. Default-on;
     /// inert unless `swiftmetadata` is on.
@@ -1155,12 +1155,12 @@ crate::kuna_flag!(
 );
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.swiftcall_swift_registers = Some(swift_registers);
     hooks.swiftcall_derive_model = Some(derive_model);
 }
 
-crate::kuna_arch_state!(SwiftAbi);
+crate::unlace_arch_state!(SwiftAbi);
 
 #[cfg(test)]
 mod tests {

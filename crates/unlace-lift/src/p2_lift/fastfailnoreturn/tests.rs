@@ -119,7 +119,7 @@ fn resolver(id: u32) -> Option<String> {
 }
 
 #[test]
-fn elem_id_in_kuna_range() {
+fn elem_id_in_unlace_range() {
     assert_eq!(ELEM_FASTFAILNORETURN.get_id(), 4144);
     assert_eq!(ELEM_FASTFAILNORETURN.get_name(), "fastfailnoreturn");
 }

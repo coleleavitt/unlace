@@ -75,7 +75,7 @@ effect when it runs.
   (settable 88 -> 89, analysis tier 27 -> 28, the `PASS_GATES` list, the JSON row
   count 87 -> 88) and `catalog_bytecompat.rs` (88 -> 89 plus the recaptured
   `tests/fixtures/phase_catalog.json`, re-captured from `decomp_dbg` after the
-  rebase). `tests/stages/kuna-catalog.toml` needs no edit: its exact-count asserts
+  rebase). `tests/stages/catalog.toml` needs no edit: its exact-count asserts
   key on `source_decompiler = "angr"` and the `structure-recovery` /
   `opt-in-tool` change_kinds, none of which this row joins; the two
   `min="10" max="160"` asserts absorb 88 -> 89. `make test-stages` is 394/394
@@ -88,7 +88,7 @@ effect when it runs.
   a discovered entry ⇒ tail call, no containing entry ⇒ reject), and the
   epilogue-shape matcher including its near-misses (`ldmia r3!` is not a stack
   restore; `ldr r0,[sp,#4]` is not either).
-* e2e (`kuna-console/tests/verify_tailcallentry.rs`): four tests over
+* e2e (`console/tests/verify_tailcallentry.rs`): four tests over
   `cortexm_tailcall_le32` — option off, the tail-called routine has no entry and
   its body is emitted inside `_start` (the bug); option on, it registers and
   decompiles to its own constant (the fix); the three near-miss shapes stay

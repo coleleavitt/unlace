@@ -22,10 +22,10 @@ fn bootstrap(all: bool) -> ConsoleProgram {
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
     let arch = prog.arch_mut();
-    arch.set_kuna_option("listing", "on").unwrap();
-    arch.set_kuna_option("tailcallentry", "on").unwrap();
+    arch.set_unlace_option("listing", "on").unwrap();
+    arch.set_unlace_option("tailcallentry", "on").unwrap();
     if all {
-        arch.set_kuna_option("tailcallentryall", "on").unwrap();
+        arch.set_unlace_option("tailcallentryall", "on").unwrap();
     }
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");

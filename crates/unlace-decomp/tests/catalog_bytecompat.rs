@@ -1,9 +1,9 @@
-//! Catalog byte-compatibility gate (ADR 0006, item w4-kuna-p0-pack).
+//! Catalog byte-compatibility gate (ADR 0006, item w4-unlace-p0-pack).
 //!
 //! The Rust catalog JSON emitter (`phases::emit_catalog_json`) must
-//! reproduce `kuna_console.cc kunaEmitSettableJson`'s output **byte for byte**:
-//! `tests/stages/kuna-catalog.toml` (a C++ datatest) string-matches the raw
-//! emitter output, and `python -m kuna.catalog` parses it, so any drift in key
+//! reproduce `kuna_console.cc unlaceEmitSettableJson`'s output **byte for byte**:
+//! `tests/stages/unlace-catalog.toml` (a C++ datatest) string-matches the raw
+//! emitter output, and `python -m unlace.catalog` parses it, so any drift in key
 //! order, spacing, separators, pipe-splitting, the conditional `current` field,
 //! or escaping would silently break the LLM control surface.
 //!
@@ -11,7 +11,7 @@
 //!
 //! The fixture `tests/fixtures/phase_catalog.json` is the EXACT bytes the C++
 //! `decomp_dbg` binary emits for `phase catalog` **with no program loaded**
-//! (so `kunaLiveValue` returns `""` for every option and no `current` field is
+//! (so `unlaceLiveValue` returns `""` for every option and no `current` field is
 //! present). We compare against the no-program form deliberately: the `current`
 //! field is architecture-dependent (it reads live `Architecture` flags), so it
 //! is not a stable cross-build byte contract — but the surrounding bytes (key
@@ -23,11 +23,11 @@
 //! ## Regenerating the fixture
 //!
 //! The original fixture was captured from the (now-removed) C++ binary. Since the
-//! C++ tree is gone and kuna is Rust-only, the Rust `emit_catalog_json` emitter is
-//! the authoritative source; kuna-native settables (e.g. `realtypes`, DIV-6) have
+//! C++ tree is gone and unlace is Rust-only, the Rust `emit_catalog_json` emitter is
+//! the authoritative source; unlace-native settables (e.g. `realtypes`, DIV-6) have
 //! no C++ origin. Recapture from the Rust `decomp_dbg` with the `openfile write`
 //! trick (the same one `unlace decompile` uses, so console prompts never pollute the
-//! bytes), with no program loaded so `kunaLiveValue` returns `""` (no `current`):
+//! bytes), with no program loaded so `unlaceLiveValue` returns `""` (no `current`):
 //!
 //! ```sh
 //! printf 'openfile write /tmp/cap.json\nphase catalog\nclosefile\nquit\n' \
@@ -79,7 +79,7 @@ fn fixture_has_no_current_field() {
 // One `"option":` per settable row, each carrying the tier and symptoms
 // fields; the count is the registry's, so a row added elsewhere moves it.
 fn fixture_has_every_settable() {
-    let n = unlace_decomp::phases::kuna_num_settables();
+    let n = unlace_decomp::phases::unlace_num_settables();
     assert_eq!(FIXTURE.matches("\"option\": ").count(), n);
     assert_eq!(FIXTURE.matches("\"tier\": ").count(), n);
     assert_eq!(FIXTURE.matches("\"symptoms\": ").count(), n);
@@ -90,8 +90,8 @@ fn single_settable_rows_match_their_slice_of_the_catalog() {
     // `phase catalog <option>` (one-argument form) must emit exactly the same
     // bytes as that option's row in the full catalog, minus the leading "  "
     // is preserved and minus the trailing comma (the full form joins with ',').
-    for i in 0..unlace_decomp::phases::kuna_num_settables() {
-        let st = unlace_decomp::phases::kuna_settable_by_index(i);
+    for i in 0..unlace_decomp::phases::unlace_num_settables() {
+        let st = unlace_decomp::phases::unlace_settable_by_index(i);
         let one = emit_catalog_json_one(st.option, None).expect("known option");
         // The one-row form is the bare object + a single newline.
         assert!(one.starts_with("  {\"option\": "));

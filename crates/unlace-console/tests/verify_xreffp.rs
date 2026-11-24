@@ -217,7 +217,7 @@ fn a_skip_that_falls_through_into_an_entry_found_from_a_call_files_nothing() {
 }
 
 fn armframes_off(arch: &mut Architecture) {
-    arch.set_kuna_option("armframes", "off")
+    arch.set_unlace_option("armframes", "off")
         .expect("armframes flips off");
 }
 
@@ -281,7 +281,7 @@ fn a_kept_thumb_skip_is_rendered_as_the_walk_decoded_it() {
 }
 
 fn armframes_on(arch: &mut Architecture) {
-    arch.set_kuna_option("armframes", "on")
+    arch.set_unlace_option("armframes", "on")
         .expect("armframes flips on");
 }
 

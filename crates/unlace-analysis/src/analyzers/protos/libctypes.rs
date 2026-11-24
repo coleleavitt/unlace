@@ -1,4 +1,4 @@
-//! (kuna `libctypes`) Named libc/POSIX aggregate types in the built-in prototype
+//! (unlace `libctypes`) Named libc/POSIX aggregate types in the built-in prototype
 //! tables — `FILE *` where the width-stable vocabulary can only say `void *`.
 //!
 //! [`super::Ty`] is width-stable by construction, so every aggregate pointer in
@@ -68,7 +68,7 @@
 //!
 //! ## Names are the bare DWARF spelling
 //!
-//! `FILE`, `stat`, `passwd`, … — not `struct stat`. kuna's printer spells a
+//! `FILE`, `stat`, `passwd`, … — not `struct stat`. unlace's printer spells a
 //! named base bare and its `.h` emitter supplies the matching
 //! `typedef struct stat stat;`, so the bare form is the one that round-trips
 //! through `decompile-project`.
@@ -117,7 +117,7 @@
 
 use std::rc::Rc;
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::types::{int4, uint4};
 use unlace_decomp::dtype::{Datatype, TypeFactory, flags, type_metatype};
 
@@ -345,9 +345,9 @@ pub(super) fn named_aggregate(
     types: &dyn TypeFactory,
     word_size: uint4,
     layout: Layout,
-) -> KunaResult<Rc<Datatype>> {
+) -> UnlaceResult<Rc<Datatype>> {
     let Some(agg) = NAMED_AGGREGATES.iter().find(|a| a.name == name) else {
-        return Err(KunaError::lowlevel(format!(
+        return Err(UnlaceError::lowlevel(format!(
             "libctypes: no width is known for `{name}`"
         )));
     };
@@ -362,7 +362,7 @@ pub(super) fn named_aggregate(
     };
     if let Some(held) = types.find_by_name(name)? {
         if !usable(&held) {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "libctypes: `{name}` is already held by a different type"
             )));
         }
@@ -1597,7 +1597,7 @@ pub(super) const LIBC_EXT_NAMED: &[(&str, Sig)] = &[
     // it; what it buys is the ARITY (without it 12 calls in the corpus print one
     // argument and 2 print four). `pthread_mutex_destroy` bought nothing -- its
     // one argument is recovered either way -- and is left out. A mutex is often
-    // the first member of a larger record, which `kuna_libcfit` declines per call.
+    // the first member of a larger record, which `unlace_libcfit` declines per call.
     (
         "pthread_mutex_init",
         Sig {
@@ -1730,7 +1730,7 @@ pub(super) const LIBC_DEFINED_NAMED: &[(&str, Sig)] = &[
 ///
 /// A call into `libc.so.6` is answered by glibc's build of `obstack.c`, whose
 /// published prototype is the one in `/usr/include/obstack.h` — so this is the
-/// declaration, and `size_t` here would be kuna printing a false one.
+/// declaration, and `size_t` here would be unlace printing a false one.
 pub(super) const LIBC_IMPORTED_OBSTACK: &[(&str, Sig)] = &[
     (
         "_obstack_begin",

@@ -6,7 +6,7 @@ use unlace_decomp::dtype::TypeFactoryImpl;
 /// The `libctypes` gate is a process environment variable and these tests run as
 /// threads of one process, so the three that write it have to take turns. Without
 /// this, `the_declared_lookup_follows_the_gate` reads a value another test set,
-/// and so does `kuna_libcnames`' table test, which takes it too.
+/// and so does `unlace_libcnames`' table test, which takes it too.
 pub(in crate::analyzers::protos) static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 /// A type factory shaped like the x86-64 one the passes run against.
@@ -932,7 +932,7 @@ fn the_two_stream_shapes_do_not_borrow_each_others_names() {
     }
 }
 
-/// `<stream>_ptr` is a name kuna invents, so an image that already answers to it
+/// `<stream>_ptr` is a name unlace invents, so an image that already answers to it
 /// takes it: the GOT slot keeps its address-shaped rendering rather than
 /// borrowing an identifier that also names a `.data` word somewhere else. The
 /// colliding global here is `static`, so only `.symtab` carries it — a lookup

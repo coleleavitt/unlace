@@ -85,20 +85,20 @@ fn decompile(func: &str, mode: Mode) -> String {
     // commit). Build the Listing (`listing on`) and keep `noreturn_propagate` on
     // in BOTH modes; toggle only `noreturn_known`.
     prog.arch_mut()
-        .set_kuna_option("listing", "on")
+        .set_unlace_option("listing", "on")
         .expect("listing flips on");
     prog.arch_mut()
-        .set_kuna_option("noreturn_propagate", "on")
+        .set_unlace_option("noreturn_propagate", "on")
         .expect("noreturn_propagate flips on");
     match mode {
         Mode::ErrorOff => {
             prog.arch_mut()
-                .set_kuna_option("noreturn_known", "off")
+                .set_unlace_option("noreturn_known", "off")
                 .expect("noreturn_known flips off");
         }
         Mode::ErrorOn => {
             prog.arch_mut()
-                .set_kuna_option("noreturn_known", "on")
+                .set_unlace_option("noreturn_known", "on")
                 .expect("noreturn_known flips on");
         }
     }
@@ -185,16 +185,16 @@ fn discovered_consumer_does_not_fix_single_site_error_wrapper() {
     let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
     prog.arch_mut()
-        .set_kuna_option("listing", "on")
+        .set_unlace_option("listing", "on")
         .expect("listing on");
     prog.arch_mut()
-        .set_kuna_option("noreturn_disc", "on")
+        .set_unlace_option("noreturn_disc", "on")
         .expect("noreturn_disc on");
     prog.arch_mut()
-        .set_kuna_option("noreturn_propagate", "off")
+        .set_unlace_option("noreturn_propagate", "off")
         .expect("propagate off");
     prog.arch_mut()
-        .set_kuna_option("noreturn_known", "off")
+        .set_unlace_option("noreturn_known", "off")
         .expect("known off");
     prog.commit_pending_analysis().expect("commit");
 

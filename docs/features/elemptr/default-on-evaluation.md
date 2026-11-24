@@ -11,7 +11,7 @@ the string-literal rule and globals typed only by a batch that decides them).
 | step | criterion | result |
 |---|---|---|
 | (a) `make test` | no datatest assertion moves | 675/675, PARITY OK, no per-test opt-out |
-| (b) `make test-stages` | only the option's own effect moves | PARITY OK (1,467/1,467 on `f96e80805`; the baseline gains the 26 `kuna-elemptr.xml` keys and loses none); 8 assertions of other options read the subscript for the same access and 3 read the narrow load of a 4-byte field (listed in `record.json`), `kuna-castindex.xml` turns `elemptr` off in both passes |
+| (b) `make test-stages` | only the option's own effect moves | PARITY OK (1,467/1,467 on `f96e80805`; the baseline gains the 26 `elemptr.xml` keys and loses none); 8 assertions of other options read the subscript for the same access and 3 read the narrow load of a 4-byte field (listed in `record.json`), `castindex.xml` turns `elemptr` off in both passes |
 | (c) `make test-cli` | a moved probe has a reason | 2 probes of other options read the subscript for the same access; the four `elemptr` probes pin the rebuilt fixture (268/268) |
 | (d) 444-slice typesweep | improved >= worse, no perfect function lost | 1,631 -> 1,674 perfect, 189 better, 0 worse; 243 scored variables gained, 0 lost; no function's variable or argument count moved |
 | (e) speed | worst delta <= +5% | interleaved min-of-15 whole-binary on `f96e80805`: fmt +0.03%, ls +0.25%, sort +0.36%, bash +1.81% (round O: +0.14%, +0.17%, +0.21%, +0.39%; on `b273c2259`: +0.05%, +0.11%, +0.32%, +1.65%) |

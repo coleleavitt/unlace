@@ -130,7 +130,7 @@ All three previously-failing clauses flipped: `stdout_matches[1]`
 carries **both arms** — `on_key` (three-register hole, the bug) and `on_two` (two-register
 hole, the control, identical under both settings) — with
 `tests/cli/keyboard-callback-uses-undefined.json` pinned to it and
-`tests/stages/kuna-inputparamgap.toml` pinning the two-pass rendering.
+`tests/stages/inputparamgap.toml` pinning the two-pass rendering.
 
 ## Speed
 

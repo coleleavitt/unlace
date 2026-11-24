@@ -1,6 +1,6 @@
 //! Rebuild one cache image as a standalone thin Mach-O.
 //!
-//! Every segment keeps its cache virtual address, so an address kuna prints is
+//! Every segment keeps its cache virtual address, so an address unlace prints is
 //! the address in the cache. The segments' bytes are copied with slide info
 //! applied, and the image gets a private `__LINKEDIT`: the cache shares one
 //! `__LINKEDIT` across all images, and the load commands point into it.
@@ -9,7 +9,7 @@
 //! the cache moved to its local-symbols file in place of the `<redacted>`
 //! placeholders left behind (left nameless when that file is missing). It also holds a compact string table, the
 //! indirect-symbol table renumbered to match, copies of the export trie,
-//! function starts and data-in-code, and a `kuna.dyld.xrefs` `LC_NOTE` naming
+//! function starts and data-in-code, and a `unlace.dyld.xrefs` `LC_NOTE` naming
 //! the image's references into other images ([`super::xrefs`]). Linkedit data
 //! the rebuild does not carry (code signature, split-seg info, rebase and bind
 //! opcodes the cache builder already applied) is zeroed in its command.

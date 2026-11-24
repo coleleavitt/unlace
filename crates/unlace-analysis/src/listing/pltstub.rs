@@ -1,4 +1,4 @@
-//! (kuna) `pltstub` — a PLT stub that builds its slot's address in a register
+//! (unlace) `pltstub` — a PLT stub that builds its slot's address in a register
 //! references the slot, not the partial sums on the way to it.
 //!
 //! GNU ld's A32 PLT entry adds the PC and two (three with `--long-plt`) rotated

@@ -1,4 +1,4 @@
-//! (kuna) `addrtakenentry` — code whose address the program takes, and that no
+//! (unlace) `addrtakenentry` — code whose address the program takes, and that no
 //! flow reaches, is a function entry (P1 code/data partition, x86-64).
 //!
 //! The Listing walk makes a function only at a CALL target. A function whose

@@ -1,7 +1,7 @@
 //! The MeP languages (big- and little-endian MeP-c4 core) load a raw image at 0x1000 and
 //! decompile it.
 use crate::common;
-use common::{repo_root, run_kuna};
+use common::{repo_root, run_unlace};
 
 fn decompile(fixture: &str, target: &str) -> String {
     let bin = repo_root()
@@ -10,7 +10,7 @@ fn decompile(fixture: &str, target: &str) -> String {
         .to_str()
         .unwrap()
         .to_owned();
-    let (stdout, stderr, code) = run_kuna(&[
+    let (stdout, stderr, code) = run_unlace(&[
         "decompile",
         &bin,
         "0x1000",

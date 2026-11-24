@@ -1,7 +1,7 @@
-//! Tests for the element-pointer commitment (kuna `elemptr`).
+//! Tests for the element-pointer commitment (unlace `elemptr`).
 //!
 //! The walk needs a decompiled function and is covered end to end by
-//! `tests/stages/kuna-elemptr.toml` (pass 1 `off` = the bug, pass 2 `on` = the
+//! `tests/stages/unlace-elemptr.toml` (pass 1 `off` = the bug, pass 2 `on` = the
 //! fix, with two controls) and by the compiled round trip in
 //! `unlace-cli/tests/decompile_all_cli.rs`. What is pinned here are the pieces
 //! the design rests on: which votes the candidate may replace, the batch

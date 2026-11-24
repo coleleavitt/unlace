@@ -25,7 +25,7 @@ const WANT: &str = "3693803628968453501\n";
 fn decompile(fixture: &str, option: &str) -> String {
     let bin = common::fixture(fixture);
     let (stdout, stderr, code) =
-        common::run_kuna(&["decompile-all", &bin, "--option", "narrowret", option]);
+        common::run_unlace(&["decompile-all", &bin, "--option", "narrowret", option]);
     assert_eq!(code, 0, "unlace decompile-all {fixture} failed: {stderr}");
     stdout
 }

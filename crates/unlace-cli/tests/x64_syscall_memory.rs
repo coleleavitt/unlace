@@ -46,7 +46,7 @@ fn excluded_abis_preserve_the_register_only_syscall_model() {
     let object = common::scratch_file("x64-syscall-scope", "o");
     std::fs::write(&source, SCOPE_SOURCE).unwrap();
     compile(&["-c"], &source, &object);
-    let (text, err, rc) = common::run_kuna(&[
+    let (text, err, rc) = common::run_unlace(&[
         "decompile",
         object.to_str().unwrap(),
         "abi_echo",
@@ -55,7 +55,7 @@ fn excluded_abis_preserve_the_register_only_syscall_model() {
     ]);
     assert_eq!(rc, 0, "{text}\n{err}");
     assert!(text.contains("return a;"), "{text}");
-    let (text, err, rc) = common::run_kuna(&[
+    let (text, err, rc) = common::run_unlace(&[
         "decompile",
         object.to_str().unwrap(),
         "abi_echo",
@@ -107,7 +107,7 @@ fn excluded_abis_preserve_the_register_only_syscall_model() {
                     _ => args.extend(["--option".into(), "x64syscall".into(), mode.into()]),
                 }
                 let refs: Vec<_> = args.iter().map(String::as_str).collect();
-                let (text, err, rc) = common::run_kuna(&refs);
+                let (text, err, rc) = common::run_unlace(&refs);
                 assert_eq!(rc, 0, "{policy} {mode}: {text}\n{err}");
                 let windows = policy.starts_with("windows");
                 let result = if windows {
@@ -163,7 +163,7 @@ fn excluded_abis_preserve_the_register_only_syscall_model() {
         }
     }
     for mode in ["on", "abi"] {
-        let (text, err, rc) = common::run_kuna(&[
+        let (text, err, rc) = common::run_unlace(&[
             "decompile",
             object.to_str().unwrap(),
             "metadata8",
@@ -241,7 +241,7 @@ fn caller_metadata_writes_keep_the_physical_pointer_payload() {
                 args.extend(["--option".into(), "x64syscall".into(), mode.into()]);
             }
             let (text, err, rc) =
-                common::run_kuna(&args.iter().map(String::as_str).collect::<Vec<_>>());
+                common::run_unlace(&args.iter().map(String::as_str).collect::<Vec<_>>());
             assert_eq!(rc, 0, "{text}\n{err}");
             assert!(
                 text.contains("v1[0] =")
@@ -256,7 +256,7 @@ fn caller_metadata_writes_keep_the_physical_pointer_payload() {
         roundtrip(&printed);
     }
     let project = common::scratch_file("x64-syscall-metadata-project", "dir");
-    let (text, err, rc) = common::run_kuna(&[
+    let (text, err, rc) = common::run_unlace(&[
         "decompile-project",
         object.to_str().unwrap(),
         "--functions",
@@ -361,7 +361,7 @@ fn decompile(object: &Path, mode: Option<&str>) -> Vec<(String, String)> {
         args.extend(["--assert".into(), format!("prototype {name} {prototype}")]);
     }
     let refs: Vec<_> = args.iter().map(String::as_str).collect();
-    let (text, err, rc) = common::run_kuna(&refs);
+    let (text, err, rc) = common::run_unlace(&refs);
     assert_eq!(rc, 0, "{text}\n{err}");
     let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
     doc["functions"]

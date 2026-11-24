@@ -9,7 +9,7 @@
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::{Decoder, Encoder, PackedDecode, PackedEncode};
 use unlace_base::space::{AddrSpace, AddrSpaceManager, ConstantSpace, addrspace_flags, spacetype};
 use unlace_base::types::Wrap;
@@ -68,8 +68,8 @@ impl SleighBaseTrans for TestTrans {
     fn decode_construct_tpl(
         &mut self,
         _decoder: &mut dyn unlace_num::opcodes::OpcodeDecoder,
-    ) -> KunaResult<(i32, ConstructTplHandle)> {
-        Err(KunaError::sleigh("no ConstructTpl in verifier tests"))
+    ) -> UnlaceResult<(i32, ConstructTplHandle)> {
+        Err(UnlaceError::sleigh("no ConstructTpl in verifier tests"))
     }
 }
 
@@ -99,9 +99,9 @@ impl VWalker {
 }
 
 impl PatternExpressionContext for VWalker {
-    fn get_instruction_bytes(&self, byteoff: i32, numbytes: i32) -> KunaResult<u32> {
+    fn get_instruction_bytes(&self, byteoff: i32, numbytes: i32) -> UnlaceResult<u32> {
         if byteoff < 0 || (byteoff + numbytes) as usize > self.instr.len() {
-            return Err(KunaError::bad_data(
+            return Err(UnlaceError::bad_data(
                 "Instruction is using more than 16 bytes",
             ));
         }
@@ -113,7 +113,7 @@ impl PatternExpressionContext for VWalker {
         Ok(res)
     }
 
-    fn get_context_bytes(&self, _bytestart: i32, _size: i32) -> KunaResult<u32> {
+    fn get_context_bytes(&self, _bytestart: i32, _size: i32) -> UnlaceResult<u32> {
         Ok(0)
     }
 
@@ -125,37 +125,39 @@ impl PatternExpressionContext for VWalker {
         panic!("verify_w2_sleigh_symbol never reads naddr")
     }
 
-    fn get_n2addr(&self) -> KunaResult<Address> {
-        Err(KunaError::lowlevel("inst_next2 not available"))
+    fn get_n2addr(&self) -> UnlaceResult<Address> {
+        Err(UnlaceError::lowlevel("inst_next2 not available"))
     }
 
-    fn operand_value(&self, _index: i32, _table_id: u32, _ct_id: u32) -> KunaResult<i64> {
-        Err(KunaError::sleigh("no operand values in verifier tests"))
+    fn operand_value(&self, _index: i32, _table_id: u32, _ct_id: u32) -> UnlaceResult<i64> {
+        Err(UnlaceError::sleigh("no operand values in verifier tests"))
     }
 }
 
 impl SymbolWalker for VWalker {
-    fn push_operand(&mut self, i: i32) -> KunaResult<()> {
+    fn push_operand(&mut self, i: i32) -> UnlaceResult<()> {
         self.path.push(i);
         Ok(())
     }
 
-    fn pop_operand(&mut self) -> KunaResult<()> {
+    fn pop_operand(&mut self) -> UnlaceResult<()> {
         self.path.pop();
         Ok(())
     }
 
-    fn get_constructor(&self) -> KunaResult<ConstructorRef> {
+    fn get_constructor(&self) -> UnlaceResult<ConstructorRef> {
         for (p, ctref) in &self.ctmap {
             if *p == self.path {
                 return Ok(*ctref);
             }
         }
-        Err(KunaError::sleigh("no constructor mapped for operand path"))
+        Err(UnlaceError::sleigh(
+            "no constructor mapped for operand path",
+        ))
     }
 
-    fn get_fixed_handle(&self, _i: i32) -> KunaResult<FixedHandle> {
-        Err(KunaError::sleigh("no fixed handles in verifier tests"))
+    fn get_fixed_handle(&self, _i: i32) -> UnlaceResult<FixedHandle> {
+        Err(UnlaceError::sleigh("no fixed handles in verifier tests"))
     }
 
     fn get_const_space(&self) -> Rc<AddrSpace> {
@@ -166,21 +168,21 @@ impl SymbolWalker for VWalker {
         panic!("verify_w2_sleigh_symbol never reads cur space")
     }
 
-    fn get_dest_addr(&self) -> KunaResult<Address> {
-        Err(KunaError::lowlevel("no flowdest in verifier tests"))
+    fn get_dest_addr(&self) -> UnlaceResult<Address> {
+        Err(UnlaceError::lowlevel("no flowdest in verifier tests"))
     }
 
-    fn get_ref_addr(&self) -> KunaResult<Address> {
-        Err(KunaError::lowlevel("no flowref in verifier tests"))
+    fn get_ref_addr(&self) -> UnlaceResult<Address> {
+        Err(UnlaceError::lowlevel("no flowref in verifier tests"))
     }
 
-    fn get_instruction_bits(&self, startbit: i32, size: i32) -> KunaResult<u32> {
+    fn get_instruction_bits(&self, startbit: i32, size: i32) -> UnlaceResult<u32> {
         let mut res: u32 = 0;
         for i in 0..size {
             let bit = startbit + i;
             let byte = (bit / 8) as usize;
             if byte >= self.instr.len() {
-                return Err(KunaError::bad_data("instruction bits past buffer"));
+                return Err(UnlaceError::bad_data("instruction bits past buffer"));
             }
             let b = (self.instr[byte] >> (7 - (bit % 8))) & 1;
             res = (res << 1) | u32::from(b);
@@ -188,7 +190,7 @@ impl SymbolWalker for VWalker {
         Ok(res)
     }
 
-    fn get_context_bits(&self, _startbit: i32, _size: i32) -> KunaResult<u32> {
+    fn get_context_bits(&self, _startbit: i32, _size: i32) -> UnlaceResult<u32> {
         Ok(0)
     }
 }
@@ -217,7 +219,7 @@ fn decode_table(
     nsyms: i64,
     heads: impl FnOnce(&mut PackedEncode),
     contents: impl FnOnce(&mut PackedEncode),
-) -> KunaResult<(SymbolTable, Vec<u8>)> {
+) -> UnlaceResult<(SymbolTable, Vec<u8>)> {
     let mut buf = Vec::new();
     {
         let mut enc = PackedEncode::new(&mut buf);

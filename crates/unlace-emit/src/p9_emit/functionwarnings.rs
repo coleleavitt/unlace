@@ -75,7 +75,7 @@ impl Warning {
 
     /// A stable code: the kind of an unabbreviated engine stem, else the slug
     /// `warning_slug` gives the text (less its count), else the producer tag
-    /// of a kuna warning, else `other`.
+    /// of a unlace warning, else `other`.
     pub fn kind(&self) -> String {
         let body = self.text.strip_prefix("WARNING (jumptable): ");
         let body = body

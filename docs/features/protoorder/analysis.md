@@ -59,12 +59,12 @@ loaded through itself — until that too was refused.
 | A Thumb function address typed as a data pointer rendered `&sub_80014f4[1]` (invalid C): riot 0 -> 4, cleanflight 3 -> 16, freertos 4 (labelled `literal` in round 6) | A pointer vote is refused on a constant that resolves into a code symbol (the global container lookup `ActionConstantPtr` uses) | fixture `protoorder_codeptr_thumb_le32` (hand-assembled Thumb, `.py` generator) + probe `protoorder-types-refuses-a-pointer-into-code`: `sub_8120(0x8131)`, not `&sub_8130[1]`; riot 4 -> 0, cleanflight 16 -> 4 (main's own 4); `label-review.py` now labels the shape `code-subscript` (a defect, checked before any benign label): 0 over the corpus |
 | "`types` cannot change what the program does" and "a stated type never adds a cast" were false | Removed from the `phases.toml` row, `docs/cli.md` and the PR body; the row and spec 04 now list what a winning vote does change: casts at the argument (`caller((unsigned char *)0x402000,3)`), a wide store split through a guessed pointee (`*(unsigned long *)(a0 + 0xe8) = 0` -> two 4-byte stores, same bytes, different access width), and an unsigned vote's casts on signed uses (`(int)a0 >> 2`) | `docs/options.md` regenerated |
 | A default raw-image `decompile-all` would take the callee-first path after the rawdiscover rebase and print `no call graph` | A raw image orders callees first only when the option is named; the no-call-graph warning prints only then | `raw_image_discovers_called_functions_beyond_its_seeds` asserts a silent default and the warning when named |
-| `kuna-catalog.xml` #6 did not list `protoorder` | listed; stage baseline re-recorded for the renamed assertion | 1141/1141 |
+| `catalog.xml` #6 did not list `protoorder` | listed; stage baseline re-recorded for the renamed assertion | 1141/1141 |
 
 What round 7 did not change: a load whose value is KNOWN signed or unsigned
 still takes the truncation form (`(short)v1[0x11]` for `ldrsh.w r3,[r5,#0x44]`):
 the value is right, the read is the whole element. Narrowing that too moves two
-pinned stage assertions (`kuna-tiedphitrim.xml` #13/#14, `(int4)v2[1]`), so it
+pinned stage assertions (`tiedphitrim.xml` #13/#14, `(int4)v2[1]`), so it
 is a separate, gated choice, not a strict fix. The reviewer's instrument (new
 `(short|char)p[k]` spellings, which also counts renumbered names) reads 197
 over the 46 binaries main -> PR. The truncation form behind them now fires only

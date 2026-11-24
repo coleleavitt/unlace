@@ -2,10 +2,10 @@
 //! x86-64 binary by full-hash fingerprint.
 //!
 //! Fixture: `tests/fixtures/fid/prog` — a statically-linked, `-no-pie`, **stripped**
-//! x86-64 ELF built from `lib.c` (`kuna_crc32`/`kuna_strlen`/`kuna_memset`) + a
+//! x86-64 ELF built from `lib.c` (`unlace_crc32`/`unlace_strlen`/`unlace_memset`) + a
 //! `main.c` that calls each (so the linker retains them). `strip --strip-all` left
 //! NO symbol table, so every function is an engine `FUN_*`/`sub_*` placeholder. The
-//! star function `kuna_crc32` is at VMA `0x4017c0` (the CRC-32 loop with the magic
+//! star function `unlace_crc32` is at VMA `0x4017c0` (the CRC-32 loop with the magic
 //! `0xEDB88320` immediate). The build recipe + the pinned VMA are recorded in
 //! `tests/fixtures/fid/README.md`.
 //!
@@ -19,8 +19,8 @@
 //!    `prog` carries an engine `sub_<addr>`/`FUN_*` placeholder name — proving the
 //!    name is NOT a leftover symbol (the binary is stripped) and that FID's value is
 //!    what's visible.
-//!  - **`--option listing on --option fid on`** + `kuna_fid_db=…/lib.fid`: the SAME
-//!    function is now **`kuna_crc32`** — recovered purely by full-hash fingerprint
+//!  - **`--option listing on --option fid on`** + `unlace_fid_db=…/lib.fid`: the SAME
+//!    function is now **`unlace_crc32`** — recovered purely by full-hash fingerprint
 //!    match against the library DB. Only FID could do this.
 //!
 //! The proof is read two ways: (1) the symbol-table name at `0x4017c0` (the rename
@@ -39,9 +39,9 @@ use unlace_console::ifacedecomp::{
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
-/// The pinned VMA of `kuna_crc32` in the stripped `prog` (recorded in the fixture
+/// The pinned VMA of `unlace_crc32` in the stripped `prog` (recorded in the fixture
 /// README; `-static -no-pie` keeps it stable).
-const KUNA_CRC32_VMA: u64 = 0x4017c0;
+const UNLACE_CRC32_VMA: u64 = 0x4017c0;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -58,7 +58,7 @@ fn fixture_dir() -> PathBuf {
 enum Mode {
     /// Default: no flags, no DB env (the today baseline — the stripped placeholder).
     Off,
-    /// `--option listing on --option fid on` + `kuna_fid_db=…/lib.fid`, set BEFORE
+    /// `--option listing on --option fid on` + `unlace_fid_db=…/lib.fid`, set BEFORE
     /// the deferred commit (the live-CLI ordering).
     On,
     Strict,
@@ -73,7 +73,7 @@ struct Run {
     dur: Duration,
 }
 
-/// Resolve the symbol-table name at `KUNA_CRC32_VMA` (the engine placeholder, or the
+/// Resolve the symbol-table name at `UNLACE_CRC32_VMA` (the engine placeholder, or the
 /// FID-installed library name).
 fn name_at_crc32(prog: &ConsoleProgram) -> String {
     let code_space = prog
@@ -82,7 +82,7 @@ fn name_at_crc32(prog: &ConsoleProgram) -> String {
         .get_default_code_space()
         .expect("a default code space")
         .clone();
-    let addr = Address::new(Rc::clone(&code_space), KUNA_CRC32_VMA);
+    let addr = Address::new(Rc::clone(&code_space), UNLACE_CRC32_VMA);
     match prog.arch().symboltab.find_function_across_scopes(&addr) {
         Some((sid, _)) => prog.arch().symboltab.symbol(sid).get_name().to_string(),
         // No installed function symbol at the VMA ⇒ the engine default name.
@@ -91,7 +91,7 @@ fn name_at_crc32(prog: &ConsoleProgram) -> String {
 }
 
 /// Bootstrap the stripped `prog`, (optionally) enable FID + point it at the DB, resolve +
-/// decompile the function at `KUNA_CRC32_VMA`.
+/// decompile the function at `UNLACE_CRC32_VMA`.
 fn run(mode: Mode) -> Run {
     static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
     let _guard = ENV_LOCK.lock().unwrap();
@@ -102,7 +102,7 @@ fn run(mode: Mode) -> Run {
     let bin = fixture_dir().join("prog");
     let bin = bin.to_str().expect("UTF-8 fixture path").to_string();
 
-    // The DB env var (`kuna_fid_db`) is read by `FidPass::run` at the deferred
+    // The DB env var (`unlace_fid_db`) is read by `FidPass::run` at the deferred
     // commit. Set it ONLY for the On run; clear it for Off so the default path is
     // doubly inert (gate off AND no DB).
     let mut temp_db = None;
@@ -137,52 +137,52 @@ fn run(mode: Mode) -> Run {
     let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
 
-    prog.arch_mut().set_kuna_option("fid", "strict").unwrap();
+    prog.arch_mut().set_unlace_option("fid", "strict").unwrap();
     assert!(
         prog.arch()
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::analysisgates::Fid>()
             .on
             && prog
                 .arch()
-                .kuna_options
+                .unlace_options
                 .get::<unlace_decomp::analysisgates::Fid>()
                 .strict
     );
-    prog.arch_mut().set_kuna_option("fid", "on").unwrap();
+    prog.arch_mut().set_unlace_option("fid", "on").unwrap();
     assert!(
         prog.arch()
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::analysisgates::Fid>()
             .on
             && !prog
                 .arch()
-                .kuna_options
+                .unlace_options
                 .get::<unlace_decomp::analysisgates::Fid>()
                 .strict
     );
-    assert!(prog.arch_mut().set_kuna_option("fid", "bogus").is_err());
+    assert!(prog.arch_mut().set_unlace_option("fid", "bogus").is_err());
     assert!(
         prog.arch()
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::analysisgates::Fid>()
             .on
             && !prog
                 .arch()
-                .kuna_options
+                .unlace_options
                 .get::<unlace_decomp::analysisgates::Fid>()
                 .strict
     );
-    prog.arch_mut().set_kuna_option("fid", "off").unwrap();
+    prog.arch_mut().set_unlace_option("fid", "off").unwrap();
     assert!(
         !prog
             .arch()
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::analysisgates::Fid>()
             .on
             && !prog
                 .arch()
-                .kuna_options
+                .unlace_options
                 .get::<unlace_decomp::analysisgates::Fid>()
                 .strict
     );
@@ -192,7 +192,7 @@ fn run(mode: Mode) -> Run {
     // Listing build + FID consumer run see them on.
     if !matches!(mode, Mode::Off) {
         prog.arch_mut()
-            .set_kuna_option("listing", "on")
+            .set_unlace_option("listing", "on")
             .expect("listing flips on");
         let setting = if matches!(mode, Mode::Strict | Mode::StrictMatched) {
             "strict"
@@ -200,7 +200,7 @@ fn run(mode: Mode) -> Run {
             "on"
         };
         prog.arch_mut()
-            .set_kuna_option("fid", setting)
+            .set_unlace_option("fid", setting)
             .expect("fid flips on");
     }
     // `read symbols`: build the Listing (deferred) + run the FID consumer, gated.
@@ -212,13 +212,13 @@ fn run(mode: Mode) -> Run {
 
     // Drive the decompile so the rendered body reflects the symbol name: when FID
     // re-identified the function it is now a real symbol resolvable by name (`load
-    // function kuna_crc32`); the un-renamed placeholder is loaded by address (`load
+    // function unlace_crc32`); the un-renamed placeholder is loaded by address (`load
     // addr 0x<vma>`, which names it via `name_function`). `load function` resolves
     // the installed symbol — including the FID-renamed one — so the body renders the
     // recovered name; `IfcAddrrangeLoad` builds a fresh default-named funcdata and
     // would not.
     let load_cmd = if is_placeholder(&name) {
-        format!("load addr 0x{KUNA_CRC32_VMA:x}")
+        format!("load addr 0x{UNLACE_CRC32_VMA:x}")
     } else {
         format!("load function {name}")
     };
@@ -247,7 +247,7 @@ fn run(mode: Mode) -> Run {
 }
 
 /// THE PAYOFF: the function at `0x4017c0` in the STRIPPED `prog` is a generic
-/// `sub_*`/`FUN_*` placeholder by default, and becomes `kuna_crc32` only when FID is
+/// `sub_*`/`FUN_*` placeholder by default, and becomes `unlace_crc32` only when FID is
 /// on — recovered purely by full-hash fingerprint match against `lib.fid`.
 #[test]
 fn fid_reidentifies_stripped_crc32_by_fingerprint() {
@@ -257,14 +257,14 @@ fn fid_reidentifies_stripped_crc32_by_fingerprint() {
     let strict_matched = run(Mode::StrictMatched);
 
     eprintln!(
-        "==== 0x{KUNA_CRC32_VMA:x} symbol  OFF: {:>16}   ON: {:>16} ====",
+        "==== 0x{UNLACE_CRC32_VMA:x} symbol  OFF: {:>16}   ON: {:>16} ====",
         off.name, on.name
     );
     eprintln!("---- FID OFF (default) [{:?}] ----\n{}", off.dur, off.body);
     eprintln!("---- FID ON [{:?}] ----\n{}", on.dur, on.body);
 
     // 1. FID OFF (default): the stripped function's name is a generic engine
-    //    placeholder (`sub_*`/`FUN_*`/`func_*`) — NOT `kuna_crc32` (the binary is
+    //    placeholder (`sub_*`/`FUN_*`/`func_*`) — NOT `unlace_crc32` (the binary is
     //    stripped; there is no symbol to leak it).
     assert!(
         is_placeholder(&off.name),
@@ -282,7 +282,7 @@ fn fid_reidentifies_stripped_crc32_by_fingerprint() {
         off.body
     );
 
-    // 2. FID ON: the SAME function is now `kuna_crc32`, recovered by fingerprint —
+    // 2. FID ON: the SAME function is now `unlace_crc32`, recovered by fingerprint —
     //    in the symbol table AND in the rendered body.
     assert_eq!(
         on.name, "kuna_crc32",

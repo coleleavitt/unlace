@@ -1,4 +1,4 @@
-//! (kuna) Spec user-op and prototype-model names that `Architecture` resolves for a pass while
+//! (unlace) Spec user-op and prototype-model names that `Architecture` resolves for a pass while
 //! it builds a function's context. Each pass module re-exports the names it owns under its own
 //! name, so the architecture never names the pass.
 

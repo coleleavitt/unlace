@@ -34,11 +34,11 @@ fn decompile_in(fixture: &str, function: &str, extra: &[&str], directives: &[&st
     for directive in directives {
         args.extend(["--assert", directive]);
     }
-    let (text, stderr, code) = common::run_kuna(&args);
+    let (text, stderr, code) = common::run_unlace(&args);
     assert_eq!(code, 0, "{directives:?}: {stderr}");
     assert!(!stderr.contains("rejected"), "{directives:?}: {stderr}");
     args.push("--json");
-    let (doc, stderr, _) = common::run_kuna(&args);
+    let (doc, stderr, _) = common::run_unlace(&args);
     let parsed: serde_json::Value =
         serde_json::from_str(&doc).unwrap_or_else(|e| panic!("{e}: {stderr}\n{doc}"));
     let json = parsed
@@ -776,10 +776,10 @@ fn outcomes(
     for directive in directives {
         args.extend(["--assert", directive]);
     }
-    let (_, stderr, code) = common::run_kuna(&args);
+    let (_, stderr, code) = common::run_unlace(&args);
     assert_eq!(code, 0, "{directives:?}: {stderr}");
     args.push("--json");
-    let (doc, stderr, _) = common::run_kuna(&args);
+    let (doc, stderr, _) = common::run_unlace(&args);
     let parsed: serde_json::Value =
         serde_json::from_str(&doc).unwrap_or_else(|e| panic!("{e}: {stderr}\n{doc}"));
     let code = parsed
@@ -1007,7 +1007,7 @@ fn a_keyword_or_type_name_is_refused() {
         ("type v6 unsigned int while", "`while` is a C keyword"),
     ] {
         let (text, stderr, code) =
-            common::run_kuna(&["decompile", binary.as_str(), "mix", "--assert", directive]);
+            common::run_unlace(&["decompile", binary.as_str(), "mix", "--assert", directive]);
         assert_eq!(code, 0, "{directive}: {stderr}");
         assert!(
             stderr.contains("rejected") && stderr.contains(reason),

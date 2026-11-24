@@ -713,7 +713,7 @@ impl Cover {
         self.add_ref_points_for(ctx, &[ref_op], vn);
     }
 
-    /// (kuna) [`Self::add_ref_point_for`] for each of `ref_ops` in turn.
+    /// (unlace) [`Self::add_ref_point_for`] for each of `ref_ops` in turn.
     pub fn add_ref_points_for(
         &mut self,
         ctx: &dyn CoverContext,
@@ -740,12 +740,12 @@ impl Cover {
         self.runs = runs;
     }
 
-    /// (kuna) Does `hit` hold for some block of \b this?
+    /// (unlace) Does `hit` hold for some block of \b this?
     pub fn any_block(&self, mut hit: impl FnMut(int4, &CoverBlock) -> bool) -> bool {
         self.iter().any(|(bl, cb)| hit(bl, cb))
     }
 
-    /// (kuna) [`Self::add_ref_point_for`] that stops at the first block of
+    /// (unlace) [`Self::add_ref_point_for`] that stops at the first block of
     /// \b this, already present or just set or extended by the walk, for which
     /// `hit` holds, and says whether it stopped.  A block only grows during the
     /// walk, so for a `hit` that holds on every block containing one it holds
@@ -773,7 +773,7 @@ impl Cover {
     /// block and filling backward until existing cover is hit (C++
     /// `Cover::addRefRecurse`, `cover.cc:524-558`).
     ///
-    /// (kuna) Stops, returning true, once `hit` holds for a block it has just
+    /// (unlace) Stops, returning true, once `hit` holds for a block it has just
     /// set or extended (see [`Self::add_ref_point_until`]).
     fn add_ref_recurse<F: FnMut(int4, &CoverBlock) -> bool>(
         s: &mut Scratch,
@@ -827,7 +827,7 @@ impl Cover {
     /// `ref_op` is `(block_index, CoverPoint, code)` for the reading PcodeOp.
     /// `ref_inputs`, when the read is a MULTIEQUAL, lists the input slots whose
     /// Varnode equals `vn` (the C++ `ref->getIn(j)==vn` loop), as predecessor
-    /// block indices to recurse into.  (kuna) Stops, returning true, once `hit`
+    /// block indices to recurse into.  (unlace) Stops, returning true, once `hit`
     /// holds for a block it has just set or extended.
     fn add_ref_point<F: FnMut(int4, &CoverBlock) -> bool>(
         s: &mut Scratch,
@@ -980,7 +980,7 @@ impl Cover {
     /// `rep_addr` is the address of the representative Varnode for the secondary
     /// `affectsTest` (the C++ passes `Varnode *vn` and reads only `vn->getAddr()`
     /// in `StackAffectingOps::affectsTest`, so we thread the resolved address).
-    /// (kuna) Upstream's walk keeps the index of the block it just tested, so
+    /// (unlace) Upstream's walk keeps the index of the block it just tested, so
     /// it skips the set's next block after every block it shares with the
     /// cover. A second walk that reads each block's index tests every guarded
     /// STORE; CALLs keep upstream's walk.
@@ -1089,7 +1089,7 @@ pub struct PcodeOpSetEntry {
     pub point: CoverPoint,
     /// `op->getSeqNum().getOrder()` — the `compareByBlock` within-block key.
     pub order: uintm,
-    /// (kuna) A guarded stack STORE the second walk of
+    /// (unlace) A guarded stack STORE the second walk of
     /// [`Cover::intersect_op_set`] tests (under `stackstoreguard`).
     pub store: bool,
 }

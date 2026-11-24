@@ -1,4 +1,4 @@
-//! (kuna) A recovered parameter whose value only ever reaches the variadic tail
+//! (unlace) A recovered parameter whose value only ever reaches the variadic tail
 //! of a call is not a parameter a caller may be handed.
 //!
 //! # The symptom
@@ -158,7 +158,7 @@ fn is_vararg_slot(data: &Funcdata, op: OpId, slot: int4) -> bool {
     if slot < 1 {
         return false;
     }
-    if data.kuna_passthrough_vararg_calls().contains(&op) {
+    if data.unlace_passthrough_vararg_calls().contains(&op) {
         return true;
     }
     let Some(idx) = data.get_call_specs_index(op) else {

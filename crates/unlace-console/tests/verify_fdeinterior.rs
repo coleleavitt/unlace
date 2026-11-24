@@ -50,7 +50,7 @@ fn bootstrap() -> ConsoleProgram {
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
     prog.arch_mut()
-        .set_kuna_option("eh_frame_full", "on")
+        .set_unlace_option("eh_frame_full", "on")
         .expect("eh_frame_full flips on");
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");

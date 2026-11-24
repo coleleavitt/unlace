@@ -1,4 +1,4 @@
-//! Auto-apply cspec call-fixups — the kuna analog of Ghidra's
+//! Auto-apply cspec call-fixups — the unlace analog of Ghidra's
 //! `CallFixupAnalyzer` (the "Call-Fixup Installer").
 //!
 //! # What this is
@@ -15,7 +15,7 @@
 //! a fixup: it enumerates the registered call-fixups' `<target>` names, matches
 //! them against the program's functions by name, and tags each match with the
 //! fixup (`function.setCallFixup(name)`). The decompiler then applies the tagged
-//! fixup at flow time. kuna inherits the whole *apply* path (see "Inherited vs
+//! fixup at flow time. unlace inherits the whole *apply* path (see "Inherited vs
 //! gap" below); this pass is the missing *installer*.
 //!
 //! # Inherited vs gap
@@ -30,11 +30,11 @@
 //! hand in the console `fixup apply` command (`IfcFixupApply`, `ifacedecomp.rs`).
 //!
 //! **The gap this fills**: nothing auto-iterates the registered fixups' `<target>`
-//! names and applies them to matching FunctionSymbols. kuna only had the manual
+//! names and applies them to matching FunctionSymbols. unlace only had the manual
 //! `fixup apply <fixup> <function>` console path. Ghidra's `CallFixupAnalyzer` is
 //! exactly that auto-installer; this pass ports it.
 //!
-//! # Origin (upstream Ghidra, the tree kuna was ported from)
+//! # Origin (upstream Ghidra, the tree unlace was ported from)
 //!
 //! - `Ghidra/Features/Base/src/main/java/ghidra/app/plugin/core/disassembler/CallFixupAnalyzer.java`
 //!   — `AnalyzerType.FUNCTION_ANALYZER`, `setDefaultEnablement(true)` (line 51).
@@ -56,7 +56,7 @@
 //! `repairLocationsForNonReturningFunction`/`setNoFallThru`/`clearAndRepairFlows`
 //! (lines 234-434) is **post-disassembly listing flow-repair** (FlowOverride,
 //! ClearFlowAndRepairCmd) and is **not portable at this tier** — there is no
-//! pre-decompile Listing / FlowOverride here. kuna handles fixup fallthrough
+//! pre-decompile Listing / FlowOverride here. unlace handles fixup fallthrough
 //! inside the engine's flow/inject path. Thunk-following
 //! (`addInThunkedFunctionsToList`, lines 177-198) is part of that flow-repair half
 //! and is likewise out of scope. This is the same tier constraint already
@@ -102,7 +102,7 @@ pub fn target_fixup_map(arch: &Architecture) -> Vec<(String, String)> {
     fixup_map(arch, true)
 }
 
-/// [`target_fixup_map`], with the kuna fixup families' option gates applied
+/// [`target_fixup_map`], with the unlace fixup families' option gates applied
 /// only when `gated`. The load-time scan matches against every family: it runs
 /// before the run's `--option`s reach the architecture, so a default-off family
 /// (`aeabifloat`) would never match a relocatable object's undefined helpers,
@@ -120,7 +120,7 @@ fn fixup_map(arch: &Architecture, gated: bool) -> Vec<(String, String)> {
         if gated
             && fixup_name.starts_with(unlace_decomp::arithhelpers::FIXUP_PREFIX)
             && !arch
-                .kuna_options
+                .unlace_options
                 .get::<unlace_decomp::arithhelpers::ArithHelpers>()
                 .0
         {
@@ -129,7 +129,7 @@ fn fixup_map(arch: &Architecture, gated: bool) -> Vec<(String, String)> {
         if gated
             && fixup_name.starts_with(unlace_decomp::aeabifloat::FIXUP_PREFIX)
             && !arch
-                .kuna_options
+                .unlace_options
                 .get::<unlace_decomp::aeabifloat::AeabiFloat>()
                 .0
         {
@@ -137,7 +137,10 @@ fn fixup_map(arch: &Architecture, gated: bool) -> Vec<(String, String)> {
         }
         if gated
             && fixup_name.starts_with(unlace_decomp::objcarc::FIXUP_PREFIX)
-            && !arch.kuna_options.get::<unlace_decomp::objcarc::ObjcArc>().0
+            && !arch
+                .unlace_options
+                .get::<unlace_decomp::objcarc::ObjcArc>()
+                .0
         {
             continue;
         }

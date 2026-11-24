@@ -1,4 +1,4 @@
-//! (kuna `floatglobals`) A global the whole program only moves through float
+//! (unlace `floatglobals`) A global the whole program only moves through float
 //! registers holds a float (P5).
 //!
 //! A global has one declaration for every function, so `float_input_vote`
@@ -79,11 +79,11 @@ pub fn float_only(data: &Funcdata, addr: &Address, size: int4) -> bool {
         return false;
     }
     let on = glb
-        .kuna_options
+        .unlace_options
         .get::<crate::coreoptions::FloatGlobalsOn>()
         .0;
     match on
-        .then(|| glb.kuna_states.get::<FloatGlobalsFound>())
+        .then(|| glb.unlace_states.get::<FloatGlobalsFound>())
         .flatten()
     {
         Some(found) => {
@@ -92,7 +92,7 @@ pub fn float_only(data: &Funcdata, addr: &Address, size: int4) -> bool {
         }
         None => {
             if on
-                && glb.kuna_states.get::<FloatScan>().is_some()
+                && glb.unlace_states.get::<FloatScan>().is_some()
                 && crate::floatreg::moved_as_a_float_here(data, addr, size)
             {
                 glb.float_globals_wanted.set(true);
@@ -106,5 +106,5 @@ pub fn float_only(data: &Funcdata, addr: &Address, size: int4) -> bool {
 /// [`ArchState`](crate::archstate::ArchState) shared with every function's context.
 #[derive(Debug, Default)]
 pub struct FloatGlobalsFound(pub FloatGlobals);
-crate::kuna_arch_state!(FloatGlobalsFound);
-crate::kuna_arch_state!(FloatScan);
+crate::unlace_arch_state!(FloatGlobalsFound);
+crate::unlace_arch_state!(FloatScan);

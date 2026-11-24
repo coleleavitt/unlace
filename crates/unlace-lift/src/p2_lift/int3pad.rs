@@ -60,11 +60,11 @@
 use crate::context::OpId;
 use crate::funcdata::Funcdata;
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::ElementId;
 use unlace_base::types::uintb;
 
-/// Marshaling element `<int3pad>` (kuna).  ElementIds live in the 4000+ range;
+/// Marshaling element `<int3pad>` (unlace).  ElementIds live in the 4000+ range;
 /// 4149 is the last one taken, so this is 4150.
 pub const ELEM_INT3PAD: ElementId = ElementId::new("int3pad", 4150);
 
@@ -78,7 +78,7 @@ pub const INT3_BYTE: u64 = 0xcc;
 /// handful of bytes.
 pub const MAX_PAD_RUN: u32 = 256;
 
-/// (kuna) `int3pad off|warn|halt` — how a decoded `int3` is handled.
+/// (unlace) `int3pad off|warn|halt` — how a decoded `int3` is handled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Int3PadMode {
     /// Upstream: the pad prints as an indirect call and nothing says so.
@@ -90,9 +90,9 @@ pub enum Int3PadMode {
     Halt,
 }
 
-impl crate::optionset::KunaOption for Int3PadMode {
+impl crate::optionset::UnlaceOption for Int3PadMode {
     const NAME: &'static str = "int3pad";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         Int3PadMode::Off
@@ -102,7 +102,7 @@ impl crate::optionset::KunaOption for Int3PadMode {
         Int3PadMode::Warn
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         OptionInt3Pad.apply(value)
     }
 }
@@ -128,12 +128,12 @@ pub struct Int3PadSite {
     pub halt: bool,
 }
 
-/// (kuna) Choose the `int3` pad handling: `int3pad off|warn|halt`.
+/// (unlace) Choose the `int3` pad handling: `int3pad off|warn|halt`.
 ///
-/// Following the kuna-option idiom
+/// Following the unlace-option idiom
 /// ([`OptionArrayNotation`](crate::arraynotation::OptionArrayNotation)),
 /// this struct owns only the parse; the caller
-/// (`Architecture::set_kuna_option`) writes the live field.
+/// (`Architecture::set_unlace_option`) writes the live field.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct OptionInt3Pad;
 
@@ -142,13 +142,13 @@ impl OptionInt3Pad {
     pub const NAME: &'static str = "int3pad";
 
     /// Parse + validate the `off`/`warn`/`halt` value.
-    pub fn apply(&self, p1: &str) -> KunaResult<(Int3PadMode, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(Int3PadMode, String)> {
         let mode = match p1 {
             "off" => Int3PadMode::Off,
             "warn" => Int3PadMode::Warn,
             "halt" => Int3PadMode::Halt,
             other => {
-                return Err(KunaError::parse(format!(
+                return Err(UnlaceError::parse(format!(
                     "Unknown int3pad value: {other} (expected off|warn|halt)"
                 )));
             }

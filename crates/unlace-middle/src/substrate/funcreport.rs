@@ -31,7 +31,7 @@ pub struct VarInfo {
     pub line_numbers: Vec<usize>,
     /// Machine instruction addresses associated with those pseudocode lines.
     pub addresses: Vec<u64>,
-    /// (kuna `slotsplit`) A piece `slotsplit` cut from a wider frame row, other
+    /// (unlace `slotsplit`) A piece `slotsplit` cut from a wider frame row, other
     /// than the first piece of that row: the rows without it are the rows
     /// reported before the split.
     pub split_piece: bool,

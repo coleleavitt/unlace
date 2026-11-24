@@ -1,8 +1,8 @@
-//! (kuna) `elfmain` — name the ELF routine crt1 hands to `__libc_start_main`
+//! (unlace) `elfmain` — name the ELF routine crt1 hands to `__libc_start_main`
 //! `main`, and declare it `int main(int argc, char **argv, char **envp)`
 //! (P1 program prep).
 //!
-//! kuna already finds this address. Entry-discovery oracle 4 decodes the
+//! unlace already finds this address. Entry-discovery oracle 4 decodes the
 //! `_start` → `__libc_start_main(main, …)` idiom on x86-64, AArch64, ARM and
 //! RISC-V and seeds the recovered VMA as a function entry — but address-only, so
 //! on a stripped ELF the program's own starting point arrives in the inventory
@@ -25,7 +25,7 @@
 //!   by that name.
 //!
 //! The return type is the half body-driven recovery can never supply: `main`'s
-//! value is consumed by `__libc_start_main`, outside the image, so kuna types it
+//! value is consumed by `__libc_start_main`, outside the image, so unlace types it
 //! from the widest register write it can see and prints `unsigned long`. The
 //! parameters are the half it supplies only by accident — a `main` that ignores
 //! its arguments reads neither argument register and is declared `void(void)`,
@@ -74,9 +74,9 @@
 //! On the two loudest cases, openssh `sftp` -O2 @0x5250 and shadow `login` -O2
 //! @0x3d20, the unstripped twin's DWARF declares `int main(int argc, char
 //! **argv)` for both, and the `r8`/`r9` the body forwards to a variadic call
-//! site is an undefined read on the path kuna sees. So the lock does not delete
+//! site is an undefined read on the path unlace sees. So the lock does not delete
 //! a parameter that exists; it stops rendering an undefined read as one. Both
-//! shapes are pinned (`tests/stages/kuna-elfmain.toml` #5-#8,
+//! shapes are pinned (`tests/stages/unlace-elfmain.toml` #5-#8,
 //! `tests/cli/elf-main-extra-register-args.json`), so whichever way call-site
 //! argument recovery fixes them, it shows up as a test move.
 //!
@@ -155,7 +155,7 @@ const MAIN: &str = "main";
 /// The C runtime entry whose presence says the image's `_start` is a crt1.
 const LIBC_START_MAIN: &[u8] = b"__libc_start_main";
 
-/// (kuna) The ELF libc-start `main` naming + prototype pass (`elfmain`).
+/// (unlace) The ELF libc-start `main` naming + prototype pass (`elfmain`).
 ///
 /// Registered like every other analysis pass and computed at LOAD; the commit
 /// boundary applies the name and the one prototype only when
@@ -433,7 +433,7 @@ fn main_prototype(ctx: &AnalysisCtx) -> Option<PrototypePieces> {
         first_var_arg_slot: -1,
         output_storage: None,
         input_storage: Vec::new(),
-        kuna_library_names: None,
+        unlace_library_names: None,
     })
 }
 

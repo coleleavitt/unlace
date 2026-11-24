@@ -1,4 +1,4 @@
-//! (kuna `floatglobals`) Which globals the program only ever moves through
+//! (unlace `floatglobals`) Which globals the program only ever moves through
 //! floating-point registers: the whole-program scan behind
 //! `unlace_decomp::floatglobals`.
 //!
@@ -991,7 +991,7 @@ pub(super) struct Evidence {
     /// Accesses by address: `(width, float)`.
     accesses: BTreeMap<u64, Vec<(u8, bool)>>,
     pub(super) escapes: BTreeSet<u64>,
-    /// (kuna `opaquepredicate globals`) Stores and address uses.
+    /// (unlace `opaquepredicate globals`) Stores and address uses.
     pub(super) writes: super::opaqueglobals::Writes,
 }
 

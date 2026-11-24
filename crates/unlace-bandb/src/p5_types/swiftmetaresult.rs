@@ -1,4 +1,4 @@
-//! (kuna `swifttypes`) Type the result of every call to a Swift type
+//! (unlace `swifttypes`) Type the result of every call to a Swift type
 //! metadata accessor as `swift.type_metadata *`; a `sitetypelock` client.
 //!
 //! An accessor (`Module.Type.type_metadata_accessor`, the demangled `…Ma`
@@ -43,7 +43,7 @@ pub fn contribute(data: &mut Funcdata) {
     let arch = Rc::clone(data.get_arch());
     if !arch.swift_metadata_results
         || !arch
-            .kuna_options
+            .unlace_options
             .get::<crate::valuewitness::Valuewitness>()
             .0
     {

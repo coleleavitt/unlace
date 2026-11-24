@@ -1,5 +1,5 @@
 //! Port of `decompiler/cpp/kuna_inferfuncentry.{cc,hh}` — function-entry
-//! constant-pointer inference (kuna GH-6930, S5 const-pointer).
+//! constant-pointer inference (unlace GH-6930, S5 const-pointer).
 //!
 //! `ActionConstantPtr::isPointer` rejects any constant whose bit pattern "looks
 //! like a single bit or mask" (`bit_transitions < 3`) before it consults the
@@ -11,8 +11,8 @@
 //!
 //! ## What this module ports
 //!
-//! [`kuna_is_function_entry`] is a faithful free-function transcription of the
-//! C++ `kunaIsFunctionEntry(Funcdata&, AddrSpace*, const Varnode*, const
+//! [`unlace_is_function_entry`] is a faithful free-function transcription of the
+//! C++ `unlaceIsFunctionEntry(Funcdata&, AddrSpace*, const Varnode*, const
 //! PcodeOp*)` predicate.  The `isPointer` integration (skipping the
 //! `bit_transitions` rejection when this returns `true`) is W4/W5
 //! (`ruleaction`/`coreaction`); this module owns only the *decision*.
@@ -32,7 +32,7 @@
 use unlace_base::address::Address;
 use unlace_num::opcodes::OpCode;
 
-/// (kuna) Does `opcode` order its constant operand against something?
+/// (unlace) Does `opcode` order its constant operand against something?
 ///
 /// An ordering comparison pins a bound, and the strict/non-strict rewrite moves
 /// the literal by one on the way here -- `MIN (n, BUFSIZ)` reaches this pass as
@@ -48,7 +48,7 @@ pub fn orders_its_constant(opcode: OpCode) -> bool {
     )
 }
 
-/// (kuna) Does `opcode` read its constant operand as a number?
+/// (unlace) Does `opcode` read its constant operand as a number?
 ///
 /// An ordering comparison, a multiply, a divide, a remainder or a shift is
 /// arithmetic on the value; C has none of them between a function pointer and
@@ -68,7 +68,7 @@ pub fn reads_as_integer(opcode: OpCode) -> bool {
         )
 }
 
-/// (kuna) May the single-bit escape be consulted for this constant?
+/// (unlace) May the single-bit escape be consulted for this constant?
 ///
 /// The escape suspends the one guard (`bit_transitions < 3`) that keeps integer
 /// flags, masks and round sizes out of the symbol table, so it may only be taken
@@ -92,8 +92,8 @@ pub fn entry_escape_applies(opcode: OpCode, value_reads_as_integer: bool) -> boo
     !value_reads_as_integer && !reads_as_integer(opcode)
 }
 
-/// (kuna) Does the constant resolve exactly to a known function entry?
-/// (C++ `kunaIsFunctionEntry`, GH-6930).
+/// (unlace) Does the constant resolve exactly to a known function entry?
+/// (C++ `unlaceIsFunctionEntry`, GH-6930).
 ///
 /// C++ `kuna_inferfuncentry.cc:12-26`.
 ///
@@ -105,7 +105,7 @@ pub fn entry_escape_applies(opcode: OpCode, value_reads_as_integer: bool) -> boo
 /// Returns `true` only for an *exact* function-entry match — the C++
 /// `fd->getAddress() == rampoint` — so an ordinary single-bit integer constant
 /// (no function at its resolved address) is never reclassified.
-pub fn kuna_is_function_entry(
+pub fn unlace_is_function_entry(
     rampoint: Option<&Address>,
     function_entry: Option<&Address>,
 ) -> bool {

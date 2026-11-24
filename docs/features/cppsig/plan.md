@@ -55,7 +55,7 @@ A refusal must leave the function exactly as `off` would.
 
 - Two-pass end-to-end: `cppsig off` = untyped `a0`; default = the typed signature with
   `this`. The XML datatest bootstrap never produces an `AnalysisOutput`, so this is a Rust
-  integration test in `kuna-console/tests/` — precedent `verify_cppcallnames.rs` (#262) and
+  integration test in `console/tests/` — precedent `verify_cppcallnames.rs` (#262) and
   `verify_fdeinterior.rs` (#263).
 - Static-member and namespaced-free-function cases asserted to gain **no** `this` — this is
   the parameter-shift regression guard.

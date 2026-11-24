@@ -1,4 +1,4 @@
-//! (kuna `callrettype`) A call returns the type its callee declares.
+//! (unlace `callrettype`) A call returns the type its callee declares.
 //!
 //! `unlace decompile-all` decompiles callees before callers
 //! ([`crate::protoorder`]).  That channel carries a callee's
@@ -54,7 +54,7 @@ pub struct StatedReturn {
     pub ct: Rc<Datatype>,
 }
 
-/// The run's statements, keyed like `Architecture::kuna_protoorder_types`.
+/// The run's statements, keyed like `Architecture::unlace_protoorder_types`.
 pub type StatedReturns = HashMap<(int4, uintb), Rc<StatedReturn>>;
 
 /// The largest function (in live p-code ops) [`contradicted`] audits.  The
@@ -100,7 +100,7 @@ fn differs_in_class(t: &Datatype, ct: &Datatype) -> bool {
 /// every data section the loader reported?  Nothing is when the loader reported
 /// none.
 fn is_number(data: &Funcdata, v: Option<VarnodeId>) -> bool {
-    let ranges = data.kuna_callret_data();
+    let ranges = data.unlace_callret_data();
     !ranges.is_empty()
         && v.and_then(|v| data.vbank().get(v))
             .filter(|n| n.is_constant())
@@ -113,7 +113,11 @@ fn is_number(data: &Funcdata, v: Option<VarnodeId>) -> bool {
 /// decompiled after it.  A statement from an earlier decompile of the same
 /// function is replaced or, when this one states nothing, forgotten.
 pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
-    if !arch.kuna_options.get::<crate::callrettype::CallRetType>().0 {
+    if !arch
+        .unlace_options
+        .get::<crate::callrettype::CallRetType>()
+        .0
+    {
         return;
     }
     let Some(k) = key(entry) else { return };
@@ -128,12 +132,12 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
     };
     match stated {
         Some(s) => {
-            arch.kuna_tables
+            arch.unlace_tables
                 .get_mut::<crate::callrettype::StatedReturns>()
                 .insert(k, Rc::new(s));
         }
         None => {
-            arch.kuna_tables
+            arch.unlace_tables
                 .get_mut::<crate::callrettype::StatedReturns>()
                 .remove(&k);
         }
@@ -184,7 +188,7 @@ fn states(ct: &Rc<Datatype>) -> bool {
 
 /// What the function filed under `k` states it returns, for [`restore`].
 pub fn statement(arch: &Architecture, k: (int4, uintb)) -> Option<Rc<StatedReturn>> {
-    arch.kuna_tables
+    arch.unlace_tables
         .get::<crate::callrettype::StatedReturns>()
         .get(&k)
         .cloned()
@@ -210,12 +214,12 @@ pub fn same_statement(a: Option<&StatedReturn>, b: Option<&StatedReturn>) -> boo
 pub fn restore(arch: &mut Architecture, k: (int4, uintb), stated: Option<Rc<StatedReturn>>) {
     match stated {
         Some(s) => {
-            arch.kuna_tables
+            arch.unlace_tables
                 .get_mut::<crate::callrettype::StatedReturns>()
                 .insert(k, s);
         }
         None => {
-            arch.kuna_tables
+            arch.unlace_tables
                 .get_mut::<crate::callrettype::StatedReturns>()
                 .remove(&k);
         }
@@ -228,7 +232,7 @@ pub fn forget_statements_naming(arch: &mut Architecture, names: &[String]) {
     if names.is_empty() {
         return;
     }
-    arch.kuna_tables
+    arch.unlace_tables
         .get_mut::<crate::callrettype::StatedReturns>()
         .retain(|_, s| !crate::protoorder::names_type(&s.ct, names));
 }
@@ -237,9 +241,12 @@ pub fn forget_statements_naming(arch: &mut Architecture, names: &[String]) {
 /// never reads its own statement: at a call to itself that is what an earlier
 /// decompile of this same function said.
 pub fn seed(arch: &Architecture, data: &mut Funcdata) {
-    if !arch.kuna_options.get::<crate::callrettype::CallRetType>().0
+    if !arch
+        .unlace_options
+        .get::<crate::callrettype::CallRetType>()
+        .0
         || arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::callrettype::StatedReturns>()
             .is_empty()
     {
@@ -256,23 +263,23 @@ pub fn seed(arch: &Architecture, data: &mut Funcdata) {
             continue;
         }
         let Some(s) = arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::callrettype::StatedReturns>()
             .get(&k)
         else {
             continue;
         };
         if own.is_some_and(|o| {
-            arch.kuna_tables
+            arch.unlace_tables
                 .get::<crate::callrettype::Refusals>()
                 .contains(&(o, k))
         }) {
-            data.kuna_set_callret_withdrawn(k, Rc::clone(s));
+            data.unlace_set_callret_withdrawn(k, Rc::clone(s));
         } else {
-            data.kuna_set_callret_type(k, Rc::clone(s));
+            data.unlace_set_callret_type(k, Rc::clone(s));
         }
     }
-    data.kuna_set_callret_data(Rc::clone(&arch.globalref_ranges));
+    data.unlace_set_callret_data(Rc::clone(&arch.globalref_ranges));
 }
 
 /// The callees whose stated return type the finished `data` contradicts.
@@ -292,7 +299,7 @@ pub fn seed(arch: &Architecture, data: &mut Funcdata) {
 /// left alone, and a function over [`AUDIT_MAX_OPS`] is not audited.
 pub fn contradicted(data: &mut Funcdata) -> Vec<(int4, uintb)> {
     let mut out: Vec<(int4, uintb)> = Vec::new();
-    if !data.kuna_has_callret_types() || data.obank().iter_alive().count() > AUDIT_MAX_OPS {
+    if !data.unlace_has_callret_types() || data.obank().iter_alive().count() > AUDIT_MAX_OPS {
         return out;
     }
     let (returned_calls, returns_number) = returned_sources(data);
@@ -310,7 +317,7 @@ pub fn contradicted(data: &mut Funcdata) -> Vec<(int4, uintb)> {
         let Some(k) = key(fc.get_entry_address()) else {
             continue;
         };
-        let Some(stated) = data.kuna_callret_type(k) else {
+        let Some(stated) = data.unlace_callret_type(k) else {
             continue;
         };
         if returns_number
@@ -337,7 +344,7 @@ pub fn contradicted(data: &mut Funcdata) -> Vec<(int4, uintb)> {
         if out.contains(&k) {
             continue;
         }
-        let Some(ct) = data.kuna_callret_type(k).map(|s| Rc::clone(&s.ct)) else {
+        let Some(ct) = data.unlace_callret_type(k).map(|s| Rc::clone(&s.ct)) else {
             continue;
         };
         if !data
@@ -424,7 +431,7 @@ fn returned_sources(data: &Funcdata) -> (Vec<OpId>, bool) {
 pub fn refuse(arch: &mut Architecture, entry: &Address, callees: &[(int4, uintb)]) {
     let Some(own) = key(entry) else { return };
     for &k in callees {
-        arch.kuna_tables
+        arch.unlace_tables
             .get_mut::<crate::callrettype::Refusals>()
             .insert((own, k));
     }
@@ -582,7 +589,7 @@ pub fn stated_return_type(data: &Funcdata, op: OpId, fc: &FuncCallSpecs) -> Opti
     {
         return None;
     }
-    let stated = data.kuna_callret_type(key(fc.get_entry_address())?)?;
+    let stated = data.unlace_callret_type(key(fc.get_entry_address())?)?;
     let outvn = o.get_out()?;
     let out = data.vbank().get(outvn)?;
     if out.get_size() != stated.size
@@ -620,7 +627,7 @@ pub fn refused_token(data: &mut Funcdata, op: OpId) -> Option<Rc<Datatype>> {
         if fc.proto().is_output_locked() {
             return None;
         }
-        let stated = data.kuna_callret_stated(key(fc.get_entry_address())?)?;
+        let stated = data.unlace_callret_stated(key(fc.get_entry_address())?)?;
         let outvn = o.get_out()?;
         let out = data.vbank().get(outvn)?;
         if out.get_size() != stated.size || out.get_addr() != &stated.addr {
@@ -672,16 +679,16 @@ pub fn float_held_as_bits(data: &mut Funcdata, op: OpId) -> Option<Rc<Datatype>>
             return None;
         }
         let at = |addr: &Address, size: int4| out.get_addr() == addr && out.get_size() == size;
-        let ct = match data.kuna_callret_stated(k) {
+        let ct = match data.unlace_callret_stated(k) {
             Some(s) => (s.ct.get_metatype() == type_metatype::TYPE_FLOAT
                 && s.ct.get_size() == s.size
                 && at(&s.addr, s.size))
             .then(|| Rc::clone(&s.ct))?,
             None => {
-                if data.kuna_callee_returns(k) != Some(crate::voidret::Returns::Float) {
+                if data.unlace_callee_returns(k) != Some(crate::voidret::Returns::Float) {
                     return None;
                 }
-                let (addr, size) = data.kuna_callee_return_storage(k)?;
+                let (addr, size) = data.unlace_callee_return_storage(k)?;
                 if !at(addr, *size) {
                     return None;
                 }
@@ -873,7 +880,7 @@ fn widened_at_other_sign(data: &Funcdata, family: &[VarnodeId], ct: &Datatype) -
     let signed = ct.get_metatype() == type_metatype::TYPE_INT;
     let size = ct.get_size();
     let returned = data
-        .kuna_callret_returned()
+        .unlace_callret_returned()
         .iter()
         .any(|&(s, from)| from == size && s != signed);
     let mut work: Vec<VarnodeId> = family.to_vec();
@@ -928,7 +935,7 @@ fn widened_at_other_sign(data: &Funcdata, family: &[VarnodeId], ct: &Datatype) -
 }
 
 /// Did the dead-bit trimming drop a zero-extension of the `size`-byte argument
-/// in `slot` of the call `call` (`kuna_truncarg`'s record)?
+/// in `slot` of the call `call` (`unlace_truncarg`'s record)?
 fn zero_extended_argument(
     data: &Funcdata,
     call: OpId,
@@ -947,8 +954,8 @@ fn zero_extended_argument(
 /// it, the function's returned value: the value the function returns reaches
 /// its callers converted at that sign.
 pub fn note_returned_extension(data: &mut Funcdata, signed: bool, from: int4) {
-    if data.kuna_has_integer_callret_types() {
-        data.kuna_note_callret_returned((signed, from));
+    if data.unlace_has_integer_callret_types() {
+        data.unlace_note_callret_returned((signed, from));
     }
 }
 
@@ -1038,7 +1045,7 @@ fn result_type(data: &Funcdata, call: OpId) -> Option<Rc<Datatype>> {
         return fc.proto().get_output_type().cloned();
     }
     Some(Rc::clone(
-        &data.kuna_callret_type(key(fc.get_entry_address())?)?.ct,
+        &data.unlace_callret_type(key(fc.get_entry_address())?)?.ct,
     ))
 }
 
@@ -1052,8 +1059,8 @@ fn declared_param_type(data: &Funcdata, call: OpId, slot: int4) -> Option<Rc<Dat
     param.get_type().cloned()
 }
 
-crate::kuna_flag!(
-    /// (kuna `callrettype`) A call's output takes the return type its callee's
+crate::unlace_flag!(
+    /// (unlace `callrettype`) A call's output takes the return type its callee's
     /// own recovery stated earlier in a callee-first run.  See
     /// [`crate::callrettype`].
     CallRetType,
@@ -1063,7 +1070,7 @@ crate::kuna_flag!(
     shipped: true
 );
 
-/// (kuna `callrettype`) The recovered return value of each callee this function calls, copied
+/// (unlace `callrettype`) The recovered return value of each callee this function calls, copied
 /// off the `Architecture` (`types`), and the statements this caller refused (`withdrawn`,
 /// `floatreg`); kept across `Funcdata::clear`.
 #[derive(Default)]
@@ -1071,101 +1078,101 @@ struct StatedSlot {
     types: crate::callrettype::StatedReturns,
     withdrawn: crate::callrettype::StatedReturns,
 }
-crate::kuna_func_state!(StatedSlot, keep_across_clear: true);
+crate::unlace_func_state!(StatedSlot, keep_across_clear: true);
 
-/// The `kuna_callrettype` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// The `unlace_callrettype` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataCallrettypeExt {
-    /// (kuna `callrettype`) Record what the callee filed under `key` returns.
-    fn kuna_set_callret_type(
+    /// (unlace `callrettype`) Record what the callee filed under `key` returns.
+    fn unlace_set_callret_type(
         &mut self,
         key: (unlace_base::types::int4, unlace_base::types::uintb),
         stated: std::rc::Rc<crate::callrettype::StatedReturn>,
     );
-    /// (kuna `floatreg`) Record a statement this caller refused.
-    fn kuna_set_callret_withdrawn(
+    /// (unlace `floatreg`) Record a statement this caller refused.
+    fn unlace_set_callret_withdrawn(
         &mut self,
         key: (unlace_base::types::int4, unlace_base::types::uintb),
         stated: std::rc::Rc<crate::callrettype::StatedReturn>,
     );
-    /// (kuna `floatreg`) What the callee at `key` stated it returns, whether
+    /// (unlace `floatreg`) What the callee at `key` stated it returns, whether
     /// or not this caller took the statement.
-    fn kuna_callret_stated(
+    fn unlace_callret_stated(
         &self,
         key: (unlace_base::types::int4, unlace_base::types::uintb),
     ) -> Option<&crate::callrettype::StatedReturn>;
-    /// (kuna `callrettype`) Whether any callee stated what it returns.
-    fn kuna_has_callret_types(&self) -> bool;
-    /// (kuna `callrettype`) Whether any callee stated an integer return.
-    fn kuna_has_integer_callret_types(&self) -> bool;
-    /// (kuna `callrettype`) What the callee filed under `key` stated it returns.
-    fn kuna_callret_type(
+    /// (unlace `callrettype`) Whether any callee stated what it returns.
+    fn unlace_has_callret_types(&self) -> bool;
+    /// (unlace `callrettype`) Whether any callee stated an integer return.
+    fn unlace_has_integer_callret_types(&self) -> bool;
+    /// (unlace `callrettype`) What the callee filed under `key` stated it returns.
+    fn unlace_callret_type(
         &self,
         key: (unlace_base::types::int4, unlace_base::types::uintb),
     ) -> Option<&crate::callrettype::StatedReturn>;
 }
 
 impl FuncdataCallrettypeExt for crate::funcdata::Funcdata {
-    /// (kuna `callrettype`) Record what the callee filed under `key` returns.
-    fn kuna_set_callret_type(
+    /// (unlace `callrettype`) Record what the callee filed under `key` returns.
+    fn unlace_set_callret_type(
         &mut self,
         key: (unlace_base::types::int4, unlace_base::types::uintb),
         stated: std::rc::Rc<crate::callrettype::StatedReturn>,
     ) {
-        self.kuna_state_mut::<StatedSlot>()
+        self.unlace_state_mut::<StatedSlot>()
             .types
             .insert(key, stated);
     }
-    /// (kuna `floatreg`) Record a statement this caller refused.
-    fn kuna_set_callret_withdrawn(
+    /// (unlace `floatreg`) Record a statement this caller refused.
+    fn unlace_set_callret_withdrawn(
         &mut self,
         key: (unlace_base::types::int4, unlace_base::types::uintb),
         stated: std::rc::Rc<crate::callrettype::StatedReturn>,
     ) {
-        self.kuna_state_mut::<StatedSlot>()
+        self.unlace_state_mut::<StatedSlot>()
             .withdrawn
             .insert(key, stated);
     }
-    /// (kuna `floatreg`) What the callee at `key` stated it returns, whether
+    /// (unlace `floatreg`) What the callee at `key` stated it returns, whether
     /// or not this caller took the statement.
-    fn kuna_callret_stated(
+    fn unlace_callret_stated(
         &self,
         key: (unlace_base::types::int4, unlace_base::types::uintb),
     ) -> Option<&crate::callrettype::StatedReturn> {
-        let slot = self.kuna_state::<StatedSlot>();
+        let slot = self.unlace_state::<StatedSlot>();
         slot.types
             .get(&key)
             .or_else(|| slot.withdrawn.get(&key))
             .map(|r| r.as_ref())
     }
-    /// (kuna `callrettype`) Whether any callee stated what it returns.
-    fn kuna_has_callret_types(&self) -> bool {
-        !self.kuna_state::<StatedSlot>().types.is_empty()
+    /// (unlace `callrettype`) Whether any callee stated what it returns.
+    fn unlace_has_callret_types(&self) -> bool {
+        !self.unlace_state::<StatedSlot>().types.is_empty()
     }
-    /// (kuna `callrettype`) Whether any callee stated an integer return.
-    fn kuna_has_integer_callret_types(&self) -> bool {
-        self.kuna_state::<StatedSlot>().types.values().any(|s| {
+    /// (unlace `callrettype`) Whether any callee stated an integer return.
+    fn unlace_has_integer_callret_types(&self) -> bool {
+        self.unlace_state::<StatedSlot>().types.values().any(|s| {
             matches!(
                 s.ct.get_metatype(),
                 crate::dtype::type_metatype::TYPE_INT | crate::dtype::type_metatype::TYPE_UINT
             )
         })
     }
-    /// (kuna `callrettype`) What the callee filed under `key` stated it returns.
-    fn kuna_callret_type(
+    /// (unlace `callrettype`) What the callee filed under `key` stated it returns.
+    fn unlace_callret_type(
         &self,
         key: (unlace_base::types::int4, unlace_base::types::uintb),
     ) -> Option<&crate::callrettype::StatedReturn> {
-        self.kuna_state::<StatedSlot>()
+        self.unlace_state::<StatedSlot>()
             .types
             .get(&key)
             .map(|r| r.as_ref())
     }
 }
 
-crate::kuna_arch_table!(StatedReturns);
+crate::unlace_arch_table!(StatedReturns);
 
-/// (kuna `callrettype`) The (caller, callee) pairs whose statement the caller's finished
+/// (unlace `callrettype`) The (caller, callee) pairs whose statement the caller's finished
 /// variables contradicted; an [`ArchTable`](crate::archstate::ArchTable).
 pub type Refusals = std::collections::HashSet<Refusal>;
-crate::kuna_arch_table!(Refusals);
+crate::unlace_arch_table!(Refusals);

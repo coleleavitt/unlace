@@ -1,6 +1,6 @@
 //! The Uxn language loads a raw ROM image at 0x100 and decompiles a reset vector.
 use crate::common;
-use common::{repo_root, run_kuna};
+use common::{repo_root, run_unlace};
 
 fn decompile(fixture: &str) -> String {
     let bin = repo_root()
@@ -9,7 +9,7 @@ fn decompile(fixture: &str) -> String {
         .to_str()
         .unwrap()
         .to_owned();
-    let (stdout, stderr, code) = run_kuna(&[
+    let (stdout, stderr, code) = run_unlace(&[
         "decompile",
         &bin,
         "0x100",

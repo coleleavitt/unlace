@@ -39,7 +39,7 @@ fn fallthrough_references_and_selected_and_whole_program_output() {
         assert!(listing.refs_from(terminal).is_empty());
         drop(listing);
 
-        prog.arch_mut().set_kuna_option("listing", "on").unwrap();
+        prog.arch_mut().set_unlace_option("listing", "on").unwrap();
         prog.commit_pending_analysis().unwrap();
         let targets = prog.function_entries_executable();
         assert_eq!(targets.len(), 2);

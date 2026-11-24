@@ -1,6 +1,6 @@
-//! (kuna `pdbtypes`) The PDB type stream (TPI) mapped onto kuna datatypes.
+//! (unlace `pdbtypes`) The PDB type stream (TPI) mapped onto unlace datatypes.
 //!
-//! The kuna analog of Ghidra's `PdbApplicator` type half
+//! The unlace analog of Ghidra's `PdbApplicator` type half
 //! (`CompositeTypeApplier`, `EnumTypeApplier`, `PointerTypeApplier`, `ArrayTypeApplier`, `ProcedureTypeApplier`, `MemberFunctionTypeApplier`).
 //! Each CodeView leaf becomes the type the DWARF mapper would build for the same
 //! declaration: primitives by width and sign, pointers (references included) at
@@ -44,7 +44,7 @@ pub(crate) struct ProcType {
     pub has_this: bool,
 }
 
-/// Resolves TPI type indices to kuna datatypes, memoized per index.
+/// Resolves TPI type indices to unlace datatypes, memoized per index.
 pub(crate) struct TpiMapper<'t, 'f> {
     finder: pdb::TypeFinder<'t>,
     types: &'f dyn TypeFactory,
@@ -308,7 +308,7 @@ impl<'t, 'f> TpiMapper<'t, 'f> {
                 // A declared record: a pointer built to the shell while the
                 // members are walked (a self-reference, or the same structure
                 // reached first through a global) reads the completed layout.
-                let built = self.types.kuna_declare_record(&text, union);
+                let built = self.types.unlace_declare_record(&text, union);
                 built.ok().filter(|t| t.get_metatype() == want)?
             }
         };
@@ -570,7 +570,7 @@ impl<'t, 'f> TpiMapper<'t, 'f> {
                 first_var_arg_slot,
                 output_storage: None,
                 input_storage: Vec::new(),
-                kuna_library_names: None,
+                unlace_library_names: None,
             },
             calling_convention: cc,
             has_this,

@@ -1,4 +1,4 @@
-//! (kuna) `callresultuse` — a callee's result, read untouched by the next call
+//! (unlace) `callresultuse` — a callee's result, read untouched by the next call
 //! or by the RETURN, is that call's result although the callee's prototype
 //! is unknown.
 //!
@@ -6,7 +6,7 @@
 //!
 //! `bl allKeys; bl objc_retainAutoreleasedReturnValue; mov x22,x0; mov x2,x21;
 //! bl containsObject:; mov x0,x22; bl objc_release` reads each message's `x0`
-//! as the next receiver and later releases it; the callees are imports.  kuna
+//! as the next receiver and later releases it; the callees are imports.  unlace
 //! printed `allKeys(a); objc_retainAutoreleasedReturnValue();
 //! containsObject:()`, receiver and argument gone, and `g2(g(a))` with `g`
 //! and `g2` imports as `g(); g2();`.
@@ -67,7 +67,7 @@ use crate::context::{OpId, VarnodeId};
 use crate::dtype::{type_class, type_metatype};
 use crate::funcdata::Funcdata;
 
-/// (kuna `callresultuse`) Which untouched call results count as the value
+/// (unlace `callresultuse`) Which untouched call results count as the value
 /// handed on.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum CallResultUse {
@@ -94,13 +94,13 @@ impl CallResultUse {
 pub struct OptionCallResultUse;
 
 impl OptionCallResultUse {
-    pub fn apply(&self, p1: &str) -> unlace_base::error::KunaResult<(CallResultUse, String)> {
+    pub fn apply(&self, p1: &str) -> unlace_base::error::UnlaceResult<(CallResultUse, String)> {
         let mode = match p1 {
             "off" => CallResultUse::Off,
             "on" | "" => CallResultUse::On,
             "all" => CallResultUse::All,
             other => {
-                return Err(unlace_base::error::KunaError::parse(format!(
+                return Err(unlace_base::error::UnlaceError::parse(format!(
                     "Unknown callresultuse value: {other} (expected off|on|all)"
                 )));
             }
@@ -184,7 +184,7 @@ fn returns_value(
     // `protoorder types` states the callee's recovery without locking it;
     // its result storage is recorded only with `passthrough` on.
     match data
-        .kuna_protoorder_types(fc.get_entry_address())
+        .unlace_protoorder_types(fc.get_entry_address())
         .map(|s| s.result.as_ref())
     {
         Some(Some((out_addr, out_size))) if disjoint(out_addr, *out_size, addr, size) => {
@@ -194,7 +194,7 @@ fn returns_value(
         Some(None)
             if data
                 .get_arch()
-                .kuna_options
+                .unlace_options
                 .get::<crate::passthrough::PassThrough>()
                 .0 =>
         {
@@ -223,7 +223,7 @@ fn takes_argument(
         };
     }
     let entry = fc.get_entry_address();
-    if let Some(facts) = data.kuna_callee_entry_dead(entry) {
+    if let Some(facts) = data.unlace_callee_entry_dead(entry) {
         if facts.never_takes(addr, size) {
             return Evidence::No;
         }
@@ -231,7 +231,7 @@ fn takes_argument(
             return Evidence::Yes;
         }
     }
-    match data.kuna_protoorder_types(entry) {
+    match data.unlace_protoorder_types(entry) {
         Some(s)
             if s.inputs
                 .iter()
@@ -345,7 +345,7 @@ fn in_x0(data: &Funcdata, addr: &Address) -> bool {
 /// is not, and keeps the strict reading.  Off with the option.
 pub fn call_result_root(data: &Funcdata, root: VarnodeId) -> bool {
     data.get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::callresultuse::CallResultUse>()
         != CallResultUse::Off
         && walk_call_results(data, root).is_some()
@@ -463,7 +463,7 @@ pub fn scoring_return(data: &Funcdata, opmatch: OpId, root: VarnodeId) -> bool {
     }
     if data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::callresultuse::CallResultUse>()
         != CallResultUse::All
     {
@@ -649,7 +649,7 @@ fn every_return_hands_back_a_call_result(data: &Funcdata, slot: int4) -> bool {
 pub fn scoring_argument(data: &Funcdata, opmatch: OpId, root: VarnodeId) -> bool {
     if data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::callresultuse::CallResultUse>()
         == CallResultUse::Off
         || !data
@@ -692,7 +692,7 @@ pub fn yield_to_own_value(
 ) {
     if data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::callresultuse::CallResultUse>()
         == CallResultUse::Off
     {
@@ -744,7 +744,7 @@ pub fn yield_to_own_value(
 pub fn plant(data: &mut Funcdata) {
     if data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::callresultuse::CallResultUse>()
         == CallResultUse::Off
         || data.get_active_output().is_none()
@@ -764,7 +764,7 @@ pub fn plant(data: &mut Funcdata) {
     }
     crate::voidret::plant_piece(data, addr.clone(), size);
     if crate::voidret::planted_overlaps(data, &addr, size) {
-        data.kuna_note_callresultuse_planted(addr, size);
+        data.unlace_note_callresultuse_planted(addr, size);
     }
 }
 
@@ -776,7 +776,7 @@ pub fn plant(data: &mut Funcdata) {
 /// incoming `r0` on the other, printed `return a1`).  Under `on` the hand-off
 /// was the plant's only purpose.
 pub fn settle_planted(data: &Funcdata, active: &mut crate::fspec::ParamActive) {
-    let Some((addr, size)) = data.kuna_callresultuse_planted() else {
+    let Some((addr, size)) = data.unlace_callresultuse_planted() else {
         return;
     };
     let i = active.which_trial(addr, *size);
@@ -786,7 +786,7 @@ pub fn settle_planted(data: &Funcdata, active: &mut crate::fspec::ParamActive) {
     let slot = active.get_trial(i).get_slot();
     let keep = data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::callresultuse::CallResultUse>()
         == CallResultUse::All
         && every_return_hands_back_a_call_result(data, slot);
@@ -815,7 +815,7 @@ fn first_call_input(data: &Funcdata, register: &Address, size: int4) -> bool {
         let fc = data.get_call_specs(idx);
         first.contains(&fc.get_op())
             && data
-                .kuna_protoorder_types(fc.get_entry_address())
+                .unlace_protoorder_types(fc.get_entry_address())
                 .is_some_and(|s| {
                     s.inputs
                         .iter()
@@ -840,15 +840,15 @@ fn result_register(data: &Funcdata) -> Option<(Address, int4)> {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.callresultuse_scores_trial = Some(scores_trial);
     hooks.callresultuse_scoring_argument = Some(scoring_argument);
     hooks.callresultuse_scoring_return = Some(scoring_return);
 }
 
-impl crate::optionset::KunaOption for CallResultUse {
+impl crate::optionset::UnlaceOption for CallResultUse {
     const NAME: &'static str = "callresultuse";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         crate::callresultuse::CallResultUse::Off
@@ -858,7 +858,7 @@ impl crate::optionset::KunaOption for CallResultUse {
         crate::callresultuse::CallResultUse::Off
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         Ok(crate::callresultuse::OptionCallResultUse.apply(value)?)
     }
 }

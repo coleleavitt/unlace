@@ -1,4 +1,4 @@
-//! (kuna `signedness`) Decide an integer local's *declared* signedness from the
+//! (unlace `signedness`) Decide an integer local's *declared* signedness from the
 //! operations the body applies to it, instead of from whichever type-inference
 //! vote happened to be most specific.
 //!
@@ -27,7 +27,7 @@
 //! time - after propagation, from the accumulated set of size-tagged operations a
 //! value participates in - rather than during propagation, and offers a flag for
 //! the case where nothing observed settles it ("C programmers write `int` when it
-//! does not matter").  This module is that decision re-derived for kuna's
+//! does not matter").  This module is that decision re-derived for unlace's
 //! declaration seam: it accumulates the op set per declared HighVariable and
 //! picks `TYPE_INT` or `TYPE_UINT` for the *declaration only*.  No Varnode type
 //! changes, no inference re-runs, and every cast `ActionSetCasts` inserted stays
@@ -80,7 +80,7 @@
 //! declaration.  An earlier revision justified the row by "shifting a
 //! negative value left is undefined in C", which does not hold up - signed
 //! overflow of `+ - *` is undefined on exactly the same footing and those are
-//! neutral here, and kuna's C models the arithmetic the binary performs rather
+//! neutral here, and unlace's C models the arithmetic the binary performs rather
 //! than being UB-free by construction.  The row is kept anyway, for two reasons
 //! that were measured rather than argued: a value the body ORs and shifts left is
 //! a bit buffer, which C source spells unsigned (zlib's `deflate` bit writer is
@@ -106,15 +106,15 @@
 //! two disagree at `+ - * & | ^ << == != < <= > >= / % >>` alike.  Below the
 //! promotion width no operator is neutral, so this pass does not touch a narrow
 //! declaration at all.  The promotion width that decides this is **the `int` of
-//! the compiler reading kuna's output, not the target's**: emitted C is read and
+//! the compiler reading unlace's output, not the target's**: emitted C is read and
 //! compiled where `int` is 4 bytes however small the target's cspec
 //! `<data_organization><integer_size>` is (it is 2 on avr8gcc, avr8egcc,
 //! TI_MSP430, TI_MSP430X, CR16, PIC24 and x86-16).  The floor is therefore
 //! `max(4, TypeFactory::get_size_of_int())` - see [`MIN_PROMOTION_SIZE`].
 //! (Reduced from `findutils` `find -O2` `sub_bac0`, where re-declaring a `short`
 //! unsigned left `if ((v2 == v8) || (v8 == -1)) break;` in place and made the
-//! `break` dead; `tests/stages/kuna-signedness.toml` pins that case on x86-64 and
-//! `tests/stages/kuna-signedness-int16.toml` pins it on a target whose own `int`
+//! `break` dead; `tests/stages/unlace-signedness.toml` pins that case on x86-64 and
+//! `tests/stages/unlace-signedness-int16.toml` pins it on a target whose own `int`
 //! is 2 bytes.)
 //!
 //! At and above the promotion width the neutral list is where the argument is
@@ -186,7 +186,7 @@
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
@@ -199,12 +199,12 @@ use crate::funcdata::Funcdata;
 /// C's integer promotions run before every operator, and which extension is
 /// performed is read off the declaration, so below the promotion width nothing in
 /// [`classify_reader`]'s neutral half is neutral.  The promotion width that
-/// decides that is the one of the compiler reading kuna's output - `int` is 4
+/// decides that is the one of the compiler reading unlace's output - `int` is 4
 /// bytes there - and *not* the target's `<data_organization><integer_size>`, which
 /// is 2 on avr8gcc, avr8egcc, TI_MSP430, TI_MSP430X, CR16, PIC24 and x86-16.
 const MIN_PROMOTION_SIZE: int4 = 4;
 
-/// (kuna) How the declared signedness of an integer local is chosen:
+/// (unlace) How the declared signedness of an integer local is chosen:
 /// `signedness upstream|auto|prefer-signed|prefer-unsigned`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SignPolicy {
@@ -219,9 +219,9 @@ pub enum SignPolicy {
     PreferUnsigned,
 }
 
-impl crate::optionset::KunaOption for SignPolicy {
+impl crate::optionset::UnlaceOption for SignPolicy {
     const NAME: &'static str = "signedness";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         SignPolicy::Upstream
@@ -231,7 +231,7 @@ impl crate::optionset::KunaOption for SignPolicy {
         SignPolicy::Auto
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         OptionSignedness.apply(value)
     }
 }
@@ -254,7 +254,7 @@ impl SignPolicy {
     }
 }
 
-/// (kuna) The `signedness upstream|auto|prefer-signed|prefer-unsigned` option.
+/// (unlace) The `signedness upstream|auto|prefer-signed|prefer-unsigned` option.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct OptionSignedness;
 
@@ -264,14 +264,14 @@ impl OptionSignedness {
 
     /// Parse + validate the value and return the policy plus the confirmation
     /// message (the caller stores it in the registered option `SignPolicy`).
-    pub fn apply(&self, p1: &str) -> KunaResult<(SignPolicy, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(SignPolicy, String)> {
         let policy = match p1 {
             "upstream" => SignPolicy::Upstream,
             "auto" => SignPolicy::Auto,
             "prefer-signed" => SignPolicy::PreferSigned,
             "prefer-unsigned" => SignPolicy::PreferUnsigned,
             _ => {
-                return Err(KunaError::parse(
+                return Err(UnlaceError::parse(
                     "signedness must be \"upstream\", \"auto\", \"prefer-signed\" or \"prefer-unsigned\"",
                 ));
             }
@@ -803,18 +803,18 @@ pub fn plan(
         let Some(h) = fd.high_bank().get(high) else {
             continue;
         };
-        if h.kuna_name().is_none() {
+        if h.unlace_name().is_none() {
             continue;
         }
         // A high the Symbol table describes as a composite, or a piece of one, is
         // declared from the Symbol - not from this type.  `castsign` admits the
         // one mapping that is neither: a frame local covering its Symbol whole,
         // unless the Symbol's type is locked.
-        let frame_local = h.kuna_symbol_offset() >= 0;
+        let frame_local = h.unlace_symbol_offset() >= 0;
         if frame_local && !castsign {
             continue;
         }
-        if h.kuna_symbol_type().is_some_and(|t| {
+        if h.unlace_symbol_type().is_some_and(|t| {
             matches!(
                 t.get_metatype(),
                 type_metatype::TYPE_STRUCT | type_metatype::TYPE_UNION | type_metatype::TYPE_ARRAY

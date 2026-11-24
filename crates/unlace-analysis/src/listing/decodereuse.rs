@@ -6,7 +6,7 @@ use super::{
     xrefs::{FullCapture, FullOp},
 };
 use std::rc::Rc;
-use unlace_base::{address::Address, error::KunaResult, space::AddrSpace};
+use unlace_base::{address::Address, error::UnlaceResult, space::AddrSpace};
 use unlace_sleigh::translate::{AssemblyEmit, PcodeEmit, Translate};
 
 #[derive(PartialEq, Eq)]
@@ -60,7 +60,7 @@ pub(crate) fn capture(
     decoded: &mut Decoded,
     full: &mut FullCapture,
     keep_ops: bool,
-) -> KunaResult<Option<Rc<ReusableDecode>>> {
+) -> UnlaceResult<Option<Rc<ReusableDecode>>> {
     let addr = Address::new(Rc::clone(space), at);
     decoded.mnemonic.clear();
     decoded.operands.clear();

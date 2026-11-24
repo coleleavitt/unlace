@@ -1,10 +1,10 @@
-//! (kuna `vaarg`) The x86-64 SysV `va_arg` expansion prints as `va_arg(ap, T)`.
+//! (unlace `vaarg`) The x86-64 SysV `va_arg` expansion prints as `va_arg(ap, T)`.
 //!
 //! `va_arg(ap, T)` compiles to a test of the offset into the register save
 //! area (gcc `ix86_gimplify_va_arg`, clang `X86_64ABIInfo::EmitVAArg`): below
 //! `48 - 8n` (`176 - 16` for a double) the register arm `R` reads
 //! `reg_save_area + offset` and steps the offset, otherwise the memory arm `M`
-//! reads `overflow_arg_area` and steps that pointer. kuna printed both arms.
+//! reads `overflow_arg_area` and steps that pointer. unlace printed both arms.
 //!
 //! The va_list state takes one of three forms, and [`ActionVaArg`] collects
 //! each into *webs* of values: the offset web (`gp_offset` or `fp_offset`)
@@ -1508,7 +1508,7 @@ fn find(data: &Funcdata, cls: &Cls) -> Option<Plan> {
 }
 
 /// Destroy `store` and the INDIRECTs it left.
-fn destroy_store(data: &mut Funcdata, store: OpId) -> unlace_base::error::KunaResult<()> {
+fn destroy_store(data: &mut Funcdata, store: OpId) -> unlace_base::error::UnlaceResult<()> {
     let Some(b) = data.obank().get(store).and_then(|o| o.get_parent()) else {
         return Ok(());
     };
@@ -1593,8 +1593,8 @@ fn has_va_start(data: &Funcdata) -> bool {
     })
 }
 
-fn rewrite(data: &mut Funcdata, plan: &Plan) -> unlace_base::error::KunaResult<()> {
-    use unlace_base::error::KunaError;
+fn rewrite(data: &mut Funcdata, plan: &Plan) -> unlace_base::error::UnlaceResult<()> {
+    use unlace_base::error::UnlaceError;
     let id = crate::userop::BUILTIN_VAARG as uintb;
     for &(op, ap, sse) in &plan.reads {
         let ap = match ap {
@@ -1618,7 +1618,7 @@ fn rewrite(data: &mut Funcdata, plan: &Plan) -> unlace_base::error::KunaResult<(
     for &(c, m) in &plan.sites {
         let i = data.bblocks_ref().block(c).get_out_index(m);
         if i < 0 {
-            return Err(KunaError::lowlevel("vaarg: stale arm"));
+            return Err(UnlaceError::lowlevel("vaarg: stale arm"));
         }
         data.remove_branch(c, i)?;
     }
@@ -1630,7 +1630,7 @@ fn rewrite(data: &mut Funcdata, plan: &Plan) -> unlace_base::error::KunaResult<(
                 .bb_op_head(entry)
                 .and_then(|o| data.obank().get(o))
                 .map(|o| o.get_addr().clone())
-                .ok_or_else(|| KunaError::lowlevel("vaarg: empty entry"))?;
+                .ok_or_else(|| UnlaceError::lowlevel("vaarg: empty entry"))?;
             let fp = fp.unwrap_or(48);
             let gp = gp.unwrap_or_else(|| 8 * named_registers(data));
             let last = crate::vastart::last_named(
@@ -1684,7 +1684,12 @@ impl Action for ActionVaArg {
         })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        if !data.get_arch().kuna_options.get::<crate::vaarg::VaArg>().0 {
+        if !data
+            .get_arch()
+            .unlace_options
+            .get::<crate::vaarg::VaArg>()
+            .0
+        {
             return 0;
         }
         let cls = Cls::classify(data);
@@ -1702,8 +1707,8 @@ impl Action for ActionVaArg {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna `vaarg`) The x86-64 va_arg expansion as va_arg(ap, T).
+crate::unlace_flag!(
+    /// (unlace `vaarg`) The x86-64 va_arg expansion as va_arg(ap, T).
     VaArg,
     "vaarg",
     "va_arg expansion as one call",

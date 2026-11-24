@@ -1,4 +1,4 @@
-//! (kuna `delphiabi`) The Win32 imports of a Delphi PE keep `__stdcall`.
+//! (unlace `delphiabi`) The Win32 imports of a Delphi PE keep `__stdcall`.
 //!
 //! Under the Delphi compiler spec the default model is `register` (EAX, EDX,
 //! ECX, then the stack), but a Windows API entry point is `__stdcall`

@@ -8,7 +8,7 @@ use unlace_num::opcodes::OpCode;
 
 use crate::constantshift::ConstantLslPlan;
 
-/// (kuna `armconstshift`) Which fixed left shifts of a signed operand print
+/// (unlace `armconstshift`) Which fixed left shifts of a signed operand print
 /// through an unsigned conversion.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ConstShiftMode {
@@ -21,9 +21,9 @@ pub enum ConstShiftMode {
     All,
 }
 
-impl crate::optionset::KunaOption for ConstShiftMode {
+impl crate::optionset::UnlaceOption for ConstShiftMode {
     const NAME: &'static str = "armconstshift";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         ConstShiftMode::Off
@@ -33,7 +33,7 @@ impl crate::optionset::KunaOption for ConstShiftMode {
         ConstShiftMode::Off
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         OptionArmConstShift.apply(value)
     }
 }
@@ -52,13 +52,13 @@ impl ConstShiftMode {
 pub struct OptionArmConstShift;
 
 impl OptionArmConstShift {
-    pub fn apply(&self, p1: &str) -> unlace_base::error::KunaResult<(ConstShiftMode, String)> {
+    pub fn apply(&self, p1: &str) -> unlace_base::error::UnlaceResult<(ConstShiftMode, String)> {
         let mode = match p1 {
             "off" => ConstShiftMode::Off,
             "on" | "" => ConstShiftMode::On,
             "all" => ConstShiftMode::All,
             other => {
-                return Err(unlace_base::error::KunaError::parse(format!(
+                return Err(unlace_base::error::UnlaceError::parse(format!(
                     "Unknown armconstshift value: {other} (expected off|on|all)"
                 )));
             }
@@ -78,7 +78,7 @@ pub fn plan_arm_constant_lsl(
     arch: &Architecture,
     op: OpId,
 ) -> Option<ConstantLslPlan> {
-    if arch.kuna_options.get::<ConstShiftMode>() == ConstShiftMode::Off
+    if arch.unlace_options.get::<ConstShiftMode>() == ConstShiftMode::Off
         || !arch.archid.starts_with("ARM:")
     {
         return None;

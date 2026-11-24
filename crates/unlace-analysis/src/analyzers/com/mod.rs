@@ -1,4 +1,4 @@
-//! (kuna `com`) COM class and interface ids, and the interfaces they name.
+//! (unlace `com`) COM class and interface ids, and the interfaces they name.
 //!
 //! On a PE image the pass:
 //! - names every 16-byte value in a data or code section that equals a known class id
@@ -174,7 +174,7 @@ impl<'a> ComTypes<'a> {
 
     fn build_guid(&self) -> Option<Rc<Datatype>> {
         let t = self.types;
-        let shell = t.kuna_declare_record("GUID", false).ok()?;
+        let shell = t.unlace_declare_record("GUID", false).ok()?;
         if shell.get_metatype() != type_metatype::TYPE_STRUCT {
             return t
                 .get_type_array(16, t.get_base(1, type_metatype::TYPE_UNKNOWN).ok()?)
@@ -211,7 +211,7 @@ impl<'a> ComTypes<'a> {
     fn build_multi_qi(&self) -> Option<Rc<Datatype>> {
         let t = self.types;
         let ptr = self.ptr;
-        let shell = t.kuna_declare_record("MULTI_QI", false).ok()?;
+        let shell = t.unlace_declare_record("MULTI_QI", false).ok()?;
         if shell.get_metatype() != type_metatype::TYPE_STRUCT {
             return None;
         }
@@ -251,7 +251,7 @@ impl<'a> ComTypes<'a> {
         let methods = methods_of(name)?;
         let t = self.types;
         let ptr = self.ptr;
-        let shell = t.kuna_declare_record(name, false).ok()?;
+        let shell = t.unlace_declare_record(name, false).ok()?;
         if shell.get_metatype() != type_metatype::TYPE_STRUCT {
             return None;
         }
@@ -260,7 +260,7 @@ impl<'a> ComTypes<'a> {
         }
         let this = t.get_type_pointer(ptr, Rc::clone(&shell), 1).ok()?;
         let vtbl_name = format!("{name}Vtbl");
-        let vtbl = t.kuna_declare_record(&vtbl_name, false).ok()?;
+        let vtbl = t.unlace_declare_record(&vtbl_name, false).ok()?;
         if vtbl.get_metatype() != type_metatype::TYPE_STRUCT {
             return None;
         }
@@ -470,7 +470,7 @@ fn parse_guid(text: &str) -> Option<[u8; 16]> {
 /// cannot be read.
 fn cfg_ids(arch: &unlace_decomp::architecture::Architecture) -> BTreeMap<[u8; 16], String> {
     use std::io::Read;
-    let Some(path) = arch.kuna_options.get::<unlace_decomp::comcfg::ComCfg>().0 else {
+    let Some(path) = arch.unlace_options.get::<unlace_decomp::comcfg::ComCfg>().0 else {
         return BTreeMap::new();
     };
     let mut bytes = Vec::new();

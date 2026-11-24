@@ -1,4 +1,4 @@
-//! (kuna `itaniumeh`) The Itanium call-site table, decoded for the decompiler.
+//! (unlace `itaniumeh`) The Itanium call-site table, decoded for the decompiler.
 //!
 //! For every LSDA (from an `.eh_frame` FDE, or on ARM32 from an `.ARM.extab`
 //! entry), each call-site record that has a landing pad becomes an
@@ -333,7 +333,7 @@ fn symbol_type(sym: &str) -> Option<String> {
     d.strip_prefix("typeinfo for ").map(str::to_string)
 }
 
-/// (kuna `ehnote`) A header note on every function whose landing pads flow does
+/// (unlace `ehnote`) A header note on every function whose landing pads flow does
 /// not show: how many call sites unwind to one, what the pads do, and the
 /// personality that reads them. Committed only when `ehnote` is on and
 /// `itaniumeh` (which shows the pads) is off.

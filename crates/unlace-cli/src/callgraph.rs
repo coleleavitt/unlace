@@ -18,12 +18,12 @@ pub(crate) struct CallGraph {
     index: XrefIndex,
     /// Canonical `(entry, extent)` pairs, ascending by entry.
     entries: Vec<(u64, u64)>,
-    /// (kuna `pltlocal`) `(stub, definition)` pairs a call through the stub is
+    /// (unlace `pltlocal`) `(stub, definition)` pairs a call through the stub is
     /// built at; empty with the option off.
     plt_local: Vec<(u64, u64)>,
 }
 
-/// (kuna `callbacktype`) [`CallGraph::callback_refs`]: what the graph said
+/// (unlace `callbacktype`) [`CallGraph::callback_refs`]: what the graph said
 /// about each entry it was asked for. An entry it was not asked for has no
 /// references.
 pub(crate) struct CallbackRefs {
@@ -123,13 +123,13 @@ impl CallGraph {
         }
     }
 
-    /// (kuna `pltlocal`) The function a call to `entry` is built at: the
+    /// (unlace `pltlocal`) The function a call to `entry` is built at: the
     /// definition a bound PLT stub forwards to, else `entry` itself.
     pub(crate) fn call_target(&self, entry: u64) -> u64 {
         unlace_decomp::pltlocal::target_of(&self.plt_local, entry).unwrap_or(entry)
     }
 
-    /// (kuna `callbacktype`) The entries of the functions that CALL or tail-jump
+    /// (unlace `callbacktype`) The entries of the functions that CALL or tail-jump
     /// to `entry`, itself included, or `None` when one such instruction sits in
     /// no function.
     pub(crate) fn direct_callers(&self, entry: u64) -> Option<Vec<u64>> {
@@ -142,7 +142,7 @@ impl CallGraph {
         Some(out.into_iter().collect())
     }
 
-    /// (kuna `callbacktype`) Does anything call or tail-jump to `entry` --
+    /// (unlace `callbacktype`) Does anything call or tail-jump to `entry` --
     /// another function, the function itself, or code no function owns?
     pub(crate) fn called_directly(&self, entry: u64) -> bool {
         self.index
@@ -151,7 +151,7 @@ impl CallGraph {
             .any(|r| matches!(r.kind, XrefKind::Call | XrefKind::Jump))
     }
 
-    /// (kuna `callbacktype`) The instructions that materialize the address of
+    /// (unlace `callbacktype`) The instructions that materialize the address of
     /// `entry` without calling it -- the `lea`/immediate a callback argument is
     /// built by, and anything else that takes the same address -- each with the
     /// function it sits in.
@@ -164,7 +164,7 @@ impl CallGraph {
             .collect()
     }
 
-    /// (kuna `callbacktype`) The answers [`Self::address_taken_refs`],
+    /// (unlace `callbacktype`) The answers [`Self::address_taken_refs`],
     /// [`Self::called_directly`] and [`Self::direct_callers`] give for each of
     /// `entries`, kept so a run can let the reference index go long before it
     /// asks them.
@@ -183,7 +183,7 @@ impl CallGraph {
         CallbackRefs { by_entry }
     }
 
-    /// (kuna `calleevote`) Every direct call and tail jump to the function
+    /// (unlace `calleevote`) Every direct call and tail jump to the function
     /// entered at `entry` from another function, by instruction address, or
     /// `None` when its callers cannot all be listed: it is in `open`
     /// ([`open_function_entries`]), its address is taken in code, or a
@@ -244,7 +244,7 @@ impl CallGraph {
             }
         }
 
-        // The walk's function set and kuna's inventory are two views of the same
+        // The walk's function set and unlace's inventory are two views of the same
         // program and need not agree entry-for-entry, so fold every reached
         // address onto the inventory record that contains it before answering.
         let mut owners: BTreeSet<u64> = BTreeSet::new();
@@ -334,7 +334,7 @@ impl CallGraph {
         &self.entries
     }
 
-    /// (kuna `calleereginputs custom`) The direct call sites of `entry` from
+    /// (unlace `calleereginputs custom`) The direct call sites of `entry` from
     /// other functions, as `(call instruction, owning entry)`, or `None` when
     /// its caller set is not a list of direct calls: its address is taken in
     /// code (a Data/Read/Write reference), another function branches to it, or
@@ -399,7 +399,7 @@ impl CallGraph {
         self.index.forwarding_veneers()
     }
 
-    /// (kuna `calleevote`, `callbacktype`) The function entries whose address the
+    /// (unlace `calleevote`, `callbacktype`) The function entries whose address the
     /// image puts somewhere nobody can list ([`open_function_entries`]). An image
     /// that cannot be read again leaves every function open.
     pub(crate) fn open_entries(&self, binary: &str, pref: SlicePref) -> BTreeSet<u64> {
@@ -413,7 +413,7 @@ impl CallGraph {
             .unwrap_or_else(|| seeds.iter().copied().collect())
     }
 
-    /// (kuna `narrowargs callers`) Every call and tail jump to each function
+    /// (unlace `narrowargs callers`) Every call and tail jump to each function
     /// of a 32-bit ARM image whose callers the image lets us list, by entry:
     /// nothing in its bytes builds or holds the address ([`arm_closure::scan`])
     /// and the walk materializes it nowhere, every reference comes from a known
@@ -474,7 +474,7 @@ impl CallGraph {
     }
 }
 
-/// (kuna `calleevote`) The function entries among `entries` whose callers the
+/// (unlace `calleevote`) The function entries among `entries` whose callers the
 /// image cannot list by its instructions alone.
 ///
 /// The reference walk reads one instruction at a time, so it sees a function's
@@ -549,7 +549,7 @@ fn open_function_entries(file: &object::File, bytes: &[u8], entries: &[u64]) -> 
     scan.out
 }
 
-/// (kuna `calleevote`) Does the image put this section's bytes in memory? On
+/// (unlace `calleevote`) Does the image put this section's bytes in memory? On
 /// ELF that is the `SHF_ALLOC` flag, whatever the address (firmware loads code
 /// at 0); other formats map every section they carry bytes for.
 pub(super) fn image_loads(section: &object::Section) -> bool {
@@ -565,7 +565,7 @@ pub(super) fn image_loads(section: &object::Section) -> bool {
     }
 }
 
-/// (kuna `calleevote`) The function entries found stored so far.
+/// (unlace `calleevote`) The function entries found stored so far.
 struct StoredScan {
     #[expect(
         clippy::disallowed_types,
@@ -681,7 +681,7 @@ mod tests {
                 ("aif", "off"),
                 ("tailcallentry", "off"),
             ] {
-                prog.arch_mut().set_kuna_option(name, value).unwrap();
+                prog.arch_mut().set_unlace_option(name, value).unwrap();
             }
             prog.commit_pending_analysis().unwrap();
             let bytes = std::fs::read(&path).unwrap();
@@ -743,7 +743,7 @@ mod tests {
                 ("aif", "off"),
                 ("tailcallentry", "off"),
             ] {
-                prog.arch_mut().set_kuna_option(name, value).unwrap();
+                prog.arch_mut().set_unlace_option(name, value).unwrap();
             }
             prog.commit_pending_analysis().unwrap();
             let bytes = std::fs::read(&path).unwrap();

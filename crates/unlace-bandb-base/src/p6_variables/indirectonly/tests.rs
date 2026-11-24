@@ -3,7 +3,7 @@
 //! `mark_indirect_only`.
 //!
 //! The end-to-end behaviour (the merge a marked input unlocks) is covered by
-//! `tests/stages/kuna-indirectonly.toml` (two-pass: off = the bug, on = the fix).
+//! `tests/stages/unlace-indirectonly.toml` (two-pass: off = the bug, on = the fix).
 
 use std::rc::Rc;
 

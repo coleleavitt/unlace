@@ -1,4 +1,4 @@
-//! (kuna `fatstr`) Rust `&str` RECORD recognition — length-bounded string
+//! (unlace `fatstr`) Rust `&str` RECORD recognition — length-bounded string
 //! facts recovered from static `(ptr, len)` records (`docs/multilang.md` W4,
 //! the analysis-side half of the `fatstr` option).
 //!
@@ -234,7 +234,7 @@ fn scan_direct_records(slots: &[RoRegion], targets: &[RoRegion], width: u64) -> 
     out
 }
 
-/// (kuna `fatstr`) The string-record pass. Registered for rustc- and
+/// (unlace `fatstr`) The string-record pass. Registered for rustc- and
 /// Go-detected images; committed under the `fatstr` mode gate.
 pub struct StrRecordPass {
     /// Widen the direct arm's SLOT regions to the Go data image

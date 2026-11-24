@@ -67,7 +67,7 @@ fn bootstrap(mode: Mode) -> unlace_console::engine::ConsoleProgram {
     // gated commit keeps the pass's facts.
     if let Mode::On = mode {
         prog.arch_mut()
-            .set_kuna_option("funcstart_patterns", "on")
+            .set_unlace_option("funcstart_patterns", "on")
             .expect("funcstart_patterns flips on");
     }
     prog.commit_pending_analysis()

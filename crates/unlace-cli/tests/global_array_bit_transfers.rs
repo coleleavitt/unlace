@@ -88,7 +88,7 @@ _high4:
     let whole_declaration = format!("data 0x{:x} unsigned char whole[4]", address + 24);
     let double_declaration = format!("data 0x{:x} double dstate[2]", address + 32);
     let directory = asm.with_extension("project");
-    let (out, err, status) = common::run_kuna(&[
+    let (out, err, status) = common::run_unlace(&[
         "decompile-project",
         binary.to_str().unwrap(),
         "-o",

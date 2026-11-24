@@ -67,10 +67,10 @@ The proposal's older baseline remains recorded as proposal evidence only.
 
 The end-to-end stage fixture is `tests/stages/ghangr-gooutput.toml`. It selects C,
 then Go, then C again over the same image. Go integration tests are registered
-in kuna-console's integration suite:
+in console's integration suite:
 
 ```sh
-cargo test --manifest-path decompiler/Cargo.toml -p kuna-console --test integration verify_outlang_go::
+cargo test --manifest-path decompiler/Cargo.toml -p console --test integration verify_outlang_go::
 cargo test --manifest-path decompiler/Cargo.toml -p kuna-decomp --lib kuna_langgo::tests::
 ```
 

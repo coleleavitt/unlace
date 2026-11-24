@@ -50,7 +50,7 @@ spelling. The signature correction is a strict bug fix and needs no new option.
 
 ## Regression coverage
 
-`tests/stages/kuna-declared-callback-c.toml` is a self-contained ARM byte fixture.
+`tests/stages/declared-callback-c.toml` is a self-contained ARM byte fixture.
 It checks parameters, a published global, a saved callback local, callback return
 values, structure fields, arrays, variadic inputs, recursive callback parameters
 and callback-returning callbacks. It exercises both core and `ctypes` spelling.

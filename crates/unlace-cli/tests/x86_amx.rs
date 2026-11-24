@@ -2,7 +2,7 @@
 //! 64-bit x86 and lifts to user operations on tile numbers; before, every AMX
 //! instruction was a bad instruction.
 use crate::common;
-use common::{repo_root, run_kuna};
+use common::{repo_root, run_unlace};
 
 fn fixture(name: &str) -> String {
     repo_root()
@@ -47,7 +47,7 @@ const MNEMONICS: [&str; 15] = [
 #[test]
 fn every_amx_instruction_decodes() {
     let elf = fixture("amx.elf");
-    let (stdout, stderr, code) = run_kuna(&["disassemble", &elf, "probe"]);
+    let (stdout, stderr, code) = run_unlace(&["disassemble", &elf, "probe"]);
     assert_eq!(code, 0, "{stderr}");
     let listing = rows(&stdout);
     let mnemonics: Vec<&str> = listing
@@ -72,7 +72,7 @@ fn every_amx_instruction_decodes() {
 #[test]
 fn amx_kernel_lifts() {
     let elf = fixture("amx.elf");
-    let (stdout, stderr, code) = run_kuna(&["decompile", &elf, "kernel"]);
+    let (stdout, stderr, code) = run_unlace(&["decompile", &elf, "kernel"]);
     assert_eq!(code, 0, "{stderr}");
     let lower = stdout.to_lowercase();
     assert!(!lower.contains("unimplemented"), "{stdout}");

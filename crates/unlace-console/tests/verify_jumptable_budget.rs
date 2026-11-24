@@ -111,7 +111,7 @@ fn program_of(image: Vec<u8>, budget: Option<Duration>) -> (ConsoleProgram, Path
     let mut program = bootstrap_from_object_with_isa(path.to_str().unwrap(), "", &specs(), None)
         .expect("bootstrap fixture with built processor specs");
     program.commit_pending_analysis().unwrap();
-    program.arch_mut().kuna_fn_budget = budget;
+    program.arch_mut().unlace_fn_budget = budget;
     (program, path)
 }
 

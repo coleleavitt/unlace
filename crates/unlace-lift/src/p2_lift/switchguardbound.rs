@@ -1,7 +1,7 @@
-//! (kuna) Guard-bounded jump-table index option — `option switchguardbound`
+//! (unlace) Guard-bounded jump-table index option — `option switchguardbound`
 //! (angr port: `test_decompiling_missing_function_call`; S2 switch-model).
 //!
-//! Sibling of [`kuna_switchmodbound`](crate::p2_lift::switchmodbound)
+//! Sibling of [`unlace_switchmodbound`](crate::p2_lift::switchmodbound)
 //! (GH-9191). Both address the same recovery failure — the basic `JumpBasic`
 //! model cannot bound a LOAD-table index, so `JumpTable::recoverAddresses`
 //! aborts with *"Too many branches"* and `FlowInfo::truncateIndirectJump`
@@ -21,10 +21,10 @@
 //!
 //! ## What this module owns vs. STUB(W4)
 //!
-//! As with `kuna_switchmodbound`, the assigned scope here is **only** the
+//! As with `unlace_switchmodbound`, the assigned scope here is **only** the
 //! `ElementId` and the `ArchOption` that flips the arch flag — *not* the
 //! recovery logic. The recovery walk
-//! `JumpBasic::kuna_try_guard_bound_table(Funcdata*, PcodeOp* indop, uint4
+//! `JumpBasic::unlace_try_guard_bound_table(Funcdata*, PcodeOp* indop, uint4
 //! maxtablesize)` is a member of `JumpBasic` and lives next to the rest of the
 //! model in `jumptable.rs` (it needs the protected `pathMeld`/`jrange`/
 //! `selectguards`/`varnodeIndex` state). It is invoked from `recoverModel()`
@@ -41,19 +41,19 @@
 
 use unlace_base::marshal::ElementId;
 
-/// Marshaling element `<switchguardbound>` (kuna). ElementIds live in the 4000+
+/// Marshaling element `<switchguardbound>` (unlace). ElementIds live in the 4000+
 /// range (C++ `ELEM_SWITCHGUARDBOUND = ElementId("switchguardbound",4022)`;
 /// 4021 is `stackguard`).
 pub const ELEM_SWITCHGUARDBOUND: ElementId = ElementId::new("switchguardbound", 4022);
 
-/// (kuna) Toggle bounding a LOAD-table jumptable by an out-of-band CBRANCH range
+/// (unlace) Toggle bounding a LOAD-table jumptable by an out-of-band CBRANCH range
 /// guard on its index (C++ `OptionSwitchGuardBound`).
 ///
 /// STUB(W4): the C++ `OptionSwitchGuardBound::apply` flips
 /// `glb->switch_guard_bound`; here the flag is carried as a plain `bool` whose
 /// [`Default`] is the *shipped* default (`option switchguardbound off`, i.e.
 /// \b false — upstream byte-identical). W4's `JumpBasic::recoverModel` reads this
-/// gate before calling `kuna_try_guard_bound_table`.
+/// gate before calling `unlace_try_guard_bound_table`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SwitchGuardBoundOption {
     /// True if a CBRANCH range guard on a LOAD-table jumptable index bounds the
@@ -69,7 +69,7 @@ impl Default for SwitchGuardBoundOption {
 }
 
 impl SwitchGuardBoundOption {
-    /// (kuna) Set the gate (C++ `OptionSwitchGuardBound::apply`).
+    /// (unlace) Set the gate (C++ `OptionSwitchGuardBound::apply`).
     pub fn apply(&mut self, val: bool) -> &'static str {
         self.enabled = val;
         if val {

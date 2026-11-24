@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 use unlace_base::address::Address;
-use unlace_console::console::register_kuna_commands;
+use unlace_console::console::register_unlace_commands;
 use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
     DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
@@ -45,7 +45,7 @@ fn inspect_with_setup<T>(
     ];
     let mut status = ConsoleCommands::into_status(commands.clone());
     register_decomp_commands(&mut status);
-    register_kuna_commands(&mut status);
+    register_unlace_commands(&mut status);
     status.set_error_is_done(true);
     status
         .get_data_mut(DECOMPILE_MODULE)

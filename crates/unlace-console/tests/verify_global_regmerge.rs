@@ -14,13 +14,13 @@
 //! HighVariable — faithful to upstream Ghidra, whose `goal_width` phi likewise
 //! carries all-register-`EAX` inputs tagged `hv=goal_width`.
 //!
-//! The BUG was purely in kuna's printer (`p9_emit/printc.rs`, `push_vn_explicit_ir`
+//! The BUG was purely in unlace's printer (`p9_emit/printc.rs`, `push_vn_explicit_ir`
 //! unnamed-location tail): it rendered each member of that mixed high by the
 //! member's *own* storage, so the register members leaked a raw `EAX`/`RAX` (and
 //! `unique` members a `Unique<hex>`) — e.g. `EAX = (dat_215120 * 0xbb) / 200;`
 //! and `EAX = (int4)strlen(v18); v6 = &v18[EAX];` — instead of the shared global
 //! name.  Ghidra renders every member through `high->getSymbol()` -> the global;
-//! kuna now mirrors that, resolving each member to its high's canonical global
+//! unlace now mirrors that, resolving each member to its high's canonical global
 //! storage so the whole variable reads as one `dat_<addr>`
 //! (`dat_215110 = (dat_215120 * 0xbb) / 200;`, `dat_21511c = (int4)strlen(v15);`).
 //!

@@ -17,7 +17,7 @@
 use std::collections::BTreeMap;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::{
     ATTRIB_SIZE, ATTRIB_SPACE, AttributeId, Decoder, ElementId, IdRegistry,
 };
@@ -119,7 +119,7 @@ pub struct TruncationTag {
 impl TruncationTag {
     /// Parse a \<truncate_space> element to configure \b this object
     /// \param decoder is the stream decoder
-    pub fn decode(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    pub fn decode(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         let elem_id = decoder.open_element_id(&ELEM_TRUNCATE_SPACE)?;
         self.space_name =
             String::from_utf8_lossy(&decoder.read_string_id(&ATTRIB_SPACE)?).into_owned();
@@ -171,14 +171,14 @@ pub trait PcodeEmit {
     /// \param addr is the address (of the instruction) to associate with the
     ///        p-code op
     /// \param decoder is the stream decoder
-    fn decode_op(&mut self, addr: &Address, decoder: &mut dyn OpcodeDecoder) -> KunaResult<()> {
+    fn decode_op(&mut self, addr: &Address, decoder: &mut dyn OpcodeDecoder) -> UnlaceResult<()> {
         let elem_id = decoder.open_element_id(&ELEM_OP)?;
         let isize = decoder.read_signed_integer_id(&ATTRIB_SIZE)? as i32; // cast: intb -> int4 (truncating)
         // (the C++ nests this check inside `isize <= 16` — the 16-entry
         // stack-array path — but a negative isize always takes that path,
         // so the flat check is equivalent)
         if isize < 0 {
-            return Err(KunaError::decoder("Bad <op> size attribute"));
+            return Err(UnlaceError::decoder("Bad <op> size attribute"));
         }
         // The C++ uses a 16-entry stack array for small isize and a heap
         // vector otherwise — an allocation optimization with identical
@@ -298,7 +298,7 @@ impl TranslateBase {
     /// If no floating-point format objects were registered by the
     /// \b initialize method, this method will fill in some suitable default
     /// formats.  These defaults are based on the 4-byte and 8-byte encoding
-    /// specified by the IEEE 754 standard, plus (kuna) the 2-byte binary16
+    /// specified by the IEEE 754 standard, plus (unlace) the 2-byte binary16
     /// half-precision encoding that AArch64 FP16 and RISC-V Zfh operate on.
     pub fn set_default_float_formats(&mut self) {
         if self.floatformats.is_empty() {
@@ -391,7 +391,7 @@ impl Default for TranslateBase {
 /// [`TranslateBase`] reached via [`Translate::translate_base`], whose
 /// non-virtual methods are mirrored here as provided methods.
 pub trait Translate: RegisterLookup {
-    /// Access the concrete C++ base-class state (kuna boundary; see trait docs).
+    /// Access the concrete C++ base-class state (unlace boundary; see trait docs).
     fn translate_base(&self) -> &TranslateBase;
 
     /// Mutable access to the concrete C++ base-class state.
@@ -402,7 +402,7 @@ pub trait Translate: RegisterLookup {
     /// A translator gets initialized once, possibly using XML documents to
     /// configure it.
     /// \param store is a set of configuration documents
-    fn initialize(&mut self, store: &mut DocumentStorage) -> KunaResult<()>;
+    fn initialize(&mut self, store: &mut DocumentStorage) -> UnlaceResult<()>;
 
     /// \brief Add a new context variable to the model for this processor
     ///
@@ -496,20 +496,20 @@ pub trait Translate: RegisterLookup {
     /// to find the number of bytes it uses within the instruction stream.
     /// \param baseaddr is the Address of the instruction
     /// \return the number of bytes in the instruction
-    fn instruction_length(&self, baseaddr: &Address) -> KunaResult<i32>;
+    fn instruction_length(&self, baseaddr: &Address) -> UnlaceResult<i32>;
 
     /// \brief Transform a single machine instruction into pcode
     ///
     /// This is the main interface to the pcode translation engine.  The
     /// \e dump method in the \e emit object is invoked exactly once for each
     /// pcode operation in the translation for the machine instruction at the
-    /// given address.  This routine can err with `KunaError::Unimpl` or
-    /// `KunaError::BadData` (the C++ `UnimplError`/`BadDataError` throws).
+    /// given address.  This routine can err with `UnlaceError::Unimpl` or
+    /// `UnlaceError::BadData` (the C++ `UnimplError`/`BadDataError` throws).
     /// (`const` in C++ — engines cache through interior mutability.)
     /// \param emit is the tailored pcode emitting object
     /// \param baseaddr is the Address of the machine instruction
     /// \return the number of bytes in the machine instruction
-    fn one_instruction(&self, emit: &mut dyn PcodeEmit, baseaddr: &Address) -> KunaResult<i32>;
+    fn one_instruction(&self, emit: &mut dyn PcodeEmit, baseaddr: &Address) -> UnlaceResult<i32>;
 
     /// Validate the actual consumed bytes before committing context or emitting p-code.
     /// Translators without this contract must explicitly decline checked decoding.
@@ -518,8 +518,8 @@ pub trait Translate: RegisterLookup {
         _emit: &mut dyn PcodeEmit,
         _baseaddr: &Address,
         _image: &dyn crate::loadimage::ImageBytes,
-    ) -> KunaResult<i32> {
-        Err(KunaError::lowlevel(
+    ) -> UnlaceResult<i32> {
+        Err(UnlaceError::lowlevel(
             "Checked instruction translation is unsupported",
         ))
     }
@@ -531,7 +531,7 @@ pub trait Translate: RegisterLookup {
     /// application via the \e dump method in the \e emit object.
     /// \param emit is the disassembly emitting object
     /// \param baseaddr is the address of the machine instruction to disassemble
-    fn print_assembly(&self, emit: &mut dyn AssemblyEmit, baseaddr: &Address) -> KunaResult<i32>;
+    fn print_assembly(&self, emit: &mut dyn AssemblyEmit, baseaddr: &Address) -> UnlaceResult<i32>;
 
     /// Lift an instruction and capture its assembly text. Assembly failure is
     /// best-effort: it does not replace a successful lift or its consumed length.
@@ -541,7 +541,7 @@ pub trait Translate: RegisterLookup {
         pcode: &mut dyn PcodeEmit,
         assembly: &mut dyn AssemblyEmit,
         baseaddr: &Address,
-    ) -> KunaResult<i32> {
+    ) -> UnlaceResult<i32> {
         let length = self.one_instruction(pcode, baseaddr)?;
         let _ = self.print_assembly(assembly, baseaddr);
         Ok(length)
@@ -558,7 +558,7 @@ pub trait Translate: RegisterLookup {
         assembly: &mut dyn AssemblyEmit,
         baseaddr: &Address,
         context: &mut Option<Vec<u32>>,
-    ) -> KunaResult<i32> {
+    ) -> UnlaceResult<i32> {
         *context = None;
         self.one_instruction_with_assembly(pcode, assembly, baseaddr)
     }
@@ -578,7 +578,7 @@ pub trait Translate: RegisterLookup {
         baseaddr: &Address,
         mnemonic: &mut String,
         body: &mut String,
-    ) -> KunaResult<i32> {
+    ) -> UnlaceResult<i32> {
         mnemonic.clear();
         body.clear();
         let result = {
@@ -631,7 +631,7 @@ pub trait Translate: RegisterLookup {
     /// C++ `getRegister` with the canonical unlace-num `VarnodeData` payload
     /// (the abstract lookup itself is `RegisterLookup::get_register`, in
     /// unlace-base types).
-    fn get_register_data(&self, nm: &str) -> KunaResult<VarnodeData> {
+    fn get_register_data(&self, nm: &str) -> UnlaceResult<VarnodeData> {
         Ok(varnode_data_from_storage(&self.get_register(nm)?))
     }
 }
@@ -658,7 +658,7 @@ mod tests {
     }
 
     impl RegisterLookup for TestRegisters {
-        fn get_register(&self, nm: &str) -> KunaResult<VarnodeStorage> {
+        fn get_register(&self, nm: &str) -> UnlaceResult<VarnodeStorage> {
             for (name, offset, size) in &self.regs {
                 if *name == nm {
                     return Ok(VarnodeStorage {
@@ -669,7 +669,7 @@ mod tests {
                 }
             }
             // sleighbase.cc throws SleighError (caught as a LowlevelError)
-            Err(KunaError::sleigh(format!("Unknown register name: {nm}")))
+            Err(UnlaceError::sleigh(format!("Unknown register name: {nm}")))
         }
 
         fn get_register_name(&self, base: &Rc<AddrSpace>, off: u64, size: i32) -> String {
@@ -1328,7 +1328,7 @@ mod tests {
             _sz: i32,
             _point: &Address,
             full_encoding: &mut u64,
-        ) -> KunaResult<Address> {
+        ) -> UnlaceResult<Address> {
             *full_encoding = val;
             Ok(Address::new(Rc::clone(&self.space), val + 1))
         }
@@ -1454,7 +1454,7 @@ mod tests {
             .unwrap();
         let mut emit = CollectEmit::default();
         let err = emit.decode_op(&addr, &mut dec).unwrap_err();
-        assert!(matches!(err, KunaError::Decoder { .. }));
+        assert!(matches!(err, UnlaceError::Decoder { .. }));
         assert_eq!(err.explain(), "Bad <op> size attribute");
     }
 
@@ -1508,7 +1508,7 @@ mod tests {
     }
 
     impl RegisterLookup for DummyTranslate {
-        fn get_register(&self, nm: &str) -> KunaResult<VarnodeStorage> {
+        fn get_register(&self, nm: &str) -> UnlaceResult<VarnodeStorage> {
             self.regs.get_register(nm)
         }
         fn get_register_name(&self, base: &Rc<AddrSpace>, off: u64, size: i32) -> String {
@@ -1526,7 +1526,7 @@ mod tests {
         fn translate_base_mut(&mut self) -> &mut TranslateBase {
             &mut self.base
         }
-        fn initialize(&mut self, _store: &mut DocumentStorage) -> KunaResult<()> {
+        fn initialize(&mut self, _store: &mut DocumentStorage) -> UnlaceResult<()> {
             self.base.set_big_endian(false);
             self.base.set_unique_base(0x1000);
             self.base.set_default_float_formats();
@@ -1553,10 +1553,14 @@ mod tests {
         fn get_user_op_names(&self, res: &mut Vec<String>) {
             res.push("pcodeop_one".to_string());
         }
-        fn instruction_length(&self, _baseaddr: &Address) -> KunaResult<i32> {
+        fn instruction_length(&self, _baseaddr: &Address) -> UnlaceResult<i32> {
             Ok(4)
         }
-        fn one_instruction(&self, emit: &mut dyn PcodeEmit, baseaddr: &Address) -> KunaResult<i32> {
+        fn one_instruction(
+            &self,
+            emit: &mut dyn PcodeEmit,
+            baseaddr: &Address,
+        ) -> UnlaceResult<i32> {
             let vars = [VarnodeData {
                 space: Some(Rc::clone(&self.regs.space)),
                 offset: 0,
@@ -1569,10 +1573,10 @@ mod tests {
             &self,
             emit: &mut dyn AssemblyEmit,
             baseaddr: &Address,
-        ) -> KunaResult<i32> {
+        ) -> UnlaceResult<i32> {
             if baseaddr.get_offset() == 4 {
                 emit.dump(baseaddr, "PARTIAL", "assembly");
-                return Err(KunaError::lowlevel("assembly failed"));
+                return Err(UnlaceError::lowlevel("assembly failed"));
             }
             emit.dump(baseaddr, "NOP", "");
             Ok(4)

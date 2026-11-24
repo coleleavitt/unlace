@@ -1,4 +1,4 @@
-//! Tests for the two flag-compare rules (kuna GH-1276 / GH-8777):
+//! Tests for the two flag-compare rules (unlace GH-1276 / GH-8777):
 //! `RuleBoolSignLess` (`(b<<k) s< 0` -> `b != 0`) and `RuleSborrowGe`
 //! (`XNOR(sign(V-K), SBORROW(V,K))` -> `INT_SLESSEQUAL(K,V)`), plus the gate-off
 //! and decline paths.
@@ -57,7 +57,7 @@ fn unk(size: int4) -> Rc<Datatype> {
 }
 
 fn no_replace()
--> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> unlace_base::error::KunaResult<()> {
+-> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> unlace_base::error::UnlaceResult<()> {
     |_: &mut VarnodeBank, _: VarnodeId, _: VarnodeId| Ok(())
 }
 
@@ -90,7 +90,7 @@ fn wire(fd: &mut Funcdata, vn: VarnodeId, op: OpId, slot: int4) {
         .set_input(Some(vn), slot);
 }
 
-/// Wire a shared constant without a descend edge (see kuna_booleanmask tests).
+/// Wire a shared constant without a descend edge (see unlace_booleanmask tests).
 fn wire_const(fd: &mut Funcdata, vn: VarnodeId, op: OpId, slot: int4) {
     fd.obank_mut()
         .get_mut(op)

@@ -125,7 +125,7 @@ explicit `<symbol>` definitions and never constructs an `ObjectLoadImage`, so no
 facts exist on that path and the option is unobservable there. Every sibling analysis-tier
 discovery flag (`funcstart_patterns`, `aif`, `eh_frame_full`, `i386_pie_plt`) is gated the
 same way. The two-pass case is therefore
-`decompiler/crates/kuna-console/tests/verify_cortexmvectors.rs`, over a new 357-byte
+`decompiler/crates/console/tests/verify_cortexmvectors.rs`, over a new 357-byte
 hand-assembled fixture (`cortexm_ccm_vectors_le32`, with its committed generator and a
 fixtures-README row) that fails all three shipped predicates at once:
 

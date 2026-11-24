@@ -1,7 +1,7 @@
 //! Regression fence for an explicit two-byte `wchar_t` data declaration at a
 //! short UTF-16 string. Operand-reference analysis once mapped the string's first
 //! unit as a one-byte short string; it now declines a run that opens an array of
-//! 2-byte character codes, and `tests/stages/kuna-short-utf16-window.toml` keeps
+//! 2-byte character codes, and `tests/stages/unlace-short-utf16-window.toml` keeps
 //! the collision of the two mappings.
 
 use std::path::PathBuf;
@@ -25,7 +25,7 @@ fn load() -> ConsoleProgram {
     let mut prog = bootstrap_from_object(fixture.to_str().unwrap(), "", &specs)
         .unwrap_or_else(|e| panic!("bootstrap short UTF-16 PE fixture: {}", e.explain()));
     prog.arch_mut()
-        .set_kuna_option("operand_refs", "on")
+        .set_unlace_option("operand_refs", "on")
         .expect("operand_refs is registered");
     prog.commit_pending_analysis().expect("analysis commit");
     prog

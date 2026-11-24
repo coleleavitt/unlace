@@ -1,28 +1,28 @@
-//! Named kuna option handlers and the allowlist used by every frontend.
+//! Named unlace option handlers and the allowlist used by every frontend.
 //!
 //! Each declaration defines both the dispatch arm and its registered name.
 //! Catalog metadata remains in phases.toml and is checked against this list.
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::types::uint4;
 
 use crate::architecture::Architecture;
 use crate::options::on_or_off;
 use crate::printc::ArchPrintExt;
 
-macro_rules! kuna_options {
+macro_rules! unlace_options {
     ($this:ident, $value:ident; $($name:literal => $apply:expr_2021),* $(,)?) => {
-        pub const KUNA_OPTION_NAMES: &[&str] = &[$($name),*];
+        pub const UNLACE_OPTION_NAMES: &[&str] = &[$($name),*];
 
         /// The driver's option dispatch on [`Architecture`]; middle code reaches it through
-        /// `Architecture::set_kuna_option` and the `set_kuna_option` pass hook.
-        pub(crate) trait KunaOptionDispatch {
-            fn dispatch_kuna_option(&mut self, name: &str, value: &str) -> KunaResult<String>;
+        /// `Architecture::set_unlace_option` and the `set_unlace_option` pass hook.
+        pub(crate) trait UnlaceOptionDispatch {
+            fn dispatch_unlace_option(&mut self, name: &str, value: &str) -> UnlaceResult<String>;
         }
 
-        impl KunaOptionDispatch for Architecture {
-            /// Validate and apply a named kuna option to its live configuration.
-            fn dispatch_kuna_option(&mut $this, name: &str, $value: &str) -> KunaResult<String> {
+        impl UnlaceOptionDispatch for Architecture {
+            /// Validate and apply a named unlace option to its live configuration.
+            fn dispatch_unlace_option(&mut $this, name: &str, $value: &str) -> UnlaceResult<String> {
                 macro_rules! on_off {
                     ($field:ident, $label:literal) => {{
                         let val = on_or_off($value)?;
@@ -33,31 +33,31 @@ macro_rules! kuna_options {
                 macro_rules! registered {
                     ($option:ty) => {{
                         let (val, msg) =
-                            <$option as crate::optionset::KunaOption>::parse($value)?;
-                        $this.kuna_options.set(val);
+                            <$option as crate::optionset::UnlaceOption>::parse($value)?;
+                        $this.unlace_options.set(val);
                         Ok(msg)
                     }};
                 }
                 match name {
                     $($name => $apply,)*
-                    other => Err(KunaError::parse(format!("Unknown kuna option: {other}"))),
+                    other => Err(UnlaceError::parse(format!("Unknown kuna option: {other}"))),
                 }
             }
         }
     };
 }
 
-/// The `set_kuna_option` pass hook: the dispatch below.
-fn set_kuna_option(arch: &mut Architecture, name: &str, value: &str) -> KunaResult<String> {
-    arch.dispatch_kuna_option(name, value)
+/// The `set_unlace_option` pass hook: the dispatch below.
+fn set_unlace_option(arch: &mut Architecture, name: &str, value: &str) -> UnlaceResult<String> {
+    arch.dispatch_unlace_option(name, value)
 }
 
 /// Fill this module's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
-    hooks.set_kuna_option = Some(set_kuna_option);
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
+    hooks.set_unlace_option = Some(set_unlace_option);
 }
 
-kuna_options! { self, p1;
+unlace_options! { self, p1;
     "outlang" => {
         self.set_print_language_checked(p1)?;
         Ok(format!("Output language set to {}", self.print().get_name()))
@@ -182,24 +182,24 @@ kuna_options! { self, p1;
     "stackaddrargtrial" => registered!(crate::stackaddrargtrial::StackAddrArgTrial),
     "calleefilledarg" => registered!(crate::calleefilledarg::CalleeFilledArg),
     "callwide" => {
-        let (enabled, msg) = <crate::callwide::CallWide as crate::optionset::KunaOption>::parse(p1)?;
-        self.kuna_tables.get_mut::<crate::callwide::ProofSlot>().clear();
-        self.kuna_options.set(enabled);
+        let (enabled, msg) = <crate::callwide::CallWide as crate::optionset::UnlaceOption>::parse(p1)?;
+        self.unlace_tables.get_mut::<crate::callwide::ProofSlot>().clear();
+        self.unlace_options.set(enabled);
         Ok(msg)
     },
     "bejoin" => {
         let (mode, msg) = crate::bejoin::BeJoinMode::parse(p1)?;
-        self.kuna_tables.get_mut::<crate::callwide::ProofSlot>().clear();
-        self.kuna_options.set(mode);
+        self.unlace_tables.get_mut::<crate::callwide::ProofSlot>().clear();
+        self.unlace_options.set(mode);
         Ok(msg)
     },
     "octeoneffects" => registered!(crate::octeoneffects::OcteonEffectsMode),
     "bejoinpass" => {
         let (mode, msg) = crate::bejoinpass::BeJoinPassMode::parse(p1)?;
-        if mode != self.kuna_options.get::<crate::bejoinpass::BeJoinPassMode>() {
-            self.kuna_tables.get_mut::<crate::bejoin::WideCache>().forget_verdicts();
+        if mode != self.unlace_options.get::<crate::bejoinpass::BeJoinPassMode>() {
+            self.unlace_tables.get_mut::<crate::bejoin::WideCache>().forget_verdicts();
         }
-        self.kuna_options.set(mode);
+        self.unlace_options.set(mode);
         Ok(msg)
     },
     "rustabi" => registered!(crate::rustabi::RustAbiMode),
@@ -210,18 +210,18 @@ kuna_options! { self, p1;
     "rustprobestack" => registered!(crate::rustprobestack::RustProbestackMode),
     "gomorestack" => registered!(crate::gomorestack::GoMorestackMode),
     "goabi" => {
-        let (on, msg) = <crate::goabi::GoAbi as crate::optionset::KunaOption>::parse(p1)?;
+        let (on, msg) = <crate::goabi::GoAbi as crate::optionset::UnlaceOption>::parse(p1)?;
         self.load_options_mut().goabi = on.0;
         crate::goabi::set_goabi_env(on.0);
-        self.kuna_options.set(on);
+        self.unlace_options.set(on);
         Ok(msg)
     },
     "gowritebarrier" => registered!(crate::gowritebarrier::GoWriteBarrierMode),
     "sourcelang" => {
-        let (forced, msg) = <crate::sourcelang::SourceLangForced as crate::optionset::KunaOption>::parse(p1)?;
+        let (forced, msg) = <crate::sourcelang::SourceLangForced as crate::optionset::UnlaceOption>::parse(p1)?;
         self.load_options_mut().sourcelang = forced.0;
         crate::sourcelang::set_sourcelang_env(forced.0);
-        self.kuna_options.set(forced);
+        self.unlace_options.set(forced);
         Ok(msg)
     },
     "sparcstructret" => registered!(crate::sparcstructret::SparcStructReturn),
@@ -250,8 +250,8 @@ kuna_options! { self, p1;
     "nulterminator" => registered!(crate::nulterminator::NulTerminator),
     "endptrbound" => registered!(crate::endptrbound::EndPtrBound),
     "castobject" => registered!(crate::castobject::CastObject),
-    "calleeargs" => registered!(crate::calleestackargs::KunaCalleeargs),
-    "calleeargsmsvc" => registered!(crate::calleestackargs::KunaCalleeargsMsvc),
+    "calleeargs" => registered!(crate::calleestackargs::UnlaceCalleeargs),
+    "calleeargsmsvc" => registered!(crate::calleestackargs::UnlaceCalleeargsMsvc),
     "argclobber" => registered!(crate::argclobber::ArgClobber),
     "armfloatargs" => registered!(crate::armfloatargs::ArmFloatArgs),
     "narrowargs" => registered!(crate::narrowargs::NarrowArgs),
@@ -264,11 +264,11 @@ kuna_options! { self, p1;
     "narrowret" => registered!(crate::narrowret::NarrowRet),
     "regsigned" => registered!(crate::regnarrow::NarrowSigned),
     "narrowext" => {
-        let (mode, msg) = <crate::narrowext::NarrowExtMode as crate::optionset::KunaOption>::parse(p1)?;
-        if mode != self.kuna_options.get::<crate::narrowext::NarrowExtMode>() {
-            self.kuna_tables.get_mut::<crate::callwide::ProofSlot>().clear();
+        let (mode, msg) = <crate::narrowext::NarrowExtMode as crate::optionset::UnlaceOption>::parse(p1)?;
+        if mode != self.unlace_options.get::<crate::narrowext::NarrowExtMode>() {
+            self.unlace_tables.get_mut::<crate::callwide::ProofSlot>().clear();
         }
-        self.kuna_options.set(mode);
+        self.unlace_options.set(mode);
         Ok(msg)
     },
     "armfloatreturn" => registered!(crate::armfloatreturn::ArmFloatReturn),
@@ -336,7 +336,7 @@ kuna_options! { self, p1;
             .parse::<uint4>()
             .ok()
             .filter(|&v| v > 0 && field.bytes().all(|b| b.is_ascii_digit()))
-            .ok_or_else(|| KunaError::parse("Must specify integer maximum"))?;
+            .ok_or_else(|| UnlaceError::parse("Must specify integer maximum"))?;
         self.max_jumptable_size = val;
         Ok(format!("Maximum jumptable size set to {val}"))
     },
@@ -436,10 +436,10 @@ kuna_options! { self, p1;
 
     "arm64evcall" => registered!(crate::analysisgates::Arm64evcall),
     "libctypes" => {
-        let (layout, msg) = <crate::libctypes::LibcTypesLayout as crate::optionset::KunaOption>::parse(p1)?;
+        let (layout, msg) = <crate::libctypes::LibcTypesLayout as crate::optionset::UnlaceOption>::parse(p1)?;
         self.load_options_mut().libctypes = layout;
         crate::libctypes::set_libctypes_env_layout(layout);
-        self.kuna_options.set(layout);
+        self.unlace_options.set(layout);
         Ok(msg)
     },
     "tlsnames" => registered!(crate::tlsnames::Tlsnames),
@@ -502,30 +502,30 @@ kuna_options! { self, p1;
     "armwalkmode" => registered!(crate::analysisgates::Armwalkmode),
     "ppc32picimports" => {
         let mode = crate::ppc32picimports::Mode::parse(p1)
-            .ok_or_else(|| KunaError::parse("Expected ppc32picimports off|on|abi"))?;
+            .ok_or_else(|| UnlaceError::parse("Expected ppc32picimports off|on|abi"))?;
         self.analysis_ppc32picimports = mode;
         self.load_options_mut().ppc32picimports = mode;
         mode.set_env();
         Ok(format!("PPC32 PIC import recovery {}", mode.as_str()))
     },
     "ppcapu" => {
-        let (val, msg) = <crate::ppcapu::PpcApu as crate::optionset::KunaOption>::parse(p1)?;
+        let (val, msg) = <crate::ppcapu::PpcApu as crate::optionset::UnlaceOption>::parse(p1)?;
         self.load_options_mut().ppcapu = val.0;
         crate::ppcapu::set_ppcapu_env(val.0);
-        self.kuna_options.set(val);
+        self.unlace_options.set(val);
         Ok(msg)
     },
     "delphiabi" => {
-        let (val, msg) = <crate::delphiabi::DelphiAbi as crate::optionset::KunaOption>::parse(p1)?;
+        let (val, msg) = <crate::delphiabi::DelphiAbi as crate::optionset::UnlaceOption>::parse(p1)?;
         crate::delphiabi::set_delphiabi_env(val.0);
-        self.kuna_options.set(val);
+        self.unlace_options.set(val);
         Ok(msg)
     },
     "ifuncfpret" => {
-        let (val, msg) = <crate::ifuncfpret::IfuncFpRet as crate::optionset::KunaOption>::parse(p1)?;
+        let (val, msg) = <crate::ifuncfpret::IfuncFpRet as crate::optionset::UnlaceOption>::parse(p1)?;
         self.load_options_mut().ifuncfpret = val.0;
         crate::ifuncfpret::set_ifuncfpret_env(val.0);
-        self.kuna_options.set(val);
+        self.unlace_options.set(val);
         Ok(msg)
     },
     "kernelcache" => {
@@ -546,9 +546,9 @@ kuna_options! { self, p1;
         Ok(crate::dyldcache::set_dyldimage(p1))
     },
     "debuglink" => {
-        let (val, msg) = <crate::debuglink::DebugLink as crate::optionset::KunaOption>::parse(p1)?;
+        let (val, msg) = <crate::debuglink::DebugLink as crate::optionset::UnlaceOption>::parse(p1)?;
         crate::debuglink::set_debuglink_env(val.0);
-        self.kuna_options.set(val);
+        self.unlace_options.set(val);
         Ok(msg)
     },
     "cil" => {
@@ -562,10 +562,10 @@ kuna_options! { self, p1;
         Ok(msg)
     },
     "symbolnamechars" => {
-        let (mode, msg) = <crate::symbolnamechars::NameChars as crate::optionset::KunaOption>::parse(p1)?;
+        let (mode, msg) = <crate::symbolnamechars::NameChars as crate::optionset::UnlaceOption>::parse(p1)?;
         self.load_options_mut().symbolnamechars = mode;
         crate::symbolnamechars::set_symbolnamechars_env(mode);
-        self.kuna_options.set(mode);
+        self.unlace_options.set(mode);
         Ok(msg)
     },
     "dwarf" => registered!(crate::analysisgates::Dwarf),
@@ -581,17 +581,17 @@ kuna_options! { self, p1;
     "dwarfglobaltypes" => registered!(crate::analysisgates::Dwarfglobaltypes),
     "dwarfdecls" => registered!(crate::analysisgates::Dwarfdecls),
     "dwarfenumtypedef" => {
-        let (val, msg) = <crate::analysisgates::DwarfEnumTypedef as crate::optionset::KunaOption>::parse(p1)?;
+        let (val, msg) = <crate::analysisgates::DwarfEnumTypedef as crate::optionset::UnlaceOption>::parse(p1)?;
         // FIXME: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::set_var("UNLACE_DWARFENUMTYPEDEF", if val.0 { "on" } else { "off" }) };
-        self.kuna_options.set(val);
+        self.unlace_options.set(val);
         Ok(msg)
     },
     "dwarfscopes" => {
-        let (val, msg) = <crate::analysisgates::DwarfScopes as crate::optionset::KunaOption>::parse(p1)?;
+        let (val, msg) = <crate::analysisgates::DwarfScopes as crate::optionset::UnlaceOption>::parse(p1)?;
         // FIXME: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::set_var("UNLACE_DWARFSCOPES", if val.0 { "on" } else { "off" }) };
-        self.kuna_options.set(val);
+        self.unlace_options.set(val);
         Ok(msg)
     },
     "addrtable" => registered!(crate::analysisgates::Addrtable),
@@ -654,29 +654,29 @@ kuna_options! { self, p1;
         registered!(crate::analysisgates::Tailcallentryall)
     },
     "nameladder" => {
-        let (val, msg) = <crate::analysisgates::Nameladder as crate::optionset::KunaOption>::parse(p1)?;
+        let (val, msg) = <crate::analysisgates::Nameladder as crate::optionset::UnlaceOption>::parse(p1)?;
         self.load_options_mut().nameladder = val.0;
         self.load_options().export_env("nameladder");
-        self.kuna_options.set(val);
+        self.unlace_options.set(val);
         Ok(msg)
     },
     "flirt" => {
         registered!(crate::coreoptions::Flirt)
     },
     "ruststdsigs" => {
-        let (val, msg) = <crate::ruststdsigs::RustStdSigs as crate::optionset::KunaOption>::parse(p1)?;
+        let (val, msg) = <crate::ruststdsigs::RustStdSigs as crate::optionset::UnlaceOption>::parse(p1)?;
         crate::ruststdsigs::set_ruststdsigs_env(val);
-        self.kuna_options.set(val);
+        self.unlace_options.set(val);
         Ok(msg)
     },
     "fidproto" => {
         registered!(crate::fidproto::Fidproto)
     },
     "codestrings" => {
-        let (val, msg) = <crate::analysisgates::Codestrings as crate::optionset::KunaOption>::parse(p1)?;
+        let (val, msg) = <crate::analysisgates::Codestrings as crate::optionset::UnlaceOption>::parse(p1)?;
         self.load_options_mut().codestrings = val.0;
         self.load_options().export_env("codestrings");
-        self.kuna_options.set(val);
+        self.unlace_options.set(val);
         Ok(msg)
     },
     "protomerge" => {
@@ -693,24 +693,24 @@ kuna_options! { self, p1;
     "cfstrings" => registered!(crate::analysisgates::CfStrings),
     "blobs" => registered!(crate::analysisgates::Blobs),
     "swifttypes" => {
-        let (val, msg) = <crate::analysisgates::Swifttypes as crate::optionset::KunaOption>::parse(p1)?;
+        let (val, msg) = <crate::analysisgates::Swifttypes as crate::optionset::UnlaceOption>::parse(p1)?;
         self.load_options_mut().swifttypes = val.0;
         self.load_options().export_env("swifttypes");
-        self.kuna_options.set(val);
+        self.unlace_options.set(val);
         Ok(msg)
     },
     "swifthelpers" => registered!(crate::analysisgates::Swifthelpers),
     "objcivars" => {
-        let (val, msg) = <crate::objcivars::ObjcIvars as crate::optionset::KunaOption>::parse(p1)?;
+        let (val, msg) = <crate::objcivars::ObjcIvars as crate::optionset::UnlaceOption>::parse(p1)?;
         self.load_options_mut().objcivars = val.0;
         crate::objcivars::set_objcivars_env(val.0);
-        self.kuna_options.set(val);
+        self.unlace_options.set(val);
         Ok(msg)
     },
     "swiftobjcthunk" => registered!(crate::analysisgates::Swiftobjcthunk),
     "valuewitness" => registered!(crate::valuewitness::Valuewitness),
     "objcsdk" => {
-        let path = crate::objcsdk::parse_option_value(p1).map_err(KunaError::parse)?;
+        let path = crate::objcsdk::parse_option_value(p1).map_err(UnlaceError::parse)?;
         crate::objcsdk::set_objcsdk_env(path.as_deref().and_then(|p| p.to_str()));
         self.load_options_mut().objcsdk = path.clone();
         Ok(match path {
@@ -719,7 +719,7 @@ kuna_options! { self, p1;
         })
     },
     "sdktypes" => {
-        let path = crate::sdktypes::parse_option_value(p1).map_err(KunaError::parse)?;
+        let path = crate::sdktypes::parse_option_value(p1).map_err(UnlaceError::parse)?;
         Ok(match path {
             Some(p) => format!("SDK C declarations read from {}", p.display()),
             None => "SDK C declarations off".to_string(),
@@ -743,10 +743,10 @@ kuna_options! { self, p1;
     "retternary" => registered!(crate::ctree::Retternary),
     "orexit" => registered!(crate::ctree::Orexit),
     "macho-arm64e" => {
-        let (val, msg) = <crate::macho_arm64e::MachoArm64e as crate::optionset::KunaOption>::parse(p1)?;
+        let (val, msg) = <crate::macho_arm64e::MachoArm64e as crate::optionset::UnlaceOption>::parse(p1)?;
         self.load_options_mut().macho_arm64e = val.0;
         crate::macho_arm64e::set_macho_arm64e_env(val.0);
-        self.kuna_options.set(val);
+        self.unlace_options.set(val);
         Ok(msg)
     },
 }

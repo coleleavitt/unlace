@@ -11,7 +11,7 @@ fn a_big_endian_object_lists_each_function_once() {
         "relocrebase_be_mips.o",
     ] {
         let path = common::fixture(name);
-        let (stdout, stderr, rc) = common::run_kuna(&["functions", &path, "--json"]);
+        let (stdout, stderr, rc) = common::run_unlace(&["functions", &path, "--json"]);
         assert_eq!(rc, 0, "{name}: {stderr}");
         let result: serde_json::Value = serde_json::from_str(&stdout).expect("JSON inventory");
         let mut seen: Vec<(String, u64)> = result["functions"]

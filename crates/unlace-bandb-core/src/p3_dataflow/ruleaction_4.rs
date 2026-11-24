@@ -309,7 +309,7 @@ impl Rule for RuleLoadVarnode {
             unlace_base::space::AddrSpace::address_to_byte(offoff, baseoff.get_word_size());
         // A read-only relocated pointer is the weak binding plus its addend,
         // not the synthetic display address stored in its pre-link bytes.
-        let nullable = crate::nullable_reloc::relocations(&data.get_arch().kuna_states)
+        let nullable = crate::nullable_reloc::relocations(&data.get_arch().unlace_states)
             .get(&offoff)
             .filter(|_| {
                 data.get_address()
@@ -2149,7 +2149,7 @@ impl Rule for RuleHumptyOr {
 /// (C++ `RuleSwitchSingle`).
 ///
 /// A labelled table on a single-out-edge BRANCHIND becomes a BRANCH to its
-/// address. (kuna) A one-entry table over a computed value is left alone: table
+/// address. (unlace) A one-entry table over a computed value is left alone: table
 /// recovery can keep only the entries its guards prove reachable, so one kept
 /// entry is not proof of one destination.
 pub struct RuleSwitchSingle;

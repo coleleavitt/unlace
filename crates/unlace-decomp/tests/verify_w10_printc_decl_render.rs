@@ -66,7 +66,7 @@ fn rust_harness() -> PathBuf {
 }
 
 /// Drive `bin` on `stem`.xml with `UNLACE_DUMP=1`, returning the full concatenated
-/// bulk `print C` output (between the `===KUNA_DUMP_BEGIN===`/`===KUNA_DUMP_MID===`
+/// bulk `print C` output (between the `===UNLACE_DUMP_BEGIN===`/`===UNLACE_DUMP_MID===`
 /// markers), or `None` if the binary / `.sla` is unavailable (the test SKIPs).
 fn dump_print_c(bin: &PathBuf, stem: &str) -> Option<String> {
     if !bin.exists() {

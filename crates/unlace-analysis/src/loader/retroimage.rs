@@ -1,4 +1,4 @@
-//! (kuna `retroimage`) Loaders for executable and object containers the
+//! (unlace `retroimage`) Loaders for executable and object containers the
 //! `object` crate does not read: PlayStation PS-X EXE, Nintendo 64 ROM,
 //! BSD/SunOS/Linux a.out, AmigaDOS hunk load files, classic Mac OS PEF, the
 //! Win16/OS/2 1.x New Executable and OMF objects and libraries.
@@ -14,7 +14,7 @@
 //! and no image may map more than [`MAX_MODULE`] bytes.
 
 use object::SectionKind;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_sleigh::loadimage::section_flags;
 
 pub mod aout;
@@ -102,7 +102,7 @@ pub fn is_retro_image(prefix: &[u8]) -> bool {
 }
 
 /// Parse `bytes` as the container [`is_retro_image`] recognized.
-pub fn parse(filename: &str, bytes: &[u8]) -> KunaResult<RetroImage> {
+pub fn parse(filename: &str, bytes: &[u8]) -> UnlaceResult<RetroImage> {
     let image = if psx::probe(bytes) {
         psx::parse(filename, bytes)
     } else if n64::probe(bytes) {
@@ -118,7 +118,7 @@ pub fn parse(filename: &str, bytes: &[u8]) -> KunaResult<RetroImage> {
     } else if omf::probe(bytes) {
         omf::parse(filename, bytes)
     } else {
-        Err(KunaError::lowlevel(format!(
+        Err(UnlaceError::lowlevel(format!(
             "File: {filename} : not a recognized executable container"
         )))
     }?;
@@ -146,8 +146,8 @@ pub fn retro_language_ids() -> Vec<&'static str> {
     ids
 }
 
-pub(crate) fn invalid(filename: &str, format: &str, detail: &str) -> KunaError {
-    KunaError::lowlevel(format!(
+pub(crate) fn invalid(filename: &str, format: &str, detail: &str) -> UnlaceError {
+    UnlaceError::lowlevel(format!(
         "File: {filename} : invalid {format} image: {detail}"
     ))
 }

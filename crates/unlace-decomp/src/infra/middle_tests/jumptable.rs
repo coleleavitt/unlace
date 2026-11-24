@@ -24,8 +24,8 @@ use unlace_base::address::calc_mask;
 use unlace_base::address::count_leading_zeros;
 use unlace_base::address::coveringmask;
 use unlace_base::address::mostsigbit_set;
-use unlace_base::error::KunaError;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceError;
+use unlace_base::error::UnlaceResult;
 use unlace_base::marshal::ATTRIB_FORMAT;
 use unlace_base::marshal::ATTRIB_SIZE;
 use unlace_base::marshal::AttributeId;
@@ -161,19 +161,19 @@ fn guard_range_retry_keeps_both_wrapped_bounds() {
 fn a_dropped_return_destination_keeps_the_constant_targets() {
     let ram = ram_of(&build_manager());
     let mut jt = JumpTable::new(Address::new(ram.clone(), 0x1004));
-    jt.kuna_push_entry(Address::new(ram.clone(), 0x1040), 0, 0x1040);
+    jt.unlace_push_entry(Address::new(ram.clone(), 0x1040), 0, 0x1040);
     jt.addresstable.push(Address::new(ram.clone(), 0x1005));
     jt.jmodel = Some(Box::new(
         crate::constselectjump::JumpModelConstSelect::from_flow_targets(vec![0x1040], Some(0x1005)),
     ));
     assert_eq!(
-        jt.kuna_return_default(),
+        jt.unlace_return_default(),
         Some(&Address::new(ram.clone(), 0x1005))
     );
-    jt.kuna_drop_return_default();
-    assert!(jt.kuna_return_default().is_none());
+    jt.unlace_drop_return_default();
+    assert!(jt.unlace_return_default().is_none());
     let offsets: Vec<_> = jt.address_table().iter().map(|a| a.get_offset()).collect();
     assert_eq!(offsets, [0x1040]);
-    jt.kuna_drop_return_default();
+    jt.unlace_drop_return_default();
     assert_eq!(jt.address_table().len(), 1);
 }

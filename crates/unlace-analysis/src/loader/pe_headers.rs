@@ -1,5 +1,5 @@
-//! (kuna) The PE **header page**: the file-backed bytes Windows maps at
-//! `ImageBase` before the first section, which kuna's load map omitted entirely.
+//! (unlace) The PE **header page**: the file-backed bytes Windows maps at
+//! `ImageBase` before the first section, which unlace's load map omitted entirely.
 //!
 //! A PE image is mapped by the Windows loader in two parts: `SizeOfHeaders`
 //! bytes of the file are copied to `ImageBase` (read-only, `PAGE_READONLY`), and
@@ -12,7 +12,7 @@
 //! built or packed image can, and one does: the witness for
 //! `docs/re-needs/pe-header-entry-mapped.md` declares `AddressOfEntryPoint`
 //! `0x154`, which is the byte immediately after its two-entry section table, so
-//! the declared entry lived in the header page. Every kuna surface answered
+//! the declared entry lived in the header page. Every unlace surface answered
 //! "address 0x400154 is not mapped in this input" — including `decompile
 //! --define-function`, i.e. an explicit definition could not reach it either.
 //!
@@ -37,7 +37,7 @@ use super::format::HeaderRegion;
 ///
 /// The extent is `SizeOfHeaders` clamped twice: to the file length, because only
 /// file-backed bytes can be copied, and to the first section's RVA, so a
-/// malformed `SizeOfHeaders` (a packer field kuna already has to distrust — see
+/// malformed `SizeOfHeaders` (a packer field unlace already has to distrust — see
 /// [`super::pe_datadirs`]) can never shadow a real section. Both clamps can
 /// yield zero, which is `None`: no region rather than an empty one.
 ///

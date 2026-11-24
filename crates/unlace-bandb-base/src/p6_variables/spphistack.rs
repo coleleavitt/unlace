@@ -1,4 +1,4 @@
-//! (kuna `spphistack`) A bare input stack pointer reaching a phi is a stack address.
+//! (unlace `spphistack`) A bare input stack pointer reaching a phi is a stack address.
 //!
 //! A va_list that a function spills to its frame and reloads becomes, after
 //! the stack is heritaged and the `+4` steps are simplified into the loop, one
@@ -21,8 +21,8 @@ use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyRes
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 
-crate::kuna_flag!(
-    /// (kuna `spphistack`) A bare input stack pointer reaching a phi becomes
+crate::unlace_flag!(
+    /// (unlace `spphistack`) A bare input stack pointer reaching a phi becomes
     /// `PTRSUB(sp, 0)`.
     SpPhiStack,
     "spphistack",
@@ -58,7 +58,7 @@ fn bare_sp_inputs(data: &Funcdata) -> Vec<(OpId, usize, VarnodeId)> {
     found
 }
 
-/// (kuna `spphistack`) `ActionSpPhiStack`.
+/// (unlace `spphistack`) `ActionSpPhiStack`.
 pub struct ActionSpPhiStack {
     base: ActionBase,
 }
@@ -89,7 +89,7 @@ impl Action for ActionSpPhiStack {
     }
 
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        if !data.get_arch().kuna_options.get::<SpPhiStack>().0 {
+        if !data.get_arch().unlace_options.get::<SpPhiStack>().0 {
             return 0;
         }
         for (phi, slot, sp) in bare_sp_inputs(data) {

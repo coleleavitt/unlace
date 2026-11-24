@@ -16,7 +16,7 @@
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::KunaError;
+use unlace_base::error::UnlaceError;
 use unlace_base::marshal::IdRegistry;
 use unlace_base::space::{AddrSpace, AddrSpaceManager, ConstantSpace, addrspace_flags, spacetype};
 use unlace_base::xml::xml_tree;
@@ -93,7 +93,7 @@ fn assert_chunk_bytes(img: &mut LoadImageXml, ram: &Rc<AddrSpace>, offset: u64, 
         .load(1, &Address::new(Rc::clone(ram), pad_end))
         .unwrap_err();
     assert!(
-        matches!(err, KunaError::DataUnavail { .. }),
+        matches!(err, UnlaceError::DataUnavail { .. }),
         "first unmapped byte at {pad_end:#x}"
     );
 }
@@ -161,12 +161,12 @@ fn verify_w2loadimage_pad_empty_chunk_at_zero_wrapping_erase() {
     let err = img
         .load(1, &Address::new(Rc::clone(&ram), 0x200))
         .unwrap_err();
-    assert!(matches!(err, KunaError::DataUnavail { .. }));
+    assert!(matches!(err, UnlaceError::DataUnavail { .. }));
     // The 0xdd chunk was erased too (nothing mapped at 0x9000)
     let err = img
         .load(1, &Address::new(Rc::clone(&ram), 0x9000))
         .unwrap_err();
-    assert!(matches!(err, KunaError::DataUnavail { .. }));
+    assert!(matches!(err, UnlaceError::DataUnavail { .. }));
 }
 
 /// Erase ties and chains: a chunk whose end EQUALS its predecessor's end is
@@ -208,7 +208,7 @@ fn verify_w2loadimage_pad_exact_end_tie_chain_and_empty_gap_chunk() {
     let err = img
         .load(1, &Address::new(Rc::clone(&ram), 0x30e))
         .unwrap_err();
-    assert!(matches!(err, KunaError::DataUnavail { .. }));
+    assert!(matches!(err, UnlaceError::DataUnavail { .. }));
 
     // caseB: empty chunk in the gap survives and self-pads
     let mut img = image_from_str(
@@ -228,7 +228,7 @@ fn verify_w2loadimage_pad_exact_end_tie_chain_and_empty_gap_chunk() {
     let err = img
         .load(1, &Address::new(Rc::clone(&ram), 0x400))
         .unwrap_err();
-    assert!(matches!(err, KunaError::DataUnavail { .. }));
+    assert!(matches!(err, UnlaceError::DataUnavail { .. }));
 }
 
 /// The pad clamp to the next chunk applies only when the next chunk is in
@@ -260,7 +260,7 @@ fn verify_w2loadimage_pad_cross_space_no_clamp() {
     let err = img
         .load(1, &Address::new(Rc::clone(&ram1), 0x304))
         .unwrap_err();
-    assert!(matches!(err, KunaError::DataUnavail { .. }));
+    assert!(matches!(err, UnlaceError::DataUnavail { .. }));
 
     // ram2's chunk survived (not erased by the cross-space comparison)
     let got = img.load(4, &Address::new(Rc::clone(&ram2), 0x110)).unwrap();
@@ -270,7 +270,7 @@ fn verify_w2loadimage_pad_cross_space_no_clamp() {
         .load(1, &Address::new(Rc::clone(&ram2), 0x10f))
         .unwrap_err();
     match &err {
-        KunaError::DataUnavail { explain } => {
+        UnlaceError::DataUnavail { explain } => {
             assert_eq!(explain, "Bytes at 0x0000010f are not mapped");
         }
         other => panic!("expected DataUnavail, got {other:?}"),
@@ -311,12 +311,12 @@ fn verify_w2loadimage_space_end_wrap_chunk_no_pad_and_wrapped_overlap() {
     let err = img
         .load(1, &Address::new(Rc::clone(&ram), 0x8))
         .unwrap_err();
-    assert!(matches!(err, KunaError::DataUnavail { .. }));
+    assert!(matches!(err, UnlaceError::DataUnavail { .. }));
     // And just below the chunk: dist wraps to 0xffff -> unmapped
     let err = img
         .load(1, &Address::new(Rc::clone(&ram), 0xffef))
         .unwrap_err();
-    assert!(matches!(err, KunaError::DataUnavail { .. }));
+    assert!(matches!(err, UnlaceError::DataUnavail { .. }));
 }
 
 /// Zero-length loadFill requests never throw in C++ (the while(size>0) loop
@@ -351,7 +351,7 @@ fn verify_w2loadimage_zero_length_reads_and_adjust_vma_int4_truncation() {
     let err = img
         .load(4, &Address::new(Rc::clone(&ram), 0x100))
         .unwrap_err();
-    assert!(matches!(err, KunaError::DataUnavail { .. }));
+    assert!(matches!(err, UnlaceError::DataUnavail { .. }));
     let mut rec = LoadImageFunc::default();
     img.open_symbols();
     assert!(img.get_next_symbol(&mut rec));

@@ -1,5 +1,5 @@
 //! MSVC RTTI / vftable class-name recovery e2e gate (`rtti` analysis option — the
-//! kuna analog of Ghidra's `RttiAnalyzer`).
+//! unlace analog of Ghidra's `RttiAnalyzer`).
 //!
 //! Two real polymorphic-C++ Windows PEs (`msvc_rtti_x64.exe` / `msvc_rtti_x86.exe`,
 //! one base class `Shape` + one derived class `Box` with a virtual method) carry the
@@ -88,7 +88,7 @@ fn bootstrap_rtti(fixture: &str, on: bool) -> ConsoleProgram {
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
     prog.arch_mut()
-        .set_kuna_option("rtti", if on { "on" } else { "off" })
+        .set_unlace_option("rtti", if on { "on" } else { "off" })
         .expect("rtti flips");
     // Analysis facts commit at `read symbols` (gated by the per-pass flag), not
     // eagerly at bootstrap — trigger that commit after the option is applied.

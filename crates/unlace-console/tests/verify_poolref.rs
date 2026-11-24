@@ -24,11 +24,11 @@ use std::path::PathBuf;
 use unlace_analysis::listing::xrefs::{self, XrefIndex, XrefKind};
 use unlace_console::engine::bootstrap_from_object;
 
-/// `"kuna poolref prompt"` — reached through a read-only pool word.
+/// `"unlace poolref prompt"` — reached through a read-only pool word.
 const PROMPT: u64 = 0x10100;
-/// `"kuna poolref narrow"` — reached only by a two-byte read of a pool word.
+/// `"unlace poolref narrow"` — reached only by a two-byte read of a pool word.
 const NARROW: u64 = 0x10120;
-/// `"kuna poolref hidden"` — reached only through a `.data` slot.
+/// `"unlace poolref hidden"` — reached only through a `.data` slot.
 const HIDDEN: u64 = 0x10140;
 
 /// The `ldr r0,[0x10028]` that forms `PROMPT`, and the function it lies in.

@@ -49,7 +49,7 @@ fn target(fd: &Funcdata, op: OpId, slot: i32) -> Option<(Rc<Datatype>, bool)> {
     {
         return None;
     }
-    let stated = fd.kuna_protoorder_types(call.get_entry_address())?;
+    let stated = fd.unlace_protoorder_types(call.get_entry_address())?;
     let (address, original_size) = call.final_input_storage().get((slot - 1) as usize)?;
     let (parameter, size, ty) = stated.inputs.get((slot - 1) as usize)?;
     if !integer(ty)

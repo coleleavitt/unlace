@@ -1,4 +1,4 @@
-//! (kuna `callerreads`) Where each direct call returns to.
+//! (unlace `callerreads`) Where each direct call returns to.
 //!
 //! A function decompiled alone may return what its callers read after calling
 //! it (`unlace_decomp::callerreads`). The walk already files every direct

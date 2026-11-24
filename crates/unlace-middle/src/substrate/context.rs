@@ -12,7 +12,7 @@ use std::rc::Rc;
 
 use slotmap::new_key_type;
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::{AddrSpace, AddrSpaceManager};
 use unlace_base::types::{int4, uint4};
 use unlace_num::opcodes::OpCode;
@@ -142,12 +142,12 @@ pub struct GlobalEntry {
     /// hands `ActionDeindirect` so the deindirect sees an inline (inject-bearing)
     /// callee and restarts — the restart re-flows and the now-direct CALL injects.
     pub func_inject_id: int4,
-    /// (kuna) The owning FunctionSymbol's no-return flag (C++
+    /// (unlace) The owning FunctionSymbol's no-return flag (C++
     /// `FunctionSymbol::getFunction()->getFuncProto().isNoReturn()`, set by
     /// `option noreturn <name>` or the no-return analysis pass).  `false` when not
     /// a function.  The C++ `Scope::queryFunction` hands `ActionDeindirect` the
     /// callee's live `Funcdata`, so its no-return flow effect comes for free; the
-    /// kuna snapshot has to carry the bit explicitly, and without it a deindirected
+    /// unlace snapshot has to carry the bit explicitly, and without it a deindirected
     /// CALLIND to a no-return callee never schedules the restart that re-flows the
     /// now-direct CALL with an artificial halt.
     pub func_no_return: bool,
@@ -169,7 +169,7 @@ pub struct GlobalEntry {
 /// from the [`ArchHandle`] in [`Funcdata::set_varnode_properties`](crate::funcdata::Funcdata::set_varnode_properties).
 ///
 /// The C++ `glb` is the live `Architecture`, so `localmap->queryProperties` walks
-/// the parent chain up to the live global scope.  The merged kuna `glb`
+/// the parent chain up to the live global scope.  The merged unlace `glb`
 /// ([`ArchContext`]) holds per-function configuration and services, and the function's
 /// `localmap` owns its own detached `Database`; this snapshot is the wire that
 /// reconnects the global symbol table onto `glb` so global-mapped varnodes get
@@ -720,27 +720,27 @@ mod tests;
 /// the function and its analysis passes.
 pub struct ArchContext {
     /// The pass hooks the IR calls through ([`crate::passhooks`]).
-    pub pass_hooks: &'static crate::passhooks::KunaHooks,
-    /// The registered kuna options, copied from the engine.
-    pub kuna_options: crate::optionset::OptionSet,
+    pub pass_hooks: &'static crate::passhooks::UnlaceHooks,
+    /// The registered unlace options, copied from the engine.
+    pub unlace_options: crate::optionset::OptionSet,
     pub x87_empty_storage: Option<crate::architecture::Storage>,
-    /// (kuna `varargsave`) The System V argument registers, when the pass applies.
+    /// (unlace `varargsave`) The System V argument registers, when the pass applies.
     pub vararg_regs: Option<crate::architecture::Regs>,
-    /// (kuna `arm64evcall`) The architecture's resolved arm64e virtual calls.
+    /// (unlace `arm64evcall`) The architecture's resolved arm64e virtual calls.
     pub vcall_targets: Rc<std::collections::BTreeMap<u64, crate::architecture::VcallTargets>>,
 
-    /// The kuna passes' architecture-wide tables, shared with the engine
+    /// The unlace passes' architecture-wide tables, shared with the engine
     /// ([`crate::archstate`]): call mechanisms, jump assists, segment operations.
-    pub kuna_states: crate::archstate::ArchStates,
-    /// (kuna) `callmechanisms` — apply compiler-spec prototype entry/return p-code.
+    pub unlace_states: crate::archstate::ArchStates,
+    /// (unlace) `callmechanisms` — apply compiler-spec prototype entry/return p-code.
     pub call_mechanism_effects: bool,
-    /// (kuna `dexmodel`) The loaded DEX file's constant pool and register
+    /// (unlace `dexmodel`) The loaded DEX file's constant pool and register
     /// payloads; `None` for any other image or with the option off.
     pub dex: Option<Rc<crate::dex::DexModel>>,
-    /// (kuna `jvmmodel`) The class file holding the function, when it is a
+    /// (unlace `jvmmodel`) The class file holding the function, when it is a
     /// method of a loaded class.
     pub jvm: Option<Rc<crate::jvm::JvmModel>>,
-    /// (kuna) `callmechanisms auto` — only return payloads whose stored slot the next instruction
+    /// (unlace) `callmechanisms auto` — only return payloads whose stored slot the next instruction
     /// reloads, forwarded into that reload when possible.
     pub call_mechanism_reload_only: bool,
     /// Shared spaces retain the pointer identities and indices used by lifted
@@ -759,7 +759,7 @@ pub struct ArchContext {
     /// as the C++ `Architecture::getLanedRegister` does.  Empty for hand-built
     /// fixtures and non-vector architectures.
     pub lanerecords: Vec<crate::transform::LanedRegister>,
-    /// (kuna) The compiler spec's `<prefersplit>` rows: whole registers heritage
+    /// (unlace) The compiler spec's `<prefersplit>` rows: whole registers heritage
     /// pass 0 splits into two independent pieces.  Copied from the engine
     /// `Architecture` in `build_arch_handle`; empty when the spec states none.
     pub split_records: Vec<crate::architecture::PreferSplitRecord>,
@@ -813,101 +813,101 @@ pub struct ArchContext {
     /// `Architecture::max_term_duplication`, default 2).  Drives
     /// `ActionMarkExplicit::processMultiplier`.
     pub max_term_duplication: int4,
-    /// (kuna) CALLOTHER user-op ids named in
+    /// (unlace) CALLOTHER user-op ids named in
     /// [`STATE_USEROP_NAMES`](crate::retsysreg::STATE_USEROP_NAMES), and
     /// those named in [`COP_USEROP_NAMES`](crate::retsysreg::COP_USEROP_NAMES),
     /// resolved from the program's user ops when the handle is built.
     pub retsysreg_userops: Vec<unlace_base::types::uint4>,
     pub retsysreg_cop_userops: Vec<unlace_base::types::uint4>,
-    /// (kuna) The source language of this image (`option sourcelang` override
+    /// (unlace) The source language of this image (`option sourcelang` override
     /// applied): what `option rustabi auto` tests and `option reloadarg`
     /// stands down on.  Copied from the engine `Architecture` in
     /// `build_arch_handle`.
     pub source_lang: crate::sourcelang::SourceLang,
-    /// (kuna `swifttypes`) Type Swift metadata accessor call results; read by
+    /// (unlace `swifttypes`) Type Swift metadata accessor call results; read by
     /// [`crate::p5_types::swiftmetaresult`]. Copied from the engine
     /// `Architecture` in `build_arch_handle`.
     pub swift_metadata_results: bool,
-    /// (kuna) The `SoftwareBreakpoint` user-op id when `option ptrauthtrap`
+    /// (unlace) The `SoftwareBreakpoint` user-op id when `option ptrauthtrap`
     /// is on; read by [`crate::ptrauthtrap`].
     pub ptrauth_trap_userop: Option<unlace_base::types::uint4>,
-    /// (kuna) The language is arm64e's; read by
+    /// (unlace) The language is arm64e's; read by
     /// [`crate::p4_calls::hiddenretarg`].
     pub arm64e: bool,
-    /// (kuna) angr-style default naming: an unknown callee / global prints as
+    /// (unlace) angr-style default naming: an unknown callee / global prints as
     /// `sub_<addr>` / `dat_<addr>` rather than `func_<addr>` (C++
     /// option `namestyle`, default `angr`).  Read by the call-spec
     /// printed-name resolution ([`FuncCallSpecs::fspec_printed_name`](crate::fspec::FuncCallSpecs::fspec_printed_name)).
     pub name_style_angr: bool,
-    /// (kuna, Phase 3) Ghidra-convention fallback naming (`FUN_`/`DAT_`/`LAB_`),
+    /// (unlace, Phase 3) Ghidra-convention fallback naming (`FUN_`/`DAT_`/`LAB_`),
     /// set only by the ghidra-mode registerProgram — see
     /// `Architecture::name_style_ghidra`.  Wins over `name_style_angr` in
-    /// [`Self::kuna_name_style`].
+    /// [`Self::unlace_name_style`].
     pub name_style_ghidra: bool,
 
-    /// (kuna `opaquepredicate globals`) A comparison asked while the scan was
+    /// (unlace `opaquepredicate globals`) A comparison asked while the scan was
     /// pending.
     pub opaque_globals_wanted: std::cell::Cell<bool>,
 
-    /// (kuna) CALLOTHER user-op ids the architecture registered under a byte
+    /// (unlace) CALLOTHER user-op ids the architecture registered under a byte
     /// shuffle name ([`SHUFFLE_USEROP_NAMES`](crate::simdlane::SHUFFLE_USEROP_NAMES)),
     /// resolved once per program in `Architecture::build_arch_handle` so
     /// [`RuleSimdShuffleLane`](crate::simdlane::RuleSimdShuffleLane) can
     /// name a CALLOTHER without reaching the full `Architecture`.
     pub simd_shuffle_userops: Vec<unlace_base::types::uint4>,
-    /// (kuna) CALLOTHER ids of the x87 integer conversions read by
+    /// (unlace) CALLOTHER ids of the x87 integer conversions read by
     /// [`RuleX87Truncate`](crate::x87truncate::RuleX87Truncate).
     pub x87_float_to_int_userops: Vec<unlace_base::types::uint4>,
     /// SLEIGH FIST/FISTP conversion userops and their signed output widths.
     /// Resolved by name once when building the architecture snapshot.
     pub x87_integer_userops: Vec<(unlace_base::types::uint4, int4)>,
-    /// (kuna) CALLOTHER ids of the float roundings p-code has no operator for
+    /// (unlace) CALLOTHER ids of the float roundings p-code has no operator for
     /// ([`USEROP_NAMES`](crate::roundingops::USEROP_NAMES)), typed float in
-    /// and out by [`kuna_roundingops`](crate::roundingops).
+    /// and out by [`unlace_roundingops`](crate::roundingops).
     pub float_rounding_userops: Vec<unlace_base::types::uint4>,
-    /// (kuna `calltargettype`) C output: a parameter or global takes the call's
+    /// (unlace `calltargettype`) C output: a parameter or global takes the call's
     /// type too, and a target whose uses disagree is cast at each call. The
     /// Rust speller spells every pointer to code `*const ()`, so neither changes
     /// anything there. Read by
     /// [`retype_call_targets`](crate::calltargettype::retype_call_targets).
     pub call_target_c: bool,
-    /// (kuna) The output is Java: decide casts as `CastStrategyJava`.
+    /// (unlace) The output is Java: decide casts as `CastStrategyJava`.
     pub java_casts: bool,
-    /// (kuna `floatglobals`) A vote asked while the scan was pending.
+    /// (unlace `floatglobals`) A vote asked while the scan was pending.
     pub float_globals_wanted: std::cell::Cell<bool>,
-    /// (kuna) The printer spells a residual one-byte TYPE_UNKNOWN as C `char`
+    /// (unlace) The printer spells a residual one-byte TYPE_UNKNOWN as C `char`
     /// (`realtypes` on, C output), so its promotion sign-extends.  Read by
-    /// [`kuna_truncarg`](crate::p9_emit::truncarg).
+    /// [`unlace_truncarg`](crate::p9_emit::truncarg).
     pub unknown_byte_is_char: bool,
-    /// (kuna) The printer spells residual TYPE_UNKNOWN bytes as an integer
+    /// (unlace) The printer spells residual TYPE_UNKNOWN bytes as an integer
     /// (`realtypes` on, or an output language with no unknown-bytes type), so a
     /// float assigned into them reads as a numeric conversion.  Read by
-    /// [`kuna_floatstore`](crate::p9_emit::floatstore).
+    /// [`unlace_floatstore`](crate::p9_emit::floatstore).
     pub unknown_is_integer: bool,
-    /// (kuna) The output language promotes a sub-`int` argument to `int`
+    /// (unlace) The output language promotes a sub-`int` argument to `int`
     /// (`LangCaps::integer_promotion`).  Read by
-    /// [`kuna_truncarg`](crate::p9_emit::truncarg).
+    /// [`unlace_truncarg`](crate::p9_emit::truncarg).
     pub int_promotion: bool,
 
-    /// (kuna `elemptr`) The sections a program's data objects live in, sorted and
+    /// (unlace `elemptr`) The sections a program's data objects live in, sorted and
     /// inclusive; the `globalref` ranges, copied from the Architecture.
     pub elem_ptr_ranges: std::rc::Rc<Vec<(u64, u64)>>,
-    /// (kuna `libctypes`) The named libc aggregate tables are on.  Copied from
+    /// (unlace `libctypes`) The named libc aggregate tables are on.  Copied from
     /// the option's [`LibcTypesLayout`](crate::libctypes::LibcTypesLayout) (not `off`);
-    /// read by [`kuna_libcfit`](crate::p5_types::libcfit), which holds a
+    /// read by [`unlace_libcfit`](crate::p5_types::libcfit), which holds a
     /// named libc pointer vote to what the caller does through it.
     pub libctypes: bool,
-    /// (kuna) `armfloatreturn` is on and the image states the ARM VFP calling
+    /// (unlace) `armfloatreturn` is on and the image states the ARM VFP calling
     /// convention.  Read by [`crate::p4_calls::armfloatreturn`].
     pub arm_float_return: bool,
-    /// (kuna) `armfloatargs` is on and the image states the ARM VFP calling
+    /// (unlace) `armfloatargs` is on and the image states the ARM VFP calling
     /// convention.  Read by [`crate::p4_calls::armfloatargs`].
     pub arm_float_args: bool,
-    /// (kuna) The default model before `armfloatreturn` widens it, kept for the
+    /// (unlace) The default model before `armfloatreturn` widens it, kept for the
     /// AEABI helpers that use the base standard in every image.  Read by
     /// [`crate::p4_calls::armfloatreturn::helper_model`].
     pub arm_base_model: Option<Rc<crate::fspec::ProtoModel>>,
-    /// (kuna) The core-register (soft-float) model a declared AEABI helper
+    /// (unlace) The core-register (soft-float) model a declared AEABI helper
     /// prototype is laid out under on every 32-bit ARM image (RTABI32 3.1).  Read by
     /// [`crate::p4_calls::armfloatreturn::declared_helper_model`].
     pub arm_helper_model: Option<Rc<crate::fspec::ProtoModel>>,
@@ -916,11 +916,11 @@ pub struct ArchContext {
     pub float_arg_registers: Option<bool>,
     /// The spec's soft-float model on a soft-float image, if it has one.
     pub soft_float_model: Option<Rc<crate::fspec::ProtoModel>>,
-    /// (kuna) The soft-float model a declaration that names no convention is
+    /// (unlace) The soft-float model a declaration that names no convention is
     /// laid out under, on an image without floating-point hardware.  Read by
     /// [`crate::p4_calls::typedcallabi::undeclared_model`].
     pub soft_float_declarations: Option<Rc<crate::fspec::ProtoModel>>,
-    /// (kuna) The image is ARM and states the VFP variant, where a variadic
+    /// (unlace) The image is ARM and states the VFP variant, where a variadic
     /// declaration returns under the base standard.  Read by
     /// [`crate::p4_calls::typedcallabi::undeclared_model`].
     pub vfp_variadic: bool,
@@ -930,33 +930,33 @@ pub struct ArchContext {
     /// callee extends to its register (`i32::MAX`: none).  Read by
     /// [`crate::p4_calls::typedcallabi`].
     pub caller_extends_returns_from: i32,
-    /// (kuna) How the image passes a floating-point value in the variadic part
+    /// (unlace) How the image passes a floating-point value in the variadic part
     /// of a call.  Read by [`crate::p4_calls::varargretreg`].
     pub vararg_floats: crate::architecture::VarargFloats,
-    /// (kuna) how a narrow integer argument or return value fills its register
-    /// (`narrowext`).  Read by [`crate::p4_calls::kuna_narrowext`].
+    /// (unlace) how a narrow integer argument or return value fills its register
+    /// (`narrowext`).  Read by [`crate::p4_calls::unlace_narrowext`].
     pub narrow_ext: NarrowExtRules,
 
-    /// (kuna `vtabletypes`) A call made direct by an indirect-call override
+    /// (unlace `vtabletypes`) A call made direct by an indirect-call override
     /// does not take the register that carried its target as an argument.
     pub vtable_types: bool,
-    /// (kuna `calleereginputs custom`) Per-callee-entry input-register key, and
+    /// (unlace `calleereginputs custom`) Per-callee-entry input-register key, and
     /// the model for each key: so a function's own evaluation prints the same
     /// custom register parameters its callers pass. Copied from the global
     /// architecture per function; empty unless the whole-image rule decided one.
-    pub kuna_custom_reg_callers: Rc<std::collections::HashMap<u64, u16>>,
-    pub kuna_custom_reg_models: Rc<std::collections::HashMap<u16, Rc<crate::fspec::ProtoModel>>>,
+    pub unlace_custom_reg_callers: Rc<std::collections::HashMap<u64, u16>>,
+    pub unlace_custom_reg_models: Rc<std::collections::HashMap<u16, Rc<crate::fspec::ProtoModel>>>,
 
-    /// (kuna `loopcontinue`) The output language's do-while runs its test on
+    /// (unlace `loopcontinue`) The output language's do-while runs its test on
     /// `continue;`: C `do..while` and Go's `for` post statement do, Rust's
     /// `loop { ..; if !(c) { break; } }` restarts the body instead.
     pub do_while_continue: bool,
-    /// (kuna) The loader identified the image as a Linux ELF: the fact
+    /// (unlace) The loader identified the image as a Linux ELF: the fact
     /// `option linuxsyscall auto` acts on.
     pub image_linux_elf: bool,
     /// Exact GCC AMD64 target supporting the ordinary SysV stack model.
     pub x64_syscall_memory_target: bool,
-    /// (kuna) The user-op indices the `SYSCALL` constructor emits, resolved once
+    /// (unlace) The user-op indices the `SYSCALL` constructor emits, resolved once
     /// per program because the boundary `ArchContext` carries no userop table.
     /// A user-op a compiler spec specialized with its own `<callotherfixup>` is
     /// left out, so a spec-declared model always wins.  Read by
@@ -967,23 +967,23 @@ pub struct ArchContext {
     /// load-linked or store-conditional left without its upstream fixup (ghidra
     /// mode) remains; see `octeonops::userop_ids`.
     pub octeon_memory_userops: Vec<(u32, crate::octeonops::Effect)>,
-    /// (kuna `atomics`) The x86 lock envelope or AArch64 ordering user
-    /// operations an atomic instruction may carry; see `kuna_atomics`.
+    /// (unlace `atomics`) The x86 lock envelope or AArch64 ordering user
+    /// operations an atomic instruction may carry; see `unlace_atomics`.
     pub atomic_userops: crate::atomicops::AtomicUserops,
-    /// (kuna) `option syscallregs`, resolved against the loader's user-space
+    /// (unlace) `option syscallregs`, resolved against the loader's user-space
     /// fact: does the ARM/AArch64/RISC-V/MIPS/PowerPC system-call user-op read
     /// its setup registers and write its result?  Read by
     /// [`ActionSyscallRegs`](crate::syscallregs::ActionSyscallRegs).
     pub syscall_regs: bool,
-    /// (kuna) The processor family of the loaded language, when `syscallregs`
+    /// (unlace) The processor family of the loaded language, when `syscallregs`
     /// models it.
     pub syscall_regs_family: Option<SyscallFamily>,
-    /// (kuna) The family's system-call user-op ids, minus any a compiler spec
+    /// (unlace) The family's system-call user-op ids, minus any a compiler spec
     /// specialized with its own `<callotherfixup>`.
     pub syscall_regs_userops: Vec<unlace_base::types::uint4>,
-    /// (kuna) The compiler spec is a Windows one: a fact `option pebnames` acts on.
+    /// (unlace) The compiler spec is a Windows one: a fact `option pebnames` acts on.
     pub windows_cspec: bool,
-    /// (kuna) The loader identified a Windows user-mode PE: the fact
+    /// (unlace) The loader identified a Windows user-mode PE: the fact
     /// `option pebnames auto` acts on.
     pub image_windows_user: bool,
     /// AArch64 integer division returns zero for a zero divisor.
@@ -1029,12 +1029,12 @@ pub struct ArchContext {
     /// by `JumpBasic::buildAddresses` to align recovered targets.  `0` (no
     /// alignment) for hand-built fixtures.
     pub funcptr_align: int4,
-    /// (kuna `lazyfuncs`) The entry starts the commit installed as names only,
-    /// sorted, so the run-on cut (`kuna_switchrunon`) sees the same functions
+    /// (unlace `lazyfuncs`) The entry starts the commit installed as names only,
+    /// sorted, so the run-on cut (`unlace_switchrunon`) sees the same functions
     /// with the option on.
     pub lazy_entry_starts: Rc<Vec<u64>>,
-    /// (kuna) `Architecture::kuna_fde_extents`.
-    pub kuna_fde_extents: Rc<Vec<(u64, u64)>>,
+    /// (unlace) `Architecture::unlace_fde_extents`.
+    pub unlace_fde_extents: Rc<Vec<(u64, u64)>>,
     /// The program load image (C++ `Architecture::loader`), shared from the
     /// engine through `build_arch_handle`.  Read by jump-table emulation
     /// (`EmulateFunction::executeLoad` -> `get_load_image_value`) to fetch the
@@ -1046,7 +1046,7 @@ pub struct ArchContext {
     /// [`Funcdata::fillin_read_only`](crate::funcdata::Funcdata::fillin_read_only).
     /// `false` by default (C++ `Architecture::resetDefaults`).
     pub readonlypropagate: bool,
-    /// (kuna `dynrelocs`) `[start, stop]` (inclusive) offsets whose read-only
+    /// (unlace `dynrelocs`) `[start, stop]` (inclusive) offsets whose read-only
     /// contents are foldable even with [`Self::readonlypropagate`] off: the
     /// dynamic-relocation slots the loader filled in that `PT_GNU_RELRO` freezes.
     /// The value is the linker's, the memory is `mprotect`ed read-only before
@@ -1056,14 +1056,14 @@ pub struct ArchContext {
     /// every hand-built fixture and every XML `<binaryimage>` load, which is why
     /// the datatest parity oracle cannot see this field.
     pub dynreloc_const: Rc<Vec<(u64, u64)>>,
-    /// (kuna `vectorabi`) The vector user-ops (AVX SLEIGH ops with an intrinsic
+    /// (unlace `vectorabi`) The vector user-ops (AVX SLEIGH ops with an intrinsic
     /// name, and the `lanefuse` built-ins) with their element kind; their
     /// operands and results take the Intel vector types.
     pub vector_userops: Rc<Vec<(unlace_base::types::uint4, u8)>>,
-    /// (kuna `vectorabi`) The default model widened with the vector entries,
+    /// (unlace `vectorabi`) The default model widened with the vector entries,
     /// used for a function whose body holds vector operations.
     pub vector_fp: Option<Rc<crate::fspec::ProtoModel>>,
-    /// (kuna `litpoolconst`) `[start, stop]` (inclusive) offsets of the image's
+    /// (unlace `litpoolconst`) `[start, stop]` (inclusive) offsets of the image's
     /// executable, non-writable, file-backed regions — the instruction stream, and
     /// so the literal pools embedded in it. A read entirely inside one is foldable
     /// with [`Self::readonlypropagate`] off.
@@ -1091,7 +1091,7 @@ pub struct ArchContext {
     /// global-mapped varnodes so their stores survive `ActionDeadCode`.  `None`
     /// for hand-built fixtures (no symbol table).
     pub global_query: Option<Rc<GlobalQuery>>,
-    /// (kuna, Phase 3) The ghidra-mode lazy symbol provider
+    /// (unlace, Phase 3) The ghidra-mode lazy symbol provider
     /// ([`RemoteScope`](crate::remote_provider::RemoteScope)); when installed,
     /// every global-scope read below queries through it (fetching unresolved
     /// addresses from the host) instead of the frozen `global_query`/
@@ -1104,7 +1104,7 @@ pub struct ArchContext {
     /// the various pointer-inference arms.  Default-on (C++ `resetDefaults`); `false`
     /// for hand-built fixtures (no constant-pointer recovery exercised).
     pub infer_pointers: bool,
-    /// (kuna `blobs`) The first address of each embedded image or archive,
+    /// (unlace `blobs`) The first address of each embedded image or archive,
     /// shared from the real architecture; empty for fixtures.
     pub blob_entries: Rc<std::collections::BTreeSet<u64>>,
     /// Ordered list of address spaces in which a constant pointer can be inferred
@@ -1145,7 +1145,7 @@ pub struct ArchContext {
         unlace_base::types::uintb,
         Rc<crate::fspec::ProtoModel>,
     )>,
-    /// (kuna) The calling convention bound to a function with no declared
+    /// (unlace) The calling convention bound to a function with no declared
     /// signature, by entry `(space index, offset)`: the analysis tier's
     /// model-only facts ([`crate::Architecture::loader_proto_models`]). The
     /// function's own decompile recovers its parameters under it, and a call
@@ -1153,10 +1153,10 @@ pub struct ArchContext {
     pub bound_proto_models: Rc<
         std::collections::BTreeMap<(int4, unlace_base::types::uintb), Rc<crate::fspec::ProtoModel>>,
     >,
-    /// (kuna `swiftmetadata`) Each local Swift enum's case count by its
+    /// (unlace `swiftmetadata`) Each local Swift enum's case count by its
     /// metadata accessor's entry offset (`p2_lift/switchextent.rs`).
     pub swift_enum_cases: Rc<std::collections::BTreeMap<u64, u32>>,
-    /// (kuna `calleereginputs`) The `__thiscall` model, the ECX storage a
+    /// (unlace `calleereginputs`) The `__thiscall` model, the ECX storage a
     /// virtual call reads its `this` from and EAX's, when the option applies.
     pub virtual_this: Option<(
         Rc<crate::fspec::ProtoModel>,
@@ -1193,14 +1193,14 @@ impl ArchContext {
         // minimum; the upstream default when unset is 4.
         ArchContext {
             pass_hooks: crate::architecture::default_pass_hooks(),
-            kuna_states: Default::default(),
+            unlace_states: Default::default(),
             call_mechanism_effects: false,
             dex: None,
             jvm: None,
             call_mechanism_reload_only: false,
             manage,
             min_laned_register_size: 4,
-            kuna_options: crate::optionset::OptionSet::new(),
+            unlace_options: crate::optionset::OptionSet::new(),
             x87_empty_storage: None,
             vararg_regs: None,
             vcall_targets: Rc::default(),
@@ -1224,22 +1224,22 @@ impl ArchContext {
             max_term_duplication: 2,
             retsysreg_userops: Vec::new(),
             retsysreg_cop_userops: Vec::new(),
-            // (kuna) `option bejoin`; the real value is copied from the engine
+            // (unlace) `option bejoin`; the real value is copied from the engine
             // Architecture in `build_arch_handle`.
             source_lang: Default::default(),
-            // (kuna) `option gobool` default auto; copied the same way.
-            // (kuna) `option gonewtype` default on; copied the same way.
+            // (unlace) `option gobool` default auto; copied the same way.
+            // (unlace) `option gonewtype` default on; copied the same way.
             swift_metadata_results: false,
             ptrauth_trap_userop: None,
             arm64e: false,
-            // (kuna) angr-style default naming is default-on (Architecture::reset).
+            // (unlace) angr-style default naming is default-on (Architecture::reset).
             name_style_angr: true,
-            // (kuna, Phase 3) ghidra-mode-only; never set on the standalone path.
+            // (unlace, Phase 3) ghidra-mode-only; never set on the standalone path.
             name_style_ghidra: false,
-            // (kuna) default-off opt-in; the real value is copied from the engine
+            // (unlace) default-off opt-in; the real value is copied from the engine
             // Architecture in `build_arch_handle` (`option dedupvardecls`).
-            // (kuna) DIV-2 default-on (GH-558): resetDefaults sets present_lessequal=true.
-            // (kuna) the real arch overwrites each of these in `build_arch_handle`;
+            // (unlace) DIV-2 default-on (GH-558): resetDefaults sets present_lessequal=true.
+            // (unlace) the real arch overwrites each of these in `build_arch_handle`;
             // hand-built fixtures (no `build_arch_handle`) get `false`, so a rule
             // registered `enabled=false` is inert there — matching the gate-off
             // unit tests.
@@ -1248,14 +1248,14 @@ impl ArchContext {
             x87_float_to_int_userops: Vec::new(),
             x87_integer_userops: Vec::new(),
             float_rounding_userops: Vec::new(),
-            call_target_c: false, // (kuna) option calltargettype, C output
+            call_target_c: false, // (unlace) option calltargettype, C output
             java_casts: false,
             float_globals_wanted: std::cell::Cell::new(false),
-            unknown_byte_is_char: false, // (kuna) realtypes + C output
-            unknown_is_integer: false,   // (kuna) realtypes, or not C output
-            int_promotion: true,         // (kuna) LangCaps::integer_promotion (C)
-            elem_ptr_ranges: std::rc::Rc::new(Vec::new()), // (kuna) elemptr
-            libctypes: false,            // (kuna) option libctypes, copied from Architecture
+            unknown_byte_is_char: false, // (unlace) realtypes + C output
+            unknown_is_integer: false,   // (unlace) realtypes, or not C output
+            int_promotion: true,         // (unlace) LangCaps::integer_promotion (C)
+            elem_ptr_ranges: std::rc::Rc::new(Vec::new()), // (unlace) elemptr
+            libctypes: false,            // (unlace) option libctypes, copied from Architecture
             // endptrbound only re-expresses an address the walk already compares
             // against, so the fixture seam carries the real default.
             // castobject only re-types a slot whose readers agree, so the fixture
@@ -1264,8 +1264,8 @@ impl ArchContext {
             // recovered prototype says it never reads, and declines outright
             // when there is no callee to ask, so the fixture seam carries the
             // shipped default.
-            arm_float_args: false,   // (kuna) option armfloatargs (default off)
-            arm_float_return: false, // (kuna) option armfloatreturn (default off)
+            arm_float_args: false, // (unlace) option armfloatargs (default off)
+            arm_float_return: false, // (unlace) option armfloatreturn (default off)
             arm_base_model: None,
             arm_helper_model: None,
             float_arg_registers: None,
@@ -1278,8 +1278,8 @@ impl ArchContext {
             narrow_ext: NarrowExtRules::default(),
 
             vtable_types: false,
-            kuna_custom_reg_callers: Rc::default(),
-            kuna_custom_reg_models: Rc::default(),
+            unlace_custom_reg_callers: Rc::default(),
+            unlace_custom_reg_models: Rc::default(),
 
             do_while_continue: true,
             image_linux_elf: false,
@@ -1307,17 +1307,17 @@ impl ArchContext {
             alias_block_level: 2, // Architecture default: block structs and arrays
             funcptr_align: 0,
             lazy_entry_starts: Rc::default(),
-            kuna_fde_extents: Rc::new(Vec::new()),
+            unlace_fde_extents: Rc::new(Vec::new()),
             loader: None,
             // C++ Architecture default: readonlypropagate = false (resetDefaults);
             // `option readonly` flips it before the per-function build_arch_handle.
             readonlypropagate: false,
-            // (kuna) No dynamic-relocation const slots until a real ELF load
+            // (unlace) No dynamic-relocation const slots until a real ELF load
             // installs them (see `Architecture::dynreloc_const`).
             dynreloc_const: Rc::new(Vec::new()),
             vector_userops: Rc::new(Vec::new()),
             vector_fp: None,
-            // (kuna) No executable read-only ranges until a real object load
+            // (unlace) No executable read-only ranges until a real object load
             // installs them (see `Architecture::litpool_const`).
             litpool_const: Rc::new(Vec::new()),
             // Default volatile ops are non-functional (`getDisplay() != 0`), so the
@@ -1347,16 +1347,16 @@ impl ArchContext {
         }
     }
 
-    /// (kuna, Phase 3) The active fallback naming vocabulary (see
-    /// [`KunaNameStyle`](crate::database::KunaNameStyle)): `Ghidra` wins over
+    /// (unlace, Phase 3) The active fallback naming vocabulary (see
+    /// [`UnlaceNameStyle`](crate::database::UnlaceNameStyle)): `Ghidra` wins over
     /// `Angr` wins over the upstream `Func` default.
-    pub fn kuna_name_style(&self) -> crate::database::KunaNameStyle {
+    pub fn unlace_name_style(&self) -> crate::database::UnlaceNameStyle {
         if self.name_style_ghidra {
-            crate::database::KunaNameStyle::Ghidra
+            crate::database::UnlaceNameStyle::Ghidra
         } else if self.name_style_angr {
-            crate::database::KunaNameStyle::Angr
+            crate::database::UnlaceNameStyle::Angr
         } else {
-            crate::database::KunaNameStyle::Func
+            crate::database::UnlaceNameStyle::Func
         }
     }
 
@@ -1372,13 +1372,13 @@ impl ArchContext {
     /// `uintb` worth of bytes, byte-swap to host order if the space endianness
     /// differs from the host, then mask/shift to `sz`.  Drives jump-table LOAD
     /// emulation.  Returns an error if no loader is shared (hand-built fixtures).
-    pub fn get_load_image_value(&self, addr: &Address, sz: int4) -> KunaResult<u64> {
+    pub fn get_load_image_value(&self, addr: &Address, sz: int4) -> UnlaceResult<u64> {
         use unlace_base::address::{byte_swap, calc_mask};
         use unlace_base::types::HOST_ENDIAN;
         let loader = self
             .loader
             .as_ref()
-            .ok_or_else(|| KunaError::lowlevel("getLoadImageValue: no load image shared"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("getLoadImageValue: no load image shared"))?;
         let mut buf = [0u8; 8]; // sizeof(uintb)
         loader.borrow_mut().load_fill(&mut buf, addr)?;
         let big = addr.is_big_endian();
@@ -1406,7 +1406,7 @@ impl ArchContext {
         self.readonlypropagate
     }
 
-    /// (kuna `dynrelocs`) Whether `offset` lies in a dynamic-relocation slot that
+    /// (unlace `dynrelocs`) Whether `offset` lies in a dynamic-relocation slot that
     /// `PT_GNU_RELRO` freezes, so a read-only varnode there may be folded to its
     /// relocated value even with global read-only propagation off. Binary search
     /// over the sorted, disjoint [`Self::dynreloc_const`]; a plain `false` when
@@ -1420,7 +1420,7 @@ impl ArchContext {
         }
     }
 
-    /// (kuna `litpoolconst`) Whether the `size`-byte read at `offset` lies
+    /// (unlace `litpoolconst`) Whether the `size`-byte read at `offset` lies
     /// entirely inside the image's executable read-only memory, so a read-only
     /// varnode there may be folded to the constant it holds even with global
     /// read-only propagation off. A plain `false` when the range list is empty,
@@ -1440,11 +1440,11 @@ impl ArchContext {
     /// mirroring C++ `glb->loader->loadFill(bytes, sz, addr)`.  Returns an error
     /// (the C++ `DataUnavailError` analogue) when no loader is shared or the
     /// region is unavailable.  Used by [`Funcdata::fillin_read_only`](crate::funcdata::Funcdata::fillin_read_only) to fetch a read-only Varnode's value.
-    pub fn loader_fill(&self, buf: &mut [u8], addr: &Address) -> KunaResult<()> {
+    pub fn loader_fill(&self, buf: &mut [u8], addr: &Address) -> UnlaceResult<()> {
         let loader = self
             .loader
             .as_ref()
-            .ok_or_else(|| KunaError::lowlevel("loadFill: no load image shared"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("loadFill: no load image shared"))?;
         loader.borrow_mut().load_fill(buf, addr)
     }
 
@@ -1455,7 +1455,7 @@ impl ArchContext {
             .map(|t| t as &dyn crate::dtype::TypeFactory)
     }
 
-    /// (kuna `dexmodel`, `jvmmodel`) The constant-pool record for `refs` (C++
+    /// (unlace `dexmodel`, `jvmmodel`) The constant-pool record for `refs` (C++
     /// `glb->cpool->getRecord`).  Only a DEX image or a class file has a pool.
     pub fn cpool_record(&self, refs: &[u64]) -> Option<Rc<crate::cpool::CPoolRecord>> {
         if let Some(jvm) = self.jvm.as_ref() {
@@ -1530,7 +1530,7 @@ impl ArchContext {
         self.bound_proto_models.get(&key).cloned()
     }
 
-    /// (kuna `libcnames`) The library names the prototype parked on the
+    /// (unlace `libcnames`) The library names the prototype parked on the
     /// callee at `addr` carries, without copying the prototype.
     pub fn callee_library_names(
         &self,
@@ -1544,12 +1544,12 @@ impl ArchContext {
         self.callee_protos
             .iter()
             .find(|(si, off, _)| *si == space_index && *off == offset)
-            .and_then(|(_, _, pieces)| pieces.kuna_library_names)
+            .and_then(|(_, _, pieces)| pieces.unlace_library_names)
     }
 
     pub fn callee_proto_pieces(&self, addr: &Address) -> Option<crate::fspec::PrototypePieces> {
         if let Some(remote) = &self.remote_scope {
-            // (kuna, Phase 3) ghidra-mode: the locked callee signatures decoded
+            // (unlace, Phase 3) ghidra-mode: the locked callee signatures decoded
             // from getMappedSymbols answers (query-through).
             return remote.callee_pieces_at(addr);
         }
@@ -1784,7 +1784,7 @@ impl ArchContext {
         sz: int4,
         point: &Address,
         full_encoding: &mut u64,
-    ) -> KunaResult<Address> {
+    ) -> UnlaceResult<Address> {
         if let Some(seg) = self.get_segment_op(spc.get_index()) {
             return Ok(seg.resolve(val, sz, point, full_encoding, |mem, at| {
                 self.get_tracked_value(mem, at)
@@ -1804,7 +1804,7 @@ impl ArchContext {
     }
 
     /// C++ `data.getScopeLocal()->getParent()->queryContainer(addr,size,usepoint)`
-    /// restricted to the global scope (the merged kuna `glb` carries the global
+    /// restricted to the global scope (the merged unlace `glb` carries the global
     /// scope as the read-only [`GlobalQuery`] snapshot, not a live `Database`
     /// parent chain).  Returns the smallest covering Symbol's
     /// [`GlobalContainer`] (its data-type, entry address, and `getAllFlags()`), or
@@ -1891,7 +1891,7 @@ impl ArchContext {
             .indirect_slot_type(addr, size, usepoint)
     }
 
-    /// (kuna `switchrunon`) A lookup of the known function entry at or before
+    /// (unlace `switchrunon`) A lookup of the known function entry at or before
     /// an offset in `addr`'s space, over one global-scope snapshot and the
     /// entries `lazyfuncs` left as names.
     pub fn function_owner(&self, addr: &Address) -> Option<impl Fn(u64) -> Option<u64> + use<>> {
@@ -1905,7 +1905,7 @@ impl ArchContext {
         })
     }
 
-    /// (kuna `switchextent`) The first known function entry above `addr`'s
+    /// (unlace `switchextent`) The first known function entry above `addr`'s
     /// offset in its space, over the same functions [`Self::function_owner`]
     /// sees.
     pub fn function_entry_after(&self, addr: &Address) -> Option<u64> {
@@ -1923,7 +1923,7 @@ impl ArchContext {
         }
     }
 
-    /// (kuna `switchextent`) The name of the function symbol that starts at
+    /// (unlace `switchextent`) The name of the function symbol that starts at
     /// `entry`, without building its prototype as [`Self::query_function`] does.
     pub fn function_name_at(&self, entry: &Address) -> Option<String> {
         let query = self.effective_global_query(entry)?;
@@ -1935,7 +1935,7 @@ impl ArchContext {
         name
     }
 
-    /// (kuna `switchrunon`) Whether `b` lies in the load-image section that
+    /// (unlace `switchrunon`) Whether `b` lies in the load-image section that
     /// holds `a`; true when no section holds `a` or the image reports none.
     pub fn in_section_of(&self, a: &Address, b: &Address) -> bool {
         let Some(loader) = self.loader.as_ref() else {
@@ -2072,7 +2072,7 @@ impl ArchContext {
             if e.func_inject_id >= 0 {
                 proto.set_inject_id(e.func_inject_id);
             }
-            // (kuna) The callee's no-return flow effect: `deindirect` skips its
+            // (unlace) The callee's no-return flow effect: `deindirect` skips its
             // prototype merge for a no-return callee and schedules the restart
             // whose re-flow truncates at the call.
             if e.func_no_return {
@@ -2220,7 +2220,7 @@ impl crate::database::DatabaseArch for ArchContext {
     }
 }
 
-/// (kuna `syscallregs`) The processor families whose system-call user-op the pass models.
+/// (unlace `syscallregs`) The processor families whose system-call user-op the pass models.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SyscallFamily {
     Arm,
@@ -2288,7 +2288,7 @@ impl SyscallFamily {
     }
 }
 
-/// (kuna `narrowext`) The widening an image's arguments and return values follow, if known.
+/// (unlace `narrowext`) The widening an image's arguments and return values follow, if known.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct NarrowExtRules {
     pub input: Option<crate::fspec::Widen>,

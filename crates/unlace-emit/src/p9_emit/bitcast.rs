@@ -54,7 +54,7 @@ pub fn storage_transfer(
         fd.vbank()
             .get(id)
             .and_then(|v| fd.high_bank().get(v.get_high()?))
-            .and_then(|h| h.kuna_symbol_type().map(|ty| ty.get_metatype()))
+            .and_then(|h| h.unlace_symbol_type().map(|ty| ty.get_metatype()))
             .is_some_and(|meta| {
                 matches!(meta, type_metatype::TYPE_STRUCT | type_metatype::TYPE_UNION)
             })
@@ -252,7 +252,7 @@ pub fn reinterprets_to_float(fd: &Funcdata, input: VarnodeId) -> bool {
 pub fn word_result(fd: &Funcdata, op: OpId) -> Option<Rc<Datatype>> {
     if !fd
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::coreoptions::StackViews>()
         .0
     {
@@ -295,7 +295,7 @@ pub fn word_result(fd: &Funcdata, op: OpId) -> Option<Rc<Datatype>> {
 pub fn stack_float_input(fd: &Funcdata, op: OpId, input: VarnodeId) -> Option<Transfer> {
     if !fd
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::coreoptions::StackViews>()
         .0
     {
@@ -418,11 +418,11 @@ fn states_a_return(fd: &Funcdata, op: OpId) -> bool {
         .get_space()
         .map(|s| (s.get_index(), entry.get_offset()))
         .is_some_and(|k| {
-            fd.kuna_callret_stated(k)
+            fd.unlace_callret_stated(k)
                 .is_some_and(|s| read_as(&s.addr, s.size))
-                || (fd.kuna_callee_returns(k) == Some(crate::voidret::Returns::Other)
+                || (fd.unlace_callee_returns(k) == Some(crate::voidret::Returns::Other)
                     && fd
-                        .kuna_callee_return_storage(k)
+                        .unlace_callee_return_storage(k)
                         .is_some_and(|(a, n)| read_as(a, *n)))
         })
 }
@@ -480,7 +480,7 @@ pub fn declared_member_type(fd: &Funcdata, id: VarnodeId) -> Option<Rc<Datatype>
     let declared = crate::printc::declared_variable_type(fd, id)?;
     if !fd
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::coreoptions::StackViews>()
         .0
     {
@@ -542,6 +542,6 @@ pub fn array_float_conversion(fd: &Funcdata, op: OpId) -> Option<Rc<Datatype>> {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.bitcast_reinterprets_to_float = Some(reinterprets_to_float);
 }

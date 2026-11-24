@@ -3,7 +3,7 @@
 //! listing used to find SLEIGH spec files (`sleigh_arch.cc`,
 //! `slgh_compile.cc`, `consolemain.cc`, `test.cc`).
 //!
-//! Only the POSIX branch of the C++ `#ifdef _WINDOWS` pairs is ported (kuna
+//! Only the POSIX branch of the C++ `#ifdef _WINDOWS` pairs is ported (unlace
 //! targets Linux); the Windows branches (`FindFirstFileA`,
 //! `GetCurrentDirectoryA`, the `'\\'` separator) are intentionally dropped.
 //! Implementation is `std::fs` based but keeps the C++ string-typed API
@@ -49,7 +49,7 @@ impl FileManage {
         }
     }
 
-    /// The search path, in the order directories were added (kuna).
+    /// The search path, in the order directories were added (unlace).
     pub fn path_list(&self) -> &[String] {
         &self.pathlist
     }

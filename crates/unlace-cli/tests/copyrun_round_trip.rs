@@ -16,7 +16,7 @@ fn emitted(option: &str, functions: Option<&str>) -> String {
     if let Some(functions) = functions {
         args.extend(["--functions", functions]);
     }
-    let (output, error, status) = common::run_kuna(&args);
+    let (output, error, status) = common::run_unlace(&args);
     assert_eq!(status, 0, "{error}");
     let document: serde_json::Value = serde_json::from_str(&output).unwrap();
     document["functions"]

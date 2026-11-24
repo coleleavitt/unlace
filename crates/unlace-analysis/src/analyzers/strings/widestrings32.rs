@@ -1,4 +1,4 @@
-//! (kuna `widestrings32`) The 4-byte width of the string-literal markup: a
+//! (unlace `widestrings32`) The 4-byte width of the string-literal markup: a
 //! `wchar_t` literal of an ELF or Mach-O target, where `wchar_t` is 4 bytes, or a
 //! `char32_t` one.
 //!

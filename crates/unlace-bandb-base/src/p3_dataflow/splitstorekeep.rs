@@ -53,7 +53,7 @@
 use crate::context::VarnodeId;
 use crate::funcdata::Funcdata;
 
-/// Carry the `stack_store` mark from a refined write onto its pieces (kuna
+/// Carry the `stack_store` mark from a refined write onto its pieces (unlace
 /// `splitstorekeep`).
 ///
 /// Called from [`Heritage::refine_write`](crate::heritage) with the
@@ -77,6 +77,6 @@ pub fn keep_store_mark(fd: &mut Funcdata, vn: VarnodeId, pieces: &[VarnodeId]) -
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.splitstorekeep_keep_store_mark = Some(keep_store_mark);
 }

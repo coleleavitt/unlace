@@ -1,4 +1,4 @@
-//! (kuna `msvcstrappend`) Render an inlined MSVC `std::string` append as one call.
+//! (unlace `msvcstrappend`) Render an inlined MSVC `std::string` append as one call.
 //!
 //! MSVC inlines `std::string::push_back` (and `operator+=(char)`, which is
 //! `push_back`) and the literal form of `append(const char *, size_t)` into
@@ -76,7 +76,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::space::{AddrSpace, spacetype};
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
@@ -1454,7 +1454,7 @@ fn emit_assign(
     dest: &Address,
     size: int4,
     src: &Src,
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     let op = match src {
         Src::Const(c) => {
             let op = data.new_op(1, at.clone());
@@ -1485,7 +1485,7 @@ fn emit_assign(
     Ok(())
 }
 
-fn rewrite(data: &mut Funcdata, regs: &Regs, site: &Site) -> KunaResult<bool> {
+fn rewrite(data: &mut Funcdata, regs: &Regs, site: &Site) -> UnlaceResult<bool> {
     use crate::dtype::type_metatype;
     use crate::fspec::{EffectRecord, effect_type};
     let Some(types) = data.get_arch().types() else {
@@ -1600,7 +1600,7 @@ fn rewrite(data: &mut Funcdata, regs: &Regs, site: &Site) -> KunaResult<bool> {
     data.delete_call_specs(site.call);
     let idx = data.push_call_specs(fc);
     let handle = crate::flow::next_fspec_handle();
-    let style = data.get_arch().kuna_name_style();
+    let style = data.get_arch().unlace_name_style();
     data.get_call_specs(idx)
         .register_in_fspec_space(handle, style);
     let fspecvn = data.new_varnode_call_specs(handle);
@@ -1609,7 +1609,7 @@ fn rewrite(data: &mut Funcdata, regs: &Regs, site: &Site) -> KunaResult<bool> {
     Ok(true)
 }
 
-/// (kuna) `ActionMsvcStrAppend` — collapse each inlined MSVC `std::string`
+/// (unlace) `ActionMsvcStrAppend` — collapse each inlined MSVC `std::string`
 /// append to one call (option `msvcstrappend`).
 pub struct ActionMsvcStrAppend {
     base: ActionBase,
@@ -1646,7 +1646,7 @@ impl Action for ActionMsvcStrAppend {
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::msvcstrappend::MsvcStrAppend>()
             .0
             || data.num_calls() == 0
@@ -1683,8 +1683,8 @@ impl Action for ActionMsvcStrAppend {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna `msvcstrappend`) Collapse each inlined MSVC x64 `std::string`
+crate::unlace_flag!(
+    /// (unlace `msvcstrappend`) Collapse each inlined MSVC x64 `std::string`
     /// `push_back` / literal `append` capacity diamond into one call on a locked
     /// `std::string::push_back` / `std::string::append` prototype (`option
     /// msvcstrappend`).  See [`crate::p2_lift::msvcstrappend`].

@@ -1,4 +1,4 @@
-//! (kuna) Recover an argument list from the callee's own body when the call has
+//! (unlace) Recover an argument list from the callee's own body when the call has
 //! no sibling to compare against.
 //!
 //! # The gap
@@ -21,7 +21,7 @@
 //! ```
 //!
 //! `rcx` is untouched between the entry and the `CALL`, so the argument really is
-//! the caller's own first parameter, and kuna's own recovery of the callee agrees
+//! the caller's own first parameter, and unlace's own recovery of the callee agrees
 //! — `payload` on its own comes out `unsigned long long payload(unsigned int *)`.
 //! But `Funcdata::onlyOpUse` (`funcdata_varnode.cc:1851`) rejects the `rcx` trial
 //! because a `CBRANCH` also reads that value, and the address-taken `lea` is not
@@ -81,7 +81,7 @@ use crate::context::{OpId, VarnodeId};
 use crate::fspec::{FuncCallSpecs, ParamEntry};
 use crate::funcdata::Funcdata;
 
-/// Marshaling element `<calleearitybody>` (kuna 4000+ range; 4151 = calleepop).
+/// Marshaling element `<calleearitybody>` (unlace 4000+ range; 4151 = calleepop).
 pub const ELEM_CALLEEARITYBODY: ElementId = ElementId::new("calleearitybody", 4152);
 
 /// One of a captured call's trials, in prototype order.
@@ -121,7 +121,7 @@ pub struct PendingBodyArgs {
     op: OpId,
     entry: Address,
     trials: Vec<BodyTrial>,
-    /// (kuna `swiftcall`) The call already passes a Swift `self` and nothing
+    /// (unlace `swiftcall`) The call already passes a Swift `self` and nothing
     /// else; the body's plan covers that trial like any other.
     swift_self: bool,
 }
@@ -346,7 +346,7 @@ fn recover_one(data: &mut Funcdata, p: &PendingBodyArgs) -> bool {
         entry_locations(&fc.proto().input_param_entries())
     };
     let picked = {
-        let Some(live) = data.kuna_callee_entry_dead(&p.entry) else {
+        let Some(live) = data.unlace_callee_entry_dead(&p.entry) else {
             return false;
         };
         match plan_from_body(&p.trials, &entries, live) {

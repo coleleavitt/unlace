@@ -96,7 +96,7 @@ fn traced(root: &Path, image: &Image, base: &[u8], name: &str, trace: &[u8]) -> 
     path
 }
 
-fn kuna(args: &[&std::ffi::OsStr]) -> (String, String) {
+fn unlace(args: &[&std::ffi::OsStr]) -> (String, String) {
     let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .arg("--sleighpath")
@@ -116,7 +116,7 @@ fn kuna(args: &[&std::ffi::OsStr]) -> (String, String) {
 
 /// Function name by entry address, and the C of each, for one option value.
 fn functions(binary: &Path, mode: &str) -> BTreeMap<u32, (String, String)> {
-    let (json, _) = kuna(&[
+    let (json, _) = unlace(&[
         "decompile-all".as_ref(),
         binary.as_os_str(),
         "--json".as_ref(),
@@ -185,7 +185,7 @@ fn pe_trace_names_only_free_placeholders() {
         off.values()
             .all(|(n, c)| !n.ends_with("_TRACE") && !c.contains("_TRACE"))
     );
-    kuna(&[
+    unlace(&[
         "decompile".as_ref(),
         binary.as_os_str(),
         "FROM_TRACE".as_ref(),
@@ -205,7 +205,7 @@ fn pe_trace_names_only_free_placeholders() {
     assert_eq!(name(&on, image.exported), "exported");
     assert!(name(&on, image.helper).starts_with("sub_"), "{on:?}");
     assert!(name(&on, image.sample).starts_with("sub_"), "{on:?}");
-    let (by_name, _) = kuna(&[
+    let (by_name, _) = unlace(&[
         "decompile".as_ref(),
         binary.as_os_str(),
         "exported".as_ref(),
@@ -249,7 +249,7 @@ fn pe_trace_names_only_free_placeholders() {
     let mut capped = record(low, &vec![""; 65537], &[(image.sample, "LOST")]);
     capped.extend(record(low, &["a.for"], &[(image.helper, "KEPT")]));
     let binary = traced(&root, &image, &image.stripped, "capped.dll", &capped);
-    let (json, stderr) = kuna(&[
+    let (json, stderr) = unlace(&[
         "decompile-all".as_ref(),
         binary.as_os_str(),
         "--json".as_ref(),
@@ -290,7 +290,7 @@ fn pe_trace_names_only_free_placeholders() {
     let expected = text(&only, &root.join("original.obj"));
     for mode in ["on", "lines"] {
         let project = root.join(mode);
-        kuna(&[
+        unlace(&[
             "decompile-project".as_ref(),
             binary.as_os_str(),
             "--addr".as_ref(),

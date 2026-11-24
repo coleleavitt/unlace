@@ -40,7 +40,7 @@ fn a_pointer_table_with_printable_entries_round_trips() {
         "ptrslot_gcc_O1_large_x86_64",
         "ptrslot_clang_O1_x86_64",
     ] {
-        let (printed, stderr, code) = common::run_kuna(&[
+        let (printed, stderr, code) = common::run_unlace(&[
             "decompile-all",
             &common::fixture(fixture),
             "--functions",
@@ -96,7 +96,7 @@ fn a_pointer_table_with_printable_entries_round_trips() {
 #[test]
 fn a_pointer_table_at_a_printable_base_is_not_a_string() {
     let fixture = "ptrslot_gcc_O1_i386";
-    let (printed, stderr, code) = common::run_kuna(&[
+    let (printed, stderr, code) = common::run_unlace(&[
         "decompile-all",
         &common::fixture(fixture),
         "--functions",

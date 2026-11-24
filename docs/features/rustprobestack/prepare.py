@@ -1,7 +1,7 @@
 from common import *
 import datetime
 base=Path('/home/mahaloz/kwt/angr-base-c5fc')
-run(r,w,['cargo','build','--release','-p','kuna-cli','-p','kuna-console','-p','kuna-harness'],'build-final.log',r/'decompiler')
+run(r,w,['cargo','build','--release','-p','kuna-cli','-p','console','-p','kuna-harness'],'build-final.log',r/'decompiler')
 k=r/'decompiler/target/release/kuna'
 p=subprocess.run([str(k),'catalog','--markdown'],cwd=r,env=env,capture_output=True,text=True);assert p.returncode==0;(r/'docs/options.md').write_text(p.stdout)
 cap=w/'phase_catalog.json';commands=f'openfile write {cap}\nphase catalog\nclosefile\nquit\n'

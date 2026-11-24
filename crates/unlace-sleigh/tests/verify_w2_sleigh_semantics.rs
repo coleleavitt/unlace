@@ -15,7 +15,7 @@
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::{
     AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
@@ -102,11 +102,11 @@ impl VerifyWalker {
 }
 
 impl PatternExpressionContext for VerifyWalker {
-    fn get_instruction_bytes(&self, _byteoff: i32, _numbytes: i32) -> KunaResult<u32> {
-        Err(KunaError::sleigh("not in scope"))
+    fn get_instruction_bytes(&self, _byteoff: i32, _numbytes: i32) -> UnlaceResult<u32> {
+        Err(UnlaceError::sleigh("not in scope"))
     }
-    fn get_context_bytes(&self, _byteoff: i32, _numbytes: i32) -> KunaResult<u32> {
-        Err(KunaError::sleigh("not in scope"))
+    fn get_context_bytes(&self, _byteoff: i32, _numbytes: i32) -> UnlaceResult<u32> {
+        Err(UnlaceError::sleigh("not in scope"))
     }
     fn get_addr(&self) -> Address {
         self.addr.clone()
@@ -114,29 +114,29 @@ impl PatternExpressionContext for VerifyWalker {
     fn get_naddr(&self) -> Address {
         self.naddr.clone()
     }
-    fn get_n2addr(&self) -> KunaResult<Address> {
-        Err(KunaError::lowlevel("no next2"))
+    fn get_n2addr(&self) -> UnlaceResult<Address> {
+        Err(UnlaceError::lowlevel("no next2"))
     }
-    fn operand_value(&self, _index: i32, _table_id: u32, _ct_id: u32) -> KunaResult<i64> {
-        Err(KunaError::sleigh("not in scope"))
+    fn operand_value(&self, _index: i32, _table_id: u32, _ct_id: u32) -> UnlaceResult<i64> {
+        Err(UnlaceError::sleigh("not in scope"))
     }
 }
 
 impl SymbolWalker for VerifyWalker {
-    fn push_operand(&mut self, _i: i32) -> KunaResult<()> {
+    fn push_operand(&mut self, _i: i32) -> UnlaceResult<()> {
         Ok(())
     }
-    fn pop_operand(&mut self) -> KunaResult<()> {
+    fn pop_operand(&mut self) -> UnlaceResult<()> {
         Ok(())
     }
-    fn get_constructor(&self) -> KunaResult<ConstructorRef> {
-        Err(KunaError::sleigh("not in scope"))
+    fn get_constructor(&self) -> UnlaceResult<ConstructorRef> {
+        Err(UnlaceError::sleigh("not in scope"))
     }
-    fn get_fixed_handle(&self, i: i32) -> KunaResult<FixedHandle> {
+    fn get_fixed_handle(&self, i: i32) -> UnlaceResult<FixedHandle> {
         self.handles
             .get(i as usize)
             .cloned()
-            .ok_or_else(|| KunaError::sleigh("no handle"))
+            .ok_or_else(|| UnlaceError::sleigh("no handle"))
     }
     fn get_const_space(&self) -> Rc<AddrSpace> {
         Rc::clone(&self.const_space)
@@ -144,17 +144,17 @@ impl SymbolWalker for VerifyWalker {
     fn get_cur_space(&self) -> Rc<AddrSpace> {
         Rc::clone(&self.cur_space)
     }
-    fn get_dest_addr(&self) -> KunaResult<Address> {
-        Err(KunaError::lowlevel("no flowdest"))
+    fn get_dest_addr(&self) -> UnlaceResult<Address> {
+        Err(UnlaceError::lowlevel("no flowdest"))
     }
-    fn get_ref_addr(&self) -> KunaResult<Address> {
-        Err(KunaError::lowlevel("no flowref"))
+    fn get_ref_addr(&self) -> UnlaceResult<Address> {
+        Err(UnlaceError::lowlevel("no flowref"))
     }
-    fn get_instruction_bits(&self, _startbit: i32, _size: i32) -> KunaResult<u32> {
-        Err(KunaError::sleigh("not in scope"))
+    fn get_instruction_bits(&self, _startbit: i32, _size: i32) -> UnlaceResult<u32> {
+        Err(UnlaceError::sleigh("not in scope"))
     }
-    fn get_context_bits(&self, _startbit: i32, _size: i32) -> KunaResult<u32> {
-        Err(KunaError::sleigh("not in scope"))
+    fn get_context_bits(&self, _startbit: i32, _size: i32) -> UnlaceResult<u32> {
+        Err(UnlaceError::sleigh("not in scope"))
     }
 }
 
@@ -422,19 +422,19 @@ fn verify_w2sem_pcodebuilder_error_partial_state() {
         fn set_label_count(&mut self, val: u32) {
             self.labelcount = val;
         }
-        fn dump(&mut self, _op: &OpTpl) -> KunaResult<()> {
-            Err(KunaError::lowlevel("dump fails"))
+        fn dump(&mut self, _op: &OpTpl) -> UnlaceResult<()> {
+            Err(UnlaceError::lowlevel("dump fails"))
         }
-        fn append_build(&mut self, _bld: &OpTpl, _secnum: i32) -> KunaResult<()> {
+        fn append_build(&mut self, _bld: &OpTpl, _secnum: i32) -> UnlaceResult<()> {
             Ok(())
         }
-        fn delay_slot(&mut self, _op: &OpTpl) -> KunaResult<()> {
+        fn delay_slot(&mut self, _op: &OpTpl) -> UnlaceResult<()> {
             Ok(())
         }
-        fn set_label(&mut self, _op: &OpTpl) -> KunaResult<()> {
+        fn set_label(&mut self, _op: &OpTpl) -> UnlaceResult<()> {
             Ok(())
         }
-        fn append_cross_build(&mut self, _bld: &OpTpl, _secnum: i32) -> KunaResult<()> {
+        fn append_cross_build(&mut self, _bld: &OpTpl, _secnum: i32) -> UnlaceResult<()> {
             Ok(())
         }
     }

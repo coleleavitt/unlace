@@ -1,4 +1,4 @@
-//! (kuna `fieldtype`) A synthesized field some access holds as a pointer is
+//! (unlace `fieldtype`) A synthesized field some access holds as a pointer is
 //! declared as that pointer, not as the integer its first access carried.
 //!
 //! # The gap
@@ -49,7 +49,7 @@
 
 use std::rc::Rc;
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
@@ -58,7 +58,7 @@ use crate::dtype::{Datatype, TypeField, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::options::on_or_off;
 
-/// (kuna) Parse `option fieldtype on|off`; the caller writes the live field.
+/// (unlace) Parse `option fieldtype on|off`; the caller writes the live field.
 pub struct OptionFieldType;
 
 impl OptionFieldType {
@@ -66,7 +66,7 @@ impl OptionFieldType {
     pub const NAME: &'static str = "fieldtype";
 
     /// Parse + validate the `on`/`off` value.
-    pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((val, format!("Pointer field typing turned {prop}")))

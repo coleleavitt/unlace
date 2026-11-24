@@ -1,10 +1,10 @@
-//! Tests for the lowered comparison-cascade -> switch recovery sub-stage (kuna,
+//! Tests for the lowered comparison-cascade -> switch recovery sub-stage (unlace,
 //! angr `LoweredSwitchSimplifier`, S2): the read-only detection
 //! ([`ActionLowerSwitchDetect::detect`] / [`recover_cascade`]) on a hand-built
 //! lowered binary-search cascade, the default (gate-off) behavior, the sticky
 //! side table, and the [`OptionLowerSwitch::apply`] parse.
 //!
-//! The install half (`Funcdata::kuna_install_lowered_switch`) is exercised
+//! The install half (`Funcdata::unlace_install_lowered_switch`) is exercised
 //! end-to-end by the `ghangr-loweredswitch` / `ghangr-loweredswitch-mv`
 //! stage-model datatests; the unit tests below cover the install Action's gate /
 //! store-lookup structure (the surgery declines gracefully on the empty unit `fd`,
@@ -328,7 +328,7 @@ fn detect_recovers_lowered_switch() {
         "detect should set restart-pending"
     );
 
-    // The sticky side table now reports a record (kunaLoweredSwitchHasRecord).
+    // The sticky side table now reports a record (unlaceLoweredSwitchHasRecord).
     assert!(act.store().borrow().has_record(&fd));
     let recs = act.store().borrow().records(&fd).to_vec();
     assert_eq!(recs.len(), 1);
@@ -820,7 +820,7 @@ fn key_for_func_uses_entry_address() {
 #[test]
 fn empty_store_has_no_record() {
     let fd = build_fd();
-    let store = KunaLoweredSwitchStore::new();
+    let store = UnlaceLoweredSwitchStore::new();
     assert!(!store.has_record(&fd));
     assert!(store.records(&fd).is_empty());
 }
@@ -828,17 +828,17 @@ fn empty_store_has_no_record() {
 // -----------------------------------------------------------------------------
 // ActionLowerSwitchInstall (the install half).
 //
-// The CFG surgery (Funcdata::kunaInstallLoweredSwitch) is a documented
-// STUB(W7/W4) — getHeritagePass, a real JumpTable registry, kunaSetTrivialModel,
+// The CFG surgery (Funcdata::unlaceInstallLoweredSwitch) is a documented
+// STUB(W7/W4) — getHeritagePass, a real JumpTable registry, unlaceSetTrivialModel,
 // and removeUnreachableBlocks are all unported — so `install` always declines
 // (0).  These cover the ported structure: gate-off, no-record short-circuit, the
 // has-record path still declining at the surgery seam, and clone filtering.
 // -----------------------------------------------------------------------------
 
 /// A minimal recovered record for `fd` (the shape the Detect half produces).
-fn sample_record(fd: &Funcdata) -> KunaLoweredSwitchRecord {
+fn sample_record(fd: &Funcdata) -> UnlaceLoweredSwitchRecord {
     let a = |off: u64| ram_addr(fd, off);
-    KunaLoweredSwitchRecord {
+    UnlaceLoweredSwitchRecord {
         branch_addr: a(0x1001),
         var_addr: a(0x4000),
         var_size: 4,

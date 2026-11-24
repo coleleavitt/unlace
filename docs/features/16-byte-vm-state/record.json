@@ -24,7 +24,7 @@
     "decompiler/crates/kuna-decomp/src/infra/architecture.rs",
     "decompiler/crates/kuna-decomp/src/p0_knowledge/options.rs",
     "decompiler/crates/kuna-decomp/phases.toml",
-    "tests/stages/kuna-arraycoverwidth.xml",
+    "tests/stages/arraycoverwidth.xml",
     "tests/cli/16-byte-vm-state.json",
     "decompiler/crates/kuna-analysis/tests/fixtures/arraycoverwidth_x86_64",
     "decompiler/crates/kuna-analysis/tests/fixtures/arraycoverwidth_x86_64.s",

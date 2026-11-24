@@ -38,7 +38,7 @@
 //! no W3 surface.
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::spacetype;
 use unlace_base::types::{int4, uintb};
 
@@ -106,16 +106,16 @@ impl crate::comment::SorterFuncdata for Funcdata {
         &self,
         cursor: &crate::comment::OpCursor,
         addr: &Address,
-    ) -> KunaResult<crate::comment::OpBlockInfo> {
+    ) -> UnlaceResult<crate::comment::OpBlockInfo> {
         let op = cursor_to_op(cursor.0);
         let o = self
             .obank()
             .get(op)
-            .ok_or_else(|| KunaError::lowlevel("CommentSorter: stale op cursor"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("CommentSorter: stale op cursor"))?;
         // A dead op (no parent) is a C++ LowlevelError.
         let parent = o
             .get_parent()
-            .ok_or_else(|| KunaError::lowlevel("Dead op reaching CommentSorter"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("Dead op reaching CommentSorter"))?;
         let block_index = self.bblocks_ref().block(parent).get_index();
         let order = o.get_seq_num().get_order();
         // block->contains(addr) == cover.inRange(addr,1).
@@ -211,7 +211,7 @@ impl Funcdata {
         }
     }
 
-    /// (kuna `gotonext`) Re-derive each fall-thru chain from the case blocks: a
+    /// (unlace `gotonext`) Re-derive each fall-thru chain from the case blocks: a
     /// case that is a `BlockGoto` to another case's entry block chains to that
     /// case.  `grab_case_basic` reads the target's switch out-index from sblocks
     /// edges, which a target wrapped in its own `BlockGoto` has lost and whose
@@ -258,7 +258,7 @@ impl Funcdata {
         let ncase = cases.len();
         if self
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::funcdata_block::GotoNext>()
             .0
         {
@@ -695,7 +695,7 @@ impl Funcdata {
     /// can be moved to be so).  Returns the root explicit op or `None`.
     /// When `finalOp` is a hidden COPY, the op feeding it is what the header
     /// prints, so it must also move up to the COPY past every printed statement
-    /// between them (kuna; upstream only moves the COPY).
+    /// between them (unlace; upstream only moves the COPY).
     fn while_test_terminal(&mut self, wd: BlockId, slot: int4) -> Option<OpId> {
         let loop_def = self.sblocks_ref().block(wd).get_loop_def()?;
         let vn = self.obank().get(loop_def).and_then(|o| o.get_in(slot))?;
@@ -905,20 +905,20 @@ impl Funcdata {
     /// guarded target becomes a destination of the switch.  Used by
     /// `JumpBasic::foldInOneGuard` when the guard targets a block not already in
     /// the switch table.
-    pub fn push_branch(&mut self, bb: BlockId, slot: int4, bbnew: BlockId) -> KunaResult<()> {
+    pub fn push_branch(&mut self, bb: BlockId, slot: int4, bbnew: BlockId) -> UnlaceResult<()> {
         let cbranch = self
             .bb_op_tail(bb)
-            .ok_or_else(|| KunaError::lowlevel("pushBranch: source block has no terminator"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("pushBranch: source block has no terminator"))?;
         let cb_ok = self.obank().get(cbranch).map(|o| o.code()) == Some(OpCode::CPUI_CBRANCH)
             && self.bblocks_ref().block(bb).size_out() == 2;
         if !cb_ok {
-            return Err(KunaError::lowlevel("Cannot push non-conditional edge"));
+            return Err(UnlaceError::lowlevel("Cannot push non-conditional edge"));
         }
         let indop = self
             .bb_op_tail(bbnew)
-            .ok_or_else(|| KunaError::lowlevel("pushBranch: target block has no terminator"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("pushBranch: target block has no terminator"))?;
         if self.obank().get(indop).map(|o| o.code()) != Some(OpCode::CPUI_BRANCHIND) {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Can only push branch into indirect jump",
             ));
         }
@@ -938,7 +938,7 @@ impl Funcdata {
     /// With no branches left the MULTIEQUAL becomes a COPY of a fresh input
     /// varnode (the value is now an input to the function); with a single branch
     /// it becomes a plain COPY of its sole input.
-    pub fn op_zero_multi(&mut self, op: OpId) -> KunaResult<()> {
+    pub fn op_zero_multi(&mut self, op: OpId) -> UnlaceResult<()> {
         let nin = self
             .obank()
             .get(op)
@@ -1163,7 +1163,7 @@ impl Funcdata {
                 }
                 if self
                     .get_arch()
-                    .kuna_options
+                    .unlace_options
                     .get::<crate::condcallpush::CondCallPush>()
                     .0
                     && crate::condcallpush::is_call_push(self, inst)
@@ -1312,7 +1312,7 @@ impl Funcdata {
     ///
     /// \param bb is the given basic block
     /// \param num is the index of the outgoing edge to remove
-    pub fn branch_remove_internal(&mut self, bb: BlockId, num: int4) -> KunaResult<()> {
+    pub fn branch_remove_internal(&mut self, bb: BlockId, num: int4) -> UnlaceResult<()> {
         // No decision left.
         if self.bblocks_ref().block(bb).size_out() == 2 {
             if let Some(lastop) = self.bb_op_tail(bb) {
@@ -1341,7 +1341,7 @@ impl Funcdata {
 
     /// Remove the indicated branch and rebuild the structured-block state (C++
     /// `Funcdata::removeBranch`, `funcdata_block.cc:`).
-    pub fn remove_branch(&mut self, bb: BlockId, num: int4) -> KunaResult<()> {
+    pub fn remove_branch(&mut self, bb: BlockId, num: int4) -> UnlaceResult<()> {
         self.branch_remove_internal(bb, num)?;
         self.structure_reset();
         Ok(())
@@ -1427,7 +1427,7 @@ impl Funcdata {
     /// Force any Varnode defined by a MULTIEQUAL in the (about-to-be-removed)
     /// block `bb` to be defined in the output block instead (C++
     /// `Funcdata::pushMultiequals`, `funcdata_block.cc:105`).
-    pub fn push_multiequals(&mut self, bb: BlockId) -> KunaResult<()> {
+    pub fn push_multiequals(&mut self, bb: BlockId) -> UnlaceResult<()> {
         if self.bblocks_ref().block(bb).size_out() == 0 {
             return Ok(());
         }
@@ -1585,7 +1585,7 @@ impl Funcdata {
     /// of the constant is interposed.  Returns `true` if any rewritten reader is
     /// in a block that is not itself fully orphaned (i.e. has in-edges), which the
     /// caller turns into a one-time "creating undefined varnodes" warning.
-    pub fn descend2_undef(&mut self, vn: VarnodeId) -> KunaResult<bool> {
+    pub fn descend2_undef(&mut self, vn: VarnodeId) -> UnlaceResult<bool> {
         let sz = self
             .vbank()
             .get(vn)
@@ -1696,7 +1696,7 @@ impl Funcdata {
     ///
     /// `unreachable` selects the warning/`descend2Undef` arm used by
     /// `removeUnreachableBlocks`; `removeDoNothingBlock` passes `false`.
-    pub fn block_remove_internal(&mut self, bb: BlockId, unreachable: bool) -> KunaResult<()> {
+    pub fn block_remove_internal(&mut self, bb: BlockId, unreachable: bool) -> UnlaceResult<()> {
         // BRANCHIND last op -> drop its jump table: the ops below are destroyed,
         // so a surviving table would point at a dead BRANCHIND.
         if let Some(op) = self.bb_op_tail(bb) {
@@ -1812,7 +1812,7 @@ impl Funcdata {
                     }
                 }
                 if self.descendants_outside(deadvn) {
-                    return Err(KunaError::lowlevel("Deleting op with descendants"));
+                    return Err(UnlaceError::lowlevel("Deleting op with descendants"));
                 }
             }
             if self.obank().get(op).expect("blockRemoveInternal").is_call() {
@@ -1831,9 +1831,9 @@ impl Funcdata {
     ///
     /// The block must contain only marker ops (MULTIEQUAL/INDIRECT) and possibly
     /// a single unconditional branch.  Forces a structuring reset.
-    pub fn remove_do_nothing_block(&mut self, bb: BlockId) -> KunaResult<()> {
+    pub fn remove_do_nothing_block(&mut self, bb: BlockId) -> UnlaceResult<()> {
         if self.bblocks_ref().block(bb).size_out() > 1 {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Cannot delete a reachable block unless it has 1 out or less",
             ));
         }
@@ -1858,7 +1858,7 @@ impl Funcdata {
         &mut self,
         issuewarning: bool,
         checkexistence: bool,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         let _ = issuewarning; // W4 warning facility; the block deletion is realized.
         let size = self.bblocks_get_size();
         if checkexistence {
@@ -1965,7 +1965,7 @@ impl Funcdata {
     /// Scans basic blocks for the one whose last op is at `pcop`, then the out
     /// edge whose target block's last op is at `pcdest`, and marks that edge a
     /// goto branch.  Returns `true` if an edge was labeled.
-    pub fn force_goto(&mut self, pcop: &Address, pcdest: &Address) -> KunaResult<bool> {
+    pub fn force_goto(&mut self, pcop: &Address, pcdest: &Address) -> UnlaceResult<bool> {
         let n = self.bblocks_get_size();
         for i in 0..n {
             let bl = self.bblocks_get_block(i);
@@ -2005,9 +2005,9 @@ impl Funcdata {
     /// (C++ `Funcdata::removeFromFlowSplit`, `funcdata_block.cc:900`).
     ///
     /// The given block must have 2 inputs / 2 outputs and \b no operations.
-    pub fn remove_from_flow_split(&mut self, bl: BlockId, swap: bool) -> KunaResult<()> {
+    pub fn remove_from_flow_split(&mut self, bl: BlockId, swap: bool) -> UnlaceResult<()> {
         if !self.bb_empty_op(bl) {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Can only split the flow for an empty block",
             ));
         }
@@ -2070,9 +2070,9 @@ impl Funcdata {
     /// Install a fresh (empty) jump-table for a BRANCHIND at `addr` (C++
     /// `Funcdata::installJumpTable`, `funcdata_block.cc:480`).  Must be called
     /// before flow is traced.
-    pub fn install_jump_table(&mut self, addr: Address) -> KunaResult<usize> {
+    pub fn install_jump_table(&mut self, addr: Address) -> UnlaceResult<usize> {
         if self.is_proc_started() {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Cannot install jumptable if flow is already traced",
             ));
         }
@@ -2081,7 +2081,7 @@ impl Funcdata {
             .iter()
             .any(|jt| *jt.get_op_address() == addr)
         {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Trying to install over existing jumptable",
             ));
         }
@@ -2095,9 +2095,9 @@ impl Funcdata {
     ///
     /// `target` resolves an [`Address`] to the op starting its block (the
     /// `FlowInfo::target` surface).
-    pub fn switch_over_jump_tables<F>(&mut self, target: F) -> KunaResult<()>
+    pub fn switch_over_jump_tables<F>(&mut self, target: F) -> UnlaceResult<()>
     where
-        F: Fn(&Funcdata, &Address) -> KunaResult<OpId>,
+        F: Fn(&Funcdata, &Address) -> UnlaceResult<OpId>,
     {
         let n = self.num_jump_tables();
         for i in 0..n {
@@ -2125,9 +2125,9 @@ impl Funcdata {
     /// STUB(W4): the FuncCallSpecs cloning (`oldspec->clone(newop)` + the fspec
     /// annotation swap) is the W4 call-spec surface; the op + jump-table clone is
     /// the load-bearing part for switch recovery and is ported.
-    pub fn truncated_flow_clone(&mut self, src: &Funcdata) -> KunaResult<()> {
+    pub fn truncated_flow_clone(&mut self, src: &Funcdata) -> UnlaceResult<()> {
         if !self.obank().empty() {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Trying to do truncated flow on pre-existing pcode",
             ));
         }
@@ -2154,7 +2154,7 @@ impl Funcdata {
             let oldop = oldspec.get_op();
             let seq = src.obank().get(oldop).unwrap().get_seq_num().clone();
             let newop = self.obank().find_op(&seq).ok_or_else(|| {
-                KunaError::lowlevel("Could not trace call spec across partial clone")
+                UnlaceError::lowlevel("Could not trace call spec across partial clone")
             })?;
             let newspec = oldspec.clone_for_op(newop);
             self.push_call_specs(newspec);
@@ -2170,7 +2170,7 @@ impl Funcdata {
             };
             let seq = src.obank().get(indop).unwrap().get_seq_num().clone();
             let newop = self.obank().find_op(&seq).ok_or_else(|| {
-                KunaError::lowlevel("Could not trace jumptable across partial clone")
+                UnlaceError::lowlevel("Could not trace jumptable across partial clone")
             })?;
             let mut jtclone = crate::jumptable::JumpTable::new_clone(srcjt);
             let opaddr = self.obank().get(newop).unwrap().get_addr().clone();
@@ -2190,7 +2190,7 @@ impl Funcdata {
     /// Peels transparent COPY/CAST/ZEXT/SEXT/zero-SUBPIECE ops so the BRANCHIND
     /// reads the canonical switch value (the `canonSwitchVar` analog).  Returns the
     /// canonical Varnode, or `None` if the head is not a comparison-on-constant.
-    fn kuna_head_switch_var(&self, cbranch: OpId, var_addr: &Address) -> Option<VarnodeId> {
+    fn unlace_head_switch_var(&self, cbranch: OpId, var_addr: &Address) -> Option<VarnodeId> {
         let boolvn = self.obank().get(cbranch)?.get_in(1)?;
         let cmp = self.vbank().get(boolvn)?.get_def()?;
         let v0 = self.obank().get(cmp)?.get_in(0)?;
@@ -2254,7 +2254,7 @@ impl Funcdata {
 
     /// Find the basic block whose first address is `addr` (the install's
     /// target-block locator; the cascade record stores block START addresses).
-    fn kuna_block_at_start(&self, addr: &Address) -> Option<BlockId> {
+    fn unlace_block_at_start(&self, addr: &Address) -> Option<BlockId> {
         let n = self.bblocks_get_size();
         for i in 0..n {
             let bl = self.bblocks_get_block(i);
@@ -2270,7 +2270,7 @@ impl Funcdata {
 
     /// Find the basic block whose terminating op is at address `addr` (the
     /// cascade head, recorded as `branch_addr` = the head CBRANCH's op address).
-    fn kuna_block_with_tail_at(&self, addr: &Address) -> Option<BlockId> {
+    fn unlace_block_with_tail_at(&self, addr: &Address) -> Option<BlockId> {
         let n = self.bblocks_get_size();
         for i in 0..n {
             let bl = self.bblocks_get_block(i);
@@ -2286,8 +2286,8 @@ impl Funcdata {
         None
     }
 
-    /// (kuna) Manufacture the S2 switch artifact from a recovered lowered
-    /// comparison cascade (C++ `Funcdata::kunaInstallLoweredSwitch`,
+    /// (unlace) Manufacture the S2 switch artifact from a recovered lowered
+    /// comparison cascade (C++ `Funcdata::unlaceInstallLoweredSwitch`,
     /// `kuna_loweredswitch.cc:463`).
     ///
     /// Runs pre-SSA on the restart pass (`ActionLowerSwitchInstall::apply`, before
@@ -2312,7 +2312,7 @@ impl Funcdata {
     /// `read_head_operand` reports that `prefer_head_operand` found an operand of
     /// the head compare other than `var_addr` and the switch reads it.
     #[allow(clippy::too_many_arguments)]
-    pub fn kuna_install_lowered_switch(
+    pub fn unlace_install_lowered_switch(
         &mut self,
         branch_addr: &Address,
         var_addr: &Address,
@@ -2322,7 +2322,7 @@ impl Funcdata {
         default_target: &Address,
         signed_labels: bool,
         prefer_head_operand: bool,
-    ) -> KunaResult<Option<(usize, bool)>> {
+    ) -> UnlaceResult<Option<(usize, bool)>> {
         use unlace_base::types::uintb;
 
         // Don't re-install if a table already exists for this branch address.
@@ -2335,7 +2335,7 @@ impl Funcdata {
         }
 
         // (1) Locate the cascade head block.
-        let head = match self.kuna_block_with_tail_at(branch_addr) {
+        let head = match self.unlace_block_with_tail_at(branch_addr) {
             Some(h) => h,
             None => return Ok(None),
         };
@@ -2345,7 +2345,7 @@ impl Funcdata {
         // out-edge, a representative case label (the printer emits one `case` per
         // address-table entry; duplicate-valued cases collapse to the same edge,
         // and the C++ trivial recovery emits one label per edge).
-        // (kuna `loweredswitchexact`) every label of a shared body is kept instead.
+        // (unlace `loweredswitchexact`) every label of a shared body is kept instead.
         let mut out_targets: Vec<Address> = Vec::new();
         let mut out_labels: Vec<Vec<uintb>> = Vec::new();
         let mut out_is_default: Vec<bool> = Vec::new();
@@ -2371,7 +2371,7 @@ impl Funcdata {
         // longer matches — decline.
         let mut out_blocks: Vec<BlockId> = Vec::with_capacity(out_targets.len());
         for tgt in &out_targets {
-            match self.kuna_block_at_start(tgt) {
+            match self.unlace_block_at_start(tgt) {
                 Some(b) => out_blocks.push(b),
                 None => return Ok(None),
             }
@@ -2385,10 +2385,10 @@ impl Funcdata {
         // through the cascade spine is swept.  If an already-recovered jump table
         // sits down there, the cascade was a guard chain in front of a genuine
         // switch and installing would delete it — decline.
-        if self.kuna_lowered_switch_strands_table(head, &out_blocks) {
+        if self.unlace_lowered_switch_strands_table(head, &out_blocks) {
             return Ok(None);
         }
-        // (kuna `loweredswitchexact`) Nothing a deleted compare block writes may be
+        // (unlace `loweredswitchexact`) Nothing a deleted compare block writes may be
         // read again on the raw p-code this edits.
         if !(self.hooks().loweredswitchexact_raw_install_keeps_values)(self, head, &out_blocks) {
             return Ok(None);
@@ -2408,7 +2408,7 @@ impl Funcdata {
         // non-constant operand is the switch variable.  Reusing that exact Varnode
         // (rather than a fresh free read of `var_addr`) keeps its full def-use chain
         // intact so heritage threads SSA through it and the printer names it.
-        // (kuna `loweredswitchvalue`) Prefer what the head compare itself reads:
+        // (unlace `loweredswitchvalue`) Prefer what the head compare itself reads:
         // `var_addr` need not hold the compared value at the head.
         let head_operand = if prefer_head_operand {
             (self.hooks().loweredswitchvalue_head_compare_operand)(
@@ -2421,7 +2421,7 @@ impl Funcdata {
         let read_head_operand = head_operand.is_some();
         let swvn = match head_operand {
             Some(_) => None,
-            None => self.kuna_head_switch_var(cbranch, var_addr),
+            None => self.unlace_head_switch_var(cbranch, var_addr),
         };
         let read_addr = match &head_operand {
             Some(HeadOperand::Storage(a)) => a.clone(),
@@ -2504,7 +2504,7 @@ impl Funcdata {
 
         // Re-find the head after the sweep (block ids are stable, but be defensive)
         // and build the table against its post-sweep out-edge indices.
-        let head = match self.kuna_block_with_tail_at(branch_addr) {
+        let head = match self.unlace_block_with_tail_at(branch_addr) {
             Some(h) => h,
             None => return Ok(None),
         };
@@ -2518,11 +2518,11 @@ impl Funcdata {
         // default out-edge is recorded as the table's default block.
         let indop = self
             .bb_op_tail(head)
-            .ok_or_else(|| KunaError::lowlevel("install: head lost its BRANCHIND"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("install: head lost its BRANCHIND"))?;
         let opaddr = self.obank().get(indop).unwrap().get_addr().clone();
         let mut jt = crate::jumptable::JumpTable::new(opaddr.clone());
         jt.set_indirect_op_addr(indop, opaddr);
-        jt.kuna_set_trivial_model();
+        jt.unlace_set_trivial_model();
 
         let mut default_out_index: int4 = -1;
         for oi in 0..nout {
@@ -2541,26 +2541,26 @@ impl Funcdata {
                 default_out_index = oi;
             }
             for &lab in labs {
-                jt.kuna_push_entry(start.clone(), oi, lab);
+                jt.unlace_push_entry(start.clone(), oi, lab);
             }
         }
-        jt.kuna_finalize(default_out_index);
+        jt.unlace_finalize(default_out_index);
         jt.mark_complete();
 
-        jt.kuna_set_signed_labels(signed_labels);
+        jt.unlace_set_signed_labels(signed_labels);
         // Record the recovered switch-variable storage so the post-heritage
-        // repair (`kuna_repair_lowered_switch_inputs`) can re-point the
+        // repair (`unlace_repair_lowered_switch_inputs`) can re-point the
         // synthesized BRANCHIND at the live SSA value if heritage normalized the
         // too-small switch-var read up to the register range's width and then
         // swept the resulting undefined wide read (nulling the BRANCHIND input).
-        jt.kuna_set_lowered_var(read_addr, var_size);
+        jt.unlace_set_lowered_var(read_addr, var_size);
 
         self.jumpvec_mut().push(jt);
         let idx = self.num_jump_tables() as usize - 1;
         Ok(Some((idx, read_head_operand)))
     }
 
-    /// (kuna) Would installing the lowered switch at `head` strand a genuine jump
+    /// (unlace) Would installing the lowered switch at `head` strand a genuine jump
     /// table?
     ///
     /// Walks reachability from the entry over the *post-surgery* successor
@@ -2568,10 +2568,10 @@ impl Funcdata {
     /// any block that drops out of the reachable set ends in a BRANCHIND with a
     /// recovered [`JumpTable`](crate::jumptable::JumpTable).  The
     /// `remove_unreachable_blocks` sweep at the end of
-    /// [`kuna_install_lowered_switch`](Self::kuna_install_lowered_switch) would
+    /// [`unlace_install_lowered_switch`](Self::unlace_install_lowered_switch) would
     /// destroy that BRANCHIND and its table, replacing a real switch with the
     /// synthetic cascade dispatch and losing every case the table dispatched.
-    fn kuna_lowered_switch_strands_table(&self, head: BlockId, out_blocks: &[BlockId]) -> bool {
+    fn unlace_lowered_switch_strands_table(&self, head: BlockId, out_blocks: &[BlockId]) -> bool {
         let size = self.bblocks_get_size();
         let mut entry: Option<BlockId> = None;
         for i in 0..size {
@@ -2625,9 +2625,9 @@ impl Funcdata {
         false
     }
 
-    /// (kuna) Post-heritage repair of synthetic lowered-switch BRANCHIND inputs.
+    /// (unlace) Post-heritage repair of synthetic lowered-switch BRANCHIND inputs.
     ///
-    /// `kuna_install_lowered_switch` runs pre-SSA and points the synthesized
+    /// `unlace_install_lowered_switch` runs pre-SSA and points the synthesized
     /// `BRANCHIND` at a *free read* of the recovered switch-variable storage
     /// (e.g. a 4-byte `EAX` read), trusting heritage to thread SSA through it.
     /// But when that register's overlapping range is read elsewhere at a wider
@@ -2642,21 +2642,21 @@ impl Funcdata {
     /// This runs right after [`op_heritage`](crate::funcdata::Funcdata::op_heritage)
     /// (its only caller is the action wired immediately after `ActionHeritage`).
     /// For each synthetic lowered-switch table (the only ones carrying
-    /// [`JumpTable::kuna_lowered_var`]) whose BRANCHIND input is null/free, it
+    /// [`JumpTable::unlace_lowered_var`]) whose BRANCHIND input is null/free, it
     /// finds the live SSA Varnode of exactly the recorded `(addr,size)` reaching
     /// the BRANCHIND — the narrow switch value (e.g. the call output) — by
     /// scanning the BRANCHIND's own block backward and then up the dominator
     /// tree, and re-points input 0 at it.  Scoped strictly to the recorded
     /// synthetic tables, so it cannot perturb the datatest corpus (which has no
-    /// `kuna_lowered_var` tables).  Declines silently if no exact-size reaching
+    /// `unlace_lowered_var` tables).  Declines silently if no exact-size reaching
     /// def is found, leaving the current behavior intact.
-    pub fn kuna_repair_lowered_switch_inputs(&mut self) {
+    pub fn unlace_repair_lowered_switch_inputs(&mut self) {
         // Snapshot the (indirect op, var addr, var size) of every synthetic table.
         let targets: Vec<(OpId, Address, int4)> = self
             .jumpvec_ref()
             .iter()
             .filter_map(|jt| {
-                let (a, s) = jt.kuna_lowered_var()?;
+                let (a, s) = jt.unlace_lowered_var()?;
                 let op = jt.get_indirect_op()?;
                 Some((op, a.clone(), *s))
             })
@@ -2686,21 +2686,21 @@ impl Funcdata {
                 continue;
             }
             // Find the live reaching def of exactly (var_addr, var_size).
-            if let Some(def_vn) = self.kuna_reaching_def_at(indop, &var_addr, var_size) {
+            if let Some(def_vn) = self.unlace_reaching_def_at(indop, &var_addr, var_size) {
                 let _ = self.op_set_input(indop, def_vn, 0);
             }
         }
     }
 
-    /// (kuna) Find the live SSA Varnode of exactly `(addr,size)` reaching `op`
+    /// (unlace) Find the live SSA Varnode of exactly `(addr,size)` reaching `op`
     /// (its def dominates `op`).  Scans `op`'s own block backward from `op`, then
     /// walks the immediate-dominator chain scanning each block's ops in reverse;
     /// returns the first output Varnode matching the storage exactly.  Returns
     /// `None` if no exact match dominates `op` (the caller then declines).
     ///
-    /// Used only by [`kuna_repair_lowered_switch_inputs`]; an exact-size match is
+    /// Used only by [`unlace_repair_lowered_switch_inputs`]; an exact-size match is
     /// required so we never re-point a BRANCHIND at a mis-sized value.
-    fn kuna_reaching_def_at(&self, op: OpId, addr: &Address, size: int4) -> Option<VarnodeId> {
+    fn unlace_reaching_def_at(&self, op: OpId, addr: &Address, size: int4) -> Option<VarnodeId> {
         let want_space = addr.get_space()?.get_index();
         let want_off = addr.get_offset();
         let matches = |this: &Self, vn: VarnodeId| -> bool {
@@ -2840,7 +2840,7 @@ impl Funcdata {
         // linkJumpTable: search for a pre-existing table.
         if let Some(idx) = self.link_jump_table(op) {
             self.get_jump_table_mut(idx as int4)
-                .kuna_set_target_encoding(encoding);
+                .unlace_set_target_encoding(encoding);
             let jt = self.get_jump_table(idx as int4);
             if !jt.is_override() && !jt.is_partial() && jt.num_entries() != 0 {
                 return Ok(Some(idx)); // Previously calculated, complete, non-override
@@ -2866,7 +2866,7 @@ impl Funcdata {
         // Trial recovery into a fresh table appended to jumpvec.
         let addr = self.obank().get(op).unwrap().get_addr().clone();
         let mut trial = crate::jumptable::JumpTable::new(addr);
-        trial.kuna_set_target_encoding(encoding);
+        trial.unlace_set_target_encoding(encoding);
         self.jumpvec_mut().push(trial);
         let idx = self.num_jump_tables() as usize - 1;
         let mode = self.stage_jump_table(idx, op, record_loads, visited, run_pipeline, shared);
@@ -2900,7 +2900,7 @@ impl Funcdata {
         // built (C++ `if (!partial.isJumptableRecoveryOn())`, `option jtsharepartial`).
         let share = self
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::funcdata_block::JumptableSharePartial>()
             .0;
         let mut owned: Option<Funcdata> = None;
@@ -2973,7 +2973,7 @@ impl Funcdata {
                 .map(<[Address]>::to_vec);
             jt.recover_multistage(partial).map(|()| {
                 if let Some(targets) = targets {
-                    jt.kuna_adopt_multistage_targets(targets);
+                    jt.unlace_adopt_multistage_targets(targets);
                 }
             })
         } else {
@@ -2999,7 +2999,7 @@ impl Funcdata {
     /// sharing \b this function's arch + entry, with the raw p-code + jump-tables
     /// cloned (C++ `Funcdata partial(...)` + `partial.truncatedFlow`'s op-clone
     /// half).  The block-building + action pipeline run inside `run_pipeline`.
-    fn build_jumptable_partial(&self) -> KunaResult<Funcdata> {
+    fn build_jumptable_partial(&self) -> UnlaceResult<Funcdata> {
         let glb = self.get_arch().clone();
         let uniq_start = self.vbank().get_uniqbase();
         let mut partial = Funcdata::new(
@@ -3029,9 +3029,9 @@ impl Funcdata {
         // fields (#871).
         partial.reset_local_window();
         partial.truncated_flow_clone(self)?;
-        *partial.kuna_extent_tables_mut() = self.kuna_extent_tables().clone();
-        partial.kuna_later_tables = self.kuna_later_tables.clone();
-        partial.kuna_later_wanted = std::rc::Rc::clone(&self.kuna_later_wanted);
+        *partial.unlace_extent_tables_mut() = self.unlace_extent_tables().clone();
+        partial.unlace_later_tables = self.unlace_later_tables.clone();
+        partial.unlace_later_wanted = std::rc::Rc::clone(&self.unlace_later_wanted);
         Ok(partial)
     }
 
@@ -3221,17 +3221,17 @@ impl Funcdata {
     /// the new block takes over flow from one input edge to the original block.
     /// The original block must have no out edges and more than one (non-redundant)
     /// in edge.
-    pub fn node_split(&mut self, b: BlockId, inedge: int4) -> KunaResult<()> {
+    pub fn node_split(&mut self, b: BlockId, inedge: int4) -> UnlaceResult<()> {
         self.node_split_cloning(b, inedge, false).map(|_| ())
     }
 
-    /// (kuna `returndup calls`) [`Self::node_split`] for a block holding calls:
+    /// (unlace `returndup calls`) [`Self::node_split`] for a block holding calls:
     /// each cloned call gets its own call spec.  Returns the new block.
-    pub fn node_split_calls(&mut self, b: BlockId, inedge: int4) -> KunaResult<BlockId> {
+    pub fn node_split_calls(&mut self, b: BlockId, inedge: int4) -> UnlaceResult<BlockId> {
         self.node_split_cloning(b, inedge, true)
     }
 
-    /// (kuna `phithread`, `returndup calls`) [`Self::node_split`] for a block with
+    /// (unlace `phithread`, `returndup calls`) [`Self::node_split`] for a block with
     /// exactly one out edge: the clone takes over in edge `inedge` and flows into
     /// the same successor, whose MULTIEQUALs gain an input for the new edge (the
     /// clone of whatever the original block passed).  When the successor has no
@@ -3247,21 +3247,23 @@ impl Funcdata {
         b: BlockId,
         inedge: int4,
         calls: bool,
-    ) -> KunaResult<BlockId> {
+    ) -> UnlaceResult<BlockId> {
         let (size_in, succ) = {
             let blk = self.bblocks_ref().block(b);
             if blk.size_out() != 1 {
-                return Err(KunaError::lowlevel("nodesplit-through needs one out edge"));
+                return Err(UnlaceError::lowlevel(
+                    "nodesplit-through needs one out edge",
+                ));
             }
             (blk.size_in(), blk.get_out(0))
         };
         if succ == b || size_in <= 1 || inedge < 0 || inedge >= size_in {
-            return Err(KunaError::lowlevel("nodesplit-through: bad block shape"));
+            return Err(UnlaceError::lowlevel("nodesplit-through: bad block shape"));
         }
         let mut seen: std::collections::BTreeSet<BlockId> = std::collections::BTreeSet::new();
         for i in 0..size_in {
             if !seen.insert(self.bblocks_ref().block(b).get_in(i)) {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "Cannot nodesplit block with redundant in edges",
                 ));
             }
@@ -3270,30 +3272,32 @@ impl Funcdata {
         let succ_single = self.bblocks_ref().block(succ).size_in() == 1;
         let mut escaping: Vec<VarnodeId> = Vec::new();
         if slot < 0 {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "nodesplit-through: successor lost its edge",
             ));
         }
         for op in self.bb_ops(b) {
             let Some(o) = self.obank().get(op) else {
-                return Err(KunaError::lowlevel("nodesplit-through: stale op"));
+                return Err(UnlaceError::lowlevel("nodesplit-through: stale op"));
             };
             if o.is_branch() && o.code() != OpCode::CPUI_BRANCH {
-                return Err(KunaError::lowlevel("nodesplit-through: conditional branch"));
+                return Err(UnlaceError::lowlevel(
+                    "nodesplit-through: conditional branch",
+                ));
             }
             if !calls && (o.is_call() || o.code() == OpCode::CPUI_INDIRECT) {
-                return Err(KunaError::lowlevel("nodesplit-through: call in block"));
+                return Err(UnlaceError::lowlevel("nodesplit-through: call in block"));
             }
             let Some(out) = o.get_out() else { continue };
             let Some(v) = self.vbank().get(out) else {
-                return Err(KunaError::lowlevel("nodesplit-through: stale output"));
+                return Err(UnlaceError::lowlevel("nodesplit-through: stale output"));
             };
             if v.is_persist() || v.is_addr_tied() {
-                return Err(KunaError::lowlevel("nodesplit-through: tied output"));
+                return Err(UnlaceError::lowlevel("nodesplit-through: tied output"));
             }
             for reader in v.descend_iter() {
                 let Some(r) = self.obank().get(reader) else {
-                    return Err(KunaError::lowlevel("nodesplit-through: stale reader"));
+                    return Err(UnlaceError::lowlevel("nodesplit-through: stale reader"));
                 };
                 let parent = r.get_parent();
                 if parent == Some(b) {
@@ -3304,7 +3308,7 @@ impl Funcdata {
                     && (0..r.num_input()).all(|s| r.get_in(s) != Some(out) || s == slot);
                 if !via_slot {
                     if !succ_single {
-                        return Err(KunaError::lowlevel(
+                        return Err(UnlaceError::lowlevel(
                             "nodesplit-through: value read outside the block",
                         ));
                     }
@@ -3350,7 +3354,7 @@ impl Funcdata {
         Ok(bprime)
     }
 
-    /// (kuna) After [`Self::node_split_through`] split `b` into `b` and `bprime`,
+    /// (unlace) After [`Self::node_split_through`] split `b` into `b` and `bprime`,
     /// both flowing into `succ` alone: merge `b`'s output `v` and its clone in a
     /// new MULTIEQUAL at the head of `succ`, and point every reader of `v`
     /// outside the two blocks at the merge.
@@ -3361,7 +3365,7 @@ impl Funcdata {
         succ: BlockId,
         v: VarnodeId,
         cloner: &CloneBlockOps,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let clone_vn = self
             .vbank()
             .get(v)
@@ -3369,12 +3373,12 @@ impl Funcdata {
             .and_then(|d| cloner.orig_to_clone.get(&d).copied())
             .filter(|&c| self.obank().get(c).is_some_and(|o| !o.is_dead()))
             .and_then(|c| self.obank().get(c).and_then(|o| o.get_out()))
-            .ok_or_else(|| KunaError::lowlevel("nodesplit-through: value has no clone"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("nodesplit-through: value has no clone"))?;
         let (size, addr) = {
             let vn = self
                 .vbank()
                 .get(v)
-                .ok_or_else(|| KunaError::lowlevel("nodesplit-through: stale value"))?;
+                .ok_or_else(|| UnlaceError::lowlevel("nodesplit-through: stale value"))?;
             (vn.get_size(), vn.get_addr().clone())
         };
         let unique = addr.get_space().map(|s| s.get_type()) == Some(spacetype::IPTR_INTERNAL);
@@ -3409,7 +3413,7 @@ impl Funcdata {
         let sb = self.bblocks_ref().block(succ).get_in_index(b);
         let sp = self.bblocks_ref().block(succ).get_in_index(bprime);
         if sb < 0 || sp < 0 {
-            return Err(KunaError::lowlevel("nodesplit-through: successor edges"));
+            return Err(UnlaceError::lowlevel("nodesplit-through: successor edges"));
         }
         self.op_set_input(phi, v, sb)?;
         self.op_set_input(phi, clone_vn, sp)?;
@@ -3417,16 +3421,21 @@ impl Funcdata {
         Ok(())
     }
 
-    fn node_split_cloning(&mut self, b: BlockId, inedge: int4, calls: bool) -> KunaResult<BlockId> {
+    fn node_split_cloning(
+        &mut self,
+        b: BlockId,
+        inedge: int4,
+        calls: bool,
+    ) -> UnlaceResult<BlockId> {
         // Split node b along inedge.
         if self.bblocks_ref().block(b).size_out() != 0 {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Cannot (currently) nodesplit block with out flow",
             ));
         }
         let size_in = self.bblocks_ref().block(b).size_in();
         if size_in <= 1 {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Cannot nodesplit block with only 1 in edge",
             ));
         }
@@ -3436,7 +3445,7 @@ impl Funcdata {
         for i in 0..size_in {
             let inbl = self.bblocks_ref().block(b).get_in(i);
             if !seen.insert(inbl) {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "Cannot nodesplit block with redundant in edges",
                 ));
             }
@@ -3460,7 +3469,7 @@ impl Funcdata {
     /// the output Varnode of the last cloned op (drives `CloneBlockOps::
     /// cloneExpression`).  Used by `RuleConditionalMove::constructBool` to pull a
     /// boolean expression out of a conditional block via duplication.
-    pub fn clone_expression(&mut self, ops: &[OpId], follow_op: OpId) -> KunaResult<VarnodeId> {
+    pub fn clone_expression(&mut self, ops: &[OpId], follow_op: OpId) -> UnlaceResult<VarnodeId> {
         let mut cloner = CloneBlockOps::new();
         cloner.clone_expression(self, ops, follow_op)
     }
@@ -3544,11 +3553,11 @@ impl Funcdata {
             match opc {
                 OpCode::CPUI_MULTIEQUAL => {}
                 OpCode::CPUI_COPY | OpCode::CPUI_RETURN => {
-                    // (kuna `retsplitglobal`) upstream never looks at the COPY's
+                    // (unlace `retsplitglobal`) upstream never looks at the COPY's
                     // OUTPUT, so a shared epilogue that stores to globals reads
                     // as a bare epilogue and gets cloned into every predecessor.
                     // See `crate::p8_structure::retsplitglobal`.
-                    // (kuna `retsplitglobal`) upstream never looks at the COPY's
+                    // (unlace `retsplitglobal`) upstream never looks at the COPY's
                     // OUTPUT, so a shared epilogue that stores to globals reads
                     // as a bare epilogue and gets cloned into every predecessor.
                     // See `crate::p8_structure::retsplitglobal`.
@@ -3582,11 +3591,11 @@ impl Funcdata {
             }
             cur = next;
         }
-        // (kuna `retsplitglobal`) a bare epilogue is cheap to clone; one that
+        // (unlace `retsplitglobal`) a bare epilogue is cheap to clone; one that
         // stores to more globals than the bound is not one.
         !(self.hooks().retsplitglobal_split_is_declined)(
             self.get_arch()
-                .kuna_options
+                .unlace_options
                 .get::<crate::coreoptions::RetSplitGlobal>()
                 .0,
             global_stores,
@@ -3671,9 +3680,9 @@ impl Funcdata {
                 splitedge.pop();
                 retnode.pop();
             }
-            // (kuna `retsplitlimit`) a block too big to clone this many times keeps its gotos.
+            // (unlace `retsplitlimit`) a block too big to clone this many times keeps its gotos.
             if (self.hooks().retsplitlimit_split_is_declined)(
-                &self.get_arch().kuna_options,
+                &self.get_arch().unlace_options,
                 self.bb_op_count(parent),
                 retnode.len() - first,
             ) {
@@ -3690,8 +3699,8 @@ impl Funcdata {
         count
     }
 
-    /// (kuna) Duplicate a shared **bare-epilogue** RETURN block into each of its
-    /// predecessors but one — kuna's analog of angr's SAILR gotoless
+    /// (unlace) Duplicate a shared **bare-epilogue** RETURN block into each of its
+    /// predecessors but one — unlace's analog of angr's SAILR gotoless
     /// `ReturnDuplicatorHigh` (driver for
     /// [`ActionReturnDup`](crate::p8_structure::returndup::ActionReturnDup),
     /// option `returndup`).  Returns the number of edges split.
@@ -3717,7 +3726,7 @@ impl Funcdata {
     /// True if the shared RETURN block `b` returns a CONSTANT value (or a phi/COPY
     /// resolving to constants) — angr `ReturnDuplicatorHigh._should_duplicate_dst =
     /// dst_is_const_ret` (it only duplicates *simple const-return* regions). A
-    /// `return <variable>` block is NOT const-ret. kuna's unfiltered duplication of
+    /// `return <variable>` block is NOT const-ret. unlace's unfiltered duplication of
     /// variable-return shares diverges from the source's merged short-circuit form on
     /// the aggregate (decbench measured a ~976 GED-perfect regression); gating on this
     /// makes returndup selective like angr's.
@@ -3819,8 +3828,8 @@ impl Funcdata {
             if !self.return_split_is_splittable(parent) {
                 continue;
             }
-            // (kuna, angr-selective) Only duplicate a SIMPLE CONST-RETURN region — angr
-            // `ReturnDuplicatorHigh._should_duplicate_dst = dst_is_const_ret`. kuna used to
+            // (unlace, angr-selective) Only duplicate a SIMPLE CONST-RETURN region — angr
+            // `ReturnDuplicatorHigh._should_duplicate_dst = dst_is_const_ret`. unlace used to
             // duplicate every splittable shared return, INCLUDING `return <variable>`, which
             // diverges from the source's merged short-circuit form on the aggregate (decbench:
             // ~976 GED-perfect regression across 21768 firings). Const-return guard clauses
@@ -3830,12 +3839,12 @@ impl Funcdata {
             if !self.returndup_is_const_ret(parent) {
                 continue;
             }
-            // (kuna, `option rettriangle`) The join of a one-block `if` is no
+            // (unlace, `option rettriangle`) The join of a one-block `if` is no
             // guard: splitting it prints `if (!c) return K; f(); return K;` for
             // `if (c) f(); return K;`.
             if self
                 .get_arch()
-                .kuna_options
+                .unlace_options
                 .get::<crate::coreoptions::RetTriangle>()
                 .0
                 && (self.hooks().rettriangle_is_triangle_join)(self, parent)
@@ -3847,14 +3856,14 @@ impl Funcdata {
             }
         }
 
-        // (kuna) A shared return that is the out-target two guards must keep in
+        // (unlace) A shared return that is the out-target two guards must keep in
         // common is the operand chain of a short-circuit expression: splitting it
         // blocks `rule_block_or` permanently, and the source's
         // `return a || (b && c);` becomes a cascade of constant-return guards.
         let shared = (self.hooks().orchain_shortcircuit_shared_targets)(self);
         let bool_only = self
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::orchainbool::OrchainBool>()
             .0;
         if parents.iter().any(|&p| {
@@ -3887,7 +3896,7 @@ impl Funcdata {
         count
     }
 
-    /// (kuna, angr `earlyreturn`) The in-edge indices of shared RETURN block `b` whose
+    /// (unlace, angr `earlyreturn`) The in-edge indices of shared RETURN block `b` whose
     /// contribution to the return-value phi is a **constant** — the early-return guard
     /// arms (`if (c) return 0;`).  This is the PER-EDGE analog of
     /// [`Self::returndup_is_const_ret`] (which requires the *whole* return value const and
@@ -3935,10 +3944,10 @@ impl Funcdata {
         edges
     }
 
-    /// (kuna) Peel the **constant arms** out of a shared RETURN block into their own
+    /// (unlace) Peel the **constant arms** out of a shared RETURN block into their own
     /// per-predecessor `return K`, so `if (c) { return K; } body; return <var>;` (the
     /// early-return guard) and `switch (x) { case A: return K0; ... }` (the multi-way
-    /// const dispatch) recover per-predecessor instead of kuna's merged
+    /// const dispatch) recover per-predecessor instead of unlace's merged
     /// `v = MULTIEQUAL(#K0, #K1, …); return v;` — angr SAILR `ReturnDuplicatorHigh`, but
     /// PER-EDGE (see [`Self::earlyreturn_const_edges`]).  Distinct from
     /// [`Self::returndup_apply`], which requires the *whole* return const and so cannot
@@ -4012,7 +4021,7 @@ impl Funcdata {
         count
     }
 
-    /// (kuna, `earlyreturn`) Peel the const guard arm(s) of a **narrow** shared-return
+    /// (unlace, `earlyreturn`) Peel the const guard arm(s) of a **narrow** shared-return
     /// diamond (`if (c) return K; body; return <var>;`) — the ActionEarlyReturn driver.
     /// Thin wrapper over [`Self::const_return_peel`] with earlyreturn's caps (≤16 in-edges).
     #[doc(hidden)]
@@ -4020,7 +4029,7 @@ impl Funcdata {
         self.const_return_peel(max_splits, max_inedges)
     }
 
-    /// (kuna, `switchreturn`) Peel the const case arms of a **wide multi-way switch-phi**
+    /// (unlace, `switchreturn`) Peel the const case arms of a **wide multi-way switch-phi**
     /// shared-return block (`switch (x) { case A: v = K0; break; … } return v;` →
     /// `case A: return K0; …`) — the ActionSwitchReturn driver.  The direct continuation of
     /// [`Self::earlyreturn_apply`]: identical per-edge const-peel machinery
@@ -4050,7 +4059,7 @@ impl Funcdata {
         }
     }
 
-    /// (kuna GH-8467) The entry address of a structured block, for angr-style
+    /// (unlace GH-8467) The entry address of a structured block, for angr-style
     /// `label_<addr>` goto-label naming (C++ `PrintC::emitLabelStatement`'s
     /// `getFrontLeaf()` basic-block start).  Invalid when the block has no leaf.
     pub fn sblock_entry_addr(&self, bl: BlockId) -> Address {
@@ -4114,7 +4123,7 @@ impl Funcdata {
     /// 2-way/n-way branch, and a plain unconditional BRANCH op left in the middle
     /// is dead and removed by later dead-code; W3 has no such later pass yet, so
     /// this method returns `Err` if a branch op would be stranded).
-    pub fn splice_block_basic(&mut self, bl: BlockId) -> KunaResult<()> {
+    pub fn splice_block_basic(&mut self, bl: BlockId) -> UnlaceResult<()> {
         // Validate the single-out / single-in chain.
         let outbl = {
             let mut o: Option<BlockId> = None;
@@ -4124,7 +4133,7 @@ impl Funcdata {
                     o = Some(cand);
                 }
             }
-            o.ok_or_else(|| KunaError::lowlevel("Cannot splice basic blocks"))?
+            o.ok_or_else(|| UnlaceError::lowlevel("Cannot splice basic blocks"))?
         };
 
         // Remove any jump op at the end of -bl- (C++ funcdata_block.cc:941).
@@ -4147,7 +4156,7 @@ impl Funcdata {
             if self.obank().get(firstop).expect("spliceBlockBasic").code()
                 == unlace_num::opcodes::OpCode::CPUI_MULTIEQUAL
             {
-                return Err(KunaError::lowlevel("Splicing block with MULTIEQUAL"));
+                return Err(UnlaceError::lowlevel("Splicing block with MULTIEQUAL"));
             }
             self.obank_mut()
                 .get_mut(firstop)
@@ -4339,7 +4348,7 @@ impl Funcdata {
         &mut self,
         sif: BlockId,
         allow_op_removal: bool,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         // Only if/else collapses.
         if self.sblocks_ref().block(sif).get_size() != 3 {
             return Ok(false);
@@ -4364,7 +4373,7 @@ impl Funcdata {
     /// structured-block tree and call `preferComplement` on every `BlockGraph`
     /// node (only `BlockIf` overrides it non-trivially).  Returns the number of
     /// nodes rearranged.
-    pub fn prefer_complement(&mut self, allow_op_mods: bool) -> KunaResult<int4> {
+    pub fn prefer_complement(&mut self, allow_op_mods: bool) -> UnlaceResult<int4> {
         use crate::block::BlockType;
         if self.sblocks_get_size() == 0 {
             return Ok(0);
@@ -4401,7 +4410,7 @@ impl Funcdata {
         Ok(count)
     }
 
-    /// (kuna, option `branchflip`) Flip negated-guard `if/else` branches for
+    /// (unlace, option `branchflip`) Flip negated-guard `if/else` branches for
     /// linearity — the angr-SAILR-style condition-polarity normalization.
     ///
     /// This is the *complement* of [`Self::prefer_complement`]: where
@@ -4417,7 +4426,7 @@ impl Funcdata {
     /// `op_flip_in_place_execute` + `swap_blocks(sif,1,2)`) and is logged as a
     /// `branchflip:` warning comment at the guard's CBRANCH so the rewrite is
     /// observable.  Returns the number of `if/else` blocks flipped.
-    pub fn branch_flip_complement(&mut self, allow_op_mods: bool) -> KunaResult<int4> {
+    pub fn branch_flip_complement(&mut self, allow_op_mods: bool) -> UnlaceResult<int4> {
         use crate::block::BlockType;
         if self.sblocks_get_size() == 0 {
             return Ok(0);
@@ -4453,7 +4462,7 @@ impl Funcdata {
         Ok(count)
     }
 
-    /// (kuna, option `branchflip`) The per-`BlockIf` half of
+    /// (unlace, option `branchflip`) The per-`BlockIf` half of
     /// [`Self::branch_flip_complement`]: flip a 3-component `if/else` whose guard
     /// is the negated / equality-to-zero form to its positive complement.
     ///
@@ -4467,7 +4476,7 @@ impl Funcdata {
         &mut self,
         sif: BlockId,
         allow_op_removal: bool,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         // Only if/else (3-component) collapses can swap arms in place.
         if self.sblocks_ref().block(sif).get_size() != 3 {
             return Ok(false);
@@ -4498,14 +4507,14 @@ impl Funcdata {
         // police that — any structural pass in this family that drops, duplicates
         // or re-parents a component trips it (debug builds only).
         #[cfg(debug_assertions)]
-        let leaves_before = self.kuna_flip_leaf_multiset(sif);
+        let leaves_before = self.unlace_flip_leaf_multiset(sif);
         self.split_flip_in_place_execute(split);
         self.op_flip_in_place_execute(&fliplist)?;
         // Swap the BlockIf's true/false children to match.
         self.sblocks_mut().swap_blocks(sif, 1, 2);
         #[cfg(debug_assertions)]
         debug_assert_eq!(
-            self.kuna_flip_leaf_multiset(sif),
+            self.unlace_flip_leaf_multiset(sif),
             leaves_before,
             "branchflip: arm swap changed the leaf set under the BlockIf"
         );
@@ -4516,7 +4525,7 @@ impl Funcdata {
     /// `sbl` — the guard-rail instrument for the arm-swapping structuring family
     /// (debug builds only; see [`Self::block_if_flip_negated_guard`]).
     #[cfg(debug_assertions)]
-    fn kuna_flip_leaf_multiset(&self, sbl: BlockId) -> Vec<BlockId> {
+    fn unlace_flip_leaf_multiset(&self, sbl: BlockId) -> Vec<BlockId> {
         use crate::block::BlockType;
         let mut leaves: Vec<BlockId> = Vec::new();
         let mut stack: Vec<BlockId> = vec![sbl];
@@ -4678,7 +4687,7 @@ impl Funcdata {
                 }
                 None => return,
             };
-            // (kuna) `x ^ x` and `x - x` are the constant 0 before a rule folds
+            // (unlace) `x ^ x` and `x - x` are the constant 0 before a rule folds
             // them; MSVC zeroes a struct through `xor eax,eax` (#871).
             if matches!(code, OpCode::CPUI_INT_XOR | OpCode::CPUI_INT_SUB)
                 && ninput == 2
@@ -4704,7 +4713,7 @@ impl Funcdata {
                         cur_vn = i1;
                     } else {
                         {
-                            if crate::heritage::kuna_jt_trace() {
+                            if crate::heritage::unlace_jt_trace() {
                                 eprintln!("jt-trace protect stop: multiple paths at {:?}", code);
                             }
                             return; // Multiple paths
@@ -4761,14 +4770,14 @@ impl Funcdata {
                 }
                 return; // Don't backtrack further
             } else {
-                if crate::heritage::kuna_jt_trace() {
+                if crate::heritage::unlace_jt_trace() {
                     eprintln!("jt-trace protect stop: op {:?}", code);
                 }
                 return;
             }
         }
         // Exactly one path, from a constant to a switch.
-        if crate::heritage::kuna_jt_trace() {
+        if crate::heritage::unlace_jt_trace() {
             eprintln!(
                 "jt-trace protect end vn_const={:?} last_indirect={:?}",
                 self.vbank().get(cur_vn).map(|v| v.is_constant()),
@@ -4836,7 +4845,7 @@ struct CloneBlockOps {
     clone_list: Vec<(OpId, OpId)>,
     /// Map from original op to its clone (C++ `origToClone`).
     orig_to_clone: std::collections::BTreeMap<OpId, OpId>,
-    /// (kuna `returndup calls`) Clone CALLs and INDIRECTs too: each cloned call
+    /// (unlace `returndup calls`) Clone CALLs and INDIRECTs too: each cloned call
     /// gets its own copy of the call spec, and a cloned INDIRECT names the
     /// cloned call.
     calls: bool,
@@ -4854,7 +4863,7 @@ impl CloneBlockOps {
     /// Make a basic clone of the p-code op copying its basic control-flow
     /// properties (C++ `CloneBlockOps::buildOpClone`, `funcdata_block.cc:970`).
     /// In the case of a \e branch, the op is not cloned and `None` is returned.
-    fn build_op_clone(&mut self, data: &mut Funcdata, op: OpId) -> KunaResult<Option<OpId>> {
+    fn build_op_clone(&mut self, data: &mut Funcdata, op: OpId) -> UnlaceResult<Option<OpId>> {
         let (is_branch, opc, num_input, addr, op_flags, op_addl) = {
             let o = data.obank().get(op).expect("buildOpClone: stale op");
             (
@@ -4868,7 +4877,7 @@ impl CloneBlockOps {
         };
         if is_branch {
             if opc != OpCode::CPUI_BRANCH {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "Cannot duplicate 2-way or n-way branch in nodeplit",
                 ));
             }
@@ -4899,12 +4908,12 @@ impl CloneBlockOps {
                 | opf::fallthru_true
                 | opf::calculated_bool
                 | opf::ptrflow
-                // (kuna) not in the upstream mask: a cloned `guardReturns` liveness
+                // (unlace) not in the upstream mask: a cloned `guardReturns` liveness
                 // COPY that loses the flag gets a value propagated into it and
                 // prints as a second store to the global on the split path.
                 | opf::return_copy);
-        // The addl-flag subset (funcdata_block.cc:987-988), plus the kuna_zextreturn and
-        // kuna_exactfloat records.
+        // The addl-flag subset (funcdata_block.cc:987-988), plus the unlace_zextreturn and
+        // unlace_exactfloat records.
         use crate::op::pcodeop_addlflags as opaf;
         let afl = op_addl
             & (opaf::special_prop
@@ -4913,8 +4922,8 @@ impl CloneBlockOps {
                 | opaf::is_cpool_transformed
                 | opaf::stop_type_propagation
                 | opaf::store_unmapped
-                | opaf::kuna_zextreturn
-                | opaf::kuna_exactfloat);
+                | opaf::unlace_zextreturn
+                | opaf::unlace_exactfloat);
         let error_flag = (data.hooks().syscallregs_is_error_flag)(data, op);
         {
             let o = data
@@ -4939,7 +4948,7 @@ impl CloneBlockOps {
         data: &mut Funcdata,
         orig_op: OpId,
         clone_op: OpId,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let opvn = match data
             .obank()
             .get(orig_op)
@@ -4977,7 +4986,7 @@ impl CloneBlockOps {
         b: BlockId,
         bprime: BlockId,
         inedge: int4,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         // Collect b's ops in order (the C++ `beginOp()..endOp()` block walk).
         let mut ops: Vec<OpId> = Vec::new();
         let mut cur = data.bb_op_head(b);
@@ -5010,7 +5019,7 @@ impl CloneBlockOps {
         data: &mut Funcdata,
         ops: &[OpId],
         follow_op: OpId,
-    ) -> KunaResult<VarnodeId> {
+    ) -> UnlaceResult<VarnodeId> {
         for &orig_op in ops {
             let clone_op = match self.build_op_clone(data, orig_op)? {
                 Some(c) => c,
@@ -5020,7 +5029,7 @@ impl CloneBlockOps {
             data.op_insert_before(clone_op, follow_op);
         }
         if self.clone_list.is_empty() {
-            return Err(KunaError::lowlevel("No expression to clone"));
+            return Err(UnlaceError::lowlevel("No expression to clone"));
         }
         self.patch_inputs(data, 0)?;
         let last_clone = self
@@ -5036,7 +5045,7 @@ impl CloneBlockOps {
             .expect("cloneExpression: last clone has output"))
     }
 
-    /// (kuna `returndup calls`) Give the clone of a call op its own copy of the
+    /// (unlace `returndup calls`) Give the clone of a call op its own copy of the
     /// original's call spec; returns the new spec's fspec handle. A CALLIND
     /// has no fspec input (its target is the pointer, and its spec has no entry
     /// address to name), so its clone gets the spec but no handle.
@@ -5048,7 +5057,7 @@ impl CloneBlockOps {
             return None;
         }
         let handle = crate::fspec::next_fspec_handle();
-        let style = data.get_arch().kuna_name_style();
+        let style = data.get_arch().unlace_name_style();
         data.get_call_specs(new_idx)
             .register_in_fspec_space(handle, style);
         Some(handle)
@@ -5056,7 +5065,7 @@ impl CloneBlockOps {
 
     /// Map original-op input Varnodes to the input slots of the cloned ops
     /// (C++ `CloneBlockOps::patchInputs`, `funcdata_block.cc:1066`).
-    fn patch_inputs(&self, data: &mut Funcdata, inedge: int4) -> KunaResult<()> {
+    fn patch_inputs(&self, data: &mut Funcdata, inedge: int4) -> UnlaceResult<()> {
         let mut one_input_phis: Vec<OpId> = Vec::new();
         for pos in 0..self.clone_list.len() {
             let (orig_op, clone_op) = self.clone_list[pos];
@@ -5087,9 +5096,9 @@ impl CloneBlockOps {
                     one_input_phis.push(orig_op);
                 }
             } else if orig_code == OpCode::CPUI_INDIRECT && !self.calls {
-                return Err(KunaError::lowlevel("Can't clone INDIRECTs"));
+                return Err(UnlaceError::lowlevel("Can't clone INDIRECTs"));
             } else if data.obank().get(orig_op).expect("patchInputs").is_call() && !self.calls {
-                return Err(KunaError::lowlevel("Can't clone CALLs"));
+                return Err(UnlaceError::lowlevel("Can't clone CALLs"));
             } else {
                 let fspec = if self.calls {
                     self.clone_call_spec(data, orig_op, clone_op)
@@ -5130,7 +5139,7 @@ impl CloneBlockOps {
                     } else if is_annot {
                         data.new_code_ref(&vaddr)
                     } else if is_free {
-                        return Err(KunaError::lowlevel("Can't clone free varnode"));
+                        return Err(UnlaceError::lowlevel("Can't clone free varnode"));
                     } else if is_written {
                         match vdef.and_then(|d| self.orig_to_clone.get(&d).copied()) {
                             Some(clone_def) => data
@@ -5154,7 +5163,7 @@ impl CloneBlockOps {
         Ok(())
     }
 
-    /// (kuna) A phi the split leaves with one input is `x = COPY v`, and the return
+    /// (unlace) A phi the split leaves with one input is `x = COPY v`, and the return
     /// guards (`return_copy`, kept by [`Self::build_op_clone`]) read `x`.  Copy
     /// propagation and `ActionVarnodeProps`' known-zero replacement must not turn
     /// either into a store the binary does not make.  When `x` and `v` are one global
@@ -5162,7 +5171,7 @@ impl CloneBlockOps {
     /// the clone and in the original block alike: a copy left in the original is
     /// cloned as a plain COPY by the next split of that block.  A guard reading `x`
     /// through a temporary takes `v` when `v` is the guard's own global.
-    fn settle_one_input_phi(data: &mut Funcdata, op: OpId) -> KunaResult<()> {
+    fn settle_one_input_phi(data: &mut Funcdata, op: OpId) -> UnlaceResult<()> {
         let (Some(out), Some(input)) = (
             data.obank().get(op).and_then(|o| o.get_out()),
             data.obank().get(op).and_then(|o| o.get_in(0)),
@@ -5211,8 +5220,8 @@ impl CloneBlockOps {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna `gotonext`) Leave out a `goto` whose target is the block that runs
+crate::unlace_flag!(
+    /// (unlace `gotonext`) Leave out a `goto` whose target is the block that runs
     /// next anyway, print one to the block after the enclosing loop or switch as
     /// `break;`, and keep switch fall-thru chains in case order
     /// (`p8_structure/gotonext.rs`). Default on.
@@ -5244,7 +5253,7 @@ pub type VisitedMap = std::collections::BTreeMap<Address, VisitStat>;
 /// The reduced "jumptable" action-pipeline runner the recovery chain calls per
 /// partial clone (it builds the partial's blocks + runs the action set).  Type
 /// alias to keep the recovery signatures from tripping `clippy::type_complexity`.
-pub type JtPipelineFn<'a> = dyn FnMut(&mut Funcdata, &VisitedMap) -> KunaResult<()> + 'a;
+pub type JtPipelineFn<'a> = dyn FnMut(&mut Funcdata, &VisitedMap) -> UnlaceResult<()> + 'a;
 
 /// What the synthesized `BRANCHIND` reads.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -5255,14 +5264,14 @@ pub enum HeadOperand {
     Value(VarnodeId),
 }
 
-crate::kuna_flag!(
-    /// (kuna) Run the jump-table partial sub-decompilation ONCE per
+crate::unlace_flag!(
+    /// (unlace) Run the jump-table partial sub-decompilation ONCE per
     /// `FlowInfo::recoverJumpTables` batch and share it across every table in
     /// that batch, as the C++ does (`Funcdata::stageJumpTable` guards the clone
     /// and the reduced pipeline behind `if (!partial.isJumptableRecoveryOn())`);
     /// off re-clones and re-analyses the function once per table, which is what
     /// `option unrolledguard` needs to see an already-recovered sibling table
-    /// (C++ has no equivalent flag — this is the upstream shape vs kuna's).
+    /// (C++ has no equivalent flag — this is the upstream shape vs unlace's).
     JumptableSharePartial,
     "jtsharepartial",
     "Shared jump-table partial sub-decompilation",

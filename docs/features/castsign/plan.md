@@ -39,7 +39,7 @@ flag before anything new.
 
 ## Tests
 
-- `tests/stages/kuna-castsign.toml`: pass 1 (off) pins a `uint8` stack value with
+- `tests/stages/castsign.toml`: pass 1 (off) pins a `uint8` stack value with
   `(int8)v1` at each signed comparison; pass 2 (on) pins `int8` and the dropped
   casts. An index the body decrements, a logically shifted value and an
   address-taken stack value stay unsigned in both passes; pass 3 locks the first

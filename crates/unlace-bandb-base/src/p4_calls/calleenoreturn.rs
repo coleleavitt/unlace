@@ -17,21 +17,21 @@ pub fn is_no_return(arch: &Architecture, entry: &Address) -> bool {
     let name = arch.symboltab.function_display_name_across_scopes(entry);
     if let Some(name) = name.as_deref() {
         if arch
-            .kuna_options
+            .unlace_options
             .get::<crate::analysisgates::NoreturnKnown>()
             .0
             && crate::noreturn_externmatch::is_known_noreturn_name(name)
         {
             return true;
         }
-        if arch.kuna_options.get::<crate::gobounds::GoBounds>().0
+        if arch.unlace_options.get::<crate::gobounds::GoBounds>().0
             && arch.source_lang().is_go()
             && crate::gobounds::is_go_check_name(name)
         {
             return true;
         }
         if arch
-            .kuna_options
+            .unlace_options
             .get::<crate::securitycheck::StripSecurityCheck>()
             .0
             && crate::securitycheck::is_security_check_name(name)
@@ -40,7 +40,7 @@ pub fn is_no_return(arch: &Architecture, entry: &Address) -> bool {
         }
     }
     if arch
-        .kuna_options
+        .unlace_options
         .get::<crate::analysisgates::NoreturnKnown>()
         .0
     {
@@ -68,7 +68,7 @@ pub fn is_proxy_no_return_at(
     fallthrough: &Address,
 ) -> bool {
     use crate::noreturn_externmatch::{call_ends_function, is_proxy_noreturn_name, is_stub_body};
-    arch.kuna_options
+    arch.unlace_options
         .get::<crate::analysisgates::NoreturnKnown>()
         .0
         && call_ends_function(arch, call, fallthrough)

@@ -16,7 +16,7 @@
 //!
 //! What makes it worth running instead of `strings(1)` is the last two columns.
 //! `strings(1)` answers "what text is in this file"; the question an analyst
-//! actually has is "**which function uses this string**", and kuna can answer it
+//! actually has is "**which function uses this string**", and unlace can answer it
 //! because it already has the reference edges — the same
 //! [`unlace_analysis::listing::xrefs`] index behind `unlace xrefs`. Every row carries
 //! how many references land anywhere in the literal's extent and the functions
@@ -45,7 +45,7 @@
 //! answer **zero** on a length-prefixed name table
 //! (`\x0cout.js\x06std\x12_0x8ec6b3`, the shape a bundled JS or bytecode payload
 //! carries) that `strings(1)` reads in full. The default is therefore `any`,
-//! `strings(1)`'s own rule over kuna's address set; `nul` restores the
+//! `strings(1)`'s own rule over unlace's address set; `nul` restores the
 //! pass-faithful view, and every row says which ending it had.
 
 mod filter;

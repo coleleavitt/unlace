@@ -1,7 +1,7 @@
-//! (kuna) `kuna_callpopret` — a `call` whose callee pops the pushed return
+//! (unlace) `unlace_callpopret` — a `call` whose callee pops the pushed return
 //! address off the stack and `ret`s to its *caller's* caller (S2 flow
 //! classification).  Sibling of
-//! [`kuna_calltrampoline`](crate::calltrampoline), which decides the same
+//! [`unlace_calltrampoline`](crate::calltrampoline), which decides the same
 //! question for the flavour of the idiom that ends in a `jmp`.
 //!
 //! ## The structural gap
@@ -35,7 +35,7 @@
 //!
 //! ## The signal this module owns
 //!
-//! [`kuna_call_pops_return_address`] scans the callee's raw p-code — decoded out
+//! [`unlace_call_pops_return_address`] scans the callee's raw p-code — decoded out
 //! of band by the caller, before the flow follower has committed to those bytes —
 //! and fires only when all of the following hold:
 //!
@@ -76,18 +76,18 @@ use unlace_num::pcoderaw::VarnodeData;
 
 use crate::calltrampoline::RawOp;
 
-/// Marshaling element `<callpopret>` (kuna).  ElementIds live in the 4000+
+/// Marshaling element `<callpopret>` (unlace).  ElementIds live in the 4000+
 /// range; 4163 was the next free id when this module was added.
 pub const ELEM_CALLPOPRET: ElementId = ElementId::new("callpopret", 4163);
 
 /// How many machine instructions of the callee the scan will decode before
 /// giving up.  The idiom is `pop reg; <adjust>; ret`; the slack is for the flag
 /// lowering of an `add` and for a second adjustment.
-pub const KUNA_CALLPOPRET_MAX_INSTRS: usize = 6;
+pub const UNLACE_CALLPOPRET_MAX_INSTRS: usize = 6;
 
 /// How many raw p-code ops the scan will read before giving up, whatever the
 /// instruction count says.
-pub const KUNA_CALLPOPRET_MAX_OPS: usize = 64;
+pub const UNLACE_CALLPOPRET_MAX_OPS: usize = 64;
 
 /// A varnode location reduced to the triple the scan compares on.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -192,7 +192,7 @@ impl Track {
         if let Some(h) = held {
             // Cap the map: the idiom needs two or three entries, and an unbounded
             // one would let a long decode grow it without bound.
-            if self.known.len() < KUNA_CALLPOPRET_MAX_OPS {
+            if self.known.len() < UNLACE_CALLPOPRET_MAX_OPS {
                 self.known.push((k, h));
             }
         }
@@ -208,7 +208,7 @@ impl Track {
     }
 }
 
-/// (kuna `callpopret`) Does this run of raw p-code discard the return address its
+/// (unlace `callpopret`) Does this run of raw p-code discard the return address its
 /// caller pushed and then `ret` through the word above it — returning to the
 /// caller's own caller instead of to the call site?
 ///
@@ -219,8 +219,8 @@ impl Track {
 /// A `true` verdict means control provably never reaches the return address, so
 /// the `CALL` is a transfer and the bytes at the return address are not
 /// instructions of the caller.
-pub fn kuna_call_pops_return_address(ops: &[RawOp], sp: &VarnodeStorage) -> bool {
-    if ops.is_empty() || ops.len() > KUNA_CALLPOPRET_MAX_OPS {
+pub fn unlace_call_pops_return_address(ops: &[RawOp], sp: &VarnodeStorage) -> bool {
+    if ops.is_empty() || ops.len() > UNLACE_CALLPOPRET_MAX_OPS {
         return false;
     }
     let Some(spkey) = key_of_storage(sp) else {

@@ -1,4 +1,4 @@
-//! (kuna `avxintrinsics`) Intel intrinsic names for the SLEIGH AVX user-ops.
+//! (unlace `avxintrinsics`) Intel intrinsic names for the SLEIGH AVX user-ops.
 //!
 //! The x86 SLEIGH spec lifts most AVX2, FMA and AVX-512 instructions to opaque
 //! user-ops named after the mnemonic and its extension (`vpaddd_avx2`,
@@ -265,7 +265,7 @@ fn rest_fma((kind, form, ty): (&str, &str, &str), w: &str) -> (String, Vec<usize
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.avxintrin_element_kind = Some(element_kind);
     hooks.avxintrin_intrinsic = Some(intrinsic);
 }

@@ -97,7 +97,7 @@ fn switch_return_paths_preserve_native_writes() {
         let specs = common::repo_root().join("specs");
         for region in ["off", "on"] {
             for duplicate in ["off", "on"] {
-                let (stdout, stderr, rc) = common::run_kuna(&[
+                let (stdout, stderr, rc) = common::run_unlace(&[
                     "decompile-all",
                     elf.to_str().unwrap(),
                     "--functions",

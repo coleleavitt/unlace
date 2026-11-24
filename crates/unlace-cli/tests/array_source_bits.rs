@@ -173,7 +173,7 @@ int main(void) {{
 // Coalescing can make the memory read itself define the mapped frame word.
 // Preserve the fresh fixture's storage and pointer, then render that state.
 fn direct_load_body(binary: &std::path::Path, read: u64, mix: u64) -> String {
-    use unlace_console::console::register_kuna_commands;
+    use unlace_console::console::register_unlace_commands;
     use unlace_console::ifacedecomp::{
         DECOMPILE_MODULE, IfaceDecompData, execute, register_console_commands,
         register_decomp_commands,
@@ -186,7 +186,7 @@ fn direct_load_body(binary: &std::path::Path, read: u64, mix: u64) -> String {
     );
     let mut status = IfaceTerm::into_status("", script.as_bytes());
     register_decomp_commands(&mut status);
-    register_kuna_commands(&mut status);
+    register_unlace_commands(&mut status);
     register_console_commands(&mut status);
     let data = status
         .get_data_mut(DECOMPILE_MODULE)
@@ -229,7 +229,9 @@ fn direct_load_body(binary: &std::path::Path, read: u64, mix: u64) -> String {
                 && value
                     .get_high()
                     .and_then(|h| fd.high_bank().get(h))
-                    .is_some_and(|h| h.kuna_symbol_offset() == 4 && h.kuna_link_symbol().is_some())
+                    .is_some_and(|h| {
+                        h.unlace_symbol_offset() == 4 && h.unlace_link_symbol().is_some()
+                    })
         })
         .expect("payload copy");
     let mut source = fd.obank().get(store).unwrap().get_in(0).unwrap();
@@ -256,9 +258,9 @@ fn direct_load_body(binary: &std::path::Path, read: u64, mix: u64) -> String {
     );
     fd.op_set_all_input(store, &inputs).unwrap();
     let arch = data.conf.as_mut().unwrap().arch_mut();
-    arch.kuna_options
+    arch.unlace_options
         .set(unlace_decomp::printc::Realtypes(true));
-    arch.kuna_options
+    arch.unlace_options
         .set(unlace_decomp::coreoptions::CTypes(true));
     arch.with_print(|printer, arch| {
         printer.options.partial_access = true;

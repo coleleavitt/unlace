@@ -1,4 +1,4 @@
-//! (kuna) `switchtable` — read a computed jump's target table out of the image,
+//! (unlace) `switchtable` — read a computed jump's target table out of the image,
 //! so the case bodies of a switch belong to the function that dispatches to them.
 //!
 //! # The gap
@@ -213,10 +213,10 @@ pub(super) struct Reach<'a> {
     /// The decoded set is final: a dispatch nothing falls into will not be
     /// read again, so a table with no range check above it has none.
     pub settled: bool,
-    /// (kuna `calltable`) Whether code names an address, decoded or not: a
+    /// (unlace `calltable`) Whether code names an address, decoded or not: a
     /// table with no range check ends before the next table it runs into.
     pub named: Option<&'a dyn Fn(u64) -> bool>,
-    /// (kuna `switchextent`) The lowest jump table above a table that the
+    /// (unlace `switchextent`) The lowest jump table above a table that the
     /// function dispatching at `from` dispatches through, given `(from,
     /// table)`: where a relative table with no range check ends.
     pub next_table: Option<&'a dyn Fn(u64, u64) -> Option<u64>>,
@@ -389,7 +389,7 @@ pub(super) fn register_targets(
             }
         }
         (Err(gap), None) => match shape {
-            // (kuna `calltable`) A pointer table with no count runs to the
+            // (unlace `calltable`) A pointer table with no count runs to the
             // first word that is not code of the section the transfer is in,
             // or to the first word code names, where another table starts.
             Shape::Pointer { table } if call || reach.settled || gap.is_none() => {
@@ -414,7 +414,7 @@ pub(super) fn register_targets(
                     ..TableRead::default()
                 }
             }
-            // (kuna `switchextent`) A relative table with no range check ends
+            // (unlace `switchextent`) A relative table with no range check ends
             // where the function's next jump table begins.
             Shape::Relative { table, width, .. } if reach.settled || gap.is_none() => {
                 let count = reach
@@ -619,7 +619,7 @@ pub(super) struct TableRead {
     /// Where the read stopped for want of a decoded instruction ending at this
     /// address: the walk reached the dispatch before the code falling into it.
     pub gap: Option<u64>,
-    /// (kuna `calltable`) A jump through a pointer table with no range check:
+    /// (unlace `calltable`) A jump through a pointer table with no range check:
     /// the entries run to the first non-code word. That is a call table's
     /// shape; a table read this way is never taken as a switch.
     pub unbounded: bool,

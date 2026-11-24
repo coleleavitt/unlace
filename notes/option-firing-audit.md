@@ -132,42 +132,42 @@ deferred ones (`fid`, `formatstring`, `operand_refs`, `swiftmetadata`,
 
 | option | default | evidence |
 |---|---|---|
-| `addrtable` | off | fixture/reliable: kuna-addrtable.toml:on=3 |
-| `aif` | off | fixture/auto: kuna-aifbracket.toml:off=1; fixture/auto: kuna-aifnoppad.toml:off=2 |
-| `armframes` | inventory | fixture/auto: kuna-arm-frame-inventory.toml:off=1 |
-| `bejoin` | callers | raw-fixture/auto: kuna-bejoin-evidence-pairs:off=6; raw-fixture/auto: kuna-bejoin-evidence-pairs:on=1 |
-| `bejoinpass` | whole | fixture/auto: kuna-bejoinpass.xml:off=3; fixture/reliable+protos: kuna-bejoinpass.xml:off=3 |
-| `callarrayextent` | off | fixture/reliable+protos: kuna-call-array-extent.xml:on=4 |
-| `callmechanisms` | auto | raw-fixture/auto: kuna-ppc64-toc-reload-switch:on=2; raw-fixture/auto: kuna-ppc64-toc-reload-switch:on=2 |
-| `calloverlap` | auto | raw-fixture/auto: ghdec-calloverlap:full=1; raw-fixture/auto: kuna-register-pair-call-args:full=1 |
-| `callwide` | off | fixture/auto: kuna-callwide.toml:on=10 |
-| `charptr` | off | raw-fixture/auto: kuna-charptr:on=1 |
+| `addrtable` | off | fixture/reliable: addrtable.toml:on=3 |
+| `aif` | off | fixture/auto: aifbracket.toml:off=1; fixture/auto: aifnoppad.toml:off=2 |
+| `armframes` | inventory | fixture/auto: arm-frame-inventory.toml:off=1 |
+| `bejoin` | callers | raw-fixture/auto: bejoin-evidence-pairs:off=6; raw-fixture/auto: bejoin-evidence-pairs:on=1 |
+| `bejoinpass` | whole | fixture/auto: bejoinpass.xml:off=3; fixture/reliable+protos: bejoinpass.xml:off=3 |
+| `callarrayextent` | off | fixture/reliable+protos: call-array-extent.xml:on=4 |
+| `callmechanisms` | auto | raw-fixture/auto: ppc64-toc-reload-switch:on=2; raw-fixture/auto: ppc64-toc-reload-switch:on=2 |
+| `calloverlap` | auto | raw-fixture/auto: ghdec-calloverlap:full=1; raw-fixture/auto: register-pair-call-args:full=1 |
+| `callwide` | off | fixture/auto: callwide.toml:on=10 |
+| `charptr` | off | raw-fixture/auto: charptr:on=1 |
 | `constselectjump` | reentry | fixture/reliable: re-constselectjump.toml:on=1 |
-| `devectorize` | off | fixture/reliable: kuna-devectorize.toml:on=1; fixture/reliable+protos: kuna-devectorize.toml:on=1 |
-| `dynalloca` | off | fixture/auto: kuna-dynalloca.toml:on=1; fixture/reliable+protos: kuna-dynalloca.toml:on=1 |
-| `flowmode` | off | fixture/auto: kuna-flowmode.toml:aftercall=2; fixture/auto: kuna-flowmode.toml:on=2 |
-| `fpuemu` | auto | fixture/auto: kuna-x86-16-fpuemu.toml:on=3 |
-| `globalarrayanchor` | off | fixture/reliable+protos: kuna-globalarrayanchor-a64.toml:on=9 |
-| `gobool` | auto | raw-fixture/auto: kuna-gobool:always=1 |
-| `gowritebarrier` | auto | fixture/auto: kuna-gojumpchain.toml:always=2; fixture/auto: kuna-gojumpchain.toml:auto=2 |
+| `devectorize` | off | fixture/reliable: devectorize.toml:on=1; fixture/reliable+protos: devectorize.toml:on=1 |
+| `dynalloca` | off | fixture/auto: dynalloca.toml:on=1; fixture/reliable+protos: dynalloca.toml:on=1 |
+| `flowmode` | off | fixture/auto: flowmode.toml:aftercall=2; fixture/auto: flowmode.toml:on=2 |
+| `fpuemu` | auto | fixture/auto: x86-16-fpuemu.toml:on=3 |
+| `globalarrayanchor` | off | fixture/reliable+protos: globalarrayanchor-a64.toml:on=9 |
+| `gobool` | auto | raw-fixture/auto: gobool:always=1 |
+| `gowritebarrier` | auto | fixture/auto: gojumpchain.toml:always=2; fixture/auto: gojumpchain.toml:auto=2 |
 | `highsliceguard` | off | fixture/auto: ghangr-highslice-guard.toml:on=4 |
-| `int3pad` | warn | raw-fixture/auto: kuna-int3pad:halt=1; raw-fixture/auto: kuna-int3pad:off=1 |
-| `javasync` | off | fixture/auto: kuna-dex-javasync.toml:on=2 |
-| `kernelcache` | auto | fixture/auto: kuna-kernelcache-merge.toml:Widget=7; fixture/auto: kuna-kernelcache-merge.toml:com.apple.kernel,Widget=5 |
-| `kernelcache-boot` | auto | fixture/auto: kuna-kernelcacheboot.toml:off=2 |
-| `linuxsyscall` | auto | raw-fixture/auto: kuna-linuxsyscall-x64-compat:on=1; raw-fixture/auto: kuna-linuxsyscall:on=1 |
-| `msvcstrappend` | off | raw-fixture/auto: kuna-msvcstrappend:on=3; raw-fixture/auto: kuna-msvcstrappend:on=3 |
+| `int3pad` | warn | raw-fixture/auto: int3pad:halt=1; raw-fixture/auto: int3pad:off=1 |
+| `javasync` | off | fixture/auto: dex-javasync.toml:on=2 |
+| `kernelcache` | auto | fixture/auto: kernelcache-merge.toml:Widget=7; fixture/auto: kernelcache-merge.toml:com.apple.kernel,Widget=5 |
+| `kernelcache-boot` | auto | fixture/auto: kernelcacheboot.toml:off=2 |
+| `linuxsyscall` | auto | raw-fixture/auto: linuxsyscall-x64-compat:on=1; raw-fixture/auto: linuxsyscall:on=1 |
+| `msvcstrappend` | off | raw-fixture/auto: msvcstrappend:on=3; raw-fixture/auto: msvcstrappend:on=3 |
 | `nulterminator` | off | raw-fixture/auto: gh468-nulterminator:on=1 |
-| `octeoneffects` | atomic | raw-fixture/auto: kuna-octeoneffects:off=13; raw-fixture/auto: kuna-octeoneffects:ordered=2 |
-| `outline` | off | raw-fixture/auto: kuna-outline-proto:0x401000:0x40100b-0x401019=1; raw-fixture/auto: kuna-outline:0x401000:0x40100a-0x401018=1 |
-| `ppc32picimports` | off | fixture/auto: kuna-ppc32picimports-abi.toml:abi=2; fixture/auto: kuna-ppc32picimports-address-escapes.toml:on=1 |
+| `octeoneffects` | atomic | raw-fixture/auto: octeoneffects:off=13; raw-fixture/auto: octeoneffects:ordered=2 |
+| `outline` | off | raw-fixture/auto: outline-proto:0x401000:0x40100b-0x401019=1; raw-fixture/auto: outline:0x401000:0x40100a-0x401018=1 |
+| `ppc32picimports` | off | fixture/auto: ppc32picimports-abi.toml:abi=2; fixture/auto: ppc32picimports-address-escapes.toml:on=1 |
 | `structmerge` | off | raw-fixture/auto: structmerge-siblings:siblings=2; raw-fixture/auto: structmerge-siblings:siblings=2 |
 | `switchguardbound` | off | fixture/auto: ghangr-missing-function-call-1101b1.toml:off=1 |
 | `switchmodbound` | off | fixture/reliable: gh9191-switchmodbound.xml:on=1 |
-| `switchselector` | off | raw-fixture/auto: kuna-switchselector:on=1; raw-fixture/auto: kuna-switchselector:on=1 |
+| `switchselector` | off | raw-fixture/auto: switchselector:on=1; raw-fixture/auto: switchselector:on=1 |
 | `unrolledguard` | off | fixture/auto: ghangr-optimized-memcpy-6301a9.toml:off=1; fixture/reliable: ghangr-optimized-memcpy-6301a9.toml:on=1 |
-| `wrapadd` | off | fixture/auto: kuna-wrapadd.toml:on=1 |
-| `x86listingswitch` | off | fixture/auto: kuna-x86listingswitch.toml:on=5 |
+| `wrapadd` | off | fixture/auto: wrapadd.toml:on=1 |
+| `x86listingswitch` | off | fixture/auto: x86listingswitch.toml:on=5 |
 | `armpairparam` | off | zig ARM -O2 `-g0` `long long` add/compare: 3 functions; with DWARF prototypes it has nothing to do |
 | `calleeargsmsvc` | off | `calleeargsmsvc_pe_i386.dll` with `calleeargs on`: 1 |
 | `calleevote` | fields | `off` on stripped `getfacl`: 2 |

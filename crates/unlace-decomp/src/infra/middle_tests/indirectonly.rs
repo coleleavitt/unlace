@@ -1,4 +1,4 @@
-//! Tests moved out of `kuna_indirectonly` because they read higher-band modules. They live in the
+//! Tests moved out of `unlace_indirectonly` because they read higher-band modules. They live in the
 //! driver so the middle band can become its own crate (unlace-middle).
 
 #![allow(unused_imports, dead_code)]
@@ -12,13 +12,13 @@ use crate::indirectonly::OptionIndirectOnly;
 use crate::indirectonly::check_indirect_use;
 use crate::indirectonly::mark_indirect_only;
 use crate::op::pcodeop_flags;
-use crate::option_dispatch::KUNA_OPTION_NAMES;
+use crate::option_dispatch::UNLACE_OPTION_NAMES;
 use crate::options::on_or_off;
 use crate::varnode::varnode_flags;
 use std::collections::HashSet;
 use std::rc::Rc;
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::space::AddrSpace;
 use unlace_base::space::AddrSpaceManager;
 use unlace_base::space::ConstantSpace;
@@ -33,7 +33,7 @@ use unlace_num::opcodes::OpCode;
 #[test]
 fn option_name_is_registered_and_parses() {
     assert_eq!(OptionIndirectOnly::NAME, "indirectonly");
-    assert!(KUNA_OPTION_NAMES.contains(&OptionIndirectOnly::NAME));
+    assert!(UNLACE_OPTION_NAMES.contains(&OptionIndirectOnly::NAME));
     let (v, msg) = OptionIndirectOnly.apply("on").unwrap();
     assert!(v);
     assert!(msg.contains("on"));

@@ -86,7 +86,7 @@ use std::collections::BTreeMap;
 use unlace_base::address::{
     Address, calc_mask, leastsigbit_set, mostsigbit_set, sign_extend_sized,
 };
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::AddrSpace;
 use unlace_base::types::{int4, int8, uint4, uintb};
 use unlace_num::opcodes::OpCode;
@@ -150,7 +150,7 @@ enum PatchType {
     PushPatch,
     /// Zero extend logical value into FLOAT_INT2FLOAT operator.
     Int2FloatPatch,
-    /// (kuna `regnarrow`) Read the zero extension of the logical value in one
+    /// (unlace `regnarrow`) Read the zero extension of the logical value in one
     /// input slot of an op that needs the container's full width.
     ZextUsePatch,
 }
@@ -237,23 +237,23 @@ pub struct SubvariableFlow {
     worklist: Vec<RvId>,
     /// Number of instructions pulling out the logical value (C++ `pullcount`).
     pullcount: int4,
-    /// (kuna `truncarg`) Call slots `try_call_pull` trims whose dropped bits are
+    /// (unlace `truncarg`) Call slots `try_call_pull` trims whose dropped bits are
     /// known zero.
     zext_pulls: Vec<(OpId, int4)>,
-    /// (kuna `zextreturn`) RETURNs `try_return_pull` trims whose dropped bits
+    /// (unlace `zextreturn`) RETURNs `try_return_pull` trims whose dropped bits
     /// are known zero, where the convention extends the narrow value by its sign.
     zext_returns: Vec<OpId>,
-    /// (kuna `regnarrow`) Every container this flow reaches whose bits above the
+    /// (unlace `regnarrow`) Every container this flow reaches whose bits above the
     /// logical value are known zero may be read at full width: such a read takes
     /// the zero extension of the logical value instead of failing the trace.
     zext_uses: bool,
-    /// (kuna `regnarrow`) Containers the flow reads through their own low
+    /// (unlace `regnarrow`) Containers the flow reads through their own low
     /// bytes (a SUBPIECE after their definition) instead of tracing them: they
     /// keep their width and every reader outside the flow.
     leaves: Vec<RvId>,
 }
 
-/// (kuna `regnarrow`) How a zero-extended flow crosses one reading op.
+/// (unlace `regnarrow`) How a zero-extended flow crosses one reading op.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ZextRoute {
     /// Trace through the op as upstream does.
@@ -562,7 +562,7 @@ impl SubvariableFlow {
         op: OpId,
         rvn: RvId,
         slot: int4,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         if slot == 0 {
             return Ok(false);
         }
@@ -618,14 +618,14 @@ impl SubvariableFlow {
         op: OpId,
         rvn: RvId,
         slot: int4,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         if slot == 0 {
             return Ok(false); // Don't deal with actual return address container
         }
         if data.get_func_proto().is_output_locked() {
             return Ok(false);
         }
-        // (kuna `rustabi`) Refuse to narrow a RETURN that carries a recovered
+        // (unlace `rustabi`) Refuse to narrow a RETURN that carries a recovered
         // two-register pair whose low half is a variant discriminant. Truncating
         // to the discriminant's logical width is not a narrower rendering of the
         // same value -- it deletes the other register, which is where a Rust
@@ -747,7 +747,7 @@ impl SubvariableFlow {
     /// the given INDIRECT/CALL op (C++ `SubvariableFlow::tryCallReturnPush`).
     ///
     /// STUB(W4): `fd->getCallSpecs(op)` / `isOutputLocked` / `isOutputActive`.
-    fn try_call_return_push(&mut self, data: &Funcdata, op: OpId, rvn: RvId) -> KunaResult<bool> {
+    fn try_call_return_push(&mut self, data: &Funcdata, op: OpId, rvn: RvId) -> UnlaceResult<bool> {
         if !self.aggressive {
             let vn = self.rv(rvn).vn.expect("try_call_return_push: rvn vn");
             if (data.vbank().get(vn).expect("vn").get_consume() & !self.rv(rvn).mask) != 0 {
@@ -762,7 +762,7 @@ impl SubvariableFlow {
         }
         // FuncCallSpecs *fc = fd->getCallSpecs(op); if (0) ...; isOutputLocked/Active
         let _ = op;
-        Err(KunaError::lowlevel(
+        Err(UnlaceError::lowlevel(
             "kuna rust port: SubvariableFlow::tryCallReturnPush needs FuncCallSpecs \
              (isOutputLocked / isOutputActive) — STUB(W4)",
         ))
@@ -800,7 +800,7 @@ impl SubvariableFlow {
     /// STUB(W6): `TypeOpFloatInt2Float::preferredZextSize(flowsize)`.  The NZ/size
     /// guards are executable; the preferred-size check that decides whether the
     /// patch counts as a modification needs the W6 type-op.
-    fn try_int2float_pull(&mut self, data: &Funcdata, op: OpId, rvn: RvId) -> KunaResult<bool> {
+    fn try_int2float_pull(&mut self, data: &Funcdata, op: OpId, rvn: RvId) -> UnlaceResult<bool> {
         if (self.rv(rvn).mask & 1) == 0 {
             return Ok(false); // Logical value must be justified
         }
@@ -813,20 +813,20 @@ impl SubvariableFlow {
         }
         // The pullModification refinement reads TypeOpFloatInt2Float::preferredZextSize.
         let _ = op;
-        Err(KunaError::lowlevel(
+        Err(UnlaceError::lowlevel(
             "kuna rust port: SubvariableFlow::tryInt2FloatPull needs \
              TypeOpFloatInt2Float::preferredZextSize — STUB(W6)",
         ))
     }
 
-    /// (kuna `regnarrow`) Are the bits of `v` above the logical value known
+    /// (unlace `regnarrow`) Are the bits of `v` above the logical value known
     /// zero, so that a full-width read of `v` can take the zero extension of the
     /// logical value in its place?
     fn zero_above(&self, v: &crate::varnode::Varnode, mask: uintb) -> bool {
         self.zext_uses && (mask & 1) != 0 && (v.get_nz_mask() & !mask) == 0
     }
 
-    /// (kuna `regnarrow`) Can the flow read `v`'s logical value as a SUBPIECE
+    /// (unlace `regnarrow`) Can the flow read `v`'s logical value as a SUBPIECE
     /// of it: a written container whose logical value is its low bytes?
     fn can_be_leaf(&self, v: &crate::varnode::Varnode, mask: uintb) -> bool {
         self.zext_uses
@@ -835,7 +835,7 @@ impl SubvariableFlow {
             && v.get_size() > self.flowsize
     }
 
-    /// (kuna `regnarrow`) Enter `vn` in the flow as a leaf.
+    /// (unlace `regnarrow`) Enter `vn` in the flow as a leaf.
     fn add_leaf(&mut self, data: &mut Funcdata, vn: VarnodeId, mask: uintb) -> RvId {
         let res = self.new_rv(ReplaceVarnode {
             vn: Some(vn),
@@ -853,7 +853,7 @@ impl SubvariableFlow {
         res
     }
 
-    /// (kuna `regnarrow`) Does the zero-extended flow trace `rvn`'s definition
+    /// (unlace `regnarrow`) Does the zero-extended flow trace `rvn`'s definition
     /// back through a narrower copy of it, rather than reading it as a leaf?
     fn traceable_def(&self, data: &Funcdata, rvn: RvId) -> bool {
         let Some(v) = self.rv(rvn).vn.and_then(|vn| data.vbank().get(vn)) else {
@@ -887,7 +887,7 @@ impl SubvariableFlow {
         }
     }
 
-    /// (kuna `regnarrow`) How the zero-extended flow of `vn` crosses `op`, one
+    /// (unlace `regnarrow`) How the zero-extended flow of `vn` crosses `op`, one
     /// of its readers. An op whose result is a narrower copy of the value, or
     /// whose result is read only in the logical bits, carries the flow on; an
     /// op that must see the whole container reads the zero extension instead.
@@ -967,10 +967,10 @@ impl SubvariableFlow {
         }
     }
 
-    /// (kuna `regnarrow`) Is the parameter the call `op` passes `vn` in no
+    /// (unlace `regnarrow`) Is the parameter the call `op` passes `vn` in no
     /// wider than the logical value? A wider one needs the zero extension, which
     /// the argument trimming would drop again; below `int` the trimmed argument
-    /// keeps its extension as a cast (`kuna_truncarg`), but an `int`-wide one
+    /// keeps its extension as a cast (`unlace_truncarg`), but an `int`-wide one
     /// would be converted by C from whatever sign it is declared with, so such
     /// a web is not narrowed.
     fn narrow_param(&self, data: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
@@ -991,7 +991,7 @@ impl SubvariableFlow {
             .is_some_and(|p| p.get_size() <= self.flowsize)
     }
 
-    /// (kuna `regsigned`) How the sign-extended flow of `vn` crosses `op`, one
+    /// (unlace `regsigned`) How the sign-extended flow of `vn` crosses `op`, one
     /// of its readers: [`Self::zext_route`] for a web whose container holds the
     /// sign extension of the logical value. A copy, a phi, a wider sign
     /// extension, a bitwise op, a constant arithmetic right shift and a proper
@@ -1057,7 +1057,7 @@ impl SubvariableFlow {
         }
     }
 
-    /// (kuna `regnarrow`) Does a RETURN read `vn`, the copy heritage places
+    /// (unlace `regnarrow`) Does a RETURN read `vn`, the copy heritage places
     /// in front of a returned value?
     fn returned(data: &Funcdata, vn: Option<VarnodeId>) -> bool {
         vn.and_then(|vn| data.vbank().get(vn)).is_some_and(|v| {
@@ -1069,7 +1069,7 @@ impl SubvariableFlow {
         })
     }
 
-    /// (kuna `regnarrow`) The first input slot of `op` holding `vn` that no
+    /// (unlace `regnarrow`) The first input slot of `op` holding `vn` that no
     /// zero-extension patch has claimed yet.
     fn unpatched_slot(&self, data: &Funcdata, op: OpId, vn: VarnodeId) -> Option<int4> {
         let o = data.obank().get(op)?;
@@ -1088,7 +1088,7 @@ impl SubvariableFlow {
 
     /// Trace the logical data-flow forward for the given subgraph variable
     /// (C++ `SubvariableFlow::traceForward`).
-    fn trace_forward(&mut self, data: &mut Funcdata, rvn: RvId) -> KunaResult<bool> {
+    fn trace_forward(&mut self, data: &mut Funcdata, rvn: RvId) -> UnlaceResult<bool> {
         let mut dcount = 0i32;
         let mut hcount = 0i32;
         let mut callcount = 0i32;
@@ -1619,7 +1619,7 @@ impl SubvariableFlow {
 
     /// Trace the logical data-flow backward for the given subgraph variable
     /// (C++ `SubvariableFlow::traceBackward`).
-    fn trace_backward(&mut self, data: &mut Funcdata, rvn: RvId) -> KunaResult<bool> {
+    fn trace_backward(&mut self, data: &mut Funcdata, rvn: RvId) -> UnlaceResult<bool> {
         let rvn_vn = self.rv(rvn).vn.expect("trace_backward: rvn vn");
         let op = match data.vbank().get(rvn_vn).expect("vn").get_def() {
             Some(o) => o,
@@ -2082,7 +2082,7 @@ impl SubvariableFlow {
 
     /// Trace logical data-flow forward assuming sign-extensions
     /// (C++ `SubvariableFlow::traceForwardSext`).
-    fn trace_forward_sext(&mut self, data: &mut Funcdata, rvn: RvId) -> KunaResult<bool> {
+    fn trace_forward_sext(&mut self, data: &mut Funcdata, rvn: RvId) -> UnlaceResult<bool> {
         let mut dcount = 0i32;
         let mut hcount = 0i32;
         let mut callcount = 0i32;
@@ -2242,7 +2242,7 @@ impl SubvariableFlow {
 
     /// Trace logical data-flow backward assuming sign-extensions
     /// (C++ `SubvariableFlow::traceBackwardSext`).
-    fn trace_backward_sext(&mut self, data: &mut Funcdata, rvn: RvId) -> KunaResult<bool> {
+    fn trace_backward_sext(&mut self, data: &mut Funcdata, rvn: RvId) -> UnlaceResult<bool> {
         let rvn_vn = self.rv(rvn).vn.expect("trace_backward_sext: rvn vn");
         let op = match data.vbank().get(rvn_vn).expect("vn").get_def() {
             Some(o) => o,
@@ -2353,7 +2353,7 @@ impl SubvariableFlow {
         mask: uintb,
         slot: int4,
         vn: VarnodeId,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         let (rep, inworklist) = self.set_replacement(data, vn, mask, slot >= 0);
         let rep = match rep {
             Some(r) => r,
@@ -2387,7 +2387,7 @@ impl SubvariableFlow {
         data: &mut Funcdata,
         mask: uintb,
         vn: VarnodeId,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         let (rep, inworklist) = self.set_replacement(data, vn, mask, false);
         let rep = match rep {
             Some(r) => r,
@@ -2409,7 +2409,7 @@ impl SubvariableFlow {
         inrvn: RvId,
         slot: int4,
         othervn: VarnodeId,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         let mask = self.rv(inrvn).mask;
         let (rep, inworklist) = self.set_replacement(data, othervn, mask, true);
         let rep = match rep {
@@ -2504,7 +2504,7 @@ impl SubvariableFlow {
     /// Mark an operation where original data-flow is being pushed into a subgraph
     /// variable (C++ `SubvariableFlow::addPush`).  Pushed to the *front* of the
     /// patch list.
-    fn add_push(&mut self, _data: &Funcdata, push_op: OpId, rvn: RvId) -> KunaResult<()> {
+    fn add_push(&mut self, _data: &Funcdata, push_op: OpId, rvn: RvId) -> UnlaceResult<()> {
         self.patchlist.insert(
             0,
             PatchRecord {
@@ -2630,7 +2630,7 @@ impl SubvariableFlow {
     /// (C++ `SubvariableFlow::getReplacementAddress`).
     ///
     /// Used by `getReplaceVarnode` inside [`SubvariableFlow::do_replacement`].
-    fn get_replacement_address(&self, data: &Funcdata, rvn: RvId) -> KunaResult<Address> {
+    fn get_replacement_address(&self, data: &Funcdata, rvn: RvId) -> UnlaceResult<Address> {
         let vn = self.rv(rvn).vn.expect("get_replacement_address: rvn vn");
         let v = data.vbank().get(vn).expect("vn");
         let base = v.get_addr().clone();
@@ -2649,7 +2649,7 @@ impl SubvariableFlow {
     /// Replace the input Varnode for the given subgraph variable, to avoid the
     /// overlap errors that arise when the original input is reused as the smaller
     /// logical input (C++ `SubvariableFlow::replaceInput`, subflow.cc:1258).
-    fn replace_input(&mut self, data: &mut Funcdata, rvn: RvId) -> KunaResult<()> {
+    fn replace_input(&mut self, data: &mut Funcdata, rvn: RvId) -> UnlaceResult<()> {
         let vn = self.rv(rvn).vn.expect("replace_input: rvn vn");
         let size = data
             .vbank()
@@ -2668,7 +2668,7 @@ impl SubvariableFlow {
     /// Varnode for the given subgraph variable node (C++
     /// `SubvariableFlow::getReplaceVarnode`, subflow.cc:1316).  This is the main
     /// routine for turning a logical variable into an actual Varnode object.
-    fn get_replace_varnode(&mut self, data: &mut Funcdata, rvn: RvId) -> KunaResult<VarnodeId> {
+    fn get_replace_varnode(&mut self, data: &mut Funcdata, rvn: RvId) -> UnlaceResult<VarnodeId> {
         if let Some(repl) = self.rv(rvn).replacement {
             return Ok(repl);
         }
@@ -2729,7 +2729,7 @@ impl SubvariableFlow {
         let mask = self.rv(rvn).mask;
         let shift = leastsigbit_set(mask);
         if shift >= 0 && shift % 8 == 0 && (mask >> shift) == calc_mask(self.flowsize) {
-            data.kuna_inherit_storage_slice(replacement, source, shift / 8, self.flowsize);
+            data.unlace_inherit_storage_slice(replacement, source, shift / 8, self.flowsize);
         }
         Ok(replacement)
     }
@@ -2740,7 +2740,7 @@ impl SubvariableFlow {
 
     /// Extend the subgraph from the next node in the worklist
     /// (C++ `SubvariableFlow::processNextWork`).
-    fn process_next_work(&mut self, data: &mut Funcdata) -> KunaResult<bool> {
+    fn process_next_work(&mut self, data: &mut Funcdata) -> UnlaceResult<bool> {
         let rvn = self
             .worklist
             .pop()
@@ -2781,11 +2781,11 @@ impl SubvariableFlow {
         aggr: bool,
         sext: bool,
         big: bool,
-    ) -> KunaResult<SubvariableFlow> {
+    ) -> UnlaceResult<SubvariableFlow> {
         Self::new_with(data, root, mask, aggr, sext, big, false)
     }
 
-    /// [`Self::new`], with the (kuna `regnarrow`) zero-extended-use mode.
+    /// [`Self::new`], with the (unlace `regnarrow`) zero-extended-use mode.
     fn new_with(
         data: &mut Funcdata,
         root: VarnodeId,
@@ -2794,7 +2794,7 @@ impl SubvariableFlow {
         sext: bool,
         big: bool,
         zext_uses: bool,
-    ) -> KunaResult<SubvariableFlow> {
+    ) -> UnlaceResult<SubvariableFlow> {
         let mut sf = SubvariableFlow {
             flowsize: 0,
             bitsize: 0,
@@ -2861,10 +2861,10 @@ impl SubvariableFlow {
 
     /// Trace logical value through data-flow, constructing transform
     /// (C++ `SubvariableFlow::doTrace`).
-    pub fn do_trace(&mut self, data: &mut Funcdata) -> KunaResult<bool> {
+    pub fn do_trace(&mut self, data: &mut Funcdata) -> UnlaceResult<bool> {
         self.pullcount = 0;
         let mut retval = false;
-        let mut traced: KunaResult<()> = Ok(());
+        let mut traced: UnlaceResult<()> = Ok(());
         if self.valid {
             retval = true;
             while !self.worklist.is_empty() {
@@ -2902,7 +2902,7 @@ impl SubvariableFlow {
         Ok(true)
     }
 
-    /// (kuna `regnarrow`) Does every placeholder op have its output and all of
+    /// (unlace `regnarrow`) Does every placeholder op have its output and all of
     /// its inputs, so that [`Self::do_replacement`] cannot stop half way?
     fn complete(&self) -> bool {
         self.oplist.iter().all(|rop| {
@@ -2922,7 +2922,7 @@ impl SubvariableFlow {
     /// patch *order* (call-return push patches first, then define outputs, then
     /// inputs, then the terminal patches in list order) is transcribed; the
     /// concrete mutations return the foundation's stub error until those land.
-    pub fn do_replacement(&mut self, data: &mut Funcdata) -> KunaResult<()> {
+    pub fn do_replacement(&mut self, data: &mut Funcdata) -> UnlaceResult<()> {
         // Do up front processing of the call return patches, which will be at the
         // front of the list.  Walk while type == push_patch; the index where we
         // stop is the resume point for the pull-patch loop below.
@@ -2957,7 +2957,7 @@ impl SubvariableFlow {
             piter += 1;
         }
 
-        // (kuna `regnarrow`) Read each leaf through a SUBPIECE after its definition.
+        // (unlace `regnarrow`) Read each leaf through a SUBPIECE after its definition.
         for i in 0..self.leaves.len() {
             let rvn = self.leaves[i];
             if self.rv(rvn).def.is_some() {
@@ -3199,8 +3199,8 @@ impl SubvariableFlow {
     /// STUB(W3-varnode): `Varnode::isZeroExtended` is not yet on the W3 varnode
     /// surface.  The INT_DIV/INT_REM trace paths that call it are reachable only
     /// for whole-byte divides; until the accessor lands this stub-gates them.
-    fn is_zero_extended(_data: &Funcdata, _vn: VarnodeId, _flowsize: int4) -> KunaResult<bool> {
-        Err(KunaError::lowlevel(
+    fn is_zero_extended(_data: &Funcdata, _vn: VarnodeId, _flowsize: int4) -> UnlaceResult<bool> {
+        Err(UnlaceError::lowlevel(
             "kuna rust port: Varnode::isZeroExtended not on the W3 varnode surface — STUB(W3-varnode)",
         ))
     }
@@ -3590,7 +3590,7 @@ impl Rule for RuleSubvarSext {
     }
 }
 
-/// (kuna) Is `vn`, read by a RETURN, an integer of at most eight bytes held in
+/// (unlace) Is `vn`, read by a RETURN, an integer of at most eight bytes held in
 /// two of the prototype model's integer output registers, high word where the
 /// register file's byte order puts it?
 ///
@@ -3682,7 +3682,7 @@ fn run_subflow(
     run_subflow_returning(data, root, mask, aggr, sext, big).0
 }
 
-/// (kuna `regnarrow`) Narrow the flow of the logical value `mask` of `root`,
+/// (unlace `regnarrow`) Narrow the flow of the logical value `mask` of `root`,
 /// letting every reader that needs a container's full width take the zero
 /// extension of the logical value when the container's other bits are known
 /// zero. The original Varnodes the flow rebuilt, when the function changed.
@@ -3694,7 +3694,7 @@ pub fn run_zext_uses(
     run_ext_uses(data, root, mask, false)
 }
 
-/// (kuna `regsigned`) [`run_zext_uses`] for a web whose containers hold the
+/// (unlace `regsigned`) [`run_zext_uses`] for a web whose containers hold the
 /// sign extension of the logical value: a reader that needs the container's
 /// width reads the `INT_SEXT` of the narrow value.
 pub fn run_sext_uses(
@@ -3727,7 +3727,7 @@ fn run_ext_uses(
 }
 
 /// [`run_subflow`], also answering whether the applied transform narrowed the
-/// function's returned value (kuna `callrettype`).
+/// function's returned value (unlace `callrettype`).
 fn run_subflow_returning(
     data: &mut Funcdata,
     root: VarnodeId,
@@ -4307,7 +4307,7 @@ impl SplitFlow {
 
     /// Apply the constructed transform (C++ `TransformManager::apply` via the
     /// base class).  Materializes the placeholder graph into real IR (W10).
-    pub fn apply(&mut self, data: &mut Funcdata) -> KunaResult<()> {
+    pub fn apply(&mut self, data: &mut Funcdata) -> UnlaceResult<()> {
         self.tm.apply(data)
     }
 }
@@ -4565,10 +4565,10 @@ impl SplitDatatype {
 
     /// The held type factory (C++ `types`).  Errors if absent (only the bare
     /// unit-test architecture has none; the entry rules always carry one).
-    fn types(&self) -> KunaResult<&crate::dtype::TypeFactoryImpl> {
+    fn types(&self) -> UnlaceResult<&crate::dtype::TypeFactoryImpl> {
         self.types
             .as_deref()
-            .ok_or_else(|| KunaError::lowlevel("SplitDatatype: no TypeFactory on Architecture"))
+            .ok_or_else(|| UnlaceError::lowlevel("SplitDatatype: no TypeFactory on Architecture"))
     }
 
     /// Obtain the component of the given data-type at the specified offset (C++
@@ -4580,7 +4580,7 @@ impl SplitDatatype {
         types: &dyn crate::dtype::TypeFactory,
         ct: &Rc<Datatype>,
         offset: int4,
-    ) -> KunaResult<(Option<Rc<Datatype>>, bool)> {
+    ) -> UnlaceResult<(Option<Rc<Datatype>>, bool)> {
         let mut cur_type = Rc::clone(ct);
         let mut cur_off: int8 = offset as int8;
         loop {
@@ -4678,7 +4678,7 @@ impl SplitDatatype {
         in_base: &Rc<Datatype>,
         out_base: &Rc<Datatype>,
         in_constant: bool,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         let in_category = self.categorize_datatype(in_base);
         if in_category < 0 {
             return Ok(false);
@@ -4817,7 +4817,7 @@ impl SplitDatatype {
     /// Test specific constraints for splitting the given COPY into pieces (C++
     /// `SplitDatatype::testCopyConstraints`, subflow.cc:2390).
     fn test_copy_constraints(&self, data: &Funcdata, copy_op: OpId) -> bool {
-        // (kuna) A COPY whose output lands in a read-only address range is never a
+        // (unlace) A COPY whose output lands in a read-only address range is never a
         // store the program performs; splitting it turns one invisible whole-range
         // assignment into per-element assignments that survive
         // `Merge::mark_internal_copies` and print as stores into `.rodata`.
@@ -4875,7 +4875,7 @@ impl SplitDatatype {
         data: &mut Funcdata,
         vn: VarnodeId,
         in_varnodes: &mut Vec<VarnodeId>,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         if data.lone_descend(vn).is_none() {
             return Ok(false);
         }
@@ -5017,7 +5017,7 @@ impl SplitDatatype {
         root_vn: VarnodeId,
         follow_op: OpId,
         in_varnodes: &mut Vec<VarnodeId>,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         if self.generate_constants(data, root_vn, in_varnodes)? {
             return Ok(());
         }
@@ -5067,7 +5067,7 @@ impl SplitDatatype {
         data: &mut Funcdata,
         root_vn: VarnodeId,
         out_varnodes: &mut Vec<VarnodeId>,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let base_addr = data
             .vbank()
             .get(root_vn)
@@ -5093,7 +5093,7 @@ impl SplitDatatype {
         root_vn: VarnodeId,
         previous_op: OpId,
         out_varnodes: &[VarnodeId],
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         if data
             .vbank()
             .get(root_vn)
@@ -5223,7 +5223,7 @@ impl SplitDatatype {
         follow_op: OpId,
         ptr_varnodes: &mut Vec<VarnodeId>,
         is_input: bool,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let base_type = ptr_type
             .get_ptr_to()
             .expect("buildPointers: ptrType not a pointer");
@@ -5257,7 +5257,7 @@ impl SplitDatatype {
                     // ("remainder with a divisor of zero"). Give up on this split instead.
                     let stride = tmp_type.get_size() as int8;
                     new_off = array_elem_offset(cur_off, stride).ok_or_else(|| {
-                        KunaError::lowlevel("SplitDatatype: buildPointers on a zero-sized type")
+                        UnlaceError::lowlevel("SplitDatatype: buildPointers on a zero-sized type")
                     })?;
                 } else {
                     let (sub, so) = tmp_type.get_sub_type(cur_off)?;
@@ -5287,7 +5287,7 @@ impl SplitDatatype {
                     let mut final_offset = cur_off - new_off;
                     let mut sz = res_type.get_size(); // Element size in bytes
                     if sz == 0 {
-                        return Err(KunaError::lowlevel(
+                        return Err(UnlaceError::lowlevel(
                             "SplitDatatype: buildPointers on a zero-sized element type",
                         ));
                     }
@@ -5387,7 +5387,7 @@ impl SplitDatatype {
         copy_op: OpId,
         in_type: &Rc<Datatype>,
         out_type: &Rc<Datatype>,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         if !self.test_copy_constraints(data, copy_op) {
             return Ok(false);
         }
@@ -5457,7 +5457,7 @@ impl SplitDatatype {
 
     /// Split a LOAD operation (C++ `SplitDatatype::splitLoad`, subflow.cc:2770).
     ///
-    /// (kuna) A LOAD whose lone COPY lies past a STORE or a call is not split:
+    /// (unlace) A LOAD whose lone COPY lies past a STORE or a call is not split:
     /// upstream builds the split LOADs at the COPY, which prints the read after
     /// a store into its bytes or a call.
     pub fn split_load(
@@ -5465,7 +5465,7 @@ impl SplitDatatype {
         data: &mut Funcdata,
         load_op: OpId,
         in_type: &Rc<Datatype>,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         self.is_load_store = true;
         let mut out_vn = data
             .obank()
@@ -5566,7 +5566,7 @@ impl SplitDatatype {
         Ok(true)
     }
 
-    /// (kuna) Does a STORE or a call lie between `load_op` and the later
+    /// (unlace) Does a STORE or a call lie between `load_op` and the later
     /// `copy_op`, or do they sit in different blocks?
     fn store_or_call_between(data: &Funcdata, load_op: OpId, copy_op: OpId) -> bool {
         let parent = data.obank().get(load_op).expect("stale load").get_parent();
@@ -5599,7 +5599,7 @@ impl SplitDatatype {
         data: &mut Funcdata,
         store_op: OpId,
         out_type: &Rc<Datatype>,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         self.is_load_store = true;
         let in_vn = data
             .obank()
@@ -5825,10 +5825,10 @@ impl SplitDatatype {
     /// `types` argument of `test_datatype_compatibility`/`get_component` while
     /// `self` is borrowed mutably (the C++ `types` is a separate member, not part
     /// of the mutable `dataTypePieces` state).
-    fn types_clone(&self) -> KunaResult<Rc<crate::dtype::TypeFactoryImpl>> {
+    fn types_clone(&self) -> UnlaceResult<Rc<crate::dtype::TypeFactoryImpl>> {
         self.types
             .clone()
-            .ok_or_else(|| KunaError::lowlevel("SplitDatatype: no TypeFactory on Architecture"))
+            .ok_or_else(|| UnlaceError::lowlevel("SplitDatatype: no TypeFactory on Architecture"))
     }
 }
 
@@ -5935,7 +5935,7 @@ impl RootPointer {
         resolver: &mut crate::unionresolve::ResolveCache,
         op: OpId,
         value_type: &Rc<Datatype>,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         let mut implied_base: Option<Rc<Datatype>> = None;
         let mut value_type = Rc::clone(value_type);
         if value_type.get_metatype() == type_metatype::TYPE_PARTIALSTRUCT {
@@ -6011,7 +6011,7 @@ impl RootPointer {
 
     /// COPY the root pointer into a unique temp so subsequent STOREs cannot mutate
     /// it (C++ `SplitDatatype::RootPointer::duplicateToTemp`, subflow.cc:2187).
-    fn duplicate_to_temp(&mut self, data: &mut Funcdata, follow_op: OpId) -> KunaResult<()> {
+    fn duplicate_to_temp(&mut self, data: &mut Funcdata, follow_op: OpId) -> UnlaceResult<()> {
         let new_root = data.build_copy_temp(self.pointer, follow_op)?;
         let ptr_type = self.ptr_type.clone().expect("ptrType");
         data.vbank_mut()
@@ -6268,7 +6268,7 @@ impl Rule for RuleDumptyHumpLate {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        // The funcdata mutations (opSetInput/totalReplace) return KunaResult; the
+        // The funcdata mutations (opSetInput/totalReplace) return UnlaceResult; the
         // C++ applyOp is infallible, so we run the body and map any stub error to
         // 0 (no change) at this boundary.
         Self::apply_op_inner(op, data).unwrap_or(0)
@@ -6277,8 +6277,8 @@ impl Rule for RuleDumptyHumpLate {
 
 impl RuleDumptyHumpLate {
     /// Body of `applyOp` (C++ `RuleDumptyHumpLate::applyOp`, subflow.cc:3027),
-    /// returning `KunaResult` so the funcdata mutations can use `?`.
-    fn apply_op_inner(op: OpId, data: &mut Funcdata) -> KunaResult<int4> {
+    /// returning `UnlaceResult` so the funcdata mutations can use `?`.
+    fn apply_op_inner(op: OpId, data: &mut Funcdata) -> UnlaceResult<int4> {
         let in0 = data
             .obank()
             .get(op)
@@ -6707,7 +6707,7 @@ impl SubfloatFlow {
         &mut self,
         data: &mut Funcdata,
         vn: VarnodeId,
-    ) -> KunaResult<Option<TVarRef>> {
+    ) -> UnlaceResult<Option<TVarRef>> {
         let v = data.vbank().get(vn).expect("set_replacement: stale vn");
         if v.is_mark() {
             // Already seen before
@@ -6762,7 +6762,7 @@ impl SubfloatFlow {
 
     /// Trace logical value forward through descendant Varnodes (C++
     /// `SubfloatFlow::traceForward`, subflow.cc:3264).
-    fn trace_forward(&mut self, data: &mut Funcdata, rvn: TVarRef) -> KunaResult<bool> {
+    fn trace_forward(&mut self, data: &mut Funcdata, rvn: TVarRef) -> UnlaceResult<bool> {
         let vn = self
             .tm
             .var(rvn)
@@ -6873,7 +6873,7 @@ impl SubfloatFlow {
 
     /// Trace a logical value backward through its defining op (C++
     /// `SubfloatFlow::traceBackward`, subflow.cc:3354).
-    fn trace_backward(&mut self, data: &mut Funcdata, rvn: TVarRef) -> KunaResult<bool> {
+    fn trace_backward(&mut self, data: &mut Funcdata, rvn: TVarRef) -> UnlaceResult<bool> {
         let origvn = self
             .tm
             .var(rvn)
@@ -7011,7 +7011,7 @@ impl SubfloatFlow {
 
     /// Push the trace one hop from the worklist top (C++
     /// `SubfloatFlow::processNextWork`, subflow.cc:3442).
-    fn process_next_work(&mut self, data: &mut Funcdata) -> KunaResult<bool> {
+    fn process_next_work(&mut self, data: &mut Funcdata) -> UnlaceResult<bool> {
         let rvn = self
             .worklist
             .pop()
@@ -7024,7 +7024,7 @@ impl SubfloatFlow {
 
     /// Trace logical value as far as possible (C++ `SubfloatFlow::doTrace`,
     /// subflow.cc:3477).
-    pub fn do_trace(&mut self, data: &mut Funcdata) -> KunaResult<bool> {
+    pub fn do_trace(&mut self, data: &mut Funcdata) -> UnlaceResult<bool> {
         if !self.has_format {
             return Ok(false);
         }
@@ -7048,7 +7048,7 @@ impl SubfloatFlow {
 
     /// Apply the constructed transform (C++ base `TransformManager::apply`).
     /// Materializes the placeholder graph into real IR (W10).
-    pub fn apply(&mut self, data: &mut Funcdata) -> KunaResult<()> {
+    pub fn apply(&mut self, data: &mut Funcdata) -> UnlaceResult<()> {
         self.tm.apply(data)
     }
 }
@@ -8121,18 +8121,18 @@ impl LaneDivide {
 
     /// Apply the constructed transform (C++ base `TransformManager::apply`).
     /// STUB(W6): the merged apply reaches `glb->inst[opc]`.
-    pub fn apply(&mut self, data: &mut Funcdata) -> KunaResult<()> {
+    pub fn apply(&mut self, data: &mut Funcdata) -> UnlaceResult<()> {
         self.tm.apply(data)
     }
 
-    /// (kuna) The Varnodes the trace reached.
+    /// (unlace) The Varnodes the trace reached.
     pub fn traced(&self) -> impl Iterator<Item = VarnodeId> + '_ {
         self.tm.original_varnodes()
     }
 
-    /// (kuna) Would [`Self::apply`] refuse the transform before rewriting
+    /// (unlace) Would [`Self::apply`] refuse the transform before rewriting
     /// anything ([`TransformManager::check_free_fanout`])?
-    pub fn check_free_fanout(&self, data: &Funcdata) -> KunaResult<()> {
+    pub fn check_free_fanout(&self, data: &Funcdata) -> UnlaceResult<()> {
         self.tm.check_free_fanout(data)
     }
 }
@@ -8394,8 +8394,8 @@ mod tests {
     }
 
     fn no_replace()
-    -> impl FnMut(&mut crate::varnode::VarnodeBank, VarnodeId, VarnodeId) -> KunaResult<()> {
-        |_: &mut crate::varnode::VarnodeBank, _: VarnodeId, _: VarnodeId| -> KunaResult<()> {
+    -> impl FnMut(&mut crate::varnode::VarnodeBank, VarnodeId, VarnodeId) -> UnlaceResult<()> {
+        |_: &mut crate::varnode::VarnodeBank, _: VarnodeId, _: VarnodeId| -> UnlaceResult<()> {
             Ok(())
         }
     }
@@ -8456,12 +8456,12 @@ mod tests {
                 let copy = mk_op(&mut fd, 0x1000, 1, OpCode::CPUI_COPY);
                 wire_in(&mut fd, copy, home, 0);
                 let root = wire_out(&mut fd, copy, root);
-                fd.kuna_inherit_storage(root, home);
+                fd.unlace_inherit_storage(root, home);
                 let mut subflow =
                     SubvariableFlow::new(&mut fd, root, mask, true, false, false).unwrap();
                 let rvn = subflow.varmap[&root];
                 let replacement = subflow.get_replace_varnode(&mut fd, rvn).unwrap();
-                let sources = fd.kuna_storage_sources(replacement);
+                let sources = fd.unlace_storage_sources(replacement);
                 if mask == 0xfe {
                     assert!(sources.is_empty());
                 } else {

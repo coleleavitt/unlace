@@ -1,4 +1,4 @@
-//! (kuna) A Swift string object is not a pointer to the bytes it lands on.
+//! (unlace) A Swift string object is not a pointer to the bytes it lands on.
 //!
 //! swiftc passes a large string literal (16 UTF-8 bytes or more; a shorter one is
 //! a small string packed into the words themselves) as two words: the count with

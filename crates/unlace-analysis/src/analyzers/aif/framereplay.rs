@@ -1,4 +1,4 @@
-//! (kuna `armframes`) The decisions one whole-image frame recovery reached, so a
+//! (unlace `armframes`) The decisions one whole-image frame recovery reached, so a
 //! `--jobs` worker rebuilds the parent's final Listing from them instead of
 //! searching again. The record is a pure function of the image and options,
 //! which both processes share.

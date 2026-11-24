@@ -1,4 +1,4 @@
-//! unlace-harness: dev-only differential helpers for the kuna Rust port.
+//! unlace-harness: dev-only differential helpers for the unlace Rust port.
 //!
 //! No C++ counterpart -- this crate never ships in the engine. It holds
 //! tooling that diffs the Rust crates against the C++ oracle

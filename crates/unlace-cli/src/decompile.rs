@@ -1,4 +1,4 @@
-//! `unlace decompile` — the Rust port of `kuna/decompile.py`, plus its
+//! `unlace decompile` — the Rust port of `unlace/decompile.py`, plus its
 //! machine-readable mode.
 //!
 //! The ordinary TEXT surface drives `decomp_dbg` with the same console command language
@@ -165,7 +165,7 @@ fn arch_failure_reason(out: &str) -> Option<String> {
 
 /// The reason an `option` command failed, recovered from the transcript.
 ///
-/// `IfcOption` hands a kuna stage-model name to `Architecture::set_kuna_option`
+/// `IfcOption` hands a unlace stage-model name to `Architecture::set_unlace_option`
 /// and an upstream one to `OptionDatabase::set`, and reports either one's
 /// refusal of the VALUE as an `Execution error:`. The script this driver pipes
 /// on stdin is not a *pushed* script, though, and `errorisdone` is only forced
@@ -375,7 +375,7 @@ fn is_unknown_function(out: &str) -> bool {
         || out.contains("Bad namespace:")
 }
 
-/// (kuna, issue #666) What the console said about a name miss beyond the miss
+/// (unlace, issue #666) What the console said about a name miss beyond the miss
 /// itself — a near-miss spelling, or that the image names functions and none is
 /// spelled that way.
 ///
@@ -643,7 +643,7 @@ struct DecompileOutcome {
     name: String,
     /// The function an `--addr` selection lands inside, when not at an entry.
     interior: Option<crate::interior::Interior>,
-    /// (kuna #1288) The note for a selection past the end of the flow of the
+    /// (unlace #1288) The note for a selection past the end of the flow of the
     /// function in front of it.
     past_flow: Option<String>,
 }
@@ -700,7 +700,7 @@ fn decompile(args: &DecompileArgs) -> Result<DecompileOutcome, String> {
         reject_unquotable("temp directory", &tp.display().to_string())?;
     }
 
-    // (kuna, RE-need `analysis-generated-function-name`) The driver defaults, split
+    // (unlace, RE-need `analysis-generated-function-name`) The driver defaults, split
     // in two. `base` is what this surface injects on the FIRST attempt — the DIV-15
     // Listing and the DIV-120 instruction-budget policy, neither of which touches the
     // entry set.
@@ -985,7 +985,7 @@ pub fn run(args: &DecompileArgs) -> i32 {
             if let Some(note) = &out.past_flow {
                 eprintln!("{note}");
             }
-            // (kuna outlang) The Rust back-end's unrepresentable gotos, counted
+            // (unlace outlang) The Rust back-end's unrepresentable gotos, counted
             // off the rendered text: this surface drives `decomp_dbg` as a
             // subprocess, so an in-engine counter would never reach it.
             let gotos = unlace_decomp::langrust::count_unstructured_gotos(&out.c);
@@ -1297,7 +1297,7 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
     )?;
     let assertions = crate::assertdecl::with_types(&types, types_cpp.as_deref(), sdk, assertions)?;
 
-    // (kuna outlang, DIV-80) The auto policy -- follow the binary when the caller
+    // (unlace outlang, DIV-80) The auto policy -- follow the binary when the caller
     // named no language. See `decompile_all::detected_output_language`.
     if !saw_language
         && crate::loadtime::explicit_output_language(&options).is_none()
@@ -1980,7 +1980,7 @@ Execution error: Unknown function name: nosuch
         );
     }
 
-    /// Every refusal `set_kuna_option` and `OptionDatabase::set` can raise
+    /// Every refusal `set_unlace_option` and `OptionDatabase::set` can raise
     /// arrives under one of the console's diagnostic prefixes and names its own
     /// option, whatever the value grammar was.
     #[test]

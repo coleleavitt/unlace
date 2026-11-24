@@ -362,7 +362,7 @@ impl CircleRange {
         *myleft &= mask;
         *myright &= mask;
 
-        // (kuna) Empty when the first value of the new phase is past the
+        // (unlace) Empty when the first value of the new phase is past the
         // range. Upstream compares the order of the two ends before and
         // after, which also calls a range empty when its left end wraps past
         // the top onto the new phase: `[-1, 0x1ea)` at step 2 is `[0, 0x1ea)`.

@@ -1,5 +1,5 @@
 //! Port of `decompiler/cpp/kuna_v850indbranch.{cc,hh}` — V850 "jmp [reg]"
-//! indirect-branch reclassification (kuna GH-8817, S2 flow-classification).
+//! indirect-branch reclassification (unlace GH-8817, S2 flow-classification).
 //!
 //! The V850 SLEIGH spec lifts `jmp [reg]` (reg != lp) to `call [reg]`, i.e.
 //! `CPUI_CALLIND`, so a compiler switch dispatch never reaches jump-table
@@ -10,8 +10,8 @@
 //!
 //! ## What this module ports
 //!
-//! [`kuna_is_v850_indirect_jmp`] is a faithful free-function transcription of
-//! the C++ `kunaIsV850IndirectJmp(Funcdata&, const PcodeOp*)` predicate.  The
+//! [`unlace_is_v850_indirect_jmp`] is a faithful free-function transcription of
+//! the C++ `unlaceIsV850IndirectJmp(Funcdata&, const PcodeOp*)` predicate.  The
 //! reclassification itself (the `opSetOpcode(op, CPUI_BRANCHIND)` rewrite) is
 //! driven by `flow.rs` at `FlowInfo::xrefControlFlow`; this module only owns
 //! the *decision*.
@@ -38,7 +38,7 @@ use crate::context::OpId;
 use crate::funcdata::Funcdata;
 use unlace_num::opcodes::OpCode;
 
-/// (kuna) Toggle V850 "jmp [reg]" CALLIND -> BRANCHIND reclassification
+/// (unlace) Toggle V850 "jmp [reg]" CALLIND -> BRANCHIND reclassification
 /// (C++ `OptionV850IndirectBranch`, GH-8817).
 ///
 /// STUB(W4): the C++ `OptionV850IndirectBranch::apply` flips
@@ -63,7 +63,7 @@ impl Default for V850IndirectBranchOption {
 }
 
 impl V850IndirectBranchOption {
-    /// (kuna) Set the gate (C++ `OptionV850IndirectBranch::apply`).
+    /// (unlace) Set the gate (C++ `OptionV850IndirectBranch::apply`).
     pub fn apply(&mut self, val: bool) -> &'static str {
         self.enabled = val;
         if val {
@@ -82,20 +82,20 @@ impl V850IndirectBranchOption {
 /// The option is on and the loaded language is a V850 variant, the only
 /// processor whose SLEIGH lifts `jmp [reg]` to a CALLIND.
 pub fn applies(arch: &crate::architecture::Architecture) -> bool {
-    arch.kuna_options
+    arch.unlace_options
         .get::<crate::v850indbranch::V850IndirectBranch>()
         .0
         && arch.archid.starts_with("V850:")
 }
 
-/// (kuna) Is `op` a V850 "jmp [reg]" CALLIND that should become a BRANCHIND?
-/// (C++ `kunaIsV850IndirectJmp`, v850indbranch.cc:13-36, GH-8817).
+/// (unlace) Is `op` a V850 "jmp [reg]" CALLIND that should become a BRANCHIND?
+/// (C++ `unlaceIsV850IndirectJmp`, v850indbranch.cc:13-36, GH-8817).
 ///
 /// `gate` is the resolved `glb->v850_indirect_branch` (see
 /// [`V850IndirectBranchOption`]).  `register_name` is the already-resolved
 /// `glb->translate->getRegisterName(...)` of `op`'s input-0 varnode: `None`
 /// transcribes the C++ empty string ("not a named register").  // STUB(W4)
-pub fn kuna_is_v850_indirect_jmp(
+pub fn unlace_is_v850_indirect_jmp(
     data: &Funcdata,
     op: OpId,
     gate: bool,
@@ -136,8 +136,8 @@ pub fn kuna_is_v850_indirect_jmp(
     true
 }
 
-crate::kuna_flag!(
-    /// (kuna GH-8817) Reclassify V850 `jmp [reg]` CALLIND to BRANCHIND
+crate::unlace_flag!(
+    /// (unlace GH-8817) Reclassify V850 `jmp [reg]` CALLIND to BRANCHIND
     /// (C++ `v850_indirect_branch`).
     V850IndirectBranch,
     "v850indirectbranch",

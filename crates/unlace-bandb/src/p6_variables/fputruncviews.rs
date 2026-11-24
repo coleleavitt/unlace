@@ -1,6 +1,6 @@
 //! Separate numerical integer results from the floating view transporting their bits.
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{HighVariableId, OpId};
@@ -76,7 +76,7 @@ fn marker_view(
 }
 
 #[doc(hidden)]
-pub fn recover(fd: &mut Funcdata) -> KunaResult<()> {
+pub fn recover(fd: &mut Funcdata) -> UnlaceResult<()> {
     let operations: Vec<_> = fd
         .obank()
         .iter_alive()
@@ -157,7 +157,7 @@ pub fn recover(fd: &mut Funcdata) -> KunaResult<()> {
             fd.obank().get(*user).is_some_and(|operation| {
                 operation.code() == OpCode::CPUI_COPY
                     && operation.get_in(0) == Some(out)
-                    && operation.get_addlflags() & pcodeop_addlflags::kuna_fpu_view_copy != 0
+                    && operation.get_addlflags() & pcodeop_addlflags::unlace_fpu_view_copy != 0
             })
         }) {
             continue;
@@ -317,9 +317,9 @@ pub fn recover(fd: &mut Funcdata) -> KunaResult<()> {
         fd.obank_mut()
             .get_mut(bridge)
             .unwrap()
-            .set_additional_flag(pcodeop_addlflags::kuna_fpu_view_copy);
+            .set_additional_flag(pcodeop_addlflags::unlace_fpu_view_copy);
         fd.op_insert_after(bridge, op);
-        fd.kuna_fpu_trunc_views.push(bridge);
+        fd.unlace_fpu_trunc_views.push(bridge);
         for (user, slot) in uses {
             fd.op_set_input(user, view, slot)?;
         }
@@ -349,7 +349,7 @@ pub fn keeps_root_alone(ctx: &dyn MergeContext, a: HighVariableId, b: HighVariab
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.fputruncviews_keeps_apart = Some(keeps_apart);
     hooks.fputruncviews_keeps_highs_apart = Some(keeps_highs_apart);
     hooks.fputruncviews_keeps_root_alone = Some(keeps_root_alone);

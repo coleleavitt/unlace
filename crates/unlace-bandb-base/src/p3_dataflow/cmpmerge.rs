@@ -1,4 +1,4 @@
-//! P3 merge of two comparisons on the same operands (kuna `cmpmerge`).
+//! P3 merge of two comparisons on the same operands (unlace `cmpmerge`).
 //!
 //! Two tests of the same values, combined by `||`, `&&` or `^`, or by two
 //! branches in a row to the same target, often decide one relation a single
@@ -484,7 +484,7 @@ impl Rule for RuleCompareMerge {
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::cmpmerge::CmpMerge>()
             .0
         {
@@ -717,7 +717,7 @@ impl Action for ActionBranchMerge {
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::cmpmerge::CmpMerge>()
             .0
         {
@@ -728,8 +728,8 @@ impl Action for ActionBranchMerge {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna) Merge two comparisons of the same operands, combined by a boolean op or by two branches in a row, into one. (option `cmpmerge`).
+crate::unlace_flag!(
+    /// (unlace) Merge two comparisons of the same operands, combined by a boolean op or by two branches in a row, into one. (option `cmpmerge`).
     CmpMerge,
     "cmpmerge",
     "comparison merge",

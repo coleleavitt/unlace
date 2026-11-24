@@ -25,7 +25,7 @@ if data.vbank().get(out_vn).expect("stale out").is_read_only() {
 `p2_lift/jumptable.rs:1700,2175`. The flag is painted from the symbol table's property map,
 which `Architecture::fillinReadOnlyFromLoader` fills from the load image's non-writable
 sections -- so it is true exactly for addresses the program cannot store to, on both the
-real-ELF path (`kuna-console/src/engine.rs`, `ObjectLoadImage::get_readonly` over section
+real-ELF path (`console/src/engine.rs`, `ObjectLoadImage::get_readonly` over section
 flags) and the datatest path (`<bytechunk readonly="true">`).
 
 ## Why no option

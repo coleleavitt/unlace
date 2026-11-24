@@ -43,12 +43,12 @@ fn decompile(func: &str) -> String {
         .to_string();
     let mut prog = bootstrap_from_object(&path, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
-    // (kuna `cppsig`) The SIBLING recovery is turned off so this file measures the
+    // (unlace `cppsig`) The SIBLING recovery is turned off so this file measures the
     // DWARF arm alone: `cppsig` reads the same shapes off the mangled symbol.
     // Their interaction — DWARF wins where both reach a function — is asserted in
     // `verify_cppsig.rs`.
     prog.arch_mut()
-        .set_kuna_option("cppsig", "off")
+        .set_unlace_option("cppsig", "off")
         .expect("cppsig is a registered option");
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");
@@ -127,7 +127,7 @@ fn namespaced_function_recovers_its_prototype() {
 }
 
 /// A template instantiation DOES carry its own `DW_AT_name` (`maxof<int>`), but
-/// kuna's symbol table files it as `maxof` — so only the ADDRESS-keyed prototype
+/// unlace's symbol table files it as `maxof` — so only the ADDRESS-keyed prototype
 /// park reaches it.
 #[test]
 fn template_instantiation_binds_by_address_not_name() {

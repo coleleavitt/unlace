@@ -17,8 +17,8 @@ use crate::action::{ActionGroupList, Rule};
 use crate::context::{OpId, SyscallFamily, VarnodeId};
 use crate::funcdata::Funcdata;
 
-crate::kuna_flag!(
-    /// (kuna `fpargboxed`) A RISC-V FP argument register on entry, and an FP return register
+crate::unlace_flag!(
+    /// (unlace `fpargboxed`) A RISC-V FP argument register on entry, and an FP return register
     /// after a call, holds a NaN-boxed value: its upper 32 bits are all ones.
     FpArgBoxed,
     "fpargboxed",
@@ -35,7 +35,7 @@ fn boxed_limit(data: &Funcdata, vn: VarnodeId) -> u32 {
     };
     let arch = data.get_arch();
     if arch.syscall_regs_family != Some(SyscallFamily::RiscV)
-        || !arch.kuna_options.get::<FpArgBoxed>().0
+        || !arch.unlace_options.get::<FpArgBoxed>().0
     {
         return 0;
     }

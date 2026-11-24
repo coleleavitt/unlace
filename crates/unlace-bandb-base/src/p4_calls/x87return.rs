@@ -101,7 +101,7 @@ mod tests {
     use std::rc::Rc;
     use unlace_base::{
         address::Address,
-        error::{KunaError, KunaResult},
+        error::{UnlaceError, UnlaceResult},
         space::{
             AddrSpace, AddrSpaceManager, ConstantSpace, RegisterLookup, UniqueSpace,
             VarnodeStorage, spacetype,
@@ -110,9 +110,9 @@ mod tests {
 
     struct Lookup(Rc<AddrSpace>);
     impl RegisterLookup for Lookup {
-        fn get_register(&self, name: &str) -> KunaResult<VarnodeStorage> {
+        fn get_register(&self, name: &str) -> UnlaceResult<VarnodeStorage> {
             if name != "ST0" {
-                return Err(KunaError::lowlevel("unknown register"));
+                return Err(UnlaceError::lowlevel("unknown register"));
             }
             Ok(VarnodeStorage {
                 space: Some(self.0.clone()),

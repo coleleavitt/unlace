@@ -6,7 +6,7 @@
 //!   - `pdb_prog.exe` — a freestanding x86-64 PE built `clang -target
 //!     x86_64-pc-windows-msvc -g -gcodeview -fuse-ld=lld`, so lld-link emitted a
 //!     matching `pdb_prog.pdb` + the RSDS CodeView record naming it. Its function
-//!     `pdb_demo_compute` carries NO leftover symbol kuna's loader names from (the
+//!     `pdb_demo_compute` carries NO leftover symbol unlace's loader names from (the
 //!     COFF symtab is not a function-naming source), so without the `.pdb` it is a
 //!     stripped `FUN_<addr>`.
 //!   - `pdb_prog.pdb` — the matching `.pdb`, vendored **beside** the EXE, which is
@@ -27,7 +27,7 @@
 //!  - **a stale `.pdb` beside the EXE** (the mismatch fixture copied to the
 //!    sidecar name): placeholder — the GUID/age gate rejects it, which is what
 //!    makes the automatic search safe to run by default.
-//!  - **`kuna_pdb_path`**: an EXE with no sidecar still recovers its names from an
+//!  - **`unlace_pdb_path`**: an EXE with no sidecar still recovers its names from an
 //!    explicitly supplied `.pdb`; and an explicit path that does NOT match falls
 //!    through to a sidecar that does.
 //!
@@ -40,7 +40,7 @@ use std::sync::Mutex;
 use unlace_base::address::Address;
 use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 
-/// Serializes the `kuna_pdb_path` env-var dance: the pass reads the process-global
+/// Serializes the `unlace_pdb_path` env-var dance: the pass reads the process-global
 /// env at LOAD, so two tests setting it in parallel would clobber each other. Each
 /// `#[test]` holds this lock for its whole body, the `verify_macho_fat` `ENV_LOCK`
 /// precedent.
@@ -53,7 +53,7 @@ const COMPUTE_VMA: u64 = 0x140001000;
 /// The function name the PDB pass recovers (the un-mangled source name).
 const COMPUTE_NAME: &str = "pdb_demo_compute";
 
-/// The env var naming the `.pdb` to apply (the fid `kuna_fid_db` precedent).
+/// The env var naming the `.pdb` to apply (the fid `unlace_fid_db` precedent).
 const PDB_PATH_ENV: &str = "kuna_pdb_path";
 
 fn repo_root() -> PathBuf {
@@ -78,7 +78,7 @@ fn isolated_exe(tag: &str) -> PathBuf {
     exe
 }
 
-/// How to drive one run: which EXE to load, what `kuna_pdb_path` holds, and
+/// How to drive one run: which EXE to load, what `unlace_pdb_path` holds, and
 /// whether the `pdb` option is explicitly turned off before the commit.
 struct Run {
     exe: PathBuf,
@@ -143,7 +143,7 @@ fn name_at_compute(prog: &ConsoleProgram) -> String {
 /// `COMPUTE_VMA`.
 ///
 /// The `.pdb` is located by the pass at LOAD (the facts are stashed during bootstrap), so
-/// `kuna_pdb_path` is set BEFORE `bootstrap_from_object` and always cleared after, so runs
+/// `unlace_pdb_path` is set BEFORE `bootstrap_from_object` and always cleared after, so runs
 /// do not leak into one another. The `option` line is applied before the deferred commit,
 /// matching live-CLI ordering.
 fn run(r: Run) -> String {
@@ -165,7 +165,7 @@ fn run(r: Run) -> String {
 
     if r.force_off {
         prog.arch_mut()
-            .set_kuna_option("pdb", "off")
+            .set_unlace_option("pdb", "off")
             .expect("pdb flips off");
     }
     prog.commit_pending_analysis()
@@ -251,7 +251,7 @@ fn pdb_fingerprint_gate_rejects_a_stale_sidecar() {
     );
 }
 
-/// `kuna_pdb_path` still reaches a `.pdb` that is NOT beside the image, and an
+/// `unlace_pdb_path` still reaches a `.pdb` that is NOT beside the image, and an
 /// explicit path that fails the fingerprint gate falls through to a sidecar that
 /// passes it.
 #[test]

@@ -82,7 +82,7 @@ fn bootstrap_image(
         .expect("bootstrap fixture with built processor specs");
     for (name, value) in [("listing", "on"), ("aif", "strict")].iter().chain(options) {
         prog.arch_mut()
-            .set_kuna_option(name, value)
+            .set_unlace_option(name, value)
             .expect("option applies");
     }
     if let Some((vma, name)) = declared {

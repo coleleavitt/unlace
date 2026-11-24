@@ -24,7 +24,7 @@ pub mod itecondlist;
 pub mod iteregion;
 pub mod loopbreak_recovery;
 pub mod loopcontinue;
-pub mod looprotate; // (kuna `looprotate`) a guarded do-while loop becomes a while loop
+pub mod looprotate; // (unlace `looprotate`) a guarded do-while loop becomes a while loop
 pub mod orchain;
 pub mod outline;
 pub mod region_structurer;

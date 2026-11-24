@@ -23,7 +23,7 @@
     "NOT a new mechanism. kuna_rustabi (DIV-136) already completed this arm with a sound, language-agnostic classification (model rule + both halves read + a one-sided callee-body veto) and then gated it on Compiler::Rustc, which a GCC image can never satisfy. `--option rustabi always` closes the acceptance today; it is not a default-flip candidate because `always` also drops the language test for the PRODUCER-side rule, which is why rustabi ships off. The fix is to split the consumer half out behind its own gate.",
     "Default ON: the arm only ever ADDS a definition -- two INDIRECT creations become two SUBPIECEs of a value the CALL now produces. No statement can be removed that was not a read of an undefined local, and no call can lose an argument. Measured on 498 images, this held with no exceptions.",
     "The reach is the cspec's output model, not an architecture list: <join_dual_class/> on x86-64 System V and MIPS64, and the plain <join/> over r0/r1 on 32-bit ARM -- which is how every soft-float double comes back from __aeabi_dmul. The ARM half was found by a stage-test regression, not by design, and the sweep was widened to 93 ARM/MIPS images because of it.",
-    "Widening seed_callee_return_writes so this option's veto keeps its evidence exposed a pre-existing latent coupling: seed_callee_preserves is gated on `calleepreserves`, so the default-ON `calleeretpreserves` was silently dead whenever `calleepreserves` was off. Under default options the widening is a strict no-op (calleepreserves already seeds every direct call). tests/stages/kuna-calleepreserves.xml now holds BOTH rules off in its off pass, because either one closes its witness."
+    "Widening seed_callee_return_writes so this option's veto keeps its evidence exposed a pre-existing latent coupling: seed_callee_preserves is gated on `calleepreserves`, so the default-ON `calleeretpreserves` was silently dead whenever `calleepreserves` was off. Under default options the widening is a strict no-op (calleepreserves already seeds every direct call). tests/stages/calleepreserves.xml now holds BOTH rules off in its off pass, because either one closes its witness."
   ],
   "gates": {
     "make_test": "PARITY OK 675/675",
@@ -57,7 +57,7 @@
   "speed_forced_off": false,
   "speed_note": "median of 7 on the witness function via scripts.pipeline.timeit; forming the pair deletes IR (two INDIRECT creations and their inputs) rather than adding it",
   "tests": {
-    "stage": "tests/stages/kuna-callretpair.xml (two-pass, plus a callee-veto control identical in both passes)",
+    "stage": "tests/stages/callretpair.xml (two-pass, plus a callee-veto control identical in both passes)",
     "cli": "tests/cli/bytecode-reader-return-discarded.json (retargeted onto the vendored callretpair_x86_64; the dataset witness is not vendorable)",
     "unit": "callretpair/tests.rs (the gate) and rustabi/tests.rs (the shared arm, on callretpair alone and with both gates off)",
     "fixture": "decompiler/crates/kuna-analysis/tests/fixtures/callretpair_x86_64{,.s}"

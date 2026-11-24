@@ -9,7 +9,7 @@
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::{Decoder, Encoder, PackedDecode, PackedEncode};
 use unlace_base::space::{AddrSpaceManager, ConstantSpace};
 use unlace_base::types::Wrap;
@@ -37,9 +37,9 @@ impl ByteWalker {
 }
 
 impl PatternExpressionContext for ByteWalker {
-    fn get_instruction_bytes(&self, byteoff: i32, numbytes: i32) -> KunaResult<u32> {
+    fn get_instruction_bytes(&self, byteoff: i32, numbytes: i32) -> UnlaceResult<u32> {
         if byteoff < 0 || (byteoff + numbytes) as usize > self.instr.len() {
-            return Err(KunaError::bad_data(
+            return Err(UnlaceError::bad_data(
                 "Instruction is using more than 16 bytes",
             ));
         }
@@ -51,7 +51,7 @@ impl PatternExpressionContext for ByteWalker {
         Ok(res)
     }
 
-    fn get_context_bytes(&self, _byteoff: i32, _numbytes: i32) -> KunaResult<u32> {
+    fn get_context_bytes(&self, _byteoff: i32, _numbytes: i32) -> UnlaceResult<u32> {
         Ok(0)
     }
 
@@ -63,12 +63,12 @@ impl PatternExpressionContext for ByteWalker {
         panic!("verify_w2_sleigh_pattern never reads addresses")
     }
 
-    fn get_n2addr(&self) -> KunaResult<Address> {
-        Err(KunaError::lowlevel("inst_next2 not available"))
+    fn get_n2addr(&self) -> UnlaceResult<Address> {
+        Err(UnlaceError::lowlevel("inst_next2 not available"))
     }
 
-    fn operand_value(&self, _index: i32, _table_id: u32, _ct_id: u32) -> KunaResult<i64> {
-        Err(KunaError::sleigh("no operands in verify tests"))
+    fn operand_value(&self, _index: i32, _table_id: u32, _ct_id: u32) -> UnlaceResult<i64> {
+        Err(UnlaceError::sleigh("no operands in verify tests"))
     }
 }
 

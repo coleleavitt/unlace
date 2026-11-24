@@ -39,7 +39,7 @@
 //! `__builtin_unreachable`) is `brk #1`, `llvm.ubsantrap` (`-fsanitize-trap`,
 //! `-ftrapv`) is `brk #0x55xx`, GCC's `__builtin_trap` is `brk #1000`, the
 //! arm64e pointer-authentication failure traps are `brk #0xc470`..`#0xc473`
-//! (see [`kuna_ptrauthtrap`](crate::ptrauthtrap)) and MSVC's `__fastfail`
+//! (see [`unlace_ptrauthtrap`](crate::ptrauthtrap)) and MSVC's `__fastfail`
 //! is `brk #0xf003`. [`is_brk_trap_branchind`] matches the lowered shape with
 //! one of those immediates and `flow.rs::xref_control_flow` replaces the
 //! `BRANCHIND` with the artificial no-return halt a call that never returns
@@ -67,7 +67,7 @@
 
 use crate::context::OpId;
 use crate::funcdata::Funcdata;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
@@ -120,7 +120,7 @@ pub fn brk_immediate(data: &Funcdata, op: OpId, breakpoint: u32) -> Option<uintb
 
 /// Append `code` to the inputs of the trap's `CALLOTHER`, after its immediate
 /// and return address, so the code the trap handler reads stays live.
-pub fn read_code(data: &mut Funcdata, callother: OpId, code: &VarnodeData) -> KunaResult<()> {
+pub fn read_code(data: &mut Funcdata, callother: OpId, code: &VarnodeData) -> UnlaceResult<()> {
     let slot = data
         .obank()
         .get(callother)
@@ -135,7 +135,7 @@ pub fn read_code(data: &mut Funcdata, callother: OpId, code: &VarnodeData) -> Ku
 ///
 /// Runs at flow-classification time, before basic blocks exist, so the
 /// `CALLOTHER` is found by walking back over the instruction's raw ops, as
-/// [`kuna_sparcstructret`](crate::sparcstructret) does for the same
+/// [`unlace_sparcstructret`](crate::sparcstructret) does for the same
 /// lowering of SPARC's `unimp`.
 pub fn brk_site(data: &Funcdata, op: OpId, breakpoint: u32) -> Option<(OpId, uintb)> {
     let id = trap_producer(data, op)?;

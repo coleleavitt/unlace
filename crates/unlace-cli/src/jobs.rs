@@ -122,7 +122,7 @@ pub(crate) struct TargetSpec {
     pub(crate) object_location: Option<ObjectLocation>,
     pub(crate) provenance: EntryProvenance,
     pub(crate) binding: Option<String>,
-    /// (kuna `structsynth`) The name each of this target's ledger lookups is
+    /// (unlace `structsynth`) The name each of this target's ledger lookups is
     /// answered with, in order, when a [`SynthWorker::Force`] worker runs it.
     pub(crate) synth: Option<Vec<Option<String>>>,
 }
@@ -200,22 +200,22 @@ pub(crate) struct PoolConfig<'a> {
     pub(crate) slice: Option<&'a str>,
     pub(crate) target: Option<&'a str>,
     pub(crate) sleighpath: Option<&'a str>,
-    /// (kuna `structsynth`) The parent's ledger before any decompile, when this
+    /// (unlace `structsynth`) The parent's ledger before any decompile, when this
     /// run synthesizes structures: the state a [`run_pool`] replays the
     /// workers' lookups from.  `None` runs every worker with `structsynth off`.
     pub(crate) synth_base: Option<Replay>,
-    /// (kuna `protoorder`) The serial run this pool replays would have
+    /// (unlace `protoorder`) The serial run this pool replays would have
     /// decompiled callees first, an order no pool takes: the structures a
     /// function mints there are the ones its callees' recovered prototypes lead
     /// it to, so the serial run the replayed names belong to is
     /// `--jobs 1 --option protoorder off` and the report says so.
     pub(crate) serial_callee_first: bool,
-    /// (kuna `elemptr`) The pool decompiles a batch of one function, whose
+    /// (unlace `elemptr`) The pool decompiles a batch of one function, whose
     /// worker types globals and tables as a serial batch of one does; the
     /// workers of any larger pool type neither, as a serial run that is not
     /// callee-first does not.
     pub(crate) elem_objects: bool,
-    /// (kuna `armframes`) The parent's frame-recovery record, which a worker
+    /// (unlace `armframes`) The parent's frame-recovery record, which a worker
     /// replays instead of searching the image again.
     pub(crate) arm_frames: Option<String>,
     /// Told about the first decompile of every target as its chunk lands — the
@@ -650,7 +650,7 @@ impl Session {
 
 /// The stderr brand of a pool run.
 struct PoolReport {
-    /// `--jobs` or `--stream`: every line this run prints is `[kuna <tag>]`.
+    /// `--jobs` or `--stream`: every line this run prints is `[unlace <tag>]`.
     tag: &'static str,
     banner: String,
     workers: usize,
@@ -2305,7 +2305,7 @@ mod tests {
                     addresses: Vec::new(),
                     split_piece: false,
                 },
-                // (kuna `reglocals`) A local outside the frame: its `kind` is
+                // (unlace `reglocals`) A local outside the frame: its `kind` is
                 // carried by `is_param` and `stack_offset` alone.
                 VarInfo {
                     name: "v3".into(),
@@ -2319,7 +2319,7 @@ mod tests {
                     split_piece: false,
                 },
             ],
-            // (kuna `structdefs`) One recovered type definition, so the frame
+            // (unlace `structdefs`) One recovered type definition, so the frame
             // codec's `types` block is exercised by the round-trip below.
             types: vec![TypeInfo {
                 name: "mystruct".into(),
@@ -2338,7 +2338,7 @@ mod tests {
                     type_name: "struct Pair".into(),
                 }],
             }],
-            // (kuna `globalref`) One global, so the codec's flag byte is exercised.
+            // (unlace `globalref`) One global, so the codec's flag byte is exercised.
             globals: vec![GlobalInfo {
                 address: 0x404010,
                 name: "dat_404010".into(),

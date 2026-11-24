@@ -1,4 +1,4 @@
-//! (kuna `protoorder`) What a callee's own recovery found, stated for its callers.
+//! (unlace `protoorder`) What a callee's own recovery found, stated for its callers.
 //!
 //! `unlace decompile-all` decompiles callees before callers (the ordering lives in
 //! `unlace-cli/src/decompile_all.rs`); after each function this module decides what
@@ -118,7 +118,7 @@ impl ProtoOrderMode {
     }
 }
 
-/// (kuna) Parse `option protoorder off|types|cycles|lock`.
+/// (unlace) Parse `option protoorder off|types|cycles|lock`.
 pub struct OptionProtoOrder;
 
 impl OptionProtoOrder {
@@ -126,14 +126,14 @@ impl OptionProtoOrder {
     pub const NAME: &'static str = "protoorder";
 
     /// Parse + validate the value.
-    pub fn apply(&self, p1: &str) -> unlace_base::error::KunaResult<(ProtoOrderMode, String)> {
+    pub fn apply(&self, p1: &str) -> unlace_base::error::UnlaceResult<(ProtoOrderMode, String)> {
         let mode = match p1 {
             "off" => ProtoOrderMode::Off,
             "types" => ProtoOrderMode::Types,
             "cycles" => ProtoOrderMode::Cycles,
             "lock" => ProtoOrderMode::Lock,
             other => {
-                return Err(unlace_base::error::KunaError::parse(format!(
+                return Err(unlace_base::error::UnlaceError::parse(format!(
                     "Unknown protoorder value: {other} (expected off|types|cycles|lock)"
                 )));
             }
@@ -184,7 +184,7 @@ pub struct RecoveredTypes {
     /// The part of [`Self::reads`] the body reads only by handing the register
     /// on, to a declared parameter or a callee that reads it.
     pub passes: Vec<(Address, int4)>,
-    /// (kuna `importvote`) The statement is an undeclared import's call-site
+    /// (unlace `importvote`) The statement is an undeclared import's call-site
     /// vote, not a decompiled body: [`Self::inputs`] are what its callers pass.
     pub callers_vote: bool,
 }
@@ -318,7 +318,7 @@ fn stated_argument_type<'a>(
     fc: &FuncCallSpecs,
     slot: int4,
 ) -> Option<&'a Rc<Datatype>> {
-    let stated = data.kuna_protoorder_types(fc.get_entry_address())?;
+    let stated = data.unlace_protoorder_types(fc.get_entry_address())?;
     let index = (slot - 1) as usize;
     let (addr, size) = fc.final_input_storage().get(index)?;
     stated.param_type_at(index, addr, *size)
@@ -568,7 +568,7 @@ enum Reading<'a> {
     DeclaredInput,
 }
 
-/// (kuna `calleevote`) Does anything the function does with its input `vn`
+/// (unlace `calleevote`) Does anything the function does with its input `vn`
 /// outrank a caller's type `ct` for it?  The refusals a callee's vote meets at
 /// a call site, asked of the callee's own uses, and one more for a character
 /// pointer ([`splits_a_wide_constant`]).
@@ -580,7 +580,7 @@ pub fn input_refuses(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> bool {
         || splits_a_wide_constant(data, &value_family(data, vn), ct, 0)
 }
 
-/// (kuna `callerptr`) [`input_refuses`], with the class a call reads the value as
+/// (unlace `callerptr`) [`input_refuses`], with the class a call reads the value as
 /// taken from a declared prototype only, never from another callee's recovery.
 #[doc(hidden)]
 pub fn input_refuses_declared(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> bool {
@@ -590,7 +590,7 @@ pub fn input_refuses_declared(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> 
         || splits_a_wide_constant(data, &value_family(data, vn), ct, 0)
 }
 
-/// (kuna `callrettype`) Does anything the caller does with the call result
+/// (unlace `callrettype`) Does anything the caller does with the call result
 /// `vn` outrank the callee's stated return type `ct` for it?  The refusals a
 /// callee's vote meets at a call argument, asked of the result's own uses.
 #[doc(hidden)]
@@ -614,7 +614,7 @@ fn indexes_a_pointer(data: &Funcdata, vn: VarnodeId) -> bool {
     })
 }
 
-/// (kuna `calleevote`) Is the value `vn` handed to a call whose declared
+/// (unlace `calleevote`) Is the value `vn` handed to a call whose declared
 /// prototype types that parameter a pointer to something (`pipe (int *)`)?
 #[doc(hidden)]
 pub fn handed_to_a_declared_pointer(data: &Funcdata, vn: VarnodeId) -> bool {
@@ -649,7 +649,7 @@ pub fn handed_to_a_declared_pointer(data: &Funcdata, vn: VarnodeId) -> bool {
     })
 }
 
-/// (kuna `calleevote`) Does the function load or store outside the one pointee
+/// (unlace `calleevote`) Does the function load or store outside the one pointee
 /// of `ct`, or step through more than that one object?
 #[doc(hidden)]
 pub fn reaches_past_the_pointee(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> bool {
@@ -890,7 +890,7 @@ fn a_float_can_arrive_in(data: &Funcdata, node: &crate::varnode::Varnode) -> boo
         intypes,
         output_storage: None,
         input_storage: Vec::new(),
-        kuna_library_names: None,
+        unlace_library_names: None,
     };
     let mut fp = FuncProto::new();
     if fp
@@ -1564,13 +1564,13 @@ fn printed_reader_class(data: &Funcdata, call: OpId, slot: int4) -> Option<Class
     let index = (slot - 1) as usize;
     let entry = fc.get_entry_address();
     if let Some(class) = data
-        .kuna_protoorder_types(entry)
+        .unlace_protoorder_types(entry)
         .and_then(|s| s.inputs.get(index).and_then(|(_, _, t)| printed(t)))
     {
         return Some(class);
     }
     let key = (entry.get_space()?.get_index(), entry.get_offset());
-    data.kuna_callee_param_float(key, index)
+    data.unlace_callee_param_float(key, index)
         .map(|f| if f { Class::Float } else { Class::Integer })
 }
 
@@ -1590,7 +1590,7 @@ pub fn float_read_width(data: &Funcdata, call: OpId, slot: int4) -> Option<int4>
         return param.get_type().and_then(|t| float(t));
     }
     let index = (slot - 1) as usize;
-    data.kuna_protoorder_types(fc.get_entry_address())
+    data.unlace_protoorder_types(fc.get_entry_address())
         .and_then(|s| s.inputs.get(index).and_then(|(_, _, t)| float(t)))
 }
 
@@ -1958,7 +1958,7 @@ pub fn recovered_pieces(
         first_var_arg_slot: nparams,
         output_storage: None,
         input_storage: Vec::new(),
-        kuna_library_names: None,
+        unlace_library_names: None,
     };
     let mut storage: Vec<(Address, int4)> = Vec::new();
     for i in 0..nparams {
@@ -2225,25 +2225,45 @@ pub fn park_recovered(
     }
     let (mut pieces, mut storage) = recovered_pieces(proto, name)?;
     if mode.states_types_only() {
-        let arity_sound = arch.kuna_options.get::<crate::passthrough::PassThrough>().0
+        let arity_sound = arch
+            .unlace_options
+            .get::<crate::passthrough::PassThrough>()
+            .0
             && arity_claim_sound(arch, entry, &pieces, &storage);
-        let output = if arch.kuna_options.get::<crate::passthrough::PassThrough>().0 {
+        let output = if arch
+            .unlace_options
+            .get::<crate::passthrough::PassThrough>()
+            .0
+        {
             recovered_output(proto, data)
         } else {
             None
         };
-        let result = if arch.kuna_options.get::<crate::passthrough::PassThrough>().0 {
+        let result = if arch
+            .unlace_options
+            .get::<crate::passthrough::PassThrough>()
+            .0
+        {
             recovered_result(proto)
         } else {
             None
         };
-        let vararg_tail = if arch.kuna_options.get::<crate::passthrough::PassThrough>().0 {
+        let vararg_tail = if arch
+            .unlace_options
+            .get::<crate::passthrough::PassThrough>()
+            .0
+        {
             crate::varargtail::vararg_tail_inputs(data, &storage)
         } else {
             Vec::new()
         };
-        let (reads, passes) = match data.kuna_entry_reads() {
-            Some(r) if arch.kuna_options.get::<crate::passthrough::PassThrough>().0 => {
+        let (reads, passes) = match data.unlace_entry_reads() {
+            Some(r)
+                if arch
+                    .unlace_options
+                    .get::<crate::passthrough::PassThrough>()
+                    .0 =>
+            {
                 let finals = crate::entryreads::final_forwards(data);
                 crate::entryreads::reads_through(r, &finals, |c, a, s| {
                     crate::entryreads::callee_takes(data, c, a, s, true)
@@ -2286,7 +2306,7 @@ pub fn park_recovered(
     Ok(Recovered { pieces, trimmed })
 }
 
-/// (kuna `callbacktype`) Does the body of `entry` read the argument register
+/// (unlace `callbacktype`) Does the body of `entry` read the argument register
 /// ONE PAST a declared parameter list before writing it?
 ///
 /// The same one-sided entry walk [`arity_claim_sound`] takes, asked of a list
@@ -2425,7 +2445,7 @@ fn recovered_output(
 /// is false), so it reaches nothing but the tail-call arm that reads `output`.
 ///
 /// It is also why this mode is cheap.  The locking mode parks through
-/// `set_function_proto_pieces`, which bumps `Database::kuna_generation` and so
+/// `set_function_proto_pieces`, which bumps `Database::unlace_generation` and so
 /// drops the memoized `build_callee_proto_pieces` snapshot every later function
 /// rebuilds; this table is the module's own, and the symbol table does not move.
 fn state_recovered_types(
@@ -2455,7 +2475,7 @@ fn state_recovered_types(
     let Some(key) = stated_key(entry) else {
         return Err(Decline::InvalidStorage);
     };
-    arch.kuna_tables
+    arch.unlace_tables
         .get_mut::<crate::protoorder::CalleeTypes>()
         .insert(
             key,
@@ -2474,7 +2494,7 @@ fn state_recovered_types(
 }
 
 /// The key a function's statement is filed under in
-/// `Architecture::kuna_protoorder_types`.
+/// `Architecture::unlace_protoorder_types`.
 pub fn stated_key(entry: &Address) -> Option<(int4, uintb)> {
     Some((entry.get_space()?.get_index(), entry.get_offset()))
 }
@@ -2490,7 +2510,7 @@ pub fn forget_statements_naming(arch: &mut Architecture, names: &[String]) {
     if names.is_empty() {
         return;
     }
-    arch.kuna_tables
+    arch.unlace_tables
         .get_mut::<crate::protoorder::CalleeTypes>()
         .retain(|_, stated| !stated.inputs.iter().any(|(_, _, ct)| names_type(ct, names)));
 }
@@ -2526,7 +2546,7 @@ pub fn names_type(ct: &Rc<Datatype>, names: &[String]) -> bool {
 /// redo exists because that answer changed.
 pub fn seed_protoorder_types(arch: &Architecture, data: &mut crate::funcdata::Funcdata) {
     if arch
-        .kuna_tables
+        .unlace_tables
         .get::<crate::protoorder::CalleeTypes>()
         .is_empty()
     {
@@ -2547,18 +2567,18 @@ pub fn seed_protoorder_types(arch: &Architecture, data: &mut crate::funcdata::Fu
             continue;
         }
         if let Some(stated) = arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::protoorder::CalleeTypes>()
             .get(&key)
         {
-            data.kuna_set_protoorder_types(&e, Rc::clone(stated));
+            data.unlace_set_protoorder_types(&e, Rc::clone(stated));
         }
     }
 }
 
-impl crate::optionset::KunaOption for ProtoOrderMode {
+impl crate::optionset::UnlaceOption for ProtoOrderMode {
     const NAME: &'static str = "protoorder";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         crate::protoorder::ProtoOrderMode::Off
@@ -2568,12 +2588,12 @@ impl crate::optionset::KunaOption for ProtoOrderMode {
         crate::protoorder::ProtoOrderMode::Cycles
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         Ok(crate::protoorder::OptionProtoOrder.apply(value)?)
     }
 }
 
-/// (kuna `protoorder types`) The recovered parameter types of each callee this function calls,
+/// (unlace `protoorder types`) The recovered parameter types of each callee this function calls,
 /// copied off the `Architecture` after the flow build (the type-inference seam cannot reach it),
 /// keyed by `(space index, entry offset)`; kept across `Funcdata::clear`.
 #[derive(Default)]
@@ -2583,47 +2603,47 @@ struct TypesSlot(
         std::rc::Rc<crate::protoorder::RecoveredTypes>,
     >,
 );
-crate::kuna_func_state!(TypesSlot, keep_across_clear: true);
+crate::unlace_func_state!(TypesSlot, keep_across_clear: true);
 
-/// The `kuna_protoorder` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// The `unlace_protoorder` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataProtoorderExt {
-    /// (kuna `protoorder types`) Record the types a callee's own recovery stated
+    /// (unlace `protoorder types`) Record the types a callee's own recovery stated
     /// for the function entered at `entry`.
-    fn kuna_set_protoorder_types(
+    fn unlace_set_protoorder_types(
         &mut self,
         entry: &unlace_base::address::Address,
         stated: std::rc::Rc<crate::protoorder::RecoveredTypes>,
     );
-    /// (kuna `protoorder types`) The types a callee's own recovery stated for
+    /// (unlace `protoorder types`) The types a callee's own recovery stated for
     /// the function entered at `entry`, if any were stated.
-    fn kuna_protoorder_types(
+    fn unlace_protoorder_types(
         &self,
         entry: &unlace_base::address::Address,
     ) -> Option<&crate::protoorder::RecoveredTypes>;
 }
 
 impl FuncdataProtoorderExt for crate::funcdata::Funcdata {
-    /// (kuna `protoorder types`) Record the types a callee's own recovery stated
+    /// (unlace `protoorder types`) Record the types a callee's own recovery stated
     /// for the function entered at `entry`.
-    fn kuna_set_protoorder_types(
+    fn unlace_set_protoorder_types(
         &mut self,
         entry: &unlace_base::address::Address,
         stated: std::rc::Rc<crate::protoorder::RecoveredTypes>,
     ) {
         if let Some(sp) = entry.get_space() {
-            self.kuna_state_mut::<TypesSlot>()
+            self.unlace_state_mut::<TypesSlot>()
                 .0
                 .insert((sp.get_index(), entry.get_offset()), stated);
         }
     }
-    /// (kuna `protoorder types`) The types a callee's own recovery stated for
+    /// (unlace `protoorder types`) The types a callee's own recovery stated for
     /// the function entered at `entry`, if any were stated.
-    fn kuna_protoorder_types(
+    fn unlace_protoorder_types(
         &self,
         entry: &unlace_base::address::Address,
     ) -> Option<&crate::protoorder::RecoveredTypes> {
-        let types = &self.kuna_state::<TypesSlot>().0;
+        let types = &self.unlace_state::<TypesSlot>().0;
         if types.is_empty() {
             return None;
         }
@@ -2634,14 +2654,14 @@ impl FuncdataProtoorderExt for crate::funcdata::Funcdata {
     }
 }
 
-/// (kuna `protoorder types`) The recovered parameter types each callee stated for the callers
+/// (unlace `protoorder types`) The recovered parameter types each callee stated for the callers
 /// decompiled after it, by `(space index, entry offset)`; an
 /// [`ArchTable`](crate::archstate::ArchTable).
 pub type CalleeTypes = std::collections::HashMap<
     (unlace_base::types::int4, unlace_base::types::uintb),
     std::rc::Rc<crate::protoorder::RecoveredTypes>,
 >;
-crate::kuna_arch_table!(CalleeTypes);
+crate::unlace_arch_table!(CalleeTypes);
 
 #[cfg(test)]
 mod tests;

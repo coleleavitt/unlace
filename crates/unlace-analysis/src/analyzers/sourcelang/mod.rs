@@ -1,4 +1,4 @@
-//! Source-language / compiler detection — the kuna analog of Ghidra's
+//! Source-language / compiler detection — the unlace analog of Ghidra's
 //! `SourceLanguageAnalyzer` + the per-language `SourceLanguage.existsIn`
 //! extension points.
 //!
@@ -6,16 +6,16 @@
 //! `FORMAT_ANALYSIS.before()`), calls `SourceLanguageService.find(program)` to
 //! collect the IDs whose `existsIn` predicate is true, and records them on the
 //! program; downstream language-specific analyzers (the Rust string/demangle
-//! analyzers, the Go markup, …) then gate on those IDs. kuna ports the
+//! analyzers, the Go markup, …) then gate on those IDs. unlace ports the
 //! **detection half** (the `existsIn` predicates) and uses the result to shape
 //! pass selection — concretely, to widen the no-return list for Rust binaries
 //! (see [`rust_noreturn_list`] and `loader/noreturn.rs`). The Ghidra
 //! spec-extension / `.gdt`-data-archive application machinery (`addSpecExtensions`,
-//! `getDataArchives`) is **out of scope** — kuna has no SpecExtension subsystem.
+//! `getDataArchives`) is **out of scope** — unlace has no SpecExtension subsystem.
 //! This is therefore a PARTIAL port (detection only), in the same spirit as the
 //! demangle pass's name-only scope (`demangle/mod.rs`).
 //!
-//! Origin (upstream Ghidra, the tree kuna was ported from):
+//! Origin (upstream Ghidra, the tree unlace was ported from):
 //! - analyzer shell:
 //!   `Ghidra/Features/Base/.../analysis/SourceLanguageAnalyzer.java`
 //! - dispatcher:
@@ -36,7 +36,7 @@
 //!   `.comment` section is a sequence of NUL-delimited records, each a whole
 //!   toolchain line, so an anchored "starts with `rustc version `" match is
 //!   exact (no regex crate needed — same move as `noreturn.rs`'s `*` wildcards).
-//! - The `Gcc`/`Clang` arms are a **kuna convenience**, not faithful Ghidra IDs:
+//! - The `Gcc`/`Clang` arms are a **unlace convenience**, not faithful Ghidra IDs:
 //!   Ghidra ships only Rust/Swift/ObjC `SourceLanguage` extension points for ELF,
 //!   there is no generic "C/GCC" one. They are derived from the same `.comment`
 //!   toolchain string and exist only to give a non-Rust/Go ELF a meaningful
@@ -187,21 +187,21 @@ const RICH_LLVM_PRODIDS: [u16; 2] = [
 /// The detected source-language toolchain.
 ///
 /// `Rustc` and `Go` are faithful Ghidra `SourceLanguage` IDs (Rust/Golang).
-/// `Gcc`/`Clang` are kuna conveniences derived from the `.comment` toolchain
+/// `Gcc`/`Clang` are unlace conveniences derived from the `.comment` toolchain
 /// string (Ghidra has no generic C SourceLanguage). `Unknown` is the default
 /// when no signal is present (matching `SourceLanguageService.find` returning an
 /// empty set).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Compiler {
-    /// GCC (from a `GCC: (...)` `.comment` record) — kuna convenience.
+    /// GCC (from a `GCC: (...)` `.comment` record) — unlace convenience.
     Gcc,
-    /// Clang/LLVM (from a `clang version ...` `.comment` record) — kuna convenience.
+    /// Clang/LLVM (from a `clang version ...` `.comment` record) — unlace convenience.
     Clang,
     /// rustc (faithful `RustSourceLanguage.RUST_ID`).
     Rustc,
     /// Go (faithful — `.go.buildinfo` / `.note.go.buildid` present).
     Go,
-    /// Swift (kuna — `swift5` reflection metadata sections, Swift-mangled
+    /// Swift (unlace — `swift5` reflection metadata sections, Swift-mangled
     /// symbols, or the Swift runtime import set; Ghidra has no Swift
     /// `SourceLanguage` extension point to port).
     Swift,
@@ -309,8 +309,8 @@ pub fn detect_compiler(file: &object::File, bytes: &[u8]) -> Compiler {
 ///    (`_R...` v0 / `_ZN...17h<hex>E` legacy — the loader's own demangle gate),
 ///    OR `.rodata` carries a [`RUST_SIGNATURES`] signature
 ///    (`RustSourceLanguage.isRust` rodata path).
-/// 3. **Clang** — `.comment` has a `clang version ...` record (kuna convenience).
-/// 4. **Gcc** — `.comment` has a `GCC: (...)` record (kuna convenience).
+/// 3. **Clang** — `.comment` has a `clang version ...` record (unlace convenience).
+/// 4. **Gcc** — `.comment` has a `GCC: (...)` record (unlace convenience).
 /// 5. **Unknown** otherwise.
 pub fn detect_compiler_elf(file: &object::File) -> Compiler {
     if golang_section_present(file.sections().filter_map(|s| s.name().ok())) {
@@ -339,7 +339,7 @@ pub fn detect_compiler_elf(file: &object::File) -> Compiler {
         return Compiler::Swift;
     }
 
-    // C/C++ conveniences (kuna additions; not faithful Ghidra SourceLanguage IDs).
+    // C/C++ conveniences (unlace additions; not faithful Ghidra SourceLanguage IDs).
     if comment_contains(&comment, b"clang version ") {
         return Compiler::Clang;
     }
@@ -370,7 +370,7 @@ pub fn detect_compiler_elf(file: &object::File) -> Compiler {
 /// 4. **Gcc** — a MinGW `GCC: (...)` record (MinGW PEs store these NUL-delimited
 ///    in `.rdata`; there is no `.comment` *section*).
 /// 5. **Clang** (MSVC) — any other populated `Rich` header ⇒ an MSVC `cl.exe`
-///    link. kuna has no distinct `Msvc` [`Compiler`] variant (nothing gates on
+///    link. unlace has no distinct `Msvc` [`Compiler`] variant (nothing gates on
 ///    one), so we report the closest C/C++-toolchain convenience, `Clang`, only
 ///    to lift the binary out of `Unknown`; this never changes output.
 /// 6. **Unknown** otherwise.
@@ -411,7 +411,7 @@ pub fn detect_compiler_pe(file: &object::File, bytes: &[u8]) -> Compiler {
     // No toolchain text: fall back to the MSVC `Rich` header / `@comp.id` records.
     match detect_rich_header(bytes) {
         RichVerdict::Clang => Compiler::Clang,
-        RichVerdict::Msvc => Compiler::Clang, // kuna has no `Msvc` variant; see doc.
+        RichVerdict::Msvc => Compiler::Clang, // unlace has no `Msvc` variant; see doc.
         RichVerdict::None => Compiler::Unknown,
     }
 }
@@ -492,7 +492,7 @@ pub fn comment_indicates_rust(comment: &[u8]) -> bool {
     comment_records(comment).any(|r| record_text(r).starts_with("rustc version "))
 }
 
-/// `true` if `.comment` contains a record beginning with `needle` (the kuna
+/// `true` if `.comment` contains a record beginning with `needle` (the unlace
 /// convenience used for the `clang`/`GCC` arms). `needle` is matched at the
 /// **start** of a NUL-delimited record (a `GCC: (...)` / `clang version ...`
 /// line), not anywhere in the blob.
@@ -668,7 +668,7 @@ pub(crate) fn is_legacy_rust_hash_digits(hex: &str) -> bool {
 /// `true` if a read-only data section carries any [`RUST_SIGNATURES`] byte
 /// signature (`RustSourceLanguage.isRust` fallback path): ELF `.rodata`, PE
 /// `.rdata`, Mach-O `__const` and `__cstring` (rustc puts its panic-location
-/// paths in either, depending on the target). A plain substring scan — the kuna
+/// paths in either, depending on the target). A plain substring scan — the unlace
 /// analog of `MemoryBytePatternSearcher` over literal byte sequences (no pattern
 /// engine needed; the LOSS vs Ghidra's searcher is none for literals).
 fn rodata_indicates_rust(file: &object::File) -> bool {

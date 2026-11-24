@@ -45,7 +45,7 @@ output format.)
 `a_prototype_declared_under_another_name_binds_on_both_surfaces` (kuna-cli, drives
 the real `decomp_dbg` on the fixture and fails on the unpatched tree),
 `a_declaration_written_under_another_name_still_binds_to_its_target`
-(kuna-console, the in-process twin), three guards for the new command including
+(console, the in-process twin), three guards for the new command including
 that `map param`/`map addr`/`map fun` still resolve, and the promoted probe
 `tests/cli/text-output-silently-ignores.json`. Gates: `make test` PARITY OK
 675/675, `make test-stages` PARITY OK 635/635, `make test-cli` 38/38,

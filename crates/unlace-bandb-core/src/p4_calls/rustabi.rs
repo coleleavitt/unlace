@@ -1,4 +1,4 @@
-//! (kuna, rustc) Keep the two-register value a Rust function returns, and connect
+//! (unlace, rustc) Keep the two-register value a Rust function returns, and connect
 //! it at the call.
 //!
 //! # The symptom
@@ -35,7 +35,7 @@
 //!
 //! Not the ABI decision. rustc's `ScalarPair` return -- discriminant in the first
 //! return register, payload in the second -- lands on exactly the storage the
-//! x86-64 cspec's `<join_dual_class/>` output rule already describes, and kuna
+//! x86-64 cspec's `<join_dual_class/>` output rule already describes, and unlace
 //! already recovers it: two active output trials in `RAX`/`RDX`, the rule matches,
 //! `buildReturnOutput` builds the `join` concatenation. Two *later* seams throw it
 //! away, and both of them are invisible to a C corpus because a C function whose
@@ -143,7 +143,7 @@
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::{VarnodeStorage, spacetype};
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
@@ -203,12 +203,12 @@ impl RustAbiMode {
 
 /// Parse `option rustabi off|auto|always`, returning the mode and the
 /// confirmation message.
-pub fn parse_rust_abi_mode(p1: &str) -> KunaResult<(RustAbiMode, String)> {
+pub fn parse_rust_abi_mode(p1: &str) -> UnlaceResult<(RustAbiMode, String)> {
     let mode = match p1.trim().to_ascii_lowercase().as_str() {
         "off" | "0" | "false" => RustAbiMode::Off,
         "auto" | "on" | "1" | "true" => RustAbiMode::Auto,
         "always" => RustAbiMode::Always,
-        _ => return Err(KunaError::parse("Must specify off, auto or always")),
+        _ => return Err(UnlaceError::parse("Must specify off, auto or always")),
     };
     Ok((
         mode,
@@ -221,7 +221,7 @@ pub fn parse_rust_abi_mode(p1: &str) -> KunaResult<(RustAbiMode, String)> {
 
 /// Is the Rust return-ABI rule live for this function?
 pub fn live(data: &Funcdata) -> bool {
-    match data.get_arch().kuna_options.get::<RustAbiMode>() {
+    match data.get_arch().unlace_options.get::<RustAbiMode>() {
         RustAbiMode::Off => false,
         RustAbiMode::Auto => data.get_arch().source_lang.is_rust(),
         RustAbiMode::Always => true,
@@ -780,7 +780,7 @@ impl unlace_sleigh::translate::PcodeEmit for ProbeEmit {
             // `swi` CALLOTHER and the CALLIND reading its `intloc` are the end of
             // the walk rather than a transfer to code it cannot read.  Same gate
             // and same shape as the flow builder's
-            // [`kuna_fastfailnoreturn`](crate::fastfailnoreturn).  ARM's and
+            // [`unlace_fastfailnoreturn`](crate::fastfailnoreturn).  ARM's and
             // MIPS's `setISAMode` only marks the mode bit of a PC write the same
             // instruction then transfers through (`bx lr`, `pop {..,pc}`, `jr ra`).
             OpCode::CPUI_CALLOTHER => {
@@ -1049,7 +1049,7 @@ pub fn classify_call_output_pair(
     // The one piece of callee evidence this seam can obtain: a bounded decode of
     // the callee body that proves the second register is never written.
     if let Some(entry) = callee_entry {
-        if let Some(w) = data.kuna_callee_ret_writes(entry) {
+        if let Some(w) = data.unlace_callee_ret_writes(entry) {
             if w.proves_untouched_for(model, &second_addr, second_size) {
                 return CallPairRepr::CalleeScalar;
             }
@@ -1102,7 +1102,7 @@ pub fn seed_callee_write_probe(arch: &mut crate::architecture::Architecture, dat
         let key = (sp.get_index(), e.get_offset());
         let no_return = |target: &Address| crate::calleenoreturn::is_no_return(arch, target);
         let reusable = arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::rustabi::CalleeWriteCache>()
             .get(&key)
             .is_some_and(|w| {
@@ -1112,16 +1112,16 @@ pub fn seed_callee_write_probe(arch: &mut crate::architecture::Architecture, dat
             });
         if !reusable {
             let probed = probe_callee_return_writes(arch.translate(), &e, userops, no_return);
-            arch.kuna_tables
+            arch.unlace_tables
                 .get_mut::<crate::rustabi::CalleeWriteCache>()
                 .insert(key, Rc::new(probed));
         }
         if let Some(w) = arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::rustabi::CalleeWriteCache>()
             .get(&key)
         {
-            data.kuna_set_callee_ret_writes(&e, Rc::clone(w));
+            data.unlace_set_callee_ret_writes(&e, Rc::clone(w));
         }
     }
 }
@@ -1145,7 +1145,7 @@ fn fastfail_swi_userop(arch: &crate::architecture::Architecture) -> Option<u32> 
 }
 
 /// Build the call's two-piece output the model asked for (C++
-/// `FuncCallSpecs::buildOutputFromTrials`, the `numTrials > 1` arm kuna shipped
+/// `FuncCallSpecs::buildOutputFromTrials`, the `numTrials > 1` arm unlace shipped
 /// as a stub).
 ///
 /// `finalvn` are the trial Varnodes in trial (storage) order, each currently
@@ -1287,9 +1287,9 @@ fn register_piece(data: &Funcdata, vn: VarnodeId) -> Option<(Address, int4)> {
     Some((v.get_addr().clone(), v.get_size()))
 }
 
-impl crate::optionset::KunaOption for RustAbiMode {
+impl crate::optionset::UnlaceOption for RustAbiMode {
     const NAME: &'static str = "rustabi";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         RustAbiMode::Off
@@ -1299,12 +1299,12 @@ impl crate::optionset::KunaOption for RustAbiMode {
         RustAbiMode::Auto
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         Ok(parse_rust_abi_mode(value)?)
     }
 }
 
-/// (kuna `rustabi`) Per direct-call-target evidence about the registers the callee is *proven*
+/// (unlace `rustabi`) Per direct-call-target evidence about the registers the callee is *proven*
 /// not to write, keyed by `(space index, entry offset)`; seeded by the driver after the flow
 /// build and kept across `Funcdata::clear`.
 #[derive(Default)]
@@ -1314,59 +1314,59 @@ struct CalleeWritesSlot(
         std::rc::Rc<crate::rustabi::CalleeReturnWrites>,
     >,
 );
-crate::kuna_func_state!(CalleeWritesSlot, keep_across_clear: true);
+crate::unlace_func_state!(CalleeWritesSlot, keep_across_clear: true);
 
-/// The `kuna_rustabi` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// The `unlace_rustabi` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataRustabiExt {
-    /// (kuna `rustabi`) Record what a probe of `entry`'s body proved about the
+    /// (unlace `rustabi`) Record what a probe of `entry`'s body proved about the
     /// registers it writes.
-    fn kuna_set_callee_ret_writes(
+    fn unlace_set_callee_ret_writes(
         &mut self,
         entry: &unlace_base::address::Address,
         writes: std::rc::Rc<crate::rustabi::CalleeReturnWrites>,
     );
-    /// (kuna `rustabi`) The recorded probe of `entry`'s body, if one was taken.
-    fn kuna_callee_ret_writes(
+    /// (unlace `rustabi`) The recorded probe of `entry`'s body, if one was taken.
+    fn unlace_callee_ret_writes(
         &self,
         entry: &unlace_base::address::Address,
     ) -> Option<&crate::rustabi::CalleeReturnWrites>;
 }
 
 impl FuncdataRustabiExt for crate::funcdata::Funcdata {
-    /// (kuna `rustabi`) Record what a probe of `entry`'s body proved about the
+    /// (unlace `rustabi`) Record what a probe of `entry`'s body proved about the
     /// registers it writes.
-    fn kuna_set_callee_ret_writes(
+    fn unlace_set_callee_ret_writes(
         &mut self,
         entry: &unlace_base::address::Address,
         writes: std::rc::Rc<crate::rustabi::CalleeReturnWrites>,
     ) {
         if let Some(sp) = entry.get_space() {
-            self.kuna_state_mut::<CalleeWritesSlot>()
+            self.unlace_state_mut::<CalleeWritesSlot>()
                 .0
                 .insert((sp.get_index(), entry.get_offset()), writes);
         }
     }
-    /// (kuna `rustabi`) The recorded probe of `entry`'s body, if one was taken.
-    fn kuna_callee_ret_writes(
+    /// (unlace `rustabi`) The recorded probe of `entry`'s body, if one was taken.
+    fn unlace_callee_ret_writes(
         &self,
         entry: &unlace_base::address::Address,
     ) -> Option<&crate::rustabi::CalleeReturnWrites> {
         let sp = entry.get_space()?;
-        self.kuna_state::<CalleeWritesSlot>()
+        self.unlace_state::<CalleeWritesSlot>()
             .0
             .get(&(sp.get_index(), entry.get_offset()))
             .map(|r| r.as_ref())
     }
 }
 
-/// (kuna `rustabi`) The run-wide cache of callee return-write probes, by callee `(space index,
+/// (unlace `rustabi`) The run-wide cache of callee return-write probes, by callee `(space index,
 /// entry offset)`; an [`ArchTable`](crate::archstate::ArchTable).
 pub type CalleeWriteCache = std::collections::HashMap<
     (unlace_base::types::int4, unlace_base::types::uintb),
     std::rc::Rc<crate::rustabi::CalleeReturnWrites>,
 >;
-crate::kuna_arch_table!(CalleeWriteCache);
+crate::unlace_arch_table!(CalleeWriteCache);
 
 #[cfg(test)]
 #[path = "rustabi/tests.rs"]

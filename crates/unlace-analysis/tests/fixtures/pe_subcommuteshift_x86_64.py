@@ -3,7 +3,7 @@
 
 The `.text` payload is the exact 9,024-byte `crackme_shroud.exe`
 `sub_1406fa160` bytechunk already pinned by
-`tests/stages/kuna-subcommuteshift.toml`.  It is mapped at its original VMA so
+`tests/stages/subcommuteshift.toml`.  It is mapped at its original VMA so
 all RIP-relative references retain their original meaning.  A virtual `.bss`
 section covers the referenced globals, including `usage` at `0x1408f1c08`.
 
@@ -33,7 +33,7 @@ def align(value: int, amount: int) -> int:
 
 def witness_bytes() -> bytes:
     root = Path(__file__).resolve().parents[4]
-    stage = tomllib.loads((root / "tests/stages/kuna-subcommuteshift.toml").read_text())
+    stage = tomllib.loads((root / "tests/stages/subcommuteshift.toml").read_text())
     chunks = [c for c in stage["image"].get("bytes", [])
               if c["space"] == "ram" and c["offset"] == "0x1406fa160"]
     if len(chunks) != 1:

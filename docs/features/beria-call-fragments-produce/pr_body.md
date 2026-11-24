@@ -46,7 +46,7 @@ it swallowed; the body is `a0 + 0x6e`.
 
 ## Tests
 
-`tests/stages/kuna-calltrampoline.toml` is two-pass: `option calltrampoline off`
+`tests/stages/calltrampoline.toml` is two-pass: `option calltrampoline off`
 reproduces the junk store, the default recovers `return a0 + 5`. Sixteen unit
 tests cover the recognizer's accept and decline cases (`add esp,8`, a `leave`-style
 restore, a partial write to the stack pointer, an inner call, a relative branch).

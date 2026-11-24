@@ -12,7 +12,7 @@ use std::io::Cursor;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::KunaError;
+use unlace_base::error::UnlaceError;
 use unlace_base::marshal::{
     ATTRIB_CONTENT, ATTRIB_INDEX, ATTRIB_NAME, ElementId, Encoder, PackedDecode, PackedEncode,
 };
@@ -424,7 +424,7 @@ fn test_get_register_round_trip() {
 }
 
 #[test]
-fn test_query_java_exception_surfaces_as_kuna_java() {
+fn test_query_java_exception_surfaces_as_unlace_java() {
     let tr = test_translate();
     let response = Wire::new()
         .burst(10)
@@ -434,7 +434,7 @@ fn test_query_java_exception_surfaces_as_kuna_java() {
     let mut client = GhidraClient::new(Cursor::new(response.0), Vec::new());
     let mut decoder = PackedDecode::new(&tr.manager);
     match client.get_register("XYZZY", &mut decoder) {
-        Err(WireError::Kuna(KunaError::Java { type_name, explain })) => {
+        Err(WireError::Unlace(UnlaceError::Java { type_name, explain })) => {
             assert_eq!(type_name, "java.lang.IllegalArgumentException");
             assert_eq!(explain, "no such register");
         }
@@ -466,7 +466,7 @@ fn test_get_bytes_nibble_stream_and_data_unavail() {
     let mut client = GhidraClient::new(Cursor::new(response.0), Vec::new());
     let mut buf = [0u8; 4];
     match client.get_bytes(&mut buf, &Address::new(ram, 0x401000)) {
-        Err(WireError::Kuna(KunaError::DataUnavail { explain })) => {
+        Err(WireError::Unlace(UnlaceError::DataUnavail { explain })) => {
             assert!(
                 explain.starts_with("GHIDRA has no data in the loadimage at "),
                 "{explain}"
@@ -540,8 +540,8 @@ fn test_get_register_name_query_shape() {
 // ---------------------------------------------------------------------------
 // (d) getPcodeInject against bytes captured from a live Ghidra 12.1.2
 //
-// Every other ghidra-mode test has kuna answering kuna: the sim oracle compiles
-// the cspec snippet with kuna's own SLEIGH, so a bug in that compiler would be
+// Every other ghidra-mode test has unlace answering unlace: the sim oracle compiles
+// the cspec snippet with unlace's own SLEIGH, so a bug in that compiler would be
 // invisible because both ends agree.  These two bytes-on-the-wire are the one
 // input that came from Java — the first `getCallOtherFixup` exchange of
 // `fmt_arm/main` under the stock C++ core, tapped at the pipe.
@@ -641,7 +641,7 @@ fn test_inject_query_matches_captured_ghidra_bytes() {
     tr.fetch_inject_pcode(b"setISAMode", CALLOTHERFIXUP_TYPE, &context, &mut emit)
         .expect("the captured response decodes");
 
-    // (i) the query kuna sends is the one Ghidra actually received.
+    // (i) the query unlace sends is the one Ghidra actually received.
     let expected = Wire::new()
         .burst(4)
         .string(&unhex(ARM_CAPTURED_REQUEST))

@@ -6,15 +6,15 @@
 //! (`decompiler/cpp/loadimage_ghidra.cc`, `ghidra_translate.cc`,
 //! `database_ghidra.cc`, `typegrp_ghidra.cc`, `comment_ghidra.cc`,
 //! `string_ghidra.cc`, `ghidra_context.cc`, `cpool_ghidra.cc`,
-//! `inject_ghidra.cc`).  This module ports them into kuna as query-backed
-//! implementations of kuna's existing engine traits.
+//! `inject_ghidra.cc`).  This module ports them into unlace as query-backed
+//! implementations of unlace's existing engine traits.
 //!
 //! **Phase-2 status.** [`GhidraLoadImage`] is implemented and tested here as
 //! the demonstrator for the pattern the whole phase turns on: the engine,
 //! mid-decompile, re-entrantly calls a provider (here `load_fill`), which
 //! issues a callback query on the *same* streams the command response is
 //! being written to (`SharedClient`, below).  Proving that hook plugs into a
-//! real kuna trait (`unlace_sleigh::loadimage::LoadImage`) with no change to
+//! real unlace trait (`unlace_sleigh::loadimage::LoadImage`) with no change to
 //! the standalone engine is what de-risks the rest.  The remaining providers
 //! (`ContextGhidra`, the `ScopeGhidra` lazy symbol cache, `TypeFactoryGhidra`,
 //! …) and the wiring into an `Architecture` are the gated work — see
@@ -25,7 +25,7 @@ use std::io::{Read, Write};
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::Decoder;
 use unlace_sleigh::loadimage::LoadImage;
 
@@ -38,7 +38,7 @@ use crate::protocol::WireError;
 /// A [`GhidraClient`] shared between the command loop and the engine's
 /// providers.
 ///
-/// This is the kuna analog of the C++ `glb` back-pointer every ghidra-mode
+/// This is the unlace analog of the C++ `glb` back-pointer every ghidra-mode
 /// component holds to its `ArchitectureGhidra` (e.g. `LoadImageGhidra::glb`,
 /// `loadimage_ghidra.hh`).  During a `decompileAt` the engine re-entrantly
 /// calls a provider, which issues a query on the same `sin`/`sout` the
@@ -75,11 +75,11 @@ impl<R: Read, W: Write> LoadImage for GhidraLoadImage<R, W> {
     /// C++ `LoadImageGhidra::loadFill` → `glb->getBytes`
     /// (`loadimage_ghidra.cc:37-41`).  An unmapped range comes back as the
     /// empty-response `DataUnavailError` from `getBytes`.
-    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> KunaResult<()> {
+    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> UnlaceResult<()> {
         self.client
             .borrow_mut()
             .get_bytes(ptr, addr)
-            .map_err(wire_to_kuna)
+            .map_err(wire_to_unlace)
     }
 
     /// C++ `getArchType` → `"ghidra"` (`loadimage_ghidra.cc:43-47`).
@@ -88,7 +88,7 @@ impl<R: Read, W: Write> LoadImage for GhidraLoadImage<R, W> {
     }
 
     /// C++ `adjustVma` throws `LowlevelError` (`loadimage_ghidra.cc:49-53`) —
-    /// it is a raw-binary concern never reached in ghidra mode.  kuna's trait
+    /// it is a raw-binary concern never reached in ghidra mode.  unlace's trait
     /// method cannot return an error, so this is a no-op.
     /// TODO(phase-2): if a caller ever reaches it, surface a fatal error
     /// through the process loop rather than silently doing nothing.
@@ -113,43 +113,47 @@ impl<R: Read, W: Write> GhidraRemoteFetch<R, W> {
 }
 
 impl<R: Read, W: Write> RemoteProviderFetch for GhidraRemoteFetch<R, W> {
-    fn fetch_mapped_symbols(&self, addr: &Address, decoder: &mut dyn Decoder) -> KunaResult<bool> {
+    fn fetch_mapped_symbols(
+        &self,
+        addr: &Address,
+        decoder: &mut dyn Decoder,
+    ) -> UnlaceResult<bool> {
         self.client
             .borrow_mut()
             .get_mapped_symbols_xml(addr, decoder)
-            .map_err(wire_to_kuna)
+            .map_err(wire_to_unlace)
     }
 
-    fn fetch_namespace_path(&self, id: u64, decoder: &mut dyn Decoder) -> KunaResult<bool> {
+    fn fetch_namespace_path(&self, id: u64, decoder: &mut dyn Decoder) -> UnlaceResult<bool> {
         self.client
             .borrow_mut()
             .get_namespace_path(id, decoder)
-            .map_err(wire_to_kuna)
+            .map_err(wire_to_unlace)
     }
 
-    fn fetch_is_name_used(&self, name: &str, start: u64, stop: u64) -> KunaResult<bool> {
+    fn fetch_is_name_used(&self, name: &str, start: u64, stop: u64) -> UnlaceResult<bool> {
         self.client
             .borrow_mut()
             .is_name_used(name, start, stop)
-            .map_err(wire_to_kuna)
+            .map_err(wire_to_unlace)
     }
 
-    fn fetch_external_ref(&self, addr: &Address, decoder: &mut dyn Decoder) -> KunaResult<bool> {
+    fn fetch_external_ref(&self, addr: &Address, decoder: &mut dyn Decoder) -> UnlaceResult<bool> {
         self.client
             .borrow_mut()
             .get_external_ref(addr, decoder)
-            .map_err(wire_to_kuna)
+            .map_err(wire_to_unlace)
     }
 
     fn fetch_tracked_registers(
         &self,
         addr: &Address,
         decoder: &mut dyn Decoder,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         self.client
             .borrow_mut()
             .get_tracked_registers(addr, decoder)
-            .map_err(wire_to_kuna)
+            .map_err(wire_to_unlace)
     }
 
     fn fetch_comments(
@@ -157,41 +161,46 @@ impl<R: Read, W: Write> RemoteProviderFetch for GhidraRemoteFetch<R, W> {
         fad: &Address,
         flags: u32,
         decoder: &mut dyn Decoder,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         self.client
             .borrow_mut()
             .get_comments(fad, flags, decoder)
-            .map_err(wire_to_kuna)
+            .map_err(wire_to_unlace)
     }
 }
 
 impl<R: Read, W: Write> RemoteTypeFetch for GhidraRemoteFetch<R, W> {
-    fn fetch_data_type(&self, name: &str, id: u64, decoder: &mut dyn Decoder) -> KunaResult<bool> {
+    fn fetch_data_type(
+        &self,
+        name: &str,
+        id: u64,
+        decoder: &mut dyn Decoder,
+    ) -> UnlaceResult<bool> {
         self.client
             .borrow_mut()
             .get_data_type(name, id, decoder)
-            .map_err(wire_to_kuna)
+            .map_err(wire_to_unlace)
     }
 }
 
-/// Map a query [`WireError`] onto the [`KunaError`] a [`LoadImage`] method
+/// Map a query [`WireError`] onto the [`UnlaceError`] a [`LoadImage`] method
 /// must return.
 ///
 /// A `DataUnavail` passes through unchanged (the `getBytes` empty-response
 /// case — an unmapped address).  A pipe/IO failure means the host connection
 /// died mid-query; upstream `exit(1)`s from inside `readToAnyBurst`
 /// (`ghidra_arch.cc:95-96`), but the trait method can only return a
-/// `KunaError`, so it is mapped to a `LowlevelError` here.
+/// `UnlaceError`, so it is mapped to a `LowlevelError` here.
 ///
 /// TODO(phase-2): the process loop needs a way for a provider to signal
 /// "host pipe dead → terminate" so a mid-decompile pipe death still exits
 /// the process with status 1 (the `SharedClient` should carry a fatal flag
 /// the loop checks after each command).
-pub(crate) fn wire_to_kuna(err: WireError) -> KunaError {
+pub(crate) fn wire_to_unlace(err: WireError) -> UnlaceError {
     match err {
-        WireError::Kuna(e) => e,
-        WireError::PipeClosed => KunaError::lowlevel("ghidra host pipe closed during query"),
-        WireError::Io(e) => KunaError::lowlevel(format!("i/o error during query: {e}")),
+        WireError::Unlace(e) => e,
+        WireError::PipeClosed => UnlaceError::lowlevel("ghidra host pipe closed during query"),
+        WireError::Io(e) => UnlaceError::lowlevel(format!("i/o error during query: {e}")),
     }
 }
 
@@ -315,7 +324,7 @@ mod tests {
             .load_fill(&mut buf, &Address::new(ram, 0x0))
             .expect_err("unmapped address must fail");
         assert!(
-            matches!(err, KunaError::DataUnavail { .. }),
+            matches!(err, UnlaceError::DataUnavail { .. }),
             "expected DataUnavail, got {err:?}"
         );
     }

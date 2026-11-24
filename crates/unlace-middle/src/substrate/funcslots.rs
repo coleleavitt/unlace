@@ -27,35 +27,35 @@ pub struct ByvalSite {
     pub mapped: bool,
 }
 
-/// (kuna `switchextent`) The jump tables the function's extent dispatches through, and those a Swift enum's case indexes, once a flow with a computed jump decoded it; kept across `Funcdata::clear`.
+/// (unlace `switchextent`) The jump tables the function's extent dispatches through, and those a Swift enum's case indexes, once a flow with a computed jump decoded it; kept across `Funcdata::clear`.
 #[derive(Default)]
 struct ExtentSlot(Option<std::rc::Rc<ExtentTables>>);
-crate::kuna_func_state!(ExtentSlot, keep_across_clear: true);
+crate::unlace_func_state!(ExtentSlot, keep_across_clear: true);
 
 impl crate::funcdata::Funcdata {
-    pub fn kuna_extent_tables(&self) -> &Option<std::rc::Rc<ExtentTables>> {
-        &self.kuna_state::<ExtentSlot>().0
+    pub fn unlace_extent_tables(&self) -> &Option<std::rc::Rc<ExtentTables>> {
+        &self.unlace_state::<ExtentSlot>().0
     }
 
-    pub fn kuna_extent_tables_mut(&mut self) -> &mut Option<std::rc::Rc<ExtentTables>> {
-        &mut self.kuna_state_mut::<ExtentSlot>().0
+    pub fn unlace_extent_tables_mut(&mut self) -> &mut Option<std::rc::Rc<ExtentTables>> {
+        &mut self.unlace_state_mut::<ExtentSlot>().0
     }
 }
 
-/// (kuna `msvcbyval`) The calls whose by-value slot `ActionDefaultParams` sized, with the
+/// (unlace `msvcbyval`) The calls whose by-value slot `ActionDefaultParams` sized, with the
 /// constructor call that builds each; reset by `Funcdata::clear`.
 #[derive(Default)]
 struct SitesSlot(Vec<ByvalSite>);
-crate::kuna_func_state!(SitesSlot, keep_across_clear: false);
+crate::unlace_func_state!(SitesSlot, keep_across_clear: false);
 
 impl crate::funcdata::Funcdata {
-    /// (kuna `msvcbyval`) Record the calls whose by-value slot was sized.
-    pub fn kuna_set_msvc_byval_sites(&mut self, sites: Vec<ByvalSite>) {
-        self.kuna_state_mut::<SitesSlot>().0 = sites;
+    /// (unlace `msvcbyval`) Record the calls whose by-value slot was sized.
+    pub fn unlace_set_msvc_byval_sites(&mut self, sites: Vec<ByvalSite>) {
+        self.unlace_state_mut::<SitesSlot>().0 = sites;
     }
 
-    /// (kuna `msvcbyval`) The calls whose by-value slot was sized.
-    pub fn kuna_msvc_byval_sites(&self) -> &[ByvalSite] {
-        &self.kuna_state::<SitesSlot>().0
+    /// (unlace `msvcbyval`) The calls whose by-value slot was sized.
+    pub fn unlace_msvc_byval_sites(&self) -> &[ByvalSite] {
+        &self.unlace_state::<SitesSlot>().0
     }
 }

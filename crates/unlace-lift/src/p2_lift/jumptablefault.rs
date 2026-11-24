@@ -1,4 +1,4 @@
-//! (kuna) Test-only jump-table fault: `UNLACE_JUMPTABLE_FAULT=<addr>` (`0x` hex
+//! (unlace) Test-only jump-table fault: `UNLACE_JUMPTABLE_FAULT=<addr>` (`0x` hex
 //! or decimal) panics the jump-table recovery pipeline of the function whose
 //! entry is `<addr>`. It exists so a test can check that a panic while
 //! recovering a table is that function's error, in a serial run and under

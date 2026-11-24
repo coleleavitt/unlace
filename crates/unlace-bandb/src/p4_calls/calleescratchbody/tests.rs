@@ -4,7 +4,7 @@
 //! These pin the predicate on hand-built summaries: which bodies count as
 //! bodies, and every way the clause must fail closed. The end-to-end witness --
 //! MSVC's out-of-line stack probe eating the frame size the caller loaded --
-//! lives in `tests/stages/kuna-calleescratchbody.toml`.
+//! lives in `tests/stages/unlace-calleescratchbody.toml`.
 
 use super::*;
 use crate::rustabi::FuncdataRustabiExt;
@@ -130,7 +130,7 @@ fn probe_summary(fd: &Funcdata, instructions: u32, stores: bool) -> Rc<CalleeRet
 fn a_scratch_only_helper_that_spills_is_a_body() {
     let mut fd = build_fd();
     let (fc, entry) = build_call(&mut fd, 0x2000);
-    fd.kuna_set_callee_ret_writes(&entry, probe_summary(&fd, 19, true));
+    fd.unlace_set_callee_ret_writes(&entry, probe_summary(&fd, 19, true));
     let rax = Address::new(space(&fd, "ram"), 0x00);
     assert!(callee_preserves_range(&fd, &fc, &rax, 8));
     let r10 = Address::new(space(&fd, "ram"), 0x90);
@@ -146,7 +146,7 @@ fn a_scratch_only_helper_that_spills_is_a_body() {
 fn a_body_that_stores_nothing_is_not_a_body() {
     let mut fd = build_fd();
     let (fc, entry) = build_call(&mut fd, 0x2000);
-    fd.kuna_set_callee_ret_writes(&entry, probe_summary(&fd, 19, false));
+    fd.unlace_set_callee_ret_writes(&entry, probe_summary(&fd, 19, false));
     let rax = Address::new(space(&fd, "ram"), 0x00);
     assert!(!callee_preserves_range(&fd, &fc, &rax, 8));
 }
@@ -156,7 +156,7 @@ fn a_body_that_stores_nothing_is_not_a_body() {
 fn a_one_instruction_body_is_not_a_body() {
     let mut fd = build_fd();
     let (fc, entry) = build_call(&mut fd, 0x2000);
-    fd.kuna_set_callee_ret_writes(&entry, probe_summary(&fd, 1, true));
+    fd.unlace_set_callee_ret_writes(&entry, probe_summary(&fd, 1, true));
     let rax = Address::new(space(&fd, "ram"), 0x00);
     assert!(!callee_preserves_range(&fd, &fc, &rax, 8));
 }
@@ -168,7 +168,7 @@ fn an_incomplete_walk_still_proves_nothing() {
     let mut fd = build_fd();
     let (fc, entry) = build_call(&mut fd, 0x2000);
     let ram = space(&fd, "ram").get_index();
-    fd.kuna_set_callee_ret_writes(
+    fd.unlace_set_callee_ret_writes(
         &entry,
         Rc::new(CalleeReturnWrites::from_parts_sized(
             Vec::new(),

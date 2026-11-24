@@ -5,7 +5,7 @@ use serde_json::Value as Json;
 use std::path::PathBuf;
 
 use crate::common;
-use common::{fixture, run_kuna};
+use common::{fixture, run_unlace};
 
 /// The vendored non-stripped `fauxware`: `.rodata` prompts referenced from
 /// `main`, which is exactly the string→its-user hop this command exists for.
@@ -28,7 +28,7 @@ fn utf8prompt() -> String {
 }
 
 fn listing(argv: &[&str]) -> String {
-    let (stdout, stderr, code) = run_kuna(&[&["strings"][..], argv].concat());
+    let (stdout, stderr, code) = run_unlace(&[&["strings"][..], argv].concat());
     assert_eq!(code, 0, "unlace strings {argv:?}: {stderr}");
     stdout
 }
@@ -41,7 +41,7 @@ enum Refusal {
 }
 
 fn refusal(argv: &[&str]) -> Refusal {
-    let (stdout, stderr, code) = run_kuna(&[&["strings"][..], argv].concat());
+    let (stdout, stderr, code) = run_unlace(&[&["strings"][..], argv].concat());
     match code {
         2 => Refusal::Usage(stderr),
         1 => Refusal::Query(stderr),
@@ -89,7 +89,7 @@ fn the_inventory_carries_addresses_and_sections() {
     );
 }
 
-/// The reason to ask kuna rather than `strings(1)`: the row names the function
+/// The reason to ask unlace rather than `strings(1)`: the row names the function
 /// that uses the string.
 #[test]
 fn a_row_names_the_functions_that_reference_it() {
@@ -600,7 +600,7 @@ fn the_command_line_contract() {
 /// exit 0, the literals on stdout.
 #[test]
 fn the_acceptance_probe() {
-    let (stdout, stderr, code) = run_kuna(&["strings", &fauxware()]);
+    let (stdout, stderr, code) = run_unlace(&["strings", &fauxware()]);
     assert_eq!(code, 0, "unlace strings must exit 0, not {code}: {stderr}");
     assert!(
         stdout.contains("Username: "),
@@ -615,7 +615,7 @@ fn the_acceptance_probe() {
 /// `--json` on stdout is a whole JSON document, which is what the probe asserts.
 #[test]
 fn the_cli_json_is_a_document() {
-    let (stdout, stderr, code) = run_kuna(&["strings", &fauxware(), "--json", "--no-xrefs"]);
+    let (stdout, stderr, code) = run_unlace(&["strings", &fauxware(), "--json", "--no-xrefs"]);
     assert_eq!(code, 0, "{stderr}");
     assert!(
         serde_json::from_str::<Json>(&stdout).is_ok(),
@@ -627,14 +627,14 @@ fn the_cli_json_is_a_document() {
 /// `1` for a query that cannot be answered.
 #[test]
 fn the_cli_exit_codes() {
-    let (_, stderr, code) = run_kuna(&["strings"]);
+    let (_, stderr, code) = run_unlace(&["strings"]);
     assert_eq!(code, 2, "no binary is a usage error");
     assert!(stderr.contains("usage: unlace strings"), "{stderr}");
 
-    let (_, _, code) = run_kuna(&["strings", &fauxware(), "--encoding", "ebcdic"]);
+    let (_, _, code) = run_unlace(&["strings", &fauxware(), "--encoding", "ebcdic"]);
     assert_eq!(code, 2, "an unknown encoding is a usage error");
 
-    let (_, stderr, code) = run_kuna(&["strings", "/no/such/binary"]);
+    let (_, stderr, code) = run_unlace(&["strings", "/no/such/binary"]);
     assert_eq!(
         code, 1,
         "an unreadable binary is a failed query, not a usage error"

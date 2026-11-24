@@ -1,6 +1,6 @@
 //! Say a loader note once per process, however often the image is loaded.
 //!
-//! (kuna) The loader's tolerance notes — a section table it recovered from, a
+//! (unlace) The loader's tolerance notes — a section table it recovered from, a
 //! data directory it clamped, an ET_REL layout it reports — are facts about the
 //! *image*, not about a load. A surface that loads the same image twice in one
 //! process (`unlace disassemble` answers a caller-bounded window without the

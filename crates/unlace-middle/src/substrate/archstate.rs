@@ -1,4 +1,4 @@
-//! Typed per-architecture state: a kuna pass's architecture-wide tables live in a type it owns.
+//! Typed per-architecture state: a unlace pass's architecture-wide tables live in a type it owns.
 //!
 //! An [`ArchStates`] holds one shared value (`Rc`) per [`ArchState`] type, indexed by a dense
 //! [`ArchStateId`] the type takes the first time it is used, the architecture-level counterpart of
@@ -11,8 +11,8 @@
 //!
 //! An [`ArchTables`] is the mutable counterpart, held by `Architecture` alone: one value per
 //! [`ArchTable`] type, created with [`Default`] on first use, for the run-wide ledgers and caches
-//! a pass keeps across the functions it decompiles (`arch.kuna_tables.get::<T>()`,
-//! `arch.kuna_tables.get_mut::<T>()`).
+//! a pass keeps across the functions it decompiles (`arch.unlace_tables.get::<T>()`,
+//! `arch.unlace_tables.get_mut::<T>()`).
 
 use std::any::Any;
 use std::cell::OnceCell;
@@ -24,7 +24,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 pub struct ArchStateId(usize);
 
 impl ArchStateId {
-    /// Take the next free index. Called once per state type, from [`kuna_arch_state!`].
+    /// Take the next free index. Called once per state type, from [`unlace_arch_state!`].
     pub fn next() -> ArchStateId {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
         ArchStateId(NEXT.fetch_add(1, Ordering::Relaxed))
@@ -71,7 +71,7 @@ pub fn state_index(ty: std::any::TypeId) -> ArchStateId {
 
 /// Kept for the pass modules that register a state type; every `'static` type is one.
 #[macro_export]
-macro_rules! kuna_arch_state {
+macro_rules! unlace_arch_state {
     ($ty:ty) => {};
 }
 
@@ -155,7 +155,7 @@ impl<T: Any + Default> ArchTable for T {}
 
 /// Kept for the pass modules that register a table type; every `'static + Default` type is one.
 #[macro_export]
-macro_rules! kuna_arch_table {
+macro_rules! unlace_arch_table {
     ($ty:ty) => {};
 }
 

@@ -1,4 +1,4 @@
-//! (kuna `arm64evcall`) Resolve arm64e virtual calls by their pointer-auth
+//! (unlace `arm64evcall`) Resolve arm64e virtual calls by their pointer-auth
 //! discriminator.
 //!
 //! arm64e signs every C++ vtable slot and every Swift class vtable entry with
@@ -614,7 +614,7 @@ mod tests {
         code.iter().flat_map(|w| w.to_le_bytes()).collect()
     }
 
-    /// (kuna `iokitclasses on`) A virtual call on a metaclass object: the vtable
+    /// (unlace `iokitclasses on`) A virtual call on a metaclass object: the vtable
     /// pointer loaded from an `adrp`-addressed global reports that object.
     #[test]
     fn reports_the_fixed_object_a_vtable_pointer_was_loaded_from() {

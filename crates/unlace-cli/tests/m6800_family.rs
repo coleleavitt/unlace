@@ -1,7 +1,7 @@
 //! The vendored M6800-family languages (MC6800, MC6801, HD6301, MC68HC11) load
 //! raw images and decompile; before, none of them existed.
 use crate::common;
-use common::{repo_root, run_kuna};
+use common::{repo_root, run_unlace};
 
 fn fixture(name: &str) -> String {
     repo_root()
@@ -13,7 +13,7 @@ fn fixture(name: &str) -> String {
 }
 
 fn decompile(bin: &str, target: &str) -> String {
-    let (stdout, stderr, code) = run_kuna(&[
+    let (stdout, stderr, code) = run_unlace(&[
         "decompile",
         &fixture(bin),
         "0x8000",

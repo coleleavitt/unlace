@@ -1,4 +1,4 @@
-//! (kuna `vtabletypes`) MSVC constructors and destructors from vftable stores.
+//! (unlace `vtabletypes`) MSVC constructors and destructors from vftable stores.
 //!
 //! A constructor or destructor of a polymorphic class `C` stores `C`'s vftable
 //! into the object it was called on; nothing else in the class's own code does.

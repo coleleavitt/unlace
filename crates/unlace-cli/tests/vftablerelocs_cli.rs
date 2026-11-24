@@ -1,4 +1,4 @@
-//! (kuna `rtti`) A relocatable PE's base-relocation table lists every MSVC
+//! (unlace `rtti`) A relocatable PE's base-relocation table lists every MSVC
 //! vftable slot, so the slot walk ends at the first word it does not list, even
 //! when that word holds an address inside `.text`. Fixture:
 //! `vftablerelocs_pe_i386.dll` (fixtures README).
@@ -6,7 +6,7 @@ use crate::common;
 use common::process;
 use std::process::Command;
 
-fn kuna() -> std::ffi::OsString {
+fn unlace() -> std::ffi::OsString {
     unlace_base::env::var_os("UNLACE_TEST_BIN")
         .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into())
 }
@@ -14,7 +14,7 @@ fn kuna() -> std::ffi::OsString {
 #[test]
 fn an_unrelocated_word_after_a_vftable_is_no_slot() {
     let fixture = common::fixture("vftablerelocs_pe_i386.dll");
-    let mut command = Command::new(kuna());
+    let mut command = Command::new(unlace());
     command.args(["functions", &fixture, "--json"]);
     let output = process::required_output(&mut command);
     let document: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();

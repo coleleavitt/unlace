@@ -25,7 +25,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::AddrSpaceManager;
 use unlace_base::types::int4;
 use unlace_num::pcoderaw::VarnodeData;
@@ -66,11 +66,11 @@ pub trait EngineTranslate: Translate {
     /// Read a Varnode's-worth of bytes from the load image at `addr`, masked
     /// to `sz` (C++ `Emulate*::getLoadImageValue`); drives jump-table LOAD
     /// emulation.
-    fn read_loadimage_value(&self, addr: &Address, sz: i32) -> KunaResult<u64>;
+    fn read_loadimage_value(&self, addr: &Address, sz: i32) -> UnlaceResult<u64>;
 
     /// Resolve a register by name to its [`VarnodeData`] storage (C++
     /// `Translate::getRegister(name)`).
-    fn get_register_varnode(&self, nm: &[u8]) -> KunaResult<VarnodeData>;
+    fn get_register_varnode(&self, nm: &[u8]) -> UnlaceResult<VarnodeData>;
 
     /// Speculative form of [`EngineTranslate::get_register_varnode`]: ask
     /// whether `nm` resolves *here*, cheaply and without side effects.
@@ -111,14 +111,14 @@ pub trait EngineTranslate: Translate {
         ptype: int4,
         _context: &InjectContext,
         _emit: &mut dyn PcodeEmit,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let kind = match ptype {
             CALLFIXUP_TYPE => "call-fixup",
             CALLOTHERFIXUP_TYPE => "callother-fixup",
             CALLMECHANISM_TYPE => "call-mechanism",
             _ => "executable-pcode",
         };
-        Err(KunaError::lowlevel(format!(
+        Err(UnlaceError::lowlevel(format!(
             "{kind} template not compiled and no back-end fetch: {}",
             String::from_utf8_lossy(name)
         )))
@@ -156,10 +156,10 @@ impl EngineTranslate for Sleigh {
     fn set_loader(&mut self, loader: Box<dyn LoadImage>) {
         Sleigh::set_loader(self, loader)
     }
-    fn read_loadimage_value(&self, addr: &Address, sz: i32) -> KunaResult<u64> {
+    fn read_loadimage_value(&self, addr: &Address, sz: i32) -> UnlaceResult<u64> {
         Sleigh::read_loadimage_value(self, addr, sz)
     }
-    fn get_register_varnode(&self, nm: &[u8]) -> KunaResult<VarnodeData> {
+    fn get_register_varnode(&self, nm: &[u8]) -> UnlaceResult<VarnodeData> {
         Sleigh::get_register_varnode(self, nm)
     }
     fn with_context_db_dyn(&self, f: &mut dyn FnMut(&mut dyn ContextDatabase)) {

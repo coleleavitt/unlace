@@ -1,7 +1,7 @@
-//! Tests for the character-pointer commitment (kuna `charptr`).
+//! Tests for the character-pointer commitment (unlace `charptr`).
 //!
 //! The walk needs a decompiled function and is covered end to end by
-//! `tests/stages/kuna-charptr.toml` (pass 1 `off` = the bug, pass 2 `on` = the
+//! `tests/stages/unlace-charptr.toml` (pass 1 `off` = the bug, pass 2 `on` = the
 //! fix, with four controls).  What is pinned here are the two properties the
 //! design rests on: the candidate outranks every integer vote in
 //! `getLocalType`'s fold, and it refines only a pointer vote that points at nothing.

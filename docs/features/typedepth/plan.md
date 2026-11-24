@@ -62,7 +62,7 @@ mapping byte for byte.
 
 ## 5. Tests
 
-- `kuna-console/tests/verify_typedepth.rs` — six two-pass e2e assertions against a
+- `console/tests/verify_typedepth.rs` — six two-pass e2e assertions against a
   new `-g -O0` C fixture (`typedepth_x86_64`, source vendored): the local
   `const char *const *`, three pointer hops, the anonymous-typedef alias, the
   `code` name collision, the global's extent, and termination on self-referential

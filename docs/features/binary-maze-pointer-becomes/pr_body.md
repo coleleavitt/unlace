@@ -54,7 +54,7 @@ survived.
 
 ## The tests
 
-`tests/stages/kuna-emptystrconst.toml` is the two-pass case: with the option off
+`tests/stages/emptystrconst.toml` is the two-pass case: with the option off
 the blob pointer and a genuine `""` both print `use("")`; on, only the blob's
 becomes `use((char *)0x100100)`. `tests/cli/binary-maze-pointer-becomes.json` is
 the promoted probe over the new `emptystrconst_x86_64` fixture and pins both

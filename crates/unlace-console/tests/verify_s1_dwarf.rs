@@ -1,4 +1,4 @@
-//! End-to-end gate for the DWARF analyzer port (`dwarf`, the kuna analog of
+//! End-to-end gate for the DWARF analyzer port (`dwarf`, the unlace analog of
 //! Ghidra's `DWARFAnalyzer`).
 //!
 //! Two real-ELF fixtures, two recoveries:
@@ -150,7 +150,7 @@ fn stacklocal_renders_dwarf_named_typed_locals() {
 
 #[test]
 fn dwarf_lines_annotate_source_locations() {
-    // The `.debug_line` source-line pass (`dwarf_lines`, the kuna analog of Ghidra's
+    // The `.debug_line` source-line pass (`dwarf_lines`, the unlace analog of Ghidra's
     // DWARFLineInfoCommentScript). cet_pie's `elaborate_debug_symbol` body
     // (debug_symbol.c lines ~122-146) decompiles to statements that each carry their
     // DWARF `file:line` as a `/* … */` comment. With the gate ON, the output must

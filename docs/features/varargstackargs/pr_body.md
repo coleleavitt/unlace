@@ -59,7 +59,7 @@ acceptance string does not match.
   An earlier revision without the offset-0 condition changed 2, the second being a
   MIPS o32 `$gp` save slot mistaken for a `printf` argument; that counter-example
   is what the second condition buys.
-- **Stage test**: `tests/stages/kuna-varargstackargs.toml`, two passes over a
+- **Stage test**: `tests/stages/varargstackargs.toml`, two passes over a
   hand-assembled AArch64 fixture — pass 1 (`off`) asserts the bug, pass 2 (`on`)
   the fix.
 - **Speed**: flat (+0.06% against a −0.76% null-control floor on the witness;

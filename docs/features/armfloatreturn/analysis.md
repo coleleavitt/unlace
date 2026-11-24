@@ -140,7 +140,7 @@ constant, load, copy, arithmetic and conversion results retain their width.
 
 ## Tests
 
-- `tests/stages/kuna-arm-float-return.toml` runs a raw image (no evidence, the
+- `tests/stages/arm-float-return.toml` runs a raw image (no evidence, the
   option is inert), the relocatable `armfloatreturn_armhf.o`
   (`Tag_ABI_VFP_args=1`) and the linked `fmtlf_armhf` (hard-float header flag)
   with the option off, which reproduces the truncation, and on.

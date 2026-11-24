@@ -12,7 +12,7 @@
 //! recovered by the entry-discovery oracles (the `_start`→`main` libc-start idiom
 //! AND the `.eh_frame` FDE pcBegin). The angr-style default naming
 //! (the `namestyle` option, default `angr`) means the discovered name is
-//! `sub_1405` (`p0_knowledge::database::kuna_function_name`, no leading zeros).
+//! `sub_1405` (`p0_knowledge::database::unlace_function_name`, no leading zeros).
 
 use std::path::PathBuf;
 
@@ -46,17 +46,17 @@ fn discovered_main_decompiles_without_supplied_address() {
     let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
 
-    // (kuna) The analysis-pass facts are now committed at `read symbols` (gated by
+    // (unlace) The analysis-pass facts are now committed at `read symbols` (gated by
     // the per-pass `--option <id> on|off` flags), not eagerly at bootstrap — so a
     // direct `bootstrap_from_object` consumer must trigger the commit before the
     // entry symbols are visible. This is exactly what `IfcReadSymbols` does.
-    // This gate's subject is the generated NAME (`kuna_function_name`, no leading
+    // This gate's subject is the generated NAME (`unlace_function_name`, no leading
     // zeros) that discovery gives an entry with no symbol, so `elfmain` — which
     // replaces exactly that name at exactly this address with `main` — is turned
     // off here. The default path on this same fixture is gated by
-    // `tests/stages/kuna-elfmain.toml` and `verify_crossarch_entry_main`.
+    // `tests/stages/unlace-elfmain.toml` and `verify_crossarch_entry_main`.
     prog.arch_mut()
-        .set_kuna_option("elfmain", "off")
+        .set_unlace_option("elfmain", "off")
         .expect("elfmain flips");
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");

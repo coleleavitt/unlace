@@ -111,7 +111,7 @@ Readable recovery of the std::string/ostringstream values used to construct and 
 
 **REFUTED (builder `b-r2-c-string-objects`, round 2).** Nothing about this defect is C++, MSVC,
 STL, layout or constructor-prototype specific; it reproduces on a 0x131-byte hand-built x86-64 ELF
-bytechunk with three unnamed extern stubs and no C++ at all (`tests/stages/kuna-ptrdepthcap.toml`).
+bytechunk with three unnamed extern stubs and no C++ at all (`tests/stages/ptrdepthcap.toml`).
 The cause is a type-lattice escalation: a small-string-optimized object puts `PTRSUB(spacebase,-0xN)`
 (typed pointer-to-the-mapped-local) and a LOAD from that same address (typed as the local) on the two
 inputs of one MULTIEQUAL, i.e. `T = ptr(T)`, so `ActionInferTypes` adopts a type one pointer level
@@ -132,7 +132,7 @@ _none recorded_
 
 - filed by cluster.py from 1 observation(s)
 - round 2 B_DONE (builder `b-r2-c-string-objects`): **the acceptance probe was STRENGTHENED, not bent**, before it was relied on. As filed, `a-4ac515df8701` asserted only `stdout_absent` of the two `*****` spellings with NO `exit_code` clause, so a crash, a timeout or a decompile that printed nothing would have passed it, and so would one that replaced the pointer chain with `undefined8` everywhere. Added (never relaxed): `exit_code: {eq: 0}`; a third `stdout_absent` pattern `\\*\\*\\*` so NO three-deep pointer survives anywhere, not just the two named spellings; and `stdout_matches` on all four string literals the tester had to hand-track (`"+184V38cC.TRAPPY-ATTACK0"`, `"Correct code, ur guess was: 33791"`, `"M28j2"`, `"24452"`), which is the positive evidence that the recovered type is actually better rather than merely shallower.
-- round 2 B_DONE (builder): `verify --promote` refuses this acceptance because its target is `binary_source: dataset` and CI has no dataset (the same refusal PR #377 got). No in-repo fixture was fabricated with a different sha to get around it; the in-repo regression cover is the two-pass `tests/stages/kuna-ptrdepthcap.toml`, which reproduces the defect on a hand-built bytechunk.
+- round 2 B_DONE (builder): `verify --promote` refuses this acceptance because its target is `binary_source: dataset` and CI has no dataset (the same refusal PR #377 got). No in-repo fixture was fabricated with a different sha to get around it; the in-repo regression cover is the two-pass `tests/stages/ptrdepthcap.toml`, which reproduces the defect on a hand-built bytechunk.
 - round 2 B_DONE (builder): the captain's `scope: large` triage followed from the refuted hypothesis. The fix is one module + one gated call site + one settable row, so the proposal fork was NOT taken.
 - round 2 T_TRIAGE (captain): scope small -> LARGE. Recovering std::string/ostringstream through five-level pointer types is C++ type recovery, a known multi-part area of this codebase (TypePointerRel / FuncProto-this / struct-descent are ported but unfed), not a one-session patch.
 - closed: acceptance a-c52c9a0120b6 now PASSES at c2e442188496 (the record's `## Acceptance` block is truth and hashes to a-c52c9a0120b6 after the builder strengthened it; the stale frontmatter label a-4ac515df8701 was corrected to match)

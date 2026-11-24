@@ -616,7 +616,7 @@ impl unlace_sleigh::loadimage::LoadImage for Sections {
         &mut self,
         _ptr: &mut [u8],
         _addr: &Address,
-    ) -> unlace_base::error::KunaResult<()> {
+    ) -> unlace_base::error::UnlaceResult<()> {
         Ok(())
     }
     fn get_arch_type(&self) -> Vec<u8> {

@@ -16,7 +16,7 @@ RE-friction round 2, need **`c-string-objects-become`** (major, 1 instance, chal
 
 Nothing about this defect is C++, MSVC, STL, layout or prototype specific. It reproduces on a
 **0x131-byte hand-built x86-64 ELF bytechunk** with three unnamed extern stubs and no C++
-anywhere (`tests/stages/kuna-ptrdepthcap.toml`). The STL only supplies the *idiom*.
+anywhere (`tests/stages/ptrdepthcap.toml`). The STL only supplies the *idiom*.
 
 ## What it actually is
 
@@ -77,7 +77,7 @@ in the need's Decision log:
 
 ## Regression cover
 
-* `tests/stages/kuna-ptrdepthcap.toml` — two-pass. `option ptrdepthcap off` reproduces the bug
+* `tests/stages/ptrdepthcap.toml` — two-pass. `option ptrdepthcap off` reproduces the bug
   (7 `char ****` spellings: 6 declarations + 1 cast); `option ptrdepthcap on` settles it. Assert
   #2 pins **every** three-or-more-star spelling across BOTH passes to exactly those 7, so any
   leak back into the capped pass raises the count and fails.

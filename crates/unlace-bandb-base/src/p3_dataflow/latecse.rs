@@ -1,4 +1,4 @@
-//! P3 late common-subexpression elimination (kuna `latecse`).
+//! P3 late common-subexpression elimination (unlace `latecse`).
 //!
 //! Upstream merges two ops that compute the same value from the same inputs
 //! only in a few places: `ActionMultiCse` for MULTIEQUALs and `RuleSelectCse`
@@ -124,7 +124,7 @@ impl Action for ActionLateCse {
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::latecse::LateCse>()
             .0
         {
@@ -141,8 +141,8 @@ impl Action for ActionLateCse {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna) Merge identical pure ops that read the same varnode once the rules settle. (option `latecse`).
+crate::unlace_flag!(
+    /// (unlace) Merge identical pure ops that read the same varnode once the rules settle. (option `latecse`).
     LateCse,
     "latecse",
     "late common-subexpression elimination",

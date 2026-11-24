@@ -1,4 +1,4 @@
-//! (kuna `fid`) Apply the prototypes of matched `.fid` records.
+//! (unlace `fid`) Apply the prototypes of matched `.fid` records.
 //!
 //! Runs last in the analysis commit, so every other prototype source has
 //! parked what it knows: a record's prototype goes only to a function that

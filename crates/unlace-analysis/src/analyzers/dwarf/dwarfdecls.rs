@@ -1,4 +1,4 @@
-//! (kuna `dwarfdecls`) Prototypes for imported functions from their DWARF
+//! (unlace `dwarfdecls`) Prototypes for imported functions from their DWARF
 //! declarations.
 //!
 //! A unit that calls a function another module defines carries a declaration-only

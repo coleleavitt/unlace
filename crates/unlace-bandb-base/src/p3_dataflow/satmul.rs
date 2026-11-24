@@ -1,4 +1,4 @@
-//! (kuna `satmul`) The overflow-checked `n * sizeof(T)` before `operator new[]`
+//! (unlace `satmul`) The overflow-checked `n * sizeof(T)` before `operator new[]`
 //! becomes `saturated_mul(n, sizeof(T))`.
 //!
 //! MSVC, clang and AArch64 compilers size a `new T[n]` with a full-width
@@ -24,8 +24,8 @@ use crate::context::{BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 use crate::userop::BUILTIN_SATURATED_MUL;
 
-crate::kuna_flag!(
-    /// (kuna `satmul`) Fold the overflow-checked multiply before `operator new[]`
+crate::unlace_flag!(
+    /// (unlace `satmul`) Fold the overflow-checked multiply before `operator new[]`
     /// into `saturated_mul(a, b)` (see [`crate::satmul`]).
     SatMul,
     "satmul",
@@ -390,7 +390,7 @@ fn phi_select(data: &Funcdata, op: OpId) -> Option<(Factor, Factor, int4)> {
     (outcomes[ones] == pol && guards_product(g, a, b, w)).then_some((a, b, w))
 }
 
-/// (kuna `satmul`) `lo | -zext(overflow)` and `overflow ? -1 : lo` over a
+/// (unlace `satmul`) `lo | -zext(overflow)` and `overflow ? -1 : lo` over a
 /// multiply become `saturated_mul(a, b)`.
 pub struct RuleSaturatedMul {
     group: String,
@@ -474,7 +474,7 @@ impl Rule for RuleSaturatedMul {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        if !data.get_arch().kuna_options.get::<SatMul>().0 {
+        if !data.get_arch().unlace_options.get::<SatMul>().0 {
             return 0;
         }
         match data.obank().get(op).map(|o| o.code()) {

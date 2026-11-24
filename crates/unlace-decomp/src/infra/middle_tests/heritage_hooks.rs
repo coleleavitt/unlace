@@ -8,11 +8,11 @@ mod module_scope {
     pub(super) use crate::context::BlockId;
     pub(super) use crate::coreoptions::{LEVEL_FULL, LEVEL_GLOBAL, LEVEL_OFF};
     pub(super) use crate::overrides::Override;
-    pub(super) use crate::restartlog::{KunaRestartReason, RestartLog};
+    pub(super) use crate::restartlog::{RestartLog, UnlaceRestartReason};
     pub(super) use crate::varnode::varnode_flags;
     pub(super) use std::rc::Rc;
     pub(super) use unlace_base::address::Address;
-    pub(super) use unlace_base::error::KunaResult;
+    pub(super) use unlace_base::error::UnlaceResult;
     pub(super) use unlace_base::space::{AddrSpace, spacetype};
     pub(super) use unlace_base::types::{int4, uint4, uintb};
 }

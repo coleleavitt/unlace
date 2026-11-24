@@ -91,7 +91,7 @@ fn builtin() -> Library<'static> {
     Library::parse(BUILTIN[0].1).unwrap()
 }
 
-const SMALL: &str = "kuna-typelib 1\ntarget linux x86_64\nsource test 1\n\
+const SMALL: &str = "typelib 1\ntarget linux x86_64\nsource test 1\n\
 T nfds_t *\tunsigned long\n\
 T handle_t m=unsigned long\tstruct handle *\n\
 S pollfd * 8 4\n 0 fd\tint\n 4 events\tshort\n 6 revents\tshort\n\
@@ -208,28 +208,28 @@ fn a_held_name_is_never_redefined_and_a_bad_entry_is_only_itself() {
 #[test]
 fn malformed_libraries_are_refused_with_their_line() {
     for (text, want) in [
-        ("", "kuna-typelib 1"),
-        ("kuna-typelib 2\ntarget a\nsource b\n", "kuna-typelib 1"),
-        ("kuna-typelib 1\nsource b\n", "target"),
+        ("", "typelib 1"),
+        ("typelib 2\ntarget a\nsource b\n", "typelib 1"),
+        ("typelib 1\nsource b\n", "target"),
         (
-            "kuna-typelib 1\ntarget a\nsource b\nX name *\tint\n",
+            "typelib 1\ntarget a\nsource b\nX name *\tint\n",
             "line 4: unknown entry kind",
         ),
-        ("kuna-typelib 1\ntarget a\nsource b\nT name\n", "line 4"),
+        ("typelib 1\ntarget a\nsource b\nT name\n", "line 4"),
         (
-            "kuna-typelib 1\ntarget a\nsource b\nT name ?\tint\n",
+            "typelib 1\ntarget a\nsource b\nT name ?\tint\n",
             "line 4: unknown library field",
         ),
         (
-            "kuna-typelib 1\ntarget a\nsource b\n 0 fd\tint\n",
+            "typelib 1\ntarget a\nsource b\n 0 fd\tint\n",
             "line 4: a member outside a record",
         ),
         (
-            "kuna-typelib 1\ntarget a\nsource b\nS r * 99999999999 8\n",
+            "typelib 1\ntarget a\nsource b\nS r * 99999999999 8\n",
             "line 4: a record size out of range",
         ),
         (
-            "kuna-typelib 1\ntarget a\nsource b\nS r * 8 8\n -4 fd\tint\n",
+            "typelib 1\ntarget a\nsource b\nS r * 8 8\n -4 fd\tint\n",
             "line 5: a member offset out of range",
         ),
     ] {
@@ -237,7 +237,7 @@ fn malformed_libraries_are_refused_with_their_line() {
         assert!(err.contains(want), "{text:?}: {err}");
     }
     let long = format!(
-        "kuna-typelib 1\ntarget a\nsource b\nT t *\t{}\n",
+        "typelib 1\ntarget a\nsource b\nT t *\t{}\n",
         "x".repeat(5000)
     );
     assert!(
@@ -249,7 +249,7 @@ fn malformed_libraries_are_refused_with_their_line() {
 
 #[test]
 fn members_that_do_not_fit_are_holes_and_cycles_end() {
-    let text = "kuna-typelib 1\ntarget a\nsource b\n\
+    let text = "typelib 1\ntarget a\nsource b\n\
 S r * 8 4\n 0 a\tint\n 2 overlap\tint\n 6 past\tint\n 4 b\tint\n\
 T loop_a *\tloop_b\nT loop_b *\tloop_a\n\
 S self * 8 8\n 0 me\tstruct self\n\
@@ -488,7 +488,7 @@ fn a_list_of_files_is_read_in_order() {
     let a = dir.join(format!("kuna-typelib-src-a-{}.ktl", std::process::id()));
     let b = dir.join(format!("kuna-typelib-src-b-{}.ktl", std::process::id()));
     std::fs::write(&a, SMALL).unwrap();
-    std::fs::write(&b, "kuna-typelib 1\ntarget linux x86_64\nsource second 1\n").unwrap();
+    std::fs::write(&b, "typelib 1\ntarget linux x86_64\nsource second 1\n").unwrap();
     let choice = TypeLib::Files(vec![a.clone(), b.clone()]);
     let read = super::library_sources(&choice, "linux x86_64", None, &[], 8, None);
     let off = super::library_sources(&TypeLib::Off, "linux x86_64", None, &[], 8, None);

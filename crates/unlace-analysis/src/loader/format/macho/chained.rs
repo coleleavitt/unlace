@@ -1,4 +1,4 @@
-//! Mach-O `LC_DYLD_CHAINED_FIXUPS` resolver — the kuna analog of Ghidra's
+//! Mach-O `LC_DYLD_CHAINED_FIXUPS` resolver — the unlace analog of Ghidra's
 //! `DyldChainedFixups` / the dyld `MachOAnalyzer::forEachFixupChainSegment` walk
 //! (design §5 PR-O0).
 //!
@@ -30,7 +30,7 @@
 //!   arm64_32 userland, including its biased small integers above
 //!   `max_valid_pointer`) and `_32_FIRMWARE` (5), and `ARM64E_SEGMENTED` (14).
 //!   `PTR_32_CACHE` (4) and `ARM64E_SHARED_CACHE` (13) occur only inside a
-//!   dyld shared cache, whose slide info kuna applies instead.
+//!   dyld shared cache, whose slide info unlace applies instead.
 //! - **arm64e auth-rebase** — handled: the 32-bit image-base-relative target is
 //!   rebased to a real VMA (statically the resolved pointer is just
 //!   `imagebase + target`), and the signing context dyld signs the slot with —
@@ -51,7 +51,7 @@
 //!   the blob), so a malformed header cannot hang the load.
 //! - **`SG_READ_ONLY` segments** are recorded ([`ChainedFixups::in_readonly_segment`])
 //!   so a loader can treat the rebased slots dyld freezes as constant, the
-//!   Mach-O twin of the ELF `PT_GNU_RELRO` rule in `kuna_dynrelocs`.
+//!   Mach-O twin of the ELF `PT_GNU_RELRO` rule in `unlace_dynrelocs`.
 //!
 //! ## Faithfulness / no-op guarantee
 //!
@@ -69,7 +69,7 @@ use object::FileKind;
 use object::read::macho::{LoadCommandVariant, MachHeader, Segment};
 
 /// Pointer-format ids from Apple's `mach-o/fixup-chains.h` (`DYLD_CHAINED_PTR_*`).
-/// Only the formats kuna resolves are named; any other format leaves its chain
+/// Only the formats unlace resolves are named; any other format leaves its chain
 /// unresolved (the inert path).
 mod ptr_format {
     /// `DYLD_CHAINED_PTR_ARM64E` — arm64e, 8-byte stride, auth + non-auth, rebase
@@ -788,7 +788,7 @@ fn chain_stride(pointer_format: u16) -> Option<u64> {
     }
 }
 
-/// (kuna) The rebases of a static image's `__TEXT,__chain_starts` blob
+/// (unlace) The rebases of a static image's `__TEXT,__chain_starts` blob
 /// (`dyld_chained_starts_offsets`: `u32 pointer_format, u32 starts_count, u32
 /// chain_starts[]`, each an offset from the image base), as `ld -static
 /// -fixup_chains` writes it for SPTM, TXM and other firmware. `segments` are

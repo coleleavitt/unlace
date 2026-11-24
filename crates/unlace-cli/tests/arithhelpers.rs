@@ -8,7 +8,7 @@ const FUNCTIONS: [&str; 12] = [
 ];
 
 fn emitted(fixture: &str, option: &str) -> String {
-    let (output, error, status) = common::run_kuna(&[
+    let (output, error, status) = common::run_unlace(&[
         "decompile-all",
         &common::fixture(fixture),
         "--json",

@@ -1,4 +1,4 @@
-//! Tests for the gcc stack-probe-loop SP-resolution sub-stage (kuna,
+//! Tests for the gcc stack-probe-loop SP-resolution sub-stage (unlace,
 //! GH-8017/6858, S2): the shape match + `MULTIEQUAL`->`INT_ADD` rewrite of
 //! [`RuleStackProbeLoop`].
 //!

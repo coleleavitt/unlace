@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_sleigh::globalcontext::ContextInternal;
 use unlace_sleigh::loadimage::LoadImage;
 use unlace_sleigh::sleigh::Sleigh;
@@ -24,7 +24,7 @@ impl LoadImage for DummyImg {
     fn get_file_name(&self) -> &str {
         "dummy"
     }
-    fn load_fill(&mut self, ptr: &mut [u8], _addr: &Address) -> KunaResult<()> {
+    fn load_fill(&mut self, ptr: &mut [u8], _addr: &Address) -> UnlaceResult<()> {
         ptr.fill(0);
         Ok(())
     }

@@ -1,4 +1,4 @@
-//! (kuna) A C-rendering plan for ARM register-controlled logical left shifts.
+//! (unlace) A C-rendering plan for ARM register-controlled logical left shifts.
 //!
 //! ARM masks a register LSL count to its low eight bits and returns zero when
 //! that value is at least the operand width. C leaves an equal-or-larger shift
@@ -56,7 +56,7 @@ pub fn plan_arm_register_lsl(
         return None;
     }
     let guarded = arch
-        .kuna_options
+        .unlace_options
         .get::<crate::armregistershift::ArmShiftGuard>()
         .0
         && count_v.get_nz_mask() >= 32;
@@ -88,7 +88,7 @@ pub fn plan_arm_register_lsl(
     })
 }
 
-/// (kuna `regnarrow`) The unsigned value an implied zero extension `vn`
+/// (unlace `regnarrow`) The unsigned value an implied zero extension `vn`
 /// widens, which the guard casts and the shift reads as they are; `vn` itself
 /// otherwise. Printing the extension would cast the count a second time.
 fn unsigned_extension_source(fd: &Funcdata, vn: VarnodeId) -> VarnodeId {
@@ -97,7 +97,7 @@ fn unsigned_extension_source(fd: &Funcdata, vn: VarnodeId) -> VarnodeId {
     };
     if !fd
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::regnarrow::NarrowLocals>()
         .0
         || v.is_explicit()
@@ -205,8 +205,8 @@ fn operand_is_repeatable(fd: &Funcdata, vn: VarnodeId, depth: u8) -> bool {
     true
 }
 
-crate::kuna_flag!(
-    /// (kuna `armshiftguard`) Print `count < 32u ? x << count : 0` around a
+crate::unlace_flag!(
+    /// (unlace `armshiftguard`) Print `count < 32u ? x << count : 0` around a
     /// variable ARM LSL whose count is not proven below 32 (on), or the plain
     /// shift (off).
     ArmShiftGuard,

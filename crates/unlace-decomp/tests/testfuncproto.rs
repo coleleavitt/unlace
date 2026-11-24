@@ -10,7 +10,7 @@
 //!   - `glb->translate->getRegister(nm)` — register lookup against a
 //!     **spec-loaded** `Translate`, reachable only through the full
 //!     `Architecture` build (no prototype-model-from-spec registry exists on the
-//!     kuna `Architecture` yet — see `ProtoModel`'s `// STUB(w6-fspec-2)` note);
+//!     unlace `Architecture` yet — see `ProtoModel`'s `// STUB(w6-fspec-2)` note);
 //!   - `model->assignParameterStorage(...)` / `model->deriveInputMap(...)` —
 //!     these *are* ported (`ProtoModel::assign_parameter_storage`,
 //!     `ProtoModel::derive_input_map` in `fspec.rs`), but they consume the

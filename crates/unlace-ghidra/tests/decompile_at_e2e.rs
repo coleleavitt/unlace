@@ -14,7 +14,7 @@
 //! getPcode at the entry, safe minimal answers for everything else).
 //!
 //! The real-program twin of this test — the same machinery answering from
-//! kuna's own analysis of a vendored ELF — is `ghidra_sim_e2e.rs`.
+//! unlace's own analysis of a vendored ELF — is `ghidra_sim_e2e.rs`.
 //!
 //! ## What this covers
 //!   * The whole wire lifecycle end to end over the real command loop.

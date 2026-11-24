@@ -1,4 +1,4 @@
-//! (kuna) `switchflow` — the jump-table base and range check of a dispatch the
+//! (unlace) `switchflow` — the jump-table base and range check of a dispatch the
 //! linear slice could not read, found over the function's own predecessor edges.
 //!
 //! # The gap

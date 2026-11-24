@@ -1,4 +1,4 @@
-//! (kuna) `aif strict` — structural rejects for the AIF gap cursor (P1 code/data
+//! (unlace) `aif strict` — structural rejects for the AIF gap cursor (P1 code/data
 //! partition).
 //!
 //! # The defect (GH-299)
@@ -13,21 +13,21 @@
 //!
 //! On a large stripped i386 PE that produces ~2,100 entries that are not function
 //! starts at all: they sit on an ordinary instruction in the middle of a body IDA
-//! decodes as one function, and 35% of them are inside a function kuna itself
+//! decodes as one function, and 35% of them are inside a function unlace itself
 //! already has an entry for. The mechanism is not a bad fingerprint — it is that
 //! the walk left a hole *inside* a body (an unfollowed jump table, a no-return
 //! call, an undecodable byte), and the byte-slide then reads that hole as if it
 //! were the interstice between two functions.
 //!
 //! Upstream Ghidra ships `AggressiveInstructionFinderAnalyzer` **disabled**, with
-//! the description warning "IT MAY CREATE A LOT OF BAD CODE!"; kuna turns it on for
+//! the description warning "IT MAY CREATE A LOT OF BAD CODE!"; unlace turns it on for
 //! non-x86-64 (DIV-20) because on stripped ARM firmware it is the difference
 //! between finding almost nothing and finding the program. So the trade this setting
 //! makes has to be measured in both directions, not assumed.
 //!
 //! # (E) The aligned slide
 //!
-//! Every architecture kuna decodes has an instruction-alignment floor of at least
+//! Every architecture unlace decodes has an instruction-alignment floor of at least
 //! two bytes, and on every non-x86 target in the corpus a *function* start is
 //! 4-byte aligned. The byte-slide spends 3 of every 4 probes on addresses that
 //! cannot be an instruction boundary, and those are precisely the probes that

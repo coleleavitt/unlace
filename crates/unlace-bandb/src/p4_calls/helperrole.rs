@@ -1,11 +1,11 @@
-//! (kuna `helperroles`) Role tags for helper calls, and the chained rewrites
+//! (unlace `helperroles`) Role tags for helper calls, and the chained rewrites
 //! that read them.
 //!
 //! Hex-Rays tags a call with a `funcrole_t` (memcpy, memset, strlen, strcpy,
 //! bswap, ...) whether it came from a named library call or from one of its own
 //! helper instructions, and its later rules match the role instead of a name
 //! (`minsn_t::optimize_subtree`, the `memcpy(d, s, strlen(s) + 1)` -> `strcpy`
-//! chain among them). [`role_of`] is that tag for kuna: a `CALL`'s callee name,
+//! chain among them). [`role_of`] is that tag for unlace: a `CALL`'s callee name,
 //! decorations stripped (`_memcpy`, `j_strlen`, `__imp_memcpy`, `memcpy@GLIBC`),
 //! or a `CALLOTHER` builtin's id. [`RuleStrcpyChain`] is the first rewrite on it.
 
@@ -183,7 +183,7 @@ impl Rule for RuleStrcpyChain {
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::helperrole::HelperRoles>()
             .0
         {
@@ -265,8 +265,8 @@ impl Rule for RuleStrcpyChain {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna `helperroles`) Role-tagged helper-call rewrites
+crate::unlace_flag!(
+    /// (unlace `helperroles`) Role-tagged helper-call rewrites
     /// ([`crate::helperrole`]).
     HelperRoles,
     "helperroles",

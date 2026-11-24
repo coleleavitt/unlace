@@ -59,7 +59,8 @@ struct pair swap_double(double x, int c) { struct pair value; __builtin_memcpy(&
         "mix_double",
         "swap_double",
     ] {
-        let (body, err, status) = common::run_kuna(&["decompile", binary.to_str().unwrap(), name]);
+        let (body, err, status) =
+            common::run_unlace(&["decompile", binary.to_str().unwrap(), name]);
         assert_eq!(status, 0, "{err}");
         bodies.push_str(&body.replace(&format!("{name}("), &format!("recovered_{name}(")));
     }

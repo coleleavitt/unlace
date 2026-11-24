@@ -377,7 +377,7 @@ fn formal_names_and_types_survive_shared_storage_replay() {
 #[test]
 fn inferred_register_parameter_rename_keeps_the_argument() {
     let fixture = common::fixture("lifetimes_stack_x86_64");
-    let (document, stderr, _) = common::run_kuna(&[
+    let (document, stderr, _) = common::run_unlace(&[
         "decompile",
         &fixture,
         "converted_view",

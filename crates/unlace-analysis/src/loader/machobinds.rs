@@ -1,4 +1,4 @@
-//! (kuna `machobinds`) Mach-O pointer slots a bind fills, named for their import.
+//! (unlace `machobinds`) Mach-O pointer slots a bind fills, named for their import.
 //!
 //! The indirect-symbol table names the stubs and the typed `__got` /
 //! `__la_symbol_ptr` slots. Any other pointer slot dyld fills from an import - a

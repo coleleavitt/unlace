@@ -121,7 +121,7 @@ beside `castarith`, at the same seam. A separate option rather than a value of
   a hand-made mutant of the printed decoder with a sign-extended index, or with an
   `unsigned char` element, prints a different checksum.
 - 12 unit tests in `p9_emit/castarith/tests.rs`; the stage test
-  `tests/stages/kuna-castindex.toml` (7 assertions, two passes).
+  `tests/stages/castindex.toml` (7 assertions, two passes).
 
 ## 5. Measurements
 

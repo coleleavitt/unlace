@@ -79,7 +79,7 @@ fn declared_callee_pop_preserves_stack_addresses() {
         ("unnamed", "prototype observe void observe(float a,float b)"),
     ] {
         let project = root.join(format!("project-{variant}"));
-        let (_, error, status) = common::run_kuna(&[
+        let (_, error, status) = common::run_unlace(&[
             "decompile-project",
             image.to_str().unwrap(),
             "--functions",

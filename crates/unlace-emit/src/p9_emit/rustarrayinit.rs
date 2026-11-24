@@ -22,8 +22,8 @@ impl PrintC {
         }
         let high = output.get_high()?;
         let variable = fd.high_bank().get(high)?;
-        if variable.kuna_global()
-            || variable.kuna_symbol_type()?.get_metatype()
+        if variable.unlace_global()
+            || variable.unlace_symbol_type()?.get_metatype()
                 != crate::dtype::type_metatype::TYPE_ARRAY
         {
             return None;
@@ -56,8 +56,8 @@ impl PrintC {
         if !input.is_constant() {
             let source = input.get_high()?;
             let source_high = fd.high_bank().get(source)?;
-            if source_high.kuna_global()
-                || source_high.kuna_ref_symbol().is_some()
+            if source_high.unlace_global()
+                || source_high.unlace_ref_symbol().is_some()
                 || self.emitted_high_name(fd, source)? == name
             {
                 return None;

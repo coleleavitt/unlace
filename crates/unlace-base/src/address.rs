@@ -22,7 +22,7 @@ use std::collections::BTreeSet;
 use std::ops::Bound;
 use std::rc::Rc;
 
-use crate::error::{KunaError, KunaResult};
+use crate::error::{UnlaceError, UnlaceResult};
 use crate::marshal::{ATTRIB_NAME, ATTRIB_SPACE, AttributeId, Decoder, ElementId, Encoder};
 use crate::space::{AddrSpace, AddrSpaceManager, spacetype};
 use crate::types::Wrap;
@@ -184,7 +184,7 @@ impl Address {
     }
 
     /// Write a short-hand or debug version of this address to a stream.
-    pub fn print_raw(&self, s: &mut String) -> KunaResult<()> {
+    pub fn print_raw(&self, s: &mut String) -> UnlaceResult<()> {
         match &self.base {
             AddrSpacePtr::Null => {
                 s.push_str("invalid_addr");
@@ -202,7 +202,7 @@ impl Address {
     /// `AddrSpace::read`).  Mutates the offset and returns any size
     /// associated with the parsed string.  The `manage` parameter replaces
     /// the C++ manager back-pointer.
-    pub fn read(&mut self, s: &str, manage: &AddrSpaceManager) -> KunaResult<i32> {
+    pub fn read(&mut self, s: &str, manage: &AddrSpaceManager) -> UnlaceResult<i32> {
         let mut sz: i32 = 0;
         let off = self.space().read(s, &mut sz, manage)?;
         self.offset = off;
@@ -313,7 +313,7 @@ impl Address {
     /// This method is equivalent to Address::overlap, but a range in the
     /// \e join space can be considered overlapped with its constituent
     /// pieces.
-    pub fn overlap_join(&self, skip: i32, op: &Address, size: i32) -> KunaResult<i32> {
+    pub fn overlap_join(&self, skip: i32, op: &Address, size: i32) -> UnlaceResult<i32> {
         op.space()
             .overlap_join(op.get_offset(), size, self.space(), self.offset, skip)
     }
@@ -358,7 +358,7 @@ impl Address {
     /// necessary.  The `manage` parameter replaces the C++
     /// `base->getManager()` back-pointer.
     /// \param size is the new size in bytes of the underlying object
-    pub fn renormalize(&mut self, size: i32, manage: &AddrSpaceManager) -> KunaResult<()> {
+    pub fn renormalize(&mut self, size: i32, manage: &AddrSpaceManager) -> UnlaceResult<()> {
         if self.space().get_type() == spacetype::IPTR_JOIN {
             manage.renormalize_join_address(self, size)?;
         }
@@ -375,7 +375,7 @@ impl Address {
     /// Save an \<addr\> element corresponding to this address.  The exact
     /// format is determined by the address space, but this generally has a
     /// \e space and an \e offset attribute.
-    pub fn encode(&self, encoder: &mut dyn Encoder) -> KunaResult<()> {
+    pub fn encode(&self, encoder: &mut dyn Encoder) -> UnlaceResult<()> {
         encoder.open_element(&ELEM_ADDR);
         match &self.base {
             AddrSpacePtr::Null => {}
@@ -392,7 +392,7 @@ impl Address {
     ///
     /// The element will include an extra \e size attribute so that it can
     /// describe an entire memory range.
-    pub fn encode_sized(&self, encoder: &mut dyn Encoder, size: i32) -> KunaResult<()> {
+    pub fn encode_sized(&self, encoder: &mut dyn Encoder, size: i32) -> UnlaceResult<()> {
         encoder.open_element(&ELEM_ADDR);
         match &self.base {
             AddrSpacePtr::Null => {}
@@ -413,7 +413,7 @@ impl Address {
     ///
     /// The register-name form uses the manager's installed register lookup.
     /// The shared attribute scan also serves [`Self::decode_sized`].
-    pub fn decode(decoder: &mut dyn Decoder) -> KunaResult<Address> {
+    pub fn decode(decoder: &mut dyn Decoder) -> UnlaceResult<Address> {
         let (space, offset, _size) = decode_varnode_attributes(decoder)?;
         Ok(match space {
             Some(spc) => Address::new(spc, offset),
@@ -424,7 +424,7 @@ impl Address {
     /// Decode an address and size from a stream.
     ///
     /// If a size is recovered it is returned alongside the address.
-    pub fn decode_sized(decoder: &mut dyn Decoder) -> KunaResult<(Address, i32)> {
+    pub fn decode_sized(decoder: &mut dyn Decoder) -> UnlaceResult<(Address, i32)> {
         let (space, offset, size) = decode_varnode_attributes(decoder)?;
         let addr = match space {
             Some(spc) => Address::new(spc, offset),
@@ -439,7 +439,7 @@ impl Address {
 /// (pcoderaw.cc), inlined pending the unlace-num pcoderaw port.
 fn decode_varnode_attributes(
     decoder: &mut dyn Decoder,
-) -> KunaResult<(Option<Rc<AddrSpace>>, u64, u32)> {
+) -> UnlaceResult<(Option<Rc<AddrSpace>>, u64, u32)> {
     let elem_id = decoder.open_element()?;
     let mut space: Option<Rc<AddrSpace>> = None;
     let mut size: u32 = 0;
@@ -625,7 +625,7 @@ impl SeqNum {
     }
 
     /// Encode a SeqNum to a stream
-    pub fn encode(&self, encoder: &mut dyn Encoder) -> KunaResult<()> {
+    pub fn encode(&self, encoder: &mut dyn Encoder) -> UnlaceResult<()> {
         encoder.open_element(&ELEM_SEQNUM);
         self.pc
             .get_space()
@@ -637,7 +637,7 @@ impl SeqNum {
     }
 
     /// Decode a SeqNum from a stream
-    pub fn decode(decoder: &mut dyn Decoder) -> KunaResult<SeqNum> {
+    pub fn decode(decoder: &mut dyn Decoder) -> UnlaceResult<SeqNum> {
         let mut uniq: u32 = u32::MAX; // ~((uintm)0)
         let elem_id = decoder.open_element_id(&ELEM_SEQNUM)?;
         let pc = Address::decode(decoder)?; // Recover address
@@ -658,7 +658,7 @@ impl SeqNum {
 
     /// Write out a SeqNum in human readable form to a stream
     /// (C++ `operator<<`)
-    pub fn print_raw(&self, s: &mut String) -> KunaResult<()> {
+    pub fn print_raw(&self, s: &mut String) -> UnlaceResult<()> {
         self.pc.print_raw(s)?;
         s.push(':');
         // C++ `operator<<(ostream&,const SeqNum&)`: `sq.pc.printRaw(s); s << ':'
@@ -734,7 +734,7 @@ impl Range {
     pub fn from_properties(
         properties: &RangeProperties,
         manage: &AddrSpaceManager,
-    ) -> KunaResult<Range> {
+    ) -> UnlaceResult<Range> {
         if properties.is_register {
             // C++: getDefaultCodeSpace()->getTrans()->getRegister(spaceName)
             let lookup = manage
@@ -754,7 +754,7 @@ impl Range {
         let spc = match manage.get_space_by_name(&properties.space_name) {
             Some(spc) => Rc::clone(spc),
             None => {
-                return Err(KunaError::lowlevel(format!(
+                return Err(UnlaceError::lowlevel(format!(
                     "Undefined space: {}",
                     properties.space_name
                 )));
@@ -768,7 +768,7 @@ impl Range {
             last = spc.get_highest();
         }
         if first > spc.get_highest() || last > spc.get_highest() || last < first {
-            return Err(KunaError::lowlevel("Illegal range tag"));
+            return Err(UnlaceError::lowlevel("Illegal range tag"));
         }
         Ok(Range { spc, first, last })
     }
@@ -855,10 +855,10 @@ impl Range {
     /// Restore \b this from a stream.
     /// Reconstruct this object from a \<range> or \<register> element.
     /// (The C++ mutates a default-constructed Range; the Rust constructs.)
-    pub fn decode(decoder: &mut dyn Decoder) -> KunaResult<Range> {
+    pub fn decode(decoder: &mut dyn Decoder) -> UnlaceResult<Range> {
         let elem_id = decoder.open_element()?;
         if elem_id != ELEM_RANGE && elem_id != ELEM_REGISTER {
-            return Err(KunaError::decoder(
+            return Err(UnlaceError::decoder(
                 "Expecting <range> or <register> element",
             ));
         }
@@ -870,7 +870,7 @@ impl Range {
     /// Read \b this from attributes on another element.
     /// Reconstruct from attributes that may not be part of a \<range>
     /// element.
-    pub fn decode_from_attributes(decoder: &mut dyn Decoder) -> KunaResult<Range> {
+    pub fn decode_from_attributes(decoder: &mut dyn Decoder) -> UnlaceResult<Range> {
         let mut spc: Option<Rc<AddrSpace>> = None;
         let mut seen_last = false;
         let mut first: u64 = 0;
@@ -910,7 +910,7 @@ impl Range {
         let spc = match spc {
             Some(spc) => spc,
             None => {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "No address space indicated in range tag",
                 ));
             }
@@ -919,7 +919,7 @@ impl Range {
             last = spc.get_highest();
         }
         if first > spc.get_highest() || last > spc.get_highest() || last < first {
-            return Err(KunaError::lowlevel("Illegal range tag"));
+            return Err(UnlaceError::lowlevel("Illegal range tag"));
         }
         Ok(Range { spc, first, last })
     }
@@ -978,10 +978,10 @@ impl RangeProperties {
     }
 
     /// Decode \b this from a stream
-    pub fn decode(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    pub fn decode(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         let elem_id = decoder.open_element()?;
         if elem_id != ELEM_RANGE && elem_id != ELEM_REGISTER {
-            return Err(KunaError::decoder(
+            return Err(UnlaceError::decoder(
                 "Expecting <range> or <register> element",
             ));
         }
@@ -1315,7 +1315,7 @@ impl RangeList {
 
     /// Decode \b this RangeList from a \<rangelist> element.
     /// Recover each individual disjoint Range.
-    pub fn decode(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    pub fn decode(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         let elem_id = decoder.open_element_id(&ELEM_RANGELIST)?;
         while decoder.peek_element()? != 0 {
             let range = Range::decode(decoder)?;

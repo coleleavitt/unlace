@@ -1,4 +1,4 @@
-//! (kuna) The WebAssembly binary module: its sections read into plain tables.
+//! (unlace) The WebAssembly binary module: its sections read into plain tables.
 //!
 //! A module is the 8-byte preamble followed by `(id, size, payload)` sections.
 //! Every count is checked against the bytes that remain before anything is

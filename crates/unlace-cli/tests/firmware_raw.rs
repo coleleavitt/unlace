@@ -6,7 +6,7 @@ use crate::common;
 #[test]
 fn cortexm_dump_is_configured_from_its_vector_table() {
     let fixture = common::fixture("cortexm3_raw.bin");
-    let (out, err, code) = common::run_kuna(&["decompile-all", &fixture]);
+    let (out, err, code) = common::run_unlace(&["decompile-all", &fixture]);
     assert_eq!(code, 0, "{err}");
     assert!(
         err.contains("Cortex-M vector table: base 0x8000000"),
@@ -27,7 +27,7 @@ fn cortexm_dump_is_configured_from_its_vector_table() {
 #[test]
 fn an_explicit_base_is_kept() {
     let fixture = common::fixture("cortexm3_raw.bin");
-    let (_, err, code) = common::run_kuna(&[
+    let (_, err, code) = common::run_unlace(&[
         "functions",
         &fixture,
         "--raw-image",
@@ -47,14 +47,14 @@ fn an_explicit_base_is_kept() {
 #[test]
 fn cortexm_dump_gets_the_system_control_space() {
     let bin = common::fixture("cortexm3_scs.bin");
-    let (out, err, code) = common::run_kuna(&["decompile-all", &bin]);
+    let (out, err, code) = common::run_unlace(&["decompile-all", &bin]);
     assert_eq!(code, 0, "{err}");
     assert!(out.contains("SCB.VTOR = 0x8000000;"), "{out}");
     assert!(out.contains("NVIC.ISER[0] = 0x40;"), "{out}");
     assert!(out.contains("NVIC.ISER[a0 >> 5] ="), "{out}");
     assert!(out.contains("SysTick.CTRL = 7;"), "{out}");
     let (off, err, code) =
-        common::run_kuna(&["decompile-all", &bin, "--option", "cortexmscs", "off"]);
+        common::run_unlace(&["decompile-all", &bin, "--option", "cortexmscs", "off"]);
     assert_eq!(code, 0, "{err}");
     assert!(
         off.contains("dat_e000ed08 = 0x8000000;") && !off.contains("SCB."),
@@ -66,7 +66,7 @@ fn cortexm_dump_gets_the_system_control_space() {
 fn svd_peripheral_replaces_a_system_control_space_block() {
     let bin = common::fixture("cortexm3_scs.bin");
     let svd = common::fixture("cortexm3_scs.svd");
-    let (out, err, code) = common::run_kuna(&["decompile-all", &bin, "--svd", &svd]);
+    let (out, err, code) = common::run_unlace(&["decompile-all", &bin, "--svd", &svd]);
     assert_eq!(code, 0, "{err}");
     assert!(
         out.contains("STK.RVR = a0 - 1U;") && !out.contains("SysTick."),
@@ -89,7 +89,7 @@ fn unpack_protocols_indexes_what_each_module_installs() {
     let fv = common::fixture("uefi_tiano_efi_compressed.fv");
     let dir = tempfile::tempdir().unwrap();
     let out_dir = dir.path().to_string_lossy().into_owned();
-    let (_, err, code) = common::run_kuna(&["unpack", &fv, "-o", &out_dir, "--protocols"]);
+    let (_, err, code) = common::run_unlace(&["unpack", &fv, "-o", &out_dir, "--protocols"]);
     assert_eq!(code, 0, "{err}");
     let index = std::fs::read_to_string(dir.path().join("kuna-uefi.index")).unwrap();
     assert!(
@@ -104,7 +104,7 @@ fn unpack_protocols_indexes_what_each_module_installs() {
         .join("DiskIoDxe.efi")
         .to_string_lossy()
         .into_owned();
-    let (out, err, code) = common::run_kuna(&["decompile", &module, "_ModuleEntryPoint"]);
+    let (out, err, code) = common::run_unlace(&["decompile", &module, "_ModuleEntryPoint"]);
     assert_eq!(code, 0, "{err}");
     assert!(
         out.contains("gEfiDevicePathUtilitiesProtocolGuid,NULL,&mDevicePathUtilities)"),
@@ -122,7 +122,7 @@ fn unpack_protocols_indexes_what_each_module_installs() {
 #[test]
 fn a_uefi_service_call_is_built_with_its_prototype() {
     let module = common::fixture("uefi_diskio_x64.efi");
-    let (out, err, code) = common::run_kuna(&["decompile", &module, "0x9c2"]);
+    let (out, err, code) = common::run_unlace(&["decompile", &module, "0x9c2"]);
     assert_eq!(code, 0, "{err}");
     assert!(
         out.contains("(*gBS->CreateEvent)(0x200,8,sub_52e,v1,"),
@@ -134,7 +134,7 @@ fn a_uefi_service_call_is_built_with_its_prototype() {
 fn intel_hex_with_svd_names_peripherals_and_interrupts() {
     let hex = common::fixture("cortexm3_raw.hex");
     let svd = common::fixture("cortexm3_raw.svd");
-    let (out, err, code) = common::run_kuna(&["decompile-all", &hex, "--svd", &svd]);
+    let (out, err, code) = common::run_unlace(&["decompile-all", &hex, "--svd", &svd]);
     assert_eq!(code, 0, "{err}");
     assert!(err.contains("Intel HEX: 516 bytes at 0x8000000"), "{err}");
     assert!(out.contains("void USART1_IRQHandler(void)"), "{out}");
@@ -147,7 +147,7 @@ fn intel_hex_with_svd_names_peripherals_and_interrupts() {
 #[test]
 fn svd_names_a_bundled_device() {
     let hex = common::fixture("cortexm3_raw.hex");
-    let (out, err, code) = common::run_kuna(&["decompile-all", &hex, "--svd", "STM32F401CC"]);
+    let (out, err, code) = common::run_unlace(&["decompile-all", &hex, "--svd", "STM32F401CC"]);
     assert_eq!(code, 0, "{err}");
     assert!(
         err.contains("bundled description STM32F401 for STM32F401CC"),
@@ -156,7 +156,7 @@ fn svd_names_a_bundled_device() {
     assert!(out.contains("void USART1_IRQHandler(void)"), "{out}");
     assert!(out.contains("USART1.DR = 0x78;"), "{out}");
     assert!(out.contains("GPIOA.ODR = GPIOA.ODR ^ 0x20;"), "{out}");
-    let (_, err, code) = common::run_kuna(&["decompile-all", &hex, "--svd", "STM32F103C8"]);
+    let (_, err, code) = common::run_unlace(&["decompile-all", &hex, "--svd", "STM32F103C8"]);
     assert_ne!(code, 0);
     assert!(err.contains("no bundled device of that name"), "{err}");
 }
@@ -169,7 +169,7 @@ fn svd_names_a_bundled_device() {
 fn svd_types_the_peripherals_of_an_elf() {
     let elf = common::fixture("cortexm3_raw.elf");
     let svd = common::fixture("cortexm3_raw.svd");
-    let (out, err, code) = common::run_kuna(&["decompile-all", &elf, "--svd", &svd]);
+    let (out, err, code) = common::run_unlace(&["decompile-all", &elf, "--svd", &svd]);
     assert_eq!(code, 0, "{err}");
     assert!(
         err.contains("SVD MINI_F4: 3 peripherals, 1 interrupts"),
@@ -182,7 +182,7 @@ fn svd_types_the_peripherals_of_an_elf() {
 #[test]
 fn a_mediatek_md1img_loads_its_modem_rom_with_debug_names() {
     let img = common::fixture("md1img_mipsel_test.img");
-    let (out, err, code) = common::run_kuna(&["decompile-all", &img]);
+    let (out, err, code) = common::run_unlace(&["decompile-all", &img]);
     assert_eq!(code, 0, "{err}");
     assert!(
         err.contains("MediaTek md1img: 68 bytes at 0x90000000, target MIPS:LE:32:default"),
@@ -195,7 +195,7 @@ fn a_mediatek_md1img_loads_its_modem_rom_with_debug_names() {
 #[test]
 fn a_bios_image_loads_in_real_mode_at_its_reset_vector() {
     let bin = common::fixture("bios_realmode_test.bin");
-    let (out, err, code) = common::run_kuna(&["decompile-all", &bin]);
+    let (out, err, code) = common::run_unlace(&["decompile-all", &bin]);
     assert_eq!(code, 0, "{err}");
     assert!(
         err.contains(
@@ -212,7 +212,7 @@ fn a_bios_image_loads_in_real_mode_at_its_reset_vector() {
 #[test]
 fn unpack_decodes_efi_standard_and_tiano_compressed_files() {
     let fv = common::fixture("uefi_tiano_efi_compressed.fv");
-    let (out, err, code) = common::run_kuna(&["unpack", &fv, "--list"]);
+    let (out, err, code) = common::run_unlace(&["unpack", &fv, "--list"]);
     assert_eq!(code, 0, "{err}");
     assert!(out.contains("2 modules in 1 volumes"), "{out}");
     assert!(!out.contains("undecoded"), "{out}");
@@ -221,7 +221,7 @@ fn unpack_decodes_efi_standard_and_tiano_compressed_files() {
 #[test]
 fn an_esp_image_loads_its_segments_and_names_its_rom_calls() {
     let bin = common::fixture("esprom_esp32.bin");
-    let (out, err, code) = common::run_kuna(&["decompile-all", &bin]);
+    let (out, err, code) = common::run_unlace(&["decompile-all", &bin]);
     assert_eq!(code, 0, "{err}");
     assert!(
         err.contains("ESP application image (esp32, 2 segments, entry 0x40080010)"),
@@ -237,7 +237,8 @@ fn an_esp_image_loads_its_segments_and_names_its_rom_calls() {
         "a ROM function has no body to decompile: {out}"
     );
 
-    let (off, err, code) = common::run_kuna(&["decompile-all", &bin, "--option", "esprom", "off"]);
+    let (off, err, code) =
+        common::run_unlace(&["decompile-all", &bin, "--option", "esprom", "off"]);
     assert_eq!(code, 0, "{err}");
     assert!(
         off.contains("0x4000c2c8)(a0,a1,0x10);") && !off.contains("memcpy"),
@@ -246,14 +247,15 @@ fn an_esp_image_loads_its_segments_and_names_its_rom_calls() {
     assert!(off.contains("return dat_3ff4001c * 2;"), "{off}");
 
     let (other, err, code) =
-        common::run_kuna(&["decompile-all", &bin, "--option", "esprom", "esp32c3"]);
+        common::run_unlace(&["decompile-all", &bin, "--option", "esprom", "esp32c3"]);
     assert_eq!(code, 0, "{err}");
     assert!(
         !other.contains("memcpy"),
         "another chip's ROM has other addresses: {other}"
     );
 
-    let (_, err, code) = common::run_kuna(&["decompile-all", &bin, "--option", "esprom", "esp33"]);
+    let (_, err, code) =
+        common::run_unlace(&["decompile-all", &bin, "--option", "esprom", "esp33"]);
     assert_ne!(code, 0);
     assert!(err.contains("esprom takes auto, off or a chip"), "{err}");
 }
@@ -278,11 +280,11 @@ fn an_esp_segment_dump_takes_the_chip_from_the_option() {
         "--assert",
         "readonly 0x40080000+0x50",
     ];
-    let (out, err, code) = common::run_kuna(&args);
+    let (out, err, code) = common::run_unlace(&args);
     assert_eq!(code, 0, "{err}");
     assert!(!out.contains("memcpy"), "a raw dump names no chip: {out}");
     let (out, err, code) =
-        common::run_kuna(&[&args[..], &["--option", "esprom", "esp32"]].concat());
+        common::run_unlace(&[&args[..], &["--option", "esprom", "esp32"]].concat());
     assert_eq!(code, 0, "{err}");
     assert!(out.contains("memcpy(a0,a1,0x10)"), "{out}");
 }

@@ -12,7 +12,7 @@ fn fixture(name: &str) -> std::path::PathBuf {
         .join(name)
 }
 
-fn kuna(args: &[String]) -> serde_json::Value {
+fn unlace(args: &[String]) -> serde_json::Value {
     let runner = unlace_base::env::var_os("UNLACE_TEST_RUNNER")
         .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let output = process::required_output(
@@ -161,17 +161,17 @@ fn mapped_byte_accesses_compile_and_preserve_bytes() {
             .collect::<Vec<_>>()
             .join("\n")
     };
-    let original = code(kuna(&args));
+    let original = code(unlace(&args));
     assert!(original.contains("bytes._3_4_"), "{original}");
     assert!(original.contains("whole._0_8_"), "{original}");
     args.extend(["--option".into(), "bytearrayc".into(), "off".into()]);
     assert_eq!(
         original,
-        code(kuna(&args)),
+        code(unlace(&args)),
         "explicit off must match default"
     );
     *args.last_mut().unwrap() = "on".into();
-    let printed = code(kuna(&args));
+    let printed = code(unlace(&args));
     assert!(!printed.contains("._"), "{printed}");
     assert!(
         printed.contains("&readonly_bytes[1]"),
@@ -256,14 +256,14 @@ fn arm_copy_uses_target_endian_and_preserves_struct_and_volatile_controls() {
             format!("@{}", fixture("copy_array.kuna").display()),
         ]);
         let code = |v: serde_json::Value| v["functions"][0]["code"].as_str().unwrap().to_owned();
-        let original = code(kuna(&args));
+        let original = code(unlace(&args));
         assert_eq!(
             original.matches("mutable_tile_fallback._").count(),
             5,
             "{original}"
         );
         args.extend(["--option".into(), "bytearrayc".into(), "on".into()]);
-        let printed = code(kuna(&args));
+        let printed = code(unlace(&args));
         assert!(!printed.contains("._"), "{printed}");
         let source = dir.join(format!("printed-{endian}.c"));
         std::fs::write(&source,format!(
@@ -292,11 +292,11 @@ fn arm_copy_uses_target_endian_and_preserves_struct_and_volatile_controls() {
         }
         args.truncate(args.len() - 3);
         *args.last_mut().unwrap() = format!("@{}", fixture("copy_struct.kuna").display());
-        let structure = code(kuna(&args));
+        let structure = code(unlace(&args));
         args.extend(["--option".into(), "bytearrayc".into(), "on".into()]);
         assert_eq!(
             structure,
-            code(kuna(&args)),
+            code(unlace(&args)),
             "healthy struct output changed"
         );
         let struct_source = dir.join("struct.c");
@@ -313,11 +313,11 @@ fn arm_copy_uses_target_endian_and_preserves_struct_and_volatile_controls() {
         args.truncate(args.len() - 3);
         *args.last_mut().unwrap() = format!("@{}", fixture("copy_array.kuna").display());
         args.extend(["--assert".into(), "volatile 0x11014+20".into()]);
-        let volatile = code(kuna(&args));
+        let volatile = code(unlace(&args));
         args.extend(["--option".into(), "bytearrayc".into(), "on".into()]);
         assert_eq!(
             volatile,
-            code(kuna(&args)),
+            code(unlace(&args)),
             "wide volatile effects must not become byte stores"
         );
     }

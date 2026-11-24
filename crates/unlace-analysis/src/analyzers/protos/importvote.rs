@@ -1,4 +1,4 @@
-//! (kuna) `importvote` — the direct call sites of every PLT import (P1).
+//! (unlace) `importvote` — the direct call sites of every PLT import (P1).
 //!
 //! A byte scan of the executable sections of an x86-64 ELF for `call rel32`
 //! into a PLT stub. The sites are committed to the architecture; the engine
@@ -14,7 +14,7 @@ use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 /// The most call sites kept per import.
 const MAX_SITES: usize = 32;
 
-/// (kuna) The import call-site pass (`importvote`), gated at the commit.
+/// (unlace) The import call-site pass (`importvote`), gated at the commit.
 pub struct ImportVotePass;
 
 impl AnalysisPass for ImportVotePass {

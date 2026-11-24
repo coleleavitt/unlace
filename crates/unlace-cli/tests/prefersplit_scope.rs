@@ -8,7 +8,7 @@ fn fixture() -> String {
 }
 
 fn run(args: &[&str]) -> (String, String, i32) {
-    common::run_kuna(args)
+    common::run_unlace(args)
 }
 
 #[test]
@@ -128,7 +128,7 @@ fn sibling_callees_in_a_cycle_do_not_publish_partial_contracts() {
     program.commit_pending_analysis().unwrap();
     program
         .arch_mut()
-        .set_kuna_option("protoorder", "types")
+        .set_unlace_option("protoorder", "types")
         .unwrap();
     let entry = program
         .function_entries_canonical()
@@ -150,7 +150,7 @@ fn sibling_callees_in_a_cycle_do_not_publish_partial_contracts() {
     assert!(
         program
             .arch()
-            .kuna_tables
+            .unlace_tables
             .get::<unlace_decomp::protoorder::CalleeTypes>()
             .is_empty(),
         "a cycle between direct callees must not state either contract"
@@ -177,8 +177,8 @@ fn a_recovery_drive_keeps_the_enclosing_deadline() {
         .find(|e| e.name == "ccw_helper")
         .unwrap();
     let deadline = Instant::now();
-    program.arch_mut().kuna_fn_deadline = Some(deadline);
-    program.arch_mut().kuna_fn_budget = Some(Duration::from_secs(60));
+    program.arch_mut().unlace_fn_deadline = Some(deadline);
+    program.arch_mut().unlace_fn_budget = Some(Duration::from_secs(60));
     let result = decompile_func(
         program.arch_mut(),
         &entry.name,
@@ -189,5 +189,5 @@ fn a_recovery_drive_keeps_the_enclosing_deadline() {
         result.is_err(),
         "the callee must not receive another 60 seconds"
     );
-    assert_eq!(program.arch().kuna_fn_deadline, Some(deadline));
+    assert_eq!(program.arch().unlace_fn_deadline, Some(deadline));
 }

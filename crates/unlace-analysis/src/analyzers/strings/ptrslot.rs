@@ -1,4 +1,4 @@
-//! (kuna) A pointer-aligned slot whose bytes are an address inside the loaded
+//! (unlace) A pointer-aligned slot whose bytes are an address inside the loaded
 //! image is a pointer, not text.
 //!
 //! The string matchers accept any printable run ended by a NUL, and the entry of

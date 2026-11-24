@@ -85,7 +85,7 @@ fn decompile(input: &PathBuf, func: &str, asserts: &[&str]) -> String {
     for a in asserts {
         args.extend(["--assert", a]);
     }
-    let (stdout, stderr, code) = common::run_kuna(&args);
+    let (stdout, stderr, code) = common::run_unlace(&args);
     assert_eq!(code, 0, "{func}: {stderr}");
     let doc: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     for row in doc["assertions"].as_array().unwrap() {

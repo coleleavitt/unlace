@@ -51,7 +51,7 @@
 //!
 //! - `IfcCodeDataTarget` in C++ reads the BFD import table
 //!   (`LoadImageBfd::getImportTable`).  `loadimage_bfd` is GPL-3 (the file's own
-//!   header note) and is **not** part of the kuna Rust port (no `ImportRecord`
+//!   header note) and is **not** part of the unlace Rust port (no `ImportRecord`
 //!   / `LoadImageBfd` exists).  The command is ported with the same dispatch and
 //!   parse/error surface; the import-table lookup itself is a documented loss —
 //!   it surfaces "Unable to find reference to call <name>" for any name, exactly
@@ -62,7 +62,7 @@ use std::ops::Bound;
 use std::rc::Rc;
 
 use unlace_base::address::{Address, Range, RangeList};
-use unlace_base::error::KunaError;
+use unlace_base::error::UnlaceError;
 use unlace_base::space::{AddrSpace, AddrSpaceManager};
 use unlace_base::types::{int4, uint4, uintb};
 use unlace_num::opcodes::OpCode;
@@ -223,15 +223,15 @@ impl DisassemblyEngine {
             Ok(length) => {
                 res.length = length;
             }
-            Err(KunaError::BadData { .. }) => {
+            Err(UnlaceError::BadData { .. }) => {
                 res.success = false;
                 return;
             }
-            Err(KunaError::DataUnavail { .. }) => {
+            Err(UnlaceError::DataUnavail { .. }) => {
                 res.success = false;
                 return;
             }
-            Err(KunaError::Unimpl {
+            Err(UnlaceError::Unimpl {
                 instruction_length, ..
             }) => {
                 res.length = instruction_length;
@@ -1476,7 +1476,7 @@ mod tests {
     use super::*;
     use std::cell::RefCell;
 
-    use unlace_base::error::KunaResult;
+    use unlace_base::error::UnlaceResult;
     use unlace_base::space::{
         AddrSpace, AddrSpaceManager, ConstantSpace, JoinSpace, OtherSpace, UniqueSpace,
         VarnodeStorage, addrspace_flags, spacetype,
@@ -1509,22 +1509,26 @@ mod tests {
         fn translate_base_mut(&mut self) -> &mut TranslateBase {
             &mut self.base
         }
-        fn initialize(&mut self, _store: &mut DocumentStorage) -> KunaResult<()> {
+        fn initialize(&mut self, _store: &mut DocumentStorage) -> UnlaceResult<()> {
             Ok(())
         }
         #[allow(clippy::mutable_key_type)] // register map keys' Ord is index/offset/size
         fn get_all_registers(&self, _reglist: &mut BTreeMap<VarnodeData, String>) {}
         fn get_user_op_names(&self, _res: &mut Vec<String>) {}
-        fn instruction_length(&self, baseaddr: &Address) -> KunaResult<i32> {
+        fn instruction_length(&self, baseaddr: &Address) -> UnlaceResult<i32> {
             match self.prog.get(&baseaddr.get_offset()) {
                 Some(i) => Ok(i.len),
-                None => Err(KunaError::bad_data("no instruction")),
+                None => Err(UnlaceError::bad_data("no instruction")),
             }
         }
-        fn one_instruction(&self, emit: &mut dyn PcodeEmit, baseaddr: &Address) -> KunaResult<i32> {
+        fn one_instruction(
+            &self,
+            emit: &mut dyn PcodeEmit,
+            baseaddr: &Address,
+        ) -> UnlaceResult<i32> {
             let insn = match self.prog.get(&baseaddr.get_offset()) {
                 Some(i) => i.clone(),
-                None => return Err(KunaError::bad_data("no instruction")),
+                None => return Err(UnlaceError::bad_data("no instruction")),
             };
             let mk = |off: u64| VarnodeData {
                 space: Some(Rc::clone(&self.ram)),
@@ -1553,14 +1557,14 @@ mod tests {
             &self,
             _emit: &mut dyn AssemblyEmit,
             _baseaddr: &Address,
-        ) -> KunaResult<i32> {
+        ) -> UnlaceResult<i32> {
             Ok(4)
         }
     }
 
     impl unlace_base::space::RegisterLookup for SynthTranslate {
-        fn get_register(&self, _nm: &str) -> KunaResult<VarnodeStorage> {
-            Err(KunaError::sleigh("no registers"))
+        fn get_register(&self, _nm: &str) -> UnlaceResult<VarnodeStorage> {
+            Err(UnlaceError::sleigh("no registers"))
         }
         fn get_register_name(&self, _b: &Rc<AddrSpace>, _o: u64, _s: i32) -> String {
             String::new()
@@ -1588,7 +1592,7 @@ mod tests {
         fn get_file_name(&self) -> &str {
             "synth"
         }
-        fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> KunaResult<()> {
+        fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> UnlaceResult<()> {
             Ok(())
         }
         fn get_arch_type(&self) -> Vec<u8> {

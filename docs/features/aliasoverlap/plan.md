@@ -38,7 +38,7 @@ a load past a store that overwrites some of its bytes.
   `kuna-analysis/tests/fixtures/aliasoverlap_x86_64` (+ `.c`, README row); checks
   statement order in six functions and compiles the printed C against the
   source. Main: 3 of 6 functions return a different value; fix: 0.
-- `tests/stages/kuna-aliasoverlap.toml`: the same six functions as a bytechunk,
+- `tests/stages/aliasoverlap.toml`: the same six functions as a bytechunk,
   plus four functions over a typed `S *` for the split-load path (a byte store
   into the read, a store through a second pointer, a call, and a control with
   nothing between the read and its COPY); eight assertions, main fails #1-#3

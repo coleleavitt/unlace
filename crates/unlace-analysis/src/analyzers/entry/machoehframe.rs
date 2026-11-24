@@ -1,4 +1,4 @@
-//! (kuna `machoehframe`) Mach-O `__eh_frame` FDE function starts.
+//! (unlace `machoehframe`) Mach-O `__eh_frame` FDE function starts.
 //!
 //! A Mach-O records unwind information compactly in `__unwind_info`, and falls
 //! back to a DWARF FDE in `__TEXT,__eh_frame` for a function the compact

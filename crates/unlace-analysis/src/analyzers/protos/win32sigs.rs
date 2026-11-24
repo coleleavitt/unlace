@@ -1,4 +1,4 @@
-//! (kuna) `win32sigs` — built-in Win32 API prototypes, parked by ENTRY ADDRESS.
+//! (unlace) `win32sigs` — built-in Win32 API prototypes, parked by ENTRY ADDRESS.
 //!
 //! [`super::LibProtoPass`] and [`super::libcsigs::LibcSigsPass`] carry libc.
 //! Nothing in the tree carries a single Windows API signature, so on a PE every
@@ -11,7 +11,7 @@
 //!
 //! ## Two halves, because either alone is inert
 //!
-//! **The table.** Ghidra applies its `.gdt` archives here; kuna cannot vendor
+//! **The table.** Ghidra applies its `.gdt` archives here; unlace cannot vendor
 //! them, so this is the same deliberate stand-in [`super::LibProtoPass`] already
 //! is, for the Win32 half. Ranking is measured, not intuited: an import
 //! histogram over the 54 PE images of the repipe arena corpus admits a name at
@@ -1321,7 +1321,7 @@ pub(super) const WIN32: &[(&str, Sig)] = &[
     ),
 ];
 
-/// (kuna `typelib`) `true` when this table declares `name`. A Windows type
+/// (unlace `typelib`) `true` when this table declares `name`. A Windows type
 /// library replaces such a declaration with its own, whose handles and
 /// records keep their SDK names where this table spells them `void *`.
 pub fn declares(name: &str) -> bool {

@@ -1,5 +1,5 @@
 //! Port of `decompiler/cpp/kuna_flagcompare.{cc,hh}` — flag-modelled-comparison
-//! folding (kuna GH-1276 / GH-8777, S3 simplification-quiescence).
+//! folding (unlace GH-1276 / GH-8777, S3 simplification-quiescence).
 //!
 //! Two rules, both always on:
 //!
@@ -27,7 +27,7 @@ use crate::funcdata::Funcdata;
 // GH-1276: (b << k) s< 0   ->   b != 0
 // ===========================================================================
 
-/// (kuna GH-1276) Fold `(b << k) s< 0` (a boolean shifted into the sign bit) to
+/// (unlace GH-1276) Fold `(b << k) s< 0` (a boolean shifted into the sign bit) to
 /// `b != 0` (C++ `RuleBoolSignLess`).
 pub struct RuleBoolSignLess {
     /// Rule group (C++ `Rule::basegroup`).
@@ -136,7 +136,7 @@ impl Rule for RuleBoolSignLess {
 // GH-8777: XNOR(N,V)  ->  SLESSEQUAL(K,V)   where  V s>= K
 // ===========================================================================
 
-/// (kuna GH-8777) Fold the `N == V` signed-overflow idiom to a clean signed
+/// (unlace GH-8777) Fold the `N == V` signed-overflow idiom to a clean signed
 /// compare `INT_SLESSEQUAL(K, V)` (C++ `RuleSborrowGe`).
 pub struct RuleSborrowGe {
     /// Rule group (C++ `Rule::basegroup`).
@@ -422,7 +422,7 @@ fn extract_or_of_ands(data: &Funcdata, orop: OpId) -> Option<(VarnodeId, Varnode
     Some((p0, p1))
 }
 
-// --- Local IR read helpers (see kuna_booleanmask for the rationale) ----------
+// --- Local IR read helpers (see unlace_booleanmask for the rationale) ----------
 
 fn op_in(data: &Funcdata, op: OpId, slot: int4) -> Option<VarnodeId> {
     data.obank().get(op).and_then(|o| o.get_in(slot))

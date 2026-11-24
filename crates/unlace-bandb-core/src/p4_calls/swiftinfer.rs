@@ -1,4 +1,4 @@
-//! (kuna `swiftcall`) The Swift convention of functions the metadata did not
+//! (unlace `swiftcall`) The Swift convention of functions the metadata did not
 //! bind, read off what their code does with the Swift registers.
 //!
 //! The `swiftcall` arm binds `__swiftcall` to the functions Swift metadata
@@ -75,7 +75,7 @@ fn overlaps(a: &Address, asize: int4, b: &Address, bsize: int4) -> bool {
 }
 
 fn enabled(arch: &crate::architecture::Architecture) -> bool {
-    arch.kuna_states
+    arch.unlace_states
         .get::<crate::swiftcall::SwiftAbi>()
         .is_some()
 }
@@ -237,7 +237,7 @@ fn reads_entry(
     end: Option<u64>,
     probe: Probe,
 ) -> bool {
-    let Some(abi) = arch.kuna_states.get_rc::<crate::swiftcall::SwiftAbi>() else {
+    let Some(abi) = arch.unlace_states.get_rc::<crate::swiftcall::SwiftAbi>() else {
         return false;
     };
     let Some(k) = key(entry) else { return false };
@@ -245,8 +245,8 @@ fn reads_entry(
         return false;
     }
     let cached = match probe {
-        Probe::SelfReg => arch.kuna_swift_self_reads.get(&k),
-        Probe::AsyncReg => arch.kuna_swift_async_reads.get(&k),
+        Probe::SelfReg => arch.unlace_swift_self_reads.get(&k),
+        Probe::AsyncReg => arch.unlace_swift_async_reads.get(&k),
     };
     if let Some(&r) = cached {
         return r;
@@ -262,8 +262,8 @@ fn reads_entry(
     };
     let r = probe_reads(arch.translate(), entry, end.unwrap_or(u64::MAX), &reg);
     match probe {
-        Probe::SelfReg => arch.kuna_swift_self_reads.insert(k, r),
-        Probe::AsyncReg => arch.kuna_swift_async_reads.insert(k, r),
+        Probe::SelfReg => arch.unlace_swift_self_reads.insert(k, r),
+        Probe::AsyncReg => arch.unlace_swift_async_reads.insert(k, r),
     };
     r
 }
@@ -300,8 +300,8 @@ pub fn seed(arch: &mut crate::architecture::Architecture, data: &mut Funcdata) -
             callees.insert(k);
         }
     }
-    data.kuna_set_swift_self_callees(callees);
-    data.kuna_set_swift_async_callees(async_callees);
+    data.unlace_set_swift_self_callees(callees);
+    data.unlace_set_swift_async_callees(async_callees);
     let own = data.get_address().clone();
     let Some(k) = key(&own) else {
         return (false, false);
@@ -320,7 +320,7 @@ pub fn seed(arch: &mut crate::architecture::Architecture, data: &mut Funcdata) -
 
 /// The input hint that names the `swiftself` input of a function [`seed`] found.
 pub fn self_hint(arch: &crate::architecture::Architecture) -> Option<crate::inputhints::InputHint> {
-    let abi = arch.kuna_states.get::<crate::swiftcall::SwiftAbi>()?;
+    let abi = arch.unlace_states.get::<crate::swiftcall::SwiftAbi>()?;
     Some(crate::inputhints::InputHint {
         addr: abi.self_reg.0.clone(),
         size: abi.self_reg.1,
@@ -333,10 +333,10 @@ pub fn self_hint(arch: &crate::architecture::Architecture) -> Option<crate::inpu
 pub fn callee_model(data: &Funcdata, idx: int4) -> Option<Rc<ProtoModel>> {
     let abi = data
         .get_arch()
-        .kuna_states
+        .unlace_states
         .get::<crate::swiftcall::SwiftAbi>()?;
     let k = key(data.get_call_specs(idx).get_entry_address())?;
-    data.kuna_swift_self_callees()
+    data.unlace_swift_self_callees()
         .contains(&k)
         .then(|| Rc::clone(&abi.plain))
 }
@@ -347,7 +347,7 @@ pub fn callee_model(data: &Funcdata, idx: int4) -> Option<Rc<ProtoModel>> {
 pub fn async_tail_call(data: &Funcdata, call: OpId) -> Option<Rc<ProtoModel>> {
     let abi = data
         .get_arch()
-        .kuna_states
+        .unlace_states
         .get::<crate::swiftcall::SwiftAbi>()?;
     let own = data.get_func_proto();
     if !own.has_model() || !is_async_model(own.model()) {
@@ -376,7 +376,7 @@ fn is_tail_call(data: &Funcdata, call: OpId) -> bool {
 pub fn passes_context(data: &Funcdata, idx: int4, addr: &Address, size: int4) -> bool {
     let Some(abi) = data
         .get_arch()
-        .kuna_states
+        .unlace_states
         .get::<crate::swiftcall::SwiftAbi>()
     else {
         return false;
@@ -395,7 +395,7 @@ pub fn carries_async_target(data: &Funcdata, idx: int4, slot: int4) -> bool {
     let call = data.get_call_specs(idx);
     if data
         .get_arch()
-        .kuna_states
+        .unlace_states
         .get::<crate::swiftcall::SwiftAbi>()
         .is_none()
         || !call.proto().has_model()
@@ -436,7 +436,7 @@ pub fn async_callee_model(
 ) -> Option<Rc<ProtoModel>> {
     let abi = data
         .get_arch()
-        .kuna_states
+        .unlace_states
         .get::<crate::swiftcall::SwiftAbi>()?;
     let fc = data.get_call_specs(idx);
     if let Some(&throws) = abi.async_names.get(fc.get_name()) {
@@ -444,7 +444,7 @@ pub fn async_callee_model(
     }
     let k = key(fc.get_entry_address())?;
     let throws = bound.is_some_and(|m| m.get_name().ends_with("_throws"));
-    data.kuna_swift_async_callees()
+    data.unlace_swift_async_callees()
         .contains(&k)
         .then(|| abi.model(true, throws))
 }
@@ -514,7 +514,7 @@ fn entry_value_at(data: &Funcdata, call: OpId, reg: &Address, size: int4) -> boo
 pub fn error_passing_call(data: &Funcdata, call: OpId) -> Option<Rc<ProtoModel>> {
     let abi = data
         .get_arch()
-        .kuna_states
+        .unlace_states
         .get::<crate::swiftcall::SwiftAbi>()?;
     let (reg, size) = (&abi.error_reg.0, abi.error_reg.1);
     let mut cur = data.op_next_op(call);
@@ -611,7 +611,7 @@ fn may_be_swift_name(name: &str) -> bool {
 /// accepts it, in place of the 128-bit integer the join would print as.
 pub fn pair_output_type(data: &Funcdata, op: OpId) -> Option<Rc<Datatype>> {
     data.get_arch()
-        .kuna_states
+        .unlace_states
         .get::<crate::swiftcall::SwiftAbi>()?;
     let out = data.obank().get(op)?.get_out()?;
     if !read_as_pair(data, out) || !may_be_swift(data, op) {
@@ -629,7 +629,7 @@ pub fn pair_return_type(data: &Funcdata, op: OpId, slot: int4) -> Option<Rc<Data
     let proto = data.get_func_proto();
     if data
         .get_arch()
-        .kuna_states
+        .unlace_states
         .get::<crate::swiftcall::SwiftAbi>()
         .is_none()
         || proto.is_output_locked()

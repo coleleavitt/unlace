@@ -42,7 +42,7 @@ fn body(arch: &str, prototype: &str, name: &str) -> String {
         "print C".into(),
     ]);
     register_decomp_commands(&mut status);
-    unlace_console::console::register_kuna_commands(&mut status);
+    unlace_console::console::register_unlace_commands(&mut status);
     status
         .get_data_mut(DECOMPILE_MODULE)
         .unwrap()

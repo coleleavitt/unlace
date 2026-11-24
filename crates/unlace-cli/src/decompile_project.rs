@@ -12,7 +12,7 @@
 //!
 //! Loads + analyzes the binary once (the `decompile-all` in-process path, with
 //! omitted `--mode` resolved from file size) and writes a **project folder** — default
-//! `<binary-filename>.kuna/` next to the binary, `-o DIR` overrides — designed
+//! `<binary-filename>.unlace/` next to the binary, `-o DIR` overrides — designed
 //! so a human or LLM can study the binary and attempt recompilation:
 //!
 //! * `<name>.c`   — every selected executable function (`// Function: <name> @ <addr>`
@@ -266,7 +266,7 @@ pub(crate) fn decompile_project(
     // an unfiltered fast export, 120 s otherwise, 0 disables): a non-converging
     // function becomes its own error record instead of hanging the export.
     crate::decompile_all::arm_fn_budgets(&mut prog, args);
-    // (kuna outlang) The project export is C-shaped end to end: a `.c`/`.h`
+    // (unlace outlang) The project export is C-shaped end to end: a `.c`/`.h`
     // split, a `#include`-bearing recompile prelude, and one C prototype per
     // function. Emitting a non-C body into that skeleton would produce artifacts
     // that are neither valid C nor a usable module, so this surface refuses
@@ -301,7 +301,7 @@ pub(crate) fn decompile_project(
     // metadata are whole-program artifacts only it can build. The `.h` type
     // block is the exception: `print_c_types` renders types the DECOMPILE
     // interns, so in a sharded run it has to come back from the workers.
-    // (kuna `protoorder`) The export keeps a `structsynth` ledger, and which
+    // (unlace `protoorder`) The export keeps a `structsynth` ledger, and which
     // `struct_N` a layout becomes is decided by the order the program is
     // visited in. So it takes `decompile-all`'s callee-first order under the
     // same conditions: a name means the same record on both surfaces.

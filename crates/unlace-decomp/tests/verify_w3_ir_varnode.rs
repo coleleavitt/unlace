@@ -74,8 +74,8 @@ fn space(m: &AddrSpaceManager, idx: i32) -> Rc<AddrSpace> {
 }
 
 fn no_replace()
--> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> unlace_base::error::KunaResult<()> {
-    |_: &mut VarnodeBank, _: VarnodeId, _: VarnodeId| -> unlace_base::error::KunaResult<()> {
+-> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> unlace_base::error::UnlaceResult<()> {
+    |_: &mut VarnodeBank, _: VarnodeId, _: VarnodeId| -> unlace_base::error::UnlaceResult<()> {
         Ok(())
     }
 }
@@ -279,7 +279,7 @@ fn xref_writtens_distinct_by_seqnum_but_equal_inputs_unify() {
     let mut rec = |_: &mut VarnodeBank,
                    old: VarnodeId,
                    new: VarnodeId|
-     -> unlace_base::error::KunaResult<()> {
+     -> unlace_base::error::UnlaceResult<()> {
         seen.push((old, new));
         Ok(())
     };

@@ -30,7 +30,7 @@ fn decompile(func: &str, nocall: bool) -> String {
     let mut prog = bootstrap_from_object(&path, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
     prog.arch_mut()
-        .set_kuna_option("dwarfnocall", if nocall { "on" } else { "off" })
+        .set_unlace_option("dwarfnocall", if nocall { "on" } else { "off" })
         .expect("dwarfnocall is a registered option");
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");

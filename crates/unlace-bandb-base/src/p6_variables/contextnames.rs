@@ -1,4 +1,4 @@
-//! (kuna `contextnames`) Name loop counters and the local a function returns.
+//! (unlace `contextnames`) Name loop counters and the local a function returns.
 //!
 //! Two shapes say what a numbered local is without any declaration:
 //!
@@ -197,8 +197,8 @@ fn result(fd: &mut Funcdata, found: &mut BTreeMap<HighVariableId, Vec<Evidence>>
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna `contextnames`) Name loop counters and the returned local.
+crate::unlace_flag!(
+    /// (unlace `contextnames`) Name loop counters and the returned local.
     /// See [`crate::contextnames`].
     ContextNames,
     "contextnames",

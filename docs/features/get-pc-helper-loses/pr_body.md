@@ -56,7 +56,7 @@ this on two architectures in round 3; the second was a Win64 helper preserving
 
 ## The tests
 
-`tests/stages/kuna-calleepreserves.toml` is two-pass on the witness's own bytes:
+`tests/stages/calleepreserves.toml` is two-pass on the witness's own bytes:
 `off` pins `unsigned int v1; // edx`, `on` pins the recovered parameter.
 `tests/cli/get-pc-helper-loses.json` is the promoted acceptance, re-pointed at a
 vendored fixture because CI has no dataset.

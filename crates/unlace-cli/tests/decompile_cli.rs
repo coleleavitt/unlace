@@ -879,8 +879,8 @@ fn entrymain_arm() -> String {
         .to_string()
 }
 
-/// RE-need `analysis-generated-function-name`: every name kuna PRINTS must be a
-/// name kuna ACCEPTS.
+/// RE-need `analysis-generated-function-name`: every name unlace PRINTS must be a
+/// name unlace ACCEPTS.
 ///
 /// `unlace functions` applies the DIV-20/DIV-68 discovery bundle on a non-x86-64
 /// binary and single-function `unlace decompile` did not, so the inventory listed

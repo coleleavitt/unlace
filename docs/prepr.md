@@ -23,7 +23,7 @@ Seconds. Errors fail the run:
 - an added `.obj`/`.o`/`.lib` that no test or script names;
 - a `<stringmatch>` changed in a stage test that already exists on the base,
   unless a commit carries `Assertion-change: <test>: <why the new expectation is
-  right>` (`kuna-catalog`'s are exempt; its counts are computed now).
+  right>` (`catalog`'s are exempt; its counts are computed now).
 
 A new `kuna_*.rs` with no `phases.toml` change prints a warning: that is right
 only for a strict correctness fix (`docs/agents.md`, "Adding features").

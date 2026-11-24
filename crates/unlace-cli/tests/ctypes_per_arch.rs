@@ -186,7 +186,7 @@ fn decompile_all_with(path: &str, args: &[&str]) -> String {
     let sp = specs();
     let mut argv = vec!["decompile-all", path, "--sleighpath", sp.as_str()];
     argv.extend_from_slice(args);
-    let (stdout, stderr, code) = common::run_kuna(&argv);
+    let (stdout, stderr, code) = common::run_unlace(&argv);
     assert_eq!(
         code, 0,
         "unlace decompile-all {args:?} failed on {path}: {stderr}"

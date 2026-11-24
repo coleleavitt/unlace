@@ -169,7 +169,7 @@ fn unrelocated_dos_image() -> Vec<u8> {
     header
 }
 
-fn kuna(args: &[&str]) -> Output {
+fn unlace(args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .output()
@@ -187,7 +187,7 @@ fn a_dos_executable_loads_at_its_entry_with_relocated_far_calls() {
     let path = written("dos-mz", &dos_image(&[]));
     let exe = path.to_str().unwrap();
 
-    let functions = kuna(&["functions", exe, "--json"]);
+    let functions = unlace(&["functions", exe, "--json"]);
     let listing = String::from_utf8_lossy(&functions.stdout);
     assert!(
         functions.status.success(),
@@ -202,7 +202,7 @@ fn a_dos_executable_loads_at_its_entry_with_relocated_far_calls() {
         vec!["decompile", exe, "sub_10020"],
         vec!["decompile-all", exe, "--addr", "0x10020"],
     ] {
-        let out = kuna(&args);
+        let out = unlace(&args);
         let text = String::from_utf8_lossy(&out.stdout);
         assert!(
             out.status.success(),
@@ -212,7 +212,7 @@ fn a_dos_executable_loads_at_its_entry_with_relocated_far_calls() {
         assert!(text.contains("return 9;"), "{args:?}: {text}");
     }
 
-    let strings = kuna(&["strings", exe]);
+    let strings = unlace(&["strings", exe]);
     assert!(!strings.status.success());
     assert!(
         String::from_utf8_lossy(&strings.stderr)
@@ -224,7 +224,7 @@ fn a_dos_executable_loads_at_its_entry_with_relocated_far_calls() {
 #[test]
 fn a_pklite_stub_is_named_on_load() {
     let path = written("dos-mz-pklite", &dos_image(b"PKLITE Copr. 1990"));
-    let out = kuna(&["functions", path.to_str().unwrap()]);
+    let out = unlace(&["functions", path.to_str().unwrap()]);
     assert!(
         out.status.success(),
         "{}",
@@ -243,7 +243,7 @@ fn a_near_call_wraps_inside_the_entry_code_segment() {
     let path = written("dos-mz-segment", &segmented_dos_image());
     let exe = path.to_str().unwrap();
 
-    let functions = kuna(&["functions", exe, "--json"]);
+    let functions = unlace(&["functions", exe, "--json"]);
     let listing = String::from_utf8_lossy(&functions.stdout);
     assert!(
         functions.status.success(),
@@ -259,7 +259,7 @@ fn a_near_call_wraps_inside_the_entry_code_segment() {
         "the linear sum is not the target: {listing}"
     );
 
-    let out = kuna(&["decompile-all", exe, "--addr", "0x11000"]);
+    let out = unlace(&["decompile-all", exe, "--addr", "0x11000"]);
     let text = String::from_utf8_lossy(&out.stdout);
     assert!(
         out.status.success(),
@@ -275,7 +275,7 @@ fn a_relocated_far_call_states_its_segment_and_a_far_pointer_load_does_not() {
     let path = written("dos-mz-two-segments", &two_segment_dos_image());
     let exe = path.to_str().unwrap();
 
-    let functions = kuna(&["functions", exe, "--json"]);
+    let functions = unlace(&["functions", exe, "--json"]);
     let listing = String::from_utf8_lossy(&functions.stdout);
     assert!(
         functions.status.success(),
@@ -291,7 +291,7 @@ fn a_relocated_far_call_states_its_segment_and_a_far_pointer_load_does_not() {
         "the call wrapped in segment 0x1000: {listing}"
     );
 
-    let out = kuna(&["decompile-all", exe, "--addr", "0x1ba00"]);
+    let out = unlace(&["decompile-all", exe, "--addr", "0x1ba00"]);
     let text = String::from_utf8_lossy(&out.stdout);
     assert!(
         out.status.success(),
@@ -307,7 +307,7 @@ fn the_call_sweep_keeps_code_calls_and_drops_calls_decoded_from_data() {
     let path = written("dos-mz-data-segment", &data_segment_dos_image());
     let exe = path.to_str().unwrap();
     let list = |extra: &[&str]| {
-        let out = kuna(&[&["functions", exe, "--json"][..], extra].concat());
+        let out = unlace(&[&["functions", exe, "--json"][..], extra].concat());
         let text = String::from_utf8_lossy(&out.stdout).into_owned();
         assert!(
             out.status.success(),
@@ -340,7 +340,7 @@ fn the_call_sweep_keeps_code_calls_and_drops_calls_decoded_from_data() {
 fn without_relocations_an_unrelocated_far_call_does_not_refuse_the_function_it_opens() {
     let path = written("dos-mz-unrelocated", &unrelocated_dos_image());
     let exe = path.to_str().unwrap();
-    let out = kuna(&["functions", exe, "--json"]);
+    let out = unlace(&["functions", exe, "--json"]);
     let text = String::from_utf8_lossy(&out.stdout);
     assert!(
         out.status.success(),

@@ -1,9 +1,9 @@
-//! (kuna) ELF import markup read out of `PT_DYNAMIC` — the segment-only twin of
+//! (unlace) ELF import markup read out of `PT_DYNAMIC` — the segment-only twin of
 //! the section-driven inputs [`crate::loader::elf_plt`] normally uses.
 //!
 //! ## The gap
 //!
-//! Every route by which kuna learns an import's name is keyed on the section
+//! Every route by which unlace learns an import's name is keyed on the section
 //! table: `object`'s `dynamic_relocations()` builds its iterator by scanning the
 //! `SectionTable` for `SHT_REL`/`SHT_RELA`, `dynamic_symbols()` reads `.dynsym`
 //! as a section, and [`elf_plt`](crate::loader::elf_plt) locates the stubs

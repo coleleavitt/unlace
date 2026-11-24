@@ -1,4 +1,4 @@
-//! (kuna `loadguardreads`) Index-alias LOAD guards read while renaming
+//! (unlace `loadguardreads`) Index-alias LOAD guards read while renaming
 //! instead of through one COPY per guarded range per LOAD.
 //!
 //! Upstream `Heritage::guardLoads` puts an address-forced `COPY` of every

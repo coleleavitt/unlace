@@ -9,7 +9,7 @@
 //! `CollapseStructure`/`TraceDAG`/`BlockTrace`) must express one in-edge of a
 //! shared, multi-predecessor *return tail* as an unstructured `goto` — it has no
 //! schema that duplicates a tail to avoid the goto.  On `dd::argmatch_to_argument`
-//! kuna therefore emits:
+//! unlace therefore emits:
 //!
 //! ```c
 //!   if (v2 == 0) {
@@ -46,7 +46,7 @@
 //! runs [`crate::taildup`] for a return tail that contains a
 //! call, and `off` runs neither, leaving the upstream goto/label rendering.
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
@@ -57,7 +57,7 @@ use crate::funcdata::Funcdata;
 
 use unlace_base::marshal::ElementId;
 
-/// Marshaling element `<gotoreduce>` (kuna).  ElementIds live in the 4000+ range.
+/// Marshaling element `<gotoreduce>` (unlace).  ElementIds live in the 4000+ range.
 pub const ELEM_GOTOREDUCE: ElementId = ElementId::new("gotoreduce", 4100);
 
 /// Maximum number of basic blocks in a duplicated return tail.
@@ -78,9 +78,9 @@ pub enum GotoReduceMode {
     On,
 }
 
-impl crate::optionset::KunaOption for GotoReduceMode {
+impl crate::optionset::UnlaceOption for GotoReduceMode {
     const NAME: &'static str = "gotoreduce";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         GotoReduceMode::Off
@@ -90,7 +90,7 @@ impl crate::optionset::KunaOption for GotoReduceMode {
         GotoReduceMode::On
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         OptionGotoReduce.apply(value)
     }
 }
@@ -150,7 +150,7 @@ impl Action for ActionGotoReduce {
         unlace_middle::debug_assert_settled!(data, Casts);
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<GotoReduceMode>()
             .return_tails()
         {
@@ -196,14 +196,14 @@ impl Action for ActionGotoReduce {
         let mut count: int4 = 0;
         let mut converted_targets: Vec<BlockId> = Vec::new();
         for (if_id, chain, target) in &conversions {
-            data.sblocks_mut().kuna_inline_return_tail(*if_id, chain);
+            data.sblocks_mut().unlace_inline_return_tail(*if_id, chain);
             converted_targets.push(*target);
             count += 1;
         }
 
         // Drop the label on any target no longer reached by an unstructured edge --
         // counting switch-case and multigoto carriers, not just BlockGoto/BlockIf
-        // (`kuna_gotolabel`), so a target a switch arm still jumps to keeps its label.
+        // (`unlace_gotolabel`), so a target a switch arm still jumps to keeps its label.
         crate::gotolabel::release_converted_labels(data, &converted_targets);
 
         self.base_mut().count += count;
@@ -291,13 +291,13 @@ impl OptionGotoReduce {
     pub const NAME: &'static str = "gotoreduce";
 
     /// Parse `off`/`return`/`on`, returning the mode + a confirmation message.
-    pub fn apply(&self, p1: &str) -> KunaResult<(GotoReduceMode, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(GotoReduceMode, String)> {
         let mode = match p1 {
             "off" => GotoReduceMode::Off,
             "return" => GotoReduceMode::Return,
             "on" => GotoReduceMode::On,
             _ => {
-                return Err(KunaError::parse(
+                return Err(UnlaceError::parse(
                     "Must specify gotoreduce as 'off', 'return' or 'on'",
                 ));
             }

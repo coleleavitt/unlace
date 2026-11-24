@@ -489,7 +489,7 @@ fn result_overlays_so_neither_variant_is_named() {
         );
     }
     // The source names are not lost -- they are on the side table.
-    let l = types.kuna_variant_layout("Result<u32, u32>").unwrap();
+    let l = types.unlace_variant_layout("Result<u32, u32>").unwrap();
     assert_eq!(l.facet_for_discr(0).unwrap().name, "Ok");
     assert_eq!(l.facet_for_discr(0).unwrap().label, "field_0x4");
     assert!(!l.names_any_variant());
@@ -505,7 +505,7 @@ fn records_the_layout_side_table() {
     intern(&types, &t, e).unwrap();
 
     let l = types
-        .kuna_variant_layout("Result<u32, u32>")
+        .unlace_variant_layout("Result<u32, u32>")
         .expect("layout recorded");
     assert_eq!(l.size, 8);
     assert_eq!((l.tag_offset, l.tag_size), (0, 4));
@@ -520,7 +520,7 @@ fn records_the_layout_side_table() {
         l.facet_named("Err").unwrap().fields,
         vec![("__0".to_string(), 4)]
     );
-    assert_eq!(types.kuna_variant_layouts().len(), 1);
+    assert_eq!(types.unlace_variant_layouts().len(), 1);
 }
 
 /// `Option<u32>`: `None` is a real, named, FIELDLESS facet -- it keeps its name
@@ -551,7 +551,7 @@ fn builds_option_with_a_fieldless_variant() {
 
     // `None` is not lost -- it is on the side table, with its discriminant, which
     // is where a `match` renderer reads it.
-    let l = types.kuna_variant_layout("Option<u32>").unwrap();
+    let l = types.unlace_variant_layout("Option<u32>").unwrap();
     let none = l.facet_named("None").unwrap();
     assert_eq!(none.discr, Some(0));
     assert!(none.fields.is_empty());
@@ -601,7 +601,7 @@ fn builds_niche_option_without_a_tag_field() {
     let some = built.get_field(0).unwrap().field_type.clone();
     assert_eq!(fields(&some), vec![("__0".to_string(), 0, 8)]);
 
-    let l = types.kuna_variant_layout("Option<&u32>").unwrap();
+    let l = types.unlace_variant_layout("Option<&u32>").unwrap();
     assert!(l.niche, "the overlap must be recorded");
     assert_eq!((l.tag_offset, l.tag_size), (0, 8));
     assert_eq!(l.payload_offset, 0);
@@ -642,7 +642,7 @@ fn builds_three_variants() {
         vec!["A", "B"],
         "the fieldless `C` overlays nothing; it is on the side table instead"
     );
-    let l = types.kuna_variant_layout("Three").unwrap();
+    let l = types.unlace_variant_layout("Three").unwrap();
     assert_eq!(l.variants.len(), 3);
     assert_eq!(l.facet_for_discr(2).unwrap().name, "C");
     assert!(l.facet_named("C").unwrap().payload_type.is_empty());
@@ -690,7 +690,7 @@ fn builds_multi_field_variant() {
         vec![("a".to_string(), 0, 4), ("field_0x8".to_string(), 4, 4)],
         "`a` is P's alone; `b` collides with Q's `__0`"
     );
-    let l = types.kuna_variant_layout("Multi").unwrap();
+    let l = types.unlace_variant_layout("Multi").unwrap();
     // The side table keeps the SOURCE names and offsets regardless of the label.
     assert_eq!(
         l.facet_named("P").unwrap().fields,
@@ -787,8 +787,8 @@ fn same_named_different_sized_variants_both_survive() {
         "the two `Some` facets must not share one interned type"
     );
 
-    let la = types.kuna_variant_layout("Opt").unwrap();
-    let lb = types.kuna_variant_layout("Opt_16").unwrap();
+    let la = types.unlace_variant_layout("Opt").unwrap();
+    let lb = types.unlace_variant_layout("Opt_16").unwrap();
     assert_eq!(
         la.facet_named("Some").unwrap().fields,
         vec![("__0".to_string(), 4)]
@@ -814,7 +814,7 @@ fn refuses_variant_part_with_no_payload_anywhere() {
     t.variant(vp, Some(0), "A", a);
     t.variant(vp, Some(1), "B", b);
     assert!(intern(&types, &t, e).is_none());
-    assert!(types.kuna_variant_layout("AllUnit").is_none());
+    assert!(types.unlace_variant_layout("AllUnit").is_none());
 }
 
 /// A discriminant whose type is a POINTER is not a discriminant this module will
@@ -892,7 +892,7 @@ fn refuses_when_every_facet_field_is_unbuildable() {
     assert!(fields(&built).is_empty());
     assert!(!built.is_incomplete());
     assert!(
-        types.kuna_variant_layout("AllVoid").is_none(),
+        types.unlace_variant_layout("AllVoid").is_none(),
         "no layout is claimed"
     );
 }
@@ -916,7 +916,7 @@ fn a_member_past_the_end_seals_instead_of_leaving_a_zero_size_shell() {
     let built = intern(&types, &t, e).expect("the sealed shell is the answer");
     assert_eq!(built.get_size(), 8);
     assert!(fields(&built).is_empty());
-    assert!(types.kuna_variant_layout("Overrun2").is_none());
+    assert!(types.unlace_variant_layout("Overrun2").is_none());
 }
 
 /// FIVE variants, three of them carrying payloads: nothing in the walk is capped
@@ -966,7 +966,7 @@ fn builds_five_variants() {
     assert_eq!(fields(&bt), vec![("field_0x8".to_string(), 4, 8)]);
     assert_eq!(fields(&ct), vec![("field_0x8".to_string(), 4, 4)]);
 
-    let l = types.kuna_variant_layout("Five").unwrap();
+    let l = types.unlace_variant_layout("Five").unwrap();
     assert_eq!(l.variants.len(), 5, "all five reach the side table");
     for (v, n) in [(0u64, "A"), (1, "B"), (2, "C"), (3, "D"), (4, "F")] {
         assert_eq!(l.facet_for_discr(v).unwrap().name, n);
@@ -1029,7 +1029,7 @@ fn a_generic_enum_at_two_instantiations_keeps_both() {
     assert_eq!(fb.get_name(), "Option<u64>::Some");
     assert_eq!(fields(&fa), vec![("__0".to_string(), 0, 4)]);
     assert_eq!(fields(&fb), vec![("__0".to_string(), 0, 8)]);
-    assert_eq!(types.kuna_variant_layouts().len(), 2);
+    assert_eq!(types.unlace_variant_layouts().len(), 2);
 }
 
 /// A niche `Option<Box<T>>` is the same shape as `Option<&T>` -- the null pointer
@@ -1052,7 +1052,7 @@ fn builds_niche_option_box() {
     let built = intern(&types, &t, e).expect("niche Option<Box> must build");
     assert_eq!(built.get_metatype(), type_metatype::TYPE_UNION);
     assert_eq!(fields(&built), vec![("Some".to_string(), 0, 8)]);
-    let l = types.kuna_variant_layout("Option<Box<u64>>").unwrap();
+    let l = types.unlace_variant_layout("Option<Box<u64>>").unwrap();
     assert!(l.niche);
     assert_eq!(
         l.facet_named("Some").unwrap().discr,
@@ -1079,7 +1079,7 @@ fn refuses_a_c_union() {
     assert!(variant_part(&t.dies[&u], &t.dies).is_none());
     assert!(read_variant_part(&t.dies[&u], &t.dies).is_none());
     assert!(intern(&types, &t, u).is_none());
-    assert!(types.kuna_variant_layouts().is_empty());
+    assert!(types.unlace_variant_layouts().is_empty());
 }
 
 /// A C++ `std::variant` is a tagged representation too, but libstdc++ spells it
@@ -1097,7 +1097,7 @@ fn refuses_a_cpp_std_variant() {
     t.member(v, "_M_index", u8t, 8);
     assert!(variant_part(&t.dies[&v], &t.dies).is_none());
     assert!(intern(&types, &t, v).is_none());
-    assert!(types.kuna_variant_layouts().is_empty());
+    assert!(types.unlace_variant_layouts().is_empty());
 }
 
 /// A plain `gcc -g` struct -- members, no variant part -- is refused at the very
@@ -1117,7 +1117,7 @@ fn refuses_a_plain_gcc_struct() {
         types.find_by_name("point").unwrap().is_none(),
         "nothing was interned"
     );
-    assert!(types.kuna_variant_layouts().is_empty());
+    assert!(types.unlace_variant_layouts().is_empty());
 }
 
 /// The last post-intern refusal: every candidate name for the overlay union is
@@ -1154,7 +1154,7 @@ fn seals_when_the_overlay_union_name_is_exhausted() {
     );
     assert!(fields(&built).is_empty());
     assert!(
-        types.kuna_variant_layout("Result<u32, u32>").is_none(),
+        types.unlace_variant_layout("Result<u32, u32>").is_none(),
         "no layout may be claimed for a shape that was not installed"
     );
 }
@@ -1194,7 +1194,7 @@ fn option_keeps_its_only_payload_variant_name() {
         "Option<u32>::Some",
         "the facet TYPE keeps it too"
     );
-    let l = types.kuna_variant_layout("Option<u32>").unwrap();
+    let l = types.unlace_variant_layout("Option<u32>").unwrap();
     assert_eq!(l.facet_named("Some").unwrap().label, "Some");
     assert!(l.names_any_variant());
 }
@@ -1249,7 +1249,7 @@ fn tree_style_overlay_names_no_variant_but_keeps_the_uncontested_field() {
             "{n} must not exist"
         );
     }
-    let l = types.kuna_variant_layout("Tree").unwrap();
+    let l = types.unlace_variant_layout("Tree").unwrap();
     assert!(!l.names_any_variant());
     assert_eq!(
         l.facet_for_discr(1).unwrap().name,
@@ -1283,7 +1283,7 @@ fn default_variant_is_suppressed_when_it_overlays_another() {
         "the default variant is named no more freely than the tagged one: {:?}",
         fields(&payload)
     );
-    let l = types.kuna_variant_layout("Either").unwrap();
+    let l = types.unlace_variant_layout("Either").unwrap();
     assert_eq!(
         l.facet_for_discr(0xdead).unwrap().name,
         "Ptr",
@@ -1319,7 +1319,7 @@ fn disjoint_payload_variants_keep_both_names() {
             .collect::<Vec<_>>(),
         vec!["A", "B"]
     );
-    let l = types.kuna_variant_layout("Split").unwrap();
+    let l = types.unlace_variant_layout("Split").unwrap();
     assert_eq!(l.facet_named("A").unwrap().label, "A");
     assert_eq!(l.facet_named("B").unwrap().label, "B");
     assert!(l.names_any_variant());
@@ -1385,7 +1385,7 @@ fn seals_when_every_suppressed_facet_name_is_taken() {
     );
     assert!(fields(&built).is_empty());
     assert!(
-        types.kuna_variant_layout("Result<u32, u32>").is_none(),
+        types.unlace_variant_layout("Result<u32, u32>").is_none(),
         "no layout may be claimed for a shape that was not installed"
     );
 }

@@ -85,7 +85,7 @@ off`, so both arms are satisfied by the code and neither probe was weakened.
 
 `tests/cli` promotion is refused **by design** — the acceptance target is
 `binary_source: dataset` and CI has no dataset, so `make test-cli` correctly stays at 27/27.
-The permanent CI pin is the two-pass `tests/stages/kuna-rodatastring.toml` (default recovers
+The permanent CI pin is the two-pass `tests/stages/rodatastring.toml` (default recovers
 the `builtin_strncpy`; `rodatastring off` restores the filed invalid array-typed cast).
 
 ## Evidence for default-on

@@ -1,4 +1,4 @@
-//! Independent verifier tests for `w7-s7-kuna-loweredswitch` (round 1).
+//! Independent verifier tests for `w7-s7-unlace-loweredswitch` (round 1).
 //!
 //! These are adversarial re-derivations written by the VERIFIER (not the
 //! porter), targeting the hunt-list spots this item is most fragile in:
@@ -35,7 +35,7 @@ use unlace_num::opcodes::OpCode;
 use unlace_decomp::context::{ArchContext, BlockId, TypeOp, VarnodeId};
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::loweredswitch::{
-    ActionLowerSwitchDetect, KunaLoweredSwitchStore, OptionLowerSwitch,
+    ActionLowerSwitchDetect, OptionLowerSwitch, UnlaceLoweredSwitchStore,
 };
 
 // -----------------------------------------------------------------------------
@@ -506,7 +506,7 @@ fn v5_option_and_store_surface() {
 
     // Empty store: no record for a fresh function.
     let fd = build_fd();
-    let store = KunaLoweredSwitchStore::new();
+    let store = UnlaceLoweredSwitchStore::new();
     assert!(!store.has_record(&fd));
     assert!(store.records(&fd).is_empty());
 }

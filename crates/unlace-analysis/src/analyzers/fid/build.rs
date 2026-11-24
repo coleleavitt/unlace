@@ -1,4 +1,4 @@
-//! The `.fid` generator — kuna's `FidServiceLibraryIngest` analog.
+//! The `.fid` generator — unlace's `FidServiceLibraryIngest` analog.
 //!
 //! Disassembles every named function in a parsed object (a `.o` member or a
 //! linked image) through the live SLEIGH decoder, runs the byte-exact PR2

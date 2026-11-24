@@ -1,4 +1,4 @@
-//! (kuna `paramcopyhoist`) Re-anchor the copy-shadow of an unmodified incoming
+//! (unlace `paramcopyhoist`) Re-anchor the copy-shadow of an unmodified incoming
 //! parameter in the function's entry block (P6, after HighVariable formation).
 //!
 //! ## The construct
@@ -23,7 +23,7 @@
 //!   v5 = a2;                      // NOT the entry block -> +1 CFG node
 //! ```
 //!
-//! kuna is internally inconsistent about the identical construct: the discriminator
+//! unlace is internally inconsistent about the identical construct: the discriminator
 //! is only whether the guard's join happens to be the entry block.  The source's
 //! entry block holds all the spills, so each sunk copy splits one source block in two.
 //!
@@ -74,7 +74,7 @@
 //! MULTIEQUAL arm.  The INDIRECT arm (`Merge::mergeIndirect`'s call-adjacent copy) is
 //! a different Cover shape and is deliberately left alone.
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::marshal::ElementId;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
@@ -85,10 +85,10 @@ use crate::cover::{Cover, CoverPoint};
 use crate::funcdata::Funcdata;
 use crate::options::on_or_off;
 
-/// Marshaling element `<paramcopyhoist>` (kuna 4000+ range; 4119 = iteboolean).
+/// Marshaling element `<paramcopyhoist>` (unlace 4000+ range; 4119 = iteboolean).
 pub const ELEM_PARAMCOPYHOIST: ElementId = ElementId::new("paramcopyhoist", 4120);
 
-/// (kuna) The `paramcopyhoist on|off` ArchOption.
+/// (unlace) The `paramcopyhoist on|off` ArchOption.
 pub struct OptionParamCopyHoist;
 
 impl OptionParamCopyHoist {
@@ -96,7 +96,7 @@ impl OptionParamCopyHoist {
     pub const NAME: &'static str = "paramcopyhoist";
 
     /// Parse `on`/`off`, returning the bool value + a confirmation message.
-    pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((
@@ -144,7 +144,7 @@ impl Action for ActionParamCopyHoist {
         // boundary.  Off => nothing moves => byte-identical output.
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::paramcopyhoist::ParamCopyHoist>()
             .0
         {
@@ -335,7 +335,7 @@ fn instance_shadows_root(fd: &Funcdata, vn: VarnodeId, root_vn: VarnodeId) -> bo
     }
 }
 
-/// (kuna) `paramcopyhoist`: anchor the trim COPY of an **unmodified incoming
+/// (unlace) `paramcopyhoist`: anchor the trim COPY of an **unmodified incoming
 /// parameter** in the function's entry block instead of at the tail of the
 /// MULTIEQUAL slot's predecessor, so a guarded parameter's copy-shadow
 /// (`v6 = a1;`) prints in the entry block like the source's spill instead of
@@ -345,9 +345,9 @@ fn instance_shadows_root(fd: &Funcdata, vn: VarnodeId, root_vn: VarnodeId) -> bo
 #[derive(Clone, Debug, PartialEq)]
 pub struct ParamCopyHoist(pub bool);
 
-impl crate::optionset::KunaOption for ParamCopyHoist {
+impl crate::optionset::UnlaceOption for ParamCopyHoist {
     const NAME: &'static str = "paramcopyhoist";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         ParamCopyHoist(false)
@@ -357,7 +357,7 @@ impl crate::optionset::KunaOption for ParamCopyHoist {
         ParamCopyHoist(false)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (v, msg) = crate::paramcopyhoist::OptionParamCopyHoist.apply(value)?;
         Ok((ParamCopyHoist(v), msg))
     }

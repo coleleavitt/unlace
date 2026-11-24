@@ -13,7 +13,7 @@ use common::{fixture, repo_root};
 static PROCESS_SETUP: Mutex<()> = Mutex::new(());
 
 /// A directory holding nothing but a copy of `unlace`.
-fn lone_kuna(tag: &str) -> PathBuf {
+fn lone_unlace(tag: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("kuna_single_{}_{tag}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("create sandbox");
@@ -50,8 +50,8 @@ fn run_alone(dir: &Path, args: &[&str]) -> Output {
 }
 
 #[test]
-fn a_lone_kuna_decompiles_with_its_built_in_console() {
-    let dir = lone_kuna("decompile");
+fn a_lone_unlace_decompiles_with_its_built_in_console() {
+    let dir = lone_unlace("decompile");
     let out = run_alone(&dir, &["decompile", &fixture("fauxware"), "main"]);
     let entries = std::fs::read_dir(&dir).unwrap().count();
     let _ = std::fs::remove_dir_all(&dir);
@@ -66,8 +66,8 @@ fn a_lone_kuna_decompiles_with_its_built_in_console() {
 }
 
 #[test]
-fn a_lone_kuna_compiles_a_slaspec_with_its_built_in_compiler() {
-    let dir = lone_kuna("specs");
+fn a_lone_unlace_compiles_a_slaspec_with_its_built_in_compiler() {
+    let dir = lone_unlace("specs");
     let languages = repo_root().join("specs/Ghidra/Processors/Toy/data/languages");
     let out_sla = dir.join("toy_be.sla");
     let out = run_alone(

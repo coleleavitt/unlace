@@ -19,7 +19,7 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use unlace_base::address::{Address, Range, calc_mask};
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::{ATTRIB_NAME, ATTRIB_VAL, Decoder, ElementId, Encoder, IdRegistry};
 use unlace_base::partmap::PartMap;
 use unlace_base::space::AddrSpace;
@@ -158,7 +158,7 @@ pub struct TrackedContext {
 impl TrackedContext {
     /// The register storage and value are encoded as a \<set> element.
     /// \param encoder is the stream encoder
-    pub fn encode(&self, encoder: &mut dyn Encoder) -> KunaResult<()> {
+    pub fn encode(&self, encoder: &mut dyn Encoder) -> UnlaceResult<()> {
         encoder.open_element(&ELEM_SET);
         self.loc
             .space
@@ -173,7 +173,7 @@ impl TrackedContext {
 
     /// Parse a \<set> element to fill in the storage and value details.
     /// \param decoder is the stream decoder
-    pub fn decode(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    pub fn decode(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         let elem_id = decoder.open_element_id(&ELEM_SET)?;
         self.loc.decode_from_attributes(decoder)?;
         self.val = decoder.read_unsigned_integer_id(&ATTRIB_VAL)?;
@@ -197,7 +197,7 @@ pub fn encode_tracked(
     encoder: &mut dyn Encoder,
     addr: &Address,
     vec: &TrackedSet,
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     if vec.is_empty() {
         return Ok(());
     }
@@ -220,7 +220,7 @@ pub fn encode_tracked(
 /// (C++ `ContextDatabase::decodeTracked`, a protected static method.)
 /// \param decoder is the given stream decoder
 /// \param vec is the container that will hold the new TrackedContext objects
-pub fn decode_tracked(decoder: &mut dyn Decoder, vec: &mut TrackedSet) -> KunaResult<()> {
+pub fn decode_tracked(decoder: &mut dyn Decoder, vec: &mut TrackedSet) -> UnlaceResult<()> {
     vec.clear(); // Clear out any old stuff
     while decoder.peek_element()? != 0 {
         let mut tcont = TrackedContext::default();
@@ -303,7 +303,7 @@ pub trait ContextDatabase {
     /// value — it is immutable after registration.)
     /// \param nm is the name of the context value
     /// \return the ContextBitRange object matching the name
-    fn get_variable(&self, nm: &[u8]) -> KunaResult<ContextBitRange>;
+    fn get_variable(&self, nm: &[u8]) -> UnlaceResult<ContextBitRange>;
 
     /// \brief Grab the context blob(s) for the given address range, marking
     /// bits that will be set
@@ -378,7 +378,7 @@ pub trait ContextDatabase {
     /// within the blob
     /// \param ebit is the position of the variable's least significant bit
     /// within the blob
-    fn register_variable(&mut self, nm: &[u8], sbit: i32, ebit: i32) -> KunaResult<()>;
+    fn register_variable(&mut self, nm: &[u8], sbit: i32, ebit: i32) -> UnlaceResult<()>;
 
     /// \brief Get the context blob of values associated with a given address
     ///
@@ -432,13 +432,13 @@ pub trait ContextDatabase {
     /// \brief Encode the entire database to a stream
     ///
     /// \param encoder is the stream encoder
-    fn encode(&self, encoder: &mut dyn Encoder) -> KunaResult<()>;
+    fn encode(&self, encoder: &mut dyn Encoder) -> UnlaceResult<()>;
 
     /// \brief Restore the state of \b this database object from the given
     /// stream decoder
     ///
     /// \param decoder is the given stream decoder
-    fn decode(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()>;
+    fn decode(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()>;
 
     /// \brief Add initial context state from elements in the
     /// compiler/processor specifications
@@ -447,7 +447,7 @@ pub trait ContextDatabase {
     /// either the compiler or processor specification file for the
     /// architecture, initializing this database.
     /// \param decoder is the given stream decoder
-    fn decode_from_spec(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()>;
+    fn decode_from_spec(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()>;
 
     // -- Non-virtual helper methods (provided) --
 
@@ -457,7 +457,7 @@ pub trait ContextDatabase {
     /// overlaid with other values.
     /// \param nm is the name of the context variable
     /// \param val is the default value to establish
-    fn set_variable_default(&mut self, nm: &[u8], val: u32) -> KunaResult<()> {
+    fn set_variable_default(&mut self, nm: &[u8], val: u32) -> UnlaceResult<()> {
         let var = self.get_variable(nm)?;
         var.set_value(self.get_default_value_mut(), val);
         Ok(())
@@ -470,7 +470,7 @@ pub trait ContextDatabase {
     /// been overlaid with other values.
     /// \param nm is the name of the context variable
     /// \return the variable's default value
-    fn get_default_value_by_name(&self, nm: &[u8]) -> KunaResult<u32> {
+    fn get_default_value_by_name(&self, nm: &[u8]) -> UnlaceResult<u32> {
         let var = self.get_variable(nm)?;
         Ok(var.get_value(self.get_default_value()))
     }
@@ -482,7 +482,7 @@ pub trait ContextDatabase {
     /// \param nm is the name of the context variable
     /// \param addr is the given address
     /// \param value is the new value to set
-    fn set_variable(&mut self, nm: &[u8], addr: &Address, value: u32) -> KunaResult<()> {
+    fn set_variable(&mut self, nm: &[u8], addr: &Address, value: u32) -> UnlaceResult<()> {
         let bitrange = self.get_variable(nm)?;
         let num = bitrange.get_word();
         let mask = bitrange.get_mask() << bitrange.get_shift();
@@ -502,7 +502,7 @@ pub trait ContextDatabase {
     /// \param nm is the name of the context variable
     /// \param addr is the address for which the specific value is needed
     /// \return the context variable value for the address
-    fn get_variable_value(&self, nm: &[u8], addr: &Address) -> KunaResult<u32> {
+    fn get_variable_value(&self, nm: &[u8], addr: &Address) -> UnlaceResult<u32> {
         let bitrange = self.get_variable(nm)?;
 
         let context = self.get_context(addr);
@@ -570,7 +570,7 @@ pub trait ContextDatabase {
         begad: &Address,
         endad: &Address,
         value: u32,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let bitrange = self.get_variable(nm)?;
 
         self.get_region_for_set(
@@ -739,7 +739,7 @@ impl ContextInternal {
         encoder: &mut dyn Encoder,
         addr: &Address,
         vec: &[u32],
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         encoder.open_element(&ELEM_CONTEXT_POINTSET);
         addr.get_space()
             .expect("encodeContext: invalid address (C++ UB)")
@@ -773,7 +773,7 @@ impl ContextInternal {
         decoder: &mut dyn Decoder,
         addr1: &Address,
         addr2: &Address,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         loop {
             let sub_id = decoder.open_element()?;
             if sub_id != ELEM_SET.get_id() {
@@ -840,10 +840,10 @@ impl ContextDatabase for ContextInternal {
         }
     }
 
-    fn get_variable(&self, nm: &[u8]) -> KunaResult<ContextBitRange> {
+    fn get_variable(&self, nm: &[u8]) -> UnlaceResult<ContextBitRange> {
         match self.variables.get(nm) {
             Some(bitrange) => Ok(*bitrange),
-            None => Err(KunaError::lowlevel(format!(
+            None => Err(UnlaceError::lowlevel(format!(
                 "Non-existent context variable: {}",
                 String::from_utf8_lossy(nm)
             ))),
@@ -923,9 +923,9 @@ impl ContextDatabase for ContextInternal {
         self.size
     }
 
-    fn register_variable(&mut self, nm: &[u8], sbit: i32, ebit: i32) -> KunaResult<()> {
+    fn register_variable(&mut self, nm: &[u8], sbit: i32, ebit: i32) -> UnlaceResult<()> {
         if !self.database.empty() {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Cannot register new context variables after database is initialized",
             ));
         }
@@ -934,7 +934,7 @@ impl ContextDatabase for ContextInternal {
         // non-negative bit positions)
         let sz = sbit / 32 + 1;
         if ebit / 32 + 1 != sz {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Context variable does not fit in one word",
             ));
         }
@@ -996,7 +996,7 @@ impl ContextDatabase for ContextInternal {
         res
     }
 
-    fn encode(&self, encoder: &mut dyn Encoder) -> KunaResult<()> {
+    fn encode(&self, encoder: &mut dyn Encoder) -> UnlaceResult<()> {
         if self.database.empty() && self.trackbase.empty() {
             return Ok(());
         }
@@ -1016,7 +1016,7 @@ impl ContextDatabase for ContextInternal {
         Ok(())
     }
 
-    fn decode(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    fn decode(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         let elem_id = decoder.open_element_id(&ELEM_CONTEXT_POINTS)?;
         loop {
             let sub_id = decoder.open_element()?;
@@ -1040,14 +1040,14 @@ impl ContextDatabase for ContextInternal {
                 let addr = v_data.get_addr();
                 decode_tracked(decoder, self.trackbase.split(&addr))?;
             } else {
-                return Err(KunaError::lowlevel("Bad <context_points> tag"));
+                return Err(UnlaceError::lowlevel("Bad <context_points> tag"));
             }
             decoder.close_element(sub_id)?;
         }
         decoder.close_element(elem_id)
     }
 
-    fn decode_from_spec(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    fn decode_from_spec(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         let elem_id = decoder.open_element_id(&ELEM_CONTEXT_DATA)?;
         loop {
             let sub_id = decoder.open_element()?;
@@ -1063,7 +1063,7 @@ impl ContextDatabase for ContextInternal {
             } else if sub_id == ELEM_TRACKED_SET.get_id() {
                 decode_tracked(decoder, self.create_set(&addr1, &addr2))?;
             } else {
-                return Err(KunaError::lowlevel("Bad <context_data> tag"));
+                return Err(UnlaceError::lowlevel("Bad <context_data> tag"));
             }
             decoder.close_element(sub_id)?;
         }

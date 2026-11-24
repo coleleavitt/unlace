@@ -1,4 +1,4 @@
-//! (kuna `dwarfenumtypedef`) Name an anonymous DWARF enumeration after its typedef.
+//! (unlace `dwarfenumtypedef`) Name an anonymous DWARF enumeration after its typedef.
 //!
 //! C headers usually spell an enum `typedef enum { A, B } name_t;`, so its
 //! `DW_TAG_enumeration_type` has no `DW_AT_name` and only the typedef in front of it

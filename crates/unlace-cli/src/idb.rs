@@ -1,7 +1,7 @@
 //! IDA databases (`.idb`, `.i64`) as a source of knowledge and of bytes.
 //!
 //! `unlace idb info|list|import` read one with `unlace-idb`, whose type strings unlace's TIL
-//! reader (`kuna_til`) renders as C; [`knowledge`] turns its
+//! reader (`unlace_til`) renders as C; [`knowledge`] turns its
 //! functions, names, prototypes, local types and comments into `--assert`
 //! directives, so a project file, a direct decompile of the database and the
 //! `unlace` crate's `from_idb` all reach the engine through the existing

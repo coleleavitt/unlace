@@ -1,4 +1,4 @@
-//! (kuna) The `kernelcache-boot` option: where `load file` finds the kernel
+//! (unlace) The `kernelcache-boot` option: where `load file` finds the kernel
 //! collections an Auxiliary or System collection was linked against.
 //!
 //! Such a collection points into the boot collection (and an Auxiliary one into
@@ -10,7 +10,7 @@
 
 use std::path::PathBuf;
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 
 pub const KERNELCACHE_BOOT_ENV: &str = "UNLACE_KERNELCACHE_BOOT";
 
@@ -65,11 +65,11 @@ pub fn set_kernelcache_boot_env(choice: &KernelcacheBoot) {
 
 /// Parse a `kernelcache-boot` option value. A path that does not exist is
 /// refused.
-pub fn parse_kernelcache_boot(value: &str) -> KunaResult<(KernelcacheBoot, String)> {
+pub fn parse_kernelcache_boot(value: &str) -> UnlaceResult<(KernelcacheBoot, String)> {
     let choice = KernelcacheBoot::parse(value);
     if let KernelcacheBoot::Path(path) = &choice {
         if !path.exists() {
-            return Err(KunaError::parse(format!(
+            return Err(UnlaceError::parse(format!(
                 "kernelcache-boot expects auto, off, or the path of a kernel collection or its directory; {value:?} does not exist"
             )));
         }

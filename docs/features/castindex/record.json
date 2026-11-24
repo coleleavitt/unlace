@@ -1,6 +1,6 @@
 {
  "opportunity": "kuna prints a pointer plus a variable index, and the difference of two byte pointers, as integer round trips: *(long *)((long)v7 + v19 * 8) (two casts) where IDA prints v39[v27] (none), and (long)v24 - (long)v14 (two) where IDA prints sa - v52 (none).",
- "test_name": "tests/stages/kuna-castindex.xml (7 assertions, pass 1 option castindex off, pass 2 on)",
+ "test_name": "tests/stages/castindex.xml (7 assertions, pass 1 option castindex off, pass 2 on)",
  "binary": "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11/O0/coreutils/stripped/sort",
  "selector": "0xa5c0",
  "func_addr": "0xa5c0",

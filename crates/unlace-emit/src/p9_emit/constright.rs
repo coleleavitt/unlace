@@ -1,4 +1,4 @@
-//! (kuna `constright`) An ordered comparison of a value with a constant prints the value on the
+//! (unlace `constright`) An ordered comparison of a value with a constant prints the value on the
 //! left: `x > 0x3b` instead of Ghidra's `0x3b < x`.
 //!
 //! P-code has only `<` and `<=`, so Ghidra's canonical form of `x > c` is `c < x` and the
@@ -11,8 +11,8 @@ use crate::context::OpId;
 use crate::funcdata::Funcdata;
 use unlace_num::opcodes::OpCode;
 
-crate::kuna_flag!(
-    /// (kuna `constright`) Print an ordered integer comparison of a constant with a value as the
+crate::unlace_flag!(
+    /// (unlace `constright`) Print an ordered integer comparison of a constant with a value as the
     /// mirrored comparison with the value first.
     ConstRight,
     "constright",

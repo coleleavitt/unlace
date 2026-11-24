@@ -1,4 +1,4 @@
-//! (kuna `swiftcall`) Name the Swift error register's two moments: the
+//! (unlace `swiftcall`) Name the Swift error register's two moments: the
 //! error a throwing call leaves behind, and the one a throwing function
 //! hands back.
 //!
@@ -30,7 +30,7 @@
 //! (option `swiftcall`).
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
@@ -72,12 +72,12 @@ fn is_call(code: OpCode) -> bool {
 
 /// Define the error register right after the throwing call at `call` with
 /// `swift_error()`.
-fn define_error(data: &mut Funcdata, call: OpId, reg: &Address, size: int4) -> KunaResult<()> {
+fn define_error(data: &mut Funcdata, call: OpId, reg: &Address, size: int4) -> UnlaceResult<()> {
     let pc = data
         .obank()
         .get(call)
         .map(|o| o.get_addr().clone())
-        .ok_or_else(|| KunaError::lowlevel("swifterror: stale call"))?;
+        .ok_or_else(|| UnlaceError::lowlevel("swifterror: stale call"))?;
     let op = data.new_op(1, pc);
     data.op_set_opcode_code(op, OpCode::CPUI_CALLOTHER);
     if let Some(o) = data.obank_mut().get_mut(op) {
@@ -92,12 +92,12 @@ fn define_error(data: &mut Funcdata, call: OpId, reg: &Address, size: int4) -> K
 
 /// Read the error register with `swift_throw(e)` right after `write`, the
 /// last write of it before a return.
-fn throw_error(data: &mut Funcdata, write: OpId, reg: &Address, size: int4) -> KunaResult<()> {
+fn throw_error(data: &mut Funcdata, write: OpId, reg: &Address, size: int4) -> UnlaceResult<()> {
     let pc = data
         .obank()
         .get(write)
         .map(|o| o.get_addr().clone())
-        .ok_or_else(|| KunaError::lowlevel("swifterror: stale write"))?;
+        .ok_or_else(|| UnlaceError::lowlevel("swifterror: stale write"))?;
     let op = data.new_op(2, pc);
     data.op_set_opcode_code(op, OpCode::CPUI_CALLOTHER);
     if let Some(o) = data.obank_mut().get_mut(op) {
@@ -130,7 +130,7 @@ fn write_before_return(data: &Funcdata, ret: OpId, reg: &Address, size: int4) ->
     None
 }
 
-/// (kuna) `ActionSwiftError`: name the error a throwing Swift call leaves and
+/// (unlace) `ActionSwiftError`: name the error a throwing Swift call leaves and
 /// the one a throwing function returns (option `swiftcall`).
 pub struct ActionSwiftError {
     base: ActionBase,
@@ -163,7 +163,7 @@ impl Action for ActionSwiftError {
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         let Some(abi) = data
             .get_arch()
-            .kuna_states
+            .unlace_states
             .get_rc::<crate::swiftcall::SwiftAbi>()
         else {
             return 0;
@@ -198,6 +198,6 @@ impl Action for ActionSwiftError {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.swifterror_is_error_op = Some(is_error_op);
 }

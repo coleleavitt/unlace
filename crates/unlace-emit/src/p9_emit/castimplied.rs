@@ -1,10 +1,10 @@
-//! (kuna `castimplied`) Leave out a cast that C's own conversion rules already
+//! (unlace `castimplied`) Leave out a cast that C's own conversion rules already
 //! perform on exactly those types.
 //!
 //! `CastStrategyC::isExtensionCastImplied` (cast.cc:249) hides an extension only
 //! when the op reading it is integer arithmetic or a comparison against an
 //! explicit operand of the same metatype.  Every other reader keeps the cast, so
-//! kuna prints `memchr(v10,(int)v4,n)` where `memchr` takes an `int`,
+//! unlace prints `memchr(v10,(int)v4,n)` where `memchr` takes an `int`,
 //! `v2 = (long)v1;` into a `long`, `return (unsigned long)v1;` from a function
 //! declared `unsigned long`, and `(long)(int)(unsigned int)(unsigned char)c` for
 //! one byte widened to 64 bits.  C performs each of those conversions itself:
@@ -581,7 +581,7 @@ impl ImpliedCasts {
                                     .is_some_and(|d| d.code() == OpCode::CPUI_CAST)
                             }) {
                             Some(b) => b.get_type_def_facing().clone(),
-                            // (kuna `elemptr`) A subscript of a variable declared
+                            // (unlace `elemptr`) A subscript of a variable declared
                             // `T *` -- the base `elemptr` typed -- reads a `T`.
                             None => {
                                 match self.subscript_base_type(p, fd, c.get_in(0), pv.get_def()) {
@@ -607,7 +607,7 @@ impl ImpliedCasts {
         }
     }
 
-    /// (kuna `elemptr`) The pointer type C gives the base of a subscript
+    /// (unlace `elemptr`) The pointer type C gives the base of a subscript
     /// `base[k]` whose base is a variable the text declares, a global no symbol
     /// names (`dat_5068[k]`, declared in the header at the one type the function
     /// reads it at), or a constant address printed as an array name or behind
@@ -622,7 +622,7 @@ impl ImpliedCasts {
     ) -> Option<Rc<Datatype>> {
         if !fd
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::elemptr::ElemPtr>()
             .0
         {
@@ -653,7 +653,7 @@ impl ImpliedCasts {
 
     /// The C type of an explicit `vn`: the type its declaration line (or the
     /// signature) spells, else, for a global, its symbol's type.  A declaration that
-    /// spells none of the types kuna holds for `vn` -- a merged variable declared
+    /// spells none of the types unlace holds for `vn` -- a merged variable declared
     /// `int *` whose member here reads as a `long` -- is `Opaque`: the text C
     /// sees is not the IR's type, so nothing can be concluded from the IR.
     #[doc(hidden)]
@@ -685,7 +685,7 @@ impl ImpliedCasts {
         let Some(h) = fd.high_bank().get(high) else {
             return CType::Opaque;
         };
-        let global = h.kuna_global()
+        let global = h.unlace_global()
             || (0..h.num_instances()).any(|i| {
                 fd.vbank()
                     .get(h.get_instance(i))
@@ -694,7 +694,7 @@ impl ImpliedCasts {
         if !global {
             return CType::Opaque;
         }
-        match h.kuna_symbol_type().cloned() {
+        match h.unlace_symbol_type().cloned() {
             Some(st) if st.get_size() == v.get_size() && int_range(&st).is_some() => {
                 CType::Known(st)
             }
@@ -772,7 +772,7 @@ impl ImpliedCasts {
         }
         let high = v.get_high()?;
         let h = fd.high_bank().get(high)?;
-        if h.kuna_symbol_type()
+        if h.unlace_symbol_type()
             .is_some_and(|st| st.get_size() != v.get_size())
         {
             return None;
@@ -941,8 +941,8 @@ pub fn preserves(src: &Datatype, dst: &Datatype) -> bool {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna `castimplied`) Leave out a cast C's own conversion rules already
+crate::unlace_flag!(
+    /// (unlace `castimplied`) Leave out a cast C's own conversion rules already
     /// perform: a value-preserving integer widening passed to a trusted
     /// parameter, assigned to or returned as exactly its type, or stacked under
     /// another conversion that fixes the result type.  See

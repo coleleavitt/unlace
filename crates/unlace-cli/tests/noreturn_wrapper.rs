@@ -95,7 +95,7 @@ fn decompile(fixture: &Fixture, options: &[&str], single: bool) -> Value {
         &assertion,
     ]);
     args.extend(options);
-    let (out, err, rc) = common::run_kuna(&args);
+    let (out, err, rc) = common::run_unlace(&args);
     assert_eq!(rc, 0, "{out}\n{err}");
     let doc: Value = serde_json::from_str(&out).expect("valid JSON");
     for outcome in doc["assertions"].as_array().expect("assertion outcomes") {
@@ -215,7 +215,7 @@ fn leaf_marking_propagates_through_call_and_trap_wrappers() {
     assert!(caller.contains("fail_wrapper(); // no-return"), "{single}");
 
     let assertion = format!("@{}", fixture.assertions.display());
-    let (plain, err, rc) = common::run_kuna(&[
+    let (plain, err, rc) = common::run_unlace(&[
         "decompile",
         fixture.image.to_str().unwrap(),
         "bounded_tail",
@@ -246,7 +246,10 @@ fn propagation_keeps_returning_unknown_and_incomplete_paths() {
     let mut program =
         unlace_console::engine::bootstrap_from_object(fixture.image.to_str().unwrap(), "", &specs)
             .unwrap();
-    program.arch_mut().set_kuna_option("listing", "on").unwrap();
+    program
+        .arch_mut()
+        .set_unlace_option("listing", "on")
+        .unwrap();
     use unlace_decomp::options::ArchOptionContext;
     program
         .arch_mut()

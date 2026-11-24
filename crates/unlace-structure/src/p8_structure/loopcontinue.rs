@@ -181,7 +181,7 @@ fn prints_only_its_branch(data: &Funcdata, leaf: BlockId) -> bool {
     true
 }
 
-crate::kuna_flag!(
+crate::unlace_flag!(
     /// Preserve secondary natural-loop latches as continues (`loopcontinue`).
     LoopContinue,
     "loopcontinue",

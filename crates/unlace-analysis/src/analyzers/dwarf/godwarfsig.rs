@@ -527,7 +527,7 @@ impl Facts {
             first_var_arg_slot: -1,
             output_storage: None,
             input_storage: Vec::new(),
-            kuna_library_names: None,
+            unlace_library_names: None,
         };
         let mut assigned = Vec::new();
         arch.default_fp()?
@@ -917,7 +917,7 @@ impl Facts {
             first_var_arg_slot: -1,
             output_storage: None,
             input_storage: Vec::new(),
-            kuna_library_names: None,
+            unlace_library_names: None,
         };
         let mut assigned = Vec::new();
         arch.default_fp()?
@@ -946,7 +946,7 @@ impl Facts {
             let facet = LangFacet::GoIntErrorResults;
             let outtype = match types.find_by_name(name).ok()? {
                 Some(existing) => {
-                    if types.kuna_lang_facet(name).as_ref() != Some(&facet)
+                    if types.unlace_lang_facet(name).as_ref() != Some(&facet)
                         || facet.go_int_error_fields(&existing).is_none()
                     {
                         return None;
@@ -954,7 +954,7 @@ impl Facts {
                     existing
                 }
                 None => {
-                    if types.kuna_lang_facet(name).is_some() {
+                    if types.unlace_lang_facet(name).is_some() {
                         return None;
                     }
                     let shell = types.get_type_struct(name).ok()?;
@@ -963,7 +963,7 @@ impl Facts {
                         .set_fields_struct_raw(&shell, fields, Vec::new(), 24, 8, 0)
                         .ok()?;
                     facet.go_int_error_fields(&result)?;
-                    types.kuna_register_lang_facet(name, facet).ok()?;
+                    types.unlace_register_lang_facet(name, facet).ok()?;
                     result
                 }
             };
@@ -979,7 +979,7 @@ impl Facts {
             let name = format!("__kuna_go_pair_{a}_{b}");
             let outtype = match types.find_by_name(&name).ok()? {
                 Some(existing) => {
-                    if types.kuna_lang_facet(&name).as_ref() != Some(&facet)
+                    if types.unlace_lang_facet(&name).as_ref() != Some(&facet)
                         || facet.go_pair_fields(&existing).is_none()
                     {
                         return None;
@@ -987,7 +987,7 @@ impl Facts {
                     existing
                 }
                 None => {
-                    if types.kuna_lang_facet(&name).is_some() {
+                    if types.unlace_lang_facet(&name).is_some() {
                         return None;
                     }
                     let shell = types.get_type_struct(&name).ok()?;
@@ -1002,7 +1002,7 @@ impl Facts {
                         )
                         .ok()?;
                     facet.go_pair_fields(&result)?;
-                    types.kuna_register_lang_facet(&name, facet).ok()?;
+                    types.unlace_register_lang_facet(&name, facet).ok()?;
                     result
                 }
             };

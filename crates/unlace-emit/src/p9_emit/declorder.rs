@@ -1,4 +1,4 @@
-//! (kuna `declorder`) The order a function's local declarations print in.
+//! (unlace `declorder`) The order a function's local declarations print in.
 //!
 //! The printer declares one local per line, sorted by name.  A plain string
 //! sort puts `v10`..`v19` between `v1` and `v2`, so a function with ten or more
@@ -18,7 +18,7 @@
 
 use std::cmp::Ordering;
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 
 /// The value of `declorder`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -30,9 +30,9 @@ pub enum DeclOrder {
     Natural,
 }
 
-impl crate::optionset::KunaOption for DeclOrder {
+impl crate::optionset::UnlaceOption for DeclOrder {
     const NAME: &'static str = "declorder";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         DeclOrder::Name
@@ -42,7 +42,7 @@ impl crate::optionset::KunaOption for DeclOrder {
         DeclOrder::Natural
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         OptionDeclOrder.apply(value)
     }
 }
@@ -62,12 +62,12 @@ pub struct OptionDeclOrder;
 impl OptionDeclOrder {
     pub const NAME: &'static str = "declorder";
 
-    pub fn apply(&self, p1: &str) -> KunaResult<(DeclOrder, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(DeclOrder, String)> {
         let mode = match p1 {
             "name" => DeclOrder::Name,
             "natural" => DeclOrder::Natural,
             other => {
-                return Err(KunaError::parse(format!(
+                return Err(UnlaceError::parse(format!(
                     "Unknown declorder value: {other} (expected natural|name)"
                 )));
             }

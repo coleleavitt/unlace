@@ -289,8 +289,8 @@ fn arm_thumb_symbols_keep_raw_object_coordinates_and_normalized_entry_vmas() {
     assert_eq!(by_name.binding.as_deref(), Some("global"));
 }
 
-/// (RE-need `string-owner-function-name`) A placeholder name kuna PRINTS is a
-/// name kuna ACCEPTS.
+/// (RE-need `string-owner-function-name`) A placeholder name unlace PRINTS is a
+/// name unlace ACCEPTS.
 ///
 /// `tailcallframe_x86_64` renders `sub_1170(a0)` inside `sub_11b0` — a recovered
 /// tail call to an address the canonical inventory does not hold as an entry —
@@ -362,7 +362,7 @@ fn a_default_style_name_survives_a_namestyle_flip() {
     let default_style_name = "sub_1170";
     program
         .arch_mut()
-        .kuna_options
+        .unlace_options
         .set(unlace_decomp::coreoptions::NameStyleAngr(false));
     assert_eq!(
         program.arch().name_function(
@@ -452,7 +452,7 @@ fn same_named_code_definitions_are_still_ambiguous() {
     );
 }
 
-/// (kuna, issue #666) Mach-O stores a C identifier with a leading `_`, so the
+/// (unlace, issue #666) Mach-O stores a C identifier with a leading `_`, so the
 /// spelling a caller reads in the source is not a name the image carries. It
 /// selects anyway, and reaches the same entry the decorated spelling does.
 #[test]
@@ -499,7 +499,7 @@ fn an_elf_name_is_never_read_through_an_underscore() {
     );
 }
 
-/// (kuna, issue #666) A miss on an image that names functions says so, and
+/// (unlace, issue #666) A miss on an image that names functions says so, and
 /// leaves nothing for a front-end to read as "this binary is stripped".
 #[test]
 fn a_name_miss_reports_what_the_image_does_carry() {
@@ -550,7 +550,7 @@ fn a_stripped_image_reports_no_names_at_all() {
     assert_eq!(error.to_string(), r#"no function matches "zork""#);
 }
 
-/// (kuna, issue #667) A linked image has no object-file section coordinates, so
+/// (unlace, issue #667) A linked image has no object-file section coordinates, so
 /// a section-qualified selector cannot separate two same-named entries in one.
 /// The report offers the selector that can, and calls a mapped address what it
 /// is.

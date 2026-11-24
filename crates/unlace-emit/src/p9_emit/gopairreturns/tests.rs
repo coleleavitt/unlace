@@ -33,7 +33,7 @@ fn paired_function_results_and_storage_have_distinct_go_types() {
     factory.set_max_basetype_size(8);
     let ty = pair(&factory, "verified");
     factory
-        .kuna_register_lang_facet(
+        .unlace_register_lang_facet(
             "verified",
             LangFacet::GoPairResults {
                 signed: [true, false],
@@ -94,7 +94,7 @@ fn ordinary_record_and_stale_metadata_never_imply_pair_results() {
     };
     assert!(storage_type(&cx, &ty).is_none());
     factory
-        .kuna_register_lang_facet(
+        .unlace_register_lang_facet(
             ty.get_name(),
             LangFacet::GoPairResults {
                 signed: [true, true],
@@ -103,7 +103,7 @@ fn ordinary_record_and_stale_metadata_never_imply_pair_results() {
         .unwrap();
     assert!(result_type(&cx, &ty).is_none());
     factory
-        .kuna_register_lang_facet(
+        .unlace_register_lang_facet(
             ty.get_name(),
             LangFacet::GoPairResults {
                 signed: [true, false],

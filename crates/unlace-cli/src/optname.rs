@@ -11,18 +11,18 @@
 //! not change the verdict; see `decompile.rs (check_errors)`).
 //!
 //! So the name is checked here instead, before anything is loaded, against the
-//! same two tables the engine dispatches on: the kuna stage-model options
-//! ([`KUNA_OPTION_NAMES`]) and the upstream `OptionDatabase` element ids
+//! same two tables the engine dispatches on: the unlace stage-model options
+//! ([`UNLACE_OPTION_NAMES`]) and the upstream `OptionDatabase` element ids
 //! ([`UPSTREAM_OPTION_ELEMENTS`]).  The in-process surfaces already rejected an
 //! unknown name at `decompile_all.rs (apply_one_option)`; checking up front
 //! makes every surface answer the same way, and answer before the load.
 
-use unlace_decomp::option_dispatch::KUNA_OPTION_NAMES;
+use unlace_decomp::option_dispatch::UNLACE_OPTION_NAMES;
 use unlace_decomp::options::UPSTREAM_OPTION_ELEMENTS;
 
 /// Whether `name` is a settable option name the engine will dispatch on.
 pub(crate) fn is_known(name: &str) -> bool {
-    KUNA_OPTION_NAMES.contains(&name)
+    UNLACE_OPTION_NAMES.contains(&name)
         || UPSTREAM_OPTION_ELEMENTS
             .iter()
             .any(|e| e.get_name() == name)
@@ -51,7 +51,7 @@ pub(crate) fn check(name: &str) -> Result<(), String> {
 
 /// Every settable name, for the suggestion search.
 fn all_names() -> impl Iterator<Item = &'static str> {
-    KUNA_OPTION_NAMES
+    UNLACE_OPTION_NAMES
         .iter()
         .copied()
         .chain(UPSTREAM_OPTION_ELEMENTS.iter().map(|e| e.get_name()))

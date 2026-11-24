@@ -1,4 +1,4 @@
-//! (kuna `bitidioms`) Byte swaps and rotates written out as shifts and ORs
+//! (unlace `bitidioms`) Byte swaps and rotates written out as shifts and ORs
 //! become `bswap(x)` and `rotl(x, n)`.
 //!
 //! SLEIGH lifts `bswap`/`rev` and `rol`/`ror` into the shift-and-mask p-code
@@ -289,23 +289,25 @@ fn unrotate(
     n: u64,
     size: int4,
     data: &mut Funcdata,
-) -> unlace_base::error::KunaResult<()> {
+) -> unlace_base::error::UnlaceResult<()> {
     let at = data
         .obank()
         .get(op)
         .map(|o| o.get_addr().clone())
-        .ok_or_else(|| unlace_base::error::KunaError::lowlevel("unrotate: stale op"))?;
-    let mut half =
-        |code: OpCode, by: u64, data: &mut Funcdata| -> unlace_base::error::KunaResult<VarnodeId> {
-            let s = data.new_op(2, at.clone());
-            data.op_set_opcode_code(s, code);
-            data.op_set_input(s, x, 0)?;
-            let c = data.new_constant(4, by as uintb);
-            data.op_set_input(s, c, 1)?;
-            let out = data.new_unique_out(size, s)?;
-            data.op_insert_before(s, op);
-            Ok(out)
-        };
+        .ok_or_else(|| unlace_base::error::UnlaceError::lowlevel("unrotate: stale op"))?;
+    let mut half = |code: OpCode,
+                    by: u64,
+                    data: &mut Funcdata|
+     -> unlace_base::error::UnlaceResult<VarnodeId> {
+        let s = data.new_op(2, at.clone());
+        data.op_set_opcode_code(s, code);
+        data.op_set_input(s, x, 0)?;
+        let c = data.new_constant(4, by as uintb);
+        data.op_set_input(s, c, 1)?;
+        let out = data.new_unique_out(size, s)?;
+        data.op_insert_before(s, op);
+        Ok(out)
+    };
     let l = half(OpCode::CPUI_INT_LEFT, n, data)?;
     let r = half(OpCode::CPUI_INT_RIGHT, 8 * size as u64 - n, data)?;
     data.op_set_all_input(op, &[l, r])?;
@@ -382,7 +384,7 @@ impl Rule for RuleBitIdioms {
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::bitidioms::BitIdioms>()
             .0
         {
@@ -514,7 +516,7 @@ impl Rule for RuleIntAbs {
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::bitidioms::BitIdioms>()
             .0
         {
@@ -838,8 +840,8 @@ fn match_bitscan(data: &Funcdata, head: BlockId) -> Option<BitScan> {
     })
 }
 
-fn rewrite_bitscan(data: &mut Funcdata, s: &BitScan) -> unlace_base::error::KunaResult<()> {
-    use unlace_base::error::KunaError;
+fn rewrite_bitscan(data: &mut Funcdata, s: &BitScan) -> unlace_base::error::UnlaceResult<()> {
+    use unlace_base::error::UnlaceError;
     let head_ops = data.bb_ops(s.head);
     let first = head_ops
         .iter()
@@ -849,12 +851,12 @@ fn rewrite_bitscan(data: &mut Funcdata, s: &BitScan) -> unlace_base::error::Kuna
                 .get(o)
                 .is_some_and(|p| p.code() != OpCode::CPUI_MULTIEQUAL)
         })
-        .ok_or_else(|| KunaError::lowlevel("bitscan: empty head"))?;
+        .ok_or_else(|| UnlaceError::lowlevel("bitscan: empty head"))?;
     let at = data
         .obank()
         .get(first)
         .map(|p| p.get_addr().clone())
-        .ok_or_else(|| KunaError::lowlevel("bitscan: stale op"))?;
+        .ok_or_else(|| UnlaceError::lowlevel("bitscan: stale op"))?;
     let csize = data.vbank().get(s.counter).map_or(4, |v| v.get_size());
     let width = data.vbank().get(s.source).map_or(4, |v| v.get_size());
     let result = match s.kind {
@@ -906,7 +908,7 @@ fn rewrite_bitscan(data: &mut Funcdata, s: &BitScan) -> unlace_base::error::Kuna
     Ok(())
 }
 
-/// (kuna `bitidioms`) `ActionBitScanLoop` — the loop SLEIGH lifts x86
+/// (unlace `bitidioms`) `ActionBitScanLoop` — the loop SLEIGH lifts x86
 /// `bsf`/`tzcnt`/`bsr` to becomes `ctz(x)` / `LZCOUNT(x) ^ (W - 1)`.
 pub struct ActionBitScanLoop {
     base: crate::action::ActionBase,
@@ -944,7 +946,7 @@ impl crate::action::Action for ActionBitScanLoop {
     ) -> crate::action::ApplyResult {
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::bitidioms::BitIdioms>()
             .0
         {
@@ -967,8 +969,8 @@ impl crate::action::Action for ActionBitScanLoop {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna `bitidioms`) Fold shift/OR byte swaps and rotates into `bswap` /
+crate::unlace_flag!(
+    /// (unlace `bitidioms`) Fold shift/OR byte swaps and rotates into `bswap` /
     /// `rotl` (see [`crate::bitidioms`]).
     BitIdioms,
     "bitidioms",

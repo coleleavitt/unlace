@@ -1,9 +1,9 @@
-// Tests for `kuna_gowbphi` (included into `mod tests` in gowbphi.rs).
+// Tests for `unlace_gowbphi` (included into `mod tests` in gowbphi.rs).
 //
 // Covered here: the action is inert (returns 0) with the gate off, on a
 // function with no calls, and under `always` with no matching shape. The
 // matcher's refusal ladder and the fold itself are pinned end-to-end by
-// `tests/stages/kuna-gowbphi.toml` (hand-assembled multi-op shared-arm
+// `tests/stages/unlace-gowbphi.toml` (hand-assembled multi-op shared-arm
 // diamond) and by the store-preservation oracle in the unlace-console
 // `verify_go_writebarrier` family over real Go builds.
 
@@ -39,7 +39,7 @@ fn build_fd(mode: GoWriteBarrierMode, lang: SourceLang) -> Funcdata {
     )))
     .unwrap();
     let mut ctx = ArchContext::new(m);
-    ctx.kuna_options.set(mode);
+    ctx.unlace_options.set(mode);
     ctx.source_lang = lang;
     let glb = Rc::new(ctx);
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());

@@ -986,7 +986,7 @@ fn export(
         .map_err(|e| format!("cannot write {}.asm: {e}", layout.file_name))?;
     let selected_entries = if prog
         .arch()
-        .kuna_options
+        .unlace_options
         .get::<unlace_decomp::callwide::CallWide>()
         .0
         && specs.len() <= CALLWIDE_PENDING_RECORDS
@@ -1325,7 +1325,7 @@ fn run_serial(
     if sweep.is_done() {
         run.set_asm_phase(AsmPhase::Complete);
     }
-    // (kuna `elemptr`) Each body is written as it lands, so nothing can decide
+    // (unlace `elemptr`) Each body is written as it lands, so nothing can decide
     // a global or a table for the batch.
     unlace_decomp::elemptr::without_objects(prog.arch_mut());
     let mut batch = 1usize;

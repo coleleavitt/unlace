@@ -2,7 +2,7 @@
 
 use std::collections::BTreeSet;
 use std::rc::Rc;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_decomp::dtype::{Datatype, TypeFactory, TypeField, type_metatype};
 
 pub(crate) type Local = (String, Rc<Datatype>, i64);
@@ -38,7 +38,7 @@ fn composite(
     size: i32,
     alignment: i32,
     union: bool,
-) -> KunaResult<Rc<Datatype>> {
+) -> UnlaceResult<Rc<Datatype>> {
     for variant in 0u64.. {
         let name = format!("{stem}_{variant}");
         if let Some(existing) = factory.find_by_name(&name)? {
@@ -81,7 +81,7 @@ fn composite(
     unreachable!()
 }
 
-fn backing(factory: &dyn TypeFactory, function: u64, group: &[Local]) -> KunaResult<Local> {
+fn backing(factory: &dyn TypeFactory, function: u64, group: &[Local]) -> UnlaceResult<Local> {
     let start = group[0].2;
     let size = group
         .iter()
@@ -90,7 +90,9 @@ fn backing(factory: &dyn TypeFactory, function: u64, group: &[Local]) -> KunaRes
         .unwrap()
         - i128::from(start);
     let size = i32::try_from(size).map_err(|_| {
-        unlace_base::error::KunaError::lowlevel("Debug stack overlap exceeds supported object size")
+        unlace_base::error::UnlaceError::lowlevel(
+            "Debug stack overlap exceeds supported object size",
+        )
     })?;
     let stem = format!("dwarf_stack_{function:x}_{:x}", start as u64);
     let raw_name = "storage_bytes";
@@ -98,7 +100,7 @@ fn backing(factory: &dyn TypeFactory, function: u64, group: &[Local]) -> KunaRes
     let mut fields = Vec::new();
     for (index, (name, ty, off)) in group.iter().enumerate() {
         let offset = i32::try_from(i128::from(*off) - i128::from(start)).map_err(|_| {
-            unlace_base::error::KunaError::lowlevel(
+            unlace_base::error::UnlaceError::lowlevel(
                 "Debug stack view offset exceeds supported object size",
             )
         })?;
@@ -106,7 +108,7 @@ fn backing(factory: &dyn TypeFactory, function: u64, group: &[Local]) -> KunaRes
             Rc::clone(ty)
         } else {
             let extent = offset.checked_add(ty.get_size()).ok_or_else(|| {
-                unlace_base::error::KunaError::lowlevel("Debug stack view extent overflow")
+                unlace_base::error::UnlaceError::lowlevel("Debug stack view extent overflow")
             })?;
             composite(
                 factory,

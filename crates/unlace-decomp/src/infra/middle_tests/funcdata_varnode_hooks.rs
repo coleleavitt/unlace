@@ -11,7 +11,7 @@ mod module_scope {
     pub(super) use crate::funcdata::Funcdata;
     pub(super) use crate::varnode::{DefOpInfo, varnode_flags};
     pub(super) use unlace_base::address::Address;
-    pub(super) use unlace_base::error::{KunaError, KunaResult};
+    pub(super) use unlace_base::error::{UnlaceError, UnlaceResult};
     pub(super) use unlace_base::space::{AddrSpace, spacetype};
     pub(super) use unlace_base::types::{Wrap, int4, uint1, uint4, uintb, uintm};
     pub(super) use unlace_num::opcodes::OpCode;
@@ -70,8 +70,8 @@ fn unk(size: int4) -> Rc<Datatype> {
 
 /// A no-op `replace_reads` callback (no equivalent varnode is expected in the
 /// test scaffolding, which builds varnodes at distinct addresses).
-fn no_replace() -> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> KunaResult<()> {
-    |_: &mut VarnodeBank, _: VarnodeId, _: VarnodeId| -> KunaResult<()> { Ok(()) }
+fn no_replace() -> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> UnlaceResult<()> {
+    |_: &mut VarnodeBank, _: VarnodeId, _: VarnodeId| -> UnlaceResult<()> { Ok(()) }
 }
 
 fn append_test_op(
@@ -221,17 +221,17 @@ fn storage_sources_survive_replacements_clones_and_source_deletion() {
     fd.total_replace(first, second).unwrap();
     let cloned = fd.clone_varnode(second);
     for vn in [first, second, cloned] {
-        let sources = fd.kuna_storage_sources(vn);
+        let sources = fd.unlace_storage_sources(vn);
         assert_eq!(sources.len(), 1);
         assert_eq!(sources[0].address.get_offset(), 0x80);
         assert_eq!(sources[0].size, 4);
     }
     fd.delete_varnode(first).unwrap();
-    assert!(fd.kuna_storage_sources(first).is_empty());
+    assert!(fd.unlace_storage_sources(first).is_empty());
     let reused = fd.new_unique(4, None);
-    assert!(fd.kuna_storage_sources(reused).is_empty());
+    assert!(fd.unlace_storage_sources(reused).is_empty());
     fd.clear();
-    assert!(fd.kuna_storage_sources(second).is_empty());
+    assert!(fd.unlace_storage_sources(second).is_empty());
 }
 
 #[test]
@@ -251,13 +251,13 @@ fn storage_sources_slice_each_home_from_its_significance_offset() {
     ));
     let big = fd.new_varnode(8, &Address::new(big_space, 0x100), None);
     let temp = fd.new_unique(8, None);
-    fd.kuna_inherit_storage(temp, little);
-    fd.kuna_inherit_storage(temp, big);
-    fd.kuna_inherit_storage(temp, little);
-    assert_eq!(fd.kuna_storage_sources(temp).len(), 2);
+    fd.unlace_inherit_storage(temp, little);
+    fd.unlace_inherit_storage(temp, big);
+    fd.unlace_inherit_storage(temp, little);
+    assert_eq!(fd.unlace_storage_sources(temp).len(), 2);
     let slice = fd.new_unique(2, None);
-    fd.kuna_inherit_storage_slice(slice, temp, 1, 2);
-    let sources = fd.kuna_storage_sources(slice);
+    fd.unlace_inherit_storage_slice(slice, temp, 1, 2);
+    let sources = fd.unlace_storage_sources(slice);
     assert_eq!(sources.len(), 2);
     assert_eq!(sources[0].address.get_offset(), 0x81);
     assert_eq!(sources[1].address.get_offset(), 0x105);
@@ -288,7 +288,7 @@ fn removed_extensions_preserve_low_byte_homes_without_arithmetic_origins() {
             fd.op_set_input(op, constant, 1).unwrap();
         }
         fd.op_destroy(op);
-        let sources = fd.kuna_storage_sources(input);
+        let sources = fd.unlace_storage_sources(input);
         if opcode == OpCode::CPUI_INT_ADD {
             assert!(sources.is_empty());
         } else {

@@ -1,4 +1,4 @@
-//! (kuna `containerof`) Print a pointer stepped back from a struct member to the start of
+//! (unlace `containerof`) Print a pointer stepped back from a struct member to the start of
 //! its struct as `container_of(p, S, m)` (Linux) or `CONTAINING_RECORD(p, S, m)` (Windows).
 //!
 //! A CAST to `S *` whose operand is `p` minus a constant `K` (a `PTRADD` with a negative
@@ -51,9 +51,9 @@ impl ContainerOf {
     }
 }
 
-impl crate::optionset::KunaOption for ContainerOf {
+impl crate::optionset::UnlaceOption for ContainerOf {
     const NAME: &'static str = "containerof";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         ContainerOf::Off
@@ -63,14 +63,14 @@ impl crate::optionset::KunaOption for ContainerOf {
         ContainerOf::Off
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let mode = match value {
             "off" => ContainerOf::Off,
             "on" => ContainerOf::On,
             "container_of" => ContainerOf::Linux,
             "containing_record" => ContainerOf::Windows,
             other => {
-                return Err(unlace_base::error::KunaError::parse(format!(
+                return Err(unlace_base::error::UnlaceError::parse(format!(
                     "Unknown containerof value: {other} (expected on|container_of|containing_record|off)"
                 )));
             }
@@ -249,7 +249,7 @@ impl PrintC {
         }
         let ctx = fd.get_arch();
         let windows = ctx.windows_cspec || ctx.image_windows_user;
-        let Some(name) = arch.kuna_options.get::<ContainerOf>().spelling(windows) else {
+        let Some(name) = arch.unlace_options.get::<ContainerOf>().spelling(windows) else {
             return false;
         };
         let Some(plan) = plan(fd, arch, op) else {

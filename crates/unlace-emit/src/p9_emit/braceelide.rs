@@ -1,4 +1,4 @@
-//! (kuna) The single-statement if-body brace-elision presentation sub-stage —
+//! (unlace) The single-statement if-body brace-elision presentation sub-stage —
 //! no upstream Ghidra equivalent (DIV-37).
 //!
 //! Idiomatic C often writes a single-statement if-body without braces:
@@ -8,7 +8,7 @@
 //!   stmt;
 //! ```
 //!
-//! Upstream Ghidra always braces (`if (expr) { stmt; }`).  kuna parameterizes
+//! Upstream Ghidra always braces (`if (expr) { stmt; }`).  unlace parameterizes
 //! the rendering: `option braceelide on` (the default) drops the braces when
 //! the then-body is a plain single-statement `BlockCopy` leaf; `off` restores
 //! the upstream braced form.
@@ -21,24 +21,24 @@
 //! the `else if` collapse are separate, pre-existing forms and stay untouched;
 //! else arms and loop/switch bodies always keep their braces.
 //!
-//! Following the kuna-option idiom ([`crate::arraynotation::OptionArrayNotation`]),
+//! Following the unlace-option idiom ([`crate::arraynotation::OptionArrayNotation`]),
 //! this module owns only the option struct that flips
 //! [`crate::printc::PrintCOptions::brace_elide`]; the caller
-//! (`Architecture::set_kuna_option`) writes the live flag.
+//! (`Architecture::set_unlace_option`) writes the live flag.
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::marshal::ElementId;
 
 use crate::options::on_or_off;
 
-/// Marshaling element `<braceelide>` (kuna 4000+ range; 4115 = truthycond).
+/// Marshaling element `<braceelide>` (unlace 4000+ range; 4115 = truthycond).
 pub const ELEM_BRACEELIDE: ElementId = ElementId::new("braceelide", 4116);
 
-/// (kuna) Toggle single-statement if-body brace elision: `braceelide on|off`
+/// (unlace) Toggle single-statement if-body brace elision: `braceelide on|off`
 /// (DIV-37).
 ///
 /// "off" keeps the upstream braced form (`if (expr) { stmt; }`); "on" (the
-/// kuna default) renders the statement indented on the next line, braceless.
+/// unlace default) renders the statement indented on the next line, braceless.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct OptionBraceElide;
 
@@ -48,7 +48,7 @@ impl OptionBraceElide {
 
     /// Parse + validate the `on`/`off` value; the caller performs the printer
     /// write ([`crate::printc::PrintCOptions::set_brace_elide`]).
-    pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((

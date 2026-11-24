@@ -393,12 +393,12 @@ impl LoadImage for MockLoad {
     fn get_file_name(&self) -> &str {
         "mock"
     }
-    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> KunaResult<()> {
+    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> UnlaceResult<()> {
         let off = addr.get_offset();
         for (i, slot) in ptr.iter_mut().enumerate() {
             let idx = off.wrapping_add(i as u64).wrapping_sub(self.base);
             if idx >= self.mapped_len {
-                return Err(KunaError::data_unavail("out of range"));
+                return Err(UnlaceError::data_unavail("out of range"));
             }
             *slot = self.bytes.get(idx as usize).copied().unwrap_or(0);
         }

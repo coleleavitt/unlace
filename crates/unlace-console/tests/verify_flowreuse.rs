@@ -5,7 +5,7 @@
 //!
 //! Upstream never pays that: C++ `IfcFuncload` follows flow once and
 //! `IfcDecompile` re-runs the actions on *that* `Funcdata` after
-//! `Architecture::clearAnalysis` (`ifacedecomp.cc:889`). The kuna console rebuilds
+//! `Architecture::clearAnalysis` (`ifacedecomp.cc:889`). The unlace console rebuilds
 //! instead because the facts a decompile is seeded with — `map addr` symbols and
 //! DWARF locals, `type varnode` usepoint symbols, `map hash` dynamic symbols, a
 //! `parse line` prototype, `map param` storage locks, `override prototype` facts —
@@ -72,7 +72,7 @@ fn drive_with(fixture: &str, options: &[(&str, &str)], cmds: &[&str]) -> (String
     let mut prog = load_fixture(fixture);
     for (name, value) in options {
         prog.arch_mut()
-            .set_kuna_option(name, value)
+            .set_unlace_option(name, value)
             .expect("option flips");
     }
     let cmds: Vec<String> = cmds.iter().map(|s| s.to_string()).collect();

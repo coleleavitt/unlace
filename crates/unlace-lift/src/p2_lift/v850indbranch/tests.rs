@@ -1,4 +1,4 @@
-//! Logic-level tests for `kuna_is_v850_indirect_jmp` (GH-8817), exercising the
+//! Logic-level tests for `unlace_is_v850_indirect_jmp` (GH-8817), exercising the
 //! transformation decision on hand-built IR.
 
 use std::rc::Rc;
@@ -74,7 +74,7 @@ fn gate_off_returns_false() {
     let ram = proc_space(&fd);
     let op = build_op_with_input(&mut fd, OpCode::CPUI_CALLIND, ram, 0x10);
     // gate=false: upstream byte-identical, never fires.
-    assert!(!kuna_is_v850_indirect_jmp(&fd, op, false, Some("r10")));
+    assert!(!unlace_is_v850_indirect_jmp(&fd, op, false, Some("r10")));
 }
 
 #[test]
@@ -83,7 +83,7 @@ fn callind_register_not_pc_fires() {
     let ram = proc_space(&fd);
     let op = build_op_with_input(&mut fd, OpCode::CPUI_CALLIND, ram, 0x10);
     // The canonical V850 `jmp [r10]` shape.
-    assert!(kuna_is_v850_indirect_jmp(&fd, op, true, Some("r10")));
+    assert!(unlace_is_v850_indirect_jmp(&fd, op, true, Some("r10")));
 }
 
 #[test]
@@ -92,7 +92,7 @@ fn non_callind_returns_false() {
     let ram = proc_space(&fd);
     // A BRANCHIND (or any non-CALLIND) is left alone.
     let op = build_op_with_input(&mut fd, OpCode::CPUI_BRANCHIND, ram, 0x10);
-    assert!(!kuna_is_v850_indirect_jmp(&fd, op, true, Some("r10")));
+    assert!(!unlace_is_v850_indirect_jmp(&fd, op, true, Some("r10")));
 }
 
 #[test]
@@ -103,7 +103,7 @@ fn callind_with_no_input_returns_false() {
     fd.obank_mut()
         .change_opcode(op, TypeOp::new(OpCode::CPUI_CALLIND, 0, "callind"));
     // input-0 left null
-    assert!(!kuna_is_v850_indirect_jmp(&fd, op, true, Some("r10")));
+    assert!(!unlace_is_v850_indirect_jmp(&fd, op, true, Some("r10")));
 }
 
 #[test]
@@ -112,7 +112,7 @@ fn input_not_processor_space_returns_false() {
     // input-0 in the constant space -> not a hardware register.
     let cspace = Rc::clone(fd.get_arch().manage().get_space_by_name("const").unwrap());
     let op = build_op_with_input(&mut fd, OpCode::CPUI_CALLIND, cspace, 0x10);
-    assert!(!kuna_is_v850_indirect_jmp(&fd, op, true, Some("r10")));
+    assert!(!unlace_is_v850_indirect_jmp(&fd, op, true, Some("r10")));
 }
 
 #[test]
@@ -121,8 +121,8 @@ fn unnamed_register_returns_false() {
     let ram = proc_space(&fd);
     let op = build_op_with_input(&mut fd, OpCode::CPUI_CALLIND, ram, 0x10);
     // empty name (C++ regname.empty()) -> a raw memory load, not a named reg.
-    assert!(!kuna_is_v850_indirect_jmp(&fd, op, true, None));
-    assert!(!kuna_is_v850_indirect_jmp(&fd, op, true, Some("")));
+    assert!(!unlace_is_v850_indirect_jmp(&fd, op, true, None));
+    assert!(!unlace_is_v850_indirect_jmp(&fd, op, true, Some("")));
 }
 
 #[test]
@@ -131,8 +131,8 @@ fn program_counter_excluded() {
     let ram = proc_space(&fd);
     let op = build_op_with_input(&mut fd, OpCode::CPUI_CALLIND, ram, 0x10);
     // The other V850 CALLINDs are `call [PC]`; both spellings are excluded.
-    assert!(!kuna_is_v850_indirect_jmp(&fd, op, true, Some("PC")));
-    assert!(!kuna_is_v850_indirect_jmp(&fd, op, true, Some("pc")));
+    assert!(!unlace_is_v850_indirect_jmp(&fd, op, true, Some("PC")));
+    assert!(!unlace_is_v850_indirect_jmp(&fd, op, true, Some("pc")));
 }
 
 #[test]

@@ -37,7 +37,7 @@ use std::io::{Read, Write};
 use std::rc::Rc;
 
 use unlace_base::address::{Address, ELEM_ADDR};
-use unlace_base::error::KunaError;
+use unlace_base::error::UnlaceError;
 use unlace_base::marshal::{ATTRIB_CONTENT, ATTRIB_NAME, Decoder, PackedDecode};
 use unlace_base::space::AddrSpaceManager;
 
@@ -613,7 +613,7 @@ pub fn query_doc_id(doc: &[u8], manager: &AddrSpaceManager) -> u32 {
 
 /// Consume (skip) all attributes of the current open element, leaving the
 /// decoder positioned at its first child.
-pub fn skip_attributes(dec: &mut PackedDecode) -> Result<(), KunaError> {
+pub fn skip_attributes(dec: &mut PackedDecode) -> Result<(), UnlaceError> {
     loop {
         if dec.get_next_attribute_id()? == 0 {
             return Ok(());
@@ -627,7 +627,7 @@ pub fn walk(
     dec: &mut PackedDecode,
     targets: &[u32],
     out: &mut BTreeMap<u32, BTreeSet<u64>>,
-) -> Result<(), KunaError> {
+) -> Result<(), UnlaceError> {
     loop {
         let aid = dec.get_next_attribute_id()?;
         if aid == 0 {
@@ -680,7 +680,7 @@ pub struct ParsedDoc {
     /// actually receives from `DecompileResults.getDecompiledFunction()`.
     pub c_text: String,
     /// Tokens whose text the Java-side `IllegalCharCppTransformer` CHANGED —
-    /// each is a token kuna emitted with non-identifier characters inside an
+    /// each is a token unlace emitted with non-identifier characters inside an
     /// identifier-class token (e.g. the whole rendered declarator
     /// `"unsigned long *"` as ONE `<type>` token, which `getC()` mangles to
     /// `unsigned_long__`).  Zero once the markup emitter splits declarators
@@ -1320,7 +1320,7 @@ fn flatten_markup(
     out: &mut String,
     refs: &mut BTreeMap<u32, BTreeSet<u64>>,
     mangled: &mut usize,
-) -> Result<(), KunaError> {
+) -> Result<(), UnlaceError> {
     let mut indent: i64 = 0;
     let mut color: Option<u64> = None;
     let mut content: Option<String> = None;
@@ -1480,7 +1480,7 @@ pub fn register_leaks(c: &str, registers: &BTreeSet<String>) -> (usize, BTreeSet
 }
 
 /// `Unique<hex>` token leak: identifiers of the un-named unique-storage
-/// rendering (`kuna_unnamed_location_name`), e.g. `Unique00023e00`.  Counts
+/// rendering (`unlace_unnamed_location_name`), e.g. `Unique00023e00`.  Counts
 /// `Stack<hex>` tokens too — the same no-symbol print tail produces both.
 pub fn unique_leaks(c: &str) -> usize {
     identifiers(c)

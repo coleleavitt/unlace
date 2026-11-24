@@ -13,7 +13,7 @@ fn apply_parses_inline_banner_and_reports() {
 }
 
 #[test]
-fn elem_id_is_in_the_kuna_range() {
+fn elem_id_is_in_the_unlace_range() {
     assert_eq!(ELEM_WARNSTYLE.get_id(), 4117);
     assert_eq!(OptionWarnStyle::NAME, "warnstyle");
 }

@@ -1,10 +1,10 @@
 //! End-to-end gate for **format-string varargs typing** (`formatstring`
-//! half B — the kuna analog of Ghidra's `FormatStringAnalyzer`, "Variadic
+//! half B — the unlace analog of Ghidra's `FormatStringAnalyzer`, "Variadic
 //! Function Signature Override").
 //!
 //! Drives `load file <fmt_x86_64>` → `read symbols` → `load function main` →
 //! `decompile` → `print C`, once with the feature **off** (the default) and once
-//! with `--option formatstring on` (here `set_kuna_option("formatstring",
+//! with `--option formatstring on` (here `set_unlace_option("formatstring",
 //! "on")`), and asserts:
 //!
 //! - **default-off** renders the printf call's varargs UNTYPED:
@@ -56,13 +56,13 @@ fn decompile_main(formatstring_on: bool) -> String {
     // does — so the `printf` proto is recovered before the decompile.
     // The untyped varargs are `main`'s body-driven parameters; `elfmain` declares them.
     prog.arch_mut()
-        .set_kuna_option("elfmain", "off")
+        .set_unlace_option("elfmain", "off")
         .expect("elfmain flips off");
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");
     if formatstring_on {
         prog.arch_mut()
-            .set_kuna_option("formatstring", "on")
+            .set_unlace_option("formatstring", "on")
             .expect("formatstring option flips on");
     }
 

@@ -1,4 +1,4 @@
-//! (kuna `structmerge`) Give a synthesized record the fields a sibling reader of
+//! (unlace `structmerge`) Give a synthesized record the fields a sibling reader of
 //! the same record proved.
 //!
 //! # The gap
@@ -13,7 +13,7 @@
 //! `flags` is and the other stops before `tail`.
 //!
 //! Measured on the eight layout builds (`docs/features/structmerge/recall.md`):
-//! 23 of the 77 ground-truth records kuna types at all are given more than one
+//! 23 of the 77 ground-truth records unlace types at all are given more than one
 //! `struct_N`, and merging what the readers `structsynth` already accepts prove
 //! about one record is worth 1,451 correct fields against today's 817 -- while
 //! the opposite error, one `struct_N` standing for two different records, is 1
@@ -100,7 +100,7 @@
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::types::int4;
 
 use crate::dtype::{Datatype, TypeFactory, TypeField, type_metatype};
@@ -113,7 +113,7 @@ const MIN_SHARED_CLAIMS: usize = 2;
 /// How many claims two layouts must share when none of them is such a pointer.
 const MIN_SHARED_UNTYPED: usize = 3;
 
-/// (kuna) Whether a synthesized record takes in the claims of a sibling reader.
+/// (unlace) Whether a synthesized record takes in the claims of a sibling reader.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum StructMergeMode {
     /// Upstream: a record carries only what one reader's claims contain.
@@ -123,9 +123,9 @@ pub enum StructMergeMode {
     Siblings,
 }
 
-impl crate::optionset::KunaOption for StructMergeMode {
+impl crate::optionset::UnlaceOption for StructMergeMode {
     const NAME: &'static str = "structmerge";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         StructMergeMode::Off
@@ -135,7 +135,7 @@ impl crate::optionset::KunaOption for StructMergeMode {
         StructMergeMode::Off
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         OptionStructMerge.apply(value)
     }
 }
@@ -147,7 +147,7 @@ impl StructMergeMode {
     }
 }
 
-/// (kuna) Parse `option structmerge off|siblings`; the caller writes the live field.
+/// (unlace) Parse `option structmerge off|siblings`; the caller writes the live field.
 pub struct OptionStructMerge;
 
 impl OptionStructMerge {
@@ -155,12 +155,12 @@ impl OptionStructMerge {
     pub const NAME: &'static str = "structmerge";
 
     /// Parse + validate the value.
-    pub fn apply(&self, p1: &str) -> KunaResult<(StructMergeMode, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(StructMergeMode, String)> {
         let mode = match p1 {
             "off" => StructMergeMode::Off,
             "siblings" => StructMergeMode::Siblings,
             other => {
-                return Err(KunaError::parse(format!(
+                return Err(UnlaceError::parse(format!(
                     "Unknown structmerge value: {other} (expected off|siblings)"
                 )));
             }

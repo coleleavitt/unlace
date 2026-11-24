@@ -1,6 +1,6 @@
 {
  "opportunity": "A function parameter the body only ever dereferences is declared as an integer, and whether it gets a pointer type depends on nothing but whether the first field the compiler reads sits at offset 0. Three lines of C under stock gcc -O2: `struct S { long pad; int a; int b; }; int sum(struct S *s) { return s->a + s->b; }` is `int sum(long a0) { return *(int *)(a0 + 8) + *(int *)(a0 + 0xc); }`, while moving `a` to offset 0 makes the same parameter `int *a0`. On coreutils fmt -O2 with `libctypes off` the same split shows on two neighbouring functions: put_word is `void sub_3000(unsigned long *a0)` and get_line is `void sub_3420(long a0, unsigned int a1)`, ground truth `FILE *` for both.",
- "test_name": "tests/stages/kuna-ptrfromuse.xml (11 assertions, three passes, one witness and three controls) + 5 hermetic unit tests in p5_types/ptrfromuse/tests.rs",
+ "test_name": "tests/stages/ptrfromuse.xml (11 assertions, three passes, one witness and three controls) + 5 hermetic unit tests in p5_types/ptrfromuse/tests.rs",
  "binary": "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11/O2/coreutils/stripped/fmt",
  "selector": "0x3420",
  "func_addr": "0x3420",
@@ -410,14 +410,14 @@
   "docs/features/ptrfromuse/plan.md",
   "docs/features/ptrfromuse/record.json",
   "docs/spec/05-types.md",
-  "tests/stages/kuna-ptrfromuse.xml"
+  "tests/stages/ptrfromuse.xml"
  ],
  "catalog_counts": {
   "settables": "211 -> 212",
   "tiers": "(68, 80, 63) -> (68, 81, 63)",
   "catalog_json_records": "210 -> 211",
-  "kuna-catalog.xml #6 source_decompiler angr": "32 -> 33",
-  "kuna-catalog.xml #8 change_kind opt-in-tool": "20 -> 21",
+  "catalog.xml #6 source_decompiler angr": "32 -> 33",
+  "catalog.xml #8 change_kind opt-in-tool": "20 -> 21",
   "stage corpus files": "300 -> 301 (one new file; the review added two assertions to it, not a second file)",
   "phase_catalog.json": "recaptured",
   "option_values_live_value_present_for_87": "unchanged (no live reader; ptrfromuse added to the phases/tests.rs allowlist beside pebnames)"
@@ -439,7 +439,7 @@
   "No (below the space's pointer lower bound)": "the walk carries on; an ordinary field offset",
   "residual_exposure": "a parameter used ONLY to subscript an unnamed table is declined (nothing gives it a base); a parameter used both as such a subscript and as a real memory base is typed on the strength of the second use",
   "measured_cost_of_the_refusal": "guard ablation: rebuilt with the constant test short-circuited and re-ran the byte arm over the same 16 binaries. 9 of 7,523 functions differ, all in bzip2 (bzFile *, fields at +0x1394/+0x13e8). With the flat 'at or above the bound => refuse' rule all 9 were lost; with the three grades 1 is recovered (O0 bzip2 sub_b9c1, which also dereferences its parameter at an ordinary offset) and 8 are still declined. The typesweep is bit-identical either way, so the refusal costs nothing the metric can see.",
-  "controls": "tests/stages/kuna-ptrfromuse.xml `globalindex` (Object arm) and `blindindex` (Maybe arm); each proven two-pass with a throwaway build that short-circuits its arm"
+  "controls": "tests/stages/ptrfromuse.xml `globalindex` (Object arm) and `blindindex` (Maybe arm); each proven two-pass with a throwaway build that short-circuits its arm"
  },
  "default_flip": {
   "recommendation": "none. The earlier bundle recommended flipping `void` on; that recommendation is withdrawn.",

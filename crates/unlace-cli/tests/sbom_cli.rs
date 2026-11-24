@@ -5,10 +5,10 @@ use serde_json::Value as Json;
 use std::process::Command;
 
 use crate::common;
-use common::{fixture, repo_root, run_kuna};
+use common::{fixture, repo_root, run_unlace};
 
 fn sbom_json(argv: &[&str]) -> Json {
-    let (stdout, stderr, code) = run_kuna(&[&["sbom"][..], argv].concat());
+    let (stdout, stderr, code) = run_unlace(&[&["sbom"][..], argv].concat());
     assert_eq!(code, 0, "unlace sbom {argv:?}: {stderr}");
     serde_json::from_str(&stdout).expect("JSON document")
 }
@@ -53,7 +53,7 @@ fn an_elf_lists_its_needed_libraries() {
 
 #[test]
 fn the_text_surface_has_one_row_per_component() {
-    let (stdout, stderr, code) = run_kuna(&["sbom", &fixture("fauxware")]);
+    let (stdout, stderr, code) = run_unlace(&["sbom", &fixture("fauxware")]);
     assert_eq!(code, 0, "{stderr}");
     assert!(stdout.starts_with("# fauxware sha256="), "{stdout}");
     assert!(stdout.contains("# toolchain GCC: "), "{stdout}");
@@ -163,11 +163,11 @@ fn the_document_is_stable_for_a_fixed_epoch() {
 
 #[test]
 fn bad_invocations_are_refused() {
-    let (_, stderr, code) = run_kuna(&["sbom"]);
+    let (_, stderr, code) = run_unlace(&["sbom"]);
     assert_eq!(code, 2, "{stderr}");
-    let (_, stderr, code) = run_kuna(&["sbom", &fixture("fauxware"), "--format", "xml"]);
+    let (_, stderr, code) = run_unlace(&["sbom", &fixture("fauxware"), "--format", "xml"]);
     assert_eq!(code, 2, "{stderr}");
     assert!(stderr.contains("--format"), "{stderr}");
-    let (_, stderr, code) = run_kuna(&["sbom", "/nonexistent/binary"]);
+    let (_, stderr, code) = run_unlace(&["sbom", "/nonexistent/binary"]);
     assert_eq!(code, 1, "{stderr}");
 }

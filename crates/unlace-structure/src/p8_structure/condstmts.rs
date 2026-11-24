@@ -1,4 +1,4 @@
-//! (kuna) `condstmts off|N` — the most statements a basic block may print ahead of
+//! (unlace) `condstmts off|N` — the most statements a basic block may print ahead of
 //! its test when it is folded into a condition operand.
 //!
 //! `ruleBlockOr` and `ruleBlockWhileDo` absorb a condition block into a `&&`/`||`
@@ -22,7 +22,7 @@
 use std::collections::BTreeSet;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::ElementId;
 use unlace_base::types::int4;
 
@@ -45,7 +45,7 @@ pub const MAX_REATTEMPTS: usize = 2;
 /// starts, plus (once implied flags exist) every block printing more than the cap.
 pub fn complex_blocks(data: &Funcdata) -> BTreeSet<BlockId> {
     let mut out = BTreeSet::new();
-    let cap = data.get_arch().kuna_options.get::<CondStmts>().0;
+    let cap = data.get_arch().unlace_options.get::<CondStmts>().0;
     if cap < 0 {
         return out;
     }
@@ -73,7 +73,7 @@ fn is_overlong(data: &Funcdata, bb: BlockId, cap: int4) -> bool {
 /// Record every block the existing structure prints over the cap in a
 /// comma-printed position.  Only meaningful once implied flags exist.
 pub fn record_hits(data: &mut Funcdata) {
-    let cap = data.get_arch().kuna_options.get::<CondStmts>().0;
+    let cap = data.get_arch().unlace_options.get::<CondStmts>().0;
     if cap < 0
         || !data.is_settled(crate::maturity::Fact::HighVariables)
         || data.sblocks_get_size() == 0
@@ -142,9 +142,9 @@ pub fn condfold_budget(cond_fold: int4, cond_stmts: int4) -> int4 {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CondStmts(pub int4);
 
-impl crate::optionset::KunaOption for CondStmts {
+impl crate::optionset::UnlaceOption for CondStmts {
     const NAME: &'static str = "condstmts";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         CondStmts(-1)
@@ -154,7 +154,7 @@ impl crate::optionset::KunaOption for CondStmts {
         CondStmts(DEFAULT_CAP)
     }
 
-    fn parse(value: &str) -> KunaResult<(Self, String)> {
+    fn parse(value: &str) -> UnlaceResult<(Self, String)> {
         OptionCondStmts
             .apply(value)
             .map(|(v, msg)| (CondStmts(v), msg))
@@ -167,7 +167,7 @@ pub struct OptionCondStmts;
 impl OptionCondStmts {
     pub const NAME: &'static str = "condstmts";
 
-    pub fn apply(&self, p1: &str) -> KunaResult<(int4, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(int4, String)> {
         let field = p1.trim();
         if field == "off" {
             return Ok((-1, "Condition-operand statement cap turned off".to_string()));
@@ -175,13 +175,13 @@ impl OptionCondStmts {
         let val = match field.parse::<int4>() {
             Ok(v) if !field.is_empty() && field.bytes().all(|b| b.is_ascii_digit()) => v,
             _ => {
-                return Err(KunaError::parse(
+                return Err(UnlaceError::parse(
                     "Must specify off or a decimal statement count",
                 ));
             }
         };
         if val > MAX_CAP {
-            return Err(KunaError::parse(format!(
+            return Err(UnlaceError::parse(format!(
                 "Bad statement cap: {val} exceeds the {MAX_CAP} ceiling"
             )));
         }

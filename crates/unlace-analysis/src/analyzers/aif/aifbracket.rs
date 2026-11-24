@@ -1,4 +1,4 @@
-//! (kuna) `aifbracket` — refuse an AIF gap candidate that is a fragment of the
+//! (unlace) `aifbracket` — refuse an AIF gap candidate that is a fragment of the
 //! known function around it (P1 code/data partition).
 //!
 //! # The defect (GH-299)
@@ -13,11 +13,11 @@
 //! functions, and a valid-subroutine walk, which counts the branch into decoded
 //! code as "adds information" — and becomes a `sub_<addr>` in the middle of a body.
 //! On the GH-299 witness, a 3.4 MB stripped i386 PE, 737 of the 2,067 mid-body AIF
-//! entries sit inside a function kuna has the entry of.
+//! entries sit inside a function unlace has the entry of.
 //!
 //! # The rule
 //!
-//! A kuna function is an entry with no extent, so "the hole lies inside a known
+//! A unlace function is an entry with no extent, so "the hole lies inside a known
 //! function" cannot be read off the function list: on a sparsely discovered image
 //! nearly every hole lies between one known entry and the next. The candidate's own
 //! speculative body supplies the missing proof instead. [`rejects`] refuses an

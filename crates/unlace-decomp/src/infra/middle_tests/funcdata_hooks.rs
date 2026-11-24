@@ -13,7 +13,7 @@ mod module_scope {
     pub(super) use crate::variable::{CompareNameView, HighContext, VarnodeView, VarnodeViewLoc};
     pub(super) use crate::varnode::{DefOpInfo, VarnodeBank};
     pub(super) use std::rc::Rc;
-    pub(super) use unlace_base::error::KunaResult;
+    pub(super) use unlace_base::error::UnlaceResult;
     pub(super) use unlace_base::types::{Wrap, int2, int4, uint4, uint8, uintm};
     pub(super) use unlace_num::opcodes::OpCode;
 }
@@ -103,14 +103,14 @@ fn build_dynamic_local_preserves_inferred_type_and_is_idempotent() {
     let dtype = fd.vbank().get(out).unwrap().get_type().clone();
 
     fd.build_dynamic_symbol(out, 8, unk_type()).unwrap();
-    let symbol = fd.vbank().get(out).unwrap().kuna_symbol_entry().unwrap();
+    let symbol = fd.vbank().get(out).unwrap().unlace_symbol_entry().unwrap();
     assert_eq!(fd.dynamic_symbol_specs().len(), 1);
     assert!(Rc::ptr_eq(fd.vbank().get(out).unwrap().get_type(), &dtype));
     assert!(!fd.vbank().get(out).unwrap().is_type_lock());
     fd.build_dynamic_symbol(out, 8, unk_type()).unwrap();
     assert_eq!(fd.dynamic_symbol_specs().len(), 1);
     assert_eq!(
-        fd.vbank().get(out).unwrap().kuna_symbol_entry(),
+        fd.vbank().get(out).unwrap().unlace_symbol_entry(),
         Some(symbol)
     );
 }

@@ -1,4 +1,4 @@
-//! End-to-end gate for auto-applied cspec call-fixups (`callfixup` — the kuna
+//! End-to-end gate for auto-applied cspec call-fixups (`callfixup` — the unlace
 //! analog of Ghidra's `CallFixupAnalyzer`).
 //!
 //! Drives `load file <mcount_x86_64>` (a static `gcc -pg` binary whose `main`
@@ -90,7 +90,7 @@ fn mcount_call_is_dissolved_by_the_applied_fixup() {
     // The engine emits a marker when a CALL is replaced by an injection — the
     // direct proof the analyzer-driven fixup tag reached the inherited inject path.
     assert!(
-        // (kuna DIV-38) inline warnstyle renders the header as `// injected`.
+        // (unlace DIV-38) inline warnstyle renders the header as `// injected`.
         out.contains("// injected") || out.contains("replaced with injection"),
         "expected the injection marker (fixup applied), got:\n{out}"
     );

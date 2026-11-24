@@ -1,4 +1,4 @@
-//! (kuna `evmcalls`) Solidity internal functions as calls in EVM bytecode.
+//! (unlace `evmcalls`) Solidity internal functions as calls in EVM bytecode.
 //!
 //! The EVM has no call instruction for code inside a contract. solc lowers an
 //! internal call to `PUSH ret; <arguments>; PUSH fn; JUMP` and the callee
@@ -850,7 +850,7 @@ fn shape_function(data: &mut Funcdata, args: u32, pop: i32, keeps_label: bool) -
     true
 }
 
-/// (kuna) `ActionEvmCalls` — give each recovered EVM internal call its callee's
+/// (unlace) `ActionEvmCalls` — give each recovered EVM internal call its callee's
 /// stack effect as extrapop (option `evmcalls`).
 pub struct ActionEvmCalls {
     base: ActionBase,
@@ -885,7 +885,7 @@ impl Action for ActionEvmCalls {
         let Some(loader) = arch.loader.as_ref() else {
             return 0;
         };
-        let Some(map) = image_map(&arch.kuna_options, arch.manage(), loader) else {
+        let Some(map) = image_map(&arch.unlace_options, arch.manage(), loader) else {
             return 0;
         };
         let mut changed = 0;
@@ -929,8 +929,8 @@ impl Action for ActionEvmCalls {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna `evmcalls`) Recover Solidity internal-function calls and returns in
+crate::unlace_flag!(
+    /// (unlace `evmcalls`) Recover Solidity internal-function calls and returns in
     /// EVM bytecode. See [`crate::p2_lift::evmcalls`].
     EvmCalls,
     "evmcalls",

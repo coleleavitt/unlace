@@ -1,4 +1,4 @@
-//! (kuna) PE DOS-magic tolerance: load an image whose `e_magic` is not `MZ` when
+//! (unlace) PE DOS-magic tolerance: load an image whose `e_magic` is not `MZ` when
 //! its `e_lfanew` still points at a `PE\0\0` signature, because every header the
 //! loader maps from lives behind that pointer.
 //!
@@ -6,7 +6,7 @@
 //! (`MZ`) and `e_lfanew` (the file offset of the NT headers). `object` sniffs the
 //! format from the first bytes alone, so an image whose first byte was overwritten
 //! -- a CTF challenge that ships `0x15 'Z'` instead of `MZ` -- is "Unknown file
-//! magic" and every kuna surface exits 1 before a byte of code is mapped, although
+//! magic" and every unlace surface exits 1 before a byte of code is mapped, although
 //! `e_lfanew` still leads straight to an intact PE signature, COFF header, optional
 //! header and section table.
 //!

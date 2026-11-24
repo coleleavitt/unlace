@@ -1,8 +1,8 @@
-//! (kuna) How an uncommitted BYTE is spelled on the `decompile-all --json`
+//! (unlace) How an uncommitted BYTE is spelled on the `decompile-all --json`
 //! `variables` surface (P6, JSON only).
 //!
 //! A one-byte value the type system never committed to is carried as a size-1
-//! `TYPE_UNKNOWN` (Ghidra's `undefined1`, spelled `xunknown1` in kuna's own
+//! `TYPE_UNKNOWN` (Ghidra's `undefined1`, spelled `xunknown1` in unlace's own
 //! vocabulary).  `realtypes` -- default-ON, and the rendering every real
 //! decompile runs at -- renders that carrier as `char`, which is right for the C
 //! text (`char` is the only one-byte C type that reads as a value) but asserts on

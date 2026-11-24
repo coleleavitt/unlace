@@ -1,4 +1,4 @@
-//! The MSVC RTTI byte-layout readers — the kuna ports of Ghidra's
+//! The MSVC RTTI byte-layout readers — the unlace ports of Ghidra's
 //! `Rtti0Model`..`Rtti4Model` / `VfTableModel` / `TypeDescriptorModel` (the five
 //! structures + the vftable), plus an address-resolvable image-byte view for the
 //! cross-structure byte searches the walk performs.
@@ -31,7 +31,7 @@ use unlace_decomp::fasthash::{FxHashMap, FxHashSet};
 /// A view over the loaded image's bytes addressable by virtual address — the
 /// loadable sections, sorted, so a `read(vma, len)` resolves through whichever
 /// section covers `[vma, vma+len)`, and a `scan_refs` byte-search scans every
-/// section. The kuna analog of reading program memory through Ghidra's
+/// section. The unlace analog of reading program memory through Ghidra's
 /// `MemoryByteProvider`. Structurally the same view [`crate::pclntab`] uses.
 pub struct ImageBytes<'a> {
     /// `(vma, bytes)` for each section with file-backed data, sorted by vma.

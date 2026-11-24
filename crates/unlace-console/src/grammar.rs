@@ -40,7 +40,7 @@
 //! TypeFactory-*mutating* orchestrators (`assignRawFields`, `setEnumValues`,
 //! `getTypedef`, `setName`) and an `Architecture` prototype-model registry
 //! (`getModel` / `defaultfp` / `setPrototype`) that the W6/W4 ports left as
-//! stubs (the kuna `Architecture` has **no** type-factory field or model
+//! stubs (the unlace `Architecture` has **no** type-factory field or model
 //! registry; `// STUB(w6-fspec-2)`).  The grammar *parses* these forms (the AST
 //! is built and `is_valid` runs), but completing them errs with the same
 //! C++-faithful explain text, deferred to the type-factory/model wave.  The
@@ -57,7 +57,7 @@
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::types::{int4, uint4, uintb};
 use unlace_decomp::dtype::{Datatype, TypeBitField, TypeFactory, TypeField, type_metatype};
 use unlace_decomp::fspec::PrototypePieces;
@@ -73,7 +73,7 @@ mod enumlayout;
 /// builds pointers (`PointerModifier::modType`, `grammar.cc:679-686` reads
 /// `getAddrSize()` and `getWordSize()`).
 ///
-/// The kuna `Architecture` (W4) does not yet own a [`TypeFactory`] field, so the
+/// The unlace `Architecture` (W4) does not yet own a [`TypeFactory`] field, so the
 /// C++ `Architecture *glb` argument is split into the read-mostly factory the
 /// callers pass plus this small data-organization record (the only `glb` state
 /// the C-declaration grammar actually consults).  // STUB(w6-fspec-2)
@@ -164,7 +164,7 @@ impl GrammarToken {
     /// C++ `GrammarToken::set(uint4 tp,char *ptr,int4 len)` (`grammar.cc:226-283`).
     ///
     /// `bytes` is the `ptr[0..len]` slice the C++ takes.
-    fn set_with(&mut self, tp: uint4, bytes: &[u8]) -> KunaResult<()> {
+    fn set_with(&mut self, tp: uint4, bytes: &[u8]) -> UnlaceResult<()> {
         self.ty = tp;
         match tp {
             tok::INTEGER => {
@@ -195,7 +195,7 @@ impl GrammarToken {
                 self.value = TokenValue::Integer(v);
             }
             _ => {
-                return Err(KunaError::lowlevel("Bad internal grammar token set"));
+                return Err(UnlaceError::lowlevel("Bad internal grammar token set"));
             }
         }
         Ok(())
@@ -423,7 +423,7 @@ impl GrammarLexer {
     }
 
     /// C++ `GrammarLexer::pushFile(const string &filename,istream *i)`
-    /// (`grammar.cc:615-624`).  In the kuna port the stream content is passed by
+    /// (`grammar.cc:615-624`).  In the unlace port the stream content is passed by
     /// value as bytes.
     fn push_file(&mut self, filename: &str, content: Vec<u8>) {
         self.filename = filename.to_string();
@@ -639,7 +639,7 @@ impl GrammarLexer {
     /// (`grammar.cc:570-579`): for a structural token store the kind; for a
     /// value-bearing token slice `buffer[bufstart .. bufend-1]` (the trailing
     /// lookahead char is excluded) and decode it.
-    fn establish_token(&self, token: &mut GrammarToken, val: uint4) -> KunaResult<()> {
+    fn establish_token(&self, token: &mut GrammarToken, val: uint4) -> UnlaceResult<()> {
         if val < tok::INTEGER {
             token.set(val);
         } else {
@@ -655,7 +655,7 @@ impl GrammarLexer {
 
     /// C++ `GrammarLexer::getNextToken(GrammarToken &token)`
     /// (`grammar.cc:638-677`).
-    fn get_next_token(&mut self, token: &mut GrammarToken) -> KunaResult<()> {
+    fn get_next_token(&mut self, token: &mut GrammarToken) -> UnlaceResult<()> {
         let mut tok_kind = tok::BADTOKEN;
         let mut firsttimethru = true;
 
@@ -797,12 +797,12 @@ impl TypeModifier {
         factory: &dyn TypeFactory,
         org: &DataOrg,
         model: &str,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         match self {
             TypeModifier::Pointer { flags } => {
                 // PointerModifier::modType (grammar.cc:679-686).
                 let base = base.ok_or_else(|| {
-                    KunaError::lowlevel("grammar: pointer modifier requires a base type")
+                    UnlaceError::lowlevel("grammar: pointer modifier requires a base type")
                 })?;
                 let pointer = factory.get_type_pointer(org.addr_size, base, org.word_size)?;
                 factory.get_qualified_type(pointer, type_qualifiers(*flags))
@@ -810,7 +810,7 @@ impl TypeModifier {
             TypeModifier::Array { arraysize, .. } => {
                 // ArrayModifier::modType (grammar.cc:688-693).
                 let base = base.ok_or_else(|| {
-                    KunaError::lowlevel("grammar: array modifier requires a base type")
+                    UnlaceError::lowlevel("grammar: array modifier requires a base type")
                 })?;
                 factory.get_type_array(*arraysize, base)
             }
@@ -867,7 +867,7 @@ fn function_get_in_types(
     paramlist: &[TypeDeclarator],
     factory: &dyn TypeFactory,
     org: &DataOrg,
-) -> KunaResult<Vec<Rc<Datatype>>> {
+) -> UnlaceResult<Vec<Rc<Datatype>>> {
     let mut intypes = Vec::new();
     for p in paramlist {
         intypes.push(p.build_type(factory, org)?);
@@ -988,15 +988,19 @@ impl TypeDeclarator {
 
     /// C++ `TypeDeclarator::buildType` (`grammar.cc:769-780`): apply the
     /// modifications to the basetype in **reverse** order of binding.
-    pub fn build_type(&self, factory: &dyn TypeFactory, org: &DataOrg) -> KunaResult<Rc<Datatype>> {
+    pub fn build_type(
+        &self,
+        factory: &dyn TypeFactory,
+        org: &DataOrg,
+    ) -> UnlaceResult<Rc<Datatype>> {
         let mut restype = self.qualified_basetype(factory)?;
         for m in self.mods.iter().rev() {
             restype = Some(m.mod_type(restype, factory, org, &self.model)?);
         }
-        restype.ok_or_else(|| KunaError::lowlevel("grammar: declarator has no base type"))
+        restype.ok_or_else(|| UnlaceError::lowlevel("grammar: declarator has no base type"))
     }
 
-    fn qualified_basetype(&self, factory: &dyn TypeFactory) -> KunaResult<Option<Rc<Datatype>>> {
+    fn qualified_basetype(&self, factory: &dyn TypeFactory) -> UnlaceResult<Option<Rc<Datatype>>> {
         self.basetype
             .clone()
             .map(|base| factory.get_qualified_type(base, type_qualifiers(self.flags)))
@@ -1007,7 +1011,7 @@ impl TypeDeclarator {
     ///
     /// Returns `Ok(false)` if the leading modification is not a function
     /// modifier (the C++ `return false`); otherwise fills `pieces` with the
-    /// function's input/return types and names.  The kuna [`PrototypePieces`]
+    /// function's input/return types and names.  The unlace [`PrototypePieces`]
     /// carries no `model` field (`// STUB(w6-fspec-2)`), so `pieces.model` is not
     /// set — the model is supplied separately by the proto-model wave.
     pub fn get_prototype(
@@ -1015,7 +1019,7 @@ impl TypeDeclarator {
         pieces: &mut PrototypePieces,
         factory: &dyn TypeFactory,
         org: &DataOrg,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         let mod0 = self.mods.first();
         let fmod = match mod0 {
             Some(m) if m.get_type() == ModifierKind::Function => m,
@@ -1071,7 +1075,7 @@ impl TypeDeclarator {
     /// C++ `TypeDeclarator::isValid` (`grammar.cc:824-859`).  Returns `Err`
     /// (C++ `throw ParseError`) on multiple storage specifiers / multiple type
     /// qualifiers, mirroring the C++ control flow exactly.
-    pub fn is_valid(&self) -> KunaResult<bool> {
+    pub fn is_valid(&self) -> UnlaceResult<bool> {
         if self.basetype.is_none() {
             return Ok(false); // No basetype
         }
@@ -1093,7 +1097,7 @@ impl TypeDeclarator {
             count += 1;
         }
         if count > 1 {
-            return Err(KunaError::parse("Multiple storage specifiers"));
+            return Err(UnlaceError::parse("Multiple storage specifiers"));
         }
 
         count = 0;
@@ -1107,7 +1111,7 @@ impl TypeDeclarator {
             count += 1;
         }
         if count > 1 {
-            return Err(KunaError::parse("Multiple type qualifiers"));
+            return Err(UnlaceError::parse("Multiple type qualifiers"));
         }
 
         for m in &self.mods {
@@ -1184,14 +1188,14 @@ pub enum DocType {
 // =============================================================================
 
 // =============================================================================
-// (kuna) Standard C scalar type specifiers
+// (unlace) Standard C scalar type specifiers
 // =============================================================================
 
-/// (kuna) One standard C scalar type-specifier keyword.
+/// (unlace) One standard C scalar type-specifier keyword.
 ///
 /// Upstream's grammar has no scalar keywords at all: a base type is whatever
 /// `TypeFactory::findByName` answers, so only Ghidra's own `int4` / `uint8` /
-/// `float8` vocabulary parses.  kuna's printer, however, spells core types the
+/// `float8` vocabulary parses.  unlace's printer, however, spells core types the
 /// way the target's compiler would (`p9_emit/ctypes.rs`), so the C it
 /// emits could not be fed back to it.  These keywords are the inverse of that
 /// speller and read the same `<data_organization>` widths.
@@ -1258,7 +1262,7 @@ enum IdentClass {
     Union,
     Enum,
     TypeName(Rc<Datatype>),
-    /// (kuna) A standard C scalar keyword; a run of them names one base type.
+    /// (unlace) A standard C scalar keyword; a run of them names one base type.
     ScalarSpecifier(ScalarKw),
     Identifier,
 }
@@ -1278,7 +1282,7 @@ enum PToken {
     TypeQualifier(String),
     FunctionSpecifier(String),
     TypeName(Rc<Datatype>),
-    /// (kuna) A standard C scalar keyword ([`ScalarKw`]).
+    /// (unlace) A standard C scalar keyword ([`ScalarKw`]).
     ScalarSpecifier(ScalarKw),
     Struct,
     Union,
@@ -1307,7 +1311,7 @@ pub struct CParse<'a> {
     models: &'a [String],
     /// The data-organization record (the `glb` state `build_type`/`get_prototype`
     /// read).  In C++ this is part of the `Architecture *glb` the parser holds; the
-    /// kuna split carries it alongside the factory.  // STUB(w6-fspec-2)
+    /// unlace split carries it alongside the factory.  // STUB(w6-fspec-2)
     org: DataOrg,
     keywords: BTreeMap<String, uint4>,
     lexer: GrammarLexer,
@@ -1389,7 +1393,7 @@ impl<'a> CParse<'a> {
         self.lastdecls.as_ref()
     }
 
-    /// Take the result declarations out (the kuna consumers move the AST).
+    /// Take the result declarations out (the unlace consumers move the AST).
     pub fn take_result_declarations(&mut self) -> Option<Vec<TypeDeclarator>> {
         self.lastdecls.take()
     }
@@ -1408,7 +1412,7 @@ impl<'a> CParse<'a> {
     /// C++ `CParse::setError(const string &msg)` (`grammar.cc:1318-1328`).
     ///
     /// Formats `<msg> at line <line> in <file>\n<source-line>\n<caret>`.  The
-    /// kuna lexer keeps the single source line, so the location suffix is
+    /// unlace lexer keeps the single source line, so the location suffix is
     /// reproduced.  Errors only set `lasterror` once (the C++ `lex` short-circuits
     /// once `lasterror` is non-empty).
     fn set_error(&mut self, msg: &str) {
@@ -1451,7 +1455,7 @@ impl<'a> CParse<'a> {
                 _ => {}
             }
         }
-        // (kuna) A standard C scalar keyword outranks `findByName` so that a run
+        // (unlace) A standard C scalar keyword outranks `findByName` so that a run
         // of them (`unsigned int`, `long long`) can be gathered as one base
         // type.  A run of length one still falls back to `findByName` first
         // ([`CParse::scalar_specifier`]), so `void` / `char` resolve to exactly
@@ -1474,9 +1478,9 @@ impl<'a> CParse<'a> {
     /// token and lift it to a parser terminal.  Once `lasterror` is set the C++
     /// returns `BADTOKEN` forever; the Rust port surfaces that as a parse error
     /// at the call site.
-    fn lex(&mut self) -> KunaResult<PToken> {
+    fn lex(&mut self) -> UnlaceResult<PToken> {
         if !self.lasterror.is_empty() {
-            return Err(KunaError::parse(self.lasterror.clone()));
+            return Err(UnlaceError::parse(self.lasterror.clone()));
         }
         let mut t = GrammarToken::new();
         self.lexer.get_next_token(&mut t)?;
@@ -1501,14 +1505,14 @@ impl<'a> CParse<'a> {
             }
             tok::STRINGVAL => {
                 self.set_error("Illegal string constant");
-                Err(KunaError::parse(self.lasterror.clone()))
+                Err(UnlaceError::parse(self.lasterror.clone()))
             }
             tok::DOTDOTDOT => Ok(PToken::Dotdotdot),
             tok::SCOPERES => Ok(PToken::Scoperes),
             tok::BADTOKEN => {
                 let err = self.lexer.get_error().to_string();
                 self.set_error(&err);
-                Err(KunaError::parse(self.lasterror.clone()))
+                Err(UnlaceError::parse(self.lasterror.clone()))
             }
             tok::ENDOFFILE => Ok(PToken::Eof),
             other => Ok(PToken::Punct(other as u8)),
@@ -1518,7 +1522,7 @@ impl<'a> CParse<'a> {
     // -- one-token lookahead --------------------------------------------------
 
     /// Peek at the next terminal without consuming it.
-    fn peek(&mut self) -> KunaResult<&PToken> {
+    fn peek(&mut self) -> UnlaceResult<&PToken> {
         if self.pushed.is_none() {
             let t = self.lex()?;
             self.pushed = Some(t);
@@ -1527,7 +1531,7 @@ impl<'a> CParse<'a> {
     }
 
     /// Consume and return the next terminal.
-    fn next(&mut self) -> KunaResult<PToken> {
+    fn next(&mut self) -> UnlaceResult<PToken> {
         if let Some(t) = self.pushed.take() {
             return Ok(t);
         }
@@ -1536,7 +1540,7 @@ impl<'a> CParse<'a> {
 
     /// Consume the next terminal, requiring it to be the given punctuation
     /// character; otherwise raise a syntax error (the bison `yyerror` path).
-    fn expect_punct(&mut self, ch: u8) -> KunaResult<()> {
+    fn expect_punct(&mut self, ch: u8) -> UnlaceResult<()> {
         match self.next()? {
             PToken::Punct(c) if c == ch => Ok(()),
             _ => self.syntax_error(),
@@ -1544,18 +1548,18 @@ impl<'a> CParse<'a> {
     }
 
     /// Raise the bison default "Syntax error" (`grammar.cc:1346-1347`).
-    fn syntax_error<T>(&mut self) -> KunaResult<T> {
+    fn syntax_error<T>(&mut self) -> UnlaceResult<T> {
         if self.lasterror.is_empty() {
             self.set_error("Syntax error");
         }
-        Err(KunaError::parse(self.lasterror.clone()))
+        Err(UnlaceError::parse(self.lasterror.clone()))
     }
 
     // -- grammar.y reduce actions (grammar.cc:900-1190) -----------------------
 
     /// C++ `mergeSpecDec(TypeSpecifiers*,TypeDeclarator*)` (`grammar.cc:900-907`).
     ///
-    /// (kuna) The declarator may already carry a calling convention of its own
+    /// (unlace) The declarator may already carry a calling convention of its own
     /// ([`CParse::declarator_model`]), so the specifier run only overwrites when
     /// it names one; naming a convention in both places is the same mistake
     /// `addFuncSpecifier` rejects.
@@ -1668,7 +1672,7 @@ impl<'a> CParse<'a> {
     /// `document: DECLARATION_RESULT declaration | PARAM_RESULT parameter_declaration`
     /// (`grammar.y:62-65`).  Drives the chosen top-level production then requires
     /// EOF.
-    fn parse_document(&mut self, doctype: DocType) -> KunaResult<()> {
+    fn parse_document(&mut self, doctype: DocType) -> UnlaceResult<()> {
         match doctype {
             DocType::Declaration => {
                 let decls = self.declaration()?;
@@ -1689,7 +1693,7 @@ impl<'a> CParse<'a> {
     /// `declaration: declaration_specifiers ';'
     ///             | declaration_specifiers init_declarator_list ';'`
     /// (`grammar.y:67-70`).
-    fn declaration(&mut self) -> KunaResult<Vec<TypeDeclarator>> {
+    fn declaration(&mut self) -> UnlaceResult<Vec<TypeDeclarator>> {
         let spec = self.declaration_specifiers()?;
         match self.peek()? {
             PToken::Punct(c) if *c == b';' => {
@@ -1706,7 +1710,7 @@ impl<'a> CParse<'a> {
 
     /// `declaration_specifiers` (`grammar.y:72-81`): a non-empty run of storage
     /// class / type / qualifier / function specifiers.
-    fn declaration_specifiers(&mut self) -> KunaResult<TypeSpecifiers> {
+    fn declaration_specifiers(&mut self) -> UnlaceResult<TypeSpecifiers> {
         let mut spec = TypeSpecifiers::new();
         // First specifier is mandatory.
         if !self.declaration_specifier_one(&mut spec)? {
@@ -1721,10 +1725,10 @@ impl<'a> CParse<'a> {
 
     /// Does the lookahead begin a further `declaration_specifiers` element?
     ///
-    /// (kuna) Once the run has named a type, a following `TYPE_NAME` is the
+    /// (unlace) Once the run has named a type, a following `TYPE_NAME` is the
     /// declarator's own name and not a second specifier — see
     /// [`CParse::declarator_identifier`].
-    fn declaration_specifier_starts(&mut self, spec: &TypeSpecifiers) -> KunaResult<bool> {
+    fn declaration_specifier_starts(&mut self, spec: &TypeSpecifiers) -> UnlaceResult<bool> {
         Ok(match self.peek()? {
             PToken::StorageClassSpecifier(_)
             | PToken::TypeQualifier(_)
@@ -1741,7 +1745,7 @@ impl<'a> CParse<'a> {
     /// Consume one `declaration_specifiers` element into `spec`.  Returns `false`
     /// if the lookahead is not a specifier (so the caller can detect "no
     /// specifier at all").
-    fn declaration_specifier_one(&mut self, spec: &mut TypeSpecifiers) -> KunaResult<bool> {
+    fn declaration_specifier_one(&mut self, spec: &mut TypeSpecifiers) -> UnlaceResult<bool> {
         match self.peek()? {
             PToken::StorageClassSpecifier(_) => {
                 if let PToken::StorageClassSpecifier(s) = self.next()? {
@@ -1776,7 +1780,7 @@ impl<'a> CParse<'a> {
 
     /// `init_declarator_list: init_declarator (',' init_declarator)*`
     /// (`grammar.y:83-86`).
-    fn init_declarator_list(&mut self) -> KunaResult<Vec<TypeDeclarator>> {
+    fn init_declarator_list(&mut self) -> UnlaceResult<Vec<TypeDeclarator>> {
         let mut v = vec![self.declarator()?];
         while matches!(self.peek()?, PToken::Punct(b',')) {
             self.next()?;
@@ -1787,7 +1791,7 @@ impl<'a> CParse<'a> {
 
     /// `type_specifier: TYPE_NAME | struct_or_union_specifier | enum_specifier`
     /// (`grammar.y:93-97`).
-    fn type_specifier(&mut self) -> KunaResult<Rc<Datatype>> {
+    fn type_specifier(&mut self) -> UnlaceResult<Rc<Datatype>> {
         match self.peek()? {
             PToken::TypeName(_) => match self.next()? {
                 PToken::TypeName(tp) => Ok(tp),
@@ -1802,7 +1806,7 @@ impl<'a> CParse<'a> {
         }
     }
 
-    /// (kuna) `type_specifier: scalar_keyword+` — the standard C scalar
+    /// (unlace) `type_specifier: scalar_keyword+` — the standard C scalar
     /// specifiers, which name a base type as a *run* of keywords rather than as
     /// one identifier (`unsigned int`, `long long`, `signed char`).
     ///
@@ -1810,7 +1814,7 @@ impl<'a> CParse<'a> {
     /// `char` and any host-supplied type spelled with a keyword resolve to the
     /// same interned type they always have; only combinations, and the keywords
     /// the type factory does not name, take the width-driven path.
-    fn scalar_specifier(&mut self) -> KunaResult<Rc<Datatype>> {
+    fn scalar_specifier(&mut self) -> UnlaceResult<Rc<Datatype>> {
         let mut kws: Vec<ScalarKw> = Vec::new();
         while let PToken::ScalarSpecifier(kw) = self.peek()? {
             kws.push(*kw);
@@ -1829,18 +1833,18 @@ impl<'a> CParse<'a> {
                     "Invalid combination of C type specifiers: {}",
                     spelling.join(" ")
                 ));
-                Err(KunaError::parse(self.lasterror.clone()))
+                Err(UnlaceError::parse(self.lasterror.clone()))
             }
         }
     }
 
-    /// (kuna) Turn a validated run of scalar keywords into a core data-type,
+    /// (unlace) Turn a validated run of scalar keywords into a core data-type,
     /// or `None` if the combination is not a C type.
     ///
     /// The widths come from the compiler spec's `<data_organization>` (the same
     /// source `p9_emit/ctypes.rs` spells them back out from), never from a
     /// hard-coded table, so `long` is 8 bytes on LP64 and 4 on LLP64.
-    fn resolve_scalar(&self, kws: &[ScalarKw]) -> KunaResult<Option<Rc<Datatype>>> {
+    fn resolve_scalar(&self, kws: &[ScalarKw]) -> UnlaceResult<Option<Rc<Datatype>>> {
         use type_metatype::{TYPE_BOOL, TYPE_FLOAT, TYPE_INT, TYPE_UINT};
         let n = |k: ScalarKw| kws.iter().filter(|x| **x == k).count();
         let (void, ch, sh, int_, lng) = (
@@ -1907,7 +1911,7 @@ impl<'a> CParse<'a> {
             }
             let size = self.factory.get_size_of_char();
             if sign_only == 0 {
-                // Plain `char` is kuna's text type, not an integer of that width.
+                // Plain `char` is unlace's text type, not an integer of that width.
                 return self.sized_scalar(size, None);
             }
             return self.sized_scalar(size, Some(if uns > 0 { TYPE_UINT } else { TYPE_INT }));
@@ -1928,7 +1932,7 @@ impl<'a> CParse<'a> {
         self.sized_scalar(size, Some(if uns > 0 { TYPE_UINT } else { TYPE_INT }))
     }
 
-    /// (kuna) The core type of `size` bytes with the given meta-type, or the
+    /// (unlace) The core type of `size` bytes with the given meta-type, or the
     /// character type of that width when `meta` is `None`.
     ///
     /// A zero or negative width means the compiler spec never declared one, so
@@ -1938,7 +1942,7 @@ impl<'a> CParse<'a> {
         &self,
         size: int4,
         meta: Option<type_metatype>,
-    ) -> KunaResult<Option<Rc<Datatype>>> {
+    ) -> UnlaceResult<Option<Rc<Datatype>>> {
         if size <= 0 {
             return Ok(None);
         }
@@ -1950,7 +1954,7 @@ impl<'a> CParse<'a> {
         }
     }
 
-    /// (kuna) The optional tag of a `struct`/`union`/`enum` specifier.
+    /// (unlace) The optional tag of a `struct`/`union`/`enum` specifier.
     ///
     /// A tag that has already been interned reaches the parser as `TYPE_NAME`,
     /// not `IDENTIFIER`, because [`CParse::lookup_identifier`] classifies every
@@ -1958,7 +1962,7 @@ impl<'a> CParse<'a> {
     /// here is what lets a struct be named a second time; the position is
     /// unambiguous, since a type name after `STRUCT` matched no production
     /// before, and the `old*`/`new*` actions re-check the kind by name.
-    fn tag_identifier(&mut self) -> KunaResult<String> {
+    fn tag_identifier(&mut self) -> UnlaceResult<String> {
         match self.peek()? {
             PToken::Identifier(_) => match self.next()? {
                 PToken::Identifier(s) => Ok(s),
@@ -1973,7 +1977,7 @@ impl<'a> CParse<'a> {
     }
 
     /// `struct_or_union_specifier` (`grammar.y:99-106`).
-    fn struct_or_union_specifier(&mut self) -> KunaResult<Rc<Datatype>> {
+    fn struct_or_union_specifier(&mut self) -> UnlaceResult<Rc<Datatype>> {
         let is_struct = matches!(self.next()?, PToken::Struct);
         // optional IDENTIFIER, then optional '{' struct_declaration_list '}'.
         let ident = self.tag_identifier()?;
@@ -1989,7 +1993,7 @@ impl<'a> CParse<'a> {
                 };
                 if !record.is_incomplete() {
                     self.set_error("Cannot redefine a completed record");
-                    return Err(KunaError::parse(self.lasterror.clone()));
+                    return Err(UnlaceError::parse(self.lasterror.clone()));
                 }
             }
             let declist = self.struct_declaration_list()?;
@@ -2015,7 +2019,7 @@ impl<'a> CParse<'a> {
 
     /// `struct_declaration_list: struct_declaration+` (`grammar.y:108-111`):
     /// concatenate the per-declaration declarator vectors.
-    fn struct_declaration_list(&mut self) -> KunaResult<Vec<TypeDeclarator>> {
+    fn struct_declaration_list(&mut self) -> UnlaceResult<Vec<TypeDeclarator>> {
         let mut v = self.struct_declaration()?;
         // Continue while the lookahead begins a specifier_qualifier_list.
         while matches!(
@@ -2035,7 +2039,7 @@ impl<'a> CParse<'a> {
 
     /// `struct_declaration: specifier_qualifier_list struct_declarator_list ';'`
     /// (`grammar.y:113-115`).
-    fn struct_declaration(&mut self) -> KunaResult<Vec<TypeDeclarator>> {
+    fn struct_declaration(&mut self) -> UnlaceResult<Vec<TypeDeclarator>> {
         let spec = self.specifier_qualifier_list()?;
         let declist = self.struct_declarator_list()?;
         self.expect_punct(b';')?;
@@ -2043,12 +2047,12 @@ impl<'a> CParse<'a> {
     }
 
     /// `specifier_qualifier_list` (`grammar.y:117-122`).
-    fn specifier_qualifier_list(&mut self) -> KunaResult<TypeSpecifiers> {
+    fn specifier_qualifier_list(&mut self) -> UnlaceResult<TypeSpecifiers> {
         let mut spec = TypeSpecifiers::new();
         let mut any = false;
         loop {
             match self.peek()? {
-                // (kuna) A TYPE_NAME after the list already named a type is the
+                // (unlace) A TYPE_NAME after the list already named a type is the
                 // member's name, not a second specifier.
                 PToken::TypeName(_) if spec.type_specifier.is_some() => break,
                 PToken::TypeName(_)
@@ -2077,7 +2081,7 @@ impl<'a> CParse<'a> {
 
     /// `struct_declarator_list: struct_declarator (',' struct_declarator)*`
     /// (`grammar.y:124-127`).
-    fn struct_declarator_list(&mut self) -> KunaResult<Vec<TypeDeclarator>> {
+    fn struct_declarator_list(&mut self) -> UnlaceResult<Vec<TypeDeclarator>> {
         let mut v = vec![self.struct_declarator()?];
         while matches!(self.peek()?, PToken::Punct(b',')) {
             self.next()?;
@@ -2087,7 +2091,7 @@ impl<'a> CParse<'a> {
     }
 
     /// `struct_declarator: declarator | declarator ':' NUMBER` (`grammar.y:129-132`).
-    fn struct_declarator(&mut self) -> KunaResult<TypeDeclarator> {
+    fn struct_declarator(&mut self) -> UnlaceResult<TypeDeclarator> {
         let mut dec = self.declarator()?;
         if matches!(self.peek()?, PToken::Punct(b':')) {
             self.next()?;
@@ -2101,9 +2105,9 @@ impl<'a> CParse<'a> {
 
     /// `enum_specifier` (`grammar.y:134-140`).
     ///
-    /// (kuna) A C23 fixed underlying type (`enum E : unsigned char { ... }`) may
-    /// follow the tag; it requires a body ([`kuna_enumlayout`]).
-    fn enum_specifier(&mut self) -> KunaResult<Rc<Datatype>> {
+    /// (unlace) A C23 fixed underlying type (`enum E : unsigned char { ... }`) may
+    /// follow the tag; it requires a body ([`unlace_enumlayout`]).
+    fn enum_specifier(&mut self) -> UnlaceResult<Rc<Datatype>> {
         self.next()?; // ENUM
         let ident = self.tag_identifier()?;
         let underlying = self.enum_underlying_type()?;
@@ -2128,7 +2132,7 @@ impl<'a> CParse<'a> {
     /// `enumerator_list: enumerator (',' enumerator)*` (`grammar.y:142-145`).
     /// The trailing-comma cases are handled by the caller (it consumes an
     /// optional `,` before `}`), exactly as the two `... ',' '}'` productions do.
-    fn enumerator_list(&mut self) -> KunaResult<Vec<Enumerator>> {
+    fn enumerator_list(&mut self) -> UnlaceResult<Vec<Enumerator>> {
         let mut v = vec![self.enumerator()?];
         while matches!(self.peek()?, PToken::Punct(b',')) {
             // A `,` may be the list separator OR the trailing comma before `}`.
@@ -2145,7 +2149,7 @@ impl<'a> CParse<'a> {
     }
 
     /// `enumerator: IDENTIFIER | IDENTIFIER '=' NUMBER` (`grammar.y:147-150`).
-    fn enumerator(&mut self) -> KunaResult<Enumerator> {
+    fn enumerator(&mut self) -> UnlaceResult<Enumerator> {
         let nm = match self.next()? {
             PToken::Identifier(s) => s,
             PToken::TypeName(tp) => tp.get_name().to_string(),
@@ -2164,8 +2168,8 @@ impl<'a> CParse<'a> {
 
     /// `declarator: direct_declarator | pointer direct_declarator`
     /// (`grammar.y:152-155`).
-    fn declarator(&mut self) -> KunaResult<TypeDeclarator> {
-        // (kuna) A calling convention may sit on either side of the pointer run:
+    fn declarator(&mut self) -> UnlaceResult<TypeDeclarator> {
+        // (unlace) A calling convention may sit on either side of the pointer run:
         // `int4 (__stdcall *cb)(int4)` is the Win32 callback spelling,
         // `void * __stdcall f(void)` the pointer-returning-function one.
         let mut model = self.declarator_model()?;
@@ -2175,7 +2179,7 @@ impl<'a> CParse<'a> {
             if !after.is_empty() {
                 if !model.is_empty() {
                     self.set_error("Multiple parameter models");
-                    return Err(KunaError::parse(self.lasterror.clone()));
+                    return Err(UnlaceError::parse(self.lasterror.clone()));
                 }
                 model = after;
             }
@@ -2190,7 +2194,7 @@ impl<'a> CParse<'a> {
         Ok(dec)
     }
 
-    /// (kuna) A calling convention named in DECLARATOR position — the
+    /// (unlace) A calling convention named in DECLARATOR position — the
     /// `void * __stdcall LoadLibraryExW(...)` spelling that Windows headers,
     /// MSVC and Ghidra's own listings use.  The C-standard grammar admits a
     /// function specifier only in `declaration_specifiers`, which sits *before*
@@ -2202,7 +2206,7 @@ impl<'a> CParse<'a> {
     /// (`inline`) is left for the productions that own it.
     /// Does the lookahead name a calling convention (as opposed to a reserved
     /// function specifier like `inline`)?
-    fn peek_is_model(&mut self) -> KunaResult<bool> {
+    fn peek_is_model(&mut self) -> UnlaceResult<bool> {
         let nm = match self.peek()? {
             PToken::FunctionSpecifier(s) => s.clone(),
             _ => return Ok(false),
@@ -2210,7 +2214,7 @@ impl<'a> CParse<'a> {
         Ok(!self.keywords.contains_key(&nm))
     }
 
-    fn declarator_model(&mut self) -> KunaResult<String> {
+    fn declarator_model(&mut self) -> UnlaceResult<String> {
         let mut model = String::new();
         loop {
             let nm = match self.peek()? {
@@ -2223,7 +2227,7 @@ impl<'a> CParse<'a> {
             self.next()?;
             if !model.is_empty() {
                 self.set_error("Multiple parameter models");
-                return Err(KunaError::parse(self.lasterror.clone()));
+                return Err(UnlaceError::parse(self.lasterror.clone()));
             }
             model = nm;
         }
@@ -2232,7 +2236,7 @@ impl<'a> CParse<'a> {
 
     /// `var_identifier: IDENTIFIER (SCOPERES IDENTIFIER)*` (`grammar.y:157-160`):
     /// builds a `a::b::c` scoped name.
-    fn var_identifier(&mut self, first: String) -> KunaResult<String> {
+    fn var_identifier(&mut self, first: String) -> UnlaceResult<String> {
         let mut name = first;
         while matches!(self.peek()?, PToken::Scoperes) {
             self.next()?; // SCOPERES
@@ -2251,7 +2255,7 @@ impl<'a> CParse<'a> {
         Ok(name)
     }
 
-    /// (kuna) Consume a `var_identifier` in *name* position, whose head the
+    /// (unlace) Consume a `var_identifier` in *name* position, whose head the
     /// lexer may have classified as a type name.
     ///
     /// A variable may be named after a type — `unsigned char *code`, where
@@ -2261,7 +2265,7 @@ impl<'a> CParse<'a> {
     /// answers as `TYPE_NAME`, so the name position has to take that token too.
     /// Only the unparenthesised position is taken: `int4 (code)` stays a
     /// function of one `code`, which is what C reads it as.
-    fn declarator_identifier(&mut self) -> KunaResult<String> {
+    fn declarator_identifier(&mut self) -> UnlaceResult<String> {
         match self.next()? {
             PToken::Identifier(s) => self.var_identifier(s),
             PToken::TypeName(tp) => {
@@ -2275,7 +2279,7 @@ impl<'a> CParse<'a> {
     /// `direct_declarator` (`grammar.y:162-170`): the base name or
     /// parenthesised declarator, followed by array `[...]` and function `(...)`
     /// suffixes (left-recursion unrolled to a loop).
-    fn direct_declarator(&mut self) -> KunaResult<TypeDeclarator> {
+    fn direct_declarator(&mut self) -> UnlaceResult<TypeDeclarator> {
         let mut dec = match self.peek()? {
             PToken::Identifier(_) | PToken::TypeName(_) => {
                 let name = self.declarator_identifier()?;
@@ -2298,7 +2302,7 @@ impl<'a> CParse<'a> {
     fn direct_declarator_suffixes(
         &mut self,
         mut dec: TypeDeclarator,
-    ) -> KunaResult<TypeDeclarator> {
+    ) -> UnlaceResult<TypeDeclarator> {
         loop {
             match self.peek()? {
                 PToken::Punct(b'[') => {
@@ -2333,7 +2337,7 @@ impl<'a> CParse<'a> {
     /// last in the vector and `mergePointer` applies pointers in vector order.
     /// We replicate the exact final vector by collecting the per-`*` qualifiers
     /// and reversing.
-    fn pointer(&mut self) -> KunaResult<Vec<uint4>> {
+    fn pointer(&mut self) -> UnlaceResult<Vec<uint4>> {
         // Collect (in left-to-right `*` order) each star's qualifier flags.
         let mut stars: Vec<uint4> = Vec::new();
         loop {
@@ -2357,7 +2361,7 @@ impl<'a> CParse<'a> {
 
     /// `type_qualifier_list: TYPE_QUALIFIER+` (`grammar.y:179-182`): OR the
     /// qualifier flag bits together.
-    fn type_qualifier_list(&mut self) -> KunaResult<uint4> {
+    fn type_qualifier_list(&mut self) -> UnlaceResult<uint4> {
         let mut flags: uint4 = 0;
         let mut any = false;
         while matches!(self.peek()?, PToken::TypeQualifier(_)) {
@@ -2375,7 +2379,7 @@ impl<'a> CParse<'a> {
     /// `parameter_type_list: parameter_list | parameter_list ',' DOTDOTDOT`
     /// (`grammar.y:184-187`).  Returns the parameter declarators with a trailing
     /// `None` for the `...` (the varargs marker `newFunc` pops).
-    fn parameter_type_list(&mut self) -> KunaResult<Vec<Option<TypeDeclarator>>> {
+    fn parameter_type_list(&mut self) -> UnlaceResult<Vec<Option<TypeDeclarator>>> {
         let mut v: Vec<Option<TypeDeclarator>> = Vec::new();
         // parameter_list: parameter_declaration (',' parameter_declaration)*
         v.push(Some(self.parameter_declaration()?));
@@ -2396,7 +2400,7 @@ impl<'a> CParse<'a> {
 
     /// `parameter_declaration` (`grammar.y:194-198`):
     /// `declaration_specifiers (declarator | abstract_declarator)?`.
-    fn parameter_declaration(&mut self) -> KunaResult<TypeDeclarator> {
+    fn parameter_declaration(&mut self) -> UnlaceResult<TypeDeclarator> {
         let spec = self.declaration_specifiers()?;
         match self.peek()? {
             // declarator: pointer? direct_declarator (starts with '*', IDENTIFIER, or '(').
@@ -2438,14 +2442,14 @@ impl<'a> CParse<'a> {
 
     /// After a leading `pointer`, parse the following declarator which may be
     /// concrete (`direct_declarator`) or abstract (`direct_abstract_declarator`).
-    fn declarator_or_abstract_after_pointer(&mut self) -> KunaResult<TypeDeclarator> {
+    fn declarator_or_abstract_after_pointer(&mut self) -> UnlaceResult<TypeDeclarator> {
         self.direct_abstract_or_concrete()
     }
 
     /// Parse a `direct_declarator` or `direct_abstract_declarator`.  The two
     /// differ only in whether the leading atom is a name (concrete) or empty /
     /// parenthesised-abstract; both share the array/function suffix loop.
-    fn direct_abstract_or_concrete(&mut self) -> KunaResult<TypeDeclarator> {
+    fn direct_abstract_or_concrete(&mut self) -> UnlaceResult<TypeDeclarator> {
         let dec = match self.peek()? {
             PToken::Identifier(_) | PToken::TypeName(_) => {
                 let name = self.declarator_identifier()?;
@@ -2488,7 +2492,7 @@ impl<'a> CParse<'a> {
 
     /// Inside `(...)`: a declarator that may carry a leading pointer and may be
     /// abstract or concrete.
-    fn declarator_or_abstract_or_empty(&mut self) -> KunaResult<TypeDeclarator> {
+    fn declarator_or_abstract_or_empty(&mut self) -> UnlaceResult<TypeDeclarator> {
         let mut model = self.declarator_model()?;
         let mut dec = if matches!(self.peek()?, PToken::Punct(b'*')) {
             let ptr = self.pointer()?;
@@ -2496,7 +2500,7 @@ impl<'a> CParse<'a> {
             if !after.is_empty() {
                 if !model.is_empty() {
                     self.set_error("Multiple parameter models");
-                    return Err(KunaError::parse(self.lasterror.clone()));
+                    return Err(UnlaceError::parse(self.lasterror.clone()));
                 }
                 model = after;
             }
@@ -2520,7 +2524,7 @@ impl<'a> CParse<'a> {
     }
 
     /// `assignment_expression: NUMBER` (`grammar.y:214-216`).
-    fn assignment_expression(&mut self) -> KunaResult<uintb> {
+    fn assignment_expression(&mut self) -> UnlaceResult<uintb> {
         match self.next()? {
             PToken::Number(n) => Ok(n),
             _ => self.syntax_error(),
@@ -2539,7 +2543,7 @@ impl<'a> CParse<'a> {
         &mut self,
         ident: &str,
         declist: Vec<TypeDeclarator>,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         let (anonymous, res) = if ident.is_empty() {
             let (name, record) = self.new_anonymous_record(false)?;
             (Some(name), record)
@@ -2586,7 +2590,7 @@ impl<'a> CParse<'a> {
 
     /// Assign the identity before interning the shell: anonymous records of
     /// equal layout must not share the empty name's type id.
-    fn new_anonymous_record(&mut self, union: bool) -> KunaResult<(String, Rc<Datatype>)> {
+    fn new_anonymous_record(&mut self, union: bool) -> UnlaceResult<(String, Rc<Datatype>)> {
         self.anonymous_serial += 1;
         let name = format!(
             "__kuna_anon_{:032x}_{}",
@@ -2611,12 +2615,12 @@ impl<'a> CParse<'a> {
         &mut self,
         record: Rc<Datatype>,
         name: String,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         let named = if record.get_name() != name {
             let existing = self
                 .factory
                 .find_by_name(&name)?
-                .ok_or_else(|| KunaError::parse("Missing anonymous record identity"))?;
+                .ok_or_else(|| UnlaceError::parse("Missing anonymous record identity"))?;
             let mut candidate = (*record).clone();
             candidate.name = name.clone();
             candidate.display_name = name.clone();
@@ -2625,7 +2629,7 @@ impl<'a> CParse<'a> {
             self.factory.destroy_type(&record)?;
             if !equal {
                 self.set_error("Anonymous record identity conflicts with an existing type");
-                return Err(KunaError::parse(self.lasterror.clone()));
+                return Err(UnlaceError::parse(self.lasterror.clone()));
             }
             existing
         } else {
@@ -2637,28 +2641,32 @@ impl<'a> CParse<'a> {
 
     /// The parse error for a record body that failed: an anonymous record's
     /// stub is destroyed, a tagged one stays declared.
-    fn abandon_record(&mut self, ident: &str, res: &Rc<Datatype>) -> KunaResult<Rc<Datatype>> {
+    fn abandon_record(&mut self, ident: &str, res: &Rc<Datatype>) -> UnlaceResult<Rc<Datatype>> {
         if ident.is_empty() {
             self.factory.destroy_type(res)?;
         }
-        Err(KunaError::parse(self.lasterror.clone()))
+        Err(UnlaceError::parse(self.lasterror.clone()))
     }
 
     /// C++ `CParse::oldStruct` (`grammar.cc:1087-1094`).
-    fn old_struct(&mut self, ident: &str) -> KunaResult<Rc<Datatype>> {
+    fn old_struct(&mut self, ident: &str) -> UnlaceResult<Rc<Datatype>> {
         let res = self.factory.find_by_name(ident)?;
         match &res {
             Some(tp) if tp.get_metatype() == type_metatype::TYPE_STRUCT => Ok(tp.clone()),
-            None => self.factory.kuna_declare_record(ident, false),
+            None => self.factory.unlace_declare_record(ident, false),
             _ => {
                 self.set_error("Identifier does not represent a struct as required");
-                Err(KunaError::parse(self.lasterror.clone()))
+                Err(UnlaceError::parse(self.lasterror.clone()))
             }
         }
     }
 
     /// C++ `CParse::newUnion` (`grammar.cc:1096-1121`).
-    fn new_union(&mut self, ident: &str, declist: Vec<TypeDeclarator>) -> KunaResult<Rc<Datatype>> {
+    fn new_union(
+        &mut self,
+        ident: &str,
+        declist: Vec<TypeDeclarator>,
+    ) -> UnlaceResult<Rc<Datatype>> {
         let (anonymous, res) = if ident.is_empty() {
             let (name, record) = self.new_anonymous_record(true)?;
             (Some(name), record)
@@ -2692,14 +2700,14 @@ impl<'a> CParse<'a> {
     }
 
     /// C++ `CParse::oldUnion` (`grammar.cc:1123-1130`).
-    fn old_union(&mut self, ident: &str) -> KunaResult<Rc<Datatype>> {
+    fn old_union(&mut self, ident: &str) -> UnlaceResult<Rc<Datatype>> {
         let res = self.factory.find_by_name(ident)?;
         match &res {
             Some(tp) if tp.get_metatype() == type_metatype::TYPE_UNION => Ok(tp.clone()),
-            None => self.factory.kuna_declare_record(ident, true),
+            None => self.factory.unlace_declare_record(ident, true),
             _ => {
                 self.set_error("Identifier does not represent a union as required");
-                Err(KunaError::parse(self.lasterror.clone()))
+                Err(UnlaceError::parse(self.lasterror.clone()))
             }
         }
     }
@@ -2710,8 +2718,8 @@ impl<'a> CParse<'a> {
     /// `TypeEnum::assignValues` (the duplicate-value check,
     /// `Datatype::assign_values`) and install the value map on the interned enum.
     ///
-    /// (kuna) The constants and the width are C's rather than upstream's
-    /// ([`kuna_enumlayout`]): an enumerator with no `=` is one past the one before
+    /// (unlace) The constants and the width are C's rather than upstream's
+    /// ([`unlace_enumlayout`]): an enumerator with no `=` is one past the one before
     /// it, the enum is `int`-wide (signed when a constant is negative) unless a
     /// constant needs more, or as wide as its C23 underlying type, and a second
     /// enumerator of one constant is an alias the value map does not keep.
@@ -2720,14 +2728,14 @@ impl<'a> CParse<'a> {
         ident: &str,
         vecenum: Vec<Enumerator>,
         underlying: Option<Rc<Datatype>>,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         let vallist = enumlayout::enum_constants(&vecenum);
         if let Some(tp) = &underlying {
             if let Some(name) = enumlayout::enumerator_out_of_range(tp, &vecenum, &vallist) {
                 self.set_error(&format!(
                     "Enumerator {name} does not fit the underlying type"
                 ));
-                return Err(KunaError::parse(self.lasterror.clone()));
+                return Err(UnlaceError::parse(self.lasterror.clone()));
             }
         }
         // An interned (incomplete) enum stub (C++ getTypeEnum).
@@ -2750,7 +2758,7 @@ impl<'a> CParse<'a> {
                 Err(err) => {
                     self.set_error(err.explain());
                     let _ = self.factory.destroy_type(&res);
-                    Err(KunaError::parse(self.lasterror.clone()))
+                    Err(UnlaceError::parse(self.lasterror.clone()))
                 }
             },
             Err(err) => {
@@ -2758,19 +2766,19 @@ impl<'a> CParse<'a> {
                 // the stub, returns null.
                 self.set_error(err.explain());
                 let _ = self.factory.destroy_type(&res);
-                Err(KunaError::parse(self.lasterror.clone()))
+                Err(UnlaceError::parse(self.lasterror.clone()))
             }
         }
     }
 
     /// C++ `CParse::oldEnum` (`grammar.cc:1182-1189`).
-    fn old_enum(&mut self, ident: &str) -> KunaResult<Rc<Datatype>> {
+    fn old_enum(&mut self, ident: &str) -> UnlaceResult<Rc<Datatype>> {
         let res = self.factory.find_by_name(ident)?;
         match &res {
             Some(tp) if tp.is_enum_type() => Ok(tp.clone()),
             _ => {
                 self.set_error("Identifier does not represent an enum as required");
-                Err(KunaError::parse(self.lasterror.clone()))
+                Err(UnlaceError::parse(self.lasterror.clone()))
             }
         }
     }
@@ -2786,7 +2794,7 @@ impl<'a> CParse<'a> {
     /// boundary — that the C++ does **not** catch in `runParse`; it propagates past
     /// `parse_protopieces`).  The discriminator is whether the action recorded a
     /// `lasterror`: parse failures set it, thrown exceptions do not.
-    fn parse_stream(&mut self, content: Vec<u8>, doctype: DocType) -> KunaResult<bool> {
+    fn parse_stream(&mut self, content: Vec<u8>, doctype: DocType) -> UnlaceResult<bool> {
         self.clear();
         let mut key = 0x6c62272e07bb014262b821756295c58du128;
         for byte in &content {
@@ -2818,14 +2826,14 @@ impl<'a> CParse<'a> {
 /// (`grammar.cc:1389-1406`): parse a single C type, returning the data-type and
 /// (via the returned `name`) any declared identifier.
 ///
-/// Drives `doc_parameter_declaration`; the kuna `Architecture` info is supplied
+/// Drives `doc_parameter_declaration`; the unlace `Architecture` info is supplied
 /// as the [`TypeFactory`] plus the [`DataOrg`] (the only `glb` state the grammar
 /// reads).  // STUB(w6-fspec-2)
 pub fn parse_type(
     input: &str,
     factory: &dyn TypeFactory,
     org: DataOrg,
-) -> KunaResult<(Rc<Datatype>, String)> {
+) -> UnlaceResult<(Rc<Datatype>, String)> {
     let (ty, name, _) = parse_type_with_volatile(input, factory, org)?;
     Ok((ty, name))
 }
@@ -2840,21 +2848,21 @@ pub fn parse_type_with_volatile(
     input: &str,
     factory: &dyn TypeFactory,
     org: DataOrg,
-) -> KunaResult<(Rc<Datatype>, String, bool)> {
+) -> UnlaceResult<(Rc<Datatype>, String, bool)> {
     let mut parser = CParse::new(factory, org, LINE_BUFFER);
     if !parser.parse_stream(input.as_bytes().to_vec(), DocType::ParameterDeclaration)? {
-        return Err(KunaError::parse(parser.get_error().to_string()));
+        return Err(UnlaceError::parse(parser.get_error().to_string()));
     }
     let decls = parser
         .take_result_declarations()
         .filter(|d| !d.is_empty())
-        .ok_or_else(|| KunaError::parse("Did not parse a datatype"))?;
+        .ok_or_else(|| UnlaceError::parse("Did not parse a datatype"))?;
     if decls.len() > 1 {
-        return Err(KunaError::parse("Parsed multiple declarations"));
+        return Err(UnlaceError::parse("Parsed multiple declarations"));
     }
     let decl = &decls[0];
     if !decl.is_valid()? {
-        return Err(KunaError::parse("Parsed type is invalid"));
+        return Err(UnlaceError::parse("Parsed type is invalid"));
     }
     let name = decl.get_identifier().to_string();
     let ty = decl.build_type(factory, &org)?;
@@ -2879,7 +2887,7 @@ pub fn parse_protopieces(
     input: &str,
     factory: &dyn TypeFactory,
     org: DataOrg,
-) -> KunaResult<PrototypePieces> {
+) -> UnlaceResult<PrototypePieces> {
     parse_protopieces_with_model(input, factory, org, &[]).map(|(pieces, _)| pieces)
 }
 
@@ -2890,25 +2898,25 @@ pub fn parse_protopieces_with_model(
     factory: &dyn TypeFactory,
     org: DataOrg,
     models: &[String],
-) -> KunaResult<(PrototypePieces, String)> {
+) -> UnlaceResult<(PrototypePieces, String)> {
     let mut parser = CParse::with_models(factory, org, LINE_BUFFER, models);
     if !parser.parse_stream(input.as_bytes().to_vec(), DocType::Declaration)? {
-        return Err(KunaError::parse(parser.get_error().to_string()));
+        return Err(UnlaceError::parse(parser.get_error().to_string()));
     }
     let decls = parser
         .take_result_declarations()
         .filter(|d| !d.is_empty())
-        .ok_or_else(|| KunaError::parse("Did not parse a datatype"))?;
+        .ok_or_else(|| UnlaceError::parse("Did not parse a datatype"))?;
     if decls.len() > 1 {
-        return Err(KunaError::parse("Parsed multiple declarations"));
+        return Err(UnlaceError::parse("Parsed multiple declarations"));
     }
     let decl = &decls[0];
     if !decl.is_valid()? {
-        return Err(KunaError::parse("Parsed type is invalid"));
+        return Err(UnlaceError::parse("Parsed type is invalid"));
     }
     let mut pieces = PrototypePieces::default();
     if !decl.get_prototype(&mut pieces, factory, &org)? {
-        return Err(KunaError::parse("Did not parse a prototype"));
+        return Err(UnlaceError::parse("Did not parse a prototype"));
     }
     Ok((pieces, decl.get_model().to_string()))
 }
@@ -2934,35 +2942,35 @@ pub fn parse_c(
     factory: &dyn TypeFactory,
     org: DataOrg,
     models: &[String],
-    set_prototype: impl FnOnce(PrototypePieces, &str) -> KunaResult<()>,
-) -> KunaResult<()> {
+    set_prototype: impl FnOnce(PrototypePieces, &str) -> UnlaceResult<()>,
+) -> UnlaceResult<()> {
     let mut parser = CParse::with_models(factory, org, LINE_BUFFER, models);
     if !parser.parse_stream(input.as_bytes().to_vec(), DocType::Declaration)? {
-        return Err(KunaError::parse(parser.get_error().to_string()));
+        return Err(UnlaceError::parse(parser.get_error().to_string()));
     }
     let decls = parser
         .take_result_declarations()
         .filter(|d| !d.is_empty())
-        .ok_or_else(|| KunaError::parse("Did not parse a datatype"))?;
+        .ok_or_else(|| UnlaceError::parse("Did not parse a datatype"))?;
     if decls.len() > 1 {
-        return Err(KunaError::parse("Parsed multiple declarations"));
+        return Err(UnlaceError::parse("Parsed multiple declarations"));
     }
     let decl = &decls[0];
     if !decl.is_valid()? {
-        return Err(KunaError::parse("Parsed type is invalid"));
+        return Err(UnlaceError::parse("Parsed type is invalid"));
     }
 
     if decl.has_property(flags::F_EXTERN) {
         // extern: parse a prototype and hand it to glb->setPrototype(pieces).
         let mut pieces = PrototypePieces::default();
         if !decl.get_prototype(&mut pieces, factory, &org)? {
-            return Err(KunaError::parse("Did not parse prototype as expected"));
+            return Err(UnlaceError::parse("Did not parse prototype as expected"));
         }
         set_prototype(pieces, decl.get_model())?;
     } else if decl.has_property(flags::F_TYPEDEF) {
         let ct = decl.build_type(factory, &org)?;
         if decl.get_identifier().is_empty() {
-            return Err(KunaError::parse("Missing identifier for typedef"));
+            return Err(UnlaceError::parse("Missing identifier for typedef"));
         }
         if matches!(
             ct.get_metatype(),
@@ -2984,13 +2992,13 @@ pub fn parse_c(
         // the C++ does nothing further here.  Any other base meta-type is an error.
         let base = decl
             .get_base_type()
-            .ok_or_else(|| KunaError::lowlevel("Not sure what to do with this type"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("Not sure what to do with this type"))?;
         let meta = base.get_metatype();
         let recognised = meta == type_metatype::TYPE_STRUCT
             || meta == type_metatype::TYPE_UNION
             || base.is_enum_type();
         if !recognised {
-            return Err(KunaError::lowlevel("Not sure what to do with this type"));
+            return Err(UnlaceError::lowlevel("Not sure what to do with this type"));
         }
     }
     Ok(())

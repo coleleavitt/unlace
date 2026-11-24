@@ -1,4 +1,4 @@
-//! (kuna `dexmodel`) What a DEX file tells the engine about its methods.
+//! (unlace `dexmodel`) What a DEX file tells the engine about its methods.
 //!
 //! The Dalvik SLEIGH spec leaves three things to the program that loaded the
 //! file, which in Ghidra is its Java side:
@@ -23,7 +23,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::AddrSpace;
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
@@ -116,7 +116,7 @@ impl DexModel {
     }
 
     /// Parse `bytes` as a DEX file mapped at `base`.
-    pub fn parse(bytes: Vec<u8>, base: u64) -> KunaResult<DexModel> {
+    pub fn parse(bytes: Vec<u8>, base: u64) -> UnlaceResult<DexModel> {
         Ok(DexModel::new(DexFile::parse(bytes)?, base))
     }
 
@@ -315,7 +315,11 @@ impl DexModel {
     /// The Java type of a descriptor, as Ghidra's `DexUtil.toDataType` builds it:
     /// primitives by name, a class as a pointer to a structure of that name, an
     /// array as a pointer to its element type.
-    pub fn java_type(&self, descriptor: &str, types: &dyn TypeFactory) -> KunaResult<Rc<Datatype>> {
+    pub fn java_type(
+        &self,
+        descriptor: &str,
+        types: &dyn TypeFactory,
+    ) -> UnlaceResult<Rc<Datatype>> {
         if let Some(found) = self.types.borrow().get(descriptor) {
             return Ok(Rc::clone(found));
         }
@@ -339,7 +343,7 @@ impl DexModel {
                 types.get_type_pointer(4, class, 1)?
             }
             _ => {
-                return Err(KunaError::lowlevel(format!(
+                return Err(UnlaceError::lowlevel(format!(
                     "bad DEX type descriptor: {descriptor}"
                 )));
             }
@@ -360,15 +364,15 @@ impl DexModel {
         is_static: bool,
         call_site: bool,
         types: &dyn TypeFactory,
-    ) -> KunaResult<(PrototypePieces, &'static str)> {
+    ) -> UnlaceResult<(PrototypePieces, &'static str)> {
         let id = self
             .file
             .method_id(method_idx)
-            .ok_or_else(|| KunaError::lowlevel("DEX method index out of range"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("DEX method index out of range"))?;
         let proto = self
             .file
             .proto_id(id.proto_idx)
-            .ok_or_else(|| KunaError::lowlevel("DEX proto index out of range"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("DEX proto index out of range"))?;
         let mut pieces = PrototypePieces {
             first_var_arg_slot: -1,
             ..Default::default()
@@ -421,9 +425,9 @@ impl DexModel {
         index: u64,
         tag: u64,
         types: &dyn TypeFactory,
-    ) -> KunaResult<Option<CPoolRecord>> {
+    ) -> UnlaceResult<Option<CPoolRecord>> {
         let index32 =
-            u32::try_from(index).map_err(|_| KunaError::lowlevel("DEX index out of range"))?;
+            u32::try_from(index).map_err(|_| UnlaceError::lowlevel("DEX index out of range"))?;
         let record = match tag {
             tag::METHOD | tag::STATIC_METHOD => {
                 let is_static = tag == tag::STATIC_METHOD;
@@ -541,16 +545,16 @@ fn copy_operations(
         .collect()
 }
 
-/// (kuna `dexmodel`) The DEX `uponentry` copies are in; reset by `Funcdata::clear`.
+/// (unlace `dexmodel`) The DEX `uponentry` copies are in; reset by `Funcdata::clear`.
 #[derive(Default)]
 struct EntrySlot(bool);
-crate::kuna_func_state!(EntrySlot, keep_across_clear: false);
+crate::unlace_func_state!(EntrySlot, keep_across_clear: false);
 
 /// Insert the `uponentry` copies at the start of the function (the dynamic
 /// payload `ActionConstbase` injects upstream).
-pub fn apply_entry(data: &mut crate::funcdata::Funcdata) -> KunaResult<()> {
+pub fn apply_entry(data: &mut crate::funcdata::Funcdata) -> UnlaceResult<()> {
     if data.get_arch().dex.is_none()
-        || data.kuna_state::<EntrySlot>().0
+        || data.unlace_state::<EntrySlot>().0
         || data.bblocks_get_size() == 0
     {
         return Ok(());
@@ -565,12 +569,12 @@ pub fn apply_entry(data: &mut crate::funcdata::Funcdata) -> KunaResult<()> {
     let register = arch
         .manage
         .get_space_by_name("register")
-        .ok_or_else(|| KunaError::lowlevel("Dalvik spec has no register space"))?;
+        .ok_or_else(|| UnlaceError::lowlevel("Dalvik spec has no register space"))?;
     let block = data.bblocks_get_block(0);
     let start = data.bblocks_block_start(block);
     let operations = copy_operations(&start, register, &copies);
     (data.hooks().callmechanisms_install_at_entry)(data, block, &operations)?;
-    data.kuna_state_mut::<EntrySlot>().0 = true;
+    data.unlace_state_mut::<EntrySlot>().0 = true;
     Ok(())
 }
 
@@ -579,18 +583,18 @@ pub fn apply_entry(data: &mut crate::funcdata::Funcdata) -> KunaResult<()> {
 pub fn emit_range(
     context: &crate::pcodeinject::InjectContext,
     emit: &mut dyn unlace_sleigh::translate::PcodeEmit,
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     let [count, first] = context.inputlist.as_slice() else {
-        return Err(KunaError::lowlevel("moveRangeToIV takes two inputs"));
+        return Err(UnlaceError::lowlevel("moveRangeToIV takes two inputs"));
     };
     let register = first
         .space
         .as_ref()
-        .ok_or_else(|| KunaError::lowlevel("moveRangeToIV register has no space"))?;
+        .ok_or_else(|| UnlaceError::lowlevel("moveRangeToIV register has no space"))?;
     let address = context
         .baseaddr
         .clone()
-        .ok_or_else(|| KunaError::lowlevel("moveRangeToIV without an address"))?;
+        .ok_or_else(|| UnlaceError::lowlevel("moveRangeToIV without an address"))?;
     let copies: Vec<(u64, u64, u32)> = (0..count.offset.min(256))
         .map(|i| (first.offset + 4 * i, INPUT_REGISTER_START + 4 * i, 4))
         .collect();

@@ -1,4 +1,4 @@
-//! (kuna `gotypeglobals`) The first `gotypes` CONSUMER — the walked `_type`
+//! (unlace `gotypeglobals`) The first `gotypes` CONSUMER — the walked `_type`
 //! descriptors become NAMED, TYPED data globals.
 //!
 //! A Go binary's runtime metadata types exactly one family of data objects

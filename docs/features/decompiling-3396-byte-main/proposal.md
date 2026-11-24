@@ -12,9 +12,9 @@ was pushed.
 
 The commit makes `kuna decompile <bin> <fn>` stop following the same function's flow twice —
 `load function` and `decompile` each rebuilt the whole lift, block build and per-jump-table
-sub-decompilation from scratch. 8 files: `kuna-console` `decompile_step.rs` /
+sub-decompilation from scratch. 8 files: `console` `decompile_step.rs` /
 `ifacedecomp.rs` / `interface.rs`, `kuna-decomp/src/infra/decompile_drive.rs`, a new
-`kuna-console/tests/verify_flowreuse.rs` (211 lines), `docs/spec/00-overview.md`, and a
+`console/tests/verify_flowreuse.rs` (211 lines), `docs/spec/00-overview.md`, and a
 drafted `pr_body.md`. This is **attempt 2**: attempt 1 (#380, merged) removed the O(N²)
 dead-list scan and took the witness 71.5s -> 19.4s; the acceptance bar is a median under
 10s, so the need stayed open.

@@ -3,7 +3,7 @@
 //! `rename`/`retype` — and the `--assert name`/`type` directives that lower onto
 //! them — resolve their target with `ScopeLocal::query_by_name`, so they reach
 //! exactly the locals a `Symbol` backs: the stack slots and the parameters.
-//! Every register-resident local kuna prints (`v6 // rax`, `v2 // al`) is a
+//! Every register-resident local unlace prints (`v6 // rax`, `v2 // al`) is a
 //! HighVariable the naming pass named directly, with nothing in the scope behind
 //! it, so the one plane an agent states facts through cannot name it — while
 //! `unlace decompile --help` teaches `type v2 char[16]` on exactly such a name.
@@ -14,7 +14,7 @@
 //! Both kinds survive the next IR rebuild; no analysis-local id is a replay key.
 //! A `name` with no type maps an unlocked Symbol only so later directives in
 //! the batch can find the variable; the rebuild carries the rename as a name
-//! instead (`kuna_stablenames`), since a Symbol over one definition of a merged
+//! instead (`unlace_stablenames`), since a Symbol over one definition of a merged
 //! variable split it and its type lock retyped it. A `type` that keeps the
 //! variable's width and kind travels the same way, as the type of the whole
 //! variable.
@@ -38,7 +38,7 @@
 //! the analysis, which emptied the HighVariables the NEXT directive resolves
 //! against, so of two independent renames the second always answered `No symbol
 //! named:` -- in either order.  The pass is now left intact and
-//! [`Funcdata::kuna_directive_symbols`] keeps every Symbol the batch touched
+//! [`Funcdata::unlace_directive_symbols`] keeps every Symbol the batch touched
 //! keyed by the identifier the pass printed for it, which gives `resolve_local`
 //! two readings of an identifier:
 //!
@@ -113,7 +113,7 @@ fn resolve_local(
     renaming_to: Option<&str>,
     maxduplicates: u32,
 ) -> Result<LocalTarget, String> {
-    let touched = fd.kuna_directive_symbols().to_vec();
+    let touched = fd.unlace_directive_symbols().to_vec();
     let mut printed: Vec<SymbolId> = touched
         .iter()
         .filter(|d| d.printed == name)
@@ -183,7 +183,7 @@ fn printed_by_pass(fd: &Funcdata, name: &str, touched: &[DirectiveSymbol]) -> bo
         })
         || printed_highs(fd, name)
             .into_iter()
-            .any(|id| fd.high_bank().get(id).is_some_and(|h| !h.kuna_global()))
+            .any(|id| fd.high_bank().get(id).is_some_and(|h| !h.unlace_global()))
 }
 
 /// The HighVariables the printer declared as `name`, a local printed under its
@@ -193,12 +193,12 @@ fn printed_highs(fd: &Funcdata, name: &str) -> Vec<HighVariableId> {
     fd.high_bank()
         .iter()
         .filter(|(id, h)| {
-            unlace_decomp::libcnames::shown_number(fd, *id).or(h.kuna_name()) == Some(name)
+            unlace_decomp::libcnames::shown_number(fd, *id).or(h.unlace_name()) == Some(name)
         })
         // A CONCAT piece shares its root's name and carries the root's in-symbol
         // offset; the root (offset -1) is the declaration and the only nameable
         // target, exactly as the printer's decl loop decides it.
-        .filter(|(_, h)| h.kuna_symbol_offset() < 0)
+        .filter(|(_, h)| h.unlace_symbol_offset() < 0)
         // A high all of whose instances are constants is a `&symbol` reference
         // the printer renders inline, not storage anything can be mapped over.
         .filter(|(_, h)| {
@@ -222,7 +222,7 @@ fn library_number(fd: &Funcdata, name: &str) -> Option<String> {
     let number = unlace_decomp::libcnames::number_for(fd, name)?;
     let lm = fd.get_scope_local()?;
     let given = fd
-        .kuna_directive_symbols()
+        .unlace_directive_symbols()
         .iter()
         .any(|d| d.printed != name && lm.database().symbol(d.symbol).name == name);
     (!given).then_some(number)
@@ -247,16 +247,16 @@ fn resolve_shown(
     let saved: Vec<(HighVariableId, String)> = renamed
         .iter()
         .filter_map(|(_, high, _)| {
-            Some((*high, fd.high_bank().get(*high)?.kuna_name()?.to_string()))
+            Some((*high, fd.high_bank().get(*high)?.unlace_name()?.to_string()))
         })
         .collect();
     for (_, high, name) in &renamed {
         if let Some(h) = fd
             .high_bank_mut()
             .get_mut(*high)
-            .filter(|h| h.kuna_name().is_some())
+            .filter(|h| h.unlace_name().is_some())
         {
-            h.set_kuna_name(name.clone());
+            h.set_unlace_name(name.clone());
         }
     }
     let print = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -265,7 +265,7 @@ fn resolve_shown(
     .ok();
     for (high, name) in saved.into_iter().rev() {
         if let Some(h) = fd.high_bank_mut().get_mut(high) {
-            h.set_kuna_name(name);
+            h.set_unlace_name(name);
         }
     }
     let print = print?;
@@ -289,18 +289,21 @@ fn resolve_shown(
         return Some(Ok((LocalTarget::Symbol(sym), shown.to_string())));
     }
     let h = fd.high_bank().get(local.high)?;
-    let linked = h.kuna_link_symbol().or(h.kuna_ref_symbol()).filter(|sym| {
-        fd.get_scope_local().is_some_and(|lm| {
-            lm.database()
-                .try_symbol(*sym)
-                .is_some_and(|s| !s.is_name_undefined())
-        })
-    });
+    let linked = h
+        .unlace_link_symbol()
+        .or(h.unlace_ref_symbol())
+        .filter(|sym| {
+            fd.get_scope_local().is_some_and(|lm| {
+                lm.database()
+                    .try_symbol(*sym)
+                    .is_some_and(|s| !s.is_name_undefined())
+            })
+        });
     if let Some(sym) = linked {
         return Some(Ok((LocalTarget::Symbol(sym), shown.to_string())));
     }
     let key = fd
-        .kuna_library_aliases()
+        .unlace_library_aliases()
         .iter()
         .find(|alias| alias.shown && alias.alias == local.base)
         .map_or_else(|| local.base.clone(), |alias| alias.number.clone());
@@ -331,7 +334,7 @@ fn batch_renames(fd: &Funcdata) -> Vec<(SymbolId, HighVariableId, String)> {
         return Vec::new();
     };
     let mut out = Vec::new();
-    for d in fd.kuna_directive_symbols() {
+    for d in fd.unlace_directive_symbols() {
         let Some(symbol) = lm.database().try_symbol(d.symbol) else {
             continue;
         };
@@ -345,8 +348,8 @@ fn batch_renames(fd: &Funcdata) -> Vec<(SymbolId, HighVariableId, String)> {
                     .high_bank()
                     .iter()
                     .filter(|(_, h)| {
-                        h.kuna_link_symbol() == Some(d.symbol)
-                            || h.kuna_ref_symbol() == Some(d.symbol)
+                        h.unlace_link_symbol() == Some(d.symbol)
+                            || h.unlace_ref_symbol() == Some(d.symbol)
                     })
                     .map(|(id, _)| id)
                     .collect();
@@ -398,7 +401,7 @@ fn stack_storage(fd: &Funcdata, sym: SymbolId) -> Option<(Address, Vec<int4>)> {
     for (_, h) in fd
         .high_bank()
         .iter()
-        .filter(|(_, h)| h.kuna_link_symbol() == Some(sym))
+        .filter(|(_, h)| h.unlace_link_symbol() == Some(sym))
     {
         widths.extend(
             (0..h.num_instances())
@@ -478,7 +481,7 @@ fn check_stack_retype_overlap(
     }
     let start = address.get_offset() as u128;
     let end = start + size.max(0) as u128;
-    for directive in fd.kuna_directive_symbols() {
+    for directive in fd.unlace_directive_symbols() {
         if !directive.retyped || directive.symbol == target {
             continue;
         }
@@ -543,7 +546,7 @@ pub fn apply_local(
                 .and_then(|ct| unlace_decomp::stablenames::unit_retype(&target.dtype, ct));
             let ct = retype.unwrap_or_else(|| target.dtype.clone());
             let symbol = bind_printed_local(fd, &target, newname, ct, lock_type)?;
-            fd.kuna_record_directive_symbol(DirectiveSymbol {
+            fd.unlace_record_directive_symbol(DirectiveSymbol {
                 symbol,
                 printed: name.to_string(),
                 bound: Some((target.addr.clone(), target.size, target.high)),
@@ -555,7 +558,7 @@ pub fn apply_local(
         LocalTarget::Symbol(sym) => sym,
     };
     let bound_size = fd
-        .kuna_directive_symbols()
+        .unlace_directive_symbols()
         .iter()
         .find(|d| d.symbol == sym)
         .and_then(|d| d.bound.as_ref().map(|(_, size, _)| *size));
@@ -586,7 +589,7 @@ pub fn apply_local(
         .ok_or_else(|| "Function has no local scope".to_string())?;
     let current = lm.database().symbol(sym).name.clone();
     let aliased = fd
-        .kuna_library_aliases()
+        .unlace_library_aliases()
         .iter()
         .any(|a| a.shown && a.number == current);
     if lm.symbol_category(sym) == symbol_category::FUNCTION_PARAMETER {
@@ -633,7 +636,7 @@ pub fn apply_local(
     if let Some(parameter) = parameter {
         crate::paramasserts::apply(fd, sym, parameter);
     }
-    fd.kuna_record_directive_symbol(DirectiveSymbol {
+    fd.unlace_record_directive_symbol(DirectiveSymbol {
         symbol: sym,
         printed: current,
         bound: None,
@@ -641,7 +644,7 @@ pub fn apply_local(
         unit_type: None,
     });
     if retype_given {
-        fd.kuna_set_directive_retype(sym, unit_type);
+        fd.unlace_set_directive_retype(sym, unit_type);
     }
     Ok(Some(sym))
 }
@@ -685,7 +688,7 @@ pub fn isolate_local(
     match target {
         LocalTarget::Printed(target) => {
             let symbol = bind_printed_local(fd, &target, "", target.dtype.clone(), true)?;
-            fd.kuna_record_directive_symbol(DirectiveSymbol {
+            fd.unlace_record_directive_symbol(DirectiveSymbol {
                 symbol,
                 printed: name,
                 bound: Some((target.addr.clone(), target.size, target.high)),
@@ -696,7 +699,7 @@ pub fn isolate_local(
         }
         LocalTarget::Symbol(sym) => {
             let bound = fd
-                .kuna_directive_symbols()
+                .unlace_directive_symbols()
                 .iter()
                 .any(|d| d.symbol == sym && d.bound.is_some());
             let lm = fd
@@ -708,7 +711,7 @@ pub fn isolate_local(
             }
             lm.set_symbol_identity_isolated(sym);
             let printed = lm.database().symbol(sym).name.clone();
-            fd.kuna_record_directive_symbol(DirectiveSymbol {
+            fd.unlace_record_directive_symbol(DirectiveSymbol {
                 symbol: sym,
                 printed,
                 bound: None,
@@ -992,7 +995,7 @@ fn check_width(size: int4, ct: &Datatype) -> Result<(), String> {
 /// when the `vN` allocator did not consult the scope: it handed the same `v5` to
 /// an unrelated temporary and the printer declared `v5` twice in one body
 /// (measured on the witness for `type v5 char *` and `type v7 short`).  The
-/// naming pass gives it back the number its pieces had (`kuna_stablenames`),
+/// naming pass gives it back the number its pieces had (`unlace_stablenames`),
 /// and an explicit `type v6 <T> <newname>` pins a name outright.
 fn bind_printed_local(
     fd: &mut Funcdata,

@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use unlace_base::address::{Address, calc_mask};
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::{AddrSpace, AddrSpaceManager, spacetype};
 use unlace_base::types::Wrap;
 use unlace_num::opbehavior::OpBehavior;
@@ -86,7 +86,7 @@ impl EmulateSnippet {
     ///        pull the value from
     /// \param sz is the number of bytes to pull from memory
     /// \return indicated bytes arranged as a constant value
-    fn get_load_image_value(&self, spc: &Rc<AddrSpace>, off: u64, sz: i32) -> KunaResult<u64> {
+    fn get_load_image_value(&self, spc: &Rc<AddrSpace>, off: u64, sz: i32) -> UnlaceResult<u64> {
         // C++ loadFill((uint1 *)&res, sizeof(uintb), ...): a full 8-byte
         // read regardless of sz; (a DataUnavailError is NOT caught here)
         let mut buf = [0u8; 8];
@@ -115,8 +115,8 @@ impl EmulateSnippet {
     }
 
     /// The throw shared by every illegal-in-a-snippet op.
-    fn illegal_op_error(&self) -> KunaError {
-        KunaError::lowlevel(format!(
+    fn illegal_op_error(&self) -> UnlaceError {
+        UnlaceError::lowlevel(format!(
             "Illegal p-code operation in snippet: {}",
             get_opname(self.current_op().get_opcode())
         ))
@@ -243,7 +243,7 @@ impl EmulateSnippet {
     /// is returned.
     /// \param vn is the Varnode to read
     /// \return the retrieved value
-    pub fn get_varnode_value(&self, vn: &VarnodeData) -> KunaResult<u64> {
+    pub fn get_varnode_value(&self, vn: &VarnodeData) -> UnlaceResult<u64> {
         let spc = vn
             .space
             .as_ref()
@@ -255,7 +255,7 @@ impl EmulateSnippet {
             return match self.temp_values.get(&vn.offset) {
                 // We have seen this varnode before
                 Some(val) => Ok(*val),
-                None => Err(KunaError::lowlevel(
+                None => Err(UnlaceError::lowlevel(
                     "Read before write in snippet emulation",
                 )),
             };
@@ -287,7 +287,7 @@ impl Emulate for EmulateSnippet {
         &mut self.core
     }
 
-    fn execute_unary(&mut self) -> KunaResult<()> {
+    fn execute_unary(&mut self) -> UnlaceResult<()> {
         let op = Rc::clone(self.current_op());
         let behave = Rc::clone(
             self.core
@@ -308,7 +308,7 @@ impl Emulate for EmulateSnippet {
         Ok(())
     }
 
-    fn execute_binary(&mut self) -> KunaResult<()> {
+    fn execute_binary(&mut self) -> UnlaceResult<()> {
         let op = Rc::clone(self.current_op());
         let behave = Rc::clone(
             self.core
@@ -331,7 +331,7 @@ impl Emulate for EmulateSnippet {
         Ok(())
     }
 
-    fn execute_load(&mut self) -> KunaResult<()> {
+    fn execute_load(&mut self) -> UnlaceResult<()> {
         // op will be null, use current_op
         let op = Rc::clone(self.current_op());
         let off = self.get_varnode_value(op.get_input(1))?;
@@ -350,11 +350,11 @@ impl Emulate for EmulateSnippet {
         Ok(())
     }
 
-    fn execute_store(&mut self) -> KunaResult<()> {
+    fn execute_store(&mut self) -> UnlaceResult<()> {
         Err(self.illegal_op_error())
     }
 
-    fn execute_branch(&mut self) -> KunaResult<()> {
+    fn execute_branch(&mut self) -> UnlaceResult<()> {
         let op = Rc::clone(self.current_op());
         let vn = op.get_input(0);
         let spc = vn
@@ -362,7 +362,7 @@ impl Emulate for EmulateSnippet {
             .as_ref()
             .expect("executeBranch: varnode with null space (C++ UB)");
         if spc.get_type() != spacetype::IPTR_CONSTANT {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Tried to emulate absolute branch in snippet code",
             ));
         }
@@ -371,7 +371,7 @@ impl Emulate for EmulateSnippet {
         // C++ `(pos < 0)||(pos>opList.size())`: the int4 vs size_t
         // comparison only runs after the explicit pos < 0 check
         if self.pos < 0 || (self.pos as usize) > self.op_list.len() {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Relative branch out of bounds in snippet code",
             ));
         }
@@ -384,7 +384,7 @@ impl Emulate for EmulateSnippet {
         Ok(())
     }
 
-    fn execute_cbranch(&mut self) -> KunaResult<bool> {
+    fn execute_cbranch(&mut self) -> UnlaceResult<bool> {
         // op will be null, use current_op
         let op = Rc::clone(self.current_op());
         let cond = self.get_varnode_value(op.get_input(1))?;
@@ -393,43 +393,43 @@ impl Emulate for EmulateSnippet {
         Ok(cond != 0)
     }
 
-    fn execute_branchind(&mut self) -> KunaResult<()> {
+    fn execute_branchind(&mut self) -> UnlaceResult<()> {
         Err(self.illegal_op_error())
     }
 
-    fn execute_call(&mut self) -> KunaResult<()> {
+    fn execute_call(&mut self) -> UnlaceResult<()> {
         Err(self.illegal_op_error())
     }
 
-    fn execute_callind(&mut self) -> KunaResult<()> {
+    fn execute_callind(&mut self) -> UnlaceResult<()> {
         Err(self.illegal_op_error())
     }
 
-    fn execute_callother(&mut self) -> KunaResult<()> {
+    fn execute_callother(&mut self) -> UnlaceResult<()> {
         Err(self.illegal_op_error())
     }
 
-    fn execute_multiequal(&mut self) -> KunaResult<()> {
+    fn execute_multiequal(&mut self) -> UnlaceResult<()> {
         Err(self.illegal_op_error())
     }
 
-    fn execute_indirect(&mut self) -> KunaResult<()> {
+    fn execute_indirect(&mut self) -> UnlaceResult<()> {
         Err(self.illegal_op_error())
     }
 
-    fn execute_segment_op(&mut self) -> KunaResult<()> {
+    fn execute_segment_op(&mut self) -> UnlaceResult<()> {
         Err(self.illegal_op_error())
     }
 
-    fn execute_cpool_ref(&mut self) -> KunaResult<()> {
+    fn execute_cpool_ref(&mut self) -> UnlaceResult<()> {
         Err(self.illegal_op_error())
     }
 
-    fn execute_new(&mut self) -> KunaResult<()> {
+    fn execute_new(&mut self) -> UnlaceResult<()> {
         Err(self.illegal_op_error())
     }
 
-    fn fallthru_op(&mut self) -> KunaResult<()> {
+    fn fallthru_op(&mut self) -> UnlaceResult<()> {
         self.pos += 1;
         if self.pos as usize == self.op_list.len() {
             // cast: C++ int4 == size_t comparison
@@ -440,7 +440,7 @@ impl Emulate for EmulateSnippet {
         Ok(())
     }
 
-    fn set_execute_address(&mut self, _addr: &Address) -> KunaResult<()> {
+    fn set_execute_address(&mut self, _addr: &Address) -> UnlaceResult<()> {
         self.set_current_op(0);
         Ok(())
     }
@@ -493,7 +493,7 @@ mod tests {
         }
     }
 
-    fn run(snippet: &mut EmulateSnippet) -> KunaResult<()> {
+    fn run(snippet: &mut EmulateSnippet) -> UnlaceResult<()> {
         snippet.reset_memory();
         let mut steps = 0;
         while !snippet.get_halt() {
@@ -777,7 +777,7 @@ mod tests {
         snippet.reset_memory();
         assert!(matches!(
             snippet.execute_current_op(),
-            Err(KunaError::DataUnavail { .. })
+            Err(UnlaceError::DataUnavail { .. })
         ));
     }
 }

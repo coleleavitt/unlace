@@ -1,7 +1,7 @@
-//! (kuna) `fdeinterior` — never start a function inside another function's
+//! (unlace) `fdeinterior` — never start a function inside another function's
 //! `.eh_frame` FDE (P1 code/data partition).
 //!
-//! kuna's function symbols carry no extent: a `FunctionSymbol` is an entry
+//! unlace's function symbols carry no extent: a `FunctionSymbol` is an entry
 //! address, so the commit boundary's "is this candidate already inside a known
 //! function?" question has no answer and every discovery oracle is free to plant
 //! a `sub_<addr>` in the middle of a body it cannot see. Three of them do it on
@@ -19,7 +19,7 @@
 //! * the prologue-pattern oracles match a 16-byte-aligned `push rbp; mov rbp,rsp`
 //!   that happens to sit inside a larger body.
 //!
-//! `.eh_frame` supplies exactly the extent kuna lacks: every FDE records its
+//! `.eh_frame` supplies exactly the extent unlace lacks: every FDE records its
 //! function's `pcBegin` and `pcRange`, and the FDE is per-function by
 //! construction (one `.cfi_startproc`/`.cfi_endproc` pair). So a discovered entry
 //! that falls **strictly inside** an FDE body is, on the unwinder's own
@@ -70,7 +70,7 @@ pub(crate) const STUB_SECTIONS: &[&str] = &[
     ".glink",
 ];
 
-/// (kuna) The FDE-interior entry-suppression pass (`fdeinterior`).
+/// (unlace) The FDE-interior entry-suppression pass (`fdeinterior`).
 ///
 /// Runs at load like every other analysis pass and reports the eligible FDE
 /// bodies in [`AnalysisOutput::fde_bodies`]; the **commit** applies them

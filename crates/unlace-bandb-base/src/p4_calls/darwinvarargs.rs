@@ -1,4 +1,4 @@
-//! (kuna `varargstackargs`) A callee whose own body runs Apple's `va_start`
+//! (unlace `varargstackargs`) A callee whose own body runs Apple's `va_start`
 //! is variadic at its call sites.
 //!
 //! # The gap
@@ -83,7 +83,7 @@ pub fn applies(arch: &Architecture) -> bool {
     arch.archid.starts_with("AARCH64:")
         && (arch.archid.contains("AppleSilicon")
             || *arch
-                .kuna_tables
+                .unlace_tables
                 .get::<crate::formatstring::ImageVarargAbi>()
                 == Some(VarargAbi::Nothing))
 }
@@ -95,11 +95,11 @@ pub fn applies(arch: &Architecture) -> bool {
 /// `Architecture`.
 pub fn seed(arch: &mut Architecture, data: &mut Funcdata) {
     if !applies(arch) {
-        data.kuna_set_darwin_variadic(None);
+        data.unlace_set_darwin_variadic(None);
         return;
     }
     let Some(sp) = stack_pointer(arch) else {
-        data.kuna_set_darwin_variadic(None);
+        data.unlace_set_darwin_variadic(None);
         return;
     };
     let mut found = std::collections::BTreeSet::new();
@@ -110,11 +110,11 @@ pub fn seed(arch: &mut Architecture, data: &mut Funcdata) {
             continue;
         }
         let key = (space.get_index(), e.get_offset());
-        let hit = match arch.kuna_darwin_variadic_cache.get(&key) {
+        let hit = match arch.unlace_darwin_variadic_cache.get(&key) {
             Some(&v) => v,
             None => {
                 let v = probe(arch.translate(), &e, &sp);
-                arch.kuna_darwin_variadic_cache.insert(key, v);
+                arch.unlace_darwin_variadic_cache.insert(key, v);
                 v
             }
         };
@@ -122,12 +122,12 @@ pub fn seed(arch: &mut Architecture, data: &mut Funcdata) {
             found.insert(key);
         }
     }
-    data.kuna_set_darwin_variadic(Some(found));
+    data.unlace_set_darwin_variadic(Some(found));
 }
 
 /// Is the call to `entry` one whose callee was seen running Apple's `va_start`?
 pub fn is_variadic_callee(data: &Funcdata, entry: &Address) -> bool {
-    let Some(found) = data.kuna_darwin_variadic() else {
+    let Some(found) = data.unlace_darwin_variadic() else {
         return false;
     };
     entry
@@ -151,7 +151,7 @@ pub fn is_variadic_callee(data: &Funcdata, entry: &Address) -> bool {
 /// arguments exactly as the method takes them, in registers, so their call
 /// keeps its register tail.
 pub fn keep_stack_tail(fc: &mut FuncCallSpecs, data: &Funcdata) {
-    if data.kuna_darwin_variadic().is_none()
+    if data.unlace_darwin_variadic().is_none()
         || !fc.is_dotdotdot()
         || !fc.is_input_locked()
         || MESSAGE_SENDS.contains(&fc.get_name())

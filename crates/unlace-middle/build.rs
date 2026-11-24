@@ -1,5 +1,5 @@
 //! Generate the phase tables and string-valued option storage from `phases.toml` (which stays in
-//! unlace-decomp, the catalog's home; `kuna_phases` in this crate includes the output).
+//! unlace-decomp, the catalog's home; `unlace_phases` in this crate includes the output).
 
 use std::fmt::Write as _;
 
@@ -34,7 +34,7 @@ fn generate(text: &str) -> Result<String, toml::de::Error> {
     Ok(out)
 }
 
-/// Render a phase code ("P0".."P9" or "infra") as a `KunaPhase` variant path.
+/// Render a phase code ("P0".."P9" or "infra") as a `UnlacePhase` variant path.
 fn phase_variant(code: &str) -> String {
     let v = match code {
         "infra" => "Infra",
@@ -50,10 +50,10 @@ fn phase_variant(code: &str) -> String {
         "P9" => "P9",
         other => panic!("phases.toml: bad phase code `{other}`"),
     };
-    format!("KunaPhase::{v}")
+    format!("UnlacePhase::{v}")
 }
 
-/// Render a strength code ("NONE"/"HINT"/"HARD") as a `KunaStrength` variant.
+/// Render a strength code ("NONE"/"HINT"/"HARD") as a `UnlaceStrength` variant.
 fn strength_variant(code: &str) -> String {
     let v = match code {
         "NONE" => "None",
@@ -61,7 +61,7 @@ fn strength_variant(code: &str) -> String {
         "HARD" => "Hard",
         other => panic!("phases.toml: bad strength code `{other}`"),
     };
-    format!("KunaStrength::{v}")
+    format!("UnlaceStrength::{v}")
 }
 
 /// Escape a string for a Rust string literal.
@@ -90,14 +90,14 @@ fn gen_groups(out: &mut String, rows: &[Group]) {
     .unwrap();
     writeln!(
         out,
-        "pub static GROUP_TABLE: [KunaGroupEntry; {}] = [",
+        "pub static GROUP_TABLE: [UnlaceGroupEntry; {}] = [",
         rows.len()
     )
     .unwrap();
     for r in rows {
         writeln!(
             out,
-            "    KunaGroupEntry {{ group: {}, phase: {}, subphase: {}, note: {} }},",
+            "    UnlaceGroupEntry {{ group: {}, phase: {}, subphase: {}, note: {} }},",
             rlit(r.group.as_str()),
             phase_variant(r.phase.as_str()),
             rlit(r.subphase.as_str()),
@@ -112,14 +112,14 @@ fn gen_subphases(out: &mut String, rows: &[Subphase]) {
     writeln!(out, "/// subphaseTable: every named decision point.").unwrap();
     writeln!(
         out,
-        "pub static SUBPHASE_TABLE: [KunaSubPhase; {}] = [",
+        "pub static SUBPHASE_TABLE: [UnlaceSubPhase; {}] = [",
         rows.len()
     )
     .unwrap();
     for r in rows {
         writeln!(
             out,
-            "    KunaSubPhase {{ name: {}, phase: {}, decision: {}, assertion: {}, strength: {}, rewind: {}, latent: {}, exposure: {} }},",
+            "    UnlaceSubPhase {{ name: {}, phase: {}, decision: {}, assertion: {}, strength: {}, rewind: {}, latent: {}, exposure: {} }},",
             rlit(r.name.as_str()),
             phase_variant(r.phase.as_str()),
             rlit(r.decision.as_str()),
@@ -142,14 +142,14 @@ fn gen_surfaces(out: &mut String, rows: &[Surface]) {
     .unwrap();
     writeln!(
         out,
-        "pub static SURFACE_TABLE: [KunaSurfaceEntry; {}] = [",
+        "pub static SURFACE_TABLE: [UnlaceSurfaceEntry; {}] = [",
         rows.len()
     )
     .unwrap();
     for r in rows {
         writeln!(
             out,
-            "    KunaSurfaceEntry {{ surface: {}, phase: {}, subphase: {}, note: {} }},",
+            "    UnlaceSurfaceEntry {{ surface: {}, phase: {}, subphase: {}, note: {} }},",
             rlit(r.surface.as_str()),
             phase_variant(r.phase.as_str()),
             rlit(r.subphase.as_str()),
@@ -168,12 +168,12 @@ fn gen_settables(out: &mut String, rows: &[Settable]) {
     .unwrap();
     writeln!(
         out,
-        "pub static SETTABLE_TABLE: [KunaSettable; {}] = [",
+        "pub static SETTABLE_TABLE: [UnlaceSettable; {}] = [",
         rows.len()
     )
     .unwrap();
     for r in rows {
-        writeln!(out, "    KunaSettable {{").unwrap();
+        writeln!(out, "    UnlaceSettable {{").unwrap();
         writeln!(out, "        option: {},", rlit(r.option.as_str())).unwrap();
         writeln!(out, "        values: {},", rlit(r.values.as_str())).unwrap();
         writeln!(out, "        shipped: {},", rlit(r.default.as_str())).unwrap();

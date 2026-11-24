@@ -3,7 +3,7 @@
 //! `TypeOpStore::getInputCast` casts the stored value to the pointee type, and
 //! `CastStrategyC::castStandard` needs no cast into `TYPE_UNKNOWN`: upstream
 //! prints the store as `*puVar1 = fVar2`, a copy of bits into an `undefined4`.
-//! kuna's C declares unknown bytes as an integer (`unsigned int *v1`), where
+//! unlace's C declares unknown bytes as an integer (`unsigned int *v1`), where
 //! the same assignment is C's numeric float-to-integer conversion: the 1.5f a
 //! `vstr s0,[r6]` writes as 0x3fc00000 reads as a store of 1. [`pointer`] gives
 //! the store a pointer to the value's own type instead, so it prints as

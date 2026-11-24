@@ -1,4 +1,4 @@
-//! (kuna `nameladder`) The spellings a function name is tried under when its
+//! (unlace `nameladder`) The spellings a function name is tried under when its
 //! exact spelling is not in a prototype or no-return table.
 //!
 //! IDA's type-library lookup (`guess_tinfo` -> 0x66f410) and `cleanup_name`

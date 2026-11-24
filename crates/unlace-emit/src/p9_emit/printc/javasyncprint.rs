@@ -1,4 +1,4 @@
-//! (kuna `javasync`) Printing a `try` whose catch-all is a `synchronized`
+//! (unlace `javasync`) Printing a `try` whose catch-all is a `synchronized`
 //! block's monitor release or a `finally` clause.
 //!
 //! `p2_lift/javasync.rs` reads the idiom of each catch-all handler from

@@ -1,7 +1,7 @@
 //! Schedule checks beyond the decompile snapshot: other root filters,
 //! container formatting, full-tree order and formerly unported passes.
 //! The firstpass expectation retains its original C++ capture; the full tree
-//! includes kuna-specific additions.
+//! includes unlace-specific additions.
 
 use std::collections::BTreeSet;
 

@@ -1,4 +1,4 @@
-//! (kuna #1288) Where a function of an x86 real-mode raw image ends.
+//! (unlace #1288) Where a function of an x86 real-mode raw image ends.
 //!
 //! The inventory measures a function as the clip from its entry to the next
 //! entry or the end of its CODE section (`unlace-console/src/funcextent.rs`).

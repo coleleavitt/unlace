@@ -1,4 +1,4 @@
-//! (kuna `itaniumeh`) Itanium C++ exception edges in the flow graph.
+//! (unlace `itaniumeh`) Itanium C++ exception edges in the flow graph.
 //!
 //! The `.gcc_except_table` call-site table says, for every call that can throw,
 //! where the unwinder lands (the landing pad) and which catch clauses the pad
@@ -14,7 +14,7 @@
 //! The table comes from the analysis tier (`AnalysisOutput::eh_call_sites`).
 
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::types::int4;
 
 use unlace_num::opcodes::OpCode;
@@ -49,7 +49,7 @@ pub struct EhCallSite {
     pub clauses: Vec<EhClause>,
 }
 
-/// (kuna `msvceh`) An MSVC x64 catch funclet entered as a pad: the parent's
+/// (unlace `msvceh`) An MSVC x64 catch funclet entered as a pad: the parent's
 /// frame register (`None`: the stack pointer) and its `UNWIND_INFO` frame
 /// offset, which give the establisher frame the runtime passes in RDX, and each
 /// `ret` of the funclet with the parent address it continues at.
@@ -88,17 +88,17 @@ pub struct EhTable {
     pub pads: Vec<u64>,
     pub exception_reg: Option<(Address, int4)>,
     pub selector_reg: Option<(Address, int4)>,
-    /// (kuna `msvceh`) MSVC try regions, one record per catch funclet, sorted by
+    /// (unlace `msvceh`) MSVC try regions, one record per catch funclet, sorted by
     /// `(start, end)`; regions of one function do not overlap, so the records
     /// covering an address all share its region.
     pub msvc_sites: Vec<EhCallSite>,
-    /// (kuna `msvceh`) The catch funclets those records enter, sorted by pad.
+    /// (unlace `msvceh`) The catch funclets those records enter, sorted by pad.
     pub funclets: Vec<FuncletPad>,
-    /// (kuna `msvceh`) The stack pointer and the establisher-frame argument
+    /// (unlace `msvceh`) The stack pointer and the establisher-frame argument
     /// register (RSP, RDX).
     pub stack_reg: Option<(Address, int4)>,
     pub establisher_reg: Option<(Address, int4)>,
-    /// (kuna `msvceh`) Every funclet `ret` and its continuation, sorted.
+    /// (unlace `msvceh`) Every funclet `ret` and its continuation, sorted.
     pub funclet_returns: Vec<(u64, u64)>,
 }
 
@@ -115,7 +115,7 @@ impl EhTable {
         }
     }
 
-    /// (kuna `msvceh`) Add the MSVC records and funclet pads.
+    /// (unlace `msvceh`) Add the MSVC records and funclet pads.
     pub fn with_msvc(
         mut self,
         mut sites: Vec<EhCallSite>,
@@ -142,13 +142,13 @@ impl EhTable {
         self.sites.iter().chain(self.msvc_sites.iter())
     }
 
-    /// (kuna `msvceh`) The funclet entered at `pad`.
+    /// (unlace `msvceh`) The funclet entered at `pad`.
     pub fn funclet(&self, pad: u64) -> Option<&FuncletPad> {
         let i = self.funclets.binary_search_by_key(&pad, |f| f.pad).ok()?;
         self.funclets.get(i)
     }
 
-    /// (kuna `msvceh`) The MSVC records covering `off`, in handler order.
+    /// (unlace `msvceh`) The MSVC records covering `off`, in handler order.
     pub fn msvc_sites_at(&self, off: u64) -> Vec<&EhCallSite> {
         let i = self.msvc_sites.partition_point(|s| s.start <= off);
         let Some(last) = i.checked_sub(1).and_then(|k| self.msvc_sites.get(k)) else {
@@ -162,7 +162,7 @@ impl EhTable {
             .collect()
     }
 
-    /// (kuna `msvceh`) Is `off` inside a cleanup funclet (`[pad, end)`)?
+    /// (unlace `msvceh`) Is `off` inside a cleanup funclet (`[pad, end)`)?
     pub fn in_cleanup_funclet(&self, off: u64) -> bool {
         let i = self.funclets.partition_point(|f| f.pad <= off);
         i.checked_sub(1)
@@ -171,7 +171,7 @@ impl EhTable {
             .is_some_and(|end| off < end)
     }
 
-    /// (kuna `msvceh`) The parent address a funclet `ret` at `off` continues at.
+    /// (unlace `msvceh`) The parent address a funclet `ret` at `off` continues at.
     pub fn funclet_return(&self, off: u64) -> Option<u64> {
         let i = self
             .funclet_returns
@@ -230,7 +230,7 @@ pub fn pad_comment(table: &EhTable, pad: u64) -> String {
 /// Append `if (eh_unwinding()) goto pad;` right after the call `call`, in the
 /// dead list of the instruction being decoded. Returns the CBRANCH, which the
 /// caller anchors any no-return halt after.
-pub fn insert_unwind_edge(data: &mut Funcdata, call: OpId, pad: &Address) -> KunaResult<OpId> {
+pub fn insert_unwind_edge(data: &mut Funcdata, call: OpId, pad: &Address) -> UnlaceResult<OpId> {
     let pc = data
         .obank()
         .get(call)
@@ -257,7 +257,11 @@ pub fn insert_unwind_edge(data: &mut Funcdata, call: OpId, pad: &Address) -> Kun
 /// Define the exception and selector registers at the pad `pad` with
 /// `eh_exception()` / `eh_selector()`. Called before the pad's own instruction
 /// is translated, so the two ops lead that instruction.
-pub fn define_pad_registers(data: &mut Funcdata, table: &EhTable, pad: &Address) -> KunaResult<()> {
+pub fn define_pad_registers(
+    data: &mut Funcdata,
+    table: &EhTable,
+    pad: &Address,
+) -> UnlaceResult<()> {
     if let Some(f) = table.funclet(pad.get_offset()) {
         return define_funclet_frame(data, table, f, pad);
     }
@@ -284,7 +288,7 @@ pub fn define_pad_registers(data: &mut Funcdata, table: &EhTable, pad: &Address)
     Ok(())
 }
 
-/// (kuna `msvceh`) Enter a catch funclet as a pad: RDX, the establisher frame
+/// (unlace `msvceh`) Enter a catch funclet as a pad: RDX, the establisher frame
 /// the runtime passes, is the parent's frame register less its `UNWIND_INFO`
 /// offset (the stack pointer when it has none), and the stack pointer drops by
 /// the return address the runtime's call pushed, so the funclet's `ret`, turned
@@ -294,7 +298,7 @@ fn define_funclet_frame(
     table: &EhTable,
     f: &FuncletPad,
     pad: &Address,
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     let Some((sp, sp_size)) = &table.stack_reg else {
         return Ok(());
     };
@@ -340,9 +344,13 @@ fn define_funclet_frame(
     Ok(())
 }
 
-/// (kuna `msvceh`) A funclet `ret` (among `ops`, one instruction's) becomes a
+/// (unlace `msvceh`) A funclet `ret` (among `ops`, one instruction's) becomes a
 /// branch to `cont`, the parent address the catch resumes at.
-pub fn return_to_continuation(data: &mut Funcdata, ops: &[OpId], cont: &Address) -> KunaResult<()> {
+pub fn return_to_continuation(
+    data: &mut Funcdata,
+    ops: &[OpId],
+    cont: &Address,
+) -> UnlaceResult<()> {
     let Some(&ret) = ops.iter().find(|&&op| {
         data.obank()
             .get(op)
@@ -355,9 +363,9 @@ pub fn return_to_continuation(data: &mut Funcdata, ops: &[OpId], cont: &Address)
     data.op_set_all_input(ret, &[dest])
 }
 
-/// (kuna `msvceh`) A cleanup funclet's `ret` (among `ops`) ends the path: after
+/// (unlace `msvceh`) A cleanup funclet's `ret` (among `ops`) ends the path: after
 /// the cleanup the exception keeps propagating out of the parent.
-pub fn return_to_halt(data: &mut Funcdata, ops: &[OpId]) -> KunaResult<()> {
+pub fn return_to_halt(data: &mut Funcdata, ops: &[OpId]) -> UnlaceResult<()> {
     let Some(&ret) = ops.iter().find(|&&op| {
         data.obank()
             .get(op)
@@ -375,14 +383,14 @@ const USER2: unlace_base::types::uint4 = 2;
 
 pub use crate::coreoptions::ItaniumEh;
 
-crate::kuna_arch_state!(EhTable);
+crate::unlace_arch_state!(EhTable);
 
 /// The image's call-site table, when `itaniumeh` is on; empty before the loader commits one.
 pub fn eh_table(glb: &crate::context::ArchContext) -> Option<std::rc::Rc<EhTable>> {
-    glb.kuna_options
+    glb.unlace_options
         .get::<crate::coreoptions::ItaniumEh>()
         .on
-        .then(|| glb.kuna_states.get_rc::<EhTable>().unwrap_or_default())
+        .then(|| glb.unlace_states.get_rc::<EhTable>().unwrap_or_default())
 }
 
 #[cfg(test)]

@@ -174,7 +174,7 @@ impl PrintC {
         target: &Rc<Datatype>,
     ) -> bool {
         if !arch
-            .kuna_options
+            .unlace_options
             .get::<crate::analysisgates::Godwarfsig>()
             .0
             || target.get_metatype() != type_metatype::TYPE_STRUCT
@@ -184,7 +184,7 @@ impl PrintC {
         }
         let Some(results) = arch
             .types()
-            .kuna_lang_facet(target.get_name())
+            .unlace_lang_facet(target.get_name())
             .and_then(|facet| facet.go_pair_fields(target))
         else {
             return false;

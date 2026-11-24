@@ -248,11 +248,11 @@ fn an_unreadable_base_relocation_directory_makes_the_list_partial() {
     );
 }
 
-/// Metadata kuna does not read is `unsupported`, not `none`: a MIPS image's
+/// Metadata unlace does not read is `unsupported`, not `none`: a MIPS image's
 /// dynamic relocations (its local GOT is relocated without one) and a
 /// relocatable object's relocations. A non-PIE ELF keeps none, and says so.
 #[test]
-fn metadata_kuna_does_not_read_is_unsupported() {
+fn metadata_unlace_does_not_read_is_unsupported() {
     let mips = json(&[&fixture("mipsstubs_noreturn_el.so"), "--to", "say"]);
     assert_eq!(mips["data_refs_coverage"], "unsupported", "{mips}");
     assert!(

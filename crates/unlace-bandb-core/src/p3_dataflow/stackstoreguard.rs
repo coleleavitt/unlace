@@ -291,7 +291,7 @@ pub fn keeps_store_indirect_whole(
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.stackstoreguard_enabled = Some(enabled);
     hooks.stackstoreguard_frame_unresolved = Some(frame_unresolved);
     hooks.stackstoreguard_indexed_enabled = Some(indexed_enabled);

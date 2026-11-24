@@ -9,7 +9,7 @@
 //! Attribute strings are bytes and need not be UTF-8. Encoders write to byte
 //! vectors; decoders ingest byte slices and borrow an [`AddrSpaceManager`],
 //! which may be empty when no space resolution is needed. Decoding failures
-//! use [`KunaError::Decoder`].
+//! use [`UnlaceError::Decoder`].
 //!
 //! XML element closing follows the upstream release behavior: it does not
 //! check the supplied element ID or require all children to have been read.
@@ -17,7 +17,7 @@
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-use crate::error::{KunaError, KunaResult};
+use crate::error::{UnlaceError, UnlaceResult};
 use crate::space::{AddrSpace, AddrSpaceManager, spacetype};
 use crate::types::Wrap;
 use crate::xml::{self, Document, Element};
@@ -542,7 +542,7 @@ pub trait Decoder {
     /// Called once before any decoding.  Currently this is assumed to make
     /// an internal copy of the stream data, i.e. the input stream is cleared
     /// before any decoding takes place.
-    fn ingest_stream(&mut self, s: &[u8]) -> KunaResult<()>;
+    fn ingest_stream(&mut self, s: &[u8]) -> UnlaceResult<()>;
 
     /// \brief Peek at the next child element of the current parent, without
     /// traversing in (opening) it.
@@ -550,20 +550,20 @@ pub trait Decoder {
     /// The element id is returned, which can be compared to ElementId
     /// labels.  If there are no remaining child elements to traverse, 0 is
     /// returned.
-    fn peek_element(&mut self) -> KunaResult<u32>;
+    fn peek_element(&mut self) -> UnlaceResult<u32>;
 
     /// \brief Open (traverse into) the next child element of the current parent.
     ///
     /// The child becomes the current parent.  The list of attributes is
     /// initialized for use with getNextAttributeId.  Returns 0 if there is
     /// no child to open.
-    fn open_element(&mut self) -> KunaResult<u32>;
+    fn open_element(&mut self) -> UnlaceResult<u32>;
 
-    /// (kuna) Skip the next child element of the current parent, appending its
+    /// (unlace) Skip the next child element of the current parent, appending its
     /// encoded bytes (start record to end record) to `out`, so it can be
     /// decoded later from those bytes alone.  Only a byte-encoded decoder can;
     /// the default consumes nothing and returns `false`.
-    fn skip_element_raw(&mut self, out: &mut Vec<u8>) -> KunaResult<bool> {
+    fn skip_element_raw(&mut self, out: &mut Vec<u8>) -> UnlaceResult<bool> {
         let _ = out;
         Ok(false)
     }
@@ -574,25 +574,25 @@ pub trait Decoder {
     /// The child becomes the current parent, and its attributes are
     /// initialized for use with getNextAttributeId.  The child must match
     /// the given element id or an error is returned.
-    fn open_element_id(&mut self, elem_id: &ElementId) -> KunaResult<u32>;
+    fn open_element_id(&mut self, elem_id: &ElementId) -> UnlaceResult<u32>;
 
     /// \brief Close the current element
     ///
     /// The data for the current element is considered fully processed.  If
     /// the element has additional children, an error is returned.  The
     /// stream must indicate the end of the element in some way.
-    fn close_element(&mut self, id: u32) -> KunaResult<()>;
+    fn close_element(&mut self, id: u32) -> UnlaceResult<()>;
 
     /// \brief Close the current element, skipping any child elements that
     /// have not yet been parsed
-    fn close_element_skipping(&mut self, id: u32) -> KunaResult<()>;
+    fn close_element_skipping(&mut self, id: u32) -> UnlaceResult<()>;
 
     /// \brief Get the next attribute id for the current element
     ///
     /// Attributes are automatically set up for traversal using this method,
     /// when the element is opened.  If all attributes have been traversed
     /// (or there are no attributes), 0 is returned.
-    fn get_next_attribute_id(&mut self) -> KunaResult<u32>;
+    fn get_next_attribute_id(&mut self) -> UnlaceResult<u32>;
 
     /// \brief Get the id for the (current) attribute, assuming it is indexed
     ///
@@ -600,7 +600,7 @@ pub trait Decoder {
     /// ATTRIB_UNKNOWN, reinterpret the attribute as being an indexed form of
     /// the given attribute. If the attribute matches, return this indexed
     /// id, otherwise return ATTRIB_UNKNOWN.
-    fn get_indexed_attribute_id(&mut self, attrib_id: &AttributeId) -> KunaResult<u32>;
+    fn get_indexed_attribute_id(&mut self, attrib_id: &AttributeId) -> UnlaceResult<u32>;
 
     /// \brief Reset attribute traversal for the current element
     ///
@@ -609,20 +609,20 @@ pub trait Decoder {
     fn rewind_attributes(&mut self);
 
     /// \brief Parse the current attribute as a boolean value
-    fn read_bool(&mut self) -> KunaResult<bool>;
+    fn read_bool(&mut self) -> UnlaceResult<bool>;
 
     /// \brief Find and parse a specific attribute in the current element as
     /// a boolean value (C++ `readBool(const AttributeId &)`)
     ///
     /// Parsing via getNextAttributeId is reset.
-    fn read_bool_id(&mut self, attrib_id: &AttributeId) -> KunaResult<bool>;
+    fn read_bool_id(&mut self, attrib_id: &AttributeId) -> UnlaceResult<bool>;
 
     /// \brief Parse the current attribute as a signed integer value
-    fn read_signed_integer(&mut self) -> KunaResult<i64>;
+    fn read_signed_integer(&mut self) -> UnlaceResult<i64>;
 
     /// \brief Find and parse a specific attribute in the current element as
     /// a signed integer (C++ `readSignedInteger(const AttributeId &)`)
-    fn read_signed_integer_id(&mut self, attrib_id: &AttributeId) -> KunaResult<i64>;
+    fn read_signed_integer_id(&mut self, attrib_id: &AttributeId) -> UnlaceResult<i64>;
 
     /// \brief Parse the current attribute as either a signed integer value
     /// or a string.
@@ -635,7 +635,7 @@ pub trait Decoder {
         &mut self,
         expect: &[u8],
         expectval: i64,
-    ) -> KunaResult<i64>;
+    ) -> UnlaceResult<i64>;
 
     /// \brief Find and parse a specific attribute in the current element as
     /// either a signed integer or a string.
@@ -644,34 +644,34 @@ pub trait Decoder {
         attrib_id: &AttributeId,
         expect: &[u8],
         expectval: i64,
-    ) -> KunaResult<i64>;
+    ) -> UnlaceResult<i64>;
 
     /// \brief Parse the current attribute as an unsigned integer value
-    fn read_unsigned_integer(&mut self) -> KunaResult<u64>;
+    fn read_unsigned_integer(&mut self) -> UnlaceResult<u64>;
 
     /// \brief Find and parse a specific attribute in the current element as
     /// an unsigned integer (C++ `readUnsignedInteger(const AttributeId &)`)
-    fn read_unsigned_integer_id(&mut self, attrib_id: &AttributeId) -> KunaResult<u64>;
+    fn read_unsigned_integer_id(&mut self, attrib_id: &AttributeId) -> UnlaceResult<u64>;
 
     /// \brief Parse the current attribute as a string (byte string)
-    fn read_string(&mut self) -> KunaResult<Vec<u8>>;
+    fn read_string(&mut self) -> UnlaceResult<Vec<u8>>;
 
     /// \brief Find the specific attribute in the current element and return
     /// it as a string (C++ `readString(const AttributeId &)`)
-    fn read_string_id(&mut self, attrib_id: &AttributeId) -> KunaResult<Vec<u8>>;
+    fn read_string_id(&mut self, attrib_id: &AttributeId) -> UnlaceResult<Vec<u8>>;
 
     /// \brief Parse the current attribute as an address space
-    fn read_space(&mut self) -> KunaResult<Rc<AddrSpace>>;
+    fn read_space(&mut self) -> UnlaceResult<Rc<AddrSpace>>;
 
     /// \brief Find the specific attribute in the current element and return
     /// it as an address space (C++ `readSpace(const AttributeId &)`)
-    fn read_space_id(&mut self, attrib_id: &AttributeId) -> KunaResult<Rc<AddrSpace>>;
+    fn read_space_id(&mut self, attrib_id: &AttributeId) -> UnlaceResult<Rc<AddrSpace>>;
 
     /// \brief Skip parsing of the next element
     ///
     /// The element skipped is the one that would be opened by the next call
     /// to openElement.
-    fn skip_element(&mut self) -> KunaResult<()> {
+    fn skip_element(&mut self) -> UnlaceResult<()> {
         let elem_id = self.open_element()?;
         self.close_element_skipping(elem_id)
     }
@@ -1007,13 +1007,13 @@ impl<'a> XmlDecode<'a> {
     ///
     /// Run through the attributes of the element until we find the one
     /// matching the name, or return an error otherwise.
-    fn find_matching_attribute(el: &Element, attrib_name: &str) -> KunaResult<i32> {
+    fn find_matching_attribute(el: &Element, attrib_name: &str) -> UnlaceResult<i32> {
         for i in 0..el.get_num_attributes() {
             if el.get_attribute_name(i) == attrib_name {
                 return Ok(i);
             }
         }
-        Err(KunaError::decoder(format!(
+        Err(UnlaceError::decoder(format!(
             "Attribute missing: {attrib_name}"
         )))
     }
@@ -1024,14 +1024,14 @@ impl Decoder for XmlDecode<'_> {
         self.spc_manager
     }
 
-    fn ingest_stream(&mut self, s: &[u8]) -> KunaResult<()> {
+    fn ingest_stream(&mut self, s: &[u8]) -> UnlaceResult<()> {
         let document = xml::xml_tree(s)?;
         self.root_element = Some(Rc::clone(document.get_root()));
         self.document = Some(document);
         Ok(())
     }
 
-    fn peek_element(&mut self) -> KunaResult<u32> {
+    fn peek_element(&mut self) -> UnlaceResult<u32> {
         let el: Rc<Element>;
         if self.el_stack.is_empty() {
             match &self.root_element {
@@ -1052,7 +1052,7 @@ impl Decoder for XmlDecode<'_> {
         Ok(self.registry.find_element(el.get_name(), self.scope))
     }
 
-    fn open_element(&mut self) -> KunaResult<u32> {
+    fn open_element(&mut self) -> UnlaceResult<u32> {
         let el: Rc<Element>;
         if self.el_stack.is_empty() {
             match self.root_element.take() {
@@ -1081,12 +1081,12 @@ impl Decoder for XmlDecode<'_> {
         Ok(id)
     }
 
-    fn open_element_id(&mut self, elem_id: &ElementId) -> KunaResult<u32> {
+    fn open_element_id(&mut self, elem_id: &ElementId) -> UnlaceResult<u32> {
         let el: Rc<Element>;
         if self.el_stack.is_empty() {
             match self.root_element.take() {
                 None => {
-                    return Err(KunaError::decoder(format!(
+                    return Err(UnlaceError::decoder(format!(
                         "Expecting <{}> but reached end of document",
                         elem_id.get_name()
                     )));
@@ -1106,14 +1106,14 @@ impl Decoder for XmlDecode<'_> {
                     .last_mut()
                     .expect("XmlDecode: iterator stack empty") = iter + 1;
             } else {
-                return Err(KunaError::decoder(format!(
+                return Err(UnlaceError::decoder(format!(
                     "Expecting <{}> but no remaining children in current element",
                     elem_id.get_name()
                 )));
             }
         }
         if el.get_name() != elem_id.get_name() {
-            return Err(KunaError::decoder(format!(
+            return Err(UnlaceError::decoder(format!(
                 "Expecting <{}> but got <{}>",
                 elem_id.get_name(),
                 el.get_name()
@@ -1125,7 +1125,7 @@ impl Decoder for XmlDecode<'_> {
         Ok(elem_id.get_id())
     }
 
-    fn close_element(&mut self, _id: u32) -> KunaResult<()> {
+    fn close_element(&mut self, _id: u32) -> UnlaceResult<()> {
         // The C++ CPUI_DEBUG block (additional-children / id-mismatch
         // checks) is compiled out of the test oracle and is not ported.
         self.el_stack.pop();
@@ -1134,7 +1134,7 @@ impl Decoder for XmlDecode<'_> {
         Ok(())
     }
 
-    fn close_element_skipping(&mut self, _id: u32) -> KunaResult<()> {
+    fn close_element_skipping(&mut self, _id: u32) -> UnlaceResult<()> {
         // The C++ CPUI_DEBUG id-mismatch check is compiled out of the test
         // oracle and is not ported.
         self.el_stack.pop();
@@ -1143,7 +1143,7 @@ impl Decoder for XmlDecode<'_> {
         Ok(())
     }
 
-    fn get_next_attribute_id(&mut self) -> KunaResult<u32> {
+    fn get_next_attribute_id(&mut self) -> UnlaceResult<u32> {
         let el = self.current_element();
         let next_index = self.attribute_index + 1;
         if next_index < el.get_num_attributes() {
@@ -1155,7 +1155,7 @@ impl Decoder for XmlDecode<'_> {
         Ok(0)
     }
 
-    fn get_indexed_attribute_id(&mut self, attrib_id: &AttributeId) -> KunaResult<u32> {
+    fn get_indexed_attribute_id(&mut self, attrib_id: &AttributeId) -> UnlaceResult<u32> {
         let el = self.current_element();
         if self.attribute_index < 0 || self.attribute_index >= el.get_num_attributes() {
             return Ok(ATTRIB_UNKNOWN.get_id());
@@ -1173,7 +1173,7 @@ impl Decoder for XmlDecode<'_> {
         let suffix = &attrib_name.as_bytes()[attrib_id.get_name().len()..];
         let val: u32 = cxx_num_get_u32_dec(suffix);
         if val == 0 {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "Bad indexed attribute: {}",
                 attrib_id.get_name()
             )));
@@ -1188,14 +1188,14 @@ impl Decoder for XmlDecode<'_> {
         self.attribute_index = -1;
     }
 
-    fn read_bool(&mut self) -> KunaResult<bool> {
+    fn read_bool(&mut self) -> UnlaceResult<bool> {
         let el = self.current_element();
         Ok(xml::xml_readbool(
             el.get_attribute_value_at(self.attribute_index),
         ))
     }
 
-    fn read_bool_id(&mut self, attrib_id: &AttributeId) -> KunaResult<bool> {
+    fn read_bool_id(&mut self, attrib_id: &AttributeId) -> UnlaceResult<bool> {
         let el = self.current_element();
         if *attrib_id == ATTRIB_CONTENT {
             return Ok(xml::xml_readbool(el.get_content()));
@@ -1204,14 +1204,14 @@ impl Decoder for XmlDecode<'_> {
         Ok(xml::xml_readbool(el.get_attribute_value_at(index)))
     }
 
-    fn read_signed_integer(&mut self) -> KunaResult<i64> {
+    fn read_signed_integer(&mut self) -> UnlaceResult<i64> {
         let el = self.current_element();
         Ok(cxx_parse_signed(
             el.get_attribute_value_at(self.attribute_index),
         ))
     }
 
-    fn read_signed_integer_id(&mut self, attrib_id: &AttributeId) -> KunaResult<i64> {
+    fn read_signed_integer_id(&mut self, attrib_id: &AttributeId) -> UnlaceResult<i64> {
         let el = self.current_element();
         if *attrib_id == ATTRIB_CONTENT {
             return Ok(cxx_parse_signed(el.get_content()));
@@ -1224,7 +1224,7 @@ impl Decoder for XmlDecode<'_> {
         &mut self,
         expect: &[u8],
         expectval: i64,
-    ) -> KunaResult<i64> {
+    ) -> UnlaceResult<i64> {
         let el = self.current_element();
         let value = el.get_attribute_value_at(self.attribute_index);
         if value == expect {
@@ -1238,7 +1238,7 @@ impl Decoder for XmlDecode<'_> {
         attrib_id: &AttributeId,
         expect: &[u8],
         expectval: i64,
-    ) -> KunaResult<i64> {
+    ) -> UnlaceResult<i64> {
         let value = self.read_string_id(attrib_id)?;
         if value == expect {
             return Ok(expectval);
@@ -1246,14 +1246,14 @@ impl Decoder for XmlDecode<'_> {
         Ok(cxx_parse_signed(&value))
     }
 
-    fn read_unsigned_integer(&mut self) -> KunaResult<u64> {
+    fn read_unsigned_integer(&mut self) -> UnlaceResult<u64> {
         let el = self.current_element();
         Ok(cxx_parse_unsigned(
             el.get_attribute_value_at(self.attribute_index),
         ))
     }
 
-    fn read_unsigned_integer_id(&mut self, attrib_id: &AttributeId) -> KunaResult<u64> {
+    fn read_unsigned_integer_id(&mut self, attrib_id: &AttributeId) -> UnlaceResult<u64> {
         let el = self.current_element();
         if *attrib_id == ATTRIB_CONTENT {
             return Ok(cxx_parse_unsigned(el.get_content()));
@@ -1262,12 +1262,12 @@ impl Decoder for XmlDecode<'_> {
         Ok(cxx_parse_unsigned(el.get_attribute_value_at(index)))
     }
 
-    fn read_string(&mut self) -> KunaResult<Vec<u8>> {
+    fn read_string(&mut self) -> UnlaceResult<Vec<u8>> {
         let el = self.current_element();
         Ok(el.get_attribute_value_at(self.attribute_index).to_vec())
     }
 
-    fn read_string_id(&mut self, attrib_id: &AttributeId) -> KunaResult<Vec<u8>> {
+    fn read_string_id(&mut self, attrib_id: &AttributeId) -> UnlaceResult<Vec<u8>> {
         let el = self.current_element();
         if *attrib_id == ATTRIB_CONTENT {
             return Ok(el.get_content().to_vec());
@@ -1276,13 +1276,13 @@ impl Decoder for XmlDecode<'_> {
         Ok(el.get_attribute_value_at(index).to_vec())
     }
 
-    fn read_space(&mut self) -> KunaResult<Rc<AddrSpace>> {
+    fn read_space(&mut self) -> UnlaceResult<Rc<AddrSpace>> {
         let el = self.current_element();
         let nm = el.get_attribute_value_at(self.attribute_index).to_vec();
         lookup_space_by_name(self.spc_manager, &nm)
     }
 
-    fn read_space_id(&mut self, attrib_id: &AttributeId) -> KunaResult<Rc<AddrSpace>> {
+    fn read_space_id(&mut self, attrib_id: &AttributeId) -> UnlaceResult<Rc<AddrSpace>> {
         let el = self.current_element();
         let nm: Vec<u8> = if *attrib_id == ATTRIB_CONTENT {
             el.get_content().to_vec()
@@ -1297,13 +1297,13 @@ impl Decoder for XmlDecode<'_> {
 /// Shared name -> space lookup for `XmlDecode::readSpace` variants.
 /// A non-UTF-8 name cannot equal any registered (ASCII) space name, so it
 /// falls through to the same "Unknown address space name" error as in C++.
-fn lookup_space_by_name(manager: &AddrSpaceManager, nm: &[u8]) -> KunaResult<Rc<AddrSpace>> {
+fn lookup_space_by_name(manager: &AddrSpaceManager, nm: &[u8]) -> UnlaceResult<Rc<AddrSpace>> {
     if let Ok(nm_str) = std::str::from_utf8(nm)
         && let Some(spc) = manager.get_space_by_name(nm_str)
     {
         return Ok(Rc::clone(spc));
     }
-    Err(KunaError::decoder(format!(
+    Err(UnlaceError::decoder(format!(
         "Unknown address space name: {}",
         String::from_utf8_lossy(nm)
     )))
@@ -1459,7 +1459,7 @@ impl<'a> PackedDecode<'a> {
     /// is copied, so that `end_ingest` has a chunk to pad.  The chunk
     /// *boundaries* move; the ingested bytes, the NUL termination and the byte
     /// at which the stream ends do not, so decoding matches `ingest_stream`.
-    pub fn ingest_owned(&mut self, mut data: Vec<u8>) -> KunaResult<()> {
+    pub fn ingest_owned(&mut self, mut data: Vec<u8>) -> UnlaceResult<()> {
         let length = data
             .iter()
             .position(|&byte| byte == 0)
@@ -1494,12 +1494,12 @@ impl<'a> PackedDecode<'a> {
     /// Get the byte following the current byte, do not advance position.
     /// An error is returned if the position currently points to the last
     /// byte in the stream.
-    fn get_byte_plus1(in_stream: &[Vec<u8>], pos: &Position) -> KunaResult<u8> {
+    fn get_byte_plus1(in_stream: &[Vec<u8>], pos: &Position) -> UnlaceResult<u8> {
         let ptr = pos.current + 1;
         if ptr == pos.end {
             let iter = pos.seq + 1;
             if iter == in_stream.len() {
-                return Err(KunaError::decoder("Unexpected end of stream"));
+                return Err(UnlaceError::decoder("Unexpected end of stream"));
             }
             return Ok(in_stream[iter][0]);
         }
@@ -1509,7 +1509,7 @@ impl<'a> PackedDecode<'a> {
     /// Get the byte at the current position and advance to the next byte.
     /// An error is returned if there are no additional bytes in the stream.
     #[inline(always)]
-    fn get_next_byte(in_stream: &[Vec<u8>], pos: &mut Position) -> KunaResult<u8> {
+    fn get_next_byte(in_stream: &[Vec<u8>], pos: &mut Position) -> UnlaceResult<u8> {
         let res = in_stream[pos.seq][pos.current];
         pos.current += 1;
         if pos.current != pos.end {
@@ -1517,7 +1517,7 @@ impl<'a> PackedDecode<'a> {
         }
         pos.seq += 1;
         if pos.seq == in_stream.len() {
-            return Err(KunaError::decoder("Unexpected end of stream"));
+            return Err(UnlaceError::decoder("Unexpected end of stream"));
         }
         pos.current = 0;
         pos.end = in_stream[pos.seq].len();
@@ -1530,14 +1530,14 @@ impl<'a> PackedDecode<'a> {
         in_stream: &[Vec<u8>],
         pos: &mut Position,
         mut skip: u32,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         // C++ compares `pos.end - pos.current <= skip` with ptrdiff_t vs
         // uint4 (skip converted up); both sides are non-negative here.
         while ((pos.end - pos.current) as u64) <= skip as u64 {
             skip -= (pos.end - pos.current) as u32;
             pos.seq += 1;
             if pos.seq == in_stream.len() {
-                return Err(KunaError::decoder("Unexpected end of stream"));
+                return Err(UnlaceError::decoder("Unexpected end of stream"));
             }
             pos.current = 0;
             pos.end = in_stream[pos.seq].len();
@@ -1556,7 +1556,7 @@ impl<'a> PackedDecode<'a> {
     /// chunk's end stays on the byte cursor, which is where end-of-stream is
     /// detected.
     #[inline]
-    fn read_integer(&mut self, mut len: i32) -> KunaResult<u64> {
+    fn read_integer(&mut self, mut len: i32) -> UnlaceResult<u64> {
         let mut res: u64 = 0;
         if len >= 0 && (len as usize) < self.cur_pos.end - self.cur_pos.current {
             let end = self.cur_pos.current + len as usize;
@@ -1587,7 +1587,7 @@ impl<'a> PackedDecode<'a> {
     /// matching the given id is found.  The \e current position is set to
     /// the start of the matching attribute, in preparation for one of the
     /// read*() methods.  If the id is not found an error is returned.
-    fn find_matching_attribute(&mut self, attrib_id: &AttributeId) -> KunaResult<()> {
+    fn find_matching_attribute(&mut self, attrib_id: &AttributeId) -> UnlaceResult<()> {
         self.cur_pos = self.start_pos;
         loop {
             let header1 = Self::get_byte(&self.in_stream, &self.cur_pos);
@@ -1605,7 +1605,7 @@ impl<'a> PackedDecode<'a> {
             }
             self.skip_attribute()?;
         }
-        Err(KunaError::decoder(format!(
+        Err(UnlaceError::decoder(format!(
             "Attribute {} is not present",
             attrib_id.get_name()
         )))
@@ -1616,7 +1616,7 @@ impl<'a> PackedDecode<'a> {
     /// The attribute at the \e current position is scanned enough to
     /// determine its length, and the position is advanced to the following
     /// byte.
-    fn skip_attribute(&mut self) -> KunaResult<()> {
+    fn skip_attribute(&mut self) -> UnlaceResult<()> {
         let header1 = Self::get_next_byte(&self.in_stream, &mut self.cur_pos)?; // Attribute header
         if (header1 & pf::HEADEREXTEND_MASK) != 0 {
             Self::get_next_byte(&self.in_stream, &mut self.cur_pos)?; // Extra byte for extended id
@@ -1642,7 +1642,7 @@ impl<'a> PackedDecode<'a> {
     /// This assumes the header and \b type \b byte have been read.  Decode
     /// type and length info and finish skipping over the attribute so that
     /// the next call to getNextAttributeId() is on cut.
-    fn skip_attribute_remaining(&mut self, type_byte: u8) -> KunaResult<()> {
+    fn skip_attribute_remaining(&mut self, type_byte: u8) -> UnlaceResult<()> {
         let attrib_type = type_byte >> pf::TYPECODE_SHIFT;
         if attrib_type == pf::TYPECODE_BOOLEAN || attrib_type == pf::TYPECODE_SPECIALSPACE {
             return Ok(()); // has no additional data
@@ -1663,9 +1663,9 @@ impl<'a> PackedDecode<'a> {
     /// Set decoder to beginning of the stream.  Add padding to end of the
     /// stream.  `buf_pos` is the number of bytes used by the last input
     /// buffer.
-    fn end_ingest(&mut self, mut buf_pos: i32) -> KunaResult<()> {
+    fn end_ingest(&mut self, mut buf_pos: i32) -> UnlaceResult<()> {
         if self.in_stream.is_empty() {
-            return Err(KunaError::decoder("Ended ingestion without any input"));
+            return Err(UnlaceError::decoder("Ended ingestion without any input"));
         }
         // Set position to beginning of stream
         self.end_pos.seq = 0;
@@ -1688,7 +1688,7 @@ impl Decoder for PackedDecode<'_> {
         self.spc_manager
     }
 
-    fn ingest_stream(&mut self, s: &[u8]) -> KunaResult<()> {
+    fn ingest_stream(&mut self, s: &[u8]) -> UnlaceResult<()> {
         // The C++ loop reads with `istream::get(buf, BUFFER_SIZE+1, '\0')`
         // while `s.peek() > 0`: the effective input ends at the first NUL
         // byte (or end of slice).
@@ -1713,7 +1713,7 @@ impl Decoder for PackedDecode<'_> {
         self.end_ingest(gcount)
     }
 
-    fn peek_element(&mut self) -> KunaResult<u32> {
+    fn peek_element(&mut self) -> UnlaceResult<u32> {
         let header1 = Self::get_byte(&self.in_stream, &self.end_pos);
         if (header1 & pf::HEADER_MASK) != pf::ELEMENT_START {
             return Ok(0);
@@ -1726,7 +1726,7 @@ impl Decoder for PackedDecode<'_> {
         Ok(id)
     }
 
-    fn open_element(&mut self) -> KunaResult<u32> {
+    fn open_element(&mut self) -> UnlaceResult<u32> {
         let mut header1 = Self::get_byte(&self.in_stream, &self.end_pos);
         if (header1 & pf::HEADER_MASK) != pf::ELEMENT_START {
             return Ok(0);
@@ -1751,16 +1751,16 @@ impl Decoder for PackedDecode<'_> {
         Ok(id)
     }
 
-    fn open_element_id(&mut self, elem_id: &ElementId) -> KunaResult<u32> {
+    fn open_element_id(&mut self, elem_id: &ElementId) -> UnlaceResult<u32> {
         let id = self.open_element()?;
         if id != elem_id.get_id() {
             if id == 0 {
-                return Err(KunaError::decoder(format!(
+                return Err(UnlaceError::decoder(format!(
                     "Expecting <{}> but did not scan an element",
                     elem_id.get_name()
                 )));
             }
-            return Err(KunaError::decoder(format!(
+            return Err(UnlaceError::decoder(format!(
                 "Expecting <{}> but id did not match",
                 elem_id.get_name()
             )));
@@ -1768,10 +1768,10 @@ impl Decoder for PackedDecode<'_> {
         Ok(id)
     }
 
-    fn close_element(&mut self, id: u32) -> KunaResult<()> {
+    fn close_element(&mut self, id: u32) -> UnlaceResult<()> {
         let header1 = Self::get_next_byte(&self.in_stream, &mut self.end_pos)?;
         if (header1 & pf::HEADER_MASK) != pf::ELEMENT_END {
-            return Err(KunaError::decoder("Expecting element close"));
+            return Err(UnlaceError::decoder("Expecting element close"));
         }
         let mut close_id = (header1 & pf::ELEMENTID_MASK) as u32;
         if (header1 & pf::HEADEREXTEND_MASK) != 0 {
@@ -1780,16 +1780,16 @@ impl Decoder for PackedDecode<'_> {
                 & pf::RAWDATA_MASK) as u32;
         }
         if id != close_id {
-            return Err(KunaError::decoder("Did not see expected closing element"));
+            return Err(UnlaceError::decoder("Did not see expected closing element"));
         }
         Ok(())
     }
 
-    fn skip_element_raw(&mut self, out: &mut Vec<u8>) -> KunaResult<bool> {
+    fn skip_element_raw(&mut self, out: &mut Vec<u8>) -> UnlaceResult<bool> {
         let start = self.end_pos;
         let id = self.open_element()?;
         if id == 0 {
-            return Err(KunaError::decoder("Expecting an element to skip"));
+            return Err(UnlaceError::decoder("Expecting an element to skip"));
         }
         self.close_element_skipping(id)?;
         let end = self.end_pos;
@@ -1806,7 +1806,7 @@ impl Decoder for PackedDecode<'_> {
         Ok(true)
     }
 
-    fn close_element_skipping(&mut self, id: u32) -> KunaResult<()> {
+    fn close_element_skipping(&mut self, id: u32) -> UnlaceResult<()> {
         let mut idstack: Vec<u32> = vec![id];
         while !idstack.is_empty() {
             let header1 = Self::get_byte(&self.in_stream, &self.end_pos) & pf::HEADER_MASK;
@@ -1817,13 +1817,13 @@ impl Decoder for PackedDecode<'_> {
             } else if header1 == pf::ELEMENT_START {
                 idstack.push(self.open_element()?);
             } else {
-                return Err(KunaError::decoder("Corrupt stream"));
+                return Err(UnlaceError::decoder("Corrupt stream"));
             }
         }
         Ok(())
     }
 
-    fn get_next_attribute_id(&mut self) -> KunaResult<u32> {
+    fn get_next_attribute_id(&mut self) -> UnlaceResult<u32> {
         if !self.attribute_read {
             self.skip_attribute()?;
         }
@@ -1840,7 +1840,7 @@ impl Decoder for PackedDecode<'_> {
         Ok(id)
     }
 
-    fn get_indexed_attribute_id(&mut self, _attrib_id: &AttributeId) -> KunaResult<u32> {
+    fn get_indexed_attribute_id(&mut self, _attrib_id: &AttributeId) -> UnlaceResult<u32> {
         // PackedDecode never needs to reinterpret an attribute
         Ok(ATTRIB_UNKNOWN.get_id())
     }
@@ -1850,7 +1850,7 @@ impl Decoder for PackedDecode<'_> {
         self.attribute_read = true;
     }
 
-    fn read_bool(&mut self) -> KunaResult<bool> {
+    fn read_bool(&mut self) -> UnlaceResult<bool> {
         let header1 = Self::get_next_byte(&self.in_stream, &mut self.cur_pos)?;
         if (header1 & pf::HEADEREXTEND_MASK) != 0 {
             Self::get_next_byte(&self.in_stream, &mut self.cur_pos)?;
@@ -1858,19 +1858,19 @@ impl Decoder for PackedDecode<'_> {
         let type_byte = Self::get_next_byte(&self.in_stream, &mut self.cur_pos)?;
         self.attribute_read = true;
         if (type_byte >> pf::TYPECODE_SHIFT) != pf::TYPECODE_BOOLEAN {
-            return Err(KunaError::decoder("Expecting boolean attribute"));
+            return Err(UnlaceError::decoder("Expecting boolean attribute"));
         }
         Ok((type_byte & pf::LENGTHCODE_MASK) != 0)
     }
 
-    fn read_bool_id(&mut self, attrib_id: &AttributeId) -> KunaResult<bool> {
+    fn read_bool_id(&mut self, attrib_id: &AttributeId) -> UnlaceResult<bool> {
         self.find_matching_attribute(attrib_id)?;
         let res = self.read_bool()?;
         self.cur_pos = self.start_pos;
         Ok(res)
     }
 
-    fn read_signed_integer(&mut self) -> KunaResult<i64> {
+    fn read_signed_integer(&mut self) -> UnlaceResult<i64> {
         let header1 = Self::get_next_byte(&self.in_stream, &mut self.cur_pos)?;
         if (header1 & pf::HEADEREXTEND_MASK) != 0 {
             Self::get_next_byte(&self.in_stream, &mut self.cur_pos)?;
@@ -1886,13 +1886,13 @@ impl Decoder for PackedDecode<'_> {
         } else {
             self.skip_attribute_remaining(type_byte)?;
             self.attribute_read = true;
-            return Err(KunaError::decoder("Expecting signed integer attribute"));
+            return Err(UnlaceError::decoder("Expecting signed integer attribute"));
         };
         self.attribute_read = true;
         Ok(res)
     }
 
-    fn read_signed_integer_id(&mut self, attrib_id: &AttributeId) -> KunaResult<i64> {
+    fn read_signed_integer_id(&mut self, attrib_id: &AttributeId) -> UnlaceResult<i64> {
         self.find_matching_attribute(attrib_id)?;
         let res = self.read_signed_integer()?;
         self.cur_pos = self.start_pos;
@@ -1903,7 +1903,7 @@ impl Decoder for PackedDecode<'_> {
         &mut self,
         expect: &[u8],
         expectval: i64,
-    ) -> KunaResult<i64> {
+    ) -> UnlaceResult<i64> {
         // Peek at the type byte without advancing curPos (C++ tmpPos copy)
         let mut tmp_pos = self.cur_pos;
         let header1 = Self::get_next_byte(&self.in_stream, &mut tmp_pos)?;
@@ -1915,7 +1915,7 @@ impl Decoder for PackedDecode<'_> {
         if type_code == pf::TYPECODE_STRING {
             let val = self.read_string()?;
             if val != expect {
-                return Err(KunaError::decoder(format!(
+                return Err(UnlaceError::decoder(format!(
                     "Expecting string \"{}\" but read \"{}\"",
                     String::from_utf8_lossy(expect),
                     String::from_utf8_lossy(&val)
@@ -1932,14 +1932,14 @@ impl Decoder for PackedDecode<'_> {
         attrib_id: &AttributeId,
         expect: &[u8],
         expectval: i64,
-    ) -> KunaResult<i64> {
+    ) -> UnlaceResult<i64> {
         self.find_matching_attribute(attrib_id)?;
         let res = self.read_signed_integer_expect_string(expect, expectval)?;
         self.cur_pos = self.start_pos;
         Ok(res)
     }
 
-    fn read_unsigned_integer(&mut self) -> KunaResult<u64> {
+    fn read_unsigned_integer(&mut self) -> UnlaceResult<u64> {
         let header1 = Self::get_next_byte(&self.in_stream, &mut self.cur_pos)?;
         if (header1 & pf::HEADEREXTEND_MASK) != 0 {
             Self::get_next_byte(&self.in_stream, &mut self.cur_pos)?;
@@ -1949,21 +1949,21 @@ impl Decoder for PackedDecode<'_> {
         if type_code != pf::TYPECODE_UNSIGNEDINT {
             self.skip_attribute_remaining(type_byte)?;
             self.attribute_read = true;
-            return Err(KunaError::decoder("Expecting unsigned integer attribute"));
+            return Err(UnlaceError::decoder("Expecting unsigned integer attribute"));
         }
         let res = self.read_integer(Self::read_length_code(type_byte) as i32)?;
         self.attribute_read = true;
         Ok(res)
     }
 
-    fn read_unsigned_integer_id(&mut self, attrib_id: &AttributeId) -> KunaResult<u64> {
+    fn read_unsigned_integer_id(&mut self, attrib_id: &AttributeId) -> UnlaceResult<u64> {
         self.find_matching_attribute(attrib_id)?;
         let res = self.read_unsigned_integer()?;
         self.cur_pos = self.start_pos;
         Ok(res)
     }
 
-    fn read_string(&mut self) -> KunaResult<Vec<u8>> {
+    fn read_string(&mut self) -> UnlaceResult<Vec<u8>> {
         let header1 = Self::get_next_byte(&self.in_stream, &mut self.cur_pos)?;
         if (header1 & pf::HEADEREXTEND_MASK) != 0 {
             Self::get_next_byte(&self.in_stream, &mut self.cur_pos)?;
@@ -1973,7 +1973,7 @@ impl Decoder for PackedDecode<'_> {
         if type_code != pf::TYPECODE_STRING {
             self.skip_attribute_remaining(type_byte)?;
             self.attribute_read = true;
-            return Err(KunaError::decoder("Expecting string attribute"));
+            return Err(UnlaceError::decoder("Expecting string attribute"));
         }
         let mut length = self.read_integer(Self::read_length_code(type_byte) as i32)?;
 
@@ -2004,14 +2004,14 @@ impl Decoder for PackedDecode<'_> {
         Ok(res)
     }
 
-    fn read_string_id(&mut self, attrib_id: &AttributeId) -> KunaResult<Vec<u8>> {
+    fn read_string_id(&mut self, attrib_id: &AttributeId) -> UnlaceResult<Vec<u8>> {
         self.find_matching_attribute(attrib_id)?;
         let res = self.read_string()?;
         self.cur_pos = self.start_pos;
         Ok(res)
     }
 
-    fn read_space(&mut self) -> KunaResult<Rc<AddrSpace>> {
+    fn read_space(&mut self) -> UnlaceResult<Rc<AddrSpace>> {
         let header1 = Self::get_next_byte(&self.in_stream, &mut self.cur_pos)?;
         if (header1 & pf::HEADEREXTEND_MASK) != 0 {
             Self::get_next_byte(&self.in_stream, &mut self.cur_pos)?;
@@ -2023,11 +2023,11 @@ impl Decoder for PackedDecode<'_> {
             let res = self.read_integer(Self::read_length_code(type_byte) as i32)?;
             // mixed comparison: uint8 res vs int4 numSpaces (converted up)
             if res >= self.spc_manager.num_spaces() as u64 {
-                return Err(KunaError::decoder("Invalid address space index"));
+                return Err(UnlaceError::decoder("Invalid address space index"));
             }
             match self.spc_manager.get_space(res as i32) {
                 Some(s) => spc = Rc::clone(s),
-                None => return Err(KunaError::decoder("Unknown address space index")),
+                None => return Err(UnlaceError::decoder("Unknown address space index")),
             }
         } else if type_code == pf::TYPECODE_SPECIALSPACE {
             let special_code = Self::read_length_code(type_byte);
@@ -2046,18 +2046,18 @@ impl Decoder for PackedDecode<'_> {
                         .expect("join space not registered in AddrSpaceManager"),
                 );
             } else {
-                return Err(KunaError::decoder("Cannot marshal special address space"));
+                return Err(UnlaceError::decoder("Cannot marshal special address space"));
             }
         } else {
             self.skip_attribute_remaining(type_byte)?;
             self.attribute_read = true;
-            return Err(KunaError::decoder("Expecting space attribute"));
+            return Err(UnlaceError::decoder("Expecting space attribute"));
         }
         self.attribute_read = true;
         Ok(spc)
     }
 
-    fn read_space_id(&mut self, attrib_id: &AttributeId) -> KunaResult<Rc<AddrSpace>> {
+    fn read_space_id(&mut self, attrib_id: &AttributeId) -> UnlaceResult<Rc<AddrSpace>> {
         self.find_matching_attribute(attrib_id)?;
         let res = self.read_space()?;
         self.cur_pos = self.start_pos;
@@ -2713,7 +2713,7 @@ mod tests {
         let el2 = dec.open_element_id(&ELEM_INPUT).unwrap();
         dec.close_element(el2).unwrap();
         let err = dec.close_element(el1).unwrap_err();
-        assert!(matches!(err, KunaError::Decoder { .. }));
+        assert!(matches!(err, UnlaceError::Decoder { .. }));
     }
 
     #[test]

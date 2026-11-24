@@ -1,4 +1,4 @@
-//! (kuna) A language's processor, address size and instruction byte order, as
+//! (unlace) A language's processor, address size and instruction byte order, as
 //! its `.ldefs` entry states them.
 //!
 //! Ghidra's FID decides whether a fingerprint database built for one language
@@ -47,7 +47,7 @@ pub fn language_id(archid: &str) -> &str {
     }
 }
 
-/// (kuna) Every language the bootstrap's `.ldefs` scan found, by id: what decides whether a FID
+/// (unlace) Every language the bootstrap's `.ldefs` scan found, by id: what decides whether a FID
 /// database built for another language applies here; an
 /// [`ArchTable`](crate::archstate::ArchTable) on the architecture, empty for one that was not
 /// bootstrapped from `.ldefs`.
@@ -59,23 +59,23 @@ impl Default for LanguageFamilies {
     }
 }
 
-crate::kuna_arch_table!(LanguageFamilies);
+crate::unlace_arch_table!(LanguageFamilies);
 
-/// (kuna) Record the `.ldefs` languages the bootstrap scanned.
+/// (unlace) Record the `.ldefs` languages the bootstrap scanned.
 pub fn set_language_families(
     arch: &mut crate::architecture::Architecture,
     families: std::sync::Arc<[(String, LanguageFamily)]>,
 ) {
-    arch.kuna_tables.get_mut::<LanguageFamilies>().0 = families;
+    arch.unlace_tables.get_mut::<LanguageFamilies>().0 = families;
 }
 
-/// (kuna) The scanned `.ldefs` facts for language `id`, `None` when no scanned `.ldefs`
+/// (unlace) The scanned `.ldefs` facts for language `id`, `None` when no scanned `.ldefs`
 /// defines it.
 pub fn language_family<'a>(
     arch: &'a crate::architecture::Architecture,
     id: &str,
 ) -> Option<&'a LanguageFamily> {
-    arch.kuna_tables
+    arch.unlace_tables
         .get::<LanguageFamilies>()
         .0
         .iter()
@@ -83,9 +83,9 @@ pub fn language_family<'a>(
         .map(|(_, family)| family)
 }
 
-/// (kuna) Whether the bootstrap recorded any `.ldefs` languages.
+/// (unlace) Whether the bootstrap recorded any `.ldefs` languages.
 pub fn has_language_families(arch: &crate::architecture::Architecture) -> bool {
-    !arch.kuna_tables.get::<LanguageFamilies>().0.is_empty()
+    !arch.unlace_tables.get::<LanguageFamilies>().0.is_empty()
 }
 
 #[cfg(test)]

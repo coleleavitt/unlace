@@ -27,9 +27,9 @@ pub mod paramcopyhoist;
 pub mod pointeevalue;
 pub mod registerepochs;
 pub mod slotptr;
-pub mod spphistack; // (kuna `spphistack`) a bare input stack pointer at a phi is a stack address
+pub mod spphistack; // (unlace `spphistack`) a bare input stack pointer at a phi is a stack address
 pub mod stablenames;
-pub mod stackexitanchor; // (kuna) the epilogue settles the last unknown call's purge
+pub mod stackexitanchor; // (unlace) the epilogue settles the last unknown call's purge
 pub mod stackranges;
 pub mod tiedphitrim;
 pub mod undefinedcopy;

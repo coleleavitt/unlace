@@ -37,8 +37,8 @@ The two surfaces each called the engine drive themselves:
 
 | surface | entry point |
 |---|---|
-| console `decompile` (what `kuna decompile` drives in its `decomp_dbg` subprocess) | `kuna-console/src/ifacedecomp.rs`, `IfcDecompile` |
-| whole-binary loop (`decompile-all` / `decompile-project` / wasm) | `kuna-console/src/project.rs (decompile_targets)` |
+| console `decompile` (what `kuna decompile` drives in its `decomp_dbg` subprocess) | `console/src/ifacedecomp.rs`, `IfcDecompile` |
+| whole-binary loop (`decompile-all` / `decompile-project` / wasm) | `console/src/project.rs (decompile_targets)` |
 
 `IfcDecompile` wrapped `decompile_func_full_with_override_dyn` in Ghidra's
 `FormatStringAnalyzer` half-B loop -- decompile, walk the `CALL` ops, read the
@@ -112,7 +112,7 @@ confirmation that the whole divergence is this one feature. After: **0 of 182**.
 ## The fix
 
 One shared per-function decompile step,
-`kuna-console/src/decompile_step.rs (decompile_one)`, holding the drive call, the
+`console/src/decompile_step.rs (decompile_one)`, holding the drive call, the
 format-string loop and the scoped `readonlypropagate` flip. Both `IfcDecompile`
 and `decompile_targets` call it; a caller passes the facts it has through one
 `DecompileSeed` (the console its `map addr` / `parse line` / `override` state,

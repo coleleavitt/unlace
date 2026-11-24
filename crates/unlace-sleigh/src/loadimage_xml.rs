@@ -16,7 +16,7 @@ use std::ops::Bound;
 use std::rc::Rc;
 
 use unlace_base::address::{Address, RangeList};
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::{
     ATTRIB_CONTENT, ATTRIB_NAME, ATTRIB_READONLY, ATTRIB_SPACE, AttributeId, Decoder, ELEM_SYMBOL,
     ElementId, Encoder, IdRegistry, XmlDecode,
@@ -126,10 +126,10 @@ impl LoadImageXml {
     /// Constructor
     /// \param f is the (path to the) underlying XML file
     /// \param el is the parsed form of the file
-    pub fn new(f: &str, el: Rc<Element>) -> KunaResult<LoadImageXml> {
+    pub fn new(f: &str, el: Rc<Element>) -> UnlaceResult<LoadImageXml> {
         // Extract architecture information
         if el.get_name() != "binaryimage" {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "Missing binaryimage tag in {f}"
             )));
         }
@@ -149,7 +149,7 @@ impl LoadImageXml {
     ///
     /// Encode the byte chunks and symbols as elements
     /// \param encoder is the stream encoder
-    pub fn encode(&self, encoder: &mut dyn Encoder) -> KunaResult<()> {
+    pub fn encode(&self, encoder: &mut dyn Encoder) -> UnlaceResult<()> {
         encoder.open_element(&ELEM_BINARYIMAGE);
         encoder.write_string(&ATTRIB_ARCH, &self.archtype);
 
@@ -192,7 +192,7 @@ impl LoadImageXml {
     /// \param m is for looking up address space
     /// \param registry holds the name -> id tables (C++ global static
     /// registration; an explicit parameter per the W1 marshal conventions)
-    pub fn open(&mut self, m: &AddrSpaceManager, registry: &IdRegistry) -> KunaResult<()> {
+    pub fn open(&mut self, m: &AddrSpaceManager, registry: &IdRegistry) -> UnlaceResult<()> {
         // (C++ stores `manage = m` here; the Rust port does not keep the
         // back-pointer — see module docs)
         let mut sz: u32 = 0; // unused size
@@ -249,7 +249,7 @@ impl LoadImageXml {
                     c2 = istream_get(&content, &mut pos);
                 }
             } else {
-                return Err(KunaError::lowlevel("Unknown LoadImageXml tag"));
+                return Err(UnlaceError::lowlevel("Unknown LoadImageXml tag"));
             }
             decoder.close_element(sub_id)?;
         }
@@ -326,7 +326,7 @@ impl LoadImage for LoadImageXml {
         &self.filename
     }
 
-    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> KunaResult<()> {
+    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> UnlaceResult<()> {
         // cast: the C++ `int4 size` parameter (slice length; see trait docs)
         let mut size: i32 = ptr.len() as i32;
         let mut dest: usize = 0; // the C++ output pointer cursor
@@ -375,7 +375,7 @@ impl LoadImage for LoadImageXml {
             let mut errmsg = String::from("Bytes at ");
             curaddr.print_raw(&mut errmsg)?;
             errmsg.push_str(" are not mapped");
-            return Err(KunaError::data_unavail(errmsg));
+            return Err(UnlaceError::data_unavail(errmsg));
         }
         Ok(())
     }
@@ -539,7 +539,7 @@ mod tests {
             .load(1, &Address::new(Rc::clone(&ram), 0x455c6c + 512))
             .unwrap_err();
         match &err {
-            KunaError::DataUnavail { explain } => {
+            UnlaceError::DataUnavail { explain } => {
                 assert_eq!(explain, "Bytes at 0x00455e6c are not mapped");
             }
             other => panic!("expected DataUnavail, got {other:?}"),
@@ -551,7 +551,7 @@ mod tests {
             .load(0x300, &Address::new(Rc::clone(&ram), 0x455c50))
             .unwrap_err();
         match &err {
-            KunaError::DataUnavail { explain } => {
+            UnlaceError::DataUnavail { explain } => {
                 assert_eq!(explain, "Bytes at 0x00455e6c are not mapped");
             }
             other => panic!("expected DataUnavail, got {other:?}"),
@@ -563,7 +563,7 @@ mod tests {
             .load(4, &Address::new(Rc::clone(&ram), 0x1000))
             .unwrap_err();
         match &err {
-            KunaError::DataUnavail { explain } => {
+            UnlaceError::DataUnavail { explain } => {
                 assert_eq!(explain, "Bytes at 0x00001000 are not mapped");
             }
             other => panic!("expected DataUnavail, got {other:?}"),
@@ -630,7 +630,7 @@ mod tests {
             .load(1, &Address::new(Rc::clone(&ram), 0x10))
             .unwrap_err();
         match &err {
-            KunaError::DataUnavail { explain } => {
+            UnlaceError::DataUnavail { explain } => {
                 assert_eq!(explain, "Bytes at 0x00000010 are not mapped");
             }
             other => panic!("expected DataUnavail, got {other:?}"),
@@ -664,7 +664,7 @@ mod tests {
             .load(1, &Address::new(Rc::clone(&code), 0xa00a + 512))
             .unwrap_err();
         match &err {
-            KunaError::DataUnavail { explain } => {
+            UnlaceError::DataUnavail { explain } => {
                 assert_eq!(explain, "Bytes at 0xa20a are not mapped");
             }
             other => panic!("expected DataUnavail, got {other:?}"),
@@ -770,7 +770,7 @@ mod tests {
         let err = img
             .load(1, &Address::new(Rc::clone(&ram), 0x0))
             .unwrap_err();
-        assert!(matches!(err, KunaError::DataUnavail { .. }));
+        assert!(matches!(err, UnlaceError::DataUnavail { .. }));
     }
 
     /// Constructor and open() error contracts.
@@ -783,7 +783,7 @@ mod tests {
         let doc = xml_tree(b"<other arch=\"x\"/>").unwrap();
         let err = LoadImageXml::new("file.xml", Rc::clone(doc.get_root())).unwrap_err();
         match &err {
-            KunaError::Lowlevel { explain } => {
+            UnlaceError::Lowlevel { explain } => {
                 assert_eq!(explain, "Missing binaryimage tag in file.xml");
             }
             other => panic!("expected Lowlevel, got {other:?}"),
@@ -793,7 +793,7 @@ mod tests {
         let doc = xml_tree(b"<binaryimage/>").unwrap();
         let err = LoadImageXml::new("file.xml", Rc::clone(doc.get_root())).unwrap_err();
         match &err {
-            KunaError::Decoder { explain } => assert_eq!(explain, "Unknown attribute: arch"),
+            UnlaceError::Decoder { explain } => assert_eq!(explain, "Unknown attribute: arch"),
             other => panic!("expected Decoder, got {other:?}"),
         }
 
@@ -802,7 +802,7 @@ mod tests {
         let mut img = LoadImageXml::new("file.xml", Rc::clone(doc.get_root())).unwrap();
         let err = img.open(&m, &reg).unwrap_err();
         match &err {
-            KunaError::Lowlevel { explain } => assert_eq!(explain, "Unknown LoadImageXml tag"),
+            UnlaceError::Lowlevel { explain } => assert_eq!(explain, "Unknown LoadImageXml tag"),
             other => panic!("expected Lowlevel, got {other:?}"),
         }
     }
@@ -889,7 +889,7 @@ mod tests {
         let err = img
             .load(4, &Address::new(Rc::clone(&ram), 0x100))
             .unwrap_err();
-        assert!(matches!(err, KunaError::DataUnavail { .. }));
+        assert!(matches!(err, UnlaceError::DataUnavail { .. }));
 
         let mut rec = LoadImageFunc::default();
         img.open_symbols();
@@ -924,7 +924,7 @@ mod tests {
         let err = img
             .load(1, &Address::new(Rc::clone(&ram), 0x100))
             .unwrap_err();
-        assert!(matches!(err, KunaError::DataUnavail { .. }));
+        assert!(matches!(err, UnlaceError::DataUnavail { .. }));
         let mut rec = LoadImageFunc::default();
         img.open_symbols();
         assert!(!img.get_next_symbol(&mut rec));

@@ -1,4 +1,4 @@
-//! (kuna) `litpoolconst` — a word read out of executable read-only memory is a
+//! (unlace) `litpoolconst` — a word read out of executable read-only memory is a
 //! constant, so an ARM literal pool folds without the program-wide `readonly`.
 //!
 //! # The gap it closes
@@ -14,7 +14,7 @@
 //! 0x8458  39050000            .word 0x00000539
 //! ```
 //!
-//! kuna already paints that word `Varnode::readonly` — `.text` is
+//! unlace already paints that word `Varnode::readonly` — `.text` is
 //! `SHF_ALLOC` without `SHF_WRITE` — but *folding* a read-only global is gated by
 //! `option readonly` (`Architecture::readonlypropagate`), which is off by default
 //! because it folds every `.rodata` read in the program. So the default output is
@@ -110,7 +110,7 @@ pub fn contains(ranges: &[(u64, u64)], offset: u64, size: u32) -> bool {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.litpoolconst_contains = Some(contains);
 }
 

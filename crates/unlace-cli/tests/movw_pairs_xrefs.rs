@@ -1,13 +1,13 @@
 //! `movwpairs`: an address an ARM `movw`/`movt` or AArch64 `movz`/`movk` pair builds is a
 //! reference in the discovery Listing (fixtures in `fixtures/movwpairs`).
 use crate::common;
-use common::{repo_root, run_kuna};
+use common::{repo_root, run_unlace};
 
 fn xrefs(fixture: &str, to: &str, mode: &str) -> String {
     let bin = repo_root()
         .join("crates/unlace-cli/tests/fixtures/movwpairs")
         .join(fixture);
-    let (stdout, stderr, code) = run_kuna(&[
+    let (stdout, stderr, code) = run_unlace(&[
         "xrefs",
         bin.to_str().unwrap(),
         "--to",

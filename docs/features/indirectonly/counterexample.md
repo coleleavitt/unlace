@@ -152,8 +152,8 @@ the arm that does not fabricate the store.
 
 ## 6. What is pinned
 
-* `tests/stages/kuna-indirectonly-escape.toml` — the same shape as a bytechunk
+* `tests/stages/indirectonly-escape.toml` — the same shape as a bytechunk
   (`counterexample/stage-escape.S` is the source). Pass 1 runs the **default**, so
   flipping the shipped default back to on turns the test red; pass 2 asks for the
   option and pins what it costs.
-* `tests/stages/kuna-indirectonly.toml` — the sound direction, unchanged.
+* `tests/stages/indirectonly.toml` — the sound direction, unchanged.

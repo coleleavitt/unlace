@@ -109,7 +109,7 @@
     "decompiler/crates/kuna-cli/tests/local_stack_views.rs",
     "decompiler/crates/kuna-cli/tests/stack_alias_preservation.rs",
     "decompiler/crates/kuna-cli/tests/stack_object_lifetimes.rs",
-    "decompiler/crates/kuna-console/src/console.rs",
+    "decompiler/crates/console/src/console.rs",
     "decompiler/crates/kuna-decomp/phases.toml",
     "decompiler/crates/kuna-decomp/src/infra/architecture.rs",
     "decompiler/crates/kuna-decomp/src/p0_knowledge/option_dispatch.rs",
@@ -138,9 +138,9 @@
     "docs/spec/03-ssa-and-simplification.md",
     "docs/spec/06-variables-and-merge.md",
     "docs/spec/09-emission.md",
-    "tests/stages/kuna-catalog.xml",
-    "tests/stages/kuna-localstackviews.xml",
-    "tests/stages/kuna-stackviews.xml"
+    "tests/stages/catalog.xml",
+    "tests/stages/localstackviews.xml",
+    "tests/stages/stackviews.xml"
   ],
   "instrumented_boundaries": {
     "branch": "STORE70 lower191; DCE214; copyprop225; earlyremoval230",
@@ -408,7 +408,7 @@
     }
   },
   "catalog_live_reader": "Console explicit live reader exposes local_stack_views alongside generated OptionValues; stage checks default and current on.",
-  "stage_isolation": "Existing kuna-stackviews.xml explicitly disables the bounded local option to preserve its original full-stackviews OFF/ON ablation; existing CLI helper OFF arms also disable it, while enabled/native arms retain actual local default. The new local stage exercises actual default before OFF.",
+  "stage_isolation": "Existing stackviews.xml explicitly disables the bounded local option to preserve its original full-stackviews OFF/ON ablation; existing CLI helper OFF arms also disable it, while enabled/native arms retain actual local default. The new local stage exercises actual default before OFF.",
   "stage_acceptance": {
     "source_tree": "57d2042a073209cbef13bacc74b81da0a35ce78e",
     "passing": 3135,

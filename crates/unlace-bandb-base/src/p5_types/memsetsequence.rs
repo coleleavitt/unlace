@@ -7,7 +7,7 @@
 
 use std::rc::Rc;
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
@@ -17,7 +17,7 @@ use crate::context::OpId;
 use crate::dtype::Datatype;
 use crate::funcdata::Funcdata;
 
-/// (kuna GH-9230) A constant-fill run of COPY ops collapsed into builtin_memset
+/// (unlace GH-9230) A constant-fill run of COPY ops collapsed into builtin_memset
 /// (C++ `class MemsetSequence : public StringSequence`).
 ///
 /// Composes the ported [`ArraySequence`] base (no inheritance in Rust; the base
@@ -98,7 +98,7 @@ impl MemsetSequence {
     }
 }
 
-/// (kuna GH-9230) Recognize a constant-fill run of COPY ops as builtin_memset
+/// (unlace GH-9230) Recognize a constant-fill run of COPY ops as builtin_memset
 /// (C++ `RuleMemsetCopy`).
 ///
 /// Mirrors `RuleStringCopy` but, when `option memsetrecover on`, routes a run of
@@ -148,7 +148,7 @@ impl Rule for RuleMemsetCopy {
         if !self.enabled
             && !data
                 .get_arch()
-                .kuna_options
+                .unlace_options
                 .get::<crate::memsetsequence::MemsetRecover>()
                 .0
         {
@@ -227,7 +227,7 @@ impl Rule for RuleMemsetCopy {
     }
 }
 
-/// (kuna GH-9230) How constant-fill recovery is toggled (the two values of
+/// (unlace GH-9230) How constant-fill recovery is toggled (the two values of
 /// `option memsetrecover`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MemsetRecoverForm {
@@ -254,9 +254,9 @@ impl MemsetRecoverForm {
 /// empty string or `"on"` is `true`, `"off"` is `false`, anything else is a parse
 /// error.  The caller writes [`MemsetRecoverForm::memset_recover`] into
 /// [the registered option `MemsetRecover`].
-pub fn parse_memset_recover_form(p1: &str) -> KunaResult<(MemsetRecoverForm, String)> {
+pub fn parse_memset_recover_form(p1: &str) -> UnlaceResult<(MemsetRecoverForm, String)> {
     let val = crate::options::on_or_off(p1)
-        .map_err(|_: KunaError| KunaError::parse("Must specify toggle value, on/off"))?;
+        .map_err(|_: UnlaceError| UnlaceError::parse("Must specify toggle value, on/off"))?;
     // The memset_recover flag is left to the caller (Architecture::memset_recover).
     let form = if val {
         MemsetRecoverForm::On
@@ -272,7 +272,7 @@ pub fn parse_memset_recover_form(p1: &str) -> KunaResult<(MemsetRecoverForm, Str
 
 /// Per-file registration rows in C++ definition order (one rule).
 ///
-/// Shipped default: `option memsetrecover on` (`memset_recover = true`; kuna
+/// Shipped default: `option memsetrecover on` (`memset_recover = true`; unlace
 /// DIV-2 default-on, GH-9230/1537).
 pub fn specs() -> Vec<RuleSpec> {
     vec![RuleSpec {
@@ -281,7 +281,7 @@ pub fn specs() -> Vec<RuleSpec> {
     }]
 }
 
-// --- Local IR read helpers (see kuna_addcarrychain for the rationale) --------
+// --- Local IR read helpers (see unlace_addcarrychain for the rationale) --------
 
 /// Read the constant offset of a COPY op's input 0 (C++
 /// `moveOps[i].op->getIn(0)->getOffset()`).
@@ -349,14 +349,14 @@ pub fn detect_fill_run(data: &Funcdata, move_ops: &mut Vec<WriteNode>) -> Option
     Some((fb, total_bytes))
 }
 
-/// (kuna GH-9230) Recover constant-fill store/copy runs as `builtin_memset`
+/// (unlace GH-9230) Recover constant-fill store/copy runs as `builtin_memset`
 /// (C++ `memset_recover`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct MemsetRecover(pub bool);
 
-impl crate::optionset::KunaOption for MemsetRecover {
+impl crate::optionset::UnlaceOption for MemsetRecover {
     const NAME: &'static str = "memsetrecover";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         MemsetRecover(false)
@@ -366,7 +366,7 @@ impl crate::optionset::KunaOption for MemsetRecover {
         MemsetRecover(true)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (v, msg) = crate::memsetsequence::parse_memset_recover_form(value)
             .map(|(form, msg)| (form.memset_recover(), msg))?;
         Ok((MemsetRecover(v), msg))

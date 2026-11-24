@@ -1,4 +1,4 @@
-//! ARM/Thumb mapping-symbol → decode-mode (`TMode`) painting — the kuna analog
+//! ARM/Thumb mapping-symbol → decode-mode (`TMode`) painting — the unlace analog
 //! of Ghidra's ARM ELF-loader extension + `ArmSymbolAnalyzer`.
 //!
 //! Ghidra recovers the ARM/Thumb decode mode from **two** distinct ELF
@@ -39,13 +39,13 @@
 //! ## LOSS / divergences from upstream
 //!
 //! - **`$d` data runs are a no-op.** Ghidra's `$d` branch lays *undefined data*
-//!   (listing markup that protects the bytes from disassembly); kuna has no
+//!   (listing markup that protects the bytes from disassembly); unlace has no
 //!   `createUndefinedData` equivalent at this tier, and the protection has
 //!   negligible decompiler payoff (it only matters for the listing view). We do
 //!   not emit a fact for `$d`/`$b`. Documented LOSS.
 //! - **The Thumb-FUNC address shift is now re-homed.** Ghidra *moves* a Thumb
 //!   `FUNC` symbol from `entry|1` to `entry` (`moveFunction`/`setElfSymbolAddress`)
-//!   and renames it; kuna's `read_loader_symbols` installs the `FUNC` at the odd
+//!   and renames it; unlace's `read_loader_symbols` installs the `FUNC` at the odd
 //!   address. This pass additionally emits a [`SymFact`] (`SymKind::Function`) at
 //!   the normalized (even) entry — the address the `TMode=1` paint and the engine's
 //!   decode use — so `load function <name>` and a CALL resolve there. The commit
@@ -111,7 +111,7 @@ pub(crate) fn scan_arm_markers(file: &object::File) -> AnalysisOutput {
     if file.architecture() != object::Architecture::Arm {
         return out;
     }
-    // Only ARM ELF objects carry these conventions (the only format kuna loads).
+    // Only ARM ELF objects carry these conventions (the only format unlace loads).
     if !matches!(file.format(), object::BinaryFormat::Elf) {
         return out;
     }
@@ -161,7 +161,7 @@ pub(crate) fn scan_arm_markers(file: &object::File) -> AnalysisOutput {
             // Thumb-FUNC re-home: emit the FunctionSymbol at the EVEN entry so
             // `load function <name>` / a CALL resolves at the address the `TMode`
             // paint uses (the engine decodes at the even address). Ghidra moves the
-            // symbol; kuna's `read_loader_symbols` installs it at the ODD address,
+            // symbol; unlace's `read_loader_symbols` installs it at the ODD address,
             // so this additive SymFact makes the even entry known too. The commit
             // boundary's symbol arm is idempotent (it skips an already-installed
             // function), so the odd-address install and this even-address one

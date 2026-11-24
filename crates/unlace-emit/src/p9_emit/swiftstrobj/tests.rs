@@ -1,4 +1,4 @@
-//! Unit tests for the (kuna) Swift string-object predicate.
+//! Unit tests for the (unlace) Swift string-object predicate.
 
 use super::*;
 

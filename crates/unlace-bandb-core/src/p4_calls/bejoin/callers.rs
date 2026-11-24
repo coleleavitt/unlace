@@ -1,4 +1,4 @@
-//! (kuna) `option bejoin callers`: how a function's callers read its pair is
+//! (unlace) `option bejoin callers`: how a function's callers read its pair is
 //! evidence the pair is one value.
 //!
 //! A `long long` built from a 64-bit sum or one `umull` compiles to the bytes
@@ -42,7 +42,7 @@
 //! saves the argument registers to give them back, as `__gnu_mcount_nc`
 //! does) says nothing.
 //!
-//! A call kuna does not know never returns lays unrelated code out after it
+//! A call unlace does not know never returns lays unrelated code out after it
 //! (`bl f; __builtin_unreachable()` is followed by the block a `bne`
 //! reaches, which reads `r4` for its own value), so a site says nothing when
 //! its fall-through reaches, before any branch, an instruction a branch of

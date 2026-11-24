@@ -59,7 +59,7 @@ _sample:
         "{}",
         String::from_utf8_lossy(&built.stderr)
     );
-    let (code, err, status) = common::run_kuna(&[
+    let (code, err, status) = common::run_unlace(&[
         "decompile",
         binary.to_str().unwrap(),
         "_sample",

@@ -1,7 +1,7 @@
-//! Port of `decompiler/cpp/kuna_naming.{cc,hh}` — kuna's angr-style default
+//! Port of `decompiler/cpp/kuna_naming.{cc,hh}` — unlace's angr-style default
 //! naming policy.
 //!
-//! This is a kuna-owned policy file (NOT upstream Ghidra).  It centralizes the
+//! This is a unlace-owned policy file (NOT upstream Ghidra).  It centralizes the
 //! default naming scheme that makes decompiler output read like angr's:
 //!
 //!   - locals / temps / extraout / unaff  -> `v1`, `v2`, `v3` ...
@@ -19,60 +19,60 @@
 //! The pure address-rendering helpers (`dat_`/`sub_`/`label_`/`a<n>`) were ported
 //! into [`crate::database`] as a self-contained DIV-5 boundary (the symbol
 //! database is their only consumer there); this module **re-exports** them so the
-//! `kuna_naming` surface is complete, and adds the two helpers the database
-//! doesn't need: [`kuna_is_generated_name`] (consumed by `coreaction.cc`'s
-//! parameter-comment skip) and [`kuna_storage_comment`] (consumed by
+//! `unlace_naming` surface is complete, and adds the two helpers the database
+//! doesn't need: [`unlace_is_generated_name`] (consumed by `coreaction.cc`'s
+//! parameter-comment skip) and [`unlace_storage_comment`] (consumed by
 //! `printc.cc`'s `emitVarDeclStatement`).
 //!
-//! `kunaAngrNaming(glb)` is the runtime gate; in the Rust tree the flag is the
-//! registered option `NameStyleAngr`, so [`kuna_angr_naming`] takes the flag value
+//! `unlaceAngrNaming(glb)` is the runtime gate; in the Rust tree the flag is the
+//! registered option `NameStyleAngr`, so [`unlace_angr_naming`] takes the flag value
 //! directly (the caller reads `glb->name_style_angr`).
 //!
 //! # Storage-comment boundary
 //!
-//! C++ `kunaStorageComment(glb,sym,loc)` reaches into the `Symbol` /
+//! C++ `unlaceStorageComment(glb,sym,loc)` reaches into the `Symbol` /
 //! `SymbolEntry` / `Funcdata` / `JoinRecord` / `Translate` graph to resolve a
 //! symbol's storage location.  Those are owned by other porters (W5/W6).  To stay
 //! within this module's boundary, the resolution is split: the caller (the
 //! printer, which already holds those objects) gathers the storage facts into a
-//! [`StorageView`], and [`kuna_storage_comment`] renders the comment text from
+//! [`StorageView`], and [`unlace_storage_comment`] renders the comment text from
 //! it — the rendering rules (register name lowercased, `stack +/- 0x..`, the
 //! `rdx:rax` join form, the `tmp` fallback) are transcribed exactly.
 
 use unlace_base::address::sign_extend;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::{AddrSpace, spacetype};
 use unlace_base::types::{int4, intb, uintb};
 
 // Re-export the pure address-rendering helpers ported into `database.rs`
-// (kuna_naming.cc:55-89).  These are the canonical kuna implementations.
+// (kuna_naming.cc:55-89).  These are the canonical unlace implementations.
 pub use crate::database::{
-    kuna_arg_name, kuna_function_name, kuna_global_data_name, kuna_label_name,
-    kuna_materialized_param_name,
+    unlace_arg_name, unlace_function_name, unlace_global_data_name, unlace_label_name,
+    unlace_materialized_param_name,
 };
 
-/// Marshaling element `<namestyle>` (kuna, C++
-/// `ELEM_NAMESTYLE = ElementId("namestyle",4020)`; kuna 4000+ range).
+/// Marshaling element `<namestyle>` (unlace, C++
+/// `ELEM_NAMESTYLE = ElementId("namestyle",4020)`; unlace 4000+ range).
 pub const ELEM_NAMESTYLE: unlace_base::marshal::ElementId =
     unlace_base::marshal::ElementId::new("namestyle", 4020);
 
-/// C++ `kunaAngrNaming(const Architecture *glb)` (kuna_naming.cc:30-34).
+/// C++ `unlaceAngrNaming(const Architecture *glb)` (kuna_naming.cc:30-34).
 ///
 /// "Is angr-style naming active for this Architecture?"  In C++ this is
 /// `(glb != 0) && glb->name_style_angr`; the Rust caller passes the flag value
 /// (`glb->name_style_angr`) directly — a null `glb` is modeled by passing
 /// `false`.
-pub fn kuna_angr_naming(name_style_angr: bool) -> bool {
+pub fn unlace_angr_naming(name_style_angr: bool) -> bool {
     name_style_angr
 }
 
-/// C++ `kunaToLower(string &s)` (kuna_naming.cc:48-53): lowercase a register name
+/// C++ `unlaceToLower(string &s)` (kuna_naming.cc:48-53): lowercase a register name
 /// in place (angr renders registers lowercase).
 ///
 /// Transcribes the C++ `s[i] = tolower((unsigned char)s[i])` byte-for-byte: the C
 /// `tolower` only maps ASCII `A`-`Z`, leaving every other byte (including those
 /// >= 0x80) unchanged, so the byte length and all non-ASCII bytes are preserved.
-fn kuna_to_lower(s: &mut String) {
+fn unlace_to_lower(s: &mut String) {
     // Register names are ASCII, but operate on the raw bytes to match C exactly
     // (a `to_ascii_lowercase` of a UTF-8 string would touch only ASCII anyway,
     // but going through bytes guarantees byte-identical output for any input).
@@ -84,12 +84,12 @@ fn kuna_to_lower(s: &mut String) {
     *s = String::from_utf8(bytes).expect("ASCII-only lowercasing preserves UTF-8");
 }
 
-/// C++ `kunaIsGeneratedName(const string &nm)` (kuna_naming.cc:91-106).
+/// C++ `unlaceIsGeneratedName(const string &nm)` (kuna_naming.cc:91-106).
 ///
 /// Recognize a generated default name in either scheme: `param_N` (ghidra) or
 /// `vN` / `aN` (angr).  Returns `true` only when the prefix is followed by one or
 /// more decimal digits and nothing else.
-pub fn kuna_is_generated_name(nm: &str) -> bool {
+pub fn unlace_is_generated_name(nm: &str) -> bool {
     let bytes = nm.as_bytes();
     let start: usize;
     if nm.len() >= 6 && &nm[0..6] == "param_" {
@@ -110,11 +110,11 @@ pub fn kuna_is_generated_name(nm: &str) -> bool {
     nm.len() > start
 }
 
-/// The resolved storage facts [`kuna_storage_comment`] renders, gathered by the
+/// The resolved storage facts [`unlace_storage_comment`] renders, gathered by the
 /// caller from the `Symbol`/`SymbolEntry`/`Funcdata`/`JoinRecord`/`Translate`
 /// graph (boundary: see module docs).
 ///
-/// This mirrors exactly the data the C++ `kunaStorageComment` reads off `glb`
+/// This mirrors exactly the data the C++ `unlaceStorageComment` reads off `glb`
 /// and `sym`: the storage address+size after the dynamic-symbol fall-through,
 /// the register name covering that storage (empty if none), the stack space and
 /// (if a JOIN) the constituent pieces.
@@ -142,7 +142,7 @@ pub struct StorageView<'a> {
     pub join_pieces: Option<Vec<String>>,
 }
 
-/// C++ `kunaStorageComment(const Architecture *glb,const Symbol *sym,string &out)`
+/// C++ `unlaceStorageComment(const Architecture *glb,const Symbol *sym,string &out)`
 /// (kuna_naming.cc:108-180).
 ///
 /// Build a `// rax` / `// stack - 0x10` style storage annotation for a symbol's
@@ -155,7 +155,7 @@ pub struct StorageView<'a> {
 /// side (they touch W5/W6 types); [`StorageView`] carries the post-resolution
 /// facts.  A `space == None` view models the "no representative storage at all"
 /// branch that yields `tmp`.
-pub fn kuna_storage_comment(view: &StorageView) -> String {
+pub fn unlace_storage_comment(view: &StorageView) -> String {
     let spc = match view.space {
         Some(s) => s,
         None => return "tmp".to_string(),
@@ -164,7 +164,7 @@ pub fn kuna_storage_comment(view: &StorageView) -> String {
     // Register-backed storage -> the register name, lowercased ("rax").
     if !view.register_name.is_empty() {
         let mut reg = view.register_name.clone();
-        kuna_to_lower(&mut reg);
+        unlace_to_lower(&mut reg);
         return reg;
     }
 
@@ -193,14 +193,14 @@ pub fn kuna_storage_comment(view: &StorageView) -> String {
     "tmp".to_string()
 }
 
-/// (kuna) Master naming-scheme toggle: `namestyle angr|ghidra`
+/// (unlace) Master naming-scheme toggle: `namestyle angr|ghidra`
 /// (C++ `OptionNameStyle`, naming.cc:16-28).
 ///
 /// "angr" (default) renders angr-style names (vN/aN/dat_/sub_/label_) plus a
 /// storage-location comment on each local; "ghidra" restores upstream Ghidra
 /// naming (iVar/param_/`<type>Ram`/func_/code_).
 ///
-/// Follows the kuna-option idiom (`OptionLowerSwitch::apply`): parse + validate
+/// Follows the unlace-option idiom (`OptionLowerSwitch::apply`): parse + validate
 /// here, return the resolved flag plus the confirmation message; the caller
 /// writes the flag into the registered option `NameStyleAngr`.
 #[derive(Debug, Clone, Copy, Default)]
@@ -214,13 +214,15 @@ impl OptionNameStyle {
     ///
     /// Returns `Ok((val, message))` on a valid value; an invalid value yields the
     /// exact upstream validation message as a `ParseError`.
-    pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(bool, String)> {
         let val = if p1 == "angr" {
             true
         } else if p1 == "ghidra" {
             false
         } else {
-            return Err(KunaError::parse("namestyle must be \"angr\" or \"ghidra\""));
+            return Err(UnlaceError::parse(
+                "namestyle must be \"angr\" or \"ghidra\"",
+            ));
         };
         // glb->name_style_angr = val;  -- left to the caller (STUB(W4/W9)).
         Ok((val, format!("Naming scheme set to {p1}")))

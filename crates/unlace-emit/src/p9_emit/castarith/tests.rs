@@ -56,9 +56,9 @@ impl Fx {
         let tf = Rc::new(tf);
         let mut arch = ArchContext::new(m);
         arch.types = Some(Rc::clone(&tf));
-        arch.kuna_options
+        arch.unlace_options
             .set(crate::coreoptions::CastArith(cast_arith));
-        arch.kuna_options
+        arch.unlace_options
             .set(crate::coreoptions::CastIndex(cast_index));
         let glb = Rc::new(arch);
         let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
@@ -700,7 +700,7 @@ fn a_store_of_a_value_computed_before_the_address_is_rewritten() {
     rewritten(&mut fx, add, 8, 4, 2);
 }
 
-/// kuna prints every enum as a plain `enum`, which C sizes by its own rules,
+/// unlace prints every enum as a plain `enum`, which C sizes by its own rules,
 /// while a packed enum, `-fshort-enums` or a C++ `enum class : uint8_t` is 1 or
 /// 2 bytes in the binary: `((color *)p)[3]` would scale by C's `sizeof`, not by
 /// the width the offset was measured in.  An enum element keeps the integer

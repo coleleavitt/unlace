@@ -6,7 +6,7 @@
 //! over the `MergeContext for Funcdata` bridge, and (b) refining
 //! `mark_output_storage_addr_tied` so the recovered return-value storage is left
 //! UN-tied (eligible to be IMPLIED + inlined) only for the genuine
-//! declared-output / single-def / pure-transient COPY shape — the kuna
+//! declared-output / single-def / pure-transient COPY shape — the unlace
 //! structural stand-in for C++ `ScopeLocal::inScope` (`funcdata_varnode.cc:993`,
 //! `database.hh:599` `rangetree.inRange`).
 //!
@@ -55,7 +55,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::IdRegistry;
 use unlace_base::space::AddrSpaceManager;
 use unlace_base::xml::{DocumentStorage, Element};
@@ -151,8 +151,8 @@ impl LoadImage for DummyImg {
     fn get_file_name(&self) -> &str {
         "dummy"
     }
-    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> KunaResult<()> {
-        Err(KunaError::data_unavail("dummy"))
+    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> UnlaceResult<()> {
+        Err(UnlaceError::data_unavail("dummy"))
     }
     fn get_arch_type(&self) -> Vec<u8> {
         Vec::new()
@@ -252,12 +252,12 @@ fn render_one(stem: &str, which: usize) -> Result<String, String> {
         .ok_or(format!("no space {space_name}"))?
         .clone();
     let entry = Address::new(space, off);
-    arch.kuna_options
-        .set(unlace_decomp::earlyreturn::EarlyReturn(false)); // (kuna) C++-parity test: opt out of earlyreturn (DIV-23 default-on)
-    arch.kuna_options
-        .set(unlace_decomp::switchreturn::SwitchReturn(false)); // (kuna) also opt out of switchreturn (DIV-25 default-on)
+    arch.unlace_options
+        .set(unlace_decomp::earlyreturn::EarlyReturn(false)); // (unlace) C++-parity test: opt out of earlyreturn (DIV-23 default-on)
+    arch.unlace_options
+        .set(unlace_decomp::switchreturn::SwitchReturn(false)); // (unlace) also opt out of switchreturn (DIV-25 default-on)
     let fd = decompile_func(arch, &name, entry, 0).map_err(|e| format!("decompile: {e}"))?;
-    // (kuna DIV-37) The frozen C++ oracles pin the upstream braced
+    // (unlace DIV-37) The frozen C++ oracles pin the upstream braced
     // single-statement if-body form; reset braceelide for the comparison.
     arch.print_mut().options.set_brace_elide(false);
     Ok(print_c(arch, &fd))
@@ -458,7 +458,7 @@ fn w10_implied_multiwrite_return_stays_explicit_not_overinlined() {
 fn w10_implied_boolless_acc_unregressed_byte_parity() {
     // The committed C++ B5 oracle (same constant as print_b5_boolless.rs).
     const CPP_B5_ORACLE: &str =
-        // (Header gap adjusted for the kuna DIV-34 brace-placement default.)
+        // (Header gap adjusted for the unlace DIV-34 brace-placement default.)
         "\nuint1 boolless(void)\n{\n  uint1 v1; // acc\n  \n  v1 = dat_52;\n  if (dat_52 <= 10) {\n    v1 = 1;\n  }\n  return v1;\n}\n";
 
     let rust = match render_one("boolless", 0) {

@@ -272,9 +272,9 @@ fn decompile_with(bytes: &[u8], args: &[&str], asserts: &[&str]) -> String {
     let specs = std::env::var_os("SLEIGHHOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| common::repo_root().join("specs"));
-    let kuna = unlace_base::env::var_os("UNLACE_TEST_BIN")
+    let unlace = unlace_base::env::var_os("UNLACE_TEST_BIN")
         .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
-    let mut command = Command::new(kuna);
+    let mut command = Command::new(unlace);
     command
         .arg("decompile-all")
         .arg(&path)

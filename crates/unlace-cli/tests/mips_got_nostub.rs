@@ -14,7 +14,7 @@ fn stubless_import_slots_are_not_null() {
         let path = common::fixture(image);
         let mut args = vec!["decompile", path.as_str(), "user"];
         args.extend_from_slice(extra);
-        let (code, err, rc) = common::run_kuna(&args);
+        let (code, err, rc) = common::run_unlace(&args);
         assert_eq!(rc, 0, "{image}: {err}");
         assert!(!code.contains("NULL"), "{image}: {code}");
         assert!(code.contains("if ("), "{image} lost the weak guard: {code}");

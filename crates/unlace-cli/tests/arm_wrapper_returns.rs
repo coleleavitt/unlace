@@ -194,7 +194,7 @@ fn thumb_image() -> Vec<u8> {
     object.write().unwrap()
 }
 
-/// A linked MIPS32 executable at 0x400000: `jal` is absolute, and kuna does
+/// A linked MIPS32 executable at 0x400000: `jal` is absolute, and unlace does
 /// not apply a MIPS object's relocations.
 fn mips_image(big: bool) -> Vec<u8> {
     const BASE: u32 = 0x400000;

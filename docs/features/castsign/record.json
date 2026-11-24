@@ -538,7 +538,7 @@
  },
  "parity": {
   "datatests": "675/675 PARITY OK, no assertion moved",
-  "stages": "1350/1350 PARITY OK; no assertion outside kuna-castsign.xml moved; that file now has 9 assertions (sign_of flips, a decremented index stays unsigned, a locked slot keeps its type) and baseline-stages.json changes only in its castsign keys and totals",
+  "stages": "1350/1350 PARITY OK; no assertion outside castsign.xml moved; that file now has 9 assertions (sign_of flips, a decremented index stays unsigned, a locked slot keeps its type) and baseline-stages.json changes only in its castsign keys and totals",
   "test_cli": "237/237",
   "rust_test": "RUST_TEST_RC=0, 7,484 passed, 0 failed, 38 ignored (commit 158df9544, lane 05:39:49Z-06:05:23Z)"
  },

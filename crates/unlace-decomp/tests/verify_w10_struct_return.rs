@@ -111,7 +111,7 @@ fn proto_returning(outtype: Rc<Datatype>) -> PrototypePieces {
         first_var_arg_slot: -1,
         output_storage: None,
         input_storage: Vec::new(),
-        kuna_library_names: None,
+        unlace_library_names: None,
     }
 }
 
@@ -305,12 +305,12 @@ fn tf_void(tf: &TypeFactoryImpl) -> Rc<Datatype> {
 //
 // Round-1 REJECT finding F1: the "pointer ALSO unassignable" failure
 // (C++ fspec.cc:1601 `throw ParamUnassignedError("Cannot assign return value
-// as a pointer")`) was ported as a generic `KunaError::lowlevel(...)`.  That is
+// as a pointer")`) was ported as a generic `UnlaceError::lowlevel(...)`.  That is
 // the WRONG variant: `ParamUnassignedError` is a dedicated `LowlevelError`
 // subclass that `ProtoModel::assignParameterStorage(...,ignoreOutputError=true)`
 // catches (fspec.cc:2441) to degrade the output to void; a generic
 // `LowlevelError` is NOT caught and hard-aborts the assignment.  The Rust caller
-// `assign_parameter_storage` matches only `Err(KunaError::ParamUnassigned{..})`
+// `assign_parameter_storage` matches only `Err(UnlaceError::ParamUnassigned{..})`
 // and routes everything else through `Err(e) => return Err(e)` (fspec.rs:3857),
 // so on the generic-error port the path diverges from C++.
 //
@@ -329,11 +329,11 @@ fn tf_void(tf: &TypeFactoryImpl) -> Rc<Datatype> {
 /// generic `Lowlevel`.  Output register is 4 bytes; the default data space is 8
 /// bytes, so the hidden-return pointer is 8 bytes and does NOT fit the 4-byte
 /// register either.  C++ would `throw ParamUnassignedError`; the faithful Rust
-/// port must raise `KunaError::ParamUnassigned`, the variant
+/// port must raise `UnlaceError::ParamUnassigned`, the variant
 /// `assign_parameter_storage(ignore_output_error=true)` degrades to void.
 #[test]
 fn pointer_unassignable_raises_param_unassigned_not_generic_lowlevel() {
-    use unlace_base::error::KunaError;
+    use unlace_base::error::UnlaceError;
 
     let (mgr, reg) = manager_with_data_space(8); // 8-byte pointer
     let model = one_register_out_model(&reg, 4, &mgr); // but only a 4-byte out reg
@@ -348,7 +348,7 @@ fn pointer_unassignable_raises_param_unassigned_not_generic_lowlevel() {
     // ParamUnassignedError), the exact variant the ignore_output_error catch arm
     // keys on.  A generic `Lowlevel` here would silently regress F1.
     assert!(
-        matches!(err, KunaError::ParamUnassigned { .. }),
+        matches!(err, UnlaceError::ParamUnassigned { .. }),
         "pointer-unassignable must raise ParamUnassigned (F1), got: {err:?}"
     );
     // And carry the C++ message verbatim.
@@ -357,7 +357,7 @@ fn pointer_unassignable_raises_param_unassigned_not_generic_lowlevel() {
 
 /// F1-B — the catch arm does not OVER-swallow: the *other* new error in
 /// `assign_map_standard_out` (no spacebase AND no default data space, the
-/// kuna-added guard at fspec.rs:2553) must NOT be `ParamUnassigned`.  C++ has no
+/// unlace-added guard at fspec.rs:2553) must NOT be `ParamUnassigned`.  C++ has no
 /// catch for that condition — `getDefaultDataSpace()` is assumed non-null and a
 /// null deref would crash; the faithful conservative port surfaces a generic
 /// `Lowlevel` that the ignore_output_error arm does NOT swallow (it would route
@@ -367,7 +367,7 @@ fn pointer_unassignable_raises_param_unassigned_not_generic_lowlevel() {
 /// void.
 #[test]
 fn no_data_space_guard_is_not_param_unassigned_so_catch_arm_cannot_swallow_it() {
-    use unlace_base::error::KunaError;
+    use unlace_base::error::UnlaceError;
     use unlace_base::space::{AddrSpace, spacetype};
 
     let mgr = manager_without_data_space();
@@ -393,7 +393,7 @@ fn no_data_space_guard_is_not_param_unassigned_so_catch_arm_cannot_swallow_it() 
     // The two error paths must be DISTINCT variants: the no-data-space guard is
     // NOT the degradable ParamUnassigned case.
     assert!(
-        !matches!(err, KunaError::ParamUnassigned { .. }),
+        !matches!(err, UnlaceError::ParamUnassigned { .. }),
         "no-default-data-space guard must NOT be ParamUnassigned (would be wrongly \
          swallowed by ignore_output_error), got: {err:?}"
     );
@@ -410,7 +410,7 @@ fn no_data_space_guard_is_not_param_unassigned_so_catch_arm_cannot_swallow_it() 
 /// flow (a fresh status vector per call could mask the second failure).
 #[test]
 fn shared_status_lets_second_assign_reattempt_same_entry_and_fail() {
-    use unlace_base::error::KunaError;
+    use unlace_base::error::UnlaceError;
 
     let (mgr, reg) = manager_with_data_space(8); // 8-byte pointer
     let model = one_register_out_model(&reg, 4, &mgr); // single 4-byte exclusion entry
@@ -428,7 +428,7 @@ fn shared_status_lets_second_assign_reattempt_same_entry_and_fail() {
     // reuse drives both calls against the same too-small entry -> both fail ->
     // ParamUnassigned.
     assert!(
-        matches!(r, Err(KunaError::ParamUnassigned { .. })),
+        matches!(r, Err(UnlaceError::ParamUnassigned { .. })),
         "expected ParamUnassigned from the reused-status second assign, got: {r:?}"
     );
     // No pieces were left half-pushed on the throw path (C++ throws before the

@@ -11,8 +11,8 @@
   "flag": null,
   "element_id": null,
   "change_kind": "correctness-fix",
-  "tier": "driver (kuna-console)",
-  "module": "decompiler/crates/kuna-console/src/engine.rs (commit_analysis_output), decompiler/crates/kuna-console/src/ifacedecomp.rs (IfcAddrrangeLoad)",
+  "tier": "driver (console)",
+  "module": "decompiler/crates/console/src/engine.rs (commit_analysis_output), decompiler/crates/console/src/ifacedecomp.rs (IfcAddrrangeLoad)",
   "phase": "P0 knowledge / driver seam",
   "spec_chapter": "docs/spec/00-overview.md",
   "div": "DIV-59",
@@ -46,11 +46,11 @@
   },
   "baseline_repin": false,
   "stage_test": null,
-  "stage_test_note": "structurally impossible for the primary defect: every tests/datatests and tests/stages file is an XML <binaryimage>, whose bootstrap never produces an AnalysisOutput, so commit_analysis_output is a no-op there. Gated instead by decompiler/crates/kuna-console/tests/verify_cppcallnames.rs, which drives the real engine over the vendored cpp_noreturn_x86_64 with the discovery passes enabled in the live-CLI order (option before read symbols).",
+  "stage_test_note": "structurally impossible for the primary defect: every tests/datatests and tests/stages file is an XML <binaryimage>, whose bootstrap never produces an AnalysisOutput, so commit_analysis_output is a no-op there. Gated instead by decompiler/crates/console/tests/verify_cppcallnames.rs, which drives the real engine over the vendored cpp_noreturn_x86_64 with the discovery passes enabled in the live-CLI order (option before read symbols).",
   "tests_added": [
-    "kuna-console/tests/verify_cppcallnames.rs::namespaced_callee_renders_qualified_with_discovery_on",
-    "kuna-console/tests/verify_cppcallnames.rs::load_addr_header_uses_the_known_symbol_name",
-    "kuna-console/tests/verify_cppcallnames.rs::discovery_still_names_genuinely_unknown_entries"
+    "console/tests/verify_cppcallnames.rs::namespaced_callee_renders_qualified_with_discovery_on",
+    "console/tests/verify_cppcallnames.rs::load_addr_header_uses_the_known_symbol_name",
+    "console/tests/verify_cppcallnames.rs::discovery_still_names_genuinely_unknown_entries"
   ],
   "sweep": {
     "surface": "kuna decompile-all, before (main build) vs after (this build)",
@@ -92,7 +92,7 @@
     "note": "the C++ project export was already not C (316 gcc -fsyntax-only errors before), and the .h is produced from the canonical function names this change does not touch, so nothing recompilable regresses. The .c bodies gain `::` at call sites, which is what IDA 9.2 and Ghidra 12.1 print. A sanitized identifier spelling for the export path is follow-up 1 -- a project-export policy that must rewrite .h and .c consistently, including the pre-existing `void Account::~Account(void)` headers and `{virtual override thunk}` names."
   },
   "follow_ups": [
-    "project-export identifier sanitization (kuna-console/src/project.rs build_header/build_c)",
+    "project-export identifier sanitization (console/src/project.rs build_header/build_c)",
     "address-taken function names render unqualified (Funcdata::link_spacebase_symbol uses the unscoped name_for_global_varnode; pre-existing, 3 lines in this sweep)",
     "the sibling commit arms (out.symbols, read_loader_symbols) still use a scope-local probe; no witness implicated them, so they were left alone rather than changed on suspicion",
     "a debug-info name does not displace a weaker loader name in the Database: on macho_dwarf.o the symtab _l0 is installed first, so the DWARF fact first_byte lives only in the register_symbol stream -- kuna functions reports first_byte (entry_name_rank prefers it) while --addr 0x0 reports _l0 (the Database). Pre-existing on both sides of this change; a naming-policy question, not a lookup fix."

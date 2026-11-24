@@ -177,7 +177,7 @@ two-pass stage test.
   info on one data page, and a `.symbols` file, about 64 KB in total. A small
   Python generator (`tools/fixtures/make_dyld_cache.py`) builds it from two
   hand-assembled images, so the bytes are reviewable.
-- **Stage test** `tests/stages/kuna-dyldcrossrefs.toml`:
+- **Stage test** `tests/stages/dyldcrossrefs.toml`:
   `option dyldimage /usr/lib/libcaller.dylib`, `option dyldcrossrefs off`, then
   `load file`. A caller's `bl` to the island renders `func_0x...` (the bug).
   With `on`, it renders `callee_add(...)` (the fix). A slid data pointer and a
@@ -197,7 +197,7 @@ two-pass stage test.
 - Files: `unlace-analysis/src/loader/dyldcache.rs` (+ `dyldcache/{extract,slide,xrefs,tests}.rs`),
   `unlace-decomp/src/p0_knowledge/dyldcache.rs`, `unlace-cli/src/unpack/dyld.rs`,
   fixture generator `unlace-analysis/tests/fixtures/dyld_cache_arm64e.py` (29 KB of
-  output), stage test `tests/stages/kuna-dyldcrossrefs.toml`.
+  output), stage test `tests/stages/dyldcrossrefs.toml`.
 - Options: `dyldimage` (`none|<install-name>`, default `none`) and `dyldcrossrefs`
   (`on|off`, default `on`); global `--image NAME`; `unlace unpack <cache> --list | --image`.
 - Real caches: iOS 16.4.1 arm64e (2,715 images, 44 sub-caches, slide v3) and

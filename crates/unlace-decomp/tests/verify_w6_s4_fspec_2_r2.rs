@@ -4,7 +4,7 @@
 //!
 //! Written by the INDEPENDENT verifier in round 2, AFTER the F1 repair
 //! (commit 7af2e13: the ParamUnassignedError-only catch is now matched by
-//! `Err(KunaError::ParamUnassigned { .. })`, with `Err(e) => return Err(e)` for
+//! `Err(UnlaceError::ParamUnassigned { .. })`, with `Err(e) => return Err(e)` for
 //! everything else, and `unassigned_err` builds the `ParamUnassigned` variant).
 //!
 //! These target the spots re-derived as most fragile for this round:
@@ -28,7 +28,7 @@
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::{AddrSpace, AddrSpaceManager, spacetype};
 use unlace_base::types::{int4, uint4};
 
@@ -156,28 +156,28 @@ impl TypeFactory for VoidTypeFactory {
     fn get_size_of_alt_pointer(&self) -> int4 {
         unreached!()
     }
-    fn get_alignment(&self, _size: uint4) -> KunaResult<int4> {
+    fn get_alignment(&self, _size: uint4) -> UnlaceResult<int4> {
         unreached!()
     }
-    fn get_primitive_align_size(&self, _size: uint4) -> KunaResult<int4> {
+    fn get_primitive_align_size(&self, _size: uint4) -> UnlaceResult<int4> {
         unreached!()
     }
-    fn get_type_void(&self) -> KunaResult<Rc<Datatype>> {
+    fn get_type_void(&self) -> UnlaceResult<Rc<Datatype>> {
         Ok(void_type())
     }
-    fn get_base_no_char(&self, _s: int4, _m: type_metatype) -> KunaResult<Rc<Datatype>> {
+    fn get_base_no_char(&self, _s: int4, _m: type_metatype) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
-    fn get_base(&self, _s: int4, _m: type_metatype) -> KunaResult<Rc<Datatype>> {
+    fn get_base(&self, _s: int4, _m: type_metatype) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
-    fn get_base_named(&self, _s: int4, _m: type_metatype, _n: &str) -> KunaResult<Rc<Datatype>> {
+    fn get_base_named(&self, _s: int4, _m: type_metatype, _n: &str) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
-    fn get_type_char(&self, _s: int4) -> KunaResult<Rc<Datatype>> {
+    fn get_type_char(&self, _s: int4) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
-    fn get_type_code(&self) -> KunaResult<Rc<Datatype>> {
+    fn get_type_code(&self) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
     fn get_type_pointer_strip_array(
@@ -185,7 +185,7 @@ impl TypeFactory for VoidTypeFactory {
         _s: int4,
         _pt: Rc<Datatype>,
         _ws: uint4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
     fn get_type_pointer(
@@ -193,7 +193,7 @@ impl TypeFactory for VoidTypeFactory {
         _s: int4,
         _pt: Rc<Datatype>,
         _ws: uint4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
     fn get_type_pointer_named(
@@ -202,10 +202,10 @@ impl TypeFactory for VoidTypeFactory {
         _pt: Rc<Datatype>,
         _ws: uint4,
         _n: &str,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
-    fn resize_pointer(&self, _ptr: Rc<Datatype>, _new_size: int4) -> KunaResult<Rc<Datatype>> {
+    fn resize_pointer(&self, _ptr: Rc<Datatype>, _new_size: int4) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
     fn get_type_pointer_rel(
@@ -213,7 +213,7 @@ impl TypeFactory for VoidTypeFactory {
         _parent_ptr: Rc<Datatype>,
         _ptr_to: Rc<Datatype>,
         _off: int4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
     fn get_type_pointer_rel_full(
@@ -224,7 +224,7 @@ impl TypeFactory for VoidTypeFactory {
         _ws: int4,
         _off: int4,
         _nm: &str,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
     fn get_type_pointer_with_space(
@@ -232,13 +232,13 @@ impl TypeFactory for VoidTypeFactory {
         _ptr_to: Rc<Datatype>,
         _spc: Rc<AddrSpace>,
         _nm: &str,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
-    fn get_type_array(&self, _as_: int4, _ao: Rc<Datatype>) -> KunaResult<Rc<Datatype>> {
+    fn get_type_array(&self, _as_: int4, _ao: Rc<Datatype>) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
-    fn get_type_struct(&self, _n: &str) -> KunaResult<Rc<Datatype>> {
+    fn get_type_struct(&self, _n: &str) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
     fn get_type_partial_struct(
@@ -246,10 +246,10 @@ impl TypeFactory for VoidTypeFactory {
         _contain: Rc<Datatype>,
         _off: int4,
         _sz: int4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
-    fn get_type_union(&self, _n: &str) -> KunaResult<Rc<Datatype>> {
+    fn get_type_union(&self, _n: &str) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
     fn get_type_partial_union(
@@ -257,7 +257,7 @@ impl TypeFactory for VoidTypeFactory {
         _contain: Rc<Datatype>,
         _off: int4,
         _sz: int4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
     fn get_type_partial_enum(
@@ -265,16 +265,20 @@ impl TypeFactory for VoidTypeFactory {
         _contain: Rc<Datatype>,
         _off: int4,
         _sz: int4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
-    fn get_type_enum(&self, _n: &str) -> KunaResult<Rc<Datatype>> {
+    fn get_type_enum(&self, _n: &str) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
-    fn get_type_spacebase(&self, _id: Rc<AddrSpace>, _addr: &Address) -> KunaResult<Rc<Datatype>> {
+    fn get_type_spacebase(
+        &self,
+        _id: Rc<AddrSpace>,
+        _addr: &Address,
+    ) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
-    fn resize_integer(&self, _ct: Rc<Datatype>, _new_size: int4) -> KunaResult<Rc<Datatype>> {
+    fn resize_integer(&self, _ct: Rc<Datatype>, _new_size: int4) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
     fn get_exact_piece(
@@ -282,13 +286,13 @@ impl TypeFactory for VoidTypeFactory {
         _ct: Rc<Datatype>,
         _offset: int4,
         _size: int4,
-    ) -> KunaResult<Option<Rc<Datatype>>> {
+    ) -> UnlaceResult<Option<Rc<Datatype>>> {
         unreached!()
     }
-    fn find_by_name(&self, _n: &str) -> KunaResult<Option<Rc<Datatype>>> {
+    fn find_by_name(&self, _n: &str) -> UnlaceResult<Option<Rc<Datatype>>> {
         unreached!()
     }
-    fn concretize(&self, _ct: Rc<Datatype>) -> KunaResult<Rc<Datatype>> {
+    fn concretize(&self, _ct: Rc<Datatype>) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
 }
@@ -303,7 +307,7 @@ impl TypeFactory for VoidTypeFactory {
 /// so `ParamListStandard::assignMap` throws `ParamUnassignedError` (fspec.cc:814)
 /// — a GENUINE ParamUnassigned, NOT the STUB Lowlevel.  C++ `catch
 /// (ParamUnassignedError&)` sets `error_inputparam`; the repaired port matches
-/// `Err(KunaError::ParamUnassigned { .. })` and must do the same (Ok + flag),
+/// `Err(UnlaceError::ParamUnassigned { .. })` and must do the same (Ok + flag),
 /// proving the discriminator fires for the real ParamUnassigned case.
 #[test]
 fn update_all_types_genuine_param_unassigned_sets_flag_w6s4f1_r2() {
@@ -324,7 +328,7 @@ fn update_all_types_genuine_param_unassigned_sets_flag_w6s4f1_r2() {
         first_var_arg_slot: -1,
         output_storage: None,
         input_storage: Vec::new(),
-        kuna_library_names: None,
+        unlace_library_names: None,
     };
     let r = fp.update_all_types(&proto, &tf, &mgr);
     assert!(
@@ -362,20 +366,20 @@ fn assign_parameter_storage_ignore_output_only_catches_param_unassigned_w6s4f1_r
         first_var_arg_slot: -1,
         output_storage: None,
         input_storage: Vec::new(),
-        kuna_library_names: None,
+        unlace_library_names: None,
     };
     let mut res: Vec<ParameterPieces> = Vec::new();
     let r = model.assign_parameter_storage(&proto, &mut res, true, &tf, &mgr);
     // The STUB error is a Lowlevel, NOT ParamUnassigned -> must escape the
     // ParamUnassigned-only catch even with ignore_output_error = true.
     assert!(
-        matches!(r, Err(KunaError::Lowlevel { .. })),
+        matches!(r, Err(UnlaceError::Lowlevel { .. })),
         "ignore_output_error path must still PROPAGATE a non-ParamUnassigned \
          (Lowlevel) error from the output assign (got {:?})",
         r
     );
     assert!(
-        !matches!(r, Err(KunaError::ParamUnassigned { .. })),
+        !matches!(r, Err(UnlaceError::ParamUnassigned { .. })),
         "the STUB error must not be misclassified as ParamUnassigned"
     );
 }

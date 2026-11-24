@@ -11,7 +11,7 @@ const SLOT: u64 = 0x4018;
 
 fn xrefs_to(spec: &str) -> (Value, String) {
     let lib = common::fixture("selfplt_x86_64.so");
-    let (out, err, code) = common::run_kuna(&["xrefs", &lib, "--to", spec, "--json"]);
+    let (out, err, code) = common::run_unlace(&["xrefs", &lib, "--to", spec, "--json"]);
     assert_eq!(code, 0, "{err}");
     (serde_json::from_str(&out).expect("xrefs JSON"), err)
 }

@@ -1,4 +1,4 @@
-//! (kuna `vtabletypes`) The per-class vtable facts the typed-vtable commit
+//! (unlace `vtabletypes`) The per-class vtable facts the typed-vtable commit
 //! installs ([`unlace_decomp::vtabletypes`]).
 //!
 //! Built on the Itanium recovery ([`super::itaniumrtti::recover`]), which

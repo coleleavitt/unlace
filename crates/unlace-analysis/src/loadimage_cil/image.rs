@@ -11,7 +11,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use unlace_base::address::{Address, RangeList};
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::space::AddrSpace;
 use unlace_sleigh::loadimage::{ImageBytes, LoadImage, LoadImageFunc, LoadImageSection};
 
@@ -61,7 +61,7 @@ impl LoadImage for CilLoadImage {
         self.inner.get_file_name()
     }
 
-    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> KunaResult<()> {
+    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> UnlaceResult<()> {
         self.inner.load_fill(ptr, addr)
     }
 
@@ -101,8 +101,8 @@ impl LoadImage for CilLoadImage {
         at + 1 < self.sections.len()
     }
 
-    fn kuna_overlay_bytes(&mut self, addr: &Address, data: &[u8]) -> KunaResult<()> {
-        self.inner.kuna_overlay_bytes(addr, data)
+    fn unlace_overlay_bytes(&mut self, addr: &Address, data: &[u8]) -> UnlaceResult<()> {
+        self.inner.unlace_overlay_bytes(addr, data)
     }
 
     fn get_segments(&self) -> Vec<(u64, u64, u32)> {

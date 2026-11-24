@@ -1,4 +1,4 @@
-//! (kuna `cstringconst`) A pointer-wide constant inside a string-literal section
+//! (unlace `cstringconst`) A pointer-wide constant inside a string-literal section
 //! prints as the literal there, whatever type it reaches the printer with.
 //!
 //! `PrintC::pushConstant` renders a constant as a quoted string only when its
@@ -58,7 +58,7 @@ pub fn literal_sections<'a>(
 /// with, when the option is on and the constant is as wide as a pointer.
 pub fn literal_char(arch: &Architecture, val: uintb, size: i32) -> Option<Rc<Datatype>> {
     if !arch
-        .kuna_options
+        .unlace_options
         .get::<crate::cstringconst::CstringConst>()
         .0
         || size != arch.types().get_size_of_pointer()
@@ -169,8 +169,8 @@ pub fn is_call_argument(fd: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
     false
 }
 
-crate::kuna_flag!(
-    /// (kuna `cstringconst`) Print a pointer-wide constant inside one of
+crate::unlace_flag!(
+    /// (unlace `cstringconst`) Print a pointer-wide constant inside one of
     /// [`Self::cstring_ranges`] as the string literal there, whatever its type.
     CstringConst,
     "cstringconst",

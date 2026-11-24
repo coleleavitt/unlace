@@ -1,4 +1,4 @@
-//! (kuna) A declared value a function hands on unchanged, in
+//! (unlace) A declared value a function hands on unchanged, in
 //! the register it already occupies, to the variable part of a variadic call is
 //! an argument of that call.
 //!

@@ -15,7 +15,7 @@
 
 use std::rc::Rc;
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::types::uint4;
 use unlace_decomp::dtype::{Datatype, TypeFactory};
 use unlace_decomp::formatstring::VarargAbi;
@@ -91,13 +91,13 @@ pub fn build_override_pieces(
     types: &dyn TypeFactory,
     word_size: uint4,
     abi: VarargAbi,
-) -> KunaResult<Option<PrototypePieces>> {
+) -> UnlaceResult<Option<PrototypePieces>> {
     let number_of_parameters = fixed_param_types.len() + format_specs.len();
     if number_of_parameters == 0 {
         // createParameters `:296`: numberOfParameters == 0 → null (invalid).
         return Ok(None);
     }
-    // A `long double` conversion (`%Lf`) declines the whole site. kuna has no
+    // A `long double` conversion (`%Lf`) declines the whole site. unlace has no
     // extended-precision base type, so `Spec::LongDouble` lowers to an 8-byte
     // float — and an 8-byte float is a different ABI CLASS from a `long double`:
     // on x86-64 SysV the former is passed in an SSE register and the latter in
@@ -146,7 +146,7 @@ pub fn build_override_pieces(
         first_var_arg_slot: -1,
         output_storage: None,
         input_storage: Vec::new(),
-        kuna_library_names: None,
+        unlace_library_names: None,
     }))
 }
 

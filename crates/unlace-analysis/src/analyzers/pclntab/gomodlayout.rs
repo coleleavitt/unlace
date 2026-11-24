@@ -1,4 +1,4 @@
-//! (kuna) `runtime.moduledata`, read through a layout table per Go release.
+//! (unlace) `runtime.moduledata`, read through a layout table per Go release.
 //!
 //! The linker emits one `moduledata` per module (`runtime.firstmoduledata`),
 //! the runtime's index of its own image: the pclntab slices, the text and data

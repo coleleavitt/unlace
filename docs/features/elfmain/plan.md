@@ -77,7 +77,7 @@ subphase `prototype-source`) · `p0_knowledge/options.rs` registration ·
 
 - 5 unit tests over `main_claim` (both x86-64 encodings, all four oracle-4
   architectures, the two non-PIE ARM shapes, the unstripped and non-ELF refusals);
-- `tests/stages/kuna-elfmain.toml`, the two-pass gate over the full
+- `tests/stages/elfmain.toml`, the two-pass gate over the full
   `load file` → `decompile` path (corpus 293→294, `docs/baseline-stages.json`
   re-recorded — additive only, 1007→1011 keys, no existing assertion moved);
 - `tests/cli/elf-libc-start-main-unnamed.json`, the CLI-surface acceptance.

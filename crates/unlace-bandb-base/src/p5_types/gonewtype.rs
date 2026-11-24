@@ -43,7 +43,7 @@
 //!   * a `<name>` that is layout-AMBIGUOUS — distinct function-local types
 //!     reuse one `pkg.Name` reflection spelling with different layouts, and a
 //!     name-keyed factory holds only one, so the name is no basis for a lock
-//!     (the harvest marks these, `TypeFactory::kuna_is_ambiguous_go_type`);
+//!     (the harvest marks these, `TypeFactory::unlace_is_ambiguous_go_type`);
 //!   * a result whose width is not one machine word — a reconstructed register
 //!     pair (`rbx:rax`) is not the pointer result, and a multi-word "pointer"
 //!     would mislabel the whole wide storage;
@@ -85,7 +85,7 @@ fn descriptor_slot(name: &str) -> Option<int4> {
 pub fn contribute(data: &mut Funcdata) {
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::gonewtype::GoNewType>()
         .0
     {
@@ -132,7 +132,7 @@ fn resolve_site(data: &Funcdata, op: OpId, slot: int4) -> Option<(Address, Rc<Da
     // types reuse one spelling with different layouts (the harvest marks these
     // ambiguous). The factory holds only one record per name, so locking THIS
     // site's descriptor through the name could assert the wrong layout — refuse.
-    if tlst.kuna_is_ambiguous_go_type(spelled) {
+    if tlst.unlace_is_ambiguous_go_type(spelled) {
         return None;
     }
     let record = tlst.find_by_name(spelled).ok()??;
@@ -197,8 +197,8 @@ fn descriptor_offset(data: &Funcdata, vn: crate::context::VarnodeId) -> Option<u
     src.is_constant().then(|| src.get_offset())
 }
 
-crate::kuna_flag!(
-    /// (kuna) `option gonewtype`: type a `runtime.newobject` result from its
+crate::unlace_flag!(
+    /// (unlace) `option gonewtype`: type a `runtime.newobject` result from its
     /// descriptor argument through the per-call-site output type lock.
     /// Default on (structurally inert off Go images).
     GoNewType,

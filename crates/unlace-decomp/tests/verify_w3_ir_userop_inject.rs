@@ -92,7 +92,7 @@ impl UseropArchitecture for TestArch {
         suffix: &[u8],
         tp: int4,
         decoder: &mut dyn Decoder,
-    ) -> unlace_base::error::KunaResult<int4> {
+    ) -> unlace_base::error::UnlaceResult<int4> {
         self.lib.decode_inject(src, suffix, tp, decoder)
     }
     fn get_call_other_target(&self, injectid: int4) -> Vec<u8> {
@@ -101,7 +101,7 @@ impl UseropArchitecture for TestArch {
     fn payload_io_sizes(
         &self,
         injectid: int4,
-    ) -> unlace_base::error::KunaResult<(int4, int4, int4, int4)> {
+    ) -> unlace_base::error::UnlaceResult<(int4, int4, int4, int4)> {
         let core = self.lib.get_payload(injectid).core();
         let in0 = if core.size_input() > 0 {
             core.get_input(0).get_size() as int4

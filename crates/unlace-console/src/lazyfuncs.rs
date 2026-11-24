@@ -1,4 +1,4 @@
-//! (kuna `lazyfuncs`) Materialize the `Function` objects one decompile reads.
+//! (unlace `lazyfuncs`) Materialize the `Function` objects one decompile reads.
 //!
 //! The commit installed the discovered entries as NAMES only, except the ones another
 //! commit fact lands on, so after a lift this gives a `Function` to every parked entry
@@ -10,7 +10,7 @@ use std::collections::HashSet;
 
 use unlace_analysis::pass::AnalysisOutput;
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_decomp::architecture::Architecture;
 use unlace_decomp::funcdata::Funcdata;
 use unlace_num::opcodes::OpCode;
@@ -47,7 +47,10 @@ pub(crate) fn fact_entries(out: &AnalysisOutput) -> HashSet<u64> {
 /// Give every lazy entry `lifted` read a `Function`; 0 means nothing was missing, so
 /// the caller must not re-run.  Only parked entries are ever materialized, so the
 /// symbol table never holds a `Function` the eager commit would not have built.
-pub(crate) fn materialize_callees(arch: &mut Architecture, lifted: &KunaResult<Funcdata>) -> usize {
+pub(crate) fn materialize_callees(
+    arch: &mut Architecture,
+    lifted: &UnlaceResult<Funcdata>,
+) -> usize {
     let Ok(fd) = lifted else { return 0 };
     let Some(space) = fd.get_address().get_space().cloned() else {
         return 0;

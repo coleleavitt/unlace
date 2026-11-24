@@ -1,7 +1,7 @@
 //! The Windows on ARM `/GS` helpers are recognised in a stripped PE and their call-fixups keep
 //! the caller's stack offsets (fixture `fixtures/armgscookie`).
 use crate::common;
-use common::{repo_root, run_kuna};
+use common::{repo_root, run_unlace};
 
 fn fixture() -> String {
     repo_root()
@@ -13,7 +13,7 @@ fn fixture() -> String {
 
 #[test]
 fn the_cookie_helpers_are_named_by_their_bytes() {
-    let (stdout, stderr, code) = run_kuna(&["functions", &fixture()]);
+    let (stdout, stderr, code) = run_unlace(&["functions", &fixture()]);
     assert_eq!(code, 0, "{stderr}");
     assert!(
         stdout.contains("0x401028\t__security_push_cookie"),
@@ -27,7 +27,7 @@ fn the_cookie_helpers_are_named_by_their_bytes() {
 
 #[test]
 fn the_push_moves_the_stack_pointer_so_the_first_stack_argument_is_read() {
-    let (stdout, stderr, code) = run_kuna(&["decompile", &fixture(), "0x401014", "--addr"]);
+    let (stdout, stderr, code) = run_unlace(&["decompile", &fixture(), "0x401014", "--addr"]);
     assert_eq!(code, 0, "{stderr}");
     assert!(stdout.contains("// r0 | stack + 0x0"), "{stdout}");
     assert!(!stdout.contains("stack + 0x4"), "{stdout}");

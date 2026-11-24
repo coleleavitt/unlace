@@ -43,7 +43,7 @@ lost entirely in unlocked call-site recovery.
 
 ## The tests
 
-`tests/stages/kuna-calleearityscratch.toml` is two-pass over four caller/callee
+`tests/stages/calleearityscratch.toml` is two-pass over four caller/callee
 pairs: the two scratch shapes (64-bit and the witness's own byte XOR) render an
 empty list with the option off and recover the argument with it on; an active
 boundary and a constant boundary are declined in both passes. Ten unit tests

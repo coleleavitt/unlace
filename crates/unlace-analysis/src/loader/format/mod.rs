@@ -8,7 +8,7 @@
 
 use object::{Architecture, BinaryFormat, SectionFlags, SectionKind};
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 
 pub mod coff;
 pub mod elf;
@@ -84,7 +84,7 @@ pub trait ObjectFormat {
     fn compiler_model(&self, arch: Architecture) -> Option<&'static str>;
 
     /// Per-format arm of today's `section_kind_flags` (translate an `object`
-    /// section's name, kind and flags into the kuna `section_flags` bitset).
+    /// section's name, kind and flags into the unlace `section_flags` bitset).
     fn section_bits(&self, name: &str, kind: SectionKind, flags: SectionFlags) -> u32;
 
     /// Format-dispatching replacement for `elf_plt::resolve_plt_imports`.
@@ -164,13 +164,13 @@ pub trait ObjectFormat {
 
 /// Select a format implementation for ELF, PE, Mach-O or COFF.
 /// Unsupported object formats return an error.
-pub fn detect(file: &object::File) -> KunaResult<Box<dyn ObjectFormat>> {
+pub fn detect(file: &object::File) -> UnlaceResult<Box<dyn ObjectFormat>> {
     match file.format() {
         BinaryFormat::Elf => Ok(Box::new(elf::ElfFormat)),
         BinaryFormat::Pe => Ok(Box::new(pe::PeFormat)),
         BinaryFormat::MachO => Ok(Box::new(macho::MachOFormat)),
         BinaryFormat::Coff => Ok(Box::new(coff::CoffFormat)),
-        other => Err(KunaError::lowlevel(format!(
+        other => Err(UnlaceError::lowlevel(format!(
             "unsupported object format {other:?} \
              (kuna supports ELF/PE/Mach-O/COFF)"
         ))),

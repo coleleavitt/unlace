@@ -1,4 +1,4 @@
-//! (kuna `swifthelpers`) The helpers swiftc emits into every image that
+//! (unlace `swifthelpers`) The helpers swiftc emits into every image that
 //! uses generic types, named from their bodies, and the types they are
 //! asked for, named at each call.
 //!
@@ -14,7 +14,7 @@
 //!   filled) or the second (a separate cache) is read off the register the
 //!   resolution is based on. The helper is named and given the prototype
 //!   `void *f(void *cache[, void *name])` (each call's result is typed
-//!   `swift.type_metadata *` where it can be, `kuna_swiftmetaresult`), and at every
+//!   `swift.type_metadata *` where it can be, `unlace_swiftmetaresult`), and at every
 //!   call whose arguments are `adrp`/`add` (or `adr`) constants the mangled
 //!   name is demangled and the cache named after the type it caches
 //!   (`hf.Box<hf.Unit>.type_metadata_demangling_cache`), as the image's
@@ -478,7 +478,7 @@ fn pieces(
         first_var_arg_slot: -1,
         output_storage: None,
         input_storage: Vec::new(),
-        kuna_library_names: None,
+        unlace_library_names: None,
     }
 }
 

@@ -3,7 +3,7 @@
 //!
 //! Fixture: `declmerge_x86_64` (`+.c`), a non-PIE x86-64 ELF whose `make_dir_clone`
 //! (a reduction of tar's `make_directory`) has a size phi `sz = (…) ? len : len + 1`
-//! that kuna's merge phase declines to coalesce with the `strlen` result. The
+//! that unlace's merge phase declines to coalesce with the `strlen` result. The
 //! un-coalesced phi output picks up an instance overlapping a **parameter register**,
 //! so `PrintC::emit_local_var_decls`' `is_param` storage-containment test used to
 //! SKIP it — while the statements still referenced it, producing an undeclared `v5`
@@ -12,7 +12,7 @@
 //! still declared.
 //!
 //! This gate re-parses the emitted C and asserts every referenced `vN` local appears
-//! in the declaration block. Regression for the ghidra-beats-kuna merge/copy cluster's
+//! in the declaration block. Regression for the ghidra-beats-unlace merge/copy cluster's
 //! invalid-C sub-bug (`docs/decbench/ghidra-gap-analysis.md` §3).
 //!
 //! It also asserts the mirror image: no name is declared **twice**. The printer walks
@@ -52,7 +52,7 @@ fn decompile(func: &str) -> String {
     let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
     prog.arch_mut()
-        .set_kuna_option("libcnames", "off")
+        .set_unlace_option("libcnames", "off")
         .expect("libcnames flips");
 
     let cmds: Vec<String> = [

@@ -18,7 +18,7 @@
 use std::collections::BTreeMap;
 
 use object::SectionKind;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 
 use super::{Bytes, MAX_MODULE, RetroImage, RetroSection, RetroSymbol, invalid, symbol_name};
 
@@ -153,7 +153,7 @@ fn entries(file: &Bytes, start: u64, len: u64) -> BTreeMap<u16, (u16, u16)> {
     out
 }
 
-pub fn parse(filename: &str, bytes: &[u8]) -> KunaResult<RetroImage> {
+pub fn parse(filename: &str, bytes: &[u8]) -> UnlaceResult<RetroImage> {
     let bad = |detail: &str| invalid(filename, FORMAT, detail);
     let truncated = || bad("truncated NE header");
     let file = Bytes {

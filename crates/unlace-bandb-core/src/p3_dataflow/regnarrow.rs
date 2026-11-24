@@ -1,4 +1,4 @@
-//! (kuna `regnarrow`) A register local whose every value fits a narrower low
+//! (unlace `regnarrow`) A register local whose every value fits a narrower low
 //! part is declared that narrow.
 //!
 //! A `uint8_t` counter on ARM lives in a whole register (`adds r5, #1; uxtb r5,
@@ -178,17 +178,17 @@ fn image_address(data: &Funcdata, c: uintb) -> bool {
 pub fn narrow_locals(data: &mut Funcdata) -> int4 {
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::regnarrow::NarrowLocals>()
         .0
         || data.bblocks_get_size() == 0
-        || data.kuna_regnarrow_runs >= MAX_RUNS
+        || data.unlace_regnarrow_runs >= MAX_RUNS
     {
         return 0;
     }
     let signed = data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::regnarrow::NarrowSigned>()
         .0;
     let seeds: Vec<VarnodeId> = data
@@ -212,7 +212,7 @@ pub fn narrow_locals(data: &mut Funcdata) -> int4 {
     let mut seen: BTreeSet<VarnodeId> = BTreeSet::new();
     let mut count = 0;
     for seed in seeds {
-        if seen.contains(&seed) || data.kuna_regnarrow_failed.contains(&seed) {
+        if seen.contains(&seed) || data.unlace_regnarrow_failed.contains(&seed) {
             continue;
         }
         let web = web_of(data, seed);
@@ -246,7 +246,7 @@ pub fn narrow_locals(data: &mut Funcdata) -> int4 {
         match crate::subflow::run_zext_uses(data, seed, calc_mask(w)) {
             Some((flow, narrow)) => {
                 seen.extend(flow);
-                data.kuna_regnarrow_values.extend(narrow);
+                data.unlace_regnarrow_values.extend(narrow);
                 count += 1;
                 if trace() {
                     eprintln!(
@@ -257,12 +257,12 @@ pub fn narrow_locals(data: &mut Funcdata) -> int4 {
                 }
             }
             None => {
-                data.kuna_regnarrow_failed.insert(seed);
+                data.unlace_regnarrow_failed.insert(seed);
             }
         }
     }
     if count > 0 {
-        data.kuna_regnarrow_runs += 1;
+        data.unlace_regnarrow_runs += 1;
     }
     count
 }
@@ -365,7 +365,7 @@ fn wide_frame_home(data: &Funcdata, web: &[VarnodeId], w: int4) -> bool {
         return false;
     };
     web.iter().any(|&vn| {
-        data.kuna_storage_sources(vn).iter().any(|s| {
+        data.unlace_storage_sources(vn).iter().any(|s| {
             s.size > w
                 && s.address
                     .get_space()
@@ -384,7 +384,7 @@ fn narrow_signed_web(
     match crate::subflow::run_sext_uses(data, seed, calc_mask(w)) {
         Some((flow, narrow)) => {
             seen.extend(flow);
-            data.kuna_regsigned_values.extend(narrow);
+            data.unlace_regsigned_values.extend(narrow);
             if trace() {
                 eprintln!("[regsigned] 0x{:x} -> {w}", data.get_address().get_offset());
             }
@@ -397,7 +397,7 @@ fn narrow_signed_web(
                     data.get_address().get_offset()
                 );
             }
-            data.kuna_regnarrow_failed.insert(seed);
+            data.unlace_regnarrow_failed.insert(seed);
             0
         }
     }
@@ -418,11 +418,11 @@ pub fn unsigned_vote(
     ct: &Datatype,
 ) -> Option<std::rc::Rc<Datatype>> {
     let meta = match ct.get_metatype() {
-        type_metatype::TYPE_UNKNOWN if data.kuna_regnarrow_values.contains(&vn) => {
+        type_metatype::TYPE_UNKNOWN if data.unlace_regnarrow_values.contains(&vn) => {
             type_metatype::TYPE_UINT
         }
         type_metatype::TYPE_UNKNOWN | type_metatype::TYPE_UINT
-            if data.kuna_regsigned_values.contains(&vn) =>
+            if data.unlace_regsigned_values.contains(&vn) =>
         {
             type_metatype::TYPE_INT
         }
@@ -431,15 +431,15 @@ pub fn unsigned_vote(
     data.get_arch().types()?.get_base(ct.get_size(), meta).ok()
 }
 
-/// (kuna) Declare a register-local web whose values all fit a narrower low
+/// (unlace) Declare a register-local web whose values all fit a narrower low
 /// part at that width (option `regnarrow`).  See
 /// [`crate::regnarrow`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct NarrowLocals(pub bool);
 
-impl crate::optionset::KunaOption for NarrowLocals {
+impl crate::optionset::UnlaceOption for NarrowLocals {
     const NAME: &'static str = "regnarrow";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         NarrowLocals(true)
@@ -449,22 +449,22 @@ impl crate::optionset::KunaOption for NarrowLocals {
         NarrowLocals(true)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (v, msg) = crate::options::on_or_off(value)
             .map(|v| (v, format!("Narrow register local recovery turned {value}")))?;
         Ok((NarrowLocals(v), msg))
     }
 }
 
-/// (kuna) Also narrow a register-local web whose values are all sign
+/// (unlace) Also narrow a register-local web whose values are all sign
 /// extensions of a narrower part (option `regsigned`).  See
 /// [`crate::regnarrow`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct NarrowSigned(pub bool);
 
-impl crate::optionset::KunaOption for NarrowSigned {
+impl crate::optionset::UnlaceOption for NarrowSigned {
     const NAME: &'static str = "regsigned";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         NarrowSigned(false)
@@ -474,7 +474,7 @@ impl crate::optionset::KunaOption for NarrowSigned {
         NarrowSigned(false)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (v, msg) = crate::options::on_or_off(value).map(|v| {
             (
                 v,

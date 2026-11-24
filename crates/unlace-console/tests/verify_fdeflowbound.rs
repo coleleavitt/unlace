@@ -2,7 +2,7 @@
 //! of the function's own FDE.
 //!
 //! Fixture: `fdeflowbound_x86_64.so` (`gcc -shared` of the `.s` alongside). `f`'s
-//! FDE ends after `call mydie@plt`, an import kuna cannot know never returns,
+//! FDE ends after `call mydie@plt`, an import unlace cannot know never returns,
 //! and `mov eax,7; ret` follows with no symbol and no FDE.
 
 use std::path::PathBuf;
@@ -23,7 +23,7 @@ fn decompile(on: bool) -> String {
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
     prog.arch_mut()
-        .set_kuna_option("fdeflowbound", if on { "on" } else { "off" })
+        .set_unlace_option("fdeflowbound", if on { "on" } else { "off" })
         .expect("fdeflowbound flips");
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");

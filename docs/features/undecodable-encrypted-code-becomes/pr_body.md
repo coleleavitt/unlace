@@ -70,7 +70,7 @@ restores the silent `return;`.
 
 ## The tests
 
-`tests/stages/kuna-decodehalt.toml` is the two-pass case, run with
+`tests/stages/decodehalt.toml` is the two-pass case, run with
 `voidtailreturn on` so it covers the elision seam: off, the truncated path leaves
 no statement at all; on, `halt_baddata();` under a warned prototype.
 `tests/cli/undecodable-encrypted-code-becomes.json` is the promoted acceptance

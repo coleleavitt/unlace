@@ -1,7 +1,7 @@
-//! Tests for the char-pointer byte rule (kuna `charbyte`).
+//! Tests for the char-pointer byte rule (unlace `charbyte`).
 //!
 //! The edge decision needs a decompiled function and is covered end to end by
-//! `tests/stages/kuna-charbyte.toml` (pass 1 off = `uint1`, pass 2 on = `char`).
+//! `tests/stages/unlace-charbyte.toml` (pass 1 off = `uint1`, pass 2 on = `char`).
 //! What is pinned here is the lattice fact the rule exists to override and the
 //! type predicates that keep it off every other byte.
 

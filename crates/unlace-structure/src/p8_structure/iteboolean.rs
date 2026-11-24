@@ -19,7 +19,7 @@
 //! unconditionally.  The short-circuit must stay in the CFG; only C's own
 //! `&&`/`||` can express it.
 //!
-//! So kuna renders the idiom as an explicit two-arm constant diamond:
+//! So unlace renders the idiom as an explicit two-arm constant diamond:
 //!
 //! ```text
 //! if ((a0) && (v2 = a0[1] & 0x100, v2))
@@ -38,7 +38,7 @@
 //!
 //! By the time the structurer is finished, the chain that P3 could not see has
 //! already been folded into a single [`BlockCondition`](crate::block::BlockType::Condition)
-//! — kuna prints it today as the `if`'s condition, complete with C's short-circuit
+//! — unlace prints it today as the `if`'s condition, complete with C's short-circuit
 //! semantics and any comma-expression side effects.  It is therefore renderable
 //! **unchanged** as an r-value, which is exactly the relaxation the P3 predicate
 //! cannot safely make.
@@ -62,7 +62,7 @@
 //! as `(x & 0x100)`, worth 0x100), and is also the shape P3 already folds.
 //!
 //! The match is **print-only**: the pass mutates *no* p-code.  It sets the
-//! [`kuna_iteboolean`](crate::op::pcodeop_addlflags::kuna_iteboolean) addl-flag on
+//! [`unlace_iteboolean`](crate::op::pcodeop_addlflags::unlace_iteboolean) addl-flag on
 //! the condition's terminal `CBRANCH`; the S9 C printer
 //! ([`PrintC::emit_block_if`](crate::printc)) sees that flag, re-derives the same
 //! match via [`match_ite_boolean`], and emits the single assignment in place of the
@@ -74,12 +74,12 @@
 //!
 //! An explicit `if (c) x = 1; else x = 0;` in the source compiles to the same
 //! object code as `x = c;`, so — exactly like
-//! [`iteregion`](crate::kuna_iteregion) (DIV-17) — the rewrite can
+//! [`iteregion`](crate::unlace_iteregion) (DIV-17) — the rewrite can
 //! diverge from the source.  It is gated by `option iteboolean on|off`; with it off
 //! [`ActionIteBoolean::apply`] early-returns, nothing is marked, and output is
 //! byte-identical.
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
@@ -94,7 +94,7 @@ use crate::options::on_or_off;
 
 use unlace_base::marshal::ElementId;
 
-/// Marshaling element `<iteboolean>` (kuna).  ElementIds live in the 4000+ range
+/// Marshaling element `<iteboolean>` (unlace).  ElementIds live in the 4000+ range
 /// (4118 callsitestackargs was the previous high-water mark; this is 4119).
 pub const ELEM_ITEBOOLEAN: ElementId = ElementId::new("iteboolean", 4119);
 
@@ -111,7 +111,7 @@ pub struct IteBoolMatch {
     /// Rendered with `ONLY_BRANCH` it gives the parenthesized `( cond )`.
     pub cond_block: BlockId,
     /// The condition's **terminal** `CBRANCH` (carries the
-    /// [`kuna_iteboolean`](pcodeop_addlflags::kuna_iteboolean) mark).
+    /// [`unlace_iteboolean`](pcodeop_addlflags::unlace_iteboolean) mark).
     pub cbranch: OpId,
     /// The `COPY` of the **true** clause; the statement's markup anchor.
     pub assign_op: OpId,
@@ -160,7 +160,7 @@ impl Action for ActionIteBoolean {
         // boundary.  Off => nothing marked => byte-identical output.
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::iteboolean::Iteboolean>()
             .0
         {
@@ -184,7 +184,7 @@ impl Action for ActionIteBoolean {
         let count = marks.len() as int4;
         for cbranch in marks {
             if let Some(o) = data.obank_mut().get_mut(cbranch) {
-                o.set_additional_flag(pcodeop_addlflags::kuna_iteboolean);
+                o.set_additional_flag(pcodeop_addlflags::unlace_iteboolean);
             }
         }
 
@@ -354,7 +354,7 @@ impl OptionIteBoolean {
     pub const NAME: &'static str = "iteboolean";
 
     /// Parse `on`/`off`, returning the bool value + a confirmation message.
-    pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((
@@ -364,7 +364,7 @@ impl OptionIteBoolean {
     }
 }
 
-/// (kuna) `iteboolean`: re-roll a short-circuit `0`/`1` select diamond — a
+/// (unlace) `iteboolean`: re-roll a short-circuit `0`/`1` select diamond — a
 /// 3-component `if` whose condition is a folded `&&`/`||` chain and whose two
 /// arms COPY the constants `1`/`0` to the same variable — into a single
 /// boolean assignment (`x = a && b;`).  P3 `RuleConditionalMove` cannot fold
@@ -374,9 +374,9 @@ impl OptionIteBoolean {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Iteboolean(pub bool);
 
-impl crate::optionset::KunaOption for Iteboolean {
+impl crate::optionset::UnlaceOption for Iteboolean {
     const NAME: &'static str = "iteboolean";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         Iteboolean(false)
@@ -386,7 +386,7 @@ impl crate::optionset::KunaOption for Iteboolean {
         Iteboolean(true)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (v, msg) = crate::iteboolean::OptionIteBoolean.apply(value)?;
         Ok((Iteboolean(v), msg))
     }

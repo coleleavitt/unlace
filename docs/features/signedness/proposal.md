@@ -105,7 +105,7 @@ Three things the rule has to survive that the first drafts did not:
   the target cspec says 2 on `avr8gcc`, `avr8egcc`, `TI_MSP430`, `TI_MSP430X`,
   `CR16`, `PIC24` and `x86-16`, and a target-derived guard let the identical
   defect through there. Both are pinned as stage tests
-  (`kuna-signedness.xml` on x86-64, `kuna-signedness-int16.xml` on
+  (`signedness.xml` on x86-64, `signedness-int16.xml` on
   `x86:LE:16:Protected Mode`, each with a wider control local that does flip).
 * **Transitivity.** `>>`, `/` and `%` constrain their operand *and* print at its
   type, so they record a demand and keep walking; a comparison, a cast-printing

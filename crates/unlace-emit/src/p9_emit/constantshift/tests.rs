@@ -2,7 +2,7 @@ use super::*;
 use crate::context::ArchContext;
 use crate::funcdata_facing::FuncdataFacingExt;
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::{AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, spacetype};
 use unlace_sleigh::globalcontext::ContextInternal;
 use unlace_sleigh::loadimage::LoadImage;
@@ -13,8 +13,8 @@ impl LoadImage for Image {
     fn get_file_name(&self) -> &str {
         "unit"
     }
-    fn load_fill(&mut self, _: &mut [u8], _: &Address) -> KunaResult<()> {
-        Err(KunaError::data_unavail("unit"))
+    fn load_fill(&mut self, _: &mut [u8], _: &Address) -> UnlaceResult<()> {
+        Err(UnlaceError::data_unavail("unit"))
     }
     fn get_arch_type(&self) -> Vec<u8> {
         Vec::new()
@@ -30,7 +30,7 @@ fn architecture() -> Architecture {
     arch.types_impl().setup_sizes(Some(4), 8, 8);
     arch.types_impl().set_default_alignment_map();
     arch.build_core_types().unwrap();
-    arch.kuna_options
+    arch.unlace_options
         .set(crate::armconstantshift::ConstShiftMode::All);
     arch
 }
@@ -191,7 +191,7 @@ fn only_the_all_value_plans_a_64_bit_shift() {
         (ConstShiftMode::On, false),
         (ConstShiftMode::All, true),
     ] {
-        arch.kuna_options.set(mode);
+        arch.unlace_options.set(mode);
         assert_eq!(
             plan_fixed64_lsl(&fd, &arch, shift, as_signed).is_some(),
             planned,

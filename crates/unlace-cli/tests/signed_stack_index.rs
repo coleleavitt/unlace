@@ -8,7 +8,7 @@ use std::process::Command;
 fn emitted_signed_stack_index_matches_the_stored_word() {
     let xml = &unlace_stagefile::xml_of_toml(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../tests/stages/kuna-signed-stack-index.toml"
+        "/../../tests/stages/signed-stack-index.toml"
     )))
     .unwrap();
     let chunk = regex::Regex::new(r#"<bytechunk[^>]*>([0-9a-f]+)</bytechunk>"#).unwrap();
@@ -19,7 +19,7 @@ fn emitted_signed_stack_index_matches_the_stored_word() {
         .collect();
     let binary = common::scratch_file("signed-stack-index", "bin");
     std::fs::write(&binary, bytes).unwrap();
-    let (stdout, stderr, status) = common::run_kuna(&[
+    let (stdout, stderr, status) = common::run_unlace(&[
         "decompile",
         binary.to_str().unwrap(),
         "0x1000",

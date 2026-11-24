@@ -47,7 +47,7 @@ binary: `cstool arm 'b0009fe5'` is the load.)
 
 `tests/cli/arm-literal-pool-string.json` (the promoted acceptance, re-pointed at a
 new 735-byte vendored A32 fixture — CI has no dataset) plus
-`kuna-console/tests/verify_poolref.rs`, which pins the follow *and* the three
+`console/tests/verify_poolref.rs`, which pins the follow *and* the three
 refusals on that fixture, and unit tests for the dereference and for `data_refs`.
 Before this, the promoted probe reports `functions: []`.
 

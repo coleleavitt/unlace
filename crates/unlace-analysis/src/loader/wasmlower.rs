@@ -1,4 +1,4 @@
-//! (kuna) WebAssembly function bodies lowered from stack form to register form.
+//! (unlace) WebAssembly function bodies lowered from stack form to register form.
 //!
 //! A wasm body is validated code for a stack machine, so the height of the
 //! operand stack at every instruction is a static fact. The lowering walks one

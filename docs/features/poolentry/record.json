@@ -245,7 +245,7 @@
     "wiring": "decompiler/crates/kuna-analysis/src/passes.rs",
     "fixture": "decompiler/crates/kuna-analysis/tests/fixtures/cortexm_poolentry_le32",
     "fixture_generator": "decompiler/crates/kuna-analysis/tests/fixtures/cortexm_poolentry_le32.py",
-    "e2e": "decompiler/crates/kuna-console/tests/verify_poolentry.rs",
+    "e2e": "decompiler/crates/console/tests/verify_poolentry.rs",
     "spec": "docs/spec/01-program-prep.md"
   },
   "catalog_counts": {
@@ -253,7 +253,7 @@
     "analysis_tier": "34 -> 35",
     "catalog_json_rows": "96 -> 97",
     "bytecompat_fixture": "96 -> 97",
-    "note": "Derived from a fresh `phase catalog` capture on a green build, not by arithmetic. REBASED onto funcboundflow (#280, DIV-67), which registered an option of its own, so every shared counter was re-derived from scratch on the rebased tree rather than carried over: the 97 settables and the (20 core, 42 transform, 35 analysis) tier split come from counting a live `kuna catalog --json`, and the bytecompat fixture was recaptured with the documented `decomp_dbg openfile write` recipe (it came out byte-identical to the merge result). Both sides of the rebase had made the SAME textual 95 -> 96 edit at four sites, so git auto-merged them silently to 96 with no conflict shown; the correct value is 97. tests/stages/kuna-catalog.xml is untouched: its assertions are exact-name matches on other options, ranges, or counts of `source_decompiler: angr` / `structure-recovery` / `opt-in-tool`, none of which this row is. kuna-base/src/xml.rs is untouched by poolentry (no stages XML added; its 194 is funcboundflow's), and docs/baseline-stages.json is unchanged.",
+    "note": "Derived from a fresh `phase catalog` capture on a green build, not by arithmetic. REBASED onto funcboundflow (#280, DIV-67), which registered an option of its own, so every shared counter was re-derived from scratch on the rebased tree rather than carried over: the 97 settables and the (20 core, 42 transform, 35 analysis) tier split come from counting a live `kuna catalog --json`, and the bytecompat fixture was recaptured with the documented `decomp_dbg openfile write` recipe (it came out byte-identical to the merge result). Both sides of the rebase had made the SAME textual 95 -> 96 edit at four sites, so git auto-merged them silently to 96 with no conflict shown; the correct value is 97. tests/stages/catalog.xml is untouched: its assertions are exact-name matches on other options, ranges, or counts of `source_decompiler: angr` / `structure-recovery` / `opt-in-tool`, none of which this row is. kuna-base/src/xml.rs is untouched by poolentry (no stages XML added; its 194 is funcboundflow's), and docs/baseline-stages.json is unchanged.",
     "catalog_form_comma_count": "95 -> 96",
     "pass_gates": "poolentry added to phases/tests.rs PASS_GATES (no codegen live_value reader, like tailcallentry)"
   },
@@ -261,7 +261,7 @@
   "notes": "Default-OFF, so no DIV row (default output is byte-identical; make test / make test-stages PARITY OK). Parked in modes.rs UNEVALUATED next to its three sequence siblings: cortexmvectors, ptrentry, tailcallentry and poolentry COMPOSE, every number here is measured on top of the other three, and preset membership should be one joint evaluation rather than four.",
   "residual_risks": [
     "The corpus is 91 unique images from one benchmark, and there is exactly ONE A32 image (u-boot), so the whole A32 result rests on it. decbench has no aarch64/MIPS/PPC/RISC-V image at all; inertness there is reasoned (those targets route constants to .rodata/.sdata), not measured.",
-    "Suppression is applied to AIF's accept list, not to the fully merged entry set. The fdeinterior seam in kuna-console/src/engine.rs is the architecturally correct home and would let the pairing test see entries from ptrentry/tailcallentry/cortexmvectors; that variant is unmeasured and is a follow-up, not this PR.",
+    "Suppression is applied to AIF's accept list, not to the fully merged entry set. The fdeinterior seam in console/src/engine.rs is the architecturally correct home and would let the pairing test see entries from ptrentry/tailcallentry/cortexmvectors; that variant is unmeasured and is a follow-up, not this PR.",
     "fdeinterior's warrant does not transfer: an FDE is an extent the compiler wrote into the binary, an inferred pool is a guess. The 0-of-4,220 figure is measured against DWARF from unstripped twins that the runtime predicate does not have.",
     "The merge class is untouched and is ~3x larger: 3,255 of 5,491 interior ground-truth misses corpus-wide have a containing entry that IS a real DWARF entry. Nothing here reaches it, and no claim that ARM entry recall is closed survives that factor.",
     "i386 PE has a separate, unreached defect: 55 AIF-only entries, 23 of them (41.8%) strictly inside a real body, with no fdeinterior protection because that pass is ELF-only. Not fixed, not broken, not covered."

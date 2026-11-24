@@ -63,7 +63,7 @@ unchanged on master at f9e13846, 2026-06-16); its constant arm even carries
 ## 4. What the fix must keep
 
 A store beside the loaded bytes (an adjacent byte, the next array element) is
-still no alias, so the load keeps folding past it; `tests/stages/kuna-aliasoverlap.toml`
+still no alias, so the load keeps folding past it; `tests/stages/aliasoverlap.toml`
 pins `after`, `before` and `next` for that. For a `PTRADD` index the distance
 between two indices counts elements, so it must be scaled by the element size
 before it is compared with byte widths: unscaled, `a[i]` against `a[i + 1]`

@@ -3,7 +3,7 @@
 //! under their names and lift to named user operations; before, each was a
 //! generic `sys`.
 use crate::common;
-use common::{repo_root, run_kuna};
+use common::{repo_root, run_unlace};
 
 #[test]
 fn rme_maintenance_raw_image_decompiles() {
@@ -12,7 +12,7 @@ fn rme_maintenance_raw_image_decompiles() {
         .to_str()
         .unwrap()
         .to_owned();
-    let (stdout, stderr, code) = run_kuna(&[
+    let (stdout, stderr, code) = run_unlace(&[
         "decompile",
         &bin,
         "0x1000",

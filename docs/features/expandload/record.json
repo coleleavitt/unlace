@@ -10,7 +10,7 @@
  "source_decompiler": "kuna",
  "inspiration": "Ghidra RuleExpandLoad (ruleaction.cc); upstream accepts a TYPE_UNKNOWN output in the truncation form",
  "default_on": true,
- "root_cause": "RuleExpandLoad's truncation form accepted an output whose type was still undefined; the SUBPIECE it leaves prints as a cast to int of the loaded width (TypeOpSubpiece::getOutputToken), inventing a sign. Only TYPE_UNKNOWN is declined: declining every truncation moves kuna-tiedphitrim #13/#14 (stages 1139/1141).",
+ "root_cause": "RuleExpandLoad's truncation form accepted an output whose type was still undefined; the SUBPIECE it leaves prints as a cast to int of the loaded width (TypeOpSubpiece::getOutputToken), inventing a sign. Only TYPE_UNKNOWN is declined: declining every truncation moves tiedphitrim #13/#14 (stages 1139/1141).",
  "round_trip": {
   "main": "sink((short)a0[0x1a]); -> sink receives 4294941372; the test FAILS",
   "branch": "sink(*(unsigned short *)&a0[0x1a]); -> 39612; the test passes"

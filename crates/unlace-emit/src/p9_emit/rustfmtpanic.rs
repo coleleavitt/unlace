@@ -14,7 +14,7 @@ use unlace_num::opcodes::OpCode;
 #[doc(hidden)]
 pub fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
     if !arch
-        .kuna_options
+        .unlace_options
         .get::<crate::rustfmt::RustFmtMode>()
         .recovers()
         || arch.source_lang() != crate::sourcelang::SourceLang::Rust

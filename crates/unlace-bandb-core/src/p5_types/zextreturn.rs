@@ -1,4 +1,4 @@
-//! (kuna) A narrow value a function returns zero-extended is unsigned where the
+//! (unlace) A narrow value a function returns zero-extended is unsigned where the
 //! calling convention extends a return by the sign of its type (P5).
 //!
 //! Dead-code analysis counts only the possibly-nonzero bits of a RETURN as
@@ -38,7 +38,7 @@ use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
 use crate::fspec::ParamListStandard;
 use crate::funcdata::Funcdata;
-use crate::op::pcodeop_addlflags::kuna_zextreturn;
+use crate::op::pcodeop_addlflags::unlace_zextreturn;
 
 /// Did trimming the RETURN input `vn` to the `size`-byte value under `mask`
 /// drop only known-zero bits, where the convention extends that value by sign,
@@ -102,17 +102,17 @@ pub fn zero_extended_word(
     if read_width(data, &narrow, size).is_some_and(|w| w > 4) {
         return true;
     }
-    data.kuna_note_zext_word(narrow, size, sign);
+    data.unlace_note_zext_word(narrow, size, sign);
     false
 }
 
 /// How many bytes of the register holding the `size`-byte value at `narrow`
 /// the function's callers compute with, when more than the value
-/// ([`Funcdata::kuna_wide_return`]). Up to four, C's promotion of an unsigned
+/// ([`Funcdata::unlace_wide_return`]). Up to four, C's promotion of an unsigned
 /// narrow type to `int` extends it as the binary does; beyond, only a 64-bit
 /// type does.
 fn read_width(data: &Funcdata, narrow: &Address, size: i32) -> Option<i32> {
-    data.kuna_wide_return()
+    data.unlace_wide_return()
         .filter(|(addr, width)| wider_over(addr, *width, narrow, size))
         .map(|(_, width)| *width)
 }
@@ -166,9 +166,9 @@ pub fn note_trimmed_return(data: &mut Funcdata, op: OpId, unsigned: bool) {
         return;
     }
     if unsigned {
-        o.set_additional_flag(kuna_zextreturn);
+        o.set_additional_flag(unlace_zextreturn);
     } else {
-        o.clear_additional_flag(kuna_zextreturn);
+        o.clear_additional_flag(unlace_zextreturn);
     }
 }
 
@@ -203,7 +203,7 @@ pub fn unsigned_return_vote(
         return None;
     }
     let whole = data
-        .kuna_wide_return()
+        .unlace_wide_return()
         .is_some_and(|(addr, width)| *width == size && addr == v.get_addr());
     if whole && size > 4 && v.get_nz_mask() >> 32 == 0 {
         return data
@@ -225,7 +225,7 @@ pub fn unsigned_return_vote(
             .get_in(1)
             .and_then(|r| data.vbank().get(r))
             .map(|r| r.get_size());
-        if o.get_addlflags() & kuna_zextreturn == 0 || width != Some(size) {
+        if o.get_addlflags() & unlace_zextreturn == 0 || width != Some(size) {
             return None;
         }
         any = true;

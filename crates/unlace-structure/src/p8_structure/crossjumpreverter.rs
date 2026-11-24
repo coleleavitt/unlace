@@ -7,7 +7,7 @@
 //! identical tail code reached from several predecessors is condensed into **one**
 //! shared basic block, and all but one predecessor reach it by a `goto`.  Ghidra's
 //! `CollapseStructure` (the verbatim [`crate::blockaction`] port) must then express
-//! that in-edge as an unstructured `goto`.  On `who.o::scan_entries` kuna emits:
+//! that in-edge as an unstructured `goto`.  On `who.o::scan_entries` unlace emits:
 //!
 //! ```c
 //!   else if (need_deadprocs && v1 == 8) {
@@ -44,7 +44,7 @@
 //!    — a *non-return* fall-through tail — with no side-effecting op (no
 //!    `CALL`/`STORE`) and at most [`MAX_TAIL_CALLS`] calls (angr `max_call_dup`),
 //!    bounded to [`MAX_TAIL_OPS`] printed ops (angr duplicates exactly the single
-//!    `goto_target` region node, so the kuna port duplicates the one tail block).
+//!    `goto_target` region node, so the unlace port duplicates the one tail block).
 //! 2. **Convergence precondition (correctness-critical):** the place flow reaches
 //!    after the `if` completes (its structured fall-through,
 //!    [`next_flow_after`](crate::block::BlockGraph::next_flow_after)) is the *same*
@@ -54,7 +54,7 @@
 //!
 //! When both hold it rewrites the `if` to `if (cond) { <duplicated tail> }`, reusing
 //! the same print-tree surgery as `gotoreduce`
-//! ([`kuna_inline_return_tail`](crate::block::BlockGraph::kuna_inline_return_tail)):
+//! ([`unlace_inline_return_tail`](crate::block::BlockGraph::unlace_inline_return_tail)):
 //! fresh `BlockCopy` leaves referencing the *same* underlying basic blocks (the
 //! printer re-emits their ops — no p-code cloned, SSA/def-use untouched).  When the
 //! converted `goto` was the only unstructured edge into `T`, `T`'s label is cleared.
@@ -65,7 +65,7 @@
 //! (`revert_cross_jumps`, default-ON per DIV-14) — when off, [`ActionCrossJumpReverter::apply`]
 //! early-returns and output is byte-identical.
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
@@ -77,7 +77,7 @@ use crate::options::on_or_off;
 
 use unlace_base::marshal::ElementId;
 
-/// Marshaling element `<crossjumprevert>` (kuna).  ElementIds live in the 4000+ range
+/// Marshaling element `<crossjumprevert>` (unlace).  ElementIds live in the 4000+ range
 /// (4100 gotoreduce, 4101 tailcalljump, 4102 regionstructure, 4103 noreturn_extern,
 /// 4104 noreturn_externmatch are taken; this is 4105).
 pub const ELEM_CROSSJUMPREVERT: ElementId = ElementId::new("crossjumprevert", 4105);
@@ -123,7 +123,7 @@ impl Action for ActionCrossJumpReverter {
         // P0 assertion `option crossjumprevert on|off`, carried on the Architecture boundary.
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::crossjumpreverter::RevertCrossJumps>()
             .0
         {
@@ -202,7 +202,7 @@ impl Action for ActionCrossJumpReverter {
             // fall-through case because the convergence precondition above proved
             // both paths reach the same successor S.
             data.sblocks_mut()
-                .kuna_inline_crossjump_tail(*goto_id, chain);
+                .unlace_inline_crossjump_tail(*goto_id, chain);
             data.warning(
                 "crossjumprevert: duplicated cross-jump tail to remove goto",
                 warn_addr,
@@ -213,7 +213,7 @@ impl Action for ActionCrossJumpReverter {
 
         // Drop the label on any target no longer reached by an unstructured edge --
         // counting switch-case and multigoto carriers, not just BlockGoto/BlockIf
-        // (`kuna_gotolabel`), so a target a switch arm still jumps to keeps its label.
+        // (`unlace_gotolabel`), so a target a switch arm still jumps to keeps its label.
         crate::gotolabel::release_converted_labels(data, &converted_targets);
 
         self.base_mut().count += count;
@@ -244,7 +244,7 @@ fn collect_nodes(data: &Funcdata, root: BlockId) -> Vec<BlockId> {
 /// not a duplicable cross-jump tail (ends in a return, is too big, side-effecting,
 /// or multi-successor).
 fn cross_jump_tail_chain(data: &Funcdata, bb0: BlockId) -> Option<(Vec<BlockId>, BlockId)> {
-    // angr duplicates exactly the single `goto_target` region node, so the kuna
+    // angr duplicates exactly the single `goto_target` region node, so the unlace
     // port duplicates exactly the one cross-jump tail bblock — a conservative,
     // semantics-preserving choice (the convergence precondition is checked against
     // its single fall-through successor).
@@ -335,22 +335,22 @@ impl OptionCrossJumpReverter {
     pub const NAME: &'static str = "crossjumprevert";
 
     /// Parse `on`/`off`, returning the bool value + a confirmation message.
-    pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((val, format!("Cross-jump tail reversion turned {prop}")))
     }
 }
 
-/// (kuna) angr SAILR `CrossJumpReverter`: revert compiler cross-jumping by
+/// (unlace) angr SAILR `CrossJumpReverter`: revert compiler cross-jumping by
 /// duplicating a small *non-return* cross-jump tail into the `goto` source so
 /// both paths fall straight through (`revert_cross_jumps`, opt-in default-off).
 #[derive(Clone, Debug, PartialEq)]
 pub struct RevertCrossJumps(pub bool);
 
-impl crate::optionset::KunaOption for RevertCrossJumps {
+impl crate::optionset::UnlaceOption for RevertCrossJumps {
     const NAME: &'static str = "crossjumprevert";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         RevertCrossJumps(false)
@@ -360,7 +360,7 @@ impl crate::optionset::KunaOption for RevertCrossJumps {
         RevertCrossJumps(true)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (v, msg) = crate::crossjumpreverter::OptionCrossJumpReverter.apply(value)?;
         Ok((RevertCrossJumps(v), msg))
     }

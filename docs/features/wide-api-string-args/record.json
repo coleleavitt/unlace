@@ -10,7 +10,7 @@
   "div": "DIV-110",
   "touches": [
     "decompiler/crates/kuna-analysis",
-    "decompiler/crates/kuna-console",
+    "decompiler/crates/console",
     "decompiler/crates/kuna-decomp"
   ],
   "summary": "The string-literal analysis pass gains its 2-byte (UTF-16LE) width -- Ghidra StringsAnalyzer's allCharWidths arm, which kuna's 1-byte port left as a documented seam -- and plants a typelocked wchar2[N] at each wide literal, so a wide Windows-API argument renders whole (L\"ntdll.dll\") instead of as its own first character (\"n\").",
@@ -33,7 +33,7 @@
     },
     {
       "what": "no tests/stages XML",
-      "detail": "The stages corpus is symbol-less bytechunks, which no analysis pass reaches -- the `strings` option it extends has no stage case either, for the same reason. Coverage is a cross-crate end-to-end test in kuna-console plus the promoted CLI probe, the shape docs/re-needs and the sibling analysis-tier options (noreturn_propagate, relocobjects) already use."
+      "detail": "The stages corpus is symbol-less bytechunks, which no analysis pass reaches -- the `strings` option it extends has no stage case either, for the same reason. Coverage is a cross-crate end-to-end test in console plus the promoted CLI probe, the shape docs/re-needs and the sibling analysis-tier options (noreturn_propagate, relocobjects) already use."
     },
     {
       "what": "the acceptance target is dataset-only, so the probe was re-pointed at a vendored fixture",

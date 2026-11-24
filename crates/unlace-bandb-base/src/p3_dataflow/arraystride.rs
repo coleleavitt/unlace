@@ -1,5 +1,5 @@
 //! Port of `decompiler/cpp/kuna_arraystride.{cc,hh}` — strided-induction
-//! (array-stride) recovery (kuna GH-8724, S3 simplification-quiescence).
+//! (array-stride) recovery (unlace GH-8724, S3 simplification-quiescence).
 //!
 //! `RuleArrayStride` recognizes a loop-header stride accumulator phi
 //! `acc = MULTIEQUAL(#0, acc + STRIDE)` (STRIDE a nonzero, non-one constant),
@@ -27,7 +27,7 @@ use crate::action::{ActionGroupList, Rule, RuleSpec};
 use crate::context::{BlockId, OpId, TypeOp, VarnodeId};
 use crate::funcdata::Funcdata;
 
-/// (kuna GH-8724) Re-expose a strided-induction index: rewrite a stride
+/// (unlace GH-8724) Re-expose a strided-induction index: rewrite a stride
 /// accumulator phi as `counter * stride` (C++ `RuleArrayStride`).
 pub struct RuleArrayStride {
     /// Explicit constructor override; otherwise consult the architecture.
@@ -71,11 +71,11 @@ impl Rule for RuleArrayStride {
 
     /// C++ `RuleArrayStride::applyOp` (`kuna_arraystride.cc:88`) — transcribed.
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        // (kuna) gate (ArchContext-carried).
+        // (unlace) gate (ArchContext-carried).
         if !self.enabled
             && !data
                 .get_arch()
-                .kuna_options
+                .unlace_options
                 .get::<crate::arraystride::RecoverArrayStride>()
                 .0
         {
@@ -83,7 +83,7 @@ impl Rule for RuleArrayStride {
         }
 
         // `op` must be the strided OFFSET accumulator phi: MULTIEQUAL(#0, acc + STRIDE).
-        let (init_idx, back_idx, stride, accadd) = match kuna_is_induction_phi(data, op, true) {
+        let (init_idx, back_idx, stride, accadd) = match unlace_is_induction_phi(data, op, true) {
             Some(t) => t,
             None => return 0,
         };
@@ -112,7 +112,7 @@ impl Rule for RuleArrayStride {
             if cand == op {
                 continue;
             }
-            let (ci, cb, cstep, _cadd) = match kuna_is_induction_phi(data, cand, false) {
+            let (ci, cb, cstep, _cadd) = match unlace_is_induction_phi(data, cand, false) {
                 Some(t) => t,
                 None => continue,
             };
@@ -166,7 +166,7 @@ pub fn specs() -> Vec<RuleSpec> {
     vec![RuleSpec {
         group: "analysis",
         // Shipped default: `option arraystride on` (recover_array_stride = true;
-        // kuna DIV-3 default-on, GH-8724).
+        // unlace DIV-3 default-on, GH-8724).
         ctor: || Box::new(RuleArrayStride::with_group(true, "analysis")),
     }]
 }
@@ -176,8 +176,8 @@ pub fn specs() -> Vec<RuleSpec> {
 // ---------------------------------------------------------------------------
 
 /// Does `vn` carry the constant value 0 (directly, or via a single COPY)?
-/// (C++ static `kunaIsZeroInit`).
-fn kuna_is_zero_init(data: &Funcdata, vn: VarnodeId) -> bool {
+/// (C++ static `unlaceIsZeroInit`).
+fn unlace_is_zero_init(data: &Funcdata, vn: VarnodeId) -> bool {
     if vn_is_constant(data, vn) {
         return vn_offset(data, vn) == 0;
     }
@@ -195,11 +195,11 @@ fn kuna_is_zero_init(data: &Funcdata, vn: VarnodeId) -> bool {
 }
 
 /// Is `phi` a 2-input loop-header phi `MULTIEQUAL(#0, self + C)`?
-/// (C++ static `kunaIsInductionPhi`).  Returns `(initIdx, backIdx, step, addop)`.
+/// (C++ static `unlaceIsInductionPhi`).  Returns `(initIdx, backIdx, step, addop)`.
 ///
 /// `require_lone_add`: when true the back-edge add must feed ONLY this phi (so
 /// it can be destroyed safely).
-fn kuna_is_induction_phi(
+fn unlace_is_induction_phi(
     data: &Funcdata,
     phi: OpId,
     require_lone_add: bool,
@@ -217,7 +217,7 @@ fn kuna_is_induction_phi(
             Some(v) => v,
             None => continue,
         };
-        if kuna_is_zero_init(data, vn) {
+        if unlace_is_zero_init(data, vn) {
             // init edge must carry the constant 0
             zero_idx = i;
         } else if vn_is_written(data, vn) {
@@ -259,7 +259,7 @@ fn kuna_is_induction_phi(
     ))
 }
 
-// --- Local IR read helpers (see kuna_booleanmask for the rationale) ----------
+// --- Local IR read helpers (see unlace_booleanmask for the rationale) ----------
 
 fn op_in(data: &Funcdata, op: OpId, slot: int4) -> Option<VarnodeId> {
     data.obank().get(op).and_then(|o| o.get_in(slot))
@@ -289,8 +289,8 @@ fn vn_size(data: &Funcdata, vn: VarnodeId) -> int4 {
     data.vbank().get(vn).map(|v| v.get_size()).unwrap_or(0)
 }
 
-crate::kuna_flag!(
-    /// (kuna GH-8724) Re-express a strided-induction offset as counter*stride
+crate::unlace_flag!(
+    /// (unlace GH-8724) Re-express a strided-induction offset as counter*stride
     /// (C++ `recover_array_stride`).
     RecoverArrayStride,
     "arraystride",

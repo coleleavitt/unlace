@@ -54,7 +54,7 @@ follows.
 
 ## The tests
 
-`tests/stages/kuna-fastfailnoreturn.toml` (3 assertions, two-pass: `off` is the
+`tests/stages/fastfailnoreturn.toml` (3 assertions, two-pass: `off` is the
 bug, default is the fix) and `tests/cli/large-function-malformed-output.json`
 against the vendored PE32+ above; both fail without the change. On the witness
 image 22 of 858 functions change, all of them shrinking, gotos 456 → 390, and no

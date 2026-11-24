@@ -19,8 +19,8 @@
   "files": [
     "decompiler/crates/kuna-analysis/src/analyzers/rtti/mod.rs",
     "decompiler/crates/kuna-analysis/src/analyzers/rtti/vftable.rs",
-    "decompiler/crates/kuna-console/src/engine.rs",
-    "decompiler/crates/kuna-console/tests/verify_rtti.rs",
+    "decompiler/crates/console/src/engine.rs",
+    "decompiler/crates/console/tests/verify_rtti.rs",
     "decompiler/crates/kuna-analysis/tests/fixtures/README.md",
     "tests/cli/pe-function-inventory-labels.json",
     "docs/spec/01-program-prep.md",

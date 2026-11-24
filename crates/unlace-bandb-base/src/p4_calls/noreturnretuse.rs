@@ -66,6 +66,6 @@ pub fn call_ends_in_noreturn_halt(data: &Funcdata, call: OpId) -> bool {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.noreturnretuse_call_cannot_reach_return = Some(call_cannot_reach_return);
 }

@@ -1,4 +1,4 @@
-//! Tests for `RuleBoolSignShift` (kuna GH-1282): the `(b << k) s>> k` ->
+//! Tests for `RuleBoolSignShift` (unlace GH-1282): the `(b << k) s>> k` ->
 //! `INT_2COMP(b)` rewrite and its gate-off / non-matching behaviour.
 
 use std::rc::Rc;
@@ -58,7 +58,7 @@ fn unk(size: int4) -> Rc<Datatype> {
 }
 
 fn no_replace()
--> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> unlace_base::error::KunaResult<()> {
+-> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> unlace_base::error::UnlaceResult<()> {
     |_: &mut VarnodeBank, _: VarnodeId, _: VarnodeId| Ok(())
 }
 

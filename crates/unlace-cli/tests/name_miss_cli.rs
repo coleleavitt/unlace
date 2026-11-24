@@ -1,4 +1,4 @@
-//! (kuna, issue #666) What `unlace decompile <bin> <name>` answers when the name
+//! (unlace, issue #666) What `unlace decompile <bin> <name>` answers when the name
 //! is not in the image's symbol table: the C spelling of a Mach-O symbol is not
 //! a miss at all, and a miss that IS one says what the image carries instead of
 //! calling every image stripped.

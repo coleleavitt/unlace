@@ -401,7 +401,7 @@ fn i386_pushed_image() -> Vec<u8> {
     })
 }
 
-/// Functions that return a call's `int` or pointer result, or nothing kuna can
+/// Functions that return a call's `int` or pointer result, or nothing unlace can
 /// see, and then use `%dl` for something else; none returns `%edx`. `b4` is gcc -Os `gc2 = gc1;`
 /// (`mov gc1,%dl; mov %dl,gc2`), `b3` clang's MSVC-target `gflag = gflag2 &&
 /// gi1;` (`setne %dl; and %cl,%dl; mov %dl,gflag`), and `newp` gcc -Os

@@ -155,7 +155,7 @@ pub fn apply(arch: &Architecture) -> bool {
     let Some(space) = arch.manage().get_default_code_space().cloned() else {
         return false;
     };
-    let on = match arch.kuna_options.get::<FpuEmuMode>() {
+    let on = match arch.unlace_options.get::<FpuEmuMode>() {
         FpuEmuMode::Off => false,
         FpuEmuMode::Auto => arch.fpu_emu_evidence,
         FpuEmuMode::On => true,
@@ -173,13 +173,13 @@ pub fn apply(arch: &Architecture) -> bool {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.fpuemu_apply = Some(apply);
 }
 
-impl crate::optionset::KunaOption for FpuEmuMode {
+impl crate::optionset::UnlaceOption for FpuEmuMode {
     const NAME: &'static str = "fpuemu";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         FpuEmuMode::Off
@@ -189,8 +189,8 @@ impl crate::optionset::KunaOption for FpuEmuMode {
         FpuEmuMode::Auto
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        parse_fpuemu_mode(value).map_err(unlace_base::error::KunaError::parse)
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
+        parse_fpuemu_mode(value).map_err(unlace_base::error::UnlaceError::parse)
     }
 }
 

@@ -1,4 +1,4 @@
-//! (kuna) `thunkentry` — the target of a jump thunk is a function entry.
+//! (unlace) `thunkentry` — the target of a jump thunk is a function entry.
 //!
 //! [`super::walk`] makes a function only at a CALL target; every other flow
 //! target is a same-function successor. A function whose whole body is one

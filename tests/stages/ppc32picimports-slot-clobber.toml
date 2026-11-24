@@ -1,0 +1,44 @@
+# `ppc32picimports-slot-clobber.toml` retains a return after an imported copy overwrites a
+# writable relocation slot, across off/on/off option toggles.
+
+[image]
+arch = 'PowerPC:BE:32:default'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = '4e800020'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/ppc32-pic-slot-write.elf',
+    'read symbols',
+    'option ppc32picimports off',
+    'load function check',
+    'decompile',
+    'print C',
+    'option ppc32picimports on',
+    'load function check',
+    'decompile',
+    'print C',
+    'option ppc32picimports off',
+    'load function check',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'imported slot writes retain the returning continuation in every mode'
+count = 3
+literal = 'return 7;'
+
+[[match]]
+name = 'an overwritten slot grants no terminal import contract'
+count = 0
+literal = 'abort('

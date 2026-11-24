@@ -1,6 +1,6 @@
-//! unlace-decomp: the decompiler core of the kuna Rust port.
+//! unlace-decomp: the decompiler core of the unlace Rust port.
 //!
-//! Ports all of DECCORE plus the kuna phase-model additions
+//! Ports all of DECCORE plus the unlace phase-model additions
 //! (`decompiler/cpp/`):
 //!
 //! - `varnode`, `op`, `block`, `funcdata*` (the SSA function IR -- slotmap
@@ -13,7 +13,7 @@
 //!   `blockaction` (structuring), `subflow`, `transform`, `condexe`,
 //!   `paramid`, `varmap`
 //! - `print*` (`printlanguage.cc`, `printc.cc`, `printjava.cc`, `prettyprint.cc`)
-//! - the kuna phase registry (`kuna_stages.cc` and friends -- regenerated from
+//! - the unlace phase registry (`kuna_stages.cc` and friends -- regenerated from
 //!   `phases.toml` per ADR 0006)
 //!
 //! Action/Rule dispatch and scheduling follow ADR 0005; re-runability and the
@@ -75,7 +75,7 @@ pub use unlace_structure::*;
 
 /// The pass hooks the driver's own modules provide (the option dispatch and the embedder
 /// hooks); [`PASS_HOOKS`] adds every lower crate's `provide_all` and the universal action.
-pub fn provide_all(slots: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide_all(slots: &mut crate::passhooks::UnlaceHookSlots) {
     crate::option_dispatch::provide(slots);
     crate::hooks::provide(slots);
 }

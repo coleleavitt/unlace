@@ -1,5 +1,5 @@
 //! End-to-end gate for the structural no-return **propagation** consumer
-//! (`noreturn_propagate`) — the kuna analog of angr's CFGFast call-graph
+//! (`noreturn_propagate`) — the unlace analog of angr's CFGFast call-graph
 //! no-return propagation (`test_decompiling_tee_O2_x2nrealloc`).
 //!
 //! Fixture: `noreturn_propagate_x86_64` (`+.c`), a non-PIE x86-64 ELF with a
@@ -85,25 +85,25 @@ fn decompile(func: &str, mode: Mode) -> String {
         Mode::Off => {}
         Mode::Propagate => {
             prog.arch_mut()
-                .set_kuna_option("listing", "on")
+                .set_unlace_option("listing", "on")
                 .expect("listing flips on");
             prog.arch_mut()
-                .set_kuna_option("noreturn_propagate", "on")
+                .set_unlace_option("noreturn_propagate", "on")
                 .expect("noreturn_propagate flips on");
         }
         Mode::Disc => {
             prog.arch_mut()
-                .set_kuna_option("listing", "on")
+                .set_unlace_option("listing", "on")
                 .expect("listing flips on");
             prog.arch_mut()
-                .set_kuna_option("noreturn_disc", "on")
+                .set_unlace_option("noreturn_disc", "on")
                 .expect("noreturn_disc flips on");
-            // (kuna DIV-14) `noreturn_propagate` is now default-ON and is the *other*
+            // (unlace DIV-14) `noreturn_propagate` is now default-ON and is the *other*
             // Listing consumer; with the Listing built (listing on) it would ALSO fix
             // this fixture. Turn it off so this mode isolates the discovered-consumer
             // (noreturn_disc) behaviour — the differential this test asserts.
             prog.arch_mut()
-                .set_kuna_option("noreturn_propagate", "off")
+                .set_unlace_option("noreturn_propagate", "off")
                 .expect("noreturn_propagate flips off");
         }
     }

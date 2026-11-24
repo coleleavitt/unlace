@@ -9,7 +9,7 @@
    (`option callpush on|off`), plumbed through `Architecture`, the ArchSeam (`ArchContext`),
    `options.rs`, the console's live-value table and `phases.toml`.
 3. Tests: the fixture `callpush_x86_64.c` (four builds), the two-pass stage test
-   `tests/stages/kuna-callpush.toml`, and the CLI test
+   `tests/stages/callpush.toml`, and the CLI test
    `a_calls_own_return_address_push_is_part_of_the_call`.
 4. Measure: castbench full both directions, the 444-slice typesweep (on vs off, same build),
    whole-corpus hunks (`hunks2.py`, `sidefx.py`), interleaved min-of-15 speed (`speed.py`).

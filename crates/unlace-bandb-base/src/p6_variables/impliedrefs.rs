@@ -1,4 +1,4 @@
-//! (kuna) `impliedrefs` / `termdup` — the two thresholds that decide whether a
+//! (unlace) `impliedrefs` / `termdup` — the two thresholds that decide whether a
 //! computed value gets its own declared local or is inlined into every use.
 //!
 //! `ActionMarkExplicit` (`coreaction.cc:3340`, ported in
@@ -23,12 +23,12 @@
 //! `max_implied_ref` is a program-wide tunable, not a private constant of the
 //! explicit-marking pass: `BlockBasic::isComplex`
 //! ([`Funcdata::bb_is_complex`](crate::funcdata_block)) and
-//! [`kuna_condfold`](crate::condfold) read the same field to
+//! [`unlace_condfold`](crate::condfold) read the same field to
 //! decide how many printed statements a condition block may carry. Raising
 //! `impliedrefs` therefore also loosens those two structure tests, exactly as it
 //! does upstream when the field is edited by hand.
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::types::int4;
 
 /// The largest bound either option accepts.
@@ -45,21 +45,21 @@ pub const MAX_BOUND: int4 = 1_000_000;
 /// other numeric options use, a field that is not wholly decimal digits is an
 /// error rather than a silent zero, so `option impliedrefs wide` is reported
 /// instead of quietly asking for "declare everything".
-fn parse_bound(p1: &str, what: &str) -> KunaResult<int4> {
+fn parse_bound(p1: &str, what: &str) -> UnlaceResult<int4> {
     let field = p1.trim();
     if field.is_empty() {
-        return Err(KunaError::parse(format!("Must specify {what}")));
+        return Err(UnlaceError::parse(format!("Must specify {what}")));
     }
     let val = match field.parse::<int4>() {
         Ok(v) if field.bytes().all(|b| b.is_ascii_digit()) => v,
         _ => {
-            return Err(KunaError::parse(format!(
+            return Err(UnlaceError::parse(format!(
                 "Bad {what}: {p1:?} is not a decimal count"
             )));
         }
     };
     if val > MAX_BOUND {
-        return Err(KunaError::parse(format!(
+        return Err(UnlaceError::parse(format!(
             "Bad {what}: {val} exceeds the {MAX_BOUND} ceiling"
         )));
     }
@@ -76,7 +76,7 @@ impl OptionImpliedRefs {
 
     /// Parse the descendant bound into the value written to
     /// `Architecture::max_implied_ref`, plus a confirmation message.
-    pub fn apply(&self, p1: &str) -> KunaResult<(int4, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(int4, String)> {
         let val = parse_bound(p1, "implied-reference bound")?;
         Ok((val, format!("Implied-reference bound set to {val}")))
     }
@@ -93,7 +93,7 @@ impl OptionTermDup {
 
     /// Parse the term-duplication bound into the value written to
     /// `Architecture::max_term_duplication`, plus a confirmation message.
-    pub fn apply(&self, p1: &str) -> KunaResult<(int4, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(int4, String)> {
         let val = parse_bound(p1, "term-duplication bound")?;
         Ok((val, format!("Term-duplication bound set to {val}")))
     }

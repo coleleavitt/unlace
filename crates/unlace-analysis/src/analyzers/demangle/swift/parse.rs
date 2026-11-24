@@ -1,4 +1,4 @@
-//! (kuna `swiftdemangle`) The Swift 5 (`$s`) stable-mangling parser: a
+//! (unlace `swiftdemangle`) The Swift 5 (`$s`) stable-mangling parser: a
 //! postfix stack machine over the operators of `Mangling.rst`. Each
 //! operator pops its operands from the node stack and pushes one node; the
 //! stack left at the end becomes the `Global` node. Any operator or shape

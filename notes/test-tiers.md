@@ -67,7 +67,7 @@ baseline (last night) and cannot gate a PR.
   test in `scripts/tests` checks the two lists agree). Then the decbench job, as now. Give
   nightly.yml its schedule once the first manual run has produced a baseline.
 - **Candidates to move next**, once `parity-times.json` and the JUnit reports show their wall
-  time: any stage file over 10 s (`kuna-vaarg-loop-gcc.toml` is 6 MB and is the first to measure)
+  time: any stage file over 10 s (`vaarg-loop-gcc.toml` is 6 MB and is the first to measure)
   can move to a nightly-only corpus directory; the T4 tests over 30 s on a CI runner join the
   nightly profile. A move needs the measured time in its PR.
 - **Not moved:** T1 and T2 stay per PR. They are the gates that catch a regression at the PR that

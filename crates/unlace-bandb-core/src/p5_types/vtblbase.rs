@@ -1,4 +1,4 @@
-//! (kuna `vtabletypes`) The first word of a polymorphic object is its vtable
+//! (unlace `vtabletypes`) The first word of a polymorphic object is its vtable
 //! pointer, so a pointer through which a `C_vtbl *` is stored or loaded is a
 //! `C *`.
 //!

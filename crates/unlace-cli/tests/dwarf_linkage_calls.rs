@@ -24,7 +24,8 @@ fn roundtrip(compiler: &str, extension: &str, source: &str, functions: &[&str], 
     );
     let mut code = String::new();
     for name in functions {
-        let (body, err, status) = common::run_kuna(&["decompile", library.to_str().unwrap(), name]);
+        let (body, err, status) =
+            common::run_unlace(&["decompile", library.to_str().unwrap(), name]);
         assert_eq!(status, 0, "{err}");
         assert!(!body.contains("shifted();"), "{body}");
         code.push_str(&body.replacen(&format!(" {name}("), &format!(" regenerated_{name}("), 1));
@@ -206,7 +207,8 @@ fn indirect_function_resolver_does_not_retype_its_plt_entry() {
         "{}",
         String::from_utf8_lossy(&built.stderr)
     );
-    let (code, err, status) = common::run_kuna(&["decompile", library.to_str().unwrap(), "caller"]);
+    let (code, err, status) =
+        common::run_unlace(&["decompile", library.to_str().unwrap(), "caller"]);
     assert_eq!(status, 0, "{err}");
     assert!(code.contains("dispatch(x,y,7)"), "{code}");
     for path in [source, library] {
@@ -242,7 +244,7 @@ fn local_linker_name_collision_does_not_retype_external_call() {
         String::from_utf8_lossy(&built.stderr)
     );
     let (code, err, status) =
-        common::run_kuna(&["decompile", library.to_str().unwrap(), "imported_wrapper"]);
+        common::run_unlace(&["decompile", library.to_str().unwrap(), "imported_wrapper"]);
     assert_eq!(status, 0, "{err}");
     assert!(code.contains("shared_name(x)"), "{code}");
     assert!(!code.contains("float"), "{code}");

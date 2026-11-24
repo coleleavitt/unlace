@@ -137,7 +137,7 @@ pub struct VarnodeView {
     pub type_: Rc<Datatype>,
     /// `vn->isTypeLock()`
     pub type_lock: bool,
-    /// (kuna `sitetypelock`) `vn->isSiteLocked()` — the type lock came from the
+    /// (unlace `sitetypelock`) `vn->isSiteLocked()` — the type lock came from the
     /// per-call-site output lock, so it is demoted from representative
     /// dominance on a high that merges foreign members.
     pub site_locked: bool,
@@ -158,7 +158,7 @@ pub struct VarnodeView {
 pub trait HighContext {
     /// Read the [`VarnodeView`] of a member Varnode (`vn->get*`).
     fn vn_view(&self, vn: VarnodeId) -> VarnodeView;
-    /// (kuna `sitetypelock`) Does this HighVariable (members `insts`) hold a
+    /// (unlace `sitetypelock`) Does this HighVariable (members `insts`) hold a
     /// member FOREIGN to the per-call-site lock on `lock_vn` — a wider storage
     /// piece, or a value not reaching `lock_vn` through only same-value
     /// copy/phi edges (a parameter, global, different allocation, or a phi
@@ -373,34 +373,34 @@ pub struct HighVariable {
     symbol: Option<crate::database::SymbolId>,
     /// -1 = perfect symbol match, >= 0 = offset (C++ `symboloffset`).
     symbol_offset: int4,
-    /// (kuna) The name bound to this HighVariable by `ActionNameVars`, when the
+    /// (unlace) The name bound to this HighVariable by `ActionNameVars`, when the
     /// W4 ScopeLocal/`Symbol` layer is absent.  In C++ the name lives on the
     /// `Symbol` in the local scope (`Scope::buildDefaultName` -> `renameSymbol`);
     /// the merged tree has no ScopeLocal, so `ActionNameVars` binds the angr
     /// default name (`vN`) directly here and the printer reads it as the
     /// `getSymbol()->getDisplayName()` stand-in.  `None` == unnamed.
-    kuna_name: Option<String>,
-    /// (kuna) The data-type of the mapped Symbol this high renders through (the
+    unlace_name: Option<String>,
+    /// (unlace) The data-type of the mapped Symbol this high renders through (the
     /// `getSymbol()->getType()` stand-in, used by the printer to render an array
     /// or struct member access `name[idx]`).  `None` for an unnamed/scalar high.
-    kuna_symbol_type: Option<Rc<Datatype>>,
-    /// (kuna) The local-scope EquateSymbol bound to this high by
+    unlace_symbol_type: Option<Rc<Datatype>>,
+    /// (unlace) The local-scope EquateSymbol bound to this high by
     /// `Funcdata::build_dynamic_symbol` (C++ `vn->setSymbolEntry(sym->...)` whose
     /// effect is `high->getSymbol() == sym`).  The W4 `Symbol`/`SymbolEntry`
     /// varnode-link is not in the merged tree, so the `force varnode` console
     /// command parks the equate-Symbol id here and the printer reads its
     /// `getDisplayFormat()` — the `vn->getHigh()->getSymbol()->getDisplayFormat()`
     /// path of `PrintC::push_integer` (printc.cc:1370-1376).  `None` == no equate.
-    kuna_equate_symbol: Option<crate::database::SymbolId>,
-    /// (kuna) The name bound to this high names a Symbol in the GLOBAL scope (set
+    unlace_equate_symbol: Option<crate::database::SymbolId>,
+    /// (unlace) The name bound to this high names a Symbol in the GLOBAL scope (set
     /// when `ActionNameVars::linkSpacebaseSymbol` resolves the `&symbol` reference
     /// through `glb->getGlobalScope()` rather than `fd->getScopeLocal()`).  C++
     /// `PrintC::emitLocalVarDecls` declares only the LOCAL scope
     /// (`emitScopeVarDecls(fd->getScopeLocal(), ...)`, printc.cc:2336/2667), so a
     /// global Symbol is rendered by name in the body but never carries a local
     /// declaration.  `false` == a local-scope (or unscoped) high (declarable).
-    kuna_global: bool,
-    /// (kuna, ghidra Phase 4) The local-scope Symbol this high's NAME actually
+    unlace_global: bool,
+    /// (unlace, ghidra Phase 4) The local-scope Symbol this high's NAME actually
     /// resolved to — the bind decision `ActionNameVars` made, recorded at the
     /// moment it made it (the C++ `high->getSymbol()` that `linkSymbol`'s
     /// `handleSymbolConflict` arm establishes).  `None` means the naming pass
@@ -412,19 +412,19 @@ pub struct HighVariable {
     /// conflict-separated high the conflicting parameter's symbol id, so a
     /// rename from that variable's token would rename the parameter.
     ///
-    /// Deliberately a separate field from [`Self::kuna_dynamic_symbol`]: that
+    /// Deliberately a separate field from [`Self::unlace_dynamic_symbol`]: that
     /// one is an analysis-time input the merge reads, and writing it here
     /// would let the encode path perturb decompilation.  Nothing outside the
     /// encode/markup reads this one.
-    kuna_link_symbol: Option<crate::database::SymbolId>,
-    /// (kuna, ghidra Phase 4) The local Symbol a `&symbol` REFERENCE high
+    unlace_link_symbol: Option<crate::database::SymbolId>,
+    /// (unlace, ghidra Phase 4) The local Symbol a `&symbol` REFERENCE high
     /// points at — C++ `Varnode::setSymbolReference` →
     /// `HighVariable::setSymbolReference(entry->getSymbol(), off)`
     /// (`varnode.cc:465`, `variable.cc:283`), the identity half of the bind
     /// `link_symbol_reference` already performs for the name/type/offset.
     ///
     /// Its high is the CONSTANT `PTRSUB` offset operand, not the variable's own
-    /// storage, so this is deliberately NOT [`Self::kuna_link_symbol`]: that
+    /// storage, so this is deliberately NOT [`Self::unlace_link_symbol`]: that
     /// field feeds `<high symref>`, and such a high encodes `class="constant"`,
     /// where Java's `HighConstant.decode` does nothing at all with a mapped
     /// local symref.  Only the DECLARATION needs it: a stack array/struct
@@ -432,7 +432,7 @@ pub struct HighVariable {
     /// is declared off this reference high, and its `<vardecl symref>` must
     /// carry the `<localdb>` id or `ClangVariableDecl.decode` logs "Invalid
     /// symbol reference" and leaves rename/retype dead on that line.
-    kuna_ref_symbol: Option<crate::database::SymbolId>,
+    unlace_ref_symbol: Option<crate::database::SymbolId>,
 }
 
 impl HighVariable {
@@ -457,112 +457,112 @@ impl HighVariable {
             piece: None,
             symbol: None,
             symbol_offset: -1,
-            kuna_name: None,
-            kuna_symbol_type: None,
-            kuna_equate_symbol: None,
-            kuna_global: false,
-            kuna_link_symbol: None,
-            kuna_ref_symbol: None,
+            unlace_name: None,
+            unlace_symbol_type: None,
+            unlace_equate_symbol: None,
+            unlace_global: false,
+            unlace_link_symbol: None,
+            unlace_ref_symbol: None,
         }
     }
 
-    /// (kuna) Get the name bound by `ActionNameVars` (the ScopeLocal/`Symbol`
+    /// (unlace) Get the name bound by `ActionNameVars` (the ScopeLocal/`Symbol`
     /// name stand-in), or `None` if unnamed.
-    pub fn kuna_name(&self) -> Option<&str> {
-        self.kuna_name.as_deref()
+    pub fn unlace_name(&self) -> Option<&str> {
+        self.unlace_name.as_deref()
     }
 
-    /// (kuna) Bind the angr default name to this HighVariable.
-    pub fn set_kuna_name(&mut self, name: impl Into<String>) {
-        self.kuna_name = Some(name.into());
+    /// (unlace) Bind the angr default name to this HighVariable.
+    pub fn set_unlace_name(&mut self, name: impl Into<String>) {
+        self.unlace_name = Some(name.into());
     }
 
-    /// (kuna) Set the in-symbol byte offset for an array/struct member access
+    /// (unlace) Set the in-symbol byte offset for an array/struct member access
     /// (the printer renders `name[idx]` when this is > 0 and the symbol type is
     /// an array).  The C++ `HighVariable::symboloffset` (`variable.cc`).
     pub fn set_symbol_offset(&mut self, off: int4) {
         self.symbol_offset = off;
     }
 
-    /// (kuna) The in-symbol byte offset bound by `name_for_varnode` (or -1).
-    pub fn kuna_symbol_offset(&self) -> int4 {
+    /// (unlace) The in-symbol byte offset bound by `name_for_varnode` (or -1).
+    pub fn unlace_symbol_offset(&self) -> int4 {
         self.symbol_offset
     }
 
-    /// (kuna LOSS-229) Bind the dynamic-mapping Symbol id to this high (C++
+    /// (unlace LOSS-229) Bind the dynamic-mapping Symbol id to this high (C++
     /// `HighVariable::setSymbol` via `vn->setSymbolEntry`).  Read by
     /// `Merge::mergeTestRequired`'s symbol guard (merge.cc:157-164) so a dynamic
     /// temp does not get merged back into the storage it copies.
-    pub fn set_kuna_dynamic_symbol(&mut self, sym: crate::database::SymbolId) {
+    pub fn set_unlace_dynamic_symbol(&mut self, sym: crate::database::SymbolId) {
         self.symbol = Some(sym);
     }
 
-    /// (kuna LOSS-229) The dynamic-mapping Symbol id bound to this high, or `None`.
-    pub fn kuna_dynamic_symbol(&self) -> Option<crate::database::SymbolId> {
+    /// (unlace LOSS-229) The dynamic-mapping Symbol id bound to this high, or `None`.
+    pub fn unlace_dynamic_symbol(&self) -> Option<crate::database::SymbolId> {
         self.symbol
     }
 
-    /// (kuna, ghidra Phase 4) Record the Symbol the naming pass bound this
-    /// high's name to — see [`Self::kuna_link_symbol`].
-    pub fn set_kuna_link_symbol(&mut self, sym: crate::database::SymbolId) {
-        self.kuna_link_symbol = Some(sym);
+    /// (unlace, ghidra Phase 4) Record the Symbol the naming pass bound this
+    /// high's name to — see [`Self::unlace_link_symbol`].
+    pub fn set_unlace_link_symbol(&mut self, sym: crate::database::SymbolId) {
+        self.unlace_link_symbol = Some(sym);
     }
 
-    /// (kuna, ghidra Phase 4) The Symbol bound by the naming pass (or
+    /// (unlace, ghidra Phase 4) The Symbol bound by the naming pass (or
     /// materialized by the encode-time link pass), or `None` when the high was
     /// deliberately left symbol-less.
-    pub fn kuna_link_symbol(&self) -> Option<crate::database::SymbolId> {
-        self.kuna_link_symbol
+    pub fn unlace_link_symbol(&self) -> Option<crate::database::SymbolId> {
+        self.unlace_link_symbol
     }
 
-    /// (kuna, ghidra Phase 4) Record the local Symbol this `&symbol` reference
-    /// high points at — see [`Self::kuna_ref_symbol`].
-    pub fn set_kuna_ref_symbol(&mut self, sym: crate::database::SymbolId) {
-        self.kuna_ref_symbol = Some(sym);
+    /// (unlace, ghidra Phase 4) Record the local Symbol this `&symbol` reference
+    /// high points at — see [`Self::unlace_ref_symbol`].
+    pub fn set_unlace_ref_symbol(&mut self, sym: crate::database::SymbolId) {
+        self.unlace_ref_symbol = Some(sym);
     }
 
-    /// (kuna, ghidra Phase 4) The local Symbol this `&symbol` reference high
+    /// (unlace, ghidra Phase 4) The local Symbol this `&symbol` reference high
     /// points at, or `None` when the high is not such a reference (or the
     /// reference resolved through the GLOBAL scope, whose ids are not
     /// `LocalSymbolMap` ids).
-    pub fn kuna_ref_symbol(&self) -> Option<crate::database::SymbolId> {
-        self.kuna_ref_symbol
+    pub fn unlace_ref_symbol(&self) -> Option<crate::database::SymbolId> {
+        self.unlace_ref_symbol
     }
 
-    /// (kuna) Bind the mapped Symbol's data-type (for array/struct rendering).
+    /// (unlace) Bind the mapped Symbol's data-type (for array/struct rendering).
     pub fn set_symbol_type(&mut self, ct: Rc<Datatype>) {
-        self.kuna_symbol_type = Some(ct);
+        self.unlace_symbol_type = Some(ct);
     }
 
-    /// (kuna) The mapped Symbol's data-type, or `None`.
-    pub fn kuna_symbol_type(&self) -> Option<&Rc<Datatype>> {
-        self.kuna_symbol_type.as_ref()
+    /// (unlace) The mapped Symbol's data-type, or `None`.
+    pub fn unlace_symbol_type(&self) -> Option<&Rc<Datatype>> {
+        self.unlace_symbol_type.as_ref()
     }
 
-    /// (kuna) Mark that this high's name resolves to a GLOBAL-scope Symbol (the
-    /// `linkSpacebaseSymbol` global-scope fallback).  See [`Self::kuna_global`].
-    pub fn set_kuna_global(&mut self, global: bool) {
-        self.kuna_global = global;
+    /// (unlace) Mark that this high's name resolves to a GLOBAL-scope Symbol (the
+    /// `linkSpacebaseSymbol` global-scope fallback).  See [`Self::unlace_global`].
+    pub fn set_unlace_global(&mut self, global: bool) {
+        self.unlace_global = global;
     }
 
-    /// (kuna) Whether this high names a GLOBAL-scope Symbol (rendered by name but
+    /// (unlace) Whether this high names a GLOBAL-scope Symbol (rendered by name but
     /// never declared in the function body — C++ `emitScopeVarDecls` walks only the
     /// local scope, printc.cc:2667).
-    pub fn kuna_global(&self) -> bool {
-        self.kuna_global
+    pub fn unlace_global(&self) -> bool {
+        self.unlace_global
     }
 
-    /// (kuna) Bind the local-scope EquateSymbol to this high (the merged-tree
+    /// (unlace) Bind the local-scope EquateSymbol to this high (the merged-tree
     /// stand-in for `vn->setSymbolEntry` whose effect C++ exposes as
     /// `high->getSymbol()`).  Set by `Funcdata::build_dynamic_symbol`.
-    pub fn set_kuna_equate_symbol(&mut self, sym: crate::database::SymbolId) {
-        self.kuna_equate_symbol = Some(sym);
+    pub fn set_unlace_equate_symbol(&mut self, sym: crate::database::SymbolId) {
+        self.unlace_equate_symbol = Some(sym);
     }
 
-    /// (kuna) The equate-Symbol id bound to this high, or `None` (the
+    /// (unlace) The equate-Symbol id bound to this high, or `None` (the
     /// `high->getSymbol()` stand-in for the constant-format console path).
-    pub fn kuna_equate_symbol(&self) -> Option<crate::database::SymbolId> {
-        self.kuna_equate_symbol
+    pub fn unlace_equate_symbol(&self) -> Option<crate::database::SymbolId> {
+        self.unlace_equate_symbol
     }
 
     // --- Dirty-flag setters (variable.hh:165-169, inline) -----------------
@@ -691,17 +691,17 @@ impl HighVariable {
         self.update_flags(ctx);
         (self.flags & varnode_flags::persist) != 0
     }
-    /// (kuna) `addrtied` read *without* the [`Self::update_flags`] recompute:
+    /// (unlace) `addrtied` read *without* the [`Self::update_flags`] recompute:
     /// `None` when the cached flag word is dirty, so the caller must fall back
     /// to whatever it would have done anyway.
     ///
     /// [`update_flags`](Self::update_flags) ORs every member's flag word, so a
     /// clean `false` here proves no member Varnode is address-tied — which is
-    /// what lets `Funcdata::kuna_mapped_symbol_entry` skip a scan of every
+    /// what lets `Funcdata::unlace_mapped_symbol_entry` skip a scan of every
     /// member looking for one.  Exists because that scan sits under
     /// `Merge::mergeTestRequired`, whose `&self` context cannot run the
     /// recompute.
-    pub fn kuna_addr_tied_if_clean(&self) -> Option<bool> {
+    pub fn unlace_addr_tied_if_clean(&self) -> Option<bool> {
         if (self.highflags & high_flags::flagsdirty) != 0 {
             return None;
         }
@@ -803,7 +803,7 @@ impl HighVariable {
     /// Find the member Varnode with the most specialized data-type (C++
     /// `HighVariable::getTypeRepresentative`, `variable.cc:377-396`).
     pub fn get_type_representative(&self, ctx: &dyn HighContext) -> VarnodeId {
-        // (kuna `sitetypelock`) A per-call-site lock is authoritative only when
+        // (unlace `sitetypelock`) A per-call-site lock is authoritative only when
         // every member of the high is the allocation result or a same-value
         // copy/phi of it; on a high that merges a foreign member it must NOT
         // dominate, or the merged variable's declaration would inherit a type
@@ -997,10 +997,10 @@ impl HighVariable {
     /// Determine if \b this can have a name (C++ `HighVariable::hasName`,
     /// `variable.cc:731-760`).
     ///
-    /// Mirrors the C++ exactly; the `LowlevelError` throws become `KunaError`s
+    /// Mirrors the C++ exactly; the `LowlevelError` throws become `UnlaceError`s
     /// (ADR 0004).  `getInputVarnode`'s illegal-input/spacebase reads come from
     /// the member [`VarnodeView`]s.
-    pub fn has_name(&mut self, ctx: &dyn HighContext) -> unlace_base::error::KunaResult<bool> {
+    pub fn has_name(&mut self, ctx: &dyn HighContext) -> unlace_base::error::UnlaceResult<bool> {
         let mut indirectonly = true;
         for i in 0..self.inst.len() {
             let vn = self.inst[i];
@@ -1010,7 +1010,7 @@ impl HighVariable {
                 == varnode_flags::insert;
             if !has_cover {
                 if self.inst.len() > 1 {
-                    return Err(unlace_base::error::KunaError::lowlevel(
+                    return Err(unlace_base::error::UnlaceError::lowlevel(
                         "Non-coverable varnode has been merged",
                     ));
                 }
@@ -1018,7 +1018,7 @@ impl HighVariable {
             }
             if (view.flags & varnode_flags::implied) != 0 {
                 if self.inst.len() > 1 {
-                    return Err(unlace_base::error::KunaError::lowlevel(
+                    return Err(unlace_base::error::UnlaceError::lowlevel(
                         "Implied varnode has been merged",
                     ));
                 }
@@ -1054,7 +1054,7 @@ impl HighVariable {
     pub fn get_tied_varnode(
         &self,
         ctx: &dyn HighContext,
-    ) -> unlace_base::error::KunaResult<VarnodeId> {
+    ) -> unlace_base::error::UnlaceResult<VarnodeId> {
         for &vn in &self.inst {
             if (ctx.vn_flags(vn) & (varnode_flags::addrtied | varnode_flags::insert))
                 == (varnode_flags::addrtied | varnode_flags::insert)
@@ -1062,7 +1062,7 @@ impl HighVariable {
                 return Ok(vn);
             }
         }
-        Err(unlace_base::error::KunaError::lowlevel(
+        Err(unlace_base::error::UnlaceError::lowlevel(
             "Could not find address-tied varnode",
         ))
     }
@@ -1072,13 +1072,13 @@ impl HighVariable {
     pub fn get_input_varnode(
         &self,
         ctx: &dyn HighContext,
-    ) -> unlace_base::error::KunaResult<VarnodeId> {
+    ) -> unlace_base::error::UnlaceResult<VarnodeId> {
         for &vn in &self.inst {
             if (ctx.vn_flags(vn) & varnode_flags::input) != 0 {
                 return Ok(vn);
             }
         }
-        Err(unlace_base::error::KunaError::lowlevel(
+        Err(unlace_base::error::UnlaceError::lowlevel(
             "Could not find input varnode",
         ))
     }
@@ -1213,7 +1213,7 @@ pub struct HighIntersectTest {
     affecting_ops: PcodeOpSet,
     /// IR revision used by the saved positions and crossing decisions.
     affecting_ops_revision: u64,
-    /// (kuna) While a run of tests that edits nothing is open, the instances
+    /// (unlace) While a run of tests that edits nothing is open, the instances
     /// of each large high whose Cover has each block.
     instance_blocks: Option<crate::fasthash::FxHashMap<HighVariableId, InstanceBlocks>>,
 }
@@ -1816,7 +1816,7 @@ impl HighVariableBank {
     pub fn establish_group_symbol_offset(
         &mut self,
         id: HighVariableId,
-    ) -> unlace_base::error::KunaResult<()> {
+    ) -> unlace_base::error::UnlaceResult<()> {
         let piece = self.highs.get(&id).and_then(|h| h.piece);
         let piece = match piece {
             Some(p) => p,
@@ -1835,7 +1835,7 @@ impl HighVariableBank {
         }
         off -= self.pieces.get(&piece).map(|p| p.group_offset).unwrap_or(0);
         if off < 0 {
-            return Err(unlace_base::error::KunaError::lowlevel(
+            return Err(unlace_base::error::UnlaceError::lowlevel(
                 "Symbol offset is incompatible with VariableGroup",
             ));
         }
@@ -1973,7 +1973,7 @@ impl HighVariableBank {
         isspeculative: bool,
         ctx: &dyn HighContext,
         set_high: &mut dyn FnMut(VarnodeId, HighVariableId, int2),
-    ) -> unlace_base::error::KunaResult<()> {
+    ) -> unlace_base::error::UnlaceResult<()> {
         // highflags |= flagsdirty|namerepdirty|typedirty;
         if let Some(h) = self.highs.get_mut(&id1) {
             h.highflags |=
@@ -2008,7 +2008,7 @@ impl HighVariableBank {
         } else {
             let num2 = self.highs.get(&id2).unwrap().num_merge_classes;
             if num1 != 1 || num2 != 1 {
-                return Err(unlace_base::error::KunaError::lowlevel(
+                return Err(unlace_base::error::UnlaceError::lowlevel(
                     "Making a non-speculative merge after speculative merges have occurred",
                 ));
             }
@@ -2105,7 +2105,7 @@ impl HighVariableBank {
         &mut self,
         group: VariableGroupId,
         piece: VariablePieceId,
-    ) -> unlace_base::error::KunaResult<()> {
+    ) -> unlace_base::error::UnlaceResult<()> {
         let (offset, size) = {
             let p = self
                 .pieces
@@ -2123,7 +2123,7 @@ impl HighVariableBank {
             size,
             id: piece,
         }) {
-            return Err(unlace_base::error::KunaError::lowlevel(
+            return Err(unlace_base::error::UnlaceError::lowlevel(
                 "Duplicate VariablePiece",
             ));
         }
@@ -2182,7 +2182,7 @@ impl HighVariableBank {
         &mut self,
         piece: VariablePieceId,
         new_group: VariableGroupId,
-    ) -> unlace_base::error::KunaResult<()> {
+    ) -> unlace_base::error::UnlaceResult<()> {
         let old_group = self
             .pieces
             .get(&piece)
@@ -2206,7 +2206,7 @@ impl HighVariableBank {
         &mut self,
         this_group: VariableGroupId,
         op2: VariableGroupId,
-    ) -> unlace_base::error::KunaResult<()> {
+    ) -> unlace_base::error::UnlaceResult<()> {
         let members: Vec<VariablePieceId> = match self.groups.get(&op2) {
             None => return Ok(()),
             Some(g) => g.piece_set.iter().map(|k| k.id).collect(),
@@ -2226,7 +2226,7 @@ impl HighVariableBank {
         offset: int4,
         first_size: int4,
         grp: Option<HighVariableId>,
-    ) -> unlace_base::error::KunaResult<VariablePieceId> {
+    ) -> unlace_base::error::UnlaceResult<VariablePieceId> {
         let group = match grp {
             Some(g) => self
                 .highs
@@ -2266,7 +2266,7 @@ impl HighVariableBank {
         hi2: HighVariableId,
         first_size: int4,
         hi2_first_size: int4,
-    ) -> unlace_base::error::KunaResult<()> {
+    ) -> unlace_base::error::UnlaceResult<()> {
         let this_piece = self.highs.get(&id).and_then(|h| h.piece);
         let hi2_piece = self.highs.get(&hi2).and_then(|h| h.piece);
         match (this_piece, hi2_piece) {
@@ -2431,7 +2431,7 @@ impl HighVariableBank {
         set_mark: &mut dyn FnMut(HighVariableId),
         clear_mark: &mut dyn FnMut(HighVariableId),
         is_mark: &dyn Fn(HighVariableId) -> bool,
-    ) -> unlace_base::error::KunaResult<()> {
+    ) -> unlace_base::error::UnlaceResult<()> {
         if id2 == id1 {
             return Ok(());
         }
@@ -2457,7 +2457,7 @@ impl HighVariableBank {
             }
             (Some(p1), Some(p2)) => {
                 if isspeculative {
-                    return Err(unlace_base::error::KunaError::lowlevel(
+                    return Err(unlace_base::error::UnlaceError::lowlevel(
                         "Trying speculatively merge variables in separate groups",
                     ));
                 }

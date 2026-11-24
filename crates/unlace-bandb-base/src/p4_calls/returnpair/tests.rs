@@ -1,4 +1,4 @@
-//! Tests for the return-register pairing sub-stage (kuna GH-6990):
+//! Tests for the return-register pairing sub-stage (unlace GH-6990):
 //! [`parse_return_pair_form`] (the `OptionReturnPair::apply` decision body) and
 //! [`keep_single_return`] (the `buildReturnOutput` resize gate), including the
 //! gate-off (`pair`) behavior.

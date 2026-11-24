@@ -54,7 +54,7 @@ With this change the default prints `main(int a0,unsigned long *a1)` and
 
 ## The tests
 
-- `tests/stages/kuna-formatstring-static.toml`, 32 passes and 38 assertions:
+- `tests/stages/formatstring-static.toml`, 32 passes and 38 assertions:
   off, default and `full` on `fmt_x86_64`, the jump-table/`alloca` sites, `%lf`
   on x86-64 and ARM hard-float, a Win64 PE with `%zu`/`%td`, `fmt_aarch64`,
   gnulib's `version_etc` shape, clang `sscanf` destinations in the first

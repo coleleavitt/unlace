@@ -26,7 +26,7 @@ fn decompile(words: [u32; 12], proto: &str, extent: &str) -> Value {
             .collect::<Vec<_>>(),
     )
     .unwrap();
-    let (out, err, status) = common::run_kuna(&[
+    let (out, err, status) = common::run_unlace(&[
         "decompile",
         path.to_str().unwrap(),
         "0x1000",

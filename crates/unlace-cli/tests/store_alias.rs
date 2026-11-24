@@ -52,7 +52,7 @@ fn a_global_is_read_where_the_binary_reads_it_around_a_pointer_store() {
         ("storealias_gcc_O2_x86_64", all.as_str(), None),
         ("storealias_clang_O2_x86_64", all.as_str(), None),
     ] {
-        let (printed, stderr, code) = common::run_kuna(&[
+        let (printed, stderr, code) = common::run_unlace(&[
             "decompile-all",
             &common::fixture(fixture),
             "--functions",

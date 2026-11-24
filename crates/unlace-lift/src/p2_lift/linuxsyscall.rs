@@ -117,13 +117,13 @@ use unlace_base::marshal::ElementId;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
 use crate::context::OpId;
 use crate::funcdata::Funcdata;
 
-/// (kuna) When an x86 `int 0x80` is named: `linuxsyscall off|auto|on`.
+/// (unlace) When an x86 `int 0x80` is named: `linuxsyscall off|auto|on`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LinuxSyscallMode {
     /// The vendored lifting: an indirect call through `swi(0x80)`.
@@ -135,9 +135,9 @@ pub enum LinuxSyscallMode {
     On,
 }
 
-impl crate::optionset::KunaOption for LinuxSyscallMode {
+impl crate::optionset::UnlaceOption for LinuxSyscallMode {
     const NAME: &'static str = "linuxsyscall";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         LinuxSyscallMode::Off
@@ -147,7 +147,7 @@ impl crate::optionset::KunaOption for LinuxSyscallMode {
         LinuxSyscallMode::Auto
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         OptionLinuxSyscall.apply(value)
     }
 }
@@ -172,7 +172,7 @@ impl LinuxSyscallMode {
     }
 }
 
-/// (kuna) Parse `option linuxsyscall off|auto|on`; the caller writes the live
+/// (unlace) Parse `option linuxsyscall off|auto|on`; the caller writes the live
 /// field.
 pub struct OptionLinuxSyscall;
 
@@ -181,13 +181,13 @@ impl OptionLinuxSyscall {
     pub const NAME: &'static str = "linuxsyscall";
 
     /// Parse + validate the value.
-    pub fn apply(&self, p1: &str) -> KunaResult<(LinuxSyscallMode, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(LinuxSyscallMode, String)> {
         let mode = match p1 {
             "off" => LinuxSyscallMode::Off,
             "auto" => LinuxSyscallMode::Auto,
             "on" => LinuxSyscallMode::On,
             other => {
-                return Err(KunaError::parse(format!(
+                return Err(UnlaceError::parse(format!(
                     "Unknown linuxsyscall value: {other} (expected off|auto|on)"
                 )));
             }
@@ -196,7 +196,7 @@ impl OptionLinuxSyscall {
     }
 }
 
-/// Marshaling element `<linuxsyscall>` (kuna). ElementIds live in the 4000+
+/// Marshaling element `<linuxsyscall>` (unlace). ElementIds live in the 4000+
 /// range; 4131 was the previous max.
 pub const ELEM_LINUXSYSCALL: ElementId = ElementId::new("linuxsyscall", 4134);
 
@@ -848,7 +848,7 @@ fn rewrite(data: &mut Funcdata, site: &Site, abi: &SyscallAbi) -> bool {
 
     data.op_set_opcode_code(site.callind, OpCode::CPUI_CALL);
     let handle = crate::flow::next_fspec_handle();
-    let style = data.get_arch().kuna_name_style();
+    let style = data.get_arch().unlace_name_style();
     data.get_call_specs(idx)
         .register_in_fspec_space(handle, style);
     let fspecvn = data.new_varnode_call_specs(handle);
@@ -859,7 +859,7 @@ fn rewrite(data: &mut Funcdata, site: &Site, abi: &SyscallAbi) -> bool {
     true
 }
 
-/// (kuna) `ActionLinuxSyscall` — name Linux i386-ABI `int 0x80` sites, including
+/// (unlace) `ActionLinuxSyscall` — name Linux i386-ABI `int 0x80` sites, including
 /// the x86-64 compatibility path (option `linuxsyscall`).
 pub struct ActionLinuxSyscall {
     base: ActionBase,
@@ -895,7 +895,7 @@ impl Action for ActionLinuxSyscall {
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         let arch = data.get_arch();
-        let mode = arch.kuna_options.get::<LinuxSyscallMode>();
+        let mode = arch.unlace_options.get::<LinuxSyscallMode>();
         if !mode.fires(arch.image_linux_elf) || data.num_calls() == 0 {
             return 0;
         }

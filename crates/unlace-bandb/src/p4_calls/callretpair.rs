@@ -1,4 +1,4 @@
-//! (kuna) Connect a two-register return at the CALL, whatever language produced
+//! (unlace) Connect a two-register return at the CALL, whatever language produced
 //! the callee.
 //!
 //! # The symptom
@@ -14,7 +14,7 @@
 //! 0x9d9e9  MOV  R12,RDX
 //! ```
 //!
-//! Ask kuna about the callee and it agrees there is a sixteen-byte return --
+//! Ask unlace about the callee and it agrees there is a sixteen-byte return --
 //! `undefined16 sub_875e0(int8,char *,int8,uint4)`. Ask it about the caller and
 //! the same call has no output at all:
 //!
@@ -32,10 +32,10 @@
 //! # What is missing
 //!
 //! Not the ABI decision, and not the recovery. The x86-64 cspec's
-//! `<join_dual_class/>` output rule already describes this storage, and kuna
+//! `<join_dual_class/>` output rule already describes this storage, and unlace
 //! already puts two active output trials on the call. What drops them is the
 //! consumer seam: `FuncCallSpecs::buildOutputFromTrials` (`fspec.cc:5777`)
-//! handles one used output trial and upstream handles two, but kuna shipped the
+//! handles one used output trial and upstream handles two, but unlace shipped the
 //! multi-trial arm as a stub. The INDIRECT creations that stood for "the callee
 //! wrote something here" survive untouched, which is what renders as a local the
 //! function never assigns.
@@ -106,7 +106,7 @@
 //! -- by an op other than a CALL, CALLIND or RETURN, looking through phis, the
 //! PIECE return recovery joins a returned pair with and the no-op copies of a
 //! return's mode switch -- because a later call's argument or the function's
-//! own return trial is a read kuna has not yet decided is real (an x86-64
+//! own return trial is a read unlace has not yet decided is real (an x86-64
 //! `RDX` a next call only appears to take as an argument is one).
 
 use crate::rustabi::FuncdataRustabiExt;
@@ -231,7 +231,7 @@ pub fn build_partial_pair(
         })
         .collect();
     let entry = fc.get_entry_address();
-    let Some(callee) = data.kuna_callee_ret_writes(entry) else {
+    let Some(callee) = data.unlace_callee_ret_writes(entry) else {
         return false;
     };
     if !read_regs.iter().all(|reg| writes(callee, &reg.0, reg.1))
@@ -358,11 +358,11 @@ fn callee_returns_cover(data: &Funcdata, entry: &Address, regs: &[&(Address, int
         return false;
     };
     let k = (sp.get_index(), entry.get_offset());
-    match data.kuna_callee_returns(k) {
+    match data.unlace_callee_returns(k) {
         None => true,
         Some(crate::voidret::Returns::Void) => false,
         Some(_) => data
-            .kuna_callee_return_storage(k)
+            .unlace_callee_return_storage(k)
             .is_some_and(|(addr, size)| {
                 let pieces: Vec<(Address, int4)> = if addr.is_join() {
                     match data.get_arch().manage.find_join(addr.get_offset()) {

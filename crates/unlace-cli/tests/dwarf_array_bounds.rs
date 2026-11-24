@@ -28,7 +28,8 @@ fn fortran_array_lengths_use_both_bounds() {
         ("negative_origin", 5),
         ("negative_upper", 5),
     ] {
-        let (body, err, status) = common::run_kuna(&["decompile", object.to_str().unwrap(), name]);
+        let (body, err, status) =
+            common::run_unlace(&["decompile", object.to_str().unwrap(), name]);
         assert_eq!(status, 0, "{err}");
         assert!(
             body.lines().next().unwrap().contains(&format!("[{count}]")),
@@ -98,7 +99,7 @@ end subroutine
             .arg("-o")
             .arg(&library),
     );
-    let (printed, stderr, rc) = common::run_kuna(&[
+    let (printed, stderr, rc) = common::run_unlace(&[
         "decompile-all",
         library.to_str().unwrap(),
         "--functions",

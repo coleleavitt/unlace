@@ -1,4 +1,4 @@
-//! P3 value-range folding (kuna `rangefold`).
+//! P3 value-range folding (unlace `rangefold`).
 //!
 //! A conditional branch on `V cmp K` bounds the value of `V` in every block that
 //! one of its out-edges controls: the edge's target dominates the block and is
@@ -304,7 +304,7 @@ impl Action for ActionRangeFold {
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::rangefold::RangeFold>()
             .0
         {
@@ -315,8 +315,8 @@ impl Action for ActionRangeFold {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna) Fold a comparison or mask whose outcome the ranges dominating
+crate::unlace_flag!(
+    /// (unlace) Fold a comparison or mask whose outcome the ranges dominating
     /// branches establish fixes (option `rangefold`).  See
     /// [`crate::rangefold`].
     RangeFold,

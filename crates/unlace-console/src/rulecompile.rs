@@ -12,7 +12,7 @@
 //! `rulecompile` is reachable from exactly one place: the console `parse rule`
 //! command (`IfcParseRule::execute`), which is **conditionally compiled** behind
 //! `#ifdef CPUI_RULECOMPILE` in `decompiler/cpp/ifacedecomp.cc`.  That macro is
-//! **not** defined in the kuna build, so the command is never registered and
+//! **not** defined in the unlace build, so the command is never registered and
 //! nothing in the test corpus drives it:
 //!
 //! - no datatest (`tests/datatests/`) and no unit test
@@ -28,7 +28,7 @@
 //! error so the deferred `parse rule` path reports the feature as unimplemented
 //! rather than silently producing nothing.
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 
 use crate::unify::NOT_PORTED;
 
@@ -48,10 +48,10 @@ impl RuleCompile {
     ///
     /// This mirrors the single C++ call site
     /// (`IfcParseRule::execute`, guarded by `#ifdef CPUI_RULECOMPILE`): instead
-    /// of running the lexer/parser and `UnifyCPrinter`, the kuna build fails
+    /// of running the lexer/parser and `UnifyCPrinter`, the unlace build fails
     /// closed here.
-    pub fn not_ported<T>() -> KunaResult<T> {
-        Err(KunaError::lowlevel(NOT_PORTED))
+    pub fn not_ported<T>() -> UnlaceResult<T> {
+        Err(UnlaceError::lowlevel(NOT_PORTED))
     }
 }
 

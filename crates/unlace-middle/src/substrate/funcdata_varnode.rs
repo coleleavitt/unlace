@@ -6,7 +6,7 @@
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::{AddrSpace, spacetype};
 use unlace_base::types::{Wrap, int4, uint1, uint4, uintb, uintm};
 
@@ -39,13 +39,13 @@ impl Funcdata {
 
     /// Materialize the function's recovered/locked input parameters as Symbols in
     /// the local scope, the symbol-creation `ProtoStoreSymbol::setInput` performs
-    /// (`fspec.cc:3174`) that the kuna `ProtoStoreInternal` skips.
+    /// (`fspec.cc:3174`) that the unlace `ProtoStoreInternal` skips.
     ///
     /// In C++ the `FuncProto`'s scope IS the `ScopeLocal` (`funcdata.cc:69`
     /// `funcp.setScope(localmap,...)`), so each `setInput` adds a parameter Symbol
     /// at the parameter's storage address with category `function_parameter`.
     /// `ActionNameVars::linkSymbols` then binds the body Varnodes to those Symbols
-    /// (`Funcdata::linkSymbol` -> `Scope::queryProperties`).  The kuna port stores
+    /// (`Funcdata::linkSymbol` -> `Scope::queryProperties`).  The unlace port stores
     /// parameters in a symbol-less `ProtoStoreInternal`, so those Symbols never
     /// exist and the body renders the raw registers; this method creates them from
     /// the proto store (`get_param(i)`'s name/type/address), so the existing
@@ -76,7 +76,7 @@ impl Funcdata {
             // C++ `ProtoStoreSymbol::setInput` passes the parameter's name; an
             // unnamed (recovered, unlocked) parameter is an `addSymbol("",...)` with
             // an undefined name that `ActionNameVars`/`buildDefaultName` then routes
-            // through the active local parameter style. The kuna proto store and
+            // through the active local parameter style. The unlace proto store and
             // the scope symbol are separate objects, so the default is materialized
             // here instead of being deferred to `assignDefaultNames`, avoiding the
             // `$$undef` placeholder that `addSymbol("",...)` would otherwise leak
@@ -84,7 +84,7 @@ impl Funcdata {
             // the angr default and GUI Ghidra mode both keep `a<i>` because both
             // leave `name_style_angr` on. A locked, named proto (`parse line
             // extern`) carries the explicit `ptr`/`a`/`b`.
-            let name = crate::database::kuna_materialized_param_name(
+            let name = crate::database::unlace_materialized_param_name(
                 self.get_arch().name_style_angr,
                 i,
                 param.get_name(),
@@ -501,26 +501,26 @@ impl Funcdata {
     /// pointer data-type and the `spacebase` flag is created.  Backs
     /// `StringSequence::constructTypedPointer` for an `IPTR_SPACEBASE` (stack)
     /// destination array.
-    pub fn construct_spacebase_input(&mut self, id: &Rc<AddrSpace>) -> KunaResult<VarnodeId> {
+    pub fn construct_spacebase_input(&mut self, id: &Rc<AddrSpace>) -> UnlaceResult<VarnodeId> {
         use crate::dtype::TypeFactory;
         if let Some(space_ptr) = (self.hooks().find_spacebase_input)(self, id) {
             return Ok(space_ptr);
         }
         if id.num_spacebase() == 0 {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "Unable to construct pointer into space: {}",
                 id.get_name()
             )));
         }
         let point = id.get_spacebase(0)?;
         let point_space = point.space.as_ref().ok_or_else(|| {
-            KunaError::lowlevel("constructSpacebaseInput: spacebase has no space")
+            UnlaceError::lowlevel("constructSpacebaseInput: spacebase has no space")
         })?;
         let point_addr = Address::new(Rc::clone(point_space), point.offset);
         let types = self
             .get_arch()
             .types_rc()
-            .ok_or_else(|| KunaError::lowlevel("constructSpacebaseInput: no type factory"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("constructSpacebaseInput: no type factory"))?;
         let func_addr = self.get_address().clone();
         let ct = types.get_type_spacebase(Rc::clone(id), &func_addr)?;
         let ptr = types.get_type_pointer(point.size as int4, ct, id.get_word_size())?;
@@ -543,12 +543,12 @@ impl Funcdata {
     /// The returned constant `0` carries the `TypeSpacebase` pointer data-type
     /// and the `spacebase` flag.  Backs `StringSequence::constructTypedPointer`
     /// for a non-`IPTR_SPACEBASE` (e.g. `ram`/global) destination array.
-    pub fn construct_const_spacebase(&mut self, id: &Rc<AddrSpace>) -> KunaResult<VarnodeId> {
+    pub fn construct_const_spacebase(&mut self, id: &Rc<AddrSpace>) -> UnlaceResult<VarnodeId> {
         use crate::dtype::TypeFactory;
         let types = self
             .get_arch()
             .types_rc()
-            .ok_or_else(|| KunaError::lowlevel("constructConstSpacebase: no type factory"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("constructConstSpacebase: no type factory"))?;
         let invalid = Address::new_invalid();
         let ct = types.get_type_spacebase(Rc::clone(id), &invalid)?;
         let ptr = types.get_type_pointer(id.get_addr_size() as int4, ct, id.get_word_size())?;
@@ -599,7 +599,7 @@ impl Funcdata {
             .vbank_mut()
             .create(8, Address::new(cspc, fc_encoded), ct);
         self.assign_high(vn);
-        self.kuna_fspec_handles.push(fc_encoded);
+        self.unlace_fspec_handles.push(fc_encoded);
         vn
     }
 
@@ -630,7 +630,7 @@ impl Funcdata {
     /// The attached output receives its high variable and lane-storage record
     /// when those analyses are active, followed by scope-derived properties.
     #[inline]
-    pub fn new_varnode_out(&mut self, s: int4, m: &Address, op: OpId) -> KunaResult<VarnodeId> {
+    pub fn new_varnode_out(&mut self, s: int4, m: &Address, op: OpId) -> UnlaceResult<VarnodeId> {
         self.varnode_out(s, m, op, true)
     }
 
@@ -641,11 +641,11 @@ impl Funcdata {
         s: int4,
         m: &Address,
         op: OpId,
-    ) -> KunaResult<VarnodeId> {
+    ) -> UnlaceResult<VarnodeId> {
         self.varnode_out(s, m, op, false)
     }
 
-    /// (kuna) Constant zero is where a slice of an ABI join's padding piece
+    /// (unlace) Constant zero is where a slice of an ABI join's padding piece
     /// renormalizes: it has no storage, so the output gets a temporary instead.
     /// Any other constant address keeps upstream's "Assignment to constant".
     fn varnode_out(
@@ -654,7 +654,7 @@ impl Funcdata {
         m: &Address,
         op: OpId,
         laned: bool,
-    ) -> KunaResult<VarnodeId> {
+    ) -> UnlaceResult<VarnodeId> {
         if m.is_constant() && m.get_offset() == 0 {
             return self.unique_out(s, op, laned);
         }
@@ -685,18 +685,18 @@ impl Funcdata {
     /// [`new_varnode_out`](Funcdata::new_varnode_out).  No `localmap` match (the
     /// unique space never carries symbols), matching the C++.
     #[inline]
-    pub fn new_unique_out(&mut self, s: int4, op: OpId) -> KunaResult<VarnodeId> {
+    pub fn new_unique_out(&mut self, s: int4, op: OpId) -> UnlaceResult<VarnodeId> {
         self.unique_out(s, op, true)
     }
 
     /// [`new_unique_out`](Funcdata::new_unique_out) for a simplification rule: the
     /// output is not recorded as lane-divisible storage.
     #[inline]
-    pub fn new_unique_out_unlaned(&mut self, s: int4, op: OpId) -> KunaResult<VarnodeId> {
+    pub fn new_unique_out_unlaned(&mut self, s: int4, op: OpId) -> UnlaceResult<VarnodeId> {
         self.unique_out(s, op, false)
     }
 
-    fn unique_out(&mut self, s: int4, op: OpId, laned: bool) -> KunaResult<VarnodeId> {
+    fn unique_out(&mut self, s: int4, op: OpId, laned: bool) -> UnlaceResult<VarnodeId> {
         let ct = Self::type_base_unknown(s);
         let def = self.def_op_info_v(op);
         let vn = {
@@ -841,7 +841,7 @@ impl Funcdata {
     /// lands (LOSS recorded); `ActionRestrictLocal`'s loop over unaffected inputs
     /// (`restrict_local` loop 2) is inert in the meantime, which is faithful for the
     /// current (no-input-unaffected) IR.
-    pub fn set_input_varnode(&mut self, vn: VarnodeId) -> KunaResult<VarnodeId> {
+    pub fn set_input_varnode(&mut self, vn: VarnodeId) -> UnlaceResult<VarnodeId> {
         // Already an input.
         if self
             .vbank()
@@ -854,7 +854,7 @@ impl Funcdata {
         // First check if it overlaps any other varnode (the pure vbank read).
         if let Some(invn) = self.find_input_overlap(vn)? {
             // Identical pre-existing input: discard the candidate, return invn.
-            self.kuna_inherit_storage(invn, vn);
+            self.unlace_inherit_storage(invn, vn);
             return Ok(invn);
         }
         // Split-borrow both banks for the xref callback.
@@ -864,7 +864,7 @@ impl Funcdata {
             let mut replace = Funcdata::replace_reads_thunk(obank);
             vbank.set_input(vn, &mut replace)?
         };
-        self.kuna_rekey_storage_sources(original_vn, vn);
+        self.unlace_rekey_storage_sources(original_vn, vn);
         self.set_varnode_properties(vn);
         self.apply_input_effect_marking(vn);
         Ok(vn)
@@ -903,11 +903,11 @@ impl Funcdata {
     /// The bank refuses to destroy an integrated varnode (one with a def or
     /// descendants); that condition is the C++ `LowlevelError`. Check it before
     /// detaching the high, which still needs the live varnode's location.
-    pub fn delete_varnode(&mut self, vn: VarnodeId) -> KunaResult<()> {
+    pub fn delete_varnode(&mut self, vn: VarnodeId) -> UnlaceResult<()> {
         self.vbank().check_destroy(vn)?;
         self.purge_high_on_free(vn);
         self.vbank_mut().destroy(vn)?;
-        self.kuna_forget_storage_sources(vn);
+        self.unlace_forget_storage_sources(vn);
         Ok(())
     }
 
@@ -954,12 +954,12 @@ impl Funcdata {
                 .set_synthetic_literal(true);
         }
         let transport = (self.hooks().is_call_transport)(self, vn);
-        self.kuna_inherit_storage(cloned, vn);
+        self.unlace_inherit_storage(cloned, vn);
         if transport {
-            self.kuna_mark_call_transport(cloned);
+            self.unlace_mark_call_transport(cloned);
         }
-        if let Some(size) = self.kuna_call_transport_projection_size(vn) {
-            self.kuna_mark_call_transport_projection(cloned, size);
+        if let Some(size) = self.unlace_call_transport_projection_size(vn) {
+            self.unlace_mark_call_transport_projection(cloned, size);
         }
         cloned
     }
@@ -986,12 +986,12 @@ impl Funcdata {
                 .unwrap()
                 .set_synthetic_literal(true);
         }
-        self.kuna_extend_storage_sources(cloned, src.kuna_storage_sources(vn).iter().cloned());
+        self.unlace_extend_storage_sources(cloned, src.unlace_storage_sources(vn).iter().cloned());
         if (src.hooks().is_call_transport)(src, vn) {
-            self.kuna_mark_call_transport(cloned);
+            self.unlace_mark_call_transport(cloned);
         }
-        if let Some(size) = src.kuna_call_transport_projection_size(vn) {
-            self.kuna_mark_call_transport_projection(cloned, size);
+        if let Some(size) = src.unlace_call_transport_projection_size(vn) {
+            self.unlace_mark_call_transport_projection(cloned, size);
         }
         cloned
     }
@@ -1033,7 +1033,7 @@ impl Funcdata {
     /// if `vn` is written, `vn->def->setOutput(0)` and `vn->def = 0`; then
     /// `vn->destroyDescend()` and `vbank.destroy(vn)`.  Each step is a single,
     /// sequential single-arena borrow, so no `(vbank,obank)` split is needed.
-    pub fn destroy_varnode(&mut self, vn: VarnodeId) -> KunaResult<()> {
+    pub fn destroy_varnode(&mut self, vn: VarnodeId) -> UnlaceResult<()> {
         let readers: Vec<OpId> = self.descend_snapshot(vn);
         for op in readers {
             let slot = self.obank().get(op).map(|o| o.get_slot(vn)).unwrap_or(-1);
@@ -1064,7 +1064,7 @@ impl Funcdata {
     /// Ported faithfully: bail if the Varnode is auto-live or still has
     /// descendants; if it is not written, just free it; otherwise recurse into
     /// its defining op via `op_destroy_recursive`.
-    pub fn destroy_varnode_recursive(&mut self, vn: VarnodeId) -> KunaResult<()> {
+    pub fn destroy_varnode_recursive(&mut self, vn: VarnodeId) -> UnlaceResult<()> {
         let (auto_live, no_descend, written, def) = match self.vbank().get(vn) {
             Some(v) => (
                 v.is_auto_live(),
@@ -1094,7 +1094,7 @@ impl Funcdata {
     /// free (and its cover cleared), and any now-free no-descend Varnode is
     /// removed from the bank.  Called at the tail of `ActionDeadCode::apply`
     /// after the op graph has been pruned.
-    pub fn clear_dead_varnodes(&mut self) -> KunaResult<()> {
+    pub fn clear_dead_varnodes(&mut self) -> UnlaceResult<()> {
         // Collect first (the loop destroys Varnodes, invalidating the BTree
         // iterator); the C++ advances the iterator before any mutation.
         let candidates: Vec<VarnodeId> = self.vbank().iter_loc().collect();
@@ -1140,7 +1140,7 @@ impl Funcdata {
     /// requires the `(vbank,obank)` split accessor (see the module doc); that
     /// mutating tail (plus the `funcp.hasEffect` unaffected/return-address marking,
     /// a W4 boundary) is the owner's / `funcdata_op`'s.
-    pub fn find_input_overlap(&self, vn: VarnodeId) -> KunaResult<Option<VarnodeId>> {
+    pub fn find_input_overlap(&self, vn: VarnodeId) -> UnlaceResult<Option<VarnodeId>> {
         let v = self.vbank().get(vn).expect("find_input_overlap: stale vn");
         let vaddr = v.get_addr().clone();
         let vsize = v.get_size();
@@ -1168,7 +1168,7 @@ impl Funcdata {
             if vsize == other.get_size() && &vaddr == other.get_addr() {
                 return Ok(Some(invn));
             }
-            return Err(KunaError::lowlevel("Overlapping input varnodes"));
+            return Err(UnlaceError::lowlevel("Overlapping input varnodes"));
         }
         Ok(None)
     }
@@ -1204,21 +1204,21 @@ impl Funcdata {
     /// Find the first input Varnode covered by the given range
     /// (C++ `Funcdata::findCoveredInput` → `vbank.findCoveredInput`,
     /// `funcdata.hh:312`).
-    pub fn find_covered_input(&self, s: int4, loc: &Address) -> KunaResult<Option<VarnodeId>> {
+    pub fn find_covered_input(&self, s: int4, loc: &Address) -> UnlaceResult<Option<VarnodeId>> {
         self.vbank().find_covered_input(s, loc)
     }
 
     /// Find the input Varnode that contains the given range
     /// (C++ `Funcdata::findCoveringInput` → `vbank.findCoveringInput`,
     /// `funcdata.hh:319`).
-    pub fn find_covering_input(&self, s: int4, loc: &Address) -> KunaResult<Option<VarnodeId>> {
+    pub fn find_covering_input(&self, s: int4, loc: &Address) -> UnlaceResult<Option<VarnodeId>> {
         self.vbank().find_covering_input(s, loc)
     }
 
     /// Check if an input Varnode exists that overlaps the given range
     /// (C++ `Funcdata::hasInputIntersection` → `vbank.hasInputIntersection`,
     /// `funcdata.hh:326`).
-    pub fn has_input_intersection(&self, s: int4, loc: &Address) -> KunaResult<bool> {
+    pub fn has_input_intersection(&self, s: int4, loc: &Address) -> UnlaceResult<bool> {
         self.vbank().has_input_intersection(s, loc)
     }
 
@@ -1279,15 +1279,15 @@ impl Funcdata {
     // -----------------------------------------------------------------------
 
     /// C++ `Funcdata::linkSymbolReference` (`funcdata_varnode.cc:1214`), realized
-    /// against the merged tree's HighVariable `kuna_*` symbol-reference fields.
+    /// against the merged tree's HighVariable `unlace_*` symbol-reference fields.
     ///
     /// `offVn` is the constant **second input** to a `PTRSUB(spacebase, offset)`.
     /// The C++ recovers the Symbol the constant address refers to and stores it on
     /// the constant's HighVariable as a *reference* (`Varnode::setSymbolReference`
     /// -> `HighVariable::setSymbolReference(sym, off)` sets `symbol`/`symboloffset`,
     /// `variable.cc:283-289`).  The W4 `Symbol`/`SymbolEntry` layer is absent here,
-    /// so the reference is parked as the same `kuna_name`/`symbol_offset`/
-    /// `kuna_symbol_type` triple `ActionNameVars` uses for value reads; the printer
+    /// so the reference is parked as the same `unlace_name`/`symbol_offset`/
+    /// `unlace_symbol_type` triple `ActionNameVars` uses for value reads; the printer
     /// reads it back in the `PrintC::opPtrsub` SPACEBASE arm (`printc.cc:1081`).
     ///
     /// Returns `true` when a Symbol reference was attached (the C++ non-null return,
@@ -1308,7 +1308,7 @@ impl Funcdata {
         let op = self.lone_descend(off_vn)?;
         // The spacebase varnode.
         let in0 = self.obank().get(op).and_then(|o| o.get_in(0))?;
-        // The kuna render reads the varnode
+        // The unlace render reads the varnode
         // type for the same spacebase input (`op_ptrsub_ir` line in0 = get_type),
         // which after the W10 spacebase-input typing IS the pointer-to-spacebase;
         // use the same source so the action and the render agree.
@@ -1392,7 +1392,7 @@ impl Funcdata {
         // C++ `linkSpacebaseSymbol` (coreaction.cc:3015) attaches the reference even
         // for an undefined-named Symbol, then records the offVn in `namerec` so
         // `ActionNameVars::apply` renames the shared Symbol to `vN` (the render then
-        // reads that final name).  The kuna namerec rename only reaches
+        // reads that final name).  The unlace namerec rename only reaches
         // whole-symbol-cover locals (`resolve_default_name` renames in the
         // database), so an undefined-named composite — an unmapped array auto-local
         // — is never given a `vN` here.  Binding its raw `$$undefNN` placeholder
@@ -1411,25 +1411,25 @@ impl Funcdata {
             None => return false,
         };
         if let Some(h) = self.high_bank_mut().get_mut(high) {
-            h.set_kuna_name(info_display_name);
+            h.set_unlace_name(info_display_name);
             h.set_symbol_offset(info_sym_off);
             if let Some(t) = info_sym_type {
                 h.set_symbol_type(t);
             }
             // A reference resolved through the global scope is not a local symbol;
             // mark it so the printer's local decl loop renders it by name only.
-            h.set_kuna_global(info_is_global);
+            h.set_unlace_global(info_is_global);
             // C++ `Varnode::setSymbolReference` (varnode.cc:465) →
             // `HighVariable::setSymbolReference(entry->getSymbol(), off)`: the
             // SYMBOL IDENTITY travels with the name/offset/type this bind just
-            // copied.  kuna dropped it, which left the `<vardecl symref>` of a
+            // copied.  unlace dropped it, which left the `<vardecl symref>` of a
             // stack aggregate materialized only through `&sym` — its whole high
             // is the constant PTRSUB operand, so no addr-tied instance exists to
             // re-derive a container from — with no resolvable id.  Local scope
             // only: a global reference's Symbol is not in the `LocalSymbolMap`
             // the wire id must key into.
             if let Some(sid) = local_sid {
-                h.set_kuna_ref_symbol(sid);
+                h.set_unlace_ref_symbol(sid);
             }
         }
         true
@@ -1439,7 +1439,7 @@ impl Funcdata {
     /// `PTRSUB` ops off the given spacebase Varnode that encode a `&symbol`
     /// reference, and link each one's offset constant to its Symbol.
     ///
-    /// The kuna mapped symbols always have a defined name (the `map addr` records),
+    /// The unlace mapped symbols always have a defined name (the `map addr` records),
     /// so the `isNameUndefined()` namerec arm — which would route an unnamed
     /// spacebase symbol through `buildDefaultName` — is a no-op for the corpus and
     /// is intentionally not reproduced (no symbol reaching here is name-undefined).
@@ -1473,7 +1473,7 @@ impl Funcdata {
     /// name-undefined into `namerec`, and `apply` later renames each such shared
     /// Symbol to its `buildDefaultName` (`v<base++>`).  Because a SINGLE Symbol object
     /// backs both the offset-constant reference high AND any body member-access high,
-    /// that one rename makes both render the final `vN`.  The kuna naming model binds
+    /// that one rename makes both render the final `vN`.  The unlace naming model binds
     /// the name PER-HIGH off the *database* Symbol at query time, so the rename must
     /// land in the database BEFORE the body highs are queried — i.e. this runs as a
     /// pre-pass, ahead of the main `linkSymbols` per-space naming loop.  Sharing the
@@ -1692,8 +1692,8 @@ impl Funcdata {
     /// steps (`eraseDescend` ; `clearInput` ; `addDescend` ; `setInput`) is a
     /// distinct single-arena borrow, so the whole rewiring sequences cleanly
     /// without the `(vbank,obank)` split.
-    pub fn total_replace(&mut self, vn: VarnodeId, newvn: VarnodeId) -> KunaResult<()> {
-        self.kuna_inherit_storage(newvn, vn);
+    pub fn total_replace(&mut self, vn: VarnodeId, newvn: VarnodeId) -> UnlaceResult<()> {
+        self.unlace_inherit_storage(newvn, vn);
         // Snapshot the descend list (we mutate it as we go, mirroring `*iter++`).
         let readers = self.descend_snapshot(vn);
         for op in readers {
@@ -1718,7 +1718,11 @@ impl Funcdata {
     /// reading the new whole; any *other* reader of an original is repointed to a
     /// `SUBPIECE` of the new whole.  The originals are destroyed.  Drives
     /// `RuleDoubleOut::applyOp` (double-precision register-pair recombine).
-    pub fn combine_input_varnodes(&mut self, vn_hi: VarnodeId, vn_lo: VarnodeId) -> KunaResult<()> {
+    pub fn combine_input_varnodes(
+        &mut self,
+        vn_hi: VarnodeId,
+        vn_lo: VarnodeId,
+    ) -> UnlaceResult<()> {
         let (hi_is_input, hi_addr, hi_size) = {
             let v = self
                 .vbank()
@@ -1734,7 +1738,7 @@ impl Funcdata {
             (v.is_input(), v.get_addr().clone(), v.get_size())
         };
         if !hi_is_input || !lo_is_input {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Varnodes being combined are not inputs",
             ));
         }
@@ -1751,7 +1755,7 @@ impl Funcdata {
             is_contiguous = otheraddr == hi_addr;
         }
         if !is_contiguous {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Input varnodes being combined are not contiguous",
             ));
         }
@@ -1847,7 +1851,7 @@ impl Funcdata {
     /// 8-byte float register read whose low/high halves were split because a
     /// lane-COPY return write made the disjoint range's max write size 4) back
     /// into one whole input — driven by `ActionUnjustifiedParams`.
-    pub fn adjust_input_varnodes(&mut self, addr: &Address, sz: int4) -> KunaResult<()> {
+    pub fn adjust_input_varnodes(&mut self, addr: &Address, sz: int4) -> UnlaceResult<()> {
         // Gather inputs whose start is within [addr, endaddr].
         let end_off = addr.get_offset().wrapping_add((sz - 1) as u64);
         let space = match addr.get_space() {
@@ -1872,7 +1876,9 @@ impl Funcdata {
                 continue;
             }
             if voff.wrapping_add((v.get_size() - 1) as u64) > end_off {
-                return Err(KunaError::lowlevel("Cannot properly adjust input varnodes"));
+                return Err(UnlaceError::lowlevel(
+                    "Cannot properly adjust input varnodes",
+                ));
             }
             inlist.push(id);
         }
@@ -1891,7 +1897,7 @@ impl Funcdata {
             };
             let sa = addr.justified_contain(sz, &vaddr, vsize, false);
             if !is_input || sa < 0 || sz <= vsize {
-                return Err(KunaError::lowlevel("Bad adjustment to input varnode"));
+                return Err(UnlaceError::lowlevel("Bad adjustment to input varnode"));
             }
             let subop = self.new_op(2, fdaddr.clone());
             self.op_set_opcode_code(subop, OpCode::CPUI_SUBPIECE);
@@ -1943,7 +1949,7 @@ impl Funcdata {
     /// must retain the cloning the `total_replace_constant_clones_per_read` test
     /// pins).  Recorded as a loss; the eventual single canonical `opSetInput`
     /// should fold the constant-clone in and this local copy should disappear.
-    fn op_set_input_local(&mut self, op: OpId, mut vn: VarnodeId, slot: int4) -> KunaResult<()> {
+    fn op_set_input_local(&mut self, op: OpId, mut vn: VarnodeId, slot: int4) -> UnlaceResult<()> {
         if self.obank().get(op).and_then(|o| o.get_in(slot)) == Some(vn) {
             return Ok(());
         }
@@ -1994,7 +2000,7 @@ impl Funcdata {
     /// `glb->readonlypropagate` is set (the `option readonly` switch).  The float
     /// cluster's `v1 = 1.1234567812345` initializers come from folding the
     /// IEEE-754 bytes that live in read-only RAM into a constant here.
-    pub fn fillin_read_only(&mut self, vn: VarnodeId) -> KunaResult<bool> {
+    pub fn fillin_read_only(&mut self, vn: VarnodeId) -> UnlaceResult<bool> {
         // Can't replace output.
         let (is_written, defop) = {
             let v = self.vbank().get(vn).expect("fillin_read_only: stale vn");
@@ -2168,7 +2174,7 @@ impl Funcdata {
     /// set to the COPY output (constants may not go directly into a marker).
     /// Driven by `ActionVarnodeProps` for a Varnode whose consumed bits and
     /// non-zero mask are disjoint (it can only carry the value 0).
-    pub fn total_replace_constant(&mut self, vn: VarnodeId, val: uintb) -> KunaResult<()> {
+    pub fn total_replace_constant(&mut self, vn: VarnodeId, val: uintb) -> UnlaceResult<()> {
         let vnsize = self
             .vbank()
             .get(vn)
@@ -2256,7 +2262,7 @@ impl Funcdata {
     /// (`UserPcodeOp::BUILTIN_VOLATILE_{READ,WRITE}`); the C++ `registerBuiltin`
     /// side-effect (installing the op for the print pass) is the userop-print
     /// wave's, so the index is used directly here.
-    pub fn replace_volatile(&mut self, vn: VarnodeId) -> KunaResult<bool> {
+    pub fn replace_volatile(&mut self, vn: VarnodeId) -> UnlaceResult<bool> {
         use crate::userop::{BUILTIN_VOLATILE_READ, BUILTIN_VOLATILE_WRITE};
         let (is_written, vaddr, vnsize, is_type_lock) = {
             let v = self.vbank().get(vn).expect("replace_volatile: stale vn");
@@ -2276,7 +2282,7 @@ impl Funcdata {
                 .expect("replace_volatile: stale vn")
                 .has_no_descend();
             if !no_descend {
-                return Err(KunaError::lowlevel("Volatile memory was propagated"));
+                return Err(UnlaceError::lowlevel("Volatile memory was propagated"));
             }
             let defop = self
                 .vbank()
@@ -2315,9 +2321,9 @@ impl Funcdata {
             if no_descend {
                 return Ok(false);
             }
-            let readop = self
-                .lone_descend(vn)
-                .ok_or_else(|| KunaError::lowlevel("Volatile memory value used more than once"))?;
+            let readop = self.lone_descend(vn).ok_or_else(|| {
+                UnlaceError::lowlevel("Volatile memory value used more than once")
+            })?;
             let readaddr = self
                 .obank()
                 .get(readop)
@@ -2406,7 +2412,7 @@ impl Funcdata {
             // (isdirect && matchfc->getEntryAddress()==fc->getEntryAddress()) ||
             // (!isdirect && op->getIn(0)==opmatch->getIn(0))
             //
-            // (kuna divergence, LOSS-243 / Indirect prototype #2) For two indirect
+            // (unlace divergence, LOSS-243 / Indirect prototype #2) For two indirect
             // calls the C++ accepts the double-use only when the function-pointer
             // Varnodes are identical (`op->getIn(0)==opmatch->getIn(0)`).  Two
             // *sibling* CALLINDs that take the SAME value as the SAME parameter but
@@ -2469,7 +2475,7 @@ impl Funcdata {
 
         if fc.is_input_active() {
             let curtrial = fc.active_input().get_trial_for_input_varnode(j);
-            // (kuna `calleereginputs`) A register the other callee reads is that
+            // (unlace `calleereginputs`) A register the other callee reads is that
             // call's own argument, so this use is not explained away by it.
             if (self.hooks().calleereginputs_reads_register)(
                 fc,
@@ -2480,16 +2486,16 @@ impl Funcdata {
             }
             if curtrial.is_checked() {
                 if curtrial.is_active() {
-                    // (kuna) `varargsharedfloat`: see
+                    // (unlace) `varargsharedfloat`: see
                     // [`crate::p4_calls::varargsharedfloat`].
-                    return op == opmatch && self.kuna_shared_float_call() == Some(op);
+                    return op == opmatch && self.unlace_shared_float_call() == Some(op);
                 }
             } else if TraverseNode::is_alternate_path_valid(vn, fl, self.vbank(), self.obank()) {
                 return false;
             }
             return true;
         }
-        // (kuna) `sharedpush`: see [`crate::p4_calls::sharedpush`].
+        // (unlace) `sharedpush`: see [`crate::p4_calls::sharedpush`].
         (self.hooks().sharedpush_declared_arm_shares)(self, opmatch, op, vn, trial)
     }
 
@@ -2575,14 +2581,14 @@ impl Funcdata {
                 }) {
                     continue;
                 }
-                // (kuna) An `INT_XOR`/`INT_SUB` of a value with itself is `0`
+                // (unlace) An `INT_XOR`/`INT_SUB` of a value with itself is `0`
                 // whatever the value is, so it neither observes the
                 // Varnode nor carries it onward.  See
                 // [`crate::p4_calls::zeroidiomuse`].
                 if (self.hooks().zeroidiomuse_op_discards_operand)(self, op) {
                     continue;
                 }
-                // (kuna) `voidret` — a forced return value may also be stored
+                // (unlace) `voidret` — a forced return value may also be stored
                 // and branched on.  See [`crate::p4_calls::voidret::returned_use`].
                 if forced_return && (self.hooks().voidret_returned_use)(self, op, vn) {
                     continue;
@@ -2599,13 +2605,13 @@ impl Funcdata {
                     }
                 }
                 let mut cur_flags = base_flags;
-                // (kuna) `exclusivecallret` — see [`crate::p4_calls::exclusivecallret`].
+                // (unlace) `exclusivecallret` — see [`crate::p4_calls::exclusivecallret`].
                 if call_return
                     && (self.hooks().exclusivecallret_skips_use)(self, opmatch, op, invn, vn)
                 {
                     continue;
                 }
-                // (kuna) `carryuse`: the carry test of a returned sum.  See
+                // (unlace) `carryuse`: the carry test of a returned sum.  See
                 // [`crate::p4_calls::carryuse`].
                 if (self.hooks().carryuse_carry_test)(self, opmatch, op, vn) {
                     continue;
@@ -2615,7 +2621,7 @@ impl Funcdata {
                         res = false;
                     }
                     OpCode::CPUI_LOAD => {
-                        // (kuna) `exclusivearguse` — a dereference on a path that
+                        // (unlace) `exclusivearguse` — a dereference on a path that
                         // cannot co-execute with the matched call is not a competing
                         // use of the pointer the call is passed, and the value it
                         // reads is not the value being scored, so the walk skips the
@@ -2626,15 +2632,15 @@ impl Funcdata {
                         ) {
                             continue;
                         }
-                        // (kuna) `retindexuse`: a load the returned value only
-                        // indexes.  See `kuna_retindexuse`.
+                        // (unlace) `retindexuse`: a load the returned value only
+                        // indexes.  See `unlace_retindexuse`.
                         if (self.hooks().retindexuse_index_only_load)(self, opmatch, op, vn) {
                             continue;
                         }
                         res = false;
                     }
                     OpCode::CPUI_STORE => {
-                        // (kuna) `spillargtrial off|reload|spill` — upstream rejects
+                        // (unlace) `spillargtrial off|reload|spill` — upstream rejects
                         // on every STORE (`off`); the other levels tolerate the
                         // caller's own caller-save spill of the argument value.  See
                         // [`crate::p4_calls::spillargtrial`].  `exclusivearguse`
@@ -2650,7 +2656,7 @@ impl Funcdata {
                         }
                     }
                     OpCode::CPUI_CALL | OpCode::CPUI_CALLIND => {
-                        // (kuna divergence, DIV-118) `noreturnretuse` — upstream
+                        // (unlace divergence, DIV-118) `noreturnretuse` — upstream
                         // rejects on every competing CALL use; a call on a block
                         // that ends in a no-return halt can never reach the RETURN
                         // being matched, so it does not compete.  See
@@ -2662,7 +2668,7 @@ impl Funcdata {
                         if self.check_call_double_use(opmatch, op, vn, cur_flags, trial) {
                             continue;
                         }
-                        // (kuna) `callresultuse`: a call result handed to another
+                        // (unlace) `callresultuse`: a call result handed to another
                         // call as well is a value both read.  See
                         // [`crate::p4_calls::callresultuse::scoring_argument`].
                         if result_argument && o.get_slot(vn) > 0 {
@@ -2673,7 +2679,7 @@ impl Funcdata {
                     OpCode::CPUI_INDIRECT => {
                         cur_flags |= traverse_flags::indirectalt;
                     }
-                    // (kuna) `syscallregs` — a system call reading the value as
+                    // (unlace) `syscallregs` — a system call reading the value as
                     // an argument is a call site, not a step the value flows
                     // through: its result is the kernel's.  The value is then not
                     // also a returned register half, and stays free to be another
@@ -2876,7 +2882,7 @@ impl Funcdata {
 
     /// One [`ancestor_op_use`](Self::ancestor_op_use) step, answered from
     /// `memo` when an earlier step of the same call already found no use from
-    /// `invn` under paths it still cuts (kuna; spec chapter 04).
+    /// `invn` under paths it still cuts (unlace; spec chapter 04).
     #[allow(clippy::too_many_arguments)]
     fn ancestor_op_use_in(
         &mut self,
@@ -2978,9 +2984,9 @@ impl Funcdata {
                     .map(|o| o.is_indirect_creation())
                     .unwrap_or(false)
                 {
-                    // (kuna) `callresultuse`: a call's possible output is its
+                    // (unlace) `callresultuse`: a call's possible output is its
                     // result.  See [`crate::p4_calls::callresultuse`].
-                    let scored = self.kuna_forced_scoring() || memo.call_result_root;
+                    let scored = self.unlace_forced_scoring() || memo.call_result_root;
                     return Ancestry::of(scored && self.only_op_use(invn, op, trial, main_flags));
                 }
                 let in0 = self.obank().get(def).and_then(|o| o.get_in(0));
@@ -3081,7 +3087,7 @@ impl Funcdata {
                 Ancestry::of(self.only_op_use(invn, op, trial, main_flags))
             }
             OpCode::CPUI_PIECE => {
-                // (kuna) Selecting a piece of a PIECE, or the matching
+                // (unlace) Selecting a piece of a PIECE, or the matching
                 // SUBPIECE of a whole below, costs no level: heritage joins a
                 // narrow write into a wider tracked range as PIECE(SUBPIECE(..),
                 // new) chains, and an AArch64 `faddp s0, v0.2s` after a 128-bit
@@ -3178,8 +3184,8 @@ impl Funcdata {
                 Ancestry::of(self.only_op_use(invn, op, trial, main_flags))
             }
             OpCode::CPUI_CALL | OpCode::CPUI_CALLIND => {
-                // (kuna) `callresultuse`: a known callee's output is its result.
-                let scored = self.kuna_forced_scoring() || memo.call_result_root;
+                // (unlace) `callresultuse`: a known callee's output is its result.
+                let scored = self.unlace_forced_scoring() || memo.call_result_root;
                 Ancestry::of(scored && self.only_op_use(invn, op, trial, main_flags))
             }
             _ => Ancestry::of(self.only_op_use(invn, op, trial, main_flags)),
@@ -3188,7 +3194,7 @@ impl Funcdata {
 }
 
 // ===========================================================================
-// (kuna) The no-use memo of one ancestor_op_use call
+// (unlace) The no-use memo of one ancestor_op_use call
 // ===========================================================================
 
 /// What one [`Funcdata::ancestor_op_use`] step found above a Varnode.
@@ -3226,7 +3232,7 @@ struct UnusedAbove {
 
 type AncestorKey = (VarnodeId, int4, uint4);
 
-/// (kuna) The no-use answers of one top-level `ancestor_op_use` call.
+/// (unlace) The no-use answers of one top-level `ancestor_op_use` call.
 ///
 /// The recursion enumerates paths, and through MULTIEQUALs with many inputs
 /// one Varnode is reached by millions of them. A step's answer depends on the
@@ -3242,7 +3248,7 @@ type AncestorKey = (VarnodeId, int4, uint4);
 struct AncestorMemo {
     /// The MULTIEQUALs marked on the current path, outermost first.
     path: Vec<OpId>,
-    /// (kuna) `callresultuse`: the trial's root is a call result on every
+    /// (unlace) `callresultuse`: the trial's root is a call result on every
     /// path, so a CALL output or creation ends a path as a use.
     call_result_root: bool,
     unused: crate::fasthash::FxHashMap<AncestorKey, UnusedAbove>,
@@ -3436,17 +3442,17 @@ pub struct AncestorRealistic {
     /// walk; collected here and applied by the caller after `execute`).
     set_ind_create_formed: bool,
     set_cond_exe_effect: bool,
-    /// (kuna) `condexeret`: the op reading the function input the walk failed
+    /// (unlace) `condexeret`: the op reading the function input the walk failed
     /// at, when that input ended it.
     input_fail_reader: Option<OpId>,
-    /// (kuna) `condexeret`: walk past a non-directwrite function input instead
+    /// (unlace) `condexeret`: walk past a non-directwrite function input instead
     /// of failing, recording it and its reader in `collected`.
     collect_inputs: bool,
     collected: Vec<(OpId, VarnodeId)>,
-    /// (kuna) `condexeret`: storage whose function input fails the walk even
+    /// (unlace) `condexeret`: storage whose function input fails the walk even
     /// when it is directwrite.
     forbidden: Vec<(Address, int4)>,
-    /// (kuna) The LOADs the walk took as solid movement.
+    /// (unlace) The LOADs the walk took as solid movement.
     solid_loads: Vec<OpId>,
 }
 
@@ -3470,7 +3476,7 @@ impl AncestorRealistic {
         }
     }
 
-    /// (kuna) The LOADs the last [`Self::execute`] stopped at as solid
+    /// (unlace) The LOADs the last [`Self::execute`] stopped at as solid
     /// movement, read by [`crate::p4_calls::reloadarg`].
     #[doc(hidden)]
     pub fn solid_loads(&self) -> &[OpId] {
@@ -3488,14 +3494,14 @@ impl AncestorRealistic {
         AncestorCmd::PopSolid
     }
 
-    /// (kuna) `condexeret`: the op that read the non-directwrite function input
+    /// (unlace) `condexeret`: the op that read the non-directwrite function input
     /// the last [`Self::execute`] failed at, if that is what failed it.
     #[doc(hidden)]
     pub fn input_fail_reader(&self) -> Option<OpId> {
         self.input_fail_reader
     }
 
-    /// (kuna) `condexeret`: from now on, pass a non-directwrite function input
+    /// (unlace) `condexeret`: from now on, pass a non-directwrite function input
     /// and record it with its reader instead of failing there, so one walk sees
     /// every such input; any other failure still ends it.
     #[doc(hidden)]
@@ -3503,14 +3509,14 @@ impl AncestorRealistic {
         self.collect_inputs = true;
     }
 
-    /// (kuna) `condexeret`: the (reader, input) pairs the last collecting walk
+    /// (unlace) `condexeret`: the (reader, input) pairs the last collecting walk
     /// passed.
     #[doc(hidden)]
     pub fn collected(&self) -> &[(OpId, VarnodeId)] {
         &self.collected
     }
 
-    /// (kuna) `condexeret`: from now on, fail at any function input overlapping
+    /// (unlace) `condexeret`: from now on, fail at any function input overlapping
     /// one of `ranges`, directwrite or not.
     #[doc(hidden)]
     pub fn forbid_inputs(&mut self, ranges: Vec<(Address, int4)>) {
@@ -3872,7 +3878,7 @@ impl AncestorRealistic {
                 }
                 AncestorCmd::PopSolid
             }
-            // (kuna syscallregs) the error flag a system call leaves is the
+            // (unlace syscallregs) the error flag a system call leaves is the
             // kernel's clobber, like a register value through a call.
             OpCode::CPUI_CALLOTHER
                 if self.trial_killed_by_call && (fd.hooks().syscallregs_is_error_flag)(fd, op) =>
@@ -4009,7 +4015,7 @@ impl AncestorRealistic {
     }
 
     /// Apply the trial mutations accumulated during [`Self::execute`] to the
-    /// caller's `ParamTrial` (the C++ mutates `trial` in place; the kuna port
+    /// caller's `ParamTrial` (the C++ mutates `trial` in place; the unlace port
     /// collects the flags and applies them here so the walk can borrow `&mut
     /// Funcdata` cleanly).  `realistic`/`solid` are the `execute` result.
     #[doc(hidden)]
@@ -4131,8 +4137,8 @@ mod tests {
 
     /// A no-op `replace_reads` callback (no equivalent varnode is expected in the
     /// test scaffolding, which builds varnodes at distinct addresses).
-    fn no_replace() -> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> KunaResult<()> {
-        |_: &mut VarnodeBank, _: VarnodeId, _: VarnodeId| -> KunaResult<()> { Ok(()) }
+    fn no_replace() -> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> UnlaceResult<()> {
+        |_: &mut VarnodeBank, _: VarnodeId, _: VarnodeId| -> UnlaceResult<()> { Ok(()) }
     }
 
     // --- creation factories: bank-state outcomes -------------------------
@@ -4425,14 +4431,14 @@ mod tests {
         let constant = fd.new_constant(4, 7);
         let temp = fd.new_unique(4, None);
         fd.total_replace(original, constant).unwrap();
-        fd.kuna_inherit_storage(temp, constant);
-        assert!(fd.kuna_storage_sources(constant).is_empty());
-        assert!(fd.kuna_storage_sources(temp).is_empty());
+        fd.unlace_inherit_storage(temp, constant);
+        assert!(fd.unlace_storage_sources(constant).is_empty());
+        assert!(fd.unlace_storage_sources(temp).is_empty());
         let narrow = fd.new_unique(1, None);
-        fd.kuna_inherit_storage(narrow, original);
-        assert!(fd.kuna_storage_sources(narrow).is_empty());
-        fd.kuna_inherit_storage_slice(narrow, original, 4, 1);
-        assert!(fd.kuna_storage_sources(narrow).is_empty());
+        fd.unlace_inherit_storage(narrow, original);
+        assert!(fd.unlace_storage_sources(narrow).is_empty());
+        fd.unlace_inherit_storage_slice(narrow, original, 4, 1);
+        assert!(fd.unlace_storage_sources(narrow).is_empty());
     }
 
     #[test]
@@ -4452,7 +4458,7 @@ mod tests {
         let original = fd.new_varnode(4, &Address::new(space, 0x80), None);
         let replacement = fd.new_unique(4, None);
         fd.total_replace(original, replacement).unwrap();
-        assert!(fd.kuna_storage_sources(replacement).is_empty());
+        assert!(fd.unlace_storage_sources(replacement).is_empty());
     }
 
     #[test]

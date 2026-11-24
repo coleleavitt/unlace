@@ -5,7 +5,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use memmap2::{Mmap, MmapOptions};
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 
 #[derive(Clone, Debug)]
 pub enum ImageBytes {
@@ -19,13 +19,13 @@ impl ImageBytes {
     /// owned copy.
     /// The load's `load_mmap` option (`UNLACE_LOAD_MMAP=off` outside a load)
     /// selects the owned path.
-    pub fn map_thin_macho(path: &str) -> KunaResult<Option<Self>> {
+    pub fn map_thin_macho(path: &str) -> UnlaceResult<Option<Self>> {
         use unlace_decomp::loadoptions::{env, scoped};
         if !scoped(|o| o.load_mmap).unwrap_or_else(env::load_mmap) {
             return Ok(None);
         }
         let file = File::open(path).map_err(|error| {
-            KunaError::lowlevel(format!("Unable to open image file: {path}: {error}"))
+            UnlaceError::lowlevel(format!("Unable to open image file: {path}: {error}"))
         })?;
         if !file.metadata().is_ok_and(|metadata| metadata.is_file()) {
             return Ok(None);

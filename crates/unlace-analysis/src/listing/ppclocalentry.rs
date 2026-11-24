@@ -1,4 +1,4 @@
-//! (kuna) `ppclocalentry` — a PPC64 ELFv2 **local entry point** is not a
+//! (unlace) `ppclocalentry` — a PPC64 ELFv2 **local entry point** is not a
 //! function (P1 code/data partition).
 //!
 //! # The defect

@@ -1,4 +1,4 @@
-//! (kuna) `nulterminator` — the zero element that ends a stack character
+//! (unlace) `nulterminator` — the zero element that ends a stack character
 //! array belongs to the array, and nothing after it does.
 //!
 //! # The gap
@@ -63,7 +63,7 @@
 //!
 //! Upstream's layout is restored with `option nulterminator off`.
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::marshal::ElementId;
 use unlace_base::types::{int4, intb};
 
@@ -71,7 +71,7 @@ use crate::dtype::type_metatype;
 use crate::options::on_or_off;
 use crate::varmap::{COPY_CONSTANT, MapState, RangeHint, RangeType};
 
-/// Marshalling element id for the option (kuna 4000+ range; 4167 = the
+/// Marshalling element id for the option (unlace 4000+ range; 4167 = the
 /// previous high-water mark).
 pub const ELEM_NULTERMINATOR: ElementId = ElementId::new("nulterminator", 4168);
 
@@ -80,7 +80,7 @@ pub struct OptionNulTerminator;
 
 impl OptionNulTerminator {
     /// Parse the option and return its confirmation message.
-    pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((
@@ -146,19 +146,19 @@ pub fn close_at_terminator(
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.nulterminator_close_at_terminator = Some(close_at_terminator);
 }
 
-/// (kuna) An unread zero element right after an open stack character
+/// (unlace) An unread zero element right after an open stack character
 /// array is that array's terminator, and the array ends after it (option
 /// `nulterminator`).  See [`crate::nulterminator`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct NulTerminator(pub bool);
 
-impl crate::optionset::KunaOption for NulTerminator {
+impl crate::optionset::UnlaceOption for NulTerminator {
     const NAME: &'static str = "nulterminator";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         NulTerminator(false)
@@ -168,7 +168,7 @@ impl crate::optionset::KunaOption for NulTerminator {
         NulTerminator(false)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (v, msg) = crate::nulterminator::OptionNulTerminator.apply(value)?;
         Ok((NulTerminator(v), msg))
     }

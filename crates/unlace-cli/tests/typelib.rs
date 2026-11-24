@@ -6,8 +6,8 @@
 //! `gcc -O1 -fno-inline -o typelib_x86_64 typelib_x86_64.c` (no debug info).
 use crate::common::{self, fixture};
 
-fn kuna(args: &[&str]) -> String {
-    let (out, stderr, code) = common::run_kuna(args);
+fn unlace(args: &[&str]) -> String {
+    let (out, stderr, code) = common::run_unlace(args);
     assert_eq!(code, 0, "{args:?}: {stderr}");
     out
 }
@@ -15,7 +15,7 @@ fn kuna(args: &[&str]) -> String {
 #[test]
 fn an_import_no_table_declares_takes_the_library_declaration() {
     let image = fixture("typelib_x86_64");
-    let off = kuna(&[
+    let off = unlace(&[
         "decompile",
         &image,
         "wait_readable",
@@ -26,7 +26,7 @@ fn an_import_no_table_declares_takes_the_library_declaration() {
     assert!(off.contains("(int)poll(&v1,1,a1)"), "{off}");
     assert!(off.contains("return v3 & 1;"), "{off}");
 
-    let auto = kuna(&["decompile", &image, "wait_readable"]);
+    let auto = unlace(&["decompile", &image, "wait_readable"]);
     assert!(auto.contains("pollfd v1;"), "{auto}");
     assert!(auto.contains("v1.events = 1;"), "{auto}");
     assert!(auto.contains("if (poll(&v1,1,a1) <= 0)"), "{auto}");
@@ -37,7 +37,7 @@ fn an_import_no_table_declares_takes_the_library_declaration() {
 fn a_library_file_replaces_the_built_in_one() {
     let image = fixture("typelib_x86_64");
     let library = fixture("typelib_custom.ktl");
-    let c = kuna(&[
+    let c = unlace(&[
         "decompile",
         &image,
         "wait_readable",
@@ -46,7 +46,7 @@ fn a_library_file_replaces_the_built_in_one() {
         &library,
     ]);
     assert!(c.contains("return v1.got & 1;"), "{c}");
-    let rlimit = kuna(&[
+    let rlimit = unlace(&[
         "decompile",
         &image,
         "raise_files",
@@ -62,10 +62,10 @@ fn a_library_file_replaces_the_built_in_one() {
 #[test]
 fn a_musl_image_takes_the_entries_glibc_declares_differently() {
     let image = fixture("typelib_musl_x86_64");
-    let c = kuna(&["decompile", &image, "max_rss"]);
+    let c = unlace(&["decompile", &image, "max_rss"]);
     assert!(c.contains("rusage v2;"), "{c}");
     assert!(c.contains("v2.ru_utime.tv_sec + v2.ru_maxrss"), "{c}");
-    let off = kuna(&["decompile", &image, "max_rss", "--option", "typelib", "off"]);
+    let off = unlace(&["decompile", &image, "max_rss", "--option", "typelib", "off"]);
     assert!(off.contains("long v2 [4];"), "{off}");
 }
 
@@ -73,7 +73,7 @@ fn a_musl_image_takes_the_entries_glibc_declares_differently() {
 fn a_file_that_is_not_a_library_is_refused() {
     let image = fixture("typelib_x86_64");
     let source = fixture("typelib_x86_64.c");
-    let (_, stderr, code) = common::run_kuna(&[
+    let (_, stderr, code) = common::run_unlace(&[
         "decompile",
         &image,
         "wait_readable",
@@ -90,8 +90,8 @@ fn a_file_that_is_not_a_library_is_refused() {
 #[test]
 fn a_declared_callback_slot_still_declares_its_callback() {
     let image = fixture("callbacktype_x86_64");
-    let off = kuna(&["decompile-all", &image, "--option", "typelib", "off"]);
-    let auto = kuna(&["decompile-all", &image]);
+    let off = unlace(&["decompile-all", &image, "--option", "typelib", "off"]);
+    let auto = unlace(&["decompile-all", &image]);
     assert!(
         auto.contains("void qsort(void *a0,size_t a1,size_t a2,int (*a3)(void *,void *))"),
         "{auto}"
@@ -111,8 +111,8 @@ fn a_declared_callback_slot_still_declares_its_callback() {
 fn an_image_of_another_target_is_unchanged() {
     for name in ["libctypes_mips32_glibc_le32", "libctypes_widths_i386"] {
         let image = fixture(name);
-        let auto = kuna(&["decompile-all", &image]);
-        let off = kuna(&["decompile-all", &image, "--option", "typelib", "off"]);
+        let auto = unlace(&["decompile-all", &image]);
+        let off = unlace(&["decompile-all", &image, "--option", "typelib", "off"]);
         assert_eq!(auto, off, "{name}");
     }
 }
@@ -122,7 +122,7 @@ fn an_image_of_another_target_is_unchanged() {
 #[test]
 fn a_pe_reads_the_built_in_windows_library() {
     let image = fixture("pe_imports.exe");
-    let (_, stderr, code) = common::run_kuna(&["decompile-all", &image]);
+    let (_, stderr, code) = common::run_unlace(&["decompile-all", &image]);
     assert_eq!(code, 0, "{stderr}");
     assert!(!stderr.contains("[kuna typelib]"), "{stderr}");
 }
@@ -185,7 +185,7 @@ fn an_ida_type_library_is_read_like_a_library_file() {
     let image = fixture("typelib_x86_64");
     let til = common::scratch_file("pollfd", "til");
     std::fs::write(&til, pollfd_til()).unwrap();
-    let c = kuna(&[
+    let c = unlace(&[
         "decompile",
         &image,
         "wait_readable",

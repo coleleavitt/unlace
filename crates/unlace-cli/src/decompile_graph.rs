@@ -123,7 +123,7 @@ pub fn run(argv: &[String]) -> i32 {
 /// address that is not executable content — the row's `kind` says so, and an
 /// explicit selection does not buy an exception.
 ///
-/// (kuna outlang) C-only, for the reason `decompile-project` is: honouring
+/// (unlace outlang) C-only, for the reason `decompile-project` is: honouring
 /// `--language rust` would put Rust in a field called `codeC`. The auto policy
 /// is off for this command too (`parse_args_with_filters`), so a rustc-built
 /// binary does not trip the refusal on its own.
@@ -190,7 +190,7 @@ fn export(args: &Args, label: &str) -> Result<String, String> {
             /* want_types= */ false,
             load_seconds,
             synth_base(&prog),
-            // (kuna `protoorder`) This surface never takes the callee-first
+            // (unlace `protoorder`) This surface never takes the callee-first
             // order, serially either (`warn_protoorder_inert`), so the serial
             // run these names come from is the plain one.
             /* serial_callee_first= */

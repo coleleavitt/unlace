@@ -1,4 +1,4 @@
-//! (kuna `mulblob`) Keep a widened multiply operand a value, not an aggregate.
+//! (unlace `mulblob`) Keep a widened multiply operand a value, not an aggregate.
 //!
 //! x86-64 `MUL r64` lowers (SLEIGH `ia.sinc:4128`) to
 //! `tmp:16 = zext(RAX) * zext(rm64); RDX = tmp(8); RAX = tmp(0)`.  A 16-byte
@@ -158,7 +158,7 @@ pub fn declines_zext(data: &Funcdata, op: OpId) -> bool {
 }
 
 fn name_only_value(data: &Funcdata, vn: VarnodeId) -> bool {
-    let Some(symbol) = data.vbank().get(vn).and_then(|v| v.kuna_symbol_entry()) else {
+    let Some(symbol) = data.vbank().get(vn).and_then(|v| v.unlace_symbol_entry()) else {
         return false;
     };
     let Some(scope) = data.get_scope_local() else {

@@ -142,7 +142,7 @@ impl Fixture {
             .iter_alive()
             .filter(|op| {
                 self.fd.obank().get(*op).unwrap().get_addlflags()
-                    & pcodeop_addlflags::kuna_fpu_view_copy
+                    & pcodeop_addlflags::unlace_fpu_view_copy
                     != 0
             })
             .collect()

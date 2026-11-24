@@ -404,7 +404,7 @@ fn a_char16_t_or_short_enum_extends_by_the_sign_of_its_source_type() {
         ("narrowext_rv64_nodebug.o", vec!["widen16", "hi_sur"]),
     ] {
         let path = common::fixture(fixture);
-        let (text, err, rc) = common::run_kuna(&["decompile-all", &path]);
+        let (text, err, rc) = common::run_unlace(&["decompile-all", &path]);
         assert_eq!(rc, 0, "{fixture}: {err}");
         let mut printed = String::new();
         let mut checks = String::new();
@@ -671,7 +671,7 @@ fn charsign_round_trip(
 /// extended it to, which only `narrowext compiler` states on x86-64: by default
 /// (and with it off) that prints `CONCAT31(v1,c)` with an unassigned `v1`.
 /// clang's `getc1` keeps its buffer in the slot of an alignment push, which
-/// kuna reads wrongly on main too, so only gcc's is checked.
+/// unlace reads wrongly on main too, so only gcc's is checked.
 #[test]
 fn a_dwarf_char_parameter_keeps_its_declared_sign() {
     let compilers = host_compilers();
@@ -686,7 +686,7 @@ fn a_dwarf_char_parameter_keeps_its_declared_sign() {
         let path = common::fixture(fixture);
         let mut args = vec!["decompile-all", path.as_str()];
         args.extend_from_slice(extra);
-        let (text, err, rc) = common::run_kuna(&args);
+        let (text, err, rc) = common::run_unlace(&args);
         assert_eq!(rc, 0, "{fixture}: {err}");
         text
     };

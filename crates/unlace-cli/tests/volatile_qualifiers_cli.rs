@@ -36,7 +36,7 @@ fn decompile_prototype(bytes: &[u8], prototype: &str, target: &str) -> String {
     if target.starts_with("ARM:") {
         args.extend(["--isa", "arm"]);
     }
-    let (stdout, stderr, code) = common::run_kuna(&args);
+    let (stdout, stderr, code) = common::run_unlace(&args);
     assert_eq!(code, 0, "{stderr}");
     stdout
 }

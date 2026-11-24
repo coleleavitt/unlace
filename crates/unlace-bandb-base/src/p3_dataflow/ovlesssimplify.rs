@@ -1,5 +1,5 @@
 //! Port of `decompiler/cpp/kuna_ovlesssimplify.{cc,hh}` — overflow-flag
-//! signed-less-than simplification (kuna GH-7190, S3 simplification-quiescence).
+//! signed-less-than simplification (unlace GH-7190, S3 simplification-quiescence).
 //!
 //! `RuleOvLessSimplify` collapses the OV-flag signed-less-than idiom
 //!
@@ -23,7 +23,7 @@ use crate::action::{ActionGroupList, Rule, RuleSpec};
 use crate::context::{OpId, TypeOp, VarnodeId};
 use crate::funcdata::Funcdata;
 
-/// (kuna GH-7190) Collapse the OV-flag signed-less-than idiom to `INT_SLESS(V,-K)`
+/// (unlace GH-7190) Collapse the OV-flag signed-less-than idiom to `INT_SLESS(V,-K)`
 /// (C++ `RuleOvLessSimplify`).
 pub struct RuleOvLessSimplify {
     /// Rule group (C++ `Rule::basegroup`).
@@ -211,7 +211,7 @@ fn match_add_const(data: &Funcdata, vn: VarnodeId) -> Option<(VarnodeId, uintb)>
     }
 }
 
-// --- Local IR read helpers (see kuna_booleanmask for the rationale) ----------
+// --- Local IR read helpers (see unlace_booleanmask for the rationale) ----------
 
 fn op_in(data: &Funcdata, op: OpId, slot: int4) -> Option<VarnodeId> {
     data.obank().get(op).and_then(|o| o.get_in(slot))

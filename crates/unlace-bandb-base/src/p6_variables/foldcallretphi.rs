@@ -1,4 +1,4 @@
-//! (kuna) Fold a single-use call result past the merge phalanx — the second
+//! (unlace) Fold a single-use call result past the merge phalanx — the second
 //! gate of `foldcallret`.
 //!
 //! # The gap
@@ -96,14 +96,14 @@
 //! `BOOL_AND`/`BOOL_OR`: all of those ops share one block, but C prints them as
 //! `&&`/`||`, and a call in the operand they skip would stop being made.
 
-use unlace_base::error::KunaError;
+use unlace_base::error::UnlaceError;
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{HighVariableId, OpId, VarnodeId};
 use crate::dtype::type_metatype;
 use crate::funcdata::Funcdata;
 
-/// (kuna) Is `inflate_test`'s rejection of `operand` purely an effect of `call`?
+/// (unlace) Is `inflate_test`'s rejection of `operand` purely an effect of `call`?
 ///
 /// `high` is the HighVariable of the call output whose Cover the operand would
 /// have to be inflated over.  Returns `true` only when at least one instance of
@@ -168,7 +168,7 @@ pub fn conflict_is_self_call_effect(
     saw_conflict
 }
 
-/// (kuna) Does the call survive the move all the way to its print point?
+/// (unlace) Does the call survive the move all the way to its print point?
 ///
 /// `call_output_foldable` has already cleared the span from the call to
 /// `use_op`; this re-runs the guard over the span from the call to the statement
@@ -219,7 +219,7 @@ fn print_point_is_order_safe(data: &Funcdata, call: OpId, use_op: OpId) -> bool 
     span_clear && !crate::callretfold::op_reads_indirect_output_of(data, point, call)
 }
 
-/// (kuna) Does `call`'s output carry the whole value its callee returns?
+/// (unlace) Does `call`'s output carry the whole value its callee returns?
 ///
 /// A locked output is the callee's declared type.  An unlocked one is only as
 /// wide as this function reads it, while the callee may return more: `eax` out
@@ -257,7 +257,7 @@ fn call_output_is_full_width(data: &Funcdata, call: OpId) -> bool {
     !in_wider_register && !wider_int_return_contains(data, outlist, addr, size)
 }
 
-/// (kuna) Would the model return an integer wider than `size` bytes, up to
+/// (unlace) Would the model return an integer wider than `size` bytes, up to
 /// `long long`, in storage that contains `(addr, size)`?
 ///
 /// This is the joined case the per-register entries cannot see: `edx:eax` on
@@ -291,7 +291,7 @@ fn wider_int_return_contains(
             let mut res = Vec::new();
             match outlist.assign_map(&pieces, types, &mut res, arch.manage()) {
                 Ok(()) => {}
-                Err(KunaError::ParamUnassigned { .. }) => {
+                Err(UnlaceError::ParamUnassigned { .. }) => {
                     wide *= 2;
                     continue;
                 }

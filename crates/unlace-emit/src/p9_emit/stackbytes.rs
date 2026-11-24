@@ -259,7 +259,7 @@ fn same_backing(fd: &Funcdata, value: VarnodeId, symbol: SymbolId) -> bool {
         && value
             .get_high()
             .and_then(|high| fd.high_bank().get(high))
-            .is_some_and(|high| high.kuna_link_symbol() == Some(symbol))
+            .is_some_and(|high| high.unlace_link_symbol() == Some(symbol))
 }
 
 fn shares_backing_high(fd: &Funcdata, value: VarnodeId, symbol: SymbolId) -> bool {
@@ -267,7 +267,7 @@ fn shares_backing_high(fd: &Funcdata, value: VarnodeId, symbol: SymbolId) -> boo
         .get(value)
         .and_then(|value| value.get_high())
         .and_then(|high| fd.high_bank().get(high))
-        .is_some_and(|high| high.kuna_link_symbol() == Some(symbol))
+        .is_some_and(|high| high.unlace_link_symbol() == Some(symbol))
 }
 
 fn is_default_data_value(fd: &Funcdata, value: VarnodeId) -> bool {
@@ -579,7 +579,7 @@ fn named(fd: &Funcdata, value: VarnodeId) -> bool {
         .get(value)
         .and_then(|vn| vn.get_high())
         .and_then(|high| fd.high_bank().get(high))
-        .is_some_and(|high| high.kuna_name().is_some() || high.kuna_link_symbol().is_some())
+        .is_some_and(|high| high.unlace_name().is_some() || high.unlace_link_symbol().is_some())
 }
 
 /// Only a written Varnode has a def-facing type; an input or constant has its own.
@@ -857,7 +857,7 @@ mod tests {
         fd.high_bank_mut()
             .get_mut(high)
             .unwrap()
-            .set_kuna_name("v1");
+            .set_unlace_name("v1");
         assert!(named(&fd, register));
     }
 }

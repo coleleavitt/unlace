@@ -96,7 +96,7 @@ _sample:
         );
     }
     let (inventory, err, status) =
-        common::run_kuna(&["functions", binary.to_str().unwrap(), "--json"]);
+        common::run_unlace(&["functions", binary.to_str().unwrap(), "--json"]);
     assert_eq!(status, 0, "{err}");
     let inventory: serde_json::Value = serde_json::from_str(&inventory).unwrap();
     let slot = inventory["functions"]
@@ -144,7 +144,7 @@ _sample:
             if mode == 2 {
                 args.push("--stream");
             }
-            let (out, err, status) = common::run_kuna(&args);
+            let (out, err, status) = common::run_unlace(&args);
             assert_eq!(status, 0, "{out}\n{err}");
             let stem = binary.file_name().unwrap().to_str().unwrap();
             let header = std::fs::read_to_string(directory.join(format!("{stem}.h"))).unwrap();
@@ -222,7 +222,7 @@ fn format_specializations_do_not_become_global_function_declarations() {
         String::from_utf8_lossy(&built.stderr)
     );
     let directory = source.with_extension("project");
-    let (out, err, status) = common::run_kuna(&[
+    let (out, err, status) = common::run_unlace(&[
         "decompile-project",
         binary.to_str().unwrap(),
         "--functions",
@@ -310,7 +310,7 @@ fn selected_callees_and_array_returns_keep_the_header_valid() {
     let stem = binary.file_name().unwrap().to_str().unwrap();
     for selection in ["record", "record,invert"] {
         let directory = source.with_extension(format!("project-{}", selection.len()));
-        let (out, err, status) = common::run_kuna(&[
+        let (out, err, status) = common::run_unlace(&[
             "decompile-project",
             binary.to_str().unwrap(),
             "--functions",

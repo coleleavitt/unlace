@@ -115,7 +115,7 @@ same preset. Without preset membership this would correctly carry no DIV row.
 **No stage XML.** The XML `<binaryimage>` datatest bootstrap never produces an
 `AnalysisOutput` and so cannot reach the analyzer tier at all — the same reason
 `cppsig`, `cppproto`, `fdeinterior` and `cppcallnames` all use Rust integration
-tests. `decompiler/crates/kuna-console/tests/verify_itaniumrtti.rs` is the two-pass
+tests. `decompiler/crates/console/tests/verify_itaniumrtti.rs` is the two-pass
 e2e gate (7 assertions), precedent `verify_fdeinterior.rs` / `verify_cppcallnames.rs`.
 
 **New fixture** `itaniumrtti_x86_64.so` — `g++ -O0 -fPIC -shared -fvisibility=hidden

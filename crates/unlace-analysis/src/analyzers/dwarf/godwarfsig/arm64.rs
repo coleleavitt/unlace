@@ -46,7 +46,7 @@ fn text_entries(file: &object::File<'_>) -> TextSymbols {
 pub(crate) fn capture_compressed(ctx: &AnalysisCtx<'_>) -> Option<Facts> {
     if !ctx
         .arch
-        .kuna_options
+        .unlace_options
         .get::<unlace_decomp::analysisgates::Godwarfsig>()
         .0
         || !ctx.file.is_little_endian()

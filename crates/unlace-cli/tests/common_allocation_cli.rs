@@ -58,7 +58,8 @@ fn distinct_common_objects_do_not_turn_a_seven_return_into_zero() {
     }
     let path = common::scratch_file("common-allocation", "o");
     std::fs::write(&path, object.write().unwrap()).unwrap();
-    let (code, stderr, status) = common::run_kuna(&["decompile", path.to_str().unwrap(), "touch"]);
+    let (code, stderr, status) =
+        common::run_unlace(&["decompile", path.to_str().unwrap(), "touch"]);
     assert_eq!(status, 0, "{stderr}");
     assert!(code.contains("return 7;"), "{code}");
     assert!(code.contains(" = 7;"), "{code}");
@@ -102,7 +103,7 @@ fn common_globals_are_declared_in_recompilable_project_headers() {
             String::from_utf8_lossy(&built.stderr)
         );
         let export = dir.join(target);
-        let (_, stderr, status) = common::run_kuna(&[
+        let (_, stderr, status) = common::run_unlace(&[
             "decompile-project",
             object.to_str().unwrap(),
             "-o",

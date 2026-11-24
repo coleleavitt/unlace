@@ -12,7 +12,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::space::AddrSpace;
 use unlace_base::types::uintb;
 use unlace_num::opcodes::OpCode;
@@ -35,7 +35,7 @@ pub struct StorageView {
 #[doc(hidden)]
 pub fn enabled(fd: &Funcdata) -> bool {
     fd.get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::coreoptions::StackViews>()
         .0
         || !fd.stack_write_views().is_empty()
@@ -44,7 +44,7 @@ pub fn enabled(fd: &Funcdata) -> bool {
 pub struct OptionStackViews;
 
 impl OptionStackViews {
-    pub fn apply(&self, value: &str) -> KunaResult<(bool, String)> {
+    pub fn apply(&self, value: &str) -> UnlaceResult<(bool, String)> {
         let enabled = on_or_off(value)?;
         Ok((
             enabled,
@@ -152,7 +152,7 @@ fn placed_type(
     start: uintb,
     view: &PlacedView,
     factory: &dyn TypeFactory,
-) -> KunaResult<Rc<Datatype>> {
+) -> UnlaceResult<Rc<Datatype>> {
     if view.offset == 0 {
         return Ok(Rc::clone(&view.datatype));
     }
@@ -207,7 +207,7 @@ fn backing_type(
     size: i32,
     views: &[PlacedView],
     factory: &dyn TypeFactory,
-) -> KunaResult<Rc<Datatype>> {
+) -> UnlaceResult<Rc<Datatype>> {
     let mut members = views.to_vec();
     for view in views {
         for i in 0..view.datatype.num_depend() {
@@ -276,7 +276,7 @@ fn backing_type(
     let placed: Vec<_> = members
         .iter()
         .map(|view| placed_type(fd, start, view, factory))
-        .collect::<KunaResult<_>>()?;
+        .collect::<UnlaceResult<_>>()?;
     let mut used_names = BTreeSet::new();
     let field_names: Vec<_> = members
         .iter()
@@ -351,7 +351,7 @@ fn backing_type(
 pub fn gather(fd: &mut Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
     let full_views = fd
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::coreoptions::StackViews>()
         .0;
     let reused = if full_views {
@@ -763,7 +763,7 @@ pub fn access_type(
     }
     let high = v.get_high().and_then(|h| fd.high_bank().get(h));
     let from_high = high.and_then(|h| {
-        h.kuna_symbol_type()
+        h.unlace_symbol_type()
             .map(|ty| (Rc::clone(ty), h.get_symbol_offset().max(0)))
     });
     let from_scope = || {
@@ -893,18 +893,18 @@ pub fn pointer_origin(fd: &Funcdata, mut id: crate::context::VarnodeId) -> bool 
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.stackviews_enabled = Some(enabled);
 }
 
-/// (kuna `stackviews`) The storage view each stack write was given; reset by `Funcdata::clear`.
+/// (unlace `stackviews`) The storage view each stack write was given; reset by `Funcdata::clear`.
 #[derive(Default)]
 struct WriteViewsSlot(
     std::collections::BTreeMap<crate::context::OpId, crate::stackviews::StorageView>,
 );
-crate::kuna_func_state!(WriteViewsSlot, keep_across_clear: false);
+crate::unlace_func_state!(WriteViewsSlot, keep_across_clear: false);
 
-/// The `kuna_stackviews` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// The `unlace_stackviews` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataStackviewsExt {
     fn stack_write_views(
@@ -919,11 +919,11 @@ impl FuncdataStackviewsExt for crate::funcdata::Funcdata {
     fn stack_write_views(
         &self,
     ) -> &std::collections::BTreeMap<crate::context::OpId, crate::stackviews::StorageView> {
-        &self.kuna_state::<WriteViewsSlot>().0
+        &self.unlace_state::<WriteViewsSlot>().0
     }
     fn stack_write_views_mut(
         &mut self,
     ) -> &mut std::collections::BTreeMap<crate::context::OpId, crate::stackviews::StorageView> {
-        &mut self.kuna_state_mut::<WriteViewsSlot>().0
+        &mut self.unlace_state_mut::<WriteViewsSlot>().0
     }
 }

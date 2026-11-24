@@ -1,4 +1,4 @@
-//! (kuna `charnum`) A `char` constant that is zero or not printable prints as a number where
+//! (unlace `charnum`) A `char` constant that is zero or not printable prints as a number where
 //! it is ordered against a value or takes part in arithmetic.
 //!
 //! `PrintC::pushCharConstant` spells every constant of a character type as a quoted literal, so a
@@ -13,8 +13,8 @@ use crate::context::OpId;
 use crate::funcdata::Funcdata;
 use unlace_num::opcodes::OpCode;
 
-crate::kuna_flag!(
-    /// (kuna `charnum`) Print a zero or non-printable `char` constant as a number in an ordered
+crate::unlace_flag!(
+    /// (unlace `charnum`) Print a zero or non-printable `char` constant as a number in an ordered
     /// comparison, in arithmetic, and (when not zero) in an equality.
     CharNum,
     "charnum",

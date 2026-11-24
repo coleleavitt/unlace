@@ -1,4 +1,4 @@
-//! (kuna `mzdgroup`) The functions of an MS-DOS executable run with DS holding
+//! (unlace `mzdgroup`) The functions of an MS-DOS executable run with DS holding
 //! the program's data segment.
 //!
 //! A near data pointer in 16-bit real-mode code is an offset into the segment
@@ -44,7 +44,7 @@ pub struct MzDataSegment {
 /// untouched.
 pub fn apply(arch: &Architecture) {
     let Some(seg) = arch
-        .kuna_tables
+        .unlace_tables
         .get::<crate::mzdgroup::ImageDgroup>()
         .as_ref()
     else {
@@ -56,7 +56,10 @@ pub fn apply(arch: &Architecture) {
     let Ok(loc) = arch.get_register_varnode(b"DS") else {
         return;
     };
-    let on = arch.kuna_options.get::<crate::coreoptions::MzDgroupOn>().0;
+    let on = arch
+        .unlace_options
+        .get::<crate::coreoptions::MzDgroupOn>()
+        .0;
     let at = |offset: u64| Address::new(Rc::clone(&space), offset);
     arch.with_context_db_mut(|db| {
         let unstated =
@@ -97,11 +100,11 @@ pub fn apply(arch: &Architecture) {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.mzdgroup_apply = Some(apply);
 }
 
-/// (kuna `mzdgroup`) The data segment an MS-DOS executable's startup loads into DS; an
+/// (unlace `mzdgroup`) The data segment an MS-DOS executable's startup loads into DS; an
 /// [`ArchTable`](crate::archstate::ArchTable) on the architecture.
 pub type ImageDgroup = Option<MzDataSegment>;
-crate::kuna_arch_table!(ImageDgroup);
+crate::unlace_arch_table!(ImageDgroup);

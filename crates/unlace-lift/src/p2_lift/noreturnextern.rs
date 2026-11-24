@@ -1,4 +1,4 @@
-//! (kuna) `kuna_noreturnextern` — name-based no-return for undefined externs
+//! (unlace) `unlace_noreturnextern` — name-based no-return for undefined externs
 //! (S2 flow classification).  Inspired by angr's call-graph no-return analysis
 //! (`test_tail_tail_bytes_ret_dup`, `tail.o::tail_bytes`).
 //!
@@ -12,7 +12,7 @@
 //! 197: 0000000000000000  0 NOTYPE GLOBAL DEFAULT UND __stack_chk_fail
 //! ```
 //!
-//! kuna's analysis-tier known-no-return pass (`noreturn_known`, default on,
+//! unlace's analysis-tier known-no-return pass (`noreturn_known`, default on,
 //! `unlace-analysis::loader::noreturn`) keys its facts on the **address** of a
 //! *defined* `FUNC` symbol.  An UND extern has no definition, so it is never
 //! marked — even though its base name (`stack_chk_fail`) is on the shipped
@@ -49,7 +49,7 @@
 
 use unlace_base::marshal::ElementId;
 
-/// Marshaling element `<noreturn_extern>` (kuna).  ElementIds live in the 4000+
+/// Marshaling element `<noreturn_extern>` (unlace).  ElementIds live in the 4000+
 /// range (next free above `regionstructure`'s 4102 in the 41xx block: 4103).
 pub const ELEM_NORETURNEXTERN: ElementId = ElementId::new("noreturn_extern", 4103);
 
@@ -89,7 +89,7 @@ fn strip_leading_underscores(s: &str) -> &str {
     s.trim_start_matches('_')
 }
 
-/// Split a (possibly namespaced) symbol name into `(base, namespace)`.  kuna
+/// Split a (possibly namespaced) symbol name into `(base, namespace)`.  unlace
 /// installs `::`-split namespaces, so a demangled `Menu::exit` has base `exit` in
 /// namespace `Menu`; a flat C import `exit` has no namespace.
 fn base_and_namespace(name: &str) -> (&str, Option<&str>) {
@@ -99,7 +99,7 @@ fn base_and_namespace(name: &str) -> (&str, Option<&str>) {
     }
 }
 
-/// (kuna) Does the resolved callee display `name` match a known ELF no-return
+/// (unlace) Does the resolved callee display `name` match a known ELF no-return
 /// name?  Mirrors `unlace-analysis::loader::noreturn::name_matches` (the
 /// namespace guard + leading-`_` strip), restricted to an exact match against the
 /// closed [`ELF_NORETURN_NAMES`] set.
@@ -130,7 +130,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn elem_id_in_kuna_range() {
+    fn elem_id_in_unlace_range() {
         assert_eq!(ELEM_NORETURNEXTERN.get_id(), 4103);
         assert_eq!(ELEM_NORETURNEXTERN.get_name(), "noreturn_extern");
     }

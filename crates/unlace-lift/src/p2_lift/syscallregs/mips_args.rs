@@ -21,7 +21,7 @@
 //! unimplemented (`sys_ni_syscall`) numbers are absent.
 //!
 //! The counts are the kernel entry points', not the documented wrappers'. They
-//! differ from `kuna_linuxsyscall`'s i386 arities by name where the two
+//! differ from `unlace_linuxsyscall`'s i386 arities by name where the two
 //! disagree on what the kernel reads: `faccessat`/`fchmodat` take three
 //! registers (the flags argument is the C library's), `eventfd` one, `waitid`,
 //! `ppoll`, `epoll_pwait`, `preadv`/`pwritev` and their `2` forms one more than

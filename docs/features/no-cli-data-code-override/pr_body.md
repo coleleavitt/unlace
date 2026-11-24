@@ -90,7 +90,7 @@ verbatim.
 
 ## Tests
 
-`kuna-console/tests/verify_assertranges.rs` — 11 tests, every one a diff of the emitted C
+`console/tests/verify_assertranges.rs` — 11 tests, every one a diff of the emitted C
 against a measured baseline, because reviewing on "did the command return Ok" is how
 `override prototype` got shipped accepted-and-inert. Including the two controls above, the
 explicit-size parse (a 4-byte range stops short of a word four bytes past its end; an 8-byte

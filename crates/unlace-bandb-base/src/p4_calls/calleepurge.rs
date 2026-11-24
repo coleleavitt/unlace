@@ -1,4 +1,4 @@
-//! (kuna) Read an x86-32 callee's stack purge off its own returns.
+//! (unlace) Read an x86-32 callee's stack purge off its own returns.
 //!
 //! Under a model whose extrapop is `unknown` (`x86win.cspec`'s `__stdcall`,
 //! `__thiscall`, `__fastcall`), `StackSolver` has only a guess for a call that
@@ -379,7 +379,7 @@ impl Cache {
 #[doc(hidden)]
 pub const CUT: u8 = u8::MAX;
 
-/// (kuna) Is `UNLACE_CALLEEPURGE_DEBUG` set? Then every callee walk says on
+/// (unlace) Is `UNLACE_CALLEEPURGE_DEBUG` set? Then every callee walk says on
 /// stderr where it first gives up on each property (the pop, the stack-argument
 /// extent) and why, and each call site what extent it was given.
 fn debug_on() -> bool {
@@ -406,25 +406,25 @@ pub fn summary(arch: &Architecture, entry: &Address, depth: u8) -> Summary {
 /// boilerplate, and the gates of the no-return names that end its paths.
 fn walk_options(arch: &Architecture) -> u8 {
     u8::from(
-        arch.kuna_options
-            .get::<crate::calleestackargs::KunaCalleeargs>()
+        arch.unlace_options
+            .get::<crate::calleestackargs::UnlaceCalleeargs>()
             .0,
     ) | u8::from(
-        arch.kuna_options
+        arch.unlace_options
             .get::<crate::analysisgates::NoreturnKnown>()
             .0,
     ) << 1
         | u8::from(
-            arch.kuna_options.get::<crate::gobounds::GoBounds>().0 && arch.source_lang().is_go(),
+            arch.unlace_options.get::<crate::gobounds::GoBounds>().0 && arch.source_lang().is_go(),
         ) << 2
         | u8::from(
-            arch.kuna_options
+            arch.unlace_options
                 .get::<crate::securitycheck::StripSecurityCheck>()
                 .0,
         ) << 3
         | u8::from(
-            arch.kuna_options
-                .get::<crate::calleestackargs::KunaCalleeargsMsvc>()
+            arch.unlace_options
+                .get::<crate::calleestackargs::UnlaceCalleeargsMsvc>()
                 .0,
         ) << 4
 }
@@ -437,14 +437,14 @@ fn summary_at(arch: &Architecture, entry: &Address, depth: u8) -> (Summary, u8) 
     let off = entry.get_offset();
     let options = walk_options(arch);
     if arch
-        .kuna_tables
+        .unlace_tables
         .get::<crate::calleepurge::CacheCell>()
         .borrow()
         .tracked
         != Some(options)
     {
         let mut cache = arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::calleepurge::CacheCell>()
             .borrow_mut();
         cache.tracked = Some(options);
@@ -453,7 +453,7 @@ fn summary_at(arch: &Architecture, entry: &Address, depth: u8) -> (Summary, u8) 
     }
     {
         let cache = arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::calleepurge::CacheCell>()
             .borrow();
         if let Some(&(hit, need)) = cache.whole.get(&off).filter(|(_, need)| *need <= depth) {
@@ -477,7 +477,7 @@ fn summary_at(arch: &Architecture, entry: &Address, depth: u8) -> (Summary, u8) 
         walk(arch, entry, depth).unwrap_or((UNKNOWN, 0))
     };
     let mut cache = arch
-        .kuna_tables
+        .unlace_tables
         .get::<crate::calleepurge::CacheCell>()
         .borrow_mut();
     if found.1 <= depth {
@@ -494,7 +494,7 @@ fn summary_at(arch: &Architecture, entry: &Address, depth: u8) -> (Summary, u8) 
 fn slot_effect(arch: &Architecture, slot: &Address) -> Summary {
     let key = (slot.get_offset(), CUT);
     if let Some(&hit) = arch
-        .kuna_tables
+        .unlace_tables
         .get::<crate::calleepurge::CacheCell>()
         .borrow()
         .cut
@@ -510,7 +510,7 @@ fn slot_effect(arch: &Architecture, slot: &Address) -> Summary {
     } else {
         UNKNOWN
     };
-    arch.kuna_tables
+    arch.unlace_tables
         .get::<crate::calleepurge::CacheCell>()
         .borrow_mut()
         .cut
@@ -521,7 +521,7 @@ fn slot_effect(arch: &Architecture, slot: &Address) -> Summary {
 /// The instruction at `at`, decoded once for every walk that reaches it.
 fn decode(arch: &Architecture, space: &Rc<AddrSpace>, at: uintb) -> Option<Decoded> {
     if let Some(hit) = arch
-        .kuna_tables
+        .unlace_tables
         .get::<crate::calleepurge::CacheCell>()
         .borrow()
         .decoded
@@ -536,7 +536,7 @@ fn decode(arch: &Architecture, space: &Rc<AddrSpace>, at: uintb) -> Option<Decod
         .ok()?;
     let found: Decoded = Rc::new((collect.0, len.max(1) as uintb));
     let mut cache = arch
-        .kuna_tables
+        .unlace_tables
         .get::<crate::calleepurge::CacheCell>()
         .borrow_mut();
     if cache.decoded.len() >= DECODED {
@@ -1383,12 +1383,12 @@ fn registers(arch: &Architecture) -> Option<Regs> {
     }
     let space = space?;
     let msvc = arch
-        .kuna_options
-        .get::<crate::calleestackargs::KunaCalleeargs>()
+        .unlace_options
+        .get::<crate::calleestackargs::UnlaceCalleeargs>()
         .0
         && arch
-            .kuna_options
-            .get::<crate::calleestackargs::KunaCalleeargsMsvc>()
+            .unlace_options
+            .get::<crate::calleestackargs::UnlaceCalleeargsMsvc>()
             .0;
     let fs = t
         .get_register_data("FS_OFFSET")
@@ -1437,8 +1437,8 @@ fn walk(arch: &Architecture, entry: &Address, depth: u8) -> Option<(Summary, u8)
     let mut returns = false;
     let mut returns_stack = false;
     let track = arch
-        .kuna_options
-        .get::<crate::calleestackargs::KunaCalleeargs>()
+        .unlace_options
+        .get::<crate::calleestackargs::UnlaceCalleeargs>()
         .0;
     let mut steps = 0usize;
     while let Some((at, incoming)) = work.pop() {
@@ -1596,7 +1596,7 @@ fn walk(arch: &Architecture, entry: &Address, depth: u8) -> Option<(Summary, u8)
                     }
                 }
             }
-            // (kuna `calleeargsmsvc`) MSVC follows a call that does not return
+            // (unlace `calleeargsmsvc`) MSVC follows a call that does not return
             // (`_CxxThrowException`, `__report_rangecheckfailure`) with `int3`;
             // the path ends at the call instead of falling into the padding and
             // the function after it.
@@ -1688,13 +1688,13 @@ fn walk(arch: &Architecture, entry: &Address, depth: u8) -> Option<(Summary, u8)
     ))
 }
 
-/// (kuna) Each x86-32 callee's stack effect read off its own code, shared through `&Architecture`;
+/// (unlace) Each x86-32 callee's stack effect read off its own code, shared through `&Architecture`;
 /// an [`ArchTable`](crate::archstate::ArchTable).
 pub type CacheCell = std::cell::RefCell<Cache>;
-crate::kuna_arch_table!(CacheCell);
+crate::unlace_arch_table!(CacheCell);
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.calleepurge_forget_walks = Some(forget_walks);
 }
 

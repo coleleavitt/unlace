@@ -9,7 +9,7 @@
 //! matters here because the reference implementation this back-end is modelled
 //! on (SEFCOM Oxidizer, merged into angr as `structured_codegen/rust.py`) emits
 //! all four of those into output it calls Rust, and its own showcase snippet
-//! does not parse. `syn::parse_file` is the check that keeps kuna honest.
+//! does not parse. `syn::parse_file` is the check that keeps unlace honest.
 //!
 //! `syn` is a token-level oracle: it accepts some things rustc rejects on
 //! semantic grounds. The C-variadic case below is exactly that — `unsafe fn

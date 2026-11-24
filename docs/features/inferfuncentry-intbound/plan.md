@@ -11,7 +11,7 @@ offered to.
    numerically-read constant values once per pass from the snapshot it already
    takes, and `is_pointer` consults the predicate at the one place the
    `bit_transitions < 3` rejection is skipped. No other call site exists.
-3. `tests/stages/kuna-inferfuncentry-intbound.toml`: `handler` at `0x100000`
+3. `tests/stages/inferfuncentry-intbound.toml`: `handler` at `0x100000`
    (`1 << 20`), `bound` computing `MIN (n, 0x100000)`, `reg` registering
    `handler` as a callback, `dispatch` selecting between `handler` and `setcb`.
    Five assertions: the bounded value keeps its integer type, its bound prints as

@@ -30,8 +30,8 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 use unlace_base::address::Address;
-use unlace_base::error::KunaError;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceError;
+use unlace_base::error::UnlaceResult;
 use unlace_base::space::AddrSpace;
 use unlace_base::space::AddrSpaceManager;
 use unlace_base::types::int4;
@@ -49,8 +49,8 @@ impl LoadImage for DummyImg {
     fn get_file_name(&self) -> &str {
         "dummy"
     }
-    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> KunaResult<()> {
-        Err(KunaError::data_unavail("dummy"))
+    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> UnlaceResult<()> {
+        Err(UnlaceError::data_unavail("dummy"))
     }
     fn get_arch_type(&self) -> Vec<u8> {
         Vec::new()
@@ -65,129 +65,139 @@ fn bare_sleigh() -> Sleigh {
 }
 
 #[test]
-fn kuna_anchor_flags_default_to_div_values() {
+fn unlace_anchor_flags_default_to_div_values() {
     let arch = Architecture::new("test:LE:32", bare_sleigh());
     // DIV-2/DIV-3 default-on (architecture.cc:1430-1451).
     assert!(
-        arch.kuna_options
+        arch.unlace_options
             .get::<crate::memsetsequence::MemsetRecover>()
             .0
     );
     assert!(
-        arch.kuna_options
+        arch.unlace_options
             .get::<crate::arraystride::RecoverArrayStride>()
             .0
     );
     assert!(
-        arch.kuna_options
+        arch.unlace_options
             .get::<crate::loweredswitch::LoweredSwitchMode>()
             .enabled()
     );
     assert!(
-        arch.kuna_options
+        arch.unlace_options
             .get::<crate::coreoptions::NameStyleAngr>()
             .0
     );
     assert!(
-        arch.kuna_options
+        arch.unlace_options
             .get::<crate::compareform::PresentLessequal>()
             .0
     );
-    // (kuna) signedness ships `auto` -- a declaration is re-signed when every
+    // (unlace) signedness ships `auto` -- a declaration is re-signed when every
     // signedness-sensitive reader of the value agrees.
     assert_eq!(
-        arch.kuna_options.get::<crate::typeround::SignPolicy>(),
+        arch.unlace_options.get::<crate::typeround::SignPolicy>(),
         crate::typeround::SignPolicy::Auto
     );
-    // (kuna) DIV-13 default-on sweep: the 10 angr structuring/switch flags are now
+    // (unlace) DIV-13 default-on sweep: the 10 angr structuring/switch flags are now
     // default-on (per-test opt-out keeps the datatest/stage corpora at parity).
     assert!(
-        arch.kuna_options
+        arch.unlace_options
             .get::<crate::tailcalljump::TailCallJump>()
             .jumps
     );
     assert!(
-        arch.kuna_options
+        arch.unlace_options
             .get::<crate::tailcalljump::TailCallJump>()
             .tables
     );
     assert!(
-        arch.kuna_options
+        arch.unlace_options
             .get::<crate::jumptable::SwitchMultiPred>()
             .0
     );
     assert!(
-        arch.kuna_options
+        arch.unlace_options
             .get::<crate::region_structurer::RegionLoopRefine>()
             .0
     );
     assert_eq!(
-        arch.kuna_options.get::<crate::gotoreduce::GotoReduceMode>(),
+        arch.unlace_options
+            .get::<crate::gotoreduce::GotoReduceMode>(),
         crate::gotoreduce::GotoReduceMode::On
     );
     assert!(
-        arch.kuna_options
+        arch.unlace_options
             .get::<crate::ifelseflatten::FlattenIfelse>()
             .0
     );
     assert!(
-        arch.kuna_options
+        arch.unlace_options
             .get::<crate::crossjumpreverter::RevertCrossJumps>()
             .0
     );
     assert!(
-        arch.kuna_options
+        arch.unlace_options
             .get::<crate::dedupitetail::DedupIteTail>()
             .0
     );
     assert!(
-        arch.kuna_options
+        arch.unlace_options
             .get::<crate::callretfold::FoldCallReturns>()
             .0
     );
-    // (kuna) foldcallretphi default-on (docs/features/foldcallretphi/flip.md).
-    assert!(arch.kuna_options.get::<crate::blockaction::BranchFlip>().0);
-    // (kuna) DIV-14 default-on sweep: 3 more flags default-on (2 of them REMOVE
+    // (unlace) foldcallretphi default-on (docs/features/foldcallretphi/flip.md).
+    assert!(
+        arch.unlace_options
+            .get::<crate::blockaction::BranchFlip>()
+            .0
+    );
+    // (unlace) DIV-14 default-on sweep: 3 more flags default-on (2 of them REMOVE
     // CODE — stackguard/noreturn_propagate). Per-test opt-out
     // (stackguard on the 2 Partial-splitting datatests) keeps the corpora at
     // parity; noreturn_propagate is Listing-gated so it is inert on every gate.
     assert!(
-        arch.kuna_options
+        arch.unlace_options
             .get::<crate::stackguard::StripStackGuard>()
             .0
     ); // stackguard (REMOVES CODE)
     assert!(
-        arch.kuna_options
+        arch.unlace_options
             .get::<crate::analysisgates::NoreturnPropagate>()
             .0
     ); // noreturn_propagate (REMOVES CODE, Listing-gated)
     assert!(
-        arch.kuna_options
+        arch.unlace_options
             .get::<crate::jumptable::SwitchSharedCase>()
             .0
     ); // switchsharedcase
     assert!(
-        arch.kuna_options
+        arch.unlace_options
             .get::<crate::sparcstructret::SparcStructReturn>()
             .0
     ); // sparcstructret (SPARC-gated)
     assert!(
-        arch.kuna_options
+        arch.unlace_options
             .get::<crate::v850indbranch::V850IndirectBranch>()
             .0
     ); // v850indirectbranch (V850-gated)
     // default-off (upstream byte-identical).
-    assert!(!arch.kuna_options.get::<crate::returnpair::ReturnSingle>().0);
     assert!(
         !arch
-            .kuna_options
+            .unlace_options
+            .get::<crate::returnpair::ReturnSingle>()
+            .0
+    );
+    assert!(
+        !arch
+            .unlace_options
             .get::<crate::jumptable::SwitchModuloBound>()
             .0
     );
-    assert!(!arch.kuna_options.get::<crate::flow::UnrolledGuard>().0);
+    assert!(!arch.unlace_options.get::<crate::flow::UnrolledGuard>().0);
     assert!(
         !arch
-            .kuna_options
+            .unlace_options
             .get::<crate::heritage::StackAliasDeadstore>()
             .0
     );
@@ -197,14 +207,14 @@ fn kuna_anchor_flags_default_to_div_values() {
 fn reset_defaults_is_idempotent_after_mutation() {
     let mut arch = Architecture::new("t", bare_sleigh());
     arch.max_instructions = 7;
-    arch.kuna_options
+    arch.unlace_options
         .set(crate::typeround::SignPolicy::Upstream);
     arch.reset_defaults();
     assert_eq!(arch.max_instructions, 100000);
-    // (kuna) `signedness` ships `auto`: the struct literal holds the inert
+    // (unlace) `signedness` ships `auto`: the struct literal holds the inert
     // `Upstream` arm, so only reset_defaults puts the shipped value in place.
     assert_eq!(
-        arch.kuna_options.get::<crate::typeround::SignPolicy>(),
+        arch.unlace_options.get::<crate::typeround::SignPolicy>(),
         crate::typeround::SignPolicy::Auto
     );
 }
@@ -213,26 +223,26 @@ fn reset_defaults_is_idempotent_after_mutation() {
 fn apply_mode_aggressive_flips_offdefault_flags_but_not_dwarf_lines() {
     let mut arch = Architecture::new("test:LE:32", bare_sleigh());
     // Off-by-default under the shipped defaults.
-    assert!(!arch.kuna_options.get::<crate::analysisgates::Listing>().0);
+    assert!(!arch.unlace_options.get::<crate::analysisgates::Listing>().0);
     assert_eq!(
-        arch.kuna_options.get::<crate::aif::AifMode>(),
+        arch.unlace_options.get::<crate::aif::AifMode>(),
         crate::aif::AifMode::Off
     );
     assert!(
         !arch
-            .kuna_options
+            .unlace_options
             .get::<crate::analysisgates::FastFuncdisc>()
             .0
     );
     assert!(
         !arch
-            .kuna_options
+            .unlace_options
             .get::<crate::jumptable::SwitchGuardBound>()
             .0
     );
     assert!(
         !arch
-            .kuna_options
+            .unlace_options
             .get::<crate::analysisgates::DwarfLines>()
             .0
     );
@@ -241,35 +251,35 @@ fn apply_mode_aggressive_flips_offdefault_flags_but_not_dwarf_lines() {
         .expect("aggressive mode applies");
 
     // Representative aggressive members turned on.
-    assert!(arch.kuna_options.get::<crate::analysisgates::Listing>().0);
+    assert!(arch.unlace_options.get::<crate::analysisgates::Listing>().0);
     assert_eq!(
-        arch.kuna_options.get::<crate::aif::AifMode>(),
+        arch.unlace_options.get::<crate::aif::AifMode>(),
         crate::aif::AifMode::Strict
     );
     assert!(
-        arch.kuna_options
+        arch.unlace_options
             .get::<crate::analysisgates::FastFuncdisc>()
             .0
     );
     assert!(
-        arch.kuna_options
+        arch.unlace_options
             .get::<crate::jumptable::SwitchGuardBound>()
             .0
     );
     // Listed by the preset even though DIV-54 makes it a shipped default, so the
     // preset re-enables it after an earlier `--option returndup off`.
     assert!(
-        arch.kuna_options
+        arch.unlace_options
             .get::<crate::returndup::ReturnDup>()
             .shared
     );
     assert!(
-        arch.kuna_options
+        arch.unlace_options
             .get::<crate::sparcstructret::SparcStructReturn>()
             .0
     ); // SPARC-idiom-gated, safe to enable
     assert!(
-        arch.kuna_options
+        arch.unlace_options
             .get::<crate::v850indbranch::V850IndirectBranch>()
             .0
     ); // V850-gated, listed so the preset owns it
@@ -277,7 +287,7 @@ fn apply_mode_aggressive_flips_offdefault_flags_but_not_dwarf_lines() {
     // `/* src.c:NNN */` comment — noise, not recovery.
     assert!(
         !arch
-            .kuna_options
+            .unlace_options
             .get::<crate::analysisgates::DwarfLines>()
             .0
     );
@@ -289,13 +299,13 @@ fn apply_mode_reliable_is_a_no_op() {
     arch.apply_mode("reliable").expect("reliable mode applies");
     // reliable == shipped defaults: nothing off-default gets flipped, and nothing
     // on-default gets cleared.
-    assert!(!arch.kuna_options.get::<crate::analysisgates::Listing>().0);
+    assert!(!arch.unlace_options.get::<crate::analysisgates::Listing>().0);
     assert_eq!(
-        arch.kuna_options.get::<crate::aif::AifMode>(),
+        arch.unlace_options.get::<crate::aif::AifMode>(),
         crate::aif::AifMode::Off
     );
     assert!(
-        arch.kuna_options
+        arch.unlace_options
             .get::<crate::returndup::ReturnDup>()
             .shared
     ); // DIV-54 shipped default survives
@@ -304,37 +314,37 @@ fn apply_mode_reliable_is_a_no_op() {
 #[test]
 fn apply_mode_fast_replaces_exhaustive_with_bounded_discovery() {
     let mut arch = Architecture::new("test:LE:32", bare_sleigh());
-    arch.kuna_options.set(crate::analysisgates::Listing(true));
-    arch.kuna_options
+    arch.unlace_options.set(crate::analysisgates::Listing(true));
+    arch.unlace_options
         .set(crate::analysisgates::FuncstartPatterns(true));
-    arch.kuna_options.set(crate::aif::AifMode::Strict);
+    arch.unlace_options.set(crate::aif::AifMode::Strict);
 
     arch.apply_mode("fast").expect("fast mode applies");
 
-    assert!(!arch.kuna_options.get::<crate::analysisgates::Listing>().0);
+    assert!(!arch.unlace_options.get::<crate::analysisgates::Listing>().0);
     assert!(
         !arch
-            .kuna_options
+            .unlace_options
             .get::<crate::analysisgates::FuncstartPatterns>()
             .0
     );
     assert_eq!(
-        arch.kuna_options.get::<crate::aif::AifMode>(),
+        arch.unlace_options.get::<crate::aif::AifMode>(),
         crate::aif::AifMode::Off
     );
     assert!(
-        arch.kuna_options
+        arch.unlace_options
             .get::<crate::analysisgates::FastFuncdisc>()
             .0
     );
     assert!(
-        arch.kuna_options
+        arch.unlace_options
             .get::<crate::analysisgates::NoreturnPropagate>()
             .0
     );
     assert!(
         !arch
-            .kuna_options
+            .unlace_options
             .get::<crate::jumptable::SwitchGuardBound>()
             .0
     );
@@ -401,7 +411,7 @@ fn owned_subsystems_are_constructed_and_accessible() {
 fn arch_option_context_drives_the_printer() {
     let mut arch = Architecture::new("t", bare_sleigh());
     assert!(arch.print_is_c_language());
-    // (kuna) DIV-34: NULL printing is default-on; the option still drives it.
+    // (unlace) DIV-34: NULL printing is default-on; the option still drives it.
     assert!(arch.print().options.null);
     arch.set_null_printing(false);
     assert!(!arch.print().options.null);

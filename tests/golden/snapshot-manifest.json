@@ -996,7 +996,7 @@
    "source": "tests/datatests/inlinetarget.xml",
    "status": "ok"
   },
-  "kuna-assert": {
+  "assert": {
    "arch": "x86:LE:64:default:gcc",
    "decompiles": 2,
    "files": {
@@ -1006,16 +1006,16 @@
     "B4": 2,
     "B5": 2
    },
-   "source": "tests/stages/kuna-assert.toml",
+   "source": "tests/stages/assert.toml",
    "status": "ok"
   },
-  "kuna-catalog": {
+  "catalog": {
    "arch": "x86:LE:64:default:gcc",
    "decompiles": 0,
    "files": {
     "B0": 1
    },
-   "source": "tests/stages/kuna-catalog.xml",
+   "source": "tests/stages/catalog.xml",
    "status": "ok"
   },
   "unlace-console": {
@@ -1024,10 +1024,10 @@
    "files": {
     "B0": 1
    },
-   "source": "tests/stages/kuna-console.toml",
+   "source": "tests/stages/console.toml",
    "status": "ok"
   },
-  "kuna-pipeline-quality": {
+  "pipeline-quality": {
    "arch": "x86:LE:64:default:gcc",
    "decompiles": 2,
    "files": {
@@ -1037,10 +1037,10 @@
     "B4": 2,
     "B5": 2
    },
-   "source": "tests/stages/kuna-pipeline-quality.toml",
+   "source": "tests/stages/pipeline-quality.toml",
    "status": "ok"
   },
-  "kuna-regions": {
+  "regions": {
    "arch": "x86:LE:64:default:gcc",
    "decompiles": 1,
    "files": {
@@ -1050,10 +1050,10 @@
     "B4": 1,
     "B5": 1
    },
-   "source": "tests/stages/kuna-regions.toml",
+   "source": "tests/stages/regions.toml",
    "status": "ok"
   },
-  "kuna-restarts": {
+  "restarts": {
    "arch": "x86:LE:64:default:gcc",
    "decompiles": 2,
    "files": {
@@ -1063,7 +1063,7 @@
     "B4": 2,
     "B5": 2
    },
-   "source": "tests/stages/kuna-restarts.toml",
+   "source": "tests/stages/restarts.toml",
    "status": "ok"
   },
   "longdouble": {

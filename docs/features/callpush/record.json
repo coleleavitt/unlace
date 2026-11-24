@@ -273,7 +273,7 @@
  },
  "parity": {
   "datatests": "675/675, PARITY OK (default on; 0 assertions moved)",
-  "stages": "PARITY OK after one legitimate move: FMTSTATIC #7 pinned v3 in __printf_chk(1,\"got %s\\n\",v3); the call keeps its one vararg and the variable is renumbered, so the pattern reads v[0-9]+; +5 kuna-callpush assertions re-recorded",
+  "stages": "PARITY OK after one legitimate move: FMTSTATIC #7 pinned v3 in __printf_chk(1,\"got %s\\n\",v3); the call keeps its one vararg and the variable is renumbered, so the pattern reads v[0-9]+; +5 callpush assertions re-recorded",
   "test_cli": "237/237"
  },
  "soundness": "the deleted store writes the word below the stack pointer that only the callee's ret reads; call 1f;pop excluded (destination == stored address) and pinned by the stage and CLI tests; callpopret lifts a callee that pops its return address as a BRANCH, so no CALL to match; an alloca frame is not runnable C in either arm, so the round trip is the statement set (CLI test) and the whole-corpus classification",

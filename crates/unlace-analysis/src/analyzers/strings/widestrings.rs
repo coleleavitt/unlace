@@ -1,8 +1,8 @@
-//! (kuna `widestrings`) The 2-byte width of [`super::StringLiteralPass`].
+//! (unlace `widestrings`) The 2-byte width of [`super::StringLiteralPass`].
 //!
 //! # The gap
 //!
-//! Ghidra's `StringsAnalyzer` has an `allCharWidths` setting; kuna ported only
+//! Ghidra's `StringsAnalyzer` has an `allCharWidths` setting; unlace ported only
 //! its 1-byte arm and said so ("UTF-16/32 is a documented seam, skipped"). Read
 //! at 1-byte width a UTF-16LE literal is a ONE-CHARACTER string: `L"ntdll.dll"`
 //! is `6e 00 74 00 …`, whose first NUL closes the run after `n`. Nothing plants

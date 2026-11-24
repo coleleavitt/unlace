@@ -1,4 +1,4 @@
-//! (kuna) The PE **address-taken function** oracle: function starts recovered
+//! (unlace) The PE **address-taken function** oracle: function starts recovered
 //! from the image's own base-relocation table.
 //!
 //! ## Why the other PE oracles cannot see these
@@ -90,7 +90,7 @@ pub(super) fn reloc_code_pointers<Pe: ImageNtHeaders>(
     });
 }
 
-/// (kuna `addrtakenentry`) The relocated addresses [`reloc_code_pointers`] leaves
+/// (unlace `addrtakenentry`) The relocated addresses [`reloc_code_pointers`] leaves
 /// out because they lie in an executable section before the first
 /// `RUNTIME_FUNCTION` that section has. Not starts on this evidence alone — a
 /// packed image's data blob sits there too — so they are candidates the Listing

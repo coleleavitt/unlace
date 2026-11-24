@@ -1,4 +1,4 @@
-//! (kuna `jvmmodel`) What a Java class file tells the engine about its methods.
+//! (unlace `jvmmodel`) What a Java class file tells the engine about its methods.
 //!
 //! The JVM SLEIGH spec leaves the same things to the program that loaded the
 //! class as the Dalvik spec does, which in Ghidra is its Java side
@@ -25,7 +25,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::AddrSpace;
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
@@ -112,7 +112,7 @@ fn last_name(internal: &str) -> &str {
 
 impl JvmModel {
     /// Parse `bytes` as a class file whose methods map from `base` (4-aligned).
-    pub fn parse(bytes: Vec<u8>, base: u64) -> KunaResult<JvmModel> {
+    pub fn parse(bytes: Vec<u8>, base: u64) -> UnlaceResult<JvmModel> {
         let file = ClassFile::parse(bytes)?;
         let scope = file
             .class_name(file.this_class)
@@ -205,7 +205,11 @@ impl JvmModel {
     /// `DescriptorDecoder.getDataTypeOfDescriptor` builds it: primitives by name,
     /// a class as a pointer to a structure of its simple name, an array as a
     /// pointer to its element type.
-    pub fn java_type(&self, descriptor: &str, types: &dyn TypeFactory) -> KunaResult<Rc<Datatype>> {
+    pub fn java_type(
+        &self,
+        descriptor: &str,
+        types: &dyn TypeFactory,
+    ) -> UnlaceResult<Rc<Datatype>> {
         if let Some(found) = self.types.borrow().get(descriptor) {
             return Ok(Rc::clone(found));
         }
@@ -229,7 +233,7 @@ impl JvmModel {
                 types.get_type_pointer(4, class, 1)?
             }
             _ => {
-                return Err(KunaError::lowlevel(format!(
+                return Err(UnlaceError::lowlevel(format!(
                     "bad JVM type descriptor: {descriptor}"
                 )));
             }
@@ -248,9 +252,9 @@ impl JvmModel {
         descriptor: &str,
         this: Option<Option<&str>>,
         types: &dyn TypeFactory,
-    ) -> KunaResult<PrototypePieces> {
+    ) -> UnlaceResult<PrototypePieces> {
         let (params, ret) = method_descriptor(descriptor).ok_or_else(|| {
-            KunaError::lowlevel(format!("bad JVM method descriptor: {descriptor}"))
+            UnlaceError::lowlevel(format!("bad JVM method descriptor: {descriptor}"))
         })?;
         let mut pieces = PrototypePieces {
             first_var_arg_slot: -1,
@@ -282,7 +286,7 @@ impl JvmModel {
         &self,
         method: &JvmMethod,
         types: &dyn TypeFactory,
-    ) -> KunaResult<PrototypePieces> {
+    ) -> UnlaceResult<PrototypePieces> {
         let class = self
             .file
             .class_name(self.file.this_class)
@@ -316,7 +320,7 @@ impl JvmModel {
         index: u16,
         tag: u64,
         types: &dyn TypeFactory,
-    ) -> KunaResult<Option<CPoolRecord>> {
+    ) -> UnlaceResult<Option<CPoolRecord>> {
         let Some((class, name, descriptor)) = self.file.member(index) else {
             return Ok(None);
         };
@@ -345,7 +349,7 @@ impl JvmModel {
         index: u64,
         tag: u64,
         types: &dyn TypeFactory,
-    ) -> KunaResult<Option<CPoolRecord>> {
+    ) -> UnlaceResult<Option<CPoolRecord>> {
         if tag == tag::NEWARRAY {
             let element = match index {
                 4 => "Z",
@@ -553,13 +557,13 @@ struct JvmEnv {
 }
 
 impl JvmEnv {
-    fn new(arch: &crate::architecture::Architecture) -> KunaResult<JvmEnv> {
+    fn new(arch: &crate::architecture::Architecture) -> UnlaceResult<JvmEnv> {
         let manage = arch.manage();
-        let space = |name: &str| -> KunaResult<u64> {
+        let space = |name: &str| -> UnlaceResult<u64> {
             manage
                 .get_space_by_name(name)
                 .map(|s| s.get_index() as u64)
-                .ok_or_else(|| KunaError::lowlevel(format!("JVM spec has no {name} space")))
+                .ok_or_else(|| UnlaceError::lowlevel(format!("JVM spec has no {name} space")))
         };
         Ok(JvmEnv {
             sp: arch.get_register_varnode(b"SP")?,
@@ -570,12 +574,12 @@ impl JvmEnv {
             constant: Rc::clone(
                 manage
                     .get_constant_space()
-                    .ok_or_else(|| KunaError::lowlevel("no constant space"))?,
+                    .ok_or_else(|| UnlaceError::lowlevel("no constant space"))?,
             ),
             unique: Rc::clone(
                 manage
                     .get_unique_space()
-                    .ok_or_else(|| KunaError::lowlevel("no unique space"))?,
+                    .ok_or_else(|| UnlaceError::lowlevel("no unique space"))?,
             ),
             ram: space("ram")?,
             parameters: space("parameterSpace")?,
@@ -685,13 +689,13 @@ impl<'a> Emitter<'a> {
         name: &str,
         output: Option<VarnodeData>,
         mut args: Vec<VarnodeData>,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let index = self
             .env
             .userops
             .iter()
             .position(|n| n == name.as_bytes())
-            .ok_or_else(|| KunaError::lowlevel(format!("JVM spec has no user-op {name}")))?;
+            .ok_or_else(|| UnlaceError::lowlevel(format!("JVM spec has no user-op {name}")))?;
         args.insert(0, self.constant(index as u64, 4));
         self.op(OpCode::CPUI_CALLOTHER, output, args);
         Ok(())
@@ -730,31 +734,31 @@ pub fn emit_payload(
     name: &[u8],
     context: &crate::pcodeinject::InjectContext,
     emit: &mut dyn unlace_sleigh::translate::PcodeEmit,
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     let address = context
         .baseaddr
         .clone()
-        .ok_or_else(|| KunaError::lowlevel("JVM payload without an address"))?;
+        .ok_or_else(|| UnlaceError::lowlevel("JVM payload without an address"))?;
     let model = arch
         .jvm_models()
         .iter()
         .find(|m| m.contains(address.get_offset()))
         .cloned()
-        .ok_or_else(|| KunaError::lowlevel("JVM payload outside every class"))?;
+        .ok_or_else(|| UnlaceError::lowlevel("JVM payload outside every class"))?;
     let index = context
         .inputlist
         .first()
         .map(|v| v.offset)
-        .ok_or_else(|| KunaError::lowlevel("JVM payload without a pool index"))?;
+        .ok_or_else(|| UnlaceError::lowlevel("JVM payload without a pool index"))?;
     let index16 =
-        u16::try_from(index).map_err(|_| KunaError::lowlevel("JVM pool index out of range"))?;
+        u16::try_from(index).map_err(|_| UnlaceError::lowlevel("JVM pool index out of range"))?;
     let env = JvmEnv::new(arch)?;
     let mut e = Emitter::new(&env, address, UNIQUE_BASE);
     let file = &model.file;
-    let field_descriptor = || -> KunaResult<String> {
+    let field_descriptor = || -> UnlaceResult<String> {
         file.member(index16)
             .map(|(_, _, d)| d.to_string())
-            .ok_or_else(|| KunaError::lowlevel("JVM field reference expected"))
+            .ok_or_else(|| UnlaceError::lowlevel("JVM field reference expected"))
     };
     match name {
         b"getStaticCallOther" | b"getFieldCallOther" => {
@@ -891,14 +895,14 @@ pub fn emit_payload(
                 b"invokespecialCallOther" => tag::INVOKESPECIAL,
                 b"invokestaticCallOther" => tag::INVOKESTATIC,
                 b"invokevirtualCallOther" => tag::INVOKEVIRTUAL,
-                _ => return Err(KunaError::lowlevel("not a JVM payload")),
+                _ => return Err(UnlaceError::lowlevel("not a JVM payload")),
             };
             let descriptor = file
                 .member(index16)
                 .map(|(_, _, d)| d.to_string())
-                .ok_or_else(|| KunaError::lowlevel("JVM method reference expected"))?;
+                .ok_or_else(|| UnlaceError::lowlevel("JVM method reference expected"))?;
             let (params, ret) = method_descriptor(&descriptor)
-                .ok_or_else(|| KunaError::lowlevel("bad JVM method descriptor"))?;
+                .ok_or_else(|| UnlaceError::lowlevel("bad JVM method descriptor"))?;
             let with_this = matches!(
                 tag,
                 tag::INVOKEVIRTUAL | tag::INVOKESPECIAL | tag::INVOKEINTERFACE
@@ -949,17 +953,17 @@ pub fn emit_payload(
     Ok(())
 }
 
-/// (kuna `jvmmodel`) The JVM `uponentry` copies are in; reset by `Funcdata::clear`.
+/// (unlace `jvmmodel`) The JVM `uponentry` copies are in; reset by `Funcdata::clear`.
 #[derive(Default)]
 struct EntrySlot(bool);
-crate::kuna_func_state!(EntrySlot, keep_across_clear: false);
+crate::unlace_func_state!(EntrySlot, keep_across_clear: false);
 
 /// Insert the `uponentry` copies at the start of the function
 /// (`InjectPayloadJavaParameters`): each argument moves from `parameterSpace`
 /// to the local variable array, `LVA` stepping 4 or 8 bytes.
-pub fn apply_entry(data: &mut crate::funcdata::Funcdata) -> KunaResult<()> {
+pub fn apply_entry(data: &mut crate::funcdata::Funcdata) -> UnlaceResult<()> {
     if data.get_arch().jvm.is_none()
-        || data.kuna_state::<EntrySlot>().0
+        || data.unlace_state::<EntrySlot>().0
         || data.bblocks_get_size() == 0
     {
         return Ok(());
@@ -975,22 +979,22 @@ pub fn apply_entry(data: &mut crate::funcdata::Funcdata) -> KunaResult<()> {
         return Ok(());
     }
     let manage = &arch.manage;
-    let space = |name: &str| -> KunaResult<u64> {
+    let space = |name: &str| -> UnlaceResult<u64> {
         manage
             .get_space_by_name(name)
             .map(|s| s.get_index() as u64)
-            .ok_or_else(|| KunaError::lowlevel(format!("JVM spec has no {name} space")))
+            .ok_or_else(|| UnlaceError::lowlevel(format!("JVM spec has no {name} space")))
     };
     let (parameters, locals) = (space("parameterSpace")?, space("localVariableArray")?);
     let constant = Rc::clone(
         manage
             .get_constant_space()
-            .ok_or_else(|| KunaError::lowlevel("no constant space"))?,
+            .ok_or_else(|| UnlaceError::lowlevel("no constant space"))?,
     );
     let unique = Rc::clone(
         manage
             .get_unique_space()
-            .ok_or_else(|| KunaError::lowlevel("no unique space"))?,
+            .ok_or_else(|| UnlaceError::lowlevel("no unique space"))?,
     );
     // `LVA` is the eighth 4-byte register of `JVM.slaspec`'s register block.
     let lva = manage
@@ -1000,7 +1004,7 @@ pub fn apply_entry(data: &mut crate::funcdata::Funcdata) -> KunaResult<()> {
             offset: 0x1c,
             size: 4,
         })
-        .ok_or_else(|| KunaError::lowlevel("JVM spec has no register space"))?;
+        .ok_or_else(|| UnlaceError::lowlevel("JVM spec has no register space"))?;
     let c = |value: u64, size: u32| VarnodeData {
         space: Some(Rc::clone(&constant)),
         offset: value,
@@ -1041,6 +1045,6 @@ pub fn apply_entry(data: &mut crate::funcdata::Funcdata) -> KunaResult<()> {
         });
     }
     (data.hooks().callmechanisms_install_at_entry)(data, block, &operations)?;
-    data.kuna_state_mut::<EntrySlot>().0 = true;
+    data.unlace_state_mut::<EntrySlot>().0 = true;
     Ok(())
 }

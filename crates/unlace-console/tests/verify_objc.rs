@@ -122,7 +122,7 @@ fn run(fx: Fixture, mode: Mode) -> Run {
     // flag on the live arch BEFORE committing so the gated objc facts are applied.
     let value = if let Mode::On = mode { "on" } else { "off" };
     prog.arch_mut()
-        .set_kuna_option("objc", value)
+        .set_unlace_option("objc", value)
         .expect("objc flips");
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");

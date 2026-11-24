@@ -1,10 +1,10 @@
-//! (kuna) `argclobber` — drop a trailing register argument that a previous
+//! (unlace) `argclobber` — drop a trailing register argument that a previous
 //! call's clobber put there.
 //!
 //! # The symptom
 //!
 //! coreutils `fmt` (-O2, stripped) calls one static function three times and
-//! kuna renders three different arities, the longest of which reads a variable
+//! unlace renders three different arities, the longest of which reads a variable
 //! nothing assigns:
 //!
 //! ```text
@@ -83,11 +83,11 @@
 //! * it is **trailing** -- no used trial follows it -- so the argument list keeps
 //!   its positional shape and no later argument moves;
 //! * at least one used argument remains, since an empty list is
-//!   [`kuna_calleearityfwd`](crate::calleearityfwd)'s failure
+//!   [`unlace_calleearityfwd`](crate::calleearityfwd)'s failure
 //!   shape, not this one's;
 //! * no already-final call to the same callee entry in this function passed an
 //!   argument in that storage. This is the subtractive twin of
-//!   [`kuna_calleearity`](crate::calleearity)'s witness rule and
+//!   [`unlace_calleearity`](crate::calleearity)'s witness rule and
 //!   it is what orders this pass against the additive family: a slot a sibling
 //!   really used outranks the clobber evidence here.
 //!
@@ -126,12 +126,12 @@
 //! (`mov %r12,%rdx`) on the non-clobber path loses both the argument and the
 //! parameter, and `void caller(long,unsigned long)` becomes `void
 //! caller(long)`. That shape is
-//! `tests/stages/kuna-argclobber-forward.toml`.
+//! `tests/stages/unlace-argclobber-forward.toml`.
 //!
 //! **The callee.** That still leaves a register the caller never wrote, and
 //! nothing on the caller's side can say whether the callee wanted it. Only the
 //! callee can, and the statement that settles it is the callee's own **recovered
-//! prototype**: the parameter list kuna gets from decompiling that function,
+//! prototype**: the parameter list unlace gets from decompiling that function,
 //! which [`crate::protoorder`] parks for every callee it
 //! decompiles before its callers. A prototype with a parameter overlapping the
 //! register says the callee takes an argument there, and the drop is declined
@@ -178,7 +178,7 @@
 //!
 //! A prototype states what the callee NAMES. A forwarding thunk names almost
 //! nothing: `long fwd(struct box *o,long a,long b) { if (!a) return 0; return
-//! o->fn(o,a,b); }` compiles to `test %rsi,%rsi; je; jmp *(%rdi)`, so kuna
+//! o->fn(o,a,b); }` compiles to `test %rsi,%rsi; je; jmp *(%rdi)`, so unlace
 //! recovers `(rdi, rsi)` — two parameters, honestly reporting the two registers
 //! the body touches — while the function it jumps to consumes three. The
 //! recovered list then EQUALS the two arguments the drop would leave behind, the
@@ -195,7 +195,7 @@
 //! # What it cannot know
 //!
 //! The evidence is a recovery, not a fact. A callee whose own parameter list
-//! kuna under-recovers — it misses a parameter the callee really reads, on a
+//! unlace under-recovers — it misses a parameter the callee really reads, on a
 //! path where every transfer is answered for — states a prototype that admits
 //! the drop, and the argument goes. That is the residual
 //! hole, and it is the same hole every callee-derived statement has. Two things
@@ -217,7 +217,7 @@
 use crate::calleedeadarg::FuncdataCalleedeadargExt;
 use crate::protoorder::FuncdataProtoorderExt;
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::marshal::ElementId;
 use unlace_base::space::spacetype;
 use unlace_base::types::int4;
@@ -229,7 +229,7 @@ use crate::fspec::FuncCallSpecs;
 use crate::funcdata::Funcdata;
 use crate::options::on_or_off;
 
-/// Marshaling element `<argclobber>` (kuna 4000+ range).
+/// Marshaling element `<argclobber>` (unlace 4000+ range).
 pub const ELEM_ARGCLOBBER: ElementId = ElementId::new("argclobber", 4173);
 
 /// `option argclobber on|off` (default on).
@@ -241,7 +241,7 @@ impl OptionArgClobber {
 
     /// Resolve the flag and its confirmation message; the caller writes it into
     /// the registered option `ArgClobber`.
-    pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((val, format!("Trailing clobber-argument drop turned {prop}")))
@@ -425,7 +425,7 @@ fn callee_prototype_is_the_argument_list(
     size: int4,
     surviving: &[(Address, int4)],
 ) -> bool {
-    let Some(stated) = data.kuna_protoorder_types(entry) else {
+    let Some(stated) = data.unlace_protoorder_types(entry) else {
         return false;
     };
     if size <= 0 || stated.inputs.is_empty() {
@@ -490,7 +490,7 @@ fn storage_overlaps(a: &Address, asize: int4, b: &Address, bsize: int4) -> bool 
 pub fn drop_clobber_tail_arg(fc: &mut FuncCallSpecs, data: &mut Funcdata) {
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::argclobber::ArgClobber>()
         .0
     {
@@ -584,11 +584,11 @@ pub fn drop_clobber_tail_arg(fc: &mut FuncCallSpecs, data: &mut Funcdata) {
     // A thunk that tail-calls through a pointer, and one that forwards to an
     // unsignatured import, are both short for that reason.
     let reads_it = data
-        .kuna_callee_entry_dead(&entry)
+        .unlace_callee_entry_dead(&entry)
         .map(|d| d.proves_input(&addr, trial_size))
         .unwrap_or(true);
     let transfer_free = data
-        .kuna_callee_forward(&entry)
+        .unlace_callee_forward(&entry)
         .map(|f| f.transfer_free(&addr, trial_size))
         .unwrap_or(false);
     let body_admits = !reads_it && transfer_free;
@@ -604,14 +604,14 @@ pub fn drop_clobber_tail_arg(fc: &mut FuncCallSpecs, data: &mut Funcdata) {
     fc.get_active_input().get_trial_mut(idx).mark_no_use();
 }
 
-/// (kuna) Drop a trailing register argument a previous call's clobber put
+/// (unlace) Drop a trailing register argument a previous call's clobber put
 /// there (option `argclobber`).  See [`crate::argclobber`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct ArgClobber(pub bool);
 
-impl crate::optionset::KunaOption for ArgClobber {
+impl crate::optionset::UnlaceOption for ArgClobber {
     const NAME: &'static str = "argclobber";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         ArgClobber(true)
@@ -621,7 +621,7 @@ impl crate::optionset::KunaOption for ArgClobber {
         ArgClobber(true)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (v, msg) = crate::argclobber::OptionArgClobber.apply(value)?;
         Ok((ArgClobber(v), msg))
     }

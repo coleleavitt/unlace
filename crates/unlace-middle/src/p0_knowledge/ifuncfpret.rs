@@ -1,4 +1,4 @@
-//! (kuna) The `ifuncfpret` option gate — name the x86-64 `.plt.sec`/`.iplt`
+//! (unlace) The `ifuncfpret` option gate — name the x86-64 `.plt.sec`/`.iplt`
 //! **IFUNC** (`R_X86_64_IRELATIVE`) PLT stubs so a tail `jmp` to one is recovered
 //! as a tail call (`tailcalljump`) and the callee's return type flows out.
 //!
@@ -35,15 +35,15 @@ pub fn ifuncfpret_enabled() -> bool {
     crate::loadoptions::scoped(|o| o.ifuncfpret).unwrap_or_else(crate::loadoptions::env::ifuncfpret)
 }
 
-/// Export a `set_kuna_option("ifuncfpret", val)` toggle to [`IFUNCFPRET_ENV`] so a
+/// Export a `set_unlace_option("ifuncfpret", val)` toggle to [`IFUNCFPRET_ENV`] so a
 /// later `load file` in the *same* process sees the choice.
 pub fn set_ifuncfpret_env(on: bool) {
     // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var(IFUNCFPRET_ENV, if on { "on" } else { "off" }) };
 }
 
-crate::kuna_flag!(
-    /// (kuna `ifuncfpret`) The requested state of the load-time IFUNC PLT-stub naming; the catalog's live `current` field reads it.
+crate::unlace_flag!(
+    /// (unlace `ifuncfpret`) The requested state of the load-time IFUNC PLT-stub naming; the catalog's live `current` field reads it.
     IfuncFpRet,
     "ifuncfpret",
     "IFUNC PLT-stub naming",

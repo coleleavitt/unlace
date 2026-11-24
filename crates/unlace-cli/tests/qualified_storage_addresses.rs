@@ -49,7 +49,7 @@ _adjust_value:
         String::from_utf8_lossy(&output.stderr)
     );
     let (inventory, err, status) =
-        common::run_kuna(&["functions", binary.to_str().unwrap(), "--json"]);
+        common::run_unlace(&["functions", binary.to_str().unwrap(), "--json"]);
     assert_eq!(status, 0, "{err}");
     let inventory: serde_json::Value = serde_json::from_str(&inventory).unwrap();
     let helper = inventory["functions"]
@@ -63,7 +63,7 @@ _adjust_value:
         "param 0x1::0 ECX unsigned int value",
         "return 0x1::EDX unsigned int",
     ] {
-        let (_, err, status) = common::run_kuna(&[
+        let (_, err, status) = common::run_unlace(&[
             "decompile",
             binary.to_str().unwrap(),
             "_sample",
@@ -101,7 +101,7 @@ _adjust_value:
                 args.extend(["--assert", prototype.as_str()]);
             }
             args.extend(["--assert", assertions[0], "--assert", assertions[1]]);
-            let (body, err, status) = common::run_kuna(&args);
+            let (body, err, status) = common::run_unlace(&args);
             assert_eq!(status, 0, "{err}");
             assert!(
                 body.contains("return _adjust_value(x);"),
@@ -205,7 +205,7 @@ adjust_value:
         String::from_utf8_lossy(&output.stderr)
     );
     let (inventory, err, status) =
-        common::run_kuna(&["functions", binary.to_str().unwrap(), "--json"]);
+        common::run_unlace(&["functions", binary.to_str().unwrap(), "--json"]);
     assert_eq!(status, 0, "{err}");
     let inventory: serde_json::Value = serde_json::from_str(&inventory).unwrap();
     let mut helpers: Vec<_> = inventory["functions"]
@@ -236,7 +236,7 @@ adjust_value:
         for directive in &directives {
             args.extend(["--assert", directive.as_str()]);
         }
-        let (body, err, status) = common::run_kuna(&args);
+        let (body, err, status) = common::run_unlace(&args);
         assert_eq!(status, 0, "{err}");
         assert!(body.contains("return adjust_value(x);"), "{caller}: {body}");
     }

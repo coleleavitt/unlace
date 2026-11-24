@@ -1,4 +1,4 @@
-//! (kuna `swiftdemangle`) The demangling tree: one node per grammar
+//! (unlace `swiftdemangle`) The demangling tree: one node per grammar
 //! production, built in postfix order by the parser and rendered by the
 //! printers. Substitutions re-reference earlier nodes, so the tree is a DAG
 //! of immutable, reference-counted nodes.

@@ -9,7 +9,7 @@ fn an_unchecked_table_ends_at_the_functions_next_table() {
     let decompile = |name: &str, extra: &[&str]| {
         let mut args = vec!["decompile", binary.as_str(), name];
         args.extend_from_slice(extra);
-        let (out, stderr, rc) = common::run_kuna(&args);
+        let (out, stderr, rc) = common::run_unlace(&args);
         assert_eq!(rc, 0, "{stderr}");
         out
     };
@@ -46,7 +46,7 @@ fn the_reference_walk_files_a_jump_to_each_case() {
     let binary = common::fixture("switchextent_aarch64");
     let jumps = |from: &str| {
         let (out, stderr, rc) =
-            common::run_kuna(&["xrefs", binary.as_str(), "--from", from, "--json"]);
+            common::run_unlace(&["xrefs", binary.as_str(), "--from", from, "--json"]);
         assert_eq!(rc, 0, "{stderr}");
         let doc: serde_json::Value = serde_json::from_str(&out).unwrap();
         let mut to: Vec<String> = doc["xrefs"]
@@ -87,7 +87,7 @@ fn a_swift_enum_table_has_its_enums_case_count() {
     let decompile = |extra: &[&str]| {
         let mut args = vec!["decompile", binary.as_str(), "dispatch"];
         args.extend_from_slice(extra);
-        let (out, stderr, rc) = common::run_kuna(&args);
+        let (out, stderr, rc) = common::run_unlace(&args);
         assert_eq!(rc, 0, "{stderr}");
         out
     };

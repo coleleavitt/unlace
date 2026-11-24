@@ -1,4 +1,4 @@
-//! (kuna) Maturity: how far the scheduler has got through one pass of the `universal` restart
+//! (unlace) Maturity: how far the scheduler has got through one pass of the `universal` restart
 //! group over a function, and which facts are settled from there on (`docs/spec/00-overview.md`
 //! §0.10).
 //!
@@ -168,29 +168,29 @@ struct MaturityState {
     reached: Vec<Maturity>,
 }
 
-crate::kuna_func_state!(MaturityState, keep_across_clear: false);
+crate::unlace_func_state!(MaturityState, keep_across_clear: false);
 
 /// Whether the full `decompile` drive runs this function, so [`debug_assert_settled!`] holds
 /// it to the tree's order; survives a clear.
 #[derive(Default)]
 struct MaturityTracked(bool);
 
-crate::kuna_func_state!(MaturityTracked, keep_across_clear: true);
+crate::unlace_func_state!(MaturityTracked, keep_across_clear: true);
 
 impl Funcdata {
     /// How far the current pass has got.
     pub fn maturity(&self) -> Maturity {
-        self.kuna_state::<MaturityState>().level
+        self.unlace_state::<MaturityState>().level
     }
 
     /// The levels the current pass reached, in the order it reached them.
     pub fn maturity_reached(&self) -> &[Maturity] {
-        &self.kuna_state::<MaturityState>().reached
+        &self.unlace_state::<MaturityState>().reached
     }
 
     /// Record that a node settling `level` completed; a lower level changes nothing.
     pub fn advance_maturity(&mut self, level: Maturity) {
-        let state = self.kuna_state_mut::<MaturityState>();
+        let state = self.unlace_state_mut::<MaturityState>();
         if level > state.level {
             state.level = level;
             state.reached.push(level);
@@ -216,12 +216,12 @@ impl Funcdata {
 
     /// Say whether the full `decompile` drive runs this function.
     pub fn set_maturity_tracked(&mut self, tracked: bool) {
-        self.kuna_state_mut::<MaturityTracked>().0 = tracked;
+        self.unlace_state_mut::<MaturityTracked>().0 = tracked;
     }
 
     /// Does the full `decompile` drive run this function?
     pub fn maturity_tracked(&self) -> bool {
-        self.kuna_state::<MaturityTracked>().0
+        self.unlace_state::<MaturityTracked>().0
     }
 }
 

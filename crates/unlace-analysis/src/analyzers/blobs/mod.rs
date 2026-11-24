@@ -1,4 +1,4 @@
-//! (kuna `blobs`) Embedded images and archives: PNG, JPEG, GIF, BMP, ICO,
+//! (unlace `blobs`) Embedded images and archives: PNG, JPEG, GIF, BMP, ICO,
 //! zip, gzip, xz and zstd files stored whole inside a mapped section.
 //!
 //! A candidate is a magic number; a blob is a candidate whose container

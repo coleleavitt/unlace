@@ -1,4 +1,4 @@
-//! (kuna `oslog`) Apple unified-logging call sites print their arguments.
+//! (unlace `oslog`) Apple unified-logging call sites print their arguments.
 //!
 //! The `os_log*` macros compile to a call into libsystem_trace with the
 //! arguments packed into a stack buffer the caller fills right before the call:
@@ -91,7 +91,7 @@ fn callee_shape(fd: &Funcdata, call: OpId) -> Option<Shape> {
 /// nothing about it can be shown better.
 #[doc(hidden)]
 pub fn recover(fd: &Funcdata, arch: &Architecture, call: OpId) -> Option<Plan> {
-    if !arch.kuna_options.get::<crate::oslog::OsLogArgs>().0 {
+    if !arch.unlace_options.get::<crate::oslog::OsLogArgs>().0 {
         return None;
     }
     let shape = callee_shape(fd, call)?;
@@ -120,7 +120,7 @@ pub fn recover(fd: &Funcdata, arch: &Architecture, call: OpId) -> Option<Plan> {
 #[doc(hidden)]
 pub fn hidden_ops(fd: &Funcdata, arch: &Architecture) -> BTreeSet<OpId> {
     let mut hidden = BTreeSet::new();
-    if !arch.kuna_options.get::<crate::oslog::OsLogArgs>().0 {
+    if !arch.unlace_options.get::<crate::oslog::OsLogArgs>().0 {
         return hidden;
     }
     for call in fd.obank().iter_alive() {
@@ -687,8 +687,8 @@ fn piece_of(fd: &Funcdata, id: VarnodeId) -> Option<(VarnodeId, u64)> {
     (byte.checked_add(width)? <= size).then_some((whole, byte))
 }
 
-crate::kuna_flag!(
-    /// (kuna `oslog`) Print decoded os_log buffer arguments at the call.
+crate::unlace_flag!(
+    /// (unlace `oslog`) Print decoded os_log buffer arguments at the call.
     OsLogArgs,
     "oslog",
     "Apple os_log call arguments",

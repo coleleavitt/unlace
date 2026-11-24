@@ -1,4 +1,4 @@
-//! Go `pclntab` function-name recovery — the kuna analog of Ghidra's
+//! Go `pclntab` function-name recovery — the unlace analog of Ghidra's
 //! `GolangSymbolAnalyzer` (the name-recovery half).
 //!
 //! A Go binary embeds a `pclntab` (the "program-counter → line/name" table) so the
@@ -8,7 +8,7 @@
 //! [`SymFact`] `{ addr: func_entry, name, kind: Function }` per function — so
 //! `main.main`, `runtime.*`, and package functions render named.
 //!
-//! Origin (upstream Ghidra, the tree kuna was ported from):
+//! Origin (upstream Ghidra, the tree unlace was ported from):
 //! - header:   `Ghidra/Features/Base/.../golang/rtti/GoPcHeader.java`
 //!   (the four magics `GO_1_2/1_16/1_18/1_20`, `isPcHeader` validation, the
 //!   `*Offset`-relative-to-header layout, `readMagic`'s LE-then-BE endian probe).
@@ -39,7 +39,7 @@
 //!
 //! Defensive by construction (the [`AnalysisPass`] never-fail contract): an
 //! unknown magic that no `moduledata` record makes up for
-//! ([`kuna_gomoduledata`]), a malformed header, an out-of-range offset, or a
+//! ([`unlace_gomoduledata`]), a malformed header, an out-of-range offset, or a
 //! missing table all yield an **empty** output — never a panic, never an error.
 
 use object::read::{Object, ObjectSection, ObjectSymbol};
@@ -91,7 +91,7 @@ enum End {
 
 /// A view over the loaded image's bytes addressable by virtual address: the
 /// loadable sections, sorted, so a `read(vma, len)` resolves through whichever
-/// section covers `[vma, vma+len)`. This is the kuna analog of reading program
+/// section covers `[vma, vma+len)`. This is the unlace analog of reading program
 /// memory through Ghidra's `BinaryReader`/`MemoryByteProvider`.
 pub(crate) struct ImageBytes<'a> {
     /// `(vma, bytes)` for each section with file-backed data, sorted by vma.
@@ -491,7 +491,7 @@ fn pcvalue_span(img: &ImageBytes, vma: u64, quantum: u8) -> Option<u64> {
 ///    `.data.rel.ro.gopclntab` an internally linked go1.25-or-older ELF PIE uses,
 ///    or the large read-only data split's `.lrodata_gopclntab` / Mach-O
 ///    `__lrodata_gopcln`) section start;
-/// 2. the `runtime.pclntab` / `runtime.firstmoduledata`-adjacent symbol — kuna
+/// 2. the `runtime.pclntab` / `runtime.firstmoduledata`-adjacent symbol — unlace
 ///    resolves the `runtime.pclntab` symbol directly when present;
 /// 3. a byte scan of the read-only data sections for the validated header magic
 ///    whose table also resolves ([`table_plausible`]), preferring the table the
@@ -538,7 +538,7 @@ pub(crate) fn locate_header(file: &object::File, img: &ImageBytes) -> Option<u64
     }
 
     // (3) Scan the read-only data sections for the header magic + valid prefix
-    // (the kuna analog of `findPcHeaderAddress` for stripped binaries). Restrict
+    // (the unlace analog of `findPcHeaderAddress` for stripped binaries). Restrict
     // to the sections Go places the pclntab in to keep the scan bounded — ELF
     // `.rodata`/`.data.rel.ro`/`.noptrdata`/`.data`, PE `.rdata` (the Windows
     // linker has no pclntab section: the table rides inside the one read-only
@@ -815,7 +815,7 @@ fn functab_end(img: &ImageBytes, h: &PcHeader) -> Option<u64> {
 }
 
 /// `moduledata.text` of the module whose `pcHeader` is at `header_vma`: the
-/// full record ([`kuna_gomodlayout`]) when its release's layout reads, else
+/// full record ([`unlace_gomodlayout`]) when its release's layout reads, else
 /// the head every release shares — word 17 is `len(ftab)` (`nfunc + 1`) and
 /// words 20-23 are `minpc, maxpc, text, etext`, which must nest. Searched in the
 /// data sections the linker places `runtime.firstmoduledata` in.
@@ -866,7 +866,7 @@ fn go_minor(file: &object::File, img: &ImageBytes) -> Option<u16> {
 }
 
 /// The `moduledata` of the module whose `pcHeader` is at `header_vma`, read
-/// through its release's layout ([`kuna_gomodlayout`]) and accepted only when
+/// through its release's layout ([`unlace_gomodlayout`]) and accepted only when
 /// its `ftab` holds `nfunc + 1` entries.
 fn module_record(
     file: &object::File,

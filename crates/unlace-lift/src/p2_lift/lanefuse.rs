@@ -1,4 +1,4 @@
-//! (kuna `lanefuse`) Re-fuse the per-lane p-code of a vector instruction.
+//! (unlace `lanefuse`) Re-fuse the per-lane p-code of a vector instruction.
 //!
 //! The x86 SLEIGH spec writes many SSE/AVX instructions lane by lane:
 //! `VADDPS ymm0, ymm0, ymm1` is eight `FLOAT_ADD`s on 4-byte slices of the
@@ -16,7 +16,7 @@
 //! (avxlifter.so 0x9c20), from the mnemonic rather than the p-code.
 
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::types::{int4, uint4};
 use unlace_num::opcodes::OpCode;
 
@@ -136,7 +136,7 @@ fn neon_builtins() -> Vec<(uint4, String)> {
 
 /// Fuse a run of lane copies of one scalar into `vdup[q]_n`: `dup v0.4s, w1`
 /// lifts as four COPYs of `w1` into the four lanes of `v0`, in any order.
-fn fuse_neon_dup(data: &mut Funcdata, ops: &[OpId]) -> KunaResult<bool> {
+fn fuse_neon_dup(data: &mut Funcdata, ops: &[OpId]) -> UnlaceResult<bool> {
     let copies: Vec<(OpId, Address, int4, Address, int4)> = ops
         .iter()
         .filter_map(|&op| {
@@ -219,10 +219,10 @@ fn fuse_neon_dup(data: &mut Funcdata, ops: &[OpId]) -> KunaResult<bool> {
     Ok(true)
 }
 
-/// (kuna `neonintrin`) Fuse every AArch64 lane run among the ops of one
+/// (unlace `neonintrin`) Fuse every AArch64 lane run among the ops of one
 /// instruction into its ACLE built-in: the same runs as [`fuse`] over 8- and
 /// 16-byte registers.
-pub fn fuse_neon(data: &mut Funcdata, ops: &[OpId]) -> KunaResult<bool> {
+pub fn fuse_neon(data: &mut Funcdata, ops: &[OpId]) -> UnlaceResult<bool> {
     let mut changed = fuse_neon_dup(data, ops)?;
     if changed {
         return Ok(true);
@@ -419,7 +419,7 @@ pub fn has_vector_run(data: &Funcdata, ops: &[OpId]) -> bool {
 
 /// `vex` also stands for `lanefuse all`, which fuses legacy-SSE runs as if
 /// they were VEX-encoded.
-pub fn fuse(data: &mut Funcdata, ops: &[OpId], vex: bool) -> KunaResult<bool> {
+pub fn fuse(data: &mut Funcdata, ops: &[OpId], vex: bool) -> UnlaceResult<bool> {
     let mut changed = false;
     let mut i = 0;
     while i < ops.len() {
@@ -585,7 +585,7 @@ fn addr_of(data: &Funcdata, vn: Option<VarnodeId>) -> Option<Address> {
 /// that every lane of `r` is rewritten so, and turns the user-op into its masked
 /// built-in reading `(src, k, operands...)` or `(k, operands...)`; the lane ops
 /// and the mask extraction are removed.
-pub fn fold_mask(data: &mut Funcdata, ops: &[OpId], evex_z: bool) -> KunaResult<bool> {
+pub fn fold_mask(data: &mut Funcdata, ops: &[OpId], evex_z: bool) -> UnlaceResult<bool> {
     let Some(pos) = ops.iter().position(|&op| {
         data.obank().get(op).is_some_and(|o| {
             o.code() == OpCode::CPUI_CALLOTHER
@@ -799,7 +799,7 @@ pub fn fold_mask(data: &mut Funcdata, ops: &[OpId], evex_z: bool) -> KunaResult<
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.lanefuse_mask_builtins = Some(mask_builtins);
     hooks.lanefuse_builtins = Some(builtins);
 }

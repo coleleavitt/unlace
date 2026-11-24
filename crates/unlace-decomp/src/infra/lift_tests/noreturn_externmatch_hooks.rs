@@ -1,9 +1,9 @@
-//! Tests moved out of `kuna_noreturn_externmatch` because they reach pass hooks a higher crate
+//! Tests moved out of `unlace_noreturn_externmatch` because they reach pass hooks a higher crate
 //! provides. They live in the driver, which links every hook.
 
 #![allow(unused_imports, dead_code)]
 
-/// The imports of `kuna_noreturn_externmatch` itself, as a glob so the tests' own imports win.
+/// The imports of `unlace_noreturn_externmatch` itself, as a glob so the tests' own imports win.
 mod module_scope {
     pub(super) use crate::architecture::Architecture;
     pub(super) use unlace_base::address::Address;
@@ -17,7 +17,7 @@ use crate::noreturn_externmatch::*;
 use module_scope::*;
 use std::rc::Rc;
 use std::sync::Arc;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_sleigh::globalcontext::ContextInternal;
 use unlace_sleigh::loadimage::{ImageBytes, LoadImage};
 use unlace_sleigh::sleigh::Sleigh;
@@ -49,7 +49,7 @@ impl LoadImage for StubImage {
     fn get_file_name(&self) -> &str {
         "stub"
     }
-    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> KunaResult<()> {
+    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> UnlaceResult<()> {
         self.0.fill_span(ptr, addr.get_offset());
         Ok(())
     }

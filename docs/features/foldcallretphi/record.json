@@ -1,6 +1,6 @@
 {
   "opportunity": "foldcallret proves a single-use call output order-safe to fold, but ActionMarkImplied re-tests it in check_implied_cover, whose Merge::inflate_test arm forces it explicit when an operand has another live SSA version of the same HighVariable over the call output's cover. Upstream never reaches that arm with a call output, and the version it collides with is the CPUI_INDIRECT the call itself attaches to a global it reads as an argument, so passing stdin/stdout/errno to a call is enough to block the fold.",
-  "test_name": "tests/stages/kuna-foldcallretphi.xml (default passes first, no option command: helper undeclared = the spill kept by the width guard; helper declared int4 = the fold; target2 = a global write in the span keeps the spill; target3 = gcc -O2 setcc/and for (r == 0) && (a > 5), the call's value the right operand of BOOL_AND = the spill kept; then option foldcallretphi off = the spills) + tests/stages/kuna-foldcallretphi-join.xml (i386 edx:eax: undeclared big keeps the spill, declared int4 folds, off keeps it) + 3 option-parse unit tests + the architecture default assertion",
+  "test_name": "tests/stages/foldcallretphi.xml (default passes first, no option command: helper undeclared = the spill kept by the width guard; helper declared int4 = the fold; target2 = a global write in the span keeps the spill; target3 = gcc -O2 setcc/and for (r == 0) && (a > 5), the call's value the right operand of BOOL_AND = the spill kept; then option foldcallretphi off = the spills) + tests/stages/foldcallretphi-join.xml (i386 edx:eax: undeclared big keeps the spill, declared int4 folds, off keeps it) + 3 option-parse unit tests + the architecture default assertion",
   "binary": "synthetic bytechunk (x86:LE:64:default:gcc) in the stage test",
   "selector": "target",
   "func_addr": "0x1000",
@@ -106,7 +106,7 @@
     "decompiler/crates/kuna-decomp/src/p0_knowledge/options.rs",
     "decompiler/crates/kuna-decomp/src/p0_knowledge/modes.rs (UNEVALUATED list entry)",
     "decompiler/crates/kuna-decomp/phases.toml",
-    "tests/stages/kuna-foldcallretphi.xml (new)",
+    "tests/stages/foldcallretphi.xml (new)",
     "docs/spec/06-variables-and-merge.md",
     "docs/options.md",
     "docs/baseline-stages.json",
@@ -148,7 +148,7 @@
     "phases/tests.rs: fn-name-settables / kuna_num_settables / SETTABLE_TABLE-len / fn-name-tiers / tier-tuple / catalog-json-records (counters --fix)",
     "phases/tests.rs option_values_live_value_present_for_86: a bool option with no live_field must be listed beside its sibling foldcallret",
     "tests/catalog_bytecompat.rs x4 + tests/fixtures/phase_catalog.json (recaptured with no program loaded)",
-    "tests/stages/kuna-catalog.xml #6 angr bucket 32 -> 33",
+    "tests/stages/catalog.xml #6 angr bucket 32 -> 33",
     "kuna-base/src/xml.rs corpus file count 295 -> 296",
     "p0_knowledge/modes.rs aggressive_carries_every_default_off_option: every default-off on|off option is in AGGRESSIVE_OVERRIDES or listed with a reason"
   ],
@@ -170,11 +170,11 @@
   "default_on_flip": {
     "base": "measured on origin/main e1139df9, then rebased onto f1ec42a7 (boolbyte default-on) and onto 6e4f6fa5 (structsynth default-on), re-measured each time (gates, 32-binary sweep, typesweep, speed); one build per base, new default vs --option foldcallretphi off; off byte-identical to main-build dumps on 24 of the 32 sweep binaries at e1139df9 (48/48 files); review round 3 added the joined-return and short-circuit guards and every measurement was re-run on that build (6e4f6fa5), the sweep widened to 48 binaries; rebased onto d96e3408 (charbyte default-on) and re-measured: gates, 48-binary sweep (identical hunk list and metrics), typesweep, speed",
     "datatests": "675/675 PARITY OK, 0 assertions move, no per-test opt-out",
-    "stages": "PARITY OK on every base (1141/1141 e1139df9, 1144/1144 f1ec42a7, 1156/1156 6e4f6fa5); tests/stages/kuna-foldcallretphi.xml gains the undeclared-helper pass (spill kept) and `parse line extern int4 helper(int8 a);` (folded); its 5 assertion names re-recorded in docs/baseline-stages.json, no other row moves; round 3: 1160/1160 PARITY OK. kuna-foldcallretphi.xml runs its default passes first with no option command (pins the shipped default) and gains target3 (gcc -O2 setcc/and for (r == 0) && (a > 5): spill kept, #6/#7); new kuna-foldcallretphi-join.xml (i386 edx:eax: undeclared big keeps the spill, declared int4 folds); 5 names re-recorded + 4 new rows, no other row moves; the 4 new assertions fail on the pre-guard build; d96e3408: 1181/1181 PARITY OK after re-recording (only this option's 5 renamed + 4 new rows move)",
+    "stages": "PARITY OK on every base (1141/1141 e1139df9, 1144/1144 f1ec42a7, 1156/1156 6e4f6fa5); tests/stages/foldcallretphi.xml gains the undeclared-helper pass (spill kept) and `parse line extern int4 helper(int8 a);` (folded); its 5 assertion names re-recorded in docs/baseline-stages.json, no other row moves; round 3: 1160/1160 PARITY OK. foldcallretphi.xml runs its default passes first with no option command (pins the shipped default) and gains target3 (gcc -O2 setcc/and for (r == 0) && (a > 5): spill kept, #6/#7); new foldcallretphi-join.xml (i386 edx:eax: undeclared big keeps the spill, declared int4 folds); 5 names re-recorded + 4 new rows, no other row moves; the 4 new assertions fail on the pre-guard build; d96e3408: 1181/1181 PARITY OK after re-recording (only this option's 5 renamed + 4 new rows move)",
     "test_cli": "tests/cli/no-cli-rename-or-prototype-override re-pointed v2 -> v1 (the read buffer renumbers once the strcmp spill folds) plus a read(\\w+,credbuf,8) clause; derived id a-a58fc408288b -> a-76f56989c6d3; 185/185 (e1139df9, f1ec42a7), 189/189 (6e4f6fa5); 189/189 with both round-3 guards; 189/189 on d96e3408",
     "rust_test_pins_moved": {
-      "kuna-console/tests/verify_assertplane.rs": "6 cases target authenticate's register local int v1 (the strcmp spill); fixture loads with foldcallretphi off",
-      "kuna-console/tests/verify_libcsigs.rs callee_return_type_reaches_the_local_that_holds_it": "fd local found by its = open( assignment instead of the v4 number",
+      "console/tests/verify_assertplane.rs": "6 cases target authenticate's register local int v1 (the strcmp spill); fixture loads with foldcallretphi off",
+      "console/tests/verify_libcsigs.rs callee_return_type_reaches_the_local_that_holds_it": "fd local found by its = open( assignment instead of the v4 number",
       "kuna-ghidra/tests/ghidra_sim_e2e.rs ghidra_sim_faillog_pins": "PIN_FAILLOG_C_LINES [287,39,92] -> [286,37,92]: fstat(fileno(..)) and !fclose(dat_6298) fold in sub_2620, fread/fwrite in sub_3320; sub_3de0/sub_31a0/sub_3900/fseeko keep their spills under the width guard; CLI loses the same 1 and 2 lines"
     },
     "typesweep": {

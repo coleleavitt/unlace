@@ -51,7 +51,7 @@ fn raw_extended_loads_round_trip_through_native_i386_calls() {
     let specs = common::repo_root().join("specs");
     let mut code = String::new();
     for name in ["sample", "sample_choice"] {
-        let (body, error, status) = common::run_kuna(&[
+        let (body, error, status) = common::run_unlace(&[
             "decompile",
             library.to_str().unwrap(),
             name,
@@ -66,7 +66,7 @@ fn raw_extended_loads_round_trip_through_native_i386_calls() {
         code.push_str(&body.replacen(&format!(" {name}("), &format!(" regenerated_{name}("), 1));
         code.push('\n');
     }
-    let (declared, error, status) = common::run_kuna(&[
+    let (declared, error, status) = common::run_unlace(&[
         "decompile",
         library.to_str().unwrap(),
         "sample",

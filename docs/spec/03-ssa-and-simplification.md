@@ -1716,7 +1716,7 @@ address, then drops the table and the structured-block graph so no `switch`
 is emitted. A header warning (`Switch with 1 destination removed at <addr>`,
 plus `: N cases all go to same destination` when every entry matches) is
 added unless the table has one entry and the switch value is a constant
-(`tests/stages/kuna-switchsingle.toml`). Unlike upstream, a one-entry table
+(`tests/stages/switchsingle.toml`). Unlike upstream, a one-entry table
 over a computed value is left alone: kuna's table recovery can keep only the
 entries its guards prove reachable, so a single kept entry is not proof that
 the dispatch has one destination. This is a strict fix with no option: a
@@ -1961,13 +1961,13 @@ functions, exactly the loads it widened before. Those are the residual: a
 declared record's field reached from a declared parameter or global, such as a
 DWARF-typed `r` in `(r->flags & 0x81) == 0x80`. The printed C reads the
 whole declared field there, which faults only for an object shorter than its
-declared type. `kuna-narrowload.xml` pins the narrow spellings, the declared
+declared type. `narrowload.xml` pins the narrow spellings, the declared
 parameter's whole-field compare, and the narrow read through a call's result
 and a loop's phi. `decompile_all_cli.rs`'s
 `a_narrow_read_round_trips_through_the_printed_c` and
 `a_narrow_read_of_a_declared_record_round_trips_through_the_printed_c` (the
 `-g` builds) run the printed functions on objects that end at a page boundary.
-`kuna-tiedphitrim.xml` #13/#14 and `structsynth-locals.xml` #2 pin the narrow
+`tiedphitrim.xml` #13/#14 and `structsynth-locals.xml` #2 pin the narrow
 spelling of a 4-byte field read through an inferred `int8 *`.
 
 Under `namestyle angr`, copy propagation also preserves the eliminated
@@ -2538,7 +2538,7 @@ image is still followed. Only a jump whose target, or the table read feeding
 it, is computed by a SEGMENTOP is judged (a bounded walk up the target's
 definitions): the Z80 spec declares a segment op that its unsegmented build
 never emits, and a Z80 `jp (hl)` table with a row in RAM or the BIOS is
-followed as upstream follows it (`tests/stages/kuna-segmentize-z80.toml`).
+followed as upstream follows it (`tests/stages/segmentize-z80.toml`).
 Ghidra mode has no local `.sla` to compile the snippet, so there the segment
 ops are not decoded and the CALLOTHER stays.
 
@@ -2934,7 +2934,7 @@ across blocks from an input at the entry, and its lanes, being unique storage,
 become temporaries read by four MULTIEQUALs. The function used to fail with
 `laned register split failed part way: Free varnode has multiple descendants`;
 it now decompiles without that split
-(`tests/stages/kuna-lanedivide-freefanout.toml`). This is a correctness repair
+(`tests/stages/lanedivide-freefanout.toml`). This is a correctness repair
 with no option.
 
 When `SplitDatatype` divides a constant, `constantbytes.rs` extracts
@@ -2982,7 +2982,7 @@ Splitting at the LOAD and keeping the COPY is not the answer: when the COPY writ
 a global at the function's return, the pieces land in a temporary and the COPY
 into the global stops printing, which drops the global's store. With nothing between the
 two, the split still happens at the COPY, as upstream does. This is a strict fix
-with no option (`tests/stages/kuna-aliasoverlap.toml` #5 to #8).
+with no option (`tests/stages/aliasoverlap.toml` #5 to #8).
 
 ### (kuna) `regnarrow` — a register local at the width its values fit
 
@@ -3060,7 +3060,7 @@ type_match the declared width is what moves: a
 `uint8_t` counter or a byte read from a `uint8_t` field matches `char`, and an
 x86-64 `int` matches `int`; a local the source declares `int` or an enum but
 only ever loads from a byte field narrows too, and the binary cannot tell the
-two apart (`tests/stages/kuna-regnarrow.toml`, `kuna-regnarrow-x86.xml`).
+two apart (`tests/stages/regnarrow.toml`, `regnarrow-x86.xml`).
 
 ### (kuna) `regsigned` — a register local at the width its values are sign extended from
 
@@ -3126,7 +3126,7 @@ holds a sign-extended byte in a register is declared `char`, which the binary
 cannot tell apart. The net is small (a few perfect functions on ARM firmware,
 none on x86-64), and a narrowed value that a wider reader takes back gains a
 cast (`(long)(int)v` on AArch64), which is why the option stays off by default
-(`tests/stages/kuna-regsigned.toml`).
+(`tests/stages/regsigned.toml`).
 
 ## 3.4 Conditional execution
 
@@ -3166,7 +3166,7 @@ may simply not be linked yet. `condexe.rs (ConditionalExecution::build_heritage_
 records that per space from `Funcdata::num_heritage_passes`, as upstream. Most
 such ops fall to dead-code removal first. They still reach the test when the
 space's dead-code delay outlasts its heritage delay (the console
-`deadcode delay` command, `tests/stages/kuna-condexe-heritage.toml`), and on
+`deadcode delay` command, `tests/stages/condexe-heritage.toml`), and on
 ARM predicated code: a `moveq`/`movne` pair ahead of the re-tested branch
 (u-boot `env_attr_lookup`) now collapses into the guarded block.
 `condexe.rs (RuleOrPredicate)` (oppool1, group
@@ -3549,7 +3549,7 @@ outcome reaches. A `CALLOTHER` is inserted after the merge block's
 no-overflow outcome, a threshold that is not `(2^W - 1) / c`, or a guard over
 other factors is left alone.
 
-**alloca** (kuna) — `crates/unlace-bandb-base/src/p3_dataflow/alloca.rs (RuleAlloca, RuleAllocaProbe, rewrite_raw)`, group `analysis`, live gate `alloca_calls` (`option alloca`, default on). A dynamic stack allocation becomes `alloca(size)` (builtin `BUILTIN_ALLOCA`, output typed `void *`). At `ActionStart`, before heritage, `sp = sp - reg` (directly, or through the temporary SLEIGH stages it in) becomes `sp = alloca(reg)`, unless the same block loaded the register as a constant: `mov eax,N; call __chkstk; sub rsp,rax` is a fixed frame. Rewriting the raw op gives the stack pointer one definition that later rules cannot duplicate. `RuleAlloca` then takes the size back to the `n` the source wrote when it is the round-up `(n + c) & -a` (`a` from 4 to 64, `c` below 64, also as `>> k << k`, through the zero extension a 32-bit `and` adds) or the stack-clash remainder `(n + c) & (p - a)`. It also rewrites an `INT_ADD` of a stack-pointer value (the entry stack pointer, or an earlier `alloca` result, plus constants) and the negation of a non-constant rounded size, which is how clang computes the new stack pointer in another register first, and it drops the realignment `(alloca(n) + c) & -a` of the result. It leaves that `INT_ADD` alone when its result meets another stack-derived pointer in a `MULTIEQUAL` (`p = n > k ? alloca(n) : buf`), because the frame array `buf` is laid out from the stack arithmetic the merge sees. Under stack-clash protection the page part is taken by a probe loop guarded by `sp == limit`. `RuleAllocaProbe` removes each probe, a store back of the word the same instruction just loaded from the same stack-derived address (`or qword [rsp+0xff8],0`, `xor qword [rsp],0`). A load and a store from two instructions are not a probe: another store can change the slot between them, so the second store restores an earlier value. CPython's `r = []; ...; return r` lost its return value this way, because `STORE_FAST r` pops the slot that `LOAD_FAST r` later pushes back into. It also pins a guard that compares a stack pointer with the loop's limit (an `alloca` result, or the stack pointer less the page part) to the successor that does not test the limit again, which makes the loop unreachable. The stack arguments an i386 caller pushes after the allocation stay unrecovered, as before, because the stack model has one frame base and after the allocation the stack pointer is not that base plus a constant. Exercised by `tests/stages/kuna-alloca.toml`.
+**alloca** (kuna) — `crates/unlace-bandb-base/src/p3_dataflow/alloca.rs (RuleAlloca, RuleAllocaProbe, rewrite_raw)`, group `analysis`, live gate `alloca_calls` (`option alloca`, default on). A dynamic stack allocation becomes `alloca(size)` (builtin `BUILTIN_ALLOCA`, output typed `void *`). At `ActionStart`, before heritage, `sp = sp - reg` (directly, or through the temporary SLEIGH stages it in) becomes `sp = alloca(reg)`, unless the same block loaded the register as a constant: `mov eax,N; call __chkstk; sub rsp,rax` is a fixed frame. Rewriting the raw op gives the stack pointer one definition that later rules cannot duplicate. `RuleAlloca` then takes the size back to the `n` the source wrote when it is the round-up `(n + c) & -a` (`a` from 4 to 64, `c` below 64, also as `>> k << k`, through the zero extension a 32-bit `and` adds) or the stack-clash remainder `(n + c) & (p - a)`. It also rewrites an `INT_ADD` of a stack-pointer value (the entry stack pointer, or an earlier `alloca` result, plus constants) and the negation of a non-constant rounded size, which is how clang computes the new stack pointer in another register first, and it drops the realignment `(alloca(n) + c) & -a` of the result. It leaves that `INT_ADD` alone when its result meets another stack-derived pointer in a `MULTIEQUAL` (`p = n > k ? alloca(n) : buf`), because the frame array `buf` is laid out from the stack arithmetic the merge sees. Under stack-clash protection the page part is taken by a probe loop guarded by `sp == limit`. `RuleAllocaProbe` removes each probe, a store back of the word the same instruction just loaded from the same stack-derived address (`or qword [rsp+0xff8],0`, `xor qword [rsp],0`). A load and a store from two instructions are not a probe: another store can change the slot between them, so the second store restores an earlier value. CPython's `r = []; ...; return r` lost its return value this way, because `STORE_FAST r` pops the slot that `LOAD_FAST r` later pushes back into. It also pins a guard that compares a stack pointer with the loop's limit (an `alloca` result, or the stack pointer less the page part) to the successor that does not test the limit again, which makes the loop unreachable. The stack arguments an i386 caller pushes after the allocation stay unrecovered, as before, because the stack model has one frame base and after the allocation the stack pointer is not that base plus a constant. Exercised by `tests/stages/alloca.toml`.
 
 **cancelbytearithmetic** (repipe `cancelling-byte-arithmetic-splits`) —
 `crates/unlace-bandb-base/src/p3_dataflow/cancelbytearithmetic.rs`
@@ -3622,7 +3622,7 @@ Power-of-two widths stay with `ActionLaneDivide`, `simdlane` and
 `constspaceload` to preserve their view of register lanes. The rule runs during
 simplification because other rules can recreate the odd widths after heritage.
 It leaves all 675 datatest assertions unchanged.
-`tests/stages/kuna-wideslice.toml` pins clang
+`tests/stages/wideslice.toml` pins clang
 `-O3` SSE byte-unpacking (eight direct lane additions, no 13-byte locals and
 no `SUB13x` reads);
 `gh275-spillargtrial.xml` independently exercises a 12-byte packed-double tree.
@@ -3661,10 +3661,10 @@ Floats, saturating and sign-extended lanes are not matched, and neither is a
 vector loop the compiler also unrolled (two vector iterations per trip with an
 odd-trip epilogue, clang 14's x86-64 `-O2`/`-O3` default) nor any gcc 11 shape
 measured.
-`tests/stages/kuna-devectorize.toml` runs the byte-sum witness in both passes
+`tests/stages/devectorize.toml` runs the byte-sum witness in both passes
 (off: the guard, eight accumulators, fold and remainder loop; on: one
 `do { v1 += bytes[v2]; ... } while (length != v2)`);
-`tests/stages/kuna-devectorize-effects.toml` keeps the vector arm of two
+`tests/stages/devectorize-effects.toml` keeps the vector arm of two
 hand-written sums whose exits disagree on a global store.
 
 **Inline string lengths** (`option strlenscan`, default **on**) —
@@ -3715,7 +3715,7 @@ different paths are never merged at a join. The printed `strlen` is therefore
 taken where the scan was. A scan for any other byte (a `memchr`-like loop), one
 whose count starts elsewhere, one whose raw count is read, and one stepping
 backward keep their loops.
-`tests/stages/kuna-strlenscan.toml` runs gcc 9 -O1 functions in both passes. The
+`tests/stages/strlenscan.toml` runs gcc 9 -O1 functions in both passes. The
 default pass shows `return strlen(a0);`, a length read twice as one variable,
 two lengths in one expression in order, a length taken before the store and
 before the call that follow the scan, an inlined `strcat` taking its length once
@@ -3806,7 +3806,7 @@ read it through, so a fill of `buf` prints `builtin_memset(buf,0,0x1118)` rather
 than `builtin_memset((void *)0x4042c0,0,0x1118)`, and `globalref` (09-emission
 §9.9) names an unnamed one `&dat_<addr>`, since passing that address as a
 `void *` operand converts exactly as the cast did.
-`tests/stages/kuna-repstring.toml` and `kuna-repstring-i386.xml` run gcc 15
+`tests/stages/repstring.toml` and `repstring-i386.xml` run gcc 15
 `-Os -minline-all-stringops` builds of
 `unlace-analysis/tests/fixtures/repstring.c` in both passes: fills of a mixed
 word, of zero words and of a byte, a copy, a copy whose final pointer is
@@ -4662,9 +4662,9 @@ varnode, one heritage has not reached, is left alone: a free varnode keeps its
 single reader, so no new op can read it, and a rewrite to a bare leaf would
 leave the root a `COPY` with no input
 (`crates/unlace-bandb-base/src/p3_dataflow/mba.rs (replace)`; CoreADI32.dll
-under `mba on` panicked in `RuleTermOrder` this way). Pinned by `tests/stages/kuna-mba.toml` (two leaves) and
-`tests/stages/kuna-mba-groups.toml` (a four-leaf group, six leaves in three
-groups, and the polynomial) and `tests/stages/kuna-mba-solve.toml` (constant
+under `mba on` panicked in `RuleTermOrder` this way). Pinned by `tests/stages/mba.toml` (two leaves) and
+`tests/stages/mba-groups.toml` (a four-leaf group, six leaves in three
+groups, and the polynomial) and `tests/stages/mba-solve.toml` (constant
 operands, a shared complement, a complemented sum, a leaf plus a boolean term,
 bit logic alone). A subtree of the replacement that the old tree already
 computes reuses that varnode. Not done: a narrower op under a zero extension
@@ -4855,7 +4855,7 @@ becomes a COPY of the new phi's output. Each edge value equals the pair on that
 edge, so the rewrite is exact. The half phis keep their other readers and are
 removed as dead code when they have none.
 
-Pinned by `tests/stages/kuna-pairlocal.toml` (gcc -m32 -O1, a `long long` set
+Pinned by `tests/stages/pairlocal.toml` (gcc -m32 -O1, a `long long` set
 to a sign-extended int, a zero-extended product and 0 on three paths: the
 option-off output has one `CONCAT44`, the option-on output none). Not done: a
 pair whose halves are joined through PIECEs of other variables (64-bit

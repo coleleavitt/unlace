@@ -17,7 +17,7 @@ for index,(r,old,w)in enumerate(zip(roots,oldwork,work)):
   else:assert not(r/name).exists(),('unexpected local file',str(r),name)
   (r/name).parent.mkdir(parents=True,exist_ok=True);(r/name).write_bytes(subprocess.check_output(['git','show',rev+':'+name],cwd=main))
  p=r/'decompiler/crates/kuna-base/src/xml.rs';s=p.read_text();count=644+index
- s,n=re.subn(r'        assert_eq!\(count, \d+, "corpus file count drifted"\);','        // and kuna-wrapsplit + kuna-wrapsplit-be / accesses that run past the top of their space\n        assert_eq!(count, '+str(count)+', "corpus file count drifted");',s);assert n==1;p.write_text(s)
+ s,n=re.subn(r'        assert_eq!\(count, \d+, "corpus file count drifted"\);','        // and wrapsplit + wrapsplit-be / accesses that run past the top of their space\n        assert_eq!(count, '+str(count)+', "corpus file count drifted");',s);assert n==1;p.write_text(s)
  (w/'integration-source.json').write_text(json.dumps({'main_commit':rev,'previous_main':prior,'changed_main_paths':files,'corpus_files':count,'previous_evidence':str(backup)},indent=2)+'\n')
  print(r.name,'main source integrated',flush=True)
 env=os.environ|{'PATH':'/tmp/kuna-toolchains/go1.27.3/go/bin:'+os.environ['PATH'],'CARGO_INCREMENTAL':'0','CARGO_PROFILE_DEV_DEBUG':'0','CARGO_PROFILE_TEST_DEBUG':'0','CARGO_BUILD_JOBS':'8','RUST_TEST_THREADS':'8'}
@@ -33,7 +33,7 @@ def run(r,w,cmd,log,cwd=None):
  print(r.name,log,'PASS',flush=True)
 def feature(index):
  r,w=roots[index],work[index]
- run(r,w,['cargo','build','--release','-p','kuna-cli','-p','kuna-console','-p','kuna-harness'],'build.log',r/'decompiler')
+ run(r,w,['cargo','build','--release','-p','kuna-cli','-p','console','-p','kuna-harness'],'build.log',r/'decompiler')
  run(r,w,['decompiler/target/release/kuna','test','--datatests','--datatests-dir','tests/stages','--save-baseline','docs/baseline-stages.json'],'record-stages.log')
  count=[3523,3531,3541][index];assert json.loads((r/'docs/baseline-stages.json').read_text())['data_footer']==[count,count]
  files=subprocess.check_output(['git','ls-files','--cached','--others','--exclude-standard','decompiler','tests','specs','VERSION','Makefile','docs/spec','docs/options.md'],cwd=r,text=True).splitlines()

@@ -24,7 +24,7 @@ pub use unlace_structure::*;
 /// The pass hooks this crate's own modules provide: each module's `provide`, in the driver's
 /// order. The driver composes the crates' tables into the default pipeline's
 /// (`unlace_decomp::PASS_HOOKS`); a crate's unit tests compose the crates at or below it.
-pub fn provide_all(slots: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide_all(slots: &mut crate::passhooks::UnlaceHookSlots) {
     crate::calltransport::provide(slots);
     crate::funcdata_union::provide(slots);
     crate::exclusivearguse::provide(slots);
@@ -86,16 +86,16 @@ pub fn provide_all(slots: &mut crate::passhooks::KunaHookSlots) {
 
 /// This crate's unit tests link without the driver, so they define the driver's hook symbol
 /// themselves: the hooks of this crate and the crates below it, and a stub that panics, naming
-/// itself, for each hook a higher crate provides (`KunaHookSlots::finish_with_stubs`).
+/// itself, for each hook a higher crate provides (`UnlaceHookSlots::finish_with_stubs`).
 #[cfg(test)]
 mod unprovided {
-    use unlace_middle::passhooks::{KunaHookSlots, KunaHooks};
+    use unlace_middle::passhooks::{UnlaceHookSlots, UnlaceHooks};
 
     #[unsafe(no_mangle)]
-    fn __unlace_default_pass_hooks() -> &'static KunaHooks {
-        static HOOKS: std::sync::OnceLock<KunaHooks> = std::sync::OnceLock::new();
+    fn __unlace_default_pass_hooks() -> &'static UnlaceHooks {
+        static HOOKS: std::sync::OnceLock<UnlaceHooks> = std::sync::OnceLock::new();
         HOOKS.get_or_init(|| {
-            let mut slots = KunaHookSlots::default();
+            let mut slots = UnlaceHookSlots::default();
             unlace_middle::provide_all(&mut slots);
             unlace_lift::provide_all(&mut slots);
             unlace_structure::provide_all(&mut slots);

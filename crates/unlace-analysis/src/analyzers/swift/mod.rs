@@ -155,13 +155,13 @@ impl AnalysisPass for SwiftMetadataPass {
         let records = namer.claim_records();
         let witnesses = ctx
             .arch
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::valuewitness::Valuewitness>()
             .0
             .then(|| swiftwitness::claim(&reader, &md, ctx.file.architecture(), &namer));
         let helpers = (ctx
             .arch
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::valuewitness::Valuewitness>()
             .0
             && ctx.file.architecture() == object::Architecture::Aarch64)
@@ -179,12 +179,12 @@ impl AnalysisPass for SwiftMetadataPass {
         out.swift_enum_cases.sort_unstable();
         if ctx
             .arch
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::analysisgates::Swifttypes>()
             .0
             || ctx
                 .arch
-                .kuna_options
+                .unlace_options
                 .get::<unlace_decomp::analysisgates::Swifthelpers>()
                 .0
         {
@@ -199,7 +199,7 @@ impl AnalysisPass for SwiftMetadataPass {
             );
             if ctx
                 .arch
-                .kuna_options
+                .unlace_options
                 .get::<unlace_decomp::analysisgates::Swifthelpers>()
                 .0
             {
@@ -207,7 +207,7 @@ impl AnalysisPass for SwiftMetadataPass {
             }
             if ctx
                 .arch
-                .kuna_options
+                .unlace_options
                 .get::<unlace_decomp::analysisgates::Swifttypes>()
                 .0
             {
@@ -234,7 +234,7 @@ impl AnalysisPass for SwiftMetadataPass {
                 }
                 if let (true, Some(regs)) = (
                     ctx.arch
-                        .kuna_options
+                        .unlace_options
                         .get::<unlace_decomp::swiftcall::Swiftcall>()
                         .0,
                     regs.as_ref(),
@@ -247,7 +247,7 @@ impl AnalysisPass for SwiftMetadataPass {
                         .collect();
                     let callers = if ctx
                         .arch
-                        .kuna_options
+                        .unlace_options
                         .get::<unlace_decomp::analysisgates::Swiftcallers>()
                         .0
                     {

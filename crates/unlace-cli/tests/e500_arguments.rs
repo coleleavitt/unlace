@@ -48,7 +48,7 @@ fn decompile_with(words: &[u32], little: bool, variant: &str, options: &[(&str, 
     for (name, value) in options {
         args.extend(["--option", name, value]);
     }
-    let (out, err, rc) = common::run_kuna(&args);
+    let (out, err, rc) = common::run_unlace(&args);
     std::fs::remove_file(path).unwrap();
     assert_eq!(rc, 0, "{err}\n{out}");
     out

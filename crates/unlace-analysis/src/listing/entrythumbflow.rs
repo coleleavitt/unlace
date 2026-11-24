@@ -1,10 +1,10 @@
-//! (kuna `entrythumbflow`) Entry-reachable Thumb decode context for a mixed
+//! (unlace `entrythumbflow`) Entry-reachable Thumb decode context for a mixed
 //! ARM image whose container entry carries the Thumb bit but whose machine word
 //! makes no whole-image mode claim (PE `IMAGE_FILE_MACHINE_ARM` and
 //! `ARMTHUMB_MIXED`, as a UEFI TE carries them).
 //!
 //! The entry bit proves the mode at one address. Ghidra's disassembler carries
-//! that context along the flow it follows; kuna's decompiler reads context per
+//! that context along the flow it follows; unlace's decompiler reads context per
 //! address from the `ContextDatabase` and follows nothing, so the same walk is
 //! run here once, at the analysis commit, and its result is published as
 //! bounded [`ContextPaint`] ranges: exactly the instruction bytes the walk
@@ -44,7 +44,7 @@ use std::collections::BTreeSet;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::space::AddrSpace;
 use unlace_decomp::architecture::Architecture;
 
@@ -76,7 +76,7 @@ pub fn entry_thumb_flow(
     ranges: &[(u64, u64)],
     entry: u64,
     noreturn: &[u64],
-) -> KunaResult<EntryThumbFlow> {
+) -> UnlaceResult<EntryThumbFlow> {
     let mut ranges: Vec<(u64, u64)> = ranges
         .iter()
         .filter_map(|&(start, size)| {

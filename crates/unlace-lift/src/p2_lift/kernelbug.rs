@@ -36,7 +36,7 @@
 //! the kernel's own spelling, with the file as a `char *` constant so it prints
 //! as the literal — after which the flow falls through to the next instruction,
 //! or `BUG()`, after which the flow plants the artificial no-return halt a call
-//! that never returns gets ([`kuna_brktrap`](crate::brktrap)). A table
+//! that never returns gets ([`unlace_brktrap`](crate::brktrap)). A table
 //! without `CONFIG_DEBUG_BUGVERBOSE` has no file or line, and the statement
 //! prints bare.
 //!
@@ -51,7 +51,7 @@
 use crate::context::OpId;
 use crate::funcdata::Funcdata;
 use crate::userop::{BUILTIN_KERNEL_BUG, BUILTIN_KERNEL_WARN};
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::types::int4;
 
 /// The AArch64 `brk` immediate Linux uses for `BUG`/`WARN` (`BUG_BRK_IMM`).
@@ -118,7 +118,7 @@ pub fn rewrite(
     branch: OpId,
     callother: OpId,
     site: &KernelBugSite,
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     let ptr_size: int4 = data
         .obank()
         .get(branch)
@@ -158,10 +158,10 @@ pub fn rewrite(
     Ok(())
 }
 
-/// (kuna `kernelbug`) The kernel BUG sites the loader found; an
+/// (unlace `kernelbug`) The kernel BUG sites the loader found; an
 /// [`ArchTable`](crate::archstate::ArchTable) on the architecture.
 pub type BugSites = Vec<KernelBugSite>;
-crate::kuna_arch_table!(BugSites);
+crate::unlace_arch_table!(BugSites);
 
 #[cfg(test)]
 #[path = "kernelbug/tests.rs"]

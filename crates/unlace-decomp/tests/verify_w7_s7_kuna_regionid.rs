@@ -1,4 +1,4 @@
-//! Independent adversarial verification tests for `w7-s7-kuna-regionid`
+//! Independent adversarial verification tests for `w7-s7-unlace-regionid`
 //! (port of `decompiler/cpp/kuna_regionid.{cc,hh}`).
 //!
 //! These tests were written by the VERIFIER, not the porter.  They re-derive
@@ -20,7 +20,7 @@
 //! pinning a fragile exact tree shape.
 
 use unlace_decomp::context::BlockId;
-use unlace_decomp::regionid::{KunaGraphRegion, KunaRegionIdentifier, KunaRegionVisitor};
+use unlace_decomp::regionid::{UnlaceGraphRegion, UnlaceRegionIdentifier, UnlaceRegionVisitor};
 
 /// Visitor that records the leaf-block addresses (in walk order) and, for every
 /// cyclic region, its body block addresses (sorted).  Mirrors the in-module
@@ -34,11 +34,11 @@ struct Collector {
     stack: Vec<(bool, Vec<u64>)>,
 }
 
-impl KunaRegionVisitor for Collector {
-    fn enter_region(&mut self, region: &KunaGraphRegion) {
+impl UnlaceRegionVisitor for Collector {
+    fn enter_region(&mut self, region: &UnlaceGraphRegion) {
         self.stack.push((region.is_cyclic(), Vec::new()));
     }
-    fn exit_region(&mut self, _region: &KunaGraphRegion) {
+    fn exit_region(&mut self, _region: &UnlaceGraphRegion) {
         if let Some((cyclic, mut body)) = self.stack.pop() {
             if cyclic {
                 body.sort_unstable();
@@ -56,8 +56,8 @@ impl KunaRegionVisitor for Collector {
     }
 }
 
-fn run(edges: &[(u64, u64)], addrs: &[u64]) -> (KunaRegionIdentifier, Collector) {
-    let mut ri = KunaRegionIdentifier::new();
+fn run(edges: &[(u64, u64)], addrs: &[u64]) -> (UnlaceRegionIdentifier, Collector) {
+    let mut ri = UnlaceRegionIdentifier::new();
     let mut id = std::collections::BTreeMap::new();
     for &a in addrs {
         id.insert(a, ri.add_synthetic_block(a));
@@ -249,7 +249,7 @@ fn self_loop_head_slice_hack() {
 /// `chosen` here would silently keep the wrong component).
 #[test]
 fn connected_component_prefers_entry_over_largest() {
-    let mut ri = KunaRegionIdentifier::new();
+    let mut ri = UnlaceRegionIdentifier::new();
     // Larger component (4 nodes), no entry.
     let a1 = ri.add_synthetic_block(1);
     let a2 = ri.add_synthetic_block(2);
@@ -289,14 +289,14 @@ fn connected_component_prefers_entry_over_largest() {
 #[test]
 fn compute_idempotent_and_empty_errors() {
     // Empty graph -> Err.
-    let mut empty = KunaRegionIdentifier::new();
+    let mut empty = UnlaceRegionIdentifier::new();
     assert!(
         empty.compute().is_err(),
         "empty input graph is an error, not a panic"
     );
 
     // Idempotent compute on a real graph.
-    let mut ri = KunaRegionIdentifier::new();
+    let mut ri = UnlaceRegionIdentifier::new();
     let n1 = ri.add_synthetic_block(1);
     let n2 = ri.add_synthetic_block(2);
     ri.add_synthetic_edge(n1, n2);

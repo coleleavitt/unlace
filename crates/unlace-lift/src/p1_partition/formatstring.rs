@@ -1,4 +1,4 @@
-//! (kuna `formatstring`) The three-valued gate for printf/scanf varargs typing.
+//! (unlace `formatstring`) The three-valued gate for printf/scanf varargs typing.
 //!
 //! `off` types nothing. `static` runs the LOAD-TIME resolver — the format
 //! constant is read out of the image at the call site and a per-call-site
@@ -20,7 +20,7 @@
 //! `static` resolves at load on x86 only ([`reached_by_default`]); `full` resolves
 //! on every target [`VarargAbi`] admits.
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 
 use crate::architecture::Architecture;
 use crate::dtype::{Datatype, type_metatype};
@@ -173,7 +173,7 @@ pub fn reached_by_default(archid: &str) -> bool {
 /// The variadic convention of the loaded target: the loader's answer when it
 /// recorded one, else what the language id alone says.
 pub fn target_vararg_abi(arch: &Architecture) -> VarargAbi {
-    arch.kuna_tables
+    arch.unlace_tables
         .get::<crate::formatstring::ImageVarargAbi>()
         .unwrap_or_else(|| vararg_abi(&arch.archid, None))
 }
@@ -184,13 +184,13 @@ pub fn target_vararg_abi(arch: &Architecture) -> VarargAbi {
 ///
 /// `on` is an accepted alias for `full`, the meaning it carried while the option
 /// was `on|off`.
-pub fn parse_formatstring_mode(p1: &str) -> KunaResult<(FormatStringMode, String)> {
+pub fn parse_formatstring_mode(p1: &str) -> UnlaceResult<(FormatStringMode, String)> {
     let mode = match p1 {
         "off" => FormatStringMode::Off,
         "static" => FormatStringMode::Static,
         "full" | "on" => FormatStringMode::Full,
         _ => {
-            return Err(KunaError::parse(
+            return Err(UnlaceError::parse(
                 "Must specify off, static or full (`on` = full)",
             ));
         }
@@ -201,9 +201,9 @@ pub fn parse_formatstring_mode(p1: &str) -> KunaResult<(FormatStringMode, String
     ))
 }
 
-impl crate::optionset::KunaOption for FormatStringMode {
+impl crate::optionset::UnlaceOption for FormatStringMode {
     const NAME: &'static str = "formatstring";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         crate::formatstring::FormatStringMode::Off
@@ -213,20 +213,20 @@ impl crate::optionset::KunaOption for FormatStringMode {
         crate::formatstring::FormatStringMode::Static
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         Ok(crate::formatstring::parse_formatstring_mode(value)?)
     }
 }
 
-/// (kuna `formatstring`) The format sites the analysis tier parked, by call address; an
+/// (unlace `formatstring`) The format sites the analysis tier parked, by call address; an
 /// [`ArchTable`](crate::archstate::ArchTable) on the architecture.
 pub type ParkedSites = std::collections::BTreeMap<u64, Vec<ParkedFormatSite>>;
-crate::kuna_arch_table!(ParkedSites);
+crate::unlace_arch_table!(ParkedSites);
 
-/// (kuna `formatstring`) How the image passes variadic arguments, a load-time fact; an
+/// (unlace `formatstring`) How the image passes variadic arguments, a load-time fact; an
 /// [`ArchTable`](crate::archstate::ArchTable) on the architecture.
 pub type ImageVarargAbi = Option<VarargAbi>;
-crate::kuna_arch_table!(ImageVarargAbi);
+crate::unlace_arch_table!(ImageVarargAbi);
 
 #[cfg(test)]
 mod tests {

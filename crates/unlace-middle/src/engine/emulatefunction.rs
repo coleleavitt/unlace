@@ -5,7 +5,7 @@
 //!
 //! `EmulateFunction` (jumptable.hh:110) derives from `EmulatePcodeOp`
 //! (emulateutil.hh:43), which in turn derives from the SLEIGH `Emulate` base.
-//! The kuna port folds the two C++ classes into one [`EmulateFunction`] struct
+//! The unlace port folds the two C++ classes into one [`EmulateFunction`] struct
 //! that implements the ported [`Emulate`](unlace_sleigh::emulate::Emulate) trait
 //! and supplies the `EmulatePcodeOp` method bodies directly (Rust has no
 //! protected-virtual inheritance; the `EmulateFunction` overrides — `executeLoad`
@@ -24,7 +24,7 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::AddrSpace;
 use unlace_base::types::{int4, uintb};
 
@@ -89,7 +89,7 @@ impl<'a> EmulateFunction<'a> {
         self.readonly_image_required = required;
     }
 
-    /// (kuna) Pre-seed a Varnode's value in the emulation memory state, exactly
+    /// (unlace) Pre-seed a Varnode's value in the emulation memory state, exactly
     /// as if it had already been computed.  Used by the loop-carried-base
     /// jump-table recovery (`option switchsharedcase`) to inject the table base —
     /// a loop-invariant `lea .rodata` value that reaches the rebuilt meld path
@@ -107,13 +107,13 @@ impl<'a> EmulateFunction<'a> {
         self.loadpoints.take()
     }
 
-    /// (kuna) The value this emulation computed for `vn` (or was seeded
+    /// (unlace) The value this emulation computed for `vn` (or was seeded
     /// with), without falling back to the load image.
     pub fn emulated_value(&self, vn: VarnodeId) -> Option<uintb> {
         self.varnode_map.get(&vn).copied()
     }
 
-    /// (kuna) The value of `vn` computed from the values this emulation
+    /// (unlace) The value of `vn` computed from the values this emulation
     /// holds, by executing the pure ops that define it back to held values
     /// and constants, at most `budget` of them.  `None` when that needs any
     /// other input or op, when it reaches no held value, or when a LOAD's
@@ -225,12 +225,12 @@ impl<'a> EmulateFunction<'a> {
     /// C++ `EmulateFunction::getVarnodeValue(Varnode *vn)`: read a Varnode out
     /// of the syntax-tree memory state.  A constant returns its offset; a seen
     /// Varnode returns its stored value; otherwise the load image is consulted.
-    fn get_varnode_value(&self, vn: VarnodeId) -> KunaResult<uintb> {
+    fn get_varnode_value(&self, vn: VarnodeId) -> UnlaceResult<uintb> {
         let v = self
             .fd
             .vbank()
             .get(vn)
-            .ok_or_else(|| KunaError::lowlevel("EmulateFunction: dangling varnode"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("EmulateFunction: dangling varnode"))?;
         if v.is_constant() {
             return Ok(v.get_offset());
         }
@@ -247,10 +247,15 @@ impl<'a> EmulateFunction<'a> {
 
     /// C++ `EmulatePcodeOp::getLoadImageValue(AddrSpace*,uintb,int4)` — pull a
     /// value out of the program load image (the read-only switch table).
-    fn get_load_image_value(&self, spc: &Rc<AddrSpace>, off: uintb, sz: int4) -> KunaResult<uintb> {
+    fn get_load_image_value(
+        &self,
+        spc: &Rc<AddrSpace>,
+        off: uintb,
+        sz: int4,
+    ) -> UnlaceResult<uintb> {
         if self.readonly_image_required {
             if sz <= 0 || off.checked_add(sz as u64 - 1).is_none() {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "EmulateFunction: invalid read-only image range",
                 ));
             }
@@ -264,7 +269,7 @@ impl<'a> EmulateFunction<'a> {
                 if flags & crate::varnode::varnode_flags::readonly == 0
                     || flags & crate::varnode::varnode_flags::volatil != 0
                 {
-                    return Err(KunaError::lowlevel(
+                    return Err(UnlaceError::lowlevel(
                         "EmulateFunction: load-image read is not immutable",
                     ));
                 }
@@ -277,21 +282,21 @@ impl<'a> EmulateFunction<'a> {
     /// Resolve a LOAD/STORE `<spaceid>` constant operand to its `AddrSpace`
     /// (C++ `Varnode::getSpaceFromConst`: the constant's offset is the
     /// space-manager index).
-    fn space_from_const(&self, vn: VarnodeId) -> KunaResult<Rc<AddrSpace>> {
+    fn space_from_const(&self, vn: VarnodeId) -> UnlaceResult<Rc<AddrSpace>> {
         let idx = self
             .fd
             .vbank()
             .get(vn)
             .map(|v| v.get_offset())
-            .ok_or_else(|| KunaError::lowlevel("getSpaceFromConst: dangling varnode"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("getSpaceFromConst: dangling varnode"))?;
         let manage = self.fd.get_arch().manage();
         if idx >= manage.num_spaces() as u64 {
-            return Err(KunaError::lowlevel("getSpaceFromConst: bad space index"));
+            return Err(UnlaceError::lowlevel("getSpaceFromConst: bad space index"));
         }
         manage
             .get_space(idx as i32)
             .cloned()
-            .ok_or_else(|| KunaError::lowlevel("getSpaceFromConst: no space"))
+            .ok_or_else(|| UnlaceError::lowlevel("getSpaceFromConst: no space"))
     }
 
     /// C++ `EmulateFunction::emulatePath(uintb,const PathMeld&,PcodeOp*,Varnode*)`
@@ -303,7 +308,7 @@ impl<'a> EmulateFunction<'a> {
         path_meld: &PathMeld,
         startop: OpId,
         startvn: VarnodeId,
-    ) -> KunaResult<uintb> {
+    ) -> UnlaceResult<uintb> {
         let num_ops = path_meld.num_ops();
         let mut i: int4 = 0;
         while i < num_ops {
@@ -330,7 +335,7 @@ impl<'a> EmulateFunction<'a> {
                 j += 1;
             }
             if j == ninput || i == 0 {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "Cannot start jumptable emulation with unresolved MULTIEQUAL",
                 ));
             }
@@ -341,16 +346,16 @@ impl<'a> EmulateFunction<'a> {
                 .obank()
                 .get(startop)
                 .and_then(|o| o.get_out())
-                .ok_or_else(|| KunaError::lowlevel("MULTIEQUAL without output"))?;
+                .ok_or_else(|| UnlaceError::lowlevel("MULTIEQUAL without output"))?;
             i -= 1; // Move to the next instruction to be executed
             startop = path_meld
                 .get_op(i)
-                .ok_or_else(|| KunaError::lowlevel("Bad jumptable emulation"))?;
+                .ok_or_else(|| UnlaceError::lowlevel("Bad jumptable emulation"))?;
         }
         // Suppress unused-assignment lint on startop after the rebind.
         let _ = startop;
         if i == num_ops {
-            return Err(KunaError::lowlevel("Bad jumptable emulation"));
+            return Err(UnlaceError::lowlevel("Bad jumptable emulation"));
         }
         let startvn_is_const = self
             .fd
@@ -364,7 +369,7 @@ impl<'a> EmulateFunction<'a> {
         while i > 0 {
             let curop = path_meld
                 .get_op(i)
-                .ok_or_else(|| KunaError::lowlevel("Bad jumptable emulation"))?;
+                .ok_or_else(|| UnlaceError::lowlevel("Bad jumptable emulation"))?;
             i -= 1;
             self.set_current_op(curop);
             self.execute_current_op().map_err(|_| {
@@ -374,18 +379,18 @@ impl<'a> EmulateFunction<'a> {
                     .get(curop)
                     .map(|o| o.get_addr().clone())
                     .unwrap_or_default();
-                KunaError::lowlevel(format!("Could not emulate address calculation at {addr:?}"))
+                UnlaceError::lowlevel(format!("Could not emulate address calculation at {addr:?}"))
             })?;
         }
         let op0 = path_meld
             .get_op(0)
-            .ok_or_else(|| KunaError::lowlevel("Bad jumptable emulation"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("Bad jumptable emulation"))?;
         let invn = self
             .fd
             .obank()
             .get(op0)
             .and_then(|o| o.get_in(0))
-            .ok_or_else(|| KunaError::lowlevel("Bad jumptable emulation"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("Bad jumptable emulation"))?;
         self.get_varnode_value(invn)
     }
 }
@@ -400,7 +405,7 @@ impl Emulate for EmulateFunction<'_> {
     }
 
     /// C++ `EmulatePcodeOp::executeUnary`.
-    fn execute_unary(&mut self) -> KunaResult<()> {
+    fn execute_unary(&mut self) -> UnlaceResult<()> {
         let op = self.current_op.expect("executeUnary: no current op");
         let behave = self.behave();
         let in0 = self.in_vn(op, 0)?;
@@ -412,7 +417,7 @@ impl Emulate for EmulateFunction<'_> {
     }
 
     /// C++ `EmulatePcodeOp::executeBinary`.
-    fn execute_binary(&mut self) -> KunaResult<()> {
+    fn execute_binary(&mut self) -> UnlaceResult<()> {
         let op = self.current_op.expect("executeBinary: no current op");
         let behave = self.behave();
         let in0 = self.in_vn(op, 0)?;
@@ -427,7 +432,7 @@ impl Emulate for EmulateFunction<'_> {
 
     /// C++ `EmulateFunction::executeLoad` (the override): record the LOAD point
     /// if collecting, then the base `EmulatePcodeOp::executeLoad`.
-    fn execute_load(&mut self) -> KunaResult<()> {
+    fn execute_load(&mut self) -> UnlaceResult<()> {
         let op = self.current_op.expect("executeLoad: no current op");
         let in1 = self.in_vn(op, 1)?;
         let in0 = self.in_vn(op, 0)?;
@@ -451,19 +456,19 @@ impl Emulate for EmulateFunction<'_> {
     }
 
     /// C++ `EmulatePcodeOp::executeStore`: nowhere to store (null memstate).
-    fn execute_store(&mut self) -> KunaResult<()> {
+    fn execute_store(&mut self) -> UnlaceResult<()> {
         Ok(())
     }
 
     /// C++ `EmulateFunction::executeBranch` (override): throws.
-    fn execute_branch(&mut self) -> KunaResult<()> {
-        Err(KunaError::lowlevel(
+    fn execute_branch(&mut self) -> UnlaceResult<()> {
+        Err(UnlaceError::lowlevel(
             "Branch encountered emulating jumptable calculation",
         ))
     }
 
     /// C++ `EmulatePcodeOp::executeCbranch`.
-    fn execute_cbranch(&mut self) -> KunaResult<bool> {
+    fn execute_cbranch(&mut self) -> UnlaceResult<bool> {
         let op = self.current_op.expect("executeCbranch: no current op");
         let in1 = self.in_vn(op, 1)?;
         let cond = self.get_varnode_value(in1)?;
@@ -477,45 +482,45 @@ impl Emulate for EmulateFunction<'_> {
     }
 
     /// C++ `EmulateFunction::executeBranchind` (override): throws.
-    fn execute_branchind(&mut self) -> KunaResult<()> {
-        Err(KunaError::lowlevel(
+    fn execute_branchind(&mut self) -> UnlaceResult<()> {
+        Err(UnlaceError::lowlevel(
             "Indirect branch encountered emulating jumptable calculation",
         ))
     }
 
     /// C++ `EmulateFunction::executeCall` (override): ignore calls.
-    fn execute_call(&mut self) -> KunaResult<()> {
+    fn execute_call(&mut self) -> UnlaceResult<()> {
         self.fallthru_op()
     }
 
     /// C++ `EmulateFunction::executeCallind` (override): ignore calls.
-    fn execute_callind(&mut self) -> KunaResult<()> {
+    fn execute_callind(&mut self) -> UnlaceResult<()> {
         self.fallthru_op()
     }
 
     /// C++ `EmulateFunction::executeCallother` (override): ignore callothers.
-    fn execute_callother(&mut self) -> KunaResult<()> {
+    fn execute_callother(&mut self) -> UnlaceResult<()> {
         self.fallthru_op()
     }
 
     /// C++ `EmulatePcodeOp::executeMultiequal`.
-    fn execute_multiequal(&mut self) -> KunaResult<()> {
+    fn execute_multiequal(&mut self) -> UnlaceResult<()> {
         let op = self.current_op.expect("executeMultiequal: no current op");
         let last = self
             .last_op
-            .ok_or_else(|| KunaError::lowlevel("Could not execute MULTIEQUAL"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("Could not execute MULTIEQUAL"))?;
         let bl = self
             .fd
             .obank()
             .get(op)
             .and_then(|o| o.get_parent())
-            .ok_or_else(|| KunaError::lowlevel("MULTIEQUAL without parent block"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("MULTIEQUAL without parent block"))?;
         let last_bl = self
             .fd
             .obank()
             .get(last)
             .and_then(|o| o.get_parent())
-            .ok_or_else(|| KunaError::lowlevel("Could not execute MULTIEQUAL"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("Could not execute MULTIEQUAL"))?;
         let graph = self.fd.bblocks_ref();
         let size_in = graph.block(bl).size_in();
         let mut i: int4 = 0;
@@ -526,7 +531,7 @@ impl Emulate for EmulateFunction<'_> {
             i += 1;
         }
         if i == size_in {
-            return Err(KunaError::lowlevel("Could not execute MULTIEQUAL"));
+            return Err(UnlaceError::lowlevel("Could not execute MULTIEQUAL"));
         }
         let invn = self.in_vn(op, i)?;
         let val = self.get_varnode_value(invn)?;
@@ -536,7 +541,7 @@ impl Emulate for EmulateFunction<'_> {
     }
 
     /// C++ `EmulatePcodeOp::executeIndirect`: treat as a copy of in0.
-    fn execute_indirect(&mut self) -> KunaResult<()> {
+    fn execute_indirect(&mut self) -> UnlaceResult<()> {
         let op = self.current_op.expect("executeIndirect: no current op");
         let in0 = self.in_vn(op, 0)?;
         let val = self.get_varnode_value(in0)?;
@@ -547,7 +552,7 @@ impl Emulate for EmulateFunction<'_> {
 
     /// C++ `EmulatePcodeOp::executeSegmentOp`: run the segment op's snippet on
     /// the two operand values.
-    fn execute_segment_op(&mut self) -> KunaResult<()> {
+    fn execute_segment_op(&mut self) -> UnlaceResult<()> {
         let op = self.current_op.expect("executeSegmentOp: no current op");
         let in0 = self.in_vn(op, 0)?;
         let index = self
@@ -559,7 +564,7 @@ impl Emulate for EmulateFunction<'_> {
         let glb = std::rc::Rc::clone(self.fd.get_arch());
         let segdef = glb
             .get_segment_op(index)
-            .ok_or_else(|| KunaError::lowlevel("Segment operand missing definition"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("Segment operand missing definition"))?;
         let in1 = self.in_vn(op, 1)?;
         let in2 = self.in_vn(op, 2)?;
         let v1 = self.get_varnode_value(in1)?;
@@ -571,32 +576,32 @@ impl Emulate for EmulateFunction<'_> {
     }
 
     /// C++ `EmulatePcodeOp::executeCpoolRef`: ignore.
-    fn execute_cpool_ref(&mut self) -> KunaResult<()> {
+    fn execute_cpool_ref(&mut self) -> UnlaceResult<()> {
         Ok(())
     }
 
     /// C++ `EmulatePcodeOp::executeNew`: ignore.
-    fn execute_new(&mut self) -> KunaResult<()> {
+    fn execute_new(&mut self) -> UnlaceResult<()> {
         Ok(())
     }
 
     /// C++ `EmulateFunction::fallthruOp`: keep lastOp for MULTIEQUAL, outer loop
     /// controls execution flow.
-    fn fallthru_op(&mut self) -> KunaResult<()> {
+    fn fallthru_op(&mut self) -> UnlaceResult<()> {
         self.last_op = self.current_op;
         Ok(())
     }
 
     /// C++ `EmulateFunction::setExecuteAddress`.
-    fn set_execute_address(&mut self, addr: &Address) -> KunaResult<()> {
+    fn set_execute_address(&mut self, addr: &Address) -> UnlaceResult<()> {
         let physical = addr.get_space().map(|s| s.has_physical()).unwrap_or(false);
         if !physical {
-            return Err(KunaError::lowlevel("Bad execute address"));
+            return Err(UnlaceError::lowlevel("Bad execute address"));
         }
         let op = self
             .fd
             .op_bank_target(addr)
-            .ok_or_else(|| KunaError::lowlevel("Could not set execute address"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("Could not set execute address"))?;
         self.set_current_op(op);
         Ok(())
     }
@@ -622,29 +627,29 @@ impl EmulateFunction<'_> {
     }
 
     /// `currentOp->getIn(slot)`.
-    fn in_vn(&self, op: OpId, slot: int4) -> KunaResult<VarnodeId> {
+    fn in_vn(&self, op: OpId, slot: int4) -> UnlaceResult<VarnodeId> {
         self.fd
             .obank()
             .get(op)
             .and_then(|o| o.get_in(slot))
-            .ok_or_else(|| KunaError::lowlevel("EmulateFunction: missing op input"))
+            .ok_or_else(|| UnlaceError::lowlevel("EmulateFunction: missing op input"))
     }
 
     /// `currentOp->getOut()`.
-    fn out_vn(&self, op: OpId) -> KunaResult<VarnodeId> {
+    fn out_vn(&self, op: OpId) -> UnlaceResult<VarnodeId> {
         self.fd
             .obank()
             .get(op)
             .and_then(|o| o.get_out())
-            .ok_or_else(|| KunaError::lowlevel("EmulateFunction: op without output"))
+            .ok_or_else(|| UnlaceError::lowlevel("EmulateFunction: op without output"))
     }
 
     /// `vn->getSize()`.
-    fn size(&self, vn: VarnodeId) -> KunaResult<int4> {
+    fn size(&self, vn: VarnodeId) -> UnlaceResult<int4> {
         self.fd
             .vbank()
             .get(vn)
             .map(|v| v.get_size())
-            .ok_or_else(|| KunaError::lowlevel("EmulateFunction: dangling varnode size"))
+            .ok_or_else(|| UnlaceError::lowlevel("EmulateFunction: dangling varnode size"))
     }
 }

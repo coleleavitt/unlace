@@ -1,6 +1,6 @@
 //! The Lua 5.4 bytecode language decompiles the raw code array of one `luac5.4` function.
 use crate::common;
-use common::{repo_root, run_kuna};
+use common::{repo_root, run_unlace};
 
 fn decompile(fixture: &str) -> String {
     let bin = repo_root()
@@ -9,7 +9,7 @@ fn decompile(fixture: &str) -> String {
         .to_str()
         .unwrap()
         .to_owned();
-    let (stdout, stderr, code) = run_kuna(&[
+    let (stdout, stderr, code) = run_unlace(&[
         "decompile",
         &bin,
         "0x1000",

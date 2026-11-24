@@ -1,6 +1,6 @@
 {
-  "opportunity": "kuna-globalarrayanchor::clear_slot",
-  "test_name": "kuna-globalarrayanchor",
+  "opportunity": "globalarrayanchor::clear_slot",
+  "test_name": "globalarrayanchor",
   "option": "globalarrayanchor",
   "flag": "global_array_anchor",
   "change_kind": "opt-in-tool",

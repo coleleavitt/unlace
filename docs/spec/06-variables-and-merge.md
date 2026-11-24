@@ -272,7 +272,7 @@ determines how aggressive the merge may be:
   empty unless an `isolate` named such a local, and the test then costs one
   emptiness check. With `isolate a0`, a parameter whose register the function
   goes on to reuse (`a0 *= 3;`) keeps its value and the product gets its own
-  local (`v2 = a0 * 3;`); `tests/stages/kuna-assert-format-isolate.toml` pins
+  local (`v2 = a0 * 3;`); `tests/stages/assert-format-isolate.toml` pins
   both, and that the isolation survives a later rename and decompile.
 - `merge.rs (Merge::merge_test_speculative)` — additionally: nothing
   persistent, no inputs, nothing address-tied. Purely cosmetic merges never
@@ -748,7 +748,7 @@ values alone, so one base plus two different constants counted as two objects
 whatever the widths: a byte store at `p+8` let a 4-byte load at `p+7` print
 after it, reading the new byte. kuna corrects that without an option; a store
 on an adjacent byte or element still lets the load fold past it
-(`tests/stages/kuna-aliasoverlap.toml`). The other place a read used to move past
+(`tests/stages/aliasoverlap.toml`). The other place a read used to move past
 a store is the per-field split of a typed LOAD, guarded in chapter
 [03](03-ssa-and-simplification.md) (§3.3).
 
@@ -1164,7 +1164,7 @@ not compile: a function returning the 64-bit `rax` after a call that wrote only
 such a high is a `vN` local declared with its storage (`// register 0x4`). The
 local is read but never assigned, as the binary reads the register's
 undefined upper half. Only register pieces change; real globals keep
-`dat_<addr>` (`tests/stages/kuna-regpiece.toml`).
+`dat_<addr>` (`tests/stages/regpiece.toml`).
 
 **A default name skips one a caller locked.** The `vN` allocator (and the
 `<prefix>Var<N>` arm under Ghidra names) used to hand out `v<base++>` without

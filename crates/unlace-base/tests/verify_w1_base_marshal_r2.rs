@@ -37,7 +37,7 @@
 
 use std::rc::Rc;
 
-use unlace_base::error::KunaError;
+use unlace_base::error::UnlaceError;
 use unlace_base::marshal::{
     ATTRIB_UNKNOWN, ATTRIB_VAL, Decoder, ELEM_DATA, Encoder, IdRegistry, PackedDecode,
     PackedEncode, XmlDecode, XmlEncode,
@@ -63,7 +63,7 @@ fn test_manager() -> AddrSpaceManager {
 
 /// Drive `<data NAME="x"/>` through XmlDecode up to getIndexedAttributeId
 /// (same scaffold as round 1; base name "val", id 24).
-fn indexed_attr_id(name: &str) -> Result<u32, KunaError> {
+fn indexed_attr_id(name: &str) -> Result<u32, UnlaceError> {
     let manager = AddrSpaceManager::new();
     let registry = IdRegistry::with_base_ids();
     let mut dec = XmlDecode::new(&manager, &registry);
@@ -101,7 +101,7 @@ fn verify_marshal_indexed_attr_negative_overflow_boundary_r2() {
     assert!(
         matches!(
             indexed_attr_id("val-0").unwrap_err(),
-            KunaError::Lowlevel { .. }
+            UnlaceError::Lowlevel { .. }
         ),
         "negated zero is still zero -> Bad indexed attribute"
     );
@@ -130,7 +130,7 @@ fn verify_marshal_indexed_attr_suffix_stops_at_first_nondigit_r2() {
     assert!(
         matches!(
             indexed_attr_id("val.5").unwrap_err(),
-            KunaError::Lowlevel { .. }
+            UnlaceError::Lowlevel { .. }
         ),
         "no digits before '.': failed extraction stores 0 -> throw"
     );
@@ -167,7 +167,7 @@ fn verify_marshal_xml_write_string_indexed_index_wrap_bytes_r2() {
     );
     assert!(matches!(
         dec.get_indexed_attribute_id(&ATTRIB_VAL).unwrap_err(),
-        KunaError::Lowlevel { .. }
+        UnlaceError::Lowlevel { .. }
     ));
     assert_eq!(
         dec.get_next_attribute_id().unwrap(),

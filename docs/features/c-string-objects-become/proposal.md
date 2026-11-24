@@ -12,7 +12,7 @@ need's filed hypothesis was wrong and the difference matters for the next reader
 That is not what happens. The defect has nothing to do with the STL, with MSVC,
 with layouts, or with constructor prototypes: it reproduces on a 0x131-byte
 hand-built x86-64 ELF bytechunk with three unnamed extern stubs and no C++ at
-all (`tests/stages/kuna-ptrdepthcap.toml`). What the STL contributes is only the
+all (`tests/stages/ptrdepthcap.toml`). What the STL contributes is only the
 *idiom*, and any small-string-optimized container has it.
 
 ## What was measured

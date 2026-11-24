@@ -1,6 +1,6 @@
 # go-type-names
 
-Three stripped Linux amd64 builds of `main.go` for the `kuna-gotypenames` stage
+Three stripped Linux amd64 builds of `main.go` for the `gotypenames` stage
 test: `main.mk` allocates a `main.Point`, `main.main` converts the `*main.Point`
 to the `main.Shape` interface, and the runtime packages linked in supply
 sub-package types (`internal/bisect.parseError`, `internal/poll.errNetClosing`).

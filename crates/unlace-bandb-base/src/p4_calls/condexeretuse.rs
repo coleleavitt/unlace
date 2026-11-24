@@ -160,7 +160,7 @@ fn reachable_from(data: &Funcdata, from: BlockId) -> Option<HashSet<BlockId>> {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.condexeretuse_any_retest_merge = Some(any_retest_merge);
     hooks.condexeretuse_applies = Some(applies);
     hooks.condexeretuse_cannot_arrive = Some(cannot_arrive);

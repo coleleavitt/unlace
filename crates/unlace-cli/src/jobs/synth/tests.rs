@@ -104,7 +104,7 @@ fn a_rename_covering_a_symbol_name_is_refused() {
     assert!(!only_types_are_renamed(&r, &map));
 }
 
-/// (kuna `protoorder`) The names a pool replays are a serial run's, and on
+/// (unlace `protoorder`) The names a pool replays are a serial run's, and on
 /// `decompile-all` that run is the one without the callee-first order: the
 /// report has to name it, not `--jobs 1`.
 #[test]

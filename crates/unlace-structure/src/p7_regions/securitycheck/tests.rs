@@ -1,4 +1,4 @@
-// Tests for the `kuna_securitycheck` port (included into `mod tests` in
+// Tests for the `unlace_securitycheck` port (included into `mod tests` in
 // securitycheck.rs).
 //
 // Covered:

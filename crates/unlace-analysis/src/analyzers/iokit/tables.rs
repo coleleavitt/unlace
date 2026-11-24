@@ -1,4 +1,4 @@
-//! (kuna `xnutables`) XNU data tables that need no class knowledge to find:
+//! (unlace `xnutables`) XNU data tables that need no class knowledge to find:
 //! `kalloc_type` views, `IOExternalMethodDispatch` tables, and pointer slots
 //! (`__got`, `__auth_got`, `__auth_ptr`) the indirect-symbol table does not name.
 
@@ -203,7 +203,7 @@ pub(super) fn allocator_prototypes(ctx: &AnalysisCtx, rec: &Recovered, out: &mut
             first_var_arg_slot: -1,
             output_storage: None,
             input_storage: Vec::new(),
-            kuna_library_names: None,
+            unlace_library_names: None,
         };
         for (addr, _) in at.iter().filter(|(_, n)| n == name) {
             out.prototypes_at.push((*addr, pieces.clone()));

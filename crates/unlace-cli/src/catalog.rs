@@ -3,13 +3,13 @@
 //! The linked engine supplies static JSON by default; an explicit console
 //! override keeps external queries. This module renders a table, indented JSON
 //! or the generated Markdown manual. Validation compares the catalog with
-//! [`unlace_decomp::option_dispatch::KUNA_OPTION_NAMES`] to reject missing or stale rows.
+//! [`unlace_decomp::option_dispatch::UNLACE_OPTION_NAMES`] to reject missing or stale rows.
 
 use std::collections::BTreeSet;
 use std::fmt::Write as _;
 
 use unlace_console::buildstamp;
-use unlace_decomp::option_dispatch::KUNA_OPTION_NAMES;
+use unlace_decomp::option_dispatch::UNLACE_OPTION_NAMES;
 use unlace_decomp::phases::{emit_catalog_json, emit_catalog_json_one, emit_catalog_markdown};
 
 use crate::jsonfmt::{Json, dumps_indent2, extract_json_span, parse};
@@ -225,10 +225,10 @@ pub fn cmd_text(option: Option<&str>, tier: Option<&str>, pinned_by: Option<&str
     crate::output::emit_with_status(&text, 0)
 }
 
-/// `--check`: verify the catalog documents exactly the registered kuna options.
+/// `--check`: verify the catalog documents exactly the registered unlace options.
 ///
 /// Compare the selected catalog's option names with this build's registered set
-/// (`KUNA_OPTION_NAMES`). A registered option with no row is undiscoverable;
+/// (`UNLACE_OPTION_NAMES`). A registered option with no row is undiscoverable;
 /// a row matching no registered option is stale. An explicit console override
 /// selects that binary's catalog; otherwise both sets come from this build.
 pub fn cmd_check(pinned_by: Option<&str>) -> i32 {
@@ -243,7 +243,7 @@ pub fn cmd_check(pinned_by: Option<&str>) -> i32 {
         .iter()
         .filter_map(|e| field(e, "option").map(|s| s.to_string()))
         .collect();
-    let registered: BTreeSet<String> = KUNA_OPTION_NAMES.iter().map(|s| s.to_string()).collect();
+    let registered: BTreeSet<String> = UNLACE_OPTION_NAMES.iter().map(|s| s.to_string()).collect();
 
     let mut problems: Vec<String> = Vec::new();
     for name in registered.difference(&cat) {

@@ -71,7 +71,7 @@ fn run_at(fixture: &str, vma: u64, on: bool) -> String {
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
     prog.arch_mut()
-        .set_kuna_option("importdata", if on { "on" } else { "off" })
+        .set_unlace_option("importdata", if on { "on" } else { "off" })
         .expect("importdata flips");
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");

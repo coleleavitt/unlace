@@ -17,7 +17,7 @@ pass (analysis.md section 2). Every number below is from the new build.
 | criterion | result |
 |---|---|
 | (a) `make test` with the new default | 675/675 assertions, PARITY OK; none moved |
-| (b) `make test-stages` | 1421/1421, PARITY OK; the only new keys are the 11 of `tests/stages/kuna-castobject.toml`, whose pass 1 sets the option off explicitly; `docs/baseline-stages.json` re-recorded for those 11 only (0 removed) |
+| (b) `make test-stages` | 1421/1421, PARITY OK; the only new keys are the 11 of `tests/stages/castobject.toml`, whose pass 1 sets the option off explicitly; `docs/baseline-stages.json` re-recorded for those 11 only (0 removed) |
 | (c) `make test-cli` | 247/247; no probe pins an out-parameter declaration |
 | (d) 444-slice typesweep (coreutils grep gzip diffutils bzip2 findutils tar shadow, O0/O2/O2-noinline, metric pinned at 625e892) | 1,615 -> 1,615 perfect, aggregate 3973.97 -> 3973.97, 0 improved / 0 worse / 0 moved. 10,738 of 10,748 functions have byte-identical variables; in the other 10 the retyped local is `int` in DWARF every time (status / wstatus / wait_status in ginstall strip, split closeout, timeout main, sort reap, diff finish_output, useradd tallylog_reset, tar sys_exec_info_script sys_wait_for_child wait_for_grandchild sys_wait_command), which type_match already scored as a match at `unsigned int`; split closeout's other stack locals only change their `vN` numbers |
 | (e) speed, interleaved min-of-15 whole-binary `decompile-all` (speed.py, speed.json) | fmt O2 -1.55%, ls O2 -0.48%, sort O2 +4.91%, bash O2 -1.05% (min); sort ran under heavy machine load and re-ran at -3.18% on a quieter machine; within +5% either way |

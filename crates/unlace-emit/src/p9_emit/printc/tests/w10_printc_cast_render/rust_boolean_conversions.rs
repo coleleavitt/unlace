@@ -15,7 +15,7 @@ fn expression(meta: type_metatype, opcode: OpCode, lang: &str, nocasts: bool) ->
     fd.high_bank_mut()
         .get_mut(high)
         .unwrap()
-        .set_kuna_name("value");
+        .set_unlace_name("value");
     let mut printer = PrintC::new();
     printer.set_name(lang);
     printer.rt_ctx.lang = printer.out_lang;
@@ -112,9 +112,9 @@ fn boolean_truncation_keeps_the_low_byte_before_comparison() {
     fd.high_bank_mut()
         .get_mut(high)
         .unwrap()
-        .set_kuna_name("value");
+        .set_unlace_name("value");
     let mut arch = bare_arch();
-    arch.kuna_options.set(crate::boolbyte::BoolByte(true));
+    arch.unlace_options.set(crate::boolbyte::BoolByte(true));
     let types = arch.types_impl();
     types.set_max_basetype_size(8);
     types.set_default_alignment_map();

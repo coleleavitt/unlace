@@ -1,4 +1,4 @@
-//! (kuna) A register the function only ever **pushed** is not a value the
+//! (unlace) A register the function only ever **pushed** is not a value the
 //! function placed in a return register.
 //!
 //! # The symptom
@@ -27,7 +27,7 @@
 //! # Why it happens
 //!
 //! `RDX` at the RETURN traces back to `R8` at entry, so [`crate::
-//! kuna_retinputhalf`] sees an unwritten Varnode in input-parameter storage at a
+//! unlace_retinputhalf`] sees an unwritten Varnode in input-parameter storage at a
 //! different address than the half it reaches, calls it a value the function
 //! *placed* there, and keeps the half. Keeping the half is what gives `R8` a
 //! reader, which is what makes `R8` a parameter — and `R8` being a parameter is
@@ -48,7 +48,7 @@
 //! delivering a result, and the register is not a placement source.
 //!
 //! Recorded during the flow build ([`observe_instruction`], one pass over the
-//! ops an instruction just emitted) and consulted by `kuna_retinputhalf`'s
+//! ops an instruction just emitted) and consulted by `unlace_retinputhalf`'s
 //! terminal test. A register that is pushed and popped back into *itself* is
 //! written by the pop, so the ordinary callee-saved save/restore never qualifies;
 //! neither does a callee-saved register the function loads a value into before
@@ -219,34 +219,34 @@ pub fn observe_instruction(data: &mut Funcdata, ops: &[OpId]) {
         }
     }
 
-    let regs = data.kuna_pushed_registers_mut();
+    let regs = data.unlace_pushed_registers_mut();
     regs.written.append(&mut written);
     regs.saved.append(&mut saved);
 }
 
-crate::kuna_func_state!(PushedRegisters, keep_across_clear: true);
+crate::unlace_func_state!(PushedRegisters, keep_across_clear: true);
 
-/// The `kuna_retpushedhalf` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// The `unlace_retpushedhalf` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataRetpushedhalfExt {
-    /// (kuna `retpushedhalf`) The flow build's record of registers this function
+    /// (unlace `retpushedhalf`) The flow build's record of registers this function
     /// only ever pushed, for appending to.
-    fn kuna_pushed_registers_mut(&mut self) -> &mut crate::retpushedhalf::PushedRegisters;
-    /// (kuna `retpushedhalf`) The flow build's record of registers this function
+    fn unlace_pushed_registers_mut(&mut self) -> &mut crate::retpushedhalf::PushedRegisters;
+    /// (unlace `retpushedhalf`) The flow build's record of registers this function
     /// only ever pushed.
-    fn kuna_pushed_registers(&self) -> &crate::retpushedhalf::PushedRegisters;
+    fn unlace_pushed_registers(&self) -> &crate::retpushedhalf::PushedRegisters;
 }
 
 impl FuncdataRetpushedhalfExt for crate::funcdata::Funcdata {
-    /// (kuna `retpushedhalf`) The flow build's record of registers this function
+    /// (unlace `retpushedhalf`) The flow build's record of registers this function
     /// only ever pushed, for appending to.
-    fn kuna_pushed_registers_mut(&mut self) -> &mut crate::retpushedhalf::PushedRegisters {
-        self.kuna_state_mut::<PushedRegisters>()
+    fn unlace_pushed_registers_mut(&mut self) -> &mut crate::retpushedhalf::PushedRegisters {
+        self.unlace_state_mut::<PushedRegisters>()
     }
-    /// (kuna `retpushedhalf`) The flow build's record of registers this function
+    /// (unlace `retpushedhalf`) The flow build's record of registers this function
     /// only ever pushed.
-    fn kuna_pushed_registers(&self) -> &crate::retpushedhalf::PushedRegisters {
-        self.kuna_state::<PushedRegisters>()
+    fn unlace_pushed_registers(&self) -> &crate::retpushedhalf::PushedRegisters {
+        self.unlace_state::<PushedRegisters>()
     }
 }
 
@@ -255,6 +255,6 @@ impl FuncdataRetpushedhalfExt for crate::funcdata::Funcdata {
 mod tests;
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.retpushedhalf_observe_instruction = Some(observe_instruction);
 }

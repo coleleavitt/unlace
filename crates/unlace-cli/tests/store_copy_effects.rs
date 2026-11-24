@@ -19,7 +19,7 @@ fn late_resolved_stores_remain_visible_to_calls_and_aliasing_loads() {
         "storecopyeffects_gcc_O0_x86_64.o",
         "storecopyeffects_gcc_O2_x86_64.o",
     ] {
-        let (printed, stderr, code) = common::run_kuna(&[
+        let (printed, stderr, code) = common::run_unlace(&[
             "decompile-all",
             &common::fixture(fixture),
             "--functions",

@@ -1,4 +1,4 @@
-//! (kuna) The per-function proof `option bejoin evidence` joins a
+//! (unlace) The per-function proof `option bejoin evidence` joins a
 //! two-register value by, read off the function's own instructions.
 //!
 //! The answer has to be a function of the callee alone: a call reads its
@@ -248,7 +248,7 @@ fn take(
     pair: &WidePair,
     key: Entry,
 ) -> bool {
-    if arch.kuna_options.get::<super::BeJoinMode>() == super::BeJoinMode::Callers {
+    if arch.unlace_options.get::<super::BeJoinMode>() == super::BeJoinMode::Callers {
         by_callers(arch, cache, model, pair, key)
     } else {
         verdict(arch, &mut cache.map, model, pair, key)
@@ -662,18 +662,18 @@ pub fn wide_pair(
 /// Inert unless `option bejoin` is `evidence` and the image's model joins its
 /// pair high word first.
 pub fn seed(arch: &mut Architecture, data: &mut Funcdata) {
-    if !arch.kuna_options.get::<super::BeJoinMode>().proves() {
+    if !arch.unlace_options.get::<super::BeJoinMode>().proves() {
         return;
     }
     let Some(model) = arch.default_fp().cloned() else {
         return;
     };
-    let mut cache = std::mem::take(arch.kuna_tables.get_mut::<crate::bejoin::WideCache>());
+    let mut cache = std::mem::take(arch.unlace_tables.get_mut::<crate::bejoin::WideCache>());
     if cache.pair.is_none() {
         cache.pair = Some(wide_pair(&model, arch.manage()));
     }
     let Some(Some(pair)) = cache.pair.clone() else {
-        *arch.kuna_tables.get_mut::<crate::bejoin::WideCache>() = cache;
+        *arch.unlace_tables.get_mut::<crate::bejoin::WideCache>() = cache;
         return;
     };
     let mut entries: Vec<Entry> = Vec::new();
@@ -685,7 +685,7 @@ pub fn seed(arch: &mut Architecture, data: &mut Funcdata) {
             entries.extend(key(entry));
         }
     }
-    if let Some(earlier) = data.kuna_wide() {
+    if let Some(earlier) = data.unlace_wide() {
         let mut known: Vec<Entry> = earlier.verdicts.keys().copied().collect();
         known.sort_unstable();
         entries.extend(known);
@@ -697,12 +697,12 @@ pub fn seed(arch: &mut Architecture, data: &mut Funcdata) {
             verdicts.insert(k, take(arch, &mut cache, &model, &pair, k));
         }
     }
-    data.kuna_set_wide(WideView {
+    data.unlace_set_wide(WideView {
         pair,
         verdicts,
         missed: Default::default(),
     });
-    *arch.kuna_tables.get_mut::<crate::bejoin::WideCache>() = cache;
+    *arch.unlace_tables.get_mut::<crate::bejoin::WideCache>() = cache;
 }
 
 /// After a pass of the pipeline: did a call ask about a callee no verdict was
@@ -710,7 +710,7 @@ pub fn seed(arch: &mut Architecture, data: &mut Funcdata) {
 /// callee proven? Then the driver runs the pass again, and [`seed`] takes
 /// those callees' verdicts too.
 pub fn missed_proven(arch: &mut Architecture, data: &Funcdata) -> bool {
-    let Some(view) = data.kuna_wide() else {
+    let Some(view) = data.unlace_wide() else {
         return false;
     };
     let missed = view.missed.borrow().clone();
@@ -720,12 +720,12 @@ pub fn missed_proven(arch: &mut Architecture, data: &Funcdata) -> bool {
     let Some(model) = arch.default_fp().cloned() else {
         return false;
     };
-    let mut cache = std::mem::take(arch.kuna_tables.get_mut::<crate::bejoin::WideCache>());
+    let mut cache = std::mem::take(arch.unlace_tables.get_mut::<crate::bejoin::WideCache>());
     let mut any = false;
     for k in missed {
         any |= take(arch, &mut cache, &model, &view.pair, k);
     }
-    *arch.kuna_tables.get_mut::<crate::bejoin::WideCache>() = cache;
+    *arch.unlace_tables.get_mut::<crate::bejoin::WideCache>() = cache;
     any
 }
 
@@ -738,7 +738,7 @@ pub fn proven(data: &Funcdata, entry: &Address) -> bool {
     };
     crate::callwide::proven(data, entry)
         || data
-            .kuna_wide()
+            .unlace_wide()
             .is_some_and(|w| w.get((sp.get_index(), entry.get_offset())))
 }
 
@@ -864,7 +864,8 @@ fn proves_wide(
 /// path end, the pair a proven callee left in place as that callee's whole
 /// value ([`crate::bejoinpass::settle_return`])?
 fn hands_back_whole(arch: &Architecture, pair: &WidePair) -> bool {
-    arch.kuna_options.get::<crate::bejoinpass::BeJoinPassMode>()
+    arch.unlace_options
+        .get::<crate::bejoinpass::BeJoinPassMode>()
         == crate::bejoinpass::BeJoinPassMode::Whole
         && pair.hi.1 == 4
         && pair.lo.1 == 4
@@ -1866,7 +1867,7 @@ pub fn build_high_read(
     if !proven(data, &entry) {
         return false;
     }
-    let Some(pair) = data.kuna_wide().map(|w| w.pair.clone()) else {
+    let Some(pair) = data.unlace_wide().map(|w| w.pair.clone()) else {
         return false;
     };
     let ((hi_addr, hi_size), (lo_addr, lo_size)) = (pair.hi, pair.lo);

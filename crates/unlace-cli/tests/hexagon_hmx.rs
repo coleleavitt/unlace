@@ -2,7 +2,7 @@
 //! syntax and lifts each instruction to a named pcodeop over its decoded
 //! address and control fields; before, every HMX word was a bad instruction.
 use crate::common;
-use common::{repo_root, run_kuna};
+use common::{repo_root, run_unlace};
 
 const TARGET: &str = "Hexagon:LE:32:default";
 
@@ -40,7 +40,7 @@ fn rows(stdout: &str) -> Vec<String> {
 
 #[test]
 fn every_hmx_encoding_decodes_as_llvm_prints_it() {
-    let (stdout, stderr, code) = run_kuna(&[
+    let (stdout, stderr, code) = run_unlace(&[
         "disassemble",
         &fixture("hmx.elf"),
         "probe",
@@ -70,7 +70,7 @@ fn every_hmx_encoding_decodes_as_llvm_prints_it() {
 
 #[test]
 fn hmx_instructions_lift_to_named_pcodeops() {
-    let (stdout, stderr, code) = run_kuna(&[
+    let (stdout, stderr, code) = run_unlace(&[
         "decompile",
         &fixture("hmx.bin"),
         "0x1000",

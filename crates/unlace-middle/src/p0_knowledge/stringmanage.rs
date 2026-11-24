@@ -39,7 +39,7 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
 use unlace_base::address::{Address, mostsigbit_set};
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::{ATTRIB_CONTENT, AttributeId, Decoder, ElementId, Encoder};
 use unlace_base::space::AddrSpaceManager;
 use unlace_base::types::{int4, uint1, uint8};
@@ -305,7 +305,7 @@ impl StringManager {
         }
     }
 
-    /// (kuna) Seed already-decoded UTF-8 `bytes` as the string at a real
+    /// (unlace) Seed already-decoded UTF-8 `bytes` as the string at a real
     /// load-image `addr`, so [`StringManagerUnicode::get_string_data`] returns
     /// them for a `char`-typed pointer to `addr` instead of reading the bytes
     /// physically stored there. The Mach-O `cfstrings` commit uses this: a
@@ -333,7 +333,7 @@ impl StringManager {
     /// content layout is reproduced byte-for-byte: a leading `\n`, two lowercase
     /// hex digits per byte (`setfill('0') setw(2) hex`), a `\n  ` break after
     /// every 20 bytes, and a trailing `\n`.
-    pub fn encode(&self, encoder: &mut dyn Encoder) -> KunaResult<()> {
+    pub fn encode(&self, encoder: &mut dyn Encoder) -> UnlaceResult<()> {
         encoder.open_element(&ELEM_STRINGMANAGE);
 
         for (addr, string_data) in self.string_map.iter() {
@@ -367,7 +367,7 @@ impl StringManager {
     /// Parse a `<stringmanage>` element with `<string>` children.  The hex-content
     /// scan replicates the C++ `istringstream` loop: skip whitespace, read two
     /// hex chars, decode `c1*16 + c2` until a non-positive char is read.
-    pub fn decode(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    pub fn decode(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         let elem_id = decoder.open_element_id(&ELEM_STRINGMANAGE)?;
         loop {
             let sub_id = decoder.open_element()?;
@@ -479,7 +479,7 @@ impl StringManager {
     /// consumed; the number consumed is passed back via `skip`.  Returns the
     /// codepoint or -1 if the encoding is invalid.
     ///
-    /// (kuna) A lead byte that announces more bytes than `buf` holds is an
+    /// (unlace) A lead byte that announces more bytes than `buf` holds is an
     /// invalid encoding, not a read past the end.  `checkCharacters` hands this
     /// the tail `&buf[i..]` of a fixed-size window, so a window whose LAST byte
     /// is a multi-byte lead reaches every arm below with too few bytes; the C++
@@ -722,7 +722,7 @@ impl StringManagerUnicode {
         // A non-closure transcription of the C++ do/while: the `'fill` block
         // mirrors the `try` body, returning the load_fill Result so the
         // DataUnavail catch is handled below.
-        let result: KunaResult<()> = 'fill: loop {
+        let result: UnlaceResult<()> = 'fill: loop {
             let mut amount: int4 = 32; // Grab 32 bytes of image at a time
             let mut new_buffer_size: int4 = cur_buffer_size + amount;
             // C++ compares a uint4 newBufferSize against int4 maximumChars; both
@@ -758,7 +758,7 @@ impl StringManagerUnicode {
         // DataUnavail the C++ returns the empty buffer immediately.
         match result {
             Ok(()) => {}
-            Err(KunaError::DataUnavail { .. }) => {
+            Err(UnlaceError::DataUnavail { .. }) => {
                 return &self.base.string_map[addr].byte_data;
             }
             // No other error is expected from load_fill; propagate by treating

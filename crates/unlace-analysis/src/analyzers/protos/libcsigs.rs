@@ -1,14 +1,14 @@
-//! (kuna) `libcsigs` — the measured extension of the built-in libc prototype table.
+//! (unlace) `libcsigs` — the measured extension of the built-in libc prototype table.
 //!
 //! [`super::LibProtoPass`] ships 27 signatures: a deliberate minimal stand-in for
-//! the Ghidra `.gdt` archives kuna cannot vendor. Every libc callee outside those
+//! the Ghidra `.gdt` archives unlace cannot vendor. Every libc callee outside those
 //! 27 leaves its caller's arguments as an inferred `unsigned long`, which is the
-//! single largest source of kuna's `type_match` gap on plain C.
+//! single largest source of unlace's `type_match` gap on plain C.
 //!
 //! This pass adds the measured remainder. The entries were chosen by frequency,
 //! not intuition: `objdump` over the 547 C binaries of the frozen decbench corpus
 //! gives a PLT call-site histogram, and the 1587 cases where IDA scores a perfect
-//! `type_match` and kuna does not give a per-case callee ranking. A name is in the
+//! `type_match` and unlace does not give a per-case callee ranking. A name is in the
 //! table when it clears **>= 100 corpus call sites or >= 3 of those cases**.
 //!
 //! ## Where the signatures come from
@@ -4618,7 +4618,7 @@ pub(super) const LIBC_EXT: &[(&str, Sig)] = &[
     ),
 ];
 
-/// (kuna `armfloatreturn`) The C99 `<math.h>` functions (and glibc's `sincos`)
+/// (unlace `armfloatreturn`) The C99 `<math.h>` functions (and glibc's `sincos`)
 /// a hard-float ARM image imports, laid out by the widened VFP model once the
 /// option applies: a `double` in `d0`, a `float` in `s0`, `long` 4 bytes. Seeded
 /// on ARM only, into [`AnalysisOutput::arm_float_prototypes`], so a caller reads

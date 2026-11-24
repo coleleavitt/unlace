@@ -36,7 +36,7 @@
 //!     port reproduces the op-shell creation and surfaces the existing
 //!     `op_set_output` `Err` — so `pullback_op`, `get_new_multi`, `do_replacement`,
 //!     `execute`, `apply`, and `RuleOrPredicate::apply_op`/`check_single` return
-//!     `KunaResult` and the stub is visible, never silently mis-ported.
+//!     `UnlaceResult` and the stub is visible, never silently mis-ported.
 //!   - **`Funcdata::opSetOpcode`** (W6 `glb->inst[opc]`): the rule needs the
 //!     resolved [`crate::context::TypeOp`] for a target opcode; the W6 op-info table
 //!     is not present, so [`resolve_typeop`] surfaces a stub `Err`.  // STUB(W6)
@@ -45,7 +45,7 @@
 //! algorithmic novelty of this file — is complete.
 
 use std::collections::BTreeMap;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
@@ -66,9 +66,9 @@ use crate::funcdata::Funcdata;
 /// has no `inst[]` entry in C++ either, `inst[CPUI_MAX]` is the trailing null)
 /// has no record; the conditional-execution rewrite never sets that opcode, so a
 /// `CPUI_MAX` request is an internal invariant violation surfaced as an `Err`.
-fn resolve_typeop(opc: OpCode) -> KunaResult<TypeOp> {
+fn resolve_typeop(opc: OpCode) -> UnlaceResult<TypeOp> {
     if opc == OpCode::CPUI_MAX {
-        return Err(KunaError::lowlevel(
+        return Err(UnlaceError::lowlevel(
             "condexe resolve_typeop: CPUI_MAX has no inst[] entry",
         ));
     }
@@ -141,7 +141,7 @@ impl ConditionalExecution {
         }
     }
 
-    /// (kuna) The out block `iblock` branches to on every execution that entered
+    /// (unlace) The out block `iblock` branches to on every execution that entered
     /// it through in-edge `inslot`, when `iblock` re-tests the condition of the
     /// block both of its in-edges lead back to: the control-flow half of
     /// [`verify`](Self::verify), without the removability of `iblock`'s ops.
@@ -406,7 +406,7 @@ impl ConditionalExecution {
         op: OpId,
         inbranch: int4,
         fd: &mut Funcdata,
-    ) -> KunaResult<VarnodeId> {
+    ) -> UnlaceResult<VarnodeId> {
         if let Some(invn) = self.find_pullback(inbranch) {
             return Ok(invn);
         }
@@ -504,7 +504,12 @@ impl ConditionalExecution {
     /// STUB(W6/opSetOutput): `newUniqueOut`→`opSetOutput` and `opSetOpcode`→W6
     /// surface the documented stub `Err`; the op-shell + input wiring + insert are
     /// reproduced.
-    fn get_new_multi(&mut self, op: OpId, bl: BlockId, fd: &mut Funcdata) -> KunaResult<VarnodeId> {
+    fn get_new_multi(
+        &mut self,
+        op: OpId,
+        bl: BlockId,
+        fd: &mut Funcdata,
+    ) -> UnlaceResult<VarnodeId> {
         let sizein = fd.bblocks_ref().block(bl).size_in();
         let start = crate::block::block_get_start(&fd.bblocks_ref().arena, bl);
         let newop = fd.new_op(sizein, start);
@@ -545,7 +550,7 @@ impl ConditionalExecution {
         m: &unlace_base::address::Address,
         op: OpId,
         fd: &mut Funcdata,
-    ) -> KunaResult<VarnodeId> {
+    ) -> UnlaceResult<VarnodeId> {
         let vn = fd.new_varnode(s, m, None);
         fd.op_set_output(op, vn)?; // STUB(opSetOutput)
         Ok(vn)
@@ -554,7 +559,7 @@ impl ConditionalExecution {
     /// `newUniqueOut(s,op)` — create a defined unique output Varnode for `op`
     /// (C++ `Funcdata::newUniqueOut`, `funcdata_varnode.cc:131`).  Same stub as
     /// [`new_varnode_out`](ConditionalExecution::new_varnode_out).
-    fn new_unique_out(&self, s: int4, op: OpId, fd: &mut Funcdata) -> KunaResult<VarnodeId> {
+    fn new_unique_out(&self, s: int4, op: OpId, fd: &mut Funcdata) -> UnlaceResult<VarnodeId> {
         let vn = fd.new_unique(s, None);
         fd.op_set_output(op, vn)?; // STUB(opSetOutput)
         Ok(vn)
@@ -562,7 +567,12 @@ impl ConditionalExecution {
 
     /// Calculate the replacement Varnode for a read coming through an arbitrary
     /// block (C++ `ConditionalExecution::resolveRead`, `condexe.cc:224-237`).
-    fn resolve_read(&mut self, op: OpId, bl: BlockId, fd: &mut Funcdata) -> KunaResult<VarnodeId> {
+    fn resolve_read(
+        &mut self,
+        op: OpId,
+        bl: BlockId,
+        fd: &mut Funcdata,
+    ) -> UnlaceResult<VarnodeId> {
         if fd.bblocks_ref().block(bl).size_in() == 1 {
             // Since dominator is iblock, In(0) must be iblock. Figure what side we came through.
             let inrev = fd.bblocks_ref().block(bl).get_in_rev_index(0);
@@ -584,7 +594,7 @@ impl ConditionalExecution {
         op: OpId,
         inbranch: int4,
         fd: &mut Funcdata,
-    ) -> KunaResult<VarnodeId> {
+    ) -> UnlaceResult<VarnodeId> {
         let iblock = self.iblock.expect("resolveIblockRead: no iblock");
         let mut op = op;
         if fd
@@ -638,7 +648,7 @@ impl ConditionalExecution {
         {
             self.pullback_op(op, inbranch, fd)
         } else {
-            Err(KunaError::lowlevel(
+            Err(UnlaceError::lowlevel(
                 "Conditional execution: Illegal op in iblock",
             ))
         }
@@ -653,7 +663,7 @@ impl ConditionalExecution {
         readop: OpId,
         slot: int4,
         fd: &mut Funcdata,
-    ) -> KunaResult<VarnodeId> {
+    ) -> UnlaceResult<VarnodeId> {
         let iblock = self.iblock.expect("getMultiequalRead: no iblock");
         let bl = fd
             .obank()
@@ -682,7 +692,7 @@ impl ConditionalExecution {
         op: OpId,
         bl: BlockId,
         fd: &mut Funcdata,
-    ) -> KunaResult<VarnodeId> {
+    ) -> UnlaceResult<VarnodeId> {
         let iblock = self.iblock.expect("getReplacementRead: no iblock");
         let bl_index = fd.bblocks_ref().block(bl).get_index();
         if let Some(&res) = self.replacement.get(&bl_index) {
@@ -694,7 +704,7 @@ impl ConditionalExecution {
             curbl = match fd.bblocks_ref().block(curbl).get_immed_dom() {
                 Some(d) => d,
                 None => {
-                    return Err(KunaError::lowlevel(
+                    return Err(UnlaceError::lowlevel(
                         "Conditional execution: Could not find dominator",
                     ));
                 }
@@ -718,7 +728,7 @@ impl ConditionalExecution {
     ///
     /// STUB(opSetOutput / W6): the RETURN-input COPY creation and any pullback
     /// MULTIEQUAL creation surface the documented stub `Err`s through the helpers.
-    fn do_replacement(&mut self, op: OpId, fd: &mut Funcdata) -> KunaResult<()> {
+    fn do_replacement(&mut self, op: OpId, fd: &mut Funcdata) -> UnlaceResult<()> {
         self.replacement.clear();
         self.pullback.clear();
         let iblock = self.iblock.expect("doReplacement: no iblock");
@@ -939,7 +949,7 @@ impl ConditionalExecution {
     /// We assume the last call to [`verify`](ConditionalExecution::verify)
     /// returned \b true.  STUB(opSetOutput / W6): the data-flow rewrite
     /// (`doReplacement`) surfaces the documented stub `Err`s.
-    pub fn execute(&mut self, fd: &mut Funcdata) -> KunaResult<()> {
+    pub fn execute(&mut self, fd: &mut Funcdata) -> UnlaceResult<()> {
         let iblock = self.iblock.expect("execute: no iblock");
         // Remove ops in reverse order
         let mut iter = fd.bb_op_tail(iblock);
@@ -1399,7 +1409,7 @@ impl RuleOrPredicate {
         branch: &mut MultiPredicate,
         op: OpId,
         data: &mut Funcdata,
-    ) -> KunaResult<int4> {
+    ) -> UnlaceResult<int4> {
         if data
             .vbank()
             .get(vn)
@@ -1461,13 +1471,13 @@ impl Rule for RuleOrPredicate {
 }
 
 impl RuleOrPredicate {
-    /// The `KunaResult`-returning body of [`Rule::apply_op`] (C++
+    /// The `UnlaceResult`-returning body of [`Rule::apply_op`] (C++
     /// `RuleOrPredicate::applyOp`, `condexe.cc:653-709`).
     ///
     /// STUB(opSetOutput / W6): `newOp`+`newUniqueOut`+`opSetOpcode(MULTIEQUAL)` for
     /// the new MULTIEQUAL, and the final `opSetOpcode(op,CPUI_COPY)`, surface the
     /// documented stub `Err`s.
-    fn apply_op_inner(&self, op: OpId, data: &mut Funcdata) -> KunaResult<int4> {
+    fn apply_op_inner(&self, op: OpId, data: &mut Funcdata) -> UnlaceResult<int4> {
         let mut branch0 = MultiPredicate::new();
         let mut branch1 = MultiPredicate::new();
         let op_in0 = data
@@ -1585,7 +1595,12 @@ impl RuleOrPredicate {
 
     /// `newUniqueOut(s,op)` for the rule's data-mutation context (same stub as
     /// [`ConditionalExecution::new_unique_out`]).
-    fn new_unique_out_data(&self, s: int4, op: OpId, data: &mut Funcdata) -> KunaResult<VarnodeId> {
+    fn new_unique_out_data(
+        &self,
+        s: int4,
+        op: OpId,
+        data: &mut Funcdata,
+    ) -> UnlaceResult<VarnodeId> {
         let vn = data.new_unique(s, None);
         data.op_set_output(op, vn)?; // STUB(opSetOutput)
         Ok(vn)

@@ -1,4 +1,4 @@
-//! (kuna) `aifnoppad` — no AIF gap entry starts on alignment padding or zero fill
+//! (unlace) `aifnoppad` — no AIF gap entry starts on alignment padding or zero fill
 //! (P1 code/data partition).
 //!
 //! # The defect (GH-299)
@@ -11,7 +11,7 @@
 //! share, and the `nop`s between each relay thunk's `ret` and the next thunk's
 //! hot-patchable `mov edi,edi` entry then pass both acceptance tests: a fingerprint
 //! match, and a valid subroutine that falls through into decoded code. Each run
-//! becomes a `sub_<addr>` in front of a function kuna already has. On ARM firmware,
+//! becomes a `sub_<addr>` in front of a function unlace already has. On ARM firmware,
 //! zero halfwords around a literal pool are accepted the same way, and an accepted
 //! zero run swallows the function behind it.
 //!
@@ -50,7 +50,7 @@ use super::{GapDecoder, ProbedInsn};
 pub(super) enum Filler {
     /// The candidate does not open with filler: probe it as usual.
     No,
-    /// Zero fill, or padding in front of a function kuna has: do not probe it.
+    /// Zero fill, or padding in front of a function unlace has: do not probe it.
     Refuse,
     /// Padding in front of undecoded code that starts at the address held: probe
     /// the candidate, and plant an accept there instead.

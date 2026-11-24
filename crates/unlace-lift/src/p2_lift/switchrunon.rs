@@ -1,4 +1,4 @@
-//! (kuna) `switchrunon` — a jump table with no range guard stops where its
+//! (unlace) `switchrunon` — a jump table with no range guard stops where its
 //! rows leave the function for good.
 //!
 //! A switch whose selector the compiler knows to be in range has no bounds
@@ -56,7 +56,7 @@ pub fn own_rows(entry: u64, rows: &[u64], owner: &dyn Fn(u64) -> Option<u64>) ->
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.switchrunon_own_rows = Some(own_rows);
 }
 

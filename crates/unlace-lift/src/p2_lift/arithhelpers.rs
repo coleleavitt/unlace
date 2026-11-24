@@ -1,4 +1,4 @@
-//! (kuna) Compiler arithmetic runtime helpers as the C operators they implement.
+//! (unlace) Compiler arithmetic runtime helpers as the C operators they implement.
 //!
 //! A 32-bit target with no instruction for an operation on `long long` (or, on
 //! ARM, for any integer division) calls a runtime helper instead: GCC's libgcc
@@ -12,7 +12,7 @@
 //! or, when the callee is an unresolved import, as an argument-less call whose
 //! result nobody reads.
 //!
-//! Each helper is registered as a `<callfixup>`, the mechanism `kuna_msvcftol`
+//! Each helper is registered as a `<callfixup>`, the mechanism `unlace_msvcftol`
 //! uses: the CALL is replaced with the helper's semantics in p-code, so the
 //! arguments are ordinary register and stack reads and the result an ordinary
 //! register write, and `a / b` falls out of the normal simplification. A helper
@@ -34,7 +34,7 @@
 //! `s>>`), which is what `_allshl`/`_allshr` compute for counts of 64 and over;
 //! the libgcc and AEABI helpers leave such counts undefined, as C does.
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 
 /// Prefix of every `<callfixup name=...>` this module registers; the installer
 /// (`unlace_analysis::analyzers::callfixup`) skips them under `option arithhelpers off`.
@@ -228,8 +228,8 @@ pub fn payload_xml(abi: HelperAbi) -> Vec<String> {
 /// Parse each of [`payload_xml`]'s elements and hand it to `register`.
 pub fn decode_payloads(
     abi: HelperAbi,
-    register: &mut dyn FnMut(&std::rc::Rc<unlace_base::xml::Element>) -> KunaResult<()>,
-) -> KunaResult<()> {
+    register: &mut dyn FnMut(&std::rc::Rc<unlace_base::xml::Element>) -> UnlaceResult<()>,
+) -> UnlaceResult<()> {
     use unlace_base::xml::DocumentStorage;
     let float = match abi {
         HelperAbi::Arm { big_endian } => crate::aeabifloat::payload_xml(big_endian),
@@ -244,13 +244,13 @@ pub fn decode_payloads(
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.arithhelpers_decode_payloads = Some(decode_payloads);
     hooks.arithhelpers_helper_abi = Some(helper_abi);
 }
 
-crate::kuna_flag!(
-    /// (kuna `arithhelpers`) Install the arithmetic runtime-helper call-fixups
+crate::unlace_flag!(
+    /// (unlace `arithhelpers`) Install the arithmetic runtime-helper call-fixups
     /// (`p2_lift/arithhelpers.rs`) so a 32-bit call to `__udivdi3`,
     /// `__aeabi_uldivmod`, `_alldiv`, ... prints as the C operator it implements.
     /// Read by the analysis-tier call-fixup installer, like `msvc_ftol`.

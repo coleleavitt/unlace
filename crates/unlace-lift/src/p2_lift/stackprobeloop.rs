@@ -42,7 +42,7 @@
 //! `op_set_opcode` takes a fully-formed `TypeOp`; the `glb->inst[opc]` property
 //! flags are the W6 table (filled by the architecture's `inst` lookup).  The
 //! opcode *value* is the load-bearing part for the rewrite and the action
-//! engine's dispatch (the `kuna_addcarrychain` / `kuna_arraystride` idiom).
+//! engine's dispatch (the `unlace_addcarrychain` / `unlace_arraystride` idiom).
 //! // STUB(W6): `glb->inst[CPUI_INT_ADD]` property flags.
 
 use unlace_base::address::{Address, calc_mask};
@@ -55,11 +55,11 @@ use crate::action::{ActionGroupList, Rule, RuleSpec};
 use crate::context::{OpId, TypeOp, VarnodeId};
 use crate::funcdata::Funcdata;
 
-/// Marshaling element `<stackprobeloop>` (kuna).  ElementIds live in the 4000+
+/// Marshaling element `<stackprobeloop>` (unlace).  ElementIds live in the 4000+
 /// range (C++ `ELEM_STACKPROBELOOP = ElementId("stackprobeloop",4012)`).
 pub const ELEM_STACKPROBELOOP: ElementId = ElementId::new("stackprobeloop", 4012);
 
-/// (kuna GH-8017/6858) Resolve a gcc stack-probe loop's stack-pointer
+/// (unlace GH-8017/6858) Resolve a gcc stack-probe loop's stack-pointer
 /// `MULTIEQUAL` to a constant offset (C++ `class RuleStackProbeLoop`).
 ///
 /// Matches a 2-input `CPUI_MULTIEQUAL` producing the stack-pointer register
@@ -301,7 +301,7 @@ fn stack_relative(data: &Funcdata, sp_in: VarnodeId, vn: VarnodeId) -> Option<ui
 }
 
 // ---------------------------------------------------------------------------
-// Local IR read accessors (the kuna_loweredswitch / kuna_arraystride idiom).
+// Local IR read accessors (the unlace_loweredswitch / unlace_arraystride idiom).
 // ---------------------------------------------------------------------------
 
 fn op_num_input(data: &Funcdata, op: OpId) -> int4 {

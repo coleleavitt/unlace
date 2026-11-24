@@ -33,7 +33,7 @@
 
 use std::io::{Read, Write};
 
-use unlace_base::error::KunaError;
+use unlace_base::error::UnlaceError;
 use unlace_base::marshal::Decoder;
 
 // ---------------------------------------------------------------------------
@@ -82,7 +82,7 @@ pub const BURST_MESSAGE_CLOSE: u8 = 17;
 ///
 /// The C++ helpers have three failure modes: pipe closure (`exit(1)`),
 /// protocol misalignment / Java exceptions (`throw JavaError`), and engine
-/// errors (`LowlevelError` etc.).  The latter two are [`KunaError`]s; pipe
+/// errors (`LowlevelError` etc.).  The latter two are [`UnlaceError`]s; pipe
 /// closure gets its own variant so the process loop can map it to a clean
 /// process exit instead of a warning.
 #[derive(Debug)]
@@ -92,9 +92,9 @@ pub enum WireError {
     PipeClosed,
     /// Any other I/O failure on the streams.
     Io(std::io::Error),
-    /// A protocol/engine error ([`KunaError::Java`] carries both real Java
+    /// A protocol/engine error ([`UnlaceError::Java`] carries both real Java
     /// exceptions and the C++-generated "alignment" errors).
-    Kuna(KunaError),
+    Unlace(UnlaceError),
 }
 
 impl std::fmt::Display for WireError {
@@ -102,14 +102,14 @@ impl std::fmt::Display for WireError {
         match self {
             WireError::PipeClosed => write!(f, "pipe closed"),
             WireError::Io(e) => write!(f, "i/o error: {e}"),
-            WireError::Kuna(e) => write!(f, "{e}"),
+            WireError::Unlace(e) => write!(f, "{e}"),
         }
     }
 }
 
-impl From<KunaError> for WireError {
-    fn from(e: KunaError) -> WireError {
-        WireError::Kuna(e)
+impl From<UnlaceError> for WireError {
+    fn from(e: UnlaceError) -> WireError {
+        WireError::Unlace(e)
     }
 }
 
@@ -118,7 +118,7 @@ pub type WireResult<T> = Result<T, WireError>;
 
 /// `throw JavaError("alignment", msg)` — the C++-generated protocol error.
 pub fn java_alignment(msg: &str) -> WireError {
-    WireError::Kuna(KunaError::java("alignment", msg))
+    WireError::Unlace(UnlaceError::java("alignment", msg))
 }
 
 /// Map a write/flush error: a broken pipe means the parent died.
@@ -275,13 +275,13 @@ pub fn read_string_stream_decoder<R: Read>(
     s: &mut R,
     decoder: &mut dyn Decoder,
 ) -> WireResult<bool> {
-    // (The C++ ingests straight off the istream; kuna's Decoder::ingest_stream
+    // (The C++ ingests straight off the istream; unlace's Decoder::ingest_stream
     // takes a slice, so the payload is accumulated first — same bytes, the
     // packed encoding is NUL-free so the accumulation boundary is identical.)
     let t = read_to_any_burst(s)?;
     if t == BURST_STRING_OPEN {
         let (payload, code) = read_payload_to_burst(s, true)?;
-        decoder.ingest_stream(&payload).map_err(WireError::Kuna)?;
+        decoder.ingest_stream(&payload).map_err(WireError::Unlace)?;
         if code != BURST_STRING_CLOSE {
             return Err(java_alignment("Expecting XML string end"));
         }
@@ -307,7 +307,7 @@ pub fn write_string_stream<W: Write>(s: &mut W, msg: &[u8]) -> WireResult<()> {
 }
 
 /// Consume the query-response header; an exception frame is decoded and
-/// surfaced as [`KunaError::Java`] (C++ `readToResponse`,
+/// surfaced as [`UnlaceError::Java`] (C++ `readToResponse`,
 /// ghidra_arch.cc:192-205).
 pub fn read_to_response<R: Read>(s: &mut R) -> WireResult<()> {
     let t = read_to_any_burst(s)?;
@@ -318,7 +318,7 @@ pub fn read_to_response<R: Read>(s: &mut R) -> WireResult<()> {
         let extype = read_string_stream(s)?;
         let message = read_string_stream(s)?;
         let _ = read_to_any_burst(s)?; // the exception terminator
-        return Err(WireError::Kuna(KunaError::java(
+        return Err(WireError::Unlace(UnlaceError::java(
             String::from_utf8_lossy(&extype).into_owned(),
             String::from_utf8_lossy(&message).into_owned(),
         )));
@@ -467,7 +467,7 @@ mod tests {
         // wrong opening burst
         let mut s = Cursor::new(burst(BURST_BYTES_OPEN));
         match read_string_stream(&mut s) {
-            Err(WireError::Kuna(KunaError::Java { type_name, explain })) => {
+            Err(WireError::Unlace(UnlaceError::Java { type_name, explain })) => {
                 assert_eq!(type_name, "alignment");
                 assert_eq!(explain, "Expecting string");
             }
@@ -479,7 +479,7 @@ mod tests {
         input.extend_from_slice(&burst(BURST_BYTES_CLOSE));
         let mut s = Cursor::new(input);
         match read_string_stream(&mut s) {
-            Err(WireError::Kuna(KunaError::Java { explain, .. })) => {
+            Err(WireError::Unlace(UnlaceError::Java { explain, .. })) => {
                 assert_eq!(explain, "Expecting string terminator");
             }
             other => panic!("expected alignment error, got {other:?}"),
@@ -508,7 +508,7 @@ mod tests {
         write_string_stream(&mut wire, b"boom").unwrap();
         wire.extend_from_slice(&burst(BURST_EXCEPTION_CLOSE));
         match read_to_response(&mut Cursor::new(wire)) {
-            Err(WireError::Kuna(KunaError::Java { type_name, explain })) => {
+            Err(WireError::Unlace(UnlaceError::Java { type_name, explain })) => {
                 assert_eq!(type_name, "java.lang.Exception");
                 assert_eq!(explain, "boom");
             }

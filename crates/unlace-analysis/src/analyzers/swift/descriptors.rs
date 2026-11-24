@@ -1,4 +1,4 @@
-//! (kuna `swiftmetadata`) The Swift 5 runtime metadata records, read from
+//! (unlace `swiftmetadata`) The Swift 5 runtime metadata records, read from
 //! the reflection sections (`__swift5_types` / `swift5_type_metadata`,
 //! `__swift5_protos`, `__swift5_proto`, `__swift5_fieldmd`) per the ABI
 //! (`swift/include/swift/ABI/Metadata.h`, `MetadataValues.h`).

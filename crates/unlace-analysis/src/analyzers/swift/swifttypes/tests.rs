@@ -1,4 +1,4 @@
-//! (kuna `swifttypes`) The nesting bound on layouts built through other
+//! (unlace `swifttypes`) The nesting bound on layouts built through other
 //! layouts; the end-to-end layouts are `verify_swifttypes`.
 
 use super::*;
@@ -130,7 +130,7 @@ fn nested_optionals_stop_at_the_nesting_bound() {
             let mangled = [b"SS".as_slice(), &b"Sg".repeat(n)].concat();
             let node = demangle_swift_type(&mangled, &|_, _, _| None).expect("parses");
             types
-                .kuna_type(&node, 16, 0)
+                .unlace_type(&node, 16, 0)
                 .map(|t| t.get_name().to_string())
         };
         assert_eq!(optional(1).as_deref(), Some("Swift.String"));

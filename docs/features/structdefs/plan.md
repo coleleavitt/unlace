@@ -38,7 +38,7 @@ through `print C`.
 
 ## 3. The project-export suppression
 
-`decompile_pulled` (kuna-console `project.rs`) clears the printer flag for the
+`decompile_pulled` (console `project.rs`) clears the printer flag for the
 duration of a `want_proto` batch — `want_proto` is exactly the
 `decompile-project` surface, since it is what asks for the `.h` prototype — and
 restores it after, so one loaded program can drive both surfaces. This reaches
@@ -68,7 +68,7 @@ nothing.
 - 7 unit tests in `structdefs/tests.rs` over hand-built `Datatype`s: the
   pointee pull-in, nested ordering, cycle termination, the core/unnamed
   refusals, the opaque forward declaration, a complete body, and the dedup rule.
-- `tests/stages/kuna-structdefs.toml` — two `print C` passes over one decompiled
+- `tests/stages/structdefs.toml` — two `print C` passes over one decompiled
   function (`parse line struct mystruct { … };`), default then
   `option structdefs on`: the definition appears exactly once, and the signature
   and body lines appear exactly twice (so the flip is proven to add the preamble

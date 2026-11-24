@@ -1,4 +1,4 @@
-//! (kuna `msvcsig`) Resolve a call through an import slot that carries a locked
+//! (unlace `msvcsig`) Resolve a call through an import slot that carries a locked
 //! MSVC prototype while the flow is followed, instead of after a restart.
 //!
 //! `msvcsig` locks each MSVC import's declared prototype onto the import's

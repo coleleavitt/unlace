@@ -1,7 +1,7 @@
-//! (kuna `poolextents`) ARM32 literal-pool extents from trusted references.
+//! (unlace `poolextents`) ARM32 literal-pool extents from trusted references.
 //!
 //! On ARM a function's PC-relative constants sit in `.text` right after the
-//! code that loads them, and a function whose last act is a call kuna cannot
+//! code that loads them, and a function whose last act is a call unlace cannot
 //! prove no-return is followed by its own pool. The decompiler's flow walk
 //! takes that call's fall-through and decodes the pool as instructions; the
 //! `funcboundflow` bound (`unlace_decomp::funcboundflow`) needs to know where

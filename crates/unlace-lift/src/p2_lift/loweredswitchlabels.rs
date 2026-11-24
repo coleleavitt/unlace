@@ -11,7 +11,7 @@
 use unlace_base::marshal::ElementId;
 use unlace_num::opcodes::OpCode;
 
-/// Marshaling element `<loweredswitchlabels>` (kuna 4000+ range).
+/// Marshaling element `<loweredswitchlabels>` (unlace 4000+ range).
 pub const ELEM_LOWEREDSWITCHLABELS: ElementId = ElementId::new("loweredswitchlabels", 4093);
 
 /// Signedness proved by a lowered-switch range comparison.

@@ -1,7 +1,7 @@
 //! Tests for the arithmetic `castwiden` rests on.
 //!
 //! Which cast a function prints needs a decompile and is covered end to end by
-//! `tests/stages/kuna-castwiden.toml` (off, on, literal) and by the compiled round
+//! `tests/stages/unlace-castwiden.toml` (off, on, literal) and by the compiled round
 //! trip in `unlace-cli/tests/decompile_all_cli.rs`
 //! (`an_implied_widening_round_trips_through_the_printed_c`).  What is pinned here
 //! is the rule every removal rests on: `fits` accepts a widening only where C's

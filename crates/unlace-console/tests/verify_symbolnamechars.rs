@@ -18,7 +18,7 @@
 //! `symbolnamechars` is a LOADER-tier gate: the names are minted inside `load
 //! file`, and a stage script's `option` command requires a live image, so no
 //! script can set the mode before the load it has to affect.
-//! `tests/stages/kuna-symbolnamechars.toml` therefore pins the DEFAULT arm only
+//! `tests/stages/unlace-symbolnamechars.toml` therefore pins the DEFAULT arm only
 //! and the off/ident arms live here, where the env var can be set around each
 //! load. Same limit, same reason, as `verify_symbolnamerepair.rs`.
 
@@ -192,7 +192,7 @@ fn safe_leaves_gcc_clone_suffixes_alone_and_ident_folds_them() {
 /// real unstripped C++ binaries, where the names are `::`-qualified and mangled.
 ///
 /// The end-to-end half — actually running `load function <sanitized name>` and
-/// getting a body — is `tests/stages/kuna-symbolnamechars.toml`, which does it
+/// getting a body — is `tests/stages/unlace-symbolnamechars.toml`, which does it
 /// five times.
 #[test]
 fn every_reported_name_is_addressable_and_unique() {

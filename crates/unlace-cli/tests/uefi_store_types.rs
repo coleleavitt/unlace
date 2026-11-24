@@ -1,4 +1,4 @@
-//! (kuna `storetype`, `uefi`) A UEFI driver's service-table globals are typed from
+//! (unlace `storetype`, `uefi`) A UEFI driver's service-table globals are typed from
 //! the value its entry stores into them, so every reader calls through `gBS->`.
 //! The `uefi` pass names and types the tables on its own, so the untyped control
 //! turns both off.
@@ -9,7 +9,7 @@ fn decompile_all(extra: &[&str]) -> String {
     let fixture = common::fixture("uefi_diskio_x64.efi");
     let mut args = vec!["decompile-all", fixture.as_str()];
     args.extend_from_slice(extra);
-    let (out, err, code) = common::run_kuna(&args);
+    let (out, err, code) = common::run_unlace(&args);
     assert_eq!(code, 0, "{err}");
     out
 }

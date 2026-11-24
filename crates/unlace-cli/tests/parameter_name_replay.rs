@@ -83,7 +83,7 @@ fn run(
     if json {
         args.push("--json");
     }
-    common::run_kuna(&args)
+    common::run_unlace(&args)
 }
 
 fn decompile(image: &PathBuf, prototype: &str, assertions: &[&str]) -> String {

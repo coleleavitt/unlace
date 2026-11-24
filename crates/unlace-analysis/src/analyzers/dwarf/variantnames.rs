@@ -1,11 +1,11 @@
-//! (kuna `variantnames`) Synthesize an enum type for a recovered variant
+//! (unlace `variantnames`) Synthesize an enum type for a recovered variant
 //! part's `tag` field, so discriminant constants render as variant names.
 //!
-//! The variant-part importer (`kuna_dwarfvariants`) knows every
+//! The variant-part importer (`unlace_dwarfvariants`) knows every
 //! `DW_AT_discr_value` and every variant name, but installs the tag member
 //! with the plain integer type DWARF declares for it — so the emitted C tests
 //! `(*e).tag == 1` where the compiler said `1` selects `Err`. This module
-//! builds the namemap the importer already holds into a kuna enum of the
+//! builds the namemap the importer already holds into a unlace enum of the
 //! tag's own width (`TYPE_ENUM_UINT` + namemap, exactly what the C-enum
 //! import produces), and the existing enum-constant rendering does the rest:
 //! `(*e).tag == Err`.

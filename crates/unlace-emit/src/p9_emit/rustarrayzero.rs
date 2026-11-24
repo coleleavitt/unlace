@@ -46,7 +46,7 @@ impl PrintC {
     }
 }
 
-crate::kuna_flag!(
+crate::unlace_flag!(
     /// The `rustarrayzero` option.
     RustArrayZero,
     "rustarrayzero",

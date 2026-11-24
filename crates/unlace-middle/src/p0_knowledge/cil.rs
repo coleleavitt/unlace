@@ -1,4 +1,4 @@
-//! (kuna) The `cil` option: decode a managed .NET assembly from its CIL method
+//! (unlace) The `cil` option: decode a managed .NET assembly from its CIL method
 //! bodies instead of from the native stub of its PE.
 //!
 //! A managed PE holds one native instruction, the jump to `_CorExeMain`; the
@@ -12,7 +12,7 @@
 //! command, so it is a load-time option ([`crate::loadoptions`]) that the
 //! CLI carries in [`CIL_ENV`].
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 
 /// Absent or any value other than the off-tokens means enabled.
 pub const CIL_ENV: &str = "UNLACE_CIL";
@@ -28,7 +28,7 @@ pub fn set_cil_env(on: bool) {
 }
 
 /// Apply `option cil VALUE`.
-pub fn set_cil(value: &str) -> KunaResult<String> {
+pub fn set_cil(value: &str) -> UnlaceResult<String> {
     crate::options::on_or_off(value).map(|on| {
         set_cil_env(on);
         format!(

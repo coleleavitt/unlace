@@ -83,7 +83,7 @@ per call it lives across.
 ## 5. Tests
 
 Unit tests (`elemptr/tests.rs`), the two-pass stage test
-`tests/stages/kuna-elemptr.toml` on the compiled fixture, four `tests/cli` probes (one
+`tests/stages/elemptr.toml` on the compiled fixture, four `tests/cli` probes (one
 runs a batch that must leave a byte-stepped global and a first-element-named table
 untyped, one a caller passing a table with a zero byte to a typed callee), the
 compiled round trip over three builds, two arms and two compilers

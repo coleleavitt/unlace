@@ -95,7 +95,7 @@ fn verified_home_gap(fd: &Funcdata, call: &FuncCallSpecs) -> Option<Rc<AddrSpace
 /// Translate a callee home cell only when the architecture declares an 8-byte
 /// stack return slot and the locked model starts its sole stack input at byte 40.
 /// The caller-side proof must still place the translated cell in a negative local.
-/// Kuna does not currently expose the cspec `stackshift` as a model property.
+/// Unlace does not currently expose the cspec `stackshift` as a model property.
 #[doc(hidden)]
 pub fn caller_home_cell(
     fd: &Funcdata,

@@ -1,4 +1,4 @@
-//! P3 signed division and remainder by `2^k` written as a select (kuna `pow2select`).
+//! P3 signed division and remainder by `2^k` written as a select (unlace `pow2select`).
 //!
 //! Signed `x / 2^k` rounds toward zero, so a compiler adds `2^k - 1` to a
 //! negative `x` before the arithmetic shift.  Without a branchless sign mask it
@@ -288,7 +288,7 @@ impl Rule for RuleSelectDiv {
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::selectdiv::Pow2Select>()
             .0
         {
@@ -333,8 +333,8 @@ impl Rule for RuleSelectDiv {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna) Rewrite a signed division or remainder by a power of two written as a select or a sign-mask shift. (option `pow2select`).
+crate::unlace_flag!(
+    /// (unlace) Rewrite a signed division or remainder by a power of two written as a select or a sign-mask shift. (option `pow2select`).
     Pow2Select,
     "pow2select",
     "power-of-two division select recovery",

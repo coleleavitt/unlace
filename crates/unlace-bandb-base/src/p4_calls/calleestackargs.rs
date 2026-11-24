@@ -1,4 +1,4 @@
-//! (kuna `calleeargs`) Bound an x86-32 call's stack arguments by what its
+//! (unlace `calleeargs`) Bound an x86-32 call's stack arguments by what its
 //! callee's own code touches.
 //!
 //! An argument pushed for an outer call before an inner call sits on the stack
@@ -62,8 +62,8 @@ impl OptionCalleeArgs {
     pub const NAME: &'static str = "calleeargs";
 
     /// Resolve the flag and its confirmation message; the caller writes it into
-    /// the registered option `KunaCalleeargs`.
-    pub fn apply(&self, p1: &str) -> unlace_base::error::KunaResult<(bool, String)> {
+    /// the registered option `UnlaceCalleeargs`.
+    pub fn apply(&self, p1: &str) -> unlace_base::error::UnlaceResult<(bool, String)> {
         let val = crate::options::on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((val, format!("Callee stack-argument extent turned {prop}")))
@@ -78,8 +78,8 @@ pub fn callee_stack_arg_bytes(
     call_at: &Address,
 ) -> Option<crate::calleepurge::StackArgs> {
     if !arch
-        .kuna_options
-        .get::<crate::calleestackargs::KunaCalleeargs>()
+        .unlace_options
+        .get::<crate::calleestackargs::UnlaceCalleeargs>()
         .0
     {
         return None;
@@ -91,8 +91,8 @@ pub fn callee_stack_arg_bytes(
 /// returns pop or the caller removes after the call at `call_at`.
 pub fn callee_stack_window(arch: &Architecture, entry: &Address, call_at: &Address) -> Option<u32> {
     if !arch
-        .kuna_options
-        .get::<crate::calleestackargs::KunaCalleeargs>()
+        .unlace_options
+        .get::<crate::calleestackargs::UnlaceCalleeargs>()
         .0
     {
         return None;
@@ -105,8 +105,8 @@ pub fn callee_stack_window(arch: &Architecture, entry: &Address, call_at: &Addre
 /// callee releases itself.
 pub fn callee_return_pop(arch: &Architecture, entry: &Address) -> Option<u32> {
     if !arch
-        .kuna_options
-        .get::<crate::calleestackargs::KunaCalleeargs>()
+        .unlace_options
+        .get::<crate::calleestackargs::UnlaceCalleeargs>()
         .0
     {
         return None;
@@ -118,8 +118,8 @@ pub fn callee_return_pop(arch: &Architecture, entry: &Address) -> Option<u32> {
 /// cannot follow such a call, so the stack offsets of every call in its caller
 /// are guesses, and no extent is applied there.
 pub fn callee_moves_stack(arch: &Architecture, entry: &Address) -> bool {
-    arch.kuna_options
-        .get::<crate::calleestackargs::KunaCalleeargs>()
+    arch.unlace_options
+        .get::<crate::calleestackargs::UnlaceCalleeargs>()
         .0
         && crate::calleepurge::moves_stack(arch, entry)
 }
@@ -314,52 +314,52 @@ fn stored(data: &Funcdata, mut vn: VarnodeId) -> VarnodeId {
     vn
 }
 
-/// (kuna `calleeargs`) Bound a call's stack arguments by what its callee
+/// (unlace `calleeargs`) Bound a call's stack arguments by what its callee
 /// reads.
 #[derive(Clone, Debug, PartialEq)]
-pub struct KunaCalleeargs(pub bool);
+pub struct UnlaceCalleeargs(pub bool);
 
-impl crate::optionset::KunaOption for KunaCalleeargs {
+impl crate::optionset::UnlaceOption for UnlaceCalleeargs {
     const NAME: &'static str = "calleeargs";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
-        KunaCalleeargs(true)
+        UnlaceCalleeargs(true)
     }
 
     fn shipped() -> Self {
-        KunaCalleeargs(true)
+        UnlaceCalleeargs(true)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (v, msg) = crate::calleestackargs::OptionCalleeArgs.apply(value)?;
-        Ok((KunaCalleeargs(v), msg))
+        Ok((UnlaceCalleeargs(v), msg))
     }
 }
 
-/// (kuna `calleeargsmsvc`) Let the `calleeargs` walk read through the MSVC
+/// (unlace `calleeargsmsvc`) Let the `calleeargs` walk read through the MSVC
 /// frame boilerplate: the SEH registration of a local record in `fs:[0]` and
 /// the `/GS` cookie scrambled with a stack address are not escapes.
 #[derive(Clone, Debug, PartialEq)]
-pub struct KunaCalleeargsMsvc(pub bool);
+pub struct UnlaceCalleeargsMsvc(pub bool);
 
-impl crate::optionset::KunaOption for KunaCalleeargsMsvc {
+impl crate::optionset::UnlaceOption for UnlaceCalleeargsMsvc {
     const NAME: &'static str = "calleeargsmsvc";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
-        KunaCalleeargsMsvc(false)
+        UnlaceCalleeargsMsvc(false)
     }
 
     fn shipped() -> Self {
-        KunaCalleeargsMsvc(false)
+        UnlaceCalleeargsMsvc(false)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let v = crate::options::on_or_off(value)?;
         let prop = if v { "on" } else { "off" };
         Ok((
-            KunaCalleeargsMsvc(v),
+            UnlaceCalleeargsMsvc(v),
             format!("Callee stack-argument extent through MSVC frames turned {prop}"),
         ))
     }

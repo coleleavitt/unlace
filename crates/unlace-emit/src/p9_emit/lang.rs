@@ -1,12 +1,12 @@
-//! (kuna) The output-language plane: which surface language P9 renders into.
+//! (unlace) The output-language plane: which surface language P9 renders into.
 //!
 //! # Why this exists
 //!
-//! The C++ tree kuna was ported from had a three-level printer hierarchy —
+//! The C++ tree unlace was ported from had a three-level printer hierarchy —
 //! `PrintLanguage` (the RPN driver and the mod/scope stacks) → `PrintC` →
 //! `PrintJava : public PrintC` — selected through a `PrintLanguageCapability`
 //! registry. The port flattened all of it into one concrete `PrintC`
-//! (`p9_emit/printc.rs`). This module re-erects the seam, in the shape kuna
+//! (`p9_emit/printc.rs`). This module re-erects the seam, in the shape unlace
 //! actually needs; `PrintJava` returns as [`OutLang::Java`].
 //!
 //! # The shape, and why it is not a trait object over the whole printer
@@ -377,11 +377,11 @@ pub type FnAttributes = &'static [&'static str];
 
 /// What the emitter is **allowed** to produce in this language.
 ///
-/// These gate the decision sites of kuna's default-ON C rendering options, so a
+/// These gate the decision sites of unlace's default-ON C rendering options, so a
 /// language that cannot express a construct never sees it — rather than the
 /// operator being told to flip four options. `switch_captures_break` is the
 /// load-bearing one: a C `switch` captures a bare `break`, so
-/// `kuna_scope_break` (`p8_structure/loopbreak_recovery.rs`) legitimately retags a
+/// `unlace_scope_break` (`p8_structure/loopbreak_recovery.rs`) legitimately retags a
 /// goto-to-switch-exit as `f_break_goto`; a language whose switch does not
 /// capture `break` must re-resolve that scope or emit a jump to the wrong place.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -432,7 +432,7 @@ pub struct LangCaps {
 /// The `kw_*` and punctuation fields are the spellings; the `tok_*` fields are
 /// the [`OpToken`]s whose *spelling* varies. The other ~40 operator tokens —
 /// arithmetic, comparison, shifts, the ten `op=` forms — are identical across
-/// every language kuna targets and stay in `printc::tokens`, un-churned.
+/// every language unlace targets and stay in `printc::tokens`, un-churned.
 pub struct LangProfile {
     /// The `option setlanguage` name.
     pub name: &'static str,
@@ -472,7 +472,7 @@ pub struct LangProfile {
     /// precedence.
     ///
     /// Most of the ~46 operator tokens are the right token in every language
-    /// kuna targets, so a whole parallel table would be noise. The ones that are
+    /// unlace targets, so a whole parallel table would be noise. The ones that are
     /// not fall into two groups, and the second is the dangerous one:
     ///
     /// * **spelling** -- Rust writes bitwise complement `!`, not `~`.
@@ -596,7 +596,7 @@ fn unknown_base(
 }
 
 /// Fill this module's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.lang_do_while_continue = Some(do_while_continue);
     hooks.lang_int_promotion = Some(int_promotion);
     hooks.lang_c_for = Some(c_for);

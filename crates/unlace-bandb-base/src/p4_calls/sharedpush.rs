@@ -256,7 +256,7 @@ fn reaches_avoiding(data: &Funcdata, from: BlockId, target: BlockId, wall: Block
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.sharedpush_declared_arm_shares = Some(declared_arm_shares);
 }
 

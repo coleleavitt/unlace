@@ -1,4 +1,4 @@
-//! Authored ELF/signature data is read statically; only Kuna is executed.
+//! Authored ELF/signature data is read statically; only Unlace is executed.
 
 use crate::common;
 use serde_json::{Value, json};
@@ -122,7 +122,7 @@ fn summary(binary: &std::path::Path, extra: &[&str]) -> Value {
         "off",
     ];
     args.extend_from_slice(extra);
-    let (stdout, stderr, status) = common::run_kuna(&args);
+    let (stdout, stderr, status) = common::run_unlace(&args);
     assert_eq!(status, 0, "{stderr}");
     serde_json::from_str(&stdout).unwrap()
 }
@@ -259,11 +259,11 @@ fn image_report_survives_second_commit_without_changing_analysis_flags() {
             .unwrap();
         program
             .arch_mut()
-            .kuna_options
+            .unlace_options
             .set(unlace_decomp::analysisgates::Listing(listing));
         program
             .arch_mut()
-            .kuna_options
+            .unlace_options
             .set(unlace_decomp::coreoptions::Flirt(false));
         program.request_rust_profiles(Request {
             candidates: vec![Profile {
@@ -296,7 +296,7 @@ fn image_report_survives_second_commit_without_changing_analysis_flags() {
         assert_eq!(
             program
                 .arch()
-                .kuna_options
+                .unlace_options
                 .get::<unlace_decomp::analysisgates::Listing>()
                 .0,
             listing
@@ -304,7 +304,7 @@ fn image_report_survives_second_commit_without_changing_analysis_flags() {
         assert!(
             !program
                 .arch()
-                .kuna_options
+                .unlace_options
                 .get::<unlace_decomp::coreoptions::Flirt>()
                 .0
         );
@@ -313,7 +313,7 @@ fn image_report_survives_second_commit_without_changing_analysis_flags() {
         assert_eq!(
             program
                 .arch()
-                .kuna_options
+                .unlace_options
                 .get::<unlace_decomp::analysisgates::Listing>()
                 .0,
             listing
@@ -321,7 +321,7 @@ fn image_report_survives_second_commit_without_changing_analysis_flags() {
         assert!(
             !program
                 .arch()
-                .kuna_options
+                .unlace_options
                 .get::<unlace_decomp::coreoptions::Flirt>()
                 .0
         );
@@ -331,7 +331,7 @@ fn image_report_survives_second_commit_without_changing_analysis_flags() {
 fn invoke(args: &[&str]) -> (String, String, i32) {
     let mut args = args.to_vec();
     args.extend(["--option", "flirt", "off", "--language", "c"]);
-    common::run_kuna(&args)
+    common::run_unlace(&args)
 }
 
 fn document(args: &[&str]) -> Value {
@@ -730,11 +730,11 @@ fn application_consumes_one_observation_and_console_rejects_effective_overlays()
             .unwrap();
         program
             .arch_mut()
-            .kuna_options
+            .unlace_options
             .set(unlace_decomp::coreoptions::Flirt(false));
         program
             .arch_mut()
-            .kuna_options
+            .unlace_options
             .set(unlace_decomp::analysisgates::Listing(true));
         if overlay {
             program.set_assertions(vec![Directive {

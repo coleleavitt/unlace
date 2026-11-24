@@ -1,11 +1,11 @@
-//! Tests for read-only string block-copy recovery (kuna `rodatastring`): the
+//! Tests for read-only string block-copy recovery (unlace `rodatastring`): the
 //! [`covers_exactly`] tiling predicate that decides whether a gathered run
 //! really spells the whole string, the [`readonly_source`] source classifier,
 //! plus the [`RuleRodataStringCopy`] gate and the option parse.
 //!
 //! The end-to-end recovery (the `builtin_strncpy` build and the COPY teardown,
 //! both inherited from `StringSequence`) needs a load image, a global symbol
-//! table and a type factory, so it is proven by `tests/stages/kuna-rodatastring.toml`
+//! table and a type factory, so it is proven by `tests/stages/unlace-rodatastring.toml`
 //! rather than here.
 
 use super::*;

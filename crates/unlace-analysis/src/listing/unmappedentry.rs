@@ -1,4 +1,4 @@
-//! (kuna) `unmappedentry` — the recursive-descent walk never mints a function
+//! (unlace) `unmappedentry` — the recursive-descent walk never mints a function
 //! at a CALL target it is not allowed to decode (P1 code/data partition).
 //!
 //! [`super::walk`] runs a two-level worklist: an inner instruction worklist and

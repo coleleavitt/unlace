@@ -5,7 +5,7 @@
 
 use std::rc::Rc;
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::xml::Element;
 use unlace_decomp::loadoptions::{self, LoadOptions, LoadScope};
 
@@ -21,7 +21,7 @@ use crate::engine::{
 /// takes) it scans at each load, or a
 /// [`LanguageDatabase`](unlace_decomp::sleigh_arch::LanguageDatabase) a caller
 /// scanned once with [`language_database`](crate::engine::language_database).
-/// Kuna implements it; callers cannot.
+/// Unlace implements it; callers cannot.
 pub trait LanguageSource: Languages {}
 
 impl<L: Languages + ?Sized> LanguageSource for L {}
@@ -36,7 +36,7 @@ impl<L: Languages + ?Sized> LanguageSource for L {}
 /// let load = Bootstrap::new(&db).arm_isa(Some(ArmIsa::Thumb)).options(&options);
 /// let first = load.object("a.elf")?;
 /// let second = load.object("b.elf")?;
-/// # Ok::<(), unlace_base::error::KunaError>(())
+/// # Ok::<(), unlace_base::error::UnlaceError>(())
 /// ```
 ///
 /// Each setting has a default:
@@ -111,7 +111,7 @@ impl<'a, L: LanguageSource + ?Sized> Bootstrap<'a, L> {
 
     /// Load an object-format binary: ELF, PE, Mach-O or COFF, as
     /// [`bootstrap_from_object`](crate::engine::bootstrap_from_object) does.
-    pub fn object(&self, path: &str) -> KunaResult<ConsoleProgram> {
+    pub fn object(&self, path: &str) -> UnlaceResult<ConsoleProgram> {
         let isa = self.resolved_isa()?;
         match self.options {
             Some(options) => {
@@ -132,7 +132,7 @@ impl<'a, L: LanguageSource + ?Sized> Bootstrap<'a, L> {
     /// TE, a DOS `MZ`, one of the [`Bootstrap::retro_bytes`] containers, or an
     /// object-format binary, as
     /// [`bootstrap_from_image`](crate::engine::bootstrap_from_image) does.
-    pub fn image(&self, path: &str) -> KunaResult<ConsoleProgram> {
+    pub fn image(&self, path: &str) -> UnlaceResult<ConsoleProgram> {
         let isa = self.resolved_isa()?;
         match self.options {
             Some(options) => {
@@ -152,7 +152,7 @@ impl<'a, L: LanguageSource + ?Sized> Bootstrap<'a, L> {
     /// Load any input `load file` accepts: a real image as [`Bootstrap::image`]
     /// takes it, or an XML document holding a `<binaryimage>`, as
     /// [`bootstrap_from_file`](crate::engine::bootstrap_from_file) does.
-    pub fn file(&self, path: &str) -> KunaResult<ConsoleProgram> {
+    pub fn file(&self, path: &str) -> UnlaceResult<ConsoleProgram> {
         let input = {
             let _load = self.enter();
             classify_file(path)?
@@ -184,7 +184,7 @@ impl<'a, L: LanguageSource + ?Sized> Bootstrap<'a, L> {
     /// Load a headerless byte image mapped at `base`, its functions found from
     /// `entries`, as [`bootstrap_from_raw`](crate::engine::bootstrap_from_raw)
     /// does. Needs a target.
-    pub fn raw(&self, path: &str, base: u64, entries: &[u64]) -> KunaResult<ConsoleProgram> {
+    pub fn raw(&self, path: &str, base: u64, entries: &[u64]) -> UnlaceResult<ConsoleProgram> {
         let isa = self.resolved_isa()?;
         let _load = self.enter();
         bootstrap_raw_image(
@@ -206,11 +206,11 @@ impl<'a, L: LanguageSource + ?Sized> Bootstrap<'a, L> {
         path: &str,
         runs: Vec<(u64, Vec<u8>, u32)>,
         entries: &[u64],
-    ) -> KunaResult<ConsoleProgram> {
+    ) -> UnlaceResult<ConsoleProgram> {
         let isa = self.resolved_isa()?;
         let (image, base) = unlace_sleigh::loadimage::RawLoadImage::from_segments(path, runs)
             .ok_or_else(|| {
-                KunaError::lowlevel(
+                UnlaceError::lowlevel(
                     "raw segments: none holds a byte, two overlap, or one wraps the address space",
                 )
             })?;
@@ -227,7 +227,7 @@ impl<'a, L: LanguageSource + ?Sized> Bootstrap<'a, L> {
     }
 
     /// Load a UEFI TE image, as [`bootstrap_from_te`](crate::engine::bootstrap_from_te) does.
-    pub fn te(&self, path: &str) -> KunaResult<ConsoleProgram> {
+    pub fn te(&self, path: &str) -> UnlaceResult<ConsoleProgram> {
         let isa = self.resolved_isa()?;
         let _load = self.enter();
         bootstrap_te(path, self.target, self.languages, isa)
@@ -235,7 +235,7 @@ impl<'a, L: LanguageSource + ?Sized> Bootstrap<'a, L> {
 
     /// Load a UEFI TE image from bytes already read from `path`, as
     /// [`bootstrap_from_te_bytes`](crate::engine::bootstrap_from_te_bytes) does.
-    pub fn te_bytes(&self, path: &str, bytes: &[u8]) -> KunaResult<ConsoleProgram> {
+    pub fn te_bytes(&self, path: &str, bytes: &[u8]) -> UnlaceResult<ConsoleProgram> {
         let isa = self.resolved_isa()?;
         let _load = self.enter();
         bootstrap_te_bytes(path, bytes, self.target, self.languages, isa)
@@ -243,14 +243,14 @@ impl<'a, L: LanguageSource + ?Sized> Bootstrap<'a, L> {
 
     /// Load a DEX file, or an APK's `classes*.dex` files, from bytes already
     /// read from `path`, as [`bootstrap_from_dex_bytes`](crate::engine::bootstrap_from_dex_bytes) does.
-    pub fn dex_bytes(&self, path: &str, bytes: Vec<u8>) -> KunaResult<ConsoleProgram> {
+    pub fn dex_bytes(&self, path: &str, bytes: Vec<u8>) -> UnlaceResult<ConsoleProgram> {
         let _load = self.enter();
         bootstrap_dex_bytes(path, bytes, self.target, self.languages)
     }
 
     /// Load a DOS `MZ` executable from bytes already read from `path`, as
     /// [`bootstrap_from_mz_bytes`](crate::engine::bootstrap_from_mz_bytes) does.
-    pub fn mz_bytes(&self, path: &str, bytes: &[u8]) -> KunaResult<ConsoleProgram> {
+    pub fn mz_bytes(&self, path: &str, bytes: &[u8]) -> UnlaceResult<ConsoleProgram> {
         let isa = self.resolved_isa()?;
         let _load = self.enter();
         bootstrap_mz_bytes(path, bytes, self.target, self.languages, isa)
@@ -258,14 +258,14 @@ impl<'a, L: LanguageSource + ?Sized> Bootstrap<'a, L> {
 
     /// Load a WebAssembly module from bytes already read from `path`, as
     /// [`bootstrap_from_wasm_bytes`](crate::engine::bootstrap_from_wasm_bytes) does.
-    pub fn wasm_bytes(&self, path: &str, bytes: &[u8]) -> KunaResult<ConsoleProgram> {
+    pub fn wasm_bytes(&self, path: &str, bytes: &[u8]) -> UnlaceResult<ConsoleProgram> {
         let _load = self.enter();
         bootstrap_wasm_bytes(path, bytes, self.target, self.languages)
     }
 
     /// Load a PS-X EXE, N64 ROM, a.out, Amiga hunk or PEF executable from
     /// bytes already read from `path`.
-    pub fn retro_bytes(&self, path: &str, bytes: &[u8]) -> KunaResult<ConsoleProgram> {
+    pub fn retro_bytes(&self, path: &str, bytes: &[u8]) -> UnlaceResult<ConsoleProgram> {
         let isa = self.resolved_isa()?;
         let _load = self.enter();
         bootstrap_retro_bytes(path, bytes, self.target, self.languages, isa)
@@ -273,7 +273,11 @@ impl<'a, L: LanguageSource + ?Sized> Bootstrap<'a, L> {
 
     /// Load a `<binaryimage>` element as language `arch_id`, as
     /// [`bootstrap_program`](crate::engine::bootstrap_program) does.
-    pub fn xml_image(&self, binaryimage: Rc<Element>, arch_id: &str) -> KunaResult<ConsoleProgram> {
+    pub fn xml_image(
+        &self,
+        binaryimage: Rc<Element>,
+        arch_id: &str,
+    ) -> UnlaceResult<ConsoleProgram> {
         let _load = self.enter();
         bootstrap_xml_image(binaryimage, arch_id, self.languages)
     }
@@ -281,7 +285,7 @@ impl<'a, L: LanguageSource + ?Sized> Bootstrap<'a, L> {
     /// Load the `<binaryimage>` inside a parsed XML document, as language its
     /// `arch` attribute names, as
     /// [`bootstrap_from_root`](crate::engine::bootstrap_from_root) does.
-    pub fn xml_root(&self, root: &Rc<Element>) -> KunaResult<ConsoleProgram> {
+    pub fn xml_root(&self, root: &Rc<Element>) -> UnlaceResult<ConsoleProgram> {
         let (binaryimage, arch_id) = xml_root_image(root)?;
         self.xml_image(binaryimage, &arch_id)
     }
@@ -293,7 +297,7 @@ impl<'a, L: LanguageSource + ?Sized> Bootstrap<'a, L> {
         }
     }
 
-    fn resolved_isa(&self) -> KunaResult<Option<ArmIsa>> {
+    fn resolved_isa(&self) -> UnlaceResult<Option<ArmIsa>> {
         match (self.arm_isa, self.options) {
             (Some(isa), _) => Ok(isa),
             (None, Some(_)) => Ok(None),

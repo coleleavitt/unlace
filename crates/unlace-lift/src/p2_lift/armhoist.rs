@@ -1,4 +1,4 @@
-//! (kuna `armhoist`) Pre-structuring hoist of the instructions both arms of a
+//! (unlace `armhoist`) Pre-structuring hoist of the instructions both arms of a
 //! two-way branch share at their head or their tail: the counterpart of the
 //! Hex-Rays microcode rules `EXTRACT_IDENTICAL_HEAD_IF_INSNS` and
 //! `EXTRACT_EQUAL_IF_TAIL_INSNS` (`notes/ida-hexrays-rules.md`).
@@ -320,7 +320,7 @@ pub fn armhoist_apply(data: &mut Funcdata) -> i32 {
     n
 }
 
-/// (kuna) `ActionArmHoist` — move the ops both arms of a branch share out of
+/// (unlace) `ActionArmHoist` — move the ops both arms of a branch share out of
 /// the arms before structuring (option `armhoist`, default off).
 pub struct ActionArmHoist {
     base: ActionBase,
@@ -349,7 +349,7 @@ impl Action for ActionArmHoist {
         })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        if !data.get_arch().kuna_options.get::<ArmHoist>().0 {
+        if !data.get_arch().unlace_options.get::<ArmHoist>().0 {
             return 0;
         }
         if data.is_settled(crate::maturity::Fact::Ssa) {
@@ -360,8 +360,8 @@ impl Action for ActionArmHoist {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna) Hoist the ops both arms of a branch share out of the arms before
+crate::unlace_flag!(
+    /// (unlace) Hoist the ops both arms of a branch share out of the arms before
     /// structuring (option `armhoist`).
     ArmHoist,
     "armhoist",

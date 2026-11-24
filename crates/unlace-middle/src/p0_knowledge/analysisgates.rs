@@ -1,8 +1,8 @@
 //! The on/off gates of the analysis tier's passes (`unlace-analysis`, run by the console
-//! before decompilation), registered as kuna options.
+//! before decompilation), registered as unlace options.
 
-crate::kuna_flag!(
-    /// (kuna `strcodelen`) Bound `&str` literals by the length the code loads beside them.
+crate::unlace_flag!(
+    /// (unlace `strcodelen`) Bound `&str` literals by the length the code loads beside them.
     Strcodelen,
     "strcodelen",
     "code-side Rust &str lengths",
@@ -10,8 +10,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Gate the no-return-known pass (`noreturn_known`); default on.
+crate::unlace_flag!(
+    /// (unlace) Gate the no-return-known pass (`noreturn_known`); default on.
     NoreturnKnown,
     "noreturn_known",
     "No-return-known analysis pass",
@@ -19,8 +19,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Gate the libgcc DI-mode `__divdi3` contract on SPARC32 BE ELF
+crate::unlace_flag!(
+    /// (unlace) Gate the libgcc DI-mode `__divdi3` contract on SPARC32 BE ELF
     /// (`libgccsigs`); default off.
     Libgccsigs,
     "libgccsigs",
@@ -29,8 +29,8 @@ crate::kuna_flag!(
     shipped: false
 );
 
-crate::kuna_flag!(
-    /// (kuna) Gate the Go `_type` descriptor globals — the `gotypes` harvest's
+crate::unlace_flag!(
+    /// (unlace) Gate the Go `_type` descriptor globals — the `gotypes` harvest's
     /// typed-data facts (`gotypeglobals`); default on.
     GoTypeGlobals,
     "gotypeglobals",
@@ -39,8 +39,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Gate the arm64e virtual-call resolution (`arm64evcall`).
+crate::unlace_flag!(
+    /// (unlace) Gate the arm64e virtual-call resolution (`arm64evcall`).
     /// Default on.
     Arm64evcall,
     "arm64evcall",
@@ -49,8 +49,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Gate the UEFI module markup pass (`uefi`); default on.
+crate::unlace_flag!(
+    /// (unlace) Gate the UEFI module markup pass (`uefi`); default on.
     Uefi,
     "uefi",
     "Gate the UEFI module markup pass (`uefi`); default on.",
@@ -58,8 +58,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Gate the Cortex-M System Control Space globals (`cortexmscs`);
+crate::unlace_flag!(
+    /// (unlace) Gate the Cortex-M System Control Space globals (`cortexmscs`);
     /// default on. Inert unless the image is a Cortex-M one.
     Cortexmscs,
     "cortexmscs",
@@ -68,8 +68,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Gate the COM id and interface pass (`com`); default on.
+crate::unlace_flag!(
+    /// (unlace) Gate the COM id and interface pass (`com`); default on.
     Com,
     "com",
     "COM class and interface ids, interface typing",
@@ -77,8 +77,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Gate the string-literal pass (`strings`); default on.
+crate::unlace_flag!(
+    /// (unlace) Gate the string-literal pass (`strings`); default on.
     Strings,
     "strings",
     "String-literal analysis pass",
@@ -86,8 +86,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Gate the 2-byte (UTF-16LE) width of the string-literal pass
+crate::unlace_flag!(
+    /// (unlace) Gate the 2-byte (UTF-16LE) width of the string-literal pass
     /// (`widestrings`); default on. Off drops the wide facts at the commit, so the
     /// markup is exactly the 1-byte pass's.
     Widestrings,
@@ -97,8 +97,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Gate the 4-byte (`wchar_t`/`char32_t`) width of the string-literal
+crate::unlace_flag!(
+    /// (unlace) Gate the 4-byte (`wchar_t`/`char32_t`) width of the string-literal
     /// pass (`widestrings32`); default off, on in the aggressive preset. Off
     /// drops the `wchar4[N]` facts at the commit.
     Widestrings32,
@@ -108,8 +108,8 @@ crate::kuna_flag!(
     shipped: false
 );
 
-crate::kuna_flag!(
-    /// (kuna) Gate the entry-discovery pass (`entry_disc`); default on.
+crate::unlace_flag!(
+    /// (unlace) Gate the entry-discovery pass (`entry_disc`); default on.
     EntryDisc,
     "entry_disc",
     "Entry-discovery analysis pass",
@@ -117,7 +117,7 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
+crate::unlace_flag!(
     /// Bounded i386 switch successors in the discovery Listing; default off.
     X86listingswitch,
     "x86listingswitch",
@@ -126,8 +126,8 @@ crate::kuna_flag!(
     shipped: false
 );
 
-crate::kuna_flag!(
-    /// (kuna) Make code whose address the program takes, and that no flow
+crate::unlace_flag!(
+    /// (unlace) Make code whose address the program takes, and that no flow
     /// reaches, a function entry (`addrtakenentry`); default **on**. A function
     /// called only through a pointer that a `lea`/`mov`/`push` materializes, or
     /// (PE) that a relocated word before the section's first `.pdata` record
@@ -143,8 +143,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Name the ELF routine crt1 hands to `__libc_start_main` `main` and
+crate::unlace_flag!(
+    /// (unlace) Name the ELF routine crt1 hands to `__libc_start_main` `main` and
     /// declare it `int main(int argc, char **argv, char **envp)` (`elfmain`);
     /// default **on**. Entry oracle 4 already decodes that address on x86-64,
     /// AArch64, ARM and RISC-V, but seeds it address-only, so a stripped ELF
@@ -166,8 +166,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Gate the `.eh_frame` LSDA landing-pad discovery sub-feature of the
+crate::unlace_flag!(
+    /// (unlace) Gate the `.eh_frame` LSDA landing-pad discovery sub-feature of the
     /// always-on entry-discovery pass (`eh_frame_full`, the GccExceptionAnalyzer
     /// `.gcc_except_table` markup); default **off** (output-changing: adds the
     /// discovered exception-handler landing pads as function entries).
@@ -178,8 +178,8 @@ crate::kuna_flag!(
     shipped: false
 );
 
-crate::kuna_flag!(
-    /// (kuna) Gate the Mach-O `__unwind_info` function-start discovery pass
+crate::unlace_flag!(
+    /// (unlace) Gate the Mach-O `__unwind_info` function-start discovery pass
     /// (`unwindstarts`); default **off** (output-changing: adds the function
     /// starts the linker recorded in `__TEXT,__unwind_info`, which matter only on
     /// an image whose `LC_FUNCTION_STARTS` was stripped).
@@ -190,8 +190,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Gate the Mach-O bound-slot naming pass (`machobinds`); default **on**.
+crate::unlace_flag!(
+    /// (unlace) Gate the Mach-O bound-slot naming pass (`machobinds`); default **on**.
     Machobinds,
     "machobinds",
     "Mach-O bound-slot import naming",
@@ -199,8 +199,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Gate the Mach-O `__eh_frame` FDE function-start pass
+crate::unlace_flag!(
+    /// (unlace) Gate the Mach-O `__eh_frame` FDE function-start pass
     /// (`machoehframe`); default **on**.
     Machoehframe,
     "machoehframe",
@@ -209,8 +209,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) List the handlers of a 32-bit PE's MFC message maps as functions
+crate::unlace_flag!(
+    /// (unlace) List the handlers of a 32-bit PE's MFC message maps as functions
     /// (option `mfcmsgmap`).  See `unlace_analysis::entry::mfcmsgmap`.
     Mfcmsgmap,
     "mfcmsgmap",
@@ -219,8 +219,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) A relocated pointer to an MSVC frame prologue on a 32-bit PE is a
+crate::unlace_flag!(
+    /// (unlace) A relocated pointer to an MSVC frame prologue on a 32-bit PE is a
     /// function entry (option `msvcptrentry`).  See
     /// `unlace_analysis::entry::msvcptrentry`.
     Msvcptrentry,
@@ -230,8 +230,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Withhold an exception-cleanup `.cold` fragment from the function
+crate::unlace_flag!(
+    /// (unlace) Withhold an exception-cleanup `.cold` fragment from the function
     /// list (option `ehcold`).  See `unlace_analysis::entry::ehcold`.
     Ehcold,
     "ehcold",
@@ -240,8 +240,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Keep every single-owner `.cold` part out of the function list, as IDA
+crate::unlace_flag!(
+    /// (unlace) Keep every single-owner `.cold` part out of the function list, as IDA
     /// keeps a function tail (option `functails`). See
     /// `unlace_analysis::entry::ehcold::cold_tails`.
     Functails,
@@ -251,8 +251,8 @@ crate::kuna_flag!(
     shipped: false
 );
 
-crate::kuna_flag!(
-    /// (kuna) Note a function's hidden landing pads in its header (option `ehnote`).
+crate::unlace_flag!(
+    /// (unlace) Note a function's hidden landing pads in its header (option `ehnote`).
     Ehnote,
     "ehnote",
     "Hidden landing-pad note",
@@ -260,8 +260,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Gate the **full byte-pattern function-start** pass
+crate::unlace_flag!(
+    /// (unlace) Gate the **full byte-pattern function-start** pass
     /// (`funcstart_patterns`); default **off** (output-changing: it discovers more
     /// functions). The faithful port of Ghidra's `FunctionStartAnalyzer` over the
     /// entire vendored pattern corpus (`entry/patterns/*.xml`, the
@@ -281,8 +281,8 @@ crate::kuna_flag!(
     shipped: false
 );
 
-crate::kuna_flag!(
-    /// (kuna) Widen the ARM Cortex-M hardware vector-table signature
+crate::unlace_flag!(
+    /// (unlace) Widen the ARM Cortex-M hardware vector-table signature
     /// (`cortexmvectors`); default **off** (output-changing: it discovers more
     /// functions). The shipped signature confirms a table only when it starts a
     /// section the loader maps executable, its stack word is in the architectural
@@ -303,8 +303,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Discover ARM function entries that are reachable only through a
+crate::unlace_flag!(
+    /// (unlace) Discover ARM function entries that are reachable only through a
     /// code-pointer word (`ptrentry`); default **off** (output-changing: it
     /// discovers more functions). The shipped code-pointer scan already finds
     /// every Thumb pointer word but accepts a target only if it opens with a
@@ -327,8 +327,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Reconstruct the ARM PC-relative literal pools the Listing never
+crate::unlace_flag!(
+    /// (unlace) Reconstruct the ARM PC-relative literal pools the Listing never
     /// defines as data, and use them to fix the two defects that follow
     /// (`poolentry`); default **off** (output-changing: it both adds and relocates
     /// discovered functions). The AIF gap walk slides its cursor one byte at a time
@@ -350,8 +350,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) `armwalkmode`: the Listing walk decodes each reached instruction in
+crate::unlace_flag!(
+    /// (unlace) `armwalkmode`: the Listing walk decodes each reached instruction in
     /// the ARM mode its control flow carries, on an image whose metadata states
     /// no mode; default on.
     Armwalkmode,
@@ -361,8 +361,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Gate the DWARF recovery pass (`dwarf`); default on.
+crate::unlace_flag!(
+    /// (unlace) Gate the DWARF recovery pass (`dwarf`); default on.
     Dwarf,
     "dwarf",
     "DWARF recovery analysis pass",
@@ -370,10 +370,10 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Gate the DWARF `.debug_line` source-line comment pass (`dwarf_lines`);
+crate::unlace_flag!(
+    /// (unlace) Gate the DWARF `.debug_line` source-line comment pass (`dwarf_lines`);
     /// default **off** — it changes the decompiled output (adds `/* file:line */`
-    /// comments). The kuna analog of Ghidra's `DWARFLineInfoCommentScript`.
+    /// comments). The unlace analog of Ghidra's `DWARFLineInfoCommentScript`.
     DwarfLines,
     "dwarf_lines",
     "DWARF .debug_line source-line comment pass",
@@ -381,8 +381,8 @@ crate::kuna_flag!(
     shipped: false
 );
 
-crate::kuna_flag!(
-    /// (kuna) Drop the parameters a `DW_CC_nocall` DWARF subprogram no longer
+crate::unlace_flag!(
+    /// (unlace) Drop the parameters a `DW_CC_nocall` DWARF subprogram no longer
     /// receives (option `dwarfnocall`).
     Dwarfnocall,
     "dwarfnocall",
@@ -391,7 +391,7 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
+crate::unlace_flag!(
     /// Recover verified Go scalar/pointer register-ABI signatures from DWARF.
     Godwarfsig,
     "godwarfsig",
@@ -400,8 +400,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) `dwarfglobaltypes`: lock a DWARF global's declared type.
+crate::unlace_flag!(
+    /// (unlace) `dwarfglobaltypes`: lock a DWARF global's declared type.
     Dwarfglobaltypes,
     "dwarfglobaltypes",
     "DWARF global types",
@@ -409,8 +409,8 @@ crate::kuna_flag!(
     shipped: false
 );
 
-crate::kuna_flag!(
-    /// (kuna) `dwarfdecls`: type an import's calls by its DWARF declaration.
+crate::unlace_flag!(
+    /// (unlace) `dwarfdecls`: type an import's calls by its DWARF declaration.
     Dwarfdecls,
     "dwarfdecls",
     "DWARF declarations of imports",
@@ -418,8 +418,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) `dwarfenumtypedef`: an anonymous DWARF enum takes its typedef's name; the
+crate::unlace_flag!(
+    /// (unlace) `dwarfenumtypedef`: an anonymous DWARF enum takes its typedef's name; the
     /// loader reads `UNLACE_DWARFENUMTYPEDEF`.
     DwarfEnumTypedef,
     "dwarfenumtypedef",
@@ -428,8 +428,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Gate the address-table pass (`addrtable`); default **off** (matches
+crate::unlace_flag!(
+    /// (unlace) Gate the address-table pass (`addrtable`); default **off** (matches
     /// Ghidra `AddressTableAnalyzer.setDefaultEnablement(false)`).
     Addrtable,
     "addrtable",
@@ -438,12 +438,12 @@ crate::kuna_flag!(
     shipped: false
 );
 
-crate::kuna_flag!(
-    /// (kuna) Gate the scalar/operand reference-markup pass (`operand_refs`); the
-    /// kuna analog of Ghidra's `ScalarOperandAnalyzer`/`ElfScalarOperandAnalyzer`.
+crate::unlace_flag!(
+    /// (unlace) Gate the scalar/operand reference-markup pass (`operand_refs`); the
+    /// unlace analog of Ghidra's `ScalarOperandAnalyzer`/`ElfScalarOperandAnalyzer`.
     /// Default **off**: `ScalarOperandAnalyzer.getDefaultEnablement` is `!isElf`
     /// (Ghidra ships the producing analyzer DISABLED for every ELF), the ELF
-    /// subclass only *removes* bad `.got`/`.plt` refs kuna never creates, and the
+    /// subclass only *removes* bad `.got`/`.plt` refs unlace never creates, and the
     /// one useful product (a `.rodata` string typed `char*`) is already delivered
     /// by the always-on `strings` + libproto/S5 typing — so a per-instruction
     /// immediate scan is net-negative (over-accepts). When on, it linear-decodes the
@@ -457,8 +457,8 @@ crate::kuna_flag!(
     shipped: false
 );
 
-crate::kuna_flag!(
-    /// (kuna `formatcallees`) Let the load-time format resolver also type the
+crate::unlace_flag!(
+    /// (unlace `formatcallees`) Let the load-time format resolver also type the
     /// calls to format functions no table declares (a program's own logger that
     /// forwards to `vfprintf`, a `*printf*`-named import). See
     /// `unlace_analysis::formatstring::fmtcallee`.
@@ -469,8 +469,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Gate the Listing/xref disassembly tier (`listing`); default
+crate::unlace_flag!(
+    /// (unlace) Gate the Listing/xref disassembly tier (`listing`); default
     /// **off**. When on (real-ELF path only), a program-wide recursive-descent
     /// disassembly Listing/xref model is built once at load and shared read-only
     /// with the consumer analysis passes. Default-off ⇒ the Listing is never
@@ -482,8 +482,8 @@ crate::kuna_flag!(
     shipped: false
 );
 
-crate::kuna_flag!(
-    /// (kuna) Gate the rooted fast whole-project function discovery pass
+crate::unlace_flag!(
+    /// (unlace) Gate the rooted fast whole-project function discovery pass
     /// (`fast_funcdisc`); default **off**. It recursively follows direct calls
     /// from metadata-backed roots and admits pointer-table targets only after
     /// fingerprint and valid-subroutine checks. The `fast` mode enables it.
@@ -494,8 +494,8 @@ crate::kuna_flag!(
     shipped: false
 );
 
-crate::kuna_flag!(
-    /// (kuna `lazyfuncs`) Commit discovered entries as names only; default off.
+crate::unlace_flag!(
+    /// (unlace `lazyfuncs`) Commit discovered entries as names only; default off.
     Lazyfuncs,
     "lazyfuncs",
     "Materialize Function objects on demand instead of one per entry",
@@ -503,8 +503,8 @@ crate::kuna_flag!(
     shipped: false
 );
 
-crate::kuna_flag!(
-    /// (kuna) Run the object-file analysis passes on a TE or `--raw-image` load
+crate::unlace_flag!(
+    /// (unlace) Run the object-file analysis passes on a TE or `--raw-image` load
     /// over a rebuilt PE / ELF view of it (`objectview`); default **on**.
     Objectview,
     "objectview",
@@ -513,12 +513,12 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Gate the discovered-no-return consumer (`noreturn_disc`), the first
+crate::unlace_flag!(
+    /// (unlace) Gate the discovered-no-return consumer (`noreturn_disc`), the first
     /// Listing/xref consumer; default **off**. It is a flow heuristic (a callee is
     /// no-return if ≥3 of its call sites show no valid fall-through, iterated to a
     /// fixpoint over the Listing) that can be wrong, so it ships behind its own
-    /// flag — the kuna analog of Ghidra's `FindNoReturnFunctionsAnalyzer`. Reads
+    /// flag — the unlace analog of Ghidra's `FindNoReturnFunctionsAnalyzer`. Reads
     /// the Listing (`--option listing on` builds it); a no-op when the Listing is
     /// absent. Default-off ⇒ every parity gate is byte-identical.
     NoreturnDisc,
@@ -528,10 +528,10 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Gate the structural no-return **propagation** consumer
+crate::unlace_flag!(
+    /// (unlace) Gate the structural no-return **propagation** consumer
     /// (`noreturn_propagate`), the second Listing/xref consumer; default **off**.
-    /// The kuna analog of angr's CFGFast call-graph no-return propagation: seed
+    /// The unlace analog of angr's CFGFast call-graph no-return propagation: seed
     /// from the Known no-return set and conclude a function no-return when its last
     /// real instruction (skipping trailing NOP padding) is a call/tail-jump to an
     /// already-no-return callee, with no returning path — iterated to a fixpoint,
@@ -547,8 +547,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Gate the CFG-reachability no-return rule (`noreturn_reach`), the port of
+crate::unlace_flag!(
+    /// (unlace) Gate the CFG-reachability no-return rule (`noreturn_reach`), the port of
     /// Ghidra's `FindNoReturnFunctionsAnalyzer.targetOnlyCallsNoReturn`: a function is
     /// no-return iff no `RETURN` is reachable from entry once calls to already-no-return
     /// callees are treated as terminal. Generalizes `noreturn_propagate`'s tail-call rule
@@ -562,9 +562,9 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Gate the MSVC RTTI / vftable recovery pass (`rtti`); default **off**.
-    /// The kuna analog of Ghidra's `RttiAnalyzer` (a Microsoft-PE analyzer): on a
+crate::unlace_flag!(
+    /// (unlace) Gate the MSVC RTTI / vftable recovery pass (`rtti`); default **off**.
+    /// The unlace analog of Ghidra's `RttiAnalyzer` (a Microsoft-PE analyzer): on a
     /// Windows PE it parses the `CompleteObjectLocator` → RTTI3/2/1 → RTTI0 graph in
     /// `.rdata`/`.data`, demangles each `.?A…@@` class name, and emits
     /// `<Class>::vftable` / `<Class>::RTTI_Complete_Object_Locator` /
@@ -581,8 +581,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Label MSVC `ThrowInfo` chains and comment x64 throw sites (option
+crate::unlace_flag!(
+    /// (unlace) Label MSVC `ThrowInfo` chains and comment x64 throw sites (option
     /// `msvceh`). See `unlace_analysis::entry::msvceh`.
     Msvceh,
     "msvceh",
@@ -591,8 +591,8 @@ crate::kuna_flag!(
     shipped: false
 );
 
-crate::kuna_flag!(
-    /// (kuna) Read Borland/Delphi RTTI: VMTs, class and method names, type info
+crate::unlace_flag!(
+    /// (unlace) Read Borland/Delphi RTTI: VMTs, class and method names, type info
     /// and interface tables (option `delphi`). See `unlace_analysis::delphi`.
     Delphi,
     "delphi",
@@ -601,8 +601,8 @@ crate::kuna_flag!(
     shipped: false
 );
 
-crate::kuna_flag!(
-    /// (kuna, NOVEL) Gate the Itanium (GCC/Clang) RTTI + vtable recovery pass
+crate::unlace_flag!(
+    /// (unlace, NOVEL) Gate the Itanium (GCC/Clang) RTTI + vtable recovery pass
     /// (`itaniumrtti`); default **off**. Ghidra has no Itanium RTTI analyzer at all
     /// — its `RttiAnalyzer` is Microsoft-only and its GCC class recovery is
     /// script-tier — so on a stripped `g++` binary a vtable stays `DAT_<addr>`.
@@ -626,8 +626,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna, GH-299) Gate the AIF literal-pool slide (`aifpoolslide`); default
+crate::unlace_flag!(
+    /// (unlace, GH-299) Gate the AIF literal-pool slide (`aifpoolslide`); default
     /// **on**. A gap candidate on a word some instruction loads PC-relatively is
     /// pool data: its accept is planted on the first address after the pool when
     /// its body decoded an instruction there, and it is rejected otherwise. 32-bit
@@ -639,8 +639,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Gate tail-call function-entry recovery (`tailcallentry`); default
+crate::unlace_flag!(
+    /// (unlace) Gate tail-call function-entry recovery (`tailcallentry`); default
     /// **off**. The recursive-descent Listing walk treats every non-CALL flow
     /// target as a same-function successor, so a routine reached only by a tail
     /// `B` is absorbed into its caller instead of becoming its own function. This
@@ -659,8 +659,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Function bodies as chunks with shared tails (`funcchunks`); the FID matcher hashes the chunk body. Default off.
+crate::unlace_flag!(
+    /// (unlace) Function bodies as chunks with shared tails (`funcchunks`); the FID matcher hashes the chunk body. Default off.
     Funcchunks,
     "funcchunks",
     "Function chunk bodies (main chunk + shared tails)",
@@ -668,8 +668,8 @@ crate::kuna_flag!(
     shipped: false
 );
 
-crate::kuna_flag!(
-    /// (kuna) Type symbol-table data objects from their access width (`globalwidth`). Default on.
+crate::unlace_flag!(
+    /// (unlace) Type symbol-table data objects from their access width (`globalwidth`). Default on.
     Globalwidth,
     "globalwidth",
     "Data-object typing from access width",
@@ -677,8 +677,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Drop an AIF gap entry whose first instruction the code reads or writes as data (`aifdataveto`). Default on.
+crate::unlace_flag!(
+    /// (unlace) Drop an AIF gap entry whose first instruction the code reads or writes as data (`aifdataveto`). Default on.
     Aifdataveto,
     "aifdataveto",
     "AIF data read/write veto",
@@ -686,8 +686,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Bind `__swiftcall` to every function that calls a Swift runtime entry point (`swiftcallers`). Default off.
+crate::unlace_flag!(
+    /// (unlace) Bind `__swiftcall` to every function that calls a Swift runtime entry point (`swiftcallers`). Default off.
     Swiftcallers,
     "swiftcallers",
     "Swift calling convention for Swift runtime callers",
@@ -695,8 +695,8 @@ crate::kuna_flag!(
     shipped: false
 );
 
-crate::kuna_flag!(
-    /// (kuna) Resume the Listing walk from new callback roots instead of rebuilding it (`incrementalwalk`). Default on.
+crate::unlace_flag!(
+    /// (unlace) Resume the Listing walk from new callback roots instead of rebuilding it (`incrementalwalk`). Default on.
     Incrementalwalk,
     "incrementalwalk",
     "Incremental Listing walk for callback roots",
@@ -704,8 +704,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Run `tailcallentry` on AArch64, x86 and RISC-V as well as ARM (`tailcallentryall`). Default off.
+crate::unlace_flag!(
+    /// (unlace) Run `tailcallentry` on AArch64, x86 and RISC-V as well as ARM (`tailcallentryall`). Default off.
     Tailcallentryall,
     "tailcallentryall",
     "Tail-call function-entry recovery on non-ARM targets",
@@ -713,8 +713,8 @@ crate::kuna_flag!(
     shipped: false
 );
 
-crate::kuna_flag!(
-    /// (kuna) Retry prototype/no-return name lookups under undecorated spellings (`nameladder`). Default on.
+crate::unlace_flag!(
+    /// (unlace) Retry prototype/no-return name lookups under undecorated spellings (`nameladder`). Default on.
     Nameladder,
     "nameladder",
     "Prototype/no-return name lookup ladder",
@@ -722,8 +722,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) IDA's string rule inside code sections (`codestrings`). Default on.
+crate::unlace_flag!(
+    /// (unlace) IDA's string rule inside code sections (`codestrings`). Default on.
     Codestrings,
     "codestrings",
     "Code-section string acceptance rule",
@@ -731,8 +731,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Call tables, the call-table vs switch vote and the switch-case
+crate::unlace_flag!(
+    /// (unlace) Call tables, the call-table vs switch vote and the switch-case
     /// entries it drops (`calltable`). Default on; reads the Listing.
     Calltable,
     "calltable",
@@ -741,8 +741,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Name a stripped Mach-O stub from the chained bind on its slot
+crate::unlace_flag!(
+    /// (unlace) Name a stripped Mach-O stub from the chained bind on its slot
     /// (`stubbinds`). Default on; Mach-O only.
     Stubbinds,
     "stubbinds",
@@ -751,8 +751,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Name a placeholder jump thunk `j_<target>` (`thunknames`). Default on.
+crate::unlace_flag!(
+    /// (unlace) Name a placeholder jump thunk `j_<target>` (`thunknames`). Default on.
     Thunknames,
     "thunknames",
     "Placeholder jump thunks named j_<target>",
@@ -760,8 +760,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Name a placeholder function whose body is a bare return
+crate::unlace_flag!(
+    /// (unlace) Name a placeholder function whose body is a bare return
     /// `nullsub_<addr>` (`nullsubs`). Default off.
     Nullsubs,
     "nullsubs",
@@ -770,9 +770,9 @@ crate::kuna_flag!(
     shipped: false
 );
 
-crate::kuna_flag!(
-    /// (kuna) Gate the Mach-O Objective-C metadata recovery pass (`objc`); default
-    /// **off**. The kuna analog of Ghidra's `ObjcTypeMetadataAnalyzer`
+crate::unlace_flag!(
+    /// (unlace) Gate the Mach-O Objective-C metadata recovery pass (`objc`); default
+    /// **off**. The unlace analog of Ghidra's `ObjcTypeMetadataAnalyzer`
     /// (name-recovery half): when the binary is a Mach-O, walk the `__objc_*`
     /// metadata (classlist → class_t → class_ro_t → method_list_t) and rename each
     /// IMP function `-[Class sel]` / `+[Class sel]` (the FID-precedent label-gated
@@ -790,8 +790,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna `panicloc`) Rust images only: type and name the panic `Location`
+crate::unlace_flag!(
+    /// (unlace `panicloc`) Rust images only: type and name the panic `Location`
     /// records (`unlace-analysis` `strings/panicloc.rs`). Default on.
     Panicloc,
     "panicloc",
@@ -800,8 +800,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) `option swiftmetadata` — the Swift runtime-metadata recovery pass
+crate::unlace_flag!(
+    /// (unlace) `option swiftmetadata` — the Swift runtime-metadata recovery pass
     /// (`unlace-analysis::analyzers::swift`): names metadata accessors, vtable and
     /// override implementations, protocol witnesses and descriptor records from
     /// the `swift5_*` reflection sections. Default-off, output-changing; inert on
@@ -813,8 +813,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) `option blobs` — plant each embedded image or archive the
+crate::unlace_flag!(
+    /// (unlace) `option blobs` — plant each embedded image or archive the
     /// `blobs` pass found as a `<kind>_<addr>` data symbol typed
     /// `unsigned char[len]`. Default **on**; real-binary-path only.
     Blobs,
@@ -824,8 +824,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Gate the Swift type-layout arm of the metadata pass
+crate::unlace_flag!(
+    /// (unlace) Gate the Swift type-layout arm of the metadata pass
     /// (`swifttypes`): struct and class layouts from static type metadata,
     /// typed metadata records, accessor prototypes and the register-pinned
     /// `self` of getters. Default-on; inert unless `swiftmetadata` is on.
@@ -836,8 +836,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Gate the Swift helper arm of the metadata pass
+crate::unlace_flag!(
+    /// (unlace) Gate the Swift helper arm of the metadata pass
     /// (`swifthelpers`): the instantiation helpers and lazy witness table
     /// accessors named from their bodies, and the caches they fill named
     /// after the type each call asks for. Default-on; inert unless
@@ -849,8 +849,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Gate the `@objc`-thunk arm of the Swift metadata pass
+crate::unlace_flag!(
+    /// (unlace) Gate the `@objc`-thunk arm of the Swift metadata pass
     /// (`swiftobjcthunk`): a vtable slot an Objective-C entry point calls is
     /// named by its selector or property. Default-on; inert unless
     /// `swiftmetadata` is on.
@@ -861,8 +861,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) `xnutables`: kalloc_type views, IOExternalMethodDispatch tables and
+crate::unlace_flag!(
+    /// (unlace) `xnutables`: kalloc_type views, IOExternalMethodDispatch tables and
     /// unnamed pointer slots on an XNU kernel or kext (default on).
     Xnutables,
     "xnutables",
@@ -871,8 +871,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) `osclassinfo`: DriverKit `__osclassinfo` class records (default on).
+crate::unlace_flag!(
+    /// (unlace) `osclassinfo`: DriverKit `__osclassinfo` class records (default on).
     Osclassinfo,
     "osclassinfo",
     "DriverKit __osclassinfo class records",
@@ -880,8 +880,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) `dextrpc`: DriverKit IORPC dispatch prototypes, message ids and
+crate::unlace_flag!(
+    /// (unlace) `dextrpc`: DriverKit IORPC dispatch prototypes, message ids and
     /// class layouts, run at the commit point when `osclassinfo` is on
     /// (default on).
     Dextrpc,
@@ -891,8 +891,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna `swiftruntime`) The Swift runtime's entry points bound to their
+crate::unlace_flag!(
+    /// (unlace `swiftruntime`) The Swift runtime's entry points bound to their
     /// header signatures, by name. Default-on; Swift-detected images only.
     Swiftruntime,
     "swiftruntime",
@@ -901,13 +901,13 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Gate the PE PDB metadata recovery pass (`pdb`); default **off**. The
-    /// kuna analog of Ghidra's `PdbUniversalAnalyzer` (the pure-Java PDB analyzer;
+crate::unlace_flag!(
+    /// (unlace) Gate the PE PDB metadata recovery pass (`pdb`); default **off**. The
+    /// unlace analog of Ghidra's `PdbUniversalAnalyzer` (the pure-Java PDB analyzer;
     /// the MS-DIA `PdbAnalyzer` is Windows-native and out of scope) — the
     /// name-recovery half. On a Windows PE, read the CodeView fingerprint
     /// (`{guid, age, path}` from the debug directory), locate the external `.pdb`
-    /// (tier-1: the `kuna_pdb_path` env var, the fid `kuna_fid_db` precedent),
+    /// (tier-1: the `unlace_pdb_path` env var, the fid `unlace_fid_db` precedent),
     /// **fingerprint-gate** it (the supplied `.pdb`'s `pdb_information().guid/age`
     /// must match the PE's CodeView record — a MISMATCH/ABSENT `.pdb` emits nothing,
     /// the FID full-hash-match discipline of never applying wrong external
@@ -926,8 +926,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna `pdbtypes`) Commit the types, typed prototypes, stack and register
+crate::unlace_flag!(
+    /// (unlace `pdbtypes`) Commit the types, typed prototypes, stack and register
     /// locals, typed globals and vftables the matched `.pdb` describes; default
     /// **off**. Inert without `pdb` locating a fingerprint-matching `.pdb`.
     Pdbtypes,
@@ -937,8 +937,8 @@ crate::kuna_flag!(
     shipped: false
 );
 
-crate::kuna_flag!(
-    /// (kuna `pdblines`) Commit the matched `.pdb`'s source lines as
+crate::unlace_flag!(
+    /// (unlace `pdblines`) Commit the matched `.pdb`'s source lines as
     /// `file:line` comments; default **off** (it adds a comment per line).
     Pdblines,
     "pdblines",
@@ -947,16 +947,16 @@ crate::kuna_flag!(
     shipped: false
 );
 
-/// (kuna `flowmode`) Paint ARM decode modes the flow proves (`on`), also past calls proven to return (`after_call`).
+/// (unlace `flowmode`) Paint ARM decode modes the flow proves (`on`), also past calls proven to return (`after_call`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FlowMode {
     pub on: bool,
     pub after_call: bool,
 }
 
-impl crate::optionset::KunaOption for FlowMode {
+impl crate::optionset::UnlaceOption for FlowMode {
     const NAME: &'static str = "flowmode";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         FlowMode {
@@ -972,13 +972,13 @@ impl crate::optionset::KunaOption for FlowMode {
         }
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (on, after_call) = match value.trim().to_ascii_lowercase().as_str() {
             "on" | "1" | "true" => (true, false),
             "aftercall" => (true, true),
             "off" | "0" | "false" => (false, false),
             other => {
-                return Err(unlace_base::error::KunaError::lowlevel(format!(
+                return Err(unlace_base::error::UnlaceError::lowlevel(format!(
                     "flowmode: expected `on`, `aftercall` or `off`, got `{other}`"
                 )));
             }
@@ -995,16 +995,16 @@ impl crate::optionset::KunaOption for FlowMode {
     }
 }
 
-/// (kuna `cvftrace`) Name CVF routines from their `.trace` records (`names`), with source-line comments (`lines`).
+/// (unlace `cvftrace`) Name CVF routines from their `.trace` records (`names`), with source-line comments (`lines`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CvfTrace {
     pub names: bool,
     pub lines: bool,
 }
 
-impl crate::optionset::KunaOption for CvfTrace {
+impl crate::optionset::UnlaceOption for CvfTrace {
     const NAME: &'static str = "cvftrace";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         CvfTrace {
@@ -1020,13 +1020,13 @@ impl crate::optionset::KunaOption for CvfTrace {
         }
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (names, lines) = match value.trim().to_ascii_lowercase().as_str() {
             "on" | "1" | "true" => (true, false),
             "lines" => (true, true),
             "off" | "0" | "false" => (false, false),
             other => {
-                return Err(unlace_base::error::KunaError::lowlevel(format!(
+                return Err(unlace_base::error::UnlaceError::lowlevel(format!(
                     "cvftrace: expected `on`, `lines` or `off`, got `{other}`"
                 )));
             }
@@ -1043,16 +1043,16 @@ impl crate::optionset::KunaOption for CvfTrace {
     }
 }
 
-/// (kuna `gopcln`) Go pclntab source positions: function headers and inlined calls (`on`), plus every statement's `file:line` (`lines`).
+/// (unlace `gopcln`) Go pclntab source positions: function headers and inlined calls (`on`), plus every statement's `file:line` (`lines`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct GoPcln {
     pub on: bool,
     pub lines: bool,
 }
 
-impl crate::optionset::KunaOption for GoPcln {
+impl crate::optionset::UnlaceOption for GoPcln {
     const NAME: &'static str = "gopcln";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         GoPcln {
@@ -1068,13 +1068,13 @@ impl crate::optionset::KunaOption for GoPcln {
         }
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (on, lines) = match value.trim().to_ascii_lowercase().as_str() {
             "on" | "1" | "true" => (true, false),
             "lines" => (true, true),
             "off" | "0" | "false" => (false, false),
             other => {
-                return Err(unlace_base::error::KunaError::lowlevel(format!(
+                return Err(unlace_base::error::UnlaceError::lowlevel(format!(
                     "gopcln: expected `on`, `lines` or `off`, got `{other}`"
                 )));
             }
@@ -1091,16 +1091,16 @@ impl crate::optionset::KunaOption for GoPcln {
     }
 }
 
-/// (kuna `fid`) Run the FID fingerprint matcher (`on`), renaming only what it can confirm (`strict`).
+/// (unlace `fid`) Run the FID fingerprint matcher (`on`), renaming only what it can confirm (`strict`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Fid {
     pub on: bool,
     pub strict: bool,
 }
 
-impl crate::optionset::KunaOption for Fid {
+impl crate::optionset::UnlaceOption for Fid {
     const NAME: &'static str = "fid";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         Fid {
@@ -1116,13 +1116,13 @@ impl crate::optionset::KunaOption for Fid {
         }
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (on, strict) = match value {
             "off" => (false, false),
             "" | "on" => (true, false),
             "strict" => (true, true),
             _ => {
-                return Err(unlace_base::error::KunaError::parse(
+                return Err(unlace_base::error::UnlaceError::parse(
                     "fid expects on, off, or strict",
                 ));
             }
@@ -1141,16 +1141,16 @@ impl crate::optionset::KunaOption for Fid {
     }
 }
 
-/// (kuna `iokitclasses`) Recover IOKit class names (`names`) and their vtable types (`types`).
+/// (unlace `iokitclasses`) Recover IOKit class names (`names`) and their vtable types (`types`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct IokitClasses {
     pub names: bool,
     pub types: bool,
 }
 
-impl crate::optionset::KunaOption for IokitClasses {
+impl crate::optionset::UnlaceOption for IokitClasses {
     const NAME: &'static str = "iokitclasses";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         IokitClasses {
@@ -1166,13 +1166,13 @@ impl crate::optionset::KunaOption for IokitClasses {
         }
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (names, types) = match value {
             "on" => (true, true),
             "names" => (true, false),
             "off" => (false, false),
             other => {
-                return Err(unlace_base::error::KunaError::parse(format!(
+                return Err(unlace_base::error::UnlaceError::parse(format!(
                     "iokitclasses takes on|names|off, not {other:?}"
                 )));
             }
@@ -1184,16 +1184,16 @@ impl crate::optionset::KunaOption for IokitClasses {
     }
 }
 
-/// (kuna `cfstrings`) Run the Mach-O `__cfstring` pass (`pass`), and mark each literal it prints as a CFString (`annotate`).
+/// (unlace `cfstrings`) Run the Mach-O `__cfstring` pass (`pass`), and mark each literal it prints as a CFString (`annotate`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CfStrings {
     pub pass: bool,
     pub annotate: bool,
 }
 
-impl crate::optionset::KunaOption for CfStrings {
+impl crate::optionset::UnlaceOption for CfStrings {
     const NAME: &'static str = "cfstrings";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         CfStrings {
@@ -1209,7 +1209,7 @@ impl crate::optionset::KunaOption for CfStrings {
         }
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (pass, annotate) = match value {
             "annotate" => (true, true),
             other => (crate::options::on_or_off(other)?, false),
@@ -1228,16 +1228,16 @@ impl crate::optionset::KunaOption for CfStrings {
     }
 }
 
-/// (kuna `armframes`) Inventory validated ARM frames (`inventory`), and recover functions from them (`full`).
+/// (unlace `armframes`) Inventory validated ARM frames (`inventory`), and recover functions from them (`full`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ArmFrames {
     pub inventory: bool,
     pub full: bool,
 }
 
-impl crate::optionset::KunaOption for ArmFrames {
+impl crate::optionset::UnlaceOption for ArmFrames {
     const NAME: &'static str = "armframes";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         ArmFrames {
@@ -1253,7 +1253,7 @@ impl crate::optionset::KunaOption for ArmFrames {
         }
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (inventory, full) = if value == "inventory" {
             (true, false)
         } else {
@@ -1267,8 +1267,8 @@ impl crate::optionset::KunaOption for ArmFrames {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna `dwarfscopes`) DWARF lexical-block and location-list locals; the loader reads `UNLACE_DWARFSCOPES`.
+crate::unlace_flag!(
+    /// (unlace `dwarfscopes`) DWARF lexical-block and location-list locals; the loader reads `UNLACE_DWARFSCOPES`.
     DwarfScopes,
     "dwarfscopes",
     "DWARF lexical-block and location-list locals",
@@ -1276,7 +1276,7 @@ crate::kuna_flag!(
     shipped: true
 );
 
-/// (kuna `movwpairs`) How the discovery Listing reads an address an ARM `movw`/`movt` or
+/// (unlace `movwpairs`) How the discovery Listing reads an address an ARM `movw`/`movt` or
 /// AArch64 `movz`/`movk` pair builds in 16-bit halves: `off` (the low half starts
 /// nothing), `access` (a load or store through the completed register is a read or a
 /// write of that address), `on` (and the pair is a reference to the address where it lands
@@ -1289,9 +1289,9 @@ pub enum MovwPairs {
     On,
 }
 
-impl crate::optionset::KunaOption for MovwPairs {
+impl crate::optionset::UnlaceOption for MovwPairs {
     const NAME: &'static str = "movwpairs";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         MovwPairs::Off
@@ -1301,13 +1301,13 @@ impl crate::optionset::KunaOption for MovwPairs {
         MovwPairs::Off
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let mode = match value {
             "off" => MovwPairs::Off,
             "access" => MovwPairs::Access,
             "on" => MovwPairs::On,
             _ => {
-                return Err(unlace_base::error::KunaError::parse(
+                return Err(unlace_base::error::UnlaceError::parse(
                     "Must specify off, access or on",
                 ));
             }

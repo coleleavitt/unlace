@@ -1,11 +1,11 @@
-//! (kuna `swiftdemangle`) The demangler's pinned corpus: real symbols from
+//! (unlace `swiftdemangle`) The demangler's pinned corpus: real symbols from
 //! the Swift 6.3 stdlib / Foundation and iOS app binaries, each with the
 //! full form `swift-demangle --compact` prints for it and the name-only
-//! form kuna installs.
+//! form unlace installs.
 
 use super::*;
 
-/// (mangled, `swift-demangle` full form, kuna name-only form).
+/// (mangled, `swift-demangle` full form, unlace name-only form).
 const CORPUS: &[(&str, &str, &str)] = &[
     (
         "$sSS5countSivg",

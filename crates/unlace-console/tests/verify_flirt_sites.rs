@@ -1,4 +1,4 @@
-//! (kuna `flirt`) FLIRT matching on a stripped binary.
+//! (unlace `flirt`) FLIRT matching on a stripped binary.
 //!
 //! Fixture: `tests/fixtures/fid/callees/prog` and the signature
 //! `tests/fixtures/flirt/callees.sig` (written by `make_callees_sig.py` beside
@@ -67,7 +67,9 @@ fn names_with(flirt: &str, fid: &str, fid_db: Option<PathBuf>) -> Vec<String> {
     )
     .expect("bootstrap fixture with built processor specs");
     for (k, v) in [("listing", "on"), ("flirt", flirt), ("fid", fid)] {
-        prog.arch_mut().set_kuna_option(k, v).expect("option flips");
+        prog.arch_mut()
+            .set_unlace_option(k, v)
+            .expect("option flips");
     }
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");

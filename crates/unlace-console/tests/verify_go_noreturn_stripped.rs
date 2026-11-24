@@ -98,15 +98,15 @@ fn decompile_function(bin: &str, name: &str, option: Option<&str>) -> String {
     let mut prog: ConsoleProgram = bootstrap_from_object(bin, "", &spec_roots)
         .expect("bootstrap go fixture with built processor specs");
     prog.arch_mut()
-        .set_kuna_option("gobounds", "off")
+        .set_unlace_option("gobounds", "off")
         .expect("retain the check while testing its no-return fact");
     if let Some(v) = option {
         prog.arch_mut()
-            .set_kuna_option("noreturn_known", v)
+            .set_unlace_option("noreturn_known", v)
             .expect("noreturn_known option applies");
         // The unwind-extent bound stops the same fall-through on its own.
         prog.arch_mut()
-            .set_kuna_option("fdeflowbound", v)
+            .set_unlace_option("fdeflowbound", v)
             .expect("fdeflowbound option applies");
     }
     prog.commit_pending_analysis()

@@ -1,4 +1,4 @@
-//! (kuna) `retsplitlimit` — `ActionReturnSplit` does not clone a return block
+//! (unlace) `retsplitlimit` — `ActionReturnSplit` does not clone a return block
 //! into more copies than a function can afford.
 //!
 //! `ActionReturnSplit` gives every goto into a shared RETURN block its own
@@ -16,10 +16,10 @@
 //! block under it splits exactly as upstream, so the C changes only in the
 //! functions that would have cloned more.
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::ElementId;
 
-/// Marshalling element id for the option (kuna 4000+ range).
+/// Marshalling element id for the option (unlace 4000+ range).
 pub const ELEM_RETSPLITLIMIT: ElementId = ElementId::new("retsplitlimit", 4179);
 
 /// The default limit: a return block is not split into more than this many
@@ -30,9 +30,9 @@ pub const DEFAULT_LIMIT: u64 = 1 << 20;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RetSplitLimit(pub Option<u64>);
 
-impl crate::optionset::KunaOption for RetSplitLimit {
+impl crate::optionset::UnlaceOption for RetSplitLimit {
     const NAME: &'static str = "retsplitlimit";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         RetSplitLimit(None)
@@ -42,7 +42,7 @@ impl crate::optionset::KunaOption for RetSplitLimit {
         RetSplitLimit(Some(DEFAULT_LIMIT))
     }
 
-    fn parse(value: &str) -> KunaResult<(Self, String)> {
+    fn parse(value: &str) -> UnlaceResult<(Self, String)> {
         OptionRetSplitLimit
             .apply(value)
             .map(|(v, msg)| (RetSplitLimit(v), msg))
@@ -57,7 +57,7 @@ impl OptionRetSplitLimit {
     pub const NAME: &'static str = "retsplitlimit";
 
     /// Resolve the limit (`None` for `off`) and its confirmation message.
-    pub fn apply(&self, p1: &str) -> KunaResult<(Option<u64>, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(Option<u64>, String)> {
         let field = p1.trim();
         if field == "off" {
             return Ok((None, "Return split clone limit turned off".to_string()));
@@ -66,7 +66,7 @@ impl OptionRetSplitLimit {
             .parse::<u64>()
             .ok()
             .filter(|_| !field.is_empty() && field.bytes().all(|b| b.is_ascii_digit()))
-            .ok_or_else(|| KunaError::parse("Must specify off or a decimal op count"))?;
+            .ok_or_else(|| UnlaceError::parse("Must specify off or a decimal op count"))?;
         Ok((
             Some(n),
             format!("A return block is split into at most {n} cloned ops"),
@@ -86,7 +86,7 @@ fn declined_by_option(options: &crate::optionset::OptionSet, ops: usize, edges: 
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.retsplitlimit_split_is_declined = Some(declined_by_option);
 }
 

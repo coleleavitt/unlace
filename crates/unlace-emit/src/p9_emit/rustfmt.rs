@@ -1,4 +1,4 @@
-//! (kuna `rustfmt`) Which Rust formatting-macro recoveries run. `on` recovers
+//! (unlace `rustfmt`) Which Rust formatting-macro recoveries run. `on` recovers
 //! print!/eprint!, format! and panic! (literal and piece-array layouts, primitive
 //! and string arguments, static integer specifications); `all` adds the String
 //! and Stdout write!/writeln! writers; `off` keeps every runtime formatting call.
@@ -11,9 +11,9 @@ pub enum RustFmtMode {
     All,
 }
 
-impl crate::optionset::KunaOption for RustFmtMode {
+impl crate::optionset::UnlaceOption for RustFmtMode {
     const NAME: &'static str = "rustfmt";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         RustFmtMode::On
@@ -23,8 +23,8 @@ impl crate::optionset::KunaOption for RustFmtMode {
         RustFmtMode::On
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        parse_rustfmt_mode(value).map_err(unlace_base::error::KunaError::parse)
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
+        parse_rustfmt_mode(value).map_err(unlace_base::error::UnlaceError::parse)
     }
 }
 

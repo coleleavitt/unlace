@@ -1,5 +1,5 @@
 //! Port of `decompiler/cpp/kuna_addcarrychain.{cc,hh}` — carry-chain wide-add
-//! recovery (kuna GH-8913, S5/S3 simplification-quiescence).
+//! recovery (unlace GH-8913, S5/S3 simplification-quiescence).
 //!
 //! `RuleAddCarryChain` matches the reassembling `CPUI_PIECE` of an 8-bit
 //! carry-chained 16-bit add (the classic two-instruction ADC idiom) and rewrites
@@ -24,7 +24,7 @@ use crate::action::{ActionGroupList, Rule, RuleSpec};
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 
-/// (kuna GH-8913) Fuse an 8-bit carry-chained 16-bit add reassembled by CONCAT
+/// (unlace GH-8913) Fuse an 8-bit carry-chained 16-bit add reassembled by CONCAT
 /// (C++ `RuleAddCarryChain`).
 pub struct RuleAddCarryChain {
     /// Rule group (C++ `Rule::basegroup`).
@@ -111,9 +111,9 @@ impl Rule for RuleAddCarryChain {
             Some(v) => v,
             None => return 0,
         };
-        let hipart = if kuna_is_carry_of(data, hi1, a, b) {
+        let hipart = if unlace_is_carry_of(data, hi1, a, b) {
             hi0
-        } else if kuna_is_carry_of(data, hi0, a, b) {
+        } else if unlace_is_carry_of(data, hi0, a, b) {
             hi1
         } else {
             return 0;
@@ -202,8 +202,8 @@ pub fn specs() -> Vec<RuleSpec> {
 // ---------------------------------------------------------------------------
 
 /// Strip any CAST/COPY wrappers, returning the underlying value
-/// (C++ static `kunaStripCast`).
-fn kuna_strip_cast(data: &Funcdata, mut vn: VarnodeId) -> VarnodeId {
+/// (C++ static `unlaceStripCast`).
+fn unlace_strip_cast(data: &Funcdata, mut vn: VarnodeId) -> VarnodeId {
     while vn_is_written(data, vn) {
         let def = vn_def(data, vn).expect("vn written");
         let oc = op_code(data, def);
@@ -219,10 +219,10 @@ fn kuna_strip_cast(data: &Funcdata, mut vn: VarnodeId) -> VarnodeId {
 }
 
 /// Are `a` and `b` the same value once CAST/COPY wrappers are stripped?
-/// (C++ static `kunaSameValue`).
-fn kuna_same_value(data: &Funcdata, a: VarnodeId, b: VarnodeId) -> bool {
-    let a = kuna_strip_cast(data, a);
-    let b = kuna_strip_cast(data, b);
+/// (C++ static `unlaceSameValue`).
+fn unlace_same_value(data: &Funcdata, a: VarnodeId, b: VarnodeId) -> bool {
+    let a = unlace_strip_cast(data, a);
+    let b = unlace_strip_cast(data, b);
     if a == b {
         return true;
     }
@@ -234,8 +234,8 @@ fn kuna_same_value(data: &Funcdata, a: VarnodeId, b: VarnodeId) -> bool {
 
 /// Given the carry varnode and the low-add operands (a,b), confirm it is the
 /// page-cross carry of a+b, in either INT_CARRY or RuleCarryElim form
-/// (C++ static `kunaIsCarryOf`).
-fn kuna_is_carry_of(data: &Funcdata, carryvn: VarnodeId, a: VarnodeId, b: VarnodeId) -> bool {
+/// (C++ static `unlaceIsCarryOf`).
+fn unlace_is_carry_of(data: &Funcdata, carryvn: VarnodeId, a: VarnodeId, b: VarnodeId) -> bool {
     if !vn_is_written(data, carryvn) {
         return false;
     }
@@ -250,10 +250,10 @@ fn kuna_is_carry_of(data: &Funcdata, carryvn: VarnodeId, a: VarnodeId, b: Varnod
             Some(v) => v,
             None => return false,
         };
-        if kuna_same_value(data, c0, a) && kuna_same_value(data, c1, b) {
+        if unlace_same_value(data, c0, a) && unlace_same_value(data, c1, b) {
             return true;
         }
-        if kuna_same_value(data, c0, b) && kuna_same_value(data, c1, a) {
+        if unlace_same_value(data, c0, b) && unlace_same_value(data, c1, a) {
             return true;
         }
         return false;
@@ -280,7 +280,7 @@ fn kuna_is_carry_of(data: &Funcdata, carryvn: VarnodeId, a: VarnodeId, b: Varnod
         } else {
             return false;
         };
-        if !kuna_same_value(data, val, v_add) {
+        if !unlace_same_value(data, val, v_add) {
             return false;
         }
         let negc: uintb = vn_offset(data, c_add).wrapping_neg() & calc_mask(vn_size(data, val));
@@ -289,7 +289,7 @@ fn kuna_is_carry_of(data: &Funcdata, carryvn: VarnodeId, a: VarnodeId, b: Varnod
     false
 }
 
-// --- Local IR read helpers (see kuna_booleanmask for the rationale) ----------
+// --- Local IR read helpers (see unlace_booleanmask for the rationale) ----------
 
 fn op_in(data: &Funcdata, op: OpId, slot: int4) -> Option<VarnodeId> {
     data.obank().get(op).and_then(|o| o.get_in(slot))

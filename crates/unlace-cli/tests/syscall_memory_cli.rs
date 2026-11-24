@@ -215,7 +215,7 @@ fn decompile_image(function: &str, image: Vec<u8>, option: Option<&str>) -> Stri
     if let Some(value) = option {
         args.extend(["--option", "syscallregs", value]);
     }
-    let (text, err, rc) = common::run_kuna(&args);
+    let (text, err, rc) = common::run_unlace(&args);
     assert_eq!(rc, 0, "{text}\n{err}");
     if let Some(global) = text
         .split(|c: char| !c.is_ascii_alphanumeric() && c != '_')

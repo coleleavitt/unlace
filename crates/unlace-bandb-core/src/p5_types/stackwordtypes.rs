@@ -45,7 +45,7 @@ pub fn backing_store(
         || value
             .get_high()
             .and_then(|id| fd.high_bank().get(id))
-            .and_then(|high| high.kuna_symbol_type())
+            .and_then(|high| high.unlace_symbol_type())
             .is_some_and(generated)
         || fd.get_scope_local().is_some_and(|scope| {
             scope

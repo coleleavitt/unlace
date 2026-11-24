@@ -54,7 +54,7 @@ fn bootstrap_with_eh_frame_full(on: bool) -> unlace_console::engine::ConsoleProg
         .expect("bootstrap fixture with built processor specs");
     if on {
         prog.arch_mut()
-            .set_kuna_option("eh_frame_full", "on")
+            .set_unlace_option("eh_frame_full", "on")
             .expect("eh_frame_full flips on");
     }
     // Analysis facts commit at `read symbols` (gated by the per-pass flags), not

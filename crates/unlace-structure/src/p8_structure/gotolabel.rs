@@ -1,4 +1,4 @@
-//! S8 label bookkeeping shared by the goto-reduction passes (kuna).
+//! S8 label bookkeeping shared by the goto-reduction passes (unlace).
 //!
 //! # The defect this closes
 //!
@@ -7,9 +7,9 @@
 //! flag [`BlockGraph::mark_unstructured`](crate::block::BlockGraph::mark_unstructured)
 //! sets on each goto target, and the three goto-reduction passes that convert a
 //! `goto` into a duplicated tail
-//! ([`kuna_gotoreduce`](crate::gotoreduce),
-//! [`kuna_taildup`](crate::taildup),
-//! [`kuna_crossjumpreverter`](crate::crossjumpreverter)) clear
+//! ([`unlace_gotoreduce`](crate::gotoreduce),
+//! [`unlace_taildup`](crate::taildup),
+//! [`unlace_crossjumpreverter`](crate::crossjumpreverter)) clear
 //! that flag once the converted target is no longer reached by an unstructured
 //! edge.  Each pass carried its own copy of the "still reached" test, and all
 //! three copies looked at `BlockGoto`/`BlockIf` goto targets only — so a target

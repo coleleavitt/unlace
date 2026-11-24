@@ -1,4 +1,4 @@
-//! (kuna `iokitclasses on`) Commit what the typed IOKit classes say about
+//! (unlace `iokitclasses on`) Commit what the typed IOKit classes say about
 //! functions and data, once [`unlace_decomp::vtabletypes::install`] has
 //! built the class structures.
 //!
@@ -13,7 +13,7 @@ use std::rc::Rc;
 
 use unlace_analysis::iokit::IokitCxxFacts;
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::space::AddrSpace;
 use unlace_decomp::dtype::Datatype;
 use unlace_decomp::inputhints::InputHint;
@@ -25,19 +25,20 @@ pub(crate) fn commit(
     prog: &mut ConsoleProgram,
     code_space: &Rc<AddrSpace>,
     facts: &IokitCxxFacts,
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     let ws = code_space.get_word_size();
-    let class_pointer = |prog: &ConsoleProgram, class: &str| -> KunaResult<Option<Rc<Datatype>>> {
-        let types = prog.arch().types();
-        let Some(st) = types.find_by_name(class)?.filter(|t| !t.is_incomplete()) else {
-            return Ok(None);
+    let class_pointer =
+        |prog: &ConsoleProgram, class: &str| -> UnlaceResult<Option<Rc<Datatype>>> {
+            let types = prog.arch().types();
+            let Some(st) = types.find_by_name(class)?.filter(|t| !t.is_incomplete()) else {
+                return Ok(None);
+            };
+            Ok(Some(types.get_type_pointer(
+                types.get_size_of_pointer(),
+                st,
+                ws,
+            )?))
         };
-        Ok(Some(types.get_type_pointer(
-            types.get_size_of_pointer(),
-            st,
-            ws,
-        )?))
-    };
 
     if let (false, Ok(loc)) = (
         facts.this_types.is_empty(),
@@ -67,7 +68,7 @@ pub(crate) fn commit(
             );
         }
         prog.arch_mut()
-            .kuna_tables
+            .unlace_tables
             .get_mut::<unlace_decomp::inputhints::ThisHints>()
             .0 = hints;
     }

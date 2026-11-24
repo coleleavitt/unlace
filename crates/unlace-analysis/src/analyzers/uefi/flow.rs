@@ -1,4 +1,4 @@
-//! (kuna `uefi`) Where an EFI module's service tables and protocol interfaces go.
+//! (unlace `uefi`) Where an EFI module's service tables and protocol interfaces go.
 //!
 //! Like every pass that decodes, this runs at the commit point, when the
 //! engine's translator has the image. It lifts the code reachable from the

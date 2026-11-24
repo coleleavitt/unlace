@@ -11,7 +11,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::marshal::{ATTRIB_TYPE, Decoder, Encoder, IdRegistry, XmlDecode, XmlEncode};
 use unlace_base::space::{AddrSpace, AddrSpaceManager, ConstantSpace, addrspace_flags, spacetype};
 
@@ -83,7 +83,7 @@ impl FuncProtoOverride for TestProto {
     fn set_override(&mut self, val: bool) {
         *self.overridden.borrow_mut() = val;
     }
-    fn encode(&self, encoder: &mut dyn Encoder) -> KunaResult<()> {
+    fn encode(&self, encoder: &mut dyn Encoder) -> UnlaceResult<()> {
         // Stand-in for FuncProto::encode: a <prototype>-ish leaf carrying the tag.
         encoder.open_element(&ELEM_PROTOOVERRIDE);
         encoder.write_string(&ATTRIB_TYPE, self.tag.as_bytes());

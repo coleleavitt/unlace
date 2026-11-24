@@ -1,4 +1,4 @@
-//! Unit tests for the (kuna) stack-cookie scramble alias exemption.
+//! Unit tests for the (unlace) stack-cookie scramble alias exemption.
 
 use super::*;
 

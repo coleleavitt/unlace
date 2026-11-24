@@ -63,7 +63,7 @@ fn fixture(source: &str, frame: bool) -> Option<Fixture> {
 
 fn entries(fixture: &Fixture) -> Vec<u64> {
     let (stdout, stderr, rc) =
-        common::run_kuna(&["functions", fixture.binary.to_str().unwrap(), "--json"]);
+        common::run_unlace(&["functions", fixture.binary.to_str().unwrap(), "--json"]);
     assert_eq!(rc, 0, "{stderr}\n{stdout}");
     let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     let entries: Vec<_> = parsed["functions"]

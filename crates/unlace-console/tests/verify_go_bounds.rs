@@ -31,7 +31,7 @@ fn decompile(binary: &std::path::Path, name: &str, enabled: bool) -> String {
     .unwrap();
     program
         .arch_mut()
-        .set_kuna_option("gobounds", if enabled { "on" } else { "off" })
+        .set_unlace_option("gobounds", if enabled { "on" } else { "off" })
         .unwrap();
     program.commit_pending_analysis().unwrap();
     let commands = vec![

@@ -89,7 +89,7 @@ pub struct PriorNames {
     /// renamed or retyped (a `libcnames` spelling such as `fd`): no other local
     /// is given one again.
     pub vacated_names: BTreeSet<String>,
-    /// (kuna `libcnames`) The library name each number printed as.
+    /// (unlace `libcnames`) The library name each number printed as.
     pub aliases: BTreeMap<int4, String>,
     /// One past the last number handed out.
     pub end: int4,
@@ -281,7 +281,7 @@ fn prior_name<'a>(prior: &'a PriorNames, (op, shape, place): &Keys) -> Option<&'
 /// matched by the most precise key the record holds: a key it holds for more
 /// than one name matches nothing.
 fn tally(fd: &Funcdata, high: HighVariableId) -> BTreeMap<String, (usize, usize)> {
-    let prior = fd.kuna_prior_names();
+    let prior = fd.unlace_prior_names();
     let mut counts: BTreeMap<String, (usize, usize)> = BTreeMap::new();
     for (vn, keys) in instances_with_keys(fd, high) {
         if let Some(name) = matched_name(fd, prior, vn, &keys) {
@@ -310,7 +310,7 @@ fn tally(fd: &Funcdata, high: HighVariableId) -> BTreeMap<String, (usize, usize)
 /// matches: a variable that took in part of the renamed one is still the
 /// variable it was.
 pub fn best(fd: &Funcdata, high: HighVariableId) -> Option<int4> {
-    let prior = fd.kuna_prior_names();
+    let prior = fd.unlace_prior_names();
     if prior.ops.is_empty() {
         return None;
     }
@@ -340,17 +340,17 @@ pub fn best(fd: &Funcdata, high: HighVariableId) -> Option<int4> {
 /// the rename's name at all, in which case it is the renamed local and keeps
 /// its number (see [`orphaned`]).
 pub fn renamed_number(fd: &Funcdata, high: HighVariableId) -> Option<int4> {
-    best(fd, high).filter(|i| fd.kuna_prior_names().vacated.contains_key(i))
+    best(fd, high).filter(|i| fd.unlace_prior_names().vacated.contains_key(i))
 }
 
 /// Did no local take the name the rename of number `i` gave?
 pub fn orphaned(fd: &Funcdata, i: int4) -> bool {
-    let Some(name) = fd.kuna_prior_names().vacated.get(&i) else {
+    let Some(name) = fd.unlace_prior_names().vacated.get(&i) else {
         return false;
     };
     !fd.high_bank()
         .iter()
-        .any(|(_, h)| h.kuna_name() == Some(name.as_str()))
+        .any(|(_, h)| h.unlace_name() == Some(name.as_str()))
 }
 
 /// The local each name-only rename names: the one holding most of the renamed
@@ -362,7 +362,7 @@ pub fn rename_targets(
     fd: &Funcdata,
     tallies: &[(HighVariableId, BTreeMap<String, (usize, usize)>)],
 ) -> BTreeMap<HighVariableId, String> {
-    let renames = &fd.kuna_prior_names().renames;
+    let renames = &fd.unlace_prior_names().renames;
     let mut best: BTreeMap<&String, ((usize, usize), HighVariableId)> = BTreeMap::new();
     for (high, counts) in tallies {
         for (name, count) in counts {
@@ -382,13 +382,13 @@ pub fn rename_targets(
 /// is carried: a piece of a structure takes its root's name, so it neither
 /// keeps a number nor is renamed apart from it.
 pub fn tallies(fd: &mut Funcdata) -> Vec<(HighVariableId, BTreeMap<String, (usize, usize)>)> {
-    if fd.kuna_prior_names().ops.is_empty() {
+    if fd.unlace_prior_names().ops.is_empty() {
         return Vec::new();
     }
     let highs: Vec<HighVariableId> = fd
         .high_bank()
         .iter()
-        .filter(|(_, h)| !h.kuna_global())
+        .filter(|(_, h)| !h.unlace_global())
         .map(|(high, _)| high)
         .collect();
     let mut out = Vec::new();
@@ -412,7 +412,7 @@ pub fn assign_numbers(
     fd: &Funcdata,
     tallies: &[(HighVariableId, BTreeMap<String, (usize, usize)>)],
 ) -> BTreeMap<HighVariableId, int4> {
-    let prior = fd.kuna_prior_names();
+    let prior = fd.unlace_prior_names();
     let angr = fd.get_arch().name_style_angr;
     let mut options: Vec<((usize, usize), int4, HighVariableId)> = Vec::new();
     for (high, counts) in tallies {
@@ -455,14 +455,14 @@ fn record<K: Ord>(map: &mut BTreeMap<K, Option<String>>, key: K, name: &str) {
 
 /// The keys of every instance of each local the naming pass just named, with
 /// its name, for [`carry`]; taken only when the drive asked for it
-/// (`Architecture::kuna_record_names`), since a directive may follow.
+/// (`Architecture::unlace_record_names`), since a directive may follow.
 pub fn snapshot(fd: &Funcdata) -> Vec<(String, Keys)> {
     let mut out = Vec::new();
     for (high, h) in fd.high_bank().iter() {
-        if h.kuna_global() {
+        if h.unlace_global() {
             continue;
         }
-        if let Some(name) = h.kuna_name() {
+        if let Some(name) = h.unlace_name() {
             out.extend(
                 instances(fd, high)
                     .into_iter()
@@ -478,13 +478,13 @@ pub fn snapshot(fd: &Funcdata) -> Vec<(String, Keys)> {
 /// carries the same name, is carried under that printed name.
 pub fn relabel(fd: &mut Funcdata, high: HighVariableId, name: &str) {
     let keys = instances(fd, high);
-    let mut snapshot = fd.kuna_name_snapshot().to_vec();
+    let mut snapshot = fd.unlace_name_snapshot().to_vec();
     for (label, entry) in &mut snapshot {
         if keys.contains(entry) {
             *label = name.to_string();
         }
     }
-    fd.set_kuna_name_snapshot(snapshot);
+    fd.set_unlace_name_snapshot(snapshot);
 }
 
 /// A retype carried to the next decompile as the type of the whole printed
@@ -525,7 +525,7 @@ pub fn retypes_as_unit(from: &crate::dtype::Datatype, to: &crate::dtype::Datatyp
 pub fn is_carried_as_name(fd: &Funcdata, sym: crate::database::SymbolId) -> bool {
     is_name_only(fd, sym)
         || fd
-            .kuna_directive_symbols()
+            .unlace_directive_symbols()
             .iter()
             .any(|d| d.symbol == sym && d.unit_type.is_some())
 }
@@ -540,7 +540,7 @@ pub fn is_carried_as_name(fd: &Funcdata, sym: crate::database::SymbolId) -> bool
 /// type as well.
 pub fn lock_retyped(fd: &mut Funcdata) {
     let locks: Vec<(VarnodeId, std::rc::Rc<crate::dtype::Datatype>)> = {
-        let prior = fd.kuna_prior_names();
+        let prior = fd.unlace_prior_names();
         if !prior.retypes.values().any(|retype| retype.infer) {
             return;
         }
@@ -592,7 +592,7 @@ fn merged_names(fd: &Funcdata, high: HighVariableId) -> BTreeSet<u32> {
     let Some(h) = fd.high_bank().get(high) else {
         return BTreeSet::new();
     };
-    let prior = fd.kuna_prior_names();
+    let prior = fd.unlace_prior_names();
     let mut memo = prior.merged_names.borrow_mut();
     let MergeMemo { locals, names } = &mut *memo;
     (0..h.num_instances())
@@ -649,7 +649,7 @@ pub fn holds_retype(fd: &Funcdata, vn: VarnodeId) -> bool {
     let Some(v) = fd.vbank().get(vn).filter(|v| v.is_type_lock()) else {
         return false;
     };
-    fd.kuna_prior_names()
+    fd.unlace_prior_names()
         .retypes
         .values()
         .any(|retype| retype.infer && std::rc::Rc::ptr_eq(&retype.ct, v.get_type()))
@@ -667,7 +667,7 @@ pub fn is_retyped_definition(fd: &Funcdata, vn: VarnodeId) -> bool {
     if !replays_inference(fd) {
         return false;
     }
-    let prior = fd.kuna_prior_names();
+    let prior = fd.unlace_prior_names();
     keys_of(fd, vn)
         .and_then(|keys| prior.ops.get(&keys.0).and_then(|name| name.as_ref()))
         .and_then(|name| prior.retypes.get(name))
@@ -685,7 +685,7 @@ pub fn printed_pointee(
 ) -> Option<std::rc::Rc<crate::dtype::Datatype>> {
     let v = fd.vbank().get(vn).filter(|v| v.is_type_lock())?;
     let mut pointees = fd
-        .kuna_prior_names()
+        .unlace_prior_names()
         .retypes
         .values()
         .filter(|retype| retype.infer && std::rc::Rc::ptr_eq(&retype.ct, v.get_type()))
@@ -705,7 +705,7 @@ pub fn printed_pointee(
 }
 
 fn replays_inference(fd: &Funcdata) -> bool {
-    fd.kuna_prior_names()
+    fd.unlace_prior_names()
         .retypes
         .values()
         .any(|retype| retype.infer)
@@ -809,7 +809,7 @@ pub fn retype_targets(
     fd: &Funcdata,
     tallies: &[(HighVariableId, BTreeMap<String, (usize, usize)>)],
 ) -> BTreeMap<HighVariableId, std::rc::Rc<crate::dtype::Datatype>> {
-    let retypes = &fd.kuna_prior_names().retypes;
+    let retypes = &fd.unlace_prior_names().retypes;
     directive_targets(fd, tallies)
         .into_iter()
         .filter_map(|(name, high)| retypes.get(&name).map(|retype| (high, retype.ct.clone())))
@@ -824,7 +824,7 @@ pub fn directive_targets(
     fd: &Funcdata,
     tallies: &[(HighVariableId, BTreeMap<String, (usize, usize)>)],
 ) -> BTreeMap<String, HighVariableId> {
-    let prior = fd.kuna_prior_names();
+    let prior = fd.unlace_prior_names();
     let fits = |name: &str, high: HighVariableId| match prior.retypes.get(name) {
         Some(retype) => width(fd, high) == Some(retype.ct.get_size()),
         None => true,
@@ -870,7 +870,7 @@ pub fn is_name_only(fd: &Funcdata, sym: crate::database::SymbolId) -> bool {
         && !symbol.is_type_locked()
         && symbol.get_category() != crate::database::symbol_category::FUNCTION_PARAMETER
         && fd
-            .kuna_directive_symbols()
+            .unlace_directive_symbols()
             .iter()
             .any(|d| d.symbol == sym && (d.bound.is_some() || mapped))
 }
@@ -880,9 +880,9 @@ pub fn is_name_only(fd: &Funcdata, sym: crate::database::SymbolId) -> bool {
 /// to it since renamed. Empty when no directive touched `fd` and it kept no
 /// earlier numbering, so a plain re-decompile numbers from scratch as before.
 pub fn carry(fd: &Funcdata) -> PriorNames {
-    let prior = fd.kuna_prior_names();
+    let prior = fd.unlace_prior_names();
     let isolated = crate::isolated::carried(fd);
-    if prior.is_empty() && fd.kuna_directive_symbols().is_empty() {
+    if prior.is_empty() && fd.unlace_directive_symbols().is_empty() {
         return PriorNames {
             isolated,
             ..Default::default()
@@ -898,7 +898,7 @@ pub fn carry(fd: &Funcdata) -> PriorNames {
         given: prior.given.clone(),
         vacated_names: prior.vacated_names.clone(),
         aliases: prior.aliases.clone(),
-        end: prior.end.max(fd.kuna_default_name_end()),
+        end: prior.end.max(fd.unlace_default_name_end()),
         renames: BTreeMap::new(),
         symbol_renames: prior.symbol_renames.clone(),
         retypes: prior
@@ -914,7 +914,7 @@ pub fn carry(fd: &Funcdata) -> PriorNames {
         merged_names: Default::default(),
         isolated,
     };
-    for (name, (op, shape, place)) in fd.kuna_name_snapshot().iter().cloned() {
+    for (name, (op, shape, place)) in fd.unlace_name_snapshot().iter().cloned() {
         record(&mut next.ops, op, &name);
         record(&mut next.shapes, shape, &name);
         record(&mut next.places, place, &name);
@@ -927,7 +927,7 @@ pub fn carry(fd: &Funcdata) -> PriorNames {
     let Some(lm) = fd.get_scope_local() else {
         return next;
     };
-    let directives = fd.kuna_directive_symbols();
+    let directives = fd.unlace_directive_symbols();
     for (sym, addr, size, name) in lm.named_symbol_storage() {
         let name = match directives.iter().find(|d| d.symbol == sym) {
             Some(d) if !lm.database().symbol(sym).is_name_locked() => &d.printed,
@@ -938,7 +938,7 @@ pub fn carry(fd: &Funcdata) -> PriorNames {
             next.symbols.entry((addr, size)).or_insert(i);
         }
     }
-    for alias in fd.kuna_library_aliases().iter().filter(|a| a.shown) {
+    for alias in fd.unlace_library_aliases().iter().filter(|a| a.shown) {
         if let Some(i) = default_name_index(&alias.number, angr) {
             next.aliases.insert(i, alias.alias.clone());
         }
@@ -959,7 +959,7 @@ pub fn carry(fd: &Funcdata) -> PriorNames {
             continue;
         }
         if let Some(alias) = fd
-            .kuna_library_aliases()
+            .unlace_library_aliases()
             .iter()
             .find(|a| a.shown && a.number == directive.printed)
         {
@@ -994,7 +994,7 @@ pub fn carry(fd: &Funcdata) -> PriorNames {
     next
 }
 
-/// (kuna `--assert`) The previous decompile's default numbering, seeded by the drive when a
+/// (unlace `--assert`) The previous decompile's default numbering, seeded by the drive when a
 /// directive batch is replayed (`prior`), and the numbering the naming pass handed out, by
 /// instance identity (`snapshot`). Kept across `Funcdata::clear`.
 #[derive(Default)]
@@ -1002,43 +1002,43 @@ struct NamesSlot {
     prior: PriorNames,
     snapshot: Vec<(String, Keys)>,
 }
-crate::kuna_func_state!(NamesSlot, keep_across_clear: true);
+crate::unlace_func_state!(NamesSlot, keep_across_clear: true);
 
-/// The `kuna_stablenames` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// The `unlace_stablenames` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataStablenamesExt {
-    /// (kuna `--assert`) The previous decompile's default numbering to keep.
-    fn kuna_prior_names(&self) -> &PriorNames;
+    /// (unlace `--assert`) The previous decompile's default numbering to keep.
+    fn unlace_prior_names(&self) -> &PriorNames;
     fn seed_prior_names(&mut self, prior: PriorNames);
     /// The numbering the naming pass recorded (empty unless asked to).
-    fn kuna_name_snapshot(&self) -> &[(String, Keys)];
-    fn set_kuna_name_snapshot(&mut self, snapshot: Vec<(String, Keys)>);
+    fn unlace_name_snapshot(&self) -> &[(String, Keys)];
+    fn set_unlace_name_snapshot(&mut self, snapshot: Vec<(String, Keys)>);
 }
 
 impl FuncdataStablenamesExt for crate::funcdata::Funcdata {
-    /// (kuna `--assert`) The previous decompile's default numbering to keep.
-    fn kuna_prior_names(&self) -> &PriorNames {
-        &self.kuna_state::<NamesSlot>().prior
+    /// (unlace `--assert`) The previous decompile's default numbering to keep.
+    fn unlace_prior_names(&self) -> &PriorNames {
+        &self.unlace_state::<NamesSlot>().prior
     }
     fn seed_prior_names(&mut self, prior: PriorNames) {
-        self.kuna_state_mut::<NamesSlot>().prior = prior;
+        self.unlace_state_mut::<NamesSlot>().prior = prior;
     }
     /// The numbering the naming pass recorded (empty unless asked to).
-    fn kuna_name_snapshot(&self) -> &[(String, Keys)] {
-        &self.kuna_state::<NamesSlot>().snapshot
+    fn unlace_name_snapshot(&self) -> &[(String, Keys)] {
+        &self.unlace_state::<NamesSlot>().snapshot
     }
-    fn set_kuna_name_snapshot(&mut self, snapshot: Vec<(String, Keys)>) {
-        self.kuna_state_mut::<NamesSlot>().snapshot = snapshot;
+    fn set_unlace_name_snapshot(&mut self, snapshot: Vec<(String, Keys)>) {
+        self.unlace_state_mut::<NamesSlot>().snapshot = snapshot;
     }
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.stablenames_same_variable = Some(same_variable);
     hooks.stablenames_variable_groups = Some(variable_groups);
 }
 
-crate::kuna_arch_table!(PriorNames);
+crate::unlace_arch_table!(PriorNames);
 
 #[cfg(test)]
 mod tests {

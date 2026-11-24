@@ -1,11 +1,11 @@
-//! (kuna) Shared CFG idiom shapes for language-runtime reductions
+//! (unlace) Shared CFG idiom shapes for language-runtime reductions
 //! (`docs/multilang.md` W2).
 //!
 //! A compiled language runtime stamps the same few control-flow shapes into
 //! every function it manages — a guard branch to a cold runtime call, a
 //! stack-growth loop around the entry — and each language pack wants to match
 //! one and collapse it. The *matchers* live here, shared and separately
-//! testable; each reduction stays its own `kuna_<slug>.rs` action with its own
+//! testable; each reduction stays its own `unlace_<slug>.rs` action with its own
 //! option, per the one-feature-one-module rule. The matchers only read the
 //! `bblocks` CFG; what to do with a match (which edge to cut, which op to
 //! lower) is the caller's.

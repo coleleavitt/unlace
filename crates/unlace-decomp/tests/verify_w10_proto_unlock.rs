@@ -165,7 +165,7 @@ fn w10_proto_unlock_const_return_collapses_no_tied_roundtrip() {
     };
     // The join pentry decoded -> a non-empty model with a `char *` parameter and
     // the recovered 4-byte return type (was `void promote_compare(void)` while the
-    // join pentry failed).  (kuna DIV-6 realtypes) the un-inferred return renders
+    // join pentry failed).  (unlace DIV-6 realtypes) the un-inferred return renders
     // as `unsigned int` (was `xunknown4`).
     assert!(
         a.contains("unsigned int promote_compare(char *"),

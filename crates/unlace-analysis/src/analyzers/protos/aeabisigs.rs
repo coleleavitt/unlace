@@ -1,4 +1,4 @@
-//! (kuna) The Arm run-time ABI's helper functions, typed as RTABI32 declares
+//! (unlace) The Arm run-time ABI's helper functions, typed as RTABI32 declares
 //! them, on every 32-bit ARM image that names one.
 //!
 //! A soft-float caller computes `a + b` on `double` as `__aeabi_dadd(a, b)`

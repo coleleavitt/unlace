@@ -45,7 +45,7 @@ fn bootstrap(fast_funcdisc: bool) -> ConsoleProgram {
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
     prog.arch_mut()
-        .set_kuna_option("fast_funcdisc", if fast_funcdisc { "on" } else { "off" })
+        .set_unlace_option("fast_funcdisc", if fast_funcdisc { "on" } else { "off" })
         .expect("fast_funcdisc flips");
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");

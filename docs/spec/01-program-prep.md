@@ -3004,7 +3004,7 @@ a TE. Measured on a 2.6 MB Go `wasip1` module: 1792 functions load in 0.08 s
 and every body lowers. Checked by compiling the printed C of functions from
 `tests/fixtures/wasm/calls.wasm` beside their source and comparing results on
 random inputs (`crates/unlace-cli/tests/wasm_cli.rs`), and by
-`tests/stages/kuna-wasm-module.toml`.
+`tests/stages/wasm-module.toml`.
 (kuna) **The Device memory of an M-profile image is volatile** (always on;
 `crates/unlace-analysis/src/loader/cortexmdevice.rs (paint_volatile)`).
 The ARMv7-M and ARMv8-M memory maps make two regions Device memory on every
@@ -4104,7 +4104,7 @@ could override the method. The reference walk
 same table: a site with one method is a `call` edge to it, a site with
 several a `vcall` edge to each, and every method in the image's code is
 walked as a function.
-Stage test: `tests/stages/kuna-arm64evcall.toml`, each of three fixtures with the
+Stage test: `tests/stages/arm64evcall.toml`, each of three fixtures with the
 option off and on.
 
 Two arch-marker passes paint **decode context** rather than names, because a wrong
@@ -4382,7 +4382,7 @@ The always-on core, in pass order (`passes.rs (passes_for)`):
   last two path components and the position (`panic_loc_src_main_rs_10_5`),
   so the call prints `&panic_loc_tiny_rs_15_9`. The file name is also a
   bounded string fact of exact length. Pinned by
-  `tests/stages/kuna-panicloc.toml`.
+  `tests/stages/panicloc.toml`.
 - **Wide strings** (`widestrings`, the `StringsAnalyzer` `allCharWidths` arm,
   `crates/unlace-analysis/src/analyzers/strings/widestrings.rs
   (scan_wide_strings)`): the same matcher over 2-byte little-endian code units —
@@ -4659,7 +4659,7 @@ moves.
   place of the built-in one, for an image of the target the file names.
 
   *Format.* A library is a text file. Three header lines name the format
-  version (`kuna-typelib 1`), the target (`target linux x86_64`) and the source
+  version (`typelib 1`), the target (`target linux x86_64`) and the source
   (`source musl 1.2.6`). Each entry after them is one line: `F name flag<TAB>C
   declaration` for a function, `T name flag<TAB>C type` for a typedef, and `S
   name flag size alignment` (`U` for a union) for a record, followed by one
@@ -5095,7 +5095,7 @@ moves.
   (`effective_libctypes_layout`), and the declared-name path below is handed it as
   a fact about the image. Scaling the table per architecture would need a
   measured width for every row on every ABI, and is not attempted.
-  `tests/stages/kuna-libctypes.toml` pass 14 is the i386 witness.
+  `tests/stages/libctypes.toml` pass 14 is the i386 witness.
 
   Growth is also why a named vote is held to what the caller does with the
   pointer. A libc aggregate is often the first member of a larger object, whose
@@ -5262,7 +5262,7 @@ moves.
 
   The default is `opaque`. No datatest loads a file, so the 675 assertions
   cannot see this tier either way; the stage corpus can, and
-  `tests/stages/kuna-libctypes.toml` pins the row in both arms. The evidence for
+  `tests/stages/libctypes.toml` pins the row in both arms. The evidence for
   the default is therefore the corpus type-recovery sweep: over the decbench
   slices at `-O0`, `-O2` and `-O2 -fno-inline`, naming these pointees moves 70
   functions to a perfect type score and one to a worse one — a `hash_do_for_each`
@@ -6393,7 +6393,7 @@ moves.
   already owning the synthesized name is never fought (the re-imported
   compilation unit reuses it on an exact shape match, the `build_enum` rule).
   It acts only where a variant part was imported — no layout, no tag member,
-  nothing to retype. `tests/stages/kuna-variantnames.toml` and
+  nothing to retype. `tests/stages/variantnames.toml` and
   the unlace-console `verify_variantnames` gate own the naming assertions
   (store, read, declaration type, and the niche no-op) over the committed
   `dwarfvariants_x86_64` fixture.
@@ -6574,7 +6574,7 @@ moves.
   name-only subset reached 26%, at no measurable cost (demangling the whole
   symbol table takes under 10 ms). The unit-test corpus is real symbols
   pinned with the `swift-demangle` output; the stage test
-  `tests/stages/kuna-swiftdemangle.toml` loads `macho_swift_names_arm64`, a
+  `tests/stages/swiftdemangle.toml` loads `macho_swift_names_arm64`, a
   clang-built arm64 Mach-O whose root class carries the runtime name
   `_TtC4main7Greeter` through `objc_runtime_name` and whose exported function
   carries the symbol `_$s4main10countWords2ofS2i_tF` through an `asm` label,
@@ -7844,7 +7844,7 @@ every other binary's pass list is byte-identical to before the pass existed):
   come from replaying the bind opcodes
   (`loader/format/macho/dyldinfo.rs (resolve_dyld_info_binds)`), which keeps
   no addend, so the anchor is accepted on the name alone. Pinned by
-  `tests/stages/kuna-itaniumrtti-macho.toml` and its `-classic` twin.
+  `tests/stages/itaniumrtti-macho.toml` and its `-classic` twin.
 - **Objective-C** (`objc`, Mach-O-only, on by default and inert elsewhere;
   `crates/unlace-analysis/src/analyzers/objc/mod.rs`): walk
   `__objc_classlist` → `class_t` → `class_ro_t` → method lists (both absolute and
@@ -7952,7 +7952,7 @@ every other binary's pass list is byte-identical to before the pass existed):
     takes only the arguments the call site shows, so a receiver the caller
     never moved (its own incoming `x0`) is not listed:
     `v1 = objc_msgSend$length();`. A strict fix, no option;
-    `tests/stages/kuna-objcstubagree.toml` pins it.
+    `tests/stages/objcstubagree.toml` pins it.
 
   The rebase slots of the three ref sections are also reported constant
   (`AnalysisOutput::const_ranges`). dyld fills them once before any code runs
@@ -8050,7 +8050,7 @@ every other binary's pass list is byte-identical to before the pass existed):
     commit of its facts) says; when it does not run at all (`sourcelang`
     forced to another language) the ivar list builds the struct, under the
     demangled name. The stage test
-    `tests/stages/kuna-swiftclassnames.toml` proves both spellings on
+    `tests/stages/swiftclassnames.toml` proves both spellings on
     `macho_swift_classnames_arm64`, and both owners of the layout on
     `macho_swift_classnames_fieldmd_arm64`. Off (the option is read
     at load as `UNLACE_OBJCIVARS` for the structs and at the commit for `self`
@@ -8223,7 +8223,7 @@ every other binary's pass list is byte-identical to before the pass existed):
     of the selector's stub and then of `objc_msgSend` (at most 512), reading the
     retargets back. A method's `self`/`_cmd` parameter names are never adopted
     for the caller's variables. A selector no class of the chain declares keeps
-    the runtime entry point. The stage test `tests/stages/kuna-objcresolve.toml`
+    the runtime entry point. The stage test `tests/stages/objcresolve.toml`
     runs both fixtures with the options off and on; `unlace-cli`'s
     `xrefs_objc_resolved` test asks both directions.
 
@@ -8263,7 +8263,7 @@ every other binary's pass list is byte-identical to before the pass existed):
     init…]` returns that class, and a super send is never retargeted either,
     since its first argument is the `objc_super`. On a 390-function sample of
     a 72 MB iOS app this resolves 88 more sends (64 to 152) and types 13 more
-    locals as class pointers (108 to 121); `tests/stages/kuna-objcsdksend.toml`
+    locals as class pointers (108 to 121); `tests/stages/objcsdksend.toml`
     runs a fixture that sends to an imported class with `objcresolve` and
     `objcrettype` off and on.
 
@@ -8354,7 +8354,7 @@ every other binary's pass list is byte-identical to before the pass existed):
     `block.block.invoke = …; block.capture_1 = &cell_1; cell_1.forwarding = block.capture_1;`
     — Hex-Rays' `Block_layout_<ea>` frame members. A capture's signedness is
     not modelled. The stage tests
-    `tests/stages/kuna-objcstructs.toml` and `tests/stages/kuna-objcblocks.toml`
+    `tests/stages/objcstructs.toml` and `tests/stages/objcblocks.toml`
     run `macho_objc_structs_arm64` and `macho_objc_blocks_arm64`.
 
     On an x86-64 Mach-O the same recovery reads x86-64 creators
@@ -8394,7 +8394,7 @@ every other binary's pass list is byte-identical to before the pass existed):
     through a slot or a jump out of `__text` may be another function's: a block
     built past one has no known creator, is named
     `block_<invoke>_block_invoke`, and types no frame; its invoke is typed all
-    the same. `tests/stages/kuna-objcblocksx86.toml` runs
+    the same. `tests/stages/objcblocksx86.toml` runs
     `macho_objc_blocks_x86_64` and `macho_objc_blocks2_x86_64` with `objc` off
     and on.
 
@@ -8438,7 +8438,7 @@ every other binary's pass list is byte-identical to before the pass existed):
     Foundation out of an iOS 16.4 arm64e cache: 3,979 `objc_msgSend$<sel>` stubs
     named (none before), every selector, class, super and protocol reference
     slot named (6,050, 566, 481 and 33), `self` and `_cmd` typed on its methods.
-    `tests/stages/kuna-dyldcacheobjc.toml` runs the two synthetic caches of
+    `tests/stages/dyldcacheobjc.toml` runs the two synthetic caches of
     `dyld_cache_objc.py`, one with the header and one with only the
     `objc_opt_t`.
   - **SDK C prototypes** (`objcsdk`, kuna, the C half of the same directory,
@@ -8600,7 +8600,7 @@ every other binary's pass list is byte-identical to before the pass existed):
   in a crafted file cannot multiply into millions of names. The pass is
   registered only for `Compiler::Swift` (§1.3's detector) in Mach-O or ELF, so
   every other image's pass set is unchanged; the stage test
-  `tests/stages/kuna-swiftmetadata.toml` runs the fully stripped swiftc-built
+  `tests/stages/swiftmetadata.toml` runs the fully stripped swiftc-built
   `swift_metadata_elf` off and on.
 - **Swift type layouts** (`swifttypes`, the type-layout arm of the pass above,
   default-on and inert unless `swiftmetadata` is on;
@@ -8687,7 +8687,7 @@ both
   accessors look up a runtime cache are skipped), lays out 4,585 structs and
   3,205 classes with 30,997 fields (22,794 typed), and pins the `self` of 5,739
   vtable getters and 2,821 witness getters, for about 0.1 s and 3 MB over the
-  naming arm. The stage test `tests/stages/kuna-swifttypes.toml` runs the
+  naming arm. The stage test `tests/stages/swifttypes.toml` runs the
   stripped swiftc-built `swift_types_elf` with the arm off and on.
   The arm also types the result of every call to an accessor that no
   prototype covers (a local generic or runtime-initialized type's, an
@@ -8747,7 +8747,7 @@ both
   arm names 278 helper copies (one pair per statically linked package), 818
   lazy accessors and 18,549 caches, for about 0.4 s of load time in a dev
   build. The stage test
-  `tests/stages/kuna-swifthelpers.toml` runs the stripped
+  `tests/stages/swifthelpers.toml` runs the stripped
   `swift_helpers_arm64_elf` with both arms off and on.
 - **Swift calling convention** (`swiftcall`, the calling-convention arm of the
   pass above, default-on and inert unless `swiftmetadata` and `swifttypes` are
@@ -8815,7 +8815,7 @@ both
   pass one fewer, and the functions that test a call's error by releasing it
   grow from 84 to 235. It adds no measurable load time and about 8 MB, and the
   42,240 decompiles take 2.5% longer. The
-  stage test `tests/stages/kuna-swiftcall.toml` runs the stripped
+  stage test `tests/stages/swiftcall.toml` runs the stripped
   `swift_call_elf` with the arm off and on, and its unstripped twin
   `swift_call_syms_elf` on.
 - **Swift runtime prototypes** (`swiftruntime`, Swift-detected Mach-O and
@@ -8837,7 +8837,7 @@ both
   left to recovery. An object reference is a
   `void *`: its type is the metadata's, which the call site knows, and a
   `swift.HeapObject *` would hide the first stored property behind
-  `obj[1].isa`. The stage test `tests/stages/kuna-swiftruntime.toml` runs the
+  `obj[1].isa`. The stage test `tests/stages/swiftruntime.toml` runs the
   stripped `swift_types_elf` off and on.
   On arm64 the table also carries the runtime's register-specific retain and
   release entry points (`swift/Runtime/CustomRRABI.h`, instantiated for
@@ -8851,7 +8851,7 @@ both
   so the one parameter is explicit storage on the prototype (the
   `objc_retain_x<N>` shape) and the call prints its argument:
   `swift_release_x20(v)` for the bare `swift_release_x20()`. The stage test
-  `tests/stages/kuna-swiftrrregs.toml` runs `swift_rr_regs_macho`, an arm64
+  `tests/stages/swiftrrregs.toml` runs `swift_rr_regs_macho`, an arm64
   Mach-O assembled against the iOS libswiftCore.
   The standard library's own C entry points are in the table too
   (`_swift_stdlib_*`, declared in the shims headers
@@ -8866,7 +8866,7 @@ both
   `swift.NSOperatingSystemVersion` (`majorVersion`, `minorVersion`,
   `patchVersion`), which on arm64 comes back through `x8`, so a caller's
   `v1[0]` reads `v1.majorVersion`. The stage test
-  `tests/stages/kuna-swiftstdlib.toml` runs `swift_stdlib_macho`, assembled
+  `tests/stages/swiftstdlib.toml` runs `swift_stdlib_macho`, assembled
   the same way.
   The rest of the compiler's list of runtime calls
   (`include/swift/Runtime/RuntimeFunctions.def`) is in the table as well, for
@@ -9014,7 +9014,7 @@ both
   (`arm64evcall.rs (object_at)`): when it is a metaclass object, the
   commit resolves the call to the one method that metaclass's own vtable
   holds in the slot, so `X::gMetaClass.alloc()` is a direct call.
-  Stage test: `tests/stages/kuna-iokitcxx.toml` (the typed classes, `names`
+  Stage test: `tests/stages/iokitcxx.toml` (the typed classes, `names`
   against `on`).
 - **XNU data tables** (kuna, `xnutables`, the same XNU images, default-on;
   `crates/unlace-analysis/src/analyzers/iokit/tables.rs`): three kinds
@@ -11230,7 +11230,7 @@ pinned rather than only described: the in-repo fixture `elfmainextra_x86_64`
 @0x1026 reads `r8` into a call argument and stores `r9` to a global, so its
 body-driven signature is `unsigned long sub_1026(unsigned int a0,unsigned long
 a1,unsigned long a2,unsigned long a3,unsigned long a4,unsigned long a5)` and the
-default arm shows both losses at once (`tests/stages/kuna-elfmain.toml` §§5-8,
+default arm shows both losses at once (`tests/stages/elfmain.toml` §§5-8,
 `tests/cli/elf-main-extra-register-args.json`). Whichever way call-site argument
 recovery removes the fabrication, those assertions move.
 
@@ -12935,7 +12935,7 @@ so an AArch64 `adrp x17, P; add x17, x17, #o; ldrsw x16, [x17, x16, lsl #2]`
 reads its jump table at `P + o`. Apple's linker lists such an inline `__text`
 table in `LC_FUNCTION_STARTS`, where it decodes as a `sub_` entry the dispatch
 then indexes (`sub_4060[a0 * 4]`), and the veto removes it
-(`tests/stages/kuna-relswitch-a64.toml`). On a Thumb literal-pool image an
+(`tests/stages/relswitch-a64.toml`). On a Thumb literal-pool image an
 AIF-only entry whose first word a literal load reads is dropped too (the
 `poolentry` fixture's `F`, the split shape its corpus measurement disclosed). On the stripped
 Lua (x86-64, AArch64), ld.so, llvm-nm and llvm-objdump images it removes

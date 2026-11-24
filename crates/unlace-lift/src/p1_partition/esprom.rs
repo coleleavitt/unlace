@@ -1,4 +1,4 @@
-//! (kuna `esprom`) Which Espressif chip's mask ROM and memory map an image
+//! (unlace `esprom`) Which Espressif chip's mask ROM and memory map an image
 //! runs against.
 //!
 //! The symbol tables and the memory maps live in the analyzer tier
@@ -7,9 +7,9 @@
 //! application image, from the chip id in the image header, so on every other
 //! input `auto` names no chip and the option does nothing.
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 
-/// An Espressif chip with a mask ROM kuna has a table for.
+/// An Espressif chip with a mask ROM unlace has a table for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum EspChip {
     Esp32,
@@ -106,12 +106,12 @@ impl EspRom {
 
 /// Parse the `option esprom` argument, producing the value plus the
 /// confirmation message.
-pub fn parse_esprom(p1: &str) -> KunaResult<(EspRom, String)> {
+pub fn parse_esprom(p1: &str) -> UnlaceResult<(EspRom, String)> {
     let value = match p1 {
         "auto" => EspRom::Auto,
         "off" => EspRom::Off,
         name => EspRom::Chip(EspChip::from_name(name).ok_or_else(|| {
-            KunaError::parse(
+            UnlaceError::parse(
                 "esprom takes auto, off or a chip: esp32, esp32s2, esp32s3, esp32c2, esp32c3, esp32c6, esp32h2, esp8266",
             )
         })?),
@@ -125,9 +125,9 @@ pub fn parse_esprom(p1: &str) -> KunaResult<(EspRom, String)> {
     ))
 }
 
-impl crate::optionset::KunaOption for EspRom {
+impl crate::optionset::UnlaceOption for EspRom {
     const NAME: &'static str = "esprom";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         crate::esprom::EspRom::Auto
@@ -137,12 +137,12 @@ impl crate::optionset::KunaOption for EspRom {
         crate::esprom::EspRom::Auto
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         Ok(crate::esprom::parse_esprom(value)?)
     }
 }
 
-/// (kuna `esprom`) The ESP chip the loaded image was built for; an
+/// (unlace `esprom`) The ESP chip the loaded image was built for; an
 /// [`ArchTable`](crate::archstate::ArchTable) on the architecture.
 pub type ImageChip = Option<EspChip>;
-crate::kuna_arch_table!(ImageChip);
+crate::unlace_arch_table!(ImageChip);

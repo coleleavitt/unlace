@@ -139,7 +139,7 @@ impl Action for ActionGoBounds {
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::gobounds::GoBounds>()
             .0
             || !data.get_arch().source_lang.is_go()
@@ -182,7 +182,7 @@ impl Action for ActionGoBounds {
     }
 }
 
-crate::kuna_flag!(
+crate::unlace_flag!(
     /// Fold Go compiler bounds/division panic arms (option gobounds).
     GoBounds,
     "gobounds",

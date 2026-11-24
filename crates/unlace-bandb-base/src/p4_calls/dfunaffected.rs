@@ -1,9 +1,9 @@
-//! (kuna, ida) Assert the x86 ABI's direction-flag guarantee on a decoded
+//! (unlace, ida) Assert the x86 ABI's direction-flag guarantee on a decoded
 //! prototype model, so the flag stops leaking into decompiled output.
 //!
 //! # The symptom
 //!
-//! gcc inlines `strcmp(file, "-")` as a two-byte `repe cmpsb`, and kuna emitted
+//! gcc inlines `strcmp(file, "-")` as a two-byte `repe cmpsb`, and unlace emitted
 //! the whole lowered loop with the direction flag as a live variable:
 //!
 //! ```text
@@ -75,6 +75,6 @@ pub fn assert_direction_flag_unaffected(
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.dfunaffected_assert_direction_flag_unaffected = Some(assert_direction_flag_unaffected);
 }

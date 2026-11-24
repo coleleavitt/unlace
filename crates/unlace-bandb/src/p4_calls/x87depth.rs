@@ -1,4 +1,4 @@
-//! (kuna) `x87depth` — the x87 register-stack depth at each return.
+//! (unlace) `x87depth` — the x87 register-stack depth at each return.
 //!
 //! SLEIGH models ST0..ST7 as eight fixed registers and every push or pop as a
 //! copy shift, so the p-code has no stack top. A function that calls a
@@ -476,7 +476,7 @@ fn solve(data: &Funcdata, storage: &Storage) -> Option<DepthFacts> {
 pub fn warn(data: &mut Funcdata) {
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::x87depth::X87Depth>()
         .0
     {
@@ -488,8 +488,8 @@ pub fn warn(data: &mut Funcdata) {
     let proto = data.get_func_proto();
     if proto.is_output_locked()
         && !float(proto.get_output_type())
-        && !data.kuna_x87_float_returns.is_empty()
-        && data.kuna_x87_empty_returns.is_empty()
+        && !data.unlace_x87_float_returns.is_empty()
+        && data.unlace_x87_empty_returns.is_empty()
     {
         data.warning_header("x87depth: the function leaves a value on the x87 stack but its return type is not floating-point");
     }
@@ -499,7 +499,7 @@ pub fn warn(data: &mut Funcdata) {
         let Some(addr) = data.obank().get(fc.get_op()).map(|o| o.get_addr().clone()) else {
             continue;
         };
-        if data.kuna_x87_float_calls.contains(&addr)
+        if data.unlace_x87_float_calls.contains(&addr)
             && fc.proto().is_output_locked()
             && !float(fc.proto().get_output_type())
         {
@@ -511,8 +511,8 @@ pub fn warn(data: &mut Funcdata) {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna) The x87 stack depth proves ST0 empty at returns (option
+crate::unlace_flag!(
+    /// (unlace) The x87 stack depth proves ST0 empty at returns (option
     /// `x87depth`). See [`crate::x87depth`].
     X87Depth,
     "x87depth",

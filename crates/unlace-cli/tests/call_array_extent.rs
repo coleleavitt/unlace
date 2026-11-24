@@ -7,7 +7,7 @@ use std::process::Command;
 fn decompile(entry: &str, name: &str, option: &str, local_type: Option<&str>) -> String {
     let xml = &unlace_stagefile::xml_of_toml(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../tests/stages/kuna-call-array-extent.toml"
+        "/../../tests/stages/call-array-extent.toml"
     )))
     .unwrap();
     let chunk =
@@ -76,7 +76,7 @@ fn decompile(entry: &str, name: &str, option: &str, local_type: Option<&str>) ->
     if let Some(local_type) = local_type {
         args.extend(["--assert", local_type]);
     }
-    let (stdout, stderr, status) = common::run_kuna(&args);
+    let (stdout, stderr, status) = common::run_unlace(&args);
     assert_eq!(status, 0, "{stderr}");
     let result: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     assert!(result["functions"][0]["error"].is_null(), "{stdout}");

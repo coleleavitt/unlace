@@ -36,10 +36,10 @@ unsigned named_local(unsigned helper_linkage) { return helper(helper_linkage)+11
         String::from_utf8_lossy(&built.stderr)
     );
     let inventory_args = ["functions", binary.to_str().unwrap(), "--json"];
-    let (before_inventory, inventory_err, inventory_status) = common::run_kuna(&inventory_args);
+    let (before_inventory, inventory_err, inventory_status) = common::run_unlace(&inventory_args);
     assert_eq!(inventory_status, 0, "{inventory_err}");
     let (standalone, err, status) =
-        common::run_kuna(&["decompile", binary.to_str().unwrap(), "helper"]);
+        common::run_unlace(&["decompile", binary.to_str().unwrap(), "helper"]);
     assert_eq!(status, 0, "{err}");
     assert!(
         standalone.contains("helper(unsigned int value)"),
@@ -64,9 +64,10 @@ unsigned named_local(unsigned helper_linkage) { return helper(helper_linkage)+11
         if mode == 2 {
             args.push("--stream");
         }
-        let (out, err, status) = common::run_kuna(&args);
+        let (out, err, status) = common::run_unlace(&args);
         assert_eq!(status, 0, "{out}\n{err}");
-        let (after_inventory, inventory_err, inventory_status) = common::run_kuna(&inventory_args);
+        let (after_inventory, inventory_err, inventory_status) =
+            common::run_unlace(&inventory_args);
         assert_eq!(inventory_status, 0, "{inventory_err}");
         assert_eq!(before_inventory, after_inventory);
         let name = binary.file_name().unwrap().to_str().unwrap();
@@ -190,7 +191,7 @@ fn conflicting_emitted_function_names_are_reported_in_each_execution_mode() {
         if mode == 2 {
             args.push("--stream");
         }
-        let (out, err, status) = common::run_kuna(&args);
+        let (out, err, status) = common::run_unlace(&args);
         assert_eq!(status, 0, "{out}\n{err}");
         let header = std::fs::read_to_string(project.join(format!(
             "{}.h",

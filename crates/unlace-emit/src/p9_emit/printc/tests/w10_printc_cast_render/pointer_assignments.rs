@@ -54,7 +54,7 @@ fn integer_carriers_and_cast_results_assign_to_pointer_members() {
             fd.high_bank_mut()
                 .get_mut(high)
                 .unwrap()
-                .set_kuna_name("value");
+                .set_unlace_name("value");
             let mut frame = Datatype::new_with_align(size * 2, size, type_metatype::TYPE_STRUCT);
             frame.name = "Frame".into();
             frame.display_name = frame.name.clone();
@@ -68,7 +68,7 @@ fn integer_carriers_and_cast_results_assign_to_pointer_members() {
             };
             let high = fd.vbank().get(output).unwrap().get_high().unwrap();
             let high = fd.high_bank_mut().get_mut(high).unwrap();
-            high.set_kuna_name("frame");
+            high.set_unlace_name("frame");
             high.set_symbol_type(Rc::new(frame));
             high.set_symbol_offset(size);
             let mut printer = PrintC::new();

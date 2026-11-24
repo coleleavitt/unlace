@@ -1,0 +1,84 @@
+[image]
+arch = 'MIPS:BE:64:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '03e0000800000000'
+
+# Authored regressions: P2 edge closure and P9 selector normalization
+# under the default `constselectjump reentry` (reentereddispatch.xml holds
+# the `off` pass). Narrowed returns and foreign register copies must preserve
+# dispatcher effects; a second indirect edge must reach the next store. The CLI
+# companion executes all bodies at O0/O2.
+
+[script]
+commands = [
+    'clear architecture',
+    'load raw MIPS:BE:64:octeon-32addr:default 0x400000 0x400000 tests/fixtures/return-value-dispatch/foreign-copy-n32.bin',
+    'function bounds 0x400000 0x400028 as foreign_copy_n32',
+    'map prototype 0x400000 unsigned int foreign_copy_n32(unsigned int value);',
+    'lo fu 0x400000',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load raw MIPS:BE:64:octeon-32addr:default 0x400000 0x400000 tests/fixtures/return-value-dispatch/narrow-n32.bin',
+    'function bounds 0x400000 0x400034 as narrow_n32',
+    'map prototype 0x400000 unsigned int narrow_n32(void);',
+    'lo fu 0x400000',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load raw MIPS:BE:64:octeon:default 0x400000 0x400000 tests/fixtures/return-value-dispatch/foreign-copy-64.bin',
+    'function bounds 0x400000 0x400028 as foreign_copy_64',
+    'map prototype 0x400000 unsigned int foreign_copy_64(unsigned int value);',
+    'lo fu 0x400000',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load raw MIPS:BE:64:octeon:default 0x400000 0x400000 tests/fixtures/return-value-dispatch/narrow-64.bin',
+    'function bounds 0x400000 0x400034 as narrow_64',
+    'map prototype 0x400000 unsigned int narrow_64(void);',
+    'lo fu 0x400000',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load raw MIPS:BE:64:octeon-32addr:default 0x400000 0x400000 tests/fixtures/indirect-dispatch/reentry-n32-r31-2-indirect-reentry.bin',
+    'function bounds 0x400000 0x400044 as edge_n32',
+    'map prototype 0x400000 void edge_n32(unsigned int seed, unsigned int *output);',
+    'lo fu 0x400000',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load raw MIPS:BE:64:octeon:default 0x400000 0x400000 tests/fixtures/indirect-dispatch/reentry-64-r31-2-indirect-reentry.bin',
+    'function bounds 0x400000 0x400044 as edge_64',
+    'map prototype 0x400000 void edge_64(unsigned int seed, unsigned int *output);',
+    'lo fu 0x400000',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'dispatch-values #1: narrowing keeps every dispatch increment'
+count = 2
+regex = 'v[0-9]+ \+= 1;'
+
+[[match]]
+name = 'dispatch-values #2: foreign source update is retained'
+count = 2
+literal = 'value += 7;'
+
+[[match]]
+name = 'dispatch-values #3: indirect re-entry reaches the second store'
+count = 2
+literal = 'output[1] = seed;'
+
+[[match]]
+name = 'dispatch-values #4: no incomplete recovery'
+count = 0
+regex = 'more targets|uninitialized|could not be normalized'

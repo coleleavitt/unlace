@@ -1,10 +1,10 @@
-//! (kuna) `passthrough` — a register a function forwards untouched to a callee
+//! (unlace) `passthrough` — a register a function forwards untouched to a callee
 //! that reads it is a parameter of that function too.
 //!
 //! # The symptom
 //!
 //! gzip -O2 `gzip_base_name` is `endbr64; jmp gzip_last_component` — it hands
-//! its own `rdi` to the callee and returns what the callee returns. kuna recovers
+//! its own `rdi` to the callee and returns what the callee returns. unlace recovers
 //! the callee as `char *sub_dfd0(char *a0)` in the same run, yet prints
 //!
 //! ```text
@@ -142,7 +142,7 @@ use crate::narrowret::FuncdataNarrowretExt;
 use crate::protoorder::FuncdataProtoorderExt;
 use crate::rustabi::FuncdataRustabiExt;
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::marshal::ElementId;
 use unlace_base::space::spacetype;
 use unlace_base::types::int4;
@@ -155,7 +155,7 @@ use crate::funcdata::Funcdata;
 use crate::options::on_or_off;
 use crate::varnode::Varnode;
 
-/// Marshaling element `<passthrough>` (kuna 4000+ range).
+/// Marshaling element `<passthrough>` (unlace 4000+ range).
 pub const ELEM_PASSTHROUGH: ElementId = ElementId::new("passthrough", 4177);
 
 /// `option passthrough on|off`.
@@ -167,7 +167,7 @@ impl OptionPassThrough {
 
     /// Resolve the flag and its confirmation message; the caller writes it into
     /// the registered option `PassThrough`.
-    pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((
@@ -221,11 +221,11 @@ pub fn stated_width(
 ) -> Option<int4> {
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::passthrough::PassThrough>()
         .0
         || size <= 0
-        || data.kuna_passthrough_variadic()
+        || data.unlace_passthrough_variadic()
     {
         return None;
     }
@@ -238,7 +238,7 @@ pub fn stated_width(
         .get(op)
         .map(|o| !o.is_dead() && o.code() == OpCode::CPUI_CALL)
         .unwrap_or(false);
-    if !is_call || !is_register(addr) || data.kuna_passthrough_vararg_calls().contains(&op) {
+    if !is_call || !is_register(addr) || data.unlace_passthrough_vararg_calls().contains(&op) {
         return None;
     }
     let entry = fc.get_entry_address();
@@ -247,12 +247,12 @@ pub fn stated_width(
             return None;
         }
         let seen = data
-            .kuna_entry_reads()
+            .unlace_entry_reads()
             .and_then(|r| r.width(addr))
             .unwrap_or(size)
             .min(size);
         let width = match data
-            .kuna_callee_entry_dead(entry)
+            .unlace_callee_entry_dead(entry)
             .filter(|f| f.is_complete())
         {
             Some(f) => f.live_input_width(addr, size).map_or(seen, |w| w.min(seen)),
@@ -263,7 +263,7 @@ pub fn stated_width(
             .possible_input_param(addr, width)
             .then_some(width);
     }
-    let stated = data.kuna_protoorder_types(entry)?;
+    let stated = data.unlace_protoorder_types(entry)?;
     if stated.vararg_tail.iter().any(|a| a == addr) {
         return None;
     }
@@ -279,8 +279,8 @@ pub fn stated_width(
     let float = stated_type.get_metatype() == crate::dtype::type_metatype::TYPE_FLOAT;
     if !general_purpose(fc.proto(), addr, size) && !float {
         let facts = data
-            .kuna_callee_entry_through(entry)
-            .or_else(|| data.kuna_callee_entry_dead(entry))?;
+            .unlace_callee_entry_through(entry)
+            .or_else(|| data.unlace_callee_entry_dead(entry))?;
         if !stated.arity_sound || !facts.proves_input(addr, size) {
             return None;
         }
@@ -309,8 +309,8 @@ pub fn stated_width(
         return None;
     }
     let facts = data
-        .kuna_callee_entry_through(entry)
-        .or_else(|| data.kuna_callee_entry_dead(entry))
+        .unlace_callee_entry_through(entry)
+        .or_else(|| data.unlace_callee_entry_dead(entry))
         .filter(|f| f.is_complete());
     let seen = stated
         .reads
@@ -343,11 +343,11 @@ fn general_purpose(proto: &crate::fspec::FuncProto, addr: &Address, size: int4) 
 /// decode reads it, or it hands it to a declared parameter; without a complete
 /// decode, its first heritage saw it read ([`crate::entryreads`]).
 fn self_takes(data: &Funcdata, addr: &Address, size: int4) -> bool {
-    let Some(own) = data.kuna_entry_reads() else {
+    let Some(own) = data.unlace_entry_reads() else {
         return false;
     };
     match data
-        .kuna_callee_entry_dead(data.get_address())
+        .unlace_callee_entry_dead(data.get_address())
         .filter(|f| f.is_complete())
     {
         Some(f) => {
@@ -363,7 +363,7 @@ fn self_takes(data: &Funcdata, addr: &Address, size: int4) -> bool {
 /// of its model up to the first its own body does not read.
 fn stated_registers(data: &Funcdata, entry: &Address) -> Option<Vec<Address>> {
     if entry == data.get_address() {
-        data.kuna_entry_reads()?;
+        data.unlace_entry_reads()?;
         let proto = data.get_func_proto();
         if !proto.has_model() {
             return None;
@@ -384,7 +384,7 @@ fn stated_registers(data: &Funcdata, entry: &Address) -> Option<Vec<Address>> {
         return Some(out);
     }
     Some(
-        data.kuna_protoorder_types(entry)?
+        data.unlace_protoorder_types(entry)?
             .inputs
             .iter()
             .map(|(a, _, _)| a.clone())
@@ -672,7 +672,7 @@ pub fn claim_untouched_registers(data: &mut Funcdata) {
     claim_untouched_registers_mode(data, ClaimPass::Initial)
 }
 
-/// (kuna callee-contract) [`claim_untouched_registers`] re-run after a callee's
+/// (unlace callee-contract) [`claim_untouched_registers`] re-run after a callee's
 /// statement arrived mid-pipeline (the P4 trial-storage bootstrap).
 ///
 /// The first run at `ActionFuncLink` could not know the callee, and by now the
@@ -697,7 +697,7 @@ pub fn claim_after_go_stack_guard(data: &mut Funcdata) {
     let proto = data.get_func_proto();
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::passthrough::PassThrough>()
         .0
         || !data.get_arch().source_lang.is_go()
@@ -728,7 +728,7 @@ fn go_register_model(proto: &crate::fspec::FuncProto) -> bool {
 fn claim_untouched_registers_mode(data: &mut Funcdata, pass: ClaimPass) {
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::passthrough::PassThrough>()
         .0
     {
@@ -736,9 +736,9 @@ fn claim_untouched_registers_mode(data: &mut Funcdata, pass: ClaimPass) {
     }
     let after_go_stack_guard = pass == ClaimPass::GoStackGuard;
     if !after_go_stack_guard {
-        data.kuna_set_passthrough_variadic(reads_the_vararg_count(data));
+        data.unlace_set_passthrough_variadic(reads_the_vararg_count(data));
     }
-    if data.kuna_passthrough_variadic() {
+    if data.unlace_passthrough_variadic() {
         return;
     }
     let returned_call_result = if after_go_stack_guard {
@@ -757,13 +757,13 @@ fn claim_untouched_registers_mode(data: &mut Funcdata, pass: ClaimPass) {
             .filter(|&i| set_up_as_variadic(data, i))
             .map(|i| data.get_call_specs(i).get_op())
             .collect();
-        data.kuna_set_passthrough_vararg_calls(vararg);
+        data.unlace_set_passthrough_vararg_calls(vararg);
     }
     let first = first_calls(data);
     let mut claims = if pass == ClaimPass::Initial {
         Vec::new()
     } else {
-        data.kuna_passthrough_claims().to_vec()
+        data.unlace_passthrough_claims().to_vec()
     };
     for idx in 0..data.num_calls() {
         if !data.get_call_specs(idx).is_input_active()
@@ -772,7 +772,7 @@ fn claim_untouched_registers_mode(data: &mut Funcdata, pass: ClaimPass) {
             continue;
         }
         let entry = data.get_call_specs(idx).get_entry_address().clone();
-        let stated: Vec<(Address, int4)> = match data.kuna_protoorder_types(&entry) {
+        let stated: Vec<(Address, int4)> = match data.unlace_protoorder_types(&entry) {
             Some(s) => s.inputs.iter().map(|(a, sz, _)| (a.clone(), *sz)).collect(),
             None => continue,
         };
@@ -849,7 +849,7 @@ fn claim_untouched_registers_mode(data: &mut Funcdata, pass: ClaimPass) {
     if let Some(ret) = returned_call_result {
         claim_tail_return(data, &mut claims, ret);
     }
-    data.kuna_set_passthrough_claims(claims);
+    data.unlace_set_passthrough_claims(claims);
 }
 
 /// Is `vn`, read by a call, the function's own incoming register `addr:size`
@@ -934,7 +934,7 @@ fn call_leaves_alone(
     let entry = fc.get_entry_address();
     !entry.is_invalid()
         && fc.plt_stub().is_none()
-        && data.kuna_callee_ret_writes(entry).is_some_and(|w| {
+        && data.unlace_callee_ret_writes(entry).is_some_and(|w| {
             w.proves_untouched_for(crate::rustabi::call_model(fc.proto()), addr, size)
         })
 }
@@ -977,7 +977,7 @@ fn no_hole_before(
     if pos == 0 {
         return true;
     }
-    let Some(facts) = data.kuna_callee_entry_dead(data.get_address()) else {
+    let Some(facts) = data.unlace_callee_entry_dead(data.get_address()) else {
         return true;
     };
     stated[..pos]
@@ -1065,7 +1065,7 @@ fn stated_tail_return(data: &Funcdata) -> Option<(Vec<(Address, int4)>, Vec<OpId
     let mut widths: Vec<(int4, bool)> = Vec::new();
     let narrow_tails = data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::narrowret::NarrowRet>()
         .0
         && !data
@@ -1075,7 +1075,7 @@ fn stated_tail_return(data: &Funcdata) -> Option<(Vec<(Address, int4)>, Vec<OpId
             .is_some_and(|c| c.is_big_endian());
     let beside_own = data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::mixedtailret::MixedTailRet>()
         .0;
     for &r in &rets {
@@ -1092,12 +1092,12 @@ fn stated_tail_return(data: &Funcdata) -> Option<(Vec<(Address, int4)>, Vec<OpId
             return None;
         }
         let (addr, size, _) = data
-            .kuna_protoorder_types(fc.get_entry_address())?
+            .unlace_protoorder_types(fc.get_entry_address())?
             .output
             .clone()?;
         let zero_extended = narrow_tails
             && fc.get_entry_address().get_space().is_some_and(|sp| {
-                data.kuna_narrowret((sp.get_index(), fc.get_entry_address().get_offset()))
+                data.unlace_narrowret((sp.get_index(), fc.get_entry_address().get_offset()))
                     .is_some_and(|n| n.addr == addr && n.size == size)
             });
         widths.push((size, zero_extended));
@@ -1288,7 +1288,7 @@ fn claim_tail_return(
 pub fn returns_tail_result(data: &Funcdata, vn: VarnodeId, addr: &Address, size: int4) -> bool {
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::passthrough::PassThrough>()
         .0
     {
@@ -1319,7 +1319,7 @@ pub fn returns_tail_result(data: &Funcdata, vn: VarnodeId, addr: &Address, size:
         return false;
     };
     let call = OpId::from(slotmap::KeyData::from_ffi(iop.get_offset()));
-    data.kuna_passthrough_claims()
+    data.unlace_passthrough_claims()
         .iter()
         .any(|c| c.addr == *addr && c.size == size && c.ret_owners.contains(&call))
 }
@@ -1340,7 +1340,7 @@ fn is_low_piece(data: &Funcdata, op: OpId) -> bool {
 /// Is `[addr, addr+size)` a register of a tail call's result this pass claimed
 /// as the function's return value?
 fn is_tail_return_piece(data: &Funcdata, addr: &Address, size: int4) -> bool {
-    data.kuna_passthrough_claims()
+    data.unlace_passthrough_claims()
         .iter()
         .any(|c| c.addr == *addr && c.size == size && !c.ret_owners.is_empty())
 }
@@ -1362,7 +1362,7 @@ fn is_tail_return_piece(data: &Funcdata, addr: &Address, size: int4) -> bool {
 pub fn keep_tail_return_whole(data: &Funcdata, active: &mut crate::fspec::ParamActive) {
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::passthrough::PassThrough>()
         .0
     {
@@ -1510,14 +1510,14 @@ pub fn tail_return_type(
 ) -> Option<std::rc::Rc<crate::dtype::Datatype>> {
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::passthrough::PassThrough>()
         .0
     {
         return None;
     }
     if !data
-        .kuna_passthrough_claims()
+        .unlace_passthrough_claims()
         .iter()
         .any(|c| c.ret_owners.contains(&op))
     {
@@ -1527,7 +1527,7 @@ pub fn tail_return_type(
         .map(|i| data.get_call_specs(i))
         .find(|fc| fc.get_op() == op)?;
     let (_, osize, ct) = data
-        .kuna_protoorder_types(fc.get_entry_address())?
+        .unlace_protoorder_types(fc.get_entry_address())?
         .output
         .as_ref()?;
     (*osize == size && ct.get_size() == size).then(|| std::rc::Rc::clone(ct))
@@ -1546,7 +1546,7 @@ pub fn tail_return_type(
 /// visited, and an earlier call keeps the return value a later read of the
 /// range asks for (a Cortex-M `double` returned in r0:r1).
 pub fn suppresses_return_trial(data: &Funcdata, addr: &Address, size: int4) -> bool {
-    overlaps_claim(data.kuna_passthrough_claims(), addr, size)
+    overlaps_claim(data.unlace_passthrough_claims(), addr, size)
 }
 
 /// Does `[addr, addr+size)` share a byte with any claimed range?
@@ -1575,10 +1575,10 @@ fn overlaps_claim(claims: &[PassThroughClaim], addr: &Address, size: int4) -> bo
 /// off as well, and they are scored as they are there.
 pub fn claimed_range(data: &Funcdata, addr: &Address, size: int4) -> bool {
     data.get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::passthrough::PassThrough>()
         .0
-        && holds_trials(data.kuna_passthrough_claims(), addr, size)
+        && holds_trials(data.unlace_passthrough_claims(), addr, size)
 }
 
 /// Is the value the call `op` reads in `slot` the function's own incoming
@@ -1599,7 +1599,7 @@ pub fn forwarded_in_place(
 ) -> bool {
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::passthrough::PassThrough>()
         .0
     {
@@ -1887,7 +1887,7 @@ pub fn ends_rescued_run(active: &ParamActive, trial: &ParamTrial, is_spacebase: 
 pub fn saves_own_register(data: &Funcdata, op: OpId, slot: int4, addr: &Address) -> bool {
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::passthrough::PassThrough>()
         .0
         || addr
@@ -1928,7 +1928,7 @@ pub fn neutral_scope(
 ) -> Option<NeutralScope> {
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::passthrough::PassThrough>()
         .0
     {
@@ -1944,8 +1944,8 @@ pub fn neutral_scope(
         && entry != data.get_address();
     let mut untaken = Vec::new();
     if direct && fc.proto().has_model() {
-        let stated = data.kuna_protoorder_types(entry);
-        let probe = data.kuna_callee_entry_dead(entry);
+        let stated = data.unlace_protoorder_types(entry);
+        let probe = data.unlace_callee_entry_dead(entry);
         for e in fc.proto().model().input().get_entry() {
             if e.get_space().get_type() != spacetype::IPTR_PROCESSOR {
                 continue;
@@ -1995,7 +1995,7 @@ pub struct PendingPassThrough {
 pub fn capture(fc: &mut FuncCallSpecs, data: &Funcdata) -> Option<PendingPassThrough> {
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::passthrough::PassThrough>()
         .0
     {
@@ -2186,7 +2186,7 @@ pub fn truncate_before(
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.passthrough_claim_after_go_stack_guard = Some(claim_after_go_stack_guard);
     hooks.passthrough_anchors_neutral_run = Some(anchors_neutral_run);
     hooks.passthrough_ends_rescued_run = Some(ends_rescued_run);
@@ -2194,41 +2194,41 @@ pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.passthrough_suppresses_return_trial = Some(suppresses_return_trial);
 }
 
-/// (kuna `passthrough`) The register ranges `ActionFuncLink` made visible to heritage for a
+/// (unlace `passthrough`) The register ranges `ActionFuncLink` made visible to heritage for a
 /// call whose callee states them, with the calls that own each; reset by `Funcdata::clear`.
 #[derive(Default)]
 struct ClaimsSlot(Vec<crate::passthrough::PassThroughClaim>);
-crate::kuna_func_state!(ClaimsSlot, keep_across_clear: false);
+crate::unlace_func_state!(ClaimsSlot, keep_across_clear: false);
 
-/// The `kuna_passthrough` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// The `unlace_passthrough` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataPassthroughExt {
-    /// (kuna `passthrough`) Record the register ranges claimed at `ActionFuncLink`.
-    fn kuna_set_passthrough_claims(&mut self, claims: Vec<crate::passthrough::PassThroughClaim>);
-    /// (kuna `passthrough`) The register ranges claimed at `ActionFuncLink`.
-    fn kuna_passthrough_claims(&self) -> &[crate::passthrough::PassThroughClaim];
+    /// (unlace `passthrough`) Record the register ranges claimed at `ActionFuncLink`.
+    fn unlace_set_passthrough_claims(&mut self, claims: Vec<crate::passthrough::PassThroughClaim>);
+    /// (unlace `passthrough`) The register ranges claimed at `ActionFuncLink`.
+    fn unlace_passthrough_claims(&self) -> &[crate::passthrough::PassThroughClaim];
 }
 
 impl FuncdataPassthroughExt for crate::funcdata::Funcdata {
-    /// (kuna `passthrough`) Record the register ranges claimed at `ActionFuncLink`.
-    fn kuna_set_passthrough_claims(&mut self, claims: Vec<crate::passthrough::PassThroughClaim>) {
-        self.kuna_state_mut::<ClaimsSlot>().0 = claims;
+    /// (unlace `passthrough`) Record the register ranges claimed at `ActionFuncLink`.
+    fn unlace_set_passthrough_claims(&mut self, claims: Vec<crate::passthrough::PassThroughClaim>) {
+        self.unlace_state_mut::<ClaimsSlot>().0 = claims;
     }
-    /// (kuna `passthrough`) The register ranges claimed at `ActionFuncLink`.
-    fn kuna_passthrough_claims(&self) -> &[crate::passthrough::PassThroughClaim] {
-        &self.kuna_state::<ClaimsSlot>().0
+    /// (unlace `passthrough`) The register ranges claimed at `ActionFuncLink`.
+    fn unlace_passthrough_claims(&self) -> &[crate::passthrough::PassThroughClaim] {
+        &self.unlace_state::<ClaimsSlot>().0
     }
 }
 
-/// (kuna) A register forwarded untouched to a callee whose recovered
+/// (unlace) A register forwarded untouched to a callee whose recovered
 /// prototype reads it becomes a parameter (option `passthrough`).  See
 /// [`crate::passthrough`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct PassThrough(pub bool);
 
-impl crate::optionset::KunaOption for PassThrough {
+impl crate::optionset::UnlaceOption for PassThrough {
     const NAME: &'static str = "passthrough";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         PassThrough(true)
@@ -2238,7 +2238,7 @@ impl crate::optionset::KunaOption for PassThrough {
         PassThrough(true)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (v, msg) = crate::passthrough::OptionPassThrough.apply(value)?;
         Ok((PassThrough(v), msg))
     }

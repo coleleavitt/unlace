@@ -27,7 +27,7 @@ fn storage_transfers_preserve_float_bits_and_numeric_conversions_keep_their_valu
             "arm",
             Architecture::Arm,
             false,
-            include_str!("../../../tests/stages/kuna-bit-reinterpret-arm.toml"),
+            include_str!("../../../tests/stages/bit-reinterpret-arm.toml"),
             &[
                 ("bits32", 0, 12),
                 ("unbits32", 12, 8),
@@ -41,7 +41,7 @@ fn storage_transfers_preserve_float_bits_and_numeric_conversions_keep_their_valu
             "thumb",
             Architecture::Arm,
             true,
-            include_str!("../../../tests/stages/kuna-bit-reinterpret-thumb.toml"),
+            include_str!("../../../tests/stages/bit-reinterpret-thumb.toml"),
             &[
                 ("bits32", 0, 10),
                 ("unbits32", 12, 12),
@@ -55,7 +55,7 @@ fn storage_transfers_preserve_float_bits_and_numeric_conversions_keep_their_valu
             "x64",
             Architecture::X86_64,
             false,
-            include_str!("../../../tests/stages/kuna-bit-reinterpret-x64.toml"),
+            include_str!("../../../tests/stages/bit-reinterpret-x64.toml"),
             &[
                 ("bits32", 0, 15),
                 ("unbits32", 16, 9),

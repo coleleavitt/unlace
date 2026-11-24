@@ -1,0 +1,49 @@
+# `ppc32picimports-reversed-save.toml` preserves the returning continuation when an unaligned
+# reversed store overlaps the saved PIC base. Its CLI companion covers both byte orders and a
+# neighboring-store control that still recovers the terminal import.
+
+[image]
+arch = 'PowerPC:LE:32:default'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = '2000804e'
+
+[script]
+commands = [
+    'option ppc32picimports off',
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/ppc32-pic-reversed-save.elf',
+    'read symbols',
+    'load function check',
+    'decompile',
+    'print C',
+    'option ppc32picimports abi',
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/ppc32-pic-reversed-save.elf',
+    'read symbols',
+    'load function check',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'reversed save overlap retains both caller returns'
+count = 2
+literal = 'return 7;'
+
+[[match]]
+name = 'reversed save overlap keeps the stub unnamed'
+count = 2
+literal = 'sub_1800('
+
+[[match]]
+name = 'reversed save overlap grants no terminal contract'
+count = 0
+regex = '__stack_chk_fail\(|no-return'

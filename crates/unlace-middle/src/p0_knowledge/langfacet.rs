@@ -1,9 +1,9 @@
-//! (kuna) Language facets — what a C-shaped type *means* in the binary's
+//! (unlace) Language facets — what a C-shaped type *means* in the binary's
 //! source language (`docs/multilang.md` W3).
 //!
 //! A Rust `&str`, a Rust `&[T]` and a Go `string` all reach the decompiler as
 //! an ordinary sized struct (`{ptr, len}` words) or as its two words moved
-//! separately; nothing in the `type_metatype` lattice can say which. kuna
+//! separately; nothing in the `type_metatype` lattice can say which. unlace
 //! never extends the metatype enum for this — its ~3,700 consumers match it
 //! non-exhaustively, so a new variant would silently take default branches
 //! (`dwarfvariants.rs` documents the same decision). Instead a facet is
@@ -15,7 +15,7 @@
 //!
 //! Facets are registered by type providers — DWARF import, a language pack's
 //! synthesized shells — through [`crate::dtype::TypeFactory`]'s
-//! `kuna_register_lang_facet`, and survive `clear_noncore` exactly as
+//! `unlace_register_lang_facet`, and survive `clear_noncore` exactly as
 //! `VariantLayout` records do (both key by name, not by interned identity).
 
 /// What a named type means in the source language.

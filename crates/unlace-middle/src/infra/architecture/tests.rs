@@ -3,7 +3,7 @@
 //! Two strands:
 //!   1. **Defaults + flags + naming**: a minimal `Architecture` over a fresh
 //!      (uninitialized) Sleigh — exercises the verbatim `resetDefaultsInternal`
-//!      transcription, the kuna anchor flags, `nameFunction`, and the warning
+//!      transcription, the unlace anchor flags, `nameFunction`, and the warning
 //!      sink without needing a built `.sla`.
 //!   2. **Real-`.sla` bootstrap**: builds an `Architecture` over a Sleigh with a
 //!      decoded `.sla` (skips gracefully when specs are unbuilt), then lifts a

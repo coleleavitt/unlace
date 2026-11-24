@@ -1,4 +1,4 @@
-//! (kuna) `LC_DATA_IN_CODE`: the data a Mach-O's toolchain recorded inside its
+//! (unlace) `LC_DATA_IN_CODE`: the data a Mach-O's toolchain recorded inside its
 //! code, as address ranges.
 //!
 //! clang places an x86-64 switch's jump table and a Thumb `tbb`/`tbh` table in

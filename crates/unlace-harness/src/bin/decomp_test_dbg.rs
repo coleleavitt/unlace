@@ -13,7 +13,7 @@
 //!   return failedTests (clamped at 255 by add_exit_code)
 //! ```
 //!
-//! The two output streams the Python harness (`kuna/run_tests.py`) parses:
+//! The two output streams the Python harness (`unlace/run_tests.py`) parses:
 //!   - **stderr**: `testing : <name> ...` / `  passed.` / `  fail` /
 //!     `N/M tests passed.` (the unit-test grammar).
 //!   - **stdout**: `Success -- <name>` / `FAIL -- <name>` /
@@ -45,7 +45,7 @@ fn main() -> ExitCode {
     // C++ defaults; the Python harness always passes -path and -sleighpath.
     let mut dirname = String::from("../datatests");
     let mut spec_roots: Vec<String> = Vec::new();
-    // kuna: `-j N` runs the datatests across N worker processes; `-worker` is one of them.
+    // unlace: `-j N` runs the datatests across N worker processes; `-worker` is one of them.
     let mut jobs = 1usize;
     let mut worker = false;
 
@@ -106,7 +106,7 @@ fn main() -> ExitCode {
     }
 
     // SLEIGHHOME is the load-bearing spec-root the Python harness sets even
-    // without -usesleighenv; honor it (kuna/run_tests.py sets it indirectly via
+    // without -usesleighenv; honor it (unlace/run_tests.py sets it indirectly via
     // -sleighpath, but allow either).
     if let Ok(home) = std::env::var("SLEIGHHOME") {
         if !home.is_empty() && !spec_roots.contains(&home) {

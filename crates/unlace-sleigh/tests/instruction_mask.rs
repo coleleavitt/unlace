@@ -17,7 +17,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_sleigh::globalcontext::ContextInternal;
 use unlace_sleigh::loadimage::LoadImage;
 use unlace_sleigh::sleigh::{OpObject, Sleigh};
@@ -40,7 +40,7 @@ impl LoadImage for MemImg {
     fn get_file_name(&self) -> &str {
         "memimg"
     }
-    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> KunaResult<()> {
+    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> UnlaceResult<()> {
         let base = addr.get_offset();
         for (i, b) in ptr.iter_mut().enumerate() {
             let a = base.wrapping_add(i as u64);
@@ -64,8 +64,8 @@ impl LoadImage for MissingImg {
     fn get_file_name(&self) -> &str {
         "missing"
     }
-    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> KunaResult<()> {
-        Err(KunaError::data_unavail("missing"))
+    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> UnlaceResult<()> {
+        Err(UnlaceError::data_unavail("missing"))
     }
     fn get_arch_type(&self) -> Vec<u8> {
         Vec::new()

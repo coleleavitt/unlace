@@ -1,5 +1,5 @@
 //! Regression gate for the instruction-buffer tail read in
-//! `ParserContext::getInstructionBytes` / `getInstructionBits` (kuna GH-271).
+//! `ParserContext::getInstructionBytes` / `getInstructionBits` (unlace GH-271).
 //!
 //! `ParserContext` buffers `MAX_INSTRUCTION_LEN` (32) bytes, and both accessors
 //! guard only the *start* byte of a read against that bound before pulling a
@@ -7,7 +7,7 @@
 //! pattern in `sizeof(uintm)` chunks whatever the pattern's real width, so
 //! matching a 15-byte instruction issues a 4-byte read at offset 13 — one byte
 //! past `buf`. Upstream reads adjacent struct memory there (UB) and the caller's
-//! mask discards it; kuna raised `BadData` instead, which aborted the decode of
+//! mask discards it; unlace raised `BadData` instead, which aborted the decode of
 //! a valid instruction.
 //!
 //! The witness is clang's 15-byte loop-alignment NOP
@@ -21,7 +21,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 use unlace_sleigh::globalcontext::ContextInternal;
@@ -47,7 +47,7 @@ impl LoadImage for MemImg {
     fn get_file_name(&self) -> &str {
         "mem"
     }
-    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> KunaResult<()> {
+    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> UnlaceResult<()> {
         let start = addr.get_offset();
         for (i, b) in ptr.iter_mut().enumerate() {
             let a = start.wrapping_add(i as u64);
@@ -95,8 +95,8 @@ impl LoadImage for DummyImg {
     fn get_file_name(&self) -> &str {
         "dummy"
     }
-    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> KunaResult<()> {
-        Err(KunaError::data_unavail("dummy"))
+    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> UnlaceResult<()> {
+        Err(UnlaceError::data_unavail("dummy"))
     }
     fn get_arch_type(&self) -> Vec<u8> {
         Vec::new()

@@ -32,7 +32,7 @@ int main(int argc, char **argv) { dispatch(argv[0][0], argv[0]); return 0; }
 fn callers(binary: &std::path::Path, callee: &str, extra: &[&str]) -> Vec<String> {
     let mut args = vec!["xrefs", binary.to_str().unwrap(), "--to", callee, "--json"];
     args.extend_from_slice(extra);
-    let (stdout, stderr, rc) = common::run_kuna(&args);
+    let (stdout, stderr, rc) = common::run_unlace(&args);
     assert_eq!(rc, 0, "{stderr}\n{stdout}");
     let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     parsed["xrefs"]
@@ -173,7 +173,7 @@ int main(int argc, char **argv)
 
 /// The `coverage.notes` of `unlace xrefs --from function`.
 fn notes_from(binary: &std::path::Path, function: &str) -> Vec<String> {
-    let (stdout, stderr, rc) = common::run_kuna(&[
+    let (stdout, stderr, rc) = common::run_unlace(&[
         "xrefs",
         binary.to_str().unwrap(),
         "--from",

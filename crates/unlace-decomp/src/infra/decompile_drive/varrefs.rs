@@ -235,7 +235,7 @@ mod tests {
         fd.high_bank_mut()
             .get_mut(high)
             .unwrap()
-            .set_kuna_name("selected");
+            .set_unlace_name("selected");
         let mut selected = variable(-4, 4);
         selected.name = "selected".into();
         let ambiguous = variable(-4, 4);

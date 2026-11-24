@@ -1,4 +1,4 @@
-//! (kuna `passthrough`) The incoming registers a function's own body reads.
+//! (unlace `passthrough`) The incoming registers a function's own body reads.
 //!
 //! Right after the first heritage every register the body reads before writing
 //! it is an input Varnode, and its readers say how it is used ([`capture`]). A
@@ -97,7 +97,7 @@ fn declared_param(data: &Funcdata, op: OpId, slot: int4) -> bool {
 
 /// Take the snapshot (once per decompile, after the first heritage).
 pub fn capture(data: &mut Funcdata) {
-    if data.kuna_entry_reads().is_some() {
+    if data.unlace_entry_reads().is_some() {
         return;
     }
     let mut out = EntryReads::default();
@@ -199,7 +199,7 @@ pub fn capture(data: &mut Funcdata) {
             }
         }
     }
-    data.kuna_set_entry_reads(out);
+    data.unlace_set_entry_reads(out);
 }
 
 /// The incoming register a `PIECE` puts back together from the pieces heritage
@@ -368,10 +368,10 @@ fn low_demand(data: &Funcdata, vn: VarnodeId, seen: &mut Vec<VarnodeId>, budget:
 pub fn callee_reads(data: &Funcdata, entry: &Address) -> Option<Vec<(Address, int4)>> {
     if entry == data.get_address() {
         return data
-            .kuna_entry_reads()
+            .unlace_entry_reads()
             .map(|r| r.read.iter().chain(&r.declared).cloned().collect());
     }
-    data.kuna_protoorder_types(entry).map(|s| s.reads.clone())
+    data.unlace_protoorder_types(entry).map(|s| s.reads.clone())
 }
 
 /// The registers the callee at `entry` reads only by handing them on
@@ -380,11 +380,11 @@ pub fn callee_reads(data: &Funcdata, entry: &Address) -> Option<Vec<(Address, in
 pub fn callee_passes(data: &Funcdata, entry: &Address) -> Vec<(Address, int4)> {
     if entry == data.get_address() {
         return data
-            .kuna_entry_reads()
+            .unlace_entry_reads()
             .map(|r| r.declared.clone())
             .unwrap_or_default();
     }
-    data.kuna_protoorder_types(entry)
+    data.unlace_protoorder_types(entry)
         .map(|s| s.passes.clone())
         .unwrap_or_default()
 }
@@ -400,12 +400,12 @@ pub fn callee_takes(
     size: int4,
     strict: bool,
 ) -> bool {
-    let Some(stated) = data.kuna_protoorder_types(entry) else {
+    let Some(stated) = data.unlace_protoorder_types(entry) else {
         return false;
     };
     let facts = data
-        .kuna_callee_entry_through(entry)
-        .or_else(|| data.kuna_callee_entry_dead(entry))
+        .unlace_callee_entry_through(entry)
+        .or_else(|| data.unlace_callee_entry_dead(entry))
         .filter(|f| f.is_complete());
     match facts {
         Some(f) => {
@@ -472,29 +472,29 @@ pub fn reads_through(
     (all, passes)
 }
 
-/// (kuna `passthrough`) The incoming registers the first heritage saw the body read; reset by
+/// (unlace `passthrough`) The incoming registers the first heritage saw the body read; reset by
 /// `Funcdata::clear`.
 #[derive(Default)]
 struct ReadsSlot(Option<crate::entryreads::EntryReads>);
-crate::kuna_func_state!(ReadsSlot, keep_across_clear: false);
+crate::unlace_func_state!(ReadsSlot, keep_across_clear: false);
 
-/// The `kuna_entryreads` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// The `unlace_entryreads` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataEntryreadsExt {
-    /// (kuna `passthrough`) Record what the first heritage saw the body read.
-    fn kuna_set_entry_reads(&mut self, reads: crate::entryreads::EntryReads);
-    /// (kuna `passthrough`) The incoming registers the body reads, once heritage ran.
-    fn kuna_entry_reads(&self) -> Option<&crate::entryreads::EntryReads>;
+    /// (unlace `passthrough`) Record what the first heritage saw the body read.
+    fn unlace_set_entry_reads(&mut self, reads: crate::entryreads::EntryReads);
+    /// (unlace `passthrough`) The incoming registers the body reads, once heritage ran.
+    fn unlace_entry_reads(&self) -> Option<&crate::entryreads::EntryReads>;
 }
 
 impl FuncdataEntryreadsExt for crate::funcdata::Funcdata {
-    /// (kuna `passthrough`) Record what the first heritage saw the body read.
-    fn kuna_set_entry_reads(&mut self, reads: crate::entryreads::EntryReads) {
-        self.kuna_state_mut::<ReadsSlot>().0 = Some(reads);
+    /// (unlace `passthrough`) Record what the first heritage saw the body read.
+    fn unlace_set_entry_reads(&mut self, reads: crate::entryreads::EntryReads) {
+        self.unlace_state_mut::<ReadsSlot>().0 = Some(reads);
     }
-    /// (kuna `passthrough`) The incoming registers the body reads, once heritage ran.
-    fn kuna_entry_reads(&self) -> Option<&crate::entryreads::EntryReads> {
-        self.kuna_state::<ReadsSlot>().0.as_ref()
+    /// (unlace `passthrough`) The incoming registers the body reads, once heritage ran.
+    fn unlace_entry_reads(&self) -> Option<&crate::entryreads::EntryReads> {
+        self.unlace_state::<ReadsSlot>().0.as_ref()
     }
 }
 

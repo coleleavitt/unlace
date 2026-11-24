@@ -52,7 +52,7 @@ whether or not `castimplied` is on.
 
 - `castternary/tests.rs`: the conversions (`usual`, `common`), the pair
   choice (`choose`), and literal typing (`literal_type`), including ILP32/LLP64.
-- `tests/stages/kuna-castternary.toml`: two passes over a base64 quantum and five
+- `tests/stages/castternary.toml`: two passes over a base64 quantum and five
   small functions (`option iteexpr on` in both passes).
 - `kuna-cli/tests/decompile_all_cli.rs`
   `a_conditional_arm_cast_round_trips_through_the_printed_c`: the printed

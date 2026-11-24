@@ -23,7 +23,7 @@ use std::fmt;
 use std::rc::Rc;
 
 use crate::address::{AddrSpacePtr, Address, calc_mask};
-use crate::error::{KunaError, KunaResult};
+use crate::error::{UnlaceError, UnlaceResult};
 use crate::marshal::{
     ATTRIB_BIGENDIAN, ATTRIB_INDEX, ATTRIB_NAME, ATTRIB_OFFSET, ATTRIB_SIZE, ATTRIB_SPACE,
     ATTRIB_UNKNOWN, ATTRIB_WORDSIZE, AttributeId, Decoder, ElementId, Encoder, cxx_strtoul,
@@ -255,7 +255,7 @@ pub trait RegisterLookup {
     /// C++ `Translate::getRegister`: get a register as a storage triple
     /// given its name.  Errs (C++ throws `SleighError`, a `LowlevelError`)
     /// if the register does not exist.
-    fn get_register(&self, nm: &str) -> KunaResult<VarnodeStorage>;
+    fn get_register(&self, nm: &str) -> UnlaceResult<VarnodeStorage>;
 
     /// Speculative form of [`RegisterLookup::get_register`]: ask whether `nm`
     /// resolves *here*, cheaply and without side effects.
@@ -281,8 +281,8 @@ pub trait RegisterLookup {
 }
 
 /// The error for register access before a [`RegisterLookup`] is installed.
-pub fn no_register_lookup_err() -> KunaError {
-    KunaError::lowlevel(
+pub fn no_register_lookup_err() -> UnlaceError {
+    UnlaceError::lowlevel(
         "kuna rust port: no Translate/register lookup installed in the AddrSpaceManager",
     )
 }
@@ -317,7 +317,7 @@ pub trait AddressResolver {
         sz: i32,
         point: &Address,
         full_encoding: &mut u64,
-    ) -> KunaResult<Address>;
+    ) -> UnlaceResult<Address>;
 }
 
 // ---------------------------------------------------------------------------
@@ -587,7 +587,7 @@ impl JoinState {
     /// range starts exactly at \e offset.  The offset must originally have
     /// come from a JoinRecord returned by `find_add_join`, otherwise this
     /// method errs.
-    fn find_join(&self, offset: u64) -> KunaResult<Rc<JoinRecord>> {
+    fn find_join(&self, offset: u64) -> UnlaceResult<Rc<JoinRecord>> {
         let mut min: i32 = 0;
         let mut max: i32 = self.splitlist.len() as i32 - 1; // cast: int4 in C++
         while min <= max {
@@ -604,7 +604,7 @@ impl JoinState {
                 max = mid - 1;
             }
         }
-        Err(KunaError::lowlevel("Unlinked join address"))
+        Err(UnlaceError::lowlevel("Unlinked join address"))
     }
 }
 
@@ -694,7 +694,7 @@ enum AddrSpaceKind {
 pub struct AddrSpace {
     /// Type of space (PROCESSOR, CONSTANT, INTERNAL, ...)
     type_: spacetype,
-    // (kuna rust) C++ `manage`/`trans` back-pointers are not stored; see
+    // (unlace rust) C++ `manage`/`trans` back-pointers are not stored; see
     // module docs.
     /// Number of managers using this space
     refcount: Cell<i32>,
@@ -837,7 +837,7 @@ impl AddrSpace {
         self.flags.set(self.flags.get() & !flags);
     }
 
-    /// (kuna) Set the minimum pointer size outright, so a caller that marked
+    /// (unlace) Set the minimum pointer size outright, so a caller that marked
     /// near pointers can take the marking back.
     pub fn set_minimum_pointer_size(&self, size: i32) {
         self.minimum_pointer_size.set(size);
@@ -1061,20 +1061,20 @@ impl AddrSpace {
     /// Get a base register that creates this virtual space (C++
     /// `getSpacebase`, returning a `const VarnodeData &`; the Rust port
     /// returns a clone of the triple).
-    pub fn get_spacebase(&self, i: i32) -> KunaResult<VarnodeStorage> {
+    pub fn get_spacebase(&self, i: i32) -> UnlaceResult<VarnodeStorage> {
         match &self.kind {
             // SpacebaseSpace::getSpacebase
             AddrSpaceKind::Spacebase { state, .. } => {
                 let state = state.borrow();
                 if !state.hasbaseregister || i != 0 {
-                    return Err(KunaError::lowlevel(format!(
+                    return Err(UnlaceError::lowlevel(format!(
                         "No base register specified for space: {}",
                         self.get_name()
                     )));
                 }
                 Ok(state.baseloc.clone())
             }
-            _ => Err(KunaError::lowlevel(format!(
+            _ => Err(UnlaceError::lowlevel(format!(
                 "{} space is not virtual and has no associated base register",
                 self.get_name()
             ))),
@@ -1083,20 +1083,20 @@ impl AddrSpace {
 
     /// Return the original spacebase register before truncation (C++
     /// `getSpacebaseFull`; returns a clone of the triple).
-    pub fn get_spacebase_full(&self, i: i32) -> KunaResult<VarnodeStorage> {
+    pub fn get_spacebase_full(&self, i: i32) -> UnlaceResult<VarnodeStorage> {
         match &self.kind {
             // SpacebaseSpace::getSpacebaseFull
             AddrSpaceKind::Spacebase { state, .. } => {
                 let state = state.borrow();
                 if !state.hasbaseregister || i != 0 {
-                    return Err(KunaError::lowlevel(format!(
+                    return Err(UnlaceError::lowlevel(format!(
                         "No base register specified for space: {}",
                         self.get_name()
                     )));
                 }
                 Ok(state.base_orig.clone())
             }
-            _ => Err(KunaError::lowlevel(format!(
+            _ => Err(UnlaceError::lowlevel(format!(
                 "{} has no truncated registers",
                 self.get_name()
             ))),
@@ -1117,7 +1117,7 @@ impl AddrSpace {
         data: &VarnodeStorage,
         trunc_size: i32,
         stack_growth: bool,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let state = match &self.kind {
             AddrSpaceKind::Spacebase { state, .. } => state,
             // C++ cannot call this on a non-SpacebaseSpace (it is a private
@@ -1128,7 +1128,7 @@ impl AddrSpace {
         if state.hasbaseregister
             && (state.baseloc != *data || state.is_negative_stack != stack_growth)
         {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "Attempt to assign more than one base register to space: {}",
                 self.get_name()
             )));
@@ -1195,10 +1195,10 @@ impl AddrSpace {
     /// Look up the join record whose unified range starts at `offset`.
     /// Uses this space's join table, as does [`Self::overlap_join`].
     /// Returns an error for other space kinds or an unlinked offset.
-    pub fn find_join(&self, offset: u64) -> KunaResult<Rc<JoinRecord>> {
+    pub fn find_join(&self, offset: u64) -> UnlaceResult<Rc<JoinRecord>> {
         match self.join_state() {
             Some(state) => state.borrow().find_join(offset),
-            None => Err(KunaError::lowlevel("find_join on a non-join space")),
+            None => Err(UnlaceError::lowlevel("find_join on a non-join space")),
         }
     }
 
@@ -1222,7 +1222,7 @@ impl AddrSpace {
         point_space: &Rc<AddrSpace>,
         point_off: u64,
         point_skip: i32,
-    ) -> KunaResult<i32> {
+    ) -> UnlaceResult<i32> {
         match &self.kind {
             // ConstantSpace::overlapJoin always reports no overlap
             AddrSpaceKind::Constant => Ok(-1),
@@ -1302,7 +1302,7 @@ impl AddrSpace {
     /// Write the main attributes for an address within \b this space.  The
     /// caller provides only the \e offset, and this routine fills in other
     /// details pertaining to this particular space.
-    pub fn encode_attributes(&self, encoder: &mut dyn Encoder, offset: u64) -> KunaResult<()> {
+    pub fn encode_attributes(&self, encoder: &mut dyn Encoder, offset: u64) -> UnlaceResult<()> {
         match &self.kind {
             // JoinSpace::encodeAttributes: encode a \e join address to the
             // stream.  This method in the interface only outputs attributes
@@ -1313,7 +1313,7 @@ impl AddrSpace {
                 encoder.write_space(&ATTRIB_SPACE, self);
                 let num = rec.num_pieces();
                 if num > JoinSpace::MAX_PIECES {
-                    return Err(KunaError::lowlevel(
+                    return Err(UnlaceError::lowlevel(
                         "Exceeded maximum pieces in one join address",
                     ));
                 }
@@ -1342,7 +1342,7 @@ impl AddrSpace {
             // invalid, emit space="fspec"; otherwise the entry's space + offset.
             AddrSpaceKind::Fspec => {
                 let info = fspec_lookup(offset).ok_or_else(|| {
-                    KunaError::lowlevel("FspecSpace::encodeAttributes: unregistered fspec handle")
+                    UnlaceError::lowlevel("FspecSpace::encodeAttributes: unregistered fspec handle")
                 })?;
                 if info.entry.is_invalid() {
                     encoder.write_string(&ATTRIB_SPACE, b"fspec");
@@ -1379,7 +1379,7 @@ impl AddrSpace {
         encoder: &mut dyn Encoder,
         offset: u64,
         size: i32,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         match &self.kind {
             // JoinSpace ignores the size and defers to the unsized variant
             AddrSpaceKind::Join { .. } => self.encode_attributes(encoder, offset),
@@ -1387,7 +1387,7 @@ impl AddrSpace {
             // also emits ATTRIB_SIZE on the valid-entry branch.
             AddrSpaceKind::Fspec => {
                 let info = fspec_lookup(offset).ok_or_else(|| {
-                    KunaError::lowlevel("FspecSpace::encodeAttributes: unregistered fspec handle")
+                    UnlaceError::lowlevel("FspecSpace::encodeAttributes: unregistered fspec handle")
                 })?;
                 if info.entry.is_invalid() {
                     encoder.write_string(&ATTRIB_SPACE, b"fspec");
@@ -1422,7 +1422,11 @@ impl AddrSpace {
     /// routine recovers the offset and possibly the size described by the
     /// element.  `size` is only written when a size attribute is present
     /// (C++ fills a by-reference argument).
-    pub fn decode_attributes(&self, decoder: &mut dyn Decoder, size: &mut u32) -> KunaResult<u64> {
+    pub fn decode_attributes(
+        &self,
+        decoder: &mut dyn Decoder,
+        size: &mut u32,
+    ) -> UnlaceResult<u64> {
         match &self.kind {
             // JoinSpace::decodeAttributes: parse the current element as a
             // join address.  Pieces of the join are encoded as a sequence of
@@ -1482,7 +1486,7 @@ impl AddrSpace {
                             let szpos = match szpos {
                                 Some(szpos) => szpos,
                                 None => {
-                                    return Err(KunaError::lowlevel(
+                                    return Err(UnlaceError::lowlevel(
                                         "join address piece attribute is malformed",
                                     ));
                                 }
@@ -1539,7 +1543,7 @@ impl AddrSpace {
                     }
                 }
                 if !foundoffset {
-                    return Err(KunaError::lowlevel("Address is missing offset"));
+                    return Err(UnlaceError::lowlevel("Address is missing offset"));
                 }
                 Ok(offset)
             }
@@ -1552,7 +1556,7 @@ impl AddrSpace {
     /// taking into account the \e wordsize, adding a "+n" if the offset is
     /// not on-cut with wordsize. It also pads to the expected/typical size
     /// of values from this space.
-    pub fn print_raw(&self, s: &mut String, offset: u64) -> KunaResult<()> {
+    pub fn print_raw(&self, s: &mut String, offset: u64) -> UnlaceResult<()> {
         match &self.kind {
             // Constants are always printed as hexidecimal values in the
             // debugger and console dumps; OtherSpace prints the same way.
@@ -1596,11 +1600,11 @@ impl AddrSpace {
                     s.push_str(&info.printed_name);
                     Ok(())
                 }
-                None => Err(KunaError::lowlevel(
+                None => Err(UnlaceError::lowlevel(
                     "FspecSpace::printRaw: unregistered fspec handle",
                 )),
             },
-            AddrSpaceKind::Iop => Err(KunaError::lowlevel(
+            AddrSpaceKind::Iop => Err(UnlaceError::lowlevel(
                 "kuna rust port: IopSpace::printRaw requires PcodeOp (op wave)",
             )),
             _ => {
@@ -1638,7 +1642,7 @@ impl AddrSpace {
     /// Offsets within a register can be indicated by appending a '+' and
     /// integer, i.e. eax+2.
     ///
-    /// (kuna rust) The C++ `trans`/`manage` back-pointers become the
+    /// (unlace rust) The C++ `trans`/`manage` back-pointers become the
     /// explicit `manage` parameter; the register-name path consults the
     /// manager's installed [`RegisterLookup`].  With none installed,
     /// `getRegister` behaves as always-throwing — identical to the C++
@@ -1650,7 +1654,7 @@ impl AddrSpace {
     /// non-`LowlevelError`: no lookup in the tree returns one, and the only
     /// caller is the console's address parser, where a swallowed one resurfaces
     /// as a hex-parse rejection of the same token.
-    pub fn read(&self, s: &str, size: &mut i32, manage: &AddrSpaceManager) -> KunaResult<u64> {
+    pub fn read(&self, s: &str, size: &mut i32, manage: &AddrSpaceManager) -> UnlaceResult<u64> {
         // JoinSpace::read: parse a comma-separated sequence of register
         // names / shortcut-prefixed offsets into a join record.
         if let AddrSpaceKind::Join { .. } = self.kind {
@@ -1678,7 +1682,9 @@ impl AddrSpace {
                         let try_shortcut = token.first().copied().unwrap_or(0);
                         let spc = match manage.get_space_by_shortcut(try_shortcut) {
                             Some(spc) => Rc::clone(spc),
-                            None => return Err(KunaError::lowlevel("Could not parse join string")),
+                            None => {
+                                return Err(UnlaceError::lowlevel("Could not parse join string"));
+                            }
                         };
                         let mut subsize: i32 = 0;
                         let offset =
@@ -1739,7 +1745,7 @@ impl AddrSpace {
     /// defining this space.  The \e type must already be filled in.
     /// (C++ protected `decodeBasicAttributes`.)
     #[allow(clippy::collapsible_if)] // nested ifs transcribe the C++ shape
-    fn decode_basic_attributes(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    fn decode_basic_attributes(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         self.deadcodedelay.set(-1);
         loop {
             let attrib_id = decoder.get_next_attribute_id()?;
@@ -1786,20 +1792,20 @@ impl AddrSpace {
 
     /// Recover the details of this space from a stream (the C++ virtual
     /// `decode`, dispatching to the subclass overrides).
-    pub fn decode(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    pub fn decode(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         match &self.kind {
             // As the ConstantSpace is never saved, it should never get
             // decoded either.
-            AddrSpaceKind::Constant => Err(KunaError::lowlevel(
+            AddrSpaceKind::Constant => Err(UnlaceError::lowlevel(
                 "Should never decode the constant space",
             )),
             AddrSpaceKind::Join { .. } => {
-                Err(KunaError::lowlevel("Should never decode join space"))
+                Err(UnlaceError::lowlevel("Should never decode join space"))
             }
-            AddrSpaceKind::Fspec => Err(KunaError::lowlevel(
+            AddrSpaceKind::Fspec => Err(UnlaceError::lowlevel(
                 "Should never decode fspec space from stream",
             )),
-            AddrSpaceKind::Iop => Err(KunaError::lowlevel(
+            AddrSpaceKind::Iop => Err(UnlaceError::lowlevel(
                 "Should never decode iop space from stream",
             )),
             AddrSpaceKind::Overlay { .. } => self.decode_overlay(decoder),
@@ -1814,7 +1820,7 @@ impl AddrSpace {
     }
 
     /// `SpacebaseSpace::decode` (translate.cc)
-    fn decode_spacebase(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    fn decode_spacebase(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         let elem_id = decoder.open_element_id(&ELEM_SPACE_BASE)?;
         self.decode_basic_attributes(decoder)?;
         let new_contain = decoder.read_space_id(&ATTRIB_CONTAIN)?;
@@ -1827,7 +1833,7 @@ impl AddrSpace {
     }
 
     /// `OverlaySpace::decode`
-    fn decode_overlay(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    fn decode_overlay(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         let elem_id = decoder.open_element_id(&ELEM_SPACE_OVERLAY)?;
         self.name = String::from_utf8_lossy(&decoder.read_string_id(&ATTRIB_NAME)?).into_owned();
         self.index = decoder.read_signed_integer_id(&ATTRIB_INDEX)? as i32;
@@ -2226,7 +2232,7 @@ impl FspecSpace {
 }
 
 // -----------------------------------------------------------------------------
-// FspecSpace call-spec registry (kuna rust port)
+// FspecSpace call-spec registry (unlace rust port)
 //
 // In C++ the offset of an \e fspec address *is* the raw `FuncCallSpecs *`, so
 // `FspecSpace::printRaw`/`encodeAttributes` simply cast the offset back to a
@@ -2396,31 +2402,33 @@ impl AddrSpaceManager {
     /// model for this processor.  It checks a set of indexing and naming
     /// conventions for the space and returns an error if the conventions are
     /// violated. Should only be called during initialization.
-    pub fn insert_space(&mut self, spc: Rc<AddrSpace>) -> KunaResult<()> {
+    pub fn insert_space(&mut self, spc: Rc<AddrSpace>) -> UnlaceResult<()> {
         // (C++ takes conditional ownership via refcount + unique_ptr; the
         // Rc handles ownership here.)
         match spc.get_type() {
             spacetype::IPTR_CONSTANT => {
                 if spc.get_name() != ConstantSpace::NAME {
-                    return Err(KunaError::lowlevel(format!(
+                    return Err(UnlaceError::lowlevel(format!(
                         "Space {} was initialized with wrong type",
                         spc.get_name()
                     )));
                 }
                 if spc.get_index() != ConstantSpace::INDEX {
-                    return Err(KunaError::lowlevel("const space must be assigned index 0"));
+                    return Err(UnlaceError::lowlevel(
+                        "const space must be assigned index 0",
+                    ));
                 }
                 self.constantspace = Some(Rc::clone(&spc));
             }
             spacetype::IPTR_INTERNAL => {
                 if spc.get_name() != UniqueSpace::NAME {
-                    return Err(KunaError::lowlevel(format!(
+                    return Err(UnlaceError::lowlevel(format!(
                         "Space {} was initialized with wrong type",
                         spc.get_name()
                     )));
                 }
                 if self.uniqspace.is_some() {
-                    return Err(KunaError::lowlevel(format!(
+                    return Err(UnlaceError::lowlevel(format!(
                         "Space {} was initialized more than once",
                         spc.get_name()
                     )));
@@ -2429,13 +2437,13 @@ impl AddrSpaceManager {
             }
             spacetype::IPTR_FSPEC => {
                 if spc.get_name() != "fspec" {
-                    return Err(KunaError::lowlevel(format!(
+                    return Err(UnlaceError::lowlevel(format!(
                         "Space {} was initialized with wrong type",
                         spc.get_name()
                     )));
                 }
                 if self.fspecspace.is_some() {
-                    return Err(KunaError::lowlevel(format!(
+                    return Err(UnlaceError::lowlevel(format!(
                         "Space {} was initialized more than once",
                         spc.get_name()
                     )));
@@ -2444,13 +2452,13 @@ impl AddrSpaceManager {
             }
             spacetype::IPTR_JOIN => {
                 if spc.get_name() != JoinSpace::NAME {
-                    return Err(KunaError::lowlevel(format!(
+                    return Err(UnlaceError::lowlevel(format!(
                         "Space {} was initialized with wrong type",
                         spc.get_name()
                     )));
                 }
                 if self.joinspace.is_some() {
-                    return Err(KunaError::lowlevel(format!(
+                    return Err(UnlaceError::lowlevel(format!(
                         "Space {} was initialized more than once",
                         spc.get_name()
                     )));
@@ -2459,13 +2467,13 @@ impl AddrSpaceManager {
             }
             spacetype::IPTR_IOP => {
                 if spc.get_name() != "iop" {
-                    return Err(KunaError::lowlevel(format!(
+                    return Err(UnlaceError::lowlevel(format!(
                         "Space {} was initialized with wrong type",
                         spc.get_name()
                     )));
                 }
                 if self.iopspace.is_some() {
-                    return Err(KunaError::lowlevel(format!(
+                    return Err(UnlaceError::lowlevel(format!(
                         "Space {} was initialized more than once",
                         spc.get_name()
                     )));
@@ -2476,7 +2484,7 @@ impl AddrSpaceManager {
             spacetype::IPTR_SPACEBASE | spacetype::IPTR_PROCESSOR => {
                 if spc.get_type() == spacetype::IPTR_SPACEBASE && spc.get_name() == "stack" {
                     if self.stackspace.is_some() {
-                        return Err(KunaError::lowlevel(format!(
+                        return Err(UnlaceError::lowlevel(format!(
                             "Space {} was initialized more than once",
                             spc.get_name()
                         )));
@@ -2491,7 +2499,9 @@ impl AddrSpaceManager {
                         .expect("overlay space inserted without a base space")
                         .set_flags(fl::overlaybase);
                 } else if spc.is_other_space() && spc.get_index() != OtherSpace::INDEX {
-                    return Err(KunaError::lowlevel("OTHER space must be assigned index 1"));
+                    return Err(UnlaceError::lowlevel(
+                        "OTHER space must be assigned index 1",
+                    ));
                 }
             }
         }
@@ -2504,7 +2514,7 @@ impl AddrSpaceManager {
         }
 
         if let Some(existing) = &self.baselist[index] {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "Space {} was assigned id duplicating: {}",
                 spc.get_name(),
                 existing.get_name()
@@ -2512,7 +2522,7 @@ impl AddrSpaceManager {
         }
 
         if self.name2space.contains_key(spc.get_name()) {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "Space {} was initialized more than once",
                 spc.get_name()
             )));
@@ -2598,12 +2608,12 @@ impl AddrSpaceManager {
     /// should be called once to establish the official \e default space for
     /// the processor, via its index. Should only be called during
     /// initialization.
-    pub fn set_default_code_space(&mut self, index: i32) -> KunaResult<()> {
+    pub fn set_default_code_space(&mut self, index: i32) -> UnlaceResult<()> {
         if self.defaultcodespace.is_some() {
-            return Err(KunaError::lowlevel("Default space set multiple times"));
+            return Err(UnlaceError::lowlevel("Default space set multiple times"));
         }
         if self.baselist.len() <= index as usize || self.baselist[index as usize].is_none() {
-            return Err(KunaError::lowlevel("Bad index for default space"));
+            return Err(UnlaceError::lowlevel("Bad index for default space"));
         }
         self.defaultcodespace = self.baselist[index as usize].clone();
         // By default the default data space is the same
@@ -2616,14 +2626,14 @@ impl AddrSpaceManager {
     /// If the architecture has different code and data spaces, this routine
     /// can be called to set the \e data space after the \e code space has
     /// been set.
-    pub fn set_default_data_space(&mut self, index: i32) -> KunaResult<()> {
+    pub fn set_default_data_space(&mut self, index: i32) -> UnlaceResult<()> {
         if self.defaultcodespace.is_none() {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Default data space must be set after the code space",
             ));
         }
         if self.baselist.len() <= index as usize || self.baselist[index as usize].is_none() {
-            return Err(KunaError::lowlevel("Bad index for default data space"));
+            return Err(UnlaceError::lowlevel("Bad index for default data space"));
         }
         self.defaultdataspace = self.baselist[index as usize].clone();
         Ok(())
@@ -2661,9 +2671,9 @@ impl AddrSpaceManager {
 
     /// Mark a named space as truncated to `size` bytes, using the fields
     /// decoded by `unlace_sleigh::translate::TruncationTag`.
-    pub fn truncate_space(&self, space_name: &str, size: u32) -> KunaResult<()> {
+    pub fn truncate_space(&self, space_name: &str, size: u32) -> UnlaceResult<()> {
         match self.get_space_by_name(space_name) {
-            None => Err(KunaError::lowlevel(format!(
+            None => Err(UnlaceError::lowlevel(format!(
                 "Unknown space in <truncate_space> command: {space_name}"
             ))),
             Some(spc) => {
@@ -2862,7 +2872,7 @@ impl AddrSpaceManager {
 
     /// Install the [`RegisterLookup`] consulted by register-name paths (the
     /// register half of the C++ `trans` back-pointer; the C++ sets it per
-    /// space at construction time, kuna sets it once on the manager).
+    /// space at construction time, unlace sets it once on the manager).
     pub fn set_register_lookup(&mut self, lookup: Rc<dyn RegisterLookup>) {
         self.lookup.0 = Some(lookup);
     }
@@ -2878,7 +2888,7 @@ impl AddrSpaceManager {
     /// different programs being analyzed share the same processor. This
     /// routine pulls in a reference of every space in `op2` in order to
     /// manage it from within `self`.
-    pub fn copy_spaces(&mut self, op2: &AddrSpaceManager) -> KunaResult<()> {
+    pub fn copy_spaces(&mut self, op2: &AddrSpaceManager) -> UnlaceResult<()> {
         // Insert every space in -op2- into -this- manager
         for spc in op2.baselist.iter().flatten() {
             self.insert_space(Rc::clone(spc))?;
@@ -2909,7 +2919,7 @@ impl AddrSpaceManager {
         ptrdata: &VarnodeStorage,
         trunc_size: i32,
         stack_growth: bool,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         basespace.set_base_register(ptrdata, trunc_size, stack_growth)
     }
 
@@ -2955,7 +2965,7 @@ impl AddrSpaceManager {
         sz: i32,
         point: &Address,
         full_encoding: &mut u64,
-    ) -> KunaResult<Address> {
+    ) -> UnlaceResult<Address> {
         let ind = spc.get_index();
         // mixed comparison: int4 ind vs size_t list length (C++ converts ind
         // up; negative ind never enters the branch there or here)
@@ -2973,12 +2983,12 @@ impl AddrSpaceManager {
 
     /// The join-record table, reached through the registered join space (in
     /// C++ the table lives directly on the manager).
-    fn join_records(&self) -> KunaResult<&RefCell<JoinState>> {
+    fn join_records(&self) -> UnlaceResult<&RefCell<JoinState>> {
         self.joinspace
             .as_ref()
             .and_then(|spc| spc.join_state())
             .ok_or_else(|| {
-                KunaError::lowlevel(
+                UnlaceError::lowlevel(
                     "kuna rust port: join-record request without a registered join space",
                 )
             })
@@ -2997,22 +3007,22 @@ impl AddrSpaceManager {
         &self,
         pieces: &[VarnodeStorage],
         logicalsize: u32,
-    ) -> KunaResult<Rc<JoinRecord>> {
+    ) -> UnlaceResult<Rc<JoinRecord>> {
         // Find a pre-existing split record, or create a new one
         // corresponding to the input -pieces-.  If -logicalsize- is 0,
         // calculate logical size as sum of pieces
         if pieces.is_empty() {
-            return Err(KunaError::lowlevel("Cannot create a join without pieces"));
+            return Err(UnlaceError::lowlevel("Cannot create a join without pieces"));
         }
         if pieces.len() == 1 && logicalsize == 0 {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Cannot create a single piece join without a logical size",
             ));
         }
 
         let totalsize: u32 = if logicalsize != 0 {
             if pieces.len() != 1 {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "Cannot specify logical size for multiple piece join",
                 ));
             }
@@ -3024,7 +3034,7 @@ impl AddrSpaceManager {
                 sum = sum.wadd(piece.size);
             }
             if sum == 0 {
-                return Err(KunaError::lowlevel("Cannot create a zero size join"));
+                return Err(UnlaceError::lowlevel("Cannot create a zero size join"));
             }
             sum
         };
@@ -3067,7 +3077,7 @@ impl AddrSpaceManager {
     /// Find JoinRecord for \e offset in the join space (C++ protected
     /// `findJoinInternal`): recover the JoinRecord that *contains* the
     /// offset, as a range in the \e join address space, or `None`.
-    fn find_join_internal(&self, offset: u64) -> KunaResult<Option<Rc<JoinRecord>>> {
+    fn find_join_internal(&self, offset: u64) -> UnlaceResult<Option<Rc<JoinRecord>>> {
         Ok(self.join_records()?.borrow().find_join_internal(offset))
     }
 
@@ -3075,7 +3085,7 @@ impl AddrSpaceManager {
     ///
     /// The offset must originally have come from a JoinRecord returned by
     /// `find_add_join`, otherwise this method errs.
-    pub fn find_join(&self, offset: u64) -> KunaResult<Rc<JoinRecord>> {
+    pub fn find_join(&self, offset: u64) -> UnlaceResult<Rc<JoinRecord>> {
         self.join_records()?.borrow().find_join(offset)
     }
 
@@ -3096,7 +3106,7 @@ impl AddrSpaceManager {
         realaddr: &Address,
         realsize: i32,
         logicalsize: i32,
-    ) -> KunaResult<Address> {
+    ) -> UnlaceResult<Address> {
         if logicalsize == realsize {
             return Ok(realaddr.clone());
         }
@@ -3131,7 +3141,7 @@ impl AddrSpaceManager {
         hisz: i32,
         loaddr: &Address,
         losz: i32,
-    ) -> KunaResult<Address> {
+    ) -> UnlaceResult<Address> {
         // C++ dereferences the space pointers unconditionally (null is UB)
         let hispace = hiaddr
             .get_space()
@@ -3146,7 +3156,7 @@ impl AddrSpaceManager {
             || ((lotp != spacetype::IPTR_SPACEBASE) && (lotp != spacetype::IPTR_PROCESSOR))
         {
             // (sic: the C++ message reads "in appropriate")
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Trying to join in appropriate locations",
             ));
         }
@@ -3220,11 +3230,11 @@ impl AddrSpaceManager {
     /// \e non-join Address.
     /// \param addr is the given Address
     /// \param size is the size of the range in bytes
-    pub fn renormalize_join_address(&self, addr: &mut Address, size: i32) -> KunaResult<()> {
+    pub fn renormalize_join_address(&self, addr: &mut Address, size: i32) -> UnlaceResult<()> {
         let join_record = match self.find_join_internal(addr.get_offset())? {
             Some(rec) => rec,
             None => {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "Join address not covered by a JoinRecord",
                 ));
             }
@@ -3238,12 +3248,12 @@ impl AddrSpaceManager {
         let mut pos1: i32 = 0;
         let (addr1, size_trunc1) = join_record
             .equivalent_location(addr.get_offset(), &mut pos1)
-            .ok_or_else(|| KunaError::lowlevel("Join address range not covered"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("Join address range not covered"))?;
         let mut pos2: i32 = 0;
         // addr.getOffset() + (size-1): int4 sign-extends to uintb
         let (_addr2, last_offset) = join_record
             .equivalent_location(addr.get_offset().wadd((size - 1) as i64 as u64), &mut pos2)
-            .ok_or_else(|| KunaError::lowlevel("Join address range not covered"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("Join address range not covered"))?;
         if pos1 == pos2 {
             *addr = addr1;
             return Ok(());
@@ -3300,7 +3310,7 @@ impl AddrSpaceManager {
     /// \param index is the index of the piece to strip, which must be at the
     ///        front or back
     /// \return the storage triple corresponding to the remaining piece(s)
-    pub fn strip_join_piece(&self, join: &JoinRecord, index: i32) -> KunaResult<VarnodeStorage> {
+    pub fn strip_join_piece(&self, join: &JoinRecord, index: i32) -> UnlaceResult<VarnodeStorage> {
         let start: i32;
         let end: i32;
         if index == 0 {
@@ -3310,7 +3320,7 @@ impl AddrSpaceManager {
             start = 0;
             end = join.num_pieces() - 2;
         } else {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Stripping middle piece from JoinRecord",
             ));
         }
@@ -3337,7 +3347,7 @@ impl AddrSpaceManager {
     /// the default data space is assumed.
     /// \param val is the string to parse
     /// \return the parsed address
-    pub fn parse_address_simple(&self, val: &str) -> KunaResult<Address> {
+    pub fn parse_address_simple(&self, val: &str) -> UnlaceResult<Address> {
         let bytes = val.as_bytes();
         let col = bytes.iter().position(|&c| c == b':');
         let spc: Rc<AddrSpace>;
@@ -3355,7 +3365,7 @@ impl AddrSpaceManager {
                 spc = match self.get_space_by_name(spc_name) {
                     Some(spc) => Rc::clone(spc),
                     None => {
-                        return Err(KunaError::lowlevel(format!(
+                        return Err(UnlaceError::lowlevel(format!(
                             "Unknown address space: {spc_name}"
                         )));
                     }
@@ -3384,7 +3394,7 @@ impl AddrSpaceManager {
     /// based on the ElementId.
     /// \param decoder is the stream decoder
     /// \return the initialized AddrSpace
-    pub fn decode_space(&self, decoder: &mut dyn Decoder) -> KunaResult<Rc<AddrSpace>> {
+    pub fn decode_space(&self, decoder: &mut dyn Decoder) -> UnlaceResult<Rc<AddrSpace>> {
         let elem_id = decoder.peek_element()?;
         let mut res: AddrSpace = if elem_id == ELEM_SPACE_BASE.get_id() {
             SpacebaseSpace::new_for_decode()
@@ -3417,7 +3427,7 @@ impl AddrSpaceManager {
     /// inserted spaces use a fresh decoder for each `decode_space` call,
     /// ending that borrow before `insert_space`.
     /// \param decoder is the stream decoder
-    pub fn decode_spaces(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    pub fn decode_spaces(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         // The first space should always be the constant space
         self.insert_space(Rc::new(ConstantSpace::new()))?;
 
@@ -3432,7 +3442,7 @@ impl AddrSpaceManager {
         let spc = match self.get_space_by_name(&defname) {
             Some(spc) => Rc::clone(spc),
             None => {
-                return Err(KunaError::lowlevel(format!(
+                return Err(UnlaceError::lowlevel(format!(
                     "Bad 'defaultspace' attribute: {defname}"
                 )));
             }

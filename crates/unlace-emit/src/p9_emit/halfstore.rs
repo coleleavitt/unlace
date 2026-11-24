@@ -1,4 +1,4 @@
-//! (kuna `partialaccess`) Print a store into the low half of a variable as that
+//! (unlace `partialaccess`) Print a store into the low half of a variable as that
 //! store instead of a whole-variable `CONCAT`.
 //!
 //! Heritage writes a four-byte store into an eight-byte variable as a new value

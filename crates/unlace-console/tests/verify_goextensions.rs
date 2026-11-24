@@ -33,7 +33,7 @@ fn body(binary: &Path, name: &str) -> String {
     .unwrap();
     program
         .arch_mut()
-        .set_kuna_option("godwarfsig", "on")
+        .set_unlace_option("godwarfsig", "on")
         .unwrap();
     program.commit_pending_analysis().unwrap();
     let mut status = ConsoleCommands::into_status(vec![
@@ -43,7 +43,7 @@ fn body(binary: &Path, name: &str) -> String {
         "print C".into(),
     ]);
     register_decomp_commands(&mut status);
-    unlace_console::console::register_kuna_commands(&mut status);
+    unlace_console::console::register_unlace_commands(&mut status);
     status
         .get_data_mut(DECOMPILE_MODULE)
         .unwrap()

@@ -1,4 +1,4 @@
-//! (kuna `iokitclasses`) IOKit C++ class recovery for XNU kernels and kexts.
+//! (unlace `iokitclasses`) IOKit C++ class recovery for XNU kernels and kexts.
 //!
 //! Every libkern class registers itself from a static initializer: the
 //! `__mod_init_func` code calls `OSMetaClass::OSMetaClass(&X::gMetaClass,
@@ -76,7 +76,7 @@ impl AnalysisPass for IokitClassesPass {
         let classes = recover(ctx.file, &img);
         let typed = ctx
             .arch
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::analysisgates::IokitClasses>()
             .types;
         classes.emit(&mut out, typed);

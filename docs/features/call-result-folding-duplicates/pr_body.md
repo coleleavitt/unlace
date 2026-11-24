@@ -24,7 +24,7 @@ v3[v2] = (unsigned short)helper();
 
 ## The tests
 
-The promoted acceptance probe passes, and `kuna-callretmulti.xml` covers the
+The promoted acceptance probe passes, and `callretmulti.xml` covers the
 loop witness plus a same-block two-sink minimizer. The 456-binary sweep found no
 wrong-output hunk: 259 changed functions are classified in the feature record,
 with every affected callee retained.

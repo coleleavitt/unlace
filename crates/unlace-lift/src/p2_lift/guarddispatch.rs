@@ -1,4 +1,4 @@
-//! (kuna `guarddispatch`) Print a call through a Control Flow Guard dispatch
+//! (unlace `guarddispatch`) Print a call through a Control Flow Guard dispatch
 //! slot as the indirect call it guards.
 //!
 //! An image built with Control Flow Guard calls through a function pointer as
@@ -20,8 +20,8 @@ use unlace_num::opcodes::OpCode;
 use crate::context::OpId;
 use crate::funcdata::Funcdata;
 
-crate::kuna_flag!(
-    /// (kuna `guarddispatch`) Print a call through a guard dispatch slot as the
+crate::unlace_flag!(
+    /// (unlace `guarddispatch`) Print a call through a guard dispatch slot as the
     /// indirect call it guards. Default on (`option guarddispatch`).
     GuardDispatch,
     "guarddispatch",

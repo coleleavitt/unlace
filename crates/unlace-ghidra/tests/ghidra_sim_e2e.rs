@@ -2,7 +2,7 @@
 //!
 //! Drives the FULL wire lifecycle (registerProgram → setAction → decompileAt ×
 //! N → flushNative → decompileAt → deregisterProgram) against the in-process
-//! [`GhidraProcess`], with the mock-Java end answered from kuna's OWN analysis
+//! [`GhidraProcess`], with the mock-Java end answered from unlace's OWN analysis
 //! of real vendored ELFs (`tests/ghidra_sim/oracle.rs`): real Sleigh p-code,
 //! real bytes, real labels — and, since Phase 3, real `<doc><mapsym>`/`<hole>`
 //! answers for `getMappedSymbols`/`getExternalRef` built from the committed
@@ -300,8 +300,8 @@ fn assert_structure(run: &SessionRun) {
             !parsed.c_text.trim().is_empty(),
             "target #{i}: flattened markup C is empty"
         );
-        // The ghidra-mode banner: a `Kuna v…` plate comment must open every
-        // decompiled function (the user-visible "kuna is the active core"
+        // The ghidra-mode banner: a `Unlace v…` plate comment must open every
+        // decompiled function (the user-visible "unlace is the active core"
         // marker; ghidra-mode only, so the CLI differential strips it).
         assert!(
             parsed.c_text.contains("Kuna v"),
@@ -398,7 +398,7 @@ fn placeholder_total(c: &str) -> usize {
     placeholder_addrs(c).values().map(|s| s.len()).sum()
 }
 
-/// Drop the ghidra-mode `Kuna v…` banner line (ghidra-mode-only by design;
+/// Drop the ghidra-mode `Unlace v…` banner line (ghidra-mode-only by design;
 /// the CLI ground truth has no banner).
 fn strip_banner(c: &str) -> String {
     c.lines()
@@ -520,7 +520,7 @@ const PIN_FAILLOG_RESOLVABLE: [usize; 3] = [0, 0, 0];
 //
 // `formatstring static` is a fact the host-driven path cannot have: the CLI path
 // types a printf/scanf call's variadic arguments from the format constant the
-// LOAD-TIME resolver read out of the image, and a wire session has no kuna-side
+// LOAD-TIME resolver read out of the image, and a wire session has no unlace-side
 // load to read it in (the program database is Ghidra's, and so is its own
 // FormatStringAnalyzer).  That is a real GUI-path gap — recorded in
 // docs/ghidra-integration.md — but it is not a markup defect, and letting it
@@ -529,7 +529,7 @@ const PIN_FAILLOG_RESOLVABLE: [usize; 3] = [0, 0, 0];
 // worth 0.415 of ratio, mostly declaration renumbering).  So the CLI arm below
 // runs with `formatstring off`: both arms are then compared without format
 // facts, like for like, and the band keeps its measured width.  It runs with
-// `libcnames off` for the same reason: those names come from kuna's own libc
+// `libcnames off` for the same reason: those names come from unlace's own libc
 // tables, which a wire session never consults (Ghidra's archives name a
 // callee's parameters itself).
 const PIN_FAILLOG_DIFF_FLOOR: [f64; 3] = [0.02, 0.04, 0.06];
@@ -540,10 +540,10 @@ const PIN_FAILLOG_DIFF_CEILING: [f64; 3] = [0.09, 0.12, 0.15];
 // collapse this to ~1 while leaving every ratio-floor assertion green — this
 // pin is what catches it.  (sub_3320 shrank because the noreturn facts now
 // truncate the flow overrun that used to decode neighbouring functions into
-// it — defect g; the +1 everywhere is the `Kuna v…` banner line.)
+// it — defect g; the +1 everywhere is the `Unlace v…` banner line.)
 // sub_2620 283 -> 285 with `calleearity` (DIV-102): the `getpwent()` loop's
 // `sub_34a0()` regains the uid argument its two sibling call sites already pass
-// — kuna's own recovered prototype for that callee is `unsigned long sub_34a0(unsigned long a0)`
+// — unlace's own recovered prototype for that callee is `unsigned long sub_34a0(unsigned long a0)`
 // — and the uid expression `*(unsigned int *)(v7 + 0x10)` hoists into a named
 // local instead of being re-spelled twice inside the guard. Two lines, both
 // earned.
@@ -602,7 +602,7 @@ const PIN_FAILLOG_VARDECL_UNRESOLVED: [usize; 3] = [0, 0, 0];
 // distinct instruction addresses actually decoded.  Phase 3 REDUCED both
 // (1477 → 1314, 1003 → 801): the mapsym noreturn facts stop the flow from
 // decoding past `exit()`-style calls into neighbouring functions (defect g).
-// (kuna `calleedeadarg`) RAISED 1314 -> 1613 and 801 -> 1044.  The P4 veto reads
+// (unlace `calleedeadarg`) RAISED 1314 -> 1613 and 801 -> 1044.  The P4 veto reads
 // the CALLEE's body to decide whether an argument register is dead at its entry,
 // and in ghidra mode every such decode is a getPcode round trip to the host.  The
 // walk is bounded (192 instructions, and each path stops at the callee's first
@@ -610,7 +610,7 @@ const PIN_FAILLOG_VARDECL_UNRESOLVED: [usize; 3] = [0, 0, 0];
 // entirely for a function with fewer than two calls — so +243 DISTINCT decoded
 // instructions is the union of the probed prologues in this session, not
 // per-decompile growth.
-// (kuna `calleepreserves`, DIV-124) RAISED the total 1613 -> 1862 and left the
+// (unlace `calleepreserves`, DIV-124) RAISED the total 1613 -> 1862 and left the
 // DISTINCT count at 1044, unmoved.  That pairing is the whole justification: the
 // call-guard seam takes the same bounded body walk, but without
 // `calleedeadarg`'s "fewer than two calls" skip, so it also probes callees in
@@ -620,7 +620,7 @@ const PIN_FAILLOG_VARDECL_UNRESOLVED: [usize; 3] = [0, 0, 0];
 // p-code cache (repeat decompiles re-ask everything, faithful to upstream
 // GhidraTranslate).  Measured both arms on this tree: `calleepreserves off`
 // gives 1613/1044, `on` gives 1862/1044.
-// (kuna `calltrampoline`, DIV-144) RAISED the total 1862 -> 2121 and again left
+// (unlace `calltrampoline`, DIV-144) RAISED the total 1862 -> 2121 and again left
 // the DISTINCT count at 1044, unmoved, and every rendered pin above it (the C
 // line counts and the diff ratios) unchanged.  The S2 recognizer decodes a direct
 // call's target out of band -- up to six instructions, stopping at the first
@@ -633,7 +633,7 @@ const PIN_FAILLOG_VARDECL_UNRESOLVED: [usize; 3] = [0, 0, 0];
 // round trip only because ghidra mode has no p-code cache.  The gate short-
 // circuits before any decode, so `calltrampoline off` is the 1862 this pin held
 // before the option existed.
-// (kuna `calleereadarg`) RAISED the total 2121 -> 2142 and left the DISTINCT
+// (unlace `calleereadarg`) RAISED the total 2121 -> 2142 and left the DISTINCT
 // count at 1044, unmoved, with every rendered pin above it unchanged. The rule
 // asks the bounded entry walk of each function's OWN body (one with a call to
 // extend), to tell a variadic caller by its register-save prologue, and the
@@ -704,12 +704,12 @@ fn ghidra_sim_faillog_pins() {
     oracle
         .prog
         .arch_mut()
-        .set_kuna_option("formatstring", "off")
+        .set_unlace_option("formatstring", "off")
         .unwrap_or_else(|e| panic!("formatstring off: {}", e.explain()));
     oracle
         .prog
         .arch_mut()
-        .set_kuna_option("libcnames", "off")
+        .set_unlace_option("libcnames", "off")
         .unwrap_or_else(|e| panic!("libcnames off: {}", e.explain()));
     let mut ratios = Vec::new();
     for (i, parsed) in docs.iter().enumerate() {
@@ -992,9 +992,9 @@ fn sim_symbol_size(s: &ghidra_sim::SimSymbol) -> Option<i64> {
 /// The RENAME-PERSISTENCE loop (the GUI keystone): a user rename is a DB write
 /// (`HighFunctionDBUtil.updateDBVariable`) followed by an event-driven
 /// re-decompile whose getMappedSymbols answer now carries the renamed local in
-/// the function's `<localdb>` (Java `LocalSymbolMap.grabFromFunction`).  kuna
+/// the function's `<localdb>` (Java `LocalSymbolMap.grabFromFunction`).  unlace
 /// must SEED that local into the fresh Funcdata so the new name — not a fresh
-/// `vN` — renders.  Echo-back differential: run once, take a local kuna itself
+/// `vN` — renders.  Echo-back differential: run once, take a local unlace itself
 /// encoded (storage + first-use), serve it back RENAMED, assert the C shows
 /// the new name.
 #[test]
@@ -1025,7 +1025,7 @@ fn ghidra_sim_faillog_rename_persistence() {
     // typelock=false: the exact shape a plain GUI rename produces (verified
     // against a live Ghidra 12.1.2 DecompileDebug capture — `<symbol
     // typelock="false" namelock="true" cat="-1"><typeref name="undefined8">`)
-    // — which kuna must carry as a NAME RECOMMENDATION, the C++
+    // — which unlace must carry as a NAME RECOMMENDATION, the C++
     // `ScopeLocal::nameRecommend` path.
     let renamed = "host_renamed_probe";
     let run2 = run_session_with(&binary, &["sub_3ad0"], move |o| {
@@ -1068,7 +1068,7 @@ fn ghidra_sim_faillog_rename_persistence() {
 /// fix the decoder dropped hash-entry locals outright, so a rename of such a
 /// variable silently reverted in front of the user.
 ///
-/// Echo-back differential: take a hash kuna itself encoded for a wire symbol
+/// Echo-back differential: take a hash unlace itself encoded for a wire symbol
 /// (the link pass hashes conflict-separated / uncovered variables with the
 /// upstream budget Java also uses), serve it back as a renamed dynamic local,
 /// and assert the name comes back in the C.
@@ -1077,7 +1077,7 @@ fn ghidra_sim_faillog_dynamic_rename_persistence() {
     let binary = repo_root().join("tests/bug-repro/faillog");
     let run1 = run_session(&binary, &["sub_3ad0"]);
     let parsed = &run1.docs[0];
-    // A wire symbol kuna encoded with a `<hash>` entry (type="dynamic").
+    // A wire symbol unlace encoded with a `<hash>` entry (type="dynamic").
     let cand = parsed
         .localdb
         .as_ref()
@@ -1533,7 +1533,7 @@ fn ghidra_sim_pe_call_fixups_replace_the_helper_calls() {
 // C++ namespaces — what stock Ghidra prints in front of a name
 // ===========================================================================
 
-/// Java hands kuna a C++ symbol's bare name plus its namespace id, and stock
+/// Java hands unlace a C++ symbol's bare name plus its namespace id, and stock
 /// Ghidra prints the namespaces its Minimal strategy needs: every scope of a
 /// callee the caller cannot see, and the function's own path in its
 /// declaration.  Each scope is its own token, so Java renders `::` intact.
@@ -1696,7 +1696,7 @@ fn ghidra_sim_custom_large_return_with_no_formals_clears_hidden_input() {
 
 /// A value MSVC spills into the home slot its caller allocated, then passes by
 /// reference, survives a declared callee: the shape of every Qt
-/// `connect(sender, &Class::signal, ...)`, where Ghidra hands kuna a locked
+/// `connect(sender, &Class::signal, ...)`, where Ghidra hands unlace a locked
 /// prototype for the PDB-typed callee and its own `local_res18` for the slot.
 /// The slot is a local the call reaches through its address, so the store and
 /// the argument name the same variable, as the stock decompiler prints them.

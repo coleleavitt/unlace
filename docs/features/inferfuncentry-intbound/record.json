@@ -1,6 +1,6 @@
 {
  "opportunity": "kuna's `inferfuncentry` escape (GH-6930) suspends ActionConstantPtr's `bit_transitions < 3` guard for any constant that resolves to an exact function entry, whatever the operand means. In a position-independent executable `.init` sits at a low round offset, so a round buffer size lands on one: coreutils tail -O0 computes MIN (n_remaining, BUFSIZ), BUFSIZ is 0x2000 and 0x2000 is that image's _DT_INIT, so the bound printed as `if (_DT_INIT < v9)`, the other arm of the select as `v1 = _DT_INIT`, and the uintmax_t byte counter they bounded became `void *` -- in dump_remainder, and through protoorder in tail_forever's `uintmax_t bytes_to_read`.",
- "test_name": "tests/stages/kuna-inferfuncentry-intbound.xml (5 assertions, four passes: the bounded value, its bound, the GH-6930 callback argument, a function-pointer COPY control, and the option-off control) + 5 unit tests in p5_types/inferfuncentry/tests.rs",
+ "test_name": "tests/stages/inferfuncentry-intbound.xml (5 assertions, four passes: the bounded value, its bound, the GH-6930 callback argument, a function-pointer COPY control, and the option-off control) + 5 unit tests in p5_types/inferfuncentry/tests.rs",
  "binary": "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11/O0/coreutils/stripped/tail",
  "selector": "0x4649",
  "func_addr": "0x4649",
@@ -139,7 +139,7 @@
   "decompiler/crates/kuna-decomp/src/p5_types/inferfuncentry/tests.rs",
   "decompiler/crates/kuna-decomp/src/p9_emit/coreaction_render.rs",
   "decompiler/crates/kuna-base/src/xml.rs",
-  "tests/stages/kuna-inferfuncentry-intbound.xml",
+  "tests/stages/inferfuncentry-intbound.xml",
   "docs/baseline-stages.json",
   "docs/spec/05-types.md"
  ],

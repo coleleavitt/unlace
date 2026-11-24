@@ -1,7 +1,7 @@
 //! `unlace docs` — the reference manual, compiled into the binary.
 //!
 //! A release binary is frequently all a driving agent has: no repo checkout, no
-//! `docs/` tree, no network.  kuna's control surface is its documentation (the
+//! `docs/` tree, no network.  unlace's control surface is its documentation (the
 //! option catalog *is* the product), so shipping the binary without it ships
 //! something unusable.  Every topic below is therefore pulled in with
 //! `include_str!` at compile time and answered out of the binary's own rodata —

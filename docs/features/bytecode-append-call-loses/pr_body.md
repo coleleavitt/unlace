@@ -63,7 +63,7 @@ access can be competing with the call.
 
 ## The tests
 
-`tests/stages/kuna-exclusivearguse.toml` is two-pass over a vendored reduction:
+`tests/stages/exclusivearguse.toml` is two-pass over a vendored reduction:
 off gives `append_slow()`, default gives `append_slow(a0,v1,&table[a1])`, and a
 loop control keeps its one argument in both passes. `tests/cli/bytecode-append-call-loses.json`
 is the promoted acceptance probe. 11 unit tests cover the predicate, including

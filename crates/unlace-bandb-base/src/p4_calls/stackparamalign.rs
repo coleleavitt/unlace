@@ -1,13 +1,13 @@
 //! Stack argument alignment can differ from the in-memory type alignment.
 use crate::fspec::param_entry_flags::IGNORE_TYPE_ALIGN;
 use unlace_base::{
-    error::{KunaError, KunaResult},
+    error::{UnlaceError, UnlaceResult},
     space::{AddrSpace, spacetype},
     xml::Element,
 };
 
 #[doc(hidden)]
-pub fn decode(entry: &Element, space: &AddrSpace, alignment: i32, size: i32) -> KunaResult<u32> {
+pub fn decode(entry: &Element, space: &AddrSpace, alignment: i32, size: i32) -> UnlaceResult<u32> {
     let value = (0..entry.get_num_attributes())
         .find(|&i| entry.get_attribute_name(i) == "stackalign")
         .map(|i| entry.get_attribute_value_at(i));
@@ -20,10 +20,10 @@ pub fn decode(entry: &Element, space: &AddrSpace, alignment: i32, size: i32) -> 
         {
             Ok(IGNORE_TYPE_ALIGN)
         }
-        Some(b"false") => Err(KunaError::lowlevel(
+        Some(b"false") => Err(UnlaceError::lowlevel(
             "pentry stackalign requires aligned stack storage",
         )),
-        Some(_) => Err(KunaError::lowlevel("bad pentry stackalign")),
+        Some(_) => Err(UnlaceError::lowlevel("bad pentry stackalign")),
     }
 }
 
@@ -37,7 +37,7 @@ pub fn effective_alignment(flags: u32, type_alignment: i32, slot_alignment: i32)
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.stackparamalign_effective_alignment = Some(effective_alignment);
     hooks.stackparamalign_decode = Some(decode);
 }

@@ -1,7 +1,7 @@
 //! Unit tests for the slot table and the run's record. The end-to-end witness
 //! -- a comparator declared by the `qsort` call that names it -- is the CLI
 //! probe pair over `callbacktype_x86_64`; the stage test
-//! `tests/stages/kuna-callbacktype.toml` is the negative control for the
+//! `tests/stages/unlace-callbacktype.toml` is the negative control for the
 //! one-function path.
 
 use super::*;
@@ -781,7 +781,7 @@ fn declared(intypes: &[Rc<Datatype>], outtype: Option<Rc<Datatype>>) -> Prototyp
         first_var_arg_slot: -1,
         output_storage: None,
         input_storage: Vec::new(),
-        kuna_library_names: None,
+        unlace_library_names: None,
     }
 }
 

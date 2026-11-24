@@ -1,4 +1,4 @@
-//! (kuna) A return value also tested for its add's carry (option `carryuse`, P4).
+//! (unlace) A return value also tested for its add's carry (option `carryuse`, P4).
 //!
 //! `Funcdata::onlyOpUse` (funcdata_varnode.cc:1851) refuses a RETURN trial whose value
 //! reaches a branch: a register the function branches on is taken for something it
@@ -18,8 +18,8 @@ use unlace_num::opcodes::OpCode;
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 
-crate::kuna_flag!(
-    /// (kuna `carryuse`) A RETURN trial's carry test is not a competing use.
+crate::unlace_flag!(
+    /// (unlace `carryuse`) A RETURN trial's carry test is not a competing use.
     CarryUse,
     "carryuse",
     "carry-test use of a return value",
@@ -41,7 +41,7 @@ fn same(data: &Funcdata, a: VarnodeId, b: VarnodeId) -> bool {
 /// the add that defines `vn`.
 #[doc(hidden)]
 pub fn carry_test(data: &Funcdata, opmatch: OpId, compare: OpId, vn: VarnodeId) -> bool {
-    if !data.get_arch().kuna_options.get::<CarryUse>().0 {
+    if !data.get_arch().unlace_options.get::<CarryUse>().0 {
         return false;
     }
     let obank = data.obank();
@@ -80,6 +80,6 @@ pub fn carry_test(data: &Funcdata, opmatch: OpId, compare: OpId, vn: VarnodeId) 
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.carryuse_carry_test = Some(carry_test);
 }

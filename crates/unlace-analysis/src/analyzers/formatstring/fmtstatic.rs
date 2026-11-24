@@ -1,4 +1,4 @@
-//! (kuna `formatstring static`) The **load-time** half of format-string varargs
+//! (unlace `formatstring static`) The **load-time** half of format-string varargs
 //! typing: resolve each printf/scanf-family call site's format constant out of
 //! the image, and park the per-call-site prototype override before anything is
 //! decompiled.
@@ -129,7 +129,7 @@ impl AnalysisPass for FormatStringStaticPass {
             VarargAbi::Named
         } else {
             ctx.arch
-                .kuna_tables
+                .unlace_tables
                 .get::<unlace_decomp::formatstring::ImageVarargAbi>()
                 .unwrap_or_else(|| {
                     formatstring::vararg_abi(&ctx.arch.archid, Some(image_family(ctx.bytes)))
@@ -281,7 +281,7 @@ impl AnalysisPass for FormatStringStaticPass {
         }
         if ctx
             .arch
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::analysisgates::FormatCallees>()
             .0
         {

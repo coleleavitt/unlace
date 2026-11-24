@@ -1,4 +1,4 @@
-//! (kuna `vaargconst`) A SysV x86-64 `va_arg` whose offset test is a constant prints as
+//! (unlace `vaargconst`) A SysV x86-64 `va_arg` whose offset test is a constant prints as
 //! `va_arg(ap, T)`.
 //!
 //! gcc expands each `va_arg(ap, T)` on a local `va_list` into a test of `gp_offset`
@@ -49,9 +49,9 @@ pub enum VaArgConst {
     Builtin,
 }
 
-impl crate::optionset::KunaOption for VaArgConst {
+impl crate::optionset::UnlaceOption for VaArgConst {
     const NAME: &'static str = "vaargconst";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         VaArgConst::Off
@@ -61,13 +61,13 @@ impl crate::optionset::KunaOption for VaArgConst {
         VaArgConst::Off
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (choice, what) = match value.trim() {
             "off" => (VaArgConst::Off, "off"),
             "on" => (VaArgConst::On, "on, printed va_arg"),
             "builtin" => (VaArgConst::Builtin, "on, printed __builtin_va_arg"),
             other => {
-                return Err(unlace_base::error::KunaError::parse(format!(
+                return Err(unlace_base::error::UnlaceError::parse(format!(
                     "vaargconst: expected off, on or builtin, got {other:?}"
                 )));
             }
@@ -78,7 +78,7 @@ impl crate::optionset::KunaOption for VaArgConst {
 
 /// Whether option `vaargconst` is on (either spelling).
 pub fn enabled(data: &Funcdata) -> bool {
-    data.get_arch().kuna_options.get::<VaArgConst>() != VaArgConst::Off
+    data.get_arch().unlace_options.get::<VaArgConst>() != VaArgConst::Off
 }
 
 type Key = (int4, u64, i32);

@@ -1,4 +1,4 @@
-//! (kuna `atomics`) One locked x86 instruction, one AArch64 LSE atomic or one
+//! (unlace `atomics`) One locked x86 instruction, one AArch64 LSE atomic or one
 //! RISC-V AMO becomes an atomic builtin call while it is lifted.
 //!
 //! SLEIGH lifts `lock xadd [rdi], eax` as `LOCK(); old = *rdi; *rdi = old +
@@ -35,7 +35,7 @@ const MAX_OPS: usize = 64;
 const MAX_PATHS: usize = 4;
 const MAX_STEPS: usize = 128;
 
-/// (kuna) With `UNLACE_ATOMICS_TRACE` set, say on stderr how far an atomic
+/// (unlace) With `UNLACE_ATOMICS_TRACE` set, say on stderr how far an atomic
 /// rewrite or a retry-loop fold got before it declined.
 macro_rules! trace {
     ($($arg:tt)*) => {
@@ -909,7 +909,7 @@ fn access(fd: &Funcdata, ops: &[OpId], envelope: bool) -> Option<(Access, usize,
 /// when an operand had to be rebuilt in front of it.
 pub fn rewrite(fd: &mut Funcdata, ops: &[OpId]) -> Option<OpId> {
     let arch = fd.get_arch();
-    if !arch.kuna_options.get::<Atomics>().on()
+    if !arch.unlace_options.get::<Atomics>().on()
         || !arch.atomic_userops.enabled()
         || arch.source_lang.is_go()
         || ops.len() > MAX_OPS
@@ -1079,7 +1079,7 @@ fn branches_to_end(fd: &Funcdata, ops: &[OpId]) -> bool {
     })
 }
 
-/// (kuna `atomics`) A compare-and-swap of a register pair (AArch64 `casp` on
+/// (unlace `atomics`) A compare-and-swap of a register pair (AArch64 `casp` on
 /// X registers): two LOADs of `w` bytes at `p` and `p + w`, a branch past
 /// the stores unless each half equals its expected value, and two STOREs of
 /// values independent of the location to the same addresses. It becomes one
@@ -1407,7 +1407,7 @@ fn builtin(data: &Funcdata, op: OpId) -> Option<u32> {
 /// `auto` on a Windows image.
 fn msvc_spelling(fd: &Funcdata) -> bool {
     let arch = fd.get_arch();
-    arch.kuna_options
+    arch.unlace_options
         .get::<Atomics>()
         .msvc(arch.windows_cspec || arch.image_windows_user)
 }
@@ -1420,7 +1420,7 @@ fn msvc_spelling(fd: &Funcdata) -> bool {
 /// consistent, and so is an atomic whose order the language does not mark.
 fn c11_order(fd: &Funcdata, ops: &[OpId]) -> Option<u8> {
     let arch = fd.get_arch();
-    if !arch.kuna_options.get::<Atomics>().c11() {
+    if !arch.unlace_options.get::<Atomics>().c11() {
         return None;
     }
     let userops = &arch.atomic_userops;
@@ -1514,7 +1514,7 @@ fn spelled(
 }
 
 /// The atomic builtins of `data`, which access memory through their address
-/// operand: `kuna_memoryguard` guards memory across them as across a call.
+/// operand: `unlace_memoryguard` guards memory across them as across a call.
 pub fn memory_ops(data: &Funcdata) -> Vec<OpId> {
     if !data.get_arch().atomic_userops.builtins() {
         return Vec::new();
@@ -1585,7 +1585,7 @@ pub fn output_type(data: &Funcdata, op: OpId) -> Option<Rc<Datatype>> {
     value_type(data, op, width)
 }
 
-/// (kuna `llscfold`) `ActionLlscLoop` — fold an AArch64 load-exclusive /
+/// (unlace `llscfold`) `ActionLlscLoop` — fold an AArch64 load-exclusive /
 /// store-exclusive retry loop into the atomic builtin its one successful
 /// iteration performs.
 ///
@@ -1631,7 +1631,7 @@ impl Action for ActionLlscLoop {
         })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        if !data.get_arch().kuna_options.get::<LlscFold>().0
+        if !data.get_arch().unlace_options.get::<LlscFold>().0
             || data.get_heritage_pass() != 0
             || data.get_arch().atomic_userops.monitor.is_none()
             || data.get_arch().source_lang.is_go()
@@ -2731,7 +2731,7 @@ fn pair_update(v0: &Expr, v1: &Expr, lo: &Expr, hi: &Expr, w: i32) -> Option<(u3
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.atomics_input_type = Some(input_type);
     hooks.atomics_output_type = Some(output_type);
 }

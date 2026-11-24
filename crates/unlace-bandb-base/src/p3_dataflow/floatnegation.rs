@@ -6,7 +6,7 @@ use unlace_num::opcodes::OpCode;
 use crate::context::{OpId, VarnodeId};
 use crate::expression::functional_equality;
 use crate::funcdata::Funcdata;
-use crate::op::pcodeop_addlflags::kuna_exactfloat;
+use crate::op::pcodeop_addlflags::unlace_exactfloat;
 
 fn copied_value(data: &Funcdata, mut vn: VarnodeId) -> VarnodeId {
     for _ in 0..6 {
@@ -221,12 +221,12 @@ fn guarded_complement(data: &Funcdata, root: VarnodeId) -> Option<Complement> {
 pub fn is_exact(data: &Funcdata, op: OpId) -> bool {
     data.obank()
         .get(op)
-        .is_some_and(|op| op.get_addlflags() & kuna_exactfloat != 0)
+        .is_some_and(|op| op.get_addlflags() & unlace_exactfloat != 0)
 }
 
 fn mark_exact(data: &mut Funcdata, op: OpId) {
     if let Some(op) = data.obank_mut().get_mut(op) {
-        op.set_additional_flag(kuna_exactfloat);
+        op.set_additional_flag(unlace_exactfloat);
     }
 }
 

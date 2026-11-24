@@ -15,7 +15,7 @@
 //!     plus the spec-built register/join/stack spaces;
 //!   - `model->getArch()->findAddJoin(pieces, size)` /
 //!     `translate->getRegister(regname)` / `getStackSpace()` — all reachable
-//!     only through the spec-loaded `Architecture` (the kuna `Architecture` has
+//!     only through the spec-loaded `Architecture` (the unlace `Architecture` has
 //!     no SLEIGH-spec / prototype-model registry yet — `// STUB(w6-fspec-2)`).
 //!
 //! None of those pieces are owned by this porter, and the wave's library

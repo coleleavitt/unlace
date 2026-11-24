@@ -1,6 +1,6 @@
 //! C++ `test.cc` / `test.hh`: the minimal unit-test framework that drives the
 //! 207 engine unit tests (`UnitTest`), plus the `decomp_test_dbg`-equivalent
-//! console summary text the Python harness (`kuna/run_tests.py`) parses off
+//! console summary text the Python harness (`unlace/run_tests.py`) parses off
 //! **stderr**.
 //!
 //! ## What is and is not ported

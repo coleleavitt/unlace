@@ -1,12 +1,12 @@
-//! (kuna) The `ActionNameVars` tail that keeps Ghidra's `$$undefNNNNNNNN`
-//! placeholder out of every kuna surface (P6, `coreaction.cc:3079`).
+//! (unlace) The `ActionNameVars` tail that keeps Ghidra's `$$undefNNNNNNNN`
+//! placeholder out of every unlace surface (P6, `coreaction.cc:3079`).
 //!
 //! `Scope::buildUndefinedName` (`database.cc:2854`) hands a Symbol created with an
 //! empty name the placeholder `$$undef` + 8 hex digits.  Upstream that string is
 //! never observable: `ActionNameVars::apply` renames every still-undefined Symbol
 //! before it returns, and `PrintC` reads `sym->getDisplayName()` *live* at emit
-//! time, so the render always sees the final name.  kuna's naming model differs on
-//! both counts — the name is cached per HighVariable (`HighVariable::kuna_name`)
+//! time, so the render always sees the final name.  unlace's naming model differs on
+//! both counts — the name is cached per HighVariable (`HighVariable::unlace_name`)
 //! and the catch-all rename was ported but never wired — which let the placeholder
 //! reach emitted C, the `decompile-all --json` `variables` array, and the
 //! `decompile-project` `.asm` stack-frame comments.  `$$` is not a legal C
@@ -23,7 +23,7 @@
 //!   stack slot is visited before its whole-cover sibling, the partial caches the
 //!   placeholder and the sibling then renames the shared Symbol to `vN`; nothing
 //!   back-fills the first cache.  [`refresh_placeholder_high_names`] re-reads the
-//!   Symbol once at the end of the pass — kuna's stand-in for upstream's live
+//!   Symbol once at the end of the pass — unlace's stand-in for upstream's live
 //!   `getDisplayName()` read.
 //! * **Never renamed.** A Symbol no high covers wholly is never renamed at all and
 //!   keeps the placeholder in the Symbol table itself.
@@ -80,7 +80,7 @@ fn refresh_placeholder_high_names(data: &mut Funcdata) {
     let stale: Vec<HighVariableId> = data
         .high_bank()
         .iter()
-        .filter(|(_, h)| h.kuna_name().map(is_undefined_name).unwrap_or(false))
+        .filter(|(_, h)| h.unlace_name().map(is_undefined_name).unwrap_or(false))
         .map(|(id, _)| id)
         .collect();
     for high in stale {
@@ -100,7 +100,7 @@ fn refresh_placeholder_high_names(data: &mut Funcdata) {
             .map(|info| info.display_name);
         if let Some(name) = resolved {
             if let Some(h) = data.high_bank_mut().get_mut(high) {
-                h.set_kuna_name(name);
+                h.set_unlace_name(name);
             }
         }
     }

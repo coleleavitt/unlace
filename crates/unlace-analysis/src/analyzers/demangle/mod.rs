@@ -1,4 +1,4 @@
-//! Symbol-name demangling — the kuna analog of Ghidra's `GnuDemanglerAnalyzer`
+//! Symbol-name demangling — the unlace analog of Ghidra's `GnuDemanglerAnalyzer`
 //! ("Demangler GNU").
 //!
 //! ## Why a crate, not a hand-port
@@ -34,7 +34,7 @@
 //! ported), whose name-only form keeps template arguments for
 //! [`strip_bracket_groups`] to remove.
 //!
-//! Origin (upstream Ghidra, the tree kuna was ported from):
+//! Origin (upstream Ghidra, the tree unlace was ported from):
 //! - analyzer: `Ghidra/Features/GnuDemangler/.../GnuDemanglerAnalyzer.java`
 //! - the pre-filter ported here: `GnuDemangler.skip`
 //!   (`Ghidra/Features/GnuDemangler/.../GnuDemangler.java:186-227`) +
@@ -45,13 +45,13 @@
 //! Applied in [`crate::loadimage_object`]`::from_bytes`, to each loader funcsym
 //! name (`.symtab` / PLT / `.dynsym`) *after* `@VERSION` stripping and *before*
 //! the name is installed as a `FunctionSymbol`. So a mangled `_ZN3foo3barEv`
-//! becomes `foo::bar`, kuna's `::`-namespace splitter
+//! becomes `foo::bar`, unlace's `::`-namespace splitter
 //! (`Database::find_create_scope_from_symbol_name`) nests it, and calls render
 //! with readable names.
 //!
 //! ## The name-only contract (MANDATORY)
 //!
-//! kuna's scope splitter splits a symbol name on **every** `::` into nested
+//! unlace's scope splitter splits a symbol name on **every** `::` into nested
 //! scopes. A full c++filt form carries a signature (`ns::f(std::string)`) and
 //! template args (`vector<std::pair<...>>`), both of which contain `::` that
 //! would create junk scopes. So the loader consumes [`demangle_name`], which
@@ -61,12 +61,12 @@
 //! for callers that want it (and for the roadmap-documented `_Z3fooi` ->
 //! `foo(int)` shape).
 //!
-//! ## Scope (names + namespaces here; the signature in [`kuna_cppsig`])
+//! ## Scope (names + namespaces here; the signature in [`unlace_cppsig`])
 //!
 //! This module delivers Ghidra's **name + namespace** application — the same
 //! depth as the PLT pass ("correct names"). Applying the demangled **signature**
 //! (the class type for `this` plus the declared parameter types) was the
-//! deferred follow-up, and it now lives beside it in [`kuna_cppsig`]
+//! deferred follow-up, and it now lives beside it in [`unlace_cppsig`]
 //! (`--option cppsig`), which consumes [`demangle_raw`] and parks a prototype by
 //! entry address. The split is deliberate: the name reduction is mandatory and
 //! unconditional (the `::`-scope splitter depends on it), while the signature is
@@ -80,7 +80,7 @@
 //! intermediate `::` scopes are created, not correctness of the base name.
 
 pub mod cppsig;
-// (kuna) Swift demangling (`$s` stable mangling + the ObjC runtime's `_Tt` names).
+// (unlace) Swift demangling (`$s` stable mangling + the ObjC runtime's `_Tt` names).
 mod msvcsig;
 pub mod swift;
 
@@ -131,7 +131,7 @@ fn skip(raw: &str) -> bool {
     if raw.starts_with("__Z") {
         return false;
     }
-    // Rust v0 mangling (`_R...`). Not in Ghidra's Itanium-only `skip`, but kuna
+    // Rust v0 mangling (`_R...`). Not in Ghidra's Itanium-only `skip`, but unlace
     // also feeds `rustc_demangle`, which owns this prefix; gate it the same way.
     if raw.starts_with("_R") {
         return false;
@@ -139,7 +139,7 @@ fn skip(raw: &str) -> bool {
     if is_gnu2_or_3_pattern(raw) {
         return false;
     }
-    // (kuna) Swift manglings (`$s…`/`_$s…`/`_T0…`) — shapes no other scheme
+    // (unlace) Swift manglings (`$s…`/`_$s…`/`_T0…`) — shapes no other scheme
     // owns; the per-run gate is applied in the Swift arm itself.
     if crate::sourcelang::is_swift_mangled(raw) {
         return false;
@@ -190,7 +190,7 @@ pub fn demangle_raw(raw: &str) -> Option<String> {
         return None;
     }
 
-    // Swift (kuna, docs/multilang.md): the prefixes exist in no other scheme,
+    // Swift (unlace, docs/multilang.md): the prefixes exist in no other scheme,
     // so a Swift-shaped name either demangles here (the `swift-demangle` full
     // form, types included) or passes through; it is never fed to the
     // Itanium/Rust/MSVC arms.
@@ -371,7 +371,7 @@ pub fn normalize_rust_name(name: &str) -> String {
 /// groups removed), or `None` if `raw` is not a (recognized) mangled symbol.
 ///
 /// This is what the loader installs as a symbol name. The reduction is
-/// MANDATORY: kuna's scope splitter splits on every `::`, and a leftover
+/// MANDATORY: unlace's scope splitter splits on every `::`, and a leftover
 /// signature (`ns::f(std::string)`) or template arg list
 /// (`vector<std::pair<...>>`) would otherwise create junk scopes. For Itanium we
 /// ask [`cpp_demangle`] for the name-only form
@@ -384,7 +384,7 @@ pub fn demangle_name(raw: &str) -> Option<String> {
         return None;
     }
 
-    // Swift (kuna): see `demangle_raw` — Swift shapes never reach the other
+    // Swift (unlace): see `demangle_raw` — Swift shapes never reach the other
     // arms, and the name-only printer emits no signature text to strip (the
     // label form `f(a:b:)` survives the default `safe` sanitizer).
     if crate::sourcelang::is_swift_mangled(raw) {
@@ -568,7 +568,7 @@ fn msvc_identifier(phrase: &str) -> Option<String> {
         .then_some(ident)
 }
 
-/// The identifier kuna nests an **anonymous namespace** under, matching the
+/// The identifier unlace nests an **anonymous namespace** under, matching the
 /// spelling `analyzers/rtti/itaniumrtti.rs::sanitize_class_name` already
 /// gives the same construct (`(anonymous namespace)::Hidden` ->
 /// `anonymous_namespace::Hidden`).

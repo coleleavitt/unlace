@@ -73,7 +73,7 @@ void sub_1408dcdf8(unsigned long long *a0,uint4 a1,char *a2,uint8 a3)
 
 ## The tests
 
-`tests/stages/kuna-calleescratchbody.toml` is the two-pass end-to-end case:
+`tests/stages/calleescratchbody.toml` is the two-pass end-to-end case:
 `__chkstk` verbatim behind the real calling sequence, with `calleescratchbody
 off` pinning the bug and the default pinning the fix, plus an `endbr64; ret`
 negative control that must render identically in both passes. Five unit tests in

@@ -78,7 +78,7 @@ fn planted_string_symbol_and_literal_coexist() {
     let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
 
-    // (kuna) Analysis facts now commit at `read symbols` (gated by `--option`),
+    // (unlace) Analysis facts now commit at `read symbols` (gated by `--option`),
     // not eagerly at bootstrap — trigger the commit (what `IfcReadSymbols` does)
     // so the planted string symbol is visible to the direct symbol-table query.
     prog.commit_pending_analysis()

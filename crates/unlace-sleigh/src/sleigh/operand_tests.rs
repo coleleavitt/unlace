@@ -12,7 +12,7 @@ impl LoadImage for EmptyImage {
         Vec::new()
     }
     fn adjust_vma(&mut self, _: i64) {}
-    fn load_fill(&mut self, out: &mut [u8], _: &Address) -> KunaResult<()> {
+    fn load_fill(&mut self, out: &mut [u8], _: &Address) -> UnlaceResult<()> {
         out.fill(0);
         Ok(())
     }

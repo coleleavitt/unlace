@@ -2,7 +2,7 @@
 
 use unlace_base::types::int4;
 
-/// Kuna variant of upstream `Heritage::remove13Refinement`: preserve a 1+3 or
+/// Unlace variant of upstream `Heritage::remove13Refinement`: preserve a 1+3 or
 /// 3+1 junction only when joining it would straddle a known input.
 #[doc(hidden)]
 pub fn coalesce(refine: &mut [int4], straddles_input: &mut dyn FnMut(usize, usize, usize) -> bool) {
@@ -40,7 +40,7 @@ pub fn span_straddles_join(
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.inputrefinement_coalesce = Some(coalesce);
     hooks.inputrefinement_span_straddles_join = Some(span_straddles_join);
 }

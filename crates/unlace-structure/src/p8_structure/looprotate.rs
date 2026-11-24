@@ -1,8 +1,8 @@
-//! (kuna `looprotate`) A guarded do-while loop becomes a while loop.
+//! (unlace `looprotate`) A guarded do-while loop becomes a while loop.
 //!
 //! Compilers rotate `while (c) body` into `if (c) { do body while (c); }` so
 //! the test runs at the bottom. Hex-Rays undoes it (loop un-inversion), and
-//! the `for` recovery then applies; kuna printed the guard and the do-while.
+//! the `for` recovery then applies; unlace printed the guard and the do-while.
 //!
 //! [`ActionLoopRotate`] matches, on the basic blocks: a guard `G` branching to
 //! the loop's entry side `P` (or straight to the header) and to an exit `E`; a
@@ -531,16 +531,16 @@ fn apply_counting(
     data: &mut Funcdata,
     l: &Loop,
     (i1, bound, unsigned): (VarnodeId, VarnodeId, bool),
-) -> unlace_base::error::KunaResult<()> {
-    use unlace_base::error::KunaError;
+) -> unlace_base::error::UnlaceResult<()> {
+    use unlace_base::error::UnlaceError;
     let branch = data
         .bb_op_tail(l.tail)
-        .ok_or_else(|| KunaError::lowlevel("looprotate: branch"))?;
+        .ok_or_else(|| UnlaceError::lowlevel("looprotate: branch"))?;
     let at = data
         .obank()
         .get(branch)
         .map(|o| o.get_addr().clone())
-        .ok_or_else(|| KunaError::lowlevel("looprotate: branch"))?;
+        .ok_or_else(|| UnlaceError::lowlevel("looprotate: branch"))?;
     let code = if unsigned {
         OpCode::CPUI_INT_LESS
     } else {
@@ -564,8 +564,8 @@ fn apply_counting(
     Ok(())
 }
 
-fn rotate(data: &mut Funcdata, header: BlockId) -> unlace_base::error::KunaResult<bool> {
-    use unlace_base::error::KunaError;
+fn rotate(data: &mut Funcdata, header: BlockId) -> unlace_base::error::UnlaceResult<bool> {
+    use unlace_base::error::UnlaceError;
     let Some(l) = find_loop(data, header) else {
         return Ok(false);
     };
@@ -607,10 +607,10 @@ fn rotate(data: &mut Funcdata, header: BlockId) -> unlace_base::error::KunaResul
         .obank()
         .get(
             data.bb_op_tail(l.tail)
-                .ok_or_else(|| KunaError::lowlevel("looprotate: tail"))?,
+                .ok_or_else(|| UnlaceError::lowlevel("looprotate: tail"))?,
         )
         .and_then(|o| o.get_in(1))
-        .ok_or_else(|| KunaError::lowlevel("looprotate: cond"))?;
+        .ok_or_else(|| UnlaceError::lowlevel("looprotate: cond"))?;
     if plan.is_none() && !rot.movable(data, tail_cond, &mut ops, 0) {
         return Ok(false);
     }
@@ -633,12 +633,12 @@ fn rotate(data: &mut Funcdata, header: BlockId) -> unlace_base::error::KunaResul
                 .obank()
                 .get(
                     data.bb_op_tail(l.tail)
-                        .ok_or_else(|| KunaError::lowlevel("looprotate: tail"))?,
+                        .ok_or_else(|| UnlaceError::lowlevel("looprotate: tail"))?,
                 )
                 .and_then(|o| o.get_in(1))
-                .ok_or_else(|| KunaError::lowlevel("looprotate: cond"))?;
+                .ok_or_else(|| UnlaceError::lowlevel("looprotate: cond"))?;
             if !rot.movable(data, c, &mut ops, 0) {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "looprotate: counting compare not movable",
                 ));
             }
@@ -650,12 +650,12 @@ fn rotate(data: &mut Funcdata, header: BlockId) -> unlace_base::error::KunaResul
     // The new header and its edges, in the tail's out-slot order.
     let tail_op = data
         .bb_op_tail(l.tail)
-        .ok_or_else(|| KunaError::lowlevel("looprotate: tail op"))?;
+        .ok_or_else(|| UnlaceError::lowlevel("looprotate: tail op"))?;
     let at = data
         .obank()
         .get(tail_op)
         .map(|o| o.get_addr().clone())
-        .ok_or_else(|| KunaError::lowlevel("looprotate: addr"))?;
+        .ok_or_else(|| UnlaceError::lowlevel("looprotate: addr"))?;
     let flip = data
         .obank()
         .get(tail_op)
@@ -708,7 +708,7 @@ fn rotate(data: &mut Funcdata, header: BlockId) -> unlace_base::error::KunaResul
             let o = data
                 .obank()
                 .get(op)
-                .ok_or_else(|| KunaError::lowlevel("looprotate: op"))?;
+                .ok_or_else(|| UnlaceError::lowlevel("looprotate: op"))?;
             let ins: Vec<VarnodeId> = (0..o.num_input()).filter_map(|i| o.get_in(i)).collect();
             let size = o
                 .get_out()
@@ -739,12 +739,12 @@ fn rotate(data: &mut Funcdata, header: BlockId) -> unlace_base::error::KunaResul
             .obank()
             .get(op)
             .and_then(|o| o.get_out())
-            .ok_or_else(|| KunaError::lowlevel("looprotate: out"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("looprotate: out"))?;
         map.insert(orig, out);
     }
     let c = *map
         .get(&cond)
-        .ok_or_else(|| KunaError::lowlevel("looprotate: cond copy"))?;
+        .ok_or_else(|| UnlaceError::lowlevel("looprotate: cond copy"))?;
     data.op_set_input(branch, c, 1)?;
     if flip {
         if let Some(o) = data.obank_mut().get_mut(branch) {
@@ -788,7 +788,7 @@ impl Action for ActionLoopRotate {
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::looprotate::LoopRotate>()
             .0
         {
@@ -811,8 +811,8 @@ impl Action for ActionLoopRotate {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna `looprotate`) A guarded do-while loop becomes a while loop.
+crate::unlace_flag!(
+    /// (unlace `looprotate`) A guarded do-while loop becomes a while loop.
     LoopRotate,
     "looprotate",
     "Guarded do-while loops rotated to while loops",

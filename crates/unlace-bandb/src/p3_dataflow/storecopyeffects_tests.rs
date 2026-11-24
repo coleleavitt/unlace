@@ -1,6 +1,6 @@
-//! Tests of `kuna_storecopyeffects` that read modules of unlace-bandb, the crate above it, so they live here.
+//! Tests of `unlace_storecopyeffects` that read modules of unlace-bandb, the crate above it, so they live here.
 
-/// The imports of `kuna_storecopyeffects` itself, as a glob so the tests' own imports win.
+/// The imports of `unlace_storecopyeffects` itself, as a glob so the tests' own imports win.
 #[allow(unused_imports)]
 mod module_scope {
     pub(super) use crate::context::{OpId, VarnodeId};

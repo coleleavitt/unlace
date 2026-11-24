@@ -46,7 +46,7 @@ read, the drop goes through.
 |---|---|---|
 | `ce-remainder-or-pair.c` | read only past a jump table (`notrack jmp *%rax` is a cut) | `sub_1170(uint a0, ulong a1, ulong a2)`, 3 |
 | `ce-probe-budget.c` | read in the **first** instruction (`mov %rdx,%r8`), but the call-free body is over the 192-instruction budget, so the walk is abandoned and its reads cleared | `sub_1160(int a0, long a1, long a2)`, 3 |
-| `ce-probe-budget.s` | `tests/stages/kuna-argclobber-guards.toml`'s caller unchanged; its callee reads `rdx` first, then runs 200 `add`s | `sub_401031(long a0, ulong a1, long a2)`, 3 |
+| `ce-probe-budget.s` | `tests/stages/argclobber-guards.toml`'s caller unchanged; its callee reads `rdx` first, then runs 200 `add`s | `sub_401031(long a0, ulong a1, long a2)`, 3 |
 | `ce-import.c` + `ce-import-lib.c` | the callee is a PLT import in no signature table; the walk decodes the stub's indirect jump and stops | (no body) |
 
 In the three C callers, `rdx` at the call is a join of `a % d` (a real

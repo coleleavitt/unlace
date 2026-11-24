@@ -33,7 +33,7 @@ fn raw_policy(
     .unwrap();
     program
         .arch_mut()
-        .set_kuna_option("rustprobestack", mode)
+        .set_unlace_option("rustprobestack", mode)
         .unwrap();
     let forced = match language {
         "auto" => None,
@@ -43,10 +43,10 @@ fn raw_policy(
     };
     program
         .arch_mut()
-        .kuna_options
+        .unlace_options
         .set(unlace_decomp::sourcelang::SourceLangForced(forced));
     if let Some(policy) = policy {
-        program.arch_mut().set_kuna_option(policy, "on").unwrap();
+        program.arch_mut().set_unlace_option(policy, "on").unwrap();
     }
     program.commit_pending_analysis().unwrap();
     let space = program
@@ -284,8 +284,8 @@ impl unlace_sleigh::loadimage::LoadImage for EvidenceLoader {
         &mut self,
         _dst: &mut [u8],
         _address: &Address,
-    ) -> unlace_base::error::KunaResult<()> {
-        Err(unlace_base::error::KunaError::data_unavail(
+    ) -> unlace_base::error::UnlaceResult<()> {
+        Err(unlace_base::error::UnlaceError::data_unavail(
             "unavailable evidence",
         ))
     }

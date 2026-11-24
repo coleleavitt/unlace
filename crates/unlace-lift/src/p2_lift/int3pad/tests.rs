@@ -1,6 +1,6 @@
 //! Logic-level tests for [`is_int3_callind`], the option parse and the warning
 //! text, on hand-built dead-list IR (the shape walk is
-//! `kuna_fastfailnoreturn`'s, read for vector 3).
+//! `unlace_fastfailnoreturn`'s, read for vector 3).
 
 use std::rc::Rc;
 
@@ -117,7 +117,7 @@ fn resolver(id: u32) -> Option<String> {
 }
 
 #[test]
-fn elem_id_in_kuna_range() {
+fn elem_id_in_unlace_range() {
     assert_eq!(ELEM_INT3PAD.get_id(), 4150);
     assert_eq!(ELEM_INT3PAD.get_name(), "int3pad");
 }

@@ -1,4 +1,4 @@
-//! (kuna) `importvote` — an import with no declaration takes the arguments its
+//! (unlace) `importvote` — an import with no declaration takes the arguments its
 //! other call sites pass (P4 call prototypes).
 //!
 //! A tail jump to an import (`add esi,1; jmp ext3@plt`) forwards every argument
@@ -192,7 +192,7 @@ fn register(arch: &Architecture, name: &str) -> Option<(Address, int4)> {
 pub fn vote(arch: &Architecture, stub: &Address) -> Option<ImportVote> {
     let space = stub.get_space()?;
     let sites = arch
-        .kuna_import_sites
+        .unlace_import_sites
         .get(&(space.get_index(), stub.get_offset()))?;
     let reg = |name: &str| {
         register(arch, name)
@@ -218,8 +218,8 @@ pub fn vote(arch: &Architecture, stub: &Address) -> Option<ImportVote> {
 /// drive seeds the `protoorder` statements. A no-op unless `importvote` is on
 /// and the analysis tier recorded call sites.
 pub fn seed(arch: &mut Architecture, data: &Funcdata) {
-    if !arch.kuna_options.get::<crate::importvote::Importvote>().0
-        || arch.kuna_import_sites.is_empty()
+    if !arch.unlace_options.get::<crate::importvote::Importvote>().0
+        || arch.unlace_import_sites.is_empty()
     {
         return;
     }
@@ -246,7 +246,7 @@ pub fn seed(arch: &mut Architecture, data: &Funcdata) {
             continue;
         };
         if arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::protoorder::CalleeTypes>()
             .contains_key(&key)
             || arch
@@ -260,7 +260,7 @@ pub fn seed(arch: &mut Architecture, data: &Funcdata) {
             continue;
         };
         if let Some(stated) = statement(arch, v) {
-            arch.kuna_tables
+            arch.unlace_tables
                 .get_mut::<crate::protoorder::CalleeTypes>()
                 .insert(key, Rc::new(stated));
         }
@@ -298,8 +298,8 @@ fn statement(arch: &Architecture, v: ImportVote) -> Option<RecoveredTypes> {
     })
 }
 
-crate::kuna_flag!(
-    /// (kuna) State an undeclared import's call-site vote (option `importvote`).
+crate::unlace_flag!(
+    /// (unlace) State an undeclared import's call-site vote (option `importvote`).
     Importvote,
     "importvote",
     "Undeclared import call-site vote",

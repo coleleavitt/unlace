@@ -26,7 +26,7 @@ use super::{FormatKind, HeaderRegion, ImportSym, ObjectFormat};
 pub struct PeFormat;
 
 /// Translate a COFF/PE `Characteristics` bitset (+ the neutral [`SectionKind`])
-/// into the kuna `section_flags` bitset — the PE/COFF arm of the old
+/// into the unlace `section_flags` bitset — the PE/COFF arm of the old
 /// `section_kind_flags`. PE images and COFF objects share the same section-flag
 /// model (a linked PE *is* a COFF-flavored image), so [`crate::loader::format::coff::CoffFormat`]
 /// reuses this. Mirrors the BFD `SEC_*` derivation Ghidra's `CoffLoader` /

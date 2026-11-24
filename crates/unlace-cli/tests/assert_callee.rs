@@ -5,7 +5,7 @@ fn fixture() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/assert_callee_x86_64.elf")
 }
 
-fn kuna(args: &[&str]) -> Output {
+fn unlace(args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_unlace"))
         .arg(args[0])
         .arg(fixture())
@@ -25,7 +25,7 @@ fn a_stated_indirect_call_is_a_direct_call() {
         for extra in [&[][..], &["--json"][..]] {
             let mut args = vec!["decompile", "twice", "--assert", &directive];
             args.extend_from_slice(extra);
-            let out = kuna(&args);
+            let out = unlace(&args);
             let stdout = text(&out.stdout);
             assert!(out.status.success(), "{stdout}\n{}", text(&out.stderr));
             assert!(stdout.contains("v1 = handle_open(a0,a2);"), "{stdout}");
@@ -36,9 +36,9 @@ fn a_stated_indirect_call_is_a_direct_call() {
 
 #[test]
 fn a_stated_indirect_jump_is_a_tail_call() {
-    let plain = text(&kuna(&["decompile", "dispatch"]).stdout);
+    let plain = text(&unlace(&["decompile", "dispatch"]).stdout);
     assert!(!plain.contains("handle_open"), "{plain}");
-    let out = kuna(&[
+    let out = unlace(&[
         "decompile",
         "dispatch",
         "--assert",
@@ -48,7 +48,7 @@ fn a_stated_indirect_jump_is_a_tail_call() {
     assert!(out.status.success(), "{stdout}\n{}", text(&out.stderr));
     assert!(stdout.contains("  return handle_open(a0,a2);"), "{stdout}");
     assert!(!stdout.contains("switch"), "{stdout}");
-    let off = kuna(&[
+    let off = unlace(&[
         "decompile",
         "dispatch",
         "--assert",
@@ -64,7 +64,7 @@ fn a_stated_indirect_jump_is_a_tail_call() {
 
 #[test]
 fn every_function_of_a_whole_binary_run_takes_its_own_statement() {
-    let out = kuna(&[
+    let out = unlace(&[
         "decompile-all",
         "--assert",
         "callee dispatch::0x1457 handle_open",
@@ -97,7 +97,7 @@ fn a_statement_the_image_contradicts_is_rejected() {
         for extra in [&[][..], &["--json"][..]] {
             let mut args = vec!["decompile", "twice", "--assert", directive];
             args.extend_from_slice(extra);
-            let out = kuna(&args);
+            let out = unlace(&args);
             let all = format!("{}{}", text(&out.stdout), text(&out.stderr));
             assert!(all.contains("rejected"), "{directive}: {all}");
             assert!(
@@ -119,7 +119,7 @@ fn a_call_site_outside_the_function_is_refused_after_flow() {
             "callee 0x1457 handle_open",
         ];
         args.extend_from_slice(extra);
-        let out = kuna(&args);
+        let out = unlace(&args);
         let all = format!("{}{}", text(&out.stdout), text(&out.stderr));
         assert!(!out.status.success(), "{all}");
         assert!(
@@ -136,7 +136,7 @@ fn a_malformed_statement_is_a_usage_error() {
         "callee here handle_open",
         "callee 0x147a a b",
     ] {
-        let out = kuna(&["decompile", "twice", "--assert", directive]);
+        let out = unlace(&["decompile", "twice", "--assert", directive]);
         assert_eq!(
             out.status.code(),
             Some(2),
@@ -152,7 +152,7 @@ fn a_plt_stub_destination_is_applied() {
     for extra in [&[][..], &["--json"][..]] {
         let mut args = vec!["decompile", "twice", "--assert", "callee 0x147a 0x14c0"];
         args.extend_from_slice(extra);
-        let out = kuna(&args);
+        let out = unlace(&args);
         let stdout = text(&out.stdout);
         assert!(out.status.success(), "{stdout}\n{}", text(&out.stderr));
         assert!(stdout.contains("v1 = handle_open(a0,a2);"), "{stdout}");
@@ -171,7 +171,7 @@ fn a_restated_call_site_keeps_the_later_destination() {
             "callee 0x147a handle_open",
         ];
         args.extend_from_slice(extra);
-        let out = kuna(&args);
+        let out = unlace(&args);
         let all = format!("{}{}", text(&out.stdout), text(&out.stderr));
         assert!(out.status.success(), "{all}");
         assert!(all.contains("v1 = handle_open(a0,a2);"), "{all}");

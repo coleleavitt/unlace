@@ -1,4 +1,4 @@
-//! (kuna) `calleefilledarg` — an argument register the callee loads itself is
+//! (unlace) `calleefilledarg` — an argument register the callee loads itself is
 //! not a parameter slot, so it says nothing about the slots after it.
 //!
 //! # The symptom
@@ -19,7 +19,7 @@
 //!   mov x2,sp; add x3,sp,#0x40; mov w4,#0x10; bl objc_msgSend$countBy…
 //! ```
 //!
-//! kuna printed `objc_msgSend$countByEnumeratingWithState:objects:count:(v3)`,
+//! unlace printed `objc_msgSend$countByEnumeratingWithState:objects:count:(v3)`,
 //! one argument, at every `for (x in …)` loop of a 72 MB app; with the address
 //! of the enumeration state gone from the call, the state struct never escaped,
 //! its zero-initialised slots folded through the call, and the loop body read
@@ -96,11 +96,11 @@ use crate::funcdata::Funcdata;
 pub fn mark(call: &mut FuncCallSpecs, data: &Funcdata) {
     let dead = (data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::calleefilledarg::CalleeFilledArg>()
         .0
         && is_selector_stub(call.get_name()))
-    .then(|| data.kuna_callee_entry_dead_shared(call.get_entry_address()))
+    .then(|| data.unlace_callee_entry_dead_shared(call.get_entry_address()))
     .flatten()
     .filter(|d| d.is_trampoline());
     let active = call.get_active_input();
@@ -130,8 +130,8 @@ fn is_selector_stub(name: &str) -> bool {
         .is_some_and(|sel| !sel.is_empty())
 }
 
-crate::kuna_flag!(
-    /// (kuna) `option calleefilledarg`: an unfilled argument register an
+crate::unlace_flag!(
+    /// (unlace) `option calleefilledarg`: an unfilled argument register an
     /// Objective-C selector stub loads itself ends no argument list.  See
     /// [`crate::calleefilledarg`].
     CalleeFilledArg,

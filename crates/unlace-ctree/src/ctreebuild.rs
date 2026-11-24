@@ -1,4 +1,4 @@
-//! (kuna `ctree`) Build a [`CTree`] at [`CMaturity::Built`] from the final structured block tree
+//! (unlace `ctree`) Build a [`CTree`] at [`CMaturity::Built`] from the final structured block tree
 //! (`docs/architecture/ctree.md` §3).
 //!
 //! One statement per structured block: a `BlockList`/`BlockGraph` is a [`StmtKind::Seq`], a leaf

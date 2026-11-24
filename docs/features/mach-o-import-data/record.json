@@ -17,8 +17,8 @@
     "The acceptance stays on the dataset witness; `tests/cli/mach-o-import-data.json` is a hand-written CI twin retargeted onto the already-vendored `macho_imports` fixture, whose printf carries the identical veneer(0x1000005cc)+slot(0x100003000) shape. No new fixture binary was needed."
   ],
   "changed": [
-    "decompiler/crates/kuna-console/src/engine.rs",
-    "decompiler/crates/kuna-console/tests/verify_entry_selectors.rs",
+    "decompiler/crates/console/src/engine.rs",
+    "decompiler/crates/console/tests/verify_entry_selectors.rs",
     "tests/cli/mach-o-import-data.json",
     "docs/cli.md",
     "docs/spec/00-overview.md",
@@ -38,7 +38,7 @@
     "delta": "0.0% -- the section walk runs only on the multi-candidate path, at most once per selector"
   },
   "tests": {
-    "kuna-console/tests/verify_entry_selectors.rs": "2 e2e tests on the vendored macho_imports: printf resolves to the 0x1000005cc veneer while BOTH canonical rows survive (fails on the unpatched tree with the two-candidate Ambiguous), and two .text definitions of `duplicate_local` stay ambiguous so the narrowing cannot be a majority vote",
+    "console/tests/verify_entry_selectors.rs": "2 e2e tests on the vendored macho_imports: printf resolves to the 0x1000005cc veneer while BOTH canonical rows survive (fails on the unpatched tree with the two-candidate Ambiguous), and two .text definitions of `duplicate_local` stay ambiguous so the narrowing cannot be a majority vote",
     "tests/cli": "mach-o-import-data.json, 116/116"
   },
   "gates": {

@@ -49,7 +49,7 @@ UPX unpacking stub of the vendored `upx_packed_pe_i386.exe` fixture.
 `tests/cli/discovered-mapped-function-mislabeled.json` is the promoted acceptance
 probe, retargeted to the vendored reduction because CI has no dataset; it asserts
 the body's own `0x539`, not just a brace, so an empty stub cannot pass it. Three
-cargo tests in `kuna-console/tests/verify_unmappedbranch.rs` cover the body, the
+cargo tests in `console/tests/verify_unmappedbranch.rs` cover the body, the
 warning at its branch site, and the premise (the entry is mapped, the target is
 not). All four fail on the unpatched tree.
 

@@ -113,7 +113,7 @@ void __do_global_ctors_aux(void) // return-dupe
 
 Promoted verbatim (clauses and in-repo target unchanged) into
 `tests/cli/ppc64-localentry-splits-function.json`, and backed by a cross-crate two-pass
-cargo test — `kuna-console/tests/verify_ppclocalentry.rs` — which `make rust-test` does
+cargo test — `console/tests/verify_ppclocalentry.rs` — which `make rust-test` does
 run. No `tests/stages/` case: that corpus is symbol-less `<binaryimage>` bytechunks, and a
 defect gated on the ELF symbol table's `st_other` field is structurally unreproducible
 there (the same reason `noreturn_propagate` shipped with a cross-crate e2e instead).

@@ -124,10 +124,10 @@ fn load(fixture: &str, on: bool) -> ConsoleProgram {
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
     prog.arch_mut()
-        .set_kuna_option("swiftmetadata", "on")
+        .set_unlace_option("swiftmetadata", "on")
         .expect("swiftmetadata flips");
     prog.arch_mut()
-        .set_kuna_option("swiftobjcthunk", if on { "on" } else { "off" })
+        .set_unlace_option("swiftobjcthunk", if on { "on" } else { "off" })
         .expect("swiftobjcthunk flips");
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");

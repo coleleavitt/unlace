@@ -60,7 +60,7 @@ $ kuna decompile decompiler/crates/kuna-analysis/tests/fixtures/arraycoverwidth_
 
 ## The tests
 
-`tests/stages/kuna-arraycoverwidth.toml` is the two-pass case on a
+`tests/stages/arraycoverwidth.toml` is the two-pass case on a
 project-authored reduction of the witness (`arraycoverwidth_x86_64.s`): default
 pins `v2._0_16_ = v3[0]._0_16_;` and `return v2[3];`, `arraycoverwidth off`
 pins the filed `v2[0] = v3[0];`. `tests/cli/16-byte-vm-state.json` is the

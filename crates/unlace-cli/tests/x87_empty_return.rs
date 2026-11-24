@@ -210,7 +210,7 @@ fn check(binary: &std::path::Path) {
         ("_environment_after_free", false),
         ("_call_after_free", false),
     ] {
-        let (code, err, status) = common::run_kuna(&[
+        let (code, err, status) = common::run_unlace(&[
             "decompile",
             binary.to_str().unwrap(),
             name,
@@ -229,7 +229,7 @@ fn check(binary: &std::path::Path) {
             assert!(code.starts_with(&format!("long double {name}(")), "{code}");
         }
     }
-    let (code, err, status) = common::run_kuna(&[
+    let (code, err, status) = common::run_unlace(&[
         "decompile",
         binary.to_str().unwrap(),
         "_free_top",

@@ -1,7 +1,7 @@
-//! (kuna) `entrymainproto` — give the function the MSVC CRT startup calls with
+//! (unlace) `entrymainproto` — give the function the MSVC CRT startup calls with
 //! argc/argv/envp the prototype that call site establishes (P1 program prep).
 //!
-//! kuna recovers a callee's parameters from the callee's own body: a register
+//! unlace recovers a callee's parameters from the callee's own body: a register
 //! the ABI reserves for argument `i` that is READ before it is written is
 //! parameter `i`. That is why `sub_140004e8c(int a0)` comes out right on a
 //! stripped PE — its body reads `ecx`. It is also why `main` comes out
@@ -11,7 +11,7 @@
 //! arguments a few lines up in its caller.
 //!
 //! The entry point is the one place where the arguments are visible *without*
-//! the body, because on PE the C runtime startup is INSIDE the image and kuna
+//! the body, because on PE the C runtime startup is INSIDE the image and unlace
 //! already decompiles it correctly. MSVC's `__scrt_common_main_seh` fetches each
 //! argument through a named CRT accessor immediately before the call:
 //!
@@ -37,7 +37,7 @@
 //! would assert the C library's declaration of `main`, which this pass has no
 //! evidence for (the same shape carries `wmain`'s `wchar_t **`, and a hand-rolled
 //! entry point need not be `main` at all). The names carry the meaning; the types
-//! stay at the level of what was observed, which is also how every other kuna
+//! stay at the level of what was observed, which is also how every other unlace
 //! prototype recovered from code reads.
 //!
 //! The prototype is parked by ENTRY ADDRESS on the callee, through the
@@ -52,7 +52,7 @@
 //!   `sub_1149(void)` too (`gcc -O1 int main(int,char**){puts("hi");return 42;}`,
 //!   stripped). But on ELF the CRT lives in libc — `_start` hands `main` to
 //!   `__libc_start_main` and the argument passing happens in another image — so
-//!   there is no call site in the object to read. kuna's ELF `main` oracle finds
+//!   there is no call site in the object to read. unlace's ELF `main` oracle finds
 //!   the address; asserting three slots there would be quoting the C convention,
 //!   not observing a caller, which is a weaker claim than this pass makes.
 //! * The callee must carry **no function symbol**. A named `main` — from
@@ -71,7 +71,7 @@
 //! ## The measured cost
 //!
 //! Declaring `argc` makes the first ABI argument register live at the entry
-//! function's own entry, so a call there to an import kuna has no prototype for
+//! function's own entry, so a call there to an import unlace has no prototype for
 //! now finds a value in it and renders `IsDebuggerPresent(CONCAT44(dat_c,argc))`
 //! where it used to render `IsDebuggerPresent()`. That is the standing behaviour
 //! at any unprototyped callee reached with a live argument register, and the real
@@ -88,7 +88,7 @@ use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 
 use super::{executable_sections, in_executable_section};
 
-/// (kuna) The PE CRT entry-function prototype pass (`entrymainproto`).
+/// (unlace) The PE CRT entry-function prototype pass (`entrymainproto`).
 pub struct EntryMainProtoPass;
 
 impl AnalysisPass for EntryMainProtoPass {
@@ -329,6 +329,6 @@ fn prototype_for(arch: &Architecture, main: u64, slots: &[Slot]) -> Option<Proto
         first_var_arg_slot: -1,
         output_storage: None,
         input_storage: Vec::new(),
-        kuna_library_names: None,
+        unlace_library_names: None,
     })
 }

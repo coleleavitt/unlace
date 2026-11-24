@@ -29,7 +29,7 @@
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::space::{AddrSpace, AddrSpaceManager, spacetype};
 use unlace_base::types::int4;
 
@@ -137,7 +137,7 @@ fn fcs_out(fd: &mut Funcdata, op: OpId, space: Rc<AddrSpace>, off: u64, size: in
         let mut noop = |_b: &mut unlace_decomp::varnode::VarnodeBank,
                         _o: VarnodeId,
                         _n: VarnodeId|
-         -> KunaResult<()> { panic!("collision") };
+         -> UnlaceResult<()> { panic!("collision") };
         fd.vbank_mut()
             .create_def(
                 size,

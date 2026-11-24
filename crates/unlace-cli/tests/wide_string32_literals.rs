@@ -30,7 +30,7 @@ fn wide_literals_round_trip_beside_int_tables() {
         .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
         .collect();
     for fixture in ["widestr32_gcc_O2_x86_64", "widestr32_clang_O2_x86_64"] {
-        let (printed, stderr, code) = common::run_kuna(&[
+        let (printed, stderr, code) = common::run_unlace(&[
             "decompile-all",
             &common::fixture(fixture),
             "--functions",
@@ -88,7 +88,7 @@ fn wide_literals_round_trip_beside_int_tables() {
 #[test]
 fn option_off_prints_the_address() {
     let fixture = common::fixture("widestr32_gcc_O2_x86_64");
-    let (printed, stderr, code) = common::run_kuna(&[
+    let (printed, stderr, code) = common::run_unlace(&[
         "decompile-all",
         &fixture,
         "--functions",
@@ -119,7 +119,7 @@ fn other_builds_and_targets_spell_the_literals() {
         "widestr32_mips32_be_O2",
     ] {
         let (printed, stderr, code) =
-            common::run_kuna(&["decompile-all", &common::fixture(fixture)]);
+            common::run_unlace(&["decompile-all", &common::fixture(fixture)]);
         assert_eq!(code, 0, "{fixture}: {stderr}");
         let wants: &[&str] = if fixture == "widestr32_mips32_be_O2" {
             &["(L\"first-msg\")"]
@@ -177,7 +177,7 @@ fn tables_past_their_zero_never_print_as_text() {
             let path = common::fixture(fixture);
             let mut args = vec!["decompile-all", path.as_str()];
             args.extend_from_slice(extra);
-            let (printed, stderr, code) = common::run_kuna(&args);
+            let (printed, stderr, code) = common::run_unlace(&args);
             assert_eq!(code, 0, "{fixture} {extra:?}: {stderr}");
             let wide = printed.matches("L\"").count();
             let control = printed.matches("(L\"control\")").count();

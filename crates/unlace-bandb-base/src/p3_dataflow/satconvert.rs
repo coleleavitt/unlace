@@ -13,8 +13,8 @@ use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 use crate::selectdiv::{constant, def_of, input, same, select_condition, size, source};
 
-crate::kuna_flag!(
-    /// (kuna `satconvert`) Print an exactly saturating float-to-integer conversion as the C cast.
+crate::unlace_flag!(
+    /// (unlace `satconvert`) Print an exactly saturating float-to-integer conversion as the C cast.
     SatConvert,
     "satconvert",
     "saturating float-to-integer conversion as a cast",
@@ -272,7 +272,7 @@ impl Rule for RuleSatConvert {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        if !data.get_arch().kuna_options.get::<SatConvert>().0 {
+        if !data.get_arch().unlace_options.get::<SatConvert>().0 {
             return 0;
         }
         let Some(out) = data.obank().get(op).and_then(|o| o.get_out()) else {

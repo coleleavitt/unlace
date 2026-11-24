@@ -1,4 +1,4 @@
-//! (kuna) `calleeretpurge` — read how many bytes a callee pops off its own
+//! (unlace) `calleeretpurge` — read how many bytes a callee pops off its own
 //! `ret imm16`.
 //!
 //! An x86 callee that ends `ret N` removes `N` argument bytes on top of the
@@ -173,7 +173,7 @@ pub fn probe_return_purge<T: unlace_sleigh::translate::Translate + ?Sized>(
 /// distinct callee once per image. A no-op unless `option calleeretpurge` is on.
 pub fn seed(arch: &mut crate::architecture::Architecture, data: &mut Funcdata) {
     if !arch
-        .kuna_options
+        .unlace_options
         .get::<crate::calleeretpurge::CalleeRetPurge>()
         .0
         || arch.get_description().contains("windows")
@@ -187,16 +187,16 @@ pub fn seed(arch: &mut crate::architecture::Architecture, data: &mut Funcdata) {
             continue;
         }
         let key = (sp.get_index(), e.get_offset());
-        let purge = match arch.kuna_callee_purge_cache.get(&key) {
+        let purge = match arch.unlace_callee_purge_cache.get(&key) {
             Some(p) => *p,
             None => {
                 let p = probe_return_purge(arch.translate(), &e);
-                arch.kuna_callee_purge_cache.insert(key, p);
+                arch.unlace_callee_purge_cache.insert(key, p);
                 p
             }
         };
         if let Some(p) = purge.or_else(|| stret_purge(arch, data.get_call_specs(i).get_name())) {
-            data.kuna_set_callee_purge(&e, p);
+            data.unlace_set_callee_purge(&e, p);
         }
     }
 }
@@ -224,12 +224,12 @@ fn stret_purge(arch: &crate::architecture::Architecture, name: &str) -> Option<i
 /// one was recorded, else the prototype's.
 pub fn effective_extra_pop(data: &Funcdata, i: int4) -> int4 {
     let fc = data.get_call_specs(i);
-    data.kuna_callee_purge(fc.get_entry_address())
+    data.unlace_callee_purge(fc.get_entry_address())
         .unwrap_or_else(|| fc.get_extra_pop())
 }
 
-crate::kuna_flag!(
-    /// (kuna) Take a direct callee's extrapop from its own `ret imm16`
+crate::unlace_flag!(
+    /// (unlace) Take a direct callee's extrapop from its own `ret imm16`
     /// (option `calleeretpurge`).  See [`crate::calleeretpurge`].
     CalleeRetPurge,
     "calleeretpurge",

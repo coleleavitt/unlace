@@ -1,4 +1,4 @@
-//! (kuna `swiftmetadata`) The name derivations the pass makes from imported
+//! (unlace `swiftmetadata`) The name derivations the pass makes from imported
 //! descriptor names, and the bounds that keep a crafted image's records
 //! from multiplying; the end-to-end naming is `verify_swiftmetadata`.
 

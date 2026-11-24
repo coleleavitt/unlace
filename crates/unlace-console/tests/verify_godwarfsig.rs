@@ -24,7 +24,7 @@ fn decompile(binary: &Path, names: &[&str], enabled: bool, options: &[&str]) -> 
     .unwrap();
     program
         .arch_mut()
-        .set_kuna_option("godwarfsig", if enabled { "on" } else { "off" })
+        .set_unlace_option("godwarfsig", if enabled { "on" } else { "off" })
         .unwrap();
     program.commit_pending_analysis().unwrap();
     let mut commands = vec!["option outlang go".to_string()];
@@ -39,7 +39,7 @@ fn decompile(binary: &Path, names: &[&str], enabled: bool, options: &[&str]) -> 
     }
     let mut status = ConsoleCommands::into_status(commands);
     register_decomp_commands(&mut status);
-    unlace_console::console::register_kuna_commands(&mut status);
+    unlace_console::console::register_unlace_commands(&mut status);
     status
         .get_data_mut(DECOMPILE_MODULE)
         .unwrap()
@@ -291,7 +291,7 @@ fn empty_entry_ranges_require_the_exact_register_and_ret_body() {
     .unwrap();
     program
         .arch_mut()
-        .set_kuna_option("godwarfsig", "on")
+        .set_unlace_option("godwarfsig", "on")
         .unwrap();
     program.commit_pending_analysis().unwrap();
     for name in [
@@ -354,7 +354,7 @@ fn uncompressed_go_results_never_become_c_inputs() {
                 .unwrap();
                 program
                     .arch_mut()
-                    .set_kuna_option("godwarfsig", if enabled { "on" } else { "off" })
+                    .set_unlace_option("godwarfsig", if enabled { "on" } else { "off" })
                     .unwrap();
                 program.commit_pending_analysis().unwrap();
                 for name in names {
@@ -391,7 +391,7 @@ fn a_different_calling_convention_refuses_the_contract() {
     .unwrap();
     program
         .arch_mut()
-        .set_kuna_option("godwarfsig", "on")
+        .set_unlace_option("godwarfsig", "on")
         .unwrap();
     let model = program.arch().get_model("abi0").unwrap().clone();
     program.arch_mut().set_default_model_rc(model);
@@ -419,7 +419,7 @@ fn a_single_nominal_string_tracks_the_declaration_and_exact_input_storage() {
         .unwrap();
         program
             .arch_mut()
-            .set_kuna_option("godwarfsig", if enabled { "on" } else { "off" })
+            .set_unlace_option("godwarfsig", if enabled { "on" } else { "off" })
             .unwrap();
         program.commit_pending_analysis().unwrap();
         let entry = program.lookup_symbol("main.stringIndex").unwrap();

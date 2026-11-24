@@ -22,9 +22,9 @@ stays accepted as a spelling of `full` (that is what it meant when the option wa
 | `kuna-analysis/src/analyzers/formatstring/apply.rs` | override parameters are anonymous |
 | `kuna-analysis/src/pass.rs` | `FormatSiteFact` + `AnalysisOutput::format_sites` |
 | `kuna-analysis/src/passes.rs` | the pass joins `listing_consumer_passes` |
-| `kuna-console/src/engine.rs` | the commit parks the sites on the architecture, keyed by caller |
+| `console/src/engine.rs` | the commit parks the sites on the architecture, keyed by caller |
 | `kuna-decomp/src/infra/architecture.rs` | `analysis_formatstring: FormatStringMode`, `format_call_overrides` |
-| `kuna-console/src/decompile_step.rs` | parked overrides feed the FIRST drive; `audit_parked_format_sites` withdraws any the drive contradicts and drives once more; the loop and its read-only propagation are `full`-only |
+| `console/src/decompile_step.rs` | parked overrides feed the FIRST drive; `audit_parked_format_sites` withdraws any the drive contradicts and drives once more; the loop and its read-only propagation are `full`-only |
 | `kuna-decomp/src/p0_knowledge/modes.rs` | `formatstring` leaves the `aggressive` exclusion list |
 
 ## Why this can be default-ON
@@ -42,7 +42,7 @@ stays accepted as a spelling of `full` (that is what it meant when the option wa
 
 ## Verification
 
-- two-pass stage test `tests/stages/kuna-formatstring-static.toml` (off = the bug,
+- two-pass stage test `tests/stages/formatstring-static.toml` (off = the bug,
   default = the fix, plus a `full` pass that reaches the same answer without a
   Listing), and three more passes over `fmtjoin_x86_64` pinning the two sites
   the audit must withdraw (a format chosen on a jump table; an `alloca` frame);

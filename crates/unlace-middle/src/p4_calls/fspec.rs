@@ -51,7 +51,7 @@
 //!   legacy fallback (`useFillinFallback == true`).  The `ModelRule` type is a
 //!   local uninhabitable placeholder enum.
 //! - `// STUB(w6-fspec-2)` — the back-pointer to the owning [`Architecture`]
-//!   (C++ `ProtoModel::glb`) is **not** held: the kuna `Architecture` (W4) has
+//!   (C++ `ProtoModel::glb`) is **not** held: the unlace `Architecture` (W4) has
 //!   no prototype-model registry / `types` / `defaultReturnAddr` / `getModel`
 //!   yet.  Instead [`ProtoModel`] threads the [`AddrSpaceManager`] (for the
 //!   stack space and float-extension construction) and the [`TypeFactory`]
@@ -63,7 +63,7 @@
 //! - `// STUB(W4)` — `decode`/`encode` paths reach fspec-owned marshaling
 //!   ElementIds/AttributeIds (`<pentry>`, `<group>`, ...) and the
 //!   `ProtoModel`/`Architecture` wiring that are not yet ported.  These methods
-//!   return `Err(KunaError::lowlevel("STUB(W4) ..."))`; the pure-algorithm
+//!   return `Err(UnlaceError::lowlevel("STUB(W4) ..."))`; the pure-algorithm
 //!   surfaces above do not depend on them and are exercised directly in tests
 //!   via the `seed`/`push_entry` builder hooks.  The `FuncProto` input/output
 //!   trial-update paths (`updateInputTypes`, `updateOutputTypes`, ...) and
@@ -76,7 +76,7 @@
 use std::rc::Rc;
 
 use unlace_base::address::{Address, RangeList};
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::{AddrSpace, AddrSpaceManager, JoinRecord, VarnodeStorage, spacetype};
 use unlace_base::types::{Wrap, int4, uint4, uintb};
 use unlace_num::opcodes::OpCode;
@@ -139,7 +139,7 @@ pub enum AssignActionResponse {
 /// `pointermax` ConvertToPointer rule).  `assign_address` iterates these rules
 /// first and only falls through to the fallback algorithm when every rule
 /// returns `fail` — the C++ `ParamListStandard::assignAddress` behavior
-/// (fspec.cc:783-792).  // (kuna) float-typeclass wave: ModelRule now wired.
+/// (fspec.cc:783-792).  // (unlace) float-typeclass wave: ModelRule now wired.
 pub use crate::modelrules::ModelRule;
 
 // =============================================================================
@@ -173,7 +173,7 @@ pub mod param_entry_flags {
     pub const OVERLAPPING: uint4 = 0x400;
     /// Entry is first in its storage class.
     pub const FIRST_STORAGE: uint4 = 0x800;
-    /// (kuna) Slots keep the entry's alignment, not the data type's (`stackalign="false"`).
+    /// (unlace) Slots keep the entry's alignment, not the data type's (`stackalign="false"`).
     pub const IGNORE_TYPE_ALIGN: uint4 = 0x1000;
 }
 
@@ -634,7 +634,7 @@ impl ParamEntry {
         sz: int4,
         type_align: int4,
         manager: &AddrSpaceManager,
-    ) -> KunaResult<Address> {
+    ) -> UnlaceResult<Address> {
         self.get_addr_by_slot_justify(slotnum, sz, type_align, !self.is_left_justified(), manager)
     }
 
@@ -648,7 +648,7 @@ impl ParamEntry {
         type_align: int4,
         justify_right: bool,
         manager: &AddrSpaceManager,
-    ) -> KunaResult<Address> {
+    ) -> UnlaceResult<Address> {
         let mut res = Address::new_invalid(); // Start with an invalid result
         let spaceused: int4;
         if sz < self.minsize {
@@ -726,23 +726,23 @@ impl ParamEntry {
         None
     }
 
-    /// (kuna) `armfloatreturn`: a seeded `d` entry is one register, the
+    /// (unlace) `armfloatreturn`: a seeded `d` entry is one register, the
     /// double-width view of its two `s` entries, not a two-piece join. Drop the
     /// per-piece extra checks overlap resolution gave it, and let it share the
     /// first-in-class standing of its low `s` entry, so a value a call left in
     /// it is judged as it would be in that `s` register.
     #[doc(hidden)]
-    pub fn kuna_whole_register(&mut self, first: bool) {
+    pub fn unlace_whole_register(&mut self, first: bool) {
         self.flags &= !(param_entry_flags::EXTRACHECK_LOW | param_entry_flags::EXTRACHECK_HIGH);
         if first {
             self.flags |= param_entry_flags::FIRST_STORAGE;
         }
     }
 
-    /// (kuna) Take `other`'s extension of a value narrower than the entry (the
+    /// (unlace) Take `other`'s extension of a value narrower than the entry (the
     /// spec's `extension` attribute).
     #[doc(hidden)]
-    pub fn kuna_copy_extension(&mut self, other: &ParamEntry) {
+    pub fn unlace_copy_extension(&mut self, other: &ParamEntry) {
         use param_entry_flags::*;
         let mask = SMALLSIZE_ZEXT | SMALLSIZE_SEXT | SMALLSIZE_INTTYPE | SMALLSIZE_FLOATEXT;
         self.flags = (self.flags & !mask) | (other.flags & mask);
@@ -770,7 +770,7 @@ impl ParamEntry {
         &mut self,
         prev_list: &[ParamEntry],
         manager: &AddrSpaceManager,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         if self.spaceid().get_type() != spacetype::IPTR_JOIN {
             self.joinrec = None;
             return Ok(());
@@ -793,7 +793,7 @@ impl ParamEntry {
             }
         }
         if self.group_set.is_empty() {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "<pentry> join must overlap at least one previous entry",
             ));
         }
@@ -804,7 +804,7 @@ impl ParamEntry {
 
     /// Search for overlaps of this with previous entries and reassign the group
     /// if needed (C++ `resolveOverlap`).  `prev_list` excludes `self`.
-    fn resolve_overlap(&mut self, prev_list: &[ParamEntry]) -> KunaResult<()> {
+    fn resolve_overlap(&mut self, prev_list: &[ParamEntry]) -> UnlaceResult<()> {
         if self.joinrec.is_some() {
             return Ok(()); // Overlaps with join records dealt with in resolveJoin
         }
@@ -833,7 +833,7 @@ impl ParamEntry {
                     };
                 }
             } else {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "Illegal overlap of <pentry> in compiler spec",
                 ));
             }
@@ -849,19 +849,19 @@ impl ParamEntry {
 
     /// Enforce ParamEntry group ordering rules; entries within a group must be
     /// distinguishable by size or type (C++ static `orderWithinGroup`).
-    pub fn order_within_group(entry1: &ParamEntry, entry2: &ParamEntry) -> KunaResult<()> {
+    pub fn order_within_group(entry1: &ParamEntry, entry2: &ParamEntry) -> UnlaceResult<()> {
         if entry2.minsize > entry1.size || entry1.minsize > entry2.size {
             return Ok(());
         }
         if entry1.type_ != entry2.type_ {
             if entry1.type_ == type_class::TYPECLASS_GENERAL {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "<pentry> tags with a specific type must come before the general type",
                 ));
             }
             return Ok(());
         }
-        Err(KunaError::lowlevel(
+        Err(UnlaceError::lowlevel(
             "<pentry> tags within a group must be distinguished by size or type",
         ))
     }
@@ -877,8 +877,8 @@ impl ParamEntry {
         _normalstack: bool,
         _grouped: bool,
         _prev_list: &[ParamEntry],
-    ) -> KunaResult<()> {
-        Err(KunaError::lowlevel(
+    ) -> UnlaceResult<()> {
+        Err(UnlaceError::lowlevel(
             "STUB(W4) ParamEntry::decode: fspec marshaling element ids not yet ported",
         ))
     }
@@ -901,7 +901,7 @@ impl ParamEntry {
         grouped: bool,
         prev_list: &[ParamEntry],
         manager: &AddrSpaceManager,
-    ) -> KunaResult<ParamEntry> {
+    ) -> UnlaceResult<ParamEntry> {
         if alignment == size {
             alignment = 0;
         }
@@ -921,7 +921,7 @@ impl ParamEntry {
             if space.is_big_endian() {
                 e.flags |= param_entry_flags::FORCE_LEFT_JUSTIFY;
             } else {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "No support for right justification in little endian encoding",
                 ));
             }
@@ -929,7 +929,7 @@ impl ParamEntry {
         if !normalstack {
             e.flags |= param_entry_flags::REVERSE_STACK;
             if alignment != 0 && (size % alignment) != 0 {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "For positive stack growth, <pentry> size must match alignment",
                 ));
             }
@@ -1007,21 +1007,21 @@ pub mod param_trial_flags {
     /// Solid movement into the Varnode.
     pub const ANCESTOR_SOLID: uint4 = 0x400;
     pub const STACK_ADDRESS: uint4 = 0x800;
-    /// (kuna) Solid only through a reload from the caller's frame.
+    /// (unlace) Solid only through a reload from the caller's frame.
     pub const FRAME_RELOAD: uint4 = 0x1000;
-    /// (kuna `passthrough`) The function's own incoming register, untouched:
+    /// (unlace `passthrough`) The function's own incoming register, untouched:
     /// in place in the register the trial names, or saved to the stack slot.
     pub const FORWARDED_INPUT: uint4 = 0x40000;
-    /// (kuna `passthrough`) An active trial not set up for the call: storage
+    /// (unlace `passthrough`) An active trial not set up for the call: storage
     /// the function reads again after it, or the stack-protector wipe.
     pub const LIVE_PAST_CALL: uint4 = 0x80000;
-    /// (kuna `passthrough`) On a register range the pass claimed because the
+    /// (unlace `passthrough`) On a register range the pass claimed because the
     /// function never touches it.
     pub const UNTOUCHED: uint4 = 0x100000;
-    /// (kuna `passthrough`) An active stack slot holding a constant the
+    /// (unlace `passthrough`) An active stack slot holding a constant the
     /// function stored there.
     pub const STORED_CONSTANT: uint4 = 0x200000;
-    /// (kuna) `calleefilledarg`: the callee loads this register itself, so the
+    /// (unlace) `calleefilledarg`: the callee loads this register itself, so the
     /// slot is no parameter and no evidence about the slots after it.
     pub const CALLEE_FILLED: uint4 = 0x2000;
 }
@@ -1163,7 +1163,7 @@ impl ParamTrial {
     pub fn is_ind_create_formed(&self) -> bool {
         (self.flags & param_trial_flags::INDCREATE_FORMED) != 0
     }
-    /// (kuna) Take a trial formed by indirect creation as a value of its own:
+    /// (unlace) Take a trial formed by indirect creation as a value of its own:
     /// the half of a callee's proven pair the function hands back.
     pub fn clear_ind_create_formed(&mut self) {
         self.flags &= !param_trial_flags::INDCREATE_FORMED;
@@ -1204,7 +1204,7 @@ impl ParamTrial {
     pub fn has_frame_reload(&self) -> bool {
         self.flags & param_trial_flags::FRAME_RELOAD != 0
     }
-    /// (kuna `passthrough`) Record that the call reads the function's own
+    /// (unlace `passthrough`) Record that the call reads the function's own
     /// incoming register here, untouched; see
     /// [`crate::p4_calls::passthrough::forwarded_in_place`].
     pub fn set_forwarded_input(&mut self) {
@@ -1213,7 +1213,7 @@ impl ParamTrial {
     pub fn is_forwarded_input(&self) -> bool {
         self.flags & param_trial_flags::FORWARDED_INPUT != 0
     }
-    /// (kuna `passthrough`) Record that the active trial is not set up for the
+    /// (unlace `passthrough`) Record that the active trial is not set up for the
     /// call; see [`crate::p4_calls::passthrough::survives_call`] and
     /// [`crate::p4_calls::passthrough::set_before_branch`].
     pub fn set_live_past_call(&mut self) {
@@ -1222,7 +1222,7 @@ impl ParamTrial {
     pub fn is_live_past_call(&self) -> bool {
         self.flags & param_trial_flags::LIVE_PAST_CALL != 0
     }
-    /// (kuna `passthrough`) Record that the trial is on a range the pass
+    /// (unlace `passthrough`) Record that the trial is on a range the pass
     /// claimed because the function never touches it.
     pub fn set_untouched(&mut self) {
         self.flags |= param_trial_flags::UNTOUCHED;
@@ -1230,7 +1230,7 @@ impl ParamTrial {
     pub fn is_untouched(&self) -> bool {
         self.flags & param_trial_flags::UNTOUCHED != 0
     }
-    /// (kuna `passthrough`) Record that the active stack trial holds a
+    /// (unlace `passthrough`) Record that the active stack trial holds a
     /// constant the function stored; see
     /// [`crate::p4_calls::passthrough::ends_rescued_run`].
     pub fn set_stored_constant(&mut self) {
@@ -1239,7 +1239,7 @@ impl ParamTrial {
     pub fn is_stored_constant(&self) -> bool {
         self.flags & param_trial_flags::STORED_CONSTANT != 0
     }
-    /// (kuna) `calleefilledarg`: the callee writes this register before it
+    /// (unlace) `calleefilledarg`: the callee writes this register before it
     /// could read it, and the caller put nothing in it.
     pub fn set_callee_filled(&mut self) {
         self.flags |= param_trial_flags::CALLEE_FILLED;
@@ -1401,39 +1401,39 @@ pub struct ParamActive {
     recoversubcall: bool,
     /// True if varnodes should be joined in reverse order (C++ `joinReverse`).
     join_reverse: bool,
-    /// (kuna) `varargstackargs`: score the stack tail of a `fillinMap` resource
+    /// (unlace) `varargstackargs`: score the stack tail of a `fillinMap` resource
     /// section separately from its register prefix, because these trials belong
     /// to a VARIADIC call whose variable arguments the ABI passes on the stack.
     /// Set by `ActionActiveParam`; see [`crate::p4_calls::varargstackargs`].
     vararg_stack_split: bool,
-    /// (kuna) `inputparamgap`: are these the trials of the FUNCTION'S OWN input
+    /// (unlace) `inputparamgap`: are these the trials of the FUNCTION'S OWN input
     /// recovery, with the register-gap tolerance enabled?  Set by
     /// `ActionInputPrototype`; see [`crate::p4_calls::inputparamgap`].
     own_input_gap: bool,
-    /// (kuna) `stackarggap`: may an UNREFERENCED argument register end this CALL
+    /// (unlace) `stackarggap`: may an UNREFERENCED argument register end this CALL
     /// SITE's argument list when the next slot is on the stack?  Set by
     /// `ActionActiveParam`; see [`crate::p4_calls::stackarggap`].
     stack_arg_gap: bool,
-    /// (kuna) `passthrough`: which forwarded argument registers at this CALL
+    /// (unlace) `passthrough`: which forwarded argument registers at this CALL
     /// SITE stay out of the inactive-chain count, `None` for none.  Set by
     /// `ActionActiveParam`; see
     /// [`crate::p4_calls::passthrough::neutral_in_chain`].
     forwarded_neutral: Option<NeutralScope>,
-    /// (kuna `calleereginputs`) Does the callee read every register parameter
+    /// (unlace `calleereginputs`) Does the callee read every register parameter
     /// of the model these trials are scored against?  Set by
     /// `ActionActiveParam`; see [`crate::p4_calls::calleereginputs`].
     callee_reads_registers: bool,
-    /// (kuna) `condexeret`: where the output trials stand with respect to the one
+    /// (unlace) `condexeret`: where the output trials stand with respect to the one
     /// retry pass; see [`crate::p4_calls::condexeret`].
     cond_exe_retry: CondExeRetry,
-    /// (kuna) `armfloatargs`: the callee's stated single-precision inputs, which a
+    /// (unlace) `armfloatargs`: the callee's stated single-precision inputs, which a
     /// hole below a later double keeps as words; see
     /// [`crate::p4_calls::armfloatargs`].
     single_floats: Vec<Address>,
-    /// (kuna) `armfloatargs`: s-registers the function's body reads on entry,
+    /// (unlace) `armfloatargs`: s-registers the function's body reads on entry,
     /// which are parameters even where they would be a back-fill slot.
     read_singles: Vec<Address>,
-    /// (kuna) `calleefilledarg`: the callee's entry-liveness probe, which says
+    /// (unlace) `calleefilledarg`: the callee's entry-liveness probe, which says
     /// which argument registers it loads itself; see
     /// [`crate::p4_calls::calleefilledarg`].
     callee_filled: Option<Rc<dyn EntryLiveness>>,
@@ -1452,15 +1452,15 @@ impl ParamActive {
             needsfinalcheck: false,
             recoversubcall: recoversub,
             join_reverse: false,
-            vararg_stack_split: false,          // (kuna) varargstackargs
-            own_input_gap: false,               // (kuna) inputparamgap
-            stack_arg_gap: false,               // (kuna) stackarggap
-            forwarded_neutral: None,            // (kuna) passthrough
-            callee_reads_registers: false,      // (kuna) calleereginputs
-            cond_exe_retry: Default::default(), // (kuna) condexeret
-            single_floats: Vec::new(),          // (kuna) armfloatargs
-            read_singles: Vec::new(),           // (kuna) armfloatargs
-            callee_filled: None,                // (kuna) calleefilledarg
+            vararg_stack_split: false,          // (unlace) varargstackargs
+            own_input_gap: false,               // (unlace) inputparamgap
+            stack_arg_gap: false,               // (unlace) stackarggap
+            forwarded_neutral: None,            // (unlace) passthrough
+            callee_reads_registers: false,      // (unlace) calleereginputs
+            cond_exe_retry: Default::default(), // (unlace) condexeret
+            single_floats: Vec::new(),          // (unlace) armfloatargs
+            read_singles: Vec::new(),           // (unlace) armfloatargs
+            callee_filled: None,                // (unlace) calleefilledarg
         }
     }
 
@@ -1562,19 +1562,19 @@ impl ParamActive {
     pub fn join_pair_order(&self) -> (int4, int4) {
         if self.join_reverse { (1, 0) } else { (0, 1) }
     }
-    /// (kuna) `varargstackargs`: are these the trials of a variadic call whose
+    /// (unlace) `varargstackargs`: are these the trials of a variadic call whose
     /// stack tail must be scored as its own `fillinMap` section?
     pub fn is_vararg_stack_split(&self) -> bool {
         self.vararg_stack_split
     }
-    /// (kuna) `varargstackargs`: record that these trials belong to a variadic
+    /// (unlace) `varargstackargs`: record that these trials belong to a variadic
     /// call site.  `clear()` deliberately leaves it alone -- like
     /// `recoversubcall` it is a property of the call, not of one pass.
     pub fn set_vararg_stack_split(&mut self, val: bool) {
         self.vararg_stack_split = val;
     }
 
-    /// (kuna) `inputparamgap`: are these the function's OWN input trials, with
+    /// (unlace) `inputparamgap`: are these the function's OWN input trials, with
     /// the unused-register-run tolerance enabled?  Read by
     /// [`Self::force_inactive_chain`](ParamListStandard) through
     /// [`crate::p4_calls::inputparamgap::gap_slot_is_exempt`].
@@ -1582,14 +1582,14 @@ impl ParamActive {
         self.own_input_gap
     }
 
-    /// (kuna) `inputparamgap`: record that these are the function's own input
+    /// (unlace) `inputparamgap`: record that these are the function's own input
     /// trials and the option is on.  Only `ActionInputPrototype` sets it; a call
     /// site's trials keep the upstream chain rule.
     pub fn set_own_input_gap(&mut self, val: bool) {
         self.own_input_gap = val;
     }
 
-    /// (kuna) `stackarggap`: may an unreferenced argument register end this call
+    /// (unlace) `stackarggap`: may an unreferenced argument register end this call
     /// site's argument list?  Read by
     /// [`Self::force_inactive_chain`](ParamListStandard) through
     /// [`crate::p4_calls::stackarggap::ends_argument_list`].
@@ -1597,53 +1597,53 @@ impl ParamActive {
         self.stack_arg_gap
     }
 
-    /// (kuna) `stackarggap`: record that these are a call site's trials and the
+    /// (unlace) `stackarggap`: record that these are a call site's trials and the
     /// option is on.  `clear()` leaves it alone -- like `recoversubcall` it is a
     /// property of the call, not of one pass.
     pub fn set_stack_arg_gap(&mut self, val: bool) {
         self.stack_arg_gap = val;
     }
 
-    /// (kuna) `passthrough`: which forwarded argument registers at this call
+    /// (unlace) `passthrough`: which forwarded argument registers at this call
     /// site stay out of the inactive-chain count?
     pub fn forwarded_neutral(&self) -> Option<&NeutralScope> {
         self.forwarded_neutral.as_ref()
     }
 
-    /// (kuna) `passthrough`: record the call's scope, `None` with the option
+    /// (unlace) `passthrough`: record the call's scope, `None` with the option
     /// off; a property of the call, as `stack_arg_gap` is.
     pub fn set_forwarded_neutral(&mut self, val: Option<NeutralScope>) {
         self.forwarded_neutral = val;
     }
 
-    /// (kuna `calleereginputs`) Does the callee read every register parameter
+    /// (unlace `calleereginputs`) Does the callee read every register parameter
     /// of the model?
     pub fn is_callee_reads_registers(&self) -> bool {
         self.callee_reads_registers
     }
 
-    /// (kuna `calleereginputs`) Record whether the callee reads every register
+    /// (unlace `calleereginputs`) Record whether the callee reads every register
     /// parameter of the model; a property of the call, kept across `clear()`.
     pub fn set_callee_reads_registers(&mut self, val: bool) {
         self.callee_reads_registers = val;
     }
 
-    /// (kuna) `armfloatargs`: record the callee's stated single-precision inputs.
+    /// (unlace) `armfloatargs`: record the callee's stated single-precision inputs.
     pub fn set_single_floats(&mut self, addrs: Vec<Address>) {
         self.single_floats = addrs;
     }
 
-    /// (kuna) `armfloatargs`: record the s-registers the body reads on entry.
+    /// (unlace) `armfloatargs`: record the s-registers the body reads on entry.
     pub fn set_read_singles(&mut self, addrs: Vec<Address>) {
         self.read_singles = addrs;
     }
 
-    /// (kuna) `calleefilledarg`: hand over the callee's entry-liveness probe.
+    /// (unlace) `calleefilledarg`: hand over the callee's entry-liveness probe.
     pub fn set_callee_filled(&mut self, dead: Option<Rc<dyn EntryLiveness>>) {
         self.callee_filled = dead;
     }
 
-    /// (kuna) `calleefilledarg`: is trial `i` a register slot the callee loads
+    /// (unlace) `calleefilledarg`: is trial `i` a register slot the callee loads
     /// itself and the caller never filled?  Either the scoring marked it so
     /// ([`ParamTrial::is_callee_filled`]), or it is a hole `buildTrialMap`
     /// backfilled on a register the probe proves written before any read.
@@ -1656,11 +1656,11 @@ impl ParamActive {
                     .as_ref()
                     .is_some_and(|d| d.proves_dead(t.get_address(), t.get_size())))
     }
-    /// (kuna) `condexeret`: the state of the retry pass.
+    /// (unlace) `condexeret`: the state of the retry pass.
     pub fn cond_exe_retry(&self) -> &CondExeRetry {
         &self.cond_exe_retry
     }
-    /// (kuna) `condexeret`: move the retry pass to `state`.
+    /// (unlace) `condexeret`: move the retry pass to `state`.
     pub fn set_cond_exe_retry(&mut self, state: CondExeRetry) {
         self.cond_exe_retry = state;
     }
@@ -1742,9 +1742,9 @@ impl ParamActive {
 
     /// Split the trial at index `i` into two, the first piece having size `sz`
     /// (C++ `splitTrial`).
-    pub fn split_trial(&mut self, i: int4, sz: int4) -> KunaResult<()> {
+    pub fn split_trial(&mut self, i: int4, sz: int4) -> UnlaceResult<()> {
         if self.stackplaceholder >= 0 {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Cannot split parameter when the placeholder has not been recovered",
             ));
         }
@@ -1776,9 +1776,9 @@ impl ParamActive {
 
     /// Join the trial at `slot` with the trial in the next slot (C++
     /// `joinTrial`).
-    pub fn join_trial(&mut self, slot: int4, addr: &Address, sz: int4) -> KunaResult<()> {
+    pub fn join_trial(&mut self, slot: int4, addr: &Address, sz: int4) -> UnlaceResult<()> {
         if self.stackplaceholder >= 0 {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Cannot join parameters when the placeholder has not been removed",
             ));
         }
@@ -1804,7 +1804,9 @@ impl ParamActive {
             }
         }
         if sizecheck != sz {
-            return Err(KunaError::lowlevel("Size mismatch when joining parameters"));
+            return Err(UnlaceError::lowlevel(
+                "Size mismatch when joining parameters",
+            ));
         }
         self.slotbase -= 1;
         self.trial = newtrials;
@@ -1903,11 +1905,11 @@ impl ParameterPieces {
         pieces: &mut Vec<VarnodeData>,
         most_to_least: bool,
         manager: &AddrSpaceManager,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         if !most_to_least && pieces.len() > 1 {
             pieces.reverse();
         }
-        // The kuna join machinery operates on `VarnodeStorage`; convert the
+        // The unlace join machinery operates on `VarnodeStorage`; convert the
         // `VarnodeData` triples in place, merge contiguous ranges through the
         // manager's installed RegisterLookup (the C++ `glb->translate`), then
         // continue on the merged storage list.
@@ -1927,7 +1929,7 @@ impl ParameterPieces {
             let p = &seq[0];
             self.addr = Address::new(
                 p.space.clone().ok_or_else(|| {
-                    KunaError::lowlevel("assignAddressFromPieces: merged piece has no space")
+                    UnlaceError::lowlevel("assignAddressFromPieces: merged piece has no space")
                 })?,
                 p.offset,
             );
@@ -1946,7 +1948,7 @@ impl ParameterPieces {
         let unified = join_record.get_unified();
         self.addr = Address::new(
             unified.space.clone().ok_or_else(|| {
-                KunaError::lowlevel("assignAddressFromPieces: join record has no unified space")
+                UnlaceError::lowlevel("assignAddressFromPieces: join record has no unified space")
             })?,
             unified.offset,
         );
@@ -2052,7 +2054,7 @@ impl EffectRecord {
     /// Encode this record as a sized `<addr>` element (C++
     /// `EffectRecord::encode`, fspec.cc:3560-3568).  Only the three named
     /// effect types are encodable.
-    pub fn encode(&self, encoder: &mut dyn unlace_base::marshal::Encoder) -> KunaResult<()> {
+    pub fn encode(&self, encoder: &mut dyn unlace_base::marshal::Encoder) -> UnlaceResult<()> {
         let addr = self.range.get_addr();
         if self.type_ == effect_type::UNAFFECTED
             || self.type_ == effect_type::KILLEDBYCALL
@@ -2060,7 +2062,7 @@ impl EffectRecord {
         {
             addr.encode_sized(encoder, self.range.size as int4)
         } else {
-            Err(KunaError::lowlevel("Bad EffectRecord type"))
+            Err(UnlaceError::lowlevel("Bad EffectRecord type"))
         }
     }
 }
@@ -2294,20 +2296,20 @@ impl ParamListStandard {
         }
     }
 
-    /// (kuna) `armfloatreturn`: let a whole double trial fill both of its
+    /// (unlace) `armfloatreturn`: let a whole double trial fill both of its
     /// single-register groups, so the s-register it covers is no hole.
     #[doc(hidden)]
     pub fn preserve_whole_float_groups(&mut self) {
         self.whole_float_groups = true;
     }
 
-    /// (kuna) `armfloatargs`: leave the back-fill slot below a double unfilled.
+    /// (unlace) `armfloatargs`: leave the back-fill slot below a double unfilled.
     #[doc(hidden)]
     pub fn skip_backfill_holes(&mut self) {
         self.backfill_holes = true;
     }
 
-    /// (kuna) `armfloatargs`: group `grp` is the upper half of a d-register whose
+    /// (unlace) `armfloatargs`: group `grp` is the upper half of a d-register whose
     /// lower half holds a single and every later VFP hit is a double. AAPCS-VFP
     /// places those doubles past the pair without this slot, so leaving it out
     /// keeps the remaining parameters in the storage the convention assigns. A
@@ -2347,7 +2349,7 @@ impl ParamListStandard {
         later.peek().is_some() && later.all(|&e| float(e, 8))
     }
 
-    /// (kuna) `armfloatreturn`: the d-register entry that fills the hole at
+    /// (unlace) `armfloatreturn`: the d-register entry that fills the hole at
     /// group `grp` whole, when every group it covers is missing and a later
     /// hit is itself a double. An unused `double` before a used one is one
     /// 8-byte parameter, not two s-registers.
@@ -2375,14 +2377,14 @@ impl ParamListStandard {
         &self.entry
     }
 
-    /// (kuna) The parameter entries, for a builder that derives one model from
+    /// (unlace) The parameter entries, for a builder that derives one model from
     /// another.
     #[doc(hidden)]
-    pub fn kuna_entries_mut(&mut self) -> &mut [ParamEntry] {
+    pub fn unlace_entries_mut(&mut self) -> &mut [ParamEntry] {
         &mut self.entry
     }
 
-    /// (kuna) Are `hi` and `lo` two of these entries, with the value's most
+    /// (unlace) Are `hi` and `lo` two of these entries, with the value's most
     /// significant piece in the earlier one?  Read back from where a joined
     /// value's pieces sit, this is the order the matched `<join>` rule consumed
     /// them in (C++ `MultiSlotAssign::consumeMostSig`: big-endian storage,
@@ -2880,7 +2882,7 @@ impl ParamListStandard {
         status: &mut [int4],
         param: &mut ParameterPieces,
         manager: &AddrSpaceManager,
-    ) -> KunaResult<AssignActionResponse> {
+    ) -> UnlaceResult<AssignActionResponse> {
         for cur_entry in self.entry.iter() {
             let grp = cur_entry.get_group();
             if status[grp as usize] < 0 {
@@ -2927,7 +2929,7 @@ impl ParamListStandard {
         status: &mut [int4],
         res: &mut ParameterPieces,
         manager: &AddrSpaceManager,
-    ) -> KunaResult<AssignActionResponse> {
+    ) -> UnlaceResult<AssignActionResponse> {
         // C++ ParamListStandard::assignAddress (fspec.cc:783-792): try each
         // ModelRule in order; the first non-fail response wins.  Only when every
         // rule returns `fail` do we fall through to the metatype-keyed fallback.
@@ -2950,9 +2952,9 @@ impl ParamListStandard {
         typefactory: &dyn TypeFactory,
         res: &mut Vec<ParameterPieces>,
         manager: &AddrSpaceManager,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         match self.kind {
-            ParamListKind::Merged => Err(KunaError::lowlevel(
+            ParamListKind::Merged => Err(UnlaceError::lowlevel(
                 "Cannot assign prototype before model has been resolved",
             )),
             ParamListKind::Standard | ParamListKind::Register => {
@@ -2974,7 +2976,7 @@ impl ParamListStandard {
         typefactory: &dyn TypeFactory,
         res: &mut Vec<ParameterPieces>,
         manager: &AddrSpaceManager,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let mut status = vec![0i32; self.numgroup as usize];
         if !proto.input_storage.is_empty() {
             return (crate::architecture::default_pass_hooks().inputstorage_assign)(
@@ -3051,11 +3053,11 @@ impl ParamListStandard {
         typefactory: &dyn TypeFactory,
         res: &mut Vec<ParameterPieces>,
         manager: &AddrSpaceManager,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let mut status = vec![0i32; self.numgroup as usize];
         let mut back = ParameterPieces::default();
         let Some(outtype) = proto.outtype.clone() else {
-            return Err(KunaError::param_unassigned(
+            return Err(UnlaceError::param_unassigned(
                 "Cannot assign the output of a prototype with no return type",
             ));
         };
@@ -3094,11 +3096,11 @@ impl ParamListStandard {
         typefactory: &dyn TypeFactory,
         res: &mut Vec<ParameterPieces>,
         manager: &AddrSpaceManager,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let mut status = vec![0i32; self.numgroup as usize];
         let mut back = ParameterPieces::default();
         let Some(outtype) = proto.outtype.clone() else {
-            return Err(KunaError::param_unassigned(
+            return Err(UnlaceError::param_unassigned(
                 "Cannot assign the output of a prototype with no return type",
             ));
         };
@@ -3130,7 +3132,7 @@ impl ParamListStandard {
             let spc = match self.spacebase.clone() {
                 Some(s) => s,
                 None => Rc::clone(manager.get_default_data_space().ok_or_else(|| {
-                    KunaError::lowlevel(
+                    UnlaceError::lowlevel(
                         "ParamListStandardOut::assignMap: no default data space for hidden return",
                     )
                 })?),
@@ -3158,7 +3160,7 @@ impl ParamListStandard {
                     // dedicated LowlevelError subclass caught by
                     // ProtoModel::assignParameterStorage(ignoreOutputError=true)
                     // (fspec.cc:2441) to degrade the output to void.
-                    return Err(KunaError::param_unassigned(
+                    return Err(UnlaceError::param_unassigned(
                         "Cannot assign return value as a pointer",
                     ));
                 }
@@ -3196,7 +3198,7 @@ impl ParamListStandard {
         &self,
         active: &mut ParamActive,
         manager: &AddrSpaceManager,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let mut hitlist: Vec<Option<usize>> = Vec::new();
         let mut float_count = 0;
         let mut int_count = 0;
@@ -3325,7 +3327,7 @@ impl ParamListStandard {
         Ok(())
     }
 
-    /// (kuna `calleereginputs`) Every register parameter the callee reads is an
+    /// (unlace `calleereginputs`) Every register parameter the callee reads is an
     /// argument: its trial is active, a register the caller never wrote included
     /// (the callee receives the caller's own value). See
     /// [`crate::p4_calls::calleereginputs`].
@@ -3333,7 +3335,7 @@ impl ParamListStandard {
         &self,
         active: &mut ParamActive,
         manager: &AddrSpaceManager,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let mut added = false;
         for (eidx, e) in self.entry.iter().enumerate() {
             if e.get_space().get_type() != spacetype::IPTR_PROCESSOR {
@@ -3377,7 +3379,7 @@ impl ParamListStandard {
         &self,
         active: &ParamActive,
         trial_start: &mut Vec<int4>,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let numtrials = active.get_num_trials();
         let mut next_group = self.resource_start[1];
         let mut next_section = 2usize;
@@ -3390,7 +3392,7 @@ impl ParamListStandard {
             };
             if self.entry[entry].get_group() >= next_group {
                 if next_section > self.resource_start.len() {
-                    return Err(KunaError::lowlevel("Missing next resource start"));
+                    return Err(UnlaceError::lowlevel("Missing next resource start"));
                 }
                 next_group = self.resource_start[next_section];
                 next_section += 1;
@@ -3528,7 +3530,7 @@ impl ParamListStandard {
         let mut alldefnouse = false;
         for i in start..stop {
             if active.is_callee_filled(i) {
-                // (kuna) `calleefilledarg`: not a slot of this callee.
+                // (unlace) `calleefilledarg`: not a slot of this callee.
                 // See [`crate::p4_calls::calleefilledarg`].
                 continue;
             }
@@ -3572,7 +3574,7 @@ impl ParamListStandard {
         let mut seenchain = false;
         let mut chainlength = 0;
         let mut max = -1;
-        // (kuna) `passthrough`: upstream's count of the run, forwarded
+        // (unlace) `passthrough`: upstream's count of the run, forwarded
         // registers included; whether the run holds a register that is not
         // forwarded; whether a run upstream would veto has been let through.
         let (mut up_len, mut mixed, mut rescued) = (0, false, false);
@@ -3604,7 +3606,7 @@ impl ParamListStandard {
                     } else {
                         0
                     },
-                    // (kuna) `inputparamgap`: in the function's OWN input
+                    // (unlace) `inputparamgap`: in the function's OWN input
                     // recovery an unused ARGUMENT REGISTER is an ignored
                     // parameter, not evidence that a later REGISTER the body
                     // reads before writing is not a parameter.
@@ -3616,7 +3618,7 @@ impl ParamListStandard {
                         .stackaddrargtrial_trial_is_protected)(
                         active, trial, &self.entry
                     ),
-                    // (kuna) `passthrough`: a register the function hands on
+                    // (unlace) `passthrough`: a register the function hands on
                     // untouched is neither a run of empty slots nor its end.
                     (crate::architecture::default_pass_hooks().passthrough_neutral_in_chain)(
                         active, i, addr_sb,
@@ -3636,7 +3638,7 @@ impl ParamListStandard {
                 if is_unref && active.is_recover_subcall() && addr_is_spacebase {
                     seenchain = true;
                 }
-                // (kuna) `stackarggap`: an argument REGISTER the caller never
+                // (unlace) `stackarggap`: an argument REGISTER the caller never
                 // wrote, with the stack as its next slot, is the end of the
                 // argument list -- the ABI reaches the stack only past a full
                 // register file -- not a hole to fill on the way to a stack
@@ -3664,7 +3666,7 @@ impl ParamListStandard {
                             0
                         }
                 };
-                // (kuna) `passthrough`: a forwarded register is not a run of
+                // (unlace) `passthrough`: a forwarded register is not a run of
                 // empty slots.  See
                 // [`crate::p4_calls::passthrough::neutral_in_chain`].
                 up_len += step;
@@ -3677,7 +3679,7 @@ impl ParamListStandard {
                     seenchain = true;
                 }
             } else {
-                // (kuna) `passthrough`: a run upstream vetoes is let through
+                // (unlace) `passthrough`: a run upstream vetoes is let through
                 // only when every register in it is forwarded, and from then on
                 // only to trials that may end one.  See
                 // [`crate::p4_calls::passthrough::anchors_neutral_run`].
@@ -3688,7 +3690,7 @@ impl ParamListStandard {
                 seenchain |= rescued && !anchors;
                 chainlength = 0;
                 (up_len, mixed) = (0, false);
-                // (kuna) `inputparamgap`: a protected trial is a REGISTER the
+                // (unlace) `inputparamgap`: a protected trial is a REGISTER the
                 // function's own body reads before writing, and the chain does
                 // not get to veto it.  Trials sort into parameter order, so
                 // everything before it is also a register and the tail loop's
@@ -3706,7 +3708,7 @@ impl ParamListStandard {
                 let trial = active.get_trial(i);
                 (trial.is_definitely_not_used(), trial.is_active())
             };
-            // (kuna) `calleefilledarg`: a hole the callee fills itself is
+            // (unlace) `calleefilledarg`: a hole the callee fills itself is
             // never materialised as an argument.
             if defnouse || active.is_callee_filled(i) {
                 continue;
@@ -3723,9 +3725,9 @@ impl ParamListStandard {
         &self,
         active: &mut ParamActive,
         manager: &AddrSpaceManager,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         match self.kind {
-            ParamListKind::Merged => Err(KunaError::lowlevel(
+            ParamListKind::Merged => Err(UnlaceError::lowlevel(
                 "Cannot determine prototype before model has been resolved",
             )),
             ParamListKind::Standard => self.fillin_map_standard(active, manager),
@@ -3745,12 +3747,12 @@ impl ParamListStandard {
         &self,
         active: &mut ParamActive,
         manager: &AddrSpaceManager,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         if active.get_num_trials() == 0 {
             return Ok(());
         }
         if self.entry.is_empty() {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Cannot derive parameter storage for prototype model without parameter entries",
             ));
         }
@@ -3761,7 +3763,7 @@ impl ParamListStandard {
         self.force_exclusion_group(active);
         let mut trial_start: Vec<int4> = Vec::new();
         self.separate_sections(active, &mut trial_start)?;
-        // (kuna) `varargstackargs`: at a variadic call site the register file
+        // (unlace) `varargstackargs`: at a variadic call site the register file
         // between the last fixed parameter and the first stack argument is
         // structurally empty, so the stack tail of a section is scored as its
         // own section.  Off (and for every non-variadic call) this leaves
@@ -4002,14 +4004,14 @@ impl ParamListStandard {
     }
 
     /// Add another model to this union (C++ `ParamListMerged::foldIn`).
-    pub fn fold_in(&mut self, op2: &ParamListStandard) -> KunaResult<()> {
+    pub fn fold_in(&mut self, op2: &ParamListStandard) -> UnlaceResult<()> {
         if self.entry.is_empty() {
             self.spacebase = op2.spacebase.clone();
             self.entry = op2.entry.clone();
             return Ok(());
         }
         if !rc_opt_ptr_eq(&self.spacebase, &op2.spacebase) && op2.spacebase.is_some() {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Cannot merge prototype models with different stacks",
             ));
         }
@@ -4080,8 +4082,8 @@ impl ParamListStandard {
     /// STUB(W4): reaches the fspec-owned marshaling ElementIds/AttributeIds and
     /// the `<modelrule>` decode (STUB(w6-modelrules)).  Not yet ported; tests
     /// construct models directly via [`ParamListStandard::push_entry`].
-    pub fn decode(&mut self, _normalstack: bool) -> KunaResult<()> {
-        Err(KunaError::lowlevel(
+    pub fn decode(&mut self, _normalstack: bool) -> UnlaceResult<()> {
+        Err(UnlaceError::lowlevel(
             "STUB(W4) ParamListStandard::decode: fspec marshaling element ids not yet ported",
         ))
     }
@@ -4164,11 +4166,11 @@ impl ParamListStandard {
         self.model_rules.push(rule);
     }
 
-    /// (kuna) Put `rules` ahead of the decoded ones, for a model derived from
+    /// (unlace) Put `rules` ahead of the decoded ones, for a model derived from
     /// another.  `rules` carry no `fillinOutputMap` action, so the fallback
     /// [`Self::initialize`] chose stands.
     #[doc(hidden)]
-    pub fn kuna_prepend_model_rules(&mut self, rules: Vec<ModelRule>) {
+    pub fn unlace_prepend_model_rules(&mut self, rules: Vec<ModelRule>) {
         self.model_rules.splice(0..0, rules);
     }
 
@@ -4196,8 +4198,8 @@ impl ParamListStandard {
 
 /// Build the standard "cannot assign parameter address" error for a data-type
 /// (C++ `ParamUnassignedError`).
-fn unassigned_err(dt: &Rc<Datatype>) -> KunaError {
-    KunaError::param_unassigned(format!(
+fn unassigned_err(dt: &Rc<Datatype>) -> UnlaceError {
+    UnlaceError::param_unassigned(format!(
         "Cannot assign parameter address for {}",
         dt.get_name()
     ))
@@ -4207,7 +4209,7 @@ fn unassigned_err(dt: &Rc<Datatype>) -> KunaError {
 // PrototypePieces (fspec.hh:373-381)
 // =============================================================================
 
-/// (kuna `libcnames`) A library function's own names for its parameters, in slot order (an
+/// (unlace `libcnames`) A library function's own names for its parameters, in slot order (an
 /// empty string for a slot its declaration leaves unnamed), and for the value
 /// it returns, where that value has a conventional name.
 #[derive(Debug, PartialEq, Eq)]
@@ -4219,7 +4221,7 @@ pub struct LibraryNames {
 /// Raw components of a function prototype obtained from parsing source code
 /// (C++ `PrototypePieces`, `fspec.hh:373-381`).
 ///
-/// The `model` back-pointer (C++ `ProtoModel *`) is omitted: the kuna
+/// The `model` back-pointer (C++ `ProtoModel *`) is omitted: the unlace
 /// `Architecture` (W4) has no prototype-model registry, so a `PrototypePieces`
 /// cannot point at a registered model.  The methods that read it in the C++
 /// (`ProtoStoreInternal::decode`, `paramShift`) take the [`ProtoModel`] as an
@@ -4237,7 +4239,7 @@ pub struct PrototypePieces {
     /// First position of a variable argument, or -1 if not varargs (C++
     /// `firstVarArgSlot`).
     pub first_var_arg_slot: int4,
-    /// (kuna) Explicit, model-overriding locked output storage, as established by
+    /// (unlace) Explicit, model-overriding locked output storage, as established by
     /// the console `map return <addr> <type>` (`IfcMapReturn`).  C++ keeps a
     /// callee's locked `FuncProto` live on its `Funcdata` and `ActionDefaultParams`
     /// does `fc->copy(otherfunc->getFuncProto())`, carrying the custom output
@@ -4248,7 +4250,7 @@ pub struct PrototypePieces {
     /// model-driven `update_all_types`.  `None` is the normal (model-derived)
     /// case.
     pub output_storage: Option<ParameterPieces>,
-    /// (kuna) Explicit, model-overriding locked INPUT storage for individual
+    /// (unlace) Explicit, model-overriding locked INPUT storage for individual
     /// slots, as established by the console `map param <func>::<i> <storage>
     /// <decl>` (the `--assert 'param <func>::<i> ...'` directive).  The
     /// input-side twin of [`Self::output_storage`] and it exists for the same
@@ -4258,12 +4260,12 @@ pub struct PrototypePieces {
     /// stated range before assigning the remaining model-derived arguments.
     /// Empty is the normal (entirely model-derived) case.
     pub input_storage: Vec<(int4, ParameterPieces)>,
-    /// (kuna `libcnames`) The library's own names for this prototype's
+    /// (unlace `libcnames`) The library's own names for this prototype's
     /// parameters and result, when the prototype came from a built-in library
     /// table. Kept apart from [`Self::innames`] so the callee's printed
     /// signature and the name locks stay as they were; only the naming pass
     /// reads them, and only under `option libcnames`.
-    pub kuna_library_names: Option<&'static LibraryNames>,
+    pub unlace_library_names: Option<&'static LibraryNames>,
 }
 
 // =============================================================================
@@ -4294,7 +4296,7 @@ pub const EXTRAPOP_UNKNOWN: int4 = 0x8000;
 /// `extrapop`, the side-effect / likely-trash / internal-storage lists, the
 /// stack ranges for locals and parameters, and several boolean properties.
 ///
-/// The C++ `Architecture *glb` back-pointer is **not** held (the kuna
+/// The C++ `Architecture *glb` back-pointer is **not** held (the unlace
 /// `Architecture` has no prototype-model registry yet); the methods that need
 /// the stack space or float-extension construction take an [`AddrSpaceManager`]
 /// and the type factory explicitly.  The merged-model variant
@@ -4316,7 +4318,7 @@ pub struct ProtoModel {
     pub output: Option<ParamListStandard>,
     /// `true` if `self` is a copy of another model (C++ `compatModel != 0`),
     /// recording the identity of the alias parent.  The C++ holds a
-    /// `const ProtoModel *`; the kuna port carries the alias parent's identity
+    /// `const ProtoModel *`; the unlace port carries the alias parent's identity
     /// token (see [`ProtoModelId`]) so [`ProtoModel::is_compatible`] can match.
     compat_model: Option<ProtoModelId>,
     /// Stable identity of `self`, used to match `compat_model` across copies
@@ -4567,13 +4569,13 @@ impl ProtoModel {
     pub fn input(&self) -> &ParamListStandard {
         self.input.as_ref().expect("ProtoModel::input: not built")
     }
-    /// (kuna) The input resource model, or `None` before `build_param_list`.
+    /// (unlace) The input resource model, or `None` before `build_param_list`.
     pub fn input_opt(&self) -> Option<&ParamListStandard> {
         self.input.as_ref()
     }
 
     /// Restrict a convention with one forward stack resource to a whole-slot frame area.
-    pub fn kuna_bound_stack_inputs(&self, bytes: u32) -> Option<Self> {
+    pub fn unlace_bound_stack_inputs(&self, bytes: u32) -> Option<Self> {
         let input = self.input_opt()?;
         let [entry] = input.entry.as_slice() else {
             return None;
@@ -4602,7 +4604,7 @@ impl ProtoModel {
     pub fn output(&self) -> &ParamListStandard {
         self.output.as_ref().expect("ProtoModel::output: not built")
     }
-    /// (kuna) The output resource model, or `None` when it is not built.
+    /// (unlace) The output resource model, or `None` when it is not built.
     pub fn output_list(&self) -> Option<&ParamListStandard> {
         self.output.as_ref()
     }
@@ -4740,7 +4742,7 @@ impl ProtoModel {
         &self,
         active: &mut ParamActive,
         manager: &AddrSpaceManager,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         self.input().fillin_map(active, manager)
     }
     /// Derive the most likely output prototype from a list of trials (C++
@@ -4749,7 +4751,7 @@ impl ProtoModel {
         &self,
         active: &mut ParamActive,
         manager: &AddrSpaceManager,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         self.output().fillin_map(active, manager)
     }
 
@@ -4824,7 +4826,7 @@ impl ProtoModel {
     /// Establish the main resource lists for input and output parameters (C++
     /// `buildParamList`).  `strategy` is currently `""`/`"standard"` or
     /// `"register"`.
-    pub fn build_param_list(&mut self, strategy: &str) -> KunaResult<()> {
+    pub fn build_param_list(&mut self, strategy: &str) -> UnlaceResult<()> {
         if strategy.is_empty() || strategy == "standard" {
             self.input = Some(ParamListStandard::new(ParamListKind::Standard));
             self.output = Some(ParamListStandard::new(ParamListKind::StandardOut));
@@ -4832,7 +4834,7 @@ impl ProtoModel {
             self.input = Some(ParamListStandard::new(ParamListKind::Register));
             self.output = Some(ParamListStandard::new(ParamListKind::RegisterOut));
         } else {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "Unknown strategy type: {strategy}"
             )));
         }
@@ -4871,11 +4873,11 @@ impl ProtoModel {
         ignore_output_error: bool,
         typefactory: &dyn TypeFactory,
         manager: &AddrSpaceManager,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         if ignore_output_error {
             match self.output().assign_map(proto, typefactory, res, manager) {
                 Ok(()) => {}
-                Err(KunaError::ParamUnassigned { .. }) => {
+                Err(UnlaceError::ParamUnassigned { .. }) => {
                     // ParamUnassignedError: leave address undefined, void return
                     res.clear();
                     let p = ParameterPieces {
@@ -4991,8 +4993,8 @@ impl ProtoModel {
     /// `defaultReturnAddr`, `pcodeinjectlib`) — the `Architecture` registry is
     /// not yet ported.  Tests build models via [`ProtoModel::build_param_list`]
     /// + the `ParamListStandard` builder hooks.
-    pub fn decode(&mut self) -> KunaResult<()> {
-        Err(KunaError::lowlevel(
+    pub fn decode(&mut self) -> UnlaceResult<()> {
+        Err(UnlaceError::lowlevel(
             "STUB(w6-fspec-2) ProtoModel::decode: marshaling + Architecture registry not yet ported",
         ))
     }
@@ -5072,12 +5074,12 @@ impl ProtoModel {
     /// The constituent `model`'s input must be a standard or register list; on
     /// the first fold-in the merged input/output/extrapop/effects are seeded,
     /// subsequent fold-ins take the intersection.
-    pub fn fold_in_model(&mut self, model: &Rc<ProtoModel>) -> KunaResult<()> {
+    pub fn fold_in_model(&mut self, model: &Rc<ProtoModel>) -> UnlaceResult<()> {
         if !matches!(
             model.input().get_type(),
             ParamListType::Standard | ParamListType::Register
         ) {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Can only resolve between standard prototype models",
             ));
         }
@@ -5103,7 +5105,7 @@ impl ProtoModel {
             if self.inject_upon_entry != model.inject_upon_entry
                 || self.inject_upon_return != model.inject_upon_return
             {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "Cannot merge prototype models with different inject ids",
                 ));
             }
@@ -5126,7 +5128,7 @@ impl ProtoModel {
     /// Fold in a constituent and record it in the merged `modellist` (the C++
     /// `ProtoModelMerged::decode` body: `foldIn(mymodel)` then
     /// `modellist.push_back(mymodel)`).  Run `finalize` after the last fold-in.
-    pub fn merged_push(&mut self, model: Rc<ProtoModel>) -> KunaResult<()> {
+    pub fn merged_push(&mut self, model: Rc<ProtoModel>) -> UnlaceResult<()> {
         self.fold_in_model(&model)?;
         self.merged
             .as_mut()
@@ -5147,11 +5149,11 @@ impl ProtoModel {
     /// Select the best constituent model given a set of trials (C++
     /// `ProtoModelMerged::selectModel`).  Uses [`ScoreProtoModel`] to score
     /// each constituent.
-    pub fn select_model(&self, active: &ParamActive) -> KunaResult<Rc<ProtoModel>> {
+    pub fn select_model(&self, active: &ParamActive) -> UnlaceResult<Rc<ProtoModel>> {
         let merged = self
             .merged
             .as_ref()
-            .ok_or_else(|| KunaError::lowlevel("selectModel on non-merged model"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("selectModel on non-merged model"))?;
         let mut bestscore = 500;
         let mut bestindex: i32 = -1;
         for (i, m) in merged.modellist.iter().enumerate() {
@@ -5176,7 +5178,7 @@ impl ProtoModel {
         if bestindex >= 0 {
             return Ok(Rc::clone(&merged.modellist[bestindex as usize]));
         }
-        Err(KunaError::lowlevel("No model matches : missing default"))
+        Err(UnlaceError::lowlevel("No model matches : missing default"))
     }
 
     // -- test/tooling builder hooks -----------------------------------------
@@ -5294,7 +5296,7 @@ impl ScoreProtoModel {
     /// Construct a scorer (C++
     /// `ScoreProtoModel(bool isinput,const ProtoModel *mod,int4 numparam)`).
     ///
-    /// The C++ holds the `ProtoModel *` for the duration; the kuna scorer takes
+    /// The C++ holds the `ProtoModel *` for the duration; the unlace scorer takes
     /// it per [`ScoreProtoModel::add_parameter`] call instead (avoids a borrow
     /// of the model spanning the scorer's lifetime).
     pub fn new(isinput: bool, numparam: int4) -> ScoreProtoModel {
@@ -5383,7 +5385,7 @@ impl ScoreProtoModel {
 ///
 /// The C++ base is abstract with `ParameterBasic`/`ParameterSymbol` subclasses.
 /// `ParameterSymbol` is backed by a `Scope`/`Symbol` (W3/W4) and is a boundary; the
-/// kuna trait carries the shared query surface, and [`ParameterBasic`] is the
+/// unlace trait carries the shared query surface, and [`ParameterBasic`] is the
 /// stand-alone (no backing symbol) implementation.
 pub trait ProtoParameter {
     /// Get the name of the parameter ("" for return value) (C++ `getName`).
@@ -5419,9 +5421,9 @@ pub trait ProtoParameter {
     fn set_this_pointer(&mut self, val: bool);
     /// Change (override) the data-type of a size-locked parameter (C++
     /// `overrideSizeLockType`).
-    fn override_size_lock_type(&mut self, ct: Rc<Datatype>) -> KunaResult<()>;
+    fn override_size_lock_type(&mut self, ct: Rc<Datatype>) -> UnlaceResult<()>;
     /// Clear the data-type preserving any size-lock (C++ `resetSizeLockType`).
-    fn reset_size_lock_type(&mut self, factory: &dyn TypeFactory) -> KunaResult<()>;
+    fn reset_size_lock_type(&mut self, factory: &dyn TypeFactory) -> UnlaceResult<()>;
 }
 
 /// Compare storage location and data-type for equality (C++
@@ -5540,22 +5542,22 @@ impl ProtoParameter for ParameterBasic {
             self.flags &= !parameter_pieces_flags::ISTHIS;
         }
     }
-    fn override_size_lock_type(&mut self, ct: Rc<Datatype>) -> KunaResult<()> {
+    fn override_size_lock_type(&mut self, ct: Rc<Datatype>) -> UnlaceResult<()> {
         let cur_size = self.type_.as_ref().map(|t| t.get_size()).unwrap_or(0);
         if cur_size == ct.get_size() {
             if !self.is_size_type_locked() {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "Overriding parameter that is not size locked",
                 ));
             }
             self.type_ = Some(ct);
             return Ok(());
         }
-        Err(KunaError::lowlevel(
+        Err(UnlaceError::lowlevel(
             "Overriding parameter with different type size",
         ))
     }
-    fn reset_size_lock_type(&mut self, factory: &dyn TypeFactory) -> KunaResult<()> {
+    fn reset_size_lock_type(&mut self, factory: &dyn TypeFactory) -> UnlaceResult<()> {
         if self.type_.as_ref().map(|t| t.get_metatype()) == Some(type_metatype::TYPE_UNKNOWN) {
             return Ok(()); // Nothing to do
         }
@@ -5752,7 +5754,7 @@ pub mod func_proto_flags {
 /// function (C++ `FuncProto`, `fspec.hh:1343-1624`).
 ///
 /// The C++ holds a `ProtoModel *model` borrowed from the architecture's
-/// registry; with no registry the kuna `FuncProto` owns the model by
+/// registry; with no registry the unlace `FuncProto` owns the model by
 /// reference-counted clone ([`Rc<ProtoModel>`]).  The storage interface is a
 /// boxed [`ProtoStore`] (an internal store here; the symbol-backed store is a
 /// `Scope` boundary).  // STUB(w6-fspec-2)
@@ -5839,7 +5841,7 @@ impl FuncProto {
     /// Once a model is chosen it is no longer merged, so re-running is a no-op.
     /// The trials are not re-marked here (that happens in
     /// `ParamList::fillinMap` / `derive_input_map`).
-    pub fn resolve_model(&mut self, active: &ParamActive) -> KunaResult<()> {
+    pub fn resolve_model(&mut self, active: &ParamActive) -> UnlaceResult<()> {
         let model = match &self.model {
             Some(m) => Rc::clone(m),
             None => return Ok(()),
@@ -5860,7 +5862,7 @@ impl FuncProto {
     pub fn model(&self) -> &Rc<ProtoModel> {
         self.model.as_ref().expect("FuncProto::model: null")
     }
-    /// (kuna) Does a value this prototype returns in the two output registers
+    /// (unlace) Does a value this prototype returns in the two output registers
     /// `hi` and `lo` keep its most significant piece in the first of them?  See
     /// [`ParamListStandard::holds_high_first`]; `false` without a model.
     pub fn output_holds_high_first(
@@ -5939,8 +5941,8 @@ impl FuncProto {
     /// STUB(w6-fspec-2): `ProtoStoreSymbol` reaches `Scope`/`Symbol` (W3) and
     /// `glb->defaultfp` (the Architecture registry).  Use [`FuncProto::set_internal`]
     /// in the meantime.
-    pub fn set_scope(&mut self) -> KunaResult<()> {
-        Err(KunaError::lowlevel(
+    pub fn set_scope(&mut self) -> UnlaceResult<()> {
+        Err(UnlaceError::lowlevel(
             "STUB(w6-fspec-2) FuncProto::setScope: ProtoStoreSymbol needs Scope + defaultfp",
         ))
     }
@@ -6076,7 +6078,7 @@ impl FuncProto {
         for i in 0..num {
             if let Some(param) = self.store_mut().get_input_mut(i) {
                 param.set_type_lock(val);
-                // (kuna) C++ `setInputLock` calls `param->setTypeLock(val)` where
+                // (unlace) C++ `setInputLock` calls `param->setTypeLock(val)` where
                 // `param` is a symbol-backed `ParameterSymbol`, whose
                 // `setTypeLock` (fspec.cc:3052-3062) ALSO toggles the NAME lock
                 // for a NAMED parameter (`if (!sym->isNameUndefined()) attrs |=
@@ -6328,7 +6330,7 @@ impl FuncProto {
 
     /// Clear the return value if it has not been locked (C++
     /// `clearUnlockedOutput`).
-    pub fn clear_unlocked_output(&mut self, factory: &dyn TypeFactory) -> KunaResult<()> {
+    pub fn clear_unlocked_output(&mut self, factory: &dyn TypeFactory) -> UnlaceResult<()> {
         let (type_locked, size_locked) = {
             let outparam = self.get_output();
             (outparam.is_type_locked(), outparam.is_size_type_locked())
@@ -6420,7 +6422,7 @@ impl FuncProto {
         model: Option<Rc<ProtoModel>>,
         typefactory: &dyn TypeFactory,
         manager: &AddrSpaceManager,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         if model.is_some() {
             self.set_model(model);
         }
@@ -6437,7 +6439,7 @@ impl FuncProto {
                 .output_storage
                 .as_ref()
                 .is_some_and(|p| (p.flags & parameter_pieces_flags::CUSTOM_STORAGE) != 0);
-        // (kuna) A console `map return <addr>` parks an explicit, model-overriding
+        // (unlace) A console `map return <addr>` parks an explicit, model-overriding
         // locked output storage on the pieces.  `update_all_types` re-derived the
         // output from the model (e.g. RAX for an int8 return); replace it with the
         // custom storage so a stack-relative return survives the callee-proto
@@ -6472,7 +6474,7 @@ impl FuncProto {
     /// `ActionPrototypeTypes` forces the input/output Varnodes and
     /// `ActionInputPrototype` leaves the locked input untouched.
     ///
-    /// (kuna `cppsig`) An `outtype` of `None` with no `output_storage` means "the
+    /// (unlace `cppsig`) An `outtype` of `None` with no `output_storage` means "the
     /// source declares the PARAMETERS but not the return type" — the shape a C++
     /// mangled symbol has, since the Itanium ABI encodes a return type only for a
     /// template function. Storage assignment needs *some* output to work with, so
@@ -6495,7 +6497,7 @@ impl FuncProto {
         void_type: Rc<Datatype>,
         typefactory: &dyn TypeFactory,
         manager: &AddrSpaceManager,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         // Seed the model + store the way setScope would, before update_all_types
         // (which needs both: it does setModel(model) and store->clearAllInputs()).
         self.attach_internal_store(Rc::clone(&void_type));
@@ -6506,7 +6508,7 @@ impl FuncProto {
             self.set_output_lock(false);
             return Ok(());
         }
-        // (kuna) A `map return <addr> <type>` parks OUTPUT-ONLY pieces: explicit
+        // (unlace) A `map return <addr> <type>` parks OUTPUT-ONLY pieces: explicit
         // storage, and no `outtype` because the directive declares no separate
         // return type. But `assignParameterStorage` dereferences `outtype`
         // unconditionally, so those pieces aborted the process the moment the
@@ -6542,7 +6544,7 @@ impl FuncProto {
         proto: &PrototypePieces,
         typefactory: &dyn TypeFactory,
         manager: &AddrSpaceManager,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         self.set_model(self.model.clone()); // This resets extrapop
         self.store_mut().clear_all_inputs();
         self.store_mut().clear_output();
@@ -6571,7 +6573,7 @@ impl FuncProto {
                     j += 1;
                 }
             }
-            Err(KunaError::ParamUnassigned { .. }) => {
+            Err(UnlaceError::ParamUnassigned { .. }) => {
                 // ParamUnassignedError
                 self.flags |= func_proto_flags::ERROR_INPUTPARAM;
             }
@@ -6619,7 +6621,7 @@ impl FuncProto {
             &self.effectlist
         }
     }
-    /// (kuna `calleepreserves`) Does this proto carry its OWN effect records,
+    /// (unlace `calleepreserves`) Does this proto carry its OWN effect records,
     /// rather than deferring to the model's?  A non-empty override list is a
     /// deliberate statement about this function's side effects and is never
     /// second-guessed by the callee-body probe.
@@ -6702,7 +6704,7 @@ impl FuncProto {
         &self,
         active: &mut ParamActive,
         manager: &AddrSpaceManager,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         self.model().derive_output_map(active, manager)
     }
 
@@ -6712,7 +6714,7 @@ impl FuncProto {
         &self,
         active: &mut ParamActive,
         manager: &AddrSpaceManager,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         self.model().derive_input_map(active, manager)
     }
 
@@ -6753,7 +6755,7 @@ impl FuncProto {
             if (self.flags & func_proto_flags::VOIDINPUTLOCK) != 0 {
                 return false;
             }
-            // (kuna) C++ FuncProto always has a ProtoStore; the merged kuna
+            // (unlace) C++ FuncProto always has a ProtoStore; the merged unlace
             // FuncProto may have its `ProtoStoreInternal` un-attached at
             // main-loop time (un-recovered output/input). With no store there
             // are no locked params to test, so fall straight through to the
@@ -6785,7 +6787,7 @@ impl FuncProto {
                 }
             }
         }
-        // (kuna) C++ always has a model here; an un-recovered kuna FuncProto may
+        // (unlace) C++ always has a model here; an un-recovered unlace FuncProto may
         // not -- with no model nothing is yet a possible parameter.
         match &self.model {
             Some(m) => m.possible_input_param(addr, size),
@@ -6926,7 +6928,7 @@ impl FuncProto {
         dt: Rc<Datatype>,
         typefactory: &dyn TypeFactory,
         manager: &AddrSpaceManager,
-    ) -> KunaResult<Address> {
+    ) -> UnlaceResult<Address> {
         if !self.model().has_this_pointer() {
             return Ok(Address::new_invalid());
         }
@@ -7084,36 +7086,36 @@ impl FuncProto {
     ///
     /// STUB(w6-fspec-2): reaches `Funcdata`/`Varnode` (W3) — the trial list is a
     /// `vector<Varnode *>` and the body reads each Varnode's high data-type.
-    pub fn update_input_types(&mut self) -> KunaResult<()> {
-        Err(KunaError::lowlevel(
+    pub fn update_input_types(&mut self) -> UnlaceResult<()> {
+        Err(UnlaceError::lowlevel(
             "STUB(w6-fspec-2) FuncProto::updateInputTypes: needs Funcdata/Varnode trials",
         ))
     }
     /// Update input parameters from trials without types (C++
     /// `updateInputNoTypes`).  STUB(w6-fspec-2): needs `Funcdata`/`Varnode`.
-    pub fn update_input_no_types(&mut self) -> KunaResult<()> {
-        Err(KunaError::lowlevel(
+    pub fn update_input_no_types(&mut self) -> UnlaceResult<()> {
+        Err(UnlaceError::lowlevel(
             "STUB(w6-fspec-2) FuncProto::updateInputNoTypes: needs Funcdata/Varnode trials",
         ))
     }
     /// Update the return value based on Varnode trials (C++
     /// `updateOutputTypes`).  STUB(w6-fspec-2): needs `Funcdata`/`Varnode`.
-    pub fn update_output_types(&mut self) -> KunaResult<()> {
-        Err(KunaError::lowlevel(
+    pub fn update_output_types(&mut self) -> UnlaceResult<()> {
+        Err(UnlaceError::lowlevel(
             "STUB(w6-fspec-2) FuncProto::updateOutputTypes: needs Funcdata/Varnode trials",
         ))
     }
     /// Update the return value from trials without types (C++
     /// `updateOutputNoTypes`).  STUB(w6-fspec-2): needs `Funcdata`/`Varnode`.
-    pub fn update_output_no_types(&mut self) -> KunaResult<()> {
-        Err(KunaError::lowlevel(
+    pub fn update_output_no_types(&mut self) -> UnlaceResult<()> {
+        Err(UnlaceError::lowlevel(
             "STUB(w6-fspec-2) FuncProto::updateOutputNoTypes: needs Funcdata/Varnode trials",
         ))
     }
     /// Restore this from a `<prototype>` element (C++ `decode`).
     /// STUB(w6-fspec-2): needs the marshaling Decoder + Architecture registry.
-    pub fn decode(&mut self) -> KunaResult<()> {
-        Err(KunaError::lowlevel(
+    pub fn decode(&mut self) -> UnlaceResult<()> {
+        Err(UnlaceError::lowlevel(
             "STUB(w6-fspec-2) FuncProto::decode: needs marshaling + Architecture registry",
         ))
     }
@@ -7123,15 +7125,15 @@ impl FuncProto {
     /// `<returnsym>` (storage + type of the output parameter), the effect /
     /// likely-trash overrides, and the call-fixup `<inject>` when
     /// `inject_name` supplies the resolved fixup name (the C++ reads it
-    /// through `glb->pcodeinjectlib`, which the kuna `FuncProto` cannot
+    /// through `glb->pcodeinjectlib`, which the unlace `FuncProto` cannot
     /// reach — the caller resolves it).
     ///
     /// The C++ tail calls `store->encode` — `ProtoStoreSymbol::encode`
     /// (fspec.cc:3293) writes NOTHING, and upstream's decompileAt path always
     /// has the symbol-backed store, so the wire shape omits `<internallist>`;
-    /// kuna's internal store follows the wire shape (input parameters travel
+    /// unlace's internal store follows the wire shape (input parameters travel
     /// as `<localdb>` category-0 symbols, `LocalSymbolMap.decodeSymbolList`).
-    pub fn encode(&self, encoder: &mut dyn unlace_base::marshal::Encoder) -> KunaResult<()> {
+    pub fn encode(&self, encoder: &mut dyn unlace_base::marshal::Encoder) -> UnlaceResult<()> {
         use crate::remote_provider::{
             ATTRIB_CUSTOM, ATTRIB_DOTDOTDOT, ATTRIB_EXTRAPOP, ATTRIB_INLINE, ATTRIB_MODELLOCK,
             ATTRIB_NORETURN, ATTRIB_VOIDLOCK, ELEM_PROTOTYPE, ELEM_RETURNSYM,
@@ -7141,7 +7143,7 @@ impl FuncProto {
         };
         encoder.open_element(&ELEM_PROTOTYPE);
         // C++ `model->getName()` (a null model never encodes upstream); an
-        // un-modeled kuna proto degrades to the "default" spelling, which the
+        // un-modeled unlace proto degrades to the "default" spelling, which the
         // Java side maps onto the program's default model.
         let model_name = self
             .model
@@ -7183,7 +7185,7 @@ impl FuncProto {
         let store = self
             .store
             .as_ref()
-            .ok_or_else(|| KunaError::lowlevel("FuncProto::encode: no parameter store"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("FuncProto::encode: no parameter store"))?;
         let outparam = store.get_output();
         encoder.open_element(&ELEM_RETURNSYM);
         if outparam.is_type_locked() {
@@ -7215,7 +7217,7 @@ impl FuncProto {
     /// fspec.cc:3589-3627): only records differing from the underlying
     /// `ProtoModel`, grouped as `<unaffected>` / `<killedbycall>` /
     /// `<returnaddress>`.
-    fn encode_effect(&self, encoder: &mut dyn unlace_base::marshal::Encoder) -> KunaResult<()> {
+    fn encode_effect(&self, encoder: &mut dyn unlace_base::marshal::Encoder) -> UnlaceResult<()> {
         if self.effectlist.is_empty() {
             return Ok(());
         }
@@ -7265,7 +7267,7 @@ impl FuncProto {
     fn encode_likely_trash(
         &self,
         encoder: &mut dyn unlace_base::marshal::Encoder,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         if self.likelytrash.is_empty() {
             return Ok(());
         }
@@ -7314,7 +7316,7 @@ impl FuncProto {
 // `Funcdata`** (`opStackLoad`, `getOverride`, `warningHeader`, `opSetAllInput`,
 // `newVarnodeOut`, `newIndirectCreation`, `opMarkCalculatedBool`, the W6 `glb->
 // inst[opc]` `TypeOp` resolution for `opSetOpcode`).  Those paths are marked
-// `// STUB(w6-fspec-3 W4)` and return `Err(KunaError::lowlevel(...))`, matching
+// `// STUB(w6-fspec-3 W4)` and return `Err(UnlaceError::lowlevel(...))`, matching
 // the established `fspec-2` convention (`updateInputTypes`, etc.).
 //
 // The **pure** state machine (the trial lifecycle, `checkInputJoin`/
@@ -7330,7 +7332,7 @@ pub const OFFSET_UNKNOWN: uintb = 0xBADBEEF;
 
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::restartlog::{KunaRestartReason, RestartLog};
+use crate::restartlog::{RestartLog, UnlaceRestartReason};
 
 /// A class for analyzing parameters to a sub-function call (C++
 /// `FuncCallSpecs`, `fspec.hh:1645`).
@@ -7385,7 +7387,7 @@ pub struct FuncCallSpecs {
     isbadjumptable: bool,
     /// Do we have a locked output on the stack (C++ `isstackoutputlock`).
     isstackoutputlock: bool,
-    /// (kuna) `calleearity`: the storage each recovered argument occupies, in
+    /// (unlace) `calleearity`: the storage each recovered argument occupies, in
     /// prototype order, recorded when `build_input_from_trials` finalizes the
     /// list.  The CALL op's inputs carry the argument *values* (a constant, a
     /// temporary), never the location, and the trials that knew the location are
@@ -7393,45 +7395,45 @@ pub struct FuncCallSpecs {
     /// to ask what its sibling recovered.  See
     /// [`crate::p4_calls::calleearity`].
     final_input_storage: Vec<(Address, int4)>,
-    /// (kuna) `truncarg`: inputs a subvariable-flow trim narrowed by dropping
+    /// (unlace) `truncarg`: inputs a subvariable-flow trim narrowed by dropping
     /// only known-zero bits, as `(slot, size, number of inputs)` at the trim.
     /// See [`crate::p9_emit::truncarg`].
     zext_trimmed: Vec<(int4, int4, int4)>,
-    /// (kuna `formatstring`) The argument count a resolved format string
+    /// (unlace `formatstring`) The argument count a resolved format string
     /// declares, while this call still carries the open tail it sheds after
     /// trial scoring. See [`crate::p4_calls::formattail`].
     format_arity: Option<int4>,
-    /// (kuna `tailcalljump`) The register that carried a computed jump's target
+    /// (unlace `tailcalljump`) The register that carried a computed jump's target
     /// into this tail call.  Its value is the callee's own address, so input
     /// recovery never takes it as an argument.
     jump_target_storage: Option<(Address, int4)>,
-    /// (kuna `pltlocal`) The PLT stub a call through it was built past, at the
+    /// (unlace `pltlocal`) The PLT stub a call through it was built past, at the
     /// definition the stub is bound to. See [`crate::p4_calls::pltlocal`].
     plt_stub: Option<Address>,
-    /// (kuna) The model the direct callee's register inputs select. See
+    /// (unlace) The model the direct callee's register inputs select. See
     /// [`crate::p4_calls::calleereginputs`].
     callee_reg_model: Option<Rc<ProtoModel>>,
-    /// (kuna) How many of EAX, ECX and EDX the direct callee reads before
+    /// (unlace) How many of EAX, ECX and EDX the direct callee reads before
     /// writing them. See [`crate::p4_calls::calleereginputs`].
     callee_arg_registers: u8,
-    /// (kuna) The extrapop the direct callee's own returns state. See
+    /// (unlace) The extrapop the direct callee's own returns state. See
     /// [`crate::p4_calls::calleepurge`].
     callee_purge: Option<int4>,
-    /// (kuna `spsolve`) What the direct callee's own returns do to the stack
+    /// (unlace `spsolve`) What the direct callee's own returns do to the stack
     /// pointer. See [`crate::p4_calls::spsolve`].
     callee_returns: Option<crate::calleefacts::CalleeReturns>,
-    /// (kuna `calleeargs`) The stack-argument bytes the direct callee reads. See
+    /// (unlace `calleeargs`) The stack-argument bytes the direct callee reads. See
     /// [`crate::p4_calls::calleestackargs`].
     callee_stack_arg_bytes: Option<crate::calleefacts::StackArgs>,
-    /// (kuna `calleeargs`) The direct callee moves its caller's stack pointer.
+    /// (unlace `calleeargs`) The direct callee moves its caller's stack pointer.
     callee_moves_stack: bool,
-    /// (kuna `calleeargs`) For a direct callee with no stated extent, the stack
+    /// (unlace `calleeargs`) For a direct callee with no stated extent, the stack
     /// bytes its returns pop or the caller removes after the call.
     callee_stack_window: Option<u32>,
-    /// (kuna `calleeargs`) For a direct callee with no stated extent, the stack
+    /// (unlace `calleeargs`) For a direct callee with no stated extent, the stack
     /// bytes its own reached returns pop above the return address.
     callee_return_pop: Option<u32>,
-    /// (kuna `calleereginputs`) The stack bytes the caller removes right after
+    /// (unlace `calleereginputs`) The stack bytes the caller removes right after
     /// this indirect call. See [`crate::p4_calls::calleereginputs`].
     callind_cleanup: u32,
 }
@@ -7465,11 +7467,11 @@ impl FuncCallSpecs {
             isoutputactive: false,
             isbadjumptable: false,
             isstackoutputlock: false,
-            final_input_storage: Vec::new(), // (kuna) calleearity
-            zext_trimmed: Vec::new(),        // (kuna) truncarg
-            format_arity: None,              // (kuna) formatstring
-            jump_target_storage: None,       // (kuna) tailcalljump
-            plt_stub: None,                  // (kuna) pltlocal
+            final_input_storage: Vec::new(), // (unlace) calleearity
+            zext_trimmed: Vec::new(),        // (unlace) truncarg
+            format_arity: None,              // (unlace) formatstring
+            jump_target_storage: None,       // (unlace) tailcalljump
+            plt_stub: None,                  // (unlace) pltlocal
             callee_reg_model: None,
             callee_arg_registers: 0,
             callee_purge: None,
@@ -7554,9 +7556,9 @@ impl FuncCallSpecs {
     /// already-extracted `entry`/`name` (mirroring `fd->getAddress()` /
     /// `fd->getDisplayName()`).  Errs if a callee was already set (C++
     /// `throw LowlevelError("Setting call spec function multiple times")`).
-    pub fn set_funcdata(&mut self, entry: Address, name: &str) -> KunaResult<()> {
+    pub fn set_funcdata(&mut self, entry: Address, name: &str) -> UnlaceResult<()> {
         if self.has_fd {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Setting call spec function multiple times",
             ));
         }
@@ -7668,12 +7670,12 @@ impl FuncCallSpecs {
     pub fn clear_active_input(&mut self) {
         self.isinputactive = false;
     }
-    /// (kuna) `calleearity`: the storage of each argument this call finally
+    /// (unlace) `calleearity`: the storage of each argument this call finally
     /// recovered, in prototype order (empty until it is finalized).
     pub fn final_input_storage(&self) -> &[(Address, int4)] {
         &self.final_input_storage
     }
-    /// (kuna) `calleearity`: record the finalized argument storage.
+    /// (unlace) `calleearity`: record the finalized argument storage.
     pub fn set_final_input_storage(&mut self, storage: Vec<(Address, int4)>) {
         self.final_input_storage = storage;
     }
@@ -7714,7 +7716,7 @@ impl FuncCallSpecs {
     /// Resolve a merged prototype model against the recovered input trials (C++
     /// `FuncProto::resolveModel` via the `FuncCallSpecs` base, called by
     /// `ActionActiveParam`).  Delegates to the `FuncProto` base.
-    pub fn resolve_model(&mut self, active: &ParamActive) -> KunaResult<()> {
+    pub fn resolve_model(&mut self, active: &ParamActive) -> UnlaceResult<()> {
         self.proto.resolve_model(active)
     }
 
@@ -7726,7 +7728,7 @@ impl FuncCallSpecs {
     /// will not let `resolve_model(&self.activeinput)`/`derive_input_map(&mut
     /// self.activeinput)` borrow simultaneously — so the disjoint
     /// `proto`/`activeinput` field split is done here, in one place.
-    pub fn resolve_and_derive_input_map(&mut self, manager: &AddrSpaceManager) -> KunaResult<()> {
+    pub fn resolve_and_derive_input_map(&mut self, manager: &AddrSpaceManager) -> UnlaceResult<()> {
         // resolveModel reads activeinput, writes proto.model.
         self.proto.resolve_model(&self.activeinput)?;
         // deriveInputMap reads proto.model, writes activeinput trials.
@@ -7739,7 +7741,7 @@ impl FuncCallSpecs {
         &self,
         active: &mut ParamActive,
         manager: &AddrSpaceManager,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         self.proto.derive_input_map(active, manager)
     }
 
@@ -7749,7 +7751,7 @@ impl FuncCallSpecs {
         &self,
         active: &mut ParamActive,
         manager: &AddrSpaceManager,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         self.proto.derive_output_map(active, manager)
     }
 
@@ -7757,7 +7759,7 @@ impl FuncCallSpecs {
     /// `fc->deriveOutputMap(activeoutput)` in `ActionActiveReturn`).  The
     /// proto/activeoutput field split is done here (the borrow checker rejects
     /// `derive_output_map(&mut self.activeoutput)` with `&self.proto`).
-    pub fn derive_output_map_self(&mut self, manager: &AddrSpaceManager) -> KunaResult<()> {
+    pub fn derive_output_map_self(&mut self, manager: &AddrSpaceManager) -> UnlaceResult<()> {
         self.proto
             .derive_output_map(&mut self.activeoutput, manager)
     }
@@ -7848,7 +7850,7 @@ impl FuncCallSpecs {
         false
     }
 
-    /// (kuna `truncarg`) Record that input `slot` was just trimmed to `size`
+    /// (unlace `truncarg`) Record that input `slot` was just trimmed to `size`
     /// bytes, and whether every bit the trim dropped was known zero.
     pub fn note_trimmed_input(&mut self, slot: int4, size: int4, ninputs: int4, zext: bool) {
         self.zext_trimmed.retain(|e| e.0 != slot);
@@ -7857,23 +7859,23 @@ impl FuncCallSpecs {
         }
     }
 
-    /// (kuna `formatstring`) The declared argument count of a resolved format
+    /// (unlace `formatstring`) The declared argument count of a resolved format
     /// call whose open tail has not been shed yet.
     pub fn format_arity(&self) -> Option<int4> {
         self.format_arity
     }
 
-    /// (kuna `formatstring`) Set or clear [`Self::format_arity`].
+    /// (unlace `formatstring`) Set or clear [`Self::format_arity`].
     pub fn set_format_arity(&mut self, arity: Option<int4>) {
         self.format_arity = arity;
     }
 
-    /// (kuna `pltlocal`) The PLT stub this call was built past, if any.
+    /// (unlace `pltlocal`) The PLT stub this call was built past, if any.
     pub fn plt_stub(&self) -> Option<&Address> {
         self.plt_stub.as_ref()
     }
 
-    /// (kuna `pltlocal`) Record the PLT stub this call was built past.
+    /// (unlace `pltlocal`) Record the PLT stub this call was built past.
     pub fn set_plt_stub(&mut self, stub: Address) {
         self.plt_stub = Some(stub);
     }
@@ -7909,13 +7911,13 @@ impl FuncCallSpecs {
         self.callee_purge = extrapop;
     }
 
-    /// (kuna `spsolve`) What the direct callee's own returns do to the stack
+    /// (unlace `spsolve`) What the direct callee's own returns do to the stack
     /// pointer, if read.
     pub fn callee_returns(&self) -> Option<crate::calleefacts::CalleeReturns> {
         self.callee_returns
     }
 
-    /// (kuna `spsolve`) Record what the direct callee's own returns do.
+    /// (unlace `spsolve`) Record what the direct callee's own returns do.
     pub fn set_callee_returns(&mut self, returns: Option<crate::calleefacts::CalleeReturns>) {
         self.callee_returns = returns;
     }
@@ -7974,13 +7976,13 @@ impl FuncCallSpecs {
         self.callind_cleanup = bytes;
     }
 
-    /// (kuna `tailcalljump`) Record the register that carried this tail call's
+    /// (unlace `tailcalljump`) Record the register that carried this tail call's
     /// computed target.  See [`Self::carries_jump_target`].
     pub fn set_jump_target_storage(&mut self, storage: (Address, int4)) {
         self.jump_target_storage = Some(storage);
     }
 
-    /// (kuna `tailcalljump`) Does an input trial at `addr`/`size` overlap the
+    /// (unlace `tailcalljump`) Does an input trial at `addr`/`size` overlap the
     /// register that carried this tail call's computed target?
     pub fn carries_jump_target(&self, addr: &Address, size: int4) -> bool {
         self.jump_target_storage
@@ -7992,7 +7994,7 @@ impl FuncCallSpecs {
             })
     }
 
-    /// (kuna `truncarg`) Is input `slot`, still `size` bytes wide in a call with
+    /// (unlace `truncarg`) Is input `slot`, still `size` bytes wide in a call with
     /// `ninputs` inputs, the narrow value of a zero-extension the binary passed?
     pub fn is_zext_trimmed_input(&self, slot: int4, size: int4, ninputs: int4) -> bool {
         self.zext_trimmed.contains(&(slot, size, ninputs))
@@ -8052,7 +8054,7 @@ impl FuncCallSpecs {
     /// `fspec.cc:5381`).
     ///
     /// Assumes `check_input_join` returned `true`.  The C++ reaches
-    /// `glb->constructJoinAddress(glb->translate, ...)`; the kuna `ProtoModel`
+    /// `glb->constructJoinAddress(glb->translate, ...)`; the unlace `ProtoModel`
     /// does not hold the owning `Architecture`, so the caller supplies the same
     /// two values — the [`AddrSpaceManager`] (`glb`) and the register lookup
     /// (`glb->translate`) — explicitly.  Errs on a locked prototype (C++
@@ -8063,9 +8065,9 @@ impl FuncCallSpecs {
         ishislot: bool,
         manager: &AddrSpaceManager,
         translate: &dyn unlace_base::space::RegisterLookup,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         if self.proto.is_input_locked() {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Trying to join parameters on locked function prototype",
             ));
         }
@@ -8117,7 +8119,7 @@ impl FuncCallSpecs {
         restricted_proto: &FuncProto,
         newinput: &mut Vec<Option<VarnodeId>>,
         newoutput: &mut Vec<VarnodeId>,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         if (data.hooks().joincalloutput_needs_reflow)(data, self, restricted_proto) {
             return Ok(false);
         }
@@ -8176,7 +8178,7 @@ impl FuncCallSpecs {
         newproto_no_return: bool,
         newproto_inline: bool,
         restartlog: &mut RestartLog,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         self.entryaddress = newfd_entry.clone();
         self.name = newfd_name.to_string();
         self.has_fd = true;
@@ -8188,7 +8190,7 @@ impl FuncCallSpecs {
         // raw-pointer-cast equivalent), exactly as flow.rs `build_call_specs` does
         // for a direct call.
         let handle = (data.hooks().flow_next_fspec_handle)();
-        let style = data.get_arch().kuna_name_style();
+        let style = data.get_arch().unlace_name_style();
         self.register_in_fspec_space(handle, style);
         let fspecvn = data.new_varnode_call_specs(handle);
         data.op_set_input(self.op, fspecvn, 0)?;
@@ -8220,9 +8222,9 @@ impl FuncCallSpecs {
             }
         }
         data.set_restart_pending(true);
-        // (kuna) restart observability
+        // (unlace) restart observability
         let site = self.op_addr(data);
-        restartlog.record_at(data, KunaRestartReason::ProtoDeindirect, &site);
+        restartlog.record_at(data, UnlaceRestartReason::ProtoDeindirect, &site);
         Ok(())
     }
 
@@ -8238,7 +8240,7 @@ impl FuncCallSpecs {
         data: &mut Funcdata,
         fp: &FuncProto,
         restartlog: &mut RestartLog,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let mut newinput: Vec<Option<VarnodeId>> = Vec::new();
         let mut newoutput: Vec<VarnodeId> = Vec::new();
 
@@ -8254,8 +8256,8 @@ impl FuncCallSpecs {
         } else {
             // Too late to make restrictions to correct prototype: force a restart.
             data.set_restart_pending(true);
-            // (kuna) restart observability
-            restartlog.record_at(data, KunaRestartReason::ProtoForced, &site);
+            // (unlace) restart observability
+            restartlog.record_at(data, UnlaceRestartReason::ProtoForced, &site);
         }
         // Regardless of what happened, lock the prototype so it doesn't happen again.
         self.proto.set_input_lock(true);
@@ -8279,23 +8281,23 @@ impl FuncCallSpecs {
     /// (C++ `FspecSpace::printRaw` name/`func_`/`sub_` branch, `fspec.cc:2160`).
     ///
     /// `style` is the architecture's fallback-naming vocabulary
-    /// ([`Architecture::kuna_name_style`]; the `Architecture` is visible at the
+    /// ([`Architecture::unlace_name_style`]; the `Architecture` is visible at the
     /// call site that drives the annotation, so the policy is decided here —
     /// unlace-base, which holds the `FspecSpace` arms, cannot see it).
-    pub fn fspec_printed_name(&self, style: crate::database::KunaNameStyle) -> String {
+    pub fn fspec_printed_name(&self, style: crate::database::UnlaceNameStyle) -> String {
         if !self.name.is_empty() {
             return self.name.clone();
         }
         match style {
-            // (kuna) angr-style: sub_<addr>
-            crate::database::KunaNameStyle::Angr => {
-                crate::database::kuna_function_name(&self.entryaddress)
+            // (unlace) angr-style: sub_<addr>
+            crate::database::UnlaceNameStyle::Angr => {
+                crate::database::unlace_function_name(&self.entryaddress)
             }
-            // (kuna, Phase 3) ghidra-mode: FUN_%08x (the Java dynamic shape)
-            crate::database::KunaNameStyle::Ghidra => {
+            // (unlace, Phase 3) ghidra-mode: FUN_%08x (the Java dynamic shape)
+            crate::database::UnlaceNameStyle::Ghidra => {
                 crate::database::ghidra_function_name(&self.entryaddress)
             }
-            crate::database::KunaNameStyle::Func => {
+            crate::database::UnlaceNameStyle::Func => {
                 let mut s = String::from("func_");
                 // printRaw on a real (processor) entry address cannot fail; on the
                 // (unreachable) error path leave the prefix only.
@@ -8310,7 +8312,7 @@ impl FuncCallSpecs {
     /// them (the faithful equivalent of the C++ `(FuncCallSpecs *)offset` cast;
     /// `handle` is the offset of the \e fspec address, the same value
     /// `Funcdata::newVarnodeCallSpecs` takes).
-    pub fn register_in_fspec_space(&self, handle: uintb, style: crate::database::KunaNameStyle) {
+    pub fn register_in_fspec_space(&self, handle: uintb, style: crate::database::UnlaceNameStyle) {
         unlace_base::space::fspec_register(
             handle,
             unlace_base::space::FspecCallInfo {
@@ -8335,7 +8337,7 @@ impl FuncCallSpecs {
         &mut self,
         data: &mut Funcdata,
         spacebase: &Rc<AddrSpace>,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let slot = data
             .obank()
             .get(self.op)
@@ -8389,7 +8391,7 @@ impl FuncCallSpecs {
         &mut self,
         data: &mut Funcdata,
         phvn: VarnodeId,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let refvn_id = {
             let phv = data
                 .vbank()
@@ -8436,7 +8438,7 @@ impl FuncCallSpecs {
                 .get_slot(phvn)
                 - 1;
             if slot >= self.proto.num_params() {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "Stack placeholder does not line up with locked parameter",
                 ));
             }
@@ -8449,7 +8451,7 @@ impl FuncCallSpecs {
             if addr.get_space().map(Rc::as_ptr) != Some(Rc::as_ptr(&spacebase))
                 && spacebase.get_type() == spacetype::IPTR_SPACEBASE
             {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "Stack placeholder does not match locked space",
                 ));
             }
@@ -8457,7 +8459,7 @@ impl FuncCallSpecs {
             self.stackoffset = spacebase.wrap_offset(self.stackoffset);
             return Ok(());
         }
-        Err(KunaError::lowlevel("Unresolved stack placeholder"))
+        Err(UnlaceError::lowlevel("Unresolved stack placeholder"))
     }
 
     /// Abort the attempt to recover the relative stack offset (C++
@@ -8537,14 +8539,14 @@ impl FuncCallSpecs {
     /// `None` entries in `newinput` indicate stack parameters.  The op-input
     /// reuse path reads the CALL operands (the W3 op, via `data`); the stack
     /// path needs a spacebase placeholder.  Returns `false` if a stack
-    /// variable is needed and there is no placeholder, or (kuna) if a reused
+    /// variable is needed and there is no placeholder, or (unlace) if a reused
     /// input was narrowed below its parameter since its trial was recorded.
     fn transfer_locked_input(
         &self,
         data: &Funcdata,
         newinput: &mut Vec<Option<VarnodeId>>,
         source: &FuncProto,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         // Always keep the call destination address (op->getIn(0)).
         let in0 = data
             .obank()
@@ -8597,7 +8599,7 @@ impl FuncCallSpecs {
         data: &Funcdata,
         newoutput: &mut Vec<VarnodeId>,
         source: &FuncProto,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         let param = source.get_output();
         if param.get_type().map(|t| t.get_metatype()) == Some(type_metatype::TYPE_VOID) {
             return Ok(true);
@@ -8676,7 +8678,7 @@ impl FuncCallSpecs {
         param_addr: &Address,
         param_size: int4,
         stackref: Option<VarnodeId>,
-    ) -> KunaResult<VarnodeId> {
+    ) -> UnlaceResult<VarnodeId> {
         let opaddr = data
             .obank()
             .get(self.op)
@@ -8740,7 +8742,7 @@ impl FuncCallSpecs {
         &mut self,
         data: &mut Funcdata,
         newinput: &mut Vec<Option<VarnodeId>>,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         if !self.is_input_locked() {
             return Ok(());
         }
@@ -8826,7 +8828,7 @@ impl FuncCallSpecs {
         &mut self,
         data: &mut Funcdata,
         newoutput: &mut [VarnodeId],
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         if !self.proto.is_output_locked() {
             return Ok(());
         }
@@ -9057,14 +9059,14 @@ fn overlap_addr(addr: &Address, size: int4, op: &Address, opsize: int4) -> int4 
     }
 }
 
-/// (kuna `calleefilledarg`) What a callee body's entry-liveness probe proves
+/// (unlace `calleefilledarg`) What a callee body's entry-liveness probe proves
 /// (`calleedeadarg::CalleeEntryDead`), as `ParamActive` reads it.
 pub trait EntryLiveness: std::fmt::Debug {
     /// Is every byte of `addr`/`size` written on every path before the callee reads it?
     fn proves_dead(&self, addr: &Address, size: int4) -> bool;
 }
 
-/// (kuna `condexeret`) A trial whose walk at one RETURN failed only at inputs read in threadable
+/// (unlace `condexeret`) A trial whose walk at one RETURN failed only at inputs read in threadable
 /// merge blocks.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Remembered {

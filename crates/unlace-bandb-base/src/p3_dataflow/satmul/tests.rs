@@ -1,4 +1,4 @@
-//! Tests for `RuleSaturatedMul` (kuna `satmul`): the `seto; neg; or` and threshold
+//! Tests for `RuleSaturatedMul` (unlace `satmul`): the `seto; neg; or` and threshold
 //! shapes fold to `saturated_mul`, and the gate, the polarity and the bound are checked.
 
 use std::rc::Rc;
@@ -43,7 +43,7 @@ fn build_manager() -> AddrSpaceManager {
 fn build_fd(on: bool) -> Funcdata {
     let manage = build_manager();
     let mut ctx = ArchContext::new(manage);
-    ctx.kuna_options.set(SatMul(on));
+    ctx.unlace_options.set(SatMul(on));
     let glb = Rc::new(ctx);
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
     let addr = Address::new(ram, 0x1000);
@@ -55,7 +55,7 @@ fn unk(size: int4) -> Rc<Datatype> {
 }
 
 fn no_replace()
--> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> unlace_base::error::KunaResult<()> {
+-> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> unlace_base::error::UnlaceResult<()> {
     |_: &mut VarnodeBank, _: VarnodeId, _: VarnodeId| Ok(())
 }
 

@@ -598,7 +598,7 @@ fn declared_double_with_a_partial_word_edit_keeps_all_eight_bytes() {
 fn a_later_call_keeps_the_argument_computed_in_the_same_register() {
     let fixture = common::fixture("armfloatreturn_armhf.o");
     for option in ["off", "on"] {
-        let (code, err, rc) = common::run_kuna(&[
+        let (code, err, rc) = common::run_unlace(&[
             "decompile-all",
             &fixture,
             "--mode",
@@ -631,11 +631,11 @@ fn a_later_call_keeps_the_argument_computed_in_the_same_register() {
 #[test]
 fn an_int_return_beats_a_double_left_in_d0_by_a_call() {
     let fixture = common::fixture("armfloatreturn_armhf.o");
-    let (code, err, rc) = common::run_kuna(&["decompile-all", &fixture, "--mode", "aggressive"]);
+    let (code, err, rc) = common::run_unlace(&["decompile-all", &fixture, "--mode", "aggressive"]);
     assert_eq!(rc, 0, "{err}");
     assert!(code.contains("double w2(float a0,float a1)"), "{code}");
     for option in ["off", "on"] {
-        let (code, err, rc) = common::run_kuna(&[
+        let (code, err, rc) = common::run_unlace(&[
             "decompile-all",
             &fixture,
             "--mode",
@@ -672,7 +672,7 @@ fn an_int_return_beats_a_double_left_in_d0_by_a_call() {
 #[test]
 fn a_float_tail_wrapper_returns_its_callees_float() {
     let fixture = common::fixture("armfloat_preset_hard.o");
-    let (code, err, rc) = common::run_kuna(&["decompile-all", &fixture]);
+    let (code, err, rc) = common::run_unlace(&["decompile-all", &fixture]);
     assert_eq!(rc, 0, "{err}");
     assert!(code.contains("float wrap(float a0,float a1)"), "{code}");
     assert!(code.contains("v1 = wrap(a0 + 1.0f,a1);"), "{code}");
@@ -683,7 +683,7 @@ fn a_float_tail_wrapper_returns_its_callees_float() {
 #[test]
 fn a_double_returned_from_a_call_on_one_path_keeps_the_other_path() {
     let fixture = common::fixture("armfloatreturn_armhf.o");
-    let (code, err, rc) = common::run_kuna(&[
+    let (code, err, rc) = common::run_unlace(&[
         "decompile-all",
         &fixture,
         "--mode",

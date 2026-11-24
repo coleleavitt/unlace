@@ -1,4 +1,4 @@
-//! (kuna) `kuna_constselectjump` — recover an indirect branch whose destination
+//! (unlace) `unlace_constselectjump` — recover an indirect branch whose destination
 //! is selected between constants (S2 switch-model).
 //!
 //! ## The structural gap
@@ -27,7 +27,7 @@
 //!
 //! The destination set is not lost, it is simply never promoted into the CFG:
 //! both targets are literal constants reaching one marker op.  When
-//! `option constselectjump on`, [`kuna_collect_const_destinations`] walks the
+//! `option constselectjump on`, [`unlace_collect_const_destinations`] walks the
 //! `MULTIEQUAL`/`COPY` web behind the `BRANCHIND` input and, if *every* reaching
 //! definition is a constant, hands the resulting set to
 //! [`JumpModelConstSelect`] — a fixed-table [`JumpModel`] in the shape of
@@ -50,7 +50,7 @@ use std::collections::HashSet;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::space::AddrSpace;
 use unlace_base::types::{Wrap, int4, uint4, uintb};
 use unlace_num::opcodes::OpCode;
@@ -67,9 +67,9 @@ pub const MAX_INTRAPROCEDURAL_SPAN: uintb = 0xffff;
 /// Ceiling on the varnodes the backward walk will visit before giving up.
 const MAX_WALK_NODES: usize = 64;
 
-/// (kuna) Is `dest` close enough to the branch at `branch_offset` to be taken as
+/// (unlace) Is `dest` close enough to the branch at `branch_offset` to be taken as
 /// an intraprocedural destination rather than a tail-call target?
-pub fn kuna_destination_is_local(branch_offset: uintb, dest: uintb) -> bool {
+pub fn unlace_destination_is_local(branch_offset: uintb, dest: uintb) -> bool {
     if dest == 0 {
         return false;
     }
@@ -81,7 +81,7 @@ pub fn kuna_destination_is_local(branch_offset: uintb, dest: uintb) -> bool {
     span <= MAX_INTRAPROCEDURAL_SPAN
 }
 
-/// (kuna) `constselectjump`: when an indirect branch whose destination is a
+/// (unlace) `constselectjump`: when an indirect branch whose destination is a
 /// select over constants is recovered as a jump table.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ConstSelectMode {
@@ -95,9 +95,9 @@ pub enum ConstSelectMode {
     On,
 }
 
-impl crate::optionset::KunaOption for ConstSelectMode {
+impl crate::optionset::UnlaceOption for ConstSelectMode {
     const NAME: &'static str = "constselectjump";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         ConstSelectMode::Off
@@ -107,7 +107,7 @@ impl crate::optionset::KunaOption for ConstSelectMode {
         ConstSelectMode::Reentry
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         OptionConstSelectJump.apply(value)
     }
 }
@@ -131,13 +131,13 @@ impl ConstSelectMode {
 pub struct OptionConstSelectJump;
 
 impl OptionConstSelectJump {
-    pub fn apply(&self, p1: &str) -> unlace_base::error::KunaResult<(ConstSelectMode, String)> {
+    pub fn apply(&self, p1: &str) -> unlace_base::error::UnlaceResult<(ConstSelectMode, String)> {
         let mode = match p1 {
             "off" => ConstSelectMode::Off,
             "reentry" => ConstSelectMode::Reentry,
             "on" => ConstSelectMode::On,
             other => {
-                return Err(unlace_base::error::KunaError::parse(format!(
+                return Err(unlace_base::error::UnlaceError::parse(format!(
                     "Unknown constselectjump value: {other} (expected off|reentry|on)"
                 )));
             }
@@ -152,13 +152,13 @@ impl OptionConstSelectJump {
     }
 }
 
-/// (kuna) Collect the constant destination set reaching `root`, or `None` if the
+/// (unlace) Collect the constant destination set reaching `root`, or `None` if the
 /// destination is not provably a select over constants.
 ///
 /// `branch_offset` is the address of the indirect branch and `maxtablesize` the
 /// architecture's table ceiling; both are the guards described in the module
 /// header.  The returned set is sorted and deduplicated.
-pub fn kuna_collect_const_destinations(
+pub fn unlace_collect_const_destinations(
     fd: &Funcdata,
     root: VarnodeId,
     branch_offset: uintb,
@@ -167,7 +167,7 @@ pub fn kuna_collect_const_destinations(
     collect_within(fd, root, branch_offset, maxtablesize, MAX_WALK_NODES)
 }
 
-/// The walk of [`kuna_collect_const_destinations`] under a stated node ceiling.
+/// The walk of [`unlace_collect_const_destinations`] under a stated node ceiling.
 fn collect_within(
     fd: &Funcdata,
     root: VarnodeId,
@@ -190,7 +190,7 @@ fn collect_within(
         let v = fd.vbank().get(vn)?;
         if v.is_constant() {
             let off = v.get_offset();
-            if !kuna_destination_is_local(branch_offset, off) {
+            if !unlace_destination_is_local(branch_offset, off) {
                 return None;
             }
             if !dests.contains(&off) {
@@ -224,7 +224,7 @@ fn collect_within(
     Some(dests)
 }
 
-/// (kuna) A jump-table model over a fixed set of constant destinations.
+/// (unlace) A jump-table model over a fixed set of constant destinations.
 ///
 /// Shaped after `JumpModelTrivial`: the destinations are recovered once, the
 /// address table is that set, and each case label is its own target address (the
@@ -253,7 +253,7 @@ impl JumpModelConstSelect {
     /// Admit the caller's return address beside the constants of a re-entered
     /// dispatch; `encoding` is the mask the transfer itself applies.
     #[doc(hidden)]
-    pub fn kuna_admit_return(&mut self, encoding: Option<(i32, u64)>) {
+    pub fn unlace_admit_return(&mut self, encoding: Option<(i32, u64)>) {
         self.return_encoding = encoding;
         self.reentered = true;
     }
@@ -289,7 +289,7 @@ impl JumpModelConstSelect {
             || found
                 .constants
                 .iter()
-                .any(|&d| d == stub || !kuna_destination_is_local(branch_offset, d))
+                .any(|&d| d == stub || !unlace_destination_is_local(branch_offset, d))
         {
             return false;
         }
@@ -330,7 +330,7 @@ impl JumpModel for JumpModelConstSelect {
         indop: OpId,
         _matchsize: uint4,
         maxtablesize: uint4,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         self.dests.clear();
         self.return_stub = None;
         let (root, branch_offset) = match fd.obank().get(indop) {
@@ -355,7 +355,7 @@ impl JumpModel for JumpModelConstSelect {
         }
     }
 
-    fn kuna_returns_to_caller(&self) -> bool {
+    fn unlace_returns_to_caller(&self) -> bool {
         self.return_stub.is_some()
     }
 
@@ -366,7 +366,7 @@ impl JumpModel for JumpModelConstSelect {
         addresstable: &mut Vec<Address>,
         _loadpoints: Option<&mut Vec<LoadTable>>,
         _loadcounts: Option<&mut Vec<int4>>,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         addresstable.clear();
         let spc = Rc::clone(
             fd.obank()
@@ -397,7 +397,7 @@ impl JumpModel for JumpModelConstSelect {
         _maxaddsub: uint4,
         _maxleftright: uint4,
         _maxext: uint4,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         Ok(())
     }
 
@@ -407,7 +407,7 @@ impl JumpModel for JumpModelConstSelect {
         addresstable: &mut [Address],
         label: &mut Vec<uintb>,
         _orig: &dyn JumpModel,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         for a in addresstable.iter() {
             let returns = self.return_stub == Some(a.get_offset());
             label.push(if returns {
@@ -423,7 +423,7 @@ impl JumpModel for JumpModelConstSelect {
         &mut self,
         _fd: &mut Funcdata,
         _indop: OpId,
-    ) -> KunaResult<Option<VarnodeId>> {
+    ) -> UnlaceResult<Option<VarnodeId>> {
         Ok(None)
     }
 
@@ -431,7 +431,7 @@ impl JumpModel for JumpModelConstSelect {
         &mut self,
         _fd: &mut Funcdata,
         _jump: &mut crate::jumptable::JumpTable,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         Ok(false)
     }
 
@@ -446,7 +446,7 @@ impl JumpModel for JumpModelConstSelect {
         addresstable: &mut Vec<Address>,
         _loadpoints: &mut Vec<LoadTable>,
         _loadcounts: Option<&Vec<int4>>,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         if addresstable.is_empty() {
             return Ok(false);
         }
@@ -471,13 +471,13 @@ impl JumpModel for JumpModelConstSelect {
 #[path = "constselectjump/tests.rs"]
 mod tests;
 
-/// (kuna) The constant-select model needs `constselectjump on`, except on a
+/// (unlace) The constant-select model needs `constselectjump on`, except on a
 /// table staged again for re-entry, which only `off` prevents.
 pub fn admits(table: &JumpTable, mode: ConstSelectMode) -> bool {
-    mode == ConstSelectMode::On || table.kuna_is_reentered()
+    mode == ConstSelectMode::On || table.unlace_is_reentered()
 }
 
-/// (kuna) The constant-select model of `table`'s branch at `indirect`, when the
+/// (unlace) The constant-select model of `table`'s branch at `indirect`, when the
 /// option admits one for this table and the destinations are constants.
 pub fn recover(
     table: &JumpTable,
@@ -485,13 +485,13 @@ pub fn recover(
     indirect: OpId,
     matchsize: uint4,
     maxtablesize: uint4,
-) -> KunaResult<Option<Box<dyn JumpModel>>> {
-    if !admits(table, fd.get_arch().kuna_options.get::<ConstSelectMode>()) {
+) -> UnlaceResult<Option<Box<dyn JumpModel>>> {
+    if !admits(table, fd.get_arch().unlace_options.get::<ConstSelectMode>()) {
         return Ok(None);
     }
     let mut model = JumpModelConstSelect::new();
-    if table.kuna_is_reentered() {
-        model.kuna_admit_return(table.kuna_target_encoding());
+    if table.unlace_is_reentered() {
+        model.unlace_admit_return(table.unlace_target_encoding());
     }
     if model.recover_model(fd, indirect, matchsize, maxtablesize)? {
         return Ok(Some(Box::new(model)));
@@ -504,8 +504,8 @@ fn from_flow_targets(dests: Vec<uintb>, stub: Option<uintb>) -> Box<dyn JumpMode
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
-    hooks.constselectjump_destination_is_local = Some(kuna_destination_is_local);
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
+    hooks.constselectjump_destination_is_local = Some(unlace_destination_is_local);
     hooks.constselectjump_from_flow_targets = Some(from_flow_targets);
     hooks.constselectjump_recover = Some(recover);
 }

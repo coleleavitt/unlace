@@ -7,10 +7,10 @@
 //! At `-O0` a source ternary such as `flags ? "%s," : "%s"` compiles to a two-arm
 //! register-assignment **diamond**: one arm does `lea rax, "%s,"`, the other
 //! `lea rax, "%s"`, and both converge on the shared continuation (the use of the
-//! merged value).  kuna inherits Ghidra's collapse-based structurer, which renders
+//! merged value).  unlace inherits Ghidra's collapse-based structurer, which renders
 //! each such diamond as a literal `if (c) { v = A } else { v = B }` statement pair
 //! — **doubling** the branch count of any function full of them.  On iproute2's
-//! `print_link_flags` this pays kuna 41 `if`s / 0 ternaries (232 LOC) where the
+//! `print_link_flags` this pays unlace 41 `if`s / 0 ternaries (232 LOC) where the
 //! source and angr emit 21 `if`s / 20 ternaries (107 LOC), GED 140.
 //!
 //! angr's `ITERegionConverter` matches exactly this schema — a conditional-jump
@@ -47,7 +47,7 @@
 //!   instances of the diamond's merge.
 //!
 //! The match is **print-only**: the pass mutates *no* p-code.  It sets the
-//! [`kuna_iteregion`](crate::op::pcodeop_addlflags::kuna_iteregion) addl-flag on
+//! [`unlace_iteregion`](crate::op::pcodeop_addlflags::unlace_iteregion) addl-flag on
 //! the matched `CBRANCH`; the S9 C printer
 //! ([`PrintC::emit_block_if`](crate::printc)) sees that flag, re-derives the same
 //! match via [`match_ite_assignment`], and emits the single statement
@@ -64,7 +64,7 @@
 //! (`iteregion`, default-ON per DIV-17); each function with matches is logged via
 //! [`Funcdata::warning_header`].
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
@@ -77,7 +77,7 @@ use crate::options::on_or_off;
 
 use unlace_base::marshal::ElementId;
 
-/// Marshaling element `<iteregion>` (kuna).  ElementIds live in the 4000+ range
+/// Marshaling element `<iteregion>` (unlace).  ElementIds live in the 4000+ range
 /// (4100 gotoreduce … 4109 dedupitetail are taken; this is 4110).
 pub const ELEM_ITEREGION: ElementId = ElementId::new("iteregion", 4110);
 
@@ -90,7 +90,7 @@ pub struct IteAssignMatch {
     /// `ONLY_BRANCH` gives `( cond )`.
     pub cond_block: BlockId,
     /// The `CBRANCH` op in `cond_block` (carries the
-    /// [`kuna_iteregion`](pcodeop_addlflags::kuna_iteregion) mark).
+    /// [`unlace_iteregion`](pcodeop_addlflags::unlace_iteregion) mark).
     pub cbranch: OpId,
     /// The single `COPY` op of the **true** clause (taken when the rendered
     /// condition is true).  Its RHS renders as the `?` value.
@@ -139,7 +139,7 @@ impl Action for ActionIteRegion {
         // Default-OFF (a runtime choice) ⇒ nothing marked ⇒ byte-identical output.
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::iteregion::Iteregion>()
             .0
         {
@@ -165,7 +165,7 @@ impl Action for ActionIteRegion {
         let count = marks.len() as int4;
         for cbranch in marks {
             if let Some(o) = data.obank_mut().get_mut(cbranch) {
-                o.set_additional_flag(pcodeop_addlflags::kuna_iteregion);
+                o.set_additional_flag(pcodeop_addlflags::unlace_iteregion);
             }
         }
 
@@ -221,7 +221,7 @@ pub fn match_ite_assignment(data: &Funcdata, n: BlockId) -> Option<IteAssignMatc
     // precedes each `_PF` diamond) — the printer emits them normally *before* the
     // ternary, so nothing is lost.
     let cbranch = cond_cbranch(data, cond_block)?;
-    // (kuna javatry) A `try` dispatch is not a value selection.
+    // (unlace javatry) A `try` dispatch is not a value selection.
     if crate::javatry::dispatch_handler(data, cbranch).is_some() {
         return None;
     }
@@ -326,7 +326,7 @@ fn single_assign_arm(data: &Funcdata, id: BlockId) -> Option<(OpId, VarnodeId)> 
     if o.code() != OpCode::CPUI_COPY {
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::iteregion::Iteexpr>()
             .0
         {
@@ -416,7 +416,7 @@ impl OptionIteRegion {
     pub const NAME: &'static str = "iteregion";
 
     /// Parse `on`/`off`, returning the bool value + a confirmation message.
-    pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((
@@ -426,8 +426,8 @@ impl OptionIteRegion {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna) `iteexpr`: extend [`iteregion`](Self::iteregion) to diamonds whose
+crate::unlace_flag!(
+    /// (unlace) `iteexpr`: extend [`iteregion`](Self::iteregion) to diamonds whose
     /// arms are a single **computed** pure-value assignment (`v = *p`, `v = b + 5`)
     /// — not just a plain `COPY` — matching angr's aggressive `?:` recovery.  A C
     /// ternary evaluates only the taken branch, so the rewrite is
@@ -441,7 +441,7 @@ crate::kuna_flag!(
     shipped: false
 );
 
-/// (kuna) angr `ITERegionConverter`: rewrite a two-arm assignment *diamond*
+/// (unlace) angr `ITERegionConverter`: rewrite a two-arm assignment *diamond*
 /// (`if (c) v = A; else v = B;`, both arms a single COPY to the same
 /// variable, converging on one tail) to a `?:` ternary (`v = c ? A : B;`).
 /// A deliberate **runtime choice** (`iteregion`, opt-in default-off): the
@@ -451,9 +451,9 @@ crate::kuna_flag!(
 #[derive(Clone, Debug, PartialEq)]
 pub struct Iteregion(pub bool);
 
-impl crate::optionset::KunaOption for Iteregion {
+impl crate::optionset::UnlaceOption for Iteregion {
     const NAME: &'static str = "iteregion";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         Iteregion(false)
@@ -463,7 +463,7 @@ impl crate::optionset::KunaOption for Iteregion {
         Iteregion(true)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (v, msg) = crate::iteregion::OptionIteRegion.apply(value)?;
         Ok((Iteregion(v), msg))
     }

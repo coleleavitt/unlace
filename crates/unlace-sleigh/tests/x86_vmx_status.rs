@@ -1,4 +1,4 @@
-//! x86-64 VMX decode and flag lift (kuna #1628): VMREAD/VMWRITE decode without
+//! x86-64 VMX decode and flag lift (unlace #1628): VMREAD/VMWRITE decode without
 //! REX.W, every VMX instruction writes CF and ZF from its status, and VMPTRST
 //! stores the VMCS pointer.
 
@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 use unlace_sleigh::globalcontext::ContextInternal;
@@ -26,7 +26,7 @@ impl LoadImage for Bytes {
         Vec::new()
     }
     fn adjust_vma(&mut self, _: i64) {}
-    fn load_fill(&mut self, out: &mut [u8], addr: &Address) -> KunaResult<()> {
+    fn load_fill(&mut self, out: &mut [u8], addr: &Address) -> UnlaceResult<()> {
         for (i, byte) in out.iter_mut().enumerate() {
             *byte = addr
                 .get_offset()

@@ -21,7 +21,7 @@ fn decompile(addr: &str, options: &[(&str, &str)]) -> String {
         .expect("bootstrap fixture with built processor specs");
     for (name, value) in options {
         prog.arch_mut()
-            .set_kuna_option(name, value)
+            .set_unlace_option(name, value)
             .expect("option flips");
     }
     prog.commit_pending_analysis()

@@ -24,6 +24,6 @@ After this change the same commands give `main	0x140001592	main` in the summary 
 
 ## Tests
 
-- `tests/stages/kuna-pemain.toml` has two passes: off shows `sub_140001592(...)` and on shows `main(...)`. `tests/cli/pemain.json` checks the summary field.
+- `tests/stages/pemain.toml` has two passes: off shows `sub_140001592(...)` and on shows `main(...)`. `tests/cli/pemain.json` checks the summary field.
 - New cargo tests: `kuna_pemain` unit tests (MinGW stripped vs unstripped twin, ELF/Mach-O inert), `triage_cli::summary_reports_the_pe_user_entry`, and `verify_entrymainproto::the_prototype_composes_with_pemain`.
 - Across all in-repo PE fixtures, only the four with a real CRT startup change, and each gets `main` at the right address. It also names `main` correctly on three real MSVC samples (dynamic UCRT, a Qt app, and a debug static-CRT build).

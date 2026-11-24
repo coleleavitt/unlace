@@ -6,7 +6,7 @@
 //! dependency-light CLI that reads its inputs from the (virtual) filesystem and
 //! writes JSON/C to stdout — exactly the contract a browser WASI shim provides.
 //! The decompile loop and the project-export artifact builders are the shared
-//! decompile-project core (`unlace_console::project`, also behind `kuna
+//! decompile-project core (`unlace_console::project`, also behind `unlace
 //! decompile-all` / `unlace decompile-project`); this crate keeps only the
 //! wasm-safe wrapper (`unlace-cli`'s subprocess/CLI machinery cannot compile for
 //! `wasm32-wasip1`). The Node-WASI parity test in `integrations/web/test/`
@@ -197,7 +197,7 @@ fn parse_command(cmd: &str, args: &[String], binary: &str) -> Result<Cmd, String
         "project" => {
             at_most(1)?;
             // Display name defaults to the binary's basename (the CLI's
-            // `<binary-filename>.kuna/` convention).
+            // `<binary-filename>.unlace/` convention).
             let display = arg.map(str::to_string).unwrap_or_else(|| {
                 std::path::Path::new(binary)
                     .file_name()
@@ -283,7 +283,7 @@ fn parse_command(cmd: &str, args: &[String], binary: &str) -> Result<Cmd, String
 /// `reliable` from 500 KiB through just below 2 MiB, and `fast` at 2 MiB and
 /// above, with `auto`'s own override (`ctypes` on) under every one of them.
 ///
-/// (kuna outlang) For the language, `None` and `Some("auto")` follow the binary:
+/// (unlace outlang) For the language, `None` and `Some("auto")` follow the binary:
 /// a Rust binary renders as Rust. `project` is excluded from that policy -- its
 /// `.c`/`.h`/`.asm` export is C-shaped end to end -- so an explicit non-C
 /// language is an error there rather than a broken export.
@@ -314,7 +314,7 @@ pub fn run_request(req: &Request) -> Result<String, String> {
         discovery,
     )?;
     if let Some(seconds) = command_fn_budget_seconds(&command, mode) {
-        prog.arch_mut().kuna_fn_budget = Some(std::time::Duration::from_secs(seconds));
+        prog.arch_mut().unlace_fn_budget = Some(std::time::Duration::from_secs(seconds));
     }
     let language = prog.arch().print().out_lang().print_name();
 
@@ -400,7 +400,7 @@ pub fn run_request(req: &Request) -> Result<String, String> {
         }
         Cmd::Inspect(ref selector) => {
             prog.arch_mut()
-                .set_kuna_option("structdefs", "on")
+                .set_unlace_option("structdefs", "on")
                 .map_err(|e| format!("option structdefs: {}", e.explain()))?;
             let targets = resolve_targets(&prog, &command)?;
             let classifier = Classifier::new(
@@ -657,7 +657,7 @@ fn load_program(
 
     let set = |prog: &mut ConsoleProgram, name: &str, value: &str| {
         prog.arch_mut()
-            .set_kuna_option(name, value)
+            .set_unlace_option(name, value)
             .map_err(|e| format!("option {name}: {}", e.explain()))
     };
     for (name, value) in overrides {

@@ -1,4 +1,4 @@
-//! (kuna) The narrowed no-fall-through predicate for the discovered-no-return
+//! (unlace) The narrowed no-fall-through predicate for the discovered-no-return
 //! evidence tally (GH-312; P1 external refinement, part of `noreturn_disc`).
 //!
 //! # The defect (GH-312)
@@ -19,7 +19,7 @@
 //! executable range. The Listing keeps no record of which — a failed decode and an
 //! address nothing ever visited are the same `CodeUnit::Undefined` — so the arm is
 //! precisely and only a **decode-failure detector**, and a decoder gap is a fact
-//! about kuna, not about the callee.
+//! about unlace, not about the callee.
 //!
 //! Three undecodable bytes are therefore enough to forge the verdict for a callee
 //! that plainly returns, and every caller of that callee loses its live tail. The

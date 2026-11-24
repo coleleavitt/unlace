@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::{AddrSpaceManager, spacetype};
 
 use crate::dtype::{TypeFactory, type_class};
@@ -20,8 +20,8 @@ struct Range {
     end: u64,
 }
 
-fn ranges(address: &Address, size: i32, manager: &AddrSpaceManager) -> KunaResult<Vec<Range>> {
-    let error = || KunaError::param_unassigned("Invalid explicit parameter storage");
+fn ranges(address: &Address, size: i32, manager: &AddrSpaceManager) -> UnlaceResult<Vec<Range>> {
+    let error = || UnlaceError::param_unassigned("Invalid explicit parameter storage");
     let space = address.get_space().ok_or_else(error)?;
     if size <= 0 {
         return Err(error());
@@ -73,8 +73,8 @@ fn allocate(
     manager: &AddrSpaceManager,
     status: &mut [i32],
     piece: &mut ParameterPieces,
-    mut assign: impl FnMut(&mut [i32], &mut ParameterPieces) -> KunaResult<AssignActionResponse>,
-) -> KunaResult<AssignActionResponse> {
+    mut assign: impl FnMut(&mut [i32], &mut ParameterPieces) -> UnlaceResult<AssignActionResponse>,
+) -> UnlaceResult<AssignActionResponse> {
     loop {
         let previous = status.to_vec();
         let response = assign(status, piece)?;
@@ -125,7 +125,7 @@ fn allocate(
                     .checked_sub(entry.get_group())
                     .and_then(|slot| slot.checked_add(1))
                     .ok_or_else(|| {
-                        KunaError::param_unassigned("Explicit parameter slot overflow")
+                        UnlaceError::param_unassigned("Explicit parameter slot overflow")
                     })?;
                 if let Some(value) = status.get_mut(entry.get_group() as usize) {
                     *value = (*value).max(slot);
@@ -133,7 +133,7 @@ fn allocate(
             }
         }
         if previous == status {
-            return Err(KunaError::param_unassigned(
+            return Err(UnlaceError::param_unassigned(
                 "Default argument allocation overlaps explicit storage",
             ));
         }
@@ -148,7 +148,7 @@ pub fn assign(
     result: &mut Vec<ParameterPieces>,
     manager: &AddrSpaceManager,
     status: &mut [i32],
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     let mut custom = BTreeMap::new();
     for (slot, piece) in &proto.input_storage {
         let Ok(slot) = usize::try_from(*slot) else {
@@ -185,7 +185,7 @@ pub fn assign(
         {
             for &group in entry.get_all_groups() {
                 let value = status.get_mut(group as usize).ok_or_else(|| {
-                    KunaError::param_unassigned("Invalid parameter resource group")
+                    UnlaceError::param_unassigned("Invalid parameter resource group")
                 })?;
                 *value = -1;
             }
@@ -196,7 +196,7 @@ pub fn assign(
         let datatype = hidden
             .type_
             .clone()
-            .ok_or_else(|| KunaError::param_unassigned("Missing hidden parameter type"))?;
+            .ok_or_else(|| UnlaceError::param_unassigned("Missing hidden parameter type"))?;
         let is_hidden = hidden.flags & parameter_pieces_flags::HIDDENRETPARM != 0;
         let response = allocate(
             input,
@@ -223,7 +223,7 @@ pub fn assign(
             response,
             AssignActionResponse::fail | AssignActionResponse::no_assignment
         ) {
-            return Err(KunaError::param_unassigned(
+            return Err(UnlaceError::param_unassigned(
                 "Cannot allocate hidden return input beside explicit storage",
             ));
         }
@@ -250,7 +250,7 @@ pub fn assign(
             response,
             AssignActionResponse::fail | AssignActionResponse::no_assignment
         ) {
-            return Err(KunaError::param_unassigned(
+            return Err(UnlaceError::param_unassigned(
                 "Cannot allocate default input beside explicit storage",
             ));
         }
@@ -289,6 +289,6 @@ pub fn merge_mapped<'a>(
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.inputstorage_assign = Some(assign);
 }

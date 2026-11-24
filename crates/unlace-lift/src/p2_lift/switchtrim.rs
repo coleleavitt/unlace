@@ -1,4 +1,4 @@
-//! (kuna) `switchtrim` — recover a jump table no guard bounds, and end it where
+//! (unlace) `switchtrim` — recover a jump table no guard bounds, and end it where
 //! its layout ends.
 //!
 //! A switch whose default is unreachable (`__builtin_unreachable()`, an enum
@@ -69,6 +69,6 @@ pub fn trimmed_rows(
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.switchtrim_trimmed_rows = Some(trimmed_rows);
 }

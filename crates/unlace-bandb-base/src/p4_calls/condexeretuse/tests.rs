@@ -1,6 +1,6 @@
 //! Unit tests for the re-tested-condition use rule: the reachability walk and the repeated
 //! `only_op_use` walk on a hand-built re-test merge.  The end-to-end behaviour
-//! is `tests/stages/kuna-condexeretuse.toml`.
+//! is `tests/stages/unlace-condexeretuse.toml`.
 
 use std::rc::Rc;
 
@@ -73,7 +73,7 @@ fn input(fd: &mut Funcdata, off: u64, size: int4) -> VarnodeId {
     let mut keep = |_: &mut crate::varnode::VarnodeBank,
                     _: VarnodeId,
                     _: VarnodeId|
-     -> unlace_base::error::KunaResult<()> { panic!("input collision") };
+     -> unlace_base::error::UnlaceResult<()> { panic!("input collision") };
     fd.vbank_mut().set_input(vn, &mut keep).unwrap()
 }
 

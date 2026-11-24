@@ -1,4 +1,4 @@
-//! (kuna `calleeargsmsvc`) A register-only callee with an MSVC C++ exception
+//! (unlace `calleeargsmsvc`) A register-only callee with an MSVC C++ exception
 //! frame and a `/GS` cookie states its stack-argument extent, so it no longer
 //! takes the push the caller made early for the `__thiscall` call after it.
 //! Fixture: `calleeargsmsvc_pe_i386.dll` (fixtures README).
@@ -6,7 +6,7 @@ use crate::common;
 use common::process;
 use std::process::Command;
 
-fn kuna() -> std::ffi::OsString {
+fn unlace() -> std::ffi::OsString {
     unlace_base::env::var_os("UNLACE_TEST_BIN")
         .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into())
 }
@@ -17,7 +17,7 @@ fn report(mode: &str) -> String {
 
 fn report_of(name: &str, mode: &str) -> String {
     let fixture = common::fixture(name);
-    let mut command = Command::new(kuna());
+    let mut command = Command::new(unlace());
     command.args([
         "decompile",
         &fixture,

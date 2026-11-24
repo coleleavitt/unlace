@@ -1,4 +1,4 @@
-//! (kuna `structsynth`) The program-wide layout ledger: which `struct_N` a
+//! (unlace `structsynth`) The program-wide layout ledger: which `struct_N` a
 //! freshly measured layout should be, given the ones already minted.
 //!
 //! # The gap

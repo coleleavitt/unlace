@@ -1,4 +1,4 @@
-//! (kuna `dexmodel`) The DEX container format, read straight from the bytes.
+//! (unlace `dexmodel`) The DEX container format, read straight from the bytes.
 //!
 //! Follows the format document (source.android.com/docs/core/runtime/dex-format):
 //! the header, the five id tables, the class definitions with their
@@ -6,7 +6,7 @@
 //! against the file, so a truncated or hostile file is an error, not a panic.
 //! Strings are decoded from MUTF-8 when asked for.
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 
 /// `NO_INDEX`: an absent type or string reference.
 pub const NO_INDEX: u32 = 0xffff_ffff;
@@ -142,25 +142,25 @@ pub struct DexFile {
     data_base: usize,
 }
 
-fn bad(what: &str) -> KunaError {
-    KunaError::lowlevel(format!("malformed DEX file: {what}"))
+fn bad(what: &str) -> UnlaceError {
+    UnlaceError::lowlevel(format!("malformed DEX file: {what}"))
 }
 
-fn u16_at(bytes: &[u8], off: usize) -> KunaResult<u16> {
+fn u16_at(bytes: &[u8], off: usize) -> UnlaceResult<u16> {
     bytes
         .get(off..off + 2)
         .map(|b| u16::from_le_bytes([b[0], b[1]]))
         .ok_or_else(|| bad("read past the end of the file"))
 }
 
-fn u32_at(bytes: &[u8], off: usize) -> KunaResult<u32> {
+fn u32_at(bytes: &[u8], off: usize) -> UnlaceResult<u32> {
     bytes
         .get(off..off + 4)
         .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
         .ok_or_else(|| bad("read past the end of the file"))
 }
 
-fn uleb128(bytes: &[u8], pos: &mut usize) -> KunaResult<u32> {
+fn uleb128(bytes: &[u8], pos: &mut usize) -> UnlaceResult<u32> {
     let mut result: u32 = 0;
     for shift in (0..35).step_by(7) {
         let byte = *bytes.get(*pos).ok_or_else(|| bad("truncated uleb128"))?;
@@ -173,7 +173,7 @@ fn uleb128(bytes: &[u8], pos: &mut usize) -> KunaResult<u32> {
     Err(bad("uleb128 longer than five bytes"))
 }
 
-fn sleb128(bytes: &[u8], pos: &mut usize) -> KunaResult<i32> {
+fn sleb128(bytes: &[u8], pos: &mut usize) -> UnlaceResult<i32> {
     let mut result: u32 = 0;
     let mut shift = 0;
     loop {
@@ -222,7 +222,7 @@ fn mutf8(bytes: &[u8]) -> String {
 
 impl DexFile {
     /// Parse the header, the class definitions and their code items.
-    pub fn parse(bytes: Vec<u8>) -> KunaResult<DexFile> {
+    pub fn parse(bytes: Vec<u8>) -> UnlaceResult<DexFile> {
         if !is_dex(&bytes) {
             return Err(bad("no dex magic"));
         }
@@ -232,7 +232,7 @@ impl DexFile {
         if u32_at(&bytes, 0x28)? != ENDIAN_CONSTANT {
             return Err(bad("unsupported endian tag"));
         }
-        let table = |at: usize, width: usize, what: &str| -> KunaResult<Table> {
+        let table = |at: usize, width: usize, what: &str| -> UnlaceResult<Table> {
             let count = u32_at(&bytes, at)? as usize;
             let off = u32_at(&bytes, at + 4)? as usize;
             let end = count
@@ -280,7 +280,7 @@ impl DexFile {
         &self.bytes
     }
 
-    fn read_class_def(&self, at: usize) -> KunaResult<ClassDef> {
+    fn read_class_def(&self, at: usize) -> UnlaceResult<ClassDef> {
         let b = &self.bytes;
         let mut class = ClassDef {
             class_idx: u32_at(b, at)?,
@@ -322,7 +322,7 @@ impl DexFile {
         Ok(class)
     }
 
-    fn read_code_item(&self, at: usize) -> KunaResult<CodeItem> {
+    fn read_code_item(&self, at: usize) -> UnlaceResult<CodeItem> {
         let b = &self.bytes;
         let item = if self.compact {
             // `CompactDexFile::CodeItem::DecodeFields`: four 4-bit sizes and an
@@ -336,7 +336,7 @@ impl DexFile {
             let mut tries = fields & 0xf;
             let mut insns = u32::from(count_and_flags >> 5);
             let mut pre = at;
-            let mut back = || -> KunaResult<u16> {
+            let mut back = || -> UnlaceResult<u16> {
                 pre = pre
                     .checked_sub(2)
                     .ok_or_else(|| bad("code item preheader"))?;
@@ -384,7 +384,7 @@ impl DexFile {
     }
 
     /// The `try_item`s of a code item with their catch clauses.
-    pub fn tries(&self, code: &CodeItem) -> KunaResult<Vec<TryItem>> {
+    pub fn tries(&self, code: &CodeItem) -> UnlaceResult<Vec<TryItem>> {
         let b = &self.bytes;
         let tries_off = code.tries_off();
         let list_off = tries_off + usize::from(code.tries_size) * 8;

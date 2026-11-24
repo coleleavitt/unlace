@@ -84,7 +84,7 @@ _sample_indirect:
         String::from_utf8_lossy(&result.stderr)
     );
     let (inventory, err, status) =
-        common::run_kuna(&["functions", binary.to_str().unwrap(), "--json"]);
+        common::run_unlace(&["functions", binary.to_str().unwrap(), "--json"]);
     assert_eq!(status, 0, "{err}");
     let inventory: serde_json::Value = serde_json::from_str(&inventory).unwrap();
     let helpers: Vec<_> = inventory["functions"]
@@ -141,7 +141,7 @@ _sample_indirect:
                 for declaration in &declarations {
                     args.extend(["--assert", declaration.as_str()]);
                 }
-                let (body, err, status) = common::run_kuna(&args);
+                let (body, err, status) = common::run_unlace(&args);
                 assert_eq!(status, 0, "{err}");
                 assert!(
                     body.contains("_double_value(x)"),

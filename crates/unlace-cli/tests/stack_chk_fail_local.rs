@@ -3,7 +3,7 @@ use common::process;
 use std::process::Command;
 
 fn decompile(path: &str, function: &str, mode: &[&str]) -> String {
-    let (out, err, rc) = common::run_kuna(&[&["decompile", path, function], mode].concat());
+    let (out, err, rc) = common::run_unlace(&[&["decompile", path, function], mode].concat());
     assert_eq!(rc, 0, "{err}\n{out}");
     out
 }

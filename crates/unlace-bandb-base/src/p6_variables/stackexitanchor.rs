@@ -1,4 +1,4 @@
-//! (kuna) `stackexitanchor` — the epilogue settles the purge of the last unknown
+//! (unlace) `stackexitanchor` — the epilogue settles the purge of the last unknown
 //! call on each path (P6 stack-pointer flow).
 //!
 //! `StackSolver` runs where the prototype model leaves a call's extrapop
@@ -34,7 +34,7 @@ use crate::funcdata::Funcdata;
 pub fn record(data: &mut Funcdata, sb_addr: &Address) {
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::stackexitanchor::StackExitAnchor>()
         .0
     {
@@ -105,7 +105,7 @@ pub fn record(data: &mut Funcdata, sb_addr: &Address) {
     }
     anchors.sort_unstable();
     anchors.dedup();
-    data.kuna_set_stack_exit_anchors(anchors);
+    data.unlace_set_stack_exit_anchors(anchors);
 }
 
 /// The signed constant `op` adds to the stack pointer, when it is
@@ -132,8 +132,8 @@ fn sp_add(data: &Funcdata, op: &crate::op::PcodeOp, sb_addr: &Address) -> Option
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna) Tie each return's stack pointer to the entry one in the stack
+crate::unlace_flag!(
+    /// (unlace) Tie each return's stack pointer to the entry one in the stack
     /// solver (option `stackexitanchor`).
     StackExitAnchor,
     "stackexitanchor",

@@ -5,7 +5,7 @@
 //! and future local spellings, then assigns collision suffixes in caller order.
 //! Symbol and overlap-group collapsing remain in [`crate::printc`].
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::marshal::ElementId;
 
 use crate::context::HighVariableId;
@@ -13,11 +13,11 @@ use crate::database::SymbolId;
 use crate::funcdata::Funcdata;
 use crate::options::on_or_off;
 
-/// Marshaling element `<dedupvardecls>` (kuna, 4000+ id range; next free after
+/// Marshaling element `<dedupvardecls>` (unlace, 4000+ id range; next free after
 /// `hideextensions` = 4090).
 pub const ELEM_DEDUPVARDECLS: ElementId = ElementId::new("dedupvardecls", 4091);
 
-/// (kuna) Toggle the scalar duplicate-declaration collapse: `dedupvardecls on|off`.
+/// (unlace) Toggle the scalar duplicate-declaration collapse: `dedupvardecls on|off`.
 ///
 /// "off" keeps the per-high behavior (one declaration per HighVariable, so shared
 /// names repeat); "on" collapses declarations whose rendered signature is identical
@@ -31,7 +31,7 @@ impl OptionDedupVarDecls {
 
     /// Parse + validate the `on`/`off` value and return the resolved flag plus the
     /// confirmation message (the caller flips the registered option `DedupVarDecls`).
-    pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((
@@ -78,9 +78,9 @@ impl DeclIdentity {
         fd.high_bank()
             .get(high)
             .and_then(|h| {
-                h.kuna_ref_symbol()
-                    .or(h.kuna_link_symbol())
-                    .or(h.kuna_dynamic_symbol())
+                h.unlace_ref_symbol()
+                    .or(h.unlace_link_symbol())
+                    .or(h.unlace_dynamic_symbol())
             })
             .map_or(Self::High(high), Self::Symbol)
     }
@@ -211,16 +211,16 @@ impl DeclDedup {
     }
 }
 
-/// (kuna) Collapse local-variable declarations whose fully-rendered line is
+/// (unlace) Collapse local-variable declarations whose fully-rendered line is
 /// identical (the scalar analogue of the composite-symbol decl collapse), so a
 /// stack slot mapped onto many same-named HighVariables is declared once
 /// (`option dedupvardecls`; angr-inspired, S9).
 #[derive(Clone, Debug, PartialEq)]
 pub struct DedupVarDecls(pub bool);
 
-impl crate::optionset::KunaOption for DedupVarDecls {
+impl crate::optionset::UnlaceOption for DedupVarDecls {
     const NAME: &'static str = "dedupvardecls";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         DedupVarDecls(false)
@@ -230,7 +230,7 @@ impl crate::optionset::KunaOption for DedupVarDecls {
         DedupVarDecls(true)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (v, msg) = crate::dedupvardecls::OptionDedupVarDecls.apply(value)?;
         Ok((DedupVarDecls(v), msg))
     }

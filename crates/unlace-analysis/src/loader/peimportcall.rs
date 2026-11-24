@@ -11,7 +11,7 @@
 //! `queryExternalRefFunction` arm on `Varnode::isPersist() &&
 //! Varnode::isExternalRef()`. `persist` is already painted; `externref` is set
 //! nowhere in the workspace, because Ghidra sets it from an `ExternRefSymbol`
-//! (`Scope::addExternalRef`) that kuna's loader never creates. So every
+//! (`Scope::addExternalRef`) that unlace's loader never creates. So every
 //! `call [IAT]` in a PE stays an unnamed `(*dat_4112c4)(0)` — no name, no
 //! prototype, and (the damaging part) no no-return flow effect, so a function
 //! ending in `ExitThread(0)` runs on and absorbs the whole next function. Mach-O
@@ -30,13 +30,13 @@
 //!    property map into a global Varnode's flags, so the slot read now carries
 //!    `persist|externref` and `ActionDeindirect` resolves it through the
 //!    FunctionSymbol the format's import resolver (`pe_iat`, `macho_stubs`,
-//!    `elf_plt`) already registered at the slot VA. (kuna's
+//!    `elf_plt`) already registered at the slot VA. (unlace's
 //!    `query_function` keys on the Varnode's own address rather than upstream's
 //!    `ExternRefSymbol::refaddr` indirection, so the slot-VA registration lines
 //!    up without a second symbol.) Mach-O stubs, exports, LOCAL/ABS indirect
 //!    entries, ordinary data such as `__objc_msgrefs`, and an ELF function
 //!    pointer stored outside `.got` are not painted.
-//! 2. **The Win32 no-return API names.** kuna's shipped
+//! 2. **The Win32 no-return API names.** unlace's shipped
 //!    `PeMacFunctionsThatDoNotReturn` carries only the shared CRT names; the
 //!    Windows API exits (`ExitProcess`, `ExitThread`, `FreeLibraryAndExitThread`,
 //!    `KeBugCheck`, `longjmp`, …) live in upstream's separate
@@ -132,7 +132,7 @@ mod tests {
     use super::*;
     use crate::loader::noreturn::{name_matches, parse_list};
 
-    /// The vendored upstream list carries the Win32 API exits kuna's merged
+    /// The vendored upstream list carries the Win32 API exits unlace's merged
     /// PE/Mach-O list never named — the whole point of the widening.
     #[test]
     fn win32_list_names_the_api_exits() {

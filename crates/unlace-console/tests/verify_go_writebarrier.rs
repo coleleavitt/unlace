@@ -8,8 +8,8 @@
 //!   in the C;
 //! - `option gowritebarrier off`: the same function renders the thunk call.
 //!
-//! The hermetic matcher logic is pinned by the `kuna_gowritebarrier` unit
-//! tests and `tests/stages/kuna-gowritebarrier.toml`; this gate is the
+//! The hermetic matcher logic is pinned by the `unlace_gowritebarrier` unit
+//! tests and `tests/stages/unlace-gowritebarrier.toml`; this gate is the
 //! detection-driven `auto` path over a genuine Go image (the
 //! `verify_go_morestack` pattern, same hermetic build recipe).
 
@@ -150,7 +150,7 @@ fn decompile_fns(bin: &str, option: Option<&str>, names: &[String]) -> String {
         .expect("bootstrap go fixture with built processor specs");
     if let Some(v) = option {
         prog.arch_mut()
-            .set_kuna_option("gowritebarrier", v)
+            .set_unlace_option("gowritebarrier", v)
             .expect("gowritebarrier applies");
     }
     prog.commit_pending_analysis()

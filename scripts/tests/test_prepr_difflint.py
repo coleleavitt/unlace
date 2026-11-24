@@ -27,7 +27,7 @@ class DiffLintTests(unittest.TestCase):
         self.git("config", "user.name", "t")
         self.write(FIXTURES / "README.md", "| `old.exe` | recipe |\n")
         self.write("tests/stages/kuna-old.xml", STAGE)
-        self.write("tests/stages/kuna-catalog.xml", STAGE)
+        self.write("tests/stages/catalog.xml", STAGE)
         self.commit("base")
         self.git("checkout", "-q", "-b", "feature")
 
@@ -94,7 +94,7 @@ class DiffLintTests(unittest.TestCase):
 
     def test_an_edited_assertion_needs_a_trailer(self):
         self.write("tests/stages/kuna-old.xml", STAGE.replace("(2,1\\)", "(2\\)"))
-        self.write("tests/stages/kuna-catalog.xml", STAGE.replace('min="1" max="1"', 'min="2" max="2"'))
+        self.write("tests/stages/catalog.xml", STAGE.replace('min="1" max="1"', 'min="2" max="2"'))
         self.commit("re-pin")
         self.assertEqual(self.checks(), [("error", "assertion-edit", "kuna-old.xml")])
         self.git("commit", "-q", "--allow-empty", "-m", "why\n\nAssertion-change: kuna-old: the helper reads one argument")

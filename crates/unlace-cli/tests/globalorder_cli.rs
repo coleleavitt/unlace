@@ -51,7 +51,7 @@ fn prepare(cc: &str, level: &str, dir: &Path) -> (PathBuf, PathBuf, PathBuf) {
 
 fn decompile(binary: &Path, functions: &str) -> String {
     let specs = common::repo_root().join("specs");
-    let (printed, stderr, rc) = common::run_kuna(&[
+    let (printed, stderr, rc) = common::run_unlace(&[
         "decompile-all",
         binary.to_str().unwrap(),
         "--functions",

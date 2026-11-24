@@ -1,5 +1,5 @@
 //! Port of `decompiler/cpp/kuna_sparcstructret.{cc,hh}` — SPARC struct-return
-//! `unimp N` post-call fall-through (kuna GH-6882, S2 flow-classification).
+//! `unimp N` post-call fall-through (unlace GH-6882, S2 flow-classification).
 //!
 //! The SPARC ABI for a struct-returning function plants an `unimp <structsize>`
 //! after the call site; the SPARC SLEIGH spec lifts `unimp`/`illtrap` to
@@ -13,8 +13,8 @@
 //!
 //! ## What this module ports
 //!
-//! [`kuna_sparc_struct_ret_trap_producer`] returns the producer recognized by
-//! the C++ `kunaIsSparcStructRetTrap(Funcdata&, const PcodeOp*)` predicate,
+//! [`unlace_sparc_struct_ret_trap_producer`] returns the producer recognized by
+//! the C++ `unlaceIsSparcStructRetTrap(Funcdata&, const PcodeOp*)` predicate,
 //! including its **positional** (pre-SSA) backward walk over the dead/insert
 //! list to locate the trap CALLOTHER in the same instruction.  The
 //! fall-through rewrite itself is driven by `flow.rs` at
@@ -40,7 +40,7 @@ use crate::context::OpId;
 use crate::funcdata::Funcdata;
 use unlace_num::opcodes::OpCode;
 
-/// (kuna) Toggle SPARC struct-return `unimp` BRANCHIND -> fall-through
+/// (unlace) Toggle SPARC struct-return `unimp` BRANCHIND -> fall-through
 /// (C++ `OptionSparcStructRet`, GH-6882).
 ///
 /// STUB(W4): the C++ `OptionSparcStructRet::apply` flips
@@ -64,7 +64,7 @@ impl Default for SparcStructRetOption {
 }
 
 impl SparcStructRetOption {
-    /// (kuna) Set the gate (C++ `OptionSparcStructRet::apply`).
+    /// (unlace) Set the gate (C++ `OptionSparcStructRet::apply`).
     pub fn apply(&mut self, val: bool) -> &'static str {
         self.enabled = val;
         if val {
@@ -87,7 +87,7 @@ const ILLEGAL_INSTRUCTION_TRAP: &str = "IllegalInstructionTrap";
 pub fn neutralize_trap_producer(
     data: &mut Funcdata,
     producer: OpId,
-) -> unlace_base::error::KunaResult<()> {
+) -> unlace_base::error::UnlaceResult<()> {
     let Some(op) = data.obank().get(producer) else {
         return Ok(());
     };
@@ -108,7 +108,7 @@ pub fn neutralize_trap_producer(
 }
 
 /// Find the IllegalInstructionTrap producer within the branch's instruction.
-pub fn kuna_sparc_struct_ret_trap_producer<F>(
+pub fn unlace_sparc_struct_ret_trap_producer<F>(
     data: &Funcdata,
     branch: OpId,
     gate: bool,
@@ -144,8 +144,8 @@ where
     None
 }
 
-crate::kuna_flag!(
-    /// (kuna GH-6882) Let a SPARC struct-return post-call `unimp` fall through
+crate::unlace_flag!(
+    /// (unlace GH-6882) Let a SPARC struct-return post-call `unimp` fall through
     /// (C++ `sparc_struct_return`).
     SparcStructReturn,
     "sparcstructret",

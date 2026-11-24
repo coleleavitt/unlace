@@ -9,7 +9,7 @@
 //! every STORE that could alias the range, and `Heritage::guardLoads`
 //! (`heritage.cc:1570`) puts an `addrforce` `CPUI_COPY` read of the range in
 //! front of each indexed-stack LOAD whose discovered guard range covers it.
-//! kuna shipped that arm behind a hard-coded `highPtrPossible == false`, so
+//! unlace shipped that arm behind a hard-coded `highPtrPossible == false`, so
 //! neither ran.
 //!
 //! Without the LOAD guard a frame slot written by a direct `MOV [ESP+k],REG` and
@@ -22,7 +22,7 @@
 //! The halves have very different footprints, so the option is a level rather
 //! than an on/off:
 //!
-//! * [`LEVEL_OFF`] — neither guard; byte-identical to what kuna shipped before
+//! * [`LEVEL_OFF`] — neither guard; byte-identical to what unlace shipped before
 //!   this option.
 //! * [`LEVEL_LOAD`] — the LOAD guard only.  It is what recovers the dropped
 //!   initializing stores, and it moved 0/675 datatest and 0/714 stage
@@ -32,7 +32,7 @@
 //!
 //!   The STORE guard puts an `indirect_store` `INDIRECT` on the global at every
 //!   `STORE` into the global's own space ([`stores_into`]).  Without it a
-//!   pointer `STORE` has no effect on a global in kuna's SSA, so a load of the
+//!   pointer `STORE` has no effect on a global in unlace's SSA, so a load of the
 //!   global after `gi = a; *p = k;` reads the `COPY` of `a` and prints `a`, and
 //!   a value read before the store prints as a read of the global after it.  A
 //!   read-only range is skipped (a store cannot change it), and a function past
@@ -46,7 +46,7 @@
 //!
 //!   The LOAD guard puts an `addrforce` `COPY` read of the global in front of
 //!   every `LOAD` from the global's space that may read it ([`loads_from`]).
-//!   Without it a pointer `LOAD` reads no global in kuna's SSA, so
+//!   Without it a pointer `LOAD` reads no global in unlace's SSA, so
 //!   `gi = a; x = *p; gi = b;` leaves the first store with no reader and
 //!   `ActionDeadCode` deletes it.  Only a writable range with at least two
 //!   writes other than `INDIRECT`s is guarded (a single write reaches the
@@ -182,7 +182,7 @@ pub fn loads_from(
 pub fn keeps_forced_self_copy(data: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
     if data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::indexaliasguard::IndexAliasGuard>()
         .0
         < LEVEL_GLOBAL
@@ -218,7 +218,7 @@ pub fn keeps_forced_join(data: &Funcdata, out: VarnodeId, a: VarnodeId, b: Varno
             .is_some_and(|d| d.is_addr_force() && d.is_written())
     };
     data.get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::indexaliasguard::IndexAliasGuard>()
         .0
         >= LEVEL_GLOBAL
@@ -240,7 +240,7 @@ pub fn keeps_forced_join(data: &Funcdata, out: VarnodeId, a: VarnodeId, b: Varno
 pub fn load_crosses_global_store(data: &Funcdata, vn: VarnodeId) -> bool {
     if data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::indexaliasguard::IndexAliasGuard>()
         .0
         < LEVEL_GLOBAL
@@ -378,7 +378,7 @@ fn based_on(fd: &Funcdata, mut ptr: VarnodeId, bases: &[(Rc<AddrSpace>, u64)]) -
 pub fn keeps_store_guard_input(data: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
     if data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::indexaliasguard::IndexAliasGuard>()
         .0
         != LEVEL_GLOBAL
@@ -410,7 +410,7 @@ pub fn keeps_store_guard_input(data: &Funcdata, op: OpId, vn: VarnodeId) -> bool
 pub fn keeps_store_before_load(data: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
     if data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::indexaliasguard::IndexAliasGuard>()
         .0
         != LEVEL_GLOBAL
@@ -555,7 +555,7 @@ mod tests {
                     ));
                     manager.insert_space(Rc::clone(&ram)).unwrap();
                     let mut arch = ArchContext::new(manager);
-                    arch.kuna_options.set(IndexAliasGuard(LEVEL_GLOBAL));
+                    arch.unlace_options.set(IndexAliasGuard(LEVEL_GLOBAL));
                     let mut fd = Funcdata::new(
                         "f",
                         "f",
@@ -683,7 +683,7 @@ fn loads_from_hook(
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.indexaliasguard_stores_into = Some(stores_into_hook);
     hooks.indexaliasguard_loads_from = Some(loads_from_hook);
 }

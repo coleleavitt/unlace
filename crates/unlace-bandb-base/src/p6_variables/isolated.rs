@@ -22,7 +22,7 @@ use crate::funcdata::Funcdata;
 /// The storage and width of each isolated Symbol of `fd` that is a parameter
 /// or holds its storage for the whole function, with the ones `fd` was itself given.
 pub fn carried(fd: &Funcdata) -> BTreeSet<(Address, int4)> {
-    let mut out = fd.kuna_prior_names().isolated.clone();
+    let mut out = fd.unlace_prior_names().isolated.clone();
     let Some(lm) = fd.get_scope_local().filter(|lm| lm.has_isolated_symbols()) else {
         return out;
     };
@@ -43,7 +43,7 @@ pub fn carried(fd: &Funcdata) -> BTreeSet<(Address, int4)> {
 /// Is `high` a variable the previous decompile isolated ([`carried`]): does
 /// it hold the function input or the address-tied storage of one?
 pub fn holds(fd: &Funcdata, high: HighVariableId) -> bool {
-    let isolated = &fd.kuna_prior_names().isolated;
+    let isolated = &fd.unlace_prior_names().isolated;
     if isolated.is_empty() {
         return false;
     }
@@ -59,6 +59,6 @@ pub fn holds(fd: &Funcdata, high: HighVariableId) -> bool {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.isolated_holds = Some(holds);
 }

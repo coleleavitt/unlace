@@ -1,4 +1,4 @@
-//! (kuna `valuewitness`) A value's witness table, loaded through its type
+//! (unlace `valuewitness`) A value's witness table, loaded through its type
 //! metadata, is a `swift.value_witness_table *`.
 //!
 //! Swift copies, moves and destroys a value whose layout it does not know at
@@ -44,7 +44,7 @@ const ENUM_TABLE_SIZE: u64 = 112;
 pub fn output_vote(data: &Funcdata, vn: VarnodeId) -> Option<Rc<Datatype>> {
     let arch = data.get_arch();
     if !arch
-        .kuna_options
+        .unlace_options
         .get::<crate::valuewitness::Valuewitness>()
         .0
     {
@@ -78,7 +78,7 @@ pub fn output_vote(data: &Funcdata, vn: VarnodeId) -> Option<Rc<Datatype>> {
 pub fn keeps_offset(data: &Funcdata, op: OpId, slot: i32) -> bool {
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::valuewitness::Valuewitness>()
         .0
     {
@@ -108,7 +108,7 @@ pub fn keeps_offset(data: &Funcdata, op: OpId, slot: i32) -> bool {
 pub fn outside_header(data: &Funcdata, op: OpId, slot: i32, ptr: &Rc<Datatype>) -> bool {
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::valuewitness::Valuewitness>()
         .0
         || !ptr.get_ptr_to().is_some_and(|t| t.get_name() == METADATA)
@@ -182,7 +182,7 @@ fn table_read(data: &Funcdata, op: OpId, vn: VarnodeId) -> Option<u64> {
 /// value witness table's and the enum one's.
 pub fn tables(arch: &crate::context::ArchContext) -> Option<(Rc<Datatype>, Option<Rc<Datatype>>)> {
     if !arch
-        .kuna_options
+        .unlace_options
         .get::<crate::valuewitness::Valuewitness>()
         .0
     {
@@ -434,8 +434,8 @@ fn written_before<'a>(
     None
 }
 
-crate::kuna_flag!(
-    /// (kuna) Gate the value-witness arm of the metadata pass
+crate::unlace_flag!(
+    /// (unlace) Gate the value-witness arm of the metadata pass
     /// (`valuewitness`): each local struct's and enum's value witness
     /// functions named and prototyped, and a load of a value's witness table
     /// through its metadata typed `swift.value_witness_table *`. Default-on;

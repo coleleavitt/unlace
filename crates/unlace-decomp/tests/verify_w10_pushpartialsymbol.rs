@@ -85,7 +85,7 @@ fn cpp_oracle() -> PathBuf {
 }
 
 /// Drive `bin` on `stem`.xml with `UNLACE_DUMP=1`, return the sliced bulk
-/// `print C` block (the `===KUNA_DUMP_BEGIN===..===KUNA_DUMP_MID===` body), or
+/// `print C` block (the `===UNLACE_DUMP_BEGIN===..===UNLACE_DUMP_MID===` body), or
 /// `None` if the binary or its `.sla` is unavailable.
 fn dump_print_c(bin: &PathBuf, stem: &str) -> Option<String> {
     if !bin.exists() {

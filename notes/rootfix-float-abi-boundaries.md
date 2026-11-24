@@ -7,7 +7,7 @@ ownership rules or left a bounded-completeness hole. This note records what each
 one was, why the replacement is neutral rather than a patch, and what remains
 outside them.
 
-The runnable witness is `tests/stages/kuna-prefersplit.toml` and the
+The runnable witness is `tests/stages/prefersplit.toml` and the
 `prefersplit_scope` CLI tests. The original binary witness is
 `sub_17bf1c` in `libshpssdk.so`, which used to pass the value as
 `unsigned __int128` and now passes it as a `double`:

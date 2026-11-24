@@ -14,8 +14,8 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::address::SeqNum;
-use unlace_base::error::KunaError;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceError;
+use unlace_base::error::UnlaceResult;
 use unlace_base::space::AddrSpace;
 use unlace_base::space::AddrSpaceManager;
 use unlace_base::space::ConstantSpace;
@@ -132,7 +132,7 @@ impl Rule for RecordedRemoval {
 /// as an ordinary change and every pass is a sweep.
 fn run_cascade_chain(n: u64, opc: OpCode, cascade: Option<u32>) -> (Vec<u64>, usize, Vec<u64>) {
     let mut arch = ArchContext::new(build_manager());
-    arch.kuna_options
+    arch.unlace_options
         .set(crate::coreoptions::DeadCascade(cascade));
     let glb = Rc::new(arch);
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
@@ -193,7 +193,7 @@ fn run_cascade_chain(n: u64, opc: OpCode, cascade: Option<u32>) -> (Vec<u64>, us
     (alive, offers, order)
 }
 
-/// (kuna `deadcascade`) The real removal rule takes a dead chain of joins out
+/// (unlace `deadcascade`) The real removal rule takes a dead chain of joins out
 /// in the pass that removes its last link, or from the given pass of the pool's
 /// run, in the order one-link-per-pass removal would, and leaves the same ops;
 /// a chain of other ops still dies one link per pass.

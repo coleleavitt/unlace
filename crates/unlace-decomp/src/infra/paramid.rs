@@ -30,7 +30,7 @@
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::marshal::ElementId;
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
@@ -394,7 +394,7 @@ impl ParamMeasure {
         encoder: &mut dyn unlace_base::marshal::Encoder,
         tag: &ElementId,
         moredetail: bool,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         encoder.open_element(tag);
         encoder.open_element(&unlace_base::address::ELEM_ADDR);
         if let Some(spc) = &self.vndata.space {
@@ -450,7 +450,7 @@ impl ParamIDAnalysis {
     /// (`numParams`/`getParam(i)`/`getOutput` + `findVarnodeInput` + the
     /// RETURN-op output scan); `justproto = false` lists the input Varnodes
     /// outside the model (the `beginDef(input)` range).
-    pub fn new(fd: &Funcdata, justproto: bool) -> KunaResult<ParamIDAnalysis> {
+    pub fn new(fd: &Funcdata, justproto: bool) -> UnlaceResult<ParamIDAnalysis> {
         let proto = fd.get_func_proto();
         // C++ always has a model + store by analysis end; hand-built fixtures
         // may not — degrade to the "default" model spelling / no measures
@@ -585,7 +585,7 @@ impl ParamIDAnalysis {
         &self,
         encoder: &mut dyn unlace_base::marshal::Encoder,
         moredetail: bool,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         use unlace_base::marshal::{ATTRIB_MODEL, ATTRIB_NAME};
         encoder.open_element(&ELEM_PARAMMEASURES);
         encoder.write_string(&ATTRIB_NAME, self.fdname.as_bytes());

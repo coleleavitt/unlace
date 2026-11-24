@@ -1,4 +1,4 @@
-//! (kuna `castnarrow`) A narrowing whose value lands whole in an assignment, a
+//! (unlace `castnarrow`) A narrowing whose value lands whole in an assignment, a
 //! store, a prototyped argument or a `return` declared with exactly its type
 //! prints no cast, because C performs that conversion there itself; one read by
 //! arithmetic, by a comparison or by a destination of another type keeps it.
@@ -190,7 +190,7 @@ fn a_narrowing_into_a_destination_of_its_type_round_trips_through_the_printed_c(
                 "bitidioms",
                 "off",
             ]);
-            let (text, err, rc) = common::run_kuna(&args);
+            let (text, err, rc) = common::run_unlace(&args);
             assert_eq!(rc, 0, "{image} castnarrow {opt}: {err}");
             for &(off, on) in lines {
                 let (want, gone) = if opt == "on" {

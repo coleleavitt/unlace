@@ -1,4 +1,4 @@
-//! (kuna `globalref`) The address ranges a program's own data objects live in.
+//! (unlace `globalref`) The address ranges a program's own data objects live in.
 //!
 //! The printer names a pointer-typed constant `&dat_<addr>` only when the
 //! address lands in one of these ranges, so this is the loader's answer to

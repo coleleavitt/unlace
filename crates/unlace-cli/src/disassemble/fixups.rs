@@ -1,4 +1,4 @@
-//! (kuna) The load-time fixups a byte view overlaps, and where its bytes came
+//! (unlace) The load-time fixups a byte view overlaps, and where its bytes came
 //! from (GH #1379).
 //!
 //! `unlace read` shows the load image, the bytes every other surface reads: a
@@ -10,7 +10,7 @@
 //! output said which a slot was. So every fixup slot the listed span overlaps is
 //! reported with its kind, the symbol it binds, the file's own bytes and what
 //! the listed bytes are there: the file's, the loader's statically known value,
-//! or kuna's zero placeholder.
+//! or unlace's zero placeholder.
 
 use object::read::{Object, ObjectSegment};
 use unlace_analysis::loader::dataptrs::Coverage;
@@ -26,7 +26,7 @@ const NOTE_SLOTS: usize = 3;
 /// What the listed bytes hold at a fixup slot.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Returned {
-    /// The file's own bytes: kuna rewrote nothing here.
+    /// The file's own bytes: unlace rewrote nothing here.
     File,
     /// The value the loader stores, which this image determines.
     Applied,
@@ -68,7 +68,7 @@ pub(super) struct Fixups {
 /// the image's bytes and object view.
 ///
 /// An image whose object view cannot be read again lists none, under
-/// `coverage` `none`, as does one whose fixups kuna does not read.
+/// `coverage` `none`, as does one whose fixups unlace does not read.
 pub(super) fn overlapping(
     view: Option<(&[u8], &object::File)>,
     prog: &ConsoleProgram,
@@ -238,7 +238,7 @@ impl Fixups {
 }
 
 impl Slot {
-    /// `0x4000 bind _malloc: kuna's zero placeholder, the file holds ..`.
+    /// `0x4000 bind _malloc: unlace's zero placeholder, the file holds ..`.
     fn describe(&self) -> String {
         let site = &self.site;
         let mut head = format!("0x{:x} {}", site.vma, site.kind.as_str());

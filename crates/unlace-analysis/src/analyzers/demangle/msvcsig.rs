@@ -1,4 +1,4 @@
-//! (kuna `msvcsig`) The MSVC arm of [`super::cppsig`]: read everything an
+//! (unlace `msvcsig`) The MSVC arm of [`super::cppsig`]: read everything an
 //! MSVC-mangled name declares, and apply it to the defined functions AND the PE
 //! imports that carry one.
 //!
@@ -750,7 +750,7 @@ pub(super) fn build(
         first_var_arg_slot,
         output_storage: None,
         input_storage: Vec::new(),
-        kuna_library_names: None,
+        unlace_library_names: None,
     };
     let byval = tail.and_then(|tail| byval_decl(&pieces, &tail, types, ptr, word_size));
     Some(MsvcSig {

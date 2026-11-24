@@ -1,6 +1,6 @@
 {
  "opportunity": "kuna's built-in prototype tables share one width-stable type vocabulary, so all 108 aggregate-pointer slots in them are spelled `void *`. `void *` never matches a ground-truth `FILE *` (the metric's width-only generosity has no pointer entry), and named-struct pointers are 22.5% of matchable GT variables -- a class kuna scores 0.0% on while ida scores 432 / ghidra 382 / binja 523 TP on the same 92-binary sample. The libc/POSIX-namable slice of it is ~4.1% of matchable GT (FILE 605 occurrences, stat 255, passwd 136).",
- "test_name": "tests/stages/kuna-libctypes.xml (26 assertions over ten `load file` passes on five real ELFs; #5/#6 pin that the DWARF layout of `stat` survives the option being on, #16-#25 the stdio stream slots in both link kinds, #26 the `datasyms off` interaction) + 30 unit tests in analyzers::protos::kuna_libctypes::tests (the table invariants, the glibc layouts and the stream shapes) + kuna-cli/tests/decompile_project_cli.rs (header_syntax_checks_when_a_type_shares_a_name_with_a_function) + kuna-console project::tests::typedef_names_reads_every_declarator_shape + tests/cli/structdefs-json-types-array.json",
+ "test_name": "tests/stages/libctypes.xml (26 assertions over ten `load file` passes on five real ELFs; #5/#6 pin that the DWARF layout of `stat` survives the option being on, #16-#25 the stdio stream slots in both link kinds, #26 the `datasyms off` interaction) + 30 unit tests in analyzers::protos::kuna_libctypes::tests (the table invariants, the glibc layouts and the stream shapes) + kuna-cli/tests/decompile_project_cli.rs (header_syntax_checks_when_a_type_shares_a_name_with_a_function) + console project::tests::typedef_names_reads_every_declarator_shape + tests/cli/structdefs-json-types-array.json",
  "binary": "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11/O2/coreutils/stripped/fmt",
  "selector": "0x2f30",
  "func_addr": "0x2f30",
@@ -317,15 +317,15 @@
   "decompiler/crates/kuna-cli/src/decompile.rs",
   "decompiler/crates/kuna-cli/src/decompile_all.rs",
   "decompiler/crates/kuna-cli/tests/decompile_project_cli.rs",
-  "decompiler/crates/kuna-console/src/engine.rs",
-  "decompiler/crates/kuna-console/src/console.rs",
-  "decompiler/crates/kuna-console/src/project.rs",
+  "decompiler/crates/console/src/engine.rs",
+  "decompiler/crates/console/src/console.rs",
+  "decompiler/crates/console/src/project.rs",
   "decompiler/crates/kuna-decomp/phases.toml",
   "decompiler/crates/kuna-decomp/src/infra/architecture.rs",
   "decompiler/crates/kuna-decomp/src/p0_knowledge/libctypes.rs",
   "docs/spec/01-program-prep.md",
   "docs/spec/09-emission.md",
-  "tests/stages/kuna-libctypes.xml"
+  "tests/stages/libctypes.xml"
  ],
  "notes": "The gate is read INSIDE the pass through the load-time env bridge, not at the commit boundary: the pass interns its named shells into the type factory while building the signatures, and a commit-boundary arch flag additionally drops facts after `clear architecture` + `load file` (measured -- it made pass 2 of the stage test render `fclose(void *)`). stdin/stdout/stderr as typed FILE * data symbols, and a `glibc` value installing the public _IO_FILE field names, are follow-ups.",
  "default_on": true,
@@ -445,12 +445,12 @@
    "decompiler/crates/kuna-decomp/tests/fixtures/phase_catalog.json (byte capture recaptured)",
    "decompiler/crates/kuna-ghidra/tests/ghidra_sim_e2e.rs (PIN_FAILLOG_C_LINES[0] 285 -> 286)",
    "docs/options.md, docs/spec/01-program-prep.md, docs/features/libctypes/flip.md",
-   "tests/stages/kuna-libctypes.xml (restores `opaque`, not `off`, in its last command)",
+   "tests/stages/libctypes.xml (restores `opaque`, not `off`, in its last command)",
    "tests/cli/changing-namestyle-invalidates-discovered.json (`void *param_1` -> `FILE *param_1`)",
    "docs/features/libctypes/byvalue.py (the by-value scanner)"
   ],
   "moved_stage_assertions": [],
-  "moved_stage_assertions_note": "NONE. `make test-stages` is 1038/1038 PARITY OK and a --save-baseline re-record of docs/baseline-stages.json on the flipped build is byte-identical to the file in the tree (100,769 bytes each), so no re-record was needed. Checked two further ways rather than taken from the green line: (a) a throwaway fixture that loads a real ELF and asserts `int4 fclose(FILE *a0)` with NO `option` command passes on this build and fails under KUNA_LIBCTYPES=off, so the harness really sees the new default; (b) all 16 stage fixtures that `load file` were replayed through decomp_dbg in both arms with their own `option libctypes` commands removed -- 15 are byte-identical and the 16th is kuna-libctypes.xml itself (void */FILE *, plus get_prefix losing a shadow local `c` that merges into v3).",
+  "moved_stage_assertions_note": "NONE. `make test-stages` is 1038/1038 PARITY OK and a --save-baseline re-record of docs/baseline-stages.json on the flipped build is byte-identical to the file in the tree (100,769 bytes each), so no re-record was needed. Checked two further ways rather than taken from the green line: (a) a throwaway fixture that loads a real ELF and asserts `int4 fclose(FILE *a0)` with NO `option` command passes on this build and fails under KUNA_LIBCTYPES=off, so the harness really sees the new default; (b) all 16 stage fixtures that `load file` were replayed through decomp_dbg in both arms with their own `option libctypes` commands removed -- 15 are byte-identical and the 16th is libctypes.xml itself (void */FILE *, plus get_prefix losing a shadow local `c` that merges into v3).",
   "datatests_structural": "0 of 83 tests/datatests/*.xml contain `load file`, so the 675 assertions cannot observe this tier; make test is 675/675 PARITY OK and is not evidence either way.",
   "typesweep": {
    "instrument": "scripts.decbench.typesweep (decbench main's TypeMatchMetric), DECBENCH_NO_CACHE=1, KUNA_BIN pinned to this branch's release build, --workers 16, --dump-decisions",
@@ -805,7 +805,7 @@
    "within_budget": true
   },
   "gates": {
-   "make test": "datatests: 675/675 assertions passed -- PARITY OK. 0 of 83 tests/datatests/*.xml contain `load file`, so the 675 cannot observe this tier and are not evidence either way; the stage corpus is where the row is pinned (16 of 217 stage fixtures load a file, one of them tests/stages/kuna-libctypes.xml).",
+   "make test": "datatests: 675/675 assertions passed -- PARITY OK. 0 of 83 tests/datatests/*.xml contain `load file`, so the 675 cannot observe this tier and are not evidence either way; the stage corpus is where the row is pinned (16 of 217 stage fixtures load a file, one of them tests/stages/libctypes.xml).",
    "make test-stages": "datatests: 1038/1038 assertions passed -- PARITY OK; a --save-baseline re-record is byte-identical to docs/baseline-stages.json (100,769 bytes), so no assertion moved and no re-record was needed",
    "make test-cli": "tests/cli: 178/178 passed",
    "make check-spec": "check-spec OK (lenient mode) / check-spec OK (strict mode)",
@@ -894,7 +894,7 @@
    "nesting_depth": "one level: stat holds three timespecs by value and timespec holds no aggregate, so the recursive mint terminates by construction and dependent_order's definition-before-use walk stays finite. Unit-tested.",
    "adoption_unchanged": "a definition already held of the declared width is adopted whole; no published layout is ever installed over somebody else's.",
    "no_reserved_members": "no row names a member glibc reserves for itself (stat::__pad0, stat::__glibc_reserved, _IO_FILE::__pad5, _IO_FILE::_unused2); those offsets stay holes and print in the neutral offset form. Measured over the 16-binary corpus the rows fired 28 times and not one was worth having: 19 whole-struct copies spilling padding (v12.__glibc_reserved[0] = v13.__glibc_reserved[0] says exactly what v12._120_8_ = v13._120_8_ says), 8 LIES about diffutils file_data::desc/::name, and 1 address computation the name made worse ((long)v32.__glibc_reserved + v10*4 + -0x78 -> (long)&v32.st_dev + v10*4). Unit-tested: no_layout_names_a_reserved_member.",
-   "declared_prototype_layout": "declared_libc_prototype (--define-function 0x..=fopen) runs after load with the object file out of reach, so it does NOT decide whether the glibc layouts are true of this image -- it is TOLD. LibcTypesPass::run records its own target decision on AnalysisOutput::libctypes_glibc at the moment it checks the target; the console keeps it across the load and passes it in as declared_libc_prototype's `layout` argument. An earlier version read the layout off the PROGRAM (the option value plus one held aggregate whose offset-0 member carried the table's name) and was WRONG: a 32-bit MIPS glibc ELF satisfies that from its own DWARF (st_dev at offset 0 of a MIPS32 stat, tv_sec at offset 0 of a MIPS32 timespec) and minted the x86-64 216-byte FILE with _fileno at 0x70, on a target where sizeof(FILE) is not 216 and no pointer is 8 bytes wide. The size floor a review suggested alongside (refuse a held aggregate whose width is not NAMED_AGGREGATES[name].size) is already named_aggregate's adoption rule and would not have sufficed: a musl x86-64 timespec is 16 bytes with tv_sec at 0, exactly like glibc's. Unit-tested: a_refused_target_cannot_reach_the_glibc_layouts; only_a_glibc_x86_64_elf_takes_the_layouts gained a dynamically linked MIPS32 glibc fixture. End-to-end: kuna-console/tests/verify_libctypes_glibc_target.rs declares the SAME name (getgrnam, imported by neither image and the only thing that names a `group`) against two real ELFs -- the x86-64 fixture mints the published 32-byte group with gr_name at 0, and libctypes_mips32_glibc_le32 (a dynamically linked MIPS32 glibc image built -g, so its own DWARF defines stat and timespec with st_dev and tv_sec at offset 0) gets the fieldless shell. That second test FAILS against the pre-fix heuristic (verified by reinstating it: `a refused target keeps the opaque shell, whatever its own debug info says`)."
+   "declared_prototype_layout": "declared_libc_prototype (--define-function 0x..=fopen) runs after load with the object file out of reach, so it does NOT decide whether the glibc layouts are true of this image -- it is TOLD. LibcTypesPass::run records its own target decision on AnalysisOutput::libctypes_glibc at the moment it checks the target; the console keeps it across the load and passes it in as declared_libc_prototype's `layout` argument. An earlier version read the layout off the PROGRAM (the option value plus one held aggregate whose offset-0 member carried the table's name) and was WRONG: a 32-bit MIPS glibc ELF satisfies that from its own DWARF (st_dev at offset 0 of a MIPS32 stat, tv_sec at offset 0 of a MIPS32 timespec) and minted the x86-64 216-byte FILE with _fileno at 0x70, on a target where sizeof(FILE) is not 216 and no pointer is 8 bytes wide. The size floor a review suggested alongside (refuse a held aggregate whose width is not NAMED_AGGREGATES[name].size) is already named_aggregate's adoption rule and would not have sufficed: a musl x86-64 timespec is 16 bytes with tv_sec at 0, exactly like glibc's. Unit-tested: a_refused_target_cannot_reach_the_glibc_layouts; only_a_glibc_x86_64_elf_takes_the_layouts gained a dynamically linked MIPS32 glibc fixture. End-to-end: console/tests/verify_libctypes_glibc_target.rs declares the SAME name (getgrnam, imported by neither image and the only thing that names a `group`) against two real ELFs -- the x86-64 fixture mints the published 32-byte group with gr_name at 0, and libctypes_mips32_glibc_le32 (a dynamically linked MIPS32 glibc image built -g, so its own DWARF defines stat and timespec with st_dev and tv_sec at offset 0) gets the fieldless shell. That second test FAILS against the pre-fix heuristic (verified by reinstating it: `a refused target keeps the opaque shell, whatever its own debug info says`)."
   },
   "witness": {
    "binary": "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11/O2/coreutils/stripped/fmt",
@@ -1170,7 +1170,7 @@
  "stdio": {
   "what": "the stdio STREAM SLOTS as typed data symbols. The rest of the table types a stream where a CALL says what it is; the slots themselves were untyped storage (named by `datasyms`, an `undefined<size>` word) or, in a shared object, not named at all. This step emits a typed DATA symbol for each, keyed on the dynamic relocation that binds it -- which is also the evidence that the name is the C library's and not a global the program happens to spell `stdout`.",
   "module": "decompiler/crates/kuna-analysis/src/analyzers/protos/libctypes/streams.rs",
-  "carrier": "AnalysisOutput::typed_data (new `TypedDataFact`), committed in kuna-console/src/engine.rs as arm 4b with `typelock|namelock` -- after the DWARF data globals (1a) and the string literals (4) so a richer source keeps its address, before the loader `.dynsym` data stream (4a) so its untyped naming of the same slot stands down.",
+  "carrier": "AnalysisOutput::typed_data (new `TypedDataFact`), committed in console/src/engine.rs as arm 4b with `typelock|namelock` -- after the DWARF data globals (1a) and the string literals (4) so a richer source keeps its address, before the loader `.dynsym` data stream (4a) so its untyped naming of the same slot stands down.",
   "shapes": {
    "copy": "R_*_COPY on a DEFINED symbol whose st_size is the pointer width: the .bss word the run-time loader fills with libc's own `FILE *stdout`. Type `FILE *`, name `stdout`. (coreutils fmt: 0xc088 / 0xc090 / 0xc0c0.)",
    "glob_dat_undefined": "R_*_GLOB_DAT on an UNDEFINED symbol: the GOT word holds the stream's ADDRESS. Type `FILE **`, name `stdout_ptr` -- the address is not the stream, and calling it one would make the emitted `*stdout` an indirection the program does not perform. (libselinux.so.1: 0x2bf38 / 0x2bf48 / 0x2bfe8.)",
@@ -1214,16 +1214,16 @@
    "note": "decbench scores variables[] -- arguments and stack symbols. A global is not one and neither is the register local that carries it, so only a stream reaching a stack slot whose ground truth is a stream can score. tar's argp_parse gains `FILE *v70` on exactly such a slot and does not move the number because that function's ground truth does not describe it. The sweep is the guard, not the case: the case is the hunk classification."
   },
   "default": "no new option and no new value -- the stream slots ride the existing `libctypes` gate (`off` emits nothing; `opaque` and `glibc` both emit, differing only in whether the pointee has members).",
-  "tests": "tests/stages/kuna-libctypes.xml passes 6-9 (the exe and the .so built from one source, each once `off` and once `opaque`), assertions #16-#25, plus pass 10 / #26 for the `datasyms off` interaction; 7 unit tests in protos/libctypes/tests.rs (the seventh pins the minted-name decline on libctypes_streams_collide_so_x86_64.so); tests/cli/structdefs-json-types-array.json retargeted (main of i386_pie_nl now references two libc shells, so `types` carries FILE ahead of option, each pinned by name, .h text and size).",
+  "tests": "tests/stages/libctypes.xml passes 6-9 (the exe and the .so built from one source, each once `off` and once `opaque`), assertions #16-#25, plus pass 10 / #26 for the `datasyms off` interaction; 7 unit tests in protos/libctypes/tests.rs (the seventh pins the minted-name decline on libctypes_streams_collide_so_x86_64.so); tests/cli/structdefs-json-types-array.json retargeted (main of i386_pie_nl now references two libc shells, so `types` carries FILE ahead of option, each pinned by name, .h text and size).",
   "files": [
    "decompiler/crates/kuna-analysis/src/analyzers/protos/libctypes/streams.rs",
    "decompiler/crates/kuna-analysis/src/analyzers/protos/libctypes.rs",
    "decompiler/crates/kuna-analysis/src/pass.rs",
-   "decompiler/crates/kuna-console/src/engine.rs",
+   "decompiler/crates/console/src/engine.rs",
    "decompiler/crates/kuna-analysis/tests/fixtures/libctypes_streams_x86_64{,.c}",
    "decompiler/crates/kuna-analysis/tests/fixtures/libctypes_streams_so_x86_64.so",
    "decompiler/crates/kuna-analysis/tests/fixtures/libctypes_streams_collide_so_x86_64.so",
-   "tests/stages/kuna-libctypes.xml",
+   "tests/stages/libctypes.xml",
    "tests/cli/structdefs-json-types-array.json",
    "docs/spec/01-program-prep.md",
    "docs/features/libctypes/stdio.md",
@@ -1267,6 +1267,6 @@
    ],
    "verdict": "within budget: every min delta inside +/-2%, every median inside +/-3%. The work added is one walk of the dynamic relocation table per program, filtered to three names, at load."
   },
-  "gate": "the existing `libctypes` env bridge decides whether a stream fact is produced at all; the commit arm additionally answers to `datasyms`, whose contract is that `off` restores the raw `dat_<addr>` rendering for every global the DWARF pass does not name. Naming a data object stays that option's call and `libctypes` only decides what the named object IS -- there is no half of it to keep, because the type rides on the symbol. Pinned by kuna-console's own `option_datasyms_off_restores_dat_addr` and by pass 10 / assertion #26 of the stage test."
+  "gate": "the existing `libctypes` env bridge decides whether a stream fact is produced at all; the commit arm additionally answers to `datasyms`, whose contract is that `off` restores the raw `dat_<addr>` rendering for every global the DWARF pass does not name. Naming a data object stays that option's call and `libctypes` only decides what the named object IS -- there is no half of it to keep, because the type rides on the symbol. Pinned by console's own `option_datasyms_off_restores_dat_addr` and by pass 10 / assertion #26 of the stage test."
  }
 }

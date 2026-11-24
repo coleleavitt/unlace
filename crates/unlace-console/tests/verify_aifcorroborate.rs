@@ -8,7 +8,7 @@
 //! AggressiveInstructionFinderAnalyzer.java:367   if (numInstr <= 2 || (!addsInfo && startCount < 50)) { continue; }
 //! ```
 //!
-//! kuna ported the first and the `numInstr` half of the second, so a routine that
+//! unlace ported the first and the `numInstr` half of the second, so a routine that
 //! calls nothing, jumps nowhere known and merely reaches a `bx lr` becomes a
 //! function on four other functions sharing its two-mnemonic prologue.
 //!
@@ -84,13 +84,13 @@ fn bootstrap(aif: &str) -> unlace_console::engine::ConsoleProgram {
     let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
     prog.arch_mut()
-        .set_kuna_option("listing", "on")
+        .set_unlace_option("listing", "on")
         .expect("listing flips on");
     prog.arch_mut()
-        .set_kuna_option("funcstart_patterns", "on")
+        .set_unlace_option("funcstart_patterns", "on")
         .expect("funcstart_patterns flips on");
     prog.arch_mut()
-        .set_kuna_option("aif", aif)
+        .set_unlace_option("aif", aif)
         .expect("aif takes its value");
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");

@@ -1,4 +1,4 @@
-//! (kuna) A WebAssembly module as a load image.
+//! (unlace) A WebAssembly module as a load image.
 //!
 //! A module has no addresses of its own: code is a list of bodies, memory is a
 //! separate index space, and globals and tables are index spaces too. The
@@ -25,7 +25,7 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use unlace_base::address::{Address, RangeList};
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::AddrSpace;
 use unlace_decomp::architecture::Architecture;
 use unlace_decomp::dtype::type_metatype;
@@ -498,7 +498,7 @@ impl WasmImage {
                     first_var_arg_slot: -1,
                     output_storage: None,
                     input_storage: Vec::new(),
-                    kuna_library_names: None,
+                    unlace_library_names: None,
                 },
             ));
         }
@@ -600,7 +600,7 @@ impl LoadImage for WasmLoadImage {
         &self.filename
     }
 
-    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> KunaResult<()> {
+    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> UnlaceResult<()> {
         let attached = match (addr.get_space(), self.space.as_ref()) {
             (Some(space), Some(attached)) => Rc::ptr_eq(space, attached),
             _ => false,
@@ -609,7 +609,7 @@ impl LoadImage for WasmLoadImage {
         let Some(region) = self.region(start).filter(|_| attached) else {
             let mut message = format!("Unable to load {} bytes at ", ptr.len());
             addr.print_raw(&mut message)?;
-            return Err(KunaError::data_unavail(message));
+            return Err(UnlaceError::data_unavail(message));
         };
         let filled = region.fill(ptr, start);
         ptr[filled..].fill(0);
@@ -713,7 +713,7 @@ mod tests {
         ram: &Rc<AddrSpace>,
         addr: u64,
         len: usize,
-    ) -> KunaResult<Vec<u8>> {
+    ) -> UnlaceResult<Vec<u8>> {
         let mut bytes = vec![0xaa; len];
         loader.load_fill(&mut bytes, &Address::new(Rc::clone(ram), addr))?;
         Ok(bytes)

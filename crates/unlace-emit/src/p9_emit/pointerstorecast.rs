@@ -52,7 +52,7 @@ pub fn target(
     let target = printed().or_else(|| {
         let high = value.get_high().and_then(|id| fd.high_bank().get(id));
         let declared = high
-            .and_then(|high| high.kuna_symbol_type())
+            .and_then(|high| high.unlace_symbol_type())
             .filter(|ty| {
                 matches!(
                     ty.get_metatype(),
@@ -64,7 +64,7 @@ pub fn target(
             .cloned()
             .or_else(|| super::bitcast::declared_member_type(fd, output))?;
         let offset = high
-            .map(|high| high.kuna_symbol_offset().max(0))
+            .map(|high| high.unlace_symbol_offset().max(0))
             .unwrap_or(0);
         crate::stackviews::scalar_piece(fd.get_arch().types()?, declared, offset, value.get_size())
     })?;

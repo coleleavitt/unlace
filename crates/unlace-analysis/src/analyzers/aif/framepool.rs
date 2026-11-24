@@ -9,17 +9,17 @@ pub(super) fn policy(
 ) -> GapWalk<'_> {
     GapWalk {
         strict: arch
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::aif::AifMode>()
             .strict(),
         corroborate: arch
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::aif::AifMode>()
             .corroborate(),
         bracket: None,
         noppad: false,
         poolslide: arch
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::analysisgates::Aifpoolslide>()
             .0
             .then_some((arch, code_space)),

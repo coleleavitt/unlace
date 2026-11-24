@@ -52,7 +52,7 @@
 //! `Funcdata`-backed union resolution (the union/pointer-to-union/array
 //! `resolveInFlow`/`findResolve` paths), the `TypeFactory` construction caches and
 //! decode, and `printRaw`/`hashSize`.  Those surfaces exist here (so callers link)
-//! but return `Err(KunaError::lowlevel("STUB(W6) …"))`; each is tagged
+//! but return `Err(UnlaceError::lowlevel("STUB(W6) …"))`; each is tagged
 //! `// STUB(W6)` and listed in the relevant item's `losses` output.  W6 fills the
 //! bodies in place — the *signatures* are frozen by this file.
 //!
@@ -67,7 +67,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::Decoder;
 use unlace_base::space::AddrSpace;
 use unlace_base::types::{int4, int8, uint4, uint8};
@@ -278,7 +278,7 @@ pub fn base2sub(m: type_metatype) -> sub_metatype {
 
 /// Convert a type \b meta-type into the string name of the meta-type
 /// (C++ `metatype2string`, type.cc:242-303).
-pub fn metatype2string(metatype: type_metatype) -> KunaResult<String> {
+pub fn metatype2string(metatype: type_metatype) -> UnlaceResult<String> {
     use type_metatype::*;
     let res = match metatype {
         TYPE_VOID => "void",
@@ -310,7 +310,7 @@ pub fn metatype2string(metatype: type_metatype) -> KunaResult<String> {
 /// transcription preserves the same fall-through structure so an unrecognized
 /// string under a known first character still errors (matching the C++ break +
 /// final `throw`).
-pub fn string2metatype(metastring: &str) -> KunaResult<type_metatype> {
+pub fn string2metatype(metastring: &str) -> UnlaceResult<type_metatype> {
     use type_metatype::*;
     let first = metastring.as_bytes().first().copied();
     let res: Option<type_metatype> = match first {
@@ -364,12 +364,12 @@ pub fn string2metatype(metastring: &str) -> KunaResult<type_metatype> {
         Some(b'v') => (metastring == "void").then_some(TYPE_VOID),
         _ => None,
     };
-    res.ok_or_else(|| KunaError::lowlevel(format!("Unknown metatype: {metastring}")))
+    res.ok_or_else(|| UnlaceError::lowlevel(format!("Unknown metatype: {metastring}")))
 }
 
 /// Given a description of a data-type \e class, return the [`type_class`]
 /// (C++ `string2typeclass`, type.cc:375-415).
-pub fn string2typeclass(classstring: &str) -> KunaResult<type_class> {
+pub fn string2typeclass(classstring: &str) -> UnlaceResult<type_class> {
     use type_class::*;
     let first = classstring.as_bytes().first().copied();
     let res: Option<type_class> = match first {
@@ -395,7 +395,7 @@ pub fn string2typeclass(classstring: &str) -> KunaResult<type_class> {
         Some(b'u') => (classstring == "unknown").then_some(TYPECLASS_GENERAL),
         _ => None,
     };
-    res.ok_or_else(|| KunaError::lowlevel(format!("Unknown data-type class: {classstring}")))
+    res.ok_or_else(|| UnlaceError::lowlevel(format!("Unknown data-type class: {classstring}")))
 }
 
 /// Convert a data-type metatype to a data-type class (C++ `metatype2typeclass`,
@@ -913,7 +913,7 @@ pub struct Datatype {
     /// The concrete subclass payload
     pub kind: DatatypeKind,
     /// Stable identity for an incomplete record and its completed replacement,
-    /// on a record the C grammar declared ([`TypeFactory::kuna_declare_record`])
+    /// on a record the C grammar declared ([`TypeFactory::unlace_declare_record`])
     /// and the typedefs made of it while incomplete. Pointers may outlive the
     /// stub in the factory; the weak link lets them see its fields without
     /// creating an owning recursive Rc cycle. This cell is installed before
@@ -1183,7 +1183,7 @@ impl Datatype {
     /// For a variable-length type the stored id is the size-specific instance
     /// id; feeding it back through the reversible [`Datatype::hash_size`]
     /// recovers the size-independent base id.
-    pub fn get_unsized_id(&self) -> KunaResult<uint8> {
+    pub fn get_unsized_id(&self) -> UnlaceResult<uint8> {
         if (self.flags & flags::variable_length) != 0 {
             Ok(Datatype::hash_size(self.id, self.size))
         } else {
@@ -1204,7 +1204,7 @@ impl Datatype {
     ///
     /// Deemphasizes \e partial-union and \e bool, otherwise defers to
     /// [`compare`](Datatype::compare) at level 10.
-    pub fn type_order_formal(&self, op: &Datatype) -> KunaResult<int4> {
+    pub fn type_order_formal(&self, op: &Datatype) -> UnlaceResult<int4> {
         if std::ptr::eq(self, op) {
             return Ok(0);
         }
@@ -1224,7 +1224,7 @@ impl Datatype {
     }
 
     /// Order this with `op` datatype (C++ `typeOrder`, the inline at type.hh:301).
-    pub fn type_order(&self, op: &Datatype) -> KunaResult<int4> {
+    pub fn type_order(&self, op: &Datatype) -> UnlaceResult<int4> {
         if std::ptr::eq(self, op) {
             return Ok(0);
         }
@@ -1236,7 +1236,7 @@ impl Datatype {
     /// Are these the same variable length data-type (C++ `hasSameVariableBase`,
     /// type.cc:127-135): both variable-length and the size-independent
     /// [`Datatype::hash_size`] base ids agree.
-    pub fn has_same_variable_base(&self, ct: &Datatype) -> KunaResult<bool> {
+    pub fn has_same_variable_base(&self, ct: &Datatype) -> UnlaceResult<bool> {
         if !self.is_variable_length() {
             return Ok(false);
         }
@@ -1292,7 +1292,7 @@ impl Datatype {
     /// For an ordinary [`DatatypeKind::Pointer`], returns `(ptrto, 0)`.  The
     /// `TypePointerRel::getPtrInto` override needs the relative-pointer math —
     /// W6.  Returns `None` for non-pointers (the C++ null).
-    pub fn get_ptr_into(&self) -> KunaResult<Option<(Rc<Datatype>, int4)>> {
+    pub fn get_ptr_into(&self) -> UnlaceResult<Option<(Rc<Datatype>, int4)>> {
         match &self.kind {
             DatatypeKind::Pointer { ptrto, .. } => Ok(Some((Self::completed_record(ptrto), 0))),
             DatatypeKind::PointerRel {
@@ -1560,7 +1560,7 @@ impl Datatype {
     /// `TypeCode`/`TypePartial*`/`TypePointerRel`/`TypeSpacebase::compare`) are
     /// type-2/type-3 and route to a `// STUB(W6)` `Err`.  `level` is the
     /// recursion budget the overrides decrement.
-    pub fn compare(&self, op: &Datatype, level: int4) -> KunaResult<int4> {
+    pub fn compare(&self, op: &Datatype, level: int4) -> UnlaceResult<int4> {
         if self.qualified_base.is_some()
             || op.qualified_base.is_some()
             || self.typedef_imm.is_some()
@@ -1680,7 +1680,7 @@ impl Datatype {
         mut level: int4,
         field: &[TypeField],
         bitfield: &[TypeBitField],
-    ) -> KunaResult<int4> {
+    ) -> UnlaceResult<int4> {
         let res = self.compare_base(op);
         if res != 0 {
             return Ok(res);
@@ -1743,7 +1743,7 @@ impl Datatype {
         op: &Datatype,
         mut level: int4,
         field: &[TypeField],
-    ) -> KunaResult<int4> {
+    ) -> UnlaceResult<int4> {
         let res = self.compare_base(op);
         if res != 0 {
             return Ok(res);
@@ -1798,7 +1798,7 @@ impl Datatype {
         op: &Datatype,
         mut level: int4,
         proto: Option<&Rc<crate::fspec::FuncProto>>,
-    ) -> KunaResult<int4> {
+    ) -> UnlaceResult<int4> {
         let res = self.compare_base(op);
         if res != 0 {
             return Ok(res);
@@ -1859,7 +1859,7 @@ impl Datatype {
         mut level: int4,
         whole: &Rc<Datatype>,
         offset: int4,
-    ) -> KunaResult<int4> {
+    ) -> UnlaceResult<int4> {
         let res = self.compare_base(op);
         if res != 0 {
             return Ok(res);
@@ -1955,7 +1955,7 @@ impl Datatype {
         ptrto: &Rc<Datatype>,
         spaceid: Option<&Rc<AddrSpace>>,
         wordsize: uint4,
-    ) -> KunaResult<int4> {
+    ) -> UnlaceResult<int4> {
         let res = self.compare_base(op);
         if res != 0 {
             return Ok(res);
@@ -2047,14 +2047,14 @@ impl Datatype {
         }
     }
 
-    fn enum_invariant_err(method: &str) -> KunaError {
-        KunaError::lowlevel(format!(
+    fn enum_invariant_err(method: &str) -> UnlaceError {
+        UnlaceError::lowlevel(format!(
             "Datatype::{method}: enum override reached with non-enum op \
              (submeta invariant violated)"
         ))
     }
-    fn spacebase_invariant_err(method: &str) -> KunaError {
-        KunaError::lowlevel(format!(
+    fn spacebase_invariant_err(method: &str) -> UnlaceError {
+        UnlaceError::lowlevel(format!(
             "Datatype::{method}: spacebase override reached with non-spacebase op \
              (submeta invariant violated)"
         ))
@@ -2091,26 +2091,26 @@ impl Datatype {
 
     /// Internal-invariant error for a structured override reached with a
     /// non-matching `op` kind (the matching-submeta precondition was violated).
-    fn struct_invariant_err(method: &str) -> KunaError {
-        KunaError::lowlevel(format!(
+    fn struct_invariant_err(method: &str) -> UnlaceError {
+        UnlaceError::lowlevel(format!(
             "Datatype::{method}: struct override reached with non-struct op \
              (submeta invariant violated)"
         ))
     }
-    fn union_invariant_err(method: &str) -> KunaError {
-        KunaError::lowlevel(format!(
+    fn union_invariant_err(method: &str) -> UnlaceError {
+        UnlaceError::lowlevel(format!(
             "Datatype::{method}: union override reached with non-union op \
              (submeta invariant violated)"
         ))
     }
-    fn code_invariant_err(method: &str) -> KunaError {
-        KunaError::lowlevel(format!(
+    fn code_invariant_err(method: &str) -> UnlaceError {
+        UnlaceError::lowlevel(format!(
             "Datatype::{method}: code override reached with non-code op \
              (submeta invariant violated)"
         ))
     }
-    fn partial_invariant_err(method: &str) -> KunaError {
-        KunaError::lowlevel(format!(
+    fn partial_invariant_err(method: &str) -> UnlaceError {
+        UnlaceError::lowlevel(format!(
             "Datatype::{method}: partial override reached with non-partial op \
              (submeta invariant violated)"
         ))
@@ -2123,7 +2123,7 @@ impl Datatype {
     fn compare_code_basic(
         proto: Option<&Rc<crate::fspec::FuncProto>>,
         op_proto: Option<&Rc<crate::fspec::FuncProto>>,
-    ) -> KunaResult<int4> {
+    ) -> UnlaceResult<int4> {
         let proto = match proto {
             None => {
                 return Ok(if op_proto.is_none() { 0 } else { 1 });
@@ -2169,7 +2169,7 @@ impl Datatype {
     fn compare_code_storage(
         proto: &crate::fspec::FuncProto,
         op_proto: &crate::fspec::FuncProto,
-    ) -> KunaResult<int4> {
+    ) -> UnlaceResult<int4> {
         for i in -1..proto.num_params() {
             let (a, b) = if i < 0 {
                 (proto.get_output(), op_proto.get_output())
@@ -2241,7 +2241,7 @@ impl Datatype {
     /// In the C++ TypeFactory every interned data-type is a unique object, so
     /// this compares already-distinct sub-types by their stored address.  Heap
     /// addresses change with the allocator and the run, and the tree order is
-    /// the order a header declares types in, so (kuna) distinct types order by
+    /// the order a header declares types in, so (unlace) distinct types order by
     /// id, then (an unnamed type has id 0) by their own dependency order, and
     /// only then by address ([`Rc::as_ptr`]).  A declared record and its
     /// completion share one identity but not one shape, so a type carrying a
@@ -2301,8 +2301,8 @@ impl Datatype {
 
     /// Internal-invariant error for a `TypePointer` override reached with a
     /// non-pointer `op` (the matching-submeta precondition was violated).
-    fn pointer_invariant_err(method: &str) -> KunaError {
-        KunaError::lowlevel(format!(
+    fn pointer_invariant_err(method: &str) -> UnlaceError {
+        UnlaceError::lowlevel(format!(
             "Datatype::{method}: pointer override reached with non-pointer op \
              (submeta invariant violated)"
         ))
@@ -2310,8 +2310,8 @@ impl Datatype {
 
     /// Internal-invariant error for a `TypeArray` override reached with a
     /// non-array `op`.
-    fn array_invariant_err(method: &str) -> KunaError {
-        KunaError::lowlevel(format!(
+    fn array_invariant_err(method: &str) -> UnlaceError {
+        UnlaceError::lowlevel(format!(
             "Datatype::{method}: array override reached with non-array op \
              (submeta invariant violated)"
         ))
@@ -2338,7 +2338,7 @@ impl Datatype {
     /// implemented here (W6, this item).  The remaining structured overrides
     /// (`TypeStruct`/`TypeUnion`/…/`TypePointerRel`/`TypeSpacebase`) are
     /// type-2/type-3.
-    pub fn compare_dependency(&self, op: &Datatype) -> KunaResult<int4> {
+    pub fn compare_dependency(&self, op: &Datatype) -> UnlaceResult<int4> {
         if self.qualified_base.is_some() || op.qualified_base.is_some() {
             if self.qualifiers != op.qualifiers {
                 return Ok((self.qualifiers as int4) - (op.qualifiers as int4));
@@ -2480,7 +2480,7 @@ impl Datatype {
         op: &Datatype,
         field: &[TypeField],
         bitfield: &[TypeBitField],
-    ) -> KunaResult<int4> {
+    ) -> UnlaceResult<int4> {
         let res = self.compare_dependency_base(op);
         if res != 0 {
             return Ok(res);
@@ -2510,7 +2510,7 @@ impl Datatype {
     }
 
     /// `TypeUnion::compareDependency` body (type.cc:2500-2523).
-    fn compare_dependency_union(&self, op: &Datatype, field: &[TypeField]) -> KunaResult<int4> {
+    fn compare_dependency_union(&self, op: &Datatype, field: &[TypeField]) -> UnlaceResult<int4> {
         let res = self.compare_dependency_base(op);
         if res != 0 {
             return Ok(res);
@@ -2539,7 +2539,7 @@ impl Datatype {
         &self,
         op: &Datatype,
         namemap: &std::collections::BTreeMap<u64, String>,
-    ) -> KunaResult<int4> {
+    ) -> UnlaceResult<int4> {
         // C++ `TypeBase::compareDependency(op)` — same as the base body.
         let res = self.compare_dependency_base(op);
         if res != 0 {
@@ -2576,7 +2576,7 @@ impl Datatype {
         &self,
         op: &Datatype,
         proto: Option<&Rc<crate::fspec::FuncProto>>,
-    ) -> KunaResult<int4> {
+    ) -> UnlaceResult<int4> {
         let res = self.compare_dependency_base(op);
         if res != 0 {
             return Ok(res);
@@ -2627,7 +2627,7 @@ impl Datatype {
         op: &Datatype,
         spaceid: Option<&Rc<AddrSpace>>,
         localframe: &Address,
-    ) -> KunaResult<int4> {
+    ) -> UnlaceResult<int4> {
         let res = self.compare_dependency_base(op);
         if res != 0 {
             return Ok(res);
@@ -2657,7 +2657,7 @@ impl Datatype {
         op: &Datatype,
         whole: &Rc<Datatype>,
         offset: int4,
-    ) -> KunaResult<int4> {
+    ) -> UnlaceResult<int4> {
         if self.submeta != op.get_sub_meta() {
             return Ok(if self.submeta < op.get_sub_meta() {
                 -1
@@ -2919,7 +2919,7 @@ impl Datatype {
     /// `TypeArray::getSubType` (type.cc:1386-1393) overrides are implemented here
     /// (W6, this item).  The `TypeStruct`/`TypeSpacebase`/`TypePartialStruct`/
     /// `TypeCode` overrides are type-2/type-3.
-    pub fn get_sub_type(&self, off: int8) -> KunaResult<(Option<Rc<Datatype>>, int8)> {
+    pub fn get_sub_type(&self, off: int8) -> UnlaceResult<(Option<Rc<Datatype>>, int8)> {
         match &self.kind {
             // Base body: no subtype, newoff = off.  TypeEnum/TypeUnion do not
             // override getSubType, so they share the base body.
@@ -2997,12 +2997,12 @@ impl Datatype {
             // TypeCode::getSubType (type.cc:3284-3290): if a factory is bound,
             // return `getBase(1, TYPE_CODE)` with newoff=0; else null.  The
             // factory is part of the W6 TypeFactory construction.
-            DatatypeKind::Code { .. } => Err(KunaError::lowlevel(
+            DatatypeKind::Code { .. } => Err(UnlaceError::lowlevel(
                 "STUB(W6): TypeCode::getSubType needs the bound TypeFactory (getBase)",
             )),
             // TypeSpacebase::getSubType (type.cc:3411-3433): resolves through the
             // symbol-table Scope — needs the W6 Architecture/Scope wiring.
-            DatatypeKind::Spacebase { .. } => Err(KunaError::lowlevel(
+            DatatypeKind::Spacebase { .. } => Err(UnlaceError::lowlevel(
                 "STUB(W6): TypeSpacebase::getSubType needs symbol-table Scope resolution",
             )),
             // TypePointerRel does not override getSubType — it inherits
@@ -3019,7 +3019,7 @@ impl Datatype {
     /// `getHoleSize`).  Base default is 0.  The `TypeArray::getHoleSize`
     /// (type.cc:1415-1420) override is implemented here (W6, this item); the
     /// `TypeStruct`/`TypePartialStruct` overrides are type-2.
-    pub fn get_hole_size(&self, off: int4) -> KunaResult<int4> {
+    pub fn get_hole_size(&self, off: int4) -> UnlaceResult<int4> {
         match &self.kind {
             // TypeArray::getHoleSize: renormalize into the element and recurse.
             DatatypeKind::Array { arrayof, .. } => {
@@ -3072,7 +3072,7 @@ impl Datatype {
         &self,
         off: int8,
         max: int8,
-    ) -> KunaResult<(int8, int8, int8)> {
+    ) -> UnlaceResult<(int8, int8, int8)> {
         match &self.kind {
             // TypeArray::nearestArrayedComponentForward (type.cc:1395-1402).
             DatatypeKind::Array { arrayof, .. } => {
@@ -3121,7 +3121,7 @@ impl Datatype {
             }
             // TypeSpacebase::nearestArrayedComponentForward (type.cc:3435-3480):
             // walks the symbol-table Scope — needs the W6 Architecture wiring.
-            DatatypeKind::Spacebase { .. } => Err(KunaError::lowlevel(
+            DatatypeKind::Spacebase { .. } => Err(UnlaceError::lowlevel(
                 "STUB(W6): TypeSpacebase::nearestArrayedComponentForward needs Scope resolution",
             )),
             // Base default: return -1.
@@ -3141,7 +3141,7 @@ impl Datatype {
         &self,
         off: int8,
         max: int8,
-    ) -> KunaResult<(int8, int8, int8)> {
+    ) -> UnlaceResult<(int8, int8, int8)> {
         match &self.kind {
             // TypeArray::nearestArrayedComponentBackward (type.cc:1404-1413).
             DatatypeKind::Array { arrayof, .. } => {
@@ -3187,7 +3187,7 @@ impl Datatype {
             }
             // TypeSpacebase::nearestArrayedComponentBackward (type.cc:3482-3496):
             // resolves through getSubType (Scope) — needs the W6 Scope wiring.
-            DatatypeKind::Spacebase { .. } => Err(KunaError::lowlevel(
+            DatatypeKind::Spacebase { .. } => Err(UnlaceError::lowlevel(
                 "STUB(W6): TypeSpacebase::nearestArrayedComponentBackward needs Scope resolution",
             )),
             // Base default: return -1.
@@ -3200,7 +3200,7 @@ impl Datatype {
     ///
     /// A static helper on the pointed-to data-type and the out-of-bounds offset.
     #[doc(hidden)]
-    pub fn test_for_array_slack(dt: &Datatype, off: int8) -> KunaResult<bool> {
+    pub fn test_for_array_slack(dt: &Datatype, off: int8) -> UnlaceResult<bool> {
         if dt.get_metatype() == type_metatype::TYPE_ARRAY {
             return Ok(true);
         }
@@ -3220,7 +3220,12 @@ impl Datatype {
     /// `TypePointer::isPtrsubMatching` (type.cc:1260-1312) override is
     /// implemented here (W6, this item); the `TypePointerRel::isPtrsubMatching`
     /// (type.cc:3138) override is type-3.
-    pub fn is_ptrsub_matching(&self, off: int8, extra: int8, multiplier: int8) -> KunaResult<bool> {
+    pub fn is_ptrsub_matching(
+        &self,
+        off: int8,
+        extra: int8,
+        multiplier: int8,
+    ) -> UnlaceResult<bool> {
         match &self.kind {
             // TypePointer::isPtrsubMatching (type.cc:1260-1312).
             DatatypeKind::Pointer {
@@ -3270,7 +3275,7 @@ impl Datatype {
         off: int8,
         extra: int8,
         multiplier: int8,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         let wordsize = &wordsize;
         let mut extra = extra;
         let mut multiplier = multiplier;
@@ -3386,12 +3391,12 @@ impl Datatype {
         self: &Rc<Datatype>,
         _op: crate::context::OpId,
         _slot: int4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         match &self.kind {
             // TypePointer::resolveInFlow — only pointers to unions resolve.
             DatatypeKind::Pointer { ptrto, .. } => {
                 if ptrto.get_metatype() == type_metatype::TYPE_UNION {
-                    Err(KunaError::lowlevel(
+                    Err(UnlaceError::lowlevel(
                         "STUB(W6): TypePointer::resolveInFlow (pointer-to-union) needs \
                          Funcdata union-field resolution",
                     ))
@@ -3400,13 +3405,13 @@ impl Datatype {
                 }
             }
             // TypeArray::resolveInFlow always scores via Funcdata.
-            DatatypeKind::Array { .. } => Err(KunaError::lowlevel(
+            DatatypeKind::Array { .. } => Err(UnlaceError::lowlevel(
                 "STUB(W6): TypeArray::resolveInFlow needs Funcdata union-field scoring",
             )),
             // type-2 structured overrides.
             DatatypeKind::Struct { .. }
             | DatatypeKind::Union { .. }
-            | DatatypeKind::PartialUnion { .. } => Err(KunaError::lowlevel(
+            | DatatypeKind::PartialUnion { .. } => Err(UnlaceError::lowlevel(
                 "STUB(W6): Datatype::resolveInFlow structured override not yet ported",
             )),
             // Base "return this": every type without an override.
@@ -3427,11 +3432,11 @@ impl Datatype {
         self: &Rc<Datatype>,
         _op: crate::context::OpId,
         _slot: int4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         match &self.kind {
             DatatypeKind::Pointer { ptrto, .. } => {
                 if ptrto.get_metatype() == type_metatype::TYPE_UNION {
-                    Err(KunaError::lowlevel(
+                    Err(UnlaceError::lowlevel(
                         "STUB(W6): TypePointer::findResolve (pointer-to-union) needs \
                          Funcdata union-field cache",
                     ))
@@ -3439,12 +3444,12 @@ impl Datatype {
                     Ok(Rc::clone(self))
                 }
             }
-            DatatypeKind::Array { .. } => Err(KunaError::lowlevel(
+            DatatypeKind::Array { .. } => Err(UnlaceError::lowlevel(
                 "STUB(W6): TypeArray::findResolve needs Funcdata union-field cache",
             )),
             DatatypeKind::Struct { .. }
             | DatatypeKind::Union { .. }
-            | DatatypeKind::PartialUnion { .. } => Err(KunaError::lowlevel(
+            | DatatypeKind::PartialUnion { .. } => Err(UnlaceError::lowlevel(
                 "STUB(W6): Datatype::findResolve structured override not yet ported",
             )),
             _ => Ok(Rc::clone(self)),
@@ -3458,7 +3463,7 @@ impl Datatype {
     /// `TypeArray::findCompatibleResolve` (type.cc:1480-1490) overrides are
     /// implemented here (W6, this item); the `TypeUnion`/`TypePartialUnion`/
     /// `TypeStruct` overrides are type-2.
-    pub fn find_compatible_resolve(&self, ct: &Datatype) -> KunaResult<int4> {
+    pub fn find_compatible_resolve(&self, ct: &Datatype) -> UnlaceResult<int4> {
         match &self.kind {
             // TypePointer::findCompatibleResolve (type.cc:1347-1354): if `ct` is a
             // pointer, recurse on the pointed-to types.
@@ -3584,7 +3589,7 @@ impl Datatype {
         sz: int4,
         _op: crate::context::OpId,
         _slot: int4,
-    ) -> KunaResult<Option<(int4, int8)>> {
+    ) -> UnlaceResult<Option<(int4, int8)>> {
         match &self.kind {
             DatatypeKind::Struct { field, .. } => {
                 // C++ `i = getFieldIter(off);` — int8 narrows to int4.
@@ -3602,10 +3607,10 @@ impl Datatype {
             }
             // TypeUnion / TypePartialUnion findTruncation need the Funcdata cache;
             // a union must route through `Funcdata::find_truncation` instead.
-            DatatypeKind::Union { .. } => Err(KunaError::lowlevel(
+            DatatypeKind::Union { .. } => Err(UnlaceError::lowlevel(
                 "TypeUnion::findTruncation must route through Funcdata::find_truncation",
             )),
-            DatatypeKind::PartialUnion { .. } => Err(KunaError::lowlevel(
+            DatatypeKind::PartialUnion { .. } => Err(UnlaceError::lowlevel(
                 "TypePartialUnion::findTruncation must route through Funcdata::find_truncation",
             )),
             _ => Ok(None),
@@ -3627,10 +3632,10 @@ impl Datatype {
         _offset: int8,
         _op: crate::context::OpId,
         _slot: int4,
-    ) -> KunaResult<Option<(int4, int8)>> {
+    ) -> UnlaceResult<Option<(int4, int8)>> {
         match &self.kind {
             DatatypeKind::Union { .. } | DatatypeKind::PartialUnion { .. } => {
-                Err(KunaError::lowlevel(
+                Err(UnlaceError::lowlevel(
                     "Datatype::resolveTruncation must route through Funcdata::resolve_truncation",
                 ))
             }
@@ -3674,7 +3679,7 @@ impl Datatype {
     /// possible.  The `TypePartialEnum::getMatches` (type.cc:2707-2713) override
     /// shifts `val` left by `8*offset`, sets `shift_amount = offset*8`, and
     /// delegates to the parent.
-    pub fn get_matches(&self, val: u64) -> KunaResult<EnumRepresentation> {
+    pub fn get_matches(&self, val: u64) -> UnlaceResult<EnumRepresentation> {
         match &self.kind {
             DatatypeKind::Enum { namemap } => {
                 Ok(Datatype::enum_get_matches(namemap, self.size, val, 0))
@@ -3799,7 +3804,7 @@ impl Datatype {
         namelist: &[String],
         vallist: &[u64],
         assignlist: &[bool],
-    ) -> KunaResult<std::collections::BTreeMap<u64, String>> {
+    ) -> UnlaceResult<std::collections::BTreeMap<u64, String>> {
         let mut nmap: std::collections::BTreeMap<u64, String> = std::collections::BTreeMap::new();
         let mask = unlace_base::address::calc_mask(size);
         let mut maxval: u64 = 0;
@@ -3812,7 +3817,7 @@ impl Datatype {
                 }
                 val &= mask;
                 if nmap.contains_key(&val) {
-                    return Err(KunaError::lowlevel(format!(
+                    return Err(UnlaceError::lowlevel(format!(
                         "Enum \"{type_name}\": \"{}\" is a duplicate value",
                         namelist[i]
                     )));
@@ -3886,7 +3891,7 @@ impl Datatype {
     pub fn assign_field_offsets(
         list: &mut [TypeField],
         bitlist: &mut [TypeBitField],
-    ) -> KunaResult<(int4, int4, uint4)> {
+    ) -> UnlaceResult<(int4, int4, uint4)> {
         let mut next_bit_pos: int4 = -1;
         let mut cur_bit_ind: int4 = -1;
         if !bitlist.is_empty() {
@@ -3915,7 +3920,7 @@ impl Datatype {
             }
             let cur_field = &mut list[pos];
             if cur_field.field_type.get_metatype() == type_metatype::TYPE_VOID {
-                return Err(KunaError::lowlevel("Illegal field data-type: void"));
+                return Err(UnlaceError::lowlevel("Illegal field data-type: void"));
             }
             if cur_field.offset != -1 {
                 continue;
@@ -3946,7 +3951,7 @@ impl Datatype {
             );
         }
         if !bitlist.is_empty() && cur_bit_ind as usize != bitlist.len() {
-            return Err(KunaError::lowlevel("Malformed bitfield description"));
+            return Err(UnlaceError::lowlevel("Malformed bitfield description"));
         }
         if !bitlist.is_empty() {
             flags |= flags::has_bitfields;
@@ -4007,19 +4012,19 @@ impl Datatype {
     pub fn assign_union_field_offsets(
         list: &mut [TypeField],
         type_name: &str,
-    ) -> KunaResult<(int4, int4)> {
+    ) -> UnlaceResult<(int4, int4)> {
         let mut new_size: int4 = 0;
         let mut new_align: int4 = 1;
         for f in list.iter_mut() {
             let ct = &f.field_type;
             // Sanity checks on the field.
             if ct.get_metatype() == type_metatype::TYPE_VOID {
-                return Err(KunaError::lowlevel(format!(
+                return Err(UnlaceError::lowlevel(format!(
                     "Bad field data-type for union: {type_name}"
                 )));
             }
             if f.name.is_empty() {
-                return Err(KunaError::lowlevel(format!(
+                return Err(UnlaceError::lowlevel(format!(
                     "Bad field name for union: {type_name}"
                 )));
             }
@@ -4041,8 +4046,8 @@ impl Datatype {
     /// Print a description of the type to a stream (C++ `printRaw`).
     ///
     /// STUB(W6): printing is part of the type-rendering subsystem (W6/W9).
-    pub fn print_raw(&self) -> KunaResult<String> {
-        Err(KunaError::lowlevel(
+    pub fn print_raw(&self) -> UnlaceResult<String> {
+        Err(UnlaceError::lowlevel(
             "STUB(W6): Datatype::printRaw not yet ported",
         ))
     }
@@ -4095,57 +4100,57 @@ pub trait TypeFactory {
     fn get_size_of_pointer(&self) -> int4;
     /// Get size of alternate pointers, or 0 (C++ `getSizeOfAltPointer`).
     fn get_size_of_alt_pointer(&self) -> int4;
-    /// (kuna) Size of the core "short" (cspec `<short_size>`).  Defaulted so the
+    /// (unlace) Size of the core "short" (cspec `<short_size>`).  Defaulted so the
     /// implementors that model no data organization need not restate the fleet's
     /// near-universal widths; `TypeFactoryImpl` overrides with the decoded value.
     fn get_size_of_short(&self) -> int4 {
         2
     }
-    /// (kuna) Size of the core "long long" (cspec `<long_long_size>`).
+    /// (unlace) Size of the core "long long" (cspec `<long_long_size>`).
     fn get_size_of_long_long(&self) -> int4 {
         8
     }
-    /// (kuna) Size of the core "float" (cspec `<float_size>`).
+    /// (unlace) Size of the core "float" (cspec `<float_size>`).
     fn get_size_of_float(&self) -> int4 {
         4
     }
-    /// (kuna) Size of the core "double" (cspec `<double_size>`).
+    /// (unlace) Size of the core "double" (cspec `<double_size>`).
     fn get_size_of_double(&self) -> int4 {
         8
     }
-    /// (kuna) Size of the core "long double" (cspec `<long_double_size>`) -- the
+    /// (unlace) Size of the core "long double" (cspec `<long_double_size>`) -- the
     /// VALUE width, not `sizeof`.
     fn get_size_of_long_double(&self) -> int4 {
         8
     }
     /// Get data-type alignment based on size (C++ `getAlignment`).
-    fn get_alignment(&self, size: uint4) -> KunaResult<int4>;
+    fn get_alignment(&self, size: uint4) -> UnlaceResult<int4>;
     /// Get the aligned size of a primitive data-type (C++ `getPrimitiveAlignSize`).
-    fn get_primitive_align_size(&self, size: uint4) -> KunaResult<int4>;
+    fn get_primitive_align_size(&self, size: uint4) -> UnlaceResult<int4>;
 
     // -- Atomic / core getters (type.hh:894-899) ----------------------------
 
     /// Get the "void" data-type (C++ `getTypeVoid`).
-    fn get_type_void(&self) -> KunaResult<Rc<Datatype>>;
+    fn get_type_void(&self) -> UnlaceResult<Rc<Datatype>>;
     /// Get atomic type excluding "char" (C++ `getBaseNoChar`).
-    fn get_base_no_char(&self, s: int4, m: type_metatype) -> KunaResult<Rc<Datatype>>;
+    fn get_base_no_char(&self, s: int4, m: type_metatype) -> UnlaceResult<Rc<Datatype>>;
     /// Get atomic type (C++ `getBase(int4,type_metatype)`).
-    fn get_base(&self, s: int4, m: type_metatype) -> KunaResult<Rc<Datatype>>;
+    fn get_base(&self, s: int4, m: type_metatype) -> UnlaceResult<Rc<Datatype>>;
     /// Get named atomic type (C++ `getBase(int4,type_metatype,const string&)`).
-    fn get_base_named(&self, s: int4, m: type_metatype, n: &str) -> KunaResult<Rc<Datatype>>;
+    fn get_base_named(&self, s: int4, m: type_metatype, n: &str) -> UnlaceResult<Rc<Datatype>>;
     /// Get a character data-type by size (C++ `getTypeChar(int4)`).
-    fn get_type_char(&self, s: int4) -> KunaResult<Rc<Datatype>>;
-    /// (kuna) A named 1-byte character data-type of the sign `m` states
+    fn get_type_char(&self, s: int4) -> UnlaceResult<Rc<Datatype>>;
+    /// (unlace) A named 1-byte character data-type of the sign `m` states
     /// (`TYPE_INT` or `TYPE_UINT`): Ghidra's `schar`/`uchar`, which print as
     /// characters but extend, compare and convert by their own sign. The
     /// default body errs; the concrete `TypeFactoryImpl` overrides it.
-    fn get_type_char_signed(&self, _name: &str, _m: type_metatype) -> KunaResult<Rc<Datatype>> {
-        Err(KunaError::lowlevel(
+    fn get_type_char_signed(&self, _name: &str, _m: type_metatype) -> UnlaceResult<Rc<Datatype>> {
+        Err(UnlaceError::lowlevel(
             "signed character types are not supported by this factory",
         ))
     }
     /// Get an "anonymous" function data-type (C++ `getTypeCode(void)`).
-    fn get_type_code(&self) -> KunaResult<Rc<Datatype>>;
+    fn get_type_code(&self) -> UnlaceResult<Rc<Datatype>>;
     /// Create a `TypeCode` carrying a specific function prototype (C++
     /// `getTypeCode(const PrototypePieces&)`, type.cc:4476-4482).  Used by the
     /// nested function-pointer `buildType` path (`FunctionModifier::modType`).
@@ -4154,8 +4159,8 @@ pub trait TypeFactory {
     fn get_type_code_proto(
         &self,
         _proto: &crate::fspec::PrototypePieces,
-    ) -> KunaResult<Rc<Datatype>> {
-        Err(KunaError::lowlevel(
+    ) -> UnlaceResult<Rc<Datatype>> {
+        Err(UnlaceError::lowlevel(
             "TypeFactory::getTypeCode(PrototypePieces) not supported by this factory",
         ))
     }
@@ -4167,7 +4172,7 @@ pub trait TypeFactory {
         &self,
         proto: &crate::fspec::PrototypePieces,
         _model: &str,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         self.get_type_code_proto(proto)
     }
 
@@ -4180,12 +4185,12 @@ pub trait TypeFactory {
         s: int4,
         pt: Rc<Datatype>,
         ws: uint4,
-    ) -> KunaResult<Rc<Datatype>>;
+    ) -> UnlaceResult<Rc<Datatype>>;
 
     /// Construct an absolute pointer data-type (C++ `getTypePointer`).
-    fn get_type_pointer(&self, s: int4, pt: Rc<Datatype>, ws: uint4) -> KunaResult<Rc<Datatype>>;
+    fn get_type_pointer(&self, s: int4, pt: Rc<Datatype>, ws: uint4) -> UnlaceResult<Rc<Datatype>>;
 
-    fn get_qualified_type(&self, base: Rc<Datatype>, qualifiers: u8) -> KunaResult<Rc<Datatype>> {
+    fn get_qualified_type(&self, base: Rc<Datatype>, qualifiers: u8) -> UnlaceResult<Rc<Datatype>> {
         Ok(crate::typequal::qualified_type(base, qualifiers))
     }
 
@@ -4199,9 +4204,9 @@ pub trait TypeFactory {
         pt: Rc<Datatype>,
         ws: uint4,
         n: &str,
-    ) -> KunaResult<Rc<Datatype>>;
+    ) -> UnlaceResult<Rc<Datatype>>;
     /// Build a resized pointer based on the given pointer (C++ `resizePointer`).
-    fn resize_pointer(&self, ptr: Rc<Datatype>, new_size: int4) -> KunaResult<Rc<Datatype>>;
+    fn resize_pointer(&self, ptr: Rc<Datatype>, new_size: int4) -> UnlaceResult<Rc<Datatype>>;
     /// Get pointer offset relative to a container (C++ `getTypePointerRel`
     /// 3-arg form).
     fn get_type_pointer_rel(
@@ -4209,7 +4214,7 @@ pub trait TypeFactory {
         parent_ptr: Rc<Datatype>,
         ptr_to: Rc<Datatype>,
         off: int4,
-    ) -> KunaResult<Rc<Datatype>>;
+    ) -> UnlaceResult<Rc<Datatype>>;
     /// Get a relative pointer with explicit size/space/name (C++
     /// `getTypePointerRel` 6-arg form).
     #[allow(clippy::too_many_arguments)]
@@ -4221,7 +4226,7 @@ pub trait TypeFactory {
         ws: int4,
         off: int4,
         nm: &str,
-    ) -> KunaResult<Rc<Datatype>>;
+    ) -> UnlaceResult<Rc<Datatype>>;
     /// Construct a pointer into a given address space (C++
     /// `getTypePointerWithSpace`).
     fn get_type_pointer_with_space(
@@ -4229,7 +4234,7 @@ pub trait TypeFactory {
         ptr_to: Rc<Datatype>,
         spc: Rc<AddrSpace>,
         nm: &str,
-    ) -> KunaResult<Rc<Datatype>>;
+    ) -> UnlaceResult<Rc<Datatype>>;
 
     /// Given a containing data-type and a byte offset into it, recover the
     /// data-type that a relative pointer at that offset points directly at (C++
@@ -4238,7 +4243,7 @@ pub trait TypeFactory {
     /// to `getBase(1,TYPE_UNKNOWN)` when the offset is non-positive or escapes
     /// the container.  A default body, written in terms of `get_sub_type` (on
     /// `Datatype`) and `get_base` (on the factory), so every factory shares it.
-    fn get_ptr_to_from_parent(&self, base: Rc<Datatype>, off: int4) -> KunaResult<Rc<Datatype>> {
+    fn get_ptr_to_from_parent(&self, base: Rc<Datatype>, off: int4) -> UnlaceResult<Rc<Datatype>> {
         if off > 0 {
             let mut curoff: int8 = off as int8;
             let mut base = base;
@@ -4267,24 +4272,24 @@ pub trait TypeFactory {
     // -- Composite construction (type.hh:903-912) ---------------------------
 
     /// Construct an array data-type (C++ `getTypeArray`).
-    fn get_type_array(&self, as_: int4, ao: Rc<Datatype>) -> KunaResult<Rc<Datatype>>;
+    fn get_type_array(&self, as_: int4, ao: Rc<Datatype>) -> UnlaceResult<Rc<Datatype>>;
     /// Create an (empty) structure (C++ `getTypeStruct`).
-    fn get_type_struct(&self, n: &str) -> KunaResult<Rc<Datatype>>;
+    fn get_type_struct(&self, n: &str) -> UnlaceResult<Rc<Datatype>>;
     /// Create a partial structure (C++ `getTypePartialStruct`).
     fn get_type_partial_struct(
         &self,
         contain: Rc<Datatype>,
         off: int4,
         sz: int4,
-    ) -> KunaResult<Rc<Datatype>>;
+    ) -> UnlaceResult<Rc<Datatype>>;
     /// Create an (empty) union (C++ `getTypeUnion`).
-    fn get_type_union(&self, n: &str) -> KunaResult<Rc<Datatype>>;
-    /// (kuna) The incomplete struct or union a C declaration names by its tag
+    fn get_type_union(&self, n: &str) -> UnlaceResult<Rc<Datatype>>;
+    /// (unlace) The incomplete struct or union a C declaration names by its tag
     /// ahead of the body: [`Self::get_type_struct`] / [`Self::get_type_union`],
     /// except that a pointer built to a new stub reads the record its body later
     /// completes, as upstream's in-place completion does. A type already holding
     /// the name is returned unchanged.
-    fn kuna_declare_record(&self, n: &str, is_union: bool) -> KunaResult<Rc<Datatype>> {
+    fn unlace_declare_record(&self, n: &str, is_union: bool) -> UnlaceResult<Rc<Datatype>> {
         if is_union {
             self.get_type_union(n)
         } else {
@@ -4297,16 +4302,16 @@ pub trait TypeFactory {
         contain: Rc<Datatype>,
         off: int4,
         sz: int4,
-    ) -> KunaResult<Rc<Datatype>>;
+    ) -> UnlaceResult<Rc<Datatype>>;
     /// Create a partial enumeration (C++ `getTypePartialEnum`).
     fn get_type_partial_enum(
         &self,
         contain: Rc<Datatype>,
         off: int4,
         sz: int4,
-    ) -> KunaResult<Rc<Datatype>>;
+    ) -> UnlaceResult<Rc<Datatype>>;
     /// Create an (empty) enumeration (C++ `getTypeEnum`).
-    fn get_type_enum(&self, n: &str) -> KunaResult<Rc<Datatype>>;
+    fn get_type_enum(&self, n: &str) -> UnlaceResult<Rc<Datatype>>;
     /// Create an (empty) enumeration of an EXPLICIT width and signedness.
     ///
     /// [`Self::get_type_enum`] builds at the factory's configured enum width,
@@ -4324,18 +4329,18 @@ pub trait TypeFactory {
         _n: &str,
         _s: int4,
         _m: type_metatype,
-    ) -> KunaResult<Rc<Datatype>> {
-        Err(KunaError::lowlevel(
+    ) -> UnlaceResult<Rc<Datatype>> {
+        Err(UnlaceError::lowlevel(
             "TypeFactory::getTypeEnum(sized) not supported by this factory",
         ))
     }
     /// Create a "spacebase" type (C++ `getTypeSpacebase`).
-    fn get_type_spacebase(&self, id: Rc<AddrSpace>, addr: &Address) -> KunaResult<Rc<Datatype>>;
+    fn get_type_spacebase(&self, id: Rc<AddrSpace>, addr: &Address) -> UnlaceResult<Rc<Datatype>>;
 
     // -- Resizing / piece extraction (type.hh:917-918) ----------------------
 
     /// Build a resized integer based on the given integer (C++ `resizeInteger`).
-    fn resize_integer(&self, ct: Rc<Datatype>, new_size: int4) -> KunaResult<Rc<Datatype>>;
+    fn resize_integer(&self, ct: Rc<Datatype>, new_size: int4) -> UnlaceResult<Rc<Datatype>>;
     /// Get the data-type associated with a piece of a structured data-type (C++
     /// `getExactPiece`).
     fn get_exact_piece(
@@ -4343,14 +4348,14 @@ pub trait TypeFactory {
         ct: Rc<Datatype>,
         offset: int4,
         size: int4,
-    ) -> KunaResult<Option<Rc<Datatype>>>;
+    ) -> UnlaceResult<Option<Rc<Datatype>>>;
 
     // -- Lookup / conversion (type.hh:887,922) ------------------------------
 
     /// Return type of given name (C++ `findByName`).
-    fn find_by_name(&self, n: &str) -> KunaResult<Option<Rc<Datatype>>>;
+    fn find_by_name(&self, n: &str) -> UnlaceResult<Option<Rc<Datatype>>>;
     /// Convert given data-type to concrete form (C++ `concretize`).
-    fn concretize(&self, ct: Rc<Datatype>) -> KunaResult<Rc<Datatype>>;
+    fn concretize(&self, ct: Rc<Datatype>) -> UnlaceResult<Rc<Datatype>>;
 
     // -- In-place construction mutators (type.cc:3919-4019, 4292, 4618-4655) --
     // These re-key an already-interned type and return the completed `Rc` (see
@@ -4365,16 +4370,16 @@ pub trait TypeFactory {
         false
     }
     /// Rename an interned data-type (C++ `setName`).
-    fn set_name(&self, _ct: &Rc<Datatype>, _n: &str) -> KunaResult<Rc<Datatype>> {
-        Err(KunaError::lowlevel(
+    fn set_name(&self, _ct: &Rc<Datatype>, _n: &str) -> UnlaceResult<Rc<Datatype>> {
+        Err(UnlaceError::lowlevel(
             "TypeFactory::setName not supported by this factory",
         ))
     }
     /// Force the integer display format of an interned data-type (C++
     /// `TypeFactory::setDisplayFormat` → `Datatype::setDisplayFormat`,
     /// type.cc:201).  Returns the re-interned type carrying the new format.
-    fn set_display_format(&self, _ct: &Rc<Datatype>, _format: uint4) -> KunaResult<Rc<Datatype>> {
-        Err(KunaError::lowlevel(
+    fn set_display_format(&self, _ct: &Rc<Datatype>, _format: uint4) -> UnlaceResult<Rc<Datatype>> {
+        Err(UnlaceError::lowlevel(
             "TypeFactory::setDisplayFormat not supported by this factory",
         ))
     }
@@ -4384,8 +4389,8 @@ pub trait TypeFactory {
         _ct: &Rc<Datatype>,
         _fd: Vec<TypeField>,
         _bit: Vec<TypeBitField>,
-    ) -> KunaResult<Rc<Datatype>> {
-        Err(KunaError::lowlevel(
+    ) -> UnlaceResult<Rc<Datatype>> {
+        Err(UnlaceError::lowlevel(
             "TypeFactory::assignRawFields not supported by this factory",
         ))
     }
@@ -4394,12 +4399,12 @@ pub trait TypeFactory {
         &self,
         _ct: &Rc<Datatype>,
         _fd: Vec<TypeField>,
-    ) -> KunaResult<Rc<Datatype>> {
-        Err(KunaError::lowlevel(
+    ) -> UnlaceResult<Rc<Datatype>> {
+        Err(UnlaceError::lowlevel(
             "TypeFactory::assignRawFields not supported by this factory",
         ))
     }
-    /// (kuna `dwarfstructs`) Install fields on an incomplete struct with the
+    /// (unlace `dwarfstructs`) Install fields on an incomplete struct with the
     /// layout supplied VERBATIM: each field's own offset, the total size and the
     /// alignment, instead of re-deriving them with the C packing rules
     /// ([`Self::assign_raw_fields_struct`]).
@@ -4419,12 +4424,12 @@ pub trait TypeFactory {
         _size: int4,
         _align: int4,
         _extra_flags: uint4,
-    ) -> KunaResult<Rc<Datatype>> {
-        Err(KunaError::lowlevel(
+    ) -> UnlaceResult<Rc<Datatype>> {
+        Err(UnlaceError::lowlevel(
             "TypeFactory::setFields(raw struct) not supported by this factory",
         ))
     }
-    /// (kuna `dwarfstructs`) The union arm of [`Self::set_fields_struct_raw`]:
+    /// (unlace `dwarfstructs`) The union arm of [`Self::set_fields_struct_raw`]:
     /// every field sits at offset 0, so only the total size and alignment are
     /// supplied by the caller.
     fn set_fields_union_raw(
@@ -4433,8 +4438,8 @@ pub trait TypeFactory {
         _fd: Vec<TypeField>,
         _size: int4,
         _align: int4,
-    ) -> KunaResult<Rc<Datatype>> {
-        Err(KunaError::lowlevel(
+    ) -> UnlaceResult<Rc<Datatype>> {
+        Err(UnlaceError::lowlevel(
             "TypeFactory::setFields(raw union) not supported by this factory",
         ))
     }
@@ -4443,8 +4448,8 @@ pub trait TypeFactory {
         &self,
         _ct: &Rc<Datatype>,
         _nmap: std::collections::BTreeMap<u64, String>,
-    ) -> KunaResult<Rc<Datatype>> {
-        Err(KunaError::lowlevel(
+    ) -> UnlaceResult<Rc<Datatype>> {
+        Err(UnlaceError::lowlevel(
             "TypeFactory::setEnumValues not supported by this factory",
         ))
     }
@@ -4455,73 +4460,76 @@ pub trait TypeFactory {
         _name: &str,
         _id: uint8,
         _format: uint4,
-    ) -> KunaResult<Rc<Datatype>> {
-        Err(KunaError::lowlevel(
+    ) -> UnlaceResult<Rc<Datatype>> {
+        Err(UnlaceError::lowlevel(
             "TypeFactory::getTypedef not supported by this factory",
         ))
     }
     /// Remove a data-type from the container (C++ `destroyType`).
-    fn destroy_type(&self, _ct: &Rc<Datatype>) -> KunaResult<()> {
-        Err(KunaError::lowlevel(
+    fn destroy_type(&self, _ct: &Rc<Datatype>) -> UnlaceResult<()> {
+        Err(UnlaceError::lowlevel(
             "TypeFactory::destroyType not supported by this factory",
         ))
     }
 
-    /// (kuna `dwarfvariants`) Record the recovered geometry of a DWARF
+    /// (unlace `dwarfvariants`) Record the recovered geometry of a DWARF
     /// `DW_TAG_variant_part` under [`crate::dwarfvariants::VariantLayout::type_name`].
     ///
-    /// A SIDE TABLE, in the `kuna_wire_symbols` sense: nothing in the analysis
+    /// A SIDE TABLE, in the `unlace_wire_symbols` sense: nothing in the analysis
     /// reads it, no `Datatype` points at it, and it is not encoded onto the
     /// Ghidra wire, so filling it cannot perturb emitted C. A later pass reads it
     /// to render `match` / `if let` / `Ok(v)` from the compiler's own answer
     /// instead of re-deriving the discriminant from codegen shape. Defaulted to a
     /// no-op: only the concrete container keeps the table.
-    fn kuna_record_variant_layout(&self, _layout: crate::dwarfvariants::VariantLayout) {}
+    fn unlace_record_variant_layout(&self, _layout: crate::dwarfvariants::VariantLayout) {}
 
-    /// (kuna `dwarfvariants`) The layout recorded for the interned type `name`.
-    fn kuna_variant_layout(&self, _name: &str) -> Option<Rc<crate::dwarfvariants::VariantLayout>> {
+    /// (unlace `dwarfvariants`) The layout recorded for the interned type `name`.
+    fn unlace_variant_layout(
+        &self,
+        _name: &str,
+    ) -> Option<Rc<crate::dwarfvariants::VariantLayout>> {
         None
     }
 
-    /// (kuna `dwarfvariants`) Every recorded layout, in interned-name order.
-    fn kuna_variant_layouts(&self) -> Vec<Rc<crate::dwarfvariants::VariantLayout>> {
+    /// (unlace `dwarfvariants`) Every recorded layout, in interned-name order.
+    fn unlace_variant_layouts(&self) -> Vec<Rc<crate::dwarfvariants::VariantLayout>> {
         Vec::new()
     }
 
-    /// (kuna multilang W3) Record what the named type means in the source
+    /// (unlace multilang W3) Record what the named type means in the source
     /// language — the `VariantLayout` pattern: a name-keyed side record, never
     /// a new metatype.  Registered by type providers (DWARF import, a language
     /// pack's synthesized shells); the default container refuses.
-    fn kuna_register_lang_facet(
+    fn unlace_register_lang_facet(
         &self,
         _name: &str,
         _facet: crate::langfacet::LangFacet,
-    ) -> KunaResult<()> {
-        Err(KunaError::lowlevel(
+    ) -> UnlaceResult<()> {
+        Err(UnlaceError::lowlevel(
             "kuna_register_lang_facet unsupported".to_string(),
         ))
     }
 
-    /// (kuna multilang W3) The language facet recorded for the named type.
-    /// (kuna `gonewtype`) Record that a Go reflection name is held by more than
+    /// (unlace multilang W3) The language facet recorded for the named type.
+    /// (unlace `gonewtype`) Record that a Go reflection name is held by more than
     /// one descriptor with DIFFERENT layouts (function-local types reuse the
     /// `pkg.Name` spelling). A name-keyed factory keeps only one such record, so
     /// a per-site type lock resolved through this name may assert the wrong
     /// layout; [`crate::gonewtype`] refuses a marked name.
-    fn kuna_mark_ambiguous_go_type(&self, _name: &str) {}
-    /// (kuna `gonewtype`) Is this Go reflection name layout-ambiguous? See
-    /// [`TypeFactory::kuna_mark_ambiguous_go_type`].
-    fn kuna_is_ambiguous_go_type(&self, _name: &str) -> bool {
+    fn unlace_mark_ambiguous_go_type(&self, _name: &str) {}
+    /// (unlace `gonewtype`) Is this Go reflection name layout-ambiguous? See
+    /// [`TypeFactory::unlace_mark_ambiguous_go_type`].
+    fn unlace_is_ambiguous_go_type(&self, _name: &str) -> bool {
         false
     }
-    fn kuna_lang_facet(&self, _name: &str) -> Option<crate::langfacet::LangFacet> {
+    fn unlace_lang_facet(&self, _name: &str) -> Option<crate::langfacet::LangFacet> {
         None
     }
 
-    /// (kuna `cfstrings`) Make the named pointer `ptr` the type every later
+    /// (unlace `cfstrings`) Make the named pointer `ptr` the type every later
     /// pointer request of its size and word size returns for its pointee, so an
     /// inferred `struct __CFString *` is spelled `CFStringRef`.
-    fn kuna_prefer_named_pointer(&self, _ptr: &Rc<Datatype>) {}
+    fn unlace_prefer_named_pointer(&self, _ptr: &Rc<Datatype>) {}
 }
 
 // =============================================================================
@@ -4633,21 +4641,23 @@ pub fn register_type_wire_ids(reg: &mut unlace_base::marshal::IdRegistry) {
 // marshal-out.  The consumer is Java's PcodeDataTypeManager.decodeDataType,
 // which resolves a <typeref>/named <type> by (name,id) via findBaseType — for
 // wire-delivered types the (name,id) pair originally came from Java, so the
-// echo is sufficient; only kuna-invented types need the full <type> body.
+// echo is sufficient; only unlace-invented types need the full <type> body.
 // ===========================================================================
 
 impl Datatype {
     /// Decode a display-format code into its attribute string (C++
     /// `Datatype::decodeIntegerFormat`, type.cc:773-787): 1-5 map to
     /// "hex"/"dec"/"oct"/"bin"/"char".
-    pub fn decode_integer_format(val: uint4) -> KunaResult<&'static str> {
+    pub fn decode_integer_format(val: uint4) -> UnlaceResult<&'static str> {
         match val {
             1 => Ok("hex"),
             2 => Ok("dec"),
             3 => Ok("oct"),
             4 => Ok("bin"),
             5 => Ok("char"),
-            _ => Err(KunaError::lowlevel("Unrecognized integer format encoding")),
+            _ => Err(UnlaceError::lowlevel(
+                "Unrecognized integer format encoding",
+            )),
         }
     }
 
@@ -4660,7 +4670,7 @@ impl Datatype {
         meta: type_metatype,
         align: int4,
         encoder: &mut dyn unlace_base::marshal::Encoder,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         use unlace_base::marshal::{ATTRIB_ID, ATTRIB_METATYPE, ATTRIB_NAME, ATTRIB_SIZE};
         encoder.write_string(&ATTRIB_NAME, self.name.as_bytes());
         let save_id = self.get_unsized_id()?;
@@ -4695,7 +4705,7 @@ impl Datatype {
     /// Encode this data-type to the stream as a simple `<def>` typedef element
     /// (C++ `Datatype::encodeTypedef`, type.cc:543-556).  Called only when
     /// `typedef_imm` is set.
-    fn encode_typedef(&self, encoder: &mut dyn unlace_base::marshal::Encoder) -> KunaResult<()> {
+    fn encode_typedef(&self, encoder: &mut dyn unlace_base::marshal::Encoder) -> UnlaceResult<()> {
         use unlace_base::marshal::{ATTRIB_ID, ATTRIB_NAME};
         let imm = self
             .typedef_imm
@@ -4719,7 +4729,7 @@ impl Datatype {
     /// Encode a simple reference to this data-type as a `<typeref>` element
     /// including only name and id (C++ `Datatype::encodeRef`, type.cc:503-521).
     /// Falls back to the full [`Datatype::encode`] for id-less or void types.
-    pub fn encode_ref(&self, encoder: &mut dyn unlace_base::marshal::Encoder) -> KunaResult<()> {
+    pub fn encode_ref(&self, encoder: &mut dyn unlace_base::marshal::Encoder) -> UnlaceResult<()> {
         use unlace_base::marshal::{ATTRIB_ID, ATTRIB_NAME, ATTRIB_SIZE};
         if self.id != 0 && self.metatype != type_metatype::TYPE_VOID {
             encoder.open_element(&ELEM_TYPEREF);
@@ -4742,7 +4752,7 @@ impl Datatype {
     /// Encode a formal description of this data-type as a `<type>` element
     /// (C++ `Datatype::encode` + every subclass override, type.cc).  Composite
     /// data-types descend one level, describing components by reference.
-    pub fn encode(&self, encoder: &mut dyn unlace_base::marshal::Encoder) -> KunaResult<()> {
+    pub fn encode(&self, encoder: &mut dyn unlace_base::marshal::Encoder) -> UnlaceResult<()> {
         use unlace_base::marshal::ATTRIB_OFFSET;
         use unlace_base::marshal::{
             ATTRIB_CONTENT, ATTRIB_NAME, ATTRIB_SPACE, ATTRIB_VALUE, ATTRIB_WORDSIZE, ELEM_OFF,
@@ -4780,7 +4790,7 @@ impl Datatype {
             }
             // TypeBase / TypeUnknown / TypeChar / TypeUnicode (type.cc:462,983,
             // 1030): the basic form; the char/unicode subclasses are flag bits
-            // in kuna and add their marker attribute.
+            // in unlace and add their marker attribute.
             DatatypeKind::Base | DatatypeKind::Unknown => {
                 encoder.open_element(elem_type);
                 self.encode_basic(self.metatype, -1, encoder)?;
@@ -4943,7 +4953,7 @@ impl Datatype {
 impl TypeField {
     /// Encode a formal description of this field as a `<field>` element (C++
     /// `TypeField::encode`, type.cc:852-862).
-    pub fn encode(&self, encoder: &mut dyn unlace_base::marshal::Encoder) -> KunaResult<()> {
+    pub fn encode(&self, encoder: &mut dyn unlace_base::marshal::Encoder) -> UnlaceResult<()> {
         use unlace_base::marshal::{ATTRIB_ID, ATTRIB_NAME, ATTRIB_OFFSET};
         let elem_field = &ELEM_FIELD;
         encoder.open_element(elem_field);
@@ -4961,7 +4971,7 @@ impl TypeField {
 impl TypeBitField {
     /// Encode a formal description of this bit-field as a `<bitfield>` element
     /// (C++ `TypeBitField::encode`, type.cc:940-950).
-    pub fn encode(&self, encoder: &mut dyn unlace_base::marshal::Encoder) -> KunaResult<()> {
+    pub fn encode(&self, encoder: &mut dyn unlace_base::marshal::Encoder) -> UnlaceResult<()> {
         use unlace_base::marshal::{ATTRIB_NAME, ATTRIB_OFFSET, ATTRIB_SIZE};
         let elem_bitfield = &ELEM_BITFIELD;
         encoder.open_element(elem_bitfield);
@@ -4986,7 +4996,8 @@ impl TypeBitField {
 pub trait RemoteTypeFetch {
     /// getDataType(name, id): ingest the packed `<type>` response into
     /// `decoder`.  `Ok(false)` = the host does not know the type.
-    fn fetch_data_type(&self, name: &str, id: u64, decoder: &mut dyn Decoder) -> KunaResult<bool>;
+    fn fetch_data_type(&self, name: &str, id: u64, decoder: &mut dyn Decoder)
+    -> UnlaceResult<bool>;
 }
 
 /// The union of every wire type element's attributes, gathered by one scan
@@ -5137,15 +5148,15 @@ pub struct TypeFactoryImpl {
     size_of_wchar: Cell<int4>,
     /// Size of pointers into the default data space (C++ `sizeOfPointer`).
     size_of_pointer: Cell<int4>,
-    /// (kuna) Size of the core "short" data-type (cspec `<short_size>`).
+    /// (unlace) Size of the core "short" data-type (cspec `<short_size>`).
     size_of_short: Cell<int4>,
-    /// (kuna) Size of the core "long long" data-type (cspec `<long_long_size>`).
+    /// (unlace) Size of the core "long long" data-type (cspec `<long_long_size>`).
     size_of_long_long: Cell<int4>,
-    /// (kuna) Size of the core "float" data-type (cspec `<float_size>`).
+    /// (unlace) Size of the core "float" data-type (cspec `<float_size>`).
     size_of_float: Cell<int4>,
-    /// (kuna) Size of the core "double" data-type (cspec `<double_size>`).
+    /// (unlace) Size of the core "double" data-type (cspec `<double_size>`).
     size_of_double: Cell<int4>,
-    /// (kuna) Size of the core "long double" data-type (cspec `<long_double_size>`).
+    /// (unlace) Size of the core "long double" data-type (cspec `<long_double_size>`).
     /// Note this is the VALUE width, not `sizeof`: the x86 cspecs record 10 for
     /// the x87 extended format and annotate the storage width in a comment
     /// (`<!-- aligned-length=16 -->`).
@@ -5181,25 +5192,25 @@ pub struct TypeFactoryImpl {
     /// init.  `getTypeCode(PrototypePieces)` needs it for
     /// `FuncProto::updateAllTypes` -> `ProtoModel::assignParameterStorage`.
     manager: RefCell<Option<Rc<unlace_base::space::AddrSpaceManager>>>,
-    /// (kuna, Phase 3) The ghidra-mode remote type source (C++
+    /// (unlace, Phase 3) The ghidra-mode remote type source (C++
     /// `TypeFactoryGhidra`'s query back-pointer); `None` on the standalone path,
     /// where [`Self::find_by_id_or_remote`] degrades to the plain local lookup.
     remote_types: RefCell<Option<Rc<dyn RemoteTypeFetch>>>,
-    /// (kuna `dwarfvariants`) Recovered `DW_TAG_variant_part` geometry, keyed by
+    /// (unlace `dwarfvariants`) Recovered `DW_TAG_variant_part` geometry, keyed by
     /// the interned type name.  Read by nothing in the analysis -- see
-    /// [`TypeFactory::kuna_record_variant_layout`].
+    /// [`TypeFactory::unlace_record_variant_layout`].
     variant_layouts: RefCell<BTreeMap<String, Rc<crate::dwarfvariants::VariantLayout>>>,
-    /// (kuna multilang W3) Language facets, keyed by the type name.  Like
+    /// (unlace multilang W3) Language facets, keyed by the type name.  Like
     /// `variant_layouts`, the records key by name so they survive
     /// `clear_noncore`.  See [`crate::langfacet::LangFacet`].
     lang_facets: RefCell<BTreeMap<String, crate::langfacet::LangFacet>>,
-    /// (kuna `cfstrings`) Named pointers preferred for their pointee, keyed by
-    /// the pointee's id. See [`TypeFactory::kuna_prefer_named_pointer`].
+    /// (unlace `cfstrings`) Named pointers preferred for their pointee, keyed by
+    /// the pointee's id. See [`TypeFactory::unlace_prefer_named_pointer`].
     named_pointers: RefCell<BTreeMap<uint8, Rc<Datatype>>>,
-    /// (kuna `gonewtype`) Go reflection names whose descriptors disagree on
+    /// (unlace `gonewtype`) Go reflection names whose descriptors disagree on
     /// layout — a factory record keyed by name holds only one, so the name is
     /// NOT a safe basis for a per-site type lock. See
-    /// [`TypeFactory::kuna_mark_ambiguous_go_type`].
+    /// [`TypeFactory::unlace_mark_ambiguous_go_type`].
     go_ambiguous_types: RefCell<BTreeSet<String>>,
 }
 
@@ -5221,7 +5232,7 @@ impl TypeFactoryImpl {
             size_of_wchar: Cell::new(0),
             size_of_pointer: Cell::new(0),
             size_of_alt_pointer: Cell::new(0),
-            // (kuna) 0 == "the cspec has not spoken"; `setup_sizes` fills these.
+            // (unlace) 0 == "the cspec has not spoken"; `setup_sizes` fills these.
             size_of_short: Cell::new(0),
             size_of_long_long: Cell::new(0),
             size_of_float: Cell::new(0),
@@ -5260,7 +5271,7 @@ impl TypeFactoryImpl {
     /// Share the engine's address-space manager into the factory so
     /// `getTypeCode(PrototypePieces)` (the nested function-pointer `buildType`
     /// path) can run `TypeCode::setPrototype`.  The C++ `TypeFactory` holds the
-    /// `Architecture *glb` and reaches it directly; the kuna factory is a
+    /// `Architecture *glb` and reaches it directly; the unlace factory is a
     /// standalone object, so the owning architecture wires it in during `init`.
     pub fn set_proto_context(&self, manager: Rc<unlace_base::space::AddrSpaceManager>) {
         *self.manager.borrow_mut() = Some(manager);
@@ -5308,7 +5319,7 @@ impl TypeFactoryImpl {
     /// `TypeFactory::decodeAlignmentMap`, type.cc:5143-5168).  `entries` is the
     /// decoded `(size, alignment)` list in document order.  Indices left unset by
     /// the cspec inherit the nearest explicitly-set lower alignment.
-    pub fn decode_alignment_map(&self, entries: &[(int4, int4)]) -> KunaResult<()> {
+    pub fn decode_alignment_map(&self, entries: &[(int4, int4)]) -> UnlaceResult<()> {
         let mut m: Vec<int4> = Vec::new();
         for &(sz, val) in entries {
             while (m.len() as int4) <= sz {
@@ -5317,7 +5328,7 @@ impl TypeFactoryImpl {
             m[sz as usize] = val;
         }
         if m.is_empty() {
-            return Err(KunaError::lowlevel("Alignment map empty"));
+            return Err(UnlaceError::lowlevel("Alignment map empty"));
         }
         m[0] = 1;
         let mut cur_align = 1;
@@ -5375,7 +5386,7 @@ impl TypeFactoryImpl {
         if self.size_of_pointer.get() == 0 {
             self.size_of_pointer.set(default_data_addr_size);
         }
-        // (kuna) Fill the widths the cspec left unset.  30 of the 111 vendored
+        // (unlace) Fill the widths the cspec left unset.  30 of the 111 vendored
         // cspecs carry no `<data_organization>` at all and many carry only a
         // subset, so these defaults are the common case, not the exception.  The
         // `size_of_long` fallback above is kept as upstream has it; an ILP32 cspec
@@ -5435,26 +5446,26 @@ impl TypeFactoryImpl {
     pub fn set_size_of_alt_pointer(&self, s: int4) {
         self.size_of_alt_pointer.set(s);
     }
-    /// (kuna) Set the default short size (cspec `<short_size>`).
+    /// (unlace) Set the default short size (cspec `<short_size>`).
     pub fn set_size_of_short(&self, s: int4) {
         self.size_of_short.set(s);
     }
-    /// (kuna) Set the default long long size (cspec `<long_long_size>`).
+    /// (unlace) Set the default long long size (cspec `<long_long_size>`).
     #[inline]
     pub fn set_size_of_long_long(&self, s: int4) {
         self.size_of_long_long.set(s);
     }
-    /// (kuna) Set the default float size (cspec `<float_size>`).
+    /// (unlace) Set the default float size (cspec `<float_size>`).
     #[inline]
     pub fn set_size_of_float(&self, s: int4) {
         self.size_of_float.set(s);
     }
-    /// (kuna) Set the default double size (cspec `<double_size>`).
+    /// (unlace) Set the default double size (cspec `<double_size>`).
     #[inline]
     pub fn set_size_of_double(&self, s: int4) {
         self.size_of_double.set(s);
     }
-    /// (kuna) Set the default long double size (cspec `<long_double_size>`).
+    /// (unlace) Set the default long double size (cspec `<long_double_size>`).
     pub fn set_size_of_long_double(&self, s: int4) {
         self.size_of_long_double.set(s);
     }
@@ -5462,11 +5473,11 @@ impl TypeFactoryImpl {
     // -- Alignment queries (type.cc:3774-3798) -------------------------------
 
     /// Get data-type alignment based on size (C++ `TypeFactory::getAlignment`).
-    fn alignment(&self, size: uint4) -> KunaResult<int4> {
+    fn alignment(&self, size: uint4) -> UnlaceResult<int4> {
         let m = self.align_map.borrow();
         if size as usize >= m.len() {
             if m.is_empty() {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "TypeFactory alignment map not initialized",
                 ));
             }
@@ -5477,7 +5488,7 @@ impl TypeFactoryImpl {
 
     /// Get the aligned size of a primitive data-type (C++
     /// `TypeFactory::getPrimitiveAlignSize`).
-    fn primitive_align_size(&self, size: uint4) -> KunaResult<int4> {
+    fn primitive_align_size(&self, size: uint4) -> UnlaceResult<int4> {
         let align = self.alignment(size)?;
         let mut size = size;
         // C++ `uint4 mod = size % align;` — `align` is int4 but positive here.
@@ -5536,11 +5547,11 @@ impl TypeFactoryImpl {
     /// `TypeFactory::insert`, type.cc:3868-3884).  A duplicate id in `tree` is an
     /// error (the C++ throws after printing the clash); named types are also
     /// cross-referenced in `nametree`.
-    fn insert(&self, newtype: Rc<Datatype>) -> KunaResult<()> {
+    fn insert(&self, newtype: Rc<Datatype>) -> UnlaceResult<()> {
         let mut store = self.store.borrow_mut();
         let key = TreeKey(Rc::clone(&newtype));
         if store.tree.contains(&key) {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "Shared type id: {:x}",
                 newtype.get_id()
             )));
@@ -5563,18 +5574,18 @@ impl TypeFactoryImpl {
     /// are matched by the functional comparator.  A newly added type with
     /// unassigned alignment (`alignment < 0`) gets its primitive alignment
     /// computed from the alignment map.
-    fn find_add(&self, mut ct: Datatype) -> KunaResult<Rc<Datatype>> {
+    fn find_add(&self, mut ct: Datatype) -> UnlaceResult<Rc<Datatype>> {
         if !ct.name.is_empty() {
             // If there is a name there must be an id.
             if ct.id == 0 {
-                return Err(KunaError::lowlevel(format!(
+                return Err(UnlaceError::lowlevel(format!(
                     "Datatype must have a valid id: {}",
                     ct.name
                 )));
             }
             if let Some(res) = self.find_by_id_local(&ct.name, ct.id) {
                 if res.compare_dependency(&ct)? != 0 {
-                    return Err(KunaError::lowlevel(format!(
+                    return Err(UnlaceError::lowlevel(format!(
                         "Trying to alter definition of type: {}",
                         ct.name
                     )));
@@ -5633,7 +5644,7 @@ impl TypeFactoryImpl {
 
     /// C++ `TypeFactory::setName` (type.cc:3923-3937): rename an interned
     /// data-type, re-keying both trees.  Returns the renamed (new) `Rc`.
-    fn set_name_impl(&self, ct: &Rc<Datatype>, n: &str) -> KunaResult<Rc<Datatype>> {
+    fn set_name_impl(&self, ct: &Rc<Datatype>, n: &str) -> UnlaceResult<Rc<Datatype>> {
         if ct.get_name() == n {
             return Ok(Rc::clone(ct));
         }
@@ -5664,7 +5675,7 @@ impl TypeFactoryImpl {
         &self,
         ct: &Rc<Datatype>,
         format: uint4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         self.erase_interned(ct, ct.id != 0);
         let mut newct = (**ct).clone();
         newct.set_display_format(format);
@@ -5686,14 +5697,14 @@ impl TypeFactoryImpl {
         ct: &Rc<Datatype>,
         mut fd: Vec<TypeField>,
         mut bit: Vec<TypeBitField>,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         for field in &fd {
             let mut ty = Rc::clone(&field.field_type);
             while let Some(element) = ty.get_array_base() {
                 ty = element;
             }
             if ty.is_incomplete() {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "Record field has incomplete by-value type",
                 ));
             }
@@ -5710,14 +5721,14 @@ impl TypeFactoryImpl {
         &self,
         ct: &Rc<Datatype>,
         mut fd: Vec<TypeField>,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         for field in &fd {
             let mut ty = Rc::clone(&field.field_type);
             while let Some(element) = ty.get_array_base() {
                 ty = element;
             }
             if ty.is_incomplete() {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "Record field has incomplete by-value type",
                 ));
             }
@@ -5737,9 +5748,9 @@ impl TypeFactoryImpl {
         new_size: int4,
         new_align: int4,
         extra_flags: uint4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         if !ct.is_incomplete() {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Can only set fields on an incomplete structure",
             ));
         }
@@ -5765,9 +5776,9 @@ impl TypeFactoryImpl {
         new_size: int4,
         new_align: int4,
         extra_flags: uint4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         if !ct.is_incomplete() {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Can only set fields on an incomplete union",
             ));
         }
@@ -5781,10 +5792,14 @@ impl TypeFactoryImpl {
     }
 
     /// Re-key the completion `newrc` of the incomplete record `ct`. A record the
-    /// C grammar declared ([`TypeFactory::kuna_declare_record`]) also leaves the
+    /// C grammar declared ([`TypeFactory::unlace_declare_record`]) also leaves the
     /// name index, and the pointers built to it and the typedefs made of it read
     /// the completion from then on; any other stub keeps the upstream re-keying.
-    fn publish_completed_record(&self, ct: &Rc<Datatype>, newrc: &Rc<Datatype>) -> KunaResult<()> {
+    fn publish_completed_record(
+        &self,
+        ct: &Rc<Datatype>,
+        newrc: &Rc<Datatype>,
+    ) -> UnlaceResult<()> {
         let Some(link) = &ct.record_completion else {
             self.erase_interned(ct, false);
             return self.insert(Rc::clone(newrc));
@@ -5805,7 +5820,7 @@ impl TypeFactoryImpl {
         &self,
         ct: &Rc<Datatype>,
         nmap: std::collections::BTreeMap<u64, String>,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         self.erase_interned(ct, false);
         let mut newct = (**ct).clone();
         newct.set_name_map(nmap);
@@ -5823,7 +5838,7 @@ impl TypeFactoryImpl {
         name: &str,
         id: uint8,
         format: uint4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         let id = if id == 0 {
             Datatype::hash_name(name)
         } else {
@@ -5833,7 +5848,7 @@ impl TypeFactoryImpl {
             // C++ `if (ct != res->getTypedef())` throws.
             let same = matches!(res.get_typedef(), Some(t) if Rc::ptr_eq(t, ct));
             if !same {
-                return Err(KunaError::lowlevel(format!(
+                return Err(UnlaceError::lowlevel(format!(
                     "Trying to create typedef of existing type: {name}"
                 )));
             }
@@ -5861,7 +5876,7 @@ impl TypeFactoryImpl {
     }
 
     /// Complete aliases without renaming/removing the C tag they refer to.
-    fn complete_record_typedefs(&self, completed: &Rc<Datatype>) -> KunaResult<()> {
+    fn complete_record_typedefs(&self, completed: &Rc<Datatype>) -> UnlaceResult<()> {
         if completed.is_incomplete() {
             return Ok(());
         }
@@ -5902,9 +5917,9 @@ impl TypeFactoryImpl {
     /// C++ `TypeFactory::destroyType` (type.cc:4645-4655): remove a data-type
     /// from the container (used on the construction-error path).  Core types
     /// cannot be destroyed.
-    fn destroy_type_impl(&self, ct: &Rc<Datatype>) -> KunaResult<()> {
+    fn destroy_type_impl(&self, ct: &Rc<Datatype>) -> UnlaceResult<()> {
         if ct.is_core_type() {
-            return Err(KunaError::lowlevel("Cannot destroy core type"));
+            return Err(UnlaceError::lowlevel("Cannot destroy core type"));
         }
         // C++ removeWarning(ct) on hasWarning(); the warning channel is a W5 stub,
         // so there is no warning list to prune here.
@@ -5923,7 +5938,7 @@ impl TypeFactoryImpl {
         size: int4,
         meta: type_metatype,
         chartp: bool,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let ct = if chartp {
             if size == 1 {
                 self.make_type_char(name)?
@@ -5948,7 +5963,7 @@ impl TypeFactoryImpl {
     /// `ct->flags |= coretype` of `setCoreType`).  Because the flag does not
     /// participate in `compareDependency`, the tree position is unchanged; we swap
     /// the stored `Rc` for a flagged clone and refresh the caches that hold it.
-    fn restamp_core_flag(&self, ct: &Rc<Datatype>) -> KunaResult<()> {
+    fn restamp_core_flag(&self, ct: &Rc<Datatype>) -> UnlaceResult<()> {
         if ct.is_core_type() {
             return Ok(());
         }
@@ -5984,7 +5999,7 @@ impl TypeFactoryImpl {
     /// Cache the most commonly accessed core data-types (C++
     /// `TypeFactory::cacheCoreTypes`, type.cc:3659-3707).  The core types must
     /// already be present in the tree.
-    pub fn cache_core_types(&self) -> KunaResult<()> {
+    pub fn cache_core_types(&self) -> UnlaceResult<()> {
         use type_metatype::*;
         // Snapshot the tree contents to avoid holding the borrow across the
         // cache writes.
@@ -6065,7 +6080,7 @@ impl TypeFactoryImpl {
     /// Decode a data-type element — a `<typeref>` resolved against the container
     /// (querying the remote host on a miss, `TypeFactoryGhidra::findById`) or a
     /// full type element (C++ `TypeFactory::decodeType`, type.cc:4694-4723).
-    pub fn decode_type(&self, decoder: &mut dyn Decoder) -> KunaResult<Rc<Datatype>> {
+    pub fn decode_type(&self, decoder: &mut dyn Decoder) -> UnlaceResult<Rc<Datatype>> {
         if decoder.peek_element()? == ELEM_TYPEREF.get_id() {
             let elem_id = decoder.open_element()?;
             let mut newid: uint8 = 0;
@@ -6087,14 +6102,16 @@ impl TypeFactoryImpl {
             }
             let newname = String::from_utf8_lossy(&name).into_owned();
             if newname.is_empty() {
-                return Err(KunaError::decoder("<typeref> missing name"));
+                return Err(UnlaceError::decoder("<typeref> missing name"));
             }
             if newid == 0 {
                 newid = Datatype::hash_name(&newname);
             }
             let ct = self
                 .find_by_id_or_remote(&newname, newid, size)?
-                .ok_or_else(|| KunaError::lowlevel(format!("Unable to resolve type: {newname}")))?;
+                .ok_or_else(|| {
+                    UnlaceError::lowlevel(format!("Unable to resolve type: {newname}"))
+                })?;
             decoder.close_element(elem_id)?;
             return Ok(ct);
         }
@@ -6112,7 +6129,7 @@ impl TypeFactoryImpl {
         n: &str,
         id: uint8,
         sz: int4,
-    ) -> KunaResult<Option<Rc<Datatype>>> {
+    ) -> UnlaceResult<Option<Rc<Datatype>>> {
         if let Some(ct) = self.find_by_id(n, id, sz) {
             return Ok(Some(ct));
         }
@@ -6141,7 +6158,7 @@ impl TypeFactoryImpl {
     /// a full type element decoded with `forcecore`, then the caches are built.
     /// Runs on a fresh factory (the ghidra-mode `buildCoreTypes` replacement),
     /// so the upstream leading `clear()` is a no-op here.
-    pub fn decode_core_types(&self, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    pub fn decode_core_types(&self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         let elem_id = decoder.open_element_id(&ELEM_CORETYPES)?;
         while decoder.peek_element()? != 0 {
             self.decode_type_no_ref(decoder, true)?;
@@ -6156,7 +6173,7 @@ impl TypeFactoryImpl {
         &self,
         decoder: &mut dyn Decoder,
         forcecore: bool,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         use type_metatype::*;
         let elem_id = decoder.open_element()?;
         if elem_id == unlace_base::marshal::ELEM_VOID.get_id() {
@@ -6168,7 +6185,7 @@ impl TypeFactoryImpl {
             let qualifiers =
                 decoder.read_unsigned_integer_id(&unlace_base::marshal::ATTRIB_VALUE)?;
             if qualifiers == 0 || qualifiers & !7 != 0 {
-                return Err(KunaError::decoder("Invalid C type qualifiers"));
+                return Err(UnlaceError::decoder("Invalid C type qualifiers"));
             }
             let base = self.decode_type(decoder)?;
             decoder.close_element(elem_id)?;
@@ -6182,7 +6199,7 @@ impl TypeFactoryImpl {
         let b = Self::decode_wire_type_attribs(decoder, forcecore)?;
         let meta = b
             .metatype
-            .ok_or_else(|| KunaError::decoder("type element missing metatype attribute"))?;
+            .ok_or_else(|| UnlaceError::decoder("type element missing metatype attribute"))?;
         let ct = match meta {
             TYPE_PTR => {
                 let ptrto = self.decode_type(decoder)?;
@@ -6208,7 +6225,7 @@ impl TypeFactoryImpl {
             TYPE_ARRAY => {
                 let arrayof = self.decode_type(decoder)?;
                 if b.arraysize <= 0 {
-                    return Err(KunaError::lowlevel("Bad size for array"));
+                    return Err(UnlaceError::lowlevel("Bad size for array"));
                 }
                 self.get_type_array(b.arraysize, arrayof)?
             }
@@ -6325,7 +6342,7 @@ impl TypeFactoryImpl {
 
     /// The `<def>` typedef element (C++ `TypeFactory::decodeTypedef`,
     /// type.cc:4802-4856), already opened by the caller.
-    fn decode_typedef(&self, decoder: &mut dyn Decoder) -> KunaResult<Rc<Datatype>> {
+    fn decode_typedef(&self, decoder: &mut dyn Decoder) -> UnlaceResult<Rc<Datatype>> {
         let mut id: uint8 = 0;
         let mut name = String::new();
         let mut format: uint4 = 0;
@@ -6360,7 +6377,7 @@ impl TypeFactoryImpl {
         b: &WireTypeAttribs,
         forcecore: bool,
         is_union: bool,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         let meta = if is_union {
             type_metatype::TYPE_UNION
         } else {
@@ -6450,7 +6467,7 @@ impl TypeFactoryImpl {
     fn decode_wire_type_attribs(
         decoder: &mut dyn Decoder,
         _forcecore: bool,
-    ) -> KunaResult<WireTypeAttribs> {
+    ) -> UnlaceResult<WireTypeAttribs> {
         let mut b = WireTypeAttribs::default();
         loop {
             let aid = decoder.get_next_attribute_id()?;
@@ -6485,13 +6502,13 @@ impl TypeFactoryImpl {
             } else if aid == unlace_base::marshal::ATTRIB_WORDSIZE.get_id() {
                 b.wordsize = decoder.read_unsigned_integer()?;
             } else if aid == unlace_base::marshal::ATTRIB_SPACE.get_id() {
-                // Pointer address-space hint; consume (the kuna pointer build
+                // Pointer address-space hint; consume (the unlace pointer build
                 // resolves spaces downstream).
                 let _ = decoder.read_space();
             }
         }
         if b.size < 0 {
-            return Err(KunaError::decoder("Bad size for type"));
+            return Err(UnlaceError::decoder("Bad size for type"));
         }
         if b.id == 0 && !b.name.is_empty() {
             b.id = Datatype::hash_name(&b.name);
@@ -6561,7 +6578,7 @@ impl TypeFactoryImpl {
 
     /// Get the unique "void" data-type (C++ `TypeFactory::getTypeVoid`,
     /// type.cc:4056-4069).
-    fn get_type_void_impl(&self) -> KunaResult<Rc<Datatype>> {
+    fn get_type_void_impl(&self) -> UnlaceResult<Rc<Datatype>> {
         let void_col =
             (type_metatype::TYPE_VOID.as_i32() - type_metatype::TYPE_FLOAT.as_i32()) as usize;
         if let Some(ct) = self.store.borrow().typecache[0][void_col].clone() {
@@ -6590,7 +6607,7 @@ impl TypeFactoryImpl {
 
     /// Create a default 1-byte "char" type (C++ `TypeFactory::getTypeChar(name)`,
     /// type.cc:4074-4080).
-    fn make_type_char(&self, n: &str) -> KunaResult<Rc<Datatype>> {
+    fn make_type_char(&self, n: &str) -> UnlaceResult<Rc<Datatype>> {
         // TypeChar(n): TypeBase(1,TYPE_INT,n), flags|=chartype, submeta=SUB_INT_CHAR.
         let mut tc = Datatype::new(1, type_metatype::TYPE_INT);
         tc.name = n.to_string();
@@ -6603,7 +6620,12 @@ impl TypeFactoryImpl {
 
     /// Create a default multi-byte "unicode" type (C++
     /// `TypeFactory::getTypeUnicode`, type.cc:4087-4093).
-    fn make_type_unicode(&self, nm: &str, sz: int4, m: type_metatype) -> KunaResult<Rc<Datatype>> {
+    fn make_type_unicode(
+        &self,
+        nm: &str,
+        sz: int4,
+        m: type_metatype,
+    ) -> UnlaceResult<Rc<Datatype>> {
         // TypeUnicode(nm,sz,m): TypeBase(sz,m,nm); setflags(); submeta by INT/UINT.
         let mut tu = Datatype::new(sz, m);
         tu.name = nm.to_string();
@@ -6626,7 +6648,7 @@ impl TypeFactoryImpl {
 
     /// Get a "base" data-type by size and metatype, NOT preferring char (C++
     /// `TypeFactory::getBaseNoChar`, type.cc:4100-4106).
-    fn get_base_no_char_impl(&self, s: int4, m: type_metatype) -> KunaResult<Rc<Datatype>> {
+    fn get_base_no_char_impl(&self, s: int4, m: type_metatype) -> UnlaceResult<Rc<Datatype>> {
         if s == 1 && m == type_metatype::TYPE_INT {
             if let Some(nc) = self.store.borrow().type_nochar.clone() {
                 return Ok(nc);
@@ -6645,9 +6667,9 @@ impl TypeFactoryImpl {
     /// from `size as uint4` and can overflow. Sizes reach here from
     /// attacker-controlled image bytes (a symbol's declared extent), so this is an
     /// ordinary error, not an invariant. GH-339.
-    fn get_base_impl(&self, s: int4, m: type_metatype) -> KunaResult<Rc<Datatype>> {
+    fn get_base_impl(&self, s: int4, m: type_metatype) -> UnlaceResult<Rc<Datatype>> {
         if s < 0 {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "getBase: negative data-type size {s}"
             )));
         }
@@ -6679,7 +6701,7 @@ impl TypeFactoryImpl {
             let unk = self.store.borrow().typecache[1][unk_col]
                 .clone()
                 .ok_or_else(|| {
-                    KunaError::lowlevel(
+                    UnlaceError::lowlevel(
                         "getBase: TYPE_UNKNOWN size-1 not cached for oversize array",
                     )
                 })?;
@@ -6693,7 +6715,12 @@ impl TypeFactoryImpl {
 
     /// Get or create a named "base" type (C++ `TypeFactory::getBase(s,m,n)`,
     /// type.cc:4148-4154).
-    fn get_base_named_impl(&self, s: int4, m: type_metatype, n: &str) -> KunaResult<Rc<Datatype>> {
+    fn get_base_named_impl(
+        &self,
+        s: int4,
+        m: type_metatype,
+        n: &str,
+    ) -> UnlaceResult<Rc<Datatype>> {
         let mut tmp = Datatype::new(s, m);
         tmp.name = n.to_string();
         tmp.display_name = n.to_string();
@@ -6707,20 +6734,20 @@ impl TypeFactoryImpl {
     /// The lower bound is the same hardening as `get_base_impl`: the C++ `s < 5`
     /// alone indexes `charcache[s]` with a negative size, which is a process abort
     /// in Rust. A negative size now takes the unsupported-size error below.
-    fn get_type_char_sized(&self, s: int4) -> KunaResult<Rc<Datatype>> {
+    fn get_type_char_sized(&self, s: int4) -> UnlaceResult<Rc<Datatype>> {
         if (0..5).contains(&s) {
             if let Some(res) = self.store.borrow().charcache[s as usize].clone() {
                 return Ok(res);
             }
         }
-        Err(KunaError::lowlevel(
+        Err(UnlaceError::lowlevel(
             "Request for unsupported character data-type",
         ))
     }
 
     /// Retrieve or create the core anonymous "code" data-type (C++
     /// `TypeFactory::getTypeCode(void)`, type.cc:4173-4182).
-    fn get_type_code_impl(&self) -> KunaResult<Rc<Datatype>> {
+    fn get_type_code_impl(&self) -> UnlaceResult<Rc<Datatype>> {
         let code_col =
             (type_metatype::TYPE_CODE.as_i32() - type_metatype::TYPE_FLOAT.as_i32()) as usize;
         if let Some(ct) = self.store.borrow().typecache[1][code_col].clone() {
@@ -6746,9 +6773,9 @@ impl TypeFactoryImpl {
     fn make_type_code_proto(
         &self,
         proto: &crate::fspec::PrototypePieces,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         let model = self.defaultfp.borrow().clone().ok_or_else(|| {
-            KunaError::lowlevel(
+            UnlaceError::lowlevel(
                 "getTypeCode(PrototypePieces): no default prototype model (set_proto_models \
                  not run)",
             )
@@ -6756,7 +6783,7 @@ impl TypeFactoryImpl {
         self.make_type_code_proto_with_model(proto, model)
     }
 
-    /// (kuna, Phase 3) `getTypeCode(PrototypePieces)` with an EXPLICIT
+    /// (unlace, Phase 3) `getTypeCode(PrototypePieces)` with an EXPLICIT
     /// prototype model — the C++ `sig.model` when the declarator DID name one
     /// (the ghidra-mode `<prototype model=…>`), so a locked non-default-model
     /// callee (`__fastcall` on x86-32, …) gets storage assigned under the
@@ -6765,7 +6792,7 @@ impl TypeFactoryImpl {
         &self,
         proto: &crate::fspec::PrototypePieces,
         model: Rc<crate::fspec::ProtoModel>,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         self.make_type_code_proto_with_model(proto, model)
     }
 
@@ -6773,9 +6800,9 @@ impl TypeFactoryImpl {
         &self,
         proto: &crate::fspec::PrototypePieces,
         model: Rc<crate::fspec::ProtoModel>,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         let manager_rc = self.manager.borrow().clone().ok_or_else(|| {
-            KunaError::lowlevel(
+            UnlaceError::lowlevel(
                 "getTypeCode(PrototypePieces): no address-space manager (set_proto_context \
                  not run)",
             )
@@ -6802,7 +6829,7 @@ impl TypeFactoryImpl {
 
     /// Create a named "code" data-type (C++ `TypeFactory::getTypeCode(nm)`,
     /// type.cc:4188-4198).
-    fn make_type_code_named(&self, nm: &str) -> KunaResult<Rc<Datatype>> {
+    fn make_type_code_named(&self, nm: &str) -> UnlaceResult<Rc<Datatype>> {
         if nm.is_empty() {
             return self.get_type_code_impl();
         }
@@ -6856,7 +6883,7 @@ impl TypeFactoryImpl {
 
     /// Assign a truncated pointer subcomponent if `res` has the alt-pointer size
     /// (C++ `TypePointer::calcTruncate`, type.cc:1195-1204).
-    fn calc_truncate(&self, res: Rc<Datatype>) -> KunaResult<Rc<Datatype>> {
+    fn calc_truncate(&self, res: Rc<Datatype>) -> UnlaceResult<Rc<Datatype>> {
         let alt = self.size_of_alt_pointer.get();
         let has_truncate = matches!(
             &res.kind,
@@ -6883,7 +6910,11 @@ impl TypeFactoryImpl {
     /// Replace an interned data-type `old` with `new_val` (recomputing alignment
     /// if unset), used by `calcTruncate` where the C++ mutates the interned object
     /// in place.  Returns the re-interned `Rc`.
-    fn reintern_replace(&self, old: &Rc<Datatype>, new_val: Datatype) -> KunaResult<Rc<Datatype>> {
+    fn reintern_replace(
+        &self,
+        old: &Rc<Datatype>,
+        new_val: Datatype,
+    ) -> UnlaceResult<Rc<Datatype>> {
         let new_rc = Rc::new(new_val);
         let mut store = self.store.borrow_mut();
         store.tree.remove(&TreeKey(Rc::clone(old)));
@@ -6905,7 +6936,7 @@ impl TypeFactoryImpl {
         s: int4,
         pt: Rc<Datatype>,
         ws: uint4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         let mut pt = pt;
         if pt.has_stripped() {
             if let Some(st) = pt.get_stripped() {
@@ -6924,7 +6955,7 @@ impl TypeFactoryImpl {
         self.calc_truncate(res)
     }
 
-    /// (kuna `cfstrings`) The preferred named pointer to `pt`, if one was set.
+    /// (unlace `cfstrings`) The preferred named pointer to `pt`, if one was set.
     fn named_pointer(&self, s: int4, pt: &Rc<Datatype>, ws: uint4) -> Option<Rc<Datatype>> {
         let map = self.named_pointers.borrow();
         if map.is_empty() {
@@ -6943,7 +6974,7 @@ impl TypeFactoryImpl {
         s: int4,
         pt: Rc<Datatype>,
         ws: uint4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         let mut pt = pt;
         if pt.has_stripped() {
             if let Some(st) = pt.get_stripped() {
@@ -6964,7 +6995,7 @@ impl TypeFactoryImpl {
         pt: Rc<Datatype>,
         ws: uint4,
         n: &str,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         let mut pt = pt;
         if pt.has_stripped() {
             if let Some(st) = pt.get_stripped() {
@@ -6980,10 +7011,14 @@ impl TypeFactoryImpl {
     }
 
     /// Build a resized pointer (C++ `resizePointer`, type.cc:4545-4553).
-    fn resize_pointer_impl(&self, ptr: &Rc<Datatype>, new_size: int4) -> KunaResult<Rc<Datatype>> {
+    fn resize_pointer_impl(
+        &self,
+        ptr: &Rc<Datatype>,
+        new_size: int4,
+    ) -> UnlaceResult<Rc<Datatype>> {
         let mut pt = ptr
             .get_ptr_to()
-            .ok_or_else(|| KunaError::lowlevel("resizePointer: argument is not a pointer"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("resizePointer: argument is not a pointer"))?;
         if pt.has_stripped() {
             if let Some(st) = pt.get_stripped() {
                 pt = st;
@@ -7011,7 +7046,7 @@ impl TypeFactoryImpl {
     }
 
     /// Construct an array data-type (C++ `getTypeArray`, type.cc:4376-4383).
-    fn get_type_array_impl(&self, as_: int4, ao: Rc<Datatype>) -> KunaResult<Rc<Datatype>> {
+    fn get_type_array_impl(&self, as_: int4, ao: Rc<Datatype>) -> UnlaceResult<Rc<Datatype>> {
         let mut ao = ao;
         if ao.has_stripped() {
             if let Some(st) = ao.get_stripped() {
@@ -7023,7 +7058,7 @@ impl TypeFactoryImpl {
 
     /// Create an (empty) incomplete structure (C++ `getTypeStruct`,
     /// type.cc:4388-4396).
-    fn get_type_struct_impl(&self, n: &str, declared: bool) -> KunaResult<Rc<Datatype>> {
+    fn get_type_struct_impl(&self, n: &str, declared: bool) -> UnlaceResult<Rc<Datatype>> {
         // TypeStruct(): incomplete, no fields.
         let mut tmp = Datatype::new_with_align(0, -1, type_metatype::TYPE_STRUCT);
         tmp.flags |= flags::type_incomplete;
@@ -7045,7 +7080,7 @@ impl TypeFactoryImpl {
         contain: Rc<Datatype>,
         off: int4,
         sz: int4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         let strip = self.get_base_impl(sz, type_metatype::TYPE_UNKNOWN)?;
         // TypePartialStruct(contain,off,sz,strip) (type.cc:2759-2780).
         // If the container is itself a partial struct, unwrap to the real parent
@@ -7080,7 +7115,7 @@ impl TypeFactoryImpl {
 
     /// Create an (empty) incomplete union (C++ `getTypeUnion`,
     /// type.cc:4414-4422).
-    fn get_type_union_impl(&self, n: &str, declared: bool) -> KunaResult<Rc<Datatype>> {
+    fn get_type_union_impl(&self, n: &str, declared: bool) -> UnlaceResult<Rc<Datatype>> {
         let mut tmp = Datatype::new_with_align(0, -1, type_metatype::TYPE_UNION);
         // C++ `TypeUnion()` ctor (type.hh:625): flags |= (type_incomplete |
         // needs_resolution).  Every union "needs resolution" — its accessed field
@@ -7100,7 +7135,7 @@ impl TypeFactoryImpl {
         contain: Rc<Datatype>,
         off: int4,
         sz: int4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         let strip = self.get_base_impl(sz, type_metatype::TYPE_UNKNOWN)?;
         let mut tpu = Datatype::new_with_align(sz, -1, type_metatype::TYPE_PARTIALUNION);
         tpu.flags |= contain.inherit_for_partial() | flags::needs_resolution;
@@ -7113,7 +7148,7 @@ impl TypeFactoryImpl {
     }
 
     /// Create an (empty) enumeration (C++ `getTypeEnum`, type.cc:4441-4447).
-    fn get_type_enum_impl(&self, n: &str) -> KunaResult<Rc<Datatype>> {
+    fn get_type_enum_impl(&self, n: &str) -> UnlaceResult<Rc<Datatype>> {
         self.get_type_enum_sized_impl(n, self.enumsize.get(), self.enumtype.get())
     }
 
@@ -7125,7 +7160,7 @@ impl TypeFactoryImpl {
         n: &str,
         s: int4,
         m: type_metatype,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         // TypeEnum(enumsize,enumtype,n): TypeBase(s,m,nm) -> submeta = base2sub(m),
         // then flags|=enumtype and metatype = INT/UINT.
         let mut tmp = Datatype::new(s, m); // submeta = base2sub(ENUM_INT/UINT)
@@ -7151,7 +7186,7 @@ impl TypeFactoryImpl {
         contain: Rc<Datatype>,
         off: int4,
         sz: int4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         let strip = self.get_base_impl(sz, type_metatype::TYPE_UNKNOWN)?;
         // C++ `TypePartialEnum(par,off,sz,strip)` (type.cc:2683) chains through
         // `TypeEnum(sz,TYPE_PARTIALENUM)` (type.hh:548): the `TypeBase(s,m)` base
@@ -7182,7 +7217,7 @@ impl TypeFactoryImpl {
         &self,
         id: Rc<AddrSpace>,
         addr: &Address,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         // TypeSpacebase(id,addr,glb): Datatype(0,1,TYPE_SPACEBASE).
         let mut tsb = Datatype::new_with_align(0, 1, type_metatype::TYPE_SPACEBASE);
         tsb.kind = DatatypeKind::Spacebase {
@@ -7199,14 +7234,14 @@ impl TypeFactoryImpl {
         parent_ptr: Rc<Datatype>,
         ptr_to: Rc<Datatype>,
         off: int4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         let size = parent_ptr.get_size();
-        let ws = parent_ptr
-            .get_word_size()
-            .ok_or_else(|| KunaError::lowlevel("getTypePointerRel: parentPtr is not a pointer"))?;
-        let parent = parent_ptr
-            .get_ptr_to()
-            .ok_or_else(|| KunaError::lowlevel("getTypePointerRel: parentPtr is not a pointer"))?;
+        let ws = parent_ptr.get_word_size().ok_or_else(|| {
+            UnlaceError::lowlevel("getTypePointerRel: parentPtr is not a pointer")
+        })?;
+        let parent = parent_ptr.get_ptr_to().ok_or_else(|| {
+            UnlaceError::lowlevel("getTypePointerRel: parentPtr is not a pointer")
+        })?;
         let mut tp = self.build_pointer_rel(size, ptr_to, ws, parent, off);
         // markEphemeral(typegrp): stripped = getTypePointer(size,ptrto,wordsize),
         // flags|=has_stripped, submeta=SUB_PTRREL_UNK if ptrto is TYPE_UNKNOWN.
@@ -7225,7 +7260,7 @@ impl TypeFactoryImpl {
         ws: int4,
         off: int4,
         nm: &str,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         let mut tp = self.build_pointer_rel(sz, ptr_to, ws as uint4, parent, off);
         tp.name = nm.to_string();
         tp.display_name = nm.to_string();
@@ -7271,12 +7306,16 @@ impl TypeFactoryImpl {
     /// Mark a relative pointer as ephemeral (C++ `TypePointerRel::markEphemeral`,
     /// type.hh:1025-1034): cache a stripped plain pointer and lower the submeta
     /// when it points at an unknown type.
-    fn mark_ephemeral(&self, tp: &mut Datatype) -> KunaResult<()> {
+    fn mark_ephemeral(&self, tp: &mut Datatype) -> UnlaceResult<()> {
         let (ptrto, ws) = match &tp.kind {
             DatatypeKind::PointerRel {
                 ptrto, wordsize, ..
             } => (Rc::clone(ptrto), *wordsize),
-            _ => return Err(KunaError::lowlevel("markEphemeral: not a relative pointer")),
+            _ => {
+                return Err(UnlaceError::lowlevel(
+                    "markEphemeral: not a relative pointer",
+                ));
+            }
         };
         let stripped = self.get_type_pointer_impl(tp.size, Rc::clone(&ptrto), ws)?;
         if let DatatypeKind::PointerRel { stripped: slot, .. } = &mut tp.kind {
@@ -7296,7 +7335,7 @@ impl TypeFactoryImpl {
         ptr_to: Rc<Datatype>,
         spc: Rc<AddrSpace>,
         nm: &str,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         // TypePointer(ptrTo,spc): ws = spc->getWordSize(); spaceid = spc.
         let ws = spc.get_word_size();
         let mut tp = self.build_pointer(self.size_of_pointer.get(), ptr_to, ws);
@@ -7314,7 +7353,7 @@ impl TypeFactoryImpl {
 
     /// Build a resized integer based on the given integer (C++ `resizeInteger`,
     /// type.cc:4558-4568).
-    fn resize_integer_impl(&self, ct: Rc<Datatype>, new_size: int4) -> KunaResult<Rc<Datatype>> {
+    fn resize_integer_impl(&self, ct: Rc<Datatype>, new_size: int4) -> UnlaceResult<Rc<Datatype>> {
         if new_size == ct.get_size() {
             return Ok(ct);
         }
@@ -7337,7 +7376,7 @@ impl TypeFactoryImpl {
         ct: Rc<Datatype>,
         offset: int4,
         size: int4,
-    ) -> KunaResult<Option<Rc<Datatype>>> {
+    ) -> UnlaceResult<Option<Rc<Datatype>>> {
         let mut last_type: Option<Rc<Datatype>> = None;
         let mut last_off: int8 = 0;
         let mut cur_off: int8 = offset as int8;
@@ -7380,7 +7419,7 @@ impl TypeFactoryImpl {
                 type_metatype::TYPE_PARTIALUNION => {
                     // Truncate to a smaller partial union: re-base into the parent.
                     let parent = last_type.get_partial_base().ok_or_else(|| {
-                        KunaError::lowlevel("getExactPiece: partial union missing parent")
+                        UnlaceError::lowlevel("getExactPiece: partial union missing parent")
                     })?;
                     let part_off = last_type.get_partial_offset().unwrap_or(0);
                     return Ok(Some(self.get_type_partial_union_impl(
@@ -7419,7 +7458,7 @@ impl TypeFactoryImpl {
         &self,
         ct: &Rc<Datatype>,
         off: int8,
-    ) -> KunaResult<(Option<Rc<Datatype>>, int8)> {
+    ) -> UnlaceResult<(Option<Rc<Datatype>>, int8)> {
         if let DatatypeKind::Code { .. } = &ct.kind {
             // factory != null -> getBase(1, TYPE_CODE), newoff = 0.
             let code = self.get_base_impl(1, type_metatype::TYPE_CODE)?;
@@ -7429,10 +7468,10 @@ impl TypeFactoryImpl {
     }
 
     /// Convert a data-type to concrete form (C++ `concretize`, type.cc:4663-4673).
-    fn concretize_impl(&self, ct: Rc<Datatype>) -> KunaResult<Rc<Datatype>> {
+    fn concretize_impl(&self, ct: Rc<Datatype>) -> UnlaceResult<Rc<Datatype>> {
         if ct.get_metatype() == type_metatype::TYPE_CODE {
             if ct.get_size() != 1 {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "Primitive code data-type that is not size 1",
                 ));
             }
@@ -7463,7 +7502,7 @@ impl TypeFactoryImpl {
         ptr: &Rc<Datatype>,
         off: int8,
         allow_array_wrap: bool,
-    ) -> KunaResult<(Option<Rc<Datatype>>, int8, Option<Rc<Datatype>>, int8)> {
+    ) -> UnlaceResult<(Option<Rc<Datatype>>, int8, Option<Rc<Datatype>>, int8)> {
         match &ptr.kind {
             DatatypeKind::Pointer {
                 ptrto, wordsize, ..
@@ -7524,7 +7563,7 @@ impl TypeFactoryImpl {
         wordsize: uint4,
         mut off: int8,
         allow_array_wrap: bool,
-    ) -> KunaResult<(Option<Rc<Datatype>>, int8, Option<Rc<Datatype>>, int8)> {
+    ) -> UnlaceResult<(Option<Rc<Datatype>>, int8, Option<Rc<Datatype>>, int8)> {
         let ptrto_size = ptrto.get_align_size() as int8;
         if off < 0 || off >= ptrto_size {
             // Check if we are wrapping.
@@ -7609,37 +7648,37 @@ impl TypeFactory for TypeFactoryImpl {
     fn get_size_of_long_double(&self) -> int4 {
         self.size_of_long_double.get()
     }
-    fn get_alignment(&self, size: uint4) -> KunaResult<int4> {
+    fn get_alignment(&self, size: uint4) -> UnlaceResult<int4> {
         self.alignment(size)
     }
-    fn get_primitive_align_size(&self, size: uint4) -> KunaResult<int4> {
+    fn get_primitive_align_size(&self, size: uint4) -> UnlaceResult<int4> {
         self.primitive_align_size(size)
     }
 
     #[inline]
-    fn get_type_void(&self) -> KunaResult<Rc<Datatype>> {
+    fn get_type_void(&self) -> UnlaceResult<Rc<Datatype>> {
         self.get_type_void_impl()
     }
-    fn get_base_no_char(&self, s: int4, m: type_metatype) -> KunaResult<Rc<Datatype>> {
+    fn get_base_no_char(&self, s: int4, m: type_metatype) -> UnlaceResult<Rc<Datatype>> {
         self.get_base_no_char_impl(s, m)
     }
     #[inline]
-    fn get_base(&self, s: int4, m: type_metatype) -> KunaResult<Rc<Datatype>> {
+    fn get_base(&self, s: int4, m: type_metatype) -> UnlaceResult<Rc<Datatype>> {
         self.get_base_impl(s, m)
     }
-    fn get_base_named(&self, s: int4, m: type_metatype, n: &str) -> KunaResult<Rc<Datatype>> {
+    fn get_base_named(&self, s: int4, m: type_metatype, n: &str) -> UnlaceResult<Rc<Datatype>> {
         self.get_base_named_impl(s, m, n)
     }
     #[inline]
-    fn get_type_char(&self, s: int4) -> KunaResult<Rc<Datatype>> {
+    fn get_type_char(&self, s: int4) -> UnlaceResult<Rc<Datatype>> {
         self.get_type_char_sized(s)
     }
-    fn get_type_char_signed(&self, name: &str, m: type_metatype) -> KunaResult<Rc<Datatype>> {
+    fn get_type_char_signed(&self, name: &str, m: type_metatype) -> UnlaceResult<Rc<Datatype>> {
         let submeta = match m {
             type_metatype::TYPE_INT => sub_metatype::SUB_INT_CHAR,
             type_metatype::TYPE_UINT => sub_metatype::SUB_UINT_CHAR,
             _ => {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "a character type is signed or unsigned",
                 ));
             }
@@ -7652,14 +7691,14 @@ impl TypeFactory for TypeFactoryImpl {
         tc.id = Datatype::hash_name(name);
         self.find_add(tc)
     }
-    fn get_type_code(&self) -> KunaResult<Rc<Datatype>> {
+    fn get_type_code(&self) -> UnlaceResult<Rc<Datatype>> {
         self.get_type_code_impl()
     }
 
     fn get_type_code_proto(
         &self,
         proto: &crate::fspec::PrototypePieces,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         self.make_type_code_proto(proto)
     }
 
@@ -7667,7 +7706,7 @@ impl TypeFactory for TypeFactoryImpl {
         &self,
         proto: &crate::fspec::PrototypePieces,
         model: &str,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         let named = self.proto_models.borrow().get(model).cloned();
         match named {
             Some(model) => self.get_type_code_proto_model(proto, model),
@@ -7680,10 +7719,10 @@ impl TypeFactory for TypeFactoryImpl {
         s: int4,
         pt: Rc<Datatype>,
         ws: uint4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         self.get_type_pointer_strip_array_impl(s, pt, ws)
     }
-    fn get_qualified_type(&self, base: Rc<Datatype>, qualifiers: u8) -> KunaResult<Rc<Datatype>> {
+    fn get_qualified_type(&self, base: Rc<Datatype>, qualifiers: u8) -> UnlaceResult<Rc<Datatype>> {
         if qualifiers == 0 {
             return Ok(base);
         }
@@ -7698,7 +7737,7 @@ impl TypeFactory for TypeFactoryImpl {
     }
 
     #[inline]
-    fn get_type_pointer(&self, s: int4, pt: Rc<Datatype>, ws: uint4) -> KunaResult<Rc<Datatype>> {
+    fn get_type_pointer(&self, s: int4, pt: Rc<Datatype>, ws: uint4) -> UnlaceResult<Rc<Datatype>> {
         self.get_type_pointer_impl(s, pt, ws)
     }
     fn get_type_pointer_named(
@@ -7707,10 +7746,10 @@ impl TypeFactory for TypeFactoryImpl {
         pt: Rc<Datatype>,
         ws: uint4,
         n: &str,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         self.get_type_pointer_named_impl(s, pt, ws, n)
     }
-    fn resize_pointer(&self, ptr: Rc<Datatype>, new_size: int4) -> KunaResult<Rc<Datatype>> {
+    fn resize_pointer(&self, ptr: Rc<Datatype>, new_size: int4) -> UnlaceResult<Rc<Datatype>> {
         self.resize_pointer_impl(&ptr, new_size)
     }
     fn get_type_pointer_rel(
@@ -7718,7 +7757,7 @@ impl TypeFactory for TypeFactoryImpl {
         parent_ptr: Rc<Datatype>,
         ptr_to: Rc<Datatype>,
         off: int4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         self.get_type_pointer_rel_impl(parent_ptr, ptr_to, off)
     }
     fn get_type_pointer_rel_full(
@@ -7729,7 +7768,7 @@ impl TypeFactory for TypeFactoryImpl {
         ws: int4,
         off: int4,
         nm: &str,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         self.get_type_pointer_rel_full_impl(sz, parent, ptr_to, ws, off, nm)
     }
     fn get_type_pointer_with_space(
@@ -7737,16 +7776,16 @@ impl TypeFactory for TypeFactoryImpl {
         ptr_to: Rc<Datatype>,
         spc: Rc<AddrSpace>,
         nm: &str,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         self.get_type_pointer_with_space_impl(ptr_to, spc, nm)
     }
 
     #[inline]
-    fn get_type_array(&self, as_: int4, ao: Rc<Datatype>) -> KunaResult<Rc<Datatype>> {
+    fn get_type_array(&self, as_: int4, ao: Rc<Datatype>) -> UnlaceResult<Rc<Datatype>> {
         self.get_type_array_impl(as_, ao)
     }
     #[inline]
-    fn get_type_struct(&self, n: &str) -> KunaResult<Rc<Datatype>> {
+    fn get_type_struct(&self, n: &str) -> UnlaceResult<Rc<Datatype>> {
         self.get_type_struct_impl(n, false)
     }
     fn get_type_partial_struct(
@@ -7754,13 +7793,13 @@ impl TypeFactory for TypeFactoryImpl {
         contain: Rc<Datatype>,
         off: int4,
         sz: int4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         self.get_type_partial_struct_impl(contain, off, sz)
     }
-    fn get_type_union(&self, n: &str) -> KunaResult<Rc<Datatype>> {
+    fn get_type_union(&self, n: &str) -> UnlaceResult<Rc<Datatype>> {
         self.get_type_union_impl(n, false)
     }
-    fn kuna_declare_record(&self, n: &str, is_union: bool) -> KunaResult<Rc<Datatype>> {
+    fn unlace_declare_record(&self, n: &str, is_union: bool) -> UnlaceResult<Rc<Datatype>> {
         if is_union {
             self.get_type_union_impl(n, true)
         } else {
@@ -7772,7 +7811,7 @@ impl TypeFactory for TypeFactoryImpl {
         contain: Rc<Datatype>,
         off: int4,
         sz: int4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         self.get_type_partial_union_impl(contain, off, sz)
     }
     fn get_type_partial_enum(
@@ -7780,20 +7819,25 @@ impl TypeFactory for TypeFactoryImpl {
         contain: Rc<Datatype>,
         off: int4,
         sz: int4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         self.get_type_partial_enum_impl(contain, off, sz)
     }
-    fn get_type_enum(&self, n: &str) -> KunaResult<Rc<Datatype>> {
+    fn get_type_enum(&self, n: &str) -> UnlaceResult<Rc<Datatype>> {
         self.get_type_enum_impl(n)
     }
-    fn get_type_enum_sized(&self, n: &str, s: int4, m: type_metatype) -> KunaResult<Rc<Datatype>> {
+    fn get_type_enum_sized(
+        &self,
+        n: &str,
+        s: int4,
+        m: type_metatype,
+    ) -> UnlaceResult<Rc<Datatype>> {
         self.get_type_enum_sized_impl(n, s, m)
     }
-    fn get_type_spacebase(&self, id: Rc<AddrSpace>, addr: &Address) -> KunaResult<Rc<Datatype>> {
+    fn get_type_spacebase(&self, id: Rc<AddrSpace>, addr: &Address) -> UnlaceResult<Rc<Datatype>> {
         self.get_type_spacebase_impl(id, addr)
     }
 
-    fn resize_integer(&self, ct: Rc<Datatype>, new_size: int4) -> KunaResult<Rc<Datatype>> {
+    fn resize_integer(&self, ct: Rc<Datatype>, new_size: int4) -> UnlaceResult<Rc<Datatype>> {
         self.resize_integer_impl(ct, new_size)
     }
     fn get_exact_piece(
@@ -7801,25 +7845,25 @@ impl TypeFactory for TypeFactoryImpl {
         ct: Rc<Datatype>,
         offset: int4,
         size: int4,
-    ) -> KunaResult<Option<Rc<Datatype>>> {
+    ) -> UnlaceResult<Option<Rc<Datatype>>> {
         self.get_exact_piece_impl(ct, offset, size)
     }
 
     #[inline]
-    fn find_by_name(&self, n: &str) -> KunaResult<Option<Rc<Datatype>>> {
+    fn find_by_name(&self, n: &str) -> UnlaceResult<Option<Rc<Datatype>>> {
         Ok(self.find_by_name_impl(n))
     }
-    fn concretize(&self, ct: Rc<Datatype>) -> KunaResult<Rc<Datatype>> {
+    fn concretize(&self, ct: Rc<Datatype>) -> UnlaceResult<Rc<Datatype>> {
         self.concretize_impl(ct)
     }
 
     fn is_big_endian(&self) -> bool {
         self.is_big_endian_impl()
     }
-    fn set_name(&self, ct: &Rc<Datatype>, n: &str) -> KunaResult<Rc<Datatype>> {
+    fn set_name(&self, ct: &Rc<Datatype>, n: &str) -> UnlaceResult<Rc<Datatype>> {
         self.set_name_impl(ct, n)
     }
-    fn set_display_format(&self, ct: &Rc<Datatype>, format: uint4) -> KunaResult<Rc<Datatype>> {
+    fn set_display_format(&self, ct: &Rc<Datatype>, format: uint4) -> UnlaceResult<Rc<Datatype>> {
         self.set_display_format_impl(ct, format)
     }
     fn assign_raw_fields_struct(
@@ -7827,14 +7871,14 @@ impl TypeFactory for TypeFactoryImpl {
         ct: &Rc<Datatype>,
         fd: Vec<TypeField>,
         bit: Vec<TypeBitField>,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         self.assign_raw_fields_struct_impl(ct, fd, bit)
     }
     fn assign_raw_fields_union(
         &self,
         ct: &Rc<Datatype>,
         fd: Vec<TypeField>,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         self.assign_raw_fields_union_impl(ct, fd)
     }
     fn set_fields_struct_raw(
@@ -7845,7 +7889,7 @@ impl TypeFactory for TypeFactoryImpl {
         size: int4,
         align: int4,
         extra_flags: uint4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         self.set_fields_struct(ct, fd, bit, size, align, extra_flags)
     }
     fn set_fields_union_raw(
@@ -7854,14 +7898,14 @@ impl TypeFactory for TypeFactoryImpl {
         fd: Vec<TypeField>,
         size: int4,
         align: int4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         self.set_fields_union(ct, fd, size, align, 0)
     }
     fn set_enum_values(
         &self,
         ct: &Rc<Datatype>,
         nmap: std::collections::BTreeMap<u64, String>,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         self.set_enum_values_impl(ct, nmap)
     }
     fn get_typedef(
@@ -7870,50 +7914,50 @@ impl TypeFactory for TypeFactoryImpl {
         name: &str,
         id: uint8,
         format: uint4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         self.get_typedef_impl(ct, name, id, format)
     }
-    fn destroy_type(&self, ct: &Rc<Datatype>) -> KunaResult<()> {
+    fn destroy_type(&self, ct: &Rc<Datatype>) -> UnlaceResult<()> {
         self.destroy_type_impl(ct)
     }
-    fn kuna_record_variant_layout(&self, layout: crate::dwarfvariants::VariantLayout) {
+    fn unlace_record_variant_layout(&self, layout: crate::dwarfvariants::VariantLayout) {
         self.variant_layouts
             .borrow_mut()
             .insert(layout.type_name.clone(), Rc::new(layout));
     }
-    fn kuna_variant_layout(&self, name: &str) -> Option<Rc<crate::dwarfvariants::VariantLayout>> {
+    fn unlace_variant_layout(&self, name: &str) -> Option<Rc<crate::dwarfvariants::VariantLayout>> {
         self.variant_layouts.borrow().get(name).map(Rc::clone)
     }
-    fn kuna_variant_layouts(&self) -> Vec<Rc<crate::dwarfvariants::VariantLayout>> {
+    fn unlace_variant_layouts(&self) -> Vec<Rc<crate::dwarfvariants::VariantLayout>> {
         self.variant_layouts
             .borrow()
             .values()
             .map(Rc::clone)
             .collect()
     }
-    fn kuna_register_lang_facet(
+    fn unlace_register_lang_facet(
         &self,
         name: &str,
         facet: crate::langfacet::LangFacet,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         self.lang_facets
             .borrow_mut()
             .insert(name.to_string(), facet);
         Ok(())
     }
-    fn kuna_mark_ambiguous_go_type(&self, name: &str) {
+    fn unlace_mark_ambiguous_go_type(&self, name: &str) {
         self.go_ambiguous_types
             .borrow_mut()
             .insert(name.to_string());
     }
-    fn kuna_is_ambiguous_go_type(&self, name: &str) -> bool {
+    fn unlace_is_ambiguous_go_type(&self, name: &str) -> bool {
         self.go_ambiguous_types.borrow().contains(name)
     }
     #[inline]
-    fn kuna_lang_facet(&self, name: &str) -> Option<crate::langfacet::LangFacet> {
+    fn unlace_lang_facet(&self, name: &str) -> Option<crate::langfacet::LangFacet> {
         self.lang_facets.borrow().get(name).cloned()
     }
-    fn kuna_prefer_named_pointer(&self, ptr: &Rc<Datatype>) {
+    fn unlace_prefer_named_pointer(&self, ptr: &Rc<Datatype>) {
         if let Some(to) = ptr.get_ptr_to() {
             self.named_pointers
                 .borrow_mut()
@@ -9894,7 +9938,7 @@ mod tests {
         for declared in [false, true] {
             let name = if declared { "Declared" } else { "Imported" };
             let stub = if declared {
-                f.kuna_declare_record(name, false).unwrap()
+                f.unlace_declare_record(name, false).unwrap()
             } else {
                 f.get_type_struct(name).unwrap()
             };

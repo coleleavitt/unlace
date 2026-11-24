@@ -69,7 +69,7 @@ fn declared_pointer_writes_survive_a_restored_frame_base() {
     );
     let project = root.join("project");
     let specs = common::repo_root().join("specs");
-    let (_, error, status) = common::run_kuna(&[
+    let (_, error, status) = common::run_unlace(&[
         "decompile-project",
         image.to_str().unwrap(),
         "--functions",
@@ -148,7 +148,7 @@ fn a_normalized_declared_pointer_refutes_a_stale_unaliased_mark() {
     use std::rc::Rc;
     use unlace_base::address::Address;
     use unlace_base::space::spacetype;
-    use unlace_console::console::register_kuna_commands;
+    use unlace_console::console::register_unlace_commands;
     use unlace_console::ifacedecomp::{
         DECOMPILE_MODULE, IfaceDecompData, execute, register_console_commands,
         register_decomp_commands,
@@ -201,7 +201,7 @@ fn a_normalized_declared_pointer_refutes_a_stale_unaliased_mark() {
     );
     let mut status = IfaceTerm::into_status("", script.as_bytes());
     register_decomp_commands(&mut status);
-    register_kuna_commands(&mut status);
+    register_unlace_commands(&mut status);
     register_console_commands(&mut status);
     let data = status
         .get_data_mut(DECOMPILE_MODULE)

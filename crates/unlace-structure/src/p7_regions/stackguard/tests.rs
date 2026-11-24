@@ -1,4 +1,4 @@
-// Tests for the `kuna_stackguard` port (included into `mod tests` in
+// Tests for the `unlace_stackguard` port (included into `mod tests` in
 // stackguard.rs).
 //
 // Covered:

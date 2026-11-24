@@ -1,4 +1,4 @@
-//! (kuna `structsynth nest`) A pointer field whose value is loaded and then
+//! (unlace `structsynth nest`) A pointer field whose value is loaded and then
 //! dereferenced at constant offsets is typed as a pointer to a record.
 //!
 //! # The gap

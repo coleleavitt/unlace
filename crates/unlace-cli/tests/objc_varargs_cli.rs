@@ -20,7 +20,7 @@ fn runtime_varargs_follow_the_fixed_arguments() {
             "cfstrings",
             "on",
         ];
-        let (out, stderr, rc) = common::run_kuna(&args);
+        let (out, stderr, rc) = common::run_unlace(&args);
         assert_eq!(rc, 0, "{stderr}");
         out
     };

@@ -1,0 +1,76 @@
+# bitscan: abs and the one-instruction bit-scan loops (option bitidioms).
+#
+# Source (clang -O2, x86-64):
+#   int iabs(int x) { return x < 0 ? -x : x; }     neg eax ; cmovs eax,edi
+#   int ctz(unsigned x) { return __builtin_ctz(x); }  tzcnt eax,edi
+#   int clz(unsigned x) { return __builtin_clz(x); }  bsr eax,edi ; xor eax,0x1f
+#
+# SLEIGH lifts cmovs as a branch around a copy and tzcnt/bsr as loops inside
+# the one instruction. Stage: P3 simplification (RuleIntAbs, the MULTIEQUAL
+# of x and -x chosen by a sign test) and the returnsplit-group action
+# ActionBitScanLoop, which proves the loop by running it on every single-bit
+# source and rewrites it to ctz(x) or LZCOUNT(x) ^ 0x1f.
+#
+# Pass 1 (default) prints abs(a0), ctz(a0) and LZCOUNT; pass 2 (bitidioms off)
+# prints the cmov diamond and the loops.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x401000', name = 'iabs' },
+    { space = 'ram', offset = '0x401010', name = 'ctz' },
+    { space = 'ram', offset = '0x401020', name = 'clz' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401000'
+readonly = true
+hex = 'f30f1efa89f8f7d80f48c7c300000000f30f1efaf30fbcc7c300000000000000f30f1efa0fbdc783f01fc30000000000'
+
+[script]
+commands = [
+    'lo fu iabs',
+    'decompile',
+    'print C',
+    'lo fu ctz',
+    'decompile',
+    'print C',
+    'lo fu clz',
+    'decompile',
+    'print C',
+    'option bitidioms off',
+    'lo fu iabs',
+    'decompile',
+    'print C',
+    'lo fu ctz',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'KUNA-BITSCAN #1: cmov abs folds to abs (default)'
+count = 1
+literal = 'return abs('
+
+[[match]]
+name = 'KUNA-BITSCAN #2: the tzcnt loop folds to ctz (default)'
+count = 1
+literal = 'return ctz('
+
+[[match]]
+name = 'KUNA-BITSCAN #3: the bsr loop folds to LZCOUNT (default)'
+count = 1
+literal = 'LZCOUNT('
+
+[[match]]
+name = 'KUNA-BITSCAN #4: bitidioms off keeps the tzcnt loop'
+count = 1
+literal = 'for ('
+
+[[match]]
+name = 'KUNA-BITSCAN #5: bitidioms off keeps the negation diamond'
+min = 1
+max = 2
+literal = '= -'

@@ -1,4 +1,4 @@
-//! (kuna `globalref`) A constant address used as a pointer prints as the global
+//! (unlace `globalref`) A constant address used as a pointer prints as the global
 //! it names.
 //!
 //! `PrintC::pushConstant`'s pointer arm renders a pointer-typed constant as a
@@ -10,7 +10,7 @@
 //! the more parameters are typed as pointers, the more constant arguments are
 //! typed as pointers too.
 //!
-//! When on, such a constant prints as `&dat_<addr>` -- the name kuna already
+//! When on, such a constant prints as `&dat_<addr>` -- the name unlace already
 //! gives an unnamed global it reads directly -- and the function records the
 //! global as an object of the pointed-to type, which the `decompile-project`
 //! header declares. The expression has exactly the constant's pointer type, so
@@ -33,7 +33,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::types::uintb;
 use unlace_num::opcodes::OpCode;
 
@@ -54,7 +54,7 @@ impl OptionGlobalRef {
 
     /// Parse + validate the `on`/`off` value; the caller performs the printer
     /// write ([`crate::printc::PrintCOptions::set_global_ref`]).
-    pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((
@@ -72,7 +72,7 @@ pub struct Minted {
     /// True when `decl_type` is the unknown byte: the function only ever used
     /// the address through `void *` and never reads the storage there directly.
     pub unknown: bool,
-    /// (kuna `elemptr`) True when the function indexes the address with a value
+    /// (unlace `elemptr`) True when the function indexes the address with a value
     /// it computes: the global is an array of `decl_type`, named without `&`
     /// (`dat_4020[v1]`), and declared `T dat_4020[]`.
     pub array: bool,
@@ -86,7 +86,7 @@ struct Direct {
     ty: Rc<Datatype>,
     /// No global Symbol covers it, so the body prints it as `dat_<start>`.
     unnamed: bool,
-    /// (kuna `elemptr`) The rule typed it an element pointer: the header
+    /// (unlace `elemptr`) The rule typed it an element pointer: the header
     /// declares it, since a subscript of it reads the declared element.
     elem: bool,
 }
@@ -103,7 +103,7 @@ enum Seen {
 }
 
 impl Seen {
-    /// `sized` (kuna `elemptr`): an unknown pointee wider than a byte is the
+    /// `sized` (unlace `elemptr`): an unknown pointee wider than a byte is the
     /// same object as an unsigned one of its size, as [`same_object`] reads a
     /// direct access -- the undefined words a copy reads where a callee's
     /// parameter reads the elements `elemptr` gave it -- and the typed one names it.
@@ -145,7 +145,7 @@ pub struct Plan {
     direct: Vec<Direct>,
     /// The pointed-to types each in-range constant address is read at.
     pointees: BTreeMap<u64, Seen>,
-    /// (kuna `elemptr`) The addresses this function indexes with a computed
+    /// (unlace `elemptr`) The addresses this function indexes with a computed
     /// value: a constant that is the base of a `PTRADD` whose index is not.
     indexed: HashSet<u64>,
     /// Every global this function's C names, by address.
@@ -166,8 +166,8 @@ pub fn plan(fd: &Funcdata, arch: &Architecture, on: bool, is_c: bool) -> Plan {
     let mut direct = Vec::new();
     let mut pointees: BTreeMap<u64, Seen> = BTreeMap::new();
     let mut indexed = HashSet::new();
-    let elem_held = if arch.kuna_options.get::<crate::elemptr::ElemPtr>().0 {
-        fd.kuna_elemptr_verdicts()
+    let elem_held = if arch.unlace_options.get::<crate::elemptr::ElemPtr>().0 {
+        fd.unlace_elemptr_verdicts()
     } else {
         BTreeMap::new()
     };
@@ -192,8 +192,8 @@ pub fn plan(fd: &Funcdata, arch: &Architecture, on: bool, is_c: bool) -> Plan {
                     continue;
                 }
                 let Some(to) = ct.get_ptr_to() else { continue };
-                if arch.kuna_options.get::<crate::elemptr::ElemPtr>().0
-                    && fd.kuna_elemptr_objects()
+                if arch.unlace_options.get::<crate::elemptr::ElemPtr>().0
+                    && fd.unlace_elemptr_objects()
                     && is_indexed_base(fd, op, vn)
                 {
                     indexed.insert(off);
@@ -204,7 +204,7 @@ pub fn plan(fd: &Funcdata, arch: &Architecture, on: bool, is_c: bool) -> Plan {
                     Seen::merge(
                         seen,
                         to,
-                        arch.kuna_options.get::<crate::elemptr::ElemPtr>().0,
+                        arch.unlace_options.get::<crate::elemptr::ElemPtr>().0,
                     ),
                 );
             }
@@ -216,11 +216,11 @@ pub fn plan(fd: &Funcdata, arch: &Architecture, on: bool, is_c: bool) -> Plan {
                     .get_arch()
                     .query_container_global(v.get_addr(), v.get_size(), &Address::new_invalid())
                     .is_none();
-            // (kuna `elemptr`) A global the rule typed, or whose fold names its
+            // (unlace `elemptr`) A global the rule typed, or whose fold names its
             // pointee and which nothing uses as a number, is used only as that
             // pointer: one of another type (its value before a call, which
             // nothing prints) is not a read of it at that type.
-            let elem = arch.kuna_options.get::<crate::elemptr::ElemPtr>().0
+            let elem = arch.unlace_options.get::<crate::elemptr::ElemPtr>().0
                 && matches!(
                     elem_held.get(&Obj::Held(v.get_offset())),
                     Some(GlobalVerdict::Typed { .. } | GlobalVerdict::Claimed { .. })
@@ -249,7 +249,7 @@ pub fn plan(fd: &Funcdata, arch: &Architecture, on: bool, is_c: bool) -> Plan {
     }
 }
 
-/// (kuna `elemptr`) Is `vn` the base of the `PTRADD` `op`, indexed by a value
+/// (unlace `elemptr`) Is `vn` the base of the `PTRADD` `op`, indexed by a value
 /// the program computes?
 fn is_indexed_base(fd: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
     fd.obank().get(op).is_some_and(|o| {
@@ -373,7 +373,7 @@ impl Plan {
             }
         };
         let size = decl_type.get_size().max(1) as u64;
-        // (kuna `elemptr`) An indexed address is an array only where the function
+        // (unlace `elemptr`) An indexed address is an array only where the function
         // does not also read or write its first element by name: that name would
         // be the array. It is then the scalar's address, `(&dat_5c000)[i]`.
         let array = self.indexed.contains(&off)
@@ -405,7 +405,7 @@ impl Plan {
         Ok(())
     }
 
-    /// (kuna `elemptr`) Is the global this function names at `addr` an array,
+    /// (unlace `elemptr`) Is the global this function names at `addr` an array,
     /// printed by its name alone?
     pub fn is_array(&self, addr: u64) -> bool {
         self.minted.get(&addr).is_some_and(|m| m.array)
@@ -422,7 +422,7 @@ impl Plan {
             .map(|d| (d.start, &d.ty, d.elem))
     }
 
-    /// (kuna `elemptr`) The type a project header declares the global at `off`
+    /// (unlace `elemptr`) The type a project header declares the global at `off`
     /// as, when no symbol names it and the rule typed it an element pointer:
     /// the one type this function reads and writes it at.
     pub fn declared_type(&self, off: u64) -> Option<Rc<Datatype>> {
@@ -539,7 +539,7 @@ fn void_reader_converts(fd: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
         OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_RETURN => slot >= 1,
         OpCode::CPUI_CALLOTHER => {
             fd.get_arch()
-                .kuna_options
+                .unlace_options
                 .get::<crate::repstring::RepString>()
                 .0
                 && crate::repstring::input_type(fd, op, slot).is_some()

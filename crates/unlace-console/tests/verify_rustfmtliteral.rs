@@ -31,7 +31,7 @@ fn decompile(
     .unwrap();
     assert_eq!(program.arch().rustc_stable_version, Some((1, 93, 1)));
     program.arch_mut().rustc_stable_version = version;
-    program.arch_mut().kuna_options.set(if enabled {
+    program.arch_mut().unlace_options.set(if enabled {
         RustFmtMode::On
     } else {
         RustFmtMode::Off

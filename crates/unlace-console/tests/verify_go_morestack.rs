@@ -9,8 +9,8 @@
 //! - `option gomorestack off`: the same function renders the guard — a
 //!   `runtime.morestack_noctxt` call survives into the C.
 //!
-//! The hermetic matcher logic is pinned by the `kuna_gomorestack` unit tests
-//! and `tests/stages/kuna-gomorestack.toml` (no `go` needed); this gate is the
+//! The hermetic matcher logic is pinned by the `unlace_gomorestack` unit tests
+//! and `tests/stages/unlace-gomorestack.toml` (no `go` needed); this gate is the
 //! detection-driven `auto` path over a genuine Go image. Built at runtime in
 //! an isolated temp dir (the `verify_go_pclntab` pattern), guarded on `go`
 //! being on PATH; an installed compiler must build the fixture successfully.
@@ -96,7 +96,7 @@ fn decompile_main(bin: &str, option: Option<&str>) -> String {
         .expect("bootstrap go fixture with built processor specs");
     if let Some(v) = option {
         prog.arch_mut()
-            .set_kuna_option("gomorestack", v)
+            .set_unlace_option("gomorestack", v)
             .expect("gomorestack option applies");
     }
     prog.commit_pending_analysis()

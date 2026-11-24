@@ -1,4 +1,4 @@
-//! Tests for `RuleOvLessSimplify` (kuna GH-7190): collapse
+//! Tests for `RuleOvLessSimplify` (unlace GH-7190): collapse
 //! `NE(SLESS(V+K,0), AND(sign, SLESS(-1,V+K)))` -> `INT_SLESS(V, -K)`, plus the
 //! gate-off / non-matching paths.
 
@@ -56,7 +56,7 @@ fn unk(size: int4) -> Rc<Datatype> {
 }
 
 fn no_replace()
--> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> unlace_base::error::KunaResult<()> {
+-> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> unlace_base::error::UnlaceResult<()> {
     |_: &mut VarnodeBank, _: VarnodeId, _: VarnodeId| Ok(())
 }
 
@@ -90,7 +90,7 @@ fn wire(fd: &mut Funcdata, vn: VarnodeId, op: OpId, slot: int4) {
 }
 
 /// Wire a (shared) constant input without recording a descend edge (so the rule
-/// can relink it; see kuna_booleanmask tests for the rationale — the C++
+/// can relink it; see unlace_booleanmask tests for the rationale — the C++
 /// constant-dup branch of opSetInput is a deferred funcdata_op seam).
 fn wire_const(fd: &mut Funcdata, vn: VarnodeId, op: OpId, slot: int4) {
     fd.obank_mut()

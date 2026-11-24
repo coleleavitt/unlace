@@ -1,4 +1,4 @@
-//! (kuna) `endptrbound` -- a pointer walk over a stack buffer ends at the buffer.
+//! (unlace) `endptrbound` -- a pointer walk over a stack buffer ends at the buffer.
 //!
 //! A loop that walks a stack buffer with a pointer usually stops on the address
 //! one past its last element:
@@ -70,7 +70,7 @@ use std::collections::HashSet;
 use std::rc::Rc;
 
 use unlace_base::address::{Address, calc_mask, sign_extend};
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::marshal::ElementId;
 use unlace_base::space::AddrSpace;
 use unlace_base::types::{int4, uintb};
@@ -82,11 +82,11 @@ use crate::funcdata::Funcdata;
 use crate::options::on_or_off;
 use crate::varmap::{COPY_CONSTANT, MapState, RangeHint, RangeType};
 
-/// Marshaling element `<endptrbound>` (kuna 4000+ range; 4168 was the previous
+/// Marshaling element `<endptrbound>` (unlace 4000+ range; 4168 was the previous
 /// high-water mark).
 pub const ELEM_ENDPTRBOUND: ElementId = ElementId::new("endptrbound", 4169);
 
-/// (kuna) Bind a pointer walk's end address to the walked buffer: `endptrbound on|off`.
+/// (unlace) Bind a pointer walk's end address to the walked buffer: `endptrbound on|off`.
 pub struct OptionEndPtrBound;
 
 impl OptionEndPtrBound {
@@ -95,7 +95,7 @@ impl OptionEndPtrBound {
 
     /// Resolve the flag and its confirmation message; the caller writes it into
     /// the registered option `EndPtrBound`.
-    pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((val, format!("Pointer-walk end bound turned {prop}")))
@@ -561,7 +561,7 @@ fn controlling_bounds(
 pub fn gather_walks(fd: &Funcdata, space: &Rc<AddrSpace>) -> Vec<PointerWalk> {
     if !fd
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::endptrbound::EndPtrBound>()
         .0
     {
@@ -849,14 +849,14 @@ pub fn rebase_bounds(fd: &mut Funcdata, space: &Rc<AddrSpace>, walks: &[PointerW
     count
 }
 
-/// (kuna) A stack pointer walk's one-past-the-end bound renders on the walked
+/// (unlace) A stack pointer walk's one-past-the-end bound renders on the walked
 /// buffer, recovered as one array (option `endptrbound`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct EndPtrBound(pub bool);
 
-impl crate::optionset::KunaOption for EndPtrBound {
+impl crate::optionset::UnlaceOption for EndPtrBound {
     const NAME: &'static str = "endptrbound";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         EndPtrBound(true)
@@ -866,7 +866,7 @@ impl crate::optionset::KunaOption for EndPtrBound {
         EndPtrBound(true)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (v, msg) = crate::endptrbound::OptionEndPtrBound.apply(value)?;
         Ok((EndPtrBound(v), msg))
     }

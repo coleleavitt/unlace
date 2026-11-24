@@ -1,4 +1,4 @@
-//! (kuna `msvcptrentry`) A relocated pointer to an MSVC frame prologue is a
+//! (unlace `msvcptrentry`) A relocated pointer to an MSVC frame prologue is a
 //! function entry (P1 code/data partition), on 32-bit PE images.
 //!
 //! C++ code reaches much of itself only through pointers: vtable slots, MFC
@@ -36,7 +36,7 @@ use object::read::pe::PeFile32;
 use super::mfcmsgmap::{Image, relocated_rvas};
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 
-/// (kuna) The relocated-prologue-pointer pass (`msvcptrentry`), gated at the
+/// (unlace) The relocated-prologue-pointer pass (`msvcptrentry`), gated at the
 /// commit.
 pub struct MsvcPtrEntryPass;
 

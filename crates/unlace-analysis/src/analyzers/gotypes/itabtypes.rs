@@ -1,4 +1,4 @@
-//! (kuna `goitabcalls`) Per-interface itab layouts: an interface's method set
+//! (unlace `goitabcalls`) Per-interface itab layouts: an interface's method set
 //! names the `Fun` slots every itab of that interface dispatches through.
 //!
 //! An `internal/abi.InterfaceType` descriptor carries its methods as a slice of
@@ -149,14 +149,14 @@ pub(super) fn intern_record_slots(
     };
     let ct = match tf.find_by_name(&name) {
         Ok(Some(held)) if held.get_metatype() == type_metatype::TYPE_STRUCT => held,
-        Ok(None) => match tf.kuna_declare_record(&name, false) {
+        Ok(None) => match tf.unlace_declare_record(&name, false) {
             Ok(ct) => ct,
             Err(_) => return false,
         },
         _ => return false,
     };
     if ct.get_size() != 0 {
-        return tf.kuna_lang_facet(&name) == Some(facet);
+        return tf.unlace_lang_facet(&name) == Some(facet);
     }
     let (Ok(void), Ok(code), Ok(hash)) = (
         tf.get_type_void(),
@@ -193,7 +193,7 @@ pub(super) fn intern_record_slots(
     };
     tf.set_fields_struct_raw(&ct, fields, Vec::new(), size, 8, 0)
         .is_ok()
-        && tf.kuna_register_lang_facet(&name, facet).is_ok()
+        && tf.unlace_register_lang_facet(&name, facet).is_ok()
 }
 
 /// The Go register-ABI scalar a parameter or result descriptor maps to: an
@@ -298,7 +298,7 @@ pub(super) fn method_pieces(
         first_var_arg_slot: -1,
         output_storage: None,
         input_storage: Vec::new(),
-        kuna_library_names: None,
+        unlace_library_names: None,
     })
 }
 

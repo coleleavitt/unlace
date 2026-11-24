@@ -74,7 +74,7 @@ const CALLEE: &str = "sub_8000050";
 /// inside the same discovered function, so it must never become an entry.
 const SWCASE: &str = "sub_800005c";
 
-/// Bootstrap the fixture with the Listing tier on (the surface `decompile-all` / `kuna
+/// Bootstrap the fixture with the Listing tier on (the surface `decompile-all` / `unlace
 /// functions` inject on non-x86-64), optionally flipping `ptrentry` on before the deferred
 /// commit — the live-CLI ordering.
 fn bootstrap(on: bool) -> unlace_console::engine::ConsoleProgram {
@@ -87,13 +87,13 @@ fn bootstrap(on: bool) -> unlace_console::engine::ConsoleProgram {
     // inject (DIV-20). `funcstart_patterns` is what COMMITS the recursive-descent
     // walk's own finds, so without it `callee` would be discovered but unnamed.
     prog.arch_mut()
-        .set_kuna_option("listing", "on")
+        .set_unlace_option("listing", "on")
         .expect("listing flips on");
     prog.arch_mut()
-        .set_kuna_option("funcstart_patterns", "on")
+        .set_unlace_option("funcstart_patterns", "on")
         .expect("funcstart_patterns flips on");
     prog.arch_mut()
-        .set_kuna_option("ptrentry", if on { "on" } else { "off" })
+        .set_unlace_option("ptrentry", if on { "on" } else { "off" })
         .expect("ptrentry flips");
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");

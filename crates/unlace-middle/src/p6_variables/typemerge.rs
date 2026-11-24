@@ -9,13 +9,13 @@
 //! only the prior-decompile variable groups.
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::types::int4;
 
 use crate::context::HighVariableId;
 use crate::merge::MergeContext;
 
-/// (kuna) `typemerge on|storage|off`.
+/// (unlace) `typemerge on|storage|off`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TypeMergeMode {
     /// Any two same-typed variables with disjoint lifetimes (upstream).
@@ -100,7 +100,7 @@ pub fn single_storage(ctx: &dyn MergeContext, high: HighVariableId) -> Option<(A
     found
 }
 
-/// (kuna) Parse `option typemerge on|storage|off`.
+/// (unlace) Parse `option typemerge on|storage|off`.
 pub struct OptionTypeMerge;
 
 impl OptionTypeMerge {
@@ -108,13 +108,13 @@ impl OptionTypeMerge {
     pub const NAME: &'static str = "typemerge";
 
     /// Parse and validate the value.
-    pub fn apply(&self, p1: &str) -> KunaResult<(TypeMergeMode, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(TypeMergeMode, String)> {
         let mode = match p1 {
             "on" => TypeMergeMode::On,
             "storage" => TypeMergeMode::Storage,
             "off" => TypeMergeMode::Off,
             other => {
-                return Err(KunaError::parse(format!(
+                return Err(UnlaceError::parse(format!(
                     "Unknown typemerge value: {other} (expected on|storage|off)"
                 )));
             }
@@ -126,9 +126,9 @@ impl OptionTypeMerge {
     }
 }
 
-impl crate::optionset::KunaOption for TypeMergeMode {
+impl crate::optionset::UnlaceOption for TypeMergeMode {
     const NAME: &'static str = "typemerge";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         TypeMergeMode::On
@@ -138,7 +138,7 @@ impl crate::optionset::KunaOption for TypeMergeMode {
         TypeMergeMode::Storage
     }
 
-    fn parse(value: &str) -> KunaResult<(Self, String)> {
+    fn parse(value: &str) -> UnlaceResult<(Self, String)> {
         OptionTypeMerge.apply(value)
     }
 }
@@ -164,7 +164,7 @@ mod tests {
 
     #[test]
     fn shipped_default_is_storage() {
-        use crate::optionset::KunaOption;
+        use crate::optionset::UnlaceOption;
         assert_eq!(TypeMergeMode::shipped(), TypeMergeMode::Storage);
         assert_eq!(TypeMergeMode::unset(), TypeMergeMode::On);
     }

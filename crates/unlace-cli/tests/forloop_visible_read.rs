@@ -5,7 +5,7 @@ use crate::common;
 #[test]
 fn for_initializer_stays_ahead_of_a_visible_read_of_its_result() {
     let binary = common::fixture("forinit_visible_read_clang_O0_x86_64");
-    let (stdout, stderr, code) = common::run_kuna(&["decompile", &binary, "parity"]);
+    let (stdout, stderr, code) = common::run_unlace(&["decompile", &binary, "parity"]);
     assert_eq!(code, 0, "unlace decompile failed: {stderr}");
     let call = stdout
         .find("= strtoul(")

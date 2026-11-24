@@ -1,4 +1,4 @@
-//! (kuna #1288) The PC memory an MS-DOS program shares with the machine.
+//! (unlace #1288) The PC memory an MS-DOS program shares with the machine.
 //!
 //! Three regions of a PC's first megabyte change or are read behind a DOS
 //! program's back: the interrupt vector table (0000:0000-03FF), which the CPU

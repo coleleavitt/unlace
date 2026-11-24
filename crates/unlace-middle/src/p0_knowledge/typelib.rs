@@ -1,9 +1,9 @@
-//! (kuna `typelib`) Which prebuilt type library a load reads.
+//! (unlace `typelib`) Which prebuilt type library a load reads.
 //!
 //! A type library carries the declarations of a platform's C library: every
 //! function with its prototype, and every record with the size, alignment and
 //! member offsets the platform's compiler gives it. `auto` reads the library
-//! built into kuna for the image's target (an x86-64 Linux ELF linked against
+//! built into unlace for the image's target (an x86-64 Linux ELF linked against
 //! glibc or musl, or an x86 or x64 PE, which reads the Windows API library; no
 //! other target has one, so the option is inert there),
 //! `off` reads none, and a path, or a `:`-separated list of paths, reads
@@ -19,7 +19,7 @@ use std::io::Read;
 use std::path::PathBuf;
 
 /// The first line of every library file this build reads.
-pub const MAGIC: &str = "kuna-typelib 1\n";
+pub const MAGIC: &str = "typelib 1\n";
 
 /// The first bytes of an IDA type library (`.til`), the other file a path may name.
 pub const TIL_MAGIC: &[u8; 6] = b"IDATIL";
@@ -102,9 +102,9 @@ impl TypeLib {
     }
 }
 
-impl crate::optionset::KunaOption for TypeLib {
+impl crate::optionset::UnlaceOption for TypeLib {
     const NAME: &'static str = "typelib";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         TypeLib::Auto
@@ -114,8 +114,8 @@ impl crate::optionset::KunaOption for TypeLib {
         TypeLib::Auto
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let choice = TypeLib::parse(value).map_err(unlace_base::error::KunaError::parse)?;
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
+        let choice = TypeLib::parse(value).map_err(unlace_base::error::UnlaceError::parse)?;
         let msg = format!("Type library set to {}", choice.as_str());
         Ok((choice, msg))
     }
@@ -142,11 +142,7 @@ mod tests {
         std::fs::remove_file(&til).unwrap();
         assert_eq!(parsed, Ok(TypeLib::Files(vec![til.clone()])));
         let file = std::env::temp_dir().join(format!("kuna-typelib-{}.ktl", std::process::id()));
-        std::fs::write(
-            &file,
-            "kuna-typelib 1\ntarget linux x86_64\nsource test 1\n",
-        )
-        .unwrap();
+        std::fs::write(&file, "typelib 1\ntarget linux x86_64\nsource test 1\n").unwrap();
         let parsed = TypeLib::parse(file.to_str().unwrap());
         std::fs::remove_file(&file).unwrap();
         assert_eq!(parsed, Ok(TypeLib::Files(vec![file.clone()])));

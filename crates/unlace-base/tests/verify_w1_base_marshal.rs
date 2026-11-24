@@ -34,7 +34,7 @@
 
 use std::rc::Rc;
 
-use unlace_base::error::KunaError;
+use unlace_base::error::UnlaceError;
 use unlace_base::marshal::{
     ATTRIB_ALIGN, ATTRIB_CONTENT, ATTRIB_FORMAT, ATTRIB_STORAGE, ATTRIB_UNKNOWN, ATTRIB_VAL,
     Decoder, ELEM_DATA, ELEM_VALUE, Encoder, IdRegistry, PackedDecode, PackedEncode, XmlDecode,
@@ -61,7 +61,7 @@ fn test_manager() -> AddrSpaceManager {
 
 /// Drive `<data NAME="x"/>` through XmlDecode up to the point where C++ would
 /// call getIndexedAttributeId(ATTRIB_VAL) (base name "val", id 24).
-fn indexed_attr_id(name: &str) -> Result<u32, KunaError> {
+fn indexed_attr_id(name: &str) -> Result<u32, UnlaceError> {
     let manager = AddrSpaceManager::new();
     let registry = IdRegistry::with_base_ids();
     let mut dec = XmlDecode::new(&manager, &registry);
@@ -86,11 +86,11 @@ fn verify_marshal_indexed_attr_happy_and_error_paths() {
     // Exact base-name match and non-numeric suffix: val parses to 0 -> throw
     assert!(matches!(
         indexed_attr_id("val").unwrap_err(),
-        KunaError::Lowlevel { .. }
+        UnlaceError::Lowlevel { .. }
     ));
     assert!(matches!(
         indexed_attr_id("valabc").unwrap_err(),
-        KunaError::Lowlevel { .. }
+        UnlaceError::Lowlevel { .. }
     ));
     // Name not starting with the base name -> ATTRIB_UNKNOWN, no error
     assert_eq!(indexed_attr_id("zzz9").unwrap(), ATTRIB_UNKNOWN.get_id());
@@ -114,7 +114,7 @@ fn verify_marshal_indexed_attr_dec_suffix_matches_cpp_oracle_f1() {
     assert!(
         matches!(
             indexed_attr_id("val0x2").unwrap_err(),
-            KunaError::Lowlevel { .. }
+            UnlaceError::Lowlevel { .. }
         ),
         "C++ `>> dec` extracts 0 from suffix 0x2 -> Bad indexed attribute"
     );
@@ -233,12 +233,12 @@ fn verify_marshal_packed_ingest_nul_truncation_and_empty() {
     let mut dec2 = PackedDecode::new(&manager);
     assert!(matches!(
         dec2.ingest_stream(&[]).unwrap_err(),
-        KunaError::Decoder { .. }
+        UnlaceError::Decoder { .. }
     ));
     let mut dec3 = PackedDecode::new(&manager);
     assert!(matches!(
         dec3.ingest_stream(&[0x00, 0x41, 0x81]).unwrap_err(),
-        KunaError::Decoder { .. }
+        UnlaceError::Decoder { .. }
     ));
 }
 
@@ -269,7 +269,7 @@ fn verify_marshal_packed_expect_string_paths() {
     let err = dec
         .read_signed_integer_expect_string_id(&ATTRIB_FORMAT, b"other", -42)
         .unwrap_err();
-    assert!(matches!(err, KunaError::Decoder { .. }));
+    assert!(matches!(err, UnlaceError::Decoder { .. }));
     // The failed read must not have corrupted element traversal
     assert_eq!(
         dec.read_signed_integer_expect_string_id(&ATTRIB_FORMAT, b"blob", -42)

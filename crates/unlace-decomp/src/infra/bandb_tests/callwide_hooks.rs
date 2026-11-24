@@ -1,9 +1,9 @@
-//! Tests moved out of `kuna_callwide` because they reach pass hooks a higher crate
+//! Tests moved out of `unlace_callwide` because they reach pass hooks a higher crate
 //! provides. They live in the driver, which links every hook.
 
 #![allow(unused_imports, dead_code)]
 
-/// The imports of `kuna_callwide` itself, as a glob so the tests' own imports win.
+/// The imports of `unlace_callwide` itself, as a glob so the tests' own imports win.
 mod module_scope {
     pub(super) use crate::architecture::Architecture;
     pub(super) use crate::bejoin::WidePair;
@@ -22,7 +22,7 @@ use crate::context::{ArchContext, TypeOp, VarnodeId};
 use crate::options::ArchOptionContext;
 use module_scope::*;
 use std::cell::Cell;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::{
     AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
@@ -37,8 +37,8 @@ impl LoadImage for NoImage {
     fn get_file_name(&self) -> &str {
         "none"
     }
-    fn load_fill(&mut self, _: &mut [u8], _: &Address) -> KunaResult<()> {
-        Err(KunaError::data_unavail("none"))
+    fn load_fill(&mut self, _: &mut [u8], _: &Address) -> UnlaceResult<()> {
+        Err(UnlaceError::data_unavail("none"))
     }
     fn get_arch_type(&self) -> Vec<u8> {
         Vec::new()
@@ -75,8 +75,8 @@ fn data_and_proof() -> (Funcdata, Rc<Ledger>) {
     let register = manager.get_space_by_name("register").unwrap().clone();
     let model = Rc::new(ProtoModel::new(&manager));
     let mut context = ArchContext::new(manager);
-    context.kuna_options.set(crate::callwide::CallWide(true));
-    context.kuna_options.set(BeJoinMode::Evidence);
+    context.unlace_options.set(crate::callwide::CallWide(true));
+    context.unlace_options.set(BeJoinMode::Evidence);
     let mut fd = Funcdata::new(
         "f",
         "f",
@@ -98,7 +98,7 @@ fn data_and_proof() -> (Funcdata, Rc<Ledger>) {
         declarations: BTreeSet::from([0x2000]),
     });
     fd.get_func_proto_mut().set_model(Some(proof.model.clone()));
-    fd.kuna_set_callwide(Some(proof.clone()));
+    fd.unlace_set_callwide(Some(proof.clone()));
     (fd, proof)
 }
 
@@ -169,7 +169,7 @@ fn export_call_layout(layout: u8) -> (Funcdata, Rc<Ledger>, FuncCallSpecs) {
         entries: previous.entries.clone(),
         declarations: previous.declarations.clone(),
     });
-    fd.kuna_set_callwide(Some(proof.clone()));
+    fd.unlace_set_callwide(Some(proof.clone()));
     fd.get_func_proto_mut().set_model(Some(proof.model.clone()));
     let word = Rc::new(Datatype::new(4, type_metatype::TYPE_INT));
     let wide = Rc::new(Datatype::new(8, type_metatype::TYPE_UINT));
@@ -249,7 +249,7 @@ fn returned(fd: &mut Funcdata, low_size: int4) -> OpId {
 
 fn trials(fd: &Funcdata) -> ParamActive {
     let mut active = ParamActive::new(false);
-    let pair = &fd.kuna_callwide().unwrap().pair;
+    let pair = &fd.unlace_callwide().unwrap().pair;
     active.register_trial(&pair.hi.0, pair.hi.1);
     active.register_trial(&pair.lo.0, pair.lo.1);
     active
@@ -319,13 +319,13 @@ fn every_model_mutation_revokes_an_already_seeded_drive() {
             let _ = arch.translate_mut();
         },
         |arch| {
-            arch.set_kuna_option("narrowext", "compiler").unwrap();
+            arch.set_unlace_option("narrowext", "compiler").unwrap();
         },
     ];
     for mutation in mutations {
         let (fd, proof) = data_and_proof();
         let mut arch = architecture();
-        *arch.kuna_tables.get_mut::<crate::callwide::ProofSlot>() = ProofSlot(Some(proof));
+        *arch.unlace_tables.get_mut::<crate::callwide::ProofSlot>() = ProofSlot(Some(proof));
         assert!(proven(&fd, fd.get_address()));
         mutation(&mut arch);
         assert!(!proven(&fd, fd.get_address()));
@@ -340,7 +340,7 @@ fn replaying_the_same_declared_model_does_not_split_a_batch() {
     arch.set_function_prototype_model("f", model.clone());
     arch.set_default_model_rc(model.clone());
     arch.register_model(model.clone());
-    *arch.kuna_tables.get_mut::<crate::callwide::ProofSlot>() = ProofSlot(Some(proof));
+    *arch.unlace_tables.get_mut::<crate::callwide::ProofSlot>() = ProofSlot(Some(proof));
     arch.set_function_prototype_model("f", model.clone());
     arch.set_default_model_rc(model.clone());
     arch.register_model(model);

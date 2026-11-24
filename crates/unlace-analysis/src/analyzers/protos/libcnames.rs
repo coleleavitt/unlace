@@ -1,4 +1,4 @@
-//! (kuna `libcnames`) The library's own names for the parameters and results
+//! (unlace `libcnames`) The library's own names for the parameters and results
 //! of the built-in libc and Win32 signatures ([`super::LIBC`],
 //! [`super::libcsigs`], [`super::libctypes`],
 //! [`super::win32sigs`]).

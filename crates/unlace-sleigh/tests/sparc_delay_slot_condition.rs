@@ -1,7 +1,7 @@
 //! SPARC branches sample their condition before a delay slot that rewrites it.
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
 
-use unlace_base::{address::Address, error::KunaResult, space::AddrSpace};
+use unlace_base::{address::Address, error::UnlaceResult, space::AddrSpace};
 use unlace_sleigh::{
     emulate::{BreakTableCallBack, Emulate, EmulatePcodeCache},
     globalcontext::ContextInternal,
@@ -20,7 +20,7 @@ impl LoadImage for Bytes {
         Vec::new()
     }
     fn adjust_vma(&mut self, _: i64) {}
-    fn load_fill(&mut self, out: &mut [u8], addr: &Address) -> KunaResult<()> {
+    fn load_fill(&mut self, out: &mut [u8], addr: &Address) -> UnlaceResult<()> {
         for (i, byte) in out.iter_mut().enumerate() {
             *byte = addr
                 .get_offset()

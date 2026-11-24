@@ -39,7 +39,7 @@ fn load(options: &[(&str, &str)]) -> ConsoleProgram {
             prog.arch_mut().readonlypropagate = value == "on";
         } else {
             prog.arch_mut()
-                .set_kuna_option(option, value)
+                .set_unlace_option(option, value)
                 .expect("test option flips");
         }
     }

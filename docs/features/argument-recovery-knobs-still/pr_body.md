@@ -128,7 +128,7 @@ ELF O0/O2 across x86-64/ARM/Cortex-M, and 45 crackmes (PE x86-64 + static ELF).
 | Gate | Result |
 |---|---|
 | `make test` | **PARITY OK — 675/675** (`docs/baseline.json` unmoved) |
-| `make test-stages` | **PARITY OK — 597/597** (594 → 597 for the new two-pass `tests/stages/kuna-calleearityfwd.toml`) |
+| `make test-stages` | **PARITY OK — 597/597** (594 → 597 for the new two-pass `tests/stages/calleearityfwd.toml`) |
 | `make rust-test` | green |
 | `make check-spec` | green |
 | `kuna catalog --check` | `catalog OK` |

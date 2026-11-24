@@ -1,9 +1,9 @@
 //! Calls to libgcc's soft-float and machine-mode integer routines on targets
 //! other than 32-bit ARM carry prototypes typed by their machine modes, laid out
-//! under the integer convention (`kuna_softfpsigs`), so a function whose last
+//! under the integer convention (`unlace_softfpsigs`), so a function whose last
 //! act is one returns its result and keeps its arguments (#864).
 use crate::common;
-use common::{repo_root, run_kuna};
+use common::{repo_root, run_unlace};
 
 fn decompile(object: &str, function: &str, options: &[&str]) -> String {
     let path = repo_root()
@@ -11,7 +11,7 @@ fn decompile(object: &str, function: &str, options: &[&str]) -> String {
         .join(object);
     let mut args = vec!["decompile", path.to_str().unwrap(), function];
     args.extend_from_slice(options);
-    let (stdout, stderr, code) = run_kuna(&args);
+    let (stdout, stderr, code) = run_unlace(&args);
     assert_eq!(code, 0, "{object} {function}: {stderr}");
     stdout
 }

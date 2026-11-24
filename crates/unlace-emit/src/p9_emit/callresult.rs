@@ -85,11 +85,11 @@ impl PrintC {
         }
         let entry = call.get_entry_address();
         let (source_addr, source_size, source_type) = if let Some(stated) =
-            fd.kuna_callret_stated((entry.get_space()?.get_index(), entry.get_offset()))
+            fd.unlace_callret_stated((entry.get_space()?.get_index(), entry.get_offset()))
         {
             (&stated.addr, stated.size, &stated.ct)
         } else {
-            let (addr, size, ty) = fd.kuna_protoorder_types(entry)?.output.as_ref()?;
+            let (addr, size, ty) = fd.unlace_protoorder_types(entry)?.output.as_ref()?;
             (addr, *size, ty)
         };
         if !integer(source_type)

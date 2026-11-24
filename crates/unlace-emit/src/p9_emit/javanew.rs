@@ -1,4 +1,4 @@
-//! (kuna `javanew`) `new T(args)`: an allocation and the constructor call that
+//! (unlace `javanew`) `new T(args)`: an allocation and the constructor call that
 //! initializes it, printed as one Java expression.
 //!
 //! Dalvik allocates an object with `new-instance` and initializes it with a
@@ -219,8 +219,8 @@ pub fn ctor_calls(fd: &Funcdata) -> HashMap<OpId, CtorCall> {
     out
 }
 
-crate::kuna_flag!(
-    /// (kuna) Print an allocation and its `<init>` call as `new T(args)` in
+crate::unlace_flag!(
+    /// (unlace) Print an allocation and its `<init>` call as `new T(args)` in
     /// Java (option `javanew`).
     JavaNew,
     "javanew",

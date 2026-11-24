@@ -64,7 +64,7 @@ int main(void) {{return 0;}}
             .arg("-o")
             .arg(&sample),
     );
-    let (printed, stderr, rc) = common::run_kuna(&[
+    let (printed, stderr, rc) = common::run_unlace(&[
         "decompile-all",
         sample.to_str().unwrap(),
         "--functions",
@@ -169,7 +169,7 @@ int main(void) {{return 0;}}
             .arg("-o")
             .arg(&sample),
     );
-    let (printed, stderr, rc) = common::run_kuna(&[
+    let (printed, stderr, rc) = common::run_unlace(&[
         "decompile-all",
         sample.to_str().unwrap(),
         "--functions",
@@ -325,7 +325,7 @@ int main(void){
         samples.push((sample_cc.to_string(), sample));
     }
     for (sample_cc, sample) in &samples {
-        let (printed, stderr, rc) = common::run_kuna(&[
+        let (printed, stderr, rc) = common::run_unlace(&[
             "decompile-all",
             sample.to_str().unwrap(),
             "--functions",

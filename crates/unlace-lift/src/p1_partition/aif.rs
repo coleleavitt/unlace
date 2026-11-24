@@ -1,4 +1,4 @@
-//! (kuna `aif`) The four-valued gate on the Aggressive Instruction Finder gap walk.
+//! (unlace `aif`) The four-valued gate on the Aggressive Instruction Finder gap walk.
 //!
 //! The walk itself lives in the analyzer tier (`unlace_analysis::aif`); what lives
 //! here is the *decision* the option names, because the option is not a plain
@@ -11,7 +11,7 @@
 //! | `strict` | next 4-byte boundary, or the first byte of a hole | as `on` |
 //! | `precise` | as `strict` | as `on`, and the routine adds information or its prologue is shared by 50 |
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 
 /// The resolved `option aif off|on|strict|precise` mode.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -29,12 +29,12 @@ impl AifMode {
         !matches!(self, AifMode::Off)
     }
 
-    /// Does the gap cursor take the aligned slide (`kuna_aifstrict`)?
+    /// Does the gap cursor take the aligned slide (`unlace_aifstrict`)?
     pub fn strict(self) -> bool {
         matches!(self, AifMode::Strict | AifMode::Precise)
     }
 
-    /// Must an accept be corroborated (`kuna_aifcorroborate`)?
+    /// Must an accept be corroborated (`unlace_aifcorroborate`)?
     pub fn corroborate(self) -> bool {
         matches!(self, AifMode::Precise)
     }
@@ -52,13 +52,17 @@ impl AifMode {
 
 /// Parse the `option aif off|on|strict|precise` argument, producing the resolved
 /// mode plus the confirmation message.
-pub fn parse_aif_mode(p1: &str) -> KunaResult<(AifMode, String)> {
+pub fn parse_aif_mode(p1: &str) -> UnlaceResult<(AifMode, String)> {
     let mode = match p1 {
         "off" => AifMode::Off,
         "on" => AifMode::On,
         "strict" => AifMode::Strict,
         "precise" => AifMode::Precise,
-        _ => return Err(KunaError::parse("Must specify off, on, strict or precise")),
+        _ => {
+            return Err(UnlaceError::parse(
+                "Must specify off, on, strict or precise",
+            ));
+        }
     };
     Ok((
         mode,
@@ -66,9 +70,9 @@ pub fn parse_aif_mode(p1: &str) -> KunaResult<(AifMode, String)> {
     ))
 }
 
-impl crate::optionset::KunaOption for AifMode {
+impl crate::optionset::UnlaceOption for AifMode {
     const NAME: &'static str = "aif";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         crate::aif::AifMode::Off
@@ -78,7 +82,7 @@ impl crate::optionset::KunaOption for AifMode {
         crate::aif::AifMode::Off
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         Ok(crate::aif::parse_aif_mode(value)?)
     }
 }

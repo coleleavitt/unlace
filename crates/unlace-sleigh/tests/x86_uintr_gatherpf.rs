@@ -1,5 +1,5 @@
 //! x86-64 decode of the UINTR group, PREFETCHIT0/1 and the AVX-512PF gather
-//! prefetches (kuna #1627): `f3 0f c7 /6` is SENDUIPI, not RDRAND; the
+//! prefetches (unlace #1627): `f3 0f c7 /6` is SENDUIPI, not RDRAND; the
 //! RIP-relative `0f 18 /7`, `/6` are prefetches, not reserved NOPs; and
 //! VGATHERPF* index with a ZMM register and load nothing.
 
@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 use unlace_sleigh::globalcontext::ContextInternal;
@@ -27,7 +27,7 @@ impl LoadImage for Bytes {
         Vec::new()
     }
     fn adjust_vma(&mut self, _: i64) {}
-    fn load_fill(&mut self, out: &mut [u8], addr: &Address) -> KunaResult<()> {
+    fn load_fill(&mut self, out: &mut [u8], addr: &Address) -> UnlaceResult<()> {
         for (i, byte) in out.iter_mut().enumerate() {
             *byte = addr
                 .get_offset()

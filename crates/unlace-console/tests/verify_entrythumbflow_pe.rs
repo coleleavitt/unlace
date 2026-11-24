@@ -106,7 +106,7 @@ fn load_with_decoder(
     let mut program = bootstrap_from_object_with_isa(path, target, &specs(), isa)
         .expect("bootstrap fixture with built processor specs");
     for (name, value) in options {
-        program.arch_mut().set_kuna_option(name, value).unwrap();
+        program.arch_mut().set_unlace_option(name, value).unwrap();
     }
     program.commit_pending_analysis().unwrap();
     program

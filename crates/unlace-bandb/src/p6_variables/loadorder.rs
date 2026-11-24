@@ -38,7 +38,7 @@ pub fn crosses_global_write(
 ) -> bool {
     if data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::indexaliasguard::IndexAliasGuard>()
         .0
         != LEVEL_GLOBAL
@@ -186,7 +186,7 @@ pub fn keeps_apart(ctx: &mut dyn MergeContext, vn1: VarnodeId, vn2: VarnodeId) -
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.loadorder_crosses_global_write = Some(crosses_global_write);
     hooks.loadorder_keeps_apart = Some(keeps_apart);
 }

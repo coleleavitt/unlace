@@ -66,7 +66,7 @@ fn specs() -> String {
     repo_root().join("specs").to_str().unwrap().to_string()
 }
 
-fn run_kuna(args: &[&str]) -> (String, String, bool) {
+fn run_unlace(args: &[&str]) -> (String, String, bool) {
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .output()
@@ -108,7 +108,7 @@ impl Drop for Scratch {
 fn unpack_recovers_the_original_elf() {
     let scratch = Scratch::new("recover");
     let out = scratch.path("snake.unpacked");
-    let (stdout, stderr, ok) = run_kuna(&["unpack", &packed_fixture(), "-o", &out]);
+    let (stdout, stderr, ok) = run_unlace(&["unpack", &packed_fixture(), "-o", &out]);
     if !ok {
         panic!("unlace unpack failed: {stderr}");
     }
@@ -133,19 +133,19 @@ fn unpack_recovers_the_original_elf() {
     assert_eq!(u16::from_le_bytes([bytes[60], bytes[61]]), 31);
 }
 
-/// The point of the feature: what comes out is something kuna can then analyze.
+/// The point of the feature: what comes out is something unlace can then analyze.
 /// The packed input reports zero functions; the recovered one reports the real
 /// program, `main` included.
 #[test]
 fn the_unpacked_output_is_analyzable() {
     let scratch = Scratch::new("analyze");
     let out = scratch.path("snake.unpacked");
-    let (_, stderr, ok) = run_kuna(&["unpack", &packed_fixture(), "-o", &out]);
+    let (_, stderr, ok) = run_unlace(&["unpack", &packed_fixture(), "-o", &out]);
     if !ok {
         panic!("unlace unpack failed: {stderr}");
     }
 
-    let (stdout, stderr, ok) = run_kuna(&["functions", &out, "--json", "--sleighpath", &specs()]);
+    let (stdout, stderr, ok) = run_unlace(&["functions", &out, "--json", "--sleighpath", &specs()]);
     if !ok {
         panic!("unlace functions failed on the unpacked output: {stderr}");
     }
@@ -166,7 +166,7 @@ fn the_unpacked_output_is_analyzable() {
 fn unpack_json_reports_the_pack_header() {
     let scratch = Scratch::new("json");
     let out = scratch.path("snake.unpacked");
-    let (stdout, stderr, ok) = run_kuna(&["unpack", &packed_fixture(), "-o", &out, "--json"]);
+    let (stdout, stderr, ok) = run_unlace(&["unpack", &packed_fixture(), "-o", &out, "--json"]);
     if !ok {
         panic!("unlace unpack --json failed: {stderr}");
     }
@@ -195,7 +195,7 @@ fn unpack_json_reports_the_pack_header() {
 fn an_unpacked_binary_is_refused_by_name() {
     let scratch = Scratch::new("plain");
     let out = scratch.path("plain.unpacked");
-    let (_, stderr, ok) = run_kuna(&["unpack", &plain_fixture(), "-o", &out]);
+    let (_, stderr, ok) = run_unlace(&["unpack", &plain_fixture(), "-o", &out]);
     assert!(!ok, "unpacking a plain ELF should fail");
     assert!(
         stderr.contains("no UPX PackHeader"),
@@ -217,7 +217,7 @@ fn an_unimplemented_method_is_refused_by_name() {
     reheaded_fixture(15, &input);
 
     let out = scratch.path("deflate.unpacked");
-    let (_, stderr, ok) = run_kuna(&["unpack", &input, "-o", &out]);
+    let (_, stderr, ok) = run_unlace(&["unpack", &input, "-o", &out]);
     assert!(
         !ok,
         "a DEFLATE-compressed image must not be unpacked by this build"
@@ -251,7 +251,7 @@ fn a_block_mislabelled_as_lzma_is_refused_not_guessed_at() {
     std::fs::write(&input, &bytes).expect("write the relabelled fixture");
 
     let out = scratch.path("mislabelled.unpacked");
-    let (_, stderr, ok) = run_kuna(&["unpack", &input, "-o", &out]);
+    let (_, stderr, ok) = run_unlace(&["unpack", &input, "-o", &out]);
     assert!(!ok, "an NRV block relabelled as LZMA must not unpack");
     assert!(
         stderr.contains("block at 0x100"),
@@ -271,7 +271,7 @@ fn a_block_mislabelled_as_lzma_is_refused_not_guessed_at() {
 fn unpack_recovers_an_lzma_packed_elf() {
     let scratch = Scratch::new("lzma");
     let out = scratch.path("snake.lzma.unpacked");
-    let (stdout, stderr, ok) = run_kuna(&["unpack", &lzma_fixture(), "-o", &out, "--json"]);
+    let (stdout, stderr, ok) = run_unlace(&["unpack", &lzma_fixture(), "-o", &out, "--json"]);
     if !ok {
         panic!("unlace unpack failed on an LZMA image: {stderr}");
     }
@@ -297,7 +297,7 @@ fn unpack_recovers_an_lzma_packed_elf() {
     // The NRV and LZMA witnesses pack the same program: the two recoveries must
     // agree byte for byte.
     let nrv_out = scratch.path("snake.nrv.unpacked");
-    let (_, _, ok) = run_kuna(&["unpack", &packed_fixture(), "-o", &nrv_out]);
+    let (_, _, ok) = run_unlace(&["unpack", &packed_fixture(), "-o", &nrv_out]);
     assert!(ok, "the NRV witness stopped unpacking");
     assert_eq!(
         bytes,
@@ -328,7 +328,7 @@ const HEADERLESS_SIZE: usize = 792;
 fn raw_lzma_recovers_a_stream_no_pack_header_describes() {
     let scratch = Scratch::new("rawlzma");
     let out = scratch.path("payload.bin");
-    let (stdout, stderr, ok) = run_kuna(&[
+    let (stdout, stderr, ok) = run_unlace(&[
         "unpack",
         &headerless_fixture(),
         "-o",
@@ -371,7 +371,7 @@ fn raw_lzma_recovers_a_stream_no_pack_header_describes() {
 fn the_pack_header_search_is_not_degraded_by_the_override() {
     let scratch = Scratch::new("nodegrade");
     let out = scratch.path("payload.bin");
-    let (_stdout, stderr, ok) = run_kuna(&["unpack", &headerless_fixture(), "-o", &out]);
+    let (_stdout, stderr, ok) = run_unlace(&["unpack", &headerless_fixture(), "-o", &out]);
     assert!(!ok, "a file with no PackHeader must not unpack:\n{stderr}");
     assert!(stderr.contains("no UPX PackHeader found"), "{stderr}");
     assert!(
@@ -390,7 +390,7 @@ fn raw_lzma_accepts_file_offsets_and_explicit_properties() {
     let out = scratch.path("payload.bin");
     // 0x200 is where the section's raw data starts; +2 skips the prefix that
     // --lzma-props then supplies by hand.
-    let (stdout, stderr, ok) = run_kuna(&[
+    let (stdout, stderr, ok) = run_unlace(&[
         "unpack",
         &headerless_fixture(),
         "-o",
@@ -413,7 +413,7 @@ fn raw_lzma_accepts_file_offsets_and_explicit_properties() {
 
     // The same two bytes given as the prefix pair rather than as three fields.
     let hex = scratch.path("payload.hex.bin");
-    let (_o, stderr, ok) = run_kuna(&[
+    let (_o, stderr, ok) = run_unlace(&[
         "unpack",
         &headerless_fixture(),
         "-o",
@@ -435,7 +435,7 @@ fn raw_lzma_accepts_file_offsets_and_explicit_properties() {
 fn a_range_that_is_not_a_stream_is_refused_not_half_written() {
     let scratch = Scratch::new("rawbad");
     let out = scratch.path("payload.bin");
-    let (_o, stderr, ok) = run_kuna(&[
+    let (_o, stderr, ok) = run_unlace(&[
         "unpack",
         &headerless_fixture(),
         "-o",
@@ -450,7 +450,7 @@ fn a_range_that_is_not_a_stream_is_refused_not_half_written() {
         "a refusal wrote a file anyway"
     );
 
-    let (_o, stderr, ok) = run_kuna(&[
+    let (_o, stderr, ok) = run_unlace(&[
         "unpack",
         &headerless_fixture(),
         "-o",
@@ -472,21 +472,21 @@ fn a_range_that_is_not_a_stream_is_refused_not_half_written() {
 /// rather than a silent fall-back to a PackHeader search.
 #[test]
 fn a_raw_modifier_without_a_range_is_a_usage_error() {
-    let (_o, stderr, ok) = run_kuna(&["unpack", &plain_fixture(), "--lzma-props", "2,0,3"]);
+    let (_o, stderr, ok) = run_unlace(&["unpack", &plain_fixture(), "--lzma-props", "2,0,3"]);
     assert!(!ok);
     assert!(stderr.contains("only applies with --raw-lzma"), "{stderr}");
 }
 
 /// The reported case (#1294): a valid `win64/pe` image `upx -t` accepts was
 /// answered with "corrupt UPX image: PackHeader declares an overlay outside the
-/// file". It now unpacks to the reporter's PE32+, which kuna then decompiles the
+/// file". It now unpacks to the reporter's PE32+, which unlace then decompiles the
 /// way it decompiles the linker's original: three functions, the middle one
 /// calling the first.
 #[test]
 fn unpack_rebuilds_the_reported_win64_pe() {
     let scratch = Scratch::new("win64");
     let out = scratch.path("fixture-unpacked.exe");
-    let (stdout, stderr, ok) = run_kuna(&["unpack", &win64_fixture(), "-o", &out]);
+    let (stdout, stderr, ok) = run_unlace(&["unpack", &win64_fixture(), "-o", &out]);
     if !ok {
         panic!("unlace unpack failed: {stderr}");
     }
@@ -505,7 +505,7 @@ fn unpack_rebuilds_the_reported_win64_pe() {
         "PE32+"
     );
 
-    let (stdout, stderr, ok) = run_kuna(&["functions", &out, "--json", "--sleighpath", &specs()]);
+    let (stdout, stderr, ok) = run_unlace(&["functions", &out, "--json", "--sleighpath", &specs()]);
     if !ok {
         panic!("unlace functions failed on the unpacked output: {stderr}");
     }
@@ -513,7 +513,7 @@ fn unpack_rebuilds_the_reported_win64_pe() {
     for addr in ["0x140001000", "0x140001020", "0x140001060"] {
         assert!(stdout.contains(addr), "no function at {addr}:\n{stdout}");
     }
-    let (stdout, stderr, ok) = run_kuna(&[
+    let (stdout, stderr, ok) = run_unlace(&[
         "decompile",
         &out,
         "0x140001020",
@@ -536,7 +536,7 @@ fn unpack_rebuilds_the_reported_win64_pe() {
 fn win64_arm64_is_refused_by_name_and_writes_nothing() {
     let scratch = Scratch::new("arm64");
     let out = scratch.path("arm64.unpacked");
-    let (_, stderr, ok) = run_kuna(&["unpack", &arm64_fixture(), "-o", &out]);
+    let (_, stderr, ok) = run_unlace(&["unpack", &arm64_fixture(), "-o", &out]);
     assert!(!ok, "win64/arm64 must not unpack");
     assert!(
         stderr.contains("unsupported UPX image: target format 43 (win64/arm64)"),

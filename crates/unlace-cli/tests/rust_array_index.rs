@@ -45,9 +45,9 @@ fn complete_rust_array_indices_match_native_memory_addresses_and_calls() {
         expected = Some(output);
     }
     std::fs::remove_file(&native).unwrap();
-    let kuna = unlace_base::env::var_os("UNLACE_TEST_BIN")
+    let unlace = unlace_base::env::var_os("UNLACE_TEST_BIN")
         .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
-    let output = process::required_output(Command::new(kuna).args([
+    let output = process::required_output(Command::new(unlace).args([
         "decompile-all",
         &common::fixture("array_index_x86_64"),
         "--json",

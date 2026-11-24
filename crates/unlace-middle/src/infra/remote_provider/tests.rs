@@ -221,7 +221,7 @@ impl MockFetch {
         map: &std::collections::BTreeMap<u64, Vec<u8>>,
         off: u64,
         decoder: &mut dyn Decoder,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         match map.get(&off) {
             Some(doc) => {
                 decoder.ingest_stream(doc)?;
@@ -233,18 +233,24 @@ impl MockFetch {
 }
 
 impl RemoteProviderFetch for MockFetch {
-    fn fetch_mapped_symbols(&self, addr: &Address, decoder: &mut dyn Decoder) -> KunaResult<bool> {
+    fn fetch_mapped_symbols(
+        &self,
+        addr: &Address,
+        decoder: &mut dyn Decoder,
+    ) -> UnlaceResult<bool> {
         self.bump("mapped");
         if self.fail_mapped.contains(&addr.get_offset()) {
-            return Err(unlace_base::error::KunaError::lowlevel("mock wire failure"));
+            return Err(unlace_base::error::UnlaceError::lowlevel(
+                "mock wire failure",
+            ));
         }
         Self::serve(&self.mapped, addr.get_offset(), decoder)
     }
-    fn fetch_namespace_path(&self, _id: u64, _decoder: &mut dyn Decoder) -> KunaResult<bool> {
+    fn fetch_namespace_path(&self, _id: u64, _decoder: &mut dyn Decoder) -> UnlaceResult<bool> {
         self.bump("namespace");
         Ok(false)
     }
-    fn fetch_external_ref(&self, addr: &Address, decoder: &mut dyn Decoder) -> KunaResult<bool> {
+    fn fetch_external_ref(&self, addr: &Address, decoder: &mut dyn Decoder) -> UnlaceResult<bool> {
         self.bump("external");
         Self::serve(&self.external, addr.get_offset(), decoder)
     }
@@ -252,7 +258,7 @@ impl RemoteProviderFetch for MockFetch {
         &self,
         addr: &Address,
         decoder: &mut dyn Decoder,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         self.bump("tracked");
         Self::serve(&self.tracked, addr.get_offset(), decoder)
     }
@@ -261,7 +267,7 @@ impl RemoteProviderFetch for MockFetch {
         _fad: &Address,
         _flags: u32,
         _decoder: &mut dyn Decoder,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         Ok(false)
     }
 }

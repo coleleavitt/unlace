@@ -1,11 +1,11 @@
-//! (kuna) Name-matched no-return for unresolved externs, part of `noreturn_known`
+//! (unlace) Name-matched no-return for unresolved externs, part of `noreturn_known`
 //! (angr port: `test_decompiling_incorrect_duplication_chcon_main`;
 //! angr CLE/CFGFast extern no-return tagging; S2 flow follow).
 //!
 //! ## The gap
 //!
 //! On a normal dynamically-linked ELF, the `noreturn_known` analysis pass
-//! (`unlace-analysis` `loader/noreturn.rs`, the kuna analog of Ghidra's
+//! (`unlace-analysis` `loader/noreturn.rs`, the unlace analog of Ghidra's
 //! `NoReturnFunctionAnalyzer`) marks `exit`/`abort`/`__stack_chk_fail`/… no-return
 //! by scanning the symbol table and emitting a `NoReturnFact` keyed by the
 //! function's **address**. The commit sets the `FunctionSymbol` proto's
@@ -80,7 +80,7 @@ use unlace_sleigh::translate::PcodeEmit;
 
 use crate::architecture::Architecture;
 
-/// Marshaling element `<noreturn_externmatch>` (kuna). ElementIds live in the
+/// Marshaling element `<noreturn_externmatch>` (unlace). ElementIds live in the
 /// 4000+ range; 4103 (`noreturn_extern`, PR #90) is the previous max.
 pub const ELEM_NORETURN_EXTERNMATCH: ElementId = ElementId::new("noreturn_externmatch", 4104);
 
@@ -100,7 +100,7 @@ fn strip_leading_underscores(s: &str) -> &str {
     s.trim_start_matches('_')
 }
 
-/// Split a (possibly namespaced) symbol name into `(base, namespace)`. kuna
+/// Split a (possibly namespaced) symbol name into `(base, namespace)`. unlace
 /// installs `::`-split namespaces, so a demangled `Menu::exit` has base `exit` in
 /// namespace `Menu`; a flat C import `exit` has no namespace.
 fn base_and_namespace(name: &str) -> (&str, Option<&str>) {
@@ -289,7 +289,7 @@ mod tests {
         assert!(is_known_noreturn_name("std::exit"));
     }
 
-    /// (kuna DIV-78, GH-273) The libstdc++ `std::__throw_*` family reaches this
+    /// (unlace DIV-78, GH-273) The libstdc++ `std::__throw_*` family reaches this
     /// matcher in its DEMANGLED form (`query_call` resolves the display name), so
     /// the plain half of the list entry is what fires here; the mangled half is
     /// what the analysis-tier scan matches pre-demangle.

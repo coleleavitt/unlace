@@ -177,7 +177,7 @@ fn gcc_dwarf_parameters_reach_the_returned_expression() {
             &[root.join("specs").to_string_lossy().into_owned()],
         )
         .unwrap();
-        prog.arch_mut().set_kuna_option("ctypes", "on").unwrap();
+        prog.arch_mut().set_unlace_option("ctypes", "on").unwrap();
         prog.commit_pending_analysis().unwrap();
         for (name, expression) in [
             ("get_one", "(unsigned int)value.x"),

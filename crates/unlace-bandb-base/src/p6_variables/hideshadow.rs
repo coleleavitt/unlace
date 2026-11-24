@@ -1,4 +1,4 @@
-//! (kuna) Consolidate redundant copies of one value.
+//! (unlace) Consolidate redundant copies of one value.
 //!
 //! # The gap
 //!

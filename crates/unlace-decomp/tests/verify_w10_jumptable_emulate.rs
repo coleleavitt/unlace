@@ -15,7 +15,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::{
     AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
@@ -36,12 +36,12 @@ impl LoadImage for MemImage {
     fn get_file_name(&self) -> &str {
         "mem"
     }
-    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> KunaResult<()> {
+    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> UnlaceResult<()> {
         let off = addr.get_offset();
         for (i, b) in ptr.iter_mut().enumerate() {
             let pos = off.wrapping_add(i as u64);
             if pos < self.base || (pos - self.base) as usize >= self.bytes.len() {
-                return Err(KunaError::data_unavail("out of image"));
+                return Err(UnlaceError::data_unavail("out of image"));
             }
             *b = self.bytes[(pos - self.base) as usize];
         }

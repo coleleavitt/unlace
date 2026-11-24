@@ -66,9 +66,9 @@ pub enum GoWriteBarrierMode {
     Always,
 }
 
-impl crate::optionset::KunaOption for GoWriteBarrierMode {
+impl crate::optionset::UnlaceOption for GoWriteBarrierMode {
     const NAME: &'static str = "gowritebarrier";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         GoWriteBarrierMode::Auto
@@ -78,8 +78,8 @@ impl crate::optionset::KunaOption for GoWriteBarrierMode {
         GoWriteBarrierMode::Auto
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        parse_gowritebarrier_mode(value).map_err(unlace_base::error::KunaError::parse)
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
+        parse_gowritebarrier_mode(value).map_err(unlace_base::error::UnlaceError::parse)
     }
 }
 
@@ -136,14 +136,14 @@ pub fn is_write_barrier_name(name: &str) -> bool {
 
 /// Is the fold live for this function?
 pub fn live(data: &Funcdata) -> bool {
-    match data.get_arch().kuna_options.get::<GoWriteBarrierMode>() {
+    match data.get_arch().unlace_options.get::<GoWriteBarrierMode>() {
         GoWriteBarrierMode::Off => false,
         GoWriteBarrierMode::Auto => data.get_arch().source_lang.is_go(),
         GoWriteBarrierMode::Always => true,
     }
 }
 
-/// (kuna) `ActionGoWriteBarrier` — fold the Go GC write-barrier diamond
+/// (unlace) `ActionGoWriteBarrier` — fold the Go GC write-barrier diamond
 /// (option `gowritebarrier`, default auto).
 pub struct ActionGoWriteBarrier {
     base: ActionBase,

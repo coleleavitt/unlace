@@ -56,7 +56,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::{ATTRIB_SPACE, ATTRIB_TYPE, Decoder, ElementId, Encoder, IdRegistry};
 use unlace_base::space::{ATTRIB_DELAY, AddrSpace, AddrSpaceManager};
 use unlace_base::types::{int4, uint4};
@@ -133,7 +133,7 @@ pub trait FuncProtoOverride {
     fn set_override(&mut self, val: bool);
 
     /// Encode the prototype to a stream (C++ `FuncProto::encode`).
-    fn encode(&self, encoder: &mut dyn Encoder) -> KunaResult<()>;
+    fn encode(&self, encoder: &mut dyn Encoder) -> UnlaceResult<()>;
 
     /// Append a debug description of the prototype (C++ `FuncProto::printRaw`,
     /// here always with the C++ literal name `"func"`).
@@ -159,7 +159,7 @@ impl FuncProtoOverride for crate::fspec::FuncProto {
     fn set_override(&mut self, val: bool) {
         crate::fspec::FuncProto::set_override(self, val);
     }
-    fn encode(&self, encoder: &mut dyn Encoder) -> KunaResult<()> {
+    fn encode(&self, encoder: &mut dyn Encoder) -> UnlaceResult<()> {
         crate::fspec::FuncProto::encode(self, encoder)
     }
     fn print_raw(&self, s: &mut String) {
@@ -172,7 +172,7 @@ impl FuncProtoOverride for crate::fspec::FuncProto {
 
 /// A [`FuncProtoOverride`] backed by parsed [`PrototypePieces`](crate::fspec::PrototypePieces),
 /// the value an `override prototype <addr> <decl>` installs (C++ `IfcProtooverride`
-/// builds a `FuncProto` from the pieces; the kuna store keeps the pieces and
+/// builds a `FuncProto` from the pieces; the unlace store keeps the pieces and
 /// reconstructs the `FuncProto` at flow-time `applyPrototype`).  Mirrors the
 /// console's wrapper; lives here so the re-seed path
 /// ([`crate::decompile_drive`]) can construct it without depending on the console
@@ -187,8 +187,8 @@ impl FuncProtoOverride for PiecesProtoOverride {
         // The override flag rides on the rebuilt `FuncProto` (set in
         // `ArchFlowEnv::build_override_proto`), not on the pieces.
     }
-    fn encode(&self, _encoder: &mut dyn Encoder) -> KunaResult<()> {
-        Err(KunaError::lowlevel(
+    fn encode(&self, _encoder: &mut dyn Encoder) -> UnlaceResult<()> {
+        Err(UnlaceError::lowlevel(
             "kuna rust port: prototype-override encode needs the W4 FuncProto::encode",
         ))
     }
@@ -211,7 +211,7 @@ impl FuncProtoOverride for PiecesProtoOverride {
 /// supplied by the caller as this callback (which decodes the child element and
 /// returns the boxed override).
 pub type ProtoDecoder<'a> =
-    dyn FnMut(&mut dyn Decoder) -> KunaResult<Box<dyn FuncProtoOverride>> + 'a;
+    dyn FnMut(&mut dyn Decoder) -> UnlaceResult<Box<dyn FuncProtoOverride>> + 'a;
 
 // ---------------------------------------------------------------------------
 // Override (override.hh:50-92, override.cc:29-433)
@@ -239,23 +239,23 @@ pub struct Override {
     protoover: BTreeMap<Address, Box<dyn FuncProtoOverride>>,
     /// Addresses of indirect jumps that need multistage recovery.
     multistagejump: Vec<Address>,
-    /// (kuna) The targets the late model recovered for a multistage jump, used
+    /// (unlace) The targets the late model recovered for a multistage jump, used
     /// when the second flow-time stage still recovers a single address.
     multistagetargets: BTreeMap<Address, Vec<Address>>,
     /// Override the CALL <-> BRANCH interpretation of a branch instruction.
     flowoverride: BTreeMap<Address, uint4>,
     /// `/GS` checker call sites recognized after SSA and replayed on restart.
     msvc_cookie_calls: BTreeSet<Address>,
-    /// (kuna `spsolve`) Call sites the stack-pointer solve found not to return,
+    /// (unlace `spsolve`) Call sites the stack-pointer solve found not to return,
     /// replayed on the restart it asks for.
     no_return_calls: BTreeSet<Address>,
-    /// (kuna `formatstring`) Call points whose prototype override is a resolved
+    /// (unlace `formatstring`) Call points whose prototype override is a resolved
     /// format string, installed with an open tail it sheds after P4.
     format_calls: BTreeSet<Address>,
-    /// (kuna `persistcalls`) Guard every persistent global at every call on the
+    /// (unlace `persistcalls`) Guard every persistent global at every call on the
     /// restart re-flow.
     persist_calls_off: bool,
-    /// (kuna `sitetypelock`) Per-call-site output type lock: the CALL at
+    /// (unlace `sitetypelock`) Per-call-site output type lock: the CALL at
     /// \b call-point has its output Varnode type-locked to the held data-type
     /// when type recovery starts.  Engine-internal (not marshaled), like
     /// `msvc_cookie_calls`; survives a decompilation restart like every other
@@ -368,13 +368,13 @@ impl Override {
         self.multistagejump.push(addr);
     }
 
-    /// (kuna) Record the targets a late model recovered for the multistage jump
+    /// (unlace) Record the targets a late model recovered for the multistage jump
     /// at `addr`.
     pub fn insert_multistage_targets(&mut self, addr: Address, targets: Vec<Address>) {
         self.multistagetargets.insert(addr, targets);
     }
 
-    /// (kuna) The targets recorded for the multistage jump at `addr`.
+    /// (unlace) The targets recorded for the multistage jump at `addr`.
     pub fn multistage_targets(&self, addr: &Address) -> Option<&[Address]> {
         self.multistagetargets.get(addr).map(Vec::as_slice)
     }
@@ -390,37 +390,37 @@ impl Override {
         self.msvc_cookie_calls.insert(addr);
     }
 
-    /// (kuna `formatstring`) Mark the prototype override at `addr` as one a
+    /// (unlace `formatstring`) Mark the prototype override at `addr` as one a
     /// resolved format string produced.
     pub fn insert_format_call(&mut self, addr: Address) {
         self.format_calls.insert(addr);
     }
 
-    /// (kuna `formatstring`) Is the prototype override at `addr` a resolved
+    /// (unlace `formatstring`) Is the prototype override at `addr` a resolved
     /// format string's?
     pub fn is_format_call(&self, addr: &Address) -> bool {
         self.format_calls.contains(addr)
     }
 
-    /// (kuna `persistcalls`) Guard every persistent global at every call from
+    /// (unlace `persistcalls`) Guard every persistent global at every call from
     /// the next re-flow on.
     pub fn set_persist_calls_off(&mut self) {
         self.persist_calls_off = true;
     }
 
-    /// (kuna `persistcalls`) Has a re-flow been asked to guard every
+    /// (unlace `persistcalls`) Has a re-flow been asked to guard every
     /// persistent global at every call?
     pub fn persist_calls_off(&self) -> bool {
         self.persist_calls_off
     }
 
-    /// (kuna `spsolve`) Does the call at `addr` not return, by the stack-pointer
+    /// (unlace `spsolve`) Does the call at `addr` not return, by the stack-pointer
     /// solve of an earlier pass?
     pub fn is_no_return_call(&self, addr: &Address) -> bool {
         self.no_return_calls.contains(addr)
     }
 
-    /// (kuna `spsolve`) Record that the call at `addr` does not return; `false`
+    /// (unlace `spsolve`) Record that the call at `addr` does not return; `false`
     /// when it was already recorded.
     pub fn insert_no_return_call(&mut self, addr: Address) -> bool {
         self.no_return_calls.insert(addr)
@@ -432,7 +432,7 @@ impl Override {
         self.msvc_cookie_calls.contains(addr)
     }
 
-    /// (kuna `sitetypelock`) Lock the output of the CALL at `callpoint` to
+    /// (unlace `sitetypelock`) Lock the output of the CALL at `callpoint` to
     /// `ct`.  Applied by `ActionSiteTypeLock` when type recovery starts; a
     /// later insert at the same call point replaces the earlier one.
     pub fn insert_output_typelock(
@@ -443,7 +443,7 @@ impl Override {
         self.outputtypelock.insert(callpoint, ct);
     }
 
-    /// (kuna `sitetypelock`) The output type locked at this call point, if any.
+    /// (unlace `sitetypelock`) The output type locked at this call point, if any.
     pub fn find_output_typelock(
         &self,
         callpoint: &Address,
@@ -454,7 +454,7 @@ impl Override {
         self.outputtypelock.get(callpoint)
     }
 
-    /// (kuna `sitetypelock`) Does any call point hold an output type lock?
+    /// (unlace `sitetypelock`) Does any call point hold an output type lock?
     #[inline]
     pub fn has_output_typelocks(&self) -> bool {
         !self.outputtypelock.is_empty()
@@ -620,7 +620,7 @@ impl Override {
     ///
     /// \param encoder is the stream encoder
     /// \param glb is the Architecture's address-space manager
-    pub fn encode(&self, encoder: &mut dyn Encoder, glb: &AddrSpaceManager) -> KunaResult<()> {
+    pub fn encode(&self, encoder: &mut dyn Encoder, glb: &AddrSpaceManager) -> UnlaceResult<()> {
         if self.forcegoto.is_empty()
             && self.deadcodedelay.is_empty()
             && self.indirectover.is_empty()
@@ -694,7 +694,7 @@ impl Override {
         &mut self,
         decoder: &mut dyn Decoder,
         proto_decoder: &mut ProtoDecoder<'_>,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let elem_id = decoder.open_element_id(&ELEM_OVERRIDE)?;
         loop {
             let sub_id = decoder.open_element()?;
@@ -717,7 +717,7 @@ impl Override {
                 let delay = decoder.read_signed_integer_id(&ATTRIB_DELAY)?;
                 let spc = decoder.read_space_id(&ATTRIB_SPACE)?;
                 if delay < 0 {
-                    return Err(KunaError::lowlevel("Bad deadcodedelay tag"));
+                    return Err(UnlaceError::lowlevel("Bad deadcodedelay tag"));
                 }
                 // delay was just checked non-negative; it fits int4 as in the
                 // C++ `readSignedInteger` -> int4 assignment.
@@ -729,7 +729,7 @@ impl Override {
                 let type_ = Override::string_to_type(&decoder.read_string_id(&ATTRIB_TYPE)?);
                 let addr = Address::decode(decoder)?;
                 if type_ == flow_type::NONE || addr.is_invalid() {
-                    return Err(KunaError::lowlevel("Bad flowoverride tag"));
+                    return Err(UnlaceError::lowlevel("Bad flowoverride tag"));
                 }
                 self.insert_flow_override(addr, type_);
             }

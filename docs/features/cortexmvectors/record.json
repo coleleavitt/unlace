@@ -85,7 +85,7 @@
     },
     {
       "question": "Why no tests/stages/*.xml two-pass case?",
-      "answer": "The oracle keys entirely on ELF structure (sh_flags, PT_LOAD flags, e_entry, section bytes at a section base). The datatest harness embeds raw bytechunks and never constructs an ObjectLoadImage, so the option is unobservable there. Replaced by kuna-console/tests/verify_cortexmvectors.rs, a two-pass cross-crate gate over a committed fixture — the same wiring every sibling analysis-tier discovery flag uses."
+      "answer": "The oracle keys entirely on ELF structure (sh_flags, PT_LOAD flags, e_entry, section bytes at a section base). The datatest harness embeds raw bytechunks and never constructs an ObjectLoadImage, so the option is unobservable there. Replaced by console/tests/verify_cortexmvectors.rs, a two-pass cross-crate gate over a committed fixture — the same wiring every sibling analysis-tier discovery flag uses."
     }
   ]
 }

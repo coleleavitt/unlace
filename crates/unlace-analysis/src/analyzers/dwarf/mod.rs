@@ -1,4 +1,4 @@
-//! DWARF debug-info names + types — the kuna analog of Ghidra's `DWARFAnalyzer`
+//! DWARF debug-info names + types — the unlace analog of Ghidra's `DWARFAnalyzer`
 //! ("DWARF").
 //!
 //! When a binary carries `.debug_*` sections, the compiler has already recorded
@@ -8,7 +8,7 @@
 //! instead of `FUN_00401136(undefined8,undefined8)`, and a typed parameter like
 //! `char *binary` renders instead of `undefined8`/`long`.
 //!
-//! This pass reproduces the same two recoveries against kuna's symbol + type
+//! This pass reproduces the same two recoveries against unlace's symbol + type
 //! tables:
 //!   * **subtask 1 (names + globals)** — each *defined* `DW_TAG_subprogram`
 //!     (one with `DW_AT_low_pc`) emits a [`SymFact`]`{Function}` at its entry
@@ -16,7 +16,7 @@
 //!     a [`SymFact`]`{Data}`.
 //!   * **subtask 2 (typed signatures)** — each defined subprogram also emits a
 //!     [`PrototypePieces`] built from its return-type DIE + `DW_TAG_formal_parameter`
-//!     children, mapping each DWARF type DIE to a kuna [`Datatype`] via the
+//!     children, mapping each DWARF type DIE to a unlace [`Datatype`] via the
 //!     architecture's [`TypeFactory`].
 //!   * **subtask 3 (named, typed stack locals)** — each defined subprogram's
 //!     direct `DW_TAG_variable`/`DW_TAG_formal_parameter` children that carry a
@@ -26,7 +26,7 @@
 //!     function's `ScopeLocal` (the `map addr`/`seed_mapped_symbols` path) so the
 //!     decompiler renders `FILE *file` instead of `local_18`.
 //!
-//! ## Origin (upstream Ghidra, the tree kuna was ported from)
+//! ## Origin (upstream Ghidra, the tree unlace was ported from)
 //!
 //! - Driver: `Ghidra/Features/Base/.../analysis/DWARFAnalyzer.java` (`added()`,
 //!   builds DWARFProgram + runs `DWARFImporter.performImport`).
@@ -41,13 +41,13 @@
 //! - `DWARFDataTypeImporter.java` — `getDataType(DIEAggregate)`, the recursive
 //!   tag switch ([`build_datatype`] reproduces it): `makeDataTypeForPointer`,
 //!   base_type, struct/union/array/typedef/const/volatile, plus the
-//!   `trackRecursion` cycle guard ([`kuna_typedepth`]) that survives type cycles.
+//!   `trackRecursion` cycle guard ([`unlace_typedepth`]) that survives type cycles.
 //!
 //! ## Dependency-substitution LOSS
 //!
 //! Ghidra hand-rolls a complete DWARF reader in `ghidra.app.util.bin.format.dwarf.*`
 //! (DWARFProgram, DebugInfoEntry, DIEAggregate, DWARFAbbreviation, StringTable).
-//! kuna substitutes [`gimli`], the de-facto Rust DWARF reader, for that parser
+//! unlace substitutes [`gimli`], the de-facto Rust DWARF reader, for that parser
 //! *wholesale* — the same dependency-substitution LOSS as BFD -> `object` (see
 //! `loadimage_object.rs` / docs/rust-port/losses.md). We use gimli's high-level
 //! `Dwarf::attr_string` / `attr_address` accessors (NOT raw form decode), so the
@@ -70,12 +70,12 @@
 //! - We skip `DW_TAG_label`, `DW_TAG_call_site`, inlined-subroutine, lexical-block
 //!   comments, and source-info/plate comments — all listing cosmetics with zero
 //!   decompiler-output payoff (the same scope as the strings/demangle losses).
-//! - **Aggregate layout is now imported** (`dwarfstructs`, [`kuna_dwarfstructs`]):
+//! - **Aggregate layout is now imported** (`dwarfstructs`, [`unlace_dwarfstructs`]):
 //!   a `DW_TAG_structure_type`/`union_type`/`class_type` carries its
 //!   `DW_AT_byte_size` and its `DW_TAG_member` children (offsets verbatim,
 //!   bitfields included) onto the interned type.
 //! - **Discriminated unions are now imported too** (`dwarfvariants`,
-//!   [`kuna_dwarfvariants`]): a `DW_TAG_structure_type` carrying a
+//!   [`unlace_dwarfvariants`]): a `DW_TAG_structure_type` carrying a
 //!   `DW_TAG_variant_part` — a Rust tagged enum, which has no `DW_TAG_member` of
 //!   its own — recovers its `DW_AT_discr` discriminant, each `DW_TAG_variant`'s
 //!   `DW_AT_discr_value`, and each variant's payload. LOSS: the overlay is a
@@ -89,7 +89,7 @@
 //!
 //! ## PIE / load-bias limitation
 //!
-//! kuna's loader treats a DWARF `DW_AT_low_pc` as the runtime VMA verbatim (true
+//! unlace's loader treats a DWARF `DW_AT_low_pc` as the runtime VMA verbatim (true
 //! for the vendored PIE `cet_pie_x86_64`: its DWARF low_pc 0x1357 equals the
 //! `.symtab` address). A target with a nonzero load bias would need a base
 //! adjustment (Ghidra's `DWARFProgram.getCodeAddress` applies the program
@@ -181,14 +181,14 @@ fn dwarf_section_data(file: &object::File, id: gimli::SectionId) -> Option<Vec<u
 /// `stack_offset = call_frame_cfa + fbreg`). Ghidra reads it per-language from the
 /// processor's `<arch>.dwarf` `<call_frame_cfa value="N"/>` element
 /// (`DWARFRegisterMappings.getCallFrameCFA`); this is the faithful subset for the
-/// ELF architectures kuna can produce here, transcribed from those files:
+/// ELF architectures unlace can produce here, transcribed from those files:
 ///
 /// - x86-64 (`x86-64.dwarf`): 8 — push of return addr below the entry-SP CFA.
 /// - x86 32-bit (`x86.dwarf`): 4.
 /// - AArch64/ARM/SPARC/PowerPC: 0 — frame-base already at the CFA, no SP-adjust.
 /// - RISC-V 64 (`riscv64.dwarf`): 8.
 ///
-/// `None` for any architecture whose constant kuna does not vend; the DWARF
+/// `None` for any architecture whose constant unlace does not vend; the DWARF
 /// stack-local recovery then SKIPS `DW_OP_fbreg` locals for that target (additive,
 /// faithful — we never guess a frame offset we can't ground in upstream's table).
 fn call_frame_cfa(arch: object::Architecture) -> Option<i64> {
@@ -202,7 +202,7 @@ fn call_frame_cfa(arch: object::Architecture) -> Option<i64> {
     }
 }
 
-/// (kuna `dwarfglobaltypes`) A global's DWARF type is worth locking when it has
+/// (unlace `dwarfglobaltypes`) A global's DWARF type is worth locking when it has
 /// a size and says more than a raw word: not void, not `undefined`, and not an
 /// incomplete aggregate.
 fn global_type_is_whole(t: &Datatype) -> bool {
@@ -239,7 +239,7 @@ struct DieSnap {
     /// `DW_AT_byte_size` (base_type/pointer/struct sizing; on a `DW_TAG_member`
     /// it is the DWARF 2/3 bitfield CONTAINER width).
     byte_size: Option<u64>,
-    /// (kuna `dwarfstructs`) `DW_AT_data_member_location` — a `DW_TAG_member`'s
+    /// (unlace `dwarfstructs`) `DW_AT_data_member_location` — a `DW_TAG_member`'s
     /// byte offset within its aggregate, taken verbatim. `None` when the
     /// attribute is absent or its expression is not a constant displacement;
     /// [`Self::member_location_unknown`] tells the two apart.
@@ -247,22 +247,22 @@ struct DieSnap {
     /// The member has a `DW_AT_data_member_location` whose expression is not a
     /// constant displacement (a dynamic virtual-base location, or malformed).
     member_location_unknown: bool,
-    /// (kuna `dwarfstructs`) `DW_AT_bit_size` — a bitfield member's width in bits.
+    /// (unlace `dwarfstructs`) `DW_AT_bit_size` — a bitfield member's width in bits.
     bit_size: Option<u64>,
-    /// (kuna `dwarfstructs`) `DW_AT_bit_offset` — the DWARF 2/3 bitfield spelling:
+    /// (unlace `dwarfstructs`) `DW_AT_bit_offset` — the DWARF 2/3 bitfield spelling:
     /// bits from the MOST significant bit of the container named by
     /// `DW_AT_byte_size`. A packed field that extends past its container has a
     /// negative one ([`signed_bit_offset`]).
     bit_offset: Option<i64>,
-    /// (kuna `dwarfstructs`) `DW_AT_data_bit_offset` — the DWARF 4/5 bitfield
+    /// (unlace `dwarfstructs`) `DW_AT_data_bit_offset` — the DWARF 4/5 bitfield
     /// spelling: bits from the start of the aggregate.
     data_bit_offset: Option<u64>,
-    /// (kuna `dwarfstructs`) `DW_AT_alignment`, when the producer states it.
+    /// (unlace `dwarfstructs`) `DW_AT_alignment`, when the producer states it.
     alignment: Option<u64>,
-    /// (kuna `dwarfvariants`) `DW_AT_discr` on a `DW_TAG_variant_part` — the
+    /// (unlace `dwarfvariants`) `DW_AT_discr` on a `DW_TAG_variant_part` — the
     /// unit offset of the `DW_TAG_member` that IS the discriminant.
     discr_ref: Option<usize>,
-    /// (kuna `dwarfvariants`) `DW_AT_discr_value` on a `DW_TAG_variant` — the
+    /// (unlace `dwarfvariants`) `DW_AT_discr_value` on a `DW_TAG_variant` — the
     /// discriminant value that selects it. `None` on a variant that carries none
     /// marks the DEFAULT (niche / untagged) variant, which is a fact, not a gap.
     discr_value: Option<i64>,
@@ -279,11 +279,11 @@ struct DieSnap {
     const_value: Option<i64>,
     /// True if `DW_AT_declaration` is set (a declaration-only DIE — skip).
     declaration: bool,
-    /// (kuna `calltargettype`) `DW_AT_prototyped` on a `DW_TAG_subroutine_type`.
+    /// (unlace `calltargettype`) `DW_AT_prototyped` on a `DW_TAG_subroutine_type`.
     prototyped: bool,
     /// True if the DIE carries a `DW_AT_location` (a global var has a real address).
     has_location: bool,
-    /// (kuna `dwarfnocall`) `DW_AT_calling_convention` is `DW_CC_nocall`.
+    /// (unlace `dwarfnocall`) `DW_AT_calling_convention` is `DW_CC_nocall`.
     nocall: bool,
     /// `DW_OP_addr` operand of a simple `DW_AT_location`, if that is its form.
     addr_location: Option<u64>,
@@ -293,10 +293,10 @@ struct DieSnap {
     fbreg_location: Option<i64>,
     /// `DW_AT_frame_base` on a subprogram.
     frame_base: Option<FrameBase>,
-    /// (kuna `dwarfscopes`) A variable held in a register: the DWARF register
+    /// (unlace `dwarfscopes`) A variable held in a register: the DWARF register
     /// and, for a location-list entry, the PC its range starts at.
     reg_location: Option<(u16, Option<u64>)>,
-    /// (kuna `dwarfscopes`) A parameter whose location at the function's entry
+    /// (unlace `dwarfscopes`) A parameter whose location at the function's entry
     /// is a single register.
     entry_register: Option<u16>,
     indirect_parameter: bool,
@@ -305,16 +305,16 @@ struct DieSnap {
     depth: isize,
     /// Offsets of this DIE's direct children, in order.
     children: Vec<usize>,
-    /// (kuna `cppproto`) `DW_AT_specification` or `DW_AT_abstract_origin` — the
+    /// (unlace `cppproto`) `DW_AT_specification` or `DW_AT_abstract_origin` — the
     /// one-hop link from an out-of-line DEFINITION to the DECLARATION that carries
     /// its name, return type and (for an abstract instance) its parameter names.
     origin_ref: Option<usize>,
-    /// (kuna `cppproto`) True when [`Self::origin_ref`] came from
+    /// (unlace `cppproto`) True when [`Self::origin_ref`] came from
     /// `DW_AT_specification` (a definition/declaration pair) rather than
     /// `DW_AT_abstract_origin` (a concrete instance of an abstract one). Only the
-    /// former is followed for a subprogram — see `kuna_cppproto`'s clone note.
+    /// former is followed for a subprogram — see `unlace_cppproto`'s clone note.
     origin_is_spec: bool,
-    /// (kuna `cppproto`) This DIE's parent offset, so the namespace/class ancestry
+    /// (unlace `cppproto`) This DIE's parent offset, so the namespace/class ancestry
     /// of a declaration can be walked into a qualified name.
     parent: Option<usize>,
 }
@@ -442,7 +442,7 @@ fn snapshot_unit_with_go(
         }
         let mut snap = DieSnap::new(entry.tag(), depth);
         snap.parent = parent_off;
-        // (kuna `cppproto`) The one-hop definition->declaration link. gcc/clang put
+        // (unlace `cppproto`) The one-hop definition->declaration link. gcc/clang put
         // an out-of-line member or namespace definition at CU top level with only
         // `DW_AT_specification`, and a concrete out-of-line instance of an inlined
         // function with only `DW_AT_abstract_origin`; both leave the DIE with no
@@ -505,7 +505,7 @@ fn snapshot_unit_with_go(
         if let Some(v) = entry.attr_value(gimli::DW_AT_alignment) {
             snap.alignment = v.udata_value();
         }
-        // (kuna `dwarfvariants`) The discriminated-union attributes. `DW_AT_discr`
+        // (unlace `dwarfvariants`) The discriminated-union attributes. `DW_AT_discr`
         // is a reference to the artificial tag member; `DW_AT_discr_value` is a
         // constant whose signedness follows the discriminant type, so it is read
         // signed-first exactly like `DW_AT_const_value` above.
@@ -909,13 +909,13 @@ fn read_sleb128(buf: &[u8]) -> Option<(i64, usize)> {
     }
 }
 
-/// Build the kuna [`Datatype`] for the type DIE at `off`, recursing through the
+/// Build the unlace [`Datatype`] for the type DIE at `off`, recursing through the
 /// DWARF type chain (faithful reduction of `DWARFDataTypeImporter.getDataType`'s
 /// tag switch). `None` for a missing/unbuildable type; the caller skips that one
 /// piece rather than failing the analysis. `walk` is the recursion guard
 /// ([`typedepth::TypeWalk`]) and is the whole of the termination argument.
 ///
-/// `cpp` adds the C++-only tag arms (see [`kuna_cppproto`]): a
+/// `cpp` adds the C++-only tag arms (see [`unlace_cppproto`]): a
 /// `DW_TAG_class_type` maps like a structure and a
 /// `DW_TAG_reference_type`/`DW_TAG_rvalue_reference_type` like a pointer.
 fn build_datatype(
@@ -954,7 +954,7 @@ fn build_datatype_at(
     // structure, and collapsing is what carries an anonymous aggregate's typedef
     // name onto it (`mbstate_t`, not the shared `anon_struct`). Stripping cannot
     // loop (the hop count is bounded) and leaves the cycle guard where it belongs,
-    // on the pointer/array/struct arms that actually recurse. (kuna `cppproto`
+    // on the pointer/array/struct arms that actually recurse. (unlace `cppproto`
     // introduced it for C++; `typedepth` extends it to the C callers.)
     let (die, alias) = if cpp || walk.collapse_qualifiers() {
         strip_qualifiers(die, dies)
@@ -1009,7 +1009,7 @@ fn build_datatype_at(
         }
         gimli::DW_TAG_array_type => {
             let elem = build_datatype(die.type_ref, dies, types, word_size, walk, cpp)?;
-            // Flattened extent: the product of every known subrange length (`kuna_dwarfbounds`).
+            // Flattened extent: the product of every known subrange length (`unlace_dwarfbounds`).
             let count = die
                 .children
                 .iter()
@@ -1077,19 +1077,19 @@ fn build_datatype_at(
 }
 
 /// Intern the aggregate for `die`: its `DW_AT_byte_size` + `DW_TAG_member`
-/// layout ([`kuna_dwarfstructs`]), after the variant-part arm
-/// ([`kuna_dwarfvariants`]) has had its turn. The name falls back to the
+/// layout ([`unlace_dwarfstructs`]), after the variant-part arm
+/// ([`unlace_dwarfvariants`]) has had its turn. The name falls back to the
 /// anonymous `fallback` when the BORROWED typedef name is not a name the type
 /// factory can hold an aggregate under.
 ///
-/// The alias is a name from another namespace, and it can already be taken: kuna
+/// The alias is a name from another namespace, and it can already be taken: unlace
 /// registers a core type called `code`, and zlib's `inftrees.h` typedefs an
 /// anonymous struct to exactly that. The factory then refuses the redefinition,
 /// the aggregate builds as `None`, and the pointer arm's `.or_else(get_type_void)`
 /// turns `code *next` into `void *next` — the very degradation this pass exists
 /// to remove. Only an aggregate that had no name of its own falls back: a
 /// genuinely named type keeps the pre-existing behavior (no new name is asserted
-/// on kuna's behalf).
+/// on unlace's behalf).
 #[allow(clippy::too_many_arguments)]
 fn intern_aggregate(
     types: &dyn TypeFactory,
@@ -1102,7 +1102,7 @@ fn intern_aggregate(
     cpp: bool,
     union: bool,
 ) -> Option<Rc<Datatype>> {
-    // (kuna `dwarfvariants`) A `DW_TAG_variant_part` child means the aggregate is
+    // (unlace `dwarfvariants`) A `DW_TAG_variant_part` child means the aggregate is
     // a discriminated union, whose layout the member walk below cannot see (there
     // are no `DW_TAG_member` children to walk). `None` here means the arm REFUSED
     // this DIE -- it fell short of one of its guards -- and the member walk
@@ -1119,7 +1119,7 @@ fn intern_aggregate(
     )
 }
 
-/// (kuna `cppproto`) Follow the transparent qualifier chain
+/// (unlace `cppproto`) Follow the transparent qualifier chain
 /// (`typedef`/`const`/`volatile`/`restrict`) to the first DIE that describes real
 /// structure, also returning the innermost `DW_TAG_typedef` name seen on the way.
 ///
@@ -1222,7 +1222,7 @@ fn enum_fallback(size: i32, signed: Option<bool>) -> type_metatype {
     }
 }
 
-/// Build a real kuna enum `Datatype` from a `DW_TAG_enumeration_type` DIE and its
+/// Build a real unlace enum `Datatype` from a `DW_TAG_enumeration_type` DIE and its
 /// `DW_TAG_enumerator` children (`DWARFDataTypeImporter.makeDataTypeForEnum`).
 ///
 /// The decompiler already renders an enum-typed constant by member name; what was
@@ -1292,7 +1292,7 @@ fn build_enum(
     types.set_enum_values(&ct, nmap).ok()
 }
 
-/// (kuna `calltargettype`) The function type a `DW_TAG_subroutine_type` declares,
+/// (unlace `calltargettype`) The function type a `DW_TAG_subroutine_type` declares,
 /// so a pointer to it is a function pointer C can call rather than `void *`.
 /// An unprototyped `int (*)()` states no parameters (C++ states none of its
 /// types prototyped), C cannot spell a `...` with no parameter before it, and a
@@ -1391,11 +1391,11 @@ fn build_pieces(
         first_var_arg_slot,
         output_storage: None,
         input_storage: Vec::new(),
-        kuna_library_names: None,
+        unlace_library_names: None,
     })
 }
 
-/// (kuna `dwarfnocall`) Record which parameters of a `DW_CC_nocall` subprogram
+/// (unlace `dwarfnocall`) Record which parameters of a `DW_CC_nocall` subprogram
 /// carry no location. The compiler changed such a function's convention (clang's
 /// dead-argument elimination on an internal function): a parameter it removed
 /// is still listed but has no `DW_AT_location`, and the remaining ones moved
@@ -1433,7 +1433,7 @@ fn note_nocall(
 /// fbreg location, no `DW_AT_type`, an unbuildable type, an empty name) is SKIPPED
 /// — never a failure (the names+types of subtasks 1+2 are unaffected).
 ///
-/// (kuna `dwarfscopes`) Locals nested in lexical blocks and inlined
+/// (unlace `dwarfscopes`) Locals nested in lexical blocks and inlined
 /// subroutines are collected too (an inlined one named by its abstract origin,
 /// a repeated name suffixed), and a variable held in a register becomes a
 /// [`RegLocalFact`](crate::pass::RegLocalFact).
@@ -1536,7 +1536,7 @@ impl DwarfPass {
         //
         // DWARFProgram.isDWARF: no `.debug_info` => not a DWARF program, empty out.
         if dwarf_section_data(ctx.file, gimli::SectionId::DebugInfo).is_none() {
-            // (kuna `debuglink`) A stripped image's DWARF lives in its companion
+            // (unlace `debuglink`) A stripped image's DWARF lives in its companion
             // debug file; the addresses are the image's own.
             if unlace_decomp::debuglink::debuglink_enabled() {
                 let companion = ctx
@@ -1572,7 +1572,7 @@ impl DwarfPass {
         let Ok(sections) = gimli::DwarfSections::load(load) else {
             return out;
         };
-        // (kuna `debuglink`) A DWZ-compressed debug file keeps the strings and
+        // (unlace `debuglink`) A DWZ-compressed debug file keeps the strings and
         // types it shares with other packages' debug files in a supplementary
         // file its `.gnu_debugaltlink` names; its `strp_alt`/`strp_sup` names
         // then resolve through `Dwarf::sup`.
@@ -1595,8 +1595,8 @@ impl DwarfPass {
         let types = ctx.arch.types();
         let (_addr_size, word_size) = ctx.arch.data_org();
         // subtask 3: the per-arch static CFA constant that turns a `DW_OP_fbreg`
-        // frame-base offset into a kuna stack-space offset (`stack = cfa + fbreg`).
-        // `None` => this target's CFA is not in kuna's table; skip fbreg locals
+        // frame-base offset into a unlace stack-space offset (`stack = cfa + fbreg`).
+        // `None` => this target's CFA is not in unlace's table; skip fbreg locals
         // (additive — the names+types from subtasks 1+2 still apply).
         let cfa = call_frame_cfa(ctx.file.architecture());
         let complex_max =
@@ -1713,7 +1713,7 @@ impl DwarfPass {
                                 );
                             }
                         }
-                        // (kuna `cppproto`) The C++ arm: fuse the definition with the
+                        // (unlace `cppproto`) The C++ arm: fuse the definition with the
                         // declaration it links to, qualify the name by its
                         // namespace/class ancestry, and key the prototype by entry
                         // address. Emitted into a SEPARATE fact set the commit
@@ -2339,7 +2339,7 @@ mod tests {
 
     /// Snapshot-parse cet_pie and confirm `elaborate_debug_symbol`'s three
     /// `DW_OP_fbreg` locals decode to the expected frame-base offsets, and that
-    /// applying the x86-64 CFA constant (8) lands each at the kuna stack offset that
+    /// applying the x86-64 CFA constant (8) lands each at the unlace stack offset that
     /// the disassembly confirms (`-0x18`/`-0x10`/`-0x8` off `%rbp`, i.e. CFA-relative
     /// -32/-24/-16). This is the offset math the commit then wraps onto the stack
     /// space; the full name+type install render is the e2e `verify_s1_dwarf.rs` gate.

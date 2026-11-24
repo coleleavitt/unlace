@@ -12,7 +12,7 @@
 //! function-entry list the engine reported. Per entry:
 //!
 //! * `"plt"`   — the entry VMA falls inside a stub section, or the name is an
-//!   imported symbol. (kuna's function names are demangled; an import that
+//!   imported symbol. (unlace's function names are demangled; an import that
 //!   only matches after demangling is caught by the range test instead.)
 //! * `"thunk"` — the entry's single instruction is a *lone jump*
 //!   ([`ConsoleProgram::lone_jump_target`]): direct to another known function
@@ -109,7 +109,7 @@ impl Classifier {
         // undefined symbol, bound to a synthetic address purely so a call to it
         // renders by name. It is a call that leaves this module and has no body
         // to show, which is what the `plt` group means here; the name test below
-        // cannot catch it, since kuna's names are demangled
+        // cannot catch it, since unlace's names are demangled
         // (`CellClass::Cell_Coord`) while the symbol table's are not.
         if !prog.vma_bytes_mapped(norm) {
             return "plt";

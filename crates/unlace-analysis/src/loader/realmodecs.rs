@@ -1,4 +1,4 @@
-//! (kuna #1288) The x86 real-mode code segment in the decode context.
+//! (unlace #1288) The x86 real-mode code segment in the decode context.
 //!
 //! `x86-16.sla` keeps the real-mode code segment in the context variable
 //! `realCS` (default 0). A near branch decodes inside the 64 KiB segment that

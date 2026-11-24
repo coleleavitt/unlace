@@ -12,7 +12,7 @@ use crate::common;
 const DECLARED: &str = "int parse_header(unsigned char *buf,unsigned int len,hdr *out)";
 const RECOVERED: &str = "int parse_header(int *a0,unsigned int a1,int *a2)";
 
-fn kuna() -> Command {
+fn unlace() -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
     command
         .env("SLEIGHHOME", common::repo_root().join("specs"))
@@ -21,7 +21,7 @@ fn kuna() -> Command {
 }
 
 fn build(object: &Path, out: &Path, extra: &[&str]) -> String {
-    let result = kuna()
+    let result = unlace()
         .args(["fid", "build"])
         .arg(object)
         .arg("-o")
@@ -36,7 +36,7 @@ fn build(object: &Path, out: &Path, extra: &[&str]) -> String {
 }
 
 fn decompile(db: &Path, extra: &[&str]) -> String {
-    let result = kuna()
+    let result = unlace()
         .arg("decompile-all")
         .arg(common::repo_root().join("tests/fixtures/fid/protos/prog"))
         .args(["--option", "fid", "on"])
@@ -150,7 +150,7 @@ fn layouts() -> std::path::PathBuf {
 }
 
 fn build_all(objects: &[&str], out: &Path) -> String {
-    let result = kuna()
+    let result = unlace()
         .args(["fid", "build"])
         .args(objects.iter().map(|o| layouts().join(o)))
         .arg("-o")
@@ -165,7 +165,7 @@ fn build_all(objects: &[&str], out: &Path) -> String {
 
 /// `decompile-all` of the stripped layouts `prog` against `db`: (stdout, stderr).
 fn decompile_layouts(db: &Path) -> (String, String) {
-    let result = kuna()
+    let result = unlace()
         .arg("decompile-all")
         .arg(layouts().join("prog"))
         .args(["--option", "fid", "on"])

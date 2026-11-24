@@ -3,7 +3,7 @@
 //! names and lift to user operations that take the ZA operand by number;
 //! before, every one was a bad instruction.
 use crate::common;
-use common::{repo_root, run_kuna};
+use common::{repo_root, run_unlace};
 
 fn fixture(name: &str) -> String {
     repo_root()
@@ -15,7 +15,7 @@ fn fixture(name: &str) -> String {
 }
 
 fn decompile(elf: &str, function: &str) -> String {
-    let (stdout, stderr, code) = run_kuna(&["decompile", elf, function]);
+    let (stdout, stderr, code) = run_unlace(&["decompile", elf, function]);
     assert_eq!(code, 0, "{function}: {stderr}");
     let lower = stdout.to_lowercase();
     assert!(!lower.contains("unimplemented"), "{function}:\n{stdout}");
@@ -28,7 +28,7 @@ fn every_sme_encoding_decodes_as_llvm_names_it() {
     let expected = std::fs::read_to_string(fixture("probe.txt")).unwrap();
     let expected: Vec<&str> = expected.lines().collect();
     let elf = fixture("sme.elf");
-    let (stdout, stderr, code) = run_kuna(&["disassemble", &elf, "probe", "--count", "4096"]);
+    let (stdout, stderr, code) = run_unlace(&["disassemble", &elf, "probe", "--count", "4096"]);
     assert_eq!(code, 0, "{stderr}");
     let listing: Vec<String> = stdout
         .lines()

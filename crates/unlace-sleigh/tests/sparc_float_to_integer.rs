@@ -1,6 +1,6 @@
 //! Floating-to-integer conversions use integer destination widths and encodings.
 use std::{path::PathBuf, rc::Rc};
-use unlace_base::{address::Address, error::KunaResult, space::RegisterLookup};
+use unlace_base::{address::Address, error::UnlaceResult, space::RegisterLookup};
 use unlace_num::{opcodes::OpCode, pcoderaw::VarnodeData};
 use unlace_sleigh::{
     globalcontext::ContextInternal, loadimage::LoadImage, sleigh::Sleigh, translate::PcodeEmit,
@@ -15,7 +15,7 @@ impl LoadImage for Bytes {
         Vec::new()
     }
     fn adjust_vma(&mut self, _: i64) {}
-    fn load_fill(&mut self, out: &mut [u8], addr: &Address) -> KunaResult<()> {
+    fn load_fill(&mut self, out: &mut [u8], addr: &Address) -> UnlaceResult<()> {
         for (i, byte) in out.iter_mut().enumerate() {
             *byte = addr
                 .get_offset()

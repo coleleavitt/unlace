@@ -1,4 +1,4 @@
-//! (kuna `cppproto`) The C++ arm of the DWARF pass: resolve a subprogram
+//! (unlace `cppproto`) The C++ arm of the DWARF pass: resolve a subprogram
 //! DEFINITION through its declaration link, qualify it by its namespace/class
 //! ancestry, and bind the recovered prototype by ENTRY ADDRESS.
 //!
@@ -17,7 +17,7 @@
 //!   likewise carry `DW_AT_abstract_origin` instead of a name and type.
 //!
 //! Both were dropped whole by the `snap.name.is_empty()` guard, so on a `-g` C++
-//! binary kuna lost the name, the typed signature AND the named stack locals of
+//! binary unlace lost the name, the typed signature AND the named stack locals of
 //! every member function. Chasing the link is a **single hop** — the declaration
 //! a definition points at is itself a declaration, never another indirection.
 //!
@@ -47,7 +47,7 @@
 //! `Architecture::set_function_prototype_pieces` resolves a NAME in the global
 //! scope, while the parked prototype is read back by ADDRESS
 //! (`Database::function_proto_pieces`). C++ breaks the round trip twice over: a
-//! demangled template name is normalized (kuna's symbol for `maxof<int>` is
+//! demangled template name is normalized (unlace's symbol for `maxof<int>` is
 //! `maxof`), and a qualified name lives in a nested scope
 //! (`find_create_scope_from_symbol_name` puts `Account::deposit` in scope
 //! `Account`) that the global by-name query never reaches. `DW_AT_low_pc` is the
@@ -188,7 +188,7 @@ fn var_arg_slot(die: &DieSnap, dies: &BTreeMap<usize, DieSnap>, nparams: usize) 
 /// ancestry outermost-first (Ghidra's `DWARFName` / `DWARFProgram.getName`).
 ///
 /// An anonymous ancestor (an unnamed namespace or class) contributes nothing —
-/// Ghidra spells it `(anonymous namespace)`, but kuna resolves the prototype by
+/// Ghidra spells it `(anonymous namespace)`, but unlace resolves the prototype by
 /// address, so the shorter name only has to be a legible label.
 fn qualified_name(die: &DieSnap, dies: &BTreeMap<usize, DieSnap>) -> String {
     let mut path: Vec<&str> = Vec::new();
@@ -262,7 +262,7 @@ pub(super) fn build_pieces(
         first_var_arg_slot: res.first_var_arg_slot,
         output_storage: None,
         input_storage: Vec::new(),
-        kuna_library_names: None,
+        unlace_library_names: None,
     })
 }
 

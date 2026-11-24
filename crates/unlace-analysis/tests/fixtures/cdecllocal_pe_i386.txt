@@ -1,4 +1,4 @@
-Stripped PE32 i386 fixture for kuna_calleestackargs (tests/stages/kuna-calleeargs.toml).
+Stripped PE32 i386 fixture for kuna_calleestackargs (tests/stages/calleeargs.toml).
 
 cdecllocal_pe_i386.cpp and cdecllocal_pe_i386_impl.cpp are compiled by Visual C++ 2005 SP1
 (`cl /O2 /c`, outputs renamed cdecllocal_pe_i386_c.obj and cdecllocal_pe_i386_impl.obj).

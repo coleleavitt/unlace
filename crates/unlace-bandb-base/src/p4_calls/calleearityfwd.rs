@@ -1,4 +1,4 @@
-//! (kuna) Reconcile a call's argument list against a sibling that finalizes
+//! (unlace) Reconcile a call's argument list against a sibling that finalizes
 //! *later*.
 //!
 //! # The gap
@@ -82,7 +82,7 @@ use crate::context::{OpId, VarnodeId};
 use crate::fspec::FuncCallSpecs;
 use crate::funcdata::Funcdata;
 
-/// Marshaling element `<calleearityfwd>` (kuna 4000+ range; 4133 = calleearity).
+/// Marshaling element `<calleearityfwd>` (unlace 4000+ range; 4133 = calleearity).
 pub const ELEM_CALLEEARITYFWD: ElementId = ElementId::new("calleearityfwd", 4137);
 
 /// A call that finalized with no arguments, held until every spec in the pass is
@@ -95,7 +95,7 @@ pub struct PendingRescue {
     op: OpId,
     entry: Address,
     candidates: Vec<(Address, int4, VarnodeId)>,
-    /// (kuna `swiftcall`) The Swift `self` the call already passes, which
+    /// (unlace `swiftcall`) The Swift `self` the call already passes, which
     /// stays its first argument.
     swift_self: Option<(Address, int4)>,
 }
@@ -121,7 +121,7 @@ pub fn capture_empty_call(fc: &FuncCallSpecs, data: &Funcdata) -> Option<Pending
     for i in 0..active.get_num_trials() {
         let t = active.get_trial(i);
         if t.is_used() {
-            // (kuna `swiftcall`) A Swift `self` alone is no recovered list.
+            // (unlace `swiftcall`) A Swift `self` alone is no recovered list.
             if swift_self.is_none()
                 && crate::swiftcall::is_self_storage(data, t.get_address(), t.get_size())
             {

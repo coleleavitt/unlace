@@ -51,7 +51,7 @@
   },
   "tests": {
     "unit": "decompiler/crates/kuna-analysis/src/analyzers/entry/armlibcmain.rs (5 tests): both crt1 shapes claimed at the right VMA, the PIE/static/non-ARM refusals, and the three A32 decoders on the exact words the witness _start carries",
-    "end_to_end": "decompiler/crates/kuna-console/tests/verify_armlibcmain.rs (3 tests, two-pass): option off = no function covers main at all; default = both shapes recover it and its body reaches the printf/fgets calls; and the count guard (exactly one entry added, none on a PIE ARM image)",
+    "end_to_end": "decompiler/crates/console/tests/verify_armlibcmain.rs (3 tests, two-pass): option off = no function covers main at all; default = both shapes recover it and its body reaches the printf/fgets calls; and the count guard (exactly one entry added, none on a PIE ARM image)",
     "cli": "tests/cli/arm-prompt-string-owning.json -- make test-cli 66/66",
     "stage_test": null,
     "stage_test_rationale": "tests/stages is a bytechunk corpus with no ELF container, so it cannot carry a case whose whole premise is a PLT stub and a program header; the two-pass gate lives in verify_armlibcmain.rs instead, which is where machomain's does for the same reason."

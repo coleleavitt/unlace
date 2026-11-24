@@ -68,7 +68,7 @@ pub(super) struct ContextPainter {
     /// The decode-mode paints to apply, collected from the marker scans. Empty on
     /// any language with no decode-mode context (e.g. x86-64) ⇒ a no-op painter.
     paints: Vec<ContextPaint>,
-    /// (kuna `armfuncmode`) The sorted `[start, end)` extents the pass paints
+    /// (unlace `armfuncmode`) The sorted `[start, end)` extents the pass paints
     /// A32 from function-symbol evidence; empty when it paints nothing.
     a32_extents: Vec<(u64, u64)>,
 }

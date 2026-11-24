@@ -1,6 +1,6 @@
 //! The `unlace` command line, as a library.
 //!
-//! Command dispatch for the kuna CLI lives here so the `unlace` binary
+//! Command dispatch for the unlace CLI lives here so the `unlace` binary
 //! (`src/main.rs`, which only calls [`main`]) and the embedding API (the
 //! `unlace` crate, through [`embed`]) are built from the same parser, loader,
 //! decompile loop and JSON serializer and cannot drift apart. Nothing here but
@@ -141,7 +141,7 @@ pub fn main() -> ExitCode {
     let code = match sub {
         "-V" | "--version" | "version" => {
             // Release CI bakes the repo-derived MAJOR.MINOR (docs/release.md)
-            // via KUNA_VERSION; dev builds report the workspace Cargo version.
+            // via UNLACE_VERSION; dev builds report the workspace Cargo version.
             output::emit_with_status(
                 &format!(
                     "unlace {}\n",

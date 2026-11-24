@@ -60,7 +60,7 @@
 use std::rc::Rc;
 
 use unlace_base::address::{Address, bit_transitions};
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::types::{int4, int8, uint8, uintb, uintm};
 use unlace_num::opcodes::OpCode;
 
@@ -128,7 +128,7 @@ impl ResolvedUnion {
         unres_type: Rc<Datatype>,
         fld_num: int4,
         typegrp: &dyn TypeFactory,
-    ) -> KunaResult<ResolvedUnion> {
+    ) -> UnlaceResult<ResolvedUnion> {
         let mut base_type = Rc::clone(&unres_type);
         let field_num = fld_num;
         let lock = false;
@@ -136,26 +136,28 @@ impl ResolvedUnion {
         match unres_type.get_metatype() {
             type_metatype::TYPE_PARTIALUNION => {
                 base_type = unres_type.get_partial_base().ok_or_else(|| {
-                    KunaError::lowlevel("ResolvedUnion: partial union missing parent")
+                    UnlaceError::lowlevel("ResolvedUnion: partial union missing parent")
                 })?;
                 if fld_num < 0 {
                     resolve = unres_type.get_stripped().ok_or_else(|| {
-                        KunaError::lowlevel("ResolvedUnion: partial union missing stripped")
+                        UnlaceError::lowlevel("ResolvedUnion: partial union missing stripped")
                     })?;
                 } else {
                     let field = base_type.get_field(fld_num).ok_or_else(|| {
-                        KunaError::lowlevel("ResolvedUnion: parent union field out of range")
+                        UnlaceError::lowlevel("ResolvedUnion: parent union field out of range")
                     })?;
                     let field_type = Rc::clone(&field.field_type);
                     let offset = unres_type.get_partial_offset().ok_or_else(|| {
-                        KunaError::lowlevel("ResolvedUnion: partial union missing offset")
+                        UnlaceError::lowlevel("ResolvedUnion: partial union missing offset")
                     })?;
                     let size = unres_type.get_size();
                     match typegrp.get_exact_piece(field_type, offset, size)? {
                         Some(piece) => resolve = piece,
                         None => {
                             resolve = unres_type.get_stripped().ok_or_else(|| {
-                                KunaError::lowlevel("ResolvedUnion: partial union missing stripped")
+                                UnlaceError::lowlevel(
+                                    "ResolvedUnion: partial union missing stripped",
+                                )
                             })?;
                         }
                     }
@@ -164,15 +166,15 @@ impl ResolvedUnion {
             type_metatype::TYPE_PTR => {
                 base_type = unres_type
                     .get_ptr_to()
-                    .ok_or_else(|| KunaError::lowlevel("ResolvedUnion: pointer missing ptrto"))?;
+                    .ok_or_else(|| UnlaceError::lowlevel("ResolvedUnion: pointer missing ptrto"))?;
                 if fld_num < 0 {
                     resolve = Rc::clone(&unres_type);
                 } else {
                     let field = base_type.get_depend(fld_num).ok_or_else(|| {
-                        KunaError::lowlevel("ResolvedUnion: pointer ptrto field out of range")
+                        UnlaceError::lowlevel("ResolvedUnion: pointer ptrto field out of range")
                     })?;
                     let wordsize = unres_type.get_word_size().ok_or_else(|| {
-                        KunaError::lowlevel("ResolvedUnion: pointer missing wordsize")
+                        UnlaceError::lowlevel("ResolvedUnion: pointer missing wordsize")
                     })?;
                     resolve = typegrp.get_type_pointer_strip_array(
                         unres_type.get_size(),
@@ -185,9 +187,9 @@ impl ResolvedUnion {
                 if fld_num < 0 {
                     resolve = Rc::clone(&unres_type);
                 } else {
-                    resolve = unres_type
-                        .get_depend(fld_num)
-                        .ok_or_else(|| KunaError::lowlevel("ResolvedUnion: field out of range"))?;
+                    resolve = unres_type.get_depend(fld_num).ok_or_else(|| {
+                        UnlaceError::lowlevel("ResolvedUnion: field out of range")
+                    })?;
                 }
             }
         }
@@ -544,12 +546,12 @@ pub fn deref_pointer(
     max_length: int4,
     vn_size: int4,
     typegrp: &dyn TypeFactory,
-) -> KunaResult<DerefResult> {
+) -> UnlaceResult<DerefResult> {
     use type_metatype::*;
     if fit_type.get_metatype() == TYPE_PTR {
         let ptrto = fit_type
             .get_ptr_to()
-            .ok_or_else(|| KunaError::lowlevel("derefPointer: pointer missing ptrto"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("derefPointer: pointer missing ptrto"))?;
         let mut sub_type: Option<Rc<Datatype>> = Some(Rc::clone(&ptrto));
         while let Some(st) = &sub_type {
             if st.get_size() <= vn_size {
@@ -603,7 +605,7 @@ pub fn score_truncation(
     vn_size: int4,
     offset: int4,
     result_base: Option<&Rc<Datatype>>,
-) -> KunaResult<(int4, Option<Rc<Datatype>>)> {
+) -> UnlaceResult<(int4, Option<Rc<Datatype>>)> {
     use type_metatype::*;
     let score: int4;
     let mut ct_out: Option<Rc<Datatype>> = Some(Rc::clone(ct));
@@ -614,9 +616,9 @@ pub fn score_truncation(
         let mut score_local = -10;
         let num = ct.num_depend();
         for i in 0..num {
-            let field = ct
-                .get_field(i)
-                .ok_or_else(|| KunaError::lowlevel("scoreTruncation: union field out of range"))?;
+            let field = ct.get_field(i).ok_or_else(|| {
+                UnlaceError::lowlevel("scoreTruncation: union field out of range")
+            })?;
             if field.offset == offset && field.field_type.get_size() == vn_size {
                 score_local = 10;
                 if let Some(base) = result_base {
@@ -648,7 +650,7 @@ pub fn score_truncation(
                 }
             } else if meta == TYPE_ARRAY {
                 let el_type = cur.get_depend(0).ok_or_else(|| {
-                    KunaError::lowlevel("scoreTruncation: array missing element type")
+                    UnlaceError::lowlevel("scoreTruncation: array missing element type")
                 })?;
                 let align = el_type.get_align_size();
                 if align < vn_size {
@@ -1439,7 +1441,7 @@ struct UnionMapSlot(
         crate::unionresolve::ResolvedUnion,
     >,
 );
-crate::kuna_func_state!(UnionMapSlot, keep_across_clear: false);
+crate::unlace_func_state!(UnionMapSlot, keep_across_clear: false);
 
 /// The `unionresolve` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
@@ -1465,7 +1467,7 @@ impl FuncdataUnionresolveExt for crate::funcdata::Funcdata {
         crate::unionresolve::ResolveEdge,
         crate::unionresolve::ResolvedUnion,
     > {
-        &self.kuna_state::<UnionMapSlot>().0
+        &self.unlace_state::<UnionMapSlot>().0
     }
     fn union_map_mut(
         &mut self,
@@ -1473,7 +1475,7 @@ impl FuncdataUnionresolveExt for crate::funcdata::Funcdata {
         crate::unionresolve::ResolveEdge,
         crate::unionresolve::ResolvedUnion,
     > {
-        &mut self.kuna_state_mut::<UnionMapSlot>().0
+        &mut self.unlace_state_mut::<UnionMapSlot>().0
     }
 }
 

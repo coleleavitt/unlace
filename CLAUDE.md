@@ -73,7 +73,7 @@ Each tier only builds on the ones below it; new behavior ships behind a named op
   `tests/fixtures/phase_catalog.json` (the byte-compat capture) and `docs/options.md`, both
   regenerated, never hand-counted: the counts in `phases/tests.rs` and
   `tests/catalog_bytecompat.rs` are read from `phases.toml`, a `live_field` row is the only
-  kind with a codegen live reader, and `tests/stages/kuna-catalog.toml` computes its bucket
+  kind with a codegen live reader, and `tests/stages/catalog.toml` computes its bucket
   counts from the compiled catalog. Run `cargo test -p unlace-middle --lib kuna_phases` after
   any catalog edit.
 - **The spec is live**: describe every feature/behavior change in prose in the owning

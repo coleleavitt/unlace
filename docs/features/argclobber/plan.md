@@ -34,7 +34,7 @@ identical where they do not.
 * `tests/cli/argclobber-keeps-an-argument-the-callee-takes.json` — the
   `ce-remainder-or-pair` counterexample on
   `argclobber_pair_x86_64`: the argument stays.
-* `tests/stages/kuna-argclobber.toml` becomes the negative control it now is. The
+* `tests/stages/argclobber.toml` becomes the negative control it now is. The
   harness decompiles one function from a byte image, so nothing is stated and the
   argument survives both passes. Its three sibling stage tests
   (`-forward`, `-guards`, `-armreturn`) assert the same survival; each now says

@@ -76,7 +76,7 @@ pub fn representative_comment(
     if stack.get_index() != space.get_index() {
         return None;
     }
-    let offset = fd.high_bank().get(high)?.kuna_symbol_offset().max(0);
+    let offset = fd.high_bank().get(high)?.unlace_symbol_offset().max(0);
     let base = address - offset as i64;
     storage_comment(fd, arch, &base, varnode.get_size())
         .map(|(text, space, _)| (text, space, address.get_offset()))
@@ -138,7 +138,7 @@ pub fn high_comment(
     high: HighVariableId,
 ) -> Option<StorageComment> {
     if !arch
-        .kuna_options
+        .unlace_options
         .get::<crate::coreoptions::NameStyleAngr>()
         .0
     {
@@ -187,7 +187,7 @@ fn visit_homes(
     let own = high;
     let high = fd.high_bank().get(high)?;
     let mut fallback = None;
-    if let Some((scope, symbol)) = fd.get_scope_local().zip(high.kuna_ref_symbol()) {
+    if let Some((scope, symbol)) = fd.get_scope_local().zip(high.unlace_ref_symbol()) {
         for (address, size) in scope.symbol_storage(symbol) {
             visit(&address, size);
         }
@@ -208,7 +208,7 @@ fn visit_homes(
         let symbol_offset = varnode
             .get_high()
             .and_then(|id| fd.high_bank().get(id))
-            .map(|h| h.kuna_symbol_offset())
+            .map(|h| h.unlace_symbol_offset())
             .unwrap_or(-1);
         if varnode.is_addr_tied()
             && varnode.get_high() == Some(own)
@@ -221,10 +221,10 @@ fn visit_homes(
         {
             address = &address - symbol_offset as i64;
         }
-        if !fd.kuna_is_call_transport(id) {
+        if !fd.unlace_is_call_transport(id) {
             visit(&address, varnode.get_size());
         }
-        for source in fd.kuna_storage_sources(id) {
+        for source in fd.unlace_storage_sources(id) {
             visit(&source.address, source.size);
         }
         if let Some(op) = varnode.get_def().and_then(|op| fd.obank().get(op)) {

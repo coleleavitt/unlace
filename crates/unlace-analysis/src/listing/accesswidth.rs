@@ -1,4 +1,4 @@
-//! (kuna `globalwidth`) The width a program reads and writes each sized data
+//! (unlace `globalwidth`) The width a program reads and writes each sized data
 //! object with.
 //!
 //! A symbol-table data object (`STT_OBJECT`) has a size but no type, so it is

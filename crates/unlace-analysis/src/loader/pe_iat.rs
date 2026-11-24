@@ -1,14 +1,14 @@
-//! PE IAT/INT import-name resolution — the kuna analog of Ghidra's
+//! PE IAT/INT import-name resolution — the unlace analog of Ghidra's
 //! `PeLoader.processImports` / `ImportDataDirectory` markup
 //! (`Ghidra/Features/PE/.../format/pe/ImportDataDirectory.java`,
 //! `.../opinion/PeLoader.java`).
 //!
-//! ## Why this lives in kuna at all
+//! ## Why this lives in unlace at all
 //!
-//! kuna ports Ghidra's C++ *decompiler*; resolving a Windows import slot
+//! unlace ports Ghidra's C++ *decompiler*; resolving a Windows import slot
 //! (`0x14000d33c`) to its imported library name (`puts`) is done by Ghidra's
 //! Java *loader* layer, which the port never carried over.  Without it a CALL
-//! that lands on an import has no symbol, so `FlowInfo::queryCall` (kuna
+//! that lands on an import has no symbol, so `FlowInfo::queryCall` (unlace
 //! `decompile_drive.rs::query_call`) finds nothing and the printer falls back to
 //! `sub_<addr>`.  This module reconstructs the slot→name mapping straight from
 //! the PE Import Directory, so the loader can register the imports as ordinary

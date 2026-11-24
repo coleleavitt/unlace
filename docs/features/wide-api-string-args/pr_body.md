@@ -88,7 +88,7 @@ Whole-binary A/B on the witness: **42 changed lines, every one a recovery** —
   `crtmain_x86_64.exe`) that reproduces the shape exactly: `LoadLibraryW` on a
   wide literal and `GetProcAddress` on an ASCII one, the second being the control
   that the 1-byte width is untouched. `make test-cli` 26/26.
-- `decompiler/crates/kuna-console/tests/verify_widestrings.rs` — 4 cross-crate
+- `decompiler/crates/console/tests/verify_widestrings.rs` — 4 cross-crate
   end-to-end tests: the on-arm renders `L"ntdll.dll"`, the off-arm leaves the
   address untyped, the commit plants `s_140002100` only with the width on, and —
   with `operand_refs` on, the pass set a default `kuna decompile` runs — the

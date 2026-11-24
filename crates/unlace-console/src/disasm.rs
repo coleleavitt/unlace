@@ -103,14 +103,14 @@ pub fn hex(bytes: &[u8]) -> String {
     s
 }
 
-/// (kuna, `disassembly-fabricates-zero-byte`) The exclusive end of the
+/// (unlace, `disassembly-fabricates-zero-byte`) The exclusive end of the
 /// contiguous mapped run containing `vma`, and the next mapped address above it.
 ///
 /// The load image answers a read that STARTS on mapped memory for its whole
 /// length, zero-filling every byte past the last segment it crosses — the
 /// upstream BFD contract (`LoadImageBfd::loadFill`, `loadimage_object.rs`). So
 /// the start address is the only thing that path checks, and a listing that asks
-/// for more bytes than the run holds gets the rest of them invented: `kuna
+/// for more bytes than the run holds gets the rest of them invented: `unlace
 /// disassemble 0x80d190b` on an unmapped address correctly refuses, while
 /// `unlace disassemble 0x80d18b0 --count 30` on the same image walked 23 bytes
 /// past the same segment's end and reported eight `ADD byte ptr [EAX],AL` rows
@@ -298,7 +298,7 @@ fn walked_over(rows: &[Row], t: u64) -> bool {
     }
 }
 
-/// (kuna, `linear-disassembly-silently-skips`) The addresses this listing's own
+/// (unlace, `linear-disassembly-silently-skips`) The addresses this listing's own
 /// branches name that no row in it starts at.
 ///
 /// In a straight-line listing rows tile their span, so an in-range target no row

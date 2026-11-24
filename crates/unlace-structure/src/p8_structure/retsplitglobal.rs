@@ -1,4 +1,4 @@
-//! (kuna) `retsplitglobal` — a shared epilogue that WRITES GLOBALS is not a bare
+//! (unlace) `retsplitglobal` — a shared epilogue that WRITES GLOBALS is not a bare
 //! epilogue, so it must not be cloned into every predecessor.
 //!
 //! # The symptom
@@ -6,7 +6,7 @@
 //! A macOS crackme's initializer `sub_100003790` ends in one block that fills
 //! four message buffers, seventy-two byte stores long, and returns. Three paths
 //! reach it: the `n < 0` guard, the vectorised loop's exact-fit exit, and the
-//! scalar tail. kuna emits that block **three times** — 216 statements, 46% of
+//! scalar tail. unlace emits that block **three times** — 216 statements, 46% of
 //! the whole function's text:
 //!
 //! ```text
@@ -39,7 +39,7 @@
 //! `COPY` into a *persistent* Varnode is a different animal: it is a store to a
 //! global that the program can observe, and it is exactly what the C prints as
 //! `dat_<addr> = ...`. Seventy-two of them are neither bare nor cheap, and both
-//! splitters — upstream `ActionReturnSplit` and kuna's `ActionReturnDup`
+//! splitters — upstream `ActionReturnSplit` and unlace's `ActionReturnDup`
 //! (`returndup`) — share this one predicate, which is why turning `returndup` off
 //! does not stop the cloning: the goto-driven upstream action picks it up
 //! instead.
@@ -84,12 +84,12 @@
 //! shipped default `on`); with the option off the predicate is upstream's and
 //! the output is byte-identical.
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::marshal::ElementId;
 
 use crate::options::on_or_off;
 
-/// Marshalling element id for the option (kuna 4000+ range).
+/// Marshalling element id for the option (unlace 4000+ range).
 pub const ELEM_RETSPLITGLOBAL: ElementId = ElementId::new("retsplitglobal", 4143);
 
 /// The `retsplitglobal on|off` option (`coreoptions::RetSplitGlobal`).
@@ -101,7 +101,7 @@ impl OptionRetSplitGlobal {
 
     /// Resolve the flag and its confirmation message; the caller writes it into
     /// the registered option `RetSplitGlobal`.
-    pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((
@@ -158,7 +158,7 @@ pub fn split_is_declined(gate: bool, stores: usize) -> bool {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.retsplitglobal_is_global_store = Some(is_global_store);
     hooks.retsplitglobal_split_is_declined = Some(split_is_declined);
 }

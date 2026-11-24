@@ -234,8 +234,8 @@ files, adding 16 rows costs:
 | `src/p0_knowledge/phases/tests.rs:48,49` | `kuna_num_settables()`, `SETTABLE_TABLE.len()` | 2 edits |
 | `tests/catalog_bytecompat.rs:82,84,86` | `"option":` / `"tier":` / `"symptoms":` counts | 3 edits |
 | `tests/fixtures/phase_catalog.json` | the **byte-for-byte** catalog fixture (`assert_eq!(rust, FIXTURE)`) | regenerate |
-| `tests/stages/kuna-catalog.toml:40,44` | `#5 use_when` / `#9 change_kind` are `min="10" max="160"` | **no bump** (99 < 160) |
-| `tests/stages/kuna-catalog.toml:41,42,43` | `#6/#7/#8` exact buckets keyed on `source_decompiler: "angr"` / `change_kind: "structure-recovery"` / `"opt-in-tool"` | **no bump** if every new row uses `source_decompiler = "ghidra-upstream"` and `change_kind = "presentation-default"` or `"analysis-enablement"` |
+| `tests/stages/catalog.toml:40,44` | `#5 use_when` / `#9 change_kind` are `min="10" max="160"` | **no bump** (99 < 160) |
+| `tests/stages/catalog.toml:41,42,43` | `#6/#7/#8` exact buckets keyed on `source_decompiler: "angr"` / `change_kind: "structure-recovery"` / `"opt-in-tool"` | **no bump** if every new row uses `source_decompiler = "ghidra-upstream"` and `change_kind = "presentation-default"` or `"analysis-enablement"` |
 | `docs/options.md` | `unlace catalog --markdown >` | regenerate |
 | `docs/spec/` | the P0 chapter | prose |
 
@@ -246,7 +246,7 @@ greppable by symptom, and a lazy row is worse than no row.
 
 Standing requirement 5 (a two-pass `tests/stages/` testcase per option) does **not** apply:
 no behavior is being added, and the underlying `apply` bodies are already covered by
-`p0_knowledge/options/tests.rs`. `tests/stages/kuna-catalog.toml` is the right regression
+`p0_knowledge/options/tests.rs`. `tests/stages/catalog.toml` is the right regression
 fence — extend it with a `min="1" max="1"` stringmatch on the `readonly` row.
 
 ### Recommendation: ONE PR for Tier A, with a per-option judgement pass inside it

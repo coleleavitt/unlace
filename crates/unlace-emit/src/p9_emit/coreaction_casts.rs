@@ -108,7 +108,7 @@ impl<'a> FuncdataCastContext<'a> {
         }
     }
 
-    /// (kuna) Report a non-constant one-byte TYPE_UNKNOWN as `ty` instead, so the
+    /// (unlace) Report a non-constant one-byte TYPE_UNKNOWN as `ty` instead, so the
     /// promotion queries see the type the printer spells it as.
     #[doc(hidden)]
     pub fn with_unknown_byte_as(mut self, ty: Rc<Datatype>) -> Self {
@@ -465,7 +465,7 @@ fn get_input_cast_op(
             }
             let contract = (data
                 .get_arch()
-                .kuna_options
+                .unlace_options
                 .get::<crate::coreoptions::StackViews>()
                 .0
                 && opc == OpCode::CPUI_CALLOTHER)
@@ -618,7 +618,7 @@ fn get_input_cast_store(
         return None;
     }
     // slot == 2: cast the value, not the pointer.
-    // (kuna) The other half of the size-1 `code` reading: with the stored
+    // (unlace) The other half of the size-1 `code` reading: with the stored
     // value typed by its own width, the pointee still demands a cast to
     // `code`, which prints `(void)`.  A `code` destination is not a value type,
     // so the store needs no cast at all.
@@ -678,7 +678,7 @@ fn get_input_cast_equal(
     standard
 }
 
-/// (kuna) The integer operand type of an `==`/`!=` that orders after a
+/// (unlace) The integer operand type of an `==`/`!=` that orders after a
 /// `bool` of its size. Both sides compare as that integer instead: C converts a
 /// `bool` to an integer as the 0 or 1 it holds, but an integer to `bool` as
 /// whether it is nonzero, so `(bool)v == b` matches when `v` is 3 and `b` is 1.
@@ -697,7 +697,7 @@ fn integer_beside_bool(reqtype: &Rc<Datatype>, types: [&Rc<Datatype>; 2]) -> Opt
         .cloned()
 }
 
-/// (kuna) Would C widen `vn`, an input of a narrow `==`/`!=` printed as
+/// (unlace) Would C widen `vn`, an input of a narrow `==`/`!=` printed as
 /// `slottype`, with the other sign than `reqtype`, the type both inputs compare
 /// as? The p-code compares the bytes; C promotes each side by its own type, so
 /// a `char` beside an `unsigned char` stops matching once the top bit is set.
@@ -737,7 +737,7 @@ fn promotes_with_other_sign(
     !top_bit_clear(vn) && !top_bit_clear(other)
 }
 
-/// (kuna) Does a C float `==` of `a` and `b` decide what their bit test does?
+/// (unlace) Does a C float `==` of `a` and `b` decide what their bit test does?
 /// Only against a constant whose literal spells the value exactly (a normal
 /// number or an infinity), or against `+0.0` when the other side is an `ABS`,
 /// which can be neither `-0.0` nor equal to zero as a NaN.
@@ -758,7 +758,7 @@ fn float_compare_is_exact(data: &Funcdata, a: VarnodeId, b: VarnodeId) -> bool {
         .any(|(c, v)| crate::floatbits::compares_as_a_float(data, c) || zero_against_abs(c, v))
 }
 
-/// (kuna) The integer type an `INT_EQUAL`/`INT_NOTEQUAL` with a float input
+/// (unlace) The integer type an `INT_EQUAL`/`INT_NOTEQUAL` with a float input
 /// compares its bits as: the integer input's type, else `uint` of the width.
 /// A C `==` on floats differs from the bit test for -0.0, NaNs and NaN constants.
 fn float_bits_type(data: &Funcdata, types: &[Rc<Datatype>], size: int4) -> Option<Rc<Datatype>> {
@@ -1327,7 +1327,7 @@ fn subpiece_composite_byte_offset(data: &Funcdata, op: OpId) -> i64 {
     }
 }
 
-/// (kuna `structsynth nest`) `ct`, or the completed record when `ct` is a
+/// (unlace `structsynth nest`) `ct`, or the completed record when `ct` is a
 /// synthesized record's pointer to its own shell
 /// (`structsynth::resolve_self_pointer`).
 fn resolve_self_pointer(data: &Funcdata, ct: Rc<Datatype>) -> Rc<Datatype> {
@@ -1400,7 +1400,7 @@ fn load_store_space(data: &Funcdata, op: OpId) -> Option<Rc<unlace_base::space::
 // =============================================================================
 
 /// Fill the cast hook ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.action_set_casts = Some(Funcdata::action_set_casts);
 }
 
@@ -1479,21 +1479,21 @@ impl FuncdataCastExt for Funcdata {
                 } else if opc == OpCode::CPUI_PTRSUB {
                     self.cast_fixup_ptrsub(op);
                 }
-                // (kuna `castarith`) A pointer plus whole elements stays pointer arithmetic.
+                // (unlace `castarith`) A pointer plus whole elements stays pointer arithmetic.
                 if self
                     .get_arch()
-                    .kuna_options
+                    .unlace_options
                     .get::<crate::coreoptions::CastArith>()
                     .0
                     && self.obank().get(op).map(|o| o.code()) == Some(OpCode::CPUI_INT_ADD)
                 {
                     crate::castarith::rewrite(self, op);
                 }
-                // (kuna `castindex`) So does a variable index, and a byte-pointer difference.
+                // (unlace `castindex`) So does a variable index, and a byte-pointer difference.
                 let mut diff_token = None;
                 if self
                     .get_arch()
-                    .kuna_options
+                    .unlace_options
                     .get::<crate::coreoptions::CastIndex>()
                     .0
                 {
@@ -1854,7 +1854,7 @@ impl FuncdataCastLocalExt for Funcdata {
             .get(vnin)
             .and_then(|v| v.get_high())
             .and_then(|h| self.high_bank().get(h))
-            .and_then(|h| h.kuna_symbol_type())
+            .and_then(|h| h.unlace_symbol_type())
             .cloned()
         {
             self.inherit_union_field(&backing, newop, 0, op, slot);
@@ -1906,10 +1906,10 @@ impl FuncdataCastLocalExt for Funcdata {
         self.cast_output_token(op, strat, tokenct)
     }
 
-    /// (kuna `voidret`) Make the call `op` write its callee's whole result,
+    /// (unlace `voidret`) Make the call `op` write its callee's whole result,
     /// typed `wide`, into a temporary its output then truncates with a CAST,
     /// which prints the conversion, to an unsigned word where `unsigned` asks
-    /// ([`crate::voidret::narrowed_call_result`]).  (kuna
+    /// ([`crate::voidret::narrowed_call_result`]).  (unlace
     /// `callrettype`) A float the caller holds as bits goes through the same
     /// CAST at its own width, which prints the reinterpretation
     /// ([`crate::callrettype::float_held_as_bits`]).
@@ -2074,7 +2074,7 @@ impl FuncdataCastLocalExt for Funcdata {
                         .get(outvn)
                         .and_then(|v| v.get_high())
                         .and_then(|h| self.high_bank().get(h))
-                        .and_then(|h| h.kuna_symbol_type())
+                        .and_then(|h| h.unlace_symbol_type())
                         .cloned()
                     {
                         self.inherit_union_field(&backing, newop, -1, op, -1);
@@ -2732,7 +2732,7 @@ mod verify_w10_merge_casts_r2 {
         fd.set_high_level();
         let high = fd.vbank().get(source).unwrap().get_high().unwrap();
         let named = fd.high_bank_mut().get_mut(high).unwrap();
-        named.set_kuna_name("storage");
+        named.set_unlace_name("storage");
         named.set_symbol_type(Rc::clone(&backing));
         named.set_symbol_offset(0);
         let resolution = ResolvedUnion::new_field(Rc::clone(&backing), 1, types.as_ref()).unwrap();

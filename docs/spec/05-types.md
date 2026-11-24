@@ -196,7 +196,7 @@ completion link and so one identity, but not one shape, so a type carrying such
 a link orders by id, then after every unlinked type of that id, then by the
 link's address, never by shape: the order of two identity classes cannot depend
 on which member of a class is compared.
-`tests/stages/kuna-typeorder.toml` pins the order on a DWARF fixture.
+`tests/stages/typeorder.toml` pins the order on a DWARF fixture.
 
 (kuna) **A record the C grammar declared completes the pointers built to it.**
 Upstream completes a struct or union in place (`TypeFactory::setFields`), so a
@@ -577,7 +577,7 @@ So the residual exposure is precise: a parameter used *only* to subscript an
 unnamed byte-element table would be declined (nothing tells the walk it is a
 base, but nothing gives it a base either), and a parameter used both as such a
 subscript and as a real memory base is typed on the strength of the second use.
-`tests/stages/kuna-ptrfromuse.toml` pins both grades, as `globalindex` and
+`tests/stages/ptrfromuse.toml` pins both grades, as `globalindex` and
 `blindindex`.
 
 The candidate is **folded** into `get_local_type`'s result by
@@ -665,7 +665,7 @@ that option is on (`ArchContext::libctypes`), and only about the vote. It never
 touches a type that arrives by another road: a call's OUTPUT (`getpwnam`'s
 `passwd *`), or propagation between Varnodes that are later merged into one
 variable, which is how bash's `glob_vector` still prints one `DIR *` local that
-also holds an unrelated `sh_malloc` result. `tests/stages/kuna-libctypes.toml`
+also holds an unrelated `sh_malloc` result. `tests/stages/libctypes.toml`
 pass 13 pins the obstack and mutex shapes and a control that keeps its name.
 
 (kuna) **A variadic argument in a floating-point register.** The variadic part
@@ -1117,7 +1117,7 @@ table is passed as its address). A global
 the header declines as
 read at two types is compiled at the pointer that comment lists, so a
 disagreement cannot hide behind a guessed declaration.
-`tests/stages/kuna-elemptr.toml` pins the witnesses, the three controls (a
+`tests/stages/elemptr.toml` pins the witnesses, the three controls (a
 record walked by a stride, a pointer read at two widths, the length), the byte
 step and the first-element read in both passes, the narrow load (pass 1 is
 upstream's widened read), and an element returned from the register its address
@@ -1286,7 +1286,7 @@ variable. `--option boolbyte off` restores the upstream fold exactly - the
 candidate is never offered and the printer arm is not consulted - which is the
 ablation to reach for when a `bool` declaration is in question.
 
-`tests/stages/kuna-boolbyte.toml` pins the witness, the five refusals - a byte
+`tests/stages/boolbyte.toml` pins the witness, the five refusals - a byte
 that is also widened and added, a byte tested for its low bit, a byte stored
 through a pointer, a stack byte set to 0 and then filled by a callee, and a byte
 parameter copied into a slot a callee is handed the address of - and both
@@ -1391,7 +1391,7 @@ one type, three functions change a declaration count: two split a `char` byte
 or pointer from an unrelated `unsigned char` value that had shared its
 declaration, and one joins two `char *` locals. Every changed comparison was
 checked by compiling both forms and evaluating them over all 256 byte values.
-`tests/stages/kuna-charbyte.toml` pins the witness, the `unsigned char *` and
+`tests/stages/charbyte.toml` pins the witness, the `unsigned char *` and
 unsigned-compare controls, the `0xe9` comparison, and a pointer that is
 `char *` only because `strlen` takes one.
 
@@ -1488,7 +1488,7 @@ register, so a store through a pointer loaded from the TEB
 (`mov eax,fs:[0x18]; mov [eax],esp`) is typed as `teb->Self->ExceptionList = ...`.
 And `auto` needs the loader fact, which only the object loader writes, so it never
 fires in the Ghidra front-end; `on` does. Exercised by
-`tests/stages/kuna-pebnames.toml`, `tests/stages/kuna-pebnames-x86.toml` (both
+`tests/stages/pebnames.toml`, `tests/stages/pebnames-x86.toml` (both
 with near misses that must not gain a name, and x86 SEH and MSVC C++ EH frames that
 must render exactly as with the option off) and
 `crates/unlace-console/tests/verify_pebnames.rs`.
@@ -1667,14 +1667,14 @@ also holds a keymap entry's function is now typed as that function pointer and
 indexed. The cost is gcc's incompatible-pointer-type warnings, 247 to 312: a
 function whose recovered prototype differs from the DWARF type of the slot it
 is passed to was passed to a `void *` before, and gcc 14 and later reject that
-by default. Exercised by `tests/stages/kuna-calltargettype.toml` (gcc -O1 and clang
+by default. Exercised by `tests/stages/calltargettype.toml` (gcc -O1 and clang
 -O2 builds of a table dispatch, a local holding a table entry, a record's
 callback, a local called with two arities, a local that receives a function's
 address, a local handed to `qsort`, a float held in `xmm0` as an integer, and a
-`ctypes off` pass), by `kuna-calltargetstorage.xml` (a parameter, a global,
+`ctypes off` pass), by `calltargetstorage.xml` (a parameter, a global,
 the fields of a synthesized record declared from their calls, a declared
-`code *` field cast at its call, and a Rust pass), and by `kuna-calltargettype-a64.xml` and
-`kuna-calltargettype-armhf.xml` (a float call typed `float (*)(float)` in `s0`,
+`code *` field cast at its call, and a Rust pass), and by `calltargettype-a64.xml` and
+`calltargettype-armhf.xml` (a float call typed `float (*)(float)` in `s0`,
 an integer call, and a float held in `s0` as an integer, on AArch64 and ARMv7
 hard-float).
 
@@ -2265,7 +2265,7 @@ IDA both emit and adds 35 in 14 (`docs/features/fieldtype/record.json`). It stay
 because of the ledger below: a reader shares a record only on exact field-type
 agreement, so a field one reader re-types moves which record another reader is
 answered with (`docs/features/fieldtype/default-on-evaluation.md`).
-`tests/stages/kuna-fieldtype.toml` pins both passes, including the index and the
+`tests/stages/fieldtype.toml` pins both passes, including the index and the
 merged number as controls, and the compiled round trip in `decompile_all_cli.rs`
 checks the printed C computes what the binary does.
 
@@ -4153,7 +4153,7 @@ ARM the words are argument registers; this trigger fires only on an aligned
 argument register pair under `armpairparam` (`armpairparam.rs
 (joined_pair)`), never on stack words, since the i386 callers of the MSVC
 `__stdcall` helpers read their stack words the same way and keep
-`CONCAT44(a1,a0) / CONCAT44(a3,a2)` (stage `kuna-arithhelpers` #9). The rule merges the pair with
+`CONCAT44(a1,a0) / CONCAT44(a3,a2)` (stage `arithhelpers` #9). The rule merges the pair with
 `combine_input_varnodes` and marks the two SUBPIECEs it leaves as
 double-precision pieces; `RuleDoubleIn` then folds the arithmetic or compare,
 and `ActionInputPrototype` reports one 8-byte parameter. The rule does nothing
@@ -4364,11 +4364,11 @@ store of `0x80000001038e4750` as its forty-byte text, and the empty literal
 (`0xe000000000000000` beside a zero count word) as `""`; the count word is left,
 because the code really stores it. At `auto` the rule acts when the image's
 source language is Swift; `always` drops the language test; `off` keeps the
-constants. The stage test `tests/stages/kuna-swiftstr.toml` runs the stripped
-`swift_types_elf` off and on; `tests/stages/kuna-swiftstrcsel.toml` runs the
+constants. The stage test `tests/stages/swiftstr.toml` runs the stripped
+`swift_types_elf` off and on; `tests/stages/swiftstrcsel.toml` runs the
 arm64 Mach-O `macho_swift_strsel_arm64`, whose literals are picked by `csel`
 pairs, a switch and a selected store, off, on, and on with `swiftmetadata`;
-`tests/stages/kuna-swiftstrcmp.toml` runs `macho_swift_strcmp_arm64`, whose
+`tests/stages/swiftstrcmp.toml` runs `macho_swift_strcmp_arm64`, whose
 `s == "…"` tests compare both words inline, off and on.
 
 The **language-facet table** the rule consults is the multilang W3 plane's

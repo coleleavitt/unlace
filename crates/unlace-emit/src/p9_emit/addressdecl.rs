@@ -19,8 +19,8 @@ pub fn object_type(fd: &Funcdata, high: HighVariableId) -> Option<Rc<Datatype>> 
         return None;
     }
     let h = fd.high_bank().get(high)?;
-    let object = h.kuna_symbol_type()?;
-    if h.kuna_symbol_offset() < 0
+    let object = h.unlace_symbol_type()?;
+    if h.unlace_symbol_offset() < 0
         || h.num_instances() == 0
         || matches!(
             object.get_metatype(),
@@ -47,7 +47,7 @@ fn splits_wider_object(fd: &Funcdata, high: HighVariableId) -> bool {
         return false;
     };
     let (Some(sym), Some(width)) = (
-        h.kuna_ref_symbol(),
+        h.unlace_ref_symbol(),
         fd.vbank()
             .get(h.get_instance(0))
             .map(|v| v.get_size() as u64),

@@ -1,4 +1,4 @@
-//! (kuna `uefi`) UEFI module markup for PE images with an EFI subsystem.
+//! (unlace `uefi`) UEFI module markup for PE images with an EFI subsystem.
 //!
 //! On an EFI application or driver (PE `Subsystem` 10..13) the pass:
 //! - types the entry point `EFI_STATUS _ModuleEntryPoint(EFI_HANDLE ImageHandle,

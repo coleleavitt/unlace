@@ -1,4 +1,4 @@
-//! (kuna) MIPS relocations in a relocatable object.
+//! (unlace) MIPS relocations in a relocatable object.
 //!
 //! A MIPS `.o` names its call targets and its data through relocations whose
 //! fields are pieces of instructions: `jal`'s 26-bit word index (`R_MIPS_26`),

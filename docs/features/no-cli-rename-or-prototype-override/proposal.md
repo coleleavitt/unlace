@@ -241,7 +241,7 @@ Each stage is one PR, each closes one need, each is independently shippable.
 **Stage A — `no-cli-rename-or-prototype-override` (the dispatched need).**
 1. `kuna-cli/src/assertdecl.rs`: the directive parser + `@FILE`, modelled line-for-line on
    `funcdecl.rs`. Unit tests per directive, per malformation.
-2. Fix `map return`'s `outtype null` panic; add a `kuna-console` regression test.
+2. Fix `map return`'s `outtype null` panic; add a `console` regression test.
 3. Diagnose `override prototype`'s no-op — the store side or the `queryCall` consume — and fix
    or, if it is a genuine engine port, record it as Stage-A residue on the need rather than
    silently shipping a directive that lies.

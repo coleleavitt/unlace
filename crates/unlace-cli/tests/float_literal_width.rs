@@ -80,7 +80,7 @@ double widened(float value) { return (double)value + 0.1; }
         "the fixture must contain its floating constants"
     );
     let borrowed: Vec<_> = arguments.iter().map(String::as_str).collect();
-    let (_, error, status) = common::run_kuna(&borrowed);
+    let (_, error, status) = common::run_unlace(&borrowed);
     assert_eq!(status, 0, "{error}");
     let generated = project.join("sample.so.c");
     let driver = root.join("driver.c");

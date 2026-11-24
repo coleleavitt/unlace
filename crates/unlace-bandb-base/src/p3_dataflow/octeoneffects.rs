@@ -1,4 +1,4 @@
-//! (kuna `octeoneffects`) Memory effects and types of the Octeon atomic,
+//! (unlace `octeoneffects`) Memory effects and types of the Octeon atomic,
 //! reservation and ordering user operations declared by `octeonAtomics.sinc`.
 //! An atomic update, load-linked, store-conditional or cache-block zero accesses
 //! memory through its address operand; `atomic` (the default) guards writable
@@ -51,7 +51,7 @@ pub fn guards(data: &Funcdata, op: OpId) -> bool {
         e.addressed()
             || data
                 .get_arch()
-                .kuna_options
+                .unlace_options
                 .get::<crate::octeoneffects::OcteonEffectsMode>()
                 == OcteonEffectsMode::Ordered
     })
@@ -225,7 +225,7 @@ fn result_metatype(size: int4) -> type_metatype {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.octeoneffects_input_type = Some(input_type);
     hooks.octeoneffects_output_type = Some(output_type);
 }

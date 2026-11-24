@@ -7,7 +7,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::common::{repo_root, run_kuna, scratch_file};
+use crate::common::{repo_root, run_unlace, scratch_file};
 
 const MANIFEST: &str = include_str!("processors.toml");
 
@@ -201,7 +201,7 @@ fn run_case(c: &Case) -> Vec<String> {
         argv.extend(["--raw-image", "--target", &c.language, "--base", &c.base]);
     }
     argv.extend(c.args.iter().map(String::as_str));
-    let (stdout, stderr, code) = run_kuna(&argv);
+    let (stdout, stderr, code) = run_unlace(&argv);
     if code != 0 {
         return vec![format!("exit {code}: {stderr}")];
     }

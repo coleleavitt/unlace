@@ -1,4 +1,4 @@
-//! (kuna `swiftcall`) Swift's calling convention on the functions the
+//! (unlace `swiftcall`) Swift's calling convention on the functions the
 //! metadata and the symbol table name, with their `self` typed.
 //!
 //! Swift passes a method's `self` in the `swiftself` register (x20 on
@@ -417,7 +417,7 @@ impl Binder<'_, '_> {
         self_t: Option<Rc<Datatype>>,
     ) -> Option<Declared> {
         let types = self.types;
-        let any = |node: &NodeRef| types.kuna_type(node, u32::MAX, 0);
+        let any = |node: &NodeRef| types.unlace_type(node, u32::MAX, 0);
         let (mut params, ret) = match entity.kind {
             Kind::Function | Kind::Allocator | Kind::Constructor => {
                 let (params, ret, trailing) = function_signature(entity)?;
@@ -926,7 +926,7 @@ pub fn bind(
     b.imports(import_calls);
     b.classes();
     b.conformances();
-    // (kuna `swiftcallers`) A function only the runtime calls reveal takes
+    // (unlace `swiftcallers`) A function only the runtime calls reveal takes
     // the model last, so a placement above keeps its `self` type.
     for &(f, throws) in callers {
         b.bound.entry(f).or_insert(Binding {
@@ -976,7 +976,7 @@ pub fn bind(
                     first_var_arg_slot: -1,
                     output_storage: None,
                     input_storage: Vec::new(),
-                    kuna_library_names: None,
+                    unlace_library_names: None,
                 },
             });
     }
@@ -1018,7 +1018,7 @@ pub fn bind(
     stats
 }
 
-/// (kuna `swiftcallers`) Every function that calls a Swift runtime entry
+/// (unlace `swiftcallers`) Every function that calls a Swift runtime entry
 /// point, with whether it calls `swift_willThrow`: IDA's caller rule for
 /// `__swiftcall` (its swift module ORs the flag into each code reference to a
 /// `swift_*` symbol, through thunks). A closure, a partial-apply forwarder, a

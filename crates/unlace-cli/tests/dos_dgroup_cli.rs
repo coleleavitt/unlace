@@ -80,7 +80,7 @@ const TWO_SEGMENTS: [u8; 21] = [
     0xb8, 0x00, 0x4c, 0xcd, 0x21,
 ];
 
-fn kuna(args: &[&str]) -> Output {
+fn unlace(args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .output()
@@ -90,7 +90,7 @@ fn kuna(args: &[&str]) -> Output {
 fn decompiled(stem: &str, image: &[u8], name: &str, extra: &[&str]) -> String {
     let path = common::scratch_file(stem, "exe");
     std::fs::write(&path, image).unwrap();
-    let out = kuna(&[&["decompile", path.to_str().unwrap(), name][..], extra].concat());
+    let out = unlace(&[&["decompile", path.to_str().unwrap(), name][..], extra].concat());
     let text = String::from_utf8_lossy(&out.stdout).into_owned();
     assert!(
         out.status.success(),

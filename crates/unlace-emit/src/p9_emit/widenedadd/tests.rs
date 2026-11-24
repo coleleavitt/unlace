@@ -1,7 +1,7 @@
 use super::*;
 use crate::context::ArchContext;
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::{AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, spacetype};
 use unlace_sleigh::globalcontext::ContextInternal;
 use unlace_sleigh::loadimage::LoadImage;
@@ -12,8 +12,8 @@ impl LoadImage for Image {
     fn get_file_name(&self) -> &str {
         "unit"
     }
-    fn load_fill(&mut self, _: &mut [u8], _: &Address) -> KunaResult<()> {
-        Err(KunaError::data_unavail("unit"))
+    fn load_fill(&mut self, _: &mut [u8], _: &Address) -> UnlaceResult<()> {
+        Err(UnlaceError::data_unavail("unit"))
     }
     fn get_arch_type(&self) -> Vec<u8> {
         Vec::new()
@@ -29,7 +29,7 @@ fn architecture() -> Architecture {
     arch.types_impl().setup_sizes(Some(4), 8, 8);
     arch.types_impl().set_default_alignment_map();
     arch.build_core_types().unwrap();
-    arch.kuna_options.set(crate::widenedadd::WrapAdd(true));
+    arch.unlace_options.set(crate::widenedadd::WrapAdd(true));
     arch
 }
 fn function() -> Funcdata {
@@ -145,6 +145,6 @@ fn the_option_gates_the_wrapping_form() {
     fd.op_set_input(ret, extended, 1).unwrap();
     let signed = |_| Rc::new(Datatype::new(4, type_metatype::TYPE_INT));
     assert!(plan(&fd, &arch, add, signed).is_some());
-    arch.kuna_options.set(crate::widenedadd::WrapAdd(false));
+    arch.unlace_options.set(crate::widenedadd::WrapAdd(false));
     assert!(plan(&fd, &arch, add, signed).is_none());
 }

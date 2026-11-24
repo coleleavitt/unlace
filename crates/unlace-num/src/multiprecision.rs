@@ -4,7 +4,7 @@
 //! `u128` arithmetic while preserving the narrow-input path and zero-divisor
 //! behavior.
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 
 /// Multi-precision logical left shift by a constant amount.
 ///
@@ -87,7 +87,7 @@ pub fn udiv128(
     denom: &[u64; 2],
     quotient_res: &mut [u64; 2],
     remainder_res: &mut [u64; 2],
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     if numer[1] == 0 && denom[1] == 0 {
         quotient_res[0] = numer[0] / denom[0];
         quotient_res[1] = 0;
@@ -105,11 +105,11 @@ fn udiv128_wide(
     denom: &[u64; 2],
     quotient_res: &mut [u64; 2],
     remainder_res: &mut [u64; 2],
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     let n = from_limbs(numer);
     let d = from_limbs(denom);
     if d == 0 {
-        return Err(KunaError::lowlevel("divide by 0"));
+        return Err(UnlaceError::lowlevel("divide by 0"));
     }
     if n < d {
         *quotient_res = [0, 0];
@@ -232,7 +232,7 @@ mod tests {
         let mut q = [0u64; 2];
         let mut r = [0u64; 2];
         let err = udiv128(&[0, 1], &[0, 0], &mut q, &mut r).unwrap_err();
-        assert_eq!(err, KunaError::lowlevel("divide by 0"));
+        assert_eq!(err, UnlaceError::lowlevel("divide by 0"));
         assert!(err.is_lowlevel());
     }
 

@@ -59,7 +59,7 @@ pub fn access(fd: &Funcdata, vn: VarnodeId) -> Option<Access> {
         return None;
     }
     let high = fd.high_bank().get(value.get_high()?)?;
-    let global = high.kuna_global()
+    let global = high.unlace_global()
         || (0..high.num_instances()).any(|i| {
             fd.vbank()
                 .get(high.get_instance(i))
@@ -68,8 +68,8 @@ pub fn access(fd: &Funcdata, vn: VarnodeId) -> Option<Access> {
     if !global {
         return None;
     }
-    let symbol = high.kuna_symbol_type()?;
-    let offset = high.kuna_symbol_offset().max(0);
+    let symbol = high.unlace_symbol_type()?;
+    let offset = high.unlace_symbol_offset().max(0);
     if !byte_array(symbol) || offset.checked_add(size)? > symbol.get_size() {
         return None;
     }
@@ -81,7 +81,7 @@ pub fn access(fd: &Funcdata, vn: VarnodeId) -> Option<Access> {
         return None;
     }
     Some(Access {
-        name: high.kuna_name()?.to_owned(),
+        name: high.unlace_name()?.to_owned(),
         offset,
         size,
         big: space.is_big_endian(),

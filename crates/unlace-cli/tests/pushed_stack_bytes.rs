@@ -59,10 +59,9 @@ const FUNCTIONS: &[(u64, u64, &str, &str)] = &[
 ];
 
 fn fixture() -> (std::path::PathBuf, std::path::PathBuf) {
-    let xml = &unlace_stagefile::xml_of_toml(include_str!(
-        "../../../tests/stages/kuna-stack-byte-copy.toml"
-    ))
-    .unwrap();
+    let xml =
+        &unlace_stagefile::xml_of_toml(include_str!("../../../tests/stages/stack-byte-copy.toml"))
+            .unwrap();
     let chunk = xml
         .split_once("<bytechunk ")
         .unwrap()

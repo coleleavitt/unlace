@@ -22,7 +22,7 @@ fn decompile(fixture: &str, addr: &str, extra: &[&str]) -> String {
         "on",
     ];
     args.extend_from_slice(extra);
-    let (out, err, status) = common::run_kuna(&args);
+    let (out, err, status) = common::run_unlace(&args);
     assert_eq!(status, 0, "{err}");
     out
 }

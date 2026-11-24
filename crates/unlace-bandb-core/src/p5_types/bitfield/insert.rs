@@ -682,7 +682,7 @@ impl BitFieldInsertTransform {
                 state.node = VarnodeId::default();
                 return true;
             }
-            // (kuna) The final write's own output holds the field only after the
+            // (unlace) The final write's own output holds the field only after the
             // write; its value comes from the write's inputs.
             let own_output = self.final_code(data) != OpCode::CPUI_STORE
                 && data

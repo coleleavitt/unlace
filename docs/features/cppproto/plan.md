@@ -82,7 +82,7 @@ address-resolved signature wins wherever both reach the same function.
 
 ## 5. Tests
 
-`kuna-console/tests/verify_cppproto.rs` — seven two-pass assertions over the new
+`console/tests/verify_cppproto.rs` — seven two-pass assertions over the new
 `cppproto_x86_64` fixture (out-of-line member, `const` member, reference
 parameter, `static` member, namespace function, template instantiation,
 class-typed pointer parameter). Each runs the fixture twice, once with the option

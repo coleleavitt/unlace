@@ -1,4 +1,4 @@
-//! (kuna) Recognize the Windows on ARM `/GS` helpers `__security_push_cookie` and
+//! (unlace) Recognize the Windows on ARM `/GS` helpers `__security_push_cookie` and
 //! `__security_pop_cookie` in a stripped ARM PE by their bytes, so the
 //! `security_push_cookie`/`security_pop_cookie` call-fixups of `ARM_win.cspec` reach them.
 //!

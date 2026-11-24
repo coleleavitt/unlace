@@ -1,4 +1,4 @@
-//! (kuna `postinc`) `v = *p; p = p + 1;` prints as `v = *p++;`.
+//! (unlace `postinc`) `v = *p; p = p + 1;` prints as `v = *p++;`.
 //!
 //! C source steps a pointer through a buffer with `*p++`, which compilers lower
 //! to a load or store followed by a pointer add. [`ActionPostIncrement`]
@@ -147,7 +147,7 @@ impl Action for ActionPostIncrement {
         unlace_middle::debug_assert_settled!(data, Casts);
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::coreoptions::PostIncrement>()
             .0
         {
@@ -167,7 +167,7 @@ impl Action for ActionPostIncrement {
             };
             data.op_mark_non_printing_pub(inc);
             if let Some(o) = data.obank_mut().get_mut(access) {
-                o.set_additional_flag(crate::op::pcodeop_addlflags::kuna_postinc);
+                o.set_additional_flag(crate::op::pcodeop_addlflags::unlace_postinc);
             }
             self.base.count += 1;
         }

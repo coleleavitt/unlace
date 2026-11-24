@@ -75,7 +75,7 @@ default-ON decision alone.
 
 ## Testing
 
-`kuna-console/tests/verify_libcsigs.rs`, five two-pass assertions over the existing
+`console/tests/verify_libcsigs.rs`, five two-pass assertions over the existing
 vendored `fauxware` fixture. **No `tests/stages/*.xml` case**: the XML datatest
 bootstrap builds its program from a `<binaryimage>` element and never runs the
 analyzer tier, so no `kuna_analysis` pass can fire there — the same reason

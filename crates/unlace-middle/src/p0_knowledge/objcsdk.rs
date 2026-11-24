@@ -1,9 +1,9 @@
-//! (kuna `objcsdk`) The load-time bridge for the Objective-C SDK header path.
+//! (unlace `objcsdk`) The load-time bridge for the Objective-C SDK header path.
 //!
 //! The `objc` pass runs while the loader snapshots the image, upstream of every
 //! console `option`, so the directory it reads method signatures from travels
 //! as a process environment variable ([`OBJCSDK_ENV`]) the way `sourcelang`
-//! does. Apple's headers are never vendored: the user points kuna
+//! does. Apple's headers are never vendored: the user points unlace
 //! at an SDK on disk (`--option objcsdk /path/to/iPhoneOS.sdk`) or at any
 //! directory of `.h` files, and nothing derived from them is written anywhere.
 
@@ -22,7 +22,7 @@ pub fn sdk_path() -> Option<PathBuf> {
 
 /// The header root [`OBJCSDK_ENV`] names, if any. Reads only the environment;
 /// a load in progress reads [`sdk_path`]. A value that names no directory (set
-/// outside kuna, or removed since) reads no headers and says so once.
+/// outside unlace, or removed since) reads no headers and says so once.
 pub fn sdk_path_from_env() -> Option<PathBuf> {
     let v = unlace_base::env::var(OBJCSDK_ENV).ok()?;
     match parse_option_value(&v) {
@@ -37,7 +37,7 @@ pub fn sdk_path_from_env() -> Option<PathBuf> {
     }
 }
 
-/// Bridge a `set_kuna_option("objcsdk", val)` choice to [`OBJCSDK_ENV`] so a
+/// Bridge a `set_unlace_option("objcsdk", val)` choice to [`OBJCSDK_ENV`] so a
 /// later `load file` in the same process sees it (`off` clears it).
 pub fn set_objcsdk_env(path: Option<&str>) {
     match path {

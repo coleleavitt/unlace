@@ -39,7 +39,7 @@ fn specs() -> String {
 }
 
 /// Run the built `unlace` binary, returning `(stdout, stderr, exit code)`.
-fn run_kuna(args: &[&str]) -> (String, String, Option<i32>) {
+fn run_unlace(args: &[&str]) -> (String, String, Option<i32>) {
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .output()
@@ -152,7 +152,7 @@ fn data_only_object() -> Vec<u8> {
 /// single-function call answers exit 0 with the `decompile-all` record shape.
 #[test]
 fn decompile_json_emits_the_record_shape_for_one_function() {
-    let (stdout, stderr, code) = run_kuna(&[
+    let (stdout, stderr, code) = run_unlace(&[
         "decompile",
         &fixture(),
         "_DT_INIT",
@@ -215,7 +215,7 @@ fn decompile_json_is_byte_identical_to_decompile_all_for_one_function() {
     ] {
         let mut one_args = vec!["decompile", &bin, "_DT_INIT", "--json", "--sleighpath", &sp];
         one_args.extend_from_slice(options);
-        let (one, stderr, code) = run_kuna(&one_args);
+        let (one, stderr, code) = run_unlace(&one_args);
         if code != Some(0) {
             panic!("unlace decompile --json failed: {stderr}");
         }
@@ -229,7 +229,7 @@ fn decompile_json_is_byte_identical_to_decompile_all_for_one_function() {
             &sp,
         ];
         all_args.extend_from_slice(options);
-        let (all, stderr, code) = run_kuna(&all_args);
+        let (all, stderr, code) = run_unlace(&all_args);
         assert_eq!(
             code,
             Some(0),
@@ -249,12 +249,12 @@ fn decompile_json_selects_by_address_too() {
     let bin = fixture();
     let sp = specs();
     let (auto, stderr, code) =
-        run_kuna(&["decompile", &bin, "0x1000", "--json", "--sleighpath", &sp]);
+        run_unlace(&["decompile", &bin, "0x1000", "--json", "--sleighpath", &sp]);
     if code != Some(0) {
         panic!("unlace decompile 0x1000 --json failed: {stderr}");
     }
     assert!(auto.contains("\"address_hex\": \"0x1000\""), "{auto}");
-    let (explicit, stderr, code) = run_kuna(&[
+    let (explicit, stderr, code) = run_unlace(&[
         "decompile",
         &bin,
         "1000",
@@ -289,7 +289,7 @@ fn json_refuses_the_flags_it_cannot_honor() {
     ] {
         let mut argv = vec!["decompile", bin.as_str(), "_DT_INIT", "--json"];
         argv.extend_from_slice(&extra);
-        let (stdout, stderr, code) = run_kuna(&argv);
+        let (stdout, stderr, code) = run_unlace(&argv);
         assert_eq!(code, Some(2), "{extra:?} must be refused, got: {stderr}");
         assert!(stderr.contains("not supported with --json"), "{stderr}");
         assert!(stdout.is_empty(), "a refused flag does no work: {stdout}");
@@ -301,7 +301,7 @@ fn json_refuses_the_flags_it_cannot_honor() {
 /// `error`, so a caller never has to reconcile empty stdout with prose stderr.
 #[test]
 fn an_unresolved_selector_answers_with_an_error_envelope() {
-    let (stdout, stderr, code) = run_kuna(&[
+    let (stdout, stderr, code) = run_unlace(&[
         "decompile",
         &fixture(),
         "nosuchfunction",
@@ -342,7 +342,7 @@ fn a_total_discovery_failure_is_reported_as_a_failure() {
     ] {
         let mut argv = surface.clone();
         argv.extend_from_slice(&["--sleighpath", sp.as_str()]);
-        let (stdout, stderr, code) = run_kuna(&argv);
+        let (stdout, stderr, code) = run_unlace(&argv);
         assert_ne!(
             code,
             Some(0),
@@ -368,7 +368,7 @@ fn a_total_discovery_failure_is_reported_as_a_failure() {
 #[test]
 fn a_packed_image_is_named_as_packed() {
     let image = temp_image("upx", &stripped_executable(b"UPX!\x00\x00\x00\x00"));
-    let (stdout, stderr, code) = run_kuna(&[
+    let (stdout, stderr, code) = run_unlace(&[
         "functions",
         image.to_str().unwrap(),
         "--json",
@@ -398,7 +398,7 @@ fn a_packed_image_is_named_as_packed() {
 #[test]
 fn an_image_with_no_code_keeps_its_empty_success() {
     let image = temp_image("dataonly", &data_only_object());
-    let (stdout, stderr, code) = run_kuna(&[
+    let (stdout, stderr, code) = run_unlace(&[
         "functions",
         image.to_str().unwrap(),
         "--json",
@@ -421,7 +421,7 @@ fn an_image_with_no_code_keeps_its_empty_success() {
 #[test]
 fn a_run_that_finds_functions_still_exits_zero() {
     let (stdout, stderr, code) =
-        run_kuna(&["functions", &fixture(), "--json", "--sleighpath", &specs()]);
+        run_unlace(&["functions", &fixture(), "--json", "--sleighpath", &specs()]);
     if code != Some(0) {
         panic!("unlace functions failed: {stderr}");
     }

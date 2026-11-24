@@ -32,7 +32,7 @@ the compatibility interrupt once while leaving the native call byte-identical.
 ## Tests
 
 - Four focused unit tests pin the syscall table and exact constant-width rules.
-- `kuna-linuxsyscall-x64-compat.xml` adds five two-pass assertions; the existing
+- `linuxsyscall-x64-compat.xml` adds five two-pass assertions; the existing
   i386 and native-x64 stages pass alongside it (16/16 focused assertions).
 - The promoted CLI probe over the deterministic 17-byte raw fixture requires a
   standalone `sys_exit(0);` and forbids `swi`, `syscall()`, `sys_write`, and

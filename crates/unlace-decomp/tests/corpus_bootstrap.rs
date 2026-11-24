@@ -61,7 +61,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::IdRegistry;
 use unlace_base::space::AddrSpaceManager;
 use unlace_base::xml::{DocumentStorage, Element};
@@ -227,8 +227,8 @@ impl LoadImage for DummyImg {
     fn get_file_name(&self) -> &str {
         "dummy"
     }
-    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> KunaResult<()> {
-        Err(KunaError::data_unavail("dummy"))
+    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> UnlaceResult<()> {
+        Err(UnlaceError::data_unavail("dummy"))
     }
     fn get_arch_type(&self) -> Vec<u8> {
         Vec::new()
@@ -622,7 +622,7 @@ fn real_flow_links_ops(bs: &Bootstrap, fd: Funcdata) -> bool {
         // W4 seam Err — still proves the engine is wired into flow (the op-building
         // emitter ran; the W4 subsystem boundary is what was reached, not the
         // now-completed output/codeRef emitter seam).
-        Err(KunaError::Lowlevel { explain, .. }) => {
+        Err(UnlaceError::Lowlevel { explain, .. }) => {
             explain.contains("FuncCallSpecs")
                 || explain.contains("JumpTable")
                 || explain.contains("PcodeInjectLibrary")
@@ -892,9 +892,9 @@ fn first_n_op_lines(body: &[String], n: usize) -> Vec<String> {
 
 /// Read a spec file's root element name and verify it parses (a pspec is
 /// `<processor_spec>`, a cspec is `<compiler_spec>`).  Returns the root name.
-fn root_element_name(path: &std::path::Path) -> KunaResult<String> {
+fn root_element_name(path: &std::path::Path) -> UnlaceResult<String> {
     let bytes = std::fs::read(path)
-        .map_err(|e| KunaError::lowlevel(format!("read {}: {e}", path.display())))?;
+        .map_err(|e| UnlaceError::lowlevel(format!("read {}: {e}", path.display())))?;
     let mut store = DocumentStorage::new();
     let doc = store.parse_document(&bytes)?;
     Ok(doc.get_root().get_name().to_string())

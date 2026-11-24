@@ -1,4 +1,4 @@
-//! (kuna `mzsweep`) The raw-image call sweep over an MS-DOS executable keeps
+//! (unlace `mzsweep`) The raw-image call sweep over an MS-DOS executable keeps
 //! only the calls a DOS program can make.
 //!
 //! [`super::rawdiscover`] decodes the whole mapped image straight through

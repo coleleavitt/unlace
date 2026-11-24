@@ -2220,7 +2220,7 @@ impl Rule for RuleConditionalMove {
         if op_code(data, cbranch) != OpCode::CPUI_CBRANCH {
             return 0;
         }
-        // (kuna javatry) An exception edge selects no value.
+        // (unlace javatry) An exception edge selects no value.
         if crate::javatry::dispatch_handler(data, cbranch).is_some()
             || crate::javatry::is_throws_edge(data, cbranch)
         {
@@ -2707,7 +2707,7 @@ impl Rule for RuleIgnoreNan {
         vec![OpCode::CPUI_FLOAT_NAN]
     }
 
-    /// (kuna `deadwaves`) The test follows the NaN result through three
+    /// (unlace `deadwaves`) The test follows the NaN result through three
     /// levels of boolean readers to the comparisons it guards.
     fn walks_far(&self) -> bool {
         true

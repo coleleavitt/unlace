@@ -1,7 +1,7 @@
-//! (kuna) `callmechanisms` — compiler-declared p-code attached to prototype entry and return boundaries.
+//! (unlace) `callmechanisms` — compiler-declared p-code attached to prototype entry and return boundaries.
 use std::rc::Rc;
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::{IdRegistry, XmlDecode};
 use unlace_base::space::AddrSpaceManager;
 use unlace_base::xml::{DocumentStorage, Element};
@@ -45,13 +45,13 @@ pub struct OptionCallMechanisms;
 impl OptionCallMechanisms {
     pub const NAME: &'static str = "callmechanisms";
 
-    pub fn apply(&self, p1: &str) -> KunaResult<(CallMechanismMode, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(CallMechanismMode, String)> {
         let mode = match p1 {
             "off" => CallMechanismMode::Off,
             "auto" => CallMechanismMode::Auto,
             "on" | "" => CallMechanismMode::On,
             other => {
-                return Err(KunaError::parse(format!(
+                return Err(UnlaceError::parse(format!(
                     "Unknown callmechanisms value: {other} (expected off|auto|on)"
                 )));
             }
@@ -71,7 +71,7 @@ pub fn register(
     xml: Option<&str>,
     manager: &AddrSpaceManager,
     library: &mut PcodeInjectLibrarySleigh,
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     let Some(xml) = xml else { return Ok(()) };
     let mut documents = DocumentStorage::new();
     let root = documents.parse_document(xml.as_bytes())?.get_root().clone();
@@ -82,7 +82,7 @@ pub fn register(
         manager: &AddrSpaceManager,
         registry: &IdRegistry,
         library: &mut PcodeInjectLibrarySleigh,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         if element.get_name() == "prototype" {
             let name = element.get_attribute_value("name").unwrap_or(b"__stdcall");
             for child in element
@@ -92,7 +92,7 @@ pub fn register(
             {
                 let kind = child.get_attribute_value("inject").unwrap_or(b"");
                 if !matches!(kind, b"uponentry" | b"uponreturn") {
-                    return Err(KunaError::lowlevel(
+                    return Err(UnlaceError::lowlevel(
                         "Prototype p-code requires uponentry or uponreturn",
                     ));
                 }
@@ -144,11 +144,11 @@ pub struct State {
     pub failure: Option<String>,
 }
 
-crate::kuna_func_state!(State, keep_across_clear: false);
+crate::unlace_func_state!(State, keep_across_clear: false);
 
 /// Did installing a call mechanism fail, so the pipeline must stop?
 fn failed(data: &crate::funcdata::Funcdata) -> bool {
-    data.kuna_state::<State>().failure.is_some()
+    data.unlace_state::<State>().failure.is_some()
 }
 
 /// Changing a call's return mechanism requires rebuilding its pre-SSA effects.
@@ -173,7 +173,7 @@ pub fn evaluation_model(data: &crate::funcdata::Funcdata) -> Option<Rc<crate::fs
             .has_model()
             .then(|| data.get_func_proto().model().clone());
     }
-    // (kuna `calleereginputs custom`) A function the whole-image rule decided
+    // (unlace `calleereginputs custom`) A function the whole-image rule decided
     // takes a callee-saved register as a custom argument evaluates its own
     // prototype under the synthesized model, so its printed parameters are the
     // ones its callers pass.
@@ -190,7 +190,7 @@ pub fn evaluation_model(data: &crate::funcdata::Funcdata) -> Option<Rc<crate::fs
 }
 
 /// Apply the callee model's declared return-boundary effects once per lifted call.
-pub fn apply_return(data: &mut crate::funcdata::Funcdata, index: i32) -> KunaResult<()> {
+pub fn apply_return(data: &mut crate::funcdata::Funcdata, index: i32) -> UnlaceResult<()> {
     if !data.get_arch().call_mechanism_effects {
         return Ok(());
     }
@@ -200,11 +200,11 @@ pub fn apply_return(data: &mut crate::funcdata::Funcdata, index: i32) -> KunaRes
     }
     let op = call.get_op();
     let id = call.proto().get_inject_upon_return();
-    if let Some(previous) = data.kuna_state::<State>().applied.get(&op) {
+    if let Some(previous) = data.unlace_state::<State>().applied.get(&op) {
         return if *previous == id {
             Ok(())
         } else {
-            Err(KunaError::lowlevel(
+            Err(UnlaceError::lowlevel(
                 "Call mechanism changed after insertion; function requires reanalysis",
             ))
         };
@@ -215,7 +215,7 @@ pub fn apply_return(data: &mut crate::funcdata::Funcdata, index: i32) -> KunaRes
     let address = data
         .obank()
         .get(op)
-        .ok_or_else(|| KunaError::lowlevel("Missing call operation for compiler mechanism"))?
+        .ok_or_else(|| UnlaceError::lowlevel("Missing call operation for compiler mechanism"))?
         .get_addr()
         .clone();
     let mut context = crate::pcodeinject::InjectContext {
@@ -231,12 +231,12 @@ pub fn apply_return(data: &mut crate::funcdata::Funcdata, index: i32) -> KunaRes
         };
         if let Some(value) = forwardable_value(&operations, store, data, load) {
             forward_reload(data, load, &value)?;
-            data.kuna_state_mut::<State>().applied.insert(op, id);
+            data.unlace_state_mut::<State>().applied.insert(op, id);
             return Ok(());
         }
     }
     install_after(data, op, &operations)?;
-    data.kuna_state_mut::<State>().applied.insert(op, id);
+    data.unlace_state_mut::<State>().applied.insert(op, id);
     Ok(())
 }
 
@@ -277,11 +277,11 @@ fn forward_reload(
     data: &mut crate::funcdata::Funcdata,
     load: crate::context::OpId,
     value: &unlace_num::pcoderaw::VarnodeData,
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     let space = value
         .space
         .clone()
-        .ok_or_else(|| KunaError::lowlevel("Compiler mechanism value has no space"))?;
+        .ok_or_else(|| UnlaceError::lowlevel("Compiler mechanism value has no space"))?;
     let source = data.new_varnode_space_off(value.size as i32, space, value.offset);
     data.op_set_input(load, source, 0)?;
     data.op_remove_input(load, 1);
@@ -414,7 +414,7 @@ fn reloads_stored_slot(
 }
 
 /// Apply the current model's entry-boundary effects before the first operation.
-pub fn apply_entry(data: &mut crate::funcdata::Funcdata) -> KunaResult<()> {
+pub fn apply_entry(data: &mut crate::funcdata::Funcdata) -> UnlaceResult<()> {
     if !data.get_arch().call_mechanism_effects
         || data.get_arch().call_mechanism_reload_only
         || data.bblocks_get_size() == 0
@@ -425,11 +425,11 @@ pub fn apply_entry(data: &mut crate::funcdata::Funcdata) -> KunaResult<()> {
         return Ok(());
     };
     let id = model.get_inject_upon_entry();
-    if let Some(previous) = data.kuna_state::<State>().entry {
+    if let Some(previous) = data.unlace_state::<State>().entry {
         return if previous == id {
             Ok(())
         } else {
-            Err(KunaError::lowlevel(
+            Err(UnlaceError::lowlevel(
                 "Entry mechanism changed after insertion; function requires reanalysis",
             ))
         };
@@ -447,7 +447,7 @@ pub fn apply_entry(data: &mut crate::funcdata::Funcdata) -> KunaResult<()> {
     let arch = data.get_arch().clone();
     let operations = mechanisms(&arch).operations(id, arch.manage(), &mut context)?;
     install(data, None, Some(block), &operations)?;
-    data.kuna_state_mut::<State>().entry = Some(id);
+    data.unlace_state_mut::<State>().entry = Some(id);
     Ok(())
 }
 
@@ -473,7 +473,7 @@ impl unlace_sleigh::translate::PcodeEmit for Operations {
     }
 }
 
-fn validate_operations(operations: &[Operation]) -> KunaResult<()> {
+fn validate_operations(operations: &[Operation]) -> UnlaceResult<()> {
     use unlace_num::opcodes::OpCode::*;
     for op in operations {
         if matches!(
@@ -488,7 +488,7 @@ fn validate_operations(operations: &[Operation]) -> KunaResult<()> {
                 | CPUI_INDIRECT
                 | CPUI_MAX
         ) {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Compiler prototype mechanism requires unsupported control flow",
             ));
         }
@@ -497,7 +497,7 @@ fn validate_operations(operations: &[Operation]) -> KunaResult<()> {
                 space.get_type() == unlace_base::space::spacetype::IPTR_CONSTANT
             })
         }) {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Compiler prototype mechanism writes constant storage",
             ));
         }
@@ -509,7 +509,7 @@ fn validate_operations(operations: &[Operation]) -> KunaResult<()> {
                     space.get_type() != unlace_base::space::spacetype::IPTR_CONSTANT
                 }) && storage.offset.checked_add(storage.size as u64).is_none())
             {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "Invalid compiler prototype mechanism storage",
                 ));
             }
@@ -523,7 +523,7 @@ pub fn install_at_entry(
     data: &mut crate::funcdata::Funcdata,
     block: crate::context::BlockId,
     operations: &[Operation],
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     install(data, None, Some(block), operations)
 }
 
@@ -532,7 +532,7 @@ pub fn install_after(
     data: &mut crate::funcdata::Funcdata,
     previous: crate::context::OpId,
     operations: &[Operation],
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     install(data, Some(previous), None, operations)
 }
 
@@ -541,7 +541,7 @@ fn install(
     mut previous: Option<crate::context::OpId>,
     entry: Option<crate::context::BlockId>,
     operations: &[Operation],
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     use unlace_base::address::Address;
     use unlace_base::space::spacetype;
     validate_operations(operations)?;
@@ -559,8 +559,9 @@ fn install(
         }
     }
     let relocation = if let Some((lo, hi)) = temporary_range {
-        let size = i32::try_from(hi - lo)
-            .map_err(|_| KunaError::lowlevel("Compiler mechanism temporary range is too large"))?;
+        let size = i32::try_from(hi - lo).map_err(|_| {
+            UnlaceError::lowlevel("Compiler mechanism temporary range is too large")
+        })?;
         let anchor = data.new_unique(size, None);
         let base = data.vbank().get(anchor).unwrap().get_addr().get_offset();
         data.delete_varnode(anchor)?;
@@ -603,7 +604,7 @@ fn install(
     Ok(())
 }
 
-fn validate_template(template: &unlace_sleigh::semantics::ConstructTpl) -> KunaResult<()> {
+fn validate_template(template: &unlace_sleigh::semantics::ConstructTpl) -> UnlaceResult<()> {
     use unlace_sleigh::semantics::ConstType;
     for op in template.get_opvec() {
         for storage in (0..op.num_input())
@@ -626,7 +627,7 @@ fn validate_template(template: &unlace_sleigh::semantics::ConstructTpl) -> KunaR
                         | ConstType::JFlowdest
                         | ConstType::JFlowdestSize
                 ) {
-                    return Err(KunaError::lowlevel(
+                    return Err(UnlaceError::lowlevel(
                         "Compiler mechanism uses unsupported instruction context",
                     ));
                 }
@@ -672,7 +673,7 @@ impl Mechanisms {
         id: i32,
         manager: &AddrSpaceManager,
         context: &mut crate::pcodeinject::InjectContext,
-    ) -> KunaResult<Vec<Operation>> {
+    ) -> UnlaceResult<Vec<Operation>> {
         let mut output = Operations::default();
         self.emit(id, manager, context, &mut output)?;
         validate_operations(&output.0)?;
@@ -685,19 +686,19 @@ impl Mechanisms {
         manager: &AddrSpaceManager,
         context: &mut crate::pcodeinject::InjectContext,
         output: &mut dyn unlace_sleigh::translate::PcodeEmit,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let (payload, template) = self
             .payloads
             .get(&id)
-            .ok_or_else(|| KunaError::lowlevel("Missing compiler prototype mechanism"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("Missing compiler prototype mechanism"))?;
         let template = template.as_ref().ok_or_else(|| {
-            KunaError::lowlevel("Compiler prototype mechanism has no compiled p-code")
+            UnlaceError::lowlevel("Compiler prototype mechanism has no compiled p-code")
         })?;
         validate_template(template)?;
         let space = |value: Option<&Rc<unlace_base::space::AddrSpace>>| {
             value
                 .cloned()
-                .ok_or_else(|| KunaError::lowlevel("Missing mechanism address space"))
+                .ok_or_else(|| UnlaceError::lowlevel("Missing mechanism address space"))
         };
         let engine = crate::inject_sleigh::SleighInjectEngine::new(
             space(manager.get_constant_space())?,
@@ -708,11 +709,13 @@ impl Mechanisms {
     }
 }
 
-crate::kuna_arch_state!(Mechanisms);
+crate::unlace_arch_state!(Mechanisms);
 
 /// The architecture's compiled mechanisms; none before the specs load.
 fn mechanisms(arch: &crate::context::ArchContext) -> Rc<Mechanisms> {
-    arch.kuna_states.get_rc::<Mechanisms>().unwrap_or_default()
+    arch.unlace_states
+        .get_rc::<Mechanisms>()
+        .unwrap_or_default()
 }
 
 /// A context's `(call_mechanism_effects, call_mechanism_reload_only)`.
@@ -724,7 +727,7 @@ fn effects(options: &crate::optionset::OptionSet, image_elfv1_toc: bool) -> (boo
 /// Compile the mechanisms out of the architecture's loaded inject library.
 fn load(arch: &mut crate::architecture::Architecture) {
     let mechanisms = Mechanisms::from_library(&arch.pcodeinjectlib);
-    arch.kuna_states.set(Rc::new(mechanisms));
+    arch.unlace_states.set(Rc::new(mechanisms));
 }
 
 /// [`compiled_ids`] against the architecture's inject library.
@@ -737,12 +740,12 @@ fn register_in(
     xml: Option<&str>,
     manager: &AddrSpaceManager,
     arch: &mut crate::architecture::Architecture,
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     register(xml, manager, &mut arch.pcodeinjectlib)
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.callmechanisms_effects = Some(effects);
     hooks.callmechanisms_load = Some(load);
     hooks.callmechanisms_compiled_ids = Some(compiled_ids_in);
@@ -752,9 +755,9 @@ pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.callmechanisms_install_at_entry = Some(install_at_entry);
 }
 
-impl crate::optionset::KunaOption for CallMechanismMode {
+impl crate::optionset::UnlaceOption for CallMechanismMode {
     const NAME: &'static str = "callmechanisms";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         crate::callmechanisms::CallMechanismMode::Off
@@ -764,7 +767,7 @@ impl crate::optionset::KunaOption for CallMechanismMode {
         crate::callmechanisms::CallMechanismMode::Auto
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         Ok(crate::callmechanisms::OptionCallMechanisms.apply(value)?)
     }
 }
@@ -849,7 +852,7 @@ mod tests {
         model.set_inject_ids(0, -1);
         let mut context = crate::context::ArchContext::new(manager);
         context.evalfp_current = Some(Rc::new(model));
-        context.kuna_states.set(Rc::new(mechanisms));
+        context.unlace_states.set(Rc::new(mechanisms));
         context.call_mechanism_effects = true;
         let address = Address::new(ram.clone(), 0x1000);
         let mut data = crate::funcdata::Funcdata::new(

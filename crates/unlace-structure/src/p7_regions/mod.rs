@@ -5,7 +5,7 @@
 
 pub mod msvcstackguard;
 pub mod securitycheck;
-// (kuna) post-SSA Go write-barrier arm fold (shared/phi-feeding shapes;
+// (unlace) post-SSA Go write-barrier arm fold (shared/phi-feeding shapes;
 // rides option gowritebarrier).
 pub mod dynalloca;
 pub mod gowbphi;

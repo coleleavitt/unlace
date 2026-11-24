@@ -1,6 +1,6 @@
-//! Tests of `kuna_registerepochs` that read modules of unlace-bandb, the crate above it, so they live here.
+//! Tests of `unlace_registerepochs` that read modules of unlace-bandb, the crate above it, so they live here.
 
-/// The imports of `kuna_registerepochs` itself, as a glob so the tests' own imports win.
+/// The imports of `unlace_registerepochs` itself, as a glob so the tests' own imports win.
 #[allow(unused_imports)]
 mod module_scope {
     pub(super) use crate::funcdata::Funcdata;

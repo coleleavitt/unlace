@@ -1,4 +1,4 @@
-//! (kuna `chkstkdarwin`) Remove the Darwin AArch64 stack probe before SSA, so
+//! (unlace `chkstkdarwin`) Remove the Darwin AArch64 stack probe before SSA, so
 //! the registers it preserves keep their values across it.
 //!
 //! Apple clang calls `___chkstk_darwin`, with the byte count in `x9`, before it
@@ -195,7 +195,7 @@ impl Action for ActionChkstkDarwin {
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::coreoptions::ChkstkDarwin>()
             .0
             || data.is_settled(crate::maturity::Fact::Ssa)
@@ -219,7 +219,7 @@ impl Action for ActionChkstkDarwin {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.chkstkdarwin_applies_to = Some(applies_to);
 }
 

@@ -39,7 +39,7 @@ the spawn at `decompile.rs`), then recovers what failed by reading the transcrip
 (`check_errors`).
 
 The console does report the refusal — `IfcOption::execute`
-(`kuna-console/src/ifacedecomp.rs`) routes the pair to
+(`console/src/ifacedecomp.rs`) routes the pair to
 `Architecture::set_kuna_option` or `OptionDatabase::set` and maps either one's
 error to `IfaceError::execution`, which prints
 
@@ -49,7 +49,7 @@ Execution error: Must specify toggle value, on/off
 ```
 
 — but `errorisdone` is set only for a **pushed** script
-(`kuna-console/src/interface.rs (push_script_state)`). A script arriving on
+(`console/src/interface.rs (push_script_state)`). A script arriving on
 stdin is not pushed, so the session survives the raise, runs `read symbols`,
 `load addr`, `decompile` and `print C`, and exits 0.
 

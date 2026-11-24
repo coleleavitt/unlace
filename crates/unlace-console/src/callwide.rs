@@ -254,13 +254,13 @@ mod tests {
         use crate::engine::EntrySelector;
         let mut prog = image_program("mips32_be_dwarf.elf");
         prog.arch_mut()
-            .kuna_options
+            .unlace_options
             .set(unlace_decomp::callwide::CallWide(true));
         prog.arch_mut()
-            .kuna_options
+            .unlace_options
             .set(unlace_decomp::analysisgates::Dwarf(true));
         prog.arch_mut()
-            .kuna_options
+            .unlace_options
             .set(unlace_decomp::narrowext::NarrowExtMode::Compiler);
         prog.commit_pending_analysis().unwrap();
         let producer = prog
@@ -308,7 +308,7 @@ mod tests {
         prepare(&mut prog);
         assert!(
             prog.arch()
-                .kuna_tables
+                .unlace_tables
                 .get::<unlace_decomp::callwide::ProofSlot>()
                 .is_empty()
         );
@@ -326,13 +326,13 @@ mod tests {
         use crate::engine::EntrySelector;
         let mut prog = image_program("mips32_be_dwarf.elf");
         prog.arch_mut()
-            .kuna_options
+            .unlace_options
             .set(unlace_decomp::callwide::CallWide(true));
         prog.arch_mut()
-            .kuna_options
+            .unlace_options
             .set(unlace_decomp::analysisgates::Dwarf(true));
         prog.arch_mut()
-            .kuna_options
+            .unlace_options
             .set(unlace_decomp::narrowext::NarrowExtMode::Compiler);
         prog.commit_pending_analysis().unwrap();
         let caller = prog
@@ -359,26 +359,26 @@ mod tests {
         assert!(
             !prog
                 .arch()
-                .kuna_tables
+                .unlace_tables
                 .get::<unlace_decomp::callwide::ProofSlot>()
                 .is_empty()
         );
         assert!(
             prog.arch()
-                .kuna_tables
+                .unlace_tables
                 .get::<unlace_decomp::callwide::ProofSlot>()
                 .needed_declaration(caller.addr.get_offset())
         );
         assert!(
             prog.arch()
-                .kuna_tables
+                .unlace_tables
                 .get::<unlace_decomp::callwide::ProofSlot>()
                 .needed_declaration(ignored.addr.get_offset())
         );
         assert!(
             !prog
                 .arch()
-                .kuna_tables
+                .unlace_tables
                 .get::<unlace_decomp::callwide::ProofSlot>()
                 .needed_declaration(unused.addr.get_offset())
         );
@@ -421,12 +421,12 @@ mod tests {
         for mode in [NarrowExtMode::Abi, NarrowExtMode::Off] {
             let mut prog = image_program("mips32_be_dwarf.elf");
             prog.arch_mut()
-                .kuna_options
+                .unlace_options
                 .set(unlace_decomp::callwide::CallWide(true));
             prog.arch_mut()
-                .kuna_options
+                .unlace_options
                 .set(unlace_decomp::analysisgates::Dwarf(true));
-            prog.arch_mut().kuna_options.set(mode);
+            prog.arch_mut().unlace_options.set(mode);
             prog.commit_pending_analysis().unwrap();
             let caller = prog
                 .resolve_entry(&EntrySelector::Name("caller64".into()))
@@ -442,7 +442,7 @@ mod tests {
             prepare(&mut prog);
             assert!(
                 prog.arch()
-                    .kuna_tables
+                    .unlace_tables
                     .get::<unlace_decomp::callwide::ProofSlot>()
                     .is_empty(),
                 "{}",
@@ -480,13 +480,13 @@ mod tests {
                 .collect(),
         );
         register_decomp_commands(&mut status);
-        crate::console::register_kuna_commands(&mut status);
+        crate::console::register_unlace_commands(&mut status);
         let mut prog = program();
         prog.arch_mut()
-            .kuna_options
+            .unlace_options
             .set(unlace_decomp::callwide::CallWide(true));
         prog.arch_mut()
-            .kuna_options
+            .unlace_options
             .set(unlace_decomp::analysisgates::Dwarf(false));
         status
             .get_data_mut(DECOMPILE_MODULE)
@@ -505,12 +505,12 @@ mod tests {
             let prog = data.conf.as_mut().unwrap();
             if prog
                 .arch()
-                .kuna_options
+                .unlace_options
                 .get::<unlace_decomp::callwide::CallWide>()
                 .0
                 && prog
                     .arch()
-                    .kuna_options
+                    .unlace_options
                     .get::<unlace_decomp::bejoin::BeJoinMode>()
                     .proves()
             {
@@ -586,7 +586,7 @@ mod tests {
         assert!(prog.callwide.unavailable.is_some());
         assert!(
             prog.arch()
-                .kuna_tables
+                .unlace_tables
                 .get::<unlace_decomp::callwide::ProofSlot>()
                 .is_empty()
         );
@@ -742,12 +742,12 @@ pub(crate) fn target_declaration(
 pub fn prepare(prog: &mut ConsoleProgram) {
     if !prog
         .arch()
-        .kuna_options
+        .unlace_options
         .get::<unlace_decomp::callwide::CallWide>()
         .0
         || !prog
             .arch()
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::bejoin::BeJoinMode>()
             .proves()
         || prog.callwide.frozen
@@ -756,7 +756,7 @@ pub fn prepare(prog: &mut ConsoleProgram) {
     }
     unlace_decomp::mipsunaligned::paint(prog.arch_mut());
     prog.arch_mut()
-        .kuna_tables
+        .unlace_tables
         .get_mut::<unlace_decomp::callwide::ProofSlot>()
         .clear();
     ingest_dwarf(prog);
@@ -825,7 +825,7 @@ pub fn prepare(prog: &mut ConsoleProgram) {
             }
             let Some(verdict) = prog
                 .arch()
-                .kuna_tables
+                .unlace_tables
                 .get::<unlace_decomp::callwide::ProofSlot>()
                 .verdict()
             else {
@@ -835,7 +835,7 @@ pub fn prepare(prog: &mut ConsoleProgram) {
                 .iter()
                 .filter(|declaration| {
                     prog.arch()
-                        .kuna_tables
+                        .unlace_tables
                         .get::<unlace_decomp::callwide::ProofSlot>()
                         .needed_declaration(declaration.entry)
                 })
@@ -858,7 +858,7 @@ pub fn prepare(prog: &mut ConsoleProgram) {
             }
             if prog
                 .arch()
-                .kuna_tables
+                .unlace_tables
                 .get::<unlace_decomp::callwide::ProofSlot>()
                 .is_empty()
             {
@@ -874,12 +874,12 @@ pub fn prepare(prog: &mut ConsoleProgram) {
             }
             if !prog
                 .arch()
-                .kuna_tables
+                .unlace_tables
                 .get::<unlace_decomp::callwide::ProofSlot>()
                 .same_verdict(&verdict)
             {
                 prog.arch_mut()
-                    .kuna_tables
+                    .unlace_tables
                     .get_mut::<unlace_decomp::callwide::ProofSlot>()
                     .clear();
                 refuse(prog, "declaration replay changed the frozen proof");
@@ -908,7 +908,7 @@ fn ingest_dwarf(prog: &mut ConsoleProgram) {
     prog.callwide.declaration_bytes = bytes;
     if !prog
         .arch()
-        .kuna_options
+        .unlace_options
         .get::<unlace_decomp::analysisgates::Dwarf>()
         .0
         || !prog.callwide.supported()

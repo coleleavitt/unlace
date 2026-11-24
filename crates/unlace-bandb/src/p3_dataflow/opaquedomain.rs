@@ -7,11 +7,11 @@
 //! operation in the tree is evaluated exactly, at its own width, for each of
 //! them; the comparison folds when all assignments agree. This decides
 //! predicates that depend on a remainder, a division, a signed comparison or
-//! a right shift, which the low-bit proofs of `kuna_opaquepredicate` cannot
+//! a right shift, which the low-bit proofs of `unlace_opaquepredicate` cannot
 //! read: `(x * x * x - x) % 3 == 0` and `x * x >= 0` hold for every zero- or
 //! sign-extended byte `x` and for no wider one.
 //!
-//! A read of a global the whole program never writes (`kuna_opaqueglobals`,
+//! A read of a global the whole program never writes (`unlace_opaqueglobals`,
 //! `opaquepredicate globals`) is the constant the image initializes it to.
 
 use std::collections::BTreeMap;

@@ -1,4 +1,4 @@
-//! (kuna `gotypeglobals`) The second `gotypes` CONSUMER — the runtime's
+//! (unlace `gotypeglobals`) The second `gotypes` CONSUMER — the runtime's
 //! interface-dispatch tables (`itab`s) become NAMED data globals.
 //!
 //! Every interface value a Go program builds carries an `itab` — a record

@@ -9,7 +9,7 @@
 //! runs one of two dedicated guards — `Heritage::guardCallOverlappingInput`
 //! (`heritage.cc:1210`) on the input side and `Heritage::tryOutputOverlapGuard` /
 //! `Heritage::guardOutputOverlap` (`heritage.cc:1249`/`:1293`) on the output side.
-//! kuna shipped both as comment-only stubs, so the parameter and return entries
+//! unlace shipped both as comment-only stubs, so the parameter and return entries
 //! inside such a range were invisible to trial recovery.
 //!
 //! This is routine on x86-64: SLEIGH models `PXOR`, `MOVDQA`, `MOVDQU` and `ORPD`
@@ -24,9 +24,9 @@
 //! The two halves are separable and carry different risk, so the option is a
 //! policy with explicit modes rather than an on/off:
 //!
-//! * [`LEVEL_OFF`] — both branches inert; byte-identical to what kuna shipped
+//! * [`LEVEL_OFF`] — both branches inert; byte-identical to what unlace shipped
 //!   before this option for a single partially covered ABI entry. Complete
-//!   multi-slot register ranges are partitioned by `kuna_multiregargs`.
+//!   multi-slot register ranges are partitioned by `unlace_multiregargs`.
 //! * [`LEVEL_AUTO`] (the default) — both guards, but only for a named
 //!   eight-byte register's low four-byte general ABI slot on a truncated 32-bit
 //!   address target, including e500 GPRs.
@@ -39,7 +39,7 @@
 //! siblings in [`crate::heritage`]; this module owns the option's
 //! parse surface and the level vocabulary the gate reads.
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::types::int4;
 
 /// `option calloverlap off` — both overlap guards stay inert.
@@ -61,9 +61,9 @@ pub const LEVEL_FULL: int4 = 3;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CallOverlap(pub int4);
 
-impl crate::optionset::KunaOption for CallOverlap {
+impl crate::optionset::UnlaceOption for CallOverlap {
     const NAME: &'static str = "calloverlap";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         CallOverlap(LEVEL_AUTO)
@@ -73,7 +73,7 @@ impl crate::optionset::KunaOption for CallOverlap {
         CallOverlap(LEVEL_AUTO)
     }
 
-    fn parse(value: &str) -> KunaResult<(Self, String)> {
+    fn parse(value: &str) -> UnlaceResult<(Self, String)> {
         OptionCallOverlap
             .apply(value)
             .map(|(v, msg)| (CallOverlap(v), msg))
@@ -89,7 +89,7 @@ impl OptionCallOverlap {
     pub const NAME: &'static str = "calloverlap";
 
     /// Parse `auto`/`off`/`in`/`full` into the guard level + a confirmation message.
-    pub fn apply(&self, p1: &str) -> KunaResult<(int4, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(int4, String)> {
         match p1 {
             "auto" => Ok((
                 LEVEL_AUTO,
@@ -113,7 +113,7 @@ impl OptionCallOverlap {
                  (guardCallOverlappingInput + tryOutputOverlapGuard)"
                     .to_string(),
             )),
-            _ => Err(unlace_base::error::KunaError::parse(
+            _ => Err(unlace_base::error::UnlaceError::parse(
                 "Must specify one of auto, off, in, full",
             )),
         }
@@ -194,7 +194,7 @@ pub fn auto_register(
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.calloverlap_auto_register = Some(auto_register);
 }
 
@@ -211,8 +211,8 @@ mod tests {
 
     struct Registers;
     impl RegisterLookup for Registers {
-        fn get_register(&self, _: &str) -> KunaResult<VarnodeStorage> {
-            Err(unlace_base::error::KunaError::lowlevel(
+        fn get_register(&self, _: &str) -> UnlaceResult<VarnodeStorage> {
+            Err(unlace_base::error::UnlaceError::lowlevel(
                 "name lookup unused",
             ))
         }

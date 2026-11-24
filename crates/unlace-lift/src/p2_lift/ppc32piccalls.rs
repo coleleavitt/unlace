@@ -11,7 +11,7 @@ use crate::{
     funcdata::Funcdata,
 };
 use std::collections::{BTreeMap, VecDeque};
-use unlace_base::{address::Address, error::KunaResult};
+use unlace_base::{address::Address, error::UnlaceResult};
 use unlace_num::opcodes::OpCode;
 
 /// Loader evidence for one validated R_PPC_JMP_SLOT relocation.
@@ -130,7 +130,7 @@ fn load(data: &Funcdata, engine: &Architecture, op: OpId, state: &State) -> Opti
         return None;
     }
     engine
-        .kuna_tables
+        .unlace_tables
         .get::<crate::ppc32piccalls::PicImports>()
         .contains_key(&offset)
         .then_some(Value::Slot(offset))
@@ -202,7 +202,7 @@ fn direct_slot(
         Stub::Absolute(slot) => slot,
     };
     engine
-        .kuna_tables
+        .unlace_tables
         .get::<crate::ppc32piccalls::PicImports>()
         .contains_key(&u64::from(slot))
         .then_some(u64::from(slot))
@@ -259,7 +259,7 @@ pub fn prove(data: &Funcdata, engine: &Architecture) -> BTreeMap<u64, CallBindin
 fn prove_inner(data: &Funcdata, engine: &Architecture) -> Option<BTreeMap<u64, CallBinding>> {
     if !engine.analysis_ppc32picimports.scoped()
         || engine
-            .kuna_tables
+            .unlace_tables
             .get::<crate::ppc32piccalls::PicImports>()
             .is_empty()
         || !engine.archid.starts_with("PowerPC:")
@@ -337,12 +337,12 @@ fn prove_inner(data: &Funcdata, engine: &Architecture) -> Option<BTreeMap<u64, C
                         return None;
                     };
                     let mut import = engine
-                        .kuna_tables
+                        .unlace_tables
                         .get::<crate::ppc32piccalls::PicImports>()
                         .get(&slot)?
                         .clone();
                     import.no_return &= engine
-                        .kuna_options
+                        .unlace_options
                         .get::<crate::analysisgates::NoreturnKnown>()
                         .0;
                     let tail = o.code() == OpCode::CPUI_BRANCHIND;
@@ -418,7 +418,7 @@ fn prove_inner(data: &Funcdata, engine: &Architecture) -> Option<BTreeMap<u64, C
 /// Apply one proof while re-lifting the same entry. The relocation address is
 /// used only in this call spec; neither it nor the stub gets a FunctionSymbol.
 #[doc(hidden)]
-pub fn bind(data: &mut Funcdata, op: OpId, entry: &Address, indirect: bool) -> KunaResult<bool> {
+pub fn bind(data: &mut Funcdata, op: OpId, entry: &Address, indirect: bool) -> UnlaceResult<bool> {
     let Some(o) = data.obank().get(op) else {
         return Ok(false);
     };
@@ -449,7 +449,7 @@ pub fn bind(data: &mut Funcdata, op: OpId, entry: &Address, indirect: bool) -> K
     }
     fc.proto_mut().set_no_return(binding.import.no_return);
     let handle = crate::flow::next_fspec_handle();
-    fc.register_in_fspec_space(handle, data.get_arch().kuna_name_style());
+    fc.register_in_fspec_space(handle, data.get_arch().unlace_name_style());
     data.push_call_specs(fc);
     let vn = data.new_varnode_call_specs(handle);
     data.op_set_input(op, vn, 0)?;
@@ -473,12 +473,12 @@ pub fn clear_stale_warnings(db: &mut crate::architecture::CommentDatabase, entry
     });
 }
 
-/// (kuna `ppc32piccalls`) The proved PIC call bindings, by call address. They belong to this entry's flow only and are rebuilt after a clear or restart.
+/// (unlace `ppc32piccalls`) The proved PIC call bindings, by call address. They belong to this entry's flow only and are rebuilt after a clear or restart.
 #[derive(Default)]
 struct BindingsSlot(std::collections::BTreeMap<u64, crate::ppc32piccalls::CallBinding>);
-crate::kuna_func_state!(BindingsSlot, keep_across_clear: false);
+crate::unlace_func_state!(BindingsSlot, keep_across_clear: false);
 
-/// The `kuna_ppc32piccalls` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// The `unlace_ppc32piccalls` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataPpc32piccallsExt {
     fn ppc32_pic_calls(
@@ -495,12 +495,12 @@ impl FuncdataPpc32piccallsExt for crate::funcdata::Funcdata {
     fn ppc32_pic_calls(
         &self,
     ) -> &std::collections::BTreeMap<u64, crate::ppc32piccalls::CallBinding> {
-        &self.kuna_state::<BindingsSlot>().0
+        &self.unlace_state::<BindingsSlot>().0
     }
     fn ppc32_pic_calls_mut(
         &mut self,
     ) -> &mut std::collections::BTreeMap<u64, crate::ppc32piccalls::CallBinding> {
-        &mut self.kuna_state_mut::<BindingsSlot>().0
+        &mut self.unlace_state_mut::<BindingsSlot>().0
     }
     /// The caller-local PPC32 import calls this entry's flow applied.
     fn ppc32_import_calls(&self) -> impl Iterator<Item = &crate::ppc32piccalls::CallBinding> {
@@ -508,10 +508,10 @@ impl FuncdataPpc32piccallsExt for crate::funcdata::Funcdata {
     }
 }
 
-/// (kuna `ppc32picimports`) The PIC import slots the loader found, by address; an
+/// (unlace `ppc32picimports`) The PIC import slots the loader found, by address; an
 /// [`ArchTable`](crate::archstate::ArchTable) on the architecture.
 pub type PicImports = std::collections::BTreeMap<u64, ImportSlot>;
-crate::kuna_arch_table!(PicImports);
+crate::unlace_arch_table!(PicImports);
 
 #[cfg(test)]
 mod tests {

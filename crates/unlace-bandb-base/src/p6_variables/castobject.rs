@@ -1,4 +1,4 @@
-//! (kuna `castobject`) A frame object whose address is passed to a declared
+//! (unlace `castobject`) A frame object whose address is passed to a declared
 //! `T *` parameter is declared `T` when its readers agree.
 //!
 //! The frame model types a stack local from the values its own loads and stores
@@ -62,7 +62,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::rc::Rc;
 
 use unlace_base::address::sign_extend;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::space::AddrSpace;
 use unlace_base::types::{int4, intb, uintb};
 use unlace_num::opcodes::OpCode;
@@ -73,7 +73,7 @@ use crate::funcdata::Funcdata;
 use crate::options::on_or_off;
 use crate::varmap::{MapState, RangeType};
 
-/// (kuna) Declare a frame object at the pointee of the parameter its address fills:
+/// (unlace) Declare a frame object at the pointee of the parameter its address fills:
 /// `castobject on|off`.
 pub struct OptionCastObject;
 
@@ -83,7 +83,7 @@ impl OptionCastObject {
 
     /// Resolve the flag and its confirmation message; the caller writes it into
     /// the registered option `CastObject`.
-    pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((val, format!("Out-parameter object typing turned {prop}")))
@@ -534,15 +534,15 @@ pub fn reconcile(fd: &mut Funcdata) {
     }
 }
 
-/// (kuna) A frame object whose address only fills declared `T *` parameters
+/// (unlace) A frame object whose address only fills declared `T *` parameters
 /// is declared `T` (option `castobject`).  See
 /// [`crate::castobject`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct CastObject(pub bool);
 
-impl crate::optionset::KunaOption for CastObject {
+impl crate::optionset::UnlaceOption for CastObject {
     const NAME: &'static str = "castobject";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         CastObject(true)
@@ -552,7 +552,7 @@ impl crate::optionset::KunaOption for CastObject {
         CastObject(true)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (v, msg) = crate::castobject::OptionCastObject.apply(value)?;
         Ok((CastObject(v), msg))
     }

@@ -40,7 +40,7 @@ prints `char v1; ... v1 == 0xe9` - wrong C (analysis.md §3).
 
 ## Tests
 
-* `tests/stages/kuna-charbyte.toml`, two passes (off, on), 21 assertions. The
+* `tests/stages/charbyte.toml`, two passes (off, on), 21 assertions. The
   review round added four controls that keep `uint1` in both passes:
   `argbyte` (the byte passed to `logit` as a one-byte argument), `sibling`
   (`a0[1]` passed to `logit` while `a0[0]` qualifies), `counter` (gcc -O0

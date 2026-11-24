@@ -1,17 +1,17 @@
-//! (kuna) A `&parameter` reference must not re-declare the parameter as a
+//! (unlace) A `&parameter` reference must not re-declare the parameter as a
 //! body local.
 //!
 //! `ActionNameVars::linkSpacebaseSymbol` (`coreaction.cc:3005`) binds the offset
 //! constant of a `PTRSUB(spacebase, off)` — the `&symbol` markup — to the Symbol
-//! that owns the referenced frame slot, and kuna carries the Symbol identity onto
-//! the constant's HighVariable (`HighVariable::kuna_ref_symbol`, the port of C++
+//! that owns the referenced frame slot, and unlace carries the Symbol identity onto
+//! the constant's HighVariable (`HighVariable::unlace_ref_symbol`, the port of C++
 //! `Varnode::setSymbolReference`).  When the referenced slot is an incoming stack
 //! parameter, that Symbol is the parameter's own `function_parameter` Symbol.
 //!
 //! Upstream declares a function body's locals by walking the ScopeLocal Symbol
 //! table for `no_category` Symbols only (`PrintC::emitScopeVarDecls`,
 //! `printc.cc:2667`), so a `function_parameter` Symbol is rendered in the
-//! signature and never again.  kuna's printer instead walks HighVariables and
+//! signature and never again.  unlace's printer instead walks HighVariables and
 //! recognises a parameter by testing whether a `function_parameter` Symbol
 //! *contains the storage* of one of the high's member Varnodes.  An `&parameter`
 //! reference high has no such member: every instance of it is the PTRSUB offset
@@ -66,7 +66,7 @@ pub fn parameter_symbol_at(lm: &ScopeLocal, addr: &Address) -> Option<SymbolId> 
 /// The C++ `emitScopeVarDecls(scope, no_category)` predicate, asked of a high
 /// whose only Varnodes are the constant PTRSUB offset that carries the reference.
 pub fn references_parameter_symbol(fd: &Funcdata, high: HighVariableId) -> bool {
-    let Some(sym) = fd.high_bank().get(high).and_then(|h| h.kuna_ref_symbol()) else {
+    let Some(sym) = fd.high_bank().get(high).and_then(|h| h.unlace_ref_symbol()) else {
         return false;
     };
     fd.get_scope_local()
@@ -91,7 +91,7 @@ pub fn parameter_reference_varrefs(fd: &Funcdata, addr: &Address) -> BTreeSet<u6
         return varrefs;
     };
     for (_, high) in fd.high_bank().iter() {
-        if high.kuna_ref_symbol() != Some(sym) {
+        if high.unlace_ref_symbol() != Some(sym) {
             continue;
         }
         for index in 0..high.num_instances() {

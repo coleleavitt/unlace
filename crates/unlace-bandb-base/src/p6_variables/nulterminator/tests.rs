@@ -1,4 +1,4 @@
-//! Unit tests for (kuna) `nulterminator`.
+//! Unit tests for (unlace) `nulterminator`.
 
 use std::rc::Rc;
 

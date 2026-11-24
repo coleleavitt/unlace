@@ -461,7 +461,7 @@ fn floating_structs_with_bitfields_return_through_gprs() {
                     &[root.join("specs").to_string_lossy().into_owned()],
                 )
                 .unwrap();
-                prog.arch_mut().set_kuna_option("ctypes", "on").unwrap();
+                prog.arch_mut().set_unlace_option("ctypes", "on").unwrap();
                 let (addr_size, word_size) = prog.arch().data_org();
                 let fields = if bits_first {
                     "unsigned b:1; double d;"
@@ -625,7 +625,7 @@ fn independent_hard_float_images_select_and_recover_the_declared_values() {
                 &[root.join("specs").to_string_lossy().into_owned()],
             )
             .unwrap();
-            prog.arch_mut().set_kuna_option("ctypes", "on").unwrap();
+            prog.arch_mut().set_unlace_option("ctypes", "on").unwrap();
             prog.commit_pending_analysis().unwrap();
             let types = prog.arch().types();
             let shell = types.get_type_struct("ExplicitAlignedDoubles").unwrap();
@@ -728,7 +728,7 @@ fn independent_compilers_recover_direct_nested_and_padded_float_fields() {
                 &[root.join("specs").to_string_lossy().into_owned()],
             )
             .unwrap();
-            prog.arch_mut().set_kuna_option("ctypes", "on").unwrap();
+            prog.arch_mut().set_unlace_option("ctypes", "on").unwrap();
             prog.commit_pending_analysis().unwrap();
             for (name, expected) in [
                 ("nested_first", "return x.a.d;"),
@@ -802,7 +802,7 @@ fn soft_float_aliases_preserve_unsigned_argument_extension_with_explicit_selecti
                     Some(false),
                     "{compiler} {variant}:{model}"
                 );
-                prog.arch_mut().set_kuna_option("ctypes", "on").unwrap();
+                prog.arch_mut().set_unlace_option("ctypes", "on").unwrap();
                 prog.commit_pending_analysis().unwrap();
                 let mut code = Vec::new();
                 for name in ["narrow_u8", "narrow_u16", "narrow_u32", "indirect"] {
@@ -850,7 +850,7 @@ fn sectionless_pic_entries_recover_t9() {
             &[root.join("specs").to_string_lossy().into_owned()],
         )
         .unwrap();
-        prog.arch_mut().set_kuna_option("ctypes", "on").unwrap();
+        prog.arch_mut().set_unlace_option("ctypes", "on").unwrap();
         prog.commit_pending_analysis().unwrap();
         let entry = prog
             .resolve_entry(&EntrySelector::Numeric(0x100000))
@@ -882,7 +882,7 @@ fn pic_imports_use_the_dynamic_name_instead_of_the_linker_stub_label() {
                 &[root.join("specs").to_string_lossy().into_owned()],
             )
             .unwrap();
-            prog.arch_mut().set_kuna_option("ctypes", "on").unwrap();
+            prog.arch_mut().set_unlace_option("ctypes", "on").unwrap();
             prog.commit_pending_analysis().unwrap();
             let entry = prog
                 .resolve_entry(&EntrySelector::Name("imported_call".into()))
@@ -1326,7 +1326,7 @@ fn independent_gcc_prototypes_recover_aggregate_and_quad_values() {
                 &[root.join("specs").to_string_lossy().into_owned()],
             )
             .unwrap();
-            prog.arch_mut().set_kuna_option("ctypes", "on").unwrap();
+            prog.arch_mut().set_unlace_option("ctypes", "on").unwrap();
             prog.commit_pending_analysis().unwrap();
             for (name, expr) in [
                 ("pair_first", "return p.a;"),

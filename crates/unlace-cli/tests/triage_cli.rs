@@ -38,7 +38,7 @@ fn specs() -> String {
     repo_root().join("specs").to_str().unwrap().to_string()
 }
 
-fn run_kuna(args: &[&str]) -> (String, String, i32) {
+fn run_unlace(args: &[&str]) -> (String, String, i32) {
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .env("SLEIGHHOME", specs())
@@ -99,14 +99,15 @@ fn json_sizes(stdout: &str) -> Vec<u64> {
 /// knows the generated spelling still selects the function.
 #[test]
 fn filter_selects_by_name_regex() {
-    let (out, err, code) = run_kuna(&["functions", &fauxware(), "--filter", "auth|accept|reject"]);
+    let (out, err, code) =
+        run_unlace(&["functions", &fauxware(), "--filter", "auth|accept|reject"]);
     assert_eq!(code, 0, "{err}");
     assert_eq!(
         listing_names(&out),
         vec!["authenticate", "accepted", "rejected"]
     );
 
-    let (aliased, _, code) = run_kuna(&["functions", &fauxware(), "--filter", "^sub_400664$"]);
+    let (aliased, _, code) = run_unlace(&["functions", &fauxware(), "--filter", "^sub_400664$"]);
     assert_eq!(code, 0);
     assert_eq!(
         listing_names(&aliased),
@@ -116,14 +117,14 @@ fn filter_selects_by_name_regex() {
 
     // A filter that matches nothing is an ANSWER, not a discovery failure: the
     // zero-discovery verdict must stay attached to discovery.
-    let (empty, _, code) = run_kuna(&["functions", &fauxware(), "--filter", "no_such_symbol"]);
+    let (empty, _, code) = run_unlace(&["functions", &fauxware(), "--filter", "no_such_symbol"]);
     assert_eq!(code, 0, "an empty selection is not a failed run");
     assert!(listing_rows(&empty).is_empty());
 }
 
 #[test]
 fn a_malformed_filter_is_a_usage_error() {
-    let (_, err, code) = run_kuna(&["functions", &fauxware(), "--filter", "["]);
+    let (_, err, code) = run_unlace(&["functions", &fauxware(), "--filter", "["]);
     assert_eq!(code, 2, "{err}");
     assert!(err.contains("invalid --filter regex"), "{err}");
 }
@@ -132,7 +133,7 @@ fn a_malformed_filter_is_a_usage_error() {
 /// is rejected before the binary is even loaded.
 #[test]
 fn size_bounds_are_inclusive_and_ordered() {
-    let (out, err, code) = run_kuna(&["functions", &fauxware(), "--min-size", "100", "--json"]);
+    let (out, err, code) = run_unlace(&["functions", &fauxware(), "--min-size", "100", "--json"]);
     assert_eq!(code, 0, "{err}");
     let sizes = json_sizes(&out);
     assert!(
@@ -142,7 +143,7 @@ fn size_bounds_are_inclusive_and_ordered() {
     assert!(sizes.iter().all(|&s| s >= 100), "{out}");
     assert!(json_field(&out, "/count").unwrap() < json_field(&out, "/total").unwrap());
 
-    let (bounded, _, code) = run_kuna(&[
+    let (bounded, _, code) = run_unlace(&[
         "functions",
         &fauxware(),
         "--min-size",
@@ -156,7 +157,7 @@ fn size_bounds_are_inclusive_and_ordered() {
     assert!(!sizes.is_empty(), "the fixture must exercise both bounds");
     assert!(sizes.iter().all(|&s| (32..=44).contains(&s)), "{bounded}");
 
-    let (_, err, code) = run_kuna(&[
+    let (_, err, code) = run_unlace(&[
         "functions",
         &fauxware(),
         "--min-size",
@@ -172,7 +173,7 @@ fn size_bounds_are_inclusive_and_ordered() {
 /// AFTER the sort, so "the three biggest functions" is one call.
 #[test]
 fn sort_and_limit_answer_the_three_biggest_question() {
-    let (out, err, code) = run_kuna(&[
+    let (out, err, code) = run_unlace(&[
         "functions",
         &fauxware(),
         "--sort",
@@ -196,14 +197,14 @@ fn sort_and_limit_answer_the_three_biggest_question() {
     );
     assert!(out.contains("\"name\": \"main\""), "{out}");
 
-    let (by_name, _, code) = run_kuna(&["functions", &fauxware(), "--sort", "name"]);
+    let (by_name, _, code) = run_unlace(&["functions", &fauxware(), "--sort", "name"]);
     assert_eq!(code, 0);
     let names = listing_names(&by_name);
     let mut sorted = names.clone();
     sorted.sort();
     assert_eq!(names, sorted);
 
-    let (_, err, code) = run_kuna(&["functions", &fauxware(), "--sort", "entropy"]);
+    let (_, err, code) = run_unlace(&["functions", &fauxware(), "--sort", "entropy"]);
     assert_eq!(code, 2, "{err}");
     assert!(err.contains("unknown --sort key"), "{err}");
 }
@@ -213,7 +214,7 @@ fn sort_and_limit_answer_the_three_biggest_question() {
 /// is why an address-taken function pointer has to count as an edge.
 #[test]
 fn reachable_from_walks_the_call_graph() {
-    let (out, err, code) = run_kuna(&["functions", &fauxware(), "--reachable-from", "main"]);
+    let (out, err, code) = run_unlace(&["functions", &fauxware(), "--reachable-from", "main"]);
     assert_eq!(code, 0, "{err}");
     let reached = listing_names(&out);
     for want in [
@@ -240,7 +241,8 @@ fn reachable_from_walks_the_call_graph() {
         "the query narrowed nothing: {reached:?}"
     );
 
-    let (from_start, _, code) = run_kuna(&["functions", &fauxware(), "--reachable-from", "_start"]);
+    let (from_start, _, code) =
+        run_unlace(&["functions", &fauxware(), "--reachable-from", "_start"]);
     assert_eq!(code, 0);
     assert!(
         listing_names(&from_start).iter().any(|n| n == "main"),
@@ -248,11 +250,12 @@ fn reachable_from_walks_the_call_graph() {
     );
 
     // An address operand resolves the same way a name does.
-    let (by_addr, _, code) = run_kuna(&["functions", &fauxware(), "--reachable-from", "0x40071d"]);
+    let (by_addr, _, code) =
+        run_unlace(&["functions", &fauxware(), "--reachable-from", "0x40071d"]);
     assert_eq!(code, 0);
     assert_eq!(listing_names(&by_addr), reached);
 
-    let (_, err, code) = run_kuna(&["functions", &fauxware(), "--reachable-from", "no_such_fn"]);
+    let (_, err, code) = run_unlace(&["functions", &fauxware(), "--reachable-from", "no_such_fn"]);
     assert_eq!(code, 1, "{err}");
     assert!(err.contains("no function named"), "{err}");
 }
@@ -267,13 +270,13 @@ fn summary_reports_the_pe_user_entry() {
         .to_str()
         .unwrap()
         .to_string();
-    let (out, err, code) = run_kuna(&["functions", &bin, "--summary", "--json"]);
+    let (out, err, code) = run_unlace(&["functions", &bin, "--summary", "--json"]);
     assert_eq!(code, 0, "{err}");
     let main = out.split("\"main\":").nth(1).expect("a main field");
     assert!(main.contains("\"name\": \"main\""), "{out}");
     assert!(main.contains("\"address_hex\": \"0x140001592\""), "{out}");
 
-    let (text, _, code) = run_kuna(&["functions", &bin, "--summary"]);
+    let (text, _, code) = run_unlace(&["functions", &bin, "--summary"]);
     assert_eq!(code, 0);
     assert!(text.contains("main\t0x140001592\tmain"), "{text}");
 }
@@ -283,7 +286,7 @@ fn summary_reports_the_pe_user_entry() {
 /// functions — without emitting an inventory at all.
 #[test]
 fn summary_orients_without_emitting_the_inventory() {
-    let (out, err, code) = run_kuna(&["functions", &fauxware(), "--summary", "--json"]);
+    let (out, err, code) = run_unlace(&["functions", &fauxware(), "--summary", "--json"]);
     assert_eq!(code, 0, "{err}");
     for key in [
         "\"summary\"",
@@ -310,7 +313,7 @@ fn summary_orients_without_emitting_the_inventory() {
         "a summary never carries pseudocode: {out}"
     );
 
-    let (full, _, code) = run_kuna(&["functions", &fauxware(), "--json"]);
+    let (full, _, code) = run_unlace(&["functions", &fauxware(), "--json"]);
     assert_eq!(code, 0);
     assert!(
         out.len() < full.len(),
@@ -320,7 +323,7 @@ fn summary_orients_without_emitting_the_inventory() {
     );
 
     // `--limit` sizes the `largest` list.
-    let (capped, _, code) = run_kuna(&[
+    let (capped, _, code) = run_unlace(&[
         "functions",
         &fauxware(),
         "--summary",
@@ -335,7 +338,7 @@ fn summary_orients_without_emitting_the_inventory() {
         "entry + main + 2 largest: {capped}"
     );
 
-    let (text, _, code) = run_kuna(&["functions", &fauxware(), "--summary"]);
+    let (text, _, code) = run_unlace(&["functions", &fauxware(), "--summary"]);
     assert_eq!(code, 0);
     assert!(text.contains("size buckets:"), "{text}");
     assert!(text.contains("reachable from entry"), "{text}");
@@ -345,7 +348,7 @@ fn summary_orients_without_emitting_the_inventory() {
 /// selected batch is both far smaller and far cheaper than the whole binary.
 #[test]
 fn decompile_all_narrows_the_run_not_the_output() {
-    let (out, err, code) = run_kuna(&[
+    let (out, err, code) = run_unlace(&[
         "decompile-all",
         &fauxware(),
         "--json",
@@ -365,7 +368,7 @@ fn decompile_all_narrows_the_run_not_the_output() {
     assert!(out.contains("\"name\": \"authenticate\""), "{out}");
     assert!(!out.contains("\"name\": \"_start\""), "{out}");
 
-    let (whole, _, code) = run_kuna(&["decompile-all", &fauxware(), "--json"]);
+    let (whole, _, code) = run_unlace(&["decompile-all", &fauxware(), "--json"]);
     assert_eq!(code, 0);
     assert!(
         out.len() * 2 < whole.len(),
@@ -380,7 +383,7 @@ fn decompile_all_narrows_the_run_not_the_output() {
         "unfiltered documents keep their schema"
     );
 
-    let (filtered, _, code) = run_kuna(&[
+    let (filtered, _, code) = run_unlace(&[
         "decompile-all",
         &fauxware(),
         "--json",
@@ -405,7 +408,7 @@ fn an_arm_thumb_entry_resolves_to_its_even_address() {
         .to_str()
         .unwrap()
         .to_string();
-    let (out, err, code) = run_kuna(&["functions", &arm, "--summary", "--json"]);
+    let (out, err, code) = run_unlace(&["functions", &arm, "--summary", "--json"]);
     assert_eq!(code, 0, "{err}");
     assert!(
         out.contains("\"address_hex\": \"0x3dc\""),
@@ -417,9 +420,9 @@ fn an_arm_thumb_entry_resolves_to_its_even_address() {
         "the entry must reach something: {out}"
     );
 
-    let (odd, _, code) = run_kuna(&["functions", &arm, "--reachable-from", "0x3dd"]);
+    let (odd, _, code) = run_unlace(&["functions", &arm, "--reachable-from", "0x3dd"]);
     assert_eq!(code, 0);
-    let (even, _, _) = run_kuna(&["functions", &arm, "--reachable-from", "0x3dc"]);
+    let (even, _, _) = run_unlace(&["functions", &arm, "--reachable-from", "0x3dc"]);
     assert_eq!(
         listing_names(&odd),
         listing_names(&even),
@@ -439,7 +442,7 @@ fn a_macho_lc_main_entry_is_reported_as_a_vma() {
         .to_str()
         .unwrap()
         .to_string();
-    let (out, err, code) = run_kuna(&["functions", &macho, "--summary", "--json"]);
+    let (out, err, code) = run_unlace(&["functions", &macho, "--summary", "--json"]);
     assert_eq!(code, 0, "{err}");
     assert!(
         out.contains("\"address_hex\": \"0x1000005b0\""),
@@ -473,11 +476,11 @@ fn a_universal_macho_summarizes_the_slice_the_inventory_loaded() {
         .to_str()
         .unwrap()
         .to_string();
-    let (plain, err, code) = run_kuna(&["functions", &fat, "--json"]);
+    let (plain, err, code) = run_unlace(&["functions", &fat, "--json"]);
     assert_eq!(code, 0, "{err}");
     let inventory = json_field(&plain, "/count").expect("the plain inventory reports a count");
 
-    let (out, err, code) = run_kuna(&["functions", &fat, "--summary", "--json"]);
+    let (out, err, code) = run_unlace(&["functions", &fat, "--summary", "--json"]);
     assert_eq!(code, 0, "{err}");
     assert!(!err.contains("Unsupported file format"), "{err}");
     assert_eq!(
@@ -497,7 +500,7 @@ fn a_universal_macho_summarizes_the_slice_the_inventory_loaded() {
     // `--slice` is live on this path, not merely non-fatal: the arm64 slice
     // states its own `_main` at a different address.
     let (arm64, err, code) =
-        run_kuna(&["functions", &fat, "--summary", "--json", "--slice", "arm64"]);
+        run_unlace(&["functions", &fat, "--summary", "--json", "--slice", "arm64"]);
     assert_eq!(code, 0, "{err}");
     assert!(
         arm64.contains("\"address_hex\": \"0x10000056c\""),
@@ -536,7 +539,7 @@ fn a_repaired_header_still_reports_the_summary_entry() {
             .to_str()
             .unwrap()
             .to_string();
-        let (out, err, code) = run_kuna(&["functions", &image, "--summary", "--json"]);
+        let (out, err, code) = run_unlace(&["functions", &image, "--summary", "--json"]);
         assert_eq!(code, 0, "{name}: {err}");
         assert!(
             out.contains(entry),
@@ -564,7 +567,7 @@ fn a_repaired_header_still_reports_the_summary_entry() {
 /// A well-formed image has nothing to warn about, and says so with an empty array.
 #[test]
 fn a_well_formed_image_summarizes_with_no_warnings() {
-    let (out, err, code) = run_kuna(&["functions", &fauxware(), "--summary", "--json"]);
+    let (out, err, code) = run_unlace(&["functions", &fauxware(), "--summary", "--json"]);
     assert_eq!(code, 0, "{err}");
     assert!(out.contains("\"warnings\": []"), "{out}");
 }
@@ -579,12 +582,12 @@ fn a_narrowed_run_on_a_packed_image_still_fails_loudly() {
         .to_str()
         .unwrap()
         .to_string();
-    let (out, err, code) = run_kuna(&["functions", &packed, "--filter", "main", "--json"]);
+    let (out, err, code) = run_unlace(&["functions", &packed, "--filter", "main", "--json"]);
     assert_eq!(code, 1, "{err}");
     assert!(out.contains("UPX-packed"), "{out}");
     assert!(err.contains("unlace unpack"), "{err}");
 
-    let (summary, _, code) = run_kuna(&["functions", &packed, "--summary", "--json"]);
+    let (summary, _, code) = run_unlace(&["functions", &packed, "--summary", "--json"]);
     assert_eq!(code, 1, "a summary of nothing is still a failed run");
     assert!(summary.contains("UPX-packed"), "{summary}");
 }
@@ -593,7 +596,7 @@ fn a_narrowed_run_on_a_packed_image_still_fails_loudly() {
 /// where they are ignored would be worse than not offering them.
 #[test]
 fn triage_flags_are_not_offered_where_they_do_nothing() {
-    let (_, err, code) = run_kuna(&["decompile-project", &fauxware(), "--filter", "main"]);
+    let (_, err, code) = run_unlace(&["decompile-project", &fauxware(), "--filter", "main"]);
     assert_eq!(code, 2, "{err}");
     assert!(err.contains("unknown option --filter"), "{err}");
 }
@@ -615,7 +618,7 @@ fn an_inventory_of_only_imports_is_still_a_failed_run() {
         .to_str()
         .unwrap()
         .to_string();
-    let (out, err, code) = run_kuna(&["functions", &imports_only, "--json"]);
+    let (out, err, code) = run_unlace(&["functions", &imports_only, "--json"]);
     assert_eq!(code, 1, "{err}");
     assert_eq!(
         json_field(&out, "/count"),
@@ -636,12 +639,12 @@ fn an_inventory_of_only_imports_is_still_a_failed_run() {
     );
 
     // The orientation surface reads the same verdict off the same inventory.
-    let (summary, err, code) = run_kuna(&["functions", &imports_only, "--summary", "--json"]);
+    let (summary, err, code) = run_unlace(&["functions", &imports_only, "--summary", "--json"]);
     assert_eq!(code, 1, "a summary of nothing is still a failed run: {err}");
     assert!(summary.contains("no functions discovered"), "{summary}");
 
     // And a declaration is still what closes it: one body is enough.
-    let (declared, err, code) = run_kuna(&[
+    let (declared, err, code) = run_unlace(&[
         "functions",
         &imports_only,
         "--json",

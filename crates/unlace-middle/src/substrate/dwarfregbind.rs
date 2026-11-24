@@ -1,4 +1,4 @@
-//! (kuna `dwarfscopes`) Where a DWARF register local binds: the reaching
+//! (unlace `dwarfscopes`) Where a DWARF register local binds: the reaching
 //! write of its register at the start of its location range, found by walking
 //! the basic block that holds the start and its single-predecessor chain, and
 //! the width the bound symbol takes when that write is wider than the DWARF

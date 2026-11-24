@@ -1,4 +1,4 @@
-//! (kuna) `aifpoolslide` — no AIF gap entry starts on a literal-pool word; an
+//! (unlace) `aifpoolslide` — no AIF gap entry starts on a literal-pool word; an
 //! accept that opens with one is planted on the code after the pool (P1 code/data
 //! partition).
 //!

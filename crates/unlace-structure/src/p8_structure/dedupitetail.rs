@@ -6,7 +6,7 @@
 //!
 //! # The structural gap
 //!
-//! kuna inherits Ghidra's collapse-based structurer
+//! unlace inherits Ghidra's collapse-based structurer
 //! ([`crate::blockaction`]), which, when a single basic block is reachable from
 //! *both* arms of an `if/else`, **clones** it into each arm rather than converging
 //! the two predecessors onto one copy.  On `true_ubuntu1804::usage` (x86-64
@@ -14,12 +14,12 @@
 //! `__printf_chk("...online help...")` / `setlocale(5,0)` / `strncmp(...,"en_",3)`
 //! prefix **twice** — once at the head of each arm — because the compiler emitted
 //! two physically distinct copies of that prefix and the structurer kept both.
-//! angr emits each shared continuation **once**.  This pays kuna an extra `if`,
+//! angr emits each shared continuation **once**.  This pays unlace an extra `if`,
 //! extra lines, and a duplicated call per cloned block.
 //!
 //! This is the exact **inverse** of the three SAILR goto-reduction passes
-//! ([`crate::gotoreduce`] / `kuna_crossjumpreverter` /
-//! `kuna_taildup`), which *duplicate* a shared tail to remove a `goto`.  Here kuna
+//! ([`crate::gotoreduce`] / `unlace_crossjumpreverter` /
+//! `unlace_taildup`), which *duplicate* a shared tail to remove a `goto`.  Here unlace
 //! has *over-duplicated* a shared if/else head, and the readability win is to
 //! **merge** the identical copies back into one.
 //!
@@ -42,7 +42,7 @@
 //! ahead of the `if` (and dropping the duplicate) changes nothing about which code
 //! runs or in what order — it is purely a print-tree edit (the structured
 //! `list`/`parent`), exactly like
-//! [`kuna_flatten_ifelse`](crate::block::BlockGraph::kuna_flatten_ifelse): no p-code
+//! [`unlace_flatten_ifelse`](crate::block::BlockGraph::unlace_flatten_ifelse): no p-code
 //! is cloned and SSA/def-use is untouched, because the retained leaf still points at
 //! its original bblock (the printer re-emits its ops).
 //!
@@ -55,7 +55,7 @@
 //! (`dedup_ite_tail`, default-ON per DIV-14) — when off, [`ActionDedupIteTail::apply`]
 //! early-returns and output is byte-identical.
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
@@ -67,7 +67,7 @@ use crate::options::on_or_off;
 
 use unlace_base::marshal::ElementId;
 
-/// Marshaling element `<dedupitetail>` (kuna).  ElementIds live in the 4000+ range
+/// Marshaling element `<dedupitetail>` (unlace).  ElementIds live in the 4000+ range
 /// (4100 gotoreduce, 4101 tailcalljump, 4102 regionstructure, 4103 noreturn_extern,
 /// 4104 noreturn_externmatch, 4105 crossjumprevert, 4106 switchsharedcase,
 /// 4107 ifelseflatten, 4108 taildup are taken; this is 4109).
@@ -115,7 +115,7 @@ impl Action for ActionDedupIteTail {
         // P0 assertion `option dedupitetail on|off`, carried on the Architecture boundary.
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::dedupitetail::DedupIteTail>()
             .0
         {
@@ -148,10 +148,10 @@ impl Action for ActionDedupIteTail {
             let ok = match kind {
                 HoistKind::Prefix => data
                     .sblocks_mut()
-                    .kuna_hoist_ite_prefix(*if_id, retained, duplicate),
+                    .unlace_hoist_ite_prefix(*if_id, retained, duplicate),
                 HoistKind::Suffix => data
                     .sblocks_mut()
-                    .kuna_hoist_ite_suffix(*if_id, retained, duplicate),
+                    .unlace_hoist_ite_suffix(*if_id, retained, duplicate),
             };
             if ok {
                 count += 1;
@@ -618,14 +618,14 @@ impl OptionDedupIteTail {
     pub const NAME: &'static str = "dedupitetail";
 
     /// Parse `on`/`off`, returning the bool value + a confirmation message.
-    pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((val, format!("If/else tail deduplication turned {prop}")))
     }
 }
 
-/// (kuna) angr structurer ITE region-dedup: merge a duplicated `if/else` tail
+/// (unlace) angr structurer ITE region-dedup: merge a duplicated `if/else` tail
 /// (a maximal common prefix/suffix of statement-equivalent leaves shared by both
 /// arms) by hoisting the shared blocks out of the `if` — emitting one copy
 /// instead of two.  The inverse of the SAILR duplication passes
@@ -634,9 +634,9 @@ impl OptionDedupIteTail {
 #[derive(Clone, Debug, PartialEq)]
 pub struct DedupIteTail(pub bool);
 
-impl crate::optionset::KunaOption for DedupIteTail {
+impl crate::optionset::UnlaceOption for DedupIteTail {
     const NAME: &'static str = "dedupitetail";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         DedupIteTail(false)
@@ -646,7 +646,7 @@ impl crate::optionset::KunaOption for DedupIteTail {
         DedupIteTail(true)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (v, msg) = crate::dedupitetail::OptionDedupIteTail.apply(value)?;
         Ok((DedupIteTail(v), msg))
     }

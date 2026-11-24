@@ -54,7 +54,7 @@ pub fn create(
     while fd
         .high_bank()
         .iter()
-        .any(|(_, high)| high.kuna_name() == Some(name.as_str()))
+        .any(|(_, high)| high.unlace_name() == Some(name.as_str()))
     {
         suffix += 1;
         name = format!("{stem}_{suffix}");
@@ -100,7 +100,7 @@ pub fn create(
         .get_mut(alias)?
         .set_flags_pub(crate::varnode::varnode_flags::namelock);
     let high = fd.vbank().get(alias)?.get_high()?;
-    fd.high_bank_mut().get_mut(high)?.set_kuna_name(name);
+    fd.high_bank_mut().get_mut(high)?.set_unlace_name(name);
     fd.high_bank_mut().get_mut(high)?.set_symbol_type(target);
     operations.push(cast);
     for op in operations.into_iter().rev() {
@@ -108,10 +108,10 @@ pub fn create(
     }
     let reference = fd.vbank().get(at)?.get_high()?;
     let high = fd.high_bank_mut().get_mut(reference)?;
-    high.set_kuna_name(info.display_name.clone());
+    high.set_unlace_name(info.display_name.clone());
     high.set_symbol_offset(0);
     high.set_symbol_type(Rc::clone(backing));
-    high.set_kuna_ref_symbol(info.symbol);
+    high.set_unlace_ref_symbol(info.symbol);
     Some(alias)
 }
 
@@ -131,7 +131,7 @@ pub fn matches(
     let ty = assertion.datatype.as_ref().unwrap_or(&use_.datatype);
     let stem = format!("{}_view", assertion.view_name(ty));
     let named = high
-        .kuna_name()
+        .unlace_name()
         .is_some_and(|name| name == stem || name.starts_with(&(stem + "_")));
     if !named || !value.is_explicit() {
         return false;

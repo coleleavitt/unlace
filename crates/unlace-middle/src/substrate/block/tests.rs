@@ -656,7 +656,7 @@ fn w10_build_copy_from_empty_source() {
 }
 
 // ---------------------------------------------------------------------------
-// kuna_flatten_ifelse — the if-else-flattening print-tree splice
+// unlace_flatten_ifelse — the if-else-flattening print-tree splice
 // (angr IfElseFlattener; p8_structure::ifelseflatten)
 // ---------------------------------------------------------------------------
 
@@ -705,7 +705,7 @@ fn flatten_ifelse_drops_else_and_splices_sibling() {
     );
     assert_eq!(g.block(parent).get_size(), 2, "parent holds [if, tail]");
 
-    let ok = g.kuna_flatten_ifelse(if_id);
+    let ok = g.unlace_flatten_ifelse(if_id);
     assert!(
         ok,
         "flatten should succeed for a 3-comp if/else under a list"
@@ -751,7 +751,7 @@ fn flatten_ifelse_refuses_two_component_if() {
     let _tc = push_leaf(&mut g, if_id);
 
     assert!(
-        !g.kuna_flatten_ifelse(if_id),
+        !g.unlace_flatten_ifelse(if_id),
         "2-component if is not flattenable"
     );
     assert_eq!(g.block(if_id).get_size(), 2, "unchanged");
@@ -778,7 +778,7 @@ fn flatten_ifelse_refuses_non_list_parent() {
     let _e = push_leaf(&mut g, inner);
 
     assert!(
-        !g.kuna_flatten_ifelse(inner),
+        !g.unlace_flatten_ifelse(inner),
         "non-list parent cannot host the sibling"
     );
     assert_eq!(g.block(inner).get_size(), 3, "unchanged");
@@ -865,7 +865,7 @@ fn ite_suffix_hoist_leaves_no_branch_on_a_freed_block() {
     g.add_block(root, brk);
     let front_before = g.get_front_leaf(tclause);
 
-    assert!(g.kuna_hoist_ite_suffix(ite, &[kept], &[dropped]));
+    assert!(g.unlace_hoist_ite_suffix(ite, &[kept], &[dropped]));
     assert!(!g.arena.contains_key(tclause) && !g.arena.contains_key(dropped));
     assert_eq!(g.block(ite).get_block(1), body);
     assert_eq!(g.block(jump).get_if_goto_target(), Some(body));

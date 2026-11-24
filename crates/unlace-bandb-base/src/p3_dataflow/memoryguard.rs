@@ -1,6 +1,6 @@
-//! (kuna) Heritage guards for user operations that may write memory: the
+//! (unlace) Heritage guards for user operations that may write memory: the
 //! system calls of `syscallregs` and `x64syscall`, the Octeon atomics of
-//! `octeoneffects` and the atomic builtins of `kuna_atomics`. Each owner picks its operations and [`memory_ops`] lists
+//! `octeoneffects` and the atomic builtins of `unlace_atomics`. Each owner picks its operations and [`memory_ops`] lists
 //! them all, so heritage guards, `ActionMarkImplied` cover checks and
 //! `persistcalls` sparse guarding see the same set. One INDIRECT per operation
 //! guards a writable RAM or stack range, as a call guard does. Read-only image
@@ -99,6 +99,6 @@ fn guard(
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.memoryguard_guard_memory = Some(guard_memory);
 }

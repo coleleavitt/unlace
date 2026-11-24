@@ -1,5 +1,5 @@
 //! Port of `decompiler/cpp/kuna_booleanmask.{cc,hh}` — boolean
-//! sign-extension-mask simplification (kuna GH-1282, S3 simplification-quiescence).
+//! sign-extension-mask simplification (unlace GH-1282, S3 simplification-quiescence).
 //!
 //! `RuleBoolSignShift` folds `(b << k) s>> k` into the sign-extended-mask form
 //! `0 - b` = `INT_2COMP(b)` (0 or all-ones) when the pre-shift value is a single
@@ -22,7 +22,7 @@ use crate::action::{ActionGroupList, Rule, RuleSpec};
 use crate::context::{OpId, TypeOp, VarnodeId};
 use crate::funcdata::Funcdata;
 
-/// (kuna GH-1282) Fold `(b << k) s>> k` into the sign-extended-mask form `0 - b`
+/// (unlace GH-1282) Fold `(b << k) s>> k` into the sign-extended-mask form `0 - b`
 /// (C++ `RuleBoolSignShift`).
 pub struct RuleBoolSignShift {
     /// Rule group (C++ `Rule::basegroup`, set by the `Rule(g,0,"boolsignshift")`

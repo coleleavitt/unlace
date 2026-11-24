@@ -12,7 +12,7 @@
 //! definitions, then undefined symbols, each symbol's section ordinal moved
 //! past the sections of the images before it), one indirect-symbol table (each
 //! section's `reserved1` moved the same way), one function-starts table counted
-//! from the lowest `__TEXT`, and one `kuna.dyld.xrefs` note, without the call
+//! from the lowest `__TEXT`, and one `unlace.dyld.xrefs` note, without the call
 //! targets that now lie inside a merged image. The identity commands
 //! (`LC_ID_DYLIB`, `LC_UUID`, the dylib list) are those of the image named
 //! first. Export tries and data-in-code are not carried: every export of a

@@ -1,4 +1,4 @@
-//! (kuna `cppshortnames`) Print the short spelling of standard C++ names.
+//! (unlace `cppshortnames`) Print the short spelling of standard C++ names.
 //!
 //! A demangler and DWARF spell a standard library type in full:
 //! `std::__cxx11::basic_string<char, std::char_traits<char>,
@@ -278,7 +278,7 @@ fn drop_inline_namespaces(s: &str) -> String {
 /// function by its whole demangled path (`std::__cxx11::basic_string::_M_append`),
 /// with no scope list for [`short_scopes`] to shorten.
 pub fn function_name(arch: &crate::architecture::Architecture, name: String) -> String {
-    if !arch.kuna_options.get::<CppShortNames>().0 {
+    if !arch.unlace_options.get::<CppShortNames>().0 {
         return name;
     }
     match short_type(&name) {
@@ -287,8 +287,8 @@ pub fn function_name(arch: &crate::architecture::Architecture, name: String) -> 
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna `cppshortnames`) Print the short spelling of standard C++ names.
+crate::unlace_flag!(
+    /// (unlace `cppshortnames`) Print the short spelling of standard C++ names.
     /// See [`crate::cppshortnames`].
     CppShortNames,
     "cppshortnames",

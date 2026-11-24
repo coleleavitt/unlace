@@ -24,7 +24,7 @@ fn single_reader(fd: &Funcdata, value: VarnodeId, reader: OpId) -> bool {
 }
 
 fn option_u64_layout(arch: &Architecture) -> Option<()> {
-    let layout = arch.types().kuna_variant_layout(OPTION_U64)?;
+    let layout = arch.types().unlace_variant_layout(OPTION_U64)?;
     if layout.type_name != OPTION_U64
         || layout.size != 16
         || layout.niche

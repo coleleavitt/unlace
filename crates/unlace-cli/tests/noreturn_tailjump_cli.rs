@@ -5,7 +5,7 @@ use crate::common;
 
 fn decompile_all(exe: &str) -> String {
     let exe = common::fixture(exe);
-    let (out, err, code) = common::run_kuna(&["decompile-all", exe.as_str()]);
+    let (out, err, code) = common::run_unlace(&["decompile-all", exe.as_str()]);
     assert_eq!(code, 0, "{err}");
     out
 }

@@ -37,7 +37,7 @@
 //!
 //! ## What the C++ B2 snapshot is, exactly
 //!
-//! `kuna.goldens` snapshots B2 as `print raw` + `print tree block` written through
+//! `unlace.goldens` snapshots B2 as `print raw` + `print tree block` written through
 //! one `openfile`.  At `break start heritage` the *structured* blocks (`sblocks`)
 //! are still empty, so `print tree block` (`Funcdata::printBlockTree` →
 //! `sblocks.printTree`) emits nothing; the whole file is

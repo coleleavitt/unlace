@@ -1,4 +1,4 @@
-//! (kuna `narrowargs callers`) A 32-bit ARM register parameter every caller
+//! (unlace `narrowargs callers`) A 32-bit ARM register parameter every caller
 //! passes as a narrow value is declared that narrow.
 //!
 //! The AAPCS has the caller extend a `uint8_t`, `int16_t` or `_Bool` argument
@@ -289,7 +289,7 @@ fn argument(data: &Funcdata, vn: VarnodeId, addr: Address, zext_trimmed: bool) -
 /// its own parameters.
 pub fn record(arch: &mut Architecture, entry: &Address, fd: &Funcdata) {
     if !arch
-        .kuna_tables
+        .unlace_tables
         .get::<crate::callerargs::Ledger>()
         .recording
     {
@@ -297,7 +297,7 @@ pub fn record(arch: &mut Architecture, entry: &Address, fd: &Funcdata) {
     }
     let me = entry.get_offset();
     let own = if arch
-        .kuna_tables
+        .unlace_tables
         .get::<crate::callerargs::Ledger>()
         .own
         .contains_key(&me)
@@ -341,10 +341,13 @@ pub fn record(arch: &mut Architecture, entry: &Address, fd: &Funcdata) {
         ));
     }
     let taken = taken_entries(
-        &arch.kuna_tables.get::<crate::callerargs::Ledger>().expected,
+        &arch
+            .unlace_tables
+            .get::<crate::callerargs::Ledger>()
+            .expected,
         fd,
     );
-    let ledger = arch.kuna_tables.get_mut::<crate::callerargs::Ledger>();
+    let ledger = arch.unlace_tables.get_mut::<crate::callerargs::Ledger>();
     ledger.taken.extend(taken);
     if !ledger.recorded.insert(me) {
         for sites in ledger.sites.values_mut() {
@@ -431,7 +434,7 @@ fn agree(args: &[&Arg]) -> Option<(int4, Ext)> {
 /// Decide what every function's callers state about its parameters; returns
 /// the entries whose statement is new.
 pub fn decide(arch: &mut Architecture) -> Vec<uintb> {
-    let ledger = arch.kuna_tables.get::<crate::callerargs::Ledger>();
+    let ledger = arch.unlace_tables.get::<crate::callerargs::Ledger>();
     let mut decided: Vec<(uintb, Vec<NarrowParam>)> = Vec::new();
     for (&entry, expected) in &ledger.expected {
         let (Some(own), Some(sites)) = (ledger.own.get(&entry), ledger.sites.get(&entry)) else {
@@ -492,7 +495,7 @@ pub fn decide(arch: &mut Architecture) -> Vec<uintb> {
                 );
             }
         }
-        arch.kuna_tables
+        arch.unlace_tables
             .get_mut::<crate::callerargs::Ledger>()
             .stated
             .insert(k, Rc::new(s));
@@ -503,26 +506,26 @@ pub fn decide(arch: &mut Architecture) -> Vec<uintb> {
 /// Hand the function its callers' statement before the pipeline runs.
 pub fn seed(arch: &Architecture, data: &mut Funcdata) {
     if !arch
-        .kuna_options
+        .unlace_options
         .get::<crate::narrowargs::NarrowArgs>()
         .callers
     {
         return;
     }
     if let Some(s) = arch
-        .kuna_tables
+        .unlace_tables
         .get::<crate::callerargs::Ledger>()
         .stated
         .get(&data.get_address().get_offset())
     {
-        data.kuna_set_callerargs(Some(Rc::clone(s)));
+        data.unlace_set_callerargs(Some(Rc::clone(s)));
     }
 }
 
 /// Replace every stated register input by its low part, extended at the
 /// entry as the callers extended it. Returns how many were replaced.
 pub fn narrow_stated(data: &mut Funcdata) -> int4 {
-    let Some(stated) = data.kuna_callerargs().cloned() else {
+    let Some(stated) = data.unlace_callerargs().cloned() else {
         return 0;
     };
     let mut count = 0;
@@ -561,7 +564,7 @@ pub fn narrow_stated(data: &mut Funcdata) -> int4 {
 /// The type the callers' statement gives the narrowed input `vn`, offered to
 /// `Varnode::getLocalType`'s fold in place of an integer of its size.
 pub fn input_vote(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> Option<Rc<Datatype>> {
-    let stated = data.kuna_callerargs()?;
+    let stated = data.unlace_callerargs()?;
     let v = data.vbank().get(vn)?;
     if !v.is_input() || v.is_type_lock() || ct.get_size() != v.get_size() {
         return None;
@@ -591,39 +594,39 @@ pub fn trace() -> bool {
     unlace_base::env::var("UNLACE_CALLERARGS_TRACE").is_ok_and(|v| v != "0" && !v.is_empty())
 }
 
-/// (kuna `narrowargs callers`) The parameters every caller passes narrow; kept across
+/// (unlace `narrowargs callers`) The parameters every caller passes narrow; kept across
 /// `Funcdata::clear`.
 #[derive(Default)]
 struct NarrowSlot(Option<std::rc::Rc<Vec<crate::callerargs::NarrowParam>>>);
-crate::kuna_func_state!(NarrowSlot, keep_across_clear: true);
+crate::unlace_func_state!(NarrowSlot, keep_across_clear: true);
 
-/// The `kuna_callerargs` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// The `unlace_callerargs` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataCallerargsExt {
-    /// (kuna `narrowargs callers`) Record the parameters every caller passes narrow.
-    fn kuna_set_callerargs(
+    /// (unlace `narrowargs callers`) Record the parameters every caller passes narrow.
+    fn unlace_set_callerargs(
         &mut self,
         stated: Option<std::rc::Rc<Vec<crate::callerargs::NarrowParam>>>,
     );
-    /// (kuna `narrowargs callers`) The parameters every caller passes narrow.
-    fn kuna_callerargs(&self) -> Option<&std::rc::Rc<Vec<crate::callerargs::NarrowParam>>>;
+    /// (unlace `narrowargs callers`) The parameters every caller passes narrow.
+    fn unlace_callerargs(&self) -> Option<&std::rc::Rc<Vec<crate::callerargs::NarrowParam>>>;
 }
 
 impl FuncdataCallerargsExt for crate::funcdata::Funcdata {
-    /// (kuna `narrowargs callers`) Record the parameters every caller passes narrow.
-    fn kuna_set_callerargs(
+    /// (unlace `narrowargs callers`) Record the parameters every caller passes narrow.
+    fn unlace_set_callerargs(
         &mut self,
         stated: Option<std::rc::Rc<Vec<crate::callerargs::NarrowParam>>>,
     ) {
-        self.kuna_state_mut::<NarrowSlot>().0 = stated;
+        self.unlace_state_mut::<NarrowSlot>().0 = stated;
     }
-    /// (kuna `narrowargs callers`) The parameters every caller passes narrow.
-    fn kuna_callerargs(&self) -> Option<&std::rc::Rc<Vec<crate::callerargs::NarrowParam>>> {
-        self.kuna_state::<NarrowSlot>().0.as_ref()
+    /// (unlace `narrowargs callers`) The parameters every caller passes narrow.
+    fn unlace_callerargs(&self) -> Option<&std::rc::Rc<Vec<crate::callerargs::NarrowParam>>> {
+        self.unlace_state::<NarrowSlot>().0.as_ref()
     }
 }
 
-crate::kuna_arch_table!(Ledger);
+crate::unlace_arch_table!(Ledger);
 
 #[cfg(test)]
 mod tests;

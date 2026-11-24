@@ -12,7 +12,7 @@ use unlace_num::opcodes::OpCode;
 
 use super::*;
 use crate::context::{ArchContext, TypeOp};
-use crate::p2_lift::loweredswitch::{ActionLowerSwitchDetect, KunaLoweredSwitchRecord};
+use crate::p2_lift::loweredswitch::{ActionLowerSwitchDetect, UnlaceLoweredSwitchRecord};
 
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
@@ -125,8 +125,8 @@ fn record(
     cases: &[(u64, u64)],
     default: u64,
     size: int4,
-) -> KunaLoweredSwitchRecord {
-    KunaLoweredSwitchRecord {
+) -> UnlaceLoweredSwitchRecord {
+    UnlaceLoweredSwitchRecord {
         branch_addr: ram(fd, 0x1001),
         var_addr: ram(fd, 0x4000),
         var_size: size,

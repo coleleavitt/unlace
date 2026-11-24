@@ -1,4 +1,4 @@
-//! (kuna `loweredswitchbits`) A switch the compiler lowered to bit tests and
+//! (unlace `loweredswitchbits`) A switch the compiler lowered to bit tests and
 //! offset range checks becomes a switch again.
 //!
 //! clang lowers `switch (t) { case A: case B: case F: ...; }` over a narrow
@@ -34,7 +34,7 @@ use unlace_num::opcodes::OpCode;
 use crate::block::BlockType;
 use crate::context::{BlockId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::p2_lift::loweredswitch::KunaLoweredSwitchRecord;
+use crate::p2_lift::loweredswitch::UnlaceLoweredSwitchRecord;
 use crate::p2_lift::loweredswitchvalue::ValueCheck;
 
 /// The most case values a recovered switch holds.
@@ -355,7 +355,7 @@ fn same_exit(data: &Funcdata, a: BlockId, b: BlockId) -> bool {
 
 /// The record for a bit-test cascade in `data`, if there is one.
 #[doc(hidden)]
-pub fn recover(data: &Funcdata) -> Option<KunaLoweredSwitchRecord> {
+pub fn recover(data: &Funcdata) -> Option<UnlaceLoweredSwitchRecord> {
     let mut nodes = BTreeMap::new();
     for i in 0..data.bblocks_get_size() {
         let bl = data.bblocks_get_block(i);
@@ -431,7 +431,7 @@ pub fn recover(data: &Funcdata) -> Option<KunaLoweredSwitchRecord> {
         sorted.sort_by_key(|&(x, _)| label(x));
         let mut value = ValueCheck::for_value(data, storage);
         value.read_home = true;
-        return Some(KunaLoweredSwitchRecord {
+        return Some(UnlaceLoweredSwitchRecord {
             branch_addr: data.obank().get(data.bb_op_tail(head)?)?.get_addr().clone(),
             var_addr: sv.get_addr().clone(),
             var_size: sv.get_size(),
@@ -445,8 +445,8 @@ pub fn recover(data: &Funcdata) -> Option<KunaLoweredSwitchRecord> {
     None
 }
 
-crate::kuna_flag!(
-    /// (kuna `loweredswitchbits`) A switch lowered to bit tests re-rolls.  See
+crate::unlace_flag!(
+    /// (unlace `loweredswitchbits`) A switch lowered to bit tests re-rolls.  See
     /// [`crate::p2_lift::loweredswitchbits`].
     LoweredSwitchBits,
     "loweredswitchbits",

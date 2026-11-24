@@ -19,7 +19,7 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::AddrSpace;
 use unlace_base::types::Wrap;
 use unlace_num::opcodes::OpCode;
@@ -197,9 +197,9 @@ impl ExprTree {
 
     /// C++ `setOutput`: force the output of the expression to be `newout`.
     /// If the original output is named, this requires an extra COPY op.
-    pub fn set_output(&mut self, newout: VarnodeTpl) -> KunaResult<()> {
+    pub fn set_output(&mut self, newout: VarnodeTpl) -> UnlaceResult<()> {
         let outvn = match self.outvn.take() {
-            None => return Err(KunaError::sleigh("Expression has no output")),
+            None => return Err(UnlaceError::sleigh("Expression has no output")),
             Some(vn) => vn,
         };
         if outvn.is_unnamed() {
@@ -276,7 +276,7 @@ fn force_size_propagate(
     vt_offset: &ConstTpl,
     size: &ConstTpl,
     ops: &mut [OpTpl],
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     for op in ops.iter_mut() {
         if let Some(vn) = op.get_out_mut() {
             if vn.is_local_temp() && *vn.get_offset() == *vt_offset {
@@ -285,7 +285,7 @@ fn force_size_propagate(
                     && vn.get_size().get_real() != 0
                     && vn.get_size().get_real() != size.get_real()
                 {
-                    return Err(KunaError::sleigh("Localtemp size mismatch"));
+                    return Err(UnlaceError::sleigh("Localtemp size mismatch"));
                 }
                 vn.set_size(size.clone());
             }
@@ -298,7 +298,7 @@ fn force_size_propagate(
                     && vn.get_size().get_real() != 0
                     && vn.get_size().get_real() != size.get_real()
                 {
-                    return Err(KunaError::sleigh("Localtemp size mismatch"));
+                    return Err(UnlaceError::sleigh("Localtemp size mismatch"));
                 }
                 vn.set_size(size.clone());
             }
@@ -311,7 +311,7 @@ fn force_size_propagate(
 /// *outside* `ops` (e.g. an `ExprTree::outvn`): if `vt` has no size yet,
 /// set it, and if `vt` is a local temporary propagate the size to its other
 /// uses in `ops`.
-pub fn force_size(vt: &mut VarnodeTpl, size: &ConstTpl, ops: &mut [OpTpl]) -> KunaResult<()> {
+pub fn force_size(vt: &mut VarnodeTpl, size: &ConstTpl, ops: &mut [OpTpl]) -> UnlaceResult<()> {
     if vt.get_size().get_type() != ConstType::Real || vt.get_size().get_real() != 0 {
         return Ok(()); // Size already exists
     }
@@ -333,7 +333,7 @@ fn force_size_at(
     op_index: usize,
     slot: VtSlot,
     size: &ConstTpl,
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     let offset = {
         let op = &mut ops[op_index];
         let vt = match slot {
@@ -358,7 +358,7 @@ fn force_size_at(
 /// zero-size varnode at slot `j` (-1 = output) of `ops[op_index]`; don't
 /// consider the output as a source if `inputonly`.  (The C++ signature
 /// passes the op by aliased pointer; the port passes its index.)
-pub fn match_size(j: i32, op_index: usize, inputonly: bool, ops: &mut [OpTpl]) -> KunaResult<()> {
+pub fn match_size(j: i32, op_index: usize, inputonly: bool, ops: &mut [OpTpl]) -> UnlaceResult<()> {
     // read-only scan for a matching nonzero-size varnode
     let matched: Option<ConstTpl> = {
         let op = &ops[op_index];
@@ -394,7 +394,7 @@ pub fn match_size(j: i32, op_index: usize, inputonly: bool, ops: &mut [OpTpl]) -
 /// operands for the constructor are built before any other pcode in the
 /// constructor is generated.  (The C++ signature passes the op by aliased
 /// pointer; the port passes its index.)
-pub fn fillin_zero(op_index: usize, ops: &mut [OpTpl]) -> KunaResult<()> {
+pub fn fillin_zero(op_index: usize, ops: &mut [OpTpl]) -> UnlaceResult<()> {
     let opc = ops[op_index].get_opcode();
     match opc {
         // Instructions where all inputs and output are same size
@@ -546,7 +546,7 @@ pub fn fillin_zero(op_index: usize, ops: &mut [OpTpl]) -> KunaResult<()> {
 /// C++ static `PcodeCompile::propagateSize`: fill in sizes for varnodes
 /// with size 0; returns false if some zero-size varnode could not be filled
 /// in, true otherwise.
-pub fn propagate_size(ct: &mut ConstructTpl) -> KunaResult<bool> {
+pub fn propagate_size(ct: &mut ConstructTpl) -> UnlaceResult<bool> {
     let ops = ct.get_opvec_mut();
     let mut zerovec: Vec<usize> = Vec::new();
     for i in 0..ops.len() {
@@ -686,7 +686,7 @@ pub trait PcodeCompile {
         mut rhs: ExprTree,
         varname: &[u8],
         size: u32,
-    ) -> KunaResult<Vec<OpTpl>> {
+    ) -> UnlaceResult<Vec<OpTpl>> {
         let mut tmpvn = self.build_temporary();
         if size != 0 {
             // Size was explicitly specified
@@ -874,7 +874,7 @@ pub trait PcodeCompile {
 
     /// C++ `createLoad`: new load expression; frees (consumes) the pointer
     /// expression and the qualifier.
-    fn create_load(&mut self, qual: StarQuality, mut ptr: ExprTree) -> KunaResult<ExprTree> {
+    fn create_load(&mut self, qual: StarQuality, mut ptr: ExprTree) -> UnlaceResult<ExprTree> {
         let outvn = self.build_temporary();
         let mut op = OpTpl::new(OpCode::CPUI_LOAD);
         // The first varnode input to the load is a constant reference to the
@@ -922,7 +922,7 @@ pub trait PcodeCompile {
         qual: StarQuality,
         mut ptr: ExprTree,
         mut val: ExprTree,
-    ) -> KunaResult<Vec<OpTpl>> {
+    ) -> UnlaceResult<Vec<OpTpl>> {
         let mut res = std::mem::take(&mut ptr.ops);
         res.append(&mut val.ops);
         let mut op = OpTpl::new(OpCode::CPUI_STORE);
@@ -1034,7 +1034,7 @@ pub trait PcodeCompile {
         basevn: &VarnodeTpl,
         bitoffset: u32,
         numbits: u32,
-    ) -> KunaResult<Option<VarnodeTpl>> {
+    ) -> UnlaceResult<Option<VarnodeTpl>> {
         let byteoffset = bitoffset / 8; // Convert to byte units
         let numbytes = numbits / 8;
         let mut fullsz: u64 = 0;
@@ -1048,7 +1048,7 @@ pub trait PcodeCompile {
             // C++ adds the two uint4s first (can wrap) then widens for the
             // uintb comparison
             if u64::from(byteoffset.wadd(numbytes)) > fullsz {
-                return Err(KunaError::sleigh("Requested bit range out of bounds"));
+                return Err(UnlaceError::sleigh("Requested bit range out of bounds"));
             }
         }
 
@@ -1076,7 +1076,9 @@ pub trait PcodeCompile {
             )
         } else {
             if basevn.get_size().get_type() != ConstType::Real {
-                return Err(KunaError::sleigh("Could not construct requested bit range"));
+                return Err(UnlaceError::sleigh(
+                    "Could not construct requested bit range",
+                ));
             }
             let defaultspace = self
                 .get_default_space()
@@ -1104,7 +1106,7 @@ pub trait PcodeCompile {
         bitoffset: u32,
         numbits: u32,
         mut rhs: ExprTree,
-    ) -> KunaResult<Vec<OpTpl>> {
+    ) -> UnlaceResult<Vec<OpTpl>> {
         let mut errmsg = String::new();
         if numbits == 0 {
             errmsg = "Size of bitrange is zero".to_string();
@@ -1192,7 +1194,7 @@ pub trait PcodeCompile {
         sym_name: &[u8],
         bitoffset: u32,
         numbits: u32,
-    ) -> KunaResult<ExprTree> {
+    ) -> UnlaceResult<ExprTree> {
         let mut bitoffset = bitoffset;
         let mut errmsg = String::new();
         if numbits == 0 {

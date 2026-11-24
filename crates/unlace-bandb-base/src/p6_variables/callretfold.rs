@@ -1,10 +1,10 @@
-//! (kuna) Call-return variable folding — inline a single-use call return into
+//! (unlace) Call-return variable folding — inline a single-use call return into
 //! its use site (port of angr's "call return variable folding"; test
 //! `test_call_return_variable_folding`, S6).
 //!
 //! # The presentation gap
 //!
-//! Ghidra/kuna force **every** call output to be *explicit* in
+//! Ghidra/unlace force **every** call output to be *explicit* in
 //! [`ActionMarkExplicit::base_explicit`](crate::coreaction_cleanup)
 //! (`coreaction.cc:3105`, the `if (op->isCall()) return -1;` arm), so a call
 //! result always spills to its own named local:
@@ -112,14 +112,14 @@
 
 use std::rc::Rc;
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 use crate::options::on_or_off;
 
-/// (kuna) Is the call output `vn` order-safe to fold into its single use?
+/// (unlace) Is the call output `vn` order-safe to fold into its single use?
 ///
 /// Called from `base_explicit` only when `glb->fold_call_returns` is on and the
 /// defining op of `vn` is a (non-`NEW`) call.  Read-only over the merged tree.
@@ -256,7 +256,7 @@ pub fn op_reads_indirect_output_of(data: &Funcdata, op: OpId, call: OpId) -> boo
     false
 }
 
-/// (kuna) foldcallret: does the fold of call output `vn` survive all the way to
+/// (unlace) foldcallret: does the fold of call output `vn` survive all the way to
 /// the statement it is actually printed in?
 ///
 /// [`call_output_foldable`] clears the span from the call to its single use, but
@@ -281,7 +281,7 @@ pub fn fold_print_point_is_order_safe(data: &Funcdata, vn: VarnodeId) -> bool {
 /// Longest implied chain [`print_chain`] will chase before giving up.
 const MAX_IMPLIED_CHAIN: usize = 8;
 
-/// (kuna) The ops the folded expression travels through, ending at the one whose
+/// (unlace) The ops the folded expression travels through, ending at the one whose
 /// statement it is printed in.
 ///
 /// An op is its own statement when it has no output (STORE, CBRANCH, a void
@@ -313,7 +313,7 @@ pub fn print_chain(data: &Funcdata, use_op: OpId) -> Option<Vec<OpId>> {
     None
 }
 
-/// (kuna) Does the call survive the move all the way to its print point?
+/// (unlace) Does the call survive the move all the way to its print point?
 ///
 /// Runs [`op_is_write_barrier`] over the span from the call to the statement the
 /// folded expression lands in, which is where it is evaluated at run time.  The
@@ -435,7 +435,7 @@ fn op_is_statement(data: &Funcdata, op: OpId) -> bool {
     })
 }
 
-/// (kuna GH-684) Does the folded call's value reach the right-hand operand of an
+/// (unlace GH-684) Does the folded call's value reach the right-hand operand of an
 /// `&&` or `||` on its way to the print point?
 ///
 /// P-code's `BOOL_AND`/`BOOL_OR` evaluate both operands, and C's `&&`/`||` skip
@@ -541,7 +541,7 @@ fn op_is_write_barrier(data: &Funcdata, op: OpId) -> bool {
     op_writes_observable_storage(data, op)
 }
 
-/// (kuna) Does `op` write storage the callee could read — memory, not a register?
+/// (unlace) Does `op` write storage the callee could read — memory, not a register?
 ///
 /// Heritage promotes a write to a fixed address into a plain `CPUI_COPY` (or any
 /// arithmetic op) whose output varnode is address-tied: a global is persistent,
@@ -603,7 +603,7 @@ fn vn_def(data: &Funcdata, vn: VarnodeId) -> Option<OpId> {
 // Option gate
 //===========================================================================
 
-/// (kuna) Toggle call-return variable folding: `foldcallret on|off`.
+/// (unlace) Toggle call-return variable folding: `foldcallret on|off`.
 ///
 /// Ships default-**OFF** (opt-in): it changes call-output rendering broadly, so
 /// it is not byte-identical to upstream.  "on" lets order-safe single-use call
@@ -616,22 +616,22 @@ impl OptionFoldCallRet {
 
     /// Parse `on|off` and return the resolved flag + confirmation message.  The
     /// caller writes the flag into the registered option `FoldCallReturns`.
-    pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((val, format!("Call-return variable folding turned {prop}")))
     }
 }
 
-/// (kuna) Fold an order-safe single-use call return into its use site
+/// (unlace) Fold an order-safe single-use call return into its use site
 /// (`fold_call_returns`, DIV-14 default-on; angr "call return variable
 /// folding").
 #[derive(Clone, Debug, PartialEq)]
 pub struct FoldCallReturns(pub bool);
 
-impl crate::optionset::KunaOption for FoldCallReturns {
+impl crate::optionset::UnlaceOption for FoldCallReturns {
     const NAME: &'static str = "foldcallret";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         FoldCallReturns(false)
@@ -641,7 +641,7 @@ impl crate::optionset::KunaOption for FoldCallReturns {
         FoldCallReturns(true)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (v, msg) = crate::callretfold::OptionFoldCallRet.apply(value)?;
         Ok((FoldCallReturns(v), msg))
     }

@@ -1,5 +1,5 @@
 //! Port of `decompiler/cpp/kuna_restartlog.{cc,hh}` — restart observability
-//! (kuna roadmap item 5).
+//! (unlace roadmap item 5).
 //!
 //! Mechanism (c) of the stage model — global restart with persisted hints — is
 //! the single most diagnostic signal in the engine and is otherwise invisible:
@@ -10,7 +10,7 @@
 //!
 //! ## Ownership model vs. the C++ global table
 //!
-//! The C++ keeps a single file-static `std::map<KunaFuncKey, ...>` keyed by
+//! The C++ keeps a single file-static `std::map<UnlaceFuncKey, ...>` keyed by
 //! `(const Architecture*, entry space index, entry offset)`, so events survive
 //! `Funcdata::clear()`/`clearAnalysis()` (the side table is not part of the
 //! Funcdata) and the arch pointer separates functions across loaded programs.
@@ -19,7 +19,7 @@
 //! `Architecture`** (one log per loaded program — the arch-pointer dimension of
 //! the C++ key becomes the owner): it lives outside the `Funcdata`, so it
 //! survives function clears exactly as the C++ table does, and the entry key
-//! reduces to `(space_index, offset)` ([`KunaFuncKey`]). The per-function event
+//! reduces to `(space_index, offset)` ([`UnlaceFuncKey`]). The per-function event
 //! cap, the global (per-log) sequence counter, and the dump format are
 //! transcribed verbatim.
 //!
@@ -31,10 +31,10 @@
 use crate::funcdata::Funcdata;
 use std::collections::BTreeMap;
 
-/// (kuna) Why a function restart (or suppressed restart) was triggered —
-/// C++ `KunaRestartReason`.
+/// (unlace) Why a function restart (or suppressed restart) was triggered —
+/// C++ `UnlaceRestartReason`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum KunaRestartReason {
+pub enum UnlaceRestartReason {
     /// Dead-definition gate bumped (`Override::insertDeadcodeDelay`) — restart.
     /// C++ `krestart_deadcode_bump` (0).
     DeadcodeBump,
@@ -50,55 +50,55 @@ pub enum KunaRestartReason {
     /// Restrictive prototype forced too late at a call site — restart.
     /// C++ `krestart_proto_forced` (4).
     ProtoForced,
-    /// (kuna) Lowered comparison-cascade switch detected late -> restart.
+    /// (unlace) Lowered comparison-cascade switch detected late -> restart.
     /// C++ `krestart_lowered_switch` (5).
     LoweredSwitch,
 }
 
-impl KunaRestartReason {
+impl UnlaceRestartReason {
     /// Human-readable reason name — byte-for-byte port of
-    /// `kunaRestartReasonName` (`kuna_restartlog.cc:46`).
+    /// `unlaceRestartReasonName` (`kuna_restartlog.cc:46`).
     pub fn name(self) -> &'static str {
         match self {
-            KunaRestartReason::DeadcodeBump => {
+            UnlaceRestartReason::DeadcodeBump => {
                 "deadcode-delay bump (S3 dead-definition gate, edge 3)"
             }
-            KunaRestartReason::DeadcodeSuppressed => {
+            UnlaceRestartReason::DeadcodeSuppressed => {
                 "deadcode-delay bump SUPPRESSED (delay already installed)"
             }
-            KunaRestartReason::MultistageJump => {
+            UnlaceRestartReason::MultistageJump => {
                 "multistage jump-table hint (S2 switch model, edge 2)"
             }
-            KunaRestartReason::ProtoDeindirect => {
+            UnlaceRestartReason::ProtoDeindirect => {
                 "prototype discovered late at indirect call (S4, edge 5)"
             }
-            KunaRestartReason::ProtoForced => "prototype forced late at call site (S4, edge 5)",
-            KunaRestartReason::LoweredSwitch => {
+            UnlaceRestartReason::ProtoForced => "prototype forced late at call site (S4, edge 5)",
+            UnlaceRestartReason::LoweredSwitch => {
                 "lowered comparison-cascade switch (S2 switch model, kuna angr-port)"
             }
         }
     }
 }
 
-/// One recorded trigger event — C++ `KunaRestartEvent`.
+/// One recorded trigger event — C++ `UnlaceRestartEvent`.
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct KunaRestartEvent {
+struct UnlaceRestartEvent {
     /// Global (per-log) sequence number ordering events across functions.
     seq: i32,
     /// Why.
-    reason: KunaRestartReason,
+    reason: UnlaceRestartReason,
     /// Site description.
     detail: String,
 }
 
 /// Side-table key identifying a function within one `Architecture` — C++
-/// `KunaFuncKey` minus the (now owner-implied) arch pointer.
+/// `UnlaceFuncKey` minus the (now owner-implied) arch pointer.
 ///
 /// `Ord` is the transcribed C++ `operator<`: space index then offset (the C++
 /// also compares the arch pointer first, which is constant within one owning
 /// log, so it drops out).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct KunaFuncKey {
+pub struct UnlaceFuncKey {
     /// Entry address space index (C++ `spaceindex`; -1 for a null space).
     pub space_index: i32,
     /// Entry offset (C++ `offset`).
@@ -108,11 +108,11 @@ pub struct KunaFuncKey {
 /// Ring cap per function — C++ `MAX_EVENTS_PER_FUNC`.
 const MAX_EVENTS_PER_FUNC: usize = 32;
 
-/// (kuna) The restart-trigger side table for one `Architecture` — the owned
+/// (unlace) The restart-trigger side table for one `Architecture` — the owned
 /// equivalent of the C++ file-static `restartTable` + `restartSeq`.
 #[derive(Clone, Debug, Default)]
 pub struct RestartLog {
-    table: BTreeMap<KunaFuncKey, Vec<KunaRestartEvent>>,
+    table: BTreeMap<UnlaceFuncKey, Vec<UnlaceRestartEvent>>,
     seq: i32,
 }
 
@@ -127,24 +127,24 @@ impl RestartLog {
     ///
     /// `space_index` is the entry address's space index, or -1 if the entry has
     /// no space (the C++ `(entry.getSpace() != 0) ? ->getIndex() : -1`).
-    fn key_for_func(fd: &Funcdata) -> KunaFuncKey {
+    fn key_for_func(fd: &Funcdata) -> UnlaceFuncKey {
         let entry = fd.get_address();
         let space_index = match entry.get_space() {
             Some(s) => s.get_index(),
             None => -1,
         };
-        KunaFuncKey {
+        UnlaceFuncKey {
             space_index,
             offset: entry.get_offset(),
         }
     }
 
     /// Record a restart trigger against `fd`'s entry — byte-for-byte port of
-    /// `kunaRecordRestart(Funcdata, reason, detail)` (`kuna_restartlog.cc:66`).
+    /// `unlaceRecordRestart(Funcdata, reason, detail)` (`kuna_restartlog.cc:66`).
     ///
     /// Caps at [`MAX_EVENTS_PER_FUNC`] per function (the earliest events are the
     /// diagnostic ones, so a full bucket is left untouched).
-    pub fn record(&mut self, fd: &Funcdata, reason: KunaRestartReason, detail: &str) {
+    pub fn record(&mut self, fd: &Funcdata, reason: UnlaceRestartReason, detail: &str) {
         let key = Self::key_for_func(fd);
         let events = self.table.entry(key).or_default();
         if events.len() >= MAX_EVENTS_PER_FUNC {
@@ -152,7 +152,7 @@ impl RestartLog {
         }
         let seq = self.seq;
         self.seq += 1;
-        events.push(KunaRestartEvent {
+        events.push(UnlaceRestartEvent {
             seq,
             reason,
             detail: detail.to_string(),
@@ -160,12 +160,12 @@ impl RestartLog {
     }
 
     /// Record a restart trigger, formatting the given site address as the
-    /// detail — port of the `Address`-overload `kunaRecordRestart`
+    /// detail — port of the `Address`-overload `unlaceRecordRestart`
     /// (`kuna_restartlog.cc:79`), which does `site.printRaw(oss)`.
     pub fn record_at(
         &mut self,
         fd: &Funcdata,
-        reason: KunaRestartReason,
+        reason: UnlaceRestartReason,
         site: &unlace_base::address::Address,
     ) {
         let mut detail = String::new();
@@ -176,7 +176,7 @@ impl RestartLog {
     }
 
     /// Dump the recorded restart events for `fd` — byte-for-byte port of
-    /// `kunaDumpRestarts` (`kuna_restartlog.cc:87`). Returns the exact text the
+    /// `unlaceDumpRestarts` (`kuna_restartlog.cc:87`). Returns the exact text the
     /// C++ writes (one trailing newline per line).
     pub fn render(&self, fd: &Funcdata) -> String {
         let mut os = String::new();

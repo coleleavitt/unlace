@@ -1,13 +1,13 @@
 //! Choose the C spelling of an unconditional loop.
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 
-pub fn parse_inf_loop_style(value: &str) -> KunaResult<(bool, String)> {
+pub fn parse_inf_loop_style(value: &str) -> UnlaceResult<(bool, String)> {
     let top = match value {
         "while" => true,
         "do" => false,
         other => {
-            return Err(KunaError::parse(format!(
+            return Err(UnlaceError::parse(format!(
                 "Unknown infloopstyle value: {other} (expected while|do)"
             )));
         }

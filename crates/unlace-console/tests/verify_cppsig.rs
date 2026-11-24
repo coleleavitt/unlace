@@ -53,7 +53,7 @@ fn decompile(func: &str, mode: &str) -> String {
     // The gate is read at the analysis COMMIT boundary (the producing pass runs
     // at `load file`, upstream of any `option` command), so it must be set here.
     prog.arch_mut()
-        .set_kuna_option("cppsig", mode)
+        .set_unlace_option("cppsig", mode)
         .expect("cppsig is a registered option");
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");
@@ -117,7 +117,7 @@ fn constructor_recovers_this_and_the_declared_parameter() {
 /// This one also pins the return-type contract: `balance()` returns `int`, and
 /// the recovered signature must NOT flatten it to `void`. Itanium encodes no
 /// return type for an ordinary function, so the prototype locks the INPUT half
-/// only and kuna's own return recovery still runs (upstream's
+/// only and unlace's own return recovery still runs (upstream's
 /// `DemangledFunction.resolveReturnType` returns null for the same reason).
 #[test]
 fn const_member_is_proven_and_keeps_its_recovered_return_type() {
@@ -198,7 +198,7 @@ fn dwarf_wins_over_the_demangled_signature() {
     for mode in ["off", "proven", "inferred"] {
         let mut prog = bootstrap_from_object(&path, "", &spec_roots)
             .expect("bootstrap fixture with built processor specs");
-        prog.arch_mut().set_kuna_option("cppsig", mode).unwrap();
+        prog.arch_mut().set_unlace_option("cppsig", mode).unwrap();
         prog.commit_pending_analysis()
             .expect("analysis commit succeeds");
         let cmds: Vec<String> = [

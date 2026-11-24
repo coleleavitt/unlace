@@ -1,4 +1,4 @@
-//! (kuna `override flow`) The RET-call chain a flow-call override starts.
+//! (unlace `override flow`) The RET-call chain a flow-call override starts.
 //!
 //! A `push <continuation>; push <target>; ret` run is a call written without a
 //! `call` instruction: the `ret` pops `<target>` and jumps to it, and the callee
@@ -13,9 +13,9 @@
 //! is dead and decompiles to `return;`.  The caller sees one recovered call and
 //! no evidence that the rest of the chain exists.
 //!
-//! [`kuna_chain_sites`] walks that chain from the overridden site and reports the
+//! [`unlace_chain_sites`] walks that chain from the overridden site and reports the
 //! other `ret`s in it, so the same override can be planted on each.
-//! [`kuna_entry_chain_sites`] exposes the same recognition for an unasserted
+//! [`unlace_entry_chain_sites`] exposes the same recognition for an unasserted
 //! function entry, allowing the decompile drive to seed the complete chain by
 //! default. A `ret` is a link only when raw-p-code provenance proves its
 //! destination was loaded from a slot written by this run and the adjacent slot
@@ -24,7 +24,7 @@
 //! LOAD/STORE pair must also name the same p-code memory space. A real `call` or
 //! unsupported `CALLOTHER` clears provenance before the walk continues.
 //!
-//! [`kuna_push_immediate_ret`] recognizes the distinct one-store tail-transfer
+//! [`unlace_push_immediate_ret`] recognizes the distinct one-store tail-transfer
 //! shape: RETURN pops an immediate written by this run, with no adjacent in-run
 //! stack store. The exclusion keeps `push continuation; push target; ret` under
 //! `entryretdispatch`; a one-store match is seeded as BRANCH and has no
@@ -602,7 +602,7 @@ fn chain_of(
 /// fall-through address. The same bounded walk and strict provenance predicate
 /// back both automatic entry recognition and explicit `flow <addr> call` chain
 /// extension.
-pub fn kuna_entry_chain_sites(
+pub fn unlace_entry_chain_sites(
     trans: &dyn Translate,
     entry: &Address,
     max_sites: usize,
@@ -619,7 +619,7 @@ pub fn kuna_entry_chain_sites(
 /// The destination is returned for diagnostics/tests, but the decompile drive
 /// reclassifies the existing RETURN op as BRANCH and lets its own input carry
 /// the target. This never creates or decodes a target function.
-pub fn kuna_push_immediate_ret(
+pub fn unlace_push_immediate_ret(
     trans: &dyn Translate,
     entry: &Address,
     max_insns: usize,
@@ -662,7 +662,7 @@ pub fn kuna_push_immediate_ret(
 ///
 /// Empty unless `at` is itself a link — which is every ordinary use of
 /// `override flow`, since an ordinary `ret` has no pushed continuation.
-pub fn kuna_chain_sites(
+pub fn unlace_chain_sites(
     trans: &dyn Translate,
     entry: &Address,
     at: &Address,
@@ -679,7 +679,7 @@ pub fn kuna_chain_sites(
     sites.into_iter().filter(|s| s != at).collect()
 }
 
-/// How many links [`kuna_chain_sites`] reports, and how far it decodes looking
+/// How many links [`unlace_chain_sites`] reports, and how far it decodes looking
 /// for them.  A chain is one call per link, so the site cap is a function-sized
 /// call count and the instruction cap a function-sized body.
 pub const CHAIN_MAX_SITES: usize = 256;
@@ -688,7 +688,7 @@ pub const CHAIN_MAX_INSNS: usize = 4096;
 
 /// The chained sites, spelled the way the console spells an address, for the
 /// line `override flow` prints when it extended itself.
-pub fn kuna_render_sites(sites: &[Address]) -> String {
+pub fn unlace_render_sites(sites: &[Address]) -> String {
     sites
         .iter()
         .map(|a| {

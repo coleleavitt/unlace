@@ -25,7 +25,7 @@
 //!
 //! `sleigh_arch.cc` carries three process-global statics:
 //! `static map<int4,Sleigh> translators`, `static vector<LanguageDescription>
-//! description`, and `static FileManage specpaths`.  Per the kuna `IdRegistry`/
+//! description`, and `static FileManage specpaths`.  Per the unlace `IdRegistry`/
 //! `CapabilityRegistry` convention (no nondeterministic static constructors),
 //! these move into an explicit value, [`LanguageDatabase`], that the bootstrap
 //! owns and threads through.  `description`/`specpaths` are the load-bearing
@@ -65,7 +65,7 @@
 
 use std::borrow::Cow;
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::filemanage::FileManage;
 use unlace_base::marshal::{
     ATTRIB_CONTENT, ATTRIB_ID, ATTRIB_NAME, ATTRIB_SIZE, AttributeId, Decoder, ElementId,
@@ -108,7 +108,7 @@ pub const ATTRIB_VERSION: AttributeId = AttributeId::new("version", 144);
 /// `architecture.cc:40` — used by the [`crate::raw_arch`]/[`crate::xml_arch`]
 /// save-file marshaling).
 pub const ATTRIB_ADJUSTVMA: AttributeId = AttributeId::new("adjustvma", 103);
-/// (kuna) Marshaling attribute "instructionEndian": the `.ldefs` byte order of
+/// (unlace) Marshaling attribute "instructionEndian": the `.ldefs` byte order of
 /// instructions when it differs from the data `endian` (ARM BE8, big-endian
 /// AArch64, little-endian NDS32). The C++ decoder ignores it.
 pub const ATTRIB_INSTRUCTION_ENDIAN: AttributeId = AttributeId::new("instructionEndian", 4004);
@@ -173,7 +173,7 @@ impl CompilerTag {
 
     /// Parse file attributes from a \<compiler> element (C++
     /// `CompilerTag::decode`, `sleigh_arch.cc:43`).
-    pub fn decode(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    pub fn decode(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         let elem_id = decoder.open_element_id(&ELEM_COMPILER)?;
         self.name = read_string(decoder, &ATTRIB_NAME)?;
         self.spec = read_string(decoder, &ATTRIB_SPEC)?;
@@ -214,7 +214,7 @@ pub struct LanguageDescription {
     processor: String,
     /// `true` if this processor is \e big-endian (C++ `isbigendian`).
     isbigendian: bool,
-    /// (kuna) `true` if its instructions are big-endian: the `instructionEndian`
+    /// (unlace) `true` if its instructions are big-endian: the `instructionEndian`
     /// attribute, else the data endianness.
     instruction_big_endian: bool,
     /// Size of address bus in bits (C++ `size`).
@@ -248,7 +248,7 @@ impl LanguageDescription {
 
     /// Parse \b this description from a stream (C++ `LanguageDescription::decode`,
     /// `sleigh_arch.cc:55`).
-    pub fn decode(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    pub fn decode(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         let elem_id = decoder.open_element_id(&ELEM_LANGUAGE)?;
         self.processor = read_string(decoder, &ATTRIB_PROCESSOR)?;
         self.isbigendian = read_string(decoder, &ATTRIB_ENDIAN)? == "big";
@@ -310,7 +310,7 @@ impl LanguageDescription {
         self.isbigendian
     }
 
-    /// (kuna) Return `true` if instructions are big-endian (Ghidra's
+    /// (unlace) Return `true` if instructions are big-endian (Ghidra's
     /// `LanguageDescription.getInstructionEndian`).
     pub fn is_instruction_big_endian(&self) -> bool {
         self.instruction_big_endian
@@ -409,7 +409,7 @@ impl LanguageDescription {
 /// `description` (the parsed `.ldefs` records) and `specpaths` (the spec
 /// directory list).
 ///
-/// Per the kuna no-static convention (`capability.rs` / `IdRegistry`), the
+/// Per the unlace no-static convention (`capability.rs` / `IdRegistry`), the
 /// process-global `static vector<LanguageDescription> description` and `static
 /// FileManage specpaths` become this owned value, threaded through the
 /// bootstrap.  `collectSpecFiles`/`getDescriptions`/`scanForSleighDirectories`
@@ -424,7 +424,7 @@ pub struct LanguageDatabase {
     description: Vec<LanguageDescription>,
     /// Known directories that contain .ldefs files (C++ `specpaths`).
     specpaths: FileManage,
-    /// (kuna) Spec trees held in memory, each reached through the
+    /// (unlace) Spec trees held in memory, each reached through the
     /// `specpaths` entries under its internal root.
     mounts: Vec<MemorySpecs>,
 }
@@ -441,7 +441,7 @@ impl LanguageDatabase {
         &mut self.specpaths
     }
 
-    /// (kuna) Add a spec root of either kind, scanning it like
+    /// (unlace) Add a spec root of either kind, scanning it like
     /// [`Self::scan_for_sleigh_directories`].
     pub fn add_spec_root(&mut self, root: &SpecRoot) {
         match root {
@@ -454,7 +454,7 @@ impl LanguageDatabase {
         }
     }
 
-    /// (kuna) The contents of a spec file this database resolved, such as a
+    /// (unlace) The contents of a spec file this database resolved, such as a
     /// [`BuildSpecFiles`] path, from disk or from a mounted tree.
     pub fn read_spec(&self, path: &str) -> std::io::Result<Cow<'_, [u8]>> {
         memoryspecs::read(&self.mounts, path)
@@ -514,7 +514,7 @@ impl LanguageDatabase {
         &mut self,
         bytes: &[u8],
         registry: &IdRegistry,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let empty_manager = AddrSpaceManager::new();
         let mut decoder = XmlDecode::new(&empty_manager, registry);
         decoder.ingest_stream(bytes)?;
@@ -523,7 +523,7 @@ impl LanguageDatabase {
 
     /// The `<language_definitions>` body of [`Self::load_language_description`]
     /// (separated so the C++ `for(;;)` peek loop reads cleanly).
-    fn decode_definitions(&mut self, decoder: &mut XmlDecode) -> KunaResult<()> {
+    fn decode_definitions(&mut self, decoder: &mut XmlDecode) -> UnlaceResult<()> {
         let elem_id = decoder.open_element_id(&ELEM_LANGUAGE_DEFINITIONS)?;
         loop {
             let sub_id = decoder.peek_element()?;
@@ -572,11 +572,11 @@ impl LanguageDatabase {
     pub fn get_descriptions(
         &mut self,
         registry: &IdRegistry,
-    ) -> KunaResult<&[LanguageDescription]> {
+    ) -> UnlaceResult<&[LanguageDescription]> {
         let mut s = String::new();
         self.collect_spec_files(&mut s, registry);
         if !s.is_empty() {
-            return Err(KunaError::lowlevel(s));
+            return Err(UnlaceError::lowlevel(s));
         }
         Ok(&self.description)
     }
@@ -643,7 +643,11 @@ impl LanguageDatabase {
     /// `sleigh_arch.cc:423`).  Walks `language.numTruncations()` and applies
     /// `trans->truncateSpace`.  (The manager truncates through interior
     /// mutability, so a `&AddrSpaceManager` suffices, matching unlace-base.)
-    pub fn modify_spaces(&self, languageindex: int4, manager: &AddrSpaceManager) -> KunaResult<()> {
+    pub fn modify_spaces(
+        &self,
+        languageindex: int4,
+        manager: &AddrSpaceManager,
+    ) -> UnlaceResult<()> {
         let language = &self.description[languageindex as usize];
         for i in 0..language.num_truncations() {
             let tag = language.get_truncation(i);
@@ -652,7 +656,7 @@ impl LanguageDatabase {
         Ok(())
     }
 
-    /// (kuna) The same `<truncate_space>` records [`Self::modify_spaces`]
+    /// (unlace) The same `<truncate_space>` records [`Self::modify_spaces`]
     /// applies, as plain data — the half of a decode engine's rebuild
     /// instructions that lives in the `.ldefs` rather than the `.sla`
     /// ([`crate::decodekit::EngineRecipe`]).
@@ -790,7 +794,7 @@ impl SleighArchitecture {
         &mut self,
         db: &LanguageDatabase,
         arch_type: &str,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         if self.archid.is_empty() {
             if self.target.is_empty() || self.target == "default" {
                 self.archid = arch_type.to_string();
@@ -823,7 +827,7 @@ impl SleighArchitecture {
             i += 1;
         }
         if self.languageindex == -1 {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "No sleigh specification for {baseid}"
             )));
         }
@@ -848,7 +852,7 @@ impl SleighArchitecture {
     /// pspec/cspec into the `DocumentStorage`; that registration is the caller's
     /// job (it owns the `DocumentStorage` and the W6/W8 decode that consumes the
     /// tags), so this returns the resolved paths in [`BuildSpecFiles`].
-    pub fn build_spec_file(&self, db: &LanguageDatabase) -> KunaResult<BuildSpecFiles> {
+    pub fn build_spec_file(&self, db: &LanguageDatabase) -> UnlaceResult<BuildSpecFiles> {
         let language_reuse = self.is_translate_reused();
         let language = &db.descriptions()[self.languageindex as usize];
         let compiler = match self.archid.rfind(':') {
@@ -880,7 +884,7 @@ impl SleighArchitecture {
                 &mut slafile,
                 language.get_sla_file(),
             );
-            // (kuna) A spec tree holds SLEIGH sources: the image comes from the `.sla` cache,
+            // (unlace) A spec tree holds SLEIGH sources: the image comes from the `.sla` cache,
             // compiled from the sibling `.slaspec` on first use (a current prebuilt file wins).
             let on_disk = !slafile.is_empty() && std::path::Path::new(&slafile).is_file();
             if slafile.is_empty() || on_disk {
@@ -901,13 +905,17 @@ impl SleighArchitecture {
                 };
                 if let Some(wanted) = wanted {
                     let resolved = unlace_slacomp::slacache::sla_path(&wanted).map_err(|e| {
-                        KunaError::sleigh(format!("{} for {}: {e}", wanted.display(), self.archid))
+                        UnlaceError::sleigh(format!(
+                            "{} for {}: {e}",
+                            wanted.display(),
+                            self.archid
+                        ))
                     })?;
                     slafile = resolved.to_string_lossy().into_owned();
                 }
             }
             if slafile.is_empty() {
-                return Err(KunaError::sleigh(format!(
+                return Err(UnlaceError::sleigh(format!(
                     "Could not find .sla file for {}",
                     self.archid
                 )));
@@ -942,13 +950,13 @@ impl SleighArchitecture {
         &mut self,
         loader: Box<dyn LoadImage>,
         sla_bytes: &[u8],
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let context = Box::new(ContextInternal::new());
         let mut sleigh = Sleigh::new(loader, context);
         sleigh.initialize_from_sla(sla_bytes)?;
         let archid = self.archid.clone();
         let mut base = Architecture::new(&archid, sleigh);
-        // (kuna) Keep the bytes: they are the only thing a decode-equivalent
+        // (unlace) Keep the bytes: they are the only thing a decode-equivalent
         // engine can be rebuilt from away from this one
         // (`decodekit::EngineRecipe`).
         base.set_decode_sla(std::sync::Arc::from(sla_bytes));
@@ -1044,7 +1052,7 @@ pub fn normalize_size(nm: &str) -> String {
 /// fields), but may drop the compiler field and be a little sloppier in format.
 /// Errors if it does not have 4 or 5 fields, exactly as the C++ throws
 /// `LowlevelError`.
-pub fn normalize_architecture(nm: &str) -> KunaResult<String> {
+pub fn normalize_architecture(nm: &str) -> UnlaceResult<String> {
     let bytes = nm.as_bytes();
     let mut pos = [0usize; 4];
     let mut i: usize = 0;
@@ -1072,7 +1080,7 @@ pub fn normalize_architecture(nm: &str) -> KunaResult<String> {
         i += 1;
     }
     if i != 3 && i != 4 {
-        return Err(KunaError::lowlevel(format!(
+        return Err(UnlaceError::lowlevel(format!(
             "Architecture string does not look like sleigh id: {nm}"
         )));
     }
@@ -1102,7 +1110,7 @@ pub fn normalize_architecture(nm: &str) -> KunaResult<String> {
 /// Read a string attribute as a Rust `String` (the `.ldefs` attributes are all
 /// ASCII; the decoder yields bytes — `from_utf8_lossy` mirrors the C++ `string`
 /// which carries raw bytes, but the spec tree is ASCII so this is lossless).
-fn read_string(decoder: &mut dyn Decoder, attrib: &AttributeId) -> KunaResult<String> {
+fn read_string(decoder: &mut dyn Decoder, attrib: &AttributeId) -> UnlaceResult<String> {
     Ok(String::from_utf8_lossy(&decoder.read_string_id(attrib)?).into_owned())
 }
 

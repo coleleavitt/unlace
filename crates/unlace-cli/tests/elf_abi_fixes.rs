@@ -2,13 +2,13 @@
 //! packets lift through SLEIGH `crossbuild` (#679), and soft-float ARM objects
 //! whose external functions return `float` in `r0` (#681).
 use crate::common;
-use common::{repo_root, run_kuna};
+use common::{repo_root, run_unlace};
 
 fn decompile(fixture: &str, function: &str) -> String {
     let path = repo_root()
         .join("crates/unlace-cli/tests/fixtures")
         .join(fixture);
-    let (stdout, stderr, code) = run_kuna(&["decompile", path.to_str().unwrap(), function]);
+    let (stdout, stderr, code) = run_unlace(&["decompile", path.to_str().unwrap(), function]);
     assert_eq!(code, 0, "{fixture} {function}: {stderr}");
     let lower = stdout.to_lowercase();
     assert!(!lower.contains("bad instruction"), "{stdout}");

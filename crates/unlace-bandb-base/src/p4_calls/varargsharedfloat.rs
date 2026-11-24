@@ -1,4 +1,4 @@
-//! (kuna) `varargsharedfloat` — a 32-bit PowerPC variadic double whose register
+//! (unlace) `varargsharedfloat` — a 32-bit PowerPC variadic double whose register
 //! also feeds an earlier argument of the same call is an argument.
 //!
 //! `sumi(2, x * 2, x)` with `sumi(int, ...)` compiles at clang -O0 to
@@ -53,7 +53,7 @@ pub fn feeds_earlier_argument(
 ) -> bool {
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::varargsharedfloat::VarargSharedFloat>()
         .0
         || data.get_arch().vararg_floats != VarargFloats::ConditionBit
@@ -99,9 +99,9 @@ pub fn feeds_earlier_argument(
     if !lower.iter().any(|r| register_free(data, call, vn, r)) {
         return false;
     }
-    data.kuna_set_shared_float_call(Some(call));
+    data.unlace_set_shared_float_call(Some(call));
     let kept = data.ancestor_op_use(maxancestor, vn, call, trial, 0, 0);
-    data.kuna_set_shared_float_call(None);
+    data.unlace_set_shared_float_call(None);
     kept
 }
 
@@ -216,8 +216,8 @@ fn register_free(data: &Funcdata, call: OpId, vn: VarnodeId, reg: &Address) -> b
     true
 }
 
-crate::kuna_flag!(
-    /// (kuna) Keep a counted variadic double whose register also feeds an
+crate::unlace_flag!(
+    /// (unlace) Keep a counted variadic double whose register also feeds an
     /// earlier argument of the same call (option `varargsharedfloat`).  See
     /// [`crate::varargsharedfloat`].
     VarargSharedFloat,

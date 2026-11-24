@@ -202,7 +202,7 @@ The artifact checklist (every item, or the gates fail opaquely):
    `crates/unlace-decomp/tests/catalog_bytecompat.rs` (count asserts **and** the
    `tests/fixtures/phase_catalog.json` fixture — regenerate it with the console
    `openfile write`/`phase catalog` recapture documented in that file's header).
-   `tests/stages/kuna-catalog.toml` computes its bucket counts from the compiled catalog.
+   `tests/stages/catalog.toml` computes its bucket counts from the compiled catalog.
    **After any rebase, re-derive these from a fresh capture and a green run — never from
    arithmetic.** Two of them auto-merge *without a conflict* and are still wrong: an
    identical `N → N+1` edit on both sides merges to `N+1` when the answer is `N+2`, and a
@@ -416,7 +416,7 @@ from `unlace catalog --json` alone: `summary` (WHAT), `use_when` (WHEN — the s
   `analysis-enablement` | `opt-in-tool`; the field an agent reads to judge whether
   flipping is cosmetic, structural, or semantic.
 
-`unlace catalog --check` + the `tests/stages/kuna-catalog.toml` fence enforce the contract.
+`unlace catalog --check` + the `tests/stages/catalog.toml` fence enforce the contract.
 
 ## Known caveats
 

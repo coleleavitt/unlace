@@ -1,4 +1,4 @@
-//! (kuna `structsynth`) Synthesize a structure type from the constant-offset
+//! (unlace `structsynth`) Synthesize a structure type from the constant-offset
 //! dereferences of a pointer parameter, or of a pointer a call returned.
 //!
 //! # The gap
@@ -170,7 +170,7 @@
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::spacetype;
 use unlace_base::types::{int4, intb, uintb};
 
@@ -181,15 +181,15 @@ use crate::context::VarnodeId;
 use crate::dtype::{Datatype, DatatypeKind, TypeFactory, TypeField, type_metatype};
 use crate::funcdata::Funcdata;
 
-/// (kuna `structsynth`) The program-wide layout ledger: which minted `struct_N`
+/// (unlace `structsynth`) The program-wide layout ledger: which minted `struct_N`
 /// a freshly measured layout is, and which ones a later layout took over.
 pub mod ledger;
 
-/// (kuna `structsynth`) The ledger as data, for a whole-program run split across
+/// (unlace `structsynth`) The ledger as data, for a whole-program run split across
 /// worker processes: record, replay, install, force.
 pub mod shard;
 
-/// (kuna `structsynth nest`) A field loaded and dereferenced in turn is a
+/// (unlace `structsynth nest`) A field loaded and dereferenced in turn is a
 /// pointer to a record of its own, or to the record that holds it.
 mod nest;
 
@@ -199,7 +199,7 @@ const MAX_FIELD_OFFSET: intb = 0x8000;
 /// The deepest `COPY`/`CAST`/pointer-arithmetic chain the address peel follows.
 const MAX_PEEL_DEPTH: u32 = 8;
 
-/// (kuna `calleevote fields`) The narrowest access a lone field may be.
+/// (unlace `calleevote fields`) The narrowest access a lone field may be.
 const LONE_FIELD_MIN_WIDTH: int4 = 4;
 
 /// The access widths that may become a field: the ones whose C spelling in the
@@ -207,7 +207,7 @@ const LONE_FIELD_MIN_WIDTH: int4 = 4;
 /// whose alignment therefore divides their offset when the offset does.
 const FIELD_WIDTHS: [int4; 4] = [1, 2, 4, 8];
 
-/// (kuna) Which bases `structsynth` may synthesize a structure over.
+/// (unlace) Which bases `structsynth` may synthesize a structure over.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum StructSynthMode {
     /// Upstream: a dereferenced pointer keeps whatever pointee inference gave it.
@@ -240,7 +240,7 @@ impl StructSynthMode {
     }
 }
 
-/// (kuna) Parse `option structsynth off|param|locals|nest|all`; the caller
+/// (unlace) Parse `option structsynth off|param|locals|nest|all`; the caller
 /// writes the live field.
 pub struct OptionStructSynth;
 
@@ -249,7 +249,7 @@ impl OptionStructSynth {
     pub const NAME: &'static str = "structsynth";
 
     /// Parse + validate the value.
-    pub fn apply(&self, p1: &str) -> KunaResult<(StructSynthMode, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(StructSynthMode, String)> {
         let mode = match p1 {
             "off" => StructSynthMode::Off,
             "param" => StructSynthMode::Param,
@@ -257,7 +257,7 @@ impl OptionStructSynth {
             "nest" => StructSynthMode::Nest,
             "all" => StructSynthMode::All,
             other => {
-                return Err(KunaError::parse(format!(
+                return Err(UnlaceError::parse(format!(
                     "Unknown structsynth value: {other} (expected off|param|locals|nest|all)"
                 )));
             }
@@ -275,11 +275,11 @@ struct Slot {
     ctype: Option<Rc<Datatype>>,
     /// What every access of that width said the bytes are.
     seen: Kinds,
-    /// (kuna `fieldtype`) Every access of that width, in the order it was
+    /// (unlace `fieldtype`) Every access of that width, in the order it was
     /// recorded, with the value it loaded or stored; kept only while the option
     /// or its trace is on.
     accesses: Vec<(Option<Rc<Datatype>>, Option<VarnodeId>)>,
-    /// (kuna `fieldtype`) The pointer the accesses settled on, which the field
+    /// (unlace `fieldtype`) The pointer the accesses settled on, which the field
     /// takes over whatever the first access carried.
     pointer: Option<Rc<Datatype>>,
 }
@@ -341,7 +341,7 @@ struct Evidence {
     integer_use: bool,
     /// The base flows into a phi, so some dereference of it is loop-carried.
     phi_reached: bool,
-    /// (kuna `calleevote fields`) An address the base yields by a constant
+    /// (unlace `calleevote fields`) An address the base yields by a constant
     /// offset reaches a phi: a pointer stepped through a loop, which walks an
     /// array, where a lone field would read one element as a record.
     derived_walk: bool,
@@ -746,7 +746,7 @@ fn collect(data: &mut Funcdata) -> BTreeMap<VarnodeId, Evidence> {
     let mut ev: BTreeMap<VarnodeId, Evidence> = BTreeMap::new();
     let keep_values = data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::coreoptions::FieldType>()
         .0
         || crate::fieldtype::trace_on();
@@ -886,7 +886,7 @@ fn note_uses(data: &Funcdata, base: VarnodeId, e: &mut Evidence) {
                     .unwrap_or(false);
                 if !constant {
                     e.dynamic_offset = true;
-                } else if data.kuna_calleevote_closed() {
+                } else if data.unlace_calleevote_closed() {
                     e.derived_walk |= op.get_out().is_some_and(|out| address_walks(data, out, 0));
                 }
             }
@@ -924,7 +924,7 @@ fn note_uses(data: &Funcdata, base: VarnodeId, e: &mut Evidence) {
     }
 }
 
-/// (kuna `calleevote fields`) Does the address `vn` reach a phi through copies,
+/// (unlace `calleevote fields`) Does the address `vn` reach a phi through copies,
 /// casts and further constant offsets?
 fn address_walks(data: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
     let Some(v) = data.vbank().get(vn) else {
@@ -1121,14 +1121,14 @@ fn synthesize(data: &mut Funcdata) -> bool {
     let raw = collect(data);
     let nests = data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::structsynth::StructSynthMode>()
         .nests();
     let ptrsize = types.get_size_of_pointer();
     let mut asks = Vec::new();
     let field_type = data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::coreoptions::FieldType>()
         .0;
     for (base, e) in by_creation(data, &raw) {
@@ -1188,7 +1188,7 @@ fn synthesize(data: &mut Funcdata) -> bool {
     // alone keep the order `param` always had.
     if data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::structsynth::StructSynthMode>()
         .locals()
     {
@@ -1230,7 +1230,7 @@ fn by_creation<'a>(
     bases
 }
 
-/// (kuna `calleevote fields`) Does a closed function with a lone-field candidate
+/// (unlace `calleevote fields`) Does a closed function with a lone-field candidate
 /// need one more propagation pass before its lattice can be read?
 ///
 /// The plateau signal is set by a propagation pass that changes nothing, and a
@@ -1239,16 +1239,16 @@ fn by_creation<'a>(
 /// settled. Asking for one pass there, once, is what lets a one-field getter be
 /// read at all.
 fn wants_settle_pass(data: &mut Funcdata) -> bool {
-    if !data.kuna_calleevote_closed()
+    if !data.unlace_calleevote_closed()
         || !data.has_type_recovery_started()
         || data.is_type_recovery_exceeded()
-        || data.kuna_infertypes_settled()
+        || data.unlace_infertypes_settled()
     {
         return false;
     }
     let headless = data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::structheadless::StructHeadlessMode>()
         .fires();
     let raw = collect(data);
@@ -1271,7 +1271,7 @@ fn answer(
 ) -> Option<Rc<Datatype>> {
     match data
         .get_arch()
-        .kuna_states
+        .unlace_states
         .get_rc::<std::cell::RefCell<shard::ShardHook>>()
     {
         Some(hook) => shard::lookup(&hook, types, fields, size, unclaimed, selfs),
@@ -1282,13 +1282,13 @@ fn answer(
             unclaimed,
             selfs,
             data.get_arch()
-                .kuna_options
+                .unlace_options
                 .get::<crate::structmerge::StructMergeMode>(),
         ),
     }
 }
 
-/// (kuna `stackstruct`) The program-wide structure for a frame record's layout,
+/// (unlace `stackstruct`) The program-wide structure for a frame record's layout,
 /// only when it is exactly `size` bytes: a frame object cannot grow past the
 /// bytes its evidence proved, because the slots after it belong to other locals.
 #[doc(hidden)]
@@ -1313,7 +1313,7 @@ fn accepts(data: &mut Funcdata, base: VarnodeId, e: &Evidence) -> bool {
     if !v.is_input()
         && !(data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::structsynth::StructSynthMode>()
             .locals()
             && is_local_base(data, base, e))
@@ -1332,7 +1332,7 @@ fn accepts(data: &mut Funcdata, base: VarnodeId, e: &Evidence) -> bool {
     let Some(ct) = vn_type(data, base) else {
         return false;
     };
-    // (kuna `elfmain`) A `main`'s runtime `argv`/`envp` is the vector, however
+    // (unlace `elfmain`) A `main`'s runtime `argv`/`envp` is the vector, however
     // few of its elements the body reads.
     if crate::elfmaindecl::took_runtime_type(data, base, &ct) {
         return false;
@@ -1340,7 +1340,7 @@ fn accepts(data: &mut Funcdata, base: VarnodeId, e: &Evidence) -> bool {
     if crate::inputhints::took_hint_type(data, base, &ct) {
         return false;
     }
-    let lone = data.kuna_calleevote_closed() && !pointee_is_given(data, base, &ct, e);
+    let lone = data.unlace_calleevote_closed() && !pointee_is_given(data, base, &ct, e);
     let headless = lone
         && crate::structheadless::admits(data, base, &ct)
         && !(crate::structheadless::is_headless(e.slots.keys())
@@ -1643,12 +1643,12 @@ fn accepts_record(
     true
 }
 
-/// (kuna `calleevote fields`) Is this one field, read at a constant offset other
+/// (unlace `calleevote fields`) Is this one field, read at a constant offset other
 /// than zero, at least [`LONE_FIELD_MIN_WIDTH`] bytes wide, with no address
 /// derived from the pointer stepped through a loop?
 ///
 /// One field is evidence of a record only in a function every caller of which
-/// is known (`Funcdata::kuna_calleevote_closed`): a function reached through a
+/// is known (`Funcdata::unlace_calleevote_closed`): a function reached through a
 /// pointer -- a `qsort` comparator, a hash-table callback -- takes the generic
 /// `void *` its contract declares and casts inside, and reads one field of what
 /// it was handed exactly the way a getter does. A byte or halfword at a fixed
@@ -1662,7 +1662,7 @@ fn is_lone_field(e: &Evidence) -> bool {
             .all(|(off, s)| *off > 0 && s.width >= LONE_FIELD_MIN_WIDTH)
 }
 
-/// (kuna `calleevote fields`) Did something outside the function's own reading
+/// (unlace `calleevote fields`) Did something outside the function's own reading
 /// give the parameter `base` its pointee `ct`, so that its lone field `e` does
 /// not make it a record?  A declared prototype it is handed to (`pipe (int *)`)
 /// always did. The type every caller passes, which the input took, did for a
@@ -1698,7 +1698,7 @@ fn pointee_is_given(data: &Funcdata, base: VarnodeId, ct: &Datatype, e: &Evidenc
     fits && crate::calleevote::took_stated_type(data, base, ct)
 }
 
-/// (kuna `calleevote fields`) Is `ct` a pointer to a synthesized record that
+/// (unlace `calleevote fields`) Is `ct` a pointer to a synthesized record that
 /// claims exactly one field -- what a lone field read mints? Such a record
 /// gives way to the one every caller of the function passes.
 pub fn points_at_lone_record(ct: &Datatype) -> bool {
@@ -1709,13 +1709,13 @@ pub fn points_at_lone_record(ct: &Datatype) -> bool {
         && ledger::layout_of(&pt).is_some_and(|l| l.fields.len() == 1)
 }
 
-/// (kuna `structheadless`) Is `ct` a pointer to a record this pass minted?
+/// (unlace `structheadless`) Is `ct` a pointer to a record this pass minted?
 pub fn points_at_synthesized_record(ct: &Datatype) -> bool {
     ct.get_ptr_to()
         .is_some_and(|pt| ledger::minted_number(&pt).is_some())
 }
 
-/// (kuna `structheadless`) Is `ct` a pointer to a record this pass minted with
+/// (unlace `structheadless`) Is `ct` a pointer to a record this pass minted with
 /// two or more claims and none at offset 0 -- what only a headless read mints?
 pub fn points_at_headless_record(ct: &Datatype) -> bool {
     let Some(pt) = ct.get_ptr_to() else {
@@ -1726,7 +1726,7 @@ pub fn points_at_headless_record(ct: &Datatype) -> bool {
             .is_some_and(|l| l.fields.len() >= 2 && l.fields.first().is_some_and(|f| f.offset > 0))
 }
 
-/// (kuna `structsynth nest`) The completed record a pointer to its own shell
+/// (unlace `structsynth nest`) The completed record a pointer to its own shell
 /// stands for, or `None` for any other type.
 ///
 /// A record that points at itself is minted around its incomplete shell
@@ -1769,7 +1769,7 @@ pub fn resolve_self_pointer(types: &dyn TypeFactory, ct: &Datatype) -> Option<Rc
     types.get_type_pointer(ct.get_size(), full, *wordsize).ok()
 }
 
-/// (kuna) `ActionStructSynth` -- synthesize `struct_N` over a dereferenced
+/// (unlace) `ActionStructSynth` -- synthesize `struct_N` over a dereferenced
 /// pointer parameter or returned pointer (option `structsynth`).
 pub struct ActionStructSynth {
     base: ActionBase,
@@ -1814,7 +1814,7 @@ impl Action for ActionStructSynth {
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::structsynth::StructSynthMode>()
             .fires()
             || self.fired
@@ -1830,7 +1830,7 @@ impl Action for ActionStructSynth {
         // one that never settled is not evidence at all.
         if !data.has_type_recovery_started()
             || data.is_type_recovery_exceeded()
-            || !data.kuna_infertypes_settled()
+            || !data.unlace_infertypes_settled()
         {
             return 0;
         }
@@ -1844,9 +1844,9 @@ impl Action for ActionStructSynth {
     }
 }
 
-impl crate::optionset::KunaOption for StructSynthMode {
+impl crate::optionset::UnlaceOption for StructSynthMode {
     const NAME: &'static str = "structsynth";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         crate::structsynth::StructSynthMode::Locals
@@ -1856,7 +1856,7 @@ impl crate::optionset::KunaOption for StructSynthMode {
         crate::structsynth::StructSynthMode::Locals
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         Ok(crate::structsynth::OptionStructSynth.apply(value)?)
     }
 }

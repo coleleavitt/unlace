@@ -60,7 +60,7 @@ carries the DIV row.
 re-pointed at a new vendored fixture, `jumpoverdecoy_i386` — the witness's own 60
 bytes rebased to `0x10000` — since CI has no dataset. Four `kuna-cli` integration
 tests cover the note, the `--follow` recovery, that `--follow` is a no-op on an
-ordinary function, and that both modes cover the same bytes; one `kuna-console`
+ordinary function, and that both modes cover the same bytes; one `console`
 unit test pins the fall-through rule including the `goto`-to-fall-through case.
 
 Sweep of `kuna disassemble` with and without `--follow` over ~800 functions of

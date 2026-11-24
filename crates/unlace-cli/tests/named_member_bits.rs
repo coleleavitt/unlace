@@ -73,7 +73,7 @@ API unsigned int store_values(float first,float second){
     )
     .unwrap();
     for option in ["stackviews", "realtypes", "ctypes"] {
-        program.arch_mut().set_kuna_option(option, "on").unwrap();
+        program.arch_mut().set_unlace_option(option, "on").unwrap();
     }
     program.commit_pending_analysis().unwrap();
     let facts = [

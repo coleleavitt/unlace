@@ -2,7 +2,7 @@
 //! under their ratified encodings. The 0.6.2 draft tables they replace put the
 //! instructions in the custom opcode space and left them unimplemented.
 use crate::common;
-use common::{repo_root, run_kuna};
+use common::{repo_root, run_unlace};
 
 fn fixture(name: &str) -> String {
     repo_root()
@@ -27,13 +27,13 @@ fn rows(stdout: &str) -> Vec<String> {
 }
 
 fn disassemble(args: &[&str]) -> Vec<String> {
-    let (stdout, stderr, code) = run_kuna(&[&["disassemble"][..], args].concat());
+    let (stdout, stderr, code) = run_unlace(&[&["disassemble"][..], args].concat());
     assert_eq!(code, 0, "unlace disassemble {args:?}: {stderr}");
     rows(&stdout)
 }
 
 fn decompile(elf: &str, function: &str) -> String {
-    let (stdout, stderr, code) = run_kuna(&["decompile", elf, function]);
+    let (stdout, stderr, code) = run_unlace(&["decompile", elf, function]);
     assert_eq!(code, 0, "{function}: {stderr}");
     let lower = stdout.to_lowercase();
     assert!(!lower.contains("unimplemented"), "{function}:\n{stdout}");

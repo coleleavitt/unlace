@@ -62,7 +62,7 @@ fn decompile_target(
     )
     .unwrap();
     program.arch_mut().readonlypropagate = true;
-    program.arch_mut().kuna_options.set(mode);
+    program.arch_mut().unlace_options.set(mode);
     if let Some(prototype) = prototype {
         program.set_assertions(vec![Directive {
             raw: format!("prototype probe {prototype}"),

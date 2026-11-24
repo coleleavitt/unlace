@@ -1,4 +1,4 @@
-//! (kuna) The PE load configuration directory (`IMAGE_LOAD_CONFIG_DIRECTORY`,
+//! (unlace) The PE load configuration directory (`IMAGE_LOAD_CONFIG_DIRECTORY`,
 //! data directory 10; Microsoft PE/COFF specification, "The Load Configuration
 //! Structure").
 //!

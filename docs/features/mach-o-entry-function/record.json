@@ -10,7 +10,7 @@
   "div": "DIV-111",
   "touches": [
     "decompiler/crates/kuna-analysis",
-    "decompiler/crates/kuna-console",
+    "decompiler/crates/console",
     "decompiler/crates/kuna-decomp"
   ],
   "summary": "The Mach-O LC_MAIN entry routine is named `main` through the existing entry_names overlay and declared `int main(int argc, char **argv)`, so a stripped macOS binary stops reporting the one function an agent needs first as one more sub_<addr> in an inventory of them.",
@@ -21,7 +21,7 @@
     },
     {
       "what": "default-ON is forced by the acceptance probe, and the four gates cannot vouch for it",
-      "detail": "The acceptance runs plain `kuna functions <bin> --json` with no --option, so a default-OFF option cannot close the need. The captain's B_PLAN note is right that '0/675 assertions changed' is NOT evidence here: both parity corpora are symbol-less ELF bytechunks, so no Mach-O loader/naming change can move them in either direction. The evidence supplied instead is the 23-image Mach-O sweep below, the three-test end-to-end two-pass gate in kuna-console, the four unit tests over the pure seam, and the promoted tests/cli probe on a new in-repo stripped Mach-O fixture."
+      "detail": "The acceptance runs plain `kuna functions <bin> --json` with no --option, so a default-OFF option cannot close the need. The captain's B_PLAN note is right that '0/675 assertions changed' is NOT evidence here: both parity corpora are symbol-less ELF bytechunks, so no Mach-O loader/naming change can move them in either direction. The evidence supplied instead is the 23-image Mach-O sweep below, the three-test end-to-end two-pass gate in console, the four unit tests over the pure seam, and the promoted tests/cli probe on a new in-repo stripped Mach-O fixture."
     },
     {
       "what": "the name is `main`, not `_main`",
@@ -33,7 +33,7 @@
     },
     {
       "what": "no tests/stages XML",
-      "detail": "Same reason as the sibling analysis-tier options (widestrings, noreturn_propagate, relocobjects): the stages corpus is symbol-less bytechunks that carry no load commands at all, so a Mach-O container fact cannot be expressed there. Coverage is decompiler/crates/kuna-console/tests/verify_machomain.rs (the two-pass gate, plus the named-twin guard), four unit tests over entry_main_vma / macho_main_entry_vma, and the promoted CLI probe."
+      "detail": "Same reason as the sibling analysis-tier options (widestrings, noreturn_propagate, relocobjects): the stages corpus is symbol-less bytechunks that carry no load commands at all, so a Mach-O container fact cannot be expressed there. Coverage is decompiler/crates/console/tests/verify_machomain.rs (the two-pass gate, plus the named-twin guard), four unit tests over entry_main_vma / macho_main_entry_vma, and the promoted CLI probe."
     },
     {
       "what": "the acceptance target is dataset-only, so a stripped Mach-O fixture was vendored",

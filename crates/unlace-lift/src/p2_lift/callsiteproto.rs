@@ -1,4 +1,4 @@
-//! (kuna) A loader-stated prototype for one call instruction.
+//! (unlace) A loader-stated prototype for one call instruction.
 //!
 //! An analysis pass that reads a call's arguments out of the image can know
 //! more about that one call than its callee's prototype says: the `uefi` pass
@@ -15,7 +15,7 @@ use crate::fspec::PrototypePieces;
 
 /// The prototype parked for the call instruction at `site`.
 pub fn parked(arch: &Architecture, site: &Address) -> Option<PrototypePieces> {
-    if arch.kuna_callsite_protos.is_empty() {
+    if arch.unlace_callsite_protos.is_empty() {
         return None;
     }
     let code = arch.manage().get_default_code_space()?;
@@ -25,5 +25,5 @@ pub fn parked(arch: &Architecture, site: &Address) -> Option<PrototypePieces> {
     {
         return None;
     }
-    arch.kuna_callsite_protos.get(&site.get_offset()).cloned()
+    arch.unlace_callsite_protos.get(&site.get_offset()).cloned()
 }

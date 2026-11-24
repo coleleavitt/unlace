@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use unlace_analysis::loadimage_te::synthetic::TeImage;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::xml::{DocumentStorage, Element};
 use unlace_console::engine::{Bootstrap, ConsoleProgram, language_database};
 use unlace_console::project::{DecompileOptions, decompile_entry};
@@ -60,7 +60,7 @@ impl Drop for Scratch {
 /// What a load built, as far as a caller can see it: the language, the
 /// description, the sections, every function and the C of the first few, or
 /// the error.
-fn fingerprint(load: KunaResult<ConsoleProgram>) -> String {
+fn fingerprint(load: UnlaceResult<ConsoleProgram>) -> String {
     let mut prog = match load {
         Ok(prog) => prog,
         Err(err) => return format!("error: {err}"),
@@ -122,7 +122,7 @@ fn xml_root() -> Rc<Element> {
         .clone()
 }
 
-type Load<'a> = dyn Fn() -> KunaResult<ConsoleProgram> + 'a;
+type Load<'a> = dyn Fn() -> UnlaceResult<ConsoleProgram> + 'a;
 
 #[test]
 fn explicit_options_reach_every_input_without_the_environment() {
@@ -291,7 +291,7 @@ fn a_failed_load_leaves_no_options_in_force() {
     let load = Bootstrap::new(&db).options(&options);
     let junk = Scratch::new("bootstrap-failed-junk", "bin", &[0u8; 64]);
     let raw = Scratch::new("bootstrap-failed-raw", "bin", &X86_ADD);
-    let failures: Vec<(&str, KunaResult<ConsoleProgram>)> = vec![
+    let failures: Vec<(&str, UnlaceResult<ConsoleProgram>)> = vec![
         ("missing object", load.object("/nonexistent/kuna/image")),
         ("unknown format", load.object(junk.path())),
         ("missing file", load.file("/nonexistent/kuna/image")),

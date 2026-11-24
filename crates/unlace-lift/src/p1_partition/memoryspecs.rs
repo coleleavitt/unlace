@@ -1,4 +1,4 @@
-//! (kuna) SLEIGH spec roots that are either directories or trees held in memory.
+//! (unlace) SLEIGH spec roots that are either directories or trees held in memory.
 //!
 //! A [`MemorySpecs`] is a flat table of files, each keyed by its `/`-separated
 //! path relative to the spec root (`Ghidra/Processors/x86/data/languages/x86-64.sla`):
@@ -8,7 +8,7 @@
 //!
 //! The table travels by value: [`LanguageDatabase::add_spec_root`] keeps it in
 //! the database, which hands each mounted tree an internal root,
-//! `kuna-memory://<n>`, unique within that database. Nothing is registered
+//! `unlace-memory://<n>`, unique within that database. Nothing is registered
 //! process-wide. The database reaches spec files only through the functions
 //! here; each answers a mounted path from its table and passes any other path
 //! to [`FileManage`]/`std::fs`.

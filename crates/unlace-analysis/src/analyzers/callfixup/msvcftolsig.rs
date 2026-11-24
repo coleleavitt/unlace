@@ -1,5 +1,5 @@
-//! (kuna) Recognize the statically linked MSVC x86-32 float-to-integer CRT
-//! helpers in a stripped PE by their bytes, so the `kuna_msvcftol` call-fixup
+//! (unlace) Recognize the statically linked MSVC x86-32 float-to-integer CRT
+//! helpers in a stripped PE by their bytes, so the `unlace_msvcftol` call-fixup
 //! reaches them.
 //!
 //! The fixup is installed by name, and a stripped image names nothing: every

@@ -1,4 +1,4 @@
-//! `unlace fid build` — generate a kuna-native `.fid` fingerprint database from a
+//! `unlace fid build` — generate a unlace-native `.fid` fingerprint database from a
 //! static library (`.a`) or object file(s) (`.o`).
 //!
 //! This is the §5.2 `FidServiceLibraryIngest` analog (FID PR3): for each input

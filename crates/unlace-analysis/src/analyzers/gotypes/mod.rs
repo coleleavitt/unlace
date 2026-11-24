@@ -15,10 +15,10 @@
 //! Recovered: package-qualified NAMED struct types (fields, verified offsets,
 //! total size), with field types mapped to base widths, pointers, and the
 //! header shells. The first consumer rides the same walk: each decoded
-//! `_type` record is itself a typed global (`kuna_typeglobals`, the
+//! `_type` record is itself a typed global (`unlace_typeglobals`, the
 //! `gotypeglobals` option), emitted as a `TypedDataFact` and committed at the
 //! engine's typed-data seam. Interface method sets become per-interface itab
-//! layouts (`kuna_itabtypes`, bound by the `goitabcalls` option). Deliberately
+//! layouts (`unlace_itabtypes`, bound by the `goitabcalls` option). Deliberately
 //! NOT here: generic instantiations beyond their raw name string, map/chan
 //! internals beyond an opaque named shell, binding any OTHER global to a
 //! harvested type (the metadata declares none), and any caller-signature
@@ -486,16 +486,16 @@ fn locate_moduledata(file: &object::File, img: &GoImage, header_vma: u64) -> Opt
 /// Get-or-create one of the well-known Go header shells: an already-interned
 /// (possibly completed) struct is returned as-is. New shells retain a completion
 /// link so pointers created before field import see the completed layout.
-fn shell(tf: &dyn TypeFactory, name: &str) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+fn shell(tf: &dyn TypeFactory, name: &str) -> unlace_base::error::UnlaceResult<Rc<Datatype>> {
     if let Some(held) = tf.find_by_name(name)? {
         if held.get_metatype() == type_metatype::TYPE_STRUCT {
             return Ok(held);
         }
-        return Err(unlace_base::error::KunaError::lowlevel(format!(
+        return Err(unlace_base::error::UnlaceError::lowlevel(format!(
             "gotypes: `{name}` is already held by a non-struct"
         )));
     }
-    tf.kuna_declare_record(name, false)
+    tf.unlace_declare_record(name, false)
 }
 
 /// Intern the four well-known header shells and their facets. Idempotent: an
@@ -551,7 +551,7 @@ fn intern_header_shells(tf: &dyn TypeFactory, width: int4) {
                 .collect();
             let _ = tf.set_fields_struct_raw(&ct, fd, Vec::new(), size, width, 0);
         }
-        let _ = tf.kuna_register_lang_facet(name, facet);
+        let _ = tf.unlace_register_lang_facet(name, facet);
     }
 }
 
@@ -635,7 +635,7 @@ fn intern_named_structs(
         }
         for (name, fps) in &by_name {
             if fps.len() > 1 {
-                tf.kuna_mark_ambiguous_go_type(name);
+                tf.unlace_mark_ambiguous_go_type(name);
             }
         }
     }
@@ -645,7 +645,7 @@ fn intern_named_structs(
         // A layout-ambiguous name must not be completed to one of its
         // conflicting layouts — the client refuses it regardless, and leaving
         // a shell keeps any later, address-exact recovery free to complete it.
-        if tf.kuna_is_ambiguous_go_type(&t.name) {
+        if tf.unlace_is_ambiguous_go_type(&t.name) {
             continue;
         }
         let Ok(ct) = shell(tf, &t.name) else { continue };
@@ -775,7 +775,7 @@ fn struct_layout_fingerprint(img: &GoImage, t: &GoType) -> Option<String> {
     Some(fp)
 }
 
-/// (kuna `goitabcalls`) Every static itab of a 64-bit little-endian Go image
+/// (unlace `goitabcalls`) Every static itab of a 64-bit little-endian Go image
 /// with its interface's linker spelling, located as the harvest locates them;
 /// empty for any other image.
 pub(crate) fn static_itab_interfaces(file: &object::File) -> Vec<(u64, String)> {
@@ -808,7 +808,7 @@ pub(crate) fn static_itab_interfaces(file: &object::File) -> Vec<(u64, String)> 
         .collect()
 }
 
-/// (kuna) `GoTypesPass` — the Go runtime-type harvest (Go-detected images only).
+/// (unlace) `GoTypesPass` — the Go runtime-type harvest (Go-detected images only).
 pub struct GoTypesPass;
 
 impl AnalysisPass for GoTypesPass {
@@ -860,7 +860,7 @@ impl AnalysisPass for GoTypesPass {
             .map(|s| s.address())
             .collect();
         let itabs = itabs::collect(&img, &meta, anchor, &occupied);
-        // (kuna `goitabcalls`) One record per interface naming its method slots;
+        // (unlace `goitabcalls`) One record per interface naming its method slots;
         // output-neutral until the option binds it.
         let go_abi = ctx
             .arch

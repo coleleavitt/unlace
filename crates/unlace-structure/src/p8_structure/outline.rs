@@ -46,7 +46,7 @@
 //! routinely laid out in several disjoint pieces (DWARF records 3-6 ranges for the
 //! callees inlined into `coreutils/tr::parse_str`, and 66% of instances span more
 //! than one range). The value names only a head and an exit; the member set is
-//! re-derived here from the live CFG with [`kuna_check_region`] and is **never**
+//! re-derived here from the live CFG with [`unlace_check_region`] and is **never**
 //! trusted from the spec, so a stale or hand-written pair cannot excise something
 //! that is not a region.
 //!
@@ -67,7 +67,7 @@
 //! disjoint pieces, and in stage 1's own witness the exit address is *below* the
 //! head. The members are therefore re-derived here from the CFG with the same
 //! single-entry predicate stage 1 uses
-//! ([`kuna_check_region`]), so the spec only has to name the head and the exit.
+//! ([`unlace_check_region`]), so the spec only has to name the head and the exit.
 //!
 //! # v1 restrictions, and why each one is here
 //!
@@ -103,7 +103,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::ElementId;
 use unlace_base::space::{AddrSpace, spacetype};
 use unlace_base::types::{int4, uint4, uintb};
@@ -114,11 +114,11 @@ use crate::context::{BlockId, OpId, VarnodeId};
 use crate::fspec::FuncCallSpecs;
 use crate::funcdata::Funcdata;
 use crate::regiongraph::{
-    KunaIncrementalDominators, KunaNodeId, KunaNodePool, KunaNodeSet, KunaRegionGraph, NodeKind,
-    kuna_subgraph_between_nodes,
+    NodeKind, UnlaceIncrementalDominators, UnlaceNodeId, UnlaceNodePool, UnlaceNodeSet,
+    UnlaceRegionGraph, unlace_subgraph_between_nodes,
 };
 
-/// kuna ElementId for the `outline` option (4124; `almostregion` took 4123).
+/// unlace ElementId for the `outline` option (4124; `almostregion` took 4123).
 pub const ELEM_OUTLINE: ElementId = ElementId::new("outline", 4124);
 
 /// One `<fn_entry>:<head>-<exit>` run of the `outline` option value.
@@ -145,13 +145,13 @@ impl OutlineSpec {
     /// The function entry is part of the grammar because an option value is global
     /// to the run: it is applied once and every function is then decompiled under
     /// it, so each run has to say which function it belongs to.
-    pub fn parse(text: &str) -> KunaResult<OutlineSpec> {
+    pub fn parse(text: &str) -> UnlaceResult<OutlineSpec> {
         let t = text.trim();
         if t.is_empty() || t == "off" {
             return Ok(OutlineSpec::default());
         }
         if t.chars().any(|c| c.is_whitespace()) {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "outline: the value must not contain whitespace \
                  (use 0xFN:0xHEAD-0xEXIT;0xFN:0xHEAD-0xEXIT)",
             ));
@@ -161,11 +161,11 @@ impl OutlineSpec {
             if part.is_empty() {
                 continue;
             }
-            let (fnpart, region) = part
-                .split_once(':')
-                .ok_or_else(|| KunaError::lowlevel("outline: expected <fn_entry>:<head>-<exit>"))?;
+            let (fnpart, region) = part.split_once(':').ok_or_else(|| {
+                UnlaceError::lowlevel("outline: expected <fn_entry>:<head>-<exit>")
+            })?;
             let (headpart, exitpart) = region.split_once('-').ok_or_else(|| {
-                KunaError::lowlevel("outline: expected <head>-<exit> after the colon")
+                UnlaceError::lowlevel("outline: expected <head>-<exit> after the colon")
             })?;
             runs.push(OutlineRun {
                 fn_entry: parse_hex(fnpart)?,
@@ -174,7 +174,7 @@ impl OutlineSpec {
             });
         }
         if runs.is_empty() {
-            return Err(KunaError::lowlevel("outline: no region in the value"));
+            return Err(UnlaceError::lowlevel("outline: no region in the value"));
         }
         Ok(OutlineSpec { runs })
     }
@@ -190,14 +190,14 @@ impl OutlineSpec {
     }
 }
 
-fn parse_hex(s: &str) -> KunaResult<uintb> {
+fn parse_hex(s: &str) -> UnlaceResult<uintb> {
     let t = s.trim();
     let body = t
         .strip_prefix("0x")
         .or_else(|| t.strip_prefix("0X"))
         .unwrap_or(t);
     uintb::from_str_radix(body, 16)
-        .map_err(|_| KunaError::lowlevel("outline: address is not hexadecimal"))
+        .map_err(|_| UnlaceError::lowlevel("outline: address is not hexadecimal"))
 }
 
 /// \brief Excise a supplied single-entry region and emit a call to a synthesized
@@ -234,7 +234,7 @@ impl Action for ActionOutline {
         // P0 assertion `option outline <spec>`, carried on the Architecture boundary.
         let raw = data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::outline::OutlineOption>()
             .0
             .clone();
@@ -268,7 +268,7 @@ impl Action for ActionOutline {
 
 /// Locate a basic block by its start address.
 ///
-/// `Funcdata::kuna_block_at_start` is private, and widening it is not this PR's
+/// `Funcdata::unlace_block_at_start` is private, and widening it is not this PR's
 /// business, so the scan is done here over the public block accessors.
 fn block_at(data: &Funcdata, off: uintb) -> Option<BlockId> {
     let n = data.bblocks_get_size();
@@ -529,7 +529,7 @@ fn has_unmodelled_side_effect(data: &Funcdata, members: &BTreeSet<BlockId>) -> b
 }
 
 /// Perform one outline. Returns `Ok(false)` when a precondition declines it.
-fn outline_one(data: &mut Funcdata, run: &OutlineRun) -> KunaResult<bool> {
+fn outline_one(data: &mut Funcdata, run: &OutlineRun) -> UnlaceResult<bool> {
     let head_bl = match block_at(data, run.head) {
         Some(b) => b,
         None => return Ok(false),
@@ -550,19 +550,19 @@ fn outline_one(data: &mut Funcdata, run: &OutlineRun) -> KunaResult<bool> {
         (Some(&h), Some(&x)) => (h, x),
         _ => return Ok(false),
     };
-    let mut doms = KunaIncrementalDominators::new(&sc.pool, &sc.graph, sc.head, false)?;
-    if !kuna_check_region(&sc.pool, &sc.graph, hn, xn, &mut doms)? {
+    let mut doms = UnlaceIncrementalDominators::new(&sc.pool, &sc.graph, sc.head, false)?;
+    if !unlace_check_region(&sc.pool, &sc.graph, hn, xn, &mut doms)? {
         return Ok(false);
     }
 
-    let mut frontier = KunaNodeSet::new();
+    let mut frontier = UnlaceNodeSet::new();
     frontier.insert(sc.pool.key(xn));
-    let mut slice = KunaRegionGraph::new();
-    kuna_subgraph_between_nodes(&sc.pool, &sc.graph, hn, &frontier, false, &mut slice)?;
-    let mut nodes: Vec<KunaNodeId> = Vec::new();
+    let mut slice = UnlaceRegionGraph::new();
+    unlace_subgraph_between_nodes(&sc.pool, &sc.graph, hn, &frontier, false, &mut slice)?;
+    let mut nodes: Vec<UnlaceNodeId> = Vec::new();
     slice.get_nodes(&mut nodes);
 
-    let mut block_of: BTreeMap<KunaNodeId, BlockId> = BTreeMap::new();
+    let mut block_of: BTreeMap<UnlaceNodeId, BlockId> = BTreeMap::new();
     for (&bl, &nid) in sc.node_of.iter() {
         block_of.insert(nid, bl);
     }
@@ -673,7 +673,7 @@ fn outline_one(data: &mut Funcdata, run: &OutlineRun) -> KunaResult<bool> {
     fc.proto_mut().set_internal(model, void_ty);
     let idx = data.push_call_specs(fc);
     let handle = crate::flow::next_fspec_handle();
-    let angr = data.get_arch().kuna_name_style();
+    let angr = data.get_arch().unlace_name_style();
     data.get_call_specs(idx)
         .register_in_fspec_space(handle, angr);
     let fspecvn = data.new_varnode_call_specs(handle);
@@ -715,24 +715,24 @@ fn outline_one(data: &mut Funcdata, run: &OutlineRun) -> KunaResult<bool> {
 //===========================================================================
 // Region substrate
 //
-// `kuna_check_region` is transcribed from the private
-// `KunaRegionIdentifier::check_region` (`p7_regions/regionid.rs:1504`, angr RI
+// `unlace_check_region` is transcribed from the private
+// `UnlaceRegionIdentifier::check_region` (`p7_regions/regionid.rs:1504`, angr RI
 // `_check_region`) so this pass can run the predicate over a scratch graph it owns.
 // `regionid.rs` is a line-faithful port pinned by `docs/spec/07-regions.md`
 // and is deliberately not modified to expose it.
 //===========================================================================
 
 struct Scratch {
-    pool: KunaNodePool,
-    graph: KunaRegionGraph,
-    head: KunaNodeId,
-    node_of: BTreeMap<BlockId, KunaNodeId>,
+    pool: UnlaceNodePool,
+    graph: UnlaceRegionGraph,
+    head: UnlaceNodeId,
+    node_of: BTreeMap<BlockId, UnlaceNodeId>,
 }
 
 fn build_scratch(data: &Funcdata) -> Scratch {
-    let mut pool = KunaNodePool::new();
-    let mut graph = KunaRegionGraph::new();
-    let mut node_of: BTreeMap<BlockId, KunaNodeId> = BTreeMap::new();
+    let mut pool = UnlaceNodePool::new();
+    let mut graph = UnlaceRegionGraph::new();
+    let mut node_of: BTreeMap<BlockId, UnlaceNodeId> = BTreeMap::new();
 
     let n = data.bblocks_get_size();
     for i in 0..n {
@@ -787,18 +787,18 @@ fn build_scratch(data: &Funcdata) -> Scratch {
 
 /// Is `[start, end)` a single-entry region of `g`?
 ///
-/// Transcribed from the private `KunaRegionIdentifier::check_region`
+/// Transcribed from the private `UnlaceRegionIdentifier::check_region`
 /// (`p7_regions/regionid.rs:1504`, angr RI `_check_region`) so this pass can
 /// run the predicate over a scratch graph it owns and may mutate edge-by-edge.
 /// `regionid.rs` is a line-faithful port pinned by `docs/spec/07-regions.md`
 /// and is deliberately not modified to expose it.
-fn kuna_check_region(
-    pool: &KunaNodePool,
-    g: &KunaRegionGraph,
-    start_node: KunaNodeId,
-    end_node: KunaNodeId,
-    doms: &mut KunaIncrementalDominators,
-) -> KunaResult<bool> {
+fn unlace_check_region(
+    pool: &UnlaceNodePool,
+    g: &UnlaceRegionGraph,
+    start_node: UnlaceNodeId,
+    end_node: UnlaceNodeId,
+    doms: &mut UnlaceIncrementalDominators,
+) -> UnlaceResult<bool> {
     if !doms.dominates(start_node, end_node) {
         let early_start_frontier = doms.df(pool, g, start_node)?;
         for it in early_start_frontier.iter() {
@@ -845,7 +845,7 @@ impl OptionOutline {
     pub const NAME: &'static str = "outline";
 
     /// Validate the region grammar, returning the value to store plus a message.
-    pub fn apply(&self, p1: &str) -> KunaResult<(String, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(String, String)> {
         let spec = OutlineSpec::parse(p1)?;
         if spec.is_empty() {
             return Ok((String::new(), "Region outlining turned off".to_string()));
@@ -858,7 +858,7 @@ impl OptionOutline {
     }
 }
 
-/// (kuna) Short-circuit condition folding across a **complex sibling block**
+/// (unlace) Short-circuit condition folding across a **complex sibling block**
 /// (angr Phoenix's `MultiStatementExpression` relaxation of
 /// `_match_acyclic_short_circuit_conditions`).  Ghidra's `ruleBlockOr` declines
 /// the `A || B` fold whenever the sibling condition block is *complex*
@@ -917,17 +917,17 @@ impl OptionOutline {
 /// ([`MAX_PREFIX_STMTS_ANGR`](crate::condfold::MAX_PREFIX_STMTS_ANGR))
 /// = `on` (angr parity), `9`
 /// ([`MAX_PREFIX_STMTS_WIDE`](crate::condfold::MAX_PREFIX_STMTS_WIDE))
-/// = `wide` (absorbs kuna's finer printed-statement granularity).  The level moves
+/// = `wide` (absorbs unlace's finer printed-statement granularity).  The level moves
 /// the budget for BOTH rules and nothing else.  Default-OFF opt-in.  See
 /// [`crate::condfold`].
-/// (kuna) `outline` region spec, empty when off.  See
+/// (unlace) `outline` region spec, empty when off.  See
 /// [`crate::outline`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct OutlineOption(pub String);
 
-impl crate::optionset::KunaOption for OutlineOption {
+impl crate::optionset::UnlaceOption for OutlineOption {
     const NAME: &'static str = "outline";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         OutlineOption(String::new())
@@ -937,7 +937,7 @@ impl crate::optionset::KunaOption for OutlineOption {
         OutlineOption(String::new())
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (v, msg) = crate::outline::OptionOutline.apply(value)?;
         Ok((OutlineOption(v), msg))
     }

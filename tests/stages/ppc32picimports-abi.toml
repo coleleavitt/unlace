@@ -1,0 +1,54 @@
+# - `ppc32picimports-abi.toml`, `ppc32picimports-abi-indirect.toml`, and
+# `ppc32picimports-driver.toml` exercise explicit `ppc32picimports abi` recovery, including
+# ordinary returning callers and compiler start files.
+
+[image]
+arch = 'PowerPC:BE:32:default'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = '4e800020'
+
+[script]
+commands = [
+    'option ppc32picimports off',
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/ppc32-pic-imports.elf',
+    'read symbols',
+    'load function check',
+    'decompile',
+    'print C',
+    'option ppc32picimports abi',
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/ppc32-pic-imports.elf',
+    'read symbols',
+    'load function check',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'PIC off keeps the unnamed stub'
+count = 1
+literal = 'sub_1800('
+
+[[match]]
+name = 'PIC abi names the actual returning import'
+count = 1
+literal = 'extra('
+
+[[match]]
+name = 'both passes retain the reachable return'
+count = 2
+literal = 'return 7;'
+
+[[match]]
+name = 'the other valid relocation never supplies a contract'
+count = 0
+regex = '__stack_chk_fail\(|no-return'

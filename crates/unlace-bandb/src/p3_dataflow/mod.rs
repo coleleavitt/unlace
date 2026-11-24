@@ -13,7 +13,7 @@ pub mod indexaliasguard;
 #[cfg(test)]
 mod indirectanchor_tests;
 pub mod leafmemory;
-pub mod narrowload; // (kuna) a narrow LOAD keeps its own width
+pub mod narrowload; // (unlace) a narrow LOAD keeps its own width
 pub mod opaquedomain;
 pub mod opaqueglobals;
 pub mod opaquepredicate;

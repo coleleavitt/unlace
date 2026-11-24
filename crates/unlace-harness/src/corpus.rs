@@ -39,7 +39,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::IdRegistry;
 use unlace_base::space::{AddrSpaceManager, spacetype};
 use unlace_base::xml::{DocumentStorage, Element};
@@ -317,8 +317,8 @@ impl LoadImage for DummyImg {
     fn get_file_name(&self) -> &str {
         "dummy"
     }
-    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> KunaResult<()> {
-        Err(KunaError::data_unavail("dummy"))
+    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> UnlaceResult<()> {
+        Err(UnlaceError::data_unavail("dummy"))
     }
     fn get_arch_type(&self) -> Vec<u8> {
         Vec::new()
@@ -688,7 +688,7 @@ fn block_cover_range(fd: &Funcdata, bl: unlace_decomp::context::BlockId) -> (u64
 }
 
 /// Reduce a flow error to a short EXCLUDED reason.
-fn exclusion_reason(e: &KunaError) -> String {
+fn exclusion_reason(e: &UnlaceError) -> String {
     let s = e.to_string();
     if s.contains("jump-table") || s.contains("JumpTable") {
         "BRANCHIND jump-table recovery (W4)".into()

@@ -91,7 +91,7 @@ impl unlace_sleigh::loadimage::LoadImage for NoImage {
         &mut self,
         ptr: &mut [u8],
         _addr: &unlace_base::address::Address,
-    ) -> unlace_base::error::KunaResult<()> {
+    ) -> unlace_base::error::UnlaceResult<()> {
         ptr.fill(0);
         Ok(())
     }

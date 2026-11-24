@@ -157,10 +157,10 @@ pub fn held_bits_token(data: &mut Funcdata, op: crate::context::OpId) -> Option<
         }
         let entry = fc.get_entry_address();
         let key = (entry.get_space()?.get_index(), entry.get_offset());
-        if !data.kuna_callee_float_bits(key) {
+        if !data.unlace_callee_float_bits(key) {
             return None;
         }
-        let stated = data.kuna_callret_stated(key)?;
+        let stated = data.unlace_callret_stated(key)?;
         let outvn = data.obank().get(op)?.get_out()?;
         let out = data.vbank().get(outvn)?;
         let float = stated.ct.get_metatype() == type_metatype::TYPE_FLOAT

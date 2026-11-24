@@ -1,4 +1,4 @@
-//! (kuna `objcsdk`) Objective-C method signatures from SDK headers, for the
+//! (unlace `objcsdk`) Objective-C method signatures from SDK headers, for the
 //! selectors an image only sends.
 //!
 //! A stub `objc_msgSend$setAlpha:` has a prototype only when something in the
@@ -6,7 +6,7 @@
 //! kept the untyped call-site inference and lost arguments
 //! (`objc_msgSend$setTransitioningDelegate:(v3)`). The declarations exist — in
 //! the SDK the app was built against — and Apple's headers may not be shipped
-//! with kuna, so this reads them at load from a directory the user names
+//! with unlace, so this reads them at load from a directory the user names
 //! (`--option objcsdk <SDK root or header dir>`, `UNLACE_OBJCSDK`): an SDK root
 //! contributes the `Headers/` of every framework the image links
 //! (`LC_LOAD_DYLIB`), any other directory every `.h` up to eight directories

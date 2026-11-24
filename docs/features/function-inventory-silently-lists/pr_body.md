@@ -48,7 +48,7 @@ empty.
 
 `triage_cli.rs` drives the built binary over the new fixture (both surfaces, plus
 the declaration that clears it) and fails on the unpatched tree with exit 0
-instead of 1; two `kuna-console` tests pin the predicate and its agreement with
+instead of 1; two `console` tests pin the predicate and its agreement with
 `function_entries_executable` on five fixtures;
 `tests/cli/function-inventory-silently-lists.json` is the promoted probe.
 

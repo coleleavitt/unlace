@@ -19,7 +19,7 @@
 //!      *the* print-fidelity-critical pure function: it reads only the token
 //!      precedence/associativity/type and the current RPN stage, and decides
 //!      whether a sub-expression is wrapped in `(`/`)`.  This is transcribed
-//!      token-for-token (including the kuna GH-2786 adjacent-sign fix at
+//!      token-for-token (including the unlace GH-2786 adjacent-sign fix at
 //!      printlanguage.cc:292-294).
 //!   3. **The self-contained statics** [`most_natural_base`], [`format_binary`],
 //!      [`unicode_needs_escape`], [`unnamed_field`], and the mod/scope-stack and
@@ -47,7 +47,7 @@
 //! layout is faithful before `prettyprint` lands.
 
 use unlace_base::address::mostsigbit_set;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::types::{int4, uint4, uintb};
 
 /// Syntax-highlight class for an emitted token.
@@ -133,7 +133,7 @@ pub struct OpToken {
     /// The token representing the negation of this token (C++ `negate`).
     /// `None` if the operator has no complement.
     pub negate: Option<&'static OpToken>,
-    /// (kuna outlang) The operator's result must be parenthesised when it is an
+    /// (unlace outlang) The operator's result must be parenthesised when it is an
     /// operand of a `<`/`>`-family operator, because the language would otherwise
     /// re-parse the boundary. Rust's `as` is the case this exists for: in
     /// `x as i32 < 5` the `i32 <` opens generic arguments and the expression does
@@ -142,7 +142,7 @@ pub struct OpToken {
     /// `(a + b) as T` correct. `false` for every C token, so the C path is
     /// untouched.
     pub paren_before_angle: bool,
-    /// (kuna) The operator groups left-to-right like any other binary token but
+    /// (unlace) The operator groups left-to-right like any other binary token but
     /// is *not* mathematically associative, so re-grouping its operands changes
     /// the value. The IEEE-754 float tokens are what this exists for: `a * b * c`
     /// re-reads as `(a * b) * c`, which rounds at different points than the
@@ -190,7 +190,7 @@ pub mod modifiers {
     pub const HIDE_THISPARAM: uint4 = 0x4000;
     /// The current block may need to surround itself with additional braces.
     pub const PENDING_BRACE: uint4 = 0x8000;
-    /// (kuna) The expression being pushed is consumed as a BOOLEAN (an
+    /// (unlace) The expression being pushed is consumed as a BOOLEAN (an
     /// if/while/for/ternary condition or a `&&`/`||`/`!` operand), so a
     /// comparison against zero may render in its truthy form (`x` / `!x`)
     /// under `option truthycond` (DIV-36).  Scoped off across any
@@ -643,9 +643,9 @@ impl PrintContext {
     /// `emit->getMaxLineSize()` upper-bound check (that bound lives on the
     /// `Emit` driver, prettyprint).  `max_line_size` is supplied by the caller
     /// that owns the emitter.
-    pub fn set_line_comment_indent(&mut self, val: int4, max_line_size: int4) -> KunaResult<()> {
+    pub fn set_line_comment_indent(&mut self, val: int4, max_line_size: int4) -> UnlaceResult<()> {
         if val < 0 || val >= max_line_size {
-            return Err(KunaError::lowlevel("Bad comment indent value"));
+            return Err(UnlaceError::lowlevel("Bad comment indent value"));
         }
         self.line_commentindent = val;
         Ok(())
@@ -653,7 +653,7 @@ impl PrintContext {
 
     /// C++ `setIntegerFormat` (printlanguage.cc:705-719) — set the default
     /// integer display format, toggling the `force_hex`/`force_dec` mods.
-    pub fn set_integer_format(&mut self, nm: &str) -> KunaResult<()> {
+    pub fn set_integer_format(&mut self, nm: &str) -> UnlaceResult<()> {
         // Prefix match on the first 3 chars, as the C++ does.
         let m = if nm.starts_with("hex") {
             modifiers::FORCE_HEX
@@ -662,7 +662,7 @@ impl PrintContext {
         } else if nm.starts_with("best") {
             0
         } else {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "Unknown integer format option: {nm}"
             )));
         };
@@ -690,14 +690,14 @@ impl PrintContext {
 /// **pure** function of the two tokens' type/precedence/associativity and the
 /// top token's current `visited` stage (and, for `hiddenfunction`, the
 /// previous token on the stack), so it is transcribed exactly here including the
-/// kuna GH-2786 adjacent-sign fix.
+/// unlace GH-2786 adjacent-sign fix.
 ///
 /// `prev_token` is `revpol[size-2].tok` (the token below `top`), needed only for
 /// the `HiddenFunction` arm; pass `None` when the stack has only one entry.
 pub fn parentheses(top: &ReversePolish, op2: &OpToken, prev_token: Option<&OpToken>) -> bool {
     let top_token = top.tok;
     let stage = top.visited;
-    // (kuna outlang) See `OpToken::paren_before_angle`.
+    // (unlace outlang) See `OpToken::paren_before_angle`.
     if op2.paren_before_angle
         && top_token.token_type == TokenType::Binary
         && (top_token.print1.starts_with('<') || top_token.print1.starts_with('>'))
@@ -717,7 +717,7 @@ pub fn parentheses(top: &ReversePolish, op2: &OpToken, prev_token: Option<&OpTok
                 if top_token.associative {
                     return false;
                 }
-                // (kuna) See `OpToken::left_to_right_only`.
+                // (unlace) See `OpToken::left_to_right_only`.
                 if top_token.left_to_right_only && stage == 0 {
                     return false;
                 }
@@ -737,7 +737,7 @@ pub fn parentheses(top: &ReversePolish, op2: &OpToken, prev_token: Option<&OpTok
             if top_token.precedence < op2.precedence {
                 return false;
             }
-            // (kuna) GH-2786: adjacent identical sign tokens would merge into the
+            // (unlace) GH-2786: adjacent identical sign tokens would merge into the
             // --/++ operator (printlanguage.cc:292-294).
             if op2.token_type == TokenType::UnaryPrefix
                 && top_token.print1 == op2.print1

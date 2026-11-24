@@ -2,12 +2,12 @@
 //!
 //! Two things this proves end-to-end over the vendored fixture
 //! (`unlace-analysis/tests/fixtures/fid_lib_x86_64.o`, an x86-64 `.o` with three
-//! distinctive self-contained functions — `kuna_crc32`, `kuna_strlen`,
-//! `kuna_memset`):
+//! distinctive self-contained functions — `unlace_crc32`, `unlace_strlen`,
+//! `unlace_memset`):
 //!
 //! 1. **Generator presence + naming:** `build_records` over the bootstrapped
-//!    object produces a record named `kuna_crc32`, one named `kuna_strlen`, and
-//!    one named `kuna_memset` — the functions are re-identifiable by name.
+//!    object produces a record named `unlace_crc32`, one named `unlace_strlen`, and
+//!    one named `unlace_memset` — the functions are re-identifiable by name.
 //!
 //! 2. **DB serialization consistency:** the records, written to a `.fid` and
 //!    reloaded, are byte-for-byte the same (`find_by_full_hash` recovers each),

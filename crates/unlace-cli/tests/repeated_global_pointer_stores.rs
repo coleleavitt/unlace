@@ -22,7 +22,7 @@ fn repeated_global_pointer_stores_preserve_aliasing_and_early_returns() {
     );
     let original = root.path().join("original.c");
     std::fs::write(&original, generated.stdout).unwrap();
-    let (body, stderr, status) = common::run_kuna(&[
+    let (body, stderr, status) = common::run_unlace(&[
         "decompile",
         &common::fixture("globalptrstores_x86_64.o"),
         "big",

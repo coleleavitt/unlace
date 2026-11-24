@@ -37,7 +37,7 @@ use std::io::{Read, Write};
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::{
     ATTRIB_BIGENDIAN, ATTRIB_OFFSET, Decoder, ELEM_INPUT, ELEM_OUTPUT, Encoder, IdRegistry,
     PackedDecode, XmlDecode,
@@ -64,7 +64,7 @@ use unlace_decomp::pcodeinject::{
 use crate::client::InjectType;
 use crate::ids::{ELEM_UNIMPL, register_ghidra_ids};
 use crate::protocol::WireError;
-use crate::provider::{GhidraLoadImage, SharedClient, wire_to_kuna};
+use crate::provider::{GhidraLoadImage, SharedClient, wire_to_unlace};
 
 /// Build the marshaling [`IdRegistry`] a ghidra-mode session needs: the
 /// unlace-base tables, the translate.cc ids (the tspec vocabulary), and the
@@ -109,11 +109,11 @@ impl TspecModel {
     ///     <truncate_space space=... size=.../> ...
     ///   </sleigh>
     /// ```
-    pub fn decode(tspec: &[u8], registry: &IdRegistry) -> KunaResult<TspecModel> {
+    pub fn decode(tspec: &[u8], registry: &IdRegistry) -> UnlaceResult<TspecModel> {
         let document = xml_tree(tspec)?;
         let root = Rc::clone(document.get_root());
         if root.get_name() != "sleigh" {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "Could not find sleigh tag (got <{}>)",
                 root.get_name()
             )));
@@ -131,7 +131,7 @@ impl TspecModel {
 
         // decodeSpaces (translate.cc): constant space first, then one child
         // element per space, then the defaultspace resolution.  Driven
-        // stepwise (fresh decoder per child) per the kuna decode_spaces
+        // stepwise (fresh decoder per child) per the unlace decode_spaces
         // aliasing note.
         manager.insert_space(Rc::new(ConstantSpace::new()))?;
         let spaces_el = root
@@ -139,7 +139,7 @@ impl TspecModel {
             .iter()
             .find(|c| c.get_name() == "spaces")
             .cloned()
-            .ok_or_else(|| KunaError::lowlevel("Missing <spaces> in <sleigh> tag"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("Missing <spaces> in <sleigh> tag"))?;
         let defname = {
             let mut dec = XmlDecode::new_with_root(&manager, registry, &spaces_el, 0);
             dec.open_element()?;
@@ -155,7 +155,7 @@ impl TspecModel {
         let def_index = match manager.get_space_by_name(&defname) {
             Some(spc) => spc.get_index(),
             None => {
-                return Err(KunaError::lowlevel(format!(
+                return Err(UnlaceError::lowlevel(format!(
                     "Bad 'defaultspace' attribute: {defname}"
                 )));
             }
@@ -185,12 +185,12 @@ impl TspecModel {
 /// C++ `GhidraTranslate` (ghidra_translate.hh:36-57): the live ghidra-mode
 /// translator.  Its disassembly/p-code (`oneInstruction`) and register
 /// lookups (`getRegister`/`getRegisterName`) are served by queries on the
-/// shared [`GhidraClient`] (the kuna analog of the C++ `glb` back-pointer).
+/// shared [`GhidraClient`] (the unlace analog of the C++ `glb` back-pointer).
 ///
 /// All the query I/O and cache fills run through `&self` (the trait methods
 /// are `&self`, matching C++ `const`/`mutable`), so mutation goes through the
 /// `RefCell` caches and the `RefCell` inside [`SharedClient`] — the sanctioned
-/// kuna interior-mutability pattern.
+/// unlace interior-mutability pattern.
 pub struct GhidraTranslate<R: Read, W: Write> {
     /// The concrete C++ `Translate` base-class state — endianness, unique
     /// base, float formats (reached through [`Translate::translate_base`]).
@@ -269,7 +269,7 @@ impl<R: Read, W: Write> GhidraRegisterLookup<R, W> {
 
 impl<R: Read, W: Write> RegisterLookup for GhidraRegisterLookup<R, W> {
     /// C++ `GhidraTranslate::getRegister` (ghidra_translate.cc:45-70).
-    fn get_register(&self, nm: &str) -> KunaResult<VarnodeStorage> {
+    fn get_register(&self, nm: &str) -> UnlaceResult<VarnodeStorage> {
         {
             let cache = self.nm2addr.borrow();
             if let Some(vndata) = cache.get(nm) {
@@ -280,15 +280,15 @@ impl<R: Read, W: Write> RegisterLookup for GhidraRegisterLookup<R, W> {
             .manager
             .borrow()
             .upgrade()
-            .ok_or_else(|| KunaError::lowlevel("ghidra register lookup: manager gone"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("ghidra register lookup: manager gone"))?;
         let mut decoder = PackedDecode::new(&manager);
         let found = self
             .client
             .borrow_mut()
             .get_register(nm, &mut decoder)
-            .map_err(wire_to_kuna)?;
+            .map_err(wire_to_unlace)?;
         if !found {
-            return Err(KunaError::lowlevel(format!("No register named {nm}")));
+            return Err(UnlaceError::lowlevel(format!("No register named {nm}")));
         }
         let (regaddr, regsize) = Address::decode_sized(&mut decoder)?;
         let vndata = VarnodeStorage {
@@ -375,7 +375,7 @@ impl<R: Read, W: Write> RegisterLookup for GhidraRegisterLookup<R, W> {
 // the tests use owned `Cursor`/`Vec`, all `'static`.
 impl<R: Read + 'static, W: Write + 'static> GhidraTranslate<R, W> {
     /// Build the live translator from the tspec document and the shared query
-    /// client (the kuna analog of the C++ `ArchitectureGhidra` installing
+    /// client (the unlace analog of the C++ `ArchitectureGhidra` installing
     /// `buildTranslator`→GhidraTranslate + `buildLoader`→LoadImageGhidra,
     /// ghidra_arch.cc:283-299).
     ///
@@ -387,7 +387,7 @@ impl<R: Read + 'static, W: Write + 'static> GhidraTranslate<R, W> {
         tspec: &[u8],
         registry: &IdRegistry,
         client: SharedClient<R, W>,
-    ) -> KunaResult<GhidraTranslate<R, W>> {
+    ) -> UnlaceResult<GhidraTranslate<R, W>> {
         let TspecModel {
             manager,
             big_endian,
@@ -437,7 +437,7 @@ impl<R: Read, W: Write> GhidraTranslate<R, W> {
 impl<R: Read, W: Write> RegisterLookup for GhidraTranslate<R, W> {
     /// C++ `GhidraTranslate::getRegister` — delegated to the shared
     /// [`GhidraRegisterLookup`] (one cache, also installed on the manager).
-    fn get_register(&self, nm: &str) -> KunaResult<VarnodeStorage> {
+    fn get_register(&self, nm: &str) -> UnlaceResult<VarnodeStorage> {
         self.ensure_lookup_wired();
         self.reglookup.get_register(nm)
     }
@@ -470,12 +470,12 @@ impl<R: Read, W: Write> Translate for GhidraTranslate<R, W> {
     /// The tspec is parsed at construction ([`GhidraTranslate::new`]), so the
     /// `DocumentStorage` initialize path is vestigial (C++
     /// `GhidraTranslate::initialize` pulls the `<sleigh>` tag from the store;
-    /// kuna already has it).
-    fn initialize(&mut self, _store: &mut DocumentStorage) -> KunaResult<()> {
+    /// unlace already has it).
+    fn initialize(&mut self, _store: &mut DocumentStorage) -> UnlaceResult<()> {
         Ok(())
     }
     /// C++ `GhidraTranslate::getAllRegisters` throws `LowlevelError`
-    /// (ghidra_translate.hh:49-50); kuna's infallible signature can only
+    /// (ghidra_translate.hh:49-50); unlace's infallible signature can only
     /// no-op.  The Java host owns the register table; this is never reached in
     /// ghidra mode.
     #[allow(clippy::mutable_key_type)] // VarnodeData interior mutability does not affect its Ord (see the trait)
@@ -500,33 +500,33 @@ impl<R: Read, W: Write> Translate for GhidraTranslate<R, W> {
     }
     /// C++ throws (ghidra_translate.hh:53-54) — the length is only knowable by
     /// disassembling, which is the host's job.
-    fn instruction_length(&self, _baseaddr: &Address) -> KunaResult<i32> {
-        Err(KunaError::lowlevel(
+    fn instruction_length(&self, _baseaddr: &Address) -> UnlaceResult<i32> {
+        Err(UnlaceError::lowlevel(
             "Cannot get instruction length through this interface",
         ))
     }
     /// C++ `GhidraTranslate::oneInstruction` (ghidra_translate.cc:120-156): a
     /// `getPcode` query whose response is either `<unimpl offset=.../>` or
     /// `<inst offset=..><addr/> <op ...>* </inst>`.  The load-bearing method.
-    fn one_instruction(&self, emit: &mut dyn PcodeEmit, baseaddr: &Address) -> KunaResult<i32> {
+    fn one_instruction(&self, emit: &mut dyn PcodeEmit, baseaddr: &Address) -> UnlaceResult<i32> {
         // The decoder's space indices come from the tspec manager, which is
         // what makes the packed <addr>/<spaceid> elements decode correctly.
         let mut decoder = PackedDecode::new(&self.manager);
         let success = match self.client.borrow_mut().get_pcode(baseaddr, &mut decoder) {
             Ok(s) => s,
             // C++ catch(JavaError&): rethrow LowlevelError with the address.
-            Err(WireError::Kuna(KunaError::Java { .. })) => {
+            Err(WireError::Unlace(UnlaceError::Java { .. })) => {
                 let mut msg = String::from("Error generating pcode at address: ");
                 let _ = baseaddr.print_raw(&mut msg);
-                return Err(KunaError::lowlevel(msg));
+                return Err(UnlaceError::lowlevel(msg));
             }
-            Err(other) => return Err(wire_to_kuna(other)),
+            Err(other) => return Err(wire_to_unlace(other)),
         };
         if !success {
             // C++ BadDataError — the flow decode-error ladder's BadData branch.
             let mut msg = String::from("No pcode could be generated at address: ");
             let _ = baseaddr.print_raw(&mut msg);
-            return Err(KunaError::bad_data(msg));
+            return Err(UnlaceError::bad_data(msg));
         }
         let el = decoder.open_element()?;
         let offset = decoder.read_signed_integer_id(&ATTRIB_OFFSET)? as i32; // intb -> int4
@@ -535,7 +535,7 @@ impl<R: Read, W: Write> Translate for GhidraTranslate<R, W> {
             // instruction length the flow ladder reads.
             let mut msg = String::from("Instruction not implemented in pcode:\n ");
             let _ = baseaddr.print_raw(&mut msg);
-            return Err(KunaError::unimpl(msg, offset));
+            return Err(UnlaceError::unimpl(msg, offset));
         }
         let pc = Address::decode(&mut decoder)?;
         // The <inst> element is never closed; peek returns 0 at </inst>.
@@ -545,8 +545,12 @@ impl<R: Read, W: Write> Translate for GhidraTranslate<R, W> {
         Ok(offset)
     }
     /// C++ throws (ghidra_translate.hh:55-56) — disassembly is the host's job.
-    fn print_assembly(&self, _emit: &mut dyn AssemblyEmit, _baseaddr: &Address) -> KunaResult<i32> {
-        Err(KunaError::lowlevel(
+    fn print_assembly(
+        &self,
+        _emit: &mut dyn AssemblyEmit,
+        _baseaddr: &Address,
+    ) -> UnlaceResult<i32> {
+        Err(UnlaceError::lowlevel(
             "Cannot disassemble through this interface",
         ))
     }
@@ -584,7 +588,7 @@ impl<R: Read, W: Write> EngineTranslate for GhidraTranslate<R, W> {
     /// `Sleigh::read_loadimage_value` / C++ `Emulate*::getLoadImageValue`):
     /// `loadFill` a full `uintb`, byte-swap to host order if the space
     /// endianness differs, then mask/shift down to `sz`.
-    fn read_loadimage_value(&self, addr: &Address, sz: i32) -> KunaResult<u64> {
+    fn read_loadimage_value(&self, addr: &Address, sz: i32) -> UnlaceResult<u64> {
         use unlace_base::address::{byte_swap, calc_mask};
         use unlace_base::types::HOST_ENDIAN;
         let mut buf = [0u8; 8]; // sizeof(uintb)
@@ -608,7 +612,7 @@ impl<R: Read, W: Write> EngineTranslate for GhidraTranslate<R, W> {
     /// C++ `Translate::getRegister(name)` returning the canonical
     /// [`VarnodeData`] — adapts [`RegisterLookup::get_register`] (which yields
     /// the unlace-base [`VarnodeStorage`] triple).
-    fn get_register_varnode(&self, nm: &[u8]) -> KunaResult<VarnodeData> {
+    fn get_register_varnode(&self, nm: &[u8]) -> UnlaceResult<VarnodeData> {
         let name = String::from_utf8_lossy(nm);
         let vndata = RegisterLookup::get_register(self, &name)?;
         Ok(varnode_data_from_storage(&vndata))
@@ -638,7 +642,7 @@ impl<R: Read, W: Write> EngineTranslate for GhidraTranslate<R, W> {
         ptype: int4,
         context: &InjectContext,
         emit: &mut dyn PcodeEmit,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let itype = match ptype {
             CALLFIXUP_TYPE => InjectType::CallFixup,
             CALLOTHERFIXUP_TYPE => InjectType::CallOtherFixup,
@@ -660,19 +664,19 @@ impl<R: Read, W: Write> EngineTranslate for GhidraTranslate<R, W> {
             // C++ catch(JavaError&): the host's message becomes a LOW-LEVEL
             // error, so the warning names the payload rather than repeating the
             // host's bare text.
-            Err(WireError::Kuna(KunaError::Java { explain, .. })) => {
-                return Err(KunaError::lowlevel(format!("Injection error: {explain}")));
+            Err(WireError::Unlace(UnlaceError::Java { explain, .. })) => {
+                return Err(UnlaceError::lowlevel(format!("Injection error: {explain}")));
             }
             // C++ catch(DecoderError&).
-            Err(WireError::Kuna(KunaError::Decoder { explain })) => {
-                return Err(KunaError::lowlevel(format!(
+            Err(WireError::Unlace(UnlaceError::Decoder { explain })) => {
+                return Err(UnlaceError::lowlevel(format!(
                     "Error decoding injection: {explain}"
                 )));
             }
-            Err(other) => return Err(wire_to_kuna(other)),
+            Err(other) => return Err(wire_to_unlace(other)),
         };
         if !answered {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "Could not retrieve injection: {nm}"
             )));
         }
@@ -681,7 +685,7 @@ impl<R: Read, W: Write> EngineTranslate for GhidraTranslate<R, W> {
         // `<inst>` (DecompileCallback.encodeInstruction); upstream walks into
         // `Address::decode` there and faults.
         if elem == ELEM_UNIMPL.get_id() {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "Unimplemented p-code injection: {nm}"
             )));
         }
@@ -921,7 +925,7 @@ mod tests {
         assert_eq!(w, expected, "getPcode request framing");
     }
 
-    /// (b) `<unimpl offset=N/>` → `KunaError::Unimpl` carrying the offset.
+    /// (b) `<unimpl offset=N/>` → `UnlaceError::Unimpl` carrying the offset.
     #[test]
     fn one_instruction_unimpl_carries_length() {
         let mut doc = Vec::new();
@@ -938,14 +942,14 @@ mod tests {
             .one_instruction(&mut RecordEmit::default(), &Address::new(ram, 0x1000))
             .expect_err("unimpl must error");
         match err {
-            KunaError::Unimpl {
+            UnlaceError::Unimpl {
                 instruction_length, ..
             } => assert_eq!(instruction_length, 2),
             other => panic!("expected Unimpl, got {other:?}"),
         }
     }
 
-    /// (c) An empty getPcode response → `KunaError::BadData`.
+    /// (c) An empty getPcode response → `UnlaceError::BadData`.
     #[test]
     fn one_instruction_empty_is_bad_data() {
         let client = shared(empty_response());
@@ -955,7 +959,7 @@ mod tests {
             .one_instruction(&mut RecordEmit::default(), &Address::new(ram, 0x1000))
             .expect_err("empty response must error");
         assert!(
-            matches!(err, KunaError::BadData { .. }),
+            matches!(err, UnlaceError::BadData { .. }),
             "expected BadData, got {err:?}"
         );
     }
@@ -1035,7 +1039,7 @@ mod tests {
 /// the host decodes before lifting the snippet — baseaddr, calladdr, then the
 /// sized operand lists, each omitted when empty.  `nextaddr` is never sent;
 /// the host recomputes it from the instruction's fall-through.
-fn encode_inject_context(context: &InjectContext, encoder: &mut dyn Encoder) -> KunaResult<()> {
+fn encode_inject_context(context: &InjectContext, encoder: &mut dyn Encoder) -> UnlaceResult<()> {
     let null = Address::default();
     encoder.open_element(&ELEM_CONTEXT);
     context.baseaddr.as_ref().unwrap_or(&null).encode(encoder)?;

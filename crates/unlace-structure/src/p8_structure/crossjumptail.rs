@@ -394,10 +394,10 @@ fn plan(
 /// Copies of `members[k..=m]` of `rl`, in a new list.
 fn copy_run(graph: &mut BlockGraph, rl: BlockId, k: usize, m: usize) -> BlockId {
     let members = graph.block(rl).get_list()[k..=m].to_vec();
-    let list = graph.kuna_new_node(BlockKind::Ls);
+    let list = graph.unlace_new_node(BlockKind::Ls);
     for c in members {
-        let copy = graph.kuna_clone_subtree(c);
-        graph.kuna_push_component(list, copy);
+        let copy = graph.unlace_clone_subtree(c);
+        graph.unlace_push_component(list, copy);
     }
     list
 }
@@ -405,12 +405,12 @@ fn copy_run(graph: &mut BlockGraph, rl: BlockId, k: usize, m: usize) -> BlockId 
 /// Put `body` where `g`'s jump was: after a `goto` node's body, or as an `if`'s arm.
 fn replace_jump(graph: &mut BlockGraph, g: BlockId, body: BlockId) {
     if graph.block(g).get_type() == BlockType::If {
-        graph.kuna_push_component(g, body);
+        graph.unlace_push_component(g, body);
         if let BlockKind::If { gototarget, .. } = graph.block_mut(g).kind_mut() {
             *gototarget = None;
         }
     } else {
-        graph.kuna_push_component(g, body);
+        graph.unlace_push_component(g, body);
         *graph.block_mut(g).kind_mut() = BlockKind::Ls;
     }
 }
@@ -456,14 +456,14 @@ fn apply_once(data: &mut Funcdata, gates: Gates) -> Option<BlockId> {
             let len = graph.block(list).get_list().len();
             let rest_end = if run_end.is_none() { k } else { len };
             let rest = (at + 1 < rest_end)
-                .then(|| graph.kuna_wrap_components(list, at + 1, rest_end - 1, BlockKind::Ls));
+                .then(|| graph.unlace_wrap_components(list, at + 1, rest_end - 1, BlockKind::Ls));
             match run {
                 Some(run) => replace_jump(graph, g, run),
                 None => *graph.block_mut(g).kind_mut() = BlockKind::Ls,
             }
             if let Some(rest) = rest {
                 let at_rest = index_in(graph, list, rest)?;
-                graph.kuna_move_component(list, at_rest, carrier);
+                graph.unlace_move_component(list, at_rest, carrier);
             }
         }
         Plan::Break => {
@@ -480,21 +480,21 @@ fn apply_once(data: &mut Funcdata, gates: Gates) -> Option<BlockId> {
             let run = copy_run(graph, rl, k, end);
             let head = graph.get_front_leaf(w)?;
             if graph.block(g).get_type() == BlockType::If {
-                let jump = graph.kuna_new_node(BlockKind::Goto {
+                let jump = graph.unlace_new_node(BlockKind::Goto {
                     gototarget: Some(head),
                     gototype: block_flags::f_continue_goto,
                 });
-                graph.kuna_push_component(jump, run);
-                graph.kuna_push_component(g, jump);
+                graph.unlace_push_component(jump, run);
+                graph.unlace_push_component(g, jump);
                 if let BlockKind::If { gototarget, .. } = graph.block_mut(g).kind_mut() {
                     *gototarget = None;
                 }
             } else {
                 let body = graph.block(g).get_block(0);
-                let seq = graph.kuna_new_node(BlockKind::Ls);
-                graph.kuna_set_component(g, 0, seq);
-                graph.kuna_push_component(seq, body);
-                graph.kuna_push_component(seq, run);
+                let seq = graph.unlace_new_node(BlockKind::Ls);
+                graph.unlace_set_component(g, 0, seq);
+                graph.unlace_push_component(seq, body);
+                graph.unlace_push_component(seq, run);
                 if let BlockKind::Goto {
                     gototarget,
                     gototype,
@@ -530,19 +530,19 @@ pub fn crossjumptail_apply(data: &mut Funcdata) -> i32 {
     let arch = data.get_arch();
     let gates = Gates {
         tails: arch
-            .kuna_options
+            .unlace_options
             .get::<crate::crossjumpreverter::RevertCrossJumps>()
             .0,
         latch: arch
-            .kuna_options
+            .unlace_options
             .get::<crate::crossjumpreverter::RevertCrossJumps>()
             .0
             && arch
-                .kuna_options
+                .unlace_options
                 .get::<crate::loopcontinue::LoopContinue>()
                 .0,
         brk: arch
-            .kuna_options
+            .unlace_options
             .get::<crate::loopbreak_recovery::RecoverLoopBreak>()
             .0,
         do_while_continue: arch.do_while_continue,
@@ -554,7 +554,7 @@ pub fn crossjumptail_apply(data: &mut Funcdata) -> i32 {
     if has_exceptional_if(data, root) {
         return 0;
     }
-    data.sblocks_mut().kuna_flatten_lists(root);
+    data.sblocks_mut().unlace_flatten_lists(root);
     let mut targets = Vec::new();
     for _ in 0..64 {
         match apply_once(data, gates) {

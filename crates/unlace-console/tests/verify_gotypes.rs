@@ -143,7 +143,7 @@ fn decompile_one_opt(bin: &str, option: Option<(&str, &str)>, name: &str) -> Str
         .expect("bootstrap go fixture with built processor specs");
     if let Some((opt, v)) = option {
         prog.arch_mut()
-            .set_kuna_option(opt, v)
+            .set_unlace_option(opt, v)
             .unwrap_or_else(|e| panic!("{opt} applies: {e:?}"));
     }
     prog.commit_pending_analysis()
@@ -393,9 +393,9 @@ fn check_named_struct(arch: &str) {
     assert!(std::rc::Rc::ptr_eq(&a, &back));
 
     // The header shells carry their facets (the W3 plane fills).
-    assert_eq!(tf.kuna_lang_facet("go.string"), Some(LangFacet::GoString));
+    assert_eq!(tf.unlace_lang_facet("go.string"), Some(LangFacet::GoString));
     assert!(matches!(
-        tf.kuna_lang_facet("go.slice"),
+        tf.unlace_lang_facet("go.slice"),
         Some(LangFacet::GoSlice { .. })
     ));
 
@@ -731,7 +731,7 @@ fn go_interface_calls_print_by_method_name() {
         "one slot per method, in the interface's order"
     );
     assert_eq!(
-        prog.arch().types().kuna_lang_facet("go.itab.main.Shape"),
+        prog.arch().types().unlace_lang_facet("go.itab.main.Shape"),
         Some(LangFacet::GoItab {
             interface: "main.Shape".to_string()
         })

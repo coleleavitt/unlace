@@ -604,7 +604,7 @@ fn compile(xmls: &[(&str, &'static str)], align: u64) -> FuncStartPatterns {
 }
 
 /// Return the compiled full pattern set for `arch` (little/big-endian aware), or
-/// `None` if kuna vendors no *usable* pattern set for the architecture. Faithful
+/// `None` if unlace vendors no *usable* pattern set for the architecture. Faithful
 /// to the `patternconstraints.xml` language→patternfile dispatch (we select by the
 /// `object` architecture + endianness, the analyzer-tier analog of the SLEIGH
 /// language id). Cached per arch so the parse runs once.

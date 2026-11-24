@@ -1,4 +1,4 @@
-//! (kuna) A return value that also indexes a load (option `retindexuse`, P4).
+//! (unlace) A return value that also indexes a load (option `retindexuse`, P4).
 //!
 //! `Funcdata::onlyOpUse` (funcdata_varnode.cc:1851) scores a RETURN trial by
 //! walking every use of the register's value forward, and a LOAD anywhere on that
@@ -32,9 +32,9 @@ pub enum RetIndexUse {
     On,
 }
 
-impl crate::optionset::KunaOption for RetIndexUse {
+impl crate::optionset::UnlaceOption for RetIndexUse {
     const NAME: &'static str = "retindexuse";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         RetIndexUse::Off
@@ -44,13 +44,13 @@ impl crate::optionset::KunaOption for RetIndexUse {
         RetIndexUse::Bpf
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (choice, what) = match value.trim() {
             "off" => (RetIndexUse::Off, "off"),
             "bpf" => (RetIndexUse::Bpf, "on eBPF"),
             "on" => (RetIndexUse::On, "on every target"),
             other => {
-                return Err(unlace_base::error::KunaError::parse(format!(
+                return Err(unlace_base::error::UnlaceError::parse(format!(
                     "retindexuse: expected off, bpf or on, got {other:?}"
                 )));
             }
@@ -80,7 +80,7 @@ fn ebpf(data: &Funcdata) -> bool {
 /// through `vn`, an address that is the walked (marked) value plus a value
 /// the walk did not reach, constant offsets folded on the way.
 fn index_only_load(data: &Funcdata, opmatch: OpId, op: OpId, vn: VarnodeId) -> bool {
-    match data.get_arch().kuna_options.get::<RetIndexUse>() {
+    match data.get_arch().unlace_options.get::<RetIndexUse>() {
         RetIndexUse::Off => return false,
         RetIndexUse::Bpf if !ebpf(data) => return false,
         _ => {}
@@ -120,6 +120,6 @@ fn index_only_load(data: &Funcdata, opmatch: OpId, op: OpId, vn: VarnodeId) -> b
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.retindexuse_index_only_load = Some(index_only_load);
 }

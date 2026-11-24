@@ -1,4 +1,4 @@
-// Tests for `kuna_gonewtype` (included into `mod tests` in gonewtype.rs).
+// Tests for `unlace_gonewtype` (included into `mod tests` in gonewtype.rs).
 //
 // Covered:
 //   - `descriptor_offset`: a constant, a COPY of a constant, and the refusals
@@ -37,7 +37,7 @@ fn build_fd(go_new_type: bool) -> Funcdata {
     )))
     .unwrap();
     let mut ctx = ArchContext::new(m);
-    ctx.kuna_options
+    ctx.unlace_options
         .set(crate::gonewtype::GoNewType(go_new_type));
     let glb = Rc::new(ctx);
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());

@@ -39,7 +39,7 @@ fn a_pointer_stored_to_a_global_is_not_dereferenced_through_the_global() {
         "globalpointee_gcc_O2_x86_64",
         "globalpointee_clang_O2_x86_64",
     ] {
-        let (printed, stderr, code) = common::run_kuna(&[
+        let (printed, stderr, code) = common::run_unlace(&[
             "decompile-all",
             &common::fixture(fixture),
             "--functions",

@@ -54,7 +54,7 @@
     {
       "id": "no-stages-testcase",
       "claim": "This ships with a cross-crate cargo test instead of a `tests/stages/` two-pass XML, because the stages corpus structurally cannot carry the defect.",
-      "evidence": "Both parity corpora are symbol-less `<binaryimage>` bytechunks; the fold reads the ELF symbol table's `st_other` field, which no bytechunk has. The precedent is `noreturn_propagate`, which shipped covered by a cross-crate e2e for the same reason. `kuna-console/tests/verify_ppclocalentry.rs` runs both passes through `bootstrap_from_object` + `commit_pending_analysis` and IS run by `make rust-test`; `tests/cli/ppc64-localentry-splits-function.json` carries the promoted acceptance."
+      "evidence": "Both parity corpora are symbol-less `<binaryimage>` bytechunks; the fold reads the ELF symbol table's `st_other` field, which no bytechunk has. The precedent is `noreturn_propagate`, which shipped covered by a cross-crate e2e for the same reason. `console/tests/verify_ppclocalentry.rs` runs both passes through `bootstrap_from_object` + `commit_pending_analysis` and IS run by `make rust-test`; `tests/cli/ppc64-localentry-splits-function.json` carries the promoted acceptance."
     },
     {
       "id": "default-on",

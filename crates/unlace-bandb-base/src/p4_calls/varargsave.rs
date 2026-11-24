@@ -1,4 +1,4 @@
-//! (kuna) `varargsave` — the System V x86-64 register save area of a variadic
+//! (unlace) `varargsave` — the System V x86-64 register save area of a variadic
 //! function.
 //!
 //! A variadic function compiled for System V x86-64 opens by spilling every
@@ -70,7 +70,7 @@ fn named(regs: &Regs, name: &[u8]) -> Option<Key> {
 
 pub fn regs(arch: &crate::architecture::Architecture) -> Option<Regs> {
     let id = arch.get_description();
-    if !arch.kuna_options.get::<crate::varargsave::VarargSave>().0
+    if !arch.unlace_options.get::<crate::varargsave::VarargSave>().0
         || !id.starts_with("x86:LE:64")
         || crate::fastfailnoreturn::archid_is_windows(id)
     {
@@ -538,12 +538,12 @@ pub fn strip(data: &mut Funcdata) {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.varargsave_regs = Some(regs);
 }
 
-crate::kuna_flag!(
-    /// (kuna) Remove a System V x86-64 register save area and mark the function
+crate::unlace_flag!(
+    /// (unlace) Remove a System V x86-64 register save area and mark the function
     /// variadic (option `varargsave`).
     VarargSave,
     "varargsave",

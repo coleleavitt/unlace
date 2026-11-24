@@ -31,7 +31,7 @@ pub fn prepare(fd: &mut Funcdata, factory: &dyn TypeFactory) {
             let Some(high) = value.get_high().and_then(|id| fd.high_bank().get(id)) else {
                 continue;
             };
-            let Some(backing) = high.kuna_symbol_type() else {
+            let Some(backing) = high.unlace_symbol_type() else {
                 continue;
             };
             if !backing.get_name().starts_with("stack_views_") {

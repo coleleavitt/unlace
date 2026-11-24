@@ -1,5 +1,5 @@
-//! Adversarial verifier tests for item `w6-kuna-s4s5-pack` — the kuna S4/S5
-//! sub-stage pack (`kuna_returnpair`, `kuna_memsetsequence`, `kuna_compareform`).
+//! Adversarial verifier tests for item `w6-unlace-s4s5-pack` — the unlace S4/S5
+//! sub-stage pack (`unlace_returnpair`, `unlace_memsetsequence`, `unlace_compareform`).
 //!
 //! The hunt list flagged these as the most fragile spots for this item:
 //!
@@ -13,7 +13,7 @@
 //!     round trip *at* the int-max/int-min/uint-max boundary, across 4- and
 //!     8-byte widths.
 //!   * **Off-by-one (returnpair gate).** `keep_single_return`
-//!     (`kuna_returnpair`, the `buildReturnOutput` resize predicate
+//!     (`unlace_returnpair`, the `buildReturnOutput` resize predicate
 //!     `return_single && newparam.size() > 2`) has its sole boundary at size 2
 //!     vs 3.  Exhaustively pinned.
 //!   * **Comparator totality / exact-token parse.** `OptionReturnPair::apply`
@@ -89,7 +89,7 @@ fn no_replace() -> impl FnMut(
     &mut VarnodeBank,
     unlace_decomp::context::VarnodeId,
     unlace_decomp::context::VarnodeId,
-) -> unlace_base::error::KunaResult<()> {
+) -> unlace_base::error::UnlaceResult<()> {
     |_: &mut VarnodeBank, _, _| Ok(())
 }
 
@@ -306,7 +306,7 @@ fn t2_restore_guards_decline_and_keep_mark() {
 // (return_single=false) never truncates regardless of size.
 // Parse: exact-string match; near-miss tokens are errors, not silently
 // accepted (no case fold, no trim).
-// Oracle: kuna_returnpair (gate predicate) ; kuna_returnpair.cc:20-25.
+// Oracle: unlace_returnpair (gate predicate) ; kuna_returnpair.cc:20-25.
 // ===========================================================================
 #[test]
 fn t3_returnpair_gate_boundary_and_exact_token_parse() {
@@ -382,7 +382,7 @@ fn t3_returnpair_gate_boundary_and_exact_token_parse() {
 //   else throw ParseError("Must specify compareform as 'canonical' or 'original'");
 //   return "Comparison presentation set to " + p1 + " form";
 //
-// `original` (kuna DIV-2 default) must map to present_lessequal=TRUE (the gate
+// `original` (unlace DIV-2 default) must map to present_lessequal=TRUE (the gate
 // `ActionPresentCompareForm` consumes), `canonical` to FALSE.  The parse is an
 // EXACT string match (no case fold, no trim); near-miss tokens are parse errors,
 // not silently coerced.  The confirmation string is byte-identical to the C++

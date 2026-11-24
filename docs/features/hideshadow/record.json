@@ -1,7 +1,7 @@
 {
   "opportunity": "ActionHideShadow, the upstream merge-phalanx pass that consolidates two copies of one value into a single chain so the repeated assignment stops printing, was scheduled in kuna but its body was a no-op stub. Its engine half, Merge::hide_shadows, was already a complete port. The stub named three blockers -- a written def-set iterator, the HighVariable mark surface and the MergeContext bridge -- and all three exist today.",
-  "test_name": "tests/stages/kuna-hideshadow.xml (3 assertions: off = the repeated copy, on = one copy, plus a guard function whose two copies sit on exclusive branches and must survive ON) + 3 option-parse unit tests",
-  "binary": "tests/stages/kuna-hideshadow.xml bytechunk (gcc -O0 x86-64, 265 bytes)",
+  "test_name": "tests/stages/hideshadow.xml (3 assertions: off = the repeated copy, on = one copy, plus a guard function whose two copies sit on exclusive branches and must survive ON) + 3 option-parse unit tests",
+  "binary": "tests/stages/hideshadow.xml bytechunk (gcc -O0 x86-64, 265 bytes)",
   "selector": "target",
   "func_addr": "0x1000",
   "option": "hideshadow",
@@ -131,7 +131,7 @@
     "decompiler/crates/kuna-decomp/src/substrate/context.rs",
     "decompiler/crates/kuna-decomp/src/p0_knowledge/options.rs",
     "decompiler/crates/kuna-decomp/phases.toml",
-    "tests/stages/kuna-hideshadow.xml (new)",
+    "tests/stages/hideshadow.xml (new)",
     "docs/spec/06-variables-and-merge.md",
     "docs/options.md",
     "docs/features/hideshadow/ (analysis.md, plan.md, record.json, corpus-classification.md, corpus-diffs.txt, speed-remeasure.txt)"

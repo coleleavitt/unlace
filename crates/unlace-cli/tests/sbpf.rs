@@ -1,7 +1,7 @@
 //! The Solana sBPF languages decompile clang-built (v1) and hand-assembled (v2) code from a
 //! raw image, with `syscall` targets named by their murmur3 hash.
 use crate::common;
-use common::{repo_root, run_kuna};
+use common::{repo_root, run_unlace};
 
 fn decompile(fixture: &str, addr: &str, target: &str) -> String {
     let bin = repo_root()
@@ -10,7 +10,7 @@ fn decompile(fixture: &str, addr: &str, target: &str) -> String {
         .to_str()
         .unwrap()
         .to_owned();
-    let (stdout, stderr, code) = run_kuna(&[
+    let (stdout, stderr, code) = run_unlace(&[
         "decompile",
         &bin,
         addr,

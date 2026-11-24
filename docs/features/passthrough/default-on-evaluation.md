@@ -60,7 +60,7 @@ arms of the same build.
 | step | result |
 |---|---|
 | (a) `make test` | PARITY OK, 675/675 — the console decompiles no callee first, so no datatest can reach the rule |
-| (b) `make test-stages` | PARITY OK, 1311/1311; `tests/stages/kuna-passthrough.toml` already pins `option passthrough off` in pass 1, so nothing was re-recorded |
+| (b) `make test-stages` | PARITY OK, 1311/1311; `tests/stages/passthrough.toml` already pins `option passthrough off` in pass 1, so nothing was re-recorded |
 | (c) `make test-cli` | 236/236, with one probe re-pinned (below) and one added for the vararg-tail refusal |
 | (d) 444-slice typesweep, new default vs `--option passthrough off` | PERFECT **1,593 → 1,569** reading the flip backwards, i.e. the flip is **+24** (24 onto perfect, 0 off); aggregate 3,853.89 → 3,905.63; 83 improved, **3 worse** |
 | (e) interleaved min-of-15, fmt/ls/sort -O2 + bash -O2 | fmt +0.39%, ls +0.02%, sort +0.15%, bash +0.20%; worst **+0.39%**, budget +5% |

@@ -84,7 +84,7 @@ fn eligible_extent(fd: &Funcdata, start: u64, size: i32) -> bool {
 pub fn record_store(fd: &mut Funcdata, address: &Address, size: i32) {
     if fd
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::coreoptions::StackViews>()
         .0
         || size <= 0
@@ -281,7 +281,7 @@ fn initialize_parameters(
                 )?
                 .symbol;
             Some((
-                crate::database::kuna_materialized_param_name(
+                crate::database::unlace_materialized_param_name(
                     fd.get_arch().name_style_angr,
                     index,
                     parameter.get_name(),
@@ -320,10 +320,10 @@ fn initialize_parameters(
             high = fd.assign_high_var(source)?;
         }
         let h = fd.high_bank_mut().get_mut(high)?;
-        h.set_kuna_name(name);
+        h.set_unlace_name(name);
         h.set_symbol_offset(-1);
         h.set_symbol_type(Rc::clone(&datatype));
-        h.set_kuna_link_symbol(parameter_symbol);
+        h.set_unlace_link_symbol(parameter_symbol);
         let block = fd.bblocks_get_block(0);
         let point = fd.bblocks_block_start(block);
         let op = fd.new_op(1, point);
@@ -333,10 +333,10 @@ fn initialize_parameters(
         fd.vbank_mut().get_mut(out)?.set_explicit();
         let high = fd.vbank().get(out)?.get_high()?;
         let h = fd.high_bank_mut().get_mut(high)?;
-        h.set_kuna_name(info.display_name.clone());
+        h.set_unlace_name(info.display_name.clone());
         h.set_symbol_offset(offset);
         h.set_symbol_type(Rc::clone(backing));
-        h.set_kuna_link_symbol(info.symbol);
+        h.set_unlace_link_symbol(info.symbol);
         let mut resolution =
             crate::unionresolve::ResolvedUnion::new_field(Rc::clone(backing), member, factory)
                 .ok()?;
@@ -454,10 +454,10 @@ fn bind_values(fd: &mut Funcdata, info: &crate::varmap::LinkEntryInfo) {
             continue;
         }
         let h = fd.high_bank_mut().get_mut(high).unwrap();
-        h.set_kuna_name(info.display_name.clone());
+        h.set_unlace_name(info.display_name.clone());
         h.set_symbol_offset(*offsets.first().unwrap());
         h.set_symbol_type(Rc::clone(info.sym_type.as_ref().unwrap()));
-        h.set_kuna_link_symbol(info.symbol);
+        h.set_unlace_link_symbol(info.symbol);
     }
 }
 
@@ -658,7 +658,7 @@ fn storage(fd: &Funcdata, object: &StackObject) -> Option<VarnodeId> {
     }
     let (high, id) = selected?;
     let h = fd.high_bank().get(high)?;
-    if h.kuna_name().is_none()
+    if h.unlace_name().is_none()
         || (0..h.num_instances()).any(|i| {
             fd.vbank()
                 .get(h.get_instance(i))
@@ -695,7 +695,7 @@ pub fn prepare_casts(fd: &mut Funcdata) {
     let mut initialized = BTreeSet::new();
     if !fd
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::coreoptions::StackViews>()
         .0
     {
@@ -741,7 +741,7 @@ pub fn prepare_casts(fd: &mut Funcdata) {
             continue;
         };
         let high_id = value.get_high().unwrap();
-        let name = high.kuna_name().unwrap().to_string();
+        let name = high.unlace_name().unwrap().to_string();
         let datatype = if value.get_type().get_metatype() == type_metatype::TYPE_UNKNOWN {
             let Ok(ty) = factory.get_base(value.get_size(), type_metatype::TYPE_UINT) else {
                 continue;
@@ -771,10 +771,10 @@ pub fn prepare_casts(fd: &mut Funcdata) {
             }
         };
         let h = fd.high_bank_mut().get_mut(high_id).unwrap();
-        h.set_kuna_name(name.clone());
+        h.set_unlace_name(name.clone());
         h.set_symbol_offset(-1);
         h.set_symbol_type(Rc::clone(&datatype));
-        h.set_kuna_link_symbol(symbol);
+        h.set_unlace_link_symbol(symbol);
         bind_uses(fd, &object, &datatype, &name, symbol, 0, factory.as_ref());
     }
 }
@@ -859,17 +859,17 @@ fn bind_uses(
             continue;
         };
         let h = fd.high_bank_mut().get_mut(reference).unwrap();
-        h.set_kuna_name(name.to_string());
+        h.set_unlace_name(name.to_string());
         h.set_symbol_offset(symbol_offset);
         h.set_symbol_type(Rc::clone(datatype));
-        h.set_kuna_ref_symbol(symbol);
+        h.set_unlace_ref_symbol(symbol);
         fd.op_insert_before(op, call);
         let _ = fd.op_set_input(call, out, use_.slot);
     }
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.stackparamviews_separates_parameter = Some(separates_parameter);
     hooks.stackparamviews_backing_for_address = Some(backing_for_address);
 }

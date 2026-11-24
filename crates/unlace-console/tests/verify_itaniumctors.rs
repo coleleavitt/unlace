@@ -41,10 +41,10 @@ fn bootstrap(fixture: &str, rtti: bool) -> ConsoleProgram {
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
     prog.arch_mut()
-        .set_kuna_option("listing", "on")
+        .set_unlace_option("listing", "on")
         .expect("listing flips");
     prog.arch_mut()
-        .set_kuna_option("itaniumrtti", if rtti { "on" } else { "off" })
+        .set_unlace_option("itaniumrtti", if rtti { "on" } else { "off" })
         .expect("itaniumrtti flips");
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");

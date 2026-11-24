@@ -98,7 +98,7 @@ never asking the symbol table what was installed at that address.
 
 ## The fix
 
-Two one-idea changes, both in the driver tier (`kuna-console`):
+Two one-idea changes, both in the driver tier (`console`):
 
 1. `engine.rs`, discovered-entry commit arm — resolve the idempotence probe
    **across scopes** (`find_function_across_scopes`, the port of C++
@@ -171,7 +171,7 @@ project-export policy decision, not a printer fix. Recorded as a follow-up.
 
 1. **Project-export identifier sanitization** — a `::`/`~`/`{}`-free spelling for the
    `decompile-project` `.c`/`.h` pair, with the readable form kept in the pseudocode
-   surfaces. Owner: `decompiler/crates/kuna-console/src/project.rs`
+   surfaces. Owner: `decompiler/crates/console/src/project.rs`
    (`build_header` / `build_c`).
 2. **Address-taken function names are unqualified** —
    `Funcdata::link_spacebase_symbol`

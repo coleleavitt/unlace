@@ -26,11 +26,11 @@ fn decompile_in(fixture: &str, function: &str, extra: &[&str], directives: &[&st
     for directive in directives {
         args.extend(["--assert", directive]);
     }
-    let (text, stderr, code) = common::run_kuna(&args);
+    let (text, stderr, code) = common::run_unlace(&args);
     assert_eq!(code, 0, "{directives:?}: {stderr}");
     assert!(!stderr.contains("rejected"), "{directives:?}: {stderr}");
     args.push("--json");
-    let (doc, stderr, _) = common::run_kuna(&args);
+    let (doc, stderr, _) = common::run_unlace(&args);
     let parsed: serde_json::Value =
         serde_json::from_str(&doc).unwrap_or_else(|e| panic!("{e}: {stderr}\n{doc}"));
     for outcome in parsed["assertions"].as_array().into_iter().flatten() {

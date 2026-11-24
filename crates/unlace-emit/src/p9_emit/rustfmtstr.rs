@@ -27,7 +27,7 @@ pub fn recover(
     pointer: VarnodeId,
 ) -> Option<super::rustfmtargs::Argument> {
     if !arch
-        .kuna_options
+        .unlace_options
         .get::<crate::rustfmt::RustFmtMode>()
         .recovers()
         || !matches!(arch.rustc_stable_version, Some((1, 93, 0 | 1)))

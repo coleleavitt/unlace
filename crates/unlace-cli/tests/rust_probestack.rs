@@ -159,10 +159,10 @@ fn complete_emitted_bodies_preserve_values_and_probe_stack_writes() {
 #[test]
 #[cfg(all(target_arch = "x86_64", target_os = "linux"))]
 fn helper_spill_does_not_truncate_the_callers_reused_page() {
-    let kuna = unlace_base::env::var_os("UNLACE_TEST_BIN")
+    let unlace = unlace_base::env::var_os("UNLACE_TEST_BIN")
         .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let facts = common::fixture("rust_probestack_buffer.kuna");
-    let result = process::required_output(Command::new(kuna).args([
+    let result = process::required_output(Command::new(unlace).args([
         "decompile",
         &common::fixture("rust_probestack_buffer_x86_64"),
         "probe_buffer",
@@ -232,13 +232,13 @@ fn helper_spill_does_not_truncate_the_callers_reused_page() {
 
 #[test]
 fn optional_stack_memory_policies_retain_the_probe_and_whole_page() {
-    let kuna = unlace_base::env::var_os("UNLACE_TEST_BIN")
+    let unlace = unlace_base::env::var_os("UNLACE_TEST_BIN")
         .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let facts = common::fixture("rust_probestack_buffer.kuna");
     for policy in ["stackviews", "stackalias"] {
         let mut previous = None;
         for mode in ["off", "auto", "always"] {
-            let output = process::required_output(Command::new(&kuna).args([
+            let output = process::required_output(Command::new(&unlace).args([
                 "decompile",
                 &common::fixture("rust_probestack_buffer_x86_64"),
                 "probe_buffer",
@@ -268,10 +268,10 @@ fn optional_stack_memory_policies_retain_the_probe_and_whole_page() {
 
 #[test]
 fn defaults_and_presets_keep_the_summary_explicit() {
-    let kuna = unlace_base::env::var_os("UNLACE_TEST_BIN")
+    let unlace = unlace_base::env::var_os("UNLACE_TEST_BIN")
         .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     for mode in ["auto", "reliable", "aggressive", "fast"] {
-        let output = process::required_output(Command::new(&kuna).args([
+        let output = process::required_output(Command::new(&unlace).args([
             "decompile",
             &common::fixture("rust_probestack_x86_64"),
             "probe_page",

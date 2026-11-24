@@ -6,7 +6,7 @@
 //! default (`aeabifloat`) the floating-point helpers print as the C operators
 //! and casts they implement; `option aeabifloat off` keeps the typed calls.
 use crate::common;
-use common::{repo_root, run_kuna};
+use common::{repo_root, run_unlace};
 
 const CALLS: [&str; 3] = ["--option", "aeabifloat", "off"];
 
@@ -20,7 +20,7 @@ fn decompile_with(object: &str, function: &str, options: &[&str]) -> String {
         .join(object);
     let mut args = vec!["decompile", path.to_str().unwrap(), function];
     args.extend_from_slice(options);
-    let (stdout, stderr, code) = run_kuna(&args);
+    let (stdout, stderr, code) = run_unlace(&args);
     assert_eq!(code, 0, "{object} {function}: {stderr}");
     stdout
 }

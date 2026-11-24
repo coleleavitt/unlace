@@ -1,7 +1,7 @@
-//! Tests for the use-derived parameter pointer (kuna `ptrfromuse`).
+//! Tests for the use-derived parameter pointer (unlace `ptrfromuse`).
 //!
 //! The walk itself needs a decompiled function and is covered end to end by
-//! `tests/stages/kuna-ptrfromuse.toml` (pass 1 off = `int8 a0`, pass 2 `byte` =
+//! `tests/stages/unlace-ptrfromuse.toml` (pass 1 off = `int8 a0`, pass 2 `byte` =
 //! `char *a0`).  What can be pinned here is the option surface and the one
 //! property the whole design rests on: the candidate is offered to
 //! `getLocalType`'s fold, so a more specific vote is kept rather than clobbered.

@@ -22,7 +22,7 @@ fn gcc_stack_and_split_arguments_recover_the_declared_value() {
                 &[root.join("specs").to_string_lossy().into_owned()],
             )
             .unwrap();
-            prog.arch_mut().set_kuna_option("ctypes", "on").unwrap();
+            prog.arch_mut().set_unlace_option("ctypes", "on").unwrap();
             prog.commit_pending_analysis().unwrap();
             for (name, expression) in [
                 ("pair_split_first", "p.a"),
@@ -67,7 +67,7 @@ fn gcc_scalar_stack_slots_and_wide_values_remain_distinct() {
             &[root.join("specs").to_string_lossy().into_owned()],
         )
         .unwrap();
-        prog.arch_mut().set_kuna_option("ctypes", "on").unwrap();
+        prog.arch_mut().set_unlace_option("ctypes", "on").unwrap();
         prog.commit_pending_analysis().unwrap();
         for (name, expected) in [
             ("pointer_ninth", "return *p;"),
@@ -127,7 +127,7 @@ fn gcc_pointer_uses_preserve_inferred_integers_and_physical_sp() {
                 &[root.join("specs").to_string_lossy().into_owned()],
             )
             .unwrap();
-            prog.arch_mut().set_kuna_option("ctypes", "on").unwrap();
+            prog.arch_mut().set_unlace_option("ctypes", "on").unwrap();
             prog.commit_pending_analysis().unwrap();
             for (name, inferred_contract, declared_contract) in [
                 (

@@ -1,4 +1,4 @@
-//! (kuna `rodatastring`) Read-only string block-copy recovery — the
+//! (unlace `rodatastring`) Read-only string block-copy recovery — the
 //! rodata-sourced half of the S5 "constsequence" group
 //! ([`constseq`](crate::constseq)).
 //!
@@ -11,7 +11,7 @@
 //! assignments — `v1[0] = (char[8])s_100003f1d._0_8_;` and
 //! `v8._0_9_ = s_100003f1d._16_9_;` — which are not valid C (there is no array
 //! cast, and `._0_9_` is member syntax on an array object), and which hide the
-//! string kuna has already recovered at that address.
+//! string unlace has already recovered at that address.
 //!
 //! [`RuleRodataStringCopy`] recognizes such a run and collapses it into the
 //! same `builtin_strncpy(dest, "…", n)` user-op `RuleStringCopy` produces,
@@ -46,7 +46,7 @@
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::spacetype;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
@@ -70,7 +70,7 @@ struct Slice {
     order: u32,
 }
 
-/// (kuna `rodatastring`) Collapse a read-only string block copy into
+/// (unlace `rodatastring`) Collapse a read-only string block copy into
 /// `builtin_strncpy`.
 pub struct RuleRodataStringCopy {
     /// Resolved `glb->rodata_string` gate, ORed with the live architecture flag.
@@ -116,7 +116,7 @@ impl Rule for RuleRodataStringCopy {
         if !self.enabled
             && !data
                 .get_arch()
-                .kuna_options
+                .unlace_options
                 .get::<crate::rodatastring::RodataString>()
                 .0
         {
@@ -366,7 +366,7 @@ fn read_image(data: &Funcdata, addr: &Address, len: int4) -> Option<Vec<u8>> {
     Some(buf)
 }
 
-/// (kuna `rodatastring`) How read-only string block-copy recovery is toggled.
+/// (unlace `rodatastring`) How read-only string block-copy recovery is toggled.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RodataStringForm {
     /// `on`: collapse the block copy into `builtin_strncpy`.
@@ -384,9 +384,9 @@ impl RodataStringForm {
 
 /// Parse the `option rodatastring on|off` argument and produce the resolved
 /// form plus the confirmation message.
-pub fn parse_rodata_string_form(p1: &str) -> KunaResult<(RodataStringForm, String)> {
+pub fn parse_rodata_string_form(p1: &str) -> UnlaceResult<(RodataStringForm, String)> {
     let val = crate::options::on_or_off(p1)
-        .map_err(|_: KunaError| KunaError::parse("Must specify toggle value, on/off"))?;
+        .map_err(|_: UnlaceError| UnlaceError::parse("Must specify toggle value, on/off"))?;
     let form = if val {
         RodataStringForm::On
     } else {
@@ -408,14 +408,14 @@ pub fn specs() -> Vec<RuleSpec> {
     }]
 }
 
-/// (kuna `rodatastring`) Recover a read-only string block copy as
+/// (unlace `rodatastring`) Recover a read-only string block copy as
 /// `builtin_strncpy`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RodataString(pub bool);
 
-impl crate::optionset::KunaOption for RodataString {
+impl crate::optionset::UnlaceOption for RodataString {
     const NAME: &'static str = "rodatastring";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         RodataString(false)
@@ -425,7 +425,7 @@ impl crate::optionset::KunaOption for RodataString {
         RodataString(true)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (v, msg) = crate::rodatastring::parse_rodata_string_form(value)
             .map(|(form, msg)| (form.rodata_string(), msg))?;
         Ok((RodataString(v), msg))

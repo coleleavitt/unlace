@@ -76,7 +76,7 @@
 
 use slotmap::SlotMap;
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::{
     ATTRIB_INDEX, ATTRIB_TYPE, AttributeId, Decoder, ELEM_TARGET, ElementId, Encoder,
 };
@@ -189,8 +189,8 @@ pub mod block_flags {
     pub const f_delayed_donothing: uint4 = 0x80000;
     /// Has the final transform been run
     pub const f_final_transform: uint4 = 0x100000;
-    /// (kuna `guardedloop`) A do-while that prints its test at the top
-    pub const f_kuna_top_test: uint4 = 0x200000;
+    /// (unlace `guardedloop`) A do-while that prints its test at the top
+    pub const f_unlace_top_test: uint4 = 0x200000;
 }
 
 /// Boolean properties on edges (C++ `FlowBlock::edge_flags`,
@@ -269,13 +269,13 @@ impl BlockEdge {
 
     /// Restore \b this edge from a stream (C++ `BlockEdge::decode`,
     /// `block.cc:48`).
-    pub fn decode(&mut self, decoder: &mut dyn Decoder, resolver: &BlockMap) -> KunaResult<()> {
+    pub fn decode(&mut self, decoder: &mut dyn Decoder, resolver: &BlockMap) -> UnlaceResult<()> {
         let elem_id = decoder.open_element_id(&ELEM_EDGE)?;
         self.label = 0; // Tag does not currently contain info about label
         let end_index = decoder.read_signed_integer_id(&ATTRIB_END)? as int4;
         self.point = resolver.find_level_block(end_index);
         if self.point.is_none() {
-            return Err(KunaError::lowlevel("Bad serialized edge in block graph"));
+            return Err(UnlaceError::lowlevel("Bad serialized edge in block graph"));
         }
         self.reverse_index = decoder.read_signed_integer_id(&ATTRIB_REV)? as int4;
         decoder.close_element(elem_id)?;
@@ -1020,10 +1020,10 @@ pub type BlockArena = SlotMap<BlockId, FlowBlock>;
 /// owning arena is shared across the whole function (ADR 0001), so a
 /// [`BlockGraph`] pairs the arena with the root [`BlockId`] of the graph node.
 ///
-/// (kuna) Tally for the `quality` goto-count structure-quality metric (C++
-/// `IfcKunaQuality`), filled by [`BlockGraph::kuna_count_quality`].
+/// (unlace) Tally for the `quality` goto-count structure-quality metric (C++
+/// `IfcUnlaceQuality`), filled by [`BlockGraph::unlace_count_quality`].
 #[derive(Default, Clone, Copy, Debug)]
-pub struct KunaQualityCounts {
+pub struct UnlaceQualityCounts {
     /// `BlockGoto` nodes in the structured tree.
     pub goto_nodes: int4,
     /// Of those, how many actually print a `goto` (`gotoPrints`).
@@ -1263,11 +1263,11 @@ impl BlockGraph {
     }
 
     /// Mark a \e goto branch (C++ `FlowBlock::setGotoBranch`, `block.cc:305`).
-    pub fn set_goto_branch(&mut self, this_id: BlockId, i: int4) -> KunaResult<()> {
+    pub fn set_goto_branch(&mut self, this_id: BlockId, i: int4) -> UnlaceResult<()> {
         if i >= 0 && i < self.arena[this_id].outofthis.len() as int4 {
             self.set_out_edge_flag(this_id, i, edge_flags::f_goto_edge);
         } else {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Could not find block edge to mark unstructured",
             ));
         }
@@ -2052,9 +2052,9 @@ impl BlockGraph {
 
     /// Force the \e false out edge to go to the given FlowBlock
     /// (C++ `BlockGraph::forceFalseEdge`, `block.cc:1204`).
-    fn force_false_edge(&mut self, graph_id: BlockId, out0: BlockId) -> KunaResult<()> {
+    fn force_false_edge(&mut self, graph_id: BlockId, out0: BlockId) -> UnlaceResult<()> {
         if self.arena[graph_id].size_out() != 2 {
-            return Err(KunaError::lowlevel("Can only preserve binary condition"));
+            return Err(UnlaceError::lowlevel("Can only preserve binary condition"));
         }
         let mut out0 = out0;
         if self.arena[out0].parent == Some(graph_id) {
@@ -2064,7 +2064,7 @@ impl BlockGraph {
             self.swap_edges(graph_id);
         }
         if self.arena[graph_id].outofthis[0].point != Some(out0) {
-            return Err(KunaError::lowlevel("Unable to preserve condition"));
+            return Err(UnlaceError::lowlevel("Unable to preserve condition"));
         }
         Ok(())
     }
@@ -2137,7 +2137,7 @@ impl BlockGraph {
             // BlockGoto::markUnstructured: a real goto's target.  Upstream marks
             // only when `gotoPrints()` holds, because upstream's
             // `PrintC::emitBlockGoto` emits the trailing goto under the same test;
-            // kuna's printer (`printc.rs (PrintC::emit_block_goto)`) emits it for
+            // unlace's printer (`printc.rs (PrintC::emit_block_goto)`) emits it for
             // every goto target, so gating the mark here left the printed
             // `goto label_X;` with no `label_X:` whenever the target happened to be
             // the next block in flow.  The mark is never narrower than the print.
@@ -2222,19 +2222,19 @@ impl BlockGraph {
         }
     }
 
-    /// (kuna) Recursively tally the goto-count structure-quality metric over the
-    /// structured tree from `this_id` (C++ `IfcKunaQuality kunaCountGotos`).
+    /// (unlace) Recursively tally the goto-count structure-quality metric over the
+    /// structured tree from `this_id` (C++ `IfcUnlaceQuality unlaceCountGotos`).
     ///
     /// Templated on [`mark_unstructured`](BlockGraph::mark_unstructured) (it
     /// walks the same tree): counts `BlockGoto` nodes (and how many actually
     /// *print* a goto via [`goto_prints`](BlockGraph::goto_prints)),
     /// `BlockMultiGoto` virtual edges, and `BlockIf` if-gotos whose target is a
     /// real `f_goto_goto` jump.  Read-only.
-    pub fn kuna_count_quality(&self, this_id: BlockId, counts: &mut KunaQualityCounts) {
+    pub fn unlace_count_quality(&self, this_id: BlockId, counts: &mut UnlaceQualityCounts) {
         let n = self.arena[this_id].get_size();
         for i in 0..n {
             if let Some(child) = self.arena[this_id].list.get(i as usize).copied() {
-                self.kuna_count_quality(child, counts);
+                self.unlace_count_quality(child, counts);
             }
         }
         match self.arena[this_id].get_type() {
@@ -2353,7 +2353,7 @@ impl BlockGraph {
 
     /// Splice the given FlowBlock together with its single output
     /// (C++ `BlockGraph::spliceBlock`, `block.cc:1600`).
-    pub fn splice_block(&mut self, graph_id: BlockId, bl: BlockId) -> KunaResult<()> {
+    pub fn splice_block(&mut self, graph_id: BlockId, bl: BlockId) -> UnlaceResult<()> {
         let mut outbl: Option<BlockId> = None;
         if self.arena[bl].size_out() == 1 {
             let o = self.arena[bl].get_out(0);
@@ -2364,7 +2364,7 @@ impl BlockGraph {
         let outbl = match outbl {
             Some(o) => o,
             None => {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "Can only splice a block with 1 output to a block with 1 input",
                 ));
             }
@@ -2411,10 +2411,10 @@ impl BlockGraph {
 
     /// Get the entry point FlowBlock (C++ `BlockGraph::getStartBlock`,
     /// `block.cc:1652`).
-    pub fn get_start_block(&self, graph_id: BlockId) -> KunaResult<BlockId> {
+    pub fn get_start_block(&self, graph_id: BlockId) -> UnlaceResult<BlockId> {
         let list = &self.arena[graph_id].list;
         if list.is_empty() || (self.arena[list[0]].flags & block_flags::f_entry_point) == 0 {
-            return Err(KunaError::lowlevel("No start block registered"));
+            return Err(UnlaceError::lowlevel("No start block registered"));
         }
         Ok(list[0])
     }
@@ -2468,7 +2468,7 @@ impl BlockGraph {
         ret_id
     }
 
-    /// (kuna) Inline a duplicated return-tail into a `BlockIf` that currently
+    /// (unlace) Inline a duplicated return-tail into a `BlockIf` that currently
     /// renders as `if (cond) goto T`, turning it into `if (cond) { <chain> }`.
     ///
     /// `bbchain` is a single-successor run of *bblocks* [`BlockId`]s (the same
@@ -2481,7 +2481,7 @@ impl BlockGraph {
     /// chain is bounded and side-effect-safe.  Edges are intentionally not
     /// rewired — this runs after `ActionFinalStructure`, and the C printer walks
     /// only components / copy pointers (never edges) below the `if`.
-    pub fn kuna_inline_return_tail(&mut self, if_id: BlockId, bbchain: &[BlockId]) {
+    pub fn unlace_inline_return_tail(&mut self, if_id: BlockId, bbchain: &[BlockId]) {
         // Mint a BlockCopy leaf per bblock in the duplicated tail (flags cleared
         // so no spurious label/goto annotation rides along on the copy).
         let mut leaves: Vec<BlockId> = Vec::with_capacity(bbchain.len());
@@ -2504,7 +2504,7 @@ impl BlockGraph {
         }
     }
 
-    /// (kuna) If-else flattening (angr `IfElseFlattener`): drop the `else` arm of
+    /// (unlace) If-else flattening (angr `IfElseFlattener`): drop the `else` arm of
     /// the 3-component [`BlockIf`](BlockKind::If) `if_id` whose true-clause is
     /// statement-terminating, re-parenting the former else-clause as the `if`'s
     /// immediate successor in its parent's component list.  Turns
@@ -2517,11 +2517,11 @@ impl BlockGraph {
     /// its parent is a [`Ls`](BlockKind::Ls)/[`Graph`](BlockKind::Graph) able to
     /// host the moved sibling.  Returns `true` on success, `false` if the shape no
     /// longer matches (defensive — the tree may have shifted under a prior splice).
-    /// (kuna `gotosink`) Replace components `start..=end` of the list `parent`
+    /// (unlace `gotosink`) Replace components `start..=end` of the list `parent`
     /// with one new node of `kind` holding them in order, and return it.  A
-    /// print-tree edit like [`kuna_flatten_ifelse`](Self::kuna_flatten_ifelse):
+    /// print-tree edit like [`unlace_flatten_ifelse`](Self::unlace_flatten_ifelse):
     /// list and parent links only.
-    pub fn kuna_wrap_components(
+    pub fn unlace_wrap_components(
         &mut self,
         parent: BlockId,
         start: usize,
@@ -2539,12 +2539,12 @@ impl BlockGraph {
         node
     }
 
-    /// (kuna `gotosink`) Splice every `BlockList` that is itself a member of a
+    /// (unlace `gotosink`) Splice every `BlockList` that is itself a member of a
     /// list or graph into its parent, so statements that print as one sequence
     /// are siblings; a goto, goto case or edge that named the list names its
     /// first member, which is where it lands.  A pure print-tree edit: a nested list prints exactly its
     /// members in order.
-    pub fn kuna_flatten_lists(&mut self, root: BlockId) {
+    pub fn unlace_flatten_lists(&mut self, root: BlockId) {
         let mut moved: std::collections::BTreeMap<BlockId, BlockId> =
             std::collections::BTreeMap::new();
         let mut stack = vec![root];
@@ -2608,33 +2608,33 @@ impl BlockGraph {
         }
     }
 
-    /// (kuna `gotosink`) Put `node` at position `idx` of the list `parent`.
-    pub fn kuna_set_component(&mut self, parent: BlockId, idx: usize, node: BlockId) {
+    /// (unlace `gotosink`) Put `node` at position `idx` of the list `parent`.
+    pub fn unlace_set_component(&mut self, parent: BlockId, idx: usize, node: BlockId) {
         self.arena[parent].list[idx] = node;
         self.arena[node].parent = Some(parent);
     }
 
-    /// (kuna `gotosink`) Move component `idx` of `parent` to the end of `dest`.
-    pub fn kuna_move_component(&mut self, parent: BlockId, idx: usize, dest: BlockId) {
+    /// (unlace `gotosink`) Move component `idx` of `parent` to the end of `dest`.
+    pub fn unlace_move_component(&mut self, parent: BlockId, idx: usize, dest: BlockId) {
         let node = self.arena[parent].list.remove(idx);
         self.arena[node].parent = Some(dest);
         self.arena[dest].list.push(node);
     }
 
-    /// (kuna `crossjumptail`) A new node of `kind` with no parent and no components.
-    pub fn kuna_new_node(&mut self, kind: BlockKind) -> BlockId {
+    /// (unlace `crossjumptail`) A new node of `kind` with no parent and no components.
+    pub fn unlace_new_node(&mut self, kind: BlockKind) -> BlockId {
         self.arena.insert(FlowBlock::new_kind(kind))
     }
 
-    /// (kuna `crossjumptail`) Append `node` to the components of `parent`.
-    pub fn kuna_push_component(&mut self, parent: BlockId, node: BlockId) {
+    /// (unlace `crossjumptail`) Append `node` to the components of `parent`.
+    pub fn unlace_push_component(&mut self, parent: BlockId, node: BlockId) {
         self.arena[node].parent = Some(parent);
         self.arena[parent].list.push(node);
     }
 
-    /// (kuna `crossjumptail`) A copy of the print tree under `id`: the same basic
+    /// (unlace `crossjumptail`) A copy of the print tree under `id`: the same basic
     /// blocks, jump targets and edges, without the labels of the original.
-    pub fn kuna_clone_subtree(&mut self, id: BlockId) -> BlockId {
+    pub fn unlace_clone_subtree(&mut self, id: BlockId) -> BlockId {
         let mut copy = self.arena[id].clone();
         copy.clear_flag(
             block_flags::f_unstructured_targ
@@ -2644,13 +2644,13 @@ impl BlockGraph {
         let members = std::mem::take(&mut copy.list);
         let node = self.arena.insert(copy);
         for m in members {
-            let c = self.kuna_clone_subtree(m);
-            self.kuna_push_component(node, c);
+            let c = self.unlace_clone_subtree(m);
+            self.unlace_push_component(node, c);
         }
         node
     }
 
-    pub fn kuna_flatten_ifelse(&mut self, if_id: BlockId) -> bool {
+    pub fn unlace_flatten_ifelse(&mut self, if_id: BlockId) -> bool {
         // Must still be a 3-component BlockIf.
         if self.arena[if_id].get_type() != BlockType::If || self.arena[if_id].get_size() != 3 {
             return false;
@@ -2680,7 +2680,7 @@ impl BlockGraph {
         true
     }
 
-    /// (kuna) Deduplicate a cloned `if/else` head (angr structurer ITE region-dedup):
+    /// (unlace) Deduplicate a cloned `if/else` head (angr structurer ITE region-dedup):
     /// hoist a shared leaf **prefix** out of both arms of the 3-component
     /// [`BlockIf`](BlockKind::If) `if_id`, emitting one copy before the `if` instead
     /// of two inside it.  `retained` are the prefix leaf nodes kept (the true-arm
@@ -2688,8 +2688,8 @@ impl BlockGraph {
     /// removed.  Returns `true` on success.
     ///
     /// This is the *inverse* of the SAILR duplication helpers
-    /// ([`kuna_inline_return_tail`](Self::kuna_inline_return_tail) /
-    /// [`kuna_inline_crossjump_tail`](Self::kuna_inline_crossjump_tail)) and a pure
+    /// ([`unlace_inline_return_tail`](Self::unlace_inline_return_tail) /
+    /// [`unlace_inline_crossjump_tail`](Self::unlace_inline_crossjump_tail)) and a pure
     /// print-tree edit (component `list`/`parent` only) — CFG edges and p-code are
     /// untouched.  Sound because a shared prefix executes unconditionally first in
     /// **both** arms: moving the single retained copy ahead of the `if` and dropping
@@ -2697,7 +2697,7 @@ impl BlockGraph {
     /// ([`crate::p8_structure::dedupitetail`], option-gated) has verified each
     /// `(retained, duplicate)` pair are C-equivalent clean leaves and that both arms
     /// keep at least one component after the prefix.
-    pub fn kuna_hoist_ite_prefix(
+    pub fn unlace_hoist_ite_prefix(
         &mut self,
         if_id: BlockId,
         retained: &[BlockId],
@@ -2746,7 +2746,7 @@ impl BlockGraph {
         self.arena[else_clause].list.drain(0..k);
         // Free the now-orphaned duplicate (else-arm) leaf nodes.
         for (&r, &d) in retained.iter().zip(duplicate.iter()) {
-            self.kuna_free_replaced(d, r);
+            self.unlace_free_replaced(d, r);
         }
         // Splice the retained leaves into the parent immediately before the `if`,
         // preserving their order.
@@ -2761,20 +2761,20 @@ impl BlockGraph {
         true
     }
 
-    /// (kuna) Deduplicate a cloned `if/else` tail (angr structurer ITE region-dedup):
+    /// (unlace) Deduplicate a cloned `if/else` tail (angr structurer ITE region-dedup):
     /// hoist a shared leaf **suffix** out of both arms of the 3-component
     /// [`BlockIf`](BlockKind::If) `if_id`, emitting one copy *after* the `if` instead
     /// of two inside it.  `retained` are the suffix leaf nodes kept (the true-arm
     /// copies, in source order); `duplicate` are the matching else-arm copies removed.
     /// Returns `true` on success.
     ///
-    /// The dual of [`kuna_hoist_ite_prefix`](Self::kuna_hoist_ite_prefix), and likewise
+    /// The dual of [`unlace_hoist_ite_prefix`](Self::unlace_hoist_ite_prefix), and likewise
     /// a pure print-tree edit (component `list`/`parent` only).  Sound only because the
     /// caller ([`crate::p8_structure::dedupitetail`], option-gated) has verified
     /// each arm's divergent middle *falls through* to the suffix (so both arms always
     /// reach it) and that each `(retained, duplicate)` pair are C-equivalent clean
     /// leaves with at least one component left before the suffix in each arm.
-    pub fn kuna_hoist_ite_suffix(
+    pub fn unlace_hoist_ite_suffix(
         &mut self,
         if_id: BlockId,
         retained: &[BlockId],
@@ -2817,7 +2817,7 @@ impl BlockGraph {
         self.arena[else_clause].list.truncate(en - k);
         // Free the now-orphaned duplicate (else-arm) leaf nodes.
         for (&r, &d) in retained.iter().zip(duplicate.iter()) {
-            self.kuna_free_replaced(d, r);
+            self.unlace_free_replaced(d, r);
         }
         // Splice the retained leaves into the parent immediately *after* the `if`,
         // preserving their order.
@@ -2837,7 +2837,7 @@ impl BlockGraph {
         true
     }
 
-    /// (kuna) If the `i`-th clause of the `BlockIf` `if_id` is an `Ls`/`Graph` list
+    /// (unlace) If the `i`-th clause of the `BlockIf` `if_id` is an `Ls`/`Graph` list
     /// holding exactly **one** component, replace the clause with that component
     /// directly (re-parenting it to the `if`) and free the now-empty list.  This
     /// avoids the degenerate single-element [`BlockList`](BlockKind::Ls), which the
@@ -2858,16 +2858,16 @@ impl BlockGraph {
         let sole = self.arena[clause].list[0];
         self.arena[sole].parent = Some(if_id);
         self.arena[if_id].list[i] = sole;
-        self.kuna_free_replaced(clause, sole);
+        self.unlace_free_replaced(clause, sole);
     }
 
-    /// (kuna) Free the print-tree node `old` after an edit put `new` in its place,
+    /// (unlace) Free the print-tree node `old` after an edit put `new` in its place,
     /// first pointing every unstructured-branch carrier that names `old` (a
     /// `BlockGoto`/`BlockIf` goto target, a `BlockSwitch` case, a `BlockMultiGoto`
     /// edge) at `new`, so no `goto` is left naming a freed node.  A clause and the
     /// sole component it is unwrapped to share their front leaf, so the goto keeps
     /// its label and its landing statement.
-    fn kuna_free_replaced(&mut self, old: BlockId, new: BlockId) {
+    fn unlace_free_replaced(&mut self, old: BlockId, new: BlockId) {
         for blk in self.arena.values_mut() {
             match &mut blk.kind {
                 BlockKind::Goto { gototarget, .. } | BlockKind::If { gototarget, .. } => {
@@ -2891,11 +2891,11 @@ impl BlockGraph {
         self.arena.remove(old);
     }
 
-    /// (kuna) Inline a duplicated **cross-jump tail** into a `BlockGoto` that
+    /// (unlace) Inline a duplicated **cross-jump tail** into a `BlockGoto` that
     /// currently renders as `<body>; goto T`, turning it into a plain `BlockList`
     /// `<body>; <chain>` (the goto vanishes — angr `CrossJumpReverter`).
     ///
-    /// Unlike [`kuna_inline_return_tail`](Self::kuna_inline_return_tail) (which
+    /// Unlike [`unlace_inline_return_tail`](Self::unlace_inline_return_tail) (which
     /// duplicates a *return* tail into a `BlockIf`'s true clause — a closed path),
     /// this duplicates a *non-return, fall-through* tail into a `BlockGoto`.  The
     /// goto node already holds the source body in `list[0]` (e.g. the
@@ -2909,7 +2909,7 @@ impl BlockGraph {
     /// the goto and falling through is semantics-preserving.  Edges are intentionally
     /// not rewired — this runs after `ActionFinalStructure`, and the C printer walks
     /// only components / copy pointers (never edges) below the list.
-    pub fn kuna_inline_crossjump_tail(&mut self, goto_id: BlockId, bbchain: &[BlockId]) {
+    pub fn unlace_inline_crossjump_tail(&mut self, goto_id: BlockId, bbchain: &[BlockId]) {
         // Mint a BlockCopy leaf per bblock in the duplicated tail (flags cleared so
         // no spurious label/goto annotation rides along on the copy).
         let mut leaves: Vec<BlockId> = Vec::with_capacity(bbchain.len());
@@ -2994,7 +2994,11 @@ impl BlockGraph {
 
     /// Build a new BlockList collapsing the given components
     /// (C++ `BlockGraph::newBlockList`, `block.cc:1761`).
-    pub fn new_block_list(&mut self, graph_id: BlockId, nodes: &[BlockId]) -> KunaResult<BlockId> {
+    pub fn new_block_list(
+        &mut self,
+        graph_id: BlockId,
+        nodes: &[BlockId],
+    ) -> UnlaceResult<BlockId> {
         let back = *nodes.last().expect("newBlockList: empty nodes");
         let outforce = self.arena[back].size_out();
         let mut out0: Option<BlockId> = None;
@@ -3018,7 +3022,7 @@ impl BlockGraph {
         graph_id: BlockId,
         b1: BlockId,
         b2: BlockId,
-    ) -> KunaResult<BlockId> {
+    ) -> UnlaceResult<BlockId> {
         let out0 = self.arena[b2].get_out(0);
         let opc = if self.arena[b1].get_false_out() == b2 {
             OpCode::CPUI_INT_OR
@@ -3037,9 +3041,9 @@ impl BlockGraph {
 
     /// Build a new BlockIfGoto collapsing the given condition
     /// (C++ `BlockGraph::newBlockIfGoto`, `block.cc:1802`).
-    pub fn new_block_if_goto(&mut self, graph_id: BlockId, cond: BlockId) -> KunaResult<BlockId> {
+    pub fn new_block_if_goto(&mut self, graph_id: BlockId, cond: BlockId) -> UnlaceResult<BlockId> {
         if !self.arena[cond].is_goto_out(1) {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Building ifgoto where true branch is not the goto",
             ));
         }
@@ -3123,12 +3127,12 @@ impl BlockGraph {
         ret
     }
 
-    /// SAILR P1 (kuna) — build a `BlockInfLoop` over a *set* of body components.
+    /// SAILR P1 (unlace) — build a `BlockInfLoop` over a *set* of body components.
     ///
     /// Unlike [`new_block_inf_loop`](Self::new_block_inf_loop) (one pre-collapsed
     /// body block), this absorbs the whole natural-loop body `body` (in the given
     /// order, `body[0]` the head) into one inner `BlockGraph`, then wraps that as the
-    /// `BlockInfLoop` body — the kuna analog of angr
+    /// `BlockInfLoop` body — the unlace analog of angr
     /// `phoenix._match_cyclic_natural_loop` collecting the cycle into one
     /// `SequenceNode` wrapped as `LoopNode("while", true, seq)`.  Edges *between*
     /// members (including the back-edges to the head) become internal to the inner
@@ -3168,13 +3172,13 @@ impl BlockGraph {
         has_exit: bool,
         jt_index: usize,
         switch_case_edges: &std::collections::BTreeMap<(BlockId, BlockId), (int4, bool)>,
-    ) -> KunaResult<BlockId> {
+    ) -> UnlaceResult<BlockId> {
         let rootbl = cs[0];
         let leafbl = self
             .get_exit_leaf(rootbl)
-            .ok_or_else(|| KunaError::lowlevel("Could not get switch leaf"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("Could not get switch leaf"))?;
         if self.arena[leafbl].get_type() != BlockType::Copy {
-            return Err(KunaError::lowlevel("Could not get switch leaf"));
+            return Err(UnlaceError::lowlevel("Could not get switch leaf"));
         }
         let ret = self.arena.insert(FlowBlock::new_kind(BlockKind::Switch {
             caseblocks: Vec::new(),
@@ -4004,7 +4008,7 @@ impl BlockGraph {
 
     /// Decode basic info from element attributes (C++ `FlowBlock::decodeHeader`,
     /// `block.cc:2481`).
-    fn decode_header(&mut self, this_id: BlockId, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    fn decode_header(&mut self, this_id: BlockId, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         self.arena[this_id].index = decoder.read_signed_integer_id(&ATTRIB_INDEX)? as int4;
         Ok(())
     }
@@ -4133,7 +4137,7 @@ impl BlockGraph {
         this_id: BlockId,
         decoder: &mut dyn Decoder,
         resolver: &BlockMap,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let mut inedge = BlockEdge::default();
         inedge.decode(decoder, resolver)?;
         let point = inedge.point.expect("decodeNextInEdge: resolved");
@@ -4158,7 +4162,7 @@ impl BlockGraph {
         this_id: BlockId,
         decoder: &mut dyn Decoder,
         resolver: &BlockMap,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         loop {
             let sub_id = decoder.peek_element()?;
             if sub_id != ELEM_EDGE.get_id() {
@@ -4172,7 +4176,7 @@ impl BlockGraph {
     /// Decode the body of a block from a stream (C++ `FlowBlock::decodeBody`
     /// default / `BlockBasic::decodeBody` / `BlockGraph::decodeBody`,
     /// `block.cc:1405`/`2707`).
-    fn decode_body(&mut self, this_id: BlockId, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    fn decode_body(&mut self, this_id: BlockId, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         match &mut self.arena[this_id].kind {
             BlockKind::Basic(_) => {
                 let mut cover = unlace_base::address::RangeList::new();
@@ -4192,7 +4196,11 @@ impl BlockGraph {
 
     /// Decode a BlockGraph body: the \<bhead> list then the recursive component
     /// blocks (C++ `BlockGraph::decodeBody`, `block.cc:1405`).
-    fn decode_graph_body(&mut self, this_id: BlockId, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    fn decode_graph_body(
+        &mut self,
+        this_id: BlockId,
+        decoder: &mut dyn Decoder,
+    ) -> UnlaceResult<()> {
         let mut newresolver = BlockMap::new();
         let mut tmplist: Vec<BlockId> = Vec::new();
         loop {
@@ -4224,7 +4232,7 @@ impl BlockGraph {
         this_id: BlockId,
         decoder: &mut dyn Decoder,
         resolver: &BlockMap,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let elem_id = decoder.open_element_id(&ELEM_BLOCK)?;
         self.decode_header(this_id, decoder)?;
         self.decode_body(this_id, decoder)?;
@@ -4235,7 +4243,7 @@ impl BlockGraph {
 
     /// Decode a top-level BlockGraph (C++ `BlockGraph::decode`, `block.cc:1432`).
     /// Creates the resolver and decodes the root graph node.
-    pub fn decode_top(&mut self, this_id: BlockId, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    pub fn decode_top(&mut self, this_id: BlockId, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         let resolver = BlockMap::new();
         self.decode(this_id, decoder, &resolver)?;
         Ok(())

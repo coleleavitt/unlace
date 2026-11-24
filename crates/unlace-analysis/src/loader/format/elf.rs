@@ -11,7 +11,7 @@
 //!   [`ImportSym`]s: the PLT stubs, then the `.got` slots of imports no stub
 //!   fronts, which [`ElfFormat::import_slots`] also reports as ranges.
 //! - [`ElfFormat::const_ranges`] is `elf_plt::mips_got_const_ranges`, plus the
-//!   defined-address MIPS GOT slots of `kuna_mipsgot`.
+//!   defined-address MIPS GOT slots of `unlace_mipsgot`.
 //!
 //! The existing ELF fixtures + the 675 datatests are the proof this is
 //! byte-identical (see the module doc on [`super`]).
@@ -104,7 +104,7 @@ impl ObjectFormat for ElfFormat {
         // SEC_READONLY: an allocated, non-writable section (the BFD readonly bit),
         // minus the tables the toolchain and the run-time loader own.
         //
-        // (kuna) BFD sets the bit on `.interp`, the notes, `.dynsym`, `.dynstr`,
+        // (unlace) BFD sets the bit on `.interp`, the notes, `.dynsym`, `.dynstr`,
         // `.gnu.hash`, `.rela.*` and the version tables as readily as on
         // `.rodata`: they are allocated and not writable.  Nothing in the program
         // reads them, but the readonly range is also what licenses the printer to

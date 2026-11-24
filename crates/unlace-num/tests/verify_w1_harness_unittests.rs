@@ -69,7 +69,7 @@ fn zero_division_preserves_outputs_on_both_failure_paths() {
         } else {
             assert_eq!(
                 result.expect("wide zero division must return an error"),
-                Err(unlace_base::error::KunaError::lowlevel("divide by 0"))
+                Err(unlace_base::error::UnlaceError::lowlevel("divide by 0"))
             );
         }
         assert_eq!(q, quotient);

@@ -1,4 +1,4 @@
-//! EFI table layouts (UEFI 2.10 / PI 1.8), built into kuna `Datatype`s.
+//! EFI table layouts (UEFI 2.10 / PI 1.8), built into unlace `Datatype`s.
 //!
 //! Each field is spelled in a small C-like vocabulary: a scalar (`UINTN`,
 //! `UINT32`, `CHAR16`, ...), an EFI typedef (`EFI_STATUS`, `EFI_HANDLE`, ...), a
@@ -547,7 +547,7 @@ impl<'a> EfiTypes<'a> {
     }
 
     fn build_struct(&self, name: &str, fields: &[(String, String)]) -> Option<Rc<Datatype>> {
-        let shell = self.types.kuna_declare_record(name, false).ok()?;
+        let shell = self.types.unlace_declare_record(name, false).ok()?;
         if shell.get_metatype() != type_metatype::TYPE_STRUCT {
             return None;
         }

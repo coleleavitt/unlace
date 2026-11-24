@@ -70,7 +70,7 @@ fn record_declared_source_keeps_cast() {
             .arg("-o")
             .arg(&object),
     );
-    let (body, err, status) = common::run_kuna(&["decompile", object.to_str().unwrap(), "load"]);
+    let (body, err, status) = common::run_unlace(&["decompile", object.to_str().unwrap(), "load"]);
     assert_eq!(status, 0, "{err}");
     let generated = root.join("generated.c");
     std::fs::write(&generated, format!("{header}{body}")).unwrap();

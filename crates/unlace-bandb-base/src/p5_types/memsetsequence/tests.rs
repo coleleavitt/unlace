@@ -1,4 +1,4 @@
-//! Tests for the constant-fill (memset/bzero) recovery sub-stage (kuna GH-9230):
+//! Tests for the constant-fill (memset/bzero) recovery sub-stage (unlace GH-9230):
 //! [`MemsetSequence::form_fill_run`] — the single-value-fill detection that
 //! distinguishes a memset from a string or a lone NUL terminator — plus the
 //! [`RuleMemsetCopy`] gate and the `OptionMemsetRecover` parse.

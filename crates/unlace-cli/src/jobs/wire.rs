@@ -332,7 +332,7 @@ pub(crate) fn encode_result(r: &FuncResult) -> Vec<u8> {
         }
         put_u64s(&mut body, &v.addresses);
     }
-    // (kuna `structdefs`) The recovered type definitions travel with the
+    // (unlace `structdefs`) The recovered type definitions travel with the
     // record: a pooled worker renders the C, so the parent has no `Funcdata`
     // left to re-derive them from.
     put_u32(&mut body, r.types.len() as u32);
@@ -355,7 +355,7 @@ pub(crate) fn encode_result(r: &FuncResult) -> Vec<u8> {
             put_str(&mut body, &use_.type_name);
         }
     }
-    // (kuna `globalref`) The globals the body names by address, for the
+    // (unlace `globalref`) The globals the body names by address, for the
     // project header the parent writes.
     put_u32(&mut body, r.globals.len() as u32);
     for g in &r.globals {
@@ -371,7 +371,7 @@ pub(crate) fn encode_result(r: &FuncResult) -> Vec<u8> {
                 | u8::from(g.integer) << 4,
         );
     }
-    // (kuna `calltargettype`) The calls through synthesized fields, for the
+    // (unlace `calltargettype`) The calls through synthesized fields, for the
     // project header the parent writes.
     put_u32(&mut body, r.field_calls.len() as u32);
     for f in &r.field_calls {

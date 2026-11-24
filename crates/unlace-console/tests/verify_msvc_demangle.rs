@@ -27,7 +27,7 @@
 //!                          `freefunc` decompiles to `x + 42`
 //! ```
 //!
-//! `Bar::foo`/`ns::g` nest into scopes via kuna's `::`-splitter, so the flat
+//! `Bar::foo`/`ns::g` nest into scopes via unlace's `::`-splitter, so the flat
 //! `load function` resolves the bare leaf `freefunc` here (the non-namespaced
 //! free function) — the demangle of the *namespaced* names is proven at the
 //! loader level by `loadimage_object::tests::msvc_mangled_coff_symbols_are_demangled_name_only`

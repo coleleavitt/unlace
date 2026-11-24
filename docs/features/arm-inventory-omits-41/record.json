@@ -77,10 +77,10 @@
   },
   "files": {
     "wiring": "decompiler/crates/kuna-analysis/src/passes.rs",
-    "call_site": "decompiler/crates/kuna-console/src/engine.rs",
+    "call_site": "decompiler/crates/console/src/engine.rs",
     "fixture": "decompiler/crates/kuna-analysis/tests/fixtures/armdiscseed_le32",
     "fixture_generator": "decompiler/crates/kuna-analysis/tests/fixtures/armdiscseed_le32.py",
-    "e2e": "decompiler/crates/kuna-console/tests/verify_armdiscseed.rs",
+    "e2e": "decompiler/crates/console/tests/verify_armdiscseed.rs",
     "probe": "tests/cli/arm-inventory-omits-41.json",
     "spec": "docs/spec/01-program-prep.md"
   },

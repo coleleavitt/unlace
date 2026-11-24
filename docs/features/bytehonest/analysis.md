@@ -59,6 +59,6 @@ therefore strictly narrower: `metatype == TYPE_UNKNOWN && size == 1`, read off t
 
 ## 5. Consequence to state
 
-`kuna-console/src/project.rs` (`decompile-project`) reads `extract_variables`
+`console/src/project.rs` (`decompile-project`) reads `extract_variables`
 too, so the exported `.c`/`.h` project's variable inventory reports the same
 `undefined1` as `decompile-all --json`. The emitted `.c` file is unchanged.

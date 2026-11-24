@@ -24,12 +24,12 @@
 //!   --assert 'volatile 0x50000000+4'
 //!   --assert 'bytes 0x43d0c6 8bd581c21f324000'
 //!   --assert 'bytes 0x43d0c6 @notes/stage1.bin'
-//!   --assert @notes/overrides.kuna
+//!   --assert @notes/overrides.unlace
 //! ```
 //!
 //! Repeatable, and `@FILE` holds one directive per line with `#` comments — the
 //! `--define-function` file contract verbatim, because that is what makes an
-//! override durable across invocations.  kuna does not write assertions back
+//! override durable across invocations.  unlace does not write assertions back
 //! into the image: the file is the artifact, and it is plain text an agent can
 //! generate, diff and version.
 //!
@@ -436,7 +436,7 @@ mod tests {
         assert_eq!(form.line, "override prototype 0x13b0 void f(int a);");
     }
 
-    /// A directive kuna cannot honor must say so rather than be dropped: an
+    /// A directive unlace cannot honor must say so rather than be dropped: an
     /// accepted-and-inert assertion is the failure mode this plane exists to end.
     #[test]
     fn a_malformed_directive_is_rejected_naming_itself() {

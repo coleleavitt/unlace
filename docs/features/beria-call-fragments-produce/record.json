@@ -70,7 +70,7 @@
     "decompiler/crates/kuna-decomp/phases.toml",
     "decompiler/crates/kuna-analysis/tests/fixtures/calltrampoline_i386",
     "decompiler/crates/kuna-analysis/tests/fixtures/calltrampoline_i386.s",
-    "tests/stages/kuna-calltrampoline.xml",
+    "tests/stages/calltrampoline.xml",
     "tests/cli/beria-call-fragments-produce.json",
     "docs/spec/02-lift-and-flow.md",
     "docs/history.md",

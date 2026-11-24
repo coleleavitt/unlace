@@ -35,7 +35,7 @@ use std::rc::Rc;
 use crate::checkedarena::Arena;
 use smallvec::SmallVec;
 use unlace_base::address::{Address, SeqNum, mach_extreme};
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::{AddrSpace, AddrSpaceManager, spacetype};
 use unlace_base::types::{Wrap, int2, int4, uint2, uint4, uintb, uintm};
 
@@ -153,10 +153,10 @@ pub mod addl_flags {
     pub const stop_uppropagation: uint2 = 0x800;
     /// The varnode is implied but also has a data-type that needs resolution
     pub const has_implied_field: uint2 = 0x1000;
-    /// (kuna) A load of a global the value was stored to reads this value instead
+    /// (unlace) A load of a global the value was stored to reads this value instead
     /// (`p3_dataflow/globalstorekeep.rs`)
     pub const global_load: uint2 = 0x2000;
-    /// (kuna `sitetypelock`) This Varnode's type lock was applied by the
+    /// (unlace `sitetypelock`) This Varnode's type lock was applied by the
     /// per-call-site output type lock, so the lock may be retracted if the
     /// Varnode's HighVariable turns out to span foreign members
     /// (`p5_types/sitetypelock.rs`).
@@ -562,12 +562,12 @@ pub struct Varnode {
     /// Which bits are known to be zero (C++ `uintb nzm`)
     nzm: uintb,
     /// The dynamic SymbolEntry bound to this Varnode (C++ `Varnode::mapentry`,
-    /// set by `setSymbolEntry`).  kuna stores the owning Symbol's id (the
+    /// set by `setSymbolEntry`).  unlace stores the owning Symbol's id (the
     /// SymbolEntry is reachable from it); read by `getSymbolEntry`-style
     /// idempotency checks so a re-run of `ActionDynamicMapping` does not re-bind an
     /// already-mapped equate Varnode (C++ `attemptDynamicMapping`,
     /// `funcdata_varnode.cc:1348`).  `None` = unbound.
-    kuna_symbol_entry: Option<crate::database::SymbolId>,
+    unlace_symbol_entry: Option<crate::database::SymbolId>,
 }
 
 thread_local! {
@@ -615,7 +615,7 @@ impl Varnode {
             cover: None,
             consumed: u64::MAX, // ~((uintb)0)
             nzm: 0,
-            kuna_symbol_entry: None,
+            unlace_symbol_entry: None,
         };
         let space = match vn.loc.get_space() {
             Some(spc) => Rc::clone(spc),
@@ -889,26 +889,26 @@ impl Varnode {
     pub fn clear_consume_vacuous(&mut self) {
         self.addlflags &= !addl_flags::vacconsume;
     }
-    /// (kuna) Does a load of a global this value was stored to read the value?
+    /// (unlace) Does a load of a global this value was stored to read the value?
     #[inline]
     pub fn is_global_load(&self) -> bool {
         (self.addlflags & addl_flags::global_load) != 0
     }
-    /// (kuna) Record that a load of a global this value was stored to reads it.
+    /// (unlace) Record that a load of a global this value was stored to reads it.
     pub fn set_global_load(&mut self) {
         self.addlflags |= addl_flags::global_load;
     }
-    /// (kuna `sitetypelock`) Was this Varnode's type lock applied by the
+    /// (unlace `sitetypelock`) Was this Varnode's type lock applied by the
     /// per-call-site output type lock?
     pub fn is_site_locked(&self) -> bool {
         (self.addlflags & addl_flags::site_locked) != 0
     }
-    /// (kuna `sitetypelock`) Mark that the per-call-site output type lock
+    /// (unlace `sitetypelock`) Mark that the per-call-site output type lock
     /// applied this Varnode's type lock.
     pub fn set_site_locked(&mut self) {
         self.addlflags |= addl_flags::site_locked;
     }
-    /// (kuna `sitetypelock`) Clear the per-call-site lock marker (on retract).
+    /// (unlace `sitetypelock`) Clear the per-call-site lock marker (on retract).
     pub fn clear_site_locked(&mut self) {
         self.addlflags &= !addl_flags::site_locked;
     }
@@ -1007,14 +1007,14 @@ impl Varnode {
     /// The owning Symbol of the bound dynamic SymbolEntry (C++ `getSymbolEntry()`
     /// presence test), or `None` if unbound.
     #[inline]
-    pub fn kuna_symbol_entry(&self) -> Option<crate::database::SymbolId> {
-        self.kuna_symbol_entry
+    pub fn unlace_symbol_entry(&self) -> Option<crate::database::SymbolId> {
+        self.unlace_symbol_entry
     }
     /// Bind a dynamic SymbolEntry's owning Symbol to this Varnode (C++
     /// `setSymbolEntry`); also marks it `Varnode::mapped` exactly as the C++ does
     /// (`varnode.cc:448`).
-    pub fn set_kuna_symbol_entry(&mut self, sym: crate::database::SymbolId) {
-        self.kuna_symbol_entry = Some(sym);
+    pub fn set_unlace_symbol_entry(&mut self, sym: crate::database::SymbolId) {
+        self.unlace_symbol_entry = Some(sym);
         self.flags |= varnode_flags::mapped;
     }
     /// C++ `isUnaffected`.
@@ -1450,13 +1450,15 @@ impl Varnode {
     ///
     /// Returns an error if a free (non-spacebase) varnode would gain a second
     /// descendant (the C++ `LowlevelError`).
-    fn add_descend(&mut self, op: OpId) -> KunaResult<()> {
+    fn add_descend(&mut self, op: OpId) -> UnlaceResult<()> {
         if self.is_free()
             && !self.is_spacebase()
             && !self.descend.is_empty()
             && self.get_space().get_type() != spacetype::IPTR_IOP
         {
-            return Err(KunaError::lowlevel("Free varnode has multiple descendants"));
+            return Err(UnlaceError::lowlevel(
+                "Free varnode has multiple descendants",
+            ));
         }
         self.descend.push(op); // push_back
         self.set_flags(varnode_flags::coverdirty);
@@ -1578,7 +1580,7 @@ impl Varnode {
 
     /// Return relative overlap, where the given Varnode may be in the \e join
     /// space (C++ `overlapJoin`).
-    pub fn overlap_join(&self, op: &Varnode) -> KunaResult<int4> {
+    pub fn overlap_join(&self, op: &Varnode) -> UnlaceResult<int4> {
         if !self.loc.is_big_endian() {
             self.loc.overlap_join(0, &op.loc, op.size)
         } else {
@@ -1736,15 +1738,15 @@ pub struct DefOpInfo {
 /// Rewire reads when the bank unifies equivalent Varnodes. The callback's
 /// caller owns the op arena; the bank supplies the old and retained ids.
 pub type ReplaceReads<'a> =
-    dyn FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> KunaResult<()> + 'a;
+    dyn FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> UnlaceResult<()> + 'a;
 
 impl VarnodeBank {
     /// Construct the bank with the caller's analysis unique-space start.
     /// Fails if the address-space manager has no unique space.
-    pub fn new(manage: &AddrSpaceManager, uniq_start: uintm) -> KunaResult<VarnodeBank> {
+    pub fn new(manage: &AddrSpaceManager, uniq_start: uintm) -> UnlaceResult<VarnodeBank> {
         let uniq_space = manage
             .get_unique_space()
-            .ok_or_else(|| KunaError::lowlevel("VarnodeBank: no unique space registered"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("VarnodeBank: no unique space registered"))?;
         let uniq_space = Rc::clone(uniq_space);
         Ok(VarnodeBank {
             uniqbase: uniq_start,
@@ -1852,16 +1854,16 @@ impl VarnodeBank {
 
     /// Check deletion eligibility before any cross-bank cleanup.
     #[doc(hidden)]
-    pub fn check_destroy(&self, vn: VarnodeId) -> KunaResult<()> {
+    pub fn check_destroy(&self, vn: VarnodeId) -> UnlaceResult<()> {
         let v = &self.arena[vn];
         if v.def.is_some() || !v.has_no_descend() {
-            return Err(KunaError::lowlevel("Deleting integrated varnode"));
+            return Err(UnlaceError::lowlevel("Deleting integrated varnode"));
         }
         Ok(())
     }
 
     /// Remove a Varnode from the container and reclaim it (C++ `destroy`).
-    pub fn destroy(&mut self, vn: VarnodeId) -> KunaResult<()> {
+    pub fn destroy(&mut self, vn: VarnodeId) -> UnlaceResult<()> {
         self.check_destroy(vn)?;
         let lk = self.arena[vn]
             .lociter
@@ -1887,7 +1889,7 @@ impl VarnodeBank {
         vn: VarnodeId,
         lk: LocKey,
         replace_reads: &mut ReplaceReads,
-    ) -> KunaResult<VarnodeId> {
+    ) -> UnlaceResult<VarnodeId> {
         use std::collections::btree_map::Entry;
         // One descent, not two: the lookup and the insertion are the same
         // search.  The `insert` flag set below is outside the (input|written)
@@ -1918,15 +1920,17 @@ impl VarnodeBank {
         &mut self,
         vn: VarnodeId,
         replace_reads: &mut ReplaceReads,
-    ) -> KunaResult<VarnodeId> {
+    ) -> UnlaceResult<VarnodeId> {
         let v = &self.arena[vn];
         if !v.is_free() {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Making input out of varnode which is not free",
             ));
         }
         if v.is_constant() {
-            return Err(KunaError::lowlevel("Making input out of constant varnode"));
+            return Err(UnlaceError::lowlevel(
+                "Making input out of constant varnode",
+            ));
         }
         // Erase the previous ordering snapshot.
         let lk = self.arena[vn]
@@ -1953,13 +1957,13 @@ impl VarnodeBank {
         vn: VarnodeId,
         def: DefOpInfo,
         replace_reads: &mut ReplaceReads,
-    ) -> KunaResult<VarnodeId> {
+    ) -> UnlaceResult<VarnodeId> {
         let v = &self.arena[vn];
         if !v.is_free() {
-            return Err(KunaError::lowlevel("Defining varnode which is not free"));
+            return Err(UnlaceError::lowlevel("Defining varnode which is not free"));
         }
         if v.is_constant() {
-            return Err(KunaError::lowlevel("Assignment to constant"));
+            return Err(UnlaceError::lowlevel("Assignment to constant"));
         }
         let lk = self.arena[vn]
             .lociter
@@ -2016,7 +2020,7 @@ impl VarnodeBank {
         ct: Rc<Datatype>,
         def: DefOpInfo,
         replace_reads: &mut ReplaceReads,
-    ) -> KunaResult<VarnodeId> {
+    ) -> UnlaceResult<VarnodeId> {
         let lk = LocKey::new(
             AddrKey::of(&m),
             s,
@@ -2038,7 +2042,7 @@ impl VarnodeBank {
         ct: Rc<Datatype>,
         def: DefOpInfo,
         replace_reads: &mut ReplaceReads,
-    ) -> KunaResult<VarnodeId> {
+    ) -> UnlaceResult<VarnodeId> {
         let addr = Address::new(Rc::clone(&self.uniq_space), self.uniqid as u64);
         self.uniqid = self.uniqid.wadd(s as uintm);
         self.create_def(s, addr, ct, def, replace_reads)
@@ -2048,7 +2052,7 @@ impl VarnodeBank {
 
     /// Add `op` to `vn`'s descend list (C++ `vn->addDescend(op)`).
     #[inline]
-    pub fn add_descend(&mut self, vn: VarnodeId, op: OpId) -> KunaResult<()> {
+    pub fn add_descend(&mut self, vn: VarnodeId, op: OpId) -> UnlaceResult<()> {
         self.arena[vn].add_descend(op)
     }
     /// Erase `op` from `vn`'s descend list (C++ `vn->eraseDescend(op)`).
@@ -2453,9 +2457,9 @@ impl VarnodeBank {
     /// `beginDef(uint4 fl,const Address &addr)` (`varnode.cc:1927`).
     /// Errors for the `written` class (C++ throws "Cannot get contiguous
     /// written AND addressed").
-    fn begin_def_flag_addr(&self, fl: uint4, addr: &Address) -> KunaResult<DefProbe> {
+    fn begin_def_flag_addr(&self, fl: uint4, addr: &Address) -> UnlaceResult<DefProbe> {
         if fl == varnode_flags::written {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Cannot get contiguous written AND addressed",
             ));
         }
@@ -2478,9 +2482,9 @@ impl VarnodeBank {
     }
 
     /// `endDef(uint4 fl,const Address &addr)` (`varnode.cc:1961`).
-    fn end_def_flag_addr(&self, fl: uint4, addr: &Address) -> KunaResult<DefProbe> {
+    fn end_def_flag_addr(&self, fl: uint4, addr: &Address) -> UnlaceResult<DefProbe> {
         if fl == varnode_flags::written {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Cannot get contiguous written AND addressed",
             ));
         }
@@ -2504,7 +2508,7 @@ impl VarnodeBank {
 
     /// Varnode ids of a given property class starting at a given address, in
     /// definition order (C++ `beginDef(uint4,Address)`..`endDef(uint4,Address)`).
-    pub fn iter_def_flag_addr(&self, fl: uint4, addr: &Address) -> KunaResult<Vec<VarnodeId>> {
+    pub fn iter_def_flag_addr(&self, fl: uint4, addr: &Address) -> UnlaceResult<Vec<VarnodeId>> {
         let begin = self.begin_def_flag_addr(fl, addr)?;
         let end = self.end_def_flag_addr(fl, addr)?;
         Ok(self.iter_def_probe(begin, end).collect())
@@ -2514,7 +2518,7 @@ impl VarnodeBank {
 
     /// Find the first input Varnode completely contained within the given range
     /// (C++ `findCoveredInput`).
-    pub fn find_covered_input(&self, s: int4, loc: &Address) -> KunaResult<Option<VarnodeId>> {
+    pub fn find_covered_input(&self, s: int4, loc: &Address) -> UnlaceResult<Option<VarnodeId>> {
         let space = loc
             .get_space()
             .expect("findCoveredInput on invalid address (C++ UB)");
@@ -2543,7 +2547,7 @@ impl VarnodeBank {
 
     /// Find the input Varnode that completely contains the given range
     /// (C++ `findCoveringInput`).
-    pub fn find_covering_input(&self, s: int4, loc: &Address) -> KunaResult<Option<VarnodeId>> {
+    pub fn find_covering_input(&self, s: int4, loc: &Address) -> UnlaceResult<Option<VarnodeId>> {
         // then possibly step back one
         let begin = self.begin_def_flag_addr(varnode_flags::input, loc)?;
         let cand = self.iter_def_probe(begin.clone(), DefProbe::End).next();
@@ -2585,7 +2589,7 @@ impl VarnodeBank {
 
     /// Check for an input Varnode overlapping the given range
     /// (C++ `hasInputIntersection`).
-    pub fn has_input_intersection(&self, s: int4, loc: &Address) -> KunaResult<bool> {
+    pub fn has_input_intersection(&self, s: int4, loc: &Address) -> UnlaceResult<bool> {
         let begin = self.begin_def_flag_addr(varnode_flags::input, loc)?;
         if let Some(id) = self.iter_def_probe(begin.clone(), DefProbe::End).next() {
             let vn = &self.arena[id];
@@ -2672,8 +2676,8 @@ mod tests {
     }
 
     /// A no-op `replace_reads` callback (no equivalent varnode is expected).
-    fn no_replace() -> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> KunaResult<()> {
-        |_: &mut VarnodeBank, _: VarnodeId, _: VarnodeId| -> KunaResult<()> { Ok(()) }
+    fn no_replace() -> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> UnlaceResult<()> {
+        |_: &mut VarnodeBank, _: VarnodeId, _: VarnodeId| -> UnlaceResult<()> { Ok(()) }
     }
 
     #[test]
@@ -3308,7 +3312,7 @@ mod tests {
         bank.set_input(kept, &mut no_replace()).unwrap();
         let orphan = bank.create(4, addr, dt(4));
         assert!(
-            bank.set_input(orphan, &mut |_, _, _| Err(KunaError::lowlevel(
+            bank.set_input(orphan, &mut |_, _, _| Err(UnlaceError::lowlevel(
                 "replacement failed"
             )))
             .is_err()
@@ -3400,10 +3404,11 @@ mod tests {
 
         let f2 = bank.create(4, addr.clone(), dt(4));
         let mut replaced: Vec<(VarnodeId, VarnodeId)> = Vec::new();
-        let mut record = |_: &mut VarnodeBank, old: VarnodeId, new: VarnodeId| -> KunaResult<()> {
-            replaced.push((old, new));
-            Ok(())
-        };
+        let mut record =
+            |_: &mut VarnodeBank, old: VarnodeId, new: VarnodeId| -> UnlaceResult<()> {
+                replaced.push((old, new));
+                Ok(())
+            };
         let in2 = bank.set_input(f2, &mut record).unwrap();
         assert_eq!(in2, in1, "input unifies onto the existing input varnode");
         assert_eq!(replaced, vec![(f2, in1)]);

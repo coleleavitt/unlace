@@ -32,7 +32,7 @@ fn decompile(
     )
     .unwrap();
     assert_eq!(program.arch().rustc_stable_version, Some((1, 93, 1)));
-    program.arch_mut().kuna_options.set(if enabled {
+    program.arch_mut().unlace_options.set(if enabled {
         RustFmtMode::On
     } else {
         RustFmtMode::Off
@@ -138,7 +138,7 @@ fn language_layout_and_formatter_facts_bound_string_recovery() {
                     2 => arch.rustc_stable_version = Some((1, 90, 0)),
                     3 => arch.rustc_stable_version = Some((1, 99, 1)),
                     _ => arch
-                        .kuna_options
+                        .unlace_options
                         .set(unlace_decomp::sourcelang::SourceLangForced(Some(
                             unlace_decomp::sourcelang::SourceLang::C,
                         ))),

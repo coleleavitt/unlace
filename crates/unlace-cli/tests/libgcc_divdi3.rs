@@ -80,7 +80,7 @@ fn signed_di_quotient_low_word_survives_an_opaque_call() {
         if let Some(value) = option {
             args.extend(["--option", "libgccsigs", value]);
         }
-        let (output, error, status) = common::run_kuna(&args);
+        let (output, error, status) = common::run_unlace(&args);
         assert_eq!(status, 0, "{error}");
         let document: serde_json::Value = serde_json::from_str(&output).unwrap();
         assert!(document["functions"][0]["error"].is_null(), "{output}");
@@ -147,7 +147,7 @@ fn an_explicit_scalar_signature_overrides_the_runtime_contract() {
     let root = tempfile::tempdir().unwrap();
     let image = root.path().join("scalar.o");
     std::fs::write(&image, caller(false)).unwrap();
-    let (output, error, status) = common::run_kuna(&[
+    let (output, error, status) = common::run_unlace(&[
         "decompile",
         image.to_str().unwrap(),
         "divide_low",
@@ -252,7 +252,7 @@ int high(long long a,long long b){return (int)((a/b)>>32);}
                         "prototype __divdi3 long long __divdi3(long long a,long long b)",
                     ]);
                 }
-                let (output, error, status) = common::run_kuna(&args);
+                let (output, error, status) = common::run_unlace(&args);
                 assert_eq!(status, 0, "{error}");
                 let document: serde_json::Value = serde_json::from_str(&output).unwrap();
                 assert!(document["functions"][0]["error"].is_null(), "{output}");
@@ -370,7 +370,7 @@ void twice(long long a,long long *p){p[0]=f(a);p[1]=f(a+1);}
             ("global", "void global("),
             ("twice", "void twice("),
         ] {
-            let (output, error, status) = common::run_kuna(&[
+            let (output, error, status) = common::run_unlace(&[
                 "decompile",
                 image.to_str().unwrap(),
                 function,

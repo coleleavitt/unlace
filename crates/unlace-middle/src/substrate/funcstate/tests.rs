@@ -2,11 +2,11 @@ use super::*;
 
 #[derive(Default)]
 struct Kept(u32);
-crate::kuna_func_state!(Kept, keep_across_clear: true);
+crate::unlace_func_state!(Kept, keep_across_clear: true);
 
 #[derive(Default)]
 struct Dropped(Vec<u32>);
-crate::kuna_func_state!(Dropped, keep_across_clear: false);
+crate::unlace_func_state!(Dropped, keep_across_clear: false);
 
 #[test]
 fn a_slot_starts_at_its_default_and_a_clear_drops_only_the_unkept_ones() {

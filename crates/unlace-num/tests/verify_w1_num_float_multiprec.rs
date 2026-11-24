@@ -6,7 +6,7 @@
 //! harness -- not by re-deriving them on paper.  Multiprecision oracle
 //! values come from Rust's native u128 arithmetic.
 
-use unlace_base::error::KunaError;
+use unlace_base::error::UnlaceError;
 use unlace_num::float::{FloatFormat, floatclass};
 use unlace_num::multiprecision::{add128, leftshift128, subtract128, udiv128, uless128};
 
@@ -172,7 +172,7 @@ fn verify_mp_random_differential_u128() {
     let mut r = [0u64; 2];
     assert_eq!(
         udiv128(&[1, 1], &[0, 0], &mut q, &mut r).unwrap_err(),
-        KunaError::lowlevel("divide by 0")
+        UnlaceError::lowlevel("divide by 0")
     );
 }
 

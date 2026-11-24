@@ -1,4 +1,4 @@
-//! ghidra-sim v1: a mock-Java [`AnswerSource`] backed by kuna's OWN analysis
+//! ghidra-sim v1: a mock-Java [`AnswerSource`] backed by unlace's OWN analysis
 //! of a real vendored ELF.
 //!
 //! The sim plays the Java host's role with real program facts:
@@ -39,7 +39,7 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::address::{ATTRIB_FIRST, ATTRIB_LAST, ELEM_RANGELIST};
-use unlace_base::error::KunaError;
+use unlace_base::error::UnlaceError;
 use unlace_base::marshal::{
     ATTRIB_ID, ATTRIB_INDEX, ATTRIB_METATYPE, ATTRIB_MODEL, ATTRIB_NAME, ATTRIB_NAMELOCK,
     ATTRIB_OFFSET, ATTRIB_READONLY, ATTRIB_SIZE, ATTRIB_TYPE, ATTRIB_TYPELOCK, ATTRIB_VAL, Decoder,
@@ -57,7 +57,7 @@ use unlace_decomp::dtype::{Datatype, DatatypeKind, ELEM_TYPEREF, type_metatype};
 use unlace_decomp::fspec::PrototypePieces;
 use unlace_decomp::funcdata_encode::ELEM_FUNCTION;
 use unlace_decomp::inject_sleigh::SleighInjectEngine;
-use unlace_decomp::option_dispatch::KUNA_OPTION_NAMES;
+use unlace_decomp::option_dispatch::UNLACE_OPTION_NAMES;
 use unlace_decomp::options::OptionDatabase;
 use unlace_decomp::pcodeinject::{
     CALLFIXUP_TYPE, CALLOTHERFIXUP_TYPE, ELEM_CONTEXT, InjectContext,
@@ -232,7 +232,7 @@ pub struct HostLocalVar {
     pub hash: u64,
     /// Served typelocked?  Java's `grabFromFunction` sends `typelock=false`
     /// for an `Undefined`-typed DB local — the shape a plain GUI RENAME
-    /// produces (`updateDBVariable(name, null)`), which kuna must keep as a
+    /// produces (`updateDBVariable(name, null)`), which unlace must keep as a
     /// name RECOMMENDATION; `true` is the retype shape (a real type), which
     /// survives as a seeded Symbol.
     pub typelock: bool,
@@ -474,7 +474,7 @@ impl SimOracle {
                 self.log.decoded_insts.insert(addr.get_offset());
                 resp_string(&self.inst_doc(&addr, len, &emit))
             }
-            Err(KunaError::Unimpl {
+            Err(UnlaceError::Unimpl {
                 instruction_length, ..
             }) => {
                 let mut doc = Vec::new();
@@ -1036,7 +1036,7 @@ impl SimOracle {
 
     /// Encode a data-type the way Java's `encodeTypeRef`/`encodeType` does:
     /// named types travel as `<typeref name id/>` (core types resolve locally
-    /// on the kuna side — same hash ids — and unknown named types trigger a
+    /// on the unlace side — same hash ids — and unknown named types trigger a
     /// getDataType query answered by [`Self::answer_data_type`]); anonymous
     /// pointers/arrays inline recursively; everything else inlines as a base.
     fn encode_wire_type(&self, e: &mut PackedEncode, dt: &Rc<Datatype>) {
@@ -1469,9 +1469,9 @@ pub fn apply_cli_default_options(prog: &mut ConsoleProgram, size_bytes: u64) {
     let mut options: Vec<(&str, &str)> = vec![("listing", "on")];
     options.extend(overrides);
     for (name, value) in options {
-        if KUNA_OPTION_NAMES.contains(&name) {
+        if UNLACE_OPTION_NAMES.contains(&name) {
             prog.arch_mut()
-                .set_kuna_option(name, value)
+                .set_unlace_option(name, value)
                 .unwrap_or_else(|e| panic!("option {name}: {}", e.explain()));
             continue;
         }

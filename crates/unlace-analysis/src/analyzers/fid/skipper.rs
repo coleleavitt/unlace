@@ -10,11 +10,11 @@
 //! skipper recognizes the canonical NOP encodings and the hasher drops the code
 //! unit (un-counting it from the score, `codeUnitIndex -= 1`).
 //!
-//! # Origin (upstream Ghidra, the tree kuna was ported from)
+//! # Origin (upstream Ghidra, the tree unlace was ported from)
 //!
 //! - `Ghidra/Features/Base/src/main/java/ghidra/util/search/InstructionSkipper.java`
 //!   — the [`InstructionSkipper`] trait (`getApplicableProcessor` /
-//!   `shouldSkip`). kuna drops `getApplicableProcessor` from the trait: the
+//!   `shouldSkip`). unlace drops `getApplicableProcessor` from the trait: the
 //!   skipper *set* is selected per-architecture at hasher-build time (PR4), so a
 //!   skipper in the set already applies; non-x86 gets an empty set and never
 //!   skips.

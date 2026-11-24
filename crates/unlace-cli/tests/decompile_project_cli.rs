@@ -47,7 +47,7 @@ fn out_dir(tag: &str) -> PathBuf {
     dir
 }
 
-fn run_kuna(args: &[&str]) -> (String, String, bool) {
+fn run_unlace(args: &[&str]) -> (String, String, bool) {
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .output()
@@ -63,7 +63,7 @@ fn run_kuna(args: &[&str]) -> (String, String, bool) {
 fn project(fixture_name: &str, tag: &str) -> PathBuf {
     let bin = fixture(fixture_name);
     let dir = out_dir(tag);
-    let (_stdout, stderr, ok) = run_kuna(&[
+    let (_stdout, stderr, ok) = run_unlace(&[
         "decompile-project",
         &bin,
         "-o",
@@ -83,7 +83,7 @@ fn project(fixture_name: &str, tag: &str) -> PathBuf {
 fn selected_project_refuses_an_executable_section_iat_slot() {
     let bin = fixture("pe_iatincode_i386.exe");
     let dir = out_dir("iat_slot");
-    let (stdout, stderr, ok) = run_kuna(&[
+    let (stdout, stderr, ok) = run_unlace(&[
         "decompile-project",
         &bin,
         "-o",
@@ -345,7 +345,7 @@ fn header_syntax_checks_with_cc() {
     );
 }
 
-/// (kuna) `stat` and `sigaction` are each a POSIX struct tag AND a POSIX
+/// (unlace) `stat` and `sigaction` are each a POSIX struct tag AND a POSIX
 /// function, and C keeps typedefs and functions in one file-scope namespace. The
 /// export must not emit both spellings as declarations, or the header stops
 /// parsing at the clash and every declaration after it fails too.
@@ -365,7 +365,7 @@ fn header_syntax_checks_when_a_type_shares_a_name_with_a_function() {
     for arm in ["off", "opaque", "glibc"] {
         let bin = fixture("libctypes_stat_x86_64");
         let dir = out_dir(&format!("typefnclash_{arm}"));
-        let (_stdout, stderr, ok) = run_kuna(&[
+        let (_stdout, stderr, ok) = run_unlace(&[
             "decompile-project",
             &bin,
             "-o",
@@ -434,7 +434,7 @@ fn arm_thumb_project_smoke() {
 fn fast_project_discovers_real_function_bodies() {
     let bin = fixture("pdb_prog.exe");
     let dir = out_dir("fast_bodies");
-    let (stdout, stderr, ok) = run_kuna(&[
+    let (stdout, stderr, ok) = run_unlace(&[
         "decompile-project",
         &bin,
         "-o",
@@ -466,7 +466,7 @@ fn fast_project_discovers_real_function_bodies() {
     );
 
     let control = out_dir("fast_bodies_off");
-    let (_stdout, stderr, ok) = run_kuna(&[
+    let (_stdout, stderr, ok) = run_unlace(&[
         "decompile-project",
         &bin,
         "-o",
@@ -494,7 +494,7 @@ fn fast_project_discovers_real_function_bodies() {
 fn fast_project_discovers_indirect_pointer_target() {
     let bin = fixture("aif_gap_x86_64");
     let dir = out_dir("fast_pointer");
-    let (_stdout, stderr, ok) = run_kuna(&[
+    let (_stdout, stderr, ok) = run_unlace(&[
         "decompile-project",
         &bin,
         "-o",
@@ -518,7 +518,7 @@ fn fast_project_discovers_indirect_pointer_target() {
     );
 
     let control = out_dir("fast_pointer_off");
-    let (_stdout, stderr, ok) = run_kuna(&[
+    let (_stdout, stderr, ok) = run_unlace(&[
         "decompile-project",
         &bin,
         "-o",
@@ -543,7 +543,7 @@ fn fast_project_discovers_indirect_pointer_target() {
 fn fast_project_does_not_promote_switch_case_labels() {
     let bin = fixture("switchtab_x86_64");
     let dir = out_dir("fast_switch_labels");
-    let (_stdout, stderr, ok) = run_kuna(&[
+    let (_stdout, stderr, ok) = run_unlace(&[
         "decompile-project",
         &bin,
         "-o",
@@ -578,7 +578,7 @@ fn fast_project_does_not_promote_switch_case_labels() {
 fn fast_selected_project_does_not_expand_to_callees() {
     let bin = fixture("pdb_prog.exe");
     let dir = out_dir("fast_selected");
-    let (stdout, stderr, ok) = run_kuna(&[
+    let (stdout, stderr, ok) = run_unlace(&[
         "decompile-project",
         &bin,
         "-o",
@@ -642,7 +642,7 @@ fn a_global_larger_than_the_load_window_is_dumped_whole() {
 fn a_binary_with_a_string_over_the_load_window_still_exports() {
     let bin = repo_root().join("tests/bug-repro/sort");
     let dir = out_dir("big_string");
-    let (_stdout, stderr, ok) = run_kuna(&[
+    let (_stdout, stderr, ok) = run_unlace(&[
         "decompile-project",
         bin.to_str().unwrap(),
         "-o",
@@ -690,14 +690,14 @@ fn a_binary_with_a_string_over_the_load_window_still_exports() {
 /// serial run has one.  The block therefore travels back from the workers, and
 /// this is what holds it to the serial rendering.
 ///
-/// (kuna `protoorder`) The serial run a pool matches is the one without the
+/// (unlace `protoorder`) The serial run a pool matches is the one without the
 /// callee-first order: a worker cannot see another worker's callees, so both
 /// arms name it.
 #[test]
 fn jobs_project_artifacts_are_byte_identical_to_serial() {
     let bin = fixture("dwarfstructs_x86_64");
     let serial = out_dir("jobs_serial");
-    let (_, stderr, ok) = run_kuna(&[
+    let (_, stderr, ok) = run_unlace(&[
         "decompile-project",
         &bin,
         "-o",
@@ -732,7 +732,7 @@ fn jobs_project_artifacts_are_byte_identical_to_serial() {
 
     for (jobs, chunk) in [("2", "1"), ("4", "3"), ("8", "100")] {
         let dir = out_dir(&format!("jobs_{jobs}_{chunk}"));
-        let (_, stderr, ok) = run_kuna(&[
+        let (_, stderr, ok) = run_unlace(&[
             "decompile-project",
             &bin,
             "-o",
@@ -774,7 +774,7 @@ fn jobs_project_artifacts_are_byte_identical_to_serial() {
 /// structure is the regex buffer, which is now named from
 /// `re_compile_pattern`'s declaration instead of synthesized.
 ///
-/// (kuna `protoorder`) With `--option protoorder off` on every arm, which is the
+/// (unlace `protoorder`) With `--option protoorder off` on every arm, which is the
 /// serial run a pool replays: the callee-first order decides what a function
 /// mints as much as the ledger does, and no pool can take it.
 #[test]
@@ -880,7 +880,7 @@ fn jobs_project_serial_path_keeps_the_types_of_the_other_functions() {
             "-o",
             dir.to_str().unwrap(),
         ];
-        // (kuna `protoorder`) The serial run a pool replays is the one without
+        // (unlace `protoorder`) The serial run a pool replays is the one without
         // the callee-first order; both arms name it.
         args.extend_from_slice(&[
             "--max-fn-seconds",
@@ -974,7 +974,7 @@ fn project_exit_distinguishes_all_failed_from_partial_success() {
         if stream {
             args.push("--stream");
         }
-        let (stdout, stderr, ok) = run_kuna(&args);
+        let (stdout, stderr, ok) = run_unlace(&args);
         assert!(!ok, "the all-failed {mode} project exited zero: {stdout}");
         assert!(
             stdout.contains("functions: 0 ok, 1 failed"),
@@ -1038,7 +1038,7 @@ fn project_exit_distinguishes_all_failed_from_partial_success() {
         if stream {
             args.push("--stream");
         }
-        let (stdout, stderr, ok) = run_kuna(&args);
+        let (stdout, stderr, ok) = run_unlace(&args);
         assert!(ok, "a partial-success {mode} project failed: {stderr}");
         assert!(
             stdout.contains("functions: 1 ok, 1 failed"),
@@ -1077,7 +1077,7 @@ fn stream_project(fixture_name: &str, tag: &str, extra: &[&str]) -> PathBuf {
         &specs,
     ];
     args.extend_from_slice(extra);
-    let (_stdout, stderr, ok) = run_kuna(&args);
+    let (_stdout, stderr, ok) = run_unlace(&args);
     if !ok {
         panic!("streamed project export failed on {fixture_name}: {stderr}");
     }
@@ -1223,7 +1223,7 @@ fn assert_stream_matches_serial(
 fn streamed_artifacts_match_the_non_stream_export() {
     let stream = stream_project("dwarfstructs_x86_64", "stream_serial", &[]);
     let serial = out_dir("stream_reference");
-    let (_, stderr, ok) = run_kuna(&[
+    let (_, stderr, ok) = run_unlace(&[
         "decompile-project",
         &fixture("dwarfstructs_x86_64"),
         "-o",
@@ -1273,7 +1273,7 @@ fn progress_project(fixture_name: &str, tag: &str, extra: &[&str]) -> PathBuf {
         &specs,
     ];
     args.extend_from_slice(extra);
-    let (_stdout, stderr, ok) = run_kuna(&args);
+    let (_stdout, stderr, ok) = run_unlace(&args);
     if !ok {
         panic!("--progress project export failed on {fixture_name}: {stderr}");
     }
@@ -1320,7 +1320,7 @@ fn assert_final_index(dir: &std::path::Path, file_name: &str) -> String {
 fn a_progress_export_is_the_non_stream_export_plus_its_index() {
     let name = "dwarfstructs_x86_64";
     let plain = out_dir("progress_plain");
-    let (_, stderr, ok) = run_kuna(&[
+    let (_, stderr, ok) = run_unlace(&[
         "decompile-project",
         &fixture(name),
         "-o",
@@ -1562,7 +1562,7 @@ fn streamed_blocks_follow_the_entry_point_not_the_address_order() {
 /// Run `unlace` with extra environment under a wall-clock cap, returning `None`
 /// when it had to be killed: the failure a fault-injecting run guards against
 /// is a pool that never finishes.
-fn run_kuna_env_with_timeout(
+fn run_unlace_env_with_timeout(
     args: &[&str],
     env: &[(&str, &str)],
     cap: std::time::Duration,
@@ -1608,7 +1608,7 @@ fn streamed_worker_panic_loses_only_the_function_that_panicked() {
         specs.as_str(),
     ];
     args.extend_from_slice(&pool);
-    let (_, stderr, ok) = run_kuna_env_with_timeout(
+    let (_, stderr, ok) = run_unlace_env_with_timeout(
         &args,
         &[("UNLACE_JOBS_FAULT", "panic:0x400540")],
         std::time::Duration::from_secs(240),
@@ -1708,7 +1708,7 @@ fn a_streamed_seed_runs_in_a_worker_and_costs_only_its_own_record() {
         specs.as_str(),
     ];
     args.extend_from_slice(&pool);
-    let (_, stderr, ok) = run_kuna_env_with_timeout(
+    let (_, stderr, ok) = run_unlace_env_with_timeout(
         &args,
         &[("UNLACE_JOBS_FAULT", &format!("panic:{ENTRY}"))],
         std::time::Duration::from_secs(240),
@@ -1775,7 +1775,7 @@ fn a_streamed_seed_runs_in_a_worker_and_costs_only_its_own_record() {
 fn streamed_selected_project_does_not_expand_to_callees() {
     let bin = fixture("pdb_prog.exe");
     let dir = out_dir("stream_selected");
-    let (stdout, stderr, ok) = run_kuna(&[
+    let (stdout, stderr, ok) = run_unlace(&[
         "decompile-project",
         &bin,
         "-o",
@@ -1821,7 +1821,7 @@ fn streamed_selected_project_does_not_expand_to_callees() {
 fn stream_refuses_an_assertion_and_is_not_a_whole_binary_flag() {
     let bin = fixture("fauxware");
     let dir = out_dir("stream_assert");
-    let (_, stderr, ok) = run_kuna(&[
+    let (_, stderr, ok) = run_unlace(&[
         "decompile-project",
         &bin,
         "-o",
@@ -1843,7 +1843,7 @@ fn stream_refuses_an_assertion_and_is_not_a_whole_binary_flag() {
     );
 
     for cmd in ["decompile-all", "decompile-graph"] {
-        let (_, stderr, ok) = run_kuna(&[cmd, &bin, "--stream", "--sleighpath", &specs()]);
+        let (_, stderr, ok) = run_unlace(&[cmd, &bin, "--stream", "--sleighpath", &specs()]);
         assert!(!ok, "{cmd} must not accept --stream");
         assert!(
             stderr.contains("unknown option --stream"),
@@ -1870,7 +1870,7 @@ fn a_failed_load_reports_itself_and_spares_a_previous_export() {
     std::fs::create_dir_all(&junk_dir).unwrap();
     let junk = junk_dir.join("fauxware");
     std::fs::write(&junk, b"this is not an object file\n").unwrap();
-    let (_, stderr, ok) = run_kuna(&[
+    let (_, stderr, ok) = run_unlace(&[
         "decompile-project",
         junk.to_str().unwrap(),
         "-o",
@@ -1914,7 +1914,7 @@ fn a_failed_load_into_an_empty_folder_leaves_a_failed_readme() {
     let junk = junk_dir.join("notabinary");
     std::fs::write(&junk, b"this is not an object file\n").unwrap();
     let dir = out_dir("stream_failed_fresh");
-    let (_, stderr, ok) = run_kuna(&[
+    let (_, stderr, ok) = run_unlace(&[
         "decompile-project",
         junk.to_str().unwrap(),
         "-o",
@@ -1961,7 +1961,7 @@ fn a_missing_binary_creates_no_folder() {
             &specs,
         ];
         args.extend(extra);
-        let (_, stderr, ok) = run_kuna(&args);
+        let (_, stderr, ok) = run_unlace(&args);
         assert!(!ok, "a missing binary must fail: {stderr}");
         assert!(
             stderr.contains("binary not found"),
@@ -2149,7 +2149,7 @@ fn block_with_a_directory(path: &std::path::Path) {
 }
 
 /// Strip an ELF's section headers (`e_shoff`/`e_shnum`/`e_shstrndx`), which
-/// kuna loads through its segment fallback.  Such an image publishes no CODE
+/// unlace loads through its segment fallback.  Such an image publishes no CODE
 /// section, so there is nothing to sweep.
 fn section_header_stripped(fixture_name: &str, tag: &str) -> (PathBuf, PathBuf) {
     let dir = out_dir(tag);
@@ -2277,7 +2277,7 @@ fn synthesized_structs(text: &str) -> std::collections::BTreeMap<String, String>
     out
 }
 
-/// (kuna `protoorder` + `structsynth`) A `struct_N` names one record across the
+/// (unlace `protoorder` + `structsynth`) A `struct_N` names one record across the
 /// whole-program surfaces.
 ///
 /// The ledger numbers a synthesized layout in the order the program is visited
@@ -2299,7 +2299,7 @@ fn a_struct_name_means_the_same_record_in_the_export_and_in_decompile_all() {
             "--sleighpath",
             &specs(),
         ];
-        let (_out, stderr, ok) = run_kuna(&[&base[..], arm].concat());
+        let (_out, stderr, ok) = run_unlace(&[&base[..], arm].concat());
         if !ok {
             panic!("unlace decompile-project failed: {stderr}");
         }
@@ -2313,7 +2313,7 @@ fn a_struct_name_means_the_same_record_in_the_export_and_in_decompile_all() {
             "structdefs",
             "on",
         ];
-        let (text, stderr, ok) = run_kuna(&[&all[..], arm].concat());
+        let (text, stderr, ok) = run_unlace(&[&all[..], arm].concat());
         assert!(ok, "unlace decompile-all failed: {stderr}");
         let (exported, decompiled) = (synthesized_structs(&header), synthesized_structs(&text));
         assert!(

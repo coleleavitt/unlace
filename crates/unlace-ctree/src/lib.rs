@@ -15,16 +15,16 @@ pub use unlace_middle::*;
 
 /// This crate's unit tests link without the driver, so they define the driver's hook symbol
 /// themselves: the hooks of the crates below it, and a stub that panics, naming itself, for
-/// each hook a higher crate provides (`KunaHookSlots::finish_with_stubs`).
+/// each hook a higher crate provides (`UnlaceHookSlots::finish_with_stubs`).
 #[cfg(test)]
 mod unprovided {
-    use unlace_middle::passhooks::{KunaHookSlots, KunaHooks};
+    use unlace_middle::passhooks::{UnlaceHookSlots, UnlaceHooks};
 
     #[unsafe(no_mangle)]
-    fn __unlace_default_pass_hooks() -> &'static KunaHooks {
-        static HOOKS: std::sync::OnceLock<KunaHooks> = std::sync::OnceLock::new();
+    fn __unlace_default_pass_hooks() -> &'static UnlaceHooks {
+        static HOOKS: std::sync::OnceLock<UnlaceHooks> = std::sync::OnceLock::new();
         HOOKS.get_or_init(|| {
-            let mut slots = KunaHookSlots::default();
+            let mut slots = UnlaceHookSlots::default();
             unlace_middle::provide_all(&mut slots);
             slots.finish_with_stubs()
         })

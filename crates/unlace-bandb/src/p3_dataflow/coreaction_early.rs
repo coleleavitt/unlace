@@ -308,14 +308,14 @@ impl Action for ActionConstbase {
         if let Err(error) =
             crate::callmechanisms::apply_entry(data).and_then(|_| crate::registerslots::apply(data))
         {
-            data.kuna_state_mut::<crate::callmechanisms::State>()
+            data.unlace_state_mut::<crate::callmechanisms::State>()
                 .failure = Some(error.to_string());
             return 0;
         }
         if let Err(error) =
             crate::dex::apply_entry(data).and_then(|_| crate::jvm::apply_entry(data))
         {
-            data.kuna_state_mut::<crate::callmechanisms::State>()
+            data.unlace_state_mut::<crate::callmechanisms::State>()
                 .failure = Some(error.to_string());
             return 0;
         }
@@ -430,7 +430,7 @@ impl Action for ActionHeritage {
         // the live Funcdata into SSA form (reads linked to writes, MULTIEQUAL
         // phi-nodes placed at dominance frontiers).  The action always reports 0
         // changes (the C++ does too — heritage registers no change count, which
-        // is why `break action heritage` never fires; see kuna/goldens.py B3).
+        // is why `break action heritage` never fires; see unlace/goldens.py B3).
         // (unlace decompile-all watchdog) thread the per-function deadline into
         // the heritage per-space loop; `None` everywhere but a budgeted drive.
         if let Err(error) = data.op_heritage_with_deadline(ctx.deadline) {
@@ -439,20 +439,20 @@ impl Action for ActionHeritage {
         }
         if data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::passthrough::PassThrough>()
             .0
         {
             crate::entryreads::capture(data);
         }
-        // (kuna) Expand a frame `rep movs` with a known count before the stack's
+        // (unlace) Expand a frame `rep movs` with a known count before the stack's
         // first heritage (`repframecopy.rs`).
         crate::repframecopy::expand_all(data);
-        // (kuna) Repair any synthetic lowered-switch BRANCHIND whose input
-        // heritage normalized away (see `kuna_repair_lowered_switch_inputs`).
+        // (unlace) Repair any synthetic lowered-switch BRANCHIND whose input
+        // heritage normalized away (see `unlace_repair_lowered_switch_inputs`).
         // A no-op unless a lowered-switch was installed this function, so it
         // never perturbs the datatest corpus.
-        data.kuna_repair_lowered_switch_inputs();
+        data.unlace_repair_lowered_switch_inputs();
         0
     }
 }
@@ -635,7 +635,7 @@ impl Action for ActionVarnodeProps {
                     }
                 }
             } else if has_action_property {
-                // (kuna `dynrelocs`) `cachereadonly` is the program-wide `option
+                // (unlace `dynrelocs`) `cachereadonly` is the program-wide `option
                 // readonly`. A PT_GNU_RELRO-frozen dynamic-relocation slot folds
                 // regardless: its value was computed by the linker and the range
                 // is mprotected read-only before main, so the fold is a fact, not
@@ -647,7 +647,7 @@ impl Action for ActionVarnodeProps {
                         .vbank()
                         .get(vn)
                         .is_some_and(|v| data.get_arch().dynreloc_const_contains(v.get_offset()));
-                // (kuna `litpoolconst`) The same narrow exception for the
+                // (unlace `litpoolconst`) The same narrow exception for the
                 // program's own instruction stream: an ARM immediate too wide to
                 // encode is parked in a literal pool in `.text` and loaded
                 // PC-relatively, and `r-x` memory cannot be written, so the word
@@ -979,7 +979,7 @@ impl Action for ActionRedundBranch {
                 let bb_is_switch = data.bblocks_ref().block(bb).is_switch_out();
                 // Do not splice a block coming from a single-exit switch — this
                 // prevents possible second-stage recovery.
-                // (kuna javatry) A `try` dispatch keeps a block of its own.
+                // (unlace javatry) A `try` dispatch keeps a block of its own.
                 if bl_size_in == 1
                     && !bl_is_entry
                     && !bb_is_switch

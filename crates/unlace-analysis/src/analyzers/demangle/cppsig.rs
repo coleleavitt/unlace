@@ -1,4 +1,4 @@
-//! (kuna `cppsig`) Apply the DEMANGLED C++ signature — the class type for
+//! (unlace `cppsig`) Apply the DEMANGLED C++ signature — the class type for
 //! `this`, plus the declared parameter types — to a function whose mangled
 //! symbol survives.
 //!
@@ -422,7 +422,7 @@ fn parse_decl(dem: &str) -> Option<Decl> {
     // the `static` keyword, and the calling convention.  A 32-bit MSVC member
     // (`__thiscall`) passes `this` in ECX rather than as ordinary argument 0, so
     // that one combination is refused here rather than mis-placed; the MSVC arm
-    // (`kuna_msvcsig`) reads it with its convention.
+    // (`unlace_msvcsig`) reads it with its convention.
     let msvc = prefix.contains("__cdecl")
         || prefix.contains("__thiscall")
         || prefix.contains("__stdcall")
@@ -713,7 +713,7 @@ pub(super) fn strip_template_args(s: &str) -> String {
 ///
 /// `outtype` is deliberately `None`: Itanium encodes a return type only for a
 /// template function, so there is nothing to apply, and inventing `void` would
-/// DELETE the return value kuna's own recovery finds (upstream's
+/// DELETE the return value unlace's own recovery finds (upstream's
 /// `resolveReturnType` returns null here for the same reason). `None` is read by
 /// `Funcdata::apply_locked_prototype` as "lock the input half only".
 fn build_pieces(
@@ -735,7 +735,7 @@ fn build_pieces(
         innames.push(String::new());
     }
     if intypes.is_empty() && !decl.varargs {
-        // Nothing to say about a `void`-parameter function that kuna does not
+        // Nothing to say about a `void`-parameter function that unlace does not
         // already derive; locking an empty input list would only suppress its own
         // recovery.
         return None;
@@ -762,11 +762,11 @@ fn build_pieces(
         first_var_arg_slot,
         output_storage: None,
         input_storage: Vec::new(),
-        kuna_library_names: None,
+        unlace_library_names: None,
     })
 }
 
-/// Map one demangled parameter type to a kuna [`Datatype`], or `None` when the
+/// Map one demangled parameter type to a unlace [`Datatype`], or `None` when the
 /// declaration describes something this pass refuses to model.
 ///
 /// The accepted grammar is deliberately narrow, because the demangled text
@@ -864,7 +864,7 @@ fn build_param_type(
 fn class_record(types: &dyn TypeFactory, name: &str) -> Option<Rc<Datatype>> {
     match types.find_by_name(name).ok()? {
         Some(ct) => (ct.get_metatype() == type_metatype::TYPE_STRUCT).then_some(ct),
-        None => types.kuna_declare_record(name, false).ok(),
+        None => types.unlace_declare_record(name, false).ok(),
     }
 }
 

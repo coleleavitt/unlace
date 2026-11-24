@@ -1,7 +1,7 @@
-//! (kuna `objcarc`) Hide ARC bookkeeping: the Objective-C runtime's
+//! (unlace `objcarc`) Hide ARC bookkeeping: the Objective-C runtime's
 //! retain/release/autorelease calls become the copies and stores they stand
 //! for, through `<callfixup>` payloads registered beside the compiler specs'
-//! (the `kuna_msvcftol` pattern).
+//! (the `unlace_msvcftol` pattern).
 //!
 //! An ARC-compiled method is strewn with `objc_retain(x)`, `objc_release(x)`,
 //! `v = objc_retainAutoreleasedReturnValue(v)` and `objc_storeStrong(&slot, x)`.
@@ -17,7 +17,7 @@
 //! starts with `RSP = RSP + 8` (the `alloca_probe` correction); arm64 `bl` only
 //! writes `x30`.
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 
 /// Every fixup this module registers starts with this; the installer
 /// (`unlace_analysis::analyzers::callfixup`) drops them all under `option objcarc off`.
@@ -121,8 +121,8 @@ pub fn payload_xml(
 /// Parse `xml` — one `<callfixup>` after another — and hand each root to `register`.
 pub fn decode_payload(
     xml: &str,
-    register: &mut dyn FnMut(&std::rc::Rc<unlace_base::xml::Element>) -> KunaResult<()>,
-) -> KunaResult<()> {
+    register: &mut dyn FnMut(&std::rc::Rc<unlace_base::xml::Element>) -> UnlaceResult<()>,
+) -> UnlaceResult<()> {
     use unlace_base::xml::DocumentStorage;
     let wrapped = format!("<kuna_objcarc>\n{xml}</kuna_objcarc>");
     let mut store = DocumentStorage::new();
@@ -133,8 +133,8 @@ pub fn decode_payload(
     Ok(())
 }
 
-crate::kuna_flag!(
-    /// (kuna `objcarc`) Install the Objective-C ARC call-fixups
+crate::unlace_flag!(
+    /// (unlace `objcarc`) Install the Objective-C ARC call-fixups
     /// (`p2_lift/objcarc.rs`): retain/autorelease pass-throughs become
     /// copies, releases vanish, `objc_storeStrong` is its store. Default on;
     /// read by the analysis-tier call-fixup installer like `msvc_ftol`.
@@ -146,7 +146,7 @@ crate::kuna_flag!(
 );
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.objcarc_decode_payload = Some(decode_payload);
     hooks.objcarc_payload_xml = Some(payload_xml);
 }

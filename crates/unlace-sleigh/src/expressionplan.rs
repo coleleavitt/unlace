@@ -1,7 +1,7 @@
 //! Prepared runtime expression evaluation, retaining the original tree for
 //! encoding, inspection, compiler rewrites and replacement-value evaluation.
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::types::Wrap;
 
 use crate::slghpatexpress::{
@@ -92,7 +92,7 @@ impl ExpressionPlan {
     pub(crate) fn get_value(
         &self,
         walker: &(impl PatternExpressionContext + ?Sized),
-    ) -> KunaResult<i64> {
+    ) -> UnlaceResult<i64> {
         if self.stack_depth == 0 {
             return self.execute(walker, &mut []);
         }
@@ -104,7 +104,7 @@ impl ExpressionPlan {
         &self,
         walker: &(impl PatternExpressionContext + ?Sized),
         stack: &mut [i64],
-    ) -> KunaResult<i64> {
+    ) -> UnlaceResult<i64> {
         let mut value = 0;
         let mut depth = 0;
         for step in &self.steps {
@@ -283,7 +283,7 @@ mod tests {
     use crate::slghpatexpress::{BinaryExpression, ConstantValue, OperandValue, UnaryExpression};
     use std::cell::RefCell;
     use unlace_base::address::Address;
-    use unlace_base::error::{KunaError, KunaResult};
+    use unlace_base::error::{UnlaceError, UnlaceResult};
 
     struct Walker {
         values: [i64; 4],
@@ -292,10 +292,10 @@ mod tests {
     }
 
     impl PatternExpressionContext for Walker {
-        fn get_instruction_bytes(&self, _: i32, _: i32) -> KunaResult<u32> {
-            Err(KunaError::bad_data("instruction read"))
+        fn get_instruction_bytes(&self, _: i32, _: i32) -> UnlaceResult<u32> {
+            Err(UnlaceError::bad_data("instruction read"))
         }
-        fn get_context_bytes(&self, _: i32, _: i32) -> KunaResult<u32> {
+        fn get_context_bytes(&self, _: i32, _: i32) -> UnlaceResult<u32> {
             unreachable!()
         }
         fn get_addr(&self) -> Address {
@@ -304,13 +304,13 @@ mod tests {
         fn get_naddr(&self) -> Address {
             Address::default()
         }
-        fn get_n2addr(&self) -> KunaResult<Address> {
-            Err(KunaError::sleigh("next2"))
+        fn get_n2addr(&self) -> UnlaceResult<Address> {
+            Err(UnlaceError::sleigh("next2"))
         }
-        fn operand_value(&self, index: i32, table: u32, ct: u32) -> KunaResult<i64> {
+        fn operand_value(&self, index: i32, table: u32, ct: u32) -> UnlaceResult<i64> {
             self.reads.borrow_mut().push((index, table, ct));
             if self.fail == Some(index) {
-                return Err(KunaError::sleigh("operand failure"));
+                return Err(UnlaceError::sleigh("operand failure"));
             }
             Ok(self.values[index as usize])
         }

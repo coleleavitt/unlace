@@ -1,4 +1,4 @@
-//! (kuna) A user op a processor spec names for a rounding to an integral value
+//! (unlace) A user op a processor spec names for a rounding to an integral value
 //! that p-code has no operator for takes one float and returns a float of the
 //! same width (P5).
 //!

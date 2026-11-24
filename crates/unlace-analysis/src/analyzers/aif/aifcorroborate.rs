@@ -1,4 +1,4 @@
-//! (kuna) `aif precise` — the AIF accept needs corroboration, not just a
+//! (unlace) `aif precise` — the AIF accept needs corroboration, not just a
 //! 4-shared prologue (P1 code/data partition).
 //!
 //! # The defect (GH-313)
@@ -14,7 +14,7 @@
 //!                                               if (numInstr <= 2 || (!addsInfo && startCount < 50)) { continue; }
 //! ```
 //!
-//! kuna ported the first test ([`super::FINGERPRINT_THRESHOLD`]) and the
+//! unlace ported the first test ([`super::FINGERPRINT_THRESHOLD`]) and the
 //! `numInstr <= 2` half of the second ([`super::MIN_SUBROUTINE_INSNS`]), and
 //! dropped `(!addsInfo && startCount < 50)` entirely. Both of its inputs exist —
 //! `check_valid_subroutine_with_policy` walks the candidate's flows, and
@@ -36,7 +36,7 @@
 //! **The corroborating fact is computed upstream's way.** Ghidra's `addsInfo` is
 //! set only from `instr.getFlows()` — unconditionally on a call ("calls always add
 //! info"), and on a jump only when `listing.getInstructionAt(flows[0]) != null`
-//! ("jumps must jump to existing code"). kuna's own `adds_info`, which feeds the
+//! ("jumps must jump to existing code"). unlace's own `adds_info`, which feeds the
 //! separate `didTerminate || didCallValidSubroutine` gate, is looser: its
 //! out-of-gap arm counts any flow target that is a known instruction start,
 //! including a plain FALL-THROUGH off the end of the hole into decoded code. That
@@ -89,7 +89,7 @@
 //! a number rather than a hypothesis. What upstream's guard assumes — that a
 //! function worth finding calls something the analyzer already knows — does not
 //! hold for the bare-metal ARM firmware that is AIF's remaining justification in
-//! kuna, where the routines only AIF can find are exactly the leaf helpers that
+//! unlace, where the routines only AIF can find are exactly the leaf helpers that
 //! call nothing.
 
 /// Ghidra's `startCount < 50` (`AggressiveInstructionFinderAnalyzer.java:367`):

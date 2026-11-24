@@ -12,7 +12,7 @@ use unlace_num::opcodes::OpCode;
 #[doc(hidden)]
 pub fn recover(fd: &Funcdata, arch: &Architecture, op: OpId) -> Option<(&'static str, String)> {
     if !arch
-        .kuna_options
+        .unlace_options
         .get::<crate::rustfmt::RustFmtMode>()
         .recovers()
         || arch.source_lang() != crate::sourcelang::SourceLang::Rust

@@ -1,4 +1,4 @@
-//! (kuna) `picbase` — resolve an i386 PIC base register to its constant, so a
+//! (unlace) `picbase` — resolve an i386 PIC base register to its constant, so a
 //! GOT-relative address formation becomes a cross-reference to the thing it
 //! forms.
 //!
@@ -43,7 +43,7 @@
 //!    `_GLOBAL_OFFSET_TABLE_` ([`got_base`]) and every idiom in the program must
 //!    agree on one register and one value. Absent the match, nothing is claimed.
 //!
-//! The module-wide half is not a nicety: kuna's function inventory splits the
+//! The module-wide half is not a nicety: unlace's function inventory splits the
 //! filing crackme's one prompt routine into four entries at its `int3` traps,
 //! and the `lea` that forms `"Password: "` lands in a *different* entry from the
 //! idiom that set `ebx` up.

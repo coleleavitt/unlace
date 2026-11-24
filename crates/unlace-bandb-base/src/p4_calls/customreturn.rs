@@ -2,13 +2,13 @@
 use crate::dtype::TypeFactory;
 use crate::fspec::PrototypePieces;
 use std::borrow::Cow;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 
 #[doc(hidden)]
 pub fn input_assignment<'a>(
     pieces: &'a PrototypePieces,
     types: &dyn TypeFactory,
-) -> KunaResult<Cow<'a, PrototypePieces>> {
+) -> UnlaceResult<Cow<'a, PrototypePieces>> {
     if pieces.output_storage.is_none() {
         return Ok(Cow::Borrowed(pieces));
     }
@@ -18,6 +18,6 @@ pub fn input_assignment<'a>(
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.customreturn_input_assignment = Some(input_assignment);
 }

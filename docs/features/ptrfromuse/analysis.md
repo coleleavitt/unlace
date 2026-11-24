@@ -121,7 +121,7 @@ ordinary offset keeps its candidate from that use (one of the nine, O0 bzip2
 *unnamed* byte-element table is declined rather than typed — the safe direction,
 but by accident rather than by knowing. A parameter used both as such a subscript
 and as a real memory base is typed on the strength of the second use, and its
-subscripted global loses its name in the body. `tests/stages/kuna-ptrfromuse.toml`
+subscripted global loses its name in the body. `tests/stages/ptrfromuse.toml`
 pins both grades (`globalindex`, `blindindex`); each was proven two-pass with a
 throwaway build that short-circuits its own arm.
 
@@ -271,4 +271,4 @@ of the class the rule has to get right. The flip sweep adds the ARM32 firmwares
 whole-corpus diff, and the four sites that spell a named global subscripted by a
 parameter (O0 and O2 `dash`, O0 `tar`) were re-checked with the default flipped:
 all four print the same in both arms. The grade is still pinned by
-`tests/stages/kuna-ptrfromuse.toml` (`globalindex`, `blindindex`).
+`tests/stages/ptrfromuse.toml` (`globalindex`, `blindindex`).

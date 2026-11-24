@@ -1,4 +1,4 @@
-//! (kuna `authptrcall`) Bind a call through an arm64e `__auth_ptr` slot to the
+//! (unlace `authptrcall`) Bind a call through an arm64e `__auth_ptr` slot to the
 //! import its chained bind names.
 //!
 //! An arm64e link keeps two pointer tables for imported functions. `__auth_got`

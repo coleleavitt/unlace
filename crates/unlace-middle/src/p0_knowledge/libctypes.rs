@@ -1,4 +1,4 @@
-//! (kuna `libctypes`) The named-libc-aggregate gate — spell a libc/POSIX
+//! (unlace `libctypes`) The named-libc-aggregate gate — spell a libc/POSIX
 //! aggregate pointer in the built-in prototype tables (`FILE *`, `stat *`,
 //! `DIR *`, `option *`, …) instead of the width-stable `void *` those slots
 //! carry today.
@@ -75,7 +75,7 @@ pub enum LibcTypesLayout {
 /// The layout this process asks for, from [`LIBCTYPES_ENV`]. Unset ⇒
 /// [`LibcTypesLayout::Opaque`] (the shipped default); an unrecognised token is
 /// read as `Opaque` rather than refused, because this is a bridge, not the
-/// validator — `Architecture::set_kuna_option` rejects a bad value at the
+/// validator — `Architecture::set_unlace_option` rejects a bad value at the
 /// `option` line, where the operator can see it.
 pub fn libctypes_layout() -> LibcTypesLayout {
     crate::loadoptions::scoped(|o| o.libctypes).unwrap_or_else(crate::loadoptions::env::libctypes)
@@ -118,7 +118,7 @@ pub const AGGREGATE_NAMES: &[&str] = &[
     "utmpx",
 ];
 
-/// Export a `set_kuna_option("libctypes", val)` choice to [`LIBCTYPES_ENV`] so a
+/// Export a `set_unlace_option("libctypes", val)` choice to [`LIBCTYPES_ENV`] so a
 /// later `load file` in the *same* process sees it (the interactive
 /// `option libctypes glibc` before `load file` path; the CLI sets the env var on
 /// the subprocess directly).
@@ -136,9 +136,9 @@ pub fn set_libctypes_env_layout(layout: LibcTypesLayout) {
     };
 }
 
-impl crate::optionset::KunaOption for LibcTypesLayout {
+impl crate::optionset::UnlaceOption for LibcTypesLayout {
     const NAME: &'static str = "libctypes";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         LibcTypesLayout::Off
@@ -148,13 +148,13 @@ impl crate::optionset::KunaOption for LibcTypesLayout {
         LibcTypesLayout::Opaque
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let layout = match value.trim().to_ascii_lowercase().as_str() {
             "opaque" | "on" | "1" | "true" => LibcTypesLayout::Opaque,
             "glibc" => LibcTypesLayout::Glibc,
             "off" | "0" | "false" => LibcTypesLayout::Off,
             other => {
-                return Err(unlace_base::error::KunaError::lowlevel(format!(
+                return Err(unlace_base::error::UnlaceError::lowlevel(format!(
                     "libctypes: expected `off`, `opaque` or `glibc`, got `{other}`"
                 )));
             }

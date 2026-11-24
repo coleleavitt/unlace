@@ -1,4 +1,4 @@
-//! (kuna `msvceh`) MSVC C++ exception metadata, the `try`/`catch` side (x64).
+//! (unlace `msvceh`) MSVC C++ exception metadata, the `try`/`catch` side (x64).
 //!
 //! An x64 function with a C++ `try` names a language-specific handler in its
 //! `UNWIND_INFO`: `__CxxFrameHandler3` or `__GSHandlerCheck_EH` with a

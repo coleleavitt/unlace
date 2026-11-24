@@ -1,7 +1,7 @@
 //! Porter in-module tests for `userop.rs`.
 //!
 //! Cover the `UserPcodeOp` hierarchy constructors (incl. the BUILTIN_* ids and
-//! kuna's `BUILTIN_MEMSET`), `UserOpManage` registration/lookup parity, and the
+//! unlace's `BUILTIN_MEMSET`), `UserOpManage` registration/lookup parity, and the
 //! decode of real `<callotherfixup>`/`<segmentop>`/`<jumpassist>` elements
 //! grepped from the vendored cspec/pspec files.
 
@@ -67,13 +67,13 @@ impl UseropArchitecture for TestArch {
         suffix: &[u8],
         tp: int4,
         decoder: &mut dyn Decoder,
-    ) -> KunaResult<int4> {
+    ) -> UnlaceResult<int4> {
         self.lib.decode_inject(src, suffix, tp, decoder)
     }
     fn get_call_other_target(&self, injectid: int4) -> Vec<u8> {
         self.lib.base.get_call_other_target(injectid)
     }
-    fn payload_io_sizes(&self, injectid: int4) -> KunaResult<(int4, int4, int4, int4)> {
+    fn payload_io_sizes(&self, injectid: int4) -> UnlaceResult<(int4, int4, int4, int4)> {
         let core = self.lib.get_payload(injectid).core();
         let in0 = if core.size_input() > 0 {
             core.get_input(0).get_size() as int4
@@ -123,7 +123,7 @@ fn builtin_ids_are_pinned() {
     assert_eq!(BUILTIN_MEMCPY, 0x10000003);
     assert_eq!(BUILTIN_STRNCPY, 0x10000004);
     assert_eq!(BUILTIN_WCSNCPY, 0x10000005);
-    // (kuna) GH-9230
+    // (unlace) GH-9230
     assert_eq!(BUILTIN_MEMSET, 0x10000006);
     assert_eq!(BUILTIN_SYSCALL_ERROR, 0x10000007);
 }

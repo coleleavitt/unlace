@@ -8,7 +8,7 @@
 //! class (a rebase slot's `class_t`, or an imported class's bind name) and the
 //! two method lists; the caller renames the IMPs `-[Class(Category) sel]` through
 //! the same path as a class's own methods. The property lists type the
-//! getters and setters (`kuna_objcprops`); the protocol list is not read, since
+//! getters and setters (`unlace_objcprops`); the protocol list is not read, since
 //! nothing in the emitted C would show it.
 
 use super::classt;

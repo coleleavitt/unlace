@@ -1,4 +1,4 @@
-//! (kuna `guardedloop`) A guarded do-while loop prints as a while loop.
+//! (unlace `guardedloop`) A guarded do-while loop prints as a while loop.
 //!
 //! clang rotates `while (c) B` into `if (g) { I; do B while (c); }`, where the
 //! guard `g` is `c` on the values the assignments `I` give the loop.  On the
@@ -641,7 +641,7 @@ fn empty_body(data: &Funcdata, w: BlockId) -> bool {
 pub fn guardedloop_apply(data: &mut Funcdata) -> i32 {
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::coreoptions::GuardedLoop>()
         .0
         || data.sblocks_get_size() == 0
@@ -655,7 +655,8 @@ pub fn guardedloop_apply(data: &mut Funcdata) -> i32 {
     while let Some(id) = stack.pop() {
         let b = data.sblocks_ref().block(id);
         stack.extend(b.get_list().iter().copied());
-        if b.get_type() == BlockType::DoWhile && b.get_flags() & block_flags::f_kuna_top_test == 0 {
+        if b.get_type() == BlockType::DoWhile && b.get_flags() & block_flags::f_unlace_top_test == 0
+        {
             loops.push(id);
         }
     }
@@ -664,7 +665,7 @@ pub fn guardedloop_apply(data: &mut Funcdata) -> i32 {
         if empty_body(data, w) {
             data.sblocks_mut()
                 .block_mut(w)
-                .set_flag(block_flags::f_kuna_top_test);
+                .set_flag(block_flags::f_unlace_top_test);
             count += 1;
             continue;
         }
@@ -672,7 +673,7 @@ pub fn guardedloop_apply(data: &mut Funcdata) -> i32 {
             continue;
         };
         let graph = data.sblocks_mut();
-        graph.block_mut(w).set_flag(block_flags::f_kuna_top_test);
+        graph.block_mut(w).set_flag(block_flags::f_unlace_top_test);
         if let Some(guard) = drop {
             *graph.block_mut(guard).kind_mut() = BlockKind::Ls;
         }

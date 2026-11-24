@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::IdRegistry;
 use unlace_base::space::AddrSpaceManager;
 use unlace_base::xml::{DocumentStorage, Element};
@@ -153,8 +153,8 @@ impl LoadImage for DummyImg {
     fn get_file_name(&self) -> &str {
         "dummy"
     }
-    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> KunaResult<()> {
-        Err(KunaError::data_unavail("dummy"))
+    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> UnlaceResult<()> {
+        Err(UnlaceError::data_unavail("dummy"))
     }
     fn get_arch_type(&self) -> Vec<u8> {
         Vec::new()
@@ -396,7 +396,7 @@ fn option_command_mutates_the_real_architecture() {
     let arch = xarch.sleigh_mut().base_mut().expect("Architecture base");
 
     let options = OptionDatabase::new();
-    let set = |arch: &mut Architecture, name: &str, p1: &str| -> KunaResult<String> {
+    let set = |arch: &mut Architecture, name: &str, p1: &str| -> UnlaceResult<String> {
         let id = registry.find_element(name, 0);
         assert!(id != 0, "option element `{name}` is not registered");
         options.set(arch, id, p1, "", "")
@@ -419,7 +419,7 @@ fn option_command_mutates_the_real_architecture() {
     );
 
     // (2) the printer: `option nullprinting off` -> PrintC option flips.
-    //     (kuna DIV-34: null printing is default-ON; the option still drives it.)
+    //     (unlace DIV-34: null printing is default-ON; the option still drives it.)
     assert!(
         arch.print().options.null,
         "precondition: null printing on (DIV-34)"
@@ -505,7 +505,7 @@ fn maxinstruction_option_bounds_flow_following() {
     let entry = Address::new(space, sym.offset);
 
     let options = OptionDatabase::new();
-    let set = |arch: &mut Architecture, name: &str, p1: &str| -> KunaResult<String> {
+    let set = |arch: &mut Architecture, name: &str, p1: &str| -> UnlaceResult<String> {
         let id = registry.find_element(name, 0);
         assert!(id != 0, "option element `{name}` is not registered");
         options.set(arch, id, p1, "", "")

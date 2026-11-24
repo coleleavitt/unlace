@@ -50,7 +50,7 @@ fn rust_caps_forbid_the_c_only_constructs() {
     assert!(c.switch_multi_label, "A | B => is the multi-label form");
 }
 
-/// The three kuna rendering defaults that are ON and produce non-Rust text.
+/// The three unlace rendering defaults that are ON and produce non-Rust text.
 /// Each is neutralized by a capability rather than by asking an operator to flip
 /// an option, which is what makes selecting Rust a single correct choice.
 #[test]
@@ -67,7 +67,7 @@ fn rust_caps_neutralize_the_default_on_c_renderings() {
 }
 
 /// The hazard this record exists to close: a C `switch` captures a bare `break`,
-/// which is why `kuna_scope_break` retags a goto-to-switch-exit as
+/// which is why `unlace_scope_break` retags a goto-to-switch-exit as
 /// `f_break_goto`. A Rust `match` does not, so the same flag rendered naively
 /// inside a `match` arm inside a loop would break the *loop*.
 #[test]

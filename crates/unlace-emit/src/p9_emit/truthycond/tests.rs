@@ -12,7 +12,7 @@ fn apply_parses_on_off_and_reports() {
 }
 
 #[test]
-fn elem_id_is_in_the_kuna_range() {
+fn elem_id_is_in_the_unlace_range() {
     assert_eq!(ELEM_TRUTHYCOND.get_id(), 4115);
     assert_eq!(OptionTruthyCond::NAME, "truthycond");
 }

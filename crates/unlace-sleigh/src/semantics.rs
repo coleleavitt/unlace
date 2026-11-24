@@ -16,7 +16,7 @@
 
 use std::rc::Rc;
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::{Decoder, Encoder};
 use unlace_base::space::{AddrSpace, spacetype};
 use unlace_base::types::Wrap;
@@ -279,7 +279,7 @@ impl ConstTpl {
     /// C++ `fix(const ParserWalker &)`: get the value of the ConstTpl in
     /// context.  NOTE: if the property is dynamic this returns the property
     /// of the temporary storage.
-    pub fn fix(&self, walker: &(impl SymbolWalker + ?Sized)) -> KunaResult<u64> {
+    pub fn fix(&self, walker: &(impl SymbolWalker + ?Sized)) -> UnlaceResult<u64> {
         match self.type_ {
             // Fill in starting address placeholder with real address
             ConstType::JStart => Ok(walker.get_addr().get_offset()),
@@ -355,7 +355,7 @@ impl ConstTpl {
     pub fn fix_space(
         &self,
         walker: &(impl SymbolWalker + ?Sized),
-    ) -> KunaResult<Option<Rc<AddrSpace>>> {
+    ) -> UnlaceResult<Option<Rc<AddrSpace>>> {
         match self.type_ {
             ConstType::JCurspace => return Ok(Some(walker.get_cur_space())),
             ConstType::Handle => {
@@ -369,7 +369,9 @@ impl ConstTpl {
             ConstType::JFlowref => return Ok(walker.get_ref_addr()?.get_space().cloned()),
             _ => {}
         }
-        Err(KunaError::lowlevel("ConstTpl is not a spaceid as expected"))
+        Err(UnlaceError::lowlevel(
+            "ConstTpl is not a spaceid as expected",
+        ))
     }
 
     /// C++ `fillinSpace`: fill in the space portion of a FixedHandle, based
@@ -378,7 +380,7 @@ impl ConstTpl {
         &self,
         hand: &mut FixedHandle,
         walker: &(impl SymbolWalker + ?Sized),
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         match self.type_ {
             ConstType::JCurspace => {
                 hand.space = Some(walker.get_cur_space());
@@ -398,7 +400,9 @@ impl ConstTpl {
             }
             _ => {}
         }
-        Err(KunaError::lowlevel("ConstTpl is not a spaceid as expected"))
+        Err(UnlaceError::lowlevel(
+            "ConstTpl is not a spaceid as expected",
+        ))
     }
 
     /// C++ `fillinOffset`: fill in the offset portion of a FixedHandle,
@@ -409,7 +413,7 @@ impl ConstTpl {
         &self,
         hand: &mut FixedHandle,
         walker: &(impl SymbolWalker + ?Sized),
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         if self.type_ == ConstType::Handle {
             let otherhand = walker.borrow_fixed_handle(self.value_handle_index)?;
             crate::handleview::export_offset(otherhand, hand);
@@ -425,7 +429,7 @@ impl ConstTpl {
     }
 
     /// C++ `transfer`: replace old handles with new handles.
-    pub fn transfer(&mut self, params: &[HandleTpl]) -> KunaResult<()> {
+    pub fn transfer(&mut self, params: &[HandleTpl]) -> UnlaceResult<()> {
         if self.type_ != ConstType::Handle {
             return Ok(());
         }
@@ -448,7 +452,7 @@ impl ConstTpl {
                     self.select = VField::VOffsetPlus;
                     self.value_real = tmp;
                 } else {
-                    return Err(KunaError::lowlevel(
+                    return Err(UnlaceError::lowlevel(
                         "Cannot truncate macro input in this way",
                     ));
                 }
@@ -535,7 +539,7 @@ impl ConstTpl {
     }
 
     /// C++ `decode`.
-    pub fn decode(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    pub fn decode(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         let el = decoder.open_element()?;
         if el == sla::ELEM_CONST_REAL {
             self.type_ = ConstType::Real;
@@ -552,7 +556,7 @@ impl ConstTpl {
                 1 => VField::VOffset,
                 2 => VField::VSize,
                 3 => VField::VOffsetPlus,
-                _ => return Err(KunaError::decoder("Bad handle selector encoding")),
+                _ => return Err(UnlaceError::decoder("Bad handle selector encoding")),
             };
             if self.select == VField::VOffsetPlus {
                 self.value_real = decoder.read_unsigned_integer_id(&sla::ATTRIB_PLUS)?;
@@ -583,7 +587,7 @@ impl ConstTpl {
             self.type_ = ConstType::JFlowdestSize;
         } else {
             // C++ throws LowlevelError (not DecoderError) here
-            return Err(KunaError::lowlevel("Bad constant type"));
+            return Err(UnlaceError::lowlevel("Bad constant type"));
         }
         decoder.close_element(el)
     }
@@ -670,7 +674,7 @@ impl VarnodeTpl {
     }
 
     /// C++ `isDynamic`.
-    pub fn is_dynamic(&self, walker: &(impl SymbolWalker + ?Sized)) -> KunaResult<bool> {
+    pub fn is_dynamic(&self, walker: &(impl SymbolWalker + ?Sized)) -> UnlaceResult<bool> {
         if self.offset.get_type() != ConstType::Handle {
             return Ok(false);
         }
@@ -683,7 +687,7 @@ impl VarnodeTpl {
 
     /// C++ `transfer`: a positive return indicates truncation of a local
     /// temp or a zero-size object; -1 otherwise.
-    pub fn transfer(&mut self, params: &[HandleTpl]) -> KunaResult<i32> {
+    pub fn transfer(&mut self, params: &[HandleTpl]) -> UnlaceResult<i32> {
         let mut does_offset_plus = false;
         let mut handle_index: i32 = 0;
         let mut plus: i32 = 0;
@@ -816,7 +820,7 @@ impl VarnodeTpl {
     }
 
     /// C++ `decode`.
-    pub fn decode(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    pub fn decode(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         let el = decoder.open_element_id(&sla::ELEM_VARNODE_TPL)?;
         self.space.decode(decoder)?;
         self.offset.decode(decoder)?;
@@ -950,7 +954,7 @@ impl HandleTpl {
         &self,
         hand: &mut FixedHandle,
         walker: &(impl SymbolWalker + ?Sized),
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         if self.ptrspace.get_type() == ConstType::Real {
             // The export is unstarred, but this doesn't mean the varnode
             // being exported isn't dynamic
@@ -1012,7 +1016,7 @@ impl HandleTpl {
     }
 
     /// C++ `decode`.
-    pub fn decode(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    pub fn decode(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         let el = decoder.open_element_id(&sla::ELEM_HANDLE_TPL)?;
         self.space.decode(decoder)?;
         self.size.decode(decoder)?;
@@ -1161,7 +1165,7 @@ impl OpTpl {
     }
 
     /// C++ `decode`.
-    pub fn decode(&mut self, decoder: &mut dyn OpcodeDecoder) -> KunaResult<()> {
+    pub fn decode(&mut self, decoder: &mut dyn OpcodeDecoder) -> UnlaceResult<()> {
         let el = decoder.open_element_id(&sla::ELEM_OP_TPL)?;
         self.opc = decoder.read_opcode_id(&sla::ATTRIB_CODE)?;
         let subel = decoder.peek_element()?;
@@ -1396,7 +1400,7 @@ impl ConstructTpl {
     }
 
     /// C++ `decode`: returns the section id (-1 for the main section).
-    pub fn decode(&mut self, decoder: &mut dyn OpcodeDecoder) -> KunaResult<i32> {
+    pub fn decode(&mut self, decoder: &mut dyn OpcodeDecoder) -> UnlaceResult<i32> {
         let el = decoder.open_element_id(&sla::ELEM_CONSTRUCT_TPL)?;
         let mut sectionid: i32 = -1;
         let mut attrib = decoder.get_next_attribute_id()?;
@@ -1452,22 +1456,22 @@ pub trait PcodeBuilder {
     fn set_label_count(&mut self, val: u32);
 
     /// C++ pure virtual `dump`.
-    fn dump(&mut self, op: &OpTpl) -> KunaResult<()>;
+    fn dump(&mut self, op: &OpTpl) -> UnlaceResult<()>;
     /// C++ pure virtual `appendBuild`.
-    fn append_build(&mut self, bld: &OpTpl, secnum: i32) -> KunaResult<()>;
+    fn append_build(&mut self, bld: &OpTpl, secnum: i32) -> UnlaceResult<()>;
     /// C++ pure virtual `delaySlot`.
-    fn delay_slot(&mut self, op: &OpTpl) -> KunaResult<()>;
+    fn delay_slot(&mut self, op: &OpTpl) -> UnlaceResult<()>;
     /// C++ pure virtual `setLabel`.
-    fn set_label(&mut self, op: &OpTpl) -> KunaResult<()>;
+    fn set_label(&mut self, op: &OpTpl) -> UnlaceResult<()>;
     /// C++ pure virtual `appendCrossBuild`.
-    fn append_cross_build(&mut self, bld: &OpTpl, secnum: i32) -> KunaResult<()>;
+    fn append_cross_build(&mut self, bld: &OpTpl, secnum: i32) -> UnlaceResult<()>;
 
     /// C++ `PcodeBuilder::build` (semantics.cc): `None` mirrors the C++
     /// null `ConstructTpl *` and produces `UnimplError("",0)`.
-    fn build(&mut self, construct: Option<&ConstructTpl>, secnum: i32) -> KunaResult<()> {
+    fn build(&mut self, construct: Option<&ConstructTpl>, secnum: i32) -> UnlaceResult<()> {
         let construct = match construct {
             // Pcode is not implemented for this constructor
-            None => return Err(KunaError::unimpl("", 0)),
+            None => return Err(UnlaceError::unimpl("", 0)),
             Some(c) => c,
         };
 
@@ -1573,11 +1577,13 @@ mod tests {
     }
 
     impl PatternExpressionContext for TestWalker {
-        fn get_instruction_bytes(&self, _byteoff: i32, _numbytes: i32) -> KunaResult<u32> {
-            Err(KunaError::sleigh("no instruction bytes in semantics tests"))
+        fn get_instruction_bytes(&self, _byteoff: i32, _numbytes: i32) -> UnlaceResult<u32> {
+            Err(UnlaceError::sleigh(
+                "no instruction bytes in semantics tests",
+            ))
         }
-        fn get_context_bytes(&self, _byteoff: i32, _numbytes: i32) -> KunaResult<u32> {
-            Err(KunaError::sleigh("no context bytes in semantics tests"))
+        fn get_context_bytes(&self, _byteoff: i32, _numbytes: i32) -> UnlaceResult<u32> {
+            Err(UnlaceError::sleigh("no context bytes in semantics tests"))
         }
         fn get_addr(&self) -> Address {
             self.addr.clone()
@@ -1585,39 +1591,39 @@ mod tests {
         fn get_naddr(&self) -> Address {
             self.naddr.clone()
         }
-        fn get_n2addr(&self) -> KunaResult<Address> {
+        fn get_n2addr(&self) -> UnlaceResult<Address> {
             self.n2addr
                 .clone()
-                .ok_or_else(|| KunaError::lowlevel("inst_next2 not available in this context"))
+                .ok_or_else(|| UnlaceError::lowlevel("inst_next2 not available in this context"))
         }
-        fn operand_value(&self, _index: i32, _table_id: u32, _ct_id: u32) -> KunaResult<i64> {
-            Err(KunaError::sleigh("no operand values in semantics tests"))
+        fn operand_value(&self, _index: i32, _table_id: u32, _ct_id: u32) -> UnlaceResult<i64> {
+            Err(UnlaceError::sleigh("no operand values in semantics tests"))
         }
     }
 
     impl SymbolWalker for TestWalker {
-        fn push_operand(&mut self, _i: i32) -> KunaResult<()> {
+        fn push_operand(&mut self, _i: i32) -> UnlaceResult<()> {
             Ok(())
         }
-        fn pop_operand(&mut self) -> KunaResult<()> {
+        fn pop_operand(&mut self) -> UnlaceResult<()> {
             Ok(())
         }
-        fn get_constructor(&self) -> KunaResult<ConstructorRef> {
-            Err(KunaError::sleigh("no constructor in semantics tests"))
+        fn get_constructor(&self) -> UnlaceResult<ConstructorRef> {
+            Err(UnlaceError::sleigh("no constructor in semantics tests"))
         }
-        fn get_fixed_handle(&self, i: i32) -> KunaResult<FixedHandle> {
+        fn get_fixed_handle(&self, i: i32) -> UnlaceResult<FixedHandle> {
             self.owned_reads.set(self.owned_reads.get() + 1);
             self.handles
                 .get(i as usize)
                 .cloned()
-                .ok_or_else(|| KunaError::sleigh("no fixed handle for operand"))
+                .ok_or_else(|| UnlaceError::sleigh("no fixed handle for operand"))
         }
-        fn borrow_fixed_handle(&self, i: i32) -> KunaResult<Cow<'_, FixedHandle>> {
+        fn borrow_fixed_handle(&self, i: i32) -> UnlaceResult<Cow<'_, FixedHandle>> {
             if self.borrowed_handles {
                 self.handles
                     .get(i as usize)
                     .map(Cow::Borrowed)
-                    .ok_or_else(|| KunaError::sleigh("no fixed handle for operand"))
+                    .ok_or_else(|| UnlaceError::sleigh("no fixed handle for operand"))
             } else {
                 self.get_fixed_handle(i).map(Cow::Owned)
             }
@@ -1628,21 +1634,23 @@ mod tests {
         fn get_cur_space(&self) -> Rc<AddrSpace> {
             Rc::clone(&self.cur_space)
         }
-        fn get_dest_addr(&self) -> KunaResult<Address> {
+        fn get_dest_addr(&self) -> UnlaceResult<Address> {
             self.dest_addr
                 .clone()
-                .ok_or_else(|| KunaError::lowlevel("no flowdest"))
+                .ok_or_else(|| UnlaceError::lowlevel("no flowdest"))
         }
-        fn get_ref_addr(&self) -> KunaResult<Address> {
+        fn get_ref_addr(&self) -> UnlaceResult<Address> {
             self.ref_addr
                 .clone()
-                .ok_or_else(|| KunaError::lowlevel("no flowref"))
+                .ok_or_else(|| UnlaceError::lowlevel("no flowref"))
         }
-        fn get_instruction_bits(&self, _startbit: i32, _size: i32) -> KunaResult<u32> {
-            Err(KunaError::sleigh("no instruction bits in semantics tests"))
+        fn get_instruction_bits(&self, _startbit: i32, _size: i32) -> UnlaceResult<u32> {
+            Err(UnlaceError::sleigh(
+                "no instruction bits in semantics tests",
+            ))
         }
-        fn get_context_bits(&self, _startbit: i32, _size: i32) -> KunaResult<u32> {
-            Err(KunaError::sleigh("no context bits in semantics tests"))
+        fn get_context_bits(&self, _startbit: i32, _size: i32) -> UnlaceResult<u32> {
+            Err(UnlaceError::sleigh("no context bits in semantics tests"))
         }
     }
 
@@ -2514,24 +2522,24 @@ mod tests {
         fn set_label_count(&mut self, val: u32) {
             self.labelcount = val;
         }
-        fn dump(&mut self, op: &OpTpl) -> KunaResult<()> {
+        fn dump(&mut self, op: &OpTpl) -> UnlaceResult<()> {
             self.calls.push(format!("dump:{:?}", op.get_opcode()));
             self.inside.push((self.labelbase, self.labelcount));
             Ok(())
         }
-        fn append_build(&mut self, _bld: &OpTpl, secnum: i32) -> KunaResult<()> {
+        fn append_build(&mut self, _bld: &OpTpl, secnum: i32) -> UnlaceResult<()> {
             self.calls.push(format!("build:{secnum}"));
             Ok(())
         }
-        fn delay_slot(&mut self, _op: &OpTpl) -> KunaResult<()> {
+        fn delay_slot(&mut self, _op: &OpTpl) -> UnlaceResult<()> {
             self.calls.push("delayslot".to_string());
             Ok(())
         }
-        fn set_label(&mut self, _op: &OpTpl) -> KunaResult<()> {
+        fn set_label(&mut self, _op: &OpTpl) -> UnlaceResult<()> {
             self.calls.push("setlabel".to_string());
             Ok(())
         }
-        fn append_cross_build(&mut self, _bld: &OpTpl, secnum: i32) -> KunaResult<()> {
+        fn append_cross_build(&mut self, _bld: &OpTpl, secnum: i32) -> UnlaceResult<()> {
             self.calls.push(format!("crossbuild:{secnum}"));
             Ok(())
         }
@@ -2583,6 +2591,6 @@ mod tests {
 
         // null template is UnimplError
         let err = builder.build(None, 0).unwrap_err();
-        assert!(matches!(err, KunaError::Unimpl { .. }));
+        assert!(matches!(err, UnlaceError::Unimpl { .. }));
     }
 }

@@ -1,4 +1,4 @@
-//! (kuna) Prototypes for the Objective-C runtime's entry points an image imports
+//! (unlace) Prototypes for the Objective-C runtime's entry points an image imports
 //! — `objc_alloc_init(Class)`, `id objc_retain(id)`, `objc_storeStrong(id *, id)`,
 //! … — so a call through an import stub carries its arguments and result (an
 //! untyped stub drops them: `v = objc_retainAutoreleasedReturnValue();`), and for

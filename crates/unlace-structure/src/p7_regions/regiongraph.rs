@@ -1,9 +1,9 @@
 //! Port of `decompiler/cpp/kuna_regiongraph.{cc,hh}` (W7, item
-//! `w7-s7-kuna-regiongraph`): the kuna-owned graph substrate for the angr
+//! `w7-s7-unlace-regiongraph`): the unlace-owned graph substrate for the angr
 //! `RegionIdentifier` port (S7).
 //!
 //! This module is **not** part of upstream Ghidra.  It provides the mutable,
-//! deterministic digraph machinery that `kuna_regionid` (the port of
+//! deterministic digraph machinery that `unlace_regionid` (the port of
 //! angr/analyses/decompiler/region_identifier.py) collapses while identifying
 //! single-entry regions.  The decompiler's own `BlockGraph` cannot serve:
 //! region identification destructively merges and replaces nodes, and the
@@ -14,20 +14,20 @@
 //! The C++ is already a faithful angr port; this module transcribes it
 //! structure-for-structure: iteration order, tie-breakers, and the panic-mode
 //! heuristics are all preserved.  The whole point of the C++ file is the global
-//! `(addr, ident)` strict weak order ([`KunaNodeOrder`]) that replaces Python
+//! `(addr, ident)` strict weak order ([`UnlaceNodeOrder`]) that replaces Python
 //! dict insertion order; that order is transcribed exactly.
 //!
 //! ## Node handles
 //!
-//! The C++ uses `KunaRegionNode *` both as identity (in pointer sets used for
-//! *membership tests only*) and for ordering (via the `KunaNodeOrder`
+//! The C++ uses `UnlaceRegionNode *` both as identity (in pointer sets used for
+//! *membership tests only*) and for ordering (via the `UnlaceNodeOrder`
 //! comparator on the node's `(addr, ident)`).  Per ADR 0001 raw pointers
-//! become arena ids: a [`KunaNodeId`] (a `u32` index into a [`KunaNodePool`])
-//! replaces `KunaRegionNode *`.  Pointer identity is id equality; the
-//! "membership only" pointer sets use `FxHashSet<KunaNodeId>` keyed by raw id
+//! become arena ids: a [`UnlaceNodeId`] (a `u32` index into a [`UnlaceNodePool`])
+//! replaces `UnlaceRegionNode *`.  Pointer identity is id equality; the
+//! "membership only" pointer sets use `FxHashSet<UnlaceNodeId>` keyed by raw id
 //! (never iterated in an output-affecting way). Every
-//! container that the C++ *iterates* is keyed by the ordered [`KunaNodeKey`]
-//! `(addr, ident)`, exactly matching `KunaNodeOrder` (ADR 0002).
+//! container that the C++ *iterates* is keyed by the ordered [`UnlaceNodeKey`]
+//! `(addr, ident)`, exactly matching `UnlaceNodeOrder` (ADR 0002).
 //!
 //! Integer semantics follow ADR 0003 (`uintb -> u64`, `uint4 -> u32`,
 //! `int4 -> i32`); the one place the C++ relies on wrapping — the `_sort_edge`
@@ -35,28 +35,28 @@
 //!
 //! ## STUB(W7): the region payload
 //!
-//! `KunaRegionNode` in C++ carries a `KunaGraphRegion *region` (the collapsed
-//! region payload, defined in `kuna_regionid.hh`).  `kuna_regionid` is not yet
-//! ported, so [`KunaRegionNode::region`] is an opaque [`RegionPayloadId`]
+//! `UnlaceRegionNode` in C++ carries a `UnlaceGraphRegion *region` (the collapsed
+//! region payload, defined in `kuna_regionid.hh`).  `unlace_regionid` is not yet
+//! ported, so [`UnlaceRegionNode::region`] is an opaque [`RegionPayloadId`]
 //! placeholder; the graph substrate never dereferences it.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::fasthash::{FxHashMap, FxHashSet};
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::types::{Wrap, int4, uint4, uintb};
 
 use crate::context::BlockId;
 
-/// Opaque handle to a collapsed region payload (C++ `KunaGraphRegion *`).
+/// Opaque handle to a collapsed region payload (C++ `UnlaceGraphRegion *`).
 ///
-/// STUB(W7): `kuna_regionid`'s `KunaGraphRegion` is not yet ported; the graph
+/// STUB(W7): `unlace_regionid`'s `UnlaceGraphRegion` is not yet ported; the graph
 /// substrate only stores and copies this handle, never dereferences it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RegionPayloadId(pub u32);
 
-/// What a [`KunaRegionNode`] is (C++ `KunaRegionNode::node_kind`).
+/// What a [`UnlaceRegionNode`] is (C++ `UnlaceRegionNode::node_kind`).
 ///
 /// Mirrors angr's `TNode = Block | MultiNode | GraphRegion` (+ the dummy end
 /// node fabricated by acyclic-region identification).
@@ -66,19 +66,19 @@ pub enum NodeKind {
     Block,
     /// Merged single-out -> single-in chain (angr `MultiNode`).
     Multi,
-    /// Wrapper for a collapsed `KunaGraphRegion`.
+    /// Wrapper for a collapsed `UnlaceGraphRegion`.
     Region,
     /// Dummy end node (angr `Block(-1,-1)`).
     Dummy,
 }
 
-/// (kuna) A node handle in the region-identification working graph
-/// (C++ `KunaRegionNode`).
+/// (unlace) A node handle in the region-identification working graph
+/// (C++ `UnlaceRegionNode`).
 ///
 /// One concrete struct with a kind tag instead of a class hierarchy; all
-/// instances are owned by a [`KunaNodePool`] and live until it is dropped.
+/// instances are owned by a [`UnlaceNodePool`] and live until it is dropped.
 #[derive(Debug, Clone)]
-pub struct KunaRegionNode {
+pub struct UnlaceRegionNode {
     /// What this node is (C++ `node_kind kind`).
     kind: NodeKind,
     /// Sort address (block start / first chain member / region head)
@@ -91,25 +91,25 @@ pub struct KunaRegionNode {
     /// (C++ `const FlowBlock *block`).
     block: Option<BlockId>,
     /// `k_multi`: member nodes in execution order (C++ `vector<...> chain`).
-    chain: Vec<KunaNodeId>,
-    /// `k_region`: the collapsed region payload (C++ `KunaGraphRegion *region`).
+    chain: Vec<UnlaceNodeId>,
+    /// `k_region`: the collapsed region payload (C++ `UnlaceGraphRegion *region`).
     region: Option<RegionPayloadId>,
     /// `k_block`: does the wrapped block end with `CPUI_BRANCHIND`/`CPUI_CBRANCH`?
     ///
     /// STUB(W7): the C++ `endsWithBranchindOrCbranch` reaches
     /// `FlowBlock::lastOp()->code()` live; the basic-block CFG never mutates
     /// during region identification, so the block-graph adapter
-    /// ([`crate::regionid::KunaRegionIdentifier::build_from_block_graph`])
+    /// ([`crate::regionid::UnlaceRegionIdentifier::build_from_block_graph`])
     /// precomputes the predicate once per real block and parks it here.  Always
     /// `false` for synthetic test nodes (no block); for `k_multi`/`k_region`
     /// wrappers the predicate consults the last chain member's flag, not this.
     branchy: bool,
 }
 
-impl KunaRegionNode {
-    /// Construct a node (C++ `KunaRegionNode(node_kind,uintb,uint4)`).
-    pub fn new(kind: NodeKind, addr: uintb, ident: uint4) -> KunaRegionNode {
-        KunaRegionNode {
+impl UnlaceRegionNode {
+    /// Construct a node (C++ `UnlaceRegionNode(node_kind,uintb,uint4)`).
+    pub fn new(kind: NodeKind, addr: uintb, ident: uint4) -> UnlaceRegionNode {
+        UnlaceRegionNode {
             kind,
             addr,
             ident,
@@ -141,7 +141,7 @@ impl KunaRegionNode {
         self.block = Some(block);
     }
     /// `k_block`: does the wrapped block end with `CPUI_BRANCHIND`/`CPUI_CBRANCH`?
-    /// (STUB(W7) precomputed predicate, see [`KunaRegionNode::branchy`]).
+    /// (STUB(W7) precomputed predicate, see [`UnlaceRegionNode::branchy`]).
     pub fn ends_with_branchind_or_cbranch(&self) -> bool {
         self.branchy
     }
@@ -151,11 +151,11 @@ impl KunaRegionNode {
         self.branchy = branchy;
     }
     /// `k_multi`: members (C++ `getChain`).
-    pub fn get_chain(&self) -> &[KunaNodeId] {
+    pub fn get_chain(&self) -> &[UnlaceNodeId] {
         &self.chain
     }
     /// Set the member chain (C++ pool fills `chain` after construction).
-    pub fn set_chain(&mut self, chain: Vec<KunaNodeId>) {
+    pub fn set_chain(&mut self, chain: Vec<UnlaceNodeId>) {
         self.chain = chain;
     }
     /// `k_region`: payload (C++ `getRegion`).
@@ -180,76 +180,76 @@ impl KunaRegionNode {
     }
 }
 
-/// Arena id of a [`KunaRegionNode`] (replaces the C++ `KunaRegionNode *`).
+/// Arena id of a [`UnlaceRegionNode`] (replaces the C++ `UnlaceRegionNode *`).
 ///
 /// Identity is id equality; ordering for *iterated* containers goes through
-/// [`KunaNodeKey`], never through the raw id.
+/// [`UnlaceNodeKey`], never through the raw id.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct KunaNodeId(pub u32);
+pub struct UnlaceNodeId(pub u32);
 
-/// (kuna) The global deterministic strict weak order over region nodes
-/// (C++ `KunaNodeOrder`): compare `(addr, ident)` lexicographically.
+/// (unlace) The global deterministic strict weak order over region nodes
+/// (C++ `UnlaceNodeOrder`): compare `(addr, ident)` lexicographically.
 ///
-/// In Rust the comparator lives in the ordered **key** [`KunaNodeKey`]; every
-/// `BTreeMap`/`BTreeSet`/sort that the C++ keys on `KunaNodeOrder` is keyed on
+/// In Rust the comparator lives in the ordered **key** [`UnlaceNodeKey`]; every
+/// `BTreeMap`/`BTreeSet`/sort that the C++ keys on `UnlaceNodeOrder` is keyed on
 /// this struct so iteration order matches exactly.  `ident` is a unique
 /// creation index, so `(addr, ident)` never collides in practice — the same as
-/// the C++ `set<KunaRegionNode *,KunaNodeOrder>`, where two nodes with equal
+/// the C++ `set<UnlaceRegionNode *,UnlaceNodeOrder>`, where two nodes with equal
 /// `(addr,ident)` would be indistinguishable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct KunaNodeKey {
-    /// C++ `KunaNodeOrder` primary key.
+pub struct UnlaceNodeKey {
+    /// C++ `UnlaceNodeOrder` primary key.
     pub addr: uintb,
-    /// C++ `KunaNodeOrder` tiebreaker.
+    /// C++ `UnlaceNodeOrder` tiebreaker.
     pub ident: uint4,
     /// Arena id, never compared (it sits after `(addr,ident)` only as a
     /// total-order safety net; equal `(addr,ident)` never occurs).  Kept last
-    /// so it cannot perturb the `KunaNodeOrder` semantics.
-    pub id: KunaNodeId,
+    /// so it cannot perturb the `UnlaceNodeOrder` semantics.
+    pub id: UnlaceNodeId,
 }
 
-/// The owning pool for [`KunaRegionNode`] handles (C++: the
-/// `KunaRegionIdentifier`'s node pool).
+/// The owning pool for [`UnlaceRegionNode`] handles (C++: the
+/// `UnlaceRegionIdentifier`'s node pool).
 ///
-/// The graph and algorithms reference nodes by [`KunaNodeId`]; this pool maps
+/// The graph and algorithms reference nodes by [`UnlaceNodeId`]; this pool maps
 /// id -> node and supplies the `(addr, ident)` an id sorts by.
 #[derive(Debug, Clone, Default)]
-pub struct KunaNodePool {
-    nodes: Vec<KunaRegionNode>,
+pub struct UnlaceNodePool {
+    nodes: Vec<UnlaceRegionNode>,
 }
 
-impl KunaNodePool {
+impl UnlaceNodePool {
     /// An empty pool.
-    pub fn new() -> KunaNodePool {
-        KunaNodePool { nodes: Vec::new() }
+    pub fn new() -> UnlaceNodePool {
+        UnlaceNodePool { nodes: Vec::new() }
     }
 
-    /// Allocate a node, returning its id (C++ `new KunaRegionNode(...)`).
-    pub fn alloc(&mut self, node: KunaRegionNode) -> KunaNodeId {
-        let id = KunaNodeId(self.nodes.len() as u32);
+    /// Allocate a node, returning its id (C++ `new UnlaceRegionNode(...)`).
+    pub fn alloc(&mut self, node: UnlaceRegionNode) -> UnlaceNodeId {
+        let id = UnlaceNodeId(self.nodes.len() as u32);
         self.nodes.push(node);
         id
     }
 
     /// Allocate a fresh node from `(kind, addr, ident)`.
-    pub fn make(&mut self, kind: NodeKind, addr: uintb, ident: uint4) -> KunaNodeId {
-        self.alloc(KunaRegionNode::new(kind, addr, ident))
+    pub fn make(&mut self, kind: NodeKind, addr: uintb, ident: uint4) -> UnlaceNodeId {
+        self.alloc(UnlaceRegionNode::new(kind, addr, ident))
     }
 
     /// Borrow a node.
-    pub fn get(&self, id: KunaNodeId) -> &KunaRegionNode {
+    pub fn get(&self, id: UnlaceNodeId) -> &UnlaceRegionNode {
         &self.nodes[id.0 as usize]
     }
 
     /// Borrow a node mutably.
-    pub fn get_mut(&mut self, id: KunaNodeId) -> &mut KunaRegionNode {
+    pub fn get_mut(&mut self, id: UnlaceNodeId) -> &mut UnlaceRegionNode {
         &mut self.nodes[id.0 as usize]
     }
 
-    /// The ordered key for `id` (mirrors `KunaNodeOrder` on the node).
-    pub fn key(&self, id: KunaNodeId) -> KunaNodeKey {
+    /// The ordered key for `id` (mirrors `UnlaceNodeOrder` on the node).
+    pub fn key(&self, id: UnlaceNodeId) -> UnlaceNodeKey {
         let n = self.get(id);
-        KunaNodeKey {
+        UnlaceNodeKey {
             addr: n.addr,
             ident: n.ident,
             id,
@@ -257,55 +257,55 @@ impl KunaNodePool {
     }
 }
 
-/// Deterministically iterable node set (C++ `KunaNodeSet =
-/// set<KunaRegionNode *,KunaNodeOrder>`): a `BTreeSet` keyed by [`KunaNodeKey`].
-pub type KunaNodeSet = BTreeSet<KunaNodeKey>;
+/// Deterministically iterable node set (C++ `UnlaceNodeSet =
+/// set<UnlaceRegionNode *,UnlaceNodeOrder>`): a `BTreeSet` keyed by [`UnlaceNodeKey`].
+pub type UnlaceNodeSet = BTreeSet<UnlaceNodeKey>;
 
-/// Adjacency record for one node (C++ `KunaRegionGraph::Adjacency`).
+/// Adjacency record for one node (C++ `UnlaceRegionGraph::Adjacency`).
 #[derive(Debug, Clone, Default)]
 struct Adjacency {
     /// In-neighbors in edge insertion order (C++ `preds`).
-    preds: Vec<KunaNodeId>,
+    preds: Vec<UnlaceNodeId>,
     /// Out-neighbors in edge insertion order (C++ `succs`).
-    succs: Vec<KunaNodeId>,
+    succs: Vec<UnlaceNodeId>,
 }
 
-/// (kuna) A mutable directed graph over [`KunaNodeId`] handles
-/// (C++ `KunaRegionGraph`).
+/// (unlace) A mutable directed graph over [`UnlaceNodeId`] handles
+/// (C++ `UnlaceRegionGraph`).
 ///
 /// `networkx.DiGraph` analog: nodes carry insertion-ordered predecessor and
 /// successor lists (mirroring networkx adjacency-dict insertion order), edges
 /// are deduplicated on insert, self-loops are supported, and whole-graph node
-/// iteration is in `KunaNodeOrder` (the `BTreeSet` over [`KunaNodeKey`]).  The
+/// iteration is in `UnlaceNodeOrder` (the `BTreeSet` over [`UnlaceNodeKey`]).  The
 /// `Clone` impl performs a full structural copy (the node handles themselves
 /// are shared via the pool, never owned by the graph).
 ///
-/// The ordered key set gives `KunaNodeOrder` iteration without consulting the
+/// The ordered key set gives `UnlaceNodeOrder` iteration without consulting the
 /// pool; the adjacency is reached by id through a hash map that is never
 /// iterated, so a neighbor read costs one probe instead of two tree searches.
 #[derive(Debug, Clone, Default)]
-pub struct KunaRegionGraph {
-    /// All nodes in `KunaNodeOrder` (the keys of C++ `NodeMap nodes`).
-    order: BTreeSet<KunaNodeKey>,
+pub struct UnlaceRegionGraph {
+    /// All nodes in `UnlaceNodeOrder` (the keys of C++ `NodeMap nodes`).
+    order: BTreeSet<UnlaceNodeKey>,
     /// id -> (key, adjacency). Membership and lookup only, never iterated.
-    adj: FxHashMap<KunaNodeId, (KunaNodeKey, Adjacency)>,
+    adj: FxHashMap<UnlaceNodeId, (UnlaceNodeKey, Adjacency)>,
 }
 
-impl KunaRegionGraph {
+impl UnlaceRegionGraph {
     /// An empty graph.
-    pub fn new() -> KunaRegionGraph {
-        KunaRegionGraph::default()
+    pub fn new() -> UnlaceRegionGraph {
+        UnlaceRegionGraph::default()
     }
 
     /// Is the node in the graph? (C++ `containsNode`).
-    pub fn contains_node(&self, n: KunaNodeId) -> bool {
+    pub fn contains_node(&self, n: UnlaceNodeId) -> bool {
         self.adj.contains_key(&n)
     }
 
     /// Add a node, with its ordered key (C++ `addNode`, idempotent).
     ///
-    /// The key must mirror `KunaNodeOrder` for `n` (use [`KunaNodePool::key`]).
-    pub fn add_node_keyed(&mut self, key: KunaNodeKey) {
+    /// The key must mirror `UnlaceNodeOrder` for `n` (use [`UnlaceNodePool::key`]).
+    pub fn add_node_keyed(&mut self, key: UnlaceNodeKey) {
         // Default-construct adjacency if absent (C++ `nodes[n];`).
         self.order.insert(key);
         self.adj
@@ -314,20 +314,20 @@ impl KunaRegionGraph {
     }
 
     /// Add a node by id, consulting the pool for its key (convenience).
-    pub fn add_node(&mut self, pool: &KunaNodePool, n: KunaNodeId) {
+    pub fn add_node(&mut self, pool: &UnlaceNodePool, n: UnlaceNodeId) {
         self.add_node_keyed(pool.key(n));
     }
 
-    fn node(&self, n: KunaNodeId) -> Option<&Adjacency> {
+    fn node(&self, n: UnlaceNodeId) -> Option<&Adjacency> {
         self.adj.get(&n).map(|(_, adj)| adj)
     }
 
-    fn node_mut(&mut self, n: KunaNodeId) -> Option<&mut Adjacency> {
+    fn node_mut(&mut self, n: UnlaceNodeId) -> Option<&mut Adjacency> {
         self.adj.get_mut(&n).map(|(_, adj)| adj)
     }
 
     /// Remove node and all incident edges (C++ `removeNode`).
-    pub fn remove_node(&mut self, n: KunaNodeId) {
+    pub fn remove_node(&mut self, n: UnlaceNodeId) {
         let Some((key, adj)) = self.adj.remove(&n) else {
             return;
         };
@@ -355,7 +355,7 @@ impl KunaRegionGraph {
     }
 
     /// Does edge a->b exist? (C++ `hasEdge`).
-    pub fn has_edge(&self, a: KunaNodeId, b: KunaNodeId) -> bool {
+    pub fn has_edge(&self, a: UnlaceNodeId, b: UnlaceNodeId) -> bool {
         self.node(a).is_some_and(|adj| adj.succs.contains(&b))
     }
 
@@ -363,7 +363,7 @@ impl KunaRegionGraph {
     ///
     /// Endpoints are keyed via the pool, exactly as C++ `nodes[a]`/`nodes[b]`
     /// default-construct adjacency on first reference.
-    pub fn add_edge(&mut self, pool: &KunaNodePool, a: KunaNodeId, b: KunaNodeId) {
+    pub fn add_edge(&mut self, pool: &UnlaceNodePool, a: UnlaceNodeId, b: UnlaceNodeId) {
         if self.has_edge(a, b) {
             return;
         }
@@ -374,7 +374,7 @@ impl KunaRegionGraph {
     }
 
     /// Remove edge if present (C++ `removeEdge`).
-    pub fn remove_edge(&mut self, a: KunaNodeId, b: KunaNodeId) {
+    pub fn remove_edge(&mut self, a: UnlaceNodeId, b: UnlaceNodeId) {
         if let Some(adj) = self.node_mut(a) {
             if let Some(pos) = adj.succs.iter().position(|&x| x == b) {
                 adj.succs.remove(pos);
@@ -388,55 +388,55 @@ impl KunaRegionGraph {
     }
 
     /// In-degree (C++ `sizeIn`).
-    pub fn size_in(&self, n: KunaNodeId) -> KunaResult<int4> {
-        let adj = self
-            .node(n)
-            .ok_or_else(|| KunaError::lowlevel("kuna regiongraph: sizeIn of node not in graph"))?;
+    pub fn size_in(&self, n: UnlaceNodeId) -> UnlaceResult<int4> {
+        let adj = self.node(n).ok_or_else(|| {
+            UnlaceError::lowlevel("kuna regiongraph: sizeIn of node not in graph")
+        })?;
         Ok(adj.preds.len() as int4)
     }
 
     /// Out-degree (C++ `sizeOut`).
-    pub fn size_out(&self, n: KunaNodeId) -> KunaResult<int4> {
-        let adj = self
-            .node(n)
-            .ok_or_else(|| KunaError::lowlevel("kuna regiongraph: sizeOut of node not in graph"))?;
+    pub fn size_out(&self, n: UnlaceNodeId) -> UnlaceResult<int4> {
+        let adj = self.node(n).ok_or_else(|| {
+            UnlaceError::lowlevel("kuna regiongraph: sizeOut of node not in graph")
+        })?;
         Ok(adj.succs.len() as int4)
     }
 
     /// In-neighbors in insertion order (C++ `getPreds`).
-    pub fn get_preds(&self, n: KunaNodeId) -> KunaResult<&[KunaNodeId]> {
+    pub fn get_preds(&self, n: UnlaceNodeId) -> UnlaceResult<&[UnlaceNodeId]> {
         let adj = self.node(n).ok_or_else(|| {
-            KunaError::lowlevel("kuna regiongraph: getPreds of node not in graph")
+            UnlaceError::lowlevel("kuna regiongraph: getPreds of node not in graph")
         })?;
         Ok(&adj.preds)
     }
 
     /// Out-neighbors in insertion order (C++ `getSuccs`).
-    pub fn get_succs(&self, n: KunaNodeId) -> KunaResult<&[KunaNodeId]> {
+    pub fn get_succs(&self, n: UnlaceNodeId) -> UnlaceResult<&[UnlaceNodeId]> {
         let adj = self.node(n).ok_or_else(|| {
-            KunaError::lowlevel("kuna regiongraph: getSuccs of node not in graph")
+            UnlaceError::lowlevel("kuna regiongraph: getSuccs of node not in graph")
         })?;
         Ok(&adj.succs)
     }
 
-    /// Out-neighbors in `KunaNodeOrder` (C++ `getSortedSuccs`).
+    /// Out-neighbors in `UnlaceNodeOrder` (C++ `getSortedSuccs`).
     pub fn get_sorted_succs(
         &self,
-        pool: &KunaNodePool,
-        n: KunaNodeId,
-    ) -> KunaResult<Vec<KunaNodeId>> {
+        pool: &UnlaceNodePool,
+        n: UnlaceNodeId,
+    ) -> UnlaceResult<Vec<UnlaceNodeId>> {
         let mut res = self.get_succs(n)?.to_vec();
         res.sort_by(|&a, &b| pool.key(a).cmp(&pool.key(b)));
         Ok(res)
     }
 
-    /// Fill reusable scratch with out-neighbors in `KunaNodeOrder`.
+    /// Fill reusable scratch with out-neighbors in `UnlaceNodeOrder`.
     fn get_sorted_succs_into(
         &self,
-        pool: &KunaNodePool,
-        n: KunaNodeId,
-        res: &mut Vec<KunaNodeId>,
-    ) -> KunaResult<()> {
+        pool: &UnlaceNodePool,
+        n: UnlaceNodeId,
+        res: &mut Vec<UnlaceNodeId>,
+    ) -> UnlaceResult<()> {
         res.clear();
         res.extend_from_slice(self.get_succs(n)?);
         res.sort_by(|&a, &b| pool.key(a).cmp(&pool.key(b)));
@@ -446,9 +446,9 @@ impl KunaRegionGraph {
     /// Snapshot in-edges (C++ `inEdges`).
     pub fn in_edges(
         &self,
-        n: KunaNodeId,
-        res: &mut Vec<(KunaNodeId, KunaNodeId)>,
-    ) -> KunaResult<()> {
+        n: UnlaceNodeId,
+        res: &mut Vec<(UnlaceNodeId, UnlaceNodeId)>,
+    ) -> UnlaceResult<()> {
         for &p in self.get_preds(n)? {
             res.push((p, n));
         }
@@ -458,9 +458,9 @@ impl KunaRegionGraph {
     /// Snapshot out-edges (C++ `outEdges`).
     pub fn out_edges(
         &self,
-        n: KunaNodeId,
-        res: &mut Vec<(KunaNodeId, KunaNodeId)>,
-    ) -> KunaResult<()> {
+        n: UnlaceNodeId,
+        res: &mut Vec<(UnlaceNodeId, UnlaceNodeId)>,
+    ) -> UnlaceResult<()> {
         for &s in self.get_succs(n)? {
             res.push((n, s));
         }
@@ -468,7 +468,7 @@ impl KunaRegionGraph {
     }
 
     /// Snapshot all edges (node-major deterministic order) (C++ `allEdges`).
-    pub fn all_edges(&self, res: &mut Vec<(KunaNodeId, KunaNodeId)>) {
+    pub fn all_edges(&self, res: &mut Vec<(UnlaceNodeId, UnlaceNodeId)>) {
         for (key, adj) in self.iter_adj() {
             for &s in adj.succs.iter() {
                 res.push((key.id, s));
@@ -476,15 +476,20 @@ impl KunaRegionGraph {
         }
     }
 
-    /// Snapshot all nodes in `KunaNodeOrder` (C++ `getNodes`).
-    pub fn get_nodes(&self, res: &mut Vec<KunaNodeId>) {
+    /// Snapshot all nodes in `UnlaceNodeOrder` (C++ `getNodes`).
+    pub fn get_nodes(&self, res: &mut Vec<UnlaceNodeId>) {
         for key in self.order.iter() {
             res.push(key.id);
         }
     }
 
     /// Build induced subgraph copy (C++ `induced`).
-    pub fn induced(&self, pool: &KunaNodePool, keep: &KunaNodeSet, res: &mut KunaRegionGraph) {
+    pub fn induced(
+        &self,
+        pool: &UnlaceNodePool,
+        keep: &UnlaceNodeSet,
+        res: &mut UnlaceRegionGraph,
+    ) {
         for key in keep.iter() {
             if !self.contains_node(key.id) {
                 continue;
@@ -504,7 +509,7 @@ impl KunaRegionGraph {
     }
 
     /// Build edge-reversed copy, same node set (C++ `buildReversed`).
-    pub fn build_reversed(&self, pool: &KunaNodePool, res: &mut KunaRegionGraph) {
+    pub fn build_reversed(&self, pool: &UnlaceNodePool, res: &mut UnlaceRegionGraph) {
         for key in self.order.iter() {
             res.add_node_keyed(*key);
         }
@@ -516,13 +521,13 @@ impl KunaRegionGraph {
     }
 
     /// Begin deterministic node iteration (C++ `beginNode`/`endNode`): the
-    /// keys are in `KunaNodeOrder`.
-    pub fn node_keys(&self) -> impl Iterator<Item = &KunaNodeKey> {
+    /// keys are in `UnlaceNodeOrder`.
+    pub fn node_keys(&self) -> impl Iterator<Item = &UnlaceNodeKey> {
         self.order.iter()
     }
 
-    /// Iterate nodes with their adjacency in `KunaNodeOrder`.
-    fn iter_adj(&self) -> impl Iterator<Item = (&KunaNodeKey, &Adjacency)> {
+    /// Iterate nodes with their adjacency in `UnlaceNodeOrder`.
+    fn iter_adj(&self) -> impl Iterator<Item = (&UnlaceNodeKey, &Adjacency)> {
         self.order.iter().map(|key| (key, &self.adj[&key.id].1))
     }
 
@@ -551,34 +556,34 @@ impl KunaRegionGraph {
 // DFS utilities
 //
 
-/// (kuna) Find back edges via iterative DFS (port of angr `dfs_back_edges`).
+/// (unlace) Find back edges via iterative DFS (port of angr `dfs_back_edges`).
 ///
-/// Children are visited in `KunaNodeOrder`.  Each `(source,target)` pair where
+/// Children are visited in `UnlaceNodeOrder`.  Each `(source,target)` pair where
 /// `target` is on the current DFS stack-path is reported, in discovery order.
 /// Appends to `res`.
-pub fn kuna_dfs_back_edges(
-    pool: &KunaNodePool,
-    g: &KunaRegionGraph,
-    start: KunaNodeId,
-    res: &mut Vec<(KunaNodeId, KunaNodeId)>,
-) -> KunaResult<()> {
+pub fn unlace_dfs_back_edges(
+    pool: &UnlaceNodePool,
+    g: &UnlaceRegionGraph,
+    start: UnlaceNodeId,
+    res: &mut Vec<(UnlaceNodeId, UnlaceNodeId)>,
+) -> UnlaceResult<()> {
     if !g.contains_node(start) {
         return Ok(());
     }
     // Membership only, never iterated (C++ `visited` and `finished`, each a
-    // `set<const KunaRegionNode *>`): one probe answers both, as every finished
+    // `set<const UnlaceRegionNode *>`): one probe answers both, as every finished
     // node was visited first.
     const VISITED: u8 = 1;
     const FINISHED: u8 = 2;
-    let mut state: FxHashMap<KunaNodeId, u8> = FxHashMap::default();
+    let mut state: FxHashMap<UnlaceNodeId, u8> = FxHashMap::default();
     struct Frame {
-        node: KunaNodeId,
-        children: Vec<KunaNodeId>,
+        node: UnlaceNodeId,
+        children: Vec<UnlaceNodeId>,
         cursor: int4,
     }
     let mut stack: Vec<Frame> = Vec::new();
     // Child lists of popped frames, reused by later pushes.
-    let mut spare: Vec<Vec<KunaNodeId>> = Vec::new();
+    let mut spare: Vec<Vec<UnlaceNodeId>> = Vec::new();
     stack.push(Frame {
         node: start,
         children: g.get_sorted_succs(pool, start)?,
@@ -622,20 +627,20 @@ pub fn kuna_dfs_back_edges(
     Ok(())
 }
 
-/// (kuna) Deterministic DFS post-order from a source node (port of
+/// (unlace) Deterministic DFS post-order from a source node (port of
 /// `GraphUtils.dfs_postorder_nodes_deterministic`).
 ///
 /// Explicit `(node, preVisit)` stack; successors are pushed in ascending
-/// `KunaNodeOrder` so the largest-addressed successor is explored first (matches
+/// `UnlaceNodeOrder` so the largest-addressed successor is explored first (matches
 /// angr exactly).  Appends to `res`.
-pub fn kuna_dfs_postorder_deterministic(
-    pool: &KunaNodePool,
-    g: &KunaRegionGraph,
-    source: KunaNodeId,
-    res: &mut Vec<KunaNodeId>,
-) -> KunaResult<()> {
-    let mut visited: FxHashSet<KunaNodeId> = FxHashSet::default(); // Membership only
-    let mut stack: Vec<(KunaNodeId, bool)> = Vec::new(); // (node, isPreVisit)
+pub fn unlace_dfs_postorder_deterministic(
+    pool: &UnlaceNodePool,
+    g: &UnlaceRegionGraph,
+    source: UnlaceNodeId,
+    res: &mut Vec<UnlaceNodeId>,
+) -> UnlaceResult<()> {
+    let mut visited: FxHashSet<UnlaceNodeId> = FxHashSet::default(); // Membership only
+    let mut stack: Vec<(UnlaceNodeId, bool)> = Vec::new(); // (node, isPreVisit)
     let mut successors = Vec::new();
     stack.push((source, true));
     while let Some(entry) = stack.pop() {
@@ -661,17 +666,17 @@ pub fn kuna_dfs_postorder_deterministic(
 //
 
 /// BFS shortest path length between two nodes; -1 if unreachable
-/// (C++ `kunaShortestPathLength`).
-fn kuna_shortest_path_length(
-    g: &KunaRegionGraph,
-    a: KunaNodeId,
-    b: KunaNodeId,
-) -> KunaResult<int4> {
+/// (C++ `unlaceShortestPathLength`).
+fn unlace_shortest_path_length(
+    g: &UnlaceRegionGraph,
+    a: UnlaceNodeId,
+    b: UnlaceNodeId,
+) -> UnlaceResult<int4> {
     if a == b {
         return Ok(0);
     }
-    let mut dist: BTreeMap<KunaNodeId, int4> = BTreeMap::new(); // Membership/lookup only
-    let mut queue: Vec<KunaNodeId> = Vec::new();
+    let mut dist: BTreeMap<UnlaceNodeId, int4> = BTreeMap::new(); // Membership/lookup only
+    let mut queue: Vec<UnlaceNodeId> = Vec::new();
     dist.insert(a, 0);
     queue.push(a);
     let mut pos = 0;
@@ -679,7 +684,7 @@ fn kuna_shortest_path_length(
         let cur = queue[pos];
         pos += 1;
         let d = dist[&cur];
-        let succs: Vec<KunaNodeId> = g.get_succs(cur)?.to_vec();
+        let succs: Vec<UnlaceNodeId> = g.get_succs(cur)?.to_vec();
         for s in succs {
             if dist.contains_key(&s) {
                 continue;
@@ -695,15 +700,15 @@ fn kuna_shortest_path_length(
 }
 
 /// Edge sort key: `src.addr + dst.addr` (port of `GraphUtils._sort_edge` /
-/// the C++ `KunaEdgeSum`).
+/// the C++ `UnlaceEdgeSum`).
 ///
 /// Python's sum is arbitrary precision; compare `(carry, low64)`
 /// lexicographically so address sums straddling 2^64 still order exactly as in
 /// angr.  Returns `Ordering` for `a` vs `b`.
-fn kuna_edge_sum_cmp(
-    pool: &KunaNodePool,
-    a: (KunaNodeId, KunaNodeId),
-    b: (KunaNodeId, KunaNodeId),
+fn unlace_edge_sum_cmp(
+    pool: &UnlaceNodePool,
+    a: (UnlaceNodeId, UnlaceNodeId),
+    b: (UnlaceNodeId, UnlaceNodeId),
 ) -> std::cmp::Ordering {
     let a0 = pool.get(a.0).get_addr();
     let a1 = pool.get(a.1).get_addr();
@@ -724,7 +729,7 @@ fn kuna_edge_sum_cmp(
     suma.cmp(&sumb)
 }
 
-/// (kuna) Quasi-topological sort of all nodes (port of
+/// (unlace) Quasi-topological sort of all nodes (port of
 /// `GraphUtils.quasi_topological_sort_nodes`, the `nodes=None`/`loop_heads=None`
 /// form RegionIdentifier uses).
 ///
@@ -732,11 +737,11 @@ fn kuna_edge_sum_cmp(
 /// condensation, and expand each SCC recursively after picking its loop head
 /// (`_append_scc`), including the panic mode that aggressively strips back edges
 /// from huge dense SCCs.  Appends the ordered nodes to `res`.
-pub fn kuna_quasi_topo_sort(
-    pool: &KunaNodePool,
-    g: &KunaRegionGraph,
-    res: &mut Vec<KunaNodeId>,
-) -> KunaResult<()> {
+pub fn unlace_quasi_topo_sort(
+    pool: &UnlaceNodePool,
+    g: &UnlaceRegionGraph,
+    res: &mut Vec<UnlaceNodeId>,
+) -> UnlaceResult<()> {
     let num_nodes = g.num_nodes();
     if num_nodes == 0 {
         return Ok(());
@@ -749,9 +754,9 @@ pub fn kuna_quasi_topo_sort(
 
     // --- Find non-trivial strongly connected components (iterative Tarjan) ---
     // Node indices in deterministic (addr,ident) order.
-    let mut node_list: Vec<KunaNodeId> = Vec::new();
+    let mut node_list: Vec<UnlaceNodeId> = Vec::new();
     g.get_nodes(&mut node_list);
-    let mut node_index: BTreeMap<KunaNodeId, int4> = BTreeMap::new(); // Lookup only
+    let mut node_index: BTreeMap<UnlaceNodeId, int4> = BTreeMap::new(); // Lookup only
     for (i, &n) in node_list.iter().enumerate() {
         node_index.insert(n, i as int4);
     }
@@ -785,7 +790,7 @@ pub fn kuna_quasi_topo_sort(
             while !stack.is_empty() {
                 let fr_node = stack.last().unwrap().node;
                 let fr_child = stack.last().unwrap().child;
-                let succs: &[KunaNodeId] = g.get_succs(node_list[fr_node as usize])?;
+                let succs: &[UnlaceNodeId] = g.get_succs(node_list[fr_node as usize])?;
                 if (fr_child as usize) < succs.len() {
                     let w = node_index[&succs[fr_child as usize]];
                     stack.last_mut().unwrap().child += 1;
@@ -896,9 +901,9 @@ pub fn kuna_quasi_topo_sort(
     let mut id_in_degree: Vec<int4> = vec![0; total_ids];
     let mut id_succ_set: Vec<BTreeSet<int4>> = vec![BTreeSet::new(); total_ids]; // Dedup helper
 
-    let mut edges: Vec<(KunaNodeId, KunaNodeId)> = Vec::new();
+    let mut edges: Vec<(UnlaceNodeId, UnlaceNodeId)> = Vec::new();
     g.all_edges(&mut edges);
-    edges.sort_by(|&a, &b| kuna_edge_sum_cmp(pool, a, b));
+    edges.sort_by(|&a, &b| unlace_edge_sum_cmp(pool, a, b));
     for (efirst, esecond) in edges {
         let src_idx = node_index[&efirst];
         let dst_idx = node_index[&esecond];
@@ -981,7 +986,7 @@ pub fn kuna_quasi_topo_sort(
     } else if heads.len() == 1 {
         head = heads[0];
     } else {
-        return Err(KunaError::lowlevel(
+        return Err(UnlaceError::lowlevel(
             "kuna regiongraph: collapsed graph has no head",
         ));
     }
@@ -1026,11 +1031,11 @@ pub fn kuna_quasi_topo_sort(
         }
         if id >= num_nodes as int4 {
             let mem = &scc_members[big_sccs[(id - num_nodes as int4) as usize] as usize];
-            let mut scc: KunaNodeSet = KunaNodeSet::new();
+            let mut scc: UnlaceNodeSet = UnlaceNodeSet::new();
             for &m in mem.iter() {
                 scc.insert(pool.key(node_list[m as usize]));
             }
-            kuna_append_scc(pool, g, res, &scc)?;
+            unlace_append_scc(pool, g, res, &scc)?;
         } else {
             res.push(node_list[id as usize]);
         }
@@ -1042,23 +1047,23 @@ pub fn kuna_quasi_topo_sort(
 ///
 /// `loop_head_candidates` is always `None` at RegionIdentifier's call sites, so
 /// that parameter is dropped.
-fn kuna_append_scc(
-    pool: &KunaNodePool,
-    g: &KunaRegionGraph,
-    ordered: &mut Vec<KunaNodeId>,
-    scc: &KunaNodeSet,
-) -> KunaResult<()> {
-    let mut loop_head: Option<KunaNodeId> = None;
+fn unlace_append_scc(
+    pool: &UnlaceNodePool,
+    g: &UnlaceRegionGraph,
+    ordered: &mut Vec<UnlaceNodeId>,
+    scc: &UnlaceNodeSet,
+) -> UnlaceResult<()> {
+    let mut loop_head: Option<UnlaceNodeId> = None;
 
     // Find the first node (scanning ordered backwards) with successors in the
     // SCC.
     for i in (0..ordered.len()).rev() {
         let parent = ordered[i];
         // SCC members that are successors of parent.
-        let mut scc_succs: Vec<KunaNodeId> = Vec::new();
+        let mut scc_succs: Vec<UnlaceNodeId> = Vec::new();
         {
-            let mut seen: KunaNodeSet = KunaNodeSet::new();
-            let succs: Vec<KunaNodeId> = g.get_succs(parent)?.to_vec();
+            let mut seen: UnlaceNodeSet = UnlaceNodeSet::new();
+            let succs: Vec<UnlaceNodeId> = g.get_succs(parent)?.to_vec();
             for s in succs {
                 let sk = pool.key(s);
                 if scc.contains(&sk) && !seen.contains(&sk) {
@@ -1077,16 +1082,16 @@ fn kuna_append_scc(
             // dict-inversion {v: k} semantics.
             scc_succs.sort_by(|&a, &b| pool.key(a).cmp(&pool.key(b)));
             // Overwrites on collision = last wins (C++ map<int4,...>).
-            let mut dist_to_node: BTreeMap<int4, KunaNodeId> = BTreeMap::new();
+            let mut dist_to_node: BTreeMap<int4, UnlaceNodeId> = BTreeMap::new();
             for &j in scc_succs.iter() {
                 let mut total: int4 = 0;
                 for &k in scc_succs.iter() {
                     if k == j {
                         continue;
                     }
-                    let d = kuna_shortest_path_length(g, j, k)?;
+                    let d = unlace_shortest_path_length(g, j, k)?;
                     if d < 0 {
-                        return Err(KunaError::lowlevel(
+                        return Err(UnlaceError::lowlevel(
                             "kuna regiongraph: SCC members not mutually reachable",
                         ));
                     }
@@ -1106,10 +1111,10 @@ fn kuna_append_scc(
         None => scc.iter().next().unwrap().id,
     };
 
-    let mut subgraph = KunaRegionGraph::new();
+    let mut subgraph = UnlaceRegionGraph::new();
     g.induced(pool, scc, &mut subgraph);
     {
-        let mut head_in: Vec<(KunaNodeId, KunaNodeId)> = Vec::new();
+        let mut head_in: Vec<(UnlaceNodeId, UnlaceNodeId)> = Vec::new();
         subgraph.in_edges(loop_head, &mut head_in)?;
         for (a, b) in head_in {
             subgraph.remove_edge(a, b);
@@ -1121,9 +1126,9 @@ fn kuna_append_scc(
     if subgraph.num_nodes() > PANIC_THRESHOLD
         && (subgraph.num_edges() as f64) > (subgraph.num_nodes() as f64) * 1.4
     {
-        let mut back_edges: Vec<(KunaNodeId, KunaNodeId)> = Vec::new();
-        kuna_dfs_back_edges(pool, &subgraph, loop_head, &mut back_edges)?;
-        back_edges.sort_by(|&a, &b| kuna_edge_sum_cmp(pool, a, b));
+        let mut back_edges: Vec<(UnlaceNodeId, UnlaceNodeId)> = Vec::new();
+        unlace_dfs_back_edges(pool, &subgraph, loop_head, &mut back_edges)?;
+        back_edges.sort_by(|&a, &b| unlace_edge_sum_cmp(pool, a, b));
         for (a, b) in back_edges {
             subgraph.remove_edge(a, b);
             if (subgraph.num_edges() as f64) <= (subgraph.num_nodes() as f64) * 1.4 {
@@ -1132,7 +1137,7 @@ fn kuna_append_scc(
         }
     }
 
-    kuna_quasi_topo_sort(pool, &subgraph, ordered)?; // Appends to ordered
+    unlace_quasi_topo_sort(pool, &subgraph, ordered)?; // Appends to ordered
     Ok(())
 }
 
@@ -1140,21 +1145,21 @@ fn kuna_append_scc(
 // subgraph_between_nodes
 //
 
-/// The checks shared by [`kuna_subgraph_between_nodes`] and
-/// [`kuna_slice_visits`]: `source` and every frontier node are in `g`.
+/// The checks shared by [`unlace_subgraph_between_nodes`] and
+/// [`unlace_slice_visits`]: `source` and every frontier node are in `g`.
 fn check_slice_ends(
-    g: &KunaRegionGraph,
-    source: KunaNodeId,
-    frontier: &KunaNodeSet,
-) -> KunaResult<()> {
+    g: &UnlaceRegionGraph,
+    source: UnlaceNodeId,
+    frontier: &UnlaceNodeSet,
+) -> UnlaceResult<()> {
     if !g.contains_node(source) {
-        return Err(KunaError::lowlevel(
+        return Err(UnlaceError::lowlevel(
             "kuna regiongraph: slice source not in graph",
         ));
     }
     for fk in frontier.iter() {
         if !g.contains_node(fk.id) {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "kuna regiongraph: slice frontier node not in graph",
             ));
         }
@@ -1166,12 +1171,12 @@ fn check_slice_ends(
 /// one reverse BFS from the frontier set (replaces angr's per-successor
 /// `networkx.has_path` probes; equivalent since the cut graph is not mutated).
 fn reaching_frontier(
-    g: &KunaRegionGraph,
-    source: KunaNodeId,
-    frontier: &KunaNodeSet,
-) -> KunaResult<FxHashSet<KunaNodeId>> {
-    let mut can_reach: FxHashSet<KunaNodeId> = FxHashSet::default(); // Membership only
-    let mut queue: Vec<KunaNodeId> = Vec::new();
+    g: &UnlaceRegionGraph,
+    source: UnlaceNodeId,
+    frontier: &UnlaceNodeSet,
+) -> UnlaceResult<FxHashSet<UnlaceNodeId>> {
+    let mut can_reach: FxHashSet<UnlaceNodeId> = FxHashSet::default(); // Membership only
+    let mut queue: Vec<UnlaceNodeId> = Vec::new();
     for fk in frontier.iter() {
         if can_reach.insert(fk.id) {
             queue.push(fk.id);
@@ -1193,7 +1198,7 @@ fn reaching_frontier(
     Ok(can_reach)
 }
 
-/// (kuna) Slice of `g` from `source` up to (optionally including) `frontier`
+/// (unlace) Slice of `g` from `source` up to (optionally including) `frontier`
 /// (port of `subgraph_between_nodes`).
 ///
 /// Cut edges into `source`, BFS forward keeping only paths that can still reach
@@ -1202,21 +1207,21 @@ fn reaching_frontier(
 /// costs the nodes it walks, not the whole graph.
 /// Returns `Err` if `source` or a frontier node is not in the graph (angr
 /// raises `KeyError`).
-pub fn kuna_subgraph_between_nodes(
-    pool: &KunaNodePool,
-    g: &KunaRegionGraph,
-    source: KunaNodeId,
-    frontier: &KunaNodeSet,
+pub fn unlace_subgraph_between_nodes(
+    pool: &UnlaceNodePool,
+    g: &UnlaceRegionGraph,
+    source: UnlaceNodeId,
+    frontier: &UnlaceNodeSet,
     include_frontier: bool,
-    res: &mut KunaRegionGraph,
-) -> KunaResult<()> {
+    res: &mut UnlaceRegionGraph,
+) -> UnlaceResult<()> {
     check_slice_ends(g, source, frontier)?;
     let can_reach = reaching_frontier(g, source, frontier)?;
 
     // Forward FIFO BFS from source, adding edges to the slice.
     {
-        let mut queue: Vec<KunaNodeId> = Vec::new();
-        let mut traversed: FxHashSet<KunaNodeId> = FxHashSet::default(); // Membership only
+        let mut queue: Vec<UnlaceNodeId> = Vec::new();
+        let mut traversed: FxHashSet<UnlaceNodeId> = FxHashSet::default(); // Membership only
         queue.push(source);
         let mut pos = 0;
         while pos < queue.len() {
@@ -1245,7 +1250,7 @@ pub fn kuna_subgraph_between_nodes(
 
     // Iteratively prune dangling interior nodes.
     loop {
-        let mut to_remove: Vec<KunaNodeId> = Vec::new();
+        let mut to_remove: Vec<UnlaceNodeId> = Vec::new();
         for (key, adj) in res.iter_adj() {
             let n = key.id;
             if n == source {
@@ -1276,7 +1281,7 @@ pub fn kuna_subgraph_between_nodes(
     Ok(())
 }
 
-/// (kuna) Whether the forward walk of [`kuna_subgraph_between_nodes`] from
+/// (unlace) Whether the forward walk of [`unlace_subgraph_between_nodes`] from
 /// `source` visits a node `hit` accepts, stopping at the first.
 ///
 /// Every node that walk visits stays in the slice: `source` aside, it is
@@ -1286,17 +1291,17 @@ pub fn kuna_subgraph_between_nodes(
 /// A `true` answer therefore says the slice, frontier included, holds such a
 /// node, without building it. A `false` one says nothing about the frontier
 /// nodes.
-pub fn kuna_slice_visits(
-    g: &KunaRegionGraph,
-    pool: &KunaNodePool,
-    source: KunaNodeId,
-    frontier: &KunaNodeSet,
-    mut hit: impl FnMut(KunaNodeId) -> bool,
-) -> KunaResult<bool> {
+pub fn unlace_slice_visits(
+    g: &UnlaceRegionGraph,
+    pool: &UnlaceNodePool,
+    source: UnlaceNodeId,
+    frontier: &UnlaceNodeSet,
+    mut hit: impl FnMut(UnlaceNodeId) -> bool,
+) -> UnlaceResult<bool> {
     check_slice_ends(g, source, frontier)?;
     let can_reach = reaching_frontier(g, source, frontier)?;
-    let mut queue: Vec<KunaNodeId> = vec![source];
-    let mut traversed: FxHashSet<KunaNodeId> = FxHashSet::default(); // Membership only
+    let mut queue: Vec<UnlaceNodeId> = vec![source];
+    let mut traversed: FxHashSet<UnlaceNodeId> = FxHashSet::default(); // Membership only
     let mut pos = 0;
     while pos < queue.len() {
         let node = queue[pos];
@@ -1323,23 +1328,23 @@ pub fn kuna_slice_visits(
 // Dominators
 //
 
-/// (kuna) Immediate dominators of all nodes reachable from `start`
+/// (unlace) Immediate dominators of all nodes reachable from `start`
 /// (`networkx.immediate_dominators` analog, Cooper-Harvey-Kennedy over a
 /// deterministic reverse post-order).
 ///
 /// Unreachable nodes are absent from `idom`; `idom[start] == start`.
-pub fn kuna_immediate_dominators(
-    pool: &KunaNodePool,
-    g: &KunaRegionGraph,
-    start: KunaNodeId,
-    idom: &mut BTreeMap<KunaNodeId, KunaNodeId>,
-) -> KunaResult<()> {
+pub fn unlace_immediate_dominators(
+    pool: &UnlaceNodePool,
+    g: &UnlaceRegionGraph,
+    start: UnlaceNodeId,
+    idom: &mut BTreeMap<UnlaceNodeId, UnlaceNodeId>,
+) -> UnlaceResult<()> {
     // Cooper-Harvey-Kennedy over deterministic reverse postorder.
-    let mut postorder: Vec<KunaNodeId> = Vec::new();
-    kuna_dfs_postorder_deterministic(pool, g, start, &mut postorder)?;
+    let mut postorder: Vec<UnlaceNodeId> = Vec::new();
+    unlace_dfs_postorder_deterministic(pool, g, start, &mut postorder)?;
     // Reachable nodes only: node ids come from an append-only pool, so indexing
     // scratch by raw id would scale with all historical nodes, not this graph.
-    let mut po_index: FxHashMap<KunaNodeId, usize> =
+    let mut po_index: FxHashMap<UnlaceNodeId, usize> =
         FxHashMap::with_capacity_and_hasher(postorder.len(), Default::default());
     for (i, &n) in postorder.iter().enumerate() {
         po_index.insert(n, i);
@@ -1348,7 +1353,7 @@ pub fn kuna_immediate_dominators(
     idom.insert(start, start);
     // Dense parent state follows the reachable postorder. Seed it from the
     // caller's map to preserve the existing behavior for pre-populated maps.
-    let mut idom_by_index: Vec<Option<KunaNodeId>> = postorder
+    let mut idom_by_index: Vec<Option<UnlaceNodeId>> = postorder
         .iter()
         .map(|node| idom.get(node).copied())
         .collect();
@@ -1408,14 +1413,14 @@ pub fn kuna_immediate_dominators(
     Ok(())
 }
 
-/// (kuna) Does `dominator` dominate `node` under the idom map?
+/// (unlace) Does `dominator` dominate `node` under the idom map?
 /// (port of `utils.graph.dominates`).
-pub fn kuna_dominates(
-    idom: &BTreeMap<KunaNodeId, KunaNodeId>,
-    dominator: KunaNodeId,
-    node: KunaNodeId,
+pub fn unlace_dominates(
+    idom: &BTreeMap<UnlaceNodeId, UnlaceNodeId>,
+    dominator: UnlaceNodeId,
+    node: UnlaceNodeId,
 ) -> bool {
-    let mut n: Option<KunaNodeId> = Some(node);
+    let mut n: Option<UnlaceNodeId> = Some(node);
     while let Some(cur) = n {
         if cur == dominator {
             return true;
@@ -1429,14 +1434,14 @@ pub fn kuna_dominates(
 }
 
 //
-// KunaIncrementalDominators
+// UnlaceIncrementalDominators
 //
 
-/// (kuna) Incrementally maintained (post-)dominators with dominance frontiers
+/// (unlace) Incrementally maintained (post-)dominators with dominance frontiers
 /// (port of `angr.utils.doms.IncrementalDominators`).
 ///
 /// Holds a borrowed graph by argument (the C++ keeps a live `const
-/// KunaRegionGraph *`); the graph must only ever change by replacing a set of
+/// UnlaceRegionGraph *`); the graph must only ever change by replacing a set of
 /// nodes with a single new node ([`graph_updated`](Self::graph_updated)),
 /// exactly as in angr.  Dominance frontiers are computed lazily on first
 /// [`df`](Self::df) use and patched incrementally afterwards.
@@ -1445,32 +1450,32 @@ pub fn kuna_dominates(
 /// methods cleanly, the underlying graph and pool are passed to every method
 /// that needs them (`init_*`, `graph_updated`, `verify`), exactly the data the
 /// C++ reaches through its `graph` member.
-pub struct KunaIncrementalDominators {
+pub struct UnlaceIncrementalDominators {
     /// Tree root (entry node; end node when post) (C++ `start`).
-    start: KunaNodeId,
+    start: UnlaceNodeId,
     /// True if computing post-dominators (C++ `post`).
     post: bool,
     /// node -> immediate (post-)dominator (C++ `doms`).
-    doms: BTreeMap<KunaNodeId, KunaNodeId>,
+    doms: BTreeMap<UnlaceNodeId, UnlaceNodeId>,
     /// Has the dominance-frontier map been initialized? (C++ `dfsValid`).
     dfs_valid: bool,
     /// node -> dominance frontier (C++ `dfs`).
-    dfs: BTreeMap<KunaNodeId, KunaNodeSet>,
+    dfs: BTreeMap<UnlaceNodeId, UnlaceNodeSet>,
     /// Has the inverted dominator tree been built? (C++ `invertedValid`).
     inverted_valid: bool,
     /// dominator -> dominatees (C++ `invertedDomTree`).
-    inverted_dom_tree: BTreeMap<KunaNodeId, Vec<KunaNodeId>>,
+    inverted_dom_tree: BTreeMap<UnlaceNodeId, Vec<UnlaceNodeId>>,
 }
 
-impl KunaIncrementalDominators {
+impl UnlaceIncrementalDominators {
     /// Build over `graph` rooted at `start` (C++ constructor).
     pub fn new(
-        pool: &KunaNodePool,
-        graph: &KunaRegionGraph,
-        start: KunaNodeId,
+        pool: &UnlaceNodePool,
+        graph: &UnlaceRegionGraph,
+        start: UnlaceNodeId,
         is_post: bool,
-    ) -> KunaResult<KunaIncrementalDominators> {
-        let mut me = KunaIncrementalDominators {
+    ) -> UnlaceResult<UnlaceIncrementalDominators> {
+        let mut me = UnlaceIncrementalDominators {
             start,
             post: is_post,
             doms: BTreeMap::new(),
@@ -1487,16 +1492,16 @@ impl KunaIncrementalDominators {
     /// Compute doms from scratch (C++ `initDoms`).
     fn compute_doms(
         &self,
-        pool: &KunaNodePool,
-        graph: &KunaRegionGraph,
-    ) -> KunaResult<BTreeMap<KunaNodeId, KunaNodeId>> {
-        let mut res: BTreeMap<KunaNodeId, KunaNodeId> = BTreeMap::new();
+        pool: &UnlaceNodePool,
+        graph: &UnlaceRegionGraph,
+    ) -> UnlaceResult<BTreeMap<UnlaceNodeId, UnlaceNodeId>> {
+        let mut res: BTreeMap<UnlaceNodeId, UnlaceNodeId> = BTreeMap::new();
         if self.post {
-            let mut rev = KunaRegionGraph::new();
+            let mut rev = UnlaceRegionGraph::new();
             graph.build_reversed(pool, &mut rev);
-            kuna_immediate_dominators(pool, &rev, self.start, &mut res)?;
+            unlace_immediate_dominators(pool, &rev, self.start, &mut res)?;
         } else {
-            kuna_immediate_dominators(pool, graph, self.start, &mut res)?;
+            unlace_immediate_dominators(pool, graph, self.start, &mut res)?;
         }
         res.insert(self.start, self.start);
         Ok(res)
@@ -1508,21 +1513,21 @@ impl KunaIncrementalDominators {
     /// direction-predecessors, climbing the dom chain.
     fn compute_dfs(
         &self,
-        pool: &KunaNodePool,
-        graph: &KunaRegionGraph,
-    ) -> KunaResult<BTreeMap<KunaNodeId, KunaNodeSet>> {
-        let mut res: BTreeMap<KunaNodeId, KunaNodeSet> = BTreeMap::new();
-        // Iterate doms in KunaNodeOrder (C++ map iteration is pointer order
+        pool: &UnlaceNodePool,
+        graph: &UnlaceRegionGraph,
+    ) -> UnlaceResult<BTreeMap<UnlaceNodeId, UnlaceNodeSet>> {
+        let mut res: BTreeMap<UnlaceNodeId, UnlaceNodeSet> = BTreeMap::new();
+        // Iterate doms in UnlaceNodeOrder (C++ map iteration is pointer order
         // there, but the output is order-insensitive: every (u,v) pair that
         // qualifies inserts u into res[v]; the set contents are identical
-        // regardless of visit order).  We iterate by KunaNodeOrder for
+        // regardless of visit order).  We iterate by UnlaceNodeOrder for
         // determinism.
-        let dom_keys: Vec<KunaNodeId> = self.doms_in_order(pool);
+        let dom_keys: Vec<UnlaceNodeId> = self.doms_in_order(pool);
         for u in dom_keys {
             if !graph.contains_node(u) {
                 continue;
             }
-            let preds: Vec<KunaNodeId> = if self.post {
+            let preds: Vec<UnlaceNodeId> = if self.post {
                 graph.get_succs(u)?.to_vec()
             } else {
                 graph.get_preds(u)?.to_vec()
@@ -1541,7 +1546,7 @@ impl KunaIncrementalDominators {
                     match self.doms.get(&v) {
                         Some(&nx) => v = nx,
                         None => {
-                            return Err(KunaError::lowlevel(
+                            return Err(UnlaceError::lowlevel(
                                 "kuna regiongraph: broken dom chain in initDfs",
                             ));
                         }
@@ -1552,17 +1557,17 @@ impl KunaIncrementalDominators {
         Ok(res)
     }
 
-    /// `doms` keys in `KunaNodeOrder` (the C++ `doms` is a `map<...,
-    /// KunaNodeOrder>` over node pointers; here `doms` is keyed by raw id so we
+    /// `doms` keys in `UnlaceNodeOrder` (the C++ `doms` is a `map<...,
+    /// UnlaceNodeOrder>` over node pointers; here `doms` is keyed by raw id so we
     /// re-sort by the pool key for deterministic iteration).
-    fn doms_in_order(&self, pool: &KunaNodePool) -> Vec<KunaNodeId> {
-        let mut v: Vec<KunaNodeId> = self.doms.keys().copied().collect();
+    fn doms_in_order(&self, pool: &UnlaceNodePool) -> Vec<UnlaceNodeId> {
+        let mut v: Vec<UnlaceNodeId> = self.doms.keys().copied().collect();
         v.sort_by(|&a, &b| pool.key(a).cmp(&pool.key(b)));
         v
     }
 
     /// Build the inverted tree if not yet built (C++ `updateInvertedDomtree`).
-    fn update_inverted_domtree(&mut self, pool: &KunaNodePool) {
+    fn update_inverted_domtree(&mut self, pool: &UnlaceNodePool) {
         if self.inverted_valid {
             return;
         }
@@ -1570,7 +1575,7 @@ impl KunaIncrementalDominators {
         // C++ iterates `doms` (pointer order) appending `first` to
         // invertedDomTree[second].  The per-dominator list order is
         // observable downstream (graphUpdated dominatee re-pointing), so
-        // iterate in KunaNodeOrder for a deterministic build.
+        // iterate in UnlaceNodeOrder for a deterministic build.
         for u in self.doms_in_order(pool) {
             let d = self.doms[&u];
             self.inverted_dom_tree.entry(d).or_default().push(u);
@@ -1578,17 +1583,17 @@ impl KunaIncrementalDominators {
     }
 
     /// Immediate dominator (`None` if absent) (C++ `idom`).
-    pub fn idom(&self, n: KunaNodeId) -> Option<KunaNodeId> {
+    pub fn idom(&self, n: UnlaceNodeId) -> Option<UnlaceNodeId> {
         self.doms.get(&n).copied()
     }
 
     /// Dominance frontier (empty set if absent) (C++ `df`).
     pub fn df(
         &mut self,
-        pool: &KunaNodePool,
-        graph: &KunaRegionGraph,
-        n: KunaNodeId,
-    ) -> KunaResult<KunaNodeSet> {
+        pool: &UnlaceNodePool,
+        graph: &UnlaceRegionGraph,
+        n: UnlaceNodeId,
+    ) -> UnlaceResult<UnlaceNodeSet> {
         if !self.dfs_valid {
             self.dfs_valid = true;
             self.dfs = self.compute_dfs(pool, graph)?;
@@ -1597,8 +1602,8 @@ impl KunaIncrementalDominators {
     }
 
     /// Does `dominator` (post-)dominate `n`? (C++ `dominates`).
-    pub fn dominates(&self, dominator: KunaNodeId, n: KunaNodeId) -> bool {
-        let mut cur: Option<KunaNodeId> = Some(n);
+    pub fn dominates(&self, dominator: UnlaceNodeId, n: UnlaceNodeId) -> bool {
+        let mut cur: Option<UnlaceNodeId> = Some(n);
         while let Some(c) = cur {
             if c == dominator {
                 return true;
@@ -1614,20 +1619,20 @@ impl KunaIncrementalDominators {
     /// Patch after nodes were replaced by `new_node` (C++ `graphUpdated`).
     pub fn graph_updated(
         &mut self,
-        pool: &KunaNodePool,
-        new_node: KunaNodeId,
-        replaced_nodes: &KunaNodeSet,
-        replaced_head: KunaNodeId,
-    ) -> KunaResult<()> {
+        pool: &UnlaceNodePool,
+        new_node: UnlaceNodeId,
+        replaced_nodes: &UnlaceNodeSet,
+        replaced_head: UnlaceNodeId,
+    ) -> UnlaceResult<()> {
         self.update_inverted_domtree(pool);
 
         // Climb out of the replaced set to find the new node's dominator.
         let mut new_dom = *self.doms.get(&replaced_head).ok_or_else(|| {
-            KunaError::lowlevel("kuna regiongraph: replaced head has no dominator")
+            UnlaceError::lowlevel("kuna regiongraph: replaced head has no dominator")
         })?;
         while replaced_nodes.contains(&pool.key(new_dom)) && new_dom != self.start {
             new_dom = *self.doms.get(&new_dom).ok_or_else(|| {
-                KunaError::lowlevel("kuna regiongraph: broken dom chain in graphUpdated")
+                UnlaceError::lowlevel("kuna regiongraph: broken dom chain in graphUpdated")
             })?;
         }
         if replaced_nodes.contains(&pool.key(self.start)) {
@@ -1638,7 +1643,7 @@ impl KunaIncrementalDominators {
         }
 
         // Re-point all dominatees of replaced nodes at the new node.
-        let mut new_node_doms: Vec<KunaNodeId> = Vec::new();
+        let mut new_node_doms: Vec<UnlaceNodeId> = Vec::new();
         for ri in replaced_nodes.iter() {
             if let Some(dtees) = self.inverted_dom_tree.get(&ri.id) {
                 let dtees = dtees.clone();
@@ -1684,7 +1689,7 @@ impl KunaIncrementalDominators {
                     found = true;
                 }
                 if !found {
-                    return Err(KunaError::lowlevel(
+                    return Err(UnlaceError::lowlevel(
                         "kuna regiongraph: inverted dom tree inconsistent",
                     ));
                 }
@@ -1696,10 +1701,10 @@ impl KunaIncrementalDominators {
 
     /// Recompute from scratch and compare (port of `_debug_check` / C++
     /// `verify`).
-    pub fn verify(&self, pool: &KunaNodePool, graph: &KunaRegionGraph) -> KunaResult<()> {
+    pub fn verify(&self, pool: &UnlaceNodePool, graph: &UnlaceRegionGraph) -> UnlaceResult<()> {
         let true_doms = self.compute_doms(pool, graph)?;
         if true_doms.len() != self.doms.len() {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "kuna regiongraph: incremental dominators diverged (size)",
             ));
         }
@@ -1707,7 +1712,7 @@ impl KunaIncrementalDominators {
             match self.doms.get(k) {
                 Some(dv) if dv == v => {}
                 _ => {
-                    return Err(KunaError::lowlevel(
+                    return Err(UnlaceError::lowlevel(
                         "kuna regiongraph: incremental dominators diverged",
                     ));
                 }
@@ -1716,7 +1721,7 @@ impl KunaIncrementalDominators {
         if self.dfs_valid {
             let true_dfs = self.compute_dfs(pool, graph)?;
             if true_dfs.len() != self.dfs.len() {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "kuna regiongraph: incremental frontiers diverged (size)",
                 ));
             }
@@ -1724,7 +1729,7 @@ impl KunaIncrementalDominators {
                 match self.dfs.get(k) {
                     Some(dv) if dv == v => {}
                     _ => {
-                        return Err(KunaError::lowlevel(
+                        return Err(UnlaceError::lowlevel(
                             "kuna regiongraph: incremental frontiers diverged",
                         ));
                     }
@@ -1741,21 +1746,21 @@ mod tests {
 
     /// Helper: a pool plus a name->id table for building test graphs by addr.
     struct Builder {
-        pool: KunaNodePool,
+        pool: UnlaceNodePool,
         next_ident: uint4,
     }
 
     impl Builder {
         fn new() -> Builder {
             Builder {
-                pool: KunaNodePool::new(),
+                pool: UnlaceNodePool::new(),
                 next_ident: 0,
             }
         }
 
         /// Allocate a synthetic block node at `addr` (ident auto-increments,
         /// matching the deterministic creation-index tiebreaker).
-        fn node(&mut self, addr: uintb) -> KunaNodeId {
+        fn node(&mut self, addr: uintb) -> UnlaceNodeId {
             let id = self.next_ident;
             self.next_ident += 1;
             self.pool.make(NodeKind::Block, addr, id)
@@ -1763,10 +1768,10 @@ mod tests {
 
         fn graph(
             &self,
-            edges: &[(KunaNodeId, KunaNodeId)],
-            extra: &[KunaNodeId],
-        ) -> KunaRegionGraph {
-            let mut g = KunaRegionGraph::new();
+            edges: &[(UnlaceNodeId, UnlaceNodeId)],
+            extra: &[UnlaceNodeId],
+        ) -> UnlaceRegionGraph {
+            let mut g = UnlaceRegionGraph::new();
             for &n in extra {
                 g.add_node(&self.pool, n);
             }
@@ -1776,8 +1781,8 @@ mod tests {
             g
         }
 
-        fn set(&self, ids: &[KunaNodeId]) -> KunaNodeSet {
-            let mut s = KunaNodeSet::new();
+        fn set(&self, ids: &[UnlaceNodeId]) -> UnlaceNodeSet {
+            let mut s = UnlaceNodeSet::new();
             for &i in ids {
                 s.insert(self.pool.key(i));
             }
@@ -1788,10 +1793,10 @@ mod tests {
     /// Reachability after removing one node. This deliberately does not use
     /// dominator code or traversal order, so it can serve as a small oracle.
     fn reachable_without(
-        graph: &KunaRegionGraph,
-        start: KunaNodeId,
-        removed: Option<KunaNodeId>,
-    ) -> BTreeSet<KunaNodeId> {
+        graph: &UnlaceRegionGraph,
+        start: UnlaceNodeId,
+        removed: Option<UnlaceNodeId>,
+    ) -> BTreeSet<UnlaceNodeId> {
         if removed == Some(start) {
             return BTreeSet::new();
         }
@@ -1809,11 +1814,11 @@ mod tests {
     /// Compute immediate dominators by the definition: a node dominates a
     /// reachable target iff deleting it makes that target unreachable.
     fn idom_by_removal(
-        graph: &KunaRegionGraph,
-        start: KunaNodeId,
-    ) -> BTreeMap<KunaNodeId, KunaNodeId> {
+        graph: &UnlaceRegionGraph,
+        start: UnlaceNodeId,
+    ) -> BTreeMap<UnlaceNodeId, UnlaceNodeId> {
         let reachable = reachable_without(graph, start, None);
-        let mut dominators = BTreeMap::<KunaNodeId, BTreeSet<KunaNodeId>>::new();
+        let mut dominators = BTreeMap::<UnlaceNodeId, BTreeSet<UnlaceNodeId>>::new();
         for &node in &reachable {
             let mut node_dominators = BTreeSet::new();
             for &candidate in &reachable {
@@ -1832,7 +1837,7 @@ mod tests {
                 result.insert(start, start);
                 continue;
             }
-            let strict_dominators: BTreeSet<KunaNodeId> = dominators[&node]
+            let strict_dominators: BTreeSet<UnlaceNodeId> = dominators[&node]
                 .iter()
                 .copied()
                 .filter(|&candidate| candidate != node)
@@ -1885,7 +1890,7 @@ mod tests {
         let lo = b.node(0x100);
         let mid = b.node(0x200);
         // Insert edges out of insertion order; getSuccs preserves insertion,
-        // getSortedSuccs imposes KunaNodeOrder.
+        // getSortedSuccs imposes UnlaceNodeOrder.
         let g = b.graph(&[(s, hi), (s, lo), (s, mid)], &[]);
         assert_eq!(g.get_succs(s).unwrap(), &[hi, lo, mid]);
         assert_eq!(g.get_sorted_succs(&b.pool, s).unwrap(), vec![lo, mid, hi]);
@@ -1901,7 +1906,7 @@ mod tests {
         let d = b.node(0x40);
         let g = b.graph(&[(a, bb), (bb, c), (c, bb), (c, d)], &[]);
         let mut be = Vec::new();
-        kuna_dfs_back_edges(&b.pool, &g, a, &mut be).unwrap();
+        unlace_dfs_back_edges(&b.pool, &g, a, &mut be).unwrap();
         assert_eq!(be, vec![(c, bb)]);
     }
 
@@ -1912,7 +1917,7 @@ mod tests {
         let c = b.node(0x20);
         let g = b.graph(&[(a, c), (c, c)], &[]);
         let mut be = Vec::new();
-        kuna_dfs_back_edges(&b.pool, &g, a, &mut be).unwrap();
+        unlace_dfs_back_edges(&b.pool, &g, a, &mut be).unwrap();
         assert_eq!(be, vec![(c, c)]);
     }
 
@@ -1926,7 +1931,7 @@ mod tests {
         let d = b.node(0x40);
         let g = b.graph(&[(a, bb), (a, c), (bb, d), (c, d)], &[]);
         let mut po = Vec::new();
-        kuna_dfs_postorder_deterministic(&b.pool, &g, a, &mut po).unwrap();
+        unlace_dfs_postorder_deterministic(&b.pool, &g, a, &mut po).unwrap();
         // Successors pushed ascending => largest (c@0x30) explored first.
         // c -> d (d finishes), c finishes, then b (d already visited) finishes,
         // then a.  Postorder: d, c, b, a.
@@ -1944,7 +1949,7 @@ mod tests {
         let c = b.node(0x30);
         let g = b.graph(&[(a, bb), (bb, c)], &[]);
         let mut order = Vec::new();
-        kuna_quasi_topo_sort(&b.pool, &g, &mut order).unwrap();
+        unlace_quasi_topo_sort(&b.pool, &g, &mut order).unwrap();
         assert_eq!(order, vec![a, bb, c]);
     }
 
@@ -1954,12 +1959,12 @@ mod tests {
         let a = b.node(0x10);
         let g = b.graph(&[], &[a]);
         let mut order = Vec::new();
-        kuna_quasi_topo_sort(&b.pool, &g, &mut order).unwrap();
+        unlace_quasi_topo_sort(&b.pool, &g, &mut order).unwrap();
         assert_eq!(order, vec![a]);
 
-        let g2 = KunaRegionGraph::new();
+        let g2 = UnlaceRegionGraph::new();
         let mut order2 = Vec::new();
-        kuna_quasi_topo_sort(&b.pool, &g2, &mut order2).unwrap();
+        unlace_quasi_topo_sort(&b.pool, &g2, &mut order2).unwrap();
         assert!(order2.is_empty());
     }
 
@@ -1974,7 +1979,7 @@ mod tests {
         let d = b.node(0x40);
         let g = b.graph(&[(a, bb), (bb, c), (c, bb), (c, d)], &[]);
         let mut order = Vec::new();
-        kuna_quasi_topo_sort(&b.pool, &g, &mut order).unwrap();
+        unlace_quasi_topo_sort(&b.pool, &g, &mut order).unwrap();
         // a precedes the SCC; the SCC ({b,c}) precedes d; head of SCC is b
         // (single successor of a inside the SCC).  d last.
         assert_eq!(order.len(), 4);
@@ -1996,13 +2001,13 @@ mod tests {
         let d = b.node(0x40);
         let g = b.graph(&[(a, bb), (a, c), (bb, d), (c, d)], &[]);
         let mut idom = BTreeMap::new();
-        kuna_immediate_dominators(&b.pool, &g, a, &mut idom).unwrap();
+        unlace_immediate_dominators(&b.pool, &g, a, &mut idom).unwrap();
         assert_eq!(idom[&a], a);
         assert_eq!(idom[&bb], a);
         assert_eq!(idom[&c], a);
         assert_eq!(idom[&d], a);
-        assert!(kuna_dominates(&idom, a, d));
-        assert!(!kuna_dominates(&idom, bb, d));
+        assert!(unlace_dominates(&idom, a, d));
+        assert!(!unlace_dominates(&idom, bb, d));
     }
 
     #[test]
@@ -2015,7 +2020,7 @@ mod tests {
         let d = b.node(0x40);
         let g = b.graph(&[(a, bb), (bb, c), (c, d)], &[]);
         let mut idom = BTreeMap::new();
-        kuna_immediate_dominators(&b.pool, &g, a, &mut idom).unwrap();
+        unlace_immediate_dominators(&b.pool, &g, a, &mut idom).unwrap();
         assert_eq!(idom[&bb], a);
         assert_eq!(idom[&c], bb);
         assert_eq!(idom[&d], c);
@@ -2068,7 +2073,7 @@ mod tests {
 
         let mut actual = BTreeMap::new();
         actual.insert(unrelated, unrelated);
-        kuna_immediate_dominators(&b.pool, &graph, start, &mut actual).unwrap();
+        unlace_immediate_dominators(&b.pool, &graph, start, &mut actual).unwrap();
         for (&node, &parent) in &expected {
             assert_eq!(actual.get(&node), Some(&parent), "node {node:?}");
         }
@@ -2078,7 +2083,7 @@ mod tests {
 
         let mut permuted = BTreeMap::new();
         permuted.insert(unrelated, unrelated);
-        kuna_immediate_dominators(&b.pool, &permuted_graph, start, &mut permuted).unwrap();
+        unlace_immediate_dominators(&b.pool, &permuted_graph, start, &mut permuted).unwrap();
         assert_eq!(
             permuted, actual,
             "edge insertion order must not change dominators"
@@ -2108,12 +2113,12 @@ mod tests {
             let graph = b.graph(&edges, &nodes);
             let expected = idom_by_removal(&graph, nodes[0]);
             let mut actual = BTreeMap::new();
-            kuna_immediate_dominators(&b.pool, &graph, nodes[0], &mut actual).unwrap();
+            unlace_immediate_dominators(&b.pool, &graph, nodes[0], &mut actual).unwrap();
             assert_eq!(actual, expected, "generated graph {sample}");
             edges.reverse();
             let reversed = b.graph(&edges, &nodes);
             let mut actual = BTreeMap::new();
-            kuna_immediate_dominators(&b.pool, &reversed, nodes[0], &mut actual).unwrap();
+            unlace_immediate_dominators(&b.pool, &reversed, nodes[0], &mut actual).unwrap();
             assert_eq!(actual, expected, "reversed edge order in graph {sample}");
         }
     }
@@ -2131,8 +2136,8 @@ mod tests {
         let f = b.node(0x60); // dead-end off b
         let g = b.graph(&[(a, bb), (bb, c), (c, e), (a, d), (d, e), (bb, f)], &[]);
         let frontier = b.set(&[e]);
-        let mut res = KunaRegionGraph::new();
-        kuna_subgraph_between_nodes(&b.pool, &g, a, &frontier, true, &mut res).unwrap();
+        let mut res = UnlaceRegionGraph::new();
+        unlace_subgraph_between_nodes(&b.pool, &g, a, &frontier, true, &mut res).unwrap();
         // f can't reach e -> pruned; e kept (includeFrontier).
         assert!(!res.contains_node(f));
         assert!(res.contains_node(e));
@@ -2142,20 +2147,20 @@ mod tests {
         assert!(res.contains_node(d));
 
         // Now exclude the frontier.
-        let mut res2 = KunaRegionGraph::new();
-        kuna_subgraph_between_nodes(&b.pool, &g, a, &frontier, false, &mut res2).unwrap();
+        let mut res2 = UnlaceRegionGraph::new();
+        unlace_subgraph_between_nodes(&b.pool, &g, a, &frontier, false, &mut res2).unwrap();
         assert!(!res2.contains_node(e));
     }
 
     /// angr's `subgraph_between_nodes` as first ported: cut the edges into
     /// `source` on a copy of the graph, then walk the copy.
     fn slice_on_a_copy(
-        pool: &KunaNodePool,
-        g: &KunaRegionGraph,
-        source: KunaNodeId,
-        frontier: &KunaNodeSet,
+        pool: &UnlaceNodePool,
+        g: &UnlaceRegionGraph,
+        source: UnlaceNodeId,
+        frontier: &UnlaceNodeSet,
         include_frontier: bool,
-    ) -> KunaRegionGraph {
+    ) -> UnlaceRegionGraph {
         let mut graph = g.clone();
         let mut src_in = Vec::new();
         graph.in_edges(source, &mut src_in).unwrap();
@@ -2163,7 +2168,7 @@ mod tests {
             graph.remove_edge(a, b);
         }
         let mut can_reach = BTreeSet::new();
-        let mut queue: Vec<KunaNodeId> = frontier.iter().map(|k| k.id).collect();
+        let mut queue: Vec<UnlaceNodeId> = frontier.iter().map(|k| k.id).collect();
         can_reach.extend(queue.iter().copied());
         let mut pos = 0;
         while pos < queue.len() {
@@ -2175,7 +2180,7 @@ mod tests {
                 }
             }
         }
-        let mut res = KunaRegionGraph::new();
+        let mut res = UnlaceRegionGraph::new();
         let mut queue = vec![source];
         let mut traversed = BTreeSet::new();
         let mut pos = 0;
@@ -2199,7 +2204,7 @@ mod tests {
             }
         }
         loop {
-            let dangling: Vec<KunaNodeId> = res
+            let dangling: Vec<UnlaceNodeId> = res
                 .iter_adj()
                 .filter(|(k, adj)| {
                     k.id != source
@@ -2251,17 +2256,19 @@ mod tests {
                 let picked: Vec<_> = nodes.iter().copied().filter(|_| next(3) == 0).collect();
                 let frontier = b.set(&picked);
                 for include in [true, false] {
-                    let mut res = KunaRegionGraph::new();
-                    kuna_subgraph_between_nodes(&b.pool, &g, source, &frontier, include, &mut res)
-                        .unwrap();
+                    let mut res = UnlaceRegionGraph::new();
+                    unlace_subgraph_between_nodes(
+                        &b.pool, &g, source, &frontier, include, &mut res,
+                    )
+                    .unwrap();
                     let copy = slice_on_a_copy(&b.pool, &g, source, &frontier, include);
                     assert_eq!(format!("{res:?}"), format!("{copy:?}"), "graph {sample}");
                 }
-                let mut res = KunaRegionGraph::new();
-                kuna_subgraph_between_nodes(&b.pool, &g, source, &frontier, true, &mut res)
+                let mut res = UnlaceRegionGraph::new();
+                unlace_subgraph_between_nodes(&b.pool, &g, source, &frontier, true, &mut res)
                     .unwrap();
                 let mut visited = Vec::new();
-                let hit = kuna_slice_visits(&g, &b.pool, source, &frontier, |n| {
+                let hit = unlace_slice_visits(&g, &b.pool, source, &frontier, |n| {
                     visited.push(n);
                     false
                 });
@@ -2275,7 +2282,7 @@ mod tests {
                 }
                 let target = visited.last().copied();
                 let stops =
-                    kuna_slice_visits(&g, &b.pool, source, &frontier, |n| Some(n) == target);
+                    unlace_slice_visits(&g, &b.pool, source, &frontier, |n| Some(n) == target);
                 assert_eq!(stops.unwrap(), target.is_some());
             }
         }
@@ -2289,34 +2296,34 @@ mod tests {
         let c = b.node(0x20);
         let orphan = b.node(0x99);
         let g = b.graph(&[(a, c)], &[]);
-        let empty = KunaNodeSet::new();
+        let empty = UnlaceNodeSet::new();
         // source not in graph.
         assert!(
-            kuna_subgraph_between_nodes(
+            unlace_subgraph_between_nodes(
                 &b.pool,
                 &g,
                 orphan,
                 &empty,
                 true,
-                &mut KunaRegionGraph::new()
+                &mut UnlaceRegionGraph::new()
             )
             .is_err()
         );
         // frontier node not in graph.
         let bad_front = b.set(&[orphan]);
         assert!(
-            kuna_subgraph_between_nodes(
+            unlace_subgraph_between_nodes(
                 &b.pool,
                 &g,
                 a,
                 &bad_front,
                 true,
-                &mut KunaRegionGraph::new()
+                &mut UnlaceRegionGraph::new()
             )
             .is_err()
         );
-        assert!(kuna_slice_visits(&g, &b.pool, orphan, &empty, |_| true).is_err());
-        assert!(kuna_slice_visits(&g, &b.pool, a, &bad_front, |_| true).is_err());
+        assert!(unlace_slice_visits(&g, &b.pool, orphan, &empty, |_| true).is_err());
+        assert!(unlace_slice_visits(&g, &b.pool, a, &bad_front, |_| true).is_err());
     }
 
     #[test]
@@ -2329,7 +2336,7 @@ mod tests {
         let d = b.node(0x40);
         let e = b.node(0x50);
         let g = b.graph(&[(a, bb), (a, c), (bb, d), (c, d), (d, e)], &[]);
-        let dom = KunaIncrementalDominators::new(&b.pool, &g, a, false).unwrap();
+        let dom = UnlaceIncrementalDominators::new(&b.pool, &g, a, false).unwrap();
         assert_eq!(dom.idom(a), Some(a));
         assert_eq!(dom.idom(d), Some(a));
         assert_eq!(dom.idom(e), Some(d));
@@ -2349,7 +2356,7 @@ mod tests {
         let c = b.node(0x30);
         let d = b.node(0x40);
         let g = b.graph(&[(a, bb), (a, c), (bb, d), (c, d)], &[]);
-        let mut dom = KunaIncrementalDominators::new(&b.pool, &g, a, false).unwrap();
+        let mut dom = UnlaceIncrementalDominators::new(&b.pool, &g, a, false).unwrap();
         let dfb = dom.df(&b.pool, &g, bb).unwrap();
         let dfc = dom.df(&b.pool, &g, c).unwrap();
         assert_eq!(dfb, b.set(&[d]));
@@ -2375,7 +2382,7 @@ mod tests {
         let d = b.node(0x40);
         let e = b.node(0x50);
         let g = b.graph(&[(a, bb), (bb, c), (c, d), (d, e)], &[]);
-        let mut dom = KunaIncrementalDominators::new(&b.pool, &g, a, false).unwrap();
+        let mut dom = UnlaceIncrementalDominators::new(&b.pool, &g, a, false).unwrap();
         // Touch frontiers so patching exercises the dfs path too.
         let _ = dom.df(&b.pool, &g, bb).unwrap();
 
@@ -2405,7 +2412,7 @@ mod tests {
         let bb = b.node(0x20);
         let c = b.node(0x30);
         let g = b.graph(&[(a, bb), (bb, c)], &[]);
-        let dom = KunaIncrementalDominators::new(&b.pool, &g, c, true).unwrap();
+        let dom = UnlaceIncrementalDominators::new(&b.pool, &g, c, true).unwrap();
         // Post-dominator tree over reversed edges: c pdom of b, b pdom of a.
         assert_eq!(dom.idom(c), Some(c));
         assert_eq!(dom.idom(bb), Some(c));
@@ -2423,14 +2430,14 @@ mod tests {
 
         // Induced on {a, b}: only edge a -> b survives.
         let keep = b.set(&[a, bb]);
-        let mut ind = KunaRegionGraph::new();
+        let mut ind = UnlaceRegionGraph::new();
         g.induced(&b.pool, &keep, &mut ind);
         assert_eq!(ind.num_nodes(), 2);
         assert!(ind.has_edge(a, bb));
         assert!(!ind.has_edge(a, c));
 
         // Reversed: every edge flips, node set preserved.
-        let mut rev = KunaRegionGraph::new();
+        let mut rev = UnlaceRegionGraph::new();
         g.build_reversed(&b.pool, &mut rev);
         assert!(rev.has_edge(bb, a));
         assert!(rev.has_edge(c, bb));

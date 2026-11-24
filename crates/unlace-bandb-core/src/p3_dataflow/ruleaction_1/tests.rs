@@ -12,7 +12,7 @@
 use std::rc::Rc;
 
 use unlace_base::address::{Address, calc_mask};
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::space::{
     AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace, UniqueSpace, addrspace_flags,
     spacetype,
@@ -67,8 +67,8 @@ fn unk(size: int4) -> Rc<Datatype> {
     Rc::new(Datatype::new(size, type_metatype::TYPE_UNKNOWN))
 }
 
-fn no_replace() -> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> KunaResult<()> {
-    |_: &mut VarnodeBank, _: VarnodeId, _: VarnodeId| -> KunaResult<()> { Ok(()) }
+fn no_replace() -> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> UnlaceResult<()> {
+    |_: &mut VarnodeBank, _: VarnodeId, _: VarnodeId| -> UnlaceResult<()> { Ok(()) }
 }
 
 /// Make a live binary op (2 input slots, no output) at the ram offset.
@@ -1111,7 +1111,7 @@ fn intlessequal_rewrites_x_le_c_to_x_lt_c_plus_1() {
         is_const(&fd, newc) && off_of(&fd, newc) == 6,
         "constant became c+1"
     );
-    // (kuna) provenance: the rewritten op carries the canonical-LESSEQUAL mark.
+    // (unlace) provenance: the rewritten op carries the canonical-LESSEQUAL mark.
     assert!(
         fd.obank().get(op).unwrap().is_canonical_lessequal(),
         "provenance recorded on the canonicalized comparison"
@@ -1247,7 +1247,7 @@ fn selectcse_declines_at_csehash_stub() {
 }
 
 // -----------------------------------------------------------------------------
-// (kuna) RuleMaskJoin — (x & m1) + (x & m2) => x, or x & (m1 | m2)
+// (unlace) RuleMaskJoin — (x & m1) + (x & m2) => x, or x & (m1 | m2)
 // -----------------------------------------------------------------------------
 
 /// `join(x & m1, x & m2)` on 8-byte values, the AND outputs at 0x100 and 0x108.

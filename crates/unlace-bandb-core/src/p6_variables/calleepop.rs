@@ -1,4 +1,4 @@
-//! (kuna) Recover how many argument bytes a callee pops when the compiler spec
+//! (unlace) Recover how many argument bytes a callee pops when the compiler spec
 //! cannot say.
 //!
 //! # The gap
@@ -31,7 +31,7 @@
 //!
 //! The guess is refined for the one family whose convention the ABI fixes:
 //! **an imported function**.  A Win32 API entry point is `__stdcall` by the
-//! platform's own rule (`WINAPI`), and kuna already knows which callees are
+//! platform's own rule (`WINAPI`), and unlace already knows which callees are
 //! imports — `peimportcall` paints `Varnode::externref` over the Import Address
 //! Table, which is what lets `ActionDeindirect` resolve `call dword ptr [IAT]`
 //! to a name in the first place.  A call to an *internal* function keeps
@@ -77,7 +77,7 @@ use unlace_num::opcodes::OpCode;
 use crate::context::VarnodeId;
 use crate::funcdata::Funcdata;
 
-/// Marshaling element `<calleepop>` (kuna 4000+ range; 4150 = the previous high
+/// Marshaling element `<calleepop>` (unlace 4000+ range; 4150 = the previous high
 /// water mark).
 pub const ELEM_CALLEEPOP: ElementId = ElementId::new("calleepop", 4151);
 

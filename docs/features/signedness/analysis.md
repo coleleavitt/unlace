@@ -97,7 +97,7 @@ Three refinements were needed on top:
   false, and `+ - * & | ^ <<` all diverge the same way. Reduced from findutils
   `find -O2` `sub_bac0`, where re-declaring `short v8` unsigned left
   `if ((v2 == v8) || (v8 == -1)) break;` in place with a dead `break`; the
-  reduced bytechunk is the second function in `tests/stages/kuna-signedness.toml`.
+  reduced bytechunk is the second function in `tests/stages/signedness.toml`.
 
   The width that decides it is the `int` of whoever compiles the emitted C, which
   is 4 bytes, **not** `TypeFactory::get_size_of_int()`. Reading it off the target
@@ -108,7 +108,7 @@ Three refinements were needed on top:
   printed `int2 v1; ... if (v1 != -1)` and `prefer-unsigned` printed
   `uint2 v1; ... if (v1 != -1)`, a constant-true test to any reader whose `int` is
   4 bytes. The floor is now `max(4, get_size_of_int())`, and
-  `tests/stages/kuna-signedness-int16.toml` pins it on that architecture (2 of its
+  `tests/stages/signedness-int16.toml` pins it on that architecture (2 of its
   4 assertions fail with the target-derived guard, 4/4 with this one), with a
   4-byte local in the same image that *does* flip so the decline is visibly the
   width rule and not an inactive option.

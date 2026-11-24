@@ -12,7 +12,7 @@
 //!   * **init order faithfulness.**  `option extrapop` before any default proto
 //!     model is seeded (empty `proto_models` registry) must take the C++
 //!     no-op-when-defaultfp-null path (no panic, no spurious mutation), and the
-//!     unknown-model error must surface as a `KunaError`, never a `panic!`.
+//!     unknown-model error must surface as a `UnlaceError`, never a `panic!`.
 //!   * **shell brace-matching boundary.**  The structural-sanity invariant the
 //!     gate relies on (matched braces) must hold even for a display name that
 //!     itself contains brace/paren characters — the printer must not let a
@@ -25,7 +25,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::IdRegistry;
 use unlace_base::space::AddrSpaceManager;
 use unlace_base::xml::{DocumentStorage, Element};
@@ -123,8 +123,8 @@ impl LoadImage for DummyImg {
     fn get_file_name(&self) -> &str {
         "dummy"
     }
-    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> KunaResult<()> {
-        Err(KunaError::data_unavail("dummy"))
+    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> UnlaceResult<()> {
+        Err(UnlaceError::data_unavail("dummy"))
     }
     fn get_arch_type(&self) -> Vec<u8> {
         Vec::new()
@@ -259,7 +259,7 @@ fn w9x_decompile_func_runs_perform_and_prints() {
     // the derived "decompile" root and `getCurrent() != null`.  The Rust
     // `build_action` now mirrors that (it calls `set_current("decompile")` after
     // `install_universal`), so right after `init_post_engine` the current action
-    // is "decompile" — faithful to upstream and required by the kuna `stage
+    // is "decompile" — faithful to upstream and required by the unlace `stage
     // status` / `pipeline list (current)` console readers.
     assert!(
         arch.has_current_action(),
@@ -313,13 +313,13 @@ fn w9x_extrapop_with_no_default_model_is_a_safe_noop() {
     assert_eq!(arch.default_fp().unwrap().get_extra_pop(), 8);
 }
 
-/// ADVERSARIAL 3b — unknown-model resolution surfaces a `KunaError`, never a
+/// ADVERSARIAL 3b — unknown-model resolution surfaces a `UnlaceError`, never a
 /// panic, and the message faithfully echoes the C++ `LowlevelError("Unknown
 /// prototype model :...")`.
 #[test]
 fn w9x_unknown_model_is_an_error_not_a_panic() {
     let mut arch = Architecture::new("t", bare_sleigh());
-    let err: KunaError = arch.set_default_model("no-such-model").unwrap_err();
+    let err: UnlaceError = arch.set_default_model("no-such-model").unwrap_err();
     let msg = format!("{err}");
     assert!(
         msg.contains("Unknown prototype model"),

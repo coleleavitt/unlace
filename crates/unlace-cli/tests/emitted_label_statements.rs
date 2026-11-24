@@ -26,7 +26,7 @@ const CASES: &[Case] = &[
     Case {
         name: "arm",
         architecture: Architecture::Arm,
-        stage: include_str!("../../../tests/stages/kuna-labelstmt-arm.toml"),
+        stage: include_str!("../../../tests/stages/labelstmt-arm.toml"),
         symbols: &[("probe", 0, 52), ("probe_control", 0x40, 56)],
         prototypes: &[
             (
@@ -67,7 +67,7 @@ fn main() { unsafe {
     Case {
         name: "x64",
         architecture: Architecture::X86_64,
-        stage: include_str!("../../../tests/stages/kuna-labelstmt-x64.toml"),
+        stage: include_str!("../../../tests/stages/labelstmt-x64.toml"),
         symbols: &[("last_case", 0, 0x82), ("skip_blanks", 0x90, 0x26)],
         prototypes: &[
             (

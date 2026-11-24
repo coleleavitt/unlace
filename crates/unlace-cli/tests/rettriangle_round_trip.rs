@@ -1,4 +1,4 @@
-//! (kuna `rettriangle`) A one-block `if` before a constant return prints as
+//! (unlace `rettriangle`) A one-block `if` before a constant return prints as
 //! `if (c) f(); return 0;` instead of the split `if (!c) return 0; f(); return 0;`.
 //! Each image is printed with the option off and on, compiled beside the fixture
 //! source (functions renamed `s_<name>`) under gcc and clang at -O0 and -O2, and
@@ -103,7 +103,7 @@ fn a_one_block_if_before_a_constant_return_round_trips_through_the_printed_c() {
                 "rettriangle",
                 opt,
             ];
-            let (text, err, rc) = common::run_kuna(&args);
+            let (text, err, rc) = common::run_unlace(&args);
             assert_eq!(rc, 0, "{image} rettriangle {opt}: {err}");
             for name in triangles {
                 let body = function(&text, name);

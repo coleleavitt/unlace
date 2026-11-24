@@ -1,8 +1,8 @@
-//! (kuna) `pdatainterior` — never start a function inside another function's
+//! (unlace) `pdatainterior` — never start a function inside another function's
 //! `.pdata` `RUNTIME_FUNCTION` body (P1 code/data partition).
 //!
 //! The PE half of [`super::fdeinterior`], and it exists for the same reason:
-//! a kuna `FunctionSymbol` is an entry address with no extent, so the commit
+//! a unlace `FunctionSymbol` is an entry address with no extent, so the commit
 //! boundary cannot answer "is this candidate already inside a known function?"
 //! and every discovery oracle is free to plant a `sub_<addr>` in the middle of a
 //! body it cannot see. On ELF `.eh_frame` supplies the missing extent; on PE the
@@ -52,7 +52,7 @@ use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 
 use super::existing_function_addrs;
 
-/// (kuna) The `.pdata`-interior entry-suppression pass (`pdatainterior`).
+/// (unlace) The `.pdata`-interior entry-suppression pass (`pdatainterior`).
 ///
 /// Reports the `RUNTIME_FUNCTION` bodies that describe exactly one function in
 /// [`AnalysisOutput::fde_bodies`], the same channel `fdeinterior` reports its FDE

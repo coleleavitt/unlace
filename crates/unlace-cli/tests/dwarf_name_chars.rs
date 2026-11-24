@@ -53,7 +53,7 @@ fn patched(image: &[u8]) -> Vec<u8> {
 }
 
 fn decompile(binary: &std::path::Path, mode: &str) -> String {
-    let (body, err, status) = common::run_kuna(&[
+    let (body, err, status) = common::run_unlace(&[
         "decompile-all",
         binary.to_str().unwrap(),
         "--option",

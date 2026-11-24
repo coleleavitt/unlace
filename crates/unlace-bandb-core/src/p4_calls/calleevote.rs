@@ -1,4 +1,4 @@
-//! (kuna `calleevote`) A callee parameter takes the type every caller passes.
+//! (unlace `calleevote`) A callee parameter takes the type every caller passes.
 //!
 //! `protoorder` carries what a callee's own recovery found out to its callers.
 //! This is the other direction. A whole-binary run decompiles every caller of a
@@ -72,7 +72,7 @@ impl CalleeVoteMode {
     }
 }
 
-/// (kuna) Parse `option calleevote off|types|fields`.
+/// (unlace) Parse `option calleevote off|types|fields`.
 pub struct OptionCalleeVote;
 
 impl OptionCalleeVote {
@@ -80,13 +80,13 @@ impl OptionCalleeVote {
     pub const NAME: &'static str = "calleevote";
 
     /// Parse + validate the value.
-    pub fn apply(&self, p1: &str) -> unlace_base::error::KunaResult<(CalleeVoteMode, String)> {
+    pub fn apply(&self, p1: &str) -> unlace_base::error::UnlaceResult<(CalleeVoteMode, String)> {
         let mode = match p1 {
             "off" => CalleeVoteMode::Off,
             "types" => CalleeVoteMode::Types,
             "fields" => CalleeVoteMode::Fields,
             other => {
-                return Err(unlace_base::error::KunaError::parse(format!(
+                return Err(unlace_base::error::UnlaceError::parse(format!(
                     "Unknown calleevote value: {other} (expected off|types|fields)"
                 )));
             }
@@ -390,7 +390,7 @@ fn points_at_plain_char(ct: &Datatype) -> bool {
 /// Is `ct`, the type the function input `vn` carries, the one its callers
 /// stated for it?
 pub fn took_stated_type(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> bool {
-    let Some(stated) = data.kuna_calleevote_inputs() else {
+    let Some(stated) = data.unlace_calleevote_inputs() else {
         return false;
     };
     let Some(v) = data.vbank().get(vn) else {
@@ -410,9 +410,9 @@ pub fn took_stated_type(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> bool {
 /// ones the last redo left untyped.
 pub fn record(arch: &mut Architecture, entry: &Address, fd: &mut Funcdata) {
     let Some(me) = key_of(entry) else { return };
-    let prove = arch.kuna_options.get::<crate::callerptr::CallerPtr>().0;
+    let prove = arch.unlace_options.get::<crate::callerptr::CallerPtr>().0;
     let own = if arch
-        .kuna_tables
+        .unlace_tables
         .get::<crate::calleevote::Ledger>()
         .own
         .contains_key(&me)
@@ -481,7 +481,7 @@ pub fn record(arch: &mut Architecture, entry: &Address, fd: &mut Funcdata) {
             },
         ));
     }
-    let ledger = arch.kuna_tables.get_mut::<crate::calleevote::Ledger>();
+    let ledger = arch.unlace_tables.get_mut::<crate::calleevote::Ledger>();
     ledger.drop_calls_of(me.1);
     for (callee, site) in calls {
         if let Some(k) = key_of(&callee) {
@@ -553,12 +553,12 @@ pub fn decide(
 ) -> Vec<(int4, uintb)> {
     let ptr_size = arch.types().get_size_of_pointer();
     let headless = arch
-        .kuna_options
+        .unlace_options
         .get::<crate::structheadless::StructHeadlessMode>()
         .fires();
     let pointers = crate::callerptr::void_pointer(arch);
     let decided = decide_ledger_with(
-        arch.kuna_tables.get::<crate::calleevote::Ledger>(),
+        arch.unlace_tables.get::<crate::calleevote::Ledger>(),
         ptr_size,
         headless,
         pointers.as_ref(),
@@ -566,7 +566,7 @@ pub fn decide(
     );
     let changed = decided.iter().map(|(k, _)| *k).collect();
     for (key, stated) in decided {
-        arch.kuna_tables
+        arch.unlace_tables
             .get_mut::<crate::calleevote::Ledger>()
             .stated
             .insert(key, Rc::new(stated));
@@ -779,7 +779,7 @@ pub fn decide_ledger_with(
 /// stated: tar's `exclude_add_pattern_buffer (struct exclude *, char *)` is
 /// redone for its record and its callers still pass the buffer as `char *`.
 pub fn forget_statements_naming(arch: &mut Architecture, names: &[String]) {
-    arch.kuna_tables
+    arch.unlace_tables
         .get_mut::<crate::calleevote::Ledger>()
         .forget_naming(names);
 }
@@ -803,7 +803,7 @@ pub fn trace() -> bool {
 /// the vote its body was printed with.
 pub fn seed(arch: &Architecture, data: &mut Funcdata) {
     if !arch
-        .kuna_options
+        .unlace_options
         .get::<crate::calleevote::CalleeVoteMode>()
         .is_on()
     {
@@ -812,17 +812,17 @@ pub fn seed(arch: &Architecture, data: &mut Funcdata) {
     let Some(key) = key_of(data.get_address()) else {
         return;
     };
-    let ledger = arch.kuna_tables.get::<crate::calleevote::Ledger>();
+    let ledger = arch.unlace_tables.get::<crate::calleevote::Ledger>();
     if let Some(stated) = ledger.stated.get(&key) {
-        data.kuna_set_calleevote_inputs(Some(Rc::clone(stated)));
+        data.unlace_set_calleevote_inputs(Some(Rc::clone(stated)));
     }
     if arch
-        .kuna_options
+        .unlace_options
         .get::<crate::calleevote::CalleeVoteMode>()
         .fields()
         && ledger.closed.contains(&key)
     {
-        data.kuna_set_calleevote_closed(true);
+        data.unlace_set_calleevote_closed(true);
     }
 }
 
@@ -837,7 +837,7 @@ pub fn seed(arch: &Architecture, data: &mut Funcdata) {
 /// that one object, so a callee that reaches past it (`cfg_free(&cfg)` reading
 /// the members after a `char *` first one) is not taking the object's type.
 pub fn input_vote(data: &Funcdata, vn: VarnodeId, ct: &Rc<Datatype>) -> Option<Rc<Datatype>> {
-    let stated = data.kuna_calleevote_inputs()?;
+    let stated = data.unlace_calleevote_inputs()?;
     let v = data.vbank().get(vn)?;
     if !v.is_input() || v.is_type_lock() {
         return None;
@@ -860,7 +860,7 @@ pub fn input_vote(data: &Funcdata, vn: VarnodeId, ct: &Rc<Datatype>) -> Option<R
             ct,
             ptr_size,
             data.get_arch()
-                .kuna_options
+                .unlace_options
                 .get::<crate::structheadless::StructHeadlessMode>()
                 .fires(),
         ) && crate::structheadless::gives_a_pointee(&want.ct));
@@ -894,7 +894,7 @@ const DERIVED_BUDGET: usize = 2048;
 /// non-zero constant (`if (!s) s = table;`), and for one that it -- or an
 /// address it derives from it by adds, pointer arithmetic, copies, casts or
 /// merges (`p + i == (long)table`) -- compares with, adds to or subtracts from
-/// a constant in read-only memory that is not a string literal kuna recovered
+/// a constant in read-only memory that is not a string literal unlace recovered
 /// (`charptr::constant_is_string`), or adds the negation of one to
 /// (`p - (long)table`). A walk that runs out of [`DERIVED_BUDGET`] refuses too.
 #[doc(hidden)]
@@ -939,7 +939,7 @@ fn merged_with_a_constant(data: &Funcdata, family: &[VarnodeId]) -> bool {
 
 /// Is the constant `off` of `size` bytes, read at `op`, an address in
 /// read-only memory -- what the printer renders as a literal -- that is not a
-/// string literal kuna recovered?
+/// string literal unlace recovered?
 fn table_address(data: &Funcdata, op: crate::context::OpId, off: uintb, size: int4) -> bool {
     let glb = data.get_arch();
     let Some(spc) = glb.manage().get_default_data_space() else {
@@ -1066,41 +1066,41 @@ fn meets_an_address_constant(data: &Funcdata, family: &[VarnodeId]) -> bool {
     false
 }
 
-/// (kuna `calleevote`) The types every caller of this function passes for its inputs, copied
+/// (unlace `calleevote`) The types every caller of this function passes for its inputs, copied
 /// off the `Architecture` after the flow build; kept across `Funcdata::clear`.
 #[derive(Default)]
 struct InputsSlot(Option<std::rc::Rc<crate::calleevote::CallerTypes>>);
-crate::kuna_func_state!(InputsSlot, keep_across_clear: true);
+crate::unlace_func_state!(InputsSlot, keep_across_clear: true);
 
-/// The `kuna_calleevote` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// The `unlace_calleevote` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataCalleevoteExt {
-    /// (kuna `calleevote`) Record what this function's callers pass for its inputs.
-    fn kuna_set_calleevote_inputs(
+    /// (unlace `calleevote`) Record what this function's callers pass for its inputs.
+    fn unlace_set_calleevote_inputs(
         &mut self,
         stated: Option<std::rc::Rc<crate::calleevote::CallerTypes>>,
     );
-    /// (kuna `calleevote`) What this function's callers pass for its inputs.
-    fn kuna_calleevote_inputs(&self) -> Option<&crate::calleevote::CallerTypes>;
+    /// (unlace `calleevote`) What this function's callers pass for its inputs.
+    fn unlace_calleevote_inputs(&self) -> Option<&crate::calleevote::CallerTypes>;
 }
 
 impl FuncdataCalleevoteExt for crate::funcdata::Funcdata {
-    /// (kuna `calleevote`) Record what this function's callers pass for its inputs.
-    fn kuna_set_calleevote_inputs(
+    /// (unlace `calleevote`) Record what this function's callers pass for its inputs.
+    fn unlace_set_calleevote_inputs(
         &mut self,
         stated: Option<std::rc::Rc<crate::calleevote::CallerTypes>>,
     ) {
-        self.kuna_state_mut::<InputsSlot>().0 = stated;
+        self.unlace_state_mut::<InputsSlot>().0 = stated;
     }
-    /// (kuna `calleevote`) What this function's callers pass for its inputs.
-    fn kuna_calleevote_inputs(&self) -> Option<&crate::calleevote::CallerTypes> {
-        self.kuna_state::<InputsSlot>().0.as_deref()
+    /// (unlace `calleevote`) What this function's callers pass for its inputs.
+    fn unlace_calleevote_inputs(&self) -> Option<&crate::calleevote::CallerTypes> {
+        self.unlace_state::<InputsSlot>().0.as_deref()
     }
 }
 
-impl crate::optionset::KunaOption for CalleeVoteMode {
+impl crate::optionset::UnlaceOption for CalleeVoteMode {
     const NAME: &'static str = "calleevote";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         crate::calleevote::CalleeVoteMode::Off
@@ -1110,12 +1110,12 @@ impl crate::optionset::KunaOption for CalleeVoteMode {
         crate::calleevote::CalleeVoteMode::Fields
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         Ok(crate::calleevote::OptionCalleeVote.apply(value)?)
     }
 }
 
-crate::kuna_arch_table!(Ledger);
+crate::unlace_arch_table!(Ledger);
 
 #[cfg(test)]
 mod tests;

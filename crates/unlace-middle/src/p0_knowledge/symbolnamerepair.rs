@@ -1,4 +1,4 @@
-//! (kuna) Degenerate-symbol-name repair — stop one degenerate qualified
+//! (unlace) Degenerate-symbol-name repair — stop one degenerate qualified
 //! symbol name from aborting the load of an entire binary.
 //!
 //! ## The failure it removes

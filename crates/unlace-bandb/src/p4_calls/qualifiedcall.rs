@@ -30,6 +30,6 @@ pub fn prototype(arch: &ArchContext, entry: &Address) -> Option<FuncProto> {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.qualifiedcall_prototype = Some(prototype);
 }

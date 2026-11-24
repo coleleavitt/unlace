@@ -90,7 +90,7 @@ pub fn soft_model(arch: &Architecture, evidence: Option<bool>) -> Option<Rc<Prot
         return Some(Rc::clone(soft));
     };
     let mut model = (**soft).clone();
-    for entry in model.input_mut().kuna_entries_mut() {
+    for entry in model.input_mut().unlace_entries_mut() {
         let same = default.input().get_entry().iter().find(|d| {
             d.get_type() == entry.get_type()
                 && d.get_space().get_index() == entry.get_space().get_index()
@@ -98,7 +98,7 @@ pub fn soft_model(arch: &Architecture, evidence: Option<bool>) -> Option<Rc<Prot
                 && d.get_size() == entry.get_size()
         });
         if let Some(same) = same {
-            entry.kuna_copy_extension(same);
+            entry.unlace_copy_extension(same);
         }
     }
     Some(Rc::new(model))
@@ -382,7 +382,7 @@ fn rebuild(arch: &ArchContext, proto: &FuncProto) -> Option<Rc<FuncProto>> {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.typedcallabi_caller_extends_from = Some(caller_extends_from);
     hooks.typedcallabi_image_evidence = Some(image_evidence);
     hooks.typedcallabi_soft_model = Some(soft_model);

@@ -23,7 +23,7 @@ fn decompile_in(fixture: &str, surface: &[&str], assertions: &[&str]) -> (String
         }
     }
     args.extend(["--sleighpath", specs.to_str().unwrap()]);
-    common::run_kuna(&args)
+    common::run_unlace(&args)
 }
 
 #[test]

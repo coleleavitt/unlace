@@ -1,5 +1,5 @@
 //! End-to-end gate for **scalar/operand reference markup** (`operand_refs` —
-//! the kuna analog of Ghidra's `ScalarOperandAnalyzer` / `ElfScalarOperandAnalyzer`,
+//! the unlace analog of Ghidra's `ScalarOperandAnalyzer` / `ElfScalarOperandAnalyzer`,
 //! the operand/reference markup family — **gated off** by default).
 //!
 //! Drives `load file <operand_refs_x86_64>` → `read symbols` → `load function
@@ -67,7 +67,7 @@ fn decompile_main(operand_refs_on: bool) -> String {
     // option BEFORE `commit_pending_analysis` so the deferred run sees it on.
     if operand_refs_on {
         prog.arch_mut()
-            .set_kuna_option("operand_refs", "on")
+            .set_unlace_option("operand_refs", "on")
             .expect("operand_refs option flips on");
     }
     prog.commit_pending_analysis()

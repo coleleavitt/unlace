@@ -12,7 +12,7 @@
 //! and clears it; `ArchitectureCapability::initialize` re-files the capability
 //! into its own `thelist`.
 //!
-//! Per ADR 0006 / the W1 `IdRegistry` convention, kuna does **not** rely on
+//! Per ADR 0006 / the W1 `IdRegistry` convention, unlace does **not** rely on
 //! static constructors (they are nondeterministic across translation units and
 //! invisible to the build).  Instead the registry is an explicit value
 //! ([`CapabilityRegistry`]) that a caller populates by calling [`register`]

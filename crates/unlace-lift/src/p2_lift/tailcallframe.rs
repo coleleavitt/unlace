@@ -1,13 +1,13 @@
-//! (kuna) `kuna_tailcallframe` — recover an `-O2` tail jump whose callee was
+//! (unlace) `unlace_tailcallframe` — recover an `-O2` tail jump whose callee was
 //! never discovered, from the stack-frame teardown that precedes it (S2 flow
-//! classification).  Sibling of [`kuna_tailcalljump`](crate::tailcalljump),
+//! classification).  Sibling of [`unlace_tailcalljump`](crate::tailcalljump),
 //! which handles the case where the branch target *is* a known function entry.
 //!
 //! ## The structural gap
 //!
-//! [`kuna_tailcalljump`](crate::tailcalljump) recognises `jmp X` as a tail
+//! [`unlace_tailcalljump`](crate::tailcalljump) recognises `jmp X` as a tail
 //! call only when `query_call(X)` resolves — X must already be a function in the
-//! symbol table.  Every discovery oracle kuna has reaches a function either from
+//! symbol table.  Every discovery oracle unlace has reaches a function either from
 //! a symbol, from an unwind record, or from a direct `call` the recursive-descent
 //! walk arrived at.  A callee that is reached **only** through a code pointer in
 //! initialized data satisfies none of them: the walk never enters the callback,
@@ -33,7 +33,7 @@
 //! ordinary intraprocedural jump — which never restores the frame, because the
 //! code it jumps to still needs it.
 //!
-//! [`kuna_is_frame_teardown_tail_call`] measures two constant stack-pointer
+//! [`unlace_is_frame_teardown_tail_call`] measures two constant stack-pointer
 //! deltas over the already-decoded raw p-code and requires that they cancel:
 //!
 //!   * the **prologue** delta, accumulated forward from the function's entry
@@ -54,13 +54,13 @@
 //! A delta that cancels is necessary but not sufficient: the run ending at the
 //! branch is also asked to give back what the entry run put on the stack, which
 //! is what tells a teardown apart from cdecl argument cleanup.  See
-//! [`kuna_tailcallsaved`](crate::tailcallsaved).
+//! [`unlace_tailcallsaved`](crate::tailcallsaved).
 //!
 //! ## What this rule cannot distinguish
 //!
-//! The evidence is the frame, not the function bound, and kuna's
+//! The evidence is the frame, not the function bound, and unlace's
 //! `FunctionSymbol` is an entry address with **no extent** (see
-//! [`kuna_funcboundflow`](crate::funcboundflow)), so nothing here can ask
+//! [`unlace_funcboundflow`](crate::funcboundflow)), so nothing here can ask
 //! whether `dest` is still inside the caller.  A jump that tears the frame down
 //! *completely* and then branches to a shared return sequence **inside the same
 //! function** is therefore indistinguishable from a tail call, and is recovered
@@ -82,7 +82,7 @@
 //!
 //! The *decision* only.  The rewrite (`BRANCH` → `CPUI_CALL` + an artificial
 //! `RETURN`) is the one `flow.rs` already drives for
-//! [`kuna_tailcalljump`](crate::tailcalljump) at the `CPUI_BRANCH` arm of
+//! [`unlace_tailcalljump`](crate::tailcalljump) at the `CPUI_BRANCH` arm of
 //! `xref_control_flow`; this predicate is consulted second, so a target that is
 //! a known function keeps the existing path and the existing warning text.
 
@@ -95,10 +95,10 @@ use unlace_num::opcodes::OpCode;
 use crate::context::OpId;
 use crate::funcdata::Funcdata;
 use crate::tailcallsaved::{
-    kuna_stack_restored_bytes, kuna_stack_saved_bytes, kuna_teardown_restores_saves,
+    unlace_stack_restored_bytes, unlace_stack_saved_bytes, unlace_teardown_restores_saves,
 };
 
-/// Marshaling element `<tailcallframe>` (kuna).  ElementIds live in the 4000+
+/// Marshaling element `<tailcallframe>` (unlace).  ElementIds live in the 4000+
 /// range; `scripts.repipe.counters --check` derives the next free id and fails
 /// on a duplicate — do not read the high-water mark by hand.
 pub const ELEM_TAILCALLFRAME: ElementId = ElementId::new("tailcallframe", 4139);
@@ -302,7 +302,7 @@ fn prologue_frame(data: &Funcdata, entry: &Address, sp: &VarnodeStorage) -> Opti
             return None;
         }
         delta = delta.wrapping_add(eff.delta);
-        saved = saved.saturating_add(kuna_stack_saved_bytes(data, &at, sp, eff.delta));
+        saved = saved.saturating_add(unlace_stack_saved_bytes(data, &at, sp, eff.delta));
         let Some((sq, _)) = data
             .obank()
             .first_after_seq(&SeqNum::new(at.clone(), uintm::MAX))
@@ -344,7 +344,7 @@ fn epilogue_teardown(data: &Funcdata, branch: OpId, sp: &VarnodeStorage) -> Opti
             return None;
         }
         delta = delta.wrapping_add(eff.delta);
-        restored = restored.saturating_add(kuna_stack_restored_bytes(data, &at, sp, eff.delta));
+        restored = restored.saturating_add(unlace_stack_restored_bytes(data, &at, sp, eff.delta));
         let first_at = data.obank().iter_at(&at).next().map(|(_, i)| i)?;
         cur = data.obank().op_before(first_at);
         prev = at;
@@ -352,7 +352,7 @@ fn epilogue_teardown(data: &Funcdata, branch: OpId, sp: &VarnodeStorage) -> Opti
     Some((delta, restored))
 }
 
-/// (kuna) Is `op` a direct `jmp` that tears the frame down first, and so is a
+/// (unlace) Is `op` a direct `jmp` that tears the frame down first, and so is a
 /// tail call to a callee no discovery oracle found?
 ///
 /// Fires iff:
@@ -360,7 +360,7 @@ fn epilogue_teardown(data: &Funcdata, branch: OpId, sp: &VarnodeStorage) -> Opti
 ///   - `op` is a direct, non-indirect `CPUI_BRANCH`;
 ///   - `dest` is neither the current function's own entry (self tail recursion
 ///     stays an ordinary back-edge, as in
-///     [`kuna_tailcalljump`](crate::tailcalljump)) nor an address this
+///     [`unlace_tailcalljump`](crate::tailcalljump)) nor an address this
 ///     function has already decoded (an address already in the op bank is live
 ///     intraprocedural flow, whatever the stack looks like);
 ///   - the function establishes a frame (`prologue < 0`) and the run of
@@ -370,7 +370,7 @@ fn epilogue_teardown(data: &Funcdata, branch: OpId, sp: &VarnodeStorage) -> Opti
 /// `sp` is the stack-pointer register location (`getStackSpace()
 /// ->getSpacebaseFull(0)`), resolved by the caller.  With no stack space in the
 /// compiler spec there is no frame to reason about and the rule declines.
-pub fn kuna_is_frame_teardown_tail_call(
+pub fn unlace_is_frame_teardown_tail_call(
     data: &Funcdata,
     op: OpId,
     gate: bool,
@@ -408,11 +408,11 @@ pub fn kuna_is_frame_teardown_tail_call(
     if epilogue <= 0 || epilogue != -prologue {
         return false;
     }
-    kuna_teardown_restores_saves(saved, restored)
+    unlace_teardown_restores_saves(saved, restored)
 }
 
-crate::kuna_flag!(
-    /// (kuna `tailcallframe`) Recover a direct `jmp` whose target is NOT a known
+crate::unlace_flag!(
+    /// (unlace `tailcallframe`) Recover a direct `jmp` whose target is NOT a known
     /// function as a tail call when the instructions immediately before it tear
     /// down exactly the frame the entry block built — the callback-only callee no
     /// discovery oracle reaches (`option tailcallframe`).  See

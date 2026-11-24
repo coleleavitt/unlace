@@ -19,7 +19,7 @@ const THUMB: &str = "unflagged_elf_thumb";
 
 fn xrefs(binary: &str, direction: &str, target: &str) -> (Value, String) {
     let path = common::fixture(binary);
-    let (stdout, stderr, rc) = common::run_kuna(&["xrefs", &path, direction, target, "--json"]);
+    let (stdout, stderr, rc) = common::run_unlace(&["xrefs", &path, direction, target, "--json"]);
     assert_eq!(rc, 0, "{stderr}\n{stdout}");
     (serde_json::from_str(&stdout).unwrap(), stderr)
 }
@@ -194,7 +194,7 @@ fn to_lists_the_called_code_it_did_not_walk() {
         "{stderr}"
     );
     let path = common::fixture(MACHO);
-    let (text, _, rc) = common::run_kuna(&["xrefs", &path, "--from", "_main"]);
+    let (text, _, rc) = common::run_unlace(&["xrefs", &path, "--from", "_main"]);
     assert_eq!(rc, 0);
     assert!(
         text.contains("0x1000003fc\tcall\t_middle\t@0x1000003d8"),
@@ -206,7 +206,7 @@ fn to_lists_the_called_code_it_did_not_walk() {
 #[test]
 fn the_inventory_still_leaves_unflagged_code_out() {
     let path = common::fixture(MACHO);
-    let (stdout, stderr, rc) = common::run_kuna(&["functions", &path, "--json"]);
+    let (stdout, stderr, rc) = common::run_unlace(&["functions", &path, "--json"]);
     assert_eq!(rc, 0, "{stderr}");
     let doc: Value = serde_json::from_str(&stdout).unwrap();
     let mut names: Vec<&str> = doc["functions"]

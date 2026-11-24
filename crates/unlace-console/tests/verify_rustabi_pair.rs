@@ -17,7 +17,7 @@
 //! }
 //! ```
 //!
-//! kuna already recovers the `RAX:RDX` pair the ABI asks for; the producer loses
+//! unlace already recovers the `RAX:RDX` pair the ABI asks for; the producer loses
 //! it to a subvariable-flow truncation driven by the one-bit discriminant, and
 //! the consumer loses it to the un-ported multi-trial branch of
 //! `buildOutputFromTrials`. The two seams are answered by two DIFFERENT

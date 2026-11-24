@@ -7,7 +7,7 @@ use unlace_base::space::spacetype;
 
 pub fn enabled_for(fd: &Funcdata, addr: &Address, size: i32) -> bool {
     (fd.get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::coreoptions::StackViews>()
         .0
         || crate::stackparamviews::preserves_range(fd, addr, 1)
@@ -28,7 +28,7 @@ pub fn unresolved_store(fd: &Funcdata, op: OpId) -> bool {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.stackeffects_enabled_for = Some(enabled_for);
     hooks.stackeffects_unresolved_store = Some(unresolved_store);
 }

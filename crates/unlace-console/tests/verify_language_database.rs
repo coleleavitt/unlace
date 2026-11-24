@@ -5,7 +5,7 @@
 
 use std::path::PathBuf;
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_console::engine::{Bootstrap, ConsoleProgram, language_database};
 use unlace_console::project::{DecompileOptions, decompile_entry};
 use unlace_decomp::loadoptions::LoadOptions;
@@ -56,7 +56,7 @@ fn decompile(mut prog: ConsoleProgram, funcs: &[&str]) -> (String, Vec<String>) 
 }
 
 fn each_image(
-    load: impl Fn(&str) -> KunaResult<ConsoleProgram> + Sync,
+    load: impl Fn(&str) -> UnlaceResult<ConsoleProgram> + Sync,
 ) -> Vec<(String, Vec<String>)> {
     // One thread per image, all reading the same database at once.
     std::thread::scope(|scope| {

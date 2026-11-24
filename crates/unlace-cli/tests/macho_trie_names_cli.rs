@@ -21,7 +21,7 @@ fn repo_root() -> PathBuf {
         .unwrap()
 }
 
-fn kuna(args: &[&str]) -> Output {
+fn unlace(args: &[&str]) -> Output {
     let specs = repo_root().join("specs");
     Command::new(env!("CARGO_BIN_EXE_unlace"))
         .env_remove("UNLACE_DECOMP_DBG")
@@ -45,7 +45,7 @@ fn fixture(name: &str) -> String {
 fn trie_names_list_and_select_on_a_stripped_dylib() {
     for name in FIXTURES {
         let image = fixture(name);
-        let out = kuna(&["functions", &image]);
+        let out = unlace(&["functions", &image]);
         let listing = String::from_utf8_lossy(&out.stdout);
         assert!(
             out.status.success(),
@@ -69,7 +69,7 @@ fn trie_names_list_and_select_on_a_stripped_dylib() {
         );
 
         for selector in ["audit_exported_function", "_audit_exported_function"] {
-            let out = kuna(&["decompile", &image, selector]);
+            let out = unlace(&["decompile", &image, selector]);
             let c = String::from_utf8_lossy(&out.stdout);
             assert!(
                 out.status.success(),
@@ -79,7 +79,7 @@ fn trie_names_list_and_select_on_a_stripped_dylib() {
             assert!(c.contains("return a0 + 7;"), "{name} {selector}:\n{c}");
         }
 
-        let out = kuna(&["decompile", &image, "audit_caller"]);
+        let out = unlace(&["decompile", &image, "audit_caller"]);
         let c = String::from_utf8_lossy(&out.stdout);
         assert!(
             out.status.success(),
@@ -91,7 +91,7 @@ fn trie_names_list_and_select_on_a_stripped_dylib() {
             "{name}: the callee and the global read by name:\n{c}"
         );
 
-        let out = kuna(&["decompile", &image, "audit_exported_data"]);
+        let out = unlace(&["decompile", &image, "audit_exported_data"]);
         let stderr = String::from_utf8_lossy(&out.stderr);
         assert!(
             !out.status.success(),
@@ -109,7 +109,7 @@ fn trie_names_list_and_select_on_a_stripped_dylib() {
 #[test]
 fn trie_names_fill_a_partial_symbol_table() {
     let image = fixture("macho_trie_partial_arm64");
-    let out = kuna(&["functions", &image]);
+    let out = unlace(&["functions", &image]);
     let listing = String::from_utf8_lossy(&out.stdout);
     assert!(
         out.status.success(),
@@ -125,7 +125,7 @@ fn trie_names_fill_a_partial_symbol_table() {
         "{listing}"
     );
     for selector in ["_audit_export_b", "audit_export_b"] {
-        let out = kuna(&["decompile", &image, selector]);
+        let out = unlace(&["decompile", &image, selector]);
         let c = String::from_utf8_lossy(&out.stdout);
         assert!(
             out.status.success(),

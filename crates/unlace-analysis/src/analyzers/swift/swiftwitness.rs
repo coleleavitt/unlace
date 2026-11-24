@@ -1,4 +1,4 @@
-//! (kuna `valuewitness`) Name and type the value witness functions of every
+//! (unlace `valuewitness`) Name and type the value witness functions of every
 //! local struct and enum.
 //!
 //! Each value type's metadata is preceded by a pointer to its value witness
@@ -250,7 +250,7 @@ fn prototype(
         first_var_arg_slot: -1,
         output_storage: None,
         input_storage: Vec::new(),
-        kuna_library_names: None,
+        unlace_library_names: None,
     })
 }
 

@@ -160,7 +160,7 @@ impl Action for ActionAssignHigh {
 // ActionMergeRequired (coreaction.hh:363)
 // =============================================================================
 
-/// (kuna) Mark the recovered output-register storage `mapped | addrtied` — the
+/// (unlace) Mark the recovered output-register storage `mapped | addrtied` — the
 /// W4 `ScopeLocal::coalesceSymbols`/`syncVarnodesWithSymbol` (`inScope`) effect
 /// that the merged tree's absent ScopeLocal does not perform.  Without it the
 /// return register is un-tied and `Merge::mergeTestRequired` lets an un-tied
@@ -168,7 +168,7 @@ impl Action for ActionAssignHigh {
 /// touched (when a proto store + output param are present), keeping the change
 /// narrow and faithful to `inScope`'s output-register arm.
 ///
-/// (kuna) ScopeLocal::inScope refinement: C++ `inScope` keys on the local
+/// (unlace) ScopeLocal::inScope refinement: C++ `inScope` keys on the local
 /// scope's range tree (`rangetree.inRange`) — a register holding a *single
 /// transient value* (e.g. the x86-64 `EAX` return of a one-COPY expression) is
 /// NOT a mapped local and stays un-tied, whereas a register genuinely reused as
@@ -269,7 +269,7 @@ fn mark_output_storage_addr_tied(data: &mut Funcdata) {
     // chain IMPLIED and the printer collapses it into the `return` expression
     // (`return (float4)(int4)(fval - 0x10) * dat;`).  This is a structural IR-shape
     // test off the recovered output, not a name/address special case.
-    // (kuna W4-ScopeLocal refinement) A return register whose marker writes are
+    // (unlace W4-ScopeLocal refinement) A return register whose marker writes are
     // ALL phi/indirect joins over `persist` global values is not a genuine
     // whole-function local: it merely carries a global (e.g. `glob1.a`) through the
     // join.  C++ `inScope` keys on the local range tree, which never contains a
@@ -331,7 +331,7 @@ fn mark_output_storage_addr_tied(data: &mut Funcdata) {
         return;
     }
 
-    // (kuna over-tie fix) A return register written *only* by `COPY`s of a
+    // (unlace over-tie fix) A return register written *only* by `COPY`s of a
     // constant (x86 `promote_compare`'s `EAX = #0x0` / `EAX = #0x1` return
     // constants) is a pure constant-return transient.  C++ `inScope` never
     // restructures such a register into a whole-function local — it collapses the
@@ -366,7 +366,7 @@ fn mark_output_storage_addr_tied(data: &mut Funcdata) {
         return;
     }
 
-    // (kuna LOSS-206 ScopeLocal-ownership gate) The C++ `addrtied` derivation for a
+    // (unlace LOSS-206 ScopeLocal-ownership gate) The C++ `addrtied` derivation for a
     // register that "Could not find any symbol" reduces to one query
     // (`funcdata_varnode.cc:993` `syncVarnodesWithSymbols`): mark it
     // `mapped|addrtied` iff `lm->inScope(addr,size,usepoint)`.
@@ -390,7 +390,7 @@ fn mark_output_storage_addr_tied(data: &mut Funcdata) {
     // C++ that source register carries its own recovered local (e.g.
     // `partialmerge::readpartial`'s `a_simple`, a `map hash` dynamic Symbol on
     // `register:0x18`), so the value is named there and the un-tied return COPY just
-    // forwards it (`a_simple = glob1.a; return a_simple + 10;`).  kuna does not yet
+    // forwards it (`a_simple = glob1.a; return a_simple + 10;`).  unlace does not yet
     // recover that per-Varnode dynamic mapentry (LOSS-206: the W4 `Varnode::
     // getSymbolEntry`/`isMapped` link is unported), so without keeping the return
     // register tied the forwarding COPY collapses and the NEGATIVE
@@ -429,7 +429,7 @@ fn mark_output_storage_addr_tied(data: &mut Funcdata) {
                 Some(s) => s,
                 None => return false,
             };
-            // (kuna LOSS-234 condmove) The forwarding-alias tie is the stand-in for an
+            // (unlace LOSS-234 condmove) The forwarding-alias tie is the stand-in for an
             // absent *recovered-local Symbol* on the source register (the `map hash`
             // dynamic SymbolEntry `a_simple` on `register:0x18` in
             // `partialmerge::readpartial`).  It must fire ONLY when the source register
@@ -451,7 +451,7 @@ fn mark_output_storage_addr_tied(data: &mut Funcdata) {
                 .get(src_vn)
                 .and_then(|v| v.get_high())
                 .and_then(|h| data.high_bank().get(h))
-                .map(|h| h.kuna_dynamic_symbol().is_some() || h.kuna_equate_symbol().is_some())
+                .map(|h| h.unlace_dynamic_symbol().is_some() || h.unlace_equate_symbol().is_some())
                 .unwrap_or(false);
             if !src_high_has_symbol {
                 return false;
@@ -474,7 +474,7 @@ fn mark_output_storage_addr_tied(data: &mut Funcdata) {
         // a transient processor register whether or not the output is locked.
         let has_marker_write = !marker_writes.is_empty();
 
-        // (kuna LOSS-241 transient-register over-tie fix) Even WITH a control-flow
+        // (unlace LOSS-241 transient-register over-tie fix) Even WITH a control-flow
         // join marker, a return register is NOT a whole-function local C++ ties when
         // one of its non-marker SSA versions is a TRANSIENT INTERMEDIATE that feeds
         // ANOTHER write of the same return address.  In `dostackextract` the field3
@@ -526,7 +526,7 @@ fn mark_output_storage_addr_tied(data: &mut Funcdata) {
             })
         });
 
-        // (kuna LOSS-231 loop-carried return-register over-tie fix) A return
+        // (unlace LOSS-231 loop-carried return-register over-tie fix) A return
         // register whose `marker` (phi) join is LOOP-CARRIED — its phi output
         // flows, through a back-edge, around an SSA def-use cycle back into one
         // of the phi's own inputs — is NOT a whole-function local C++ ties.  In
@@ -667,7 +667,7 @@ impl Action for ActionMergeRequired {
         // C++ order over the live IR: mergeAddrTied -> groupPartials ->
         // mergeMarker.  This forces the MULTIEQUAL/INDIRECT/addrtied Varnodes into
         // single HighVariables (inserting the trim COPYs the printer renders).
-        // (kuna W4-ScopeLocal stand-in) Mark the recovered output-register
+        // (unlace W4-ScopeLocal stand-in) Mark the recovered output-register
         // storage `mapped | addrtied`.  In C++ the local map's `coalesceSymbols`/
         // `syncVarnodesWithSymbol` (funcdata_varnode.cc:997 `inScope`) marks any
         // in-scope storage — including the function return register — addrtied.
@@ -687,7 +687,7 @@ impl Action for ActionMergeRequired {
         // empty (no stack-affecting ops on the boolless/condconst slices).
         let phi_arm = data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::phiarm::PhiArmSplit>()
             .0;
         data.with_covermerge(|merge, data| {
@@ -704,13 +704,13 @@ impl Action for ActionMergeRequired {
             let _ = merge.merge_marker(data);
         });
 
-        // (kuna LOSS-229) Re-attach dynamic-hash symbols to the firstuse COPYs that
+        // (unlace LOSS-229) Re-attach dynamic-hash symbols to the firstuse COPYs that
         // `mergeAddrTied` just re-materialised.  In upstream the firstuse COPY that a
         // dynamic SymbolEntry targets is never destroyed, so the EARLY
         // `ActionDynamicMapping` binding (set in the fullloop) is still present on the
         // COPY output when `ActionMergeCopy` (`mergeOpcode(CPUI_COPY)` ->
         // `mergeTestRequired` symbol guard, merge.cc:157-164) runs — keeping the
-        // dynamic temp a distinct HighVariable from the field it copies.  In the kuna
+        // dynamic temp a distinct HighVariable from the field it copies.  In the unlace
         // pipeline `RulePropagateCopy` collapses that COPY in the fullloop and the
         // cover-separation above re-inserts a FRESH COPY whose output never received
         // the early binding; without re-binding now, `ActionMergeCopy` (which runs
@@ -761,7 +761,7 @@ fn base_explicit(data: &Funcdata, vn: crate::context::VarnodeId, mut maxref: int
         if dop.is_marker() {
             return -1;
         }
-        // (kuna javatry) The caught exception is the catch clause's variable.
+        // (unlace javatry) The caught exception is the catch clause's variable.
         if crate::javatry::caught_handler(data, def).is_some() {
             return -1;
         }
@@ -769,13 +769,13 @@ fn base_explicit(data: &Funcdata, vn: crate::context::VarnodeId, mut maxref: int
             if dop.code() == OpCode::CPUI_NEW && dop.num_input() == 1 {
                 return -2; // Explicit, but may need special printing
             }
-            // (kuna) foldcallret: when on, let an order-safe single-use call
+            // (unlace) foldcallret: when on, let an order-safe single-use call
             // output fall through to the implied path so the printer inlines the
             // call expression at its use (angr "call return variable folding").
             // Option off => byte-identical upstream (always explicit).
             if !(data
                 .get_arch()
-                .kuna_options
+                .unlace_options
                 .get::<crate::callretfold::FoldCallReturns>()
                 .0
                 && crate::callretfold::call_output_foldable(data, vn))
@@ -848,7 +848,7 @@ fn base_explicit(data: &Funcdata, vn: crate::context::VarnodeId, mut maxref: int
     if crate::stablenames::holds_retype(data, vn) {
         return -1;
     }
-    // (kuna swiftcall) a throwing call's error is read as one value, named once.
+    // (unlace swiftcall) a throwing call's error is read as one value, named once.
     if crate::swifterror::is_error(data, def) {
         return -1;
     }
@@ -957,7 +957,7 @@ impl OpStackElement {
 fn process_multiplier(data: &mut Funcdata, vn: crate::context::VarnodeId, max: int4) {
     if data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::callretfold::FoldCallReturns>()
         .0
         && crate::callretfold::expression_contains_foldable_call(data, vn)
@@ -1138,12 +1138,12 @@ impl Action for ActionMarkExplicit {
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         unlace_middle::debug_assert_settled!(data, HighVariables);
         // C++ coreaction.cc:3340 — ActionMarkExplicit::apply.
-        // (kuna `implweight`) Under a weight limit an expression with more readers
+        // (unlace `implweight`) Under a weight limit an expression with more readers
         // than `max_implied_ref` is still a candidate; process_multiplier then caps
         // its terms at weight / readers.
         let weight = data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::coreaction_cleanup::ImplWeight>()
             .0;
         let maxref = if weight > 0 {
@@ -1742,17 +1742,17 @@ fn check_implied_cover(
     if load.is_some() && has_cover && crate::stackloadcover::crosses_write(data, vn) {
         return false;
     }
-    // (kuna `indexaliasguard global`) a load stays ahead of a store to a global
+    // (unlace `indexaliasguard global`) a load stays ahead of a store to a global
     // it may read; see [`crate::indexaliasguard`].
     if load.is_some() && has_cover && crate::indexaliasguard::load_crosses_global_store(data, vn) {
         return false;
     }
-    // (kuna) a load of a global holding a stored pointer stays ahead of a write;
+    // (unlace) a load of a global holding a stored pointer stays ahead of a write;
     // see [`crate::pointeevalue::load_crosses_write`].
     if crate::pointeevalue::load_crosses_write(data, vn) {
         return false;
     }
-    // (kuna syscallregs) a system call's error flag reads like the call it
+    // (unlace syscallregs) a system call's error flag reads like the call it
     // follows, so it is printed ahead of any later call as well.
     if (data.obank().get(def).map(|o| o.is_call()).unwrap_or(false)
         || load.is_some()
@@ -1786,7 +1786,7 @@ fn check_implied_cover(
             }
         }
     }
-    // (kuna GH-657) foldcallret: `base_explicit` cleared the span from the call
+    // (unlace GH-657) foldcallret: `base_explicit` cleared the span from the call
     // to its single use, but the folded expression is evaluated wherever that
     // use's own value is finally printed, which can be several statements later.
     // The descendants-first walk of `ActionMarkImplied` has classified that
@@ -1794,7 +1794,7 @@ fn check_implied_cover(
     // guard over the whole distance the call would move.
     if data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::callretfold::FoldCallReturns>()
         .0
         && data.obank().get(def).map(|o| o.is_call()).unwrap_or(false)
@@ -1808,7 +1808,7 @@ fn check_implied_cover(
     // Partial Merge #4/#5 (the `EAX = glob1.a + ESI` register-param temp earns
     // its own statement instead of folding into the return).
     //
-    // (kuna LOSS-248 W11) This arm was BLOCKED through W10 because it regressed
+    // (unlace LOSS-248 W11) This arm was BLOCKED through W10 because it regressed
     // Long double #4: `passmany`'s int2 stack params were mis-recovered (spurious
     // `xunknown4 y/z/w` + `xunknown2 v1/v2/v3` locals) so a surviving addrForced
     // INDIRECT over `writeLongDouble` polluted the piece-intersection graph and
@@ -1829,13 +1829,13 @@ fn check_implied_cover(
         let n = o.num_input();
         (0..n).filter_map(|i| o.get_in(i)).collect()
     };
-    // (kuna) foldcallret: a call output reaches the arm above only because
+    // (unlace) foldcallret: a call output reaches the arm above only because
     // `foldcallret` let it through `base_explicit`, and what it collides with is
     // usually the call's own INDIRECT effect on an operand -- see
-    // `kuna_foldcallretphi` for why that collision is not a reason to refuse.
+    // `unlace_foldcallretphi` for why that collision is not a reason to refuse.
     let self_effect_ok = data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::callretfold::FoldCallReturns>()
         .0
         && data.obank().get(def).map(|o| o.is_call()).unwrap_or(false)
@@ -2058,13 +2058,13 @@ impl Action for ActionMarkIndirectOnly {
         // C++ coreaction.hh:358 — ActionMarkIndirectOnly::apply
         //   data.markIndirectOnly(); return 0;
         //
-        // (kuna, option `indirectonly`, opt-in default-off) off is the inert
+        // (unlace, option `indirectonly`, opt-in default-off) off is the inert
         // stub this action shipped as before the port: `indirectonly` then has
         // no writer and both of its readers — `HighVariable::has_name` and
         // `Merge::merge_test_adjacent` — take the more-variables branch.
         if data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::indirectonly::MarkIndirectOnly>()
             .0
         {
@@ -2163,15 +2163,15 @@ impl Action for ActionMergeType {
         // Drive `Merge::merge_by_datatype` over the loc-ordered Varnode slice
         // (`beginLoc()..endLoc()`) via the persistent `covermerge`.
         //
-        // (kuna, option `typemerge`) narrows which same-typed highs join.
+        // (unlace, option `typemerge`) narrows which same-typed highs join.
         let range: Vec<crate::context::VarnodeId> = data.vbank().iter_loc().collect();
         let mode = data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::typemerge::TypeMergeMode>();
         let callee_saved = data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::calleesaved::CalleeSavedSplit>()
             .0;
         data.with_covermerge(|merge, data| {
@@ -2284,7 +2284,7 @@ impl Action for ActionCopyMarker {
 
 /// Link each nameable HighVariable to its Symbol and assign default names — the
 /// faithful `ActionNameVars::linkSymbols` walk (coreaction.cc:3044-3072) +
-/// `Scope::buildDefaultName`'s `kunaAngrNaming` branch (database.cc:1764-1785).
+/// `Scope::buildDefaultName`'s `unlaceAngrNaming` branch (database.cc:1764-1785).
 ///
 /// C++ walks `beginLoc(spc)..endLoc(spc)` for each non-constant space, hits each
 /// high once at its name representative, skips highs that cannot carry a name
@@ -2304,10 +2304,10 @@ impl Action for ActionCopyMarker {
 /// to `vN` (in-scope, address-tied, non-persistent locals) get the angr default.
 ///
 /// C++ `Funcdata::linkProtoPartial` (`funcdata_varnode.cc:1153`), realized against
-/// the merged tree's HighVariable `kuna_*` naming fields: bind a CONCAT-tree piece
+/// the merged tree's HighVariable `unlace_*` naming fields: bind a CONCAT-tree piece
 /// to its root structure's symbol so it renders `root.field` (e.g. `v1.A`).
 ///
-/// The kuna model has no `SymbolEntry`; the equivalent of "the piece inherits the
+/// The unlace model has no `SymbolEntry`; the equivalent of "the piece inherits the
 /// root's symbol" is stamping the root's display name + the root's struct type +
 /// the piece's group-relative in-symbol byte offset onto the piece's HighVariable
 /// — exactly the triple `printc`'s `push_partial_symbol_ir` walks to emit
@@ -2315,8 +2315,8 @@ impl Action for ActionCopyMarker {
 /// (C++ `HighVariable::setSymbol`, `variable.cc:259`), where the group offset comes
 /// from `establishGroupSymbolOffset` on the root.
 ///
-/// `linkSymbol(nameRep)` on the root is the on-demand naming the kuna loop performs
-/// here directly: if the root already carries a `kuna_name` (a container symbol or a
+/// `linkSymbol(nameRep)` on the root is the on-demand naming the unlace loop performs
+/// here directly: if the root already carries a `unlace_name` (a container symbol or a
 /// previously-allocated `vN`), reuse it; otherwise allocate the next `vN` (consuming
 /// `base`) and bind it — pieces themselves never consume a `vN`.  Returns `true` when
 /// the piece was bound (caller skips the `vN` allocator).
@@ -2379,7 +2379,7 @@ fn bind_proto_partial_piece(
     let existing_name = data
         .high_bank()
         .get(root_high)
-        .and_then(|h| h.kuna_name())
+        .and_then(|h| h.unlace_name())
         .map(|s| s.to_string())
         .or_else(|| {
             data.get_scope_local()
@@ -2471,7 +2471,7 @@ fn bind_proto_partial_piece(
     // struct type) onto the root high, the `vn->setSymbolEntry(sym->getFirstWholeMap())`
     // stand-in for the root itself.  `establishGroupSymbolOffset` reads this offset.
     if let Some(h) = data.high_bank_mut().get_mut(root_high) {
-        h.set_kuna_name(root_name.clone());
+        h.set_unlace_name(root_name.clone());
         h.set_symbol_offset(root_sym_off);
         if let Some(t) = root_type.clone() {
             h.set_symbol_type(t);
@@ -2498,7 +2498,7 @@ fn bind_proto_partial_piece(
     // vn->setSymbolEntry(...): bind the root's name + struct type + the piece's
     // in-symbol offset onto the piece's HighVariable.
     if let Some(h) = data.high_bank_mut().get_mut(piece_high) {
-        h.set_kuna_name(root_name);
+        h.set_unlace_name(root_name);
         h.set_symbol_offset(sym_off);
         if let Some(t) = root_type {
             h.set_symbol_type(t);
@@ -2511,7 +2511,7 @@ fn bind_proto_partial_piece(
 /// `PrintC::pushSymbolScope` (`printc.cc:203`) + `Symbol::getResolutionDepth`
 /// (`database.cc:324`) under the default `MINIMAL_NAMESPACES` strategy.
 ///
-/// The kuna printer renders a HighVariable's bound `kuna_name` string verbatim, so
+/// The unlace printer renders a HighVariable's bound `unlace_name` string verbatim, so
 /// the namespace qualifier is computed here (where the function's local scope, its
 /// namespace path, and the global Symbol's scope chain are all available) and baked
 /// into the bound name — exactly as the function's own `a::b::assign_vals` display
@@ -2526,7 +2526,7 @@ fn bind_proto_partial_piece(
 ///   function's local scope (a parameter/local that shadows the global)?
 ///
 /// Returns the (possibly qualified) name, e.g. `::spam`, `a::spam`, or just `spam`.
-fn kuna_qualify_global_name(
+fn unlace_qualify_global_name(
     base: &str,
     sym_scope_path: &[String],
     func_ns_path: &[String],
@@ -2552,9 +2552,9 @@ fn kuna_qualify_global_name(
 /// from its `::`-qualified display name — `a::b::assign_vals` -> `["a","b"]`, a bare
 /// `main` -> `[]`.  This stands in for the `curscope` (the function's local scope)
 /// ancestry that `Symbol::getResolutionDepth` walks; the function's local scope is a
-/// detached scope in the kuna port, so its namespace ancestry is recovered from the
+/// detached scope in the unlace port, so its namespace ancestry is recovered from the
 /// name the function was loaded under (`lo fu a::b::assign_vals`).
-fn kuna_function_namespace_path(display_name: &str) -> Vec<String> {
+fn unlace_function_namespace_path(display_name: &str) -> Vec<String> {
     let mut parts: Vec<&str> = display_name.split("::").collect();
     parts.pop(); // drop the function's own base name
     parts.into_iter().map(|s| s.to_string()).collect()
@@ -2586,7 +2586,7 @@ struct OpRecommend {
 /// (`isNameLocked`/`isNameUndefined`), skip a size mismatch, unwrap a `CPUI_CAST` into
 /// the function (recording a null-typed, less-preferred recommendation), skip an
 /// address-tied target high (`Don't propagate parameter name to address tied variable`),
-/// and skip generated default param names (`kunaIsGeneratedName`, the (kuna) `aN`/`vN`
+/// and skip generated default param names (`unlaceIsGeneratedName`, the (unlace) `aN`/`vN`
 /// guard at `coreaction.cc:2929`).  The type-order tiebreak keeps the more-specified
 /// recommendation when one high is fed by several calls (`makeRec`'s `typeOrder` check).
 fn build_func_param_name_recmap(
@@ -2625,11 +2625,11 @@ fn build_func_param_name_recmap(
             }
             let param_name = param.get_name().to_string();
             let param_size = param.get_size();
-            // (kuna) coreaction.cc:2929: skip generated defaults (param_N / aN / vN).
-            if crate::naming::kuna_is_generated_name(&param_name) {
+            // (unlace) coreaction.cc:2929: skip generated defaults (param_N / aN / vN).
+            if crate::naming::unlace_is_generated_name(&param_name) {
                 continue;
             }
-            // (kuna `objcresolve`) An Objective-C method's receiver and selector
+            // (unlace `objcresolve`) An Objective-C method's receiver and selector
             // are its own `self` and `_cmd`, not names for the caller's values.
             if matches!(param_name.as_str(), "self" | "_cmd")
                 && fc.get_name().starts_with(['-', '+'])
@@ -2725,14 +2725,14 @@ fn build_func_param_name_recmap(
 ///
 /// C++ `Scope::buildDefaultName` (database.cc:1786) routes an unnamed local to
 /// `buildVariableName`, whose local arm renders `<printNameBase(type)>Var<index>`
-/// (`iVar1`, `uVar2`, ...) — the upstream Ghidra scheme.  kuna's angr default
+/// (`iVar1`, `uVar2`, ...) — the upstream Ghidra scheme.  unlace's angr default
 /// (DIV-5) instead renders `v<index>`.  This consumes one `base` index either way.
 ///
 /// `ct` is the high representative's data-type (the declaration type, e.g.
 /// `int4`); `printNameBase` is its first character.  A nameless type contributes
 /// no prefix (so the ghidra name degenerates to `Var<index>`, matching the C++
 /// empty-`printNameBase` case).
-fn kuna_default_local_name(
+fn unlace_default_local_name(
     data: &mut Funcdata,
     ct: Option<&crate::dtype::Datatype>,
     base: &mut int4,
@@ -2796,9 +2796,9 @@ fn recommended_name_for(
         .high_bank()
         .get(high)
         .map(|h| {
-            h.kuna_dynamic_symbol().is_some()
-                || h.kuna_equate_symbol().is_some()
-                || h.kuna_link_symbol().is_some()
+            h.unlace_dynamic_symbol().is_some()
+                || h.unlace_equate_symbol().is_some()
+                || h.unlace_link_symbol().is_some()
         })
         .unwrap_or(false)
     {
@@ -2906,7 +2906,7 @@ fn func_param_name_for_high(
 fn name_local_highs_angr(data: &mut Funcdata) {
     use crate::context::HighVariableId;
     // Materialize the recovered/locked parameters as Symbols in the local scope
-    // (C++ `ProtoStoreSymbol::setInput` did this at recovery time; the kuna
+    // (C++ `ProtoStoreSymbol::setInput` did this at recovery time; the unlace
     // `ProtoStoreInternal` does not, so it is done here before the walk).
     data.link_proto_params();
 
@@ -2918,19 +2918,19 @@ fn name_local_highs_angr(data: &mut Funcdata) {
     // address-tied arm renames the Symbol at the recommended address, and the
     // use-point arms are applied per-high inside the walk
     // (`recommended_name_for`).  All are no-ops without recommendations.
-    let prior = data.kuna_prior_names().clone();
+    let prior = data.unlace_prior_names().clone();
     let tallies = crate::stablenames::tallies(data);
     let targets = crate::stablenames::rename_targets(data, &tallies);
     let retyped = crate::stablenames::retype_targets(data, &tallies);
     let reached = crate::stablenames::directive_targets(data, &tallies);
-    data.set_kuna_directive_targets(reached);
+    data.set_unlace_directive_targets(reached);
     let assigned = crate::stablenames::assign_numbers(data, &tallies);
     if let Some(lm) = data.get_scope_local_mut() {
         lm.install_prior_names(prior.name_seed());
         lm.set_rename_targets(targets);
         lm.set_assigned_numbers(assigned);
     }
-    data.kuna_apply_dynamic_recommendations();
+    data.unlace_apply_dynamic_recommendations();
     if let Some(lm) = data.get_scope_local_mut() {
         lm.recover_addrtied_name_recommendations();
     }
@@ -2939,7 +2939,7 @@ fn name_local_highs_angr(data: &mut Funcdata) {
     // `lookForFuncParamNames(data,namerec)` AFTER `linkSymbols` but BEFORE the
     // `buildDefaultName` (`vN`) rename loop (coreaction.cc:3087): a sub-function's
     // locked parameter name (`receive`'s `dvar`) overrides the `vN` default for the
-    // matching argument local.  The kuna walk assigns defaults inline, so build the
+    // matching argument local.  The unlace walk assigns defaults inline, so build the
     // recommendation map up front and consult it at each default-naming site below.
     let func_param_recmap = build_func_param_name_recmap(data);
 
@@ -2973,7 +2973,7 @@ fn name_local_highs_angr(data: &mut Funcdata) {
     let mut taken: std::collections::BTreeSet<String> = data
         .high_bank()
         .iter()
-        .filter_map(|(_, h)| h.kuna_name().map(str::to_string))
+        .filter_map(|(_, h)| h.unlace_name().map(str::to_string))
         .collect();
     let library = crate::libcnames::candidates(data);
     for vn in vlist {
@@ -3025,7 +3025,7 @@ fn name_local_highs_angr(data: &mut Funcdata) {
         if data
             .high_bank()
             .get(high)
-            .map(|h| h.kuna_name().is_some())
+            .map(|h| h.unlace_name().is_some())
             .unwrap_or(false)
         {
             continue;
@@ -3038,7 +3038,7 @@ fn name_local_highs_angr(data: &mut Funcdata) {
         // root, binds the root's symbol, and assigns the SAME symbol to the piece —
         // so the piece renders `root.field` (e.g. `v1.A`) rather than its own raw `vN`
         // / `dat_N`.  Pieces do NOT consume a `vN` slot (the root keeps `v1`).  This
-        // branch reproduces that against the kuna naming model (the name + group-
+        // branch reproduces that against the unlace naming model (the name + group-
         // relative in-symbol offset + root struct type are bound directly on the
         // piece's HighVariable, the `vn->setSymbolEntry(sym->getFirstWholeMap())`
         // stand-in) and `continue`s, skipping the `vN` allocator below.
@@ -3107,7 +3107,7 @@ fn name_local_highs_angr(data: &mut Funcdata) {
                 .unwrap_or(rec_name);
             taken.insert(unique.clone());
             if let Some(h) = data.high_bank_mut().get_mut(high) {
-                h.set_kuna_name(unique);
+                h.set_unlace_name(unique);
             }
             continue;
         }
@@ -3170,14 +3170,14 @@ fn name_local_highs_angr(data: &mut Funcdata) {
             // :1031` `otherVn->getSize() != entry->getSize()`) without depending on
             // whether the rust merge happened to unify equal-width siblings.
             let size_mismatch = v_size != info.entry_size;
-            // (kuna LOSS-234 zeroprop) C++ `queryProperties(vn->getAddr(),1,usepoint)`
+            // (unlace LOSS-234 zeroprop) C++ `queryProperties(vn->getAddr(),1,usepoint)`
             // returns the SMALLEST containing SymbolEntry.  When a *narrower* addr-tied
             // local (the 1-byte char-return register r0 in `zeroprop`) shares a base
             // address with a *wider* function input/parameter (the 4-byte `int4 *ptrint`
             // at the same r0), C++'s ScopeLocal has restructured the return register into
             // its OWN size-1 local Symbol, so the size-1 query returns that distinct
             // entry — never the wider param.  `handleSymbolConflict` then reuses the
-            // (matching-size) entry and the return is named `v1`.  The kuna W4 ScopeLocal
+            // (matching-size) entry and the return is named `v1`.  The unlace W4 ScopeLocal
             // stand-in has no separate size-1 entry, so `query_container_for_link` returns
             // the wider param entry here; the `v_addrtied` `reuse_directly` arm would then
             // bind the *param's* name (`ptrint`) onto the char-return high.  Detect that
@@ -3298,7 +3298,7 @@ fn name_local_highs_angr(data: &mut Funcdata) {
                     Some(t) => t,
                     None => (info.display_name, info.sym_off, info.sym_type),
                 };
-                // (kuna, ghidra Phase 4) Record WHICH Symbol this bind resolved
+                // (unlace, ghidra Phase 4) Record WHICH Symbol this bind resolved
                 // to — the same `findContainer` query the name came from.  The
                 // wire encode reads this decision instead of re-deriving a
                 // container binding, so the conflict fall-through below (which
@@ -3306,12 +3306,12 @@ fn name_local_highs_angr(data: &mut Funcdata) {
                 // mistaken for a bind: re-deriving there would hand the
                 // conflict-separated high the PARAMETER's symbol id.
                 if let Some(h) = data.high_bank_mut().get_mut(high) {
-                    h.set_kuna_name(sym_name);
+                    h.set_unlace_name(sym_name);
                     h.set_symbol_offset(sym_off);
                     if let Some(t) = sym_type {
                         h.set_symbol_type(t);
                     }
-                    h.set_kuna_link_symbol(bound_sid);
+                    h.set_unlace_link_symbol(bound_sid);
                 }
                 continue;
             }
@@ -3334,13 +3334,13 @@ fn name_local_highs_angr(data: &mut Funcdata) {
         //                  (`getRegisterName(...).empty()`), and
         //   * `v<base++>`  for EVERYTHING else — registers (incl. XMM lanes), uniques,
         //                  non-param inputs, unaffected/extraout storage.
-        // The prior kuna gate (`v_input || v_persist || !v_addrtied`) admitted only
+        // The prior unlace gate (`v_input || v_persist || !v_addrtied`) admitted only
         // address-tied stack/return storage, so a transient register like `XMM0_Qa`
         // or a `Unique` temp fell straight through to `pushUnnamedLocation` and
         // rendered raw.  The faithful gate is the single `dat_` exclusion below.
         //
         // `dat_<addr>` is rendered by the unnamed-location tail (`pushUnnamedLocation`,
-        // `kunaGlobalDataName`), so we simply *skip* naming a persistent non-register;
+        // `unlaceGlobalDataName`), so we simply *skip* naming a persistent non-register;
         // it must NOT acquire a `vN`.  A persistent **register** would still be `vN`,
         // matching the angr arm's `getRegisterName` guard.
         let spc = v_addr.get_space().expect("named high rep has no space");
@@ -3360,7 +3360,7 @@ fn name_local_highs_angr(data: &mut Funcdata) {
         // port, so an input read of read-only global RAM reaches here with
         // `persist == false`.  The faithful proxy for "this is a global, route to
         // `dat_`" is the same predicate `PrintC::pushUnnamedLocation` uses to emit
-        // the `dat_<addr>` token (`printc.rs::kuna_global_naming`): a **global data
+        // the `dat_<addr>` token (`printc.rs::unlace_global_naming`): a **global data
         // space** (`IPTR_PROCESSOR`) address with **no register name**.  Registers
         // live in the same processor space but carry a register name, so they are
         // excluded and still get `vN`; uniques (`IPTR_INTERNAL`) and stack
@@ -3380,7 +3380,7 @@ fn name_local_highs_angr(data: &mut Funcdata) {
             // this query a surviving global store falls to `pushUnnamedLocation` and
             // renders `dat_<addr>`.
             //
-            // The merged kuna `localmap` is a detached `Database`; its global reach is
+            // The merged unlace `localmap` is a detached `Database`; its global reach is
             // the `GlobalQuery` snapshot on `glb` (built after every `map addr`).
             // Address-tied global entries are valid at every usepoint, so an invalid
             // usepoint is faithful here (C++ `SymbolEntry::inUse` short-circuits on
@@ -3397,16 +3397,16 @@ fn name_local_highs_angr(data: &mut Funcdata) {
                 // name collides with a local/parameter gets a `::` prefix; a Symbol in
                 // a namespace gets its `ns::` path.  Non-colliding globals are
                 // unchanged (`scope_path` empty and no local collision -> bare name).
-                let func_ns_path = kuna_function_namespace_path(data.get_display_name());
+                let func_ns_path = unlace_function_namespace_path(data.get_display_name());
                 let name_used = |nm: &str| {
                     data.get_scope_local()
                         .map(|lm| lm.local_name_used(nm))
                         .unwrap_or(false)
                 };
                 let qualified =
-                    kuna_qualify_global_name(&sym_name, &scope_path, &func_ns_path, &name_used);
+                    unlace_qualify_global_name(&sym_name, &scope_path, &func_ns_path, &name_used);
                 if let Some(h) = data.high_bank_mut().get_mut(high) {
-                    h.set_kuna_name(qualified);
+                    h.set_unlace_name(qualified);
                     h.set_symbol_offset(sym_off);
                     if let Some(t) = sym_type {
                         h.set_symbol_type(t);
@@ -3449,7 +3449,7 @@ fn name_local_highs_angr(data: &mut Funcdata) {
                             continue;
                         }
                         with_prior_numbers(data, high, |data| {
-                            kuna_default_local_name(data, rep_ty.as_deref(), &mut base)
+                            unlace_default_local_name(data, rep_ty.as_deref(), &mut base)
                         })
                     }
                 }
@@ -3457,7 +3457,7 @@ fn name_local_highs_angr(data: &mut Funcdata) {
         };
         taken.insert(name.clone());
         if let Some(h) = data.high_bank_mut().get_mut(high) {
-            h.set_kuna_name(name);
+            h.set_unlace_name(name);
         }
     }
 
@@ -3475,7 +3475,7 @@ fn name_local_highs_angr(data: &mut Funcdata) {
     // attached to BOTH the offset-constant high and the stack-slot high, and the
     // undefined ones are renamed ONCE at the end of `apply` (`buildDefaultName`,
     // coreaction.cc:3092).  The render reads `getSymbol()->getDisplayName()` at
-    // print time, so it always sees the FINAL name.  The kuna model binds the name
+    // print time, so it always sees the FINAL name.  The unlace model binds the name
     // PER-HIGH off the database Symbol, so the spacebase pass must run AFTER the
     // main naming loop — by which point the main loop's `resolve_default_name` has
     // already renamed each undefined local Symbol to its `vN` in the database
@@ -3505,14 +3505,14 @@ fn name_local_highs_angr(data: &mut Funcdata) {
             }
         }
         let name = with_prior_numbers(data, high, |data| {
-            kuna_default_local_name(data, rep_ty.as_deref(), &mut base)
+            unlace_default_local_name(data, rep_ty.as_deref(), &mut base)
         });
         if let Some(h) = data.high_bank_mut().get_mut(high) {
-            h.set_kuna_name(name);
+            h.set_unlace_name(name);
         }
     }
 
-    // C++ `localmap->assignDefaultNames(base)` (coreaction.cc:3079), plus the kuna
+    // C++ `localmap->assignDefaultNames(base)` (coreaction.cc:3079), plus the unlace
     // counterpart of the printer's live `sym->getDisplayName()` read: no `$$undef`
     // placeholder may outlive this pass, in the Symbol table or in a HighVariable's
     // name cache.  See `crate::undefname`.
@@ -3520,13 +3520,13 @@ fn name_local_highs_angr(data: &mut Funcdata) {
     let end = data
         .get_scope_local()
         .map_or(base, |lm| base.max(lm.prior_names_end()));
-    data.set_kuna_default_name_end(end);
+    data.set_unlace_default_name_end(end);
     for (high, ct) in retyped {
         retype_whole_variable(data, high, ct);
     }
-    if data.kuna_record_names() {
+    if data.unlace_record_names() {
         let snapshot = crate::stablenames::snapshot(data);
-        data.set_kuna_name_snapshot(snapshot);
+        data.set_unlace_name_snapshot(snapshot);
     }
     crate::libcnames::apply(data, &library);
 }
@@ -3566,7 +3566,7 @@ fn retype_whole_variable(
     }
     if let Some(h) = data.high_bank_mut().get_mut(high) {
         h.type_dirty();
-        if h.kuna_symbol_type()
+        if h.unlace_symbol_type()
             .is_some_and(|t| t.get_size() == ct.get_size())
         {
             h.set_symbol_type(ct);
@@ -3631,13 +3631,13 @@ impl Action for ActionNameVars {
         // `renameSymbol`, the HighVariable->Symbol attachment, the callspec list)
         // is absent in the merged tree.  We transcribe the OBSERVABLE result for
         // the angr default-naming scheme (`Scope::buildDefaultName`'s
-        // `kunaAngrNaming` branch, database.cc:1764-1785): each nameable LOCAL
+        // `unlaceAngrNaming` branch, database.cc:1764-1785): each nameable LOCAL
         // HighVariable gets `v` + a running base index.  A "nameable local" is the
         // C++ `linkSymbols` filter reduced to what the merged tree can express:
         // the high's name representative is addr-tied (in local scope), not an
         // input, not persist/global — i.e. exactly the locals that
         // `buildDefaultName` would route to the `vN` arm.  The name is bound on
-        // the HighVariable (the `Symbol` stand-in; see `HighVariable::kuna_name`).
+        // the HighVariable (the `Symbol` stand-in; see `HighVariable::unlace_name`).
         name_local_highs_angr(data);
         0
     }
@@ -3692,7 +3692,7 @@ impl Action for ActionSetCasts {
         // many casts were inserted; `count` accumulates inside the driver.
         if data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::castobject::CastObject>()
             .0
         {
@@ -3732,14 +3732,14 @@ pub fn merge_actions() -> Vec<Box<dyn Action>> {
     ]
 }
 
-/// (kuna `implweight`) An expression read more than `max_implied_ref` times
+/// (unlace `implweight`) An expression read more than `max_implied_ref` times
 /// still prints inline when its terms times its uses is at most this; 0 = off.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ImplWeight(pub int4);
 
-impl crate::optionset::KunaOption for ImplWeight {
+impl crate::optionset::UnlaceOption for ImplWeight {
     const NAME: &'static str = "implweight";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         ImplWeight(0)
@@ -3749,7 +3749,7 @@ impl crate::optionset::KunaOption for ImplWeight {
         ImplWeight(0)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let field = value.trim();
         if field == "off" {
             return Ok((
@@ -3764,7 +3764,7 @@ impl crate::optionset::KunaOption for ImplWeight {
                     "An expression prints inline while its terms times its uses is at most {n}"
                 ),
             )),
-            _ => Err(unlace_base::error::KunaError::parse(
+            _ => Err(unlace_base::error::UnlaceError::parse(
                 "Must specify off or a weight from 2 to 64",
             )),
         }

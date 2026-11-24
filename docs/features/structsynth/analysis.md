@@ -536,7 +536,7 @@ the same four measurements.
 `make test-stages` moves exactly four, in two other options' tests. Both were
 read in both arms:
 
-* `ELFMAIN #1`/`#2` — `kuna-elfmain.xml`'s `option elfmain off` pass, where the
+* `ELFMAIN #1`/`#2` — `elfmain.xml`'s `option elfmain off` pass, where the
   entry's argument vector has no declared type:
 
   ```

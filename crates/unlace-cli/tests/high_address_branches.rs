@@ -79,7 +79,7 @@ fn arm64_calls_keep_unsigned_targets_in_text_json_and_xrefs() {
         let specs = specs.to_str().unwrap();
         let site = format!("0x{:x}", base + 0x1000);
         let target = format!("0x{:x}", base + 0x1384);
-        let (text, stderr, code) = common::run_kuna(&[
+        let (text, stderr, code) = common::run_unlace(&[
             "disassemble",
             binary,
             &site,
@@ -97,7 +97,7 @@ fn arm64_calls_keep_unsigned_targets_in_text_json_and_xrefs() {
             [site.as_str(), "e1000094", "bl", target.as_str()],
             "{text}"
         );
-        let (json, stderr, code) = common::run_kuna(&[
+        let (json, stderr, code) = common::run_unlace(&[
             "disassemble",
             binary,
             &site,
@@ -111,7 +111,7 @@ fn arm64_calls_keep_unsigned_targets_in_text_json_and_xrefs() {
         assert_eq!(code, 0, "{stderr}");
         let doc: Value = serde_json::from_str(&json).unwrap();
         assert_eq!(doc["instructions"][0]["operands"], target, "{json}");
-        let (json, stderr, code) = common::run_kuna(&[
+        let (json, stderr, code) = common::run_unlace(&[
             "xrefs",
             binary,
             "--to",
@@ -153,7 +153,7 @@ fn arm64_branch_forms_keep_high_targets_in_both_directions() {
         for (site, target) in [(0x1000, 0x1384), (0x1384, 0x1000)] {
             let site = format!("0x{:x}", base + site);
             let target = format!("0x{:x}", base + target);
-            let (json, stderr, code) = common::run_kuna(&[
+            let (json, stderr, code) = common::run_unlace(&[
                 "disassemble",
                 path.to_str().unwrap(),
                 &site,

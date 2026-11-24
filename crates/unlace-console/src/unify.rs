@@ -11,7 +11,7 @@
 //! The unification engine is reachable from exactly one place: the console
 //! `parse rule` command (`IfcParseRule`), which is **conditionally compiled**
 //! behind `#ifdef CPUI_RULECOMPILE` in `decompiler/cpp/ifacedecomp.cc`.  That
-//! macro is **not** defined in the kuna build, so:
+//! macro is **not** defined in the unlace build, so:
 //!
 //! - no datatest under `tests/datatests/` exercises it,
 //! - no unit test under `decompiler/unittests/` exercises it,
@@ -29,7 +29,7 @@
 //! error so any caller (in practice only the deferred `parse rule` path)
 //! reports the feature as unimplemented rather than silently misbehaving.
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 
 /// Stable explanatory string shared by the deferred rule-compiler surface, so
 /// the `parse rule` console command (if it is ever registered) reports a
@@ -51,8 +51,8 @@ impl UnifyState {
     /// The unification engine is not ported.  Returns the LOSS error
     /// ([`NOT_PORTED`]) so the deferred `parse rule` command reports the
     /// feature as unimplemented.
-    pub fn not_ported<T>() -> KunaResult<T> {
-        Err(KunaError::lowlevel(NOT_PORTED))
+    pub fn not_ported<T>() -> UnlaceResult<T> {
+        Err(UnlaceError::lowlevel(NOT_PORTED))
     }
 }
 

@@ -387,7 +387,7 @@ fn offset(
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.spillstoreguard_bounds = Some(bounds);
     hooks.spillstoreguard_build = Some(build);
     hooks.spillstoreguard_prune = Some(prune);

@@ -72,7 +72,7 @@ fn dos_image(module: &[u8]) -> Vec<u8> {
     image
 }
 
-fn kuna(args: &[&str]) -> Output {
+fn unlace(args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .output()
@@ -80,7 +80,7 @@ fn kuna(args: &[&str]) -> Output {
 }
 
 fn run(args: &[&str]) -> (String, String) {
-    let out = kuna(args);
+    let out = unlace(args);
     let (stdout, stderr) = (
         String::from_utf8_lossy(&out.stdout).into_owned(),
         String::from_utf8_lossy(&out.stderr).into_owned(),

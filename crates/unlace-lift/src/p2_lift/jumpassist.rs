@@ -1,4 +1,4 @@
-//! (kuna `jumpassist`) The `JumpAssisted` jump-table model (`jumptable.cc`).
+//! (unlace `jumpassist`) The `JumpAssisted` jump-table model (`jumptable.cc`).
 //!
 //! A processor spec can describe a switch whose table the SLEIGH semantics
 //! cannot express by itself: the instruction computes its destination through a
@@ -18,7 +18,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::rc::Rc;
 
 use unlace_base::address::{Address, calc_mask};
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::{AddrSpace, spacetype};
 use unlace_base::types::{int4, uint4, uintb};
 use unlace_num::opcodes::OpCode;
@@ -112,16 +112,16 @@ impl Script {
 
     /// Run the script on `inputs` and return its output
     /// (`ExecutablePcode::evaluate`).
-    pub fn evaluate(&self, glb: &ArchContext, inputs: &[uintb]) -> KunaResult<uintb> {
+    pub fn evaluate(&self, glb: &ArchContext, inputs: &[uintb]) -> UnlaceResult<uintb> {
         let manage = glb.manage();
         let space = |s: Option<&Rc<AddrSpace>>| {
             s.cloned()
-                .ok_or_else(|| KunaError::lowlevel("jumpassist: missing address space"))
+                .ok_or_else(|| UnlaceError::lowlevel("jumpassist: missing address space"))
         };
         let unique = space(manage.get_unique_space())?;
         let core = self.payload.as_payload().core();
         if inputs.len() != core.size_input() as usize {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "jumpassist: script has the wrong number of parameters",
             ));
         }
@@ -166,7 +166,7 @@ impl Script {
                 }
             };
             let Some(out) = op.output.as_ref() else {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "jumpassist: script op without an output",
                 ));
             };
@@ -182,7 +182,7 @@ impl Script {
                         .get(code as usize)
                         .and_then(Option::as_ref)
                         .ok_or_else(|| {
-                            KunaError::lowlevel("jumpassist: script op cannot be evaluated")
+                            UnlaceError::lowlevel("jumpassist: script op cannot be evaluated")
                         })?;
                     let insize = op.inputs[0].size as int4;
                     if op.inputs.len() == 1 {
@@ -202,7 +202,7 @@ impl Script {
         let out = context
             .output
             .first()
-            .ok_or_else(|| KunaError::lowlevel("jumpassist: script has no output"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("jumpassist: script has no output"))?;
         Ok(state.get(&key(out)).copied().unwrap_or(0))
     }
 }
@@ -246,15 +246,15 @@ impl JumpModelAssisted {
         JumpModelAssisted::default()
     }
 
-    fn assist(&self) -> KunaResult<&Rc<Assist>> {
+    fn assist(&self) -> UnlaceResult<&Rc<Assist>> {
         self.assist
             .as_ref()
-            .ok_or_else(|| KunaError::lowlevel("JumpAssisted: model not recovered"))
+            .ok_or_else(|| UnlaceError::lowlevel("JumpAssisted: model not recovered"))
     }
 
-    fn run(&self, fd: &Funcdata, script: &Script, index: uintb) -> KunaResult<uintb> {
+    fn run(&self, fd: &Funcdata, script: &Script, index: uintb) -> UnlaceResult<uintb> {
         if script.num_inputs() != self.inputs.len() {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "{}: script has wrong number of parameters",
                 String::from_utf8_lossy(&self.assist()?.name)
             )));
@@ -280,7 +280,7 @@ impl JumpModel for JumpModelAssisted {
         indop: OpId,
         matchsize: uint4,
         maxtablesize: uint4,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         let Some(addr_vn) = fd.obank().get(indop).and_then(|o| o.get_in(0)) else {
             return Ok(false);
         };
@@ -327,7 +327,7 @@ impl JumpModel for JumpModelAssisted {
             None => self.inputs[1] as uint4,
             Some(script) => {
                 if script.num_inputs() != self.inputs.len() {
-                    return Err(KunaError::lowlevel(format!(
+                    return Err(UnlaceError::lowlevel(format!(
                         "{}: <size_pcode> has wrong number of parameters",
                         String::from_utf8_lossy(&assist.name)
                     )));
@@ -348,13 +348,13 @@ impl JumpModel for JumpModelAssisted {
         addresstable: &mut Vec<Address>,
         _loadpoints: Option<&mut Vec<LoadTable>>,
         _loadcounts: Option<&mut Vec<int4>>,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let assist = self.assist()?;
         let spc = fd
             .obank()
             .get(indop)
             .and_then(|o| o.get_addr().get_space().cloned())
-            .ok_or_else(|| KunaError::lowlevel("JumpAssisted: BRANCHIND has no space"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("JumpAssisted: BRANCHIND has no space"))?;
         let mut mask: uintb = !0;
         let bit = fd.get_arch().funcptr_align;
         if bit != 0 {
@@ -376,7 +376,7 @@ impl JumpModel for JumpModelAssisted {
         _maxaddsub: uint4,
         _maxleftright: uint4,
         _maxext: uint4,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         Ok(())
     }
 
@@ -386,13 +386,13 @@ impl JumpModel for JumpModelAssisted {
         _addresstable: &mut [Address],
         label: &mut Vec<uintb>,
         orig: &dyn JumpModel,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let same = orig
             .as_any()
             .downcast_ref::<JumpModelAssisted>()
             .is_some_and(|o| o.size_indices == self.size_indices);
         if !same {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "JumpAssisted table size changed during recovery",
             ));
         }
@@ -412,9 +412,9 @@ impl JumpModel for JumpModelAssisted {
         &mut self,
         fd: &mut Funcdata,
         _indop: OpId,
-    ) -> KunaResult<Option<VarnodeId>> {
+    ) -> UnlaceResult<Option<VarnodeId>> {
         let (Some(assist_op), Some(switchvn)) = (self.assist_op, self.switchvn) else {
-            return Err(KunaError::lowlevel("JumpAssisted: model not recovered"));
+            return Err(UnlaceError::lowlevel("JumpAssisted: model not recovered"));
         };
         if let Some(out) = fd.obank().get(assist_op).and_then(|o| o.get_out()) {
             for reader in fd.descend_snapshot(out) {
@@ -436,7 +436,7 @@ impl JumpModel for JumpModelAssisted {
         Ok(Some(switchvn))
     }
 
-    fn fold_in_guards(&mut self, _fd: &mut Funcdata, jump: &mut JumpTable) -> KunaResult<bool> {
+    fn fold_in_guards(&mut self, _fd: &mut Funcdata, jump: &mut JumpTable) -> UnlaceResult<bool> {
         let original = jump.get_default_block();
         jump.set_last_as_default();
         Ok(original != jump.get_default_block())
@@ -449,7 +449,7 @@ impl JumpModel for JumpModelAssisted {
         _addresstable: &mut Vec<Address>,
         _loadpoints: &mut Vec<LoadTable>,
         _loadcounts: Option<&Vec<int4>>,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         Ok(true)
     }
 
@@ -479,7 +479,7 @@ pub fn recover(
     indirect: OpId,
     matchsize: uint4,
     maxtablesize: uint4,
-) -> KunaResult<Option<Box<dyn JumpModel>>> {
+) -> UnlaceResult<Option<Box<dyn JumpModel>>> {
     let mut model = JumpModelAssisted::new();
     if model.recover_model(fd, indirect, matchsize, maxtablesize)? {
         return Ok(Some(Box::new(model)));
@@ -488,23 +488,23 @@ pub fn recover(
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.jumpassist_recover = Some(recover);
     hooks.jumpassist_load = Some(load);
 }
 
-crate::kuna_arch_state!(JumpAssists);
+crate::unlace_arch_state!(JumpAssists);
 
 /// The compiled `<jumpassist>` scripts, when the option is on and the specs declare any.
 fn assists(glb: &ArchContext) -> Option<&JumpAssists> {
-    if !glb.kuna_options.get::<crate::coreoptions::JumpAssist>().0 {
+    if !glb.unlace_options.get::<crate::coreoptions::JumpAssist>().0 {
         return None;
     }
-    glb.kuna_states.get::<JumpAssists>()
+    glb.unlace_states.get::<JumpAssists>()
 }
 
 /// Compile the `<jumpassist>` scripts out of the architecture's loaded inject library.
 fn load(arch: &mut crate::architecture::Architecture) {
     let assists = JumpAssists::from_library(&arch.userops, &arch.pcodeinjectlib);
-    arch.kuna_states.set(Rc::new(assists));
+    arch.unlace_states.set(Rc::new(assists));
 }

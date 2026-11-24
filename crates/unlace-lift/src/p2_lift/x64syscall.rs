@@ -1,4 +1,4 @@
-//! (kuna `x64syscall`) Give the x86-64 `SYSCALL` user-op the Linux ABI's
+//! (unlace `x64syscall`) Give the x86-64 `SYSCALL` user-op the Linux ABI's
 //! register effects, so a syscall wrapper stops returning its own first
 //! argument.
 //!
@@ -29,7 +29,7 @@
 //! nothing redefines `RAX` across the instruction and the `RAX` the store reads
 //! is still the one loaded from `number` — the function is emitted as
 //! `syscall(); return number;`. The return value is not an invented one; it is
-//! correct copy propagation over an operation kuna has been told writes nothing,
+//! correct copy propagation over an operation unlace has been told writes nothing,
 //! which makes the emitted C a *false statement about the program*.
 //!
 //! `linuxsyscall` does not cover this and cannot be extended to: it resolves the
@@ -85,9 +85,9 @@ use unlace_num::opcodes::OpCode;
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
 use crate::context::OpId;
 use crate::funcdata::Funcdata;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 
-/// Marshaling element `<x64syscall>` (kuna). ElementIds live in the 4000+ range;
+/// Marshaling element `<x64syscall>` (unlace). ElementIds live in the 4000+ range;
 /// 4160 was the previous max.
 pub const ELEM_X64SYSCALL: ElementId = ElementId::new("x64syscall", 4161);
 
@@ -110,7 +110,7 @@ const REGISTER_SIZE: int4 = 8;
 /// emits, and bounded so a long block cannot make the pass quadratic.
 const SETUP_WALK_LIMIT: usize = 64;
 
-/// (kuna) What effects to give the `SYSCALL` user-op: `x64syscall off|on|abi`.
+/// (unlace) What effects to give the `SYSCALL` user-op: `x64syscall off|on|abi`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum X64SyscallMode {
     /// Upstream: a zero-input, zero-output `CALLOTHER`.
@@ -123,9 +123,9 @@ pub enum X64SyscallMode {
     Abi,
 }
 
-impl crate::optionset::KunaOption for X64SyscallMode {
+impl crate::optionset::UnlaceOption for X64SyscallMode {
     const NAME: &'static str = "x64syscall";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         X64SyscallMode::Off
@@ -135,7 +135,7 @@ impl crate::optionset::KunaOption for X64SyscallMode {
         X64SyscallMode::On
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         OptionX64Syscall.apply(value)
     }
 }
@@ -152,11 +152,11 @@ impl X64SyscallMode {
     }
 }
 
-/// (kuna) Choose the `SYSCALL` effect model: `x64syscall off|on|abi`.
+/// (unlace) Choose the `SYSCALL` effect model: `x64syscall off|on|abi`.
 ///
-/// Following the kuna-option idiom
+/// Following the unlace-option idiom
 /// ([`OptionInt3Pad`](crate::int3pad::OptionInt3Pad)), this struct owns only
-/// the parse; the caller (`Architecture::set_kuna_option`) writes the live field.
+/// the parse; the caller (`Architecture::set_unlace_option`) writes the live field.
 pub struct OptionX64Syscall;
 
 impl OptionX64Syscall {
@@ -164,13 +164,13 @@ impl OptionX64Syscall {
     pub const NAME: &'static str = "x64syscall";
 
     /// Parse + validate the `off`/`on`/`abi` value.
-    pub fn apply(&self, p1: &str) -> KunaResult<(X64SyscallMode, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(X64SyscallMode, String)> {
         let mode = match p1 {
             "off" => X64SyscallMode::Off,
             "on" => X64SyscallMode::On,
             "abi" => X64SyscallMode::Abi,
             other => {
-                return Err(KunaError::parse(format!(
+                return Err(UnlaceError::parse(format!(
                     "Unknown x64syscall value: {other} (expected off|on|abi)"
                 )));
             }
@@ -355,14 +355,14 @@ fn memory_abi_supported(data: &Funcdata) -> bool {
 
 fn is_marked_syscall(data: &Funcdata, op: OpId) -> bool {
     data.obank().get(op).is_some_and(|o| {
-        !o.is_dead() && o.get_addlflags() & crate::op::pcodeop_addlflags::kuna_x64syscall != 0
+        !o.is_dead() && o.get_addlflags() & crate::op::pcodeop_addlflags::unlace_x64syscall != 0
     }) && is_syscall(data, op)
 }
 
 /// Enabled, uninjected x86-64 system calls in the supported SysV memory model.
 pub fn is_memory_call(data: &Funcdata, op: OpId) -> bool {
     data.get_arch()
-        .kuna_options
+        .unlace_options
         .get::<X64SyscallMode>()
         .rewrites()
         && memory_abi_supported(data)
@@ -373,7 +373,7 @@ pub fn is_memory_call(data: &Funcdata, op: OpId) -> bool {
 pub fn memory_calls(data: &Funcdata) -> Vec<OpId> {
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<X64SyscallMode>()
         .rewrites()
         || data.get_arch().x64_syscall_userops.is_empty()
@@ -393,7 +393,7 @@ fn rewrite(
     op: OpId,
     abi: &SyscallAbi64,
     mode: X64SyscallMode,
-) -> KunaResult<bool> {
+) -> UnlaceResult<bool> {
     let mut reads = vec![abi.num.clone()];
     for reg in &abi.args {
         if mode.takes_all_args() || block_sets_up(data, op, reg) {
@@ -410,11 +410,11 @@ fn rewrite(
     data.obank_mut()
         .get_mut(op)
         .expect("rewritten syscall")
-        .set_additional_flag(crate::op::pcodeop_addlflags::kuna_x64syscall);
+        .set_additional_flag(crate::op::pcodeop_addlflags::unlace_x64syscall);
     Ok(true)
 }
 
-/// (kuna) `ActionX64Syscall` — give the x86-64 `SYSCALL` user-op the Linux ABI's
+/// (unlace) `ActionX64Syscall` — give the x86-64 `SYSCALL` user-op the Linux ABI's
 /// register effects (option `x64syscall`).
 pub struct ActionX64Syscall {
     base: ActionBase,
@@ -445,7 +445,7 @@ impl Action for ActionX64Syscall {
         }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        let mode = data.get_arch().kuna_options.get::<X64SyscallMode>();
+        let mode = data.get_arch().unlace_options.get::<X64SyscallMode>();
         if !mode.rewrites() || data.get_arch().x64_syscall_userops.is_empty() {
             return 0;
         }

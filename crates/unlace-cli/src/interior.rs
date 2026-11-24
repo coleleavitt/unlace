@@ -83,7 +83,7 @@ pub(crate) fn note(i: &Interior) -> String {
     )
 }
 
-/// (kuna #1288) The stderr line for a selection past the end of the flow of
+/// (unlace #1288) The stderr line for a selection past the end of the flow of
 /// the function in front of it (`ConsoleProgram::flow_ended_before`): an
 /// MS-DOS program's data after a function's code is in no function.
 fn past_flow_note(prog: &ConsoleProgram, byte: u64) -> Option<String> {

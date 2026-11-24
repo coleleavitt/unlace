@@ -1,4 +1,4 @@
-//! (kuna) The ABI seam: what a function's recovered calling convention looks like
+//! (unlace) The ABI seam: what a function's recovered calling convention looks like
 //! in the output language.
 //!
 //! # Why this axis is thin, deliberately
@@ -34,7 +34,7 @@
 //! trait method with no consumer is a wish list rather than an interface: the
 //! `ArchContext` the P4 action reads carries only `defaultfp`/`evalfp_current`
 //! and no named-model registry, so a `preferred_model` hook would be plumbing in
-//! service of a function that returns `None` for both languages kuna emits.
+//! service of a function that returns `None` for both languages unlace emits.
 
 /// Per-language rendering of a recovered calling convention.
 pub trait LangAbi {

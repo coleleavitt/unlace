@@ -1,7 +1,7 @@
-//! Adversarial verification tests for item `w4-kuna-p0-pack` (round 1).
+//! Adversarial verification tests for item `w4-unlace-p0-pack` (round 1).
 //!
 //! Independent verifier tests targeting the hunt-list-flagged fragile spots of
-//! the P0 pack port (`kuna_phases`/`kuna_assert`/`kuna_restartlog`):
+//! the P0 pack port (`unlace_phases`/`unlace_assert`/`unlace_restartlog`):
 //!
 //!   - the `values` pipe-split's INCLUSIVE-loop port (C++ `while(pos<=vals.size())`),
 //!     where a trailing/lone `|` emits an extra empty `""` token — the highest
@@ -9,14 +9,14 @@
 //!   - `json_string` escaping (control chars < 0x20 collapse to one space, `\n`
 //!     special-cased, `"`/`\\` escaped) and the C++ byte-iteration vs Rust
 //!     char-iteration on multibyte input;
-//!   - `KunaPhase::from_code` length/range boundaries and byte-index safety on a
+//!   - `UnlacePhase::from_code` length/range boundaries and byte-index safety on a
 //!     multibyte input (must not panic);
 //!   - `RestartLog` per-function cap at exactly 32, monotone seq across funcs,
 //!     and `(space_index, offset)` key ordering (the transcribed `operator<`);
 //!   - `AssertLog::render_list`'s "applied via HARD mechanism" annotation gate.
 //!
-//! These are derived against the C++ in scope (`kuna_console.cc kunaJsonString`/
-//! `kunaEmitSettableJson`, `kuna_stages.cc kunaStageFromCode`,
+//! These are derived against the C++ in scope (`kuna_console.cc unlaceJsonString`/
+//! `unlaceEmitSettableJson`, `kuna_stages.cc unlaceStageFromCode`,
 //! `kuna_restartlog.cc`, `kuna_assert.cc listAssertions`), not the porter notes.
 
 use std::rc::Rc;
@@ -26,23 +26,23 @@ use unlace_base::space::{
     AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 
-use unlace_decomp::assert::{AssertLog, KunaAssertion};
+use unlace_decomp::assert::{AssertLog, UnlaceAssertion};
 use unlace_decomp::context::ArchContext;
 use unlace_decomp::funcdata::Funcdata;
-use unlace_decomp::phases::{KunaPhase, KunaSettable, KunaStrength, emit_settable_json};
-use unlace_decomp::restartlog::{KunaRestartReason, RestartLog};
+use unlace_decomp::phases::{UnlacePhase, UnlaceSettable, UnlaceStrength, emit_settable_json};
+use unlace_decomp::restartlog::{RestartLog, UnlaceRestartReason};
 
 // A bare settable used to drive the JSON emitter with hand-built `values`.
-fn settable_with_values(values: &'static str, shipped: &'static str) -> KunaSettable {
-    KunaSettable {
+fn settable_with_values(values: &'static str, shipped: &'static str) -> UnlaceSettable {
+    UnlaceSettable {
         option: "probe",
         values,
         shipped,
         destructive: false,
-        phase: KunaPhase::P3,
+        phase: UnlacePhase::P3,
         subphase: "simplification-quiescence",
-        strength: KunaStrength::Hard,
-        rewind: KunaPhase::P3,
+        strength: UnlaceStrength::Hard,
+        rewind: UnlacePhase::P3,
         issue: "",
         summary: "",
         use_when: "",
@@ -58,13 +58,13 @@ fn settable_with_values(values: &'static str, shipped: &'static str) -> KunaSett
     }
 }
 
-/// HUNT(off-by-one / inclusive-loop): C++ `kunaEmitSettableJson` walks the
+/// HUNT(off-by-one / inclusive-loop): C++ `unlaceEmitSettableJson` walks the
 /// pipe-separated values with `while(pos <= vals.size())`, so a string ENDING in
 /// `|` emits a trailing empty `""` token, a LONE `|` emits two `""`, and an EMPTY
 /// string emits one `""`. The Rust `loop { ... match next { None => break } }`
 /// must reproduce each exactly, or the catalog `values` array diverges.
 #[test]
-fn w4_kuna_p0_pack_values_split_inclusive_loop_edges() {
+fn w4_unlace_p0_pack_values_split_inclusive_loop_edges() {
     // C++: vals="a|", size=2. pos0 -> "a", pos2<=2 -> "" -> ["a",""].
     let mut out = String::new();
     emit_settable_json(&mut out, &settable_with_values("a|", "a"), None);
@@ -98,17 +98,17 @@ fn w4_kuna_p0_pack_values_split_inclusive_loop_edges() {
     );
 }
 
-/// HUNT(width/escaping): `kunaJsonString` escapes `"` and `\\`, special-cases
+/// HUNT(width/escaping): `unlaceJsonString` escapes `"` and `\\`, special-cases
 /// `\n` to `\n`, collapses every other control char < 0x20 to a single space,
 /// and passes everything >= 0x20 through. The Rust port iterates `chars()` where
 /// C++ iterates bytes; for multibyte UTF-8 the re-encoded bytes must be identical
 /// (every continuation byte is >= 0x80, so neither side touches it).
 #[test]
-fn w4_kuna_p0_pack_json_string_escaping_and_control_chars() {
+fn w4_unlace_p0_pack_json_string_escaping_and_control_chars() {
     // Build values with quote/backslash via a stable settable summary path: the
     // emitter routes `summary`/`use_when`/... through json_string too. Use a
     // settable whose summary contains the adversarial bytes.
-    let st = KunaSettable {
+    let st = UnlaceSettable {
         summary: "q\"b\\s\tt\u{1}c\nL\u{00e9}",
         ..settable_with_values("on|off", "on")
     };
@@ -123,49 +123,49 @@ fn w4_kuna_p0_pack_json_string_escaping_and_control_chars() {
     );
 }
 
-/// HUNT(off-by-one / byte-index safety): `KunaPhase::from_code` requires exactly
+/// HUNT(off-by-one / byte-index safety): `UnlacePhase::from_code` requires exactly
 /// 2 chars, `P0`/`p0`, or `[sS][1-9]`. The boundary chars `'0'` and `':'` (just
 /// outside `'1'..='9'`) must reject; a 1- or 3-char code rejects; and a 2-BYTE
 /// but multi-CODEPOINT input (e.g. "é" is 2 bytes) must not panic on byte
 /// indexing — C++ indexes `code[0]/code[1]` on the byte string and simply fails
 /// the char comparisons.
 #[test]
-fn w4_kuna_p0_pack_from_code_boundaries_and_byte_safety() {
+fn w4_unlace_p0_pack_from_code_boundaries_and_byte_safety() {
     // Valid forms.
-    assert_eq!(KunaPhase::from_code("P0"), Some(KunaPhase::P0));
-    assert_eq!(KunaPhase::from_code("p0"), Some(KunaPhase::P0));
-    assert_eq!(KunaPhase::from_code("P1"), Some(KunaPhase::P1));
+    assert_eq!(UnlacePhase::from_code("P0"), Some(UnlacePhase::P0));
+    assert_eq!(UnlacePhase::from_code("p0"), Some(UnlacePhase::P0));
+    assert_eq!(UnlacePhase::from_code("P1"), Some(UnlacePhase::P1));
     // Legacy S-code aliases stay accepted.
-    assert_eq!(KunaPhase::from_code("S1"), Some(KunaPhase::P1));
-    assert_eq!(KunaPhase::from_code("s9"), Some(KunaPhase::P9));
+    assert_eq!(UnlacePhase::from_code("S1"), Some(UnlacePhase::P1));
+    assert_eq!(UnlacePhase::from_code("s9"), Some(UnlacePhase::P9));
 
     // Range boundaries: '0' and ':' bracket '1'..='9'.
     assert_eq!(
-        KunaPhase::from_code("S0"),
+        UnlacePhase::from_code("S0"),
         None,
         "S0 below range (legacy alias has no 0)"
     );
-    assert_eq!(KunaPhase::from_code("S:"), None, "S: above '9'");
-    assert_eq!(KunaPhase::from_code("P:"), None, "P: above '9'");
+    assert_eq!(UnlacePhase::from_code("S:"), None, "S: above '9'");
+    assert_eq!(UnlacePhase::from_code("P:"), None, "P: above '9'");
     // Only P/p and the legacy S/s prefixes pair with a digit.
-    assert_eq!(KunaPhase::from_code("Q1"), None);
-    assert_eq!(KunaPhase::from_code("X9"), None);
+    assert_eq!(UnlacePhase::from_code("Q1"), None);
+    assert_eq!(UnlacePhase::from_code("X9"), None);
 
     // Length boundaries.
-    assert_eq!(KunaPhase::from_code("S"), None);
-    assert_eq!(KunaPhase::from_code("S12"), None);
-    assert_eq!(KunaPhase::from_code(""), None);
+    assert_eq!(UnlacePhase::from_code("S"), None);
+    assert_eq!(UnlacePhase::from_code("S12"), None);
+    assert_eq!(UnlacePhase::from_code(""), None);
 
     // Multibyte: "é" is exactly 2 bytes in UTF-8 but len()==2; the C++ would
     // read two bytes and fail every comparison. Rust must not panic on
     // `as_bytes()[0/1]` and must return None.
     assert_eq!(
-        KunaPhase::from_code("é"),
+        UnlacePhase::from_code("é"),
         None,
         "2-byte multibyte must not panic"
     );
     // A single non-ascii char (1 codepoint, 2 bytes) -> len 2 -> compared as bytes.
-    assert_eq!(KunaPhase::from_code("S\u{0080}"), None);
+    assert_eq!(UnlacePhase::from_code("S\u{0080}"), None);
 }
 
 /// HUNT(off-by-one / iteration order): the `RestartLog` per-function ring cap is
@@ -175,7 +175,7 @@ fn w4_kuna_p0_pack_from_code_boundaries_and_byte_safety() {
 /// 32nd record (index 31) is the last kept and the 33rd is dropped, while a
 /// second function still records (proving the cap is per-key, not global).
 #[test]
-fn w4_kuna_p0_pack_restartlog_cap_is_exactly_32_per_function() {
+fn w4_unlace_p0_pack_restartlog_cap_is_exactly_32_per_function() {
     let fd_a = build_fd("alpha", 0x1000);
     let fd_b = build_fd("beta", 0x2000);
     let mut log = RestartLog::new();
@@ -183,10 +183,10 @@ fn w4_kuna_p0_pack_restartlog_cap_is_exactly_32_per_function() {
     // 33 records into A: indices 0..=31 kept, the 33rd dropped.
     for i in 0..33 {
         let detail = format!("a{i}");
-        log.record(&fd_a, KunaRestartReason::DeadcodeBump, &detail);
+        log.record(&fd_a, UnlaceRestartReason::DeadcodeBump, &detail);
     }
     // B still records after A is full (per-function cap, not global).
-    log.record(&fd_b, KunaRestartReason::ProtoForced, "b0");
+    log.record(&fd_b, UnlaceRestartReason::ProtoForced, "b0");
 
     let out_a = log.render(&fd_a);
     assert!(out_a.contains("\n  31: "), "index 31 must be retained");
@@ -211,20 +211,20 @@ fn w4_kuna_p0_pack_restartlog_cap_is_exactly_32_per_function() {
     );
 }
 
-/// HUNT(comparator totality / key ordering): `KunaFuncKey`'s derived `Ord` is the
+/// HUNT(comparator totality / key ordering): `UnlaceFuncKey`'s derived `Ord` is the
 /// transcribed C++ `operator<` minus the owner-implied arch pointer: space_index
 /// (i32) then offset (u64). Two functions in the same space sort by offset; the
 /// dump for each reads only its own bucket in insertion order, so distinct keys
 /// never cross-contaminate regardless of insertion interleaving.
 #[test]
-fn w4_kuna_p0_pack_restartlog_keys_do_not_collide_interleaved() {
+fn w4_unlace_p0_pack_restartlog_keys_do_not_collide_interleaved() {
     let fd_lo = build_fd("lo", 0x10);
     let fd_hi = build_fd("hi", 0x20);
     let mut log = RestartLog::new();
     // Interleave records across the two keys.
-    log.record(&fd_hi, KunaRestartReason::MultistageJump, "hi-0");
-    log.record(&fd_lo, KunaRestartReason::DeadcodeBump, "lo-0");
-    log.record(&fd_hi, KunaRestartReason::ProtoDeindirect, "hi-1");
+    log.record(&fd_hi, UnlaceRestartReason::MultistageJump, "hi-0");
+    log.record(&fd_lo, UnlaceRestartReason::DeadcodeBump, "lo-0");
+    log.record(&fd_hi, UnlaceRestartReason::ProtoDeindirect, "hi-1");
 
     let out_lo = log.render(&fd_lo);
     let out_hi = log.render(&fd_hi);
@@ -242,25 +242,25 @@ fn w4_kuna_p0_pack_restartlog_keys_do_not_collide_interleaved() {
     );
 }
 
-/// HUNT(exception->Result / conditional rendering): `IfcKunaAssert::listAssertions`
+/// HUNT(exception->Result / conditional rendering): `IfcUnlaceAssert::listAssertions`
 /// prints " (applied via HARD mechanism)" ONLY when the recorded strength is HINT
 /// and the applied mechanism is HARD. Every other (strength, applied) pairing must
 /// omit it; the "-" strength label is reserved for `kstrength_none`.
 #[test]
-fn w4_kuna_p0_pack_assertlog_hint_via_hard_annotation_gate() {
-    let mk = |strength, applied| KunaAssertion {
+fn w4_unlace_p0_pack_assertlog_hint_via_hard_annotation_gate() {
+    let mk = |strength, applied| UnlaceAssertion {
         func_name: "(global)".into(),
-        phase: KunaPhase::P3,
+        phase: UnlacePhase::P3,
         subphase: "simplification-quiescence".into(),
         args: String::new(),
         strength,
         applied,
-        rewind: KunaPhase::P3,
+        rewind: UnlacePhase::P3,
     };
 
     // HINT requested, HARD applied -> annotation present.
     let mut log = AssertLog::new();
-    log.push(mk(KunaStrength::Hint, KunaStrength::Hard));
+    log.push(mk(UnlaceStrength::Hint, UnlaceStrength::Hard));
     let out = log.render_list();
     assert!(
         out.contains("strength=HINT (applied via HARD mechanism)  rewind->P3"),
@@ -269,21 +269,21 @@ fn w4_kuna_p0_pack_assertlog_hint_via_hard_annotation_gate() {
 
     // HARD requested, HARD applied -> NO annotation, label HARD.
     let mut log = AssertLog::new();
-    log.push(mk(KunaStrength::Hard, KunaStrength::Hard));
+    log.push(mk(UnlaceStrength::Hard, UnlaceStrength::Hard));
     let out = log.render_list();
     assert!(out.contains("strength=HARD  rewind->P3"));
     assert!(!out.contains("applied via HARD"));
 
     // HINT requested, HINT applied -> NO annotation (applied not HARD).
     let mut log = AssertLog::new();
-    log.push(mk(KunaStrength::Hint, KunaStrength::Hint));
+    log.push(mk(UnlaceStrength::Hint, UnlaceStrength::Hint));
     let out = log.render_list();
     assert!(out.contains("strength=HINT  rewind->P3"));
     assert!(!out.contains("applied via HARD"));
 
     // NONE strength -> "-" label.
     let mut log = AssertLog::new();
-    log.push(mk(KunaStrength::None, KunaStrength::Hard));
+    log.push(mk(UnlaceStrength::None, UnlaceStrength::Hard));
     let out = log.render_list();
     assert!(out.contains("strength=-  rewind->P3"), "got: {out}");
 }

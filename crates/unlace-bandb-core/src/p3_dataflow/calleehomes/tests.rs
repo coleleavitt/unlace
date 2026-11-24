@@ -77,7 +77,7 @@ impl Fx {
         manager_mut.set_default_data_space(ram.get_index()).unwrap();
         let stack = Rc::clone(manager.get_stack_space().unwrap());
         let mut arch = ArchContext::new_shared(Rc::clone(&manager));
-        arch.kuna_options
+        arch.unlace_options
             .set(crate::coreoptions::StackViews(stack_views));
         arch.default_return_addr =
             return_address.map(|(offset, size)| unlace_num::pcoderaw::VarnodeData {

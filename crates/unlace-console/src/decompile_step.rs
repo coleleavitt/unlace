@@ -17,7 +17,7 @@
 //!
 //! # Format-string varargs typing (FormatStringAnalyzer half B)
 //!
-//! The kuna analog of Ghidra's `FormatStringAnalyzer` (DecompilerDependent):
+//! The unlace analog of Ghidra's `FormatStringAnalyzer` (DecompilerDependent):
 //! after the first decompile of a caller, walk its `CALL` ops, find calls to
 //! printf/scanf-family variadic functions, read the format-string constant at
 //! the call's format argument, parse its specifiers, and build a per-call-site
@@ -31,7 +31,7 @@
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::types::{int4, uint4, uintb};
 use unlace_decomp::architecture::Architecture;
 use unlace_decomp::database::DynamicSymbolSpec;
@@ -94,7 +94,7 @@ impl DecompileSeed<'_> {
 /// later re-decompile of the same function keeps the typing; the whole-binary
 /// loop discards it (each function is decompiled once).
 pub struct DecompileStep {
-    pub result: KunaResult<Funcdata>,
+    pub result: UnlaceResult<Funcdata>,
     pub discovered: Vec<(Address, PrototypePieces)>,
 }
 
@@ -157,11 +157,11 @@ pub fn decompile_one_prefollowed(
         proto_overrides,
         prefollowed,
     );
-    // (kuna `lazyfuncs`) Materialize the targets this lift read and re-run; each round
+    // (unlace `lazyfuncs`) Materialize the targets this lift read and re-run; each round
     // creates at least one `Function`, so the finite entry set bounds the loop.  The
     // previous `Funcdata` is dropped first so the extra pass does not double the peak.
     if arch
-        .kuna_options
+        .unlace_options
         .get::<unlace_decomp::analysisgates::Lazyfuncs>()
         .0
     {
@@ -194,7 +194,7 @@ fn decompile_one_prefollowed_once(
     prefollowed: Option<Funcdata>,
 ) -> DecompileStep {
     let formatstring_mode = arch
-        .kuna_options
+        .unlace_options
         .get::<unlace_decomp::formatstring::FormatStringMode>();
     let saved_readonlypropagate = arch.readonlypropagate;
     // Only the LOOP needs the drive to fold the format constant out of read-only
@@ -202,13 +202,13 @@ fn decompile_one_prefollowed_once(
     if formatstring_mode.loop_pass() {
         arch.readonlypropagate = true;
     }
-    // (kuna `formatstring static`) The per-call-site overrides the load-time
+    // (unlace `formatstring static`) The per-call-site overrides the load-time
     // resolver parked for THIS function. A caller-supplied override at the same
     // callpoint wins, exactly as a hand-typed `override prototype` outranks a
     // discovered one below.
     let parked: Vec<ParkedFormatSite> = if formatstring_mode.statik() {
         match arch
-            .kuna_tables
+            .unlace_tables
             .get::<unlace_decomp::formatstring::ParkedSites>()
             .get(&entry.get_offset())
         {
@@ -246,13 +246,13 @@ fn decompile_one_prefollowed_once(
     // RETURN, which distinguishes it from the incoming return address and from
     // ordinary RET/RET-immediate instructions. Seed the derived CALLs first so
     // an explicit flow assertion at the same address remains authoritative.
-    let entry_chain = crate::retcallchain::kuna_entry_chain_sites(
+    let entry_chain = crate::retcallchain::unlace_entry_chain_sites(
         arch.translate(),
         &entry,
         crate::retcallchain::CHAIN_MAX_SITES,
         crate::retcallchain::CHAIN_MAX_INSNS,
     );
-    let push_immediate_ret = crate::retcallchain::kuna_push_immediate_ret(
+    let push_immediate_ret = crate::retcallchain::unlace_push_immediate_ret(
         arch.translate(),
         &entry,
         crate::retcallchain::CHAIN_MAX_INSNS,
@@ -314,11 +314,11 @@ fn decompile_one_prefollowed_once(
         seed.object_assertions,
         seed.purpose,
     );
-    // (kuna `floatglobals`) A float vote asked about a global before the
+    // (unlace `floatglobals`) A float vote asked about a global before the
     // whole-program scan ran: take it once for the run, and drive again. One
     // function of a large image does not pay for it, and refuses the global.
     if arch
-        .kuna_states
+        .unlace_states
         .get::<unlace_decomp::floatglobals::FloatGlobalsFound>()
         .is_none()
         && result
@@ -326,21 +326,22 @@ fn decompile_one_prefollowed_once(
             .is_ok_and(|fd| fd.get_arch().float_globals_wanted.get())
     {
         let input = arch
-            .kuna_states
+            .unlace_states
             .get_rc::<unlace_decomp::floatglobals::FloatScan>()
             .filter(|input| {
-                arch.kuna_float_scan_batch
+                arch.unlace_float_scan_batch
                     || input.code_bytes() <= unlace_decomp::floatglobals::SINGLE_FUNCTION_SCAN_BYTES
             });
         match input {
-            None => arch
-                .kuna_states
-                .set(Rc::new(unlace_decomp::floatglobals::FloatGlobalsFound(
-                    unlace_decomp::floatglobals::FloatGlobals::new(),
-                ))),
+            None => {
+                arch.unlace_states
+                    .set(Rc::new(unlace_decomp::floatglobals::FloatGlobalsFound(
+                        unlace_decomp::floatglobals::FloatGlobals::new(),
+                    )))
+            }
             Some(input) => {
                 let found = unlace_analysis::listing::floatglobals::scan(arch, &input);
-                arch.kuna_states
+                arch.unlace_states
                     .set(Rc::new(unlace_decomp::floatglobals::FloatGlobalsFound(
                         found,
                     )));
@@ -361,10 +362,10 @@ fn decompile_one_prefollowed_once(
             }
         }
     }
-    // (kuna `opaquepredicate globals`) A comparison read a global before the
+    // (unlace `opaquepredicate globals`) A comparison read a global before the
     // whole-program scan ran: take it once for the run, and drive again.
     if arch
-        .kuna_states
+        .unlace_states
         .get::<unlace_decomp::opaqueglobals::UnwrittenGlobals>()
         .is_none()
         && result
@@ -372,11 +373,11 @@ fn decompile_one_prefollowed_once(
             .is_ok_and(|fd| fd.get_arch().opaque_globals_wanted.get())
     {
         let found = arch
-            .kuna_states
+            .unlace_states
             .get_rc::<unlace_decomp::floatglobals::FloatScan>()
             .map(|input| unlace_analysis::listing::opaqueglobals::scan(arch, &input))
             .unwrap_or_default();
-        arch.kuna_states.set(Rc::new(found));
+        arch.unlace_states.set(Rc::new(found));
         result = unlace_decomp::decompile_drive::decompile_func_full_with_override_dyn(
             arch,
             name,
@@ -448,7 +449,7 @@ fn decompile_one_prefollowed_once(
             seed.purpose,
         );
     }
-    // (kuna `objcresolve`) A message send whose method the finished function
+    // (unlace `objcresolve`) A message send whose method the finished function
     // knows is retargeted to that IMP and the function driven again, so the
     // call carries the method's prototype and the call graph its edge.
     let retargets = match &result {
@@ -473,7 +474,7 @@ fn decompile_one_prefollowed_once(
             seed.purpose,
         );
     }
-    // (kuna `callrettype`) A callee's stated return type that the finished
+    // (unlace `callrettype`) A callee's stated return type that the finished
     // function's own variables contradict is withdrawn for this caller, and the
     // function is driven again without it.
     let contradicted = match &mut result {
@@ -499,10 +500,10 @@ fn decompile_one_prefollowed_once(
             seed.purpose,
         );
     }
-    // (kuna `callerreads`) Use raw caller evidence when the driver has no
+    // (unlace `callerreads`) Use raw caller evidence when the driver has no
     // callee-first return settling pass.
     let read = match &result {
-        Ok(fd) if !arch.kuna_settle_caller_reads => unlace_decomp::callerreads::read(arch, fd),
+        Ok(fd) if !arch.unlace_settle_caller_reads => unlace_decomp::callerreads::read(arch, fd),
         _ => None,
     };
     if let Some(storage) = read {
@@ -537,7 +538,7 @@ fn decompile_one_prefollowed_once(
     DecompileStep { result, discovered }
 }
 
-/// (kuna `formatstring static`) The parked call sites whose override the drive
+/// (unlace `formatstring static`) The parked call sites whose override the drive
 /// contradicts, by callpoint.
 ///
 /// The load-time resolver reads the format out of a window of the call's own
@@ -680,10 +681,10 @@ fn const_value(
 }
 
 /// Resolve a `CALL` argument varnode to the constant pointer it carries, if any
-/// (the kuna analog of reading `callOp.getInput(paramCount).getAddress()` in
+/// (the unlace analog of reading `callOp.getInput(paramCount).getAddress()` in
 /// Ghidra's `PcodeFunctionParser.searchForVariadicCallData`, `:99`).
 ///
-/// In kuna's IR the format-string pointer is rarely a bare constant varnode at
+/// In unlace's IR the format-string pointer is rarely a bare constant varnode at
 /// the call site; it is typically a value produced by a `PTRSUB`/`PTRADD`/
 /// `COPY`/`CAST`/`INT_ADD` op whose constant input is the read-only data address
 /// (e.g. `u0x… = ->(#0x0,#0x402004)`).  So if the arg varnode is itself a
@@ -729,7 +730,7 @@ pub(crate) fn resolve_const_pointer(
     }
 }
 
-/// Read a NUL-terminated byte string out of the load image at `vma` (the kuna
+/// Read a NUL-terminated byte string out of the load image at `vma` (the unlace
 /// analog of Ghidra resolving the constant address to its defined string `Data`
 /// in `PcodeFunctionParser`).  Reads byte-by-byte via the architecture's
 /// `read_loadimage_value`; stops at the first NUL or after `MAX` bytes, and bails
@@ -769,7 +770,7 @@ fn is_readonly_span(arch: &Architecture, vma: uintb, len: u64) -> bool {
 
 /// Walk the decompiled `fd`'s `CALL` ops and produce per-call-site prototype
 /// overrides for printf/scanf-family variadic calls whose format string is a
-/// readable constant (the kuna analog of `FormatStringAnalyzer.decompile` +
+/// readable constant (the unlace analog of `FormatStringAnalyzer.decompile` +
 /// `PcodeFunctionParser.parseFunctionForCallData` + `overrideCallList`).
 ///
 /// For each `CALL`:
@@ -905,7 +906,7 @@ pub(crate) fn extract_format_string_overrides(
     overrides
 }
 
-/// (kuna `objcresolve`) Install the retargets of every send the decompiled `fd`
+/// (unlace `objcresolve`) Install the retargets of every send the decompiled `fd`
 /// resolved and not yet retargeted: the CALL's new entry, and for an
 /// `objc_msgSend$<sel>` stub site the stub's own prototype with `self` typed as
 /// the receiver's class and the IMP's declared return. The count installed.
@@ -913,7 +914,7 @@ fn objc_retargets(arch: &mut Architecture, fd: &unlace_decomp::funcdata::Funcdat
     let mut n = 0;
     for send in unlace_decomp::objcrettype::resolved_sends(fd) {
         let site = send.site.get_offset();
-        if arch.kuna_objc_retargets.contains_key(&site) {
+        if arch.unlace_objc_retargets.contains_key(&site) {
             continue;
         }
         if send.stub {
@@ -948,9 +949,9 @@ fn objc_retargets(arch: &mut Architecture, fd: &unlace_decomp::funcdata::Funcdat
                 }
             }
             pieces.name = send.label.clone();
-            arch.kuna_objc_site_pieces.insert(site, pieces);
+            arch.unlace_objc_site_pieces.insert(site, pieces);
         }
-        arch.kuna_objc_retargets.insert(site, send.imp);
+        arch.unlace_objc_retargets.insert(site, send.imp);
         n += 1;
     }
     n

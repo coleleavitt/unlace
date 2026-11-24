@@ -1,4 +1,4 @@
-//! (kuna `javatry`) Exception edges for a DEX method's `try_item`s.
+//! (unlace `javatry`) Exception edges for a DEX method's `try_item`s.
 //!
 //! A DEX method lists its protected ranges and their catch clauses beside the
 //! code. Nothing in the instruction stream reaches a catch handler, so without
@@ -22,7 +22,7 @@
 use std::collections::BTreeMap;
 
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 
 use unlace_num::opcodes::OpCode;
 
@@ -148,7 +148,7 @@ pub fn can_throw(op: u8) -> bool {
     }
 }
 
-fn callother(data: &mut Funcdata, at: &Address, id: u32, args: &[u64]) -> KunaResult<OpId> {
+fn callother(data: &mut Funcdata, at: &Address, id: u32, args: &[u64]) -> UnlaceResult<OpId> {
     let op = data.new_op(1 + args.len() as i32, at.clone());
     data.op_set_opcode_code(op, OpCode::CPUI_CALLOTHER);
     if let Some(o) = data.obank_mut().get_mut(op) {
@@ -163,7 +163,7 @@ fn callother(data: &mut Funcdata, at: &Address, id: u32, args: &[u64]) -> KunaRe
     Ok(op)
 }
 
-fn edge(data: &mut Funcdata, at: &Address, id: u32, handler: u64) -> KunaResult<OpId> {
+fn edge(data: &mut Funcdata, at: &Address, id: u32, handler: u64) -> UnlaceResult<OpId> {
     let test = callother(data, at, id, &[handler])?;
     let flag = data.new_unique_out(1, test)?;
     let branch = data.new_op(2, at.clone());
@@ -187,7 +187,7 @@ pub fn before_instruction(
     plan: &JavaTryPlan,
     model: &DexModel,
     curaddr: &Address,
-) -> KunaResult<Option<OpId>> {
+) -> UnlaceResult<Option<OpId>> {
     if plan.is_empty() {
         return Ok(None);
     }
@@ -210,7 +210,7 @@ pub fn before_instruction(
             .get_space_by_name("register")
             .cloned()
             .ok_or_else(|| {
-                unlace_base::error::KunaError::lowlevel("Dalvik spec has no register space")
+                unlace_base::error::UnlaceError::lowlevel("Dalvik spec has no register space")
             })?;
         data.new_varnode_out(
             4,
@@ -307,7 +307,7 @@ impl CatchTable {
         let model = arch
             .dex
             .as_ref()
-            .filter(|_| arch.kuna_options.get::<crate::coreoptions::JavaTry>().0)?;
+            .filter(|_| arch.unlace_options.get::<crate::coreoptions::JavaTry>().0)?;
         let mut handlers: BTreeMap<u64, (Vec<(u64, u64)>, Vec<Option<u32>>)> = BTreeMap::new();
         for block in canonical_blocks(model, data.get_address().get_offset()) {
             for &(type_idx, handler) in &block.handlers {
@@ -556,7 +556,7 @@ impl crate::action::Action for ActionJavaThrowPrune {
     ) -> crate::action::ApplyResult {
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::coreoptions::JavaTry>()
             .0
         {

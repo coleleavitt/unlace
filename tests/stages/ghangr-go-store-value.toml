@@ -1,10 +1,10 @@
 # `ghangr-go-store-value.toml` checks Go integer destination conversions for fields, plain/indexed
 # pointers and a side-effectful call, with all integer widths and complete native bodies covered
-# by the CLI integration fixture. `kuna-kernelcache.toml` loads a synthetic arm64 kernel
+# by the CLI integration fixture. `kernelcache.toml` loads a synthetic arm64 kernel
 # collection three ways: the bare MH_FILESET with `kernelcache off` (one image, no symbols), its
 # kext out of an IMG4(IM4P(LZFSE)) wrapper, and its kernel out of a bare IM4P(complzss). The
 # fixtures and their generator live in `crates/unlace-analysis/tests/fixtures/kernelcache/`.
-# `kuna-kernelcacheboot.toml` loads the kext of a synthetic Auxiliary collection twice: with
+# `kernelcacheboot.toml` loads the kext of a synthetic Auxiliary collection twice: with
 # `kernelcache-boot off` its calls into the kernel go through unresolved slots, and by default
 # they are named from the boot collection that sits beside it (`linked/` in the same fixture
 # directory).

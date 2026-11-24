@@ -1,4 +1,4 @@
-//! (kuna) Keep a narrowed call argument's truncation in the C.
+//! (unlace) Keep a narrowed call argument's truncation in the C.
 //!
 //! Dead-code analysis counts only the possibly-nonzero bits of a call input as
 //! consumed, so when a caller zero-extends a sub-`int` value into the argument
@@ -152,7 +152,7 @@ fn callee_reads_wider(data: &Funcdata, op: OpId, slot: int4, size: int4) -> bool
         return false;
     };
     let fc = data.get_call_specs(i);
-    let Some(stated) = data.kuna_protoorder_types(fc.get_entry_address()) else {
+    let Some(stated) = data.unlace_protoorder_types(fc.get_entry_address()) else {
         return false;
     };
     let index = (slot - 1) as usize;

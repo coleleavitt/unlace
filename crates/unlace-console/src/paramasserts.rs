@@ -74,7 +74,7 @@ fn touched(fd: &Funcdata) -> Vec<SymbolId> {
     let Some(scope) = fd.get_scope_local() else {
         return Vec::new();
     };
-    fd.kuna_directive_symbols()
+    fd.unlace_directive_symbols()
         .iter()
         .map(|directive| directive.symbol)
         .filter(|&symbol| scope.symbol_category(symbol) == symbol_category::FUNCTION_PARAMETER)

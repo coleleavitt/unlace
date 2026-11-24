@@ -3,7 +3,7 @@
 //!
 //! Decompiles real corpus functions (reusing the `decompile_e2e.rs` bootstrap
 //! mechanics), encodes each resulting [`Funcdata`] as the `<function>`/`<ast>`
-//! document, round-trips the bytes back through kuna's `PackedDecode`, and
+//! document, round-trips the bytes back through unlace's `PackedDecode`, and
 //! asserts:
 //!
 //!   * the header (`<function name size>`) round-trips,
@@ -24,7 +24,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::{ATTRIB_UNIQ, Address, ELEM_ADDR, ELEM_RANGELIST, ELEM_SEQNUM};
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::{
     ATTRIB_NAME, ATTRIB_REF, ATTRIB_SIZE, Decoder, ELEM_VOID, IdRegistry, PackedDecode,
     PackedEncode,
@@ -169,8 +169,8 @@ impl LoadImage for DummyImg {
     fn get_file_name(&self) -> &str {
         "dummy"
     }
-    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> KunaResult<()> {
-        Err(KunaError::data_unavail("dummy"))
+    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> UnlaceResult<()> {
+        Err(UnlaceError::data_unavail("dummy"))
     }
     fn get_arch_type(&self) -> Vec<u8> {
         Vec::new()
@@ -270,7 +270,7 @@ struct Observed {
     op_count: usize,
 }
 
-fn decode_function(manage: &AddrSpaceManager, bytes: &[u8]) -> KunaResult<Observed> {
+fn decode_function(manage: &AddrSpaceManager, bytes: &[u8]) -> UnlaceResult<Observed> {
     let mut obs = Observed::default();
     let mut dec = PackedDecode::new(manage);
     dec.ingest_stream(bytes)?;
@@ -297,7 +297,7 @@ fn decode_function(manage: &AddrSpaceManager, bytes: &[u8]) -> KunaResult<Observ
     Ok(obs)
 }
 
-fn decode_ast(dec: &mut PackedDecode, obs: &mut Observed) -> KunaResult<()> {
+fn decode_ast(dec: &mut PackedDecode, obs: &mut Observed) -> UnlaceResult<()> {
     loop {
         let c = dec.peek_element()?;
         if c == 0 {
@@ -330,7 +330,7 @@ fn decode_ast(dec: &mut PackedDecode, obs: &mut Observed) -> KunaResult<()> {
     Ok(())
 }
 
-fn decode_block(dec: &mut PackedDecode, obs: &mut Observed) -> KunaResult<()> {
+fn decode_block(dec: &mut PackedDecode, obs: &mut Observed) -> UnlaceResult<()> {
     loop {
         let c = dec.peek_element()?;
         if c == 0 {
@@ -532,7 +532,7 @@ fn walk_markup(
     dec: &mut PackedDecode,
     oprefs: &mut BTreeSet<u64>,
     varrefs: &mut BTreeSet<u64>,
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     let id = dec.open_element()?;
     loop {
         let a = dec.get_next_attribute_id()?;
@@ -561,7 +561,7 @@ fn walk_markup(
 fn decode_markup_refs(
     manage: &AddrSpaceManager,
     bytes: &[u8],
-) -> KunaResult<(BTreeSet<u64>, BTreeSet<u64>)> {
+) -> UnlaceResult<(BTreeSet<u64>, BTreeSet<u64>)> {
     let mut dec = PackedDecode::new(manage);
     dec.ingest_stream(bytes)?;
     // The markup root is the clang <function> (EmitMarkup::begin_function opens

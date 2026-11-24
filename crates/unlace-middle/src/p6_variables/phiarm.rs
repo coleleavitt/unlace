@@ -113,7 +113,7 @@ pub fn keeps_apart(
     })
 }
 
-/// (kuna) Parse `option phiarm on|off`.
+/// (unlace) Parse `option phiarm on|off`.
 pub struct OptionPhiArm;
 
 impl OptionPhiArm {
@@ -121,21 +121,21 @@ impl OptionPhiArm {
     pub const NAME: &'static str = "phiarm";
 
     /// Parse and validate the value.
-    pub fn apply(&self, p1: &str) -> unlace_base::error::KunaResult<(bool, String)> {
+    pub fn apply(&self, p1: &str) -> unlace_base::error::UnlaceResult<(bool, String)> {
         let on = crate::options::on_or_off(p1)?;
         let state = if on { "on" } else { "off" };
         Ok((on, format!("Phi-arm variable split turned {state}")))
     }
 }
 
-/// (kuna) Trim phi arms that are variables of their own before the required
+/// (unlace) Trim phi arms that are variables of their own before the required
 /// merge (option `phiarm`, default off).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PhiArmSplit(pub bool);
 
-impl crate::optionset::KunaOption for PhiArmSplit {
+impl crate::optionset::UnlaceOption for PhiArmSplit {
     const NAME: &'static str = "phiarm";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         PhiArmSplit(false)
@@ -145,7 +145,7 @@ impl crate::optionset::KunaOption for PhiArmSplit {
         PhiArmSplit(false)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (on, msg) = OptionPhiArm.apply(value)?;
         Ok((PhiArmSplit(on), msg))
     }
@@ -154,7 +154,7 @@ impl crate::optionset::KunaOption for PhiArmSplit {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::optionset::KunaOption;
+    use crate::optionset::UnlaceOption;
 
     #[test]
     fn option_parses_and_ships_off() {

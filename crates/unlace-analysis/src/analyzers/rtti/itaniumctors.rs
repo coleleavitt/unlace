@@ -1,4 +1,4 @@
-//! (kuna) Itanium constructor and destructor recovery from vptr stores — the
+//! (unlace) Itanium constructor and destructor recovery from vptr stores — the
 //! refinement of `itaniumrtti` that names `C::C` and `C::~C`.
 //!
 //! A constructor or destructor of a polymorphic class `C` is the one kind of
@@ -668,7 +668,7 @@ impl<'a> Walker<'a> {
             first_var_arg_slot: -1,
             output_storage: None,
             input_storage: Vec::new(),
-            kuna_library_names: None,
+            unlace_library_names: None,
         };
         let mut assigned = Vec::new();
         model

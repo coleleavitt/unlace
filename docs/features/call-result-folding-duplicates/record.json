@@ -1,7 +1,7 @@
 {
   "need_id": "call-result-folding-duplicates",
   "opportunity": "call-result-folding-duplicates",
-  "test_name": "kuna-callretmulti",
+  "test_name": "callretmulti",
   "binary": "decompiler/crates/kuna-analysis/tests/fixtures/callretmulti_x86_64",
   "selector": "sub_140002930",
   "func_addr": "0x401000",
@@ -47,9 +47,9 @@
     "raw_diff": "docs/features/call-result-folding-duplicates/sweep.diff"
   },
   "tests": {
-    "stage": "tests/stages/kuna-callretmulti.xml (two functions, two passes, three assertions)",
+    "stage": "tests/stages/callretmulti.xml (two functions, two passes, three assertions)",
     "promoted_probe": "tests/cli/call-result-folding-duplicates.json",
-    "focused_related_suites": "kuna-callretmulti plus five call-folding/callee-scratch suites, 23/23"
+    "focused_related_suites": "callretmulti plus five call-folding/callee-scratch suites, 23/23"
   },
   "gates": {
     "make test": "675/675 PARITY OK",

@@ -1,0 +1,72 @@
+# kuna armshiftguard: a register-controlled ARM LSL uses the low eight
+# count bits, so the C printer guards it with `count < 32u ? ... : 0u`
+# (arm-register-shift.xml). P9 emission / cast-policy.
+# ShiftMasked (`and r1,r1,#0x1f; mov r0,r0,lsl r1; bx lr`) and ShiftField
+# (`mov r1,r1,lsr #27; mov r0,r0,lsl r1; bx lr`) have counts whose known
+# bits keep them below 32, so they print the plain shift with no guard in
+# every mode. ShiftValue (`mov r0,r0,lsl r1; bx lr`) keeps the guard by
+# default and prints the plain shift under `option armshiftguard off`.
+
+[image]
+arch = 'ARM:LE:32:v5t:default'
+symbols = [
+    { space = 'ram', offset = '0x10000', name = 'ShiftMasked' },
+    { space = 'ram', offset = '0x10020', name = 'ShiftField' },
+    { space = 'ram', offset = '0x10040', name = 'ShiftValue' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10000'
+hex = '1f1001e21001a0e11eff2fe1'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10020'
+hex = 'a11da0e11001a0e11eff2fe1'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10040'
+hex = '1001a0e11eff2fe1'
+
+[script]
+commands = [
+    'parse line extern uint4 ShiftMasked(uint4 value, uint4 count);',
+    'parse line extern uint4 ShiftField(uint4 value, uint4 word);',
+    'parse line extern uint4 ShiftValue(uint4 value, uint4 count);',
+    'load function ShiftMasked',
+    'decompile',
+    'print C',
+    'load function ShiftField',
+    'decompile',
+    'print C',
+    'load function ShiftValue',
+    'decompile',
+    'print C',
+    'option armshiftguard off',
+    'load function ShiftValue',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'armshiftguard #1: only the default ShiftValue keeps the range guard'
+count = 1
+literal = '< 32u ?'
+
+[[match]]
+name = 'armshiftguard #2: a count masked by 0x1f prints the plain shift'
+count = 1
+regex = 'return \(uint4\)value\s*<<\s*\(count & 0x1f\);'
+
+[[match]]
+name = 'armshiftguard #3: a count from a 5-bit field prints the plain shift'
+count = 1
+regex = 'return \(uint4\)value\s*<<\s*\(word >> 0x1b\);'
+
+[[match]]
+name = 'armshiftguard #4: off prints the unproven count as a plain shift'
+count = 1
+regex = 'return \(uint4\)value\s*<<\s*\(count & 0xff\);'

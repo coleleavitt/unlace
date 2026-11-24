@@ -1,4 +1,4 @@
-//! (kuna `swiftdemangle`) Swift's Punycode variant (RFC 3492 with `_` as
+//! (unlace `swiftdemangle`) Swift's Punycode variant (RFC 3492 with `_` as
 //! the delimiter and `A`–`J` standing in for the digits `0`–`9`).
 
 const BASE: u32 = 36;

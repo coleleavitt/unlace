@@ -62,7 +62,7 @@ fn check(target: &str, word: bool, double: bool, arith: bool) {
     } else {
         "unsigned int"
     };
-    use unlace_console::console::register_kuna_commands;
+    use unlace_console::console::register_unlace_commands;
     use unlace_console::ifacedecomp::{
         DECOMPILE_MODULE, IfaceDecompData, execute, register_console_commands,
         register_decomp_commands,
@@ -106,7 +106,7 @@ API float choose_value(float first,float second){float value=adjust_value(first)
     let script = script.replace("float ", &format!("{scalar} "));
     let mut status = IfaceTerm::into_status("", script.as_bytes());
     register_decomp_commands(&mut status);
-    register_kuna_commands(&mut status);
+    register_unlace_commands(&mut status);
     register_console_commands(&mut status);
     status
         .get_data_mut(DECOMPILE_MODULE)

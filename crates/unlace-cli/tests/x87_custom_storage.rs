@@ -57,7 +57,7 @@ _root_value:
     let regenerated = source.with_extension("c");
     let executable = source.with_extension("exe");
     for assertions in [[parameter, result], [result, parameter]] {
-        let (code, err, status) = common::run_kuna(&[
+        let (code, err, status) = common::run_unlace(&[
             "decompile",
             binary.to_str().unwrap(),
             "_sample",
@@ -182,7 +182,7 @@ original_custom:
     )
     .unwrap();
     for assertions in [[parameter, result], [result, parameter]] {
-        let (code, err, status) = common::run_kuna(&[
+        let (code, err, status) = common::run_unlace(&[
             "decompile",
             binary.to_str().unwrap(),
             "_scaled",
@@ -195,7 +195,7 @@ original_custom:
         ]);
         assert_eq!(status, 0, "{err}");
         assert!(code.contains("(long double)n"), "{code}");
-        let (caller, err, status) = common::run_kuna(&[
+        let (caller, err, status) = common::run_unlace(&[
             "decompile",
             binary.to_str().unwrap(),
             "_dispatch",

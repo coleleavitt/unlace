@@ -12,7 +12,7 @@
 //! program.  No `.sla` is ever loaded: every instruction's p-code, every
 //! byte, symbol, type and comment arrives over the wire.
 //!
-//! This crate is the kuna port of that front-end, layered as:
+//! This crate is the unlace port of that front-end, layered as:
 //!
 //! - [`protocol`] — the burst framing (`ghidra_arch.cc:50-248`), generic
 //!   over `Read`/`Write`.
@@ -34,7 +34,7 @@
 //!   so the Ghidra GUI degrades cleanly.  Deliberately no unlace-decomp
 //!   dependency.
 //! - **Phase 2: the engine bridge** — an `ArchitectureGhidra` analog
-//!   backing kuna's loader/translator/scope/type/comment/string/cpool/
+//!   backing unlace's loader/translator/scope/type/comment/string/cpool/
 //!   inject/context hooks with the query client, plus `Funcdata::encode`
 //!   and the marked-up C output for the decompileAt response.
 //! - **Phase 3: lazy scope/types** (the ScopeGhidra cache/holes model).

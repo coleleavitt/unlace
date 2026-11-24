@@ -2,16 +2,16 @@
 //!
 //! Some IR algorithms (`funcdata*`, `heritage`, the cleanup action) need a decision or a
 //! helper that a higher pass owns. Calling the pass directly makes the IR depend on it.
-//! Instead the IR calls through [`KunaHooks`], held by every
+//! Instead the IR calls through [`UnlaceHooks`], held by every
 //! [`ArchContext`](crate::context::ArchContext); each pass module fills its slots in a
-//! `provide(&mut KunaHookSlots)` function, and the driver composes them once
+//! `provide(&mut UnlaceHookSlots)` function, and the driver composes them once
 //! (`universalaction::PASS_HOOKS`). This is rustc's `rustc_middle::hooks`.
 //!
 //! The driver installs that table at link time: it defines the symbol
 //! [`default_pass_hooks`] calls, so no IR module names the driver and every binary or test that
 //! links the crate gets the table without a setup call.
 //!
-//! [`KunaHookSlots::finish`] refuses a table with an empty slot, so the first
+//! [`UnlaceHookSlots::finish`] refuses a table with an empty slot, so the first
 //! `ArchContext` of a run checks that every hook is provided.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -21,7 +21,7 @@ use unlace_base::address::Address;
 use unlace_base::space::{AddrSpace, AddrSpaceManager};
 use unlace_base::types::{int4, intb, uint4, uintb};
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::marshal::IdRegistry;
 use unlace_base::xml::Element;
 use unlace_num::opcodes::OpCode;
@@ -51,13 +51,13 @@ use crate::varnode::VarnodeBank;
 
 unsafe extern "Rust" {
     /// The default pipeline's hook table, defined by the driver (`universalaction`).
-    safe fn __unlace_default_pass_hooks() -> &'static KunaHooks;
+    safe fn __unlace_default_pass_hooks() -> &'static UnlaceHooks;
 }
 
 /// The pass hooks every [`ArchContext`] starts with: the default pipeline's, composed with the
 /// universal action tree it schedules.
 #[inline]
-pub fn default_pass_hooks() -> &'static KunaHooks {
+pub fn default_pass_hooks() -> &'static UnlaceHooks {
     __unlace_default_pass_hooks()
 }
 
@@ -65,21 +65,21 @@ macro_rules! declare_hooks {
     ($($(#[$attr:meta])* $name:ident: $(for<$($lt:lifetime),*>)? fn($($arg:ty),* $(,)?) $(-> $ret:ty)?;)*) => {
         /// The pass hooks, every one provided; call one as `(fd.hooks().name)(args)`.
         #[derive(Clone, Copy)]
-        pub struct KunaHooks {
+        pub struct UnlaceHooks {
             $($(#[$attr])* pub $name: $(for<$($lt),*>)? fn($($arg),*) $(-> $ret)?,)*
         }
 
-        /// A [`KunaHooks`] under construction: each pass module's `provide` fills its slots.
+        /// A [`UnlaceHooks`] under construction: each pass module's `provide` fills its slots.
         #[derive(Default)]
-        pub struct KunaHookSlots {
+        pub struct UnlaceHookSlots {
             $(pub $name: Option<$(for<$($lt),*>)? fn($($arg),*) $(-> $ret)?>,)*
         }
 
-        impl KunaHookSlots {
+        impl UnlaceHookSlots {
             /// The finished table, or the names of the slots no module provided.
-            pub fn finish(self) -> Result<KunaHooks, Vec<&'static str>> {
+            pub fn finish(self) -> Result<UnlaceHooks, Vec<&'static str>> {
                 match self {
-                    KunaHookSlots { $($name: Some($name),)* } => Ok(KunaHooks { $($name,)* }),
+                    UnlaceHookSlots { $($name: Some($name),)* } => Ok(UnlaceHooks { $($name,)* }),
                     _ => {
                         let mut missing = Vec::new();
                         $(if self.$name.is_none() {
@@ -91,13 +91,13 @@ macro_rules! declare_hooks {
             }
         }
 
-        impl KunaHookSlots {
+        impl UnlaceHookSlots {
             /// The table with every slot no module filled set to a stub that panics, naming the
             /// hook: what the unit tests of a crate below the driver run with, after providing
             /// the hooks of their own crate and the crates below it.
             #[doc(hidden)]
-            pub fn finish_with_stubs(self) -> KunaHooks {
-                KunaHooks {
+            pub fn finish_with_stubs(self) -> UnlaceHooks {
+                UnlaceHooks {
                     $($name: self.$name.unwrap_or({
                         fn stub$(<$($lt),*>)?($(_: $arg),*) $(-> $ret)? {
                             panic!(concat!(
@@ -112,11 +112,11 @@ macro_rules! declare_hooks {
             }
         }
 
-        impl KunaHooks {
+        impl UnlaceHooks {
             /// A table whose every hook panics, naming itself.
             #[doc(hidden)]
-            pub fn unprovided() -> KunaHooks {
-                KunaHookSlots::default().finish_with_stubs()
+            pub fn unprovided() -> UnlaceHooks {
+                UnlaceHookSlots::default().finish_with_stubs()
             }
         }
     };
@@ -124,14 +124,14 @@ macro_rules! declare_hooks {
 
 /// This crate's unit tests link without the driver, so they define the driver's symbol
 /// themselves: this crate's own hooks ([`crate::provide_all`]), and a stub that panics, naming
-/// itself, for every hook a higher crate provides ([`KunaHookSlots::finish_with_stubs`]).
+/// itself, for every hook a higher crate provides ([`UnlaceHookSlots::finish_with_stubs`]).
 #[cfg(test)]
 mod unprovided {
     #[unsafe(no_mangle)]
-    fn __unlace_default_pass_hooks() -> &'static super::KunaHooks {
-        static HOOKS: std::sync::OnceLock<super::KunaHooks> = std::sync::OnceLock::new();
+    fn __unlace_default_pass_hooks() -> &'static super::UnlaceHooks {
+        static HOOKS: std::sync::OnceLock<super::UnlaceHooks> = std::sync::OnceLock::new();
         HOOKS.get_or_init(|| {
-            let mut slots = super::KunaHookSlots::default();
+            let mut slots = super::UnlaceHookSlots::default();
             crate::provide_all(&mut slots);
             slots.finish_with_stubs()
         })
@@ -148,13 +148,13 @@ declare_hooks! {
     stack_slot_aliased: fn(&Funcdata, &mut AliasChecker, &Rc<AddrSpace>, uintb) -> bool;
     /// Mark a local range not mapped (`funcdata_spacebase`).
     scope_local_mark_not_mapped: fn(&mut Funcdata, &Rc<AddrSpace>, uintb, int4, bool);
-    /// (kuna `calltransport`) Is the varnode a call-argument transport (`kuna_calltransport`).
+    /// (unlace `calltransport`) Is the varnode a call-argument transport (`unlace_calltransport`).
     is_call_transport: fn(&Funcdata, VarnodeId) -> bool;
-    /// (kuna `calltransport`) Record the varnode as a call-argument transport.
+    /// (unlace `calltransport`) Record the varnode as a call-argument transport.
     record_call_transport: fn(&mut Funcdata, VarnodeId);
-    /// (kuna `calltransport`) Is the byte range of the varnode a projection of a transport.
+    /// (unlace `calltransport`) Is the byte range of the varnode a projection of a transport.
     is_call_transport_projection: fn(&Funcdata, VarnodeId, int4, int4) -> bool;
-    /// (kuna `calltransport`) Does the varnode have a use as local storage.
+    /// (unlace `calltransport`) Does the varnode have a use as local storage.
     has_local_storage_use: fn(&Funcdata, VarnodeId) -> bool;
     /// `ActionSetCasts` over the function (`coreaction_casts`).
     action_set_casts: fn(&mut Funcdata) -> int4;
@@ -163,9 +163,9 @@ declare_hooks! {
     /// `Varnode::getTypeReadFacing` against the union cache (`funcdata_facing`).
     vn_type_read_facing: fn(&Funcdata, VarnodeId, OpId) -> Rc<Datatype>;
     /// Apply a union-facet symbol to its varnode (`funcdata_union`).
-    apply_union_facet: fn(&mut Funcdata, &SymbolEntry) -> KunaResult<bool>;
+    apply_union_facet: fn(&mut Funcdata, &SymbolEntry) -> UnlaceResult<bool>;
     /// `Funcdata::forceFacingType` (`funcdata_union`).
-    force_facing_type: fn(&mut Funcdata, Rc<Datatype>, int4, OpId, int4) -> KunaResult<()>;
+    force_facing_type: fn(&mut Funcdata, Rc<Datatype>, int4, OpId, int4) -> UnlaceResult<()>;
     /// `Funcdata::inheritUnionField` (`funcdata_union`).
     inherit_union_field: fn(&mut Funcdata, &Datatype, OpId, int4, OpId, int4) -> int4;
     /// `calleereginputs::reads_register`.
@@ -255,7 +255,7 @@ declare_hooks! {
     /// `calleeretpreserves::exact_cookie_preserves_unjustified_return_slice`.
     calleeretpreserves_exact_cookie_preserves_unjustified_return_slice: fn(&Funcdata, &FuncCallSpecs, &Address, int4) -> bool;
     /// `inputtile::new_tiled_input`.
-    inputtile_new_tiled_input: fn(&mut Funcdata, int4, &Address) -> KunaResult<VarnodeId>;
+    inputtile_new_tiled_input: fn(&mut Funcdata, int4, &Address) -> UnlaceResult<VarnodeId>;
     /// `localstackviews::preserves_range`.
     localstackviews_preserves_range: fn(&Funcdata, &Address, i32) -> bool;
     /// `msvcbyval::constructed_ranges`.
@@ -328,49 +328,49 @@ declare_hooks! {
     callmechanisms_requires_reflow: fn(&crate::fspec::FuncProto, &crate::fspec::FuncProto) -> bool;
     /// `callmechanisms::failed`: installing a call mechanism failed, so the pipeline stops.
     callmechanisms_failed: fn(&Funcdata) -> bool;
-    /// `kuna_callmechanisms`: a context's `(call_mechanism_effects, call_mechanism_reload_only)`
+    /// `unlace_callmechanisms`: a context's `(call_mechanism_effects, call_mechanism_reload_only)`
     /// from the options and the image's ELFv1 TOC fact.
     callmechanisms_effects: fn(&crate::optionset::OptionSet, bool) -> (bool, bool);
-    /// `kuna_callmechanisms`: compile the call mechanisms out of the loaded inject library.
+    /// `unlace_callmechanisms`: compile the call mechanisms out of the loaded inject library.
     callmechanisms_load: fn(&mut Architecture);
     /// `callmechanisms::compiled_ids` for a prototype model's name.
     callmechanisms_compiled_ids: fn(&Architecture, &str) -> (i32, i32);
     /// `callmechanisms::register`: register the compiler spec's prototype p-code.
-    callmechanisms_register: fn(Option<&str>, &AddrSpaceManager, &mut Architecture) -> KunaResult<()>;
-    /// `kuna_callwide`: drop the whole-image caller proof (the image or its facts changed).
+    callmechanisms_register: fn(Option<&str>, &AddrSpaceManager, &mut Architecture) -> UnlaceResult<()>;
+    /// `unlace_callwide`: drop the whole-image caller proof (the image or its facts changed).
     callwide_clear: fn(&mut crate::archstate::ArchTables);
-    /// `kuna_callwide`: revoke the whole-image caller proof through a shared borrow.
+    /// `unlace_callwide`: revoke the whole-image caller proof through a shared borrow.
     callwide_revoke: fn(&crate::archstate::ArchTables);
     /// `globalcallranges::preserves`: does a completely decoded leaf callee leave the range alone?
     globalcallranges_preserves:
         fn(&mut crate::heritage::GlobalCallRanges, &Funcdata, &FuncCallSpecs, &Address, int4) -> bool;
-    /// `kuna_inputhints`: did a pass give any method's `this` input hints?
+    /// `unlace_inputhints`: did a pass give any method's `this` input hints?
     inputhints_has_this_hints: fn(&crate::archstate::ArchTables) -> bool;
-    /// `kuna_hooks`: register an embedder rule on the architecture's registry.
+    /// `unlace_hooks`: register an embedder rule on the architecture's registry.
     hooks_add_rule: fn(
         &mut crate::archstate::ArchTables,
         &str,
         crate::action::RuleState,
         Box<dyn crate::action::Rule>,
-    ) -> KunaResult<()>;
-    /// `kuna_hooks`: register an embedder phase callback on the architecture's registry.
+    ) -> UnlaceResult<()>;
+    /// `unlace_hooks`: register an embedder phase callback on the architecture's registry.
     hooks_on_phase: fn(
         &mut crate::archstate::ArchTables,
-        crate::phases::KunaPhase,
+        crate::phases::UnlacePhase,
         Box<dyn FnMut(&mut Funcdata)>,
-    ) -> KunaResult<()>;
+    ) -> UnlaceResult<()>;
     /// `printc`: a new output-language printer (C++ `PrintCLanguageCapability::buildLanguage`).
     printer_new: fn() -> Box<dyn crate::printhandle::PrintHandle>;
     /// `printc`: a default printer, standing in while the owned one is lent out.
     printer_default: fn() -> Box<dyn crate::printhandle::PrintHandle>;
-    /// `kuna_lang`: does the output language continue a bottom-tested loop (not Rust's
+    /// `unlace_lang`: does the output language continue a bottom-tested loop (not Rust's
     /// `loop { ...; if !c { break; } }`)?
     lang_do_while_continue: fn(crate::outlang::OutLang) -> bool;
-    /// `kuna_lang`: does the output language promote narrow integer operands as C does?
+    /// `unlace_lang`: does the output language promote narrow integer operands as C does?
     lang_int_promotion: fn(crate::outlang::OutLang) -> bool;
-    /// `kuna_lang`: does the output language have C's `for` header?
+    /// `unlace_lang`: does the output language have C's `for` header?
     lang_c_for: fn(crate::outlang::OutLang) -> bool;
-    /// `kuna_lang`: the language's real name for a residual unknown
+    /// `unlace_lang`: the language's real name for a residual unknown
     /// (`TypeSpeller::unknown_base`).
     lang_unknown_base: fn(
         crate::outlang::OutLang,
@@ -378,22 +378,22 @@ declare_hooks! {
         bool,
         bool,
     ) -> Option<std::borrow::Cow<'static, str>>;
-    /// `kuna_calleepurge`: forget the x86-32 callee walks (the host's facts changed).
+    /// `unlace_calleepurge`: forget the x86-32 callee walks (the host's facts changed).
     calleepurge_forget_walks: fn(&mut crate::archstate::ArchTables);
-    /// `kuna_jumpassist`: compile the jump assists out of the loaded inject library.
+    /// `unlace_jumpassist`: compile the jump assists out of the loaded inject library.
     jumpassist_load: fn(&mut Architecture);
-    /// `kuna_segmentize`: compile the registered segment operations into the states.
+    /// `unlace_segmentize`: compile the registered segment operations into the states.
     segmentize_build: fn(
         &Architecture,
         Rc<AddrSpaceManager>,
         &[Option<Rc<dyn unlace_num::opbehavior::OpBehavior>>],
         &mut crate::archstate::ArchStates,
-    ) -> KunaResult<()>;
+    ) -> UnlaceResult<()>;
     /// `callmechanisms::install_at_entry`: straight-line p-code at the start of a block.
     callmechanisms_install_at_entry:
-        fn(&mut Funcdata, BlockId, &[crate::emittedop::Operation]) -> KunaResult<()>;
+        fn(&mut Funcdata, BlockId, &[crate::emittedop::Operation]) -> UnlaceResult<()>;
     /// `dynamiclocals::bind`.
-    dynamiclocals_bind: fn(&mut Funcdata, VarnodeId, &SymbolEntry) -> KunaResult<bool>;
+    dynamiclocals_bind: fn(&mut Funcdata, VarnodeId, &SymbolEntry) -> UnlaceResult<bool>;
     /// `highslice_guard::matches`.
     highslice_guard_matches: fn(&Funcdata, OpId, OpId) -> bool;
     /// `joincalloutput::needs_reflow`.
@@ -457,7 +457,7 @@ declare_hooks! {
     /// `spsolve::applies`.
     spsolve_applies: fn(&Architecture) -> bool;
     /// `stackparamalign::decode`.
-    stackparamalign_decode: fn(&Element, &AddrSpace, i32, i32) -> KunaResult<u32>;
+    stackparamalign_decode: fn(&Element, &AddrSpace, i32, i32) -> UnlaceResult<u32>;
     /// `typedcallabi::caller_extends_from`.
     typedcallabi_caller_extends_from: fn(&Architecture) -> i32;
     /// `typedcallabi::image_evidence`.
@@ -477,7 +477,7 @@ declare_hooks! {
     /// `inputrefinement::span_straddles_join`.
     inputrefinement_span_straddles_join: fn((usize, usize), usize, usize, usize) -> bool;
     /// `inputstorage::assign`.
-    inputstorage_assign: fn(&ParamListStandard, &PrototypePieces, &dyn TypeFactory, &mut Vec<ParameterPieces>, &AddrSpaceManager, &mut [i32]) -> KunaResult<()>;
+    inputstorage_assign: fn(&ParamListStandard, &PrototypePieces, &dyn TypeFactory, &mut Vec<ParameterPieces>, &AddrSpaceManager, &mut [i32]) -> UnlaceResult<()>;
     /// `narrowext::mark`.
     narrowext_mark: fn(&mut Funcdata, OpId);
     /// `nulterminator::close_at_terminator`.
@@ -555,11 +555,11 @@ declare_hooks! {
     /// `inputrefinement::coalesce`.
     inputrefinement_coalesce: fn(&mut [int4], &mut dyn FnMut(usize, usize, usize) -> bool);
     /// `msvcftol::decode_payload`.
-    msvcftol_decode_payload: fn(&mut dyn FnMut(&std::rc::Rc<Element>) -> KunaResult<()>) -> KunaResult<()>;
+    msvcftol_decode_payload: fn(&mut dyn FnMut(&std::rc::Rc<Element>) -> UnlaceResult<()>) -> UnlaceResult<()>;
     /// `msvcftol::language_is_x86_32`.
     msvcftol_language_is_x86_32: fn(&dyn Fn(&[u8]) -> bool, i32) -> bool;
     /// `objcarc::decode_payload`.
-    objcarc_decode_payload: fn(&str, &mut dyn FnMut(&std::rc::Rc<Element>) -> KunaResult<()>) -> KunaResult<()>;
+    objcarc_decode_payload: fn(&str, &mut dyn FnMut(&std::rc::Rc<Element>) -> UnlaceResult<()>) -> UnlaceResult<()>;
     /// `objcarc::payload_xml`.
     objcarc_payload_xml: fn(&dyn Fn(&[u8]) -> bool, i32) -> Option<String>;
     /// `stackarggap::ends_argument_list`.
@@ -569,7 +569,7 @@ declare_hooks! {
     /// `switchrunon::own_rows`.
     switchrunon_own_rows: fn(u64, &[u64], &dyn Fn(u64) -> Option<u64>) -> Option<usize>;
     /// `x87intrinsic::decode_prototype`.
-    x87intrinsic_decode_prototype: fn(&mut dyn FnMut(&std::rc::Rc<Element>) -> KunaResult<()>) -> KunaResult<()>;
+    x87intrinsic_decode_prototype: fn(&mut dyn FnMut(&std::rc::Rc<Element>) -> UnlaceResult<()>) -> UnlaceResult<()>;
     /// `retpushedhalf::observe_instruction`.
     retpushedhalf_observe_instruction: fn(&mut Funcdata, &[OpId]);
     /// `armfloatreturn::declared_helper_model`.
@@ -587,7 +587,7 @@ declare_hooks! {
     /// `printc::type_to_c_string`.
     printc_type_to_c_string: fn(&Architecture, &Rc<Datatype>) -> String;
     /// `arithhelpers::decode_payloads`.
-    arithhelpers_decode_payloads: fn(HelperAbi, &mut dyn FnMut(&std::rc::Rc<Element>) -> KunaResult<()>) -> KunaResult<()>;
+    arithhelpers_decode_payloads: fn(HelperAbi, &mut dyn FnMut(&std::rc::Rc<Element>) -> UnlaceResult<()>) -> UnlaceResult<()>;
     /// `arithhelpers::helper_abi`.
     arithhelpers_helper_abi: fn(&dyn Fn(&[u8]) -> bool, i32, bool) -> Option<HelperAbi>;
     /// `lanefuse::mask_builtins`.
@@ -600,11 +600,11 @@ declare_hooks! {
     customreturn_input_assignment: for<'a> fn(
         &'a PrototypePieces,
         &dyn TypeFactory,
-    ) -> KunaResult<std::borrow::Cow<'a, PrototypePieces>>;
+    ) -> UnlaceResult<std::borrow::Cow<'a, PrototypePieces>>;
     /// `arrayextent::settle`.
     arrayextent_settle: fn(&mut MapState, &Rc<AddrSpace>, &dyn TypeFactory);
     /// `goreg::g_pointer_type`.
-    goreg_g_pointer_type: fn(&dyn TypeFactory, GoLayout) -> KunaResult<std::rc::Rc<Datatype>>;
+    goreg_g_pointer_type: fn(&dyn TypeFactory, GoLayout) -> UnlaceResult<std::rc::Rc<Datatype>>;
     /// `narrowext::or_model`.
     narrowext_or_model: fn(Option<Widen>, &ParamListStandard, &Address, i32, Option<&Datatype>, &mut VarnodeData) -> (OpCode, bool);
     /// `passthrough::anchors_neutral_run`.
@@ -616,7 +616,7 @@ declare_hooks! {
     /// `registerslots::assumed`.
     registerslots_assumed: fn(&[ParamEntry], &Address, i32, &mut VarnodeData) -> Option<OpCode>;
     /// `registerslots::decode`.
-    registerslots_decode: fn(&Element, Option<VarnodeData>, i32, i32, u32) -> KunaResult<Option<Extension>>;
+    registerslots_decode: fn(&Element, Option<VarnodeData>, i32, i32, u32) -> UnlaceResult<Option<Extension>>;
     /// `varargretreg::image_vararg_floats`.
     varargretreg_image_vararg_floats: fn(&Architecture) -> VarargFloats;
     /// `varargsave::regs`.
@@ -640,16 +640,16 @@ declare_hooks! {
     /// The universal action tree for the architecture: its stack space and embedder hooks
     /// (`universalaction::build_universal_action_hooked`).
     universal_action: fn(&Architecture) -> Box<dyn Action>;
-    /// `constselectjump::kuna_destination_is_local`.
+    /// `constselectjump::unlace_destination_is_local`.
     constselectjump_destination_is_local: fn(uintb, uintb) -> bool;
     /// `constselectjump::JumpModelConstSelect::from_flow_targets`.
     constselectjump_from_flow_targets: fn(Vec<uintb>, Option<uintb>) -> Box<dyn JumpModel>;
     /// `constselectjump::recover`.
-    constselectjump_recover: fn(&JumpTable, &mut Funcdata, OpId, uint4, uint4) -> KunaResult<Option<Box<dyn JumpModel>>>;
+    constselectjump_recover: fn(&JumpTable, &mut Funcdata, OpId, uint4, uint4) -> UnlaceResult<Option<Box<dyn JumpModel>>>;
     /// `rawswitch::recover`.
-    rawswitch_recover: fn(&JumpTable, &mut Funcdata, OpId, uint4, uint4) -> KunaResult<Option<Box<dyn JumpModel>>>;
+    rawswitch_recover: fn(&JumpTable, &mut Funcdata, OpId, uint4, uint4) -> UnlaceResult<Option<Box<dyn JumpModel>>>;
     /// `jumpassist::recover`.
-    jumpassist_recover: fn(&mut Funcdata, OpId, uint4, uint4) -> KunaResult<Option<Box<dyn JumpModel>>>;
+    jumpassist_recover: fn(&mut Funcdata, OpId, uint4, uint4) -> UnlaceResult<Option<Box<dyn JumpModel>>>;
     /// `indexaliasguard::stores_into`.
     indexaliasguard_stores_into: fn(&Funcdata, &Rc<AddrSpace>, &dyn Fn(&Funcdata, VarnodeId) -> Option<Rc<AddrSpace>>) -> Vec<OpId>;
     /// `narrowext::rules`.
@@ -676,6 +676,6 @@ declare_hooks! {
     globalorder_copy_moves_write: fn(&Funcdata, crate::context::HighVariableId, crate::context::HighVariableId) -> bool;
     /// `guardedreadtrim::guarded_block`.
     guardedreadtrim_guarded_block: fn(&Funcdata, VarnodeId, &[OpId]) -> Option<BlockId>;
-    /// `kuna_option_dispatch`: validate and apply a named kuna option.
-    set_kuna_option: fn(&mut Architecture, &str, &str) -> KunaResult<String>;
+    /// `unlace_option_dispatch`: validate and apply a named unlace option.
+    set_unlace_option: fn(&mut Architecture, &str, &str) -> UnlaceResult<String>;
 }

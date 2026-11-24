@@ -1,4 +1,4 @@
-//! (kuna) A value a function returns in a floating-point register is a float (P5).
+//! (unlace) A value a function returns in a floating-point register is a float (P5).
 //!
 //! A calling convention that reserves registers for floating point (`xmm0` on
 //! x86-64, `s0`/`d0` on hard-float ARM and AArch64, `ST0` on i386) makes the
@@ -1065,9 +1065,9 @@ fn call_returns_a_float(data: &Funcdata, op: crate::context::OpId) -> bool {
     else {
         return false;
     };
-    match data.kuna_callret_stated(k) {
+    match data.unlace_callret_stated(k) {
         Some(stated) => float(&stated.ct),
-        None => data.kuna_callee_returns(k) == Some(crate::voidret::Returns::Float),
+        None => data.unlace_callee_returns(k) == Some(crate::voidret::Returns::Float),
     }
 }
 
@@ -1139,7 +1139,7 @@ pub fn float_class(data: &Funcdata, list: Option<&ParamListStandard>, node: &Var
     let Some(space) = node.get_addr().get_space() else {
         return false;
     };
-    !data.kuna_float_pair_half((space.get_index(), node.get_offset()))
+    !data.unlace_float_pair_half((space.get_index(), node.get_offset()))
         && !pair_used_whole(data, node.get_addr(), node.get_size())
 }
 
@@ -1211,7 +1211,7 @@ pub fn note_float_pairs(data: &mut Funcdata) {
             let Some(space) = addr.get_space() else {
                 continue;
             };
-            data.kuna_note_float_pair_half((space.get_index(), addr.get_offset()));
+            data.unlace_note_float_pair_half((space.get_index(), addr.get_offset()));
         }
     }
 }
@@ -1219,7 +1219,7 @@ pub fn note_float_pairs(data: &mut Funcdata) {
 #[doc(hidden)]
 pub fn returned_in_a_float_register(data: &Funcdata, vn: VarnodeId, node: &Varnode) -> bool {
     let proto = data.get_func_proto();
-    if !proto.has_model() || proto.is_output_locked() || data.kuna_float_return_withdrawn() {
+    if !proto.has_model() || proto.is_output_locked() || data.unlace_float_return_withdrawn() {
         return false;
     }
     let returned = node.descend_iter().any(|r| {

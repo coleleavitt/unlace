@@ -1,4 +1,4 @@
-//! (kuna `narrowret`) A call reads the narrow value its callee returns.
+//! (unlace `narrowret`) A call reads the narrow value its callee returns.
 //!
 //! A function that returns a `uint8_t`, a `uint16_t` or a `bool` hands it back
 //! in a whole register, and a caller that relies on the callee having
@@ -31,7 +31,7 @@ use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_class, type_metatype};
 use crate::fspec::FuncCallSpecs;
 use crate::funcdata::Funcdata;
-use crate::op::pcodeop_addlflags::kuna_narrowret;
+use crate::op::pcodeop_addlflags::unlace_narrowret;
 
 /// The narrow value a callee returns zero-extended: its storage and width.
 #[derive(Debug, Clone)]
@@ -55,7 +55,7 @@ impl NarrowReturn {
     }
 }
 
-/// The run's statements, keyed like `Architecture::kuna_callret_types`.
+/// The run's statements, keyed like `Architecture::unlace_callret_types`.
 pub type NarrowReturns = HashMap<(int4, uintb), Rc<NarrowReturn>>;
 
 /// What a caller computed with (`used`) and read (`read`) of a call output
@@ -98,7 +98,7 @@ fn return_register_width(data: &Funcdata) -> Option<int4> {
 pub fn note_trim(data: &mut Funcdata, op: OpId, before: VarnodeId, mask: u64) {
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::narrowret::NarrowRet>()
         .0
     {
@@ -110,16 +110,16 @@ pub fn note_trim(data: &mut Funcdata, op: OpId, before: VarnodeId, mask: u64) {
     if o.code() != OpCode::CPUI_RETURN {
         return;
     }
-    let marked = o.get_addlflags() & kuna_narrowret != 0;
+    let marked = o.get_addlflags() & unlace_narrowret != 0;
     let zero = crate::subflow::drops_only_zero_bits(data, before, mask);
     let whole = data.vbank().get(before).map(|v| v.get_size()) == return_register_width(data);
     let Some(o) = data.obank_mut().get_mut(op) else {
         return;
     };
     if zero && (whole || marked) {
-        o.set_additional_flag(kuna_narrowret);
+        o.set_additional_flag(unlace_narrowret);
     } else {
-        o.clear_additional_flag(kuna_narrowret);
+        o.clear_additional_flag(unlace_narrowret);
     }
 }
 
@@ -162,7 +162,7 @@ fn narrow_return(data: &Funcdata) -> Option<NarrowReturn> {
             return None;
         }
         any = true;
-        if o.get_addlflags() & kuna_narrowret == 0 {
+        if o.get_addlflags() & unlace_narrowret == 0 {
             let inner = tail_statement(data, vn)?;
             tails = true;
             computed = true;
@@ -233,7 +233,7 @@ fn tail_statement(data: &Funcdata, vn: VarnodeId) -> Option<NarrowReturn> {
         .get(call)
         .filter(|c| c.code() == OpCode::CPUI_CALL)?;
     let fc = data.get_call_specs(data.get_call_specs_index(call)?);
-    let stated = data.kuna_narrowret(key(fc.get_entry_address())?)?;
+    let stated = data.unlace_narrowret(key(fc.get_entry_address())?)?;
     (stated.size == v.get_size() && stated.addr == *v.get_addr()).then(|| stated.clone())
 }
 
@@ -241,7 +241,7 @@ fn tail_statement(data: &Funcdata, vn: VarnodeId) -> Option<NarrowReturn> {
 /// the callers decompiled after it.  A statement from an earlier decompile of
 /// the same function is replaced or, when this one states nothing, forgotten.
 pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
-    if !arch.kuna_options.get::<crate::narrowret::NarrowRet>().0 {
+    if !arch.unlace_options.get::<crate::narrowret::NarrowRet>().0 {
         return;
     }
     let Some(k) = key(entry) else { return };
@@ -266,12 +266,12 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
     }
     match stated {
         Some(s) => {
-            arch.kuna_tables
+            arch.unlace_tables
                 .get_mut::<crate::narrowret::NarrowReturns>()
                 .insert(k, Rc::new(s));
         }
         None => {
-            arch.kuna_tables
+            arch.unlace_tables
                 .get_mut::<crate::narrowret::NarrowReturns>()
                 .remove(&k);
         }
@@ -280,7 +280,7 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
 
 /// What the function filed under `k` states it returns, for [`restore`].
 pub fn statement(arch: &Architecture, k: (int4, uintb)) -> Option<Rc<NarrowReturn>> {
-    arch.kuna_tables
+    arch.unlace_tables
         .get::<crate::narrowret::NarrowReturns>()
         .get(&k)
         .cloned()
@@ -310,12 +310,12 @@ pub fn same_statement(a: Option<&NarrowReturn>, b: Option<&NarrowReturn>) -> boo
 pub fn restore(arch: &mut Architecture, k: (int4, uintb), stated: Option<Rc<NarrowReturn>>) {
     match stated {
         Some(s) => {
-            arch.kuna_tables
+            arch.unlace_tables
                 .get_mut::<crate::narrowret::NarrowReturns>()
                 .insert(k, s);
         }
         None => {
-            arch.kuna_tables
+            arch.unlace_tables
                 .get_mut::<crate::narrowret::NarrowReturns>()
                 .remove(&k);
         }
@@ -325,9 +325,9 @@ pub fn restore(arch: &mut Architecture, k: (int4, uintb), stated: Option<Rc<Narr
 /// Copy onto `data` what every callee it calls stated.  A function never reads
 /// its own statement.
 pub fn seed(arch: &Architecture, data: &mut Funcdata) {
-    if !arch.kuna_options.get::<crate::narrowret::NarrowRet>().0
+    if !arch.unlace_options.get::<crate::narrowret::NarrowRet>().0
         || arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::narrowret::NarrowReturns>()
             .is_empty()
     {
@@ -344,11 +344,11 @@ pub fn seed(arch: &Architecture, data: &mut Funcdata) {
             continue;
         }
         if let Some(s) = arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::narrowret::NarrowReturns>()
             .get(&k)
         {
-            data.kuna_set_narrowret(k, Rc::clone(s));
+            data.unlace_set_narrowret(k, Rc::clone(s));
         }
     }
 }
@@ -393,7 +393,7 @@ pub fn narrow_call_output(
 ) {
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::narrowret::NarrowRet>()
         .0
     {
@@ -402,7 +402,7 @@ pub fn narrow_call_output(
     let Some(k) = key(fc.get_entry_address()) else {
         return;
     };
-    let Some(stated) = data.kuna_narrowret(k).cloned() else {
+    let Some(stated) = data.unlace_narrowret(k).cloned() else {
         return;
     };
     let op = fc.get_op();
@@ -430,12 +430,12 @@ pub fn narrow_call_output(
             used: crate::voidret::used_storage(data, out),
             read: data.vbank().get(out).and_then(crate::voidret::read_storage),
         };
-        data.kuna_note_narrowret_read(op, before);
+        data.unlace_note_narrowret_read(op, before);
         data.op_unset_output(op);
         let ext = data.new_op(1, at);
         data.op_set_opcode_code(ext, OpCode::CPUI_INT_ZEXT);
         if let Some(e) = data.obank_mut().get_mut(ext) {
-            e.set_additional_flag(kuna_narrowret);
+            e.set_additional_flag(unlace_narrowret);
         }
         if data.op_set_output(ext, out).is_err() {
             let _ = data.op_destroy_raw(ext);
@@ -488,7 +488,7 @@ pub fn stated_type(
 ) -> Option<Rc<Datatype>> {
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::narrowret::NarrowRet>()
         .0
         || size != 1
@@ -501,7 +501,7 @@ pub fn stated_type(
         .filter(|o| o.code() == OpCode::CPUI_CALL)?
         .get_out()?;
     let k = key(fc.get_entry_address())?;
-    let stated = data.kuna_narrowret(k)?;
+    let stated = data.unlace_narrowret(k)?;
     if stated.size != size || !holds_low_part(data, out, stated) {
         return None;
     }
@@ -517,7 +517,7 @@ pub fn stated_type(
 pub fn states_truth(data: &Funcdata, op: OpId) -> bool {
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::narrowret::NarrowRet>()
         .0
     {
@@ -532,7 +532,7 @@ pub fn states_truth(data: &Funcdata, op: OpId) -> bool {
         return false;
     };
     callee_key(data, op)
-        .and_then(|k| data.kuna_narrowret(k))
+        .and_then(|k| data.unlace_narrowret(k))
         .is_some_and(|s| s.truth() && s.size == out.get_size() && s.addr == *out.get_addr())
 }
 
@@ -563,7 +563,7 @@ fn sole_value(
 ) -> bool {
     let same_callee = |op: OpId| -> bool {
         callee(op)
-            .and_then(|k| data.kuna_narrowret(k))
+            .and_then(|k| data.unlace_narrowret(k))
             .is_some_and(|s| same_statement(Some(s), Some(stated)))
     };
     let mut work = vec![out];
@@ -611,7 +611,7 @@ fn sole_value(
                 }
             }
             OpCode::CPUI_INDIRECT => work.extend(d.get_in(0)),
-            OpCode::CPUI_INT_ZEXT if d.get_addlflags() & kuna_narrowret != 0 => {
+            OpCode::CPUI_INT_ZEXT if d.get_addlflags() & unlace_narrowret != 0 => {
                 work.extend(d.get_in(0))
             }
             other => {
@@ -633,7 +633,7 @@ fn sole_value(
                 OpCode::CPUI_COPY | OpCode::CPUI_MULTIEQUAL | OpCode::CPUI_INDIRECT => {
                     work.extend(o.get_out())
                 }
-                OpCode::CPUI_INT_ZEXT if o.get_addlflags() & kuna_narrowret != 0 => {
+                OpCode::CPUI_INT_ZEXT if o.get_addlflags() & unlace_narrowret != 0 => {
                     work.extend(o.get_out())
                 }
                 OpCode::CPUI_RETURN => returned = true,
@@ -684,7 +684,7 @@ fn sole_tail(
         p.is_some_and(|c| {
             c == op
                 || callee(c)
-                    .and_then(|k| data.kuna_narrowret(k))
+                    .and_then(|k| data.unlace_narrowret(k))
                     .is_some_and(|s| same_statement(Some(s), Some(stated)))
         })
     })
@@ -706,7 +706,7 @@ pub fn widened_read(data: &Funcdata, out: VarnodeId) -> VarnodeId {
                 continue;
             };
             match o.code() {
-                OpCode::CPUI_INT_ZEXT if o.get_addlflags() & kuna_narrowret != 0 => {
+                OpCode::CPUI_INT_ZEXT if o.get_addlflags() & unlace_narrowret != 0 => {
                     if let Some(wide) = o.get_out() {
                         return wide;
                     }
@@ -728,15 +728,15 @@ fn trace() -> bool {
     unlace_base::env::var("UNLACE_NARROWRET_TRACE").is_ok_and(|v| v != "0" && !v.is_empty())
 }
 
-/// (kuna) Make a call to a callee that returns a narrow value zero-extended
+/// (unlace) Make a call to a callee that returns a narrow value zero-extended
 /// read that value (option `narrowret`).  See
-/// [`crate::kuna_narrowret`].
+/// [`crate::unlace_narrowret`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct NarrowRet(pub bool);
 
-impl crate::optionset::KunaOption for NarrowRet {
+impl crate::optionset::UnlaceOption for NarrowRet {
     const NAME: &'static str = "narrowret";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         NarrowRet(true)
@@ -746,90 +746,90 @@ impl crate::optionset::KunaOption for NarrowRet {
         NarrowRet(true)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (v, msg) = crate::options::on_or_off(value)
             .map(|v| (v, format!("Narrow call result recovery turned {value}")))?;
         Ok((NarrowRet(v), msg))
     }
 }
 
-/// (kuna `narrowret`) The narrow value each callee this function calls returns zero-extended,
+/// (unlace `narrowret`) The narrow value each callee this function calls returns zero-extended,
 /// copied off the `Architecture`; kept across `Funcdata::clear`.
 #[derive(Default)]
 struct ReturnsSlot(crate::narrowret::NarrowReturns);
-crate::kuna_func_state!(ReturnsSlot, keep_across_clear: true);
+crate::unlace_func_state!(ReturnsSlot, keep_across_clear: true);
 
-/// (kuna `narrowret`) What this function computed with, and read, of each call output
+/// (unlace `narrowret`) What this function computed with, and read, of each call output
 /// `narrowret` narrowed, before it narrowed it; reset by `Funcdata::clear`.
 #[derive(Default)]
 struct ReadsSlot(std::collections::HashMap<crate::context::OpId, crate::narrowret::ReadBefore>);
-crate::kuna_func_state!(ReadsSlot, keep_across_clear: false);
+crate::unlace_func_state!(ReadsSlot, keep_across_clear: false);
 
-/// The `kuna_narrowret` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// The `unlace_narrowret` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataNarrowretExt {
-    /// (kuna `narrowret`) Record the narrow value the callee filed under `key` returns.
-    fn kuna_set_narrowret(
+    /// (unlace `narrowret`) Record the narrow value the callee filed under `key` returns.
+    fn unlace_set_narrowret(
         &mut self,
         key: (unlace_base::types::int4, unlace_base::types::uintb),
         stated: std::rc::Rc<crate::narrowret::NarrowReturn>,
     );
-    /// (kuna `narrowret`) The narrow value the callee filed under `key` returns.
-    fn kuna_narrowret(
+    /// (unlace `narrowret`) The narrow value the callee filed under `key` returns.
+    fn unlace_narrowret(
         &self,
         key: (unlace_base::types::int4, unlace_base::types::uintb),
     ) -> Option<&crate::narrowret::NarrowReturn>;
-    /// (kuna `narrowret`) Note what this function read of the output of the
+    /// (unlace `narrowret`) Note what this function read of the output of the
     /// CALL `op` before `narrowret` narrowed it.
-    fn kuna_note_narrowret_read(
+    fn unlace_note_narrowret_read(
         &mut self,
         op: crate::context::OpId,
         before: crate::narrowret::ReadBefore,
     );
-    /// (kuna `narrowret`) What this function read of the output of the CALL
+    /// (unlace `narrowret`) What this function read of the output of the CALL
     /// `op` before `narrowret` narrowed it, if it did.
-    fn kuna_narrowret_read(
+    fn unlace_narrowret_read(
         &self,
         op: crate::context::OpId,
     ) -> Option<&crate::narrowret::ReadBefore>;
 }
 
 impl FuncdataNarrowretExt for crate::funcdata::Funcdata {
-    /// (kuna `narrowret`) Record the narrow value the callee filed under `key` returns.
-    fn kuna_set_narrowret(
+    /// (unlace `narrowret`) Record the narrow value the callee filed under `key` returns.
+    fn unlace_set_narrowret(
         &mut self,
         key: (unlace_base::types::int4, unlace_base::types::uintb),
         stated: std::rc::Rc<crate::narrowret::NarrowReturn>,
     ) {
-        self.kuna_state_mut::<ReturnsSlot>().0.insert(key, stated);
+        self.unlace_state_mut::<ReturnsSlot>().0.insert(key, stated);
     }
-    /// (kuna `narrowret`) The narrow value the callee filed under `key` returns.
-    fn kuna_narrowret(
+    /// (unlace `narrowret`) The narrow value the callee filed under `key` returns.
+    fn unlace_narrowret(
         &self,
         key: (unlace_base::types::int4, unlace_base::types::uintb),
     ) -> Option<&crate::narrowret::NarrowReturn> {
-        self.kuna_state::<ReturnsSlot>()
+        self.unlace_state::<ReturnsSlot>()
             .0
             .get(&key)
             .map(|r| r.as_ref())
     }
-    /// (kuna `narrowret`) Note what this function read of the output of the
+    /// (unlace `narrowret`) Note what this function read of the output of the
     /// CALL `op` before `narrowret` narrowed it.
-    fn kuna_note_narrowret_read(
+    fn unlace_note_narrowret_read(
         &mut self,
         op: crate::context::OpId,
         before: crate::narrowret::ReadBefore,
     ) {
-        self.kuna_state_mut::<ReadsSlot>().0.insert(op, before);
+        self.unlace_state_mut::<ReadsSlot>().0.insert(op, before);
     }
-    /// (kuna `narrowret`) What this function read of the output of the CALL
+    /// (unlace `narrowret`) What this function read of the output of the CALL
     /// `op` before `narrowret` narrowed it, if it did.
-    fn kuna_narrowret_read(
+    fn unlace_narrowret_read(
         &self,
         op: crate::context::OpId,
     ) -> Option<&crate::narrowret::ReadBefore> {
-        self.kuna_state::<ReadsSlot>().0.get(&op)
+        self.unlace_state::<ReadsSlot>().0.get(&op)
     }
 }
 
-crate::kuna_arch_table!(NarrowReturns);
+crate::unlace_arch_table!(NarrowReturns);

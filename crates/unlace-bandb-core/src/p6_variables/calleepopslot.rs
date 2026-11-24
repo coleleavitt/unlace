@@ -1,4 +1,4 @@
-//! (kuna) The callee-pop guess for an unknown extrapop, read off the caller's
+//! (unlace) The callee-pop guess for an unknown extrapop, read off the caller's
 //! push run and kept right when a stack slot is pushed in front of one call
 //! and popped by a later one.
 //!

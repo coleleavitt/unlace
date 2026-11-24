@@ -1,4 +1,4 @@
-//! (kuna `globalref`) Unit tests for the decision's pure parts over hand-built
+//! (unlace `globalref`) Unit tests for the decision's pure parts over hand-built
 //! `Datatype`s: the range lookup, the per-address type merge, and which direct
 //! accesses the declared object may share its storage with.
 
@@ -70,7 +70,7 @@ fn two_types_at_one_address_name_nothing() {
     );
 }
 
-/// (kuna `elemptr`) An unknown word and the unsigned word of its size are one
+/// (unlace `elemptr`) An unknown word and the unsigned word of its size are one
 /// object, and the unsigned one names it; a byte, a signed word, or the same
 /// pair without the option are two types.
 #[test]

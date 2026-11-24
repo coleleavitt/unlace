@@ -28,7 +28,7 @@
 use std::collections::BTreeMap;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::{ATTRIB_CONTENT, ATTRIB_TYPE, Decoder, ElementId, Encoder, IdRegistry};
 use unlace_base::types::{int4, uint4};
 
@@ -169,7 +169,7 @@ impl Comment {
     /// The single comment is encoded as a `<comment>` element.  The two address
     /// children are written exactly as the C++ does (open `<addr>`, write the
     /// space's attributes, close) — `Address::encode` is the same sequence.
-    pub fn encode(&self, encoder: &mut dyn Encoder) -> KunaResult<()> {
+    pub fn encode(&self, encoder: &mut dyn Encoder) -> UnlaceResult<()> {
         let tpname = Comment::decode_comment_type(self.type_)?;
         encoder.open_element(&ELEM_COMMENT);
         encoder.write_string(&ATTRIB_TYPE, tpname.as_bytes());
@@ -184,7 +184,7 @@ impl Comment {
 
     /// Decode a `<comment>` element from the given stream decoder
     /// (C++ `Comment::decode`).
-    pub fn decode(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    pub fn decode(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         self.emitted = false;
         self.type_ = 0;
         let elem_id = decoder.open_element_id(&ELEM_COMMENT)?;
@@ -204,7 +204,7 @@ impl Comment {
 
     /// Convert a name string to a single comment property
     /// (C++ `Comment::encodeCommentType`).
-    pub fn encode_comment_type(name: &[u8]) -> KunaResult<uint4> {
+    pub fn encode_comment_type(name: &[u8]) -> UnlaceResult<uint4> {
         if name == b"user1" {
             return Ok(comment_type::USER1);
         }
@@ -223,7 +223,7 @@ impl Comment {
         if name == b"warningheader" {
             return Ok(comment_type::WARNINGHEADER);
         }
-        Err(KunaError::lowlevel(format!(
+        Err(UnlaceError::lowlevel(format!(
             "Unknown comment type: {}",
             String::from_utf8_lossy(name)
         )))
@@ -231,7 +231,7 @@ impl Comment {
 
     /// Convert a single comment property to its string representation
     /// (C++ `Comment::decodeCommentType`).
-    pub fn decode_comment_type(val: uint4) -> KunaResult<&'static str> {
+    pub fn decode_comment_type(val: uint4) -> UnlaceResult<&'static str> {
         match val {
             comment_type::USER1 => Ok("user1"),
             comment_type::USER2 => Ok("user2"),
@@ -239,7 +239,7 @@ impl Comment {
             comment_type::HEADER => Ok("header"),
             comment_type::WARNING => Ok("warning"),
             comment_type::WARNINGHEADER => Ok("warningheader"),
-            _ => Err(KunaError::lowlevel("Unknown comment type")),
+            _ => Err(UnlaceError::lowlevel("Unknown comment type")),
         }
     }
 }
@@ -317,10 +317,10 @@ pub trait CommentDatabase {
     fn comments_for<'a>(&'a self, fad: &Address) -> Box<dyn Iterator<Item = &'a Comment> + 'a>;
 
     /// Encode all comments in the container to a stream (C++ `encode`).
-    fn encode(&self, encoder: &mut dyn Encoder) -> KunaResult<()>;
+    fn encode(&self, encoder: &mut dyn Encoder) -> UnlaceResult<()>;
 
     /// Decode all comments from a `<commentdb>` element (C++ `decode`).
-    fn decode(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()>;
+    fn decode(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()>;
 }
 
 /// \brief An in-memory implementation of the [`CommentDatabase`] API
@@ -443,7 +443,7 @@ impl CommentDatabase for CommentDatabaseInternal {
         Box::new(self.commentset.range(beg..end).map(|(_, c)| c))
     }
 
-    fn encode(&self, encoder: &mut dyn Encoder) -> KunaResult<()> {
+    fn encode(&self, encoder: &mut dyn Encoder) -> UnlaceResult<()> {
         encoder.open_element(&ELEM_COMMENTDB);
         for comm in self.commentset.values() {
             comm.encode(encoder)?;
@@ -452,7 +452,7 @@ impl CommentDatabase for CommentDatabaseInternal {
         Ok(())
     }
 
-    fn decode(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    fn decode(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         let elem_id = decoder.open_element_id(&ELEM_COMMENTDB)?;
         while decoder.peek_element()? != 0 {
             let mut com = Comment::empty();
@@ -563,7 +563,7 @@ pub trait SorterFuncdata {
     /// `op->getParent()->getIndex()`, `op->getSeqNum().getOrder()`,
     /// `block->contains(addr)`).  A dead op (no parent) is the C++
     /// `LowlevelError("Dead op reaching CommentSorter")` and surfaces as `Err`.
-    fn op_block_info(&self, cursor: &OpCursor, addr: &Address) -> KunaResult<OpBlockInfo>;
+    fn op_block_info(&self, cursor: &OpCursor, addr: &Address) -> UnlaceResult<OpBlockInfo>;
 
     /// The address of the op at the given cursor (C++ `op->getAddr()`).
     fn op_addr(&self, cursor: &OpCursor) -> Address;
@@ -656,7 +656,7 @@ impl CommentSorter {
         subsort: &mut Subsort,
         comm: &Comment,
         fd: &dyn SorterFuncdata,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         if comm.get_type() == 0 {
             return Ok(false);
         }
@@ -727,7 +727,7 @@ impl CommentSorter {
         fd: &dyn SorterFuncdata,
         db: &dyn CommentDatabase,
         display_unplaced: bool,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         self.commmap.clear();
         self.display_unplaced_comments = display_unplaced;
         if tp == 0 {

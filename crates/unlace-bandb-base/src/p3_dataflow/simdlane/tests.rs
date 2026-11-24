@@ -1,4 +1,4 @@
-//! Tests for `RuleSimdShuffleLane` (kuna `simdlane`): the
+//! Tests for `RuleSimdShuffleLane` (unlace `simdlane`): the
 //! `SUBPIECE(pshufb(src,<const mask>),k)` -> `SUBPIECE(src,mask[k])` rewrite, the
 //! lane-selection table it rests on, and every clause that declines it.
 
@@ -110,7 +110,7 @@ fn unk(size: int4) -> Rc<Datatype> {
 }
 
 fn no_replace()
--> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> unlace_base::error::KunaResult<()> {
+-> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> unlace_base::error::UnlaceResult<()> {
     |_: &mut VarnodeBank, _: VarnodeId, _: VarnodeId| Ok(())
 }
 

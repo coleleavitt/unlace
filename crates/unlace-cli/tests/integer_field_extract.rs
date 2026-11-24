@@ -61,9 +61,9 @@ fn complete_integer_field_callers_match_source_values_and_call_counts() {
             .copied()
             .filter(|name| language != "rust" || !RUST_UNCHANGED_GAPS.contains(name))
             .collect();
-        let kuna = unlace_base::env::var_os("UNLACE_TEST_BIN")
+        let unlace = unlace_base::env::var_os("UNLACE_TEST_BIN")
             .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
-        let output = process::required_output(Command::new(kuna).args([
+        let output = process::required_output(Command::new(unlace).args([
             "decompile-all",
             &common::fixture("integer_field_extract_x86_64"),
             "--json",

@@ -1,4 +1,4 @@
-//! (kuna) Follow an AArch64 jump table in the Listing walk, so the case bodies
+//! (unlace) Follow an AArch64 jump table in the Listing walk, so the case bodies
 //! of a switch belong to the function that dispatches to them.
 //!
 //! clang and gcc lower an AArch64 switch to a compact table of byte, halfword
@@ -80,7 +80,7 @@ impl<'a> A64Tables<'a> {
             entries,
             tables: FunctionTables::new(pool),
             extent: arch
-                .kuna_options
+                .unlace_options
                 .get::<unlace_decomp::jumptable::SwitchExtent>()
                 .0,
         }

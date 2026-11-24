@@ -9,7 +9,7 @@ mod module_scope {
     pub(super) use crate::funcdata::Funcdata;
     pub(super) use smallvec::SmallVec;
     pub(super) use unlace_base::address::SeqNum;
-    pub(super) use unlace_base::error::{KunaError, KunaResult};
+    pub(super) use unlace_base::error::{UnlaceError, UnlaceResult};
     pub(super) use unlace_base::types::{int4, uint4};
     pub(super) use unlace_num::opcodes::OpCode;
 }
@@ -953,7 +953,7 @@ fn repeatapply_deadline_bounds_nonconverging_action() {
     assert!(total <= 2);
 }
 
-/// (kuna `deadwaves`) A dead chain dies one link per pass and leaves the
+/// (unlace `deadwaves`) A dead chain dies one link per pass and leaves the
 /// other ops; after the first pass the waves offer the other rules only the
 /// chain's next link instead of every op, and a far-walking rule every op of
 /// its opcode, as a sweep does.
@@ -966,7 +966,7 @@ fn dead_waves_remove_the_chain_and_visit_only_its_links() {
     assert!(waved_far >= 40 * 40, "{waved_far}");
 }
 
-/// (kuna `copywaves`) A join whose inputs are copies takes one copy
+/// (unlace `copywaves`) A join whose inputs are copies takes one copy
 /// propagation per pass; the passes after the first are waves over the join's
 /// neighbourhood, and the ops a wave reaches only for their opcode get just
 /// the far-walking rule.
@@ -980,7 +980,7 @@ fn copy_waves_propagate_the_join_and_visit_only_its_neighbourhood() {
     assert!(waved_far >= 30, "{waved_far}");
 }
 
-/// (kuna `copywaves`) A propagation that leaves its COPY alive hands the
+/// (unlace `copywaves`) A propagation that leaves its COPY alive hands the
 /// COPY's input a new reader; the wave offers that input's definition, so a
 /// rule testing the definition's readers fires before the pool converges, as
 /// it would under a sweep.

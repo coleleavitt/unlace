@@ -322,7 +322,7 @@ fn real_kernelcache_tables() {
     );
 }
 
-/// (kuna `iokitclasses on`) `iokitcxx_kext.macho`: Derived's vtable is typed with
+/// (unlace `iokitclasses on`) `iokitcxx_kext.macho`: Derived's vtable is typed with
 /// slots named from the inherited method names, sized to its registration,
 /// and every vtable member and the constructor take their class's `this`.
 #[test]

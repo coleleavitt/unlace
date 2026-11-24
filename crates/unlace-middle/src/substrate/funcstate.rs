@@ -1,10 +1,10 @@
-//! Typed per-function state: each kuna pass keeps its side tables in a type it owns.
+//! Typed per-function state: each unlace pass keeps its side tables in a type it owns.
 //!
 //! A [`FuncStates`] holds one value per [`FuncState`] type, indexed by a dense [`StateId`] the
 //! type takes the first time it is used, the per-function counterpart of
 //! [`OptionSet`](crate::optionset::OptionSet). [`Funcdata`](crate::funcdata::Funcdata) owns
 //! one, so it never names a pass's type: a pass reads its table with
-//! `data.kuna_state::<S>()` and writes it with `data.kuna_state_mut::<S>()`. A slot is created
+//! `data.unlace_state::<S>()` and writes it with `data.unlace_state_mut::<S>()`. A slot is created
 //! with [`Default`] on first use. `Funcdata::clear` drops every slot whose
 //! [`FuncState::KEEP_ACROSS_CLEAR`] is false, so the next read starts from the default again.
 
@@ -20,7 +20,7 @@ pub const MAX_STATES: usize = 256;
 pub struct StateId(usize);
 
 impl StateId {
-    /// Take the next free index. Called once per state type, from [`kuna_func_state!`].
+    /// Take the next free index. Called once per state type, from [`unlace_func_state!`].
     pub fn next() -> StateId {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
         let id = NEXT.fetch_add(1, Ordering::Relaxed);
@@ -37,13 +37,13 @@ pub trait FuncState: Any + Default {
     /// Does the value survive `Funcdata::clear` (a restart)?
     const KEEP_ACROSS_CLEAR: bool;
 
-    /// This type's index; implement it with [`kuna_func_state!`].
+    /// This type's index; implement it with [`unlace_func_state!`].
     fn id() -> StateId;
 }
 
 /// Implement [`FuncState`] for a type, saying whether it survives `Funcdata::clear`.
 #[macro_export]
-macro_rules! kuna_func_state {
+macro_rules! unlace_func_state {
     ($ty:ty, keep_across_clear: $keep:expr) => {
         impl $crate::funcstate::FuncState for $ty {
             const KEEP_ACROSS_CLEAR: bool = $keep;

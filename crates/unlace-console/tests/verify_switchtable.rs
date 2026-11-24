@@ -612,7 +612,7 @@ fn a_dispatch_beyond_the_linear_slice_reaches_exactly_its_cases() {
 }
 
 /// The GH-1824 symptom: a function called only from such a case body has its
-/// dispatcher as caller, and `kuna xrefs --to` it no longer answers nothing.
+/// dispatcher as caller, and `unlace xrefs --to` it no longer answers nothing.
 #[test]
 fn a_callee_behind_a_hoisted_base_or_far_guard_has_its_dispatcher_as_caller() {
     let mut wrong = Vec::new();

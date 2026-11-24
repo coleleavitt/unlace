@@ -1,4 +1,4 @@
-//! (kuna `iokitclasses on`) The recovered IOKit classes as C++ types.
+//! (unlace `iokitclasses on`) The recovered IOKit classes as C++ types.
 //!
 //! Each class with a vtable becomes a [`VtableClass`] the typed-vtable commit
 //! installs ([`unlace_decomp::vtabletypes`]): the class structure `C`

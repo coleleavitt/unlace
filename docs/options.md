@@ -899,6 +899,9 @@ Three tiers:
 | a stripped static binary lists libc functions as sub_<addr> | [`flirt`](#flirt----on--off-default-off) |
 | unlace cannot use flirt .sig signatures | [`flirt`](#flirt----on--off-default-off) |
 | memcpy and printf in a static binary have no names | [`flirt`](#flirt----on--off-default-off) |
+| a FLIRT-named library function has no prototype although its type library exists | [`flirttil`](#flirttil----on--off-default-off) |
+| a libc function named through FLIRT prints untyped arguments and raw record offsets | [`flirttil`](#flirttil----on--off-default-off) |
+| an ids file beside a signature names a type library that never loads | [`flirttil`](#flirttil----on--off-default-off) |
 | a stripped rust binary lists core and std functions as sub_<addr> | [`ruststdsigs`](#ruststdsigs----off--exact--nearest-default-off) |
 | rust panic and allocation helpers have no names in a stripped binary | [`ruststdsigs`](#ruststdsigs----off--exact--nearest-default-off) |
 | msvc c++ class names missing and vftables left as unnamed data | [`rtti`](#rtti----on--off-default-on) |
@@ -3475,6 +3478,14 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **When to flip:** Off (default). Flip on with listing on and UNLACE_FLIRT_SIGS pointing at .sig files (for example IDA's sig/pc/glibc_amd64.sig for a static x86-64 glibc binary) when a stripped statically linked binary shows hundreds of sub_ functions that are library code.
 - **Where / provenance:** P1/external-refinement · unlace · analysis-enablement · unlace-flirt
 - **Example:** `UNLACE_FLIRT_SIGS=$IDADIR/sig/pc/glibc_amd64.sig unlace functions ./static-stripped --option listing on --option flirt on`
+
+### `flirttil` -- on | off, default `off`
+
+- **Symptoms:** a FLIRT-named library function has no prototype although its type library exists; a libc function named through FLIRT prints untyped arguments and raw record offsets; an ids file beside a signature names a type library that never loads.
+- **What it does:** Autoload the IDA type library that FLIRT signatures name in the ids and idsnames files beside them: a line <signature> <library> loads <library>.til when <signature>.sig applies (IDA's autoloads lines). The library is read beside the signature, else from UNLACE_TIL_DIR, as one more source of the typelib option: it is read under typelib auto or a file list, not under typelib off, and after the libraries the option chose, so the first library that declares a name still wins. Needs flirt on and UNLACE_FLIRT_SIGS. Inert when no ids file beside an applicable signature names a library.
+- **When to flip:** Off (default). Flip on with flirt on and UNLACE_FLIRT_SIGS pointing at an IDA sig directory whose ids file names type libraries, and with those libraries beside the signatures or in UNLACE_TIL_DIR, when a FLIRT-named library function still shows untyped arguments or raw record offsets.
+- **Where / provenance:** P1/external-refinement · unlace · analysis-enablement · unlace-flirt-autoload-til
+- **Example:** `UNLACE_FLIRT_SIGS=$IDADIR/sig/pc UNLACE_TIL_DIR=$IDADIR/til unlace functions ./static-stripped --option listing on --option flirt on --option flirttil on`
 
 ### `ruststdsigs` -- off | exact | nearest, default `off`
 

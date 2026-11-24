@@ -1370,6 +1370,10 @@ pub struct TypeLibFacts {
     /// directory, the first that exists being read
     /// (`analyzers::protos::typelib::til_slots`).
     pub til_slots: Vec<Vec<String>>,
+    /// (unlace `flirttil`) The type libraries the applicable FLIRT signatures
+    /// autoload, each with the `.sig` that names it. Read only when `flirt` and
+    /// `flirttil` are on (`analyzers::flirt::autoloaded_tils`).
+    pub flirt_tils: Vec<(std::path::PathBuf, String)>,
 }
 
 /// (unlace `formatstring static`) One printf/scanf-family call site whose format

@@ -9650,6 +9650,10 @@ both
   names are IDA scripts, not functions) and one whose header file-type mask
   excludes the binary's format are never loaded, so pointing the variable at all
   of a `sig/` tree loads only the libraries that can apply.
+  With `flirttil on` (default off) the type libraries that the `ids` and `idsnames` files
+  beside the applicable signatures name are read as sources of the `typelib` option: a line
+  `<signature> <library>` autoloads `<library>.til`, from beside the `.sig` or from
+  `UNLACE_TIL_DIR` (`analyzers/flirt/autotil.rs`). Nothing is read under `typelib off`.
   At every discovered entry the byte trie is walked over the first `pattern_len`
   bytes; a module matches when the byte-swapped CRC-16/X.25 of the `crc_len` bytes
   after the prefix, its tail bytes and its expected instruction bits agree. An

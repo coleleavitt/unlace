@@ -472,6 +472,9 @@ unlace_options! { self, p1;
     "unwindstarts" => {
         registered!(crate::analysisgates::Unwindstarts)
     },
+    "flirttil" => {
+        registered!(crate::analysisgates::FlirtTil)
+    },
     "aggressivethunks" => {
         registered!(crate::analysisgates::AggressiveThunks)
     },

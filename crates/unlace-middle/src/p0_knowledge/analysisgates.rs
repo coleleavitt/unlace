@@ -202,6 +202,19 @@ crate::unlace_flag!(
 );
 
 crate::unlace_flag!(
+    /// (unlace `flirttil`) Autoload the IDA type library a FLIRT signature names in
+    /// its `ids` or `idsnames` file (`<signature> <library>` loads `<library>.til`,
+    /// IDA's "%s.sig autoloads %s.til"), read as one more source of the `typelib`
+    /// option; default **off** (output-changing: the library's prototypes and
+    /// records declare the imports and the functions FLIRT names).
+    FlirtTil,
+    "flirttil",
+    "FLIRT signature autoload of a type library",
+    unset: false,
+    shipped: false
+);
+
+crate::unlace_flag!(
     /// (unlace `thunkentry`) Widen the jump-thunk promotion from the jumps that open a
     /// function entry to every decoded direct jump (IDA's
     /// `aggressively_convert_jumps_to_thunks`); default **off** (output-changing: adds

@@ -14,8 +14,6 @@ mod huc6280;
 mod javacard_raw;
 #[path = "konami.rs"]
 mod konami;
-#[path = "v8ignition_raw.rs"]
-mod v8ignition_raw;
 #[path = "lua54.rs"]
 mod lua54;
 #[path = "m6800_family.rs"]
@@ -26,7 +24,8 @@ mod mep;
 mod mips_ase;
 #[path = "mips_elf_selection.rs"]
 mod mips_elf_selection;
-
+#[path = "v8ignition_raw.rs"]
+mod v8ignition_raw;
 
 #[path = "aarch64_rme.rs"]
 mod aarch64_rme;
@@ -1063,6 +1062,8 @@ mod typelib;
 mod calleeargsmsvc_cli;
 #[path = "importcache_cli.rs"]
 mod importcache_cli;
+#[path = "initterm_cli.rs"]
+mod initterm_cli;
 #[path = "msvccookie_return_cli.rs"]
 mod msvccookie_return_cli;
 #[path = "msvcexport_cli.rs"]
@@ -1071,7 +1072,5 @@ mod msvcexport_cli;
 mod processors;
 #[path = "vexzeroupper_cli.rs"]
 mod vexzeroupper_cli;
-#[path = "initterm_cli.rs"]
-mod initterm_cli;
 #[path = "vftablerelocs_cli.rs"]
 mod vftablerelocs_cli;

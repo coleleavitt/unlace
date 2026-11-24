@@ -145,22 +145,35 @@ the same console only, which is what the harness already enforces.
 
 ## PR sequence
 
-Each PR is one family, small enough to check by eye; lead runs `cargo check`.
+Each PR is one family, small enough to check by eye, and keeps behaviour
+identical on its own; lead runs `cargo check`.
 
-1. This plan.
+1. This plan (#1072).
 2. Fields for the six env-only gates (delphiabi, debuglink, exporttrie,
-   ruststdsigs, dwarfscopes, dwarfenumtypedef); readers go through `scoped()`.
-   No writer changes. (Behaviour: environment-mode loads read the same
-   variables; explicit loads, test-only, read the shipped defaults.)
-3. Console owns `LoadOptions` (`IfaceDecompData::load_options`, `load file`,
-   `load raw`, `option` copy-back).
-4. option_dispatch stops writing: every `set_*_env` call, the two inline
-   `set_var`s, `export_env` calls, `reset_wire_defaults`'s `set_env`.
-5. CLI in-process loads explicit (`apply_to_process`, `export_image_selection`,
-   `take_global_image`, `followimages`, `unpack/dyld.rs`); `decompile_all`,
-   `strings`, `blobs`, `fid`, `lumina`, `callwide`, `projectfunctionnames`.
-6. wasm `load_program`.
-7. Drop environment mode, `UNLACE_GOVERSION` write, harness `restore_option_env`,
-   the unused `set_*_env` helpers and `export_env`; fix the tests that set the
-   variables to fake input.
-8. CLI plumbing variables -> `paths::Overrides`; `docs/cli.md` environment table.
+   ruststdsigs, dwarfscopes, dwarfenumtypedef); readers go through `scoped()`
+   (#1073).
+3. Every load-time `option` arm also sets the program's `load_options_mut()`
+   field (the six above were env-only), so an explicit-options program and an
+   environment-mode one see the same value after `option`.
+4. Console `load file` / `load raw` load with explicit options, read with
+   `LoadOptions::from_env()` at each load (same values the gates read today:
+   the `option` arms still write the environment), `go_version: None` (the
+   environment-mode rule), and the ARM ISA from `arm_isa_from_env`.
+5. The other environment-mode loaders go explicit the same way: harness
+   `bootstrap_program` (XML datatests), wasm `load_program` (`macho_arm64e` set
+   on the options instead of the environment), callwide, fid, lumina,
+   projectfunctionnames, bench.
+6. CLI in-process loads build `LoadOptions` from `--option` / `--slice` /
+   `--image` / `--jobs` over `from_env()` (`apply_to_process`, `LoadtimeEnv`,
+   `export_image_selection`, `take_global_image`, `followimages`,
+   `unpack/dyld.rs`); `apply_to_command` stays (child environment).
+7. Console holds `IfaceDecompData::load_options` (read from the environment at
+   the first load, reset by the harness between files), `option` copies the
+   program's options back, and the `option` arms stop writing the environment.
+   Live-value readers that read a gate outside `load_scope` (`console.rs`
+   `exporttrie`, `dyldcrossrefs`, `cil`) enter it. Harness
+   `restore_option_env` goes.
+8. Drop environment mode (`enter_environment`, `load_options_from_env`), the
+   `UNLACE_GOVERSION` write, the `set_*_env` helpers and `export_env`; tests that
+   set variables to fake input use explicit options.
+9. CLI plumbing variables -> `paths::Overrides`; `docs/cli.md` environment table.

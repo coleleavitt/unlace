@@ -473,6 +473,7 @@ unlace_options! { self, p1;
     },
     "exporttrie" => {
         let val = on_or_off(p1)?;
+        self.load_options_mut().exporttrie = val;
         crate::exporttrie::set_exporttrie_env(val);
         Ok(format!("Mach-O export-trie naming turned {}", if val { "on" } else { "off" }))
     },
@@ -517,6 +518,7 @@ unlace_options! { self, p1;
     },
     "delphiabi" => {
         let (val, msg) = <crate::delphiabi::DelphiAbi as crate::optionset::UnlaceOption>::parse(p1)?;
+        self.load_options_mut().delphiabi = val.0;
         crate::delphiabi::set_delphiabi_env(val.0);
         self.unlace_options.set(val);
         Ok(msg)
@@ -547,6 +549,7 @@ unlace_options! { self, p1;
     },
     "debuglink" => {
         let (val, msg) = <crate::debuglink::DebugLink as crate::optionset::UnlaceOption>::parse(p1)?;
+        self.load_options_mut().debuglink = val.0;
         crate::debuglink::set_debuglink_env(val.0);
         self.unlace_options.set(val);
         Ok(msg)
@@ -582,6 +585,7 @@ unlace_options! { self, p1;
     "dwarfdecls" => registered!(crate::analysisgates::Dwarfdecls),
     "dwarfenumtypedef" => {
         let (val, msg) = <crate::analysisgates::DwarfEnumTypedef as crate::optionset::UnlaceOption>::parse(p1)?;
+        self.load_options_mut().dwarfenumtypedef = val.0;
         // FIXME: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::set_var("UNLACE_DWARFENUMTYPEDEF", if val.0 { "on" } else { "off" }) };
         self.unlace_options.set(val);
@@ -589,6 +593,7 @@ unlace_options! { self, p1;
     },
     "dwarfscopes" => {
         let (val, msg) = <crate::analysisgates::DwarfScopes as crate::optionset::UnlaceOption>::parse(p1)?;
+        self.load_options_mut().dwarfscopes = val.0;
         // FIXME: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::set_var("UNLACE_DWARFSCOPES", if val.0 { "on" } else { "off" }) };
         self.unlace_options.set(val);
@@ -665,6 +670,7 @@ unlace_options! { self, p1;
     },
     "ruststdsigs" => {
         let (val, msg) = <crate::ruststdsigs::RustStdSigs as crate::optionset::UnlaceOption>::parse(p1)?;
+        self.load_options_mut().ruststdsigs = val;
         crate::ruststdsigs::set_ruststdsigs_env(val);
         self.unlace_options.set(val);
         Ok(msg)

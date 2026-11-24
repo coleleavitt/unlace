@@ -1,0 +1,189 @@
+# Rabbit 6000 additions on top of the 4000 set: the 49 page (ALU with
+# pointer-register and stack operands, pointer block moves, the multiply-
+# accumulate loops, AES / SHA / MD5 helpers, the pointer-register chain
+# shifts), 16/32-bit ALU on (IX+d)/(IY+d), SWAP, TSTNULL, CNVC/CNVD, MUL/MULU
+# HL,DE and the ALTS / ALTSD prefixes. Included by rabbit.sinc under
+# @define R6000. Written from Rabbit Semiconductor's Rabbit 6000 instruction
+# spreadsheet; encodings cross-checked against z88dk's r6k test table.
+
+define pcodeop puma;
+define pcodeop pums;
+define pcodeop aessr;
+define pcodeop aesisr;
+define pcodeop aesmc;
+define pcodeop aesimc;
+
+
+# 49 page: ALU with pointer-register and stack operands
+:ADD "JKHL",qp01 is $(N4) wJKHL & q0_8=0x49 ; qhi2=0 & qmid2=0 & qp01 & qlo4 & r6m=0 { local a:4 = 0; getJKHL(a); local v:4 = qp01; local r:4 = 0; r = a + v; C_flag = carry(a, v); LV_flag = scarry(a, v); resultFlags(r); T32 = r; build wJKHL; }
+:ADD dA,"("^qp01^pdisp^")" is $(N4) q0_8=0x49 ; qhi2=0 & qmid2=0 & qp01 & r6m=1 & dA ; pdisp { local ea:4 = qp01 + pdisp; local v:1 = 0; pld(v, ea); add8(dA, A, v); }
+:ADD dHL,"("^qp01^pdisp^")" is $(N4) q0_8=0x49 ; qhi2=0 & qmid2=0 & qp01 & r6m=2 & dHL ; pdisp { local ea:4 = qp01 + pdisp; local v:2 = 0; pld(v, ea); local a:2 = HL; local r:2 = a + v; C_flag = carry(a, v); LV_flag = scarry(a, v); resultFlags(r); dHL = r; }
+:ADD "JKHL","("^qp01^pdisp^")" is $(N4) wJKHL & q0_8=0x49 ; qhi2=0 & qmid2=0 & qp01 & r6m=3 ; pdisp { local ea:4 = qp01 + pdisp; local v:4 = 0; pld(v, ea); local a:4 = 0; getJKHL(a); local r:4 = 0; r = a + v; C_flag = carry(a, v); LV_flag = scarry(a, v); resultFlags(r); T32 = r; build wJKHL; }
+:ADD dA,spn is $(N4) q0_8=0x49 ; q0_8=0x89 & dA ; spn { local v:1 = *[ram]:1 spn; add8(dA, A, v); }
+:ADD dHL,spn is $(N4) q0_8=0x49 ; q0_8=0x8a & dHL ; spn { local v:2 = *[ram]:2 spn; local a:2 = HL; local r:2 = a + v; C_flag = carry(a, v); LV_flag = scarry(a, v); resultFlags(r); dHL = r; }
+:ADD "JKHL",spn is $(N4) wJKHL & q0_8=0x49 ; q0_8=0x8b ; spn { local v:4 = *[ram]:4 spn; local a:4 = 0; getJKHL(a); local r:4 = 0; r = a + v; C_flag = carry(a, v); LV_flag = scarry(a, v); resultFlags(r); T32 = r; build wJKHL; }
+:ADC "JKHL",qp01 is $(N4) wJKHL & q0_8=0x49 ; qhi2=0 & qmid2=1 & qp01 & qlo4 & r6m=0 { local a:4 = 0; getJKHL(a); local v:4 = qp01; local r:4 = 0; local c:4 = zext(C_flag); local t:4 = a + v; r = t + c; C_flag = carry(a, v) || carry(t, c); LV_flag = scarry(a, v) ^^ scarry(t, c); resultFlags(r); T32 = r; build wJKHL; }
+:ADC dA,"("^qp01^pdisp^")" is $(N4) q0_8=0x49 ; qhi2=0 & qmid2=1 & qp01 & r6m=1 & dA ; pdisp { local ea:4 = qp01 + pdisp; local v:1 = 0; pld(v, ea); adc8(dA, A, v); }
+:ADC dHL,"("^qp01^pdisp^")" is $(N4) q0_8=0x49 ; qhi2=0 & qmid2=1 & qp01 & r6m=2 & dHL ; pdisp { local ea:4 = qp01 + pdisp; local v:2 = 0; pld(v, ea); adc16(dHL, HL, v); }
+:ADC "JKHL","("^qp01^pdisp^")" is $(N4) wJKHL & q0_8=0x49 ; qhi2=0 & qmid2=1 & qp01 & r6m=3 ; pdisp { local ea:4 = qp01 + pdisp; local v:4 = 0; pld(v, ea); local a:4 = 0; getJKHL(a); local r:4 = 0; local c:4 = zext(C_flag); local t:4 = a + v; r = t + c; C_flag = carry(a, v) || carry(t, c); LV_flag = scarry(a, v) ^^ scarry(t, c); resultFlags(r); T32 = r; build wJKHL; }
+:ADC dA,spn is $(N4) q0_8=0x49 ; q0_8=0x99 & dA ; spn { local v:1 = *[ram]:1 spn; adc8(dA, A, v); }
+:ADC dHL,spn is $(N4) q0_8=0x49 ; q0_8=0x9a & dHL ; spn { local v:2 = *[ram]:2 spn; adc16(dHL, HL, v); }
+:ADC "JKHL",spn is $(N4) wJKHL & q0_8=0x49 ; q0_8=0x9b ; spn { local v:4 = *[ram]:4 spn; local a:4 = 0; getJKHL(a); local r:4 = 0; local c:4 = zext(C_flag); local t:4 = a + v; r = t + c; C_flag = carry(a, v) || carry(t, c); LV_flag = scarry(a, v) ^^ scarry(t, c); resultFlags(r); T32 = r; build wJKHL; }
+:SUB "JKHL",qp01 is $(N4) wJKHL & q0_8=0x49 ; qhi2=0 & qmid2=2 & qp01 & qlo4 & r6m=0 { local a:4 = 0; getJKHL(a); local v:4 = qp01; local r:4 = 0; r = a - v; C_flag = a < v; LV_flag = sborrow(a, v); resultFlags(r); T32 = r; build wJKHL; }
+:SUB dA,"("^qp01^pdisp^")" is $(N4) q0_8=0x49 ; qhi2=0 & qmid2=2 & qp01 & r6m=1 & dA ; pdisp { local ea:4 = qp01 + pdisp; local v:1 = 0; pld(v, ea); sub8(dA, A, v); }
+:SUB dHL,"("^qp01^pdisp^")" is $(N4) q0_8=0x49 ; qhi2=0 & qmid2=2 & qp01 & r6m=2 & dHL ; pdisp { local ea:4 = qp01 + pdisp; local v:2 = 0; pld(v, ea); local a:2 = HL; local r:2 = a - v; C_flag = a < v; LV_flag = sborrow(a, v); resultFlags(r); dHL = r; }
+:SUB "JKHL","("^qp01^pdisp^")" is $(N4) wJKHL & q0_8=0x49 ; qhi2=0 & qmid2=2 & qp01 & r6m=3 ; pdisp { local ea:4 = qp01 + pdisp; local v:4 = 0; pld(v, ea); local a:4 = 0; getJKHL(a); local r:4 = 0; r = a - v; C_flag = a < v; LV_flag = sborrow(a, v); resultFlags(r); T32 = r; build wJKHL; }
+:SUB dA,spn is $(N4) q0_8=0x49 ; q0_8=0xa9 & dA ; spn { local v:1 = *[ram]:1 spn; sub8(dA, A, v); }
+:SUB dHL,spn is $(N4) q0_8=0x49 ; q0_8=0xaa & dHL ; spn { local v:2 = *[ram]:2 spn; local a:2 = HL; local r:2 = a - v; C_flag = a < v; LV_flag = sborrow(a, v); resultFlags(r); dHL = r; }
+:SUB "JKHL",spn is $(N4) wJKHL & q0_8=0x49 ; q0_8=0xab ; spn { local v:4 = *[ram]:4 spn; local a:4 = 0; getJKHL(a); local r:4 = 0; r = a - v; C_flag = a < v; LV_flag = sborrow(a, v); resultFlags(r); T32 = r; build wJKHL; }
+:SBC "JKHL",qp01 is $(N4) wJKHL & q0_8=0x49 ; qhi2=0 & qmid2=3 & qp01 & qlo4 & r6m=0 { local a:4 = 0; getJKHL(a); local v:4 = qp01; local r:4 = 0; local c:4 = zext(C_flag); local t:4 = a - v; r = t - c; C_flag = (a < v) || (t < c); LV_flag = sborrow(a, v) ^^ sborrow(t, c); resultFlags(r); T32 = r; build wJKHL; }
+:SBC dA,"("^qp01^pdisp^")" is $(N4) q0_8=0x49 ; qhi2=0 & qmid2=3 & qp01 & r6m=1 & dA ; pdisp { local ea:4 = qp01 + pdisp; local v:1 = 0; pld(v, ea); sbc8(dA, A, v); }
+:SBC dHL,"("^qp01^pdisp^")" is $(N4) q0_8=0x49 ; qhi2=0 & qmid2=3 & qp01 & r6m=2 & dHL ; pdisp { local ea:4 = qp01 + pdisp; local v:2 = 0; pld(v, ea); sbc16(dHL, HL, v); }
+:SBC "JKHL","("^qp01^pdisp^")" is $(N4) wJKHL & q0_8=0x49 ; qhi2=0 & qmid2=3 & qp01 & r6m=3 ; pdisp { local ea:4 = qp01 + pdisp; local v:4 = 0; pld(v, ea); local a:4 = 0; getJKHL(a); local r:4 = 0; local c:4 = zext(C_flag); local t:4 = a - v; r = t - c; C_flag = (a < v) || (t < c); LV_flag = sborrow(a, v) ^^ sborrow(t, c); resultFlags(r); T32 = r; build wJKHL; }
+:SBC dA,spn is $(N4) q0_8=0x49 ; q0_8=0xb9 & dA ; spn { local v:1 = *[ram]:1 spn; sbc8(dA, A, v); }
+:SBC dHL,spn is $(N4) q0_8=0x49 ; q0_8=0xba & dHL ; spn { local v:2 = *[ram]:2 spn; sbc16(dHL, HL, v); }
+:SBC "JKHL",spn is $(N4) wJKHL & q0_8=0x49 ; q0_8=0xbb ; spn { local v:4 = *[ram]:4 spn; local a:4 = 0; getJKHL(a); local r:4 = 0; local c:4 = zext(C_flag); local t:4 = a - v; r = t - c; C_flag = (a < v) || (t < c); LV_flag = sborrow(a, v) ^^ sborrow(t, c); resultFlags(r); T32 = r; build wJKHL; }
+:AND "JKHL",qp01 is $(N4) wJKHL & q0_8=0x49 ; qhi2=1 & qmid2=0 & qp01 & qlo4 & r6m=0 { local a:4 = 0; getJKHL(a); local v:4 = qp01; local r:4 = 0; r = a & v; C_flag = 0; LV_flag = (r & 0xF0000000) != 0; resultFlags(r); T32 = r; build wJKHL; }
+:AND dA,"("^qp01^pdisp^")" is $(N4) q0_8=0x49 ; qhi2=1 & qmid2=0 & qp01 & r6m=1 & dA ; pdisp { local ea:4 = qp01 + pdisp; local v:1 = 0; pld(v, ea); local r:1 = A & v; logic8(r); dA = r; }
+:AND dHL,"("^qp01^pdisp^")" is $(N4) q0_8=0x49 ; qhi2=1 & qmid2=0 & qp01 & r6m=2 & dHL ; pdisp { local ea:4 = qp01 + pdisp; local v:2 = 0; pld(v, ea); local r:2 = HL & v; logic16(r); dHL = r; }
+:AND "JKHL","("^qp01^pdisp^")" is $(N4) wJKHL & q0_8=0x49 ; qhi2=1 & qmid2=0 & qp01 & r6m=3 ; pdisp { local ea:4 = qp01 + pdisp; local v:4 = 0; pld(v, ea); local a:4 = 0; getJKHL(a); local r:4 = 0; r = a & v; C_flag = 0; LV_flag = (r & 0xF0000000) != 0; resultFlags(r); T32 = r; build wJKHL; }
+:AND dA,spn is $(N4) q0_8=0x49 ; q0_8=0xc9 & dA ; spn { local v:1 = *[ram]:1 spn; local r:1 = A & v; logic8(r); dA = r; }
+:AND dHL,spn is $(N4) q0_8=0x49 ; q0_8=0xca & dHL ; spn { local v:2 = *[ram]:2 spn; local r:2 = HL & v; logic16(r); dHL = r; }
+:AND "JKHL",spn is $(N4) wJKHL & q0_8=0x49 ; q0_8=0xcb ; spn { local v:4 = *[ram]:4 spn; local a:4 = 0; getJKHL(a); local r:4 = 0; r = a & v; C_flag = 0; LV_flag = (r & 0xF0000000) != 0; resultFlags(r); T32 = r; build wJKHL; }
+:XOR "JKHL",qp01 is $(N4) wJKHL & q0_8=0x49 ; qhi2=1 & qmid2=1 & qp01 & qlo4 & r6m=0 { local a:4 = 0; getJKHL(a); local v:4 = qp01; local r:4 = 0; r = a ^ v; C_flag = 0; LV_flag = (r & 0xF0000000) != 0; resultFlags(r); T32 = r; build wJKHL; }
+:XOR dA,"("^qp01^pdisp^")" is $(N4) q0_8=0x49 ; qhi2=1 & qmid2=1 & qp01 & r6m=1 & dA ; pdisp { local ea:4 = qp01 + pdisp; local v:1 = 0; pld(v, ea); local r:1 = A ^ v; logic8(r); dA = r; }
+:XOR dHL,"("^qp01^pdisp^")" is $(N4) q0_8=0x49 ; qhi2=1 & qmid2=1 & qp01 & r6m=2 & dHL ; pdisp { local ea:4 = qp01 + pdisp; local v:2 = 0; pld(v, ea); local r:2 = HL ^ v; logic16(r); dHL = r; }
+:XOR "JKHL","("^qp01^pdisp^")" is $(N4) wJKHL & q0_8=0x49 ; qhi2=1 & qmid2=1 & qp01 & r6m=3 ; pdisp { local ea:4 = qp01 + pdisp; local v:4 = 0; pld(v, ea); local a:4 = 0; getJKHL(a); local r:4 = 0; r = a ^ v; C_flag = 0; LV_flag = (r & 0xF0000000) != 0; resultFlags(r); T32 = r; build wJKHL; }
+:XOR dA,spn is $(N4) q0_8=0x49 ; q0_8=0xd9 & dA ; spn { local v:1 = *[ram]:1 spn; local r:1 = A ^ v; logic8(r); dA = r; }
+:XOR dHL,spn is $(N4) q0_8=0x49 ; q0_8=0xda & dHL ; spn { local v:2 = *[ram]:2 spn; local r:2 = HL ^ v; logic16(r); dHL = r; }
+:XOR "JKHL",spn is $(N4) wJKHL & q0_8=0x49 ; q0_8=0xdb ; spn { local v:4 = *[ram]:4 spn; local a:4 = 0; getJKHL(a); local r:4 = 0; r = a ^ v; C_flag = 0; LV_flag = (r & 0xF0000000) != 0; resultFlags(r); T32 = r; build wJKHL; }
+:OR "JKHL",qp01 is $(N4) wJKHL & q0_8=0x49 ; qhi2=1 & qmid2=2 & qp01 & qlo4 & r6m=0 { local a:4 = 0; getJKHL(a); local v:4 = qp01; local r:4 = 0; r = a | v; C_flag = 0; LV_flag = (r & 0xF0000000) != 0; resultFlags(r); T32 = r; build wJKHL; }
+:OR dA,"("^qp01^pdisp^")" is $(N4) q0_8=0x49 ; qhi2=1 & qmid2=2 & qp01 & r6m=1 & dA ; pdisp { local ea:4 = qp01 + pdisp; local v:1 = 0; pld(v, ea); local r:1 = A | v; logic8(r); dA = r; }
+:OR dHL,"("^qp01^pdisp^")" is $(N4) q0_8=0x49 ; qhi2=1 & qmid2=2 & qp01 & r6m=2 & dHL ; pdisp { local ea:4 = qp01 + pdisp; local v:2 = 0; pld(v, ea); local r:2 = HL | v; logic16(r); dHL = r; }
+:OR "JKHL","("^qp01^pdisp^")" is $(N4) wJKHL & q0_8=0x49 ; qhi2=1 & qmid2=2 & qp01 & r6m=3 ; pdisp { local ea:4 = qp01 + pdisp; local v:4 = 0; pld(v, ea); local a:4 = 0; getJKHL(a); local r:4 = 0; r = a | v; C_flag = 0; LV_flag = (r & 0xF0000000) != 0; resultFlags(r); T32 = r; build wJKHL; }
+:OR dA,spn is $(N4) q0_8=0x49 ; q0_8=0xe9 & dA ; spn { local v:1 = *[ram]:1 spn; local r:1 = A | v; logic8(r); dA = r; }
+:OR dHL,spn is $(N4) q0_8=0x49 ; q0_8=0xea & dHL ; spn { local v:2 = *[ram]:2 spn; local r:2 = HL | v; logic16(r); dHL = r; }
+:OR "JKHL",spn is $(N4) wJKHL & q0_8=0x49 ; q0_8=0xeb ; spn { local v:4 = *[ram]:4 spn; local a:4 = 0; getJKHL(a); local r:4 = 0; r = a | v; C_flag = 0; LV_flag = (r & 0xF0000000) != 0; resultFlags(r); T32 = r; build wJKHL; }
+:CP "JKHL",qp01 is $(N4) wJKHL & q0_8=0x49 ; qhi2=1 & qmid2=3 & qp01 & qlo4 & r6m=0 { local a:4 = 0; getJKHL(a); local v:4 = qp01; local r:4 = 0; r = a - v; C_flag = a < v; LV_flag = sborrow(a, v); resultFlags(r); }
+:CP dA,"("^qp01^pdisp^")" is $(N4) q0_8=0x49 ; qhi2=1 & qmid2=3 & qp01 & r6m=1 & dA ; pdisp { local ea:4 = qp01 + pdisp; local v:1 = 0; pld(v, ea); cp8(A, v); }
+:CP dHL,"("^qp01^pdisp^")" is $(N4) q0_8=0x49 ; qhi2=1 & qmid2=3 & qp01 & r6m=2 & dHL ; pdisp { local ea:4 = qp01 + pdisp; local v:2 = 0; pld(v, ea); local a:2 = HL; local r:2 = a - v; C_flag = a < v; LV_flag = sborrow(a, v); resultFlags(r); }
+:CP "JKHL","("^qp01^pdisp^")" is $(N4) wJKHL & q0_8=0x49 ; qhi2=1 & qmid2=3 & qp01 & r6m=3 ; pdisp { local ea:4 = qp01 + pdisp; local v:4 = 0; pld(v, ea); local a:4 = 0; getJKHL(a); local r:4 = 0; r = a - v; C_flag = a < v; LV_flag = sborrow(a, v); resultFlags(r); }
+:CP dA,spn is $(N4) q0_8=0x49 ; q0_8=0xf9 & dA ; spn { local v:1 = *[ram]:1 spn; cp8(A, v); }
+:CP dHL,spn is $(N4) q0_8=0x49 ; q0_8=0xfa & dHL ; spn { local v:2 = *[ram]:2 spn; local a:2 = HL; local r:2 = a - v; C_flag = a < v; LV_flag = sborrow(a, v); resultFlags(r); }
+:CP "JKHL",spn is $(N4) wJKHL & q0_8=0x49 ; q0_8=0xfb ; spn { local v:4 = *[ram]:4 spn; local a:4 = 0; getJKHL(a); local r:4 = 0; r = a - v; C_flag = a < v; LV_flag = sborrow(a, v); resultFlags(r); }
+:INC "("^qp01^pdisp^")" is $(N4) q0_8=0x49 ; qhi2=2 & qmid2=2 & qp01 & r6m=1 ; pdisp { local ea:4 = qp01 + pdisp; local v:1 = 0; pld(v, ea); local r:1 = v + 1; LV_flag = scarry(v, 1:1); resultFlags(r); pst(ea, r); }
+:DEC "("^qp01^pdisp^")" is $(N4) q0_8=0x49 ; qhi2=2 & qmid2=3 & qp01 & r6m=1 ; pdisp { local ea:4 = qp01 + pdisp; local v:1 = 0; pld(v, ea); local r:1 = v - 1; LV_flag = sborrow(v, 1:1); resultFlags(r); pst(ea, r); }
+:PLDI is $(N4) q0_8=0x49 ; q0_8=0xa0 { local v:1 = 0; pld(v, PY); pst(PX, v); BC = BC - 1; PX = PX + 1; PY = PY + 1; LV_flag = BC != 0; }
+:PLDIR is $(N4) q0_8=0x49 ; q0_8=0xb0 { local v:1 = 0; pld(v, PY); pst(PX, v); BC = BC - 1; PX = PX + 1; PY = PY + 1; LV_flag = BC != 0; if (BC != 0) goto inst_start; }
+:PLDISR is $(N4) q0_8=0x49 ; q0_8=0x90 { local v:1 = 0; pld(v, PY); pst(PX, v); BC = BC - 1; PY = PY + 1; LV_flag = BC != 0; if (BC != 0) goto inst_start; }
+:PLSIR is $(N4) q0_8=0x49 ; q0_8=0xf0 { local v:1 = 0; pld(v, PY); pst(PX, v); BC = BC - 1; PX = PX + 1; PY = PY + 1; LV_flag = BC != 0; if (BC != 0) goto inst_start; }
+:PLSIDR is $(N4) q0_8=0x49 ; q0_8=0xd0 { local v:1 = 0; pld(v, PY); pst(PX, v); BC = BC - 1; PX = PX + 1; LV_flag = BC != 0; if (BC != 0) goto inst_start; }
+:PLDD is $(N4) q0_8=0x49 ; q0_8=0xa8 { local v:1 = 0; pld(v, PY); pst(PX, v); BC = BC - 1; PX = PX + -1; PY = PY + -1; LV_flag = BC != 0; }
+:PLDDR is $(N4) q0_8=0x49 ; q0_8=0xb8 { local v:1 = 0; pld(v, PY); pst(PX, v); BC = BC - 1; PX = PX + -1; PY = PY + -1; LV_flag = BC != 0; if (BC != 0) goto inst_start; }
+:PLDDSR is $(N4) q0_8=0x49 ; q0_8=0x98 { local v:1 = 0; pld(v, PY); pst(PX, v); BC = BC - 1; PY = PY + -1; LV_flag = BC != 0; if (BC != 0) goto inst_start; }
+:PLSDR is $(N4) q0_8=0x49 ; q0_8=0xf8 { local v:1 = 0; pld(v, PY); pst(PX, v); BC = BC - 1; PX = PX + -1; PY = PY + -1; LV_flag = BC != 0; if (BC != 0) goto inst_start; }
+:PLSDDR is $(N4) q0_8=0x49 ; q0_8=0xd8 { local v:1 = 0; pld(v, PY); pst(PX, v); BC = BC - 1; PX = PX + -1; LV_flag = BC != 0; if (BC != 0) goto inst_start; }
+:PUMA is $(N4) q0_8=0x49 ; q0_8=0xC0 { C_flag = puma(PX, PY, PZ, BC, DE, DE_, C_flag); BC = 0; }
+:PUMS is $(N4) q0_8=0x49 ; q0_8=0xC8 { C_flag = pums(PX, PY, PZ, BC, DE, DE_, C_flag); BC = 0; }
+:AESSR is $(N4) q0_8=0x49 ; q0_8=0xa2 { aessr(); }
+:AESISR is $(N4) q0_8=0x49 ; q0_8=0xa3 { aesisr(); }
+:AESMC is $(N4) q0_8=0x49 ; q0_8=0xb2 { aesmc(); }
+:AESIMC is $(N4) q0_8=0x49 ; q0_8=0xb3 { aesimc(); }
+:SHAF1 is $(N4) wJKHL & q0_8=0x49 ; q0_8=0xc2 { T32 = ((PX ^ PY) & PW) ^ PY; build wJKHL; }
+:SHAF2 is $(N4) wJKHL & q0_8=0x49 ; q0_8=0xd2 { T32 = ((PW | PX) & PY) | (PW & PX); build wJKHL; }
+:SHAF3 is $(N4) wJKHL & q0_8=0x49 ; q0_8=0xe2 { T32 = PW ^ PX ^ PY; build wJKHL; }
+:MD5F1 is $(N4) wJKHL & q0_8=0x49 ; q0_8=0xc3 { T32 = (PW & PX) | ((~PW) & PY); build wJKHL; }
+:MD5F2 is $(N4) wJKHL & q0_8=0x49 ; q0_8=0xd3 { T32 = (PY & PW) | ((~PY) & PX); build wJKHL; }
+:MD5F3 is $(N4) wJKHL & q0_8=0x49 ; q0_8=0xe3 { T32 = PX ^ (PW | (~PY)); build wJKHL; }
+:SL1REG is $(N4) q0_8=0x49 ; q0_8=0x8c { local j:4 = PW; setJKHL(j); }
+:RL1REG is $(N4) q0_8=0x49 ; q0_8=0x8d { local j:4 = 0; getJKHL(j); local w:4 = PW; PW = j; setJKHL(w); }
+:SR1REG is $(N4) q0_8=0x49 ; q0_8=0x8e { local j:4 = PW; setJKHL(j); }
+:RR1REG is $(N4) q0_8=0x49 ; q0_8=0x8f { local j:4 = 0; getJKHL(j); local t:4 = PW; PW = j; setJKHL(t); }
+:SL2REG is $(N4) q0_8=0x49 ; q0_8=0x9c { local j:4 = PW; PW = PX; setJKHL(j); }
+:RL2REG is $(N4) q0_8=0x49 ; q0_8=0x9d { local j:4 = 0; getJKHL(j); local w:4 = PW; PW = PX; PX = j; setJKHL(w); }
+:SR2REG is $(N4) q0_8=0x49 ; q0_8=0x9e { local j:4 = PX; PX = PW; setJKHL(j); }
+:RR2REG is $(N4) q0_8=0x49 ; q0_8=0x9f { local j:4 = 0; getJKHL(j); local t:4 = PX; PX = PW; PW = j; setJKHL(t); }
+:SL3REG is $(N4) q0_8=0x49 ; q0_8=0xac { local j:4 = PW; PW = PX; PX = PY; setJKHL(j); }
+:RL3REG is $(N4) q0_8=0x49 ; q0_8=0xad { local j:4 = 0; getJKHL(j); local w:4 = PW; PW = PX; PX = PY; PY = j; setJKHL(w); }
+:SR3REG is $(N4) q0_8=0x49 ; q0_8=0xae { local j:4 = PY; PY = PX; PX = PW; setJKHL(j); }
+:RR3REG is $(N4) q0_8=0x49 ; q0_8=0xaf { local j:4 = 0; getJKHL(j); local t:4 = PY; PY = PX; PX = PW; PW = j; setJKHL(t); }
+:SL4REG is $(N4) q0_8=0x49 ; q0_8=0xbc { local j:4 = PW; PW = PX; PX = PY; PY = PZ; setJKHL(j); }
+:RL4REG is $(N4) q0_8=0x49 ; q0_8=0xbd { local j:4 = 0; getJKHL(j); local w:4 = PW; PW = PX; PX = PY; PY = PZ; PZ = j; setJKHL(w); }
+:SR4REG is $(N4) q0_8=0x49 ; q0_8=0xbe { local j:4 = PZ; PZ = PY; PY = PX; PX = PW; setJKHL(j); }
+:RR4REG is $(N4) q0_8=0x49 ; q0_8=0xbf { local j:4 = 0; getJKHL(j); local t:4 = PZ; PZ = PY; PY = PX; PX = PW; PW = j; setJKHL(t); }
+:SL5REG is $(N4) q0_8=0x49 ; q0_8=0xcc { local j:4 = PW; PW = PX; PX = PY; PY = PZ; PZ = PW_; setJKHL(j); }
+:RL5REG is $(N4) q0_8=0x49 ; q0_8=0xcd { local j:4 = 0; getJKHL(j); local w:4 = PW; PW = PX; PX = PY; PY = PZ; PZ = PW_; PW_ = j; setJKHL(w); }
+:SR5REG is $(N4) q0_8=0x49 ; q0_8=0xce { local j:4 = PW_; PW_ = PZ; PZ = PY; PY = PX; PX = PW; setJKHL(j); }
+:RR5REG is $(N4) q0_8=0x49 ; q0_8=0xcf { local j:4 = 0; getJKHL(j); local t:4 = PW_; PW_ = PZ; PZ = PY; PY = PX; PX = PW; PW = j; setJKHL(t); }
+:SL6REG is $(N4) q0_8=0x49 ; q0_8=0xdc { local j:4 = PW; PW = PX; PX = PY; PY = PZ; PZ = PW_; PW_ = PX_; setJKHL(j); }
+:RL6REG is $(N4) q0_8=0x49 ; q0_8=0xdd { local j:4 = 0; getJKHL(j); local w:4 = PW; PW = PX; PX = PY; PY = PZ; PZ = PW_; PW_ = PX_; PX_ = j; setJKHL(w); }
+:SR6REG is $(N4) q0_8=0x49 ; q0_8=0xde { local j:4 = PX_; PX_ = PW_; PW_ = PZ; PZ = PY; PY = PX; PX = PW; setJKHL(j); }
+:RR6REG is $(N4) q0_8=0x49 ; q0_8=0xdf { local j:4 = 0; getJKHL(j); local t:4 = PX_; PX_ = PW_; PW_ = PZ; PZ = PY; PY = PX; PX = PW; PW = j; setJKHL(t); }
+:SL7REG is $(N4) q0_8=0x49 ; q0_8=0xec { local j:4 = PW; PW = PX; PX = PY; PY = PZ; PZ = PW_; PW_ = PX_; PX_ = PY_; setJKHL(j); }
+:RL7REG is $(N4) q0_8=0x49 ; q0_8=0xed { local j:4 = 0; getJKHL(j); local w:4 = PW; PW = PX; PX = PY; PY = PZ; PZ = PW_; PW_ = PX_; PX_ = PY_; PY_ = j; setJKHL(w); }
+:SR7REG is $(N4) q0_8=0x49 ; q0_8=0xee { local j:4 = PY_; PY_ = PX_; PX_ = PW_; PW_ = PZ; PZ = PY; PY = PX; PX = PW; setJKHL(j); }
+:RR7REG is $(N4) q0_8=0x49 ; q0_8=0xef { local j:4 = 0; getJKHL(j); local t:4 = PY_; PY_ = PX_; PX_ = PW_; PW_ = PZ; PZ = PY; PY = PX; PX = PW; PW = j; setJKHL(t); }
+:SL8REG is $(N4) q0_8=0x49 ; q0_8=0xfc { local j:4 = PW; PW = PX; PX = PY; PY = PZ; PZ = PW_; PW_ = PX_; PX_ = PY_; PY_ = PZ_; setJKHL(j); }
+:RL8REG is $(N4) q0_8=0x49 ; q0_8=0xfd { local j:4 = 0; getJKHL(j); local w:4 = PW; PW = PX; PX = PY; PY = PZ; PZ = PW_; PW_ = PX_; PX_ = PY_; PY_ = PZ_; PZ_ = j; setJKHL(w); }
+:SR8REG is $(N4) q0_8=0x49 ; q0_8=0xfe { local j:4 = PZ_; PZ_ = PY_; PY_ = PX_; PX_ = PW_; PW_ = PZ; PZ = PY; PY = PX; PX = PW; setJKHL(j); }
+:RR8REG is $(N4) q0_8=0x49 ; q0_8=0xff { local j:4 = 0; getJKHL(j); local t:4 = PZ_; PZ_ = PY_; PY_ = PX_; PX_ = PW_; PW_ = PZ; PZ = PY; PY = PX; PX = PW; PW = j; setJKHL(t); }
+:ADD dHL,"(IX"^sdisp^")" is pfx=1 & q0_8=0x80 & dHL ; sdisp { local ea:2 = IX + sdisp; local v:2 = *[ram]:2 ea; local a:2 = HL; local r:2 = a + v; C_flag = carry(a, v); LV_flag = scarry(a, v); resultFlags(r); dHL = r; }
+:ADC dHL,"(IX"^sdisp^")" is pfx=1 & q0_8=0x81 & dHL ; sdisp { local ea:2 = IX + sdisp; local v:2 = *[ram]:2 ea; adc16(dHL, HL, v); }
+:ADD "JKHL","(IX"^sdisp^")" is pfx=1 & wJKHL & q0_8=0x82 ; sdisp { local ea:2 = IX + sdisp; local v:4 = *[ram]:4 ea; local a:4 = 0; getJKHL(a); local r:4 = 0; r = a + v; C_flag = carry(a, v); LV_flag = scarry(a, v); resultFlags(r); T32 = r; build wJKHL; }
+:ADC "JKHL","(IX"^sdisp^")" is pfx=1 & wJKHL & q0_8=0x83 ; sdisp { local ea:2 = IX + sdisp; local v:4 = *[ram]:4 ea; local a:4 = 0; getJKHL(a); local r:4 = 0; local c:4 = zext(C_flag); local t:4 = a + v; r = t + c; C_flag = carry(a, v) || carry(t, c); LV_flag = scarry(a, v) ^^ scarry(t, c); resultFlags(r); T32 = r; build wJKHL; }
+:SUB dHL,"(IX"^sdisp^")" is pfx=1 & q0_8=0x90 & dHL ; sdisp { local ea:2 = IX + sdisp; local v:2 = *[ram]:2 ea; local a:2 = HL; local r:2 = a - v; C_flag = a < v; LV_flag = sborrow(a, v); resultFlags(r); dHL = r; }
+:SBC dHL,"(IX"^sdisp^")" is pfx=1 & q0_8=0x91 & dHL ; sdisp { local ea:2 = IX + sdisp; local v:2 = *[ram]:2 ea; sbc16(dHL, HL, v); }
+:SUB "JKHL","(IX"^sdisp^")" is pfx=1 & wJKHL & q0_8=0x92 ; sdisp { local ea:2 = IX + sdisp; local v:4 = *[ram]:4 ea; local a:4 = 0; getJKHL(a); local r:4 = 0; r = a - v; C_flag = a < v; LV_flag = sborrow(a, v); resultFlags(r); T32 = r; build wJKHL; }
+:SBC "JKHL","(IX"^sdisp^")" is pfx=1 & wJKHL & q0_8=0x93 ; sdisp { local ea:2 = IX + sdisp; local v:4 = *[ram]:4 ea; local a:4 = 0; getJKHL(a); local r:4 = 0; local c:4 = zext(C_flag); local t:4 = a - v; r = t - c; C_flag = (a < v) || (t < c); LV_flag = sborrow(a, v) ^^ sborrow(t, c); resultFlags(r); T32 = r; build wJKHL; }
+:AND dHL,"(IX"^sdisp^")" is pfx=1 & q0_8=0xa0 & dHL ; sdisp { local ea:2 = IX + sdisp; local v:2 = *[ram]:2 ea; local r:2 = HL & v; logic16(r); dHL = r; }
+:XOR dHL,"(IX"^sdisp^")" is pfx=1 & q0_8=0xa1 & dHL ; sdisp { local ea:2 = IX + sdisp; local v:2 = *[ram]:2 ea; local r:2 = HL ^ v; logic16(r); dHL = r; }
+:AND "JKHL","(IX"^sdisp^")" is pfx=1 & wJKHL & q0_8=0xa2 ; sdisp { local ea:2 = IX + sdisp; local v:4 = *[ram]:4 ea; local a:4 = 0; getJKHL(a); local r:4 = 0; r = a & v; C_flag = 0; LV_flag = (r & 0xF0000000) != 0; resultFlags(r); T32 = r; build wJKHL; }
+:XOR "JKHL","(IX"^sdisp^")" is pfx=1 & wJKHL & q0_8=0xa3 ; sdisp { local ea:2 = IX + sdisp; local v:4 = *[ram]:4 ea; local a:4 = 0; getJKHL(a); local r:4 = 0; r = a ^ v; C_flag = 0; LV_flag = (r & 0xF0000000) != 0; resultFlags(r); T32 = r; build wJKHL; }
+:OR dHL,"(IX"^sdisp^")" is pfx=1 & q0_8=0xb0 & dHL ; sdisp { local ea:2 = IX + sdisp; local v:2 = *[ram]:2 ea; local r:2 = HL | v; logic16(r); dHL = r; }
+:CP dHL,"(IX"^sdisp^")" is pfx=1 & q0_8=0xb1 & dHL ; sdisp { local ea:2 = IX + sdisp; local v:2 = *[ram]:2 ea; local a:2 = HL; local r:2 = a - v; C_flag = a < v; LV_flag = sborrow(a, v); resultFlags(r); }
+:OR "JKHL","(IX"^sdisp^")" is pfx=1 & wJKHL & q0_8=0xb2 ; sdisp { local ea:2 = IX + sdisp; local v:4 = *[ram]:4 ea; local a:4 = 0; getJKHL(a); local r:4 = 0; r = a | v; C_flag = 0; LV_flag = (r & 0xF0000000) != 0; resultFlags(r); T32 = r; build wJKHL; }
+:CP "JKHL","(IX"^sdisp^")" is pfx=1 & wJKHL & q0_8=0xb3 ; sdisp { local ea:2 = IX + sdisp; local v:4 = *[ram]:4 ea; local a:4 = 0; getJKHL(a); local r:4 = 0; r = a - v; C_flag = a < v; LV_flag = sborrow(a, v); resultFlags(r); }
+:ADD "IX",simm8 is pfx=1 & q0_8=0xC5 ; simm8 { local v:2 = sext(simm8:1); C_flag = carry(IX, v); IX = IX + v; }
+:ADD dHL,"(IY"^sdisp^")" is pfx=2 & q0_8=0x80 & dHL ; sdisp { local ea:2 = IY + sdisp; local v:2 = *[ram]:2 ea; local a:2 = HL; local r:2 = a + v; C_flag = carry(a, v); LV_flag = scarry(a, v); resultFlags(r); dHL = r; }
+:ADC dHL,"(IY"^sdisp^")" is pfx=2 & q0_8=0x81 & dHL ; sdisp { local ea:2 = IY + sdisp; local v:2 = *[ram]:2 ea; adc16(dHL, HL, v); }
+:ADD "JKHL","(IY"^sdisp^")" is pfx=2 & wJKHL & q0_8=0x82 ; sdisp { local ea:2 = IY + sdisp; local v:4 = *[ram]:4 ea; local a:4 = 0; getJKHL(a); local r:4 = 0; r = a + v; C_flag = carry(a, v); LV_flag = scarry(a, v); resultFlags(r); T32 = r; build wJKHL; }
+:ADC "JKHL","(IY"^sdisp^")" is pfx=2 & wJKHL & q0_8=0x83 ; sdisp { local ea:2 = IY + sdisp; local v:4 = *[ram]:4 ea; local a:4 = 0; getJKHL(a); local r:4 = 0; local c:4 = zext(C_flag); local t:4 = a + v; r = t + c; C_flag = carry(a, v) || carry(t, c); LV_flag = scarry(a, v) ^^ scarry(t, c); resultFlags(r); T32 = r; build wJKHL; }
+:SUB dHL,"(IY"^sdisp^")" is pfx=2 & q0_8=0x90 & dHL ; sdisp { local ea:2 = IY + sdisp; local v:2 = *[ram]:2 ea; local a:2 = HL; local r:2 = a - v; C_flag = a < v; LV_flag = sborrow(a, v); resultFlags(r); dHL = r; }
+:SBC dHL,"(IY"^sdisp^")" is pfx=2 & q0_8=0x91 & dHL ; sdisp { local ea:2 = IY + sdisp; local v:2 = *[ram]:2 ea; sbc16(dHL, HL, v); }
+:SUB "JKHL","(IY"^sdisp^")" is pfx=2 & wJKHL & q0_8=0x92 ; sdisp { local ea:2 = IY + sdisp; local v:4 = *[ram]:4 ea; local a:4 = 0; getJKHL(a); local r:4 = 0; r = a - v; C_flag = a < v; LV_flag = sborrow(a, v); resultFlags(r); T32 = r; build wJKHL; }
+:SBC "JKHL","(IY"^sdisp^")" is pfx=2 & wJKHL & q0_8=0x93 ; sdisp { local ea:2 = IY + sdisp; local v:4 = *[ram]:4 ea; local a:4 = 0; getJKHL(a); local r:4 = 0; local c:4 = zext(C_flag); local t:4 = a - v; r = t - c; C_flag = (a < v) || (t < c); LV_flag = sborrow(a, v) ^^ sborrow(t, c); resultFlags(r); T32 = r; build wJKHL; }
+:AND dHL,"(IY"^sdisp^")" is pfx=2 & q0_8=0xa0 & dHL ; sdisp { local ea:2 = IY + sdisp; local v:2 = *[ram]:2 ea; local r:2 = HL & v; logic16(r); dHL = r; }
+:XOR dHL,"(IY"^sdisp^")" is pfx=2 & q0_8=0xa1 & dHL ; sdisp { local ea:2 = IY + sdisp; local v:2 = *[ram]:2 ea; local r:2 = HL ^ v; logic16(r); dHL = r; }
+:AND "JKHL","(IY"^sdisp^")" is pfx=2 & wJKHL & q0_8=0xa2 ; sdisp { local ea:2 = IY + sdisp; local v:4 = *[ram]:4 ea; local a:4 = 0; getJKHL(a); local r:4 = 0; r = a & v; C_flag = 0; LV_flag = (r & 0xF0000000) != 0; resultFlags(r); T32 = r; build wJKHL; }
+:XOR "JKHL","(IY"^sdisp^")" is pfx=2 & wJKHL & q0_8=0xa3 ; sdisp { local ea:2 = IY + sdisp; local v:4 = *[ram]:4 ea; local a:4 = 0; getJKHL(a); local r:4 = 0; r = a ^ v; C_flag = 0; LV_flag = (r & 0xF0000000) != 0; resultFlags(r); T32 = r; build wJKHL; }
+:OR dHL,"(IY"^sdisp^")" is pfx=2 & q0_8=0xb0 & dHL ; sdisp { local ea:2 = IY + sdisp; local v:2 = *[ram]:2 ea; local r:2 = HL | v; logic16(r); dHL = r; }
+:CP dHL,"(IY"^sdisp^")" is pfx=2 & q0_8=0xb1 & dHL ; sdisp { local ea:2 = IY + sdisp; local v:2 = *[ram]:2 ea; local a:2 = HL; local r:2 = a - v; C_flag = a < v; LV_flag = sborrow(a, v); resultFlags(r); }
+:OR "JKHL","(IY"^sdisp^")" is pfx=2 & wJKHL & q0_8=0xb2 ; sdisp { local ea:2 = IY + sdisp; local v:4 = *[ram]:4 ea; local a:4 = 0; getJKHL(a); local r:4 = 0; r = a | v; C_flag = 0; LV_flag = (r & 0xF0000000) != 0; resultFlags(r); T32 = r; build wJKHL; }
+:CP "JKHL","(IY"^sdisp^")" is pfx=2 & wJKHL & q0_8=0xb3 ; sdisp { local ea:2 = IY + sdisp; local v:4 = *[ram]:4 ea; local a:4 = 0; getJKHL(a); local r:4 = 0; r = a - v; C_flag = a < v; LV_flag = sborrow(a, v); resultFlags(r); }
+:ADD "IY",simm8 is pfx=2 & q0_8=0xC5 ; simm8 { local v:2 = sext(simm8:1); C_flag = carry(IY, v); IY = IY + v; }
+:SWAP "BCDE" is pfx=1 & q0_8=0x32 { local b:1 = B; local c:1 = C; B = E; C = D; D = c; E = b; }
+:SWAP "JKHL" is pfx=2 & q0_8=0x32 { local j:1 = JK(1); local k:1 = JK:1; JK = (zext(L) << 8) | zext(H); H = k; L = j; }
+:INC dpd is $(NP) op0_8=0x6D ; dpd & qps=0 & qlo4=0xD & qpd { local v:4 = qpd; local r:4 = v + 1; LV_flag = scarry(v, 1:4); resultFlags(r); dpd = r; }
+:DEC dpd is $(NP) op0_8=0x6D ; dpd & qps=0 & qlo4=0xF & qpd { local v:4 = qpd; local r:4 = v - 1; LV_flag = sborrow(v, 1:4); resultFlags(r); dpd = r; }
+:SBOX qpd is $(NP) op0_8=0x6D ; qpd & qmid2=1 & qlo4=0xD { qpd = sbox(qpd); }
+:IBOX qpd is $(NP) op0_8=0x6D ; qpd & qmid2=1 & qlo4=0xF { qpd = ibox(qpd); }
+:TSTNULL qps is $(NP) op0_8=0xED ; qhi2=2 & qps & qlo4=6 { Z_flag = (qps == 0xffff0000) || (qps == 0); C_flag = qps == 0xffff0000; }
+:CNVC qps is $(NP) op0_8=0xED ; qhi2=2 & qps & qlo4=0xE { qps = convc(qps); }
+:CNVD qps is $(NP) op0_8=0xED ; qhi2=2 & qps & qlo4=0xF { qps = convd(qps); }
+:SWAP "B" is $(NP) op0_8=0xED ; q0_8=0x87 { local v:1 = B; v = ((v & 0xf0) >> 4) | ((v & 0x0f) << 4); v = ((v & 0xcc) >> 2) | ((v & 0x33) << 2); B = ((v & 0xaa) >> 1) | ((v & 0x55) << 1); }
+:SWAP "C" is $(NP) op0_8=0xED ; q0_8=0x97 { local v:1 = C; v = ((v & 0xf0) >> 4) | ((v & 0x0f) << 4); v = ((v & 0xcc) >> 2) | ((v & 0x33) << 2); C = ((v & 0xaa) >> 1) | ((v & 0x55) << 1); }
+:SWAP "D" is $(NP) op0_8=0xED ; q0_8=0xa7 { local v:1 = D; v = ((v & 0xf0) >> 4) | ((v & 0x0f) << 4); v = ((v & 0xcc) >> 2) | ((v & 0x33) << 2); D = ((v & 0xaa) >> 1) | ((v & 0x55) << 1); }
+:SWAP "E" is $(NP) op0_8=0xED ; q0_8=0xb7 { local v:1 = E; v = ((v & 0xf0) >> 4) | ((v & 0x0f) << 4); v = ((v & 0xcc) >> 2) | ((v & 0x33) << 2); E = ((v & 0xaa) >> 1) | ((v & 0x55) << 1); }
+:SWAP "H" is $(NP) op0_8=0xED ; q0_8=0xc7 { local v:1 = H; v = ((v & 0xf0) >> 4) | ((v & 0x0f) << 4); v = ((v & 0xcc) >> 2) | ((v & 0x33) << 2); H = ((v & 0xaa) >> 1) | ((v & 0x55) << 1); }
+:SWAP "L" is $(NP) op0_8=0xED ; q0_8=0xd7 { local v:1 = L; v = ((v & 0xf0) >> 4) | ((v & 0x0f) << 4); v = ((v & 0xcc) >> 2) | ((v & 0x33) << 2); L = ((v & 0xaa) >> 1) | ((v & 0x55) << 1); }
+:SWAP "A" is $(NP) op0_8=0xED ; q0_8=0xf7 { local v:1 = A; v = ((v & 0xf0) >> 4) | ((v & 0x0f) << 4); v = ((v & 0xcc) >> 2) | ((v & 0x33) << 2); A = ((v & 0xaa) >> 1) | ((v & 0x55) << 1); }
+:SWAP "BC" is $(NP) op0_8=0xED ; q0_8=0xcf { local t:1 = B; B = C; C = t; }
+:SWAP "DE" is $(NP) op0_8=0xED ; q0_8=0xdf { local t:1 = D; D = E; E = t; }
+:SWAP "HL" is $(NP) op0_8=0xED ; q0_8=0xef { local t:1 = H; H = L; L = t; }
+:SWAP "JK" is $(NP) op0_8=0xED ; q0_8=0xFF { JK = (JK << 8) | (JK >> 8); }
+:ADC "JKHL","BCDE" is $(NP) wJKHL & op0_8=0xED ; q0_8=0xCE { local a:4 = 0; getJKHL(a); local v:4 = 0; getBCDE(v); local r:4 = 0; local c:4 = zext(C_flag); local t:4 = a + v; r = t + c; C_flag = carry(a, v) || carry(t, c); LV_flag = scarry(a, v) ^^ scarry(t, c); resultFlags(r); T32 = r; build wJKHL; }
+:SBC "JKHL","BCDE" is $(NP) wJKHL & op0_8=0xED ; q0_8=0xDE { local a:4 = 0; getJKHL(a); local v:4 = 0; getBCDE(v); local r:4 = 0; local c:4 = zext(C_flag); local t:4 = a - v; r = t - c; C_flag = (a < v) || (t < c); LV_flag = sborrow(a, v) ^^ sborrow(t, c); resultFlags(r); T32 = r; build wJKHL; }
+:TEST "DE" is $(NP) op0_8=0xED ; q0_8=0x5C { resultFlags(DE); LV_flag = 0; C_flag = 0; }
+:MUL "HL","DE" is $(N4) q0_8=0x59 { local p:4 = sext(HL) * sext(DE); setJKHL(p); }
+:MULU "HL","DE" is $(N4) q0_8=0x69 { local p:4 = zext(HL) * zext(DE); setJKHL(p); }
+:EX "JKHL","BCDE'" is $(N4) q0_8=0x44 { local t:2 = JK; JK = BC_; BC_ = t; t = HL; HL = DE_; DE_ = t; }

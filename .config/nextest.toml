@@ -14,14 +14,23 @@ slow-timeout = { period = "60s", terminate-after = 10 }
 [[profile.default.overrides]]
 filter = 'binary_id(unlace-harness::parity)'
 slow-timeout = { period = "300s", terminate-after = 4 }
+test-group = 'parity'
+
+# Each parity test runs its own decomp_test_dbg worker pool; nextest runs every test in its own
+# process, so parity.rs's in-process mutex cannot keep the two corpora apart. One at a time.
+[test-groups]
+parity = { max-threads = 1 }
 
 [profile.ci]
 fail-fast = false
 failure-output = "immediate-final"
 status-level = "fail"
 final-status-level = "slow"
+# The gates job already runs the parity corpora (tests.yml), so the workspace suite skips them.
 default-filter = '''
 not (
+    binary_id(unlace-harness::parity)
+  |
     (binary_id(unlace-cli::integration) & test(=stack_struct::every_build_declares_the_record_and_prints_c))
   | (binary_id(unlace-cli::integration) & test(=stack_parameter_lifetimes::wider_stores_keep_their_width_in_narrow_parameter_slots))
   | (binary_id(unlace-console::integration) & test(=verify_arm_context::generated_graphs_preserve_calls_modes_and_c_across_layouts_and_reuse))

@@ -293,6 +293,10 @@ specs/Ghidra/Processors/ADSP218x vendors the Analog Devices ADSP-218x SLEIGH mod
 Ghidra-Rare (https://github.com/aleph-void/Ghidra-Rare), released under the MIT
 License (its license files are in that directory).
 
+specs/Ghidra/Processors/DSP56000 vendors the Motorola DSP56000 / DSP56156 SLEIGH module DSP56000 of
+Ghidra-Rare (https://github.com/aleph-void/Ghidra-Rare), released under the MIT
+License (its license files are in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

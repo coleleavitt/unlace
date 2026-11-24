@@ -251,6 +251,14 @@ afterwards. The register file is unchanged.
     ADDCW reg,reg (adds the destination to itself), LOADD abs20 (drops the high word), stores to
     abs20 above 0xeffff (no remap), the high byte SUBCB writes, the high word of R12..SP after a
     word operation, shift counts out of range. Seed 7, 2500 encodings: 3286 matches, no mismatches.
+  - AVR (`--arch avr`, `avr8:LE:16:extended`, ELF flags avr5): the language keeps R0..R31 at
+    data addresses 0..31 of its mem space, so the harness reads them as memory (`mem_registers`,
+    `slaregs.mem_registers`); sim/avr's SRAM is at 0x800000 + address, and SP/SREG (0x5d..0x5f)
+    are left out of the memory comparison. All eight SREG flags are compared. Fixed in
+    `avr8.sinc`: no instruction set H (ADD/ADC/SUB/SUBI/SBC/SBCI/CP/CPC/CPI/NEG now do); ADC took
+    V from the new carry; ADIW took V from the sum; FMUL/FMULS/FMULSU were `todo()` with the wrong
+    registers (R24..R31 for R16..R23). Ignored: sim/avr takes FMUL's C after the shift, and a Y/Z
+    displacement past 0xffff. Seed 4, 2500 encodings: 7410 matches, no mismatches.
   - The simulators that cache decoded instructions (the CGEN ones) do not notice code rewritten
     at an address they ran, so a different instruction at a used address starts a fresh
     simulator. MCORE and MSP430 are not wired: sim/mcore's single step leaves PC elsewhere, and

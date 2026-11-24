@@ -126,3 +126,24 @@ def space_names(langid: str) -> dict:
     from 3 (after const, other and unique) in declaration order, and LOAD/STORE carry that id."""
     text = preprocess(find_language(langid))
     return {3 + i: (m.group(1) if m.group(2) == "register_space" else "ram") for i, m in enumerate(SPACEDEF.finditer(text))}
+
+
+ANYDEF = re.compile(r"define\s+(\w+)\s+offset\s*=\s*(\S+)\s+size\s*=\s*(\S+)\s*\[([^\]]*)\]", re.S)
+
+
+def mem_registers(langid: str) -> dict:
+    """{name: (offset, size)} of the registers a language defines in a RAM space (avr8 keeps
+    R0..R31 at data addresses 0..31); the p-code reads and writes them as memory."""
+    text = preprocess(find_language(langid))
+    out = {}
+    for m in ANYDEF.finditer(text):
+        if m.group(1) == "register":
+            continue
+        try:
+            off, size = _num(m.group(2)), _num(m.group(3))
+        except ValueError:
+            continue
+        for i, name in enumerate(m.group(4).split()):
+            if name != "_" and name not in out:
+                out[name] = (off + i * size, size)
+    return out

@@ -27,7 +27,7 @@ import unicorn as uc  # noqa: E402
 
 from arches import ARCHES  # noqa: E402
 from pcode_emu import State, Unmodeled, step  # noqa: E402
-from slaregs import register_map, space_names  # noqa: E402
+from slaregs import mem_registers, register_map, space_names  # noqa: E402
 import qemu_backend  # noqa: E402
 import gdbsim_backend  # noqa: E402
 import rvv_backend  # noqa: E402
@@ -307,6 +307,10 @@ def main():
     regs, big = register_map(arch.lang)
     arch.big = big
     State.space_ids = space_names(arch.lang)
+    if getattr(arch, "mem_registers", False):
+        mregs = {n: v for n, v in mem_registers(arch.lang).items() if n not in regs}
+        regs.update(mregs)
+        State.mem_names = frozenset(mregs)
     rng = random.Random(args.seed)
     if args.bytes:
         dis = arch.capstone()

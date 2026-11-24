@@ -1,0 +1,15 @@
+# sleigh specification file for GameCube DSP -- default variant GCDSP:BE:16:default
+#
+# The instruction semantics are in GCDSP.sinc; this file selects the options.
+# (See GCDSP_exact.slaspec for the variant that models $cr and the 40-bit saturation exactly.)
+
+# Adjust the formatting of BLOOP/BLOOPI; see Addr16After in GCDSP.sinc
+@define BLOOP_ONE_AFTER
+# Apply sign-extension to writes to $ac0.m and $ac1.m when $sr.SXM says it should happen
+# (otherwise 16-bit mode is always assumed)
+@define USE_40_BIT_SIGN_EXTENSION
+# Assume CR is always set to 0x00ff - makes LRS and SRS disassemble better.
+# This assumption is violated for Zelda uCode (use the exact variant for that).
+@define SIMPLIFY_CR
+
+@include "GCDSP.sinc"

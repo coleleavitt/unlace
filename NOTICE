@@ -118,6 +118,10 @@ specs/Ghidra/Processors/F8 vendors the Fairchild F8 SLEIGH specification of
 aleph-void/ghidra-f8 (https://github.com/aleph-void/ghidra-f8), released under the
 Apache License, Version 2.0 (its license file is in that directory).
 
+specs/Ghidra/Processors/GCDSP vendors the Nintendo GameCube DSP SLEIGH specification of
+aleph-void/ghidra-gcdsp-lang (https://github.com/aleph-void/ghidra-gcdsp-lang), a fork of Pokechu22/ghidra-gcdsp-lang, released under the
+Apache License, Version 2.0 (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

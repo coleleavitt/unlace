@@ -1,0 +1,28 @@
+<?xml version="1.1" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="GCDSP"
+            endian="big"
+            size="16"
+            variant="default"
+            version="1.1"
+            slafile="GCDSP.sla"
+            processorspec="GCDSP.pspec"
+            manualindexfile="../manuals/GCDSP.idx"
+            id="GCDSP:BE:16:default">
+    <description>GameCube DSP</description>
+    <compiler name="default" spec="GCDSP.cspec" id="default"/>
+  </language>
+  <language processor="GCDSP"
+            endian="big"
+            size="16"
+            variant="exact"
+            version="1.1"
+            slafile="GCDSP_exact.sla"
+            processorspec="GCDSP.pspec"
+            manualindexfile="../manuals/GCDSP.idx"
+            id="GCDSP:BE:16:exact">
+    <description>GameCube DSP (exact: $cr and 40-bit saturation modelled at run time)</description>
+    <compiler name="default" spec="GCDSP.cspec" id="default"/>
+  </language>
+</language_definitions>

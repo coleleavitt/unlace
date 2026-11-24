@@ -997,3 +997,71 @@ fn itab_record_names_each_method_slot() {
         "re-interning keeps the completed record"
     );
 }
+
+/// [`synth_interface`] plus a named struct `main.Holder` at `types + 0`
+/// (size 24) whose field `S` at offset 0 is the `main.Shape` interface and
+/// whose field `Tag` at offset 16 is not an interface.
+fn synth_holder() -> (Vec<(u64, Vec<u8>)>, u64, u64) {
+    let (mut spans, types, etypes) = synth_interface(&["Area", "Name"]);
+    let blob = &mut spans[0].1;
+    blob[0..8].copy_from_slice(&24u64.to_le_bytes());
+    blob[20] = TFLAG_NAMED;
+    blob[23] = KIND_STRUCT;
+    blob[40..44].copy_from_slice(&0x1c0i32.to_le_bytes());
+    blob[0x1c0..0x1cd].copy_from_slice(b"\0\x0bmain.Holder");
+    blob[0x1d0..0x1d3].copy_from_slice(b"\0\x01S");
+    blob[0x1d8..0x1dd].copy_from_slice(b"\0\x03Tag");
+    blob[56..64].copy_from_slice(&(types + 0x380).to_le_bytes());
+    blob[64..72].copy_from_slice(&2u64.to_le_bytes());
+    blob[72..80].copy_from_slice(&2u64.to_le_bytes());
+    for (k, (name, typ, offset)) in [(0x1d0u64, 0x100u64, 0u64), (0x1d8, 0, 16)]
+        .into_iter()
+        .enumerate()
+    {
+        let f = 0x380 + 24 * k;
+        blob[f..f + 8].copy_from_slice(&(types + name).to_le_bytes());
+        blob[f + 8..f + 16].copy_from_slice(&(types + typ).to_le_bytes());
+        blob[f + 16..f + 24].copy_from_slice(&offset.to_le_bytes());
+    }
+    (spans, types, etypes)
+}
+
+#[test]
+fn interface_fields_name_their_interface() {
+    let (spans, types, etypes) = synth_holder();
+    let img = img_of(&spans);
+    let meta = TypeMeta {
+        types,
+        etypes,
+        offsets: vec![0],
+    };
+    let holder = read_type(&img, types, etypes, 0).expect("struct record");
+    assert_eq!(
+        super::kuna_ifacefields::interface_fields(&img, &meta, &holder, false),
+        Some(vec![(0, "main.Shape".to_string())])
+    );
+    let tf = unlace_decomp::dtype::TypeFactoryImpl::new();
+    tf.set_default_alignment_map();
+    tf.set_max_basetype_size(8);
+    tf.setup_sizes(Some(8), 8, 8);
+    tf.cache_core_types().unwrap();
+    assert_eq!(
+        super::kuna_ifacefields::register(&tf, &img, &meta, Some((1, 22))),
+        1
+    );
+    assert_eq!(
+        tf.kuna_lang_facet("main.Holder"),
+        Some(LangFacet::GoInterfaceFields {
+            fields: vec![(0, "main.Shape".to_string())]
+        })
+    );
+    // An offset past the struct's size is a corrupt record: no facet.
+    let (mut bad, types, etypes) = synth_holder();
+    bad[0].1[0x390..0x398].copy_from_slice(&99u64.to_le_bytes());
+    let img = img_of(&bad);
+    let holder = read_type(&img, types, etypes, 0).unwrap();
+    assert_eq!(
+        super::kuna_ifacefields::interface_fields(&img, &meta, &holder, false),
+        None
+    );
+}

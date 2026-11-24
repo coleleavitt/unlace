@@ -11731,7 +11731,15 @@ least four times among already-reached functions, and the bounded
 `check_valid_subroutine` probe must cover more than two instructions without a
 bad decode or out-of-image flow and reach either a terminal/computed jump or an
 informative call/edge into known code. Accepted bodies are claimed so a later
-candidate cannot split them. ARM instead reuses the existing Thumb-pointer
+candidate cannot split them. The walk then resumes with the accepted targets,
+and the entries the load-time passes committed (a Delphi VMT method, say), as
+roots, so their direct-call closure is discovered and committed too. The
+functions the walk had before the resume are kept, so the resume only adds
+entries. A Delphi image's System memory-manager record is the case it was
+written for: the record in writable data holds `GetMem`, `FreeMem` and
+`ReallocMem`, which are reached only by indirect calls through that record, and
+before the resume they were listed without any of the allocator code they call.
+ARM instead reuses the existing Thumb-pointer
 oracle: an aligned odd code pointer is accepted only at an undefined
 frame-establishing prologue that passes the same valid-subroutine probe.
 

@@ -41,10 +41,12 @@ mod loadtime;
 mod optname;
 mod output;
 mod paths;
+mod project;
 mod project_stream;
 mod rawfront;
 mod runtime_hints;
 mod rust_signatures;
+mod sbom;
 mod skill;
 mod specs;
 mod strings;
@@ -79,6 +81,8 @@ const COMMANDS: &[(&str, CommandHandler)] = &[
     ("fid", fid::run),
     ("flirt", flirt::run),
     ("rust-signatures", rust_signatures::run),
+    ("sbom", sbom::run),
+    ("project", project::run),
 ];
 
 /// Run the `unlace` command line over this process's arguments.
@@ -171,8 +175,8 @@ fn usage() {
          this CLI well, embedded in the binary, no network -- for Claude Code, Codex and OpenCode\n\
          (`--dir DIR` for other agents).  `unlace install-skill --print` shows it without installing.\n\
          \n\
-         unlace decompile <binary> [--isa auto|arm|thumb] <func> [--addr] [--json] [--no-vars] [--omit aliases,line_mappings,variables,types] [--slice ARCH] [--language auto|c|rust|java|go] [--mode auto|reliable|aggressive|fast] [--option NAME VALUE]... [--kassert ARGS]... [--define-function S[-E][=N]|@FILE]... [--assert DIRECTIVE|@FILE]... [--types FILE.h|DIR]... [--types-cpp CC] [--max-fn-seconds N] [--max-fn-memory MiB] [--raw-image --target T --base VMA]\n\
-         unlace decompile-all <binary> [--isa auto|arm|thumb] [--json] [--functions a,b,..] [--addr 0xVMA]... [--no-vars] [--omit aliases,line_mappings,variables,types] [--language auto|c|rust|java|go] [--max-fn-seconds N] [--max-fn-memory MiB] [--mode auto|reliable|aggressive|fast] [--option N V]... [--define-function S[-E][=N]|@FILE]... [--assert DIRECTIVE|@FILE]... [--types FILE.h|DIR]... [--types-cpp CC] [--raw-image --target T --base VMA (--entry|--addr VMA)...]\n\
+         unlace decompile <binary> [--isa auto|arm|thumb] <func> [--addr] [--json] [--project FILE] [--no-vars] [--omit aliases,line_mappings,variables,types] [--slice ARCH] [--language auto|c|rust|java|go] [--mode auto|reliable|aggressive|fast] [--option NAME VALUE]... [--kassert ARGS]... [--define-function S[-E][=N]|@FILE]... [--assert DIRECTIVE|@FILE]... [--types FILE.h|DIR]... [--types-cpp CC] [--max-fn-seconds N] [--max-fn-memory MiB] [--raw-image --target T --base VMA]\n\
+         unlace decompile-all <binary> [--isa auto|arm|thumb] [--json] [--project FILE] [--functions a,b,..] [--addr 0xVMA]... [--no-vars] [--omit aliases,line_mappings,variables,types] [--language auto|c|rust|java|go] [--max-fn-seconds N] [--max-fn-memory MiB] [--mode auto|reliable|aggressive|fast] [--option N V]... [--define-function S[-E][=N]|@FILE]... [--assert DIRECTIVE|@FILE]... [--types FILE.h|DIR]... [--types-cpp CC] [--raw-image --target T --base VMA (--entry|--addr VMA)...]\n\
          unlace decompile-project <binary> [--isa auto|arm|thumb] [-o DIR] [--functions a,b,..] [--addr 0xVMA]... [--max-fn-seconds N] [--max-fn-memory MiB] [--mode auto|reliable|aggressive|fast] [--option N V]... [--define-function S[-E][=N]|@FILE]... [--assert DIRECTIVE|@FILE]... [--types FILE.h|DIR]... [--types-cpp CC] [--raw-image --target T --base VMA (--entry|--addr VMA)...]\n\
          unlace decompile-graph <binary> [--isa auto|arm|thumb] [-o FILE] [--label TEXT] [--max-fn-seconds N] [--max-fn-memory MiB] [--mode auto|reliable|aggressive|fast] [--option N V]... [--define-function S[-E][=N]|@FILE]...\n\
          unlace functions <binary> [--isa auto|arm|thumb] [--json] [--jobs N|auto] [--mode auto|reliable|aggressive|fast] [--option N V]... [--define-function S[-E][=N]|@FILE]... [--raw-image --target T --base VMA (--entry|--addr VMA)...]\n\
@@ -194,6 +198,8 @@ fn usage() {
          unlace fid query <binary> --db <file.fid> --addr <address> [--addr <address> ...] --json\n\
          unlace flirt make <lib.a|*.o ...> -o <out.pat> [--sig <out.sig>] [--libname NAME]\n\
          unlace rust-signatures check [--manifest PATH] [--json]\n\
+         unlace sbom <binary> [--json] [--format cyclonedx|spdx] [-o FILE] [--slice ARCH]\n\
+         unlace project <init|schema|set|unset|get|list|query|export|import> ... [--json|--jsonl]   # the SQLite project file of overrides\n\
          unlace --version\n\
          \n\
          --image NAME[+NAME...] (any subcommand): load those images of a dyld shared cache\n\

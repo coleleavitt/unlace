@@ -1394,6 +1394,23 @@ returns it, so the inflate is paid once per image rather than once per process
 (and the `--jobs` decode lanes, rebuilt from the bytes the bootstrap consumed,
 skip it too). Both forms ingest the identical buffer, so what decodes is the
 same. `UNLACE_SLA_RAW=0` reads the compressed `.sla` as before.
+
+(kuna) **Constructor templates on first use.** Most of a `.sla` is the
+`<construct_tpl>` p-code template of every constructor, and a run builds p-code
+for few of them. The symbol-table decode therefore keeps each template's encoded
+bytes (`Decoder::skip_element_raw`, which only a byte-encoded decoder provides;
+an XML decoder decodes eagerly as before) and reads just its `section` and
+`delay` attributes, which place the handle in its constructor and answer
+instruction resolution's delay-slot question. The template itself is decoded
+by the eager `ConstructTpl::decode`, over the same bytes and against the
+engine's own address-space manager, the first time the p-code builder or an
+exported operand needs it
+(`crates/unlace-sleigh/src/kuna_lazytemplates.rs (LazyTemplates::get)`), and
+kept. Spaces keep the indices the `.sla` gave them, so the value is the one an
+eager decode makes, whenever it is made; encoding a lazily decoded spec decodes
+all of them first. The one visible difference is when a corrupt template is
+reported: at its first use instead of at load. `UNLACE_SLA_LAZY=0` decodes
+every template at load.
 The decompressed buffer is then *handed* to the packed decoder rather than
 copied into it (`crates/unlace-base/src/marshal.rs
 (PackedDecode::ingest_owned)`): the inflate buffer becomes the decoder's leading

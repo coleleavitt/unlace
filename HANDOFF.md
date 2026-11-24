@@ -427,6 +427,10 @@ about 0.5 s per middle edit. Numbers and the decision are in `notes/crate-archit
   `iteregion`, `iteboolean`, `switchmerge`, `gotonext`, `voidtailreturn` and backlog #8/#9/#10
   become tree rewrites). Introduced behind `ctree` (default off) with a byte-identical proof before
   any rewrite moves. Section 9 of the doc is the order of the work.
+- Landed: `crates/unlace-ctree` (types, `CMaturity`, builder at `built`), `option ctree`
+  (default off; catalog 326) and the tree walk `printc/kuna_ctreeprint.rs` (graph sequences,
+  leaves, `if` arms; everything else opaque). Next: the byte-identical corpus proof with
+  `--option ctree on` (doc section 6.3), then more node kinds out of `Opaque`.
 
 ### CI and tests
 - 2026-11-23, after the stop: every finished Tests run on `main` since 2026-11-22 20:57 had failed

@@ -236,6 +236,9 @@ impl Decoder for FormatDecode<'_> {
     fn open_element(&mut self) -> KunaResult<u32> {
         self.inner.open_element()
     }
+    fn skip_element_raw(&mut self, out: &mut Vec<u8>) -> KunaResult<bool> {
+        self.inner.skip_element_raw(out)
+    }
     fn open_element_id(&mut self, elem_id: &ElementId) -> KunaResult<u32> {
         self.inner.open_element_id(elem_id)
     }

@@ -3,6 +3,7 @@
 ```yaml
 Anchors:
   - crates/unlace-emit/src/p9_emit
+  - crates/unlace-ctree/src
 ```
 
 The CLI's `functions --json` serializes borrowed inventory records through
@@ -5712,3 +5713,41 @@ buffer stores and the header address. On iOS 16.4.1 `trustd` the decode
 succeeds at 398 of 404 log calls; the rest store an argument the decode cannot
 attribute to one variable at the call (an implied expression split across
 cells) and keep the raw form.
+
+## (kuna) Printing through the C syntax tree — `option ctree`, default off
+
+The design is `docs/architecture/ctree.md`. With `option ctree on`,
+`PrintC::emit_function_body` builds a C syntax tree for the function before it
+prints the body, unless the printer is in flat mode. The tree lives in
+`crates/unlace-ctree/src`: `kuna_ctree` holds the statement and expression
+arenas and the tree's maturity (`built`, `statements`, `rewritten`, `final`,
+which only rises), and `kuna_ctreebuild::build` makes one statement per
+structured block from `sblocks.root`: a `BlockList` or `BlockGraph` becomes a
+sequence, a `BlockCopy` or `BlockBasic` leaf an ops statement, a `BlockIf` an
+`if` whose pre-statements and condition both name the condition block (an
+if-goto's body is a goto statement), a `BlockWhileDo` a `for` statement when it
+carries its initializer and iterator ops and a `while` otherwise, a `BlockDoWhile`
+a `do`-`while` whose condition is its body's branch, a `BlockInfLoop` an infinite
+loop, a `BlockSwitch` a switch over its components, a `BlockGoto` a sequence of
+its body and a goto statement, and a condition or multi-goto block an opaque
+statement.
+Nesting deeper than 2048 blocks stays opaque. `split_statements` then takes the
+tree to `statements`: each leaf holds its basic block's ops in order (a
+`BlockCopy` through the block it mirrors; a leaf of more than 2^20 ops is not
+split), and the leaf printer (`emit_basic_block_ops_in`, with the same filters
+as the block walk) prints from that list.
+
+The walk is `printc/kuna_ctreeprint.rs`. The body prints from the root's
+statements; `emit_block` first asks the tree for the statement built from its
+block, and the walk prints a `BlockGraph` sequence (each statement in its own
+`begin_block`/`end_block`), a leaf (`emit_block_copy` or `emit_block_basic`),
+and the components the block printers take through `emit_part`: a plain `if`'s
+body and else, a `for` or `while` body, a C `do`-`while` or infinite loop's body,
+and a goto block's body come from the statement the tree holds in that place
+(`CTree::part`). Anything else, including every special form of `emit_block_if`
+(`try`, `iteregion`, `iteboolean`, a switch plan) and every `BlockList`, prints
+through the block printer's own dispatch, and the children it prints come back
+through `emit_block`. At `built` each of these prints exactly the calls the
+block printer makes for the same block, so the output with the option on is the
+output with it off; a difference is a bug. The tree is dropped when the body is
+printed.

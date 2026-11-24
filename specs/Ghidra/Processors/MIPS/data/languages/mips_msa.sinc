@@ -9,16 +9,6 @@ attach variables [ msa_wd msa_ws msa_wt ] [ w0 w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w1
 attach variables [ msa_rd msa_rs msa_rt ] [ zero at v0 v1 a0 a1 a2 a3 t0 t1 t2 t3 t4 t5 t6 t7 s0 s1 s2 s3 s4 s5 s6 s7 t8 t9 k0 k1 gp sp s8 ra ];
 attach variables [ msa_cs msa_cd ] [ MSAIR MSACSR MSAAccess MSASave MSAModify MSARequest MSAMap MSAUnmap _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ];
 
-define pcodeop msa_bnz_b;
-define pcodeop msa_bnz_d;
-define pcodeop msa_bnz_h;
-define pcodeop msa_bnz_v;
-define pcodeop msa_bnz_w;
-define pcodeop msa_bz_b;
-define pcodeop msa_bz_d;
-define pcodeop msa_bz_h;
-define pcodeop msa_bz_v;
-define pcodeop msa_bz_w;
 define pcodeop msa_fadd_d;
 define pcodeop msa_fadd_w;
 define pcodeop msa_fcaf_d;
@@ -2969,27 +2959,57 @@ MSAOFF8: off(msa_rs) is msa_rs & msa_mi10 [ off = msa_mi10 * 8; ] {
 	msa_wd = zext(mr0) | (zext(mr1) << 64);
 }
 :bnz.b msa_wt, Rel16 is $(AMODE) & prime=0x11 & msa_25_23=0x7 & msa_22_21=0x0 & msa_wt & Rel16 {
-	tmp:1 = msa_bnz_b(msa_wt);
+	local mz0:1 = msa_wt(0);
+	local mz1:1 = msa_wt(1);
+	local mz2:1 = msa_wt(2);
+	local mz3:1 = msa_wt(3);
+	local mz4:1 = msa_wt(4);
+	local mz5:1 = msa_wt(5);
+	local mz6:1 = msa_wt(6);
+	local mz7:1 = msa_wt(7);
+	local mz8:1 = msa_wt(8);
+	local mz9:1 = msa_wt(9);
+	local mz10:1 = msa_wt(10);
+	local mz11:1 = msa_wt(11);
+	local mz12:1 = msa_wt(12);
+	local mz13:1 = msa_wt(13);
+	local mz14:1 = msa_wt(14);
+	local mz15:1 = msa_wt(15);
+	tmp:1 = !((mz0 == 0) || (mz1 == 0) || (mz2 == 0) || (mz3 == 0) || (mz4 == 0) || (mz5 == 0) || (mz6 == 0) || (mz7 == 0) || (mz8 == 0) || (mz9 == 0) || (mz10 == 0) || (mz11 == 0) || (mz12 == 0) || (mz13 == 0) || (mz14 == 0) || (mz15 == 0));
 	delayslot(1);
 	if (tmp != 0) goto Rel16;
 }
 :bnz.h msa_wt, Rel16 is $(AMODE) & prime=0x11 & msa_25_23=0x7 & msa_22_21=0x1 & msa_wt & Rel16 {
-	tmp:1 = msa_bnz_h(msa_wt);
+	local mz0:2 = msa_wt(0);
+	local mz1:2 = msa_wt(2);
+	local mz2:2 = msa_wt(4);
+	local mz3:2 = msa_wt(6);
+	local mz4:2 = msa_wt(8);
+	local mz5:2 = msa_wt(10);
+	local mz6:2 = msa_wt(12);
+	local mz7:2 = msa_wt(14);
+	tmp:1 = !((mz0 == 0) || (mz1 == 0) || (mz2 == 0) || (mz3 == 0) || (mz4 == 0) || (mz5 == 0) || (mz6 == 0) || (mz7 == 0));
 	delayslot(1);
 	if (tmp != 0) goto Rel16;
 }
 :bnz.w msa_wt, Rel16 is $(AMODE) & prime=0x11 & msa_25_23=0x7 & msa_22_21=0x2 & msa_wt & Rel16 {
-	tmp:1 = msa_bnz_w(msa_wt);
+	local mz0:4 = msa_wt(0);
+	local mz1:4 = msa_wt(4);
+	local mz2:4 = msa_wt(8);
+	local mz3:4 = msa_wt(12);
+	tmp:1 = !((mz0 == 0) || (mz1 == 0) || (mz2 == 0) || (mz3 == 0));
 	delayslot(1);
 	if (tmp != 0) goto Rel16;
 }
 :bnz.d msa_wt, Rel16 is $(AMODE) & prime=0x11 & msa_25_23=0x7 & msa_22_21=0x3 & msa_wt & Rel16 {
-	tmp:1 = msa_bnz_d(msa_wt);
+	local mz0:8 = msa_wt(0);
+	local mz1:8 = msa_wt(8);
+	tmp:1 = !((mz0 == 0) || (mz1 == 0));
 	delayslot(1);
 	if (tmp != 0) goto Rel16;
 }
 :bnz.v msa_wt, Rel16 is $(AMODE) & prime=0x11 & msa_25_21=0xf & msa_wt & Rel16 {
-	tmp:1 = msa_bnz_v(msa_wt);
+	tmp:1 = msa_wt != 0;
 	delayslot(1);
 	if (tmp != 0) goto Rel16;
 }
@@ -3287,27 +3307,57 @@ MSAOFF8: off(msa_rs) is msa_rs & msa_mi10 [ off = msa_mi10 * 8; ] {
 	msa_wd = zext(mr0) | (zext(mr1) << 64);
 }
 :bz.b msa_wt, Rel16 is $(AMODE) & prime=0x11 & msa_25_23=0x6 & msa_22_21=0x0 & msa_wt & Rel16 {
-	tmp:1 = msa_bz_b(msa_wt);
+	local mz0:1 = msa_wt(0);
+	local mz1:1 = msa_wt(1);
+	local mz2:1 = msa_wt(2);
+	local mz3:1 = msa_wt(3);
+	local mz4:1 = msa_wt(4);
+	local mz5:1 = msa_wt(5);
+	local mz6:1 = msa_wt(6);
+	local mz7:1 = msa_wt(7);
+	local mz8:1 = msa_wt(8);
+	local mz9:1 = msa_wt(9);
+	local mz10:1 = msa_wt(10);
+	local mz11:1 = msa_wt(11);
+	local mz12:1 = msa_wt(12);
+	local mz13:1 = msa_wt(13);
+	local mz14:1 = msa_wt(14);
+	local mz15:1 = msa_wt(15);
+	tmp:1 = (mz0 == 0) || (mz1 == 0) || (mz2 == 0) || (mz3 == 0) || (mz4 == 0) || (mz5 == 0) || (mz6 == 0) || (mz7 == 0) || (mz8 == 0) || (mz9 == 0) || (mz10 == 0) || (mz11 == 0) || (mz12 == 0) || (mz13 == 0) || (mz14 == 0) || (mz15 == 0);
 	delayslot(1);
 	if (tmp != 0) goto Rel16;
 }
 :bz.h msa_wt, Rel16 is $(AMODE) & prime=0x11 & msa_25_23=0x6 & msa_22_21=0x1 & msa_wt & Rel16 {
-	tmp:1 = msa_bz_h(msa_wt);
+	local mz0:2 = msa_wt(0);
+	local mz1:2 = msa_wt(2);
+	local mz2:2 = msa_wt(4);
+	local mz3:2 = msa_wt(6);
+	local mz4:2 = msa_wt(8);
+	local mz5:2 = msa_wt(10);
+	local mz6:2 = msa_wt(12);
+	local mz7:2 = msa_wt(14);
+	tmp:1 = (mz0 == 0) || (mz1 == 0) || (mz2 == 0) || (mz3 == 0) || (mz4 == 0) || (mz5 == 0) || (mz6 == 0) || (mz7 == 0);
 	delayslot(1);
 	if (tmp != 0) goto Rel16;
 }
 :bz.w msa_wt, Rel16 is $(AMODE) & prime=0x11 & msa_25_23=0x6 & msa_22_21=0x2 & msa_wt & Rel16 {
-	tmp:1 = msa_bz_w(msa_wt);
+	local mz0:4 = msa_wt(0);
+	local mz1:4 = msa_wt(4);
+	local mz2:4 = msa_wt(8);
+	local mz3:4 = msa_wt(12);
+	tmp:1 = (mz0 == 0) || (mz1 == 0) || (mz2 == 0) || (mz3 == 0);
 	delayslot(1);
 	if (tmp != 0) goto Rel16;
 }
 :bz.d msa_wt, Rel16 is $(AMODE) & prime=0x11 & msa_25_23=0x6 & msa_22_21=0x3 & msa_wt & Rel16 {
-	tmp:1 = msa_bz_d(msa_wt);
+	local mz0:8 = msa_wt(0);
+	local mz1:8 = msa_wt(8);
+	tmp:1 = (mz0 == 0) || (mz1 == 0);
 	delayslot(1);
 	if (tmp != 0) goto Rel16;
 }
 :bz.v msa_wt, Rel16 is $(AMODE) & prime=0x11 & msa_25_21=0xb & msa_wt & Rel16 {
-	tmp:1 = msa_bz_v(msa_wt);
+	tmp:1 = msa_wt == 0;
 	delayslot(1);
 	if (tmp != 0) goto Rel16;
 }

@@ -470,8 +470,16 @@ for name, mn, suf, cons, ops, asm, wd_in, signed_imm, fmt in out:
                 body.append("*[ram]:%d (a + %d) = msa_wd(%d);" % (elsz, i * elsz, i * elsz))
     elif fmt.startswith("MSA_CBRANCH"):
         disp = "msa_wt, Rel16"; pat.append("Rel16")
-        pcodeops.add(uop)
-        body = ["tmp:1 = %s(msa_wt);" % uop, "delayslot(1);", "if (tmp != 0) goto Rel16;"]
+        if suf == "v":
+            cond = "msa_wt == 0" if mn.startswith("bz") else "msa_wt != 0"
+            body = ["tmp:1 = %s;" % cond]
+        else:
+            # bz.df: some element is zero; bnz.df: every element is nonzero
+            s = SIZE[suf]
+            body = ["local mz%d:%d = msa_wt(%d);" % (i, s, i * s) for i in range(16 // s)]
+            any_zero = " || ".join("(mz%d == 0)" % i for i in range(16 // s))
+            body.append("tmp:1 = %s;" % (any_zero if mn.startswith("bz") else "!(%s)" % any_zero))
+        body += ["delayslot(1);", "if (tmp != 0) goto Rel16;"]
     elif mn == "move.v":
         disp = "msa_wd, msa_ws"; body = ["msa_wd = msa_ws;"]
     elif mn == "cfcmsa":

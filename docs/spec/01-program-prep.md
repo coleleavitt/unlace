@@ -2172,8 +2172,8 @@ body (issue #1288); the note sends a PKLITE file to `unlace unpack`. Surfaces th
 need an `object::File` refuse an `MZ` input with a capability error, as they do
 a TE.
 
-(unlace) **PS-X EXE, N64 ROM, a.out, Amiga hunk, PEF and NE executables and
-OMF objects and libraries load from their own headers.** These containers hold code for processors unlace
+(unlace) **PS-X EXE, N64 ROM, a.out, Amiga hunk, PEF and NE executables,
+OMF objects and libraries, and Android boot images load from their own headers.** These containers hold code for processors unlace
 decodes, but the `object` crate reads none of them, so each was refused as an
 unknown format and had to be mapped by hand as a headerless image, which for
 the three relocatable ones is also wrong: a flat mapping leaves every
@@ -2252,6 +2252,15 @@ relocation program) is skipped and reported on stderr rather than guessed.
   of the first hunk, which must be code. An overlay tree ends the load with a
   note; a library or object unit (`HUNK_UNIT`) is not claimed. The language is
   `68000:BE:32:default`.
+- **Android boot image** (`androidboot.rs`): the `ANDROID!` magic, AOSP header
+  versions 0 to 2. The kernel is the module, based at `kernel_addr` and entered
+  at its first byte; its size is bounded by the module limit and it must fit the
+  32-bit address space. The language comes from the kernel's own header: an
+  arm64 `Image` (`ARM\x64` at 0x38) is `AARCH64:LE:64:v8A`, an ARM `zImage`
+  (0x016f2818 at 0x24) is `ARM:LE:32:v7`, and any other kernel is refused. The
+  ramdisk and second-stage loader are not mapped; each is named in a note. The
+  command line is not surfaced. A page size that is not a power of two, or a
+  kernel or ramdisk that runs past the file, is refused.
 - **PEF** (`pef.rs`): the tag `Joy!peff` with architecture `pwpc`; a CFM-68K
   fragment is refused. Each instantiated section (code, data,
   pattern-initialized data, constant) is placed in header order from

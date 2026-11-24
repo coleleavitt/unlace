@@ -180,7 +180,8 @@ writes 0, SLEIGH writes 1. Unicorn misses this because it does not unbox either.
 ## Regression sweep
 
 `tools/difffuzz/sweep.py` runs every configuration (each `--arch` with the Unicorn oracle where
-Unicorn emulates it, and with `--oracle qemu`, including `riscv64v`) at a fixed seed and a small
+Unicorn emulates it, with `--oracle qemu`, including `riscv64v`, and `x86-64-native` with
+`--oracle native`) at a fixed seed and a small
 count, one difffuzz process per configuration, and prints one line per configuration:
 
 ```sh

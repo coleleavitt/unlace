@@ -25,7 +25,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-# (arch, oracle). Unicorn covers the targets it emulates well enough; QEMU covers the rest.
+# (arch, oracle). Unicorn covers the targets it emulates well enough, QEMU the rest, and x86-64 also
+# runs natively on this CPU.
 CONFIGS = [
     ("x86-64", "unicorn"), ("aarch64", "unicorn"), ("riscv64", "unicorn"), ("arm", "unicorn"),
     ("thumb", "unicorn"), ("mips", "unicorn"), ("ppc", "unicorn"), ("tricore", "unicorn"),
@@ -33,6 +34,7 @@ CONFIGS = [
     ("mips", "qemu"), ("mips64", "qemu"), ("mipsr6", "qemu"), ("mips64r6", "qemu"),
     ("ppc", "qemu"), ("ppc64", "qemu"), ("ppc64le", "qemu"), ("ppc64-isa", "qemu"), ("ppc64le-isa", "qemu"),
     ("s390x", "qemu"), ("nios2", "qemu"), ("sh4", "qemu"), ("m68k", "qemu"),
+    ("x86-64-native", "native"),
 ]
 FAILING = ("mismatch", "length", "missing-output", "missing-input")
 KNOWN = HERE / "sweep_known.json"
@@ -68,7 +70,7 @@ def available(arch, oracle, objdump):
         return f"cannot import arches ({e})"
     if arch not in arches.ARCHES:
         return "unknown arch"
-    if oracle == "qemu":
+    if oracle in ("qemu", "native"):
         import qemu_backend
         return None if qemu_backend.available(arches.ARCHES[arch]) else "no QEMU user binary"
     return None

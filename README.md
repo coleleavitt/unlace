@@ -14,8 +14,9 @@ Unlace exposes the decisions inside the decompiler as named options that an agen
 can flip per run, lists them with `unlace catalog`, and speaks `--json`, so an LLM can drive it
 end to end. Its engine comes from Kuna, a Rust port of
 [Ghidra](https://github.com/NationalSecurityAgency/ghidra)'s decompiler; Unlace adds Apple
-platform support (Mach-O, chained fixups, the dyld shared cache, kernelcaches, Objective-C,
-Swift, arm64e) and fixes found by comparing its output against IDA 9.5.
+platform support and fixes found by comparing its output against IDA 9.5. The formats it reads,
+the architectures it is checked on, its output languages, its front ends and what is still
+experimental are listed in [docs/status.md](docs/status.md).
 
 | Measured locally, 2026-11-22 | Unlace | IDA 9.5 |
 |---|---|---|
@@ -46,7 +47,7 @@ unlace install-skill                                   # teach Claude Code, Code
 ```
 
 Unlace can also replace Ghidra's own decompiler, in the GUI or headless; see the
-[Ghidra extension README](integrations/ghidra/KunaDecompiler/README.md). The full CLI reference is
+[Ghidra extension README](integrations/ghidra/UnlaceDecompiler/README.md). The full CLI reference is
 [docs/cli.md](docs/cli.md); to call the decompiler from Rust, see [docs/api.md](docs/api.md).
 
 ## Layout

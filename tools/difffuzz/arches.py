@@ -753,6 +753,117 @@ class S390x(Arch):
         return cand["mnemonic"] == "stmh"
 
 
+class _ObjdumpIns:
+    def __init__(self, b, mnemonic, op_str):
+        self.bytes, self.mnemonic, self.op_str = b, mnemonic, op_str
+
+
+class ObjdumpDis:
+    """A Capstone stand-in for an architecture Capstone 5 lacks: binutils objdump decodes
+    4-byte little-endian words in batches, cached by encoding."""
+
+    def __init__(self, tool, mach):
+        self.tool, self.mach, self.cache = tool, mach, {}
+
+    def prime(self, words):
+        import os
+        import subprocess
+        import tempfile
+        todo = sorted({w for w in words if w not in self.cache})
+        if not todo:
+            return
+        with tempfile.NamedTemporaryFile(suffix=".bin", delete=False) as f:
+            f.write(b"".join(todo))
+            path = f.name
+        try:
+            out = subprocess.run([self.tool, "-D", "-b", "binary", "-m", self.mach, path],
+                                 capture_output=True, text=True, check=True).stdout
+        finally:
+            os.unlink(path)
+        got = {}
+        for line in out.splitlines():
+            m = re.match(r"\s*([0-9a-f]+):\t([0-9a-f]{8})\s*\t(\S+)\s*(.*)$", line)
+            if m:
+                got[int(m.group(1), 16) // 4] = (m.group(3), m.group(4).split("#")[0].strip())
+        for i, w in enumerate(todo):
+            mn = got.get(i)
+            self.cache[w] = None if mn is None or mn[0].startswith(".") else mn
+
+    def disasm(self, raw, addr):
+        b = bytes(raw[:4])
+        if len(b) < 4:
+            return
+        if b not in self.cache:
+            self.prime([b])
+        hit = self.cache[b]
+        if hit:
+            yield _ObjdumpIns(b, hit[0], hit[1])
+
+
+LA_NAMES = ("ra tp sp a0 a1 a2 a3 a4 a5 a6 a7 t0 t1 t2 t3 t4 t5 t6 t7 t8 r21 fp "
+            "s0 s1 s2 s3 s4 s5 s6 s7 s8").split()
+LA_FNAMES = [f"fa{i}" for i in range(8)] + [f"ft{i}" for i in range(16)] + [f"fs{i}" for i in range(8)]
+LA_DENY = re.compile(
+    r"^(syscall|break|dbcl|hvcl|ertn|idle|cpucfg|rdtime.*|csr.*|iocsr.*|tlb.*|invtlb|cacop|lddir|ldpte|"
+    r"gcsr.*|gtlb.*|preld.*|asrt.*|ll\..*|sc\..*|llacq.*|screl.*|sc\.q|"
+    r"movfcsr2gr|movgr2fcsr|frecipe.*|frsqrte.*|f(ld|st)(gt|le)\..*|v.*|xv.*|"
+    r"x86.*|arm.*|setx86.*|setarm.*|setj|movgr2scr|movscr2gr|jiscr.*|"
+    r"rcr.*|rotr\.[bh]|rotri\.[bh]|addu12i.*|adc\..*|sbc\..*|sra\.?[bh].*|srl\.?[bh].*|sll\.?[bh].*|"
+    r"ldl\..*|ldr\..*|stl\..*|str\..*|armmove|armmfflag|armmtflag|x86mfflag|x86mtflag|gcsr.*|lbt.*)$"
+)
+_LA_DIS = None
+
+
+class LoongArch64(Arch):
+    """LoongArch64 (QEMU oracle only: qemu-loongarch64 -cpu max; Unicorn and Capstone 5 lack it).
+    Encodings are decoded with binutils objdump ($DIFFFUZZ_LA_OBJDUMP or
+    loongarch64-linux-gnu-objdump on PATH)."""
+    name = "loongarch64"
+    lang = "Loongarch:LE:64:lp64d"
+    elf_machine = 258
+    pc = "pc"
+    gprs = [(n, 0) for n in LA_NAMES]
+    vecs = [(n, 0) for n in LA_FNAMES]
+    deny = LA_DENY
+
+    def partial(self, mnemonic, operands):
+        """A single-precision or word result in an FPR leaves bits 63:32 undefined (QEMU NaN-boxes
+        them); only the low word is compared."""
+        dst = operands.split(",")[0].strip().lstrip("$")
+        if not dst.startswith("f") or mnemonic.startswith("movgr2frh"):
+            return {}
+        parts = mnemonic.split(".")
+        fmt = parts[1] if parts[0] in ("ftint", "ftintrm", "ftintrp", "ftintrz", "ftintrne", "ffint", "fcvt") and len(parts) > 2 else parts[-1]
+        return {dst: 0xFFFFFFFF} if fmt in ("s", "w") else {}
+
+    def ignored(self, mnemonic, operands, state):
+        if re.match(r"^fn?m(add|sub)\.[sd]$", mnemonic):
+            return {operands.split(",")[0].strip().lstrip("$")}  # fused: p-code rounds twice
+        return set()
+
+    def unicorn(self):
+        raise NotImplementedError("LoongArch has no Unicorn model; use --oracle qemu")
+
+    def capstone(self):
+        global _LA_DIS
+        if _LA_DIS is None:
+            import os
+            import shutil
+            tool = os.environ.get("DIFFFUZZ_LA_OBJDUMP") or shutil.which("loongarch64-linux-gnu-objdump")
+            if not tool:
+                raise SystemExit("loongarch64: set DIFFFUZZ_LA_OBJDUMP to a binutils objdump for LoongArch")
+            _LA_DIS = ObjdumpDis(tool, "loongarch")
+        return _LA_DIS
+
+    def gen(self, rng):
+        pool = getattr(self, "_pool", None)
+        if not pool:
+            pool = [rng.getrandbits(32).to_bytes(4, "little") for _ in range(8192)]
+            self.capstone().prime(pool)
+            self._pool = pool
+        return pool.pop()
+
+
 TC_DENY = re.compile(
     r"^(j.*|call.*|ret|rfe|rfm|syscall|debug|trap.*|isync|dsync|svlcx|rslcx|bisr|ldlcx|lducx|stlcx|stucx|"
     r"mfcr|mtcr|enable|disable|wait|nop|cachea.*|cachei.*|loop.*|fcall.*|fret|cmpswap.*|swap.*|ldmst|.*\.f|q.*)$"
@@ -1052,4 +1163,4 @@ class M68k(Arch32):
         return cand["mnemonic"] == "link.w" and cand["op_str"].startswith("a7,")
 
 
-ARCHES = {a.name: a for a in (X86_64(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), S390x(), TriCore(), Nios2(), Sh4(), M68k())}
+ARCHES = {a.name: a for a in (X86_64(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), S390x(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k())}

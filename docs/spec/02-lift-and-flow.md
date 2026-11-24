@@ -1287,7 +1287,7 @@ recovered switch table.
   The gate is on the install, as for `msvcftol`.
 
 - **AEABI floating-point helpers** (`crates/unlace-lift/src/p2_lift/kuna_aeabifloat.rs`,
-  option **`aeabifloat`**, default off): on 32-bit ARM the same payload list
+  option **`aeabifloat`**, default on): on 32-bit ARM the same payload list
   carries the run-time ABI's floating-point helpers (RTABI32 4.1.2), each body
   the IEEE 754 operation the helper performs on its base-standard operands.
   `__aeabi_dadd`, `dsub`, `drsub`, `dmul`, `ddiv` and the `f` forms are
@@ -1310,17 +1310,18 @@ recovered switch table.
   `__floatsidf`, `__fixdfsi`, `__fixdfdi`, ...): libgcc defines both names at
   one address, a static image may name the function by either, and newlib
   calls the libgcc names directly. The three-way `__eqdf2`/`__ltdf2` family
-  returns something else and keeps its calls. Default off: the fold takes the
-  image's helpers to be RTABI32's round-to-nearest IEEE ones, which a library
-  built for flush-to-zero or another rounding mode is not. The gate is on the
+  returns something else and keeps its calls. Default on: RTABI32 requires the
+  helpers to be round-to-nearest IEEE 754, so the fold changes no value on a
+  conforming image; flip it off for a firmware that links non-IEEE helpers
+  (flush-to-zero, a fixed-point shim) under the AEABI names. The gate is on the
   install, as for `arithhelpers`. The load-time call-fixup scan
   (`unlace_analysis::callfixup`) matches every kuna family whatever its option,
   because it runs before the run's options reach the architecture; the commit
   re-derives each fact's fixup through the gated map. Gating the scan too left a
   relocatable object's undefined `__aeabi_*` imports, which only the scan names,
-  without the fixup under `option aeabifloat on`. On a hard-float caller that moves the
-  `r0:r1` result into `d0` (`vmov d0, r0, r1`), the result still prints as two
-  masked halves of a union cast joined by `+`.
+  without the fixup. On a hard-float caller that moves the `r0:r1` result into
+  `d0` (`vmov d0, r0, r1`), the two halves join back into the value through
+  `maskjoin` (chapter 3).
 
 - **Objective-C ARC bookkeeping** (`crates/unlace-lift/src/p2_lift/kuna_objcarc.rs`,
   option **`objcarc`**, default on): the second kuna-owned call-fixup family,

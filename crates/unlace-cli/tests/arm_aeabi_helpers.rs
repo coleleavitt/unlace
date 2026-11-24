@@ -1,14 +1,16 @@
 //! Calls to the Arm run-time ABI helpers carry their RTABI32 prototypes, laid out
 //! under the base standard whatever the image's own convention: a soft-float
 //! object (with or without an FPU, either byte order) and a hard-float object on
-//! a single-precision FPU, whose `double` operations call the helpers. Under
-//! `option aeabifloat on` the floating-point helpers print as the C operators
-//! and casts they implement.
+//! a single-precision FPU, whose `double` operations call the helpers. By
+//! default (`aeabifloat`) the floating-point helpers print as the C operators
+//! and casts they implement; `option aeabifloat off` keeps the typed calls.
 use crate::common;
 use common::{repo_root, run_kuna};
 
+const CALLS: [&str; 3] = ["--option", "aeabifloat", "off"];
+
 fn decompile(object: &str, function: &str) -> String {
-    decompile_with(object, function, &[])
+    decompile_with(object, function, &CALLS)
 }
 
 fn decompile_with(object: &str, function: &str, options: &[&str]) -> String {
@@ -109,8 +111,8 @@ fn folded_hard_float_double_helpers_print_as_operators_and_casts() {
 #[test]
 fn a_double_moved_back_to_d0_prints_whole() {
     for (function, line, options) in [
-        ("dadd", "return __aeabi_dadd(a,b);", &[][..]),
-        ("i2d", "return __aeabi_i2d(a);", &[][..]),
+        ("dadd", "return __aeabi_dadd(a,b);", &CALLS[..]),
+        ("i2d", "return __aeabi_i2d(a);", &CALLS[..]),
         ("dadd", "return a + b;", &FOLD[..]),
         ("i2d", "return (double)a;", &FOLD[..]),
     ] {

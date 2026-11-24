@@ -4517,6 +4517,20 @@ with an EGPR was a bad instruction. Exercised by `x86_apx.rs` (an
 `evex_probe` against `llvm-objdump`, and an EVEX ANDN/SHRX routine that
 decompiles to `(~a1 & a0) >> (a2 & 0x3f)`).
 
+### x86 ENQCMD and CMPccXADD (#98)
+
+`ia.sinc` decodes ENQCMD and ENQCMDS (F2/F3 0F 38 F8) in every x86 language:
+the 64-byte enqueue store is a user operation whose result is ZF (the retry
+status), with OF SF AF PF CF cleared. `cmpccxadd.sinc` adds CMPccXADD to
+`x86:LE:64:*` (VEX E0+cc, and its APX EVEX form in `apx_evex.sinc`): the old
+memory value is compared with the first register as CMP does, the sum with the
+second register is stored only when the condition holds, and the first register
+gets the old value, so a `cmpexadd` decompiles to the compare-and-add it is.
+Before, each was a bad instruction. The EVEX-promoted GPR forms in
+`apx_evex.sinc` now also leave a disp8 uncompressed (N=1); before, they took
+the AVX-512 scaling of whatever tuple context was current. Exercised by the
+`x86_64_cmpccxadd` row of `unlace-cli/tests/processors.toml`.
+
 ### x86-64 AVX10.2 (#98)
 
 `specs/Ghidra/Processors/x86/data/languages/avx10_2.sinc` decodes AVX10.2 in
@@ -4575,7 +4589,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `SAM8` | Samsung SAM8 (S3C8/S3F8), SAM88RCRI (S3C9/S3F9) | `SAM8:BE:16:default`, `SAM88RCRI:BE:16:default` | Samsung S3C8-series user's manual ch. 6 (instruction set), S3C9454B/F9454B user's manual | `unlace-cli/tests/sam8_raw.rs` |
 | `EVM` | Ethereum Virtual Machine bytecode, Cancun opcode set | `EVM:BE:32:Cancun` | Ethereum Yellow Paper appendix H, evm.codes opcode reference, EIPs 145/1153/3855/4844/5656/7516 | `unlace-cli/tests/evm.rs` |
 | `Rabbit` | Rabbit Semiconductor Rabbit 2000 / Rabbit 3000A | `Rabbit2000:LE:16:default`, `Rabbit3000:LE:16:default` | Rabbit 2000/3000 Instruction Reference Manual (019-0098), Rabbit 2000/3000 User's Manuals, Dynamic C docs | `unlace-cli/tests/rabbit_raw.rs` |
-| `Lanai` | Lanai v11 (Myricom, Google) | `lanai:BE:32:default` | LLVM Lanai backend (`LanaiInstrFormats.td` format descriptions, `LanaiInstrInfo.td`, `LanaiCallingConv.td`) | `unlace-cli/tests/lanai_raw.rs` |
+| `Lanai` | Lanai v11 (Myricom, Google) | `lanai:BE:32:default` | LLVM Lanai backend (`LanaiInstrFormats.td` format descriptions, `LanaiInstrInfo.td`, `LanaiCallingConv.td`) | `unlace-cli/tests/processors.toml` (`lanai`) |
 | `META` | Imagination Technologies META (Meta 1.1, 1.2, 2.1), GP instructions | `META:LE:32:default` | binutils `include/opcode/metag.h` and `opcodes/metag-dis.c` field layouts, Linux `arch/metag` ABI; checked against `metag-linux-gnu-objdump` | `unlace-cli/tests/meta_raw.rs` |
 | `S1C` | Epson S1C17 and S1C33000 cores | `S1C17:LE:24:default`, `S1C33:LE:32:default` | Epson S1C17 Core Manual Rev. 1.2, S1C33000 Core CPU Manual, S1C17 Startup Manual, S1C33 Application Note | `unlace-cli/tests/s1c_raw.rs` |
 | `ST20` | Inmos/ST ST20-C2 and ST20-C4 integer cores | `ST20:LE:32:default` | ST20C2/C4 Core Instruction Set Reference Manual (72-TRN-273-01), transputer compiler writer's guide | `unlace-cli/tests/st20_raw.rs` |
@@ -4584,14 +4598,16 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `PowerPC` (Gekko) | IBM Gekko / Broadway (PowerPC 750CL) paired singles | `PowerPC:BE:32:Gekko` | IBM PowerPC 750CL User's Manual (paired-single chapter); checked against `powerpc-elf-objdump -M gekko` 2.43.1 | `unlace-cli/tests/ppc_gekko.rs` |
 | `PowerPC` (SPE2) | NXP e200z4/e200z7 with SPE2 and EFS2 | `PowerPC:BE:32:e200-SPE2` | binutils PowerPC opcode table (SPE2/EFS2 rows), SPE2 intrinsic names; checked against `powerpc-elf-objdump` 2.43.1 | `unlace-cli/tests/ppc_spe2.rs` |
 | `M16C` (`M32C_80`) | Renesas M32C/80 (M16C/80 set plus `MUL.L`, `DIV*.L`, `SHANC.L`, `SHLNC.L`) | `M32C/80:LE:24:default` | Renesas M32C/80 Series Software Manual REJ09B0319; checked against `m32c-elf-as` 2.43.1 | `unlace-cli/tests/m32c_raw.rs` |
-| `Propeller` | Parallax Propeller 1 (P8X32A) cog | `propeller:LE:16:default` | Propeller Manual v1.2 assembly reference, P8X32A datasheet opcode matrix | `unlace-cli/tests/propeller_raw.rs` |
+| `Propeller` | Parallax Propeller 1 (P8X32A) cog | `propeller:LE:16:default` | Propeller Manual v1.2 assembly reference, P8X32A datasheet opcode matrix | `unlace-cli/tests/processors.toml` (`propeller`) |
 | `MIPS` (MIPS-3D, SmartMIPS) | MIPS64 with MIPS-3D, MIPS32 with SmartMIPS (pre-R6 languages) | existing `MIPS:*:64:*` and `MIPS:*:32:*` pre-R6 languages | binutils MIPS opcode table (MIPS-3D/SmartMIPS rows), MIPS-3D (MD00099) and SmartMIPS ASE specifications; checked against `mips-elf-objdump` 2.43.1 | `unlace-cli/tests/mips_ase.rs` |
 | `NFP` | Netronome NFP-6xxx flow-processor microengine (ME v2.8, 8 contexts) | `NFP:LE:32:ME28` | binutils `opcodes/nfp-dis.c` and `include/opcode/nfp.h` field layouts; checked against binutils objdump (`elf64-nfp`) | `unlace-cli/tests/nfp_raw.rs` |
 | `TLCS870` | Toshiba TLCS-870 (TMP87xx) | `TLCS870:LE:16:default` | Toshiba TLCS-870 data books; MAME tlcs870 (BSD-3) | `unlace-cli/tests/tlcs870_raw.rs` |
-| `MMIX` | Knuth MMIX | `MMIX:BE:64:default` | MMIXware (Knuth), binutils `mmix` opcode table, GCC `config/mmix` ABI | `unlace-cli/tests/mmix_raw.rs` |
+| `MMIX` | Knuth MMIX | `MMIX:BE:64:default` | MMIXware (Knuth), binutils `mmix` opcode table, GCC `config/mmix` ABI | `unlace-cli/tests/processors.toml` (`mmix`) |
 | `Z8000` | Zilog Z8002 (non-segmented), Z8001 (segmented) | `Z8002:BE:16:default`, `Z8001:BE:32:segmented` | Zilog Z8000 CPU Technical Manual + PLZ/ASM manual; MAME z8000 (BSD-3) cross-check; tgtakaoka/libasm (Apache-2.0) | `unlace-cli/tests/z8000_raw.rs` |
 | `Z380` | Zilog Z380 (Native/Extended, Word/Long Word, DDIR W/LW/IB/IW) | `Z380:LE:32:default` | Zilog Z380 User's Manual DC-8297-03 (Appendix C opcode tables); flag macros adapted from the in-repo Z80 module | `unlace-cli/tests/z380_raw.rs` |
 | `VAX` | DEC VAX (base, G/H floating and vector encodings) | `VAX:LE:32:default` | VAX Architecture Reference Manual; MAME `vax` disassembler (opcode table, length oracle) | `unlace-cli/tests/vax.rs` |
+| `Xtensa` (ESP32-S3 PIE) | Xtensa LX7 with the ESP32-S3 Processor Instruction Extensions (`EE.*`) | `Xtensa:LE:32:esp32s3` | Espressif LLVM `XtensaS3DSPInstrInfo.td` (encodings, generated), ESP32-S3 TRM PIE chapter | `unlace-cli/tests/processors.toml` (`xtensa_esp32s3_pie_*`) |
+| `eZ80` | Zilog eZ80 (eZ80Acclaim! eZ80F91/F92/F93/L92, eZ80190), ADL and Z80 modes | `eZ80:LE:24:ADL`, `eZ80:LE:24:Z80` | Zilog UM0077/UM0080; MAME z80 (BSD-3); libasm (Apache-2.0); binutils z80-dis.c read to cross-check encodings only | `unlace-cli/tests/ez80_raw.rs` |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)

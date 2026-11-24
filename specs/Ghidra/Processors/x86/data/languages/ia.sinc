@@ -7434,6 +7434,29 @@ define pcodeop movdir64b;
 }
 @endif
 
+define pcodeop enqcmd;
+define pcodeop enqcmds;
+:ENQCMD       Reg16, m512 is $(LONGMODE_OFF) & vexMode=0 & $(PRE_F2) & addrsize=0 & byte=0x0F; byte=0x38; byte=0xF8; Reg16 ... & m512 {
+	ZF = enqcmd(Reg16, m512); OF = 0; SF = 0; AF = 0; PF = 0; CF = 0;
+}
+:ENQCMD       Reg32, m512 is vexMode=0 & $(PRE_F2) & addrsize=1 & byte=0x0F; byte=0x38; byte=0xF8; Reg32 ... & m512 {
+	ZF = enqcmd(Reg32, m512); OF = 0; SF = 0; AF = 0; PF = 0; CF = 0;
+}
+:ENQCMDS      Reg16, m512 is $(LONGMODE_OFF) & vexMode=0 & $(PRE_F3) & addrsize=0 & byte=0x0F; byte=0x38; byte=0xF8; Reg16 ... & m512 {
+	ZF = enqcmds(Reg16, m512); OF = 0; SF = 0; AF = 0; PF = 0; CF = 0;
+}
+:ENQCMDS      Reg32, m512 is vexMode=0 & $(PRE_F3) & addrsize=1 & byte=0x0F; byte=0x38; byte=0xF8; Reg32 ... & m512 {
+	ZF = enqcmds(Reg32, m512); OF = 0; SF = 0; AF = 0; PF = 0; CF = 0;
+}
+@ifdef IA64
+:ENQCMD       Reg64, m512 is $(LONGMODE_ON) & vexMode=0 & $(PRE_F2) & addrsize=2 & byte=0x0F; byte=0x38; byte=0xF8; Reg64 ... & m512 {
+	ZF = enqcmd(Reg64, m512); OF = 0; SF = 0; AF = 0; PF = 0; CF = 0;
+}
+:ENQCMDS      Reg64, m512 is $(LONGMODE_ON) & vexMode=0 & $(PRE_F3) & addrsize=2 & byte=0x0F; byte=0x38; byte=0xF8; Reg64 ... & m512 {
+	ZF = enqcmds(Reg64, m512); OF = 0; SF = 0; AF = 0; PF = 0; CF = 0;
+}
+@endif
+
 :MOVDDUP      XmmReg, m64         is vexMode=0 &  $(PRE_F2) & byte=0x0F; byte=0x12; m64 & XmmReg ...
 {
     XmmReg[0,64] = m64;

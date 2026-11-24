@@ -4182,6 +4182,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `EmotionEngine` | PlayStation 2 Emotion Engine (R5900, MMI, VU) | `r5900:LE:32:default` | aleph-void/ghidra-emotionengine-reloaded (fork of chaoticgd/ghidra-emotionengine-reloaded) @ `77e147c007`, Apache-2.0 |
 | `Allegrex` | PSP Allegrex (with VFPU) | `Allegrex:LE:32:default` | aleph-void/ghidra-allegrex (fork of kotcrab/ghidra-allegrex) @ `7929c178ae`, Apache-2.0 |
 | `DSP56300` | Motorola DSP563xx | `DSP56300:LE:24:default`, `DSP56300:LE:24:modulo` | aleph-void/ghidra-dsp56300 (fork of roblg/ghidra-dsp56300) @ `78509aa7f8`, Apache-2.0 |
+| `NS32000` | National Semiconductor NS32000 | `NS32016:LE:32:default`, `NS32016:LE:32:NS32532` | aleph-void/ghidra-NS32016 (fork of raybellis/ghidra-NS32016) @ `de87d2c093`, Apache-2.0 |
 <!-- vendor-rows -->
 
 ### WDC 65816 (#98)

@@ -9,9 +9,9 @@ use std::ffi::OsString;
 use std::process::Command;
 
 use unlace_decomp::{
-    kuna_calltargettype, kuna_debuglink, kuna_delphiabi, kuna_dyldcache, kuna_exporttrie, kuna_goabi,
-    kuna_ifuncfpret, kuna_kernelcache, kuna_libctypes, kuna_macho_arm64e, kuna_objcivars,
-    kuna_objcsdk, kuna_ppcapu, kuna_sourcelang, kuna_symbolnamechars,
+    kuna_calltargettype, kuna_debuglink, kuna_delphiabi, kuna_dyldcache, kuna_exporttrie,
+    kuna_goabi, kuna_ifuncfpret, kuna_kernelcache, kuna_libctypes, kuna_macho_arm64e,
+    kuna_objcivars, kuna_objcsdk, kuna_ppcapu, kuna_sourcelang, kuna_symbolnamechars,
 };
 
 #[derive(Clone, Copy)]

@@ -9,7 +9,8 @@
 //! `s0` as it came in) is an unaffected input to the ancestor check, which
 //! rejects it, and the output fill-in then cannot start at `s1`: the function
 //! came out `void mkh(void)`. A computed value a RETURN alone reads in a higher
-//! register is a result (a compiler does not compute a dead value), so
+//! register (not a constant, not the zero fill a narrow write leaves) is a
+//! result (a compiler does not compute a dead value), so
 //! [`keep_lower_results`] also keeps the first lane of each lower floating
 //! output entry the RETURNs read as the function's own input.
 
@@ -37,6 +38,34 @@ fn float_entry(data: &Funcdata, space: usize, off: u64, size: i32) -> Option<usi
         })
 }
 
+/// Whether every live RETURN reads, in `slot`, a value the function computes:
+/// neither a constant nor a COPY of one (the zero a narrow write leaves in the
+/// upper lanes of a register is a COPY of zero).
+fn computed(data: &Funcdata, return_ops: &[crate::context::OpId], slot: i32) -> bool {
+    return_ops.iter().all(|&r| {
+        let Some(o) = data.obank().get(r) else {
+            return true;
+        };
+        if o.is_dead() || o.get_halt_type() != 0 || o.code() != OpCode::CPUI_RETURN {
+            return true;
+        }
+        let Some(v) = o.get_in(slot).and_then(|v| data.vbank().get(v)) else {
+            return false;
+        };
+        if v.is_constant() || v.is_input() {
+            return false;
+        }
+        let Some(def) = v.get_def().and_then(|d| data.obank().get(d)) else {
+            return false;
+        };
+        !(def.code() == OpCode::CPUI_COPY
+            && def
+                .get_in(0)
+                .and_then(|c| data.vbank().get(c))
+                .is_some_and(|c| c.is_constant()))
+    })
+}
+
 /// Mark active the trial at the start of each floating output entry below the
 /// highest one an active trial lies in, when every live RETURN reads there the
 /// function's own input at that storage.
@@ -56,7 +85,8 @@ pub fn keep_lower_results(
         };
         let off = t.get_address().get_offset();
         if let Some(entry) = float_entry(data, space.get_index() as usize, off, t.get_size()) {
-            placed.push((i, entry, t.is_active()));
+            let real = t.is_active() && computed(data, return_ops, t.get_slot());
+            placed.push((i, entry, real));
         }
     }
     let Some(top) = placed
@@ -82,7 +112,10 @@ pub fn keep_lower_results(
             .collect()
     };
     for lower in 0..top {
-        if placed.iter().any(|(_, e, a)| *e == lower && *a) {
+        if placed
+            .iter()
+            .any(|(i, e, _)| *e == lower && active.get_trial(*i).is_active())
+        {
             continue;
         }
         let Some(&(base, _)) = entries.get(lower) else {

@@ -314,16 +314,18 @@ define pcodeop fsub_q;
 {
 	local sg1:4 = trunc(frs1);
 	local sv2:4 = sg1;
-	local sg3:1 = frs1 f< 0xcf000000:16;
-	if (!sg3) goto <sgsat1>;
+	local sg3:16 = float2float(0xc1e0000000000000:8);
+	local sg4:16 = float2float(0x41e0000000000000:8);
+	local sg5:1 = frs1 f< sg3;
+	if (!sg5) goto <sgsat1>;
 		sv2 = 0x80000000:4;
 	<sgsat1>
-	local sg4:1 = frs1 f>= 0x4f000000:16;
-	if (!sg4) goto <sgsat2>;
+	local sg6:1 = frs1 f>= sg4;
+	if (!sg6) goto <sgsat2>;
 		sv2 = 0x7fffffff:4;
 	<sgsat2>
-	local sg5:1 = nan(frs1);
-	if (!sg5) goto <sgsat3>;
+	local sg7:1 = nan(frs1);
+	if (!sg7) goto <sgsat3>;
 		sv2 = 0x7fffffff:4;
 	<sgsat3>
 	rd = sv2;
@@ -359,16 +361,18 @@ define pcodeop fsub_q;
 	local sg1:8 = trunc(frs1);
 	local sg2:4 = sg1:4;
 	local sv3:4 = sg2;
-	local sg4:1 = frs1 f<= 0xbf800000:16;
-	if (!sg4) goto <sgsat1>;
+	local sg4:16 = float2float(0xbff0000000000000:8);
+	local sg5:16 = float2float(0x41f0000000000000:8);
+	local sg6:1 = frs1 f<= sg4;
+	if (!sg6) goto <sgsat1>;
 		sv3 = 0x0:4;
 	<sgsat1>
-	local sg5:1 = frs1 f>= 0x4f800000:16;
-	if (!sg5) goto <sgsat2>;
+	local sg7:1 = frs1 f>= sg5;
+	if (!sg7) goto <sgsat2>;
 		sv3 = 0xffffffff:4;
 	<sgsat2>
-	local sg6:1 = nan(frs1);
-	if (!sg6) goto <sgsat3>;
+	local sg8:1 = nan(frs1);
+	if (!sg8) goto <sgsat3>;
 		sv3 = 0xffffffff:4;
 	<sgsat3>
 	rd = sv3;
@@ -1719,20 +1723,22 @@ define pcodeop fsub_q;
 {
 	local sg1:4 = trunc(frs1);
 	local sv2:4 = sg1;
-	local sg3:1 = frs1 f< 0xcf000000:16;
-	if (!sg3) goto <sgsat1>;
+	local sg3:16 = float2float(0xc1e0000000000000:8);
+	local sg4:16 = float2float(0x41e0000000000000:8);
+	local sg5:1 = frs1 f< sg3;
+	if (!sg5) goto <sgsat1>;
 		sv2 = 0x80000000:4;
 	<sgsat1>
-	local sg4:1 = frs1 f>= 0x4f000000:16;
-	if (!sg4) goto <sgsat2>;
+	local sg6:1 = frs1 f>= sg4;
+	if (!sg6) goto <sgsat2>;
 		sv2 = 0x7fffffff:4;
 	<sgsat2>
-	local sg5:1 = nan(frs1);
-	if (!sg5) goto <sgsat3>;
+	local sg7:1 = nan(frs1);
+	if (!sg7) goto <sgsat3>;
 		sv2 = 0x7fffffff:4;
 	<sgsat3>
-	local sg6:8 = sext(sv2);
-	rd = sg6;
+	local sg8:8 = sext(sv2);
+	rd = sg8;
 }
 
 :fcvt.w.q rd,frs1,"rdn" is rd & frs1 & op0006=0x53 & funct3=0x2 & op2031=0xc60
@@ -1765,20 +1771,22 @@ define pcodeop fsub_q;
 	local sg1:8 = trunc(frs1);
 	local sg2:4 = sg1:4;
 	local sv3:4 = sg2;
-	local sg4:1 = frs1 f<= 0xbf800000:16;
-	if (!sg4) goto <sgsat1>;
+	local sg4:16 = float2float(0xbff0000000000000:8);
+	local sg5:16 = float2float(0x41f0000000000000:8);
+	local sg6:1 = frs1 f<= sg4;
+	if (!sg6) goto <sgsat1>;
 		sv3 = 0x0:4;
 	<sgsat1>
-	local sg5:1 = frs1 f>= 0x4f800000:16;
-	if (!sg5) goto <sgsat2>;
+	local sg7:1 = frs1 f>= sg5;
+	if (!sg7) goto <sgsat2>;
 		sv3 = 0xffffffff:4;
 	<sgsat2>
-	local sg6:1 = nan(frs1);
-	if (!sg6) goto <sgsat3>;
+	local sg8:1 = nan(frs1);
+	if (!sg8) goto <sgsat3>;
 		sv3 = 0xffffffff:4;
 	<sgsat3>
-	local sg7:8 = sext(sv3);
-	rd = sg7;
+	local sg9:8 = sext(sv3);
+	rd = sg9;
 }
 
 :fcvt.wu.q rd,frs1,"rdn" is rd & frs1 & op0006=0x53 & funct3=0x2 & op2031=0xc61

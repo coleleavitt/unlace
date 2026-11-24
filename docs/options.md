@@ -586,6 +586,8 @@ Three tiers:
 | a predicate function prints as an if/else of two constant returns | [`boolreturn`](#boolreturn----on--off-default-off) |
 | if (c) { ...long body... } else { abort(); } with the error path last | [`noretfirst`](#noretfirst----on--off-default-off) |
 | the main path of a function is nested in an if whose else only exits | [`noretfirst`](#noretfirst----on--off-default-off) |
+| if (a) { if (b) { ... } } where the source wrote one if (a && b) | [`nestedand`](#nestedand----on--off-default-off) |
+| a chain of tests on one pointer prints as nested ifs with no else | [`nestedand`](#nestedand----on--off-default-off) |
 | rule pools spend most of their time re-testing ops nothing changed | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a large function's simplification repeats full sweeps for a handful of rewrites | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a DOS program's globals print as *(short *)0x308e near-pointer dereferences instead of named globals | [`mzdgroup`](#mzdgroup----on--off-default-on) |
@@ -2523,6 +2525,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** Turn on to read guard clauses as the source likely wrote them: `if (p == NULL) { abort(); } use(p);` instead of `if (p != NULL) { use(p); } else { abort(); }`. Leave off for Ghidra's own arm order; both orders are the same object code.
 - **Where / provenance:** P9/condition-form · kuna · structure-recovery · kuna-noretfirst
 - **Example:** `option noretfirst on`
+
+### `nestedand` -- on | off, default `off`
+
+- **Symptoms:** if (a) { if (b) { ... } } where the source wrote one if (a && b); a chain of tests on one pointer prints as nested ifs with no else.
+- **What it does:** C output only: print an if whose whole body is another if, neither with an else, as one if over the two conditions joined by &&: `if (a) { if (b) { X } }` becomes `if ((a) && (b)) { X }`, printed the way a structured && condition prints. The inner if must print nothing before its test (no statement, no comment, no label), its condition must be a single leaf, and neither if may print as a switch or an exception form; chains fold from the outside in, so three nested ifs become one if over a && b && c. A rewrite of the C syntax tree (`docs/architecture/ctree.md`): turning it on builds the tree for every printed function. The structurer's own && folding (ruleBlockAnd, condfold) is unchanged; this covers the tests it leaves nested.
+- **When to flip:** Turn on when nested ifs with no else read as one source condition (`if (p && p->x)` chains a compiler laid out as separate tests). Leave off to keep each test as its own if, as Ghidra prints it; with no else the two forms run the same code.
+- **Where / provenance:** P9/condition-form · kuna · structure-recovery · kuna-nestedand
+- **Example:** `option nestedand on`
 
 ## Analysis & loader passes
 

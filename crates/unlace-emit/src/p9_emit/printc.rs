@@ -4865,7 +4865,8 @@ impl PrintC {
         self.assign_label_names(fd, sroot);
         let tree_on = arch.kuna_options.get::<crate::kuna_ctree::Ctree>().0
             || arch.kuna_options.get::<crate::kuna_ctree::Boolreturn>().0
-            || arch.kuna_options.get::<crate::kuna_ctree::Noretfirst>().0;
+            || arch.kuna_options.get::<crate::kuna_ctree::Noretfirst>().0
+            || arch.kuna_options.get::<crate::kuna_ctree::Nestedand>().0;
         self.ctree = if tree_on && !self.is_flat() {
             crate::kuna_ctreebuild::build(fd)
         } else {
@@ -5050,6 +5051,58 @@ impl PrintC {
                 .close_paren(crate::printlanguage::CLOSE_PAREN, id2);
             self.context.pop_mod();
             self.emit.close_paren(crate::printlanguage::CLOSE_PAREN, id);
+        }
+    }
+
+    /// (kuna `nestedand`) Print a condition of the C syntax tree in the `ONLY_BRANCH` state:
+    /// a `Branch` as its condition block's branch, an `And` the way
+    /// [`emit_block_condition`](Self::emit_block_condition) prints a `&&` of two condition
+    /// blocks (the left operand in this state, the right operand comma-separated, each
+    /// parenthesized). The right operand of an `And` is always a `Branch`.
+    fn emit_cond_expr(
+        &mut self,
+        fd: &Funcdata,
+        arch: &Architecture,
+        expr: crate::kuna_ctree::ExprId,
+    ) {
+        use crate::kuna_ctree::ExprKind;
+        let kind = match self.ctree.as_ref() {
+            Some(tree) => tree.expr(expr).kind.clone(),
+            None => return,
+        };
+        match kind {
+            ExprKind::Branch(block) => self.emit_block(fd, arch, block),
+            ExprKind::And(left, right) => {
+                let right_block = match self
+                    .ctree
+                    .as_ref()
+                    .map(|tree| tree.expr(right).kind.clone())
+                {
+                    Some(ExprKind::Branch(block)) => block,
+                    _ => return,
+                };
+                let id = self.emit.open_paren(crate::printlanguage::OPEN_PAREN, 0);
+                self.emit_cond_expr(fd, arch, left);
+                self.context.push_mod();
+                self.context.unset_mod(modifiers::ONLY_BRANCH);
+                self.context.set_mod(modifiers::COMMA_SEPARATE);
+                let pol = ReversePolish {
+                    tok: &tokens::BOOLEAN_AND,
+                    visited: 1,
+                    paren: false,
+                    op: None,
+                    id: 0,
+                    id2: 0,
+                };
+                self.emit_op(&pol);
+                let id2 = self.emit.open_paren(crate::printlanguage::OPEN_PAREN, 0);
+                self.emit_block(fd, arch, right_block);
+                self.emit
+                    .close_paren(crate::printlanguage::CLOSE_PAREN, id2);
+                self.context.pop_mod();
+                self.emit.close_paren(crate::printlanguage::CLOSE_PAREN, id);
+            }
+            _ => {}
         }
     }
 
@@ -5868,7 +5921,9 @@ impl PrintC {
         self.emit.spaces(1, 0);
         self.context.push_mod();
         self.context.set_mod(modifiers::ONLY_BRANCH);
-        if !self.emit_rust_option_condition(fd, arch, cond_block) {
+        if let Some(chain) = self.and_condition(blk) {
+            self.emit_cond_expr(fd, arch, chain);
+        } else if !self.emit_rust_option_condition(fd, arch, cond_block) {
             self.emit_block(fd, arch, cond_block);
         }
         self.context.pop_mod();

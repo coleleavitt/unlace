@@ -5768,6 +5768,17 @@ Itanium exception `if`. `emit_block_if` prints it with no else, the body through
 `emit_part` (`CTree::stmt_for` finds the `if` inside the sequence), then the
 moved arm under `NO_BRANCH`.
 
+With `option nestedand on` (C output; default off), a last pass over the
+statements, outermost first, folds an `if` with no else and no goto whose body is
+another such `if` (not rewritten above) into one `if` over `And(cond, inner)`,
+while the inner `if` prints nothing before its test (`header_prints_nothing`, no
+comment, no label), its condition is a single `BlockCopy` leaf, and neither is a
+switch-merge or Itanium exception `if`; the fold repeats on the new body.
+`emit_block_if` prints the header through `emit_cond_expr`, which prints an
+`And` exactly as `emit_block_condition` prints a `&&` of two condition blocks: the
+left operand in the `ONLY_BRANCH` state, the `&&` token, the right leaf
+comma-separated, each parenthesized.
+
 The walk is `printc/kuna_ctreeprint.rs`. The body prints from the root's
 statements; `emit_block` first asks the tree for the statement built from its
 block, and the walk prints a `BlockGraph` sequence (each statement in its own

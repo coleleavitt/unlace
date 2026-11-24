@@ -14,6 +14,8 @@ mod huc6280;
 mod m6800_family;
 #[path = "mips_elf_selection.rs"]
 mod mips_elf_selection;
+#[path = "pdp11_raw.rs"]
+mod pdp11_raw;
 #[path = "moxie_raw.rs"]
 mod moxie_raw;
 #[path = "return_branch_cli.rs"]

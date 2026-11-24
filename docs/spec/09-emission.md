@@ -4999,7 +4999,12 @@ argument when the op has no result. The table covers:
 - packed integer arithmetic, saturating and unsigned forms, compares, shifts,
   min/max, averages, packs, unpacks and permutes (`_mm256_adds_epu8`,
   `_mm256_max_epu8`, `_mm256_cmpgt_epi32`, `_mm256_permutevar8x32_epi32`);
-- the bitwise forms on the whole register (`_mm256_and_si256`).
+- the bitwise forms on the whole register (`_mm256_and_si256`);
+- the AVX-512CD and AVX-512F/VL forms `vplzcnt{d,q}`, `vpconflict{d,q}` and
+  `vpternlog{d,q}` (`_mm512_lzcnt_epi64`, `_mm_conflict_epi32`,
+  `_mm256_ternarylogic_epi64`). Ternary logic keeps its immediate as the
+  fourth argument, and its masked forms take the merge source first, as the
+  Intel `_mm512_mask_ternarylogic_epi32(src, k, a, b, c, imm)` does.
 
 The FMA family is the one place where the argument order changes. SLEIGH passes
 the instruction's operands `(a, b, c)` in encoding order, and the form number
@@ -5014,7 +5019,11 @@ is unaffected. Changes 0/675 datatest assertions; the stage test
 `gh9184-x86-fma-ymm256.xml` now accepts either spelling of its FMA sanity
 check. Pinned by `tests/stages/avxintrinsics.toml`.
 
-Not done (the rest of IDA's avxlifter): vector datatypes (`__m256`), re-fusing
+Not done (the rest of IDA's avxlifter): AVX-512 compress and expand, gather and
+scatter, the k-mask ops, FP16, VNNI, IFMA, BF16, popcnt, permutex2var (a
+merge-masked `vpermi2` writes its index operand, so the generic `_mask`
+rewrite would order its arguments wrongly), multishift, GFNI, VAES, CLMUL and
+SHA, which keep their SLEIGH names; vector datatypes (`__m256`), re-fusing
 the per-lane SLEIGH bodies of VEX float ops into one vector op, folding
 AVX-512 `conditionalAssign` mask chains into `_mask_`/`_maskz_` forms, and a
 vector-register calling convention. A trial cspec with `YMM0`-`YMM7` input

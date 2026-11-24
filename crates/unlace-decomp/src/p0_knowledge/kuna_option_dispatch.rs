@@ -464,6 +464,7 @@ kuna_options! { self, p1;
         registered!(crate::kuna_analysisgates::Machoehframe)
     },
     "ehcold" => registered!(crate::kuna_analysisgates::Ehcold),
+    "mfcmsgmap" => registered!(crate::kuna_analysisgates::Mfcmsgmap),
     "importvote" => registered!(crate::kuna_importvote::Importvote),
     "ehnote" => registered!(crate::kuna_analysisgates::Ehnote),
     "funcstart_patterns" => {

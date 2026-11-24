@@ -10434,6 +10434,23 @@ call-site indices, not code ranges, in its table. So every LSDA walker skips it
 personality whose name cannot be read is read as Itanium. With `itaniumeh` on,
 the pads are shown and no note is attached.
 
+**(kuna) MFC message-map handlers are functions** (`mfcmsgmap`, default-**off**;
+`crates/unlace-analysis/src/analyzers/entry/kuna_mfcmsgmap.rs`). An MFC window
+class routes messages through a static `AFX_MSGMAP` in `.rdata`
+(`pfnGetBaseMap`, `lpEntries`), and its `AFX_MSGMAP_ENTRY` array (`nMessage,
+nCode, nID, nLastID, nSig, pfn`, 24 bytes each, ending in an all-zero entry)
+names each handler. `CWnd::OnWndMsg` calls `pfn` indirectly, so nothing else
+finds the handlers, and each was folded into the function before it. On a
+32-bit PE the deferred entry pass reads every table the base relocations vouch
+for: `lpEntries` and the `pfnGetBaseMap` word before it are relocated,
+`pfnGetBaseMap` points into an executable section, the entries lie in a
+non-executable section, and every entry's `pfn` is a relocated pointer into
+code, with `nMessage` below 0x10000 and `nSig` below 0x100. A run that
+breaks any of these is not read. The handlers join the committed entries, so
+the walk also uses them as roots. On PEGRP32F.dll it reads 29 maps and 198
+handlers. Every handler is an IDA 9.5 function start, and 194 were missing
+from the inventory before.
+
 **(kuna) MSVC throw metadata is labelled** (`msvceh`, default-**off**;
 `crates/unlace-analysis/src/analyzers/entry/kuna_msvceh.rs (find_throw_infos)`).
 An MSVC `throw e;` is `_CxxThrowException(&e, &ThrowInfo)` and `throw;` is

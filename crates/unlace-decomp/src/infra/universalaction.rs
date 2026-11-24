@@ -1784,6 +1784,9 @@ pub fn universal_sched_hooked(
             act!(crate::kuna_returnselector::ActionReturnSelector::boxed(
                 "merge"
             )),
+            // (kuna) spphistack: a bare input stack pointer a phi reads becomes
+            // PTRSUB(sp, 0), before HighVariables are assigned and merged.
+            act!(crate::kuna_spphistack::ActionSpPhiStack::boxed("merge")),
             act!(ActionAssignHigh::boxed("merge")),
             act!(ActionMergeRequired::boxed("merge")),
             act!(ActionMarkExplicit::boxed("merge")),

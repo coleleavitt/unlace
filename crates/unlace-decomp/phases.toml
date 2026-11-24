@@ -5959,6 +5959,25 @@ live_true = "on"
 live_false = "off"
 
 [[settable]]
+option = "spphistack"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P6"
+subphase = "merge-aggressiveness"
+strength = "HARD"
+rewind = "P6"
+issue = "unlace-975"
+summary = "Turn a MULTIEQUAL input that is the bare input stack pointer into PTRSUB(sp, 0) computed at the end of that edge's predecessor, just before HighVariables are assigned. A va_list the function spills and reloads becomes, after the stack is heritaged and its +4 steps move into the loop, a loop phi whose entry value is sp(i) itself (MIPS o32 and AArch64 add_all); merging puts sp(i) into the phi's HighVariable, which then takes the stack pointer's addrtied storage name and prints as Register00000074 = (int *)((int)Register00000074 + 4). With the option on the phi merges with an ordinary value whose source is a stack reference, as an sp(i) + c already is."
+use_when = "Off by default: it inserts an op on the edge into every phi that reads the input stack pointer, and what the stack reference prints as depends on the stack symbols mapped at offset 0. Turn it on when a varargs loop or another walk that starts at the incoming stack pointer prints as an assignment to RegisterNNNNNNNN (the stack pointer's storage) instead of a local."
+example = "--option spphistack on"
+source_decompiler = "kuna"
+inspiration = "real-code sweep (#975): zig mips/aarch64 -O2 add_all; Hex-Rays stack-variable resolution and the hexmips va_list adapter (notes/ida-gap/hexrays-microcode.md)"
+change_kind = "new-analysis"
+tier = "transform"
+symptoms = "a va_list walk prints as Register00000074 = (int *)((int)Register00000074 + 4) on MIPS|a varargs loop on AArch64 reads (int *)Register00000008|a loop pointer that starts at the incoming stack pointer is named after the stack pointer register's storage"
+
+[[settable]]
 option = "avxintrinsics"
 values = "on|off"
 default = "on"

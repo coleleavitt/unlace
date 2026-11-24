@@ -396,6 +396,7 @@ kuna_options! { self, p1;
     "mba" => registered!(crate::kuna_mba::Mba),
     "egraph" => registered!(crate::kuna_egraph::Egraph),
     "pairlocal" => registered!(crate::kuna_pairphi::PairLocal),
+    "spphistack" => registered!(crate::kuna_spphistack::SpPhiStack),
     "avxintrinsics" => registered!(crate::printc::AvxIntrinsics),
     "x87depth" => registered!(crate::kuna_x87depth::X87Depth),
     "trapaftercall" => registered!(crate::kuna_coreoptions::TrapAfterCall),

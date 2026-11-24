@@ -208,6 +208,128 @@ def semantics(mn, suf, imm):
     L.append(_pack(res, s))
     return L
 
+def semantics2(mn, suf, imm):
+    """The remaining integer groups (their element formulas follow the MSA specification; where it
+    leaves a result open, QEMU's helpers)."""
+    base = mn.split(".")[0]
+    if suf not in SIZE:
+        return None
+    s = SIZE[suf]; n = 16 // s; B = 8 * s
+    L = []
+    a = lambda i: "ma%d" % i
+    b = lambda i: "mb%d" % i
+    usesimm = base in ("bclri", "bseti", "bnegi", "binsli", "binsri", "srari", "srlri", "sat_s", "sat_u")
+    op = {"bclri": "bclr", "bseti": "bset", "bnegi": "bneg", "binsli": "binsl", "binsri": "binsr",
+          "srari": "srar", "srlri": "srlr"}.get(base, base)
+    elementwise = {"bclr", "bset", "bneg", "binsl", "binsr", "srar", "srlr", "ave_s", "ave_u", "aver_s", "aver_u",
+                   "sat_s", "sat_u", "max_a", "min_a", "asub_s", "asub_u", "subsus_u", "subsuu_s"}
+    if op in ("hadd_s", "hadd_u", "hsub_s", "hsub_u"):
+        hs = s // 2
+        ext = "sext" if op.endswith("_s") else "zext"
+        o = "+" if op.startswith("hadd") else "-"
+        res = []
+        for i in range(n):
+            L.append("local mx%d:%d = msa_ws(%d);" % (i, hs, (2 * i + 1) * hs))
+            L.append("local my%d:%d = msa_wt(%d);" % (i, hs, (2 * i) * hs))
+            L.append("local mr%d:%d = %s(mx%d) %s %s(my%d);" % (i, s, ext, i, o, ext, i))
+            res.append("mr%d" % i)
+        L.append(_pack(res, s))
+        return L
+    if op == "shf":
+        res = []
+        for i in range(n):
+            g4, k = i // 4, i % 4
+            L.append("local mix%d:4 = ((%s >> %d) & 3) + %d;" % (i, imm, 2 * k, 4 * g4))
+            L.append("local msh%d:16 = msa_ws >> (mix%d * %d);" % (i, i, B))
+            L.append("local mr%d:%d = msh%d:%d;" % (i, s, i, s))
+            res.append("mr%d" % i)
+        L.append(_pack(res, s))
+        return L
+    if op == "vshf":
+        L += _elems("msa_wd", s, n, "mc")
+        res = []
+        for i in range(n):
+            L.append("local mk%d:4 = zext(mc%d:1 & 0x3f) %% %d;" % (i, i, 2 * n))
+            L.append("local mlo%d:16 = msa_wt >> (mk%d * %d);" % (i, i, B))
+            L.append("local mhi%d:16 = msa_ws >> ((mk%d - %d) * %d);" % (i, i, n, B))
+            L.append("local mpick%d:%d = (mlo%d:%d * zext(mk%d < %d)) | (mhi%d:%d * zext(mk%d >= %d));" % (i, s, i, s, i, n, i, s, i, n))
+            L.append("local mr%d:%d = mpick%d * zext((mc%d:1 & 0xc0) == 0);" % (i, s, i, i))
+            res.append("mr%d" % i)
+        L.append(_pack(res, s))
+        return L
+    if op in ("sld", "sldi"):
+        # windows of n bytes (n = the element count), each the low bytes of ws:wd slid down by k bytes
+        E = n
+        if op == "sld":
+            L.append("local mk:4 = msa_rt:4 %% %d;" % E)
+        else:
+            L.append("local mk:4 = %s;" % imm)
+        res = []
+        for w in range(16 // E):
+            L.append("local mws%d:%d = msa_ws(%d);" % (w, E, w * E))
+            L.append("local mwd%d:%d = msa_wd(%d);" % (w, E, w * E))
+            L.append("local mr%d:%d = (mws%d >> (mk * 8)) | (mwd%d << ((%d - mk) * 8));" % (w, E, w, w, E))
+            res.append("mr%d" % w)
+        L.append(_pack(res, E))
+        return L
+    if op not in elementwise:
+        return None
+    L += _elems("msa_ws", s, n, "ma")
+    if op in ("binsl", "binsr"):
+        L += _elems("msa_wd", s, n, "mc")
+    if not usesimm and op not in ("sat_s", "sat_u"):
+        L += _elems("msa_wt", s, n, "mb")
+    if usesimm:
+        L.append("local mm:%d = %s;" % (s, imm))
+    res = []
+    for i in range(n):
+        x, r = a(i), "mr%d" % i
+        y = "mm" if usesimm else b(i)
+        if op in ("bclr", "bset", "bneg"):
+            L.append("local mbit%d:%d = 1 << (%s & %d);" % (i, s, y, B - 1))
+            L.append("local %s:%d = %s;" % (r, s, {"bclr": "%s & ~mbit%d", "bset": "%s | mbit%d", "bneg": "%s ^ mbit%d"}[op] % (x, i)))
+        elif op in ("binsl", "binsr"):
+            L.append("local mn%d:%d = %s & %d;" % (i, s, y, B - 1))
+            ones = "0x%x" % ((1 << B) - 1)
+            if op == "binsl":
+                L.append("local mmask%d:%d = ~((%s:%d >> mn%d) >> 1);" % (i, s, ones, s, i))
+            else:
+                L.append("local mmask%d:%d = ~((%s:%d << mn%d) << 1);" % (i, s, ones, s, i))
+            L.append("local %s:%d = (%s & mmask%d) | (mc%d & ~mmask%d);" % (r, s, x, i, i, i))
+        elif op in ("srar", "srlr"):
+            sh = ">>" if op == "srlr" else "s>>"
+            L.append("local msh%d:%d = %s & %d;" % (i, s, y, B - 1))
+            L.append("local mrb%d:%d = ((%s >> (msh%d - 1)) & 1) * zext(msh%d != 0);" % (i, s, x, i, i))
+            L.append("local %s:%d = (%s %s msh%d) + mrb%d;" % (r, s, x, sh, i, i))
+        elif op in ("ave_s", "ave_u", "aver_s", "aver_u"):
+            sh = "s>>" if op.endswith("_s") else ">>"
+            rnd = "|" if op.startswith("aver") else "&"
+            L.append("local %s:%d = (%s %s 1) + (%s %s 1) + ((%s %s %s) & 1);" % (r, s, x, sh, y, sh, x, rnd, y))
+        elif op == "sat_s":
+            L.append("local mhi%d:%d = (1 << mm) - 1;" % (i, s))
+            L.append("local mlo%d:%d = 0 - (1 << mm);" % (i, s))
+            L.append("local %s:%d = (%s * zext((%s s<= mhi%d) && (%s s>= mlo%d))) | (mhi%d * zext(%s s> mhi%d)) | (mlo%d * zext(%s s< mlo%d));" % (r, s, x, x, i, x, i, i, x, i, i, x, i))
+        elif op == "sat_u":
+            L.append("local mhi%d:%d = (2 << mm) - 1;" % (i, s))
+            L.append("local %s:%d = (%s * zext(%s <= mhi%d)) | (mhi%d * zext(%s > mhi%d));" % (r, s, x, x, i, i, x, i))
+        elif op in ("max_a", "min_a"):
+            L.append("local mxa%d:%d = (%s * zext(%s s>= 0)) | ((0 - %s) * zext(%s s< 0));" % (i, s, x, x, x, x))
+            L.append("local mya%d:%d = (%s * zext(%s s>= 0)) | ((0 - %s) * zext(%s s< 0));" % (i, s, y, y, y, y))
+            c = "mxa%d > mya%d" % (i, i) if op == "max_a" else "mxa%d < mya%d" % (i, i)
+            L.append("local %s:%d = (%s * zext(%s)) | (%s * zext(!(%s)));" % (r, s, x, c, y, c))
+        elif op in ("asub_s", "asub_u"):
+            cmp = "s>" if op == "asub_s" else ">"
+            L.append("local %s:%d = ((%s - %s) * zext(%s %s %s)) | ((%s - %s) * zext(!(%s %s %s)));" % (r, s, x, y, x, cmp, y, y, x, x, cmp, y))
+        elif op == "subsus_u":
+            L.append("local mw%d:%d = zext(%s) - sext(%s);" % (i, 2 * s, x, y))
+            L.append("local %s:%d = (mw%d:%d * zext((mw%d s>= 0) && (mw%d s<= %s))) | (%s * zext(mw%d s> %s));" % (r, s, i, s, i, i, _umax(s), _umax(s), i, _umax(s)))
+        elif op == "subsuu_s":
+            L.append("local mw%d:%d = zext(%s) - zext(%s);" % (i, 2 * s, x, y))
+            L.append("local %s:%d = (mw%d:%d * zext((mw%d s<= %s) && (mw%d s>= %s))) | (%s * zext(mw%d s> %s)) | (%s * zext(mw%d s< %s));" % (r, s, i, s, i, _smax(s), i, _smin(s), _smax(s), i, _smax(s), _smin(s), i, _smin(s)))
+        res.append(r)
+    L.append(_pack(res, s))
+    return L
+
 out = []
 skipped = []
 for name, fmt, args in encs:
@@ -330,7 +452,7 @@ for name, mn, suf, cons, ops, asm, wd_in, signed_imm, fmt in out:
                 ins.append("msa_" + op)
         if imm:
             ins.append(imm + ":4")
-        sem = semantics(mn, suf, imm)
+        sem = semantics(mn, suf, imm) or semantics2(mn, suf, imm)
         if sem:
             body = sem
         else:

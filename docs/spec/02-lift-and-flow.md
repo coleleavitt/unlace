@@ -4345,9 +4345,11 @@ do the element-wise groups: `addv`/`subv`/`mulv` (and `addvi`/`subvi`), the bitw
 element's low bits), the compares `ceq`/`clt`/`cle` (and immediates; all-ones or zero elements),
 `min`/`max` (signed, unsigned, immediates), the saturating `adds_s`/`adds_u`/`subs_s`/`subs_u`,
 `div`/`mod` (a zero divisor gives what QEMU gives: the architecture leaves it UNPREDICTABLE),
-`pcnt`/`nlzc`/`nloc`, `fill`/`ldi`/`splat`/`splati`, and the `ilv*`/`pck*` permutations. Every
-other instruction (floating point, dot products, fixed-point `q` forms, `shf`, `vshf`, `sld`, ...)
-is a user operation named after its mnemonic (`msa_addv_w`) with the
+`pcnt`/`nlzc`/`nloc`, `fill`/`ldi`/`splat`/`splati`, the `ilv*`/`pck*` permutations, `shf`, `vshf`,
+`sld`/`sldi` (byte windows of the element count, as QEMU slides them), `binsl`/`binsr`, the rounding
+shifts `srar`/`srlr`, `ave`/`aver`, `sat_s`/`sat_u`, `max_a`/`min_a`, `hadd`/`hsub`, `asub`,
+`subsus_u`/`subsuu_s` and `bclr`/`bset`/`bneg` (each with its immediate form). The floating-point,
+dot-product and fixed-point `q` instructions are user operations named after its mnemonic (`msa_addv_w`) with the
 destination as output and the read operands (and the destination, for the accumulating forms)
 as inputs.
 

@@ -6432,8 +6432,14 @@ moves.
   not `off`;
   `crates/unlace-analysis/src/analyzers/demangle/kuna_msvcsig.rs`, the
   signature half of Ghidra's `MicrosoftDemanglerAnalyzer`) reads an MSVC-mangled
-  name as the full declaration it is, and reads it off the **PE imports** as well
-  as off defined symbols. The Itanium reading above sees only `file.symbols()` and
+  name as the full declaration it is, and reads it off the **PE imports** and the
+  **PE exports** as well as off defined symbols. A linked PE keeps no symbol
+  table, so on a DLL the export directory is the only place a
+  `__declspec(dllexport)` member's declaration survives: an MSVC-mangled export
+  whose address lies in a code section is read as a defined function at that
+  address (`?SendFrame@CUsbCanDriver@@QAEHPAUcan_frame@@I@Z` gives
+  `CUsbCanDriver::SendFrame` its ECX `this`, its `can_frame *` and its `int`
+  return), and a data or vftable export is not. The Itanium reading above sees only `file.symbols()` and
   `file.dynamic_symbols()`, and a PE import lives in the import table, so a call
   through the IAT to `?IsValid@Arr@@QAEHXZ` was named `Arr::IsValid` and had no
   prototype: the `this` that MSVC passes in ECX was dropped, a hidden return

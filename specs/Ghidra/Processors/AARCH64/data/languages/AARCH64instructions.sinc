@@ -4015,4 +4015,5 @@ unimpl
 @include "AARCH64_apple.sinc"
 @include "AARCH64_rme.sinc"
 @include "AARCH64_sve2.sinc"
+@include "AARCH64_svemm.sinc"
 @include "AARCH64_sme.sinc"

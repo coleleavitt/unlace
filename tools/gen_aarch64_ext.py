@@ -4,7 +4,8 @@
 Usage:
   llvm-tblgen --dump-json -I <llvm>/include -I <llvm>/lib/Target/AArch64 \
       <llvm>/lib/Target/AArch64/AArch64.td -o aarch64.json
-  gen_aarch64_ext.py aarch64.json <Predicate,...> <prefix> <OP_> out.sinc [probe.json [<ExcludedPredicate,...>]]
+  gen_aarch64_ext.py aarch64.json <Predicate,...> <prefix> <OP_> out.sinc [probe.json [<ExcludedPredicate,...>
+      [<RequiredPredicate,...> [skip.txt]]]]
 
 Every non-pseudo 32-bit instruction record carrying one of the predicates is
 emitted. Its fixed bits become token-field constraints. Each operand field is
@@ -13,7 +14,9 @@ operand text LLVM prints for each accepted value becomes one entry of a SLEIGH
 subtable that exports the register (or the constant) it names. Each instruction
 lifts to the user operation <OP_><mnemonic>: its output is the first written
 operand and its inputs are the read operands. probe.json receives the records
-with one sample encoding each and LLVM's text for it.
+with one sample encoding each and LLVM's text for it. A record must also carry one
+of the required predicates when that list is given (an empty list requires
+nothing), and the records named in skip.txt (one per line) are left out.
 """
 import io, sys, json, re, random, subprocess, collections
 random.seed(1234)
@@ -21,7 +24,7 @@ random.seed(1234)
 def load(path):
     return json.load(open(path))
 
-def records(J, want, exclude=()):
+def records(J, want, exclude=(), require=()):
     out = []
     for name in J['!instanceof']['Instruction']:
         r = J[name]
@@ -31,6 +34,7 @@ def records(J, want, exclude=()):
         ps = [p['def'] for p in r.get('Predicates', [])]
         if not any(p in want for p in ps): continue
         if any(p in exclude for p in ps): continue
+        if require and not any(p in require for p in ps): continue
         mask = val = 0
         vars_ = collections.defaultdict(list)
         for pos, e in enumerate(r['Inst']):
@@ -86,8 +90,8 @@ def llvm(words, attr='+all'):
     return res
 
 
-def sample(J, want, excl):
-    recs = records(J, want, excl)
+def sample(J, want, excl, require=()):
+    recs = records(J, want, excl, require)
     del J
     # phase 2: bases
     cands = []
@@ -381,9 +385,11 @@ def emit(data, P, OPP, skip=()):
 
 if __name__ == '__main__':
     J = load(sys.argv[1])
-    excl = set(sys.argv[7].split(',')) if len(sys.argv) > 7 else set()
-    data = sample(J, set(sys.argv[2].split(',')), excl)
+    excl = set(p for p in sys.argv[7].split(',') if p) if len(sys.argv) > 7 else set()
+    req = set(p for p in sys.argv[8].split(',') if p) if len(sys.argv) > 8 else set()
+    skip = set(open(sys.argv[9]).read().split()) if len(sys.argv) > 9 else set()
+    data = sample(J, set(sys.argv[2].split(',')), excl, req)
     del J
-    open(sys.argv[5], 'w').write(emit(data, sys.argv[3], sys.argv[4]))
+    open(sys.argv[5], 'w').write(emit(data, sys.argv[3], sys.argv[4], skip))
     if len(sys.argv) > 6:
         json.dump(data, open(sys.argv[6], 'w'))

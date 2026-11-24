@@ -7,7 +7,7 @@
 //! opcode bits outside the relocation field.
 //!
 //! Supported instruction families are ARM `CALL`/`JUMP24`, Thumb call/jump,
-//! `REL32`, and `PREL31`; AArch64 branch, ADRP page, ADD low-12, and scaled load/
+//! `REL32`, `PREL31`, and the A32/Thumb-2 `MOVW`/`MOVT` pairs; C-SKY `bsr32`; AArch64 branch, ADRP page, ADD low-12, and scaled load/
 //! store low-12 forms; PowerPC (32- and 64-bit) `REL24`/`PLTREL24`/`LOCAL24PC`
 //! and `ADDR24` branches, the 14-bit conditional-branch forms, the absolute,
 //! PC-relative (`REL16`) and TOC-relative 16-bit halves, TOC64, and the
@@ -66,6 +66,8 @@ enum Specific {
     ArmBranch24,
     ArmThumbBranch24,
     ArmPrel31,
+    CskyBsr26,
+    ArmMovw { thumb: bool, top: bool, pc: bool },
     PcRelativeData,
     Aarch64Branch26,
     Aarch64AdrPage { checked: bool },
@@ -261,6 +263,7 @@ impl RelocationSpec {
                     | Specific::LarchCall36
                     | Specific::LarchBranch { .. }
                     | Specific::LanaiBranch25
+                    | Specific::CskyBsr26
                     | Specific::AvrPcrel { bits: 12 }
                     | Specific::AvrCall
                     | Specific::CudaAbs47
@@ -534,6 +537,17 @@ fn classify_info(
         }
         (Architecture::Arm, Some(elf::R_ARM_REL32)) => Some((Specific::PcRelativeData, false)),
         (Architecture::Arm, Some(elf::R_ARM_PREL31)) => Some((Specific::ArmPrel31, false)),
+        (Architecture::Arm, Some(t @ 43..=50)) => {
+            let n = t - 43;
+            Some((
+                Specific::ArmMovw {
+                    thumb: n >= 4,
+                    top: n % 2 == 1,
+                    pc: n % 4 >= 2,
+                },
+                false,
+            ))
+        }
 
         (Architecture::Aarch64, Some(elf::R_AARCH64_CALL26)) => {
             Some((Specific::Aarch64Branch26, true))
@@ -828,6 +842,9 @@ fn classify_info(
         (Architecture::Hexagon, Some(r_type)) if classify_hexagon(r_type).is_some() => {
             classify_hexagon(r_type)
         }
+        (Architecture::Csky, Some(elf::R_CKCORE_PCREL_IMM26BY2)) => {
+            Some((Specific::CskyBsr26, true))
+        }
         (Architecture::Bpf, Some(elf::R_BPF_NONE)) => return Ok(None),
         (Architecture::Bpf, Some(elf::R_BPF_64_64)) => Some((Specific::BpfImm64, false)),
         (Architecture::Bpf, Some(elf::R_BPF_64_32)) => Some((Specific::BpfCall, true)),
@@ -976,6 +993,17 @@ fn apply_info(
             target_thumb,
         ),
         Specific::ArmPrel31 => arm_prel31(field, little_endian, reloc, symbol, place),
+        Specific::CskyBsr26 => csky_bsr26(field, little_endian, reloc, symbol, place),
+        Specific::ArmMovw { thumb, top, pc } => arm_movw(
+            field,
+            little_endian,
+            reloc,
+            symbol,
+            pc.then_some(place),
+            thumb,
+            top,
+            target_thumb,
+        ),
         Specific::PcRelativeData => pc_relative_data(field, little_endian, reloc, symbol, place),
         Specific::Aarch64Branch26 => aarch64_branch26(field, little_endian, reloc, symbol, place),
         Specific::Aarch64AdrPage { checked } => {
@@ -1464,6 +1492,86 @@ fn arm_branch24(
         insn = (insn & !0x00ff_ffff) | (((value >> 2) as u32) & 0x00ff_ffff);
     }
     write_u32(field, le, insn);
+    Ok(())
+}
+
+/// ARM `MOVW`/`MOVT` (`43`..`46`, A32 `cond 0011 0x00 imm4 Rd imm12`) and the
+/// Thumb-2 forms (`47`..`50`, `11110 i 10x100 imm4 / 0 imm3 Rd imm8`): the low
+/// half of `(S + A) | T` (`MOVW_*_NC`) or the high half of `S + A` (`MOVT_*`),
+/// less `P` for the `PREL` forms. ARM objects are REL: `A` is the signed
+/// imm16 already in the instruction.
+#[allow(clippy::too_many_arguments)]
+fn arm_movw(
+    field: &mut [u8],
+    le: bool,
+    reloc: RelocationInfo,
+    symbol: u64,
+    place: Option<u64>,
+    thumb: bool,
+    top: bool,
+    target_thumb: Option<bool>,
+) -> Result<(), RelocationFailure> {
+    let (imm, form) = if thumb {
+        let hi = read_u16(&field[..2], le);
+        let lo = read_u16(&field[2..], le);
+        let imm =
+            ((hi & 0xf) << 12) | (((hi >> 10) & 1) << 11) | (((lo >> 12) & 7) << 8) | (lo & 0xff);
+        let op = if top { 0xf2c0 } else { 0xf240 };
+        (imm, hi & 0xfbf0 == op && lo & 0x8000 == 0)
+    } else {
+        let insn = read_u32(field, le);
+        let imm = (((insn >> 4) & 0xf000) | (insn & 0xfff)) as u16;
+        let op = if top { 0x0340_0000 } else { 0x0300_0000 };
+        (imm, insn & 0x0ff0_0000 == op)
+    };
+    if !form {
+        return Err(RelocationFailure::InvalidEncoding);
+    }
+    let mut value = symbol as i128 + explicit_plus_implicit(reloc, i128::from(imm as i16));
+    if !top && target_thumb == Some(true) {
+        value |= 1;
+    }
+    value -= place.map_or(0, i128::from);
+    let x = (if top { value >> 16 } else { value } as u32 & 0xffff) as u16;
+    if thumb {
+        let hi = read_u16(&field[..2], le);
+        let lo = read_u16(&field[2..], le);
+        let hi = (hi & 0xfbf0) | ((x >> 12) & 0xf) | (((x >> 11) & 1) << 10);
+        let lo = (lo & 0x8f00) | (((x >> 8) & 7) << 12) | (x & 0xff);
+        write_u16(&mut field[..2], le, hi);
+        write_u16(&mut field[2..], le, lo);
+    } else {
+        let insn = read_u32(field, le);
+        let x = u32::from(x);
+        write_u32(
+            field,
+            le,
+            (insn & 0xfff0_f000) | ((x & 0xf000) << 4) | (x & 0xfff),
+        );
+    }
+    Ok(())
+}
+
+/// C-SKY `bsr32 label` (`PCREL_IMM26BY2`): `111000` then a 26-bit halfword
+/// displacement `(S + A - P) >> 1`. A 32-bit C-SKY instruction is two halfwords,
+/// the high one first, each in the object's byte order.
+fn csky_bsr26(
+    field: &mut [u8],
+    le: bool,
+    reloc: RelocationInfo,
+    symbol: u64,
+    place: u64,
+) -> Result<(), RelocationFailure> {
+    let insn = (u32::from(read_u16(&field[..2], le)) << 16) | u32::from(read_u16(&field[2..], le));
+    if insn >> 26 != 0x38 || reloc.implicit_addend {
+        return Err(RelocationFailure::InvalidEncoding);
+    }
+    let value = symbol as i128 + reloc.addend as i128 - place as i128;
+    require_aligned(value, 2)?;
+    require_signed(value, 27)?;
+    let insn = (insn & !0x03ff_ffff) | (((value >> 1) as u32) & 0x03ff_ffff);
+    write_u16(&mut field[..2], le, (insn >> 16) as u16);
+    write_u16(&mut field[2..], le, insn as u16);
     Ok(())
 }
 
@@ -3727,6 +3835,163 @@ mod tests {
             );
             assert_eq!(field, before);
         }
+    }
+}
+
+#[cfg(test)]
+mod arm_movw_tests {
+    use super::*;
+
+    fn patch(
+        r_type: u32,
+        bytes: [u8; 4],
+        le: bool,
+        symbol: u64,
+        place: u64,
+        thumb: Option<bool>,
+    ) -> Result<[u8; 4], RelocationFailure> {
+        let info = RelocationInfo {
+            kind: RelocationKind::Unknown,
+            encoding: RelocationEncoding::Unknown,
+            size: 0,
+            addend: 0,
+            implicit_addend: true,
+            r_type: Some(r_type),
+        };
+        let spec = classify_info(Architecture::Arm, info)?.expect("not a no-op");
+        let mut field = bytes;
+        apply_info(spec, info, &mut field, le, symbol, place, thumb, None)?;
+        Ok(field)
+    }
+
+    // Words as ld.lld writes them for the sweep's zig thumb, arm and armeb objects.
+    #[test]
+    fn movw_movt_pairs_match_the_linker() {
+        let g = 0x2_0348;
+        assert_eq!(
+            patch(47, [0x40, 0xf2, 0x00, 0x01], true, g, 0x1_002a, None),
+            Ok([0x40, 0xf2, 0x48, 0x31])
+        );
+        assert_eq!(
+            patch(48, [0xc0, 0xf2, 0x00, 0x01], true, g, 0x1_002e, None),
+            Ok([0xc0, 0xf2, 0x02, 0x01])
+        );
+        let h = 0x2_049c;
+        assert_eq!(
+            patch(43, [0x00, 0x00, 0x00, 0x93], true, h, 0x1_0044, None),
+            Ok([0x9c, 0x04, 0x00, 0x93])
+        );
+        assert_eq!(
+            patch(44, [0x00, 0x00, 0x40, 0x93], true, h, 0x1_0048, None),
+            Ok([0x02, 0x00, 0x40, 0x93])
+        );
+        assert_eq!(
+            patch(43, [0x93, 0x00, 0x00, 0x00], false, h, 0x1_0044, None),
+            Ok([0x93, 0x00, 0x04, 0x9c])
+        );
+        assert_eq!(
+            patch(44, [0x93, 0x40, 0x00, 0x00], false, h, 0x1_0048, None),
+            Ok([0x93, 0x40, 0x00, 0x02])
+        );
+    }
+
+    #[test]
+    fn movw_takes_the_thumb_bit_the_rel_addend_and_the_pc() {
+        // `movw r0, #:lower16:f+4` against a Thumb function: (S + A) | 1.
+        assert_eq!(
+            patch(
+                43,
+                0xe300_0004u32.to_le_bytes(),
+                true,
+                0x1_2340,
+                0,
+                Some(true)
+            ),
+            Ok(0xe302_0345u32.to_le_bytes())
+        );
+        // `movt` keeps the high half of S + A, carry included, and ignores T.
+        assert_eq!(
+            patch(
+                44,
+                0xe340_0fffu32.to_le_bytes(),
+                true,
+                0x1_f001,
+                0,
+                Some(true)
+            ),
+            Ok(0xe340_0002u32.to_le_bytes())
+        );
+        // MOVW_PREL_NC: (S + A) - P.
+        assert_eq!(
+            patch(
+                45,
+                0xe300_0000u32.to_le_bytes(),
+                true,
+                0x1_2340,
+                0x1_0000,
+                None
+            ),
+            Ok(0xe302_0340u32.to_le_bytes())
+        );
+        assert_eq!(
+            patch(47, 0xe300_0000u32.to_le_bytes(), true, 0x1_2340, 0, None),
+            Err(RelocationFailure::InvalidEncoding)
+        );
+    }
+}
+
+#[cfg(test)]
+mod csky_tests {
+    use super::*;
+
+    fn bsr(
+        bytes: [u8; 4],
+        le: bool,
+        symbol: u64,
+        place: u64,
+    ) -> Result<[u8; 4], RelocationFailure> {
+        let info = RelocationInfo {
+            kind: RelocationKind::Unknown,
+            encoding: RelocationEncoding::Unknown,
+            size: 0,
+            addend: 0,
+            implicit_addend: false,
+            r_type: Some(elf::R_CKCORE_PCREL_IMM26BY2),
+        };
+        let spec = classify_info(Architecture::Csky, info)?.expect("not a no-op");
+        assert!(spec.is_call());
+        let mut field = bytes;
+        apply_info(spec, info, &mut field, le, symbol, place, None, None)?;
+        Ok(field)
+    }
+
+    // Words as GNU ld 2.45 writes them for csky-elf-gcc 15.3 objects.
+    #[test]
+    fn bsr32_matches_the_linker_and_is_range_checked() {
+        assert_eq!(
+            bsr([0x00, 0xe0, 0x00, 0x00], true, 0x1_0568, 0x1_0310),
+            Ok([0x00, 0xe0, 0x2c, 0x01])
+        );
+        assert_eq!(
+            bsr([0x00, 0xe0, 0x00, 0x00], true, 0x1_05d0, 0x1_031a),
+            Ok([0x00, 0xe0, 0x5b, 0x01])
+        );
+        assert_eq!(
+            bsr([0xe0, 0x00, 0x00, 0x00], false, 0x1_0310, 0x1_0568),
+            Ok([0xe3, 0xff, 0xfe, 0xd4])
+        );
+        assert_eq!(
+            bsr([0x00, 0xe0, 0x00, 0x00], true, 0x1_0569, 0x1_0310),
+            Err(RelocationFailure::Misaligned)
+        );
+        assert_eq!(
+            bsr([0x00, 0xe0, 0x00, 0x00], true, 0x400_0000, 0),
+            Err(RelocationFailure::OutOfRange)
+        );
+        assert_eq!(
+            bsr([0x00, 0xe8, 0x00, 0x00], true, 0x1_0568, 0x1_0310),
+            Err(RelocationFailure::InvalidEncoding)
+        );
     }
 }
 

@@ -1809,18 +1809,21 @@ pub fn run_listing_consumers_replaying_observed(
                         })
                     };
                     let mut veto_out = AnalysisOutput::default();
+                    let string_at = |e: u64| crate::aif::kuna_aifstringveto::string_at(&file, e);
                     veto_out.data_vetoed = listing
                         .functions()
                         .filter(|(_, f)| !f.from_symbol)
                         .map(|(&e, _)| e)
-                        .filter(|&e| targets.contains(&e) && !flow_target(e))
+                        .filter(|&e| (targets.contains(&e) || string_at(e)) && !flow_target(e))
                         .collect();
                     out.push(("aifdataveto", veto_out));
                     aif_out.entries.retain(|&e| {
                         let span = listing
                             .instruction_at(e)
                             .map_or(1, |i| u64::from(i.len).max(1));
-                        flow_target(e) || targets.range(e..e.saturating_add(span)).next().is_none()
+                        flow_target(e)
+                            || (targets.range(e..e.saturating_add(span)).next().is_none()
+                                && !string_at(e))
                     });
                 }
             }

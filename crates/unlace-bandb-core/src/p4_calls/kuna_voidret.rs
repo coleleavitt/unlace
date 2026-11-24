@@ -1404,31 +1404,44 @@ pub fn due(arch: &mut Architecture) -> BTreeSet<(int4, uintb)> {
     let mut force: Vec<((int4, uintb), (Address, int4))> = Vec::new();
     let mut withdraw: Vec<(int4, uintb)> = Vec::new();
     let mut displace: Vec<(int4, uintb)> = Vec::new();
+    let (mut forced, mut returns, mut storage) = (
+        Seek::new(&ledger.forced),
+        Seek::new(&ledger.returns),
+        Seek::new(&ledger.storage),
+    );
     for (callee, claims) in &ledger.read {
         let Some(first) = claims.first() else {
             continue;
         };
+        let was_forced = forced.get(callee);
+        if was_forced.is_some() && ledger.withdrawn.contains(callee) {
+            continue;
+        }
         let space = |a: &Address| a.get_space().map(|s| s.get_index());
+        let (first_space, first_offset) = (space(&first.0), first.0.get_offset());
         let agree = claims
             .iter()
-            .all(|(a, _)| space(a) == space(&first.0) && a.get_offset() == first.0.get_offset());
-        let widest = claims
-            .iter()
-            .max_by_key(|(_, s)| *s)
-            .cloned()
-            .unwrap_or_else(|| first.clone());
-        match ledger.forced.get(callee) {
-            None if agree && ledger.returns.get(callee) == Some(&Returns::Void) => {
-                force.push((*callee, widest))
+            .all(|(a, _)| a.get_offset() == first_offset && space(a) == first_space);
+        let widest = || claims.iter().max_by_key(|(_, s)| *s).unwrap_or(first);
+        match was_forced {
+            None if agree => {
+                let widest = widest();
+                let recovered = returns.get(callee);
+                if recovered == Some(&Returns::Void) {
+                    force.push((*callee, widest.clone()));
+                } else if displaced(ledger, callee, recovered, storage.get(callee), widest) {
+                    displace.push(*callee);
+                    force.push((*callee, widest.clone()));
+                }
             }
-            None if agree && displaced(ledger, callee, &widest) => {
-                displace.push(*callee);
-                force.push((*callee, widest));
-            }
-            Some(_) if ledger.withdrawn.contains(callee) => {}
+            None => {}
             Some(_) if !agree => withdraw.push(*callee),
-            Some((_, size)) if widest.1 > *size => force.push((*callee, widest)),
-            _ => {}
+            Some((_, size)) => {
+                let widest = widest();
+                if widest.1 > *size {
+                    force.push((*callee, widest.clone()));
+                }
+            }
         }
     }
     ledger.displacing.extend(displace);
@@ -1466,21 +1479,45 @@ pub fn due(arch: &mut Architecture) -> BTreeSet<(int4, uintb)> {
 /// function `int put(..)` by zeroing every call-clobbered register but `eax`,
 /// so `pxor %xmm0,%xmm0` made `put` return the constant `0.0` its callers never
 /// read; to them it returns nothing, and it is forced like a `void` one.
-fn displaced(ledger: &Ledger, callee: &(int4, uintb), read: &(Address, int4)) -> bool {
+/// `returns` and `storage` are the callee's entries in the ledger's maps of those names.
+fn displaced(
+    ledger: &Ledger,
+    callee: &(int4, uintb),
+    returns: Option<&Returns>,
+    storage: Option<&(Address, int4)>,
+    read: &(Address, int4),
+) -> bool {
     let register = |a: &Address| {
         a.get_space()
             .is_some_and(|s| s.get_type() == spacetype::IPTR_PROCESSOR)
     };
     !ledger.withdrawn.contains(callee)
         && register(&read.0)
-        && matches!(
-            ledger.returns.get(callee),
-            Some(Returns::Float | Returns::Other)
-        )
-        && ledger
-            .storage
-            .get(callee)
+        && matches!(returns, Some(Returns::Float | Returns::Other))
+        && storage
             .is_some_and(|(addr, size)| register(addr) && !overlaps(addr, *size, &read.0, read.1))
+}
+
+/// A forward cursor over a ledger map: [`Seek::get`] answers `map.get(k)` for keys asked in
+/// ascending order, walking the map once instead of searching it per key.
+struct Seek<'a, V> {
+    it: std::iter::Peekable<std::collections::btree_map::Iter<'a, (int4, uintb), V>>,
+}
+
+impl<'a, V> Seek<'a, V> {
+    fn new(map: &'a BTreeMap<(int4, uintb), V>) -> Self {
+        Self {
+            it: map.iter().peekable(),
+        }
+    }
+
+    fn get(&mut self, k: &(int4, uintb)) -> Option<&'a V> {
+        while self.it.next_if(|&(key, _)| key < k).is_some() {}
+        self.it
+            .peek()
+            .filter(|&&(key, _)| key == k)
+            .map(|&(_, v)| v)
+    }
 }
 
 /// The functions that read a function whose return a redo changed after they

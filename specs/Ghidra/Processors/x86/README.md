@@ -261,3 +261,21 @@ difffuzz (4000, seed 7) is unchanged; the EVEX, VEX and legacy sweeps regress no
 newly decoded VAES/VPCLMULQDQ; `decompile-all /usr/bin/ls` is byte-identical.
 Left: SSE/MMX encodings with a reserved F2/F3 prefix that Capstone accepts stay undecoded; AMD FMA4
 is not decoded.
+
+## x87 against this CPU (`ia.sinc`)
+
+`tools/difffuzz` now emulates the 80-bit extended format exactly (`softfloat.py`) and
+`--arch x86-64-x87 --oracle native` compares ST0-ST7 and C0-C3 against this CPU. It found:
+
+- `FSTSW`/`FNSTSW` stored the last compare's status word: the condition bits that arithmetic,
+  `FPREM` and `FXAM` set never reached `AX`.
+- `FXAM` took the sign from `ST0 < 0` (wrong for -0 and NaN) and called an infinity normal.
+- `FPREM` multiplied the bits of its integer quotient as a float; `FPREM`/`FPREM1` never set
+  C2 (so a `fprem; fnstsw ax; sahf; jp` loop had an undefined condition) or the quotient bits.
+- Loads, register and 80-bit stores, `FXCH`, `FCHS`, `FABS`, `FINCSTP`, `FISTTP` and the
+  constant loads left C1 unchanged; they clear it.
+
+Checked: x87 difffuzz, 9000 encodings over four seeds, has no mismatch left beyond the documented
+classes (C1 as the round-up bit, the double-precision constants, FPREM's partial remainder);
+`decompile-all` of libm.so.6 differs only in functions that read the status word or use `FXAM`.
+Left: `FIST`/`FISTP`, `FBLD`/`FBSTP`, `FFREE` and the transcendentals stay user operations.

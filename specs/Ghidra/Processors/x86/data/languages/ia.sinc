@@ -2396,6 +2396,10 @@ macro fpopv(val) {
 	ST6 = ST7;
 }
 
+macro fstsw(dst) {
+    dst = (FPUStatusWord & 0xb8ff) | (zext(C0)<<8) | (zext(C1)<<9) | (zext(C2)<<10) | (zext(C3)<<14);
+}
+
 macro fcom(val) {
     C1 = 0;
     
@@ -5319,6 +5323,7 @@ define pcodeop f2xm1;
 { 
     FPUInstructionPointer = inst_start;
     ST0 = abs(ST0); 
+    C1 = 0;
 }
     
 :"FADD" m32fp      is vexMode=0 & $(X87_D8); reg_opcode=0 ... & m32fp 
@@ -5377,6 +5382,7 @@ define pcodeop from_bcd;
     FPUInstructionPointer = inst_start;
     fdec(); 
     ST0 = from_bcd(m80); 
+    C1 = 0;
 }
 
 define pcodeop to_bcd;
@@ -5391,6 +5397,7 @@ define pcodeop to_bcd;
 { 
     FPUInstructionPointer = inst_start;
     ST0 = f- ST0; 
+    C1 = 0;
 }
 
 instruction:FCLEX          is vexMode=0 & byte=0x9B; byte=0xDB; byte=0xE2      
@@ -5719,6 +5726,7 @@ define pcodeop ffree;
 { 
     FPUInstructionPointer = inst_start;
     fdec(); ST0 = int2float(m16); 
+    C1 = 0;
 }         
 
 :"FILD" m32      is vexMode=0 & $(X87_DB); reg_opcode=0 ... & m32
@@ -5726,6 +5734,7 @@ define pcodeop ffree;
     FPUInstructionPointer = inst_start;
     fdec(); 
     ST0 = int2float(m32); 
+    C1 = 0;
 }         
 
 :"FILD" m64      is vexMode=0 & $(X87_DF); reg_opcode=5 ... & m64
@@ -5733,12 +5742,14 @@ define pcodeop ffree;
     FPUInstructionPointer = inst_start;
     fdec(); 
     ST0 = int2float(m64); 
+    C1 = 0;
 }         
                                                                   
 :"FINCSTP"            is vexMode=0 & $(X87_D9); byte=0xF7                 
 { 
     FPUInstructionPointer = inst_start;
     finc(); 
+    C1 = 0;
 }                                   
 
 instruction:FINIT              is vexMode=0 & byte=0x9B; byte=0xDB; byte=0xE3          
@@ -5816,6 +5827,7 @@ define pcodeop x87_float_to_int64;
     FPUInstructionPointer = inst_start;
     m16 = trunc(ST0); 
     fpop();
+    C1 = 0;
 }                 
 
 :"FISTTP" m32     is vexMode=0 & $(X87_DB); reg_opcode=1 ... & m32 
@@ -5823,6 +5835,7 @@ define pcodeop x87_float_to_int64;
     FPUInstructionPointer = inst_start;
     m32 = trunc(ST0); 
     fpop(); 
+    C1 = 0;
 }
                  
 :"FISTTP" m64     is vexMode=0 & $(X87_DD); reg_opcode=1 ... & m64
@@ -5830,6 +5843,7 @@ define pcodeop x87_float_to_int64;
     FPUInstructionPointer = inst_start;
     m64 = trunc(ST0); 
     fpop(); 
+    C1 = 0;
 }                 
                                                                       
 :"FLD" m32fp        is vexMode=0 & $(X87_D9); (mod != 0b11 & reg_opcode=0) ... & m32fp            
@@ -5837,6 +5851,7 @@ define pcodeop x87_float_to_int64;
     FPUInstructionPointer = inst_start;
     fdec();
     ST0 = float2float(m32fp); 
+    C1 = 0;
 }           
 
 :"FLD" m64fp        is vexMode=0 & $(X87_DD); reg_opcode=0 ... & m64fp
@@ -5844,16 +5859,18 @@ define pcodeop x87_float_to_int64;
     FPUInstructionPointer = inst_start;
     fdec(); 
     ST0 = float2float(m64fp);
+    C1 = 0;
 }            
 
 :"FLD" m80fp        is vexMode=0 & $(X87_DB); reg_opcode=5 ... & m80fp
 {
     FPUInstructionPointer = inst_start;
     fpushv(m80fp); 
+    C1 = 0;
 }                      
 
 # Be careful that you don't clobber freg during fpushv, need a tmp to hold the value
-:"FLD" freg       is vexMode=0 & $(X87_D9); frow=12 & fpage=0 & freg          { tmp:10 = freg; fpushv(tmp); }                     
+:"FLD" freg       is vexMode=0 & $(X87_D9); frow=12 & fpage=0 & freg          { tmp:10 = freg; fpushv(tmp); C1 = 0; }                     
                                                                       
 :"FLD1"           is vexMode=0 & $(X87_D9); byte=0xE8  
 { 
@@ -5861,13 +5878,15 @@ define pcodeop x87_float_to_int64;
     one:4 = 1; 
     tmp:10 = int2float(one); 
     fpushv(tmp); 
+    C1 = 0;
 }  
 
 :"FLDL2T"		is vexMode=0 & $(X87_D9); byte=0xE9
 { 
     FPUInstructionPointer = inst_start;
-    src:8 = 0x400a934f0979a371; 
-    tmp:10 = float2float(src); 
+    src:8 = 0x400a934f0979a371;
+    tmp:10 = float2float(src);
+    C1 = 0; 
     fpushv(tmp); 
 }
 
@@ -5875,23 +5894,26 @@ define pcodeop x87_float_to_int64;
 { 
     FPUInstructionPointer = inst_start;
     src:8 = 0x3ff71547652b82fe;
-    tmp:10 = float2float(src); 
+    tmp:10 = float2float(src);
+    C1 = 0; 
     fpushv(tmp); 
 }
 
 :"FLDPI"		is vexMode=0 & $(X87_D9); byte=0xEB			
 {
     FPUInstructionPointer = inst_start;
-    src:8 = 0x400921fb54442d18; 
-    tmp:10 = float2float(src); 
+    src:8 = 0x400921fb54442d18;
+    tmp:10 = float2float(src);
+    C1 = 0; 
     fpushv(tmp);
 }
 
 :"FLDLG2"		is vexMode=0 & $(X87_D9); byte=0xEC			
 { 
     FPUInstructionPointer = inst_start;
-    src:8 = 0x3fd34413509f79ff; 
-    tmp:10 = float2float(src); 
+    src:8 = 0x3fd34413509f79ff;
+    tmp:10 = float2float(src);
+    C1 = 0; 
     fpushv(tmp); 
 }
 
@@ -5899,7 +5921,8 @@ define pcodeop x87_float_to_int64;
 { 
     FPUInstructionPointer = inst_start;
     src:8 = 0x3fe62e42fefa39ef;
-    tmp:10 = float2float(src); 
+    tmp:10 = float2float(src);
+    C1 = 0; 
     fpushv(tmp); 
 }
 
@@ -5909,6 +5932,7 @@ define pcodeop x87_float_to_int64;
     zero:4 = 0;
     tmp:10 = int2float(zero); 
     fpushv(tmp); 
+    C1 = 0;
 }
 
 :"FLDCW" m16      is vexMode=0 & $(X87_D9); (mod != 0b11 & reg_opcode=5) ... & m16            
@@ -5993,19 +6017,30 @@ define pcodeop fpatan;
 :"FPREM"          is vexMode=0 & $(X87_D9); byte=0xF8
 {
     FPUInstructionPointer = inst_start;
-    local tmp = ST0 f/ ST1;
-    tmp = trunc(tmp);
-    tmp = tmp f* ST1;
-    ST0 = ST0 f- tmp;
+    local q:8 = trunc(ST0 f/ ST1);
+    local tmp:10 = int2float(q);
+    local qa:8 = trunc(abs(tmp));
+    local e0:2 = ST0(8) & 0x7fff;
+    local e1:2 = ST1(8) & 0x7fff;
+    C2 = (e0 > e1) && ((e0 - e1) > 63);
+    C1 = qa[0,1];
+    C3 = qa[1,1];
+    C0 = qa[2,1];
+    ST0 = ST0 f- (tmp f* ST1);
 }
 
 :"FPREM1"         is vexMode=0 & $(X87_D9); byte=0xF5
 {
     FPUInstructionPointer = inst_start;
-    local tmp = ST0 f/ ST1;
-    tmp = round(tmp);
-    tmp = tmp f* ST1;
-    ST0 = ST0 f- tmp;
+    local r = round(ST0 f/ ST1);
+    local qa:8 = trunc(abs(r));
+    local e0:2 = ST0(8) & 0x7fff;
+    local e1:2 = ST1(8) & 0x7fff;
+    C2 = (e0 > e1) && ((e0 - e1) > 63);
+    C1 = qa[0,1];
+    C3 = qa[1,1];
+    C0 = qa[2,1];
+    ST0 = ST0 f- (r f* ST1);
 }
 
 define pcodeop fptan;
@@ -6140,6 +6175,7 @@ define pcodeop fsin;
 { 
     FPUInstructionPointer = inst_start;
     freg = ST0; 
+    C1 = 0;
 }             
 
 :"FSTP" m32fp  is vexMode=0 & $(X87_D9); (mod != 0b11 & reg_opcode=3) ... & m32fp 
@@ -6160,12 +6196,14 @@ define pcodeop fsin;
 {
     FPUInstructionPointer = inst_start;
     fpopv(m80fp); 
+    C1 = 0;
 }             
 
 :"FSTP" freg      is vexMode=0 & $(X87_DD); frow=13 & fpage=1 & freg 
 {
     FPUInstructionPointer = inst_start;
     fpopv(freg); 
+    C1 = 0;
 }                    
 
 instruction:FSTCW m16      is vexMode=0 & byte=0x9B; byte=0xD9; (mod != 0b11 & reg_opcode=7) ... & m16
@@ -6200,22 +6238,22 @@ instruction:FSTENV Mem     is vexMode=0 & byte=0x9B; byte=0xD9; (mod != 0b11 & r
 
 instruction:FSTSW m16      is vexMode=0 & byte=0x9B; byte=0xDD; reg_opcode=7 ... & m16     
 { 
-    m16 = FPUStatusWord; 
+    fstsw(m16);
 }
 
 instruction:FSTSW AX       is vexMode=0 & byte=0x9B; byte=0xDF; byte=0xE0 & AX         
 { 
-    AX = FPUStatusWord; 
+    fstsw(AX);
 }
 
 :"FNSTSW" m16     is vexMode=0 & $(X87_DD); reg_opcode=7 ... & m16 
 {
-    m16 = FPUStatusWord; 
+    fstsw(m16);
 }
 
 :"FNSTSW" AX      is vexMode=0 & $(X87_DF); byte=0xE0 & AX      
 {
-    AX = FPUStatusWord; 
+    fstsw(AX);
 }
 
 :"FSUB" m32fp  is vexMode=0 & $(X87_D8); reg_opcode=4 ... & m32fp  
@@ -6360,23 +6398,14 @@ instruction:FSTSW AX       is vexMode=0 & byte=0x9B; byte=0xDF; byte=0xE0 & AX
 :"FXAM"           is vexMode=0 & $(X87_D9); byte=0xE5
 {
   FPUInstructionPointer = inst_start;
-  # this is not an exact implementation, but gets the sign and zero tests right
+  local e:2 = ST0(8) & 0x7fff;
   izero:4 = 0;
   fzero:10 = int2float(izero);
-  
-  # did not know how test for infinity or empty
-  C0 = nan(ST0);
-  
-  # sign of ST0
-  C1 = ( ST0 f< fzero );
-
-  # assume normal if not zero 
-  C2 = ( ST0 f!= fzero );
-
-  # equal to zero  
-  C3 = ( ST0 f== fzero );
-  
-  FPUStatusWord = (zext(C0)<<8) | (zext(C1)<<9) | (zext(C2)<<10) | (zext(C3)<<14);
+  C1 = ST0[79,1];
+  C0 = (e == 0x7fff);
+  C2 = !nan(ST0) && (ST0 f!= fzero);
+  C3 = (e == 0);
+  FPUStatusWord = (FPUStatusWord & 0xb8ff) | (zext(C0)<<8) | (zext(C1)<<9) | (zext(C2)<<10) | (zext(C3)<<14);
 }
                                                                     
 :"FXCH" freg      is vexMode=0 & $(X87_D9); frow=12 & fpage=1 & freg  
@@ -6385,6 +6414,7 @@ instruction:FSTSW AX       is vexMode=0 & byte=0x9B; byte=0xDF; byte=0xE0 & AX
     local tmp = ST0; 
     ST0 = freg; 
     freg = tmp; 
+    C1 = 0;
 }          
 
 :"FXCH"           is vexMode=0 & $(X87_D9); byte=0xC9                 
@@ -6393,6 +6423,7 @@ instruction:FSTSW AX       is vexMode=0 & byte=0x9B; byte=0xDF; byte=0xE0 & AX
     local tmp = ST0;
     ST0 = ST1;
     ST1 = tmp; 
+    C1 = 0;
 }                    
 
 # fxsave and fxrstor

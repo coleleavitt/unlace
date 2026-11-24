@@ -662,13 +662,13 @@ def sz_rxy(op, r, base, disp):
 
 
 class S390xHarness:
-    """r0..r15 at 8*i, the condition code (IPM layout) at 128, f0..f15 at 144 + 8*i. A scratch
-    register the instruction does not write holds the table address; SPM/IPM move the
-    condition code."""
+    """r0..r15 at 8*i, the condition code (IPM layout) at 128, v0..v31 at 144 + 16*i (f0..f15 are
+    the leftmost doublewords of v0..v15). A scratch register the instruction does not write holds
+    the table address; SPM/IPM move the condition code, VL/VST the vector registers."""
     qemu = ("qemu-s390x", ["-cpu", "max"])
     machine = 22
     big = True
-    table_size = 144 + 128
+    table_size = 144 + 512
     marker_at = 136
 
     def __init__(self):
@@ -689,8 +689,8 @@ class S390xHarness:
     def prologue(self, target):
         s, t = self.scratch, self._temp()
         c = sz_llilf(s, TABLES) + sz_rxy(0x04, t, s, 128) + bytes([0x04, t << 4])    # lg t; spm t
-        for i in range(16):
-            c += bytes([0x68, i << 4, s << 4 | (144 + 8 * i) >> 8, (144 + 8 * i) & 0xFF])  # ld fi
+        for i in range(32):
+            c += bytes([0xE7, (i & 15) << 4, s << 4 | (144 + 16 * i) >> 8, (144 + 16 * i) & 0xFF, 0x08 if i >= 16 else 0, 0x06])  # vl vi
         for i in range(16):
             if i != s:
                 c += sz_rxy(0x04, i, s, 8 * i)
@@ -706,8 +706,8 @@ class S390xHarness:
             if i != s:
                 c += sz_rxy(0x24, i, s, 8 * i)                                          # stg
         c += bytes([0xB2, 0x22, 0x00, t << 4]) + sz_rxy(0x24, t, s, 128)               # ipm t
-        for i in range(16):
-            c += bytes([0x60, i << 4, s << 4 | (144 + 8 * i) >> 8, (144 + 8 * i) & 0xFF])  # std fi
+        for i in range(32):
+            c += bytes([0xE7, (i & 15) << 4, s << 4 | (144 + 16 * i) >> 8, (144 + 16 * i) & 0xFF, 0x08 if i >= 16 else 0, 0x0E])  # vst vi
         c += sz_llilf(t, marker) + sz_rxy(0x24, t, s, self.marker_at)
         for base, size in [(OUT, self.table_size)] + [(p, PAGE) for p in dumps]:
             c += bytes([0xA7, 0x29, 0x00, 0x01]) + sz_llilf(3, base) + sz_llilf(4, size) + bytes([0x0A, 0x04])  # write
@@ -720,8 +720,8 @@ class S390xHarness:
             struct.pack_into(">Q", t, 8 * i, init.get(f"r{i}", 0) & (2 ** 64 - 1))
         cc = next((k for k in range(4) if init.get(f"CC{k}")), 0)
         struct.pack_into(">Q", t, 128, cc << 28)
-        for i in range(16):
-            struct.pack_into(">Q", t, 144 + 8 * i, init_vec.get(f"f{i}", 0) & (2 ** 64 - 1))
+        for i in range(32):
+            t[144 + 16 * i:160 + 16 * i] = (init_vec.get(f"v{i}", 0) & (2 ** 128 - 1)).to_bytes(16, "big")
         return bytes(t)
 
     def parse(self, arch, out):
@@ -730,8 +730,8 @@ class S390xHarness:
         for k in range(4):
             regs[f"CC{k}"] = int(cc == k)
         regs["CCA"], regs["CCB"] = int(cc >= 2), cc & 1
-        for i in range(16):
-            regs[f"f{i}"] = struct.unpack_from(">Q", out, 144 + 8 * i)[0]
+        for i in range(32):
+            regs[f"v{i}"] = int.from_bytes(out[144 + 16 * i:160 + 16 * i], "big")
         return regs, 0
 
 
@@ -1007,21 +1007,124 @@ class HppaHarness:
         return regs, (struct.unpack_from(">I", out, 132)[0] & 1) | (2 if nullified else 0)
 
 
-HARNESSES = {"aarch64": A64Harness, "riscv64": RvHarness, "mips": MipsHarness, "mips64": Mips64Harness,
+
+# ---------------------------------------------------------------- ARM / Thumb (AArch32, ELF32)
+
+def arm_movw(rd, v):
+    return 0xE3000000 | ((v >> 12) & 0xF) << 16 | rd << 12 | (v & 0xFFF)
+
+
+def arm_movt(rd, v):
+    return 0xE3400000 | ((v >> 28) & 0xF) << 16 | rd << 12 | ((v >> 16) & 0xFFF)
+
+
+def arm_li32(rd, v):
+    return [arm_movw(rd, v & 0xFFFF), arm_movt(rd, v)]
+
+
+def arm_ldr(rt, rn, off):
+    return 0xE5900000 | rn << 16 | rt << 12 | (off & 0xFFF)
+
+
+def arm_str(rt, rn, off):
+    return 0xE5800000 | rn << 16 | rt << 12 | (off & 0xFFF)
+
+
+class ArmHarness:
+    """A32 code on qemu-arm -cpu max. r0..r14 at 4*i, APSR (NZCVQ, GE) at 64, read back at 64.
+    The prologue is A32: it sets the flags with MSR APSR_nzcvqg, loads every register but a
+    scratch one, restores the scratch register last and jumps with LDR pc from a literal, which
+    interworks, so a Thumb target (bit 0 set) runs as Thumb. An epilogue at a Thumb exit starts
+    with BX pc from a word-aligned address (a NOP first when it is not) and a NOP, to get back to A32."""
+    qemu = ("qemu-arm", ["-cpu", "max"])
+    machine = 40
+    big = False
+    elf32 = True
+    flags = 0x05000000          # EF_ARM_EABI_VER5
+    table_size = 80
+    marker_at = 72
+    thumb = False
+
+    def __init__(self):
+        self.scratch, self.scratch_names = 12, ["r12"]
+
+    def choose_scratch(self, arch, regs, written):
+        names = [f"r{i}" for i in range(12, -1, -1)] + ["lr"]
+        got = _pick_free(arch, regs, written, names, 1)
+        if not got:
+            return False
+        self.scratch_names = got
+        self.scratch = 14 if got[0] == "lr" else int(got[0][1:])
+        return True
+
+    def prologue(self, target):
+        s = self.scratch
+        t = 0 if s != 0 else 1
+        c = arm_li32(s, TABLES)
+        c += [arm_ldr(t, s, 64), 0xE12CF000 | t]                                    # msr APSR_nzcvqg, t
+        for i in range(15):
+            if i != s:
+                c.append(arm_ldr(i, s, 4 * i))
+        c.append(arm_ldr(s, s, 4 * s))
+        c += [0xE51FF004, target | (1 if self.thumb else 0)]                         # ldr pc, [pc, #-4]
+        return words(c)
+
+    def epilogue_at(self, dumps, marker, at):
+        head = b""
+        if self.thumb:
+            head = halfwords(([] if at % 4 == 0 else [0x46C0]) + [0x4778, 0x46C0])   # bx pc from a word address
+        return head + self._epilogue(dumps, marker)
+
+    def epilogue(self, dumps, marker):
+        return self.epilogue_at(dumps, marker, 0)
+
+    def _epilogue(self, dumps, marker):
+        s = self.scratch
+        t = 0 if s != 0 else 1
+        c = arm_li32(s, OUT)
+        for i in range(15):
+            if i != s:
+                c.append(arm_str(i, s, 4 * i))
+        c += [0xE10F0000 | t << 12, arm_str(t, s, 64)]                               # mrs t, APSR
+        c += arm_li32(t, marker) + [arm_str(t, s, self.marker_at)]
+        for base, size in [(OUT, self.table_size)] + [(p, PAGE) for p in dumps]:
+            c += arm_li32(7, 4) + arm_li32(0, 1) + arm_li32(1, base) + arm_li32(2, size) + [0xEF000000]   # write
+        c += arm_li32(7, 1) + arm_li32(0, 0) + [0xEF000000]                                             # exit
+        return words(c)
+
+    def table(self, arch, init, init_vec, flagword):
+        t = bytearray(self.table_size)
+        for i, (n, _) in enumerate(arch.gprs[:15]):
+            struct.pack_into("<I", t, 4 * i, init.get(n, 0) & 0xFFFFFFFF)
+        struct.pack_into("<I", t, 64, flagword & 0xF80F0000)
+        return bytes(t)
+
+    def parse(self, arch, out):
+        regs = {n: struct.unpack_from("<I", out, 4 * i)[0] for i, (n, _) in enumerate(arch.gprs[:15])}
+        return regs, struct.unpack_from("<I", out, 64)[0]
+
+
+class ThumbHarness(ArmHarness):
+    """T32 code: the same harness, entered with bit 0 of the target set."""
+    thumb = True
+
+
+HARNESSES = {"arm": ArmHarness, "thumb": ThumbHarness, "aarch64": A64Harness, "riscv64": RvHarness, "mips": MipsHarness, "mips64": Mips64Harness,
              "mipsr6": MipsR6Harness, "mips64r6": Mips64R6Harness, "nios2": Nios2Harness, "sh4": Sh4Harness,
              "ppc": lambda: PpcHarness(("qemu-ppc", ["-cpu", "7457"]), 20, True, False),
              "ppc64": lambda: PpcHarness(("qemu-ppc64", ["-cpu", "power10"]), 21, True, True, 2),
              "ppc64le": lambda: PpcHarness(("qemu-ppc64le", ["-cpu", "power10"]), 21, False, True, 2),
              "ppc64-isa": lambda: PpcHarness(("qemu-ppc64", ["-cpu", "power10"]), 21, True, True, 2),
              "ppc64le-isa": lambda: PpcHarness(("qemu-ppc64le", ["-cpu", "power10"]), 21, False, True, 2),
-             "s390x": S390xHarness, "m68k": M68kHarness, "loongarch64": LaHarness, "sparc64": SparcHarness, "sparc": Sparc32Harness, "hppa": HppaHarness}
+             "s390x": S390xHarness, "s390x-vec": S390xHarness, "m68k": M68kHarness, "loongarch64": LaHarness, "sparc64": SparcHarness, "sparc": Sparc32Harness, "hppa": HppaHarness}
 
 
 def qemu_path(name):
-    """A QEMU user binary: from $DIFFFUZZ_QEMU_DIR when set, else from PATH."""
-    d = os.environ.get("DIFFFUZZ_QEMU_DIR")
-    if d and os.access(os.path.join(d, name), os.X_OK):
-        return os.path.join(d, name)
+    """A QEMU user binary: from the directories in $DIFFFUZZ_QEMU_DIR (separated by ':') when set,
+    else from PATH."""
+    for d in os.environ.get("DIFFFUZZ_QEMU_DIR", "").split(os.pathsep):
+        if d and os.access(os.path.join(os.path.expanduser(d), name), os.X_OK):
+            return os.path.join(os.path.expanduser(d), name)
     return shutil.which(name)
 
 # ---------------------------------------------------------------- PowerPC (32, 64 big- and little-endian)
@@ -1167,11 +1270,14 @@ class X86NativeHarness:
     qemu = None
     machine = 62
     big = False
-    table_size = 192 + 512 + 16
+    # an FXSAVE image at 768 (FCW 0x37F, the C0-C3 bits, ST0..ST6 valid, ST7 empty, MXCSR 0x1F80)
+    fx_at = 768
+    table_size = 768 + 512
     marker_at = 192 + 512
 
     def prologue(self, target):
         c = b"\x48\xB8" + struct.pack("<Q", TABLES)                      # movabs rax, TABLES
+        c += b"\x48\x0F\xAE\x88" + struct.pack("<i", self.fx_at)            # fxrstor64 [rax+fx_at]
         for i in range(16):
             c += _x86_vmovdqu(i, 192 + 32 * i, False)
         c += b"\xFF\xB0" + struct.pack("<i", 128) + b"\x9D"              # push [rax+128]; popfq
@@ -1190,6 +1296,7 @@ class X86NativeHarness:
         c += b"\x9C\x5B" + _x86_mov_store(3, 128)                        # pushfq; pop rbx; store
         for i in range(16):
             c += _x86_vmovdqu(i, 192 + 32 * i, True)
+        c += b"\x48\x0F\xAE\x80" + struct.pack("<i", self.fx_at)            # fxsave64 [rax+fx_at]
         c += b"\x48\xC7\x80" + struct.pack("<iI", self.marker_at, marker)
         for base, size in [(OUT, self.table_size)] + [(p, PAGE) for p in dumps]:
             c += b"\xB8\x01\x00\x00\x00\xBF\x01\x00\x00\x00"              # eax=1 (write); edi=1
@@ -1206,16 +1313,35 @@ class X86NativeHarness:
         for i in range(16):
             v = init_vec.get(f"YMM{i}", 0)
             t[192 + 32 * i:224 + 32 * i] = (v & (2 ** 256 - 1)).to_bytes(32, "little")
+        fx = self.fx_at
+        fsw = (init.get("C0", 0) << 8) | (init.get("C1", 0) << 9) | (init.get("C2", 0) << 10) | (init.get("C3", 0) << 14)
+        struct.pack_into("<HHB", t, fx, 0x37F, fsw, 0x7F)
+        struct.pack_into("<I", t, fx + 24, 0x1F80)
+        for i in range(8):
+            t[fx + 32 + 16 * i:fx + 42 + 16 * i] = (init.get(f"ST{i}", 0) & (2 ** 80 - 1)).to_bytes(10, "little")
         return bytes(t)
 
     def parse(self, arch, out):
         regs = {n: struct.unpack_from("<Q", out, 8 * i)[0] for i, (n, _) in enumerate(arch.gprs)}
         for i in range(16):
             regs[f"YMM{i}"] = int.from_bytes(out[192 + 32 * i:224 + 32 * i], "little")
+        fx = self.fx_at
+        fsw, ftw = struct.unpack_from("<HB", out, fx + 2)
+        top = (fsw >> 11) & 7
+        for n, b in (("C0", 8), ("C1", 9), ("C2", 10), ("C3", 14)):
+            regs[n] = (fsw >> b) & 1
+        regs["_invalid"] = set()
+        for i in range(8):
+            regs[f"ST{i}"] = int.from_bytes(out[fx + 32 + 16 * i:fx + 42 + 16 * i], "little")
+            if not (ftw >> ((top + i) & 7)) & 1:
+                regs["_invalid"].add(f"ST{i}")        # an empty register holds no value
+        # a stack fault (push onto a full stack, pop or read of an empty one): not modelled by SLEIGH
+        regs["_undefined"] = bool(fsw & 0x40)
         return regs, struct.unpack_from("<Q", out, 128)[0]
 
 
 HARNESSES["x86-64-native"] = X86NativeHarness
+HARNESSES["x86-64-x87"] = X86NativeHarness
 
 
 def available(arch):
@@ -1239,6 +1365,8 @@ def run_case_qemu(arch, regs, row, cand, rng, seed, tmp):
     else:
         bits_ = {n: rng.getrandbits(1) for n in getattr(arch, "qemu_bits", ())}
     init.update(bits_)
+    extra = arch.extra_init(rng) if hasattr(arch, "extra_init") else {}
+    init.update(extra)
     for n, _ in arch.vecs:
         if n in regs and regs[n][1] < 16:
             init_vec[n] &= (1 << (8 * regs[n][1])) - 1
@@ -1259,6 +1387,9 @@ def run_case_qemu(arch, regs, row, cand, rng, seed, tmp):
         st.set(n, init[n])
     for n in bits_:
         st.set(n, bits_[n])
+    for n, v in extra.items():
+        if n in regs:
+            st.set(n, v)
     for n, _ in arch.vecs:
         if n in regs:
             st.set(n, init_vec[n])
@@ -1323,7 +1454,8 @@ def run_case_qemu(arch, regs, row, cand, rng, seed, tmp):
     for i, b in enumerate(cand["bytes"]):
         mem[addr + i] = b
     for k, x in enumerate(exits):
-        for i, b in enumerate(h.epilogue(data_pages, 0x5EA1 + k)):
+        ep = h.epilogue_at(data_pages, 0x5EA1 + k, x) if hasattr(h, "epilogue_at") else h.epilogue(data_pages, 0x5EA1 + k)
+        for i, b in enumerate(ep):
             mem[x + i] = b
     tables = bytearray(PAGE)
     tables[:h.table_size] = h.table(arch, init, init_vec, flagword)
@@ -1365,8 +1497,21 @@ def run_case_qemu(arch, regs, row, cand, rng, seed, tmp):
         for n in h.scratch_names:
             ref[n] = init[n]
 
+    if ref.get("_undefined"):
+        return {"status": "undefined"}
     diffs = {}
-    partial = arch.partial(cand["mnemonic"], cand["op_str"]) if hasattr(arch, "partial") else {}
+    if not hasattr(arch, "partial"):
+        partial = {}
+    elif getattr(arch, "partial_uses_sleigh", False):
+        partial = arch.partial(cand["mnemonic"], cand["op_str"], row)
+    else:
+        partial = arch.partial(cand["mnemonic"], cand["op_str"])
+    for n in extra:
+        if n in ignore or n not in regs or n not in ref or n in ref.get("_invalid", ()):
+            continue
+        w = (1 << (8 * regs[n][1])) - 1
+        if st.get(n) & w != ref[n] & w:
+            diffs[n] = (st.get(n) & w, ref[n] & w)
     for n, _ in arch.gprs + arch.vecs + [(b, None) for b in bits_]:
         if n in ignore or n not in regs:
             continue

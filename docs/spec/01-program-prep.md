@@ -1115,7 +1115,12 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   absolute, relative, PLT-relative, and image-offset fields at 8/16/32/64 bits in
   the object's byte order (an s390x `*DBL` field, `PC32DBL`/`PLT32DBL` and their
   16-bit forms, holds `(S + A - P) >> 1` and rejects an odd value), plus the instruction fields and ABI formulas for ARM
-  `CALL`/`JUMP24`/Thumb branches/`REL32`/`PREL31`, AArch64 branch/page/low-12
+  `CALL`/`JUMP24`/Thumb branches/`REL32`/`PREL31`, C-SKY `bsr32`
+  (`PCREL_IMM26BY2`: `(S + A - P) >> 1` in the low 26 bits, the instruction's
+  two halfwords high first), the A32 and Thumb-2
+  `MOVW`/`MOVT` pairs (`MOVW_ABS_NC`/`MOVT_ABS` and the `PREL` forms, 43..50:
+  the low half of `(S + A) | T` or the high half of `S + A`, less `P` for
+  `PREL`, with `A` the REL addend already in the imm16; sweep re-run), AArch64 branch/page/low-12
   forms, PowerPC `REL24`/`PLTREL24`/`LOCAL24PC`/`ADDR24` calls (32- and 64-bit;
   a `-fPIC` object's `PLTREL24` addend locates the caller's `.got2` for the
   linker's call stub and is not added to the target), the 14-bit conditional
@@ -12548,6 +12553,16 @@ AIF-only entry whose first word a literal load reads is dropped too (the
 `poolentry` fixture's `F`, the split shape its corpus measurement disclosed). On the stripped
 Lua (x86-64, AArch64), ld.so, llvm-nm and llvm-objdump images it removes
 nothing; on the fixture it removes the function-shaped table the code reads.
+The veto also drops a discovered or AIF entry whose bytes are a string
+(`crates/unlace-analysis/src/analyzers/aif/kuna_aifstringveto.rs (is_string)`):
+at least six printable characters, ASCII or UTF-16LE, and then the NUL that ends
+them, followed by `int3` padding or another string of at least four characters
+(printable code up to a zero byte, `push ebx; push 0xa; push 0x2b67`, goes on
+with more code). A Windows driver keeps its `DbgPrint` formats in the code
+sections it pages with the code and pushes their addresses as immediates, which
+read as function pointers. In the Silicon Labs CP210x bus enumerator (x86) 109 of
+its 227 functions were such strings. Over 85,000 functions of /usr/bin,
+/usr/lib64 and the Holley PEs the test holds for 111 entries, each a string.
 **Incremental walk** (`incrementalwalk`, default-on): the x86 callback rounds
 resume the Listing from the accepted roots instead of rebuilding it, the
 `addrtakenentry` way; on a 300-callback i386 fixture the function set is

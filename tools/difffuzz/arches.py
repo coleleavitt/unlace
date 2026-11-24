@@ -271,6 +271,83 @@ class X86_64Native(X86_64):
         return super().gen(rng)
 
 
+
+def x87_value(rng):
+    """An 80-bit extended value: mostly normal numbers near 1 and small integers, some zeros,
+    infinities, large and tiny exponents and denormals; never a NaN or unnormal."""
+    k = rng.random()
+    s = rng.getrandbits(1) << 79
+    if k < 0.05:
+        return s
+    if k < 0.08:
+        return s | (0x7FFF << 64) | (1 << 63)
+    if k < 0.1:
+        return s | rng.getrandbits(63)                                  # denormal
+    if k < 0.3:
+        n = rng.randrange(1, 1 << rng.choice([4, 16, 32, 63]))
+        e = n.bit_length() - 1
+        return s | ((16383 + e) << 64) | (n << (63 - e))                # an integer
+    if k < 0.9:
+        e = 16383 + rng.randrange(-70, 70)
+    else:
+        e = rng.randrange(1, 0x7FFF)
+    m = (1 << 63) | rng.getrandbits(63)
+    if rng.random() < 0.3:
+        m &= ~((1 << rng.randrange(20, 63)) - 1)                         # few significant bits
+    return s | (e << 64) | m
+
+
+# the x86 deny list with x87 allowed, except the environment/state loads and stores and FLDCW (the
+# oracle runs at the default control word: 64-bit precision, round to nearest, exceptions masked)
+X87_DENY = re.compile(
+    X86_DENY.pattern.replace("|f.*|", "|fx.*|f?wait|fn?stenv|fldenv|fn?save|frstor|fldcw|")
+)
+
+
+# x87 ops whose C1 is the round-up indicator (not expressible in p-code), and the compares whose
+# C1 the SDM clears but this CPU leaves unchanged
+X87_C1_FREE = re.compile(
+    r"^(f(i?(add|sub|subr|mul|div|divr))p?|fsqrt|fscale|frndint|fistp?|f(u)?comp?i|fcmov.*)$"
+)
+
+
+class X86_64X87(X86_64Native):
+    """x86-64-native restricted to the x87 escape opcodes D8..DF (with prefixes now and then)."""
+    name = "x86-64-x87"
+    deny = X87_DENY
+
+    def extra_init(self, rng):
+        """ST0..ST6 hold x87 values (ST7 is empty, so one push does not overflow) and C0..C3 random."""
+        init = {f"C{i}": rng.getrandbits(1) for i in range(4)}
+        for i in range(7):
+            init[f"ST{i}"] = x87_value(rng)
+        init["ST7"] = 0
+        # the harness's FXRSTOR image: control word 0x37F, TOP = 0, the condition bits
+        init["FPUControlWord"] = 0x37F
+        init["FPUStatusWord"] = init["C0"] << 8 | init["C1"] << 9 | init["C2"] << 10 | init["C3"] << 14
+        return init
+
+    def canonical(self, cand):
+        # Capstone's FSTPNCE (D9 D8+i) is an undocumented FSTP alias that LLVM and SLEIGH leave undecoded
+        return cand["mnemonic"] != "fstpnce"
+
+    def ignored(self, mnemonic, operands, state):
+        out = super().ignored(mnemonic, operands, state)
+        if X87_C1_FREE.match(mnemonic) or (mnemonic in ("fst", "fstp") and re.search(r"\b[dq]word ptr", operands)):
+            out = out | {"C1"}
+        # the partial remainder comes from a rounded divide and multiply: exact for small quotients only
+        # and the constants are the double values widened (a decompiler constant is at most 8 bytes)
+        if mnemonic in ("fprem", "fprem1", "fldpi", "fldl2e", "fldl2t", "fldlg2", "fldln2"):
+            out = out | {"ST0"}
+        return out
+
+    def gen(self, rng):
+        tail = rng.getrandbits(64).to_bytes(8, "little") + rng.getrandbits(32).to_bytes(4, "little")
+        modrm = bytes([rng.choice([rng.getrandbits(8) | 0xC0, rng.getrandbits(8)])])
+        pre = bytes(rng.choice([[], [], [], [0x66], [0x48], [0x9B]]))
+        return pre + bytes([0xD8 + rng.getrandbits(3)]) + modrm + tail
+
+
 A64_DENY = re.compile(
     r"^(svc|hvc|smc|brk|hlt|dcps\d|eret.*|drps|msr|mrs|sys|sysl|tlbi|dc|ic|at|isb|dsb|dmb|sb|ssbb|pssbb|"
     r"wf[ei].*|yield|sev.*|hint|clrex|ld.*xr.*|st.*xr.*|ldar.*|stlr.*|ldapr.*|stlur.*|ldaxp|stlxp|"
@@ -429,14 +506,29 @@ class Arm32(Arch32):
         return (word & 0xF8000000) | 0x10 | (0x20 if self.thumb else 0)
 
     def skip(self, cand):
-        # Writes to pc are left to flow tests.
-        return bool(re.search(r"\bpc\b", cand["op_str"]))
+        # Writes to pc are left to flow tests; a supervisor call would run a system call.
+        return bool(re.search(r"\bpc\b", cand["op_str"])) or cand["mnemonic"].startswith("svc")
 
     def canonical(self, cand):
         """Capstone decodes A32 encodings whose should-be-zero fields are set; SLEIGH rejects them.
-        Keep an encoding only when Keystone assembles Capstone's text back to the same bytes."""
+        Keep an encoding only when Keystone assembles Capstone's text back to the same bytes, and an
+        LDRD/STRD only with an even first register below lr. T32: a shifted-register data-processing
+        op with bit 15 of its second halfword set, or a saturate/bit-field op with bit 10 of its
+        first, is UNPREDICTABLE."""
+        b = cand["bytes"]
         if self.thumb:
-            return True
+            if len(b) != 4:
+                return True
+            hw1 = b[1] << 8 | b[0]
+            if (hw1 & 0xFE00) == 0xEA00 and b[3] & 0x80:
+                return False
+            return not ((hw1 & 0xFA00) == 0xF200 and not b[3] & 0x80 and (hw1 >> 4) & 0x10 and hw1 & 0x400)
+        m = re.match(r"^(?:ld|st)rd\w*$", cand["mnemonic"]) and re.match(r"(\w+),", cand["op_str"])
+        if m:
+            n = {"sb": 9, "sl": 10, "fp": 11, "ip": 12, "sp": 13, "lr": 14}.get(m.group(1))
+            n = n if n is not None else int(m.group(1)[1:]) if re.fullmatch(r"r\d+", m.group(1)) else 0
+            if n % 2 or n == 14:
+                return False
         try:
             import keystone
         except ImportError:
@@ -776,7 +868,7 @@ class S390x(Arch):
     pc = "PC"
     max_len = 6
     gprs = [(f"r{i}", getattr(sz, f"UC_S390X_REG_R{i}")) for i in range(16)]
-    vecs = [(f"f{i}", getattr(sz, f"UC_S390X_REG_F{i}")) for i in range(16)]
+    vecs = [(f"v{i}", getattr(sz, f"UC_S390X_REG_V{i}", None)) for i in range(32)]
     pc_const = sz.UC_S390X_REG_PC
     deny = S390X_DENY
     qemu_bits = ("CC0", "CC1", "CC2", "CC3", "CCA", "CCB")
@@ -799,6 +891,43 @@ class S390x(Arch):
     def skip(self, cand):
         # QEMU 10.2 stores the low word shifted left by 32 (zero) for STMH, not bits 0-31
         return cand["mnemonic"] == "stmh"
+
+    def ignored(self, mnemonic, operands, state):
+        dst = "v" + operands.split(",")[0].strip()[2:]
+        if re.match(r"^[vw]fn?m[as](sb|db|xb)$", mnemonic):
+            return {dst}  # fused: p-code rounds twice
+        if re.match(r"^[vw]c(dg|dlg|ef|elf)b?$", mnemonic):
+            mode = operands.split(",")[-1].strip()
+            if mode not in ("0", "4"):
+                return {dst}  # an int-to-float conversion rounds to nearest in p-code, whatever M5 says
+        return set()
+
+    partial_uses_sleigh = True
+
+    def partial(self, mnemonic, operands, sleigh=None):
+        """A scalar (W) vector instruction defines element 0 of its target; the rest of the
+        register is unpredictable. The SLEIGH mnemonic is used when there is one (Capstone 5
+        prints the newer W forms as their generic V form)."""
+        if sleigh is not None:
+            mnemonic = sleigh["mnemonic"]
+            dst = sleigh["operands"].split(",")[0].strip()
+            dst = "%" + dst.rstrip("s") if dst.startswith(("f", "v")) else dst
+        else:
+            dst = operands.split(",")[0].strip()
+        if not mnemonic.startswith("w") or not dst.startswith(("%f", "%v")) or mnemonic.endswith("xb") and not mnemonic.startswith("wflrx"):
+            return {}
+        sb = re.search(r"sbs?$", mnemonic) is not None or \
+            mnemonic in ("wledb", "wcefb", "wcelfb", "wcfeb", "wclfeb")
+        return {"v" + dst[2:]: ((1 << 32) - 1) << 96 if sb else ((1 << 64) - 1) << 64}
+
+
+class S390xVec(S390x):
+    """s390x with the generator drawing vector-facility (E7, E6) encodings."""
+    name = "s390x-vec"
+    deny = re.compile(r"$^")
+
+    def gen(self, rng):
+        return bytes([0xE6 if rng.random() < 0.1 else 0xE7]) + rng.getrandbits(40).to_bytes(5, "big")
 
 
 class _ObjdumpIns:
@@ -1419,4 +1548,4 @@ class Hppa(ObjdumpArch):
         return True
 
 
-ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), S390x(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa())}
+ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa())}

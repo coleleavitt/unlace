@@ -793,6 +793,29 @@ fn option_values_live_value_present_for_129() {
                             // `warnstyle` and `int3pad` are here.  Its live
                             // value is the registered option `SignPolicy`.
                             | "signedness"
+                            // (kuna) Registered options (`kuna_flag!`,
+                            // `registered!`) with no `live_field`: their live
+                            // value is the option registry's, not a codegen field.
+                            | "fpargboxed"
+                            | "satconvert"
+                            | "latecse"
+                            | "aeabifloat"
+                            | "evmcalls"
+                            | "pairbranch"
+                            | "calleeargsmsvc"
+                            | "typemerge"
+                            | "phiarm"
+                            | "calleesaved"
+                            | "ctree"
+                            | "boolreturn"
+                            | "noretfirst"
+                            | "nestedand"
+                            | "retternary"
+                            | "orexit"
+                            | "honestgaps"
+                            | "condcallpush"
+                            | "orchainlive"
+                            | "orchainbool"
                     ) || PASS_GATES.contains(&st.option),
                     "unexpected option with no live reader: {}",
                     st.option

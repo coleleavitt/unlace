@@ -81,6 +81,8 @@ mod v810;
 mod x86_amx;
 #[path = "x86_apx.rs"]
 mod x86_apx;
+#[path = "x86_avx10.rs"]
+mod x86_avx10;
 
 #[path = "firmware_raw.rs"]
 mod firmware_raw;

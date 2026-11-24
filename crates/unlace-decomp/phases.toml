@@ -7949,3 +7949,22 @@ inspiration = "Hex-Rays and angr print such functions as `return a == b;`; backl
 change_kind = "structure-recovery"
 tier = "transform"
 symptoms = "if (c) { return 1; } else { return 0; } where the source returns the comparison|a predicate function prints as an if/else of two constant returns"
+
+[[settable]]
+option = "noretfirst"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P9"
+subphase = "condition-form"
+strength = "HARD"
+rewind = "P9"
+issue = "kuna-noretfirst"
+summary = "C output only: when exactly one arm of an if/else never falls through (its structured block has no way out: it returns or calls a function that does not return), print that arm as the if's only body and the other arm after the if, so the code that continues is not nested in an else. When the arm that never falls through is the else, the condition prints negated, the way any flipped branch prints (`if (x < 5)` rather than `if (!(x >= 5))`). Only for an if that is a statement of a list (not part of a loop or if condition, not the else of another if), whose condition is a single leaf, and that does not print as a switch or an exception try. A rewrite of the C syntax tree (`docs/architecture/ctree.md`): turning it on builds the tree for every printed function."
+use_when = "Turn on to read guard clauses as the source likely wrote them: `if (p == NULL) { abort(); } use(p);` instead of `if (p != NULL) { use(p); } else { abort(); }`. Leave off for Ghidra's own arm order; both orders are the same object code."
+example = "option noretfirst on"
+source_decompiler = "kuna"
+inspiration = "Hex-Rays prints guard clauses first; backlog issue 8 measured a structuring tie-break prototype of the same idea on DecBench O2-noinline (mean GED 11.08 -> 10.99, exact-match 36.8% -> 38.0%)"
+change_kind = "structure-recovery"
+tier = "transform"
+symptoms = "if (c) { ...long body... } else { abort(); } with the error path last|the main path of a function is nested in an if whose else only exits"

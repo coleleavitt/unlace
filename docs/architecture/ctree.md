@@ -7,7 +7,8 @@ and the builder at `built`; `option ctree on` (default off) prints the body thro
 its ops, and the leaf printer prints from that list. The first rewrites, `iteboolean` and
 `iteregion`, run on the tree (`PrintC::ctree_rewrite`, level `rewritten`); they live in the emit
 crate for now because their tests read printer state (output language, stack views). The first
-new rewrite, `option boolreturn` (backlog #9, the `return c` part), runs in the same pass.
+new rewrite, `option boolreturn` (backlog #9, the `return c` part), runs in the same pass, and so
+does `option noretfirst` (backlog #8: the arm that never falls through first, the other after).
 Spec: `docs/spec/09-emission.md`, "Printing through the C syntax tree".
 
 Today the printer walks the structured block graph and the p-code ops directly and writes text as it

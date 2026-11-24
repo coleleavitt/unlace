@@ -2346,7 +2346,9 @@ mod tests {
         // and kuna-boolreturn-default / constant-return predicates print as one return (option boolreturn)
         // and jt871-struct-field-index-across-call / a switch index read from a struct passed to a call stays a switch
         // and ocaml-tagged-guard / a range check of a tagged int bounds the table
-        assert_eq!(count, 1012, "corpus file count drifted");
+        // and ocaml-eq-guard / an equality test between the range checks keeps the far bound
+        // and kuna-pairlocal / a long long local on 32-bit x86 joins at its phis (option pairlocal)
+        assert_eq!(count, 1014, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

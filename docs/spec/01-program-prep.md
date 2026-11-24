@@ -2085,7 +2085,19 @@ symbols; an address that already has a name keeps it. A companion that carries
 DWARF also feeds the DWARF analyzer
 (`crates/unlace-analysis/src/analyzers/dwarf/mod.rs (DwarfPass)` runs
 over the companion when the image has no `.debug_info`), since the addresses
-are the image's own; MiniDebugInfo has no DWARF. The loader also reports a `PT_LOAD`
+are the image's own; MiniDebugInfo has no DWARF. A debug file that `dwz -m`
+compressed (Fedora/RHEL `-debuginfo`, Debian/Ubuntu `-dbgsym`) keeps the
+strings and partial units several packages share in a supplementary file its
+`.gnu_debugaltlink` names with that file's build-id;
+`elf_debuglink.rs (find_altlink)` looks for it at the named path (absolute,
+with `/usr/lib/debug` also tried under each `KUNA_DEBUG_DIRS` root, or
+relative to the debug file), then by build-id under the debug directories,
+and accepts it only if its build-id matches. The DWARF analyzer then sets it as
+gimli's supplementary `Dwarf` (`Dwarf::set_sup`), so names in
+`DW_FORM_GNU_strp_alt` / `DW_FORM_strp_sup` resolve. A `DW_FORM_GNU_ref_alt`
+reference into the supplementary file's partial units is not followed yet
+(the per-unit DIE snapshot resolves only unit-local references), so a type
+that lives only there stays unknown. The loader also reports a `PT_LOAD`
 that maps an address another `PT_LOAD` already mapped from different file bytes
 (`elf_debuglink.rs (overlapping_loads)`), a shape only a hand-made or hostile
 image has; which bytes win is unchanged.
@@ -4733,7 +4745,24 @@ moves.
   present is read (`_win10`, then `_win81`, `_win8`, `_win7`, `_vista`,
   `_ws03`, `_xp`, `_2000`, `_nt`, then the bare name), and a user-mode or
   native image also reads the newest Native API library (`ntapi`,
-  `ntapi64`). Which files were read, and any that could not be, is said once on
+  `ntapi64`); an AArch64 EFI image reads `arm/uefi64`.
+
+  An ELF or Mach-O image reads the libraries `TypeLibPass` names for it
+  (`kuna_typelib.rs (til_slots)`, carried as `TypeLibFacts::til_slots`): per
+  slot a list of candidate paths relative to the `til` directory, of which the
+  first present is read (or, when the variable names a subdirectory such as
+  `til/arm`, the first present by file name). A Linux ELF reads
+  `gnulnx_<arch>` and the `gnuunx` (32-bit) or `gnuunx64` library it is built
+  on (x86, x86-64, ARM, AArch64, 32-bit PowerPC; PowerPC64's `gnulnx_ppc64`
+  stands alone). An ELF whose loader is `/system/bin/linker[64]`, or which
+  imports from `libc.so` under Bionic's `LIBC` version, reads `android_arm` or
+  `android_arm64` instead. A Mach-O reads one SDK library: for iOS (the
+  `LC_BUILD_VERSION` or `LC_VERSION_MIN_IPHONEOS` platform, simulator
+  included) `iphoneos64_sdkNN` on AArch64 and `iphoneos_sdk12` on 32-bit ARM;
+  otherwise `macosNN_sdk00_arm64` or `macosNN_sdk00_x64` (an x86-64 image
+  built with a 10.x SDK first tries `macosx64_sdk15`/`sdk14`). The library
+  for the major SDK version the image names is preferred, then older ones,
+  then newer ones (`by_preference`). Which files were read, and any that could not be, is said once on
   stderr (`[kuna typelib] UNLACE_TIL_DIR: read ...`); an unreadable library is
   skipped, where a listed file that cannot be read is an error.
 
@@ -12764,6 +12793,13 @@ unmatched `PUSH`/`SUB SP` still open) was implemented, measured, and dominated b
 it on both precision and recall. As with `ptrentry`, the region is the
 entry-ordered one — the nearest preceding discovered entry — which is the
 granularity the tier has and errs conservative on a sparsely discovered image.
+An accepted target becomes a region boundary for the next pass, and the scan
+repeats until it finds nothing new (at most eight rounds). A routine reached by
+a tail branch from another tail-branch target lies inside the first one's region
+until that one is accepted. libopencm3's `_usbd_standard_request` is found in
+the first round, and the `_usbd_standard_request_device`, `_interface` and
+`_endpoint` it tail-branches to are found in the second. Before, their bodies
+printed inside it.
 Two of the four guards are satisfied by an *absent* model rather than by
 evidence: the predecessor test reads the reference model and the epilogue test
 the disassembly text, and a walk can be told to capture neither (above), which
@@ -13443,6 +13479,16 @@ retained prior entry that a jump-table dispatch reaches is a case block and is
 contradicted too. On the stripped U-Boot O2-noinline image these rules leave
 recall at 92.0% and raise precision from 92.6% to 98.6%; `parse_label` and
 `malloc` stay whole.
+
+A `ptrentry` target is checked against the raw Thumb scan's roots the same
+way (`kuna_ptrentry.rs (shrinkwrap_roots)`). Its decoded run, following
+fall-through only for at most eight instructions and stopping at a call, a
+return or an unconditional branch, may reach a root no call targets. Then the
+target is the routine's real entry and the root its shrink-wrapped `push`: the
+root is withdrawn, the target becomes a walk root, and the Listing is rebuilt.
+libopencm3's `dwc_poll` (`ldr.w r12,[r0,#0xdc]; push.w {...}`, reached only
+through the driver table) was a 4-byte stub and a separate 472-byte
+`sub_8001718` before.
 
 One inventory recovery shares its decodes. Frame validation, the AIF gap walks
 (including the prior inventory's), prefix reconciliation and every Listing

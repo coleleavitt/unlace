@@ -5918,6 +5918,25 @@ flips, so the value stays `0` or `1`. The run is contiguous and every folded bod
 bare `return`, so C's own short-circuit evaluation runs the same tests in the
 same order and evaluates nothing the binary skips.
 
+With `option charnum on` (default off), `push_char_constant_ir` prints a one-byte constant
+of a character type as a number instead of a character literal when it is zero or not
+printable (outside 0x20-0x7e) and the reading op is an ordered comparison or an integer
+arithmetic or bitwise op, or, for a non-zero value, an equality (`kuna_charnum::as_number`):
+`'\\0' <= c` prints `0 <= c`, `c == '\\x03'` prints `c == 3`. A printable character, and a
+zero read by an equality, a store, a copy or a call, keep the literal.
+
+With `option constright on` (C output; default off), `op_binary_ir` mirrors an integer `<` or
+`<=` whose first operand is a constant and whose second is not (`kuna_constright::mirrors`):
+it prints the other comparison token (`token_mirror`: `<` and `>`, `<=` and `>=`, taken after
+any negated token is resolved) and the operands in the opposite order, so `0x3b < x` prints
+`x > 0x3b`.
+
+With `option signeddec on` (default off), the integer path (`signed_decimal`, at the
+constant push of `push_vn_explicit_ir` and the two token builders that predict it) prints a
+constant read as a signed integer in decimal when no symbol or type fixes its format, its
+signed magnitude is below 0x10000 and the reading op is not a bitwise `&`, `|`, `^` or shift
+(`kuna_signeddec::decimal`). Unsigned constants keep `mostNaturalBase`.
+
 With `option retternary on` (C output; default off), an `if`/`else` the forms
 above leave, whose arms are such leaves each printing one `RETURN` of a constant
 or an explicit variable, becomes one return (`return_ternary_shape`): a `1` or

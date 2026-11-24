@@ -42,5 +42,6 @@ pub fn provide_all(slots: &mut crate::kuna_passhooks::KunaHookSlots) {
     crate::kuna_revisitrefine::provide(slots);
     crate::kuna_calloverlap::provide(slots);
     crate::kuna_retindexuse::provide(slots);
+    crate::kuna_carryuse::provide(slots);
     crate::modelrules::provide(slots);
 }

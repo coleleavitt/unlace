@@ -115,6 +115,55 @@ pub fn find_companion(file: &object::File, image: &Path) -> Option<(PathBuf, Vec
     None
 }
 
+/// The DWZ supplementary file (`dwz -m`) the debug file `file` names in its
+/// `.gnu_debugaltlink`, with its bytes: the strings and partial units several
+/// packages' debug files share, which `DW_FORM_GNU_strp_alt` /
+/// `DW_FORM_strp_sup` and `DW_FORM_GNU_ref_alt` refer into. Searched at the
+/// path the section names (absolute, or relative to `near`'s directory, the
+/// file that carries the section), the same path under each `KUNA_DEBUG_DIRS`
+/// root in place of `/usr/lib/debug`, then by its build-id under each debug
+/// directory (`.build-id/<xx>/<rest>.debug`). A candidate is accepted only when
+/// its build-id is the one the section records.
+pub fn find_altlink(file: &object::File, near: Option<&Path>) -> Option<(PathBuf, Vec<u8>)> {
+    let (name, id) = file.gnu_debugaltlink().ok().flatten()?;
+    if id.len() < 2 {
+        return None;
+    }
+    let name = PathBuf::from(String::from_utf8_lossy(name).into_owned());
+    let mut paths = Vec::new();
+    if name.is_absolute() {
+        paths.push(name.clone());
+        if let Ok(rest) = name.strip_prefix("/usr/lib/debug") {
+            paths.extend(debug_dirs().into_iter().map(|dir| dir.join(rest)));
+        }
+    } else if let Some(parent) = near.and_then(Path::parent) {
+        paths.push(parent.join(&name));
+    }
+    for dir in debug_dirs() {
+        paths.push(
+            dir.join(".build-id")
+                .join(hex(&id[..1]))
+                .join(format!("{}.debug", hex(&id[1..]))),
+        );
+    }
+    for path in paths {
+        if !std::fs::metadata(&path).is_ok_and(|m| m.is_file() && m.len() <= MAX_COMPANION_BYTES) {
+            continue;
+        }
+        let Ok(bytes) = std::fs::read(&path) else {
+            continue;
+        };
+        let matches = object::File::parse(&*bytes)
+            .ok()
+            .and_then(|sup| sup.build_id().ok().flatten().map(|other| other == id))
+            .unwrap_or(false);
+        if matches {
+            return Some((path, bytes));
+        }
+    }
+    None
+}
+
 /// The ELF inside `.gnu_debugdata`, decompressed.
 pub fn minidebuginfo(file: &object::File) -> Option<Vec<u8>> {
     let section = file.section_by_name(".gnu_debugdata")?;
@@ -188,4 +237,33 @@ pub fn overlapping_loads(bytes: &[u8]) -> Vec<(u64, u64)> {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::find_altlink;
+
+    fn fixture(name: &str) -> std::path::PathBuf {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures")
+            .join(name)
+    }
+
+    /// The supplementary file is found next to the debug file that names it,
+    /// and only when its build-id is the one `.gnu_debugaltlink` records.
+    #[test]
+    fn the_altlink_file_is_found_beside_the_debug_file_and_checked() {
+        let main = fixture("dwzaltlink_main");
+        let bytes = std::fs::read(&main).unwrap();
+        let file = object::File::parse(&*bytes).unwrap();
+        let (path, sup) = find_altlink(&file, Some(&main)).expect("supplementary file");
+        assert_eq!(path, fixture("dwzaltlink_sup.debug"));
+        assert_eq!(sup, std::fs::read(fixture("dwzaltlink_sup.debug")).unwrap());
+        assert!(find_altlink(&file, None).is_none_or(|(p, _)| p != path));
+        let sup_file = object::File::parse(&*sup).unwrap();
+        assert!(
+            find_altlink(&sup_file, Some(&main)).is_none(),
+            "no section, no file"
+        );
+    }
 }

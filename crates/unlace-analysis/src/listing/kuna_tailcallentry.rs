@@ -52,6 +52,10 @@
 //!    A function does not begin by tearing down a frame it never built; such a
 //!    target is the caller's shared epilogue.
 //!
+//! Accepted targets become region boundaries, and the scan runs again (at most
+//! eight rounds): a routine reached by a tail branch from another tail-branch
+//! target lies inside the first one's region until that one is accepted.
+//!
 //! ARM-gated like the sibling Stage-2/3 seed scans, so every non-ARM binary is a
 //! strict no-op (the mechanism is architecture-neutral; the evidence is not).
 
@@ -96,13 +100,32 @@ pub fn tail_call_entries(file: &object::File, listing: &Listing, all_arches: boo
     if !listing.has_refs() || !listing.has_assembly() {
         return Vec::new();
     }
-    let entries: Vec<u64> = listing.functions().map(|(&a, _)| a).collect();
-    branch_targets(listing, &entries)
-        .into_iter()
-        .filter(|(target, srcs)| probe(listing, &entries, *target, srcs).is_ok())
-        .map(|(target, _)| target)
-        .collect()
+    let mut entries: Vec<u64> = listing.functions().map(|(&a, _)| a).collect();
+    let mut accepted: Vec<u64> = Vec::new();
+    for _ in 0..MAX_ROUNDS {
+        let found: Vec<u64> = branch_targets(listing, &entries)
+            .into_iter()
+            .filter(|(target, srcs)| probe(listing, &entries, *target, srcs).is_ok())
+            .map(|(target, _)| target)
+            .collect();
+        if found.is_empty() {
+            break;
+        }
+        accepted.extend(&found);
+        entries.extend(found);
+        entries.sort_unstable();
+        entries.dedup();
+    }
+    accepted.sort_unstable();
+    accepted.dedup();
+    accepted
 }
+
+/// How many times the accepted entries are fed back as region boundaries. A
+/// routine reached by a tail branch from another tail-branch target
+/// (`_usbd_standard_request` -> `_usbd_standard_request_device`) is in no
+/// region of its own until the first is accepted.
+const MAX_ROUNDS: usize = 8;
 
 /// Every unconditional-branch target that is a decoded instruction and not
 /// already a function entry, keyed by target with all of its branch sites.

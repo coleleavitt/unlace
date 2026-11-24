@@ -9,6 +9,17 @@ use unlace_decomp::dtype::TypeFactoryImpl;
 /// and so does `unlace_libcnames`' table test, which takes it too.
 pub(in crate::analyzers::protos) static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+/// `layout` in force on this thread until the guard drops, as a load's options put it.
+fn in_force(
+    layout: unlace_decomp::libctypes::LibcTypesLayout,
+) -> unlace_decomp::loadoptions::LoadScope {
+    unlace_decomp::loadoptions::LoadOptions {
+        libctypes: layout,
+        ..unlace_decomp::loadoptions::LoadOptions::default()
+    }
+    .enter()
+}
+
 /// A type factory shaped like the x86-64 one the passes run against.
 fn factory() -> TypeFactoryImpl {
     let types = TypeFactoryImpl::new();
@@ -486,9 +497,7 @@ fn the_account_database_slots_name_both_aggregates() {
 fn the_declared_lookup_follows_the_gate() {
     let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     let types = factory();
-    unlace_decomp::libctypes::set_libctypes_env_layout(
-        unlace_decomp::libctypes::LibcTypesLayout::Off,
-    );
+    let off_scope = in_force(unlace_decomp::libctypes::LibcTypesLayout::Off);
     let off = super::super::declared_libc_prototype("fopen", &types, 1, Layout::Opaque)
         .expect("fopen off");
     let off_base = off.outtype.as_ref().and_then(|t| t.get_ptr_to());
@@ -497,9 +506,8 @@ fn the_declared_lookup_follows_the_gate() {
         Some(type_metatype::TYPE_VOID),
         "off: the shipped void * signature"
     );
-    unlace_decomp::libctypes::set_libctypes_env_layout(
-        unlace_decomp::libctypes::LibcTypesLayout::Opaque,
-    );
+    drop(off_scope);
+    let _on_scope = in_force(unlace_decomp::libctypes::LibcTypesLayout::Opaque);
     let on = super::super::declared_libc_prototype("fopen", &types, 1, Layout::Opaque)
         .expect("fopen on");
     let on_base = on.outtype.as_ref().and_then(|t| t.get_ptr_to());
@@ -508,8 +516,6 @@ fn the_declared_lookup_follows_the_gate() {
         Some("FILE".to_string()),
         "on: the named signature"
     );
-    // FIXME: Audit that the environment access only happens in single-threaded code.
-    unsafe { std::env::remove_var(unlace_decomp::libctypes::LIBCTYPES_ENV) };
 }
 
 /// A declared name whose named form cannot be built degrades to the width-stable
@@ -519,9 +525,7 @@ fn the_declared_lookup_follows_the_gate() {
 fn a_declined_aggregate_degrades_to_the_width_stable_signature() {
     let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     let types = factory();
-    unlace_decomp::libctypes::set_libctypes_env_layout(
-        unlace_decomp::libctypes::LibcTypesLayout::Opaque,
-    );
+    let _scope = in_force(unlace_decomp::libctypes::LibcTypesLayout::Opaque);
     let shell = types.get_type_struct("stat").expect("shell");
     let int4t = types.get_base(4, type_metatype::TYPE_INT).expect("int");
     let field = unlace_decomp::dtype::TypeField::new(0, 0, "mine", int4t);
@@ -541,8 +545,6 @@ fn a_declined_aggregate_degrades_to_the_width_stable_signature() {
         type_metatype::TYPE_VOID,
         "degraded to void *"
     );
-    // FIXME: Audit that the environment access only happens in single-threaded code.
-    unsafe { std::env::remove_var(unlace_decomp::libctypes::LIBCTYPES_ENV) };
 }
 
 // -- the `glibc` field layouts ---------------------------------------------
@@ -795,13 +797,13 @@ fn no_layout_names_a_reserved_member() {
 /// buy a 216-byte x86-64 `FILE`.
 #[test]
 fn a_refused_target_cannot_reach_the_glibc_layouts() {
-    use unlace_decomp::libctypes::{LIBCTYPES_ENV, LibcTypesLayout, set_libctypes_env_layout};
+    use unlace_decomp::libctypes::LibcTypesLayout;
     let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
 
     // The run asked for `glibc` and the program looks the part. The load-time
     // target gate still refused, so `Opaque` is what arrives here, and `Opaque`
     // is what is minted.
-    set_libctypes_env_layout(LibcTypesLayout::Glibc);
+    let glibc_scope = in_force(LibcTypesLayout::Glibc);
     let refused = factory();
     named_aggregate("stat", &refused, 1, Layout::Glibc).expect("a laid-out `stat`");
     let shelled =
@@ -837,7 +839,8 @@ fn a_refused_target_cannot_reach_the_glibc_layouts() {
 
     // The option value alone can no longer reach the layouts from here: it is
     // necessary (the pass reads it before the target gate) and not sufficient.
-    set_libctypes_env_layout(LibcTypesLayout::Opaque);
+    drop(glibc_scope);
+    let _opaque_scope = in_force(LibcTypesLayout::Opaque);
     let still = super::super::declared_libc_prototype("fopen", &factory(), 1, Layout::Opaque)
         .expect("fopen");
     let shell = still
@@ -846,8 +849,6 @@ fn a_refused_target_cannot_reach_the_glibc_layouts() {
         .and_then(|t| t.get_ptr_to())
         .expect("FILE *");
     assert!(shell.is_incomplete(), "`opaque` mints the fieldless shell");
-    // FIXME: Audit that the environment access only happens in single-threaded code.
-    unsafe { std::env::remove_var(LIBCTYPES_ENV) };
 }
 
 /// Read one of the crate's binary fixtures.
@@ -1079,10 +1080,10 @@ fn only_an_x86_64_glibc_abi_takes_the_widths() {
 /// `void *` tables, and so does a name the operator declares there.
 #[test]
 fn a_refused_target_is_off_whatever_was_asked() {
-    use unlace_decomp::libctypes::{LIBCTYPES_ENV, LibcTypesLayout, set_libctypes_env_layout};
+    use unlace_decomp::libctypes::LibcTypesLayout;
     let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     for asked in [LibcTypesLayout::Opaque, LibcTypesLayout::Glibc] {
-        set_libctypes_env_layout(asked);
+        let _scope = in_force(asked);
         let i386 = fixture_bytes("libctypes_widths_i386");
         let file = object::File::parse(i386.as_slice()).expect("parse the i386 witness");
         assert_eq!(
@@ -1098,8 +1099,6 @@ fn a_refused_target_is_off_whatever_was_asked() {
             "{asked:?} on x86-64"
         );
     }
-    // FIXME: Audit that the environment access only happens in single-threaded code.
-    unsafe { std::env::remove_var(LIBCTYPES_ENV) };
     let types = factory();
     let pieces =
         super::super::declared_libc_prototype("fopen", &types, 1, Layout::Off).expect("fopen");

@@ -1,6 +1,8 @@
 //! Unit tests for the `symbolnamechars` sanitizer and its env gate.
 
 use super::*;
+use crate::loadoptions::{LoadOptions, Vars, read};
+use std::collections::BTreeMap;
 
 fn safe(name: &[u8]) -> String {
     String::from_utf8(sanitize_symbol_name_bytes(name, NameChars::Safe).into_owned()).unwrap()
@@ -204,9 +206,11 @@ fn sanitize_ident_chain_matches_the_rtti_class_name_contract() {
 /// process-global.
 #[test]
 fn env_gate_defaults_to_safe_and_round_trips() {
-    // FIXME: Audit that the environment access only happens in single-threaded code.
-    unsafe { std::env::remove_var(SYMBOLNAMECHARS_ENV) };
-    assert_eq!(symbolnamechars_mode(), NameChars::Safe, "unset ⇒ safe");
+    let read_with = |value: Option<&str>| {
+        let overrides = BTreeMap::from([(SYMBOLNAMECHARS_ENV, value.map(str::to_string))]);
+        read::symbolnamechars(&Vars::with(&overrides))
+    };
+    assert_eq!(read_with(None), NameChars::Safe, "unset ⇒ safe");
 
     for (token, want) in [
         ("off", NameChars::Off),
@@ -220,24 +224,22 @@ fn env_gate_defaults_to_safe_and_round_trips() {
         ("IDENT", NameChars::Ident),
     ] {
         assert_eq!(NameChars::parse(token), Some(want), "{token}");
-        // FIXME: Audit that the environment access only happens in single-threaded code.
-        unsafe { std::env::set_var(SYMBOLNAMECHARS_ENV, token) };
-        assert_eq!(symbolnamechars_mode(), want, "{token}");
+        assert_eq!(read_with(Some(token)), want, "{token}");
     }
     // An unrecognized value is not a silent third behavior: it falls back to the
     // shipped default rather than to `off`.
     assert_eq!(NameChars::parse("bogus"), None);
-    // FIXME: Audit that the environment access only happens in single-threaded code.
-    unsafe { std::env::set_var(SYMBOLNAMECHARS_ENV, "bogus") };
-    assert_eq!(symbolnamechars_mode(), NameChars::Safe);
+    assert_eq!(read_with(Some("bogus")), NameChars::Safe);
 
     for mode in [NameChars::Off, NameChars::Safe, NameChars::Ident] {
-        set_symbolnamechars_env(mode);
+        let _scope = LoadOptions {
+            symbolnamechars: mode,
+            ..LoadOptions::default()
+        }
+        .enter();
         assert_eq!(symbolnamechars_mode(), mode);
         assert_eq!(NameChars::parse(mode.as_str()), Some(mode));
     }
-    // FIXME: Audit that the environment access only happens in single-threaded code.
-    unsafe { std::env::remove_var(SYMBOLNAMECHARS_ENV) };
 }
 
 /// The `str` entry point agrees with the byte one and borrows when it can.

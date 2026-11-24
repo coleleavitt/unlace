@@ -17,11 +17,11 @@
 //! `load file`, which runs **upstream of every `option` command** and, in
 //! `unlace decompile-all`, upstream of `apply_runtime_options`: an
 //! `Architecture` bool read inside the pass would see the constructor default
-//! whatever the user asked for. So the gate is a process environment variable
-//! ([`LIBCTYPES_ENV`]), consulted by the pass and by the declared-name lookup,
-//! exported by the `unlace decompile`/`decompile-all` CLI before the load and set
-//! by the console's `option libctypes …` arm, exactly as the other load-time
-//! gates do. The companion
+//! whatever the user asked for. So the gate is a load option
+//! (`LoadOptions::libctypes`), read by the pass and by the declared-name lookup
+//! from the options in force. The CLI and the console carry the user's value
+//! into a load through [`LIBCTYPES_ENV`]; the console's `option libctypes …` arm
+//! changes only the options of the program it names. The companion
 //! registered [`LibcTypesLayout`] value keeps the option catalog-visible and
 //! makes `phase catalog`'s live `current` field reflect it.
 //!
@@ -118,24 +118,6 @@ pub const AGGREGATE_NAMES: &[&str] = &[
     "utmpx",
 ];
 
-/// Export a `set_unlace_option("libctypes", val)` choice to [`LIBCTYPES_ENV`] so a
-/// later `load file` in the *same* process sees it (the interactive
-/// `option libctypes glibc` before `load file` path; the CLI sets the env var on
-/// the subprocess directly).
-pub fn set_libctypes_env_layout(layout: LibcTypesLayout) {
-    // FIXME: Audit that the environment access only happens in single-threaded code.
-    unsafe {
-        std::env::set_var(
-            LIBCTYPES_ENV,
-            match layout {
-                LibcTypesLayout::Off => "off",
-                LibcTypesLayout::Opaque => "opaque",
-                LibcTypesLayout::Glibc => "glibc",
-            },
-        )
-    };
-}
-
 impl crate::optionset::UnlaceOption for LibcTypesLayout {
     const NAME: &'static str = "libctypes";
     crate::unlace_option_id!();
@@ -171,55 +153,53 @@ impl crate::optionset::UnlaceOption for LibcTypesLayout {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::loadoptions::{LoadOptions, Vars, read};
+    use std::collections::BTreeMap;
 
-    /// The gate defaults on (unset env), only the off-tokens disable it, and
-    /// `glibc` is the one token that asks for the field layouts. Serialized by
-    /// being a single test (env is process-global).
+    /// What the gate reads when its variable holds `value` (`None` = unset).
+    fn read_with(value: Option<&str>) -> LibcTypesLayout {
+        let overrides = BTreeMap::from([(LIBCTYPES_ENV, value.map(str::to_string))]);
+        read::libctypes(&Vars::with(&overrides))
+    }
+
+    /// The gate defaults on (unset variable), only the off-tokens disable it, and
+    /// `glibc` is the one token that asks for the field layouts.
     #[test]
     fn libctypes_env_gate() {
-        // FIXME: Audit that the environment access only happens in single-threaded code.
-        unsafe { std::env::remove_var(LIBCTYPES_ENV) };
-        assert!(libctypes_enabled(), "unset => default-on");
-        assert_eq!(
-            libctypes_layout(),
-            LibcTypesLayout::Opaque,
-            "unset => opaque"
-        );
+        assert_eq!(read_with(None), LibcTypesLayout::Opaque, "unset => opaque");
         for off in ["off", "0", "false", "OFF", " off "] {
-            // FIXME: Audit that the environment access only happens in single-threaded code.
-            unsafe { std::env::set_var(LIBCTYPES_ENV, off) };
-            assert!(!libctypes_enabled(), "`{off}` should disable");
-            assert_eq!(libctypes_layout(), LibcTypesLayout::Off);
+            assert_eq!(
+                read_with(Some(off)),
+                LibcTypesLayout::Off,
+                "`{off}` should disable"
+            );
         }
         for on in ["opaque", "on", "1", "true", "OPAQUE", " opaque ", ""] {
-            // FIXME: Audit that the environment access only happens in single-threaded code.
-            unsafe { std::env::set_var(LIBCTYPES_ENV, on) };
-            assert!(libctypes_enabled(), "`{on}` should enable");
             assert_eq!(
-                libctypes_layout(),
+                read_with(Some(on)),
                 LibcTypesLayout::Opaque,
                 "`{on}` is not a layout"
             );
         }
         for g in ["glibc", "GLIBC", " glibc "] {
-            // FIXME: Audit that the environment access only happens in single-threaded code.
-            unsafe { std::env::set_var(LIBCTYPES_ENV, g) };
-            assert!(libctypes_enabled(), "`{g}` should enable");
             assert_eq!(
-                libctypes_layout(),
+                read_with(Some(g)),
                 LibcTypesLayout::Glibc,
                 "`{g}` asks for layouts"
             );
         }
-        for (layout, want) in [
-            (LibcTypesLayout::Off, LibcTypesLayout::Off),
-            (LibcTypesLayout::Opaque, LibcTypesLayout::Opaque),
-            (LibcTypesLayout::Glibc, LibcTypesLayout::Glibc),
+        for layout in [
+            LibcTypesLayout::Off,
+            LibcTypesLayout::Opaque,
+            LibcTypesLayout::Glibc,
         ] {
-            set_libctypes_env_layout(layout);
-            assert_eq!(libctypes_layout(), want);
+            let _scope = LoadOptions {
+                libctypes: layout,
+                ..LoadOptions::default()
+            }
+            .enter();
+            assert_eq!(libctypes_layout(), layout);
+            assert_eq!(libctypes_enabled(), layout != LibcTypesLayout::Off);
         }
-        // FIXME: Audit that the environment access only happens in single-threaded code.
-        unsafe { std::env::remove_var(LIBCTYPES_ENV) };
     }
 }

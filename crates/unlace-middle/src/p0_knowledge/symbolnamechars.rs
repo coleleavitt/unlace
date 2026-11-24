@@ -161,15 +161,6 @@ pub fn symbolnamechars_mode() -> NameChars {
         .unwrap_or_else(crate::loadoptions::env::symbolnamechars)
 }
 
-/// Export a `set_unlace_option("symbolnamechars", val)` choice to
-/// [`SYMBOLNAMECHARS_ENV`] so a later `load file` in the *same* process sees it
-/// (the interactive `option symbolnamechars … ` before `load file` path, and the
-/// in-process CLI drivers).
-pub fn set_symbolnamechars_env(mode: NameChars) {
-    // FIXME: Audit that the environment access only happens in single-threaded code.
-    unsafe { std::env::set_var(SYMBOLNAMECHARS_ENV, mode.as_str()) };
-}
-
 /// Whether `a`,`b` (adjacent, in that order) open or close a C comment.
 fn is_comment_delim(a: u8, b: u8) -> bool {
     matches!((a, b), (b'*', b'/') | (b'/', b'*') | (b'/', b'/'))

@@ -81,6 +81,7 @@ pub const ELEM_ORCHAIN: ElementId = ElementId::new("orchain", 4136);
 #[doc(hidden)]
 pub fn shortcircuit_shared_targets(data: &Funcdata) -> BTreeSet<BlockId> {
     let mut shared: BTreeSet<BlockId> = BTreeSet::new();
+    let live_out = data.get_arch().kuna_options.get::<OrchainLive>().0;
     let nbb = data.bblocks_get_size();
     if nbb < 3 {
         return shared;
@@ -143,6 +144,9 @@ pub fn shortcircuit_shared_targets(data: &Funcdata) -> BTreeSet<BlockId> {
             if data.bb_is_complex(q) {
                 continue; // BlockBasic::isComplex — the sibling is too wide to fold
             }
+            if live_out && defines_live_value(data, q) {
+                continue;
+            }
 
             shared.insert(clause);
             outs.insert(p, [clause, qouts[1 - j]]);
@@ -190,12 +194,44 @@ pub fn shortcircuit_shared_targets(data: &Funcdata) -> BTreeSet<BlockId> {
     shared
 }
 
+/// Does basic block `q` compute a value read outside it (`orchainlive`)? Such an operand
+/// is a statement the source wrote before its own guard (`x = f(); if (x == -1) return -1;`),
+/// not part of a short-circuit expression, so its fold is not protected from `returndup`.
+fn defines_live_value(data: &Funcdata, q: BlockId) -> bool {
+    data.bb_ops(q).into_iter().any(|op| {
+        let Some(o) = data.obank().get(op) else {
+            return false;
+        };
+        if o.is_marker() {
+            return false;
+        }
+        let Some(v) = o.get_out().and_then(|v| data.vbank().get(v)) else {
+            return false;
+        };
+        v.descend_iter().any(|d| {
+            data.obank()
+                .get(d)
+                .is_some_and(|d| d.get_parent() != Some(q))
+        })
+    })
+}
+
 /// The CFG predecessors of `b` (the raw bblocks in-edges — a superset of the
 /// predecessors in the partially folded graph, which is all the worklist needs).
 fn preds_of(data: &Funcdata, b: BlockId) -> Vec<BlockId> {
     let blk = data.bblocks_ref().block(b);
     (0..blk.size_in()).map(|i| blk.get_in(i)).collect()
 }
+
+crate::kuna_flag!(
+    /// (kuna `orchainlive`) Leave a short-circuit fold unprotected from `returndup` when its
+    /// operand block computes a value read after the chain.
+    OrchainLive,
+    "orchainlive",
+    "guard splits past operands that define a live value",
+    unset: false,
+    shipped: false
+);
 
 /// Fill this pass's hooks ([`crate::kuna_passhooks`]).
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {

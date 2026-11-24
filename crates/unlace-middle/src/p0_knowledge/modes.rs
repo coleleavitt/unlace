@@ -647,6 +647,8 @@ mod tests {
         /// `gopairreturns` remains explicit while aggregate ABI interactions across
         /// Go corpus sizes are evaluated for automatic selection.
         const UNEVALUATED: &[&str] = &[
+            // `orchainlive` (issue #10) is swept in its own PR; preset membership waits on it.
+            "orchainlive",
             // `phithread` (issue #20) landed without a corpus sweep.
             "phithread",
             // `phiarm` (issue #20) landed without a corpus sweep.

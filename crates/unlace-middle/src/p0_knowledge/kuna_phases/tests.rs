@@ -47,13 +47,13 @@ fn surface_count_is_102() {
 }
 
 #[test]
-fn settable_count_is_353() {
-    assert_eq!(kuna_num_settables(), 353);
-    assert_eq!(SETTABLE_TABLE.len(), 353);
+fn settable_count_is_355() {
+    assert_eq!(kuna_num_settables(), 355);
+    assert_eq!(SETTABLE_TABLE.len(), 355);
 }
 
 #[test]
-fn tier_counts_are_70_core_177_transform_106_analysis() {
+fn tier_counts_are_70_core_178_transform_107_analysis() {
     let mut core = 0;
     let mut transform = 0;
     let mut analysis = 0;
@@ -65,7 +65,7 @@ fn tier_counts_are_70_core_177_transform_106_analysis() {
             other => panic!("invalid tier {other:?} on {}", s.option),
         }
     }
-    assert_eq!((core, transform, analysis), (70, 177, 106));
+    assert_eq!((core, transform, analysis), (70, 178, 107));
 }
 
 #[test]
@@ -1324,7 +1324,8 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // +1 for `javasync`; its P9 row sits after `javanew`: 351 rows, 350 commas.
     // +1 for `condcallpush`; its P8 row is last: 352 rows, 351 commas.
     // +1 for `comcfg`; its P1 row follows `com`: 353 rows, 352 commas.
-    assert_eq!(json.matches("},\n").count(), 352);
+    // +1 for `orchainlive`: 355 rows, 354 commas.
+    assert_eq!(json.matches("},\n").count(), 354);
 }
 
 #[test]

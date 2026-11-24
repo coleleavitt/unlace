@@ -6,6 +6,8 @@ mod c28x_raw;
 #[path = "chip8.rs"]
 mod chip8;
 mod common;
+#[path = "hexagon_hmx.rs"]
+mod hexagon_hmx;
 #[path = "m32r_raw.rs"]
 mod m32r_raw;
 #[path = "ft32_raw.rs"]

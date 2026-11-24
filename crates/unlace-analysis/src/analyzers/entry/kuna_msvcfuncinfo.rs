@@ -18,7 +18,7 @@ use object::read::pe::PeFile64;
 use object::{Object, ObjectSymbol};
 use unlace_decomp::kuna_fasthash::{FxHashMap, FxHashSet};
 
-use crate::pass::{AnalysisOutput, CommentFact};
+use crate::pass::{AnalysisOutput, CommentFact, FidMatch};
 use crate::rtti::models::ImageBytes;
 use crate::rtti::refkind::{End, RefKind};
 
@@ -103,6 +103,8 @@ pub fn collect(file: &object::File, bytes: &[u8], img: &ImageBytes) -> AnalysisO
     let base = file.relative_address_base();
     let rk = RefKind::new(true, base, End::Little);
     let handlers = handler_names(file, bytes);
+    let names = parent_names(file);
+    let mut named = FxHashSet::<u64>::default();
     let mut by_info = FxHashMap::<(u64, bool), Vec<u64>>::default();
     for (begin, unwind) in runtime_functions(&pe, bytes, base) {
         let Some((handler, data)) = language_handler(img, base, unwind) else {
@@ -155,6 +157,16 @@ pub fn collect(file: &object::File, bytes: &[u8], img: &ImageBytes) -> AnalysisO
             continue;
         };
         notes(parent, &decoded, true, &mut out);
+        let catches = decoded
+            .tries
+            .iter()
+            .flat_map(|t| t.catches.iter().map(|c| c.handler));
+        for (n, f) in catches.enumerate() {
+            name_funclet(&names, parent, "catch", n, f, &mut named, &mut out);
+        }
+        for (n, &(_, f)) in decoded.cleanups.iter().enumerate() {
+            name_funclet(&names, parent, "dtor", n, f, &mut named, &mut out);
+        }
         for f in funclets {
             if entries.insert(f) {
                 out.entries.push(f);
@@ -245,6 +257,53 @@ pub(crate) fn notes(parent: u64, info: &EhFuncInfo, separate: bool, out: &mut An
             text: format!("eh: unwind funclet of {parent:#x} (state {state})"),
         });
     }
+}
+
+/// The image's own names for function starts: its symbols, then its exports.
+pub(crate) fn parent_names(file: &object::File) -> FxHashMap<u64, String> {
+    let mut m = FxHashMap::default();
+    for s in file.symbols() {
+        if let Ok(name) = s.name()
+            && !name.is_empty()
+        {
+            m.entry(s.address()).or_insert_with(|| name.to_string());
+        }
+    }
+    for e in file.exports().unwrap_or_default() {
+        if let Ok(name) = std::str::from_utf8(e.name()) {
+            m.entry(e.address()).or_insert_with(|| name.to_string());
+        }
+    }
+    m
+}
+
+/// `<parent>$<kind>$<n>`, MSVC's and IDA's funclet naming; an unnamed parent
+/// is `sub_<addr>`.
+pub fn funclet_name(names: &FxHashMap<u64, String>, parent: u64, kind: &str, n: usize) -> String {
+    match names.get(&parent) {
+        Some(p) => format!("{p}${kind}${n}"),
+        None => format!("sub_{parent:x}${kind}${n}"),
+    }
+}
+
+/// Rename the funclet `f` (a placeholder only) once, as the `n`-th `kind` of `parent`.
+pub(crate) fn name_funclet(
+    names: &FxHashMap<u64, String>,
+    parent: u64,
+    kind: &str,
+    n: usize,
+    f: u64,
+    named: &mut FxHashSet<u64>,
+    out: &mut AnalysisOutput,
+) {
+    if f == parent || names.contains_key(&f) || !named.insert(f) {
+        return;
+    }
+    out.fid_names.push(FidMatch {
+        addr: f,
+        name: funclet_name(names, parent, kind, n),
+        by_signature: false,
+    });
 }
 
 /// Which frame handler each import slot, thunk or named symbol is.
@@ -638,6 +697,14 @@ mod tests {
         put(&mut b, unwind, &[0x01 | (0x4 << 3)]);
         let img = ImageBytes::from_spans(vec![(RDATA, b.as_slice())]);
         assert_eq!(language_handler(&img, BASE, unwind), None);
+    }
+
+    #[test]
+    fn funclet_names() {
+        let mut names = FxHashMap::default();
+        names.insert(0x1000u64, "catcher".to_string());
+        assert_eq!(funclet_name(&names, 0x1000, "catch", 1), "catcher$catch$1");
+        assert_eq!(funclet_name(&names, 0x2000, "dtor", 0), "sub_2000$dtor$0");
     }
 
     #[test]

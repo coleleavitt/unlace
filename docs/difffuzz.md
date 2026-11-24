@@ -259,6 +259,16 @@ afterwards. The register file is unchanged.
     V from the new carry; ADIW took V from the sum; FMUL/FMULS/FMULSU were `todo()` with the wrong
     registers (R24..R31 for R16..R23). Ignored: sim/avr takes FMUL's C after the shift, and a Y/Z
     displacement past 0xffff. Seed 4, 2500 encodings: 7410 matches, no mismatches.
+  - Blackfin (`--arch bfin`, `Blackfin:LE:32:default`): sim/bfin numbers ASTAT 36 and PC 53
+    (`include/sim/sim-bfin.h`); R0..R7, P0..P5, SP, FP, I/M/B/L (L = 0) and the ASTAT flags are
+    compared; the operations are filtered on the whole objdump text (`canonical`). Fixed in
+    `blackfin.slaspec`: data-register compares set AZ/AN/AC0 (only CC was set), the 32-bit shifts
+    leave AC0 alone (they cleared it), the sign/zero extensions clear AC0 and V (they kept them),
+    `(a + b) << n` takes V from the add or a sign-changing shift step and leaves AC0 alone, and the
+    16-bit half add/subtract saturate under (S) and set AC0/V/VS/AN/AZ (they set nothing). Ignored:
+    register shift counts of 2^31 and up (a C int in sim/bfin), the flags of `>>=` by more than 31
+    (sim/bfin writes 0 and leaves them), a pointer post-modified by itself. Seed 5, 2500
+    encodings: 5892 matches, no mismatches.
   - The simulators that cache decoded instructions (the CGEN ones) do not notice code rewritten
     at an address they ran, so a different instruction at a used address starts a fresh
     simulator. MCORE and MSP430 are not wired: sim/mcore's single step leaves PC elsewhere, and

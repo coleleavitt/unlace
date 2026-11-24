@@ -903,7 +903,109 @@ class LaHarness:
         return regs, 0
 
 
-HARNESSES = {"aarch64": A64Harness, "riscv64": RvHarness, "mips": MipsHarness, "mips64": Mips64Harness,
+
+# ---------------------------------------------------------------- ARM / Thumb (AArch32, ELF32)
+
+def arm_movw(rd, v):
+    return 0xE3000000 | ((v >> 12) & 0xF) << 16 | rd << 12 | (v & 0xFFF)
+
+
+def arm_movt(rd, v):
+    return 0xE3400000 | ((v >> 28) & 0xF) << 16 | rd << 12 | ((v >> 16) & 0xFFF)
+
+
+def arm_li32(rd, v):
+    return [arm_movw(rd, v & 0xFFFF), arm_movt(rd, v)]
+
+
+def arm_ldr(rt, rn, off):
+    return 0xE5900000 | rn << 16 | rt << 12 | (off & 0xFFF)
+
+
+def arm_str(rt, rn, off):
+    return 0xE5800000 | rn << 16 | rt << 12 | (off & 0xFFF)
+
+
+class ArmHarness:
+    """A32 code on qemu-arm -cpu max. r0..r14 at 4*i, APSR (NZCVQ, GE) at 64, read back at 64.
+    The prologue is A32: it sets the flags with MSR APSR_nzcvqg, loads every register but a
+    scratch one, restores the scratch register last and jumps with LDR pc from a literal, which
+    interworks, so a Thumb target (bit 0 set) runs as Thumb. An epilogue at a Thumb exit starts
+    with BX pc from a word-aligned address (a NOP first when it is not) and a NOP, to get back to A32."""
+    qemu = ("qemu-arm", ["-cpu", "max"])
+    machine = 40
+    big = False
+    elf32 = True
+    flags = 0x05000000          # EF_ARM_EABI_VER5
+    table_size = 80
+    marker_at = 72
+    thumb = False
+
+    def __init__(self):
+        self.scratch, self.scratch_names = 12, ["r12"]
+
+    def choose_scratch(self, arch, regs, written):
+        names = [f"r{i}" for i in range(12, -1, -1)] + ["lr"]
+        got = _pick_free(arch, regs, written, names, 1)
+        if not got:
+            return False
+        self.scratch_names = got
+        self.scratch = 14 if got[0] == "lr" else int(got[0][1:])
+        return True
+
+    def prologue(self, target):
+        s = self.scratch
+        t = 0 if s != 0 else 1
+        c = arm_li32(s, TABLES)
+        c += [arm_ldr(t, s, 64), 0xE12CF000 | t]                                    # msr APSR_nzcvqg, t
+        for i in range(15):
+            if i != s:
+                c.append(arm_ldr(i, s, 4 * i))
+        c.append(arm_ldr(s, s, 4 * s))
+        c += [0xE51FF004, target | (1 if self.thumb else 0)]                         # ldr pc, [pc, #-4]
+        return words(c)
+
+    def epilogue_at(self, dumps, marker, at):
+        head = b""
+        if self.thumb:
+            head = halfwords(([] if at % 4 == 0 else [0x46C0]) + [0x4778, 0x46C0])   # bx pc from a word address
+        return head + self._epilogue(dumps, marker)
+
+    def epilogue(self, dumps, marker):
+        return self.epilogue_at(dumps, marker, 0)
+
+    def _epilogue(self, dumps, marker):
+        s = self.scratch
+        t = 0 if s != 0 else 1
+        c = arm_li32(s, OUT)
+        for i in range(15):
+            if i != s:
+                c.append(arm_str(i, s, 4 * i))
+        c += [0xE10F0000 | t << 12, arm_str(t, s, 64)]                               # mrs t, APSR
+        c += arm_li32(t, marker) + [arm_str(t, s, self.marker_at)]
+        for base, size in [(OUT, self.table_size)] + [(p, PAGE) for p in dumps]:
+            c += arm_li32(7, 4) + arm_li32(0, 1) + arm_li32(1, base) + arm_li32(2, size) + [0xEF000000]   # write
+        c += arm_li32(7, 1) + arm_li32(0, 0) + [0xEF000000]                                             # exit
+        return words(c)
+
+    def table(self, arch, init, init_vec, flagword):
+        t = bytearray(self.table_size)
+        for i, (n, _) in enumerate(arch.gprs[:15]):
+            struct.pack_into("<I", t, 4 * i, init.get(n, 0) & 0xFFFFFFFF)
+        struct.pack_into("<I", t, 64, flagword & 0xF80F0000)
+        return bytes(t)
+
+    def parse(self, arch, out):
+        regs = {n: struct.unpack_from("<I", out, 4 * i)[0] for i, (n, _) in enumerate(arch.gprs[:15])}
+        return regs, struct.unpack_from("<I", out, 64)[0]
+
+
+class ThumbHarness(ArmHarness):
+    """T32 code: the same harness, entered with bit 0 of the target set."""
+    thumb = True
+
+
+HARNESSES = {"arm": ArmHarness, "thumb": ThumbHarness, "aarch64": A64Harness, "riscv64": RvHarness, "mips": MipsHarness, "mips64": Mips64Harness,
              "mipsr6": MipsR6Harness, "mips64r6": Mips64R6Harness, "nios2": Nios2Harness, "sh4": Sh4Harness,
              "ppc": lambda: PpcHarness(("qemu-ppc", ["-cpu", "7457"]), 20, True, False),
              "ppc64": lambda: PpcHarness(("qemu-ppc64", ["-cpu", "power10"]), 21, True, True, 2),
@@ -914,10 +1016,11 @@ HARNESSES = {"aarch64": A64Harness, "riscv64": RvHarness, "mips": MipsHarness, "
 
 
 def qemu_path(name):
-    """A QEMU user binary: from $DIFFFUZZ_QEMU_DIR when set, else from PATH."""
-    d = os.environ.get("DIFFFUZZ_QEMU_DIR")
-    if d and os.access(os.path.join(d, name), os.X_OK):
-        return os.path.join(d, name)
+    """A QEMU user binary: from the directories in $DIFFFUZZ_QEMU_DIR (separated by ':') when set,
+    else from PATH."""
+    for d in os.environ.get("DIFFFUZZ_QEMU_DIR", "").split(os.pathsep):
+        if d and os.access(os.path.join(os.path.expanduser(d), name), os.X_OK):
+            return os.path.join(os.path.expanduser(d), name)
     return shutil.which(name)
 
 # ---------------------------------------------------------------- PowerPC (32, 64 big- and little-endian)
@@ -1219,7 +1322,8 @@ def run_case_qemu(arch, regs, row, cand, rng, seed, tmp):
     for i, b in enumerate(cand["bytes"]):
         mem[addr + i] = b
     for k, x in enumerate(exits):
-        for i, b in enumerate(h.epilogue(data_pages, 0x5EA1 + k)):
+        ep = h.epilogue_at(data_pages, 0x5EA1 + k, x) if hasattr(h, "epilogue_at") else h.epilogue(data_pages, 0x5EA1 + k)
+        for i, b in enumerate(ep):
             mem[x + i] = b
     tables = bytearray(PAGE)
     tables[:h.table_size] = h.table(arch, init, init_vec, flagword)

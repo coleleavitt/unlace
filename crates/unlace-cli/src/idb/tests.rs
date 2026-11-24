@@ -256,3 +256,89 @@ fn info_and_list_documents() {
     }
     assert!(records(&db, "bogus").is_err());
 }
+
+fn strings(args: &[&str]) -> Vec<String> {
+    args.iter().map(|a| a.to_string()).collect()
+}
+
+fn after<'a>(args: &'a [String], flag: &str) -> Vec<&'a str> {
+    args.windows(2)
+        .filter(|w| w[0] == flag)
+        .map(|w| w[1].as_str())
+        .collect()
+}
+
+#[test]
+fn a_database_input_becomes_a_raw_load() {
+    assert!(is_database_file(FIXTURE));
+    let mut args = strings(&[FIXTURE, "--json"]);
+    let mut temp = Vec::new();
+    prepare_args("decompile-all", &mut args, &mut temp).expect("prepares");
+    assert_eq!(after(&args, "--target"), ["x86:LE:64:default"]);
+    assert!(args.iter().any(|a| a == "--raw-image"));
+    assert_eq!(after(&args, "--base"), ["0x400000"]);
+    let db = open(FIXTURE, false).unwrap();
+    assert_eq!(after(&args, "--entry").len(), db.functions.len());
+    let assert_file = after(&args, "--assert");
+    assert_eq!(assert_file.len(), 1);
+    let path = assert_file[0].strip_prefix('@').expect("an @file");
+    assert_eq!(temp, [PathBuf::from(path)]);
+    let directives = std::fs::read_to_string(path).expect("written");
+    assert!(
+        directives
+            .lines()
+            .any(|l| l.starts_with("function ") && l.ends_with("=main"))
+    );
+    unlace_console::assertsyntax::parse_directive_flag(assert_file[0]).expect("every line parses");
+    let _ = std::fs::remove_file(path);
+
+    let mut again = args.clone();
+    prepare_args("decompile-all", &mut again, &mut Vec::new()).unwrap();
+    assert_eq!(again, args, "an already raw argument list is left alone");
+}
+
+#[test]
+fn names_select_through_the_database() {
+    let main = function_address(FIXTURE, "main").expect("main");
+    assert!(main.starts_with("0x"));
+    assert!(function_address(FIXTURE, "no_such_function").is_err());
+
+    let mut args = strings(&[FIXTURE, "--functions", "main", "--json"]);
+    let mut temp = Vec::new();
+    prepare_args("decompile-all", &mut args, &mut temp).unwrap();
+    assert!(!args.iter().any(|a| a == "--functions"));
+    assert_eq!(after(&args, "--addr"), [main.as_str()]);
+    assert!(after(&args, "--entry").is_empty());
+    for path in temp {
+        let _ = std::fs::remove_file(path);
+    }
+
+    let mut args = strings(&[FIXTURE, "main"]);
+    let mut temp = Vec::new();
+    prepare_args("decompile", &mut args, &mut temp).unwrap();
+    assert!(after(&args, "--entry").is_empty());
+    for path in temp {
+        let _ = std::fs::remove_file(path);
+    }
+}
+
+#[test]
+fn the_raw_load_maps_segments_and_no_return_functions() {
+    let load = raw_load(FIXTURE).unwrap().expect("a database");
+    assert!(!load.runs.is_empty());
+    assert!(
+        load.runs
+            .windows(2)
+            .all(|w| w[0].0 + w[0].1.len() as u64 <= w[1].0)
+    );
+    let db = open(FIXTURE, false).unwrap();
+    let exit = db
+        .functions
+        .iter()
+        .find(|f| f.no_return)
+        .expect("a no-return function");
+    assert!(load.noreturn.contains(&exit.start));
+    let notice = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/idb/NOTICE.md");
+    assert!(!is_database_file(notice));
+    assert!(raw_load(notice).unwrap().is_none());
+}

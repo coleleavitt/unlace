@@ -8,6 +8,9 @@
 //! ESP image) as well, and names a raw dump's interrupt handlers after the
 //! device's interrupts.
 //!
+//! An IDA database (`.idb`/`.i64`) becomes a raw load of its segments with its
+//! knowledge as `--assert` directives (`crate::idb::prepare_args`).
+//!
 //! Runs before the subcommand parses its arguments, for the subcommands that
 //! take a raw image. The binary must be the first argument. A container is
 //! flattened into a temporary file that [`Prepared`] removes when dropped.
@@ -71,6 +74,10 @@ pub fn prepare(
     else {
         return Ok(prepared);
     };
+    if crate::idb::is_database_file(&binary) {
+        crate::idb::prepare_args(sub, &mut prepared.args, &mut prepared.temp)?;
+        return Ok(prepared);
+    }
     let Ok(mut bytes) = std::fs::read(&binary) else {
         return Ok(prepared);
     };

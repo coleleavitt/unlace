@@ -120,6 +120,25 @@ the emitter the block printer called for the same block, and should print the sa
      the C, Go and Rust printers, and gated by the printer's mode (`ONLY_BRANCH`), so a label
      node would have to reproduce each call site's placement. Not attempted.
 
+11. ctree/javarest (edit-only, 2026-11-24): the DEX `try` test on a rest of a list (`list_java_try`
+   with a slice) is recorded per skip on the list sequence when the tree is rewritten
+   (`ctree_java_rests`, `CTree::set_java_rests`); the whole-list record (`is_java_list`) is
+   unchanged. `list_has_java_try` reads only the function and the Java catch table, which is set
+   at the top of `emit_function_document` before the body (and so the tree) is built.
+
+Checked and left as they are (no print-time decision left to move, or not identical by construction):
+- break and continue (`emit_goto_statement` and its callers): the goto type of every if-goto and
+  goto block the tree holds already comes from the tree (`tree_goto_type`, set by
+  `ctree_take_plans`). The fallback `goto_rewrites.gototype` only runs when the tree holds no
+  statement for the block (past the depth bound, or no tree), and the `while` form's `break` is a
+  fixed flag.
+- tail return (`voidtailreturn`): the op is already removed from the one leaf that holds it in the
+  tree (`ctree_take_plans`). The print-time check in `emit_basic_block_ops_in` only runs for a leaf
+  with no statement list in the tree (past the depth bound, a leaf over `MAX_LEAF_OPS`, or no tree).
+  returndup and switchreturn are structuring-phase transforms (`unlace-structure`), not print-time
+  decisions, so nothing in the printer moves for them.
+- label placement inside a rest (`emit_any_label_statement`): see item 10.
+
 What still matches while printing: the DEX `try` matcher on a rest of a list (`list_has_java_try`
 for a slice), and any block the tree holds no statement for (past the depth bound) runs every
 matcher itself.

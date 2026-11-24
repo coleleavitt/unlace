@@ -245,6 +245,7 @@ pub struct CTree {
     java_lists: BTreeSet<StmtId>,
     rest_tries: BTreeMap<StmtId, Vec<Option<ListTry>>>,
     switch_arms: BTreeMap<StmtId, Vec<ArmRecord>>,
+    java_rests: BTreeMap<StmtId, Vec<bool>>,
 }
 
 impl CTree {
@@ -315,6 +316,18 @@ impl CTree {
     /// The recorded choices of arm `index` of the switch `id`, when a record was made.
     pub fn switch_arm(&self, id: StmtId, index: usize) -> Option<ArmRecord> {
         self.switch_arms.get(&id)?.get(index).copied()
+    }
+
+    /// Record, for the list sequence `id`, whether each rest of it holds a DEX `try` dispatch
+    /// (entry `skip` is the rest from `skip` on).
+    pub fn set_java_rests(&mut self, id: StmtId, rests: Vec<bool>) {
+        self.java_rests.insert(id, rests);
+    }
+
+    /// Whether the rest of the list sequence `id` from `skip` on holds a DEX `try` dispatch,
+    /// when a record was made.
+    pub fn java_rest(&self, id: StmtId, skip: usize) -> Option<bool> {
+        self.java_rests.get(&id)?.get(skip).copied()
     }
 
     /// The `try` form recorded for the rest of the list sequence `id` from `skip` on. The

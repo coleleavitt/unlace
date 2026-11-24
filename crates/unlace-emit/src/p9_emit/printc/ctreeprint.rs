@@ -373,6 +373,7 @@ impl PrintC {
         }
         self.ctree_list_tries(fd);
         self.ctree_rest_tries(fd);
+        self.ctree_java_rests(fd);
         self.ctree_switch_arms(fd);
         if let Some(tree) = self.ctree.as_mut() {
             tree.advance(CMaturity::Rewritten);
@@ -472,6 +473,28 @@ impl PrintC {
         tree.switch_arm(tree.node_for(blk)?, index)
     }
 
+    /// The statement sequences of the tree whose list the printer prints from a rest: each list
+    /// and graph sequence, with its block. Empty without a tree.
+    fn list_seqs(&self, fd: &Funcdata) -> Vec<(StmtId, BlockId)> {
+        let Some(tree) = self.ctree.as_ref() else {
+            return Vec::new();
+        };
+        tree.stmt_ids()
+            .into_iter()
+            .filter_map(|id| {
+                let stmt = tree.stmt(id);
+                let blk = stmt.origin?;
+                (tree.node_for(blk) == Some(id)
+                    && matches!(stmt.kind, StmtKind::Seq(_))
+                    && matches!(
+                        fd.sblocks_ref().block(blk).get_type(),
+                        BlockType::Ls | BlockType::Graph
+                    ))
+                .then_some((id, blk))
+            })
+            .collect()
+    }
+
     /// (unlace `itaniumeh`) Record on each list and graph sequence the `try` form of every rest
     /// of it: `eh_list_try_match` on `list[skip..]`, the match a switch arm or goto block
     /// printed from `skip` used to make while printing (`list_try_form`). The match reads only
@@ -480,25 +503,7 @@ impl PrintC {
         if crate::itaniumeh::eh_table(fd.get_arch()).is_none() {
             return;
         }
-        let lists: Vec<(StmtId, BlockId)> = match self.ctree.as_ref() {
-            Some(tree) => tree
-                .stmt_ids()
-                .into_iter()
-                .filter_map(|id| {
-                    let stmt = tree.stmt(id);
-                    let blk = stmt.origin?;
-                    (tree.node_for(blk) == Some(id)
-                        && matches!(stmt.kind, StmtKind::Seq(_))
-                        && matches!(
-                            fd.sblocks_ref().block(blk).get_type(),
-                            BlockType::Ls | BlockType::Graph
-                        ))
-                    .then_some((id, blk))
-                })
-                .collect(),
-            None => return,
-        };
-        for (id, blk) in lists {
+        for (id, blk) in self.list_seqs(fd) {
             let list: Vec<BlockId> = fd.sblocks_ref().block(blk).get_list().to_vec();
             if list.len() > MAX_REST_TRIES {
                 continue;
@@ -508,6 +513,28 @@ impl PrintC {
                 .collect();
             if let Some(tree) = self.ctree.as_mut() {
                 tree.set_rest_tries(id, rests);
+            }
+        }
+    }
+
+    /// (unlace `javatry`) Record on each list and graph sequence whether each rest of it holds a
+    /// DEX `try` dispatch: `list_has_java_try` on `list[skip..]`, the test a rest printed from
+    /// `skip` used to make while printing (`list_java_try`). It reads the function and the
+    /// Java catch table, which is fixed before the body prints.
+    fn ctree_java_rests(&mut self, fd: &Funcdata) {
+        if self.java_catches.is_none() {
+            return;
+        }
+        for (id, blk) in self.list_seqs(fd) {
+            let list: Vec<BlockId> = fd.sblocks_ref().block(blk).get_list().to_vec();
+            if list.len() > MAX_REST_TRIES {
+                continue;
+            }
+            let rests: Vec<bool> = (0..list.len())
+                .map(|skip| self.list_has_java_try(fd, &list[skip..]))
+                .collect();
+            if let Some(tree) = self.ctree.as_mut() {
+                tree.set_java_rests(id, rests);
             }
         }
     }
@@ -535,16 +562,24 @@ impl PrintC {
         if self.java_catches.is_none() {
             return false;
         }
-        let whole = fd.sblocks_ref().block(blk).get_list().len() == list.len();
-        let node = self
-            .ctree
-            .as_ref()
-            .and_then(|tree| tree.node_for(blk))
-            .filter(|_| whole);
-        match (self.ctree.as_ref(), node) {
-            (Some(tree), Some(id)) => tree.is_java_list(id),
-            _ => self.list_has_java_try(fd, list),
+        let full = fd.sblocks_ref().block(blk).get_list();
+        let whole = full.len() == list.len();
+        if let Some(tree) = self.ctree.as_ref()
+            && let Some(id) = tree.node_for(blk)
+        {
+            if whole {
+                return tree.is_java_list(id);
+            }
+            let rest = full
+                .len()
+                .checked_sub(list.len())
+                .filter(|&skip| full[skip..] == *list)
+                .and_then(|skip| tree.java_rest(id, skip));
+            if let Some(found) = rest {
+                return found;
+            }
         }
+        self.list_has_java_try(fd, list)
     }
 
     /// (unlace `itaniumeh`) The landing pad of the `try` printed around the block `blk`: the

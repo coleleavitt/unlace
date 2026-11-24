@@ -4220,7 +4220,13 @@ impl PrintC {
                     source_comments.insert(*high, comment);
                 }
             }
-            for (&high, &owner) in &self.local_name_aliases {
+            let mut aliases: Vec<_> = self
+                .local_name_aliases
+                .iter()
+                .map(|(&high, &owner)| (high, owner))
+                .collect();
+            aliases.sort_unstable();
+            for (high, owner) in aliases {
                 let comments = source_comments
                     .remove(&owner)
                     .into_iter()

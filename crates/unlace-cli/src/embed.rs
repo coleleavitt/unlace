@@ -215,7 +215,7 @@ pub fn load(request: &Request) -> Result<Session, LoadError> {
 
 /// Flag the function at `address` no-return, declaring one there first when
 /// nothing starts at it.
-fn declare_no_return(prog: &mut ConsoleProgram, address: u64) -> Result<(), String> {
+pub(crate) fn declare_no_return(prog: &mut ConsoleProgram, address: u64) -> Result<(), String> {
     let fail = |detail: &str| format!("noreturn {address:#x}: {detail}");
     let offset = prog
         .input_code_offset(address)

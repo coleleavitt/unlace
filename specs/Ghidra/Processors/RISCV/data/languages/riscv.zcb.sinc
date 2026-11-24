@@ -1,0 +1,74 @@
+# Zcb code-size extension (RISC-V Zc* 1.0.0): byte and halfword loads and
+# stores, compressed zero/sign extensions, c.not and c.mul. They use encodings
+# the C extension leaves reserved (quadrant 0 funct3=100; quadrant 1
+# funct6=100111 with bits 6:5 = 10 or 11), so they decode in every language.
+
+zcbbimm: uimm is cop0505 & cop0606 [ uimm = (cop0505 << 1) | cop0606; ] { local tmp:$(XLEN) = uimm; export tmp; }
+zcbhimm: uimm is cop0505 [ uimm = cop0505 << 1; ] { local tmp:$(XLEN) = uimm; export tmp; }
+
+:c.lbu cr0204s,zcbbimm(cr0709s) is cr0709s & cr0204s & zcbbimm & cop0001=0x0 & cop1315=0x4 & cop1012=0x0
+{
+	local ea:$(XLEN) = zcbbimm + cr0709s;
+	cr0204s = zext(*[ram]:1 ea);
+}
+
+:c.lhu cr0204s,zcbhimm(cr0709s) is cr0709s & cr0204s & zcbhimm & cop0001=0x0 & cop1315=0x4 & cop1012=0x1 & cop0606=0
+{
+	local ea:$(XLEN) = zcbhimm + cr0709s;
+	cr0204s = zext(*[ram]:2 ea);
+}
+
+:c.lh cr0204s,zcbhimm(cr0709s) is cr0709s & cr0204s & zcbhimm & cop0001=0x0 & cop1315=0x4 & cop1012=0x1 & cop0606=1
+{
+	local ea:$(XLEN) = zcbhimm + cr0709s;
+	cr0204s = sext(*[ram]:2 ea);
+}
+
+:c.sb cr0204s,zcbbimm(cr0709s) is cr0709s & cr0204s & zcbbimm & cop0001=0x0 & cop1315=0x4 & cop1012=0x2
+{
+	local ea:$(XLEN) = zcbbimm + cr0709s;
+	*[ram]:1 ea = cr0204s:1;
+}
+
+:c.sh cr0204s,zcbhimm(cr0709s) is cr0709s & cr0204s & zcbhimm & cop0001=0x0 & cop1315=0x4 & cop1012=0x3 & cop0606=0
+{
+	local ea:$(XLEN) = zcbhimm + cr0709s;
+	*[ram]:2 ea = cr0204s:2;
+}
+
+:c.zext.b cr0709s is cr0709s & cop0001=0x1 & cop1315=0x4 & cop1012=0x7 & cop0506=0x3 & cop0204=0x0
+{
+	cr0709s = zext(cr0709s:1);
+}
+
+:c.sext.b cr0709s is cr0709s & cop0001=0x1 & cop1315=0x4 & cop1012=0x7 & cop0506=0x3 & cop0204=0x1
+{
+	cr0709s = sext(cr0709s:1);
+}
+
+:c.zext.h cr0709s is cr0709s & cop0001=0x1 & cop1315=0x4 & cop1012=0x7 & cop0506=0x3 & cop0204=0x2
+{
+	cr0709s = zext(cr0709s:2);
+}
+
+:c.sext.h cr0709s is cr0709s & cop0001=0x1 & cop1315=0x4 & cop1012=0x7 & cop0506=0x3 & cop0204=0x3
+{
+	cr0709s = sext(cr0709s:2);
+}
+
+@if ADDRSIZE == "64"
+:c.zext.w cr0709s is cr0709s & cop0001=0x1 & cop1315=0x4 & cop1012=0x7 & cop0506=0x3 & cop0204=0x4
+{
+	cr0709s = zext(cr0709s:4);
+}
+@endif
+
+:c.not cr0709s is cr0709s & cop0001=0x1 & cop1315=0x4 & cop1012=0x7 & cop0506=0x3 & cop0204=0x5
+{
+	cr0709s = ~cr0709s;
+}
+
+:c.mul cr0709s,cr0204s is cr0709s & cr0204s & cop0001=0x1 & cop1315=0x4 & cop1012=0x7 & cop0506=0x2
+{
+	cr0709s = cr0709s * cr0204s;
+}

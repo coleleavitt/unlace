@@ -228,6 +228,7 @@ kuna_options! { self, p1;
     "rodatastring" => registered!(crate::kuna_rodatastring::RodataString),
     "switchmodbound" => registered!(crate::jumptable::SwitchModuloBound),
     "switchextent" => registered!(crate::jumptable::SwitchExtent),
+    "honestgaps" => registered!(crate::kuna_honestgaps::HonestGaps),
     "constselectjump" => registered!(crate::kuna_constselectjump::ConstSelectMode),
     "switchguardbound" => registered!(crate::jumptable::SwitchGuardBound),
     "highsliceguard" => registered!(crate::jumptable::HighsliceGuard),
@@ -272,6 +273,8 @@ kuna_options! { self, p1;
     "devectorize" => registered!(crate::kuna_devectorize::DevectorizeReduction),
     "strlenscan" => registered!(crate::kuna_strlenscan::StrlenScan),
     "repstring" => registered!(crate::kuna_repstring::RepString),
+    "atomics" => registered!(crate::kuna_atomicops::Atomics),
+    "llscfold" => registered!(crate::kuna_atomicops::LlscFold),
     "copyrun" => registered!(crate::kuna_copyrun::CopyRun),
     "regionstructure" => registered!(crate::region_structurer::RegionStructure),
     "guardarm" => registered!(crate::kuna_ifnoexit::GuardArm),
@@ -562,6 +565,7 @@ kuna_options! { self, p1;
     },
     "fid" => registered!(crate::kuna_analysisgates::Fid),
     "rtti" => registered!(crate::kuna_analysisgates::Rtti),
+    "msvceh" => registered!(crate::kuna_analysisgates::Msvceh),
     "itaniumrtti" => {
         registered!(crate::kuna_analysisgates::Itaniumrtti)
     },

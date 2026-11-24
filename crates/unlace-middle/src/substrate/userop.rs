@@ -191,6 +191,26 @@ pub const BUILTIN_LABS: uint4 = 0x1000001e;
 pub const BUILTIN_STRCPY: uint4 = 0x1000001f;
 /// (kuna) Built-in id for `va_arg` (`vaarg`).
 pub const BUILTIN_VAARG: uint4 = 0x10000020;
+/// (kuna) Built-in ids for the atomic read-modify-write builtins one locked x86
+/// instruction, AArch64 LSE atomic or RISC-V AMO lifts to (`kuna_atomics`), in
+/// [`ATOMIC_BUILTINS`] order.
+pub const BUILTIN_ATOMIC_FETCH_ADD: uint4 = 0x10000040;
+pub const BUILTIN_ATOMIC_FETCH_SUB: uint4 = 0x10000041;
+pub const BUILTIN_ATOMIC_FETCH_AND: uint4 = 0x10000042;
+pub const BUILTIN_ATOMIC_FETCH_OR: uint4 = 0x10000043;
+pub const BUILTIN_ATOMIC_FETCH_XOR: uint4 = 0x10000044;
+pub const BUILTIN_ATOMIC_EXCHANGE: uint4 = 0x10000045;
+pub const BUILTIN_ATOMIC_COMPARE_SWAP: uint4 = 0x10000046;
+/// (kuna) Each atomic builtin and the GCC/Clang `__sync` builtin it prints as.
+pub const ATOMIC_BUILTINS: [(uint4, &[u8]); 7] = [
+    (BUILTIN_ATOMIC_FETCH_ADD, b"__sync_fetch_and_add"),
+    (BUILTIN_ATOMIC_FETCH_SUB, b"__sync_fetch_and_sub"),
+    (BUILTIN_ATOMIC_FETCH_AND, b"__sync_fetch_and_and"),
+    (BUILTIN_ATOMIC_FETCH_OR, b"__sync_fetch_and_or"),
+    (BUILTIN_ATOMIC_FETCH_XOR, b"__sync_fetch_and_xor"),
+    (BUILTIN_ATOMIC_EXCHANGE, b"__sync_lock_test_and_set"),
+    (BUILTIN_ATOMIC_COMPARE_SWAP, b"__sync_val_compare_and_swap"),
+];
 
 // ---------------------------------------------------------------------------
 // UserOpBase + UserPcodeOp hierarchy (userop.hh:47-318)
@@ -1277,7 +1297,10 @@ impl UserOpManage {
             BUILTIN_KERNEL_WARN => {
                 UserPcodeOp::new_unspecialized(b"__WARN", BUILTIN_KERNEL_WARN as int4)
             }
-            _ => return Err(KunaError::lowlevel("Bad built-in userop id")),
+            _ => match ATOMIC_BUILTINS.iter().find(|(id, _)| *id == i) {
+                Some((_, name)) => UserPcodeOp::new_unspecialized(name, i as int4),
+                None => return Err(KunaError::lowlevel("Bad built-in userop id")),
+            },
         };
         self.builtinmap.insert(i, res);
         Ok(self.builtinmap.get(&i).unwrap())

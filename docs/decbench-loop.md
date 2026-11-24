@@ -32,6 +32,11 @@ ARM/PE at two of three optimisation levels (see *Refreshing the signal*). Use th
 find cases; do not quote them as a measured cross-tool result without re-running every
 decompiler on one tree.
 
+For a corpus you build yourself, with the compiler's DWARF as the ground truth and per-function
+rows for A/B-ing one option, see the quality harness (`docs/quality-harness.md`,
+`python3 -m scripts.quality`): decbench is the fixed external tree, the harness is the one
+you regenerate and extend.
+
 So the campaign mines **two** reference pools — `--base angr` (the original) and
 `--base ida` (the current GED leader) — plus the NOVEL pool below.
 

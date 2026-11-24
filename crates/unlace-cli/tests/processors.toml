@@ -1104,3 +1104,34 @@ expect = [
     "dat_2000 = a0 + a1;",  # the store to 0x2000
     "return;",  # the returns
 ]
+
+# The Hitachi H8/500 languages (written from the H8/500 programming manual and MAME's
+# disassembler) decompile a hand-assembled raw image: ADD.W, CMP:I + BCC, a store to
+# @H'F000:16 and two returns.
+[[family]]
+name = "h8500"
+language = "H8500:BE:16:minimum"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/h8500/add_cmp_store.bin"
+forbid = ["baddata"]
+
+[[family.function]]
+test = "h8500_add_compare_store_decompiles"
+address = "0x0"
+expect = [
+    "if (a0 + 3U <= 0xf)",  # ADD.W #3 then the CMP.W #0x10 / BCC test
+    "dat_f000 = a0 + 3U;",  # the MOV.W store to @H'F000:16
+    "return 5;",  # the fall-through path
+    "return 0;",  # the branch target
+]
+
+[[family.function]]
+test = "h8500_maximum_mode_decompiles"
+address = "0x0"
+language = "H8500:BE:24:maximum"
+expect = [
+    "if (a0 + 3U <= 0xf)",
+    "0xf000) = a0 + 3U;",  # the store goes through DP in maximum mode
+    "return 5;",
+    "return 0;",
+]

@@ -48,6 +48,9 @@ mod nios2_raw;
 mod pdp11_raw;
 #[path = "moxie_raw.rs"]
 mod moxie_raw;
+#[path = "rabbit_raw.rs"]
+mod rabbit_raw;
+
 #[path = "return_branch_cli.rs"]
 mod return_branch_cli;
 #[path = "riscv_bitmanip.rs"]

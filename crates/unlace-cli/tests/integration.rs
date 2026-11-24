@@ -12,6 +12,8 @@ mod fr_raw;
 mod hexagon_hmx;
 #[path = "iq2000_raw.rs"]
 mod iq2000_raw;
+#[path = "konami.rs"]
+mod konami;
 #[path = "m32r_raw.rs"]
 mod m32r_raw;
 #[path = "ft32_raw.rs"]

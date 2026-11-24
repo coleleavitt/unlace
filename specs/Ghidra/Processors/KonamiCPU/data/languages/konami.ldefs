@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="KONAMI"
+            endian="big"
+            size="16"
+            variant="default"
+            version="1.0"
+            slafile="konami.sla"
+            processorspec="konami.pspec"
+            id="KONAMI:BE:16:default">
+    <description>KONAMI CPU (Konami 052001/052526/053248, 6809-derived, "Konami-2")</description>
+    <compiler name="default" spec="konami.cspec" id="default"/>
+  </language>
+</language_definitions>

@@ -4476,6 +4476,19 @@ a CFCMOV load, EGPR addressing, an NF add between a CMP and its SETcc)
 decompile to the expected C. Coverage and gaps are in
 `specs/Ghidra/Processors/x86/README.md`.
 
+The other EVEX maps reach the EGPRs too: the 64-bit EVEX prefix in `ia.sinc`
+accepts the X4 and B4 bits (inverted P1 bit 2 and P0 bit 3, which AVX-512
+required to be 1 and 0) and sets the fifth register-id bits from them and from
+EVEX.R', so AVX-512 memory operands and GPR operands can name `R16`-`R31`;
+encodings AVX-512 accepted decode as before. `apx_evex.sinc` adds the EVEX
+forms of the VEX GPR instructions (BMI1, BMI2, KMOV, the AMX tile loads and
+stores and tile configuration), with the `.NF` forms of the flag-writing BMI
+instructions, and `apx_map4.sinc` the map-4 forms of MOVDIR64B, MOVDIRI,
+INVEPT, INVVPID, INVPCID and the CET shadow-stack writes. Before, each of these
+with an EGPR was a bad instruction. Exercised by `x86_apx.rs` (an
+`evex_probe` against `llvm-objdump`, and an EVEX ANDN/SHRX routine that
+decompiles to `(~a1 & a0) >> (a2 & 0x3f)`).
+
 ### Processor modules written for unlace (#98)
 
 These processor directories hold SLEIGH written for unlace from public ISA documentation

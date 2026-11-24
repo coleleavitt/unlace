@@ -46,10 +46,37 @@ forms print as `llvm-objdump` does (case and the `.NF` suffix aside; `xchg`
 lists its operands the other way round). Decompiling all of `/usr/bin/ls`
 gives byte-identical C before and after.
 
-Gaps: EGPRs in instructions encoded with EVEX maps other than 4 (the EVEX
-forms of the VEX GPR instructions such as ANDN/BEXTR/SHLX/KMOV, CMPccXADD,
-MOVDIR64B, INVPCID, and EGPR base/index registers in AVX-512 memory operands)
-are not decoded yet; a REX2-prefixed instruction that #UDs (map-1 rows 0x3*
+Gaps: ENQCMD/ENQCMDS and CMPccXADD have no constructor in any form (the base
+spec lacks them), so their EVEX forms are not decoded either; a REX2-prefixed instruction that #UDs (map-1 rows 0x3*
 and 0x8*, a REX2 before another prefix) is a bad instruction, not modelled
 further; NF on a form the spec gives no NF variant is rejected only where
 LLVM's encoding tables leave no constructor.
+
+## Intel APX: EGPRs in the other EVEX maps (`apx_evex.sinc`, `ia.sinc`)
+
+Sources: the same specification, 3.1.2.3 (the extended EVEX prefix: R4 is
+EVEX.R', X4 the inverted P1 bit 2 that AVX-512 required to be 1, B4 the P0 bit 3
+it required to be 0) and 3.1.4.1 (the VEX instructions promoted to EVEX).
+
+- The 64-bit EVEX prefix in `ia.sinc` now accepts every X4 and B4 value and sets
+  `rexR4`, `rexX4` and `rexB4`, so every EVEX instruction reaches `R16`-`R31`
+  wherever it names a GPR: base and index of a memory operand, a GPR source or
+  destination (`vpextrq r16`, `vcvttsd2si r16`). Encodings AVX-512 accepted
+  have X4=B4=0 and decode as before.
+- `apx_evex.sinc`: EVEX copies of the VEX GPR instructions, with V4:vvvv as the
+  register id of the vvvv operand: BMI1 (ANDN, BEXTR, BLSI, BLSMSK, BLSR), BMI2
+  (BZHI, MULX, PDEP, PEXT, RORX, SARX, SHLX, SHRX), KMOVB/W/D/Q, and the AMX
+  LDTILECFG, STTILECFG, TILELOADD, TILELOADDT1, TILESTORED. EVEX.NF (P2 bit 2)
+  gives the `.NF` forms of ANDN, BEXTR, BLSI, BLSMSK, BLSR and BZHI, the same
+  p-code without the flag writes.
+- `apx_map4.sinc` adds the map-4 EVEX forms of MOVDIR64B, MOVDIRI, INVEPT,
+  INVVPID, INVPCID, WRSSD/Q and WRUSSD/Q.
+
+Checked: `evex_probe` of the fixture and a 50-instruction sample of these forms
+print as `llvm-objdump` does (case aside); disassembling all of libcrypto.so.3's
+`.text` (787k lines, 77k of them AVX-512) gives the same listing before and
+after.
+Gaps: an X4=0 register-only vector encoding (AVX10.2 uses that bit for YMM
+embedded rounding) decodes as if X4 were 1; the base spec's own EVEX gaps
+remain (`vpbroadcastd zmm, r32` prints no source, a VSIB index prints as a
+GPR, the `{1toN}` broadcast marker is not printed).

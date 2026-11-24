@@ -942,6 +942,39 @@ expect = [
     "10",  # the store to $10 survives
 ]
 
+# The native TILEPro language decompiles bundles built with tilepro-linux-gnu-as:
+# a load/accumulate loop closed by bnz with a store, a register swap inside one
+# bundle (parallel reads), and a jal with register arguments.
+[[family]]
+name = "tilepro"
+language = "TILEPRO:LE:32:default"
+base = "0x10000"
+fixture = "crates/unlace-cli/tests/fixtures/tilepro/sum_swap_call.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "tilepro_load_loop_decompiles"
+address = "0x10000"
+expect = [
+    "v1 += *a0++;",  # lw + add with the post-incremented pointer
+    "} while (a1);",  # bnz closes the loop
+    "dat_1000 = v1;",  # moveli + sw
+]
+
+[[family.function]]
+test = "tilepro_parallel_swap_decompiles"
+address = "0x10040"
+expect = [
+    "return a1 - a0;",  # { move r0, r1 ; move r1, r0 } swaps before the sub
+]
+
+[[family.function]]
+test = "tilepro_call_with_register_arguments_decompiles"
+address = "0x10050"
+expect = [
+    "return sub_10040(7,5) << 2;",  # r0/r1 arguments, jal, and the r0 result
+]
+
 # The native TILE-Gx language decompiles a raw image of hand-assembled bundles:
 # a counted loop, a call with register arguments, a conditional move, a register
 # swap inside one bundle (parallel reads) and a bit-field extract.
@@ -1488,6 +1521,71 @@ expect = [
     "v4 = *(int *)CONCAT44(v3,v2) + v4;",
     "v5 -= 1;",
     "*a2->field_0x0 = v4;",
+]
+
+[[family]]
+name = "amdgpu_gfx10"
+language = "AMDGPU:LE:64:GFX10"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx1030_kernels.bin"
+
+# `fixtures/amdgpu/gfx900_kernels.cl` built for gfx1030 (wave32): `scale` guards the store
+# with v_cmp + s_and_saveexec_b32 + s_cbranch_execz on EXEC_LO, `sum` is the scalar loop.
+[[family.function]]
+test = "amdgpu_gfx10_guarded_store_decompiles"
+address = "0x0"
+expect = [
+    "if (a5 < a2->field_0x14)",
+    "* 3 + a2->field_0x10;",
+]
+
+[[family.function]]
+test = "amdgpu_gfx10_scalar_loop_decompiles"
+address = "0x100"
+expect = [
+    "while (v5) {",
+    "v4 = *(int *)CONCAT44(v3,v2) + v4;",
+    "*a2->field_0x0 = v4;",
+]
+
+[[family]]
+name = "amdgpu_gfx11"
+language = "AMDGPU:LE:64:GFX11"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx1100_kernels.bin"
+
+# The same kernels built for gfx1100 (RDNA3 opcodes, s_load_b32/global_load_b32 names).
+[[family.function]]
+test = "amdgpu_gfx11_guarded_store_decompiles"
+address = "0x0"
+expect = [
+    "if (a5 < a0->field_0x14)",
+    "* 3 + a0->field_0x10;",
+]
+
+[[family.function]]
+test = "amdgpu_gfx11_scalar_loop_decompiles"
+address = "0x100"
+expect = [
+    "while (v5) {",
+    "*a0->field_0x0 = v4;",
+]
+
+[[family]]
+name = "amdgpu_gfx11_vopd"
+language = "AMDGPU:LE:64:GFX11"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx1100_vopd.bin"
+
+# `fixtures/amdgpu/gfx1100_vopd.cl` at -O3: float math the compiler pairs into four VOPD
+# (v_dual_*) instructions; both halves read their sources before either writes.
+[[family.function]]
+test = "amdgpu_gfx11_vopd_decompiles"
+address = "0x0"
+expect = [
+    "v3 = v6 - v5;",
+    "*(float *)(v2 + 8) = v4 + v4;",
+    "v6 = v5 + 1.0f;",
 ]
 
 # The CPython 3.12 bytecode language decompiles a function's co_code from a raw image:

@@ -105,6 +105,18 @@ afterwards. The register file is unchanged.
   second operand counts from its own extension word; bit-field width 0 = 32, register fields wrap,
   memory fields reach a fifth byte, BFFFO adds the offset, BFCHG/BFCLR/BFSET write the operand
   back. Seed 13, 4000 encodings: 8152 matches, no mismatches.
+- SPARC V9 (`--arch sparc64`, `sparc:BE:64:default`, `qemu-sparc64`; `--arch sparc`,
+  `sparc:BE:32:default`, on `qemu-sparc32plus`, which runs the V8+ ABI on a V9 CPU; both
+  `--oracle qemu`, QEMU 8.2): the table register is restored in the BA's delay slot; Y and CCR
+  go through `wr`/`rd`. SPARC64 QEMU maps 8 KiB pages, so its segments are widened to 8 KiB
+  (`seg_align`). Not generated: branches, calls, register windows, traps, `rd`/`wr`,
+  ASI, floating-point and VIS instructions, and reserved encodings QEMU refuses (shift bits
+  11:5, the unused asi field of a register-form ALU op, MOVcc's reserved cc values). The 32-bit
+  language skips the 64-bit-only instructions and does not compare xcc. QEMU 8.2 zero-extends
+  a 32-bit SLL, so `sll` is skipped on sparc64 (V9 shifts all 64 bits). Fixed in `SparcV9.sinc`
+  after the first run: UDIV/SDIV(cc) clamp an overflowing quotient (2^32-1, 2^31-1 or -2^31)
+  and set icc.v; xcc of UMULcc/SMULcc/UDIVcc/SDIVcc comes from the 64-bit result. Seed 5,
+  4000 encodings on sparc64: 10650 matches; seed 6, 3000 on sparc: 8251; no mismatches.
 - PowerPC has no QEMU harness. `qemu-ppc64` runs in 64-bit mode (MSR.SF is not user-writable),
   where record forms set CR0 from the 64-bit result, so it is not an exact reference for
   32-bit PowerPC.

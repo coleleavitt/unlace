@@ -45,7 +45,7 @@ def fill_byte(addr, seed):
     return (x * 0xBF58476D1CE4E5B9 >> 56) & 0xFF
 
 
-def elf(segments, entry, machine, big=False, flags=0, elf64=True):
+def elf(segments, entry, machine, big=False, flags=0, elf64=True, align=PAGE):
     """A static ELF64 (or ELF32) with one PT_LOAD per (vaddr, bytes, prot) segment."""
     e = ">" if big else "<"
     n = len(segments)
@@ -54,18 +54,37 @@ def elf(segments, entry, machine, big=False, flags=0, elf64=True):
         hdr = ident + struct.pack(e + "HHIQQQIHHHHHH", 2, machine, 1, entry, 64, 0, flags, 64, 56, n, 64, 0, 0)
     else:
         hdr = ident + struct.pack(e + "HHIIIIIHHHHHH", 2, machine, 1, entry, 52, 0, flags, 52, 32, n, 40, 0, 0)
-    off = PAGE
+    off = align
     phs, blobs = b"", b""
     for vaddr, data, prot in segments:
         if elf64:
-            phs += struct.pack(e + "IIQQQQQQ", 1, prot, off, vaddr, vaddr, len(data), len(data), PAGE)
+            phs += struct.pack(e + "IIQQQQQQ", 1, prot, off, vaddr, vaddr, len(data), len(data), align)
         else:
-            phs += struct.pack(e + "IIIIIIII", 1, off, vaddr, vaddr, len(data), len(data), prot, PAGE)
-        pad = (-len(data)) % PAGE
+            phs += struct.pack(e + "IIIIIIII", 1, off, vaddr, vaddr, len(data), len(data), prot, align)
+        pad = (-len(data)) % align
         blobs += data + b"\0" * pad
         off += len(data) + pad
     img = hdr + phs
-    return img + b"\0" * (PAGE - len(img)) + blobs
+    return img + b"\0" * (align - len(img)) + blobs
+
+
+def coalesce(segs, align, filler):
+    """Segments widened to align-sized blocks (hosts whose target page is larger than PAGE); the
+    bytes no segment gives come from filler, and blocks of one protection merge."""
+    mem, prot = {}, {}
+    for lo, data, pr in segs:
+        for i, b in enumerate(data):
+            mem[lo + i] = b
+        for blk in range(lo & ~(align - 1), lo + len(data), align):
+            prot[blk] = prot.get(blk, 0) | pr
+    out = []
+    for blk in sorted(prot):
+        data = bytes(mem.get(blk + i, filler(blk + i)) for i in range(align))
+        if out and out[-1][0] + len(out[-1][1]) == blk and out[-1][2] == prot[blk]:
+            out[-1] = (out[-1][0], out[-1][1] + data, prot[blk])
+        else:
+            out.append((blk, data, prot[blk]))
+    return out
 
 
 def words(ws, big=False):
@@ -434,21 +453,21 @@ class Nios2Harness:
         return {n: struct.unpack_from("<I", out, 4 * i)[0] for i, (n, _) in enumerate(arch.gprs, start=1)}, 0
 
 
-def elf32(segments, entry, machine, big=False, flags=0):
+def elf32(segments, entry, machine, big=False, flags=0, align=PAGE):
     """A static ELF32 with one PT_LOAD per (vaddr, bytes, prot) segment."""
     e = ">" if big else "<"
     n = len(segments)
     ident = b"\x7fELF" + bytes([1, 2 if big else 1, 1, 0]) + b"\0" * 8
     hdr = ident + struct.pack(e + "HHIIIIIHHHHHH", 2, machine, 1, entry, 52, 0, flags, 52, 32, n, 40, 0, 0)
-    off = PAGE
+    off = align
     phs, blobs = b"", b""
     for vaddr, data, prot in segments:
-        phs += struct.pack(e + "IIIIIIII", 1, off, vaddr, vaddr, len(data), len(data), prot, PAGE)
-        pad = (-len(data)) % PAGE
+        phs += struct.pack(e + "IIIIIIII", 1, off, vaddr, vaddr, len(data), len(data), prot, align)
+        pad = (-len(data)) % align
         blobs += data + b"\0" * pad
         off += len(data) + pad
     img = hdr + phs
-    return img + b"\0" * (PAGE - len(img)) + blobs
+    return img + b"\0" * (align - len(img)) + blobs
 
 
 # ---------------------------------------------------------------- SuperH SH-4 (16-bit, ELF32)
@@ -716,6 +735,93 @@ class S390xHarness:
         return regs, 0
 
 
+# ---------------------------------------------------------------- SPARC V9 (64-bit; 32-bit on sparc32plus)
+
+def sp_li32(r, v):
+    return [0x01000000 | r << 25 | ((v >> 10) & 0x3FFFFF), 0x80102000 | r << 25 | r << 14 | (v & 0x3FF)]
+
+
+def sp_mem(op3, rd, rs1, off):
+    return 0xC0002000 | rd << 25 | op3 << 19 | rs1 << 14 | (off & 0x1FFF)
+
+
+class SparcHarness:
+    """g1..i7 at 8*i (SLEIGH order g0..i7), Y at 256, CCR at 264, marker at 272. A register the
+    instruction does not write holds the table address; the BA's delay slot restores it."""
+    qemu = ("qemu-sparc64", [])
+    machine = 43
+    big = True
+    trap = 0x6D
+    seg_align = 0x2000       # 8 KiB target pages
+    table_size = 280
+    marker_at = 272
+
+    def __init__(self):
+        self.s = 23
+        self.scratch_names = []
+
+    def choose_scratch(self, arch, regs, written):
+        for i in list(range(23, 15, -1)) + list(range(7, 0, -1)):
+            n = arch.gprs[i - 1][0]
+            if n in regs and not written & set(range(regs[n][0], regs[n][0] + regs[n][1])):
+                self.s = i
+                self.scratch_names = [n]
+                return True
+        return False
+
+    def _t(self):
+        return 1 if self.s != 1 else 2
+
+    def prologue(self, target):
+        s, t = self.s, self._t()
+        c = sp_li32(s, TABLES)
+        c += [sp_mem(0x0B, t, s, 256), 0x81802000 | t << 14]               # ldx; wr t,0,%y
+        c += [sp_mem(0x0B, t, s, 264), 0x85802000 | t << 14]               # ldx; wr t,0,%ccr
+        for i in range(1, 32):
+            if i != s:
+                c.append(sp_mem(0x0B, i, s, 8 * i))
+        here = PROLOGUE + 4 * len(c)
+        c += [0x10800000 | (((target - here) >> 2) & 0x3FFFFF), sp_mem(0x0B, s, s, 8 * s)]  # ba target; ldx (delay)
+        return words(c, True)
+
+    def epilogue(self, dumps, marker):
+        s, t = self.s, self._t()
+        c = sp_li32(s, OUT)
+        for i in range(1, 32):
+            if i != s:
+                c.append(sp_mem(0x0E, i, s, 8 * i))
+        c += [0x81400000 | t << 25, sp_mem(0x0E, t, s, 256)]               # rd %y,t
+        c += [0x81408000 | t << 25, sp_mem(0x0E, t, s, 264)]               # rd %ccr,t
+        c += sp_li32(t, marker) + [sp_mem(0x0E, t, s, self.marker_at)]
+        for base, size in [(OUT, self.table_size)] + [(p, PAGE) for p in dumps]:
+            c += [0x82102004, 0x90102001] + sp_li32(9, base) + sp_li32(10, size) + [0x91D02000 | self.trap]
+        c += [0x82102001, 0x90102000, 0x91D02000 | self.trap]               # exit(0)
+        return words(c, True)
+
+    def table(self, arch, init, init_vec, flagword):
+        t = bytearray(self.table_size)
+        mask = (1 << (64 if arch.elf64 else 32)) - 1
+        for i, (n, _) in enumerate(arch.gprs[:31], start=1):
+            struct.pack_into(">Q", t, 8 * i, init.get(n, 0) & mask)
+        struct.pack_into(">Q", t, 256, init.get("Y", 0) & 0xFFFFFFFF)
+        struct.pack_into(">Q", t, 264, flagword & 0xFF)
+        return bytes(t)
+
+    def parse(self, arch, out):
+        regs = {n: struct.unpack_from(">Q", out, 8 * i)[0] for i, (n, _) in enumerate(arch.gprs[:31], start=1)}
+        regs["Y"] = struct.unpack_from(">Q", out, 256)[0]
+        return regs, struct.unpack_from(">Q", out, 264)[0] & 0xFF
+
+
+class Sparc32Harness(SparcHarness):
+    """The 32-bit SPARC V9 language on qemu-sparc32plus (V8+ ABI: 32-bit ELF, V9 CPU)."""
+    qemu = ("qemu-sparc32plus", [])
+    machine = 18
+    flags = 0x100            # EF_SPARC_32PLUS
+    elf32 = True
+    trap = 0x10
+
+
 HARNESSES = {"aarch64": A64Harness, "riscv64": RvHarness, "mips": MipsHarness, "mips64": Mips64Harness,
              "mipsr6": MipsR6Harness, "mips64r6": Mips64R6Harness, "nios2": Nios2Harness, "sh4": Sh4Harness,
              "ppc": lambda: PpcHarness(("qemu-ppc", ["-cpu", "7457"]), 20, True, False),
@@ -723,7 +829,7 @@ HARNESSES = {"aarch64": A64Harness, "riscv64": RvHarness, "mips": MipsHarness, "
              "ppc64le": lambda: PpcHarness(("qemu-ppc64le", ["-cpu", "power10"]), 21, False, True, 2),
              "ppc64-isa": lambda: PpcHarness(("qemu-ppc64", ["-cpu", "power10"]), 21, True, True, 2),
              "ppc64le-isa": lambda: PpcHarness(("qemu-ppc64le", ["-cpu", "power10"]), 21, False, True, 2),
-             "s390x": S390xHarness, "m68k": M68kHarness}
+             "s390x": S390xHarness, "m68k": M68kHarness, "sparc64": SparcHarness, "sparc": Sparc32Harness}
 
 
 def qemu_path(name):
@@ -971,10 +1077,13 @@ def run_case_qemu(arch, regs, row, cand, rng, seed, tmp):
     for p in data_pages:
         segs.append((p, bytes(fill_byte(p + i, seed) for i in range(PAGE)), 6))
     segs.sort()
+    align = getattr(h, "seg_align", PAGE)
+    if align > PAGE:
+        segs = coalesce(segs, align, lambda a: fill_byte(a, seed))
     path = os.path.join(tmp, "qemu-case.elf")
     with open(path, "wb") as f:
         build = elf32 if getattr(h, "elf32", False) else elf
-        f.write(build(segs, PROLOGUE, h.machine, h.big, getattr(h, "flags", 0)))
+        f.write(build(segs, PROLOGUE, h.machine, h.big, getattr(h, "flags", 0), align=align))
     os.chmod(path, 0o755)
     try:
         p = subprocess.run([qemu_path(h.qemu[0]), *h.qemu[1], path], capture_output=True, timeout=10)

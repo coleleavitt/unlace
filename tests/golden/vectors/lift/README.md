@@ -45,6 +45,11 @@ instructions and their operations are unchanged; only unique-space offsets
 moved. The new lines are the Rust runtime's output over `slacomp` specs, and the
 same capture over the previous sources reproduces the old fixture exactly.
 
+`gh6990-returnpair.txt` was refreshed again for the SPARC UDIV/SDIV overflow and
+multiply/divide xcc corrections. The function has none of those instructions; only
+unique-space offsets moved. The same capture over the previous sources reproduces the
+previous fixture exactly.
+
 ## Regeneration
 
 ```bash

@@ -1052,4 +1052,86 @@ class M68k(Arch32):
         return cand["mnemonic"] == "link.w" and cand["op_str"].startswith("a7,")
 
 
-ARCHES = {a.name: a for a in (X86_64(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), S390x(), TriCore(), Nios2(), Sh4(), M68k())}
+SPARC_DENY = re.compile(
+    r"^(b.*|fb.*|cb.*|call|jmpl?|ret|retl|rett|return|save|restore|saved|restored|flushw|done|retry|"
+    r"t(a|n|ne|e|g|le|ge|l|gu|leu|cc|cs|pos|neg|vc|vs)|taddcctv|tsubcctv|rd.*|wr.*|flush|membar|stbar|"
+    r"prefetch.*|f.*|impdep.*|illtrap|unimp|sir|iprefetch|(ld|st)[a-z]*a|swapa|casx?a|ldq.*|stq.*|"
+    r"shutdown|sleep|nop)$"
+)
+
+
+class Sparc64(Arch):
+    """SPARC V9 integer instructions, against QEMU user mode (--oracle qemu). Branches, calls,
+    register-window, trap, privileged, ASI and floating-point instructions are not generated."""
+    name = "sparc64"
+    lang = "sparc:BE:64:default"
+    elf_machine = 43
+    big = True
+    pc = "PC"
+    gprs = [(n, None) for n in ["g1", "g2", "g3", "g4", "g5", "g6", "g7", "o0", "o1", "o2", "o3", "o4", "o5",
+                                "sp", "o7", "l0", "l1", "l2", "l3", "l4", "l5", "l6", "l7", "i0", "i1", "i2",
+                                "i3", "i4", "i5", "fp", "i7"]] + [("Y", None)]
+    pc_const = None
+    flags_reg = "ccr"
+    flag_bits = {"i_cf": 0, "i_vf": 1, "i_zf": 2, "i_nf": 3, "x_cf": 4, "x_vf": 5, "x_zf": 6, "x_nf": 7}
+    deny = SPARC_DENY
+
+    def unicorn(self):
+        raise NotImplementedError("sparc runs with --oracle qemu")
+
+    def capstone(self):
+        return cs.Cs(cs.CS_ARCH_SPARC, cs.CS_MODE_BIG_ENDIAN | cs.CS_MODE_V9)
+
+    def gen(self, rng):
+        k = rng.random()
+        w = rng.getrandbits(32)
+        if k < 0.05:
+            w = (w & 0x3E3FFFFF) | 0x01000000                         # sethi
+        else:
+            w = (w & 0x3FFFFFFF) | (0x80000000 if k < 0.65 else 0xC0000000)
+        return w.to_bytes(4, "big")
+
+    def canonical(self, cand):
+        w = int.from_bytes(cand["bytes"][:4], "big")
+        op, op3, i = w >> 30, (w >> 19) & 0x3F, (w >> 13) & 1
+        if op == 2 and op3 in (0x25, 0x26, 0x27):
+            # shift encodings: bits 11:5 (11:6 with x = 1) are reserved
+            res = 0xFC0 if (i and (w >> 12) & 1) else 0xFE0
+            if w & res:
+                return False
+        elif op == 2 and op3 < 0x25 and not i and (w >> 5) & 0xFF:
+            return False                                     # the unused asi field of a register form
+        elif op == 2 and op3 == 0x2C:
+            # MOVcc: cc2 = 0 is fcc, cc1:cc0 = 01/11 are reserved, bits 10:5 of the register form too
+            if not (w >> 18) & 1 or (w >> 11) & 1 or (not i and (w >> 5) & 0x3F):
+                return False
+        elif op == 2 and op3 in (0x36, 0x37):
+            return False                                     # VIS / IMPDEP
+        return not re.search(r"%f|%c\d|%fsr|%fcc|%asi|%q", cand["op_str"])
+
+    def skip(self, cand):
+        # QEMU 8.2 zero-extends a 32-bit SLL; V9 shifts all 64 bits
+        return self.elf64 and cand["mnemonic"] == "sll"
+
+    def fix_inputs(self, init, rng):
+        init["Y"] &= 0xFFFFFFFF
+
+
+class Sparc32(Sparc64):
+    """The 32-bit SPARC V9 language (32-bit registers) on qemu-sparc32plus. Instructions that only
+    exist for 64-bit registers or read xcc are not generated, and xcc is not compared."""
+    name = "sparc"
+    lang = "sparc:BE:32:default"
+    elf_machine = 18
+    elf64 = False
+
+    def canonical(self, cand):
+        if re.match(r"(ldx|stx|sllx|srlx|srax|mulx|sdivx|udivx|casx|movr.*|popc|ldsw)$", cand["mnemonic"]):
+            return False
+        return "%xcc" not in cand["op_str"] and Sparc64.canonical(self, cand)
+
+    def ignored(self, mnemonic, operands, state):
+        return {"x_cf", "x_vf", "x_zf", "x_nf"}
+
+
+ARCHES = {a.name: a for a in (X86_64(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), S390x(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32())}

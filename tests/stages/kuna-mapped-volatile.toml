@@ -128,4 +128,4 @@ literal = '*output = first[v1];'
 [[match]]
 name = 'second index uses second snapshot'
 count = 1
-literal = 'v2 = second[v2];'
+literal = 'v3 = second[v2];'

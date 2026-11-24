@@ -347,8 +347,8 @@ regex = 'int4 v[45]; // (r8d \| stack - 0x10|eax \| r9d \| stack - 0xc|eax \| r8
 name = 'ARRAYEXTENT #9: two adjacent indexed arrays stay two arrays in every pass'
 count = 3
 literal = [
-    'uint4 v2 [4]; // ebx | ',
-    'int4 v3 [4]; // ecx | edi | edx | esi | stack - 0x10 | stack - 0x14 | stack - 0x18 | stack - 0xc',
+    'uint4 v3 [4]; // ebx | ',
+    'int4 v4 [4]; // ecx | edi | edx | esi | stack - 0x10 | stack - 0x14 | stack - 0x18 | stack - 0xc',
 ]
 
 [[match]]

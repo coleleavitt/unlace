@@ -62,6 +62,9 @@ pub struct MsvcFunclet {
     /// An x86 catch block: the runtime calls it with EBP already the parent's,
     /// so only the stack pointer moves (by 4) and RDX is not defined.
     pub x86: bool,
+    /// An unwind (destructor) or `__finally` funclet, with its end: after it the
+    /// exception keeps propagating, so each of its `ret`s ends the path.
+    pub cleanup_end: Option<u64>,
 }
 
 /// An [`MsvcFunclet`] with its registers resolved.
@@ -72,6 +75,7 @@ pub struct FuncletPad {
     pub frame_offset: u64,
     pub returns: Vec<(u64, u64)>,
     pub x86: bool,
+    pub cleanup_end: Option<u64>,
 }
 
 /// The image's call-site table plus the two registers the unwinder fills at a
@@ -156,6 +160,15 @@ impl EhTable {
             .iter()
             .filter(|s| off < s.end)
             .collect()
+    }
+
+    /// (kuna `msvceh`) Is `off` inside a cleanup funclet (`[pad, end)`)?
+    pub fn in_cleanup_funclet(&self, off: u64) -> bool {
+        let i = self.funclets.partition_point(|f| f.pad <= off);
+        i.checked_sub(1)
+            .and_then(|k| self.funclets.get(k))
+            .and_then(|f| f.cleanup_end)
+            .is_some_and(|end| off < end)
     }
 
     /// (kuna `msvceh`) The parent address a funclet `ret` at `off` continues at.
@@ -315,6 +328,7 @@ fn define_funclet_frame(
             EhClause::Catch {
                 type_name: Some(t), ..
             } => format!("catch ({t})"),
+            EhClause::Cleanup => "cleanup, then the exception propagates".to_string(),
             _ => "catch (...)".to_string(),
         })
         .collect();
@@ -339,6 +353,21 @@ pub fn return_to_continuation(data: &mut Funcdata, ops: &[OpId], cont: &Address)
     data.op_set_opcode_code(ret, OpCode::CPUI_BRANCH);
     let dest = data.new_code_ref(cont);
     data.op_set_all_input(ret, &[dest])
+}
+
+/// (kuna `msvceh`) A cleanup funclet's `ret` (among `ops`) ends the path: after
+/// the cleanup the exception keeps propagating out of the parent.
+pub fn return_to_halt(data: &mut Funcdata, ops: &[OpId]) -> KunaResult<()> {
+    let Some(&ret) = ops.iter().find(|&&op| {
+        data.obank()
+            .get(op)
+            .is_some_and(|o| o.code() == OpCode::CPUI_RETURN)
+    }) else {
+        return Ok(());
+    };
+    let one = data.new_constant(4, 1);
+    data.op_set_all_input(ret, &[one])?;
+    data.op_mark_halt(ret, pcodeop_flags::noreturn)
 }
 
 /// Ghidra's `Comment::user2`, the instruction comment the printer emits inline.
@@ -409,6 +438,7 @@ mod tests {
                 frame_offset: 0,
                 returns: vec![(0x10ea, 0x10be)],
                 x86: false,
+                cleanup_end: None,
             }],
         );
         let pads: Vec<u64> = t.msvc_sites_at(0x10b8).iter().map(|s| s.pad).collect();
@@ -417,6 +447,7 @@ mod tests {
         assert!(t.is_pad(0x10c7) && t.is_pad(0x10eb) && t.is_pad(0x40));
         assert!(t.funclet(0x10c7).is_some() && t.funclet(0x10eb).is_none());
         assert_eq!(t.funclet_return(0x10ea), Some(0x10be));
+        assert!(!t.in_cleanup_funclet(0x10c8));
         assert!(t.site_at(0x10b8).is_none());
     }
 

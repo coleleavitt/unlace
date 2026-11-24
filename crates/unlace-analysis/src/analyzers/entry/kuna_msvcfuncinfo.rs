@@ -216,7 +216,8 @@ const X64_REGS: [&str; 16] = [
 /// region whose state the try guards gets one call-site record per catch
 /// funclet (in handler order) whose `ret` continues in the parent; each such
 /// funclet becomes a pad with the parent's frame register and the returns it
-/// continues at.
+/// continues at. A region whose state no try guards gets a cleanup record into
+/// that state's unwind funclet, whose `ret`s end the path.
 #[allow(clippy::too_many_arguments)]
 fn splice_sites(
     img: &ImageBytes,
@@ -256,6 +257,7 @@ fn splice_sites(
                     frame_offset,
                     returns,
                     x86: false,
+                    cleanup_end: None,
                 });
             }
             let selector = k as i64 + 1;
@@ -276,6 +278,36 @@ fn splice_sites(
                         clauses: vec![clause.clone()],
                     });
                 }
+            }
+        }
+    }
+    let guarded = |s: i32| {
+        info.tries
+            .iter()
+            .any(|t| s >= t.low as i32 && s <= t.high as i32)
+    };
+    for &(state, f) in &info.cleanups {
+        let Some(&(fend, _)) = extents.get(&f) else {
+            continue;
+        };
+        if spliced.insert(f) {
+            out.msvc_funclets.push(MsvcFunclet {
+                pad: f,
+                frame_reg: frame_reg.clone(),
+                frame_offset,
+                returns: Vec::new(),
+                x86: false,
+                cleanup_end: Some(fend),
+            });
+        }
+        for &(lo, hi, s) in &regions {
+            if s == state as i32 && !guarded(s) {
+                out.msvc_eh_sites.push(EhCallSite {
+                    start: lo,
+                    end: hi,
+                    pad: f,
+                    clauses: vec![EhClause::Cleanup],
+                });
             }
         }
     }

@@ -1,0 +1,178 @@
+# Altera/Intel Nios II (R1): 32 32-bit general registers, fixed 32-bit instructions in
+# I-, R- and J-type formats. Written from the Nios II Processor Reference Guide
+# (instruction set reference, chapter 8) and the binutils opcode table.
+
+define space ram type=ram_space size=4 default;
+define space register type=register_space size=4;
+
+define register offset=0 size=4 [
+  zero at r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15
+  r16 r17 r18 r19 r20 r21 r22 r23 et bt gp sp fp ea sstatus ra
+];
+define register offset=0x100 size=4 [ pc ];
+define register offset=0x200 size=4 [
+  status estatus bstatus ienable ipending cpuid ctl6 exception
+  pteaddr tlbacc tlbmisc eccinj badaddr config mpubase mpuacc
+  ctl16 ctl17 ctl18 ctl19 ctl20 ctl21 ctl22 ctl23
+  ctl24 ctl25 ctl26 ctl27 ctl28 ctl29 ctl30 ctl31
+];
+
+define token instr(32)
+  fA     = (27,31)
+  fB     = (22,26)
+  fC     = (17,21)
+  dA     = (27,31)
+  dB     = (22,26)
+  dC     = (17,21)
+  ctlN   = (6,10)
+  imm16  = (6,21)
+  simm16 = (6,21) signed
+  imm26  = (6,31)
+  opx    = (11,16)
+  imm5   = (6,10)
+  op     = (0,5)
+  cN     = (6,13)
+  creadA = (16,16)
+  creadB = (15,15)
+  creadC = (14,14)
+;
+
+attach variables [ fA fB fC ] [
+  zero at r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15
+  r16 r17 r18 r19 r20 r21 r22 r23 et bt gp sp fp ea sstatus ra
+];
+attach variables [ dA dB dC ] [
+  zero at r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15
+  r16 r17 r18 r19 r20 r21 r22 r23 et bt gp sp fp ea sstatus ra
+];
+attach variables [ ctlN ] [
+  status estatus bstatus ienable ipending cpuid ctl6 exception
+  pteaddr tlbacc tlbmisc eccinj badaddr config mpubase mpuacc
+  ctl16 ctl17 ctl18 ctl19 ctl20 ctl21 ctl22 ctl23
+  ctl24 ctl25 ctl26 ctl27 ctl28 ctl29 ctl30 ctl31
+];
+
+define pcodeop trap;
+define pcodeop breakpoint;
+define pcodeop exception_return;
+define pcodeop breakpoint_return;
+define pcodeop custom;
+define pcodeop sync;
+define pcodeop flush_data_line;
+define pcodeop init_data_line;
+define pcodeop flush_instruction_line;
+define pcodeop init_instruction_line;
+define pcodeop flush_pipeline;
+define pcodeop read_previous_register_set;
+define pcodeop write_previous_register_set;
+
+# Source operands read r0 as the constant 0; a write to r0 is discarded.
+A: fA is fA & dA=0 { export 0:4; }
+A: fA is fA { export fA; }
+B: fB is fB & dB=0 { export 0:4; }
+B: fB is fB { export fB; }
+
+SIMM: simm16 is simm16 { export *[const]:4 simm16; }
+UIMM: imm16 is imm16 { export *[const]:4 imm16; }
+HIMM: imm16 is imm16 { local v:4 = imm16 << 16; export v; }
+MEM: simm16(A) is simm16 & A { local addr:4 = A + simm16; export addr; }
+REL: dest is simm16 [ dest = inst_next + simm16; ] { export *:4 dest; }
+JDEST: dest is imm26 [ dest = (inst_start & 0xf0000000) | (imm26 << 2); ] { export *:4 dest; }
+
+# I-type writes go to rB; R-type writes go to rC. A write to zero is dropped.
+:addi fB, A, SIMM is op=0x04 & fB & A & SIMM { fB = A + SIMM; }
+:andi fB, A, UIMM is op=0x0c & fB & A & UIMM { fB = A & UIMM; }
+:ori fB, A, UIMM is op=0x14 & fB & A & UIMM { fB = A | UIMM; }
+:xori fB, A, UIMM is op=0x1c & fB & A & UIMM { fB = A ^ UIMM; }
+:andhi fB, A, HIMM is op=0x2c & fB & A & HIMM { fB = A & HIMM; }
+:orhi fB, A, HIMM is op=0x34 & fB & A & HIMM { fB = A | HIMM; }
+:xorhi fB, A, HIMM is op=0x3c & fB & A & HIMM { fB = A ^ HIMM; }
+:muli fB, A, SIMM is op=0x24 & fB & A & SIMM { fB = A * SIMM; }
+:cmpgei fB, A, SIMM is op=0x08 & fB & A & SIMM { fB = zext(A s>= SIMM); }
+:cmplti fB, A, SIMM is op=0x10 & fB & A & SIMM { fB = zext(A s< SIMM); }
+:cmpnei fB, A, SIMM is op=0x18 & fB & A & SIMM { fB = zext(A != SIMM); }
+:cmpeqi fB, A, SIMM is op=0x20 & fB & A & SIMM { fB = zext(A == SIMM); }
+:cmpgeui fB, A, UIMM is op=0x28 & fB & A & UIMM { fB = zext(A >= UIMM); }
+:cmpltui fB, A, UIMM is op=0x30 & fB & A & UIMM { fB = zext(A < UIMM); }
+
+:ldb fB, MEM is op=0x07 & fB & MEM { fB = sext(*:1 MEM); }
+:ldbu fB, MEM is op=0x03 & fB & MEM { fB = zext(*:1 MEM); }
+:ldh fB, MEM is op=0x0f & fB & MEM { fB = sext(*:2 MEM); }
+:ldhu fB, MEM is op=0x0b & fB & MEM { fB = zext(*:2 MEM); }
+:ldw fB, MEM is op=0x17 & fB & MEM { fB = *:4 MEM; }
+:ldbio fB, MEM is op=0x27 & fB & MEM { fB = sext(*:1 MEM); }
+:ldbuio fB, MEM is op=0x23 & fB & MEM { fB = zext(*:1 MEM); }
+:ldhio fB, MEM is op=0x2f & fB & MEM { fB = sext(*:2 MEM); }
+:ldhuio fB, MEM is op=0x2b & fB & MEM { fB = zext(*:2 MEM); }
+:ldwio fB, MEM is op=0x37 & fB & MEM { fB = *:4 MEM; }
+:stb B, MEM is op=0x05 & B & MEM { *:1 MEM = B:1; }
+:sth B, MEM is op=0x0d & B & MEM { *:2 MEM = B:2; }
+:stw B, MEM is op=0x15 & B & MEM { *:4 MEM = B; }
+:stbio B, MEM is op=0x25 & B & MEM { *:1 MEM = B:1; }
+:sthio B, MEM is op=0x2d & B & MEM { *:2 MEM = B:2; }
+:stwio B, MEM is op=0x35 & B & MEM { *:4 MEM = B; }
+:flushda MEM is op=0x1b & MEM { flush_data_line(MEM); }
+:flushd MEM is op=0x3b & MEM { flush_data_line(MEM); }
+:initda MEM is op=0x13 & MEM { init_data_line(MEM); }
+:initd MEM is op=0x33 & MEM { init_data_line(MEM); }
+:rdprs fB, A, SIMM is op=0x38 & fB & A & SIMM { fB = read_previous_register_set(A, SIMM); }
+
+:br REL is op=0x06 & dA=0 & dB=0 & REL { goto REL; }
+:beq A, B, REL is op=0x26 & A & B & REL { if (A == B) goto REL; }
+:bne A, B, REL is op=0x1e & A & B & REL { if (A != B) goto REL; }
+:bge A, B, REL is op=0x0e & A & B & REL { if (A s>= B) goto REL; }
+:blt A, B, REL is op=0x16 & A & B & REL { if (A s< B) goto REL; }
+:bgeu A, B, REL is op=0x2e & A & B & REL { if (A >= B) goto REL; }
+:bltu A, B, REL is op=0x36 & A & B & REL { if (A < B) goto REL; }
+
+:call JDEST is op=0x00 & JDEST { ra = inst_next; call JDEST; }
+:jmpi JDEST is op=0x01 & JDEST { goto JDEST; }
+
+:custom cN, fC, A, B is op=0x32 & cN & fC & A & B { fC = custom(cN:1, A, B); }
+
+# R-type
+:ret is op=0x3a & opx=0x05 & dA=31 { return [ra]; }
+:jmp A is op=0x3a & opx=0x0d & A { goto [A]; }
+:callr A is op=0x3a & opx=0x1d & A { local t = A; ra = inst_next; call [t]; }
+:nextpc fC is op=0x3a & opx=0x1c & fC { fC = inst_next; }
+:eret is op=0x3a & opx=0x01 { status = estatus; exception_return(); return [ea]; }
+:bret is op=0x3a & opx=0x09 { status = bstatus; breakpoint_return(); return [bt]; }
+:trap imm5 is op=0x3a & opx=0x2d & imm5 { trap(imm5:1); }
+:break imm5 is op=0x3a & opx=0x34 & imm5 { breakpoint(imm5:1); }
+:sync is op=0x3a & opx=0x36 { sync(); }
+:flushp is op=0x3a & opx=0x04 { flush_pipeline(); }
+:flushi A is op=0x3a & opx=0x0c & A { flush_instruction_line(A); }
+:initi A is op=0x3a & opx=0x29 & A { init_instruction_line(A); }
+:rdctl fC, ctlN is op=0x3a & opx=0x26 & fC & ctlN { fC = ctlN; }
+:wrctl ctlN, A is op=0x3a & opx=0x2e & ctlN & A { ctlN = A; }
+:wrprs fC, A is op=0x3a & opx=0x14 & fC & A { write_previous_register_set(fC:1, A); }
+
+:nop is op=0x3a & opx=0x31 & dA=0 & dB=0 & dC=0 { }
+:mov fC, A is op=0x3a & opx=0x31 & fC & A & dB=0 { fC = A; }
+:add fC, A, B is op=0x3a & opx=0x31 & fC & A & B { fC = A + B; }
+:sub fC, A, B is op=0x3a & opx=0x39 & fC & A & B { fC = A - B; }
+:mul fC, A, B is op=0x3a & opx=0x27 & fC & A & B { fC = A * B; }
+:div fC, A, B is op=0x3a & opx=0x25 & fC & A & B { fC = A s/ B; }
+:divu fC, A, B is op=0x3a & opx=0x24 & fC & A & B { fC = A / B; }
+:mulxss fC, A, B is op=0x3a & opx=0x1f & fC & A & B { local p:8 = sext(A) * sext(B); fC = p(4); }
+:mulxsu fC, A, B is op=0x3a & opx=0x17 & fC & A & B { local p:8 = sext(A) * zext(B); fC = p(4); }
+:mulxuu fC, A, B is op=0x3a & opx=0x07 & fC & A & B { local p:8 = zext(A) * zext(B); fC = p(4); }
+:and fC, A, B is op=0x3a & opx=0x0e & fC & A & B { fC = A & B; }
+:or fC, A, B is op=0x3a & opx=0x16 & fC & A & B { fC = A | B; }
+:xor fC, A, B is op=0x3a & opx=0x1e & fC & A & B { fC = A ^ B; }
+:nor fC, A, B is op=0x3a & opx=0x06 & fC & A & B { fC = ~(A | B); }
+:cmpeq fC, A, B is op=0x3a & opx=0x20 & fC & A & B { fC = zext(A == B); }
+:cmpne fC, A, B is op=0x3a & opx=0x18 & fC & A & B { fC = zext(A != B); }
+:cmpge fC, A, B is op=0x3a & opx=0x08 & fC & A & B { fC = zext(A s>= B); }
+:cmplt fC, A, B is op=0x3a & opx=0x10 & fC & A & B { fC = zext(A s< B); }
+:cmpgeu fC, A, B is op=0x3a & opx=0x28 & fC & A & B { fC = zext(A >= B); }
+:cmpltu fC, A, B is op=0x3a & opx=0x30 & fC & A & B { fC = zext(A < B); }
+:sll fC, A, B is op=0x3a & opx=0x13 & fC & A & B { fC = A << (B & 31); }
+:srl fC, A, B is op=0x3a & opx=0x1b & fC & A & B { fC = A >> (B & 31); }
+:sra fC, A, B is op=0x3a & opx=0x3b & fC & A & B { fC = A s>> (B & 31); }
+:rol fC, A, B is op=0x3a & opx=0x03 & fC & A & B { local n = B & 31; fC = (A << n) | (A >> ((32 - n) & 31)); }
+:ror fC, A, B is op=0x3a & opx=0x0b & fC & A & B { local n = B & 31; fC = (A >> n) | (A << ((32 - n) & 31)); }
+:slli fC, A, imm5 is op=0x3a & opx=0x12 & fC & A & imm5 { fC = A << imm5; }
+:srli fC, A, imm5 is op=0x3a & opx=0x1a & fC & A & imm5 { fC = A >> imm5; }
+:srai fC, A, imm5 is op=0x3a & opx=0x3a & fC & A & imm5 { fC = A s>> imm5; }
+:roli fC, A, imm5 is op=0x3a & opx=0x02 & fC & A & imm5 { fC = (A << imm5) | (A >> ((32 - imm5) & 31)); }

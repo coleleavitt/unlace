@@ -4264,6 +4264,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `PDP11` | DEC PDP-11 (base set, EIS, MFPS/MTPS) | `PDP-11:LE:16:default` | written for unlace from the DEC PDP-11 handbooks, Apache-2.0 |
 | `Moxie` | Moxie (moxielogic) | `moxie:BE:32:default`, `moxie:LE:32:default` | written for unlace from the Moxie architecture page and the binutils opcode table |
 | `FT32` | FTDI FT32 (FT900/FT930) | `ft32:LE:32:default` | written for unlace from the FT32 documentation and the binutils opcode table |
+| `NiosII` | Altera/Intel Nios II (R1) | `nios2:LE:32:R1`, `nios2:BE:32:R1` | written for unlace from the Nios II Processor Reference Guide and the binutils opcode table |
 <!-- vendor-rows -->
 
 ### DEC PDP-11 (#98)

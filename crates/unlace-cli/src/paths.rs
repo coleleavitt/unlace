@@ -18,8 +18,8 @@
 //!   holding `unlace`. There is no repo root there, so nothing may be derived from
 //!   one: popping three parents off it lands on a path that exists nowhere.
 //!
-//! The environment overrides (`KUNA_ROOT`, `KUNA_SPECS`, `KUNA_DECOMP_DBG`,
-//! `KUNA_SLACOMP` — all documented in `docs/cli.md`) win over all of this.
+//! The environment overrides (`UNLACE_ROOT`, `UNLACE_SPECS`, `UNLACE_DECOMP_DBG`,
+//! `UNLACE_SLACOMP` — all documented in `docs/cli.md`) win over all of this.
 
 use std::env;
 use std::path::{Path, PathBuf};
@@ -83,7 +83,7 @@ fn is_spec_tree(dir: &Path) -> bool {
     dir.join("Ghidra").join("Processors").is_dir()
 }
 
-/// Where `specs_dir()` looks when neither `KUNA_SPECS` nor `KUNA_ROOT` pins it:
+/// Where `specs_dir()` looks when neither `UNLACE_SPECS` nor `UNLACE_ROOT` pins it:
 /// the checkout's `specs/` (the one holding the binary, else the one it was built
 /// from), then the two places a release archive's separately
 /// downloaded `specs/` tree lands (inside the extracted directory, or beside it),
@@ -123,15 +123,15 @@ fn first_spec_tree(dirs: &[PathBuf]) -> Option<PathBuf> {
 
 /// Root passed as `-sleighpath` / `SLEIGHHOME` (contains `Ghidra/Processors/...`).
 ///
-/// `KUNA_SPECS` and `KUNA_ROOT` pin it outright; then the tree built into this
+/// `UNLACE_SPECS` and `UNLACE_ROOT` pin it outright; then the tree built into this
 /// binary, unpacked; otherwise the first [`specs_search_dirs`] entry that holds a
 /// tree wins, falling back to the first candidate so the caller still has
 /// something to name.
 pub fn specs_dir() -> PathBuf {
-    if let Some(specs) = env_path("KUNA_SPECS") {
+    if let Some(specs) = env_path("UNLACE_SPECS") {
         return specs;
     }
-    if let Some(root) = env_path("KUNA_ROOT") {
+    if let Some(root) = env_path("UNLACE_ROOT") {
         return root.join("specs");
     }
     if let Some(Ok(dir)) = crate::embedded_specs::tree() {
@@ -147,7 +147,7 @@ pub fn require_specs_dir() -> Result<PathBuf, String> {
     if is_spec_tree(&dir) {
         return Ok(dir);
     }
-    for var in ["KUNA_SPECS", "KUNA_ROOT"] {
+    for var in ["UNLACE_SPECS", "UNLACE_ROOT"] {
         if env_path(var).is_some() {
             return Err(format!(
                 "no SLEIGH specs at {} ({var}) -- it holds no Ghidra/Processors tree",
@@ -168,7 +168,7 @@ pub fn require_specs_dir() -> Result<PathBuf, String> {
 
 /// How to point kuna at a SLEIGH tree, for the failures that surface after the
 /// directory itself resolved.
-pub const SPECS_HINT: &str = "set KUNA_SPECS to a specs/ directory (a checkout's specs/, whose .sla \
+pub const SPECS_HINT: &str = "set UNLACE_SPECS to a specs/ directory (a checkout's specs/, whose .sla \
      images compile into the .sla cache on first use, or the kuna-v<ver>-specs release archive)";
 
 /// A comma-separated rendering of a probe list, for a diagnostic.
@@ -231,12 +231,12 @@ fn builtin(env_var: &str, subcommand: &'static str) -> Result<Program, String> {
 
 /// The decompiler console `unlace decompile` and `unlace catalog` drive.
 pub fn decomp_dbg() -> Result<Program, String> {
-    builtin("KUNA_DECOMP_DBG", DECOMP_DBG_SUBCOMMAND)
+    builtin("UNLACE_DECOMP_DBG", DECOMP_DBG_SUBCOMMAND)
 }
 
 /// The SLEIGH compiler `unlace specs` runs.
 pub fn slacomp() -> Result<Program, String> {
-    builtin("KUNA_SLACOMP", SLACOMP_SUBCOMMAND)
+    builtin("UNLACE_SLACOMP", SLACOMP_SUBCOMMAND)
 }
 
 #[cfg(test)]

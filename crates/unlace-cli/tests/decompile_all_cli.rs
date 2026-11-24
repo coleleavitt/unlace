@@ -278,29 +278,35 @@ fn noreturn_error_fixture() -> String {
 }
 
 /// The decode-lane knobs (`kuna_pdecode`). Cleared from every child here so a
-/// suite run under `KUNA_DECODE_JOBS=8 KUNA_DECODE_MIN_BYTES=0` -- which is how
+/// suite run under `UNLACE_DECODE_JOBS=8 UNLACE_DECODE_MIN_BYTES=0` -- which is how
 /// DIV-169 says to exercise the gates -- cannot move a baseline these tests take
 /// for granted; each test then sets only what it means to.
 const DECODE_ENV: [&str; 6] = [
-    "KUNA_DECODE_JOBS",
-    "KUNA_DECODE_MIN_BYTES",
-    "KUNA_DECODE_INTERVALS",
-    "KUNA_DECODE_SELFCHECK",
-    "KUNA_DECODE_STATS",
-    "KUNA_DECODE_FAULT",
+    "UNLACE_DECODE_JOBS",
+    "UNLACE_DECODE_MIN_BYTES",
+    "UNLACE_DECODE_INTERVALS",
+    "UNLACE_DECODE_SELFCHECK",
+    "UNLACE_DECODE_STATS",
+    "UNLACE_DECODE_FAULT",
 ];
 
 /// A `unlace` invocation with this suite's environment hygiene, plus `env`.
 fn kuna_command(env: &[(&str, &str)]) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
-    cmd.env_remove("KUNA_DECOMP_DBG").env_remove("KUNA_SLACOMP");
+    cmd.env_remove("UNLACE_DECOMP_DBG")
+        .env_remove("KUNA_DECOMP_DBG")
+        .env_remove("UNLACE_SLACOMP")
+        .env_remove("KUNA_SLACOMP");
     // A lane fault reports itself in one line; `RUST_BACKTRACE` deliberately
     // turns the runtime's panic block back on, so it must not reach a child
     // whose whole assertion is that the block is absent.
     cmd.env_remove("RUST_BACKTRACE");
-    cmd.env_remove("KUNA_JOBS_FAULT");
-    cmd.env_remove("KUNA_RENDER_FAULT");
-    cmd.env_remove("KUNA_JUMPTABLE_FAULT");
+    cmd.env_remove("UNLACE_JOBS_FAULT")
+        .env_remove("KUNA_JOBS_FAULT");
+    cmd.env_remove("UNLACE_RENDER_FAULT")
+        .env_remove("KUNA_RENDER_FAULT");
+    cmd.env_remove("UNLACE_JUMPTABLE_FAULT")
+        .env_remove("KUNA_JUMPTABLE_FAULT");
     for name in DECODE_ENV {
         cmd.env_remove(name);
     }
@@ -1654,7 +1660,7 @@ fn the_memory_limit_defaults_to_the_cgroup_cap() {
         std::fs::create_dir_all(&leaf).unwrap();
         std::fs::write(leaf.join("memory.max"), "1073741824\n").unwrap();
         std::fs::write(leaf.join("memory.current"), format!("{current}\n")).unwrap();
-        let env = [("KUNA_CGROUP_ROOT", root.path().to_str().unwrap())];
+        let env = [("UNLACE_CGROUP_ROOT", root.path().to_str().unwrap())];
         let mut args = vec!["decompile-all", bin, "--json", "--sleighpath", &sp];
         if !extra.contains(&"--max-fn-seconds") {
             args.extend_from_slice(&["--max-fn-seconds", "0"]);
@@ -5971,7 +5977,7 @@ fn jobs_auto_fits_the_cgroup_memory_cap() {
         "anon 734003200\nfile 209715200\nactive_file 0\ninactive_file 0\nshmem 209715200\n",
     )
     .unwrap();
-    let env = [("KUNA_CGROUP_ROOT", root.path().to_str().unwrap())];
+    let env = [("UNLACE_CGROUP_ROOT", root.path().to_str().unwrap())];
     let bin = fauxware();
     let sp = specs();
     let base: Vec<&str> = [
@@ -6098,7 +6104,7 @@ fn jobs_names_synthesized_structs_as_the_serial_run_does() {
             ] {
                 let (got, stderr, ok) = run_kuna_env(
                     &[&base[..], &["--jobs", "3", "--jobs-chunk", "1"]].concat(),
-                    &[("KUNA_JOBS_FAULT", fault)],
+                    &[("UNLACE_JOBS_FAULT", fault)],
                 );
                 assert!(ok, "{fixture} {fault} failed: {stderr}");
                 assert!(stderr.contains(says), "{fixture} {fault}: {stderr}");
@@ -6140,7 +6146,7 @@ fn jobs_a_stall_in_the_ordered_structsynth_worker_blames_the_function_that_stall
     let started = Instant::now();
     let (got, stderr, ok) = run_kuna_env_with_timeout(
         &args,
-        &[("KUNA_JOBS_FAULT", "synth:serial,stall-again:0x14ea")],
+        &[("UNLACE_JOBS_FAULT", "synth:serial,stall-again:0x14ea")],
         Duration::from_secs(240),
     )
     .expect("the stalled ordered chunk wedged the pool");
@@ -6151,7 +6157,7 @@ fn jobs_a_stall_in_the_ordered_structsynth_worker_blames_the_function_that_stall
     );
     assert_eq!(
         stderr
-            .matches("KUNA_JOBS_FAULT: injected stall at 0x14ea")
+            .matches("UNLACE_JOBS_FAULT: injected stall at 0x14ea")
             .count(),
         1,
         "{stderr}"
@@ -6217,7 +6223,7 @@ fn jobs_falls_back_when_a_worker_cannot_install_the_replayed_structures() {
     );
     let (got, stderr, ok) = run_kuna_env(
         &[&base[..], &["--jobs", "2", "--jobs-chunk", "1"]].concat(),
-        &[("KUNA_JOBS_FAULT", "synth:force,synth:noinstall")],
+        &[("UNLACE_JOBS_FAULT", "synth:force,synth:noinstall")],
     );
     assert!(ok, "the run failed: {stderr}");
     assert!(
@@ -6391,7 +6397,9 @@ fn jobs_refuses_what_a_pool_cannot_carry() {
 fn jobs_leaves_no_scratch_directory_behind() {
     let bin = fauxware();
     let mut child = Command::new(env!("CARGO_BIN_EXE_unlace"))
+        .env_remove("UNLACE_DECOMP_DBG")
         .env_remove("KUNA_DECOMP_DBG")
+        .env_remove("UNLACE_SLACOMP")
         .env_remove("KUNA_SLACOMP")
         .args([
             "decompile-all",
@@ -6520,7 +6528,9 @@ fn killing_the_parent_takes_the_workers_and_the_scratch_dir_with_it() {
 
     let bin = hang_repro();
     let mut child = Command::new(env!("CARGO_BIN_EXE_unlace"))
+        .env_remove("UNLACE_DECOMP_DBG")
         .env_remove("KUNA_DECOMP_DBG")
+        .env_remove("UNLACE_SLACOMP")
         .env_remove("KUNA_SLACOMP")
         .args([
             "decompile-all",
@@ -6636,7 +6646,7 @@ fn fauxware_serial_json() -> String {
 
 /// A pooled `decompile-all --json` of `fauxware` in ONE chunk (so one worker
 /// serves every target and the dispatch order is the planner's longest-first
-/// order), under `KUNA_JOBS_FAULT=fault`.
+/// order), under `UNLACE_JOBS_FAULT=fault`.
 fn fauxware_pooled_with_fault(fault: &str, max_fn_seconds: &str) -> (String, String, bool) {
     let bin = fauxware();
     let sp = specs();
@@ -6658,10 +6668,10 @@ fn fauxware_pooled_with_fault(fault: &str, max_fn_seconds: &str) -> (String, Str
     .collect();
     run_kuna_env_with_timeout(
         &args,
-        &[("KUNA_JOBS_FAULT", fault)],
+        &[("UNLACE_JOBS_FAULT", fault)],
         Duration::from_secs(240),
     )
-    .unwrap_or_else(|| panic!("KUNA_JOBS_FAULT={fault} wedged the pool"))
+    .unwrap_or_else(|| panic!("UNLACE_JOBS_FAULT={fault} wedged the pool"))
 }
 
 /// Every record but those named in `lost` must be the serial run's, byte for
@@ -6708,7 +6718,7 @@ fn jobs_a_worker_panic_loses_only_the_function_that_panicked() {
         );
         assert_eq!(
             stderr
-                .matches(&format!("KUNA_JOBS_FAULT: injected panic at {addr}"))
+                .matches(&format!("UNLACE_JOBS_FAULT: injected panic at {addr}"))
                 .count(),
             2,
             "{name} is run once in its chunk and once alone, never again:\n{stderr}"
@@ -6746,7 +6756,7 @@ fn jobs_a_transient_worker_death_loses_nothing() {
     assert!(ok, "{stderr}");
     assert_eq!(got, serial, "a recovered run must be the serial document");
     assert_eq!(
-        stderr.matches("KUNA_JOBS_FAULT: injected panic").count(),
+        stderr.matches("UNLACE_JOBS_FAULT: injected panic").count(),
         1,
         "{stderr}"
     );
@@ -6796,9 +6806,9 @@ fn a_render_panic_leaves_later_functions_on_the_configured_printer() {
             want.contains("{\\n    puts("),
             "indentincrement 4 must show in the bodies:\n{want}"
         );
-        let (got, stderr, ok) = run_kuna_env(&args, &[("KUNA_RENDER_FAULT", at)]);
+        let (got, stderr, ok) = run_kuna_env(&args, &[("UNLACE_RENDER_FAULT", at)]);
         assert!(ok, "one render panic must not fail the run:\n{stderr}");
-        let fault = format!("KUNA_RENDER_FAULT: injected render panic at {at}");
+        let fault = format!("UNLACE_RENDER_FAULT: injected render panic at {at}");
         assert_eq!(stderr.matches(&fault).count(), 1, "{stderr}");
         let (want, got) = (json_records(&want), json_records(&got));
         assert_eq!(got.len(), want.len(), "one record per target");
@@ -6846,16 +6856,16 @@ fn a_jump_table_recovery_panic_is_the_functions_error() {
     let want = json_records(&want);
     for jobs in ["1", "2"] {
         let args: Vec<&str> = run.iter().copied().chain(["--jobs", jobs]).collect();
-        let (got, stderr, ok) = run_kuna_env(&args, &[("KUNA_JUMPTABLE_FAULT", "0x100000")]);
+        let (got, stderr, ok) = run_kuna_env(&args, &[("UNLACE_JUMPTABLE_FAULT", "0x100000")]);
         assert!(ok, "one function's panic must not fail the run:\n{stderr}");
-        let fault = "KUNA_JUMPTABLE_FAULT: injected jump-table recovery panic at 0x100000";
+        let fault = "UNLACE_JUMPTABLE_FAULT: injected jump-table recovery panic at 0x100000";
         assert_eq!(stderr.matches(fault).count(), 1, "--jobs {jobs}:\n{stderr}");
         let got = json_records(&got);
         assert_eq!(got.len(), want.len(), "one record per target");
         for (w, g) in want.iter().zip(&got) {
             if record_name(w) == "dispatch" {
                 let error = "\"error\": \"decompile pipeline reached an un-ported seam (LOSS-131) \
-                             in jump-table recovery at 0x100007: KUNA_JUMPTABLE_FAULT";
+                             in jump-table recovery at 0x100007: UNLACE_JUMPTABLE_FAULT";
                 assert!(
                     g.contains("\"code\": null") && g.contains(error),
                     "--jobs {jobs}:\n{g}"
@@ -6895,7 +6905,7 @@ fn jobs_a_stalled_worker_loses_only_the_function_that_stalled() {
     );
     assert_eq!(
         stderr
-            .matches("KUNA_JOBS_FAULT: injected stall at 0x4006fd")
+            .matches("UNLACE_JOBS_FAULT: injected stall at 0x4006fd")
             .count(),
         1,
         "a stalled function is not re-run:\n{stderr}"
@@ -6938,7 +6948,7 @@ fn jobs_a_stalled_worker_loses_only_the_function_that_stalled() {
     }
     for addr in ["0x4006fd", "0x400530", "0x400550"] {
         let fired = stderr
-            .matches(&format!("KUNA_JOBS_FAULT: injected stall at {addr}"))
+            .matches(&format!("UNLACE_JOBS_FAULT: injected stall at {addr}"))
             .count();
         assert_eq!(fired, 1, "{addr} stalled once:\n{stderr}");
     }
@@ -6978,7 +6988,7 @@ fn jobs_neighbouring_crashers_do_not_forfeit_their_chunk() {
     );
     assert_eq!(recovered_count(&stderr), Some(16), "{stderr}");
     assert_eq!(
-        stderr.matches("KUNA_JOBS_FAULT: injected panic").count(),
+        stderr.matches("UNLACE_JOBS_FAULT: injected panic").count(),
         6,
         "the chunk's death, then one re-run apiece for the five crashers:\n{stderr}"
     );
@@ -7011,7 +7021,7 @@ fn jobs_rerunning_a_dead_worker_never_loops() {
         }
     };
     let crashed = "worker chunk failed (worker exited: exit status: 101)";
-    let panics = |stderr: &str| stderr.matches("KUNA_JOBS_FAULT: injected panic").count();
+    let panics = |stderr: &str| stderr.matches("UNLACE_JOBS_FAULT: injected panic").count();
 
     let (got, stderr, ok) = fauxware_pooled_with_fault("spawn:0", "0");
     assert!(!ok, "a run that decompiled nothing must fail:\n{stderr}");
@@ -7068,7 +7078,7 @@ fn jobs_rerunning_a_dead_worker_never_loops() {
     ];
     let cap = Duration::from_secs(240);
     let (got, stderr, ok) =
-        run_kuna_env_with_timeout(&args, &[("KUNA_JOBS_FAULT", "panic:*")], cap)
+        run_kuna_env_with_timeout(&args, &[("UNLACE_JOBS_FAULT", "panic:*")], cap)
             .expect("workers that die on everything wedged the pool");
     assert!(!ok, "{stderr}");
     every_record_failed(&got, crashed);
@@ -7098,7 +7108,7 @@ fn jobs_rerunning_a_dead_worker_never_loops() {
 fn jobs_a_worker_that_dies_in_its_load_loses_nothing() {
     let serial = fauxware_serial_json();
     let total = json_records(&serial).len();
-    let loads = |stderr: &str| stderr.matches("KUNA_JOBS_FAULT").count();
+    let loads = |stderr: &str| stderr.matches("UNLACE_JOBS_FAULT").count();
 
     let (got, stderr, ok) = fauxware_pooled_with_fault("load-abort:1", "0");
     assert!(ok, "{stderr}");
@@ -7144,7 +7154,7 @@ fn jobs_a_worker_that_dies_in_its_load_loses_nothing() {
     ];
     let cap = Duration::from_secs(240);
     let (got, stderr, ok) =
-        run_kuna_env_with_timeout(&args, &[("KUNA_JOBS_FAULT", "load-abort:*")], cap)
+        run_kuna_env_with_timeout(&args, &[("UNLACE_JOBS_FAULT", "load-abort:*")], cap)
             .expect("workers that die in every load wedged the pool");
     assert!(!ok, "{stderr}");
     let records = json_records(&got);
@@ -7242,7 +7252,10 @@ fn assert_lanes_produced_it(stderr: &str, what: &str) {
 fn jobs_decode_lanes_are_byte_identical_to_serial() {
     let bin = fauxware();
     let sp = specs();
-    let lanes_on = [("KUNA_DECODE_MIN_BYTES", "0"), ("KUNA_DECODE_STATS", "1")];
+    let lanes_on = [
+        ("UNLACE_DECODE_MIN_BYTES", "0"),
+        ("UNLACE_DECODE_STATS", "1"),
+    ];
     let (want, want_err, ok) = run_kuna(&["functions", &bin, "--json", "--sleighpath", &sp]);
     if !ok {
         panic!("unlace functions failed: {want_err}");
@@ -7321,7 +7334,7 @@ fn jobs_decode_lanes_decline_on_a_context_committing_language() {
     }
     let mut with_jobs = args.to_vec();
     with_jobs.extend_from_slice(&["--jobs", "8"]);
-    let (got, stderr, ok) = run_kuna_env(&with_jobs, &[("KUNA_DECODE_MIN_BYTES", "0")]);
+    let (got, stderr, ok) = run_kuna_env(&with_jobs, &[("UNLACE_DECODE_MIN_BYTES", "0")]);
     assert!(ok, "unlace functions --jobs 8 failed on ARM: {stderr}");
     assert_eq!(got, want, "the ARM decline moved the inventory");
     assert!(
@@ -7350,7 +7363,10 @@ fn a_dead_lane_falls_back_to_the_serial_walk() {
     for lane in ["0", "2"] {
         let (got, stderr, ok) = run_kuna_env_with_timeout(
             &with_jobs,
-            &[("KUNA_DECODE_MIN_BYTES", "0"), ("KUNA_DECODE_FAULT", lane)],
+            &[
+                ("UNLACE_DECODE_MIN_BYTES", "0"),
+                ("UNLACE_DECODE_FAULT", lane),
+            ],
             FAULT_CAP,
         )
         .unwrap_or_else(|| panic!("lane {lane}'s fault deadlocked the run"));
@@ -7400,7 +7416,10 @@ fn jobs_decode_lanes_agree_with_serial_on_decompile_all() {
     args.extend_from_slice(&["--jobs", "4"]);
     let (got, stderr, ok) = run_kuna_env(
         &args,
-        &[("KUNA_DECODE_MIN_BYTES", "0"), ("KUNA_DECODE_STATS", "1")],
+        &[
+            ("UNLACE_DECODE_MIN_BYTES", "0"),
+            ("UNLACE_DECODE_STATS", "1"),
+        ],
     );
     assert!(ok, "unlace decompile-all --jobs 4 failed: {stderr}");
     assert_eq!(got, want, "--jobs 4 moved the document");
@@ -7432,8 +7451,8 @@ fn a_refused_lane_spawn_falls_back_to_the_serial_walk() {
         let (got, stderr, ok) = run_kuna_env_with_timeout(
             &with_jobs,
             &[
-                ("KUNA_DECODE_MIN_BYTES", "0"),
-                ("KUNA_DECODE_FAULT", &format!("spawn:{lane}")),
+                ("UNLACE_DECODE_MIN_BYTES", "0"),
+                ("UNLACE_DECODE_FAULT", &format!("spawn:{lane}")),
             ],
             FAULT_CAP,
         )
@@ -7482,7 +7501,7 @@ fn functions_takes_jobs_with_a_raw_image() {
         "--jobs",
         "4",
     ];
-    let (got, stderr, ok) = run_kuna_env(&args, &[("KUNA_DECODE_MIN_BYTES", "0")]);
+    let (got, stderr, ok) = run_kuna_env(&args, &[("UNLACE_DECODE_MIN_BYTES", "0")]);
     assert!(
         ok,
         "functions --raw-image --jobs 4 must not be refused: {stderr}"
@@ -7551,7 +7570,10 @@ fn functions_takes_jobs_with_an_assert_overlay() {
     ];
     let (got, stderr, ok) = run_kuna_env(
         &args,
-        &[("KUNA_DECODE_MIN_BYTES", "0"), ("KUNA_DECODE_STATS", "1")],
+        &[
+            ("UNLACE_DECODE_MIN_BYTES", "0"),
+            ("UNLACE_DECODE_STATS", "1"),
+        ],
     );
     assert!(
         ok,

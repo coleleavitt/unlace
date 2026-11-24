@@ -60,14 +60,14 @@ fn stub_decomp_dbg(tag: &str, c_body: &str, transcript: &str, stderr_text: &str)
         "#!/bin/sh\n\
          out=\n\
          saw_load=0\n\
-         if [ \"${{KUNA_EXPECT_ARM_ISA+x}}\" = x ] && [ \"$KUNA_ARM_ISA\" != \"$KUNA_EXPECT_ARM_ISA\" ]; then exit 9; fi\n\
+         if [ \"${{UNLACE_EXPECT_ARM_ISA+x}}\" = x ] && [ \"$UNLACE_ARM_ISA\" != \"$UNLACE_EXPECT_ARM_ISA\" ]; then exit 9; fi\n\
          while IFS= read -r line; do\n\
-         \x20 if [ \"${{KUNA_EXPECT_LOAD_LINE+x}}\" = x ] && [ \"$line\" = \"$KUNA_EXPECT_LOAD_LINE\" ]; then saw_load=1; fi\n\
+         \x20 if [ \"${{UNLACE_EXPECT_LOAD_LINE+x}}\" = x ] && [ \"$line\" = \"$UNLACE_EXPECT_LOAD_LINE\" ]; then saw_load=1; fi\n\
          \x20 case \"$line\" in\n\
          \x20   'openfile write '*) out=${{line#openfile write }} ;;\n\
          \x20 esac\n\
          done\n\
-         if [ \"${{KUNA_EXPECT_LOAD_LINE+x}}\" = x ] && [ \"$saw_load\" != 1 ]; then exit 8; fi\n\
+         if [ \"${{UNLACE_EXPECT_LOAD_LINE+x}}\" = x ] && [ \"$saw_load\" != 1 ]; then exit 8; fi\n\
          [ -n \"$out\" ] && cat > \"$out\" <<'KUNA_C_EOF'\n{c_body}\nKUNA_C_EOF\n\
          cat <<'KUNA_OUT_EOF'\n{transcript}\nKUNA_OUT_EOF\n\
          cat >&2 <<'KUNA_ERR_EOF'\n{stderr_text}\nKUNA_ERR_EOF\n\
@@ -178,7 +178,7 @@ fn arm_isa_override_reaches_single_function_engine() {
         "",
     );
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
-        .env("KUNA_EXPECT_ARM_ISA", "thumb")
+        .env("UNLACE_EXPECT_ARM_ISA", "thumb")
         .args([
             "decompile",
             &fauxware(),
@@ -209,8 +209,8 @@ fn raw_image_flags_reach_single_function_engine_with_quoted_path() {
         raw.canonicalize().unwrap().display()
     );
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
-        .env("KUNA_EXPECT_ARM_ISA", "thumb")
-        .env("KUNA_EXPECT_LOAD_LINE", expected)
+        .env("UNLACE_EXPECT_ARM_ISA", "thumb")
+        .env("UNLACE_EXPECT_LOAD_LINE", expected)
         .args([
             "decompile",
             raw.to_str().unwrap(),
@@ -1311,7 +1311,11 @@ fn unavailable_output_directory_fails_before_the_console_starts() {
     let scratch = tempfile::tempdir().unwrap();
     let stub = scratch.path().join("console");
     let marker = scratch.path().join("started");
-    std::fs::write(&stub, "#!/bin/sh\nprintf started > \"$KUNA_STUB_MARKER\"\n").unwrap();
+    std::fs::write(
+        &stub,
+        "#!/bin/sh\nprintf started > \"$UNLACE_STUB_MARKER\"\n",
+    )
+    .unwrap();
     std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o700)).unwrap();
     let missing = scratch.path().join("missing");
     let result = Command::new(env!("CARGO_BIN_EXE_unlace"))
@@ -1322,7 +1326,7 @@ fn unavailable_output_directory_fails_before_the_console_starts() {
         .env("TMPDIR", &missing)
         .env("TMP", &missing)
         .env("TEMP", &missing)
-        .env("KUNA_STUB_MARKER", &marker)
+        .env("UNLACE_STUB_MARKER", &marker)
         .output()
         .expect("run text decompilation");
     assert_eq!(result.status.code(), Some(1));
@@ -1349,13 +1353,13 @@ while IFS= read -r line; do
       out=${line#openfile write }
       out=${out#\"}
       out=${out%\"}
-      if [ "$KUNA_STUB_WRITE" = 1 ]; then
+      if [ "$UNLACE_STUB_WRITE" = 1 ]; then
         printf '%s\n' 'int main(void) { return 0; }' > "$out"
       fi
       ;;
   esac
 done
-printf '%s\n' "$KUNA_STUB_TRANSCRIPT"
+printf '%s\n' "$UNLACE_STUB_TRANSCRIPT"
 "#,
     )
     .unwrap();
@@ -1380,8 +1384,8 @@ printf '%s\n' "$KUNA_STUB_TRANSCRIPT"
                 .env("TMPDIR", &staging)
                 .env("TMP", &staging)
                 .env("TEMP", &staging)
-                .env("KUNA_STUB_WRITE", write)
-                .env("KUNA_STUB_TRANSCRIPT", transcript);
+                .env("UNLACE_STUB_WRITE", write)
+                .env("UNLACE_STUB_TRANSCRIPT", transcript);
             if regions {
                 command.arg("--regions");
             }

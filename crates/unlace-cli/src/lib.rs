@@ -215,14 +215,14 @@ fn usage() {
     );
 }
 
-/// Honor `--engine cpp|rust` like the Python tools: set `KUNA_ENGINE`.  In the
+/// Honor `--engine cpp|rust` like the Python tools: set `UNLACE_ENGINE`.  In the
 /// Rust-only world `rust` is already the default and `cpp` would fail to resolve,
 /// but the flag is accepted (and exported) for compatibility with existing
 /// invocations / the pipeline.
 fn apply_engine(engine: Option<&str>) {
     if let Some(e) = engine {
         // FIXME: Audit that the environment access only happens in single-threaded code.
-        unsafe { std::env::set_var("KUNA_ENGINE", e) };
+        unsafe { std::env::set_var("UNLACE_ENGINE", e) };
     }
 }
 
@@ -251,14 +251,17 @@ fn cmd_catalog(argv: &[String]) -> Result<i32, String> {
             "--decomp-dbg" => {
                 // FIXME: Audit that the environment access only happens in single-threaded code.
                 unsafe {
-                    std::env::set_var("KUNA_DECOMP_DBG", take_value(argv, &mut i, "--decomp-dbg")?)
+                    std::env::set_var(
+                        "UNLACE_DECOMP_DBG",
+                        take_value(argv, &mut i, "--decomp-dbg")?,
+                    )
                 };
                 decomp_dbg_flag = true;
             }
             "--sleighpath" => {
                 // FIXME: Audit that the environment access only happens in single-threaded code.
                 unsafe {
-                    std::env::set_var("KUNA_SPECS", take_value(argv, &mut i, "--sleighpath")?)
+                    std::env::set_var("UNLACE_SPECS", take_value(argv, &mut i, "--sleighpath")?)
                 };
             }
             "-h" | "--help" => {
@@ -282,7 +285,7 @@ fn cmd_catalog(argv: &[String]) -> Result<i32, String> {
     let pinned_by = if decomp_dbg_flag {
         Some("--decomp-dbg")
     } else {
-        paths::pinned_by("KUNA_DECOMP_DBG")
+        paths::pinned_by("UNLACE_DECOMP_DBG")
     };
 
     Ok(if check {
@@ -306,7 +309,7 @@ fn usage_catalog() {
          flips on every decompiling surface.  Each row carries its phase, tier, values,\n\
          default, the symptoms it addresses and when to flip it.\n\
          By default the catalog comes from this binary, without a console or specs.\n\
-         --decomp-dbg P or a non-empty KUNA_DECOMP_DBG selects an external console\n\
+         --decomp-dbg P or a non-empty UNLACE_DECOMP_DBG selects an external console\n\
          instead (the flag wins); a missing selected console is an error.\n\
          --sleighpath and --engine remain accepted but do not select that route.\n\
          --markdown always renders this binary's catalog.\n\

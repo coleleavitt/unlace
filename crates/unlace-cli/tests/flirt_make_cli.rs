@@ -66,7 +66,7 @@ fn a_library_signature_names_the_functions_of_a_stripped_program() {
             .arg("functions")
             .arg(dir.join("prog"))
             .args(["--option", "flirt", flirt])
-            .env("KUNA_FLIRT_SIGS", &sig)
+            .env("UNLACE_FLIRT_SIGS", &sig)
             .env("SLEIGHHOME", common::repo_root().join("specs"))
             .output()
             .expect("run unlace functions");

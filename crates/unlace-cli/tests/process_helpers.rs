@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use common::process;
 
-const CHILD_MODE: &str = "KUNA_CLI_PROCESS_TEST_MODE";
+const CHILD_MODE: &str = "UNLACE_CLI_PROCESS_TEST_MODE";
 const PIPE_BYTES: usize = 512 * 1024;
 
 fn child(mode: &str) -> Command {

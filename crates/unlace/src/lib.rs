@@ -44,7 +44,7 @@
 //!   interior to another function, a `warning:` about an unmapped declaration)
 //!   are printed by the library too.
 //! - The SLEIGH specifications are found as the command line finds them:
-//!   [`Decompiler::with_sleighpath`], else `KUNA_SPECS`, `KUNA_ROOT`, the tree
+//!   [`Decompiler::with_sleighpath`], else `UNLACE_SPECS`, `UNLACE_ROOT`, the tree
 //!   built in with the `embed-specs` feature, or the checkout's `specs/`.
 //! - A [`Decompiler`] is not `Send`: the engine's program holds reference-counted
 //!   state. Make one per thread. Loads read and briefly set process environment

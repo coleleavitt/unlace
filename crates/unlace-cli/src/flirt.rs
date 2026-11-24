@@ -61,7 +61,7 @@ fn usage() {
          Write FLIRT patterns for the functions of object files or static libraries.\n\
          -o is the `.pat` text: one line per function with a global name, bytes a\n\
          relocation rewrites left variable. --sig also writes the `.sig` tree (format\n\
-         version 10) that `--option flirt on` applies through KUNA_FLIRT_SIGS;\n\
+         version 10) that `--option flirt on` applies through UNLACE_FLIRT_SIGS;\n\
          --libname is the library name in its header (default: the first input's file\n\
          stem). Functions that share their leading 32 bytes and CRC are told apart by\n\
          a tail byte, then by a referenced name; those nothing tells apart are listed\n\

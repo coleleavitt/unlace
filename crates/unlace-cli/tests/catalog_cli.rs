@@ -51,10 +51,12 @@ impl Catalog {
         cmd.arg("catalog")
             .args(args)
             .current_dir(self.dir.path())
+            .env_remove("UNLACE_DECOMP_DBG")
             .env_remove("KUNA_DECOMP_DBG")
+            .env_remove("UNLACE_ENGINE")
             .env_remove("KUNA_ENGINE")
-            .env("KUNA_ROOT", self.dir.path())
-            .env("KUNA_SPECS", self.dir.path().join("missing-specs"))
+            .env("UNLACE_ROOT", self.dir.path())
+            .env("UNLACE_SPECS", self.dir.path().join("missing-specs"))
             .env("SLEIGHHOME", self.dir.path().join("missing-specs"));
         cmd
     }
@@ -74,7 +76,7 @@ impl Catalog {
             &path,
             "#!/bin/sh\nprintf '%s\\n' \"$@\" > console-args\n\
              printf '%s\\n' \"$SLEIGHHOME\" > console-specs\n\
-             printf '%s\\n' \"$KUNA_ENGINE\" > console-engine\n\
+             printf '%s\\n' \"$UNLACE_ENGINE\" > console-engine\n\
              cat > console-script\n\
              printf '[decomp]> phase catalog\\n'\n\
              case \"$(head -n 1 console-script)\" in\n\
@@ -145,7 +147,7 @@ fn standalone_catalog_needs_neither_console_nor_specs() {
     succeeds(
         &catalog
             .command(&["--check"])
-            .env("KUNA_DECOMP_DBG", "")
+            .env("UNLACE_DECOMP_DBG", "")
             .captured(),
     );
 }
@@ -157,13 +159,13 @@ fn explicit_missing_console_still_fails_instead_of_falling_back() {
     for args in [vec![], vec!["--json"], vec!["--check"]] {
         let out = catalog
             .command(&args)
-            .env("KUNA_DECOMP_DBG", &missing)
+            .env("UNLACE_DECOMP_DBG", &missing)
             .captured();
         assert_eq!(out.status.code(), Some(1));
         assert!(out.stdout.is_empty());
         let stderr = String::from_utf8(out.stderr).unwrap();
         assert!(stderr.contains("decomp_dbg not found at"), "{stderr}");
-        assert!(stderr.contains("KUNA_DECOMP_DBG"), "{stderr}");
+        assert!(stderr.contains("UNLACE_DECOMP_DBG"), "{stderr}");
     }
     let out = catalog.run(&["--json", "--decomp-dbg", missing.to_str().unwrap()]);
     assert_eq!(out.status.code(), Some(1));
@@ -171,7 +173,7 @@ fn explicit_missing_console_still_fails_instead_of_falling_back() {
     succeeds(
         &catalog
             .command(&["--markdown"])
-            .env("KUNA_DECOMP_DBG", missing)
+            .env("UNLACE_DECOMP_DBG", missing)
             .captured(),
     );
 }
@@ -204,7 +206,7 @@ fn unselected_sibling_console_is_not_started_and_opt_in_is_byte_identical() {
         );
         let external = catalog
             .command(&args)
-            .env("KUNA_DECOMP_DBG", &console)
+            .env("UNLACE_DECOMP_DBG", &console)
             .captured();
         assert!(
             marker.exists(),
@@ -232,7 +234,10 @@ fn external_selection_preserves_precedence_legacy_flags_and_drift_check() {
             "--sleighpath",
             "custom-specs",
         ])
-        .env("KUNA_DECOMP_DBG", catalog.dir.path().join("wrong-console"))
+        .env(
+            "UNLACE_DECOMP_DBG",
+            catalog.dir.path().join("wrong-console"),
+        )
         .captured();
     succeeds(&out);
     let json: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
@@ -250,7 +255,7 @@ fn external_selection_preserves_precedence_legacy_flags_and_drift_check() {
     }
     let out = catalog
         .command(&["--check"])
-        .env("KUNA_DECOMP_DBG", console)
+        .env("UNLACE_DECOMP_DBG", console)
         .captured();
     assert_eq!(out.status.code(), Some(1));
     assert!(out.stdout.is_empty());

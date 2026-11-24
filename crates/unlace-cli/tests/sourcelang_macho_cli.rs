@@ -44,7 +44,9 @@ fn specs() -> String {
 
 fn run(args: &[&str]) -> (String, String, bool) {
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
+        .env_remove("UNLACE_DECOMP_DBG")
         .env_remove("KUNA_DECOMP_DBG")
+        .env_remove("UNLACE_SLACOMP")
         .env_remove("KUNA_SLACOMP")
         .args(args)
         .output()

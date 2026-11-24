@@ -68,11 +68,11 @@ fn relocated_tables_preserve_values_after_independent_relayout() {
     let mut command = Command::new(runner);
     command
         .env(
-            "KUNA_BINARY",
+            "UNLACE_BINARY",
             unlace_base::env::var_os("UNLACE_BINARY")
                 .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into()),
         )
-        .env("KUNA_SPECS", common::repo_root().join("specs"))
+        .env("UNLACE_SPECS", common::repo_root().join("specs"))
         .args(["decompile-all"])
         .arg(&object)
         .args([

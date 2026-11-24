@@ -841,7 +841,7 @@ fn jobs_project_names_synthesized_structs_as_the_serial_export_does() {
                 (
                     "force",
                     &["--jobs", "3", "--jobs-chunk", "1"][..],
-                    &[("KUNA_JOBS_FAULT", "synth:force")][..],
+                    &[("UNLACE_JOBS_FAULT", "synth:force")][..],
                 ),
             ] {
                 let (dir, stderr, ok) = export(tag, extra, env);
@@ -910,7 +910,7 @@ fn jobs_project_serial_path_keeps_the_types_of_the_other_functions() {
     let (sharded, stderr, ok) = export(
         "fallback",
         &["--jobs", "4", "--jobs-chunk", "1"],
-        &[("KUNA_JOBS_FAULT", "synth:serial")],
+        &[("UNLACE_JOBS_FAULT", "synth:serial")],
     );
     assert!(ok, "sharded export failed: {stderr}");
     assert!(
@@ -1411,7 +1411,7 @@ fn a_progress_export_reports_progress_before_it_writes_the_export() {
             "--sleighpath",
             &specs(),
         ])
-        .env("KUNA_JOBS_FAULT", format!("stall:{smallest}"))
+        .env("UNLACE_JOBS_FAULT", format!("stall:{smallest}"))
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
@@ -1610,7 +1610,7 @@ fn streamed_worker_panic_loses_only_the_function_that_panicked() {
     args.extend_from_slice(&pool);
     let (_, stderr, ok) = run_kuna_env_with_timeout(
         &args,
-        &[("KUNA_JOBS_FAULT", "panic:0x400540")],
+        &[("UNLACE_JOBS_FAULT", "panic:0x400540")],
         std::time::Duration::from_secs(240),
     )
     .expect("a panicking worker wedged the streamed export");
@@ -1660,7 +1660,7 @@ fn streamed_worker_panic_loses_only_the_function_that_panicked() {
     assert_eq!(bodies(&dir), bodies(&reference), "a bystander's body moved");
     assert_eq!(
         stderr
-            .matches("KUNA_JOBS_FAULT: injected panic at 0x400540")
+            .matches("UNLACE_JOBS_FAULT: injected panic at 0x400540")
             .count(),
         2,
         "the function that panicked runs once in its chunk and once alone:\n{stderr}"
@@ -1684,7 +1684,7 @@ fn streamed_worker_panic_loses_only_the_function_that_panicked() {
 /// -- and a stack overflow, which is what found this, aborts rather than
 /// unwinds.  They go through the pool like every other function now.
 ///
-/// `KUNA_JOBS_FAULT` fires in the worker, which is exactly what makes the change
+/// `UNLACE_JOBS_FAULT` fires in the worker, which is exactly what makes the change
 /// observable: a panic armed at the image entry point used to fire nowhere at
 /// all, because the one process that decompiled it carried no fault hook, and
 /// the export came back with 1,031 clean records instead of 1,030 and a loss.
@@ -1710,7 +1710,7 @@ fn a_streamed_seed_runs_in_a_worker_and_costs_only_its_own_record() {
     args.extend_from_slice(&pool);
     let (_, stderr, ok) = run_kuna_env_with_timeout(
         &args,
-        &[("KUNA_JOBS_FAULT", &format!("panic:{ENTRY}"))],
+        &[("UNLACE_JOBS_FAULT", &format!("panic:{ENTRY}"))],
         std::time::Duration::from_secs(240),
     )
     .expect("a panicking seed wedged the streamed export");

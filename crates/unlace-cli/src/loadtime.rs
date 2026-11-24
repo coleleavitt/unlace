@@ -182,7 +182,7 @@ fn settings(
         values.insert(kuna_calltargettype::CALLTARGETTYPE_ENV, Some("off".into()));
     }
     if let Some(slice) = slice.filter(|s| !s.trim().is_empty()) {
-        values.insert("KUNA_MACHO_SLICE", Some(slice.into()));
+        values.insert("UNLACE_MACHO_SLICE", Some(slice.into()));
     }
     if decode_lanes > 1 {
         values.insert(
@@ -431,11 +431,11 @@ mod tests {
         assert_eq!(
             actual,
             BTreeMap::from([
-                ("KUNA_OBJCIVARS", Some("off")),
-                ("KUNA_MACHO_ARM64E", Some("off")),
-                ("KUNA_MACHO_SLICE", Some("arm64")),
-                ("KUNA_DYLDCROSSREFS", Some("off")),
-                ("KUNA_CIL", Some("off")),
+                ("UNLACE_OBJCIVARS", Some("off")),
+                ("UNLACE_MACHO_ARM64E", Some("off")),
+                ("UNLACE_MACHO_SLICE", Some("arm64")),
+                ("UNLACE_DYLDCROSSREFS", Some("off")),
+                ("UNLACE_CIL", Some("off")),
                 (kuna_sourcelang::SOURCELANG_ENV, None),
                 (unlace_analysis::passes::LOAD_OBJC_ENV, Some("on")),
                 (unlace_analysis::passes::LOAD_STRINGS_ENV, Some("on")),
@@ -450,7 +450,7 @@ mod tests {
 
     #[test]
     fn process_guard_restores_overwrites_and_removals_after_unwind() {
-        const KEY: &str = "KUNA_CLI_LOADTIME_GUARD_TEST";
+        const KEY: &str = "UNLACE_CLI_LOADTIME_GUARD_TEST";
         let initial = std::env::var_os(KEY);
         let mut outer = LoadtimeEnv::default();
         outer.set(KEY, Some("inherited"));

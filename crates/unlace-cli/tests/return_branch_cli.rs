@@ -78,7 +78,7 @@ const ABIS: [Abi; 2] = [
 ];
 
 fn cross_tool(variable: &str, defaults: &[&str]) -> Option<String> {
-    if let Some(value) = std::env::var_os(variable) {
+    if let Some(value) = unlace_base::env::var_os(variable) {
         let value = value.into_string().expect("UTF-8 tool path");
         process::required_output(Command::new(&value).arg("--version"));
         return Some(value);
@@ -173,14 +173,14 @@ fn source(stem: &str, text: &str) -> PathBuf {
 #[test]
 fn a_constant_jump_through_the_return_register_keeps_its_store() {
     let Some(cc) = cross_tool(
-        "KUNA_RETURNBRANCH_MIPS_CC",
+        "UNLACE_RETURNBRANCH_MIPS_CC",
         &["clang", "clang-21", "clang-14"],
     ) else {
         eprintln!("returnbranch replay: no cross compiler");
         return;
     };
     let ld = cross_tool(
-        "KUNA_RETURNBRANCH_MIPS_LD",
+        "UNLACE_RETURNBRANCH_MIPS_LD",
         &["ld.lld", "ld.lld-21", "ld.lld-14"],
     )
     .as_deref()
@@ -195,7 +195,7 @@ fn a_constant_jump_through_the_return_register_keeps_its_store() {
         path
     };
     for abi in ABIS {
-        let Some(qemu) = cross_tool("KUNA_RETURNBRANCH_MIPS_QEMU", abi.qemu) else {
+        let Some(qemu) = cross_tool("UNLACE_RETURNBRANCH_MIPS_QEMU", abi.qemu) else {
             eprintln!("returnbranch replay: no {} emulator", abi.name);
             continue;
         };

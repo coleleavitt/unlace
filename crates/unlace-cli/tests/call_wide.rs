@@ -427,7 +427,7 @@ fn replay(case: Case, sources: &[&Path], header: &Path) {
 }
 
 fn cross_tool(variable: &str, defaults: &[&str]) -> Option<String> {
-    if let Some(value) = std::env::var_os(variable) {
+    if let Some(value) = unlace_base::env::var_os(variable) {
         let value = value.into_string().expect("UTF-8 tool path");
         process::required_output(Command::new(&value).arg("--version"));
         return Some(value);
@@ -599,7 +599,7 @@ fn replay_native_mips(case: Case, directory: &Path, manifest: &Value, link: &[St
                 .arg(&executable),
         );
         let qemu = cross_tool(
-            "KUNA_CALLWIDE_MIPS_QEMU",
+            "UNLACE_CALLWIDE_MIPS_QEMU",
             &["qemu-mips", "qemu-mips-static"],
         )
         .unwrap();
@@ -608,10 +608,10 @@ fn replay_native_mips(case: Case, directory: &Path, manifest: &Value, link: &[St
 }
 
 fn mips_replay_environment(case: Case) -> Option<(PathBuf, Value, String)> {
-    let compiler = cross_tool("KUNA_CALLWIDE_MIPS_CC", &["clang", "clang-14"]);
-    let linker = cross_tool("KUNA_CALLWIDE_MIPS_LD", &["ld.lld", "ld.lld-14"]);
+    let compiler = cross_tool("UNLACE_CALLWIDE_MIPS_CC", &["clang", "clang-14"]);
+    let linker = cross_tool("UNLACE_CALLWIDE_MIPS_LD", &["ld.lld", "ld.lld-14"]);
     let qemu = cross_tool(
-        "KUNA_CALLWIDE_MIPS_QEMU",
+        "UNLACE_CALLWIDE_MIPS_QEMU",
         &["qemu-mips", "qemu-mips-static"],
     );
     let (Some(compiler), Some(linker), Some(qemu)) = (compiler, linker, qemu) else {

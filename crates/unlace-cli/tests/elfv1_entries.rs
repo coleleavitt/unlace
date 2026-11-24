@@ -553,7 +553,7 @@ fn elfv1_toc_reload_after_a_call_keeps_the_jump_table_base() {
     let decompile = |path: &std::path::Path, option: Option<&str>| {
         let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
         command
-            .env("KUNA_SPECS", common::repo_root().join("specs"))
+            .env("UNLACE_SPECS", common::repo_root().join("specs"))
             .args(["decompile", path.to_str().unwrap(), ".answer"]);
         if let Some(value) = option {
             command.args(["--option", "callmechanisms", value]);
@@ -637,7 +637,7 @@ fn elfv1_calls_keep_their_short_circuit_condition() {
         let [default, on, off] = [None, Some("on"), Some("off")].map(|option| {
             let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
             command
-                .env("KUNA_SPECS", common::repo_root().join("specs"))
+                .env("UNLACE_SPECS", common::repo_root().join("specs"))
                 .args(["decompile", path.to_str().unwrap(), address, "--addr"]);
             if let Some(value) = option {
                 command.args(["--option", "callmechanisms", value]);

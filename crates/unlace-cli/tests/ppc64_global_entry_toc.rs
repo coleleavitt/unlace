@@ -10,7 +10,7 @@ use std::process::Command;
 fn a_global_entry_resolves_its_toc_relative_global() {
     let binary = common::fixture("publish_toc_ppc64le");
     let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
-        .env("KUNA_SPECS", common::repo_root().join("specs"))
+        .env("UNLACE_SPECS", common::repo_root().join("specs"))
         .args(["decompile", &binary, "publish"])
         .output()
         .unwrap();

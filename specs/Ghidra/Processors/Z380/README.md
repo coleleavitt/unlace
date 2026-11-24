@@ -92,7 +92,7 @@ Appendix C and checked with `unlace decompile --raw-image --target Z380:LE:32:de
 | `CB 30` / `ED 78` / `ED 79` / `ED 3E` / `ED 75` / `DD 18 00 00` | `EX B,B'`, `IN A,(C)`, `OUT (C),A`, `SWAP HL`, `EXTSW`, `JR` (16-bit) | decode and data flow |
 | `DD F7` / `C5` | `SETC LW` / `PUSH BC` | 4-byte push in Long Word mode |
 
-The CLI test `crates/unlace-cli/tests/z380_raw.rs` decompiles
+The `crates/unlace-cli/tests/processors.toml` row `z380` decompiles
 `crates/unlace-cli/tests/fixtures/z380/add_store.bin` (listing in `add_store.s`) to
 
 ```c

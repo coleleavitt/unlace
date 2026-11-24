@@ -6,9 +6,6 @@ mod chip8;
 mod common;
 #[path = "evm.rs"]
 mod evm;
-#[path = "ez80_raw.rs"]
-mod ez80_raw;
-
 #[path = "hexagon_hmx.rs"]
 mod hexagon_hmx;
 #[path = "huc6280.rs"]
@@ -734,12 +731,6 @@ mod globalwidth;
 
 #[path = "xrefs_unflagged_cli.rs"]
 mod xrefs_unflagged_cli;
-
-#[path = "z380_raw.rs"]
-mod z380_raw;
-
-#[path = "z8000_raw.rs"]
-mod z8000_raw;
 
 #[path = "zero_extended_returns.rs"]
 mod zero_extended_returns;

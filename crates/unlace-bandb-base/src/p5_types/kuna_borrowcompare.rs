@@ -764,8 +764,9 @@ impl RuleDoubleInputPair {
 /// The unlocked input word directly above `lo` in the same space, if `lo` is
 /// itself an unlocked input, the function never writes either word (a compiler
 /// that spills into an argument slot writes one half, which a joined parameter
-/// can only print as a partial store), and the prototype model accepts the two
-/// words as one parameter (a stack slot; not two separate argument registers).
+/// can only print as a partial store; the possible effect of a call on the
+/// words, an INDIRECT no other op reads, is not a write), and the prototype
+/// model accepts the two words as one parameter (a stack slot; not two separate argument registers).
 /// With option `armpairparam` an aligned argument register pair is accepted
 /// as well, written or not: a later write of a register is a new value, not a
 /// store into the parameter.
@@ -785,14 +786,51 @@ fn input_above(data: &Funcdata, lo: VarnodeId) -> Option<VarnodeId> {
     let h = data.vbank().get(hi)?;
     let base = if addr.is_big_endian() { hiaddr } else { addr };
     let end = &base + 2 * size as i64;
-    let written = data
-        .vbank()
-        .iter_loc_addr_range(&base, &end)
-        .any(|id| data.vbank().get(id).is_some_and(|v| v.is_written()));
+    let written = data.vbank().iter_loc_addr_range(&base, &end).any(|id| {
+        data.vbank().get(id).is_some_and(|v| v.is_written()) && !call_effect_only(data, id)
+    });
     let pair = crate::kuna_armpairparam::joined_pair(data, &base, 2 * size);
     (!h.is_type_lock()
         && (pair || (!written && data.get_func_proto().possible_input_param(&base, 2 * size))))
     .then_some(hi)
+}
+
+/// Whether `vn` is the output of an INDIRECT (a call's possible effect on the
+/// word) whose value reaches only further INDIRECTs and MULTIEQUALs, never an
+/// op that reads it.
+fn call_effect_only(data: &Funcdata, vn: VarnodeId) -> bool {
+    if !matches!(def_of(data, vn), Some((_, OpCode::CPUI_INDIRECT))) {
+        return false;
+    }
+    let mut seen = std::collections::BTreeSet::new();
+    let mut work = vec![vn];
+    while let Some(v) = work.pop() {
+        if !seen.insert(v) {
+            continue;
+        }
+        if seen.len() > MAX_REACH {
+            return false;
+        }
+        let Some(var) = data.vbank().get(v) else {
+            return false;
+        };
+        for op in var.descend_iter() {
+            let Some(o) = data.obank().get(op) else {
+                return false;
+            };
+            if !matches!(o.code(), OpCode::CPUI_INDIRECT | OpCode::CPUI_MULTIEQUAL) {
+                return false;
+            }
+            if o.code() == OpCode::CPUI_INDIRECT && o.get_in(0) != Some(v) {
+                return false;
+            }
+            match o.get_out() {
+                Some(out) => work.push(out),
+                None => return false,
+            }
+        }
+    }
+    true
 }
 
 /// The input word directly above `lo` in its space, if `lo` is an input.

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="4004"
+            endian="little"
+            size="16"
+            variant="default"
+            version="1.0"
+            slafile="4004.sla"
+            processorspec="4004.pspec"
+            id="4004:LE:16:default">
+    <description>Intel 4004 / 4040 (MCS-4, MCS-40)</description>
+    <compiler name="default" spec="4004.cspec" id="default"/>
+  </language>
+</language_definitions>

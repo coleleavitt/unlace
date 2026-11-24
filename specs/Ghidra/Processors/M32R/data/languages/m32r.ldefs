@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="M32R"
+            endian="big"
+            size="32"
+            variant="default"
+            version="1.0"
+            slafile="m32r.sla"
+            processorspec="m32r.pspec"
+            id="M32R:BE:32:default">
+    <description>Renesas (Mitsubishi) M32R, M32RX and M32R2, big-endian</description>
+    <compiler name="default" spec="m32r.cspec" id="default"/>
+    <external_name tool="gnu" name="m32r"/>
+    <external_name tool="gnu" name="m32rx"/>
+    <external_name tool="gnu" name="m32r2"/>
+  </language>
+</language_definitions>

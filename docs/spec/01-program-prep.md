@@ -9477,8 +9477,10 @@ both
   and its target stay apart. A referenced name is compared both raw and
   demangled, since the binary's own names are demangled. Measured with a `.sig`
   made by `unlace flirt make` from the Rust 1.95 `libstd`/`libcore`/`liballoc` rlibs
-  on the stripped rustc 1.94 nightly `json_typegen` (`--option listing on`): 136
-  functions named, every one the right function but in mangled form before. The names go out through the FID
+  on the stripped rustc 1.94 nightly `json_typegen` (`--option listing on`): 137
+  functions named, mangled before; against its unstripped twin 132 are right, 3 are
+  the `__rust_alloc` jump stubs named `j_` for the `__rdl_alloc` they jump to, and 2
+  are functions with another one's identical code. The names go out through the FID
   rename stream and its placeholder label gate. FID and FLIRT names are code
   signature guesses (`FidMatch::by_signature`): the commit applies the metadata
   renames (PDB, Objective-C, Swift) first, so a guess never replaces one, and

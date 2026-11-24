@@ -225,7 +225,29 @@
       </killedbycall>
     </prototype>
   </default_proto>
-  
+
+  <!-- (kuna) The MSVC /GS helpers of Windows on ARM. __security_push_cookie allocates the
+       word below the caller's stack pointer that holds the scrambled cookie and returns with
+       sp four bytes lower; __security_pop_cookie checks that word and releases it. As plain
+       calls the caller's frame would be four bytes off from the push on. -->
+  <callfixup name="security_push_cookie">
+    <target name="__security_push_cookie"/>
+    <pcode>
+      <body><![CDATA[
+            sp = sp - 4;
+      ]]></body>
+    </pcode>
+  </callfixup>
+
+  <callfixup name="security_pop_cookie">
+    <target name="__security_pop_cookie"/>
+    <pcode>
+      <body><![CDATA[
+            sp = sp + 4;
+      ]]></body>
+    </pcode>
+  </callfixup>
+
   <callotherfixup targetop="setISAMode">
     <pcode incidentalcopy="true">
       <input name="newTB"/>

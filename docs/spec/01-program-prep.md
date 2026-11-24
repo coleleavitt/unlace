@@ -6913,6 +6913,17 @@ moves.
   Each entry is committed as a function symbol under its CRT name (plus a
   placeholder rename for one another fact already installed) and as a call-fixup
   fact; a match only names and tags, and a near miss of any one byte is no match.
+  On a little-endian ARM PE it also recognizes the Windows on ARM `/GS` helpers
+  `__security_push_cookie` and `__security_pop_cookie` by their bytes
+  (`crates/unlace-analysis/src/analyzers/callfixup/kuna_armgscookiesig.rs`), with the
+  `movw`/`movt` immediates of `__security_cookie`'s address masked out, as IDA 9.5's
+  `arm.so` does. The push helper allocates the word below its caller's stack pointer that
+  holds the scrambled cookie and returns with `sp` four bytes lower; the pop helper checks
+  and releases it. `ARM_win.cspec`'s `security_push_cookie` and `security_pop_cookie`
+  fixups model exactly that stack effect (`sp = sp - 4`, `sp = sp + 4`); as plain calls
+  every stack reference of the caller after the push was four bytes off, and its first
+  stack argument read as its second. With the fixups the cookie word and its check leave
+  the C, as `msvcstackguard` removes the x86 cookie.
   The same pass names the MSVC 64-bit arithmetic helpers the `kuna_arithhelpers`
   fixups target (`__allmul`, `__alldiv`, `__allrem`, `__alldvrm`, `__aulldiv`,
   `__aullrem`, `__aulldvrm`, `__allshl`, `__allshr`, `__aullshr`) by their complete

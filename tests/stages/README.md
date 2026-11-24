@@ -75,7 +75,7 @@ target/debug/decomp_test_dbg -sleighpath specs -path tests/stages datatests wide
 "Gates"); the selected files must pass every assertion, and the baseline keys of the files left out
 are not checked. `decomp_test_dbg` prints the raw datatest stream (`Success --`/`FAIL --` per
 assertion) for the named files. Run from the repository root: scripts load fixtures by relative
-path. `target/parity-times.json` holds each file's wall time from the last parity run.
+path. `target/parity-times.toml` holds each file's wall time from the last parity run.
 
 ## Conventions
 

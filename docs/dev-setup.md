@@ -139,9 +139,9 @@ baseline by name and skips the check for baseline keys of files it did not run; 
 assertion must pass, and a corpus none of whose files match is skipped. `UNLACE_BLESS=1` refuses
 a selected run.
 
-Each run writes `target/parity-times.json`: per corpus, every file it ran with its wall time in
-milliseconds and its outcome (`pass`, `fail` or `error`), slowest first. CI uploads it as the
-`parity-times` artifact of the parity gates job.
+Each run writes `target/parity-times.toml`: one `[[file]]` table per corpus file it ran (`corpus`, `file`, wall time `ms` and `outcome`: `pass`, `fail` or `error`), slowest first within a run. CI uploads it as the `parity-times` artifact of the parity gates job.
+
+Each full run also writes `target/parity-ledger.toml`: one `[[assertion]]` table per assertion of both corpora, with `corpus`, `file`, `name`, `key` (the baseline key: `data:<name>`, with ` @dupN` for the Nth assertion of a repeated name, failing ones counted), `status` (`pass` or `fail`), `class` and `in_baseline`. `class` is `must-pass` (a TOML test's assertion, or a passing XML assertion the baseline holds), `regressed` (a must-pass assertion that fails: the gate fails), `newly-passing` (passes, not in the baseline: reported, never failing) or `known-failing` (fails, not in the baseline). `in_baseline` is `true` or `false` for an XML test and absent for a TOML test, which is its own baseline. The file also has `[[file_error]]` tables (files that could not be parsed or run) and `[[absent]]` tables (baseline keys that no assertion of the run produced; the gate counts them as regressed). A run replaces its own corpus's tables and keeps the other's. It is written before the gate's assert, so a failing run leaves it too. A `UNLACE_PARITY_FILES` run does not write it. CI uploads it as the `parity-ledger` artifact, next to `parity-times`.
 
 Other one-liners: `cargo test --release -p unlace-ghidra -- --include-ignored` (the ghidra-mode
 differential harness with its heavier breadth test), `bash scripts/version.sh` (the version CI

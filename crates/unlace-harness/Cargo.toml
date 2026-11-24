@@ -25,6 +25,7 @@ dynamic_linking = ["dep:unlace-decomp-dylib", "unlace-console/dynamic_linking"]
 [dev-dependencies]
 unlace-slacomp.workspace = true
 serde_json = "1"
+toml = { version = "1.1", default-features = false, features = ["parse", "serde", "std", "display"] }
 
 [lints]
 workspace = true

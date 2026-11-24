@@ -40,7 +40,7 @@ baseline (last night) and cannot gate a PR.
 1. **T1 and T2 already run once.** Since ci/parity-once the nextest `ci` profile skips
    `unlace-harness::parity`, so the corpora run only in the `gates` job. With
    `UNLACE_PARITY_FILES` (#1033) a local check of one stage file no longer runs all 931, and
-   `target/parity-times.json` (#1036) names the slow files from any CI run.
+   `target/parity-times.toml` (#1036) names the slow files from any CI run.
 2. **Newly passing assertions are a T1/T2 event, not a failure.** The report classifies must-pass,
    regressed and newly passing (#1039); a bless stays a deliberate commit that names what it adds.
 3. **The 7 slow T4 tests run nowhere on a schedule but coverage.** `.config/nextest.toml` drops
@@ -67,7 +67,7 @@ baseline (last night) and cannot gate a PR.
   place: the `ci` profile's exclusion and the `nightly` profile's inclusion both read it, or a
   test in `scripts/tests` checks the two lists agree). Then the decbench job, as now. Give
   nightly.yml its schedule once the first manual run has produced a baseline.
-- **Candidates to move next**, once `parity-times.json` and the JUnit reports show their wall
+- **Candidates to move next**, once `parity-times.toml` and the JUnit reports show their wall
   time: any stage file over 10 s (`vaarg-loop-gcc.toml` is 6 MB and is the first to measure)
   can move to a nightly-only corpus directory; the T4 tests over 30 s on a CI runner join the
   nightly profile. A move needs the measured time in its PR.

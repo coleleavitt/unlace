@@ -2,6 +2,12 @@
 #
 # A [[family]] names a raw image (`fixture`, a path from the repository root, or `image`, a key
 # of [images] holding hex bytes), its load `base` and its SLEIGH `language` id (a list runs
+msp430_p1_classic = """
+d24220002100304100000000
+"""
+msp430x_p1_p2 = """
+d24200020302304100000000
+"""
 # every function once per language). Each [[family.function]] decompiles one address:
 #   unlace decompile <image> <address> --raw-image --target <language> --base <base>
 # (plus the family's `args`, extra CLI arguments). A function passes when the run exits 0, its
@@ -4413,6 +4419,30 @@ address = "g_shlv"
 expect = ["a0 << "]
 forbid = ["-(int)"]
 
+# A 64-bit argument takes an aligned d4/d5 or d6/d7 pair, so the second double of f(double,double)
+# is the parameter in e6, not an uninitialised local, and an int before a double leaves d5 empty.
+[[family]]
+name = "tricore_tc18_gcc_double"
+loader = "auto"
+args = ["--target", "tricore:LE:32:tc18"]
+fixture = "crates/unlace-cli/tests/fixtures/tricore_tc18_gcc/gcc_double.elf"
+forbid = ["// e6"]
+
+[[family.function]]
+test = "tricore_tc18_gcc_double_second_arg"
+address = "g_dadd"
+expect = ["double g_dadd(double a0,double a1)", "return a0 + a1;"]
+
+[[family.function]]
+test = "tricore_tc18_gcc_double_msub"
+address = "g_dmsub"
+expect = ["double g_dmsub(double a0,double a1)", "a0 * a1"]
+
+[[family.function]]
+test = "tricore_tc18_gcc_int_then_double"
+address = "g_idmul"
+expect = ["(double)a0 * a2"]
+
 # The AVR-Dx languages (avr8xt.sla, I/O at data 0, one pspec per series from Microchip's AVR-Dx_DFP)
 # name an `in` from the VPORT window and an `sts` to the PORT block.
 [[family]]
@@ -4425,6 +4455,31 @@ image = "avrxt_io"
 test = "avr_dx_io_names"
 address = "0x0"
 expect = ["PORTA_DIR = VPORTA_OUT;"]
+
+# MSP430 family languages: each family pspec labels its peripheral registers from TI's support files
+# (mov.b &P1IN, &P1OUT; ret). The classic families have P1 at 0x20; on the 5xx/6xx/FR cores port A
+# is a word at 0x200 whose halves take the byte names (P1IN at 0x200, P2OUT at 0x203).
+[[family]]
+name = "msp430_family_names_classic"
+language = ["TI_MSP430:LE:16:f1xx", "TI_MSP430:LE:16:f2xx", "TI_MSP430:LE:16:g2xx", "TI_MSP430:LE:16:f4xx"]
+base = "0x4000"
+image = "msp430_p1_classic"
+
+[[family.function]]
+test = "msp430_family_names_classic_ports"
+address = "0x4000"
+expect = ["P1OUT = P1IN;"]
+
+[[family]]
+name = "msp430x_family_names"
+language = ["TI_MSP430X:LE:32:f5xx", "TI_MSP430X:LE:32:f6xx", "TI_MSP430X:LE:32:fr2xx", "TI_MSP430X:LE:32:fr5xx", "TI_MSP430X:LE:32:fr6xx"]
+base = "0x4000"
+image = "msp430x_p1_p2"
+
+[[family.function]]
+test = "msp430x_family_names_byte_ports"
+address = "0x4000"
+expect = ["P2OUT = P1IN;"]
 
 # PIC18 Q-series (pic18q.sla, SFR page 0x400): an access-bank SFR is the family's register
 # (Q24 PIR1 at 0x4b7) and access-bank 0x01 is data 0x501; the classic language keeps 0xfb7 and 0x01.

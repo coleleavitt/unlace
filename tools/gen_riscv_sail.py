@@ -1267,6 +1267,13 @@ class Compiler:
             except OverflowError:
                 bits = 0x7c00 if value > 0 else 0xfc00
             return '0x%x:2' % bits
+        if fw == 128:
+            # a binary128 constant does not fit a SLEIGH constant; every bound used here is a
+            # double, so it is that double widened exactly
+            d = struct.unpack('<Q', struct.pack('<d', value))[0]
+            if struct.unpack('<d', struct.pack('<Q', d))[0] != value:
+                raise Unsupported('binary128 constant %r is not a double' % value)
+            return self.tmp(128, 'float2float(0x%x:8)' % d).name
         return '0x%x:%d' % (struct.unpack('<Q' if fw == 64 else '<I', struct.pack('<d' if fw == 64 else '<f', value))[0], fw // 8)
 
     def trunc_sat(self, x, fw, signed, iw):

@@ -5464,6 +5464,11 @@ as context (`tools/gen_rvv_groups.py` generates the tables and the constructors)
 - **Old destination.** Every user operation that writes a vector register takes the old
   destination (group) as its first input. Tail- or mask-undisturbed elements, and every element
   when vl = 0, keep their old values.
+- **Vector crypto.** The Zvk* instructions (and Zvbb's) stay user operations. Their exact
+  semantics run over element groups up to the run-time `vl`, which p-code could only express as a
+  loop over indexed register-space accesses for every instruction. That prints as a pointer loop
+  over the register file, and heritage does not follow dynamically indexed register bytes, so
+  the data flow would be worse than the user operations give.
 - **`vset*`.** `vsetvli`, `vsetivli` and `vsetvl` write `vl` (the user operation's result, also
   in `rd`) and `vtype`. `vtype` is the immediate, or `rs2`, unless the vtype is reserved: then
   `vill` is set. Reserved here means bits above 7 set, LMUL encoding 4, or SEW above 64. A
@@ -5558,9 +5563,13 @@ FPSIZE 128), id `RISCV:LE:64:GQ`. The loader picks it for a 64-bit ELF whose
   fused forms and the integer conversions other than `rtz` are user operations.
 - **Display.** The exact conversions into Q print no rounding mode, as LLVM prints them.
 - **Not in this language.** Zfh, Zfa and Zfbfmin are generated for FLEN 64 and left out.
-- **Decompiler gaps.** The decompiler has no 16-byte float format, so quad constants print as
-  `FLOAT_UNKNOWN`. `fpargboxed` claims only 8-byte argument registers, so a narrower argument
-  keeps its NaN-unboxing test in this language.
+- **Constants.** A binary128 constant cannot be a constant varnode: they hold 64 bits. So the
+  generator writes every binary128 bound as the exact double it is, widened (`float2float(c:8)`).
+  That prints as the double, and compares against it fold back to double compares
+  (`satconvert` then prints the cast). The decompiler keeps no 16-byte float format for the same
+  reason.
+- **Argument unboxing.** `fpargboxed` folds the double unboxing test of a 16-byte argument or
+  return register. The float and half tests are 12 and 14 bytes wide and stay.
 - **Check.** QEMU has no Q, so this is checked against llvm-objdump only: every sampled word and
   near miss of rv_q/rv64_q/F/D agrees.
 

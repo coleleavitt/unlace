@@ -406,6 +406,18 @@ so `in`/`out` and `lds`/`sts` reach the same bytes; R0-R31 outside the data spac
 labels every data-space register `<instance>_<register>` (`PORTA_DIR`, `TCA0_CNT`), so a
 peripheral access prints by name, not as `dat_400`.
 
+(unlace) The MSP430 families have their own languages, chosen with `--target` (an MSP430 ELF does
+not name its device): `TI_MSP430:LE:16:f1xx`, `f2xx`, `g2xx`, `f4xx` and `i2xx` on `TI_MSP430.sla`, and
+`TI_MSP430X:LE:32:f5xx`, `f6xx`, `fr2xx` (with FR4xx), `fr5xx` and `fr6xx` on `TI_MSP430X.sla`. Each
+has a pspec, `TI_MSP430_<family>.pspec`, which `tools/gen_msp430_pspec.py` writes from TI's BSD-3
+MSP430 GCC support files (the `<device>_symbols.ld` of every device). An address is labelled with
+the name every device of the family gives it, the spelling most of them use, and left unlabelled
+where the devices disagree (LCD_B against LCD_C, Timer_A against Timer_B); the legacy first-timer
+names (`TACTL`) count as the current ones (`TA0CTL`). A word port's halves take the byte port
+names code uses (`PAOUT` is labelled `P1OUT`, its high byte `P2OUT`). The peripheral space (to
+0x1ff, or 0xfff on the 5xx/6xx/FR cores) is volatile. The `default` languages keep Ghidra's F1xx
+pspec.
+
 (unlace) The PIC18F Q-series families have their own languages, `PIC-18:LE:24:Q10`, `Q20`, `Q24`,
 `Q35`, `Q40`, `Q41`, `Q43`, `Q83` and `Q84`, chosen with `--target`. Each family has a pspec,
 `pic18q_<family>.pspec`, which `tools/gen_pic18q_pspec.py` writes from Microchip's Apache-2.0
@@ -9595,6 +9607,30 @@ both
   candidate to indicate availability. The check reads only the requested
   manifest location and its referenced banks. Reports and application each
   obtain their own explicit manifest inputs.
+- **Rust standard-library signatures** (`ruststdsigs off|exact|nearest`, default
+  off; `crates/unlace-analysis/src/analyzers/flirt/kuna_ruststdsigs.rs`): adds a
+  `.sig` for the Rust `std`, `core` and `alloc` to the FLIRT pass, built from an
+  installed rustup toolchain. A Rust binary links its rustc's precompiled standard
+  library, so those functions match the toolchain's rlibs up to relocations. The
+  image's `.comment` names its compiler (`rustc version 1.94.0-nightly (b68e16cfc
+  2026-01-11)`), and each toolchain under the rustup home (`RUSTUP_HOME`, else
+  `~/.rustup`) names its own in the `.comment` of its `libstd` objects. `exact` takes
+  the toolchain whose record equals the image's; `nearest` takes that one, else the
+  one whose record's date is closest, then the closest version. Its three rlibs go
+  through the `unlace flirt make` pattern and `.sig` writers once and the result is
+  cached (`XDG_CACHE_HOME`, else `~/.cache`, at
+  `unlace/ruststdsigs/<version>-<target>.sig`). Only an x86-64 or AArch64 Linux ELF
+  with a `rustc version` record is considered, and the matching is the FLIRT pass's
+  own, so it needs `flirt on` and the Listing. The choice travels as
+  `KUNA_RUSTSTDSIGS`, since the pass reads its signatures while the image loads.
+  Measured on stripped release binaries against their symbol tables (names, right,
+  `j_` jump stubs named for their target, wrong): a probe built by 1.95.0 with the
+  1.95.0 toolchain 140/135/3/2, one built by 1.100.0 with 1.100.0 150/145/3/2; with
+  the other of the two 70/63/3/4 and 71/64/3/4. The cargo-installed `fclones`
+  (1.101.0-nightly of 2026-11-05) takes 1.100.0 under `nearest` and gets
+  239/233/3/3; `json_typegen` and `wasm2es6js` (1.94.0 nightlies) take 1.95.0 and get
+  137/132/3/2 and 67/66/0/1. A wrong name is a function with another's identical
+  code.
 - **FLIRT signature writer** (`unlace flirt make`, a build-time command that no
   decompile reaches;
   `crates/unlace-analysis/src/analyzers/flirt/kuna_flirtpat.rs (patterns_from_object)`,

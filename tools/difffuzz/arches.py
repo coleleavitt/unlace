@@ -761,4 +761,71 @@ class Nios2(Arch32):
         return set()
 
 
-ARCHES = {a.name: a for a in (X86_64(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), TriCore(), Nios2())}
+SH4_DENY = re.compile(
+    r"^(bra|braf|bsr|bsrf|jmp|jsr|rts|rte|bt/s|bf/s|trapa|sleep|ldtlb|ldc.*|stc.*|lds.*fp.*|sts.*fp.*|"
+    r"pref|prefi|icbi|ocb.*|movca\.l|movco\.l|movli\.l|synco|f.*|frchg|fschg|tas\.b|mac\.[wl]|setrc|ldrs|ldre|"
+    r"clrmac|sets|clrs|ldc|stc|nop)$"
+)
+
+
+SH2A_ONLY = re.compile(
+    r"^(movml\.l|movmu\.l|clips\.[bw]|clipu\.[bw]|ldbank|stbank|jsr/n|rts/n|rtv/n|mulr|movrt|nott|divu|divs|"
+    r"movi20s?|bclr.*|bset.*|bst.*|bld.*|band.*|bor.*|bxor.*|movu\.[bw]|resbank)$"
+)
+
+
+class Sh4(Arch32):
+    """SuperH SH-4 (little endian), against QEMU user mode (--oracle qemu). Delay-slot branches,
+    privileged, cache, FPU and MAC instructions are not generated; Q, M and S are not compared
+    (user mode cannot read them)."""
+    name = "sh4"
+    lang = "SuperH4:LE:32:default"
+    elf_machine = 42
+    base = 0x3F1000
+    pc = "PC"
+    gprs = [(f"r{i}", None) for i in range(16)] + [("GBR", None), ("MACH", None), ("MACL", None), ("PR", None)]
+    pc_const = None
+    flags_reg = "sr"
+    flag_bits = {"T": 0, "S": 1, "Q": 8, "M": 9}
+    deny = SH4_DENY
+
+    def unicorn(self):
+        raise NotImplementedError("sh4 runs with --oracle qemu")
+
+    def capstone(self):
+        return cs.Cs(cs.CS_ARCH_SH, cs.CS_MODE_SH4)
+
+    def gen(self, rng):
+        return rng.getrandbits(16).to_bytes(2, "little")
+
+    def fix_flags(self, word):
+        return word & ~0x2              # S starts clear: CLRS is the only user-mode way to set it
+
+    def canonical(self, cand):
+        # Capstone's SH4 mode also accepts SH-2A and SH4A-only encodings
+        if SH2A_ONLY.match(cand["mnemonic"]):
+            return False
+        return not re.match(r"mov\.[bwl] (@-r\d+,r0|r0,@r\d+\+)$", cand["mnemonic"] + " " + cand["op_str"])
+
+    def skip(self, cand):
+        mn, ops = cand["mnemonic"], cand["op_str"]
+        # QEMU 8.2 clears T on ROTL/ROTR (andi with 0); the manual sets it to the bit shifted out
+        if mn in ("rotl", "rotr"):
+            return True
+        # DIV1 Rn,Rn: the manual reads Rm before Rn is shifted; QEMU reads it after
+        regs = [r.strip() for r in ops.split(",")]
+        return mn == "div1" and len(regs) == 2 and regs[0] == regs[1]
+
+    def ignored(self, mnemonic, operands, state):
+        # QEMU's DIV1 computes the carry of a subtraction of 0 wrongly (its 64-bit add of -Rm)
+        if mnemonic == "div1":
+            rm = operands.split(",")[0].strip()
+            try:
+                if state.get(rm) & 0xFFFFFFFF == 0:
+                    return {"S", "Q", "M", "T"}
+            except KeyError:
+                pass
+        return {"S", "Q", "M"}
+
+
+ARCHES = {a.name: a for a in (X86_64(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), TriCore(), Nios2(), Sh4())}

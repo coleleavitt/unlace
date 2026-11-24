@@ -1286,7 +1286,15 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   of a `bcc` into bits 24..2, `R_LANAI_21` the absolute 21-bit address of an
   SLS/SLI access into bits 22..18 and 15..0, `HI16`/`LO16` the halves of
   `S + A` into an RI immediate, and `R_LANAI_32` a big-endian data word; the
-  absolute fields are range-checked. eBPF objects are REL-only and every program ships as one,
+  absolute fields are range-checked. Hexagon (unlace#677, little-endian
+  RELA) covers the PC-relative branches `B22`/`B15`/`B13`/`B9`/`B7_PCREL`
+  (`(S + A - P) >> 2` dealt into each form's ABI bit mask, range-checked),
+  their extended `_X` forms (the low six bits of `S + A - P`), the `immext`
+  payloads `B32_PCREL_X` and `32_6_X` (bits 31..6 into mask `0x0fff3fff`), and
+  the low six bits of `16_X`, `11_X`, `10_X` and `6_X` for the instruction
+  classes measured against `ld.lld` (by top byte, or bits 25..20 of a duplex
+  for `6_X`), ORed in as the linker does. Other classes and `8_X`, `12_X`,
+  `9_X`, `7_X` are reported unsupported and leave the field untouched. eBPF objects are REL-only and every program ships as one,
   so its three instruction forms are encoded rather than written as plain words:
   `R_BPF_64_64` names the 16-byte `lddw` (a map or global reference) and lands
   `S + A` in the two 32-bit `imm` fields at +4 and +12, the addend read back from

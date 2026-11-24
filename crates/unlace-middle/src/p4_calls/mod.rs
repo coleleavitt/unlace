@@ -4,3 +4,4 @@
 //! `lib.rs` so public paths (`unlace_decomp::<module>`) are unchanged.
 
 pub mod fspec;
+pub mod kuna_armpairparam; // (kuna) unprototyped 64-bit parameters in an aligned register pair

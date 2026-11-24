@@ -14,6 +14,8 @@ mod riscv_crypto;
 mod riscv_zcb;
 #[path = "riscv_zcmp.rs"]
 mod riscv_zcmp;
+#[path = "riscv_zfh.rs"]
+mod riscv_zfh;
 #[path = "rust_signature_summary.rs"]
 mod rust_signature_summary;
 #[path = "sparc_prologue_start.rs"]
@@ -129,6 +131,8 @@ mod arm_interwork_cli;
 #[path = "arm_isa_cli.rs"]
 mod arm_isa_cli;
 
+#[path = "arm_register_pair_params.rs"]
+mod arm_register_pair_params;
 #[path = "arm_variadic_returns.rs"]
 mod arm_variadic_returns;
 

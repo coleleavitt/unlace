@@ -1321,6 +1321,13 @@ pub(super) const WIN32: &[(&str, Sig)] = &[
     ),
 ];
 
+/// (kuna `typelib`) `true` when this table declares `name`. A Windows type
+/// library replaces such a declaration with its own, whose handles and
+/// records keep their SDK names where this table spells them `void *`.
+pub fn declares(name: &str) -> bool {
+    WIN32.iter().any(|(n, _)| *n == name)
+}
+
 /// Every address the import resolver names as a genuine import.
 ///
 /// One name yields SEVERAL addresses on a PE — the IAT slot and the `FF 25`
@@ -1377,6 +1384,14 @@ mod tests {
                 "{name} is already in the libcsigs table"
             );
         }
+    }
+
+    #[test]
+    fn declares_names_only_this_table() {
+        assert!(declares("CreateThread"));
+        assert!(declares("MessageBoxW"));
+        assert!(!declares("strlen"));
+        assert!(!declares("NtCreateFile"));
     }
 
     #[test]

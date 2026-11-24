@@ -9628,7 +9628,7 @@ pub(crate) fn classify_file(path: &str) -> UnlaceResult<FileInput> {
 
 /// The ARM decode mode named by [`ARM_ISA_ENV`], for the entry points that
 /// take none.
-pub(crate) fn arm_isa_from_env() -> UnlaceResult<Option<ArmIsa>> {
+pub fn arm_isa_from_env() -> UnlaceResult<Option<ArmIsa>> {
     unlace_base::env::var(ARM_ISA_ENV)
         .ok()
         .map(|value| ArmIsa::parse(&value))

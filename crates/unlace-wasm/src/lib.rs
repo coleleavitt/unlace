@@ -33,7 +33,7 @@ mod inspect;
 mod json;
 
 use unlace_console::assertions::{Directive, Outcome};
-use unlace_console::engine::{ConsoleProgram, EntrySelector, FunctionEntry, bootstrap_from_image};
+use unlace_console::engine::{ConsoleProgram, EntrySelector, FunctionEntry};
 use unlace_console::project::{
     DecompileOptions, FAST_WHOLE_BINARY_FN_BUDGET_SECONDS, FuncResult, build_asm, build_c,
     build_header, build_readme, collect_dat_addrs, decompile_export_targets,
@@ -626,28 +626,23 @@ fn load_program(
     directives: &[Directive],
     discovery: bool,
 ) -> Result<ConsoleProgram, String> {
-    let arm64e_env = unlace_decomp::macho_arm64e::MACHO_ARM64E_ENV;
-    let arm64e = overrides
+    let mut options = unlace_decomp::loadoptions::LoadOptions::from_env_for_load();
+    if let Some(value) = overrides
         .iter()
         .filter(|(option, _)| *option == "macho-arm64e")
         .map(|(_, value)| *value)
-        .last();
-    let previous_arm64e = std::env::var_os(arm64e_env);
-    if let Some(value) = arm64e {
-        // FIXME: Audit that the environment access only happens in single-threaded code.
-        unsafe { std::env::set_var(arm64e_env, value) };
+        .last()
+    {
+        options.macho_arm64e = unlace_decomp::options::parse_env_toggle(value, true);
     }
 
     let spec_roots = vec![spec_root.to_string()];
-    let bootstrap = bootstrap_from_image(binary, "", &spec_roots);
-    if arm64e.is_some() {
-        match previous_arm64e {
-            // FIXME: Audit that the environment access only happens in single-threaded code.
-            Some(value) => unsafe { std::env::set_var(arm64e_env, value) },
-            // FIXME: Audit that the environment access only happens in single-threaded code.
-            None => unsafe { std::env::remove_var(arm64e_env) },
-        }
-    }
+    let bootstrap = unlace_console::engine::arm_isa_from_env().and_then(|isa| {
+        unlace_console::engine::Bootstrap::new(&spec_roots)
+            .arm_isa(isa)
+            .options(&options)
+            .image(binary)
+    });
     let mut prog = bootstrap.map_err(|e| {
         format!(
             "could not build an architecture for {binary}: {}",

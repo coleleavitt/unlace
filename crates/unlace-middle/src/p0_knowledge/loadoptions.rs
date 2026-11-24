@@ -218,6 +218,16 @@ impl LoadOptions {
         }
     }
 
+    /// The options an entry point that takes none loads with: the environment
+    /// read once, as [`LoadOptions::from_env`], with the Go release left to the
+    /// image, as a load without options leaves it.
+    pub fn from_env_for_load() -> Self {
+        LoadOptions {
+            go_version: None,
+            ..LoadOptions::from_env()
+        }
+    }
+
     /// The options in force on this thread: the innermost scope's, else the
     /// environment's.
     pub fn in_force() -> Rc<LoadOptions> {

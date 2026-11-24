@@ -31,6 +31,7 @@
 pub mod autotil;
 pub mod flirtpat;
 pub mod flirtsig;
+pub mod inspect;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 

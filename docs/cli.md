@@ -5597,6 +5597,19 @@ nothing tells apart are reported as a `collision:` line and left out of the
 are written once. The exit status is 0 when the files were written, 1 when an
 input cannot be read or no function is left to write, and 2 on a usage error.
 
+## `unlace flirt inspect` — read an IDA `.sig` or `.til` file
+
+`unlace flirt inspect <file.sig|file.til> [--limit N] [--json]` prints the header
+of an IDA FLIRT signature or type library and a sample of its names, without
+matching or writing anything. The file is told apart by its magic: `IDASGN` for a
+signature, the TIL header for a type library; any other file exits 1.
+
+For a type library the view gives the title, compiler, the sizes of `int`, `bool`,
+`enum` and `long double`, the pointer size, and the counts and first names of its
+symbols and types. `--limit 0` lists every name; `--json` prints the same fields
+as one document, with `names_total` (or `symbols_total`/`types_total`) giving the
+full counts.
+
 ## `unlace lumina` — IDA's Lumina function-metadata service
 
 Lumina is IDA Pro's shared database of function metadata: a client sends a key for each function and

@@ -4517,6 +4517,20 @@ with an EGPR was a bad instruction. Exercised by `x86_apx.rs` (an
 `evex_probe` against `llvm-objdump`, and an EVEX ANDN/SHRX routine that
 decompiles to `(~a1 & a0) >> (a2 & 0x3f)`).
 
+### x86 ENQCMD and CMPccXADD (#98)
+
+`ia.sinc` decodes ENQCMD and ENQCMDS (F2/F3 0F 38 F8) in every x86 language:
+the 64-byte enqueue store is a user operation whose result is ZF (the retry
+status), with OF SF AF PF CF cleared. `cmpccxadd.sinc` adds CMPccXADD to
+`x86:LE:64:*` (VEX E0+cc, and its APX EVEX form in `apx_evex.sinc`): the old
+memory value is compared with the first register as CMP does, the sum with the
+second register is stored only when the condition holds, and the first register
+gets the old value, so a `cmpexadd` decompiles to the compare-and-add it is.
+Before, each was a bad instruction. The EVEX-promoted GPR forms in
+`apx_evex.sinc` now also leave a disp8 uncompressed (N=1); before, they took
+the AVX-512 scaling of whatever tuple context was current. Exercised by the
+`x86_64_cmpccxadd` row of `unlace-cli/tests/processors.toml`.
+
 ### x86-64 AVX10.2 (#98)
 
 `specs/Ghidra/Processors/x86/data/languages/avx10_2.sinc` decodes AVX10.2 in

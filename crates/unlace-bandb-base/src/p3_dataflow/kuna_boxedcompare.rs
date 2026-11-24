@@ -7,13 +7,14 @@
 //! ones too, as the psABI requires a float argument or return value narrower than FLEN to be
 //! NaN-boxed. A half-precision read tests the upper 48 bits instead; those count as all ones
 //! when they are exactly bits 16..63 of such a register, the shape only a half unboxing reads.
+//! With 16-byte f registers (FLEN 128, `RISCV:LE:64:GQ`) bits 64..127 are the boxed ones, and
+//! the double unboxing test (bytes 8..16) folds the same way.
 
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use crate::action::{ActionGroupList, Rule};
 use crate::context::{OpId, SyscallFamily, VarnodeId};
-use crate::database::TranslateAccess;
 use crate::funcdata::Funcdata;
 
 crate::kuna_flag!(
@@ -26,10 +27,63 @@ crate::kuna_flag!(
     shipped: true
 );
 
-/// The bits of `vn` known to be 1 under `fpargboxed` because it lies in the upper half of a
-/// RISC-V FP register the psABI boxes: an argument register (`fa0`..`fa7`, 8 bytes) on entry,
-/// or a return register (`fa0`, `fa1`) written by a call. Heritage often splits the
-/// register, so the varnode can be the upper word alone.
+/// How many argument registers (`fa0`..) `vn` may lie in under `fpargboxed`: all eight for an
+/// input on entry, `fa0`/`fa1` for a call's output, none otherwise (or on another processor).
+fn boxed_limit(data: &Funcdata, vn: VarnodeId) -> u32 {
+    let Some(v) = data.vbank().get(vn) else {
+        return 0;
+    };
+    let arch = data.get_arch();
+    if arch.syscall_regs_family != Some(SyscallFamily::RiscV)
+        || !arch.kuna_options.get::<FpArgBoxed>().0
+    {
+        return 0;
+    }
+    if v.is_input() {
+        return 8;
+    }
+    let call = v
+        .get_def()
+        .and_then(|d| data.obank().get(d))
+        .is_some_and(|o| matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND));
+    if call { 2 } else { 0 }
+}
+
+/// The FP argument register (its byte size, 8 or 16 for FLEN 64 or 128) that holds
+/// `[offset, offset + size)` at byte `start` of it, if any.
+fn argument_register(data: &Funcdata, vn: VarnodeId, limit: u32) -> Option<(u64, u64)> {
+    let v = data.vbank().get(vn)?;
+    let (space, offset, size) = (v.get_space(), v.get_offset(), v.get_size() as u64);
+    let lookup = data.get_arch().manage().register_lookup()?;
+    for reg in [8u64, 16] {
+        for start in 0..reg {
+            let Some(base) = offset.checked_sub(start) else {
+                break;
+            };
+            if start + size > reg {
+                continue;
+            }
+            // the exact name: a 16-byte f register (FLEN 128) has no 8-byte name at its offset
+            let name = lookup.get_exact_register_name(space, base, reg as int4);
+            let argument = name
+                .strip_prefix("fa")
+                .and_then(|n| n.parse::<u32>().ok())
+                .is_some_and(|n| n < limit);
+            if argument {
+                return Some((reg, start));
+            }
+        }
+    }
+    None
+}
+
+/// The bits of `vn` known to be 1 under `fpargboxed` because it lies in the boxed upper part
+/// of a RISC-V FP register the psABI boxes: an argument register (`fa0`..`fa7`) on entry, or a
+/// return register (`fa0`, `fa1`) written by a call. With 8-byte registers bits 32..63 are
+/// ones (anything narrower than a double is boxed), with 16-byte ones (FLEN 128) bits 64..127.
+/// Heritage often splits the register, so the varnode can be a piece of it; a piece that is
+/// exactly the register's bytes from 2, 4 or 8 to its end is the unboxing test of a value of
+/// that size and counts as all ones.
 fn boxed_register(data: &Funcdata, vn: VarnodeId) -> u64 {
     let Some(v) = data.vbank().get(vn) else {
         return 0;
@@ -38,58 +92,43 @@ fn boxed_register(data: &Funcdata, vn: VarnodeId) -> u64 {
     if !(1..=8).contains(&size) {
         return 0;
     }
-    let limit = if v.is_input() {
-        8
-    } else {
-        let call = v
-            .get_def()
-            .and_then(|d| data.obank().get(d))
-            .is_some_and(|o| matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND));
-        if !call {
-            return 0;
-        }
-        2
-    };
-    let arch = data.get_arch();
-    if arch.syscall_regs_family != Some(SyscallFamily::RiscV)
-        || !arch.kuna_options.get::<FpArgBoxed>().0
-    {
+    let limit = boxed_limit(data, vn);
+    if limit == 0 {
         return 0;
     }
-    let space = v.get_space();
-    let offset = v.get_offset();
-    for start in 0..8u64 {
-        let Some(base) = offset.checked_sub(start) else {
-            break;
-        };
-        if start + size as u64 > 8 {
-            continue;
-        }
-        let name = arch.get_register_name(space, base, 8);
-        let argument = name
-            .strip_prefix("fa")
-            .and_then(|n| n.parse::<u32>().ok())
-            .is_some_and(|n| n < limit);
-        if !argument {
-            continue;
-        }
-        if start == 2 && size == 6 {
-            // bits 16..63: the unboxing test of a half-precision value
-            return unlace_base::address::calc_mask(6);
-        }
-        // register bit 8 * start + i is varnode bit i; bits 32..63 of the register are ones
-        let low = 32u64.saturating_sub(8 * start);
-        if low >= 64 {
-            return unlace_base::address::calc_mask(size);
-        }
-        return (u64::MAX << low) & unlace_base::address::calc_mask(size);
+    let Some((reg, start)) = argument_register(data, vn, limit) else {
+        return 0;
+    };
+    if start + size as u64 == reg && matches!(start, 2 | 4 | 8) && start > 0 {
+        return unlace_base::address::calc_mask(size);
     }
-    0
+    // register bit 8 * start + i is varnode bit i; the boxed bits start at 32 or 64
+    let boxed = if reg == 8 { 32u64 } else { 64 };
+    let low = boxed.saturating_sub(8 * start);
+    if low >= 64 {
+        return 0;
+    }
+    (u64::MAX << low) & unlace_base::address::calc_mask(size)
 }
 
-/// Is `vn` a whole boxed FP register (an 8-byte argument on entry or call result)?
+/// The byte size of `vn` when it is a whole boxed FP register (an argument on entry or a call
+/// result, 8 or 16 bytes).
+fn whole_boxed_size(data: &Funcdata, vn: VarnodeId) -> Option<u64> {
+    let v = data.vbank().get(vn)?;
+    let size = v.get_size() as u64;
+    let limit = boxed_limit(data, vn);
+    if limit == 0 || !matches!(size, 8 | 16) {
+        return None;
+    }
+    match argument_register(data, vn, limit) {
+        Some((reg, 0)) if reg == size => Some(size),
+        _ => None,
+    }
+}
+
+/// Is `vn` a whole boxed 8-byte FP register (an argument on entry or call result)?
 fn whole_boxed(data: &Funcdata, vn: VarnodeId) -> bool {
-    data.vbank().get(vn).is_some_and(|v| v.get_size() == 8) && boxed_register(data, vn) != 0
+    whole_boxed_size(data, vn) == Some(8)
 }
 
 /// Is `vn` a whole boxed FP register shifted right by 16 (the half unboxing test's source)?
@@ -167,7 +206,15 @@ fn known_ones(data: &Funcdata, vn: VarnodeId, budget: &mut u32) -> u64 {
             input(0) << (low * 8) | input(1)
         }
         OpCode::CPUI_SUBPIECE => match constant(1) {
-            Some(2) if size == 6 && op.get_in(0).is_some_and(|w| whole_boxed(data, w)) => mask,
+            // the unboxing test of a value 2, 4 or 8 bytes wide: the register's bytes from there
+            // to its end
+            Some(shift)
+                if matches!(shift, 2 | 4 | 8)
+                    && op.get_in(0).and_then(|w| whole_boxed_size(data, w))
+                        == Some(shift + size as u64) =>
+            {
+                mask
+            }
             Some(0) if size == 6 && op.get_in(0).is_some_and(|w| upper_half_word(data, w)) => mask,
             Some(shift) if shift < 8 => input(0) >> (shift * 8),
             _ => 0,

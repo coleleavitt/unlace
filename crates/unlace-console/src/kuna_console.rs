@@ -658,6 +658,10 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
             .kuna_options
             .get::<unlace_decomp::kuna_symbolnamechars::NameChars>()
             .as_str(),
+        "ruststdsigs" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_ruststdsigs::RustStdSigs>()
+            .as_str(),
         "dwarf" => on_off(
             conf.kuna_options
                 .get::<unlace_decomp::kuna_analysisgates::Dwarf>()

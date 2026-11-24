@@ -196,6 +196,13 @@ class HalfConstants(unittest.TestCase):
         self.assertEqual(c.fconst(-65504.0, 16), "0xfbff:2")
         self.assertEqual(c.fconst(-1.0, 32), "0xbf800000:4")
 
+    def test_a_binary128_bound_is_a_widened_double(self):
+        c = g.Compiler.__new__(g.Compiler)
+        c.lines, c.ntmp, c.depth = [], 0, 0
+        name = c.fconst(-2.0 ** 31, 128)
+        self.assertIn("float2float(0xc1e0000000000000:8)", "\n".join(c.lines))
+        self.assertTrue(name)
+
 
 class DToQ(unittest.TestCase):
     def test_d_encodings_and_names_become_q(self):

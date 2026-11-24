@@ -13,6 +13,9 @@
 # (docs/processor-tests.md).
 
 [images]
+s1c88 = """
+31e502cc11f8ffffb005b103f0f380f8b0000391f5fdf8ff
+"""
 s1c6200 = """
 0a8103030e0f0fdf0fff0fff0fff0fff0e030e1404000c010fdf0fff0fff0fff0f440a810f5b0fdf
 """
@@ -1831,3 +1834,35 @@ expect = ["sub_0(3,4)"]
 test = "s1c6200_decimal_mode_add_is_adjusted"
 address = "0x10"
 expect = ["9 < v1"]
+
+# The S1C88 language decompiles routines hand-assembled from the core manual's instruction
+# list: a compare and JRS NC with EX A,B (absolute difference), a caller using CARS, and
+# an ADD A,[HL] / INC HL / DJR NZ byte-sum loop.
+[[family]]
+name = "s1c88"
+language = "S1C88:LE:16:default"
+base = "0x0"
+image = "s1c88"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "s1c88_compare_and_exchange_decompiles"
+address = "0x0"
+expect = [
+    "if (a0 < a1)",  # CP A,B then JRS NC skips EX A,B
+    "return v1 - a1;",
+]
+
+[[family.function]]
+test = "s1c88_cars_call_decompiles"
+address = "0x8"
+expect = ["sub_0(5,3)"]
+
+[[family.function]]
+test = "s1c88_djr_loop_sums_bytes"
+address = "0x10"
+expect = [
+    "v1 += *v2++;",  # ADD A,[HL] and INC HL in the DJR NZ body
+    "while (a1)",
+]

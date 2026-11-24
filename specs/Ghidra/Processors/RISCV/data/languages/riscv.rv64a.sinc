@@ -132,8 +132,8 @@
 }
 
 
-# Zacas (1.0): the RV64 doubleword compare-and-swap. RV32 amocas.d and RV64
-# amocas.q take even/odd register pairs and are not decoded.
+# Zacas (1.0): the RV64 doubleword compare-and-swap. The register-pair forms
+# (RV32 amocas.d, RV64 amocas.q) are in riscv.zacas.sinc.
 # amocas.d d,t,0(s) 2800302f fe00707f QWORD|DREF (64, 8)
 :amocas.d^aqrl rdL,rs2L,(rs1) is rs1 & rs2L & rdL & op0001=0x3 & op0204=0x3 & op0506=0x1 & funct3=0x3 & op2731=0x5 & aqrl
 {

@@ -1,0 +1,80 @@
+# Armv9 Realm Management Extension (FEAT_RME) system instructions and the
+# FEAT_ATS1A address translations. Each is a SYS alias (op0=1) that the base
+# spec decoded only as a generic "sys"; here it gets its architectural name and
+# a named user operation. TLBI RPAOS/RPALOS invalidate the granule protection
+# table entries cached for a physical address (range), TLBI PAALL/PAALLOS all
+# of them; their nXS forms (FEAT_XS, CRn=9) are listed too. DC CIPAPA and
+# DC CIGDPAPA clean and invalidate by physical address to the point of
+# physical aliasing (the second also the allocation tags). AT S1E1A/S1E2A/S1E3A
+# translate a stage 1 address without the permission checks and write PAR_EL1.
+# Encodings: Arm ARM (DDI 0487) C5.5 "A64 system instructions for TLB
+# maintenance", C5.3 "for cache maintenance", C5.4 "for address translation".
+define pcodeop TLBI_RPAOS;
+define pcodeop TLBI_RPAOSNXS;
+define pcodeop TLBI_RPALOS;
+define pcodeop TLBI_RPALOSNXS;
+define pcodeop TLBI_PAALLOS;
+define pcodeop TLBI_PAALLOSNXS;
+define pcodeop TLBI_PAALL;
+define pcodeop TLBI_PAALLNXS;
+define pcodeop DC_CIPAPA;
+define pcodeop DC_CIGDPAPA;
+define pcodeop AT_S1E1A;
+define pcodeop AT_S1E2A;
+define pcodeop AT_S1E3A;
+
+with : ImmS_ImmR_TestSet=1 {
+
+:tlbi "RPAOS", Rt_GPR64
+is b_1931=0b1101010100001 & b_1618=0b110 & b_1215=0b1000 & b_0811=0b0100 & b_0507=0b011 & Rt_GPR64
+{ TLBI_RPAOS(Rt_GPR64); }
+
+:tlbi "RPAOSNXS", Rt_GPR64
+is b_1931=0b1101010100001 & b_1618=0b110 & b_1215=0b1001 & b_0811=0b0100 & b_0507=0b011 & Rt_GPR64
+{ TLBI_RPAOSNXS(Rt_GPR64); }
+
+:tlbi "RPALOS", Rt_GPR64
+is b_1931=0b1101010100001 & b_1618=0b110 & b_1215=0b1000 & b_0811=0b0100 & b_0507=0b111 & Rt_GPR64
+{ TLBI_RPALOS(Rt_GPR64); }
+
+:tlbi "RPALOSNXS", Rt_GPR64
+is b_1931=0b1101010100001 & b_1618=0b110 & b_1215=0b1001 & b_0811=0b0100 & b_0507=0b111 & Rt_GPR64
+{ TLBI_RPALOSNXS(Rt_GPR64); }
+
+:tlbi "PAALLOS"
+is b_1931=0b1101010100001 & b_1618=0b110 & b_1215=0b1000 & b_0811=0b0001 & b_0507=0b100 & b_0004=0b11111
+{ TLBI_PAALLOS(); }
+
+:tlbi "PAALLOSNXS"
+is b_1931=0b1101010100001 & b_1618=0b110 & b_1215=0b1001 & b_0811=0b0001 & b_0507=0b100 & b_0004=0b11111
+{ TLBI_PAALLOSNXS(); }
+
+:tlbi "PAALL"
+is b_1931=0b1101010100001 & b_1618=0b110 & b_1215=0b1000 & b_0811=0b0111 & b_0507=0b100 & b_0004=0b11111
+{ TLBI_PAALL(); }
+
+:tlbi "PAALLNXS"
+is b_1931=0b1101010100001 & b_1618=0b110 & b_1215=0b1001 & b_0811=0b0111 & b_0507=0b100 & b_0004=0b11111
+{ TLBI_PAALLNXS(); }
+
+:dc "CIPAPA", Rt_GPR64
+is b_1931=0b1101010100001 & b_1618=0b110 & b_1215=0b0111 & b_0811=0b1110 & b_0507=0b001 & Rt_GPR64
+{ DC_CIPAPA(Rt_GPR64); }
+
+:dc "CIGDPAPA", Rt_GPR64
+is b_1931=0b1101010100001 & b_1618=0b110 & b_1215=0b0111 & b_0811=0b1110 & b_0507=0b101 & Rt_GPR64
+{ DC_CIGDPAPA(Rt_GPR64); }
+
+:at "S1E1A", Rt_GPR64
+is b_1931=0b1101010100001 & b_1618=0b000 & b_1215=0b0111 & b_0811=0b1001 & b_0507=0b010 & Rt_GPR64
+{ par_el1 = AT_S1E1A(Rt_GPR64); }
+
+:at "S1E2A", Rt_GPR64
+is b_1931=0b1101010100001 & b_1618=0b100 & b_1215=0b0111 & b_0811=0b1001 & b_0507=0b010 & Rt_GPR64
+{ par_el1 = AT_S1E2A(Rt_GPR64); }
+
+:at "S1E3A", Rt_GPR64
+is b_1931=0b1101010100001 & b_1618=0b110 & b_1215=0b0111 & b_0811=0b1001 & b_0507=0b010 & Rt_GPR64
+{ par_el1 = AT_S1E3A(Rt_GPR64); }
+
+} # end with ImmS_ImmR_TestSet=1

@@ -597,6 +597,9 @@ fn option_values_live_value_present_for_129() {
                             | "int3pad"
                             | "x64syscall"
                             | "pebnames"
+                            // (kuna) `atomics` takes `auto|msvc|gcc|off`; its live value is the
+                            // registered option `kuna_atomicops::Atomics`.
+                            | "atomics"
                             // (kuna) `ptrfromuse` takes `off|byte|void`, which
                             // the codegen live reader (a bool
                             // `live_true`/`live_false` pair) cannot express --
@@ -961,8 +964,8 @@ fn option_values_live_value_present_for_129() {
     // 137 -> 138: `spsolve` (#70) added a live_field row without the bump.
     // +1 for `guarddispatch` (live_field = guard_dispatch).
     // +1 for `flownames` (live_field = flow_names).
-    // +2 for `atomics` and `llscfold` (live_field = atomics, llsc_fold).
-    assert_eq!(with_live, 143);
+    // +1 for `llscfold` (live_field = llsc_fold); `atomics` is four-valued, so it has none.
+    assert_eq!(with_live, 142);
 }
 
 #[test]

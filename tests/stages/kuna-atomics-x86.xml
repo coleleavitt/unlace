@@ -1,7 +1,7 @@
 <decompilertest>
 <!--
 
-kuna_atomics (option atomics, docs/spec/02-lift-and-flow.md): a locked x86-64 read-modify-write
+kuna_atomics (option atomics, docs/spec/02-lift-and-flow.md; auto, then msvc for two functions): a locked x86-64 read-modify-write
 lifts to one __sync builtin instead of LOCK(); load; update; store; UNLOCK();.
 Fixed forms: xadd, add, dec, or, xchg (always locked), cmpxchg at 4, 8 and 1
 bytes, an inc of a RIP-relative global, and two cmpxchg retry loops whose
@@ -68,7 +68,7 @@ and, assembled with clang -c:
 <symbol space="ram" offset="0x1010e8" name="counter"/>
 </binaryimage>
 <script>
-<com>option atomics on</com>
+<com>option atomics auto</com>
 <com>load function fetch_add</com>
 <com>decompile</com>
 <com>print C</com>
@@ -114,6 +114,13 @@ and, assembled with clang -c:
 <com>load function fence</com>
 <com>decompile</com>
 <com>print C</com>
+<com>option atomics msvc</com>
+<com>load function fetch_add</com>
+<com>decompile</com>
+<com>print C</com>
+<com>load function cas_val</com>
+<com>decompile</com>
+<com>print C</com>
 </script>
 <stringmatch name="lock xadd returns the old value of one fetch-and-add" min="1" max="1">^  return __sync_fetch_and_add\(\w+,\w+\);$</stringmatch>
 <stringmatch name="lock add discards it" min="1" max="1">^  __sync_fetch_and_add\(\w+,\w+\);$</stringmatch>
@@ -131,4 +138,6 @@ and, assembled with clang -c:
 <stringmatch name="and UNLOCK" min="3" max="3">^  UNLOCK\(\);$</stringmatch>
 <stringmatch name="the HLE hint stays" min="1" max="1">^  XACQUIRE\(\);$</stringmatch>
 <stringmatch name="the unlocked add and the HLE add stay plain updates" min="2" max="2">^  \*\w+ = \*\w+ \+ \w+;$</stringmatch>
+<stringmatch name="atomics msvc: lock xadd as _InterlockedExchangeAdd" min="1" max="1">^  return _InterlockedExchangeAdd\(\w+,\w+\);$</stringmatch>
+<stringmatch name="atomics msvc: lock cmpxchg as _InterlockedCompareExchange" min="1" max="1">^  return _InterlockedCompareExchange\(\w+,\w+,\w+\);$</stringmatch>
 </decompilertest>

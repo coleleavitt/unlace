@@ -47,7 +47,8 @@ explicit function and call-site overrides.
 read-modify-writes (`xadd`, `add`, `dec`, `or`, `xchg`, `cmpxchg` at 4, 8 and 1
 bytes, `inc` of a RIP-relative global) print as `__sync_*` builtins, that a
 compare-exchange retry loop keeps the builtin inside the loop, and that an HLE
-hint, `lock neg`, an unlocked add and a `lock or $0` fence keep their p-code.
+hint, `lock neg`, an unlocked add and a `lock or $0` fence keep their p-code; `atomics msvc`
+prints `_InterlockedExchangeAdd` and `_InterlockedCompareExchange` instead.
 
 `kuna-atomics-a64.xml` checks the AArch64 LSE forms (`ldaddal`, `ldsetal`,
 `swpal`, `casal`, `ldclral`, `stadd`) and, under option `llscfold`, the

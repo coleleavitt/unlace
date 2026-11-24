@@ -38,7 +38,8 @@
 //!
 //! Default-OFF (`--option objc`, the `fid` precedent), Mach-O-format gated (the
 //! pass is registered only for a Mach-O target in `passes.rs`), real-binary-path
-//! only. Selectors are plain ASCII — **no demangler needed**. A non-Mach-O / no-
+//! only. Selectors are plain ASCII, except a Swift-mangled one, which
+//! `methods::display_selector` demangles to its name form. A non-Mach-O / no-
 //! `__objc_*` image yields an empty output, so every parity gate is byte-identical
 //! by construction.
 //!

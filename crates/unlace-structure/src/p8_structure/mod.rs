@@ -19,6 +19,7 @@ pub mod gotosink;
 pub mod guardedloop;
 pub mod ifelseflatten;
 pub mod ifnoexit;
+pub mod irreducible_split;
 pub mod iteboolean;
 pub mod itecondlist;
 pub mod iteregion;
@@ -27,6 +28,7 @@ pub mod loopcontinue;
 pub mod looprotate; // (unlace `looprotate`) a guarded do-while loop becomes a while loop
 pub mod orchain;
 pub mod outline;
+pub mod reachingconditions;
 pub mod region_structurer;
 pub mod retsplitglobal;
 pub mod retsplitlimit;

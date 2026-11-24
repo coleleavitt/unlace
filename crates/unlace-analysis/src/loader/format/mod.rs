@@ -13,6 +13,7 @@ use unlace_base::error::{UnlaceError, UnlaceResult};
 pub mod coff;
 pub mod elf;
 pub mod elf_userland;
+pub mod lua;
 pub mod macho;
 pub mod pe;
 pub mod wasm;

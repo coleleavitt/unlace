@@ -114,7 +114,8 @@ const FOLD_DEPTH: usize = 4;
 /// Evidence kinds, strongest first: the value a library call returns, a loop
 /// counter ([`crate::contextnames`]), a library argument named for what
 /// it is, a structure field ([`crate::flownames`]), a role name, the
-/// value the function returns, and the local's type.
+/// value the function returns, a loop bound and an array base
+/// ([`crate::contextnames`]), and the local's type.
 const RET: u8 = 0;
 #[doc(hidden)]
 pub const LOOP: u8 = 1;
@@ -125,7 +126,11 @@ const ROLE: u8 = 4;
 #[doc(hidden)]
 pub const RESULT: u8 = 5;
 #[doc(hidden)]
-pub const TYPE: u8 = 6;
+pub const BOUND: u8 = 6;
+#[doc(hidden)]
+pub const BASE: u8 = 7;
+#[doc(hidden)]
+pub const TYPE: u8 = 8;
 
 /// One piece of evidence for a local: its kind, the operation (instruction,
 /// creation time), the slot, the name, and whether the output prints it.

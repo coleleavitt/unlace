@@ -786,6 +786,7 @@ pub(crate) fn static_itab_interfaces(file: &object::File) -> Vec<(u64, String)> 
     let version =
         buildinfo_blob(file).and_then(|b| go_version(b, |vma, len| img.bytes.read(vma, len)));
     img.u16_names = matches!(version, Some((1, ..=16)));
+    img.swiss_maps = matches!(version, Some((1, minor)) if minor >= 24);
     let Some(header_vma) = locate_header(file, &img.bytes) else {
         return Vec::new();
     };
@@ -831,6 +832,7 @@ impl AnalysisPass for GoTypesPass {
             return AnalysisOutput::default();
         }
         img.u16_names = matches!(version, Some((1, ..=16)));
+        img.swiss_maps = matches!(version, Some((1, minor)) if minor >= 24);
         let Some(header_vma) = locate_header(ctx.file, &img.bytes) else {
             return AnalysisOutput::default();
         };

@@ -7,6 +7,7 @@
 //! * [`messages`] — `PULL_MD`, `PUSH_MD`, their results, `RPC_FAIL`.
 //! * [`metadata`] — the metadata blob's chunks; [`tinfo`] — the function-type chunk.
 //! * [`hash`] — the calcrel MD5 key.
+//! * [`privacy`] — the sharing policy `unlace lumina push --share-policy` applies (default-deny).
 //! * [`client`], [`server`], [`db`] — a blocking client, a thread-per-connection server and its
 //!   sqlite store; [`tls`] — rustls transport (feature `tls`).
 //!
@@ -18,6 +19,7 @@ pub mod hash;
 pub mod helo;
 pub mod messages;
 pub mod metadata;
+pub mod privacy;
 pub mod protocol;
 pub mod server;
 pub mod tinfo;

@@ -4343,6 +4343,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `V810` | NEC V810 (Virtual Boy, PC-FX) | `V810:LE:32:default` | NEC uPD70732 user's manual, Virtual Boy development manual, MAME `v810` | `unlace-cli/tests/v810.rs` |
 | `Lua` | Lua 5.4 VM bytecode (one function's code array) | `Lua:LE:32:5.4` | Lua 5.4 `lopcodes.h`/`lvm.c` (MIT), reference manual; oracle `luac5.4 -l -l` | `unlace-cli/tests/lua54.rs` |
 | `CDP1802` | RCA CDP1802 COSMAC | `CDP1802:BE:16:default`, `CDP1802:BE:16:SCRT` | RCA CDP1802 data sheet, User Manual MPM-201 | `unlace-cli/tests/cdp1802_raw.rs` |
+| `IQ2000` | Vitesse IQ2000 | `iq2000:BE:32:default` | binutils CGEN `cpu/iq2000.cpu` and `cpu/iq2000m.cpu`, GCC `config/iq2000` | `unlace-cli/tests/iq2000_raw.rs` |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)

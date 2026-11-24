@@ -23,13 +23,20 @@
 //! image's source language is Go, where those bytes are unspecified by the
 //! ABI; `always` drops the language test (no-signal corpora, the stage test);
 //! `off` keeps the faithful concatenation.
+//!
+//! A function with several returns usually reaches one RETURN through a
+//! `MULTIEQUAL` of the constant returns and the concatenation. When the phi
+//! feeds only the RETURN and each input is `0`, `1` or such a concatenation,
+//! each concatenation input becomes `ZEXT(bool)` at the end of its
+//! predecessor block (`narrow_phi`).
 
 use unlace_num::opcodes::OpCode;
 
+use unlace_base::address::Address;
 use unlace_base::types::int4;
 
 use crate::action::{ActionGroupList, Rule};
-use crate::context::OpId;
+use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 
 /// The three-valued `gobool` gate.
@@ -177,53 +184,114 @@ impl Rule for RuleGoBoolReturn {
         if rv.get_size() != 8 || !rv.is_written() {
             return 0;
         }
-        let Some(piece) = rv.get_def() else { return 0 };
-        let Some(p) = data.obank().get(piece) else {
+        let Some(def) = rv.get_def() else { return 0 };
+        let Some(d) = data.obank().get(def) else {
             return 0;
         };
-        if p.code() != OpCode::CPUI_PIECE {
-            return 0;
+        if d.code() == OpCode::CPUI_MULTIEQUAL {
+            return narrow_phi(data, op, ret_vn, def);
         }
-        // PIECE(most-significant, least-significant): a 7-byte stale high half
-        // over a 1-byte boolean low half.
-        let (Some(hi), Some(lo)) = (p.get_in(0), p.get_in(1)) else {
+        let Some(lo) = stale_bool_low(data, ret_vn) else {
             return 0;
         };
-        if data.vbank().get(hi).map(|v| v.get_size()) != Some(7)
-            || data.vbank().get(lo).map(|v| v.get_size()) != Some(1)
-        {
-            return 0;
-        }
-        let Some(lv) = data.vbank().get(lo) else {
-            return 0;
-        };
-        if !lv.is_written() {
-            return 0;
-        }
-        let Some(ld) = lv.get_def() else { return 0 };
-        let Some(ldo) = data.obank().get(ld) else {
-            return 0;
-        };
-        if !produces_boolean(ldo.code()) {
-            return 0;
-        }
         // The rewrite: RETURN reads ZEXT(bool); the PIECE loses its reader and
         // dies to ordinary dead code, taking the stale high bytes with it.
         let at = data.obank().get(op).expect("return op").get_addr().clone();
-        let zext = data.new_op(1, at);
-        data.op_set_opcode_code(zext, OpCode::CPUI_INT_ZEXT);
-        if data.op_set_input(zext, lo, 0).is_err() {
-            return 0;
-        }
-        let Ok(out) = data.new_unique_out(8, zext) else {
+        let Some(out) = new_zext(data, lo, at) else {
             return 0;
         };
-        data.op_insert_before(zext, op);
-        if data.op_set_input(op, out, 1).is_err() {
+        data.op_insert_before(out.0, op);
+        if data.op_set_input(op, out.1, 1).is_err() {
             return 0;
         }
         1
     }
+}
+
+/// The boolean low byte of `vn` when `vn` is `PIECE(stale7, bool1)`: an eight-byte
+/// concatenation of a seven-byte high half over a one-byte genuine boolean definition.
+fn stale_bool_low(data: &Funcdata, vn: VarnodeId) -> Option<VarnodeId> {
+    let v = data.vbank().get(vn)?;
+    if v.get_size() != 8 || !v.is_written() {
+        return None;
+    }
+    let p = data.obank().get(v.get_def()?)?;
+    if p.code() != OpCode::CPUI_PIECE {
+        return None;
+    }
+    // PIECE(most-significant, least-significant).
+    let (hi, lo) = (p.get_in(0)?, p.get_in(1)?);
+    if data.vbank().get(hi)?.get_size() != 7 {
+        return None;
+    }
+    let lv = data.vbank().get(lo)?;
+    if lv.get_size() != 1 || !lv.is_written() {
+        return None;
+    }
+    let ld = data.obank().get(lv.get_def()?)?;
+    produces_boolean(ld.code()).then_some(lo)
+}
+
+/// A new `INT_ZEXT` op at `at` reading `lo` into an eight-byte unique: the op and its
+/// output, not yet inserted.
+fn new_zext(data: &mut Funcdata, lo: VarnodeId, at: Address) -> Option<(OpId, VarnodeId)> {
+    let zext = data.new_op(1, at);
+    data.op_set_opcode_code(zext, OpCode::CPUI_INT_ZEXT);
+    data.op_set_input(zext, lo, 0).ok()?;
+    let out = data.new_unique_out(8, zext).ok()?;
+    Some((zext, out))
+}
+
+/// The phi form: the RETURN `op` reads only the `MULTIEQUAL` `phi` (output `ret_vn`),
+/// whose every input is the constant `0` or `1` or a `PIECE(stale7, bool1)`, at least
+/// one of them a concatenation. Each concatenation input becomes `ZEXT(bool)`, placed at
+/// the end of the input's predecessor block, so the merged value is the boolean on every
+/// path. A phi read by anything else, or with any other input, is left alone.
+fn narrow_phi(data: &mut Funcdata, op: OpId, ret_vn: VarnodeId, phi: OpId) -> int4 {
+    if data.lone_descend(ret_vn) != Some(op) {
+        return 0;
+    }
+    let Some(p) = data.obank().get(phi) else {
+        return 0;
+    };
+    let Some(parent) = p.get_parent() else {
+        return 0;
+    };
+    let mut lows = Vec::new();
+    for slot in 0..p.num_input() {
+        let Some(vn) = p.get_in(slot) else {
+            return 0;
+        };
+        if let Some(lo) = stale_bool_low(data, vn) {
+            lows.push((slot, lo));
+            continue;
+        }
+        let constant = data
+            .vbank()
+            .get(vn)
+            .is_some_and(|v| v.is_constant() && v.get_offset() <= 1);
+        if !constant {
+            return 0;
+        }
+    }
+    if lows.is_empty() {
+        return 0;
+    }
+    for (slot, lo) in lows {
+        let bl = data.bblocks_ref().block(parent).get_in(slot);
+        let at = match data.bb_op_tail(bl).and_then(|t| data.obank().get(t)) {
+            Some(t) => t.get_addr().clone(),
+            None => data.obank().get(phi).expect("phi op").get_addr().clone(),
+        };
+        let Some((zext, out)) = new_zext(data, lo, at) else {
+            return 0;
+        };
+        data.op_insert_end(zext, bl);
+        if data.op_set_input(phi, out, slot).is_err() {
+            return 0;
+        }
+    }
+    1
 }
 
 #[cfg(test)]

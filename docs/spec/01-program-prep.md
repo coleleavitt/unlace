@@ -9469,7 +9469,16 @@ both
   right after an `endbr64`/`endbr32` or AArch64 `bti` landing pad (an empty
   function matches every empty-function module), a name found at two
   entries goes only to the strictly best scored one or to none, and a name the
-  binary already carries is not given again. The names go out through the FID
+  binary already carries is not given again. A module's name is the library
+  object's linkage spelling, so it is demangled the way the loader demangles an
+  installed symbol (`flirt/mod.rs (display_name)`): a Rust library's
+  `_RNvNtCs…_4core6option13expect_failed` is `core::option::expect_failed`, and a jump
+  thunk's `j_` prefix moves onto the leaf (`__rustc::j___rdl_alloc`) so the thunk
+  and its target stay apart. A referenced name is compared both raw and
+  demangled, since the binary's own names are demangled. Measured with a `.sig`
+  made by `unlace flirt make` from the Rust 1.95 `libstd`/`libcore`/`liballoc` rlibs
+  on the stripped rustc 1.94 nightly `json_typegen` (`--option listing on`): 136
+  functions named, every one the right function but in mangled form before. The names go out through the FID
   rename stream and its placeholder label gate. FID and FLIRT names are code
   signature guesses (`FidMatch::by_signature`): the commit applies the metadata
   renames (PDB, Objective-C, Swift) first, so a guess never replaces one, and

@@ -19,7 +19,7 @@ python3 -m venv ~/.local/share/difffuzz-venv
 `--arch` is `x86-64`, `aarch64`, `riscv64`, `arm` (A32), `thumb` (T32), `mips` (MIPS32 big-endian),
 `mips64`, `mips64r6`, `mipsr6` (MIPS64, MIPS64 Release 6 and MIPS32 Release 6, big-endian; use
 `--oracle qemu`), `ppc` (PowerPC 32 big-endian), `tricore`, or (QEMU oracle only) `ppc64`, `ppc64le`, `ppc64-isa`,
-`ppc64le-isa` and `s390x`. `--sleighpath DIR` lifts with the `.sla`
+`ppc64le-isa`, `s390x` and `loongarch64`. `--sleighpath DIR` lifts with the `.sla`
 files under `DIR` instead of the built-in ones, so a spec edit can be checked right after
 `slacomp` without rebuilding unlace. The summary on stdout counts each outcome and lists the
 findings by mnemonic; `--out` writes every finding with its bytes, both disassemblies, the
@@ -32,7 +32,7 @@ input registers and the differing values.
 (`qemu-riscv64 -cpu max`), `mips` and `mips64` (`qemu-mips64 -cpu MIPS64R2-generic`), and `mipsr6`
 and `mips64r6` (`qemu-mips64 -cpu I6400`, an R6 ELF with no HI/LO in the harness). `ppc` (`qemu-ppc -cpu 7457`), and the QEMU-only `ppc64`, `ppc64le` (`PowerPC:*:64:default`),
 `ppc64-isa` and `ppc64le-isa` (`PowerPC:*:64:A2ALT`, Power ISA 3.0) on `qemu-ppc64` /
-`qemu-ppc64le -cpu power10`, and `s390x` on `qemu-s390x -cpu max`. `DIFFFUZZ_QEMU_DIR` names a directory searched before `PATH`
+`qemu-ppc64le -cpu power10`, `s390x` on `qemu-s390x -cpu max`, and `loongarch64` on `qemu-loongarch64 -cpu max`. `DIFFFUZZ_QEMU_DIR` names a directory searched before `PATH`
 for the QEMU binaries (a `--target-list=ppc-linux-user,...` build of QEMU 10 works). QEMU 10 implements
 what Unicorn's older QEMU core lacks or gets wrong: BF16, I8MM (`usdot`/`sudot`), MOPS,
 `fcmla`/`fcadd`, and RISC-V NaN-boxing.
@@ -107,6 +107,14 @@ afterwards. The register file is unchanged.
   (the ISA stores truncated bits) is `undefined`, and an `lfs` of a single sNaN (widened
   without quieting) is not compared. QEMU 10.2 also sets CR bit 14 for the A-form FP record
   forms (`fmadd.`, `fsel.`, ...), so CR3 is not compared there.
+- LoongArch64 (`Loongarch:LE:64:lp64d`) has no Unicorn or Capstone 5 support, so it runs only with
+  `--oracle qemu`, and its encodings are decoded in batches by binutils objdump
+  (`DIFFFUZZ_LA_OBJDUMP`, or `loongarch64-linux-gnu-objdump` on `PATH`; a `--target=loongarch64-linux-gnu`
+  binutils build works). The harness loads r1..r31 and keeps the table address in a register the
+  instruction does not write, and f0..f31 (`fld.d`/`fst.d`). A single-precision or word result
+  in an FPR is compared in its low word only (bits 63:32 are undefined; QEMU NaN-boxes them),
+  and a fused multiply-add's result is not compared. LSX/LASX, LBT, CSR, FCSR moves, timer,
+  `ll`/`sc` and privileged instructions are left out.
 - s390x: r0..r15 and f0..f15 are seeded and compared; the condition code is set with `spm` and
   read back with `ipm`, and is seeded one-hot into `CC0`..`CC3` with `CCA`/`CCB` to match. The
   table address is kept in a register the instruction does not write. Vector, decimal, hexadecimal
@@ -255,6 +263,9 @@ Fixed in the specs (`docs/spec/02-lift-and-flow.md` describes each change):
 - **PowerPC.** `divw.` set XER[OV]/[SO]; `lhbrx`/`lwbrx` were not byte-reversed in the
   little-endian languages; `ldbrx`/`stdbrx` were user ops; `stswi` with a partial last
   register stored the whole word.
+- **LoongArch.** `bstrins.w`/`.d` had `bstrpick`'s semantics; `slli.d`/`srli.d`/`srai.d` masked the
+  shift with `0x1f`; the rotates shifted arithmetically; `bytepick.w`/`.d` picked the wrong bytes;
+  `ftintrm`/`ftintrp`/`ftint` truncated and the `.l.s` forms wrote only the low word.
 - **s390x.** `risbhg`/`risblg` took the start and end positions from six bits of I3/I4 (bit 2
   set gave a position past the word) and `risblg`'s `+ 32` bound tighter than the mask.
 - **TriCore (#563).** PSW.V was the sign bit of the 32-bit result instead of signed overflow

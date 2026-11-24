@@ -299,28 +299,28 @@ define pcodeop uncertain_fcsr;
 #la-fp-s.txt ftintrm.w.s mask=0x011a0400	
 #0x011a0400	0xfffffc00	f0:5, f5:5	['freg0_5_s0', 'freg5_5_s0']
 :ftintrm.w.s  frD, frJ               is op10_31=0x4681 & frD & frJ {
-	frD = trunc(frJ);
+	frD = trunc(floor(frJ));
 }
 
 #la-fp-s.txt ftintrm.l.s mask=0x011a2400	
 #0x011a2400	0xfffffc00	f0:5, f5:5	['freg0_5_s0', 'freg5_5_s0']
-:ftintrm.l.s  frD, frJ               is op10_31=0x4689 & frD & frJ {
-	local val:8 = trunc(frJ);
-	frD = val(0);
+:ftintrm.l.s  drD, frJ               is op10_31=0x4689 & frD & frJ & drD {
+	local val:8 = trunc(floor(frJ));
+	drD = val;
 }
 
 
 #la-fp-s.txt ftintrp.w.s mask=0x011a4400	
 #0x011a4400	0xfffffc00	f0:5, f5:5	['freg0_5_s0', 'freg5_5_s0']
 :ftintrp.w.s  frD, frJ               is op10_31=0x4691 & frD & frJ {
-	frD = trunc(frJ);
+	frD = trunc(ceil(frJ));
 }
 
 #la-fp-s.txt ftintrp.l.s mask=0x011a6400	
 #0x011a6400	0xfffffc00	f0:5, f5:5	['freg0_5_s0', 'freg5_5_s0']
-:ftintrp.l.s  frD, frJ               is op10_31=0x4699 & frD & frJ {
-	local val:8 = trunc(frJ);
-	frD = val(0);
+:ftintrp.l.s  drD, frJ               is op10_31=0x4699 & frD & frJ & drD {
+	local val:8 = trunc(ceil(frJ));
+	drD = val;
 }
 
 
@@ -332,9 +332,9 @@ define pcodeop uncertain_fcsr;
 
 #la-fp-s.txt ftintrz.l.s mask=0x011aa400	
 #0x011aa400	0xfffffc00	f0:5, f5:5	['freg0_5_s0', 'freg5_5_s0']
-:ftintrz.l.s  frD, frJ               is op10_31=0x46a9 & frD & frJ {
+:ftintrz.l.s  drD, frJ               is op10_31=0x46a9 & frD & frJ & drD {
 	local val:8 = trunc(frJ);
-	frD = val(0);
+	drD = val;
 }
 
 
@@ -346,23 +346,23 @@ define pcodeop uncertain_fcsr;
 
 #la-fp-s.txt ftintrne.l.s mask=0x011ae400	
 #0x011ae400	0xfffffc00	f0:5, f5:5	['freg0_5_s0', 'freg5_5_s0']
-:ftintrne.l.s  frD, frJ              is op10_31=0x46b9 & frD & frJ {
+:ftintrne.l.s  drD, frJ              is op10_31=0x46b9 & frD & frJ & drD {
 	local val:8 = round_even(frJ);
-	frD = val(0);
+	drD = val;
 }
 
 
 #la-fp-s.txt ftint.w.s mask=0x011b0400	
 #0x011b0400	0xfffffc00	f0:5, f5:5	['freg0_5_s0', 'freg5_5_s0']
 :ftint.w.s  frD, frJ                 is op10_31=0x46c1 & frD & frJ {
-	frD = trunc(frJ);
+	frD = round_even(frJ);
 }
 
 #la-fp-s.txt ftint.l.s mask=0x011b2400	
 #0x011b2400	0xfffffc00	f0:5, f5:5	['freg0_5_s0', 'freg5_5_s0']
-:ftint.l.s  frD, frJ                 is op10_31=0x46c9 & frD & frJ {
-	local val:8 = trunc(frJ);
-	frD = val(0);
+:ftint.l.s  drD, frJ                 is op10_31=0x46c9 & frD & frJ & drD {
+	local val:8 = round_even(frJ);
+	drD = val;
 }
 
 

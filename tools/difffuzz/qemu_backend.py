@@ -644,6 +644,89 @@ class S390xHarness:
         return regs, 0
 
 
+# ---------------------------------------------------------------- LoongArch64
+
+def la_li(rd, v):
+    return [0x14000000 | ((v >> 12) & 0xFFFFF) << 5 | rd, 0x03800000 | (v & 0xFFF) << 10 | rd << 5 | rd]
+
+
+def la_ld(rd, rj, off):
+    return 0x28C00000 | (off & 0xFFF) << 10 | rj << 5 | rd
+
+
+def la_st(rd, rj, off):
+    return 0x29C00000 | (off & 0xFFF) << 10 | rj << 5 | rd
+
+
+def la_addi(rd, rj, v):
+    return 0x02C00000 | (v & 0xFFF) << 10 | rj << 5 | rd                                 # addi.d
+
+
+class LaHarness:
+    """r1..r31 at 8*i, f0..f31 at 264 + 8*i. A scratch register the instruction does not write
+    holds the table address and reads back as its input."""
+    qemu = ("qemu-loongarch64", ["-cpu", "max"])
+    machine = 258
+    big = False
+    flags = 0x43  # EF_LOONGARCH_ABI_DOUBLE_FLOAT | EF_LOONGARCH_OBJABI_V1
+    table_size = 264 + 256
+    marker_at = 256
+
+    def __init__(self):
+        self.scratch = 31
+        self.scratch_names = ["s8"]
+
+    def choose_scratch(self, arch, regs, written):
+        for r in range(31, 1, -1):
+            n = arch.gprs[r - 1][0]
+            if n in regs and not written & set(range(regs[n][0], regs[n][0] + regs[n][1])):
+                self.scratch, self.scratch_names = r, [n]
+                return True
+        return False
+
+    def prologue(self, target):
+        s = self.scratch
+        c = la_li(s, TABLES)
+        for i in range(32):
+            c.append(0x2B800000 | (264 + 8 * i) << 10 | s << 5 | i)                     # fld.d fi
+        for i in range(1, 32):
+            if i != s:
+                c.append(la_ld(i, s, 8 * i))
+        c.append(la_ld(s, s, 8 * s))
+        off = (target - (PROLOGUE + 4 * len(c))) >> 2
+        c.append(0x50000000 | (off & 0xFFFF) << 10 | (off >> 16) & 0x3FF)               # b target
+        return words(c)
+
+    def epilogue(self, dumps, marker):
+        s = self.scratch
+        t = 1 if s != 1 else 2
+        c = la_li(s, OUT)
+        for i in range(1, 32):
+            if i != s:
+                c.append(la_st(i, s, 8 * i))
+        for i in range(32):
+            c.append(0x2BC00000 | (264 + 8 * i) << 10 | s << 5 | i)                     # fst.d fi
+        c += la_li(t, marker) + [la_st(t, s, self.marker_at)]
+        for base, size in [(OUT, self.table_size)] + [(p, PAGE) for p in dumps]:
+            c += [la_addi(4, 0, 1)] + la_li(5, base) + la_li(6, size) + [la_addi(11, 0, 64), 0x002B0000]  # write
+        c += [la_addi(4, 0, 0), la_addi(11, 0, 93), 0x002B0000]                                        # exit(0)
+        return words(c)
+
+    def table(self, arch, init, init_vec, flagword):
+        t = bytearray(self.table_size)
+        for i, (n, _) in enumerate(arch.gprs, start=1):
+            struct.pack_into("<Q", t, 8 * i, init.get(n, 0) & (2 ** 64 - 1))
+        for i, (n, _) in enumerate(arch.vecs):
+            struct.pack_into("<Q", t, 264 + 8 * i, init_vec.get(n, 0) & (2 ** 64 - 1))
+        return bytes(t)
+
+    def parse(self, arch, out):
+        regs = {n: struct.unpack_from("<Q", out, 8 * i)[0] for i, (n, _) in enumerate(arch.gprs, start=1)}
+        for i, (n, _) in enumerate(arch.vecs):
+            regs[n] = struct.unpack_from("<Q", out, 264 + 8 * i)[0]
+        return regs, 0
+
+
 HARNESSES = {"aarch64": A64Harness, "riscv64": RvHarness, "mips": MipsHarness, "mips64": Mips64Harness,
              "mipsr6": MipsR6Harness, "mips64r6": Mips64R6Harness, "nios2": Nios2Harness, "sh4": Sh4Harness,
              "ppc": lambda: PpcHarness(("qemu-ppc", ["-cpu", "7457"]), 20, True, False),
@@ -651,7 +734,7 @@ HARNESSES = {"aarch64": A64Harness, "riscv64": RvHarness, "mips": MipsHarness, "
              "ppc64le": lambda: PpcHarness(("qemu-ppc64le", ["-cpu", "power10"]), 21, False, True, 2),
              "ppc64-isa": lambda: PpcHarness(("qemu-ppc64", ["-cpu", "power10"]), 21, True, True, 2),
              "ppc64le-isa": lambda: PpcHarness(("qemu-ppc64le", ["-cpu", "power10"]), 21, False, True, 2),
-             "s390x": S390xHarness}
+             "s390x": S390xHarness, "loongarch64": LaHarness}
 
 
 def qemu_path(name):

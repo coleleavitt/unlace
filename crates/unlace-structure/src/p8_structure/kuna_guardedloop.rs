@@ -18,6 +18,10 @@
 //! call), the guard goes too: the `if` becomes a list of its condition block's
 //! statements and the arm.  No goto may reach an assignment of `I` or the
 //! loop's first block.
+//!
+//! A do-while whose body prints nothing but its test, `do {} while (c);`, prints
+//! as `while (c) {}` with no guard at all: the body runs nothing, so testing
+//! first runs the same code.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -260,9 +264,61 @@ impl Compare<'_> {
         pairwise(&x, &y) || (commutative(a.code()) && x.len() == 2 && pairwise(&x, &[y[1], y[0]]))
     }
 
+    /// The constant `v` holds on the loop's entry: a constant, or an assignment
+    /// of the inits or an implied COPY, extension or truncation that computes one
+    /// from constants.  Inside an assignment's right-hand side (`rhs`) nothing is
+    /// substituted.
+    fn entry_const(&self, v: VarnodeId, rhs: bool, depth: u32) -> Option<(u64, i32)> {
+        use OpCode::*;
+        if depth > 8 {
+            return None;
+        }
+        let n = self.data.vbank().get(v)?;
+        let size = n.get_size();
+        if !(1..=8).contains(&size) {
+            return None;
+        }
+        if n.is_constant() {
+            return Some((n.get_offset(), size));
+        }
+        let (o, rhs) = match self.init_of(v) {
+            Some(w) if !rhs => (self.data.obank().get(w)?, true),
+            Some(_) => return None,
+            None => (self.implied_def(v)?, rhs),
+        };
+        let (val, xs) = self.entry_const(o.get_in(0)?, rhs, depth + 1)?;
+        let mask = |s: i32| {
+            if s >= 8 {
+                u64::MAX
+            } else {
+                (1u64 << (8 * s)) - 1
+            }
+        };
+        let out = match o.code() {
+            CPUI_COPY => val,
+            CPUI_INT_ZEXT => val & mask(xs),
+            CPUI_INT_SEXT => {
+                let sign = (val >> (8 * xs - 1)) & 1 == 1;
+                if sign {
+                    val | !mask(xs)
+                } else {
+                    val & mask(xs)
+                }
+            }
+            CPUI_SUBPIECE => {
+                let k = self.data.vbank().get(o.get_in(1)?)?.get_offset();
+                if k >= 8 { 0 } else { val >> (8 * k) }
+            }
+            _ => return None,
+        };
+        Some((out & mask(size), size))
+    }
+
     /// `v` under `sense` as a compare, BOOL_NEGATEs folded into the sense and
     /// `k <= x` / `x <= k` against a constant written `k - 1 < x` / `x < k + 1`.
-    fn test(&self, mut v: VarnodeId, mut sense: bool) -> Option<Test> {
+    /// On the loop's side (`entry`) an operand that is a constant on entry is
+    /// that constant.
+    fn test(&self, mut v: VarnodeId, mut sense: bool, entry: bool) -> Option<Test> {
         use OpCode::*;
         let o = loop {
             let o = self.implied_def(v)?;
@@ -272,7 +328,11 @@ impl Compare<'_> {
             v = o.get_in(0)?;
             sense = !sense;
         };
-        let (a, b) = (self.operand(o.get_in(0)?), self.operand(o.get_in(1)?));
+        let side = |x: VarnodeId| match self.entry_const(x, false, 0) {
+            Some((k, s)) if entry => Operand::Const(k, s),
+            _ => self.operand(x),
+        };
+        let (a, b) = (side(o.get_in(0)?), side(o.get_in(1)?));
         let rel = match o.code() {
             CPUI_INT_EQUAL => Rel::Eq,
             CPUI_INT_NOTEQUAL => Rel::Ne,
@@ -300,7 +360,35 @@ impl Compare<'_> {
                 },
             }
         };
-        Some(normalise(t))
+        Some(self.unextend(normalise(t)))
+    }
+
+    /// `ext(x) == 0` as `x == 0` (and `!=`): a zero or sign extension is zero
+    /// exactly when its input is.
+    fn unextend(&self, mut t: Test) -> Test {
+        use OpCode::*;
+        if !matches!(t.rel, Rel::Eq | Rel::Ne) {
+            return t;
+        }
+        if matches!(t.a, Operand::Const(0, _)) {
+            (t.a, t.b) = (t.b, t.a);
+        }
+        for _ in 0..4 {
+            let (Operand::Var(x), Operand::Const(0, _)) = (t.a, t.b) else {
+                break;
+            };
+            let Some(o) = self.implied_def(x) else { break };
+            if !matches!(o.code(), CPUI_INT_ZEXT | CPUI_INT_SEXT) {
+                break;
+            }
+            let Some(inner) = o.get_in(0) else { break };
+            let Some(size) = self.data.vbank().get(inner).map(|n| n.get_size()) else {
+                break;
+            };
+            t.a = self.operand(inner);
+            t.b = Operand::Const(0, size);
+        }
+        t
     }
 
     fn same_test(&self, g: Test, c: Test) -> bool {
@@ -314,7 +402,7 @@ impl Compare<'_> {
 
     /// Does the guard `(g, gs)` enter the arm exactly when `(c, cs)` continues the loop?
     fn equivalent(&self, (g, gs): (VarnodeId, bool), (c, cs): (VarnodeId, bool)) -> bool {
-        match (self.test(g, gs), self.test(c, cs)) {
+        match (self.test(g, gs, false), self.test(c, cs, true)) {
             (Some(gt), Some(ct)) => self.same_test(gt, ct),
             (None, None) => gs == cs && self.same(self.operand(g), self.operand(c), false, 0),
             _ => false,
@@ -327,7 +415,7 @@ impl Compare<'_> {
         if self.equivalent(g, c) {
             return true;
         }
-        let (Some(gt), Some(ct)) = (self.test(g.0, g.1), self.test(c.0, c.1)) else {
+        let (Some(gt), Some(ct)) = (self.test(g.0, g.1, false), self.test(c.0, c.1, true)) else {
             return false;
         };
         matches!(gt.rel, Rel::Less(_))
@@ -336,9 +424,28 @@ impl Compare<'_> {
     }
 }
 
+/// [`normalise_le`], then the unsigned tests against zero as equalities:
+/// `0 < x` is `x != 0` and `x < 1` is `x == 0`.
+fn normalise(t: Test) -> Test {
+    let t = normalise_le(t);
+    match (t.rel, t.a, t.b) {
+        (Rel::Less(false), Operand::Const(0, _), b) => Test {
+            rel: Rel::Ne,
+            a: b,
+            b: t.a,
+        },
+        (Rel::Less(false), a, Operand::Const(1, s)) => Test {
+            rel: Rel::Eq,
+            a,
+            b: Operand::Const(0, s),
+        },
+        _ => t,
+    }
+}
+
 /// `k <= x` as `k - 1 < x` and `x <= k` as `x < k + 1`, where the constant does
 /// not wrap.
-fn normalise(t: Test) -> Test {
+fn normalise_le(t: Test) -> Test {
     let Rel::LessEq(signed) = t.rel else { return t };
     let bounds = |size: i32| {
         let bits = (size.clamp(1, 8) * 8) as u32;
@@ -512,6 +619,22 @@ fn plan(data: &Funcdata, w: BlockId, targets: &BTreeSet<BlockId>) -> Option<Opti
     .then_some(None)
 }
 
+/// Does the do-while `w` print nothing but its test: a body of one basic block
+/// whose only printed op is the CBRANCH back to itself?
+fn empty_body(data: &Funcdata, w: BlockId) -> bool {
+    let graph = data.sblocks_ref();
+    let body = graph.block(w).get_block(0);
+    let b = graph.block(body);
+    if b.get_type() != BlockType::Copy {
+        return false;
+    }
+    let Some(bb) = b.get_copy() else {
+        return false;
+    };
+    branch_to(data, bb, bb).is_some()
+        && crate::kuna_condfold::printed_shape(data, &data.bb_ops(bb)).is_some_and(|s| s.stmts == 1)
+}
+
 /// Print each qualifying guarded do-while as a while loop (see the module docs);
 /// returns how many loops changed.
 #[doc(hidden)]
@@ -538,6 +661,13 @@ pub fn guardedloop_apply(data: &mut Funcdata) -> i32 {
     }
     let mut count = 0;
     for w in loops {
+        if empty_body(data, w) {
+            data.sblocks_mut()
+                .block_mut(w)
+                .set_flag(block_flags::f_kuna_top_test);
+            count += 1;
+            continue;
+        }
         let Some(drop) = plan(data, w, &targets) else {
             continue;
         };

@@ -8043,6 +8043,9 @@ impl PrintC {
         if self.emit_wide_copy(fd, arch, op) {
             return;
         }
+        if self.emit_half_store(fd, arch, op) {
+            return;
+        }
         if self.options.bytearray_c && self.emit_bytearray_store(fd, arch, op) {
             return;
         }
@@ -9054,7 +9057,8 @@ impl PrintC {
     }
 
     /// (kuna `vaarg`) `va_arg(ap,T)`, `T` the type of the call's output; a
-    /// pointer to a `va_list` (an array type) prints `*ap`.
+    /// pointer to a `va_list` (an array type) prints `*ap`. `vaargconst builtin` spells it
+    /// `__builtin_va_arg`.
     fn push_va_arg(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) -> bool {
         let (Some(ap), Some(out)) = (
             fd.obank().get(op).and_then(|o| o.get_in(1)),
@@ -9083,9 +9087,16 @@ impl PrintC {
             (true, 4, false) => ("int".to_string(), String::new()),
             _ => type_name_for_decl(&ty, self.rt_ctx.clone()),
         };
+        let name = match arch
+            .kuna_options
+            .get::<crate::kuna_vaargconst::VaArgConst>()
+        {
+            crate::kuna_vaargconst::VaArgConst::Builtin => "__builtin_va_arg",
+            _ => "va_arg",
+        };
         self.push_op(&tokens::FUNCTION_CALL, Some(op_key(op)));
         self.push_atom(&Atom::with_op(
-            "va_arg".to_string(),
+            name.to_string(),
             TagType::OpToken,
             crate::printlanguage::SyntaxHighlight::funcname_color,
             op_key(op),
@@ -9940,6 +9951,9 @@ impl PrintC {
         }
         if self.out_lang == crate::kuna_lang::OutLang::Go {
             self.op_go_cast(fd, arch, op);
+            return;
+        }
+        if self.push_container_of(fd, arch, op) {
             return;
         }
         if self.options.bytearray_c
@@ -13676,6 +13690,35 @@ impl PrintC {
     /// of piece, or a variable; a whole array variable takes a copy out of such a
     /// piece the same way. Anything else (an intrinsic, an expression) declines
     /// and the statement keeps its assignment.
+    /// (kuna `partialaccess`) `v = CONCAT44(((T *)&v)[1], x)` as the store it is,
+    /// `*(T *)&v = x` ([`crate::kuna_halfstore`]).
+    fn emit_half_store(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) -> bool {
+        if !self.options.partial_access || self.out_lang != crate::kuna_lang::OutLang::C {
+            return false;
+        }
+        let Some(store) = crate::kuna_halfstore::plan(fd, op) else {
+            return false;
+        };
+        let Some(out) = fd.obank().get(op).and_then(|o| o.get_out()) else {
+            return false;
+        };
+        let types = arch.types();
+        let Ok(pointer) = types
+            .get_base(store.size, type_metatype::TYPE_UINT)
+            .and_then(|t| types.get_type_pointer(types.get_size_of_pointer(), t, 1))
+        else {
+            return false;
+        };
+        self.push_op(&tokens::ASSIGNMENT, Some(op_key(op)));
+        self.push_op(&tokens::DEREFERENCE, Some(op_key(op)));
+        self.push_cast_open(&pointer, op);
+        self.push_op(&tokens::ADDRESSOF, Some(op_key(op)));
+        self.push_vn_explicit_ir(fd, arch, out, op);
+        self.push_cast_close(&pointer);
+        self.push_vn_ir(fd, arch, store.value, op);
+        true
+    }
+
     fn emit_wide_copy(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) -> bool {
         use crate::dtype::type_metatype;
         use crate::kuna_partialaccess::is_scalar_width;

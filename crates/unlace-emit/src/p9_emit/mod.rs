@@ -30,6 +30,7 @@ pub mod kuna_castwiden; // (kuna) a 64-bit widening C performs by itself keeps n
 pub mod kuna_cfstr; // (kuna) CFSTR("...") for a Mach-O __cfstring entry
 pub mod kuna_charnum; // (kuna) non-printable char constants as numbers in comparisons and arithmetic
 pub mod kuna_constright; // (kuna) value-first ordered comparisons against a constant
+pub mod kuna_containerof; // (kuna `containerof`) `container_of(p, S, m)` for a pointer stepped back to its struct
 pub mod kuna_cppshortnames; // (kuna) short spellings of standard C++ names
 pub mod kuna_cstringconst;
 pub mod kuna_ctypes; // (kuna) valid per-architecture C spelling of the core types
@@ -53,6 +54,7 @@ pub mod kuna_gopairreturns;
 pub mod kuna_gopointerarith;
 mod kuna_gostringindex;
 mod kuna_gozerorecord;
+pub mod kuna_halfstore;
 pub mod kuna_infloopstyle;
 pub mod kuna_javanew; // (kuna) `new T(args)` from an allocation and its <init> call
 pub mod kuna_labelstmt; // (kuna) every printed C label labels a statement

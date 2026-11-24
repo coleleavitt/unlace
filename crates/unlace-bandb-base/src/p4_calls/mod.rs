@@ -47,6 +47,7 @@ pub mod kuna_stackcookie; // (kuna) the frame cookie MSVC stores on the stack is
 pub mod kuna_stackparamalign;
 pub mod kuna_swiftcall; // (kuna) Swift calls that may throw, and stale swiftself arguments
 pub mod kuna_swifterror; // (kuna) the Swift error register named after a throwing call and before a throwing return
+pub mod kuna_vaargconst; // (kuna) a constant-offset SysV va_arg expansion as va_arg(ap, T)
 pub mod kuna_varargretreg; // (kuna) a variadic call's argument in the register its value returns in
 pub mod kuna_varargsave; // (kuna) the System V register save area of a variadic function
 pub mod kuna_varargsharedfloat; // (kuna) a counted variadic double that also feeds an earlier argument

@@ -1,0 +1,52 @@
+# kuna-guardedloop-entryconst: an unsigned counted loop behind a truthiness
+# guard prints as a while loop with no guard (option guardedloop).
+#
+# Source (clang -O2 -fno-inline -fno-unroll-loops -fno-vectorize, x86-64):
+#   struct S { int pad; unsigned n; long *p; };
+#   void walk(struct S *s)
+#     { for (unsigned long i = 0; i < s->n; i++) sink(s->p[i]); sink(-1); }
+#
+# clang guards the rotated loop with if (s->n) and tests i < (unsigned long)s->n
+# at its bottom.  On entry i is 0, an unsigned 0 < x is x != 0, and a zero
+# extension is zero exactly when its input is, so the guard is the loop's first
+# test.
+#
+# Stage: P8, ActionGuardedLoop on the final tree (entry_const, unextend).
+# Pass 1 (default) prints v1 = 0; then the while loop, with no guard; pass 2
+# (guardedloop off) the guard and the do-while.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x401000', name = 'sink' },
+    { space = 'ram', offset = '0x401010', name = 'walk' },
+    { space = 'ram', offset = '0x401050', name = '_start' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401000'
+readonly = true
+hex = 'c36666666666662e0f1f840000000000837f04007429415653504889fb4531f6488b43084a8b3cf0e8d3ffffff49ffc68b43044939c672e84883c4085b415e48c7c7ffffffffe9b5ffffff0f1f440000ebfe'
+
+[script]
+commands = [
+    'lo fu walk',
+    'decompile',
+    'print C',
+    'option guardedloop off',
+    'lo fu walk',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'KUNA-GUARDEDLOOP-ENTRYCONST #1: the counted loop tests at the top with no guard (default)'
+count = 1
+literal = ['v1 = 0;', 'while (v1 < ']
+
+[[match]]
+name = 'KUNA-GUARDEDLOOP-ENTRYCONST #2: guardedloop off keeps the do-while'
+count = 1
+literal = 'do {'

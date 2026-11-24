@@ -128,6 +128,7 @@ impl Action for ActionStart {
         // gather / processing-start bookkeeping) is not in the merged tree.
         crate::kuna_alloca::rewrite_raw(data);
         crate::kuna_varargsave::strip(data);
+        crate::kuna_vaargconst::rewrite(data);
         crate::kuna_x87emptyreturn::capture(data);
         crate::kuna_x87free::annotate(data);
         0
@@ -311,7 +312,9 @@ impl Action for ActionConstbase {
                 .failure = Some(error.to_string());
             return 0;
         }
-        if let Err(error) = crate::kuna_dex::apply_entry(data) {
+        if let Err(error) =
+            crate::kuna_dex::apply_entry(data).and_then(|_| crate::kuna_jvm::apply_entry(data))
+        {
             data.kuna_state_mut::<crate::kuna_callmechanisms::State>()
                 .failure = Some(error.to_string());
             return 0;

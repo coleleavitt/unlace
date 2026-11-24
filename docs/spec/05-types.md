@@ -2956,7 +2956,7 @@ member access from pointer types, and `ruleaction_6.rs (RulePtraddUndo,
 RulePtrsubUndo)` in the main pool reverts them when the types they were built
 from degrade — the visible ping that the 7-pass ceiling exists to bound.
 
-### A static TLS variable is a field of the block below the thread pointer (`kuna_tlsnames.rs`)
+### A static TLS variable is a field of the block at the thread pointer (`kuna_tlsnames.rs`)
 
 A local-exec access to a `__thread` variable is a load or store at a constant
 offset from the thread pointer: x86-64 `mov eax, fs:[-0x10]` lowers to
@@ -2981,6 +2981,20 @@ end. The thread pointer is one past the block, so the accesses render
 the pointer (the `fs:[0x28]` stack canary, the `fs:[0]` self pointer) or uses
 the register any other way is left as it was, so the canary keeps its form. A
 shared object's dynamic TLS goes through `__tls_get_addr` and is not touched.
+
+AArch64 uses TLS variant I: `tpidr_el0` points at a 16-byte thread control
+block, and the executable's block follows it at `align_up(16, p_align)`
+(`TlsLayout::tcb`). A variable is at `tp + tcb + value`, so the valid offsets
+are `[tcb, tcb + block_size)`. There `tls` is a plain pointer to a
+`__tls_block` of `tcb + block_size` bytes, its fields at `tcb + value`, and the
+access renders `tls->counter`. A relocatable AArch64 object has no `PT_TLS`: its
+block is its `SHF_TLS` sections (`.tdata`, `.tbss`) in order, each at its
+alignment (`crates/unlace-analysis/src/loader/reloc_object.rs (relocatable_tls)`),
+and a symbol's value is its section's offset plus its own. The loader applies
+the local-exec relocations against the same layout:
+`R_AARCH64_TLSLE_ADD_TPREL_HI12`, `_LO12`, `_LO12_NC` and the
+`LDST*_TPREL_LO12` forms get the variable's thread-pointer offset. Before, they
+were left at zero, so every thread-local of an object aliased `tp + 0`.
 
 ### A global takes the type of the values stored into it (`kuna_storetype.rs`)
 

@@ -4214,3 +4214,20 @@ available to caller locals: the caller can reuse it immediately after the helper
 returns. Excising it as a caller callee-save slot would truncate a later buffer
 covering those bytes. The store itself retains ordinary dataflow and alias
 semantics, including an actual caller read of the saved RBP value.
+
+### (kuna) `spphistack` — a bare input stack pointer at a phi
+
+A va_list that a function spills to its frame and reloads becomes, once the
+stack is heritaged and the `+4` steps are simplified into the loop, a loop phi
+whose entry value is the input stack pointer itself (`u = sp(i) ? u + 4`;
+MIPS o32 and AArch64 `add_all`, unlace#975). `ActionMergeRequired` merges
+every MULTIEQUAL input into the phi's HighVariable, so the loop pointer takes
+the stack pointer's `addrtied` storage name from `build_variable_name`
+(`Register` + offset) and prints as an assignment to it. With option
+`spphistack` (default off),
+`crates/unlace-bandb-base/src/p6_variables/kuna_spphistack.rs (ActionSpPhiStack)`
+runs just before `ActionAssignHigh`: each MULTIEQUAL input that is the
+spacebase input register is replaced by `PTRSUB(sp(i), 0)`, computed at the end
+of that edge's predecessor, so the phi merges with an ordinary value whose
+source prints as a stack reference, as an `sp(i) + c` already does. Off, no op
+is added.

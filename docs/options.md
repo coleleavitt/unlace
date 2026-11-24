@@ -543,6 +543,9 @@ Three tiers:
 | a long long local on a 32-bit target prints as CONCAT44 of two variables | [`pairlocal`](#pairlocal----on--off-default-off) |
 | CONCAT44(v13, v12) after an if where each half is set on every path | [`pairlocal`](#pairlocal----on--off-default-off) |
 | a 64-bit sum or compare reads CONCAT44 of a sign-extended pair | [`pairlocal`](#pairlocal----on--off-default-off) |
+| a va_list walk prints as Register00000074 = (int *)((int)Register00000074 + 4) on MIPS | [`spphistack`](#spphistack----on--off-default-off) |
+| a varargs loop on AArch64 reads (int *)Register00000008 | [`spphistack`](#spphistack----on--off-default-off) |
+| a loop pointer that starts at the incoming stack pointer is named after the stack pointer register's storage | [`spphistack`](#spphistack----on--off-default-off) |
 | heavily-called custom die()/fatal() wrapper still treated as returning | [`noreturn_disc`](#noreturn_disc----on--off-default-on) |
 | dead code after a stripped sub_ wrapper that never falls through at 3+ call sites | [`noreturn_disc`](#noreturn_disc----on--off-default-on) |
 | caller swallows the next function after a wrapper call | [`noreturn_disc`](#noreturn_disc----on--off-default-on) |
@@ -1891,7 +1894,7 @@ The control surface: each of these can make output worse on the wrong source sha
 ### `guardedloop` -- on | off, default `on`
 
 - **Symptoms:** if (c) { do { ... } while (c); } where the source has while (c); a guarded do-while whose test reads memory.
-- **What it does:** Print a guarded do-while as a while loop. When a do-while sits in an arm of an if, behind only assignments that call nothing and store nothing, and the if's condition implies the loop's test on entry (the same compare once each variable those assignments write is replaced by its right-hand side, ops compared op by op, variables by HighVariable, k <= x against a constant read as k - 1 < x, == against != and < against >= with the senses swapped; or a < b for a test a != b), the test prints at the top: while (c) body. When the if has no else, the loop ends the arm, the assignments read no memory, no value they write is read after the if's skip edge and the condition is the test itself, the if goes too and its condition block's statements stand before the assignments. A goto into the assignments or to the loop's first block keeps the do-while. C output only.
+- **What it does:** Print a guarded do-while as a while loop. When a do-while sits in an arm of an if, behind only assignments that call nothing and store nothing, and the if's condition implies the loop's test on entry (the same compare once each variable those assignments write is replaced by its right-hand side, ops compared op by op, variables by HighVariable, k <= x against a constant read as k - 1 < x, == against != and < against >= with the senses swapped; or a < b for a test a != b; on the loop's side an operand an assignment sets to a constant, or an extension or truncation of one, is that constant, and an unsigned 0 < x is x != 0), the test prints at the top: while (c) body. When the if has no else, the loop ends the arm, the assignments read no memory, no value they write is read after the if's skip edge and the condition is the test itself, the if goes too and its condition block's statements stand before the assignments. A goto into the assignments or to the loop's first block keeps the do-while. A do-while whose body prints nothing but its test (do {} while (c);) prints as while (c) {} with no guard, as the empty body makes testing first run the same code. C output only.
 - **When to flip:** Turn on where the source has while (c) or for loops and kuna prints if (c) { do { ... } while (c); }: the guard clang adds when it rotates a loop. looprotate rewrites the same shape on the CFG when the tail's test is a pure function of the loop-carried values; this one also takes tests that read memory or values the body computes.
 - **Where / provenance:** P8/loop-refinement · kuna · presentation-default · kuna-guardedloop
 - **Example:** `option guardedloop on`
@@ -2623,6 +2626,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** Off by default. Turn it on for 32-bit x86, ARM or MIPS code whose long long locals print as CONCAT44 of two variables after an if or a loop.
 - **Where / provenance:** P3/simplification-quiescence · kuna · new-analysis · kuna-pairlocal
 - **Example:** `--option pairlocal on`
+
+### `spphistack` -- on | off, default `off`
+
+- **Symptoms:** a va_list walk prints as Register00000074 = (int *)((int)Register00000074 + 4) on MIPS; a varargs loop on AArch64 reads (int *)Register00000008; a loop pointer that starts at the incoming stack pointer is named after the stack pointer register's storage.
+- **What it does:** Turn a MULTIEQUAL input that is the bare input stack pointer into PTRSUB(sp, 0) computed at the end of that edge's predecessor, just before HighVariables are assigned. A va_list the function spills and reloads becomes, after the stack is heritaged and its +4 steps move into the loop, a loop phi whose entry value is sp(i) itself (MIPS o32 and AArch64 add_all); merging puts sp(i) into the phi's HighVariable, which then takes the stack pointer's addrtied storage name and prints as Register00000074 = (int *)((int)Register00000074 + 4). With the option on the phi merges with an ordinary value whose source is a stack reference, as an sp(i) + c already is.
+- **When to flip:** Off by default: it inserts an op on the edge into every phi that reads the input stack pointer, and what the stack reference prints as depends on the stack symbols mapped at offset 0. Turn it on when a varargs loop or another walk that starts at the incoming stack pointer prints as an assignment to RegisterNNNNNNNN (the stack pointer's storage) instead of a local.
+- **Where / provenance:** P6/merge-aggressiveness · kuna · new-analysis · unlace-975
+- **Example:** `--option spphistack on`
 
 ### `noreturn_disc` -- on | off, default `on`
 

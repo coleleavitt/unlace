@@ -2754,6 +2754,18 @@ impl Funcdata {
                         cur_flags |= traverse_flags::actionalt;
                     }
                 }
+                if std::env::var_os("KUNA_RETREC_TRACE").is_some() {
+                    eprintln!(
+                        "onlyop {} vn {:#x}+{} op {:?} res {}",
+                        self.get_name(),
+                        self.vbank()
+                            .get(vn)
+                            .map_or(0, |v| v.get_addr().get_offset()),
+                        self.vbank().get(vn).map_or(0, |v| v.get_size()),
+                        code,
+                        res
+                    );
+                }
                 if !res {
                     break;
                 }
@@ -2946,6 +2958,18 @@ impl Funcdata {
             .get(def)
             .map(|o| o.code())
             .unwrap_or(OpCode::CPUI_COPY);
+        if std::env::var_os("KUNA_RETREC_TRACE").is_some() {
+            eprintln!(
+                "ancop {} vn {:#x}+{} def {:?} offset {}",
+                self.get_name(),
+                self.vbank()
+                    .get(invn)
+                    .map_or(0, |v| v.get_addr().get_offset()),
+                self.vbank().get(invn).map_or(0, |v| v.get_size()),
+                code,
+                offset
+            );
+        }
         match code {
             OpCode::CPUI_INDIRECT => {
                 if self
@@ -3057,6 +3081,12 @@ impl Funcdata {
                 Ancestry::of(self.only_op_use(invn, op, trial, main_flags))
             }
             OpCode::CPUI_PIECE => {
+                // (kuna) Selecting a piece of a PIECE, or the matching
+                // SUBPIECE of a whole below, costs no level: heritage joins a
+                // narrow write into a wider tracked range as PIECE(SUBPIECE(..),
+                // new) chains, and an AArch64 `faddp s0, v0.2s` after a 128-bit
+                // write left the returned lane six steps down, past
+                // `trim_recurse_max` (spec chapter 4, return recovery).
                 let in1 = self.obank().get(def).and_then(|o| o.get_in(1));
                 let in1_size = in1
                     .and_then(|v| self.vbank().get(v))
@@ -3064,30 +3094,16 @@ impl Funcdata {
                     .unwrap_or(0);
                 if offset == 0 {
                     if let Some(in1) = in1 {
-                        return self.ancestor_op_use_in(
-                            memo,
-                            maxlevel - 1,
-                            in1,
-                            op,
-                            trial,
-                            0,
-                            main_flags,
-                        );
+                        return self
+                            .ancestor_op_use_in(memo, maxlevel, in1, op, trial, 0, main_flags);
                     }
                     return Ancestry::NONE;
                 }
                 if offset == in1_size {
                     let in0 = self.obank().get(def).and_then(|o| o.get_in(0));
                     if let Some(in0) = in0 {
-                        return self.ancestor_op_use_in(
-                            memo,
-                            maxlevel - 1,
-                            in0,
-                            op,
-                            trial,
-                            0,
-                            main_flags,
-                        );
+                        return self
+                            .ancestor_op_use_in(memo, maxlevel, in0, op, trial, 0, main_flags);
                     }
                 }
                 Ancestry::NONE
@@ -3150,7 +3166,7 @@ impl Funcdata {
                     if let Some(in0) = in0 {
                         return self.ancestor_op_use_in(
                             memo,
-                            maxlevel - 1,
+                            maxlevel,
                             in0,
                             op,
                             trial,

@@ -26,6 +26,9 @@ use crate::userop::{
     BUILTIN_ATOMIC_FETCH_AND, BUILTIN_ATOMIC_FETCH_OR, BUILTIN_ATOMIC_FETCH_SUB,
     BUILTIN_ATOMIC_FETCH_XOR,
 };
+use crate::userop::{
+    MEMORY_ORDER_SEQ_CST, MEMORY_ORDERS, atomic_builtin_explicit, c11_atomic_builtin,
+};
 use crate::userop::{atomic_builtin_generic, atomic_builtin_name, msvc_atomic_builtin};
 
 const MAX_OPS: usize = 64;
@@ -994,6 +997,7 @@ pub fn rewrite(fd: &mut Funcdata, ops: &[OpId]) -> Option<OpId> {
         &plan.operands,
         width,
         msvc_spelling(fd),
+        c11_order(fd, ops),
         |e| buildable(&state, e, new_ops),
     );
     if !plan.operands.iter().all(|e| buildable(&state, e, new_ops)) {
@@ -1226,6 +1230,7 @@ fn pair(fd: &mut Funcdata, ops: &[OpId], userops: &AtomicUserops) -> Option<OpId
         &[join(&e0, &e1), join(v0, v1)],
         width,
         msvc_spelling(fd),
+        None,
         |e| buildable(&prefix, e, true),
     );
     if !buildable(&prefix, &base, true) || !operands.iter().all(|e| buildable(&prefix, e, true)) {
@@ -1407,8 +1412,61 @@ fn msvc_spelling(fd: &Funcdata) -> bool {
         .msvc(arch.windows_cspec || arch.image_windows_user)
 }
 
-/// `builtin` and its `operands` (after the address) in the MSVC spelling when
-/// `msvc` is set and every operand passes `buildable`, else as they are.
+/// The memory order `atomics c11` spells for an atomic made of `ops`, `None` in
+/// the other spellings. An AArch64 instruction carries its order as the
+/// `LOAcquire`/`LORelease` markers: neither is relaxed, both (`ldaddal`,
+/// `ldaxr`/`stlxr`, what a compiler emits for a sequentially consistent
+/// update) is `memory_order_seq_cst`. A locked x86 instruction is sequentially
+/// consistent, and so is an atomic whose order the language does not mark.
+fn c11_order(fd: &Funcdata, ops: &[OpId]) -> Option<u8> {
+    let arch = fd.get_arch();
+    if !arch.kuna_options.get::<Atomics>().c11() {
+        return None;
+    }
+    let userops = &arch.atomic_userops;
+    if userops.lock.is_some() || (userops.acquire.is_none() && userops.release.is_none()) {
+        return Some(MEMORY_ORDER_SEQ_CST);
+    }
+    let marked = |marker: Option<u32>| {
+        marker.is_some_and(|id| {
+            ops.iter().any(|&op| {
+                fd.obank()
+                    .get(op)
+                    .filter(|o| o.code() == OpCode::CPUI_CALLOTHER)
+                    .and_then(|o| o.get_in(0))
+                    .and_then(|v| is_constant(fd, v))
+                    .is_some_and(|(c, _)| c == u64::from(id))
+            })
+        })
+    };
+    Some(match (marked(userops.acquire), marked(userops.release)) {
+        (false, false) => 0,
+        (true, false) => 2,
+        (false, true) => 3,
+        (true, true) => MEMORY_ORDER_SEQ_CST,
+    })
+}
+
+/// The C11 `memory_order` enumeration the `_explicit` builtins take last.
+fn memory_order_type(data: &Funcdata) -> Option<Rc<Datatype>> {
+    let types = data.get_arch().types()?;
+    if let Some(existing) = types.find_by_name("memory_order").ok()? {
+        return Some(existing);
+    }
+    let shell = types
+        .get_type_enum_sized("memory_order", 4, type_metatype::TYPE_ENUM_UINT)
+        .ok()?;
+    let names = MEMORY_ORDERS
+        .iter()
+        .map(|(v, n)| (*v, n.to_string()))
+        .collect();
+    types.set_enum_values(&shell, names).ok()
+}
+
+/// `builtin` and its `operands` (after the address) in the C11 spelling when
+/// `order` is set (the `_explicit` form, with the order appended, unless it is
+/// `memory_order_seq_cst`), in the MSVC spelling when `msvc` is set, and as
+/// they are otherwise or when an operand fails `buildable`.
 /// MSVC has no fetch-and-subtract, so a subtraction becomes
 /// `_InterlockedExchangeAdd` of the negated operand, and
 /// `_InterlockedCompareExchange` takes the new value before the expected one.
@@ -1417,9 +1475,21 @@ fn spelled(
     operands: &[Expr],
     width: i32,
     msvc: bool,
+    order: Option<u8>,
     buildable: impl Fn(&Expr) -> bool,
 ) -> (u32, Vec<Expr>) {
     let keep = (builtin, operands.to_vec());
+    if let Some(order) = order {
+        let explicit = order != MEMORY_ORDER_SEQ_CST;
+        let mut spelled = operands.to_vec();
+        if explicit {
+            spelled.push(Expr::Const(u64::from(order), 4));
+        }
+        return match c11_atomic_builtin(builtin, explicit) {
+            Some(id) if spelled.iter().all(&buildable) => (id, spelled),
+            _ => keep,
+        };
+    }
     if !msvc {
         return keep;
     }
@@ -1487,6 +1557,9 @@ fn value_type(data: &Funcdata, op: OpId, size: int4) -> Option<Rc<Datatype>> {
 /// whose width is the location's, have that type.
 pub fn input_type(data: &Funcdata, op: OpId, slot: int4) -> Option<Rc<Datatype>> {
     let o = data.obank().get(op)?;
+    if atomic_builtin_explicit(builtin(data, op)?) && slot == o.num_input() - 1 {
+        return memory_order_type(data);
+    }
     let width = data.vbank().get(o.get_in(2)?)?.get_size();
     let input = data.vbank().get(o.get_in(slot)?)?;
     let value = value_type(data, op, width)?;
@@ -2270,7 +2343,8 @@ fn fold_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
         .map(|i| ops[i])
         .collect();
     let at_load = at_load?;
-    let (builtin, operands) = spelled(builtin, &operands, width, msvc_spelling(data), |e| {
+    let order = c11_order(data, &ops);
+    let (builtin, operands) = spelled(builtin, &operands, width, msvc_spelling(data), order, |e| {
         buildable(&at_load, e, true)
     });
     trace!(
@@ -2532,9 +2606,15 @@ fn fold_pair_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
         return None;
     }
     let prefix = prefix?;
-    let (builtin, operands) = spelled(builtin, &[operand], width, msvc_spelling(data), |e| {
-        buildable(&prefix, e, true)
-    });
+    let order = c11_order(data, &ops);
+    let (builtin, operands) = spelled(
+        builtin,
+        &[operand],
+        width,
+        msvc_spelling(data),
+        order,
+        |e| buildable(&prefix, e, true),
+    );
     if !buildable(&prefix, &base, true) || !operands.iter().all(|e| buildable(&prefix, e, true)) {
         return None;
     }

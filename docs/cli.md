@@ -1190,6 +1190,17 @@ reported at the file and line the preprocessor's line markers give.
 unlace decompile ./client fetch --types /usr/include/curl/curl.h --types-cpp cc
 ```
 
+On a Mach-O, `--option sdktypes <SDK root>` does this for the SDK the image was
+built against without naming a header: it preprocesses the umbrella headers of
+the frameworks the image links and the `usr/include` headers that declare its
+imports (with `clang`, or the `--types-cpp` command), and keeps the prototypes
+of imported functions and every type. It reports one summary line on stderr
+instead of a warning per declaration.
+
+```bash
+unlace decompile ./trustd SecTrustEvaluateWithError --option sdktypes ~/sdks/iPhoneOS16.5.sdk
+```
+
 A declaration that does not parse is reported on stderr with its file and line,
 and the rest still apply; under `--json` it is a `rejected` row of
 `assertions[]`, whose `directive` starts with `--types <file>:<line>:`. Such a

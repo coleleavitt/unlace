@@ -119,6 +119,7 @@ kuna_options! { self, p1;
     "helperroles" => registered!(crate::kuna_helperrole::HelperRoles),
     "dynalloca" => registered!(crate::kuna_dynalloca::DynAlloca),
     "vaarg" => registered!(crate::kuna_vaarg::VaArg),
+    "vaargconst" => registered!(crate::kuna_vaargconst::VaArgConst),
     "indexrescale" => registered!(crate::kuna_indexrescale::IndexRescale),
     "looprotate" => registered!(crate::kuna_looprotate::LoopRotate),
     "guardedloop" => registered!(crate::kuna_coreoptions::GuardedLoop),
@@ -235,6 +236,7 @@ kuna_options! { self, p1;
     "switchextent" => registered!(crate::jumptable::SwitchExtent),
     "honestgaps" => registered!(crate::kuna_honestgaps::HonestGaps),
     "constselectjump" => registered!(crate::kuna_constselectjump::ConstSelectMode),
+    "rawswitch" => registered!(crate::kuna_rawswitch::RawSwitch),
     "jumptablework" => registered!(crate::kuna_jumptablework::JumpTableWork),
     "switchguardbound" => registered!(crate::jumptable::SwitchGuardBound),
     "highsliceguard" => registered!(crate::jumptable::HighsliceGuard),
@@ -292,6 +294,7 @@ kuna_options! { self, p1;
     "loopcondhoist" => registered!(crate::kuna_ifnoexit::LoopCondHoist),
     "loopcontinue" => registered!(crate::kuna_loopcontinue::LoopContinue),
     "postinc" => registered!(crate::kuna_coreoptions::PostIncrement),
+    "containerof" => registered!(crate::kuna_containerof::ContainerOf),
     "regionlooprefine" => registered!(crate::region_structurer::RegionLoopRefine),
     "regionedgeorder" => registered!(crate::region_structurer::RegionEdgeOrder),
     "outline" => registered!(crate::kuna_outline::OutlineOption),
@@ -395,6 +398,7 @@ kuna_options! { self, p1;
     "mba" => registered!(crate::kuna_mba::Mba),
     "egraph" => registered!(crate::kuna_egraph::Egraph),
     "pairlocal" => registered!(crate::kuna_pairphi::PairLocal),
+    "spphistack" => registered!(crate::kuna_spphistack::SpPhiStack),
     "avxintrinsics" => registered!(crate::printc::AvxIntrinsics),
     "x87depth" => registered!(crate::kuna_x87depth::X87Depth),
     "trapaftercall" => registered!(crate::kuna_coreoptions::TrapAfterCall),
@@ -712,6 +716,13 @@ kuna_options! { self, p1;
         Ok(match path {
             Some(p) => format!("Objective-C signatures read from {}", p.display()),
             None => "Objective-C SDK headers off".to_string(),
+        })
+    },
+    "sdktypes" => {
+        let path = crate::kuna_sdktypes::parse_option_value(p1).map_err(KunaError::parse)?;
+        Ok(match path {
+            Some(p) => format!("SDK C declarations read from {}", p.display()),
+            None => "SDK C declarations off".to_string(),
         })
     },
     "iokitclasses" => registered!(crate::kuna_analysisgates::IokitClasses),

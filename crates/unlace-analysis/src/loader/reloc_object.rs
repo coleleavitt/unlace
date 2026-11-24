@@ -375,6 +375,54 @@ struct ResolvedRelocationTarget {
 /// relocatable backend.
 ///
 /// `fmt` supplies the two per-format questions — which sections are memory-
+
+/// The static TLS block a relocatable object's `SHF_TLS` sections (`.tdata`,
+/// `.tbss`) would form linked alone: each at its alignment, in section order.
+/// The AArch64 TLSLE relocations resolve against it and the `tlsnames` pass
+/// names its variables, so the two agree.
+pub struct RelocTls {
+    /// `(section, offset in the block)`.
+    pub sections: Vec<(SectionIndex, u64)>,
+    pub size: u64,
+    pub align: u64,
+}
+
+impl RelocTls {
+    pub fn offset_of(&self, sec: SectionIndex) -> Option<u64> {
+        self.sections
+            .iter()
+            .find(|(s, _)| *s == sec)
+            .map(|(_, o)| *o)
+    }
+
+    /// The thread-pointer offset of a symbol at `value` in `sec`: TLS variant I,
+    /// the block after a 16-byte control block at the block's alignment.
+    pub fn tprel(&self, sec: SectionIndex, value: u64) -> Option<u64> {
+        let tcb = 16u64.div_ceil(self.align) * self.align;
+        Some(tcb + self.offset_of(sec)? + value)
+    }
+}
+
+pub fn relocatable_tls(file: &object::File) -> Option<RelocTls> {
+    let mut sections = Vec::new();
+    let (mut size, mut align) = (0u64, 1u64);
+    for sec in file.sections() {
+        if !matches!(sec.kind(), SectionKind::Tls | SectionKind::UninitializedTls) {
+            continue;
+        }
+        let a = sec.align().max(1);
+        let at = align_up(size, a);
+        sections.push((sec.index(), at));
+        size = at.checked_add(sec.size())?;
+        align = align.max(a);
+    }
+    (!sections.is_empty()).then_some(RelocTls {
+        sections,
+        size,
+        align,
+    })
+}
+
 /// resident ([`ObjectFormat::is_alloc_section`]) and the section-flag translation
 /// (`section_bits`, identical to the linked path, so `.rodata` lands read-only
 /// (string literals fold) and `.text` lands as code).
@@ -384,6 +432,10 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
     let machine = elf_machine(file);
     let unit = super::kuna_wordaddr::address_unit_bytes(machine);
     let little_endian = file.is_little_endian();
+    // The static TLS block the AArch64 TLSLE relocations resolve against.
+    let tls = (architecture == Architecture::Aarch64 && file.format() == object::BinaryFormat::Elf)
+        .then(|| relocatable_tls(file))
+        .flatten();
 
     // --- Pass 1: assign a load VMA to every SHF_ALLOC section, snapshot bytes.
     let mut laid: Vec<LaidSection> = Vec::new();
@@ -837,7 +889,30 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
             } else {
                 target
             };
-            let symbol = if spec.is_riscv_pcrel_lo() {
+            let symbol = if spec.is_tprel() {
+                // the thread-pointer offset of the TLS symbol in this object's TLS block
+                let tprel = match (&tls, reloc.target()) {
+                    (Some(tls), RelocationTarget::Symbol(sym_idx)) => file
+                        .symbol_by_index(sym_idx)
+                        .ok()
+                        .and_then(|sym| Some((sym.section_index()?, sym.address())))
+                        .and_then(|(sec, value)| tls.tprel(sec, value)),
+                    _ => None,
+                };
+                match tprel {
+                    Some(value) => value,
+                    None => {
+                        diagnostics.record(
+                            architecture,
+                            r_type,
+                            RelocationFailure::UnresolvedTarget,
+                            sec_vma,
+                            offset,
+                        );
+                        continue;
+                    }
+                }
+            } else if spec.is_riscv_pcrel_lo() {
                 match riscv_hi.get(&target.address) {
                     Some(value) => *value as u64,
                     None => {

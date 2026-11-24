@@ -1962,6 +1962,14 @@ on a target with 8-byte pointers reads through `unsigned __int128`, the GCC
 and Clang 16-byte integer (`return *(unsigned __int128 *)v1;`), which is local
 to this rendering: the variable keeps the declaration it had.
 
+A store into the low half of a variable that heritage wrote as a new value of
+the whole variable, `v = PIECE(SUBPIECE(v_old, k), x)` with `v_old` and `v` one
+variable, prints as that store (`printc.rs (PrintC::emit_half_store)`,
+`kuna_halfstore.rs (plan)`): `*(unsigned int *)&v12 = v3;` instead of
+`v12 = CONCAT44(((unsigned int *)&v12)[1],v3);`, IDA's `LODWORD(v12) = v3;`.
+The SUBPIECE must be implied, take exactly the bytes above `x`, and read a value
+of the PIECE's width; `x` must be a scalar width and the space little-endian.
+
 C has no scalar of 3, 5, 6, 7 or 9 to 15 bytes, and no form may compile to a
 different meaning, so those widths are handled by what the statement does.
 `printc.rs (PrintC::emit_wide_copy)` prints a plain `COPY` into such bytes, or
@@ -3409,6 +3417,21 @@ natural base, and a spacebase reference to a mapped local renders `&a` /
 Flip `off` for consumers that diff against raw pointer arithmetic
 ([docs/options.md](../options.md)); the toggle is per-render and pure
 presentation.
+
+**(kuna) containerof** — the container idiom (default **off**, C output only;
+`crates/unlace-emit/src/p9_emit/kuna_containerof.rs (PrintC::push_container_of)`,
+tried first in `printc.rs (PrintC::op_type_cast_ir_with)`). A CAST to `S *` whose
+operand is printed inline and is made of constant steps from a pointer `p`
+(`PTRADD` with a constant index, `PTRSUB`, `INT_ADD` of a constant, `INT_SUB`,
+`CAST`, `COPY`; at most nine) is the container idiom when the steps sum to `-K`,
+`0 < K < sizeof(S)`, and `S` (a named, complete struct) has a member starting
+`K` bytes in. When `p` points to a struct, the member must be of that struct
+type: the search walks nested struct members and prints the dotted path
+(`in.node`), and gives up when `K` lands inside a member of another type. The CAST
+then prints `container_of(p, S, m)` instead of `(S *)&p[-1]`; under `on` the name
+is `CONTAINING_RECORD` on a Windows image (a Windows compiler spec or a Windows
+user-mode PE), and `container_of`/`containing_record` fix it. The IR does not
+change (`tests/stages/kuna-containerof.toml`).
 
 ## 9.6 Alternate languages
 

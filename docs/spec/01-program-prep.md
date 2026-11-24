@@ -2094,10 +2094,19 @@ with `/usr/lib/debug` also tried under each `UNLACE_DEBUG_DIRS` root, or
 relative to the debug file), then by build-id under the debug directories,
 and accepts it only if its build-id matches. The DWARF analyzer then sets it as
 gimli's supplementary `Dwarf` (`Dwarf::set_sup`), so names in
-`DW_FORM_GNU_strp_alt` / `DW_FORM_strp_sup` resolve. A `DW_FORM_GNU_ref_alt`
-reference into the supplementary file's partial units is not followed yet
-(the per-unit DIE snapshot resolves only unit-local references), so a type
-that lives only there stays unknown. The loader also reports a `PT_LOAD`
+`DW_FORM_GNU_strp_alt` / `DW_FORM_strp_sup` resolve. A DIE reference into
+another unit, `DW_FORM_ref_addr` into a partial unit of the same file (what
+`dwz` makes of a single file, and how an LTO unit reaches its early-debug
+units) or `DW_FORM_GNU_ref_alt` / `DW_FORM_ref_sup` into the supplementary
+file, is keyed in the unit's DIE snapshot by `.debug_info` offset with a high
+bit for each kind (`analyzers/dwarf/mod.rs (die_ref)`), and
+`mod.rs (graft_foreign)` takes each referenced DIE, its subtree and its
+ancestors from a snapshot of the unit that holds it (`ForeignUnits`, one
+snapshot per unit, its own unit DIE left out) into the referring unit's
+snapshot, again for what those reference, up to 32 rounds and 65,536 DIEs. The
+type mapper and the declaration walks then resolve them as they resolve a
+unit-local reference. A reference still unresolved leaves its prototype
+untyped rather than `void`. The loader also reports a `PT_LOAD`
 that maps an address another `PT_LOAD` already mapped from different file bytes
 (`elf_debuglink.rs (overlapping_loads)`), a shape only a hand-made or hostile
 image has; which bytes win is unchanged.
@@ -2145,8 +2154,8 @@ body (issue #1288); the note sends a PKLITE file to `unlace unpack`. Surfaces th
 need an `object::File` refuse an `MZ` input with a capability error, as they do
 a TE.
 
-(kuna) **PS-X EXE, N64 ROM, a.out, Amiga hunk and PEF executables load from
-their own headers.** These five containers hold code for processors kuna
+(kuna) **PS-X EXE, N64 ROM, a.out, Amiga hunk, PEF and NE executables and
+OMF objects and libraries load from their own headers.** These containers hold code for processors kuna
 decodes, but the `object` crate reads none of them, so each was refused as an
 unknown format and had to be mapped by hand as a headerless image, which for
 the three relocatable ones is also wrong: a flat mapping leaves every
@@ -2170,7 +2179,9 @@ no option: before this the same file was an error.
 
 The format is claimed from the first 32 bytes
 (`crates/unlace-analysis/src/loader/kuna_retroimage.rs (is_retro_image)`),
-after the TE probe and before the MZ and object-file ones. Every size and
+after the TE probe and before the MZ and object-file ones; an NE file, whose
+header follows its MZ stub, is claimed when `e_lfanew` names `NE`, and only
+then is the whole file read. Every size and
 offset is untrusted: arithmetic is checked, a module may not exceed 256 MiB,
 and what a parser cannot honor (a relocation outside its segment, a malformed
 relocation program) is skipped and reported on stderr rather than guessed.
@@ -2247,6 +2258,48 @@ relocation program) is skipped and reported on stderr rather than guessed.
   the name of the import whose slot its TOC entry holds. `r2` is known at each
   function's entry only: after a cross-fragment call the caller reloads it
   from the linkage area the glue stored it in, and that store is not modeled.
+- **NE** (`ne.rs`, Win16 and OS/2 1.x): an MZ stub whose `e_lfanew` (with a
+  header of at least four paragraphs) names an `NE` header. Under
+  `x86:LE:16:Protected Mode:default`, where a far address is selector *
+  0x10000 + offset, segment n of the segment table is placed at n * 0x10000
+  with selector n (its stored bytes, zero to its minimum allocation), so a
+  near branch stays in its segment and a far pointer reads as its target.
+  Each segment's relocation records are applied as the Windows loader does:
+  an internal reference (a segment and offset, or a movable entry's ordinal
+  resolved through the entry table), an import by ordinal or by name, written
+  as the target's offset, selector, far address, 32-bit offset or 48-bit
+  pointer, added to the stored value for an additive record and otherwise
+  along the chain the stored words link (0xFFFF ends it). Each distinct import
+  gets a two-byte slot (a RETF) in a segment after the module's own, named
+  `MODULE_ordinal` or after the imported name, so every far call to it reaches
+  a named function. The entry table's exports are named from the resident and
+  non-resident name tables (`entry_N` when unnamed); the entry is `CS:IP`, or
+  for a library without one its first code export. The automatic data
+  segment's selector is the tracked value of DS and SS over the image.
+  Operating-system fixups (the floating-point emulator's) are counted in a
+  note and not applied; resources are not mapped.
+- **OMF** (`omf.rs`): a THEADR or LHEADR record whose name fills it opens an
+  object, a library header record (page size a power of two from 16 to 32768,
+  flags 0 or 1, zero padding, THEADR at the next page) a library, whose modules
+  are read in order from page boundaries (the dictionary is not used). The
+  records (LNAMES/LLNAMES, SEGDEF, GRPDEF, EXTDEF/LEXTDEF/CEXTDEF,
+  COMDEF/LCOMDEF, PUBDEF/LPUBDEF, LEDATA, LIDATA expanded, FIXUPP with its frame
+  and target threads, MODEND) of every module are laid out as one program: the
+  segments one after another at their alignment (at least a paragraph), from
+  0x10000 under `x86:LE:16:Real Mode:default`, or from 0x400000 under
+  `x86:LE:32:default:windows` when USE32 code dominates; the communal
+  variables after them; then one slot per external that no module defines
+  (16 bytes in 16-bit code, so a far pointer to it is `:0000`; a RETF where a
+  far pointer or segment fixup names it, else a RET). An external a module of
+  the same library defines resolves to that public. Each fixup adds to its
+  site the target's offset from its frame (the frame's paragraph in 16-bit
+  code: a segment, a group's lowest member, the segment that defines an
+  external, else the external's own paragraph; zero in flat 32-bit code), a
+  self-relative displacement, or the frame's paragraph for a segment base.
+  The entry is the first MODEND start address, else the first public in a
+  code segment. A 16-bit image with a DGROUP group fixes DS at its paragraph.
+  COMDAT records, fixups of iterated (LIDATA) data, import definitions and
+  segment selectors in 32-bit code are counted in notes and not mapped.
 
 Surfaces that need an `object::File` refuse these inputs with the capability
 error a TE or MZ input gets.

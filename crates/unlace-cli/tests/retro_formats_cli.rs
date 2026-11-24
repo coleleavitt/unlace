@@ -1,6 +1,8 @@
-//! PS-X EXE, N64 ROM, a.out, Amiga hunk and PEF executables load without
-//! `--raw-image`: each header supplies the language, base, entry and names.
-//! The fixtures are one program (`tests/fixtures/retro-formats/retro.c`).
+//! PS-X EXE, N64 ROM, a.out, Amiga hunk, PEF and NE executables and OMF
+//! objects and libraries load without `--raw-image`: each header supplies the
+//! language, base, entry and names. The retro fixtures are one program
+//! (`tests/fixtures/retro-formats/retro.c`); the NE and OMF ones are built by
+//! `tests/fixtures/win16-omf/build.py`.
 
 use crate::common;
 
@@ -187,4 +189,43 @@ fn a_malformed_container_is_named_in_its_error() {
         stderr.contains("invalid PS-X EXE image: pc0 is outside the text"),
         "{stderr}"
     );
+}
+
+fn win16(name: &str) -> String {
+    common::repo_root()
+        .join("tests/fixtures/win16-omf")
+        .join(name)
+        .to_str()
+        .unwrap()
+        .to_owned()
+}
+
+/// A Win16 NE executable loads under the 16-bit protected-mode language:
+/// its exports and imports are named functions and every far call reaches one.
+#[test]
+fn a_win16_ne_executable_names_its_exports_and_imports() {
+    let listed = kuna(&["functions", &win16("hello.exe")]);
+    for name in ["START", "HELPER", "KERNEL_91", "MESSAGEBOX"] {
+        assert!(listed.contains(name), "{name}:\n{listed}");
+    }
+    let code = kuna(&["decompile", &win16("hello.exe"), "0x10000", "--addr"]);
+    for call in ["KERNEL_91(", "MESSAGEBOX(", "HELPER("] {
+        assert!(code.contains(call), "{call}:\n{code}");
+    }
+}
+
+/// An OMF object and a library of two: publics are functions, externals
+/// named slots, and a library's modules call each other.
+#[test]
+fn omf_objects_and_libraries_load_with_their_names() {
+    let code = kuna(&["decompile", &win16("hello16.obj"), "0x1000b", "--addr"]);
+    for call in ["_sum(", "_puts(", "far_helper("] {
+        assert!(code.contains(call), "{call}:\n{code}");
+    }
+    let listed = kuna(&["functions", &win16("hello.lib")]);
+    assert!(listed.contains("0x10040\tfar_helper"), "{listed}");
+    let code = kuna(&["decompile", &win16("hello32.obj"), "0x40000d", "--addr"]);
+    for call in ["_add3(", "_printf("] {
+        assert!(code.contains(call), "{call}:\n{code}");
+    }
 }

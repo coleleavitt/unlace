@@ -776,6 +776,9 @@ pub struct Architecture {
     /// (kuna `dexmodel`) The loaded DEX files, when the image is one (or an
     /// APK holding several).
     pub dex: Vec<Rc<crate::kuna_dex::DexModel>>,
+    /// (kuna `jvmmodel`) The loaded class files, when the image is one (or a
+    /// JAR holding several).
+    pub jvm: Vec<Rc<crate::kuna_jvm::JvmModel>>,
     /// Comments for this architecture (C++ `commentdb`).  // STUB(comment.cc)
     pub commentdb: CommentDatabase,
 
@@ -1217,6 +1220,7 @@ impl Architecture {
             pcodeinjectlib: PcodeInjectLibrarySleigh::new(inject_tempbase),
             image_elfv1_toc: false, // (kuna) a load-time fact; set by the console's `load file`
             dex: Vec::new(),
+            jvm: Vec::new(),
             commentdb: CommentDatabase::new(),
             // C++ ctor leaves types/print/defaultfp null; init() fills them.
             types: Rc::new(TypeFactoryImpl::new()),
@@ -1833,6 +1837,11 @@ impl Architecture {
         self.build_arch_handle_for_entry(None)
     }
 
+    /// (kuna `jvmmodel`) The class-file models the engine may consult.
+    pub fn jvm_models(&self) -> &[Rc<crate::kuna_jvm::JvmModel>] {
+        &self.jvm
+    }
+
     fn build_arch_handle_for_entry(&self, entry: Option<&Address>) -> ArchHandle {
         let manage = self.translate.manager_rc();
         let mut ctx = ArchContext::new_shared(manage);
@@ -1850,6 +1859,12 @@ impl Architecture {
                 .find(|model| model.contains(addr.get_offset()))
                 .cloned()
         }); // dexmodel
+        ctx.jvm = entry.and_then(|addr| {
+            self.jvm
+                .iter()
+                .find(|model| model.contains(addr.get_offset()))
+                .cloned()
+        }); // jvmmodel
         ctx.kuna_options.set(crate::kuna_coreoptions::JavaTry(
             self.kuna_options
                 .get::<crate::kuna_coreoptions::JavaTry>()
@@ -3489,6 +3504,9 @@ impl Architecture {
                 userops.register_builtin(id, &adapter)?;
             }
             for (id, ..) in crate::userop::MSVC_ATOMIC_BUILTINS {
+                userops.register_builtin(id, &adapter)?;
+            }
+            for (id, ..) in crate::userop::C11_ATOMIC_BUILTINS {
                 userops.register_builtin(id, &adapter)?;
             }
             Ok(())

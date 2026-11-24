@@ -4311,6 +4311,26 @@ names, RV32 and RV64, and LLVM-selected half-precision functions that
 decompile with no bad or unimplemented instruction.
 
 
+
+### RISC-V Zfa (#98)
+
+`riscv.zfa.sinc` decodes the rest of Zfa 1.0 next to `fli.s` (§ GH-7451):
+`fli.d` and `fli.h` (the same 32-entry constant table, lifted like `fli.s`
+through the `fli` user operation with the table index), `fminm`/`fmaxm` in
+S, D and H (as `fmin`/`fmax`, but a NaN operand is the result),
+`fround`/`froundnx` (round to an integral value in the same format; user
+operations taking the value and the rounding mode, since p-code has no
+operation parameterised by rounding mode), `fcvtmod.w.d` (the low 32 bits of
+the truncated 64-bit conversion, sign-extended on RV64), the quiet compares
+`fleq`/`fltq` (the ordinary p-code float compares, which raise no exceptions
+in p-code either), and on RV32 `fmvh.x.d` (the high word of a double) and
+`fmvp.d.x` (a double from `rs2:rs1`). The `fli` constant at index 0 now
+displays as `-1.0` (it read `min`, the name of index 1). Exercised by
+`unlace-cli/tests/riscv_zfa.rs`: one probe row per encoding (all 32 `fli`
+constants) against LLVM's names, RV32 and RV64, and LLVM-selected
+`fminm.d`, `fmaxm.s`, `fround.d`, `fli.d` and `fleq.d` functions that
+decompile with no bad or unimplemented instruction.
+
 ### RISC-V cache-block operations, hints, may-be-operations and CFI (#98)
 
 `riscv.hints.sinc` decodes, in every RISC-V language:

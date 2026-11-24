@@ -16,6 +16,8 @@ mod riscv_hints;
 mod riscv_zcb;
 #[path = "riscv_zcmp.rs"]
 mod riscv_zcmp;
+#[path = "riscv_zfa.rs"]
+mod riscv_zfa;
 #[path = "riscv_zfh.rs"]
 mod riscv_zfh;
 #[path = "rust_signature_summary.rs"]

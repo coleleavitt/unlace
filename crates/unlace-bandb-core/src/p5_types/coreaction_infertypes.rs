@@ -588,6 +588,11 @@ fn call_input_type_local(
         }
     }
     let fc = fc?;
+    // (kuna `com`) A COM request's out-parameter holds the interface its
+    // interface-id argument names.
+    if let Some(ct) = crate::kuna_comtyping::out_param_type(data, op, fc, slot) {
+        return Some(ct);
+    }
     // param = fc->getParam(slot - 1)
     let proto = fc.proto();
     let arg_size = data

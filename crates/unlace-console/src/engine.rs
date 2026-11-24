@@ -3584,6 +3584,11 @@ impl ConsoleProgram {
                         image_path,
                     ));
                 }
+                // (kuna `com`) COM ids and interfaces; off by default, and
+                // it builds types, so it runs only when asked for.
+                if analysis_pass_enabled(self.arch(), "com") {
+                    merged.merge(unlace_analysis::passes::run_com(&bytes, self.arch()));
+                }
                 // Deferred Listing build + consumer/fast-inventory run, gated
                 // on the matching option. The call-fixup seed list is the names
                 // the load-time pass flagged resolved to addresses via the
@@ -3998,6 +4003,11 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         "cortexmscs" => {
             arch.kuna_options
                 .get::<unlace_decomp::kuna_analysisgates::Cortexmscs>()
+                .0
+        }
+        "com" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Com>()
                 .0
         }
         "strings" => {
@@ -8442,6 +8452,15 @@ fn commit_analysis_output(
             .set::<unlace_decomp::kuna_kalloctype::KallocTypes>(Rc::new(
                 out.kalloc_types.iter().cloned().collect(),
             ));
+    }
+    // (kuna `com`) The interface ids the engine types a COM request's
+    // out-parameter by.
+    if !out.com_interfaces.is_empty() {
+        prog.arch_mut()
+            .kuna_states
+            .set(Rc::new(unlace_decomp::kuna_comtyping::ComInterfaces(
+                out.com_interfaces.iter().cloned().collect(),
+            )));
     }
     for mut pieces in out.prototypes {
         if let Some(st) = self_types.get(&pieces.name) {

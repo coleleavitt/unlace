@@ -405,6 +405,7 @@ kuna_options! { self, p1;
     "tlsnames" => registered!(crate::kuna_tlsnames::Tlsnames),
     "uefi" => registered!(crate::kuna_analysisgates::Uefi),
     "cortexmscs" => registered!(crate::kuna_analysisgates::Cortexmscs),
+    "com" => registered!(crate::kuna_analysisgates::Com),
     "strings" => registered!(crate::kuna_analysisgates::Strings),
     "widestrings" => {
         registered!(crate::kuna_analysisgates::Widestrings)

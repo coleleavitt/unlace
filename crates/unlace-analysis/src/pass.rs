@@ -622,6 +622,10 @@ pub struct AnalysisOutput {
     /// `kalloc_type_view` / `kalloc_type_var_view`; the engine types a typed
     /// allocator's result by the view it is passed.
     pub kalloc_types: Vec<(u64, unlace_decomp::kuna_kalloctype::KallocView)>,
+    /// (kuna `com`) `(interface-id address, interface struct)` for every interface
+    /// id the image holds; the engine types a COM request's out-parameter by the
+    /// id it passes. Produced only by the `com` pass.
+    pub com_interfaces: Vec<(u64, std::rc::Rc<unlace_decomp::dtype::Datatype>)>,
     /// The `self` of each Objective-C method only a symbol names (a direct
     /// method): an unlocked hint on its first argument register, typed
     /// `Class *` under `objcivars`.
@@ -1216,6 +1220,7 @@ impl AnalysisOutput {
             self.objc_classes = other.objc_classes;
         }
         self.kalloc_types.extend(other.kalloc_types);
+        self.com_interfaces.extend(other.com_interfaces);
         self.objc_self_hints.extend(other.objc_self_hints);
         self.externref.extend(other.externref);
         self.import_slot_names.extend(other.import_slot_names);

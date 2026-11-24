@@ -4518,9 +4518,18 @@ Floating-point hardware comes from the same attributes: `Tag_FP_arch`,
 (`-mfloat-abi=softfp`) keeps the default layout: GCC and clang pass a static
 function's floating-point values in VFP registers there when they see every
 call, so the image's convention does not decide the function's. An image whose
-attributes say nothing about hardware keeps it too. Neither case changes from
-before this rule, and an exported function on a softfp image is still laid out
-in VFP registers. MIPS, PowerPC and RISC-V specs have no soft-float model, so a
+attributes say nothing about hardware keeps it too. An externally visible function
+cannot be such a function: another unit calls it under the stated convention. So
+on any ARM ELF that states the base standard (`Tag_ABI_VFP_args` 0 or absent in a
+relocatable object, or `EF_ARM_ABI_FLOAT_SOFT` in a linked image), every defined
+global or weak function symbol and every resolved import is bound to
+`__stdcall_softfp` (`crates/unlace-analysis/src/loader/kuna_armbasepcs.rs`,
+analysis pass `armbasepcs`, model facts committed through the loader-bound model
+table). The binding covers the function's own decompile, its declared (DWARF or
+library) prototype, and every direct call to it. `float scale(float v, int n)` on a
+soft-float big-endian or Cortex-M object read its result from `s0`, or lost it,
+and the `__aeabi_fadd` result it returns went unused (#681). A local function
+keeps the default layout as above. MIPS, PowerPC and RISC-V specs have no soft-float model, so a
 declaration on their soft-float images keeps the default layout as well.
 
 The soft-float model is the spec's `__stdcall_softfp` with the default model's

@@ -17,7 +17,8 @@ python3 -m venv ~/.local/share/difffuzz-venv
 ```
 
 `--arch` is `x86-64`, `aarch64`, `riscv64`, `arm` (A32), `thumb` (T32), `mips` (MIPS32 big-endian),
-`ppc` (PowerPC 32 big-endian) or `tricore`. `--sleighpath DIR` lifts with the `.sla`
+`mips64`, `mips64r6`, `mipsr6` (MIPS64, MIPS64 Release 6 and MIPS32 Release 6, big-endian; use
+`--oracle qemu`), `ppc` (PowerPC 32 big-endian) or `tricore`. `--sleighpath DIR` lifts with the `.sla`
 files under `DIR` instead of the built-in ones, so a spec edit can be checked right after
 `slacomp` without rebuilding unlace. The summary on stdout counts each outcome and lists the
 findings by mnemonic; `--out` writes every finding with its bytes, both disassemblies, the
@@ -27,7 +28,8 @@ input registers and the differing values.
 
 `--oracle qemu` replaces Unicorn with the installed QEMU user-mode binaries
 (`tools/difffuzz/qemu_backend.py`) for `aarch64` (`qemu-aarch64 -cpu max`), `riscv64`
-(`qemu-riscv64 -cpu max`) and `mips` (`qemu-mips64 -cpu MIPS64R2-generic`). QEMU 10 implements
+(`qemu-riscv64 -cpu max`), `mips` and `mips64` (`qemu-mips64 -cpu MIPS64R2-generic`), and `mipsr6`
+and `mips64r6` (`qemu-mips64 -cpu I6400`, an R6 ELF with no HI/LO in the harness). QEMU 10 implements
 what Unicorn's older QEMU core lacks or gets wrong: BF16, I8MM (`usdot`/`sudot`), MOPS,
 `fcmla`/`fcadd`, and RISC-V NaN-boxing.
 
@@ -54,7 +56,11 @@ afterwards. The register file is unchanged.
   back as its input.
 - MIPS: the installed QEMU has no 32-bit MIPS user binary, so MIPS32 code runs on a MIPS64 core
   with every register sign-extended from its 32-bit value (the state in which MIPS64 runs a
-  MIPS32 instruction as MIPS32 does). Only the low 32 bits are compared.
+  MIPS32 instruction as MIPS32 does). Only the low 32 bits are compared. `mips64` loads and
+  compares the full 64 bits. A `mipsr6` access must stay below 0x80000000, since the 64-bit core
+  sign-extends the address. Release 6 compact branches (`b*c`, `j*c`) are compared; their target
+  goes to a second epilogue. Unaligned loads and stores trap on QEMU and count as reference
+  exceptions.
 - Nios II (`--arch nios2`, `nios2:LE:32:R1`) has no Unicorn or Capstone support, so it runs only
   with `--oracle qemu`, and `arches.py` decodes mnemonics itself from the Nios II opcode tables.
   QEMU dropped the target after 8.2: build `qemu-nios2` from a QEMU 8.2 tree
@@ -78,6 +84,41 @@ afterwards. The register file is unchanged.
 - PowerPC has no QEMU harness. `qemu-ppc64` runs in 64-bit mode (MSR.SF is not user-writable),
   where record forms set CR0 from the 64-bit result, so it is not an exact reference for
   32-bit PowerPC.
+
+### RISC-V vector (`--arch riscv64v`)
+
+`--arch riscv64v --oracle qemu --vlen 128|256` (`tools/difffuzz/rvv_backend.py`) fuzzes the
+vector instructions: random OP-V, OP-VE and vector load/store words that llvm-objdump decodes
+(`--objdump`, an llvm-objdump with the RISC-V vector extensions; `--only REGEX` picks
+mnemonics). Capstone 5 does not decode them. QEMU runs with
+`-cpu max,v=true,vlen=N,elen=64,rvv_ta_all_1s=true,rvv_ma_all_1s=true`.
+
+- **Harness.** v0..v31 are loaded with `vl1re8.v`, then `vsetvl` sets a random legal vtype
+  (SEW 8..64, LMUL mf8..m8, random vta/vma) and a random AVL. vxrm and fcsr are set, then the
+  f and x registers. The epilogue stores the registers back with `vs1r.v`, together with vl,
+  vtype, vxsat, vxrm, fcsr and vstart. Half of the x registers point into a 64 KiB data
+  region, which is always mapped and compared. When QEMU raises SIGILL (a register group, SEW
+  or EEW the instruction does not allow) the case is retried at LMUL 1 with each SEW.
+- **What is compared.** `riscv.rvv.sinc` lifts every vector instruction to a user operation,
+  so element values cannot be compared. The p-code runs twice, each time with different
+  random user-operation results. A byte written the same way in both runs must equal QEMU's
+  value (`mismatch`). Any other byte QEMU changes must be one the p-code writes
+  (`missing-output`: a register, a CSR, or `mem` when there is no store). A second QEMU run
+  gives every register the p-code does not read new contents, keeping vl, vtype, vxrm and
+  fcsr. If a byte the p-code writes through a user operation changes, the result is
+  `missing-input`, tagged with the case's tail/mask policy (`tu/mu` etc.).
+- **First run** (pinned `unlace-cc4eab698b`, 400 encodings each):
+  - VLEN 128: 146 match, 111 with findings, 143 reference exceptions. The exceptions are
+    SIGSEGV on indexed and strided addresses outside the region, and SIGILL on encodings
+    reserved at every vtype.
+  - VLEN 256: 154 match, 110 with findings, 136 reference exceptions.
+  - The findings fall into four classes:
+    - `vset{i}vl{i}` do not write vl and vtype (61-79).
+    - A register group is written past vd (44-51): segment loads (`nf`), widening results,
+      and LMUL > 1.
+    - The old vd is read under a tail- or mask-undisturbed policy, or when vl is 0 (29-35).
+    - FP ops do not write fflags and fixed-point ops do not write vxsat (17-19), as the scalar
+      F/D lift also leaves the accrued flags out.
 
 On the #546 encodings, `--oracle qemu` runs `bfdot` and `usdot` (Unicorn raises
 `UC_ERR_EXCEPTION`) and agrees with Unicorn on the rest. In 300 random RISC-V instructions it
@@ -198,3 +239,23 @@ and Capstone modes, the compared registers as `(sleigh name, unicorn constant)` 
 word and its bits, an instruction generator and the mnemonics to leave out. The hooks
 `ignored`, `skip`, `normalize`, `classify_decode` and `operand_mismatch` hold the
 architecture's undefined results and the reference's known quirks.
+
+## APX against a legacy reference
+
+Unicorn has no Intel APX, so `tools/difffuzz/apxcheck.py` checks the APX instructions of a real
+binary another way: it rewrites each one into legacy x86-64 code with the same effect and runs that
+in Unicorn, while the lifted p-code of the original runs from the same state. An extended GPR
+(R16-R31) is renamed to an R8-R15 register the instruction does not use; a new-data-destination
+form `op dst, src1, src2` becomes `mov T, src1; op T, src2; mov dst, T` through a free temporary
+(zero-extending an 8- or 16-bit result, as APX does); `{nf}` must leave every flag unchanged in the
+p-code; SETcc.zu/IMUL.zu add the zero-extension; PUSH2/POP2 become two PUSHes/POPs. CCMP/CTEST,
+CFCMOVcc, JMPABS, branches and RIP-relative operands are skipped.
+
+```sh
+clang -O2 -mapxf -fPIC -shared -o lib.so *.c
+~/.local/share/difffuzz-venv/bin/python tools/difffuzz/apxcheck.py lib.so --unlace <unlace> --sleighpath specs
+```
+
+On Lua 5.3 and zlib built with clang 22 and gcc 15 (`-O2 -mapxf`), 3131 of the 3272 distinct APX
+encodings were verified (at least one trial with in-range addresses) and none differed; replacing
+the NF ADD's sum with a difference in `apx_map4.sinc` makes the check report it.

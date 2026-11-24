@@ -29,6 +29,7 @@ from arches import ARCHES  # noqa: E402
 from pcode_emu import State, Unmodeled, step  # noqa: E402
 from slaregs import register_map  # noqa: E402
 import qemu_backend  # noqa: E402
+import rvv_backend  # noqa: E402
 
 PAGE = 0x1000
 
@@ -256,7 +257,11 @@ def generate(arch, rng, n):
 def main():
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--arch", required=True, choices=sorted(ARCHES))
+    ap.add_argument("--arch", required=True, choices=sorted(ARCHES) + ["riscv64v"],
+                    help="riscv64v: RISC-V vector instructions against QEMU (tools/difffuzz/rvv_backend.py)")
+    ap.add_argument("--vlen", type=int, default=128, help="riscv64v: QEMU's VLEN in bits (128..256)")
+    ap.add_argument("--objdump", default="llvm-objdump", help="riscv64v: an llvm-objdump with the RISC-V vector extensions")
+    ap.add_argument("--only", help="riscv64v: a regex the mnemonic must match")
     ap.add_argument("--count", type=int, default=1000, help="instructions to generate")
     ap.add_argument("--trials", type=int, default=3, help="random input states per instruction")
     ap.add_argument("--seed", type=int, default=1)
@@ -268,7 +273,10 @@ def main():
     ap.add_argument("--oracle", choices=("unicorn", "qemu"), default="unicorn",
                     help="reference: Unicorn (default), or QEMU user mode (tools/difffuzz/qemu_backend.py)")
     args = ap.parse_args()
-    arch = ARCHES[args.arch]
+    vector = args.arch == "riscv64v"
+    arch = ARCHES["riscv64" if vector else args.arch]
+    if vector and args.oracle != "qemu":
+        sys.exit("--arch riscv64v needs --oracle qemu")
     if args.oracle == "qemu" and not qemu_backend.available(arch):
         sys.exit(f"--oracle qemu: no QEMU user harness or binary for {arch.name}")
     regs, big = register_map(arch.lang)
@@ -281,6 +289,8 @@ def main():
             b = bytes.fromhex(h)
             ins = next(dis.disasm(b, arch.base), None)
             cands.append({"bytes": b, "mnemonic": ins.mnemonic if ins else "?", "op_str": ins.op_str if ins else ""})
+    elif vector:
+        cands = rvv_backend.generate(rng, args.count, args.objdump, args.only)
     else:
         cands = generate(arch, rng, args.count)
     dis = arch.capstone()
@@ -306,16 +316,18 @@ def main():
                 if row is None:
                     counts["not-lifted"] += 1
                     continue
-                at = next(dis.disasm(c["bytes"], c["addr"]), None)
+                at = None if vector else next(dis.disasm(c["bytes"], c["addr"]), None)
                 cap_ops = at.op_str if at else c["op_str"]
-                why = arch.operand_mismatch(cap_ops, row["operands"]) if c["mnemonic"] == row["mnemonic"].lower() else None
+                why = None if vector else arch.operand_mismatch(cap_ops, row["operands"]) if c["mnemonic"] == row["mnemonic"].lower() else None
                 if why:
                     counts["operand"] += 1
                     findings.append({"kind": "operand", "bytes": c["bytes"].hex(), "capstone": f"{c['mnemonic']} {c['op_str']}",
                                      "sleigh": f"{row['mnemonic']} {row['operands']}", "why": why})
                 for t in range(args.trials):
                     case_rng = random.Random(f"{args.seed}:{c['bytes'].hex()}:{t}")
-                    if args.oracle == "qemu":
+                    if vector:
+                        res = rvv_backend.run_case_rvv(arch, regs, row, c, case_rng, args.seed + t, tmp, args.vlen)
+                    elif args.oracle == "qemu":
                         res = qemu_backend.run_case_qemu(arch, regs, row, c, case_rng, args.seed + t, tmp)
                     else:
                         res = run_case(arch, regs, row, c, case_rng, args.seed + t)

@@ -13,6 +13,10 @@
 # (docs/processor-tests.md).
 
 [images]
+r32c = """
+f260df9f9f9f9f9f9f9f9f9f9f9f9f9ffa40bbedfff220df9f9f9f9f9f9f9f9f
+a108640304b10864df9f9f9f9f9f9f9fb4ac40007fdf9f9f9f9f9f9f9f9f9f9f
+"""
 m7900 = """
 466400900316640084747474747474741634129d000026010084747474747474314a0025167fde400045847474747474
 """
@@ -305,6 +309,110 @@ address = "0x802a"
 expect = [
     "if (a0 < a1)",  # cmplt sets C
     "a0 = a1;",  # movt
+]
+
+# C-SKY DSP (CSKY:LE:32:v2) built with csky-elf-as -mcpu=ck810: the hi:lo multiply
+# and multiply-accumulate forms read back with mflo/mfhi.
+[[family]]
+name = "csky_dsp"
+language = "CSKY:LE:32:v2"
+base = "0x8000"
+fixture = "crates/unlace-cli/tests/fixtures/csky/dsp.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "csky_dsp_multiply_accumulate_decompiles"
+address = "0x8000"
+expect = [
+    "return a0 * a1 + a2 * a3;",  # muls + mulsa + mflo
+]
+
+[[family.function]]
+test = "csky_dsp_unsigned_high_word_decompiles"
+address = "0x800e"
+expect = [
+    "(unsigned long long)a0 * a1 >> 0x20",  # mulu + mfhi
+]
+
+# C-SKY DSP-enhance (CSKY:LE:32:v2) built with csky-elf-as -mcpu=ck804e: a post-increment
+# ldbi.w loop, max.s32, and a SIMD byte add.
+[[family]]
+name = "csky_edsp"
+language = "CSKY:LE:32:v2"
+base = "0x8000"
+fixture = "crates/unlace-cli/tests/fixtures/csky/edsp.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "csky_edsp_post_increment_load_loop_decompiles"
+address = "0x8000"
+expect = [
+    "v1 = *a0++;",  # ldbi.w
+    "} while (a1);",
+]
+
+[[family.function]]
+test = "csky_edsp_max_decompiles"
+address = "0x8012"
+expect = [
+    "if (a0 <= a1)",  # max.s32
+    "a0 = a1;",
+]
+
+[[family.function]]
+test = "csky_edsp_simd_byte_add_decompiles"
+address = "0x8018"
+expect = [
+    "return padd_8(a0,a1);",  # named lane operation
+]
+
+# C-SKY bloop (CSKY:LE:32:v2) built with csky-elf-as -mcpu=ck804e: the loop-closing
+# bloop after an ldbi.w/addu body, in its two-label and three-label forms.
+[[family]]
+name = "csky_bloop"
+language = "CSKY:LE:32:v2"
+base = "0x8000"
+fixture = "crates/unlace-cli/tests/fixtures/csky/bloop.bin"
+forbid = ["halt_baddata", "bloop("]
+
+[[family.function]]
+test = "csky_bloop_two_label_loop_decompiles"
+address = "0x8000"
+expect = [
+    "do {",  # the bloop back edge
+    "v1 = *a0++;",
+    "} while (a1);",  # the count in r1
+]
+
+[[family.function]]
+test = "csky_bloop_three_label_loop_decompiles"
+address = "0x8010"
+expect = [
+    "do {",
+    "} while (a1);",
+]
+
+# C-SKY Java acceleration (CSKY:LE:32:v2) built with csky-elf-as -mcpu=ck802j: jmpix
+# through the svbr table, 16-bit and 32-bit forms.
+[[family]]
+name = "csky_jmpix"
+language = "CSKY:LE:32:v2"
+base = "0x8000"
+fixture = "crates/unlace-cli/tests/fixtures/csky/jmpix.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "csky_jmpix_16_decompiles"
+address = "0x8000"
+expect = [
+    "* 0x10))();",  # svbr + rx * 16
+]
+
+[[family.function]]
+test = "csky_jmpix_32_decompiles"
+address = "0x8004"
+expect = [
+    "* 0x28))();",  # svbr + rx * 40
 ]
 
 # The native RCA CDP1802 language (SCRT variant) decompiles a raw image: a
@@ -2300,6 +2408,53 @@ expect = [
     "return ~(",
 ]
 
+[[family]]
+name = "evm_erc20_runtime"
+language = "EVM:BE:32:Cancun"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/evm/erc20_runtime_opt.bin"
+
+# Runtime code of `fixtures/evm/erc20.sol`'s Token (solc 0.8.24 --optimize). Jump-table recovery
+# ran pow2select on 32-byte words, whose `1 << (size * 8 - 1)` overflowed (#687, fixed by #709).
+[[family.function]]
+test = "evm_erc20_runtime_dispatch"
+address = "0x0"
+expect = [
+    "0x70a08231",
+    "0xa9059cbb",
+]
+
+[[family]]
+name = "cpython_tailcallframe"
+language = "CPython:LE:32:3.12"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/cpython/ipaddress_format.bin"
+
+# `co_code` of python3.12's `ipaddress._BaseAddress.__format__`. Its `JUMP_FORWARD` to the
+# shared padding block (0x160) leaves the operand stack as the entry block found it, which
+# tailcallframe read as a frame teardown and printed `return sub_160();` (#690).
+[[family.function]]
+test = "cpython_tailcallframe_no_tail_call"
+address = "0x0"
+forbid = ["tailcallframe", "sub_160"]
+expect = ["py_floor_divide("]
+
+[[family]]
+name = "lua54_allones_and"
+language = "Lua:LE:32:5.4"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/lua5x/lua54_allones_and.bin"
+
+# `fixtures/lua5x/lua54_allones_and.lua` (luac 5.4.8): `a & -1` on a 64-bit integer, an AND
+# with the all-ones mask, which made pow2select's remainder test overflow on `m + 1` (#688).
+[[family.function]]
+test = "lua54_allones_and_decompile"
+address = "0x0"
+expect = [
+    "luaGetTable(U0,K0)",
+    "luaEq(K2,0x23)",
+]
+
 # The 7700 Family language decompiles routines hand-assembled from the software manual's
 # instruction pages: a 16-bit compare and BCC clamp, a JSR caller, and an 8-bit store
 # after SEM and LDT (data bank 0).
@@ -2622,3 +2777,36 @@ expect = [
     "if (a5 <= a6)",
     "if (a7 < v1)",
 ]
+
+# The R32C/100 language decompiles routines hand-assembled from the software manual's chapter 4
+# instruction codes: ADD.L:Q, a JSR.W caller, a CMP.L and JLTU clamp, and an absolute byte store.
+[[family]]
+name = "r32c"
+language = "R32C:LE:32:default"
+base = "0x0"
+image = "r32c"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "r32c_quick_add_returns"
+address = "0x0"
+expect = ["return a0 + 3;"]
+
+[[family.function]]
+test = "r32c_jsr_call_decompiles"
+address = "0x10"
+expect = ["return sub_0(2) + 1;"]
+
+[[family.function]]
+test = "r32c_compare_and_branch_clamps"
+address = "0x20"
+expect = [
+    "if (a0 <= 99)",  # CMP.L #100,R2R0 then JLTU skips MOV.L #100,R2R0
+    "return 100;",
+]
+
+[[family.function]]
+test = "r32c_byte_store_is_one_byte"
+address = "0x30"
+expect = ["dat_40 = 0x7f;"]

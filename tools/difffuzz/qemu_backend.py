@@ -239,11 +239,14 @@ class MipsHarness:
     def __init__(self):
         self.scratch = 31
 
+    hilo = True
+
     def prologue(self, target):
         s = self.scratch
         t = 1 if s != 1 else 2
         c = mips_li32(s, TABLES)
-        c += [mips_ld(t, s, 256), 0x00000011 | t << 21, mips_ld(t, s, 264), 0x00000013 | t << 21]  # mthi / mtlo
+        if self.hilo:
+            c += [mips_ld(t, s, 256), 0x00000011 | t << 21, mips_ld(t, s, 264), 0x00000013 | t << 21]  # mthi / mtlo
         for i in range(1, 32):
             if i != s:
                 c.append(mips_ld(i, s, 8 * i))
@@ -259,7 +262,8 @@ class MipsHarness:
         for i in range(1, 32):
             if i != s:
                 c.append(mips_sd(i, s, 8 * i))
-        c += [0x00000010 | t << 11, mips_sd(t, s, 256), 0x00000012 | t << 11, mips_sd(t, s, 264)]  # mfhi / mflo
+        if self.hilo:
+            c += [0x00000010 | t << 11, mips_sd(t, s, 256), 0x00000012 | t << 11, mips_sd(t, s, 264)]  # mfhi / mflo
         c += mips_li32(t, marker) + [mips_sd(t, s, self.marker_at)]
         for base, size in [(OUT, self.table_size)] + [(p, PAGE) for p in dumps]:
             c += [0x24040001] + mips_li32(5, base) + mips_li32(6, size) + [0x24021389, 0x0000000C]  # a0=1; v0=5001 (write)
@@ -268,7 +272,10 @@ class MipsHarness:
 
     def table(self, arch, init, init_vec, flagword):
         t = bytearray(self.table_size)
-        sx = lambda v: (v & 0xFFFFFFFF) - ((v & 0x80000000) << 1)
+        if arch.elf64:
+            sx = lambda v: (v & 0xFFFFFFFFFFFFFFFF) - ((v & (1 << 63)) << 1)
+        else:
+            sx = lambda v: (v & 0xFFFFFFFF) - ((v & 0x80000000) << 1)
         for i, (n, _) in enumerate(arch.gprs[:31], start=1):
             struct.pack_into(">q", t, 8 * i, sx(init.get(n, 0)))
         struct.pack_into(">q", t, 256, sx(init.get("hi", 0)))
@@ -280,6 +287,22 @@ class MipsHarness:
         regs["hi"] = struct.unpack_from(">Q", out, 256)[0]
         regs["lo"] = struct.unpack_from(">Q", out, 264)[0]
         return regs, 0
+
+
+class Mips64Harness(MipsHarness):
+    """MIPS64 code on qemu-mips64: the registers are loaded and compared at their full 64 bits."""
+
+
+class MipsR6Harness(MipsHarness):
+    """MIPS32 Release 6 code on a MIPS64R6 core (I6400). R6 has no HI/LO."""
+    qemu = ("qemu-mips64", ["-cpu", "I6400"])
+    flags = 0xA0000406  # EF_MIPS_ARCH_64R6 | EF_MIPS_NAN2008 | EF_MIPS_PIC | EF_MIPS_CPIC
+    hilo = False
+
+
+class Mips64R6Harness(MipsR6Harness):
+    """MIPS64 Release 6 code on an I6400 core."""
+
 
 
 # ---------------------------------------------------------------- Nios II (R1, ELF32)
@@ -467,7 +490,8 @@ class Sh4Harness:
         return regs, struct.unpack_from("<I", out, 92)[0] & 1
 
 
-HARNESSES = {"aarch64": A64Harness, "riscv64": RvHarness, "mips": MipsHarness, "nios2": Nios2Harness, "sh4": Sh4Harness}
+HARNESSES = {"aarch64": A64Harness, "riscv64": RvHarness, "mips": MipsHarness, "mips64": Mips64Harness,
+             "mipsr6": MipsR6Harness, "mips64r6": Mips64R6Harness, "nios2": Nios2Harness, "sh4": Sh4Harness}
 
 
 def available(arch):
@@ -523,7 +547,7 @@ def run_case_qemu(arch, regs, row, cand, rng, seed, tmp):
         return {"status": "undefined"}
 
     h = HARNESSES[arch.name]()
-    if arch.name in ("riscv64", "mips", "nios2"):
+    if arch.name in ("riscv64", "nios2") or arch.name.startswith("mips"):
         written = set()
         for o in row["ops"]:
             out = o.get("output")
@@ -597,7 +621,7 @@ def run_case_qemu(arch, regs, row, cand, rng, seed, tmp):
         why = p.stderr.decode(errors="replace").strip().splitlines()
         return {"status": "ref-exception", "why": "qemu " + (why[0][:60] if why else "exit %s" % p.returncode)}
     ref, ref_flags = h.parse(arch, p.stdout[:h.table_size])
-    if arch.name in ("riscv64", "mips", "nios2"):
+    if arch.name in ("riscv64", "nios2") or arch.name.startswith("mips"):
         ref[arch.gprs[h.scratch - 1][0]] = init[arch.gprs[h.scratch - 1][0]]
     elif hasattr(h, "choose_scratch"):
         for n in h.scratch_names:

@@ -43,9 +43,11 @@
 # (0x401100) copies a local at the bottom of the frame before an unrelated
 # __cdecl call and reads it back (#16); nested (0x401130) copies f's struct
 # and then calls g(0) first, and g takes only its 0 (#17); stray (0x4011d0)
-# calls a __cdecl callee whose cold path ends in a call that does not return,
-# where the walk runs on through the int3 padding into the next function's
-# `ret 0x20`, and keeps reading its second parameter (#18); quit (0x401240)
+# calls a __cdecl callee whose cold path ends in a call that does not return;
+# the walk stops at the int3 padding after that call instead of running on into
+# the next function's `ret 0x20` (#643), so nf states no pop, and its reads of
+# t.x[0] and t.x[7] bound its arguments at 32 bytes: it takes the eight dwords,
+# as `nf(*r)` does in the source (#18); quit (0x401240)
 # passes a block to a __stdcall callee (ret 0x20) whose other path ends in
 # exit, which takes it while exit is known not to return, and the walk is
 # taken again once `noreturn_known` is turned off: it no longer does (#19);
@@ -184,8 +186,8 @@ count = 1
 literal = 'sub_401070(0x402000,2,0);'
 
 [[match]]
-name = 'REPFRAMECOPY #8: the thirteen frame moves left alone (big_pass, zero_pass stosd and movsd, loop_fill, d_virtual, d_ptr, d_direct, cleanup, local, nested, stray, unsettled, quit without noreturn_known) stay loops, and only those'
-count = 13
+name = 'REPFRAMECOPY #8: the twelve frame moves left alone (big_pass, zero_pass stosd and movsd, loop_fill, d_virtual, d_ptr, d_direct, cleanup, local, nested, unsettled, quit without noreturn_known) stay loops, and only those'
+count = 12
 regex = 'while \(v[0-9]+\) \{'
 
 [[match]]
@@ -241,7 +243,7 @@ literal = 'sub_401190(0))'
 [[match]]
 name = "REPFRAMECOPY #18: a ret the walk reaches past a call that does not return is not the callee's pop"
 count = 1
-regex = 'sub_401200\([^)]*\) \+ a1;'
+regex = 'sub_401200\((v[0-9]+,){7}v[0-9]+\) \+ a1;'
 
 [[match]]
 name = 'REPFRAMECOPY #19: a pop proven by a no-return name holds only while noreturn_known is on'

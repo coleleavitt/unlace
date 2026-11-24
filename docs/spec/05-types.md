@@ -3722,7 +3722,12 @@ being its own or a base's, owns it. A store after a call `this` was not passed
 to (a by-value return slot filled after other work) disqualifies it. MSVC
 constructors return `this`, so an owner that does is `C::C`; one that does not
 and that a function in `C`'s own vftable calls (the scalar or vector deleting
-destructor) is `C::~C`. A function the symbol table already names keeps it.
+destructor) is `C::~C`. That calling slot, when it is the only slot of `C`'s
+offset-0 vftables that calls it, is the deleting destructor and is named
+`C::~C` too, the name a symbol table gives an Itanium `D0`; it replaces the slot's
+`vfunc_<i>` name. Holley's `PEGRP32F.dll` and `USBCAN-Driver.dll` hold 46 deleting
+destructors IDA 9.5 names `` C::`scalar deleting destructor' `` that read
+`vfunc_<i>` before. A function the symbol table already names keeps it.
 Named or not, its `this` gets the `C *` hint: a helper that stores `C`'s
 vftable into the object it is passed is handed a `C`.
 

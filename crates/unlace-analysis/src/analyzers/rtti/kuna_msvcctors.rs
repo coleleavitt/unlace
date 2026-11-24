@@ -16,8 +16,10 @@
 //! A function in no vftable that returns `this` (MSVC constructors return the
 //! object they built) is `C::C`. One that does not, and that a function in
 //! `C`'s own vftable calls (the scalar or vector deleting destructor), is
-//! `C::~C`. Either way, and also when neither name applies (a helper storing
-//! the vftable into the object it is passed), the function's `this` is `C *`:
+//! `C::~C`, and so is that calling slot when it is the only one (the name a
+//! symbol table gives an Itanium deleting destructor too). Either way, and
+//! also when neither name applies (a helper storing the vftable into the
+//! object it is passed), the function's `this` is `C *`:
 //! the object it stores `C`'s vftable into is a `C`. A function the symbol
 //! table already names keeps its name.
 //!
@@ -152,6 +154,33 @@ pub fn run(ctx: &AnalysisCtx) -> AnalysisOutput {
         } else {
             None
         };
+        if let Some(name) = &name
+            && !walk.returns_this
+        {
+            let mut deleting: Vec<u64> = list[c]
+                .1
+                .tables
+                .iter()
+                .filter(|t| t.offset == 0)
+                .flat_map(|t| t.vt.slots.iter().copied())
+                .filter(|g| {
+                    walked_slots
+                        .get(g)
+                        .is_some_and(|calls| calls.contains(&entry))
+                })
+                .collect();
+            deleting.sort_unstable();
+            deleting.dedup();
+            if let [g] = deleting[..]
+                && !named_already(ctx, g)
+            {
+                out.symbols.push(SymFact {
+                    addr: g,
+                    name: name.clone(),
+                    kind: SymKind::Function,
+                });
+            }
+        }
         if let Some(name) = name
             && !named_already(ctx, entry)
         {

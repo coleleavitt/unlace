@@ -3,7 +3,7 @@
 //! the warning never reaches stdout, where `--json` documents go.
 //!
 //! The children are shell stubs speaking the child half of the protocol
-//! (`unlace_console::kuna_buildstamp`): compare `KUNA_PARENT_BUILD` with a baked
+//! (`unlace_console::kuna_buildstamp`): compare `UNLACE_PARENT_BUILD` with a baked
 //! identity and answer on stderr only when they differ. The real binaries' half
 //! is pinned by `unlace-console/tests/verify_buildstamp.rs` and
 //! `unlace-harness/tests/verify_buildstamp.rs`.
@@ -60,6 +60,7 @@ fn decomp_dbg(tag: &str, answers_as: Option<&str>) -> PathBuf {
 fn kuna(args: &[&str], envs: &[(&str, &Path)]) -> Output {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
     cmd.args(args)
+        .env_remove("UNLACE_DECOMP_DBG")
         .env_remove("KUNA_DECOMP_DBG")
         .env_remove(PARENT_ENV);
     for (k, v) in envs {
@@ -72,14 +73,14 @@ fn text(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
 }
 
-/// The reporter's two-install setup: `KUNA_DECOMP_DBG` pins an engine from an
+/// The reporter's two-install setup: `UNLACE_DECOMP_DBG` pins an engine from an
 /// older release. The render still succeeds, and stderr names both builds.
 #[test]
 fn a_decomp_dbg_from_another_build_is_named_once_on_stderr() {
     let child = decomp_dbg("other", Some(OTHER_BUILD));
     let out = kuna(
         &["decompile", fauxware().to_str().unwrap(), "main"],
-        &[("KUNA_DECOMP_DBG", &child)],
+        &[("UNLACE_DECOMP_DBG", &child)],
     );
     let (stdout, stderr) = (text(&out.stdout), text(&out.stderr));
     let _ = std::fs::remove_file(&child);
@@ -106,7 +107,7 @@ fn a_decomp_dbg_from_another_build_is_named_once_on_stderr() {
     assert_eq!(
         lines[2],
         format!(
-            "  decomp_dbg: {OTHER_BUILD} {}, chosen by KUNA_DECOMP_DBG",
+            "  decomp_dbg: {OTHER_BUILD} {}, chosen by UNLACE_DECOMP_DBG",
             child.display()
         )
     );
@@ -137,7 +138,7 @@ fn a_decomp_dbg_that_predates_the_handshake_prints_nothing() {
     let child = decomp_dbg("old", None);
     let out = kuna(
         &["decompile", fauxware().to_str().unwrap(), "main"],
-        &[("KUNA_DECOMP_DBG", &child)],
+        &[("UNLACE_DECOMP_DBG", &child)],
     );
     let _ = std::fs::remove_file(&child);
     assert_eq!(out.status.code(), Some(0));
@@ -154,7 +155,7 @@ fn the_warning_stays_out_of_catalog_json() {
     );
     let out = kuna(
         &["catalog", "--json", "--option", "loweredswitch"],
-        &[("KUNA_DECOMP_DBG", &child)],
+        &[("UNLACE_DECOMP_DBG", &child)],
     );
     let (stdout, stderr) = (text(&out.stdout), text(&out.stderr));
     let _ = std::fs::remove_file(&child);
@@ -195,5 +196,5 @@ fn a_catalog_flag_is_named_as_the_binary_selector() {
     let _ = std::fs::remove_file(&child);
     assert_eq!(out.status.code(), Some(0), "{stderr}");
     assert!(stderr.contains("chosen by --decomp-dbg"), "{stderr}");
-    assert!(!stderr.contains("chosen by KUNA_DECOMP_DBG"), "{stderr}");
+    assert!(!stderr.contains("chosen by UNLACE_DECOMP_DBG"), "{stderr}");
 }

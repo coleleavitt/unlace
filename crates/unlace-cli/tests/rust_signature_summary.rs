@@ -897,7 +897,7 @@ fn installed_corpus_check_validates_the_default_and_explicit_paths() {
             .env("LOCALAPPDATA", &data)
             .env("XDG_DATA_HOME", &data)
             .env("SLEIGHHOME", &specs)
-            .env("KUNA_SPECS", &specs)
+            .env("UNLACE_SPECS", &specs)
             .args(args)
             .output()
             .unwrap();

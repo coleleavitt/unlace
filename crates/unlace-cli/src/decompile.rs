@@ -60,7 +60,7 @@ pub struct DecompileArgs {
     /// Mach-O fat / universal slice override (`--slice <arch>`, e.g. `x86_64` /
     /// `arm64`). Picks which arch slice of a universal binary is loaded; absent
     /// ⇒ the deterministic default (x86-64 → arm64 → first present). Exported as
-    /// `KUNA_MACHO_SLICE` onto the subprocess (read at the dispatch slice peel).
+    /// `UNLACE_MACHO_SLICE` onto the subprocess (read at the dispatch slice peel).
     pub slice: Option<String>,
     /// Explicit ARM instruction-set state for every mapped code section.
     pub isa: Option<ArmIsa>,
@@ -667,7 +667,7 @@ fn decompile(args: &DecompileArgs) -> Result<DecompileOutcome, String> {
     };
     let pinned_by = match &args.decomp_dbg {
         Some(_) => Some("--decomp-dbg"),
-        None => paths::pinned_by("KUNA_DECOMP_DBG"),
+        None => paths::pinned_by("UNLACE_DECOMP_DBG"),
     };
 
     let specs = match &args.sleighpath {
@@ -1195,13 +1195,13 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
     if apply_rust_signatures.is_some() && engine.is_some() {
         return Err("--engine is not supported with --apply-rust-signatures".into());
     }
-    // Honor `--engine cpp|rust` like the Python tools: set `KUNA_ENGINE`.  In the
+    // Honor `--engine cpp|rust` like the Python tools: set `UNLACE_ENGINE`.  In the
     // Rust-only world `rust` is already the default and `cpp` would fail to
     // resolve, but the flag is accepted (and exported) for compatibility with
     // existing invocations / the pipeline.
     if let Some(e) = &engine {
         // FIXME: Audit that the environment access only happens in single-threaded code.
-        unsafe { std::env::set_var("KUNA_ENGINE", e) };
+        unsafe { std::env::set_var("UNLACE_ENGINE", e) };
     }
     addr |= looks_like_addr(&target);
     // An IDA database (`crate::idb`) loads in-process as its segments, and a name
@@ -1410,7 +1410,7 @@ fn usage() {
          \n\
          --sleighpath D and --decomp-dbg P override where this run reads the compiled\n\
          SLEIGH tree and which engine binary it drives; without them both are found\n\
-         beside this executable (see `unlace docs cli`, and KUNA_SPECS/KUNA_DECOMP_DBG).\n\
+         beside this executable (see `unlace docs cli`, and UNLACE_SPECS/UNLACE_DECOMP_DBG).\n\
          \n\
          Whole-binary runs are `unlace decompile-all` / `unlace functions`."
     );

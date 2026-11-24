@@ -5,7 +5,7 @@ fn rejects_missing_value(prefix: &[&str], flag: &str) {
         .args(prefix)
         .arg(flag)
         .env(
-            "KUNA_DECOMP_DBG",
+            "UNLACE_DECOMP_DBG",
             "/nonexistent/kuna-missing-argument-engine",
         )
         .output()

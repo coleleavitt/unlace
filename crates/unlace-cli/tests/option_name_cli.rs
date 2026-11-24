@@ -119,6 +119,7 @@ fn a_bad_name_is_answered_without_specs() {
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(&argv)
         .env_remove("SLEIGHHOME")
+        .env_remove("UNLACE_SPECS")
         .env_remove("KUNA_SPECS")
         .output()
         .expect("failed to spawn the kuna binary");

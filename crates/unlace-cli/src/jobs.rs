@@ -103,7 +103,7 @@ const RUN_RERUN_FAILURES: usize = 16;
 /// `synth:force` renames no function and `synth:noinstall` makes a worker
 /// refuse the replayed structures.  `<addr>` is a byte address (`0x` hex or
 /// decimal), or `*` for every target.
-pub(crate) const JOBS_FAULT_ENV: &str = "KUNA_JOBS_FAULT";
+pub(crate) const JOBS_FAULT_ENV: &str = "UNLACE_JOBS_FAULT";
 
 /// One decompile target, flattened out of a [`unlace_console::engine::FunctionEntry`]
 /// so it can cross a thread and a process boundary (`Address` holds an `Rc`).

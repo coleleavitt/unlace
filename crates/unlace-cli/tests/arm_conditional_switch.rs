@@ -50,7 +50,7 @@ fn guarded_arm_branch_tables_keep_cases_and_the_shared_frame() {
         let runner =
             unlace_base::env::var_os("UNLACE_CLI_WRAPPER").unwrap_or_else(|| binary.into());
         let mut command = Command::new(runner);
-        command.env("KUNA_BINARY", binary).env("KUNA_SPECS", &specs).args([
+        command.env("UNLACE_BINARY", binary).env("UNLACE_SPECS", &specs).args([
             "decompile-all", elf.to_str().unwrap(), "--target", "ARM:LE:32:v5t:default",
             "--isa", "arm", "--mode", "reliable", "--jobs", "1", "--json",
             "--assert-strict", "--sleighpath", specs.to_str().unwrap(),

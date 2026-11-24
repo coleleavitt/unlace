@@ -92,8 +92,10 @@ fn help_needs_no_binary_and_no_specs() {
     for sub in ["decompile", "catalog", "specs", "rust-signatures"] {
         let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args([sub, "--help"])
+            .env_remove("UNLACE_SPECS")
             .env_remove("KUNA_SPECS")
             .env_remove("SLEIGHHOME")
+            .env_remove("UNLACE_DECOMP_DBG")
             .env_remove("KUNA_DECOMP_DBG")
             .output()
             .expect("failed to spawn the kuna binary");
@@ -299,7 +301,7 @@ fn specs_diff_explains_independent_gates_without_running_a_compiler() {
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["specs", "--diff"])
         .env(
-            "KUNA_SLACOMP",
+            "UNLACE_SLACOMP",
             concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"),
         )
         .output()

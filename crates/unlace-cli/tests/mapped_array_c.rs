@@ -18,12 +18,12 @@ fn kuna(args: &[String]) -> serde_json::Value {
     let output = process::required_output(
         Command::new(runner)
             .env(
-                "KUNA_BINARY",
+                "UNLACE_BINARY",
                 unlace_base::env::var_os("UNLACE_BINARY")
                     .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into()),
             )
-            .env("KUNA_SPECS", common::repo_root().join("specs"))
-            .env("KUNA_DECODE_JOBS", "1")
+            .env("UNLACE_SPECS", common::repo_root().join("specs"))
+            .env("UNLACE_DECODE_JOBS", "1")
             .args(args),
     );
     serde_json::from_slice(&output.stdout).expect("CLI JSON")

@@ -17,7 +17,7 @@ fn conditional_runtime_reservation_keeps_its_amount() {
         ("watcom_dos_alloca_ox.exe", "0x10017", "0x10060"),
     ] {
         let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
-            .env("KUNA_SPECS", crate::common::repo_root().join("specs"))
+            .env("UNLACE_SPECS", crate::common::repo_root().join("specs"))
             .arg("decompile").arg(crate::common::fixture(fixture)).arg(sample)
             .args(["--define-function", "0x10008=observe",
                 "--define-function", &format!("{avail}=stackavail"),

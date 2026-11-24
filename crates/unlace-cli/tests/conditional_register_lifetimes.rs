@@ -65,9 +65,9 @@ fn generated() -> (String, Vec<String>) {
             .unwrap_or(std::ffi::OsStr::new(env!("CARGO_BIN_EXE_unlace"))),
     );
     command
-        .env("KUNA_BINARY", env!("CARGO_BIN_EXE_unlace"))
-        .env("KUNA_SPECS", common::repo_root().join("specs"))
-        .env("KUNA_DECODE_JOBS", "1")
+        .env("UNLACE_BINARY", env!("CARGO_BIN_EXE_unlace"))
+        .env("UNLACE_SPECS", common::repo_root().join("specs"))
+        .env("UNLACE_DECODE_JOBS", "1")
         .arg("decompile-all")
         .arg(&image)
         .args([

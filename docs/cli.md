@@ -1731,7 +1731,9 @@ gaps as reserved bytes; a `derivedFrom` peripheral reuses its base's type),
 declared at its base address as a typed global with a volatile range over its
 registers, and each `<interrupt>` names the Cortex-M handler of that IRQ
 `<NAME>_IRQHandler`. The access then reads `USART1.DR = 0x78;` instead of
-`dat_40011004 = 0x78;`.
+`dat_40011004 = 0x78;`. The peripherals are declared for an ELF or other
+object file (an ESP image, the ELF a container wraps) as well; only the handler
+names need a raw dump's vector table.
 
 ### Espressif (ESP32 / ESP8266) application images
 
@@ -5567,7 +5569,9 @@ command line:
 **The key.** Each function's body is the `[entry, next entry)` clip `unlace fid` uses. For each
 instruction the relocation mask (IDA's `ev_calcrel`) is the value bits of every operand SLEIGH
 resolves to a code or data address, or to a scalar that is flagged as an address or falls inside a
-mapped section. Trailing padding the clip runs into (x86 `int3`/`nop` forms, AArch64 `nop`, zero
+mapped section. On x86 the mask follows IDA's `pc` module: only whole bytes the operand owns (the
+displacement or immediate, not a shared ModRM byte), and no mask on a branch whose targets stay inside
+the function. Trailing padding the clip runs into (x86 `int3`/`nop` forms, AArch64 `nop`, zero
 bytes) is left out, as IDA leaves it outside the function. The key is `MD5(bytes & !mask ‖ mask)`
 over the whole body, the order libida's `calc_func_metadata` feeds MD5. IDA builds its mask from each processor
 module's own rules, so unlace's keys match IDA's only where both masked the same operands; between

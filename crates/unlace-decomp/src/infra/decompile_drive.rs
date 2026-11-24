@@ -740,6 +740,29 @@ impl FlowEnvironment for ArchFlowEnv {
             )),
         )
     }
+
+    fn guard_dispatch_target(
+        &self,
+        fd: &Funcdata,
+        op: crate::context::OpId,
+    ) -> Option<unlace_num::pcoderaw::VarnodeData> {
+        let arch = self.arch();
+        if !arch
+            .kuna_options
+            .get::<crate::kuna_guarddispatch::GuardDispatch>()
+            .0
+            || arch.guard_dispatch_slots.is_empty()
+        {
+            return None;
+        }
+        let name = crate::kuna_guarddispatch::target_register(&arch.archid)?;
+        if !crate::kuna_guarddispatch::calls_through_slot(fd, op, &arch.guard_dispatch_slots) {
+            return None;
+        }
+        arch.translate()
+            .probe_register_varnode(name)
+            .filter(|r| r.space.is_some())
+    }
     fn msvc_locked_entry(&self, entry: &Address) -> bool {
         let locked = &self.arch().msvcsig_import_slots;
         !locked.is_empty()

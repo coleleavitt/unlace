@@ -44,6 +44,8 @@ mod m88k_raw;
 mod mep;
 #[path = "meta_raw.rs"]
 mod meta_raw;
+#[path = "v60.rs"]
+mod v60;
 #[path = "mips_elf_selection.rs"]
 mod mips_elf_selection;
 #[path = "moxie_raw.rs"]

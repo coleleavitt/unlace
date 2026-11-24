@@ -453,7 +453,7 @@ opt-out was needed. The one visible second-order effect is on the recovered
 prototype: a length argument whose only reader was the removed compare becomes
 genuinely unused, and parameter recovery may then trim it — the same trade the
 `stackguard` option makes with the canary slot, and the reason the option
-exists. `tests/stages/oxidizer-securitycheck.xml` pins both directions.
+exists. `tests/stages/oxidizer-securitycheck.toml` pins both directions.
 
 ## 7.5 kuna passes at the region tier: msvcstackguard (kuna)
 

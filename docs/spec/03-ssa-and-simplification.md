@@ -1716,7 +1716,7 @@ address, then drops the table and the structured-block graph so no `switch`
 is emitted. A header warning (`Switch with 1 destination removed at <addr>`,
 plus `: N cases all go to same destination` when every entry matches) is
 added unless the table has one entry and the switch value is a constant
-(`tests/stages/kuna-switchsingle.xml`). Unlike upstream, a one-entry table
+(`tests/stages/kuna-switchsingle.toml`). Unlike upstream, a one-entry table
 over a computed value is left alone: kuna's table recovery can keep only the
 entries its guards prove reachable, so a single kept entry is not proof that
 the dispatch has one destination. This is a strict fix with no option: a
@@ -3620,7 +3620,7 @@ Power-of-two widths stay with `ActionLaneDivide`, `simdlane` and
 `constspaceload` to preserve their view of register lanes. The rule runs during
 simplification because other rules can recreate the odd widths after heritage.
 It leaves all 675 datatest assertions unchanged.
-`tests/stages/kuna-wideslice.xml` pins clang
+`tests/stages/kuna-wideslice.toml` pins clang
 `-O3` SSE byte-unpacking (eight direct lane additions, no 13-byte locals and
 no `SUB13x` reads);
 `gh275-spillargtrial.xml` independently exercises a 12-byte packed-double tree.
@@ -3896,6 +3896,21 @@ upper bits are claimed, so a test of a float's own bits is never folded, and a h
 parameter's 48-bit test stays. *Rewrite:* the
 compare becomes a `COPY` of true (`==`) or false (`!=`), and the canonical-NaN branch of the
 unboxing dies. Exact, so always on.
+
+**satconvert** —
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_satconvert.rs (RuleSatConvert)`, oppool1, fires
+on `MULTIEQUAL`, option `satconvert` (default on). *Pattern:* the outermost of three two-input
+joins, each taking a constant on one out-edge of its immediate dominator's branch (the select
+test `pow2select` uses), whose innermost input is `FLOAT_TRUNC(x)` at the join's width or the
+low word of a 64-bit one. The branches test `x` against float constants or `NAN(x)`. This is how
+`riscv.fd.sinc` lifts an `rtz` `fcvt.w*`/`fcvt.l*`. *Proof:* the ladder is evaluated at NaN,
+both infinities, 0, -0.5, -1 and every threshold with its two neighbours. It must equal C's
+saturating conversion at the join's width, signed or unsigned: NaN and values at or above the
+range give the maximum, values below it the minimum. Between thresholds no test changes, so those
+points cover every input. *Rewrite:* the join's readers read the truncation, the clamps die, and
+the conversion prints as `(int)x`. C leaves out-of-range conversions undefined, which is why the
+cast is the source's meaning and the rewrite sits behind an option. The 64-bit unsigned form,
+whose truncation is split at 2^63, keeps its ladder.
 
 **x87truncate** —
 `crates/unlace-bandb-base/src/p3_dataflow/kuna_x87truncate.rs

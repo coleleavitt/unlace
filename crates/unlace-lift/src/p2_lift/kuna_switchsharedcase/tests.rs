@@ -3,7 +3,7 @@
 //! The recovery walk `JumpBasic::kuna_try_loop_carried_guard_table` lives in
 //! `jumptable.rs` next to the rest of the model; this file covers the gate this
 //! module owns. End-to-end behaviour is exercised by
-//! `tests/stages/switchsharedcase-b2sum.xml`.
+//! `tests/stages/switchsharedcase-b2sum.toml`.
 
 use super::*;
 

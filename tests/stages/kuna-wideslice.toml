@@ -1,0 +1,68 @@
+# Wide-slice SSA reduction, always on. The witness is clang -O3
+# x86-64: eight input bytes are widened through SSE unpack operations,
+# accumulated in four dword lanes, folded horizontally, then followed by a
+# scalar tail.
+#
+# Heritage widens each one- or two-byte lane write by joining it with the
+# bytes below it, so the XMM value passes through intermediates 2..15 bytes
+# wide, and the rule pool keeps recreating such widths while it folds the zero
+# lanes. Nothing upstream takes a 13-byte value apart again.
+#
+# Assertions #1 and #2 pin that the bug never appears: no 13-byte locals
+# that exist nowhere in the program and no SUB13x reads of them.
+# Assertions #3 to #5 prove every lane sum is a direct shift-and-mask of the
+# loaded dword.
+#
+# This self-contained byte_sum regression embeds 143 bytes of x86-64 code
+# loaded at 0x1000.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'byte_sum' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+hex = '''
+85f6740d89f183fe08730931d231c0eb6f31c0c389ca83e2f8660fefc931c0
+660fefd2660fefc0660f1f840000000000660f6e1c07660f6e640704660f60
+d9660f61d9660ffed3660f60e1660f61e1660ffec44883c0084839c275d466
+0ffec2660f70c8ee660ffec8660f70c155660ffec1660f7ec039ca7414660f
+1f4400000fb6341701f048ffc24839d175f2c3
+'''
+
+[script]
+commands = [
+    'parse line extern unsigned int byte_sum(unsigned char *bytes, unsigned int length);',
+    'lo fu byte_sum',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'wide-slice #1: no artificial 13-byte local is declared'
+count = 0
+regex = 'char v[0-9]+ \[13\];'
+
+[[match]]
+name = 'wide-slice #2: no 13-byte temporary is read through a SUB13x slice'
+count = 0
+regex = 'SUB13[0-9]+\('
+
+[[match]]
+name = 'wide-slice #3: the reduction sums both low byte lanes as direct masked additions'
+count = 2
+regex = 'v[0-9]+ \+= v[0-9]+ & 0xff;'
+
+[[match]]
+name = 'wide-slice #4: the reduction sums all four middle byte lanes as direct shifted masked additions'
+count = 4
+regex = 'v[0-9]+ \+= v[0-9]+ >> (8|0x10) & 0xff;'
+
+[[match]]
+name = 'wide-slice #5: the reduction sums both top byte lanes as direct shifted additions'
+count = 2
+regex = 'v[0-9]+ \+= v[0-9]+ >> 0x18;'

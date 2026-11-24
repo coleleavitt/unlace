@@ -192,4 +192,4 @@ class appears.
 The earlier round of this prototype had **44** `has no member named 'field_0x…'`
 errors over 10 of these binaries, `fmt` O2 among them: offsets in a hole
 (`&a3->field_0x8` against an `undefined1 _pad8[32]`) and offsets past the end.
-`tests/stages/structsynth-hole-member.xml` is the regression probe.
+`tests/stages/structsynth-hole-member.toml` is the regression probe.

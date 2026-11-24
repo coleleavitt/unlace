@@ -1,0 +1,91 @@
+# MSVC x86-32 one-operand x87 math intrinsics (kuna_x87intrinsic, kuna_x87intrinsics).
+#
+# MSVC compiles sin(x), cos(x), sqrt(x) and their siblings as `fld x; call
+# __CIsin`: the operand is in ST0 and the result returns there. No
+# x86win.cspec model takes an ST0 input, so the call recovered no argument and
+# the expression that computed the operand was dead-code eliminated. The
+# intrinsics are bound to a dedicated ST0-in/ST0-out model with a locked
+# `long double name(long double)` signature. The two-operand intrinsics
+# (__CIatan2, __CIpow, __CIfmod) take ST1 then ST0, in source order, under a
+# second model.
+#
+# Fixture: crates/unlace-analysis/tests/fixtures/x87intrinsic_i386.obj,
+# x87intrinsic_i386.c compiled by Visual C++ 2005 SP1 (`cl /O2 /c`); its
+# __CI* intrinsics are undefined externs, bound by name.
+#
+# Fixture: crates/unlace-analysis/tests/fixtures/x87import_pe_i386.exe
+# (x87import_pe_i386.asm): `_CIcos` imported from msvcr90.dll through a
+# `jmp` thunk keeps its x87 model rather than the C runtime's `__cdecl`.
+
+[image]
+arch = 'x86:LE:32:default:windows'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/x87intrinsic_i386.obj',
+    'read symbols',
+    'load function _polar',
+    'decompile',
+    'print C',
+    'load function _angles',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/x87import_pe_i386.exe',
+    'read symbols',
+    'function bounds 0x401000 as spin',
+    'load function spin',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'X87INTRINSICS #1: no intrinsic is called without its operand'
+count = 0
+regex = '__CI[a-z0-9]+\(\)'
+
+[[match]]
+name = 'X87INTRINSICS #2: cos takes the scaled angle'
+count = 1
+literal = '__CIcos((float10)a0)'
+
+[[match]]
+name = 'X87INTRINSICS #3: sin takes the same angle'
+count = 1
+literal = '__CIsin((float10)a0)'
+
+[[match]]
+name = 'X87INTRINSICS #4: sqrt takes the sum of squares'
+count = 1
+regex = '__CIsqrt\(v[0-9]+ \* v[0-9]+ \+ v[0-9]+ \* v[0-9]+\)'
+
+[[match]]
+name = 'X87INTRINSICS #5: atan2 takes y then x'
+count = 1
+literal = '__CIatan2((float10)a0,(float10)a1)'
+
+[[match]]
+name = 'X87INTRINSICS #6: pow and fmod take both operands'
+count = 2
+regex = '__CI(pow|fmod)\(v[0-9]+,v[0-9]+\)'
+
+[[match]]
+name = 'X87INTRINSICS #7: an imported _CIcos takes the value loaded into ST0'
+count = 1
+regex = '_CIcos\(\(float10\)v[0-9]+\)'
+
+[[match]]
+name = "X87INTRINSICS #8: the imported _CIcos reads nothing off the caller's stack"
+count = 0
+regex = '_CIcos\([^;]*CONCAT'

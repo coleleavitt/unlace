@@ -499,7 +499,7 @@ class Ppc32(Arch32):
 
 TC_DENY = re.compile(
     r"^(j.*|call.*|ret|rfe|rfm|syscall|debug|trap.*|isync|dsync|svlcx|rslcx|bisr|ldlcx|lducx|stlcx|stucx|"
-    r"mfcr|mtcr|enable|disable|wait|nop|cachea.*|cachei.*|loop.*|fcall.*|fret|cmpswap.*|swap.*|ldmst|.*\.f|q.*|madd.*|msub.*)$"
+    r"mfcr|mtcr|enable|disable|wait|nop|cachea.*|cachei.*|loop.*|fcall.*|fret|cmpswap.*|swap.*|ldmst|.*\.f|q.*|madd.*\.h|msub.*\.h)$"
 )
 
 
@@ -522,15 +522,37 @@ class TriCore(Arch32):
     def sleigh_field(self, name, shift, width):
         return name, shift
 
-    def ignored(self, mnemonic, operands, state):
-        m = re.match(r"^([ad]\d+), \[(a\d+)[+]?\]?", operands)
-        if m and m.group(1) == m.group(2):
-            return {"*"}
-        return set()
-
     def gen(self, rng):
         w = rng.getrandbits(32)
         return w.to_bytes(4, "little") if w & 1 else (w & 0xFFFF).to_bytes(2, "little")
+
+    def skip(self, cand):
+        # Unicorn's LD.H D[15], A[b], off4 (SRO, 0x8c) adds off4 unscaled; the manual and Capstone
+        # scale it by 2, as for every other 16-bit halfword form.
+        return cand["bytes"][0] == 0x8C
+
+    def ignored(self, mnemonic, operands, state):
+        # A load into its own post-incremented base register is undefined.
+        m = re.match(r"^([ad]\d+), \[(a\d+)[+]?\]?", operands)
+        if m and m.group(1) == m.group(2):
+            return {"*"}
+        # INSERT, IMASK and EXTR(.U) are undefined when pos + width > 32 (Unicorn leaves the
+        # destination alone).
+        if mnemonic in ("insert", "imask", "extr", "extr.u"):
+            ops = [o.strip() for o in operands.split(",")]
+            imm = lambda o: int(o[1:], 0) if o.startswith("#") else None
+            width = imm(ops[-1])
+            pos = imm(ops[-2]) if len(ops) >= 2 else None
+            if pos is None and len(ops) >= 2 and re.match(r"^d\d+$", ops[-2]):
+                pos = state.get(ops[-2]) & 0x1F
+            if width is not None and pos is not None and pos + width > 32:
+                return {"*"}
+        # The q-format multiplies define n = 0 or 1 only; the 2-bit field's values 2 and 3 are reserved.
+        if mnemonic.endswith(".q") or mnemonic in ("mulr.h", "maddr.h", "msubr.h"):
+            m = re.search(r"#(\d+)$", operands)
+            if m and int(m.group(1)) > 1:
+                return {"*"}
+        return set()
 
     def flag_words(self):
         return [(tc.UC_TRICORE_REG_PSW, {"PSW": (27, 5)}, lambda w: (w & 0xF8000000) | 0xB80)]

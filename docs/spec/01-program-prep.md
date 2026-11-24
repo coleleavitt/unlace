@@ -2750,7 +2750,7 @@ a TE. Measured on a 2.6 MB Go `wasip1` module: 1792 functions load in 0.08 s
 and every body lowers. Checked by compiling the printed C of functions from
 `tests/fixtures/wasm/calls.wasm` beside their source and comparing results on
 random inputs (`crates/unlace-cli/tests/wasm_cli.rs`), and by
-`tests/stages/kuna-wasm-module.xml`.
+`tests/stages/kuna-wasm-module.toml`.
 (kuna) **The Device memory of an M-profile image is volatile** (always on;
 `crates/unlace-analysis/src/loader/kuna_cortexmdevice.rs (paint_volatile)`).
 The ARMv7-M and ARMv8-M memory maps make two regions Device memory on every
@@ -5324,7 +5324,7 @@ moves.
   `--svd` import puts the device name in front of a structure name the built-in
   layouts use (`STM32F103_SCB_Type`), so an SVD peripheral keeps the SVD's
   registers.
-- **(kuna) COM ids and interfaces** (`com`, default off,
+- **(kuna) COM ids and interfaces** (`com`, default on since unlace#581,
   `crates/unlace-analysis/src/analyzers/com/mod.rs (ComPass)`): on a PE
   image, every 16-byte value at 4-byte alignment in a data or code section
   (an i386 MSVC image merges `.rdata`, ids included, into `.text`) that equals
@@ -6099,7 +6099,7 @@ moves.
   already owning the synthesized name is never fought (the re-imported
   compilation unit reuses it on an exact shape match, the `build_enum` rule).
   It acts only where a variant part was imported — no layout, no tag member,
-  nothing to retype. `tests/stages/kuna-variantnames.xml` and
+  nothing to retype. `tests/stages/kuna-variantnames.toml` and
   the unlace-console `verify_variantnames` gate own the naming assertions
   (store, read, declaration type, and the niche no-op) over the committed
   `dwarfvariants_x86_64` fixture.
@@ -8216,7 +8216,7 @@ every other binary's pass list is byte-identical to before the pass existed):
   in a crafted file cannot multiply into millions of names. The pass is
   registered only for `Compiler::Swift` (§1.3's detector) in Mach-O or ELF, so
   every other image's pass set is unchanged; the stage test
-  `tests/stages/kuna-swiftmetadata.xml` runs the fully stripped swiftc-built
+  `tests/stages/kuna-swiftmetadata.toml` runs the fully stripped swiftc-built
   `swift_metadata_elf` off and on.
 - **Swift type layouts** (`swifttypes`, the type-layout arm of the pass above,
   default-on and inert unless `swiftmetadata` is on;
@@ -8303,7 +8303,7 @@ both
   accessors look up a runtime cache are skipped), lays out 4,585 structs and
   3,205 classes with 30,997 fields (22,794 typed), and pins the `self` of 5,739
   vtable getters and 2,821 witness getters, for about 0.1 s and 3 MB over the
-  naming arm. The stage test `tests/stages/kuna-swifttypes.xml` runs the
+  naming arm. The stage test `tests/stages/kuna-swifttypes.toml` runs the
   stripped swiftc-built `swift_types_elf` with the arm off and on.
   The arm also types the result of every call to an accessor that no
   prototype covers (a local generic or runtime-initialized type's, an
@@ -8363,7 +8363,7 @@ both
   arm names 278 helper copies (one pair per statically linked package), 818
   lazy accessors and 18,549 caches, for about 0.4 s of load time in a dev
   build. The stage test
-  `tests/stages/kuna-swifthelpers.xml` runs the stripped
+  `tests/stages/kuna-swifthelpers.toml` runs the stripped
   `swift_helpers_arm64_elf` with both arms off and on.
 - **Swift calling convention** (`swiftcall`, the calling-convention arm of the
   pass above, default-on and inert unless `swiftmetadata` and `swifttypes` are
@@ -8453,7 +8453,7 @@ both
   left to recovery. An object reference is a
   `void *`: its type is the metadata's, which the call site knows, and a
   `swift.HeapObject *` would hide the first stored property behind
-  `obj[1].isa`. The stage test `tests/stages/kuna-swiftruntime.xml` runs the
+  `obj[1].isa`. The stage test `tests/stages/kuna-swiftruntime.toml` runs the
   stripped `swift_types_elf` off and on.
   On arm64 the table also carries the runtime's register-specific retain and
   release entry points (`swift/Runtime/CustomRRABI.h`, instantiated for
@@ -8467,7 +8467,7 @@ both
   so the one parameter is explicit storage on the prototype (the
   `objc_retain_x<N>` shape) and the call prints its argument:
   `swift_release_x20(v)` for the bare `swift_release_x20()`. The stage test
-  `tests/stages/kuna-swiftrrregs.xml` runs `swift_rr_regs_macho`, an arm64
+  `tests/stages/kuna-swiftrrregs.toml` runs `swift_rr_regs_macho`, an arm64
   Mach-O assembled against the iOS libswiftCore.
   The standard library's own C entry points are in the table too
   (`_swift_stdlib_*`, declared in the shims headers
@@ -8482,7 +8482,7 @@ both
   `swift.NSOperatingSystemVersion` (`majorVersion`, `minorVersion`,
   `patchVersion`), which on arm64 comes back through `x8`, so a caller's
   `v1[0]` reads `v1.majorVersion`. The stage test
-  `tests/stages/kuna-swiftstdlib.xml` runs `swift_stdlib_macho`, assembled
+  `tests/stages/kuna-swiftstdlib.toml` runs `swift_stdlib_macho`, assembled
   the same way.
   The rest of the compiler's list of runtime calls
   (`include/swift/Runtime/RuntimeFunctions.def`) is in the table as well, for
@@ -11731,7 +11731,15 @@ least four times among already-reached functions, and the bounded
 `check_valid_subroutine` probe must cover more than two instructions without a
 bad decode or out-of-image flow and reach either a terminal/computed jump or an
 informative call/edge into known code. Accepted bodies are claimed so a later
-candidate cannot split them. ARM instead reuses the existing Thumb-pointer
+candidate cannot split them. The walk then resumes with the accepted targets,
+and the entries the load-time passes committed (a Delphi VMT method, say), as
+roots, so their direct-call closure is discovered and committed too. The
+functions the walk had before the resume are kept, so the resume only adds
+entries. A Delphi image's System memory-manager record is the case it was
+written for: the record in writable data holds `GetMem`, `FreeMem` and
+`ReallocMem`, which are reached only by indirect calls through that record, and
+before the resume they were listed without any of the allocator code they call.
+ARM instead reuses the existing Thumb-pointer
 oracle: an aligned odd code pointer is accepted only at an undefined
 frame-establishing prologue that passes the same valid-subroutine probe.
 

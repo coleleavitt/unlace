@@ -1,0 +1,4 @@
+# C-SKY CK810v: ABIv2 with FPUv2 and VDSP (v1), little endian.
+@define CSKY_FPUV2 ""
+@define CSKY_VDSP ""
+@include "csky.sinc"

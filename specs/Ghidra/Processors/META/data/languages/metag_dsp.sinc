@@ -1,0 +1,339 @@
+# META DSP instructions, written from the binutils metag opcode table and the DSP operand
+# layouts of its disassembler. They decode to their binutils mnemonics; their operations are
+# named p-code operations over the data registers their fields name (DSP RAM and template
+# operands are not tracked).
+
+define pcodeop dsp_abs;
+define pcodeop dsp_abs_template;
+define pcodeop dsp_add;
+define pcodeop dsp_add_template;
+define pcodeop dsp_addb8;
+define pcodeop dsp_addb8_template;
+define pcodeop dsp_adds;
+define pcodeop dsp_adds_template;
+define pcodeop dsp_addsb8;
+define pcodeop dsp_addsb8_template;
+define pcodeop dsp_addst8;
+define pcodeop dsp_addst8_template;
+define pcodeop dsp_addt8;
+define pcodeop dsp_addt8_template;
+define pcodeop dsp_and;
+define pcodeop dsp_and_template;
+define pcodeop dsp_andq;
+define pcodeop dsp_andq_template;
+define pcodeop dsp_ands;
+define pcodeop dsp_ands_template;
+define pcodeop dsp_andsq;
+define pcodeop dsp_andsq_template;
+define pcodeop dsp_asl;
+define pcodeop dsp_asl_template;
+define pcodeop dsp_asl_u;
+define pcodeop dsp_asls;
+define pcodeop dsp_asls_template;
+define pcodeop dsp_asls_u;
+define pcodeop dsp_asr;
+define pcodeop dsp_asr_template;
+define pcodeop dsp_asr_u;
+define pcodeop dsp_asrs;
+define pcodeop dsp_asrs_template;
+define pcodeop dsp_asrs_u;
+define pcodeop dsp_cmp;
+define pcodeop dsp_cmp_n;
+define pcodeop dsp_cmp_template;
+define pcodeop dsp_cmp_z;
+define pcodeop dsp_ffb;
+define pcodeop dsp_ffb_template;
+define pcodeop dsp_getd;
+define pcodeop dsp_getd_dget_set;
+define pcodeop dsp_getl;
+define pcodeop dsp_getl_dget_set;
+define pcodeop dsp_lsl;
+define pcodeop dsp_lsl_template;
+define pcodeop dsp_lsl_u;
+define pcodeop dsp_lsls;
+define pcodeop dsp_lsls_template;
+define pcodeop dsp_lsls_u;
+define pcodeop dsp_lsr;
+define pcodeop dsp_lsr_template;
+define pcodeop dsp_lsr_u;
+define pcodeop dsp_lsrs;
+define pcodeop dsp_lsrs_template;
+define pcodeop dsp_lsrs_u;
+define pcodeop dsp_max;
+define pcodeop dsp_max_template;
+define pcodeop dsp_min;
+define pcodeop dsp_min_template;
+define pcodeop dsp_mmovd;
+define pcodeop dsp_mmovd_mmov;
+define pcodeop dsp_mmovl;
+define pcodeop dsp_mmovl_mmov;
+define pcodeop dsp_mov;
+define pcodeop dsp_mov_dalu;
+define pcodeop dsp_movs;
+define pcodeop dsp_mul;
+define pcodeop dsp_mul_template;
+define pcodeop dsp_mulb8;
+define pcodeop dsp_mulb8_template;
+define pcodeop dsp_mulsb8;
+define pcodeop dsp_mulsb8_template;
+define pcodeop dsp_mulst8;
+define pcodeop dsp_mulst8_template;
+define pcodeop dsp_mult8;
+define pcodeop dsp_mult8_template;
+define pcodeop dsp_neg;
+define pcodeop dsp_negs;
+define pcodeop dsp_nmin;
+define pcodeop dsp_nmin_template;
+define pcodeop dsp_norm;
+define pcodeop dsp_norm_template;
+define pcodeop dsp_or;
+define pcodeop dsp_or_template;
+define pcodeop dsp_orq;
+define pcodeop dsp_orq_template;
+define pcodeop dsp_ors;
+define pcodeop dsp_ors_template;
+define pcodeop dsp_orsq;
+define pcodeop dsp_orsq_template;
+define pcodeop dsp_rtdsw;
+define pcodeop dsp_rtdsw_dalu;
+define pcodeop dsp_rtdw;
+define pcodeop dsp_rtdw_dalu;
+define pcodeop dsp_setd;
+define pcodeop dsp_setd_dget_set;
+define pcodeop dsp_setl;
+define pcodeop dsp_setl_dget_set;
+define pcodeop dsp_sub;
+define pcodeop dsp_sub_template;
+define pcodeop dsp_subb8;
+define pcodeop dsp_subb8_template;
+define pcodeop dsp_subs;
+define pcodeop dsp_subs_template;
+define pcodeop dsp_subsb8;
+define pcodeop dsp_subsb8_template;
+define pcodeop dsp_subst8;
+define pcodeop dsp_subst8_template;
+define pcodeop dsp_subt8;
+define pcodeop dsp_subt8_template;
+define pcodeop dsp_tst;
+define pcodeop dsp_tst_n;
+define pcodeop dsp_tst_template;
+define pcodeop dsp_tst_z;
+define pcodeop dsp_xor;
+define pcodeop dsp_xor_template;
+define pcodeop dsp_xorq;
+define pcodeop dsp_xorq_template;
+define pcodeop dsp_xors;
+define pcodeop dsp_xors_template;
+define pcodeop dsp_xorsq;
+define pcodeop dsp_xorsq_template;
+define pcodeop dsp_xsd;
+define pcodeop dsp_xsd_dalu;
+define pcodeop dsp_xsdb;
+define pcodeop dsp_xsdb_dalu;
+define pcodeop dsp_xsds;
+define pcodeop dsp_xsds_dalu;
+define pcodeop dsp_xsdsb;
+define pcodeop dsp_xsdsb_dalu;
+define pcodeop dsp_xsdsw;
+define pcodeop dsp_xsdsw_dalu;
+define pcodeop dsp_xsdw;
+define pcodeop dsp_xsdw_dalu;
+
+# DSP operand forms: a data-unit register (unit from bit 24) below 16, or a DSP RAM location
+# (field values 16..31) the model does not track.
+DST19: d0_19 is fb24=0 & fb23=0 & d0_19 { export d0_19; }
+DST19: d1_19 is fb24=1 & fb23=0 & d1_19 { export d1_19; }
+DST19: "[DSPRAM]" is fb23=1 { export DSPRAM; }
+SRC14: d0_14 is fb24=0 & fb18=0 & d0_14 { export d0_14; }
+SRC14: d1_14 is fb24=1 & fb18=0 & d1_14 { export d1_14; }
+SRC14: "[DSPRAM]" is fb18=1 { export DSPRAM; }
+SRC9: d0_9 is fb24=0 & fb13=0 & d0_9 { export d0_9; }
+SRC9: d1_9 is fb24=1 & fb13=0 & d1_9 { export d1_9; }
+SRC9: "[DSPRAM]" is fb13=1 { export DSPRAM; }
+DSTC: d0_19 is fb24=0 & d0_19 { export d0_19; }
+DSTC: d1_19 is fb24=1 & d1_19 { export d1_19; }
+SRCC14: d0_14 is fb24=0 & d0_14 { export d0_14; }
+SRCC14: d1_14 is fb24=1 & d1_14 { export d1_14; }
+SRCC9: d0_9 is fb24=0 & d0_9 { export d0_9; }
+SRCC9: d1_9 is fb24=1 & d1_9 { export d1_9; }
+
+:DADDT is fb1=1 & fb2=0 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=0 & fb29=0 & fb30=0 & fb31=0 { dsp_add_template(); }
+:DADD DST19, SRC14, SRC9 is fb2=0 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=0 & fb29=0 & fb30=0 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_add(SRC14, SRC9); }
+:DADD DST19, imm16 is fb0=1 & fb1=1 & fb2=0 & fb25=1 & fb26=0 & fb27=0 & fb28=0 & fb29=0 & fb30=0 & fb31=0 & DST19 & imm16 { DST19 = dsp_add(DST19, imm16:2); }
+:DADD DST19, imm16 is fb0=1 & fb1=1 & fb2=1 & fb25=1 & fb26=0 & fb27=0 & fb28=0 & fb29=0 & fb30=0 & fb31=0 & DST19 & imm16 { DST19 = dsp_add(DST19, imm16:2); }
+:DADD^CC DSTC, SRCC14, SRCC9 is fb5=1 & fb6=1 & fb7=1 & fb8=1 & fb25=0 & fb26=1 & fb27=0 & fb28=0 & fb29=0 & fb30=0 & fb31=0 & CC & DSTC & SRCC14 & SRCC9 { if (!CC) goto inst_next; DSTC = dsp_add(SRCC14, SRCC9); }
+:DADDST is fb1=1 & fb2=0 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=0 & fb29=0 & fb30=0 & fb31=0 { dsp_adds_template(); }
+:DADDS DST19, SRC14, SRC9 is fb2=0 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=0 & fb29=0 & fb30=0 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_adds(SRC14, SRC9); }
+:DADDS DST19, imm16 is fb0=1 & fb1=1 & fb2=0 & fb25=1 & fb26=0 & fb27=1 & fb28=0 & fb29=0 & fb30=0 & fb31=0 & DST19 & imm16 { DST19 = dsp_adds(DST19, imm16:2); }
+:DADDS DST19, imm16 is fb0=1 & fb1=1 & fb2=1 & fb25=1 & fb26=0 & fb27=1 & fb28=0 & fb29=0 & fb30=0 & fb31=0 & DST19 & imm16 { DST19 = dsp_adds(DST19, imm16:2); }
+:DADDS^CC DSTC, SRCC14, SRCC9 is fb5=1 & fb6=1 & fb7=1 & fb8=1 & fb25=0 & fb26=1 & fb27=1 & fb28=0 & fb29=0 & fb30=0 & fb31=0 & CC & DSTC & SRCC14 & SRCC9 { if (!CC) goto inst_next; DSTC = dsp_adds(SRCC14, SRCC9); }
+:DSUBT is fb1=1 & fb2=0 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=0 & fb30=0 & fb31=0 { dsp_sub_template(); }
+:DSUB DST19, SRC14, SRC9 is fb2=0 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=0 & fb30=0 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_sub(SRC14, SRC9); }
+:DSUB DST19, imm16 is fb0=1 & fb1=1 & fb2=0 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=0 & fb30=0 & fb31=0 & DST19 & imm16 { DST19 = dsp_sub(DST19, imm16:2); }
+:DSUB DST19, imm16 is fb0=1 & fb1=1 & fb2=1 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=0 & fb30=0 & fb31=0 & DST19 & imm16 { DST19 = dsp_sub(DST19, imm16:2); }
+:DSUBST is fb1=1 & fb2=0 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=1 & fb29=0 & fb30=0 & fb31=0 { dsp_subs_template(); }
+:DSUBS DST19, SRC14, SRC9 is fb2=0 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=1 & fb29=0 & fb30=0 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_subs(SRC14, SRC9); }
+:DSUBS DST19, imm16 is fb0=1 & fb1=1 & fb2=0 & fb25=1 & fb26=0 & fb27=1 & fb28=1 & fb29=0 & fb30=0 & fb31=0 & DST19 & imm16 { DST19 = dsp_subs(DST19, imm16:2); }
+:DSUBS DST19, imm16 is fb0=1 & fb1=1 & fb2=1 & fb25=1 & fb26=0 & fb27=1 & fb28=1 & fb29=0 & fb30=0 & fb31=0 & DST19 & imm16 { DST19 = dsp_subs(DST19, imm16:2); }
+:DSUBS^CC DSTC, SRCC14, SRCC9 is fb5=1 & fb6=1 & fb7=1 & fb8=1 & fb25=0 & fb26=1 & fb27=1 & fb28=1 & fb29=0 & fb30=0 & fb31=0 & CC & DSTC & SRCC14 & SRCC9 { if (!CC) goto inst_next; DSTC = dsp_subs(SRCC14, SRCC9); }
+:DSUB^CC DSTC, SRCC14, SRCC9 is fb5=1 & fb6=1 & fb7=1 & fb8=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=0 & fb30=0 & fb31=0 & CC & DSTC & SRCC14 & SRCC9 { if (!CC) goto inst_next; DSTC = dsp_sub(SRCC14, SRCC9); }
+:DANDT is fb1=1 & fb2=0 & fb3=0 & fb6=0 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=0 & fb29=1 & fb30=0 & fb31=0 { dsp_and_template(); }
+:DAND DST19, SRC14, SRC9 is fb2=0 & fb3=0 & fb6=0 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=0 & fb29=1 & fb30=0 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_and(SRC14, SRC9); }
+:DANDQT is fb1=1 & fb2=0 & fb3=0 & fb6=1 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=0 & fb29=1 & fb30=0 & fb31=0 { dsp_andq_template(); }
+:DANDQ DST19, SRC14, SRC9 is fb2=0 & fb3=0 & fb6=1 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=0 & fb29=1 & fb30=0 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_andq(SRC14, SRC9); }
+:DANDQ^CC DSTC, SRCC14, SRCC9 is fb6=1 & fb7=1 & fb8=1 & fb25=0 & fb26=1 & fb27=0 & fb28=0 & fb29=1 & fb30=0 & fb31=0 & CC & DSTC & SRCC14 & SRCC9 { if (!CC) goto inst_next; DSTC = dsp_andq(SRCC14, SRCC9); }
+:DANDSQT is fb1=1 & fb2=0 & fb3=0 & fb6=1 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=0 & fb29=1 & fb30=0 & fb31=0 { dsp_andsq_template(); }
+:DANDSQ DST19, SRC14, SRC9 is fb2=0 & fb3=0 & fb6=1 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=0 & fb29=1 & fb30=0 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_andsq(SRC14, SRC9); }
+:DANDSQ^CC DSTC, SRCC14, SRCC9 is fb6=1 & fb7=1 & fb8=1 & fb25=0 & fb26=1 & fb27=1 & fb28=0 & fb29=1 & fb30=0 & fb31=0 & CC & DSTC & SRCC14 & SRCC9 { if (!CC) goto inst_next; DSTC = dsp_andsq(SRCC14, SRCC9); }
+:DORQT is fb1=1 & fb2=0 & fb3=0 & fb6=1 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=0 & fb31=0 { dsp_orq_template(); }
+:DORQ DST19, SRC14, SRC9 is fb2=0 & fb3=0 & fb6=1 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=0 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_orq(SRC14, SRC9); }
+:DORQ^CC DSTC, SRCC14, SRCC9 is fb6=1 & fb7=1 & fb8=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=0 & fb31=0 & CC & DSTC & SRCC14 & SRCC9 { if (!CC) goto inst_next; DSTC = dsp_orq(SRCC14, SRCC9); }
+:DORSQT is fb1=1 & fb2=0 & fb3=0 & fb6=1 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=1 & fb29=1 & fb30=0 & fb31=0 { dsp_orsq_template(); }
+:DORSQ DST19, SRC14, SRC9 is fb2=0 & fb3=0 & fb6=1 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=1 & fb29=1 & fb30=0 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_orsq(SRC14, SRC9); }
+:DORSQ^CC DSTC, SRCC14, SRCC9 is fb6=1 & fb7=1 & fb8=1 & fb25=0 & fb26=1 & fb27=1 & fb28=1 & fb29=1 & fb30=0 & fb31=0 & CC & DSTC & SRCC14 & SRCC9 { if (!CC) goto inst_next; DSTC = dsp_orsq(SRCC14, SRCC9); }
+:DXORQT is fb1=1 & fb2=0 & fb3=0 & fb6=1 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=0 & fb29=0 & fb30=1 & fb31=0 { dsp_xorq_template(); }
+:DXORQ DST19, SRC14, SRC9 is fb2=0 & fb3=0 & fb6=1 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=0 & fb29=0 & fb30=1 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_xorq(SRC14, SRC9); }
+:DXORQ^CC DSTC, SRCC14, SRCC9 is fb6=1 & fb7=1 & fb8=1 & fb25=0 & fb26=1 & fb27=0 & fb28=0 & fb29=0 & fb30=1 & fb31=0 & CC & DSTC & SRCC14 & SRCC9 { if (!CC) goto inst_next; DSTC = dsp_xorq(SRCC14, SRCC9); }
+:DXORSQT is fb1=1 & fb6=1 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=0 & fb29=0 & fb30=1 & fb31=0 { dsp_xorsq_template(); }
+:DXORSQ DST19, SRC14, SRC9 is fb6=1 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=0 & fb29=0 & fb30=1 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_xorsq(SRC14, SRC9); }
+:DXORSQ^CC DSTC, SRCC14, SRCC9 is fb6=1 & fb7=1 & fb8=1 & fb25=0 & fb26=1 & fb27=1 & fb28=0 & fb29=0 & fb30=1 & fb31=0 & CC & DSTC & SRCC14 & SRCC9 { if (!CC) goto inst_next; DSTC = dsp_xorsq(SRCC14, SRCC9); }
+:DMOV is fb1=1 & fb2=1 & fb3=0 & fb5=0 & fb6=1 & fb7=0 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=0 & fb29=0 & fb30=0 & fb31=0 { dsp_mov_dalu(); }
+:DMOV is fb1=1 & fb2=1 & fb3=0 & fb5=0 & fb6=1 & fb7=1 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=0 & fb29=0 & fb30=0 & fb31=0 { dsp_mov_dalu(); }
+:GETD is fb2=0 & fb3=0 & fb4=0 & fb5=0 & fb6=0 & fb7=0 & fb8=1 & fb24=0 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=0 & fb30=0 & fb31=1 { dsp_getd_dget_set(); }
+:SETD is fb2=0 & fb3=0 & fb4=0 & fb5=0 & fb6=0 & fb7=0 & fb8=0 & fb24=0 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=0 & fb30=0 & fb31=1 { dsp_setd_dget_set(); }
+:GETL is fb2=1 & fb3=0 & fb4=0 & fb5=0 & fb6=0 & fb7=0 & fb8=1 & fb24=0 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=0 & fb30=0 & fb31=1 { dsp_getl_dget_set(); }
+:SETL is fb2=1 & fb3=0 & fb4=0 & fb5=0 & fb6=0 & fb7=0 & fb8=0 & fb24=0 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=0 & fb30=0 & fb31=1 { dsp_setl_dget_set(); }
+:MMOVD is fb0=1 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb24=0 & fb25=1 & fb26=0 & fb27=1 & fb28=0 & fb29=0 & fb30=1 & fb31=1 { dsp_mmovd_mmov(); }
+:MMOVL is fb0=1 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb24=1 & fb25=1 & fb26=0 & fb27=1 & fb28=0 & fb29=0 & fb30=1 & fb31=1 { dsp_mmovl_mmov(); }
+:MMOVD is fb0=1 & fb1=0 & fb2=0 & fb5=0 & fb6=0 & fb14=0 & fb15=0 & fb16=0 & fb17=0 & fb18=0 & fb24=0 & fb25=0 & fb26=1 & fb27=1 & fb28=0 & fb29=0 & fb30=1 & fb31=1 { dsp_mmovd_mmov(); }
+:MMOVL is fb0=1 & fb1=0 & fb2=0 & fb5=0 & fb6=0 & fb14=0 & fb15=0 & fb16=0 & fb17=0 & fb18=0 & fb24=1 & fb25=0 & fb26=1 & fb27=1 & fb28=0 & fb29=0 & fb30=1 & fb31=1 { dsp_mmovl_mmov(); }
+:DAND DST19, imm16 is fb0=1 & fb1=1 & fb2=0 & fb25=1 & fb26=0 & fb27=0 & fb28=0 & fb29=1 & fb30=0 & fb31=0 & DST19 & imm16 { DST19 = dsp_and(DST19, imm16:2); }
+:DAND DST19, imm16 is fb0=1 & fb1=1 & fb2=1 & fb25=1 & fb26=0 & fb27=0 & fb28=0 & fb29=1 & fb30=0 & fb31=0 & DST19 & imm16 { DST19 = dsp_and(DST19, imm16:2); }
+:DANDST is fb1=1 & fb2=0 & fb3=0 & fb6=0 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=0 & fb29=1 & fb30=0 & fb31=0 { dsp_ands_template(); }
+:DANDS DST19, SRC14, SRC9 is fb2=0 & fb3=0 & fb6=0 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=0 & fb29=1 & fb30=0 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_ands(SRC14, SRC9); }
+:DANDS DST19, imm16 is fb0=1 & fb1=1 & fb2=0 & fb25=1 & fb26=0 & fb27=1 & fb28=0 & fb29=1 & fb30=0 & fb31=0 & DST19 & imm16 { DST19 = dsp_ands(DST19, imm16:2); }
+:DANDS DST19, imm16 is fb0=1 & fb1=1 & fb2=1 & fb25=1 & fb26=0 & fb27=1 & fb28=0 & fb29=1 & fb30=0 & fb31=0 & DST19 & imm16 { DST19 = dsp_ands(DST19, imm16:2); }
+:DMAXT is fb1=1 & fb2=1 & fb3=0 & fb5=1 & fb6=0 & fb7=0 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=0 { dsp_max_template(); }
+:DMAX DST19, SRC14, SRC9 is fb2=1 & fb3=0 & fb5=1 & fb6=0 & fb7=0 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_max(SRC14, SRC9); }
+:DMINT is fb1=1 & fb2=0 & fb3=0 & fb5=1 & fb6=0 & fb7=0 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=0 { dsp_min_template(); }
+:DMIN DST19, SRC14, SRC9 is fb2=0 & fb3=0 & fb5=1 & fb6=0 & fb7=0 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_min(SRC14, SRC9); }
+:DNMINT is fb1=1 & fb2=1 & fb3=1 & fb5=1 & fb6=0 & fb7=0 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=0 { dsp_nmin_template(); }
+:DNMIN DST19, SRC14, SRC9 is fb2=1 & fb3=1 & fb5=1 & fb6=0 & fb7=0 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_nmin(SRC14, SRC9); }
+:DORT is fb1=1 & fb2=0 & fb3=0 & fb6=0 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=0 & fb31=0 { dsp_or_template(); }
+:DOR DST19, SRC14, SRC9 is fb2=0 & fb3=0 & fb6=0 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=0 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_or(SRC14, SRC9); }
+:DOR DST19, imm16 is fb0=1 & fb1=1 & fb2=0 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=0 & fb31=0 & DST19 & imm16 { DST19 = dsp_or(DST19, imm16:2); }
+:DOR DST19, imm16 is fb0=1 & fb1=1 & fb2=1 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=0 & fb31=0 & DST19 & imm16 { DST19 = dsp_or(DST19, imm16:2); }
+:DORST is fb1=1 & fb2=0 & fb3=0 & fb6=0 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=1 & fb29=1 & fb30=0 & fb31=0 { dsp_ors_template(); }
+:DORS DST19, SRC14, SRC9 is fb2=0 & fb3=0 & fb6=0 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=1 & fb29=1 & fb30=0 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_ors(SRC14, SRC9); }
+:DORS DST19, imm16 is fb0=1 & fb1=1 & fb2=0 & fb25=1 & fb26=0 & fb27=1 & fb28=1 & fb29=1 & fb30=0 & fb31=0 & DST19 & imm16 { DST19 = dsp_ors(DST19, imm16:2); }
+:DORS DST19, imm16 is fb0=1 & fb1=1 & fb2=1 & fb25=1 & fb26=0 & fb27=1 & fb28=1 & fb29=1 & fb30=0 & fb31=0 & DST19 & imm16 { DST19 = dsp_ors(DST19, imm16:2); }
+:DXORT is fb1=1 & fb2=0 & fb3=0 & fb6=0 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=0 & fb29=0 & fb30=1 & fb31=0 { dsp_xor_template(); }
+:DXOR DST19, SRC14, SRC9 is fb2=0 & fb3=0 & fb6=0 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=0 & fb29=0 & fb30=1 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_xor(SRC14, SRC9); }
+:DXOR DST19, imm16 is fb0=1 & fb1=1 & fb2=0 & fb25=1 & fb26=0 & fb27=0 & fb28=0 & fb29=0 & fb30=1 & fb31=0 & DST19 & imm16 { DST19 = dsp_xor(DST19, imm16:2); }
+:DXOR DST19, imm16 is fb0=1 & fb1=1 & fb2=1 & fb25=1 & fb26=0 & fb27=0 & fb28=0 & fb29=0 & fb30=1 & fb31=0 & DST19 & imm16 { DST19 = dsp_xor(DST19, imm16:2); }
+:DXORST is fb1=1 & fb2=0 & fb3=0 & fb6=0 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=0 & fb29=0 & fb30=1 & fb31=0 { dsp_xors_template(); }
+:DXORS DST19, SRC14, SRC9 is fb2=0 & fb3=0 & fb6=0 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=0 & fb29=0 & fb30=1 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_xors(SRC14, SRC9); }
+:DXORS DST19, imm16 is fb0=1 & fb1=1 & fb2=0 & fb25=1 & fb26=0 & fb27=1 & fb28=0 & fb29=0 & fb30=1 & fb31=0 & DST19 & imm16 { DST19 = dsp_xors(DST19, imm16:2); }
+:DXORS DST19, imm16 is fb0=1 & fb1=1 & fb2=1 & fb25=1 & fb26=0 & fb27=1 & fb28=0 & fb29=0 & fb30=1 & fb31=0 & DST19 & imm16 { DST19 = dsp_xors(DST19, imm16:2); }
+:DADDB8T is fb1=1 & fb2=0 & fb3=1 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=0 & fb29=1 & fb30=0 & fb31=0 { dsp_addb8_template(); }
+:DADDB8 DST19, SRC14, SRC9 is fb2=0 & fb3=1 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=0 & fb29=1 & fb30=0 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_addb8(SRC14, SRC9); }
+:DADDT8T is fb1=1 & fb2=1 & fb3=1 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=0 & fb29=1 & fb30=0 & fb31=0 { dsp_addt8_template(); }
+:DADDT8 DST19, SRC14, SRC9 is fb2=1 & fb3=1 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=0 & fb29=1 & fb30=0 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_addt8(SRC14, SRC9); }
+:DADDSB8T is fb1=1 & fb2=0 & fb3=1 & fb6=0 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=0 & fb29=1 & fb30=0 & fb31=0 { dsp_addsb8_template(); }
+:DADDSB8 DST19, SRC14, SRC9 is fb2=0 & fb3=1 & fb6=0 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=0 & fb29=1 & fb30=0 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_addsb8(SRC14, SRC9); }
+:DADDST8T is fb1=1 & fb2=1 & fb3=1 & fb6=0 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=0 & fb29=1 & fb30=0 & fb31=0 { dsp_addst8_template(); }
+:DADDST8 DST19, SRC14, SRC9 is fb2=1 & fb3=1 & fb6=0 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=0 & fb29=1 & fb30=0 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_addst8(SRC14, SRC9); }
+:DMULB8T is fb1=1 & fb2=0 & fb3=1 & fb5=0 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=0 & fb29=0 & fb30=1 & fb31=0 { dsp_mulb8_template(); }
+:DMULB8 DST19, SRC14, SRC9 is fb2=0 & fb3=1 & fb5=0 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=0 & fb29=0 & fb30=1 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_mulb8(SRC14, SRC9); }
+:DMULT8T is fb1=1 & fb2=1 & fb3=1 & fb5=0 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=0 & fb29=0 & fb30=1 & fb31=0 { dsp_mult8_template(); }
+:DMULT8 DST19, SRC14, SRC9 is fb2=1 & fb3=1 & fb5=0 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=0 & fb29=0 & fb30=1 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_mult8(SRC14, SRC9); }
+:DMULSB8T is fb1=1 & fb2=0 & fb3=1 & fb5=0 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=0 & fb29=0 & fb30=1 & fb31=0 { dsp_mulsb8_template(); }
+:DMULSB8 DST19, SRC14, SRC9 is fb2=0 & fb3=1 & fb5=0 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=0 & fb29=0 & fb30=1 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_mulsb8(SRC14, SRC9); }
+:DMULST8T is fb1=1 & fb2=1 & fb3=1 & fb5=0 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=0 & fb29=0 & fb30=1 & fb31=0 { dsp_mulst8_template(); }
+:DMULST8 DST19, SRC14, SRC9 is fb2=1 & fb3=1 & fb5=0 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=0 & fb29=0 & fb30=1 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_mulst8(SRC14, SRC9); }
+:DSUBB8T is fb1=1 & fb2=0 & fb3=1 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=0 & fb31=0 { dsp_subb8_template(); }
+:DSUBB8 DST19, SRC14, SRC9 is fb2=0 & fb3=1 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=0 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_subb8(SRC14, SRC9); }
+:DSUBT8T is fb1=1 & fb2=1 & fb3=1 & fb6=0 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=0 & fb31=0 { dsp_subt8_template(); }
+:DSUBT8 DST19, SRC14, SRC9 is fb2=1 & fb3=1 & fb6=0 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=0 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_subt8(SRC14, SRC9); }
+:DSUBSB8T is fb1=1 & fb2=0 & fb3=1 & fb6=0 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=1 & fb29=1 & fb30=0 & fb31=0 { dsp_subsb8_template(); }
+:DSUBSB8 DST19, SRC14, SRC9 is fb2=0 & fb3=1 & fb6=0 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=1 & fb29=1 & fb30=0 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_subsb8(SRC14, SRC9); }
+:DSUBST8T is fb1=1 & fb2=1 & fb3=1 & fb6=0 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=1 & fb29=1 & fb30=0 & fb31=0 { dsp_subst8_template(); }
+:DSUBST8 DST19, SRC14, SRC9 is fb2=1 & fb3=1 & fb6=0 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=1 & fb29=1 & fb30=0 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_subst8(SRC14, SRC9); }
+:DMULT is fb1=1 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=0 & fb29=1 & fb30=1 & fb31=0 { dsp_mul_template(); }
+:DMUL DST19, SRC14, SRC9 is fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=0 & fb29=1 & fb30=1 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_mul(SRC14, SRC9); }
+:DMUL DST19, imm16 is fb0=1 & fb1=1 & fb2=0 & fb25=1 & fb26=0 & fb27=0 & fb28=0 & fb29=1 & fb30=1 & fb31=0 & DST19 & imm16 { DST19 = dsp_mul(DST19, imm16:2); }
+:DMUL DST19, imm16 is fb0=1 & fb1=1 & fb2=1 & fb25=1 & fb26=0 & fb27=0 & fb28=0 & fb29=1 & fb30=1 & fb31=0 & DST19 & imm16 { DST19 = dsp_mul(DST19, imm16:2); }
+:DABST is fb1=1 & fb2=0 & fb3=1 & fb5=1 & fb6=0 & fb7=0 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=0 { dsp_abs_template(); }
+:DABS DST19, SRC14 is fb2=0 & fb3=1 & fb5=1 & fb6=0 & fb7=0 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=0 & DST19 & SRC14 { DST19 = dsp_abs(SRC14); }
+:DFFBT is fb1=1 & fb2=1 & fb3=0 & fb5=0 & fb6=0 & fb7=0 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=0 { dsp_ffb_template(); }
+:DFFB DST19, SRC14 is fb2=1 & fb3=0 & fb5=0 & fb6=0 & fb7=0 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=0 & DST19 & SRC14 { DST19 = dsp_ffb(SRC14); }
+:DNORMT is fb1=1 & fb2=0 & fb3=1 & fb5=0 & fb6=0 & fb7=0 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=0 { dsp_norm_template(); }
+:DNORM DST19, SRC14 is fb2=0 & fb3=1 & fb5=0 & fb6=0 & fb7=0 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=0 & DST19 & SRC14 { DST19 = dsp_norm(SRC14); }
+:DCMPT is fb1=1 & fb2=0 & fb3=0 & fb5=0 & fb6=0 & fb7=0 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=0 { dsp_cmp_template(); }
+:DCMP SRC14, SRC9 is fb2=0 & fb3=0 & fb5=0 & fb6=0 & fb7=0 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=0 & SRC14 & SRC9 { ZF = dsp_cmp_z(SRC14, SRC9); NF = dsp_cmp_n(SRC14, SRC9); }
+:DCMP DST19, imm16 is fb0=1 & fb1=1 & fb2=0 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=0 & DST19 & imm16 { local a:4 = DST19; ZF = dsp_cmp_z(a, imm16:2); NF = dsp_cmp_n(a, imm16:2); }
+:DCMP DST19, imm16 is fb0=1 & fb1=1 & fb2=1 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=0 & DST19 & imm16 { local a:4 = DST19; ZF = dsp_cmp_z(a, imm16:2); NF = dsp_cmp_n(a, imm16:2); }
+:DTSTT is fb1=1 & fb2=0 & fb3=0 & fb5=0 & fb6=0 & fb7=0 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=1 & fb29=1 & fb30=1 & fb31=0 { dsp_tst_template(); }
+:DTST SRC14, SRC9 is fb2=0 & fb3=0 & fb5=0 & fb6=0 & fb7=0 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=1 & fb29=1 & fb30=1 & fb31=0 & SRC14 & SRC9 { ZF = dsp_tst_z(SRC14, SRC9); NF = dsp_tst_n(SRC14, SRC9); }
+:DTST DST19, imm16 is fb0=1 & fb1=1 & fb2=0 & fb25=1 & fb26=0 & fb27=1 & fb28=1 & fb29=1 & fb30=1 & fb31=0 & DST19 & imm16 { local a:4 = DST19; ZF = dsp_tst_z(a, imm16:2); NF = dsp_tst_n(a, imm16:2); }
+:DTST DST19, imm16 is fb0=1 & fb1=1 & fb2=1 & fb25=1 & fb26=0 & fb27=1 & fb28=1 & fb29=1 & fb30=1 & fb31=0 & DST19 & imm16 { local a:4 = DST19; ZF = dsp_tst_z(a, imm16:2); NF = dsp_tst_n(a, imm16:2); }
+:DMOV DST19, SRC14 is fb1=0 & fb2=1 & fb6=0 & fb8=1 & fb15=0 & fb16=0 & fb17=0 & fb18=0 & fb25=0 & fb26=0 & fb27=0 & fb28=0 & fb29=0 & fb30=0 & fb31=0 & DST19 & SRC14 { DST19 = dsp_mov(SRC14); }
+:DMOVS DST19, SRC14 is fb1=0 & fb2=1 & fb6=0 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=0 & fb29=0 & fb30=0 & fb31=0 & DST19 & SRC14 { DST19 = dsp_movs(SRC14); }
+:DMOV is fb24=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=0 & fb30=0 & fb31=1 { dsp_mov_dalu(); }
+:DMOV is fb24=0 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=0 & fb30=0 & fb31=1 { dsp_mov_dalu(); }
+:DNEG DST19, SRC14 is fb1=0 & fb2=1 & fb6=0 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=0 & fb30=0 & fb31=0 & DST19 & SRC14 { DST19 = dsp_neg(SRC14); }
+:DNEGS DST19, SRC14 is fb1=0 & fb2=1 & fb6=0 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=1 & fb29=0 & fb30=0 & fb31=0 & DST19 & SRC14 { DST19 = dsp_negs(SRC14); }
+:DXSDB is fb1=0 & fb2=0 & fb3=0 & fb5=0 & fb6=0 & fb7=0 & fb8=1 & fb24=0 & fb25=1 & fb26=0 & fb27=1 & fb28=0 & fb29=1 & fb30=0 & fb31=1 { dsp_xsdb_dalu(); }
+:DXSDW is fb1=1 & fb2=0 & fb3=0 & fb5=0 & fb6=0 & fb7=0 & fb8=1 & fb24=0 & fb25=1 & fb26=0 & fb27=1 & fb28=0 & fb29=1 & fb30=0 & fb31=1 { dsp_xsdw_dalu(); }
+:DXSDSB is fb1=0 & fb2=0 & fb3=1 & fb5=0 & fb6=0 & fb7=0 & fb8=1 & fb24=0 & fb25=1 & fb26=0 & fb27=1 & fb28=0 & fb29=1 & fb30=0 & fb31=1 { dsp_xsdsb_dalu(); }
+:DXSDSW is fb1=1 & fb2=0 & fb3=1 & fb5=0 & fb6=0 & fb7=0 & fb8=1 & fb24=0 & fb25=1 & fb26=0 & fb27=1 & fb28=0 & fb29=1 & fb30=0 & fb31=1 { dsp_xsdsw_dalu(); }
+:DLSLT is fb1=1 & fb6=0 & fb7=0 & fb8=1 & fb26=0 & fb27=0 & fb28=1 & fb29=0 & fb30=1 & fb31=0 { dsp_lsl_template(); }
+:DLSL DST19, SRC14, SRC9 is fb6=0 & fb7=0 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=0 & fb30=1 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_lsl(SRC14, SRC9); }
+:DLSL DST19, SRC14, imm5 is fb6=0 & fb7=0 & fb8=1 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=0 & fb30=1 & fb31=0 & DST19 & SRC14 & imm5 { DST19 = dsp_lsl(SRC14, imm5:1); }
+:DLSRT is fb1=1 & fb6=1 & fb7=0 & fb8=1 & fb26=0 & fb27=0 & fb28=1 & fb29=0 & fb30=1 & fb31=0 { dsp_lsr_template(); }
+:DLSR DST19, SRC14, SRC9 is fb6=1 & fb7=0 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=0 & fb30=1 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_lsr(SRC14, SRC9); }
+:DLSR DST19, SRC14, imm5 is fb6=1 & fb7=0 & fb8=1 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=0 & fb30=1 & fb31=0 & DST19 & SRC14 & imm5 { DST19 = dsp_lsr(SRC14, imm5:1); }
+:DASLT is fb1=1 & fb6=0 & fb7=1 & fb8=1 & fb26=0 & fb27=0 & fb28=1 & fb29=0 & fb30=1 & fb31=0 { dsp_asl_template(); }
+:DASL DST19, SRC14, SRC9 is fb6=0 & fb7=1 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=0 & fb30=1 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_asl(SRC14, SRC9); }
+:DASL DST19, SRC14, imm5 is fb6=0 & fb7=1 & fb8=1 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=0 & fb30=1 & fb31=0 & DST19 & SRC14 & imm5 { DST19 = dsp_asl(SRC14, imm5:1); }
+:DASRT is fb1=1 & fb6=1 & fb7=1 & fb8=1 & fb26=0 & fb27=0 & fb28=1 & fb29=0 & fb30=1 & fb31=0 { dsp_asr_template(); }
+:DASR DST19, SRC14, SRC9 is fb6=1 & fb7=1 & fb8=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=0 & fb30=1 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_asr(SRC14, SRC9); }
+:DASR DST19, SRC14, imm5 is fb6=1 & fb7=1 & fb8=1 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=0 & fb30=1 & fb31=0 & DST19 & SRC14 & imm5 { DST19 = dsp_asr(SRC14, imm5:1); }
+:DLSLU is fb5=1 & fb6=0 & fb7=0 & fb8=1 & fb26=1 & fb27=0 & fb28=1 & fb29=0 & fb30=1 & fb31=0 { dsp_lsl_u(); }
+:DLSRU is fb5=1 & fb6=1 & fb7=0 & fb8=1 & fb26=1 & fb27=0 & fb28=1 & fb29=0 & fb30=1 & fb31=0 { dsp_lsr_u(); }
+:DASLU is fb5=1 & fb6=0 & fb7=1 & fb8=1 & fb26=1 & fb27=0 & fb28=1 & fb29=0 & fb30=1 & fb31=0 { dsp_asl_u(); }
+:DASRU is fb5=1 & fb6=1 & fb7=1 & fb8=1 & fb26=1 & fb27=0 & fb28=1 & fb29=0 & fb30=1 & fb31=0 { dsp_asr_u(); }
+:DLSL^CC DSTC, SRCC14, SRCC9 is fb5=0 & fb6=0 & fb7=0 & fb8=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=0 & fb30=1 & fb31=0 & CC & DSTC & SRCC14 & SRCC9 { if (!CC) goto inst_next; DSTC = dsp_lsl(SRCC14, SRCC9); }
+:DLSL^CC DSTC, SRCC14, imm5 is fb5=0 & fb6=0 & fb7=0 & fb8=1 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=0 & fb30=1 & fb31=0 & CC & DSTC & SRCC14 & imm5 { if (!CC) goto inst_next; DSTC = dsp_lsl(SRCC14, imm5:1); }
+:DLSR^CC DSTC, SRCC14, SRCC9 is fb5=0 & fb6=1 & fb7=0 & fb8=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=0 & fb30=1 & fb31=0 & CC & DSTC & SRCC14 & SRCC9 { if (!CC) goto inst_next; DSTC = dsp_lsr(SRCC14, SRCC9); }
+:DLSR^CC DSTC, SRCC14, imm5 is fb5=0 & fb6=1 & fb7=0 & fb8=1 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=0 & fb30=1 & fb31=0 & CC & DSTC & SRCC14 & imm5 { if (!CC) goto inst_next; DSTC = dsp_lsr(SRCC14, imm5:1); }
+:DASL^CC DSTC, SRCC14, SRCC9 is fb5=0 & fb6=0 & fb7=1 & fb8=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=0 & fb30=1 & fb31=0 & CC & DSTC & SRCC14 & SRCC9 { if (!CC) goto inst_next; DSTC = dsp_asl(SRCC14, SRCC9); }
+:DASL^CC DSTC, SRCC14, imm5 is fb5=0 & fb6=0 & fb7=1 & fb8=1 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=0 & fb30=1 & fb31=0 & CC & DSTC & SRCC14 & imm5 { if (!CC) goto inst_next; DSTC = dsp_asl(SRCC14, imm5:1); }
+:DASR^CC DSTC, SRCC14, SRCC9 is fb5=0 & fb6=1 & fb7=1 & fb8=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=0 & fb30=1 & fb31=0 & CC & DSTC & SRCC14 & SRCC9 { if (!CC) goto inst_next; DSTC = dsp_asr(SRCC14, SRCC9); }
+:DASR^CC DSTC, SRCC14, imm5 is fb5=0 & fb6=1 & fb7=1 & fb8=1 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=0 & fb30=1 & fb31=0 & CC & DSTC & SRCC14 & imm5 { if (!CC) goto inst_next; DSTC = dsp_asr(SRCC14, imm5:1); }
+:DLSLST is fb1=1 & fb6=0 & fb7=0 & fb8=1 & fb26=0 & fb27=1 & fb28=1 & fb29=0 & fb30=1 & fb31=0 { dsp_lsls_template(); }
+:DLSLS DST19, SRC14, SRC9 is fb6=0 & fb7=0 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=1 & fb29=0 & fb30=1 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_lsls(SRC14, SRC9); }
+:DLSLS DST19, SRC14, imm5 is fb6=0 & fb7=0 & fb8=1 & fb25=1 & fb26=0 & fb27=1 & fb28=1 & fb29=0 & fb30=1 & fb31=0 & DST19 & SRC14 & imm5 { DST19 = dsp_lsls(SRC14, imm5:1); }
+:DLSRST is fb1=1 & fb6=1 & fb7=0 & fb8=1 & fb26=0 & fb27=1 & fb28=1 & fb29=0 & fb30=1 & fb31=0 { dsp_lsrs_template(); }
+:DLSRS DST19, SRC14, SRC9 is fb6=1 & fb7=0 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=1 & fb29=0 & fb30=1 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_lsrs(SRC14, SRC9); }
+:DLSRS DST19, SRC14, imm5 is fb6=1 & fb7=0 & fb8=1 & fb25=1 & fb26=0 & fb27=1 & fb28=1 & fb29=0 & fb30=1 & fb31=0 & DST19 & SRC14 & imm5 { DST19 = dsp_lsrs(SRC14, imm5:1); }
+:DASLST is fb1=1 & fb6=0 & fb7=1 & fb8=1 & fb26=0 & fb27=1 & fb28=1 & fb29=0 & fb30=1 & fb31=0 { dsp_asls_template(); }
+:DASLS DST19, SRC14, SRC9 is fb6=0 & fb7=1 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=1 & fb29=0 & fb30=1 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_asls(SRC14, SRC9); }
+:DASLS DST19, SRC14, imm5 is fb6=0 & fb7=1 & fb8=1 & fb25=1 & fb26=0 & fb27=1 & fb28=1 & fb29=0 & fb30=1 & fb31=0 & DST19 & SRC14 & imm5 { DST19 = dsp_asls(SRC14, imm5:1); }
+:DASRST is fb1=1 & fb6=1 & fb7=1 & fb8=1 & fb26=0 & fb27=1 & fb28=1 & fb29=0 & fb30=1 & fb31=0 { dsp_asrs_template(); }
+:DASRS DST19, SRC14, SRC9 is fb6=1 & fb7=1 & fb8=1 & fb25=0 & fb26=0 & fb27=1 & fb28=1 & fb29=0 & fb30=1 & fb31=0 & DST19 & SRC14 & SRC9 { DST19 = dsp_asrs(SRC14, SRC9); }
+:DASRS DST19, SRC14, imm5 is fb6=1 & fb7=1 & fb8=1 & fb25=1 & fb26=0 & fb27=1 & fb28=1 & fb29=0 & fb30=1 & fb31=0 & DST19 & SRC14 & imm5 { DST19 = dsp_asrs(SRC14, imm5:1); }
+:DLSLS^CC DSTC, SRCC14, SRCC9 is fb5=0 & fb6=0 & fb7=0 & fb8=1 & fb25=0 & fb26=1 & fb27=1 & fb28=1 & fb29=0 & fb30=1 & fb31=0 & CC & DSTC & SRCC14 & SRCC9 { if (!CC) goto inst_next; DSTC = dsp_lsls(SRCC14, SRCC9); }
+:DLSLS^CC DSTC, SRCC14, imm5 is fb5=0 & fb6=0 & fb7=0 & fb8=1 & fb25=1 & fb26=1 & fb27=1 & fb28=1 & fb29=0 & fb30=1 & fb31=0 & CC & DSTC & SRCC14 & imm5 { if (!CC) goto inst_next; DSTC = dsp_lsls(SRCC14, imm5:1); }
+:DLSRS^CC DSTC, SRCC14, SRCC9 is fb5=0 & fb6=1 & fb7=0 & fb8=1 & fb25=0 & fb26=1 & fb27=1 & fb28=1 & fb29=0 & fb30=1 & fb31=0 & CC & DSTC & SRCC14 & SRCC9 { if (!CC) goto inst_next; DSTC = dsp_lsrs(SRCC14, SRCC9); }
+:DLSRS^CC DSTC, SRCC14, imm5 is fb5=0 & fb6=1 & fb7=0 & fb8=1 & fb25=1 & fb26=1 & fb27=1 & fb28=1 & fb29=0 & fb30=1 & fb31=0 & CC & DSTC & SRCC14 & imm5 { if (!CC) goto inst_next; DSTC = dsp_lsrs(SRCC14, imm5:1); }
+:DASLS^CC DSTC, SRCC14, SRCC9 is fb5=0 & fb6=0 & fb7=1 & fb8=1 & fb25=0 & fb26=1 & fb27=1 & fb28=1 & fb29=0 & fb30=1 & fb31=0 & CC & DSTC & SRCC14 & SRCC9 { if (!CC) goto inst_next; DSTC = dsp_asls(SRCC14, SRCC9); }
+:DASLS^CC DSTC, SRCC14, imm5 is fb5=0 & fb6=0 & fb7=1 & fb8=1 & fb25=1 & fb26=1 & fb27=1 & fb28=1 & fb29=0 & fb30=1 & fb31=0 & CC & DSTC & SRCC14 & imm5 { if (!CC) goto inst_next; DSTC = dsp_asls(SRCC14, imm5:1); }
+:DASRS^CC DSTC, SRCC14, SRCC9 is fb5=0 & fb6=1 & fb7=1 & fb8=1 & fb25=0 & fb26=1 & fb27=1 & fb28=1 & fb29=0 & fb30=1 & fb31=0 & CC & DSTC & SRCC14 & SRCC9 { if (!CC) goto inst_next; DSTC = dsp_asrs(SRCC14, SRCC9); }
+:DASRS^CC DSTC, SRCC14, imm5 is fb5=0 & fb6=1 & fb7=1 & fb8=1 & fb25=1 & fb26=1 & fb27=1 & fb28=1 & fb29=0 & fb30=1 & fb31=0 & CC & DSTC & SRCC14 & imm5 { if (!CC) goto inst_next; DSTC = dsp_asrs(SRCC14, imm5:1); }
+:DLSLSU is fb5=1 & fb6=0 & fb7=0 & fb8=1 & fb26=1 & fb27=1 & fb28=1 & fb29=0 & fb30=1 & fb31=0 { dsp_lsls_u(); }
+:DLSRSU is fb5=1 & fb6=1 & fb7=0 & fb8=1 & fb26=1 & fb27=1 & fb28=1 & fb29=0 & fb30=1 & fb31=0 { dsp_lsrs_u(); }
+:DASLSU is fb5=1 & fb6=0 & fb7=1 & fb8=1 & fb26=1 & fb27=1 & fb28=1 & fb29=0 & fb30=1 & fb31=0 { dsp_asls_u(); }
+:DASRSU is fb5=1 & fb6=1 & fb7=1 & fb8=1 & fb26=1 & fb27=1 & fb28=1 & fb29=0 & fb30=1 & fb31=0 { dsp_asrs_u(); }
+:DRTDW is fb1=1 & fb2=1 & fb3=0 & fb8=1 & fb24=0 & fb25=1 & fb26=0 & fb27=1 & fb28=0 & fb29=1 & fb30=0 & fb31=1 { dsp_rtdw_dalu(); }
+:DRTDSW is fb1=1 & fb2=1 & fb3=1 & fb8=1 & fb24=0 & fb25=1 & fb26=0 & fb27=1 & fb28=0 & fb29=1 & fb30=0 & fb31=1 { dsp_rtdsw_dalu(); }

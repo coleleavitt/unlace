@@ -3908,6 +3908,10 @@ warning. A declared extent (`--define-function S-E`) still wins. Under `functail
 (chapter 01) a `.cold` tail that starts exactly where the function's extent ends is
 the function's own fall-through, so the extent runs to the end of that tail.
 
+### String-hash switch tables
+
+A switch on a string compiles to `switch (hash(s))` whose case constants are the folded hashes of its literals. `stringhashswitch.rs` holds the hash functions such switches use (CRC32, CRC32C, FNV-1 and FNV-1a, djb2 and djb2a, sdbm, Murmur3, Jenkins one-at-a-time, and the Java/Swift string hash) and builds a `hash -> string` table over a binary's string pool. The table is an annotation for case labels; no printer reads it yet and the discriminator loop is not matched, so the output of every function is unchanged. Recognising the hash loop in lowered p-code, and wiring the table into case printing behind an option, are the next steps.
+
 ## 2.4 No-return at lift time
 
 The mechanism is §2.1's halt plant: if `check_for_flow_modification` believes a

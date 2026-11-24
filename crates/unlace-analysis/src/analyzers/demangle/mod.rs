@@ -80,6 +80,7 @@
 //! intermediate `::` scopes are created, not correctness of the base name.
 
 pub mod cppsig;
+pub mod lambda;
 // (unlace) Swift demangling (`$s` stable mangling + the ObjC runtime's `_Tt` names).
 mod msvcsig;
 pub mod swift;

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<processor_spec>
+  <programcounter register="PC"/>
+  <volatile outputop="write_sfr" inputop="read_sfr">
+    <range space="RAM" first="0x0" last="0x03ff"/>
+  </volatile>
+</processor_spec>

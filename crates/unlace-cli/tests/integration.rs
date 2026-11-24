@@ -34,6 +34,8 @@ mod kr1878_raw;
 mod lanai_raw;
 #[path = "lua54.rs"]
 mod lua54;
+#[path = "m32c_raw.rs"]
+mod m32c_raw;
 #[path = "m32r_raw.rs"]
 mod m32r_raw;
 #[path = "m6800_family.rs"]
@@ -1113,5 +1115,7 @@ mod types_header;
 #[path = "typelib.rs"]
 mod typelib;
 
+#[path = "msvcexport_cli.rs"]
+mod msvcexport_cli;
 #[path = "vexzeroupper_cli.rs"]
 mod vexzeroupper_cli;

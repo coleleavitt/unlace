@@ -4123,6 +4123,20 @@ literal append whose returned reference is used, an unprovable register-count
 append, a collapse whose continuation zeroes the changed registers, and 29 near
 misses, one defect each, that must stay unrolled in both passes.
 
+### Instruction buffer length (#98)
+
+The SLEIGH parser context buffers `MAX_INSTRUCTION_LEN` = 32 instruction bytes
+(`crates/unlace-sleigh/src/sleigh.rs`), twice upstream's 16, and `load_fill` reads
+that many at each decode. Long-operand ISAs need it: a NEC V60 Format II
+instruction with two double-displacement operands is 20 bytes, and VAX operand
+specifiers chain to well past 16. A read that starts past the buffer is still a
+`BadData` decode error ("Instruction is using more than 32 bytes"); the packed
+reads in `kuna_instructionbytes.rs` take any buffer width. A start address that
+is mapped zero-fills the rest of the read, as before, so a decode near the end of
+a segment sees the same bytes it did with 16. Valid x86 encodings stop at 15 bytes, so
+their decodes do not change; only a run of 16 to 31 redundant prefixes, which
+the CPU faults on, now decodes instead of failing.
+
 ### ARM CPSR control fields (GH-848)
 
 ARM-state `MRS CPSR` combines modeled NZCVQ flags with
@@ -4547,6 +4561,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `TILEGX` | Tilera TILE-Gx (TILE-Gx8000 family), parallel X/Y-mode bundles | `TILEGX:LE:64:default` | TILE-Gx ISA reference (UG401); encodings generated from the binutils `tilegx` opcode table by `tools/gen_tilegx_sleigh.py`; checked against `tilegx-linux-gnu-objdump` | `unlace-cli/tests/tilegx_raw.rs` |
 | `V60` | NEC V60 (uPD70616), V70 (uPD70632) | `V60:LE:32:default` | NEC V60/V70 user's manuals (instruction formats, addressing modes); MAME `v60` disassembler as length oracle | `unlace-cli/tests/v60.rs` |
 | `PowerPC` (SPE2) | NXP e200z4/e200z7 with SPE2 and EFS2 | `PowerPC:BE:32:e200-SPE2` | binutils PowerPC opcode table (SPE2/EFS2 rows), SPE2 intrinsic names; checked against `powerpc-elf-objdump` 2.43.1 | `unlace-cli/tests/ppc_spe2.rs` |
+| `M16C` (`M32C_80`) | Renesas M32C/80 (M16C/80 set plus `MUL.L`, `DIV*.L`, `SHANC.L`, `SHLNC.L`) | `M32C/80:LE:24:default` | Renesas M32C/80 Series Software Manual REJ09B0319; checked against `m32c-elf-as` 2.43.1 | `unlace-cli/tests/m32c_raw.rs` |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)

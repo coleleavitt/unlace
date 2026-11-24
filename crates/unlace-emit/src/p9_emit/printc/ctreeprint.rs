@@ -148,6 +148,16 @@ impl PrintC {
                 self.emit_block_goto(fd, arch, blk);
                 true
             }
+            StmtKind::Seq(_) if ty == BlockType::Condition => {
+                self.emit_block_condition(fd, arch, blk);
+                true
+            }
+            StmtKind::Seq(children) if ty == BlockType::MultiGoto => {
+                for child in children {
+                    self.emit_ctree_arm(fd, arch, child);
+                }
+                true
+            }
             StmtKind::Opaque => false,
             _ if ty == BlockType::If => {
                 match self.switch_of(blk) {
@@ -238,6 +248,13 @@ impl PrintC {
                 None => self.ite_ternary_match(fd, arch, blk).map(IteForm::Ternary),
             };
             let Some(form) = form else {
+                if self
+                    .ctree
+                    .as_ref()
+                    .is_some_and(|tree| tree.is_condition(id))
+                {
+                    continue;
+                }
                 if bool_return
                     && let Some((cond_block, ret_op, negate)) = self.bool_return_shape(fd, blk)
                 {
@@ -324,7 +341,11 @@ impl PrintC {
             let ids = self
                 .ctree
                 .as_ref()
-                .map(|tree| tree.stmt_ids())
+                .map(|tree| {
+                    let mut ids = tree.stmt_ids();
+                    ids.retain(|id| !tree.is_condition(*id));
+                    ids
+                })
                 .unwrap_or_default();
             for id in ids {
                 self.fold_return_ite(fd, id);
@@ -1603,7 +1624,11 @@ fn first_branch(tree: &crate::ctree::CTree, expr: ExprId) -> Option<BlockId> {
 
 /// Every statement of `tree`, last added first (an `if` before the statements inside it).
 fn ids_rev(tree: Option<&crate::ctree::CTree>) -> Vec<StmtId> {
-    let mut ids = tree.map(|tree| tree.stmt_ids()).unwrap_or_default();
+    let Some(tree) = tree else {
+        return Vec::new();
+    };
+    let mut ids = tree.stmt_ids();
+    ids.retain(|id| !tree.is_condition(*id));
     ids.reverse();
     ids
 }

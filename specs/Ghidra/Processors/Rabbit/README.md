@@ -64,7 +64,7 @@ Both share `rabbit.sinc`, `rabbit.pspec` and `rabbit.cspec`.
 No Rabbit assembler or emulator is installed, so the CLI fixture was assembled by hand
 from the instruction reference tables (listing in
 `crates/unlace-cli/tests/fixtures/rabbit/add_store.s`). The CLI test
-`crates/unlace-cli/tests/rabbit_raw.rs` decompiles it under both languages to
+`crates/unlace-cli/tests/processors.toml` row `rabbit` decompiles it under both languages to
 
 ```c
 unsigned short sub_0(char a0)

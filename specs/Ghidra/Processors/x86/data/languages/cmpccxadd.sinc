@@ -1,0 +1,51 @@
+# CMPccXADD (Intel SDM vol. 2, "CMPccXADD -- Compare and Add if Condition is Met"; ISE 319433):
+# VEX.128.66.0F38.W0/W1 E0+cc /r, memory destination only. The compare sets the flags as
+# CMP m, r1 does; if the condition holds the memory gets m + r2; r1 always gets the old m.
+# The EVEX form (APX) is generated into apx_evex.sinc from these constructors.
+
+cmpxaddCC: "O" is cond=0 { export OF; }
+cmpxaddCC: "NO" is cond=1 { local t = !OF; export t; }
+cmpxaddCC: "B" is cond=2 { export CF; }
+cmpxaddCC: "AE" is cond=3 { local t = !CF; export t; }
+cmpxaddCC: "E" is cond=4 { export ZF; }
+cmpxaddCC: "NE" is cond=5 { local t = !ZF; export t; }
+cmpxaddCC: "BE" is cond=6 { local t = CF || ZF; export t; }
+cmpxaddCC: "A" is cond=7 { local t = !(CF || ZF); export t; }
+cmpxaddCC: "S" is cond=8 { export SF; }
+cmpxaddCC: "NS" is cond=9 { local t = !SF; export t; }
+cmpxaddCC: "P" is cond=10 { export PF; }
+cmpxaddCC: "NP" is cond=11 { local t = !PF; export t; }
+cmpxaddCC: "L" is cond=12 { local t = OF != SF; export t; }
+cmpxaddCC: "GE" is cond=13 { local t = OF == SF; export t; }
+cmpxaddCC: "LE" is cond=14 { local t = ZF || (OF != SF); export t; }
+cmpxaddCC: "G" is cond=15 { local t = !ZF && (OF == SF); export t; }
+
+:CMP^cmpxaddCC^"XADD" m32, Reg32, vexVVVV_r32 is $(LONGMODE_ON) & $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0) & vexVVVV_r32; row=0xe & cmpxaddCC; (mod != 3 & Reg32 & check_Reg32_dest ...) ... & m32
+{
+	local old:4 = m32;
+	local sum:4 = old + vexVVVV_r32;
+	subflags(old, Reg32);
+	local d:4 = old - Reg32;
+	resultflags(d);
+	build cmpxaddCC;
+	if (!cmpxaddCC) goto <keep>;
+	m32 = sum;
+<keep>
+	Reg32 = old;
+	build check_Reg32_dest;
+}
+
+:CMP^cmpxaddCC^"XADD" m64, Reg64, vexVVVV_r64 is $(LONGMODE_ON) & $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W1) & vexVVVV_r64; row=0xe & cmpxaddCC; (mod != 3 & Reg64) ... & m64
+{
+	local old:8 = m64;
+	local sum:8 = old + vexVVVV_r64;
+	subflags(old, Reg64);
+	local d:8 = old - Reg64;
+	resultflags(d);
+	build cmpxaddCC;
+	if (!cmpxaddCC) goto <keep>;
+	m64 = sum;
+<keep>
+	Reg64 = old;
+}
+

@@ -1,0 +1,5 @@
+# SuperH SH-5 SHmedia, little endian.
+
+@define ENDIAN "little"
+
+@include "sh5.sinc"

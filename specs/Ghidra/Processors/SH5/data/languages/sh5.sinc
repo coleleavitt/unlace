@@ -1,0 +1,604 @@
+# SuperH SH-5 SHmedia: the 32-bit instruction set of the SH-5 (SH64) cores.
+# Written for unlace from the SuperH SH-5 CPU Core Architecture manual
+# (Volume 2: SHmedia). Encodings cross-checked against sh64-elf-objdump from
+# binutils 2.29.1 (the last release with SH64), used as an oracle only.
+#
+# 64 general registers (r63 reads as zero), 8 branch-target registers that
+# PTA/PTB/PTABS/PTREL load and the branches and BLINK use, 64 single FP
+# registers paired into doubles, vectors and matrices. Addresses are 32 bits
+# . The SHcompact mode bit of a branch target is not
+# modelled: every target is decoded as SHmedia.
+
+define endian=$(ENDIAN);
+define alignment=4;
+
+define space ram      type=ram_space      size=8 default;
+define space register type=register_space size=4;
+
+define register offset=0x0000 size=8 [
+	r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15
+	r16 r17 r18 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28 r29 r30 r31
+	r32 r33 r34 r35 r36 r37 r38 r39 r40 r41 r42 r43 r44 r45 r46 r47
+	r48 r49 r50 r51 r52 r53 r54 r55 r56 r57 r58 r59 r60 r61 r62 r63
+];
+define register offset=0x0400 size=8 [ PC ];
+define register offset=0x0408 size=4 [ FPSCR ];
+define register offset=0x0500 size=8 [ tr0 tr1 tr2 tr3 tr4 tr5 tr6 tr7 ];
+define register offset=0x0600 size=8 [
+	sr ssr pssr cr3 intevt expevt pexpevt tra spc pspc resvec vbr cr12 tea cr14 cr15
+	dcr kcr0 kcr1 cr19 cr20 cr21 cr22 cr23 cr24 cr25 cr26 cr27 cr28 cr29 cr30 cr31
+	cr32 cr33 cr34 cr35 cr36 cr37 cr38 cr39 cr40 cr41 cr42 cr43 cr44 cr45 cr46 cr47
+	cr48 cr49 cr50 cr51 cr52 cr53 cr54 cr55 cr56 cr57 cr58 cr59 cr60 cr61 ctc usr
+];
+define register offset=0x1000 size=4 [
+	fr0 fr1 fr2 fr3 fr4 fr5 fr6 fr7 fr8 fr9 fr10 fr11 fr12 fr13 fr14 fr15
+	fr16 fr17 fr18 fr19 fr20 fr21 fr22 fr23 fr24 fr25 fr26 fr27 fr28 fr29 fr30 fr31
+	fr32 fr33 fr34 fr35 fr36 fr37 fr38 fr39 fr40 fr41 fr42 fr43 fr44 fr45 fr46 fr47
+	fr48 fr49 fr50 fr51 fr52 fr53 fr54 fr55 fr56 fr57 fr58 fr59 fr60 fr61 fr62 fr63
+];
+define register offset=0x1000 size=8 [
+	dr0 dr2 dr4 dr6 dr8 dr10 dr12 dr14 dr16 dr18 dr20 dr22 dr24 dr26 dr28 dr30
+	dr32 dr34 dr36 dr38 dr40 dr42 dr44 dr46 dr48 dr50 dr52 dr54 dr56 dr58 dr60 dr62
+];
+define register offset=0x1000 size=16 [
+	fv0 fv4 fv8 fv12 fv16 fv20 fv24 fv28 fv32 fv36 fv40 fv44 fv48 fv52 fv56 fv60
+];
+define register offset=0x1000 size=64 [ mtrx0 mtrx16 mtrx32 mtrx48 ];
+
+define register offset=0x0800 size=8 contextreg;
+define context contextreg
+	ptTgt=(0,31)
+	ptTR=(32,34)
+	ptOK=(35,35)
+;
+
+define token instr(32)
+	b31_26=(26,31)
+	b25_23=(23,25)
+	b25_20=(20,25)
+	b19_16=(16,19)
+	b15_10=(10,15)
+	b15_15=(15,15)
+	b9_4=(4,9)
+	b9_7=(7,9)
+	b3_0=(0,3)
+	RM=(20,25)
+	RMn=(20,25)
+	RN=(10,15)
+	RNn=(10,15)
+	RD=(4,9)
+	RDn=(4,9)
+	FG=(20,25)
+	FH=(10,15)
+	FF=(4,9)
+	DG=(20,25)
+	DH=(10,15)
+	DF=(4,9)
+	FPFn=(4,9)
+	FVG=(20,25)
+	FVH=(10,15)
+	FVF=(4,9)
+	MTG=(20,25)
+	TA=(4,6)
+	TB=(20,22)
+	TAn=(4,6)
+	TBn=(20,22)
+	CK=(20,25)
+	CJ=(4,9)
+	S10=(10,19) signed
+	S6=(10,15) signed
+	U6=(10,15)
+	U5=(10,14)
+	S16=(10,25) signed
+	U16=(10,25)
+;
+
+attach variables [ RM RN RD ] [
+	r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15
+	r16 r17 r18 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28 r29 r30 r31
+	r32 r33 r34 r35 r36 r37 r38 r39 r40 r41 r42 r43 r44 r45 r46 r47
+	r48 r49 r50 r51 r52 r53 r54 r55 r56 r57 r58 r59 r60 r61 r62 r63
+];
+attach variables [ FG FH FF ] [
+	fr0 fr1 fr2 fr3 fr4 fr5 fr6 fr7 fr8 fr9 fr10 fr11 fr12 fr13 fr14 fr15
+	fr16 fr17 fr18 fr19 fr20 fr21 fr22 fr23 fr24 fr25 fr26 fr27 fr28 fr29 fr30 fr31
+	fr32 fr33 fr34 fr35 fr36 fr37 fr38 fr39 fr40 fr41 fr42 fr43 fr44 fr45 fr46 fr47
+	fr48 fr49 fr50 fr51 fr52 fr53 fr54 fr55 fr56 fr57 fr58 fr59 fr60 fr61 fr62 fr63
+];
+attach variables [ DG DH DF ] [
+	dr0 _ dr2 _ dr4 _ dr6 _ dr8 _ dr10 _ dr12 _ dr14 _
+	dr16 _ dr18 _ dr20 _ dr22 _ dr24 _ dr26 _ dr28 _ dr30 _
+	dr32 _ dr34 _ dr36 _ dr38 _ dr40 _ dr42 _ dr44 _ dr46 _
+	dr48 _ dr50 _ dr52 _ dr54 _ dr56 _ dr58 _ dr60 _ dr62 _
+];
+attach variables [ FVG FVH FVF ] [
+	fv0 _ _ _ fv4 _ _ _ fv8 _ _ _ fv12 _ _ _
+	fv16 _ _ _ fv20 _ _ _ fv24 _ _ _ fv28 _ _ _
+	fv32 _ _ _ fv36 _ _ _ fv40 _ _ _ fv44 _ _ _
+	fv48 _ _ _ fv52 _ _ _ fv56 _ _ _ fv60 _ _ _
+];
+attach variables [ MTG ] [
+	mtrx0 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+	mtrx16 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+	mtrx32 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+	mtrx48 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+];
+attach variables [ TA TB ] [ tr0 tr1 tr2 tr3 tr4 tr5 tr6 tr7 ];
+attach variables [ CK CJ ] [
+	sr ssr pssr cr3 intevt expevt pexpevt tra spc pspc resvec vbr cr12 tea cr14 cr15
+	dcr kcr0 kcr1 cr19 cr20 cr21 cr22 cr23 cr24 cr25 cr26 cr27 cr28 cr29 cr30 cr31
+	cr32 cr33 cr34 cr35 cr36 cr37 cr38 cr39 cr40 cr41 cr42 cr43 cr44 cr45 cr46 cr47
+	cr48 cr49 cr50 cr51 cr52 cr53 cr54 cr55 cr56 cr57 cr58 cr59 cr60 cr61 ctc usr
+];
+
+define pcodeop alloco;
+define pcodeop brk;
+define pcodeop fipr;
+define pcodeop ftrv;
+define pcodeop getcfg;
+define pcodeop icbi;
+define pcodeop ldhi_l;
+define pcodeop ldhi_q;
+define pcodeop ldlo_l;
+define pcodeop ldlo_q;
+define pcodeop mabs_l;
+define pcodeop mabs_w;
+define pcodeop madd_l;
+define pcodeop madd_w;
+define pcodeop madds_l;
+define pcodeop madds_ub;
+define pcodeop madds_w;
+define pcodeop mcmpeq_b;
+define pcodeop mcmpeq_l;
+define pcodeop mcmpeq_w;
+define pcodeop mcmpgt_l;
+define pcodeop mcmpgt_ub;
+define pcodeop mcmpgt_w;
+define pcodeop mcmv;
+define pcodeop mcnvs_lw;
+define pcodeop mcnvs_wb;
+define pcodeop mcnvs_wub;
+define pcodeop mextr1;
+define pcodeop mextr2;
+define pcodeop mextr3;
+define pcodeop mextr4;
+define pcodeop mextr5;
+define pcodeop mextr6;
+define pcodeop mextr7;
+define pcodeop mmacfx_wl;
+define pcodeop mmacnfx_wl;
+define pcodeop mmul_l;
+define pcodeop mmul_w;
+define pcodeop mmulfx_l;
+define pcodeop mmulfx_w;
+define pcodeop mmulfxrp_w;
+define pcodeop mmulhi_wl;
+define pcodeop mmullo_wl;
+define pcodeop mmulsum_wq;
+define pcodeop mperm_w;
+define pcodeop msad_ubq;
+define pcodeop mshalds_l;
+define pcodeop mshalds_w;
+define pcodeop mshard_l;
+define pcodeop mshard_w;
+define pcodeop mshards_q;
+define pcodeop mshfhi_b;
+define pcodeop mshfhi_l;
+define pcodeop mshfhi_w;
+define pcodeop mshflo_b;
+define pcodeop mshflo_l;
+define pcodeop mshflo_w;
+define pcodeop mshlld_l;
+define pcodeop mshlld_w;
+define pcodeop mshlrd_l;
+define pcodeop mshlrd_w;
+define pcodeop msub_l;
+define pcodeop msub_w;
+define pcodeop msubs_l;
+define pcodeop msubs_ub;
+define pcodeop msubs_w;
+define pcodeop ocbi;
+define pcodeop ocbp;
+define pcodeop ocbwb;
+define pcodeop prefi;
+define pcodeop putcfg;
+define pcodeop rte;
+define pcodeop sleep;
+define pcodeop sthi_l;
+define pcodeop sthi_q;
+define pcodeop stlo_l;
+define pcodeop stlo_q;
+define pcodeop synci;
+define pcodeop synco;
+define pcodeop trapa;
+
+# A branch through the target register the last PTA/PT loaded (tracked in
+# the context along the flow) branches to that address directly.
+ptdest: ptTgt is ptTgt { export *:8 ptTgt; }
+
+# Register sources: r63 reads as zero.
+rm: RM is RM { export RM; }
+rm: "r63" is RMn=63 { export 0:8; }
+rn: RN is RN { export RN; }
+rn: "r63" is RNn=63 { export 0:8; }
+rds: RD is RD { export RD; }
+rds: "r63" is RDn=63 { export 0:8; }
+fpf: "fp"^FPFn is FPFn & DF { export DF; }
+
+imm_s10: S10 is S10 { export *[const]:8 S10; }
+imm_s6x32: val is S6 [ val = S6 * 32; ] { export *[const]:8 val; }
+imm_s6: S6 is S6 { export *[const]:8 S6; }
+imm_s10x8: val is S10 [ val = S10 * 8; ] { export *[const]:8 val; }
+imm_s10x4: val is S10 [ val = S10 * 4; ] { export *[const]:8 val; }
+imm_s10x2: val is S10 [ val = S10 * 2; ] { export *[const]:8 val; }
+imm_s16: S16 is S16 { export *[const]:8 S16; }
+imm_pcx4: addr is S16 [ addr = inst_start + S16 * 4; ] { export *[const]:8 addr; }
+imm_u6: U6 is U6 { export *[const]:8 U6; }
+imm_u5: U5 is U5 { export *[const]:8 U5; }
+imm_u16: U16 is U16 { export *[const]:8 U16; }
+
+:add rm,rn,RD is b31_26=0 & b19_16=9 & b3_0=0 & rm & rn & RD { RD = rm + rn; }
+:add.l rm,rn,RD is b31_26=0 & b19_16=8 & b3_0=0 & rm & rn & RD { local t:4 = rm:4 + rn:4; RD = sext(t); }
+:addi rm,imm_s10,RD is b31_26=52 & b3_0=0 & rm & imm_s10 & RD { RD = rm + imm_s10; }
+:addi.l rm,imm_s10,RD is b31_26=53 & b3_0=0 & rm & imm_s10 & RD { local t:4 = rm:4 + imm_s10:4; RD = sext(t); }
+:addz.l rm,rn,RD is b31_26=0 & b19_16=12 & b3_0=0 & rm & rn & RD { local t:4 = rm:4 + rn:4; RD = zext(t); }
+:alloco rm,imm_s6x32 is b31_26=56 & b19_16=4 & b9_4=63 & b3_0=0 & rm & imm_s6x32 { local ea:8 = rm + imm_s6x32; alloco(ea); }
+:and rm,rn,RD is b31_26=1 & b19_16=11 & b3_0=0 & rm & rn & RD { RD = rm & rn; }
+:andc rm,rn,RD is b31_26=1 & b19_16=15 & b3_0=0 & rm & rn & RD { RD = rm & ~rn; }
+:andi rm,imm_s10,RD is b31_26=54 & b3_0=0 & rm & imm_s10 & RD { RD = rm & imm_s10; }
+:beq^"/l" rm,rn,TA is b31_26=25 & b19_16=1 & b9_7=4 & b3_0=0 & rm & rn & TA { if (!(rm == rn)) goto <skip>; goto [TA]; <skip> }
+:beq^"/u" rm,rn,TA is b31_26=25 & b19_16=1 & b9_7=0 & b3_0=0 & rm & rn & TA { if (!(rm == rn)) goto <skip>; goto [TA]; <skip> }
+:beqi^"/l" rm,imm_s6,TA is b31_26=57 & b19_16=1 & b9_7=4 & b3_0=0 & rm & imm_s6 & TA { if (!(rm == imm_s6)) goto <skip>; goto [TA]; <skip> }
+:beqi^"/u" rm,imm_s6,TA is b31_26=57 & b19_16=1 & b9_7=0 & b3_0=0 & rm & imm_s6 & TA { if (!(rm == imm_s6)) goto <skip>; goto [TA]; <skip> }
+:bge^"/l" rm,rn,TA is b31_26=25 & b19_16=3 & b9_7=4 & b3_0=0 & rm & rn & TA { if (!(rm s>= rn)) goto <skip>; goto [TA]; <skip> }
+:bge^"/u" rm,rn,TA is b31_26=25 & b19_16=3 & b9_7=0 & b3_0=0 & rm & rn & TA { if (!(rm s>= rn)) goto <skip>; goto [TA]; <skip> }
+:bgeu^"/l" rm,rn,TA is b31_26=25 & b19_16=11 & b9_7=4 & b3_0=0 & rm & rn & TA { if (!(rm >= rn)) goto <skip>; goto [TA]; <skip> }
+:bgeu^"/u" rm,rn,TA is b31_26=25 & b19_16=11 & b9_7=0 & b3_0=0 & rm & rn & TA { if (!(rm >= rn)) goto <skip>; goto [TA]; <skip> }
+:bgt^"/l" rm,rn,TA is b31_26=25 & b19_16=7 & b9_7=4 & b3_0=0 & rm & rn & TA { if (!(rm s> rn)) goto <skip>; goto [TA]; <skip> }
+:bgt^"/u" rm,rn,TA is b31_26=25 & b19_16=7 & b9_7=0 & b3_0=0 & rm & rn & TA { if (!(rm s> rn)) goto <skip>; goto [TA]; <skip> }
+:bgtu^"/l" rm,rn,TA is b31_26=25 & b19_16=15 & b9_7=4 & b3_0=0 & rm & rn & TA { if (!(rm > rn)) goto <skip>; goto [TA]; <skip> }
+:bgtu^"/u" rm,rn,TA is b31_26=25 & b19_16=15 & b9_7=0 & b3_0=0 & rm & rn & TA { if (!(rm > rn)) goto <skip>; goto [TA]; <skip> }
+:blink TB,"r63" is b31_26=17 & b25_23=0 & b19_16=1 & b15_10=63 & b3_0=0 & TB & RD=63 [ ptOK = 0; globalset(inst_next, ptOK); ] { goto [TB]; }
+:blink TB,RD is b31_26=17 & b25_23=0 & b19_16=1 & b15_10=63 & b3_0=0 & TB & RD [ ptOK = 0; globalset(inst_next, ptOK); ] { RD = inst_next; call [TB]; }
+:bne^"/l" rm,rn,TA is b31_26=25 & b19_16=5 & b9_7=4 & b3_0=0 & rm & rn & TA { if (!(rm != rn)) goto <skip>; goto [TA]; <skip> }
+:bne^"/u" rm,rn,TA is b31_26=25 & b19_16=5 & b9_7=0 & b3_0=0 & rm & rn & TA { if (!(rm != rn)) goto <skip>; goto [TA]; <skip> }
+:bnei^"/l" rm,imm_s6,TA is b31_26=57 & b19_16=5 & b9_7=4 & b3_0=0 & rm & imm_s6 & TA { if (!(rm != imm_s6)) goto <skip>; goto [TA]; <skip> }
+:bnei^"/u" rm,imm_s6,TA is b31_26=57 & b19_16=5 & b9_7=0 & b3_0=0 & rm & imm_s6 & TA { if (!(rm != imm_s6)) goto <skip>; goto [TA]; <skip> }
+:brk is b31_26=27 & b25_20=63 & b19_16=5 & b15_10=63 & b9_4=63 & b3_0=0 { brk(); }
+:byterev rm,RD is b31_26=0 & b19_16=15 & b15_10=63 & b3_0=0 & rm & RD { local v:8 = rm; RD = (v << 56) | ((v & 0xff00) << 40) | ((v & 0xff0000) << 24) | ((v & 0xff000000) << 8) | ((v >> 8) & 0xff000000) | ((v >> 24) & 0xff0000) | ((v >> 40) & 0xff00) | (v >> 56); }
+:cmpeq rm,rn,RD is b31_26=0 & b19_16=1 & b3_0=0 & rm & rn & RD { RD = zext(rm == rn); }
+:cmpgt rm,rn,RD is b31_26=0 & b19_16=3 & b3_0=0 & rm & rn & RD { RD = zext(rm s> rn); }
+:cmpgtu rm,rn,RD is b31_26=0 & b19_16=7 & b3_0=0 & rm & rn & RD { RD = zext(rm > rn); }
+:cmveq rm,rn,RD is b31_26=8 & b19_16=1 & b3_0=0 & rm & rn & RD { if (rm != 0) goto <skip>; RD = rn; <skip> }
+:cmvne rm,rn,RD is b31_26=8 & b19_16=5 & b3_0=0 & rm & rn & RD { if (rm == 0) goto <skip>; RD = rn; <skip> }
+:fabs.d DG,DF is b31_26=6 & b19_16=1 & b3_0=0 & DG & DF { DF = abs(DG); }
+:fabs.s FG,FF is b31_26=6 & b19_16=0 & b3_0=0 & FG & FF { FF = abs(FG); }
+:fadd.d DG,DH,DF is b31_26=13 & b19_16=1 & b3_0=0 & DG & DH & DF { DF = DG f+ DH; }
+:fadd.s FG,FH,FF is b31_26=13 & b19_16=0 & b3_0=0 & FG & FH & FF { FF = FG f+ FH; }
+:fcmpeq.d DG,DH,RD is b31_26=12 & b19_16=9 & b3_0=0 & DG & DH & RD { RD = zext(DG f== DH); }
+:fcmpeq.s FG,FH,RD is b31_26=12 & b19_16=8 & b3_0=0 & FG & FH & RD { RD = zext(FG f== FH); }
+:fcmpge.d DG,DH,RD is b31_26=12 & b19_16=15 & b3_0=0 & DG & DH & RD { RD = zext(DG f>= DH); }
+:fcmpge.s FG,FH,RD is b31_26=12 & b19_16=14 & b3_0=0 & FG & FH & RD { RD = zext(FG f>= FH); }
+:fcmpgt.d DG,DH,RD is b31_26=12 & b19_16=13 & b3_0=0 & DG & DH & RD { RD = zext(DG f> DH); }
+:fcmpgt.s FG,FH,RD is b31_26=12 & b19_16=12 & b3_0=0 & FG & FH & RD { RD = zext(FG f> FH); }
+:fcmpun.d DG,DH,RD is b31_26=12 & b19_16=11 & b3_0=0 & DG & DH & RD { RD = zext(nan(DG) || nan(DH)); }
+:fcmpun.s FG,FH,RD is b31_26=12 & b19_16=10 & b3_0=0 & FG & FH & RD { RD = zext(nan(FG) || nan(FH)); }
+:fcnv.ds DG,FF is b31_26=14 & b19_16=7 & b3_0=0 & DG & FF { FF = float2float(DG); }
+:fcnv.sd FG,DF is b31_26=14 & b19_16=6 & b3_0=0 & FG & DF { DF = float2float(FG); }
+:fdiv.d DG,DH,DF is b31_26=13 & b19_16=5 & b3_0=0 & DG & DH & DF { DF = DG f/ DH; }
+:fdiv.s FG,FH,FF is b31_26=13 & b19_16=4 & b3_0=0 & FG & FH & FF { FF = FG f/ FH; }
+:fgetscr FF is b31_26=7 & b25_20=63 & b19_16=2 & b15_10=63 & b3_0=0 & FF { FF = FPSCR; }
+:fipr.s FVG,FVH,FF is b31_26=5 & b19_16=6 & b3_0=0 & FVG & FVH & FF { FF = fipr(FVG, FVH); }
+:fld.d rm,imm_s10x8,DF is b31_26=39 & b3_0=0 & rm & imm_s10x8 & DF { local ea:8 = rm + imm_s10x8; DF = *:8 ea; }
+:fld.p rm,imm_s10x8,fpf is b31_26=38 & b3_0=0 & rm & imm_s10x8 & fpf { local ea:8 = rm + imm_s10x8; fpf = *:8 ea; }
+:fld.s rm,imm_s10x4,FF is b31_26=37 & b3_0=0 & rm & imm_s10x4 & FF { local ea:8 = rm + imm_s10x4; FF = *:4 ea; }
+:fldx.d rm,rn,DF is b31_26=7 & b19_16=9 & b3_0=0 & rm & rn & DF { local ea:8 = rm + rn; DF = *:8 ea; }
+:fldx.p rm,rn,fpf is b31_26=7 & b19_16=13 & b3_0=0 & rm & rn & fpf { local ea:8 = rm + rn; fpf = *:8 ea; }
+:fldx.s rm,rn,FF is b31_26=7 & b19_16=8 & b3_0=0 & rm & rn & FF { local ea:8 = rm + rn; FF = *:4 ea; }
+:float.ld FG,DF is b31_26=14 & b19_16=14 & b3_0=0 & FG & DF { DF = int2float(FG); }
+:float.ls FG,FF is b31_26=14 & b19_16=12 & b3_0=0 & FG & FF { FF = int2float(FG); }
+:float.qd DG,DF is b31_26=14 & b19_16=13 & b3_0=0 & DG & DF { DF = int2float(DG); }
+:float.qs DG,FF is b31_26=14 & b19_16=15 & b3_0=0 & DG & FF { FF = int2float(DG); }
+:fmac.s FG,FH,FF is b31_26=13 & b19_16=14 & b3_0=0 & FG & FH & FF { FF = (FG f* FH) f+ FF; }
+:fmov.d DG,DF is b31_26=14 & b19_16=1 & b3_0=0 & DG & DF { DF = DG; }
+:fmov.dq DG,RD is b31_26=12 & b19_16=1 & b3_0=0 & DG & RD { RD = DG; }
+:fmov.ls rm,FF is b31_26=7 & b19_16=0 & b15_10=63 & b3_0=0 & rm & FF { FF = rm:4; }
+:fmov.qd rm,DF is b31_26=7 & b19_16=1 & b15_10=63 & b3_0=0 & rm & DF { DF = rm; }
+:fmov.s FG,FF is b31_26=14 & b19_16=0 & b3_0=0 & FG & FF { FF = FG; }
+:fmov.sl FG,RD is b31_26=12 & b19_16=0 & b3_0=0 & FG & RD { RD = sext(FG); }
+:fmul.d DG,DH,DF is b31_26=13 & b19_16=7 & b3_0=0 & DG & DH & DF { DF = DG f* DH; }
+:fmul.s FG,FH,FF is b31_26=13 & b19_16=6 & b3_0=0 & FG & FH & FF { FF = FG f* FH; }
+:fneg.d DG,DF is b31_26=6 & b19_16=3 & b3_0=0 & DG & DF { DF = f- DG; }
+:fneg.s FG,FF is b31_26=6 & b19_16=2 & b3_0=0 & FG & FF { FF = f- FG; }
+:fputscr FG is b31_26=12 & b19_16=2 & b9_4=63 & b3_0=0 & FG { FPSCR = FG; }
+:fsqrt.d DG,DF is b31_26=14 & b19_16=5 & b3_0=0 & DG & DF { DF = sqrt(DG); }
+:fsqrt.s FG,FF is b31_26=14 & b19_16=4 & b3_0=0 & FG & FF { FF = sqrt(FG); }
+:fst.d rm,imm_s10x8,DF is b31_26=47 & b3_0=0 & rm & imm_s10x8 & DF { local ea:8 = rm + imm_s10x8; *:8 ea = DF; }
+:fst.p rm,imm_s10x8,fpf is b31_26=46 & b3_0=0 & rm & imm_s10x8 & fpf { local ea:8 = rm + imm_s10x8; *:8 ea = fpf; }
+:fst.s rm,imm_s10x4,FF is b31_26=45 & b3_0=0 & rm & imm_s10x4 & FF { local ea:8 = rm + imm_s10x4; *:4 ea = FF; }
+:fstx.d rm,rn,DF is b31_26=15 & b19_16=9 & b3_0=0 & rm & rn & DF { local ea:8 = rm + rn; *:8 ea = DF; }
+:fstx.p rm,rn,fpf is b31_26=15 & b19_16=13 & b3_0=0 & rm & rn & fpf { local ea:8 = rm + rn; *:8 ea = fpf; }
+:fstx.s rm,rn,FF is b31_26=15 & b19_16=8 & b3_0=0 & rm & rn & FF { local ea:8 = rm + rn; *:4 ea = FF; }
+:fsub.d DG,DH,DF is b31_26=13 & b19_16=3 & b3_0=0 & DG & DH & DF { DF = DG f- DH; }
+:fsub.s FG,FH,FF is b31_26=13 & b19_16=2 & b3_0=0 & FG & FH & FF { FF = FG f- FH; }
+:ftrc.dl DG,FF is b31_26=14 & b19_16=11 & b3_0=0 & DG & FF { FF = trunc(DG); }
+:ftrc.dq DG,DF is b31_26=14 & b19_16=9 & b3_0=0 & DG & DF { DF = trunc(DG); }
+:ftrc.sl FG,FF is b31_26=14 & b19_16=8 & b3_0=0 & FG & FF { FF = trunc(FG); }
+:ftrc.sq FG,DF is b31_26=14 & b19_16=10 & b3_0=0 & FG & DF { DF = trunc(FG); }
+:ftrv.s MTG,FVH,FVF is b31_26=5 & b19_16=14 & b3_0=0 & MTG & FVH & FVF { FVF = ftrv(MTG, FVH); }
+:getcfg rm,imm_s6,RD is b31_26=48 & b19_16=15 & b3_0=0 & rm & imm_s6 & RD { RD = getcfg(rm + imm_s6); }
+:getcon CK,RD is b31_26=9 & b19_16=15 & b15_10=63 & b3_0=0 & CK & RD { RD = CK; }
+:gettr TB,RD is b31_26=17 & b25_23=0 & b19_16=5 & b15_10=63 & b3_0=0 & TB & RD { RD = TB; }
+:icbi rm,imm_s6x32 is b31_26=56 & b19_16=5 & b9_4=63 & b3_0=0 & rm & imm_s6x32 { local ea:8 = rm + imm_s6x32; icbi(ea); }
+:ld.b rm,imm_s10,RD is b31_26=32 & b3_0=0 & rm & imm_s10 & RD { local ea:8 = rm + imm_s10; RD = sext(*:1 ea); }
+:ld.l rm,imm_s10x4,RD is b31_26=34 & b3_0=0 & rm & imm_s10x4 & RD { local ea:8 = rm + imm_s10x4; RD = sext(*:4 ea); }
+:ld.q rm,imm_s10x8,RD is b31_26=35 & b3_0=0 & rm & imm_s10x8 & RD { local ea:8 = rm + imm_s10x8; RD = *:8 ea; }
+:ld.ub rm,imm_s10,RD is b31_26=36 & b3_0=0 & rm & imm_s10 & RD { local ea:8 = rm + imm_s10; RD = zext(*:1 ea); }
+:ld.uw rm,imm_s10x2,RD is b31_26=44 & b3_0=0 & rm & imm_s10x2 & RD { local ea:8 = rm + imm_s10x2; RD = zext(*:2 ea); }
+:ld.w rm,imm_s10x2,RD is b31_26=33 & b3_0=0 & rm & imm_s10x2 & RD { local ea:8 = rm + imm_s10x2; RD = sext(*:2 ea); }
+:ldhi.l rm,imm_s6,RD is b31_26=48 & b19_16=6 & b3_0=0 & rm & imm_s6 & RD & rds { local ea:8 = rm + imm_s6; RD = ldhi_l(ea, rds); }
+:ldhi.q rm,imm_s6,RD is b31_26=48 & b19_16=7 & b3_0=0 & rm & imm_s6 & RD & rds { local ea:8 = rm + imm_s6; RD = ldhi_q(ea, rds); }
+:ldlo.l rm,imm_s6,RD is b31_26=48 & b19_16=2 & b3_0=0 & rm & imm_s6 & RD & rds { local ea:8 = rm + imm_s6; RD = ldlo_l(ea, rds); }
+:ldlo.q rm,imm_s6,RD is b31_26=48 & b19_16=3 & b3_0=0 & rm & imm_s6 & RD & rds { local ea:8 = rm + imm_s6; RD = ldlo_q(ea, rds); }
+:ldx.b rm,rn,RD is b31_26=16 & b19_16=0 & b3_0=0 & rm & rn & RD { local ea:8 = rm + rn; RD = sext(*:1 ea); }
+:ldx.l rm,rn,RD is b31_26=16 & b19_16=2 & b3_0=0 & rm & rn & RD { local ea:8 = rm + rn; RD = sext(*:4 ea); }
+:ldx.q rm,rn,RD is b31_26=16 & b19_16=3 & b3_0=0 & rm & rn & RD { local ea:8 = rm + rn; RD = *:8 ea; }
+:ldx.ub rm,rn,RD is b31_26=16 & b19_16=4 & b3_0=0 & rm & rn & RD { local ea:8 = rm + rn; RD = zext(*:1 ea); }
+:ldx.uw rm,rn,RD is b31_26=16 & b19_16=5 & b3_0=0 & rm & rn & RD { local ea:8 = rm + rn; RD = zext(*:2 ea); }
+:ldx.w rm,rn,RD is b31_26=16 & b19_16=1 & b3_0=0 & rm & rn & RD { local ea:8 = rm + rn; RD = sext(*:2 ea); }
+:mabs.l rm,RD is b31_26=10 & b19_16=10 & b15_10=63 & b3_0=0 & rm & RD { RD = mabs_l(rm); }
+:mabs.w rm,RD is b31_26=10 & b19_16=9 & b15_10=63 & b3_0=0 & rm & RD { RD = mabs_w(rm); }
+:madd.l rm,rn,RD is b31_26=2 & b19_16=2 & b3_0=0 & rm & rn & RD { RD = madd_l(rm, rn); }
+:madd.w rm,rn,RD is b31_26=2 & b19_16=1 & b3_0=0 & rm & rn & RD { RD = madd_w(rm, rn); }
+:madds.l rm,rn,RD is b31_26=2 & b19_16=6 & b3_0=0 & rm & rn & RD { RD = madds_l(rm, rn); }
+:madds.ub rm,rn,RD is b31_26=2 & b19_16=4 & b3_0=0 & rm & rn & RD { RD = madds_ub(rm, rn); }
+:madds.w rm,rn,RD is b31_26=2 & b19_16=5 & b3_0=0 & rm & rn & RD { RD = madds_w(rm, rn); }
+:mcmpeq.b rm,rn,RD is b31_26=10 & b19_16=0 & b3_0=0 & rm & rn & RD { RD = mcmpeq_b(rm, rn); }
+:mcmpeq.l rm,rn,RD is b31_26=10 & b19_16=2 & b3_0=0 & rm & rn & RD { RD = mcmpeq_l(rm, rn); }
+:mcmpeq.w rm,rn,RD is b31_26=10 & b19_16=1 & b3_0=0 & rm & rn & RD { RD = mcmpeq_w(rm, rn); }
+:mcmpgt.l rm,rn,RD is b31_26=10 & b19_16=6 & b3_0=0 & rm & rn & RD { RD = mcmpgt_l(rm, rn); }
+:mcmpgt.ub rm,rn,RD is b31_26=10 & b19_16=4 & b3_0=0 & rm & rn & RD { RD = mcmpgt_ub(rm, rn); }
+:mcmpgt.w rm,rn,RD is b31_26=10 & b19_16=5 & b3_0=0 & rm & rn & RD { RD = mcmpgt_w(rm, rn); }
+:mcmv rm,rn,RD is b31_26=18 & b19_16=3 & b3_0=0 & rm & rn & RD & rds { RD = mcmv(rm, rn, rds); }
+:mcnvs.lw rm,rn,RD is b31_26=19 & b19_16=13 & b3_0=0 & rm & rn & RD { RD = mcnvs_lw(rm, rn); }
+:mcnvs.wb rm,rn,RD is b31_26=19 & b19_16=8 & b3_0=0 & rm & rn & RD { RD = mcnvs_wb(rm, rn); }
+:mcnvs.wub rm,rn,RD is b31_26=19 & b19_16=12 & b3_0=0 & rm & rn & RD { RD = mcnvs_wub(rm, rn); }
+:mextr1 rm,rn,RD is b31_26=10 & b19_16=7 & b3_0=0 & rm & rn & RD { RD = mextr1(rm, rn); }
+:mextr2 rm,rn,RD is b31_26=10 & b19_16=11 & b3_0=0 & rm & rn & RD { RD = mextr2(rm, rn); }
+:mextr3 rm,rn,RD is b31_26=10 & b19_16=15 & b3_0=0 & rm & rn & RD { RD = mextr3(rm, rn); }
+:mextr4 rm,rn,RD is b31_26=11 & b19_16=3 & b3_0=0 & rm & rn & RD { RD = mextr4(rm, rn); }
+:mextr5 rm,rn,RD is b31_26=11 & b19_16=7 & b3_0=0 & rm & rn & RD { RD = mextr5(rm, rn); }
+:mextr6 rm,rn,RD is b31_26=11 & b19_16=11 & b3_0=0 & rm & rn & RD { RD = mextr6(rm, rn); }
+:mextr7 rm,rn,RD is b31_26=11 & b19_16=15 & b3_0=0 & rm & rn & RD { RD = mextr7(rm, rn); }
+:mmacfx.wl rm,rn,RD is b31_26=18 & b19_16=1 & b3_0=0 & rm & rn & RD & rds { RD = mmacfx_wl(rm, rn, rds); }
+:mmacnfx.wl rm,rn,RD is b31_26=18 & b19_16=5 & b3_0=0 & rm & rn & RD & rds { RD = mmacnfx_wl(rm, rn, rds); }
+:mmul.l rm,rn,RD is b31_26=19 & b19_16=2 & b3_0=0 & rm & rn & RD { RD = mmul_l(rm, rn); }
+:mmul.w rm,rn,RD is b31_26=19 & b19_16=1 & b3_0=0 & rm & rn & RD { RD = mmul_w(rm, rn); }
+:mmulfx.l rm,rn,RD is b31_26=19 & b19_16=6 & b3_0=0 & rm & rn & RD { RD = mmulfx_l(rm, rn); }
+:mmulfx.w rm,rn,RD is b31_26=19 & b19_16=5 & b3_0=0 & rm & rn & RD { RD = mmulfx_w(rm, rn); }
+:mmulfxrp.w rm,rn,RD is b31_26=19 & b19_16=9 & b3_0=0 & rm & rn & RD { RD = mmulfxrp_w(rm, rn); }
+:mmulhi.wl rm,rn,RD is b31_26=19 & b19_16=14 & b3_0=0 & rm & rn & RD { RD = mmulhi_wl(rm, rn); }
+:mmullo.wl rm,rn,RD is b31_26=19 & b19_16=10 & b3_0=0 & rm & rn & RD { RD = mmullo_wl(rm, rn); }
+:mmulsum.wq rm,rn,RD is b31_26=18 & b19_16=9 & b3_0=0 & rm & rn & RD & rds { RD = mmulsum_wq(rm, rn, rds); }
+:movi imm_s16,RD is b31_26=51 & b3_0=0 & imm_s16 & RD { RD = imm_s16; }
+:mperm.w rm,rn,RD is b31_26=10 & b19_16=13 & b3_0=0 & rm & rn & RD { RD = mperm_w(rm, rn); }
+:msad.ubq rm,rn,RD is b31_26=18 & b19_16=0 & b3_0=0 & rm & rn & RD & rds { RD = msad_ubq(rm, rn, rds); }
+:mshard.l rm,rn,RD is b31_26=3 & b19_16=10 & b3_0=0 & rm & rn & RD { RD = mshard_l(rm, rn); }
+:mshard.w rm,rn,RD is b31_26=3 & b19_16=9 & b3_0=0 & rm & rn & RD { RD = mshard_w(rm, rn); }
+:mshards.q rm,rn,RD is b31_26=3 & b19_16=11 & b3_0=0 & rm & rn & RD { RD = mshards_q(rm, rn); }
+:mshfhi.b rm,rn,RD is b31_26=11 & b19_16=4 & b3_0=0 & rm & rn & RD { RD = mshfhi_b(rm, rn); }
+:mshfhi.l rm,rn,RD is b31_26=11 & b19_16=6 & b3_0=0 & rm & rn & RD { RD = mshfhi_l(rm, rn); }
+:mshfhi.w rm,rn,RD is b31_26=11 & b19_16=5 & b3_0=0 & rm & rn & RD { RD = mshfhi_w(rm, rn); }
+:mshflo.b rm,rn,RD is b31_26=11 & b19_16=0 & b3_0=0 & rm & rn & RD { RD = mshflo_b(rm, rn); }
+:mshflo.l rm,rn,RD is b31_26=11 & b19_16=2 & b3_0=0 & rm & rn & RD { RD = mshflo_l(rm, rn); }
+:mshflo.w rm,rn,RD is b31_26=11 & b19_16=1 & b3_0=0 & rm & rn & RD { RD = mshflo_w(rm, rn); }
+:mshlld.l rm,rn,RD is b31_26=3 & b19_16=2 & b3_0=0 & rm & rn & RD { RD = mshlld_l(rm, rn); }
+:mshlld.w rm,rn,RD is b31_26=3 & b19_16=1 & b3_0=0 & rm & rn & RD { RD = mshlld_w(rm, rn); }
+:mshalds.l rm,rn,RD is b31_26=3 & b19_16=6 & b3_0=0 & rm & rn & RD { RD = mshalds_l(rm, rn); }
+:mshalds.w rm,rn,RD is b31_26=3 & b19_16=5 & b3_0=0 & rm & rn & RD { RD = mshalds_w(rm, rn); }
+:mshlrd.l rm,rn,RD is b31_26=3 & b19_16=14 & b3_0=0 & rm & rn & RD { RD = mshlrd_l(rm, rn); }
+:mshlrd.w rm,rn,RD is b31_26=3 & b19_16=13 & b3_0=0 & rm & rn & RD { RD = mshlrd_w(rm, rn); }
+:msub.l rm,rn,RD is b31_26=2 & b19_16=10 & b3_0=0 & rm & rn & RD { RD = msub_l(rm, rn); }
+:msub.w rm,rn,RD is b31_26=2 & b19_16=9 & b3_0=0 & rm & rn & RD { RD = msub_w(rm, rn); }
+:msubs.l rm,rn,RD is b31_26=2 & b19_16=14 & b3_0=0 & rm & rn & RD { RD = msubs_l(rm, rn); }
+:msubs.ub rm,rn,RD is b31_26=2 & b19_16=12 & b3_0=0 & rm & rn & RD { RD = msubs_ub(rm, rn); }
+:msubs.w rm,rn,RD is b31_26=2 & b19_16=13 & b3_0=0 & rm & rn & RD { RD = msubs_w(rm, rn); }
+:muls.l rm,rn,RD is b31_26=1 & b19_16=14 & b3_0=0 & rm & rn & RD { RD = sext(rm:4) * sext(rn:4); }
+:mulu.l rm,rn,RD is b31_26=0 & b19_16=14 & b3_0=0 & rm & rn & RD { RD = zext(rm:4) * zext(rn:4); }
+:nop is b31_26=27 & b25_20=63 & b19_16=0 & b15_10=63 & b9_4=63 & b3_0=0 {  }
+:nsb rm,RD is b31_26=0 & b19_16=13 & b15_10=63 & b3_0=0 & rm & RD { local x:8 = rm ^ (rm s>> 1); RD = lzcount(x) - 1; }
+:ocbi rm,imm_s6x32 is b31_26=56 & b19_16=9 & b9_4=63 & b3_0=0 & rm & imm_s6x32 { local ea:8 = rm + imm_s6x32; ocbi(ea); }
+:ocbp rm,imm_s6x32 is b31_26=56 & b19_16=8 & b9_4=63 & b3_0=0 & rm & imm_s6x32 { local ea:8 = rm + imm_s6x32; ocbp(ea); }
+:ocbwb rm,imm_s6x32 is b31_26=56 & b19_16=12 & b9_4=63 & b3_0=0 & rm & imm_s6x32 { local ea:8 = rm + imm_s6x32; ocbwb(ea); }
+:or rm,rn,RD is b31_26=1 & b19_16=9 & b3_0=0 & rm & rn & RD { RD = rm | rn; }
+:ori rm,imm_s10,RD is b31_26=55 & b3_0=0 & rm & imm_s10 & RD { RD = rm | imm_s10; }
+:prefi rm,imm_s6x32 is b31_26=56 & b19_16=1 & b9_4=63 & b3_0=0 & rm & imm_s6x32 { local ea:8 = rm + imm_s6x32; prefi(ea); }
+:pta^"/l" imm_pcx4,TA is b31_26=58 & b9_7=4 & b3_0=0 & imm_pcx4 & TA & TAn & S16 [ ptTgt = (inst_start + S16 * 4) & 0xffffffff; ptTR = TAn; ptOK = 1; globalset(inst_next, ptTgt); globalset(inst_next, ptTR); globalset(inst_next, ptOK); ] { TA = imm_pcx4; }
+:pta^"/u" imm_pcx4,TA is b31_26=58 & b9_7=0 & b3_0=0 & imm_pcx4 & TA & TAn & S16 [ ptTgt = (inst_start + S16 * 4) & 0xffffffff; ptTR = TAn; ptOK = 1; globalset(inst_next, ptTgt); globalset(inst_next, ptTR); globalset(inst_next, ptOK); ] { TA = imm_pcx4; }
+:ptabs^"/l" rn,TA is b31_26=26 & b25_20=63 & b19_16=1 & b9_7=4 & b3_0=0 & rn & TA [ ptOK = 0; globalset(inst_next, ptOK); ] { TA = rn; }
+:ptabs^"/u" rn,TA is b31_26=26 & b25_20=63 & b19_16=1 & b9_7=0 & b3_0=0 & rn & TA [ ptOK = 0; globalset(inst_next, ptOK); ] { TA = rn; }
+:ptb^"/l" imm_pcx4,TA is b31_26=59 & b9_7=4 & b3_0=0 & imm_pcx4 & TA [ ptOK = 0; globalset(inst_next, ptOK); ] { TA = imm_pcx4; }
+:ptb^"/u" imm_pcx4,TA is b31_26=59 & b9_7=0 & b3_0=0 & imm_pcx4 & TA [ ptOK = 0; globalset(inst_next, ptOK); ] { TA = imm_pcx4; }
+:ptrel^"/l" rn,TA is b31_26=26 & b25_20=63 & b19_16=5 & b9_7=4 & b3_0=0 & rn & TA [ ptOK = 0; globalset(inst_next, ptOK); ] { TA = inst_start + rn; }
+:ptrel^"/u" rn,TA is b31_26=26 & b25_20=63 & b19_16=5 & b9_7=0 & b3_0=0 & rn & TA [ ptOK = 0; globalset(inst_next, ptOK); ] { TA = inst_start + rn; }
+:putcfg rm,imm_s6,rds is b31_26=56 & b19_16=15 & b3_0=0 & rm & imm_s6 & rds { putcfg(rm + imm_s6, rds); }
+:putcon rm,CJ is b31_26=27 & b19_16=15 & b15_10=63 & b3_0=0 & rm & CJ { CJ = rm; }
+:rte is b31_26=27 & b25_20=63 & b19_16=3 & b15_10=63 & b9_4=63 & b3_0=0 [ ptOK = 0; globalset(inst_next, ptOK); ] { local t:8 = rte(); return [t]; }
+:shard rm,rn,RD is b31_26=1 & b19_16=7 & b3_0=0 & rm & rn & RD { RD = rm s>> (rn & 63); }
+:shard.l rm,rn,RD is b31_26=1 & b19_16=6 & b3_0=0 & rm & rn & RD { local t:4 = rm:4 s>> (rn:4 & 31); RD = sext(t); }
+:shari rm,imm_u6,RD is b31_26=49 & b19_16=7 & b3_0=0 & rm & imm_u6 & RD { RD = rm s>> imm_u6; }
+:shari.l rm,imm_u6,RD is b31_26=49 & b19_16=6 & b3_0=0 & rm & imm_u6 & RD { local t:4 = rm:4 s>> imm_u6:4; RD = sext(t); }
+:shlld rm,rn,RD is b31_26=1 & b19_16=1 & b3_0=0 & rm & rn & RD { RD = rm << (rn & 63); }
+:shlld.l rm,rn,RD is b31_26=1 & b19_16=0 & b3_0=0 & rm & rn & RD { local t:4 = rm:4 << (rn:4 & 31); RD = sext(t); }
+:shlli rm,imm_u6,RD is b31_26=49 & b19_16=1 & b3_0=0 & rm & imm_u6 & RD { RD = rm << imm_u6; }
+:shlli.l rm,imm_u5,RD is b31_26=49 & b19_16=0 & b15_15=0 & b3_0=0 & rm & imm_u5 & RD { local t:4 = rm:4 << imm_u5:4; RD = sext(t); }
+:shlrd rm,rn,RD is b31_26=1 & b19_16=3 & b3_0=0 & rm & rn & RD { RD = rm >> (rn & 63); }
+:shlrd.l rm,rn,RD is b31_26=1 & b19_16=2 & b3_0=0 & rm & rn & RD { local t:4 = rm:4 >> (rn:4 & 31); RD = sext(t); }
+:shlri rm,imm_u6,RD is b31_26=49 & b19_16=3 & b3_0=0 & rm & imm_u6 & RD { RD = rm >> imm_u6; }
+:shlri.l rm,imm_u5,RD is b31_26=49 & b19_16=2 & b15_15=0 & b3_0=0 & rm & imm_u5 & RD { local t:4 = rm:4 >> imm_u5:4; RD = sext(t); }
+:shori imm_u16,RD is b31_26=50 & b3_0=0 & imm_u16 & RD & rds { RD = (rds << 16) | imm_u16; }
+:sleep is b31_26=27 & b25_20=63 & b19_16=7 & b15_10=63 & b9_4=63 & b3_0=0 { sleep(); }
+:st.b rm,imm_s10,rds is b31_26=40 & b3_0=0 & rm & imm_s10 & rds { local ea:8 = rm + imm_s10; *:1 ea = rds:1; }
+:st.l rm,imm_s10x4,rds is b31_26=42 & b3_0=0 & rm & imm_s10x4 & rds { local ea:8 = rm + imm_s10x4; *:4 ea = rds:4; }
+:st.q rm,imm_s10x8,rds is b31_26=43 & b3_0=0 & rm & imm_s10x8 & rds { local ea:8 = rm + imm_s10x8; *:8 ea = rds; }
+:st.w rm,imm_s10x2,rds is b31_26=41 & b3_0=0 & rm & imm_s10x2 & rds { local ea:8 = rm + imm_s10x2; *:2 ea = rds:2; }
+:sthi.l rm,imm_s6,rds is b31_26=56 & b19_16=6 & b3_0=0 & rm & imm_s6 & rds { local ea:8 = rm + imm_s6; sthi_l(ea, rds); }
+:sthi.q rm,imm_s6,rds is b31_26=56 & b19_16=7 & b3_0=0 & rm & imm_s6 & rds { local ea:8 = rm + imm_s6; sthi_q(ea, rds); }
+:stlo.l rm,imm_s6,rds is b31_26=56 & b19_16=2 & b3_0=0 & rm & imm_s6 & rds { local ea:8 = rm + imm_s6; stlo_l(ea, rds); }
+:stlo.q rm,imm_s6,rds is b31_26=56 & b19_16=3 & b3_0=0 & rm & imm_s6 & rds { local ea:8 = rm + imm_s6; stlo_q(ea, rds); }
+:stx.b rm,rn,rds is b31_26=24 & b19_16=0 & b3_0=0 & rm & rn & rds { local ea:8 = rm + rn; *:1 ea = rds:1; }
+:stx.l rm,rn,rds is b31_26=24 & b19_16=2 & b3_0=0 & rm & rn & rds { local ea:8 = rm + rn; *:4 ea = rds:4; }
+:stx.q rm,rn,rds is b31_26=24 & b19_16=3 & b3_0=0 & rm & rn & rds { local ea:8 = rm + rn; *:8 ea = rds; }
+:stx.w rm,rn,rds is b31_26=24 & b19_16=1 & b3_0=0 & rm & rn & rds { local ea:8 = rm + rn; *:2 ea = rds:2; }
+:sub rm,rn,RD is b31_26=0 & b19_16=11 & b3_0=0 & rm & rn & RD { RD = rm - rn; }
+:sub.l rm,rn,RD is b31_26=0 & b19_16=10 & b3_0=0 & rm & rn & RD { local t:4 = rm:4 - rn:4; RD = sext(t); }
+:swap.q rm,rn,RD is b31_26=8 & b19_16=3 & b3_0=0 & rm & rn & RD & rds { local ea:8 = rm + rn; local old:8 = *:8 ea; *:8 ea = rds; RD = old; }
+:synci is b31_26=27 & b25_20=63 & b19_16=2 & b15_10=63 & b9_4=63 & b3_0=0 { synci(); }
+:synco is b31_26=27 & b25_20=63 & b19_16=6 & b15_10=63 & b9_4=63 & b3_0=0 { synco(); }
+:trapa rm is b31_26=27 & b19_16=1 & b15_10=63 & b9_4=63 & b3_0=0 & rm { trapa(rm); }
+:xor rm,rn,RD is b31_26=1 & b19_16=13 & b3_0=0 & rm & rn & RD { RD = rm ^ rn; }
+:xori rm,imm_s6,RD is b31_26=49 & b19_16=13 & b3_0=0 & rm & imm_s6 & RD { RD = rm ^ imm_s6; }
+:beq^"/l" rm,rn,TA is b31_26=25 & b19_16=1 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=0 & ptOK=1 & ptTR=0 & ptdest { if (!(rm == rn)) goto <skip>; goto ptdest; <skip> }
+:beq^"/l" rm,rn,TA is b31_26=25 & b19_16=1 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=1 & ptOK=1 & ptTR=1 & ptdest { if (!(rm == rn)) goto <skip>; goto ptdest; <skip> }
+:beq^"/l" rm,rn,TA is b31_26=25 & b19_16=1 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=2 & ptOK=1 & ptTR=2 & ptdest { if (!(rm == rn)) goto <skip>; goto ptdest; <skip> }
+:beq^"/l" rm,rn,TA is b31_26=25 & b19_16=1 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=3 & ptOK=1 & ptTR=3 & ptdest { if (!(rm == rn)) goto <skip>; goto ptdest; <skip> }
+:beq^"/l" rm,rn,TA is b31_26=25 & b19_16=1 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=4 & ptOK=1 & ptTR=4 & ptdest { if (!(rm == rn)) goto <skip>; goto ptdest; <skip> }
+:beq^"/l" rm,rn,TA is b31_26=25 & b19_16=1 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=5 & ptOK=1 & ptTR=5 & ptdest { if (!(rm == rn)) goto <skip>; goto ptdest; <skip> }
+:beq^"/l" rm,rn,TA is b31_26=25 & b19_16=1 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=6 & ptOK=1 & ptTR=6 & ptdest { if (!(rm == rn)) goto <skip>; goto ptdest; <skip> }
+:beq^"/l" rm,rn,TA is b31_26=25 & b19_16=1 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=7 & ptOK=1 & ptTR=7 & ptdest { if (!(rm == rn)) goto <skip>; goto ptdest; <skip> }
+:beq^"/u" rm,rn,TA is b31_26=25 & b19_16=1 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=0 & ptOK=1 & ptTR=0 & ptdest { if (!(rm == rn)) goto <skip>; goto ptdest; <skip> }
+:beq^"/u" rm,rn,TA is b31_26=25 & b19_16=1 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=1 & ptOK=1 & ptTR=1 & ptdest { if (!(rm == rn)) goto <skip>; goto ptdest; <skip> }
+:beq^"/u" rm,rn,TA is b31_26=25 & b19_16=1 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=2 & ptOK=1 & ptTR=2 & ptdest { if (!(rm == rn)) goto <skip>; goto ptdest; <skip> }
+:beq^"/u" rm,rn,TA is b31_26=25 & b19_16=1 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=3 & ptOK=1 & ptTR=3 & ptdest { if (!(rm == rn)) goto <skip>; goto ptdest; <skip> }
+:beq^"/u" rm,rn,TA is b31_26=25 & b19_16=1 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=4 & ptOK=1 & ptTR=4 & ptdest { if (!(rm == rn)) goto <skip>; goto ptdest; <skip> }
+:beq^"/u" rm,rn,TA is b31_26=25 & b19_16=1 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=5 & ptOK=1 & ptTR=5 & ptdest { if (!(rm == rn)) goto <skip>; goto ptdest; <skip> }
+:beq^"/u" rm,rn,TA is b31_26=25 & b19_16=1 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=6 & ptOK=1 & ptTR=6 & ptdest { if (!(rm == rn)) goto <skip>; goto ptdest; <skip> }
+:beq^"/u" rm,rn,TA is b31_26=25 & b19_16=1 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=7 & ptOK=1 & ptTR=7 & ptdest { if (!(rm == rn)) goto <skip>; goto ptdest; <skip> }
+:beqi^"/l" rm,imm_s6,TA is b31_26=57 & b19_16=1 & b9_7=4 & b3_0=0 & rm & imm_s6 & TA & TAn=0 & ptOK=1 & ptTR=0 & ptdest { if (!(rm == imm_s6)) goto <skip>; goto ptdest; <skip> }
+:beqi^"/l" rm,imm_s6,TA is b31_26=57 & b19_16=1 & b9_7=4 & b3_0=0 & rm & imm_s6 & TA & TAn=1 & ptOK=1 & ptTR=1 & ptdest { if (!(rm == imm_s6)) goto <skip>; goto ptdest; <skip> }
+:beqi^"/l" rm,imm_s6,TA is b31_26=57 & b19_16=1 & b9_7=4 & b3_0=0 & rm & imm_s6 & TA & TAn=2 & ptOK=1 & ptTR=2 & ptdest { if (!(rm == imm_s6)) goto <skip>; goto ptdest; <skip> }
+:beqi^"/l" rm,imm_s6,TA is b31_26=57 & b19_16=1 & b9_7=4 & b3_0=0 & rm & imm_s6 & TA & TAn=3 & ptOK=1 & ptTR=3 & ptdest { if (!(rm == imm_s6)) goto <skip>; goto ptdest; <skip> }
+:beqi^"/l" rm,imm_s6,TA is b31_26=57 & b19_16=1 & b9_7=4 & b3_0=0 & rm & imm_s6 & TA & TAn=4 & ptOK=1 & ptTR=4 & ptdest { if (!(rm == imm_s6)) goto <skip>; goto ptdest; <skip> }
+:beqi^"/l" rm,imm_s6,TA is b31_26=57 & b19_16=1 & b9_7=4 & b3_0=0 & rm & imm_s6 & TA & TAn=5 & ptOK=1 & ptTR=5 & ptdest { if (!(rm == imm_s6)) goto <skip>; goto ptdest; <skip> }
+:beqi^"/l" rm,imm_s6,TA is b31_26=57 & b19_16=1 & b9_7=4 & b3_0=0 & rm & imm_s6 & TA & TAn=6 & ptOK=1 & ptTR=6 & ptdest { if (!(rm == imm_s6)) goto <skip>; goto ptdest; <skip> }
+:beqi^"/l" rm,imm_s6,TA is b31_26=57 & b19_16=1 & b9_7=4 & b3_0=0 & rm & imm_s6 & TA & TAn=7 & ptOK=1 & ptTR=7 & ptdest { if (!(rm == imm_s6)) goto <skip>; goto ptdest; <skip> }
+:beqi^"/u" rm,imm_s6,TA is b31_26=57 & b19_16=1 & b9_7=0 & b3_0=0 & rm & imm_s6 & TA & TAn=0 & ptOK=1 & ptTR=0 & ptdest { if (!(rm == imm_s6)) goto <skip>; goto ptdest; <skip> }
+:beqi^"/u" rm,imm_s6,TA is b31_26=57 & b19_16=1 & b9_7=0 & b3_0=0 & rm & imm_s6 & TA & TAn=1 & ptOK=1 & ptTR=1 & ptdest { if (!(rm == imm_s6)) goto <skip>; goto ptdest; <skip> }
+:beqi^"/u" rm,imm_s6,TA is b31_26=57 & b19_16=1 & b9_7=0 & b3_0=0 & rm & imm_s6 & TA & TAn=2 & ptOK=1 & ptTR=2 & ptdest { if (!(rm == imm_s6)) goto <skip>; goto ptdest; <skip> }
+:beqi^"/u" rm,imm_s6,TA is b31_26=57 & b19_16=1 & b9_7=0 & b3_0=0 & rm & imm_s6 & TA & TAn=3 & ptOK=1 & ptTR=3 & ptdest { if (!(rm == imm_s6)) goto <skip>; goto ptdest; <skip> }
+:beqi^"/u" rm,imm_s6,TA is b31_26=57 & b19_16=1 & b9_7=0 & b3_0=0 & rm & imm_s6 & TA & TAn=4 & ptOK=1 & ptTR=4 & ptdest { if (!(rm == imm_s6)) goto <skip>; goto ptdest; <skip> }
+:beqi^"/u" rm,imm_s6,TA is b31_26=57 & b19_16=1 & b9_7=0 & b3_0=0 & rm & imm_s6 & TA & TAn=5 & ptOK=1 & ptTR=5 & ptdest { if (!(rm == imm_s6)) goto <skip>; goto ptdest; <skip> }
+:beqi^"/u" rm,imm_s6,TA is b31_26=57 & b19_16=1 & b9_7=0 & b3_0=0 & rm & imm_s6 & TA & TAn=6 & ptOK=1 & ptTR=6 & ptdest { if (!(rm == imm_s6)) goto <skip>; goto ptdest; <skip> }
+:beqi^"/u" rm,imm_s6,TA is b31_26=57 & b19_16=1 & b9_7=0 & b3_0=0 & rm & imm_s6 & TA & TAn=7 & ptOK=1 & ptTR=7 & ptdest { if (!(rm == imm_s6)) goto <skip>; goto ptdest; <skip> }
+:bge^"/l" rm,rn,TA is b31_26=25 & b19_16=3 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=0 & ptOK=1 & ptTR=0 & ptdest { if (!(rm s>= rn)) goto <skip>; goto ptdest; <skip> }
+:bge^"/l" rm,rn,TA is b31_26=25 & b19_16=3 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=1 & ptOK=1 & ptTR=1 & ptdest { if (!(rm s>= rn)) goto <skip>; goto ptdest; <skip> }
+:bge^"/l" rm,rn,TA is b31_26=25 & b19_16=3 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=2 & ptOK=1 & ptTR=2 & ptdest { if (!(rm s>= rn)) goto <skip>; goto ptdest; <skip> }
+:bge^"/l" rm,rn,TA is b31_26=25 & b19_16=3 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=3 & ptOK=1 & ptTR=3 & ptdest { if (!(rm s>= rn)) goto <skip>; goto ptdest; <skip> }
+:bge^"/l" rm,rn,TA is b31_26=25 & b19_16=3 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=4 & ptOK=1 & ptTR=4 & ptdest { if (!(rm s>= rn)) goto <skip>; goto ptdest; <skip> }
+:bge^"/l" rm,rn,TA is b31_26=25 & b19_16=3 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=5 & ptOK=1 & ptTR=5 & ptdest { if (!(rm s>= rn)) goto <skip>; goto ptdest; <skip> }
+:bge^"/l" rm,rn,TA is b31_26=25 & b19_16=3 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=6 & ptOK=1 & ptTR=6 & ptdest { if (!(rm s>= rn)) goto <skip>; goto ptdest; <skip> }
+:bge^"/l" rm,rn,TA is b31_26=25 & b19_16=3 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=7 & ptOK=1 & ptTR=7 & ptdest { if (!(rm s>= rn)) goto <skip>; goto ptdest; <skip> }
+:bge^"/u" rm,rn,TA is b31_26=25 & b19_16=3 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=0 & ptOK=1 & ptTR=0 & ptdest { if (!(rm s>= rn)) goto <skip>; goto ptdest; <skip> }
+:bge^"/u" rm,rn,TA is b31_26=25 & b19_16=3 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=1 & ptOK=1 & ptTR=1 & ptdest { if (!(rm s>= rn)) goto <skip>; goto ptdest; <skip> }
+:bge^"/u" rm,rn,TA is b31_26=25 & b19_16=3 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=2 & ptOK=1 & ptTR=2 & ptdest { if (!(rm s>= rn)) goto <skip>; goto ptdest; <skip> }
+:bge^"/u" rm,rn,TA is b31_26=25 & b19_16=3 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=3 & ptOK=1 & ptTR=3 & ptdest { if (!(rm s>= rn)) goto <skip>; goto ptdest; <skip> }
+:bge^"/u" rm,rn,TA is b31_26=25 & b19_16=3 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=4 & ptOK=1 & ptTR=4 & ptdest { if (!(rm s>= rn)) goto <skip>; goto ptdest; <skip> }
+:bge^"/u" rm,rn,TA is b31_26=25 & b19_16=3 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=5 & ptOK=1 & ptTR=5 & ptdest { if (!(rm s>= rn)) goto <skip>; goto ptdest; <skip> }
+:bge^"/u" rm,rn,TA is b31_26=25 & b19_16=3 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=6 & ptOK=1 & ptTR=6 & ptdest { if (!(rm s>= rn)) goto <skip>; goto ptdest; <skip> }
+:bge^"/u" rm,rn,TA is b31_26=25 & b19_16=3 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=7 & ptOK=1 & ptTR=7 & ptdest { if (!(rm s>= rn)) goto <skip>; goto ptdest; <skip> }
+:bgeu^"/l" rm,rn,TA is b31_26=25 & b19_16=11 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=0 & ptOK=1 & ptTR=0 & ptdest { if (!(rm >= rn)) goto <skip>; goto ptdest; <skip> }
+:bgeu^"/l" rm,rn,TA is b31_26=25 & b19_16=11 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=1 & ptOK=1 & ptTR=1 & ptdest { if (!(rm >= rn)) goto <skip>; goto ptdest; <skip> }
+:bgeu^"/l" rm,rn,TA is b31_26=25 & b19_16=11 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=2 & ptOK=1 & ptTR=2 & ptdest { if (!(rm >= rn)) goto <skip>; goto ptdest; <skip> }
+:bgeu^"/l" rm,rn,TA is b31_26=25 & b19_16=11 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=3 & ptOK=1 & ptTR=3 & ptdest { if (!(rm >= rn)) goto <skip>; goto ptdest; <skip> }
+:bgeu^"/l" rm,rn,TA is b31_26=25 & b19_16=11 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=4 & ptOK=1 & ptTR=4 & ptdest { if (!(rm >= rn)) goto <skip>; goto ptdest; <skip> }
+:bgeu^"/l" rm,rn,TA is b31_26=25 & b19_16=11 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=5 & ptOK=1 & ptTR=5 & ptdest { if (!(rm >= rn)) goto <skip>; goto ptdest; <skip> }
+:bgeu^"/l" rm,rn,TA is b31_26=25 & b19_16=11 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=6 & ptOK=1 & ptTR=6 & ptdest { if (!(rm >= rn)) goto <skip>; goto ptdest; <skip> }
+:bgeu^"/l" rm,rn,TA is b31_26=25 & b19_16=11 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=7 & ptOK=1 & ptTR=7 & ptdest { if (!(rm >= rn)) goto <skip>; goto ptdest; <skip> }
+:bgeu^"/u" rm,rn,TA is b31_26=25 & b19_16=11 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=0 & ptOK=1 & ptTR=0 & ptdest { if (!(rm >= rn)) goto <skip>; goto ptdest; <skip> }
+:bgeu^"/u" rm,rn,TA is b31_26=25 & b19_16=11 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=1 & ptOK=1 & ptTR=1 & ptdest { if (!(rm >= rn)) goto <skip>; goto ptdest; <skip> }
+:bgeu^"/u" rm,rn,TA is b31_26=25 & b19_16=11 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=2 & ptOK=1 & ptTR=2 & ptdest { if (!(rm >= rn)) goto <skip>; goto ptdest; <skip> }
+:bgeu^"/u" rm,rn,TA is b31_26=25 & b19_16=11 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=3 & ptOK=1 & ptTR=3 & ptdest { if (!(rm >= rn)) goto <skip>; goto ptdest; <skip> }
+:bgeu^"/u" rm,rn,TA is b31_26=25 & b19_16=11 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=4 & ptOK=1 & ptTR=4 & ptdest { if (!(rm >= rn)) goto <skip>; goto ptdest; <skip> }
+:bgeu^"/u" rm,rn,TA is b31_26=25 & b19_16=11 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=5 & ptOK=1 & ptTR=5 & ptdest { if (!(rm >= rn)) goto <skip>; goto ptdest; <skip> }
+:bgeu^"/u" rm,rn,TA is b31_26=25 & b19_16=11 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=6 & ptOK=1 & ptTR=6 & ptdest { if (!(rm >= rn)) goto <skip>; goto ptdest; <skip> }
+:bgeu^"/u" rm,rn,TA is b31_26=25 & b19_16=11 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=7 & ptOK=1 & ptTR=7 & ptdest { if (!(rm >= rn)) goto <skip>; goto ptdest; <skip> }
+:bgt^"/l" rm,rn,TA is b31_26=25 & b19_16=7 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=0 & ptOK=1 & ptTR=0 & ptdest { if (!(rm s> rn)) goto <skip>; goto ptdest; <skip> }
+:bgt^"/l" rm,rn,TA is b31_26=25 & b19_16=7 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=1 & ptOK=1 & ptTR=1 & ptdest { if (!(rm s> rn)) goto <skip>; goto ptdest; <skip> }
+:bgt^"/l" rm,rn,TA is b31_26=25 & b19_16=7 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=2 & ptOK=1 & ptTR=2 & ptdest { if (!(rm s> rn)) goto <skip>; goto ptdest; <skip> }
+:bgt^"/l" rm,rn,TA is b31_26=25 & b19_16=7 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=3 & ptOK=1 & ptTR=3 & ptdest { if (!(rm s> rn)) goto <skip>; goto ptdest; <skip> }
+:bgt^"/l" rm,rn,TA is b31_26=25 & b19_16=7 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=4 & ptOK=1 & ptTR=4 & ptdest { if (!(rm s> rn)) goto <skip>; goto ptdest; <skip> }
+:bgt^"/l" rm,rn,TA is b31_26=25 & b19_16=7 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=5 & ptOK=1 & ptTR=5 & ptdest { if (!(rm s> rn)) goto <skip>; goto ptdest; <skip> }
+:bgt^"/l" rm,rn,TA is b31_26=25 & b19_16=7 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=6 & ptOK=1 & ptTR=6 & ptdest { if (!(rm s> rn)) goto <skip>; goto ptdest; <skip> }
+:bgt^"/l" rm,rn,TA is b31_26=25 & b19_16=7 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=7 & ptOK=1 & ptTR=7 & ptdest { if (!(rm s> rn)) goto <skip>; goto ptdest; <skip> }
+:bgt^"/u" rm,rn,TA is b31_26=25 & b19_16=7 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=0 & ptOK=1 & ptTR=0 & ptdest { if (!(rm s> rn)) goto <skip>; goto ptdest; <skip> }
+:bgt^"/u" rm,rn,TA is b31_26=25 & b19_16=7 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=1 & ptOK=1 & ptTR=1 & ptdest { if (!(rm s> rn)) goto <skip>; goto ptdest; <skip> }
+:bgt^"/u" rm,rn,TA is b31_26=25 & b19_16=7 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=2 & ptOK=1 & ptTR=2 & ptdest { if (!(rm s> rn)) goto <skip>; goto ptdest; <skip> }
+:bgt^"/u" rm,rn,TA is b31_26=25 & b19_16=7 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=3 & ptOK=1 & ptTR=3 & ptdest { if (!(rm s> rn)) goto <skip>; goto ptdest; <skip> }
+:bgt^"/u" rm,rn,TA is b31_26=25 & b19_16=7 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=4 & ptOK=1 & ptTR=4 & ptdest { if (!(rm s> rn)) goto <skip>; goto ptdest; <skip> }
+:bgt^"/u" rm,rn,TA is b31_26=25 & b19_16=7 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=5 & ptOK=1 & ptTR=5 & ptdest { if (!(rm s> rn)) goto <skip>; goto ptdest; <skip> }
+:bgt^"/u" rm,rn,TA is b31_26=25 & b19_16=7 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=6 & ptOK=1 & ptTR=6 & ptdest { if (!(rm s> rn)) goto <skip>; goto ptdest; <skip> }
+:bgt^"/u" rm,rn,TA is b31_26=25 & b19_16=7 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=7 & ptOK=1 & ptTR=7 & ptdest { if (!(rm s> rn)) goto <skip>; goto ptdest; <skip> }
+:bgtu^"/l" rm,rn,TA is b31_26=25 & b19_16=15 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=0 & ptOK=1 & ptTR=0 & ptdest { if (!(rm > rn)) goto <skip>; goto ptdest; <skip> }
+:bgtu^"/l" rm,rn,TA is b31_26=25 & b19_16=15 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=1 & ptOK=1 & ptTR=1 & ptdest { if (!(rm > rn)) goto <skip>; goto ptdest; <skip> }
+:bgtu^"/l" rm,rn,TA is b31_26=25 & b19_16=15 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=2 & ptOK=1 & ptTR=2 & ptdest { if (!(rm > rn)) goto <skip>; goto ptdest; <skip> }
+:bgtu^"/l" rm,rn,TA is b31_26=25 & b19_16=15 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=3 & ptOK=1 & ptTR=3 & ptdest { if (!(rm > rn)) goto <skip>; goto ptdest; <skip> }
+:bgtu^"/l" rm,rn,TA is b31_26=25 & b19_16=15 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=4 & ptOK=1 & ptTR=4 & ptdest { if (!(rm > rn)) goto <skip>; goto ptdest; <skip> }
+:bgtu^"/l" rm,rn,TA is b31_26=25 & b19_16=15 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=5 & ptOK=1 & ptTR=5 & ptdest { if (!(rm > rn)) goto <skip>; goto ptdest; <skip> }
+:bgtu^"/l" rm,rn,TA is b31_26=25 & b19_16=15 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=6 & ptOK=1 & ptTR=6 & ptdest { if (!(rm > rn)) goto <skip>; goto ptdest; <skip> }
+:bgtu^"/l" rm,rn,TA is b31_26=25 & b19_16=15 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=7 & ptOK=1 & ptTR=7 & ptdest { if (!(rm > rn)) goto <skip>; goto ptdest; <skip> }
+:bgtu^"/u" rm,rn,TA is b31_26=25 & b19_16=15 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=0 & ptOK=1 & ptTR=0 & ptdest { if (!(rm > rn)) goto <skip>; goto ptdest; <skip> }
+:bgtu^"/u" rm,rn,TA is b31_26=25 & b19_16=15 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=1 & ptOK=1 & ptTR=1 & ptdest { if (!(rm > rn)) goto <skip>; goto ptdest; <skip> }
+:bgtu^"/u" rm,rn,TA is b31_26=25 & b19_16=15 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=2 & ptOK=1 & ptTR=2 & ptdest { if (!(rm > rn)) goto <skip>; goto ptdest; <skip> }
+:bgtu^"/u" rm,rn,TA is b31_26=25 & b19_16=15 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=3 & ptOK=1 & ptTR=3 & ptdest { if (!(rm > rn)) goto <skip>; goto ptdest; <skip> }
+:bgtu^"/u" rm,rn,TA is b31_26=25 & b19_16=15 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=4 & ptOK=1 & ptTR=4 & ptdest { if (!(rm > rn)) goto <skip>; goto ptdest; <skip> }
+:bgtu^"/u" rm,rn,TA is b31_26=25 & b19_16=15 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=5 & ptOK=1 & ptTR=5 & ptdest { if (!(rm > rn)) goto <skip>; goto ptdest; <skip> }
+:bgtu^"/u" rm,rn,TA is b31_26=25 & b19_16=15 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=6 & ptOK=1 & ptTR=6 & ptdest { if (!(rm > rn)) goto <skip>; goto ptdest; <skip> }
+:bgtu^"/u" rm,rn,TA is b31_26=25 & b19_16=15 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=7 & ptOK=1 & ptTR=7 & ptdest { if (!(rm > rn)) goto <skip>; goto ptdest; <skip> }
+:bne^"/l" rm,rn,TA is b31_26=25 & b19_16=5 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=0 & ptOK=1 & ptTR=0 & ptdest { if (!(rm != rn)) goto <skip>; goto ptdest; <skip> }
+:bne^"/l" rm,rn,TA is b31_26=25 & b19_16=5 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=1 & ptOK=1 & ptTR=1 & ptdest { if (!(rm != rn)) goto <skip>; goto ptdest; <skip> }
+:bne^"/l" rm,rn,TA is b31_26=25 & b19_16=5 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=2 & ptOK=1 & ptTR=2 & ptdest { if (!(rm != rn)) goto <skip>; goto ptdest; <skip> }
+:bne^"/l" rm,rn,TA is b31_26=25 & b19_16=5 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=3 & ptOK=1 & ptTR=3 & ptdest { if (!(rm != rn)) goto <skip>; goto ptdest; <skip> }
+:bne^"/l" rm,rn,TA is b31_26=25 & b19_16=5 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=4 & ptOK=1 & ptTR=4 & ptdest { if (!(rm != rn)) goto <skip>; goto ptdest; <skip> }
+:bne^"/l" rm,rn,TA is b31_26=25 & b19_16=5 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=5 & ptOK=1 & ptTR=5 & ptdest { if (!(rm != rn)) goto <skip>; goto ptdest; <skip> }
+:bne^"/l" rm,rn,TA is b31_26=25 & b19_16=5 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=6 & ptOK=1 & ptTR=6 & ptdest { if (!(rm != rn)) goto <skip>; goto ptdest; <skip> }
+:bne^"/l" rm,rn,TA is b31_26=25 & b19_16=5 & b9_7=4 & b3_0=0 & rm & rn & TA & TAn=7 & ptOK=1 & ptTR=7 & ptdest { if (!(rm != rn)) goto <skip>; goto ptdest; <skip> }
+:bne^"/u" rm,rn,TA is b31_26=25 & b19_16=5 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=0 & ptOK=1 & ptTR=0 & ptdest { if (!(rm != rn)) goto <skip>; goto ptdest; <skip> }
+:bne^"/u" rm,rn,TA is b31_26=25 & b19_16=5 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=1 & ptOK=1 & ptTR=1 & ptdest { if (!(rm != rn)) goto <skip>; goto ptdest; <skip> }
+:bne^"/u" rm,rn,TA is b31_26=25 & b19_16=5 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=2 & ptOK=1 & ptTR=2 & ptdest { if (!(rm != rn)) goto <skip>; goto ptdest; <skip> }
+:bne^"/u" rm,rn,TA is b31_26=25 & b19_16=5 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=3 & ptOK=1 & ptTR=3 & ptdest { if (!(rm != rn)) goto <skip>; goto ptdest; <skip> }
+:bne^"/u" rm,rn,TA is b31_26=25 & b19_16=5 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=4 & ptOK=1 & ptTR=4 & ptdest { if (!(rm != rn)) goto <skip>; goto ptdest; <skip> }
+:bne^"/u" rm,rn,TA is b31_26=25 & b19_16=5 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=5 & ptOK=1 & ptTR=5 & ptdest { if (!(rm != rn)) goto <skip>; goto ptdest; <skip> }
+:bne^"/u" rm,rn,TA is b31_26=25 & b19_16=5 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=6 & ptOK=1 & ptTR=6 & ptdest { if (!(rm != rn)) goto <skip>; goto ptdest; <skip> }
+:bne^"/u" rm,rn,TA is b31_26=25 & b19_16=5 & b9_7=0 & b3_0=0 & rm & rn & TA & TAn=7 & ptOK=1 & ptTR=7 & ptdest { if (!(rm != rn)) goto <skip>; goto ptdest; <skip> }
+:bnei^"/l" rm,imm_s6,TA is b31_26=57 & b19_16=5 & b9_7=4 & b3_0=0 & rm & imm_s6 & TA & TAn=0 & ptOK=1 & ptTR=0 & ptdest { if (!(rm != imm_s6)) goto <skip>; goto ptdest; <skip> }
+:bnei^"/l" rm,imm_s6,TA is b31_26=57 & b19_16=5 & b9_7=4 & b3_0=0 & rm & imm_s6 & TA & TAn=1 & ptOK=1 & ptTR=1 & ptdest { if (!(rm != imm_s6)) goto <skip>; goto ptdest; <skip> }
+:bnei^"/l" rm,imm_s6,TA is b31_26=57 & b19_16=5 & b9_7=4 & b3_0=0 & rm & imm_s6 & TA & TAn=2 & ptOK=1 & ptTR=2 & ptdest { if (!(rm != imm_s6)) goto <skip>; goto ptdest; <skip> }
+:bnei^"/l" rm,imm_s6,TA is b31_26=57 & b19_16=5 & b9_7=4 & b3_0=0 & rm & imm_s6 & TA & TAn=3 & ptOK=1 & ptTR=3 & ptdest { if (!(rm != imm_s6)) goto <skip>; goto ptdest; <skip> }
+:bnei^"/l" rm,imm_s6,TA is b31_26=57 & b19_16=5 & b9_7=4 & b3_0=0 & rm & imm_s6 & TA & TAn=4 & ptOK=1 & ptTR=4 & ptdest { if (!(rm != imm_s6)) goto <skip>; goto ptdest; <skip> }
+:bnei^"/l" rm,imm_s6,TA is b31_26=57 & b19_16=5 & b9_7=4 & b3_0=0 & rm & imm_s6 & TA & TAn=5 & ptOK=1 & ptTR=5 & ptdest { if (!(rm != imm_s6)) goto <skip>; goto ptdest; <skip> }
+:bnei^"/l" rm,imm_s6,TA is b31_26=57 & b19_16=5 & b9_7=4 & b3_0=0 & rm & imm_s6 & TA & TAn=6 & ptOK=1 & ptTR=6 & ptdest { if (!(rm != imm_s6)) goto <skip>; goto ptdest; <skip> }
+:bnei^"/l" rm,imm_s6,TA is b31_26=57 & b19_16=5 & b9_7=4 & b3_0=0 & rm & imm_s6 & TA & TAn=7 & ptOK=1 & ptTR=7 & ptdest { if (!(rm != imm_s6)) goto <skip>; goto ptdest; <skip> }
+:bnei^"/u" rm,imm_s6,TA is b31_26=57 & b19_16=5 & b9_7=0 & b3_0=0 & rm & imm_s6 & TA & TAn=0 & ptOK=1 & ptTR=0 & ptdest { if (!(rm != imm_s6)) goto <skip>; goto ptdest; <skip> }
+:bnei^"/u" rm,imm_s6,TA is b31_26=57 & b19_16=5 & b9_7=0 & b3_0=0 & rm & imm_s6 & TA & TAn=1 & ptOK=1 & ptTR=1 & ptdest { if (!(rm != imm_s6)) goto <skip>; goto ptdest; <skip> }
+:bnei^"/u" rm,imm_s6,TA is b31_26=57 & b19_16=5 & b9_7=0 & b3_0=0 & rm & imm_s6 & TA & TAn=2 & ptOK=1 & ptTR=2 & ptdest { if (!(rm != imm_s6)) goto <skip>; goto ptdest; <skip> }
+:bnei^"/u" rm,imm_s6,TA is b31_26=57 & b19_16=5 & b9_7=0 & b3_0=0 & rm & imm_s6 & TA & TAn=3 & ptOK=1 & ptTR=3 & ptdest { if (!(rm != imm_s6)) goto <skip>; goto ptdest; <skip> }
+:bnei^"/u" rm,imm_s6,TA is b31_26=57 & b19_16=5 & b9_7=0 & b3_0=0 & rm & imm_s6 & TA & TAn=4 & ptOK=1 & ptTR=4 & ptdest { if (!(rm != imm_s6)) goto <skip>; goto ptdest; <skip> }
+:bnei^"/u" rm,imm_s6,TA is b31_26=57 & b19_16=5 & b9_7=0 & b3_0=0 & rm & imm_s6 & TA & TAn=5 & ptOK=1 & ptTR=5 & ptdest { if (!(rm != imm_s6)) goto <skip>; goto ptdest; <skip> }
+:bnei^"/u" rm,imm_s6,TA is b31_26=57 & b19_16=5 & b9_7=0 & b3_0=0 & rm & imm_s6 & TA & TAn=6 & ptOK=1 & ptTR=6 & ptdest { if (!(rm != imm_s6)) goto <skip>; goto ptdest; <skip> }
+:bnei^"/u" rm,imm_s6,TA is b31_26=57 & b19_16=5 & b9_7=0 & b3_0=0 & rm & imm_s6 & TA & TAn=7 & ptOK=1 & ptTR=7 & ptdest { if (!(rm != imm_s6)) goto <skip>; goto ptdest; <skip> }
+:blink TB,"r63" is b31_26=17 & b25_23=0 & b19_16=1 & b15_10=63 & b3_0=0 & TB & TBn=0 & RD=63 & ptOK=1 & ptTR=0 & ptdest [ ptOK = 0; globalset(inst_next, ptOK); ] { goto ptdest; }
+:blink TB,RD is b31_26=17 & b25_23=0 & b19_16=1 & b15_10=63 & b3_0=0 & TB & TBn=0 & RD & ptOK=1 & ptTR=0 & ptdest [ ptOK = 0; globalset(inst_next, ptOK); ] { RD = inst_next; call ptdest; }
+:blink TB,"r63" is b31_26=17 & b25_23=0 & b19_16=1 & b15_10=63 & b3_0=0 & TB & TBn=1 & RD=63 & ptOK=1 & ptTR=1 & ptdest [ ptOK = 0; globalset(inst_next, ptOK); ] { goto ptdest; }
+:blink TB,RD is b31_26=17 & b25_23=0 & b19_16=1 & b15_10=63 & b3_0=0 & TB & TBn=1 & RD & ptOK=1 & ptTR=1 & ptdest [ ptOK = 0; globalset(inst_next, ptOK); ] { RD = inst_next; call ptdest; }
+:blink TB,"r63" is b31_26=17 & b25_23=0 & b19_16=1 & b15_10=63 & b3_0=0 & TB & TBn=2 & RD=63 & ptOK=1 & ptTR=2 & ptdest [ ptOK = 0; globalset(inst_next, ptOK); ] { goto ptdest; }
+:blink TB,RD is b31_26=17 & b25_23=0 & b19_16=1 & b15_10=63 & b3_0=0 & TB & TBn=2 & RD & ptOK=1 & ptTR=2 & ptdest [ ptOK = 0; globalset(inst_next, ptOK); ] { RD = inst_next; call ptdest; }
+:blink TB,"r63" is b31_26=17 & b25_23=0 & b19_16=1 & b15_10=63 & b3_0=0 & TB & TBn=3 & RD=63 & ptOK=1 & ptTR=3 & ptdest [ ptOK = 0; globalset(inst_next, ptOK); ] { goto ptdest; }
+:blink TB,RD is b31_26=17 & b25_23=0 & b19_16=1 & b15_10=63 & b3_0=0 & TB & TBn=3 & RD & ptOK=1 & ptTR=3 & ptdest [ ptOK = 0; globalset(inst_next, ptOK); ] { RD = inst_next; call ptdest; }
+:blink TB,"r63" is b31_26=17 & b25_23=0 & b19_16=1 & b15_10=63 & b3_0=0 & TB & TBn=4 & RD=63 & ptOK=1 & ptTR=4 & ptdest [ ptOK = 0; globalset(inst_next, ptOK); ] { goto ptdest; }
+:blink TB,RD is b31_26=17 & b25_23=0 & b19_16=1 & b15_10=63 & b3_0=0 & TB & TBn=4 & RD & ptOK=1 & ptTR=4 & ptdest [ ptOK = 0; globalset(inst_next, ptOK); ] { RD = inst_next; call ptdest; }
+:blink TB,"r63" is b31_26=17 & b25_23=0 & b19_16=1 & b15_10=63 & b3_0=0 & TB & TBn=5 & RD=63 & ptOK=1 & ptTR=5 & ptdest [ ptOK = 0; globalset(inst_next, ptOK); ] { goto ptdest; }
+:blink TB,RD is b31_26=17 & b25_23=0 & b19_16=1 & b15_10=63 & b3_0=0 & TB & TBn=5 & RD & ptOK=1 & ptTR=5 & ptdest [ ptOK = 0; globalset(inst_next, ptOK); ] { RD = inst_next; call ptdest; }
+:blink TB,"r63" is b31_26=17 & b25_23=0 & b19_16=1 & b15_10=63 & b3_0=0 & TB & TBn=6 & RD=63 & ptOK=1 & ptTR=6 & ptdest [ ptOK = 0; globalset(inst_next, ptOK); ] { goto ptdest; }
+:blink TB,RD is b31_26=17 & b25_23=0 & b19_16=1 & b15_10=63 & b3_0=0 & TB & TBn=6 & RD & ptOK=1 & ptTR=6 & ptdest [ ptOK = 0; globalset(inst_next, ptOK); ] { RD = inst_next; call ptdest; }
+:blink TB,"r63" is b31_26=17 & b25_23=0 & b19_16=1 & b15_10=63 & b3_0=0 & TB & TBn=7 & RD=63 & ptOK=1 & ptTR=7 & ptdest [ ptOK = 0; globalset(inst_next, ptOK); ] { goto ptdest; }
+:blink TB,RD is b31_26=17 & b25_23=0 & b19_16=1 & b15_10=63 & b3_0=0 & TB & TBn=7 & RD & ptOK=1 & ptTR=7 & ptdest [ ptOK = 0; globalset(inst_next, ptOK); ] { RD = inst_next; call ptdest; }

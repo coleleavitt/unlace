@@ -404,6 +404,7 @@ unlace_options! { self, p1;
     "trapaftercall" => registered!(crate::coreoptions::TrapAfterCall),
     "retpolinethunk" => registered!(crate::retpolinethunk::RetpolineThunk),
     "varargsave" => registered!(crate::varargsave::VarargSave),
+    "taintcheck" => registered!(crate::taintcheck::TaintCheck),
     "alloca" => registered!(crate::alloca::AllocaCalls),
     "boolbyte" => registered!(crate::boolbyte::BoolByte),
     "charbyte" => registered!(crate::charbyte::CharByte),

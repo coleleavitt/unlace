@@ -3081,6 +3081,7 @@ impl Action for ActionPrototypeWarnings {
         // the placeholder proto there are no errors to report.  Deferred
         // (count stays 0); no warning is emitted.
         crate::x87depth::warn(_data);
+        crate::taintcheck::warn(_data);
         0
     }
 }

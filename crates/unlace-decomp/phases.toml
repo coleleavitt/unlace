@@ -3354,6 +3354,25 @@ live_true = "on"
 live_false = "off"
 
 [[settable]]
+option = "taintcheck"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P4"
+subphase = "output-prototype"
+strength = "HARD"
+rewind = "P4"
+issue = "unlace#1309"
+summary = "Report data from an input source that reaches a command-execution sink. A call to `recv`, `recvfrom`, `read`, `fread`, `fgets`, `getenv` or `gets` taints its return value. Taint flows forward over the live ops, flow-insensitively: an op with a tainted input taints its output, and each tainted value keeps the first source it traces to. A call to `system`, `popen`, `execl`, `execle`, `execlp`, `execv`, `execve` or `execvp` that takes a tainted argument gets a warning comment at the call: `taintcheck: data from recv() reaches system() as an argument (report only)`. Argument slot 0 of a CALL is the target address, so it is never counted. Memory is not tracked: a buffer an input call fills is not tainted, only the return value is a seed. The check changes no code or types, only adds warnings, and runs at the P4 prototype warnings step. Ported from the archived research decompiler's `propagate_taint` (`taint_engine.rs`) and its source/sink lists; the constant-time violation check is a separate option."
+use_when = "Off by default: the check is report-only and landed without a corpus sweep, so it is not in the aggressive preset. Turn ON to list the command-execution calls in a binary that take network, environment or file input, as a first triage of an input-to-command path. A hit is a candidate for review, not a proven flow, because memory and the callee's own checks are not modelled."
+example = "option taintcheck on"
+source_decompiler = "unlace"
+inspiration = "archived unlace origin/master taint_engine.rs (propagate_taint) and its source/sink registry"
+change_kind = "opt-in-tool"
+tier = "core"
+symptoms = "a value from recv or getenv reaches system or popen with no warning|an input-controlled argument to execl or execve is not flagged|a command sink fed by a network read needs a manual trace"
+
+[[settable]]
 option = "varargsave"
 values = "on|off"
 default = "off"

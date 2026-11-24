@@ -666,10 +666,6 @@ unlace_options! { self, p1;
         self.unlace_options.set(val);
         Ok(msg)
     },
-    "protomerge" => {
-        registered!(crate::coreoptions::Protomerge)
-    },
-
     "calltable" => registered!(crate::analysisgates::Calltable),
     "stubbinds" => registered!(crate::analysisgates::Stubbinds),
     "thunknames" => registered!(crate::analysisgates::Thunknames),

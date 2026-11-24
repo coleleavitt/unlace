@@ -192,15 +192,6 @@ crate::unlace_flag!(
     shipped: false
 );
 
-crate::unlace_flag!(
-    /// (unlace) Merge load-time prototypes slot by slot (`protomerge`). Default on.
-    Protomerge,
-    "protomerge",
-    "Slot-by-slot merge of load-time prototypes",
-    unset: false,
-    shipped: true
-);
-
 /// (unlace `deadcascade`) After this many passes of one run of a rule pool
 /// (`None` = never), dead-op removal also removes the dead chain behind the
 /// removed op.

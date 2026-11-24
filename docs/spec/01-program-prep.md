@@ -6338,7 +6338,7 @@ moves.
   refused by the factory. This arm extends the member walk above and runs with
   it.
 
-- **Prototype merge** (`protomerge`, default-on; unlace;
+- **Prototype merge** (always on, no option; unlace;
   `crates/unlace-bandb-base/src/p4_calls/protomerge.rs (merge)`): the
   load-time sources park whole prototypes on a function at the analysis commit
   (the by-name and by-address libc tables, the demangled C++ signature, DWARF),

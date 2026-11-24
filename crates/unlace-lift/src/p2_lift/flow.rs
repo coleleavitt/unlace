@@ -5307,6 +5307,16 @@ truncating the fall-through here"
                     &mut shared_partial,
                 );
                 crate::kuna_budget::deadline_passed_in("jump-table recovery");
+                if std::env::var_os("KUNA_JUMPTABLE_TRACE").is_some() {
+                    eprintln!(
+                        "jumptable: recovery at {at:#x}: {}",
+                        match &mode {
+                            Ok(Some(_)) => "recovered".to_string(),
+                            Ok(None) => "no table".to_string(),
+                            Err(m) => format!("failed ({m:?})"),
+                        }
+                    );
+                }
                 mode
             };
             // (kuna `switchextent`) A table nothing bounded: decode the

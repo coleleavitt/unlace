@@ -3632,6 +3632,21 @@ impl ConsoleProgram {
                 // (already installed) symbol table.
                 if want_listing || want_fast_funcdisc || profile_request.is_some() {
                     let mut committed_entry_seeds = merged.entries.clone();
+                    // (kuna) On x86 a function a pass names (an MSVC vtable slot
+                    // from RTTI, a constructor) is listed, so it is a walk root as
+                    // well, and its direct callees are found. ARM symbols are left
+                    // out: their decode mode is not settled here.
+                    if self.arch().archid.starts_with("x86:") {
+                        committed_entry_seeds.extend(
+                            merged
+                                .symbols
+                                .iter()
+                                .filter(|s| {
+                                    matches!(s.kind, unlace_analysis::pass::SymKind::Function)
+                                })
+                                .map(|s| s.addr),
+                        );
+                    }
                     committed_entry_seeds.sort_unstable();
                     committed_entry_seeds.dedup();
                     let arch = self.arch();
@@ -4167,6 +4182,16 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         "ehcold" => {
             arch.kuna_options
                 .get::<unlace_decomp::kuna_analysisgates::Ehcold>()
+                .0
+        }
+        "mfcmsgmap" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Mfcmsgmap>()
+                .0
+        }
+        "msvcptrentry" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Msvcptrentry>()
                 .0
         }
         "importvote" => {

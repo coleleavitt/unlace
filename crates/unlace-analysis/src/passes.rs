@@ -113,6 +113,10 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         // `__aeabi_memcpy`, ...) typed as RTABI32 declares them, on a 32-bit ARM
         // image that names one. Registered always.
         Box::new(crate::protos::kuna_aeabisigs::AeabiSigsPass),
+        // (kuna) The libgcc soft-float and machine-mode integer routines
+        // (`__addsf3`, `__fixdfsi`, `__muldi3`, ...) typed by their machine modes
+        // on every target but 32-bit ARM. Registered always.
+        Box::new(crate::protos::kuna_softfpsigs::SoftFpSigsPass),
         // S1 built-in Win32 API signatures (`win32sigs`): the Windows half of the
         // `.gdt` stand-in, which nothing in the tree carried. PE/COFF only, and
         // keyed by ENTRY ADDRESS rather than by name -- a PE import is TWO
@@ -709,6 +713,8 @@ fn deferred_entry_passes() -> Vec<Box<dyn AnalysisPass>> {
         Box::new(crate::entry::FuncStartPatternPass),
         Box::new(crate::entry::kuna_coldentry::ColdEntryPass),
         Box::new(crate::entry::kuna_ehcold::EhColdPass),
+        Box::new(crate::entry::kuna_mfcmsgmap::MfcMsgMapPass),
+        Box::new(crate::entry::kuna_msvcptrentry::MsvcPtrEntryPass),
         Box::new(crate::protos::kuna_importvote::ImportVotePass),
         // (kuna `pdbtypes`/`pdblines`) A full read of the `.pdb`'s type,
         // module and line streams: paid only when its gate (and `pdb`) is on.
@@ -2532,6 +2538,8 @@ mod tests {
             .set(unlace_decomp::kuna_analysisgates::Itaniumrtti(true));
         arch.kuna_options
             .set(unlace_decomp::kuna_formatstring::FormatStringMode::Off);
+        arch.kuna_options
+            .set(unlace_decomp::kuna_goitabcalls::GoItabCalls(false));
 
         let schedule: Vec<(&str, bool)> = listing_consumer_passes(&arch)
             .into_iter()

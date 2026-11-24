@@ -1,0 +1,87 @@
+# Zalasr load-acquire / store-release (RISC-V Zalasr 1.0): a load with aq (lb.aq, and
+# lb.aqrl with rl also set) and a store with rl (sb.rl, sb.aqrl with aq also set) in the AMO
+# major opcode, encodings from riscv-opcodes (rv_zalasr) and names as llvm-objdump prints them.
+# The ordering is not modelled; the access is a plain load or store.
+
+:lb.aq rd,(rs1) is rd & rs1 & op0006=0x2f & funct3=0 & op2731=0x6 & op2626=1 & op2525=0 & op2024=0
+{
+	rd = sext(*[ram]:1 rs1);
+}
+
+:lb.aqrl rd,(rs1) is rd & rs1 & op0006=0x2f & funct3=0 & op2731=0x6 & op2626=1 & op2525=1 & op2024=0
+{
+	rd = sext(*[ram]:1 rs1);
+}
+
+:sb.rl rs2,(rs1) is rs2 & rs1 & op0006=0x2f & funct3=0 & op2731=0x7 & op2626=0 & op2525=1 & op0711=0
+{
+	*[ram]:1 rs1 = rs2:1;
+}
+
+:sb.aqrl rs2,(rs1) is rs2 & rs1 & op0006=0x2f & funct3=0 & op2731=0x7 & op2626=1 & op2525=1 & op0711=0
+{
+	*[ram]:1 rs1 = rs2:1;
+}
+
+:lh.aq rd,(rs1) is rd & rs1 & op0006=0x2f & funct3=1 & op2731=0x6 & op2626=1 & op2525=0 & op2024=0
+{
+	rd = sext(*[ram]:2 rs1);
+}
+
+:lh.aqrl rd,(rs1) is rd & rs1 & op0006=0x2f & funct3=1 & op2731=0x6 & op2626=1 & op2525=1 & op2024=0
+{
+	rd = sext(*[ram]:2 rs1);
+}
+
+:sh.rl rs2,(rs1) is rs2 & rs1 & op0006=0x2f & funct3=1 & op2731=0x7 & op2626=0 & op2525=1 & op0711=0
+{
+	*[ram]:2 rs1 = rs2:2;
+}
+
+:sh.aqrl rs2,(rs1) is rs2 & rs1 & op0006=0x2f & funct3=1 & op2731=0x7 & op2626=1 & op2525=1 & op0711=0
+{
+	*[ram]:2 rs1 = rs2:2;
+}
+
+:lw.aq rd,(rs1) is rd & rs1 & op0006=0x2f & funct3=2 & op2731=0x6 & op2626=1 & op2525=0 & op2024=0
+{
+	assignW(rd, *[ram]:4 rs1);
+}
+
+:lw.aqrl rd,(rs1) is rd & rs1 & op0006=0x2f & funct3=2 & op2731=0x6 & op2626=1 & op2525=1 & op2024=0
+{
+	assignW(rd, *[ram]:4 rs1);
+}
+
+:sw.rl rs2,(rs1) is rs2 & rs1 & op0006=0x2f & funct3=2 & op2731=0x7 & op2626=0 & op2525=1 & op0711=0
+{
+	*[ram]:4 rs1 = rs2:4;
+}
+
+:sw.aqrl rs2,(rs1) is rs2 & rs1 & op0006=0x2f & funct3=2 & op2731=0x7 & op2626=1 & op2525=1 & op0711=0
+{
+	*[ram]:4 rs1 = rs2:4;
+}
+
+@if ADDRSIZE == "64"
+:ld.aq rd,(rs1) is rd & rs1 & op0006=0x2f & funct3=3 & op2731=0x6 & op2626=1 & op2525=0 & op2024=0
+{
+	rd = *[ram]:8 rs1;
+}
+
+:ld.aqrl rd,(rs1) is rd & rs1 & op0006=0x2f & funct3=3 & op2731=0x6 & op2626=1 & op2525=1 & op2024=0
+{
+	rd = *[ram]:8 rs1;
+}
+
+:sd.rl rs2,(rs1) is rs2 & rs1 & op0006=0x2f & funct3=3 & op2731=0x7 & op2626=0 & op2525=1 & op0711=0
+{
+	*[ram]:8 rs1 = rs2;
+}
+
+:sd.aqrl rs2,(rs1) is rs2 & rs1 & op0006=0x2f & funct3=3 & op2731=0x7 & op2626=1 & op2525=1 & op0711=0
+{
+	*[ram]:8 rs1 = rs2;
+}
+
+@endif

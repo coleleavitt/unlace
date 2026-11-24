@@ -23,8 +23,14 @@ taken from the binutils `s390-opc.txt` table (opcode and format only), and
   vector packed-decimal facilities), written by `gen_vector.py` into `s390x_vector.sinc`
   (below).
 
-Not yet modelled: hexadecimal and decimal floating point (except `lde`/`lder`,
-which LLVM uses to load a float), and the privileged instructions. An
+- Hexadecimal floating point, packed decimal, decimal floating point and the remaining
+  translate and storage-to-storage instructions, written by `gen_hfpdec.py` into
+  `s390x_hfpdec.sinc` (below).
+
+Not yet modelled: the privileged and system instructions, transactional execution, the
+crypto (CPACF) instructions, guarded storage, and a few problem-state forms LLVM decodes
+(`lpd`, `lmd`, `lzrf`/`lzrg`/`llzrgf`, the compare-and-trap forms with a mask
+of 0 or 15, `locg`/`stocg` and `locfh`/`stocfh` with a mask of 0 or 15, `cfc`). An
 instruction outside the module does not decode.
 
 ## How the files are produced
@@ -89,3 +95,24 @@ after a compare, a test or a logical add is one relation.
 - Multiply-and-add and multiply-and-subtract (`MADBR`, `MAEBR`, ...) are a
   multiply followed by an add, so the intermediate product is rounded.
 - `POPCNT` without the z15 mask is the user operation `popcount_bytes`.
+
+## HFP, decimal and the remaining storage instructions
+
+`hfpdec_insts.json` lists the LLVM SystemZ records (release/22.x) whose mnemonic is in
+`gen_hfpdec.py`'s `WANT` set, extracted with `python3 gen_hfpdec.py --extract dump.json`
+from the same TableGen dump as the vector facility; `mxr` and `mxd` (absent from LLVM) are
+added in the generator. `gen_hfpdec.py data/languages` writes `s390x_hfpdec.sinc` and
+`hfpdec_fields.txt` (the token fields it uses, read by `gen_sinc.py`), so run it before
+`gen_sinc.py`. Operands follow the LLVM records: `D(X,B)`, `D(L,B)` (the displayed length is
+the byte count), `D(R,B)` and 20-bit `DH:DL` displacements; an extended operand is the pair
+`fN`:`fN+2`, a 128-bit general operand the pair `rN`:`rN+1`.
+
+Exact p-code: the HFP sign operations `lpdr`, `lper`, `lndr`, `lner`, `lcdr`, `lcer`,
+`ltdr`, `lter` (CC 0 for a zero fraction, 1 negative, 2 positive); `ts`; `mdebr`/`mdeb`;
+`madb`, `maeb`, `msdb`, `mseb` (rounded twice); `mxdb`; `bsm`/`bassm` in the 64-bit
+addressing mode. Everything else (HFP arithmetic, rounding, conversions and halving; the
+packed-decimal and DFP instructions; translate, edit, `plo`, `mvcle`, `cmpsc`, the Unicode
+conversions) is the user operation `hd_<mnemonic>`, plus `hd_<mnemonic>_cc` for the
+condition code. QEMU 10 implements neither HFP nor `bsm`/`bassm`, so only `ts` and the BFP
+rows were checked with `tools/difffuzz --oracle qemu` (no mismatch beyond the rounded-twice
+`maeb`).

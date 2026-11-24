@@ -15,7 +15,7 @@
 //! take a raw image. The binary must be the first argument. A container is
 //! flattened into a temporary file that [`Prepared`] removes when dropped.
 
-use unlace_analysis::loader::firmware::{containers, cortexm, esp, svd};
+use unlace_analysis::loader::firmware::{avrvectors, containers, cortexm, esp, svd};
 
 pub(crate) const RAW_COMMANDS: [&str; 4] = [
     "decompile",
@@ -219,6 +219,26 @@ pub fn prepare(
             table.reset()
         );
     }
+    // An AVR image's vector table names its reset and interrupt handlers.
+    if flat_entries.is_empty()
+        && has(out, "--raw-image")
+        && target.as_deref().is_some_and(|t| t.starts_with("avr8:"))
+    {
+        let base = value(out, "--base")
+            .and_then(|b| parse_address(&b))
+            .unwrap_or(0);
+        flat_entries = avrvectors::probe(&bytes)
+            .into_iter()
+            .map(|w| base.wrapping_add(w))
+            .collect();
+        if !flat_entries.is_empty() {
+            eprintln!(
+                "[kuna firmware] AVR vector table: {} handler(s), reset {:#x}",
+                flat_entries.len(),
+                flat_entries[0]
+            );
+        }
+    }
     let handlers: Vec<(u64, String)> = table
         .iter()
         .flat_map(|t| &t.handlers)
@@ -292,6 +312,14 @@ fn declare_device(device: &svd::Device, out: &mut Vec<String>) {
         device.peripherals.len(),
         device.interrupts.len()
     );
+}
+
+/// A `--base` value: hexadecimal with `0x`, else decimal.
+fn parse_address(s: &str) -> Option<u64> {
+    match s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
+        Some(hex) => u64::from_str_radix(hex, 16).ok(),
+        None => s.parse().ok(),
+    }
 }
 
 /// Remove `flag VALUE` from `args`, returning the value.

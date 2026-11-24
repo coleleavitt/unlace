@@ -116,8 +116,8 @@ insn ram:0x2110 2
   INT_OR (register,0x94,4) (unique,0x11d00,4) (unique,0x11e00,4)
   INT_ADD (register,0x28,4) (register,0x28,4) (register,0x2c,4)
 insn ram:0x2112 4
-  INT_ADD (unique,0x31300,4) (register,0x28,4) (const,0x0,4)
-  LOAD (register,0x28,4) (const,ram,8) (unique,0x31300,4)
+  INT_ADD (unique,0x32700,4) (register,0x28,4) (const,0x0,4)
+  LOAD (register,0x28,4) (const,ram,8) (unique,0x32700,4)
 insn ram:0x2116 2
   INT_ADD (unique,0x12000,4) (register,0x2c,4) (register,0x28,4)
   INT_AND (unique,0xcd00,4) (register,0x94,4) (const,0xfffffff7,4)

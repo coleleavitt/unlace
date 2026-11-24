@@ -1648,7 +1648,29 @@ hI259: val is h11t0_24_27 [ val = (((((h11t0_24_27) + 8) & 15)) - 8) * 8 + 0; ] 
 :ae_vles16c.ip hR1 is h3t0_0_7=68 & h3t0_12_23=1918 & hR1 { hR1 = hifi_ae_vles16c_ip(hR1); }
 :ae_sbf.ip hR1 is h3t0_0_7=84 & h3t0_12_23=1918 & hR1 { hR1 = hifi_ae_sbf_ip(hR1); }
 :ae_sext32 hR14, hR23, hI38 is h3t0_0_3=4 & h3t0_16_23=23 & hR14 & hR23 & hI38 { hR14 = hifi_ae_sext32(hR23, hI38); }
+:rfr hR3, hR23 is h3t0_0_7=64 & h3t0_16_23=250 & hR3 & hR23 { hR3 = hifi_rfr(hR23); }
+:wfr hR14, hR1 is h3t0_0_7=80 & h3t0_16_23=250 & hR14 & hR1 { hR14 = hifi_wfr(hR1); }
+:movt.s hR14, hR23, hR27 is h3t0_0_3=0 & h3t0_16_23=219 & hR14 & hR23 & hR27 { hR14 = hifi_movt_s(hR14, hR23, hR27); }
+:movf.s hR14, hR23, hR27 is h3t0_0_3=0 & h3t0_16_23=203 & hR14 & hR23 & hR27 { hR14 = hifi_movf_s(hR14, hR23, hR27); }
+:moveqz.s hR14, hR23, hR0 is h3t0_0_3=0 & h3t0_16_23=139 & hR14 & hR23 & hR0 { hR14 = hifi_moveqz_s(hR14, hR23, hR0); }
+:movnez.s hR14, hR23, hR0 is h3t0_0_3=0 & h3t0_16_23=155 & hR14 & hR23 & hR0 { hR14 = hifi_movnez_s(hR14, hR23, hR0); }
+:movgez.s hR14, hR23, hR0 is h3t0_0_3=0 & h3t0_16_23=187 & hR14 & hR23 & hR0 { hR14 = hifi_movgez_s(hR14, hR23, hR0); }
+:movltz.s hR14, hR23, hR0 is h3t0_0_3=0 & h3t0_16_23=171 & hR14 & hR23 & hR0 { hR14 = hifi_movltz_s(hR14, hR23, hR0); }
+:abs.s hR14, hR23 is h3t0_0_7=16 & h3t0_16_23=250 & hR14 & hR23 { hR14 = hifi_abs_s(hR23); }
+:mul.s hR23, hR22, hR14 is h3t0_0_3=0 & h3t0_16_23=42 & hR23 & hR22 & hR14 { hR23 = hifi_mul_s(hR22, hR14); }
+:madd.s hR23, hR22, hR14 is h3t0_0_3=0 & h3t0_16_23=74 & hR23 & hR22 & hR14 { hR23 = hifi_madd_s(hR23, hR22, hR14); }
+:msub.s hR23, hR22, hR14 is h3t0_0_3=0 & h3t0_16_23=90 & hR23 & hR22 & hR14 { hR23 = hifi_msub_s(hR23, hR22, hR14); }
 :maddn.s hR23, hR22, hR14 is h3t0_0_3=0 & h3t0_16_23=106 & hR23 & hR22 & hR14 { hR23 = hifi_maddn_s(hR23, hR22, hR14); }
+:add.s hR23, hR22, hR14 is h3t0_0_3=0 & h3t0_16_23=10 & hR23 & hR22 & hR14 { hR23 = hifi_add_s(hR22, hR14); }
+:sub.s hR23, hR22, hR14 is h3t0_0_3=0 & h3t0_16_23=26 & hR23 & hR22 & hR14 { hR23 = hifi_sub_s(hR22, hR14); }
+:neg.s hR14, hR23 is h3t0_0_7=96 & h3t0_16_23=250 & hR14 & hR23 { hR14 = hifi_neg_s(hR23); }
+:ole.s hR30, hR22, hR23 is h3t0_0_3=0 & h3t0_16_23=107 & hR30 & hR22 & hR23 { hR30 = hifi_ole_s(hR22, hR23); }
+:olt.s hR30, hR22, hR23 is h3t0_0_3=0 & h3t0_16_23=75 & hR30 & hR22 & hR23 { hR30 = hifi_olt_s(hR22, hR23); }
+:oeq.s hR30, hR22, hR23 is h3t0_0_3=0 & h3t0_16_23=43 & hR30 & hR22 & hR23 { hR30 = hifi_oeq_s(hR22, hR23); }
+:un.s hR30, hR22, hR23 is h3t0_0_3=0 & h3t0_16_23=27 & hR30 & hR22 & hR23 { hR30 = hifi_un_s(hR22, hR23); }
+:ule.s hR30, hR22, hR23 is h3t0_0_3=0 & h3t0_16_23=123 & hR30 & hR22 & hR23 { hR30 = hifi_ule_s(hR22, hR23); }
+:ult.s hR30, hR22, hR23 is h3t0_0_3=0 & h3t0_16_23=91 & hR30 & hR22 & hR23 { hR30 = hifi_ult_s(hR22, hR23); }
+:ueq.s hR30, hR22, hR23 is h3t0_0_3=0 & h3t0_16_23=59 & hR30 & hR22 & hR23 { hR30 = hifi_ueq_s(hR22, hR23); }
 :const.s hR14, hI39 is h3t0_0_7=48 & h3t0_16_23=250 & hR14 & hI39 { hR14 = hifi_const_s(hI39); }
 :divn.s hR23, hR22, hR14 is h3t0_0_3=0 & h3t0_16_23=122 & hR23 & hR22 & hR14 { hR23 = hifi_divn_s(hR23, hR22, hR14); }
 :sigmoid_q15 hR3, hR0 is h3t0_0_3=0 & h3t0_8_11=1 & h3t0_16_23=6 & hR3 & hR0 { hR3 = hifi_sigmoid_q15(hR0); }

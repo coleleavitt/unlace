@@ -256,6 +256,7 @@ kuna_options! { self, p1;
     "pairparam" => registered!(crate::kuna_borrowcompare::PairParams),
     "pairbranch" => registered!(crate::kuna_borrowcompare::PairBranch),
     "armpairparam" => registered!(crate::kuna_armpairparam::ArmPairParams),
+    "retindexuse" => registered!(crate::kuna_retindexuse::RetIndexUse),
     "narrowret" => registered!(crate::kuna_narrowret::NarrowRet),
     "regsigned" => registered!(crate::kuna_regnarrow::NarrowSigned),
     "narrowext" => {
@@ -465,6 +466,8 @@ kuna_options! { self, p1;
         registered!(crate::kuna_analysisgates::Machoehframe)
     },
     "ehcold" => registered!(crate::kuna_analysisgates::Ehcold),
+    "mfcmsgmap" => registered!(crate::kuna_analysisgates::Mfcmsgmap),
+    "msvcptrentry" => registered!(crate::kuna_analysisgates::Msvcptrentry),
     "importvote" => registered!(crate::kuna_importvote::Importvote),
     "ehnote" => registered!(crate::kuna_analysisgates::Ehnote),
     "funcstart_patterns" => {
@@ -632,7 +635,11 @@ kuna_options! { self, p1;
         registered!(crate::kuna_analysisgates::Tailcallentryall)
     },
     "nameladder" => {
-        registered!(crate::kuna_analysisgates::Nameladder)
+        let (val, msg) = <crate::kuna_analysisgates::Nameladder as crate::kuna_optionset::KunaOption>::parse(p1)?;
+        self.load_options_mut().nameladder = val.0;
+        self.load_options().export_env("nameladder");
+        self.kuna_options.set(val);
+        Ok(msg)
     },
     "flirt" => {
         registered!(crate::kuna_coreoptions::Flirt)
@@ -641,7 +648,11 @@ kuna_options! { self, p1;
         registered!(crate::kuna_fidproto::Fidproto)
     },
     "codestrings" => {
-        registered!(crate::kuna_analysisgates::Codestrings)
+        let (val, msg) = <crate::kuna_analysisgates::Codestrings as crate::kuna_optionset::KunaOption>::parse(p1)?;
+        self.load_options_mut().codestrings = val.0;
+        self.load_options().export_env("codestrings");
+        self.kuna_options.set(val);
+        Ok(msg)
     },
     "protomerge" => {
         registered!(crate::kuna_coreoptions::Protomerge)
@@ -655,7 +666,13 @@ kuna_options! { self, p1;
     "swiftmetadata" => registered!(crate::kuna_analysisgates::Swiftmetadata),
     "cfstrings" => registered!(crate::kuna_analysisgates::CfStrings),
     "blobs" => registered!(crate::kuna_analysisgates::Blobs),
-    "swifttypes" => registered!(crate::kuna_analysisgates::Swifttypes),
+    "swifttypes" => {
+        let (val, msg) = <crate::kuna_analysisgates::Swifttypes as crate::kuna_optionset::KunaOption>::parse(p1)?;
+        self.load_options_mut().swifttypes = val.0;
+        self.load_options().export_env("swifttypes");
+        self.kuna_options.set(val);
+        Ok(msg)
+    },
     "swifthelpers" => registered!(crate::kuna_analysisgates::Swifthelpers),
     "objcivars" => {
         let (val, msg) = <crate::kuna_objcivars::ObjcIvars as crate::kuna_optionset::KunaOption>::parse(p1)?;

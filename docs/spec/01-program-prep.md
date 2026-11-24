@@ -8714,7 +8714,7 @@ both
   the commit point like `com`
   (`crates/unlace-analysis/src/passes.rs (run_dextrpc)`) when `dextrpc` and `osclassinfo` are on, because the
   load-time pass list sees the architecture's constructor defaults rather than
-  the run's options, default-off;
+  the run's options, default on since unlace#581;
   `crates/unlace-analysis/src/analyzers/iokit/kuna_dextrpc.rs (emit)`):
   every symbol the dext defines or imports that names `C::_Dispatch(C *,
   IORPC)` (`_ZN<n>C9_DispatchEPS_5IORPC`), `C::Dispatch(IORPC)`

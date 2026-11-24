@@ -8,6 +8,8 @@ mod c28x_raw;
 #[path = "chip8.rs"]
 mod chip8;
 mod common;
+#[path = "frv_raw.rs"]
+mod frv_raw;
 #[path = "clipper_raw.rs"]
 mod clipper_raw;
 #[path = "fr_raw.rs"]

@@ -4378,6 +4378,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `M88000` | Motorola 88000 (MC88100) | `88000:BE:32:default` | written for unlace from the MC88100 User's Manual, Apache-2.0 |
 | `RISCV` (T-Head) | RISC-V with the T-Head vendor extensions (XThead*) | `RISCV:LE:64:XThead`, `RISCV:LE:32:XThead` | written for #98 from T-Head's thead-extension-spec and LLVM's XTHead encodings |
 | `Clipper` | Fairchild/Intergraph CLIPPER C100/C300 | `clipper:LE:32:default` | written for unlace from the CLIPPER C300 data book, Apache-2.0 |
+| `FRV` | Fujitsu FR-V (FR400, FR450, FR500, FR550) | `FRV:BE:32:default` | written for unlace from the FR-V ISA manuals; decode table generated from binutils CGEN `frv-opc.c` (field layout and mask/value only); decode checked against `frv-elf-objdump` 2.43.1 on all 743 instructions, Apache-2.0 |
 <!-- vendor-rows -->
 
 ### CLIPPER (#98)

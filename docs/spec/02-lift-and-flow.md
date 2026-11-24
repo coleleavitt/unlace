@@ -4533,6 +4533,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `TILEGX` | Tilera TILE-Gx (TILE-Gx8000 family), parallel X/Y-mode bundles | `TILEGX:LE:64:default` | TILE-Gx ISA reference (UG401); encodings generated from the binutils `tilegx` opcode table by `tools/gen_tilegx_sleigh.py`; checked against `tilegx-linux-gnu-objdump` | `unlace-cli/tests/tilegx_raw.rs` |
 | `V60` | NEC V60 (uPD70616), V70 (uPD70632) | `V60:LE:32:default` | NEC V60/V70 user's manuals (instruction formats, addressing modes); MAME `v60` disassembler as length oracle | `unlace-cli/tests/v60.rs` |
 | `PowerPC` (SPE2) | NXP e200z4/e200z7 with SPE2 and EFS2 | `PowerPC:BE:32:e200-SPE2` | binutils PowerPC opcode table (SPE2/EFS2 rows), SPE2 intrinsic names; checked against `powerpc-elf-objdump` 2.43.1 | `unlace-cli/tests/ppc_spe2.rs` |
+| `MIPS` (MIPS-3D, SmartMIPS) | MIPS64 with MIPS-3D, MIPS32 with SmartMIPS (pre-R6 languages) | existing `MIPS:*:64:*` and `MIPS:*:32:*` pre-R6 languages | binutils MIPS opcode table (MIPS-3D/SmartMIPS rows), MIPS-3D (MD00099) and SmartMIPS ASE specifications; checked against `mips-elf-objdump` 2.43.1 | `unlace-cli/tests/mips_ase.rs` |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)
@@ -4729,6 +4730,28 @@ unchanged. A raw `evlbbsplatbx r3,r3,r4; evaddd r3,r3,r5; blr` decompiles to
 `return *(unsigned char *)(a0 + a1) * 0x101010101010101ULL + a2;`. Exercised by
 `unlace-cli/tests/ppc_spe2.rs`; gaps (record-form CR updates, encodings binutils
 rejects) in `specs/Ghidra/Processors/PowerPC/README.md`.
+
+### MIPS-3D and SmartMIPS (#98)
+
+`mips3d.sinc` (included by `mips64be`/`mips64le`, so every pre-R6 MIPS64 language with
+64-bit FPRs) decodes the MIPS-3D ASE and `smartmips.sinc` (included by
+`mips32be`/`mips32le`) the SmartMIPS ASE, from the binutils opcode rows and the
+MIPS-3D and SmartMIPS specifications. Both occupy encodings reserved in the base ISA
+and require `REL6=0`, so no existing decode changes. MIPS-3D lifts exactly:
+`addr.ps`/`mulr.ps` reduce each source pair, `recip1`/`rsqrt1` are modelled as the
+full-precision reciprocal and reciprocal square root, `recip2` is `-(fs*ft - 1)`
+and `rsqrt2` half that, `cabs.cond` compares absolute values into condition code
+`cc` (PS: `cc` lower, `cc+1` upper; code n is FCSR bit 23 for n = 0, else 24 + n),
+`bc1any2`/`bc1any4` branch with a delay slot when any of 2 or 4 consecutive codes
+matches, and `cvt.ps.pw`/`cvt.pw.ps` convert each lane. SmartMIPS adds an 8-bit
+`ACX` register: `lwxs` loads from `base + 4*index`, `mflhxu`/`mtlhx` shift LO, HI
+and ACX, `multp`/`maddp` write or xor a GF(2) product (pcodeop `smartmips_multp`)
+into HI/LO and `pperm` is a pcodeop. Before, these words were bad instructions or
+opaque `SPECIAL2` placeholders. A raw `lwxs $2,$5($4)` decompiles to
+`return *(unsigned int *)(a0 + a1 * 4);`. Exercised by `unlace-cli/tests/mips_ase.rs`
+(probes of every row agreeing with `mips-elf-objdump`); gaps (ACX carry from the base
+multiply-accumulates, Toshiba TX19A whose encodings are not publicly documented) in
+`specs/Ghidra/Processors/MIPS/README.md`.
 
 ### RISC-V Zacas register pairs (#98)
 

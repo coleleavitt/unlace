@@ -7307,9 +7307,11 @@ every other binary's pass list is byte-identical to before the pass existed):
   `uncommontype.pkgPath` (`type:internal/poll.FD`, where the name record
   holds `poll.FD`), and a pointer, slice, array or map spelling is rebuilt
   from its elements' so the qualifier reaches it (`type:*internal/poll.FD`,
-  `type:[]io/fs.DirEntry`); a func or chan type, an anonymous struct and a
-  map type's own `pkgPath` (its record changed size with the swiss-table
-  maps) keep the record's spelling. A pointer record genuinely starts with
+  `type:[]io/fs.DirEntry`); a func or chan type and an anonymous struct keep the
+  record's spelling. A named map type's `pkgPath` is read past its map record,
+  whose size follows the Go version: the swiss-table record from go1.24
+  (`GoImage::swiss_maps`, set from the build-info version), the old buckets
+  record before (`GoImage::map_record`). A pointer record genuinely starts with
   `*`; an extra-star name was already stripped by the record reader. The
   `gonewtype` client maps the symbol back to the interned record by
   dropping the directory part of a named type's own qualifier, before any

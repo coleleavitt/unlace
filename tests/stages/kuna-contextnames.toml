@@ -1,0 +1,82 @@
+# Loop counters and returned locals named from their shape
+# (`option contextnames on|off`, default off; stage P6 naming policy,
+# `kuna_contextnames` evidence for the `kuna_libcnames` alias walk).
+#
+# The fixture (contextnames.c beside it, gcc -O1, stripped) has a triple
+# loop nest accumulating into a returned total, and a checksum whose
+# accumulator is returned on one path while the others return constants.
+#
+# Pass 1 is the shipped default: every local keeps its `vN` number.
+# Pass 2 turns the option on: the three counters, which a loop head's phi
+# joins with themselves plus one, are named `i`, `j` and `k` by nesting
+# depth; the totals every non-constant `return` returns are `result`; the
+# induction values that step by a run-time amount (`v4`, `v6`) keep their
+# numbers.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/contextnames_x86_64',
+    'option looprotate off',
+    'read symbols',
+    'load function sub_11a0',
+    'decompile',
+    'print C',
+    'load function sub_12e2',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/contextnames_x86_64',
+    'option looprotate off',
+    'option contextnames on',
+    'read symbols',
+    'load function sub_11a0',
+    'decompile',
+    'print C',
+    'load function sub_12e2',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'CONTEXTNAMES #1: off, the counters keep their numbers'
+count = 1
+literal = '} while (a1 != v5);'
+
+[[match]]
+name = 'CONTEXTNAMES #2: on, the outermost counter is i'
+count = 1
+literal = '} while (a1 != i);'
+
+[[match]]
+name = 'CONTEXTNAMES #3: on, the middle counter is j'
+count = 1
+literal = '} while (a2 != j);'
+
+[[match]]
+name = 'CONTEXTNAMES #4: on, the innermost counter is k'
+count = 1
+literal = '} while (k != a3);'
+
+[[match]]
+name = 'CONTEXTNAMES #5: on, both returned accumulators are result'
+count = 2
+literal = 'return result;'
+
+[[match]]
+name = 'CONTEXTNAMES #6: a run-time stride is not a counter'
+count = 2
+literal = 'v6 += a2 * a3;'

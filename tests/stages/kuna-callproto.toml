@@ -1,0 +1,80 @@
+# Call-site prototypes (`override prototype`, the `callproto` assertion).
+#
+# `report` calls a variadic function pointer twice; the second call is a tail
+# jump through r8, and the register holding its target was read as a fifth
+# argument until the register an indirect call jumps through stopped scoring
+# as one of its arguments (kuna_passthrough.rs, is_call_target). No callee
+# symbol carries a signature for a call through a pointer, so the only place
+# to state it is the call instruction.
+#
+# Pass 1 is the recovery with nothing stated. Pass 2 gives the tail jump its
+# own prototype without the trailing `;`. Pass 3 places a parameter with
+# `@<storage>`: the third argument is read from R8D, which holds the target.
+#
+# Source and build recipe:
+# crates/unlace-analysis/tests/fixtures/callproto_x86_64.c
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x1370', name = 'report' },
+    { space = 'ram', offset = '0x2458', name = 'logger' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x308'
+readonly = true
+hex = '257320256420256400256400'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1370'
+readonly = true
+hex = '''
+f30f1efa41574156534889f34189fe4c
+8b3dd2100000488d3d84efffff4489f6
+31c041ff174d8b07418d4e01488d3d65
+efffff4889de4489f231c05b415e415f
+41ffe0
+'''
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x2458'
+hex = '0000000000000000'
+
+[script]
+commands = [
+    'lo fu report',
+    'decompile',
+    'print C',
+    'override prototype 0x13b0 void f(char *fmt, char *s, int a, int b)',
+    'decompile',
+    'print C',
+    'lo fu report',
+    'override prototype 0x13b0 void f(char *fmt, char *s, int a @R8D)',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'callproto #1: nothing stated, the call target is not read as a fifth argument'
+count = 1
+literal = '(0x308,a1,a0,a0 + 1);'
+
+[[match]]
+name = 'callproto #2: the stated prototype leaves exactly four arguments'
+count = 1
+literal = '("%s %d %d",a1,a0,a0 + 1);'
+
+[[match]]
+name = 'callproto #3: a parameter placed with @R8D reads the target register'
+count = 1
+regex = '\("%s %d %d",a1,[^,;]*\*v1\);'
+
+[[match]]
+name = 'callproto #4: the tail jump is a call in every pass'
+count = 3
+literal = 'jump-as-call'

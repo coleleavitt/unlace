@@ -1836,10 +1836,10 @@ cpyType: "tn"	is b_1015=0x3d {export 0x3d:1; }
 cpyType: "trn"	is b_1015=0x2d {export 0x2d:1; }
 cpyType: "twn"	is b_1015=0x1d {export 0x1d:1; }
 
-cpyType: "wt"	is b_1015=0x03 {export 0x03:1; }
-cpyType: "wtn"	is b_1015=0x33 {export 0x33:1; }
-cpyType: "wtrn"	is b_1015=0x23 {export 0x23:1; }
-cpyType: "wtwn"	is b_1015=0x13 {export 0x13:1; }
+cpyType: "wt"	is b_1015=0x05 {export 0x05:1; }
+cpyType: "wtn"	is b_1015=0x35 {export 0x35:1; }
+cpyType: "wtrn"	is b_1015=0x25 {export 0x25:1; }
+cpyType: "wtwn"	is b_1015=0x15 {export 0x15:1; }
 
 
 define pcodeop MemoryCopyForward;
@@ -5358,7 +5358,7 @@ is size.ldstr & b_2129=0xee & Rs_GPR64 & b_1415 <3 & setPhase & setType & Rn_GPR
 # C6.2.276 SETP, SETM, SETE page C6-1780 line 105072 MATCH x19c00400/mask=x3fe03c00
 # CONSTRUCT x19c00400/mask=x3fe03c00 MATCHED 5 DOCUMENTED OPCODES
 define pcodeop memorySet;
-:setp^setPhase^setType [Rd_GPR64]!, Rn_GPR64!, Rs_GPR64
+:set^setPhase^setType [Rd_GPR64]!, Rn_GPR64!, Rs_GPR64
 is size.ldstr & b_2129=0xce & Rs_GPR64 & b_1415 <3 & setPhase & setType & Rn_GPR64 & Rd_GPR64 {
 	memorySet(Rd_GPR64, Rn_GPR64, Rs_GPR64, setPhase, setType);
 }

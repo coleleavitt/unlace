@@ -1,0 +1,104 @@
+# kuna C-surface normalization: analysis warnings render as terse `// slug`
+# end-of-line comments on the line they describe, instead of full
+# `/* WARNING: ... */` banner lines at the comment indent (user-reported
+# readability issue on the angr fmt corpus binary; no upstream GH issue).
+#
+# kuna adds the settable option `warnstyle inline|banner` (DIV-38,
+# docs/history.md), default inline: emit_comment_group maps each WARNING
+# comment through warning_slug and flush_eol_warnings appends the slugs at
+# the owning line's last token (statement `;`, `if (cond) {` header,
+# function prototype).  Non-warning comments always keep banner lines;
+# `option warnstyle banner` restores the upstream form.
+#
+# Stage model: S9 emission / warning-style policy.  P0 assertion:
+# `option warnstyle inline|banner`.
+#
+# ws_fn (0x100000): jmp qword ptr [rdi]  (ff 27) - an unrecoverable
+# indirect jump, which P2 flow converts to a CALLIND + return with the
+# upstream "Treating indirect jump as call" warning at the call.
+#
+# wa_fn (0x100010, under `option readonly on`): a while-loop whose
+# CONDITION block stores to a readonly global, so the "Read-only address
+# is written" warning attaches INSIDE a comma-separated loop header - the
+# adversarial shape for the flush machinery: the slug must ride to the
+# header's own flush point after `{`, never fire inside the parens (which
+# would comment out `) {` - invalid C).
+#
+# Pass 1 (default): the call statement carries the terse slug at end of
+# line (assert #1, exactly once; assert #3 proves no banner remains) and
+# the loop header stays intact with the slug after the brace (asserts
+# #4-#5).
+# Pass 2 (option warnstyle banner): the upstream banner lines (assert #2
+# and the Read-only banner inside #3's count).
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'ws_fn' },
+    { space = 'ram', offset = '0x100010', name = 'wa_fn' },
+    { space = 'ram', offset = '0x100100', name = 'rodat' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'ff27'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100010'
+readonly = true
+hex = 'eb02ffcf893de600000085ff75f4c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100100'
+readonly = true
+hex = '00000000'
+
+[script]
+commands = [
+    'option readonly on',
+    'parse line extern void ws_fn(int8 *p);',
+    'parse line extern void wa_fn(int4 x);',
+    'lo fu ws_fn',
+    'decompile',
+    'print C',
+    'lo fu wa_fn',
+    'decompile',
+    'print C',
+    'option warnstyle banner',
+    'lo fu ws_fn',
+    'decompile',
+    'print C',
+    'lo fu wa_fn',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'CNORM-WARNSTYLE #1: default renders the terse end-of-line slug (DIV-38)'
+count = 1
+literal = '; // jump-as-call'
+
+[[match]]
+name = 'CNORM-WARNSTYLE #2: warnstyle banner restores the upstream WARNING line'
+count = 1
+literal = '/* WARNING: Treating indirect jump as call */'
+
+[[match]]
+name = 'CNORM-WARNSTYLE #3: banner WARNINGs appear only in the banner pass (indirect-jump + read-only)'
+count = 2
+literal = 'WARNING'
+
+[[match]]
+name = 'CNORM-WARNSTYLE #4: a condition-block warning rides to the header flush point after the brace'
+count = 1
+literal = ') { // writes-rodata'
+
+[[match]]
+name = 'CNORM-WARNSTYLE #5: the slug never fires inside the comma-separated header parens'
+count = 0
+literal = '// writes-rodata)'

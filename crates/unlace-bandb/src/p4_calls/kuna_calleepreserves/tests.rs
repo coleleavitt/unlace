@@ -3,7 +3,7 @@
 //! These pin the predicate on hand-built summaries: what a complete probe is
 //! allowed to prove, and every way it must fail closed. The end-to-end witness
 //! -- an i386 PIE whose get-PC thunk ate a live argument -- lives in
-//! `tests/stages/kuna-calleepreserves.xml` and `tests/cli/get-pc-helper-loses.json`.
+//! `tests/stages/kuna-calleepreserves.toml` and `tests/cli/get-pc-helper-loses.json`.
 
 use super::*;
 use crate::kuna_rustabi::FuncdataRustabiExt;

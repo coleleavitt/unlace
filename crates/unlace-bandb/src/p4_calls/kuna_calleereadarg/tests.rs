@@ -1,7 +1,7 @@
 //! Unit tests for the callee-read argument rule: its decision over a callee
 //! entry summary ([`reads_as_argument`]) and the list extension it plans
-//! ([`extension`]).  The end-to-end behaviour is `tests/stages/kuna-calleereadarg.xml`,
-//! `tests/stages/kuna-calleereadarg-arm.xml` and `tests/stages/kuna-pushpadread.xml`.
+//! ([`extension`]).  The end-to-end behaviour is `tests/stages/kuna-calleereadarg.toml`,
+//! `tests/stages/kuna-calleereadarg-arm.toml` and `tests/stages/kuna-pushpadread.xml`.
 
 use super::*;
 

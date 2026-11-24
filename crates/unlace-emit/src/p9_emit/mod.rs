@@ -75,6 +75,7 @@ pub mod oslog;
 pub mod paramrefdecl;
 pub mod partialaccess;
 pub mod partialconcat;
+pub mod partmacro; // (unlace `partmacro`) IDA part macros (LOBYTE, BYTE1, HIWORD) for integer parts
 pub mod pointerargs; // (unlace) a scalar's address passed to a character-pointer parameter
 pub mod pointerstorecast;
 pub mod postinc; // (unlace `postinc`) `*p++` for a pointer step after its dereference

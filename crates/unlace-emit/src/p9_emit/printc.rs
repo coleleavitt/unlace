@@ -10574,6 +10574,9 @@ impl PrintC {
             self.push_cast_close(&target);
             return;
         }
+        if self.push_part_macro(fd, arch, op) {
+            return;
+        }
         // Non-special-print SUBPIECE (printc.cc:892-897): isSubpieceCast decides
         // between opTypeCast and opFunc.
         // The cast arm was previously gated out because it tripped a spurious

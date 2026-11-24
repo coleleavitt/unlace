@@ -1616,6 +1616,25 @@ tier = "transform"
 symptoms = "'\\0' <= c where the source tests c >= 0|c + '\\x01' where the source adds 1|a non-printable character literal in a comparison"
 
 [[settable]]
+option = "partmacro"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P9"
+subphase = "part-macro"
+strength = "HARD"
+rewind = "P9"
+issue = "unlace-partmacro"
+summary = "Print a part of an integer value as the part macro that names it: LOBYTE(x), BYTE1(x) to BYTE7(x), LOWORD(x), HIWORD(x), WORD1(x) to WORD3(x), LODWORD(x) and HIDWORD(x). A truncation of a 2-, 4- or 8-byte integer to 1, 2 or 4 bytes at an aligned byte offset, and the truncation of a right shift by a whole number of bytes, print as the macro: the truncation of x >> 8 to one byte prints BYTE1(x). A nested part folds into the most direct one, so LOBYTE(HIWORD(x)) prints BYTE2(x). A part that reads past the value after folding, such as a byte of an arithmetic shift past the top, keeps its cast. Printing only; C output only, and the recompile prelude defines the macros when the option is on."
+use_when = "Turn on to read byte and half-word unpacking the way IDA prints it (LOBYTE, BYTE1, HIWORD, LODWORD). Leave off to keep the plain casts and shifts, which every existing output and expected text uses."
+example = "option partmacro on"
+source_decompiler = "unlace"
+inspiration = "IDA's part macros (LOBYTE, BYTE1 to BYTE7, LOWORD, HIWORD, LODWORD, HIDWORD) and their direct-part folding; notes/orig-unlace/output-cprinter-a.md row 2 (PR #1348)"
+change_kind = "presentation-default"
+tier = "transform"
+symptoms = "(uint1)(x >> 8) where the source reads BYTE1(x)|a 16-bit part of a 32-bit value printed as a cast of a shift|LOBYTE(HIWORD(x)) where the source reads BYTE2(x)"
+
+[[settable]]
 option = "constright"
 values = "on|off"
 default = "off"

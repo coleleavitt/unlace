@@ -321,6 +321,10 @@ specs/Ghidra/Processors/TopSM vendors the TI TopSM RF core SLEIGH specification 
 antoniovazquezblanco/GhidraTopSM (https://github.com/antoniovazquezblanco/GhidraTopSM), released under the
 MIT License (its license file is in that directory).
 
+specs/Ghidra/Processors/SH vendors the Renesas SuperH SH-2E/SH-3/SH-3E/SH-4A SLEIGH specification of
+aleph-void/ghidra-sh (https://github.com/aleph-void/ghidra-sh), a fork of will07c5/ghidra-sh, released under the
+MIT License (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

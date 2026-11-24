@@ -2686,7 +2686,10 @@ class M32r(ObjdumpArch):
     gdb_pc = "pc"
 
     def canonical(self, cand):
-        # sim/m32r runs the base M32R; its M32RX/M32R2 mode does not keep C in PSW or CBR
+        # sim/m32r runs the base M32R; its M32RX/M32R2 mode does not keep C in PSW or CBR. An
+        # operand objdump prints as ??? is a reserved field value (an accumulator above a1).
+        if "???" in cand["op_str"]:
+            return False
         return not re.match(r"(cmpeq|cmpz|pcmpbz|satb|sath|sat|sadd|bset|bclr|btst|divh|divuh|divb|divub|"
                             r"remh|remuh|remb|remub|jc|jnc|mulwhi|mulwlo|macwhi|macwlo)$", cand["mnemonic"])
     gdb_insn_pad = b"\x70\x00"
@@ -2747,6 +2750,12 @@ class Frv(ObjdumpArch):
 
     def flag_words(self):
         return [("ccr", {"icc0": (16, 4), "icc1": (20, 4), "icc2": (24, 4), "icc3": (28, 4)}, lambda w: w)]
+
+    def canonical(self, cand):
+        # a 64-bit product goes to the register pair GRk, GRk+1: an odd GRk is a register
+        # exception, which binutils decodes anyway
+        m = re.match(r"c?[su]muli?(cc|icc)?$", cand["mnemonic"]) and re.match(r"[^,]+,[^,]+,\s*gr(\d+)", cand["op_str"])
+        return not (m and int(m.group(1)) % 2)
 
     def addr_ok(self, a):
         return a < 0x1000000
@@ -2809,6 +2818,8 @@ class H8300h(ObjdumpArch):
         mn, ops, n = cand["mnemonic"], cand["op_str"].replace(" ", ""), len(cand["bytes"])
         if mn.startswith(("mova", "rts/", "bra/", "rte/", "bsr/", "jsr/", "jmp/")):
             return False
+        if cand["bytes"][0] == 0x7A and cand["bytes"][1] & 0x08:
+            return False                       # 7A x(1erd): H8SX's #xx:16 forms of ADD.L, MOV.L, ...
         if re.match(r"(shl|shar|shal|shlr|shll|rot|ext)", mn) and ops.startswith("#"):
             return False
         if re.match(r"(add|sub|mov|cmp)\.[wl]$", mn) and ops.startswith("#") and n == 2:
@@ -2907,4 +2918,117 @@ class Pru(ObjdumpArch):
         return set()
 
 
-ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), X86_32Native(), X86_16(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), Ppc64P10(), Ppc64leP10(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k(), MicroBlaze(), MicroBlazeEl(), Xtensa(), Moxie(), Ft32(), Iq2000(), V850(), Mn10300(), Lm32(), M32r(), Frv(), H8300h(), Pru())}
+CR16_DENY = re.compile(
+    r"^(b[a-z]*|br|bal|beq0.*|bne0.*|j[a-z]*|jal|jump|excp|retx|di|ei|eiwait|wait|lpr.*|spr.*|"
+    r"loadm.*|storm.*|cinv.*|nop|push.*|pop.*|illegal|ram|rtl)$"
+)
+
+
+class Cr16(ObjdumpArch):
+    """National CR16C (little endian) against gdb's cr16 simulator (--oracle gdbsim). R0..R11 are
+    16-bit and R12, R13, RA, SP 32-bit (sim/cr16 numbering, include/sim/sim-cr16.h); C, L, F, Z
+    and N are compared through PSR. Branches, jumps, traps, processor-register moves, multiple
+    loads/stores and push/pop are not generated. sim/cr16 reaches control register N through
+    register 16 + N, and PSR is control register 10 (PSR_CR), so PSR is register 26, not
+    SIM_CR16_PSR_REGNUM."""
+    name = "cr16"
+    lang = "CR16C:LE:16:default"
+    elf_machine = 177
+    big = False
+    pc = "PC"
+    gprs = [(f"R{i}", None) for i in range(12)] + [("R12", None), ("R13", None), ("RA", None), ("SP", None)]
+    pc_const = None
+    flags_reg = "psr"
+    flag_bits = {"C": 0, "L": 2, "F": 5, "Z": 6, "N": 7}
+    deny = CR16_DENY
+    gdbsim = "cr16"
+    gdb_pc = "pc"
+    misaligned_undefined = True
+    sim_regnums = dict([(f"R{i}", (i, 2)) for i in range(12)] + [("R12", (12, 4)), ("R13", (13, 4)), ("RA", (14, 4)), ("SP", (15, 4)), ("pc", (16, 4)), ("psr", (26, 4))])
+
+    def unicorn(self):
+        raise NotImplementedError("cr16 runs with --oracle gdbsim")
+
+    def capstone(self):
+        if self._dis is None:
+            self._dis = SlotDis("cr16", False, 8, b"\x00\x2c", 2)
+        return self._dis
+
+    def draw(self, rng):
+        return rng.getrandbits(48).to_bytes(6, "little")
+
+    def sleigh_field(self, name, shift, width):
+        return "PSR", shift
+
+    def canonical(self, cand):
+        return "?" not in cand["mnemonic"]
+
+    def ignored(self, mnemonic, operands, state):
+        # binutils and sim/cr16 take the [R12]/[R13] index bit of the [Rindex]abs20 and
+        # [Rindex]disp(RPbase) forms from the wrong place (cr16-dis.c arg_idxr reads bit 6)
+        if "[r1" in operands:
+            return {"*"}
+        ops = [o.strip() for o in operands.replace("(", ",(").split(",") if o.strip()]
+
+        def reg16(o):
+            n = {"r14": "RA", "r15": "SP", "ra": "RA", "sp": "SP"}.get(o, o.upper())
+            return state.get(n) & 0xFFFF
+        # a register shift count or bit position out of range is undefined
+        m = re.match(r"(ash|lsh)u?([bwd])$", mnemonic)
+        if m and re.match(r"r\d+$|ra$|sp$", ops[0]):
+            w = {"b": 8, "w": 16, "d": 32}[m.group(2)]
+            c = reg16(ops[0])
+            c = c - 0x10000 if c & 0x8000 else c
+            if not -w < c < w:
+                return {"*"}
+        if m and ops[0] == "$-32:s":
+            return {"*"}                        # sim/cr16 shifts by 32 in C (undefined there)
+        if mnemonic == "tbit" and re.match(r"r\d+$|ra$|sp$", ops[0]) and reg16(ops[0]) >= 16:
+            return {"*"}
+        if m and re.match(r"r\d+$|ra$|sp$", ops[0]) and ops[0] in operands.split(",", 1)[1]:
+            return {"*"}                        # the count register is also shifted (read after the step)
+        # sim/cr16 bugs: the memory bit operations use the wrong bit, ADDCW reg,reg adds the
+        # destination to itself, LOADD abs20 drops the high word
+        if re.match(r"[sct]bit[bw]$", mnemonic):
+            return {"*"}
+        if mnemonic == "addcw" and re.match(r"r\d+$|ra$|sp$", ops[0]):
+            return {"*"}
+        if mnemonic == "loadd" and re.match(r"0x[0-9a-f]+:m$", ops[0]):
+            return {"*"}
+        # and its stores to abs20 leave out the remap of 0xf0000..0xfffff to 0xff0000..
+        a = re.match(r"0x([0-9a-f]+):m$", ops[-1])
+        if mnemonic.startswith("stor") and a and int(a.group(1), 16) > 0xEFFFF:
+            return {"*"}
+        # sim/cr16's add/subtract carry is computed after the result is truncated (never set)
+        if re.match(r"(add|sub)", mnemonic):
+            return {"C"}
+        return set()
+
+    def partial(self, mnemonic, operands):
+        # sim/cr16's SUBCB writes the borrow into the high byte of the destination
+        out = {}
+        if mnemonic == "subcb":
+            d = operands.replace(" ", "").split(",")[-1]
+            out[{"r14": "RA", "r15": "SP"}.get(d, d.upper())] = 0xFF
+        # sim/cr16 sign-extends a word written to R12..SP, and the pair (r12,r11) writes all of
+        # R12; the high word of those is compared only for doubleword instructions
+        if not mnemonic.endswith("d") or "(r12,r11)" in operands.replace(" ", ""):
+            for n in ("R12", "R13", "RA", "SP"):
+                out.setdefault(n, 0xFFFF)
+        return out
+
+    def fix_inputs(self, init, rng):
+        # sim/cr16 stores only the low 16 bits of a register written from outside (cr16_reg_store)
+        for n in ("R12", "R13", "RA", "SP"):
+            init[n] &= 0xFFFF
+
+    def rand_reg(self, rng, bits):
+        if rng.random() < 0.35:
+            return rng.randrange(0x10000, 0xF00000) & ~3
+        return Arch.rand_reg(self, rng, bits)
+
+    def addr_ok(self, a):
+        return 0x10 <= a < 0x1000000
+
+
+ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), X86_32Native(), X86_16(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), Ppc64P10(), Ppc64leP10(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k(), MicroBlaze(), MicroBlazeEl(), Xtensa(), Moxie(), Ft32(), Iq2000(), V850(), Mn10300(), Lm32(), M32r(), Frv(), H8300h(), Pru(), Cr16())}

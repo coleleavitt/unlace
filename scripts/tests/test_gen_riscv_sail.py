@@ -197,5 +197,23 @@ class HalfConstants(unittest.TestCase):
         self.assertEqual(c.fconst(-1.0, 32), "0xbf800000:4")
 
 
+class DToQ(unittest.TestCase):
+    def test_d_encodings_and_names_become_q(self):
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
+        import sail_d_to_q as q
+        src = ("mapping clause encdec = F_BIN_RM_TYPE_D(rs2, rs1, rm, rd, FADD_D)\n"
+               "  <-> 0b000_0001 @ encdec_freg(rs2) @ encdec_freg(rs1) @ encdec_rounding_mode (rm) @ encdec_freg(rd) @ 0b101_0011\n"
+               "  when haveDoubleFPU() & validDoubleRegs([rs2, rs1, rd])\n"
+               "  FADD_D  <-> \"fadd.d\",\n"
+               "  let (fflags, rd_val_64b) = riscv_f64Add (rm_3b, rs1_val_64b, rs2_val_64b);\n")
+        out = q.transform(src)
+        self.assertIn("F_BIN_RM_TYPE_Q(rs2, rs1, rm, rd, FADD_Q)", out)
+        self.assertIn("<-> 0b000_0011 @", out)
+        self.assertIn('"fadd.q"', out)
+        self.assertIn("riscv_f128Add", out)
+        self.assertIn("haveQuadFPU()", out)
+        self.assertNotIn("validDoubleRegs", out)
+
+
 if __name__ == "__main__":
     unittest.main()

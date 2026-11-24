@@ -85,7 +85,7 @@ impl AnalysisPass for FlirtPass {
         for (addr, name) in match_all(&matchers, &image, listing, &entries, known, true) {
             out.fid_names.push(FidMatch {
                 addr,
-                name,
+                name: display_name(&name),
                 by_signature: true,
             });
         }
@@ -536,7 +536,38 @@ fn reference_ok(
 /// library); compare with jump-thunk and import prefixes, `@N` decorations and
 /// leading underscores stripped.
 fn same_name(have: &str, want: &str) -> bool {
-    have == want || bare_name(have) == bare_name(want)
+    have == want
+        || bare_name(have) == bare_name(want)
+        || display_name(want) == have
+        || bare_name(&display_name(want)) == bare_name(have)
+}
+
+/// The name a matched module gives its function, demangled the way the loader
+/// demangles a symbol it installs: a FLIRT name is the library object's
+/// linkage spelling (`_RNvNtCs..._4core6option13expect_failed`,
+/// `_ZN3foo3barEv`, `?f@@YAXXZ`), and the binary's own symbols, the call
+/// sites and every other name source read demangled
+/// (`core::option::expect_failed`). A jump thunk's `j_` prefix moves onto
+/// the leaf (`__rustc::j___rdl_alloc`), so the thunk and its target stay
+/// apart. A name that is not mangled is kept as it is.
+pub(crate) fn display_name(raw: &str) -> String {
+    let mut body = raw;
+    let mut thunks = 0usize;
+    while let Some(rest) = body.strip_prefix("j_") {
+        body = rest;
+        thunks += 1;
+    }
+    let Some(demangled) = crate::demangle::demangle_name(body) else {
+        return raw.to_string();
+    };
+    if thunks == 0 {
+        return demangled;
+    }
+    let prefix = "j_".repeat(thunks);
+    match demangled.rsplit_once("::") {
+        Some((scope, leaf)) => format!("{scope}::{prefix}{leaf}"),
+        None => format!("{prefix}{demangled}"),
+    }
 }
 
 fn bare_name(name: &str) -> &str {

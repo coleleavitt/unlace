@@ -397,6 +397,31 @@ matching generic targets). RDNA images take the wave32 language, because the
 wave size is in the kernel descriptor, not the ELF header; wave64 code and
 GFX9.4, GCN 1-4 and GFX12 images still need an explicit `--target`.
 
+(unlace) The AVR-Dx parts (AVRxt core) have their own languages,
+`avr8:LE:16:avrda`, `avrdb`, `avrdd` and `avrdu`, chosen with `--target`; the ELF
+header cannot tell an AVR-Dx part from an Xmega. They share `avr8xt.sla`: I/O at data address 0,
+so `in`/`out` and `lds`/`sts` reach the same bytes; R0-R31 outside the data space; and a
+16-bit PC. Each series has its own pspec, `avr8dx_<series>.pspec`, which
+`tools/gen_avr_dx_pspec.py` writes from Microchip's Apache-2.0 AVR-Dx device pack. The pspec
+labels every data-space register `<instance>_<register>` (`PORTA_DIR`, `TCA0_CNT`), so a
+peripheral access prints by name, not as `dat_400`.
+
+(unlace) The PIC18F Q-series families have their own languages, `PIC-18:LE:24:Q10`, `Q20`, `Q24`,
+`Q35`, `Q40`, `Q41`, `Q43`, `Q83` and `Q84`, chosen with `--target`. Each family has a pspec,
+`pic18q_<family>.pspec`, which `tools/gen_pic18q_pspec.py` writes from Microchip's Apache-2.0
+PIC18F-Q device pack. It labels every SFR except the core registers, which SLEIGH already names.
+Q10 has the classic core and runs on `pic18.sla`. The other families have the K42/Q core and run on
+`pic18q.sla`, which `pic18.sinc` builds with `SFR_PAGE` 0x4 and `ACCESS_LOW` 0x500. On that core:
+- the core registers sit at 0x4d8-0x4ff;
+- access-bank 0x60-0xff is data 0x460-0x4ff;
+- access-bank 0x00-0x5f is data 0x500-0x55f, so a variable reached by access and by bank is one
+  address;
+- a 12-bit `MOVFF` operand finds the core registers on page 0x4.
+
+`pic18q.cspec` keeps 0x480-0x4ff out of the global ranges, as `pic18.cspec` does with
+0xf80-0xfff. Q71 has no language: its PPS registers differ between pin counts. The three-word
+`MOVFFL` is not decoded.
+
 Five further machines are routed the same way:
 - `EM_68K` (4) selects `68000:BE:32:Coldfire` when `e_flags` names a ColdFire ISA
   (`EF_M68K_CF_MASK`), `68000:BE:32:default` for `EF_M68K_M68000`, and `68000:BE:32:MC68020`
@@ -6470,7 +6495,13 @@ moves.
   dropping it would leave a leading `::`, an empty scope component the symbol
   table rejects outright. `<X as Y>` keeps the type `X` (so the method stays
   attached to the type that defines it), `<impl X as Y>` keeps the trait `Y`,
-  and `<impl Trait for Type>` keeps `Type`. Angle brackets nest, so this is a
+  and `<impl Trait for Type>` keeps `Type`. An inherent method's qualified self
+  type at the start of the name (`<serde_json::de::Deserializer<R>>::parse_integer`)
+  keeps its path too, and loses only its own generics
+  (`serde_json::de::Deserializer::parse_integer`); it was dropped like a generic list,
+  which left the bare `parse_integer` for 2,154 of fclones' 8,341 functions. A
+  self type with no path (`<[T]>::sort_unstable`, a reference, a tuple) still
+  resolves to nothing. Angle brackets nest, so this is a
   depth-tracking scan iterated to a fixed point rather than a pattern match.
 
   A this-adjusting thunk (`_ZTh`, `_ZTv`, `_ZTc`) is named for the function it
@@ -9438,7 +9469,18 @@ both
   right after an `endbr64`/`endbr32` or AArch64 `bti` landing pad (an empty
   function matches every empty-function module), a name found at two
   entries goes only to the strictly best scored one or to none, and a name the
-  binary already carries is not given again. The names go out through the FID
+  binary already carries is not given again. A module's name is the library
+  object's linkage spelling, so it is demangled the way the loader demangles an
+  installed symbol (`flirt/mod.rs (display_name)`): a Rust library's
+  `_RNvNtCs…_4core6option13expect_failed` is `core::option::expect_failed`, and a jump
+  thunk's `j_` prefix moves onto the leaf (`__rustc::j___rdl_alloc`) so the thunk
+  and its target stay apart. A referenced name is compared both raw and
+  demangled, since the binary's own names are demangled. Measured with a `.sig`
+  made by `unlace flirt make` from the Rust 1.95 `libstd`/`libcore`/`liballoc` rlibs
+  on the stripped rustc 1.94 nightly `json_typegen` (`--option listing on`): 137
+  functions named, mangled before; against its unstripped twin 132 are right, 3 are
+  the `__rust_alloc` jump stubs named `j_` for the `__rdl_alloc` they jump to, and 2
+  are functions with another one's identical code. The names go out through the FID
   rename stream and its placeholder label gate. FID and FLIRT names are code
   signature guesses (`FidMatch::by_signature`): the commit applies the metadata
   renames (PDB, Objective-C, Swift) first, so a guess never replaces one, and
@@ -10464,10 +10506,18 @@ continuations, SEH handlers) do not start with a frame. GCC and MinGW encode
 `mov ebp,esp` as `89 E5`, so their SJLJ landing pads never match either; those
 are why `addrtakenentry` stays x86-64-only. On PEGRP32F.dll it finds 1,255
 targets, every one an IDA 9.5 function start, and 452 of them were missing from
-the inventory. Code built with frame-pointer omission gives it nothing. Both
+the inventory. Code built with frame-pointer omission has no prologue to test,
+so a second form is read for it. The relocated immediate of a
+`mov r/m32, imm32` (`C7 /0` with a memory operand) in code whose target follows
+a `ret` (`C3`, or `C2 iw` with a pop below 256) is a function pointer stored
+into a structure, aimed just past another function's end. MSVC loads its own
+mid-function labels with `mov eax, imm32` or pushes them (catch continuations,
+SEH handlers), and those forms are not read. On PEGRP32F.dll the second form gives
+264 targets, every one an IDA start, and 109 of them were new. Both
 passes ship on. With them, PEGRP32F's inventory misses 544 of IDA's 6,255
 starts instead of 1,437, with 2 more functions that IDA does not list, and 226
-of IDA's 277 switch tables are recovered instead of 195.
+of IDA's 277 switch tables are recovered instead of 195 (measured before the
+second form).
 
 **(kuna) MSVC throw metadata is labelled** (`msvceh`, default-**off**;
 `crates/unlace-analysis/src/analyzers/entry/kuna_msvceh.rs (find_throw_infos)`).
@@ -14401,7 +14451,15 @@ every case callee has `dispatch` as caller in `unlace xrefs`
 `crates/unlace-analysis/src/listing/kuna_x86listingswitch.rs`) extends
 the discovery Listing for linked little-endian i386 ELF and PE images. It
 recognizes a computed jump whose own p-code loads a four-byte destination from
-`table + index * 4`. An unsigned guard on that exact whole 32-bit index must
+`table + index * 4`, or from `table + byte * 4` where the byte is read from
+`index_table + index` (MSVC's two-level form, `movzx edx, byte [ecx+idx];
+jmp [edx*4+table]`). The index bytes are read for exactly the proved range,
+and the pointer table for every entry up to the largest byte read. A word
+loaded from a frame slot (`[ebp-0x8b4]`) is an index of its own, the same at
+every load of that slot. Unoptimized MSVC code compares the slot and reloads
+it for the jump (`cmp dword ptr [ebp-0x8b4],0x64; ja; mov ecx,[ebp-0x8b4]`),
+so the guard bounds the reloaded value too. Once such a slot is read, a store
+anywhere later in the path refuses the proof. An unsigned guard on that exact whole 32-bit index must
 constrain the dispatch along one local predecessor chain, with at most sixteen
 instructions and 256 p-code operations. The proof tracks machine-width values,
 flag arithmetic, and supported normalization; it refuses unrelated comparisons,

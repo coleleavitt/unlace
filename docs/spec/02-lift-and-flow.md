@@ -1729,9 +1729,10 @@ negative, the output starting below the stack pointer at the call), and the stor
 return label before the call has no reader left. A call spec already input-locked is
 left alone. A callee that never returns gets its arguments and no result. A terminal
 tail (a block from which every explored path ends in `RETURN`, `REVERT`, `STOP` or
-`INVALID` without a return jump) that two or more constant `JUMP`s or call return
-labels share is called rather than entered: the jump becomes a CALL to it followed by an
-artificial noreturn halt, and a call whose return label is such a tail is followed by a
+`INVALID` without a return jump) that two or more constant `JUMP`s or `JUMPI`s, call return
+labels or the fall-through from the instruction before it share is called rather than
+entered: the jump becomes a CALL to it followed by an artificial noreturn halt (for a
+`JUMPI`, the BRANCHIND of its taken edge does; the CBRANCH to the next instruction stays), and a call whose return label is such a tail is followed by a
 second CALL to the tail and the halt. Its arguments are the deepest stack word below its
 entry any of its instructions reads. solc's optimizer shares the ABI-encoding and `RETURN`
 tails between external functions, reaching them with different junk below the stack
@@ -2663,6 +2664,19 @@ shape is still reachable. Sharing is worth about 16% of the wall time of a
 two-table function, and on the interleaved shape `unrolledguard` was written for
 it recovers the same tables without any tolerance rule, because the shared
 partial's edge collection runs once while every sibling table is still empty.
+The protection upstream's `ActionRestructureVarnode` gives a switch path
+(`funcdata_block.rs (Funcdata::protect_switch_path_indirects)`, C++
+`protectSwitchPathIndirects`) walks back from the BRANCHIND through ops with one
+non-constant input and marks the earliest INDIRECT `noIndirectCollapse` when the
+walk ends at a constant. (kuna) An `INT_XOR` or `INT_SUB` of a varnode with
+itself also ends the walk as a constant: MSVC zeroes a struct through
+`xor eax,eax`, and in the partial the alias pass sees neither the struct's
+address nor its pushed copy (the calls have no inputs yet), so the struct's
+fields are marked unaliased and every call's INDIRECT on them would collapse
+before a rule folds the `xor`. With the earliest INDIRECT kept, a switch index
+read from such a field after a call stays an unknown value instead of folding
+to the value stored before the call (#871; Ghidra reaches the same state by
+folding the `xor` before its second restructure pass).
 (kuna) Under a per-function budget (`00-overview.md`, *The watchdog*) the loop is bounded in
 time as well: `flow.rs (FlowInfo::recover_jump_tables)` asks the drive's
 deadline before each table and after its attempt, and `jumptable.rs
@@ -5519,6 +5533,31 @@ the half load and store), with the options of the F/D generation (see
 Zvfh adds no encodings: the vector FP instructions in `riscv.rvv.sinc` cover SEW 16, as user
 operations. The vector accrued flags (fflags, vxsat) are not written, as in the scalar lift.
 
+### RISC-V Q (quad precision): the `RISCV:LE:64:GQ` language
+
+Q needs 128-bit f registers, so it has its own language: `riscv.lp64q.slaspec` (FLEN 16,
+FPSIZE 128), id `RISCV:LE:64:GQ`. The loader picks it for a 64-bit ELF whose
+`Tag_RISCV_arch` declares `q` (`kuna_riscvzc.rs`).
+- **F and D.** `riscv.fdq.sinc` is the F/D generation at `--flen 128`: single and double
+  values are NaN-boxed into the 16-byte registers.
+- **Q.** `riscv.q.sinc` is generated from a Q extension derived from the Sail model's D
+  extension. sail-riscv names `Ext_Q` but defines no Q instruction, so `tools/sail_d_to_q.py`
+  rewrites `dext_insts.sail`:
+  - The binary64 layout becomes binary128, the fmt field 01 becomes 11, and `riscv_f64*` becomes
+    `riscv_f128*`.
+  - `fcvt.d.q`/`fcvt.q.d` and `flq`/`fsq` are added; `fmv.x.d`/`fmv.d.x` have no Q form below
+    RV128 and are dropped.
+- **What lifts as p-code.** `rne` and `dyn` arithmetic, square root, compares, sign injection,
+  min/max, `fclass.q` and the moves are p-code on 16-byte floats. Static rounding modes, the
+  fused forms and the integer conversions other than `rtz` are user operations.
+- **Display.** The exact conversions into Q print no rounding mode, as LLVM prints them.
+- **Not in this language.** Zfh, Zfa and Zfbfmin are generated for FLEN 64 and left out.
+- **Decompiler gaps.** The decompiler has no 16-byte float format, so quad constants print as
+  `FLOAT_UNKNOWN`. `fpargboxed` claims only 8-byte argument registers, so a narrower argument
+  keeps its NaN-unboxing test in this language.
+- **Check.** QEMU has no Q, so this is checked against llvm-objdump only: every sampled word and
+  near miss of rv_q/rv64_q/F/D agrees.
+
 ### RISC-V Svinval, hypervisor fences, Zalasr, Zfbfmin, Smrnmi and Ssctr
 
 These fill decode gaps that `tools/sail_sleigh_compare.py decode` against llvm-objdump showed:
@@ -5682,6 +5721,12 @@ replaces the control word defines it: `FLDCW`, `FLDENV`, `FRSTOR`,
 loads it from the first word of its area. `XRSTOR` and `XRSTORS` load it the
 same way when `EAX` bit 0 and the area's `XSTATE_BV` bit 0 are set, reset it
 to `0x037f` when only `EAX` bit 0 is set, and leave it unchanged otherwise.
+
+A VEX instruction that has no vvvv operand requires the field to be 1111b, as the
+processor does (anything else is #UD), and the VEX mask and AMX tile instructions
+require register operands without the R/B extensions. Outside 64-bit mode VEX.W
+is ignored by the instructions whose W1 form exists only in 64-bit mode, and the
+FMA3 tables are part of the 16- and 32-bit languages.
 
 AMD's XOP encoding (an `8F` byte whose next byte selects map 8, 9 or 0Ah) decodes
 like a 3-byte VEX prefix into map numbers 8-10, and `amd_xop.sinc` (generated by
@@ -5895,6 +5940,18 @@ with bit 63 cleared; bit 63 of R1 is set). Every other instruction is a user ope
 (`--arch s390x --oracle qemu --count 200 --seed 1`) went from 97 decode findings to none; QEMU
 implements neither HFP nor `bsm`/`bassm`, so those lifts are checked against the
 architecture's definition only.
+
+The same generator now also covers the CPACF crypto instructions, the privileged and system
+instructions (with the control registers `c0`-`c15`), transactional execution, guarded
+storage, access-register moves and the remaining storage forms, so every instruction of LLVM's
+SystemZ target decodes. Their user operations take the implicit registers of the LLVM record
+(`r0l` and `r1` for CPACF) and write every output register, the condition code included.
+`lpsw`/`lpswe`/`lpswey` return to the new PSW's instruction address. Exact p-code for `lzrg`,
+`lzrf`, `llzrgf`, `lpd`, `lpdg`, `lfpc`, `stfpc` and `srnm`/`srnmb`/`srnmt`, and for the
+condition masks the hand-written rows lacked (0 and 15 of load/store/select on condition, 0, 1,
+14 and 15 of compare and trap, every mask of `locfh`, `stocfh`, `clt` and `clgt`), each its own
+constructor; mask 0 has no effect and mask 15 is unconditional. Checked against QEMU (`--oracle
+qemu`, every mask of those records plus the exact loads): no mismatch.
 
 ### s390x vector facility (#98)
 

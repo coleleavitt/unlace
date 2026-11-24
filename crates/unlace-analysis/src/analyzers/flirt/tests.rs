@@ -127,6 +127,24 @@ fn a_return_behind_a_landing_pad_is_a_bare_return() {
 }
 
 #[test]
+fn matched_names_are_demangled() {
+    assert_eq!(
+        display_name("_RNvNtCsgEmfK2I1SDS_4core6option13expect_failed"),
+        "core::option::expect_failed"
+    );
+    assert_eq!(
+        display_name("j__RNvCsfLfy6EI15iL_7___rustc11___rdl_alloc"),
+        "__rustc::j___rdl_alloc"
+    );
+    assert_eq!(display_name("_ZN3foo3barEv"), "foo::bar");
+    assert_eq!(display_name("strlen"), "strlen");
+    assert!(same_name(
+        "core::option::expect_failed",
+        "_RNvNtCsgEmfK2I1SDS_4core6option13expect_failed"
+    ));
+}
+
+#[test]
 fn names_compare_without_decorations() {
     assert!(same_name("_strlen", "strlen"));
     assert!(same_name("j___imp__CreateFileW@28", "CreateFileW"));

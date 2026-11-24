@@ -1,6 +1,6 @@
 //! A `long long` parameter of an unprototyped 32-bit ARM function arrives in
 //! an aligned register pair (`r0:r1`, `r2:r3`). With option `armpairparam`
-//! the pair a carry or borrow links is one parameter; off (the default) it is
+//! (the default) the pair a carry or borrow links is one parameter; off it is
 //! two `int` parameters, as before (#18).
 use crate::common;
 use object::write::{Object, Symbol, SymbolSection};
@@ -110,6 +110,6 @@ fn armpairparam_joins_an_aligned_register_pair() {
 
 #[test]
 fn armpairparam_off_keeps_four_words() {
-    let text = decompile("arm-pair-params-off", &[]);
+    let text = decompile("arm-pair-params-off", &["--option", "armpairparam", "off"]);
     assert_eq!(arity(function(&text, "add64"), "add64"), 4, "{text}");
 }

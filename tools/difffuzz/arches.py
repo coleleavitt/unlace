@@ -2855,4 +2855,56 @@ class H8300h(ObjdumpArch):
             return True
 
 
-ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), X86_32Native(), X86_16(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), Ppc64P10(), Ppc64leP10(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k(), MicroBlaze(), MicroBlazeEl(), Xtensa(), Moxie(), Ft32(), Iq2000(), V850(), Mn10300(), Lm32(), M32r(), Frv(), H8300h())}
+PRU_DENY = re.compile(r"^(jmp|jal|qb[a-z]*|wbc|wbs|halt|slp|loop|iloop|xin|xout|xchg|sxin|sxout|sxchg|zero|fill|lbco|sbco|nop|adc|suc|rsc|lmbd)$")
+
+
+class Pru(ObjdumpArch):
+    """TI PRU (v3, little endian) against gdb's pru simulator (--oracle gdbsim): instructions in
+    IMEM at 0x20000000 + address, data in DMEM from 0. The carry is not readable from the
+    simulator, so it is not compared and the carry-in instructions are not generated; neither are
+    branches, loops, scratchpad moves and constant-table loads."""
+    name = "pru"
+    lang = "PRU:LE:32:v3"
+    elf_machine = 144
+    base = 0x1000
+    big = False
+    pc = "PC"
+    # r30/r31 are the I/O pin registers (sim/pru reads them as 0), so they are neither set nor compared
+    gprs = [(n, None) for n in ["r0", "r1", "sp", "ra", "fp"] + [f"r{i}" for i in range(5, 30)]]
+    pc_const = None
+    deny = PRU_DENY
+    objdump_machine = "pru"
+    gdbsim = "pru"
+    gdb_pc = "pc"
+    gdb_code_bias = 0x20000000
+    gdb_data_bias = 0
+    sim_regnums = dict([(n, (i, 4)) for i, n in enumerate(["r0", "r1", "sp", "ra", "fp"] + [f"r{i}" for i in range(5, 32)])] + [("pc", (32, 4))])
+
+    def unicorn(self):
+        raise NotImplementedError("pru runs with --oracle gdbsim")
+
+    def addr_ok(self, a):
+        return 0x10 <= a < 0x4000000
+
+    def canonical(self, cand):
+        # objdump prints an undecodable word as its hex value
+        return not cand["mnemonic"].startswith(("0x", "."))
+
+    def ignored(self, mnemonic, operands, state):
+        # a burst that runs past r31.b3 is illegal (sim/pru raises SIGILL); one that reaches the
+        # r30/r31 pin registers is not compared
+        if mnemonic in ("lbbo", "sbbo", "lbco", "sbco"):
+            ops = [o.strip() for o in operands.split(",")]
+            m = re.match(r"(\w+)\.b(\d)$", ops[0])
+            names = ["r0", "r1", "sp", "ra", "fp"] + [f"r{i}" for i in range(5, 32)]
+            if not m or m.group(1) not in names:
+                return {"*"}
+            start = 4 * names.index(m.group(1)) + int(m.group(2))
+            c = re.match(r"r0\.b(\d)$", ops[-1])
+            n = (state.get("r0") >> (8 * int(c.group(1))) & 0xFF) if c else int(ops[-1], 0)
+            if start + n > 120:
+                return {"*"}
+        return set()
+
+
+ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), X86_32Native(), X86_16(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), Ppc64P10(), Ppc64leP10(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k(), MicroBlaze(), MicroBlazeEl(), Xtensa(), Moxie(), Ft32(), Iq2000(), V850(), Mn10300(), Lm32(), M32r(), Frv(), H8300h(), Pru())}

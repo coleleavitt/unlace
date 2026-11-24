@@ -5,7 +5,7 @@
 //! `Architecture` exists, so a new `Architecture` starts in `abi` exactly when
 //! its image was loaded with it ([`Mode::loaded`]). `on` and `off` are live and
 //! set per `Architecture`.
-pub const ENV: &str = "KUNA_PPC32PICIMPORTS";
+pub const ENV: &str = "UNLACE_PPC32PICIMPORTS";
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Mode {

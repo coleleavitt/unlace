@@ -233,7 +233,7 @@ const AGGRESSIVE_OVERRIDES: &[(&str, &str)] = &[
     // a 4-byte mergeable string section).
     ("widestrings32", "on"),
     ("fid", "on"),
-    ("flirt", "on"),       // inert without KUNA_FLIRT_SIGS
+    ("flirt", "on"),       // inert without UNLACE_FLIRT_SIGS
     ("rtti", "on"),        // PE-only; no-op off-PE
     ("itaniumrtti", "on"), // ELF and Mach-O, inert without __cxxabiv1 typeinfo anchors
     // The speculative gap-walk ("may create bad code") with the aligned gap cursor

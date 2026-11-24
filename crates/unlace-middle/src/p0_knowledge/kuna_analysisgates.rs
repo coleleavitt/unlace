@@ -420,7 +420,7 @@ crate::kuna_flag!(
 
 crate::kuna_flag!(
     /// (kuna) `dwarfenumtypedef`: an anonymous DWARF enum takes its typedef's name; the
-    /// loader reads `KUNA_DWARFENUMTYPEDEF`.
+    /// loader reads `UNLACE_DWARFENUMTYPEDEF`.
     DwarfEnumTypedef,
     "dwarfenumtypedef",
     "DWARF anonymous enums named by their typedef",
@@ -1268,7 +1268,7 @@ impl crate::kuna_optionset::KunaOption for ArmFrames {
 }
 
 crate::kuna_flag!(
-    /// (kuna `dwarfscopes`) DWARF lexical-block and location-list locals; the loader reads `KUNA_DWARFSCOPES`.
+    /// (kuna `dwarfscopes`) DWARF lexical-block and location-list locals; the loader reads `UNLACE_DWARFSCOPES`.
     DwarfScopes,
     "dwarfscopes",
     "DWARF lexical-block and location-list locals",

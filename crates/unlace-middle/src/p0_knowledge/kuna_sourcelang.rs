@@ -94,7 +94,7 @@ impl SourceLang {
 /// Environment variable carrying a forced source language into the load path.
 /// Unset or `auto` means "trust detection"; `c`/`rust`/`go`/`swift` force the
 /// verdict for analysis-pass selection and the engine fact alike.
-pub const SOURCELANG_ENV: &str = "KUNA_SOURCELANG";
+pub const SOURCELANG_ENV: &str = "UNLACE_SOURCELANG";
 
 /// The forced source language of the load in progress, if any.
 pub fn forced() -> Option<SourceLang> {

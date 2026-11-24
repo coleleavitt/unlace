@@ -11,7 +11,7 @@ use std::path::PathBuf;
 
 /// Environment variable carrying the SDK or header directory into the load path.
 /// Unset, empty or `off` means no headers are read.
-pub const OBJCSDK_ENV: &str = "KUNA_OBJCSDK";
+pub const OBJCSDK_ENV: &str = "UNLACE_OBJCSDK";
 
 /// The header root the load in progress names (`LoadOptions::objcsdk`, else
 /// [`OBJCSDK_ENV`]), if any.

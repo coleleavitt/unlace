@@ -12,7 +12,7 @@ use std::path::PathBuf;
 
 use unlace_base::error::{KunaError, KunaResult};
 
-pub const KERNELCACHE_BOOT_ENV: &str = "KUNA_KERNELCACHE_BOOT";
+pub const KERNELCACHE_BOOT_ENV: &str = "UNLACE_KERNELCACHE_BOOT";
 
 /// `auto` searches the directory of the input; a path names one collection file
 /// or a directory to search instead; `off` reads no other file.

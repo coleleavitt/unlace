@@ -11,7 +11,7 @@
 
 /// Environment variable read by `unlace-analysis`'s language selection.
 /// Absent or any value but an off-token: enabled; an off-token: disabled.
-pub const DELPHIABI_ENV: &str = "KUNA_DELPHIABI";
+pub const DELPHIABI_ENV: &str = "UNLACE_DELPHIABI";
 
 /// Whether Delphi compiler-spec selection is enabled for this process.
 pub fn delphiabi_enabled() -> bool {

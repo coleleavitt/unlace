@@ -7,7 +7,7 @@
 //! [`EXPORTTRIE_ENV`] environment variable (the `dynrelocs` loadtime pattern).
 
 /// Absent or any value other than the off-tokens means enabled.
-pub const EXPORTTRIE_ENV: &str = "KUNA_EXPORTTRIE";
+pub const EXPORTTRIE_ENV: &str = "UNLACE_EXPORTTRIE";
 
 pub fn exporttrie_enabled() -> bool {
     crate::options::env_toggle(EXPORTTRIE_ENV, true)

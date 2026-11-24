@@ -27,7 +27,7 @@
 /// Environment variable that gates the x86-64 IFUNC PLT-stub naming (read by
 /// `unlace-analysis::loader::elf_plt::resolve_plt_imports`). Absent or an on-token
 /// ⇒ enabled; an off-token ⇒ disabled.
-pub const IFUNCFPRET_ENV: &str = "KUNA_IFUNCFPRET";
+pub const IFUNCFPRET_ENV: &str = "UNLACE_IFUNCFPRET";
 
 /// Whether IFUNC PLT-stub naming is enabled for this process (the loader gate).
 /// Default **on**: only an explicit off-token in [`IFUNCFPRET_ENV`] disables it.

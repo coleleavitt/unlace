@@ -8,7 +8,7 @@
 //! the catalog's live `current` field. Default off.
 
 /// Environment variable read by the FLIRT pass.
-pub const RUSTSTDSIGS_ENV: &str = "KUNA_RUSTSTDSIGS";
+pub const RUSTSTDSIGS_ENV: &str = "UNLACE_RUSTSTDSIGS";
 
 /// Which installed toolchain the standard-library signatures come from.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

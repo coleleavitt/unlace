@@ -42,7 +42,7 @@
 
 /// Environment variable carrying the `goabi` choice into the load path.
 /// Absent or any value other than the off-tokens means **enabled** (`auto`).
-pub const GOABI_ENV: &str = "KUNA_GOABI";
+pub const GOABI_ENV: &str = "UNLACE_GOABI";
 
 /// Whether golang-cspec auto-selection is enabled for the load in progress.
 pub fn goabi_env_enabled() -> bool {

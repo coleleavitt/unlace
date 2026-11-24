@@ -8,7 +8,7 @@
 
 use unlace_base::error::{KunaError, KunaResult};
 
-pub const KERNELCACHE_ENV: &str = "KUNA_KERNELCACHE";
+pub const KERNELCACHE_ENV: &str = "UNLACE_KERNELCACHE";
 
 /// `auto` unwraps containers and loads the kernel (`MH_EXECUTE`) entry of a
 /// fileset; a bundle id loads that entry instead; `off` passes bytes through.

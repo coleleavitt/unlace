@@ -72,7 +72,7 @@ use crate::context::{BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 use crate::kuna_emulatefunction::EmulateFunction;
 
-/// (kuna) With `KUNA_JUMPTABLE_TRACE` set, say on stderr what the basic
+/// (kuna) With `UNLACE_JUMPTABLE_TRACE` set, say on stderr what the basic
 /// jump-table model found at each indirect jump: the index range, the guards
 /// and whether the rows could be labelled (why a table stays unbounded).
 macro_rules! jt_trace {

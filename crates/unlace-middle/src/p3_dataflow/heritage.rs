@@ -7262,7 +7262,7 @@ pub struct MemoryOps {
     pub returns: Vec<crate::context::OpId>,
 }
 
-/// Is the jump-table-recovery alias trace on (`KUNA_JT_TRACE=1`)?
+/// Is the jump-table-recovery alias trace on (`UNLACE_JT_TRACE=1`)?
 pub fn kuna_jt_trace() -> bool {
     unlace_base::env::var("UNLACE_JT_TRACE").is_ok_and(|v| v != "0" && !v.is_empty())
 }

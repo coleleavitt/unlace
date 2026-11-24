@@ -4225,8 +4225,13 @@ uint4;`, …; 8-byte integers always spell `long long` so the text is
 data-model independent; `bool` is covered by `#include <stdbool.h>`;
 `char`/`void` are real C and emit nothing), then the fixed Ghidra/unlace
 `undefined` family — `undefined`, `undefined1..8` (3/5/6/7 mapped to the next
-larger unsigned integer, each carrying a sizeof-divergence note) and
-`undefined16`/`undefined32` as byte-array structs. The non-printer half of
+larger unsigned integer, each carrying a sizeof-divergence note),
+`undefined16` as `unsigned __int128` where the compiler defines
+`__SIZEOF_INT128__` and otherwise a byte-array struct, and `undefined32` as a
+byte-array struct. A body computes with a 16-byte value (a function returning
+the `rdx:rax` pair ends `return *(unsigned __int128 *)v1;`, `SUB168(x,8)`
+reads one), which a struct cannot hold, so with the struct no such body
+compiled (tools/semantic `noreturn.checked_div`, `conversions.mul_hi`). The non-printer half of
 the export (section enumeration, one-instruction disassembly, raw image
 bytes, named data symbols for the `.asm`/`README.md` artifacts) lives on the
 console engine, `crates/unlace-console/src/engine.rs

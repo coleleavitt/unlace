@@ -498,6 +498,9 @@ fn option_values_live_value_present_for_129() {
         "xnutables",
         // (kuna) DriverKit __osclassinfo records -- the same kind of gate. Default-on.
         "osclassinfo",
+        // (kuna) DriverKit IORPC dispatch types -- read inside the osclassinfo
+        // pass. Default-off.
+        "dextrpc",
         // (kuna) The Swift calling-convention arm's gate, read inside that pass.
         "swiftcall",
         // (kuna) The Swift runtime prototype pass gate.
@@ -1332,7 +1335,8 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // +1 for `orchainlive`: 355 rows, 354 commas.
     // +1 for `orchainbool`: 356 rows, 355 commas.
     // Recounted from phases.toml with `delphi` (its P1 row follows `msvceh`): 358 rows, 357 commas.
-    assert_eq!(json.matches("},\n").count(), 357);
+    // +1 for `dextrpc`; its P1 row sits after `osclassinfo`: 359 rows, 358 commas.
+    assert_eq!(json.matches("},\n").count(), 358);
 }
 
 #[test]

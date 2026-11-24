@@ -53,6 +53,9 @@ pub mod kuna_cil;
 pub mod kuna_goabi;
 // (kuna) Discriminant-value naming for recovered variant parts (load-time,
 // env-bridged; the first VariantLayout consumer).
+// (kuna) Go interface method calls by name: the option and the itab-record
+// vocabulary shared by the gotypes harvest, the DWARF signatures and the printer.
+pub mod kuna_goitabcalls;
 pub mod kuna_gopointermethod;
 pub mod kuna_gostringinput;
 pub mod kuna_gotypes;

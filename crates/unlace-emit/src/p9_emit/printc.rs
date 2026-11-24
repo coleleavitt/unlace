@@ -11090,6 +11090,32 @@ impl PrintC {
             // the unary `dereference` with the first argument, printing a spurious
             // `(*(funcptr,arg0))(arg1)` CONCAT-looking grouping.  No hidden-`this`
             // slot here (`skip = -1`), so `count = numInput - 1`.
+            if let Some(name) = super::kuna_goitabcall::interface_method(fd, arch, op) {
+                self.push_atom(&Atom::with_op(
+                    name,
+                    TagType::FuncToken,
+                    crate::printlanguage::SyntaxHighlight::funcname_color,
+                    op_key(op),
+                ));
+                if nin > 1 {
+                    for _ in 0..(nin - 2) {
+                        self.push_op(&tokens::COMMA, Some(op_key(op)));
+                    }
+                    for i in 1..nin {
+                        if let Some(vn) = fd.obank().get(op).and_then(|o| o.get_in(i)) {
+                            self.push_call_argument_ir(fd, arch, vn, op, i, proto);
+                        }
+                    }
+                } else {
+                    self.push_atom(&Atom::syntax(
+                        "",
+                        TagType::BlankToken,
+                        crate::printlanguage::SyntaxHighlight::no_color,
+                    ));
+                }
+                self.push_call_result_close(result_conversion, op);
+                return;
+            }
             let go_function = self.out_lang == crate::kuna_lang::OutLang::Go
                 && fd
                     .obank()

@@ -6764,6 +6764,33 @@ every other binary's pass list is byte-identical to before the pass existed):
   `verify_gotypes::stripped_go_itab_renders_named`, green on the itablinks
   and the contiguous-region layouts).
 
+  **Interface method slots** (`goitabcalls`, off by default;
+  `crates/unlace-analysis/src/analyzers/gotypes/kuna_itabtypes.rs (intern)`):
+  every itab of one interface lays its `Fun` array out in the order of the
+  interface descriptor's `Methods` slice (`Imethod {Name, Typ}` after the
+  `Type` base and the `PkgPath` word, sorted by name), so one record per
+  interface types all of them. On a 64-bit image the harvest reads the method
+  names of every interface descriptor the graph walk reaches and every itab's
+  `Inter`, and interns `go.itab.<interface>` (the linker spelling,
+  `go.itab.io.Writer`): `inter`, `_type`, `hash`, then one `code *` slot per
+  method at `24 + 8*i` named after it, with a `LangFacet::GoItab` facet naming
+  the interface. A spelling whose descriptors disagree on the method list, an
+  anonymous interface literal, an empty interface and a method name that is not
+  an ASCII identifier (or is a header field's name) get no record. Interning
+  binds nothing. With the option on, two consumers bind it. The Go DWARF
+  signature (`crates/unlace-analysis/src/analyzers/dwarf/kuna_godwarfsig/kuna_goiface.rs (input_types)`)
+  takes a formal whose type is a nominal interface typedef chain over the
+  `runtime.iface` storage, passed in the next two integer registers, as two
+  inputs, `<name>_tab` typed as a pointer to the interface's record and
+  `<name>_data` an opaque pointer; without the record the function keeps the
+  inference it had. The printer
+  (`crates/unlace-emit/src/p9_emit/kuna_goitabcall.rs (interface_method)`)
+  prints a CALLIND whose target is a LOAD of a method slot of such a record
+  (`PTRSUB` or `INT_ADD` of the record pointer and a constant at or past
+  offset 24) as `Interface.Method(args)`, the receiver first:
+  `main.Shape.Area(s_data)`. The slots carry no prototype, so the arguments
+  are the ones the call site recovers.
+
 - **Go pclntab** (`gopclntab`, Go-detected binaries only, always on;
   `crates/unlace-analysis/src/analyzers/pclntab/mod.rs`): the runtime
   needs the PC→name table for stack traces, so it survives stripping; the pass

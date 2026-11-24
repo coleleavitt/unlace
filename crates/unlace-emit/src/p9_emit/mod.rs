@@ -42,6 +42,7 @@ pub mod kuna_globalref; // (kuna) a constant address used as a pointer prints as
 pub mod kuna_goatomicreturn;
 pub mod kuna_gobyteextract;
 pub mod kuna_gobyteview;
+mod kuna_goitabcall;
 mod kuna_gomethod;
 pub mod kuna_goorderedcompare;
 pub mod kuna_gopackage;

@@ -875,3 +875,125 @@ fn collect_emits_the_linker_itab_symbol() {
     assert_eq!(facts[0].name, "go:itab.main.Point,fmt.Stringer");
     assert_eq!(facts[0].kind, crate::pass::SymKind::Data);
 }
+
+/// A named interface descriptor `main.Shape` at `types + 0x100` whose
+/// `Methods` slice (at `types + 0x300`) lists `methods` in order, each name
+/// record at `types + 0x240 + 0x10*k`. Returns (spans, types, etypes).
+fn synth_interface(methods: &[&str]) -> (Vec<(u64, Vec<u8>)>, u64, u64) {
+    const T: u64 = 0x100000;
+    let mut blob = vec![0u8; 0x400];
+    let n = 0x100usize;
+    blob[n + 20] = TFLAG_NAMED;
+    blob[n + 23] = KIND_INTERFACE;
+    blob[n + 40..n + 44].copy_from_slice(&0x220i32.to_le_bytes());
+    blob[0x220..0x22c].copy_from_slice(b"\0\x0amain.Shape");
+    blob[n + 56..n + 64].copy_from_slice(&(T + 0x300).to_le_bytes());
+    blob[n + 64..n + 72].copy_from_slice(&(methods.len() as u64).to_le_bytes());
+    blob[n + 72..n + 80].copy_from_slice(&(methods.len() as u64).to_le_bytes());
+    for (k, method) in methods.iter().enumerate() {
+        let at = 0x240 + 0x10 * k;
+        blob[at + 1] = method.len() as u8;
+        blob[at + 2..at + 2 + method.len()].copy_from_slice(method.as_bytes());
+        let entry = 0x300 + 8 * k;
+        blob[entry..entry + 4].copy_from_slice(&(at as i32).to_le_bytes());
+    }
+    (vec![(T, blob)], T, T + 0x400)
+}
+
+fn interface_meta(types: u64, etypes: u64) -> TypeMeta {
+    TypeMeta {
+        types,
+        etypes,
+        offsets: vec![0x100],
+    }
+}
+
+#[test]
+fn interface_methods_follow_the_descriptor_order() {
+    let (spans, types, etypes) = synth_interface(&["Area", "Name"]);
+    let img = img_of(&spans);
+    let meta = interface_meta(types, etypes);
+    let inter = read_type(&img, types, etypes, 0x100).expect("interface record");
+    assert_eq!(
+        super::kuna_itabtypes::interface_methods(&img, &meta, &inter),
+        Some(vec!["Area".to_string(), "Name".to_string()])
+    );
+    let sets = super::kuna_itabtypes::interface_method_sets(&img, &meta, &[]);
+    assert_eq!(
+        sets.get("main.Shape").map(Vec::as_slice),
+        Some(["Area".to_string(), "Name".to_string()].as_slice())
+    );
+}
+
+#[test]
+fn interface_methods_refuse_unusable_names() {
+    let cases: [&[&str]; 4] = [&["hash"], &["Area", "Area"], &["9Lives"], &["a-b"]];
+    for methods in cases {
+        let (spans, types, etypes) = synth_interface(methods);
+        let img = img_of(&spans);
+        let meta = interface_meta(types, etypes);
+        let inter = read_type(&img, types, etypes, 0x100).unwrap();
+        assert_eq!(
+            super::kuna_itabtypes::interface_methods(&img, &meta, &inter),
+            None,
+            "{methods:?}"
+        );
+        assert!(super::kuna_itabtypes::interface_method_sets(&img, &meta, &[]).is_empty());
+    }
+    let (spans, types, etypes) = synth_interface(&[]);
+    let img = img_of(&spans);
+    let meta = interface_meta(types, etypes);
+    assert!(
+        super::kuna_itabtypes::interface_method_sets(&img, &meta, &[]).is_empty(),
+        "an empty interface has no itab"
+    );
+}
+
+#[test]
+fn itab_record_names_each_method_slot() {
+    let tf = unlace_decomp::dtype::TypeFactoryImpl::new();
+    tf.set_default_alignment_map();
+    tf.set_max_basetype_size(8);
+    tf.setup_sizes(Some(8), 8, 8);
+    tf.cache_core_types().unwrap();
+    let methods = ["Area".to_string(), "Name".to_string()];
+    assert!(super::kuna_itabtypes::intern_record(
+        &tf,
+        "main.Shape",
+        &methods
+    ));
+    let record = tf
+        .find_by_name("go.itab.main.Shape")
+        .unwrap()
+        .expect("record interned");
+    assert_eq!(record.get_size(), 40);
+    let fields: Vec<(String, i32)> = (0..record.num_depend())
+        .filter_map(|i| record.get_field(i))
+        .map(|f| (f.name.clone(), f.offset))
+        .collect();
+    assert_eq!(
+        fields,
+        [
+            ("inter", 0),
+            ("_type", 8),
+            ("hash", 16),
+            ("Area", 24),
+            ("Name", 32)
+        ]
+        .map(|(n, o)| (n.to_string(), o))
+    );
+    assert_eq!(
+        record.get_field(3).unwrap().field_type.get_metatype(),
+        type_metatype::TYPE_PTR
+    );
+    assert_eq!(
+        tf.kuna_lang_facet("go.itab.main.Shape"),
+        Some(LangFacet::GoItab {
+            interface: "main.Shape".to_string()
+        })
+    );
+    assert!(
+        super::kuna_itabtypes::intern_record(&tf, "main.Shape", &methods),
+        "re-interning keeps the completed record"
+    );
+}

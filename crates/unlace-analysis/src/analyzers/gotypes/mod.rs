@@ -17,8 +17,9 @@
 //! header shells. The first consumer rides the same walk: each decoded
 //! `_type` record is itself a typed global (`kuna_typeglobals`, the
 //! `gotypeglobals` option), emitted as a `TypedDataFact` and committed at the
-//! engine's typed-data seam. Deliberately NOT here: interface/itab method
-//! resolution, generic instantiations beyond their raw name string, map/chan
+//! engine's typed-data seam. Interface method sets become per-interface itab
+//! layouts (`kuna_itabtypes`, bound by the `goitabcalls` option). Deliberately
+//! NOT here: generic instantiations beyond their raw name string, map/chan
 //! internals beyond an opaque named shell, binding any OTHER global to a
 //! harvested type (the metadata declares none), and any caller-signature
 //! recovery. Named non-struct types (a `type MyInt int`) are also skipped —
@@ -87,6 +88,7 @@ use kuna_layout::GoImage;
 
 mod kuna_fieldtypes;
 mod kuna_itabs;
+mod kuna_itabtypes;
 mod kuna_layout;
 pub mod kuna_pointermethods;
 mod kuna_structorder;
@@ -823,6 +825,9 @@ impl AnalysisPass for GoTypesPass {
             .map(|s| s.address())
             .collect();
         let itabs = kuna_itabs::collect(&img, &meta, anchor, &occupied);
+        // (kuna `goitabcalls`) One record per interface naming its method slots;
+        // output-neutral until the option binds it.
+        let _ = kuna_itabtypes::intern(tf, &img, &meta, anchor);
         let go_pointer_methods =
             kuna_pointermethods::collect(ctx.file, &img, &meta, header_vma, anchor, version)
                 .unwrap_or_default();

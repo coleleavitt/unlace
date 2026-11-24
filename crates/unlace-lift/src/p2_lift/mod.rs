@@ -3,7 +3,8 @@
 //! Stage-aligned module group; declared flatly at the crate root via re-export in
 //! `lib.rs` so public paths (`unlace_decomp::<module>`) are unchanged.
 
-pub mod aeabifloat; // (unlace) AEABI soft-float helpers (__aeabi_dadd, __aeabi_d2iz) as C operators and casts
+pub mod aeabifloat;
+pub mod antidebug; // (unlace `antidebug`) name a call to a well-known anti-debugging API (IsDebuggerPresent, ptrace, timing probes) // (unlace) AEABI soft-float helpers (__aeabi_dadd, __aeabi_d2iz) as C operators and casts
 pub mod arithhelpers; // (unlace) 32-bit runtime arithmetic helpers (__udivdi3, __aeabi_uldivmod, _alldiv) as C operators
 pub mod armflowcontext;
 pub mod armhoist; // (unlace `armhoist`) hoist the ops both arms of a branch share before structuring
@@ -16,6 +17,7 @@ pub mod cortexmpriv; // (unlace) fold the Cortex-M isCurrentModePrivileged() gua
 pub mod decodehalt; // (unlace) a halt planted where the decode failed says so instead of printing as an ordinary return
 pub mod entryretdispatch; // (unlace) recover an entry-point push/push/ret dispatch chain as calls
 pub mod evmcalls; // (unlace `evmcalls`) Solidity internal calls and returns in EVM bytecode
+pub mod evmselectors; // (unlace) Solidity dispatcher selectors and keccak-256 (`solidity_selector`, `dispatch_entries`)
 pub mod fastfailnoreturn; // (unlace) a Windows `int 0x29` (__fastfail) ends the flow instead of unbalancing the stack
 pub mod flow;
 pub mod fpuemu; // (unlace) decode the 8087 emulator's INT 34h-3Dh as the x87 instructions they stand for
@@ -58,6 +60,7 @@ pub mod rawswitch; // (unlace `rawswitch`) recover an x86-64 jump table from its
 pub mod retpolinethunk; // (unlace) a retpoline thunk recognized by its body is `call *%reg`
 pub mod sparcstructret;
 pub mod stackprobeloop;
+pub mod stringhashswitch; // (unlace) hash functions and a hash-to-string table for switches on a string hash
 pub mod switchextent; // (unlace) an unguarded jump table ends at the function's next table
 pub mod switchguardbound;
 pub mod switchguardmerge; // (unlace) merge an equality guard into its switch

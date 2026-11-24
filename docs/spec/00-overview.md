@@ -4167,6 +4167,14 @@ or prevent later actions from publishing. Totals belong to the current thread;
 threads and worker processes do not merge their tables when sharing an output
 path. File-write failures remain non-fatal. Rendering borrows the accumulated
 rows and sorts by descending exclusive time, then by name for ties.
+
+With `UNLACE_TIMING` set (no path needed) the same table is collected and the CLI
+prints it to stderr under a `unlace::timing per-action wall-clock` heading once the
+command has finished (`crates/unlace-middle/src/substrate/actionprof.rs`,
+`timing_report`; the `unlace` binary calls it from `crates/unlace-cli/src/lib.rs`).
+It is per action, not per pass, and covers only the thread that ran the schedules:
+worker threads and child processes are not merged in. Nothing is printed when no
+action ran. Both variables only observe; the decompiled output is unchanged.
 Time is exclusive — a group is charged only what it spends outside its children,
 so the rows sum to the schedule's wall time and a container cannot hide a leaf —
 and each row is keyed by the root variant it ran under, which is what separates a

@@ -67,6 +67,8 @@ pub use ppc32picimports::{ImportProofMemo, ImportProofScope};
 // (unlace) ELF section-table tolerance: an image whose section headers are
 // unreadable still has program headers describing every loadable byte.
 pub mod elf_shdr;
+// (unlace `btf`) BTF type-section reader for eBPF objects (`.BTF`); parse only, not yet consumed.
+pub mod btf;
 // (unlace) PE data-directory tolerance: a `NumberOfRvaAndSizes` larger than its own
 // optional header is clamped to the directories that are really present.
 pub mod pe_datadirs;

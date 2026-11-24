@@ -2590,3 +2590,35 @@ expect = [
     "div_scale(0x401c000000000000,0x401c000000000000,ABS(",
     "div_fixup(",
 ]
+
+[[family]]
+name = "amdgpu_cmpx_gfx1030"
+language = "AMDGPU:LE:64:GFX10"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/cmpx_gfx1030.bin"
+
+# `fixtures/amdgpu/cmpx.s` assembled for gfx1030: v_cmp_lt writes VCC, then v_cmpx_gt writes only
+# EXEC (RDNA), so the later v_cndmask still selects on the first compare.
+[[family.function]]
+test = "amdgpu_cmpx_gfx1030_keeps_vcc"
+address = "0x0"
+expect = [
+    "if (a5 <= a6)",
+    "if (a7 < v1)",
+]
+
+[[family]]
+name = "amdgpu_cmpx_gfx1100"
+language = "AMDGPU:LE:64:GFX11"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/cmpx_gfx1100.bin"
+
+# `fixtures/amdgpu/cmpx.s` assembled for gfx1100: v_cmp_lt writes VCC, then v_cmpx_gt writes only
+# EXEC (RDNA), so the later v_cndmask still selects on the first compare.
+[[family.function]]
+test = "amdgpu_cmpx_gfx1100_keeps_vcc"
+address = "0x0"
+expect = [
+    "if (a5 <= a6)",
+    "if (a7 < v1)",
+]

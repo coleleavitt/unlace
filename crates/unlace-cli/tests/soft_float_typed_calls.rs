@@ -772,9 +772,7 @@ fn direct_prototypes() -> Vec<String> {
 fn soft_float_arm_lays_declared_prototypes_out_in_core_registers() {
     let text = decompile_with(&arm_direct(false), &direct_prototypes());
     let s4 = function(&text, "s4");
-    assert!(s4.contains(" = dmix(a,k << 1);"), "{s4}");
-    assert!(s4.contains("return __aeabi_dmul("), "{s4}");
-    assert!(s4.contains(",a);"), "{s4}");
+    assert!(s4.contains("return dmix(a,k << 1) * a;"), "{s4}");
     assert!(!s4.contains("union"), "{s4}");
     let s9 = function(&text, "s9");
     assert!(s9.contains("vsink(a,1.5,a);"), "{s9}");
@@ -801,10 +799,10 @@ fn soft_float_arm_lays_dwarf_prototypes_out_in_core_registers() {
     let bytes = std::fs::read(common::fixture("softfloat_dwarf_armel.o")).unwrap();
     let text = decompile_with(&bytes, &[]);
     let dmix = function(&text, "dmix");
-    assert!(dmix.contains("__aeabi_i2d(k)"), "{dmix}");
+    assert!(dmix.contains("return (double)k * a;"), "{dmix}");
     assert!(dmix.contains(" = a;"), "{dmix}");
     let s4 = function(&text, "s4");
-    assert!(s4.contains("v1 = dmix(a,k << 1);"), "{s4}");
+    assert!(s4.contains("return dmix(a,k << 1) * a;"), "{s4}");
     assert!(
         !text
             .lines()

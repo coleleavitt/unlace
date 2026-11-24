@@ -1,0 +1,16 @@
+<opinions>
+    <!-- e_machine 89 (EM_MN10300) and 0xbeef (EM_CYGNUS_MN10300). e_flags bits 23..16 give the
+         machine (binutils include/elf/mn10300.h): 0x81 MN10300, 0x82 AM33, 0x83 AM33-2.
+         Objects without a machine value get the AM33-2 superset (default variant). -->
+    <constraint loader="Executable and Linking Format (ELF)" compilerSpecID="default">
+        <constraint primary="89" processor="MN10300" endian="little" size="32" variant="mn10300"
+                    secondary="0b.... .... 1000 0001 .... .... .... ...."/>
+        <constraint primary="89" processor="MN10300" endian="little" size="32" variant="am33"
+                    secondary="0b.... .... 1000 0010 .... .... .... ...."/>
+        <constraint primary="89" processor="MN10300" endian="little" size="32" variant="default"
+                    secondary="0b.... .... 1000 0011 .... .... .... ...."/>
+        <constraint primary="89" processor="MN10300" endian="little" size="32" variant="default"
+                    secondary="0b.... .... 0000 0000 .... .... .... ...."/>
+        <constraint primary="48879" processor="MN10300" endian="little" size="32" variant="default"/>
+    </constraint>
+</opinions>

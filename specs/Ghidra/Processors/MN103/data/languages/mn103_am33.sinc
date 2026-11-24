@@ -1,0 +1,59 @@
+# AM33 extensions that are not part of the generated families. Register names and operand
+# syntax are those GNU objdump prints; see GHIDRA-RARE.md for what establishes each semantics.
+
+define pcodeop mcst9;
+define pcodeop mcst48;
+define pcodeop getchx;
+define pcodeop getclx;
+
+SYSREG: "usp" is op1_32=0 { export USP; }
+SYSREG: "ssp" is op1_32=1 { export SSP; }
+SYSREG: "msp" is op1_32=2 { export MSP; }
+SYSREGW: "usp" is op1_10=0 { export USP; }
+SYSREGW: "ssp" is op1_10=1 { export SSP; }
+SYSREGW: "msp" is op1_10=2 { export MSP; }
+
+:mov SYSREG,an0_1 is op0=0xf0; op1_74=0x2 & op1_32 < 3 & SYSREG & an0_1 { an0_1 = SYSREG; }
+# mov pc,An: the address of the instruction itself (real code: PIC prologues reach .got with it).
+:mov "pc",an0_1 is op0=0xf0; op1_74=0x2 & op1_32=3 & an0_1 { an0_1 = inst_start; }
+:mov am1_1,SYSREGW is op0=0xf0; op1_74=0x3 & op1_10 < 3 & am1_1 & SYSREGW { SYSREGW = am1_1; }
+
+:mov "epsw",dn0_1 is op0=0xf2; op1_72=0x3b & dn0_1 { dn0_1 = read_epsw(); }
+:mov dm1_1,"epsw" is op0=0xf2; op1_74=0xf & op1_10=1 & dm1_1 { write_epsw(dm1_1); }
+:and imm32,"epsw" is op0=0xfc; op1=0xfc; imm32 { and_epsw(imm32:4); }
+:or imm32,"epsw" is op0=0xfc; op1=0xfd; imm32 { or_epsw(imm32:4); }
+
+:syscall imm4_1 is op0=0xf0; op1_74=0xe & imm4_1 { syscall(imm4_1:1); }
+
+# F5: moves between the a/d registers and the full r0-r15 file
+:mov am2_1,rn0_1 is op0=0xf5; op1_76=0 & am2_1 & rn0_1 { rn0_1 = am2_1; }
+:mov dm2_1,rn0_1 is op0=0xf5; op1_76=1 & dm2_1 & rn0_1 { rn0_1 = dm2_1; }
+:mov rmid_1,an0_1 is op0=0xf5; op1_76=2 & rmid_1 & an0_1 { an0_1 = rmid_1; }
+:mov rmid_1,dn0_1 is op0=0xf5; op1_76=3 & rmid_1 & dn0_1 { dn0_1 = rmid_1; }
+
+# F6 page AM33 operations without published semantics
+:mcst9 dn0_1 is op0=0xf6; op1_74=0x3 & dn0_1 { dn0_1 = mcst9(); }
+:mcst48 dn0_1 is op0=0xf6; op1_74=0x6 & dn0_1 { dn0_1 = mcst48(); }
+:swap dm1_1,dn0_1 is op0=0xf6; op1_74=0x8 & dm1_1 & dn0_1 { dn0_1 = swap(dm1_1); }
+:swaph dm1_1,dn0_1 is op0=0xf6; op1_74=0x9 & dm1_1 & dn0_1 { dn0_1 = swaph(dm1_1); }
+:getchx dn0_1 is op0=0xf6; op1_74=0xc & dn0_1 { dn0_1 = getchx(); }
+:getclx dn0_1 is op0=0xf6; op1_74=0xd & dn0_1 { dn0_1 = getclx(); }
+
+# movm (sp) with exreg0 or exother: their save-area size is not established.
+define pcodeop movm_restore_extended;
+:movm "(sp)",REGLIST is op0=0xce; REGLIST & regs1 & b1_2=1 { SP = movm_restore_extended(SP, regs1:1); }
+:movm "(sp)",REGLIST is op0=0xce; REGLIST & regs1 & b1_2=0 & b1_0=1 { SP = movm_restore_extended(SP, regs1:1); }
+:movm "(usp)",REGLIST is op0=0xf8; op1=0xce; REGLIST & regs1 & b1_2=1 { USP = movm_restore_extended(USP, regs1:1); }
+:movm "(usp)",REGLIST is op0=0xf8; op1=0xce; REGLIST & regs1 & b1_2=0 & b1_0=1 { USP = movm_restore_extended(USP, regs1:1); }
+
+# movm with the user stack pointer: the (sp) forms with usp (unverified)
+:movm "(usp)",REGLIST is op0=0xf8; op1=0xce; REGLIST & POPLIST & LISTSIZE {
+	mvptr = USP + LISTSIZE;
+	build POPLIST;
+	USP = USP + LISTSIZE;
+}
+:movm REGLIST,"(usp)" is op0=0xf8; op1=0xcf; REGLIST & PUSHLIST {
+	mvptr = USP;
+	build PUSHLIST;
+	USP = mvptr;
+}

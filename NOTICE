@@ -134,6 +134,10 @@ specs/Ghidra/Processors/MN102 vendors the Panasonic MN10200 SLEIGH specification
 aleph-void/ghidra-mn102-lang (https://github.com/aleph-void/ghidra-mn102-lang), a fork of Pokechu22/ghidra-mn102-lang, released under the
 Apache License, Version 2.0 (its license file is in that directory).
 
+specs/Ghidra/Processors/MN103 vendors the Panasonic MN10300 (AM33) SLEIGH specification of
+aleph-void/ghidra-mn103-extension (https://github.com/aleph-void/ghidra-mn103-extension), a fork of michaelbrandi/ghidra-mn103-extension, released under the
+Apache License, Version 2.0 (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

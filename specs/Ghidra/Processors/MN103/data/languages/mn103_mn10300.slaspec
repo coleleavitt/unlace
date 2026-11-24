@@ -1,0 +1,2 @@
+# Matsushita/Panasonic MN10300 (MN1030 core, no AM33 extensions).
+@include "mn103.sinc"

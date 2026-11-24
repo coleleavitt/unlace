@@ -1,0 +1,280 @@
+# MN10300 base instruction set (formats S0-S6, D0-D5).
+
+# ---- memory operand subtables -------------------------------------------------------------
+# (Am) / (An) on byte 0 or byte 1
+M0A0: "("^an0_0^")" is an0_0 { export an0_0; }
+M1A0: "("^an0_1^")" is an0_1 { export an0_1; }
+# (Di,An) indexed, byte 1
+M1DI: "("^di_1^","^an0_1^")" is di_1 & an0_1 { local a:4 = di_1 + an0_1; export a; }
+# (d8,sp) unsigned
+SP8:  "(sp)" is imm8=0 { local a:4 = SP; export a; }
+SP8:  "("^imm8^",sp)" is imm8 { local a:4 = SP + imm8; export a; }
+
+# ---- data movement --------------------------------------------------------------------------
+
+:clr dn1_0 is op0_74=0x0 & op0_10=0 & dn1_0 { dn1_0 = 0; ZF = 1; NF = 0; CF = 0; VF = 0; }
+
+:mov dm1_0,(abs16) is op0_74=0x0 & op0_10=1 & dm1_0; abs16 { *:4 abs16:4 = dm1_0; }
+:movbu dm1_0,(abs16) is op0_74=0x0 & op0_10=2 & dm1_0; abs16 { *:1 abs16:4 = dm1_0:1; }
+:movhu dm1_0,(abs16) is op0_74=0x0 & op0_10=3 & dm1_0; abs16 { *:2 abs16:4 = dm1_0:2; }
+
+:extb dn0_0  is op0_72=0x04 & dn0_0 { dn0_0 = sext(dn0_0:1); }
+:extbu dn0_0 is op0_72=0x05 & dn0_0 { dn0_0 = zext(dn0_0:1); }
+:exth dn0_0  is op0_72=0x06 & dn0_0 { dn0_0 = sext(dn0_0:2); }
+:exthu dn0_0 is op0_72=0x07 & dn0_0 { dn0_0 = zext(dn0_0:2); }
+
+:add simm8,an0_0 is op0_72=0x08 & an0_0; simm8 { local s:4 = simm8; local o:4 = an0_0; an0_0 = o + s; addFlags(o, s, an0_0); }
+:mov imm16,an0_0 is op0_72=0x09 & an0_0; imm16 { an0_0 = imm16; }
+:add simm8,dn0_0 is op0_72=0x0a & dn0_0; simm8 { local s:4 = simm8; local o:4 = dn0_0; dn0_0 = o + s; addFlags(o, s, dn0_0); }
+:mov simm16,dn0_0 is op0_72=0x0b & dn0_0; simm16 { dn0_0 = simm16; }
+
+:mov (abs16),dn0_0   is op0_72=0x0c & dn0_0; abs16 { dn0_0 = *:4 abs16:4; }
+:movbu (abs16),dn0_0 is op0_72=0x0d & dn0_0; abs16 { dn0_0 = zext(*:1 abs16:4); }
+:movhu (abs16),dn0_0 is op0_72=0x0e & dn0_0; abs16 { dn0_0 = zext(*:2 abs16:4); }
+:mov "sp",an0_0      is op0_72=0x0f & an0_0 { an0_0 = SP; }
+
+:inc dn1_0 is op0_74=0x4 & op0_10=0 & dn1_0 { local o:4 = dn1_0; dn1_0 = o + 1; addFlags(o, 1:4, dn1_0); }
+:inc an1_0 is op0_74=0x4 & op0_10=1 & an1_0 { an1_0 = an1_0 + 1; }
+:mov dm1_0,SP8 is op0_74=0x4 & op0_10=2 & dm1_0; SP8 { *:4 SP8 = dm1_0; }
+:mov am1_0,SP8 is op0_74=0x4 & op0_10=3 & am1_0; SP8 { *:4 SP8 = am1_0; }
+
+:inc4 an0_0 is op0_72=0x14 & an0_0 { an0_0 = an0_0 + 4; }
+:asl2 dn0_0 is op0_72=0x15 & dn0_0 { dn0_0 = dn0_0 << 2; resZN(dn0_0); }
+:mov SP8,dn0_0 is op0_72=0x16 & dn0_0; SP8 { dn0_0 = *:4 SP8; }
+:mov SP8,an0_0 is op0_72=0x17 & an0_0; SP8 { an0_0 = *:4 SP8; }
+
+:mov dm1_0,M0A0 is op0_74=0x6 & dm1_0 & M0A0 { *:4 M0A0 = dm1_0; }
+:mov M0A0,dn1_0 is op0_74=0x7 & dn1_0 & M0A0 { dn1_0 = *:4 M0A0; }
+
+# 1000 DmDn: mov Dm,Dn; with Dm == Dn it is mov imm8,Dn
+:mov dm1_0,dn0_0 is op0_74=0x8 & dm1_0 & dn0_0 { dn0_0 = dm1_0; }
+:mov simm8,dn0_0 is (op0=0x80 | op0=0x85 | op0=0x8a | op0=0x8f) & dn0_0; simm8 { dn0_0 = simm8; }
+:mov am1_0,an0_0 is op0_74=0x9 & am1_0 & an0_0 { an0_0 = am1_0; }
+:mov imm8,an0_0  is (op0=0x90 | op0=0x95 | op0=0x9a | op0=0x9f) & an0_0; imm8 { an0_0 = imm8; }
+:cmp dm1_0,dn0_0 is op0_74=0xa & dm1_0 & dn0_0 { local r:4 = dn0_0 - dm1_0; subFlags(dn0_0, dm1_0, r); }
+:cmp simm8,dn0_0 is (op0=0xa0 | op0=0xa5 | op0=0xaa | op0=0xaf) & dn0_0; simm8 { local s:4 = simm8; local r:4 = dn0_0 - s; subFlags(dn0_0, s, r); }
+:cmp am1_0,an0_0 is op0_74=0xb & am1_0 & an0_0 { local r:4 = an0_0 - am1_0; subFlags(an0_0, am1_0, r); }
+:cmp imm8,an0_0  is (op0=0xb0 | op0=0xb5 | op0=0xba | op0=0xbf) & an0_0; imm8 { local s:4 = imm8; local r:4 = an0_0 - s; subFlags(an0_0, s, r); }
+
+:add dm1_0,dn0_0 is op0_74=0xe & dm1_0 & dn0_0 { local o:4 = dn0_0; dn0_0 = o + dm1_0; addFlags(o, dm1_0, dn0_0); }
+
+# ---- conditional branches ------------------------------------------------------------------
+CC: "lt" is op0_30=0x0 { local c:1 = NF != VF; export c; }
+CC: "gt" is op0_30=0x1 { local c:1 = (ZF == 0) && (NF == VF); export c; }
+CC: "ge" is op0_30=0x2 { local c:1 = NF == VF; export c; }
+CC: "le" is op0_30=0x3 { local c:1 = ZF || (NF != VF); export c; }
+CC: "cs" is op0_30=0x4 { local c:1 = CF; export c; }
+CC: "hi" is op0_30=0x5 { local c:1 = (CF == 0) && (ZF == 0); export c; }
+CC: "cc" is op0_30=0x6 { local c:1 = CF == 0; export c; }
+CC: "ls" is op0_30=0x7 { local c:1 = CF || ZF; export c; }
+CC: "eq" is op0_30=0x8 { local c:1 = ZF; export c; }
+CC: "ne" is op0_30=0x9 { local c:1 = ZF == 0; export c; }
+CC: "ra" is op0_30=0xa { local c:1 = 1; export c; }
+
+:b^CC REL8 is op0_74=0xc & op0_30 < 0xa & CC; REL8 { if (CC) goto REL8; }
+:bra REL8 is op0=0xca; REL8 { goto REL8; }
+:nop is op0=0xcb { }
+:jmp REL16 is op0=0xcc; REL16 { goto REL16; }
+:jmp REL32 is op0=0xdc; REL32 { goto REL32; }
+
+:bvc REL8 is op0=0xf8; op1=0xe8; REL8 { if (VF == 0) goto REL8; }
+:bvs REL8 is op0=0xf8; op1=0xe9; REL8 { if (VF != 0) goto REL8; }
+:bnc REL8 is op0=0xf8; op1=0xea; REL8 { if (NF == 0) goto REL8; }
+:bns REL8 is op0=0xf8; op1=0xeb; REL8 { if (NF != 0) goto REL8; }
+
+# ---- loop instructions ---------------------------------------------------------------------
+# setlb: LIR <- the 4 instruction bytes after setlb, LAR <- setlb + 5. Lcc branches back to
+# setlb + 1 (LAR - 4) when its condition holds. The loop top is also recorded in the context so
+# that Lcc has a static target.
+:setlb is op0=0xdb [ loop_top = inst_start + 1; loop_valid = 1; globalset(inst_next, loop_top); globalset(inst_next, loop_valid); ] {
+	local a:4 = inst_next; LIR = *:4 a;
+	LAR = inst_start + 5;
+}
+LOOPTGT: is loop_valid=1 & loop_top { export *[ram]:4 loop_top; }
+:l^CC is op0_74=0xd & op0_30 < 0xb & CC & loop_valid=1 & LOOPTGT { if (CC) goto LOOPTGT; }
+:l^CC is op0_74=0xd & op0_30 < 0xb & CC & loop_valid=0 { local t:4 = LAR - 4; if (CC == 0) goto inst_next; goto [t]; }
+
+# ---- calls and returns ---------------------------------------------------------------------
+# call: store the return address at (sp), push the register list below it, MDR <- return
+# address, sp <- sp - imm8. The register saves do not move sp; imm8 covers them.
+:call REL16,REGLIST,imm8 is op0=0xcd; REL16; REGLIST & PUSHLIST; imm8 {
+	local ret:4 = inst_next;
+	*:4 SP = ret;
+	mvptr = SP;
+	build PUSHLIST;
+	MDR = ret;
+	SP = SP - imm8;
+	call REL16;
+}
+:call REL32,REGLIST,imm8 is op0=0xdd; REL32; REGLIST & PUSHLIST; imm8 {
+	local ret:4 = inst_next;
+	*:4 SP = ret;
+	mvptr = SP;
+	build PUSHLIST;
+	MDR = ret;
+	SP = SP - imm8;
+	call REL32;
+}
+# ret: sp <- sp + imm8, restore the list from below the new sp, return through (sp).
+:ret REGLIST,imm8 is op0=0xdf; REGLIST & POPLIST; imm8 {
+	SP = SP + imm8;
+	mvptr = SP;
+	build POPLIST;
+	local t:4 = *:4 SP;
+	return [t];
+}
+# retf: as ret, but returns through MDR.
+:retf REGLIST,imm8 is op0=0xde; REGLIST & POPLIST; imm8 {
+	SP = SP + imm8;
+	mvptr = SP;
+	build POPLIST;
+	return [MDR];
+}
+:calls (an0_1) is op0=0xf0; op1_72=0x3c & an0_1 {
+	local ret:4 = inst_next;
+	*:4 SP = ret;
+	MDR = ret;
+	call [an0_1];
+}
+:calls REL16 is op0=0xfa; op1=0xff; rel16 & REL16 {
+	local ret:4 = inst_next;
+	*:4 SP = ret;
+	MDR = ret;
+	call REL16;
+}
+:calls REL32 is op0=0xfc; op1=0xff; rel32 & REL32 {
+	local ret:4 = inst_next;
+	*:4 SP = ret;
+	MDR = ret;
+	call REL32;
+}
+:jmp (an0_1) is op0=0xf0; op1_72=0x3d & an0_1 { goto [an0_1]; }
+:rets is op0=0xf0; op1=0xfc { local t:4 = *:4 SP; return [t]; }
+:rti is op0=0xf0; op1=0xfd {
+	local p:2 = *:2 SP;
+	PSW = p;
+	setPSWflags(p);
+	local t:4 = *:4 (SP + 4);
+	SP = SP + 8;
+	return [t];
+}
+# trap: the return address goes to (sp) and execution continues at the fixed vector 0x40000010.
+TRAPVEC: v is op1 [ v = 0x40000010; ] { export *[ram]:4 v; }
+:trap is op0=0xf0; op1=0xfe & TRAPVEC { *:4 SP = inst_next; call TRAPVEC; }
+:rtm is op0=0xf0; op1=0xff { return_from_monitor(); }
+:syscall is op0=0xf0; op1=0xc0 { syscall(); }
+:break is op0=0xff { software_break(); }
+
+# movm (sp),regs pops; movm regs,(sp) pushes.
+:movm "(sp)",REGLIST is op0=0xce; REGLIST & POPLIST & LISTSIZE {
+	mvptr = SP + LISTSIZE;
+	build POPLIST;
+	SP = SP + LISTSIZE;
+}
+:movm REGLIST,"(sp)" is op0=0xcf; REGLIST & PUSHLIST {
+	mvptr = SP;
+	build PUSHLIST;
+	SP = mvptr;
+}
+
+# ---- F0 page --------------------------------------------------------------------------------
+:mov M1A0,am1_1 is op0=0xf0; op1_74=0x0 & M1A0 & am1_1 { am1_1 = *:4 M1A0; }
+:mov am1_1,M1A0 is op0=0xf0; op1_74=0x1 & am1_1 & M1A0 { *:4 M1A0 = am1_1; }
+:movbu M1A0,dm1_1 is op0=0xf0; op1_74=0x4 & M1A0 & dm1_1 { dm1_1 = zext(*:1 M1A0); }
+:movbu dm1_1,M1A0 is op0=0xf0; op1_74=0x5 & dm1_1 & M1A0 { *:1 M1A0 = dm1_1:1; }
+:movhu M1A0,dm1_1 is op0=0xf0; op1_74=0x6 & M1A0 & dm1_1 { dm1_1 = zext(*:2 M1A0); }
+:movhu dm1_1,M1A0 is op0=0xf0; op1_74=0x7 & dm1_1 & M1A0 { *:2 M1A0 = dm1_1:2; }
+:bset dm1_1,M1A0 is op0=0xf0; op1_74=0x8 & dm1_1 & M1A0 {
+	local m:1 = *:1 M1A0;
+	local t:4 = zext(m) & dm1_1;
+	ZF = t == 0; NF = 0; CF = 0; VF = 0;
+	*:1 M1A0 = m | dm1_1:1;
+}
+:bclr dm1_1,M1A0 is op0=0xf0; op1_74=0x9 & dm1_1 & M1A0 {
+	local m:1 = *:1 M1A0;
+	local t:4 = zext(m) & dm1_1;
+	ZF = t == 0; NF = 0; CF = 0; VF = 0;
+	*:1 M1A0 = m & ~dm1_1:1;
+}
+
+# ---- F1 page: register-register arithmetic ---------------------------------------------------
+:sub dm1_1,dn0_1  is op0=0xf1; op1_74=0x0 & dm1_1 & dn0_1 { local o:4 = dn0_1; dn0_1 = o - dm1_1; subFlags(o, dm1_1, dn0_1); }
+:sub am1_1,dn0_1  is op0=0xf1; op1_74=0x1 & am1_1 & dn0_1 { local o:4 = dn0_1; dn0_1 = o - am1_1; subFlags(o, am1_1, dn0_1); }
+:sub dm1_1,an0_1  is op0=0xf1; op1_74=0x2 & dm1_1 & an0_1 { local o:4 = an0_1; an0_1 = o - dm1_1; subFlags(o, dm1_1, an0_1); }
+:sub am1_1,an0_1  is op0=0xf1; op1_74=0x3 & am1_1 & an0_1 { local o:4 = an0_1; an0_1 = o - am1_1; subFlags(o, am1_1, an0_1); }
+:addc dm1_1,dn0_1 is op0=0xf1; op1_74=0x4 & dm1_1 & dn0_1 {
+	local a:4 = dn0_1; local b:4 = dm1_1; local c:4 = zext(CF);
+	local s:4 = a + b;
+	dn0_1 = s + c;
+	CF = carry(a, b) || carry(s, c);
+	VF = scarry(a, b) ^^ scarry(s, c);
+	ZF = dn0_1 == 0;
+	NF = dn0_1 s< 0;
+}
+:add am1_1,dn0_1  is op0=0xf1; op1_74=0x5 & am1_1 & dn0_1 { local o:4 = dn0_1; dn0_1 = o + am1_1; addFlags(o, am1_1, dn0_1); }
+:add dm1_1,an0_1  is op0=0xf1; op1_74=0x6 & dm1_1 & an0_1 { local o:4 = an0_1; an0_1 = o + dm1_1; addFlags(o, dm1_1, an0_1); }
+:add am1_1,an0_1  is op0=0xf1; op1_74=0x7 & am1_1 & an0_1 { local o:4 = an0_1; an0_1 = o + am1_1; addFlags(o, am1_1, an0_1); }
+:subc dm1_1,dn0_1 is op0=0xf1; op1_74=0x8 & dm1_1 & dn0_1 {
+	local a:4 = dn0_1; local b:4 = dm1_1; local c:4 = zext(CF);
+	local s:4 = a - b;
+	dn0_1 = s - c;
+	CF = (a < b) || (s < c);
+	VF = sborrow(a, b) ^^ sborrow(s, c);
+	ZF = dn0_1 == 0;
+	NF = dn0_1 s< 0;
+}
+:cmp am1_1,dn0_1 is op0=0xf1; op1_74=0x9 & am1_1 & dn0_1 { local r:4 = dn0_1 - am1_1; subFlags(dn0_1, am1_1, r); }
+:cmp dm1_1,an0_1 is op0=0xf1; op1_74=0xa & dm1_1 & an0_1 { local r:4 = an0_1 - dm1_1; subFlags(an0_1, dm1_1, r); }
+:mov am1_1,dn0_1 is op0=0xf1; op1_74=0xd & am1_1 & dn0_1 { dn0_1 = am1_1; }
+:mov dm1_1,an0_1 is op0=0xf1; op1_74=0xe & dm1_1 & an0_1 { an0_1 = dm1_1; }
+
+# ---- F2 page: logic, multiply/divide, shifts, special registers ------------------------------
+:and dm1_1,dn0_1 is op0=0xf2; op1_74=0x0 & dm1_1 & dn0_1 { dn0_1 = dn0_1 & dm1_1; logicFlags(dn0_1); }
+:or dm1_1,dn0_1  is op0=0xf2; op1_74=0x1 & dm1_1 & dn0_1 { dn0_1 = dn0_1 | dm1_1; logicFlags(dn0_1); }
+:xor dm1_1,dn0_1 is op0=0xf2; op1_74=0x2 & dm1_1 & dn0_1 { dn0_1 = dn0_1 ^ dm1_1; logicFlags(dn0_1); }
+:not dn0_1 is op0=0xf2; op1_72=0x0c & dn0_1 { dn0_1 = ~dn0_1; logicFlags(dn0_1); }
+:mul dm1_1,dn0_1 is op0=0xf2; op1_74=0x4 & dm1_1 & dn0_1 {
+	local p:8 = sext(dn0_1) * sext(dm1_1);
+	dn0_1 = p:4; MDR = p(4);
+	logicFlags(dn0_1);
+}
+:mulu dm1_1,dn0_1 is op0=0xf2; op1_74=0x5 & dm1_1 & dn0_1 {
+	local p:8 = zext(dn0_1) * zext(dm1_1);
+	dn0_1 = p:4; MDR = p(4);
+	logicFlags(dn0_1);
+}
+# div/divu: the 64-bit dividend MDR:Dn is divided by Dm; quotient to Dn, remainder to MDR.
+# Division by zero sets V and leaves the destination undefined (here: unchanged).
+:div dm1_1,dn0_1 is op0=0xf2; op1_74=0x6 & dm1_1 & dn0_1 { divs(dn0_1, dm1_1); }
+:divu dm1_1,dn0_1 is op0=0xf2; op1_74=0x7 & dm1_1 & dn0_1 { divu(dn0_1, dm1_1); }
+:rol dn0_1 is op0=0xf2; op1_72=0x20 & dn0_1 {
+	local v:4 = dn0_1;
+	dn0_1 = (v << 1) | zext(CF);
+	CF = v s< 0; VF = 0; resZN(dn0_1);
+}
+:ror dn0_1 is op0=0xf2; op1_72=0x21 & dn0_1 {
+	local v:4 = dn0_1;
+	dn0_1 = (v >> 1) | (zext(CF) << 31);
+	CF = (v & 1) != 0; VF = 0; resZN(dn0_1);
+}
+:asl dm1_1,dn0_1 is op0=0xf2; op1_74=0x9 & dm1_1 & dn0_1 { dn0_1 = dn0_1 << (dm1_1 & 0x1f); resZN(dn0_1); }
+:lsr dm1_1,dn0_1 is op0=0xf2; op1_74=0xa & dm1_1 & dn0_1 { CF = (dn0_1 & 1) != 0; dn0_1 = dn0_1 >> (dm1_1 & 0x1f); resZN(dn0_1); }
+:asr dm1_1,dn0_1 is op0=0xf2; op1_74=0xb & dm1_1 & dn0_1 { CF = (dn0_1 & 1) != 0; dn0_1 = dn0_1 s>> (dm1_1 & 0x1f); resZN(dn0_1); }
+:ext dn0_1 is op0=0xf2; op1_72=0x34 & dn0_1 { MDR = dn0_1 s>> 31; }
+:mov "mdr",dn0_1 is op0=0xf2; op1_72=0x38 & dn0_1 { dn0_1 = MDR; }
+:mov "psw",dn0_1 is op0=0xf2; op1_72=0x39 & dn0_1 { local v:4; getPSW(v); dn0_1 = v; }
+:mov am1_1,"sp" is op0=0xf2; op1_74=0xf & op1_10=0 & am1_1 { SP = am1_1; }
+:mov dm1_1,"mdr" is op0=0xf2; op1_74=0xf & op1_10=2 & dm1_1 { MDR = dm1_1; }
+:mov dm1_1,"psw" is op0=0xf2; op1_74=0xf & op1_10=3 & dm1_1 { PSW = dm1_1:2; setPSWflags(dm1_1); }
+
+# ---- F3/F4 pages: indexed (Di,An) ----------------------------------------------------------
+:mov M1DI,dn2_1   is op0=0xf3; op1_76=0 & M1DI & dn2_1 { dn2_1 = *:4 M1DI; }
+:mov dm2_1,M1DI   is op0=0xf3; op1_76=1 & M1DI & dm2_1 { *:4 M1DI = dm2_1; }
+:mov M1DI,an2_1   is op0=0xf3; op1_76=2 & M1DI & an2_1 { an2_1 = *:4 M1DI; }
+:mov am2_1,M1DI   is op0=0xf3; op1_76=3 & M1DI & am2_1 { *:4 M1DI = am2_1; }
+:movbu M1DI,dn2_1 is op0=0xf4; op1_76=0 & M1DI & dn2_1 { dn2_1 = zext(*:1 M1DI); }
+:movbu dm2_1,M1DI is op0=0xf4; op1_76=1 & M1DI & dm2_1 { *:1 M1DI = dm2_1:1; }
+:movhu M1DI,dn2_1 is op0=0xf4; op1_76=2 & M1DI & dn2_1 { dn2_1 = zext(*:2 M1DI); }
+:movhu dm2_1,M1DI is op0=0xf4; op1_76=3 & M1DI & dm2_1 { *:2 M1DI = dm2_1:2; }
+
+@include "mn103_gen.sinc"

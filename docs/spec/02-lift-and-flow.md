@@ -4194,6 +4194,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `JieLi` | JieLi audio SoC | `pi32:LE:32:default`, `pi32v2:LE:32:default`, `q32s:LE:32:default` | aleph-void/ghidra-jieli (fork of quarkslab/ghidra-jieli) @ `a69a59056f`, Apache-2.0 |
 | `M740` | Mitsubishi MELPS 740 | `MELPS740:LE:16:default`, `MELPS740:LE:16:wit`, `MELPS740:LE:16:muldiv` | aleph-void/ghidra-m740 @ `4495d71ab8`, Apache-2.0 |
 | `MN102` | Panasonic MN10200 | `MN102:BE:24:default` | aleph-void/ghidra-mn102-lang (fork of Pokechu22/ghidra-mn102-lang) @ `3cf1d57f86`, Apache-2.0 |
+| `MN103` | Panasonic MN10300 (AM33) | `mn10300:LE:32:default`, `mn10300:LE:32:am33`, `mn10300:LE:32:mn10300` | aleph-void/ghidra-mn103-extension (fork of michaelbrandi/ghidra-mn103-extension) @ `32d7ce4d79`, Apache-2.0 |
 <!-- vendor-rows -->
 
 ### WDC 65816 (#98)

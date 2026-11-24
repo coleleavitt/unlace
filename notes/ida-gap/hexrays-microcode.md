@@ -20,7 +20,7 @@ step. unlace side: `codegraph query` over `nodes`/`files` on origin/main `a01108
 |---|---|---|---|---|---|
 | 1 | Maturity pipeline and per-step dumps | `MMAT_ZERO`, `GENERATED`, `PREOPTIMIZED`, `LOCOPT`, `CALLS`, `GLBOPT1`-`3`, `LVARS`, `FINAL` (`sub_45D940`, `sub_45F420`, `sub_45FCA0`, `sub_460AC0`); `-dump`, `-dump2` (during propagation), `-dump3` (during instruction optimisation), `-cdump` rule names (`sub_3C2F80`) | phase model P1-P9 with `universal_sched` (`crates/unlace-decomp/src/infra/universalaction.rs`), `kuna_maturity` (#189); `decomp_dbg` `print raw` after a decompile; `KUNA_*_TRACE` per module (atomics, jumptable, regnarrow, calleevote, callerargs, narrowargs, narrowret) | partial | S: one `UNLACE_DUMP=<action>` that prints the raw p-code after a named action of the pool, the analog of `-dump2`/`-dump3`; would have cut the atomics/jumptable debug rounds of #581/#871 |
 | 2 | Two-round preoptimization and combined operand propagation | `sub_14F5A0`: `before preoptimize`, per-block `sub_E7F30(blk, 1)` then `(blk, 0)`, `after second preoptimize`, `sub_4A2D60` "after combined operand propagation" | Ghidra rule pools run to a fixpoint with restarts (`ActionPool` in `unlace-middle/src/infra/action.rs`), copy propagation `RulePropagateCopy` (`crates/unlace-bandb/src/p3_dataflow/ruleaction_3.rs:2222`), `RuleIndirectCollapse` (`ruleaction_3.rs:640`) | have | none |
-| 3 | Local and global propagation | `sub_19EA00` ("propagate step %d result (propagated %d)", 1,721 lines), `sub_1A33E0` "global propagate result"; user switch "Forbid assignment propagation" (`sub_43E530`), "Do not check indirect volatile memory access in propagation" (`sub_3C1FF0`) | SSA heritage (`ActionHeritage`, `crates/unlace-bandb/src/p3_dataflow/coreaction_early.rs:397`) plus the rule pools; no per-site user veto of a propagation | have (engine) / missing (user veto) | in task 9 |
+| 3 | 64-bit values on x86-32 (row 10, measured in section 4) | 65 `CONCAT44` in one i386 DLL where IDA prints none; most are spurious `edx:eax` returns, not locals | M, split into 4a-4c |
 | 4 | Assertions on branch edges | `gen_jnz_assertions` (`sub_1533A0` over every block via `sub_152CE0`), `gen_chain_assertions` (`sub_153420`), `delete_assertions` (`sub_152930`, `sub_166050`); user "Insert assertion" (`sub_454170`) | `ActionConditionalConst` (`crates/unlace-emit/src/p9_emit/coreaction_render.rs:3116`) propagates the constant an equality branch implies into the blocks it dominates; user assertions `--assert` (`crates/unlace-console/src/assertions.rs`, `crates/unlace-middle/src/p0_knowledge/kuna_assert.rs`) | have | none |
 | 5 | Value ranges per block | `block.valranges_tail` (`sub_CEE20`), `REMOVE_USELESS_JX_VALRANGES`, `CMP64-VALRANGES-JMP2`, `OPT_VALRNG_JCND/AND/SWITCH_NCASES` (hexrays.cfg) | `rangefold` (`crates/unlace-bandb-base/src/p3_dataflow/kuna_rangefold.rs`), `phithread ranges` (`kuna_phithread.rs`), Ghidra `ValueSetSolver` used for jump tables only | partial | M: a dominating-range fact pass (ranges from guards, masks and zero-extensions, joined at merges) that `rangefold`, `condfold` and the jump-table guard search read; today each recomputes its own |
 | 6 | Stack variable resolution | `resolve_stkvar_addresses` (`sub_152630`, maturity <= 6), `mba.corrected_stkvars` (`sub_CF420`), `stkvar du-ud` (`sub_126B10`) | `ActionStackPtrFlow` (`coreaction_render.rs:133`), `RuleSpacebase`, `ActionRestrictLocal` (`crates/unlace-bandb/src/p4_calls/coreaction_protos.rs:2216`), `stackviews` (off) | have | none |
@@ -55,3 +55,41 @@ step. unlace side: `codegraph query` over `nodes`/`files` on origin/main `a01108
 
 Not proposed: the pattern language (row 18) and everything marked have.
 
+
+## 3. IDA dumps added 2026-11-24
+
+Approved list from the survey follow-up. Exports are `idb-tools export-sqlite` (`~/RustProjects/forks/idb-rs`,
+schema in its `doc/sqlite-export.md`) of the idalib run (`~/bin/ida-dump-all-idalib`), written to
+`~/SiteResearch/ida-pro/sqlite/`; IDBs and the per-function `.c` files sit under `ida-9.5-dump/<group>/<name>/`.
+
+| export | input | functions | pseudocode | what to read it for |
+|---|---|---|---|---|
+| `loaders__macho` | `loaders/macho.so` | 662 | 480 | was a 0-byte file; same input (md5 `3a90aec7`) as `apple__macho.sqlite`, so it is a duplicate kept for the naming scheme |
+| `hexrays__hexmips` | `plugins/hexmips.so` | 8,953 | 8,282 | MIPS microcode lifter: `sub_75360` "MIPS: simplify dc", `sub_72070` the MIPS va_list adapter, `sub_77B10`/`sub_77FD0` the `__integer_overflow`/`__divide_by_zero`/`__trap` intrinsics behind the "Generate trap for arithmetic (MIPS)" option |
+| `hexrays__hexppc` | `plugins/hexppc.so` | 9,023 | 8,353 | PPC lifter: `sub_77F10` "PPC optimizer %d", the `__tw*`/`__td*` trap-word and `__sync`/`__lwsync` intrinsics, `_cntlzw`/`_cntlzd` |
+| `hexrays__hexrv` | `plugins/hexrv.so` | 8,929 | 8,258 | RISC-V lifter (the earlier run stopped at 6,276 of 8,907; rerun from scratch, the old unpacked IDB is in `hexrv/prev-unpacked/`) |
+| `procs__mips`, `procs__ppc`, `procs__riscv` | `procs/*.so` | 682 / 793 / 514 | 445 / 529 / 328 | jump-table recognisers (kernel imports `match_jpt`, `find_jtable_size`, `check_for_table_jump`, RISC-V `check_flat_jump_table`), `set_noret_insn`, stack-pointer tracking, RISC-V `reg_finder_*` value emulation |
+| `targets__TpmCoreProvisioning32` | `SysWOW64/TpmCoreProvisioning.dll` (i386 PE) | 4,252 | 4,178 | ground truth for section 4 |
+
+## 4. Register pairs on x86-32: TpmCoreProvisioning.dll (SysWOW64), unlace `0a82c6883b` vs IDA 9.5
+
+`unlace decompile-all --jobs 4` printed `CONCAT44` 65 times in 38 functions (the 54 quoted in row 10 came from
+an older pin). IDA prints none: it declares `__int64` variables and writes their halves with
+`HIDWORD()`/`LODWORD()` (234/77 uses) or `__PAIR64__` (18). The 65 uses, by cause:
+
+- **29 in `return`** (top-10 #3a). unlace gives 34 functions a `long long` return. IDA's prototype is 64-bit for
+  9 of them and 32-bit for 8; for example `CmdBufStartCommand` (`0x100A4BEC`, `int __fastcall`) ends in
+  `return CONCAT44(a1,v1);`, where `a1` is the `edx` argument still live at the return. The other 17 start
+  where IDA has no function (next item). Task: `returnpair` should not join `edx` when the value in it at every
+  return is an input or a value written only as an argument. S-M, refines the existing option.
+- **Function starts IDA does not have.** unlace finds 5,764 functions, IDA 4,252; 1,626 unlace starts are not IDA
+  starts (114 the other way). Ten of them are inside `GetEventTypeFromID` (`0x100FC580`), and
+  `sub_10001a68`/`sub_1000693d` decode data. This is the PE discovery bucket already with holley2.
+- **5 partial writes** (#3b): `v12 = CONCAT44(((unsigned int *)&v12)[1],v3);` where IDA prints
+  `LODWORD(v12) = v3;`. S: print a store of one half of a 64-bit local as a half assignment.
+- **The rest**: a 64-bit global read as two words (`EventWriteTransfer(CONCAT44(dat_1012a004,dat_1012a000),...)`,
+  a `REGHANDLE`), 64-bit compares and sums on split values (`basic_stringbuf::seekoff`), and the CRT helpers
+  `__allmul`/`__aulldiv`/`__dtoul3` with four `int` parameters where IDA has two `__int64` (#3c, S: give the
+  MSVC long-arithmetic helpers their prototypes from the type library by name).
+
+A real register-pair local, the row-10 case, accounts for few of the 65; row 10's proposal stays but drops below 3a-3c.

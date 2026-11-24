@@ -224,6 +224,13 @@ afterwards. The register file is unchanged.
     `include/sim/sim-frv.h`, so `sim_regnums`). Fixed in `frv.slaspec`: SLLcc/SLLIcc set V to the
     OR of the bits shifted out and SRLcc/SRAcc (and the immediate forms) set C to it, as
     `cpu/frv.cpu` defines them; SLEIGH kept both. Seed 3, 1500 encodings: 2216 matches.
+  - H8/300H advanced (`--arch h8300h`, `h8_300h:BE:32:advanced`; ELF flags E_H8_MACH_H8300H give
+    sim/h8300 16 MiB): sim/h8300's own register numbers (er0..er7, CCR 8, PC 9). C, V, Z, N are
+    compared; sim/h8300 never computes H (so DAA/DAS are skipped), its subtraction/INC/DEC overflow
+    test compares rd with -ea, its ADDX/SUBX set Z where the manual only clears it and ignore the
+    carry in V, it zero-extends @aa:16 and leaves DIVXU by zero different: all of those are
+    ignored. binutils' h8300h decoder also prints H8S/H8SX forms, which are not generated. Seed 7,
+    2500 encodings: 6122 matches; the language needed no fix.
   - The simulators that cache decoded instructions (the CGEN ones) do not notice code rewritten
     at an address they ran, so a different instruction at a used address starts a fresh
     simulator. MCORE and MSP430 are not wired: sim/mcore's single step leaves PC elsewhere, and

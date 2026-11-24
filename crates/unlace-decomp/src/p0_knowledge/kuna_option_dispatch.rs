@@ -113,6 +113,7 @@ kuna_options! { self, p1;
         Ok(msg)
     },
     "returnpair" => registered!(crate::kuna_returnpair::ReturnSingle),
+    "retpairpaths" => registered!(crate::kuna_returnuncomputed::RetPairPaths),
     "bitidioms" => registered!(crate::kuna_bitidioms::BitIdioms),
     "satmul" => registered!(crate::kuna_satmul::SatMul),
     "helperroles" => registered!(crate::kuna_helperrole::HelperRoles),
@@ -404,6 +405,7 @@ kuna_options! { self, p1;
     "castarith" => registered!(crate::kuna_coreoptions::CastArith),
     "castindex" => registered!(crate::kuna_coreoptions::CastIndex),
     "ptrfromuse" => registered!(crate::kuna_ptrfromuse::PtrFromUseMode),
+    "ptrfromlocal" => registered!(crate::kuna_ptrfromuse::PtrFromLocal),
     "charptr" => registered!(crate::kuna_charptr::CharPtr),
     "cstringconst" => registered!(crate::kuna_cstringconst::CstringConst),
     "charnum" => registered!(crate::kuna_charnum::CharNum),
@@ -424,6 +426,7 @@ kuna_options! { self, p1;
     "dedupvardecls" => registered!(crate::kuna_dedupvardecls::DedupVarDecls),
     "noreturn_known" => registered!(crate::kuna_analysisgates::NoreturnKnown),
     "libgccsigs" => registered!(crate::kuna_analysisgates::Libgccsigs),
+    "movwpairs" => registered!(crate::kuna_analysisgates::MovwPairs),
     "gotypeglobals" => registered!(crate::kuna_analysisgates::GoTypeGlobals),
 
     "arm64evcall" => registered!(crate::kuna_analysisgates::Arm64evcall),
@@ -473,6 +476,7 @@ kuna_options! { self, p1;
         registered!(crate::kuna_analysisgates::Machoehframe)
     },
     "ehcold" => registered!(crate::kuna_analysisgates::Ehcold),
+    "functails" => registered!(crate::kuna_analysisgates::Functails),
     "mfcmsgmap" => registered!(crate::kuna_analysisgates::Mfcmsgmap),
     "msvcptrentry" => registered!(crate::kuna_analysisgates::Msvcptrentry),
     "importvote" => registered!(crate::kuna_importvote::Importvote),
@@ -674,6 +678,7 @@ kuna_options! { self, p1;
     "calltable" => registered!(crate::kuna_analysisgates::Calltable),
     "stubbinds" => registered!(crate::kuna_analysisgates::Stubbinds),
     "thunknames" => registered!(crate::kuna_analysisgates::Thunknames),
+    "nullsubs" => registered!(crate::kuna_analysisgates::Nullsubs),
     "objc" => registered!(crate::kuna_analysisgates::Objc),
     "panicloc" => registered!(crate::kuna_analysisgates::Panicloc),
     "swiftmetadata" => registered!(crate::kuna_analysisgates::Swiftmetadata),

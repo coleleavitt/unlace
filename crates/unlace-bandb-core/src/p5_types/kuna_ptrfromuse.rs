@@ -179,6 +179,46 @@ pub fn pointer_from_use(
     tlst.get_type_pointer(ptrsize, ptrto, word_size).ok()
 }
 
+crate::kuna_flag!(
+    /// (kuna `ptrfromlocal`) Extend [`pointer_from_use`]'s walk to a pointer-width value a call
+    /// returns or a load reads, when its type is still unknown.
+    PtrFromLocal,
+    "ptrfromlocal",
+    "use-derived void * for call results and loaded words",
+    unset: false,
+    shipped: false
+);
+
+/// (kuna `ptrfromlocal`) The `void *` candidate for a pointer-width value `vn` that a `CALL`,
+/// `CALLIND` or `LOAD` writes, when the same walk as [`pointer_from_use`] finds it used as a
+/// memory base and nothing inconsistent with a pointer. The caller offers it only over a vote
+/// that is still `TYPE_UNKNOWN` (`undefined8`), so a declared callee return keeps its type.
+pub fn pointer_from_local_use(data: &Funcdata, vn: VarnodeId) -> Option<Rc<Datatype>> {
+    let v = data.vbank().get(vn)?;
+    if v.is_input() || v.is_constant() || v.is_type_lock() || v.is_annotation() {
+        return None;
+    }
+    let def = data.obank().get(v.get_def()?)?;
+    if !matches!(
+        def.code(),
+        OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_LOAD
+    ) {
+        return None;
+    }
+    let size = v.get_size();
+    let arch = Rc::clone(data.get_arch());
+    let tlst = arch.types()?;
+    let spc = Rc::clone(arch.manage().get_default_data_space()?);
+    if size != spc.get_addr_size() as int4 {
+        return None;
+    }
+    if !walk_is_base(data, vn) {
+        return None;
+    }
+    let ptrto = tlst.get_type_void().ok()?;
+    tlst.get_type_pointer(size, ptrto, spc.get_word_size()).ok()
+}
+
 /// Bounded breadth-first walk over the transitive descendants of `start`.  True
 /// when at least one terminal use is a LOAD/STORE address and no use refuses.
 /// Breadth first makes the hop cap a property of the graph -- everything within

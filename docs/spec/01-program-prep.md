@@ -3699,6 +3699,14 @@ funcsym stream:
   calls `os_unfair_lock_lock_with_options` through an island on iOS 16 and
   through `HomeKit`'s rewritten stub on iOS 14, and both render the name.
 
+- **Empty functions** (kuna `nullsubs`, default off,
+  `crates/unlace-console/src/engine/kuna_thunknames.rs (name_nullsubs)`): after
+  the thunks are named, a discovered function still named by a placeholder whose
+  first instruction, after at most one that emits no p-code (`endbr64`, `bti`), is
+  a return doing nothing but its own stack and link-register work (`LOAD`,
+  `INT_ADD`, `INT_AND`, `COPY`) becomes `nullsub_<addr>` with the placeholder's
+  address spelling, IDA's `AF_NULLSUB`. On MIPS and SPARC those ops would be the
+  delay slot's, so the return must be alone. A name in use is left alone.
 - **Jump thunks** (kuna `thunknames`, default on,
   `crates/unlace-console/src/engine/kuna_thunknames.rs`): a function
   whose first instruction is a direct unconditional branch is a thunk (a
@@ -6905,6 +6913,25 @@ moves.
   Each entry is committed as a function symbol under its CRT name (plus a
   placeholder rename for one another fact already installed) and as a call-fixup
   fact; a match only names and tags, and a near miss of any one byte is no match.
+  On a little-endian ARM PE it also recognizes the Windows on ARM `/GS` helpers
+  `__security_push_cookie` and `__security_pop_cookie` by their bytes
+  (`crates/unlace-analysis/src/analyzers/callfixup/kuna_armgscookiesig.rs`), with the
+  `movw`/`movt` immediates of `__security_cookie`'s address masked out, as IDA 9.5's
+  `arm.so` does. The push helper allocates the word below its caller's stack pointer that
+  holds the scrambled cookie and returns with `sp` four bytes lower; the pop helper checks
+  and releases it. `ARM_win.cspec`'s `security_push_cookie` and `security_pop_cookie`
+  fixups model exactly that stack effect (`sp = sp - 4`, `sp = sp + 4`); as plain calls
+  every stack reference of the caller after the push was four bytes off, and its first
+  stack argument read as its second. With the fixups the cookie word and its check leave
+  the C, as `msvcstackguard` removes the x86 cookie.
+  The same pass names the MSVC 64-bit arithmetic helpers the `kuna_arithhelpers`
+  fixups target (`__allmul`, `__alldiv`, `__allrem`, `__alldvrm`, `__aulldiv`,
+  `__aullrem`, `__aulldvrm`, `__allshl`, `__allshr`, `__aullshr`) by their complete
+  instruction streams up to the last `ret`
+  (`crates/unlace-analysis/src/analyzers/callfixup/kuna_msvcarithsig.rs`); the
+  objects carry no relocation, so nothing is wildcarded. Without it a stripped
+  i386 PE prints each `long long` multiply, divide or shift as a call with four
+  32-bit words.
   On a 32-bit ARM image the pass likewise recognizes libgcc's Thumb-1 switch
   helpers (`__gnu_thumb1_case_uqi`, `_sqi`, `_uhi`, `_shi`, `_si`) by their
   instructions
@@ -10558,6 +10585,24 @@ included, after the `coldentry` entries are added. A cold throw path reached by
 an ordinary branch (`may_throw.cold`) is not a landing-pad target and stays a
 function. x86/x86-64 ELF only.
 
+**(kuna) Or any other single-owner cold part** (`functails`, default off;
+`crates/unlace-analysis/src/analyzers/entry/kuna_ehcold.rs (cold_tails)`). The
+same test without the landing pad takes every `.cold` part IDA keeps as a
+function tail (`AF_FTAIL`, libida `append_func_tail`): a lone `ud2` after an
+assertion, an error call, an unlikely branch. An FDE body qualifies when no
+function symbol names its start, no direct `call rel32` targets it, every direct
+`jmp`/`jcc rel32` into it comes from one other FDE body (its owner), it lies
+before that owner, and its start is off the 16-byte alignment GCC and Clang give
+a function at -O2 but not a cold part. The last two tests keep a real function
+that only one other function tail-calls. The bodies go out on the `ehcold`
+channel, so the commit drops every entry inside one; the owner's flow decodes
+the part as before. Against IDA 9.5's own databases of its loaders, the IDA
+tail chunks kuna lists as functions drop from 9/51/4/18 to 2/12/0/5
+(pe/elf/coff/dex.so), and one function IDA keeps is lost (pe.so 0x62fe). The
+owners' C does not change, since their flow already decoded the parts; the parts
+stop being decompiled as functions of their own.
+x86/x86-64 ELF only.
+
 **(kuna) The pads that stay hidden are named** (`ehnote`, default-**on**;
 `crates/unlace-analysis/src/analyzers/entry/kuna_itaniumeh.rs (eh_notes)`).
 Unless `itaniumeh` shows them, a landing pad is unreachable code: the cleanups
@@ -13932,6 +13977,25 @@ same floor the constant scan applies to a lone immediate. RV64 builds that numbe
 with `addiw` and is not affected. The page or high half on its own is not a
 carried reference.
 
+(kuna, option `movwpairs`) A 32-bit address built in two 16-bit halves
+starts no carry by the rule above, because the low half is usually below the
+floor: `movw r0,#0x1cc; movt r0,#3` (A32 or T32) or `mov x0,#0x230; movk
+x0,#0x22,lsl #16` (AArch64 `movz`/`movk`, `-mcmodel=large`) left the global it reads
+and writes, the string it passes and the callback it registers referenced by
+nothing. With `movwpairs access` an instruction whose encoding is a low-half move
+(A32/T32 `movw`, AArch64 `movz` with no shift) and whose p-code writes a register
+from a constant leaves that register as a *half*: carried like any value, but
+naming nothing while it is below the floor. The high-half move that completes it
+(`movt`, `movk` with a shift, recognised by encoding too) leaves the whole value,
+which is then an ordinary carried address, so a `LOAD` or `STORE` through it is a
+`Read` or a `Write`. `movwpairs on` also files the completed value as `Data` at the
+completing instruction where it lands in a mapped section (IDA's "valid addresses
+only" reading of `MOVT` pairs), which is a judgement: a number built the same way
+that lands in a section names it. Everything else of the carry applies unchanged
+(eight hops, no joins along the run, a `movk` that only re-inserts zero upper
+halves changes nothing), and big-endian code is not read. `off` (the default) is
+the behaviour above.
+
 A constant subtracted from a carried address biases that address rather than
 naming another one. Swift builds a string literal's object as `adrp/add` of the
 literal, `sub x8,x8,#0x20`, then `orr x1,x8,#0x8000000000000000`, and the literal,
@@ -15195,7 +15259,15 @@ earlier one and padding gaps. The CLI asserts the structure (`typedef`), the
 peripheral as a typed global at its base (`data`) and its register range as
 volatile, for an object file (an ELF, an ESP image, the ELF a container
 wraps) as for a raw image, and names the IRQ handlers a raw image's vector
-table found from the interrupts.
+table found from the interrupts. A leading XML declaration is dropped before
+the reader sees it (the vendors' files declare `standalone="no"`, which the
+kuna XML grammar does not take). `svd.rs (bundled)` reads a device from
+`svd_devices.br`, the descriptions `tools/gen_svd_bundle.py` cuts from the
+vendors' device packs down to what `parse` reads and stores as one Brotli
+stream (180 devices, 77 KiB); `--svd` takes a bundled name when no file of
+that name exists, the bundled name equal to the argument or else the longest
+that covers it (case-insensitive, `X` matching one character, the part number
+going on past the name).
 
 `bundles.rs (Bundle::parse)` lists the members of the inputs that hold several
 images, without decoding them. A tar archive is recognized by its first

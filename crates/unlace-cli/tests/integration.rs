@@ -946,6 +946,8 @@ mod addrtable_xrefs;
 
 #[path = "arm64e_vcall_xrefs.rs"]
 mod arm64e_vcall_xrefs;
+#[path = "arm_gs_cookie.rs"]
+mod arm_gs_cookie;
 
 #[path = "ppc32_pic_calls.rs"]
 mod ppc32_pic_calls;
@@ -1070,6 +1072,8 @@ mod calleeargsmsvc_cli;
 mod importcache_cli;
 #[path = "initterm_cli.rs"]
 mod initterm_cli;
+#[path = "movw_pairs_xrefs.rs"]
+mod movw_pairs_xrefs;
 #[path = "msvccookie_return_cli.rs"]
 mod msvccookie_return_cli;
 #[path = "msvcexport_cli.rs"]

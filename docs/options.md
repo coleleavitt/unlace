@@ -19,6 +19,13 @@ Three tiers:
 | a field access like f->_flags with no layout anywhere in the output | [`structdefs`](#structdefs----on--off-default-off) |
 | you have to run decompile-project just to read the .h for one function's struct | [`structdefs`](#structdefs----on--off-default-off) |
 | a synthesized struct_N appears in a parameter type with no definition | [`structdefs`](#structdefs----on--off-default-off) |
+| '\0' <= c where the source tests c >= 0 | [`charnum`](#charnum----on--off-default-off) |
+| c + '\x01' where the source adds 1 | [`charnum`](#charnum----on--off-default-off) |
+| a non-printable character literal in a comparison | [`charnum`](#charnum----on--off-default-off) |
+| if (0x3b < x) where the source reads if (x > 59) | [`constright`](#constright----on--off-default-off) |
+| constant on the left of an ordered comparison | [`constright`](#constright----on--off-default-off) |
+| small signed bounds print in hex (0x3b) next to decimal ones (1000) | [`signeddec`](#signeddec----on--off-default-off) |
+| a signed comparison against a hex constant where the source used decimal | [`signeddec`](#signeddec----on--off-default-off) |
 | a byte swap prints as four masked shifts ORed together | [`bitidioms`](#bitidioms----on--off-default-on) |
 | a rotate prints as a pair of opposite shifts ORed together | [`bitidioms`](#bitidioms----on--off-default-on) |
 | bswap or rev instructions decompile to shift and mask soup | [`bitidioms`](#bitidioms----on--off-default-on) |
@@ -481,6 +488,8 @@ Three tiers:
 | every use of an argument is *(T *)(a0 + k) but the argument is not a pointer | [`ptrfromuse`](#ptrfromuse----off--byte--void-default-void) |
 | one function takes T *a0 and its sibling takes long a0 for the same kind of argument | [`ptrfromuse`](#ptrfromuse----off--byte--void-default-void) |
 | an argument dereferenced at offset 0 gets a pointer type but one dereferenced at +8 does not | [`ptrfromuse`](#ptrfromuse----off--byte--void-default-void) |
+| a call result declared long and dereferenced as *(T *)(v1 + k) | [`ptrfromlocal`](#ptrfromlocal----on--off-default-off) |
+| a pointer loaded from a structure is declared long and cast at every use | [`ptrfromlocal`](#ptrfromlocal----on--off-default-off) |
 | a string parameter is declared unsigned long and every call site passes it to strlen or printf | [`charptr`](#charptr----on--off-default-off) |
 | a buffer indexed one byte at a time is declared void * | [`charptr`](#charptr----on--off-default-off) |
 | two functions take the same string and one says char * and the other unsigned long | [`charptr`](#charptr----on--off-default-off) |
@@ -531,6 +540,9 @@ Three tiers:
 | obfuscated arithmetic that option mba leaves unsimplified | [`egraph`](#egraph----on--off-default-off) |
 | one mba identity applied to the result of another | [`egraph`](#egraph----on--off-default-off) |
 | ollvm substitution chains such as (a ^ ~b) & a instead of a & b | [`egraph`](#egraph----on--off-default-off) |
+| a long long local on a 32-bit target prints as CONCAT44 of two variables | [`pairlocal`](#pairlocal----on--off-default-off) |
+| CONCAT44(v13, v12) after an if where each half is set on every path | [`pairlocal`](#pairlocal----on--off-default-off) |
+| a 64-bit sum or compare reads CONCAT44 of a sign-extended pair | [`pairlocal`](#pairlocal----on--off-default-off) |
 | heavily-called custom die()/fatal() wrapper still treated as returning | [`noreturn_disc`](#noreturn_disc----on--off-default-on) |
 | dead code after a stripped sub_ wrapper that never falls through at 3+ call sites | [`noreturn_disc`](#noreturn_disc----on--off-default-on) |
 | caller swallows the next function after a wrapper call | [`noreturn_disc`](#noreturn_disc----on--off-default-on) |
@@ -672,6 +684,9 @@ Three tiers:
 | guard clauses returning the same constant print as one && chain | [`orchainlive`](#orchainlive----on--off-default-off) |
 | guard clauses returning the same error constant print as one && or or chain | [`orchainbool`](#orchainbool----on--off-default-off) |
 | a null check and an unrelated field test are folded into one condition before a shared return -1 | [`orchainbool`](#orchainbool----on--off-default-off) |
+| a struct copy prints as memcpy(d,s,0x18) where both sides have the same struct type | [`structassign`](#structassign----on--off-default-off) |
+| a by-value struct assignment or return reads as a memcpy call | [`structassign`](#structassign----on--off-default-off) |
+| memcpy(&v1,a0,sizeof) copies one whole record into a local of that record type | [`structassign`](#structassign----on--off-default-off) |
 | rule pools spend most of their time re-testing ops nothing changed | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a large function's simplification repeats full sweeps for a handful of rewrites | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a DOS program's globals print as *(short *)0x308e near-pointer dereferences instead of named globals | [`mzdgroup`](#mzdgroup----on--off-default-on) |
@@ -684,6 +699,9 @@ Three tiers:
 | a DEX method's catch blocks are missing from the output | [`javatry`](#javatry----on--off-default-on) |
 | code after a call that can throw runs on as if nothing could be thrown | [`javatry`](#javatry----on--off-default-on) |
 | throwException(x); return; instead of throw x; | [`javatry`](#javatry----on--off-default-on) |
+| a function returning a long long sum prints void on xtensa | [`carryuse`](#carryuse----on--off-default-off) |
+| a 64-bit add whose carry is a bgeu branch loses the return value | [`carryuse`](#carryuse----on--off-default-off) |
+| mul_wide returns void after call8 __umulsidi3 | [`carryuse`](#carryuse----on--off-default-off) |
 | a function that only ever passes its argument to a libc stdio call still declares it long or unsigned long | [`libctypes`](#libctypes----off--opaque--glibc-default-opaque) |
 | a fopen or fdopen result is a void * that nothing can name | [`libctypes`](#libctypes----off--opaque--glibc-default-opaque) |
 | a stat or lstat call fills an untyped void * buffer | [`libctypes`](#libctypes----off--opaque--glibc-default-opaque) |
@@ -706,6 +724,10 @@ Three tiers:
 | *p = v1; after a __divdi3 call where v1 is never written | [`libgccsigs`](#libgccsigs----on--off-default-off) |
 | a PIE or shared object calls __stack_chk_fail_local with an argument (__stack_chk_fail_local(a0 * 3)) | [`libgccsigs`](#libgccsigs----on--off-default-off) |
 | a function that returns a value before its stack-protector check is void | [`libgccsigs`](#libgccsigs----on--off-default-off) |
+| unlace xrefs --to a global finds 0 references on ARM code that builds addresses with movw/movt | [`movwpairs`](#movwpairs----off--access--on-default-off) |
+| a stripped Cortex-M image misses a function only passed by address (movw r0,#lo; movt r0,#hi) | [`movwpairs`](#movwpairs----off--access--on-default-off) |
+| a string passed to a function in ARMv7 code has no data symbol while the decompiled C prints its address | [`movwpairs`](#movwpairs----off--access--on-default-off) |
+| AArch64 movz/movk-built addresses (-mcmodel=large) reference nothing in the listing | [`movwpairs`](#movwpairs----off--access--on-default-off) |
 | string constants render as raw addresses or unnamed data instead of quoted char[N] literals | [`strings`](#strings----on--off-default-on) |
 | no data symbols at ascii runs in rodata | [`strings`](#strings----on--off-default-on) |
 | four-character commands such as quit, show, bind, or fork render as hexadecimal addresses | [`strings`](#strings----on--off-default-on) |
@@ -744,6 +766,9 @@ Three tiers:
 | many sub_<addr> functions that end in _Unwind_Resume() | [`ehcold`](#ehcold----on--off-default-on) |
 | a stripped c++ binary's function list is full of cleanup fragments from .text.unlikely | [`ehcold`](#ehcold----on--off-default-on) |
 | a function that starts by reading an undefined rbx and frees buffers before _Unwind_Resume | [`ehcold`](#ehcold----on--off-default-on) |
+| many sub_<addr> functions that are a single ud2 at the start of .text | [`functails`](#functails----on--off-default-off) |
+| a function jumps to sub_<addr> for its error path instead of showing it | [`functails`](#functails----on--off-default-off) |
+| a gcc .cold part is listed as its own function | [`functails`](#functails----on--off-default-off) |
 | an mfc window class's message handlers are missing from the function list | [`mfcmsgmap`](#mfcmsgmap----on--off-default-on) |
 | a function in an mfc image spans several handlers that a message map names | [`mfcmsgmap`](#mfcmsgmap----on--off-default-on) |
 | IDA lists functions at the pfn addresses of an AFX_MSGMAP_ENTRY array that unlace folds into a neighbour | [`mfcmsgmap`](#mfcmsgmap----on--off-default-on) |
@@ -1323,6 +1348,8 @@ Three tiers:
 | avx-512 arithmetic prints as vaddps_avx512f | [`avxintrinsics`](#avxintrinsics----on--off-default-on) |
 | a global one function accessed whole prints as unrelated dat_ names in another | [`mapglobalsyms`](#mapglobalsyms----on--off-default-off) |
 | later functions do not see the DAT_ symbol an earlier decompile created, unlike upstream decomp_dbg sessions | [`mapglobalsyms`](#mapglobalsyms----on--off-default-off) |
+| calls to empty functions read as sub_<addr>() like any other | [`nullsubs`](#nullsubs----on--off-default-off) |
+| a virtual table slot points at a function that only returns | [`nullsubs`](#nullsubs----on--off-default-off) |
 | an untyped MIPS32 big-endian producer loses its low return word despite a declared 64-bit consumer | [`callwide`](#callwide----on--off-default-off) |
 | producer and caller disagree about a complete big-endian eight-byte integer return | [`callwide`](#callwide----on--off-default-off) |
 | a long long return on a big-endian 32-bit target prints CONCAT44 with the low word first | [`bejoin`](#bejoin----off--evidence--callers--on-default-callers) |
@@ -1399,6 +1426,30 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** Flip on when you are reading a function whose arguments are pointers to composites and want the layout in front of you -- `structsynth`'s synthesized `struct_N`, a DWARF struct on an unstripped binary, `libctypes`' opaque `FILE`/`DIR` shells -- instead of opening the `decompile-project` header to find it. Default OFF: it is a presentation default, and a preamble in front of every function is noise for a caller diffing bodies or feeding one function to a matcher. It changes nothing but the text above the function -- the body, its line contents and every recovered type are identical either way -- but it DOES move line numbers, so a consumer pinning a line number should read `line_mappings` rather than assume the first line is the signature. The preamble is documentation, not a compilable unit: a padding member spelled `undefined1` needs the export's recompile prelude to compile, which is one more reason the project surface keeps the definitions in the header.
 - **Where / provenance:** P9/type-definition-preamble · angr · presentation-default · kuna-structdefs
 - **Example:** `option structdefs on`
+
+### `charnum` -- on | off, default `off`
+
+- **Symptoms:** '\0' <= c where the source tests c >= 0; c + '\x01' where the source adds 1; a non-printable character literal in a comparison.
+- **What it does:** Print a `char` constant that is zero or not printable as a number where an ordered comparison or arithmetic reads it, and a non-zero non-printable one also in an equality: `'\0' <= c` prints `0 <= c`, `c + '\x01'` prints `c + 1`, `c == '\x03'` prints `c == 3`. A printable character keeps its literal everywhere, and a zero keeps `'\0'` in an equality, a store, a copy or a call argument. Printing only.
+- **When to flip:** Turn on to read signed byte tests and byte arithmetic the way Hex-Rays prints them (it shows 0.7 character literals per 1,000 lines on DecBench O2-noinline where unlace shows 7.4, mostly `'\0'` in signed tests). Leave off to keep every constant of a character type as a character literal, as Ghidra prints it.
+- **Where / provenance:** P9/literal-format · kuna · presentation-default · unlace-charnum
+- **Example:** `option charnum on`
+
+### `constright` -- on | off, default `off`
+
+- **Symptoms:** if (0x3b < x) where the source reads if (x > 59); constant on the left of an ordered comparison.
+- **What it does:** Print an ordered integer comparison whose first operand is a constant and whose second is not with the value first: `0x3b < x` prints `x > 0x3b`, `8 <= x` prints `x >= 8`. P-code has only `<` and `<=`, so Ghidra's canonical form puts the constant first; the comparison is mirrored at print time (C output only), after any negation is absorbed. Equalities, float compares and the analysis are unchanged.
+- **When to flip:** Turn on to read guards the way source code and Hex-Rays write them, variable first. Leave off to keep Ghidra's constant-first order, which some diffs against Ghidra output expect.
+- **Where / provenance:** P9/condition-form · kuna · presentation-default · unlace-constright
+- **Example:** `option constright on`
+
+### `signeddec` -- on | off, default `off`
+
+- **Symptoms:** small signed bounds print in hex (0x3b) next to decimal ones (1000); a signed comparison against a hex constant where the source used decimal.
+- **What it does:** Print a constant read as a signed integer in decimal when its magnitude is below 0x10000, unless a bitwise op (`&`, `|`, `^`, a shift) reads it or a symbol or type fixes its format: `x > 0x3b` prints `x > 59`. Ghidra chooses decimal up to 10 and then the base with more trailing zeros (`mostNaturalBase`), so one function mixes `0x3b` and `1000`. Unsigned constants are unchanged. Printing only.
+- **When to flip:** Turn on for Hex-Rays' radix rule (DEFAULT_RADIX 0: decimal for signed, hex for unsigned) on small signed bounds and offsets. Leave off for Ghidra's natural-base choice.
+- **Where / provenance:** P9/literal-format · kuna · presentation-default · unlace-signeddec
+- **Example:** `option signeddec on`
 
 ### `bitidioms` -- on | off, default `on`
 
@@ -2464,6 +2515,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P5/type-propagation · angr · opt-in-tool · kuna-ptrfromuse
 - **Example:** `option ptrfromuse off`
 
+### `ptrfromlocal` -- on | off, default `off`
+
+- **Symptoms:** a call result declared long and dereferenced as *(T *)(v1 + k); a pointer loaded from a structure is declared long and cast at every use.
+- **What it does:** Extend the `ptrfromuse` walk from function inputs to a pointer-width value a CALL, CALLIND or LOAD writes: when its vote is still unknown (`undefined8`, printed `long`) and every use the walk reaches makes it a memory base (the address of a LOAD or STORE, through copies, phis, PTRADD/PTRSUB and constant-offset additions, with no use that refuses a pointer), it gets a `void *` vote folded by `type_order`. A declared callee return or a loaded value with any typed vote keeps its type. With the value a pointer, `structsynth` can then lay out the record a call returned, so `*(unsigned long *)(v1 + 0x10)` can print as a field.
+- **When to flip:** Turn on for stripped code where a pointer a callee returns or a structure member holds prints as `long v1` with every access cast (`*(unsigned long *)(v1 + 0x10)`): on twelve DecBench O2-noinline binaries 53% of these expression casts are on such call results and loaded words. Leave off to keep upstream's integer declaration of those values.
+- **Where / provenance:** P5/type-propagation · kuna · type-inference · unlace-ptrfromlocal
+- **Example:** `option ptrfromlocal on`
+
 ### `charptr` -- on | off, default `off`
 
 - **Symptoms:** a string parameter is declared unsigned long and every call site passes it to strlen or printf; a buffer indexed one byte at a time is declared void *; two functions take the same string and one says char * and the other unsigned long; a -O0 parameter is an integer although the callee's prototype declares char *; void * sub_e680(uint1 *a0) for a function that passes its argument to strlen.
@@ -2551,6 +2610,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** Off by default and stays opt-in. Turn it on together with mba for obfuscated code where mba alone leaves xor/and/or soup: substitutions stacked on each other, or linear and nonlinear MBA mixed in one tree (synthetic OLLVM-style corpus: mba+egraph solves 101-145 functions per build where mba alone solves 93-143). On ordinary compiler output it costs +2.3% instructions over DecBench O2-noinline (+64% on the libopencm3 examples, +71% on coreutils shuf) and its 247 changed functions of 91,216 are not improvements on the whole (a named local or a |= idiom folded away, a bit-field store respelled as a shift and multiply), so it is not a default candidate; see notes/egraph.md.
 - **Where / provenance:** P3/simplification-quiescence · kuna · new-analysis · kuna-egraph
 - **Example:** `--option egraph on`
+
+### `pairlocal` -- on | off, default `off`
+
+- **Symptoms:** a long long local on a 32-bit target prints as CONCAT44 of two variables; CONCAT44(v13, v12) after an if where each half is set on every path; a 64-bit sum or compare reads CONCAT44 of a sign-extended pair.
+- **What it does:** Join a 64-bit local that a 32-bit target holds in two registers (edx:eax) where control flow merges. Heritage gives each half its own MULTIEQUAL, so the 64-bit use after the join reads PIECE(hi, lo) of two 32-bit variables and prints as CONCAT44(v13, v12), each half assigned on every path (v13 = v12 >> 0x1f; or v13 = 0; v12 = 0;). RulePairPhi matches PIECE(hi, lo) of two MULTIEQUAL outputs of one block and builds the 64-bit value each incoming edge carries: two constants are the 64-bit constant, hi = lo s>> 31 is SEXT(lo), hi = 0 is ZEXT(lo), SUBPIECE(w, 4) and SUBPIECE(w, 0) of one 8-byte w are w, and the two phis' own outputs (a loop carrying the pair) are the new phi. When every edge has one, a 64-bit MULTIEQUAL of them goes at the head of the block (an extension is computed at the end of its predecessor) and the PIECE becomes a COPY of it, so the local is one long long. The rewrite is exact; the half phis stay for other readers and go dead otherwise.
+- **When to flip:** Off by default. Turn it on for 32-bit x86, ARM or MIPS code whose long long locals print as CONCAT44 of two variables after an if or a loop.
+- **Where / provenance:** P3/simplification-quiescence · kuna · new-analysis · kuna-pairlocal
+- **Example:** `--option pairlocal on`
 
 ### `noreturn_disc` -- on | off, default `on`
 
@@ -2896,6 +2963,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P8/goto-quality · kuna · structure-recovery · unlace-10-andorchain
 - **Example:** `option orchainbool on`
 
+### `structassign` -- on | off, default `off`
+
+- **Symptoms:** a struct copy prints as memcpy(d,s,0x18) where both sides have the same struct type; a by-value struct assignment or return reads as a memcpy call; memcpy(&v1,a0,sizeof) copies one whole record into a local of that record type.
+- **What it does:** Print a memcpy that copies exactly one struct as a struct assignment. A compiler copies a struct with memcpy, or inlines the copy and kuna's copy folds turn it back into memcpy, so a by-value assignment `*d = *s;` or `v = *p;` prints as `memcpy(d,s,0x18);`. Hex-Rays turns such a copy back into a struct move when the size is the size of the struct the pointers point to (hexx64 sub_4C8BB0). When on, kuna_structassign decides at print time, with the IR unchanged: a direct call of memcpy (with or without leading underscores) with three arguments, whose result is unused, whose size is a constant, and whose destination and source are both typed as pointers to one and the same struct or union type of exactly that size, prints as `*d = *s`, and an argument that is the address of a variable prints as the variable (`v1 = *a0;`). Any other memcpy (a length that is not the struct size, two different types, a char or void pointer, a used result, __memcpy_chk) prints as before. C output only.
+- **When to flip:** Off by default (not yet measured on a corpus). Turn it on to read struct copies as the assignments the source wrote, `*a0 = v1;` instead of `memcpy(a0,&v1,0x18);`, wherever type recovery gave both sides the same struct type. Leave it off when the call itself matters (a script matching memcpy calls, or code that copies between two objects that only happen to share a type).
+- **Where / provenance:** P9/readability-rewrites · ida · presentation-default · unlace-ida-gap-types-4
+- **Example:** `option structassign on`
+
 ## Analysis & loader passes
 
 Program-prep enablement: what is discovered, decoded, and named before any function is decompiled.
@@ -2932,6 +3007,14 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **Where / provenance:** P2/flow-classification · kuna · analysis-enablement · kuna-dex-loader
 - **Example:** `option javatry off`
 
+### `carryuse` -- on | off, default `off`
+
+- **Symptoms:** a function returning a long long sum prints void on xtensa; a 64-bit add whose carry is a bgeu branch loses the return value; mul_wide returns void after call8 __umulsidi3.
+- **What it does:** Keep a returned sum whose low word is also compared for its carry. Upstream's onlyOpUse (funcdata_varnode.cc:1851) refuses a RETURN trial whose value reaches a branch. A target with no carry flag adds a 64-bit value as two 32-bit adds and moves the carry with an unsigned compare of the low sum against one of its addends, often as a branch (Xtensa `add a2,a10,a8; bgeu a2,a8,1f; addi a3,a3,1`), so the low word of every such returned sum is refused and a function returning `a * b + (a >> 3)` or `f(x) + 7` as a `long long` printed `void`. With the option on, an `INT_LESS` or `INT_LESSEQUAL` between the walked value, when an `INT_ADD` defines it, and one of that add's inputs (the same Varnode or an equal constant) is the sum's carry test: `kuna_carryuse.rs` skips it in the walk for a RETURN trial, and every other use is scored as before.
+- **When to flip:** Turn on when a function that returns a 64-bit sum on a 32-bit target without a carry flag (Xtensa, also any target whose compiler branches on the carry) prints `void` or returns only its low word. Leave off for upstream's scoring.
+- **Where / provenance:** P4/output-prototype · kuna · analysis-enablement · unlace-carryuse
+- **Example:** `option carryuse on`
+
 ### `libctypes` -- off | opaque | glibc, default `opaque`
 
 - **Symptoms:** a function that only ever passes its argument to a libc stdio call still declares it long or unsigned long; a fopen or fdopen result is a void * that nothing can name; a stat or lstat call fills an untyped void * buffer; getopt_long takes a bare (void *)0x... long-option table; readdir returns a void * whose fields are casts and offsets; a stream parameter is void * where the ground truth is FILE *; a FILE * or stat * renders its members as field_0x8 / field_0x30 instead of _IO_read_ptr / st_size; a value loaded out of a named libc struct keeps the cast's type instead of the field's; stdin/stdout/stderr render as an untyped word and their fields as raw offsets ((long)stdout + 0x28); a shared object's stream slot has no name at all (*(long *)(*dat_3fe0 + 0x28)); two functions in one binary disagree about what stdout is, one calling it FILE * and the other a long.
@@ -2944,7 +3027,7 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 
 - **Symptoms:** a call into libc that no table declares passes untyped arguments and its result needs a cast; a struct pollfd, rlimit, sockaddr_in or glob_t on the stack is several unrelated locals; a local is read after a libc call without ever being written; qsort, signal, lseek or pthread_create is declared `void f(void)` in the import stubs; a libc struct pointer argument is an unsigned long *; a Win32 or Native API import (CreateFileW, ReadFile, NtCreateFile) passes untyped arguments and its records are raw offsets.
 - **What it does:** Declare the imports no other source declared from a prebuilt type library: on an x86-64 Linux ELF dynamically linked against glibc or musl the libc library, on an x86 or x64 PE the Windows API library; inert on every other target. The built-in prototype tables (`libproto`, `libcsigs`, `libctypes`) are written by hand and cover about 740 functions and nine record layouts; the library is generated from the musl 1.2.6 headers (MIT) by `scripts/typelib/gen_musl.py` and carries 1,447 functions, 347 records and 190 typedefs, each record with the size, alignment and member offsets the compiler measured. `auto` reads the library built into kuna, `off` reads none, and a path reads a library file instead (same text format, for an image of the target the file names). Only what the image imports is read: a prototype is parsed when its function is an import nothing else declared, and that interns the types it names and no others. A type name already held (debug information, a `libctypes` shell) is used as it is. For a glibc image an entry is offered only where glibc agrees with musl, which the generator measures by compiling one assertion per entry against the glibc headers (glibc 2.43: 136 names differ, 1,374 of the 1,447 functions are offered); a prototype passing a `long double` by value is never offered. The Windows libraries are generated by `scripts/typelib/gen_windows.py` from IDA 9.5's Windows 10 SDK and Native API type libraries (`mssdk_win10.til` + `ntapi_win10.til`, and their `64` versions for x64), kept to the functions 41 core system DLLs export (the export names of Wine 10.0's .spec files: kernel32, ntdll, user32, advapi32, ws2_32, ole32 and the rest) and the types those reach: 7,962 functions, 1,696 records and 2,703 typedefs for x86 (stdcall entries only, the x86 default model), 8,111, 1,702 and 2,703 for x64, about 1.4 MB of text each. Every other source still declares first, `win32sigs` included, so the built-in library declares the imports those leave: `RegOpenKeyExA` takes an `HKEY`, `NtCreateFile` a `POBJECT_ATTRIBUTES`, each record with the member offsets IDA measured. A library chosen by a file list or by `UNLACE_TIL_DIR` also replaces a `win32sigs` entry, whose handles and records are `void *`, and keeps that entry's `libcnames` names. `poll(&v1,1,a1)` over three unrelated locals becomes one `pollfd v1` with `v1.events = 1; v1.fd = a0;` and `return v1.revents & 1;`, `getrlimit(7,&v2)` over an `unsigned long` becomes `rlimit v5` with `v5.rlim_cur = v5.rlim_max;`, and `qsort`, `signal`, `glob`, `pthread_create`, `posix_spawnp` and `lseek` print their declared parameters.
-- **When to flip:** Auto (default). Measured on glibc 2.43 `-O2` binaries with `decompile-all`: coreutils `ls` changes 14 of 442 functions, `sort` 31 of 399 and `curl` 19 of 440 (the import stubs the library declares and the callers of those imports), every other function is byte-identical, and the cost is 1.8 ms to parse the library plus under 1 ms to read the declarations of curl's imports, below the run-to-run noise of the whole decompile. The tables already declare the most common functions, so what moves is the long tail: `poll`, `getsockname`, `lseek`, `ftruncate`, `time`, `posix_spawn*`, `pthread_create`, `mbrtoc32`. Turn off (`option typelib off`) to see the output without it, when a `--types` header must define a record the library also defines (a header's redefinition is rejected, as any redefinition is), or when a caller is worse for a typed callee: a pointer parameter naming a record sizes the stack object whose address is passed, so a caller that passes the address of something else there prints that object as the record, and an `int` result returned through a function whose own return is recovered as the whole register prints the unset half (`CONCAT44(v3,getrlimit(7,&v5))`). Pass a path to use declarations of your own for a C library the built-in one does not cover; a file that is not a library is refused, and a malformed entry is reported with its line. Pass an IDA type library (a `.til` file) the same way to declare the imports of an image of any target from it: its prototypes, records (laid out from their members, bit-fields left holes), enums and typedefs are read like a library file's. Pass several, separated by `:` (`mssdk64_win10.til:ntapi64_win10.til`), and the first library that declares a name wins. Under `auto`, set `UNLACE_TIL_DIR` to an IDA `til` directory and a PE also reads, ahead of the built-in library, the libraries IDA would load for it: the newest `mssdk` (`mssdk64` for x64) for a user-mode image or `ntddk` (`ntddk64`) for a native one, each with `ntapi` (`ntapi64`), and `uefi` (`uefi64`) for an EFI image; what it read is reported on stderr. Every library also declares the functions FLIRT, FID or a PDB named, not only the imports.
+- **When to flip:** Auto (default). Measured on glibc 2.43 `-O2` binaries with `decompile-all`: coreutils `ls` changes 14 of 442 functions, `sort` 31 of 399 and `curl` 19 of 440 (the import stubs the library declares and the callers of those imports), every other function is byte-identical, and the cost is 1.8 ms to parse the library plus under 1 ms to read the declarations of curl's imports, below the run-to-run noise of the whole decompile. The tables already declare the most common functions, so what moves is the long tail: `poll`, `getsockname`, `lseek`, `ftruncate`, `time`, `posix_spawn*`, `pthread_create`, `mbrtoc32`. Turn off (`option typelib off`) to see the output without it, when a `--types` header must define a record the library also defines (a header's redefinition is rejected, as any redefinition is), or when a caller is worse for a typed callee: a pointer parameter naming a record sizes the stack object whose address is passed, so a caller that passes the address of something else there prints that object as the record, and an `int` result returned through a function whose own return is recovered as the whole register prints the unset half (`CONCAT44(v3,getrlimit(7,&v5))`). Pass a path to use declarations of your own for a C library the built-in one does not cover; a file that is not a library is refused, and a malformed entry is reported with its line. Pass an IDA type library (a `.til` file) the same way to declare the imports of an image of any target from it: its prototypes, records (laid out from their members, bit-fields left holes), enums and typedefs are read like a library file's. Pass several, separated by `:` (`mssdk64_win10.til:ntapi64_win10.til`), and the first library that declares a name wins. Under `auto`, set `UNLACE_TIL_DIR` to an IDA `til` directory and an image also reads, ahead of the built-in library, the libraries IDA would load for it: for a PE the newest `mssdk` (`mssdk64` for x64) for a user-mode image or `ntddk` (`ntddk64`) for a native one, each with `ntapi` (`ntapi64`), and `uefi` (`uefi64`, `arm/uefi64` for AArch64) for an EFI image; for a Linux ELF `gnulnx_<arch>` with the `gnuunx`/`gnuunx64` library it builds on (x86, x86-64, ARM, AArch64, PowerPC), or `android_arm`/`android_arm64` when the image is linked against Bionic; for a Mach-O the newest macOS (`macosNN_sdk00_x64`/`_arm64`, `macosx64_sdk14`/`15` for a 10.x SDK) or 64-bit iOS (`iphoneos64_sdkNN`) library not newer than the SDK its build version names. What it read is reported on stderr. Every library also declares the functions FLIRT, FID or a PDB named, not only the imports.
 - **Where / provenance:** P1/external-refinement · kuna · analysis-enablement · kuna-typelib
 - **Example:** `option typelib off`
 
@@ -2955,6 +3038,14 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **When to flip:** Off by default: the locked eight-byte result still costs a caller that RETURNS arithmetic on the quotient. Return recovery keeps a caller's two return words only when each is a bare slice of the call result or a literal and nothing else reads the quotient (`return a / b;`, a quotient kept across a call, a guarded `return -1`), so `return a / b + 1;` prints `int inc(..)` with only the high word, `return -(a / b);` prints `int neg(..)`, and `return f ? a / b : c;` prints `void sel(..)`, dropping both values; with the option off all three return every word (in the first-register-low join `bejoin` leaves without evidence). Of 21 authored caller shapes at clang -O2, 14 lose words that way: +1, +c, negation, abs, `>> 3`, an unsigned `>> 32`, ^c, |c, *c, a sum of two quotients, an accumulation loop, a quotient an argument replaces on one path, a clamp (`if (x > 100) x = 100;`), and the `sel` phi. Turn on for a SPARC32 binary whose callers store or pass the quotient (`*p = (int)(a / b);`, `g(a / b)`) or return it unchanged, where the off output reads an unassigned local; check any `int` or `void` caller that should return a `long long` against the disassembly. The `__stack_chk_fail_local` half also moves more than the argument: over GCC 15 `-fPIC -fstack-protector-strong` PowerPC32 shared objects at -O1 to -O3 and -Os it removes every invented argument (391 calls on the default target, 234 on e500) and gives 240 functions on the default target the return value their source declares, but 43 PLT call stubs (32 on e500) lose an inferred return the argument was the only use of, and at -Os 4 functions lose a parameter whose only use was the argument (`void gather(int a0,unsigned char *a1)` becomes `void gather(int a0)`; e500 `void main(unsigned int a0)` becomes `void main(void)`); on an i386 PIE one function in 141 (`xstrtoimax`) splits a 64-bit local into two 32-bit halves. Turn on for such a PIE or shared object whose calls to `__stack_chk_fail_local` carry an argument.
 - **Where / provenance:** P1/external-refinement · kuna · correctness-fix · pr-1252-libgcc-divdi3
 - **Example:** `option libgccsigs on`
+
+### `movwpairs` -- off | access | on, default `off`
+
+- **Symptoms:** unlace xrefs --to a global finds 0 references on ARM code that builds addresses with movw/movt; a stripped Cortex-M image misses a function only passed by address (movw r0,#lo; movt r0,#hi); a string passed to a function in ARMv7 code has no data symbol while the decompiled C prints its address; AArch64 movz/movk-built addresses (-mcmodel=large) reference nothing in the listing.
+- **What it does:** Read an address that an ARM `movw`/`movt` pair (A32 or T32) or an AArch64 `movz`/`movk` pair builds in 16-bit halves in the discovery Listing (`regcarry`). The decompiler folds such a pair, but the Listing reads references one instruction at a time and carries a register's constant only when it could be an address on its own (at least 4096), so the low half (`movw r0,#0x1cc`, most often below that floor) started nothing: a global a function loads or stores through the completed register, a string it passes and a function pointer it registers had no cross-reference, the address-taken function was never discovered, and the data there was not typed. Both halves are recognised by their encodings (A32/T32 `movw` and `movt`, AArch64 `movz` with no shift and `movk` with one) and only on a run nothing else enters, as every carried value is. `access` carries the low half to the `movt`/`movk` that completes it: a load or store through the completed register is then a read or a write of the address. `on` also files the completed value as a reference where it lands in a mapped section (IDA's 'valid addresses only' for `MOVT` pairs), so a string, a table or a Thumb function pointer built this way is named and typed. Little-endian code only.
+- **When to flip:** Off by default. Turn access on for ARMv7/ARMv7-M or AArch64 code built with movw/movt or movz/movk addresses (clang and GCC at -O2 for Cortex-M, -mexecute-only, -mcmodel=large): `unlace xrefs --to <global>` finds no reference to a global the code reads and writes, or a stripped image misses a callback only registered by address. Turn on to also name what the pair points at (a string argument, a function pointer); a 32-bit number a pair builds that happens to land in a mapped section then prints as that address.
+- **Where / provenance:** P1/code-data-partition · kuna · analysis-enablement · ida95-gap-movt-pairs
+- **Example:** `option movwpairs on`
 
 ### `strings` -- on | off, default `on`
 
@@ -3043,6 +3134,14 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **When to flip:** On by default. Keep it on for gcc -O2 C++ binaries, where cleanup ladders otherwise flood the function list with sub_<addr> fragments that start from an undefined register and end in _Unwind_Resume(). Flip OFF to list and decompile the cold cleanup code on its own (to read what a destructor chain frees).
 - **Where / provenance:** P1/code-data-partition · kuna · analysis-enablement · ida95-22-ehcold
 - **Example:** `--option ehcold off`
+
+### `functails` -- on | off, default `off`
+
+- **Symptoms:** many sub_<addr> functions that are a single ud2 at the start of .text; a function jumps to sub_<addr> for its error path instead of showing it; a gcc .cold part is listed as its own function.
+- **What it does:** Keep every single-owner .cold part out of the function list, as IDA keeps a function tail (AF_FTAIL, append_func_tail). GCC's hot/cold split moves a function's unlikely blocks (ud2 traps, error paths, the cleanups ehcold already takes) into .text.unlikely, each with its own FDE; the FDE oracle listed each as a function, so each was listed and decompiled on its own beside the owner that already decodes it. With the option on, an FDE body with no function symbol at its start, targeted by no direct call, entered by direct jmp/jcc rel32 only from ONE other FDE body (its owner), laid out before that owner and starting off the 16-byte function alignment contributes no entries: the commit drops every discovered entry inside it, its start included. ehcold is the landing-pad case of the same rule. x86/x86-64 ELF only.
+- **When to flip:** Off by default. Turn it on for a gcc -O2 x86-64 ELF whose function list carries many small sub_<addr> fragments at the start of .text that only one function jumps to (a lone ud2, an error call), so they stop crowding the function list. On IDA 9.5's own databases of its loaders, the IDA tail chunks kuna lists as functions drop from 9/51/4/18 to 2/12/0/5 (pe/elf/coff/dex.so), and one function IDA keeps is lost (pe.so 0x62fe). The owners print the same C: their flow already decoded the parts. Leave it off to list and decompile the cold parts on their own.
+- **Where / provenance:** P1/code-data-partition · kuna · analysis-enablement · ida-gap-kernel-autoanalysis-1
+- **Example:** `--option functails on`
 
 ### `mfcmsgmap` -- on | off, default `on`
 
@@ -3151,7 +3250,7 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 ### `debuglink` -- on | off, default `on`
 
 - **Symptoms:** a stripped distribution binary prints sub_<addr> for every function although its debug package is installed; a Fedora/RHEL binary keeps function names in .gnu_debugdata but kuna shows none.
-- **What it does:** Name a stripped ELF's functions from its separate debug file: the companion its GNU build-id note names (<dir>/.build-id/xx/rest.debug, build-id checked) or its .gnu_debuglink names (next to the image, its .debug/ directory, or <dir>/<image directory>/, CRC32 checked), with <dir> each entry of KUNA_DEBUG_DIRS then /usr/lib/debug; failing that, the XZ-compressed function symbol table a Fedora/RHEL image keeps in .gnu_debugdata (MiniDebugInfo). Only an image without its own .symtab is affected, and an address that already has a name keeps it. Loader-tier: read via the KUNA_DEBUGLINK env var (symbols are read at load file).
+- **What it does:** Name a stripped ELF's functions from its separate debug file: the companion its GNU build-id note names (<dir>/.build-id/xx/rest.debug, build-id checked) or its .gnu_debuglink names (next to the image, its .debug/ directory, or <dir>/<image directory>/, CRC32 checked), with <dir> each entry of KUNA_DEBUG_DIRS then /usr/lib/debug; failing that, the XZ-compressed function symbol table a Fedora/RHEL image keeps in .gnu_debugdata (MiniDebugInfo). A DWZ-compressed debug file's supplementary file (named by .gnu_debugaltlink, found at that path, beside the debug file or by build-id, build-id checked) is read too, so its shared strings name the DWARF entries that refer to them. Only an image without its own .symtab is affected, and an address that already has a name keeps it. Loader-tier: read via the KUNA_DEBUGLINK env var (symbols are read at load file).
 - **When to flip:** On by default: a stripped system binary whose debug package or debuginfod cache is installed decompiles with its real function names instead of sub_<addr>. Turn OFF to see only what the image itself carries, or when a mismatched debug directory is in KUNA_DEBUG_DIRS.
 - **Where / provenance:** P1/environment-binding · kuna · analysis-enablement · kuna-elf-debuglink
 - **Example:** `option debuglink off`
@@ -4247,6 +4346,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **When to flip:** Off by default: the output of a function then depends on which functions were decompiled before it in the same session. Turn on to get upstream's session behaviour: a global a first function read as 8 bytes stays one 8-byte object, so a later function's 4-byte access to its upper half prints as a piece of it (dat_x._4_4_) instead of a separate dat_<addr+4>.
 - **Where / provenance:** P9/naming-policy · ghidra · presentation-default · kuna-mapglobals-dat-symbols
 - **Example:** `option mapglobalsyms on`
+
+### `nullsubs` -- on | off, default `off`
+
+- **Symptoms:** calls to empty functions read as sub_<addr>() like any other; a virtual table slot points at a function that only returns.
+- **What it does:** Name a placeholder function whose body is a bare return nullsub_<addr>, IDA's AF_NULLSUB. After at most one instruction that emits no p-code (endbr64, bti), the first instruction must be a return doing nothing but its own stack and link-register work (on MIPS and SPARC, where those ops would be a delay slot's, the return alone). The placeholder's address spelling is kept (sub_401000 becomes nullsub_401000); a function with a real name, or whose new name is taken, is left alone.
+- **When to flip:** Off by default. Turn it on to tell empty callbacks, stubbed-out hooks and no-op virtual functions apart from code at a glance: calls to them read nullsub_<addr>(), as in IDA: on IDA 9.5's own databases of its pe/elf/coff/dex loaders it names the same 8/41/2/4 functions IDA names nullsub_.
+- **Where / provenance:** P1/code-data-partition · kuna · presentation-default · ida-gap-kernel-autoanalysis-5
+- **Example:** `--option nullsubs on`
 
 ### `callwide` -- on | off, default `off`
 

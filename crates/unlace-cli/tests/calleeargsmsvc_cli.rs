@@ -11,7 +11,11 @@ fn kuna() -> std::ffi::OsString {
 }
 
 fn report(mode: &str) -> String {
-    let fixture = common::fixture("calleeargsmsvc_pe_i386.dll");
+    report_of("calleeargsmsvc_pe_i386.dll", mode)
+}
+
+fn report_of(name: &str, mode: &str) -> String {
+    let fixture = common::fixture(name);
     let mut command = Command::new(kuna());
     command.args([
         "decompile",
@@ -40,5 +44,14 @@ fn an_eh_framed_fastcall_does_not_take_the_next_calls_push() {
     assert!(
         !on.contains("\"frame error = \","),
         "on: put_text still takes the push meant for put_uint:\n{on}"
+    );
+}
+
+#[test]
+fn a_call_followed_by_int3_does_not_return_into_the_next_function() {
+    let on = report_of("calleeargsmsvc_int3_pe_i386.dll", "on");
+    assert!(
+        on.contains("\"frame error = \")"),
+        "on: put_text lost its text or took the push meant for put_uint:\n{on}"
     );
 }

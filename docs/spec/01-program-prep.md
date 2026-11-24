@@ -5312,7 +5312,9 @@ moves.
   which types the out-parameter of a COM request by the id it passes (chapter
   05). The imported `ole32` requests (`CoCreateInstance`, `CoGetClassObject`,
   `CoGetObject`, `CoGetInterfaceAndReleaseStream`, `CoGetObjectContext`,
-  `CoGetCallContext`, `OleCreate`) get their prototypes by import address,
+  `CoGetCallContext`, `OleCreate`, and the four that fill a `MULTI_QI` array:
+  `CoCreateInstanceEx`, `CoCreateInstanceFromApp`,
+  `CoGetInstanceFromIStorage`, `CoGetInstanceFromFile`) get their prototypes by import address,
   so the out-parameter is an argument at every call even where the call site
   alone would not place it (the fifth argument of `CoCreateInstance` on x86-64
   is on the stack). The pass builds types, so it runs at the analysis commit
@@ -5329,6 +5331,18 @@ moves.
   as `CLSID_<Class>`. The media, device and printing namespaces are left
   out. The model is IDA 9.5's `comhelper` plugin, which names a GUID from
   `clsid.cfg` and applies the `<Interface>Vtbl` type its type library holds.
+  The option `comcfg`
+  (`crates/unlace-middle/src/p0_knowledge/kuna_comcfg.rs (ComCfg)`, default
+  `off`) names a file in that `clsid.cfg` format, one
+  `guid {00000000-0000-0000-C000-000000000046} IUnknown` line per id and `;`
+  starting a comment, read at the commit
+  (`crates/unlace-analysis/src/analyzers/com/mod.rs (parse_clsid_cfg)`, at
+  most 64 MiB): each id the built-in table lacks is named after its line,
+  spaces and other characters made `_`, and a bare name the interface table
+  holds (`IShellLinkW`) is read as `IID_IShellLinkW`, so its interface is
+  built like a built-in id's. An id both hold keeps the built-in name; a
+  malformed line is skipped. IDA 9.5's own `clsid.cfg` holds 16,117 ids, 13,674
+  of them not in the built-in table.
 - **(kuna) Declared names** (`declaredlibcproto`,
   `crates/unlace-analysis/src/analyzers/protos/mod.rs (declared_libc_prototype)`,
   consulted from `crates/unlace-console/src/engine.rs (ConsoleProgram::declare_function)`):

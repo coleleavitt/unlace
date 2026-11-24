@@ -419,6 +419,7 @@ kuna_options! { self, p1;
     "uefi" => registered!(crate::kuna_analysisgates::Uefi),
     "cortexmscs" => registered!(crate::kuna_analysisgates::Cortexmscs),
     "com" => registered!(crate::kuna_analysisgates::Com),
+    "comcfg" => registered!(crate::kuna_comcfg::ComCfg),
     "strings" => registered!(crate::kuna_analysisgates::Strings),
     "widestrings" => {
         registered!(crate::kuna_analysisgates::Widestrings)

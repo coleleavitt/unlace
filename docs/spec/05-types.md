@@ -3762,6 +3762,29 @@ Without an interface id the decompiler can fold to an address (an id read from
 a table the code indexes, or built on the stack) the out-parameter stays
 `void **`.
 
+`CoCreateInstanceEx`, `CoCreateInstanceFromApp`, `CoGetInstanceFromIStorage`
+and `CoGetInstanceFromFile` take a count and an array of `MULTI_QI`
+(`pIID`, `pItf`, `hr`, three pointer-sized words), one interface id per
+element, and fill each `pItf`
+(`crates/unlace-bandb-base/src/p5_types/kuna_comtyping.rs (MULTI_QI_REQUESTS)`).
+When the count folds to a literal of 1 to 8 and the array's argument is the
+entry stack pointer plus literals (through copies, casts, `INT_ADD`,
+`INT_SUB` and a `PTRSUB` off the stack's base), each element's id is the
+address every pointer-sized write of its first word agrees on: a copy into
+that stack slot or a store through a stack address
+(`crates/unlace-bandb-base/src/p5_types/kuna_comtyping.rs (element_ids)`).
+An element whose id is a known interface id is a `MULTI_QI_<Interface>`
+record whose `pItf` points to the interface; an element without one is
+`MULTI_QI` (the type library's record when it has one of that size, else
+`pItf` a `void *`). The argument is typed a pointer to the one element, or
+to a record of the elements named `MULTI_QI_<I1>_<I2>...` whose fields are
+named after their interfaces (`qi<N>` for an element without one or a
+repeat), so the stack array takes that type and a call through
+`mqi.IShellLinkW.pItf` prints with the interface's method names
+(`crates/unlace-bandb-base/src/p5_types/kuna_comtyping.rs (multi_qi_type)`).
+With no element's id known, or a count that is not a literal, the argument
+keeps its declared type.
+
 ## 5.3 Ranges & consume bits
 
 The rest of the S5 fact fabric (the framing derives from the study in
@@ -4060,9 +4083,12 @@ prototype, a `long long` parameter on i386 or 32-bit ARM is recovered as two
 carry `c` (`INT_LESS`, `INT_LESSEQUAL`, `INT_CARRY`) when one of its operands is
 an unlocked input, the input word directly above it (same size, next address
 in the space's byte order) is an unlocked input too, the function writes
-neither word (a compiler that reuses an argument slot, or a call that may
-change it, leaves 4-byte writes that a joined parameter could only print as
-partial stores into it), the prototype model accepts the two words as one
+neither word (a compiler that reuses an argument slot leaves 4-byte writes
+that a joined parameter could only print as partial stores into it; a call's
+possible effect on the slot, an INDIRECT whose value reaches only further
+INDIRECTs and MULTIEQUALs and is never read, is not a write, so a function
+that calls an unprototyped function, whose stack effects cover the caller's
+argument words, can still be paired), the prototype model accepts the two words as one
 parameter (`possible_input_param` on the joined
 storage: a stack slot, not two separate argument registers such as ARM's r0
 and r1, which only a declared prototype or option `armpairparam` (chapter 4) can join), and that word appears with coefficient +-1 in the same

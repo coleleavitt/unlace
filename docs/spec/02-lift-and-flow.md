@@ -4164,6 +4164,45 @@ used. Before, the C2000 family had no language. Exercised by
 `unlace-cli/tests/c28x_raw.rs` (a word-addressed `ADDB ACC,#5; LRET` image
 decompiles with no bad or unimplemented instruction).
 
+### AArch64 RME and ATS1A system instructions (#98)
+
+`specs/Ghidra/Processors/AARCH64/data/languages/AARCH64_rme.sinc` names the
+Armv9 Realm Management Extension maintenance instructions, which the base spec
+decoded only as a generic `sys`: `TLBI RPAOS`, `RPALOS`, `PAALLOS`,
+`PAALL` (and their FEAT_XS `nXS` forms), `DC CIPAPA` and `DC CIGDPAPA`, plus
+the FEAT_ATS1A translations `AT S1E1A`, `S1E2A` and `S1E3A`. Each lifts to a
+user operation named after it (`TLBI_RPAOS(Xt)`, `DC_CIPAPA(Xt)`); the AT
+forms write `par_el1`, as the base spec's AT instructions do. The register-less
+TLBI forms match only Rt=31 (as in LLVM); another Rt stays `sys`. Exercised by
+`unlace-cli/tests/aarch64_rme.rs` (a raw image decompiles to the user
+operations).
+
+### Hexagon HMX (#98)
+
+`hexagon_hmx.sinc` decodes the ten documented instructions of the Hexagon
+Matrix Extension (FP16 set, V68/V73, Hexagon V81 HMX Programmer's Reference
+Manual 80-N2040-62): `activation.hf = mxmem(Rs,Rt)` with its `:deep` and
+`:single` forms, `weight.hf = mxmem(Rs,Rt)` and its `:deep` form,
+`bias = mxmem2(Rs)`, `mxmem2(Rs) = bias`, `cvt.hf = acc(Rs)`,
+`mxmem(Rs,Rt) = cvt` and `mxclracc.hf`. They sit in LD class 9 (op 0x10, low
+byte 0xe2..0xfe, beside `memw_locked`, `memd_locked`, `memw_phys` and
+`vextract`, whose bits 7..5 are not 111) and ST class 10 op 0x37, which
+nothing else decodes, so the existing `Hexagon:LE:32:default` language takes
+them without a variant. The accumulators, convert state, bias sets and the
+VTCM buffers are not registers here: each instruction lifts to a named
+pcodeop over its decoded fields (activation: 2 KB-aligned address, the low
+control bits, Rt; weight: 128-byte-aligned address, the negate bit, the dW
+range; bias: 256-byte-aligned address and set index; convert: bias select and
+the remaining control bits), so a raw `activation.hf = mxmem(r0,r1)`
+decompiles to `hmx_activation_hf(a0 & 0xfffff800,a0 & 0x7ff,a1);`. Before,
+every HMX word was a bad instruction. The activation/weight pair must share a
+packet; such a packet disassembles, but decompiling any multi-instruction
+Hexagon packet still fails in the crossbuild step ("Could not obtain cached
+crossbuild instruction"), an existing engine gap that is not HMX-specific.
+Exercised by `unlace-cli/tests/hexagon_hmx.rs`: probe rows for all ten
+encodings against LLVM's syntax and a raw image with one instruction per
+packet. Notes in `specs/Ghidra/Processors/Hexagon/README.md`.
+
 ### Vendored community processor modules (#98)
 
 These processor directories vendor a community SLEIGH module unchanged (its
@@ -4248,8 +4287,22 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `ESRL` | Sharp ESR-L | `ESR-L:LE:20:default` | benryves/GhidraESRL @ `baa1b81512`, MIT |
 | `TopSM` | TI TopSM RF core | `topsm:LE:16:default` | antoniovazquezblanco/GhidraTopSM @ `3f45fd9d28`, MIT |
 | `SH` | Renesas SuperH SH-2E/SH-3/SH-3E/SH-4A | `sh3:BE:32:default`, `sh3:LE:32:default`, `sh3e:BE:32:default`, `sh3e:LE:32:default`, `sh2e:BE:32:default` | aleph-void/ghidra-sh (fork of will07c5/ghidra-sh) @ `31c6ca03e9`, MIT |
-| `Moxie` | Moxie (moxielogic) | `moxie:BE:32:default`, `moxie:LE:32:default` | written for unlace from the Moxie architecture page and the binutils opcode table |
+| `M32R` | Renesas (Mitsubishi) M32R, M32RX, M32R2 | `M32R:BE:32:default` | written for unlace from the M32R software manuals and binutils CGEN `m32r.cpu` (semantics only); decode checked against `m32r-elf-objdump` 2.43.1, Apache-2.0 |
+| `PDP11` | DEC PDP-11 (base set, EIS, MFPS/MTPS) | `PDP-11:LE:16:default` | written for unlace from the DEC PDP-11 handbooks, Apache-2.0 |
 <!-- vendor-rows -->
+
+### DEC PDP-11 (#98)
+
+`specs/Ghidra/Processors/PDP11` is a SLEIGH module written for unlace from the
+DEC PDP-11 Processor and Architecture Handbooks (no prior SLEIGH existed):
+`PDP-11:LE:16:default`. The destination operand's mode and register are
+copied into the decode context so its extension word decodes after the
+source's; N, Z, V and C follow the handbook per instruction; JSR with the PC
+link is a call, and the cspec passes arguments on the stack above the return
+address and returns in R0 (R0:R1 for 32 bits). FP11 floating point decodes as
+one user op. Exercised by `unlace-cli/tests/pdp11_raw.rs` (hand-assembled add
+and signed max routines decompile to the expected C).
+
 
 ### Processor modules written for unlace (#98)
 
@@ -4261,6 +4314,14 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | Directory | Processors | Languages | Sources | Test |
 |---|---|---|---|---|
 | `CHIP8` | CHIP-8 (COSMAC VIP) and SUPER-CHIP 1.1 | `CHIP8:BE:16:VIP`, `CHIP8:BE:16:SCHIP` | COSMAC VIP manual, SUPER-CHIP 1.1 notes | `unlace-cli/tests/chip8.rs` |
+| `HuC6280` | Hudson Soft HuC6280 (PC Engine) | `HuC6280:LE:16:default` | 65C02 and HuC6280 instruction descriptions, MAME `h6280` | `unlace-cli/tests/huc6280.rs` |
+| `4004` | Intel 4004 / 4040 | `4004:LE:16:default` | Intel MCS-4 and MCS-40 Users Manuals | `unlace-cli/tests/i4004_raw.rs` |
+| `uPD7725` | NEC uPD7725 / uPD96050 DSP | `uPD7725:LE:16:default`, `uPD96050:LE:16:default` | NEC uPD7725 data sheet, necdsp notes, MAME `upd7725` | `unlace-cli/tests/upd7725.rs` |
+| `KR1878` | Angstrem KR1878VE1 (TESEY core) | `KR1878:LE:16:default` | ChipNews 2000/1 instruction table, Angstrem datasheet | `unlace-cli/tests/kr1878_raw.rs` |
+| `Moxie` | Moxie (moxielogic) | `moxie:BE:32:default`, `moxie:LE:32:default` | Moxie architecture page, binutils `moxie` opcode table | `unlace-cli/tests/moxie_raw.rs` |
+| `FT32` | FTDI FT32 (FT900/FT930) | `ft32:LE:32:default` | FT32 programmer documentation, binutils `ft32` opcode table, GCC `config/ft32` | `unlace-cli/tests/ft32_raw.rs` |
+| `NiosII` | Altera/Intel Nios II (R1) | `nios2:LE:32:R1`, `nios2:BE:32:R1` | Nios II Processor Reference Guide and ABI, binutils 2.43 `nios2` opcode table | `unlace-cli/tests/nios2_raw.rs` |
+| `2650` | Signetics 2650 / 2650A / 2650B | `2650:BE:16:default` | Signetics 2650 Microprocessor manual, 2650 data sheet | `unlace-cli/tests/s2650_raw.rs` |
 | `Lua` | Lua 5.4 VM bytecode (one function's code array) | `Lua:LE:32:5.4` | Lua 5.4 `lopcodes.h`/`lvm.c` (MIT), reference manual; oracle `luac5.4 -l -l` | `unlace-cli/tests/lua54.rs` |
 <!-- native-rows -->
 

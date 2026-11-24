@@ -1320,7 +1320,16 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   the low six bits of `16_X`, `11_X`, `10_X` and `6_X` for the instruction
   classes measured against `ld.lld` (by top byte, or bits 25..20 of a duplex
   for `6_X`), ORed in as the linker does. Other classes and `8_X`, `12_X`,
-  `9_X`, `7_X` are reported unsupported and leave the field untouched. eBPF objects are REL-only and every program ships as one,
+  `9_X`, `7_X` are reported unsupported and leave the field untouched.
+  AVR (unlace#757, little-endian 16-bit words) covers `13_PCREL` (`rjmp`/
+  `rcall`) and `7_PCREL` (`brbs`/`brbc`), the word displacement from the next
+  instruction; the nine `LDI` forms (`LO8`/`HI8`/`HH8` of `S + A`, of its
+  negation, or of the word address `(S + A) >> 1`) into `ldi`'s split K; `CALL`
+  (the 22-bit word address of `call`/`jmp`); and `16_PM`. AMDGPU (`EM_AMDGPU`,
+  no object architecture, told apart by `e_machine`) covers the 32-bit literal
+  halves `REL32_LO`/`REL32_HI` (`S + A - P`, the `s_getpc_b64` pair of every
+  call and global) and `ABS32_LO`/`ABS32_HI`, and the `ABS32`, `REL32`, `ABS64`
+  and `REL64` data words; the GOT forms stay unsupported. eBPF objects are REL-only and every program ships as one,
   so its three instruction forms are encoded rather than written as plain words:
   `R_BPF_64_64` names the 16-byte `lddw` (a map or global reference) and lands
   `S + A` in the two 32-bit `imm` fields at +4 and +12, the addend read back from

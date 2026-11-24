@@ -9,3 +9,11 @@
 - `<arch>.elf`: `ld.lld -N --image-base=0 --unresolved-symbols=ignore-all -e 0 -Ttext=<base> <arch>.o`
   with base 0x0 (avr), 0x4400 (msp430), 0x100000 (sparc64), 0x1000 (gfx900), 0x10000 (the others).
   Lanai has no linker, so only `lanai.o`.
+
+- `csky.{o,elf}`, `m68k.{o,elf}`, `or1k.elf`, `xtensa.elf` (the machines routed by #776):
+  `<target>-gcc -O2 -fno-inline-functions -c fx.c` with GNU gcc 15.3 for `csky-elf`,
+  `m68k-elf`, `or1k-elf` and `xtensa-elf` (the xtensa core built with `XCHAL_HAVE_BE 0`, windowed
+  ABI). Linked with `<target>-ld -e 0 -Ttext=0x10000` and stripped with `--strip-debug`.
+  `or1k.o` and `xtensa.o` are not kept, because their ET_REL relocations are not applied yet.
+- `sparc64_float.o`: `zig cc -target sparc64-freestanding -O2 -c sparc64_float.c`, single and double float
+  returns under the V9 ABI (#765).

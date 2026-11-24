@@ -1,0 +1,196 @@
+# Zabha byte and halfword atomic memory operations (RISC-V Zabha 1.0): the
+# AMOs of the A extension and, with Zacas, amocas, on 8- and 16-bit memory
+# (funct3 000 and 001). rd receives the sign-extended old value. Encodings
+# checked against LLVM's RISC-V assembler and disassembler.
+
+:amoswap.b^aqrl rd,rs2,(rs1) is rs1 & rs2 & rd & op0006=0x2f & funct3=0 & op2731=0x1 & aqrl
+{
+	local addr = rs1;
+	local tmp2:1 = rs2:1;
+	local old:1 = *[ram]:1 addr;
+	rd = sext(old);
+	*[ram]:1 addr = tmp2;
+}
+
+:amoadd.b^aqrl rd,rs2,(rs1) is rs1 & rs2 & rd & op0006=0x2f & funct3=0 & op2731=0x0 & aqrl
+{
+	local addr = rs1;
+	local tmp2:1 = rs2:1;
+	local old:1 = *[ram]:1 addr;
+	rd = sext(old);
+	*[ram]:1 addr = old + tmp2;
+}
+
+:amoxor.b^aqrl rd,rs2,(rs1) is rs1 & rs2 & rd & op0006=0x2f & funct3=0 & op2731=0x4 & aqrl
+{
+	local addr = rs1;
+	local tmp2:1 = rs2:1;
+	local old:1 = *[ram]:1 addr;
+	rd = sext(old);
+	*[ram]:1 addr = old ^ tmp2;
+}
+
+:amoand.b^aqrl rd,rs2,(rs1) is rs1 & rs2 & rd & op0006=0x2f & funct3=0 & op2731=0xc & aqrl
+{
+	local addr = rs1;
+	local tmp2:1 = rs2:1;
+	local old:1 = *[ram]:1 addr;
+	rd = sext(old);
+	*[ram]:1 addr = old & tmp2;
+}
+
+:amoor.b^aqrl rd,rs2,(rs1) is rs1 & rs2 & rd & op0006=0x2f & funct3=0 & op2731=0x8 & aqrl
+{
+	local addr = rs1;
+	local tmp2:1 = rs2:1;
+	local old:1 = *[ram]:1 addr;
+	rd = sext(old);
+	*[ram]:1 addr = old | tmp2;
+}
+
+:amomin.b^aqrl rd,rs2,(rs1) is rs1 & rs2 & rd & op0006=0x2f & funct3=0 & op2731=0x10 & aqrl
+{
+	local addr = rs1;
+	local tmp2:1 = rs2:1;
+	local old:1 = *[ram]:1 addr;
+	rd = sext(old);
+	if (old s<= tmp2) goto inst_next;
+	*[ram]:1 addr = tmp2;
+}
+
+:amomax.b^aqrl rd,rs2,(rs1) is rs1 & rs2 & rd & op0006=0x2f & funct3=0 & op2731=0x14 & aqrl
+{
+	local addr = rs1;
+	local tmp2:1 = rs2:1;
+	local old:1 = *[ram]:1 addr;
+	rd = sext(old);
+	if (old s>= tmp2) goto inst_next;
+	*[ram]:1 addr = tmp2;
+}
+
+:amominu.b^aqrl rd,rs2,(rs1) is rs1 & rs2 & rd & op0006=0x2f & funct3=0 & op2731=0x18 & aqrl
+{
+	local addr = rs1;
+	local tmp2:1 = rs2:1;
+	local old:1 = *[ram]:1 addr;
+	rd = sext(old);
+	if (old <= tmp2) goto inst_next;
+	*[ram]:1 addr = tmp2;
+}
+
+:amomaxu.b^aqrl rd,rs2,(rs1) is rs1 & rs2 & rd & op0006=0x2f & funct3=0 & op2731=0x1c & aqrl
+{
+	local addr = rs1;
+	local tmp2:1 = rs2:1;
+	local old:1 = *[ram]:1 addr;
+	rd = sext(old);
+	if (old >= tmp2) goto inst_next;
+	*[ram]:1 addr = tmp2;
+}
+
+:amocas.b^aqrl rd,rs2,(rs1) is rs1 & rs2 & rd & op0006=0x2f & funct3=0 & op2731=0x5 & aqrl
+{
+	local addr = rs1;
+	local tmp2:1 = rs2:1;
+	local expected:1 = rd:1;
+	local old:1 = *[ram]:1 addr;
+	rd = sext(old);
+	if (old != expected) goto inst_next;
+	*[ram]:1 addr = tmp2;
+}
+
+:amoswap.h^aqrl rd,rs2,(rs1) is rs1 & rs2 & rd & op0006=0x2f & funct3=1 & op2731=0x1 & aqrl
+{
+	local addr = rs1;
+	local tmp2:2 = rs2:2;
+	local old:2 = *[ram]:2 addr;
+	rd = sext(old);
+	*[ram]:2 addr = tmp2;
+}
+
+:amoadd.h^aqrl rd,rs2,(rs1) is rs1 & rs2 & rd & op0006=0x2f & funct3=1 & op2731=0x0 & aqrl
+{
+	local addr = rs1;
+	local tmp2:2 = rs2:2;
+	local old:2 = *[ram]:2 addr;
+	rd = sext(old);
+	*[ram]:2 addr = old + tmp2;
+}
+
+:amoxor.h^aqrl rd,rs2,(rs1) is rs1 & rs2 & rd & op0006=0x2f & funct3=1 & op2731=0x4 & aqrl
+{
+	local addr = rs1;
+	local tmp2:2 = rs2:2;
+	local old:2 = *[ram]:2 addr;
+	rd = sext(old);
+	*[ram]:2 addr = old ^ tmp2;
+}
+
+:amoand.h^aqrl rd,rs2,(rs1) is rs1 & rs2 & rd & op0006=0x2f & funct3=1 & op2731=0xc & aqrl
+{
+	local addr = rs1;
+	local tmp2:2 = rs2:2;
+	local old:2 = *[ram]:2 addr;
+	rd = sext(old);
+	*[ram]:2 addr = old & tmp2;
+}
+
+:amoor.h^aqrl rd,rs2,(rs1) is rs1 & rs2 & rd & op0006=0x2f & funct3=1 & op2731=0x8 & aqrl
+{
+	local addr = rs1;
+	local tmp2:2 = rs2:2;
+	local old:2 = *[ram]:2 addr;
+	rd = sext(old);
+	*[ram]:2 addr = old | tmp2;
+}
+
+:amomin.h^aqrl rd,rs2,(rs1) is rs1 & rs2 & rd & op0006=0x2f & funct3=1 & op2731=0x10 & aqrl
+{
+	local addr = rs1;
+	local tmp2:2 = rs2:2;
+	local old:2 = *[ram]:2 addr;
+	rd = sext(old);
+	if (old s<= tmp2) goto inst_next;
+	*[ram]:2 addr = tmp2;
+}
+
+:amomax.h^aqrl rd,rs2,(rs1) is rs1 & rs2 & rd & op0006=0x2f & funct3=1 & op2731=0x14 & aqrl
+{
+	local addr = rs1;
+	local tmp2:2 = rs2:2;
+	local old:2 = *[ram]:2 addr;
+	rd = sext(old);
+	if (old s>= tmp2) goto inst_next;
+	*[ram]:2 addr = tmp2;
+}
+
+:amominu.h^aqrl rd,rs2,(rs1) is rs1 & rs2 & rd & op0006=0x2f & funct3=1 & op2731=0x18 & aqrl
+{
+	local addr = rs1;
+	local tmp2:2 = rs2:2;
+	local old:2 = *[ram]:2 addr;
+	rd = sext(old);
+	if (old <= tmp2) goto inst_next;
+	*[ram]:2 addr = tmp2;
+}
+
+:amomaxu.h^aqrl rd,rs2,(rs1) is rs1 & rs2 & rd & op0006=0x2f & funct3=1 & op2731=0x1c & aqrl
+{
+	local addr = rs1;
+	local tmp2:2 = rs2:2;
+	local old:2 = *[ram]:2 addr;
+	rd = sext(old);
+	if (old >= tmp2) goto inst_next;
+	*[ram]:2 addr = tmp2;
+}
+
+:amocas.h^aqrl rd,rs2,(rs1) is rs1 & rs2 & rd & op0006=0x2f & funct3=1 & op2731=0x5 & aqrl
+{
+	local addr = rs1;
+	local tmp2:2 = rs2:2;
+	local expected:2 = rd:2;
+	local old:2 = *[ram]:2 addr;
+	rd = sext(old);
+	if (old != expected) goto inst_next;
+	*[ram]:2 addr = tmp2;
+}

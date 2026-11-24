@@ -4256,6 +4256,23 @@ LLVM-selected `c.lbu`, `c.lh`, `c.sb`, `c.mul`/`c.not` and
 `cmpxchg`-lowered `amocas` functions that decompile with no bad or
 unimplemented instruction.
 
+
+### RISC-V Zabha (#98)
+
+`riscv.zabha.sinc` decodes Zabha 1.0, the byte (funct3 000) and halfword
+(funct3 001) forms of every A-extension AMO (`amoswap`, `amoadd`, `amoxor`,
+`amoand`, `amoor`, `amomin`, `amomax`, `amominu`, `amomaxu`) and, with
+Zacas, `amocas.b`/`amocas.h`, with the `.aq`/`.rl`/`.aqrl` suffixes, in RV32
+and RV64. They lift like the word forms: `rd` receives the old memory value
+sign-extended to the register, the arithmetic and logical forms store the
+combined value, min/max store `rs2` only when it wins the (signed or
+unsigned) comparison, and `amocas` stores `rs2` only when memory equals the
+low byte or halfword of the old `rd`. Before, all of them were bad
+instructions. Exercised by `unlace-cli/tests/riscv_zabha.rs`: one probe row
+per encoding against LLVM's names, RV32 and RV64, and LLVM-selected 8- and
+16-bit `atomicrmw`/`cmpxchg` functions that decompile with no bad or
+unimplemented instruction.
+
 ### RISC-V scalar cryptography (#98)
 
 `riscv.rv32k.sinc` (RV32 and RV64) and `riscv.rv64k.sinc` (RV64 only,

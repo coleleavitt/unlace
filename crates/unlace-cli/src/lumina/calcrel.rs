@@ -7,6 +7,14 @@
 //! resolves to a code or data address, or to a scalar SLEIGH marks as an address or that falls inside a
 //! mapped section (an absolute address immediate). [`unlace_lumina::hash::CalcrelBuilder`] turns the
 //! bytes and masks into the key.
+//!
+//! The x86 rules follow IDA 9.5's `pc` module (`ev_calcrel` = `sub_3CBC0`, field walk in `sub_21400`,
+//! sizes in `sub_1E390`): a memory operand (`o_mem`, RIP-relative included) is masked; a branch or call
+//! target (`o_near`/`o_far`) only when it leaves the function's chunk (`is_same_fchunk`); an immediate or
+//! displacement only when it is an offset; and a mask covers whole bytes, from the operand's field to
+//! the next field. So on x86 only operand bytes SLEIGH gives entirely to the operand are masked (the
+//! displacement or immediate, not the ModRM byte it shares), and a branch that stays inside the body
+//! keeps its bytes.
 
 use std::collections::BTreeSet;
 use std::rc::Rc;
@@ -139,20 +147,27 @@ fn hash_function(
         let mask = translate
             .instruction_mask(&addr)
             .map_err(|_| "mask_failed")?;
-        insns.push((insn.len, mask));
+        insns.push((insn.len, insn.flows.clone(), mask));
     }
     // The clip runs to the next entry, so it ends in the alignment padding IDA leaves outside the
     // function (an align item, not part of any chunk).
-    while insns.len() > 1 && insns.last().is_some_and(|(_, m)| is_padding(&m.bytes, x86)) {
+    while insns.len() > 1
+        && insns
+            .last()
+            .is_some_and(|(_, _, m)| is_padding(&m.bytes, x86))
+    {
         insns.pop();
     }
     if insns.is_empty() {
         return Err("no_instructions");
     }
+    let total: u64 = insns.iter().map(|(len, _, _)| u64::from(*len)).sum();
+    let body = entry..entry.saturating_add(total);
     let mut builder = CalcrelBuilder::new();
     let mut size: u32 = 0;
-    for (len, mask) in &insns {
-        builder.push(&mask.bytes, &calcrel_mask(mask, mapped));
+    for (len, flows, mask) in &insns {
+        let local = !flows.is_empty() && flows.iter().all(|t| body.contains(t));
+        builder.push(&mask.bytes, &calcrel_mask(mask, mapped, x86, local));
         size = size.saturating_add(*len);
     }
     Ok((builder.finish(), size, insns.len()))
@@ -179,8 +194,18 @@ pub(crate) fn is_padding(bytes: &[u8], x86: bool) -> bool {
 }
 
 /// The `ev_calcrel` mask of one instruction: the value bits of every operand that names an address.
-pub(crate) fn calcrel_mask(mask: &InsnMask, mapped: &[(u64, u64)]) -> Vec<u8> {
+/// `local`: the instruction branches only inside the function body, which IDA does not mask. `x86`:
+/// mask whole bytes the operand owns entirely, as IDA's field-based mask does.
+pub(crate) fn calcrel_mask(
+    mask: &InsnMask,
+    mapped: &[(u64, u64)],
+    x86: bool,
+    local: bool,
+) -> Vec<u8> {
     let mut out = vec![0u8; mask.bytes.len()];
+    if local {
+        return out;
+    }
     for op in &mask.operands {
         let relocatable = op.objects.iter().any(|o| match o {
             OpObject::Address => true,
@@ -191,7 +216,11 @@ pub(crate) fn calcrel_mask(mask: &InsnMask, mapped: &[(u64, u64)]) -> Vec<u8> {
         });
         if relocatable {
             for (slot, bits) in out.iter_mut().zip(&op.value_mask) {
-                *slot |= *bits;
+                if !x86 {
+                    *slot |= *bits;
+                } else if *bits == 0xFF {
+                    *slot = 0xFF;
+                }
             }
         }
     }
@@ -233,7 +262,31 @@ mod tests {
             value_mask: value_bits(),
             objects: vec![OpObject::Address],
         }]);
-        assert_eq!(calcrel_mask(&m, &[]), value_bits());
+        assert_eq!(calcrel_mask(&m, &[], false, false), value_bits());
+        assert_eq!(calcrel_mask(&m, &[], true, false), value_bits());
+        assert_eq!(calcrel_mask(&m, &[], true, true), vec![0; 5]);
+    }
+
+    #[test]
+    fn x86_masks_only_bytes_the_operand_owns() {
+        // mov eax, [rip+disp32]: 8b 05 <disp32>; the memory operand also owns ModRM's mod and r/m bits.
+        let m = InsnMask {
+            bytes: vec![0x8B, 0x05, 0x10, 0x20, 0x30, 0x40],
+            fixed_mask: vec![0xFF, 0x38, 0, 0, 0, 0],
+            length: 6,
+            operands: vec![OperandView {
+                value_mask: vec![0, 0xC7, 0xFF, 0xFF, 0xFF, 0xFF],
+                objects: vec![OpObject::Address],
+            }],
+        };
+        assert_eq!(
+            calcrel_mask(&m, &[], true, false),
+            vec![0, 0, 0xFF, 0xFF, 0xFF, 0xFF]
+        );
+        assert_eq!(
+            calcrel_mask(&m, &[], false, false),
+            vec![0, 0xC7, 0xFF, 0xFF, 0xFF, 0xFF]
+        );
     }
 
     #[test]
@@ -252,7 +305,10 @@ mod tests {
                 }],
             },
         ]);
-        assert_eq!(calcrel_mask(&m, &[(0x40_0000, 0x50_0000)]), vec![0; 5]);
+        assert_eq!(
+            calcrel_mask(&m, &[(0x40_0000, 0x50_0000)], true, false),
+            vec![0; 5]
+        );
     }
 
     #[test]
@@ -265,8 +321,11 @@ mod tests {
                 is_address: false,
             }],
         }]);
-        assert_eq!(calcrel_mask(&m, &[(0x40_0000, 0x50_0000)]), value_bits());
-        assert_eq!(calcrel_mask(&m, &[]), vec![0; 5]);
+        assert_eq!(
+            calcrel_mask(&m, &[(0x40_0000, 0x50_0000)], true, false),
+            value_bits()
+        );
+        assert_eq!(calcrel_mask(&m, &[], true, false), vec![0; 5]);
     }
 
     #[test]

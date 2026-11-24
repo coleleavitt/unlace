@@ -1120,7 +1120,10 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   `L32R`'s negative literal word offset from `(P + 3) & !3`, `CALLn`'s word
   offset from `(P & !3) + 4`, and the `J`, `BRI12`, `BRI8`/`RRI8`, `LOOP` and
   narrow `beqz.n`/`bnez.n` byte offsets from `P + 4`; `ASM_EXPAND`,
-  `ASM_SIMPLIFY` and the `DIFF*` relaxation records are no-ops), OpenRISC (`EM_OPENRISC`,
+  `ASM_SIMPLIFY` and the `DIFF*` relaxation records are no-ops; `R_XTENSA_32` is
+  partial-inplace, so the word it patches keeps the part of the addend GNU `as`
+  left there, such as a jump-table row's case offset, and receives `S + A` plus
+  that word), OpenRISC (`EM_OPENRISC`,
   told apart by `e_machine`) `INSN_REL_26`/`PLT26` jumps and calls, the
   `HI_16_IN_INSN`/`AHI16`/`LO_16_IN_INSN` halves, the split `SLO16` store
   immediate and the `32`/`32_PCREL` words, C-SKY `bsr32`
@@ -6444,6 +6447,13 @@ moves.
   and `<impl Trait for Type>` keeps `Type`. Angle brackets nest, so this is a
   depth-tracking scan iterated to a fixed point rather than a pattern match.
 
+  A this-adjusting thunk (`_ZTh`, `_ZTv`, `_ZTc`) is named for the function it
+  jumps to (`demangle/mod.rs (thunk_target)`): cpp_demangle renders it as
+  `{virtual override thunk(<offsets>, <target>)}`, and reducing that whole string
+  left `{virtual override thunk}`, the name 46 functions of the iOS 16
+  `libc++.1.dylib` shared (every `basic_*stream` destructor thunk). The target is
+  the text after the last top-level comma, reduced like any other name.
+
   The hard contract is **name-only** reduction: kuna's scope splitter nests on every `::`,
   so signature tails and template argument groups must be stripped or they become
   junk scopes. **Operator names are exempt from that stripping**: `operator[]`,
@@ -7539,7 +7549,21 @@ every other binary's pass list is byte-identical to before the pass existed):
   inlined into stores the vptr through its first parameter exactly as a
   constructor does (a by-value factory's return slot, a placement-new helper, the
   constructor of a class whose first member is a `C`, a `delete p` wrapper), so an
-  optimized constructor is left unnamed rather than risk naming one of those. A
+  optimized constructor is left unnamed rather than risk naming one of those,
+  unless the order of its stores says it builds `C` from a base: the last vptr it
+  stores at offset 0 is `C`'s primary, no ancestor's follows the first of `C`'s, and
+  before it either an ancestor's primary vptr was stored there (an inlined base
+  constructor) or a call was passed `this` (an out-of-line one), with no other call
+  before; it returns nothing (a by-value factory returns its slot) and touches no
+  second parameter (`kuna_itaniumctors.rs (built_after_base)`). Every helper above
+  stores a class's own vptr alone or, inlining a destructor, the class's and then
+  its bases', and a class with no base gives no order to read. GCC `-O2` keeps
+  apfs-fuse's `DeviceDMG::DeviceDMG` (a call to `Device::Device` passed `this`,
+  then its own vptr) and `BTreeNodeVar::BTreeNodeVar(BTree &, ...)` (the inlined
+  `BTreeNode` vptr first) out of line in that shape; `PLArray::PLArray`, whose
+  inlined base stores nothing, stays unnamed. The class of a member that
+  is itself built from a base (`Holder`'s first member a `Derived`) shows the same
+  order, and its constructor is then named `Derived::Derived`. A
   `this` the function stores to a second frame slot is an inlined callee's
   parameter home (an always_inline constructor inlined into the function) until a
   call follows, which makes it the compiler's own spill across that call; a store

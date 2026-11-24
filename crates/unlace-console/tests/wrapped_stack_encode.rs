@@ -108,7 +108,7 @@ fn recovered_wrapped_local_does_not_create_a_native_join_varnode_or_change_c_on_
             let mut again = Vec::new();
             fd.encode(&mut XmlEncode::new(&mut again), 1, true).unwrap();
             assert_eq!(text.as_bytes(), again.as_slice(), "{fixture}");
-            if let Some(directory) = std::env::var_os("KUNA_WRAPPED_FUNCTION_DUMP_DIR") {
+            if let Some(directory) = unlace_base::env::var_os("UNLACE_WRAPPED_FUNCTION_DUMP_DIR") {
                 std::fs::create_dir_all(&directory).unwrap();
                 std::fs::write(
                     PathBuf::from(directory).join(format!("{fixture}.xml")),

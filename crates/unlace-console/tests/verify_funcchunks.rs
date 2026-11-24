@@ -96,7 +96,7 @@ fn inventory_size_is_the_chunk_body() {
 #[test]
 #[ignore]
 fn funcchunks_stats() {
-    let Ok(list) = std::env::var("KUNA_FUNCCHUNKS_BINS") else {
+    let Ok(list) = unlace_base::env::var("UNLACE_FUNCCHUNKS_BINS") else {
         return;
     };
     for bin in list.split(':').filter(|s| !s.is_empty()) {

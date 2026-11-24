@@ -47,13 +47,13 @@ fn surface_count_is_102() {
 }
 
 #[test]
-fn settable_count_is_332() {
-    assert_eq!(kuna_num_settables(), 332);
-    assert_eq!(SETTABLE_TABLE.len(), 332);
+fn settable_count_is_333() {
+    assert_eq!(kuna_num_settables(), 333);
+    assert_eq!(SETTABLE_TABLE.len(), 333);
 }
 
 #[test]
-fn tier_counts_are_67_core_165_transform_100_analysis() {
+fn tier_counts_are_67_core_166_transform_100_analysis() {
     let mut core = 0;
     let mut transform = 0;
     let mut analysis = 0;
@@ -65,7 +65,7 @@ fn tier_counts_are_67_core_165_transform_100_analysis() {
             other => panic!("invalid tier {other:?} on {}", s.option),
         }
     }
-    assert_eq!((core, transform, analysis), (67, 165, 100));
+    assert_eq!((core, transform, analysis), (67, 166, 100));
 }
 
 #[test]
@@ -1281,7 +1281,8 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // +1 for `oslog`; its P9 row.
     // +1 for `callresultuse`; its P4 row.
     // +1 for `guarddispatch`; its P2 row.
-    assert_eq!(json.matches("},\n").count(), 325);
+    // +1 for `typemerge`; its P6 row sits after `indirectonly`.
+    assert_eq!(json.matches("},\n").count(), 326);
 }
 
 #[test]

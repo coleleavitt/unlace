@@ -86,6 +86,49 @@ library path, and the build scripts of `unlace`, `decomp_dbg` and `decomp_test_d
 `LD_LIBRARY_PATH=$(rustc --print sysroot)/lib:$CARGO_TARGET_DIR/debug/deps`. Never use the
 feature for `--release`, dist builds or `unlace-wasm`.
 
+## Focused loop
+
+Work in this order while you edit. Each step is cheaper than the next, so run the later ones only
+once the earlier ones pass. Run every command from the repository root with the build recipe
+above exported (dev binaries land in `target/debug/`).
+
+1. Type-check the crate you are editing:
+
+   ```bash
+   cargo check -p <crate>
+   ```
+
+2. Run the crate's unit tests that cover the change:
+
+   ```bash
+   cargo test -p <crate> --lib <filter>
+   ```
+
+3. Run the one corpus file you changed, against its baseline. `UNLACE_PARITY_FILES` takes a path,
+   a file name or a stem (see below); a corpus none of whose files match is skipped:
+
+   ```bash
+   UNLACE_PARITY_FILES=<file> cargo test -p unlace-harness --test parity
+   ```
+
+   A selected run checks only its files' assertions and never re-records a baseline
+   (`UNLACE_BLESS=1` refuses it).
+
+4. If the change can alter what emitted C computes, run the x86_64-gcc rows of the semantic suite
+   against its baseline (about 4 s once the binaries are built; `--cases <stem,...>` narrows it
+   further):
+
+   ```bash
+   cargo build -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli
+   python3 tools/semantic/run.py --unlace target/debug/unlace --sleighpath specs \
+       --config x86_64-gcc --opt O0,O2 --baseline tools/semantic/baseline.toml
+   ```
+
+   The run exits 1 only for a row that passes in the baseline and no longer does. It needs gcc and
+   binutils and nothing else for this configuration.
+
+5. Before the commit, run the full gates in the next section.
+
 ## Gates
 
 Each gate is one command, run from the repository root on dev binaries:
@@ -143,6 +186,10 @@ Each run writes `target/parity-times.toml`: one `[[file]]` table per corpus file
 
 Each full run also writes `target/parity-ledger.toml`: one `[[assertion]]` table per assertion of both corpora, with `corpus`, `file`, `name`, `key` (the baseline key: `data:<name>`, with ` @dupN` for the Nth assertion of a repeated name, failing ones counted), `status` (`pass` or `fail`), `class` and `in_baseline`. `class` is `must-pass` (a TOML test's assertion, or a passing XML assertion the baseline holds), `regressed` (a must-pass assertion that fails: the gate fails), `newly-passing` (passes, not in the baseline: reported, never failing) or `known-failing` (fails, not in the baseline). `in_baseline` is `true` or `false` for an XML test and absent for a TOML test, which is its own baseline. The file also has `[[file_error]]` tables (files that could not be parsed or run) and `[[absent]]` tables (baseline keys that no assertion of the run produced; the gate counts them as regressed). A run replaces its own corpus's tables and keeps the other's. It is written before the gate's assert, so a failing run leaves it too. A `UNLACE_PARITY_FILES` run does not write it. CI uploads it as the `parity-ledger` artifact, next to `parity-times`.
 
+To see where a run spends its time, `python3 scripts/parity_slowest.py [--top N] [--corpus TEXT]` prints the
+slowest files of `target/parity-times.toml`, each with its share of the total wall time (`--top 0`
+prints all of them; `--corpus` keeps the files whose corpus name contains the text, e.g. `stages`).
+
 Other one-liners: `cargo test --release -p unlace-ghidra -- --include-ignored` (the ghidra-mode
 differential harness with its heavier breadth test), `bash scripts/version.sh` (the version CI
 tags with), `PYTHONPATH=. python3 -m scripts.observatory.generate --out observatory --unlace
@@ -192,12 +239,15 @@ tools/hooks/unlace-ci-gates.sh [fast|parity|full]   # default parity
 
 `.github/workflows/tests.yml` runs on every pull request and every push to `main` (and is
 not called by the nightly, which runs its own `slow-tests` and `semantic` jobs; see
-notes/test-tiers.md). Its four jobs start together; none waits for another.
+notes/test-tiers.md). Its jobs start together; none waits for another. The `semantic-gcc` job runs
+the x86_64-gcc rows of the T4 semantic suite (`tools/semantic/README.md`) against its baseline; the
+full three-configuration run stays in the nightly.
 
 | Job | What it runs | Typical time |
 |---|---|---|
 | `tidy` | `cargo fmt --all --check`, the Python tooling tests (`scripts/check_test_layout.py`, `scripts/check_layers.py`, `scripts/check_determinism.py`, `scripts/tests`), actionlint with shellcheck over `.github/workflows` | about 1 min |
 | `clippy` | `cargo clippy --release ... -- -D warnings` on unlace-cli, unlace-base and unlace-num (the rest of the workspace is not clippy-clean yet) | about 2 min |
+| `semantic-gcc` | `tools/semantic/run.py --config x86_64-gcc --opt O0,O2 --baseline tools/semantic/baseline.toml`: each case compiled and run against its reference, failing only on a row that passed in the baseline and no longer does | about 4 min (mostly the release build) |
 | `parity gates` | release build, `cargo test --release -p unlace-harness --test parity`, `tools/check_spec.py`, the `tests/cli` probes, `unlace catalog --check`, the determinism run, the repipe counters, `docs/options.md` freshness, the unlace-ghidra harness, and the web tests when `UNLACE_WEB` is `true` | about 10 min |
 | `workspace suite (build)` | builds every workspace test binary into a cargo-nextest archive (`cargo nextest archive`), runs the doc tests | about 12 min |
 | `cargo workspace suite (1/3..3/3)` | three jobs, each running a third of the archive (`--partition count:N/3`) under the nextest profile `ci` (`.config/nextest.toml`), which leaves out the slow tests listed there. Both suite jobs are skipped on a PR from a branch of this repository unless it has the `full-ci` label | a few min each |

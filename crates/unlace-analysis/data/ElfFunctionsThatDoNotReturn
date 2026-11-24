@@ -43,6 +43,9 @@ quick_exit
 assert_perror_fail
 chk_fail
 libc_fatal
+# glibc debug/fortify_fail.c: `__fortify_fail_abort` is `__attribute__ ((noreturn))`; the
+# stack-protector and _FORTIFY_SOURCE failure paths end in it.
+fortify_fail_abort
 #
 # (unlace divergence, DIV-78) The libstdc++ std::__throw_* exception-throw helpers
 # (<bits/functexcept.h>, plus __throw_regex_error from <bits/regex_error.h>).

@@ -662,13 +662,13 @@ def sz_rxy(op, r, base, disp):
 
 
 class S390xHarness:
-    """r0..r15 at 8*i, the condition code (IPM layout) at 128, f0..f15 at 144 + 8*i. A scratch
-    register the instruction does not write holds the table address; SPM/IPM move the
-    condition code."""
+    """r0..r15 at 8*i, the condition code (IPM layout) at 128, v0..v31 at 144 + 16*i (f0..f15 are
+    the leftmost doublewords of v0..v15). A scratch register the instruction does not write holds
+    the table address; SPM/IPM move the condition code, VL/VST the vector registers."""
     qemu = ("qemu-s390x", ["-cpu", "max"])
     machine = 22
     big = True
-    table_size = 144 + 128
+    table_size = 144 + 512
     marker_at = 136
 
     def __init__(self):
@@ -689,8 +689,8 @@ class S390xHarness:
     def prologue(self, target):
         s, t = self.scratch, self._temp()
         c = sz_llilf(s, TABLES) + sz_rxy(0x04, t, s, 128) + bytes([0x04, t << 4])    # lg t; spm t
-        for i in range(16):
-            c += bytes([0x68, i << 4, s << 4 | (144 + 8 * i) >> 8, (144 + 8 * i) & 0xFF])  # ld fi
+        for i in range(32):
+            c += bytes([0xE7, (i & 15) << 4, s << 4 | (144 + 16 * i) >> 8, (144 + 16 * i) & 0xFF, 0x08 if i >= 16 else 0, 0x06])  # vl vi
         for i in range(16):
             if i != s:
                 c += sz_rxy(0x04, i, s, 8 * i)
@@ -706,8 +706,8 @@ class S390xHarness:
             if i != s:
                 c += sz_rxy(0x24, i, s, 8 * i)                                          # stg
         c += bytes([0xB2, 0x22, 0x00, t << 4]) + sz_rxy(0x24, t, s, 128)               # ipm t
-        for i in range(16):
-            c += bytes([0x60, i << 4, s << 4 | (144 + 8 * i) >> 8, (144 + 8 * i) & 0xFF])  # std fi
+        for i in range(32):
+            c += bytes([0xE7, (i & 15) << 4, s << 4 | (144 + 16 * i) >> 8, (144 + 16 * i) & 0xFF, 0x08 if i >= 16 else 0, 0x0E])  # vst vi
         c += sz_llilf(t, marker) + sz_rxy(0x24, t, s, self.marker_at)
         for base, size in [(OUT, self.table_size)] + [(p, PAGE) for p in dumps]:
             c += bytes([0xA7, 0x29, 0x00, 0x01]) + sz_llilf(3, base) + sz_llilf(4, size) + bytes([0x0A, 0x04])  # write
@@ -720,8 +720,8 @@ class S390xHarness:
             struct.pack_into(">Q", t, 8 * i, init.get(f"r{i}", 0) & (2 ** 64 - 1))
         cc = next((k for k in range(4) if init.get(f"CC{k}")), 0)
         struct.pack_into(">Q", t, 128, cc << 28)
-        for i in range(16):
-            struct.pack_into(">Q", t, 144 + 8 * i, init_vec.get(f"f{i}", 0) & (2 ** 64 - 1))
+        for i in range(32):
+            t[144 + 16 * i:160 + 16 * i] = (init_vec.get(f"v{i}", 0) & (2 ** 128 - 1)).to_bytes(16, "big")
         return bytes(t)
 
     def parse(self, arch, out):
@@ -730,8 +730,8 @@ class S390xHarness:
         for k in range(4):
             regs[f"CC{k}"] = int(cc == k)
         regs["CCA"], regs["CCB"] = int(cc >= 2), cc & 1
-        for i in range(16):
-            regs[f"f{i}"] = struct.unpack_from(">Q", out, 144 + 8 * i)[0]
+        for i in range(32):
+            regs[f"v{i}"] = int.from_bytes(out[144 + 16 * i:160 + 16 * i], "big")
         return regs, 0
 
 
@@ -910,7 +910,7 @@ HARNESSES = {"aarch64": A64Harness, "riscv64": RvHarness, "mips": MipsHarness, "
              "ppc64le": lambda: PpcHarness(("qemu-ppc64le", ["-cpu", "power10"]), 21, False, True, 2),
              "ppc64-isa": lambda: PpcHarness(("qemu-ppc64", ["-cpu", "power10"]), 21, True, True, 2),
              "ppc64le-isa": lambda: PpcHarness(("qemu-ppc64le", ["-cpu", "power10"]), 21, False, True, 2),
-             "s390x": S390xHarness, "m68k": M68kHarness, "loongarch64": LaHarness, "sparc64": SparcHarness, "sparc": Sparc32Harness}
+             "s390x": S390xHarness, "s390x-vec": S390xHarness, "m68k": M68kHarness, "loongarch64": LaHarness, "sparc64": SparcHarness, "sparc": Sparc32Harness}
 
 
 def qemu_path(name):
@@ -1262,7 +1262,12 @@ def run_case_qemu(arch, regs, row, cand, rng, seed, tmp):
             ref[n] = init[n]
 
     diffs = {}
-    partial = arch.partial(cand["mnemonic"], cand["op_str"]) if hasattr(arch, "partial") else {}
+    if not hasattr(arch, "partial"):
+        partial = {}
+    elif getattr(arch, "partial_uses_sleigh", False):
+        partial = arch.partial(cand["mnemonic"], cand["op_str"], row)
+    else:
+        partial = arch.partial(cand["mnemonic"], cand["op_str"])
     for n, _ in arch.gprs + arch.vecs + [(b, None) for b in bits_]:
         if n in ignore or n not in regs:
             continue

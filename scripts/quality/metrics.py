@@ -69,13 +69,14 @@ def signature(code: str) -> tuple[str, list[str], bool] | None:
     """(return type spelling, parameter spellings, variadic) of the first definition."""
     clean = cfg.strip_noise(code)
     i = clean.find("(")
+    m = None
     while i >= 0:
         head = clean[:i].rstrip()
         m = re.search(r"([A-Za-z_]\w*)\s*$", head)
         if m and m.group(1) not in ("if", "while", "for", "switch", "return", "sizeof"):
             break
         i = clean.find("(", i + 1)
-    if i < 0 or not m:
+    if i < 0 or m is None:
         return None
     line_start = clean.rfind("\n", 0, m.start()) + 1
     ret = clean[line_start:m.start()].strip()

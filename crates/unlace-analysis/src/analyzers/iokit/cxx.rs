@@ -119,6 +119,7 @@ impl Recovered {
                     slots: slot_list,
                     bases: Vec::new(),
                     size: self.classes[i].size,
+                    msvc: false,
                 });
                 out.vtables.slot_ranges.push((
                     *slot0,

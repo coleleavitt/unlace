@@ -96,6 +96,8 @@ def new_run(con: sqlite3.Connection, **cols) -> int:
     cur = con.execute(f"INSERT INTO runs({','.join(keys)}) VALUES({','.join('?' * len(keys))})",
                       [json.dumps(v) if isinstance(v, (dict, list)) else v for v in cols.values()])
     con.commit()
+    if cur.lastrowid is None:
+        raise RuntimeError("INSERT INTO runs returned no row id")
     return cur.lastrowid
 
 

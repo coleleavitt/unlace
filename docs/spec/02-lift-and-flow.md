@@ -915,8 +915,16 @@ instruction named from the decoder's `Unimpl` text (mnemonic and operands, else
 `instruction`). The decompile drive does the same for a DWARF register local
 that `seed_dwarf_register_locals` could not bind (chapter 01): a header warning
 `debuginfo: DWARF local <name> (range from 0x...) not bound: no write of its
-register reaches it`. Both tags are lowercase, so the printer's warning
-records file them under the kinds `notmodelled` and `debuginfo`, and the CLI's
+register reaches it`. A prototype the load withheld is recorded once per image
+in the architecture table `WithheldPrototypes` (by entry address, else by name,
+with its cause): a library signature declaring a `float` or `double` on a
+target whose convention does not return a `double` whole (the libc tables'
+load-time partition, a declared libc function, the ARM list `armfloatreturn`
+does not apply), and a DWARF signature `build_pieces` could not type. The
+decompile's seed (`kuna_honestgaps.rs (seed)`) names it as
+`withheldproto: ...; not applied` in the header of the function it belongs to
+and at each call whose callee it is. The tags are lowercase, so the printer's warning
+records file them under the kinds `notmodelled`, `debuginfo` and `withheldproto`, and the CLI's
 `--json` lists them with the rest and totals every kind in `warning_kinds`
 (`docs/cli.md`). Off by default because the extra comments change the text of
 every function with such a gap; the losses that already print (decode-failure
@@ -4245,6 +4253,36 @@ one probe row per encoding against LLVM's names, RV32 and RV64, and
 LLVM-selected `c.lbu`, `c.lh`, `c.sb`, `c.mul`/`c.not` and
 `cmpxchg`-lowered `amocas` functions that decompile with no bad or
 unimplemented instruction.
+
+### RISC-V scalar cryptography (#98)
+
+`riscv.rv32k.sinc` (RV32 and RV64) and `riscv.rv64k.sinc` (RV64 only,
+included by `riscv.lp64d.slaspec`) decode the ratified scalar cryptography
+extensions (Scalar Crypto 1.0.1): Zknh (`sha256sig0/1`, `sha256sum0/1`; on
+RV64 `sha512sig0/1`, `sha512sum0/1`; on RV32 the half-word forms
+`sha512sum0r`, `sha512sum1r`, `sha512sig0l/h`, `sha512sig1l/h`), Zksh
+(`sm3p0`, `sm3p1`), Zksed (`sm4ed`, `sm4ks`), and Zkne/Zknd (`aes32esi`,
+`aes32esmi`, `aes32dsi`, `aes32dsmi` on RV32; `aes64es`, `aes64esm`,
+`aes64ds`, `aes64dsm`, `aes64im`, `aes64ks1i`, `aes64ks2` on RV64). They
+replace the 0.6.2 draft those files carried, which put these instructions
+in the custom-1 and custom-2 opcode spaces (where vendor extensions live)
+under draft names (`ssha256.sig0`, `saes32.encs`, `pollentropy`, ...), all
+`unimpl`; the ratified encodings are in OP and OP-IMM.
+
+The hash functions lift to their definitions: each SHA-256 and SM3 function
+is three rotates or shifts of the low word XORed together, sign-extended to
+the register on RV64 (`assignW`); each RV64 SHA-512 function is the same on
+the doubleword; each RV32 SHA-512 half forms the 64-bit value `rs2:rs1`
+(`rs2` high), applies its three 64-bit rotates (for `sig0h`/`sig1h` the
+middle term shifts only the low word) and keeps the low 32 bits. The AES
+and SM4 instructions, whose results go through an S-box, are user
+operations named after the instruction, taking `rs1`, `rs2` and, for the
+RV32 AES and SM4 forms, the byte select `bs` (`aes64ks1i` takes `rnum`).
+Zbkb, Zbkc and Zbkx are in the bit manipulation files. The Zkr `seed` CSR
+and the vector crypto extensions (Zvk*) are not covered. Exercised by
+`unlace-cli/tests/riscv_crypto.rs`: one probe row per encoding against LLVM's
+names, RV32 and RV64, and intrinsic-selected functions that decompile with
+no unimplemented instruction.
 
 ### RISC-V moves and conversions from FP to integer registers (GH-831)
 

@@ -3489,6 +3489,15 @@ impl PrintC {
                     )
                 })
                 .unwrap_or_default();
+            let scopes = if arch
+                .kuna_options
+                .get::<crate::kuna_cppshortnames::CppShortNames>()
+                .0
+            {
+                crate::kuna_cppshortnames::short_scopes(scopes)
+            } else {
+                scopes
+            };
             for scope in scopes {
                 self.emit.print(&scope, SyntaxHighlight::GlobalColor);
                 self.emit.print("::", SyntaxHighlight::NoColor);
@@ -11503,13 +11512,22 @@ impl PrintC {
                 .unwrap_or(0);
             parent != stop && remote.is_name_used(nm, parent, stop)
         };
-        crate::kuna_namespaces::scope_prefix(
+        let scopes = crate::kuna_namespaces::scope_prefix(
             self.context.namespace_strategy(),
             name,
             &callee.scope_path,
             &use_ns,
             &name_used,
-        )
+        );
+        if arch
+            .kuna_options
+            .get::<crate::kuna_cppshortnames::CppShortNames>()
+            .0
+        {
+            crate::kuna_cppshortnames::short_scopes(scopes)
+        } else {
+            scopes
+        }
     }
 
     fn call_callee_name(&self, fd: &Funcdata, op: OpId) -> String {
@@ -16630,6 +16648,10 @@ impl RealTypeCtx {
             ctypes: arch.kuna_options.get::<crate::kuna_coreoptions::CTypes>().0,
             model: crate::kuna_ctypes::CDataModel::from_types(&*arch.types()),
             c_type_definition: false,
+            cpp_short_names: arch
+                .kuna_options
+                .get::<crate::kuna_cppshortnames::CppShortNames>()
+                .0,
             go_package: None,
             go_pair_types: (lang == crate::kuna_lang::OutLang::Go
                 && arch

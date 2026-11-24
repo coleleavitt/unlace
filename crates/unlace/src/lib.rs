@@ -248,6 +248,89 @@ impl Decompiler {
         Ok(decompiler)
     }
 
+    /// Load an IDA database (`.idb`, `.i64`) without the binary it was made from: its
+    /// segments are mapped at their addresses with their rights (bytes IDA does not
+    /// hold read as zero), decoded as the SLEIGH target IDA's processor maps to, with
+    /// the database's local types, functions (entries, extents, names), prototypes
+    /// and no-return flags declared, as [`with_idb`](Self::with_idb) declares them.
+    ///
+    /// ```no_run
+    /// let mut decompiler = unlace::Decompiler::from_idb("target.i64")?;
+    /// let main = decompiler.decompile_named("main")?;
+    /// println!("{}", main.c);
+    /// # Ok::<(), unlace::Error>(())
+    /// ```
+    pub fn from_idb(path: impl AsRef<Path>) -> Result<Self> {
+        let path = path.as_ref();
+        std::fs::metadata(path).map_err(|source| Error::Io {
+            path: path.to_path_buf(),
+            source,
+        })?;
+        let idb = embed::read_idb(&utf8(path)?, true).map_err(Error::Load)?;
+        let target = idb.target.clone().ok_or_else(|| {
+            Error::Request(format!(
+                "{}: no SLEIGH target for IDA processor {:?}; map its segments with \
+                 Decompiler::from_memory and a Target instead",
+                path.display(),
+                idb.processor
+            ))
+        })?;
+        let regions = idb
+            .segments
+            .into_iter()
+            .map(|(address, bytes, execute, write)| {
+                let perms = Perms {
+                    read: true,
+                    write,
+                    execute,
+                };
+                (address, bytes, perms)
+            });
+        let decompiler = Self::from_memory(Target::new(target), regions, &idb.entries)?;
+        Ok(decompiler.change(|request| {
+            request.assertions.extend(idb.directives);
+            request.noreturn.extend(idb.noreturn);
+        }))
+    }
+
+    /// Declare what an IDA database (`.idb`, `.i64`) knows about this input: its local
+    /// types (`typedef`), functions (entries, extents, names), prototypes and no-return
+    /// flags, as `unlace idb import` stores them (`docs/cli.md`, "unlace idb"). The
+    /// addresses are the database's, so it must not have been rebased.
+    ///
+    /// When the input is a container (`open`, `from_bytes`) and the database records
+    /// the hash of the file IDA loaded, the two must match: a database of other bytes
+    /// is an [`Error::Request`]. Raw inputs are not checked.
+    ///
+    /// ```no_run
+    /// let decompiler = unlace::Decompiler::open("target")?.with_idb("target.i64")?;
+    /// # Ok::<(), unlace::Error>(())
+    /// ```
+    pub fn with_idb(self, path: impl AsRef<Path>) -> Result<Self> {
+        let path = path.as_ref();
+        std::fs::metadata(path).map_err(|source| Error::Io {
+            path: path.to_path_buf(),
+            source,
+        })?;
+        let idb = embed::read_idb(&utf8(path)?, false).map_err(Error::Load)?;
+        if self.request.raw.is_none()
+            && let Some(expected) = &idb.input_sha256
+        {
+            let actual = embed::file_sha256(&self.request.binary).map_err(Error::Load)?;
+            if *expected != actual {
+                return Err(Error::Request(format!(
+                    "{} was made from a file with SHA-256 {expected}, but {} is {actual}",
+                    path.display(),
+                    self.request.binary
+                )));
+            }
+        }
+        Ok(self.change(|request| {
+            request.assertions.extend(idb.directives);
+            request.noreturn.extend(idb.noreturn);
+        }))
+    }
+
     fn with_request(binary: String, raw: Option<embed::Raw>) -> Self {
         Self {
             request: embed::Request {

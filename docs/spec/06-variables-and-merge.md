@@ -1489,6 +1489,14 @@ rewrite `LOAD/STORE` through a spacebase-relative pointer into direct
 affine by `ActionStackPtrFlow` (§6.5). Everything below consumes the
 `(stack, offset)` Varnodes those links produce.
 
+**Frame slot kinds** (`FrameSlotKind`, `crates/unlace-middle/src/substrate/funcdata.rs`). Each
+slot that `record_frame_layout_pass` folds into the frame union is tagged by its
+stack-space offset alone: negative offsets are `Local`, the word `[0, ptr_size)` holding
+the return address is `ReturnAddress`, and anything at or above it is `StackArg`. The tag is
+data only; it changes no printed output and needs no option. Saved-register and
+Microsoft x64 shadow-space kinds are not produced yet: they need the saved-register set and
+the calling convention on `Funcdata`, which main does not carry.
+
 **Keeping non-locals out** (`crates/unlace-bandb/src/p4_calls/coreaction_protos.rs
 (ActionRestrictLocal)` → `funcdata_spacebase.rs (Funcdata::restrict_local)`,
 in `mainloop`). Stack storage that belongs to someone else is marked

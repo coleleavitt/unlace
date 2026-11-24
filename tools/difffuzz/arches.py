@@ -3105,4 +3105,82 @@ class Avr(ObjdumpArch):
         return 0x5D <= a <= 0x5F
 
 
-ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), X86_32Native(), X86_16(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), Ppc64P10(), Ppc64leP10(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k(), MicroBlaze(), MicroBlazeEl(), Xtensa(), Moxie(), Ft32(), Iq2000(), V850(), Mn10300(), Lm32(), M32r(), Frv(), H8300h(), Pru(), Cr16(), Avr())}
+BFIN_DENY = re.compile(
+    r"JUMP|CALL|RTS|RTI|RTX|RTN|RTE|LSETUP|LOOP|RAISE|EXCPT|IDLE|SYNC|NOP|STI|CLI|TESTSET|FLUSH|"
+    r"PREFETCH|IFLUSH|\(R7:|\(P5:|LINK|UNLINK|SEQSTAT|SYSCFG|RET[SIXNE]|LC[01]|LT[01]|LB[01]|USP|"
+    r"CYCLES|EMUDAT|ASTAT|DBG|ABORT|HLT|ILLEGAL|OUTC|PRNT|BYTEOP|BITMUX|A[01]|ACC|MNOP|DISALGNEXCPT|\.L\)|"
+    r"\.H\)|\(IS|\(FU|\(TFU|\(IU|\(T\)|\(S2RND|\(ISS2|\(IH|\(W32|VIT_MAX|ALIGN|"
+    r"SEARCH|BXOR|BXORSHIFT|\.illegal|\(bad\)|unknown"
+)
+BFIN_GPRS = [f"R{i}" for i in range(8)] + [f"P{i}" for i in range(6)] + ["SP", "FP"] + \
+    [f"{k}{i}" for k in "IMBL" for i in range(4)]
+
+
+class Bfin(ObjdumpArch):
+    """Analog Devices Blackfin against gdb's bfin simulator (--oracle gdbsim). R0..R7, P0..P5, SP,
+    FP and the DAG registers are compared (L0..L3 are 0, so there is no circular addressing),
+    and the ASTAT flags. Program flow, loops, system registers, the accumulators and the video
+    and DSP-only operations are not generated."""
+    name = "bfin"
+    lang = "Blackfin:LE:32:default"
+    elf_machine = 106
+    base = 0x1000
+    big = False
+    pc = "PC"
+    gprs = [(n, None) for n in BFIN_GPRS]
+    pc_const = None
+    flags_reg = "astat"
+    flag_bits = {"AZ": 0, "AN": 1, "CC": 5, "AQ": 6, "AC0": 12, "AC1": 13, "AV0": 16, "AV0S": 17,
+                 "AV1": 18, "AV1S": 19, "V": 24, "VS": 25}
+    deny = re.compile(r"^$")              # the operations are matched on the whole text in canonical()
+    gdbsim = "bfin"
+    gdb_pc = "pc"
+    misaligned_undefined = True
+    sim_regnums = dict([(n, (i, 4)) for i, n in enumerate(BFIN_GPRS)] + [("astat", (36, 4)), ("pc", (53, 4))])
+
+    def unicorn(self):
+        raise NotImplementedError("bfin runs with --oracle gdbsim")
+
+    def capstone(self):
+        if self._dis is None:
+            self._dis = SlotDis("bfin", False, 8, b"\x00\x00", 2)
+        return self._dis
+
+    def draw(self, rng):
+        return rng.getrandbits(64).to_bytes(8, "little")
+
+    def canonical(self, cand):
+        return not BFIN_DENY.search(cand["mnemonic"] + " " + cand["op_str"])
+
+    def rand_reg(self, rng, bits):
+        if rng.random() < 0.4:
+            return rng.randrange(0x100000, 0x7F00000) & ~3
+        return Arch.rand_reg(self, rng, bits)
+
+    def fix_inputs(self, init, rng):
+        for i in range(4):
+            init[f"L{i}"] = 0
+
+    def addr_ok(self, a):
+        return 0x1000 <= a < 0x8000000
+
+    def ignored(self, mnemonic, operands, state):
+        text = mnemonic + " " + operands
+        # sim/bfin takes a register shift count as a C int (a count of 2^31 or more is negative)
+        m = re.match(r"R\d (>>>=|<<=) (R\d)", text)
+        if m and state.get(m.group(2)) >= 0x80000000:
+            return {"*"}
+        # and for a logical right shift by more than 31 it writes 0 and leaves the flags alone
+        m = re.match(r"(R\d) >>= (R\d)", text)
+        if m and m.group(1) != m.group(2) and state.get(m.group(2)) > 31:
+            return {"AZ", "AN", "V"}
+        if m and m.group(1) == m.group(2):
+            return {"*"}                        # the count is the result (read after the step)
+        # a post-modify of a pointer by itself
+        m = re.search(r"\[(P\d|SP|FP|I\d) (\+\+|--) (P\d|SP|FP|M\d)\]", text)
+        if m and m.group(1) == m.group(3):
+            return {"*"}
+        return set()
+
+
+ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), X86_32Native(), X86_16(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), Ppc64P10(), Ppc64leP10(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k(), MicroBlaze(), MicroBlazeEl(), Xtensa(), Moxie(), Ft32(), Iq2000(), V850(), Mn10300(), Lm32(), M32r(), Frv(), H8300h(), Pru(), Cr16(), Avr(), Bfin())}

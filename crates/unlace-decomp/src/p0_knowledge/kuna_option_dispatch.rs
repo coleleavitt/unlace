@@ -404,6 +404,7 @@ kuna_options! { self, p1;
     "charptr" => registered!(crate::kuna_charptr::CharPtr),
     "cstringconst" => registered!(crate::kuna_cstringconst::CstringConst),
     "wideconst" => registered!(crate::kuna_wideconst::WideConst),
+    "selectmul" => registered!(crate::kuna_selectmul::SelectMul),
     "elemptr" => registered!(crate::kuna_elemptr::ElemPtr),
     "protoorder" => registered!(crate::kuna_protoorder::ProtoOrderMode),
     "calleevote" => registered!(crate::kuna_calleevote::CalleeVoteMode),
@@ -643,6 +644,12 @@ kuna_options! { self, p1;
     },
     "flirt" => {
         registered!(crate::kuna_coreoptions::Flirt)
+    },
+    "ruststdsigs" => {
+        let (val, msg) = <crate::kuna_ruststdsigs::RustStdSigs as crate::kuna_optionset::KunaOption>::parse(p1)?;
+        crate::kuna_ruststdsigs::set_ruststdsigs_env(val);
+        self.kuna_options.set(val);
+        Ok(msg)
     },
     "fidproto" => {
         registered!(crate::kuna_fidproto::Fidproto)

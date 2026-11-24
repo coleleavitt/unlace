@@ -345,3 +345,41 @@ macro __sat(res)
 	R2731 = mod;
 	R1115 = quot;
 }
+
+
+# Step division (V850E2): N = 32 - 2 * imm field quotient bits.  N = 32 of DIVN/DIVUN/DIVHN/DIVHUN
+# is DIV/DIVU/DIVH/DIVHU above.  The step semantics are not modelled: the quotient (reg2), the
+# remainder (reg3) and OV come from pcodeops; Z and S follow the quotient.
+# SDIVN imm5, reg1, reg2, reg3 - rrrrr111111RRRRR|wwwww0111iiii000 (DIVN 1011, DIVHN 1010, SDIVHN 0110)
+divsteps: val is op1821 [ val = 32 - op1821 * 2; ] { export *[const]:1 val; }
+
+define pcodeop step_divide_quotient;
+define pcodeop step_divide_remainder;
+define pcodeop step_divide_overflow;
+
+macro step_divide(kind, n, r1, r2, r3) {
+	local q:4 = step_divide_quotient(kind, n, r1, r2);
+	local r:4 = step_divide_remainder(kind, n, r1, r2);
+	$(OV) = step_divide_overflow(kind, n, r1, r2);
+	set_Z(q);
+	set_S(q);
+	r2 = q;
+	r3 = r;
+}
+
+:sdivn divsteps, R0004, R1115, R2731 is op0510=0x3F & R0004 & R1115; op2226=7 & op1617=0 & divsteps & R2731
+{ step_divide(0:1, divsteps, R0004, R1115, R2731); }
+:sdivun divsteps, R0004, R1115, R2731 is op0510=0x3F & R0004 & R1115; op2226=7 & op1617=2 & divsteps & R2731
+{ step_divide(1:1, divsteps, R0004, R1115, R2731); }
+:sdivhn divsteps, R0004, R1115, R2731 is op0510=0x3F & R0004 & R1115; op2226=6 & op1617=0 & divsteps & R2731
+{ step_divide(2:1, divsteps, R0004, R1115, R2731); }
+:sdivhun divsteps, R0004, R1115, R2731 is op0510=0x3F & R0004 & R1115; op2226=6 & op1617=2 & divsteps & R2731
+{ step_divide(3:1, divsteps, R0004, R1115, R2731); }
+:divn divsteps, R0004, R1115, R2731 is op0510=0x3F & R0004 & R1115; op2226=0xb & op1617=0 & op1821!=0 & op1821!=15 & divsteps & R2731
+{ step_divide(4:1, divsteps, R0004, R1115, R2731); }
+:divun divsteps, R0004, R1115, R2731 is op0510=0x3F & R0004 & R1115; op2226=0xb & op1617=2 & op1821!=0 & op1821!=15 & divsteps & R2731
+{ step_divide(5:1, divsteps, R0004, R1115, R2731); }
+:divhn divsteps, R0004, R1115, R2731 is op0510=0x3F & R0004 & R1115; op2226=0xa & op1617=0 & op1821!=0 & divsteps & R2731
+{ step_divide(6:1, divsteps, R0004, R1115, R2731); }
+:divhun divsteps, R0004, R1115, R2731 is op0510=0x3F & R0004 & R1115; op2226=0xa & op1617=2 & op1821!=0 & divsteps & R2731
+{ step_divide(7:1, divsteps, R0004, R1115, R2731); }

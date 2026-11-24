@@ -34,6 +34,7 @@ fn binding(name: &str) -> Option<(&'static str, Encoding)> {
         "ifuncfpret" => (kuna_ifuncfpret::IFUNCFPRET_ENV, DefaultOn),
         "ppcapu" => (kuna_ppcapu::PPCAPU_ENV, DefaultOff),
         "delphiabi" => (kuna_delphiabi::DELPHIABI_ENV, DefaultOn),
+        "ruststdsigs" => (unlace_decomp::kuna_ruststdsigs::RUSTSTDSIGS_ENV, Trimmed),
         "debuglink" => (kuna_debuglink::DEBUGLINK_ENV, DefaultOn),
         "kernelcache" => (kuna_kernelcache::KERNELCACHE_ENV, Kernelcache),
         "kernelcache-boot" => (

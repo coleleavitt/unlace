@@ -936,7 +936,7 @@ crate::kuna_flag!(
     "evmcalls",
     "EVM internal-call recovery",
     unset: false,
-    shipped: false
+    shipped: true
 );
 
 #[cfg(test)]

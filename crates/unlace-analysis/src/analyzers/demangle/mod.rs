@@ -338,11 +338,12 @@ pub fn normalize_rust_name(name: &str) -> String {
             // `<path::Type<A>>::m` at the start of the name is an inherent impl's
             // qualified self type, not a generic list: keep the type, whose own
             // generics the next round drops, so the method stays attached to it.
-            // A slice, reference or tuple self type (`<[T]>::sort`) has no path to
-            // keep and resolves to nothing as before.
+            // A nested one (`<<Vec<T>>::f::Guard>::drop`) is kept for the next round
+            // to resolve the same way. A slice, reference or tuple self type
+            // (`<[T]>::sort`) has no path to keep and resolves to nothing as before.
             None if open == 0
                 && cur[close + 1..].starts_with("::")
-                && inner.starts_with(|c: char| c.is_alphabetic() || c == '_') =>
+                && inner.starts_with(|c: char| c.is_alphabetic() || c == '_' || c == '<') =>
             {
                 inner.to_string()
             }
@@ -874,6 +875,10 @@ mod tests {
             ),
             ("<alloc::vec::Vec<T, A>>::push", "alloc::vec::Vec::push"),
             ("<[T]>::sort_unstable", "sort_unstable"),
+            (
+                "<<alloc::io::buffered::bufwriter::BufWriter<_>>::flush_buf::BufGuard>::remaining",
+                "alloc::io::buffered::bufwriter::BufWriter::flush_buf::BufGuard::remaining",
+            ),
             // A name that resolves to nothing in the middle must not leave an
             // empty component behind.
             ("a::<T>::b", "a::b"),

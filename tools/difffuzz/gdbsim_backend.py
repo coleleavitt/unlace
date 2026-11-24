@@ -50,8 +50,12 @@ def bindir():
 
 
 def available(arch):
+    """Whether the dfsim driver is installed, and the gdb that supplies the register numbers of an
+    architecture without sim_regnums."""
     sim = getattr(arch, "gdbsim", None)
-    return sim and os.access(os.path.join(bindir(), "dfsim-" + sim), os.X_OK)
+    if not sim or not os.access(os.path.join(bindir(), "dfsim-" + sim), os.X_OK):
+        return False
+    return hasattr(arch, "sim_regnums") or os.access(os.path.join(bindir(), "gdb"), os.X_OK)
 
 
 def regnums(arch):

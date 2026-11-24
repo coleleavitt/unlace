@@ -32,7 +32,7 @@ fn decompile(addr: &str) -> String {
 fn evm_branch_and_store_decompile() {
     let out = decompile("0x0");
     assert!(out.contains("v1 = dat_4 * 3;"), "{out}");
-    assert!(out.contains("if (v1 <= 100) {"), "{out}");
+    assert!(out.contains("if (100 < v1) {"), "{out}");
     assert!(out.contains("sstore(0,v1);"), "{out}");
     assert!(out.contains("evm_return(0,0x20);"), "{out}");
 }

@@ -14,4 +14,224 @@
     <description>TMS320C28 Language Module</description>
     <compiler name="default" spec="tms320c28.cspec" id="default"/>
   </language> 
+   <language processor="TMS320C28"
+            endian="little"
+            size="32"
+            variant="f280013x"
+            version="1.0"
+            slafile="tms320c28.sla"
+            processorspec="tms320c28_f280013x.pspec"
+            id="tms320c28:LE:32:f280013x">
+    <description>TMS320C28 Language Module, F280013X peripheral register names</description>
+    <compiler name="default" spec="tms320c28.cspec" id="default"/>
+  </language>
+   <language processor="TMS320C28"
+            endian="little"
+            size="32"
+            variant="f280015x"
+            version="1.0"
+            slafile="tms320c28.sla"
+            processorspec="tms320c28_f280015x.pspec"
+            id="tms320c28:LE:32:f280015x">
+    <description>TMS320C28 Language Module, F280015X peripheral register names</description>
+    <compiler name="default" spec="tms320c28.cspec" id="default"/>
+  </language>
+   <language processor="TMS320C28"
+            endian="little"
+            size="32"
+            variant="f28002x"
+            version="1.0"
+            slafile="tms320c28.sla"
+            processorspec="tms320c28_f28002x.pspec"
+            id="tms320c28:LE:32:f28002x">
+    <description>TMS320C28 Language Module, F28002X peripheral register names</description>
+    <compiler name="default" spec="tms320c28.cspec" id="default"/>
+  </language>
+   <language processor="TMS320C28"
+            endian="little"
+            size="32"
+            variant="f28003x"
+            version="1.0"
+            slafile="tms320c28.sla"
+            processorspec="tms320c28_f28003x.pspec"
+            id="tms320c28:LE:32:f28003x">
+    <description>TMS320C28 Language Module, F28003X peripheral register names</description>
+    <compiler name="default" spec="tms320c28.cspec" id="default"/>
+  </language>
+   <language processor="TMS320C28"
+            endian="little"
+            size="32"
+            variant="f28004x"
+            version="1.0"
+            slafile="tms320c28.sla"
+            processorspec="tms320c28_f28004x.pspec"
+            id="tms320c28:LE:32:f28004x">
+    <description>TMS320C28 Language Module, F28004X peripheral register names</description>
+    <compiler name="default" spec="tms320c28.cspec" id="default"/>
+  </language>
+   <language processor="TMS320C28"
+            endian="little"
+            size="32"
+            variant="f2802x"
+            version="1.0"
+            slafile="tms320c28.sla"
+            processorspec="tms320c28_f2802x.pspec"
+            id="tms320c28:LE:32:f2802x">
+    <description>TMS320C28 Language Module, F2802X peripheral register names</description>
+    <compiler name="default" spec="tms320c28.cspec" id="default"/>
+  </language>
+   <language processor="TMS320C28"
+            endian="little"
+            size="32"
+            variant="f2802x0"
+            version="1.0"
+            slafile="tms320c28.sla"
+            processorspec="tms320c28_f2802x0.pspec"
+            id="tms320c28:LE:32:f2802x0">
+    <description>TMS320C28 Language Module, F2802X0 peripheral register names</description>
+    <compiler name="default" spec="tms320c28.cspec" id="default"/>
+  </language>
+   <language processor="TMS320C28"
+            endian="little"
+            size="32"
+            variant="f2803x"
+            version="1.0"
+            slafile="tms320c28.sla"
+            processorspec="tms320c28_f2803x.pspec"
+            id="tms320c28:LE:32:f2803x">
+    <description>TMS320C28 Language Module, F2803X peripheral register names</description>
+    <compiler name="default" spec="tms320c28.cspec" id="default"/>
+  </language>
+   <language processor="TMS320C28"
+            endian="little"
+            size="32"
+            variant="f2805x"
+            version="1.0"
+            slafile="tms320c28.sla"
+            processorspec="tms320c28_f2805x.pspec"
+            id="tms320c28:LE:32:f2805x">
+    <description>TMS320C28 Language Module, F2805X peripheral register names</description>
+    <compiler name="default" spec="tms320c28.cspec" id="default"/>
+  </language>
+   <language processor="TMS320C28"
+            endian="little"
+            size="32"
+            variant="f2806x"
+            version="1.0"
+            slafile="tms320c28.sla"
+            processorspec="tms320c28_f2806x.pspec"
+            id="tms320c28:LE:32:f2806x">
+    <description>TMS320C28 Language Module, F2806X peripheral register names</description>
+    <compiler name="default" spec="tms320c28.cspec" id="default"/>
+  </language>
+   <language processor="TMS320C28"
+            endian="little"
+            size="32"
+            variant="f2807x"
+            version="1.0"
+            slafile="tms320c28.sla"
+            processorspec="tms320c28_f2807x.pspec"
+            id="tms320c28:LE:32:f2807x">
+    <description>TMS320C28 Language Module, F2807X peripheral register names</description>
+    <compiler name="default" spec="tms320c28.cspec" id="default"/>
+  </language>
+   <language processor="TMS320C28"
+            endian="little"
+            size="32"
+            variant="f2823x"
+            version="1.0"
+            slafile="tms320c28.sla"
+            processorspec="tms320c28_f2823x.pspec"
+            id="tms320c28:LE:32:f2823x">
+    <description>TMS320C28 Language Module, F2823X peripheral register names</description>
+    <compiler name="default" spec="tms320c28.cspec" id="default"/>
+  </language>
+   <language processor="TMS320C28"
+            endian="little"
+            size="32"
+            variant="f2833x"
+            version="1.0"
+            slafile="tms320c28.sla"
+            processorspec="tms320c28_f2833x.pspec"
+            id="tms320c28:LE:32:f2833x">
+    <description>TMS320C28 Language Module, F2833X peripheral register names</description>
+    <compiler name="default" spec="tms320c28.cspec" id="default"/>
+  </language>
+   <language processor="TMS320C28"
+            endian="little"
+            size="32"
+            variant="f2837xd"
+            version="1.0"
+            slafile="tms320c28.sla"
+            processorspec="tms320c28_f2837xd.pspec"
+            id="tms320c28:LE:32:f2837xd">
+    <description>TMS320C28 Language Module, F2837XD peripheral register names</description>
+    <compiler name="default" spec="tms320c28.cspec" id="default"/>
+  </language>
+   <language processor="TMS320C28"
+            endian="little"
+            size="32"
+            variant="f2837xs"
+            version="1.0"
+            slafile="tms320c28.sla"
+            processorspec="tms320c28_f2837xs.pspec"
+            id="tms320c28:LE:32:f2837xs">
+    <description>TMS320C28 Language Module, F2837XS peripheral register names</description>
+    <compiler name="default" spec="tms320c28.cspec" id="default"/>
+  </language>
+   <language processor="TMS320C28"
+            endian="little"
+            size="32"
+            variant="f2838x"
+            version="1.0"
+            slafile="tms320c28.sla"
+            processorspec="tms320c28_f2838x.pspec"
+            id="tms320c28:LE:32:f2838x">
+    <description>TMS320C28 Language Module, F2838X peripheral register names</description>
+    <compiler name="default" spec="tms320c28.cspec" id="default"/>
+  </language>
+   <language processor="TMS320C28"
+            endian="little"
+            size="32"
+            variant="f28e12x"
+            version="1.0"
+            slafile="tms320c28.sla"
+            processorspec="tms320c28_f28e12x.pspec"
+            id="tms320c28:LE:32:f28e12x">
+    <description>TMS320C28 Language Module, F28E12X peripheral register names</description>
+    <compiler name="default" spec="tms320c28.cspec" id="default"/>
+  </language>
+   <language processor="TMS320C28"
+            endian="little"
+            size="32"
+            variant="f28p551x"
+            version="1.0"
+            slafile="tms320c28.sla"
+            processorspec="tms320c28_f28p551x.pspec"
+            id="tms320c28:LE:32:f28p551x">
+    <description>TMS320C28 Language Module, F28P551X peripheral register names</description>
+    <compiler name="default" spec="tms320c28.cspec" id="default"/>
+  </language>
+   <language processor="TMS320C28"
+            endian="little"
+            size="32"
+            variant="f28p55x"
+            version="1.0"
+            slafile="tms320c28.sla"
+            processorspec="tms320c28_f28p55x.pspec"
+            id="tms320c28:LE:32:f28p55x">
+    <description>TMS320C28 Language Module, F28P55X peripheral register names</description>
+    <compiler name="default" spec="tms320c28.cspec" id="default"/>
+  </language>
+   <language processor="TMS320C28"
+            endian="little"
+            size="32"
+            variant="f28p65x"
+            version="1.0"
+            slafile="tms320c28.sla"
+            processorspec="tms320c28_f28p65x.pspec"
+            id="tms320c28:LE:32:f28p65x">
+    <description>TMS320C28 Language Module, F28P65X peripheral register names</description>
+    <compiler name="default" spec="tms320c28.cspec" id="default"/>
+  </language>
 </language_definitions>

@@ -2052,6 +2052,23 @@ expect = [
 ]
 
 [[family]]
+name = "cpython_listappend"
+language = "CPython:LE:32:3.12"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/cpython/listappend.bin"
+
+# `h(xs): r = []; for x in xs: r.append(x); return r`. STORE_FAST r pops the value-stack slot
+# that the final LOAD_FAST r pushes back into, with the iterator stored there in between. The
+# alloca probe rule took that final push for a probe and removed it, so this returned the iterator.
+[[family.function]]
+test = "cpython_listappend_returns_list"
+address = "0x0"
+expect = [
+    "v4 = py_build_list(0);",
+    "return v4;",
+]
+
+[[family]]
 name = "cpython_attrs"
 language = "CPython:LE:32:3.12"
 base = "0"

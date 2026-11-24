@@ -5243,6 +5243,12 @@ fix, so they stay inside the user operations; what is kept is the data flow
 between vector registers, scalar registers, FP registers and the memory
 addresses a load or store uses, so a vectorized function decompiles to a
 sequence of calls such as `v8 = vadd_vv(v8,v9)` instead of stopping.
+Whole-register loads, stores and moves (`vl<n>re<eew>.v`, `vs<n>r.v`, `vmv<n>r.v`)
+move `n` registers whatever `vtype` says, so for `n` = 2, 4 and 8 they read or write a
+register group: the overlapping registers `v0m2`..`v30m2`, `v0m4`..`v28m4` and
+`v0m8`..`v24m8` (64, 128 and 256 bytes, operand subtables `vdm<n>` and `vs2m<n>`), and
+`vmv<n>r.v` lifts as a copy of the group (`vmv1r.v` as a register copy). A register number not
+a multiple of `n` is reserved and, as in LLVM, not decoded.
 Exercised by `unlace-cli/tests/riscv_vector.rs`: all 1258 encoding shapes
 against LLVM's names (`fixtures/riscv_vector/probe64.txt`) and LLVM-lowered
 vector functions (load/add/store, a reduction into a scalar, an FMA with a
@@ -5659,6 +5665,22 @@ Found by `tools/difffuzz` against Unicorn.
   shifted-register forms (`ARMTHUMBinstructions.sinc`) take `thSBIT_CZN` and
   `th_logicflags()`, so with S they set C from the shifter (`ThumbExpandImm12` or `thshift2`),
   as `ORR`, `EOR` and `TST` already did; before, `ANDS.W r8,r11,r9,ROR #21` left C unchanged.
+
+### PowerPC lifter fixes from differential fuzzing
+
+Found by `tools/difffuzz --oracle qemu` (`qemu-ppc`, `qemu-ppc64` and `qemu-ppc64le`).
+
+- `divw.` (`ppc_instructions.sinc`) no longer sets XER[OV] and XER[SO]: only the `o` forms
+  record overflow, as `divwu.` already did. Before, `divw. r7,r16,r8` cleared an OV that was set.
+- `lhbrx` and `lwbrx` load the halfword or word in the image's byte order and reverse it,
+  so they are correct in the little-endian languages too; they composed the result from
+  single bytes in big-endian order, so on `PowerPC:LE:64:*` `lhbrx` returned the bytes
+  unreversed. `ldbrx` and `stdbrx` (`ppc_isa.sinc`) lift to the byte-reversed doubleword
+  load and store instead of the `LoadDoublewordByteReverseIndexed` and
+  `StoreDoublewordByteReverseIndexed` user ops, and `ldbrx` reads `(RA|0)`.
+- `stswi` with a byte count that is not a multiple of 4 stores only the leftmost bytes of its
+  last register (`storeRegisterPartial` in `ppc_common.sinc`); it stored the whole word, so
+  `stswi r23,r3,17` wrote 20 bytes.
 
 ### AArch64 rounding, saturation and by-element operands (#546)
 

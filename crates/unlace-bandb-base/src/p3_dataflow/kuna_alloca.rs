@@ -512,7 +512,9 @@ fn tests_limit(data: &Funcdata, block: crate::context::BlockId, limit: VarnodeId
 }
 
 /// The probe of a stack-clash allocation: a store back of the word just loaded
-/// from the same stack address (`or qword [rsp+k],0`).
+/// from the same stack address by the same instruction (`or qword [rsp+k],0`).
+/// A load and a store from two instructions are not one: another store to that
+/// address can come between them, and the second store then restores the value.
 fn is_probe(data: &Funcdata, store: OpId) -> bool {
     let Some(o) = data.obank().get(store) else {
         return false;
@@ -520,17 +522,26 @@ fn is_probe(data: &Funcdata, store: OpId) -> bool {
     let (Some(addr), Some(value)) = (o.get_in(1), o.get_in(2)) else {
         return false;
     };
-    let loaded = match def(data, value) {
-        Some((OpCode::CPUI_LOAD, ins)) => ins.get(1).copied(),
+    let load_of = |vn: VarnodeId| {
+        data.vbank().get(vn).and_then(|v| v.get_def()).filter(|&d| {
+            data.obank()
+                .get(d)
+                .is_some_and(|d| d.code() == OpCode::CPUI_LOAD)
+        })
+    };
+    let load = match def(data, value) {
+        Some((OpCode::CPUI_LOAD, _)) => load_of(value),
         Some((OpCode::CPUI_INT_OR, ins)) if ins.len() == 2 && constant(data, ins[1]) == Some(0) => {
-            match def(data, ins[0]) {
-                Some((OpCode::CPUI_LOAD, l)) => l.get(1).copied(),
-                _ => None,
-            }
+            load_of(ins[0])
         }
         _ => None,
     };
-    loaded.is_some_and(|l| same_address(data, l, addr)) && stack_derived(data, addr, 8)
+    let Some(load) = load.and_then(|l| data.obank().get(l)) else {
+        return false;
+    };
+    load.get_addr() == o.get_addr()
+        && load.get_in(1).is_some_and(|l| same_address(data, l, addr))
+        && stack_derived(data, addr, 8)
 }
 
 /// Remove the probe loop and probes of a stack-clash dynamic allocation.

@@ -18,7 +18,8 @@ python3 -m venv ~/.local/share/difffuzz-venv
 
 `--arch` is `x86-64`, `aarch64`, `riscv64`, `arm` (A32), `thumb` (T32), `mips` (MIPS32 big-endian),
 `mips64`, `mips64r6`, `mipsr6` (MIPS64, MIPS64 Release 6 and MIPS32 Release 6, big-endian; use
-`--oracle qemu`), `ppc` (PowerPC 32 big-endian) or `tricore`. `--sleighpath DIR` lifts with the `.sla`
+`--oracle qemu`), `ppc` (PowerPC 32 big-endian), `tricore`, or (QEMU oracle only) `ppc64`, `ppc64le`, `ppc64-isa`
+and `ppc64le-isa`. `--sleighpath DIR` lifts with the `.sla`
 files under `DIR` instead of the built-in ones, so a spec edit can be checked right after
 `slacomp` without rebuilding unlace. The summary on stdout counts each outcome and lists the
 findings by mnemonic; `--out` writes every finding with its bytes, both disassemblies, the
@@ -29,7 +30,10 @@ input registers and the differing values.
 `--oracle qemu` replaces Unicorn with the installed QEMU user-mode binaries
 (`tools/difffuzz/qemu_backend.py`) for `aarch64` (`qemu-aarch64 -cpu max`), `riscv64`
 (`qemu-riscv64 -cpu max`), `mips` and `mips64` (`qemu-mips64 -cpu MIPS64R2-generic`), and `mipsr6`
-and `mips64r6` (`qemu-mips64 -cpu I6400`, an R6 ELF with no HI/LO in the harness). QEMU 10 implements
+and `mips64r6` (`qemu-mips64 -cpu I6400`, an R6 ELF with no HI/LO in the harness). `ppc` (`qemu-ppc -cpu 7457`), and the QEMU-only `ppc64`, `ppc64le` (`PowerPC:*:64:default`),
+`ppc64-isa` and `ppc64le-isa` (`PowerPC:*:64:A2ALT`, Power ISA 3.0) on `qemu-ppc64` /
+`qemu-ppc64le -cpu power10`. `DIFFFUZZ_QEMU_DIR` names a directory searched before `PATH`
+for the QEMU binaries (a `--target-list=ppc-linux-user,...` build of QEMU 10 works). QEMU 10 implements
 what Unicorn's older QEMU core lacks or gets wrong: BF16, I8MM (`usdot`/`sudot`), MOPS,
 `fcmla`/`fcadd`, and RISC-V NaN-boxing.
 
@@ -84,6 +88,20 @@ afterwards. The register file is unchanged.
 - PowerPC has no QEMU harness. `qemu-ppc64` runs in 64-bit mode (MSR.SF is not user-writable),
   where record forms set CR0 from the 64-bit result, so it is not an exact reference for
   32-bit PowerPC.
+- PowerPC: the harness loads r0..r31, LR, CTR, CR, XER (SO, OV, CA are seeded and compared,
+  which Unicorn cannot do) and f0..f31, and keeps the table address in a register the
+  instruction does not write, like RISC-V. 32-bit PowerPC runs on `qemu-ppc`; the 64-bit
+  languages run in 64-bit mode, where a word divide or multiply-high leaves RT[0:31] and the
+  CR0 of its record form undefined (only the low word is compared). The 64-bit arches allow
+  branches, CR moves, `mfspr`/`mtspr` of XER/LR/CTR, the string and multiple ops (big-endian
+  only: little-endian mode raises an alignment interrupt) and scalar FP. FP record forms
+  leave CR1 uncompared (the FPSCR exception bits are not modelled), fused multiply-adds leave
+  their result uncompared (p-code rounds twice), `stfs` of a double outside single range
+  (the ISA stores truncated bits) is `undefined`, and an `lfs` of a single sNaN (widened
+  without quieting) is not compared. QEMU 10.2 also sets CR bit 14 for the A-form FP record
+  forms (`fmadd.`, `fsel.`, ...), so CR3 is not compared there.
+- A `LOAD` from the constant space (a dynamic export such as `export *[const]:8 tmp`) reads
+  its pointer as the value.
 
 ### RISC-V vector (`--arch riscv64v`)
 
@@ -221,6 +239,9 @@ Fixed in the specs (`docs/spec/02-lift-and-flow.md` describes each change):
 - **ARM.** A conditional `STRHT` wrote its base back even when the condition failed, and stored 4
   bytes. The T32 `ANDS`, `BICS`, `MOVS.W` (immediate), `MVNS` and `ANDS.W`/`MVNS.W` with a
   shifted register did not set C from the shifter.
+- **PowerPC.** `divw.` set XER[OV]/[SO]; `lhbrx`/`lwbrx` were not byte-reversed in the
+  little-endian languages; `ldbrx`/`stdbrx` were user ops; `stswi` with a partial last
+  register stored the whole word.
 - **TriCore (#563).** PSW.V was the sign bit of the 32-bit result instead of signed overflow
   (`overflowflags`, about 110 constructors), and `SHA` never set PSW.C.
 

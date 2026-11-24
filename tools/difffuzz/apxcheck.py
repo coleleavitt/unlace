@@ -14,7 +14,11 @@ tools/difffuzz/pcode_emu.py from the same register state:
 - SETcc.zu / IMUL.zu add the zero-extension; PUSH2/POP2 become two PUSHes/POPs; PUSHP/POPP and the
   REX2-encoded legacy instructions are renamed only.
 
-CCMP/CTEST, CFCMOVcc, JMPABS, RIP-relative operands and branches are skipped. Input: an object
+CCMPcc/CTESTcc become a branch around the compare or test, the false path loading OF SF ZF CF from
+dfv (PF from dfv.CF, AF cleared) through PUSHFQ/POPFQ (the reference's stack slot is not compared);
+CFCMOVcc becomes a branch around the move, zeroing the destination (or keeping src1 for the NDD
+form) on the false path, so a false condition never touches memory. JMPABS, RIP-relative operands
+and branches are skipped. Input: an object
 or shared library (every APX instruction in .text, deduplicated by encoding).
 
     ~/.local/share/difffuzz-venv/bin/python tools/difffuzz/apxcheck.py lib.so --unlace <unlace> [--sleighpath specs]
@@ -38,7 +42,10 @@ SIZES = {"": 64, "d": 32, "w": 16, "b": 8}
 ALU2 = {"add", "sub", "and", "or", "xor", "adc", "sbb", "imul", "adcx", "adox"}
 UNARY = {"inc", "dec", "neg", "not"}
 SHIFTS = {"shl", "sal", "shr", "sar", "rol", "ror", "rcl", "rcr"}
-SKIP = re.compile(r"^(ccmp|ctest|cfcmov|jmpabs|j|call|ret)|rip")
+SKIP = re.compile(r"^(jmpabs|j|call|ret)|rip")
+INV = {"o": "no", "no": "o", "b": "ae", "ae": "b", "e": "ne", "ne": "e", "be": "a", "a": "be", "s": "ns", "ns": "s",
+       "p": "np", "np": "p", "l": "ge", "ge": "l", "le": "g", "g": "le"}
+DFV = {"of": 0x800, "sf": 0x80, "zf": 0x40, "cf": 0x1}
 
 
 def base_reg(name):
@@ -92,7 +99,8 @@ def translate(text):
     if SKIP.search(text):
         return None
     mn, _, ops = text.partition(" ")
-    ops = split_ops(ops)
+    dm = re.match(r"(\{dfv=[^}]*\})\s*(.*)$", ops)
+    ops = ([dm.group(1)] + split_ops(dm.group(2))) if dm else split_ops(ops)
     used = {base_reg(x) for x in LEGACY.findall(text)}
     pool = [f"r{i}" for i in range(8, 16) if f"r{i}" not in used]
     ren = {}
@@ -114,6 +122,33 @@ def translate(text):
         return sized(t, bits)
     isreg = lambda o: bool(re.fullmatch(r"[a-z0-9]+", o)) and not re.fullmatch(r"-?(0x)?[0-9a-f]+", o)
     try:
+        m = re.match(r"(ccmp|ctest)(\w+)$", mn)
+        if m and ops and ops[0].startswith("{dfv="):
+            kind, cc = m.groups()
+            dfv = [x for x in ops[0][5:-1].split(",") if x]
+            bits = sum(DFV[x] for x in dfv) | (0x4 if "cf" in dfv else 0)
+            ops = ops[1:]
+            op = "cmp" if kind == "ccmp" else "test"
+            skip = [] if cc == "t" else (["jmp 1f"] if cc == "f" else ["j%s 1f" % INV[cc]])
+            lines = skip + ["%s %s" % (op, ", ".join(ops)), "jmp 2f",
+                            "1:", "pushfq", "and qword ptr [rsp], -0x8d6", "or qword ptr [rsp], %#x" % bits, "popfq", "2:"]
+            return lines, ren, temps, "stack"
+        m = re.match(r"cfcmov(\w+)$", mn)
+        if m:
+            inv = "j%s 1f" % INV[m.group(1)]
+            if len(ops) == 3:
+                d, a, b = ops
+                bits = reg_bits(d)
+                tt = temp(bits)
+                fin = "mov %s, %s" % (d, tt) if bits >= 32 else "movzx %s, %s" % (reg32(d), tt)
+                return ["mov %s, %s" % (tt, a), inv, "mov %s, %s" % (tt, b), "1:", fin], ren, temps, nf
+            d, s = ops
+            if not isreg(d):
+                return [inv, "mov %s, %s" % (d, s), "1:"], ren, temps, nf
+            bits = reg_bits(d)
+            if bits >= 32:
+                return [inv, "mov %s, %s" % (d, s), "jmp 2f", "1:", "mov %s, 0" % reg32(d), "2:"], ren, temps, nf
+            return [inv, "movzx %s, %s" % (reg32(d), s), "jmp 2f", "1:", "mov %s, 0" % reg32(d), "2:"], ren, temps, nf
         if mn in ("push2", "push2p"):
             return ["push " + ops[0], "push " + ops[1]], ren, temps, nf
         if mn in ("pop2", "pop2p"):
@@ -217,6 +252,8 @@ def run(arch, regs, row, cand, ref, ren, temps, nf, rng, seed):
     mn = re.sub(r"^\{nf\}\s*", "", cand["text"]).split()[0]
     base = {"push2": "push", "push2p": "push", "pop2": "pop", "pop2p": "pop", "pushp": "push", "popp": "pop"}.get(mn, mn)
     base = re.sub(r"^setzu", "set", base).replace("imulzu", "imul")
+    base = re.sub(r"^ccmp\w*", "cmp", re.sub(r"^ctest\w*", "test", base))
+    base = re.sub(r"^cfcmov\w*", "mov", base)
     ignore = arch.ignored(base, cand["text"], st)
     if "*" in ignore:
         return "undefined", ""
@@ -233,15 +270,17 @@ def run(arch, regs, row, cand, ref, ren, temps, nf, rng, seed):
             diffs[back.get(n.lower(), n.lower()).upper()] = (ours, ref_v)
     fv = emu.reg_read(x86.UC_X86_REG_EFLAGS)
     for n, bit in arch.flag_bits.items():
-        if n in ignore and not nf:
+        if n in ignore and nf is not True:
             continue
         ours = st.get(n) & 1
-        want = (word >> bit) & 1 if nf else (fv >> bit) & 1
+        want = (word >> bit) & 1 if nf is True else (fv >> bit) & 1
         if ours != want:
             diffs[n] = (ours, want)
     touched = set(st.writes)
     for a, sz in writes.items():
         touched.update(range(a, a + sz))
+    if nf == "stack":
+        touched -= set(range(init["RSP"] - 8, init["RSP"]))
     for a in sorted(touched):
         pv = st.mem.get(a, fill_byte(a, seed))
         rv = emu.mem_read(a, 1)[0] if mp.mapped(a) else fill_byte(a, seed)
@@ -276,7 +315,7 @@ def main():
             pend["bytes"] += bs
             continue
         pend = None
-        if not (EGPR.search(txt) or txt.startswith("{nf}") or re.match(r"(push2|pop2|pushp|popp|setzu|imulzu)", txt)
+        if not (EGPR.search(txt) or txt.startswith("{nf}") or re.match(r"(push2|pop2|pushp|popp|setzu|imulzu|ccmp|ctest|cfcmov)", txt)
                 or (txt.split() and txt.split()[0] in ALU2 | UNARY | SHIFTS and len(split_ops(txt.partition(" ")[2])) == 3)):
             continue
         txt = re.sub(r"\s+", " ", re.sub(r"\s*<[^>]*>", "", txt)).strip()

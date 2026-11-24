@@ -1868,6 +1868,8 @@ expect = [
     "dat_f8 = 1;",
     "sub_4f4();",
     "sub_514();",
+]
+
 # The S1C88 language decompiles routines hand-assembled from the core manual's instruction
 # list: a compare and JRS NC with EX A,B (absolute difference), a caller using CARS, and
 # an ADD A,[HL] / INC HL / DJR NZ byte-sum loop.

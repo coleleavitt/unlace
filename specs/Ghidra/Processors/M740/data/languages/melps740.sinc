@@ -1,0 +1,663 @@
+# SLEIGH specification for the Mitsubishi MELPS 740 (M507xx, M3xxxx "740 series") 8-bit CPU.
+#
+# Original MELPS-740 additions to the 6502 core by Philip Pemberton (Ghidra PR #5012); the
+# 6502 base was Ghidra's own 6502.slaspec. Rewritten by Ghidra-Rare after checking every
+# instruction against the "Series 740 User's Manual" (Mitsubishi, 1989): T flag, decimal mode,
+# zero-page stack, stack contents, MUL/DIV, per-family special page and W/F/S instructions.
+#
+# Variants (selected by the including .slaspec):
+#   (none)           M50740A/M50741/M50752/M50757/M50758 group: FST (E2), SLW (C2), special page 1Fxx
+#   MELPS740_WIT     WIT (C2), special page FFxx
+#   MELPS740_MULDIV  as MELPS740_WIT, plus MUL (62) and DIV (E2) (M37450 type)
+
+define endian=little;
+define alignment=1;
+
+define space RAM      type=ram_space      size=2  default;
+define space register type=register_space size=1;
+
+define register offset=0x00 size=1 [ A X Y ];
+define register offset=0x20 size=2 [ PC ];
+# SP is the stack pointer, S its low byte (the CPU register) and SPH the stack page: 0 after reset,
+# 1 when the device's CPU mode register selects page 1 (a program changes it with a write to that
+# register; for emulation write SPH). Pushes and pulls address SPH:S through SP. SPH is deliberately
+# not a tracked or context value: a constant page would make the decompiler lose the stack variables.
+define register offset=0x22 size=2 [ SP ];
+define register offset=0x22 size=1 [ S SPH ];
+# Processor status register, bit 7 .. bit 0
+define register offset=0x30 size=1 [ N V T B D I Z C ];
+
+define token opbyte (8)
+	op    = (0,7)
+	aaa   = (5,7)
+	bbb   = (2,4)
+	cc    = (0,1)
+	lo4   = (0,3)
+	b4    = (4,4)
+	bitn  = (5,7) dec
+;
+
+define token data8 (8)
+	imm8  = (0,7)
+	rel   = (0,7) signed
+;
+
+define token data16 (16)
+	imm16 = (0,15)
+;
+
+define pcodeop __cpu_fst;
+define pcodeop __cpu_slw;
+define pcodeop __cpu_wit;
+define pcodeop __cpu_stp;
+
+# ---------------------------------------------------------------------------------------------
+# Macros
+# ---------------------------------------------------------------------------------------------
+
+# The stack is in page SPH (0 or 1): the address is SPH:S, kept in the 16-bit SP.
+macro push8(v) {
+	*:1 SP = v;
+	SP = SP - 1;
+}
+
+macro pull8(v) {
+	SP = SP + 1;
+	v = *:1 SP;
+}
+
+# Zero-page 16-bit pointer at zz (the high byte wraps within page 0)
+macro zp16(p, out) {
+	local pl:2 = zext(p);
+	local ph:2 = zext(p + 1);
+	local lo:1 = *:1 pl;
+	local hi:1 = *:1 ph;
+	out = (zext(hi) << 8) | zext(lo);
+}
+
+macro pushPC(ra) {
+	push8(ra[8,8]);
+	push8(ra[0,8]);
+}
+
+macro packPS(ps) {
+	ps = (N << 7) | (V << 6) | (T << 5) | (B << 4) | (D << 3) | (I << 2) | (Z << 1) | C;
+}
+
+macro unpackPS(ps) {
+	N = ps[7,1];
+	V = ps[6,1];
+	T = ps[5,1];
+	B = ps[4,1];
+	D = ps[3,1];
+	I = ps[2,1];
+	Z = ps[1,1];
+	C = ps[0,1];
+}
+
+macro resultFlags(value) {
+	Z = (value == 0);
+	N = (value s< 0);
+}
+
+# T-flag handling of the arithmetic group: T = 0 works on A, T = 1 on the zero-page byte M(X).
+macro getTA(lhs) {
+	lhs = A;
+	if (T == 0) goto <tsrc>;
+	local xa:2 = zext(X);
+	lhs = *:1 xa;
+<tsrc>
+}
+
+macro putTA(v) {
+	if (T == 0) goto <tacc>;
+	local xd:2 = zext(X);
+	*:1 xd = v;
+	goto <tend>;
+<tacc>
+	A = v;
+<tend>
+}
+
+# ---------------------------------------------------------------------------------------------
+# Operands
+# ---------------------------------------------------------------------------------------------
+
+REL: reloc is rel [ reloc = inst_next + rel; ] { export *:2 reloc; }
+
+# Group 1 operands (ADC AND CMP EOR LDA ORA SBC STA): cc = 01, addressing mode in bbb
+OP1: imm8          is bbb=1 ; imm8                { export *:1 imm8; }
+OP1: imm8,X        is bbb=5 & X ; imm8            { local t:2 = zext(imm8 + X); export *:1 t; }
+OP1: imm16         is bbb=3 ; imm16               { export *:1 imm16; }
+OP1: imm16,X       is bbb=7 & X ; imm16           { local t:2 = imm16 + zext(X); export *:1 t; }
+OP1: imm16,Y       is bbb=6 & Y ; imm16           { local t:2 = imm16 + zext(Y); export *:1 t; }
+OP1: (imm8,X)      is bbb=0 & X ; imm8            { local p:1 = imm8 + X; local t:2; zp16(p, t); export *:1 t; }
+OP1: (imm8),Y      is bbb=4 & Y ; imm8            { local p:1 = imm8; local t:2; zp16(p, t); t = t + zext(Y); export *:1 t; }
+
+# Immediate form for the loads/ALU group (not STA)
+OP1I: OP1          is OP1                         { export OP1; }
+OP1I: "#"imm8      is bbb=2 ; imm8                { local t:1 = imm8; export t; }
+
+# Group 2 operands (shifts, INC/DEC, BIT, LDY/CPX/CPY...)
+OP2: imm8          is bbb=1 ; imm8                { export *:1 imm8; }
+OP2: A             is bbb=2 & A                   { export A; }
+OP2: imm16         is bbb=3 ; imm16               { export *:1 imm16; }
+OP2: imm8,X        is bbb=5 & X ; imm8            { local t:2 = zext(imm8 + X); export *:1 t; }
+OP2: imm16,X       is bbb=7 & X ; imm16           { local t:2 = imm16 + zext(X); export *:1 t; }
+
+# Memory-only group 2 operand without the accumulator form
+OPM: imm8          is bbb=1 ; imm8                { export *:1 imm8; }
+OPM: imm16         is bbb=3 ; imm16               { export *:1 imm16; }
+OPM: imm8,X        is bbb=5 & X ; imm8            { local t:2 = zext(imm8 + X); export *:1 t; }
+OPM: imm16,X       is bbb=7 & X ; imm16           { local t:2 = imm16 + zext(X); export *:1 t; }
+
+# Immediate / zp / abs operands of LDY, CPX, CPY, LDX
+OPIM: "#"imm8      is bbb=0 ; imm8                { local t:1 = imm8; export t; }
+OPIM: imm8         is bbb=1 ; imm8                { export *:1 imm8; }
+OPIM: imm16        is bbb=3 ; imm16               { export *:1 imm16; }
+
+ADDR8:  imm8       is imm8                        { export *:1 imm8; }
+ADDR16: imm16      is imm16                       { export *:2 imm16; }
+ADDRM:  imm16      is imm16                       { export *:1 imm16; }
+ADDRI:  (imm16)    is imm16                       { local p:2 = imm16; local t:2 = *:2 p; export t; }
+
+# ---------------------------------------------------------------------------------------------
+# Arithmetic group (honours the T flag)
+# ---------------------------------------------------------------------------------------------
+
+:ADC OP1I is (cc=1 & aaa=3) ... & OP1I
+{
+	local m:1 = OP1I;
+	local lhs:1;
+	getTA(lhs);
+	local c:1 = C;
+	local bin:2 = zext(lhs) + zext(m) + zext(c);
+	local res:1 = bin:1;
+	V = ((lhs ^ res) & (m ^ res) & 0x80) != 0;
+	C = bin > 0xff;
+	if (D == 0) goto <store>;
+	local lo:1 = (lhs & 0xf) + (m & 0xf) + c;
+	local hi:1 = (lhs >> 4) + (m >> 4);
+	if (lo <= 9) goto <nolo>;
+	lo = lo + 6;
+	hi = hi + 1;
+<nolo>
+	C = hi > 9;
+	if (hi <= 9) goto <nohi>;
+	hi = hi + 6;
+<nohi>
+	res = (hi << 4) | (lo & 0xf);
+<store>
+	resultFlags(res);
+	putTA(res);
+}
+
+:SBC OP1I is (cc=1 & aaa=7) ... & OP1I
+{
+	local m:1 = OP1I;
+	local lhs:1;
+	getTA(lhs);
+	local b:1 = 1 - C;
+	local res:1 = lhs - m - b;
+	V = ((lhs ^ m) & (lhs ^ res) & 0x80) != 0;
+	local wl:2 = zext(lhs);
+	local wm:2 = zext(m) + zext(b);
+	C = wl >= wm;
+	if (D == 0) goto <store>;
+	local lo:1 = (lhs & 0xf) - (m & 0xf) - b;
+	local lb:1 = lo s< 0;
+	if (lb == 0) goto <nolo>;
+	lo = lo - 6;
+<nolo>
+	local hi:1 = (lhs >> 4) - (m >> 4) - lb;
+	if (hi s>= 0) goto <nohi>;
+	hi = hi - 6;
+<nohi>
+	res = (hi << 4) | (lo & 0xf);
+<store>
+	resultFlags(res);
+	putTA(res);
+}
+
+:AND OP1I is (cc=1 & aaa=1) ... & OP1I
+{
+	local lhs:1;
+	getTA(lhs);
+	local res:1 = lhs & OP1I;
+	resultFlags(res);
+	putTA(res);
+}
+
+:ORA OP1I is (cc=1 & aaa=0) ... & OP1I
+{
+	local lhs:1;
+	getTA(lhs);
+	local res:1 = lhs | OP1I;
+	resultFlags(res);
+	putTA(res);
+}
+
+:EOR OP1I is (cc=1 & aaa=2) ... & OP1I
+{
+	local lhs:1;
+	getTA(lhs);
+	local res:1 = lhs ^ OP1I;
+	resultFlags(res);
+	putTA(res);
+}
+
+:CMP OP1I is (cc=1 & aaa=6) ... & OP1I
+{
+	local m:1 = OP1I;
+	local lhs:1;
+	getTA(lhs);
+	local res:1 = lhs - m;
+	resultFlags(res);
+	C = lhs >= m;
+}
+
+:LDA OP1I is (cc=1 & aaa=5) ... & OP1I
+{
+	local m:1 = OP1I;
+	resultFlags(m);
+	putTA(m);
+}
+
+:STA OP1 is (cc=1 & aaa=4) ... & OP1
+{
+	OP1 = A;
+}
+
+# ---------------------------------------------------------------------------------------------
+# Shifts, increments, tests
+# ---------------------------------------------------------------------------------------------
+
+:ASL OP2 is (op=0x06 | op=0x0A | op=0x0E | op=0x16 | op=0x1E) ... & OP2
+{
+	local t:1 = OP2;
+	C = t[7,1];
+	t = t << 1;
+	OP2 = t;
+	resultFlags(t);
+}
+
+:LSR OP2 is (op=0x46 | op=0x4A | op=0x4E | op=0x56 | op=0x5E) ... & OP2
+{
+	local t:1 = OP2;
+	C = t[0,1];
+	t = t >> 1;
+	OP2 = t;
+	resultFlags(t);
+}
+
+:ROL OP2 is (op=0x26 | op=0x2A | op=0x2E | op=0x36 | op=0x3E) ... & OP2
+{
+	local t:1 = OP2;
+	local c:1 = C;
+	C = t[7,1];
+	t = (t << 1) | c;
+	OP2 = t;
+	resultFlags(t);
+}
+
+:ROR OP2 is (op=0x66 | op=0x6A | op=0x6E | op=0x76 | op=0x7E) ... & OP2
+{
+	local t:1 = OP2;
+	local c:1 = C;
+	C = t[0,1];
+	t = (t >> 1) | (c << 7);
+	OP2 = t;
+	resultFlags(t);
+}
+
+:INC OPM is (op=0xE6 | op=0xEE | op=0xF6 | op=0xFE) ... & OPM
+{
+	local t:1 = OPM + 1;
+	OPM = t;
+	resultFlags(t);
+}
+
+:DEC OPM is (op=0xC6 | op=0xCE | op=0xD6 | op=0xDE) ... & OPM
+{
+	local t:1 = OPM - 1;
+	OPM = t;
+	resultFlags(t);
+}
+
+:INC A is op=0x3A & A
+{
+	A = A + 1;
+	resultFlags(A);
+}
+
+:DEC A is op=0x1A & A
+{
+	A = A - 1;
+	resultFlags(A);
+}
+
+:INX is op=0xE8 { X = X + 1; resultFlags(X); }
+:INY is op=0xC8 { Y = Y + 1; resultFlags(Y); }
+:DEX is op=0xCA { X = X - 1; resultFlags(X); }
+:DEY is op=0x88 { Y = Y - 1; resultFlags(Y); }
+
+:BIT OPM is (op=0x24 | op=0x2C) ... & OPM
+{
+	local m:1 = OPM;
+	N = m[7,1];
+	V = m[6,1];
+	Z = (A & m) == 0;
+}
+
+:COM ADDR8 is op=0x44 ; ADDR8
+{
+	local t:1 = ~ADDR8;
+	ADDR8 = t;
+	resultFlags(t);
+}
+
+:TST ADDR8 is op=0x64 ; ADDR8
+{
+	local t:1 = ADDR8;
+	resultFlags(t);
+}
+
+:RRF ADDR8 is op=0x82 ; ADDR8
+{
+	local t:1 = ADDR8;
+	ADDR8 = (t >> 4) | (t << 4);
+}
+
+:LDM "#"imm8, ADDR8 is op=0x3C ; imm8 ; ADDR8
+{
+	ADDR8 = imm8;
+}
+
+# ---------------------------------------------------------------------------------------------
+# Loads, stores, compares, transfers
+# ---------------------------------------------------------------------------------------------
+
+:LDX OPIM is (op=0xA2 | op=0xA6 | op=0xAE) ... & OPIM
+{
+	X = OPIM;
+	resultFlags(X);
+}
+
+:LDX imm8,Y is op=0xB6 & Y ; imm8
+{
+	local t:2 = zext(imm8 + Y);
+	X = *:1 t;
+	resultFlags(X);
+}
+
+:LDX imm16,Y is op=0xBE & Y ; imm16
+{
+	local t:2 = imm16 + zext(Y);
+	X = *:1 t;
+	resultFlags(X);
+}
+
+:LDY OPIM is (op=0xA0 | op=0xA4 | op=0xAC) ... & OPIM
+{
+	Y = OPIM;
+	resultFlags(Y);
+}
+
+:LDY imm8,X is op=0xB4 & X ; imm8
+{
+	local t:2 = zext(imm8 + X);
+	Y = *:1 t;
+	resultFlags(Y);
+}
+
+:LDY imm16,X is op=0xBC & X ; imm16
+{
+	local t:2 = imm16 + zext(X);
+	Y = *:1 t;
+	resultFlags(Y);
+}
+
+:STX ADDR8 is op=0x86 ; ADDR8 { ADDR8 = X; }
+:STX ADDRM is op=0x8E ; ADDRM { ADDRM = X; }
+:STX imm8,Y is op=0x96 & Y ; imm8 { local t:2 = zext(imm8 + Y); *:1 t = X; }
+
+:STY ADDR8 is op=0x84 ; ADDR8 { ADDR8 = Y; }
+:STY ADDRM is op=0x8C ; ADDRM { ADDRM = Y; }
+:STY imm8,X is op=0x94 & X ; imm8 { local t:2 = zext(imm8 + X); *:1 t = Y; }
+
+:CPX OPIM is (op=0xE0 | op=0xE4 | op=0xEC) ... & OPIM
+{
+	local m:1 = OPIM;
+	local res:1 = X - m;
+	resultFlags(res);
+	C = X >= m;
+}
+
+:CPY OPIM is (op=0xC0 | op=0xC4 | op=0xCC) ... & OPIM
+{
+	local m:1 = OPIM;
+	local res:1 = Y - m;
+	resultFlags(res);
+	C = Y >= m;
+}
+
+:TAX is op=0xAA { X = A; resultFlags(X); }
+:TAY is op=0xA8 { Y = A; resultFlags(Y); }
+:TXA is op=0x8A { A = X; resultFlags(A); }
+:TYA is op=0x98 { A = Y; resultFlags(A); }
+:TSX is op=0xBA { X = S; resultFlags(X); }
+:TXS is op=0x9A { S = X; }
+
+:PHA is op=0x48 { push8(A); }
+:PLA is op=0x68 { pull8(A); resultFlags(A); }
+:PHP is op=0x08 { local ps:1; packPS(ps); push8(ps); }
+:PLP is op=0x28 { local ps:1; pull8(ps); unpackPS(ps); }
+
+:CLC is op=0x18 { C = 0; }
+:SEC is op=0x38 { C = 1; }
+:CLD is op=0xD8 { D = 0; }
+:SED is op=0xF8 { D = 1; }
+:CLI is op=0x58 { I = 0; }
+:SEI is op=0x78 { I = 1; }
+:CLV is op=0xB8 { V = 0; }
+:CLT is op=0x12 { T = 0; }
+:SET is op=0x32 { T = 1; }
+:NOP is op=0xEA { }
+
+# ---------------------------------------------------------------------------------------------
+# Bit instructions: SEB/CLB (A or zero page), BBS/BBC (A or zero page)
+# ---------------------------------------------------------------------------------------------
+
+:SEB "#"bitn, A is lo4=0xB & b4=0 & bitn & A
+{
+	A = A | (1 << bitn);
+}
+
+:CLB "#"bitn, A is lo4=0xB & b4=1 & bitn & A
+{
+	A = A & ~(1 << bitn);
+}
+
+:SEB "#"bitn, ADDR8 is lo4=0xF & b4=0 & bitn ; ADDR8
+{
+	ADDR8 = ADDR8 | (1 << bitn);
+}
+
+:CLB "#"bitn, ADDR8 is lo4=0xF & b4=1 & bitn ; ADDR8
+{
+	ADDR8 = ADDR8 & ~(1 << bitn);
+}
+
+:BBS "#"bitn, A, REL is lo4=0x3 & b4=0 & bitn & A ; REL
+{
+	local m:1 = 1 << bitn;
+	if ((A & m) != 0) goto REL;
+}
+
+:BBC "#"bitn, A, REL is lo4=0x3 & b4=1 & bitn & A ; REL
+{
+	local m:1 = 1 << bitn;
+	if ((A & m) == 0) goto REL;
+}
+
+:BBS "#"bitn, ADDR8, REL is lo4=0x7 & b4=0 & bitn ; ADDR8 ; REL
+{
+	local m:1 = 1 << bitn;
+	if ((ADDR8 & m) != 0) goto REL;
+}
+
+:BBC "#"bitn, ADDR8, REL is lo4=0x7 & b4=1 & bitn ; ADDR8 ; REL
+{
+	local m:1 = 1 << bitn;
+	if ((ADDR8 & m) == 0) goto REL;
+}
+
+# ---------------------------------------------------------------------------------------------
+# Branches, jumps, calls
+# ---------------------------------------------------------------------------------------------
+
+:BCC REL is op=0x90 ; REL { if (C == 0) goto REL; }
+:BCS REL is op=0xB0 ; REL { if (C != 0) goto REL; }
+:BEQ REL is op=0xF0 ; REL { if (Z != 0) goto REL; }
+:BNE REL is op=0xD0 ; REL { if (Z == 0) goto REL; }
+:BMI REL is op=0x30 ; REL { if (N != 0) goto REL; }
+:BPL REL is op=0x10 ; REL { if (N == 0) goto REL; }
+:BVC REL is op=0x50 ; REL { if (V == 0) goto REL; }
+:BVS REL is op=0x70 ; REL { if (V != 0) goto REL; }
+:BRA REL is op=0x80 ; REL { goto REL; }
+
+:JMP ADDR16 is op=0x4C ; ADDR16
+{
+	goto ADDR16;
+}
+
+:JMP ADDRI is op=0x6C ; ADDRI
+{
+	local t:2 = ADDRI;
+	goto [t];
+}
+
+:JMP (imm8) is op=0xB2 ; imm8
+{
+	local p:1 = imm8;
+	local t:2;
+	zp16(p, t);
+	goto [t];
+}
+
+:JSR ADDR16 is op=0x20 ; ADDR16
+{
+	local ra:2 = inst_next - 1;
+	pushPC(ra);
+	call ADDR16;
+}
+
+:JSR (imm8) is op=0x02 ; imm8
+{
+	local ra:2 = inst_next - 1;
+	pushPC(ra);
+	local p:1 = imm8;
+	local t:2;
+	zp16(p, t);
+	call [t];
+}
+
+# Special page: the subroutine starts at SPAGE:ll (page 1F on the FST/SLW group, FF otherwise)
+@ifdef MELPS740_WIT
+@define SPAGE "0xff00"
+@else
+@define SPAGE "0x1f00"
+@endif
+specPage: "\\"^reloc is imm8 [ reloc = $(SPAGE) + imm8; ] { export *:2 reloc; }
+
+:JSR specPage is op=0x22 ; specPage
+{
+	local ra:2 = inst_next - 1;
+	pushPC(ra);
+	call specPage;
+}
+
+:RTS is op=0x60
+{
+	local lo:1;
+	local hi:1;
+	pull8(lo);
+	pull8(hi);
+	local ra:2 = ((zext(hi) << 8) | zext(lo)) + 1;
+	return [ra];
+}
+
+:RTI is op=0x40
+{
+	local ps:1;
+	local lo:1;
+	local hi:1;
+	pull8(ps);
+	unpackPS(ps);
+	pull8(lo);
+	pull8(hi);
+	local ra:2 = (zext(hi) << 8) | zext(lo);
+	return [ra];
+}
+
+# The BRK vector is device dependent; INT2's (FFF4), which the manual says some devices share.
+:BRK is op=0x00
+{
+	local ra:2 = inst_next + 1;
+	pushPC(ra);
+	B = 1;
+	local ps:1;
+	packPS(ps);
+	push8(ps);
+	I = 1;
+	local vec:2 = 0xfff4;
+	local t:2 = *:2 vec;
+	call [t];
+}
+
+# ---------------------------------------------------------------------------------------------
+# Device specific system instructions
+# ---------------------------------------------------------------------------------------------
+
+:STP is op=0x42 { __cpu_stp(); }
+
+@ifdef MELPS740_WIT
+:WIT is op=0xC2 { __cpu_wit(); }
+@else
+:SLW is op=0xC2 { __cpu_slw(); }
+:FST is op=0xE2 { __cpu_fst(); }
+@endif
+
+@ifdef MELPS740_MULDIV
+# M(S):A <- A * M(zz+X); S <- S - 1
+:MUL imm8,X is op=0x62 & X ; imm8
+{
+	local t:2 = zext(imm8 + X);
+	local m:1 = *:1 t;
+	local p:2 = zext(A) * zext(m);
+	A = p:1;
+	local hi:1 = p[8,8];
+	push8(hi);
+}
+
+# A <- M(zz+X+1):M(zz+X) / A; M(S) <- ~remainder; S <- S - 1  (division by zero: manual says no
+# detection is provided; modelled as no operation)
+:DIV imm8,X is op=0xE2 & X ; imm8
+{
+	local p0:1 = imm8 + X;
+	local p1:1 = p0 + 1;
+	local a0:2 = zext(p0);
+	local a1:2 = zext(p1);
+	local lo:1 = *:1 a0;
+	local hi:1 = *:1 a1;
+	local dividend:2 = (zext(hi) << 8) | zext(lo);
+	if (A == 0) goto <end>;
+	local d:2 = zext(A);
+	local q:2 = dividend / d;
+	local r:2 = dividend % d;
+	A = q:1;
+	local nr:1 = ~(r:1);
+	push8(nr);
+<end>
+}
+@endif

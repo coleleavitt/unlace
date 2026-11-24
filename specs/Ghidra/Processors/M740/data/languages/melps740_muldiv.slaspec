@@ -1,0 +1,4 @@
+# Mitsubishi MELPS 740 with WIT, MUL and DIV (M37450 type)
+@define MELPS740_WIT "1"
+@define MELPS740_MULDIV "1"
+@include "melps740.sinc"

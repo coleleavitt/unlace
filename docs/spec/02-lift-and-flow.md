@@ -172,11 +172,14 @@ to the head's failure exit
 the block between (whose barrier, `DataMemoryBarrier`, stays) and the
 store-exclusive's blocks fold as above. Since a retry re-runs only the
 store-exclusive, status and reload blocks, the head's values are not
-checked against what those blocks write; instead no op of that cycle may
-read a storage a later op of the cycle writes (`cycle_invariant`), the
-values the reload block leaves must equal the head's where they stay live
-after either exit, and the store-exclusive's constant status writes are
-exempt (`dead_after`). The reload block must repeat the head: evaluated from the state the loop body
+checked against what those blocks write. Instead a storage an op of that
+cycle reads before an earlier op of the cycle writes it, while a later op
+does (ARM's `cmp` reads the old carry for its shifter carry), is followed
+forward through the ops that read it (`cycle_taint`): it may not reach a
+load, a store, a user operation or a branch, and what it still holds at the
+end must be dead after either exit. The values the reload block leaves must
+equal the head's where they stay live after either exit, and the
+store-exclusive's constant status writes are exempt (`dead_after`). The reload block must repeat the head: evaluated from the state the loop body
 leaves, its one load-exclusive reads the head's address, it reads neither
 monitor output, and it branches back exactly when the reloaded value equals
 the head's expected value (`reload_matches`). The status test then always

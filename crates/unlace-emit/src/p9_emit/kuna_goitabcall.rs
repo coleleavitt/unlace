@@ -106,7 +106,13 @@ fn table_interface(
     }
     let def = fd.obank().get(v.get_def()?)?;
     match def.code() {
-        OpCode::CPUI_COPY => table_interface(fd, arch, def.get_in(0)?, depth - 1),
+        // A copy, and the width changes and call guards a register variable shared
+        // with a narrower value (the assertion's 4-byte type hash) puts between
+        // the table and its use, carry the same pointer.
+        OpCode::CPUI_COPY
+        | OpCode::CPUI_INT_ZEXT
+        | OpCode::CPUI_SUBPIECE
+        | OpCode::CPUI_INDIRECT => table_interface(fd, arch, def.get_in(0)?, depth - 1),
         OpCode::CPUI_MULTIEQUAL => {
             let n = def.num_input();
             if n == 0 || n > MAX_JOIN_INPUTS {
@@ -308,12 +314,15 @@ fn assert_result(
     vn: VarnodeId,
 ) -> Option<(String, Option<u64>)> {
     let mut v = fd.vbank().get(vn)?;
-    for _ in 0..2 {
+    for _ in 0..4 {
         let id = v.get_def()?;
         let def = fd.obank().get(id)?;
         match def.code() {
             OpCode::CPUI_CALL => return asserted_interface(fd, arch, id),
-            OpCode::CPUI_COPY => v = fd.vbank().get(def.get_in(0)?)?,
+            OpCode::CPUI_COPY
+            | OpCode::CPUI_INT_ZEXT
+            | OpCode::CPUI_SUBPIECE
+            | OpCode::CPUI_INDIRECT => v = fd.vbank().get(def.get_in(0)?)?,
             _ => return None,
         }
     }

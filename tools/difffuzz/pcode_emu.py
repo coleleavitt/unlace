@@ -47,6 +47,9 @@ def from_float(x, size):
 
 
 class State:
+    # {LOAD/STORE space id: "register" or "ram"}; set from slaregs.space_names, unknown ids are ram
+    space_ids: dict = {}
+
     def __init__(self, big_endian, fill, regs):
         self.big = big_endian
         self.fill = fill
@@ -145,7 +148,7 @@ def step(state, ops, addr, size, max_steps=20000):
         if opc == "STORE":
             ptr = rd(ins[1])
             v = ins[2]
-            state.write("ram", ptr, v["size"], rd(v))
+            state.write(state.space_ids.get(ins[0]["offset"], "ram"), ptr, v["size"], rd(v))
             continue
         if opc == "LOAD":
             # space id 0 is the constant space: a dynamic export into it (`export *[const]:8 tmp`)
@@ -153,7 +156,7 @@ def step(state, ops, addr, size, max_steps=20000):
             if ins[0]["offset"] == 0:
                 r = rd(ins[1]) & mask(osz)
             else:
-                r = state.read("ram", rd(ins[1]), osz)
+                r = state.read(state.space_ids.get(ins[0]["offset"], "ram"), rd(ins[1]), osz)
         else:
             r = _eval(opc, ins, rd, osz)
         state.write(*_vn(out), r)

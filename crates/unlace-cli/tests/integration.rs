@@ -25,6 +25,8 @@ mod mips_elf_selection;
 
 #[path = "v60.rs"]
 mod v60;
+#[path = "vax.rs"]
+mod vax;
 
 #[path = "aarch64_rme.rs"]
 mod aarch64_rme;

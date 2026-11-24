@@ -2018,6 +2018,41 @@ impl ActionReturnRecovery {
     }
 }
 
+/// (kuna) `KUNA_RETREC_TRACE`: print the expression tree under `vn`.
+fn retrec_tree(data: &Funcdata, vn: crate::context::VarnodeId, depth: usize) {
+    let Some(v) = data.vbank().get(vn) else {
+        return;
+    };
+    let pad = "  ".repeat(depth);
+    let tag = if v.is_constant() {
+        format!("const {:#x}", v.get_offset())
+    } else if v.is_input() {
+        "input".to_string()
+    } else {
+        String::new()
+    };
+    let def = v.get_def().and_then(|d| data.obank().get(d));
+    eprintln!(
+        "tree {}{:#x}+{} {} {:?} descend {}",
+        pad,
+        v.get_addr().get_offset(),
+        v.get_size(),
+        tag,
+        def.map(|o| o.code()),
+        v.descend_iter().count()
+    );
+    if depth >= 7 {
+        return;
+    }
+    if let Some(o) = def {
+        for k in 0..o.num_input() {
+            if let Some(iv) = o.get_in(k) {
+                retrec_tree(data, iv, depth + 1);
+            }
+        }
+    }
+}
+
 /// (kuna) `KUNA_RETREC_TRACE`: print each output trial's state at `stage`.
 fn retrec_trace(stage: &str, data: &Funcdata, active: &crate::fspec::ParamActive) {
     if std::env::var_os("KUNA_RETREC_TRACE").is_none() {
@@ -2160,6 +2195,9 @@ impl Action for ActionReturnRecovery {
                     };
                     if std::env::var_os("KUNA_RETREC_TRACE").is_some() {
                         eprintln!("retrec {} opuse trial {} only {}", data.get_name(), i, only);
+                        if !only {
+                            retrec_tree(data, vn, 0);
+                        }
                     }
                     if only {
                         active.get_trial_mut(i).mark_active();

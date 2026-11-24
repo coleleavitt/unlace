@@ -1,0 +1,955 @@
+# MULTOS Executable Language (MEL), the MULTOS smart-card virtual machine. Written for unlace
+# from the MULTOS Developer's Reference Manual (MAO-DOC-TEC-006 v1.58): the instruction
+# descriptions and the Instruction Map (opcode, tag, operand bytes, compact forms); no text is
+# copied. An instruction byte is the 5-bit opcode in bits 3-7 and the 3-bit tag in bits 0-2,
+# followed by its operand bytes (big endian). For memory operands the tag names the segment
+# register: 1 SB, 2 ST, 3 DB, 4 LB, 5 DT, 6 PB, 7 PT; tag 0 works on the top of the stack.
+# The stack grows upward: DT (dynamic top) is the stack pointer and a push stores at DT.
+# CEN/CDIS switch the compact encoding of the DB/LB/PB/PT forms on and off (decode context).
+
+define endian=big;
+define alignment=1;
+
+define space ram      type=ram_space      size=2 default;
+define space register type=register_space size=2;
+
+define register offset=0x00 size=2 [ CP SB ST DB LB DT PB PT ];
+define register offset=0x20 size=1 [ CF ZF NF VF ];
+define register offset=0x30 size=2 [ SW ];
+define register offset=0x32 size=1 [ LA ];
+define register offset=0x40 size=4 [ contextreg ];
+
+define context contextreg
+  cm    = (0,0)
+  cmoff = (1,1) noflow
+;
+
+define token ins(8)
+  opc = (3,7)
+  tag = (0,2)
+;
+define token t1(8)
+  b1 = (0,7)
+  s1 = (0,7) signed
+  cn = (6,7)
+  bn = (0,7)
+  co6 = (0,5)
+  cs6 = (0,5) signed
+;
+define token t2(8)
+  b2 = (0,7)
+  s2 = (0,7) signed
+;
+define token t3(8)
+  b3 = (0,7)
+;
+define token w1(16)
+  u16a = (0,15)
+  s16a = (0,15) signed
+;
+define token w2(16)
+  u16b = (0,15)
+  s16b = (0,15) signed
+;
+
+define pcodeop mel_set_sw;
+define pcodeop mel_set_la;
+define pcodeop mel_exit;
+define pcodeop mel_primitive;
+define pcodeop mel_block;
+define pcodeop mel_cmp_block;
+define pcodeop mel_reserved;
+
+REL: dest is s1 [ dest = inst_next + s1; ] { export *:2 dest; }
+CPW: u16a is u16a { export *:2 u16a; }
+
+:NOP is opc=0 & tag=0 { }
+:SETSW b1, b2 is opc=0 & tag=1 ; b1 ; b2 { SW = (b1 << 8) | b2; mel_set_sw(SW); }
+:SETLA b1 is opc=0 & tag=2 ; b1 { LA = b1; mel_set_la(LA); }
+:SETSWLA b1, b2, b3 is opc=0 & tag=3 ; b1 ; b2 ; b3 { SW = (b1 << 8) | b2; LA = b3; mel_set_sw(SW); mel_set_la(LA); }
+:EXIT is opc=0 & tag=4 { mel_exit(); return [CP]; }
+:EXITSW b1, b2 is opc=0 & tag=5 ; b1 ; b2 { SW = (b1 << 8) | b2; mel_set_sw(SW); mel_exit(); return [CP]; }
+:EXITLA b1 is opc=0 & tag=6 ; b1 { LA = b1; mel_set_la(LA); mel_exit(); return [CP]; }
+:EXITSWLA b1, b2, b3 is opc=0 & tag=7 ; b1 ; b2 ; b3 { SW = (b1 << 8) | b2; LA = b3; mel_set_sw(SW); mel_set_la(LA); mel_exit(); return [CP]; }
+:CEN is opc=1 & tag=0 ; bn=0 & b1 [ cm = 1; globalset(inst_next, cm); ] { }
+:CDIS is opc=1 & tag=0 ; bn=1 & b1 [ cm = 0; globalset(inst_next, cm); ] { }
+:BEQ REL is opc=1 & tag=1 ; REL { if (ZF) goto REL; }
+:BLT REL is opc=1 & tag=2 ; REL { if (CF) goto REL; }
+:BLE REL is opc=1 & tag=3 ; REL { if (CF || ZF) goto REL; }
+:BGT REL is opc=1 & tag=4 ; REL { if (!(CF || ZF)) goto REL; }
+:BGE REL is opc=1 & tag=5 ; REL { if (!CF) goto REL; }
+:BNE REL is opc=1 & tag=6 ; REL { if (!ZF) goto REL; }
+:BRA REL is opc=1 & tag=7 ; REL { goto REL; }
+:JMP is opc=2 & tag=0 { DT = DT - 2; t:2 = *:2 DT; goto [t]; }
+:JEQ CPW is opc=2 & tag=1 ; CPW { if (ZF) goto CPW; }
+:JLT CPW is opc=2 & tag=2 ; CPW { if (CF) goto CPW; }
+:JLE CPW is opc=2 & tag=3 ; CPW { if (CF || ZF) goto CPW; }
+:JGT CPW is opc=2 & tag=4 ; CPW { if (!(CF || ZF)) goto CPW; }
+:JGE CPW is opc=2 & tag=5 ; CPW { if (!CF) goto CPW; }
+:JNE CPW is opc=2 & tag=6 ; CPW { if (!ZF) goto CPW; }
+:JMP CPW is opc=2 & tag=7 ; CPW { goto CPW; }
+:CALL is opc=3 & tag=0 { DT = DT - 2; t:2 = *:2 DT; call [t]; }
+:CEQ CPW is opc=3 & tag=1 ; CPW { if (!(ZF)) goto inst_next; call CPW; }
+:CLT CPW is opc=3 & tag=2 ; CPW { if (!(CF)) goto inst_next; call CPW; }
+:CLE CPW is opc=3 & tag=3 ; CPW { if (!(CF || ZF)) goto inst_next; call CPW; }
+:CGT CPW is opc=3 & tag=4 ; CPW { if (!(!(CF || ZF))) goto inst_next; call CPW; }
+:CGE CPW is opc=3 & tag=5 ; CPW { if (!(!CF)) goto inst_next; call CPW; }
+:CNE CPW is opc=3 & tag=6 ; CPW { if (!(!ZF)) goto inst_next; call CPW; }
+:CALL CPW is opc=3 & tag=7 ; CPW { call CPW; }
+:PUSHZ b1 is opc=4 & tag=0 ; b1 { n:2 = b1; mel_block(0:1, DT, n); DT = DT + n; }
+:PUSHB b1 is opc=4 & tag=1 ; b1 { *:1 DT = b1:1; DT = DT + 1; }
+:PUSHW u16a is opc=4 & tag=2 ; u16a { *:2 DT = u16a:2; DT = DT + 2; }
+:COMPACT_OFF is opc=4 & tag=3 [ cmoff = 1; globalset(inst_next, cmoff); ] { }
+:POPN b1 is opc=4 & tag=4 ; b1 { n:2 = b1; DT = DT - n; }
+:POPB is opc=4 & tag=5 { DT = DT - 1; }
+:POPW is opc=4 & tag=6 { DT = DT - 2; }
+:BITTEST b1 is opc=4 & tag=7 ; b1 { mel_reserved(); }
+:PRIM b1 is opc=5 & tag=0 ; b1 { s:1 = 0; p:1 = b1; DT = mel_primitive(s, p, DT); }
+:PRIM b1, b2 is opc=5 & tag=1 ; b1 ; b2 { s:1 = 1; p:1 = b1; a:1 = b2; DT = mel_primitive(s, p, DT, a); }
+:PRIM b1, b2, b3 is opc=5 & tag=2 ; b1 ; b2 ; b3 { s:1 = 2; p:1 = b1; a:1 = b2; b:1 = b3; DT = mel_primitive(s, p, DT, a, b); }
+:PRIM b1, b2, u16b is opc=5 & tag=3 ; b1 ; b2 ; u16b { s:1 = 3; p:1 = b1; a:1 = b2; bc:2 = u16b; DT = mel_primitive(s, p, DT, a, bc); }
+:RET is opc=5 & tag=4 { return [CP]; }
+:RET b1 is opc=5 & tag=5 ; b1 { return [CP]; }
+:RET ", "^b1 is opc=5 & tag=6 ; b1 { return [CP]; }
+:RET b1, b2 is opc=5 & tag=7 ; b1 ; b2 { return [CP]; }
+:LOAD ", "^b1 is opc=7 & tag=0 ; bn=1 & b1 { v:1 = *:1 (DT - 1); *:1 DT = v; DT = DT + 1; }
+:LOAD ", "^b1 is opc=7 & tag=0 ; bn=2 & b1 { v:2 = *:2 (DT - 2); *:2 DT = v; DT = DT + 2; }
+:LOAD ", "^b1 is opc=7 & tag=0 ; bn=4 & b1 { v:4 = *:4 (DT - 4); *:4 DT = v; DT = DT + 4; }
+:LOAD ", "^b1 is opc=7 & tag=0 ; b1 { n:2 = b1; mel_block(7:1, DT, n); }
+:LOAD "SB["^s16a^"]", b1 is opc=7 & tag=1 ; bn=1 & b1 ; s16a { a:2 = SB + s16a; v:1 = *:1 a; *:1 DT = v; DT = DT + 1; }
+:LOAD "SB["^s16a^"]", b1 is opc=7 & tag=1 ; bn=2 & b1 ; s16a { a:2 = SB + s16a; v:2 = *:2 a; *:2 DT = v; DT = DT + 2; }
+:LOAD "SB["^s16a^"]", b1 is opc=7 & tag=1 ; bn=4 & b1 ; s16a { a:2 = SB + s16a; v:4 = *:4 a; *:4 DT = v; DT = DT + 4; }
+:LOAD "SB["^s16a^"]", b1 is opc=7 & tag=1 ; b1 ; s16a { n:2 = b1; a:2 = SB + s16a; mel_block(7:1, a, n); }
+:LOAD "ST["^s16a^"]", b1 is opc=7 & tag=2 ; bn=1 & b1 ; s16a { a:2 = ST + s16a; v:1 = *:1 a; *:1 DT = v; DT = DT + 1; }
+:LOAD "ST["^s16a^"]", b1 is opc=7 & tag=2 ; bn=2 & b1 ; s16a { a:2 = ST + s16a; v:2 = *:2 a; *:2 DT = v; DT = DT + 2; }
+:LOAD "ST["^s16a^"]", b1 is opc=7 & tag=2 ; bn=4 & b1 ; s16a { a:2 = ST + s16a; v:4 = *:4 a; *:4 DT = v; DT = DT + 4; }
+:LOAD "ST["^s16a^"]", b1 is opc=7 & tag=2 ; b1 ; s16a { n:2 = b1; a:2 = ST + s16a; mel_block(7:1, a, n); }
+:LOAD "DB["^s16a^"]", b1 is opc=7 & tag=3 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = DB + s16a; v:1 = *:1 a; *:1 DT = v; DT = DT + 1; }
+:LOAD "DB["^s16a^"]", b1 is opc=7 & tag=3 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = DB + s16a; v:2 = *:2 a; *:2 DT = v; DT = DT + 2; }
+:LOAD "DB["^s16a^"]", b1 is opc=7 & tag=3 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = DB + s16a; v:4 = *:4 a; *:4 DT = v; DT = DT + 4; }
+:LOAD "DB["^s16a^"]", b1 is opc=7 & tag=3 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = DB + s16a; mel_block(7:1, a, n); }
+:LOAD "DB["^co6^"]", "1" is opc=7 & tag=3 & cm=1 & cmoff=0 ; cn=0 & co6 { a:2 = DB + co6; v:1 = *:1 a; *:1 DT = v; DT = DT + 1; }
+:LOAD "DB["^co6^"]", "2" is opc=7 & tag=3 & cm=1 & cmoff=0 ; cn=1 & co6 { a:2 = DB + co6; v:2 = *:2 a; *:2 DT = v; DT = DT + 2; }
+:LOAD "DB["^co6^"]", "4" is opc=7 & tag=3 & cm=1 & cmoff=0 ; cn=2 & co6 { a:2 = DB + co6; v:4 = *:4 a; *:4 DT = v; DT = DT + 4; }
+:LOAD "DB[c]", "8" is opc=7 & tag=3 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(7:1, DB, 8:2); }
+:LOAD "LB["^s16a^"]", b1 is opc=7 & tag=4 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = LB + s16a; v:1 = *:1 a; *:1 DT = v; DT = DT + 1; }
+:LOAD "LB["^s16a^"]", b1 is opc=7 & tag=4 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = LB + s16a; v:2 = *:2 a; *:2 DT = v; DT = DT + 2; }
+:LOAD "LB["^s16a^"]", b1 is opc=7 & tag=4 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = LB + s16a; v:4 = *:4 a; *:4 DT = v; DT = DT + 4; }
+:LOAD "LB["^s16a^"]", b1 is opc=7 & tag=4 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = LB + s16a; mel_block(7:1, a, n); }
+:LOAD "LB["^cs6^"]", "1" is opc=7 & tag=4 & cm=1 & cmoff=0 ; cn=0 & cs6 { a:2 = LB + cs6; v:1 = *:1 a; *:1 DT = v; DT = DT + 1; }
+:LOAD "LB["^cs6^"]", "2" is opc=7 & tag=4 & cm=1 & cmoff=0 ; cn=1 & cs6 { a:2 = LB + cs6; v:2 = *:2 a; *:2 DT = v; DT = DT + 2; }
+:LOAD "LB["^cs6^"]", "4" is opc=7 & tag=4 & cm=1 & cmoff=0 ; cn=2 & cs6 { a:2 = LB + cs6; v:4 = *:4 a; *:4 DT = v; DT = DT + 4; }
+:LOAD "LB[c]", "8" is opc=7 & tag=4 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(7:1, LB, 8:2); }
+:LOAD "DT["^s16a^"]", b1 is opc=7 & tag=5 ; bn=1 & b1 ; s16a { a:2 = DT + s16a; v:1 = *:1 a; *:1 DT = v; DT = DT + 1; }
+:LOAD "DT["^s16a^"]", b1 is opc=7 & tag=5 ; bn=2 & b1 ; s16a { a:2 = DT + s16a; v:2 = *:2 a; *:2 DT = v; DT = DT + 2; }
+:LOAD "DT["^s16a^"]", b1 is opc=7 & tag=5 ; bn=4 & b1 ; s16a { a:2 = DT + s16a; v:4 = *:4 a; *:4 DT = v; DT = DT + 4; }
+:LOAD "DT["^s16a^"]", b1 is opc=7 & tag=5 ; b1 ; s16a { n:2 = b1; a:2 = DT + s16a; mel_block(7:1, a, n); }
+:LOAD "PB["^s16a^"]", b1 is opc=7 & tag=6 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = PB + s16a; v:1 = *:1 a; *:1 DT = v; DT = DT + 1; }
+:LOAD "PB["^s16a^"]", b1 is opc=7 & tag=6 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = PB + s16a; v:2 = *:2 a; *:2 DT = v; DT = DT + 2; }
+:LOAD "PB["^s16a^"]", b1 is opc=7 & tag=6 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = PB + s16a; v:4 = *:4 a; *:4 DT = v; DT = DT + 4; }
+:LOAD "PB["^s16a^"]", b1 is opc=7 & tag=6 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = PB + s16a; mel_block(7:1, a, n); }
+:LOAD "PB["^co6^"]", "1" is opc=7 & tag=6 & cm=1 & cmoff=0 ; cn=0 & co6 { a:2 = PB + co6; v:1 = *:1 a; *:1 DT = v; DT = DT + 1; }
+:LOAD "PB["^co6^"]", "2" is opc=7 & tag=6 & cm=1 & cmoff=0 ; cn=1 & co6 { a:2 = PB + co6; v:2 = *:2 a; *:2 DT = v; DT = DT + 2; }
+:LOAD "PB["^co6^"]", "4" is opc=7 & tag=6 & cm=1 & cmoff=0 ; cn=2 & co6 { a:2 = PB + co6; v:4 = *:4 a; *:4 DT = v; DT = DT + 4; }
+:LOAD "PB[c]", "8" is opc=7 & tag=6 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(7:1, PB, 8:2); }
+:LOAD "PT["^s16a^"]", b1 is opc=7 & tag=7 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = PT + s16a; v:1 = *:1 a; *:1 DT = v; DT = DT + 1; }
+:LOAD "PT["^s16a^"]", b1 is opc=7 & tag=7 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = PT + s16a; v:2 = *:2 a; *:2 DT = v; DT = DT + 2; }
+:LOAD "PT["^s16a^"]", b1 is opc=7 & tag=7 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = PT + s16a; v:4 = *:4 a; *:4 DT = v; DT = DT + 4; }
+:LOAD "PT["^s16a^"]", b1 is opc=7 & tag=7 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = PT + s16a; mel_block(7:1, a, n); }
+:LOAD "PT["^po^"]", "1" is opc=7 & tag=7 & cm=1 & cmoff=0 ; cn=0 & co6 [ po = co6 - 64; ] { a:2 = PT + po; v:1 = *:1 a; *:1 DT = v; DT = DT + 1; }
+:LOAD "PT["^po^"]", "2" is opc=7 & tag=7 & cm=1 & cmoff=0 ; cn=1 & co6 [ po = co6 - 64; ] { a:2 = PT + po; v:2 = *:2 a; *:2 DT = v; DT = DT + 2; }
+:LOAD "PT["^po^"]", "4" is opc=7 & tag=7 & cm=1 & cmoff=0 ; cn=2 & co6 [ po = co6 - 64; ] { a:2 = PT + po; v:4 = *:4 a; *:4 DT = v; DT = DT + 4; }
+:LOAD "PT[c]", "8" is opc=7 & tag=7 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(7:1, PT, 8:2); }
+:STORE ", "^b1 is opc=8 & tag=0 ; bn=1 & b1 { DT = DT - 1; v:1 = *:1 DT; *:1 (DT - 1) = v; }
+:STORE ", "^b1 is opc=8 & tag=0 ; bn=2 & b1 { DT = DT - 2; v:2 = *:2 DT; *:2 (DT - 2) = v; }
+:STORE ", "^b1 is opc=8 & tag=0 ; bn=4 & b1 { DT = DT - 4; v:4 = *:4 DT; *:4 (DT - 4) = v; }
+:STORE ", "^b1 is opc=8 & tag=0 ; b1 { n:2 = b1; mel_block(8:1, DT, n); }
+:STORE "SB["^s16a^"]", b1 is opc=8 & tag=1 ; bn=1 & b1 ; s16a { a:2 = SB + s16a; DT = DT - 1; v:1 = *:1 DT; *:1 a = v; }
+:STORE "SB["^s16a^"]", b1 is opc=8 & tag=1 ; bn=2 & b1 ; s16a { a:2 = SB + s16a; DT = DT - 2; v:2 = *:2 DT; *:2 a = v; }
+:STORE "SB["^s16a^"]", b1 is opc=8 & tag=1 ; bn=4 & b1 ; s16a { a:2 = SB + s16a; DT = DT - 4; v:4 = *:4 DT; *:4 a = v; }
+:STORE "SB["^s16a^"]", b1 is opc=8 & tag=1 ; b1 ; s16a { n:2 = b1; a:2 = SB + s16a; mel_block(8:1, a, n); }
+:STORE "ST["^s16a^"]", b1 is opc=8 & tag=2 ; bn=1 & b1 ; s16a { a:2 = ST + s16a; DT = DT - 1; v:1 = *:1 DT; *:1 a = v; }
+:STORE "ST["^s16a^"]", b1 is opc=8 & tag=2 ; bn=2 & b1 ; s16a { a:2 = ST + s16a; DT = DT - 2; v:2 = *:2 DT; *:2 a = v; }
+:STORE "ST["^s16a^"]", b1 is opc=8 & tag=2 ; bn=4 & b1 ; s16a { a:2 = ST + s16a; DT = DT - 4; v:4 = *:4 DT; *:4 a = v; }
+:STORE "ST["^s16a^"]", b1 is opc=8 & tag=2 ; b1 ; s16a { n:2 = b1; a:2 = ST + s16a; mel_block(8:1, a, n); }
+:STORE "DB["^s16a^"]", b1 is opc=8 & tag=3 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = DB + s16a; DT = DT - 1; v:1 = *:1 DT; *:1 a = v; }
+:STORE "DB["^s16a^"]", b1 is opc=8 & tag=3 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = DB + s16a; DT = DT - 2; v:2 = *:2 DT; *:2 a = v; }
+:STORE "DB["^s16a^"]", b1 is opc=8 & tag=3 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = DB + s16a; DT = DT - 4; v:4 = *:4 DT; *:4 a = v; }
+:STORE "DB["^s16a^"]", b1 is opc=8 & tag=3 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = DB + s16a; mel_block(8:1, a, n); }
+:STORE "DB["^co6^"]", "1" is opc=8 & tag=3 & cm=1 & cmoff=0 ; cn=0 & co6 { a:2 = DB + co6; DT = DT - 1; v:1 = *:1 DT; *:1 a = v; }
+:STORE "DB["^co6^"]", "2" is opc=8 & tag=3 & cm=1 & cmoff=0 ; cn=1 & co6 { a:2 = DB + co6; DT = DT - 2; v:2 = *:2 DT; *:2 a = v; }
+:STORE "DB["^co6^"]", "4" is opc=8 & tag=3 & cm=1 & cmoff=0 ; cn=2 & co6 { a:2 = DB + co6; DT = DT - 4; v:4 = *:4 DT; *:4 a = v; }
+:STORE "DB[c]", "8" is opc=8 & tag=3 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(8:1, DB, 8:2); }
+:STORE "LB["^s16a^"]", b1 is opc=8 & tag=4 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = LB + s16a; DT = DT - 1; v:1 = *:1 DT; *:1 a = v; }
+:STORE "LB["^s16a^"]", b1 is opc=8 & tag=4 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = LB + s16a; DT = DT - 2; v:2 = *:2 DT; *:2 a = v; }
+:STORE "LB["^s16a^"]", b1 is opc=8 & tag=4 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = LB + s16a; DT = DT - 4; v:4 = *:4 DT; *:4 a = v; }
+:STORE "LB["^s16a^"]", b1 is opc=8 & tag=4 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = LB + s16a; mel_block(8:1, a, n); }
+:STORE "LB["^cs6^"]", "1" is opc=8 & tag=4 & cm=1 & cmoff=0 ; cn=0 & cs6 { a:2 = LB + cs6; DT = DT - 1; v:1 = *:1 DT; *:1 a = v; }
+:STORE "LB["^cs6^"]", "2" is opc=8 & tag=4 & cm=1 & cmoff=0 ; cn=1 & cs6 { a:2 = LB + cs6; DT = DT - 2; v:2 = *:2 DT; *:2 a = v; }
+:STORE "LB["^cs6^"]", "4" is opc=8 & tag=4 & cm=1 & cmoff=0 ; cn=2 & cs6 { a:2 = LB + cs6; DT = DT - 4; v:4 = *:4 DT; *:4 a = v; }
+:STORE "LB[c]", "8" is opc=8 & tag=4 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(8:1, LB, 8:2); }
+:STORE "DT["^s16a^"]", b1 is opc=8 & tag=5 ; bn=1 & b1 ; s16a { a:2 = DT + s16a; DT = DT - 1; v:1 = *:1 DT; *:1 a = v; }
+:STORE "DT["^s16a^"]", b1 is opc=8 & tag=5 ; bn=2 & b1 ; s16a { a:2 = DT + s16a; DT = DT - 2; v:2 = *:2 DT; *:2 a = v; }
+:STORE "DT["^s16a^"]", b1 is opc=8 & tag=5 ; bn=4 & b1 ; s16a { a:2 = DT + s16a; DT = DT - 4; v:4 = *:4 DT; *:4 a = v; }
+:STORE "DT["^s16a^"]", b1 is opc=8 & tag=5 ; b1 ; s16a { n:2 = b1; a:2 = DT + s16a; mel_block(8:1, a, n); }
+:STORE "PB["^s16a^"]", b1 is opc=8 & tag=6 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = PB + s16a; DT = DT - 1; v:1 = *:1 DT; *:1 a = v; }
+:STORE "PB["^s16a^"]", b1 is opc=8 & tag=6 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = PB + s16a; DT = DT - 2; v:2 = *:2 DT; *:2 a = v; }
+:STORE "PB["^s16a^"]", b1 is opc=8 & tag=6 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = PB + s16a; DT = DT - 4; v:4 = *:4 DT; *:4 a = v; }
+:STORE "PB["^s16a^"]", b1 is opc=8 & tag=6 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = PB + s16a; mel_block(8:1, a, n); }
+:STORE "PB["^co6^"]", "1" is opc=8 & tag=6 & cm=1 & cmoff=0 ; cn=0 & co6 { a:2 = PB + co6; DT = DT - 1; v:1 = *:1 DT; *:1 a = v; }
+:STORE "PB["^co6^"]", "2" is opc=8 & tag=6 & cm=1 & cmoff=0 ; cn=1 & co6 { a:2 = PB + co6; DT = DT - 2; v:2 = *:2 DT; *:2 a = v; }
+:STORE "PB["^co6^"]", "4" is opc=8 & tag=6 & cm=1 & cmoff=0 ; cn=2 & co6 { a:2 = PB + co6; DT = DT - 4; v:4 = *:4 DT; *:4 a = v; }
+:STORE "PB[c]", "8" is opc=8 & tag=6 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(8:1, PB, 8:2); }
+:STORE "PT["^s16a^"]", b1 is opc=8 & tag=7 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = PT + s16a; DT = DT - 1; v:1 = *:1 DT; *:1 a = v; }
+:STORE "PT["^s16a^"]", b1 is opc=8 & tag=7 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = PT + s16a; DT = DT - 2; v:2 = *:2 DT; *:2 a = v; }
+:STORE "PT["^s16a^"]", b1 is opc=8 & tag=7 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = PT + s16a; DT = DT - 4; v:4 = *:4 DT; *:4 a = v; }
+:STORE "PT["^s16a^"]", b1 is opc=8 & tag=7 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = PT + s16a; mel_block(8:1, a, n); }
+:STORE "PT["^po^"]", "1" is opc=8 & tag=7 & cm=1 & cmoff=0 ; cn=0 & co6 [ po = co6 - 64; ] { a:2 = PT + po; DT = DT - 1; v:1 = *:1 DT; *:1 a = v; }
+:STORE "PT["^po^"]", "2" is opc=8 & tag=7 & cm=1 & cmoff=0 ; cn=1 & co6 [ po = co6 - 64; ] { a:2 = PT + po; DT = DT - 2; v:2 = *:2 DT; *:2 a = v; }
+:STORE "PT["^po^"]", "4" is opc=8 & tag=7 & cm=1 & cmoff=0 ; cn=2 & co6 [ po = co6 - 64; ] { a:2 = PT + po; DT = DT - 4; v:4 = *:4 DT; *:4 a = v; }
+:STORE "PT[c]", "8" is opc=8 & tag=7 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(8:1, PT, 8:2); }
+:LOADI ", "^b1 is opc=9 & tag=0 ; bn=1 & b1 { DT = DT - 2; p:2 = *:2 DT; v:1 = *:1 p; *:1 DT = v; DT = DT + 1; }
+:LOADI ", "^b1 is opc=9 & tag=0 ; bn=2 & b1 { DT = DT - 2; p:2 = *:2 DT; v:2 = *:2 p; *:2 DT = v; DT = DT + 2; }
+:LOADI ", "^b1 is opc=9 & tag=0 ; bn=4 & b1 { DT = DT - 2; p:2 = *:2 DT; v:4 = *:4 p; *:4 DT = v; DT = DT + 4; }
+:LOADI ", "^b1 is opc=9 & tag=0 ; b1 { n:2 = b1; mel_block(9:1, DT, n); }
+:LOADI "SB["^s16a^"]", b1 is opc=9 & tag=1 ; bn=1 & b1 ; s16a { a:2 = SB + s16a; p:2 = *:2 a; v:1 = *:1 p; *:1 DT = v; DT = DT + 1; }
+:LOADI "SB["^s16a^"]", b1 is opc=9 & tag=1 ; bn=2 & b1 ; s16a { a:2 = SB + s16a; p:2 = *:2 a; v:2 = *:2 p; *:2 DT = v; DT = DT + 2; }
+:LOADI "SB["^s16a^"]", b1 is opc=9 & tag=1 ; bn=4 & b1 ; s16a { a:2 = SB + s16a; p:2 = *:2 a; v:4 = *:4 p; *:4 DT = v; DT = DT + 4; }
+:LOADI "SB["^s16a^"]", b1 is opc=9 & tag=1 ; b1 ; s16a { n:2 = b1; a:2 = SB + s16a; mel_block(9:1, a, n); }
+:LOADI "ST["^s16a^"]", b1 is opc=9 & tag=2 ; bn=1 & b1 ; s16a { a:2 = ST + s16a; p:2 = *:2 a; v:1 = *:1 p; *:1 DT = v; DT = DT + 1; }
+:LOADI "ST["^s16a^"]", b1 is opc=9 & tag=2 ; bn=2 & b1 ; s16a { a:2 = ST + s16a; p:2 = *:2 a; v:2 = *:2 p; *:2 DT = v; DT = DT + 2; }
+:LOADI "ST["^s16a^"]", b1 is opc=9 & tag=2 ; bn=4 & b1 ; s16a { a:2 = ST + s16a; p:2 = *:2 a; v:4 = *:4 p; *:4 DT = v; DT = DT + 4; }
+:LOADI "ST["^s16a^"]", b1 is opc=9 & tag=2 ; b1 ; s16a { n:2 = b1; a:2 = ST + s16a; mel_block(9:1, a, n); }
+:LOADI "DB["^s16a^"]", b1 is opc=9 & tag=3 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = DB + s16a; p:2 = *:2 a; v:1 = *:1 p; *:1 DT = v; DT = DT + 1; }
+:LOADI "DB["^s16a^"]", b1 is opc=9 & tag=3 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = DB + s16a; p:2 = *:2 a; v:2 = *:2 p; *:2 DT = v; DT = DT + 2; }
+:LOADI "DB["^s16a^"]", b1 is opc=9 & tag=3 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = DB + s16a; p:2 = *:2 a; v:4 = *:4 p; *:4 DT = v; DT = DT + 4; }
+:LOADI "DB["^s16a^"]", b1 is opc=9 & tag=3 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = DB + s16a; mel_block(9:1, a, n); }
+:LOADI "DB["^co6^"]", "1" is opc=9 & tag=3 & cm=1 & cmoff=0 ; cn=0 & co6 { a:2 = DB + co6; p:2 = *:2 a; v:1 = *:1 p; *:1 DT = v; DT = DT + 1; }
+:LOADI "DB["^co6^"]", "2" is opc=9 & tag=3 & cm=1 & cmoff=0 ; cn=1 & co6 { a:2 = DB + co6; p:2 = *:2 a; v:2 = *:2 p; *:2 DT = v; DT = DT + 2; }
+:LOADI "DB["^co6^"]", "4" is opc=9 & tag=3 & cm=1 & cmoff=0 ; cn=2 & co6 { a:2 = DB + co6; p:2 = *:2 a; v:4 = *:4 p; *:4 DT = v; DT = DT + 4; }
+:LOADI "DB[c]", "8" is opc=9 & tag=3 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(9:1, DB, 8:2); }
+:LOADI "LB["^s16a^"]", b1 is opc=9 & tag=4 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = LB + s16a; p:2 = *:2 a; v:1 = *:1 p; *:1 DT = v; DT = DT + 1; }
+:LOADI "LB["^s16a^"]", b1 is opc=9 & tag=4 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = LB + s16a; p:2 = *:2 a; v:2 = *:2 p; *:2 DT = v; DT = DT + 2; }
+:LOADI "LB["^s16a^"]", b1 is opc=9 & tag=4 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = LB + s16a; p:2 = *:2 a; v:4 = *:4 p; *:4 DT = v; DT = DT + 4; }
+:LOADI "LB["^s16a^"]", b1 is opc=9 & tag=4 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = LB + s16a; mel_block(9:1, a, n); }
+:LOADI "LB["^cs6^"]", "1" is opc=9 & tag=4 & cm=1 & cmoff=0 ; cn=0 & cs6 { a:2 = LB + cs6; p:2 = *:2 a; v:1 = *:1 p; *:1 DT = v; DT = DT + 1; }
+:LOADI "LB["^cs6^"]", "2" is opc=9 & tag=4 & cm=1 & cmoff=0 ; cn=1 & cs6 { a:2 = LB + cs6; p:2 = *:2 a; v:2 = *:2 p; *:2 DT = v; DT = DT + 2; }
+:LOADI "LB["^cs6^"]", "4" is opc=9 & tag=4 & cm=1 & cmoff=0 ; cn=2 & cs6 { a:2 = LB + cs6; p:2 = *:2 a; v:4 = *:4 p; *:4 DT = v; DT = DT + 4; }
+:LOADI "LB[c]", "8" is opc=9 & tag=4 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(9:1, LB, 8:2); }
+:LOADI "DT["^s16a^"]", b1 is opc=9 & tag=5 ; bn=1 & b1 ; s16a { a:2 = DT + s16a; p:2 = *:2 a; v:1 = *:1 p; *:1 DT = v; DT = DT + 1; }
+:LOADI "DT["^s16a^"]", b1 is opc=9 & tag=5 ; bn=2 & b1 ; s16a { a:2 = DT + s16a; p:2 = *:2 a; v:2 = *:2 p; *:2 DT = v; DT = DT + 2; }
+:LOADI "DT["^s16a^"]", b1 is opc=9 & tag=5 ; bn=4 & b1 ; s16a { a:2 = DT + s16a; p:2 = *:2 a; v:4 = *:4 p; *:4 DT = v; DT = DT + 4; }
+:LOADI "DT["^s16a^"]", b1 is opc=9 & tag=5 ; b1 ; s16a { n:2 = b1; a:2 = DT + s16a; mel_block(9:1, a, n); }
+:LOADI "PB["^s16a^"]", b1 is opc=9 & tag=6 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = PB + s16a; p:2 = *:2 a; v:1 = *:1 p; *:1 DT = v; DT = DT + 1; }
+:LOADI "PB["^s16a^"]", b1 is opc=9 & tag=6 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = PB + s16a; p:2 = *:2 a; v:2 = *:2 p; *:2 DT = v; DT = DT + 2; }
+:LOADI "PB["^s16a^"]", b1 is opc=9 & tag=6 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = PB + s16a; p:2 = *:2 a; v:4 = *:4 p; *:4 DT = v; DT = DT + 4; }
+:LOADI "PB["^s16a^"]", b1 is opc=9 & tag=6 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = PB + s16a; mel_block(9:1, a, n); }
+:LOADI "PB["^co6^"]", "1" is opc=9 & tag=6 & cm=1 & cmoff=0 ; cn=0 & co6 { a:2 = PB + co6; p:2 = *:2 a; v:1 = *:1 p; *:1 DT = v; DT = DT + 1; }
+:LOADI "PB["^co6^"]", "2" is opc=9 & tag=6 & cm=1 & cmoff=0 ; cn=1 & co6 { a:2 = PB + co6; p:2 = *:2 a; v:2 = *:2 p; *:2 DT = v; DT = DT + 2; }
+:LOADI "PB["^co6^"]", "4" is opc=9 & tag=6 & cm=1 & cmoff=0 ; cn=2 & co6 { a:2 = PB + co6; p:2 = *:2 a; v:4 = *:4 p; *:4 DT = v; DT = DT + 4; }
+:LOADI "PB[c]", "8" is opc=9 & tag=6 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(9:1, PB, 8:2); }
+:LOADI "PT["^s16a^"]", b1 is opc=9 & tag=7 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = PT + s16a; p:2 = *:2 a; v:1 = *:1 p; *:1 DT = v; DT = DT + 1; }
+:LOADI "PT["^s16a^"]", b1 is opc=9 & tag=7 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = PT + s16a; p:2 = *:2 a; v:2 = *:2 p; *:2 DT = v; DT = DT + 2; }
+:LOADI "PT["^s16a^"]", b1 is opc=9 & tag=7 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = PT + s16a; p:2 = *:2 a; v:4 = *:4 p; *:4 DT = v; DT = DT + 4; }
+:LOADI "PT["^s16a^"]", b1 is opc=9 & tag=7 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = PT + s16a; mel_block(9:1, a, n); }
+:LOADI "PT["^po^"]", "1" is opc=9 & tag=7 & cm=1 & cmoff=0 ; cn=0 & co6 [ po = co6 - 64; ] { a:2 = PT + po; p:2 = *:2 a; v:1 = *:1 p; *:1 DT = v; DT = DT + 1; }
+:LOADI "PT["^po^"]", "2" is opc=9 & tag=7 & cm=1 & cmoff=0 ; cn=1 & co6 [ po = co6 - 64; ] { a:2 = PT + po; p:2 = *:2 a; v:2 = *:2 p; *:2 DT = v; DT = DT + 2; }
+:LOADI "PT["^po^"]", "4" is opc=9 & tag=7 & cm=1 & cmoff=0 ; cn=2 & co6 [ po = co6 - 64; ] { a:2 = PT + po; p:2 = *:2 a; v:4 = *:4 p; *:4 DT = v; DT = DT + 4; }
+:LOADI "PT[c]", "8" is opc=9 & tag=7 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(9:1, PT, 8:2); }
+:STOREI ", "^b1 is opc=10 & tag=0 ; bn=1 & b1 { DT = DT - 1; v:1 = *:1 DT; p:2 = *:2 (DT - 2); *:1 p = v; }
+:STOREI ", "^b1 is opc=10 & tag=0 ; bn=2 & b1 { DT = DT - 2; v:2 = *:2 DT; p:2 = *:2 (DT - 2); *:2 p = v; }
+:STOREI ", "^b1 is opc=10 & tag=0 ; bn=4 & b1 { DT = DT - 4; v:4 = *:4 DT; p:2 = *:2 (DT - 2); *:4 p = v; }
+:STOREI ", "^b1 is opc=10 & tag=0 ; b1 { n:2 = b1; mel_block(10:1, DT, n); }
+:STOREI "SB["^s16a^"]", b1 is opc=10 & tag=1 ; bn=1 & b1 ; s16a { a:2 = SB + s16a; DT = DT - 1; v:1 = *:1 DT; p:2 = *:2 a; *:1 p = v; }
+:STOREI "SB["^s16a^"]", b1 is opc=10 & tag=1 ; bn=2 & b1 ; s16a { a:2 = SB + s16a; DT = DT - 2; v:2 = *:2 DT; p:2 = *:2 a; *:2 p = v; }
+:STOREI "SB["^s16a^"]", b1 is opc=10 & tag=1 ; bn=4 & b1 ; s16a { a:2 = SB + s16a; DT = DT - 4; v:4 = *:4 DT; p:2 = *:2 a; *:4 p = v; }
+:STOREI "SB["^s16a^"]", b1 is opc=10 & tag=1 ; b1 ; s16a { n:2 = b1; a:2 = SB + s16a; mel_block(10:1, a, n); }
+:STOREI "ST["^s16a^"]", b1 is opc=10 & tag=2 ; bn=1 & b1 ; s16a { a:2 = ST + s16a; DT = DT - 1; v:1 = *:1 DT; p:2 = *:2 a; *:1 p = v; }
+:STOREI "ST["^s16a^"]", b1 is opc=10 & tag=2 ; bn=2 & b1 ; s16a { a:2 = ST + s16a; DT = DT - 2; v:2 = *:2 DT; p:2 = *:2 a; *:2 p = v; }
+:STOREI "ST["^s16a^"]", b1 is opc=10 & tag=2 ; bn=4 & b1 ; s16a { a:2 = ST + s16a; DT = DT - 4; v:4 = *:4 DT; p:2 = *:2 a; *:4 p = v; }
+:STOREI "ST["^s16a^"]", b1 is opc=10 & tag=2 ; b1 ; s16a { n:2 = b1; a:2 = ST + s16a; mel_block(10:1, a, n); }
+:STOREI "DB["^s16a^"]", b1 is opc=10 & tag=3 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = DB + s16a; DT = DT - 1; v:1 = *:1 DT; p:2 = *:2 a; *:1 p = v; }
+:STOREI "DB["^s16a^"]", b1 is opc=10 & tag=3 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = DB + s16a; DT = DT - 2; v:2 = *:2 DT; p:2 = *:2 a; *:2 p = v; }
+:STOREI "DB["^s16a^"]", b1 is opc=10 & tag=3 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = DB + s16a; DT = DT - 4; v:4 = *:4 DT; p:2 = *:2 a; *:4 p = v; }
+:STOREI "DB["^s16a^"]", b1 is opc=10 & tag=3 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = DB + s16a; mel_block(10:1, a, n); }
+:STOREI "DB["^co6^"]", "1" is opc=10 & tag=3 & cm=1 & cmoff=0 ; cn=0 & co6 { a:2 = DB + co6; DT = DT - 1; v:1 = *:1 DT; p:2 = *:2 a; *:1 p = v; }
+:STOREI "DB["^co6^"]", "2" is opc=10 & tag=3 & cm=1 & cmoff=0 ; cn=1 & co6 { a:2 = DB + co6; DT = DT - 2; v:2 = *:2 DT; p:2 = *:2 a; *:2 p = v; }
+:STOREI "DB["^co6^"]", "4" is opc=10 & tag=3 & cm=1 & cmoff=0 ; cn=2 & co6 { a:2 = DB + co6; DT = DT - 4; v:4 = *:4 DT; p:2 = *:2 a; *:4 p = v; }
+:STOREI "DB[c]", "8" is opc=10 & tag=3 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(10:1, DB, 8:2); }
+:STOREI "LB["^s16a^"]", b1 is opc=10 & tag=4 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = LB + s16a; DT = DT - 1; v:1 = *:1 DT; p:2 = *:2 a; *:1 p = v; }
+:STOREI "LB["^s16a^"]", b1 is opc=10 & tag=4 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = LB + s16a; DT = DT - 2; v:2 = *:2 DT; p:2 = *:2 a; *:2 p = v; }
+:STOREI "LB["^s16a^"]", b1 is opc=10 & tag=4 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = LB + s16a; DT = DT - 4; v:4 = *:4 DT; p:2 = *:2 a; *:4 p = v; }
+:STOREI "LB["^s16a^"]", b1 is opc=10 & tag=4 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = LB + s16a; mel_block(10:1, a, n); }
+:STOREI "LB["^cs6^"]", "1" is opc=10 & tag=4 & cm=1 & cmoff=0 ; cn=0 & cs6 { a:2 = LB + cs6; DT = DT - 1; v:1 = *:1 DT; p:2 = *:2 a; *:1 p = v; }
+:STOREI "LB["^cs6^"]", "2" is opc=10 & tag=4 & cm=1 & cmoff=0 ; cn=1 & cs6 { a:2 = LB + cs6; DT = DT - 2; v:2 = *:2 DT; p:2 = *:2 a; *:2 p = v; }
+:STOREI "LB["^cs6^"]", "4" is opc=10 & tag=4 & cm=1 & cmoff=0 ; cn=2 & cs6 { a:2 = LB + cs6; DT = DT - 4; v:4 = *:4 DT; p:2 = *:2 a; *:4 p = v; }
+:STOREI "LB[c]", "8" is opc=10 & tag=4 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(10:1, LB, 8:2); }
+:STOREI "DT["^s16a^"]", b1 is opc=10 & tag=5 ; bn=1 & b1 ; s16a { a:2 = DT + s16a; DT = DT - 1; v:1 = *:1 DT; p:2 = *:2 a; *:1 p = v; }
+:STOREI "DT["^s16a^"]", b1 is opc=10 & tag=5 ; bn=2 & b1 ; s16a { a:2 = DT + s16a; DT = DT - 2; v:2 = *:2 DT; p:2 = *:2 a; *:2 p = v; }
+:STOREI "DT["^s16a^"]", b1 is opc=10 & tag=5 ; bn=4 & b1 ; s16a { a:2 = DT + s16a; DT = DT - 4; v:4 = *:4 DT; p:2 = *:2 a; *:4 p = v; }
+:STOREI "DT["^s16a^"]", b1 is opc=10 & tag=5 ; b1 ; s16a { n:2 = b1; a:2 = DT + s16a; mel_block(10:1, a, n); }
+:STOREI "PB["^s16a^"]", b1 is opc=10 & tag=6 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = PB + s16a; DT = DT - 1; v:1 = *:1 DT; p:2 = *:2 a; *:1 p = v; }
+:STOREI "PB["^s16a^"]", b1 is opc=10 & tag=6 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = PB + s16a; DT = DT - 2; v:2 = *:2 DT; p:2 = *:2 a; *:2 p = v; }
+:STOREI "PB["^s16a^"]", b1 is opc=10 & tag=6 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = PB + s16a; DT = DT - 4; v:4 = *:4 DT; p:2 = *:2 a; *:4 p = v; }
+:STOREI "PB["^s16a^"]", b1 is opc=10 & tag=6 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = PB + s16a; mel_block(10:1, a, n); }
+:STOREI "PB["^co6^"]", "1" is opc=10 & tag=6 & cm=1 & cmoff=0 ; cn=0 & co6 { a:2 = PB + co6; DT = DT - 1; v:1 = *:1 DT; p:2 = *:2 a; *:1 p = v; }
+:STOREI "PB["^co6^"]", "2" is opc=10 & tag=6 & cm=1 & cmoff=0 ; cn=1 & co6 { a:2 = PB + co6; DT = DT - 2; v:2 = *:2 DT; p:2 = *:2 a; *:2 p = v; }
+:STOREI "PB["^co6^"]", "4" is opc=10 & tag=6 & cm=1 & cmoff=0 ; cn=2 & co6 { a:2 = PB + co6; DT = DT - 4; v:4 = *:4 DT; p:2 = *:2 a; *:4 p = v; }
+:STOREI "PB[c]", "8" is opc=10 & tag=6 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(10:1, PB, 8:2); }
+:STOREI "PT["^s16a^"]", b1 is opc=10 & tag=7 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = PT + s16a; DT = DT - 1; v:1 = *:1 DT; p:2 = *:2 a; *:1 p = v; }
+:STOREI "PT["^s16a^"]", b1 is opc=10 & tag=7 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = PT + s16a; DT = DT - 2; v:2 = *:2 DT; p:2 = *:2 a; *:2 p = v; }
+:STOREI "PT["^s16a^"]", b1 is opc=10 & tag=7 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = PT + s16a; DT = DT - 4; v:4 = *:4 DT; p:2 = *:2 a; *:4 p = v; }
+:STOREI "PT["^s16a^"]", b1 is opc=10 & tag=7 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = PT + s16a; mel_block(10:1, a, n); }
+:STOREI "PT["^po^"]", "1" is opc=10 & tag=7 & cm=1 & cmoff=0 ; cn=0 & co6 [ po = co6 - 64; ] { a:2 = PT + po; DT = DT - 1; v:1 = *:1 DT; p:2 = *:2 a; *:1 p = v; }
+:STOREI "PT["^po^"]", "2" is opc=10 & tag=7 & cm=1 & cmoff=0 ; cn=1 & co6 [ po = co6 - 64; ] { a:2 = PT + po; DT = DT - 2; v:2 = *:2 DT; p:2 = *:2 a; *:2 p = v; }
+:STOREI "PT["^po^"]", "4" is opc=10 & tag=7 & cm=1 & cmoff=0 ; cn=2 & co6 [ po = co6 - 64; ] { a:2 = PT + po; DT = DT - 4; v:4 = *:4 DT; p:2 = *:2 a; *:4 p = v; }
+:STOREI "PT[c]", "8" is opc=10 & tag=7 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(10:1, PT, 8:2); }
+:CLEARN ", "^b1 is opc=21 & tag=0 ; bn=1 & b1 { *:1 (DT - 1) = 0; }
+:CLEARN ", "^b1 is opc=21 & tag=0 ; bn=2 & b1 { *:2 (DT - 2) = 0; }
+:CLEARN ", "^b1 is opc=21 & tag=0 ; bn=4 & b1 { *:4 (DT - 4) = 0; }
+:CLEARN ", "^b1 is opc=21 & tag=0 ; b1 { n:2 = b1; mel_block(21:1, DT, n); }
+:CLEARN "SB["^s16a^"]", b1 is opc=21 & tag=1 ; bn=1 & b1 ; s16a { a:2 = SB + s16a; *:1 a = 0; }
+:CLEARN "SB["^s16a^"]", b1 is opc=21 & tag=1 ; bn=2 & b1 ; s16a { a:2 = SB + s16a; *:2 a = 0; }
+:CLEARN "SB["^s16a^"]", b1 is opc=21 & tag=1 ; bn=4 & b1 ; s16a { a:2 = SB + s16a; *:4 a = 0; }
+:CLEARN "SB["^s16a^"]", b1 is opc=21 & tag=1 ; b1 ; s16a { n:2 = b1; a:2 = SB + s16a; mel_block(21:1, a, n); }
+:CLEARN "ST["^s16a^"]", b1 is opc=21 & tag=2 ; bn=1 & b1 ; s16a { a:2 = ST + s16a; *:1 a = 0; }
+:CLEARN "ST["^s16a^"]", b1 is opc=21 & tag=2 ; bn=2 & b1 ; s16a { a:2 = ST + s16a; *:2 a = 0; }
+:CLEARN "ST["^s16a^"]", b1 is opc=21 & tag=2 ; bn=4 & b1 ; s16a { a:2 = ST + s16a; *:4 a = 0; }
+:CLEARN "ST["^s16a^"]", b1 is opc=21 & tag=2 ; b1 ; s16a { n:2 = b1; a:2 = ST + s16a; mel_block(21:1, a, n); }
+:CLEARN "DB["^s16a^"]", b1 is opc=21 & tag=3 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = DB + s16a; *:1 a = 0; }
+:CLEARN "DB["^s16a^"]", b1 is opc=21 & tag=3 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = DB + s16a; *:2 a = 0; }
+:CLEARN "DB["^s16a^"]", b1 is opc=21 & tag=3 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = DB + s16a; *:4 a = 0; }
+:CLEARN "DB["^s16a^"]", b1 is opc=21 & tag=3 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = DB + s16a; mel_block(21:1, a, n); }
+:CLEARN "DB["^co6^"]", "1" is opc=21 & tag=3 & cm=1 & cmoff=0 ; cn=0 & co6 { a:2 = DB + co6; *:1 a = 0; }
+:CLEARN "DB["^co6^"]", "2" is opc=21 & tag=3 & cm=1 & cmoff=0 ; cn=1 & co6 { a:2 = DB + co6; *:2 a = 0; }
+:CLEARN "DB["^co6^"]", "4" is opc=21 & tag=3 & cm=1 & cmoff=0 ; cn=2 & co6 { a:2 = DB + co6; *:4 a = 0; }
+:CLEARN "DB[c]", "8" is opc=21 & tag=3 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(21:1, DB, 8:2); }
+:CLEARN "LB["^s16a^"]", b1 is opc=21 & tag=4 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = LB + s16a; *:1 a = 0; }
+:CLEARN "LB["^s16a^"]", b1 is opc=21 & tag=4 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = LB + s16a; *:2 a = 0; }
+:CLEARN "LB["^s16a^"]", b1 is opc=21 & tag=4 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = LB + s16a; *:4 a = 0; }
+:CLEARN "LB["^s16a^"]", b1 is opc=21 & tag=4 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = LB + s16a; mel_block(21:1, a, n); }
+:CLEARN "LB["^cs6^"]", "1" is opc=21 & tag=4 & cm=1 & cmoff=0 ; cn=0 & cs6 { a:2 = LB + cs6; *:1 a = 0; }
+:CLEARN "LB["^cs6^"]", "2" is opc=21 & tag=4 & cm=1 & cmoff=0 ; cn=1 & cs6 { a:2 = LB + cs6; *:2 a = 0; }
+:CLEARN "LB["^cs6^"]", "4" is opc=21 & tag=4 & cm=1 & cmoff=0 ; cn=2 & cs6 { a:2 = LB + cs6; *:4 a = 0; }
+:CLEARN "LB[c]", "8" is opc=21 & tag=4 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(21:1, LB, 8:2); }
+:CLEARN "DT["^s16a^"]", b1 is opc=21 & tag=5 ; bn=1 & b1 ; s16a { a:2 = DT + s16a; *:1 a = 0; }
+:CLEARN "DT["^s16a^"]", b1 is opc=21 & tag=5 ; bn=2 & b1 ; s16a { a:2 = DT + s16a; *:2 a = 0; }
+:CLEARN "DT["^s16a^"]", b1 is opc=21 & tag=5 ; bn=4 & b1 ; s16a { a:2 = DT + s16a; *:4 a = 0; }
+:CLEARN "DT["^s16a^"]", b1 is opc=21 & tag=5 ; b1 ; s16a { n:2 = b1; a:2 = DT + s16a; mel_block(21:1, a, n); }
+:CLEARN "PB["^s16a^"]", b1 is opc=21 & tag=6 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = PB + s16a; *:1 a = 0; }
+:CLEARN "PB["^s16a^"]", b1 is opc=21 & tag=6 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = PB + s16a; *:2 a = 0; }
+:CLEARN "PB["^s16a^"]", b1 is opc=21 & tag=6 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = PB + s16a; *:4 a = 0; }
+:CLEARN "PB["^s16a^"]", b1 is opc=21 & tag=6 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = PB + s16a; mel_block(21:1, a, n); }
+:CLEARN "PB["^co6^"]", "1" is opc=21 & tag=6 & cm=1 & cmoff=0 ; cn=0 & co6 { a:2 = PB + co6; *:1 a = 0; }
+:CLEARN "PB["^co6^"]", "2" is opc=21 & tag=6 & cm=1 & cmoff=0 ; cn=1 & co6 { a:2 = PB + co6; *:2 a = 0; }
+:CLEARN "PB["^co6^"]", "4" is opc=21 & tag=6 & cm=1 & cmoff=0 ; cn=2 & co6 { a:2 = PB + co6; *:4 a = 0; }
+:CLEARN "PB[c]", "8" is opc=21 & tag=6 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(21:1, PB, 8:2); }
+:CLEARN "PT["^s16a^"]", b1 is opc=21 & tag=7 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = PT + s16a; *:1 a = 0; }
+:CLEARN "PT["^s16a^"]", b1 is opc=21 & tag=7 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = PT + s16a; *:2 a = 0; }
+:CLEARN "PT["^s16a^"]", b1 is opc=21 & tag=7 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = PT + s16a; *:4 a = 0; }
+:CLEARN "PT["^s16a^"]", b1 is opc=21 & tag=7 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = PT + s16a; mel_block(21:1, a, n); }
+:CLEARN "PT["^po^"]", "1" is opc=21 & tag=7 & cm=1 & cmoff=0 ; cn=0 & co6 [ po = co6 - 64; ] { a:2 = PT + po; *:1 a = 0; }
+:CLEARN "PT["^po^"]", "2" is opc=21 & tag=7 & cm=1 & cmoff=0 ; cn=1 & co6 [ po = co6 - 64; ] { a:2 = PT + po; *:2 a = 0; }
+:CLEARN "PT["^po^"]", "4" is opc=21 & tag=7 & cm=1 & cmoff=0 ; cn=2 & co6 [ po = co6 - 64; ] { a:2 = PT + po; *:4 a = 0; }
+:CLEARN "PT[c]", "8" is opc=21 & tag=7 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(21:1, PT, 8:2); }
+:TESTN ", "^b1 is opc=22 & tag=0 ; bn=1 & b1 { v:1 = *:1 (DT - 1); ZF = v == 0; }
+:TESTN ", "^b1 is opc=22 & tag=0 ; bn=2 & b1 { v:2 = *:2 (DT - 2); ZF = v == 0; }
+:TESTN ", "^b1 is opc=22 & tag=0 ; bn=4 & b1 { v:4 = *:4 (DT - 4); ZF = v == 0; }
+:TESTN ", "^b1 is opc=22 & tag=0 ; b1 { n:2 = b1; mel_block(22:1, DT, n); }
+:TESTN "SB["^s16a^"]", b1 is opc=22 & tag=1 ; bn=1 & b1 ; s16a { a:2 = SB + s16a; v:1 = *:1 a; ZF = v == 0; }
+:TESTN "SB["^s16a^"]", b1 is opc=22 & tag=1 ; bn=2 & b1 ; s16a { a:2 = SB + s16a; v:2 = *:2 a; ZF = v == 0; }
+:TESTN "SB["^s16a^"]", b1 is opc=22 & tag=1 ; bn=4 & b1 ; s16a { a:2 = SB + s16a; v:4 = *:4 a; ZF = v == 0; }
+:TESTN "SB["^s16a^"]", b1 is opc=22 & tag=1 ; b1 ; s16a { n:2 = b1; a:2 = SB + s16a; mel_block(22:1, a, n); }
+:TESTN "ST["^s16a^"]", b1 is opc=22 & tag=2 ; bn=1 & b1 ; s16a { a:2 = ST + s16a; v:1 = *:1 a; ZF = v == 0; }
+:TESTN "ST["^s16a^"]", b1 is opc=22 & tag=2 ; bn=2 & b1 ; s16a { a:2 = ST + s16a; v:2 = *:2 a; ZF = v == 0; }
+:TESTN "ST["^s16a^"]", b1 is opc=22 & tag=2 ; bn=4 & b1 ; s16a { a:2 = ST + s16a; v:4 = *:4 a; ZF = v == 0; }
+:TESTN "ST["^s16a^"]", b1 is opc=22 & tag=2 ; b1 ; s16a { n:2 = b1; a:2 = ST + s16a; mel_block(22:1, a, n); }
+:TESTN "DB["^s16a^"]", b1 is opc=22 & tag=3 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = DB + s16a; v:1 = *:1 a; ZF = v == 0; }
+:TESTN "DB["^s16a^"]", b1 is opc=22 & tag=3 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = DB + s16a; v:2 = *:2 a; ZF = v == 0; }
+:TESTN "DB["^s16a^"]", b1 is opc=22 & tag=3 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = DB + s16a; v:4 = *:4 a; ZF = v == 0; }
+:TESTN "DB["^s16a^"]", b1 is opc=22 & tag=3 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = DB + s16a; mel_block(22:1, a, n); }
+:TESTN "DB["^co6^"]", "1" is opc=22 & tag=3 & cm=1 & cmoff=0 ; cn=0 & co6 { a:2 = DB + co6; v:1 = *:1 a; ZF = v == 0; }
+:TESTN "DB["^co6^"]", "2" is opc=22 & tag=3 & cm=1 & cmoff=0 ; cn=1 & co6 { a:2 = DB + co6; v:2 = *:2 a; ZF = v == 0; }
+:TESTN "DB["^co6^"]", "4" is opc=22 & tag=3 & cm=1 & cmoff=0 ; cn=2 & co6 { a:2 = DB + co6; v:4 = *:4 a; ZF = v == 0; }
+:TESTN "DB[c]", "8" is opc=22 & tag=3 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(22:1, DB, 8:2); }
+:TESTN "LB["^s16a^"]", b1 is opc=22 & tag=4 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = LB + s16a; v:1 = *:1 a; ZF = v == 0; }
+:TESTN "LB["^s16a^"]", b1 is opc=22 & tag=4 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = LB + s16a; v:2 = *:2 a; ZF = v == 0; }
+:TESTN "LB["^s16a^"]", b1 is opc=22 & tag=4 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = LB + s16a; v:4 = *:4 a; ZF = v == 0; }
+:TESTN "LB["^s16a^"]", b1 is opc=22 & tag=4 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = LB + s16a; mel_block(22:1, a, n); }
+:TESTN "LB["^cs6^"]", "1" is opc=22 & tag=4 & cm=1 & cmoff=0 ; cn=0 & cs6 { a:2 = LB + cs6; v:1 = *:1 a; ZF = v == 0; }
+:TESTN "LB["^cs6^"]", "2" is opc=22 & tag=4 & cm=1 & cmoff=0 ; cn=1 & cs6 { a:2 = LB + cs6; v:2 = *:2 a; ZF = v == 0; }
+:TESTN "LB["^cs6^"]", "4" is opc=22 & tag=4 & cm=1 & cmoff=0 ; cn=2 & cs6 { a:2 = LB + cs6; v:4 = *:4 a; ZF = v == 0; }
+:TESTN "LB[c]", "8" is opc=22 & tag=4 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(22:1, LB, 8:2); }
+:TESTN "DT["^s16a^"]", b1 is opc=22 & tag=5 ; bn=1 & b1 ; s16a { a:2 = DT + s16a; v:1 = *:1 a; ZF = v == 0; }
+:TESTN "DT["^s16a^"]", b1 is opc=22 & tag=5 ; bn=2 & b1 ; s16a { a:2 = DT + s16a; v:2 = *:2 a; ZF = v == 0; }
+:TESTN "DT["^s16a^"]", b1 is opc=22 & tag=5 ; bn=4 & b1 ; s16a { a:2 = DT + s16a; v:4 = *:4 a; ZF = v == 0; }
+:TESTN "DT["^s16a^"]", b1 is opc=22 & tag=5 ; b1 ; s16a { n:2 = b1; a:2 = DT + s16a; mel_block(22:1, a, n); }
+:TESTN "PB["^s16a^"]", b1 is opc=22 & tag=6 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = PB + s16a; v:1 = *:1 a; ZF = v == 0; }
+:TESTN "PB["^s16a^"]", b1 is opc=22 & tag=6 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = PB + s16a; v:2 = *:2 a; ZF = v == 0; }
+:TESTN "PB["^s16a^"]", b1 is opc=22 & tag=6 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = PB + s16a; v:4 = *:4 a; ZF = v == 0; }
+:TESTN "PB["^s16a^"]", b1 is opc=22 & tag=6 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = PB + s16a; mel_block(22:1, a, n); }
+:TESTN "PB["^co6^"]", "1" is opc=22 & tag=6 & cm=1 & cmoff=0 ; cn=0 & co6 { a:2 = PB + co6; v:1 = *:1 a; ZF = v == 0; }
+:TESTN "PB["^co6^"]", "2" is opc=22 & tag=6 & cm=1 & cmoff=0 ; cn=1 & co6 { a:2 = PB + co6; v:2 = *:2 a; ZF = v == 0; }
+:TESTN "PB["^co6^"]", "4" is opc=22 & tag=6 & cm=1 & cmoff=0 ; cn=2 & co6 { a:2 = PB + co6; v:4 = *:4 a; ZF = v == 0; }
+:TESTN "PB[c]", "8" is opc=22 & tag=6 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(22:1, PB, 8:2); }
+:TESTN "PT["^s16a^"]", b1 is opc=22 & tag=7 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = PT + s16a; v:1 = *:1 a; ZF = v == 0; }
+:TESTN "PT["^s16a^"]", b1 is opc=22 & tag=7 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = PT + s16a; v:2 = *:2 a; ZF = v == 0; }
+:TESTN "PT["^s16a^"]", b1 is opc=22 & tag=7 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = PT + s16a; v:4 = *:4 a; ZF = v == 0; }
+:TESTN "PT["^s16a^"]", b1 is opc=22 & tag=7 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = PT + s16a; mel_block(22:1, a, n); }
+:TESTN "PT["^po^"]", "1" is opc=22 & tag=7 & cm=1 & cmoff=0 ; cn=0 & co6 [ po = co6 - 64; ] { a:2 = PT + po; v:1 = *:1 a; ZF = v == 0; }
+:TESTN "PT["^po^"]", "2" is opc=22 & tag=7 & cm=1 & cmoff=0 ; cn=1 & co6 [ po = co6 - 64; ] { a:2 = PT + po; v:2 = *:2 a; ZF = v == 0; }
+:TESTN "PT["^po^"]", "4" is opc=22 & tag=7 & cm=1 & cmoff=0 ; cn=2 & co6 [ po = co6 - 64; ] { a:2 = PT + po; v:4 = *:4 a; ZF = v == 0; }
+:TESTN "PT[c]", "8" is opc=22 & tag=7 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(22:1, PT, 8:2); }
+:INCN ", "^b1 is opc=23 & tag=0 ; bn=1 & b1 { v:1 = *:1 (DT - 1); CF = v == -1; v = v + 1; ZF = v == 0; *:1 (DT - 1) = v; }
+:INCN ", "^b1 is opc=23 & tag=0 ; bn=2 & b1 { v:2 = *:2 (DT - 2); CF = v == -1; v = v + 1; ZF = v == 0; *:2 (DT - 2) = v; }
+:INCN ", "^b1 is opc=23 & tag=0 ; bn=4 & b1 { v:4 = *:4 (DT - 4); CF = v == -1; v = v + 1; ZF = v == 0; *:4 (DT - 4) = v; }
+:INCN ", "^b1 is opc=23 & tag=0 ; b1 { n:2 = b1; mel_block(23:1, DT, n); }
+:INCN "SB["^s16a^"]", b1 is opc=23 & tag=1 ; bn=1 & b1 ; s16a { a:2 = SB + s16a; v:1 = *:1 a; CF = v == -1; v = v + 1; ZF = v == 0; *:1 a = v; }
+:INCN "SB["^s16a^"]", b1 is opc=23 & tag=1 ; bn=2 & b1 ; s16a { a:2 = SB + s16a; v:2 = *:2 a; CF = v == -1; v = v + 1; ZF = v == 0; *:2 a = v; }
+:INCN "SB["^s16a^"]", b1 is opc=23 & tag=1 ; bn=4 & b1 ; s16a { a:2 = SB + s16a; v:4 = *:4 a; CF = v == -1; v = v + 1; ZF = v == 0; *:4 a = v; }
+:INCN "SB["^s16a^"]", b1 is opc=23 & tag=1 ; b1 ; s16a { n:2 = b1; a:2 = SB + s16a; mel_block(23:1, a, n); }
+:INCN "ST["^s16a^"]", b1 is opc=23 & tag=2 ; bn=1 & b1 ; s16a { a:2 = ST + s16a; v:1 = *:1 a; CF = v == -1; v = v + 1; ZF = v == 0; *:1 a = v; }
+:INCN "ST["^s16a^"]", b1 is opc=23 & tag=2 ; bn=2 & b1 ; s16a { a:2 = ST + s16a; v:2 = *:2 a; CF = v == -1; v = v + 1; ZF = v == 0; *:2 a = v; }
+:INCN "ST["^s16a^"]", b1 is opc=23 & tag=2 ; bn=4 & b1 ; s16a { a:2 = ST + s16a; v:4 = *:4 a; CF = v == -1; v = v + 1; ZF = v == 0; *:4 a = v; }
+:INCN "ST["^s16a^"]", b1 is opc=23 & tag=2 ; b1 ; s16a { n:2 = b1; a:2 = ST + s16a; mel_block(23:1, a, n); }
+:INCN "DB["^s16a^"]", b1 is opc=23 & tag=3 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = DB + s16a; v:1 = *:1 a; CF = v == -1; v = v + 1; ZF = v == 0; *:1 a = v; }
+:INCN "DB["^s16a^"]", b1 is opc=23 & tag=3 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = DB + s16a; v:2 = *:2 a; CF = v == -1; v = v + 1; ZF = v == 0; *:2 a = v; }
+:INCN "DB["^s16a^"]", b1 is opc=23 & tag=3 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = DB + s16a; v:4 = *:4 a; CF = v == -1; v = v + 1; ZF = v == 0; *:4 a = v; }
+:INCN "DB["^s16a^"]", b1 is opc=23 & tag=3 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = DB + s16a; mel_block(23:1, a, n); }
+:INCN "DB["^co6^"]", "1" is opc=23 & tag=3 & cm=1 & cmoff=0 ; cn=0 & co6 { a:2 = DB + co6; v:1 = *:1 a; CF = v == -1; v = v + 1; ZF = v == 0; *:1 a = v; }
+:INCN "DB["^co6^"]", "2" is opc=23 & tag=3 & cm=1 & cmoff=0 ; cn=1 & co6 { a:2 = DB + co6; v:2 = *:2 a; CF = v == -1; v = v + 1; ZF = v == 0; *:2 a = v; }
+:INCN "DB["^co6^"]", "4" is opc=23 & tag=3 & cm=1 & cmoff=0 ; cn=2 & co6 { a:2 = DB + co6; v:4 = *:4 a; CF = v == -1; v = v + 1; ZF = v == 0; *:4 a = v; }
+:INCN "DB[c]", "8" is opc=23 & tag=3 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(23:1, DB, 8:2); }
+:INCN "LB["^s16a^"]", b1 is opc=23 & tag=4 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = LB + s16a; v:1 = *:1 a; CF = v == -1; v = v + 1; ZF = v == 0; *:1 a = v; }
+:INCN "LB["^s16a^"]", b1 is opc=23 & tag=4 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = LB + s16a; v:2 = *:2 a; CF = v == -1; v = v + 1; ZF = v == 0; *:2 a = v; }
+:INCN "LB["^s16a^"]", b1 is opc=23 & tag=4 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = LB + s16a; v:4 = *:4 a; CF = v == -1; v = v + 1; ZF = v == 0; *:4 a = v; }
+:INCN "LB["^s16a^"]", b1 is opc=23 & tag=4 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = LB + s16a; mel_block(23:1, a, n); }
+:INCN "LB["^cs6^"]", "1" is opc=23 & tag=4 & cm=1 & cmoff=0 ; cn=0 & cs6 { a:2 = LB + cs6; v:1 = *:1 a; CF = v == -1; v = v + 1; ZF = v == 0; *:1 a = v; }
+:INCN "LB["^cs6^"]", "2" is opc=23 & tag=4 & cm=1 & cmoff=0 ; cn=1 & cs6 { a:2 = LB + cs6; v:2 = *:2 a; CF = v == -1; v = v + 1; ZF = v == 0; *:2 a = v; }
+:INCN "LB["^cs6^"]", "4" is opc=23 & tag=4 & cm=1 & cmoff=0 ; cn=2 & cs6 { a:2 = LB + cs6; v:4 = *:4 a; CF = v == -1; v = v + 1; ZF = v == 0; *:4 a = v; }
+:INCN "LB[c]", "8" is opc=23 & tag=4 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(23:1, LB, 8:2); }
+:INCN "DT["^s16a^"]", b1 is opc=23 & tag=5 ; bn=1 & b1 ; s16a { a:2 = DT + s16a; v:1 = *:1 a; CF = v == -1; v = v + 1; ZF = v == 0; *:1 a = v; }
+:INCN "DT["^s16a^"]", b1 is opc=23 & tag=5 ; bn=2 & b1 ; s16a { a:2 = DT + s16a; v:2 = *:2 a; CF = v == -1; v = v + 1; ZF = v == 0; *:2 a = v; }
+:INCN "DT["^s16a^"]", b1 is opc=23 & tag=5 ; bn=4 & b1 ; s16a { a:2 = DT + s16a; v:4 = *:4 a; CF = v == -1; v = v + 1; ZF = v == 0; *:4 a = v; }
+:INCN "DT["^s16a^"]", b1 is opc=23 & tag=5 ; b1 ; s16a { n:2 = b1; a:2 = DT + s16a; mel_block(23:1, a, n); }
+:INCN "PB["^s16a^"]", b1 is opc=23 & tag=6 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = PB + s16a; v:1 = *:1 a; CF = v == -1; v = v + 1; ZF = v == 0; *:1 a = v; }
+:INCN "PB["^s16a^"]", b1 is opc=23 & tag=6 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = PB + s16a; v:2 = *:2 a; CF = v == -1; v = v + 1; ZF = v == 0; *:2 a = v; }
+:INCN "PB["^s16a^"]", b1 is opc=23 & tag=6 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = PB + s16a; v:4 = *:4 a; CF = v == -1; v = v + 1; ZF = v == 0; *:4 a = v; }
+:INCN "PB["^s16a^"]", b1 is opc=23 & tag=6 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = PB + s16a; mel_block(23:1, a, n); }
+:INCN "PB["^co6^"]", "1" is opc=23 & tag=6 & cm=1 & cmoff=0 ; cn=0 & co6 { a:2 = PB + co6; v:1 = *:1 a; CF = v == -1; v = v + 1; ZF = v == 0; *:1 a = v; }
+:INCN "PB["^co6^"]", "2" is opc=23 & tag=6 & cm=1 & cmoff=0 ; cn=1 & co6 { a:2 = PB + co6; v:2 = *:2 a; CF = v == -1; v = v + 1; ZF = v == 0; *:2 a = v; }
+:INCN "PB["^co6^"]", "4" is opc=23 & tag=6 & cm=1 & cmoff=0 ; cn=2 & co6 { a:2 = PB + co6; v:4 = *:4 a; CF = v == -1; v = v + 1; ZF = v == 0; *:4 a = v; }
+:INCN "PB[c]", "8" is opc=23 & tag=6 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(23:1, PB, 8:2); }
+:INCN "PT["^s16a^"]", b1 is opc=23 & tag=7 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = PT + s16a; v:1 = *:1 a; CF = v == -1; v = v + 1; ZF = v == 0; *:1 a = v; }
+:INCN "PT["^s16a^"]", b1 is opc=23 & tag=7 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = PT + s16a; v:2 = *:2 a; CF = v == -1; v = v + 1; ZF = v == 0; *:2 a = v; }
+:INCN "PT["^s16a^"]", b1 is opc=23 & tag=7 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = PT + s16a; v:4 = *:4 a; CF = v == -1; v = v + 1; ZF = v == 0; *:4 a = v; }
+:INCN "PT["^s16a^"]", b1 is opc=23 & tag=7 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = PT + s16a; mel_block(23:1, a, n); }
+:INCN "PT["^po^"]", "1" is opc=23 & tag=7 & cm=1 & cmoff=0 ; cn=0 & co6 [ po = co6 - 64; ] { a:2 = PT + po; v:1 = *:1 a; CF = v == -1; v = v + 1; ZF = v == 0; *:1 a = v; }
+:INCN "PT["^po^"]", "2" is opc=23 & tag=7 & cm=1 & cmoff=0 ; cn=1 & co6 [ po = co6 - 64; ] { a:2 = PT + po; v:2 = *:2 a; CF = v == -1; v = v + 1; ZF = v == 0; *:2 a = v; }
+:INCN "PT["^po^"]", "4" is opc=23 & tag=7 & cm=1 & cmoff=0 ; cn=2 & co6 [ po = co6 - 64; ] { a:2 = PT + po; v:4 = *:4 a; CF = v == -1; v = v + 1; ZF = v == 0; *:4 a = v; }
+:INCN "PT[c]", "8" is opc=23 & tag=7 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(23:1, PT, 8:2); }
+:DECN ", "^b1 is opc=24 & tag=0 ; bn=1 & b1 { v:1 = *:1 (DT - 1); CF = v == 0; v = v - 1; ZF = v == 0; *:1 (DT - 1) = v; }
+:DECN ", "^b1 is opc=24 & tag=0 ; bn=2 & b1 { v:2 = *:2 (DT - 2); CF = v == 0; v = v - 1; ZF = v == 0; *:2 (DT - 2) = v; }
+:DECN ", "^b1 is opc=24 & tag=0 ; bn=4 & b1 { v:4 = *:4 (DT - 4); CF = v == 0; v = v - 1; ZF = v == 0; *:4 (DT - 4) = v; }
+:DECN ", "^b1 is opc=24 & tag=0 ; b1 { n:2 = b1; mel_block(24:1, DT, n); }
+:DECN "SB["^s16a^"]", b1 is opc=24 & tag=1 ; bn=1 & b1 ; s16a { a:2 = SB + s16a; v:1 = *:1 a; CF = v == 0; v = v - 1; ZF = v == 0; *:1 a = v; }
+:DECN "SB["^s16a^"]", b1 is opc=24 & tag=1 ; bn=2 & b1 ; s16a { a:2 = SB + s16a; v:2 = *:2 a; CF = v == 0; v = v - 1; ZF = v == 0; *:2 a = v; }
+:DECN "SB["^s16a^"]", b1 is opc=24 & tag=1 ; bn=4 & b1 ; s16a { a:2 = SB + s16a; v:4 = *:4 a; CF = v == 0; v = v - 1; ZF = v == 0; *:4 a = v; }
+:DECN "SB["^s16a^"]", b1 is opc=24 & tag=1 ; b1 ; s16a { n:2 = b1; a:2 = SB + s16a; mel_block(24:1, a, n); }
+:DECN "ST["^s16a^"]", b1 is opc=24 & tag=2 ; bn=1 & b1 ; s16a { a:2 = ST + s16a; v:1 = *:1 a; CF = v == 0; v = v - 1; ZF = v == 0; *:1 a = v; }
+:DECN "ST["^s16a^"]", b1 is opc=24 & tag=2 ; bn=2 & b1 ; s16a { a:2 = ST + s16a; v:2 = *:2 a; CF = v == 0; v = v - 1; ZF = v == 0; *:2 a = v; }
+:DECN "ST["^s16a^"]", b1 is opc=24 & tag=2 ; bn=4 & b1 ; s16a { a:2 = ST + s16a; v:4 = *:4 a; CF = v == 0; v = v - 1; ZF = v == 0; *:4 a = v; }
+:DECN "ST["^s16a^"]", b1 is opc=24 & tag=2 ; b1 ; s16a { n:2 = b1; a:2 = ST + s16a; mel_block(24:1, a, n); }
+:DECN "DB["^s16a^"]", b1 is opc=24 & tag=3 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = DB + s16a; v:1 = *:1 a; CF = v == 0; v = v - 1; ZF = v == 0; *:1 a = v; }
+:DECN "DB["^s16a^"]", b1 is opc=24 & tag=3 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = DB + s16a; v:2 = *:2 a; CF = v == 0; v = v - 1; ZF = v == 0; *:2 a = v; }
+:DECN "DB["^s16a^"]", b1 is opc=24 & tag=3 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = DB + s16a; v:4 = *:4 a; CF = v == 0; v = v - 1; ZF = v == 0; *:4 a = v; }
+:DECN "DB["^s16a^"]", b1 is opc=24 & tag=3 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = DB + s16a; mel_block(24:1, a, n); }
+:DECN "DB["^co6^"]", "1" is opc=24 & tag=3 & cm=1 & cmoff=0 ; cn=0 & co6 { a:2 = DB + co6; v:1 = *:1 a; CF = v == 0; v = v - 1; ZF = v == 0; *:1 a = v; }
+:DECN "DB["^co6^"]", "2" is opc=24 & tag=3 & cm=1 & cmoff=0 ; cn=1 & co6 { a:2 = DB + co6; v:2 = *:2 a; CF = v == 0; v = v - 1; ZF = v == 0; *:2 a = v; }
+:DECN "DB["^co6^"]", "4" is opc=24 & tag=3 & cm=1 & cmoff=0 ; cn=2 & co6 { a:2 = DB + co6; v:4 = *:4 a; CF = v == 0; v = v - 1; ZF = v == 0; *:4 a = v; }
+:DECN "DB[c]", "8" is opc=24 & tag=3 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(24:1, DB, 8:2); }
+:DECN "LB["^s16a^"]", b1 is opc=24 & tag=4 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = LB + s16a; v:1 = *:1 a; CF = v == 0; v = v - 1; ZF = v == 0; *:1 a = v; }
+:DECN "LB["^s16a^"]", b1 is opc=24 & tag=4 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = LB + s16a; v:2 = *:2 a; CF = v == 0; v = v - 1; ZF = v == 0; *:2 a = v; }
+:DECN "LB["^s16a^"]", b1 is opc=24 & tag=4 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = LB + s16a; v:4 = *:4 a; CF = v == 0; v = v - 1; ZF = v == 0; *:4 a = v; }
+:DECN "LB["^s16a^"]", b1 is opc=24 & tag=4 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = LB + s16a; mel_block(24:1, a, n); }
+:DECN "LB["^cs6^"]", "1" is opc=24 & tag=4 & cm=1 & cmoff=0 ; cn=0 & cs6 { a:2 = LB + cs6; v:1 = *:1 a; CF = v == 0; v = v - 1; ZF = v == 0; *:1 a = v; }
+:DECN "LB["^cs6^"]", "2" is opc=24 & tag=4 & cm=1 & cmoff=0 ; cn=1 & cs6 { a:2 = LB + cs6; v:2 = *:2 a; CF = v == 0; v = v - 1; ZF = v == 0; *:2 a = v; }
+:DECN "LB["^cs6^"]", "4" is opc=24 & tag=4 & cm=1 & cmoff=0 ; cn=2 & cs6 { a:2 = LB + cs6; v:4 = *:4 a; CF = v == 0; v = v - 1; ZF = v == 0; *:4 a = v; }
+:DECN "LB[c]", "8" is opc=24 & tag=4 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(24:1, LB, 8:2); }
+:DECN "DT["^s16a^"]", b1 is opc=24 & tag=5 ; bn=1 & b1 ; s16a { a:2 = DT + s16a; v:1 = *:1 a; CF = v == 0; v = v - 1; ZF = v == 0; *:1 a = v; }
+:DECN "DT["^s16a^"]", b1 is opc=24 & tag=5 ; bn=2 & b1 ; s16a { a:2 = DT + s16a; v:2 = *:2 a; CF = v == 0; v = v - 1; ZF = v == 0; *:2 a = v; }
+:DECN "DT["^s16a^"]", b1 is opc=24 & tag=5 ; bn=4 & b1 ; s16a { a:2 = DT + s16a; v:4 = *:4 a; CF = v == 0; v = v - 1; ZF = v == 0; *:4 a = v; }
+:DECN "DT["^s16a^"]", b1 is opc=24 & tag=5 ; b1 ; s16a { n:2 = b1; a:2 = DT + s16a; mel_block(24:1, a, n); }
+:DECN "PB["^s16a^"]", b1 is opc=24 & tag=6 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = PB + s16a; v:1 = *:1 a; CF = v == 0; v = v - 1; ZF = v == 0; *:1 a = v; }
+:DECN "PB["^s16a^"]", b1 is opc=24 & tag=6 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = PB + s16a; v:2 = *:2 a; CF = v == 0; v = v - 1; ZF = v == 0; *:2 a = v; }
+:DECN "PB["^s16a^"]", b1 is opc=24 & tag=6 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = PB + s16a; v:4 = *:4 a; CF = v == 0; v = v - 1; ZF = v == 0; *:4 a = v; }
+:DECN "PB["^s16a^"]", b1 is opc=24 & tag=6 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = PB + s16a; mel_block(24:1, a, n); }
+:DECN "PB["^co6^"]", "1" is opc=24 & tag=6 & cm=1 & cmoff=0 ; cn=0 & co6 { a:2 = PB + co6; v:1 = *:1 a; CF = v == 0; v = v - 1; ZF = v == 0; *:1 a = v; }
+:DECN "PB["^co6^"]", "2" is opc=24 & tag=6 & cm=1 & cmoff=0 ; cn=1 & co6 { a:2 = PB + co6; v:2 = *:2 a; CF = v == 0; v = v - 1; ZF = v == 0; *:2 a = v; }
+:DECN "PB["^co6^"]", "4" is opc=24 & tag=6 & cm=1 & cmoff=0 ; cn=2 & co6 { a:2 = PB + co6; v:4 = *:4 a; CF = v == 0; v = v - 1; ZF = v == 0; *:4 a = v; }
+:DECN "PB[c]", "8" is opc=24 & tag=6 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(24:1, PB, 8:2); }
+:DECN "PT["^s16a^"]", b1 is opc=24 & tag=7 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = PT + s16a; v:1 = *:1 a; CF = v == 0; v = v - 1; ZF = v == 0; *:1 a = v; }
+:DECN "PT["^s16a^"]", b1 is opc=24 & tag=7 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = PT + s16a; v:2 = *:2 a; CF = v == 0; v = v - 1; ZF = v == 0; *:2 a = v; }
+:DECN "PT["^s16a^"]", b1 is opc=24 & tag=7 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = PT + s16a; v:4 = *:4 a; CF = v == 0; v = v - 1; ZF = v == 0; *:4 a = v; }
+:DECN "PT["^s16a^"]", b1 is opc=24 & tag=7 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = PT + s16a; mel_block(24:1, a, n); }
+:DECN "PT["^po^"]", "1" is opc=24 & tag=7 & cm=1 & cmoff=0 ; cn=0 & co6 [ po = co6 - 64; ] { a:2 = PT + po; v:1 = *:1 a; CF = v == 0; v = v - 1; ZF = v == 0; *:1 a = v; }
+:DECN "PT["^po^"]", "2" is opc=24 & tag=7 & cm=1 & cmoff=0 ; cn=1 & co6 [ po = co6 - 64; ] { a:2 = PT + po; v:2 = *:2 a; CF = v == 0; v = v - 1; ZF = v == 0; *:2 a = v; }
+:DECN "PT["^po^"]", "4" is opc=24 & tag=7 & cm=1 & cmoff=0 ; cn=2 & co6 [ po = co6 - 64; ] { a:2 = PT + po; v:4 = *:4 a; CF = v == 0; v = v - 1; ZF = v == 0; *:4 a = v; }
+:DECN "PT[c]", "8" is opc=24 & tag=7 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(24:1, PT, 8:2); }
+:NOTN ", "^b1 is opc=25 & tag=0 ; bn=1 & b1 { v:1 = ~*:1 (DT - 1); ZF = v == 0; *:1 (DT - 1) = v; }
+:NOTN ", "^b1 is opc=25 & tag=0 ; bn=2 & b1 { v:2 = ~*:2 (DT - 2); ZF = v == 0; *:2 (DT - 2) = v; }
+:NOTN ", "^b1 is opc=25 & tag=0 ; bn=4 & b1 { v:4 = ~*:4 (DT - 4); ZF = v == 0; *:4 (DT - 4) = v; }
+:NOTN ", "^b1 is opc=25 & tag=0 ; b1 { n:2 = b1; mel_block(25:1, DT, n); }
+:NOTN "SB["^s16a^"]", b1 is opc=25 & tag=1 ; bn=1 & b1 ; s16a { a:2 = SB + s16a; v:1 = ~*:1 a; ZF = v == 0; *:1 a = v; }
+:NOTN "SB["^s16a^"]", b1 is opc=25 & tag=1 ; bn=2 & b1 ; s16a { a:2 = SB + s16a; v:2 = ~*:2 a; ZF = v == 0; *:2 a = v; }
+:NOTN "SB["^s16a^"]", b1 is opc=25 & tag=1 ; bn=4 & b1 ; s16a { a:2 = SB + s16a; v:4 = ~*:4 a; ZF = v == 0; *:4 a = v; }
+:NOTN "SB["^s16a^"]", b1 is opc=25 & tag=1 ; b1 ; s16a { n:2 = b1; a:2 = SB + s16a; mel_block(25:1, a, n); }
+:NOTN "ST["^s16a^"]", b1 is opc=25 & tag=2 ; bn=1 & b1 ; s16a { a:2 = ST + s16a; v:1 = ~*:1 a; ZF = v == 0; *:1 a = v; }
+:NOTN "ST["^s16a^"]", b1 is opc=25 & tag=2 ; bn=2 & b1 ; s16a { a:2 = ST + s16a; v:2 = ~*:2 a; ZF = v == 0; *:2 a = v; }
+:NOTN "ST["^s16a^"]", b1 is opc=25 & tag=2 ; bn=4 & b1 ; s16a { a:2 = ST + s16a; v:4 = ~*:4 a; ZF = v == 0; *:4 a = v; }
+:NOTN "ST["^s16a^"]", b1 is opc=25 & tag=2 ; b1 ; s16a { n:2 = b1; a:2 = ST + s16a; mel_block(25:1, a, n); }
+:NOTN "DB["^s16a^"]", b1 is opc=25 & tag=3 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = DB + s16a; v:1 = ~*:1 a; ZF = v == 0; *:1 a = v; }
+:NOTN "DB["^s16a^"]", b1 is opc=25 & tag=3 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = DB + s16a; v:2 = ~*:2 a; ZF = v == 0; *:2 a = v; }
+:NOTN "DB["^s16a^"]", b1 is opc=25 & tag=3 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = DB + s16a; v:4 = ~*:4 a; ZF = v == 0; *:4 a = v; }
+:NOTN "DB["^s16a^"]", b1 is opc=25 & tag=3 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = DB + s16a; mel_block(25:1, a, n); }
+:NOTN "DB["^co6^"]", "1" is opc=25 & tag=3 & cm=1 & cmoff=0 ; cn=0 & co6 { a:2 = DB + co6; v:1 = ~*:1 a; ZF = v == 0; *:1 a = v; }
+:NOTN "DB["^co6^"]", "2" is opc=25 & tag=3 & cm=1 & cmoff=0 ; cn=1 & co6 { a:2 = DB + co6; v:2 = ~*:2 a; ZF = v == 0; *:2 a = v; }
+:NOTN "DB["^co6^"]", "4" is opc=25 & tag=3 & cm=1 & cmoff=0 ; cn=2 & co6 { a:2 = DB + co6; v:4 = ~*:4 a; ZF = v == 0; *:4 a = v; }
+:NOTN "DB[c]", "8" is opc=25 & tag=3 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(25:1, DB, 8:2); }
+:NOTN "LB["^s16a^"]", b1 is opc=25 & tag=4 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = LB + s16a; v:1 = ~*:1 a; ZF = v == 0; *:1 a = v; }
+:NOTN "LB["^s16a^"]", b1 is opc=25 & tag=4 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = LB + s16a; v:2 = ~*:2 a; ZF = v == 0; *:2 a = v; }
+:NOTN "LB["^s16a^"]", b1 is opc=25 & tag=4 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = LB + s16a; v:4 = ~*:4 a; ZF = v == 0; *:4 a = v; }
+:NOTN "LB["^s16a^"]", b1 is opc=25 & tag=4 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = LB + s16a; mel_block(25:1, a, n); }
+:NOTN "LB["^cs6^"]", "1" is opc=25 & tag=4 & cm=1 & cmoff=0 ; cn=0 & cs6 { a:2 = LB + cs6; v:1 = ~*:1 a; ZF = v == 0; *:1 a = v; }
+:NOTN "LB["^cs6^"]", "2" is opc=25 & tag=4 & cm=1 & cmoff=0 ; cn=1 & cs6 { a:2 = LB + cs6; v:2 = ~*:2 a; ZF = v == 0; *:2 a = v; }
+:NOTN "LB["^cs6^"]", "4" is opc=25 & tag=4 & cm=1 & cmoff=0 ; cn=2 & cs6 { a:2 = LB + cs6; v:4 = ~*:4 a; ZF = v == 0; *:4 a = v; }
+:NOTN "LB[c]", "8" is opc=25 & tag=4 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(25:1, LB, 8:2); }
+:NOTN "DT["^s16a^"]", b1 is opc=25 & tag=5 ; bn=1 & b1 ; s16a { a:2 = DT + s16a; v:1 = ~*:1 a; ZF = v == 0; *:1 a = v; }
+:NOTN "DT["^s16a^"]", b1 is opc=25 & tag=5 ; bn=2 & b1 ; s16a { a:2 = DT + s16a; v:2 = ~*:2 a; ZF = v == 0; *:2 a = v; }
+:NOTN "DT["^s16a^"]", b1 is opc=25 & tag=5 ; bn=4 & b1 ; s16a { a:2 = DT + s16a; v:4 = ~*:4 a; ZF = v == 0; *:4 a = v; }
+:NOTN "DT["^s16a^"]", b1 is opc=25 & tag=5 ; b1 ; s16a { n:2 = b1; a:2 = DT + s16a; mel_block(25:1, a, n); }
+:NOTN "PB["^s16a^"]", b1 is opc=25 & tag=6 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = PB + s16a; v:1 = ~*:1 a; ZF = v == 0; *:1 a = v; }
+:NOTN "PB["^s16a^"]", b1 is opc=25 & tag=6 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = PB + s16a; v:2 = ~*:2 a; ZF = v == 0; *:2 a = v; }
+:NOTN "PB["^s16a^"]", b1 is opc=25 & tag=6 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = PB + s16a; v:4 = ~*:4 a; ZF = v == 0; *:4 a = v; }
+:NOTN "PB["^s16a^"]", b1 is opc=25 & tag=6 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = PB + s16a; mel_block(25:1, a, n); }
+:NOTN "PB["^co6^"]", "1" is opc=25 & tag=6 & cm=1 & cmoff=0 ; cn=0 & co6 { a:2 = PB + co6; v:1 = ~*:1 a; ZF = v == 0; *:1 a = v; }
+:NOTN "PB["^co6^"]", "2" is opc=25 & tag=6 & cm=1 & cmoff=0 ; cn=1 & co6 { a:2 = PB + co6; v:2 = ~*:2 a; ZF = v == 0; *:2 a = v; }
+:NOTN "PB["^co6^"]", "4" is opc=25 & tag=6 & cm=1 & cmoff=0 ; cn=2 & co6 { a:2 = PB + co6; v:4 = ~*:4 a; ZF = v == 0; *:4 a = v; }
+:NOTN "PB[c]", "8" is opc=25 & tag=6 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(25:1, PB, 8:2); }
+:NOTN "PT["^s16a^"]", b1 is opc=25 & tag=7 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = PT + s16a; v:1 = ~*:1 a; ZF = v == 0; *:1 a = v; }
+:NOTN "PT["^s16a^"]", b1 is opc=25 & tag=7 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = PT + s16a; v:2 = ~*:2 a; ZF = v == 0; *:2 a = v; }
+:NOTN "PT["^s16a^"]", b1 is opc=25 & tag=7 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = PT + s16a; v:4 = ~*:4 a; ZF = v == 0; *:4 a = v; }
+:NOTN "PT["^s16a^"]", b1 is opc=25 & tag=7 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = PT + s16a; mel_block(25:1, a, n); }
+:NOTN "PT["^po^"]", "1" is opc=25 & tag=7 & cm=1 & cmoff=0 ; cn=0 & co6 [ po = co6 - 64; ] { a:2 = PT + po; v:1 = ~*:1 a; ZF = v == 0; *:1 a = v; }
+:NOTN "PT["^po^"]", "2" is opc=25 & tag=7 & cm=1 & cmoff=0 ; cn=1 & co6 [ po = co6 - 64; ] { a:2 = PT + po; v:2 = ~*:2 a; ZF = v == 0; *:2 a = v; }
+:NOTN "PT["^po^"]", "4" is opc=25 & tag=7 & cm=1 & cmoff=0 ; cn=2 & co6 [ po = co6 - 64; ] { a:2 = PT + po; v:4 = ~*:4 a; ZF = v == 0; *:4 a = v; }
+:NOTN "PT[c]", "8" is opc=25 & tag=7 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(25:1, PT, 8:2); }
+:CMPN ", "^b1 is opc=26 & tag=0 ; bn=1 & b1 { t:1 = *:1 (DT - 1); l:1 = *:1 (DT - 2); CF = l < t; ZF = l == t; }
+:CMPN ", "^b1 is opc=26 & tag=0 ; bn=2 & b1 { t:2 = *:2 (DT - 2); l:2 = *:2 (DT - 4); CF = l < t; ZF = l == t; }
+:CMPN ", "^b1 is opc=26 & tag=0 ; bn=4 & b1 { t:4 = *:4 (DT - 4); l:4 = *:4 (DT - 8); CF = l < t; ZF = l == t; }
+:CMPN ", "^b1 is opc=26 & tag=0 ; b1 { n:2 = b1; mel_block(26:1, DT, n); }
+:CMPN "SB["^s16a^"]", b1 is opc=26 & tag=1 ; bn=1 & b1 ; s16a { a:2 = SB + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; CF = l < t; ZF = l == t; }
+:CMPN "SB["^s16a^"]", b1 is opc=26 & tag=1 ; bn=2 & b1 ; s16a { a:2 = SB + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; CF = l < t; ZF = l == t; }
+:CMPN "SB["^s16a^"]", b1 is opc=26 & tag=1 ; bn=4 & b1 ; s16a { a:2 = SB + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; CF = l < t; ZF = l == t; }
+:CMPN "SB["^s16a^"]", b1 is opc=26 & tag=1 ; b1 ; s16a { n:2 = b1; a:2 = SB + s16a; mel_block(26:1, a, n); }
+:CMPN "ST["^s16a^"]", b1 is opc=26 & tag=2 ; bn=1 & b1 ; s16a { a:2 = ST + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; CF = l < t; ZF = l == t; }
+:CMPN "ST["^s16a^"]", b1 is opc=26 & tag=2 ; bn=2 & b1 ; s16a { a:2 = ST + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; CF = l < t; ZF = l == t; }
+:CMPN "ST["^s16a^"]", b1 is opc=26 & tag=2 ; bn=4 & b1 ; s16a { a:2 = ST + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; CF = l < t; ZF = l == t; }
+:CMPN "ST["^s16a^"]", b1 is opc=26 & tag=2 ; b1 ; s16a { n:2 = b1; a:2 = ST + s16a; mel_block(26:1, a, n); }
+:CMPN "DB["^s16a^"]", b1 is opc=26 & tag=3 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = DB + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; CF = l < t; ZF = l == t; }
+:CMPN "DB["^s16a^"]", b1 is opc=26 & tag=3 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = DB + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; CF = l < t; ZF = l == t; }
+:CMPN "DB["^s16a^"]", b1 is opc=26 & tag=3 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = DB + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; CF = l < t; ZF = l == t; }
+:CMPN "DB["^s16a^"]", b1 is opc=26 & tag=3 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = DB + s16a; mel_block(26:1, a, n); }
+:CMPN "DB["^co6^"]", "1" is opc=26 & tag=3 & cm=1 & cmoff=0 ; cn=0 & co6 { a:2 = DB + co6; t:1 = *:1 (DT - 1); l:1 = *:1 a; CF = l < t; ZF = l == t; }
+:CMPN "DB["^co6^"]", "2" is opc=26 & tag=3 & cm=1 & cmoff=0 ; cn=1 & co6 { a:2 = DB + co6; t:2 = *:2 (DT - 2); l:2 = *:2 a; CF = l < t; ZF = l == t; }
+:CMPN "DB["^co6^"]", "4" is opc=26 & tag=3 & cm=1 & cmoff=0 ; cn=2 & co6 { a:2 = DB + co6; t:4 = *:4 (DT - 4); l:4 = *:4 a; CF = l < t; ZF = l == t; }
+:CMPN "DB[c]", "8" is opc=26 & tag=3 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(26:1, DB, 8:2); }
+:CMPN "LB["^s16a^"]", b1 is opc=26 & tag=4 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = LB + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; CF = l < t; ZF = l == t; }
+:CMPN "LB["^s16a^"]", b1 is opc=26 & tag=4 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = LB + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; CF = l < t; ZF = l == t; }
+:CMPN "LB["^s16a^"]", b1 is opc=26 & tag=4 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = LB + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; CF = l < t; ZF = l == t; }
+:CMPN "LB["^s16a^"]", b1 is opc=26 & tag=4 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = LB + s16a; mel_block(26:1, a, n); }
+:CMPN "LB["^cs6^"]", "1" is opc=26 & tag=4 & cm=1 & cmoff=0 ; cn=0 & cs6 { a:2 = LB + cs6; t:1 = *:1 (DT - 1); l:1 = *:1 a; CF = l < t; ZF = l == t; }
+:CMPN "LB["^cs6^"]", "2" is opc=26 & tag=4 & cm=1 & cmoff=0 ; cn=1 & cs6 { a:2 = LB + cs6; t:2 = *:2 (DT - 2); l:2 = *:2 a; CF = l < t; ZF = l == t; }
+:CMPN "LB["^cs6^"]", "4" is opc=26 & tag=4 & cm=1 & cmoff=0 ; cn=2 & cs6 { a:2 = LB + cs6; t:4 = *:4 (DT - 4); l:4 = *:4 a; CF = l < t; ZF = l == t; }
+:CMPN "LB[c]", "8" is opc=26 & tag=4 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(26:1, LB, 8:2); }
+:CMPN "DT["^s16a^"]", b1 is opc=26 & tag=5 ; bn=1 & b1 ; s16a { a:2 = DT + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; CF = l < t; ZF = l == t; }
+:CMPN "DT["^s16a^"]", b1 is opc=26 & tag=5 ; bn=2 & b1 ; s16a { a:2 = DT + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; CF = l < t; ZF = l == t; }
+:CMPN "DT["^s16a^"]", b1 is opc=26 & tag=5 ; bn=4 & b1 ; s16a { a:2 = DT + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; CF = l < t; ZF = l == t; }
+:CMPN "DT["^s16a^"]", b1 is opc=26 & tag=5 ; b1 ; s16a { n:2 = b1; a:2 = DT + s16a; mel_block(26:1, a, n); }
+:CMPN "PB["^s16a^"]", b1 is opc=26 & tag=6 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = PB + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; CF = l < t; ZF = l == t; }
+:CMPN "PB["^s16a^"]", b1 is opc=26 & tag=6 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = PB + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; CF = l < t; ZF = l == t; }
+:CMPN "PB["^s16a^"]", b1 is opc=26 & tag=6 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = PB + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; CF = l < t; ZF = l == t; }
+:CMPN "PB["^s16a^"]", b1 is opc=26 & tag=6 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = PB + s16a; mel_block(26:1, a, n); }
+:CMPN "PB["^co6^"]", "1" is opc=26 & tag=6 & cm=1 & cmoff=0 ; cn=0 & co6 { a:2 = PB + co6; t:1 = *:1 (DT - 1); l:1 = *:1 a; CF = l < t; ZF = l == t; }
+:CMPN "PB["^co6^"]", "2" is opc=26 & tag=6 & cm=1 & cmoff=0 ; cn=1 & co6 { a:2 = PB + co6; t:2 = *:2 (DT - 2); l:2 = *:2 a; CF = l < t; ZF = l == t; }
+:CMPN "PB["^co6^"]", "4" is opc=26 & tag=6 & cm=1 & cmoff=0 ; cn=2 & co6 { a:2 = PB + co6; t:4 = *:4 (DT - 4); l:4 = *:4 a; CF = l < t; ZF = l == t; }
+:CMPN "PB[c]", "8" is opc=26 & tag=6 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(26:1, PB, 8:2); }
+:CMPN "PT["^s16a^"]", b1 is opc=26 & tag=7 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = PT + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; CF = l < t; ZF = l == t; }
+:CMPN "PT["^s16a^"]", b1 is opc=26 & tag=7 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = PT + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; CF = l < t; ZF = l == t; }
+:CMPN "PT["^s16a^"]", b1 is opc=26 & tag=7 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = PT + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; CF = l < t; ZF = l == t; }
+:CMPN "PT["^s16a^"]", b1 is opc=26 & tag=7 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = PT + s16a; mel_block(26:1, a, n); }
+:CMPN "PT["^po^"]", "1" is opc=26 & tag=7 & cm=1 & cmoff=0 ; cn=0 & co6 [ po = co6 - 64; ] { a:2 = PT + po; t:1 = *:1 (DT - 1); l:1 = *:1 a; CF = l < t; ZF = l == t; }
+:CMPN "PT["^po^"]", "2" is opc=26 & tag=7 & cm=1 & cmoff=0 ; cn=1 & co6 [ po = co6 - 64; ] { a:2 = PT + po; t:2 = *:2 (DT - 2); l:2 = *:2 a; CF = l < t; ZF = l == t; }
+:CMPN "PT["^po^"]", "4" is opc=26 & tag=7 & cm=1 & cmoff=0 ; cn=2 & co6 [ po = co6 - 64; ] { a:2 = PT + po; t:4 = *:4 (DT - 4); l:4 = *:4 a; CF = l < t; ZF = l == t; }
+:CMPN "PT[c]", "8" is opc=26 & tag=7 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(26:1, PT, 8:2); }
+:ADDN ", "^b1 is opc=27 & tag=0 ; bn=1 & b1 { t:1 = *:1 (DT - 1); l:1 = *:1 (DT - 2); r:1 = l + t; CF = carry(l, t); ZF = r == 0; *:1 (DT - 2) = r; }
+:ADDN ", "^b1 is opc=27 & tag=0 ; bn=2 & b1 { t:2 = *:2 (DT - 2); l:2 = *:2 (DT - 4); r:2 = l + t; CF = carry(l, t); ZF = r == 0; *:2 (DT - 4) = r; }
+:ADDN ", "^b1 is opc=27 & tag=0 ; bn=4 & b1 { t:4 = *:4 (DT - 4); l:4 = *:4 (DT - 8); r:4 = l + t; CF = carry(l, t); ZF = r == 0; *:4 (DT - 8) = r; }
+:ADDN ", "^b1 is opc=27 & tag=0 ; b1 { n:2 = b1; mel_block(27:1, DT, n); }
+:ADDN "SB["^s16a^"]", b1 is opc=27 & tag=1 ; bn=1 & b1 ; s16a { a:2 = SB + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l + t; CF = carry(l, t); ZF = r == 0; *:1 a = r; }
+:ADDN "SB["^s16a^"]", b1 is opc=27 & tag=1 ; bn=2 & b1 ; s16a { a:2 = SB + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l + t; CF = carry(l, t); ZF = r == 0; *:2 a = r; }
+:ADDN "SB["^s16a^"]", b1 is opc=27 & tag=1 ; bn=4 & b1 ; s16a { a:2 = SB + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l + t; CF = carry(l, t); ZF = r == 0; *:4 a = r; }
+:ADDN "SB["^s16a^"]", b1 is opc=27 & tag=1 ; b1 ; s16a { n:2 = b1; a:2 = SB + s16a; mel_block(27:1, a, n); }
+:ADDN "ST["^s16a^"]", b1 is opc=27 & tag=2 ; bn=1 & b1 ; s16a { a:2 = ST + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l + t; CF = carry(l, t); ZF = r == 0; *:1 a = r; }
+:ADDN "ST["^s16a^"]", b1 is opc=27 & tag=2 ; bn=2 & b1 ; s16a { a:2 = ST + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l + t; CF = carry(l, t); ZF = r == 0; *:2 a = r; }
+:ADDN "ST["^s16a^"]", b1 is opc=27 & tag=2 ; bn=4 & b1 ; s16a { a:2 = ST + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l + t; CF = carry(l, t); ZF = r == 0; *:4 a = r; }
+:ADDN "ST["^s16a^"]", b1 is opc=27 & tag=2 ; b1 ; s16a { n:2 = b1; a:2 = ST + s16a; mel_block(27:1, a, n); }
+:ADDN "DB["^s16a^"]", b1 is opc=27 & tag=3 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = DB + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l + t; CF = carry(l, t); ZF = r == 0; *:1 a = r; }
+:ADDN "DB["^s16a^"]", b1 is opc=27 & tag=3 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = DB + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l + t; CF = carry(l, t); ZF = r == 0; *:2 a = r; }
+:ADDN "DB["^s16a^"]", b1 is opc=27 & tag=3 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = DB + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l + t; CF = carry(l, t); ZF = r == 0; *:4 a = r; }
+:ADDN "DB["^s16a^"]", b1 is opc=27 & tag=3 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = DB + s16a; mel_block(27:1, a, n); }
+:ADDN "DB["^co6^"]", "1" is opc=27 & tag=3 & cm=1 & cmoff=0 ; cn=0 & co6 { a:2 = DB + co6; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l + t; CF = carry(l, t); ZF = r == 0; *:1 a = r; }
+:ADDN "DB["^co6^"]", "2" is opc=27 & tag=3 & cm=1 & cmoff=0 ; cn=1 & co6 { a:2 = DB + co6; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l + t; CF = carry(l, t); ZF = r == 0; *:2 a = r; }
+:ADDN "DB["^co6^"]", "4" is opc=27 & tag=3 & cm=1 & cmoff=0 ; cn=2 & co6 { a:2 = DB + co6; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l + t; CF = carry(l, t); ZF = r == 0; *:4 a = r; }
+:ADDN "DB[c]", "8" is opc=27 & tag=3 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(27:1, DB, 8:2); }
+:ADDN "LB["^s16a^"]", b1 is opc=27 & tag=4 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = LB + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l + t; CF = carry(l, t); ZF = r == 0; *:1 a = r; }
+:ADDN "LB["^s16a^"]", b1 is opc=27 & tag=4 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = LB + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l + t; CF = carry(l, t); ZF = r == 0; *:2 a = r; }
+:ADDN "LB["^s16a^"]", b1 is opc=27 & tag=4 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = LB + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l + t; CF = carry(l, t); ZF = r == 0; *:4 a = r; }
+:ADDN "LB["^s16a^"]", b1 is opc=27 & tag=4 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = LB + s16a; mel_block(27:1, a, n); }
+:ADDN "LB["^cs6^"]", "1" is opc=27 & tag=4 & cm=1 & cmoff=0 ; cn=0 & cs6 { a:2 = LB + cs6; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l + t; CF = carry(l, t); ZF = r == 0; *:1 a = r; }
+:ADDN "LB["^cs6^"]", "2" is opc=27 & tag=4 & cm=1 & cmoff=0 ; cn=1 & cs6 { a:2 = LB + cs6; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l + t; CF = carry(l, t); ZF = r == 0; *:2 a = r; }
+:ADDN "LB["^cs6^"]", "4" is opc=27 & tag=4 & cm=1 & cmoff=0 ; cn=2 & cs6 { a:2 = LB + cs6; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l + t; CF = carry(l, t); ZF = r == 0; *:4 a = r; }
+:ADDN "LB[c]", "8" is opc=27 & tag=4 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(27:1, LB, 8:2); }
+:ADDN "DT["^s16a^"]", b1 is opc=27 & tag=5 ; bn=1 & b1 ; s16a { a:2 = DT + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l + t; CF = carry(l, t); ZF = r == 0; *:1 a = r; }
+:ADDN "DT["^s16a^"]", b1 is opc=27 & tag=5 ; bn=2 & b1 ; s16a { a:2 = DT + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l + t; CF = carry(l, t); ZF = r == 0; *:2 a = r; }
+:ADDN "DT["^s16a^"]", b1 is opc=27 & tag=5 ; bn=4 & b1 ; s16a { a:2 = DT + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l + t; CF = carry(l, t); ZF = r == 0; *:4 a = r; }
+:ADDN "DT["^s16a^"]", b1 is opc=27 & tag=5 ; b1 ; s16a { n:2 = b1; a:2 = DT + s16a; mel_block(27:1, a, n); }
+:ADDN "PB["^s16a^"]", b1 is opc=27 & tag=6 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = PB + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l + t; CF = carry(l, t); ZF = r == 0; *:1 a = r; }
+:ADDN "PB["^s16a^"]", b1 is opc=27 & tag=6 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = PB + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l + t; CF = carry(l, t); ZF = r == 0; *:2 a = r; }
+:ADDN "PB["^s16a^"]", b1 is opc=27 & tag=6 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = PB + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l + t; CF = carry(l, t); ZF = r == 0; *:4 a = r; }
+:ADDN "PB["^s16a^"]", b1 is opc=27 & tag=6 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = PB + s16a; mel_block(27:1, a, n); }
+:ADDN "PB["^co6^"]", "1" is opc=27 & tag=6 & cm=1 & cmoff=0 ; cn=0 & co6 { a:2 = PB + co6; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l + t; CF = carry(l, t); ZF = r == 0; *:1 a = r; }
+:ADDN "PB["^co6^"]", "2" is opc=27 & tag=6 & cm=1 & cmoff=0 ; cn=1 & co6 { a:2 = PB + co6; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l + t; CF = carry(l, t); ZF = r == 0; *:2 a = r; }
+:ADDN "PB["^co6^"]", "4" is opc=27 & tag=6 & cm=1 & cmoff=0 ; cn=2 & co6 { a:2 = PB + co6; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l + t; CF = carry(l, t); ZF = r == 0; *:4 a = r; }
+:ADDN "PB[c]", "8" is opc=27 & tag=6 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(27:1, PB, 8:2); }
+:ADDN "PT["^s16a^"]", b1 is opc=27 & tag=7 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = PT + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l + t; CF = carry(l, t); ZF = r == 0; *:1 a = r; }
+:ADDN "PT["^s16a^"]", b1 is opc=27 & tag=7 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = PT + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l + t; CF = carry(l, t); ZF = r == 0; *:2 a = r; }
+:ADDN "PT["^s16a^"]", b1 is opc=27 & tag=7 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = PT + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l + t; CF = carry(l, t); ZF = r == 0; *:4 a = r; }
+:ADDN "PT["^s16a^"]", b1 is opc=27 & tag=7 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = PT + s16a; mel_block(27:1, a, n); }
+:ADDN "PT["^po^"]", "1" is opc=27 & tag=7 & cm=1 & cmoff=0 ; cn=0 & co6 [ po = co6 - 64; ] { a:2 = PT + po; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l + t; CF = carry(l, t); ZF = r == 0; *:1 a = r; }
+:ADDN "PT["^po^"]", "2" is opc=27 & tag=7 & cm=1 & cmoff=0 ; cn=1 & co6 [ po = co6 - 64; ] { a:2 = PT + po; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l + t; CF = carry(l, t); ZF = r == 0; *:2 a = r; }
+:ADDN "PT["^po^"]", "4" is opc=27 & tag=7 & cm=1 & cmoff=0 ; cn=2 & co6 [ po = co6 - 64; ] { a:2 = PT + po; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l + t; CF = carry(l, t); ZF = r == 0; *:4 a = r; }
+:ADDN "PT[c]", "8" is opc=27 & tag=7 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(27:1, PT, 8:2); }
+:SUBN ", "^b1 is opc=28 & tag=0 ; bn=1 & b1 { t:1 = *:1 (DT - 1); l:1 = *:1 (DT - 2); r:1 = l - t; CF = l < t; ZF = r == 0; *:1 (DT - 2) = r; }
+:SUBN ", "^b1 is opc=28 & tag=0 ; bn=2 & b1 { t:2 = *:2 (DT - 2); l:2 = *:2 (DT - 4); r:2 = l - t; CF = l < t; ZF = r == 0; *:2 (DT - 4) = r; }
+:SUBN ", "^b1 is opc=28 & tag=0 ; bn=4 & b1 { t:4 = *:4 (DT - 4); l:4 = *:4 (DT - 8); r:4 = l - t; CF = l < t; ZF = r == 0; *:4 (DT - 8) = r; }
+:SUBN ", "^b1 is opc=28 & tag=0 ; b1 { n:2 = b1; mel_block(28:1, DT, n); }
+:SUBN "SB["^s16a^"]", b1 is opc=28 & tag=1 ; bn=1 & b1 ; s16a { a:2 = SB + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l - t; CF = l < t; ZF = r == 0; *:1 a = r; }
+:SUBN "SB["^s16a^"]", b1 is opc=28 & tag=1 ; bn=2 & b1 ; s16a { a:2 = SB + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l - t; CF = l < t; ZF = r == 0; *:2 a = r; }
+:SUBN "SB["^s16a^"]", b1 is opc=28 & tag=1 ; bn=4 & b1 ; s16a { a:2 = SB + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l - t; CF = l < t; ZF = r == 0; *:4 a = r; }
+:SUBN "SB["^s16a^"]", b1 is opc=28 & tag=1 ; b1 ; s16a { n:2 = b1; a:2 = SB + s16a; mel_block(28:1, a, n); }
+:SUBN "ST["^s16a^"]", b1 is opc=28 & tag=2 ; bn=1 & b1 ; s16a { a:2 = ST + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l - t; CF = l < t; ZF = r == 0; *:1 a = r; }
+:SUBN "ST["^s16a^"]", b1 is opc=28 & tag=2 ; bn=2 & b1 ; s16a { a:2 = ST + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l - t; CF = l < t; ZF = r == 0; *:2 a = r; }
+:SUBN "ST["^s16a^"]", b1 is opc=28 & tag=2 ; bn=4 & b1 ; s16a { a:2 = ST + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l - t; CF = l < t; ZF = r == 0; *:4 a = r; }
+:SUBN "ST["^s16a^"]", b1 is opc=28 & tag=2 ; b1 ; s16a { n:2 = b1; a:2 = ST + s16a; mel_block(28:1, a, n); }
+:SUBN "DB["^s16a^"]", b1 is opc=28 & tag=3 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = DB + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l - t; CF = l < t; ZF = r == 0; *:1 a = r; }
+:SUBN "DB["^s16a^"]", b1 is opc=28 & tag=3 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = DB + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l - t; CF = l < t; ZF = r == 0; *:2 a = r; }
+:SUBN "DB["^s16a^"]", b1 is opc=28 & tag=3 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = DB + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l - t; CF = l < t; ZF = r == 0; *:4 a = r; }
+:SUBN "DB["^s16a^"]", b1 is opc=28 & tag=3 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = DB + s16a; mel_block(28:1, a, n); }
+:SUBN "DB["^co6^"]", "1" is opc=28 & tag=3 & cm=1 & cmoff=0 ; cn=0 & co6 { a:2 = DB + co6; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l - t; CF = l < t; ZF = r == 0; *:1 a = r; }
+:SUBN "DB["^co6^"]", "2" is opc=28 & tag=3 & cm=1 & cmoff=0 ; cn=1 & co6 { a:2 = DB + co6; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l - t; CF = l < t; ZF = r == 0; *:2 a = r; }
+:SUBN "DB["^co6^"]", "4" is opc=28 & tag=3 & cm=1 & cmoff=0 ; cn=2 & co6 { a:2 = DB + co6; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l - t; CF = l < t; ZF = r == 0; *:4 a = r; }
+:SUBN "DB[c]", "8" is opc=28 & tag=3 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(28:1, DB, 8:2); }
+:SUBN "LB["^s16a^"]", b1 is opc=28 & tag=4 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = LB + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l - t; CF = l < t; ZF = r == 0; *:1 a = r; }
+:SUBN "LB["^s16a^"]", b1 is opc=28 & tag=4 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = LB + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l - t; CF = l < t; ZF = r == 0; *:2 a = r; }
+:SUBN "LB["^s16a^"]", b1 is opc=28 & tag=4 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = LB + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l - t; CF = l < t; ZF = r == 0; *:4 a = r; }
+:SUBN "LB["^s16a^"]", b1 is opc=28 & tag=4 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = LB + s16a; mel_block(28:1, a, n); }
+:SUBN "LB["^cs6^"]", "1" is opc=28 & tag=4 & cm=1 & cmoff=0 ; cn=0 & cs6 { a:2 = LB + cs6; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l - t; CF = l < t; ZF = r == 0; *:1 a = r; }
+:SUBN "LB["^cs6^"]", "2" is opc=28 & tag=4 & cm=1 & cmoff=0 ; cn=1 & cs6 { a:2 = LB + cs6; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l - t; CF = l < t; ZF = r == 0; *:2 a = r; }
+:SUBN "LB["^cs6^"]", "4" is opc=28 & tag=4 & cm=1 & cmoff=0 ; cn=2 & cs6 { a:2 = LB + cs6; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l - t; CF = l < t; ZF = r == 0; *:4 a = r; }
+:SUBN "LB[c]", "8" is opc=28 & tag=4 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(28:1, LB, 8:2); }
+:SUBN "DT["^s16a^"]", b1 is opc=28 & tag=5 ; bn=1 & b1 ; s16a { a:2 = DT + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l - t; CF = l < t; ZF = r == 0; *:1 a = r; }
+:SUBN "DT["^s16a^"]", b1 is opc=28 & tag=5 ; bn=2 & b1 ; s16a { a:2 = DT + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l - t; CF = l < t; ZF = r == 0; *:2 a = r; }
+:SUBN "DT["^s16a^"]", b1 is opc=28 & tag=5 ; bn=4 & b1 ; s16a { a:2 = DT + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l - t; CF = l < t; ZF = r == 0; *:4 a = r; }
+:SUBN "DT["^s16a^"]", b1 is opc=28 & tag=5 ; b1 ; s16a { n:2 = b1; a:2 = DT + s16a; mel_block(28:1, a, n); }
+:SUBN "PB["^s16a^"]", b1 is opc=28 & tag=6 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = PB + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l - t; CF = l < t; ZF = r == 0; *:1 a = r; }
+:SUBN "PB["^s16a^"]", b1 is opc=28 & tag=6 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = PB + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l - t; CF = l < t; ZF = r == 0; *:2 a = r; }
+:SUBN "PB["^s16a^"]", b1 is opc=28 & tag=6 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = PB + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l - t; CF = l < t; ZF = r == 0; *:4 a = r; }
+:SUBN "PB["^s16a^"]", b1 is opc=28 & tag=6 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = PB + s16a; mel_block(28:1, a, n); }
+:SUBN "PB["^co6^"]", "1" is opc=28 & tag=6 & cm=1 & cmoff=0 ; cn=0 & co6 { a:2 = PB + co6; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l - t; CF = l < t; ZF = r == 0; *:1 a = r; }
+:SUBN "PB["^co6^"]", "2" is opc=28 & tag=6 & cm=1 & cmoff=0 ; cn=1 & co6 { a:2 = PB + co6; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l - t; CF = l < t; ZF = r == 0; *:2 a = r; }
+:SUBN "PB["^co6^"]", "4" is opc=28 & tag=6 & cm=1 & cmoff=0 ; cn=2 & co6 { a:2 = PB + co6; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l - t; CF = l < t; ZF = r == 0; *:4 a = r; }
+:SUBN "PB[c]", "8" is opc=28 & tag=6 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(28:1, PB, 8:2); }
+:SUBN "PT["^s16a^"]", b1 is opc=28 & tag=7 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = PT + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l - t; CF = l < t; ZF = r == 0; *:1 a = r; }
+:SUBN "PT["^s16a^"]", b1 is opc=28 & tag=7 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = PT + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l - t; CF = l < t; ZF = r == 0; *:2 a = r; }
+:SUBN "PT["^s16a^"]", b1 is opc=28 & tag=7 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = PT + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l - t; CF = l < t; ZF = r == 0; *:4 a = r; }
+:SUBN "PT["^s16a^"]", b1 is opc=28 & tag=7 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = PT + s16a; mel_block(28:1, a, n); }
+:SUBN "PT["^po^"]", "1" is opc=28 & tag=7 & cm=1 & cmoff=0 ; cn=0 & co6 [ po = co6 - 64; ] { a:2 = PT + po; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l - t; CF = l < t; ZF = r == 0; *:1 a = r; }
+:SUBN "PT["^po^"]", "2" is opc=28 & tag=7 & cm=1 & cmoff=0 ; cn=1 & co6 [ po = co6 - 64; ] { a:2 = PT + po; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l - t; CF = l < t; ZF = r == 0; *:2 a = r; }
+:SUBN "PT["^po^"]", "4" is opc=28 & tag=7 & cm=1 & cmoff=0 ; cn=2 & co6 [ po = co6 - 64; ] { a:2 = PT + po; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l - t; CF = l < t; ZF = r == 0; *:4 a = r; }
+:SUBN "PT[c]", "8" is opc=28 & tag=7 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(28:1, PT, 8:2); }
+:ANDN ", "^b1 is opc=29 & tag=0 ; bn=1 & b1 { t:1 = *:1 (DT - 1); l:1 = *:1 (DT - 2); r:1 = l & t; ZF = r == 0; *:1 (DT - 2) = r; }
+:ANDN ", "^b1 is opc=29 & tag=0 ; bn=2 & b1 { t:2 = *:2 (DT - 2); l:2 = *:2 (DT - 4); r:2 = l & t; ZF = r == 0; *:2 (DT - 4) = r; }
+:ANDN ", "^b1 is opc=29 & tag=0 ; bn=4 & b1 { t:4 = *:4 (DT - 4); l:4 = *:4 (DT - 8); r:4 = l & t; ZF = r == 0; *:4 (DT - 8) = r; }
+:ANDN ", "^b1 is opc=29 & tag=0 ; b1 { n:2 = b1; mel_block(29:1, DT, n); }
+:ANDN "SB["^s16a^"]", b1 is opc=29 & tag=1 ; bn=1 & b1 ; s16a { a:2 = SB + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l & t; ZF = r == 0; *:1 a = r; }
+:ANDN "SB["^s16a^"]", b1 is opc=29 & tag=1 ; bn=2 & b1 ; s16a { a:2 = SB + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l & t; ZF = r == 0; *:2 a = r; }
+:ANDN "SB["^s16a^"]", b1 is opc=29 & tag=1 ; bn=4 & b1 ; s16a { a:2 = SB + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l & t; ZF = r == 0; *:4 a = r; }
+:ANDN "SB["^s16a^"]", b1 is opc=29 & tag=1 ; b1 ; s16a { n:2 = b1; a:2 = SB + s16a; mel_block(29:1, a, n); }
+:ANDN "ST["^s16a^"]", b1 is opc=29 & tag=2 ; bn=1 & b1 ; s16a { a:2 = ST + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l & t; ZF = r == 0; *:1 a = r; }
+:ANDN "ST["^s16a^"]", b1 is opc=29 & tag=2 ; bn=2 & b1 ; s16a { a:2 = ST + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l & t; ZF = r == 0; *:2 a = r; }
+:ANDN "ST["^s16a^"]", b1 is opc=29 & tag=2 ; bn=4 & b1 ; s16a { a:2 = ST + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l & t; ZF = r == 0; *:4 a = r; }
+:ANDN "ST["^s16a^"]", b1 is opc=29 & tag=2 ; b1 ; s16a { n:2 = b1; a:2 = ST + s16a; mel_block(29:1, a, n); }
+:ANDN "DB["^s16a^"]", b1 is opc=29 & tag=3 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = DB + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l & t; ZF = r == 0; *:1 a = r; }
+:ANDN "DB["^s16a^"]", b1 is opc=29 & tag=3 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = DB + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l & t; ZF = r == 0; *:2 a = r; }
+:ANDN "DB["^s16a^"]", b1 is opc=29 & tag=3 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = DB + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l & t; ZF = r == 0; *:4 a = r; }
+:ANDN "DB["^s16a^"]", b1 is opc=29 & tag=3 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = DB + s16a; mel_block(29:1, a, n); }
+:ANDN "DB["^co6^"]", "1" is opc=29 & tag=3 & cm=1 & cmoff=0 ; cn=0 & co6 { a:2 = DB + co6; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l & t; ZF = r == 0; *:1 a = r; }
+:ANDN "DB["^co6^"]", "2" is opc=29 & tag=3 & cm=1 & cmoff=0 ; cn=1 & co6 { a:2 = DB + co6; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l & t; ZF = r == 0; *:2 a = r; }
+:ANDN "DB["^co6^"]", "4" is opc=29 & tag=3 & cm=1 & cmoff=0 ; cn=2 & co6 { a:2 = DB + co6; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l & t; ZF = r == 0; *:4 a = r; }
+:ANDN "DB[c]", "8" is opc=29 & tag=3 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(29:1, DB, 8:2); }
+:ANDN "LB["^s16a^"]", b1 is opc=29 & tag=4 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = LB + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l & t; ZF = r == 0; *:1 a = r; }
+:ANDN "LB["^s16a^"]", b1 is opc=29 & tag=4 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = LB + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l & t; ZF = r == 0; *:2 a = r; }
+:ANDN "LB["^s16a^"]", b1 is opc=29 & tag=4 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = LB + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l & t; ZF = r == 0; *:4 a = r; }
+:ANDN "LB["^s16a^"]", b1 is opc=29 & tag=4 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = LB + s16a; mel_block(29:1, a, n); }
+:ANDN "LB["^cs6^"]", "1" is opc=29 & tag=4 & cm=1 & cmoff=0 ; cn=0 & cs6 { a:2 = LB + cs6; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l & t; ZF = r == 0; *:1 a = r; }
+:ANDN "LB["^cs6^"]", "2" is opc=29 & tag=4 & cm=1 & cmoff=0 ; cn=1 & cs6 { a:2 = LB + cs6; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l & t; ZF = r == 0; *:2 a = r; }
+:ANDN "LB["^cs6^"]", "4" is opc=29 & tag=4 & cm=1 & cmoff=0 ; cn=2 & cs6 { a:2 = LB + cs6; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l & t; ZF = r == 0; *:4 a = r; }
+:ANDN "LB[c]", "8" is opc=29 & tag=4 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(29:1, LB, 8:2); }
+:ANDN "DT["^s16a^"]", b1 is opc=29 & tag=5 ; bn=1 & b1 ; s16a { a:2 = DT + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l & t; ZF = r == 0; *:1 a = r; }
+:ANDN "DT["^s16a^"]", b1 is opc=29 & tag=5 ; bn=2 & b1 ; s16a { a:2 = DT + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l & t; ZF = r == 0; *:2 a = r; }
+:ANDN "DT["^s16a^"]", b1 is opc=29 & tag=5 ; bn=4 & b1 ; s16a { a:2 = DT + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l & t; ZF = r == 0; *:4 a = r; }
+:ANDN "DT["^s16a^"]", b1 is opc=29 & tag=5 ; b1 ; s16a { n:2 = b1; a:2 = DT + s16a; mel_block(29:1, a, n); }
+:ANDN "PB["^s16a^"]", b1 is opc=29 & tag=6 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = PB + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l & t; ZF = r == 0; *:1 a = r; }
+:ANDN "PB["^s16a^"]", b1 is opc=29 & tag=6 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = PB + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l & t; ZF = r == 0; *:2 a = r; }
+:ANDN "PB["^s16a^"]", b1 is opc=29 & tag=6 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = PB + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l & t; ZF = r == 0; *:4 a = r; }
+:ANDN "PB["^s16a^"]", b1 is opc=29 & tag=6 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = PB + s16a; mel_block(29:1, a, n); }
+:ANDN "PB["^co6^"]", "1" is opc=29 & tag=6 & cm=1 & cmoff=0 ; cn=0 & co6 { a:2 = PB + co6; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l & t; ZF = r == 0; *:1 a = r; }
+:ANDN "PB["^co6^"]", "2" is opc=29 & tag=6 & cm=1 & cmoff=0 ; cn=1 & co6 { a:2 = PB + co6; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l & t; ZF = r == 0; *:2 a = r; }
+:ANDN "PB["^co6^"]", "4" is opc=29 & tag=6 & cm=1 & cmoff=0 ; cn=2 & co6 { a:2 = PB + co6; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l & t; ZF = r == 0; *:4 a = r; }
+:ANDN "PB[c]", "8" is opc=29 & tag=6 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(29:1, PB, 8:2); }
+:ANDN "PT["^s16a^"]", b1 is opc=29 & tag=7 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = PT + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l & t; ZF = r == 0; *:1 a = r; }
+:ANDN "PT["^s16a^"]", b1 is opc=29 & tag=7 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = PT + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l & t; ZF = r == 0; *:2 a = r; }
+:ANDN "PT["^s16a^"]", b1 is opc=29 & tag=7 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = PT + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l & t; ZF = r == 0; *:4 a = r; }
+:ANDN "PT["^s16a^"]", b1 is opc=29 & tag=7 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = PT + s16a; mel_block(29:1, a, n); }
+:ANDN "PT["^po^"]", "1" is opc=29 & tag=7 & cm=1 & cmoff=0 ; cn=0 & co6 [ po = co6 - 64; ] { a:2 = PT + po; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l & t; ZF = r == 0; *:1 a = r; }
+:ANDN "PT["^po^"]", "2" is opc=29 & tag=7 & cm=1 & cmoff=0 ; cn=1 & co6 [ po = co6 - 64; ] { a:2 = PT + po; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l & t; ZF = r == 0; *:2 a = r; }
+:ANDN "PT["^po^"]", "4" is opc=29 & tag=7 & cm=1 & cmoff=0 ; cn=2 & co6 [ po = co6 - 64; ] { a:2 = PT + po; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l & t; ZF = r == 0; *:4 a = r; }
+:ANDN "PT[c]", "8" is opc=29 & tag=7 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(29:1, PT, 8:2); }
+:ORN ", "^b1 is opc=30 & tag=0 ; bn=1 & b1 { t:1 = *:1 (DT - 1); l:1 = *:1 (DT - 2); r:1 = l | t; ZF = r == 0; *:1 (DT - 2) = r; }
+:ORN ", "^b1 is opc=30 & tag=0 ; bn=2 & b1 { t:2 = *:2 (DT - 2); l:2 = *:2 (DT - 4); r:2 = l | t; ZF = r == 0; *:2 (DT - 4) = r; }
+:ORN ", "^b1 is opc=30 & tag=0 ; bn=4 & b1 { t:4 = *:4 (DT - 4); l:4 = *:4 (DT - 8); r:4 = l | t; ZF = r == 0; *:4 (DT - 8) = r; }
+:ORN ", "^b1 is opc=30 & tag=0 ; b1 { n:2 = b1; mel_block(30:1, DT, n); }
+:ORN "SB["^s16a^"]", b1 is opc=30 & tag=1 ; bn=1 & b1 ; s16a { a:2 = SB + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l | t; ZF = r == 0; *:1 a = r; }
+:ORN "SB["^s16a^"]", b1 is opc=30 & tag=1 ; bn=2 & b1 ; s16a { a:2 = SB + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l | t; ZF = r == 0; *:2 a = r; }
+:ORN "SB["^s16a^"]", b1 is opc=30 & tag=1 ; bn=4 & b1 ; s16a { a:2 = SB + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l | t; ZF = r == 0; *:4 a = r; }
+:ORN "SB["^s16a^"]", b1 is opc=30 & tag=1 ; b1 ; s16a { n:2 = b1; a:2 = SB + s16a; mel_block(30:1, a, n); }
+:ORN "ST["^s16a^"]", b1 is opc=30 & tag=2 ; bn=1 & b1 ; s16a { a:2 = ST + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l | t; ZF = r == 0; *:1 a = r; }
+:ORN "ST["^s16a^"]", b1 is opc=30 & tag=2 ; bn=2 & b1 ; s16a { a:2 = ST + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l | t; ZF = r == 0; *:2 a = r; }
+:ORN "ST["^s16a^"]", b1 is opc=30 & tag=2 ; bn=4 & b1 ; s16a { a:2 = ST + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l | t; ZF = r == 0; *:4 a = r; }
+:ORN "ST["^s16a^"]", b1 is opc=30 & tag=2 ; b1 ; s16a { n:2 = b1; a:2 = ST + s16a; mel_block(30:1, a, n); }
+:ORN "DB["^s16a^"]", b1 is opc=30 & tag=3 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = DB + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l | t; ZF = r == 0; *:1 a = r; }
+:ORN "DB["^s16a^"]", b1 is opc=30 & tag=3 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = DB + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l | t; ZF = r == 0; *:2 a = r; }
+:ORN "DB["^s16a^"]", b1 is opc=30 & tag=3 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = DB + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l | t; ZF = r == 0; *:4 a = r; }
+:ORN "DB["^s16a^"]", b1 is opc=30 & tag=3 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = DB + s16a; mel_block(30:1, a, n); }
+:ORN "DB["^co6^"]", "1" is opc=30 & tag=3 & cm=1 & cmoff=0 ; cn=0 & co6 { a:2 = DB + co6; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l | t; ZF = r == 0; *:1 a = r; }
+:ORN "DB["^co6^"]", "2" is opc=30 & tag=3 & cm=1 & cmoff=0 ; cn=1 & co6 { a:2 = DB + co6; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l | t; ZF = r == 0; *:2 a = r; }
+:ORN "DB["^co6^"]", "4" is opc=30 & tag=3 & cm=1 & cmoff=0 ; cn=2 & co6 { a:2 = DB + co6; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l | t; ZF = r == 0; *:4 a = r; }
+:ORN "DB[c]", "8" is opc=30 & tag=3 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(30:1, DB, 8:2); }
+:ORN "LB["^s16a^"]", b1 is opc=30 & tag=4 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = LB + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l | t; ZF = r == 0; *:1 a = r; }
+:ORN "LB["^s16a^"]", b1 is opc=30 & tag=4 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = LB + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l | t; ZF = r == 0; *:2 a = r; }
+:ORN "LB["^s16a^"]", b1 is opc=30 & tag=4 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = LB + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l | t; ZF = r == 0; *:4 a = r; }
+:ORN "LB["^s16a^"]", b1 is opc=30 & tag=4 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = LB + s16a; mel_block(30:1, a, n); }
+:ORN "LB["^cs6^"]", "1" is opc=30 & tag=4 & cm=1 & cmoff=0 ; cn=0 & cs6 { a:2 = LB + cs6; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l | t; ZF = r == 0; *:1 a = r; }
+:ORN "LB["^cs6^"]", "2" is opc=30 & tag=4 & cm=1 & cmoff=0 ; cn=1 & cs6 { a:2 = LB + cs6; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l | t; ZF = r == 0; *:2 a = r; }
+:ORN "LB["^cs6^"]", "4" is opc=30 & tag=4 & cm=1 & cmoff=0 ; cn=2 & cs6 { a:2 = LB + cs6; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l | t; ZF = r == 0; *:4 a = r; }
+:ORN "LB[c]", "8" is opc=30 & tag=4 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(30:1, LB, 8:2); }
+:ORN "DT["^s16a^"]", b1 is opc=30 & tag=5 ; bn=1 & b1 ; s16a { a:2 = DT + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l | t; ZF = r == 0; *:1 a = r; }
+:ORN "DT["^s16a^"]", b1 is opc=30 & tag=5 ; bn=2 & b1 ; s16a { a:2 = DT + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l | t; ZF = r == 0; *:2 a = r; }
+:ORN "DT["^s16a^"]", b1 is opc=30 & tag=5 ; bn=4 & b1 ; s16a { a:2 = DT + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l | t; ZF = r == 0; *:4 a = r; }
+:ORN "DT["^s16a^"]", b1 is opc=30 & tag=5 ; b1 ; s16a { n:2 = b1; a:2 = DT + s16a; mel_block(30:1, a, n); }
+:ORN "PB["^s16a^"]", b1 is opc=30 & tag=6 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = PB + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l | t; ZF = r == 0; *:1 a = r; }
+:ORN "PB["^s16a^"]", b1 is opc=30 & tag=6 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = PB + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l | t; ZF = r == 0; *:2 a = r; }
+:ORN "PB["^s16a^"]", b1 is opc=30 & tag=6 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = PB + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l | t; ZF = r == 0; *:4 a = r; }
+:ORN "PB["^s16a^"]", b1 is opc=30 & tag=6 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = PB + s16a; mel_block(30:1, a, n); }
+:ORN "PB["^co6^"]", "1" is opc=30 & tag=6 & cm=1 & cmoff=0 ; cn=0 & co6 { a:2 = PB + co6; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l | t; ZF = r == 0; *:1 a = r; }
+:ORN "PB["^co6^"]", "2" is opc=30 & tag=6 & cm=1 & cmoff=0 ; cn=1 & co6 { a:2 = PB + co6; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l | t; ZF = r == 0; *:2 a = r; }
+:ORN "PB["^co6^"]", "4" is opc=30 & tag=6 & cm=1 & cmoff=0 ; cn=2 & co6 { a:2 = PB + co6; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l | t; ZF = r == 0; *:4 a = r; }
+:ORN "PB[c]", "8" is opc=30 & tag=6 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(30:1, PB, 8:2); }
+:ORN "PT["^s16a^"]", b1 is opc=30 & tag=7 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = PT + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l | t; ZF = r == 0; *:1 a = r; }
+:ORN "PT["^s16a^"]", b1 is opc=30 & tag=7 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = PT + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l | t; ZF = r == 0; *:2 a = r; }
+:ORN "PT["^s16a^"]", b1 is opc=30 & tag=7 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = PT + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l | t; ZF = r == 0; *:4 a = r; }
+:ORN "PT["^s16a^"]", b1 is opc=30 & tag=7 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = PT + s16a; mel_block(30:1, a, n); }
+:ORN "PT["^po^"]", "1" is opc=30 & tag=7 & cm=1 & cmoff=0 ; cn=0 & co6 [ po = co6 - 64; ] { a:2 = PT + po; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l | t; ZF = r == 0; *:1 a = r; }
+:ORN "PT["^po^"]", "2" is opc=30 & tag=7 & cm=1 & cmoff=0 ; cn=1 & co6 [ po = co6 - 64; ] { a:2 = PT + po; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l | t; ZF = r == 0; *:2 a = r; }
+:ORN "PT["^po^"]", "4" is opc=30 & tag=7 & cm=1 & cmoff=0 ; cn=2 & co6 [ po = co6 - 64; ] { a:2 = PT + po; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l | t; ZF = r == 0; *:4 a = r; }
+:ORN "PT[c]", "8" is opc=30 & tag=7 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(30:1, PT, 8:2); }
+:XORN ", "^b1 is opc=31 & tag=0 ; bn=1 & b1 { t:1 = *:1 (DT - 1); l:1 = *:1 (DT - 2); r:1 = l ^ t; ZF = r == 0; *:1 (DT - 2) = r; }
+:XORN ", "^b1 is opc=31 & tag=0 ; bn=2 & b1 { t:2 = *:2 (DT - 2); l:2 = *:2 (DT - 4); r:2 = l ^ t; ZF = r == 0; *:2 (DT - 4) = r; }
+:XORN ", "^b1 is opc=31 & tag=0 ; bn=4 & b1 { t:4 = *:4 (DT - 4); l:4 = *:4 (DT - 8); r:4 = l ^ t; ZF = r == 0; *:4 (DT - 8) = r; }
+:XORN ", "^b1 is opc=31 & tag=0 ; b1 { n:2 = b1; mel_block(31:1, DT, n); }
+:XORN "SB["^s16a^"]", b1 is opc=31 & tag=1 ; bn=1 & b1 ; s16a { a:2 = SB + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l ^ t; ZF = r == 0; *:1 a = r; }
+:XORN "SB["^s16a^"]", b1 is opc=31 & tag=1 ; bn=2 & b1 ; s16a { a:2 = SB + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l ^ t; ZF = r == 0; *:2 a = r; }
+:XORN "SB["^s16a^"]", b1 is opc=31 & tag=1 ; bn=4 & b1 ; s16a { a:2 = SB + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l ^ t; ZF = r == 0; *:4 a = r; }
+:XORN "SB["^s16a^"]", b1 is opc=31 & tag=1 ; b1 ; s16a { n:2 = b1; a:2 = SB + s16a; mel_block(31:1, a, n); }
+:XORN "ST["^s16a^"]", b1 is opc=31 & tag=2 ; bn=1 & b1 ; s16a { a:2 = ST + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l ^ t; ZF = r == 0; *:1 a = r; }
+:XORN "ST["^s16a^"]", b1 is opc=31 & tag=2 ; bn=2 & b1 ; s16a { a:2 = ST + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l ^ t; ZF = r == 0; *:2 a = r; }
+:XORN "ST["^s16a^"]", b1 is opc=31 & tag=2 ; bn=4 & b1 ; s16a { a:2 = ST + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l ^ t; ZF = r == 0; *:4 a = r; }
+:XORN "ST["^s16a^"]", b1 is opc=31 & tag=2 ; b1 ; s16a { n:2 = b1; a:2 = ST + s16a; mel_block(31:1, a, n); }
+:XORN "DB["^s16a^"]", b1 is opc=31 & tag=3 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = DB + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l ^ t; ZF = r == 0; *:1 a = r; }
+:XORN "DB["^s16a^"]", b1 is opc=31 & tag=3 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = DB + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l ^ t; ZF = r == 0; *:2 a = r; }
+:XORN "DB["^s16a^"]", b1 is opc=31 & tag=3 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = DB + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l ^ t; ZF = r == 0; *:4 a = r; }
+:XORN "DB["^s16a^"]", b1 is opc=31 & tag=3 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = DB + s16a; mel_block(31:1, a, n); }
+:XORN "DB["^co6^"]", "1" is opc=31 & tag=3 & cm=1 & cmoff=0 ; cn=0 & co6 { a:2 = DB + co6; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l ^ t; ZF = r == 0; *:1 a = r; }
+:XORN "DB["^co6^"]", "2" is opc=31 & tag=3 & cm=1 & cmoff=0 ; cn=1 & co6 { a:2 = DB + co6; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l ^ t; ZF = r == 0; *:2 a = r; }
+:XORN "DB["^co6^"]", "4" is opc=31 & tag=3 & cm=1 & cmoff=0 ; cn=2 & co6 { a:2 = DB + co6; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l ^ t; ZF = r == 0; *:4 a = r; }
+:XORN "DB[c]", "8" is opc=31 & tag=3 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(31:1, DB, 8:2); }
+:XORN "LB["^s16a^"]", b1 is opc=31 & tag=4 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = LB + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l ^ t; ZF = r == 0; *:1 a = r; }
+:XORN "LB["^s16a^"]", b1 is opc=31 & tag=4 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = LB + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l ^ t; ZF = r == 0; *:2 a = r; }
+:XORN "LB["^s16a^"]", b1 is opc=31 & tag=4 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = LB + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l ^ t; ZF = r == 0; *:4 a = r; }
+:XORN "LB["^s16a^"]", b1 is opc=31 & tag=4 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = LB + s16a; mel_block(31:1, a, n); }
+:XORN "LB["^cs6^"]", "1" is opc=31 & tag=4 & cm=1 & cmoff=0 ; cn=0 & cs6 { a:2 = LB + cs6; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l ^ t; ZF = r == 0; *:1 a = r; }
+:XORN "LB["^cs6^"]", "2" is opc=31 & tag=4 & cm=1 & cmoff=0 ; cn=1 & cs6 { a:2 = LB + cs6; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l ^ t; ZF = r == 0; *:2 a = r; }
+:XORN "LB["^cs6^"]", "4" is opc=31 & tag=4 & cm=1 & cmoff=0 ; cn=2 & cs6 { a:2 = LB + cs6; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l ^ t; ZF = r == 0; *:4 a = r; }
+:XORN "LB[c]", "8" is opc=31 & tag=4 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(31:1, LB, 8:2); }
+:XORN "DT["^s16a^"]", b1 is opc=31 & tag=5 ; bn=1 & b1 ; s16a { a:2 = DT + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l ^ t; ZF = r == 0; *:1 a = r; }
+:XORN "DT["^s16a^"]", b1 is opc=31 & tag=5 ; bn=2 & b1 ; s16a { a:2 = DT + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l ^ t; ZF = r == 0; *:2 a = r; }
+:XORN "DT["^s16a^"]", b1 is opc=31 & tag=5 ; bn=4 & b1 ; s16a { a:2 = DT + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l ^ t; ZF = r == 0; *:4 a = r; }
+:XORN "DT["^s16a^"]", b1 is opc=31 & tag=5 ; b1 ; s16a { n:2 = b1; a:2 = DT + s16a; mel_block(31:1, a, n); }
+:XORN "PB["^s16a^"]", b1 is opc=31 & tag=6 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = PB + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l ^ t; ZF = r == 0; *:1 a = r; }
+:XORN "PB["^s16a^"]", b1 is opc=31 & tag=6 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = PB + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l ^ t; ZF = r == 0; *:2 a = r; }
+:XORN "PB["^s16a^"]", b1 is opc=31 & tag=6 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = PB + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l ^ t; ZF = r == 0; *:4 a = r; }
+:XORN "PB["^s16a^"]", b1 is opc=31 & tag=6 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = PB + s16a; mel_block(31:1, a, n); }
+:XORN "PB["^co6^"]", "1" is opc=31 & tag=6 & cm=1 & cmoff=0 ; cn=0 & co6 { a:2 = PB + co6; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l ^ t; ZF = r == 0; *:1 a = r; }
+:XORN "PB["^co6^"]", "2" is opc=31 & tag=6 & cm=1 & cmoff=0 ; cn=1 & co6 { a:2 = PB + co6; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l ^ t; ZF = r == 0; *:2 a = r; }
+:XORN "PB["^co6^"]", "4" is opc=31 & tag=6 & cm=1 & cmoff=0 ; cn=2 & co6 { a:2 = PB + co6; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l ^ t; ZF = r == 0; *:4 a = r; }
+:XORN "PB[c]", "8" is opc=31 & tag=6 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(31:1, PB, 8:2); }
+:XORN "PT["^s16a^"]", b1 is opc=31 & tag=7 & (cm=0 | cmoff=1) ; bn=1 & b1 ; s16a { a:2 = PT + s16a; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l ^ t; ZF = r == 0; *:1 a = r; }
+:XORN "PT["^s16a^"]", b1 is opc=31 & tag=7 & (cm=0 | cmoff=1) ; bn=2 & b1 ; s16a { a:2 = PT + s16a; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l ^ t; ZF = r == 0; *:2 a = r; }
+:XORN "PT["^s16a^"]", b1 is opc=31 & tag=7 & (cm=0 | cmoff=1) ; bn=4 & b1 ; s16a { a:2 = PT + s16a; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l ^ t; ZF = r == 0; *:4 a = r; }
+:XORN "PT["^s16a^"]", b1 is opc=31 & tag=7 & (cm=0 | cmoff=1) ; b1 ; s16a { n:2 = b1; a:2 = PT + s16a; mel_block(31:1, a, n); }
+:XORN "PT["^po^"]", "1" is opc=31 & tag=7 & cm=1 & cmoff=0 ; cn=0 & co6 [ po = co6 - 64; ] { a:2 = PT + po; t:1 = *:1 (DT - 1); l:1 = *:1 a; r:1 = l ^ t; ZF = r == 0; *:1 a = r; }
+:XORN "PT["^po^"]", "2" is opc=31 & tag=7 & cm=1 & cmoff=0 ; cn=1 & co6 [ po = co6 - 64; ] { a:2 = PT + po; t:2 = *:2 (DT - 2); l:2 = *:2 a; r:2 = l ^ t; ZF = r == 0; *:2 a = r; }
+:XORN "PT["^po^"]", "4" is opc=31 & tag=7 & cm=1 & cmoff=0 ; cn=2 & co6 [ po = co6 - 64; ] { a:2 = PT + po; t:4 = *:4 (DT - 4); l:4 = *:4 a; r:4 = l ^ t; ZF = r == 0; *:4 a = r; }
+:XORN "PT[c]", "8" is opc=31 & tag=7 & cm=1 & cmoff=0 ; cn=3 & b1 { mel_block(31:1, PT, 8:2); }
+:SETB ", "^b1 is opc=13 & tag=0 ; b1 { *:1 (DT - 1) = b1:1; }
+:SETB "SB["^s16b^"]", b1 is opc=13 & tag=1 ; b1 ; s16b { a:2 = SB + s16b; *:1 a = b1:1; }
+:SETB "ST["^s16b^"]", b1 is opc=13 & tag=2 ; b1 ; s16b { a:2 = ST + s16b; *:1 a = b1:1; }
+:SETB "DB["^s16b^"]", b1 is opc=13 & tag=3 & (cm=0 | cmoff=1) ; b1 ; s16b { a:2 = DB + s16b; *:1 a = b1:1; }
+:SETB "DB["^b2^"]", b1 is opc=13 & tag=3 & cm=1 & cmoff=0 ; b1 ; b2 { a:2 = DB + b2; *:1 a = b1:1; }
+:SETB "LB["^s16b^"]", b1 is opc=13 & tag=4 & (cm=0 | cmoff=1) ; b1 ; s16b { a:2 = LB + s16b; *:1 a = b1:1; }
+:SETB "LB["^s2^"]", b1 is opc=13 & tag=4 & cm=1 & cmoff=0 ; b1 ; s2 { a:2 = LB + s2; *:1 a = b1:1; }
+:SETB "DT["^s16b^"]", b1 is opc=13 & tag=5 ; b1 ; s16b { a:2 = DT + s16b; *:1 a = b1:1; }
+:SETB "PB["^s16b^"]", b1 is opc=13 & tag=6 & (cm=0 | cmoff=1) ; b1 ; s16b { a:2 = PB + s16b; *:1 a = b1:1; }
+:SETB "PB["^b2^"]", b1 is opc=13 & tag=6 & cm=1 & cmoff=0 ; b1 ; b2 { a:2 = PB + b2; *:1 a = b1:1; }
+:SETB "PT["^s16b^"]", b1 is opc=13 & tag=7 & (cm=0 | cmoff=1) ; b1 ; s16b { a:2 = PT + s16b; *:1 a = b1:1; }
+:SETB "PT["^po^"]", b1 is opc=13 & tag=7 & cm=1 & cmoff=0 ; b1 ; b2 [ po = b2 - 256; ] { a:2 = PT + po; *:1 a = b1:1; }
+:CMPB ", "^b1 is opc=14 & tag=0 ; b1 { x:1 = *:1 (DT - 1); k:1 = b1:1; CF = x < k; ZF = x == k; }
+:CMPB "SB["^s16b^"]", b1 is opc=14 & tag=1 ; b1 ; s16b { a:2 = SB + s16b; x:1 = *:1 a; k:1 = b1:1; CF = x < k; ZF = x == k; }
+:CMPB "ST["^s16b^"]", b1 is opc=14 & tag=2 ; b1 ; s16b { a:2 = ST + s16b; x:1 = *:1 a; k:1 = b1:1; CF = x < k; ZF = x == k; }
+:CMPB "DB["^s16b^"]", b1 is opc=14 & tag=3 & (cm=0 | cmoff=1) ; b1 ; s16b { a:2 = DB + s16b; x:1 = *:1 a; k:1 = b1:1; CF = x < k; ZF = x == k; }
+:CMPB "DB["^b2^"]", b1 is opc=14 & tag=3 & cm=1 & cmoff=0 ; b1 ; b2 { a:2 = DB + b2; x:1 = *:1 a; k:1 = b1:1; CF = x < k; ZF = x == k; }
+:CMPB "LB["^s16b^"]", b1 is opc=14 & tag=4 & (cm=0 | cmoff=1) ; b1 ; s16b { a:2 = LB + s16b; x:1 = *:1 a; k:1 = b1:1; CF = x < k; ZF = x == k; }
+:CMPB "LB["^s2^"]", b1 is opc=14 & tag=4 & cm=1 & cmoff=0 ; b1 ; s2 { a:2 = LB + s2; x:1 = *:1 a; k:1 = b1:1; CF = x < k; ZF = x == k; }
+:CMPB "DT["^s16b^"]", b1 is opc=14 & tag=5 ; b1 ; s16b { a:2 = DT + s16b; x:1 = *:1 a; k:1 = b1:1; CF = x < k; ZF = x == k; }
+:CMPB "PB["^s16b^"]", b1 is opc=14 & tag=6 & (cm=0 | cmoff=1) ; b1 ; s16b { a:2 = PB + s16b; x:1 = *:1 a; k:1 = b1:1; CF = x < k; ZF = x == k; }
+:CMPB "PB["^b2^"]", b1 is opc=14 & tag=6 & cm=1 & cmoff=0 ; b1 ; b2 { a:2 = PB + b2; x:1 = *:1 a; k:1 = b1:1; CF = x < k; ZF = x == k; }
+:CMPB "PT["^s16b^"]", b1 is opc=14 & tag=7 & (cm=0 | cmoff=1) ; b1 ; s16b { a:2 = PT + s16b; x:1 = *:1 a; k:1 = b1:1; CF = x < k; ZF = x == k; }
+:CMPB "PT["^po^"]", b1 is opc=14 & tag=7 & cm=1 & cmoff=0 ; b1 ; b2 [ po = b2 - 256; ] { a:2 = PT + po; x:1 = *:1 a; k:1 = b1:1; CF = x < k; ZF = x == k; }
+:ADDB ", "^b1 is opc=15 & tag=0 ; b1 { x:1 = *:1 (DT - 1); k:1 = b1:1; CF = carry(x, k); x = x + k; ZF = x == 0; *:1 (DT - 1) = x; }
+:ADDB "SB["^s16b^"]", b1 is opc=15 & tag=1 ; b1 ; s16b { a:2 = SB + s16b; x:1 = *:1 a; k:1 = b1:1; CF = carry(x, k); x = x + k; ZF = x == 0; *:1 a = x; }
+:ADDB "ST["^s16b^"]", b1 is opc=15 & tag=2 ; b1 ; s16b { a:2 = ST + s16b; x:1 = *:1 a; k:1 = b1:1; CF = carry(x, k); x = x + k; ZF = x == 0; *:1 a = x; }
+:ADDB "DB["^s16b^"]", b1 is opc=15 & tag=3 & (cm=0 | cmoff=1) ; b1 ; s16b { a:2 = DB + s16b; x:1 = *:1 a; k:1 = b1:1; CF = carry(x, k); x = x + k; ZF = x == 0; *:1 a = x; }
+:ADDB "DB["^b2^"]", b1 is opc=15 & tag=3 & cm=1 & cmoff=0 ; b1 ; b2 { a:2 = DB + b2; x:1 = *:1 a; k:1 = b1:1; CF = carry(x, k); x = x + k; ZF = x == 0; *:1 a = x; }
+:ADDB "LB["^s16b^"]", b1 is opc=15 & tag=4 & (cm=0 | cmoff=1) ; b1 ; s16b { a:2 = LB + s16b; x:1 = *:1 a; k:1 = b1:1; CF = carry(x, k); x = x + k; ZF = x == 0; *:1 a = x; }
+:ADDB "LB["^s2^"]", b1 is opc=15 & tag=4 & cm=1 & cmoff=0 ; b1 ; s2 { a:2 = LB + s2; x:1 = *:1 a; k:1 = b1:1; CF = carry(x, k); x = x + k; ZF = x == 0; *:1 a = x; }
+:ADDB "DT["^s16b^"]", b1 is opc=15 & tag=5 ; b1 ; s16b { a:2 = DT + s16b; x:1 = *:1 a; k:1 = b1:1; CF = carry(x, k); x = x + k; ZF = x == 0; *:1 a = x; }
+:ADDB "PB["^s16b^"]", b1 is opc=15 & tag=6 & (cm=0 | cmoff=1) ; b1 ; s16b { a:2 = PB + s16b; x:1 = *:1 a; k:1 = b1:1; CF = carry(x, k); x = x + k; ZF = x == 0; *:1 a = x; }
+:ADDB "PB["^b2^"]", b1 is opc=15 & tag=6 & cm=1 & cmoff=0 ; b1 ; b2 { a:2 = PB + b2; x:1 = *:1 a; k:1 = b1:1; CF = carry(x, k); x = x + k; ZF = x == 0; *:1 a = x; }
+:ADDB "PT["^s16b^"]", b1 is opc=15 & tag=7 & (cm=0 | cmoff=1) ; b1 ; s16b { a:2 = PT + s16b; x:1 = *:1 a; k:1 = b1:1; CF = carry(x, k); x = x + k; ZF = x == 0; *:1 a = x; }
+:ADDB "PT["^po^"]", b1 is opc=15 & tag=7 & cm=1 & cmoff=0 ; b1 ; b2 [ po = b2 - 256; ] { a:2 = PT + po; x:1 = *:1 a; k:1 = b1:1; CF = carry(x, k); x = x + k; ZF = x == 0; *:1 a = x; }
+:SUBB ", "^b1 is opc=16 & tag=0 ; b1 { x:1 = *:1 (DT - 1); k:1 = b1:1; CF = x < k; x = x - k; ZF = x == 0; *:1 (DT - 1) = x; }
+:SUBB "SB["^s16b^"]", b1 is opc=16 & tag=1 ; b1 ; s16b { a:2 = SB + s16b; x:1 = *:1 a; k:1 = b1:1; CF = x < k; x = x - k; ZF = x == 0; *:1 a = x; }
+:SUBB "ST["^s16b^"]", b1 is opc=16 & tag=2 ; b1 ; s16b { a:2 = ST + s16b; x:1 = *:1 a; k:1 = b1:1; CF = x < k; x = x - k; ZF = x == 0; *:1 a = x; }
+:SUBB "DB["^s16b^"]", b1 is opc=16 & tag=3 & (cm=0 | cmoff=1) ; b1 ; s16b { a:2 = DB + s16b; x:1 = *:1 a; k:1 = b1:1; CF = x < k; x = x - k; ZF = x == 0; *:1 a = x; }
+:SUBB "DB["^b2^"]", b1 is opc=16 & tag=3 & cm=1 & cmoff=0 ; b1 ; b2 { a:2 = DB + b2; x:1 = *:1 a; k:1 = b1:1; CF = x < k; x = x - k; ZF = x == 0; *:1 a = x; }
+:SUBB "LB["^s16b^"]", b1 is opc=16 & tag=4 & (cm=0 | cmoff=1) ; b1 ; s16b { a:2 = LB + s16b; x:1 = *:1 a; k:1 = b1:1; CF = x < k; x = x - k; ZF = x == 0; *:1 a = x; }
+:SUBB "LB["^s2^"]", b1 is opc=16 & tag=4 & cm=1 & cmoff=0 ; b1 ; s2 { a:2 = LB + s2; x:1 = *:1 a; k:1 = b1:1; CF = x < k; x = x - k; ZF = x == 0; *:1 a = x; }
+:SUBB "DT["^s16b^"]", b1 is opc=16 & tag=5 ; b1 ; s16b { a:2 = DT + s16b; x:1 = *:1 a; k:1 = b1:1; CF = x < k; x = x - k; ZF = x == 0; *:1 a = x; }
+:SUBB "PB["^s16b^"]", b1 is opc=16 & tag=6 & (cm=0 | cmoff=1) ; b1 ; s16b { a:2 = PB + s16b; x:1 = *:1 a; k:1 = b1:1; CF = x < k; x = x - k; ZF = x == 0; *:1 a = x; }
+:SUBB "PB["^b2^"]", b1 is opc=16 & tag=6 & cm=1 & cmoff=0 ; b1 ; b2 { a:2 = PB + b2; x:1 = *:1 a; k:1 = b1:1; CF = x < k; x = x - k; ZF = x == 0; *:1 a = x; }
+:SUBB "PT["^s16b^"]", b1 is opc=16 & tag=7 & (cm=0 | cmoff=1) ; b1 ; s16b { a:2 = PT + s16b; x:1 = *:1 a; k:1 = b1:1; CF = x < k; x = x - k; ZF = x == 0; *:1 a = x; }
+:SUBB "PT["^po^"]", b1 is opc=16 & tag=7 & cm=1 & cmoff=0 ; b1 ; b2 [ po = b2 - 256; ] { a:2 = PT + po; x:1 = *:1 a; k:1 = b1:1; CF = x < k; x = x - k; ZF = x == 0; *:1 a = x; }
+:SETW ", "^u16a is opc=17 & tag=0 ; u16a { *:2 (DT - 2) = u16a:2; }
+:SETW "SB["^s16b^"]", u16a is opc=17 & tag=1 ; u16a ; s16b { a:2 = SB + s16b; *:2 a = u16a:2; }
+:SETW "ST["^s16b^"]", u16a is opc=17 & tag=2 ; u16a ; s16b { a:2 = ST + s16b; *:2 a = u16a:2; }
+:SETW "DB["^s16b^"]", u16a is opc=17 & tag=3 & (cm=0 | cmoff=1) ; u16a ; s16b { a:2 = DB + s16b; *:2 a = u16a:2; }
+:SETW "DB["^b2^"]", u16a is opc=17 & tag=3 & cm=1 & cmoff=0 ; u16a ; b2 { a:2 = DB + b2; *:2 a = u16a:2; }
+:SETW "LB["^s16b^"]", u16a is opc=17 & tag=4 & (cm=0 | cmoff=1) ; u16a ; s16b { a:2 = LB + s16b; *:2 a = u16a:2; }
+:SETW "LB["^s2^"]", u16a is opc=17 & tag=4 & cm=1 & cmoff=0 ; u16a ; s2 { a:2 = LB + s2; *:2 a = u16a:2; }
+:SETW "DT["^s16b^"]", u16a is opc=17 & tag=5 ; u16a ; s16b { a:2 = DT + s16b; *:2 a = u16a:2; }
+:SETW "PB["^s16b^"]", u16a is opc=17 & tag=6 & (cm=0 | cmoff=1) ; u16a ; s16b { a:2 = PB + s16b; *:2 a = u16a:2; }
+:SETW "PB["^b2^"]", u16a is opc=17 & tag=6 & cm=1 & cmoff=0 ; u16a ; b2 { a:2 = PB + b2; *:2 a = u16a:2; }
+:SETW "PT["^s16b^"]", u16a is opc=17 & tag=7 & (cm=0 | cmoff=1) ; u16a ; s16b { a:2 = PT + s16b; *:2 a = u16a:2; }
+:SETW "PT["^po^"]", u16a is opc=17 & tag=7 & cm=1 & cmoff=0 ; u16a ; b2 [ po = b2 - 256; ] { a:2 = PT + po; *:2 a = u16a:2; }
+:CMPW ", "^u16a is opc=18 & tag=0 ; u16a { x:2 = *:2 (DT - 2); k:2 = u16a:2; CF = x < k; ZF = x == k; }
+:CMPW "SB["^s16b^"]", u16a is opc=18 & tag=1 ; u16a ; s16b { a:2 = SB + s16b; x:2 = *:2 a; k:2 = u16a:2; CF = x < k; ZF = x == k; }
+:CMPW "ST["^s16b^"]", u16a is opc=18 & tag=2 ; u16a ; s16b { a:2 = ST + s16b; x:2 = *:2 a; k:2 = u16a:2; CF = x < k; ZF = x == k; }
+:CMPW "DB["^s16b^"]", u16a is opc=18 & tag=3 & (cm=0 | cmoff=1) ; u16a ; s16b { a:2 = DB + s16b; x:2 = *:2 a; k:2 = u16a:2; CF = x < k; ZF = x == k; }
+:CMPW "DB["^b2^"]", u16a is opc=18 & tag=3 & cm=1 & cmoff=0 ; u16a ; b2 { a:2 = DB + b2; x:2 = *:2 a; k:2 = u16a:2; CF = x < k; ZF = x == k; }
+:CMPW "LB["^s16b^"]", u16a is opc=18 & tag=4 & (cm=0 | cmoff=1) ; u16a ; s16b { a:2 = LB + s16b; x:2 = *:2 a; k:2 = u16a:2; CF = x < k; ZF = x == k; }
+:CMPW "LB["^s2^"]", u16a is opc=18 & tag=4 & cm=1 & cmoff=0 ; u16a ; s2 { a:2 = LB + s2; x:2 = *:2 a; k:2 = u16a:2; CF = x < k; ZF = x == k; }
+:CMPW "DT["^s16b^"]", u16a is opc=18 & tag=5 ; u16a ; s16b { a:2 = DT + s16b; x:2 = *:2 a; k:2 = u16a:2; CF = x < k; ZF = x == k; }
+:CMPW "PB["^s16b^"]", u16a is opc=18 & tag=6 & (cm=0 | cmoff=1) ; u16a ; s16b { a:2 = PB + s16b; x:2 = *:2 a; k:2 = u16a:2; CF = x < k; ZF = x == k; }
+:CMPW "PB["^b2^"]", u16a is opc=18 & tag=6 & cm=1 & cmoff=0 ; u16a ; b2 { a:2 = PB + b2; x:2 = *:2 a; k:2 = u16a:2; CF = x < k; ZF = x == k; }
+:CMPW "PT["^s16b^"]", u16a is opc=18 & tag=7 & (cm=0 | cmoff=1) ; u16a ; s16b { a:2 = PT + s16b; x:2 = *:2 a; k:2 = u16a:2; CF = x < k; ZF = x == k; }
+:CMPW "PT["^po^"]", u16a is opc=18 & tag=7 & cm=1 & cmoff=0 ; u16a ; b2 [ po = b2 - 256; ] { a:2 = PT + po; x:2 = *:2 a; k:2 = u16a:2; CF = x < k; ZF = x == k; }
+:ADDW ", "^u16a is opc=19 & tag=0 ; u16a { x:2 = *:2 (DT - 2); k:2 = u16a:2; CF = carry(x, k); x = x + k; ZF = x == 0; *:2 (DT - 2) = x; }
+:ADDW "SB["^s16b^"]", u16a is opc=19 & tag=1 ; u16a ; s16b { a:2 = SB + s16b; x:2 = *:2 a; k:2 = u16a:2; CF = carry(x, k); x = x + k; ZF = x == 0; *:2 a = x; }
+:ADDW "ST["^s16b^"]", u16a is opc=19 & tag=2 ; u16a ; s16b { a:2 = ST + s16b; x:2 = *:2 a; k:2 = u16a:2; CF = carry(x, k); x = x + k; ZF = x == 0; *:2 a = x; }
+:ADDW "DB["^s16b^"]", u16a is opc=19 & tag=3 & (cm=0 | cmoff=1) ; u16a ; s16b { a:2 = DB + s16b; x:2 = *:2 a; k:2 = u16a:2; CF = carry(x, k); x = x + k; ZF = x == 0; *:2 a = x; }
+:ADDW "DB["^b2^"]", u16a is opc=19 & tag=3 & cm=1 & cmoff=0 ; u16a ; b2 { a:2 = DB + b2; x:2 = *:2 a; k:2 = u16a:2; CF = carry(x, k); x = x + k; ZF = x == 0; *:2 a = x; }
+:ADDW "LB["^s16b^"]", u16a is opc=19 & tag=4 & (cm=0 | cmoff=1) ; u16a ; s16b { a:2 = LB + s16b; x:2 = *:2 a; k:2 = u16a:2; CF = carry(x, k); x = x + k; ZF = x == 0; *:2 a = x; }
+:ADDW "LB["^s2^"]", u16a is opc=19 & tag=4 & cm=1 & cmoff=0 ; u16a ; s2 { a:2 = LB + s2; x:2 = *:2 a; k:2 = u16a:2; CF = carry(x, k); x = x + k; ZF = x == 0; *:2 a = x; }
+:ADDW "DT["^s16b^"]", u16a is opc=19 & tag=5 ; u16a ; s16b { a:2 = DT + s16b; x:2 = *:2 a; k:2 = u16a:2; CF = carry(x, k); x = x + k; ZF = x == 0; *:2 a = x; }
+:ADDW "PB["^s16b^"]", u16a is opc=19 & tag=6 & (cm=0 | cmoff=1) ; u16a ; s16b { a:2 = PB + s16b; x:2 = *:2 a; k:2 = u16a:2; CF = carry(x, k); x = x + k; ZF = x == 0; *:2 a = x; }
+:ADDW "PB["^b2^"]", u16a is opc=19 & tag=6 & cm=1 & cmoff=0 ; u16a ; b2 { a:2 = PB + b2; x:2 = *:2 a; k:2 = u16a:2; CF = carry(x, k); x = x + k; ZF = x == 0; *:2 a = x; }
+:ADDW "PT["^s16b^"]", u16a is opc=19 & tag=7 & (cm=0 | cmoff=1) ; u16a ; s16b { a:2 = PT + s16b; x:2 = *:2 a; k:2 = u16a:2; CF = carry(x, k); x = x + k; ZF = x == 0; *:2 a = x; }
+:ADDW "PT["^po^"]", u16a is opc=19 & tag=7 & cm=1 & cmoff=0 ; u16a ; b2 [ po = b2 - 256; ] { a:2 = PT + po; x:2 = *:2 a; k:2 = u16a:2; CF = carry(x, k); x = x + k; ZF = x == 0; *:2 a = x; }
+:SUBW ", "^u16a is opc=20 & tag=0 ; u16a { x:2 = *:2 (DT - 2); k:2 = u16a:2; CF = x < k; x = x - k; ZF = x == 0; *:2 (DT - 2) = x; }
+:SUBW "SB["^s16b^"]", u16a is opc=20 & tag=1 ; u16a ; s16b { a:2 = SB + s16b; x:2 = *:2 a; k:2 = u16a:2; CF = x < k; x = x - k; ZF = x == 0; *:2 a = x; }
+:SUBW "ST["^s16b^"]", u16a is opc=20 & tag=2 ; u16a ; s16b { a:2 = ST + s16b; x:2 = *:2 a; k:2 = u16a:2; CF = x < k; x = x - k; ZF = x == 0; *:2 a = x; }
+:SUBW "DB["^s16b^"]", u16a is opc=20 & tag=3 & (cm=0 | cmoff=1) ; u16a ; s16b { a:2 = DB + s16b; x:2 = *:2 a; k:2 = u16a:2; CF = x < k; x = x - k; ZF = x == 0; *:2 a = x; }
+:SUBW "DB["^b2^"]", u16a is opc=20 & tag=3 & cm=1 & cmoff=0 ; u16a ; b2 { a:2 = DB + b2; x:2 = *:2 a; k:2 = u16a:2; CF = x < k; x = x - k; ZF = x == 0; *:2 a = x; }
+:SUBW "LB["^s16b^"]", u16a is opc=20 & tag=4 & (cm=0 | cmoff=1) ; u16a ; s16b { a:2 = LB + s16b; x:2 = *:2 a; k:2 = u16a:2; CF = x < k; x = x - k; ZF = x == 0; *:2 a = x; }
+:SUBW "LB["^s2^"]", u16a is opc=20 & tag=4 & cm=1 & cmoff=0 ; u16a ; s2 { a:2 = LB + s2; x:2 = *:2 a; k:2 = u16a:2; CF = x < k; x = x - k; ZF = x == 0; *:2 a = x; }
+:SUBW "DT["^s16b^"]", u16a is opc=20 & tag=5 ; u16a ; s16b { a:2 = DT + s16b; x:2 = *:2 a; k:2 = u16a:2; CF = x < k; x = x - k; ZF = x == 0; *:2 a = x; }
+:SUBW "PB["^s16b^"]", u16a is opc=20 & tag=6 & (cm=0 | cmoff=1) ; u16a ; s16b { a:2 = PB + s16b; x:2 = *:2 a; k:2 = u16a:2; CF = x < k; x = x - k; ZF = x == 0; *:2 a = x; }
+:SUBW "PB["^b2^"]", u16a is opc=20 & tag=6 & cm=1 & cmoff=0 ; u16a ; b2 { a:2 = PB + b2; x:2 = *:2 a; k:2 = u16a:2; CF = x < k; x = x - k; ZF = x == 0; *:2 a = x; }
+:SUBW "PT["^s16b^"]", u16a is opc=20 & tag=7 & (cm=0 | cmoff=1) ; u16a ; s16b { a:2 = PT + s16b; x:2 = *:2 a; k:2 = u16a:2; CF = x < k; x = x - k; ZF = x == 0; *:2 a = x; }
+:SUBW "PT["^po^"]", u16a is opc=20 & tag=7 & cm=1 & cmoff=0 ; u16a ; b2 [ po = b2 - 256; ] { a:2 = PT + po; x:2 = *:2 a; k:2 = u16a:2; CF = x < k; x = x - k; ZF = x == 0; *:2 a = x; }
+:CMPBRA b1 is opc=11 & tag=0 ; b1 { mel_reserved(); }
+:INDEX is opc=12 & tag=0 { mel_reserved(); }
+:LOADA "SB["^s16a^"]" is opc=11 & tag=1 ; s16a { a:2 = SB + s16a; *:2 DT = a; DT = DT + 2; }
+:INDEX "SB["^s16b^"]", b1 is opc=12 & tag=1 ; b1 ; s16b { i:1 = *:1 (DT - 1); a:2 = SB + s16b; p:2 = zext(i) * b1; r:2 = a + p; CF = carry(a, p); ZF = r == 0; *:2 (DT - 1) = r; DT = DT + 1; }
+:LOADA "ST["^s16a^"]" is opc=11 & tag=2 ; s16a { a:2 = ST + s16a; *:2 DT = a; DT = DT + 2; }
+:INDEX "ST["^s16b^"]", b1 is opc=12 & tag=2 ; b1 ; s16b { i:1 = *:1 (DT - 1); a:2 = ST + s16b; p:2 = zext(i) * b1; r:2 = a + p; CF = carry(a, p); ZF = r == 0; *:2 (DT - 1) = r; DT = DT + 1; }
+:LOADA "DB["^s16a^"]" is opc=11 & tag=3 & (cm=0 | cmoff=1) ; s16a { a:2 = DB + s16a; *:2 DT = a; DT = DT + 2; }
+:INDEX "DB["^s16b^"]", b1 is opc=12 & tag=3 & (cm=0 | cmoff=1) ; b1 ; s16b { i:1 = *:1 (DT - 1); a:2 = DB + s16b; p:2 = zext(i) * b1; r:2 = a + p; CF = carry(a, p); ZF = r == 0; *:2 (DT - 1) = r; DT = DT + 1; }
+:LOADA "DB["^b1^"]" is opc=11 & tag=3 & cm=1 & cmoff=0 ; b1 { a:2 = DB + b1; *:2 DT = a; DT = DT + 2; }
+:INDEX "DB["^b2^"]", b1 is opc=12 & tag=3 & cm=1 & cmoff=0 ; b1 ; b2 { i:1 = *:1 (DT - 1); a:2 = DB + b2; p:2 = zext(i) * b1; r:2 = a + p; CF = carry(a, p); ZF = r == 0; *:2 (DT - 1) = r; DT = DT + 1; }
+:LOADA "LB["^s16a^"]" is opc=11 & tag=4 & (cm=0 | cmoff=1) ; s16a { a:2 = LB + s16a; *:2 DT = a; DT = DT + 2; }
+:INDEX "LB["^s16b^"]", b1 is opc=12 & tag=4 & (cm=0 | cmoff=1) ; b1 ; s16b { i:1 = *:1 (DT - 1); a:2 = LB + s16b; p:2 = zext(i) * b1; r:2 = a + p; CF = carry(a, p); ZF = r == 0; *:2 (DT - 1) = r; DT = DT + 1; }
+:LOADA "LB["^s1^"]" is opc=11 & tag=4 & cm=1 & cmoff=0 ; s1 { a:2 = LB + s1; *:2 DT = a; DT = DT + 2; }
+:INDEX "LB["^s2^"]", b1 is opc=12 & tag=4 & cm=1 & cmoff=0 ; b1 ; s2 { i:1 = *:1 (DT - 1); a:2 = LB + s2; p:2 = zext(i) * b1; r:2 = a + p; CF = carry(a, p); ZF = r == 0; *:2 (DT - 1) = r; DT = DT + 1; }
+:LOADA "DT["^s16a^"]" is opc=11 & tag=5 ; s16a { a:2 = DT + s16a; *:2 DT = a; DT = DT + 2; }
+:INDEX "DT["^s16b^"]", b1 is opc=12 & tag=5 ; b1 ; s16b { i:1 = *:1 (DT - 1); a:2 = DT + s16b; p:2 = zext(i) * b1; r:2 = a + p; CF = carry(a, p); ZF = r == 0; *:2 (DT - 1) = r; DT = DT + 1; }
+:LOADA "PB["^s16a^"]" is opc=11 & tag=6 & (cm=0 | cmoff=1) ; s16a { a:2 = PB + s16a; *:2 DT = a; DT = DT + 2; }
+:INDEX "PB["^s16b^"]", b1 is opc=12 & tag=6 & (cm=0 | cmoff=1) ; b1 ; s16b { i:1 = *:1 (DT - 1); a:2 = PB + s16b; p:2 = zext(i) * b1; r:2 = a + p; CF = carry(a, p); ZF = r == 0; *:2 (DT - 1) = r; DT = DT + 1; }
+:LOADA "PB["^b1^"]" is opc=11 & tag=6 & cm=1 & cmoff=0 ; b1 { a:2 = PB + b1; *:2 DT = a; DT = DT + 2; }
+:INDEX "PB["^b2^"]", b1 is opc=12 & tag=6 & cm=1 & cmoff=0 ; b1 ; b2 { i:1 = *:1 (DT - 1); a:2 = PB + b2; p:2 = zext(i) * b1; r:2 = a + p; CF = carry(a, p); ZF = r == 0; *:2 (DT - 1) = r; DT = DT + 1; }
+:LOADA "PT["^s16a^"]" is opc=11 & tag=7 & (cm=0 | cmoff=1) ; s16a { a:2 = PT + s16a; *:2 DT = a; DT = DT + 2; }
+:INDEX "PT["^s16b^"]", b1 is opc=12 & tag=7 & (cm=0 | cmoff=1) ; b1 ; s16b { i:1 = *:1 (DT - 1); a:2 = PT + s16b; p:2 = zext(i) * b1; r:2 = a + p; CF = carry(a, p); ZF = r == 0; *:2 (DT - 1) = r; DT = DT + 1; }
+:LOADA "PT["^po^"]" is opc=11 & tag=7 & cm=1 & cmoff=0 ; b1 [ po = b1 - 256; ] { a:2 = PT + po; *:2 DT = a; DT = DT + 2; }
+:INDEX "PT["^po^"]", b1 is opc=12 & tag=7 & cm=1 & cmoff=0 ; b1 ; b2 [ po = b2 - 256; ] { i:1 = *:1 (DT - 1); a:2 = PT + po; p:2 = zext(i) * b1; r:2 = a + p; CF = carry(a, p); ZF = r == 0; *:2 (DT - 1) = r; DT = DT + 1; }
+:ILLEGAL is opc=6 { mel_reserved(); }

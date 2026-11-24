@@ -1,0 +1,71 @@
+# Typed Swift globals from their storage symbols (`option swifttypes
+# on|off`).
+#
+# Issue: a Swift global's storage symbol (`$s7callfix3ctrAA7CounterVvp`)
+# names its type in its mangling, yet the data object renders under the
+# mangled name as untyped bytes: `$s7callfix3ctrAA7CounterVvp._8_8_ = 2`.
+#
+# Stage / sub-stage: P1 external-refinement, the layout arm
+# (`kuna_swifttypes::global_variable`): a `Variable` entity's demangled
+# type is the typed data object's type.
+#
+# P0 assertion: `option swifttypes on|off` (default on; the pass needs
+# `swiftmetadata on`).
+#
+# Both passes load `swift_call_syms_elf` (symbols kept) with
+# `swiftmetadata on`. Pass 1 (`option swifttypes off`): the globals keep
+# their mangled names and raw accesses. Pass 2 (the default): `callfix.n`,
+# `callfix.acct` and `callfix.ctr` are typed, so the struct global's fields
+# print as `callfix.ctr.value` and `callfix.ctr.step`.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/swift_call_syms_elf',
+    'option swiftmetadata on',
+    'option swifttypes off',
+    'read symbols',
+    'load function main',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/swift_call_syms_elf',
+    'option swiftmetadata on',
+    'read symbols',
+    'load function main',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'swifttypes off: the struct global is raw bytes under its mangled name'
+count = 1
+literal = '*(unsigned long *)&$s7callfix3ctrAA7CounterVvp[8] = 2;'
+
+[[match]]
+name = 'swifttypes on: the integer global is typed and named'
+count = 1
+literal = 'callfix.n = '
+
+[[match]]
+name = "swifttypes on: the struct global's fields print by name"
+count = 1
+literal = 'callfix.ctr.step = 2;'
+
+[[match]]
+name = 'swifttypes on: the class-reference global is typed'
+count = 1
+literal = 'callfix.acct = '

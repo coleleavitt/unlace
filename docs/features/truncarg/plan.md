@@ -41,7 +41,7 @@ byte is spelled unsigned and the upstream reading stands.
 
 ## 3. Tests
 
-- `tests/stages/kuna-truncarg.xml`: twelve assertions. #1-#4 and #8 fail on
+- `tests/stages/kuna-truncarg.toml`: twelve assertions. #1-#4 and #8 fail on
   main. #5-#7 and #9-#12 are guards (a plain input, a sign extension, a
   declared narrow parameter, an AND of unsigned bytes, a sum that fits its
   byte, and clang's forwarded narrow parameters). #10 fails with `c_range`

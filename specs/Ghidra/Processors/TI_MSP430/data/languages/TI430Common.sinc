@@ -637,8 +637,7 @@ OFFSET_10BIT: offset10 is off16   [offset10 = inst_start + 2 + off16 * 2; ]
 	$(OVERFLOW) = 0x0;					# V Flag (reset)
 	# Operation...
 	$(CARRY) = REG_W_AS_DEST[0,1];
-	MSB:2 = REG_W_AS_DEST >> 0xF;
-	REG_W_AS_DEST = ((MSB << 0xF) | (REG_W_AS_DEST >> 0x1));
+	REG_W_AS_DEST = REG_W_AS_DEST s>> 0x1;
 	build tbl_wzero;
 	# Result Flags...
 	$(SIGN) = (REG_W_AS_DEST s< 0x0);			# S Flag
@@ -652,8 +651,7 @@ OFFSET_10BIT: offset10 is off16   [offset10 = inst_start + 2 + off16 * 2; ]
 	$(OVERFLOW) = 0x0;					# V Flag (reset)
 	# Operation...
 	$(CARRY) = (REG_B_AS_DEST & 0x1);
-	MSB:1 = REG_B_AS_DEST >> 0x7;
-	REG_B_AS_DEST = ((MSB << 0x7) | (REG_B_AS_DEST >> 0x1));
+	REG_B_AS_DEST = REG_B_AS_DEST s>> 0x1;
 	build tbl_bzero_singleop;
 	# Result Flags...
 	$(SIGN) = (REG_B_AS_DEST s< 0x0);			# S Flag

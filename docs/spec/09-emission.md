@@ -842,7 +842,7 @@ cast is redundant, though never wrong. Only an output language whose
 `ArchContext::int_promotion`). Rust arithmetic keeps its operands' width, so
 `sink(a0 * 3)` with a `u16` `a0` already carries the truncation there. The rule
 has no option because it only restores a conversion the binary performed.
-Pinned by `tests/stages/kuna-truncarg.xml`.
+Pinned by `tests/stages/kuna-truncarg.toml`.
 
 **An `int`-wide trimmed argument.** The same trim cuts an 8-byte register the
 binary zero-extended a 32-bit value into (`mov %edi,%edi`, any 32-bit write on
@@ -1671,7 +1671,7 @@ When the known bits prove the signed result nonnegative and representable, the
 compact form stays. Dynamic and out-of-range counts, other widths, unsigned
 operands and other output languages keep their rendering, and `on` remains the
 ARM-only repair. Like `on`, `all` is off by default: it adds a cast pair to every
-scaled 64-bit index and sign-bit test. `tests/stages/kuna-wide-shifts.xml` pins the
+scaled 64-bit index and sign-bit test. `tests/stages/kuna-wide-shifts.toml` pins the
 default spelling and the converted one on x86-64, AArch64, PowerPC64 and MIPS64
 objects from `tests/fixtures/wide-integer-emission/`; `unlace-cli/tests/wide_shift_emission.rs`
 executes the emitted C at O0/O2 under UBSan over signed boundary bit patterns.
@@ -1700,7 +1700,7 @@ zero-extended keep their signed form. The option is off by default because the
 casts land on every widened int sum, loop counters included: over 441 x86-64,
 AArch64, ARM, PowerPC64, MIPS64 and RISC-V 64 binaries it adds about 1.3 casts
 per 1,000 output lines (5.7 on MIPS64, 4.2 on RISC-V 64, under 0.3 elsewhere).
-`tests/stages/kuna-wrapadd.xml` pins both spellings on x86-64, AArch64,
+`tests/stages/kuna-wrapadd.toml` pins both spellings on x86-64, AArch64,
 PowerPC64 and MIPS64 objects from `tests/fixtures/wide-integer-emission/`, and
 `unlace-cli/tests/wrap_add_emission.rs` executes the `on` output at O0/O2 under
 UBSan at `INT32_MAX` and `UINT32_MAX`.

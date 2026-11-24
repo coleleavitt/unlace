@@ -2930,7 +2930,7 @@ expect = [
     "v3 = luaAdd(v3,v4);",
     "luaSetTable(v2,K3,luaConcat(v3,K4));",
     "return v3;",
-    "v1 = luaGetGlobal(K5);",
+    "= luaGetGlobal(K5);",
 ]
 
 [[family]]
@@ -2966,7 +2966,7 @@ expect = [
     "v3 = luaAdd(v3,v4);",
     "luaSetTable(v2,K3,luaConcat(v3,K4));",
     "return v3;",
-    "v1 = luaGetTable(U0,K5);",
+    "= luaGetTable(U0,K5);",
 ]
 
 [[family]]
@@ -2985,7 +2985,7 @@ expect = [
     "v3 = luaAdd(v3,v4);",
     "luaSetTable(v2,K3,luaConcat(v3,K4));",
     "return v3;",
-    "v1 = luaGetTable(U0,K5);",
+    "= luaGetTable(U0,K5);",
 ]
 
 [[family]]
@@ -3049,7 +3049,8 @@ test = "evm_erc20_calls_transfer_topic"
 address = "0x3e7"
 forbid = ["ZEXT732", "ZEXT832"]
 expect = [
-    "log3(dat_40,(v3 + 0x20) - dat_40,0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef,",
+    "log3(dat_40,(",
+    " + 0x20) - dat_40,0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef,",
     "return 1;",
 ]
 

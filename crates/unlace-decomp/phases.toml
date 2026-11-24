@@ -2440,6 +2440,25 @@ tier = "core"
 symptoms = "a 160-bit or 256-bit constant prints as a chain of zext732/zext832 shifts and ors|an evm address mask prints as ((zext732(0xffffffffffffff) << 0x40 | ...)|an event topic hash spans several lines of shifted pieces"
 
 [[settable]]
+option = "selectmul"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P9"
+subphase = "condition-form"
+strength = "HARD"
+rewind = "P9"
+issue = "unlace-selectmul"
+summary = "Print a select the lifter wrote as arithmetic, `a * zext(c) + b * zext(!c)`, as C's conditional operator `c ? a : b`. SLEIGH has no select operator, so a spec that picks one of two values without a branch multiplies each by the zero-extension of a boolean and adds (or ors) the products: TriCore's `ternary` macro behind `sel`, `seln`, `min`, `max`, `sat` and `cmov` does, and `min %d2,%d5,%d4` printed `a1 * (unsigned int)(a1 < a0) + a0 * (unsigned int)(a1 >= a0)`. `kuna_selectmul.rs` matches, at print time, an `INT_ADD`, `INT_OR` or `INT_XOR` of two implied `INT_MULT`s, each of a value by an implied `INT_ZEXT` of a one-byte boolean, whose booleans are complements: one the `BOOL_NEGATE` of the other, `==` and `!=` of the same operands in either order, or `x < y` and `y <= x` (both signed or both unsigned). Exactly one term is then non-zero, so the expression equals the value whose boolean holds, and it prints `a1 < a0 ? a1 : a0`. The condition printed is the strict compare or `!=` of the pair, and a negation's operand; it is a boolean context, so `x != 0` prints as `x`. A term held in a named variable, a float compare and a language without `?:` keep the arithmetic."
+use_when = "Turn on to read a branch-free select as the conditional it computes (TriCore `sel`/`min`/`max`/`sat`, any spec that lifts a select as multiply-by-boolean). Leave off to see the arithmetic the lift performs; both evaluate to the same value."
+example = "option selectmul on"
+source_decompiler = "kuna"
+inspiration = "TriCore 1.8 real-code sweep: every min, max, sel and sat printed as a sum of products with boolean casts"
+change_kind = "presentation-default"
+tier = "transform"
+symptoms = "a min or max prints as a1 * (unsigned int)(a1 < a0) + a0 * (unsigned int)(a1 >= a0)|a select prints as a sum of two products with (unsigned int) casts of complementary compares|tricore sel or sat prints as multiplications by booleans"
+
+[[settable]]
 option = "msvcstrappend"
 values = "on|off"
 default = "off"

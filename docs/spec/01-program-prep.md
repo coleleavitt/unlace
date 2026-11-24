@@ -9845,8 +9845,15 @@ both
   variable. On x86 the bytes a linker may rewrite when it relaxes the relocation
   are variable too: the opcode and ModRM in front of a `GOTPCRELX`, `GOT32X` or
   initial-exec TLS field, and the whole general-dynamic and local-dynamic TLS call
-  sequences. A relocation against a global name is recorded as a reference at the
-  field's offset. Functions with only a local symbol, names a compiler or
+  sequences. On x86-64 and i386 a `call`, `jmp` or `jcc` with a 32-bit displacement
+  whose target lies outside the function is variable too (one linker step that lays out
+  all the text leaves such a displacement with no relocation, and it changes with the
+  layout); the decoder is a length table for the compiler's encodings in
+  `crates/unlace-analysis/src/analyzers/flirt/flirtbranch.rs` and stops at the first
+  encoding it does not know (VEX and EVEX forms, for example), leaving the branches after
+  it fixed. A global name at such a branch's target, when one starts there, is recorded as
+  a reference at the displacement's offset, as a relocation against a global name is
+  recorded at the field's offset. Functions with only a local symbol, names a compiler or
   assembler made up (`.L` labels, mapping symbols, `.cold`/`.part.N`/`.isra.N`/`.constprop.N`
   clones, PC thunks, static-initialization stubs) and functions with fewer than
   four fixed bytes in their first 32 yield no pattern. A `.pat` line is the first

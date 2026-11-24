@@ -29,6 +29,7 @@
 //! directories).
 
 pub mod autotil;
+mod flirtbranch;
 pub mod flirtpat;
 pub mod flirtsig;
 

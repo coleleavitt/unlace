@@ -3291,21 +3291,21 @@ space="ram"/>`), so on any ordinary image an added range was global before the
 caller spoke; only the removal direction moves the C. Exposing an assertion that
 is measurably a no-op would be the same failure the plane is built to avoid.
 
-(unlace) **Load-time env bridges.** Loader gates are consumed *inside* the
-bootstrap — before any console `option` line can possibly run — so the option
-surface alone cannot deliver them; each is bridged through a process environment
-variable exported first. Both CLI paths use the bindings and value conversions
-in `crates/unlace-cli/src/loadtime.rs (binding, settings)`:
-`apply_to_command` configures the console subprocess, and `apply_to_process`
-temporarily configures the in-process loader. Repeated options keep their final
-value. An omitted option leaves the inherited environment alone; an explicit
-`macho-arm64e off` exports the off-token the loader reads. `LoadtimeEnv` restores inherited
-values, including non-Unicode values, when the load returns or unwinds. The
-conversions preserve each loader's accepted tokens and fallback behavior;
-runtime option validation remains separate.
+(unlace) **Load-time option variables.** Loader gates are consumed *inside* the
+bootstrap — before any console `option` line can possibly run — so each gate's
+value is a field of `LoadOptions` (`crates/unlace-middle/src/p0_knowledge/loadoptions.rs`)
+that the load is given, and its variable is how a user states it. The CLI builds
+those options from its invocation in `crates/unlace-cli/src/loadtime.rs (binding,
+settings)`: `apply_to_command` hands the variables to a console subprocess through
+that child's environment, and `invocation_options` and `load_options` give an
+in-process load its options without writing the process environment. Repeated
+options keep their final value. An omitted option leaves the inherited value
+alone; an explicit `macho-arm64e off` states the off-token. The conversions
+preserve each loader's accepted tokens and fallback behavior; runtime option
+validation remains separate.
 
 The default-on and opt-in boolean loader gates share
-`crates/unlace-middle/src/p0_knowledge/options.rs (env_toggle)`.
+`crates/unlace-middle/src/p0_knowledge/options.rs (parse_env_toggle)`.
 They trim Unicode whitespace and compare ASCII case-insensitively: `off`, `0`
 and `false` disable; `on`, `1`, `true` and the empty string enable. Missing,
 non-Unicode or unrecognized values retain that gate's default. Gates with

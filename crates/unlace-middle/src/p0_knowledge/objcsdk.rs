@@ -20,15 +20,8 @@ pub fn sdk_path() -> Option<PathBuf> {
         .unwrap_or_else(crate::loadoptions::env::objcsdk)
 }
 
-/// The header root [`OBJCSDK_ENV`] names, if any. Reads only the environment;
-/// a load in progress reads [`sdk_path`]. A value that names no directory (set
-/// outside unlace, or removed since) reads no headers and says so once.
-pub fn sdk_path_from_env() -> Option<PathBuf> {
-    sdk_path_from_value(&unlace_base::env::var(OBJCSDK_ENV).ok()?)
-}
-
-/// The header root an [`OBJCSDK_ENV`] value names, as [`sdk_path_from_env`]
-/// reads it.
+/// The header root an [`OBJCSDK_ENV`] value names, as the load's environment
+/// fallback reads it.
 pub fn sdk_path_from_value(v: &str) -> Option<PathBuf> {
     match parse_option_value(v) {
         Ok(path) => path,

@@ -180,14 +180,7 @@ they act and are never option state.
 points (the `unlace` binary's startup and subcommand setup, the `decomp_dbg`
 console's start); the console's `load file` and `load raw` commands, which read
 their options once when the load begins; and inside a gate, only as the fallback
-when no load is in force on the thread. Option values do not travel through the
-process environment between loads: a program keeps the `LoadOptions` it was loaded
-with, and `option NAME VALUE` changes only that program. The program does not
-write these variables to carry an option. The CLI sets them only on a child
-process it starts (`decomp_dbg`, `slacomp`), through that child's environment,
-and no load-path code calls `std::env::set_var`. The `set_*_env` helpers that
-still write one are test-only (see `notes/load-options-plan.md`, "Remaining
-environment use").
+when no load is in force on the thread. Option values do not travel through the process environment between loads: a program keeps the `LoadOptions` it was loaded with. In a console session an `option` changes the held program and the options its next `load file` starts from; no other load reads it. The program does not write these variables to carry an option: the CLI sets them only on a child process it starts (`decomp_dbg`, `slacomp`), through that child's environment, and no code on a load path calls `std::env::set_var`. Test code sets and restores them around a test (see `notes/load-options-plan.md`, "Remaining environment use").
 
 A separate engine binary can come from a different build than `unlace`: an
 override pointing at another install. (The built-in console is `unlace` itself, so it always

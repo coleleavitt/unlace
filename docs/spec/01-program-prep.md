@@ -5312,7 +5312,9 @@ moves.
   which types the out-parameter of a COM request by the id it passes (chapter
   05). The imported `ole32` requests (`CoCreateInstance`, `CoGetClassObject`,
   `CoGetObject`, `CoGetInterfaceAndReleaseStream`, `CoGetObjectContext`,
-  `CoGetCallContext`, `OleCreate`) get their prototypes by import address,
+  `CoGetCallContext`, `OleCreate`, and the four that fill a `MULTI_QI` array:
+  `CoCreateInstanceEx`, `CoCreateInstanceFromApp`,
+  `CoGetInstanceFromIStorage`, `CoGetInstanceFromFile`) get their prototypes by import address,
   so the out-parameter is an argument at every call even where the call site
   alone would not place it (the fifth argument of `CoCreateInstance` on x86-64
   is on the stack). The pass builds types, so it runs at the analysis commit
@@ -5329,6 +5331,18 @@ moves.
   as `CLSID_<Class>`. The media, device and printing namespaces are left
   out. The model is IDA 9.5's `comhelper` plugin, which names a GUID from
   `clsid.cfg` and applies the `<Interface>Vtbl` type its type library holds.
+  The option `comcfg`
+  (`crates/unlace-middle/src/p0_knowledge/kuna_comcfg.rs (ComCfg)`, default
+  `off`) names a file in that `clsid.cfg` format, one
+  `guid {00000000-0000-0000-C000-000000000046} IUnknown` line per id and `;`
+  starting a comment, read at the commit
+  (`crates/unlace-analysis/src/analyzers/com/mod.rs (parse_clsid_cfg)`, at
+  most 64 MiB): each id the built-in table lacks is named after its line,
+  spaces and other characters made `_`, and a bare name the interface table
+  holds (`IShellLinkW`) is read as `IID_IShellLinkW`, so its interface is
+  built like a built-in id's. An id both hold keeps the built-in name; a
+  malformed line is skipped. IDA 9.5's own `clsid.cfg` holds 16,117 ids, 13,674
+  of them not in the built-in table.
 - **(kuna) Declared names** (`declaredlibcproto`,
   `crates/unlace-analysis/src/analyzers/protos/mod.rs (declared_libc_prototype)`,
   consulted from `crates/unlace-console/src/engine.rs (ConsoleProgram::declare_function)`):
@@ -5716,7 +5730,18 @@ moves.
   drops the untyped entry for those addresses and maps the typed one,
   typelocked and namelocked, first among the typed data facts, so
   `cfg._12_4_ + cfg._8_4_` reads `cfg.flags + cfg.port` and
-  `*(char **)&modes[i * 8L]` reads `modes[i]`. (kuna) When neither `.comment`
+  `*(char **)&modes[i * 8L]` reads `modes[i]`. (kuna `dwarfdecls`, default off) A
+  declaration-only `DW_TAG_subprogram` (`DW_AT_declaration`, no `DW_AT_low_pc`) is kept
+  when its linkage name, or else its name, is an ELF import with PLT entries, no DWARF
+  definition of it exists in the file, it is prototyped, and every unit declaring it
+  agrees on return type, parameter types and variadic slot
+  (`dwarf/kuna_dwarfdecls.rs`); it is emitted at each PLT entry
+  (`pass.rs (AnalysisOutput::dwarf_decl_prototypes)`), and with the option on the
+  commit adds it to the address-keyed prototypes where no by-name prototype names the
+  import and no address-keyed one sits at that entry, so library signatures, type
+  libraries and DWARF definitions keep precedence. Calls to the import then take its
+  types: an enum parameter prints a constant argument as its member
+  (`gnutls_bye(s,GNUTLS_SHUT_WR)`). (kuna) When neither `.comment`
   nor the other signals name the toolchain, ELF and Mach-O detection falls back
   to the debug info (`analyzers/sourcelang/kuna_dwarfproducer.rs (dwarf_compiler)`):
   the first 16 compile units' `DW_AT_language` (Rust, Go, Swift) or
@@ -10244,6 +10269,50 @@ after its `push size`) whose code ends `mov eax, FuncInfo; jmp` within 48 bytes
 of its entry. That `FuncInfo` (magic checked) is decoded as on x64 with
 absolute references and 16-byte `HandlerType`s, and the function gets the same
 try-block comments, ending `the handler blocks are not shown`.
+
+**(kuna) Borland/Delphi RTTI names classes and methods** (`delphi`, default-**off**;
+`crates/unlace-analysis/src/analyzers/delphi/mod.rs (find_vmts)`). A Delphi
+program carries its class metadata in the image: each class has a VMT whose
+pointer (the one an object holds) points at the first user virtual method, with
+fixed fields in the words before it: a pointer back to the VMT, the interface,
+auto, init, field, method and dynamic tables, the type info, the class name (a
+ShortString), the instance size, the parent and the standard `TObject` virtuals.
+Delphi 2009 and later use 22 such slots (`Equals`, `GetHashCode` and
+`ToString` added; -88 on x86, -176 on x64), Delphi 3 to 2007 use 19, and Delphi 2
+uses 13 with no interface or auto table, the parent VMT stored directly rather than
+through a pointer, and a self pointer left 0. The pass scans every aligned word
+for a self pointer (a word equal to its own address plus the layout's self offset)
+under the two later layouts and keeps the layout with more hits; on a 32-bit image
+with neither it starts at the VMT named `TObject` with no parent and follows
+parent links down. A VMT counts only when its name is a ShortString identifier
+(letters, digits, `_`, and `.<>,` for nested and generic names), its instance
+size lies between a pointer and 16 MiB and every standard virtual points into
+code, and an image needs two such classes and the `TObject` name string at all.
+A class's positive virtual slots run while they point into code, up to the next
+VMT and to any of its own tables placed after it. Each standard or positive slot
+target is named for the topmost ancestor that holds the same address in the same
+slot (`TObject::Destroy`, `TStream::vfunc_3`); an address that two different
+slots hold, such as `@AbstractError`, stays unnamed but is still a discovered
+entry. The method table (a `Word` count, then per method its entry size, code
+pointer and ShortString name) names published methods (`TForm1::Button1Click`);
+the dynamic table (a `Word` count, the `Word` indexes, then the code pointers)
+names dynamic methods, index 0xC000 and up, as `<Class>::dynamic_<n>` and message
+handlers as `<Class>::message_WM_PAINT`, `message_CN_COMMAND` (VCL's `CN_BASE`
+0xBC00 plus a `WM_` number) or the number in hex. One function name wins per
+address: published, then standard virtual, then handler or interface thunk, then
+slot index. Every type-info record sits after a word that points at it (the
+`PPTypeInfo` references go through), then holds a kind byte (1 to 22) and a
+ShortString name; each is labelled `<Name>::typeinfo`, so a managed-type helper
+such as `@DynArrayClear(&a, &TArray<System.Byte>::typeinfo)` names its type. A
+`tkInterface` record whose flags carry `ifHasGuid` gives its GUID (after the
+parent `PPTypeInfo` and the flags byte), and a class's interface table (an
+`Integer` count padded to a pointer, then 16-byte IID, vtable, `Integer` offset
+padded to a pointer, and getter per entry) has each vtable labelled
+`<Class>::vtable_for_<Interface>` (`interface_vtable_<i>` for an IID no record
+names) and its first three thunks named `<Class>::<Interface>.QueryInterface`,
+`._AddRef` and `._Release`. The VMT and its tables get data labels
+(`<Class>::vmt`, `::method_table`, ...). Field tables, property info, Delphi
+2010+ extended RTTI and the register calling convention are not read. PE only.
 
 **(kuna) `.pdata` interiors are not function starts either** (`pdatainterior`,
 always on, DIV-155;

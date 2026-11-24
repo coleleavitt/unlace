@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="88000"
+            endian="big"
+            size="32"
+            variant="default"
+            version="1.0"
+            slafile="m88k.sla"
+            processorspec="m88k.pspec"
+            id="88000:BE:32:default">
+    <description>Motorola MC88100 (88000 family)</description>
+    <compiler name="default" spec="m88k.cspec" id="default"/>
+  </language>
+</language_definitions>

@@ -712,6 +712,10 @@ pub struct AnalysisOutput {
     /// emits them here instead. The libc and Win32 signature passes all use this
     /// stream for concrete resolver entries. See [`crate::protos`].
     pub prototypes_at: Vec<(u64, unlace_decomp::fspec::PrototypePieces)>,
+    /// (kuna `dwarfdecls`) Prototypes from DWARF declaration-only subprograms, at
+    /// the PLT entries of the import each names. With the option on, the commit
+    /// adds the ones no other prototype fact covers.
+    pub dwarf_decl_prototypes: Vec<(u64, unlace_decomp::fspec::PrototypePieces)>,
     /// (kuna `dwarfnocall`) DWARF subprograms marked `DW_CC_nocall`, as
     /// `(entry, name, parameter indices with no location)`: the compiler changed
     /// their calling convention and those parameters are no longer passed.
@@ -1041,6 +1045,9 @@ impl AnalysisOutput {
         self.prototypes_at
             .iter_mut()
             .for_each(|(_, p)| fix_proto(p));
+        self.dwarf_decl_prototypes
+            .iter_mut()
+            .for_each(|(_, p)| fix_proto(p));
         self.dwarf_nocall.iter_mut().for_each(|(_, n, _)| fix(n));
         self.arm_float_prototypes
             .iter_mut()
@@ -1288,6 +1295,8 @@ impl AnalysisOutput {
         self.blobs.extend(other.blobs);
         self.prototypes.extend(other.prototypes);
         self.prototypes_at.extend(other.prototypes_at);
+        self.dwarf_decl_prototypes
+            .extend(other.dwarf_decl_prototypes);
         self.dwarf_nocall.extend(other.dwarf_nocall);
         self.arm_float_prototypes.extend(other.arm_float_prototypes);
         self.withheld_prototypes.extend(other.withheld_prototypes);

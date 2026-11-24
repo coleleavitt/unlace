@@ -3510,6 +3510,7 @@ impl ConsoleProgram {
                 continue;
             }
             if analysis_pass_enabled(self.arch(), id) {
+                trace_entry_sources(id, &out);
                 merged.merge(out);
             }
         }
@@ -3716,6 +3717,7 @@ impl ConsoleProgram {
                             self.arm_frames = Some(record);
                         }
                         if analysis_pass_enabled(self.arch(), id) {
+                            trace_entry_sources(id, &out);
                             merged.merge(out);
                         }
                     }
@@ -10078,5 +10080,34 @@ mod symbolstream_tests {
         assert_eq!(stream.lookup("keep73").unwrap().addr.get_offset(), 73);
         assert_eq!(stream.lookup("keep0").unwrap().addr.get_offset(), 1_000);
         assert_eq!(stream.lookup("churn").unwrap().addr.get_offset(), 10_199);
+    }
+}
+
+/// (kuna) `KUNA_ENTRY_TRACE`: print on stderr each function entry, and each
+/// function symbol, a load-time or Listing-consumer pass commits, with the pass
+/// id, so an inventory entry can be traced to its source. A value that parses
+/// as a hex address (`0x4024d0`) restricts the trace to that address.
+fn trace_entry_sources(id: &str, out: &unlace_analysis::pass::AnalysisOutput) {
+    static WANT: std::sync::OnceLock<Option<Option<u64>>> = std::sync::OnceLock::new();
+    let want = WANT.get_or_init(|| {
+        std::env::var("KUNA_ENTRY_TRACE").ok().map(|v| {
+            u64::from_str_radix(v.trim().trim_start_matches("0x"), 16)
+                .ok()
+                .filter(|_| v.trim().starts_with("0x"))
+        })
+    });
+    let Some(only) = want else {
+        return;
+    };
+    let shown = |vma: u64| only.is_none_or(|w| w == vma);
+    for &vma in out.entries.iter().filter(|&&vma| shown(vma)) {
+        eprintln!("entry-source: {id} entry 0x{vma:x}");
+    }
+    for sym in out
+        .symbols
+        .iter()
+        .filter(|s| matches!(s.kind, unlace_analysis::pass::SymKind::Function) && shown(s.addr))
+    {
+        eprintln!("entry-source: {id} function 0x{:x} {}", sym.addr, sym.name);
     }
 }

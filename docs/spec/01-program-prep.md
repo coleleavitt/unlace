@@ -13419,6 +13419,16 @@ contradicted too. On the stripped U-Boot O2-noinline image these rules leave
 recall at 92.0% and raise precision from 92.6% to 98.6%; `parse_label` and
 `malloc` stay whole.
 
+A `ptrentry` target is checked against the raw Thumb scan's roots the same
+way (`kuna_ptrentry.rs (shrinkwrap_roots)`). Its decoded run, following
+fall-through only for at most eight instructions and stopping at a call, a
+return or an unconditional branch, may reach a root no call targets. Then the
+target is the routine's real entry and the root its shrink-wrapped `push`: the
+root is withdrawn, the target becomes a walk root, and the Listing is rebuilt.
+libopencm3's `dwc_poll` (`ldr.w r12,[r0,#0xdc]; push.w {...}`, reached only
+through the driver table) was a 4-byte stub and a separate 472-byte
+`sub_8001718` before.
+
 One inventory recovery shares its decodes. Frame validation, the AIF gap walks
 (including the prior inventory's), prefix reconciliation and every Listing
 rebuild decode the same image again. A decode is kept only when SLEIGH certifies

@@ -191,11 +191,30 @@ impl AnalysisPass for GoItabArgsPass {
             .into_iter()
             .collect();
         if itabs.is_empty() {
+            if std::env::var_os("KUNA_GOITABARGS_DEBUG").is_some() {
+                eprintln!("[kuna goitabargs] no static itabs located");
+            }
             return AnalysisOutput::default();
         }
         let types = ctx.arch.types();
         let mut hints = Vec::new();
-        for ((callee, index), interfaces) in votes(listing, &itabs) {
+        let votes = votes(listing, &itabs);
+        let debug = std::env::var_os("KUNA_GOITABARGS_DEBUG").is_some();
+        if debug {
+            let leas = listing
+                .instructions()
+                .filter(|(_, insn)| insn.mnemonic.trim() == "LEA")
+                .count();
+            eprintln!(
+                "[kuna goitabargs] instructions={} assembly={} lea={} itabs={} votes={}",
+                listing.num_instructions(),
+                listing.has_assembly(),
+                leas,
+                itabs.len(),
+                votes.len()
+            );
+        }
+        for ((callee, index), interfaces) in votes {
             if interfaces.len() != 1 {
                 continue;
             }
@@ -221,6 +240,14 @@ impl AnalysisPass for GoItabArgsPass {
                 name: format!("arg{index}_tab"),
                 type_: Some(table),
             });
+        }
+        if debug {
+            for hint in &hints {
+                eprintln!(
+                    "[kuna goitabargs] hint {:#x} {} {}",
+                    hint.func_addr, hint.reg, hint.name
+                );
+            }
         }
         AnalysisOutput {
             go_itab_inputs: hints,

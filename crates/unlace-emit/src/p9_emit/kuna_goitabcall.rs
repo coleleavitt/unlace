@@ -78,7 +78,13 @@ pub(crate) fn interface_method(fd: &Funcdata, arch: &Architecture, id: OpId) -> 
 /// The base pointer and constant byte offset an address is built from: one
 /// `PTRSUB` or `INT_ADD` of a constant.
 fn constant_offset(fd: &Funcdata, vn: VarnodeId) -> Option<(VarnodeId, i64)> {
-    let def = fd.obank().get(fd.vbank().get(vn)?.get_def()?)?;
+    let mut def = fd.obank().get(fd.vbank().get(vn)?.get_def()?)?;
+    for _ in 0..4 {
+        if def.code() != OpCode::CPUI_CAST {
+            break;
+        }
+        def = fd.obank().get(fd.vbank().get(def.get_in(0)?)?.get_def()?)?;
+    }
     if !matches!(def.code(), OpCode::CPUI_PTRSUB | OpCode::CPUI_INT_ADD) {
         return None;
     }
@@ -110,6 +116,7 @@ fn table_interface(
         // with a narrower value (the assertion's 4-byte type hash) puts between
         // the table and its use, carry the same pointer.
         OpCode::CPUI_COPY
+        | OpCode::CPUI_CAST
         | OpCode::CPUI_INT_ZEXT
         | OpCode::CPUI_SUBPIECE
         | OpCode::CPUI_INDIRECT => table_interface(fd, arch, def.get_in(0)?, depth - 1),
@@ -320,6 +327,7 @@ fn assert_result(
         match def.code() {
             OpCode::CPUI_CALL => return asserted_interface(fd, arch, id),
             OpCode::CPUI_COPY
+            | OpCode::CPUI_CAST
             | OpCode::CPUI_INT_ZEXT
             | OpCode::CPUI_SUBPIECE
             | OpCode::CPUI_INDIRECT => v = fd.vbank().get(def.get_in(0)?)?,
@@ -376,16 +384,25 @@ fn asserted_interface(
 
 /// The constant a Varnode holds, directly or one COPY away.
 fn constant_value(fd: &Funcdata, vn: VarnodeId) -> Option<u64> {
-    let v = fd.vbank().get(vn)?;
-    if v.is_constant() {
-        return Some(v.get_offset());
+    let mut v = fd.vbank().get(vn)?;
+    for _ in 0..4 {
+        if v.is_constant() {
+            return Some(v.get_offset());
+        }
+        let def = fd.obank().get(v.get_def()?)?;
+        match def.code() {
+            OpCode::CPUI_COPY | OpCode::CPUI_CAST => v = fd.vbank().get(def.get_in(0)?)?,
+            // A global's address: `PTRSUB(#0, #addr)`.
+            OpCode::CPUI_PTRSUB => {
+                let base = fd.vbank().get(def.get_in(0)?)?;
+                let offset = fd.vbank().get(def.get_in(1)?)?;
+                return (base.is_constant() && base.get_offset() == 0 && offset.is_constant())
+                    .then(|| offset.get_offset());
+            }
+            _ => return None,
+        }
     }
-    let def = fd.obank().get(v.get_def()?)?;
-    if def.code() != OpCode::CPUI_COPY {
-        return None;
-    }
-    let source = fd.vbank().get(def.get_in(0)?)?;
-    source.is_constant().then(|| source.get_offset())
+    None
 }
 
 /// `true` when the value `vn` is computed from a read of the word at
@@ -428,6 +445,7 @@ fn reads_record(
         def.code(),
         OpCode::CPUI_LOAD
             | OpCode::CPUI_COPY
+            | OpCode::CPUI_CAST
             | OpCode::CPUI_INT_ADD
             | OpCode::CPUI_PTRADD
             | OpCode::CPUI_PTRSUB

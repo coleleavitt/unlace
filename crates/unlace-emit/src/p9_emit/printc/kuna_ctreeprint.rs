@@ -16,7 +16,8 @@ use unlace_num::opcodes::OpCode;
 use crate::block::BlockType;
 use crate::context::BlockId;
 use crate::context::OpId;
-use crate::kuna_ctree::{CMaturity, ExprKind, StmtId, StmtKind};
+use crate::context::VarnodeId;
+use crate::kuna_ctree::{CMaturity, ExprId, ExprKind, StmtId, StmtKind};
 use crate::kuna_iteboolean::IteBoolMatch;
 use crate::kuna_iteregion::IteAssignMatch;
 
@@ -151,6 +152,8 @@ impl PrintC {
         };
         let bool_return = arch.kuna_options.get::<crate::kuna_ctree::Boolreturn>().0
             && self.out_lang == crate::kuna_lang::OutLang::C;
+        let ret_ternary = arch.kuna_options.get::<crate::kuna_ctree::Retternary>().0
+            && self.out_lang == crate::kuna_lang::OutLang::C;
         let noret_first = arch.kuna_options.get::<crate::kuna_ctree::Noretfirst>().0
             && self.out_lang == crate::kuna_lang::OutLang::C;
         let nested_and = arch.kuna_options.get::<crate::kuna_ctree::Nestedand>().0
@@ -179,6 +182,36 @@ impl PrintC {
                             tree.add_expr(ExprKind::Not(branch))
                         } else {
                             branch
+                        };
+                        tree.stmt_mut(id).kind = StmtKind::Return {
+                            value: Some(value),
+                            op: Some(ret_op),
+                        };
+                    }
+                } else if ret_ternary
+                    && let Some((cond_block, ret_op, shape)) = self.return_ternary_shape(fd, blk)
+                {
+                    if let Some(tree) = self.ctree.as_mut() {
+                        let cond = tree.add_expr(ExprKind::Branch(cond_block));
+                        let value = match shape {
+                            ReturnValue::Ternary { yes, no } => {
+                                let yes = tree.add_expr(ExprKind::Op(yes));
+                                let no = tree.add_expr(ExprKind::Op(no));
+                                tree.add_expr(ExprKind::Ternary(cond, yes, no))
+                            }
+                            ReturnValue::Logic { negate, and, other } => {
+                                let left = if negate {
+                                    tree.add_expr(ExprKind::Not(cond))
+                                } else {
+                                    cond
+                                };
+                                let right = tree.add_expr(ExprKind::Op(other));
+                                tree.add_expr(if and {
+                                    ExprKind::And(left, right)
+                                } else {
+                                    ExprKind::Or(left, right)
+                                })
+                            }
                         };
                         tree.stmt_mut(id).kind = StmtKind::Return {
                             value: Some(value),
@@ -266,8 +299,8 @@ impl PrintC {
     }
 
     /// The `return` form the tree gave the `BlockIf` `blk`: its condition block, the body's
-    /// `RETURN` op and whether the condition is negated.
-    pub(super) fn return_form(&self, blk: BlockId) -> Option<(BlockId, OpId, bool)> {
+    /// `RETURN` op and the returned value.
+    pub(super) fn return_form(&self, blk: BlockId) -> Option<(BlockId, OpId, ExprId)> {
         let tree = self.ctree.as_ref()?;
         let StmtKind::Return {
             value: Some(value),
@@ -276,14 +309,7 @@ impl PrintC {
         else {
             return None;
         };
-        match &tree.expr(*value).kind {
-            ExprKind::Branch(cond) => Some((*cond, *op, false)),
-            ExprKind::Not(inner) => match &tree.expr(*inner).kind {
-                ExprKind::Branch(cond) => Some((*cond, *op, true)),
-                _ => None,
-            },
-            _ => None,
-        }
+        Some((first_branch(tree, *value)?, *op, *value))
     }
 
     /// An `if`/`else` (no goto) whose body and else each print one statement, `return 1;`
@@ -306,8 +332,8 @@ impl PrintC {
     }
 
     /// A `BlockCopy` leaf with no label line and no comment that prints exactly one
-    /// statement, a `RETURN` of a constant: that op and the constant.
-    fn single_const_return(&mut self, fd: &Funcdata, leaf: BlockId) -> Option<(OpId, u64)> {
+    /// statement, a `RETURN` of a value: that op and the value.
+    fn single_return(&mut self, fd: &Funcdata, leaf: BlockId) -> Option<(OpId, VarnodeId)> {
         if fd.sblocks_ref().block(leaf).get_type() != BlockType::Copy {
             return None;
         }
@@ -345,18 +371,92 @@ impl PrintC {
         if o.code() != OpCode::CPUI_RETURN || o.get_halt_type() != 0 || o.num_input() != 2 {
             return None;
         }
-        let value = fd.vbank().get(o.get_in(1)?)?;
-        if !value.is_constant() || value.get_offset() > 1 {
-            return None;
-        }
-        let constant = value.get_offset();
+        let value = o.get_in(1)?;
         let bb_index = fd.bblocks_ref().block(under).get_index();
         self.commsorter.setup_block_list(bb_index);
         self.commsorter.setup_op_list(None);
         if self.commsorter.has_next() {
             return None;
         }
-        Some((ret, u64::try_from(constant).ok()?))
+        Some((ret, value))
+    }
+
+    /// [`single_return`](Self::single_return) of the constant `0` or `1`: that op and the
+    /// constant.
+    fn single_const_return(&mut self, fd: &Funcdata, leaf: BlockId) -> Option<(OpId, u64)> {
+        let (ret, value) = self.single_return(fd, leaf)?;
+        let vn = fd.vbank().get(value)?;
+        if !vn.is_constant() || vn.get_offset() > 1 {
+            return None;
+        }
+        Some((ret, u64::try_from(vn.get_offset()).ok()?))
+    }
+
+    /// (kuna `retternary`) An `if`/`else` (no goto) whose arms each print only a `return` of
+    /// a constant or a named variable: the condition block, the body's `RETURN` and the
+    /// returned value as a tree expression over the two `RETURN`s. A `1` or `0` arm against
+    /// a `bool` variable `x` folds to `c || x`, `!c || x`, `c && x` or `!c && x`; any
+    /// other pair is `c ? A : B`.
+    fn return_ternary_shape(
+        &mut self,
+        fd: &Funcdata,
+        blk: BlockId,
+    ) -> Option<(BlockId, OpId, ReturnValue)> {
+        let block = fd.sblocks_ref().block(blk);
+        if block.get_size() != 3 || block.get_if_goto_target().is_some() {
+            return None;
+        }
+        let (cond_block, body, other) =
+            (block.get_block(0), block.get_block(1), block.get_block(2));
+        let (yes_op, yes) = self.single_return(fd, body)?;
+        let (no_op, no) = self.single_return(fd, other)?;
+        let atom = |vn: VarnodeId| {
+            fd.vbank()
+                .get(vn)
+                .is_some_and(|v| v.is_constant() || (v.is_explicit() && !v.is_implied()))
+        };
+        if !atom(yes) || !atom(no) {
+            return None;
+        }
+        let constant = |vn: VarnodeId| {
+            fd.vbank()
+                .get(vn)
+                .filter(|v| v.is_constant() && v.get_offset() <= 1)
+                .map(|v| v.get_offset() == 1)
+        };
+        let boolean = |vn: VarnodeId| {
+            fd.vbank().get(vn).is_some_and(|v| {
+                !v.is_constant()
+                    && v.get_type().get_metatype() == crate::dtype::type_metatype::TYPE_BOOL
+            })
+        };
+        let value = match (constant(yes), constant(no)) {
+            (Some(true), None) if boolean(no) => ReturnValue::Logic {
+                negate: false,
+                and: false,
+                other: no_op,
+            },
+            (None, Some(true)) if boolean(yes) => ReturnValue::Logic {
+                negate: true,
+                and: false,
+                other: yes_op,
+            },
+            (Some(false), None) if boolean(no) => ReturnValue::Logic {
+                negate: true,
+                and: true,
+                other: no_op,
+            },
+            (None, Some(false)) if boolean(yes) => ReturnValue::Logic {
+                negate: false,
+                and: true,
+                other: yes_op,
+            },
+            _ => ReturnValue::Ternary {
+                yes: yes_op,
+                no: no_op,
+            },
+        };
+        Some((cond_block, yes_op, value))
     }
 
     /// (kuna `noretfirst`) Rewrite the `if`/`else` statement `id` (built from `blk`) when
@@ -552,6 +652,30 @@ impl PrintC {
             return None;
         };
         matches!(tree.expr(*cond).kind, ExprKind::And(..)).then_some(*cond)
+    }
+}
+
+/// The value a `retternary` rewrite returns; `OpId`s are the arms' `RETURN`s.
+enum ReturnValue {
+    /// `c ? yes : no`.
+    Ternary { yes: OpId, no: OpId },
+    /// `c || other`, `!c || other`, `c && other` or `!c && other`.
+    Logic {
+        negate: bool,
+        and: bool,
+        other: OpId,
+    },
+}
+
+/// The first condition block a returned value names.
+fn first_branch(tree: &crate::kuna_ctree::CTree, expr: ExprId) -> Option<BlockId> {
+    match tree.expr(expr).kind {
+        ExprKind::Branch(block) => Some(block),
+        ExprKind::Not(inner) => first_branch(tree, inner),
+        ExprKind::And(left, _) | ExprKind::Or(left, _) | ExprKind::Ternary(left, _, _) => {
+            first_branch(tree, left)
+        }
+        _ => None,
     }
 }
 

@@ -46,6 +46,17 @@ crate::kuna_flag!(
 );
 
 crate::kuna_flag!(
+    /// (kuna `retternary`) Print an `if` whose two arms only return a constant or a variable
+    /// as one `return c ? A : B;` (or `c || x`-style for a `bool` variable against `0`/`1`),
+    /// a rewrite of the C syntax tree.
+    Retternary,
+    "retternary",
+    "returns of cheap values joined into one",
+    unset: false,
+    shipped: false
+);
+
+crate::kuna_flag!(
     /// (kuna `ctree`) Print the function body through its C syntax tree. Off by default while
     /// the tree printer is proven to print exactly what the block printer prints.
     Ctree,

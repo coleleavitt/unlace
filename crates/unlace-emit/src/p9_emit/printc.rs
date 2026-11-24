@@ -4866,7 +4866,8 @@ impl PrintC {
         let tree_on = arch.kuna_options.get::<crate::kuna_ctree::Ctree>().0
             || arch.kuna_options.get::<crate::kuna_ctree::Boolreturn>().0
             || arch.kuna_options.get::<crate::kuna_ctree::Noretfirst>().0
-            || arch.kuna_options.get::<crate::kuna_ctree::Nestedand>().0;
+            || arch.kuna_options.get::<crate::kuna_ctree::Nestedand>().0
+            || arch.kuna_options.get::<crate::kuna_ctree::Retternary>().0;
         self.ctree = if tree_on && !self.is_flat() {
             crate::kuna_ctreebuild::build(fd)
         } else {
@@ -5051,6 +5052,70 @@ impl PrintC {
                 .close_paren(crate::printlanguage::CLOSE_PAREN, id2);
             self.context.pop_mod();
             self.emit.close_paren(crate::printlanguage::CLOSE_PAREN, id);
+        }
+    }
+
+    /// (kuna `boolreturn`, `retternary`) Print the value of a `return` the C syntax tree made
+    /// from an `if`: a `Branch` through the `ONLY_BRANCH` render of its condition block (it
+    /// parenthesizes itself), `Not` as `!`, an `Op` as the returned value of that `RETURN`
+    /// (a constant or a variable), and `?:`, `&&`, `||` between their operands.
+    fn emit_return_value(
+        &mut self,
+        fd: &Funcdata,
+        arch: &Architecture,
+        expr: crate::kuna_ctree::ExprId,
+    ) {
+        use crate::kuna_ctree::ExprKind;
+        use crate::prettyprint::Emit;
+        let Some(kind) = self.ctree.as_ref().map(|tree| tree.expr(expr).kind.clone()) else {
+            return;
+        };
+        let token = |emit: &mut PrintEmit, text: &str| {
+            emit.spaces(1, 0);
+            emit.tag_op(text, SyntaxHighlight::NoColor, &MarkupRef::none());
+            emit.spaces(1, 0);
+        };
+        match kind {
+            ExprKind::Branch(block) => {
+                self.context.push_mod();
+                self.context.set_mod(modifiers::ONLY_BRANCH);
+                self.emit_block(fd, arch, block);
+                self.context.pop_mod();
+            }
+            ExprKind::Not(inner) => {
+                self.emit.tag_op(
+                    tokens::BOOLEAN_NOT.print1,
+                    SyntaxHighlight::NoColor,
+                    &MarkupRef::none(),
+                );
+                self.emit_return_value(fd, arch, inner);
+            }
+            ExprKind::Op(ret) => {
+                if let Some(vn) = fd.obank().get(ret).and_then(|o| o.get_in(1)) {
+                    self.push_vn_ir(fd, arch, vn, ret);
+                }
+            }
+            ExprKind::Ternary(cond, yes, no) => {
+                self.emit_return_value(fd, arch, cond);
+                token(&mut self.emit, "?");
+                self.emit_return_value(fd, arch, yes);
+                token(&mut self.emit, ":");
+                self.emit_return_value(fd, arch, no);
+            }
+            ExprKind::And(left, right) | ExprKind::Or(left, right) => {
+                let and = matches!(kind, ExprKind::And(..));
+                self.emit_return_value(fd, arch, left);
+                token(
+                    &mut self.emit,
+                    if and {
+                        tokens::BOOLEAN_AND.print1
+                    } else {
+                        tokens::BOOLEAN_OR.print1
+                    },
+                );
+                self.emit_return_value(fd, arch, right);
+            }
+            _ => {}
         }
     }
 
@@ -5830,8 +5895,8 @@ impl PrintC {
             }
             None => {}
         }
-        if let Some((cond_block, ret_op, negate)) = self.return_form(blk) {
-            self.emit_block_if_return(fd, arch, cond_block, ret_op, negate);
+        if let Some((cond_block, ret_op, value)) = self.return_form(blk) {
+            self.emit_block_if_return(fd, arch, cond_block, ret_op, value);
             return;
         }
         let size = fd.sblocks_ref().block(blk).get_size();
@@ -6421,7 +6486,7 @@ impl PrintC {
         arch: &Architecture,
         cond_block: BlockId,
         ret_op: OpId,
-        negate: bool,
+        value: crate::kuna_ctree::ExprId,
     ) {
         use crate::prettyprint::Emit;
 
@@ -6457,17 +6522,7 @@ impl PrintC {
             &stmt_markup,
         );
         self.emit.spaces(1, 0);
-        if negate {
-            self.emit.tag_op(
-                tokens::BOOLEAN_NOT.print1,
-                SyntaxHighlight::NoColor,
-                &MarkupRef::none(),
-            );
-        }
-        self.context.push_mod();
-        self.context.set_mod(modifiers::ONLY_BRANCH);
-        self.emit_block(fd, arch, cond_block);
-        self.context.pop_mod();
+        self.emit_return_value(fd, arch, value);
         self.emit.end_statement(sid);
         self.emit
             .print(self.lang().kw_semicolon, SyntaxHighlight::NoColor);

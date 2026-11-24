@@ -366,6 +366,12 @@ language yet, so it still needs an explicit `--target`. A relocatable ARC
 object loads, but its relocation types are not applied; a call to an undefined
 symbol keeps the unrelocated displacement.
 
+(kuna, unlace#680) A WebAssembly relocatable object (`.o`) has no `name`
+section; its function and global names come from the `WASM_SYMBOL_TABLE`
+subsection of its `linking` custom section (version 2), for every index the
+`name` section does not name (`loader/format/wasm.rs`). An undefined symbol
+is named only when it carries `WASM_SYM_EXPLICIT_NAME`.
+
 (kuna, unlace#678) A relocatable object for a 16-bit machine (AVR, MSP430) is
 laid out from `SMALL_RELOC_BASE` (0x100) instead of 0x400000, which is past
 the end of its address space; every other machine keeps 0x400000

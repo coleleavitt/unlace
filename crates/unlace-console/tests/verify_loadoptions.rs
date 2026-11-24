@@ -489,7 +489,8 @@ fn a_bootstrap_without_options_reads_the_environment() {
 
 /// A load without options reads the environment even while another
 /// program's options are in force on the thread: every input builds a program
-/// that keeps reading the environment, never the held program's options.
+/// that keeps the options the environment stated at its load, never the held
+/// program's, and a later change to the environment does not reach it.
 #[test]
 fn a_load_without_options_ignores_options_held_on_the_thread() {
     use unlace_analysis::loadimage_te::synthetic::TeImage;
@@ -553,7 +554,11 @@ fn a_load_without_options_ignores_options_held_on_the_thread() {
             .into_owned();
         // FIXME: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::remove_var("UNLACE_KERNELCACHE") };
-        assert_eq!(live, "off", "{input} reads the environment live");
+        assert_eq!(
+            live,
+            KernelcacheChoice::default().as_str(),
+            "{input} keeps the options it loaded with"
+        );
     }
     std::fs::remove_file(te).unwrap();
     std::fs::remove_file(raw).unwrap();

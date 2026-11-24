@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::xml::Element;
-use unlace_decomp::loadoptions::{self, LoadOptions, LoadScope};
+use unlace_decomp::loadoptions::{LoadOptions, LoadScope};
 
 use crate::engine::{
     ArmIsa, ConsoleProgram, FileInput, Languages, RawBytes, arm_isa_from_env, bootstrap_cil,
@@ -43,15 +43,12 @@ impl<L: Languages + ?Sized> LanguageSource for L {}
 ///
 /// - **target**: empty, so the input chooses its language. A raw image has no
 ///   header to choose from and needs one.
-/// - **options**: none, so the load reads the process environment. Every
-///   input puts the environment in force on the calling thread for the load,
-///   even when another program's options are in force there, and the program
-///   it builds keeps reading the environment live; an object load (or an image
-///   load that reaches the object loader) also writes the image's Go version
-///   to [`GOVERSION_ENV`](unlace_decomp::goreg::GOVERSION_ENV), or clears
-///   it. With [`Bootstrap::options`], nothing on the load reads or writes the
-///   environment, and the program keeps the options for its analysis commit
-///   and decompiles.
+/// - **options**: none, so the load reads its options from the process
+///   environment once, as [`LoadOptions::from_env_for_load`] states them, even
+///   when another program's options are in force on the thread. With
+///   [`Bootstrap::options`], it reads none. Either way nothing on the load
+///   writes the environment, and the program keeps the options for its
+///   analysis commit and decompiles.
 /// - **arm_isa**: unset. Without options, an unset ISA comes from
 ///   [`ARM_ISA_ENV`](crate::engine::ARM_ISA_ENV); with options, it is `None`
 ///   (the image's own evidence decides).
@@ -122,8 +119,8 @@ impl<'a, L: LanguageSource + ?Sized> Bootstrap<'a, L> {
                 self.target,
                 self.languages,
                 isa,
-                &LoadOptions::from_env(),
-                true,
+                &LoadOptions::from_env_for_load(),
+                false,
             ),
         }
     }
@@ -143,8 +140,8 @@ impl<'a, L: LanguageSource + ?Sized> Bootstrap<'a, L> {
                 self.target,
                 self.languages,
                 isa,
-                &LoadOptions::from_env(),
-                true,
+                &LoadOptions::from_env_for_load(),
+                false,
             ),
         }
     }
@@ -293,7 +290,7 @@ impl<'a, L: LanguageSource + ?Sized> Bootstrap<'a, L> {
     fn enter(&self) -> LoadScope {
         match self.options {
             Some(options) => options.enter(),
-            None => loadoptions::enter_environment(),
+            None => LoadOptions::from_env_for_load().enter(),
         }
     }
 

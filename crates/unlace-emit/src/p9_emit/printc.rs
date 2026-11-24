@@ -5732,6 +5732,57 @@ impl PrintC {
         Some((pad, other, Some(tru)))
     }
 
+    /// (unlace `itaniumeh`) The `try` form of the blocks `list` of `blk`: the first
+    /// exceptional-edge `if` (no else) whose normal path never falls through and whose landing
+    /// pad starts the rest of the list, its pad, and whether the `catch` stays open to the end
+    /// of the body. It does on the function's top-level spine (only lists above, or ifs this
+    /// list is the condition of: the pad's own selector tests), where the rest of the body is
+    /// reached through the pad alone.
+    pub(super) fn eh_list_try_match(
+        &self,
+        fd: &Funcdata,
+        blk: BlockId,
+        list: &[BlockId],
+    ) -> Option<crate::ctree::ListTry> {
+        if self.lang().kw_open_curly != "{" {
+            return None;
+        }
+        let n = list.len();
+        let k = (0..n.saturating_sub(1)).find(|&k| {
+            self.is_eh_if(fd, list[k])
+                && fd.sblocks_ref().block(list[k]).get_size() == 2
+                && fd
+                    .sblocks_ref()
+                    .block(fd.sblocks_ref().block(list[k]).get_block(1))
+                    .size_out()
+                    == 0
+                && self.eh_pad_start(fd, list[k + 1]).is_some()
+        })?;
+        let pad = self.eh_pad_start(fd, list[k + 1])?;
+        let mut spine = true;
+        let mut at = blk;
+        while let Some(p) = fd.sblocks_ref().block(at).get_parent() {
+            let ty = fd.sblocks_ref().block(p).get_type();
+            let as_condition =
+                ty == crate::block::BlockType::If && fd.sblocks_ref().block(p).get_block(0) == at;
+            if !as_condition
+                && !matches!(
+                    ty,
+                    crate::block::BlockType::Ls | crate::block::BlockType::Graph
+                )
+            {
+                spine = false;
+                break;
+            }
+            at = p;
+        }
+        Some(crate::ctree::ListTry {
+            at: k,
+            pad,
+            keep_open: spine,
+        })
+    }
+
     /// (unlace `itaniumeh`) The `try` form of the `if` `blk` on an exceptional edge: its
     /// condition block, the arm that runs inside the `try` (printed after the `catch` it
     /// would read as code the handler falls into), the landing pad and the arm the edge
@@ -5962,53 +6013,25 @@ impl PrintC {
         let n = list.len();
         // (unlace `itaniumeh`) An exceptional-edge `if` whose normal path never
         // falls through and whose landing pad starts the rest of the list:
-        // `try { call; <normal path> } catch (..) { <pad> }`.
-        if self.lang().kw_open_curly == "{" {
-            if let Some(k) = (0..n.saturating_sub(1)).find(|&k| {
-                self.is_eh_if(fd, list[k])
-                    && fd.sblocks_ref().block(list[k]).get_size() == 2
-                    && fd
-                        .sblocks_ref()
-                        .block(fd.sblocks_ref().block(list[k]).get_block(1))
-                        .size_out()
-                        == 0
-                    && self.eh_pad_start(fd, list[k + 1]).is_some()
-            }) {
-                let pad = self.eh_pad_start(fd, list[k + 1]).expect("pad");
-                self.context.push_mod();
-                self.context.set_mod(modifiers::NO_BRANCH);
-                for j in 0..k {
-                    let id = self.emit.begin_block(0);
-                    self.emit_list_item(fd, arch, list, items, j);
-                    self.emit.end_block(id);
-                }
-                self.context.pop_mod();
-                let cond = fd.sblocks_ref().block(list[k]).get_block(0);
-                let normal = fd.sblocks_ref().block(list[k]).get_block(1);
-                // On the function's top-level spine (only lists above, or ifs this
-                // list is the condition of — the pad's own selector tests), the
-                // rest of the body is reached through the pad alone: the catch
-                // stays open to the end of the body.
-                let mut spine = true;
-                let mut at = blk;
-                while let Some(p) = fd.sblocks_ref().block(at).get_parent() {
-                    let ty = fd.sblocks_ref().block(p).get_type();
-                    let as_condition = ty == crate::block::BlockType::If
-                        && fd.sblocks_ref().block(p).get_block(0) == at;
-                    if !as_condition
-                        && !matches!(
-                            ty,
-                            crate::block::BlockType::Ls | crate::block::BlockType::Graph
-                        )
-                    {
-                        spine = false;
-                        break;
-                    }
-                    at = p;
-                }
-                self.emit_eh_try(fd, arch, cond, Some(normal), pad, &list[k + 1..], spine);
-                return;
+        // `try { call; <normal path> } catch (..) { <pad> }` (`list_try_form`).
+        if let Some(found) = self.list_try_form(fd, blk, list) {
+            let crate::ctree::ListTry {
+                at: k,
+                pad,
+                keep_open: spine,
+            } = found;
+            self.context.push_mod();
+            self.context.set_mod(modifiers::NO_BRANCH);
+            for j in 0..k {
+                let id = self.emit.begin_block(0);
+                self.emit_list_item(fd, arch, list, items, j);
+                self.emit.end_block(id);
             }
+            self.context.pop_mod();
+            let cond = fd.sblocks_ref().block(list[k]).get_block(0);
+            let normal = fd.sblocks_ref().block(list[k]).get_block(1);
+            self.emit_eh_try(fd, arch, cond, Some(normal), pad, &list[k + 1..], spine);
+            return;
         }
         if self.java_catches.is_some() && self.list_has_java_try(fd, list) {
             self.emit_block_ls_java_try(fd, arch, list);

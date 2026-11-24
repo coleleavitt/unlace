@@ -362,8 +362,58 @@ impl PrintC {
                 while self.fold_nested_and(fd, id) {}
             }
         }
+        self.ctree_list_tries(fd);
         if let Some(tree) = self.ctree.as_mut() {
             tree.advance(CMaturity::Rewritten);
+        }
+    }
+
+    /// (unlace `itaniumeh`) Record on each list sequence the `try` form `emit_list_items`
+    /// prints it in (`eh_list_try_match`).
+    fn ctree_list_tries(&mut self, fd: &Funcdata) {
+        let lists: Vec<(StmtId, BlockId)> = match self.ctree.as_ref() {
+            Some(tree) => tree
+                .stmt_ids()
+                .into_iter()
+                .filter_map(|id| {
+                    let stmt = tree.stmt(id);
+                    let blk = stmt.origin?;
+                    (tree.node_for(blk) == Some(id)
+                        && matches!(stmt.kind, StmtKind::Seq(_))
+                        && fd.sblocks_ref().block(blk).get_type() == BlockType::Ls)
+                        .then_some((id, blk))
+                })
+                .collect(),
+            None => return,
+        };
+        for (id, blk) in lists {
+            let list: Vec<BlockId> = fd.sblocks_ref().block(blk).get_list().to_vec();
+            if let Some(found) = self.eh_list_try_match(fd, blk, &list)
+                && let Some(tree) = self.ctree.as_mut()
+            {
+                tree.set_list_try(id, found);
+            }
+        }
+    }
+
+    /// (unlace `itaniumeh`) The `try` form of the blocks `list` of `blk`: the one the tree
+    /// recorded for `blk`'s sequence when `list` is all of it, else the match itself (the rest
+    /// of a switch arm or goto block, or a list the tree holds no sequence for).
+    pub(super) fn list_try_form(
+        &self,
+        fd: &Funcdata,
+        blk: BlockId,
+        list: &[BlockId],
+    ) -> Option<crate::ctree::ListTry> {
+        let whole = fd.sblocks_ref().block(blk).get_list().len() == list.len();
+        let node = self
+            .ctree
+            .as_ref()
+            .and_then(|tree| tree.node_for(blk))
+            .filter(|_| whole);
+        match (self.ctree.as_ref(), node) {
+            (Some(tree), Some(id)) => tree.list_try(id),
+            _ => self.eh_list_try_match(fd, blk, list),
         }
     }
 

@@ -208,6 +208,16 @@ pub enum ExprKind {
     },
 }
 
+/// (unlace `itaniumeh`) The `try` form of a list: its element `at` is an exceptional-edge `if`
+/// whose normal path runs inside the `try`, `pad` is the landing pad the rest of the list
+/// starts, and `keep_open` leaves the `catch` open to the end of the function body.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ListTry {
+    pub at: usize,
+    pub pad: u64,
+    pub keep_open: bool,
+}
+
 /// The C syntax tree of one function.
 #[derive(Clone, Debug, Default)]
 pub struct CTree {
@@ -217,6 +227,7 @@ pub struct CTree {
     maturity: CMaturity,
     by_origin: BTreeMap<BlockId, StmtId>,
     conds: BTreeSet<StmtId>,
+    list_tries: BTreeMap<StmtId, ListTry>,
 }
 
 impl CTree {
@@ -249,6 +260,16 @@ impl CTree {
     /// Is `id` part of a condition ([`mark_conditions_from`](CTree::mark_conditions_from))?
     pub fn is_condition(&self, id: StmtId) -> bool {
         self.conds.contains(&id)
+    }
+
+    /// Record that the list sequence `id` prints in the `try` form `form`.
+    pub fn set_list_try(&mut self, id: StmtId, form: ListTry) {
+        self.list_tries.insert(id, form);
+    }
+
+    /// The `try` form recorded for the list sequence `id`.
+    pub fn list_try(&self, id: StmtId) -> Option<ListTry> {
+        self.list_tries.get(&id).copied()
     }
 
     /// Add an expression.

@@ -216,7 +216,7 @@ crate::kuna_flag!(
     "mfcmsgmap",
     "MFC message-map handler discovery",
     unset: false,
-    shipped: false
+    shipped: true
 );
 
 crate::kuna_flag!(
@@ -227,7 +227,7 @@ crate::kuna_flag!(
     "msvcptrentry",
     "Relocated MSVC prologue-pointer function discovery",
     unset: false,
-    shipped: false
+    shipped: true
 );
 
 crate::kuna_flag!(

@@ -1717,7 +1717,21 @@ BRANCH to the return label when that label is not the next instruction.
 `ActionEvmCalls` (protorecovery, before ActionFuncLink and ActionExtraPopSetup)
 then locks each such call spec: its arguments are the stack words from the top,
 its extrapop is the stack effect times 32, and its `args + 1 - pop` results are
-one stack-relative output at offset `32 * pop`. When the function being
+one stack-relative output at offset `32 * pop`. A callee every return of which jumps
+through a copy of its label (`DUPn; JUMP`, as solc's getters do) leaves the label in
+its slot; its results are the `args - pop` words above that slot (`pop` may then be
+negative, the output starting below the stack pointer at the call), and the store of the
+return label before the call has no reader left. A call spec already input-locked is
+left alone. A callee that never returns gets its arguments and no result. A terminal
+tail (a block from which every explored path ends in `RETURN`, `REVERT`, `STOP` or
+`INVALID` without a return jump) that two or more constant `JUMP`s or call return
+labels share is called rather than entered: the jump becomes a CALL to it followed by an
+artificial noreturn halt, and a call whose return label is such a tail is followed by a
+second CALL to the tail and the halt. Its arguments are the deepest stack word below its
+entry any of its instructions reads. solc's optimizer shares the ABI-encoding and `RETURN`
+tails between external functions, reaching them with different junk below the stack
+top, so without this the paths merge at different stack depths, the stack pointer
+becomes a pointer variable and every dead stack store stays. When the function being
 decompiled is itself a callee whose call sites agree on its argument count, its
 own prototype is locked the same way, so it reads its arguments as parameters and
 returns its result.

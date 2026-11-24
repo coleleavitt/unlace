@@ -2812,6 +2812,17 @@ expect = [
     "= sub_51e(4,calldatasize());",
 ]
 
+# transfer(): the Transfer event topic is one 256-bit literal (option wideconst), not a
+# chain of ZEXT pieces.
+[[family.function]]
+test = "evm_erc20_calls_transfer_topic"
+address = "0x3e7"
+forbid = ["ZEXT732", "ZEXT832"]
+expect = [
+    "log3(dat_40,(v3 + 0x20) - dat_40,0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef,",
+    "return 1;",
+]
+
 [[family.function]]
 test = "evm_erc20_calls_checked_sub"
 address = "0x61c"

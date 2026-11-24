@@ -8170,6 +8170,21 @@ impl PrintC {
         read_op: Option<OpId>,
         opc: OpCode,
     ) {
+        if arch
+            .kuna_options
+            .get::<crate::kuna_wideconst::WideConst>()
+            .0
+        {
+            if let Some(tok) = crate::kuna_wideconst::wide_literal(fd, op) {
+                self.push_atom(&Atom::with_op(
+                    tok,
+                    TagType::Syntax,
+                    crate::printlanguage::SyntaxHighlight::const_color,
+                    op_key(op),
+                ));
+                return;
+            }
+        }
         if self.out_lang == crate::kuna_lang::OutLang::C {
             if opc == OpCode::CPUI_INT_ADD && self.op_named_pointer_add_ir(fd, arch, op, read_op) {
                 return;

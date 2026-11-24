@@ -1109,6 +1109,76 @@ class ThumbHarness(ArmHarness):
     thumb = True
 
 
+# ---------------------------------------------------------------- Alpha (64-bit, little endian)
+
+def al_mem(op, ra, rb, disp):
+    return op << 26 | ra << 21 | rb << 16 | (disp & 0xFFFF)
+
+
+def al_li(r, v):
+    """ldah r,hi(zero); lda r,lo(r) for v below 2^31."""
+    hi = ((v + 0x8000) >> 16) & 0xFFFF
+    lo = (v - (hi << 16)) & 0xFFFF
+    return [al_mem(0x09, r, 31, hi), al_mem(0x08, r, r, lo)]
+
+
+class AlphaHarness:
+    """r0..r30 at 8*i, marker at 248. A free register holds the table address and is loaded last,
+    then BR reaches the instruction (Alpha has no delay slots). qemu-alpha maps 8 KiB pages."""
+    qemu = ("qemu-alpha", ["-cpu", "ev67"])
+    machine = 0x9026
+    big = False
+    seg_align = 0x2000
+    table_size = 256
+    marker_at = 248
+
+    def __init__(self):
+        self.s = 28
+        self.scratch_names = []
+
+    def choose_scratch(self, arch, regs, written):
+        for i in list(range(28, 0, -1)):
+            n = arch.gprs[i][0]
+            if n in regs and not written & set(range(regs[n][0], regs[n][0] + regs[n][1])):
+                self.s = i
+                self.scratch_names = [n]
+                return True
+        return False
+
+    def prologue(self, target):
+        s = self.s
+        c = al_li(s, TABLES)
+        for i in range(31):
+            if i != s:
+                c.append(al_mem(0x29, i, s, 8 * i))                      # ldq
+        c.append(al_mem(0x29, s, s, 8 * s))
+        here = PROLOGUE + 4 * len(c)
+        c.append(0x30 << 26 | 31 << 21 | (((target - (here + 4)) >> 2) & 0x1FFFFF))   # br zero,target
+        return words(c, False)
+
+    def epilogue(self, dumps, marker):
+        s = self.s
+        t = 1 if s != 1 else 2
+        c = al_li(s, OUT)
+        for i in range(31):
+            if i != s:
+                c.append(al_mem(0x2D, i, s, 8 * i))                      # stq
+        c += al_li(t, marker) + [al_mem(0x2D, t, s, self.marker_at)]
+        for base, size in [(OUT, self.table_size)] + [(p, PAGE) for p in dumps]:
+            c += [al_mem(0x08, 0, 31, 4), al_mem(0x08, 16, 31, 1)] + al_li(17, base) + al_li(18, size) + [0x83]  # write; callsys
+        c += [al_mem(0x08, 0, 31, 1), al_mem(0x08, 16, 31, 0), 0x83]                                      # exit(0)
+        return words(c, False)
+
+    def table(self, arch, init, init_vec, flagword):
+        t = bytearray(self.table_size)
+        for i, (n, _) in enumerate(arch.gprs):
+            struct.pack_into("<Q", t, 8 * i, init.get(n, 0) & 0xFFFFFFFFFFFFFFFF)
+        return bytes(t)
+
+    def parse(self, arch, out):
+        return {n: struct.unpack_from("<Q", out, 8 * i)[0] for i, (n, _) in enumerate(arch.gprs)}, 0
+
+
 HARNESSES = {"arm": ArmHarness, "thumb": ThumbHarness, "aarch64": A64Harness, "riscv64": RvHarness, "mips": MipsHarness, "mips64": Mips64Harness,
              "mipsr6": MipsR6Harness, "mips64r6": Mips64R6Harness, "nios2": Nios2Harness, "sh4": Sh4Harness,
              "ppc": lambda: PpcHarness(("qemu-ppc", ["-cpu", "7457"]), 20, True, False),
@@ -1116,7 +1186,7 @@ HARNESSES = {"arm": ArmHarness, "thumb": ThumbHarness, "aarch64": A64Harness, "r
              "ppc64le": lambda: PpcHarness(("qemu-ppc64le", ["-cpu", "power10"]), 21, False, True, 2),
              "ppc64-isa": lambda: PpcHarness(("qemu-ppc64", ["-cpu", "power10"]), 21, True, True, 2),
              "ppc64le-isa": lambda: PpcHarness(("qemu-ppc64le", ["-cpu", "power10"]), 21, False, True, 2),
-             "s390x": S390xHarness, "s390x-vec": S390xHarness, "m68k": M68kHarness, "loongarch64": LaHarness, "sparc64": SparcHarness, "sparc": Sparc32Harness, "hppa": HppaHarness}
+             "s390x": S390xHarness, "s390x-vec": S390xHarness, "m68k": M68kHarness, "loongarch64": LaHarness, "sparc64": SparcHarness, "sparc": Sparc32Harness, "hppa": HppaHarness, "alpha": AlphaHarness}
 
 
 def qemu_path(name):

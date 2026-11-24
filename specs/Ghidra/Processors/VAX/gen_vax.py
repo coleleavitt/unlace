@@ -115,6 +115,8 @@ def code_table(k, call):
     for disp, pat, L, d, body in base_rows(k, 1, "b", 1):
         w('%s: %s^"["^s_reg^"]" is s_mode=4 & s_reg; %s %s { %s ea = ea + s_reg; %s [ea]; }'
           % (name, disp, pat, act(k, L, d), body, xfer))
+    w('%s: "#"^ia is s_mode=8 & s_rn=15; i8 [ ia = inst_start + o%d + 1; o%d = o%d + 2; ] { local ea:4 = ia; %s [ea]; }'
+      % (name, k, k + 1, k, xfer))
     return name
 
 

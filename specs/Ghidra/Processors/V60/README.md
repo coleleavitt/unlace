@@ -5,7 +5,8 @@ Written for unlace from the public description of the NEC V60 family instruction
 addressing modes, PSW and the privileged registers). No prior SLEIGH module was found.
 Operand encodings and instruction lengths were checked against MAME's `v60`
 disassembler (BSD-3-Clause, read and run as an oracle, not copied): 22,000 random
-encodings, every one of 16 bytes or less, decode to the same length and mnemonic.
+encodings (40 of them longer than 16 bytes, up to 20) decode to the same length and
+mnemonic, apart from `clrtlb`, whose immediate MAME's disassembler sizes as a byte and its core as a word.
 Flag rules follow MAME's `v60` core where the manual leaves room.
 
 Language: `V60:LE:32:default`. The V70 runs the same user and system instruction set
@@ -56,10 +57,6 @@ instructions (`adddc`, `subdc`, `subrdc`, `cvtd.pz`/`cvtd.zp`), `rotc`, `rvbit`,
 `getpte`, `getate`, `updpte`, `update`, `clrtlb`/`clrtlba`.
 
 Gaps:
-- The decoder accepts at most 16 bytes per instruction (the engine's
-  `MAX_INSTRUCTION_LEN`); a Format II instruction with two long double-displacement
-  or long-displacement operands (up to 20 bytes) and the longest Format VII forms do
-  not decode.
 - A function entered through `call` reads its arguments through AP, which the
   decompiler sees as an input register, not as the caller's stack.
 - Exceptions (zero divide, privilege, alignment), the per-level stack pointers that
@@ -68,5 +65,5 @@ Gaps:
 - Bit-address operands in auto-increment/decrement mode do not update the register.
 
 Oracle: MAME `v60` (disassembler run as a length/mnemonic oracle, core read for flag
-rules). The CLI test `crates/unlace-cli/tests/v60.rs` carries three hand-assembled
-images.
+rules). The `v60*` families in `crates/unlace-cli/tests/processors.toml` carry four hand-assembled
+images, one of them a 20-byte Format II `mov.w` with two PC-relative double displacements.

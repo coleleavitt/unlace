@@ -1487,6 +1487,27 @@ class TriCore(Arch32):
         w = rng.getrandbits(32)
         return w.to_bytes(4, "little") if w & 1 else (w & 0xFFFF).to_bytes(2, "little")
 
+    def canonical(self, cand):
+        # Capstone ignores the reserved fields ("-" in the manual's format diagrams) and the low bit
+        # of an E or P register pair: an encoding with such a bit set disassembles as if it were
+        # clear, while SLEIGH requires the field to be zero (or the pair number even). The encoding
+        # is canonical when clearing any set bit changes Capstone's text.
+        # TC1.6.2 additions that Capstone's TC1.6.2 mode decodes are not in tricore:LE:32:tc29x
+        # (TC1.6.1); they decode in tricore:LE:32:tc18.
+        if re.match(r"^(lha|popcnt\.w|shuffle|crc32.*|crcn|div64.*|rem64.*)$", cand["mnemonic"]):
+            return False
+        raw = cand["bytes"]
+        n = len(raw)
+        w = int.from_bytes(raw, "little")
+        text = (cand["mnemonic"], cand["op_str"])
+        dis = self.capstone()
+        for k in range(8 * n):
+            if (w >> k) & 1:
+                j = next(dis.disasm((w & ~(1 << k)).to_bytes(n, "little"), 0), None)
+                if j and j.size == n and (j.mnemonic, j.op_str) == text:
+                    return False
+        return True
+
     def skip(self, cand):
         # Unicorn's LD.H D[15], A[b], off4 (SRO, 0x8c) adds off4 unscaled; the manual and Capstone
         # scale it by 2, as for every other 16-bit halfword form.

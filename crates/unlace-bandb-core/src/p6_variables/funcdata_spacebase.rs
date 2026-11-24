@@ -1105,12 +1105,14 @@ impl FuncdataSpacebaseLocalExt for Funcdata {
                 space.get_addr_size() as i32 * 8 - 1,
             );
             let size = ct.get_size();
+            let kind = crate::funcdata::FrameSlotKind::classify(off, space.get_addr_size() as i64);
             slots.push((
                 off,
                 crate::funcdata::FrameSlot {
                     name,
                     dtype: ct,
                     size,
+                    kind,
                 },
             ));
         }

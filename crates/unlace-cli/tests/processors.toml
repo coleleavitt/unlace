@@ -2303,6 +2303,44 @@ expect = [
     "return a0;",
 ]
 
+# StarCore hardware loops assembled by hand from the manual's tables: DOSETUPn/DOENn/
+# DOENSHn and the prefix LPMARKA/LPMARKB bits give the last set a count-down back edge.
+[[family]]
+name = "starcore_loops"
+language = "StarCore:LE:32:SC140"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/starcore/loops.bin"
+args = ["--addr"]
+forbid = ["halt_baddata", "invalid_word", "sc_active_lc"]
+
+[[family.function]]
+test = "starcore_long_loop_lpmarkb_back_edge"
+address = "0x0"
+expect = [
+    "if (1 <= a3) {",  # SKIPLS skips the loop when LC0 <= 0
+    "while( true ) {",
+    "if (a3 <= 1) break;",
+]
+
+[[family.function]]
+test = "starcore_nested_loops"
+address = "0x20"
+expect = [
+    "v3 = 4;",  # DOENSH1 #4 inside loop 0
+    "if (v3 <= 1) break;",
+    "if (a3 <= 1) break;",
+]
+
+[[family.function]]
+test = "starcore_short_loop_lpmarka_back_edge"
+address = "0x40"
+expect = ["while( true ) {", "if (a3 <= 1) break;"]
+
+[[family.function]]
+test = "starcore_two_set_short_loop_back_edge"
+address = "0x50"
+expect = ["while( true ) {", "a0 += *a2;", "if (a3 <= 1) break;"]
+
 # The Xbox 360 Xenon language decodes VMX128: two lvx128 loads into vr64/vr65, vaddfp128,
 # vmulfp128 and an stvx128 store (encoded from Xenia's VX128 formats, blr from powerpc-elf-as).
 [[family]]

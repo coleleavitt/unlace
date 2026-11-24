@@ -4559,7 +4559,16 @@ the root constructor adds the count-down-and-branch there as above (the test is 
 after the decrement). A write to that register by another instruction in between is not
 tracked; a loop register written from any other value marks nothing.
 
-Not modelled: StarCore `DOEN`/`DOSETUP` (not decoded).
+StarCore SC140 marks loop ends in the prefix words of execution sets (`LPMARKA`, `LPMARKB`),
+not by address. `DOSETUPn` records the start `SAn` and `DOENn`/`DOENSHn` the enabled loops
+and the short-loop flag in flowing context; the highest enabled loop is the active one. A
+mark that ends an iteration later than its own set passes noflow context forward set by set:
+`LPMARKB` two sets before the end of a long loop, or on the first set of a two-set short
+loop, reaches the last set, and `LPMARKA` on the last set (or on a one-set short loop) acts
+there. The root constructor adds the manual's test after that set: while `LCn > 1`, count
+down and branch directly to the start; otherwise clear `LCn`. The loop end clears the loop's
+enable bit for the code after it, so an enclosing loop becomes active again. A set carrying
+both marks (an inner and an outer loop ending together) and `CONT`/`CONTD` are not modelled.
 
 ### Vendored community processor modules (#98)
 
@@ -4975,7 +4984,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `S12Z` | NXP S12Z (MC9S12ZVL, MC9S12ZVC, MC9S12ZVM, S12ZVH) | `S12Z:BE:24:default` | NXP S12Z CPU RM; encodings checked against binutils s12z-opc.c (read only) | `unlace-cli/tests/processors.toml` (`s12z`) |
 | `V8Ignition` | V8 Ignition bytecode (V8 13.6, Node.js 24) | `V8Ignition:LE:32:13.6` | V8 `src/interpreter/bytecodes.h`, `bytecode-operands.h` (BSD-3-Clause); oracle `node --print-bytecode` | `unlace-cli/tests/v8ignition_raw.rs` |
 | `JavaCard` | Java Card virtual machine bytecode (Java Card Platform 3.1) | `JavaCard:BE:16:3.1` | Java Card Platform VM Specification v3.1, chapters 7 and 8 | `unlace-cli/tests/javacard_raw.rs` |
-| `StarCore` | NXP (Freescale) StarCore SC140 DSP core, variable-length execution sets with prefix and serial grouping | `StarCore:LE:32:SC140` | SC140 DSP Core Reference Manual rev 4.1 (encoding and field tables read by `tools/gen_sc140_sleigh.py`); no public toolchain, checked for decode self-consistency and on hand-assembled sets | `unlace-cli/tests/processors.toml` (`starcore`, `starcore_max`) |
+| `StarCore` | NXP (Freescale) StarCore SC140 DSP core, variable-length execution sets with prefix and serial grouping | `StarCore:LE:32:SC140` | SC140 DSP Core Reference Manual rev 4.1 (encoding and field tables read by `tools/gen_sc140_sleigh.py`); no public toolchain, checked for decode self-consistency and on hand-assembled sets | `unlace-cli/tests/processors.toml` (`starcore`, `starcore_max`, `starcore_loops`) |
 | `PowerPC` (Xenon VMX128) | Xbox 360 Xenon (64-bit PowerPC, AltiVec, VMX128) | `PowerPC:BE:64:Xenon` | Xenia emulator `ppc-instructions.xml` and VX128 decode formats (BSD-3) | `unlace-cli/tests/processors.toml` (`ppc_xenon_vmx128`) |
 | `S1C6200` | Seiko Epson S1C6200 / E0C6200 / E0C6200A 4-bit core | `S1C6200:BE:16:default` | Epson E0C6200/6200A Core CPU Manual (MF297-06a); checked against MAME `e0c6200` on all 4,096 encodings | `unlace-cli/tests/processors.toml` (`s1c6200`) |
 | `Propeller` (P2) | Parallax Propeller 2 (P2X8C4M64P), hub execution | `propeller2:LE:32:default` | Parallax "Propeller 2 Instructions" table v35 (encodings, operations, flags); checked against the flexspin assembler | `unlace-cli/tests/processors.toml` (`propeller2`) |

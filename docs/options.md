@@ -1472,6 +1472,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P9/pointer-notation · unlace · presentation-default · postinc
 - **Example:** `option postinc off`
 
+### `nonnullparam` -- on | off, default `off`
+
+- **Symptoms:** a pointer parameter is used at once with no NULL test and nothing says the caller must not pass NULL; the decompiled function gives no hint that its parameter is dereferenced on entry.
+- **What it does:** Mark a parameter the function dereferences before any branch as non-null, with a comment above its first use. A function that loads or stores through a parameter in its entry block, before any conditional branch or indirect jump, requires the caller to have passed a pointer that is not null, or the access traps. With the option on, the printer adds `/* non-null: p is dereferenced before any branch */` above the first statement that dereferences the parameter, or a copy of it made in the entry block, once per parameter. The parameter is the function prototype's input whose storage the entry-block varnode is, so a callee-saved register read on entry is not one. Only the comment is added: the printed statements and every other comment are unchanged.
+- **When to flip:** Off by default. Flip on when reading a function whose parameters are dereferenced at once, to see which pointers it assumes are valid without a NULL test. The claim assumes the dereference traps on NULL, which is not true on a target that maps address zero, so read the comment as a hint, not a proof.
+- **Where / provenance:** P9/warning-style · unlace · opt-in-tool · unlace-1345
+- **Example:** `option nonnullparam on`
+
 ### `structdefs` -- on | off, default `off`
 
 - **Symptoms:** the signature says FILE * or struct_0 * and nothing says what the fields are; a field access like f->_flags with no layout anywhere in the output; you have to run decompile-project just to read the .h for one function's struct; a synthesized struct_N appears in a parameter type with no definition.

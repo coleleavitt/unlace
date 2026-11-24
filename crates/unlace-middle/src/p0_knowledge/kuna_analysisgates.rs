@@ -1298,7 +1298,7 @@ impl crate::kuna_optionset::KunaOption for MovwPairs {
     }
 
     fn shipped() -> Self {
-        MovwPairs::Off
+        MovwPairs::On
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {

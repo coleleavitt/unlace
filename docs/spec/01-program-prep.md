@@ -14001,8 +14001,11 @@ completing instruction where it lands in a mapped section (IDA's "valid addresse
 only" reading of `MOVT` pairs), which is a judgement: a number built the same way
 that lands in a section names it. Everything else of the carry applies unchanged
 (eight hops, no joins along the run, a `movk` that only re-inserts zero upper
-halves changes nothing), and big-endian code is not read. `off` (the default) is
-the behaviour above.
+halves changes nothing), and big-endian code is not read. `on` is the default;
+`off` is the behaviour above. GCC for Cortex-M builds addresses from literal pools
+(no `movt` in betaflight, cleanflight, chibios, crazyflie, nuttx, freertos, riot-os
+or the libopencm3 examples, and u-boot's 178 ARMv7 pairs are all constants outside
+its image), so the default changes those images' Listing not at all.
 
 A constant subtracted from a carried address biases that address rather than
 naming another one. Swift builds a string literal's object as `adrp/add` of the

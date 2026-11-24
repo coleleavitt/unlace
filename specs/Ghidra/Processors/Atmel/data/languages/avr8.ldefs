@@ -64,4 +64,57 @@
     <external_name tool="IDA-PRO" name="avr"/>
   </language>
   
+
+  <language processor="AVR8"
+            endian="little"
+            size="16"
+            variant="AVR-DA"
+            version="1.4"
+            slafile="avr8xt.sla"
+            processorspec="avr8dx_da.pspec"
+            manualindexfile="../manuals/AVR8.idx"
+            id="avr8:LE:16:avrda">
+    <description>AVR8 AVRxt core, AVR-DA I/O register names</description>
+    <compiler name="gcc" spec="avr8gcc.cspec" id="gcc"/>
+  </language>
+
+  <language processor="AVR8"
+            endian="little"
+            size="16"
+            variant="AVR-DB"
+            version="1.4"
+            slafile="avr8xt.sla"
+            processorspec="avr8dx_db.pspec"
+            manualindexfile="../manuals/AVR8.idx"
+            id="avr8:LE:16:avrdb">
+    <description>AVR8 AVRxt core, AVR-DB I/O register names</description>
+    <compiler name="gcc" spec="avr8gcc.cspec" id="gcc"/>
+  </language>
+
+  <language processor="AVR8"
+            endian="little"
+            size="16"
+            variant="AVR-DD"
+            version="1.4"
+            slafile="avr8xt.sla"
+            processorspec="avr8dx_dd.pspec"
+            manualindexfile="../manuals/AVR8.idx"
+            id="avr8:LE:16:avrdd">
+    <description>AVR8 AVRxt core, AVR-DD I/O register names</description>
+    <compiler name="gcc" spec="avr8gcc.cspec" id="gcc"/>
+  </language>
+
+  <language processor="AVR8"
+            endian="little"
+            size="16"
+            variant="AVR-DU"
+            version="1.4"
+            slafile="avr8xt.sla"
+            processorspec="avr8dx_du.pspec"
+            manualindexfile="../manuals/AVR8.idx"
+            id="avr8:LE:16:avrdu">
+    <description>AVR8 AVRxt core, AVR-DU I/O register names</description>
+    <compiler name="gcc" spec="avr8gcc.cspec" id="gcc"/>
+  </language>
+
 </language_definitions>

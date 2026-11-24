@@ -831,12 +831,13 @@ crate::kuna_flag!(
 
 crate::kuna_flag!(
     /// (kuna) `dextrpc`: DriverKit IORPC dispatch prototypes, message ids and
-    /// class layouts, read inside the `osclassinfo` pass (default off).
+    /// class layouts, run at the commit point when `osclassinfo` is on
+    /// (default on).
     Dextrpc,
     "dextrpc",
     "DriverKit IORPC dispatch types",
     unset: false,
-    shipped: false
+    shipped: true
 );
 
 crate::kuna_flag!(

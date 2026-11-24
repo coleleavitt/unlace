@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="TLCS870"
+            endian="little"
+            size="16"
+            variant="default"
+            version="1.0"
+            slafile="tlcs870.sla"
+            processorspec="tlcs870.pspec"
+            id="TLCS870:LE:16:default">
+    <description>Toshiba TLCS-870 (TMP87xx family), 64 KiB address space</description>
+    <compiler name="default" spec="tlcs870.cspec" id="default"/>
+  </language>
+</language_definitions>

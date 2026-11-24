@@ -1,0 +1,242 @@
+# MMIX (D. E. Knuth, The Art of Computer Programming, fascicle 1, and MMIXware): big-endian,
+# 64-bit, 256 general registers and 32 special registers, fixed 32-bit OP X Y Z instructions.
+# Local registers $0..$31 live on the register stack: they are modelled as the "lstack"
+# space addressed by rO, which PUSHJ/PUSHGO advance by X+1 registers, so the caller's
+# $(X+1).. are the callee's $0.. and rO is the cspec stack pointer. $32..$255 are global
+# registers (GCC's MMIXware ABI: $254 sp, $253 fp). Written from Knuth's MMIX definition and
+# the binutils mmix opcode table (opcode numbers, special register numbers).
+
+define endian=big;
+define alignment=4;
+
+define space ram type=ram_space size=8 default;
+define space lstack type=ram_space size=8;
+define space register type=register_space size=4;
+
+define register offset=0 size=8 [ l0 l1 l2 l3 l4 l5 l6 l7 l8 l9 l10 l11 l12 l13 l14 l15 l16 l17 l18 l19 l20 l21 l22 l23 l24 l25 l26 l27 l28 l29 l30 l31 r32 r33 r34 r35 r36 r37 r38 r39 r40 r41 r42 r43 r44 r45 r46 r47 r48 r49 r50 r51 r52 r53 r54 r55 r56 r57 r58 r59 r60 r61 r62 r63 r64 r65 r66 r67 r68 r69 r70 r71 r72 r73 r74 r75 r76 r77 r78 r79 r80 r81 r82 r83 r84 r85 r86 r87 r88 r89 r90 r91 r92 r93 r94 r95 r96 r97 r98 r99 r100 r101 r102 r103 r104 r105 r106 r107 r108 r109 r110 r111 r112 r113 r114 r115 r116 r117 r118 r119 r120 r121 r122 r123 r124 r125 r126 r127 r128 r129 r130 r131 r132 r133 r134 r135 r136 r137 r138 r139 r140 r141 r142 r143 r144 r145 r146 r147 r148 r149 r150 r151 r152 r153 r154 r155 r156 r157 r158 r159 r160 r161 r162 r163 r164 r165 r166 r167 r168 r169 r170 r171 r172 r173 r174 r175 r176 r177 r178 r179 r180 r181 r182 r183 r184 r185 r186 r187 r188 r189 r190 r191 r192 r193 r194 r195 r196 r197 r198 r199 r200 r201 r202 r203 r204 r205 r206 r207 r208 r209 r210 r211 r212 r213 r214 r215 r216 r217 r218 r219 r220 r221 r222 r223 r224 r225 r226 r227 r228 r229 r230 r231 r232 r233 r234 r235 r236 r237 r238 r239 r240 r241 r242 r243 r244 r245 r246 r247 r248 r249 r250 r251 r252 fp sp r255 ];
+define register offset=0x800 size=8 [ rB rD rE rH rJ rM rR rBB rC rN rO rS rI rT rTT rK rQ rU rV rG rL rA rF rP rW rX rY rZ rWW rXX rYY rZZ ];
+define register offset=0x900 size=8 [ pc retval ];
+
+define token instr(32)
+  op   = (24,31)
+  x    = (16,23)
+  xn   = (16,23)
+  xhi  = (21,23)
+  xs   = (16,20)
+  y    = (8,15)
+  yn   = (8,15)
+  yhi  = (13,15)
+  z    = (0,7)
+  zn   = (0,7)
+  zhi  = (5,7)
+  zs   = (0,4)
+  yz   = (0,15)
+  xyz  = (0,23)
+  imm  = (24,24)
+;
+
+attach variables [ x y z ] [ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ r32 r33 r34 r35 r36 r37 r38 r39 r40 r41 r42 r43 r44 r45 r46 r47 r48 r49 r50 r51 r52 r53 r54 r55 r56 r57 r58 r59 r60 r61 r62 r63 r64 r65 r66 r67 r68 r69 r70 r71 r72 r73 r74 r75 r76 r77 r78 r79 r80 r81 r82 r83 r84 r85 r86 r87 r88 r89 r90 r91 r92 r93 r94 r95 r96 r97 r98 r99 r100 r101 r102 r103 r104 r105 r106 r107 r108 r109 r110 r111 r112 r113 r114 r115 r116 r117 r118 r119 r120 r121 r122 r123 r124 r125 r126 r127 r128 r129 r130 r131 r132 r133 r134 r135 r136 r137 r138 r139 r140 r141 r142 r143 r144 r145 r146 r147 r148 r149 r150 r151 r152 r153 r154 r155 r156 r157 r158 r159 r160 r161 r162 r163 r164 r165 r166 r167 r168 r169 r170 r171 r172 r173 r174 r175 r176 r177 r178 r179 r180 r181 r182 r183 r184 r185 r186 r187 r188 r189 r190 r191 r192 r193 r194 r195 r196 r197 r198 r199 r200 r201 r202 r203 r204 r205 r206 r207 r208 r209 r210 r211 r212 r213 r214 r215 r216 r217 r218 r219 r220 r221 r222 r223 r224 r225 r226 r227 r228 r229 r230 r231 r232 r233 r234 r235 r236 r237 r238 r239 r240 r241 r242 r243 r244 r245 r246 r247 r248 r249 r250 r251 r252 fp sp r255 ];
+attach variables [ xs zs ] [ rB rD rE rH rJ rM rR rBB rC rN rO rS rI rT rTT rK rQ rU rV rG rL rA rF rP rW rX rY rZ rWW rXX rYY rZZ ];
+
+define pcodeop trap;
+define pcodeop trip;
+define pcodeop resume;
+define pcodeop save_context;
+define pcodeop unsave_context;
+define pcodeop sync;
+define pcodeop load_virtual_translation_status;
+define pcodeop byte_difference;
+define pcodeop wyde_difference;
+define pcodeop tetra_difference;
+define pcodeop multiple_or;
+define pcodeop multiple_xor;
+define pcodeop float_compare_epsilon;
+define pcodeop float_unordered_epsilon;
+define pcodeop float_equal_epsilon;
+define pcodeop float_remainder;
+define pcodeop float_integer;
+
+# $k: a local register on the register stack below $32, a global register above.
+RX: "$"^xn is xn & xhi=0 { local a:8 = rO + xn * 8; export *[lstack]:8 a; }
+RX: "$"^xn is xn & x { export x; }
+RY: "$"^yn is yn & yhi=0 { local a:8 = rO + yn * 8; export *[lstack]:8 a; }
+RY: "$"^yn is yn & y { export y; }
+RZ: "$"^zn is zn & zhi=0 { local a:8 = rO + zn * 8; export *[lstack]:8 a; }
+RZ: "$"^zn is zn & z { export z; }
+OPZ: RZ is imm=0 & RZ { export RZ; }
+OPZ: zn is imm=1 & zn { export *[const]:8 zn; }
+EA: RY, OPZ is RY & OPZ { local a:8 = RY + OPZ; export a; }
+
+# The main result of POP X: $(X-1).
+POPV: k is xn [ k = xn - 1; ] { local a:8 = rO + k * 8; export *[lstack]:8 a; }
+
+BRT: dest is imm=0 & yz [ dest = inst_start + yz * 4; ] { export *[ram]:8 dest; }
+BRT: dest is imm=1 & yz [ dest = inst_start + yz * 4 - 0x40000; ] { export *[ram]:8 dest; }
+JT: dest is imm=0 & xyz [ dest = inst_start + xyz * 4; ] { export *[ram]:8 dest; }
+JT: dest is imm=1 & xyz [ dest = inst_start + xyz * 4 - 0x4000000; ] { export *[ram]:8 dest; }
+
+:bn RX, BRT is (op=0x40 | op=0x41) & RX & BRT { local v:8 = RX; if (v s< 0) goto BRT; }
+:pbn RX, BRT is (op=0x50 | op=0x51) & RX & BRT { local v:8 = RX; if (v s< 0) goto BRT; }
+:bz RX, BRT is (op=0x42 | op=0x43) & RX & BRT { local v:8 = RX; if (v == 0) goto BRT; }
+:pbz RX, BRT is (op=0x52 | op=0x53) & RX & BRT { local v:8 = RX; if (v == 0) goto BRT; }
+:bp RX, BRT is (op=0x44 | op=0x45) & RX & BRT { local v:8 = RX; if (v s> 0) goto BRT; }
+:pbp RX, BRT is (op=0x54 | op=0x55) & RX & BRT { local v:8 = RX; if (v s> 0) goto BRT; }
+:bod RX, BRT is (op=0x46 | op=0x47) & RX & BRT { local v:8 = RX; if ((v & 1) != 0) goto BRT; }
+:pbod RX, BRT is (op=0x56 | op=0x57) & RX & BRT { local v:8 = RX; if ((v & 1) != 0) goto BRT; }
+:bnn RX, BRT is (op=0x48 | op=0x49) & RX & BRT { local v:8 = RX; if (v s>= 0) goto BRT; }
+:pbnn RX, BRT is (op=0x58 | op=0x59) & RX & BRT { local v:8 = RX; if (v s>= 0) goto BRT; }
+:bnz RX, BRT is (op=0x4a | op=0x4b) & RX & BRT { local v:8 = RX; if (v != 0) goto BRT; }
+:pbnz RX, BRT is (op=0x5a | op=0x5b) & RX & BRT { local v:8 = RX; if (v != 0) goto BRT; }
+:bnp RX, BRT is (op=0x4c | op=0x4d) & RX & BRT { local v:8 = RX; if (v s<= 0) goto BRT; }
+:pbnp RX, BRT is (op=0x5c | op=0x5d) & RX & BRT { local v:8 = RX; if (v s<= 0) goto BRT; }
+:bev RX, BRT is (op=0x4e | op=0x4f) & RX & BRT { local v:8 = RX; if ((v & 1) == 0) goto BRT; }
+:pbev RX, BRT is (op=0x5e | op=0x5f) & RX & BRT { local v:8 = RX; if ((v & 1) == 0) goto BRT; }
+:csn RX, RY, OPZ is (op=0x60 | op=0x61) & RX & RY & OPZ { local v:8 = RY; if (!(v s< 0)) goto inst_next; RX = OPZ; }
+:zsn RX, RY, OPZ is (op=0x70 | op=0x71) & RX & RY & OPZ { local v:8 = RY; local k:8 = OPZ; RX = zext(v s< 0) * k; }
+:csz RX, RY, OPZ is (op=0x62 | op=0x63) & RX & RY & OPZ { local v:8 = RY; if (!(v == 0)) goto inst_next; RX = OPZ; }
+:zsz RX, RY, OPZ is (op=0x72 | op=0x73) & RX & RY & OPZ { local v:8 = RY; local k:8 = OPZ; RX = zext(v == 0) * k; }
+:csp RX, RY, OPZ is (op=0x64 | op=0x65) & RX & RY & OPZ { local v:8 = RY; if (!(v s> 0)) goto inst_next; RX = OPZ; }
+:zsp RX, RY, OPZ is (op=0x74 | op=0x75) & RX & RY & OPZ { local v:8 = RY; local k:8 = OPZ; RX = zext(v s> 0) * k; }
+:csod RX, RY, OPZ is (op=0x66 | op=0x67) & RX & RY & OPZ { local v:8 = RY; if (!((v & 1) != 0)) goto inst_next; RX = OPZ; }
+:zsod RX, RY, OPZ is (op=0x76 | op=0x77) & RX & RY & OPZ { local v:8 = RY; local k:8 = OPZ; RX = zext((v & 1) != 0) * k; }
+:csnn RX, RY, OPZ is (op=0x68 | op=0x69) & RX & RY & OPZ { local v:8 = RY; if (!(v s>= 0)) goto inst_next; RX = OPZ; }
+:zsnn RX, RY, OPZ is (op=0x78 | op=0x79) & RX & RY & OPZ { local v:8 = RY; local k:8 = OPZ; RX = zext(v s>= 0) * k; }
+:csnz RX, RY, OPZ is (op=0x6a | op=0x6b) & RX & RY & OPZ { local v:8 = RY; if (!(v != 0)) goto inst_next; RX = OPZ; }
+:zsnz RX, RY, OPZ is (op=0x7a | op=0x7b) & RX & RY & OPZ { local v:8 = RY; local k:8 = OPZ; RX = zext(v != 0) * k; }
+:csnp RX, RY, OPZ is (op=0x6c | op=0x6d) & RX & RY & OPZ { local v:8 = RY; if (!(v s<= 0)) goto inst_next; RX = OPZ; }
+:zsnp RX, RY, OPZ is (op=0x7c | op=0x7d) & RX & RY & OPZ { local v:8 = RY; local k:8 = OPZ; RX = zext(v s<= 0) * k; }
+:csev RX, RY, OPZ is (op=0x6e | op=0x6f) & RX & RY & OPZ { local v:8 = RY; if (!((v & 1) == 0)) goto inst_next; RX = OPZ; }
+:zsev RX, RY, OPZ is (op=0x7e | op=0x7f) & RX & RY & OPZ { local v:8 = RY; local k:8 = OPZ; RX = zext((v & 1) == 0) * k; }
+:mul RX, RY, OPZ is (op=0x18 | op=0x19) & RX & RY & OPZ { local vy:8 = RY; local vz:8 = OPZ; RX = vy * vz; }
+:mulu RX, RY, OPZ is (op=0x1a | op=0x1b) & RX & RY & OPZ { local vy:8 = RY; local vz:8 = OPZ; local p:16 = zext(vy) * zext(vz); rH = p(8); RX = p:8; }
+:div RX, RY, OPZ is (op=0x1c | op=0x1d) & RX & RY & OPZ { local vy:8 = RY; local vz:8 = OPZ; local q:8 = vy s/ vz; local r:8 = vy s% vz; local adj:8 = zext((r != 0) && ((r s< 0) != (vz s< 0))); RX = q - adj; rR = r + adj * vz; }
+:divu RX, RY, OPZ is (op=0x1e | op=0x1f) & RX & RY & OPZ { local vy:8 = RY; local vz:8 = OPZ; RX = vy / vz; rR = vy % vz; }
+:add RX, RY, OPZ is (op=0x20 | op=0x21) & RX & RY & OPZ { local vy:8 = RY; local vz:8 = OPZ; RX = vy + vz; }
+:addu RX, RY, OPZ is (op=0x22 | op=0x23) & RX & RY & OPZ { local vy:8 = RY; local vz:8 = OPZ; RX = vy + vz; }
+:sub RX, RY, OPZ is (op=0x24 | op=0x25) & RX & RY & OPZ { local vy:8 = RY; local vz:8 = OPZ; RX = vy - vz; }
+:subu RX, RY, OPZ is (op=0x26 | op=0x27) & RX & RY & OPZ { local vy:8 = RY; local vz:8 = OPZ; RX = vy - vz; }
+:"2addu" RX, RY, OPZ is (op=0x28 | op=0x29) & RX & RY & OPZ { local vy:8 = RY; local vz:8 = OPZ; RX = vy * 2 + vz; }
+:"4addu" RX, RY, OPZ is (op=0x2a | op=0x2b) & RX & RY & OPZ { local vy:8 = RY; local vz:8 = OPZ; RX = vy * 4 + vz; }
+:"8addu" RX, RY, OPZ is (op=0x2c | op=0x2d) & RX & RY & OPZ { local vy:8 = RY; local vz:8 = OPZ; RX = vy * 8 + vz; }
+:"16addu" RX, RY, OPZ is (op=0x2e | op=0x2f) & RX & RY & OPZ { local vy:8 = RY; local vz:8 = OPZ; RX = vy * 16 + vz; }
+:cmp RX, RY, OPZ is (op=0x30 | op=0x31) & RX & RY & OPZ { local vy:8 = RY; local vz:8 = OPZ; RX = zext(vy s> vz) - zext(vy s< vz); }
+:cmpu RX, RY, OPZ is (op=0x32 | op=0x33) & RX & RY & OPZ { local vy:8 = RY; local vz:8 = OPZ; RX = zext(vy > vz) - zext(vy < vz); }
+:neg RX, yn, OPZ is (op=0x34 | op=0x35) & RX & yn & OPZ { RX = yn - OPZ; }
+:negu RX, yn, OPZ is (op=0x36 | op=0x37) & RX & yn & OPZ { RX = yn - OPZ; }
+:sl RX, RY, OPZ is (op=0x38 | op=0x39) & RX & RY & OPZ { local vy:8 = RY; local vz:8 = OPZ; RX = vy << vz; }
+:slu RX, RY, OPZ is (op=0x3a | op=0x3b) & RX & RY & OPZ { local vy:8 = RY; local vz:8 = OPZ; RX = vy << vz; }
+:sr RX, RY, OPZ is (op=0x3c | op=0x3d) & RX & RY & OPZ { local vy:8 = RY; local vz:8 = OPZ; RX = vy s>> vz; }
+:sru RX, RY, OPZ is (op=0x3e | op=0x3f) & RX & RY & OPZ { local vy:8 = RY; local vz:8 = OPZ; RX = vy >> vz; }
+:ldb RX, EA is (op=0x80 | op=0x81) & RX & EA { RX = sext(*[ram]:1 EA); }
+:ldbu RX, EA is (op=0x82 | op=0x83) & RX & EA { RX = zext(*[ram]:1 EA); }
+:ldw RX, EA is (op=0x84 | op=0x85) & RX & EA { RX = sext(*[ram]:2 EA); }
+:ldwu RX, EA is (op=0x86 | op=0x87) & RX & EA { RX = zext(*[ram]:2 EA); }
+:ldt RX, EA is (op=0x88 | op=0x89) & RX & EA { RX = sext(*[ram]:4 EA); }
+:ldtu RX, EA is (op=0x8a | op=0x8b) & RX & EA { RX = zext(*[ram]:4 EA); }
+:ldo RX, EA is (op=0x8c | op=0x8d) & RX & EA { RX = *[ram]:8 EA; }
+:ldou RX, EA is (op=0x8e | op=0x8f) & RX & EA { RX = *[ram]:8 EA; }
+:ldsf RX, EA is (op=0x90 | op=0x91) & RX & EA { local f:4 = *[ram]:4 EA; RX = float2float(f); }
+:ldht RX, EA is (op=0x92 | op=0x93) & RX & EA { local w:4 = *[ram]:4 EA; RX = zext(w) << 32; }
+:cswap RX, EA is (op=0x94 | op=0x95) & RX & EA { local m:8 = *[ram]:8 EA; if (m != rP) goto <no>; *[ram]:8 EA = RX; RX = 1; goto inst_next; <no> rP = m; RX = 0; }
+:ldunc RX, EA is (op=0x96 | op=0x97) & RX & EA { RX = *[ram]:8 EA; }
+:ldvts RX, EA is (op=0x98 | op=0x99) & RX & EA { RX = load_virtual_translation_status(EA); }
+:preld xn, EA is (op=0x9a | op=0x9b) & xn & EA { }
+:prego xn, EA is (op=0x9c | op=0x9d) & xn & EA { }
+:stb RX, EA is (op=0xa0 | op=0xa1) & RX & EA { local v:8 = RX; *[ram]:1 EA = v:1; }
+:stbu RX, EA is (op=0xa2 | op=0xa3) & RX & EA { local v:8 = RX; *[ram]:1 EA = v:1; }
+:stw RX, EA is (op=0xa4 | op=0xa5) & RX & EA { local v:8 = RX; *[ram]:2 EA = v:2; }
+:stwu RX, EA is (op=0xa6 | op=0xa7) & RX & EA { local v:8 = RX; *[ram]:2 EA = v:2; }
+:stt RX, EA is (op=0xa8 | op=0xa9) & RX & EA { local v:8 = RX; *[ram]:4 EA = v:4; }
+:sttu RX, EA is (op=0xaa | op=0xab) & RX & EA { local v:8 = RX; *[ram]:4 EA = v:4; }
+:sto RX, EA is (op=0xac | op=0xad) & RX & EA { local v:8 = RX; *[ram]:8 EA = v; }
+:stou RX, EA is (op=0xae | op=0xaf) & RX & EA { local v:8 = RX; *[ram]:8 EA = v; }
+:stsf RX, EA is (op=0xb0 | op=0xb1) & RX & EA { local v:8 = RX; local f:4 = float2float(v); *[ram]:4 EA = f; }
+:stht RX, EA is (op=0xb2 | op=0xb3) & RX & EA { local v:8 = RX; *[ram]:4 EA = v(4); }
+:stco xn, EA is (op=0xb4 | op=0xb5) & xn & EA { *[ram]:8 EA = xn:8; }
+:stunc RX, EA is (op=0xb6 | op=0xb7) & RX & EA { local v:8 = RX; *[ram]:8 EA = v; }
+:syncd xn, EA is (op=0xb8 | op=0xb9) & xn & EA { }
+:prest xn, EA is (op=0xba | op=0xbb) & xn & EA { }
+:syncid xn, EA is (op=0xbc | op=0xbd) & xn & EA { }
+:or RX, RY, OPZ is (op=0xc0 | op=0xc1) & RX & RY & OPZ { local vy:8 = RY; local vz:8 = OPZ; RX = vy | vz; }
+:orn RX, RY, OPZ is (op=0xc2 | op=0xc3) & RX & RY & OPZ { local vy:8 = RY; local vz:8 = OPZ; RX = vy | ~vz; }
+:nor RX, RY, OPZ is (op=0xc4 | op=0xc5) & RX & RY & OPZ { local vy:8 = RY; local vz:8 = OPZ; RX = ~(vy | vz); }
+:xor RX, RY, OPZ is (op=0xc6 | op=0xc7) & RX & RY & OPZ { local vy:8 = RY; local vz:8 = OPZ; RX = vy ^ vz; }
+:and RX, RY, OPZ is (op=0xc8 | op=0xc9) & RX & RY & OPZ { local vy:8 = RY; local vz:8 = OPZ; RX = vy & vz; }
+:andn RX, RY, OPZ is (op=0xca | op=0xcb) & RX & RY & OPZ { local vy:8 = RY; local vz:8 = OPZ; RX = vy & ~vz; }
+:nand RX, RY, OPZ is (op=0xcc | op=0xcd) & RX & RY & OPZ { local vy:8 = RY; local vz:8 = OPZ; RX = ~(vy & vz); }
+:nxor RX, RY, OPZ is (op=0xce | op=0xcf) & RX & RY & OPZ { local vy:8 = RY; local vz:8 = OPZ; RX = ~(vy ^ vz); }
+:bdif RX, RY, OPZ is (op=0xd0 | op=0xd1) & RX & RY & OPZ { local vy:8 = RY; local vz:8 = OPZ; RX = byte_difference(vy, vz); }
+:wdif RX, RY, OPZ is (op=0xd2 | op=0xd3) & RX & RY & OPZ { local vy:8 = RY; local vz:8 = OPZ; RX = wyde_difference(vy, vz); }
+:tdif RX, RY, OPZ is (op=0xd4 | op=0xd5) & RX & RY & OPZ { local vy:8 = RY; local vz:8 = OPZ; RX = tetra_difference(vy, vz); }
+:odif RX, RY, OPZ is (op=0xd6 | op=0xd7) & RX & RY & OPZ { local vy:8 = RY; local vz:8 = OPZ; RX = zext(vy > vz) * (vy - vz); }
+:mux RX, RY, OPZ is (op=0xd8 | op=0xd9) & RX & RY & OPZ { local vy:8 = RY; local vz:8 = OPZ; RX = (vy & rM) | (vz & ~rM); }
+:sadd RX, RY, OPZ is (op=0xda | op=0xdb) & RX & RY & OPZ { local vy:8 = RY; local vz:8 = OPZ; RX = popcount(vy & ~vz); }
+:mor RX, RY, OPZ is (op=0xdc | op=0xdd) & RX & RY & OPZ { local vy:8 = RY; local vz:8 = OPZ; RX = multiple_or(vy, vz); }
+:mxor RX, RY, OPZ is (op=0xde | op=0xdf) & RX & RY & OPZ { local vy:8 = RY; local vz:8 = OPZ; RX = multiple_xor(vy, vz); }
+:seth RX, yz is op=0xe0 & RX & yz { RX = yz:8 << 48; }
+:setmh RX, yz is op=0xe1 & RX & yz { RX = yz:8 << 32; }
+:setml RX, yz is op=0xe2 & RX & yz { RX = yz:8 << 16; }
+:setl RX, yz is op=0xe3 & RX & yz { RX = yz:8; }
+:inch RX, yz is op=0xe4 & RX & yz { RX = RX + (yz:8 << 48); }
+:incmh RX, yz is op=0xe5 & RX & yz { RX = RX + (yz:8 << 32); }
+:incml RX, yz is op=0xe6 & RX & yz { RX = RX + (yz:8 << 16); }
+:incl RX, yz is op=0xe7 & RX & yz { RX = RX + yz:8; }
+:orh RX, yz is op=0xe8 & RX & yz { RX = RX | (yz:8 << 48); }
+:ormh RX, yz is op=0xe9 & RX & yz { RX = RX | (yz:8 << 32); }
+:orml RX, yz is op=0xea & RX & yz { RX = RX | (yz:8 << 16); }
+:orl RX, yz is op=0xeb & RX & yz { RX = RX | yz:8; }
+:andnh RX, yz is op=0xec & RX & yz { RX = RX & ~(yz:8 << 48); }
+:andnmh RX, yz is op=0xed & RX & yz { RX = RX & ~(yz:8 << 32); }
+:andnml RX, yz is op=0xee & RX & yz { RX = RX & ~(yz:8 << 16); }
+:andnl RX, yz is op=0xef & RX & yz { RX = RX & ~yz:8; }
+:trap xn, yn, zn is op=0x00 & xn & yn & zn { trap(xn:1, yn:1, zn:1); }
+:fcmp RX, RY, RZ is op=0x1 & RX & RY & RZ { local vy:8 = RY; local vz:8 = RZ; RX = zext(vy f> vz) - zext(vy f< vz); }
+:fun RX, RY, RZ is op=0x2 & RX & RY & RZ { local vy:8 = RY; local vz:8 = RZ; RX = zext(nan(vy) || nan(vz)); }
+:feql RX, RY, RZ is op=0x3 & RX & RY & RZ { local vy:8 = RY; local vz:8 = RZ; RX = zext(vy f== vz); }
+:fadd RX, RY, RZ is op=0x4 & RX & RY & RZ { local vy:8 = RY; local vz:8 = RZ; RX = vy f+ vz; }
+:fix RX, yn, RZ is op=0x05 & RX & yn & RZ { local vz:8 = RZ; RX = trunc(vz); }
+:fsub RX, RY, RZ is op=0x6 & RX & RY & RZ { local vy:8 = RY; local vz:8 = RZ; RX = vy f- vz; }
+:fixu RX, yn, RZ is op=0x07 & RX & yn & RZ { local vz:8 = RZ; RX = trunc(vz); }
+:flot RX, yn, OPZ is (op=0x08 | op=0x09) & RX & yn & OPZ { local vz:8 = OPZ; RX = int2float(vz); }
+:flotu RX, yn, OPZ is (op=0x0a | op=0x0b) & RX & yn & OPZ { local vz:16 = zext(OPZ); RX = int2float(vz); }
+:sflot RX, yn, OPZ is (op=0x0c | op=0x0d) & RX & yn & OPZ { local vz:8 = OPZ; local s:4 = int2float(vz); RX = float2float(s); }
+:sflotu RX, yn, OPZ is (op=0x0e | op=0x0f) & RX & yn & OPZ { local vz:16 = zext(OPZ); local s:4 = int2float(vz); RX = float2float(s); }
+:fmul RX, RY, RZ is op=0x10 & RX & RY & RZ { local vy:8 = RY; local vz:8 = RZ; RX = vy f* vz; }
+:fcmpe RX, RY, RZ is op=0x11 & RX & RY & RZ { local vy:8 = RY; local vz:8 = RZ; RX = float_compare_epsilon(vy, vz, rE); }
+:fune RX, RY, RZ is op=0x12 & RX & RY & RZ { local vy:8 = RY; local vz:8 = RZ; RX = float_unordered_epsilon(vy, vz, rE); }
+:feqle RX, RY, RZ is op=0x13 & RX & RY & RZ { local vy:8 = RY; local vz:8 = RZ; RX = float_equal_epsilon(vy, vz, rE); }
+:fdiv RX, RY, RZ is op=0x14 & RX & RY & RZ { local vy:8 = RY; local vz:8 = RZ; RX = vy f/ vz; }
+:fsqrt RX, yn, RZ is op=0x15 & RX & yn & RZ { local vz:8 = RZ; RX = sqrt(vz); }
+:frem RX, RY, RZ is op=0x16 & RX & RY & RZ { local vy:8 = RY; local vz:8 = RZ; RX = float_remainder(vy, vz); }
+:fint RX, yn, RZ is op=0x17 & RX & yn & RZ { local vz:8 = RZ; RX = float_integer(vz, yn:1); }
+
+:jmp JT is (op=0xf0 | op=0xf1) & JT { goto JT; }
+:pushj RX, BRT is (op=0xf2 | op=0xf3) & RX & xn & BRT {
+  rJ = inst_next;
+  local base:8 = rO;
+  rO = base + (xn + 1) * 8;
+  call BRT;
+  rO = base;
+  RX = retval;
+}
+:pushgo RX, EA is (op=0xbe | op=0xbf) & RX & xn & EA {
+  local t:8 = EA;
+  rJ = inst_next;
+  local base:8 = rO;
+  rO = base + (xn + 1) * 8;
+  call [t];
+  rO = base;
+  RX = retval;
+}
+:geta RX, BRT is (op=0xf4 | op=0xf5) & RX & BRT { RX = &BRT; }
+:go RX, EA is (op=0x9e | op=0x9f) & RX & EA { local t:8 = EA; RX = inst_next; goto [t]; }
+:put xs, OPZ is (op=0xf6 | op=0xf7) & xs & OPZ { xs = OPZ; }
+:get RX, zs is op=0xfe & RX & zs { RX = zs; }
+:pop xn, yz is op=0xf8 & xn & x=0 & yz { local t:8 = rJ + yz * 4; return [t]; }
+:pop xn, yz is op=0xf8 & xn & yz & POPV { retval = POPV; local t:8 = rJ + yz * 4; return [t]; }
+:resume xyz is op=0xf9 & xyz { local t:8 = resume(xyz:4); return [t]; }
+:save RX, zn is op=0xfa & RX & zn { RX = save_context(rO); }
+:unsave xn, RZ is op=0xfb & xn & RZ { unsave_context(RZ); }
+:sync xyz is op=0xfc & xyz { sync(xyz:4); }
+:swym xyz is op=0xfd & xyz { }
+:trip xn, yn, zn is op=0xff & xn & yn & zn { trip(xn:1, yn:1, zn:1); }

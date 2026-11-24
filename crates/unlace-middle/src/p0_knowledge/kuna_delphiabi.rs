@@ -7,20 +7,20 @@
 //! The language is chosen while the image loads, before any `option` command
 //! runs, so the gate is the process environment variable [`DELPHIABI_ENV`],
 //! set by the CLI before loading. The registered [`DelphiAbi`] value exists
-//! only for the catalog's live `current` field. Default off.
+//! only for the catalog's live `current` field. Default on.
 
 /// Environment variable read by `unlace-analysis`'s language selection.
-/// Absent or an off-token: disabled; any on-token: enabled.
+/// Absent or any value but an off-token: enabled; an off-token: disabled.
 pub const DELPHIABI_ENV: &str = "KUNA_DELPHIABI";
 
 /// Whether Delphi compiler-spec selection is enabled for this process.
 pub fn delphiabi_enabled() -> bool {
     match std::env::var(DELPHIABI_ENV) {
-        Ok(v) => matches!(
+        Ok(v) => !matches!(
             v.trim().to_ascii_lowercase().as_str(),
-            "on" | "1" | "true" | ""
+            "off" | "0" | "false"
         ),
-        Err(_) => false,
+        Err(_) => true,
     }
 }
 
@@ -37,6 +37,6 @@ crate::kuna_flag!(
     DelphiAbi,
     "delphiabi",
     "Delphi register calling convention",
-    unset: false,
-    shipped: false
+    unset: true,
+    shipped: true
 );

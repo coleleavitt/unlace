@@ -372,6 +372,34 @@ impl RuleSLess2Zero {
         }
         None
     }
+
+    /// The boolean whose bit 0 a shifted operand carries: the operand itself
+    /// when a boolean op writes it, or the boolean under an INT_ZEXT. ARM VFP
+    /// `vmrs APSR_nzcv, fpscr` moves a float compare into a flag this way,
+    /// which reads as `(int)((uint)(a < b) << 31) < 0`.
+    fn shifted_bool(
+        avn: crate::context::VarnodeId,
+        data: &Funcdata,
+    ) -> Option<crate::context::VarnodeId> {
+        let def = data.vbank().get(avn)?.get_def()?;
+        let o = data.obank().get(def)?;
+        if o.is_bool_output() {
+            return Some(avn);
+        }
+        if o.code() != OpCode::CPUI_INT_ZEXT {
+            return None;
+        }
+        let inner = o.get_in(0)?;
+        let iv = data.vbank().get(inner)?;
+        if iv.get_size() != 1 || !iv.is_written() {
+            return None;
+        }
+        let idef = iv.get_def()?;
+        if !data.obank().get(idef)?.is_bool_output() {
+            return None;
+        }
+        Some(inner)
+    }
 }
 
 impl Rule for RuleSLess2Zero {
@@ -493,14 +521,13 @@ impl Rule for RuleSLess2Zero {
                     if !av.is_written() {
                         return 0;
                     }
-                    let avn_def = av.get_def().unwrap();
-                    if !data.obank().get(avn_def).unwrap().is_bool_output() {
+                    let Some(bvn) = RuleSLess2Zero::shifted_bool(avn, data) else {
                         return 0;
-                    }
+                    };
                     // We have -1 s< (bool << #8*sz-1)
                     data.op_set_opcode(op, type_op_lookup(OpCode::CPUI_BOOL_NEGATE));
                     data.op_remove_input(op, 1);
-                    data.op_set_input(op, avn, 0).expect("sless2zero: setInput");
+                    data.op_set_input(op, bvn, 0).expect("sless2zero: setInput");
                     return 1;
                 }
             }
@@ -583,6 +610,24 @@ impl Rule for RuleSLess2Zero {
                     data.op_set_input(op, avn, 0).expect("sless2zero: setInput");
                     let c = data.new_constant(avn_size, 0);
                     data.op_set_input(op, c, 1).expect("sless2zero: setInput");
+                    return 1;
+                } else if feed_opcode == OpCode::CPUI_INT_LEFT {
+                    let coeff = data.obank().get(feed_op).unwrap().get_in(1).unwrap();
+                    let cf = data.vbank().get(coeff).unwrap();
+                    if !cf.is_constant() || cf.get_offset() != (lvn_size as u64) * 8 - 1 {
+                        return 0;
+                    }
+                    let avn = data.obank().get(feed_op).unwrap().get_in(0).unwrap();
+                    if !data.vbank().get(avn).unwrap().is_written() {
+                        return 0;
+                    }
+                    let Some(bvn) = RuleSLess2Zero::shifted_bool(avn, data) else {
+                        return 0;
+                    };
+                    // We have (bool << #8*sz-1) s< 0
+                    data.op_set_opcode(op, type_op_lookup(OpCode::CPUI_COPY));
+                    data.op_remove_input(op, 1);
+                    data.op_set_input(op, bvn, 0).expect("sless2zero: setInput");
                     return 1;
                 }
             }

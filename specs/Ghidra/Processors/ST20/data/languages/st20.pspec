@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- ST20-C2/C4. Iptr is the instruction pointer. After reset the core boots from ROM
+     at the top of memory (0x7FFFFFFE holds the first instruction component); on-chip
+     memory starts at MostNeg (0x80000000). The oreg context field holds the
+     instruction data value built by pfix/nfix and is zero at every instruction start. -->
+<processor_spec>
+  <programcounter register="Iptr"/>
+  <register_data>
+    <register name="ErrorFlag" group="Flags"/>
+    <register name="HaltOnError" group="Flags"/>
+    <register name="Status" group="Status"/>
+  </register_data>
+  <default_symbols>
+    <symbol name="BOOT" address="ram:0x7ffffffe" entry="true"/>
+  </default_symbols>
+</processor_spec>

@@ -1,0 +1,85 @@
+from pathlib import Path
+import sys
+import unittest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "difffuzz"))
+
+from pcode_emu import State, Unmodeled, step  # noqa: E402
+from slaregs import preprocess, register_map  # noqa: E402
+
+
+def vn(space, offset, size):
+    return {"space": space, "offset": offset, "size": size}
+
+
+def op(opcode, output, *inputs):
+    return {"opcode": opcode, "output": output, "inputs": list(inputs)}
+
+
+REGS = {"A": (0, 4), "B": (4, 4), "F": (8, 1)}
+
+
+class PcodeEmuTests(unittest.TestCase):
+    def state(self, big=False):
+        return State(big, lambda a: a & 0xFF, REGS)
+
+    def test_add_with_carry_flag(self):
+        st = self.state()
+        st.set("A", 0xFFFFFFFF)
+        st.set("B", 2)
+        ops = [op("INT_CARRY", vn("register", 8, 1), vn("register", 0, 4), vn("register", 4, 4)),
+               op("INT_ADD", vn("register", 0, 4), vn("register", 0, 4), vn("register", 4, 4))]
+        self.assertEqual(step(st, ops, 0x1000, 4), 0x1004)
+        self.assertEqual(st.get("A"), 1)
+        self.assertEqual(st.get("F"), 1)
+
+    def test_relative_branch_skips_ops(self):
+        st = self.state()
+        ops = [op("CBRANCH", None, vn("const", 2, 4), vn("const", 1, 1)),
+               op("COPY", vn("register", 0, 4), vn("const", 7, 4)),
+               op("COPY", vn("register", 4, 4), vn("const", 9, 4))]
+        step(st, ops, 0, 4)
+        self.assertEqual(st.get("A"), 0)
+        self.assertEqual(st.get("B"), 9)
+
+    def test_unwritten_memory_reads_the_fill_and_writes_are_recorded(self):
+        st = self.state(big=True)
+        st.set("A", 0x10)
+        ops = [op("LOAD", vn("register", 4, 4), vn("const", 0, 8), vn("register", 0, 4)),
+               op("STORE", None, vn("const", 0, 8), vn("register", 0, 4), vn("const", 0xAB, 1))]
+        step(st, ops, 0, 4)
+        self.assertEqual(st.get("B"), 0x10111213)
+        self.assertEqual(st.writes, {0x10: 0xAB})
+
+    def test_branch_to_ram_is_the_next_pc(self):
+        st = self.state()
+        self.assertEqual(step(st, [op("BRANCH", None, vn("ram", 0x2000, 8))], 0, 4), 0x2000)
+
+    def test_division_by_zero_is_unmodeled(self):
+        st = self.state()
+        with self.assertRaises(Unmodeled):
+            step(st, [op("INT_DIV", vn("register", 0, 4), vn("const", 1, 4), vn("const", 0, 4))], 0, 4)
+
+
+class SlaRegsTests(unittest.TestCase):
+    def test_x86_64_registers(self):
+        regs, big = register_map("x86:LE:64:default")
+        self.assertFalse(big)
+        self.assertEqual(regs["RAX"], (0, 8))
+        self.assertEqual(regs["EAX"], (0, 4))
+        self.assertEqual(regs["R8"][1], 8)
+
+    def test_big_endian_language(self):
+        _, big = register_map("PowerPC:BE:32:default")
+        self.assertTrue(big)
+
+    def test_preprocessor_conditionals(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "t.slaspec"
+            p.write_text('@define A "1"\n@if A == "1"\nyes\n@else\nno\n@endif\n@ifdef B\nb\n@endif\n')
+            self.assertEqual(preprocess(p).split(), ["yes"])
+
+
+if __name__ == "__main__":
+    unittest.main()

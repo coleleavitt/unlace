@@ -1,0 +1,6084 @@
+# SPE2 (Signal Processing Engine 2) and EFS2 for NXP e200z4/e200z7 (#98).
+# Encodings: the SPE2/EFS2 rows of the binutils PowerPC opcode table (opcode, mask and
+# operand fields only). Mnemonics and pcodeop names follow the SPE2 intrinsics (__ev_*).
+# Exact: lane add/subtract/negate/abs/min/max, extends, splats, immediate adds, evsl/evsli,
+# evmar, and the addressing of every load and store (immediate, indexed, update; the modulo
+# "mx" forms read at rA and then advance rA through __circinc). A load or store whose lane
+# arrangement the mnemonic does not fix moves its bytes through a named pcodeop.
+# Everything else is a named pcodeop: an "a" suffix writes ACC, the "aa"/"an" forms also
+# read ACC, and the "3" forms read rD instead of ACC.
+
+define pcodeop __circinc;
+define pcodeop __efdcfh;
+define pcodeop __efdcth;
+define pcodeop __efdmadd;
+define pcodeop __efdmax;
+define pcodeop __efdmin;
+define pcodeop __efdmsub;
+define pcodeop __efdnmadd;
+define pcodeop __efdnmsub;
+define pcodeop __efdsqrt;
+define pcodeop __efscfh;
+define pcodeop __efscth;
+define pcodeop __efsmax;
+define pcodeop __efsmin;
+define pcodeop __efssqrt;
+define pcodeop __ev_absbs;
+define pcodeop __ev_absdifsb;
+define pcodeop __ev_absdifsh;
+define pcodeop __ev_absdifsw;
+define pcodeop __ev_absdifub;
+define pcodeop __ev_absdifuh;
+define pcodeop __ev_absdifuw;
+define pcodeop __ev_absds;
+define pcodeop __ev_abshs;
+define pcodeop __ev_abss;
+define pcodeop __ev_add2subf2h;
+define pcodeop __ev_add2subf2hss;
+define pcodeop __ev_addbss;
+define pcodeop __ev_addbus;
+define pcodeop __ev_adddss;
+define pcodeop __ev_adddus;
+define pcodeop __ev_addhhisw;
+define pcodeop __ev_addhhiuw;
+define pcodeop __ev_addhlosw;
+define pcodeop __ev_addhlouw;
+define pcodeop __ev_addhss;
+define pcodeop __ev_addhus;
+define pcodeop __ev_addhx;
+define pcodeop __ev_addhxss;
+define pcodeop __ev_addhxus;
+define pcodeop __ev_addsmiaa;
+define pcodeop __ev_addssiaa;
+define pcodeop __ev_addsubfh;
+define pcodeop __ev_addsubfhss;
+define pcodeop __ev_addsubfhx;
+define pcodeop __ev_addsubfhxss;
+define pcodeop __ev_addsubfw;
+define pcodeop __ev_addsubfwss;
+define pcodeop __ev_addsubfwx;
+define pcodeop __ev_addsubfwxss;
+define pcodeop __ev_addusiaa;
+define pcodeop __ev_addwegsf;
+define pcodeop __ev_addwegsi;
+define pcodeop __ev_addwogsf;
+define pcodeop __ev_addwogsi;
+define pcodeop __ev_addwss;
+define pcodeop __ev_addwus;
+define pcodeop __ev_addwx;
+define pcodeop __ev_addwxss;
+define pcodeop __ev_addwxus;
+define pcodeop __ev_avgbs;
+define pcodeop __ev_avgbsr;
+define pcodeop __ev_avgbu;
+define pcodeop __ev_avgbur;
+define pcodeop __ev_avgds;
+define pcodeop __ev_avgdsr;
+define pcodeop __ev_avgdu;
+define pcodeop __ev_avgdur;
+define pcodeop __ev_avghs;
+define pcodeop __ev_avghsr;
+define pcodeop __ev_avghu;
+define pcodeop __ev_avghur;
+define pcodeop __ev_avgws;
+define pcodeop __ev_avgwsr;
+define pcodeop __ev_avgwu;
+define pcodeop __ev_avgwur;
+define pcodeop __ev_clrbe;
+define pcodeop __ev_clrbo;
+define pcodeop __ev_clrh;
+define pcodeop __ev_cmpeqd;
+define pcodeop __ev_cmpgtds;
+define pcodeop __ev_cmpgtdu;
+define pcodeop __ev_cmpltds;
+define pcodeop __ev_cmpltdu;
+define pcodeop __ev_cntlsh;
+define pcodeop __ev_cntlzh;
+define pcodeop __ev_diff2his;
+define pcodeop __ev_diff2hisa;
+define pcodeop __ev_diff2hisaaw;
+define pcodeop __ev_divs;
+define pcodeop __ev_divu;
+define pcodeop __ev_divwsf;
+define pcodeop __ev_divwuf;
+define pcodeop __ev_dlveb;
+define pcodeop __ev_dlveh;
+define pcodeop __ev_dlveob;
+define pcodeop __ev_dlveoh;
+define pcodeop __ev_dlvob;
+define pcodeop __ev_dlvoeb;
+define pcodeop __ev_dlvoeh;
+define pcodeop __ev_dlvoh;
+define pcodeop __ev_dotp4hgasmf;
+define pcodeop __ev_dotp4hgasmfa;
+define pcodeop __ev_dotp4hgasmfaa;
+define pcodeop __ev_dotp4hgasmfaa3;
+define pcodeop __ev_dotp4hgasmi;
+define pcodeop __ev_dotp4hgasmia;
+define pcodeop __ev_dotp4hgasmiaa;
+define pcodeop __ev_dotp4hgasmiaa3;
+define pcodeop __ev_dotp4hgasumi;
+define pcodeop __ev_dotp4hgasumia;
+define pcodeop __ev_dotp4hgasumiaa;
+define pcodeop __ev_dotp4hgasumiaa3;
+define pcodeop __ev_dotp4hgaumi;
+define pcodeop __ev_dotp4hgaumia;
+define pcodeop __ev_dotp4hgaumiaa;
+define pcodeop __ev_dotp4hgaumiaa3;
+define pcodeop __ev_dotp4hgssmf;
+define pcodeop __ev_dotp4hgssmfa;
+define pcodeop __ev_dotp4hgssmfaa;
+define pcodeop __ev_dotp4hgssmfaa3;
+define pcodeop __ev_dotp4hgssmi;
+define pcodeop __ev_dotp4hgssmia;
+define pcodeop __ev_dotp4hgssmiaa;
+define pcodeop __ev_dotp4hgssmiaa3;
+define pcodeop __ev_dotp4hxgasmf;
+define pcodeop __ev_dotp4hxgasmfa;
+define pcodeop __ev_dotp4hxgasmfaa;
+define pcodeop __ev_dotp4hxgasmfaa3;
+define pcodeop __ev_dotp4hxgasmi;
+define pcodeop __ev_dotp4hxgasmia;
+define pcodeop __ev_dotp4hxgasmiaa;
+define pcodeop __ev_dotp4hxgasmiaa3;
+define pcodeop __ev_dotp4hxgssmf;
+define pcodeop __ev_dotp4hxgssmfa;
+define pcodeop __ev_dotp4hxgssmfaa;
+define pcodeop __ev_dotp4hxgssmfaa3;
+define pcodeop __ev_dotp4hxgssmi;
+define pcodeop __ev_dotp4hxgssmia;
+define pcodeop __ev_dotp4hxgssmiaa;
+define pcodeop __ev_dotp4hxgssmiaa3;
+define pcodeop __ev_dotpbasmi;
+define pcodeop __ev_dotpbasmia;
+define pcodeop __ev_dotpbasmiaaw;
+define pcodeop __ev_dotpbasmiaaw3;
+define pcodeop __ev_dotpbasumi;
+define pcodeop __ev_dotpbasumia;
+define pcodeop __ev_dotpbasumiaaw;
+define pcodeop __ev_dotpbasumiaaw3;
+define pcodeop __ev_dotpbaumi;
+define pcodeop __ev_dotpbaumia;
+define pcodeop __ev_dotpbaumiaaw;
+define pcodeop __ev_dotpbaumiaaw3;
+define pcodeop __ev_dotphasmi;
+define pcodeop __ev_dotphasmia;
+define pcodeop __ev_dotphasmiaaw;
+define pcodeop __ev_dotphasmiaaw3;
+define pcodeop __ev_dotphassf;
+define pcodeop __ev_dotphassfa;
+define pcodeop __ev_dotphassfaaw;
+define pcodeop __ev_dotphassfaaw3;
+define pcodeop __ev_dotphassfr;
+define pcodeop __ev_dotphassfra;
+define pcodeop __ev_dotphassfraaw;
+define pcodeop __ev_dotphassfraaw3;
+define pcodeop __ev_dotphassi;
+define pcodeop __ev_dotphassia;
+define pcodeop __ev_dotphassiaaw;
+define pcodeop __ev_dotphassiaaw3;
+define pcodeop __ev_dotphasumi;
+define pcodeop __ev_dotphasumia;
+define pcodeop __ev_dotphasumiaaw;
+define pcodeop __ev_dotphasumiaaw3;
+define pcodeop __ev_dotphasusi;
+define pcodeop __ev_dotphasusia;
+define pcodeop __ev_dotphasusiaaw;
+define pcodeop __ev_dotphasusiaaw3;
+define pcodeop __ev_dotphaumi;
+define pcodeop __ev_dotphaumia;
+define pcodeop __ev_dotphaumiaaw;
+define pcodeop __ev_dotphaumiaaw3;
+define pcodeop __ev_dotphausi;
+define pcodeop __ev_dotphausia;
+define pcodeop __ev_dotphausiaaw;
+define pcodeop __ev_dotphausiaaw3;
+define pcodeop __ev_dotphihcsmi;
+define pcodeop __ev_dotphihcsmia;
+define pcodeop __ev_dotphihcsmiaaw;
+define pcodeop __ev_dotphihcsmiaaw3;
+define pcodeop __ev_dotphihcssf;
+define pcodeop __ev_dotphihcssfa;
+define pcodeop __ev_dotphihcssfaaw;
+define pcodeop __ev_dotphihcssfaaw3;
+define pcodeop __ev_dotphihcssfr;
+define pcodeop __ev_dotphihcssfra;
+define pcodeop __ev_dotphihcssfraaw;
+define pcodeop __ev_dotphihcssfraaw3;
+define pcodeop __ev_dotphihcssi;
+define pcodeop __ev_dotphihcssia;
+define pcodeop __ev_dotphihcssiaaw;
+define pcodeop __ev_dotphihcssiaaw3;
+define pcodeop __ev_dotphssmi;
+define pcodeop __ev_dotphssmia;
+define pcodeop __ev_dotphssmiaaw;
+define pcodeop __ev_dotphssmiaaw3;
+define pcodeop __ev_dotphsssf;
+define pcodeop __ev_dotphsssfa;
+define pcodeop __ev_dotphsssfaaw;
+define pcodeop __ev_dotphsssfaaw3;
+define pcodeop __ev_dotphsssfr;
+define pcodeop __ev_dotphsssfra;
+define pcodeop __ev_dotphsssfraaw;
+define pcodeop __ev_dotphsssfraaw3;
+define pcodeop __ev_dotphsssiaaw;
+define pcodeop __ev_dotphsssiaaw3;
+define pcodeop __ev_dotplohcsmi;
+define pcodeop __ev_dotplohcsmia;
+define pcodeop __ev_dotplohcsmiaaw;
+define pcodeop __ev_dotplohcsmiaaw3;
+define pcodeop __ev_dotplohcssf;
+define pcodeop __ev_dotplohcssfa;
+define pcodeop __ev_dotplohcssfaaw;
+define pcodeop __ev_dotplohcssfaaw3;
+define pcodeop __ev_dotplohcssfr;
+define pcodeop __ev_dotplohcssfra;
+define pcodeop __ev_dotplohcssfraaw;
+define pcodeop __ev_dotplohcssfraaw3;
+define pcodeop __ev_dotplohcssi;
+define pcodeop __ev_dotplohcssia;
+define pcodeop __ev_dotplohcssiaaw;
+define pcodeop __ev_dotplohcssiaaw3;
+define pcodeop __ev_dotpwasmi;
+define pcodeop __ev_dotpwasmia;
+define pcodeop __ev_dotpwasmiaa;
+define pcodeop __ev_dotpwasmiaa3;
+define pcodeop __ev_dotpwassi;
+define pcodeop __ev_dotpwassia;
+define pcodeop __ev_dotpwassiaa;
+define pcodeop __ev_dotpwassiaa3;
+define pcodeop __ev_dotpwasumi;
+define pcodeop __ev_dotpwasumia;
+define pcodeop __ev_dotpwasumiaa;
+define pcodeop __ev_dotpwasumiaa3;
+define pcodeop __ev_dotpwasusi;
+define pcodeop __ev_dotpwasusia;
+define pcodeop __ev_dotpwasusiaa;
+define pcodeop __ev_dotpwasusiaa3;
+define pcodeop __ev_dotpwaumi;
+define pcodeop __ev_dotpwaumia;
+define pcodeop __ev_dotpwaumiaa;
+define pcodeop __ev_dotpwaumiaa3;
+define pcodeop __ev_dotpwausi;
+define pcodeop __ev_dotpwausia;
+define pcodeop __ev_dotpwausiaa;
+define pcodeop __ev_dotpwausiaa3;
+define pcodeop __ev_dotpwcsmi;
+define pcodeop __ev_dotpwcsmia;
+define pcodeop __ev_dotpwcsmiaaw;
+define pcodeop __ev_dotpwcsmiaaw3;
+define pcodeop __ev_dotpwcssf;
+define pcodeop __ev_dotpwcssfa;
+define pcodeop __ev_dotpwcssfaaw;
+define pcodeop __ev_dotpwcssfaaw3;
+define pcodeop __ev_dotpwcssfr;
+define pcodeop __ev_dotpwcssfra;
+define pcodeop __ev_dotpwcssfraaw;
+define pcodeop __ev_dotpwcssfraaw3;
+define pcodeop __ev_dotpwcssi;
+define pcodeop __ev_dotpwcssia;
+define pcodeop __ev_dotpwcssiaaw;
+define pcodeop __ev_dotpwcssiaaw3;
+define pcodeop __ev_dotpwgasmf;
+define pcodeop __ev_dotpwgasmfa;
+define pcodeop __ev_dotpwgasmfaa;
+define pcodeop __ev_dotpwgasmfaa3;
+define pcodeop __ev_dotpwgasmfr;
+define pcodeop __ev_dotpwgasmfra;
+define pcodeop __ev_dotpwgasmfraa;
+define pcodeop __ev_dotpwgasmfraa3;
+define pcodeop __ev_dotpwgssmf;
+define pcodeop __ev_dotpwgssmfa;
+define pcodeop __ev_dotpwgssmfaa;
+define pcodeop __ev_dotpwgssmfaa3;
+define pcodeop __ev_dotpwgssmfr;
+define pcodeop __ev_dotpwgssmfra;
+define pcodeop __ev_dotpwgssmfraa;
+define pcodeop __ev_dotpwgssmfraa3;
+define pcodeop __ev_dotpwssmi;
+define pcodeop __ev_dotpwssmia;
+define pcodeop __ev_dotpwssmiaa;
+define pcodeop __ev_dotpwssmiaa3;
+define pcodeop __ev_dotpwsssiaa;
+define pcodeop __ev_dotpwsssiaa3;
+define pcodeop __ev_dotpwxgasmf;
+define pcodeop __ev_dotpwxgasmfa;
+define pcodeop __ev_dotpwxgasmfaa;
+define pcodeop __ev_dotpwxgasmfaa3;
+define pcodeop __ev_dotpwxgasmfr;
+define pcodeop __ev_dotpwxgasmfra;
+define pcodeop __ev_dotpwxgasmfraa;
+define pcodeop __ev_dotpwxgasmfraa3;
+define pcodeop __ev_dotpwxgssmf;
+define pcodeop __ev_dotpwxgssmfa;
+define pcodeop __ev_dotpwxgssmfaa;
+define pcodeop __ev_dotpwxgssmfaa3;
+define pcodeop __ev_dotpwxgssmfr;
+define pcodeop __ev_dotpwxgssmfra;
+define pcodeop __ev_dotpwxgssmfraa;
+define pcodeop __ev_dotpwxgssmfraa3;
+define pcodeop __ev_fsaddsub;
+define pcodeop __ev_fsaddsubx;
+define pcodeop __ev_fsaddx;
+define pcodeop __ev_fscfh;
+define pcodeop __ev_fscth;
+define pcodeop __ev_fsdiff;
+define pcodeop __ev_fsdiffsum;
+define pcodeop __ev_fsmax;
+define pcodeop __ev_fsmin;
+define pcodeop __ev_fsmule;
+define pcodeop __ev_fsmulo;
+define pcodeop __ev_fsmulx;
+define pcodeop __ev_fssqrt;
+define pcodeop __ev_fssubadd;
+define pcodeop __ev_fssubaddx;
+define pcodeop __ev_fssubx;
+define pcodeop __ev_fssum;
+define pcodeop __ev_fssumdiff;
+define pcodeop __ev_ilveh;
+define pcodeop __ev_ilveoh;
+define pcodeop __ev_ilvhih;
+define pcodeop __ev_ilvhiloh;
+define pcodeop __ev_ilvloh;
+define pcodeop __ev_ilvlohih;
+define pcodeop __ev_ilvoeh;
+define pcodeop __ev_ilvoh;
+define pcodeop __ev_insb;
+define pcodeop __ev_insh;
+define pcodeop __ev_lhhsplath;
+define pcodeop __ev_lvsl;
+define pcodeop __ev_lvsr;
+define pcodeop __ev_lwbe;
+define pcodeop __ev_lwbos;
+define pcodeop __ev_lwbou;
+define pcodeop __ev_lwbsplatw;
+define pcodeop __ev_lwhsplatw;
+define pcodeop __ev_maxbpsh;
+define pcodeop __ev_maxbpuh;
+define pcodeop __ev_maxhpsw;
+define pcodeop __ev_maxhpuw;
+define pcodeop __ev_maxmagws;
+define pcodeop __ev_maxwpsd;
+define pcodeop __ev_maxwpud;
+define pcodeop __ev_mbesmi;
+define pcodeop __ev_mbesmia;
+define pcodeop __ev_mbesmiaah;
+define pcodeop __ev_mbesmianh;
+define pcodeop __ev_mbessiaah;
+define pcodeop __ev_mbessianh;
+define pcodeop __ev_mbesumi;
+define pcodeop __ev_mbesumia;
+define pcodeop __ev_mbesumiaah;
+define pcodeop __ev_mbesumianh;
+define pcodeop __ev_mbesusiaah;
+define pcodeop __ev_mbesusianh;
+define pcodeop __ev_mbeumi;
+define pcodeop __ev_mbeumia;
+define pcodeop __ev_mbeumiaah;
+define pcodeop __ev_mbeumianh;
+define pcodeop __ev_mbeusiaah;
+define pcodeop __ev_mbeusianh;
+define pcodeop __ev_mbosmi;
+define pcodeop __ev_mbosmia;
+define pcodeop __ev_mbosmiaah;
+define pcodeop __ev_mbosmianh;
+define pcodeop __ev_mbossiaah;
+define pcodeop __ev_mbossianh;
+define pcodeop __ev_mbosumi;
+define pcodeop __ev_mbosumia;
+define pcodeop __ev_mbosumiaah;
+define pcodeop __ev_mbosumianh;
+define pcodeop __ev_mbosusiaah;
+define pcodeop __ev_mbosusianh;
+define pcodeop __ev_mboumi;
+define pcodeop __ev_mboumia;
+define pcodeop __ev_mboumiaah;
+define pcodeop __ev_mboumianh;
+define pcodeop __ev_mbousiaah;
+define pcodeop __ev_mbousianh;
+define pcodeop __ev_mhesumi;
+define pcodeop __ev_mhesumia;
+define pcodeop __ev_mhesumiaaw;
+define pcodeop __ev_mhesumianw;
+define pcodeop __ev_mhesusiaaw;
+define pcodeop __ev_mhesusianw;
+define pcodeop __ev_mhosumi;
+define pcodeop __ev_mhosumia;
+define pcodeop __ev_mhosumiaaw;
+define pcodeop __ev_mhosumianw;
+define pcodeop __ev_mhosusiaaw;
+define pcodeop __ev_mhosusianw;
+define pcodeop __ev_mhssf;
+define pcodeop __ev_mhssfr;
+define pcodeop __ev_mhssi;
+define pcodeop __ev_mhsusi;
+define pcodeop __ev_mhumi;
+define pcodeop __ev_mhusi;
+define pcodeop __ev_minbpsh;
+define pcodeop __ev_minbpuh;
+define pcodeop __ev_minhpsw;
+define pcodeop __ev_minhpuw;
+define pcodeop __ev_minwpsd;
+define pcodeop __ev_minwpud;
+define pcodeop __ev_mwehgsmf;
+define pcodeop __ev_mwehgsmfa;
+define pcodeop __ev_mwehgsmfaa;
+define pcodeop __ev_mwehgsmfan;
+define pcodeop __ev_mwehgsmfr;
+define pcodeop __ev_mwehgsmfra;
+define pcodeop __ev_mwehgsmfraa;
+define pcodeop __ev_mwehgsmfran;
+define pcodeop __ev_mwhssfaaw;
+define pcodeop __ev_mwhssfaaw3;
+define pcodeop __ev_mwhssfanw;
+define pcodeop __ev_mwhssfanw3;
+define pcodeop __ev_mwhssfr;
+define pcodeop __ev_mwhssfra;
+define pcodeop __ev_mwhssfraaw;
+define pcodeop __ev_mwhssfraaw3;
+define pcodeop __ev_mwhssfranw;
+define pcodeop __ev_mwhssfranw3;
+define pcodeop __ev_mwlsmiaaw3;
+define pcodeop __ev_mwlsmianw3;
+define pcodeop __ev_mwlssiaaw3;
+define pcodeop __ev_mwlssianw3;
+define pcodeop __ev_mwlumiaaw3;
+define pcodeop __ev_mwlumianw3;
+define pcodeop __ev_mwlusiaaw3;
+define pcodeop __ev_mwlusianw3;
+define pcodeop __ev_mwohgsmf;
+define pcodeop __ev_mwohgsmfa;
+define pcodeop __ev_mwohgsmfaa;
+define pcodeop __ev_mwohgsmfan;
+define pcodeop __ev_mwohgsmfr;
+define pcodeop __ev_mwohgsmfra;
+define pcodeop __ev_mwohgsmfraa;
+define pcodeop __ev_mwohgsmfran;
+define pcodeop __ev_mwssiaa;
+define pcodeop __ev_mwssian;
+define pcodeop __ev_mwssiw;
+define pcodeop __ev_mwusiaa;
+define pcodeop __ev_mwusian;
+define pcodeop __ev_mwusiw;
+define pcodeop __ev_negbo;
+define pcodeop __ev_negbos;
+define pcodeop __ev_negbs;
+define pcodeop __ev_negds;
+define pcodeop __ev_negho;
+define pcodeop __ev_neghos;
+define pcodeop __ev_neghs;
+define pcodeop __ev_negs;
+define pcodeop __ev_negwos;
+define pcodeop __ev_perm;
+define pcodeop __ev_perm2;
+define pcodeop __ev_perm3;
+define pcodeop __ev_pksdshefrs;
+define pcodeop __ev_pksdswfrs;
+define pcodeop __ev_pksdsws;
+define pcodeop __ev_pkshsbs;
+define pcodeop __ev_pkshubs;
+define pcodeop __ev_pkswgshefrs;
+define pcodeop __ev_pkswgswfrs;
+define pcodeop __ev_pkswshfrs;
+define pcodeop __ev_pkswshilvfrs;
+define pcodeop __ev_pkswshilvs;
+define pcodeop __ev_pkswshs;
+define pcodeop __ev_pkswuhs;
+define pcodeop __ev_pkuduws;
+define pcodeop __ev_pkuhubs;
+define pcodeop __ev_pkuwuhs;
+define pcodeop __ev_popcntb;
+define pcodeop __ev_rlb;
+define pcodeop __ev_rlbi;
+define pcodeop __ev_rlh;
+define pcodeop __ev_rlhi;
+define pcodeop __ev_rnddnw;
+define pcodeop __ev_rnddnwss;
+define pcodeop __ev_rnddnwus;
+define pcodeop __ev_rnddw;
+define pcodeop __ev_rnddwss;
+define pcodeop __ev_rnddwus;
+define pcodeop __ev_rndhb;
+define pcodeop __ev_rndhbss;
+define pcodeop __ev_rndhbus;
+define pcodeop __ev_rndhnb;
+define pcodeop __ev_rndhnbss;
+define pcodeop __ev_rndhnbus;
+define pcodeop __ev_rndwh;
+define pcodeop __ev_rndwhss;
+define pcodeop __ev_rndwhus;
+define pcodeop __ev_rndwnh;
+define pcodeop __ev_rndwnhss;
+define pcodeop __ev_rndwnhus;
+define pcodeop __ev_sad2sh;
+define pcodeop __ev_sad2sha;
+define pcodeop __ev_sad2shaaw;
+define pcodeop __ev_sad2uh;
+define pcodeop __ev_sad2uha;
+define pcodeop __ev_sad2uhaaw;
+define pcodeop __ev_sad4sb;
+define pcodeop __ev_sad4sba;
+define pcodeop __ev_sad4sbaaw;
+define pcodeop __ev_sad4ub;
+define pcodeop __ev_sad4uba;
+define pcodeop __ev_sad4ubaaw;
+define pcodeop __ev_sadsw;
+define pcodeop __ev_sadswa;
+define pcodeop __ev_sadswaa;
+define pcodeop __ev_saduw;
+define pcodeop __ev_saduwa;
+define pcodeop __ev_saduwaa;
+define pcodeop __ev_satsbub;
+define pcodeop __ev_satsdsw;
+define pcodeop __ev_satsduw;
+define pcodeop __ev_satshsb;
+define pcodeop __ev_satshub;
+define pcodeop __ev_satshuh;
+define pcodeop __ev_satswgsdf;
+define pcodeop __ev_satswsh;
+define pcodeop __ev_satswuh;
+define pcodeop __ev_satswuw;
+define pcodeop __ev_satubsb;
+define pcodeop __ev_satuduw;
+define pcodeop __ev_satuhsh;
+define pcodeop __ev_satuhub;
+define pcodeop __ev_satuwsw;
+define pcodeop __ev_satuwuh;
+define pcodeop __ev_selbit;
+define pcodeop __ev_selbitm0;
+define pcodeop __ev_selbitm1;
+define pcodeop __ev_seteqb;
+define pcodeop __ev_seteqh;
+define pcodeop __ev_seteqw;
+define pcodeop __ev_setgtbs;
+define pcodeop __ev_setgtbu;
+define pcodeop __ev_setgths;
+define pcodeop __ev_setgthu;
+define pcodeop __ev_setgtws;
+define pcodeop __ev_setgtwu;
+define pcodeop __ev_setltbs;
+define pcodeop __ev_setltbu;
+define pcodeop __ev_setlths;
+define pcodeop __ev_setlthu;
+define pcodeop __ev_setltws;
+define pcodeop __ev_setltwu;
+define pcodeop __ev_slb;
+define pcodeop __ev_slbi;
+define pcodeop __ev_slh;
+define pcodeop __ev_slhi;
+define pcodeop __ev_sloi;
+define pcodeop __ev_splatb;
+define pcodeop __ev_splath;
+define pcodeop __ev_srbis;
+define pcodeop __ev_srbiu;
+define pcodeop __ev_srbs;
+define pcodeop __ev_srbu;
+define pcodeop __ev_srhis;
+define pcodeop __ev_srhiu;
+define pcodeop __ev_srhs;
+define pcodeop __ev_srhu;
+define pcodeop __ev_sris;
+define pcodeop __ev_sriu;
+define pcodeop __ev_srois;
+define pcodeop __ev_sroiu;
+define pcodeop __ev_srs;
+define pcodeop __ev_sru;
+define pcodeop __ev_sthb;
+define pcodeop __ev_stwb;
+define pcodeop __ev_stwbe;
+define pcodeop __ev_stwbo;
+define pcodeop __ev_subf2add2h;
+define pcodeop __ev_subf2add2hss;
+define pcodeop __ev_subfaddh;
+define pcodeop __ev_subfaddhss;
+define pcodeop __ev_subfaddhx;
+define pcodeop __ev_subfaddhxss;
+define pcodeop __ev_subfaddw;
+define pcodeop __ev_subfaddwss;
+define pcodeop __ev_subfaddwx;
+define pcodeop __ev_subfaddwxss;
+define pcodeop __ev_subfbss;
+define pcodeop __ev_subfbus;
+define pcodeop __ev_subfdss;
+define pcodeop __ev_subfdus;
+define pcodeop __ev_subfhhisw;
+define pcodeop __ev_subfhhiuw;
+define pcodeop __ev_subfhlosw;
+define pcodeop __ev_subfhlouw;
+define pcodeop __ev_subfhss;
+define pcodeop __ev_subfhus;
+define pcodeop __ev_subfhx;
+define pcodeop __ev_subfhxss;
+define pcodeop __ev_subfhxus;
+define pcodeop __ev_subfsmiaa;
+define pcodeop __ev_subfssiaa;
+define pcodeop __ev_subfusiaa;
+define pcodeop __ev_subfwegsf;
+define pcodeop __ev_subfwegsi;
+define pcodeop __ev_subfwogsf;
+define pcodeop __ev_subfwogsi;
+define pcodeop __ev_subfwss;
+define pcodeop __ev_subfwus;
+define pcodeop __ev_subfwx;
+define pcodeop __ev_subfwxss;
+define pcodeop __ev_subfwxus;
+define pcodeop __ev_sum2his;
+define pcodeop __ev_sum2hisa;
+define pcodeop __ev_sum2hisaaw;
+define pcodeop __ev_sum2hs;
+define pcodeop __ev_sum2hsa;
+define pcodeop __ev_sum2hsaaw;
+define pcodeop __ev_sum2hu;
+define pcodeop __ev_sum2hua;
+define pcodeop __ev_sum2huaaw;
+define pcodeop __ev_sum4bs;
+define pcodeop __ev_sum4bsa;
+define pcodeop __ev_sum4bsaaw;
+define pcodeop __ev_sum4bu;
+define pcodeop __ev_sum4bua;
+define pcodeop __ev_sum4buaaw;
+define pcodeop __ev_sumws;
+define pcodeop __ev_sumwsa;
+define pcodeop __ev_sumwsaa;
+define pcodeop __ev_sumwu;
+define pcodeop __ev_sumwua;
+define pcodeop __ev_sumwuaa;
+define pcodeop __ev_swapbhilo;
+define pcodeop __ev_swapblohi;
+define pcodeop __ev_swaphe;
+define pcodeop __ev_swaphhi;
+define pcodeop __ev_swaphhilo;
+define pcodeop __ev_swaphlo;
+define pcodeop __ev_swaphlohi;
+define pcodeop __ev_swapho;
+define pcodeop __ev_unpkhibsi;
+define pcodeop __ev_unpkhibui;
+define pcodeop __ev_unpkhihf;
+define pcodeop __ev_unpkhihsi;
+define pcodeop __ev_unpkhihui;
+define pcodeop __ev_unpkhiwgsf;
+define pcodeop __ev_unpklobsi;
+define pcodeop __ev_unpklobui;
+define pcodeop __ev_unpklohf;
+define pcodeop __ev_unpklohsi;
+define pcodeop __ev_unpklohui;
+define pcodeop __ev_unpklowgsf;
+define pcodeop __ev_xtrb;
+define pcodeop __ev_xtrd;
+define pcodeop __ev_xtrh;
+
+spe2ddd: val is BH_BITS & BIT_0 [ val = BH_BITS | (BIT_0 << 2); ] { export *[const]:1 val; }
+spe2hh: val is BITS_13_15 [ val = BITS_13_15 & 3; ] { export *[const]:1 val; }
+
+spe2ra0: A is A & BITS_16_20=0 { tmp:$(REGISTER_SIZE) = 0; export tmp; }
+spe2ra0: A is A { export A; }
+
+spe2ea1: EVUIMM^"("^RA^")" is RA & A & EVUIMM { tmp:$(REGISTER_SIZE) = RA + EVUIMM; export tmp; }
+spe2ea1: EVUIMM^"("^RA^")" is RA & A=0 & EVUIMM { tmp:$(REGISTER_SIZE) = EVUIMM; export tmp; }
+spe2ea2: val^"("^RA^")" is RA & A & EVUIMM [ val = EVUIMM * 2; ] { tmp:$(REGISTER_SIZE) = RA + val; export tmp; }
+spe2ea2: val^"("^RA^")" is RA & A=0 & EVUIMM [ val = EVUIMM * 2; ] { tmp:$(REGISTER_SIZE) = val; export tmp; }
+spe2ea4: val^"("^RA^")" is RA & A & EVUIMM [ val = EVUIMM * 4; ] { tmp:$(REGISTER_SIZE) = RA + val; export tmp; }
+spe2ea4: val^"("^RA^")" is RA & A=0 & EVUIMM [ val = EVUIMM * 4; ] { tmp:$(REGISTER_SIZE) = val; export tmp; }
+spe2ea8: val^"("^RA^")" is RA & A & EVUIMM [ val = EVUIMM * 8; ] { tmp:$(REGISTER_SIZE) = RA + val; export tmp; }
+spe2ea8: val^"("^RA^")" is RA & A=0 & EVUIMM [ val = EVUIMM * 8; ] { tmp:$(REGISTER_SIZE) = val; export tmp; }
+spe2eau1: EVUIMM^"("^RA^")" is RA & A & EVUIMM { tmp:$(REGISTER_SIZE) = RA + EVUIMM; export tmp; }
+spe2eau2: val^"("^RA^")" is RA & A & EVUIMM [ val = EVUIMM * 2; ] { tmp:$(REGISTER_SIZE) = RA + zext(val:4); export tmp; }
+spe2eau4: val^"("^RA^")" is RA & A & EVUIMM [ val = EVUIMM * 4; ] { tmp:$(REGISTER_SIZE) = RA + zext(val:4); export tmp; }
+spe2eau8: val^"("^RA^")" is RA & A & EVUIMM [ val = EVUIMM * 8; ] { tmp:$(REGISTER_SIZE) = RA + zext(val:4); export tmp; }
+
+:evfssqrt D,A is OP=4 & XOP_0_10=647 & B_BITS=0 & D & A
+{
+    D = __ev_fssqrt(A);
+}
+
+:evfscfh D,B is OP=4 & XOP_0_10=657 & A_BITS=4 & D & B
+{
+    D = __ev_fscfh(B);
+}
+
+:evfscth D,B is OP=4 & XOP_0_10=661 & A_BITS=4 & D & B
+{
+    D = __ev_fscth(B);
+}
+
+:evfsmax D,A,B is OP=4 & XOP_0_10=672 & D & A & B
+{
+    D = __ev_fsmax(A, B);
+}
+
+:evfsmin D,A,B is OP=4 & XOP_0_10=673 & D & A & B
+{
+    D = __ev_fsmin(A, B);
+}
+
+:evfsaddsub D,A,B is OP=4 & XOP_0_10=674 & D & A & B
+{
+    D = __ev_fsaddsub(A, B);
+}
+
+:evfssubadd D,A,B is OP=4 & XOP_0_10=675 & D & A & B
+{
+    D = __ev_fssubadd(A, B);
+}
+
+:evfssum D,A,B is OP=4 & XOP_0_10=676 & D & A & B
+{
+    D = __ev_fssum(A, B);
+}
+
+:evfsdiff D,A,B is OP=4 & XOP_0_10=677 & D & A & B
+{
+    D = __ev_fsdiff(A, B);
+}
+
+:evfssumdiff D,A,B is OP=4 & XOP_0_10=678 & D & A & B
+{
+    D = __ev_fssumdiff(A, B);
+}
+
+:evfsdiffsum D,A,B is OP=4 & XOP_0_10=679 & D & A & B
+{
+    D = __ev_fsdiffsum(A, B);
+}
+
+:evfsaddx D,A,B is OP=4 & XOP_0_10=680 & D & A & B
+{
+    D = __ev_fsaddx(A, B);
+}
+
+:evfssubx D,A,B is OP=4 & XOP_0_10=681 & D & A & B
+{
+    D = __ev_fssubx(A, B);
+}
+
+:evfsaddsubx D,A,B is OP=4 & XOP_0_10=682 & D & A & B
+{
+    D = __ev_fsaddsubx(A, B);
+}
+
+:evfssubaddx D,A,B is OP=4 & XOP_0_10=683 & D & A & B
+{
+    D = __ev_fssubaddx(A, B);
+}
+
+:evfsmulx D,A,B is OP=4 & XOP_0_10=684 & D & A & B
+{
+    D = __ev_fsmulx(A, B);
+}
+
+:evfsmule D,A,B is OP=4 & XOP_0_10=686 & D & A & B
+{
+    D = __ev_fsmule(A, B);
+}
+
+:evfsmulo D,A,B is OP=4 & XOP_0_10=687 & D & A & B
+{
+    D = __ev_fsmulo(A, B);
+}
+
+:efsmax D,A,B is OP=4 & XOP_0_10=688 & D & A & B
+{
+    D = __efsmax(A, B);
+}
+
+:efsmin D,A,B is OP=4 & XOP_0_10=689 & D & A & B
+{
+    D = __efsmin(A, B);
+}
+
+:efdmax D,A,B is OP=4 & XOP_0_10=696 & D & A & B
+{
+    D = __efdmax(A, B);
+}
+
+:efdmin D,A,B is OP=4 & XOP_0_10=697 & D & A & B
+{
+    D = __efdmin(A, B);
+}
+
+:efssqrt D,A is OP=4 & XOP_0_10=711 & B_BITS=0 & D & A
+{
+    D = __efssqrt(A);
+}
+
+:efscfh D,B is OP=4 & XOP_0_10=721 & A_BITS=4 & D & B
+{
+    D = __efscfh(B);
+}
+
+:efscth D,B is OP=4 & XOP_0_10=725 & A_BITS=4 & D & B
+{
+    D = __efscth(B);
+}
+
+:efdmadd D,A,B is OP=4 & XOP_0_10=738 & D & A & B
+{
+    D = __efdmadd(D, A, B);
+}
+
+:efdmsub D,A,B is OP=4 & XOP_0_10=739 & D & A & B
+{
+    D = __efdmsub(D, A, B);
+}
+
+:efdsqrt D,A is OP=4 & XOP_0_10=743 & B_BITS=0 & D & A
+{
+    D = __efdsqrt(A);
+}
+
+:efdnmadd D,A,B is OP=4 & XOP_0_10=746 & D & A & B
+{
+    D = __efdnmadd(D, A, B);
+}
+
+:efdnmsub D,A,B is OP=4 & XOP_0_10=747 & D & A & B
+{
+    D = __efdnmsub(D, A, B);
+}
+
+:efdcfh D,B is OP=4 & XOP_0_10=753 & A_BITS=4 & D & B
+{
+    D = __efdcfh(B);
+}
+
+:efdcth D,B is OP=4 & XOP_0_10=757 & A_BITS=4 & D & B
+{
+    D = __efdcth(B);
+}
+
+:evdotpwcssi D,A,B is OP=4 & XOP_0_10=128 & D & A & B
+{
+    D = __ev_dotpwcssi(A, B);
+}
+
+:evdotpwcsmi D,A,B is OP=4 & XOP_0_10=129 & D & A & B
+{
+    D = __ev_dotpwcsmi(A, B);
+}
+
+:evdotpwcssfr D,A,B is OP=4 & XOP_0_10=130 & D & A & B
+{
+    D = __ev_dotpwcssfr(A, B);
+}
+
+:evdotpwcssf D,A,B is OP=4 & XOP_0_10=131 & D & A & B
+{
+    D = __ev_dotpwcssf(A, B);
+}
+
+:evdotpwgasmf D,A,B is OP=4 & XOP_0_10=136 & D & A & B
+{
+    D = __ev_dotpwgasmf(A, B);
+}
+
+:evdotpwxgasmf D,A,B is OP=4 & XOP_0_10=137 & D & A & B
+{
+    D = __ev_dotpwxgasmf(A, B);
+}
+
+:evdotpwgasmfr D,A,B is OP=4 & XOP_0_10=138 & D & A & B
+{
+    D = __ev_dotpwgasmfr(A, B);
+}
+
+:evdotpwxgasmfr D,A,B is OP=4 & XOP_0_10=139 & D & A & B
+{
+    D = __ev_dotpwxgasmfr(A, B);
+}
+
+:evdotpwgssmf D,A,B is OP=4 & XOP_0_10=140 & D & A & B
+{
+    D = __ev_dotpwgssmf(A, B);
+}
+
+:evdotpwxgssmf D,A,B is OP=4 & XOP_0_10=141 & D & A & B
+{
+    D = __ev_dotpwxgssmf(A, B);
+}
+
+:evdotpwgssmfr D,A,B is OP=4 & XOP_0_10=142 & D & A & B
+{
+    D = __ev_dotpwgssmfr(A, B);
+}
+
+:evdotpwxgssmfr D,A,B is OP=4 & XOP_0_10=143 & D & A & B
+{
+    D = __ev_dotpwxgssmfr(A, B);
+}
+
+:evdotpwcssiaaw3 D,A,B is OP=4 & XOP_0_10=144 & D & A & B
+{
+    D = __ev_dotpwcssiaaw3(D, A, B);
+    ACC = D;
+}
+
+:evdotpwcsmiaaw3 D,A,B is OP=4 & XOP_0_10=145 & D & A & B
+{
+    D = __ev_dotpwcsmiaaw3(D, A, B, ACC);
+    ACC = D;
+}
+
+:evdotpwcssfraaw3 D,A,B is OP=4 & XOP_0_10=146 & D & A & B
+{
+    D = __ev_dotpwcssfraaw3(D, A, B);
+    ACC = D;
+}
+
+:evdotpwcssfaaw3 D,A,B is OP=4 & XOP_0_10=147 & D & A & B
+{
+    D = __ev_dotpwcssfaaw3(D, A, B);
+    ACC = D;
+}
+
+:evdotpwgasmfaa3 D,A,B is OP=4 & XOP_0_10=152 & D & A & B
+{
+    D = __ev_dotpwgasmfaa3(D, A, B);
+    ACC = D;
+}
+
+:evdotpwxgasmfaa3 D,A,B is OP=4 & XOP_0_10=153 & D & A & B
+{
+    D = __ev_dotpwxgasmfaa3(D, A, B);
+    ACC = D;
+}
+
+:evdotpwgasmfraa3 D,A,B is OP=4 & XOP_0_10=154 & D & A & B
+{
+    D = __ev_dotpwgasmfraa3(D, A, B);
+    ACC = D;
+}
+
+:evdotpwxgasmfraa3 D,A,B is OP=4 & XOP_0_10=155 & D & A & B
+{
+    D = __ev_dotpwxgasmfraa3(D, A, B);
+    ACC = D;
+}
+
+:evdotpwgssmfaa3 D,A,B is OP=4 & XOP_0_10=156 & D & A & B
+{
+    D = __ev_dotpwgssmfaa3(D, A, B);
+    ACC = D;
+}
+
+:evdotpwxgssmfaa3 D,A,B is OP=4 & XOP_0_10=157 & D & A & B
+{
+    D = __ev_dotpwxgssmfaa3(D, A, B);
+    ACC = D;
+}
+
+:evdotpwgssmfraa3 D,A,B is OP=4 & XOP_0_10=158 & D & A & B
+{
+    D = __ev_dotpwgssmfraa3(D, A, B);
+    ACC = D;
+}
+
+:evdotpwxgssmfraa3 D,A,B is OP=4 & XOP_0_10=159 & D & A & B
+{
+    D = __ev_dotpwxgssmfraa3(D, A, B);
+    ACC = D;
+}
+
+:evdotpwcssia D,A,B is OP=4 & XOP_0_10=160 & D & A & B
+{
+    D = __ev_dotpwcssia(A, B);
+    ACC = D;
+}
+
+:evdotpwcsmia D,A,B is OP=4 & XOP_0_10=161 & D & A & B
+{
+    D = __ev_dotpwcsmia(A, B);
+    ACC = D;
+}
+
+:evdotpwcssfra D,A,B is OP=4 & XOP_0_10=162 & D & A & B
+{
+    D = __ev_dotpwcssfra(A, B);
+    ACC = D;
+}
+
+:evdotpwcssfa D,A,B is OP=4 & XOP_0_10=163 & D & A & B
+{
+    D = __ev_dotpwcssfa(A, B);
+    ACC = D;
+}
+
+:evdotpwgasmfa D,A,B is OP=4 & XOP_0_10=168 & D & A & B
+{
+    D = __ev_dotpwgasmfa(A, B);
+    ACC = D;
+}
+
+:evdotpwxgasmfa D,A,B is OP=4 & XOP_0_10=169 & D & A & B
+{
+    D = __ev_dotpwxgasmfa(A, B);
+    ACC = D;
+}
+
+:evdotpwgasmfra D,A,B is OP=4 & XOP_0_10=170 & D & A & B
+{
+    D = __ev_dotpwgasmfra(A, B);
+    ACC = D;
+}
+
+:evdotpwxgasmfra D,A,B is OP=4 & XOP_0_10=171 & D & A & B
+{
+    D = __ev_dotpwxgasmfra(A, B);
+    ACC = D;
+}
+
+:evdotpwgssmfa D,A,B is OP=4 & XOP_0_10=172 & D & A & B
+{
+    D = __ev_dotpwgssmfa(A, B);
+    ACC = D;
+}
+
+:evdotpwxgssmfa D,A,B is OP=4 & XOP_0_10=173 & D & A & B
+{
+    D = __ev_dotpwxgssmfa(A, B);
+    ACC = D;
+}
+
+:evdotpwgssmfra D,A,B is OP=4 & XOP_0_10=174 & D & A & B
+{
+    D = __ev_dotpwgssmfra(A, B);
+    ACC = D;
+}
+
+:evdotpwxgssmfra D,A,B is OP=4 & XOP_0_10=175 & D & A & B
+{
+    D = __ev_dotpwxgssmfra(A, B);
+    ACC = D;
+}
+
+:evdotpwcssiaaw D,A,B is OP=4 & XOP_0_10=176 & D & A & B
+{
+    D = __ev_dotpwcssiaaw(A, B, ACC);
+    ACC = D;
+}
+
+:evdotpwcsmiaaw D,A,B is OP=4 & XOP_0_10=177 & D & A & B
+{
+    D = __ev_dotpwcsmiaaw(A, B, ACC);
+    ACC = D;
+}
+
+:evdotpwcssfraaw D,A,B is OP=4 & XOP_0_10=178 & D & A & B
+{
+    D = __ev_dotpwcssfraaw(A, B, ACC);
+    ACC = D;
+}
+
+:evdotpwcssfaaw D,A,B is OP=4 & XOP_0_10=179 & D & A & B
+{
+    D = __ev_dotpwcssfaaw(A, B, ACC);
+    ACC = D;
+}
+
+:evdotpwgasmfaa D,A,B is OP=4 & XOP_0_10=184 & D & A & B
+{
+    D = __ev_dotpwgasmfaa(A, B, ACC);
+    ACC = D;
+}
+
+:evdotpwxgasmfaa D,A,B is OP=4 & XOP_0_10=185 & D & A & B
+{
+    D = __ev_dotpwxgasmfaa(A, B, ACC);
+    ACC = D;
+}
+
+:evdotpwgasmfraa D,A,B is OP=4 & XOP_0_10=186 & D & A & B
+{
+    D = __ev_dotpwgasmfraa(A, B, ACC);
+    ACC = D;
+}
+
+:evdotpwxgasmfraa D,A,B is OP=4 & XOP_0_10=187 & D & A & B
+{
+    D = __ev_dotpwxgasmfraa(A, B, ACC);
+    ACC = D;
+}
+
+:evdotpwgssmfaa D,A,B is OP=4 & XOP_0_10=188 & D & A & B
+{
+    D = __ev_dotpwgssmfaa(A, B, ACC);
+    ACC = D;
+}
+
+:evdotpwxgssmfaa D,A,B is OP=4 & XOP_0_10=189 & D & A & B
+{
+    D = __ev_dotpwxgssmfaa(A, B, ACC);
+    ACC = D;
+}
+
+:evdotpwgssmfraa D,A,B is OP=4 & XOP_0_10=190 & D & A & B
+{
+    D = __ev_dotpwgssmfraa(A, B, ACC);
+    ACC = D;
+}
+
+:evdotpwxgssmfraa D,A,B is OP=4 & XOP_0_10=191 & D & A & B
+{
+    D = __ev_dotpwxgssmfraa(A, B, ACC);
+    ACC = D;
+}
+
+:evdotphihcssi D,A,B is OP=4 & XOP_0_10=256 & D & A & B
+{
+    D = __ev_dotphihcssi(A, B);
+}
+
+:evdotplohcssi D,A,B is OP=4 & XOP_0_10=257 & D & A & B
+{
+    D = __ev_dotplohcssi(A, B);
+}
+
+:evdotphihcssf D,A,B is OP=4 & XOP_0_10=258 & D & A & B
+{
+    D = __ev_dotphihcssf(A, B);
+}
+
+:evdotplohcssf D,A,B is OP=4 & XOP_0_10=259 & D & A & B
+{
+    D = __ev_dotplohcssf(A, B);
+}
+
+:evdotphihcsmi D,A,B is OP=4 & XOP_0_10=264 & D & A & B
+{
+    D = __ev_dotphihcsmi(A, B);
+}
+
+:evdotplohcsmi D,A,B is OP=4 & XOP_0_10=265 & D & A & B
+{
+    D = __ev_dotplohcsmi(A, B);
+}
+
+:evdotphihcssfr D,A,B is OP=4 & XOP_0_10=266 & D & A & B
+{
+    D = __ev_dotphihcssfr(A, B);
+}
+
+:evdotplohcssfr D,A,B is OP=4 & XOP_0_10=267 & D & A & B
+{
+    D = __ev_dotplohcssfr(A, B);
+}
+
+:evdotphihcssiaaw3 D,A,B is OP=4 & XOP_0_10=272 & D & A & B
+{
+    D = __ev_dotphihcssiaaw3(D, A, B);
+    ACC = D;
+}
+
+:evdotplohcssiaaw3 D,A,B is OP=4 & XOP_0_10=273 & D & A & B
+{
+    D = __ev_dotplohcssiaaw3(D, A, B);
+    ACC = D;
+}
+
+:evdotphihcssfaaw3 D,A,B is OP=4 & XOP_0_10=274 & D & A & B
+{
+    D = __ev_dotphihcssfaaw3(D, A, B);
+    ACC = D;
+}
+
+:evdotplohcssfaaw3 D,A,B is OP=4 & XOP_0_10=275 & D & A & B
+{
+    D = __ev_dotplohcssfaaw3(D, A, B);
+    ACC = D;
+}
+
+:evdotphihcsmiaaw3 D,A,B is OP=4 & XOP_0_10=280 & D & A & B
+{
+    D = __ev_dotphihcsmiaaw3(D, A, B);
+    ACC = D;
+}
+
+:evdotplohcsmiaaw3 D,A,B is OP=4 & XOP_0_10=281 & D & A & B
+{
+    D = __ev_dotplohcsmiaaw3(D, A, B);
+    ACC = D;
+}
+
+:evdotphihcssfraaw3 D,A,B is OP=4 & XOP_0_10=282 & D & A & B
+{
+    D = __ev_dotphihcssfraaw3(D, A, B);
+    ACC = D;
+}
+
+:evdotplohcssfraaw3 D,A,B is OP=4 & XOP_0_10=283 & D & A & B
+{
+    D = __ev_dotplohcssfraaw3(D, A, B);
+    ACC = D;
+}
+
+:evdotphihcssia D,A,B is OP=4 & XOP_0_10=288 & D & A & B
+{
+    D = __ev_dotphihcssia(A, B);
+    ACC = D;
+}
+
+:evdotplohcssia D,A,B is OP=4 & XOP_0_10=289 & D & A & B
+{
+    D = __ev_dotplohcssia(A, B);
+    ACC = D;
+}
+
+:evdotphihcssfa D,A,B is OP=4 & XOP_0_10=290 & D & A & B
+{
+    D = __ev_dotphihcssfa(A, B);
+    ACC = D;
+}
+
+:evdotplohcssfa D,A,B is OP=4 & XOP_0_10=291 & D & A & B
+{
+    D = __ev_dotplohcssfa(A, B);
+    ACC = D;
+}
+
+:evdotphihcsmia D,A,B is OP=4 & XOP_0_10=296 & D & A & B
+{
+    D = __ev_dotphihcsmia(A, B);
+    ACC = D;
+}
+
+:evdotplohcsmia D,A,B is OP=4 & XOP_0_10=297 & D & A & B
+{
+    D = __ev_dotplohcsmia(A, B);
+    ACC = D;
+}
+
+:evdotphihcssfra D,A,B is OP=4 & XOP_0_10=298 & D & A & B
+{
+    D = __ev_dotphihcssfra(A, B);
+    ACC = D;
+}
+
+:evdotplohcssfra D,A,B is OP=4 & XOP_0_10=299 & D & A & B
+{
+    D = __ev_dotplohcssfra(A, B);
+    ACC = D;
+}
+
+:evdotphihcssiaaw D,A,B is OP=4 & XOP_0_10=304 & D & A & B
+{
+    D = __ev_dotphihcssiaaw(A, B, ACC);
+    ACC = D;
+}
+
+:evdotplohcssiaaw D,A,B is OP=4 & XOP_0_10=305 & D & A & B
+{
+    D = __ev_dotplohcssiaaw(A, B, ACC);
+    ACC = D;
+}
+
+:evdotphihcssfaaw D,A,B is OP=4 & XOP_0_10=306 & D & A & B
+{
+    D = __ev_dotphihcssfaaw(A, B, ACC);
+    ACC = D;
+}
+
+:evdotplohcssfaaw D,A,B is OP=4 & XOP_0_10=307 & D & A & B
+{
+    D = __ev_dotplohcssfaaw(A, B, ACC);
+    ACC = D;
+}
+
+:evdotphihcsmiaaw D,A,B is OP=4 & XOP_0_10=312 & D & A & B
+{
+    D = __ev_dotphihcsmiaaw(A, B, ACC);
+    ACC = D;
+}
+
+:evdotplohcsmiaaw D,A,B is OP=4 & XOP_0_10=313 & D & A & B
+{
+    D = __ev_dotplohcsmiaaw(A, B, ACC);
+    ACC = D;
+}
+
+:evdotphihcssfraaw D,A,B is OP=4 & XOP_0_10=314 & D & A & B
+{
+    D = __ev_dotphihcssfraaw(A, B, ACC);
+    ACC = D;
+}
+
+:evdotplohcssfraaw D,A,B is OP=4 & XOP_0_10=315 & D & A & B
+{
+    D = __ev_dotplohcssfraaw(A, B, ACC);
+    ACC = D;
+}
+
+:evdotphausi D,A,B is OP=4 & XOP_0_10=320 & D & A & B
+{
+    D = __ev_dotphausi(A, B);
+}
+
+:evdotphassi D,A,B is OP=4 & XOP_0_10=321 & D & A & B
+{
+    D = __ev_dotphassi(A, B);
+}
+
+:evdotphasusi D,A,B is OP=4 & XOP_0_10=322 & D & A & B
+{
+    D = __ev_dotphasusi(A, B);
+}
+
+:evdotphassf D,A,B is OP=4 & XOP_0_10=323 & D & A & B
+{
+    D = __ev_dotphassf(A, B);
+}
+
+:evdotphsssf D,A,B is OP=4 & XOP_0_10=327 & D & A & B
+{
+    D = __ev_dotphsssf(A, B);
+}
+
+:evdotphaumi D,A,B is OP=4 & XOP_0_10=328 & D & A & B
+{
+    D = __ev_dotphaumi(A, B);
+}
+
+:evdotphasmi D,A,B is OP=4 & XOP_0_10=329 & D & A & B
+{
+    D = __ev_dotphasmi(A, B);
+}
+
+:evdotphasumi D,A,B is OP=4 & XOP_0_10=330 & D & A & B
+{
+    D = __ev_dotphasumi(A, B);
+}
+
+:evdotphassfr D,A,B is OP=4 & XOP_0_10=331 & D & A & B
+{
+    D = __ev_dotphassfr(A, B);
+}
+
+:evdotphssmi D,A,B is OP=4 & XOP_0_10=333 & D & A & B
+{
+    D = __ev_dotphssmi(A, B);
+}
+
+:evdotphsssfr D,A,B is OP=4 & XOP_0_10=335 & D & A & B
+{
+    D = __ev_dotphsssfr(A, B);
+}
+
+:evdotphausiaaw3 D,A,B is OP=4 & XOP_0_10=336 & D & A & B
+{
+    D = __ev_dotphausiaaw3(D, A, B);
+    ACC = D;
+}
+
+:evdotphassiaaw3 D,A,B is OP=4 & XOP_0_10=337 & D & A & B
+{
+    D = __ev_dotphassiaaw3(D, A, B);
+    ACC = D;
+}
+
+:evdotphasusiaaw3 D,A,B is OP=4 & XOP_0_10=338 & D & A & B
+{
+    D = __ev_dotphasusiaaw3(D, A, B);
+    ACC = D;
+}
+
+:evdotphassfaaw3 D,A,B is OP=4 & XOP_0_10=339 & D & A & B
+{
+    D = __ev_dotphassfaaw3(D, A, B);
+    ACC = D;
+}
+
+:evdotphsssiaaw3 D,A,B is OP=4 & XOP_0_10=341 & D & A & B
+{
+    D = __ev_dotphsssiaaw3(D, A, B);
+    ACC = D;
+}
+
+:evdotphsssfaaw3 D,A,B is OP=4 & XOP_0_10=343 & D & A & B
+{
+    D = __ev_dotphsssfaaw3(D, A, B);
+    ACC = D;
+}
+
+:evdotphaumiaaw3 D,A,B is OP=4 & XOP_0_10=344 & D & A & B
+{
+    D = __ev_dotphaumiaaw3(D, A, B);
+    ACC = D;
+}
+
+:evdotphasmiaaw3 D,A,B is OP=4 & XOP_0_10=345 & D & A & B
+{
+    D = __ev_dotphasmiaaw3(D, A, B);
+    ACC = D;
+}
+
+:evdotphasumiaaw3 D,A,B is OP=4 & XOP_0_10=346 & D & A & B
+{
+    D = __ev_dotphasumiaaw3(D, A, B);
+    ACC = D;
+}
+
+:evdotphassfraaw3 D,A,B is OP=4 & XOP_0_10=347 & D & A & B
+{
+    D = __ev_dotphassfraaw3(D, A, B);
+    ACC = D;
+}
+
+:evdotphssmiaaw3 D,A,B is OP=4 & XOP_0_10=349 & D & A & B
+{
+    D = __ev_dotphssmiaaw3(D, A, B);
+    ACC = D;
+}
+
+:evdotphsssfraaw3 D,A,B is OP=4 & XOP_0_10=351 & D & A & B
+{
+    D = __ev_dotphsssfraaw3(D, A, B);
+    ACC = D;
+}
+
+:evdotphausia D,A,B is OP=4 & XOP_0_10=352 & D & A & B
+{
+    D = __ev_dotphausia(A, B);
+    ACC = D;
+}
+
+:evdotphassia D,A,B is OP=4 & XOP_0_10=353 & D & A & B
+{
+    D = __ev_dotphassia(A, B);
+    ACC = D;
+}
+
+:evdotphasusia D,A,B is OP=4 & XOP_0_10=354 & D & A & B
+{
+    D = __ev_dotphasusia(A, B);
+    ACC = D;
+}
+
+:evdotphassfa D,A,B is OP=4 & XOP_0_10=355 & D & A & B
+{
+    D = __ev_dotphassfa(A, B);
+    ACC = D;
+}
+
+:evdotphsssfa D,A,B is OP=4 & XOP_0_10=359 & D & A & B
+{
+    D = __ev_dotphsssfa(A, B);
+    ACC = D;
+}
+
+:evdotphaumia D,A,B is OP=4 & XOP_0_10=360 & D & A & B
+{
+    D = __ev_dotphaumia(A, B);
+    ACC = D;
+}
+
+:evdotphasmia D,A,B is OP=4 & XOP_0_10=361 & D & A & B
+{
+    D = __ev_dotphasmia(A, B);
+    ACC = D;
+}
+
+:evdotphasumia D,A,B is OP=4 & XOP_0_10=362 & D & A & B
+{
+    D = __ev_dotphasumia(A, B);
+    ACC = D;
+}
+
+:evdotphassfra D,A,B is OP=4 & XOP_0_10=363 & D & A & B
+{
+    D = __ev_dotphassfra(A, B);
+    ACC = D;
+}
+
+:evdotphssmia D,A,B is OP=4 & XOP_0_10=365 & D & A & B
+{
+    D = __ev_dotphssmia(A, B);
+    ACC = D;
+}
+
+:evdotphsssfra D,A,B is OP=4 & XOP_0_10=367 & D & A & B
+{
+    D = __ev_dotphsssfra(A, B);
+    ACC = D;
+}
+
+:evdotphausiaaw D,A,B is OP=4 & XOP_0_10=368 & D & A & B
+{
+    D = __ev_dotphausiaaw(A, B, ACC);
+    ACC = D;
+}
+
+:evdotphassiaaw D,A,B is OP=4 & XOP_0_10=369 & D & A & B
+{
+    D = __ev_dotphassiaaw(A, B, ACC);
+    ACC = D;
+}
+
+:evdotphasusiaaw D,A,B is OP=4 & XOP_0_10=370 & D & A & B
+{
+    D = __ev_dotphasusiaaw(A, B, ACC);
+    ACC = D;
+}
+
+:evdotphassfaaw D,A,B is OP=4 & XOP_0_10=371 & D & A & B
+{
+    D = __ev_dotphassfaaw(A, B, ACC);
+    ACC = D;
+}
+
+:evdotphsssiaaw D,A,B is OP=4 & XOP_0_10=373 & D & A & B
+{
+    D = __ev_dotphsssiaaw(A, B, ACC);
+    ACC = D;
+}
+
+:evdotphsssfaaw D,A,B is OP=4 & XOP_0_10=375 & D & A & B
+{
+    D = __ev_dotphsssfaaw(A, B, ACC);
+    ACC = D;
+}
+
+:evdotphaumiaaw D,A,B is OP=4 & XOP_0_10=376 & D & A & B
+{
+    D = __ev_dotphaumiaaw(A, B, ACC);
+    ACC = D;
+}
+
+:evdotphasmiaaw D,A,B is OP=4 & XOP_0_10=377 & D & A & B
+{
+    D = __ev_dotphasmiaaw(A, B, ACC);
+    ACC = D;
+}
+
+:evdotphasumiaaw D,A,B is OP=4 & XOP_0_10=378 & D & A & B
+{
+    D = __ev_dotphasumiaaw(A, B, ACC);
+    ACC = D;
+}
+
+:evdotphassfraaw D,A,B is OP=4 & XOP_0_10=379 & D & A & B
+{
+    D = __ev_dotphassfraaw(A, B, ACC);
+    ACC = D;
+}
+
+:evdotphssmiaaw D,A,B is OP=4 & XOP_0_10=381 & D & A & B
+{
+    D = __ev_dotphssmiaaw(A, B, ACC);
+    ACC = D;
+}
+
+:evdotphsssfraaw D,A,B is OP=4 & XOP_0_10=383 & D & A & B
+{
+    D = __ev_dotphsssfraaw(A, B, ACC);
+    ACC = D;
+}
+
+:evdotp4hgaumi D,A,B is OP=4 & XOP_0_10=384 & D & A & B
+{
+    D = __ev_dotp4hgaumi(A, B);
+}
+
+:evdotp4hgasmi D,A,B is OP=4 & XOP_0_10=385 & D & A & B
+{
+    D = __ev_dotp4hgasmi(A, B);
+}
+
+:evdotp4hgasumi D,A,B is OP=4 & XOP_0_10=386 & D & A & B
+{
+    D = __ev_dotp4hgasumi(A, B);
+}
+
+:evdotp4hgasmf D,A,B is OP=4 & XOP_0_10=387 & D & A & B
+{
+    D = __ev_dotp4hgasmf(A, B);
+}
+
+:evdotp4hgssmi D,A,B is OP=4 & XOP_0_10=388 & D & A & B
+{
+    D = __ev_dotp4hgssmi(A, B);
+}
+
+:evdotp4hgssmf D,A,B is OP=4 & XOP_0_10=389 & D & A & B
+{
+    D = __ev_dotp4hgssmf(A, B);
+}
+
+:evdotp4hxgasmi D,A,B is OP=4 & XOP_0_10=390 & D & A & B
+{
+    D = __ev_dotp4hxgasmi(A, B);
+}
+
+:evdotp4hxgasmf D,A,B is OP=4 & XOP_0_10=391 & D & A & B
+{
+    D = __ev_dotp4hxgasmf(A, B);
+}
+
+:evdotpbaumi D,A,B is OP=4 & XOP_0_10=392 & D & A & B
+{
+    D = __ev_dotpbaumi(A, B);
+}
+
+:evdotpbasmi D,A,B is OP=4 & XOP_0_10=393 & D & A & B
+{
+    D = __ev_dotpbasmi(A, B);
+}
+
+:evdotpbasumi D,A,B is OP=4 & XOP_0_10=394 & D & A & B
+{
+    D = __ev_dotpbasumi(A, B);
+}
+
+:evdotp4hxgssmi D,A,B is OP=4 & XOP_0_10=398 & D & A & B
+{
+    D = __ev_dotp4hxgssmi(A, B);
+}
+
+:evdotp4hxgssmf D,A,B is OP=4 & XOP_0_10=399 & D & A & B
+{
+    D = __ev_dotp4hxgssmf(A, B);
+}
+
+:evdotp4hgaumiaa3 D,A,B is OP=4 & XOP_0_10=400 & D & A & B
+{
+    D = __ev_dotp4hgaumiaa3(D, A, B);
+    ACC = D;
+}
+
+:evdotp4hgasmiaa3 D,A,B is OP=4 & XOP_0_10=401 & D & A & B
+{
+    D = __ev_dotp4hgasmiaa3(D, A, B);
+    ACC = D;
+}
+
+:evdotp4hgasumiaa3 D,A,B is OP=4 & XOP_0_10=402 & D & A & B
+{
+    D = __ev_dotp4hgasumiaa3(D, A, B);
+    ACC = D;
+}
+
+:evdotp4hgasmfaa3 D,A,B is OP=4 & XOP_0_10=403 & D & A & B
+{
+    D = __ev_dotp4hgasmfaa3(D, A, B);
+    ACC = D;
+}
+
+:evdotp4hgssmiaa3 D,A,B is OP=4 & XOP_0_10=404 & D & A & B
+{
+    D = __ev_dotp4hgssmiaa3(D, A, B);
+    ACC = D;
+}
+
+:evdotp4hgssmfaa3 D,A,B is OP=4 & XOP_0_10=405 & D & A & B
+{
+    D = __ev_dotp4hgssmfaa3(D, A, B);
+    ACC = D;
+}
+
+:evdotp4hxgasmiaa3 D,A,B is OP=4 & XOP_0_10=406 & D & A & B
+{
+    D = __ev_dotp4hxgasmiaa3(D, A, B);
+    ACC = D;
+}
+
+:evdotp4hxgasmfaa3 D,A,B is OP=4 & XOP_0_10=407 & D & A & B
+{
+    D = __ev_dotp4hxgasmfaa3(D, A, B);
+    ACC = D;
+}
+
+:evdotpbaumiaaw3 D,A,B is OP=4 & XOP_0_10=408 & D & A & B
+{
+    D = __ev_dotpbaumiaaw3(D, A, B);
+    ACC = D;
+}
+
+:evdotpbasmiaaw3 D,A,B is OP=4 & XOP_0_10=409 & D & A & B
+{
+    D = __ev_dotpbasmiaaw3(D, A, B);
+    ACC = D;
+}
+
+:evdotpbasumiaaw3 D,A,B is OP=4 & XOP_0_10=410 & D & A & B
+{
+    D = __ev_dotpbasumiaaw3(D, A, B);
+    ACC = D;
+}
+
+:evdotp4hxgssmiaa3 D,A,B is OP=4 & XOP_0_10=414 & D & A & B
+{
+    D = __ev_dotp4hxgssmiaa3(D, A, B);
+    ACC = D;
+}
+
+:evdotp4hxgssmfaa3 D,A,B is OP=4 & XOP_0_10=415 & D & A & B
+{
+    D = __ev_dotp4hxgssmfaa3(D, A, B);
+    ACC = D;
+}
+
+:evdotp4hgaumia D,A,B is OP=4 & XOP_0_10=416 & D & A & B
+{
+    D = __ev_dotp4hgaumia(A, B);
+    ACC = D;
+}
+
+:evdotp4hgasmia D,A,B is OP=4 & XOP_0_10=417 & D & A & B
+{
+    D = __ev_dotp4hgasmia(A, B);
+    ACC = D;
+}
+
+:evdotp4hgasumia D,A,B is OP=4 & XOP_0_10=418 & D & A & B
+{
+    D = __ev_dotp4hgasumia(A, B);
+    ACC = D;
+}
+
+:evdotp4hgasmfa D,A,B is OP=4 & XOP_0_10=419 & D & A & B
+{
+    D = __ev_dotp4hgasmfa(A, B);
+    ACC = D;
+}
+
+:evdotp4hgssmia D,A,B is OP=4 & XOP_0_10=420 & D & A & B
+{
+    D = __ev_dotp4hgssmia(A, B);
+    ACC = D;
+}
+
+:evdotp4hgssmfa D,A,B is OP=4 & XOP_0_10=421 & D & A & B
+{
+    D = __ev_dotp4hgssmfa(A, B);
+    ACC = D;
+}
+
+:evdotp4hxgasmia D,A,B is OP=4 & XOP_0_10=422 & D & A & B
+{
+    D = __ev_dotp4hxgasmia(A, B);
+    ACC = D;
+}
+
+:evdotp4hxgasmfa D,A,B is OP=4 & XOP_0_10=423 & D & A & B
+{
+    D = __ev_dotp4hxgasmfa(A, B);
+    ACC = D;
+}
+
+:evdotpbaumia D,A,B is OP=4 & XOP_0_10=424 & D & A & B
+{
+    D = __ev_dotpbaumia(A, B);
+    ACC = D;
+}
+
+:evdotpbasmia D,A,B is OP=4 & XOP_0_10=425 & D & A & B
+{
+    D = __ev_dotpbasmia(A, B);
+    ACC = D;
+}
+
+:evdotpbasumia D,A,B is OP=4 & XOP_0_10=426 & D & A & B
+{
+    D = __ev_dotpbasumia(A, B);
+    ACC = D;
+}
+
+:evdotp4hxgssmia D,A,B is OP=4 & XOP_0_10=430 & D & A & B
+{
+    D = __ev_dotp4hxgssmia(A, B);
+    ACC = D;
+}
+
+:evdotp4hxgssmfa D,A,B is OP=4 & XOP_0_10=431 & D & A & B
+{
+    D = __ev_dotp4hxgssmfa(A, B);
+    ACC = D;
+}
+
+:evdotp4hgaumiaa D,A,B is OP=4 & XOP_0_10=432 & D & A & B
+{
+    D = __ev_dotp4hgaumiaa(A, B, ACC);
+    ACC = D;
+}
+
+:evdotp4hgasmiaa D,A,B is OP=4 & XOP_0_10=433 & D & A & B
+{
+    D = __ev_dotp4hgasmiaa(A, B, ACC);
+    ACC = D;
+}
+
+:evdotp4hgasumiaa D,A,B is OP=4 & XOP_0_10=434 & D & A & B
+{
+    D = __ev_dotp4hgasumiaa(A, B, ACC);
+    ACC = D;
+}
+
+:evdotp4hgasmfaa D,A,B is OP=4 & XOP_0_10=435 & D & A & B
+{
+    D = __ev_dotp4hgasmfaa(A, B, ACC);
+    ACC = D;
+}
+
+:evdotp4hgssmiaa D,A,B is OP=4 & XOP_0_10=436 & D & A & B
+{
+    D = __ev_dotp4hgssmiaa(A, B, ACC);
+    ACC = D;
+}
+
+:evdotp4hgssmfaa D,A,B is OP=4 & XOP_0_10=437 & D & A & B
+{
+    D = __ev_dotp4hgssmfaa(A, B, ACC);
+    ACC = D;
+}
+
+:evdotp4hxgasmiaa D,A,B is OP=4 & XOP_0_10=438 & D & A & B
+{
+    D = __ev_dotp4hxgasmiaa(A, B, ACC);
+    ACC = D;
+}
+
+:evdotp4hxgasmfaa D,A,B is OP=4 & XOP_0_10=439 & D & A & B
+{
+    D = __ev_dotp4hxgasmfaa(A, B, ACC);
+    ACC = D;
+}
+
+:evdotpbaumiaaw D,A,B is OP=4 & XOP_0_10=440 & D & A & B
+{
+    D = __ev_dotpbaumiaaw(A, B);
+    ACC = D;
+}
+
+:evdotpbasmiaaw D,A,B is OP=4 & XOP_0_10=441 & D & A & B
+{
+    D = __ev_dotpbasmiaaw(A, B);
+    ACC = D;
+}
+
+:evdotpbasumiaaw D,A,B is OP=4 & XOP_0_10=442 & D & A & B
+{
+    D = __ev_dotpbasumiaaw(A, B);
+    ACC = D;
+}
+
+:evdotp4hxgssmiaa D,A,B is OP=4 & XOP_0_10=446 & D & A & B
+{
+    D = __ev_dotp4hxgssmiaa(A, B, ACC);
+    ACC = D;
+}
+
+:evdotp4hxgssmfaa D,A,B is OP=4 & XOP_0_10=447 & D & A & B
+{
+    D = __ev_dotp4hxgssmfaa(A, B, ACC);
+    ACC = D;
+}
+
+:evdotpwausi D,A,B is OP=4 & XOP_0_10=448 & D & A & B
+{
+    D = __ev_dotpwausi(A, B);
+}
+
+:evdotpwassi D,A,B is OP=4 & XOP_0_10=449 & D & A & B
+{
+    D = __ev_dotpwassi(A, B);
+}
+
+:evdotpwasusi D,A,B is OP=4 & XOP_0_10=450 & D & A & B
+{
+    D = __ev_dotpwasusi(A, B);
+}
+
+:evdotpwaumi D,A,B is OP=4 & XOP_0_10=456 & D & A & B
+{
+    D = __ev_dotpwaumi(A, B);
+}
+
+:evdotpwasmi D,A,B is OP=4 & XOP_0_10=457 & D & A & B
+{
+    D = __ev_dotpwasmi(A, B);
+}
+
+:evdotpwasumi D,A,B is OP=4 & XOP_0_10=458 & D & A & B
+{
+    D = __ev_dotpwasumi(A, B);
+}
+
+:evdotpwssmi D,A,B is OP=4 & XOP_0_10=461 & D & A & B
+{
+    D = __ev_dotpwssmi(A, B);
+}
+
+:evdotpwausiaa3 D,A,B is OP=4 & XOP_0_10=464 & D & A & B
+{
+    D = __ev_dotpwausiaa3(D, A, B);
+    ACC = D;
+}
+
+:evdotpwassiaa3 D,A,B is OP=4 & XOP_0_10=465 & D & A & B
+{
+    D = __ev_dotpwassiaa3(D, A, B);
+    ACC = D;
+}
+
+:evdotpwasusiaa3 D,A,B is OP=4 & XOP_0_10=466 & D & A & B
+{
+    D = __ev_dotpwasusiaa3(D, A, B);
+    ACC = D;
+}
+
+:evdotpwsssiaa3 D,A,B is OP=4 & XOP_0_10=469 & D & A & B
+{
+    D = __ev_dotpwsssiaa3(D, A, B);
+    ACC = D;
+}
+
+:evdotpwaumiaa3 D,A,B is OP=4 & XOP_0_10=472 & D & A & B
+{
+    D = __ev_dotpwaumiaa3(D, A, B);
+    ACC = D;
+}
+
+:evdotpwasmiaa3 D,A,B is OP=4 & XOP_0_10=473 & D & A & B
+{
+    D = __ev_dotpwasmiaa3(D, A, B);
+    ACC = D;
+}
+
+:evdotpwasumiaa3 D,A,B is OP=4 & XOP_0_10=474 & D & A & B
+{
+    D = __ev_dotpwasumiaa3(D, A, B);
+    ACC = D;
+}
+
+:evdotpwssmiaa3 D,A,B is OP=4 & XOP_0_10=477 & D & A & B
+{
+    D = __ev_dotpwssmiaa3(D, A, B);
+    ACC = D;
+}
+
+:evdotpwausia D,A,B is OP=4 & XOP_0_10=480 & D & A & B
+{
+    D = __ev_dotpwausia(A, B);
+    ACC = D;
+}
+
+:evdotpwassia D,A,B is OP=4 & XOP_0_10=481 & D & A & B
+{
+    D = __ev_dotpwassia(A, B);
+    ACC = D;
+}
+
+:evdotpwasusia D,A,B is OP=4 & XOP_0_10=482 & D & A & B
+{
+    D = __ev_dotpwasusia(A, B);
+    ACC = D;
+}
+
+:evdotpwaumia D,A,B is OP=4 & XOP_0_10=488 & D & A & B
+{
+    D = __ev_dotpwaumia(A, B);
+    ACC = D;
+}
+
+:evdotpwasmia D,A,B is OP=4 & XOP_0_10=489 & D & A & B
+{
+    D = __ev_dotpwasmia(A, B);
+    ACC = D;
+}
+
+:evdotpwasumia D,A,B is OP=4 & XOP_0_10=490 & D & A & B
+{
+    D = __ev_dotpwasumia(A, B);
+    ACC = D;
+}
+
+:evdotpwssmia D,A,B is OP=4 & XOP_0_10=493 & D & A & B
+{
+    D = __ev_dotpwssmia(A, B);
+    ACC = D;
+}
+
+:evdotpwausiaa D,A,B is OP=4 & XOP_0_10=496 & D & A & B
+{
+    D = __ev_dotpwausiaa(A, B, ACC);
+    ACC = D;
+}
+
+:evdotpwassiaa D,A,B is OP=4 & XOP_0_10=497 & D & A & B
+{
+    D = __ev_dotpwassiaa(A, B, ACC);
+}
+
+:evdotpwasusiaa D,A,B is OP=4 & XOP_0_10=498 & D & A & B
+{
+    D = __ev_dotpwasusiaa(A, B, ACC);
+    ACC = D;
+}
+
+:evdotpwsssiaa D,A,B is OP=4 & XOP_0_10=501 & D & A & B
+{
+    D = __ev_dotpwsssiaa(A, B, ACC);
+}
+
+:evdotpwaumiaa D,A,B is OP=4 & XOP_0_10=504 & D & A & B
+{
+    D = __ev_dotpwaumiaa(A, B, ACC);
+    ACC = D;
+}
+
+:evdotpwasmiaa D,A,B is OP=4 & XOP_0_10=505 & D & A & B
+{
+    D = __ev_dotpwasmiaa(A, B, ACC);
+    ACC = D;
+}
+
+:evdotpwasumiaa D,A,B is OP=4 & XOP_0_10=506 & D & A & B
+{
+    D = __ev_dotpwasumiaa(A, B, ACC);
+    ACC = D;
+}
+
+:evdotpwssmiaa D,A,B is OP=4 & XOP_0_10=509 & D & A & B
+{
+    D = __ev_dotpwssmiaa(A, B, ACC);
+    ACC = D;
+}
+
+:evaddib D,B,BU_UIMM is OP=4 & XOP_0_10=515 & D & B & BU_UIMM
+{
+    lb0:1 = B(7);
+    lb1:1 = B(6);
+    lb2:1 = B(5);
+    lb3:1 = B(4);
+    lb4:1 = B(3);
+    lb5:1 = B(2);
+    lb6:1 = B(1);
+    lb7:1 = B:1;
+    lr0:1 = lb0 + BU_UIMM;
+    lr1:1 = lb1 + BU_UIMM;
+    lr2:1 = lb2 + BU_UIMM;
+    lr3:1 = lb3 + BU_UIMM;
+    lr4:1 = lb4 + BU_UIMM;
+    lr5:1 = lb5 + BU_UIMM;
+    lr6:1 = lb6 + BU_UIMM;
+    lr7:1 = lb7 + BU_UIMM;
+    lz0:8 = zext(lr0);
+    lz1:8 = zext(lr1);
+    lz2:8 = zext(lr2);
+    lz3:8 = zext(lr3);
+    lz4:8 = zext(lr4);
+    lz5:8 = zext(lr5);
+    lz6:8 = zext(lr6);
+    lz7:8 = zext(lr7);
+    D = (lz0 << 56) | (lz1 << 48) | (lz2 << 40) | (lz3 << 32) | (lz4 << 24) | (lz5 << 16) | (lz6 << 8) | lz7;
+}
+
+:evaddih D,B,BU_UIMM is OP=4 & XOP_0_10=513 & D & B & BU_UIMM
+{
+    lb0:2 = B(6);
+    lb1:2 = B(4);
+    lb2:2 = B(2);
+    lb3:2 = B:2;
+    lr0:2 = lb0 + BU_UIMM;
+    lr1:2 = lb1 + BU_UIMM;
+    lr2:2 = lb2 + BU_UIMM;
+    lr3:2 = lb3 + BU_UIMM;
+    lz0:8 = zext(lr0);
+    lz1:8 = zext(lr1);
+    lz2:8 = zext(lr2);
+    lz3:8 = zext(lr3);
+    D = (lz0 << 48) | (lz1 << 32) | (lz2 << 16) | lz3;
+}
+
+:evsubifh D,BU_UIMM,B is OP=4 & XOP_0_10=517 & D & BU_UIMM & B
+{
+    lb0:2 = B(6);
+    lb1:2 = B(4);
+    lb2:2 = B(2);
+    lb3:2 = B:2;
+    lr0:2 = lb0 - BU_UIMM;
+    lr1:2 = lb1 - BU_UIMM;
+    lr2:2 = lb2 - BU_UIMM;
+    lr3:2 = lb3 - BU_UIMM;
+    lz0:8 = zext(lr0);
+    lz1:8 = zext(lr1);
+    lz2:8 = zext(lr2);
+    lz3:8 = zext(lr3);
+    D = (lz0 << 48) | (lz1 << 32) | (lz2 << 16) | lz3;
+}
+
+:evsubifb D,BU_UIMM,B is OP=4 & XOP_0_10=519 & D & BU_UIMM & B
+{
+    lb0:1 = B(7);
+    lb1:1 = B(6);
+    lb2:1 = B(5);
+    lb3:1 = B(4);
+    lb4:1 = B(3);
+    lb5:1 = B(2);
+    lb6:1 = B(1);
+    lb7:1 = B:1;
+    lr0:1 = lb0 - BU_UIMM;
+    lr1:1 = lb1 - BU_UIMM;
+    lr2:1 = lb2 - BU_UIMM;
+    lr3:1 = lb3 - BU_UIMM;
+    lr4:1 = lb4 - BU_UIMM;
+    lr5:1 = lb5 - BU_UIMM;
+    lr6:1 = lb6 - BU_UIMM;
+    lr7:1 = lb7 - BU_UIMM;
+    lz0:8 = zext(lr0);
+    lz1:8 = zext(lr1);
+    lz2:8 = zext(lr2);
+    lz3:8 = zext(lr3);
+    lz4:8 = zext(lr4);
+    lz5:8 = zext(lr5);
+    lz6:8 = zext(lr6);
+    lz7:8 = zext(lr7);
+    D = (lz0 << 56) | (lz1 << 48) | (lz2 << 40) | (lz3 << 32) | (lz4 << 24) | (lz5 << 16) | (lz6 << 8) | lz7;
+}
+
+:evabsb D,A is OP=4 & XOP_0_10=520 & B_BITS=2 & D & A
+{
+    la0:1 = A(7);
+    la1:1 = A(6);
+    la2:1 = A(5);
+    la3:1 = A(4);
+    la4:1 = A(3);
+    la5:1 = A(2);
+    la6:1 = A(1);
+    la7:1 = A:1;
+    lm0:1 = la0 s>> 7;
+    lr0:1 = (la0 ^ lm0) - lm0;
+    lm1:1 = la1 s>> 7;
+    lr1:1 = (la1 ^ lm1) - lm1;
+    lm2:1 = la2 s>> 7;
+    lr2:1 = (la2 ^ lm2) - lm2;
+    lm3:1 = la3 s>> 7;
+    lr3:1 = (la3 ^ lm3) - lm3;
+    lm4:1 = la4 s>> 7;
+    lr4:1 = (la4 ^ lm4) - lm4;
+    lm5:1 = la5 s>> 7;
+    lr5:1 = (la5 ^ lm5) - lm5;
+    lm6:1 = la6 s>> 7;
+    lr6:1 = (la6 ^ lm6) - lm6;
+    lm7:1 = la7 s>> 7;
+    lr7:1 = (la7 ^ lm7) - lm7;
+    lz0:8 = zext(lr0);
+    lz1:8 = zext(lr1);
+    lz2:8 = zext(lr2);
+    lz3:8 = zext(lr3);
+    lz4:8 = zext(lr4);
+    lz5:8 = zext(lr5);
+    lz6:8 = zext(lr6);
+    lz7:8 = zext(lr7);
+    D = (lz0 << 56) | (lz1 << 48) | (lz2 << 40) | (lz3 << 32) | (lz4 << 24) | (lz5 << 16) | (lz6 << 8) | lz7;
+}
+
+:evabsh D,A is OP=4 & XOP_0_10=520 & B_BITS=4 & D & A
+{
+    la0:2 = A(6);
+    la1:2 = A(4);
+    la2:2 = A(2);
+    la3:2 = A:2;
+    lm0:2 = la0 s>> 15;
+    lr0:2 = (la0 ^ lm0) - lm0;
+    lm1:2 = la1 s>> 15;
+    lr1:2 = (la1 ^ lm1) - lm1;
+    lm2:2 = la2 s>> 15;
+    lr2:2 = (la2 ^ lm2) - lm2;
+    lm3:2 = la3 s>> 15;
+    lr3:2 = (la3 ^ lm3) - lm3;
+    lz0:8 = zext(lr0);
+    lz1:8 = zext(lr1);
+    lz2:8 = zext(lr2);
+    lz3:8 = zext(lr3);
+    D = (lz0 << 48) | (lz1 << 32) | (lz2 << 16) | lz3;
+}
+
+:evabsd D,A is OP=4 & XOP_0_10=520 & B_BITS=6 & D & A
+{
+    la0:8 = A;
+    lm0:8 = la0 s>> 63;
+    lr0:8 = (la0 ^ lm0) - lm0;
+    D = lr0;
+}
+
+:evabss D,A is OP=4 & XOP_0_10=520 & B_BITS=8 & D & A
+{
+    D = __ev_abss(A);
+}
+
+:evabsbs D,A is OP=4 & XOP_0_10=520 & B_BITS=10 & D & A
+{
+    D = __ev_absbs(A);
+}
+
+:evabshs D,A is OP=4 & XOP_0_10=520 & B_BITS=12 & D & A
+{
+    D = __ev_abshs(A);
+}
+
+:evabsds D,A is OP=4 & XOP_0_10=520 & B_BITS=14 & D & A
+{
+    D = __ev_absds(A);
+}
+
+:evnegwo D,A is OP=4 & XOP_0_10=521 & B_BITS=1 & D & A
+{
+    la0:4 = A(4);
+    la1:4 = A:4;
+    lr0:4 = la0;
+    lr1:4 = -la1;
+    lz0:8 = zext(lr0);
+    lz1:8 = zext(lr1);
+    D = (lz0 << 32) | lz1;
+}
+
+:evnegb D,A is OP=4 & XOP_0_10=521 & B_BITS=2 & D & A
+{
+    la0:1 = A(7);
+    la1:1 = A(6);
+    la2:1 = A(5);
+    la3:1 = A(4);
+    la4:1 = A(3);
+    la5:1 = A(2);
+    la6:1 = A(1);
+    la7:1 = A:1;
+    lr0:1 = -la0;
+    lr1:1 = -la1;
+    lr2:1 = -la2;
+    lr3:1 = -la3;
+    lr4:1 = -la4;
+    lr5:1 = -la5;
+    lr6:1 = -la6;
+    lr7:1 = -la7;
+    lz0:8 = zext(lr0);
+    lz1:8 = zext(lr1);
+    lz2:8 = zext(lr2);
+    lz3:8 = zext(lr3);
+    lz4:8 = zext(lr4);
+    lz5:8 = zext(lr5);
+    lz6:8 = zext(lr6);
+    lz7:8 = zext(lr7);
+    D = (lz0 << 56) | (lz1 << 48) | (lz2 << 40) | (lz3 << 32) | (lz4 << 24) | (lz5 << 16) | (lz6 << 8) | lz7;
+}
+
+:evnegbo D,A is OP=4 & XOP_0_10=521 & B_BITS=3 & D & A
+{
+    D = __ev_negbo(A);
+}
+
+:evnegh D,A is OP=4 & XOP_0_10=521 & B_BITS=4 & D & A
+{
+    la0:2 = A(6);
+    la1:2 = A(4);
+    la2:2 = A(2);
+    la3:2 = A:2;
+    lr0:2 = -la0;
+    lr1:2 = -la1;
+    lr2:2 = -la2;
+    lr3:2 = -la3;
+    lz0:8 = zext(lr0);
+    lz1:8 = zext(lr1);
+    lz2:8 = zext(lr2);
+    lz3:8 = zext(lr3);
+    D = (lz0 << 48) | (lz1 << 32) | (lz2 << 16) | lz3;
+}
+
+:evnegho D,A is OP=4 & XOP_0_10=521 & B_BITS=5 & D & A
+{
+    D = __ev_negho(A);
+}
+
+:evnegd D,A is OP=4 & XOP_0_10=521 & B_BITS=6 & D & A
+{
+    la0:8 = A;
+    lr0:8 = -la0;
+    D = lr0;
+}
+
+:evnegs D,A is OP=4 & XOP_0_10=521 & B_BITS=8 & D & A
+{
+    D = __ev_negs(A);
+}
+
+:evnegwos D,A is OP=4 & XOP_0_10=521 & B_BITS=9 & D & A
+{
+    D = __ev_negwos(A);
+}
+
+:evnegbs D,A is OP=4 & XOP_0_10=521 & B_BITS=10 & D & A
+{
+    D = __ev_negbs(A);
+}
+
+:evnegbos D,A is OP=4 & XOP_0_10=521 & B_BITS=11 & D & A
+{
+    D = __ev_negbos(A);
+}
+
+:evneghs D,A is OP=4 & XOP_0_10=521 & B_BITS=12 & D & A
+{
+    D = __ev_neghs(A);
+}
+
+:evneghos D,A is OP=4 & XOP_0_10=521 & B_BITS=13 & D & A
+{
+    D = __ev_neghos(A);
+}
+
+:evnegds D,A is OP=4 & XOP_0_10=521 & B_BITS=14 & D & A
+{
+    D = __ev_negds(A);
+}
+
+:evextzb D,A is OP=4 & XOP_0_10=522 & B_BITS=1 & D & A
+{
+    la0:4 = A(4);
+    la1:4 = A:4;
+    lr0:4 = la0 & 0xff;
+    lr1:4 = la1 & 0xff;
+    lz0:8 = zext(lr0);
+    lz1:8 = zext(lr1);
+    D = (lz0 << 32) | lz1;
+}
+
+:evextsbh D,A is OP=4 & XOP_0_10=522 & B_BITS=4 & D & A
+{
+    la0:2 = A(6);
+    la1:2 = A(4);
+    la2:2 = A(2);
+    la3:2 = A:2;
+    lt0:1 = la0:1;
+    lr0:2 = sext(lt0);
+    lt1:1 = la1:1;
+    lr1:2 = sext(lt1);
+    lt2:1 = la2:1;
+    lr2:2 = sext(lt2);
+    lt3:1 = la3:1;
+    lr3:2 = sext(lt3);
+    lz0:8 = zext(lr0);
+    lz1:8 = zext(lr1);
+    lz2:8 = zext(lr2);
+    lz3:8 = zext(lr3);
+    D = (lz0 << 48) | (lz1 << 32) | (lz2 << 16) | lz3;
+}
+
+:evextsw D,A is OP=4 & XOP_0_10=523 & B_BITS=6 & D & A
+{
+    l_lo:4 = A:4;
+    D = sext(l_lo);
+}
+
+:evrndwh D,A is OP=4 & XOP_0_10=524 & B_BITS=0 & D & A
+{
+    D = __ev_rndwh(A);
+}
+
+:evrndhb D,A is OP=4 & XOP_0_10=524 & B_BITS=4 & D & A
+{
+    D = __ev_rndhb(A);
+}
+
+:evrnddw D,A is OP=4 & XOP_0_10=524 & B_BITS=6 & D & A
+{
+    D = __ev_rnddw(A);
+}
+
+:evrndwhus D,A is OP=4 & XOP_0_10=524 & B_BITS=8 & D & A
+{
+    D = __ev_rndwhus(A);
+}
+
+:evrndwhss D,A is OP=4 & XOP_0_10=524 & B_BITS=9 & D & A
+{
+    D = __ev_rndwhss(A);
+}
+
+:evrndhbus D,A is OP=4 & XOP_0_10=524 & B_BITS=12 & D & A
+{
+    D = __ev_rndhbus(A);
+}
+
+:evrndhbss D,A is OP=4 & XOP_0_10=524 & B_BITS=13 & D & A
+{
+    D = __ev_rndhbss(A);
+}
+
+:evrnddwus D,A is OP=4 & XOP_0_10=524 & B_BITS=14 & D & A
+{
+    D = __ev_rnddwus(A);
+}
+
+:evrnddwss D,A is OP=4 & XOP_0_10=524 & B_BITS=15 & D & A
+{
+    D = __ev_rnddwss(A);
+}
+
+:evrndwnh D,A is OP=4 & XOP_0_10=524 & B_BITS=16 & D & A
+{
+    D = __ev_rndwnh(A);
+}
+
+:evrndhnb D,A is OP=4 & XOP_0_10=524 & B_BITS=20 & D & A
+{
+    D = __ev_rndhnb(A);
+}
+
+:evrnddnw D,A is OP=4 & XOP_0_10=524 & B_BITS=22 & D & A
+{
+    D = __ev_rnddnw(A);
+}
+
+:evrndwnhus D,A is OP=4 & XOP_0_10=524 & B_BITS=24 & D & A
+{
+    D = __ev_rndwnhus(A);
+}
+
+:evrndwnhss D,A is OP=4 & XOP_0_10=524 & B_BITS=25 & D & A
+{
+    D = __ev_rndwnhss(A);
+}
+
+:evrndhnbus D,A is OP=4 & XOP_0_10=524 & B_BITS=28 & D & A
+{
+    D = __ev_rndhnbus(A);
+}
+
+:evrndhnbss D,A is OP=4 & XOP_0_10=524 & B_BITS=29 & D & A
+{
+    D = __ev_rndhnbss(A);
+}
+
+:evrnddnwus D,A is OP=4 & XOP_0_10=524 & B_BITS=30 & D & A
+{
+    D = __ev_rnddnwus(A);
+}
+
+:evrnddnwss D,A is OP=4 & XOP_0_10=524 & B_BITS=31 & D & A
+{
+    D = __ev_rnddnwss(A);
+}
+
+:evcntlzh D,A is OP=4 & XOP_0_10=525 & B_BITS=4 & D & A
+{
+    D = __ev_cntlzh(A);
+}
+
+:evcntlsh D,A is OP=4 & XOP_0_10=526 & B_BITS=4 & D & A
+{
+    D = __ev_cntlsh(A);
+}
+
+:evpopcntb D,A is OP=4 & XOP_0_10=526 & B_BITS=26 & D & A
+{
+    D = __ev_popcntb(A);
+}
+
+:circinc D,A,B is OP=4 & XOP_0_10=528 & D & A & B
+{
+    D = __circinc(A, B);
+}
+
+:evunpkhibui D,A is OP=4 & XOP_0_10=540 & B_BITS=0 & D & A
+{
+    D = __ev_unpkhibui(A);
+}
+
+:evunpkhibsi D,A is OP=4 & XOP_0_10=540 & B_BITS=1 & D & A
+{
+    D = __ev_unpkhibsi(A);
+}
+
+:evunpkhihui D,A is OP=4 & XOP_0_10=540 & B_BITS=2 & D & A
+{
+    D = __ev_unpkhihui(A);
+}
+
+:evunpkhihsi D,A is OP=4 & XOP_0_10=540 & B_BITS=3 & D & A
+{
+    D = __ev_unpkhihsi(A);
+}
+
+:evunpklobui D,A is OP=4 & XOP_0_10=540 & B_BITS=4 & D & A
+{
+    D = __ev_unpklobui(A);
+}
+
+:evunpklobsi D,A is OP=4 & XOP_0_10=540 & B_BITS=5 & D & A
+{
+    D = __ev_unpklobsi(A);
+}
+
+:evunpklohui D,A is OP=4 & XOP_0_10=540 & B_BITS=6 & D & A
+{
+    D = __ev_unpklohui(A);
+}
+
+:evunpklohsi D,A is OP=4 & XOP_0_10=540 & B_BITS=7 & D & A
+{
+    D = __ev_unpklohsi(A);
+}
+
+:evunpklohf D,A is OP=4 & XOP_0_10=540 & B_BITS=8 & D & A
+{
+    D = __ev_unpklohf(A);
+}
+
+:evunpkhihf D,A is OP=4 & XOP_0_10=540 & B_BITS=9 & D & A
+{
+    D = __ev_unpkhihf(A);
+}
+
+:evunpklowgsf D,A is OP=4 & XOP_0_10=540 & B_BITS=12 & D & A
+{
+    D = __ev_unpklowgsf(A);
+}
+
+:evunpkhiwgsf D,A is OP=4 & XOP_0_10=540 & B_BITS=13 & D & A
+{
+    D = __ev_unpkhiwgsf(A);
+}
+
+:evsatsduw D,A is OP=4 & XOP_0_10=540 & B_BITS=16 & D & A
+{
+    D = __ev_satsduw(A);
+}
+
+:evsatsdsw D,A is OP=4 & XOP_0_10=540 & B_BITS=17 & D & A
+{
+    D = __ev_satsdsw(A);
+}
+
+:evsatshub D,A is OP=4 & XOP_0_10=540 & B_BITS=18 & D & A
+{
+    D = __ev_satshub(A);
+}
+
+:evsatshsb D,A is OP=4 & XOP_0_10=540 & B_BITS=19 & D & A
+{
+    D = __ev_satshsb(A);
+}
+
+:evsatuwuh D,A is OP=4 & XOP_0_10=540 & B_BITS=20 & D & A
+{
+    D = __ev_satuwuh(A);
+}
+
+:evsatswsh D,A is OP=4 & XOP_0_10=540 & B_BITS=21 & D & A
+{
+    D = __ev_satswsh(A);
+}
+
+:evsatswuh D,A is OP=4 & XOP_0_10=540 & B_BITS=22 & D & A
+{
+    D = __ev_satswuh(A);
+}
+
+:evsatuhub D,A is OP=4 & XOP_0_10=540 & B_BITS=23 & D & A
+{
+    D = __ev_satuhub(A);
+}
+
+:evsatuduw D,A is OP=4 & XOP_0_10=540 & B_BITS=24 & D & A
+{
+    D = __ev_satuduw(A);
+}
+
+:evsatuwsw D,A is OP=4 & XOP_0_10=540 & B_BITS=25 & D & A
+{
+    D = __ev_satuwsw(A);
+}
+
+:evsatshuh D,A is OP=4 & XOP_0_10=540 & B_BITS=26 & D & A
+{
+    D = __ev_satshuh(A);
+}
+
+:evsatuhsh D,A is OP=4 & XOP_0_10=540 & B_BITS=27 & D & A
+{
+    D = __ev_satuhsh(A);
+}
+
+:evsatswuw D,A is OP=4 & XOP_0_10=540 & B_BITS=28 & D & A
+{
+    D = __ev_satswuw(A);
+}
+
+:evsatswgsdf D,A is OP=4 & XOP_0_10=540 & B_BITS=29 & D & A
+{
+    D = __ev_satswgsdf(A);
+}
+
+:evsatsbub D,A is OP=4 & XOP_0_10=540 & B_BITS=30 & D & A
+{
+    D = __ev_satsbub(A);
+}
+
+:evsatubsb D,A is OP=4 & XOP_0_10=540 & B_BITS=31 & D & A
+{
+    D = __ev_satubsb(A);
+}
+
+:evmaxhpuw D,A is OP=4 & XOP_0_10=541 & B_BITS=0 & D & A
+{
+    D = __ev_maxhpuw(A);
+}
+
+:evmaxhpsw D,A is OP=4 & XOP_0_10=541 & B_BITS=1 & D & A
+{
+    D = __ev_maxhpsw(A);
+}
+
+:evmaxbpuh D,A is OP=4 & XOP_0_10=541 & B_BITS=4 & D & A
+{
+    D = __ev_maxbpuh(A);
+}
+
+:evmaxbpsh D,A is OP=4 & XOP_0_10=541 & B_BITS=5 & D & A
+{
+    D = __ev_maxbpsh(A);
+}
+
+:evmaxwpud D,A is OP=4 & XOP_0_10=541 & B_BITS=6 & D & A
+{
+    D = __ev_maxwpud(A);
+}
+
+:evmaxwpsd D,A is OP=4 & XOP_0_10=541 & B_BITS=7 & D & A
+{
+    D = __ev_maxwpsd(A);
+}
+
+:evminhpuw D,A is OP=4 & XOP_0_10=541 & B_BITS=8 & D & A
+{
+    D = __ev_minhpuw(A);
+}
+
+:evminhpsw D,A is OP=4 & XOP_0_10=541 & B_BITS=9 & D & A
+{
+    D = __ev_minhpsw(A);
+}
+
+:evminbpuh D,A is OP=4 & XOP_0_10=541 & B_BITS=12 & D & A
+{
+    D = __ev_minbpuh(A);
+}
+
+:evminbpsh D,A is OP=4 & XOP_0_10=541 & B_BITS=13 & D & A
+{
+    D = __ev_minbpsh(A);
+}
+
+:evminwpud D,A is OP=4 & XOP_0_10=541 & B_BITS=14 & D & A
+{
+    D = __ev_minwpud(A);
+}
+
+:evminwpsd D,A is OP=4 & XOP_0_10=541 & B_BITS=15 & D & A
+{
+    D = __ev_minwpsd(A);
+}
+
+:evmaxmagws D,A,B is OP=4 & XOP_0_10=543 & D & A & B
+{
+    D = __ev_maxmagws(A, B);
+}
+
+:evsl D,A,B is OP=4 & XOP_0_10=549 & D & A & B
+{
+    l_sh:8 = B & 0x7f;
+    D = A << l_sh;
+}
+
+:evsli D,A,EVUIMM is OP=4 & XOP_0_10=551 & D & A & EVUIMM
+{
+    D = A << EVUIMM;
+}
+
+:evsplatie D,A_BITSS is OP=4 & XOP_0_10=553 & B_BITS=1 & D & A_BITSS
+{
+    ls5:1 = A_BITSS;
+    l_v:4 = sext(ls5);
+    l_zv:4 = 0;
+    lr0:4 = l_v;
+    lr1:4 = l_zv;
+    lz0:8 = zext(lr0);
+    lz1:8 = zext(lr1);
+    D = (lz0 << 32) | lz1;
+}
+
+:evsplatib D,A_BITSS is OP=4 & XOP_0_10=553 & B_BITS=2 & D & A_BITSS
+{
+    ls5:1 = A_BITSS;
+    l_v:1 = ls5;
+    l_zv:1 = 0;
+    lr0:1 = l_v;
+    lr1:1 = l_v;
+    lr2:1 = l_v;
+    lr3:1 = l_v;
+    lr4:1 = l_v;
+    lr5:1 = l_v;
+    lr6:1 = l_v;
+    lr7:1 = l_v;
+    lz0:8 = zext(lr0);
+    lz1:8 = zext(lr1);
+    lz2:8 = zext(lr2);
+    lz3:8 = zext(lr3);
+    lz4:8 = zext(lr4);
+    lz5:8 = zext(lr5);
+    lz6:8 = zext(lr6);
+    lz7:8 = zext(lr7);
+    D = (lz0 << 56) | (lz1 << 48) | (lz2 << 40) | (lz3 << 32) | (lz4 << 24) | (lz5 << 16) | (lz6 << 8) | lz7;
+}
+
+:evsplatibe D,A_BITSS is OP=4 & XOP_0_10=553 & B_BITS=3 & D & A_BITSS
+{
+    ls5:1 = A_BITSS;
+    l_v:1 = ls5;
+    l_zv:1 = 0;
+    lr0:1 = l_v;
+    lr1:1 = l_zv;
+    lr2:1 = l_v;
+    lr3:1 = l_zv;
+    lr4:1 = l_v;
+    lr5:1 = l_zv;
+    lr6:1 = l_v;
+    lr7:1 = l_zv;
+    lz0:8 = zext(lr0);
+    lz1:8 = zext(lr1);
+    lz2:8 = zext(lr2);
+    lz3:8 = zext(lr3);
+    lz4:8 = zext(lr4);
+    lz5:8 = zext(lr5);
+    lz6:8 = zext(lr6);
+    lz7:8 = zext(lr7);
+    D = (lz0 << 56) | (lz1 << 48) | (lz2 << 40) | (lz3 << 32) | (lz4 << 24) | (lz5 << 16) | (lz6 << 8) | lz7;
+}
+
+:evsplatih D,A_BITSS is OP=4 & XOP_0_10=553 & B_BITS=4 & D & A_BITSS
+{
+    ls5:1 = A_BITSS;
+    l_v:2 = sext(ls5);
+    l_zv:2 = 0;
+    lr0:2 = l_v;
+    lr1:2 = l_v;
+    lr2:2 = l_v;
+    lr3:2 = l_v;
+    lz0:8 = zext(lr0);
+    lz1:8 = zext(lr1);
+    lz2:8 = zext(lr2);
+    lz3:8 = zext(lr3);
+    D = (lz0 << 48) | (lz1 << 32) | (lz2 << 16) | lz3;
+}
+
+:evsplatihe D,A_BITSS is OP=4 & XOP_0_10=553 & B_BITS=5 & D & A_BITSS
+{
+    ls5:1 = A_BITSS;
+    l_v:2 = sext(ls5);
+    l_zv:2 = 0;
+    lr0:2 = l_v;
+    lr1:2 = l_zv;
+    lr2:2 = l_v;
+    lr3:2 = l_zv;
+    lz0:8 = zext(lr0);
+    lz1:8 = zext(lr1);
+    lz2:8 = zext(lr2);
+    lz3:8 = zext(lr3);
+    D = (lz0 << 48) | (lz1 << 32) | (lz2 << 16) | lz3;
+}
+
+:evsplatid D,A_BITSS is OP=4 & XOP_0_10=553 & B_BITS=6 & D & A_BITSS
+{
+    ls5:1 = A_BITSS;
+    l_v:8 = sext(ls5);
+    l_zv:8 = 0;
+    lr0:8 = l_v;
+    D = lr0;
+}
+
+:evsplatia D,A_BITSS is OP=4 & XOP_0_10=553 & B_BITS=16 & D & A_BITSS
+{
+    ls5:1 = A_BITSS;
+    l_v:4 = sext(ls5);
+    l_zv:4 = 0;
+    lr0:4 = l_v;
+    lr1:4 = l_v;
+    lz0:8 = zext(lr0);
+    lz1:8 = zext(lr1);
+    D = (lz0 << 32) | lz1;
+    ACC = D;
+}
+
+:evsplatiea D,A_BITSS is OP=4 & XOP_0_10=553 & B_BITS=17 & D & A_BITSS
+{
+    ls5:1 = A_BITSS;
+    l_v:4 = sext(ls5);
+    l_zv:4 = 0;
+    lr0:4 = l_v;
+    lr1:4 = l_zv;
+    lz0:8 = zext(lr0);
+    lz1:8 = zext(lr1);
+    D = (lz0 << 32) | lz1;
+    ACC = D;
+}
+
+:evsplatiba D,A_BITSS is OP=4 & XOP_0_10=553 & B_BITS=18 & D & A_BITSS
+{
+    ls5:1 = A_BITSS;
+    l_v:1 = ls5;
+    l_zv:1 = 0;
+    lr0:1 = l_v;
+    lr1:1 = l_v;
+    lr2:1 = l_v;
+    lr3:1 = l_v;
+    lr4:1 = l_v;
+    lr5:1 = l_v;
+    lr6:1 = l_v;
+    lr7:1 = l_v;
+    lz0:8 = zext(lr0);
+    lz1:8 = zext(lr1);
+    lz2:8 = zext(lr2);
+    lz3:8 = zext(lr3);
+    lz4:8 = zext(lr4);
+    lz5:8 = zext(lr5);
+    lz6:8 = zext(lr6);
+    lz7:8 = zext(lr7);
+    D = (lz0 << 56) | (lz1 << 48) | (lz2 << 40) | (lz3 << 32) | (lz4 << 24) | (lz5 << 16) | (lz6 << 8) | lz7;
+    ACC = D;
+}
+
+:evsplatibea D,A_BITSS is OP=4 & XOP_0_10=553 & B_BITS=19 & D & A_BITSS
+{
+    ls5:1 = A_BITSS;
+    l_v:1 = ls5;
+    l_zv:1 = 0;
+    lr0:1 = l_v;
+    lr1:1 = l_zv;
+    lr2:1 = l_v;
+    lr3:1 = l_zv;
+    lr4:1 = l_v;
+    lr5:1 = l_zv;
+    lr6:1 = l_v;
+    lr7:1 = l_zv;
+    lz0:8 = zext(lr0);
+    lz1:8 = zext(lr1);
+    lz2:8 = zext(lr2);
+    lz3:8 = zext(lr3);
+    lz4:8 = zext(lr4);
+    lz5:8 = zext(lr5);
+    lz6:8 = zext(lr6);
+    lz7:8 = zext(lr7);
+    D = (lz0 << 56) | (lz1 << 48) | (lz2 << 40) | (lz3 << 32) | (lz4 << 24) | (lz5 << 16) | (lz6 << 8) | lz7;
+    ACC = D;
+}
+
+:evsplatiha D,A_BITSS is OP=4 & XOP_0_10=553 & B_BITS=20 & D & A_BITSS
+{
+    ls5:1 = A_BITSS;
+    l_v:2 = sext(ls5);
+    l_zv:2 = 0;
+    lr0:2 = l_v;
+    lr1:2 = l_v;
+    lr2:2 = l_v;
+    lr3:2 = l_v;
+    lz0:8 = zext(lr0);
+    lz1:8 = zext(lr1);
+    lz2:8 = zext(lr2);
+    lz3:8 = zext(lr3);
+    D = (lz0 << 48) | (lz1 << 32) | (lz2 << 16) | lz3;
+    ACC = D;
+}
+
+:evsplatihea D,A_BITSS is OP=4 & XOP_0_10=553 & B_BITS=21 & D & A_BITSS
+{
+    ls5:1 = A_BITSS;
+    l_v:2 = sext(ls5);
+    l_zv:2 = 0;
+    lr0:2 = l_v;
+    lr1:2 = l_zv;
+    lr2:2 = l_v;
+    lr3:2 = l_zv;
+    lz0:8 = zext(lr0);
+    lz1:8 = zext(lr1);
+    lz2:8 = zext(lr2);
+    lz3:8 = zext(lr3);
+    D = (lz0 << 48) | (lz1 << 32) | (lz2 << 16) | lz3;
+    ACC = D;
+}
+
+:evsplatida D,A_BITSS is OP=4 & XOP_0_10=553 & B_BITS=22 & D & A_BITSS
+{
+    ls5:1 = A_BITSS;
+    l_v:8 = sext(ls5);
+    l_zv:8 = 0;
+    lr0:8 = l_v;
+    D = lr0;
+    ACC = D;
+}
+
+:evsplatfio D,A_BITSS is OP=4 & XOP_0_10=555 & B_BITS=1 & D & A_BITSS
+{
+    ls5:1 = A_BITSS;
+    l_v:4 = (A_BITSS & 0x1f) << 27;
+    l_zv:4 = 0;
+    lr0:4 = l_zv;
+    lr1:4 = l_v;
+    lz0:8 = zext(lr0);
+    lz1:8 = zext(lr1);
+    D = (lz0 << 32) | lz1;
+}
+
+:evsplatfib D,A_BITSS is OP=4 & XOP_0_10=555 & B_BITS=2 & D & A_BITSS
+{
+    ls5:1 = A_BITSS;
+    l_v:1 = (A_BITSS & 0x1f) << 3;
+    l_zv:1 = 0;
+    lr0:1 = l_v;
+    lr1:1 = l_v;
+    lr2:1 = l_v;
+    lr3:1 = l_v;
+    lr4:1 = l_v;
+    lr5:1 = l_v;
+    lr6:1 = l_v;
+    lr7:1 = l_v;
+    lz0:8 = zext(lr0);
+    lz1:8 = zext(lr1);
+    lz2:8 = zext(lr2);
+    lz3:8 = zext(lr3);
+    lz4:8 = zext(lr4);
+    lz5:8 = zext(lr5);
+    lz6:8 = zext(lr6);
+    lz7:8 = zext(lr7);
+    D = (lz0 << 56) | (lz1 << 48) | (lz2 << 40) | (lz3 << 32) | (lz4 << 24) | (lz5 << 16) | (lz6 << 8) | lz7;
+}
+
+:evsplatfibo D,A_BITSS is OP=4 & XOP_0_10=555 & B_BITS=3 & D & A_BITSS
+{
+    ls5:1 = A_BITSS;
+    l_v:1 = (A_BITSS & 0x1f) << 3;
+    l_zv:1 = 0;
+    lr0:1 = l_zv;
+    lr1:1 = l_v;
+    lr2:1 = l_zv;
+    lr3:1 = l_v;
+    lr4:1 = l_zv;
+    lr5:1 = l_v;
+    lr6:1 = l_zv;
+    lr7:1 = l_v;
+    lz0:8 = zext(lr0);
+    lz1:8 = zext(lr1);
+    lz2:8 = zext(lr2);
+    lz3:8 = zext(lr3);
+    lz4:8 = zext(lr4);
+    lz5:8 = zext(lr5);
+    lz6:8 = zext(lr6);
+    lz7:8 = zext(lr7);
+    D = (lz0 << 56) | (lz1 << 48) | (lz2 << 40) | (lz3 << 32) | (lz4 << 24) | (lz5 << 16) | (lz6 << 8) | lz7;
+}
+
+:evsplatfih D,A_BITSS is OP=4 & XOP_0_10=555 & B_BITS=4 & D & A_BITSS
+{
+    ls5:1 = A_BITSS;
+    l_v:2 = (A_BITSS & 0x1f) << 11;
+    l_zv:2 = 0;
+    lr0:2 = l_v;
+    lr1:2 = l_v;
+    lr2:2 = l_v;
+    lr3:2 = l_v;
+    lz0:8 = zext(lr0);
+    lz1:8 = zext(lr1);
+    lz2:8 = zext(lr2);
+    lz3:8 = zext(lr3);
+    D = (lz0 << 48) | (lz1 << 32) | (lz2 << 16) | lz3;
+}
+
+:evsplatfiho D,A_BITSS is OP=4 & XOP_0_10=555 & B_BITS=5 & D & A_BITSS
+{
+    ls5:1 = A_BITSS;
+    l_v:2 = (A_BITSS & 0x1f) << 11;
+    l_zv:2 = 0;
+    lr0:2 = l_zv;
+    lr1:2 = l_v;
+    lr2:2 = l_zv;
+    lr3:2 = l_v;
+    lz0:8 = zext(lr0);
+    lz1:8 = zext(lr1);
+    lz2:8 = zext(lr2);
+    lz3:8 = zext(lr3);
+    D = (lz0 << 48) | (lz1 << 32) | (lz2 << 16) | lz3;
+}
+
+:evsplatfid D,A_BITSS is OP=4 & XOP_0_10=555 & B_BITS=6 & D & A_BITSS
+{
+    ls5:1 = A_BITSS;
+    l_v:8 = (A_BITSS & 0x1f) << 59;
+    l_zv:8 = 0;
+    lr0:8 = l_v;
+    D = lr0;
+}
+
+:evsplatfia D,A_BITSS is OP=4 & XOP_0_10=555 & B_BITS=16 & D & A_BITSS
+{
+    ls5:1 = A_BITSS;
+    l_v:4 = (A_BITSS & 0x1f) << 27;
+    l_zv:4 = 0;
+    lr0:4 = l_v;
+    lr1:4 = l_v;
+    lz0:8 = zext(lr0);
+    lz1:8 = zext(lr1);
+    D = (lz0 << 32) | lz1;
+    ACC = D;
+}
+
+:evsplatfioa D,A_BITSS is OP=4 & XOP_0_10=555 & B_BITS=17 & D & A_BITSS
+{
+    ls5:1 = A_BITSS;
+    l_v:4 = (A_BITSS & 0x1f) << 27;
+    l_zv:4 = 0;
+    lr0:4 = l_zv;
+    lr1:4 = l_v;
+    lz0:8 = zext(lr0);
+    lz1:8 = zext(lr1);
+    D = (lz0 << 32) | lz1;
+    ACC = D;
+}
+
+:evsplatfiba D,A_BITSS is OP=4 & XOP_0_10=555 & B_BITS=18 & D & A_BITSS
+{
+    ls5:1 = A_BITSS;
+    l_v:1 = (A_BITSS & 0x1f) << 3;
+    l_zv:1 = 0;
+    lr0:1 = l_v;
+    lr1:1 = l_v;
+    lr2:1 = l_v;
+    lr3:1 = l_v;
+    lr4:1 = l_v;
+    lr5:1 = l_v;
+    lr6:1 = l_v;
+    lr7:1 = l_v;
+    lz0:8 = zext(lr0);
+    lz1:8 = zext(lr1);
+    lz2:8 = zext(lr2);
+    lz3:8 = zext(lr3);
+    lz4:8 = zext(lr4);
+    lz5:8 = zext(lr5);
+    lz6:8 = zext(lr6);
+    lz7:8 = zext(lr7);
+    D = (lz0 << 56) | (lz1 << 48) | (lz2 << 40) | (lz3 << 32) | (lz4 << 24) | (lz5 << 16) | (lz6 << 8) | lz7;
+    ACC = D;
+}
+
+:evsplatfiboa D,A_BITSS is OP=4 & XOP_0_10=555 & B_BITS=19 & D & A_BITSS
+{
+    ls5:1 = A_BITSS;
+    l_v:1 = (A_BITSS & 0x1f) << 3;
+    l_zv:1 = 0;
+    lr0:1 = l_zv;
+    lr1:1 = l_v;
+    lr2:1 = l_zv;
+    lr3:1 = l_v;
+    lr4:1 = l_zv;
+    lr5:1 = l_v;
+    lr6:1 = l_zv;
+    lr7:1 = l_v;
+    lz0:8 = zext(lr0);
+    lz1:8 = zext(lr1);
+    lz2:8 = zext(lr2);
+    lz3:8 = zext(lr3);
+    lz4:8 = zext(lr4);
+    lz5:8 = zext(lr5);
+    lz6:8 = zext(lr6);
+    lz7:8 = zext(lr7);
+    D = (lz0 << 56) | (lz1 << 48) | (lz2 << 40) | (lz3 << 32) | (lz4 << 24) | (lz5 << 16) | (lz6 << 8) | lz7;
+    ACC = D;
+}
+
+:evsplatfiha D,A_BITSS is OP=4 & XOP_0_10=555 & B_BITS=20 & D & A_BITSS
+{
+    ls5:1 = A_BITSS;
+    l_v:2 = (A_BITSS & 0x1f) << 11;
+    l_zv:2 = 0;
+    lr0:2 = l_v;
+    lr1:2 = l_v;
+    lr2:2 = l_v;
+    lr3:2 = l_v;
+    lz0:8 = zext(lr0);
+    lz1:8 = zext(lr1);
+    lz2:8 = zext(lr2);
+    lz3:8 = zext(lr3);
+    D = (lz0 << 48) | (lz1 << 32) | (lz2 << 16) | lz3;
+    ACC = D;
+}
+
+:evsplatfihoa D,A_BITSS is OP=4 & XOP_0_10=555 & B_BITS=21 & D & A_BITSS
+{
+    ls5:1 = A_BITSS;
+    l_v:2 = (A_BITSS & 0x1f) << 11;
+    l_zv:2 = 0;
+    lr0:2 = l_zv;
+    lr1:2 = l_v;
+    lr2:2 = l_zv;
+    lr3:2 = l_v;
+    lz0:8 = zext(lr0);
+    lz1:8 = zext(lr1);
+    lz2:8 = zext(lr2);
+    lz3:8 = zext(lr3);
+    D = (lz0 << 48) | (lz1 << 32) | (lz2 << 16) | lz3;
+    ACC = D;
+}
+
+:evsplatfida D,A_BITSS is OP=4 & XOP_0_10=555 & B_BITS=22 & D & A_BITSS
+{
+    ls5:1 = A_BITSS;
+    l_v:8 = (A_BITSS & 0x1f) << 59;
+    l_zv:8 = 0;
+    lr0:8 = l_v;
+    D = lr0;
+    ACC = D;
+}
+
+:evcmpgtdu crfD,A,B is OP=4 & XOP_0_10=560 & BITS_21_22=1 & crfD & A & B
+{
+    l_cr:1 = __ev_cmpgtdu(A, B);
+    crfD = l_cr;
+}
+
+:evcmpgtds crfD,A,B is OP=4 & XOP_0_10=561 & BITS_21_22=1 & crfD & A & B
+{
+    l_cr:1 = __ev_cmpgtds(A, B);
+    crfD = l_cr;
+}
+
+:evcmpltdu crfD,A,B is OP=4 & XOP_0_10=562 & BITS_21_22=1 & crfD & A & B
+{
+    l_cr:1 = __ev_cmpltdu(A, B);
+    crfD = l_cr;
+}
+
+:evcmpltds crfD,A,B is OP=4 & XOP_0_10=563 & BITS_21_22=1 & crfD & A & B
+{
+    l_cr:1 = __ev_cmpltds(A, B);
+    crfD = l_cr;
+}
+
+:evcmpeqd crfD,A,B is OP=4 & XOP_0_10=564 & BITS_21_22=1 & crfD & A & B
+{
+    l_cr:1 = __ev_cmpeqd(A, B);
+    crfD = l_cr;
+}
+
+:evswapbhilo D,A,B is OP=4 & XOP_0_10=568 & D & A & B
+{
+    D = __ev_swapbhilo(A, B);
+}
+
+:evswapblohi D,A,B is OP=4 & XOP_0_10=569 & D & A & B
+{
+    D = __ev_swapblohi(A, B);
+}
+
+:evswaphhilo D,A,B is OP=4 & XOP_0_10=570 & D & A & B
+{
+    D = __ev_swaphhilo(A, B);
+}
+
+:evswaphlohi D,A,B is OP=4 & XOP_0_10=571 & D & A & B
+{
+    D = __ev_swaphlohi(A, B);
+}
+
+:evswaphe D,A,B is OP=4 & XOP_0_10=572 & D & A & B
+{
+    D = __ev_swaphe(A, B);
+}
+
+:evswaphhi D,A,B is OP=4 & XOP_0_10=573 & D & A & B
+{
+    D = __ev_swaphhi(A, B);
+}
+
+:evswaphlo D,A,B is OP=4 & XOP_0_10=574 & D & A & B
+{
+    D = __ev_swaphlo(A, B);
+}
+
+:evswapho D,A,B is OP=4 & XOP_0_10=575 & D & A & B
+{
+    D = __ev_swapho(A, B);
+}
+
+:evinsb D,A,spe2ddd,BITS_13_15 is OP=4 & XOP_1_10=292 & D & A & spe2ddd & BITS_13_15
+{
+    l_k0:1 = spe2ddd;
+    l_k1:1 = BITS_13_15;
+    D = __ev_insb(D, A, l_k0, l_k1);
+}
+
+:evxtrb D,A,spe2ddd,BITS_13_15 is OP=4 & XOP_1_10=293 & D & A & spe2ddd & BITS_13_15
+{
+    l_k0:1 = spe2ddd;
+    l_k1:1 = BITS_13_15;
+    D = __ev_xtrb(A, l_k0, l_k1);
+}
+
+:evsplath D,A,spe2hh is OP=4 & XOP_0_10=588 & BH_BITS=0 & BIT_15=0 & D & A & spe2hh
+{
+    l_k0:1 = spe2hh;
+    D = __ev_splath(A, l_k0);
+}
+
+:evsplatb D,A,BITS_13_15 is OP=4 & XOP_0_10=588 & BH_BITS=2 & D & A & BITS_13_15
+{
+    l_k0:1 = BITS_13_15;
+    D = __ev_splatb(A, l_k0);
+}
+
+:evinsh D,A,BH_BITS,spe2hh is OP=4 & XOP_0_10=589 & BIT_15=0 & D & A & BH_BITS & spe2hh
+{
+    l_k0:1 = BH_BITS;
+    l_k1:1 = spe2hh;
+    D = __ev_insh(D, A, l_k0, l_k1);
+}
+
+:evclrbe D,A,SIX is OP=4 & XOP_0_10=590 & BIT_15=0 & D & A & SIX
+{
+    l_k0:1 = SIX;
+    D = __ev_clrbe(A, l_k0);
+}
+
+:evclrbo D,A,SIX is OP=4 & XOP_0_10=590 & BIT_15=1 & D & A & SIX
+{
+    l_k0:1 = SIX;
+    D = __ev_clrbo(A, l_k0);
+}
+
+:evclrh D,A,SIX is OP=4 & XOP_0_10=591 & BIT_15=1 & D & A & SIX
+{
+    l_k0:1 = SIX;
+    D = __ev_clrh(A, l_k0);
+}
+
+:evxtrh D,A,BH_BITS,spe2hh is OP=4 & XOP_0_10=591 & BIT_15=0 & D & A & BH_BITS & spe2hh
+{
+    l_k0:1 = BH_BITS;
+    l_k1:1 = spe2hh;
+    D = __ev_xtrh(A, l_k0, l_k1);
+}
+
+:evselbitm0 D,A,B is OP=4 & XOP_0_10=592 & D & A & B
+{
+    D = __ev_selbitm0(A, B);
+}
+
+:evselbitm1 D,A,B is OP=4 & XOP_0_10=593 & D & A & B
+{
+    D = __ev_selbitm1(A, B);
+}
+
+:evselbit D,A,B is OP=4 & XOP_0_10=594 & D & A & B
+{
+    D = __ev_selbit(A, B);
+}
+
+:evperm D,A,B is OP=4 & XOP_0_10=596 & D & A & B
+{
+    D = __ev_perm(A, B);
+}
+
+:evperm2 D,A,B is OP=4 & XOP_0_10=597 & D & A & B
+{
+    D = __ev_perm2(A, B);
+}
+
+:evperm3 D,A,B is OP=4 & XOP_0_10=598 & D & A & B
+{
+    D = __ev_perm3(A, B);
+}
+
+:evxtrd D,A,B,BITS_0_2 is OP=4 & XOP_3_10=75 & D & A & B & BITS_0_2
+{
+    l_k:1 = BITS_0_2;
+    D = __ev_xtrd(A, B, l_k);
+}
+
+:evsrbu D,A,B is OP=4 & XOP_0_10=608 & D & A & B
+{
+    D = __ev_srbu(A, B);
+}
+
+:evsrbs D,A,B is OP=4 & XOP_0_10=609 & D & A & B
+{
+    D = __ev_srbs(A, B);
+}
+
+:evsrbiu D,A,BITS_11_13 is OP=4 & XOP_0_10=610 & D & A & BITS_11_13 & BITS_14_15=0
+{
+    l_k:1 = BITS_11_13;
+    D = __ev_srbiu(A, l_k);
+}
+
+:evsrbis D,A,BITS_11_13 is OP=4 & XOP_0_10=611 & D & A & BITS_11_13 & BITS_14_15=0
+{
+    l_k:1 = BITS_11_13;
+    D = __ev_srbis(A, l_k);
+}
+
+:evslb D,A,B is OP=4 & XOP_0_10=612 & D & A & B
+{
+    D = __ev_slb(A, B);
+}
+
+:evrlb D,A,B is OP=4 & XOP_0_10=613 & D & A & B
+{
+    D = __ev_rlb(A, B);
+}
+
+:evslbi D,A,BITS_11_13 is OP=4 & XOP_0_10=614 & D & A & BITS_11_13 & BITS_14_15=0
+{
+    l_k:1 = BITS_11_13;
+    D = __ev_slbi(A, l_k);
+}
+
+:evrlbi D,A,BITS_11_13 is OP=4 & XOP_0_10=615 & D & A & BITS_11_13 & BITS_14_15=0
+{
+    l_k:1 = BITS_11_13;
+    D = __ev_rlbi(A, l_k);
+}
+
+:evsrhu D,A,B is OP=4 & XOP_0_10=616 & D & A & B
+{
+    D = __ev_srhu(A, B);
+}
+
+:evsrhs D,A,B is OP=4 & XOP_0_10=617 & D & A & B
+{
+    D = __ev_srhs(A, B);
+}
+
+:evsrhiu D,A,SIX is OP=4 & XOP_0_10=618 & D & A & SIX & BIT_15=0
+{
+    l_k:1 = SIX;
+    D = __ev_srhiu(A, l_k);
+}
+
+:evsrhis D,A,SIX is OP=4 & XOP_0_10=619 & D & A & SIX & BIT_15=0
+{
+    l_k:1 = SIX;
+    D = __ev_srhis(A, l_k);
+}
+
+:evslh D,A,B is OP=4 & XOP_0_10=620 & D & A & B
+{
+    D = __ev_slh(A, B);
+}
+
+:evrlh D,A,B is OP=4 & XOP_0_10=621 & D & A & B
+{
+    D = __ev_rlh(A, B);
+}
+
+:evslhi D,A,SIX is OP=4 & XOP_0_10=622 & D & A & SIX & BIT_15=0
+{
+    l_k:1 = SIX;
+    D = __ev_slhi(A, l_k);
+}
+
+:evrlhi D,A,SIX is OP=4 & XOP_0_10=623 & D & A & SIX & BIT_15=0
+{
+    l_k:1 = SIX;
+    D = __ev_rlhi(A, l_k);
+}
+
+:evsru D,A,B is OP=4 & XOP_0_10=624 & D & A & B
+{
+    D = __ev_sru(A, B);
+}
+
+:evsrs D,A,B is OP=4 & XOP_0_10=625 & D & A & B
+{
+    D = __ev_srs(A, B);
+}
+
+:evsriu D,A,EVUIMM is OP=4 & XOP_0_10=626 & D & A & EVUIMM
+{
+    l_k:1 = EVUIMM;
+    D = __ev_sriu(A, l_k);
+}
+
+:evsris D,A,EVUIMM is OP=4 & XOP_0_10=627 & D & A & EVUIMM
+{
+    l_k:1 = EVUIMM;
+    D = __ev_sris(A, l_k);
+}
+
+:evlvsl D,A,B is OP=4 & XOP_0_10=628 & D & A & B
+{
+    D = __ev_lvsl(A, B);
+}
+
+:evlvsr D,A,B is OP=4 & XOP_0_10=629 & D & A & B
+{
+    D = __ev_lvsr(A, B);
+}
+
+:evsroiu D,A,BITS_11_13 is OP=4 & XOP_0_10=631 & BITS_14_15=0 & D & A & BITS_11_13
+{
+    l_k:1 = BITS_11_13;
+    D = __ev_sroiu(A, l_k);
+}
+
+:evsrois D,A,BITS_11_13 is OP=4 & XOP_0_10=631 & BITS_14_15=1 & D & A & BITS_11_13
+{
+    l_k:1 = BITS_11_13;
+    D = __ev_srois(A, l_k);
+}
+
+:evsloi D,A,BITS_11_13 is OP=4 & XOP_0_10=631 & BITS_14_15=2 & D & A & BITS_11_13
+{
+    l_k:1 = BITS_11_13;
+    D = __ev_sloi(A, l_k);
+}
+
+:evldbx D,spe2ra0,B is OP=4 & XOP_0_10=774 & D & spe2ra0 & B
+{
+    l_ea:$(REGISTER_SIZE) = spe2ra0 + B;
+    l_m:8 = *:8 l_ea;
+    D = l_m;
+}
+
+:evldb D,spe2ea8 is OP=4 & XOP_0_10=775 & D & spe2ea8
+{
+    l_ea:$(REGISTER_SIZE) = spe2ea8;
+    l_m:8 = *:8 l_ea;
+    D = l_m;
+}
+
+:evlhhsplathx D,spe2ra0,B is OP=4 & XOP_0_10=778 & D & spe2ra0 & B
+{
+    l_ea:$(REGISTER_SIZE) = spe2ra0 + B;
+    l_m:2 = *:2 l_ea;
+    D = __ev_lhhsplath(l_m);
+}
+
+:evlhhsplath D,spe2ea2 is OP=4 & XOP_0_10=779 & D & spe2ea2
+{
+    l_ea:$(REGISTER_SIZE) = spe2ea2;
+    l_m:2 = *:2 l_ea;
+    D = __ev_lhhsplath(l_m);
+}
+
+:evlwbsplatwx D,spe2ra0,B is OP=4 & XOP_0_10=786 & D & spe2ra0 & B
+{
+    l_ea:$(REGISTER_SIZE) = spe2ra0 + B;
+    l_m:4 = *:4 l_ea;
+    D = __ev_lwbsplatw(l_m);
+}
+
+:evlwbsplatw D,spe2ea4 is OP=4 & XOP_0_10=787 & D & spe2ea4
+{
+    l_ea:$(REGISTER_SIZE) = spe2ea4;
+    l_m:4 = *:4 l_ea;
+    D = __ev_lwbsplatw(l_m);
+}
+
+:evlwhsplatwx D,spe2ra0,B is OP=4 & XOP_0_10=794 & D & spe2ra0 & B
+{
+    l_ea:$(REGISTER_SIZE) = spe2ra0 + B;
+    l_m:4 = *:4 l_ea;
+    D = __ev_lwhsplatw(l_m);
+}
+
+:evlwhsplatw D,spe2ea4 is OP=4 & XOP_0_10=795 & D & spe2ea4
+{
+    l_ea:$(REGISTER_SIZE) = spe2ea4;
+    l_m:4 = *:4 l_ea;
+    D = __ev_lwhsplatw(l_m);
+}
+
+:evlbbsplatbx D,spe2ra0,B is OP=4 & XOP_0_10=798 & D & spe2ra0 & B
+{
+    l_ea:$(REGISTER_SIZE) = spe2ra0 + B;
+    l_m:1 = *:1 l_ea;
+    D = zext(l_m) * 0x0101010101010101;
+}
+
+:evlbbsplatb D,spe2ea1 is OP=4 & XOP_0_10=799 & D & spe2ea1
+{
+    l_ea:$(REGISTER_SIZE) = spe2ea1;
+    l_m:1 = *:1 l_ea;
+    D = zext(l_m) * 0x0101010101010101;
+}
+
+:evstdbx S,spe2ra0,B is OP=4 & XOP_0_10=806 & S & spe2ra0 & B
+{
+    l_ea:$(REGISTER_SIZE) = spe2ra0 + B;
+    *:8 l_ea = S;
+}
+
+:evstdb S,spe2ea8 is OP=4 & XOP_0_10=807 & S & spe2ea8
+{
+    l_ea:$(REGISTER_SIZE) = spe2ea8;
+    *:8 l_ea = S;
+}
+
+:evlwbex D,spe2ra0,B is OP=4 & XOP_0_10=810 & D & spe2ra0 & B
+{
+    l_ea:$(REGISTER_SIZE) = spe2ra0 + B;
+    l_m:4 = *:4 l_ea;
+    D = __ev_lwbe(l_m);
+}
+
+:evlwbe D,spe2ea4 is OP=4 & XOP_0_10=811 & D & spe2ea4
+{
+    l_ea:$(REGISTER_SIZE) = spe2ea4;
+    l_m:4 = *:4 l_ea;
+    D = __ev_lwbe(l_m);
+}
+
+:evlwboux D,spe2ra0,B is OP=4 & XOP_0_10=812 & D & spe2ra0 & B
+{
+    l_ea:$(REGISTER_SIZE) = spe2ra0 + B;
+    l_m:4 = *:4 l_ea;
+    D = __ev_lwbou(l_m);
+}
+
+:evlwbou D,spe2ea4 is OP=4 & XOP_0_10=813 & D & spe2ea4
+{
+    l_ea:$(REGISTER_SIZE) = spe2ea4;
+    l_m:4 = *:4 l_ea;
+    D = __ev_lwbou(l_m);
+}
+
+:evlwbosx D,spe2ra0,B is OP=4 & XOP_0_10=814 & D & spe2ra0 & B
+{
+    l_ea:$(REGISTER_SIZE) = spe2ra0 + B;
+    l_m:4 = *:4 l_ea;
+    D = __ev_lwbos(l_m);
+}
+
+:evlwbos D,spe2ea4 is OP=4 & XOP_0_10=815 & D & spe2ea4
+{
+    l_ea:$(REGISTER_SIZE) = spe2ea4;
+    l_m:4 = *:4 l_ea;
+    D = __ev_lwbos(l_m);
+}
+
+:evstwbex S,spe2ra0,B is OP=4 & XOP_0_10=818 & S & spe2ra0 & B
+{
+    l_ea:$(REGISTER_SIZE) = spe2ra0 + B;
+    l_v:4 = __ev_stwbe(S);
+    *:4 l_ea = l_v;
+}
+
+:evstwbe S,spe2ea4 is OP=4 & XOP_0_10=819 & S & spe2ea4
+{
+    l_ea:$(REGISTER_SIZE) = spe2ea4;
+    l_v:4 = __ev_stwbe(S);
+    *:4 l_ea = l_v;
+}
+
+:evstwbox S,spe2ra0,B is OP=4 & XOP_0_10=822 & S & spe2ra0 & B
+{
+    l_ea:$(REGISTER_SIZE) = spe2ra0 + B;
+    l_v:4 = __ev_stwbo(S);
+    *:4 l_ea = l_v;
+}
+
+:evstwbo S,spe2ea4 is OP=4 & XOP_0_10=823 & S & spe2ea4
+{
+    l_ea:$(REGISTER_SIZE) = spe2ea4;
+    l_v:4 = __ev_stwbo(S);
+    *:4 l_ea = l_v;
+}
+
+:evstwbx S,spe2ra0,B is OP=4 & XOP_0_10=826 & S & spe2ra0 & B
+{
+    l_ea:$(REGISTER_SIZE) = spe2ra0 + B;
+    l_v:4 = __ev_stwb(S);
+    *:4 l_ea = l_v;
+}
+
+:evstwb S,spe2ea4 is OP=4 & XOP_0_10=827 & S & spe2ea4
+{
+    l_ea:$(REGISTER_SIZE) = spe2ea4;
+    l_v:4 = __ev_stwb(S);
+    *:4 l_ea = l_v;
+}
+
+:evsthbx S,spe2ra0,B is OP=4 & XOP_0_10=830 & S & spe2ra0 & B
+{
+    l_ea:$(REGISTER_SIZE) = spe2ra0 + B;
+    l_v:2 = __ev_sthb(S);
+    *:2 l_ea = l_v;
+}
+
+:evsthb S,spe2ea2 is OP=4 & XOP_0_10=831 & S & spe2ea2
+{
+    l_ea:$(REGISTER_SIZE) = spe2ea2;
+    l_v:2 = __ev_sthb(S);
+    *:2 l_ea = l_v;
+}
+
+:evlddmx D,A,B is OP=4 & XOP_0_10=832 & D & A & B
+{
+    l_ea:$(REGISTER_SIZE) = A;
+    l_m:8 = *:8 l_ea;
+    D = l_m;
+    A = __circinc(A, B);
+}
+
+:evlddu D,spe2eau8 is OP=4 & XOP_0_10=833 & D & spe2eau8 & A
+{
+    l_ea:$(REGISTER_SIZE) = spe2eau8;
+    l_m:8 = *:8 l_ea;
+    D = l_m;
+    A = l_ea;
+}
+
+:evldwmx D,A,B is OP=4 & XOP_0_10=834 & D & A & B
+{
+    l_ea:$(REGISTER_SIZE) = A;
+    l_m:8 = *:8 l_ea;
+    D = l_m;
+    A = __circinc(A, B);
+}
+
+:evldwu D,spe2eau8 is OP=4 & XOP_0_10=835 & D & spe2eau8 & A
+{
+    l_ea:$(REGISTER_SIZE) = spe2eau8;
+    l_m:8 = *:8 l_ea;
+    D = l_m;
+    A = l_ea;
+}
+
+:evldhmx D,A,B is OP=4 & XOP_0_10=836 & D & A & B
+{
+    l_ea:$(REGISTER_SIZE) = A;
+    l_m:8 = *:8 l_ea;
+    D = l_m;
+    A = __circinc(A, B);
+}
+
+:evldhu D,spe2eau8 is OP=4 & XOP_0_10=837 & D & spe2eau8 & A
+{
+    l_ea:$(REGISTER_SIZE) = spe2eau8;
+    l_m:8 = *:8 l_ea;
+    D = l_m;
+    A = l_ea;
+}
+
+:evldbmx D,A,B is OP=4 & XOP_0_10=838 & D & A & B
+{
+    l_ea:$(REGISTER_SIZE) = A;
+    l_m:8 = *:8 l_ea;
+    D = l_m;
+    A = __circinc(A, B);
+}
+
+:evldbu D,spe2eau8 is OP=4 & XOP_0_10=839 & D & spe2eau8 & A
+{
+    l_ea:$(REGISTER_SIZE) = spe2eau8;
+    l_m:8 = *:8 l_ea;
+    D = l_m;
+    A = l_ea;
+}
+
+:evlhhesplatmx D,A,B is OP=4 & XOP_0_10=840 & D & A & B
+{
+    l_ea:$(REGISTER_SIZE) = A;
+    l_m:2 = *:2 l_ea;
+    D = (zext(l_m) << 48) | (zext(l_m) << 16);
+    A = __circinc(A, B);
+}
+
+:evlhhesplatu D,spe2eau2 is OP=4 & XOP_0_10=841 & D & spe2eau2 & A
+{
+    l_ea:$(REGISTER_SIZE) = spe2eau2;
+    l_m:2 = *:2 l_ea;
+    D = (zext(l_m) << 48) | (zext(l_m) << 16);
+    A = l_ea;
+}
+
+:evlhhsplathmx D,A,B is OP=4 & XOP_0_10=842 & D & A & B
+{
+    l_ea:$(REGISTER_SIZE) = A;
+    l_m:2 = *:2 l_ea;
+    D = __ev_lhhsplath(l_m);
+    A = __circinc(A, B);
+}
+
+:evlhhsplathu D,spe2eau2 is OP=4 & XOP_0_10=843 & D & spe2eau2 & A
+{
+    l_ea:$(REGISTER_SIZE) = spe2eau2;
+    l_m:2 = *:2 l_ea;
+    D = __ev_lhhsplath(l_m);
+    A = l_ea;
+}
+
+:evlhhousplatmx D,A,B is OP=4 & XOP_0_10=844 & D & A & B
+{
+    l_ea:$(REGISTER_SIZE) = A;
+    l_m:2 = *:2 l_ea;
+    D = (zext(l_m) << 32) | zext(l_m);
+    A = __circinc(A, B);
+}
+
+:evlhhousplatu D,spe2eau2 is OP=4 & XOP_0_10=845 & D & spe2eau2 & A
+{
+    l_ea:$(REGISTER_SIZE) = spe2eau2;
+    l_m:2 = *:2 l_ea;
+    D = (zext(l_m) << 32) | zext(l_m);
+    A = l_ea;
+}
+
+:evlhhossplatmx D,A,B is OP=4 & XOP_0_10=846 & D & A & B
+{
+    l_ea:$(REGISTER_SIZE) = A;
+    l_m:2 = *:2 l_ea;
+    l_w:4 = sext(l_m);
+    D = (zext(l_w) << 32) | zext(l_w);
+    A = __circinc(A, B);
+}
+
+:evlhhossplatu D,spe2eau2 is OP=4 & XOP_0_10=847 & D & spe2eau2 & A
+{
+    l_ea:$(REGISTER_SIZE) = spe2eau2;
+    l_m:2 = *:2 l_ea;
+    l_w:4 = sext(l_m);
+    D = (zext(l_w) << 32) | zext(l_w);
+    A = l_ea;
+}
+
+:evlwhemx D,A,B is OP=4 & XOP_0_10=848 & D & A & B
+{
+    l_ea:$(REGISTER_SIZE) = A;
+    l_m:4 = *:4 l_ea;
+    l_hi:2 = l_m(2);
+    l_lo:2 = l_m:2;
+    D = (zext(l_hi) << 48) | (zext(l_lo) << 16);
+    A = __circinc(A, B);
+}
+
+:evlwheu D,spe2eau4 is OP=4 & XOP_0_10=849 & D & spe2eau4 & A
+{
+    l_ea:$(REGISTER_SIZE) = spe2eau4;
+    l_m:4 = *:4 l_ea;
+    l_hi:2 = l_m(2);
+    l_lo:2 = l_m:2;
+    D = (zext(l_hi) << 48) | (zext(l_lo) << 16);
+    A = l_ea;
+}
+
+:evlwbsplatwmx D,A,B is OP=4 & XOP_0_10=850 & D & A & B
+{
+    l_ea:$(REGISTER_SIZE) = A;
+    l_m:4 = *:4 l_ea;
+    D = __ev_lwbsplatw(l_m);
+    A = __circinc(A, B);
+}
+
+:evlwbsplatwu D,spe2eau4 is OP=4 & XOP_0_10=851 & D & spe2eau4 & A
+{
+    l_ea:$(REGISTER_SIZE) = spe2eau4;
+    l_m:4 = *:4 l_ea;
+    D = __ev_lwbsplatw(l_m);
+    A = l_ea;
+}
+
+:evlwhoumx D,A,B is OP=4 & XOP_0_10=852 & D & A & B
+{
+    l_ea:$(REGISTER_SIZE) = A;
+    l_m:4 = *:4 l_ea;
+    l_hi:2 = l_m(2);
+    l_lo:2 = l_m:2;
+    D = (zext(l_hi) << 32) | zext(l_lo);
+    A = __circinc(A, B);
+}
+
+:evlwhouu D,spe2eau4 is OP=4 & XOP_0_10=853 & D & spe2eau4 & A
+{
+    l_ea:$(REGISTER_SIZE) = spe2eau4;
+    l_m:4 = *:4 l_ea;
+    l_hi:2 = l_m(2);
+    l_lo:2 = l_m:2;
+    D = (zext(l_hi) << 32) | zext(l_lo);
+    A = l_ea;
+}
+
+:evlwhosmx D,A,B is OP=4 & XOP_0_10=854 & D & A & B
+{
+    l_ea:$(REGISTER_SIZE) = A;
+    l_m:4 = *:4 l_ea;
+    l_hi:2 = l_m(2);
+    l_lo:2 = l_m:2;
+    l_sh:4 = sext(l_hi);
+    l_sl:4 = sext(l_lo);
+    D = (zext(l_sh) << 32) | zext(l_sl);
+    A = __circinc(A, B);
+}
+
+:evlwhosu D,spe2eau4 is OP=4 & XOP_0_10=855 & D & spe2eau4 & A
+{
+    l_ea:$(REGISTER_SIZE) = spe2eau4;
+    l_m:4 = *:4 l_ea;
+    l_hi:2 = l_m(2);
+    l_lo:2 = l_m:2;
+    l_sh:4 = sext(l_hi);
+    l_sl:4 = sext(l_lo);
+    D = (zext(l_sh) << 32) | zext(l_sl);
+    A = l_ea;
+}
+
+:evlwwsplatmx D,A,B is OP=4 & XOP_0_10=856 & D & A & B
+{
+    l_ea:$(REGISTER_SIZE) = A;
+    l_m:4 = *:4 l_ea;
+    D = (zext(l_m) << 32) | zext(l_m);
+    A = __circinc(A, B);
+}
+
+:evlwwsplatu D,spe2eau4 is OP=4 & XOP_0_10=857 & D & spe2eau4 & A
+{
+    l_ea:$(REGISTER_SIZE) = spe2eau4;
+    l_m:4 = *:4 l_ea;
+    D = (zext(l_m) << 32) | zext(l_m);
+    A = l_ea;
+}
+
+:evlwhsplatwmx D,A,B is OP=4 & XOP_0_10=858 & D & A & B
+{
+    l_ea:$(REGISTER_SIZE) = A;
+    l_m:4 = *:4 l_ea;
+    D = __ev_lwhsplatw(l_m);
+    A = __circinc(A, B);
+}
+
+:evlwhsplatwu D,spe2eau4 is OP=4 & XOP_0_10=859 & D & spe2eau4 & A
+{
+    l_ea:$(REGISTER_SIZE) = spe2eau4;
+    l_m:4 = *:4 l_ea;
+    D = __ev_lwhsplatw(l_m);
+    A = l_ea;
+}
+
+:evlwhsplatmx D,A,B is OP=4 & XOP_0_10=860 & D & A & B
+{
+    l_ea:$(REGISTER_SIZE) = A;
+    l_m:4 = *:4 l_ea;
+    l_hi:2 = l_m(2);
+    l_lo:2 = l_m:2;
+    l_h:8 = zext(l_hi);
+    l_l:8 = zext(l_lo);
+    D = (l_h << 48) | (l_h << 32) | (l_l << 16) | l_l;
+    A = __circinc(A, B);
+}
+
+:evlwhsplatu D,spe2eau4 is OP=4 & XOP_0_10=861 & D & spe2eau4 & A
+{
+    l_ea:$(REGISTER_SIZE) = spe2eau4;
+    l_m:4 = *:4 l_ea;
+    l_hi:2 = l_m(2);
+    l_lo:2 = l_m:2;
+    l_h:8 = zext(l_hi);
+    l_l:8 = zext(l_lo);
+    D = (l_h << 48) | (l_h << 32) | (l_l << 16) | l_l;
+    A = l_ea;
+}
+
+:evlbbsplatbmx D,A,B is OP=4 & XOP_0_10=862 & D & A & B
+{
+    l_ea:$(REGISTER_SIZE) = A;
+    l_m:1 = *:1 l_ea;
+    D = zext(l_m) * 0x0101010101010101;
+    A = __circinc(A, B);
+}
+
+:evlbbsplatbu D,spe2eau1 is OP=4 & XOP_0_10=863 & D & spe2eau1 & A
+{
+    l_ea:$(REGISTER_SIZE) = spe2eau1;
+    l_m:1 = *:1 l_ea;
+    D = zext(l_m) * 0x0101010101010101;
+    A = l_ea;
+}
+
+:evstddmx S,A,B is OP=4 & XOP_0_10=864 & S & A & B
+{
+    l_ea:$(REGISTER_SIZE) = A;
+    *:8 l_ea = S;
+    A = __circinc(A, B);
+}
+
+:evstddu S,spe2eau8 is OP=4 & XOP_0_10=865 & S & spe2eau8 & A
+{
+    l_ea:$(REGISTER_SIZE) = spe2eau8;
+    *:8 l_ea = S;
+    A = l_ea;
+}
+
+:evstdwmx S,A,B is OP=4 & XOP_0_10=866 & S & A & B
+{
+    l_ea:$(REGISTER_SIZE) = A;
+    *:8 l_ea = S;
+    A = __circinc(A, B);
+}
+
+:evstdwu S,spe2eau8 is OP=4 & XOP_0_10=867 & S & spe2eau8 & A
+{
+    l_ea:$(REGISTER_SIZE) = spe2eau8;
+    *:8 l_ea = S;
+    A = l_ea;
+}
+
+:evstdhmx S,A,B is OP=4 & XOP_0_10=868 & S & A & B
+{
+    l_ea:$(REGISTER_SIZE) = A;
+    *:8 l_ea = S;
+    A = __circinc(A, B);
+}
+
+:evstdhu S,spe2eau8 is OP=4 & XOP_0_10=869 & S & spe2eau8 & A
+{
+    l_ea:$(REGISTER_SIZE) = spe2eau8;
+    *:8 l_ea = S;
+    A = l_ea;
+}
+
+:evstdbmx S,A,B is OP=4 & XOP_0_10=870 & S & A & B
+{
+    l_ea:$(REGISTER_SIZE) = A;
+    *:8 l_ea = S;
+    A = __circinc(A, B);
+}
+
+:evstdbu S,spe2eau8 is OP=4 & XOP_0_10=871 & S & spe2eau8 & A
+{
+    l_ea:$(REGISTER_SIZE) = spe2eau8;
+    *:8 l_ea = S;
+    A = l_ea;
+}
+
+:evlwbemx D,A,B is OP=4 & XOP_0_10=874 & D & A & B
+{
+    l_ea:$(REGISTER_SIZE) = A;
+    l_m:4 = *:4 l_ea;
+    D = __ev_lwbe(l_m);
+    A = __circinc(A, B);
+}
+
+:evlwbeu D,spe2eau4 is OP=4 & XOP_0_10=875 & D & spe2eau4 & A
+{
+    l_ea:$(REGISTER_SIZE) = spe2eau4;
+    l_m:4 = *:4 l_ea;
+    D = __ev_lwbe(l_m);
+    A = l_ea;
+}
+
+:evlwboumx D,A,B is OP=4 & XOP_0_10=876 & D & A & B
+{
+    l_ea:$(REGISTER_SIZE) = A;
+    l_m:4 = *:4 l_ea;
+    D = __ev_lwbou(l_m);
+    A = __circinc(A, B);
+}
+
+:evlwbouu D,spe2eau4 is OP=4 & XOP_0_10=877 & D & spe2eau4 & A
+{
+    l_ea:$(REGISTER_SIZE) = spe2eau4;
+    l_m:4 = *:4 l_ea;
+    D = __ev_lwbou(l_m);
+    A = l_ea;
+}
+
+:evlwbosmx D,A,B is OP=4 & XOP_0_10=878 & D & A & B
+{
+    l_ea:$(REGISTER_SIZE) = A;
+    l_m:4 = *:4 l_ea;
+    D = __ev_lwbos(l_m);
+    A = __circinc(A, B);
+}
+
+:evlwbosu D,spe2eau4 is OP=4 & XOP_0_10=879 & D & spe2eau4 & A
+{
+    l_ea:$(REGISTER_SIZE) = spe2eau4;
+    l_m:4 = *:4 l_ea;
+    D = __ev_lwbos(l_m);
+    A = l_ea;
+}
+
+:evstwhemx S,A,B is OP=4 & XOP_0_10=880 & S & A & B
+{
+    l_ea:$(REGISTER_SIZE) = A;
+    l_h0:2 = S(6);
+    l_h2:2 = S(2);
+    l_v:4 = (zext(l_h0) << 16) | zext(l_h2);
+    *:4 l_ea = l_v;
+    A = __circinc(A, B);
+}
+
+:evstwheu S,spe2eau4 is OP=4 & XOP_0_10=881 & S & spe2eau4 & A
+{
+    l_ea:$(REGISTER_SIZE) = spe2eau4;
+    l_h0:2 = S(6);
+    l_h2:2 = S(2);
+    l_v:4 = (zext(l_h0) << 16) | zext(l_h2);
+    *:4 l_ea = l_v;
+    A = l_ea;
+}
+
+:evstwbemx S,A,B is OP=4 & XOP_0_10=882 & S & A & B
+{
+    l_ea:$(REGISTER_SIZE) = A;
+    l_v:4 = __ev_stwbe(S);
+    *:4 l_ea = l_v;
+    A = __circinc(A, B);
+}
+
+:evstwbeu S,spe2eau4 is OP=4 & XOP_0_10=883 & S & spe2eau4 & A
+{
+    l_ea:$(REGISTER_SIZE) = spe2eau4;
+    l_v:4 = __ev_stwbe(S);
+    *:4 l_ea = l_v;
+    A = l_ea;
+}
+
+:evstwhomx S,A,B is OP=4 & XOP_0_10=884 & S & A & B
+{
+    l_ea:$(REGISTER_SIZE) = A;
+    l_h1:2 = S(4);
+    l_h3:2 = S:2;
+    l_v:4 = (zext(l_h1) << 16) | zext(l_h3);
+    *:4 l_ea = l_v;
+    A = __circinc(A, B);
+}
+
+:evstwhou S,spe2eau4 is OP=4 & XOP_0_10=885 & S & spe2eau4 & A
+{
+    l_ea:$(REGISTER_SIZE) = spe2eau4;
+    l_h1:2 = S(4);
+    l_h3:2 = S:2;
+    l_v:4 = (zext(l_h1) << 16) | zext(l_h3);
+    *:4 l_ea = l_v;
+    A = l_ea;
+}
+
+:evstwbomx S,A,B is OP=4 & XOP_0_10=886 & S & A & B
+{
+    l_ea:$(REGISTER_SIZE) = A;
+    l_v:4 = __ev_stwbo(S);
+    *:4 l_ea = l_v;
+    A = __circinc(A, B);
+}
+
+:evstwbou S,spe2eau4 is OP=4 & XOP_0_10=887 & S & spe2eau4 & A
+{
+    l_ea:$(REGISTER_SIZE) = spe2eau4;
+    l_v:4 = __ev_stwbo(S);
+    *:4 l_ea = l_v;
+    A = l_ea;
+}
+
+:evstwwemx S,A,B is OP=4 & XOP_0_10=888 & S & A & B
+{
+    l_ea:$(REGISTER_SIZE) = A;
+    l_v:4 = S(4);
+    *:4 l_ea = l_v;
+    A = __circinc(A, B);
+}
+
+:evstwweu S,spe2eau4 is OP=4 & XOP_0_10=889 & S & spe2eau4 & A
+{
+    l_ea:$(REGISTER_SIZE) = spe2eau4;
+    l_v:4 = S(4);
+    *:4 l_ea = l_v;
+    A = l_ea;
+}
+
+:evstwbmx S,A,B is OP=4 & XOP_0_10=890 & S & A & B
+{
+    l_ea:$(REGISTER_SIZE) = A;
+    l_v:4 = __ev_stwb(S);
+    *:4 l_ea = l_v;
+    A = __circinc(A, B);
+}
+
+:evstwbu S,spe2eau4 is OP=4 & XOP_0_10=891 & S & spe2eau4 & A
+{
+    l_ea:$(REGISTER_SIZE) = spe2eau4;
+    l_v:4 = __ev_stwb(S);
+    *:4 l_ea = l_v;
+    A = l_ea;
+}
+
+:evstwwomx S,A,B is OP=4 & XOP_0_10=892 & S & A & B
+{
+    l_ea:$(REGISTER_SIZE) = A;
+    l_v:4 = S:4;
+    *:4 l_ea = l_v;
+    A = __circinc(A, B);
+}
+
+:evstwwou S,spe2eau4 is OP=4 & XOP_0_10=893 & S & spe2eau4 & A
+{
+    l_ea:$(REGISTER_SIZE) = spe2eau4;
+    l_v:4 = S:4;
+    *:4 l_ea = l_v;
+    A = l_ea;
+}
+
+:evsthbmx S,A,B is OP=4 & XOP_0_10=894 & S & A & B
+{
+    l_ea:$(REGISTER_SIZE) = A;
+    l_v:2 = __ev_sthb(S);
+    *:2 l_ea = l_v;
+    A = __circinc(A, B);
+}
+
+:evsthbu S,spe2eau2 is OP=4 & XOP_0_10=895 & S & spe2eau2 & A
+{
+    l_ea:$(REGISTER_SIZE) = spe2eau2;
+    l_v:2 = __ev_sthb(S);
+    *:2 l_ea = l_v;
+    A = l_ea;
+}
+
+:evmhusi D,A,B is OP=4 & XOP_0_10=1024 & D & A & B
+{
+    D = __ev_mhusi(A, B);
+}
+
+:evmhssi D,A,B is OP=4 & XOP_0_10=1025 & D & A & B
+{
+    D = __ev_mhssi(A, B);
+}
+
+:evmhsusi D,A,B is OP=4 & XOP_0_10=1026 & D & A & B
+{
+    D = __ev_mhsusi(A, B);
+}
+
+:evmhssf D,A,B is OP=4 & XOP_0_10=1028 & D & A & B
+{
+    D = __ev_mhssf(A, B);
+}
+
+:evmhumi D,A,B is OP=4 & XOP_0_10=1029 & D & A & B
+{
+    D = __ev_mhumi(A, B);
+}
+
+:evmhssfr D,A,B is OP=4 & XOP_0_10=1030 & D & A & B
+{
+    D = __ev_mhssfr(A, B);
+}
+
+:evmhesumi D,A,B is OP=4 & XOP_0_10=1034 & D & A & B
+{
+    D = __ev_mhesumi(A, B);
+}
+
+:evmhosumi D,A,B is OP=4 & XOP_0_10=1038 & D & A & B
+{
+    D = __ev_mhosumi(A, B);
+}
+
+:evmbeumi D,A,B is OP=4 & XOP_0_10=1048 & D & A & B
+{
+    D = __ev_mbeumi(A, B);
+}
+
+:evmbesmi D,A,B is OP=4 & XOP_0_10=1049 & D & A & B
+{
+    D = __ev_mbesmi(A, B);
+}
+
+:evmbesumi D,A,B is OP=4 & XOP_0_10=1050 & D & A & B
+{
+    D = __ev_mbesumi(A, B);
+}
+
+:evmboumi D,A,B is OP=4 & XOP_0_10=1052 & D & A & B
+{
+    D = __ev_mboumi(A, B);
+}
+
+:evmbosmi D,A,B is OP=4 & XOP_0_10=1053 & D & A & B
+{
+    D = __ev_mbosmi(A, B);
+}
+
+:evmbosumi D,A,B is OP=4 & XOP_0_10=1054 & D & A & B
+{
+    D = __ev_mbosumi(A, B);
+}
+
+:evmhesumia D,A,B is OP=4 & XOP_0_10=1066 & D & A & B
+{
+    D = __ev_mhesumia(A, B);
+    ACC = D;
+}
+
+:evmhosumia D,A,B is OP=4 & XOP_0_10=1070 & D & A & B
+{
+    D = __ev_mhosumia(A, B);
+    ACC = D;
+}
+
+:evmbeumia D,A,B is OP=4 & XOP_0_10=1080 & D & A & B
+{
+    D = __ev_mbeumia(A, B);
+    ACC = D;
+}
+
+:evmbesmia D,A,B is OP=4 & XOP_0_10=1081 & D & A & B
+{
+    D = __ev_mbesmia(A, B);
+    ACC = D;
+}
+
+:evmbesumia D,A,B is OP=4 & XOP_0_10=1082 & D & A & B
+{
+    D = __ev_mbesumia(A, B);
+    ACC = D;
+}
+
+:evmboumia D,A,B is OP=4 & XOP_0_10=1084 & D & A & B
+{
+    D = __ev_mboumia(A, B);
+    ACC = D;
+}
+
+:evmbosmia D,A,B is OP=4 & XOP_0_10=1085 & D & A & B
+{
+    D = __ev_mbosmia(A, B);
+    ACC = D;
+}
+
+:evmbosumia D,A,B is OP=4 & XOP_0_10=1086 & D & A & B
+{
+    D = __ev_mbosumia(A, B);
+    ACC = D;
+}
+
+:evmwusiw D,A,B is OP=4 & XOP_0_10=1088 & D & A & B
+{
+    D = __ev_mwusiw(A, B);
+}
+
+:evmwssiw D,A,B is OP=4 & XOP_0_10=1089 & D & A & B
+{
+    D = __ev_mwssiw(A, B);
+}
+
+:evmwhssfr D,A,B is OP=4 & XOP_0_10=1094 & D & A & B
+{
+    D = __ev_mwhssfr(A, B);
+}
+
+:evmwehgsmfr D,A,B is OP=4 & XOP_0_10=1110 & D & A & B
+{
+    D = __ev_mwehgsmfr(A, B);
+}
+
+:evmwehgsmf D,A,B is OP=4 & XOP_0_10=1111 & D & A & B
+{
+    D = __ev_mwehgsmf(A, B);
+}
+
+:evmwohgsmfr D,A,B is OP=4 & XOP_0_10=1118 & D & A & B
+{
+    D = __ev_mwohgsmfr(A, B);
+}
+
+:evmwohgsmf D,A,B is OP=4 & XOP_0_10=1119 & D & A & B
+{
+    D = __ev_mwohgsmf(A, B);
+}
+
+:evmwhssfra D,A,B is OP=4 & XOP_0_10=1126 & D & A & B
+{
+    D = __ev_mwhssfra(A, B);
+    ACC = D;
+}
+
+:evmwehgsmfra D,A,B is OP=4 & XOP_0_10=1142 & D & A & B
+{
+    D = __ev_mwehgsmfra(A, B);
+    ACC = D;
+}
+
+:evmwehgsmfa D,A,B is OP=4 & XOP_0_10=1143 & D & A & B
+{
+    D = __ev_mwehgsmfa(A, B);
+    ACC = D;
+}
+
+:evmwohgsmfra D,A,B is OP=4 & XOP_0_10=1150 & D & A & B
+{
+    D = __ev_mwohgsmfra(A, B);
+    ACC = D;
+}
+
+:evmwohgsmfa D,A,B is OP=4 & XOP_0_10=1151 & D & A & B
+{
+    D = __ev_mwohgsmfa(A, B);
+    ACC = D;
+}
+
+:evaddusiaa D,A is OP=4 & XOP_0_10=1152 & BITS_11_15=0 & D & A
+{
+    D = __ev_addusiaa(A, ACC);
+    ACC = D;
+}
+
+:evaddssiaa D,A is OP=4 & XOP_0_10=1153 & BITS_11_15=0 & D & A
+{
+    D = __ev_addssiaa(A, ACC);
+    ACC = D;
+}
+
+:evsubfusiaa D,A is OP=4 & XOP_0_10=1154 & BITS_11_15=0 & D & A
+{
+    D = __ev_subfusiaa(A, ACC);
+    ACC = D;
+}
+
+:evsubfssiaa D,A is OP=4 & XOP_0_10=1155 & BITS_11_15=0 & D & A
+{
+    D = __ev_subfssiaa(A, ACC);
+    ACC = D;
+}
+
+:evaddsmiaa D,A is OP=4 & XOP_0_10=1156 & BITS_11_15=0 & D & A
+{
+    D = __ev_addsmiaa(A, ACC);
+    ACC = D;
+}
+
+:evsubfsmiaa D,A is OP=4 & XOP_0_10=1158 & BITS_11_15=0 & D & A
+{
+    D = __ev_subfsmiaa(A, ACC);
+    ACC = D;
+}
+
+:evaddh D,A,B is OP=4 & XOP_0_10=1160 & D & A & B
+{
+    l_a0:2 = A(6);
+    l_b0:2 = B(6);
+    l_r0:2 = l_a0 + l_b0;
+    l_a1:2 = A(4);
+    l_b1:2 = B(4);
+    l_r1:2 = l_a1 + l_b1;
+    l_a2:2 = A(2);
+    l_b2:2 = B(2);
+    l_r2:2 = l_a2 + l_b2;
+    l_a3:2 = A:2;
+    l_b3:2 = B:2;
+    l_r3:2 = l_a3 + l_b3;
+    D = (zext(l_r0) << 48) | (zext(l_r1) << 32) | (zext(l_r2) << 16) | zext(l_r3);
+}
+
+:evaddhss D,A,B is OP=4 & XOP_0_10=1161 & D & A & B
+{
+    D = __ev_addhss(A, B);
+}
+
+:evsubfh D,A,B is OP=4 & XOP_0_10=1162 & D & A & B
+{
+    l_a0:2 = A(6);
+    l_b0:2 = B(6);
+    l_r0:2 = l_b0 - l_a0;
+    l_a1:2 = A(4);
+    l_b1:2 = B(4);
+    l_r1:2 = l_b1 - l_a1;
+    l_a2:2 = A(2);
+    l_b2:2 = B(2);
+    l_r2:2 = l_b2 - l_a2;
+    l_a3:2 = A:2;
+    l_b3:2 = B:2;
+    l_r3:2 = l_b3 - l_a3;
+    D = (zext(l_r0) << 48) | (zext(l_r1) << 32) | (zext(l_r2) << 16) | zext(l_r3);
+}
+
+:evsubfhss D,A,B is OP=4 & XOP_0_10=1163 & D & A & B
+{
+    D = __ev_subfhss(A, B);
+}
+
+:evaddhx D,A,B is OP=4 & XOP_0_10=1164 & D & A & B
+{
+    D = __ev_addhx(A, B);
+}
+
+:evaddhxss D,A,B is OP=4 & XOP_0_10=1165 & D & A & B
+{
+    D = __ev_addhxss(A, B);
+}
+
+:evsubfhx D,A,B is OP=4 & XOP_0_10=1166 & D & A & B
+{
+    D = __ev_subfhx(A, B);
+}
+
+:evsubfhxss D,A,B is OP=4 & XOP_0_10=1167 & D & A & B
+{
+    D = __ev_subfhxss(A, B);
+}
+
+:evaddd D,A,B is OP=4 & XOP_0_10=1168 & D & A & B
+{
+    l_a0:8 = A;
+    l_b0:8 = B;
+    l_r0:8 = l_a0 + l_b0;
+    D = l_r0;
+}
+
+:evadddss D,A,B is OP=4 & XOP_0_10=1169 & D & A & B
+{
+    D = __ev_adddss(A, B);
+}
+
+:evsubfd D,A,B is OP=4 & XOP_0_10=1170 & D & A & B
+{
+    l_a0:8 = A;
+    l_b0:8 = B;
+    l_r0:8 = l_b0 - l_a0;
+    D = l_r0;
+}
+
+:evsubfdss D,A,B is OP=4 & XOP_0_10=1171 & D & A & B
+{
+    D = __ev_subfdss(A, B);
+}
+
+:evaddb D,A,B is OP=4 & XOP_0_10=1172 & D & A & B
+{
+    l_a0:1 = A(7);
+    l_b0:1 = B(7);
+    l_r0:1 = l_a0 + l_b0;
+    l_a1:1 = A(6);
+    l_b1:1 = B(6);
+    l_r1:1 = l_a1 + l_b1;
+    l_a2:1 = A(5);
+    l_b2:1 = B(5);
+    l_r2:1 = l_a2 + l_b2;
+    l_a3:1 = A(4);
+    l_b3:1 = B(4);
+    l_r3:1 = l_a3 + l_b3;
+    l_a4:1 = A(3);
+    l_b4:1 = B(3);
+    l_r4:1 = l_a4 + l_b4;
+    l_a5:1 = A(2);
+    l_b5:1 = B(2);
+    l_r5:1 = l_a5 + l_b5;
+    l_a6:1 = A(1);
+    l_b6:1 = B(1);
+    l_r6:1 = l_a6 + l_b6;
+    l_a7:1 = A:1;
+    l_b7:1 = B:1;
+    l_r7:1 = l_a7 + l_b7;
+    D = (zext(l_r0) << 56) | (zext(l_r1) << 48) | (zext(l_r2) << 40) | (zext(l_r3) << 32) | (zext(l_r4) << 24) | (zext(l_r5) << 16) | (zext(l_r6) << 8) | zext(l_r7);
+}
+
+:evaddbss D,A,B is OP=4 & XOP_0_10=1173 & D & A & B
+{
+    D = __ev_addbss(A, B);
+}
+
+:evsubfb D,A,B is OP=4 & XOP_0_10=1174 & D & A & B
+{
+    l_a0:1 = A(7);
+    l_b0:1 = B(7);
+    l_r0:1 = l_b0 - l_a0;
+    l_a1:1 = A(6);
+    l_b1:1 = B(6);
+    l_r1:1 = l_b1 - l_a1;
+    l_a2:1 = A(5);
+    l_b2:1 = B(5);
+    l_r2:1 = l_b2 - l_a2;
+    l_a3:1 = A(4);
+    l_b3:1 = B(4);
+    l_r3:1 = l_b3 - l_a3;
+    l_a4:1 = A(3);
+    l_b4:1 = B(3);
+    l_r4:1 = l_b4 - l_a4;
+    l_a5:1 = A(2);
+    l_b5:1 = B(2);
+    l_r5:1 = l_b5 - l_a5;
+    l_a6:1 = A(1);
+    l_b6:1 = B(1);
+    l_r6:1 = l_b6 - l_a6;
+    l_a7:1 = A:1;
+    l_b7:1 = B:1;
+    l_r7:1 = l_b7 - l_a7;
+    D = (zext(l_r0) << 56) | (zext(l_r1) << 48) | (zext(l_r2) << 40) | (zext(l_r3) << 32) | (zext(l_r4) << 24) | (zext(l_r5) << 16) | (zext(l_r6) << 8) | zext(l_r7);
+}
+
+:evsubfbss D,A,B is OP=4 & XOP_0_10=1175 & D & A & B
+{
+    D = __ev_subfbss(A, B);
+}
+
+:evaddsubfh D,A,B is OP=4 & XOP_0_10=1176 & D & A & B
+{
+    D = __ev_addsubfh(A, B);
+}
+
+:evaddsubfhss D,A,B is OP=4 & XOP_0_10=1177 & D & A & B
+{
+    D = __ev_addsubfhss(A, B);
+}
+
+:evsubfaddh D,A,B is OP=4 & XOP_0_10=1178 & D & A & B
+{
+    D = __ev_subfaddh(A, B);
+}
+
+:evsubfaddhss D,A,B is OP=4 & XOP_0_10=1179 & D & A & B
+{
+    D = __ev_subfaddhss(A, B);
+}
+
+:evaddsubfhx D,A,B is OP=4 & XOP_0_10=1180 & D & A & B
+{
+    D = __ev_addsubfhx(A, B);
+}
+
+:evaddsubfhxss D,A,B is OP=4 & XOP_0_10=1181 & D & A & B
+{
+    D = __ev_addsubfhxss(A, B);
+}
+
+:evsubfaddhx D,A,B is OP=4 & XOP_0_10=1182 & D & A & B
+{
+    D = __ev_subfaddhx(A, B);
+}
+
+:evsubfaddhxss D,A,B is OP=4 & XOP_0_10=1183 & D & A & B
+{
+    D = __ev_subfaddhxss(A, B);
+}
+
+:evadddus D,A,B is OP=4 & XOP_0_10=1184 & D & A & B
+{
+    D = __ev_adddus(A, B);
+}
+
+:evaddbus D,A,B is OP=4 & XOP_0_10=1185 & D & A & B
+{
+    D = __ev_addbus(A, B);
+}
+
+:evsubfdus D,A,B is OP=4 & XOP_0_10=1186 & D & A & B
+{
+    D = __ev_subfdus(A, B);
+}
+
+:evsubfbus D,A,B is OP=4 & XOP_0_10=1187 & D & A & B
+{
+    D = __ev_subfbus(A, B);
+}
+
+:evaddwus D,A,B is OP=4 & XOP_0_10=1188 & D & A & B
+{
+    D = __ev_addwus(A, B);
+}
+
+:evaddwxus D,A,B is OP=4 & XOP_0_10=1189 & D & A & B
+{
+    D = __ev_addwxus(A, B);
+}
+
+:evsubfwus D,A,B is OP=4 & XOP_0_10=1190 & D & A & B
+{
+    D = __ev_subfwus(A, B);
+}
+
+:evsubfwxus D,A,B is OP=4 & XOP_0_10=1191 & D & A & B
+{
+    D = __ev_subfwxus(A, B);
+}
+
+:evadd2subf2h D,A,B is OP=4 & XOP_0_10=1192 & D & A & B
+{
+    D = __ev_add2subf2h(A, B);
+}
+
+:evadd2subf2hss D,A,B is OP=4 & XOP_0_10=1193 & D & A & B
+{
+    D = __ev_add2subf2hss(A, B);
+}
+
+:evsubf2add2h D,A,B is OP=4 & XOP_0_10=1194 & D & A & B
+{
+    D = __ev_subf2add2h(A, B);
+}
+
+:evsubf2add2hss D,A,B is OP=4 & XOP_0_10=1195 & D & A & B
+{
+    D = __ev_subf2add2hss(A, B);
+}
+
+:evaddhus D,A,B is OP=4 & XOP_0_10=1196 & D & A & B
+{
+    D = __ev_addhus(A, B);
+}
+
+:evaddhxus D,A,B is OP=4 & XOP_0_10=1197 & D & A & B
+{
+    D = __ev_addhxus(A, B);
+}
+
+:evsubfhus D,A,B is OP=4 & XOP_0_10=1198 & D & A & B
+{
+    D = __ev_subfhus(A, B);
+}
+
+:evsubfhxus D,A,B is OP=4 & XOP_0_10=1199 & D & A & B
+{
+    D = __ev_subfhxus(A, B);
+}
+
+:evaddwss D,A,B is OP=4 & XOP_0_10=1201 & D & A & B
+{
+    D = __ev_addwss(A, B);
+}
+
+:evsubfwss D,A,B is OP=4 & XOP_0_10=1203 & D & A & B
+{
+    D = __ev_subfwss(A, B);
+}
+
+:evaddwx D,A,B is OP=4 & XOP_0_10=1204 & D & A & B
+{
+    D = __ev_addwx(A, B);
+}
+
+:evaddwxss D,A,B is OP=4 & XOP_0_10=1205 & D & A & B
+{
+    D = __ev_addwxss(A, B);
+}
+
+:evsubfwx D,A,B is OP=4 & XOP_0_10=1206 & D & A & B
+{
+    D = __ev_subfwx(A, B);
+}
+
+:evsubfwxss D,A,B is OP=4 & XOP_0_10=1207 & D & A & B
+{
+    D = __ev_subfwxss(A, B);
+}
+
+:evaddsubfw D,A,B is OP=4 & XOP_0_10=1208 & D & A & B
+{
+    D = __ev_addsubfw(A, B);
+}
+
+:evaddsubfwss D,A,B is OP=4 & XOP_0_10=1209 & D & A & B
+{
+    D = __ev_addsubfwss(A, B);
+}
+
+:evsubfaddw D,A,B is OP=4 & XOP_0_10=1210 & D & A & B
+{
+    D = __ev_subfaddw(A, B);
+}
+
+:evsubfaddwss D,A,B is OP=4 & XOP_0_10=1211 & D & A & B
+{
+    D = __ev_subfaddwss(A, B);
+}
+
+:evaddsubfwx D,A,B is OP=4 & XOP_0_10=1212 & D & A & B
+{
+    D = __ev_addsubfwx(A, B);
+}
+
+:evaddsubfwxss D,A,B is OP=4 & XOP_0_10=1213 & D & A & B
+{
+    D = __ev_addsubfwxss(A, B);
+}
+
+:evsubfaddwx D,A,B is OP=4 & XOP_0_10=1214 & D & A & B
+{
+    D = __ev_subfaddwx(A, B);
+}
+
+:evsubfaddwxss D,A,B is OP=4 & XOP_0_10=1215 & D & A & B
+{
+    D = __ev_subfaddwxss(A, B);
+}
+
+:evmar D is OP=4 & XOP_0_10=1220 & BIT_11=1 & D
+{
+    D = ACC;
+}
+
+:evsumwu D,A is OP=4 & XOP_0_10=1221 & BITS_11_15=0 & D & A
+{
+    D = __ev_sumwu(A);
+}
+
+:evsumws D,A is OP=4 & XOP_0_10=1221 & BITS_11_15=1 & D & A
+{
+    D = __ev_sumws(A);
+}
+
+:evsum4bu D,A is OP=4 & XOP_0_10=1221 & BITS_11_15=2 & D & A
+{
+    D = __ev_sum4bu(A);
+}
+
+:evsum4bs D,A is OP=4 & XOP_0_10=1221 & BITS_11_15=3 & D & A
+{
+    D = __ev_sum4bs(A);
+}
+
+:evsum2hu D,A is OP=4 & XOP_0_10=1221 & BITS_11_15=4 & D & A
+{
+    D = __ev_sum2hu(A);
+}
+
+:evsum2hs D,A is OP=4 & XOP_0_10=1221 & BITS_11_15=5 & D & A
+{
+    D = __ev_sum2hs(A);
+}
+
+:evdiff2his D,A is OP=4 & XOP_0_10=1221 & BITS_11_15=6 & D & A
+{
+    D = __ev_diff2his(A);
+}
+
+:evsum2his D,A is OP=4 & XOP_0_10=1221 & BITS_11_15=7 & D & A
+{
+    D = __ev_sum2his(A);
+}
+
+:evsumwua D,A is OP=4 & XOP_0_10=1221 & BITS_11_15=16 & D & A
+{
+    D = __ev_sumwua(A);
+    ACC = D;
+}
+
+:evsumwsa D,A is OP=4 & XOP_0_10=1221 & BITS_11_15=17 & D & A
+{
+    D = __ev_sumwsa(A);
+    ACC = D;
+}
+
+:evsum4bua D,A is OP=4 & XOP_0_10=1221 & BITS_11_15=18 & D & A
+{
+    D = __ev_sum4bua(A);
+    ACC = D;
+}
+
+:evsum4bsa D,A is OP=4 & XOP_0_10=1221 & BITS_11_15=19 & D & A
+{
+    D = __ev_sum4bsa(A);
+    ACC = D;
+}
+
+:evsum2hua D,A is OP=4 & XOP_0_10=1221 & BITS_11_15=20 & D & A
+{
+    D = __ev_sum2hua(A);
+    ACC = D;
+}
+
+:evsum2hsa D,A is OP=4 & XOP_0_10=1221 & BITS_11_15=21 & D & A
+{
+    D = __ev_sum2hsa(A);
+    ACC = D;
+}
+
+:evdiff2hisa D,A is OP=4 & XOP_0_10=1221 & BITS_11_15=22 & D & A
+{
+    D = __ev_diff2hisa(A);
+    ACC = D;
+}
+
+:evsum2hisa D,A is OP=4 & XOP_0_10=1221 & BITS_11_15=23 & D & A
+{
+    D = __ev_sum2hisa(A);
+    ACC = D;
+}
+
+:evsumwuaa D,A is OP=4 & XOP_0_10=1221 & BITS_11_15=24 & D & A
+{
+    D = __ev_sumwuaa(A, ACC);
+    ACC = D;
+}
+
+:evsumwsaa D,A is OP=4 & XOP_0_10=1221 & BITS_11_15=25 & D & A
+{
+    D = __ev_sumwsaa(A, ACC);
+    ACC = D;
+}
+
+:evsum4buaaw D,A is OP=4 & XOP_0_10=1221 & BITS_11_15=26 & D & A
+{
+    D = __ev_sum4buaaw(A, ACC);
+    ACC = D;
+}
+
+:evsum4bsaaw D,A is OP=4 & XOP_0_10=1221 & BITS_11_15=27 & D & A
+{
+    D = __ev_sum4bsaaw(A, ACC);
+    ACC = D;
+}
+
+:evsum2huaaw D,A is OP=4 & XOP_0_10=1221 & BITS_11_15=28 & D & A
+{
+    D = __ev_sum2huaaw(A, ACC);
+    ACC = D;
+}
+
+:evsum2hsaaw D,A is OP=4 & XOP_0_10=1221 & BITS_11_15=29 & D & A
+{
+    D = __ev_sum2hsaaw(A, ACC);
+    ACC = D;
+}
+
+:evdiff2hisaaw D,A is OP=4 & XOP_0_10=1221 & BITS_11_15=30 & D & A
+{
+    D = __ev_diff2hisaaw(A, ACC);
+    ACC = D;
+}
+
+:evsum2hisaaw D,A is OP=4 & XOP_0_10=1221 & BITS_11_15=31 & D & A
+{
+    D = __ev_sum2hisaaw(A, ACC);
+    ACC = D;
+}
+
+:evdivwsf D,A,B is OP=4 & XOP_0_10=1228 & D & A & B
+{
+    D = __ev_divwsf(A, B);
+}
+
+:evdivwuf D,A,B is OP=4 & XOP_0_10=1229 & D & A & B
+{
+    D = __ev_divwuf(A, B);
+}
+
+:evdivs D,A,B is OP=4 & XOP_0_10=1230 & D & A & B
+{
+    D = __ev_divs(A, B);
+}
+
+:evdivu D,A,B is OP=4 & XOP_0_10=1231 & D & A & B
+{
+    D = __ev_divu(A, B);
+}
+
+:evaddwegsi D,A,B is OP=4 & XOP_0_10=1232 & D & A & B
+{
+    D = __ev_addwegsi(A, B);
+}
+
+:evaddwegsf D,A,B is OP=4 & XOP_0_10=1233 & D & A & B
+{
+    D = __ev_addwegsf(A, B);
+}
+
+:evsubfwegsi D,A,B is OP=4 & XOP_0_10=1234 & D & A & B
+{
+    D = __ev_subfwegsi(A, B);
+}
+
+:evsubfwegsf D,A,B is OP=4 & XOP_0_10=1235 & D & A & B
+{
+    D = __ev_subfwegsf(A, B);
+}
+
+:evaddwogsi D,A,B is OP=4 & XOP_0_10=1236 & D & A & B
+{
+    D = __ev_addwogsi(A, B);
+}
+
+:evaddwogsf D,A,B is OP=4 & XOP_0_10=1237 & D & A & B
+{
+    D = __ev_addwogsf(A, B);
+}
+
+:evsubfwogsi D,A,B is OP=4 & XOP_0_10=1238 & D & A & B
+{
+    D = __ev_subfwogsi(A, B);
+}
+
+:evsubfwogsf D,A,B is OP=4 & XOP_0_10=1239 & D & A & B
+{
+    D = __ev_subfwogsf(A, B);
+}
+
+:evaddhhiuw D,A,B is OP=4 & XOP_0_10=1240 & D & A & B
+{
+    D = __ev_addhhiuw(A, B);
+}
+
+:evaddhhisw D,A,B is OP=4 & XOP_0_10=1241 & D & A & B
+{
+    D = __ev_addhhisw(A, B);
+}
+
+:evsubfhhiuw D,A,B is OP=4 & XOP_0_10=1242 & D & A & B
+{
+    D = __ev_subfhhiuw(A, B);
+}
+
+:evsubfhhisw D,A,B is OP=4 & XOP_0_10=1243 & D & A & B
+{
+    D = __ev_subfhhisw(A, B);
+}
+
+:evaddhlouw D,A,B is OP=4 & XOP_0_10=1244 & D & A & B
+{
+    D = __ev_addhlouw(A, B);
+}
+
+:evaddhlosw D,A,B is OP=4 & XOP_0_10=1245 & D & A & B
+{
+    D = __ev_addhlosw(A, B);
+}
+
+:evsubfhlouw D,A,B is OP=4 & XOP_0_10=1246 & D & A & B
+{
+    D = __ev_subfhlouw(A, B);
+}
+
+:evsubfhlosw D,A,B is OP=4 & XOP_0_10=1247 & D & A & B
+{
+    D = __ev_subfhlosw(A, B);
+}
+
+:evmhesusiaaw D,A,B is OP=4 & XOP_0_10=1282 & D & A & B
+{
+    D = __ev_mhesusiaaw(A, B, ACC);
+    ACC = D;
+}
+
+:evmhosusiaaw D,A,B is OP=4 & XOP_0_10=1286 & D & A & B
+{
+    D = __ev_mhosusiaaw(A, B, ACC);
+    ACC = D;
+}
+
+:evmhesumiaaw D,A,B is OP=4 & XOP_0_10=1290 & D & A & B
+{
+    D = __ev_mhesumiaaw(A, B, ACC);
+    ACC = D;
+}
+
+:evmhosumiaaw D,A,B is OP=4 & XOP_0_10=1294 & D & A & B
+{
+    D = __ev_mhosumiaaw(A, B, ACC);
+    ACC = D;
+}
+
+:evmbeusiaah D,A,B is OP=4 & XOP_0_10=1296 & D & A & B
+{
+    D = __ev_mbeusiaah(A, B, ACC);
+    ACC = D;
+}
+
+:evmbessiaah D,A,B is OP=4 & XOP_0_10=1297 & D & A & B
+{
+    D = __ev_mbessiaah(A, B, ACC);
+    ACC = D;
+}
+
+:evmbesusiaah D,A,B is OP=4 & XOP_0_10=1298 & D & A & B
+{
+    D = __ev_mbesusiaah(A, B, ACC);
+    ACC = D;
+}
+
+:evmbousiaah D,A,B is OP=4 & XOP_0_10=1300 & D & A & B
+{
+    D = __ev_mbousiaah(A, B, ACC);
+    ACC = D;
+}
+
+:evmbossiaah D,A,B is OP=4 & XOP_0_10=1301 & D & A & B
+{
+    D = __ev_mbossiaah(A, B, ACC);
+    ACC = D;
+}
+
+:evmbosusiaah D,A,B is OP=4 & XOP_0_10=1302 & D & A & B
+{
+    D = __ev_mbosusiaah(A, B, ACC);
+    ACC = D;
+}
+
+:evmbeumiaah D,A,B is OP=4 & XOP_0_10=1304 & D & A & B
+{
+    D = __ev_mbeumiaah(A, B, ACC);
+    ACC = D;
+}
+
+:evmbesmiaah D,A,B is OP=4 & XOP_0_10=1305 & D & A & B
+{
+    D = __ev_mbesmiaah(A, B, ACC);
+    ACC = D;
+}
+
+:evmbesumiaah D,A,B is OP=4 & XOP_0_10=1306 & D & A & B
+{
+    D = __ev_mbesumiaah(A, B, ACC);
+    ACC = D;
+}
+
+:evmboumiaah D,A,B is OP=4 & XOP_0_10=1308 & D & A & B
+{
+    D = __ev_mboumiaah(A, B, ACC);
+    ACC = D;
+}
+
+:evmbosmiaah D,A,B is OP=4 & XOP_0_10=1309 & D & A & B
+{
+    D = __ev_mbosmiaah(A, B, ACC);
+    ACC = D;
+}
+
+:evmbosumiaah D,A,B is OP=4 & XOP_0_10=1310 & D & A & B
+{
+    D = __ev_mbosumiaah(A, B, ACC);
+    ACC = D;
+}
+
+:evmwlusiaaw3 D,A,B is OP=4 & XOP_0_10=1346 & D & A & B
+{
+    D = __ev_mwlusiaaw3(A, B, D);
+    ACC = D;
+}
+
+:evmwlssiaaw3 D,A,B is OP=4 & XOP_0_10=1347 & D & A & B
+{
+    D = __ev_mwlssiaaw3(A, B, D);
+    ACC = D;
+}
+
+:evmwhssfraaw3 D,A,B is OP=4 & XOP_0_10=1348 & D & A & B
+{
+    D = __ev_mwhssfraaw3(A, B, D);
+    ACC = D;
+}
+
+:evmwhssfaaw3 D,A,B is OP=4 & XOP_0_10=1349 & D & A & B
+{
+    D = __ev_mwhssfaaw3(A, B, D);
+    ACC = D;
+}
+
+:evmwhssfraaw D,A,B is OP=4 & XOP_0_10=1350 & D & A & B
+{
+    D = __ev_mwhssfraaw(A, B, ACC);
+    ACC = D;
+}
+
+:evmwhssfaaw D,A,B is OP=4 & XOP_0_10=1351 & D & A & B
+{
+    D = __ev_mwhssfaaw(A, B, ACC);
+    ACC = D;
+}
+
+:evmwlumiaaw3 D,A,B is OP=4 & XOP_0_10=1354 & D & A & B
+{
+    D = __ev_mwlumiaaw3(A, B, D);
+    ACC = D;
+}
+
+:evmwlsmiaaw3 D,A,B is OP=4 & XOP_0_10=1355 & D & A & B
+{
+    D = __ev_mwlsmiaaw3(A, B, D);
+    ACC = D;
+}
+
+:evmwusiaa D,A,B is OP=4 & XOP_0_10=1360 & D & A & B
+{
+    D = __ev_mwusiaa(A, B, ACC);
+    ACC = D;
+}
+
+:evmwssiaa D,A,B is OP=4 & XOP_0_10=1361 & D & A & B
+{
+    D = __ev_mwssiaa(A, B, ACC);
+    ACC = D;
+}
+
+:evmwehgsmfraa D,A,B is OP=4 & XOP_0_10=1366 & D & A & B
+{
+    D = __ev_mwehgsmfraa(A, B, ACC);
+    ACC = D;
+}
+
+:evmwehgsmfaa D,A,B is OP=4 & XOP_0_10=1367 & D & A & B
+{
+    D = __ev_mwehgsmfaa(A, B, ACC);
+    ACC = D;
+}
+
+:evmwohgsmfraa D,A,B is OP=4 & XOP_0_10=1374 & D & A & B
+{
+    D = __ev_mwohgsmfraa(A, B, ACC);
+    ACC = D;
+}
+
+:evmwohgsmfaa D,A,B is OP=4 & XOP_0_10=1375 & D & A & B
+{
+    D = __ev_mwohgsmfaa(A, B, ACC);
+    ACC = D;
+}
+
+:evmhesusianw D,A,B is OP=4 & XOP_0_10=1410 & D & A & B
+{
+    D = __ev_mhesusianw(A, B, ACC);
+    ACC = D;
+}
+
+:evmhosusianw D,A,B is OP=4 & XOP_0_10=1414 & D & A & B
+{
+    D = __ev_mhosusianw(A, B, ACC);
+    ACC = D;
+}
+
+:evmhesumianw D,A,B is OP=4 & XOP_0_10=1418 & D & A & B
+{
+    D = __ev_mhesumianw(A, B, ACC);
+    ACC = D;
+}
+
+:evmhosumianw D,A,B is OP=4 & XOP_0_10=1422 & D & A & B
+{
+    D = __ev_mhosumianw(A, B, ACC);
+    ACC = D;
+}
+
+:evmbeusianh D,A,B is OP=4 & XOP_0_10=1424 & D & A & B
+{
+    D = __ev_mbeusianh(A, B, ACC);
+    ACC = D;
+}
+
+:evmbessianh D,A,B is OP=4 & XOP_0_10=1425 & D & A & B
+{
+    D = __ev_mbessianh(A, B, ACC);
+    ACC = D;
+}
+
+:evmbesusianh D,A,B is OP=4 & XOP_0_10=1426 & D & A & B
+{
+    D = __ev_mbesusianh(A, B, ACC);
+    ACC = D;
+}
+
+:evmbousianh D,A,B is OP=4 & XOP_0_10=1428 & D & A & B
+{
+    D = __ev_mbousianh(A, B, ACC);
+    ACC = D;
+}
+
+:evmbossianh D,A,B is OP=4 & XOP_0_10=1429 & D & A & B
+{
+    D = __ev_mbossianh(A, B, ACC);
+    ACC = D;
+}
+
+:evmbosusianh D,A,B is OP=4 & XOP_0_10=1430 & D & A & B
+{
+    D = __ev_mbosusianh(A, B, ACC);
+    ACC = D;
+}
+
+:evmbeumianh D,A,B is OP=4 & XOP_0_10=1432 & D & A & B
+{
+    D = __ev_mbeumianh(A, B, ACC);
+    ACC = D;
+}
+
+:evmbesmianh D,A,B is OP=4 & XOP_0_10=1433 & D & A & B
+{
+    D = __ev_mbesmianh(A, B, ACC);
+    ACC = D;
+}
+
+:evmbesumianh D,A,B is OP=4 & XOP_0_10=1434 & D & A & B
+{
+    D = __ev_mbesumianh(A, B, ACC);
+    ACC = D;
+}
+
+:evmboumianh D,A,B is OP=4 & XOP_0_10=1436 & D & A & B
+{
+    D = __ev_mboumianh(A, B, ACC);
+    ACC = D;
+}
+
+:evmbosmianh D,A,B is OP=4 & XOP_0_10=1437 & D & A & B
+{
+    D = __ev_mbosmianh(A, B, ACC);
+    ACC = D;
+}
+
+:evmbosumianh D,A,B is OP=4 & XOP_0_10=1438 & D & A & B
+{
+    D = __ev_mbosumianh(A, B, ACC);
+    ACC = D;
+}
+
+:evmwlusianw3 D,A,B is OP=4 & XOP_0_10=1474 & D & A & B
+{
+    D = __ev_mwlusianw3(A, B, D);
+    ACC = D;
+}
+
+:evmwlssianw3 D,A,B is OP=4 & XOP_0_10=1475 & D & A & B
+{
+    D = __ev_mwlssianw3(A, B, D);
+    ACC = D;
+}
+
+:evmwhssfranw3 D,A,B is OP=4 & XOP_0_10=1476 & D & A & B
+{
+    D = __ev_mwhssfranw3(A, B, D);
+    ACC = D;
+}
+
+:evmwhssfanw3 D,A,B is OP=4 & XOP_0_10=1477 & D & A & B
+{
+    D = __ev_mwhssfanw3(A, B, D);
+    ACC = D;
+}
+
+:evmwhssfranw D,A,B is OP=4 & XOP_0_10=1478 & D & A & B
+{
+    D = __ev_mwhssfranw(A, B, ACC);
+    ACC = D;
+}
+
+:evmwhssfanw D,A,B is OP=4 & XOP_0_10=1479 & D & A & B
+{
+    D = __ev_mwhssfanw(A, B, ACC);
+    ACC = D;
+}
+
+:evmwlumianw3 D,A,B is OP=4 & XOP_0_10=1482 & D & A & B
+{
+    D = __ev_mwlumianw3(A, B, D);
+    ACC = D;
+}
+
+:evmwlsmianw3 D,A,B is OP=4 & XOP_0_10=1483 & D & A & B
+{
+    D = __ev_mwlsmianw3(A, B, D);
+    ACC = D;
+}
+
+:evmwusian D,A,B is OP=4 & XOP_0_10=1488 & D & A & B
+{
+    D = __ev_mwusian(A, B, ACC);
+    ACC = D;
+}
+
+:evmwssian D,A,B is OP=4 & XOP_0_10=1489 & D & A & B
+{
+    D = __ev_mwssian(A, B, ACC);
+    ACC = D;
+}
+
+:evmwehgsmfran D,A,B is OP=4 & XOP_0_10=1494 & D & A & B
+{
+    D = __ev_mwehgsmfran(A, B, ACC);
+    ACC = D;
+}
+
+:evmwehgsmfan D,A,B is OP=4 & XOP_0_10=1495 & D & A & B
+{
+    D = __ev_mwehgsmfan(A, B, ACC);
+    ACC = D;
+}
+
+:evmwohgsmfran D,A,B is OP=4 & XOP_0_10=1502 & D & A & B
+{
+    D = __ev_mwohgsmfran(A, B, ACC);
+    ACC = D;
+}
+
+:evmwohgsmfan D,A,B is OP=4 & XOP_0_10=1503 & D & A & B
+{
+    D = __ev_mwohgsmfan(A, B, ACC);
+    ACC = D;
+}
+
+:evseteqb D,A,B is OP=4 & XOP_0_10=1536 & D & A & B
+{
+    D = __ev_seteqb(A, B);
+}
+
+:evseteqb. D,A,B is OP=4 & XOP_0_10=1537 & D & A & B
+{
+    D = __ev_seteqb(A, B);
+}
+
+:evseteqh D,A,B is OP=4 & XOP_0_10=1538 & D & A & B
+{
+    D = __ev_seteqh(A, B);
+}
+
+:evseteqh. D,A,B is OP=4 & XOP_0_10=1539 & D & A & B
+{
+    D = __ev_seteqh(A, B);
+}
+
+:evseteqw D,A,B is OP=4 & XOP_0_10=1540 & D & A & B
+{
+    D = __ev_seteqw(A, B);
+}
+
+:evseteqw. D,A,B is OP=4 & XOP_0_10=1541 & D & A & B
+{
+    D = __ev_seteqw(A, B);
+}
+
+:evsetgthu D,A,B is OP=4 & XOP_0_10=1544 & D & A & B
+{
+    D = __ev_setgthu(A, B);
+}
+
+:evsetgthu. D,A,B is OP=4 & XOP_0_10=1545 & D & A & B
+{
+    D = __ev_setgthu(A, B);
+}
+
+:evsetgths D,A,B is OP=4 & XOP_0_10=1546 & D & A & B
+{
+    D = __ev_setgths(A, B);
+}
+
+:evsetgths. D,A,B is OP=4 & XOP_0_10=1547 & D & A & B
+{
+    D = __ev_setgths(A, B);
+}
+
+:evsetgtwu D,A,B is OP=4 & XOP_0_10=1548 & D & A & B
+{
+    D = __ev_setgtwu(A, B);
+}
+
+:evsetgtwu. D,A,B is OP=4 & XOP_0_10=1549 & D & A & B
+{
+    D = __ev_setgtwu(A, B);
+}
+
+:evsetgtws D,A,B is OP=4 & XOP_0_10=1550 & D & A & B
+{
+    D = __ev_setgtws(A, B);
+}
+
+:evsetgtws. D,A,B is OP=4 & XOP_0_10=1551 & D & A & B
+{
+    D = __ev_setgtws(A, B);
+}
+
+:evsetgtbu D,A,B is OP=4 & XOP_0_10=1552 & D & A & B
+{
+    D = __ev_setgtbu(A, B);
+}
+
+:evsetgtbu. D,A,B is OP=4 & XOP_0_10=1553 & D & A & B
+{
+    D = __ev_setgtbu(A, B);
+}
+
+:evsetgtbs D,A,B is OP=4 & XOP_0_10=1554 & D & A & B
+{
+    D = __ev_setgtbs(A, B);
+}
+
+:evsetgtbs. D,A,B is OP=4 & XOP_0_10=1555 & D & A & B
+{
+    D = __ev_setgtbs(A, B);
+}
+
+:evsetltbu D,A,B is OP=4 & XOP_0_10=1556 & D & A & B
+{
+    D = __ev_setltbu(A, B);
+}
+
+:evsetltbu. D,A,B is OP=4 & XOP_0_10=1557 & D & A & B
+{
+    D = __ev_setltbu(A, B);
+}
+
+:evsetltbs D,A,B is OP=4 & XOP_0_10=1558 & D & A & B
+{
+    D = __ev_setltbs(A, B);
+}
+
+:evsetltbs. D,A,B is OP=4 & XOP_0_10=1559 & D & A & B
+{
+    D = __ev_setltbs(A, B);
+}
+
+:evsetlthu D,A,B is OP=4 & XOP_0_10=1560 & D & A & B
+{
+    D = __ev_setlthu(A, B);
+}
+
+:evsetlthu. D,A,B is OP=4 & XOP_0_10=1561 & D & A & B
+{
+    D = __ev_setlthu(A, B);
+}
+
+:evsetlths D,A,B is OP=4 & XOP_0_10=1562 & D & A & B
+{
+    D = __ev_setlths(A, B);
+}
+
+:evsetlths. D,A,B is OP=4 & XOP_0_10=1563 & D & A & B
+{
+    D = __ev_setlths(A, B);
+}
+
+:evsetltwu D,A,B is OP=4 & XOP_0_10=1564 & D & A & B
+{
+    D = __ev_setltwu(A, B);
+}
+
+:evsetltwu. D,A,B is OP=4 & XOP_0_10=1565 & D & A & B
+{
+    D = __ev_setltwu(A, B);
+}
+
+:evsetltws D,A,B is OP=4 & XOP_0_10=1566 & D & A & B
+{
+    D = __ev_setltws(A, B);
+}
+
+:evsetltws. D,A,B is OP=4 & XOP_0_10=1567 & D & A & B
+{
+    D = __ev_setltws(A, B);
+}
+
+:evsaduw D,A,B is OP=4 & XOP_0_10=1568 & D & A & B
+{
+    D = __ev_saduw(A, B);
+}
+
+:evsadsw D,A,B is OP=4 & XOP_0_10=1569 & D & A & B
+{
+    D = __ev_sadsw(A, B);
+}
+
+:evsad4ub D,A,B is OP=4 & XOP_0_10=1570 & D & A & B
+{
+    D = __ev_sad4ub(A, B);
+}
+
+:evsad4sb D,A,B is OP=4 & XOP_0_10=1571 & D & A & B
+{
+    D = __ev_sad4sb(A, B);
+}
+
+:evsad2uh D,A,B is OP=4 & XOP_0_10=1572 & D & A & B
+{
+    D = __ev_sad2uh(A, B);
+}
+
+:evsad2sh D,A,B is OP=4 & XOP_0_10=1573 & D & A & B
+{
+    D = __ev_sad2sh(A, B);
+}
+
+:evsaduwa D,A,B is OP=4 & XOP_0_10=1576 & D & A & B
+{
+    D = __ev_saduwa(A, B);
+    ACC = D;
+}
+
+:evsadswa D,A,B is OP=4 & XOP_0_10=1577 & D & A & B
+{
+    D = __ev_sadswa(A, B);
+    ACC = D;
+}
+
+:evsad4uba D,A,B is OP=4 & XOP_0_10=1578 & D & A & B
+{
+    D = __ev_sad4uba(A, B);
+    ACC = D;
+}
+
+:evsad4sba D,A,B is OP=4 & XOP_0_10=1579 & D & A & B
+{
+    D = __ev_sad4sba(A, B);
+    ACC = D;
+}
+
+:evsad2uha D,A,B is OP=4 & XOP_0_10=1580 & D & A & B
+{
+    D = __ev_sad2uha(A, B);
+    ACC = D;
+}
+
+:evsad2sha D,A,B is OP=4 & XOP_0_10=1581 & D & A & B
+{
+    D = __ev_sad2sha(A, B);
+    ACC = D;
+}
+
+:evabsdifuw D,A,B is OP=4 & XOP_0_10=1584 & D & A & B
+{
+    D = __ev_absdifuw(A, B);
+}
+
+:evabsdifsw D,A,B is OP=4 & XOP_0_10=1585 & D & A & B
+{
+    D = __ev_absdifsw(A, B);
+}
+
+:evabsdifub D,A,B is OP=4 & XOP_0_10=1586 & D & A & B
+{
+    D = __ev_absdifub(A, B);
+}
+
+:evabsdifsb D,A,B is OP=4 & XOP_0_10=1587 & D & A & B
+{
+    D = __ev_absdifsb(A, B);
+}
+
+:evabsdifuh D,A,B is OP=4 & XOP_0_10=1588 & D & A & B
+{
+    D = __ev_absdifuh(A, B);
+}
+
+:evabsdifsh D,A,B is OP=4 & XOP_0_10=1589 & D & A & B
+{
+    D = __ev_absdifsh(A, B);
+}
+
+:evsaduwaa D,A,B is OP=4 & XOP_0_10=1592 & D & A & B
+{
+    D = __ev_saduwaa(A, B, ACC);
+    ACC = D;
+}
+
+:evsadswaa D,A,B is OP=4 & XOP_0_10=1593 & D & A & B
+{
+    D = __ev_sadswaa(A, B, ACC);
+    ACC = D;
+}
+
+:evsad4ubaaw D,A,B is OP=4 & XOP_0_10=1594 & D & A & B
+{
+    D = __ev_sad4ubaaw(A, B, ACC);
+    ACC = D;
+}
+
+:evsad4sbaaw D,A,B is OP=4 & XOP_0_10=1595 & D & A & B
+{
+    D = __ev_sad4sbaaw(A, B, ACC);
+    ACC = D;
+}
+
+:evsad2uhaaw D,A,B is OP=4 & XOP_0_10=1596 & D & A & B
+{
+    D = __ev_sad2uhaaw(A, B, ACC);
+    ACC = D;
+}
+
+:evsad2shaaw D,A,B is OP=4 & XOP_0_10=1597 & D & A & B
+{
+    D = __ev_sad2shaaw(A, B, ACC);
+    ACC = D;
+}
+
+:evpkshubs D,A,B is OP=4 & XOP_0_10=1600 & D & A & B
+{
+    D = __ev_pkshubs(A, B);
+}
+
+:evpkshsbs D,A,B is OP=4 & XOP_0_10=1601 & D & A & B
+{
+    D = __ev_pkshsbs(A, B);
+}
+
+:evpkswuhs D,A,B is OP=4 & XOP_0_10=1602 & D & A & B
+{
+    D = __ev_pkswuhs(A, B);
+}
+
+:evpkswshs D,A,B is OP=4 & XOP_0_10=1603 & D & A & B
+{
+    D = __ev_pkswshs(A, B);
+}
+
+:evpkuhubs D,A,B is OP=4 & XOP_0_10=1604 & D & A & B
+{
+    D = __ev_pkuhubs(A, B);
+}
+
+:evpkuwuhs D,A,B is OP=4 & XOP_0_10=1605 & D & A & B
+{
+    D = __ev_pkuwuhs(A, B);
+}
+
+:evpkswshilvs D,A,B is OP=4 & XOP_0_10=1606 & D & A & B
+{
+    D = __ev_pkswshilvs(A, B);
+}
+
+:evpkswgshefrs D,A,B is OP=4 & XOP_0_10=1607 & D & A & B
+{
+    D = __ev_pkswgshefrs(A, B);
+}
+
+:evpkswshfrs D,A,B is OP=4 & XOP_0_10=1608 & D & A & B
+{
+    D = __ev_pkswshfrs(A, B);
+}
+
+:evpkswshilvfrs D,A,B is OP=4 & XOP_0_10=1609 & D & A & B
+{
+    D = __ev_pkswshilvfrs(A, B);
+}
+
+:evpksdswfrs D,A,B is OP=4 & XOP_0_10=1610 & D & A & B
+{
+    D = __ev_pksdswfrs(A, B);
+}
+
+:evpksdshefrs D,A,B is OP=4 & XOP_0_10=1611 & D & A & B
+{
+    D = __ev_pksdshefrs(A, B);
+}
+
+:evpkuduws D,A,B is OP=4 & XOP_0_10=1612 & D & A & B
+{
+    D = __ev_pkuduws(A, B);
+}
+
+:evpksdsws D,A,B is OP=4 & XOP_0_10=1613 & D & A & B
+{
+    D = __ev_pksdsws(A, B);
+}
+
+:evpkswgswfrs D,A,B is OP=4 & XOP_0_10=1614 & D & A & B
+{
+    D = __ev_pkswgswfrs(A, B);
+}
+
+:evilveh D,A,B is OP=4 & XOP_0_10=1616 & D & A & B
+{
+    D = __ev_ilveh(A, B);
+}
+
+:evilveoh D,A,B is OP=4 & XOP_0_10=1617 & D & A & B
+{
+    D = __ev_ilveoh(A, B);
+}
+
+:evilvhih D,A,B is OP=4 & XOP_0_10=1618 & D & A & B
+{
+    D = __ev_ilvhih(A, B);
+}
+
+:evilvhiloh D,A,B is OP=4 & XOP_0_10=1619 & D & A & B
+{
+    D = __ev_ilvhiloh(A, B);
+}
+
+:evilvloh D,A,B is OP=4 & XOP_0_10=1620 & D & A & B
+{
+    D = __ev_ilvloh(A, B);
+}
+
+:evilvlohih D,A,B is OP=4 & XOP_0_10=1621 & D & A & B
+{
+    D = __ev_ilvlohih(A, B);
+}
+
+:evilvoeh D,A,B is OP=4 & XOP_0_10=1622 & D & A & B
+{
+    D = __ev_ilvoeh(A, B);
+}
+
+:evilvoh D,A,B is OP=4 & XOP_0_10=1623 & D & A & B
+{
+    D = __ev_ilvoh(A, B);
+}
+
+:evdlveb D,A,B is OP=4 & XOP_0_10=1624 & D & A & B
+{
+    D = __ev_dlveb(A, B);
+}
+
+:evdlveh D,A,B is OP=4 & XOP_0_10=1625 & D & A & B
+{
+    D = __ev_dlveh(A, B);
+}
+
+:evdlveob D,A,B is OP=4 & XOP_0_10=1626 & D & A & B
+{
+    D = __ev_dlveob(A, B);
+}
+
+:evdlveoh D,A,B is OP=4 & XOP_0_10=1627 & D & A & B
+{
+    D = __ev_dlveoh(A, B);
+}
+
+:evdlvob D,A,B is OP=4 & XOP_0_10=1628 & D & A & B
+{
+    D = __ev_dlvob(A, B);
+}
+
+:evdlvoh D,A,B is OP=4 & XOP_0_10=1629 & D & A & B
+{
+    D = __ev_dlvoh(A, B);
+}
+
+:evdlvoeb D,A,B is OP=4 & XOP_0_10=1630 & D & A & B
+{
+    D = __ev_dlvoeb(A, B);
+}
+
+:evdlvoeh D,A,B is OP=4 & XOP_0_10=1631 & D & A & B
+{
+    D = __ev_dlvoeh(A, B);
+}
+
+:evmaxbu D,A,B is OP=4 & XOP_0_10=1632 & D & A & B
+{
+    l_a0:1 = A(7);
+    l_b0:1 = B(7);
+    l_r0:1 = (l_b0 * zext(l_a0 < l_b0)) + (l_a0 * zext(!(l_a0 < l_b0)));
+    l_a1:1 = A(6);
+    l_b1:1 = B(6);
+    l_r1:1 = (l_b1 * zext(l_a1 < l_b1)) + (l_a1 * zext(!(l_a1 < l_b1)));
+    l_a2:1 = A(5);
+    l_b2:1 = B(5);
+    l_r2:1 = (l_b2 * zext(l_a2 < l_b2)) + (l_a2 * zext(!(l_a2 < l_b2)));
+    l_a3:1 = A(4);
+    l_b3:1 = B(4);
+    l_r3:1 = (l_b3 * zext(l_a3 < l_b3)) + (l_a3 * zext(!(l_a3 < l_b3)));
+    l_a4:1 = A(3);
+    l_b4:1 = B(3);
+    l_r4:1 = (l_b4 * zext(l_a4 < l_b4)) + (l_a4 * zext(!(l_a4 < l_b4)));
+    l_a5:1 = A(2);
+    l_b5:1 = B(2);
+    l_r5:1 = (l_b5 * zext(l_a5 < l_b5)) + (l_a5 * zext(!(l_a5 < l_b5)));
+    l_a6:1 = A(1);
+    l_b6:1 = B(1);
+    l_r6:1 = (l_b6 * zext(l_a6 < l_b6)) + (l_a6 * zext(!(l_a6 < l_b6)));
+    l_a7:1 = A:1;
+    l_b7:1 = B:1;
+    l_r7:1 = (l_b7 * zext(l_a7 < l_b7)) + (l_a7 * zext(!(l_a7 < l_b7)));
+    D = (zext(l_r0) << 56) | (zext(l_r1) << 48) | (zext(l_r2) << 40) | (zext(l_r3) << 32) | (zext(l_r4) << 24) | (zext(l_r5) << 16) | (zext(l_r6) << 8) | zext(l_r7);
+}
+
+:evmaxbs D,A,B is OP=4 & XOP_0_10=1633 & D & A & B
+{
+    l_a0:1 = A(7);
+    l_b0:1 = B(7);
+    l_r0:1 = (l_b0 * zext(l_a0 s< l_b0)) + (l_a0 * zext(!(l_a0 s< l_b0)));
+    l_a1:1 = A(6);
+    l_b1:1 = B(6);
+    l_r1:1 = (l_b1 * zext(l_a1 s< l_b1)) + (l_a1 * zext(!(l_a1 s< l_b1)));
+    l_a2:1 = A(5);
+    l_b2:1 = B(5);
+    l_r2:1 = (l_b2 * zext(l_a2 s< l_b2)) + (l_a2 * zext(!(l_a2 s< l_b2)));
+    l_a3:1 = A(4);
+    l_b3:1 = B(4);
+    l_r3:1 = (l_b3 * zext(l_a3 s< l_b3)) + (l_a3 * zext(!(l_a3 s< l_b3)));
+    l_a4:1 = A(3);
+    l_b4:1 = B(3);
+    l_r4:1 = (l_b4 * zext(l_a4 s< l_b4)) + (l_a4 * zext(!(l_a4 s< l_b4)));
+    l_a5:1 = A(2);
+    l_b5:1 = B(2);
+    l_r5:1 = (l_b5 * zext(l_a5 s< l_b5)) + (l_a5 * zext(!(l_a5 s< l_b5)));
+    l_a6:1 = A(1);
+    l_b6:1 = B(1);
+    l_r6:1 = (l_b6 * zext(l_a6 s< l_b6)) + (l_a6 * zext(!(l_a6 s< l_b6)));
+    l_a7:1 = A:1;
+    l_b7:1 = B:1;
+    l_r7:1 = (l_b7 * zext(l_a7 s< l_b7)) + (l_a7 * zext(!(l_a7 s< l_b7)));
+    D = (zext(l_r0) << 56) | (zext(l_r1) << 48) | (zext(l_r2) << 40) | (zext(l_r3) << 32) | (zext(l_r4) << 24) | (zext(l_r5) << 16) | (zext(l_r6) << 8) | zext(l_r7);
+}
+
+:evmaxhu D,A,B is OP=4 & XOP_0_10=1634 & D & A & B
+{
+    l_a0:2 = A(6);
+    l_b0:2 = B(6);
+    l_r0:2 = (l_b0 * zext(l_a0 < l_b0)) + (l_a0 * zext(!(l_a0 < l_b0)));
+    l_a1:2 = A(4);
+    l_b1:2 = B(4);
+    l_r1:2 = (l_b1 * zext(l_a1 < l_b1)) + (l_a1 * zext(!(l_a1 < l_b1)));
+    l_a2:2 = A(2);
+    l_b2:2 = B(2);
+    l_r2:2 = (l_b2 * zext(l_a2 < l_b2)) + (l_a2 * zext(!(l_a2 < l_b2)));
+    l_a3:2 = A:2;
+    l_b3:2 = B:2;
+    l_r3:2 = (l_b3 * zext(l_a3 < l_b3)) + (l_a3 * zext(!(l_a3 < l_b3)));
+    D = (zext(l_r0) << 48) | (zext(l_r1) << 32) | (zext(l_r2) << 16) | zext(l_r3);
+}
+
+:evmaxhs D,A,B is OP=4 & XOP_0_10=1635 & D & A & B
+{
+    l_a0:2 = A(6);
+    l_b0:2 = B(6);
+    l_r0:2 = (l_b0 * zext(l_a0 s< l_b0)) + (l_a0 * zext(!(l_a0 s< l_b0)));
+    l_a1:2 = A(4);
+    l_b1:2 = B(4);
+    l_r1:2 = (l_b1 * zext(l_a1 s< l_b1)) + (l_a1 * zext(!(l_a1 s< l_b1)));
+    l_a2:2 = A(2);
+    l_b2:2 = B(2);
+    l_r2:2 = (l_b2 * zext(l_a2 s< l_b2)) + (l_a2 * zext(!(l_a2 s< l_b2)));
+    l_a3:2 = A:2;
+    l_b3:2 = B:2;
+    l_r3:2 = (l_b3 * zext(l_a3 s< l_b3)) + (l_a3 * zext(!(l_a3 s< l_b3)));
+    D = (zext(l_r0) << 48) | (zext(l_r1) << 32) | (zext(l_r2) << 16) | zext(l_r3);
+}
+
+:evmaxwu D,A,B is OP=4 & XOP_0_10=1636 & D & A & B
+{
+    l_a0:4 = A(4);
+    l_b0:4 = B(4);
+    l_r0:4 = (l_b0 * zext(l_a0 < l_b0)) + (l_a0 * zext(!(l_a0 < l_b0)));
+    l_a1:4 = A:4;
+    l_b1:4 = B:4;
+    l_r1:4 = (l_b1 * zext(l_a1 < l_b1)) + (l_a1 * zext(!(l_a1 < l_b1)));
+    D = (zext(l_r0) << 32) | zext(l_r1);
+}
+
+:evmaxws D,A,B is OP=4 & XOP_0_10=1637 & D & A & B
+{
+    l_a0:4 = A(4);
+    l_b0:4 = B(4);
+    l_r0:4 = (l_b0 * zext(l_a0 s< l_b0)) + (l_a0 * zext(!(l_a0 s< l_b0)));
+    l_a1:4 = A:4;
+    l_b1:4 = B:4;
+    l_r1:4 = (l_b1 * zext(l_a1 s< l_b1)) + (l_a1 * zext(!(l_a1 s< l_b1)));
+    D = (zext(l_r0) << 32) | zext(l_r1);
+}
+
+:evmaxdu D,A,B is OP=4 & XOP_0_10=1638 & D & A & B
+{
+    l_a0:8 = A;
+    l_b0:8 = B;
+    l_r0:8 = (l_b0 * zext(l_a0 < l_b0)) + (l_a0 * zext(!(l_a0 < l_b0)));
+    D = l_r0;
+}
+
+:evmaxds D,A,B is OP=4 & XOP_0_10=1639 & D & A & B
+{
+    l_a0:8 = A;
+    l_b0:8 = B;
+    l_r0:8 = (l_b0 * zext(l_a0 s< l_b0)) + (l_a0 * zext(!(l_a0 s< l_b0)));
+    D = l_r0;
+}
+
+:evminbu D,A,B is OP=4 & XOP_0_10=1640 & D & A & B
+{
+    l_a0:1 = A(7);
+    l_b0:1 = B(7);
+    l_r0:1 = (l_b0 * zext(l_b0 < l_a0)) + (l_a0 * zext(!(l_b0 < l_a0)));
+    l_a1:1 = A(6);
+    l_b1:1 = B(6);
+    l_r1:1 = (l_b1 * zext(l_b1 < l_a1)) + (l_a1 * zext(!(l_b1 < l_a1)));
+    l_a2:1 = A(5);
+    l_b2:1 = B(5);
+    l_r2:1 = (l_b2 * zext(l_b2 < l_a2)) + (l_a2 * zext(!(l_b2 < l_a2)));
+    l_a3:1 = A(4);
+    l_b3:1 = B(4);
+    l_r3:1 = (l_b3 * zext(l_b3 < l_a3)) + (l_a3 * zext(!(l_b3 < l_a3)));
+    l_a4:1 = A(3);
+    l_b4:1 = B(3);
+    l_r4:1 = (l_b4 * zext(l_b4 < l_a4)) + (l_a4 * zext(!(l_b4 < l_a4)));
+    l_a5:1 = A(2);
+    l_b5:1 = B(2);
+    l_r5:1 = (l_b5 * zext(l_b5 < l_a5)) + (l_a5 * zext(!(l_b5 < l_a5)));
+    l_a6:1 = A(1);
+    l_b6:1 = B(1);
+    l_r6:1 = (l_b6 * zext(l_b6 < l_a6)) + (l_a6 * zext(!(l_b6 < l_a6)));
+    l_a7:1 = A:1;
+    l_b7:1 = B:1;
+    l_r7:1 = (l_b7 * zext(l_b7 < l_a7)) + (l_a7 * zext(!(l_b7 < l_a7)));
+    D = (zext(l_r0) << 56) | (zext(l_r1) << 48) | (zext(l_r2) << 40) | (zext(l_r3) << 32) | (zext(l_r4) << 24) | (zext(l_r5) << 16) | (zext(l_r6) << 8) | zext(l_r7);
+}
+
+:evminbs D,A,B is OP=4 & XOP_0_10=1641 & D & A & B
+{
+    l_a0:1 = A(7);
+    l_b0:1 = B(7);
+    l_r0:1 = (l_b0 * zext(l_b0 s< l_a0)) + (l_a0 * zext(!(l_b0 s< l_a0)));
+    l_a1:1 = A(6);
+    l_b1:1 = B(6);
+    l_r1:1 = (l_b1 * zext(l_b1 s< l_a1)) + (l_a1 * zext(!(l_b1 s< l_a1)));
+    l_a2:1 = A(5);
+    l_b2:1 = B(5);
+    l_r2:1 = (l_b2 * zext(l_b2 s< l_a2)) + (l_a2 * zext(!(l_b2 s< l_a2)));
+    l_a3:1 = A(4);
+    l_b3:1 = B(4);
+    l_r3:1 = (l_b3 * zext(l_b3 s< l_a3)) + (l_a3 * zext(!(l_b3 s< l_a3)));
+    l_a4:1 = A(3);
+    l_b4:1 = B(3);
+    l_r4:1 = (l_b4 * zext(l_b4 s< l_a4)) + (l_a4 * zext(!(l_b4 s< l_a4)));
+    l_a5:1 = A(2);
+    l_b5:1 = B(2);
+    l_r5:1 = (l_b5 * zext(l_b5 s< l_a5)) + (l_a5 * zext(!(l_b5 s< l_a5)));
+    l_a6:1 = A(1);
+    l_b6:1 = B(1);
+    l_r6:1 = (l_b6 * zext(l_b6 s< l_a6)) + (l_a6 * zext(!(l_b6 s< l_a6)));
+    l_a7:1 = A:1;
+    l_b7:1 = B:1;
+    l_r7:1 = (l_b7 * zext(l_b7 s< l_a7)) + (l_a7 * zext(!(l_b7 s< l_a7)));
+    D = (zext(l_r0) << 56) | (zext(l_r1) << 48) | (zext(l_r2) << 40) | (zext(l_r3) << 32) | (zext(l_r4) << 24) | (zext(l_r5) << 16) | (zext(l_r6) << 8) | zext(l_r7);
+}
+
+:evminhu D,A,B is OP=4 & XOP_0_10=1642 & D & A & B
+{
+    l_a0:2 = A(6);
+    l_b0:2 = B(6);
+    l_r0:2 = (l_b0 * zext(l_b0 < l_a0)) + (l_a0 * zext(!(l_b0 < l_a0)));
+    l_a1:2 = A(4);
+    l_b1:2 = B(4);
+    l_r1:2 = (l_b1 * zext(l_b1 < l_a1)) + (l_a1 * zext(!(l_b1 < l_a1)));
+    l_a2:2 = A(2);
+    l_b2:2 = B(2);
+    l_r2:2 = (l_b2 * zext(l_b2 < l_a2)) + (l_a2 * zext(!(l_b2 < l_a2)));
+    l_a3:2 = A:2;
+    l_b3:2 = B:2;
+    l_r3:2 = (l_b3 * zext(l_b3 < l_a3)) + (l_a3 * zext(!(l_b3 < l_a3)));
+    D = (zext(l_r0) << 48) | (zext(l_r1) << 32) | (zext(l_r2) << 16) | zext(l_r3);
+}
+
+:evminhs D,A,B is OP=4 & XOP_0_10=1643 & D & A & B
+{
+    l_a0:2 = A(6);
+    l_b0:2 = B(6);
+    l_r0:2 = (l_b0 * zext(l_b0 s< l_a0)) + (l_a0 * zext(!(l_b0 s< l_a0)));
+    l_a1:2 = A(4);
+    l_b1:2 = B(4);
+    l_r1:2 = (l_b1 * zext(l_b1 s< l_a1)) + (l_a1 * zext(!(l_b1 s< l_a1)));
+    l_a2:2 = A(2);
+    l_b2:2 = B(2);
+    l_r2:2 = (l_b2 * zext(l_b2 s< l_a2)) + (l_a2 * zext(!(l_b2 s< l_a2)));
+    l_a3:2 = A:2;
+    l_b3:2 = B:2;
+    l_r3:2 = (l_b3 * zext(l_b3 s< l_a3)) + (l_a3 * zext(!(l_b3 s< l_a3)));
+    D = (zext(l_r0) << 48) | (zext(l_r1) << 32) | (zext(l_r2) << 16) | zext(l_r3);
+}
+
+:evminwu D,A,B is OP=4 & XOP_0_10=1644 & D & A & B
+{
+    l_a0:4 = A(4);
+    l_b0:4 = B(4);
+    l_r0:4 = (l_b0 * zext(l_b0 < l_a0)) + (l_a0 * zext(!(l_b0 < l_a0)));
+    l_a1:4 = A:4;
+    l_b1:4 = B:4;
+    l_r1:4 = (l_b1 * zext(l_b1 < l_a1)) + (l_a1 * zext(!(l_b1 < l_a1)));
+    D = (zext(l_r0) << 32) | zext(l_r1);
+}
+
+:evminws D,A,B is OP=4 & XOP_0_10=1645 & D & A & B
+{
+    l_a0:4 = A(4);
+    l_b0:4 = B(4);
+    l_r0:4 = (l_b0 * zext(l_b0 s< l_a0)) + (l_a0 * zext(!(l_b0 s< l_a0)));
+    l_a1:4 = A:4;
+    l_b1:4 = B:4;
+    l_r1:4 = (l_b1 * zext(l_b1 s< l_a1)) + (l_a1 * zext(!(l_b1 s< l_a1)));
+    D = (zext(l_r0) << 32) | zext(l_r1);
+}
+
+:evmindu D,A,B is OP=4 & XOP_0_10=1646 & D & A & B
+{
+    l_a0:8 = A;
+    l_b0:8 = B;
+    l_r0:8 = (l_b0 * zext(l_b0 < l_a0)) + (l_a0 * zext(!(l_b0 < l_a0)));
+    D = l_r0;
+}
+
+:evminds D,A,B is OP=4 & XOP_0_10=1647 & D & A & B
+{
+    l_a0:8 = A;
+    l_b0:8 = B;
+    l_r0:8 = (l_b0 * zext(l_b0 s< l_a0)) + (l_a0 * zext(!(l_b0 s< l_a0)));
+    D = l_r0;
+}
+
+:evavgwu D,A,B is OP=4 & XOP_0_10=1648 & D & A & B
+{
+    D = __ev_avgwu(A, B);
+}
+
+:evavgws D,A,B is OP=4 & XOP_0_10=1649 & D & A & B
+{
+    D = __ev_avgws(A, B);
+}
+
+:evavgbu D,A,B is OP=4 & XOP_0_10=1650 & D & A & B
+{
+    D = __ev_avgbu(A, B);
+}
+
+:evavgbs D,A,B is OP=4 & XOP_0_10=1651 & D & A & B
+{
+    D = __ev_avgbs(A, B);
+}
+
+:evavghu D,A,B is OP=4 & XOP_0_10=1652 & D & A & B
+{
+    D = __ev_avghu(A, B);
+}
+
+:evavghs D,A,B is OP=4 & XOP_0_10=1653 & D & A & B
+{
+    D = __ev_avghs(A, B);
+}
+
+:evavgdu D,A,B is OP=4 & XOP_0_10=1654 & D & A & B
+{
+    D = __ev_avgdu(A, B);
+}
+
+:evavgds D,A,B is OP=4 & XOP_0_10=1655 & D & A & B
+{
+    D = __ev_avgds(A, B);
+}
+
+:evavgwur D,A,B is OP=4 & XOP_0_10=1656 & D & A & B
+{
+    D = __ev_avgwur(A, B);
+}
+
+:evavgwsr D,A,B is OP=4 & XOP_0_10=1657 & D & A & B
+{
+    D = __ev_avgwsr(A, B);
+}
+
+:evavgbur D,A,B is OP=4 & XOP_0_10=1658 & D & A & B
+{
+    D = __ev_avgbur(A, B);
+}
+
+:evavgbsr D,A,B is OP=4 & XOP_0_10=1659 & D & A & B
+{
+    D = __ev_avgbsr(A, B);
+}
+
+:evavghur D,A,B is OP=4 & XOP_0_10=1660 & D & A & B
+{
+    D = __ev_avghur(A, B);
+}
+
+:evavghsr D,A,B is OP=4 & XOP_0_10=1661 & D & A & B
+{
+    D = __ev_avghsr(A, B);
+}
+
+:evavgdur D,A,B is OP=4 & XOP_0_10=1662 & D & A & B
+{
+    D = __ev_avgdur(A, B);
+}
+
+:evavgdsr D,A,B is OP=4 & XOP_0_10=1663 & D & A & B
+{
+    D = __ev_avgdsr(A, B);
+}

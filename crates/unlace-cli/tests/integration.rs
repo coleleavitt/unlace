@@ -1,12 +1,8 @@
 // Shared integration-test executable. Process-sensitive tests stay separate.
-#[path = "amdgpu_raw.rs"]
-mod amdgpu_raw;
 #[path = "arcv2_loops.rs"]
 mod arcv2_loops;
 #[path = "chip8.rs"]
 mod chip8;
-#[path = "cpython_raw.rs"]
-mod cpython_raw;
 mod common;
 #[path = "evm.rs"]
 mod evm;
@@ -16,8 +12,8 @@ mod hexagon_hmx;
 mod huc6280;
 #[path = "konami.rs"]
 mod konami;
-#[path = "kvx_raw.rs"]
-mod kvx_raw;
+#[path = "v8ignition_raw.rs"]
+mod v8ignition_raw;
 #[path = "lua54.rs"]
 mod lua54;
 #[path = "m6800_family.rs"]

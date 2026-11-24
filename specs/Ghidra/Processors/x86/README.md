@@ -79,8 +79,7 @@ print as `llvm-objdump` does (case aside); disassembling all of libcrypto.so.3's
 after.
 Gaps: an X4=0 register-only vector encoding decodes as if X4 were 1, except
 the AVX10.2 {sae} forms below that use it for YMM; the base spec's own EVEX gaps
-remain (`vpbroadcastd zmm, r32` prints no source, a VSIB index prints as a
-GPR, the `{1toN}` broadcast marker is not printed).
+remain (see "AVX-512 base-spec fixes" for the ones since fixed).
 
 ## ENQCMD, ENQCMDS and CMPccXADD (`ia.sinc`, `cmpccxadd.sinc`)
 
@@ -141,3 +140,33 @@ plain, broadcast and {sae}/{rc} record. libcrypto.so.3's `.text` disassembly and
 Gaps: element-wise semantics of the new arithmetic (user operations); 32-bit
 mode (`x86.slaspec`) does not include the file; the base spec's broadcast
 marker is still not printed.
+
+## AVX-512 base-spec fixes (`ia.sinc`, `avx512.sinc`)
+
+Found while checking the extensions above against `llvm-objdump`; each was a
+wrong decode in the Ghidra-derived AVX-512 tables.
+
+- VPBROADCASTB/W/D/Q from a GPR (EVEX 0F38 7A/7B/7C, mod=3) had no source
+  operand; they now take `Rmr32`/`Rmr64` and pass it (or its low byte or word)
+  to the user operation, and the 128-bit VPBROADCASTB merges through its mask.
+- The EVEX gathers and scatters addressed through a GPR index (`[RAX + RCX*4]`
+  for `[rax + 4*zmm1]`); they now use the VSIB tables with an element-size ptr
+  (`evd_vm32z`, ...), and EVEX.V' selects index registers 16-31.
+- A memory broadcast prints its `{1toN}` marker.
+- Disp8*N for 16-bit broadcast elements (AVX512-FP16): full- and half-vector
+  forms took the broadcast size from EVEX.W (N=4 for a word), and the
+  quarter-vector conversions (`vcvtph2pd`, `vcvtph2qq`, ...) set no tuple at all.
+  Three tuple rows (FV16, HV16, QV16) in `ia.sinc` now give N, and the
+  register-or-memory operand tables no longer evaluate `evexDisp8N` a second
+  time (the first evaluation overwrites the tuple bits, which broke every
+  Tuple-type row other than FV/HV on a second pass).
+
+Checked: 6660 memory-form records of LLVM's AVX-512 TableGen predicates
+(AVX512F/BW/DQ/VL/FP16/VBMI/VBMI2/IFMA/VNNI/BITALG/VPOPCNTDQ/BF16/CD, GFNI,
+VAES, VPCLMULQDQ) disassembled before and after: 531 rows that differed from
+`llvm-objdump` now match, none regressed; 347 still differ (broadcast/insert/
+extract tuples, `vpmov[sz]x`, `vpexpand`/`vpcompress` b/w, scalar FP16), left
+for a later fix. libcrypto.so.3 `.text` changes only at the 63 VPBROADCASTQ
+from a GPR; `decompile-all /usr/bin/ls` is unchanged. Exercised by
+`unlace-cli/tests/x86_avx10.rs` (`base_fixes.elf`) and the `x86_64_avx512_base`
+row of `processors.toml`.

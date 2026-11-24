@@ -178,9 +178,9 @@
 //!
 //! | witness | folds through |
 //! |---|---|
-//! | `tests/stages/ghangr-condfold.xml` | Rule A (a store prefix, no calls) |
-//! | `tests/stages/ghangr-condfold-newbury.xml` | Rule A (the guard-cascade *shape*; at `wide` Rule A's budget also admits its guard blocks) |
-//! | `tests/stages/ghangr-condfold-ruleb.xml` | Rule B, twice, in both engines — a middle guard with two statement-root calls, then a nested `BlockCondition` sibling |
+//! | `tests/stages/ghangr-condfold.toml` | Rule A (a store prefix, no calls) |
+//! | `tests/stages/ghangr-condfold-newbury.toml` | Rule A (the guard-cascade *shape*; at `wide` Rule A's budget also admits its guard blocks) |
+//! | `tests/stages/ghangr-condfold-ruleb.toml` | Rule B, twice, in both engines — a middle guard with two statement-root calls, then a nested `BlockCondition` sibling |
 //!
 //! Only the third one notices if Rule B is removed.  Which rule fired is traceable:
 //! see [`trace_admit_fold`] and [`trace_ops`].
@@ -214,7 +214,7 @@
 //!   structuring passes and the operand finally emits 8 elements.
 //! * Where a call's stack-effect ops are still live at structuring time (an
 //!   unprototyped callee, no frame recovery — the stage witness
-//!   `tests/stages/ghangr-condfold-newbury.xml` is the reproducible case, at 6 measured
+//!   `tests/stages/ghangr-condfold-newbury.toml` is the reproducible case, at 6 measured
 //!   elements for a guard block whose operand finally emits none), the measure
 //!   **over**-counts.  Over-counting only ever declines a fold, so the error is in the
 //!   safe direction; it is why that witness needs `wide` while the real
@@ -1043,7 +1043,7 @@ mod tests {
     // (so `is_call`/`is_branch`/`is_marker`/`is_flow_break` mean what they mean
     // in the engine).  The load-bearing one is
     // `two_statement_root_calls_are_rule_bs_alone`, the unit-scale form of the
-    // `tests/stages/ghangr-condfold-ruleb.xml` witness.
+    // `tests/stages/ghangr-condfold-ruleb.toml` witness.
     //=======================================================================
 
     use std::rc::Rc;
@@ -1207,7 +1207,7 @@ mod tests {
         assert!(printed_shape(&fd, &fd.bb_ops(bl)).is_none());
     }
 
-    /// Build the unit-scale form of the `tests/stages/ghangr-condfold-ruleb.xml`
+    /// Build the unit-scale form of the `tests/stages/ghangr-condfold-ruleb.toml`
     /// middle guard: `su_log(); x = su_euid(); if (x != wu)`, i.e. TWO calls that
     /// each print as their own comma element.
     fn two_call_guard(fd: &mut Funcdata, off: u64) -> BlockId {

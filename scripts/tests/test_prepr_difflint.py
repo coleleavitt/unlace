@@ -100,6 +100,19 @@ class DiffLintTests(unittest.TestCase):
         self.git("commit", "-q", "--allow-empty", "-m", "why\n\nAssertion-change: kuna-old: the helper reads one argument")
         self.assertEqual(self.checks(), [])
 
+    def test_an_edited_toml_assertion_needs_a_trailer(self):
+        self.git("checkout", "-q", "main")
+        self.write("tests/stages/kuna-t.toml", "[[match]]\nname = 'T #1'\ncount = 1\nliteral = 'a'\n")
+        self.commit("toml stage test")
+        self.git("checkout", "-q", "feature")
+        self.git("merge", "-q", "main")
+        self.write("tests/stages/kuna-t.toml", "[[match]]\nname = 'T #1'\ncount = 2\nliteral = 'a'\n")
+        self.commit("re-pin")
+        self.assertEqual(self.checks(), [("error", "assertion-edit", "kuna-t.toml")])
+        self.write("tests/stages/kuna-t.toml", "# a note\n[[match]]\nname = 'T #1'\ncount = 1\nliteral = 'a'\n")
+        self.commit("only a comment")
+        self.assertEqual(self.checks(), [])
+
     def test_a_new_module_without_an_option_row_is_a_warning(self):
         self.write("crates/unlace-decomp/src/p4_calls/kuna_thing.rs", "fn f() {}\n")
         self.commit("module")

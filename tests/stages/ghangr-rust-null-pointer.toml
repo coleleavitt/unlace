@@ -1,0 +1,60 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/rust_null_pointer_x86_64',
+    'option setlanguage rust-language',
+    'read symbols',
+    'parse line extern uint1 *null_pointer(void);',
+    'load function null_pointer',
+    'decompile',
+    'print C',
+    'parse line extern uint1 *maybe_pointer(uint8 choice,uint1 *pointer);',
+    'load function maybe_pointer',
+    'decompile',
+    'print C',
+    'parse line extern int4 pointer_is_null(uint1 *pointer);',
+    'load function pointer_is_null',
+    'decompile',
+    'print C',
+    'parse line extern void clear_pointer(uint1 **slot);',
+    'load function clear_pointer',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'all four null constructors retain call syntax'
+count = 4
+literal = 'core::ptr::null_mut()'
+
+[[match]]
+name = 'null syntax is not a recovered identifier'
+count = 0
+literal = 'core::ptr::null_mut__'
+
+[[match]]
+name = 'non-null branch returns the original pointer'
+count = 1
+literal = 'return pointer;'
+
+[[match]]
+name = 'the null store targets the pointer slot'
+count = 1
+literal = '*slot = core::ptr::null_mut();'
+
+[[match]]
+name = 'all four authored functions remain'
+count = 4
+literal = 'unsafe fn '

@@ -1,0 +1,101 @@
+# P9 Rust raw-pointer PTRADD regression from the Go/Rust parity audit.
+# Default output uses wrapping byte offsets; nocastprinting preserves the
+# diagnostic path with raw-pointer indexing. Native CLI tests execute the
+# complete bodies and compare memory, addresses, and callback order.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/pointer_index_x86_64',
+    'read symbols',
+    'option outlang rust',
+    'option ctypes off',
+    'option realtypes off',
+    'map prototype address_u16_u uint2* address_u16_u(uint2*p,uint8 i);',
+    'map prototype store_i32_s void store_i32_s(int4*p,int8 i,int4 value);',
+    'map prototype load_i64_s int8 load_i64_s(int8*p,int8 i);',
+    'map prototype field_load int4 field_load(struct Record*p,int8 i);',
+    'map prototype callback_store void callback_store(int8*p,int8 i,int8 value);',
+    'map prototype logical_address int4*logical_address(int4*p,uint4 n);',
+    'map prototype signed_address int4*signed_address(int4*p,uint4 n);',
+    'map prototype counted_index int8 counted_index(int8 i);',
+    'map prototype counted_base int8*counted_base(int8*p);',
+    'map prototype counted_value int8 counted_value(int8 value);',
+    'load function load_i64_s',
+    'decompile',
+    'print C',
+    'load function store_i32_s',
+    'decompile',
+    'print C',
+    'load function address_u16_u',
+    'decompile',
+    'print C',
+    'load function field_load',
+    'decompile',
+    'print C',
+    'load function callback_store',
+    'decompile',
+    'print C',
+    'load function logical_address',
+    'decompile',
+    'print C',
+    'load function signed_address',
+    'decompile',
+    'print C',
+    'option nocastprinting on',
+    'load function load_i64_s',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'Rust indexed load dereferences a wrapping byte pointer'
+count = 1
+literal = 'return *p.wrapping_byte_offset((i as isize).wrapping_mul(8));'
+
+[[match]]
+name = 'Rust indexed store preserves the four-byte scale'
+count = 1
+literal = '*p.wrapping_byte_offset((i as isize).wrapping_mul(4)) = value;'
+
+[[match]]
+name = 'Rust indexed address does not borrow its pointee'
+count = 1
+literal = 'return p.wrapping_byte_offset((i as isize).wrapping_mul(2));'
+
+[[match]]
+name = 'Rust indexed record field preserves its byte scale'
+count = 1
+literal = 'return (*p.wrapping_byte_offset((i as isize).wrapping_mul(16))).value;'
+
+[[match]]
+name = 'Rust indexed callback store evaluates the pointer once'
+count = 1
+literal = '*counted_base(p).wrapping_byte_offset((v2 as isize).wrapping_mul(8)) = v1;'
+
+[[match]]
+name = 'Rust logical index keeps its unsigned shift width'
+count = 1
+regex = '::core::convert::identity::<u64>\(0xffffffffffffffff >> \(n as u8 \& 0x3f\)\)'
+
+[[match]]
+name = 'Rust arithmetic index keeps its signed shift width'
+count = 1
+regex = '::core::convert::identity::<i64>\(\-0x8000000000000000 >> \(n as u8 \& 0x3f\)\)'
+
+[[match]]
+name = 'Rust pointer index cast suppression keeps diagnostic output'
+count = 1
+literal = 'return p[i];'

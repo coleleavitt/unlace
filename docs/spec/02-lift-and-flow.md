@@ -61,7 +61,12 @@ the instruction writes are still computed from `Old`. On the success path of
 an x86 `cmpxchg`, where the accumulator equals `Old`, the store's op is reused
 to assign `Old` to the accumulator, so both paths agree on it; the branch then
 only decides the upper half of `RAX` after a 32-bit `cmpxchg`, which hardware
-zero-extends only on failure. An operand that no storage holds at the first
+zero-extends only on failure. A 32-bit `xadd` or `xchg` on x86-64 ends with
+`RAX = ZEXT(EAX)` after `UNLOCK()` (the hardware clear of the upper half);
+an instruction with no branch whose ops after the envelope are only such
+register-into-containing-register zero-extensions is rewritten without them,
+and they then extend the builtin's result
+(`crates/unlace-lift/src/p2_lift/kuna_atomics.rs (register_zext_tail)`). An operand that no storage holds at the first
 load (`~X` for `ldclr`, `imm + CF` for `adc`) is rebuilt with new ops in front
 of it, which is allowed only when the instruction updates memory through a
 pointer and none of its relative branches targets its end: a new op is
@@ -4563,6 +4568,21 @@ Before, each was a bad instruction. The EVEX-promoted GPR forms in
 the AVX-512 scaling of whatever tuple context was current. Exercised by the
 `x86_64_cmpccxadd` row of `unlace-cli/tests/processors.toml`.
 
+### x86 AVX-512 base-spec decode fixes (#98)
+
+Four wrong AVX-512 decodes in the Ghidra-derived tables are fixed in every x86
+language. VPBROADCASTB/W/D/Q from a GPR now read their `Rmr32`/`Rmr64` source
+(before, the operand was missing and the lift called the user operation with no
+input). The EVEX gathers and scatters address through the VSIB tables, with
+EVEX.V' selecting index registers 16-31, so `vpgatherdd zmm0{k1}, [rdi +
+4*zmm1 + 64]` lifts to the vector-indexed address (before, RCX was used as a
+scalar index). A memory broadcast prints `{1toN}`. Disp8*N is right for 16-bit
+broadcast elements: three tuple rows in `ia.sinc` (full, half and quarter
+vector with a word broadcast) give N, and the register-or-memory operand tables
+no longer evaluate `evexDisp8N` a second time, which had read tuple bits the
+first evaluation overwrote. Exercised by `unlace-cli/tests/x86_avx10.rs`
+(`base_fixes`) and the `x86_64_avx512_base` row of `processors.toml`.
+
 ### x86-64 AVX10.2 (#98)
 
 `specs/Ghidra/Processors/x86/data/languages/avx10_2.sinc` decodes AVX10.2 in
@@ -4646,6 +4666,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `CPython` | CPython 3.12 bytecode (one code object's co_code) | `CPython:LE:32:3.12` | CPython 3.12 `dis`/`opcode` tables, `Python/bytecodes.c` semantics; oracle `dis` | `unlace-cli/tests/cpython_raw.rs` |
 | `H8500` | Hitachi H8/500 (H8/510, H8/520, H8/532, H8/534, H8/536, H8/570) | `H8500:BE:16:minimum`, `H8500:BE:24:maximum` | H8/500 Programming Manual; MAME h8500dasm.cpp (BSD-3) | `unlace-cli/tests/processors.toml` (`h8500`) |
 | `S12Z` | NXP S12Z (MC9S12ZVL, MC9S12ZVC, MC9S12ZVM, S12ZVH) | `S12Z:BE:24:default` | NXP S12Z CPU RM; encodings checked against binutils s12z-opc.c (read only) | `unlace-cli/tests/processors.toml` (`s12z`) |
+| `V8Ignition` | V8 Ignition bytecode (V8 13.6, Node.js 24) | `V8Ignition:LE:32:13.6` | V8 `src/interpreter/bytecodes.h`, `bytecode-operands.h` (BSD-3-Clause); oracle `node --print-bytecode` | `unlace-cli/tests/v8ignition_raw.rs` |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)
@@ -5089,9 +5110,9 @@ written to `rd` with `assignW`. A destination table that exports a temporary
 copy of the register would drop the write, which made these conversions
 produce no value at all. The fix is in the RISC-V SLEIGH sources, so
 `riscv.lp64d.sla`, `riscv.ilp32d.sla` and `andestar_v5.sla` must be rebuilt.
-Exercised by `tests/stages/gh831-riscv-fpmove.xml` (RV64: a call result moved
+Exercised by `tests/stages/gh831-riscv-fpmove.toml` (RV64: a call result moved
 by `fmv.x.d` and `fmv.x.w`, and all four conversions) and
-`tests/stages/gh831-riscv32-fpmove.xml` (the RV32 forms).
+`tests/stages/gh831-riscv32-fpmove.toml` (the RV32 forms).
 
 The x87 `FIST` and `FISTP` lifts preserve integer conversion as width-specific
 `x87_float_to_int16`, `x87_float_to_int32`, or `x87_float_to_int64` user operations.
@@ -5141,7 +5162,7 @@ the same operand (`vMem32z`), so the qword-index gathers still decode in
 `VPSCATTERQ*`) are still built for 64-bit mode only. An index in
 `ZMM16`..`ZMM31` (`EVEX.V'`) still reads as `ZMM0`..`ZMM15`, as for every EVEX
 VSIB operand. Exercised by
-`tests/stages/gh1627-x86-senduipi-gatherpf.xml`.
+`tests/stages/gh1627-x86-senduipi-gatherpf.toml`.
 
 In 64-bit mode the x86 spec also decodes Intel AMX (`amx.sinc`, #98):
 AMX-TILE `LDTILECFG`, `STTILECFG`, `TILERELEASE`, `TILEZERO`, `TILELOADD`,
@@ -5174,7 +5195,7 @@ decode whatever `REX.W` says, since their operand size is fixed at 64 bits
 there and compilers encode them without the prefix. `VMFUNC` and `VMCALL`
 write no flags: `VMFUNC` leaves them unchanged, and the flags after a guest's
 `VMCALL` are whatever the hypervisor returns. Exercised by
-`tests/stages/gh1628-x86-vmx-decode-flags.xml`.
+`tests/stages/gh1628-x86-vmx-decode-flags.toml`.
 
 For the bounded local policy (`kuna_localstackviews.rs`), the `FlowEmit::dump` seam in
 `crates/unlace-lift/src/p2_lift/flow.rs` records original STORE and

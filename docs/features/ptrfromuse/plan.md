@@ -49,7 +49,7 @@ is neutral, one below the space's pointer lower bound is a field offset.
 `settables` 211 → 212, tiers `(68, 80, 63)` → `(68, 81, 63)`,
 `SETTABLE_TABLE` len, `catalog-json-records` 210 → 211,
 `catalog_bytecompat` fixture (recaptured, never hand-edited),
-`tests/stages/kuna-catalog.xml` `#6 source_decompiler angr` 32 → 33 and
+`tests/stages/kuna-catalog.toml` `#6 source_decompiler angr` 32 → 33 and
 `#8 change_kind opt-in-tool` 20 → 21, corpus file count 300 → 301 (one file),
 `docs/baseline-stages.json` re-recorded, `docs/options.md` regenerated.
 `ptrfromuse` is added to the no-live-reader allowlist in `kuna_phases/tests.rs`

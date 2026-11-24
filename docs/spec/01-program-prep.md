@@ -13932,6 +13932,25 @@ same floor the constant scan applies to a lone immediate. RV64 builds that numbe
 with `addiw` and is not affected. The page or high half on its own is not a
 carried reference.
 
+(kuna, option `movwpairs`) A 32-bit address built in two 16-bit halves
+starts no carry by the rule above, because the low half is usually below the
+floor: `movw r0,#0x1cc; movt r0,#3` (A32 or T32) or `mov x0,#0x230; movk
+x0,#0x22,lsl #16` (AArch64 `movz`/`movk`, `-mcmodel=large`) left the global it reads
+and writes, the string it passes and the callback it registers referenced by
+nothing. With `movwpairs access` an instruction whose encoding is a low-half move
+(A32/T32 `movw`, AArch64 `movz` with no shift) and whose p-code writes a register
+from a constant leaves that register as a *half*: carried like any value, but
+naming nothing while it is below the floor. The high-half move that completes it
+(`movt`, `movk` with a shift, recognised by encoding too) leaves the whole value,
+which is then an ordinary carried address, so a `LOAD` or `STORE` through it is a
+`Read` or a `Write`. `movwpairs on` also files the completed value as `Data` at the
+completing instruction where it lands in a mapped section (IDA's "valid addresses
+only" reading of `MOVT` pairs), which is a judgement: a number built the same way
+that lands in a section names it. Everything else of the carry applies unchanged
+(eight hops, no joins along the run, a `movk` that only re-inserts zero upper
+halves changes nothing), and big-endian code is not read. `off` (the default) is
+the behaviour above.
+
 A constant subtracted from a carried address biases that address rather than
 naming another one. Swift builds a string literal's object as `adrp/add` of the
 literal, `sub x8,x8,#0x20`, then `orr x1,x8,#0x8000000000000000`, and the literal,

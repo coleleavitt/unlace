@@ -1070,6 +1070,8 @@ mod calleeargsmsvc_cli;
 mod importcache_cli;
 #[path = "initterm_cli.rs"]
 mod initterm_cli;
+#[path = "movw_pairs_xrefs.rs"]
+mod movw_pairs_xrefs;
 #[path = "msvccookie_return_cli.rs"]
 mod msvccookie_return_cli;
 #[path = "msvcexport_cli.rs"]

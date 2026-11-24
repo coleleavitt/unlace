@@ -32,6 +32,16 @@ const MAX_OPS: usize = 64;
 const MAX_PATHS: usize = 4;
 const MAX_STEPS: usize = 128;
 
+/// (kuna) With `KUNA_ATOMICS_TRACE` set, say on stderr how far an atomic
+/// rewrite or a retry-loop fold got before it declined.
+macro_rules! trace {
+    ($($arg:tt)*) => {
+        if std::env::var_os("KUNA_ATOMICS_TRACE").is_some() {
+            eprintln!("atomics: {}", format_args!($($arg)*));
+        }
+    };
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct Storage {
     space: i32,
@@ -702,6 +712,13 @@ fn plan(eval: &Eval) -> Option<Plan> {
             vec![Expr::Old, Expr::Const(k as u64, 4)],
         )
     };
+    trace!(
+        "cas plan: width {} expected {:?} halves {:?} other {:?}",
+        eval.width,
+        expected,
+        pair_halves(&expected, eval.width),
+        other.state
+    );
     let pair_accumulator = match (accumulator, eval.access, store.store_state.as_ref()) {
         (None, Access::Pointer(_), Some(state)) => {
             pair_halves(&expected, eval.width).and_then(|(hi, lo)| {
@@ -1244,6 +1261,7 @@ fn apply(
     (first_load, store, width, envelope): (usize, usize, i32, Option<(usize, usize)>),
 ) -> Option<OpId> {
     let (atomic, store_op) = (ops[first_load], ops[store]);
+    trace!("cas apply: pair accumulator {:?}", plan.pair_accumulator);
     let pair = plan.pair_accumulator.and_then(|(hi, lo, source)| {
         let value = fd.obank().get(store_op)?.get_in(2)?;
         let def = fd.vbank().get(value)?.get_def()?;
@@ -1251,6 +1269,10 @@ fn apply(
         let only_store = fd.vbank().get(value)?.descend_iter().all(|o| o == store_op);
         (at > first_load && at < store && only_store).then_some((hi, lo, source, def))
     });
+    trace!(
+        "cas apply: pair rewrite {:?}",
+        pair.map(|(h, l, s, _)| (h, l, s))
+    );
     let mut builder = Builder {
         state,
         before: atomic,
@@ -1917,6 +1939,10 @@ fn fold_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
         Some((h, s, f)) => (h, None, s, f, None),
         None => {
             let (h, d, s, f, r) = rotated_blocks(data, p)?;
+            trace!(
+                "llsc: rotated loop h {:?} d {:?} p {:?} s {:?} f {:?} r {:?}",
+                h, d, p, s, f, r
+            );
             (h, d, s, f, Some(r))
         }
     };
@@ -2021,6 +2047,7 @@ fn fold_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
             }
         }
         let op = eval.op(index)?;
+        trace!("llsc: loop at {:?} op {} {:?}", p, index, op.code());
         match op.code() {
             OpCode::CPUI_LOAD => eval.load(&mut path, index, &mut reads)?,
             OpCode::CPUI_STORE => eval.store(&mut path, index)?,
@@ -2051,6 +2078,10 @@ fn fold_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
         }
     }
     let f_cond = eval.read(&path.state, cond_of(f)?)?;
+    trace!(
+        "llsc: loop at {:?} evaluated: p {:?} f {:?} stored {:?}",
+        p, p_cond, f_cond, path.stored
+    );
     let (Some(Expr::Const(pc, _)), Expr::Const(fc, _)) = (p_cond, &f_cond) else {
         return None;
     };
@@ -2078,7 +2109,7 @@ fn fold_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
                 .flatten()
                 .filter_map(|i| storage(data, data.obank().get(ops[i])?.get_out()?))
                 .collect();
-            r_state = Some(reload_matches(
+            let reload = reload_matches(
                 &eval,
                 r,
                 p,
@@ -2086,7 +2117,13 @@ fn fold_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
                 address.as_ref()?,
                 &expected,
                 &monitor_outs,
-            )?);
+            );
+            trace!(
+                "llsc: reload block {:?} repeats the head: {}",
+                r,
+                reload.is_some()
+            );
+            r_state = Some(reload?);
         }
         (BUILTIN_ATOMIC_COMPARE_SWAP, vec![expected, stored.clone()])
     };
@@ -2112,6 +2149,10 @@ fn fold_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
             .copied()
             .collect();
         if !cycle_invariant(data, &cycle) {
+            trace!(
+                "llsc: rotated loop at {:?} reads a value its cycle rewrites",
+                p
+            );
             return None;
         }
         let body_writes = writes(data, &p_ops)
@@ -2133,6 +2174,10 @@ fn fold_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
             .copied()
             .collect();
         if !dead_after(data, exit, &on_exit) {
+            trace!(
+                "llsc: rotated loop at {:?}: live after exit {:?}",
+                p, on_exit
+            );
             return None;
         }
         let h_state = h_state.as_ref()?;
@@ -2144,6 +2189,10 @@ fn fold_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
             .copied()
             .collect();
         if !dead_after(data, h_exit?, &on_fail) {
+            trace!(
+                "llsc: rotated loop at {:?}: live after failure {:?}",
+                p, on_fail
+            );
             return None;
         }
     } else {
@@ -2321,6 +2370,7 @@ fn fold_pair_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
             p_cond = Some(eval.read(&path.state, cond_of(p)?)?);
         }
         let op = eval.op(index)?;
+        trace!("llsc pair: loop at {:?} op {} {:?}", p, index, op.code());
         if index == pass_at && Some(&eval.read(&path.state, monitored)?) != base.as_ref() {
             return None;
         }
@@ -2380,6 +2430,10 @@ fn fold_pair_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
         }
     }
     let f_cond = eval.read(&path.state, cond_of(f)?)?;
+    trace!(
+        "llsc pair: loop at {:?} evaluated: p {:?} f {:?} stores {:?}",
+        p, p_cond, f_cond, values
+    );
     let (Some(Expr::Const(pc, _)), Expr::Const(fc, _)) = (p_cond, &f_cond) else {
         return None;
     };
@@ -2405,6 +2459,7 @@ fn fold_pair_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
         eval.subpiece(Expr::Old, w as u64, w),
     );
     let (builtin, x0, x1) = pair_update(v0, v1, &lo, &hi, w)?;
+    trace!("llsc pair: loop at {:?} is builtin {}", p, builtin);
     let operand = Expr::Op(OpCode::CPUI_PIECE, width, vec![x1, x0]);
     let written = writes(data, &ops);
     let tainted = |e: &Expr| {

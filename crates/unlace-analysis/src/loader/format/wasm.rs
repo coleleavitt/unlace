@@ -1120,8 +1120,7 @@ mod tests {
             [vec![2], uleb(0), uleb(1), name("g_sink")].concat(),
             [vec![3], uleb(0), uleb(4)].concat(),
             [vec![0], uleb(0x40 | 0x10), uleb(1), name("memset")].concat(),
-        ]
-        .concat();
+        ];
         let symbols = [uleb(entries.len() as u64), entries.concat()].concat();
         let table = [vec![8], uleb(symbols.len() as u64), symbols].concat();
         let payload = [name("linking"), uleb(2), table].concat();

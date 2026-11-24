@@ -8,4 +8,6 @@ with : lockprefx=0 {
 @include "fma.sinc"
 @include "amx.sinc"
 }
+@include "cmpccxadd.sinc"
 @include "apx_evex.sinc"
+@include "avx10_2.sinc"

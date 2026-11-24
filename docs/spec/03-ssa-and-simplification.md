@@ -4647,7 +4647,8 @@ width `w`, so a rewrite never depends on the root's width:
 
 - commutativity of `+`, `*`, `&`, `|`, `^`, and associativity in one direction
   (with commutativity that reaches every grouping);
-- ring identities: `a - b` = `a + neg b` both ways, `neg neg a`, `a + 0`,
+- ring identities: `a - b` = `a + neg b` both ways, `a - b` = `neg (b - a)`
+  (so `(b - a) - 1` is `~(a - b)`), `neg neg a`, `a + 0`,
   `a * 1`, `a * 0`, `a + neg a`, `neg` over `+` and `*` both ways, `a + a` =
   `a * 2` both ways, distribution of `*` over `+` both ways, and `a + a*b` =
   `a * (b + 1)`;
@@ -4656,7 +4657,8 @@ width `w`, so a rewrite never depends on the root's width:
   factoring a common operand out of `|`, `&` and `^` of two terms, and the
   xor spellings `(a & ~b) | (~a & b)`, `(a | b) & ~(a & b)`, `(a | b) ^ (a & b)`;
   also `(a & b) | (a ^ b)` = `a | b` and `(a ^ ~b) & a` = `a & b` (OLLVM's
-  substitutions for `|` and `&`);
+  substitutions for `|` and `&`), `~(a ^ b) & b` = `a & b`, `(a & ~b) | b` =
+  `a | b` and `(a | b) & ~b` = `a & ~b`;
 - complement as arithmetic: `~a` = `neg a - 1` both ways, `neg ~a` = `a + 1`,
   `~neg a` = `a - 1`, `a + ~b + 1` = `a - b`, `a - ~b - 1` = `a + b`;
 - linear MBA identities, each in the direction that removes ops:
@@ -4675,9 +4677,19 @@ since the node limit stops a search first. With the deterministic hashing the
 same tree gives the same result every run.
 
 **Extraction and checks.** The expression with the fewest ops (leaves and
-constants free) is extracted from the root's class. It replaces the tree only
-when it has fewer ops than the tree keeps for itself (the ops under an op with
-several readers stay for those readers), agrees with the tree on 64
+constants free), and of those the fewest bitwise ops, is extracted from the
+root's class. It replaces the tree only when it has fewer ops than the tree
+keeps for itself (the ops under an op with several readers stay for those
+readers). A form that keeps every bitwise op only regroups the arithmetic,
+which the core rules may regroup back (`collect_terms` regrouped a sum the
+other way, and the two rules traded forms until the per-function budget ran
+out on `((x + c) ^ 2*(x & c)) - 2*(~(x + c) & 2*(x & c))`). Such a rewrite is
+therefore done once per tree value in a function: the rule keeps the
+fingerprint of each tree it regrouped (the tree evaluated at four inputs where
+each leaf takes a value hashed from its varnode, the same for every spelling
+and leaf order) and refuses a tree whose fingerprint it has seen, until the
+next function. A rewrite that removes a bitwise op always stands; the
+arithmetic core rules add none back, so those cannot cycle either. The result agrees with the tree on 64
 pseudo-random full-width inputs, agrees on every input at the widest width
 (at most 8 bits) where the leaves take at most `2^16` combinations, and is not
 refuted by `mba`'s bit-serial proof, which runs for at most three leaves and

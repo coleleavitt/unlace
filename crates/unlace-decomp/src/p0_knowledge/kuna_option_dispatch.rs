@@ -245,6 +245,7 @@ kuna_options! { self, p1;
     "endptrbound" => registered!(crate::kuna_endptrbound::EndPtrBound),
     "castobject" => registered!(crate::kuna_castobject::CastObject),
     "calleeargs" => registered!(crate::kuna_calleestackargs::KunaCalleeargs),
+    "calleeargsmsvc" => registered!(crate::kuna_calleestackargs::KunaCalleeargsMsvc),
     "argclobber" => registered!(crate::kuna_argclobber::ArgClobber),
     "armfloatargs" => registered!(crate::kuna_armfloatargs::ArmFloatArgs),
     "narrowargs" => registered!(crate::kuna_narrowargs::NarrowArgs),

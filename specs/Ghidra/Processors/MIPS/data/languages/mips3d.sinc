@@ -1,0 +1,637 @@
+# MIPS-3D ASE (#98): paired-single reductions, reduced-precision reciprocal and
+# reciprocal-square-root steps, absolute compares, any-of-N condition branches and
+# paired-word conversions. Encodings: the MIPS-3D rows of the binutils MIPS opcode
+# table (match/mask only); semantics: MIPS-3D ASE specification (MIPS MD00099).
+# Pre-release-6 MIPS64 only (64-bit FPRs; bc1any2 shares COP1 rs=9 with R6 bc1eqz).
+# A paired single holds its upper half in bits 63..32 and its lower half in 31..0.
+# Condition code n is FCSR bit 23 for n = 0 and bit 24 + n otherwise.
+
+m3dcc: "fcc"^spec3 is spec3 { export *[const]:1 spec3; }
+m3dbcc: "fcc"^cc is cc { export *[const]:1 cc; }
+
+macro m3dSetCC(n, v) {
+    local pos:1 = n + 23 + ((n + 7) >> 3);
+    local sh:4 = zext(pos);
+    local bit:4 = zext(v);
+    fcsr = (fcsr & ~(1:4 << sh)) | (bit << sh);
+}
+
+macro m3dGetCC(dst, n) {
+    local p:1 = n + 23 + ((n + 7) >> 3);
+    dst = (fcsr >> zext(p)) & 1:4;
+}
+
+macro m3dPSsplit(src, up, lo) {
+    up = src(4);
+    lo = src:4;
+}
+
+:addr.PS fd, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x16 & fct=0x18 & fd & fs & ft & fdD & fsD & ftD {
+    local su:4 = fsD(4); local sl:4 = fsD:4; local tu:4 = ftD(4); local tl:4 = ftD:4;
+    local ru:4 = su f+ sl; local rl:4 = tu f+ tl;
+    fdD = (zext(ru) << 32) | zext(rl);
+}
+
+:mulr.PS fd, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x16 & fct=0x1a & fd & fs & ft & fdD & fsD & ftD {
+    local su:4 = fsD(4); local sl:4 = fsD:4; local tu:4 = ftD(4); local tl:4 = ftD:4;
+    local ru:4 = su f* sl; local rl:4 = tu f* tl;
+    fdD = (zext(ru) << 32) | zext(rl);
+}
+
+:recip1.S fd, fs is $(AMODE) & REL6=0 & prime=17 & format=0x10 & ft=0 & fct=0x1d & fd & fs {
+    local one:4 = int2float(1:4);
+    fd[0,32] = one f/ fs:4;
+}
+:recip1.D fd, fs is $(AMODE) & REL6=0 & prime=17 & format=0x11 & ft=0 & fct=0x1d & fd & fs & fdD & fsD {
+    local one:8 = int2float(1:4);
+    fdD = one f/ fsD;
+}
+:recip1.PS fd, fs is $(AMODE) & REL6=0 & prime=17 & format=0x16 & ft=0 & fct=0x1d & fd & fs & fdD & fsD {
+    local one:4 = int2float(1:4);
+    local su:4 = fsD(4); local sl:4 = fsD:4;
+    local ru:4 = one f/ su; local rl:4 = one f/ sl;
+    fdD = (zext(ru) << 32) | zext(rl);
+}
+
+:rsqrt1.S fd, fs is $(AMODE) & REL6=0 & prime=17 & format=0x10 & ft=0 & fct=0x1e & fd & fs {
+    local one:4 = int2float(1:4);
+    fd[0,32] = one f/ sqrt(fs:4);
+}
+:rsqrt1.D fd, fs is $(AMODE) & REL6=0 & prime=17 & format=0x11 & ft=0 & fct=0x1e & fd & fs & fdD & fsD {
+    local one:8 = int2float(1:4);
+    fdD = one f/ sqrt(fsD);
+}
+:rsqrt1.PS fd, fs is $(AMODE) & REL6=0 & prime=17 & format=0x16 & ft=0 & fct=0x1e & fd & fs & fdD & fsD {
+    local one:4 = int2float(1:4);
+    local su:4 = fsD(4); local sl:4 = fsD:4;
+    local ru:4 = one f/ sqrt(su); local rl:4 = one f/ sqrt(sl);
+    fdD = (zext(ru) << 32) | zext(rl);
+}
+
+:recip2.S fd, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x10 & fct=0x1c & fd & fs & ft {
+    local one:4 = int2float(1:4);
+    fd[0,32] = f- ((fs:4 f* ft:4) f- one);
+}
+:recip2.D fd, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x11 & fct=0x1c & fd & fs & ft & fdD & fsD & ftD {
+    local one:8 = int2float(1:4);
+    fdD = f- ((fsD f* ftD) f- one);
+}
+:recip2.PS fd, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x16 & fct=0x1c & fd & fs & ft & fdD & fsD & ftD {
+    local one:4 = int2float(1:4);
+    local su:4 = fsD(4); local sl:4 = fsD:4; local tu:4 = ftD(4); local tl:4 = ftD:4;
+    local ru:4 = f- ((su f* tu) f- one); local rl:4 = f- ((sl f* tl) f- one);
+    fdD = (zext(ru) << 32) | zext(rl);
+}
+
+:rsqrt2.S fd, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x10 & fct=0x1f & fd & fs & ft {
+    local one:4 = int2float(1:4); local two:4 = int2float(2:4);
+    fd[0,32] = (f- ((fs:4 f* ft:4) f- one)) f/ two;
+}
+:rsqrt2.D fd, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x11 & fct=0x1f & fd & fs & ft & fdD & fsD & ftD {
+    local one:8 = int2float(1:4); local two:8 = int2float(2:4);
+    fdD = (f- ((fsD f* ftD) f- one)) f/ two;
+}
+:rsqrt2.PS fd, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x16 & fct=0x1f & fd & fs & ft & fdD & fsD & ftD {
+    local one:4 = int2float(1:4); local two:4 = int2float(2:4);
+    local su:4 = fsD(4); local sl:4 = fsD:4; local tu:4 = ftD(4); local tl:4 = ftD:4;
+    local ru:4 = (f- ((su f* tu) f- one)) f/ two; local rl:4 = (f- ((sl f* tl) f- one)) f/ two;
+    fdD = (zext(ru) << 32) | zext(rl);
+}
+
+:cvt.PS.PW fd, fs is $(AMODE) & REL6=0 & prime=17 & format=0x14 & ft=0 & fct=0x26 & fd & fs & fdD & fsD {
+    local su:4 = fsD(4); local sl:4 = fsD:4;
+    local ru:4 = int2float(su); local rl:4 = int2float(sl);
+    fdD = (zext(ru) << 32) | zext(rl);
+}
+:cvt.PW.PS fd, fs is $(AMODE) & REL6=0 & prime=17 & format=0x16 & ft=0 & fct=0x24 & fd & fs & fdD & fsD {
+    local su:4 = fsD(4); local sl:4 = fsD:4;
+    local nu:4 = round(su); local nl:4 = round(sl);
+    local ru:4 = trunc(nu); local rl:4 = trunc(nl);
+    fdD = (zext(ru) << 32) | zext(rl);
+}
+
+:cabs.f.S m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x10 & bp2=1 & fct=48 & m3dcc & fs & ft {
+    local a = abs(fs:4); local b = abs(ft:4);
+    local un:1 = nan(a) || nan(b);
+    local eq:1 = a f== b;
+    local lt:1 = a f< b;
+    local r:1 = 0;
+    m3dSetCC(m3dcc, r);
+}
+:cabs.f.D m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x11 & bp2=1 & fct=48 & m3dcc & fs & ft & fsD & ftD {
+    local a = abs(fsD); local b = abs(ftD);
+    local un:1 = nan(a) || nan(b);
+    local eq:1 = a f== b;
+    local lt:1 = a f< b;
+    local r:1 = 0;
+    m3dSetCC(m3dcc, r);
+}
+:cabs.f.PS m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x16 & bp2=1 & fct=48 & m3dcc & fs & ft & fsD & ftD {
+    local su:4 = fsD(4); local sl:4 = fsD:4; local tu:4 = ftD(4); local tl:4 = ftD:4;
+    local al = abs(sl); local bl = abs(tl);
+    local unl:1 = nan(al) || nan(bl);
+    local eql:1 = al f== bl;
+    local ltl:1 = al f< bl;
+    local rl:1 = 0;
+    local au = abs(su); local bu = abs(tu);
+    local unu:1 = nan(au) || nan(bu);
+    local equ:1 = au f== bu;
+    local ltu:1 = au f< bu;
+    local ru:1 = 0;
+    m3dSetCC(m3dcc, rl);
+    m3dSetCC(m3dcc + 1, ru);
+}
+:cabs.un.S m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x10 & bp2=1 & fct=49 & m3dcc & fs & ft {
+    local a = abs(fs:4); local b = abs(ft:4);
+    local un:1 = nan(a) || nan(b);
+    local eq:1 = a f== b;
+    local lt:1 = a f< b;
+    local r:1 = un;
+    m3dSetCC(m3dcc, r);
+}
+:cabs.un.D m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x11 & bp2=1 & fct=49 & m3dcc & fs & ft & fsD & ftD {
+    local a = abs(fsD); local b = abs(ftD);
+    local un:1 = nan(a) || nan(b);
+    local eq:1 = a f== b;
+    local lt:1 = a f< b;
+    local r:1 = un;
+    m3dSetCC(m3dcc, r);
+}
+:cabs.un.PS m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x16 & bp2=1 & fct=49 & m3dcc & fs & ft & fsD & ftD {
+    local su:4 = fsD(4); local sl:4 = fsD:4; local tu:4 = ftD(4); local tl:4 = ftD:4;
+    local al = abs(sl); local bl = abs(tl);
+    local unl:1 = nan(al) || nan(bl);
+    local eql:1 = al f== bl;
+    local ltl:1 = al f< bl;
+    local rl:1 = unl;
+    local au = abs(su); local bu = abs(tu);
+    local unu:1 = nan(au) || nan(bu);
+    local equ:1 = au f== bu;
+    local ltu:1 = au f< bu;
+    local ru:1 = unu;
+    m3dSetCC(m3dcc, rl);
+    m3dSetCC(m3dcc + 1, ru);
+}
+:cabs.eq.S m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x10 & bp2=1 & fct=50 & m3dcc & fs & ft {
+    local a = abs(fs:4); local b = abs(ft:4);
+    local un:1 = nan(a) || nan(b);
+    local eq:1 = a f== b;
+    local lt:1 = a f< b;
+    local r:1 = eq;
+    m3dSetCC(m3dcc, r);
+}
+:cabs.eq.D m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x11 & bp2=1 & fct=50 & m3dcc & fs & ft & fsD & ftD {
+    local a = abs(fsD); local b = abs(ftD);
+    local un:1 = nan(a) || nan(b);
+    local eq:1 = a f== b;
+    local lt:1 = a f< b;
+    local r:1 = eq;
+    m3dSetCC(m3dcc, r);
+}
+:cabs.eq.PS m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x16 & bp2=1 & fct=50 & m3dcc & fs & ft & fsD & ftD {
+    local su:4 = fsD(4); local sl:4 = fsD:4; local tu:4 = ftD(4); local tl:4 = ftD:4;
+    local al = abs(sl); local bl = abs(tl);
+    local unl:1 = nan(al) || nan(bl);
+    local eql:1 = al f== bl;
+    local ltl:1 = al f< bl;
+    local rl:1 = eql;
+    local au = abs(su); local bu = abs(tu);
+    local unu:1 = nan(au) || nan(bu);
+    local equ:1 = au f== bu;
+    local ltu:1 = au f< bu;
+    local ru:1 = equ;
+    m3dSetCC(m3dcc, rl);
+    m3dSetCC(m3dcc + 1, ru);
+}
+:cabs.ueq.S m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x10 & bp2=1 & fct=51 & m3dcc & fs & ft {
+    local a = abs(fs:4); local b = abs(ft:4);
+    local un:1 = nan(a) || nan(b);
+    local eq:1 = a f== b;
+    local lt:1 = a f< b;
+    local r:1 = eq || un;
+    m3dSetCC(m3dcc, r);
+}
+:cabs.ueq.D m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x11 & bp2=1 & fct=51 & m3dcc & fs & ft & fsD & ftD {
+    local a = abs(fsD); local b = abs(ftD);
+    local un:1 = nan(a) || nan(b);
+    local eq:1 = a f== b;
+    local lt:1 = a f< b;
+    local r:1 = eq || un;
+    m3dSetCC(m3dcc, r);
+}
+:cabs.ueq.PS m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x16 & bp2=1 & fct=51 & m3dcc & fs & ft & fsD & ftD {
+    local su:4 = fsD(4); local sl:4 = fsD:4; local tu:4 = ftD(4); local tl:4 = ftD:4;
+    local al = abs(sl); local bl = abs(tl);
+    local unl:1 = nan(al) || nan(bl);
+    local eql:1 = al f== bl;
+    local ltl:1 = al f< bl;
+    local rl:1 = eql || unl;
+    local au = abs(su); local bu = abs(tu);
+    local unu:1 = nan(au) || nan(bu);
+    local equ:1 = au f== bu;
+    local ltu:1 = au f< bu;
+    local ru:1 = equ || unu;
+    m3dSetCC(m3dcc, rl);
+    m3dSetCC(m3dcc + 1, ru);
+}
+:cabs.olt.S m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x10 & bp2=1 & fct=52 & m3dcc & fs & ft {
+    local a = abs(fs:4); local b = abs(ft:4);
+    local un:1 = nan(a) || nan(b);
+    local eq:1 = a f== b;
+    local lt:1 = a f< b;
+    local r:1 = lt;
+    m3dSetCC(m3dcc, r);
+}
+:cabs.olt.D m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x11 & bp2=1 & fct=52 & m3dcc & fs & ft & fsD & ftD {
+    local a = abs(fsD); local b = abs(ftD);
+    local un:1 = nan(a) || nan(b);
+    local eq:1 = a f== b;
+    local lt:1 = a f< b;
+    local r:1 = lt;
+    m3dSetCC(m3dcc, r);
+}
+:cabs.olt.PS m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x16 & bp2=1 & fct=52 & m3dcc & fs & ft & fsD & ftD {
+    local su:4 = fsD(4); local sl:4 = fsD:4; local tu:4 = ftD(4); local tl:4 = ftD:4;
+    local al = abs(sl); local bl = abs(tl);
+    local unl:1 = nan(al) || nan(bl);
+    local eql:1 = al f== bl;
+    local ltl:1 = al f< bl;
+    local rl:1 = ltl;
+    local au = abs(su); local bu = abs(tu);
+    local unu:1 = nan(au) || nan(bu);
+    local equ:1 = au f== bu;
+    local ltu:1 = au f< bu;
+    local ru:1 = ltu;
+    m3dSetCC(m3dcc, rl);
+    m3dSetCC(m3dcc + 1, ru);
+}
+:cabs.ult.S m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x10 & bp2=1 & fct=53 & m3dcc & fs & ft {
+    local a = abs(fs:4); local b = abs(ft:4);
+    local un:1 = nan(a) || nan(b);
+    local eq:1 = a f== b;
+    local lt:1 = a f< b;
+    local r:1 = lt || un;
+    m3dSetCC(m3dcc, r);
+}
+:cabs.ult.D m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x11 & bp2=1 & fct=53 & m3dcc & fs & ft & fsD & ftD {
+    local a = abs(fsD); local b = abs(ftD);
+    local un:1 = nan(a) || nan(b);
+    local eq:1 = a f== b;
+    local lt:1 = a f< b;
+    local r:1 = lt || un;
+    m3dSetCC(m3dcc, r);
+}
+:cabs.ult.PS m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x16 & bp2=1 & fct=53 & m3dcc & fs & ft & fsD & ftD {
+    local su:4 = fsD(4); local sl:4 = fsD:4; local tu:4 = ftD(4); local tl:4 = ftD:4;
+    local al = abs(sl); local bl = abs(tl);
+    local unl:1 = nan(al) || nan(bl);
+    local eql:1 = al f== bl;
+    local ltl:1 = al f< bl;
+    local rl:1 = ltl || unl;
+    local au = abs(su); local bu = abs(tu);
+    local unu:1 = nan(au) || nan(bu);
+    local equ:1 = au f== bu;
+    local ltu:1 = au f< bu;
+    local ru:1 = ltu || unu;
+    m3dSetCC(m3dcc, rl);
+    m3dSetCC(m3dcc + 1, ru);
+}
+:cabs.ole.S m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x10 & bp2=1 & fct=54 & m3dcc & fs & ft {
+    local a = abs(fs:4); local b = abs(ft:4);
+    local un:1 = nan(a) || nan(b);
+    local eq:1 = a f== b;
+    local lt:1 = a f< b;
+    local r:1 = lt || eq;
+    m3dSetCC(m3dcc, r);
+}
+:cabs.ole.D m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x11 & bp2=1 & fct=54 & m3dcc & fs & ft & fsD & ftD {
+    local a = abs(fsD); local b = abs(ftD);
+    local un:1 = nan(a) || nan(b);
+    local eq:1 = a f== b;
+    local lt:1 = a f< b;
+    local r:1 = lt || eq;
+    m3dSetCC(m3dcc, r);
+}
+:cabs.ole.PS m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x16 & bp2=1 & fct=54 & m3dcc & fs & ft & fsD & ftD {
+    local su:4 = fsD(4); local sl:4 = fsD:4; local tu:4 = ftD(4); local tl:4 = ftD:4;
+    local al = abs(sl); local bl = abs(tl);
+    local unl:1 = nan(al) || nan(bl);
+    local eql:1 = al f== bl;
+    local ltl:1 = al f< bl;
+    local rl:1 = ltl || eql;
+    local au = abs(su); local bu = abs(tu);
+    local unu:1 = nan(au) || nan(bu);
+    local equ:1 = au f== bu;
+    local ltu:1 = au f< bu;
+    local ru:1 = ltu || equ;
+    m3dSetCC(m3dcc, rl);
+    m3dSetCC(m3dcc + 1, ru);
+}
+:cabs.ule.S m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x10 & bp2=1 & fct=55 & m3dcc & fs & ft {
+    local a = abs(fs:4); local b = abs(ft:4);
+    local un:1 = nan(a) || nan(b);
+    local eq:1 = a f== b;
+    local lt:1 = a f< b;
+    local r:1 = lt || eq || un;
+    m3dSetCC(m3dcc, r);
+}
+:cabs.ule.D m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x11 & bp2=1 & fct=55 & m3dcc & fs & ft & fsD & ftD {
+    local a = abs(fsD); local b = abs(ftD);
+    local un:1 = nan(a) || nan(b);
+    local eq:1 = a f== b;
+    local lt:1 = a f< b;
+    local r:1 = lt || eq || un;
+    m3dSetCC(m3dcc, r);
+}
+:cabs.ule.PS m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x16 & bp2=1 & fct=55 & m3dcc & fs & ft & fsD & ftD {
+    local su:4 = fsD(4); local sl:4 = fsD:4; local tu:4 = ftD(4); local tl:4 = ftD:4;
+    local al = abs(sl); local bl = abs(tl);
+    local unl:1 = nan(al) || nan(bl);
+    local eql:1 = al f== bl;
+    local ltl:1 = al f< bl;
+    local rl:1 = ltl || eql || unl;
+    local au = abs(su); local bu = abs(tu);
+    local unu:1 = nan(au) || nan(bu);
+    local equ:1 = au f== bu;
+    local ltu:1 = au f< bu;
+    local ru:1 = ltu || equ || unu;
+    m3dSetCC(m3dcc, rl);
+    m3dSetCC(m3dcc + 1, ru);
+}
+:cabs.sf.S m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x10 & bp2=1 & fct=56 & m3dcc & fs & ft {
+    local a = abs(fs:4); local b = abs(ft:4);
+    local un:1 = nan(a) || nan(b);
+    local eq:1 = a f== b;
+    local lt:1 = a f< b;
+    local r:1 = 0;
+    m3dSetCC(m3dcc, r);
+}
+:cabs.sf.D m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x11 & bp2=1 & fct=56 & m3dcc & fs & ft & fsD & ftD {
+    local a = abs(fsD); local b = abs(ftD);
+    local un:1 = nan(a) || nan(b);
+    local eq:1 = a f== b;
+    local lt:1 = a f< b;
+    local r:1 = 0;
+    m3dSetCC(m3dcc, r);
+}
+:cabs.sf.PS m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x16 & bp2=1 & fct=56 & m3dcc & fs & ft & fsD & ftD {
+    local su:4 = fsD(4); local sl:4 = fsD:4; local tu:4 = ftD(4); local tl:4 = ftD:4;
+    local al = abs(sl); local bl = abs(tl);
+    local unl:1 = nan(al) || nan(bl);
+    local eql:1 = al f== bl;
+    local ltl:1 = al f< bl;
+    local rl:1 = 0;
+    local au = abs(su); local bu = abs(tu);
+    local unu:1 = nan(au) || nan(bu);
+    local equ:1 = au f== bu;
+    local ltu:1 = au f< bu;
+    local ru:1 = 0;
+    m3dSetCC(m3dcc, rl);
+    m3dSetCC(m3dcc + 1, ru);
+}
+:cabs.ngle.S m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x10 & bp2=1 & fct=57 & m3dcc & fs & ft {
+    local a = abs(fs:4); local b = abs(ft:4);
+    local un:1 = nan(a) || nan(b);
+    local eq:1 = a f== b;
+    local lt:1 = a f< b;
+    local r:1 = un;
+    m3dSetCC(m3dcc, r);
+}
+:cabs.ngle.D m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x11 & bp2=1 & fct=57 & m3dcc & fs & ft & fsD & ftD {
+    local a = abs(fsD); local b = abs(ftD);
+    local un:1 = nan(a) || nan(b);
+    local eq:1 = a f== b;
+    local lt:1 = a f< b;
+    local r:1 = un;
+    m3dSetCC(m3dcc, r);
+}
+:cabs.ngle.PS m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x16 & bp2=1 & fct=57 & m3dcc & fs & ft & fsD & ftD {
+    local su:4 = fsD(4); local sl:4 = fsD:4; local tu:4 = ftD(4); local tl:4 = ftD:4;
+    local al = abs(sl); local bl = abs(tl);
+    local unl:1 = nan(al) || nan(bl);
+    local eql:1 = al f== bl;
+    local ltl:1 = al f< bl;
+    local rl:1 = unl;
+    local au = abs(su); local bu = abs(tu);
+    local unu:1 = nan(au) || nan(bu);
+    local equ:1 = au f== bu;
+    local ltu:1 = au f< bu;
+    local ru:1 = unu;
+    m3dSetCC(m3dcc, rl);
+    m3dSetCC(m3dcc + 1, ru);
+}
+:cabs.seq.S m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x10 & bp2=1 & fct=58 & m3dcc & fs & ft {
+    local a = abs(fs:4); local b = abs(ft:4);
+    local un:1 = nan(a) || nan(b);
+    local eq:1 = a f== b;
+    local lt:1 = a f< b;
+    local r:1 = eq;
+    m3dSetCC(m3dcc, r);
+}
+:cabs.seq.D m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x11 & bp2=1 & fct=58 & m3dcc & fs & ft & fsD & ftD {
+    local a = abs(fsD); local b = abs(ftD);
+    local un:1 = nan(a) || nan(b);
+    local eq:1 = a f== b;
+    local lt:1 = a f< b;
+    local r:1 = eq;
+    m3dSetCC(m3dcc, r);
+}
+:cabs.seq.PS m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x16 & bp2=1 & fct=58 & m3dcc & fs & ft & fsD & ftD {
+    local su:4 = fsD(4); local sl:4 = fsD:4; local tu:4 = ftD(4); local tl:4 = ftD:4;
+    local al = abs(sl); local bl = abs(tl);
+    local unl:1 = nan(al) || nan(bl);
+    local eql:1 = al f== bl;
+    local ltl:1 = al f< bl;
+    local rl:1 = eql;
+    local au = abs(su); local bu = abs(tu);
+    local unu:1 = nan(au) || nan(bu);
+    local equ:1 = au f== bu;
+    local ltu:1 = au f< bu;
+    local ru:1 = equ;
+    m3dSetCC(m3dcc, rl);
+    m3dSetCC(m3dcc + 1, ru);
+}
+:cabs.ngl.S m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x10 & bp2=1 & fct=59 & m3dcc & fs & ft {
+    local a = abs(fs:4); local b = abs(ft:4);
+    local un:1 = nan(a) || nan(b);
+    local eq:1 = a f== b;
+    local lt:1 = a f< b;
+    local r:1 = eq || un;
+    m3dSetCC(m3dcc, r);
+}
+:cabs.ngl.D m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x11 & bp2=1 & fct=59 & m3dcc & fs & ft & fsD & ftD {
+    local a = abs(fsD); local b = abs(ftD);
+    local un:1 = nan(a) || nan(b);
+    local eq:1 = a f== b;
+    local lt:1 = a f< b;
+    local r:1 = eq || un;
+    m3dSetCC(m3dcc, r);
+}
+:cabs.ngl.PS m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x16 & bp2=1 & fct=59 & m3dcc & fs & ft & fsD & ftD {
+    local su:4 = fsD(4); local sl:4 = fsD:4; local tu:4 = ftD(4); local tl:4 = ftD:4;
+    local al = abs(sl); local bl = abs(tl);
+    local unl:1 = nan(al) || nan(bl);
+    local eql:1 = al f== bl;
+    local ltl:1 = al f< bl;
+    local rl:1 = eql || unl;
+    local au = abs(su); local bu = abs(tu);
+    local unu:1 = nan(au) || nan(bu);
+    local equ:1 = au f== bu;
+    local ltu:1 = au f< bu;
+    local ru:1 = equ || unu;
+    m3dSetCC(m3dcc, rl);
+    m3dSetCC(m3dcc + 1, ru);
+}
+:cabs.lt.S m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x10 & bp2=1 & fct=60 & m3dcc & fs & ft {
+    local a = abs(fs:4); local b = abs(ft:4);
+    local un:1 = nan(a) || nan(b);
+    local eq:1 = a f== b;
+    local lt:1 = a f< b;
+    local r:1 = lt;
+    m3dSetCC(m3dcc, r);
+}
+:cabs.lt.D m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x11 & bp2=1 & fct=60 & m3dcc & fs & ft & fsD & ftD {
+    local a = abs(fsD); local b = abs(ftD);
+    local un:1 = nan(a) || nan(b);
+    local eq:1 = a f== b;
+    local lt:1 = a f< b;
+    local r:1 = lt;
+    m3dSetCC(m3dcc, r);
+}
+:cabs.lt.PS m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x16 & bp2=1 & fct=60 & m3dcc & fs & ft & fsD & ftD {
+    local su:4 = fsD(4); local sl:4 = fsD:4; local tu:4 = ftD(4); local tl:4 = ftD:4;
+    local al = abs(sl); local bl = abs(tl);
+    local unl:1 = nan(al) || nan(bl);
+    local eql:1 = al f== bl;
+    local ltl:1 = al f< bl;
+    local rl:1 = ltl;
+    local au = abs(su); local bu = abs(tu);
+    local unu:1 = nan(au) || nan(bu);
+    local equ:1 = au f== bu;
+    local ltu:1 = au f< bu;
+    local ru:1 = ltu;
+    m3dSetCC(m3dcc, rl);
+    m3dSetCC(m3dcc + 1, ru);
+}
+:cabs.nge.S m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x10 & bp2=1 & fct=61 & m3dcc & fs & ft {
+    local a = abs(fs:4); local b = abs(ft:4);
+    local un:1 = nan(a) || nan(b);
+    local eq:1 = a f== b;
+    local lt:1 = a f< b;
+    local r:1 = lt || un;
+    m3dSetCC(m3dcc, r);
+}
+:cabs.nge.D m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x11 & bp2=1 & fct=61 & m3dcc & fs & ft & fsD & ftD {
+    local a = abs(fsD); local b = abs(ftD);
+    local un:1 = nan(a) || nan(b);
+    local eq:1 = a f== b;
+    local lt:1 = a f< b;
+    local r:1 = lt || un;
+    m3dSetCC(m3dcc, r);
+}
+:cabs.nge.PS m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x16 & bp2=1 & fct=61 & m3dcc & fs & ft & fsD & ftD {
+    local su:4 = fsD(4); local sl:4 = fsD:4; local tu:4 = ftD(4); local tl:4 = ftD:4;
+    local al = abs(sl); local bl = abs(tl);
+    local unl:1 = nan(al) || nan(bl);
+    local eql:1 = al f== bl;
+    local ltl:1 = al f< bl;
+    local rl:1 = ltl || unl;
+    local au = abs(su); local bu = abs(tu);
+    local unu:1 = nan(au) || nan(bu);
+    local equ:1 = au f== bu;
+    local ltu:1 = au f< bu;
+    local ru:1 = ltu || unu;
+    m3dSetCC(m3dcc, rl);
+    m3dSetCC(m3dcc + 1, ru);
+}
+:cabs.le.S m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x10 & bp2=1 & fct=62 & m3dcc & fs & ft {
+    local a = abs(fs:4); local b = abs(ft:4);
+    local un:1 = nan(a) || nan(b);
+    local eq:1 = a f== b;
+    local lt:1 = a f< b;
+    local r:1 = lt || eq;
+    m3dSetCC(m3dcc, r);
+}
+:cabs.le.D m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x11 & bp2=1 & fct=62 & m3dcc & fs & ft & fsD & ftD {
+    local a = abs(fsD); local b = abs(ftD);
+    local un:1 = nan(a) || nan(b);
+    local eq:1 = a f== b;
+    local lt:1 = a f< b;
+    local r:1 = lt || eq;
+    m3dSetCC(m3dcc, r);
+}
+:cabs.le.PS m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x16 & bp2=1 & fct=62 & m3dcc & fs & ft & fsD & ftD {
+    local su:4 = fsD(4); local sl:4 = fsD:4; local tu:4 = ftD(4); local tl:4 = ftD:4;
+    local al = abs(sl); local bl = abs(tl);
+    local unl:1 = nan(al) || nan(bl);
+    local eql:1 = al f== bl;
+    local ltl:1 = al f< bl;
+    local rl:1 = ltl || eql;
+    local au = abs(su); local bu = abs(tu);
+    local unu:1 = nan(au) || nan(bu);
+    local equ:1 = au f== bu;
+    local ltu:1 = au f< bu;
+    local ru:1 = ltu || equ;
+    m3dSetCC(m3dcc, rl);
+    m3dSetCC(m3dcc + 1, ru);
+}
+:cabs.ngt.S m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x10 & bp2=1 & fct=63 & m3dcc & fs & ft {
+    local a = abs(fs:4); local b = abs(ft:4);
+    local un:1 = nan(a) || nan(b);
+    local eq:1 = a f== b;
+    local lt:1 = a f< b;
+    local r:1 = lt || eq || un;
+    m3dSetCC(m3dcc, r);
+}
+:cabs.ngt.D m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x11 & bp2=1 & fct=63 & m3dcc & fs & ft & fsD & ftD {
+    local a = abs(fsD); local b = abs(ftD);
+    local un:1 = nan(a) || nan(b);
+    local eq:1 = a f== b;
+    local lt:1 = a f< b;
+    local r:1 = lt || eq || un;
+    m3dSetCC(m3dcc, r);
+}
+:cabs.ngt.PS m3dcc, fs, ft is $(AMODE) & REL6=0 & prime=17 & format=0x16 & bp2=1 & fct=63 & m3dcc & fs & ft & fsD & ftD {
+    local su:4 = fsD(4); local sl:4 = fsD:4; local tu:4 = ftD(4); local tl:4 = ftD:4;
+    local al = abs(sl); local bl = abs(tl);
+    local unl:1 = nan(al) || nan(bl);
+    local eql:1 = al f== bl;
+    local ltl:1 = al f< bl;
+    local rl:1 = ltl || eql || unl;
+    local au = abs(su); local bu = abs(tu);
+    local unu:1 = nan(au) || nan(bu);
+    local equ:1 = au f== bu;
+    local ltu:1 = au f< bu;
+    local ru:1 = ltu || equ || unu;
+    m3dSetCC(m3dcc, rl);
+    m3dSetCC(m3dcc + 1, ru);
+}
+
+:bc1any2f m3dbcc, Rel16 is $(AMODE) & REL6=0 & prime=17 & copop=9 & m3dbcc & nd=0 & tf=0 & Rel16 {
+    local c0:4 = 0; local c1:4 = 0;
+    m3dGetCC(c0, m3dbcc); m3dGetCC(c1, m3dbcc + 1);
+    local take:1 = (c0 & c1) == 0;
+    delayslot(1);
+    if (take) goto Rel16;
+}
+:bc1any2t m3dbcc, Rel16 is $(AMODE) & REL6=0 & prime=17 & copop=9 & m3dbcc & nd=0 & tf=1 & Rel16 {
+    local c0:4 = 0; local c1:4 = 0;
+    m3dGetCC(c0, m3dbcc); m3dGetCC(c1, m3dbcc + 1);
+    local take:1 = (c0 | c1) != 0;
+    delayslot(1);
+    if (take) goto Rel16;
+}
+:bc1any4f m3dbcc, Rel16 is $(AMODE) & REL6=0 & prime=17 & copop=10 & m3dbcc & nd=0 & tf=0 & Rel16 {
+    local c0:4 = 0; local c1:4 = 0; local c2:4 = 0; local c3:4 = 0;
+    m3dGetCC(c0, m3dbcc); m3dGetCC(c1, m3dbcc + 1); m3dGetCC(c2, m3dbcc + 2); m3dGetCC(c3, m3dbcc + 3);
+    local take:1 = (c0 & c1 & c2 & c3) == 0;
+    delayslot(1);
+    if (take) goto Rel16;
+}
+:bc1any4t m3dbcc, Rel16 is $(AMODE) & REL6=0 & prime=17 & copop=10 & m3dbcc & nd=0 & tf=1 & Rel16 {
+    local c0:4 = 0; local c1:4 = 0; local c2:4 = 0; local c3:4 = 0;
+    m3dGetCC(c0, m3dbcc); m3dGetCC(c1, m3dbcc + 1); m3dGetCC(c2, m3dbcc + 2); m3dGetCC(c3, m3dbcc + 3);
+    local take:1 = (c0 | c1 | c2 | c3) != 0;
+    delayslot(1);
+    if (take) goto Rel16;
+}

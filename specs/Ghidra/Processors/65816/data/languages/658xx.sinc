@@ -116,10 +116,15 @@ PRIMARY_OP_NO_IMM: RefDPIndLongIdx    is bbb=5 & cc=3; RefDPIndLongIdx  { export
 PRIMARY_OP_NO_IMM: RefSR    is bbb=0 & cc=3; RefSR  { export RefSR; }
 PRIMARY_OP_NO_IMM: RefSRIndIdx    is bbb=4 & cc=3; RefSRIndIdx  { export RefSRIndIdx; }
 #
-# PRIMARY_OP is the whole subset.
+# PRIMARY_OP_V8/V16 are the whole subset as operand values.
 #
-PRIMARY_OP: PRIMARY_OP_NO_IMM    is PRIMARY_OP_NO_IMM  { export PRIMARY_OP_NO_IMM; }
-PRIMARY_OP: RefImmMF    is bbb=2 & cc=1; RefImmMF  { export RefImmMF; }
+
+# unlace: operand values for the read-only users of these modes. An immediate
+# is a constant operand rather than a read of the instruction bytes.
+PRIMARY_OP_V8: PRIMARY_OP_NO_IMM    is PRIMARY_OP_NO_IMM  { local d:1; deref_read8(d, PRIMARY_OP_NO_IMM); export d; }
+PRIMARY_OP_V8: #$imm8    is bbb=2 & cc=1; imm8  { export *[const]:1 imm8; }
+PRIMARY_OP_V16: PRIMARY_OP_NO_IMM    is PRIMARY_OP_NO_IMM  { local d:2; deref_read16(d, PRIMARY_OP_NO_IMM); export d; }
+PRIMARY_OP_V16: #$imm16    is bbb=2 & cc=1; imm16  { export *[const]:2 imm16; }
 
 # Subsets of the addressing modes for some secondary instructions (most of the remaining
 # instructions that aren't branches/jumps and don't use implied addressing).
@@ -145,15 +150,15 @@ SHIFT_OP: SEC_OP_X    is SEC_OP_X  { export SEC_OP_X; }
 ##################################################################
 
 # ADC 8 bit.
-:ADC PRIMARY_OP    is (ctx_MF=1 &
+:ADC PRIMARY_OP_V8    is (ctx_MF=1 &
     (op=0x69 | op=0x6d | op=0x6f | op=0x65 | op=0x72 | op=0x67 | op=0x7d |
      op=0x7f | op=0x79 | op=0x75 | op=0x61 | op=0x71 | op=0x77 | op=0x63 |
-     op=0x73)) ... & PRIMARY_OP
+     op=0x73)) ... & PRIMARY_OP_V8
 {
     local is_dec:1 = DF;
     local not_dec:1 = !DF;
     local do_skip_dec_adjust:1;
-    local data:1; deref_read8(data, PRIMARY_OP);
+    local data:1 = PRIMARY_OP_V8;
     local result:4;
 
     if (is_dec) goto <decimal>;
@@ -190,15 +195,15 @@ SHIFT_OP: SEC_OP_X    is SEC_OP_X  { export SEC_OP_X; }
 }
 
 # ADC 16 bit.
-:ADC PRIMARY_OP    is (ctx_MF=0 &
+:ADC PRIMARY_OP_V16    is (ctx_MF=0 &
     (op=0x69 | op=0x6d | op=0x6f | op=0x65 | op=0x72 | op=0x67 | op=0x7d |
      op=0x7f | op=0x79 | op=0x75 | op=0x61 | op=0x71 | op=0x77 | op=0x63 |
-     op=0x73)) ... & PRIMARY_OP
+     op=0x73)) ... & PRIMARY_OP_V16
 {
     local is_dec:1 = DF;
     local not_dec:1 = !DF;
     local do_skip_dec_adjust:1;
-    local data:2; deref_read16(data, PRIMARY_OP);
+    local data:2 = PRIMARY_OP_V16;
     local result:4;
 
     if (is_dec) goto <decimal>;
@@ -249,24 +254,24 @@ SHIFT_OP: SEC_OP_X    is SEC_OP_X  { export SEC_OP_X; }
 }
 
 # AND 8 bit.
-:AND PRIMARY_OP    is (ctx_MF=1 &
+:AND PRIMARY_OP_V8    is (ctx_MF=1 &
     (op=0x29 | op=0x2d | op=0x2f | op=0x25 | op=0x32 | op=0x27 | op=0x3d |
      op=0x3f | op=0x39 | op=0x35 | op=0x21 | op=0x31 | op=0x37 | op=0x23 |
-     op=0x33)) ... & PRIMARY_OP
+     op=0x33)) ... & PRIMARY_OP_V8
 {
-    local data:1; deref_read8(data, PRIMARY_OP);
+    local data:1 = PRIMARY_OP_V8;
 
     A = A & data;
     flag8_NZ(A);
 }
 
 # AND 16 bit.
-:AND PRIMARY_OP    is (ctx_MF=0 &
+:AND PRIMARY_OP_V16    is (ctx_MF=0 &
     (op=0x29 | op=0x2d | op=0x2f | op=0x25 | op=0x32 | op=0x27 | op=0x3d |
      op=0x3f | op=0x39 | op=0x35 | op=0x21 | op=0x31 | op=0x37 | op=0x23 |
-     op=0x33)) ... & PRIMARY_OP
+     op=0x33)) ... & PRIMARY_OP_V16
 {
-    local data:2; deref_read16(data, PRIMARY_OP);
+    local data:2 = PRIMARY_OP_V16;
 
     C = C & data;
     flag16_NZ(C);
@@ -335,14 +340,17 @@ macro do_asl16(_out, _data) {
     if (ZF==1) goto MemPCRelBra;
 }
 
-BIT_OP: SEC_OP_X    is (aaa=1 & cc=0) ... & SEC_OP_X  { export SEC_OP_X; }
-BIT_OP: RefImmMF    is op=0x89; RefImmMF  { export RefImmMF; }
+
+BIT_OP_V8: SEC_OP_X    is (aaa=1 & cc=0) ... & SEC_OP_X  { local d:1; deref_read8(d, SEC_OP_X); export d; }
+BIT_OP_V8: #$imm8    is op=0x89; imm8  { export *[const]:1 imm8; }
+BIT_OP_V16: SEC_OP_X    is (aaa=1 & cc=0) ... & SEC_OP_X  { local d:2; deref_read16(d, SEC_OP_X); export d; }
+BIT_OP_V16: #$imm16    is op=0x89; imm16  { export *[const]:2 imm16; }
 
 # BIT 8 bit.
-:BIT BIT_OP    is (ctx_MF=1 &
-    (op=0x89 | op=0x2c | op=0x24 | op=0x3c | op=0x34) & op) ... & BIT_OP
+:BIT BIT_OP_V8    is (ctx_MF=1 &
+    (op=0x89 | op=0x2c | op=0x24 | op=0x3c | op=0x34) & op) ... & BIT_OP_V8
 {
-    local data:1; deref_read8(data, BIT_OP);
+    local data:1 = BIT_OP_V8;
     local is_immediate:1 = op:1 == 0x89;
 
     if (is_immediate) goto <skip_flags>;
@@ -355,10 +363,10 @@ BIT_OP: RefImmMF    is op=0x89; RefImmMF  { export RefImmMF; }
 }
 
 # BIT 16 bit.
-:BIT BIT_OP    is (ctx_MF=0 &
-    (op=0x89 | op=0x2c | op=0x24 | op=0x3c | op=0x34) & op) ... & BIT_OP
+:BIT BIT_OP_V16    is (ctx_MF=0 &
+    (op=0x89 | op=0x2c | op=0x24 | op=0x3c | op=0x34) & op) ... & BIT_OP_V16
 {
-    local data:2; deref_read16(data, BIT_OP);
+    local data:2 = BIT_OP_V16;
     local is_immediate:1 = op:1 == 0x89;
 
     if (is_immediate) goto <skip_flags>;
@@ -461,12 +469,12 @@ BIT_OP: RefImmMF    is op=0x89; RefImmMF  { export RefImmMF; }
 }
 
 # CMP 8 bit.
-:CMP PRIMARY_OP    is (ctx_MF=1 &
+:CMP PRIMARY_OP_V8    is (ctx_MF=1 &
     (op=0xc9 | op=0xcd | op=0xcf | op=0xc5 | op=0xd2 | op=0xc7 | op=0xdd |
      op=0xdf | op=0xd9 | op=0xd5 | op=0xc1 | op=0xd1 | op=0xd7 | op=0xc3 |
-     op=0xd3)) ... & PRIMARY_OP
+     op=0xd3)) ... & PRIMARY_OP_V8
 {
-    local data:1; deref_read8(data, PRIMARY_OP);
+    local data:1 = PRIMARY_OP_V8;
     local result:4;
 
     result = sext(A) - sext(data);
@@ -475,12 +483,12 @@ BIT_OP: RefImmMF    is op=0x89; RefImmMF  { export RefImmMF; }
 }
 
 # CMP 16 bit.
-:CMP PRIMARY_OP    is (ctx_MF=0 &
+:CMP PRIMARY_OP_V16    is (ctx_MF=0 &
     (op=0xc9 | op=0xcd | op=0xcf | op=0xc5 | op=0xd2 | op=0xc7 | op=0xdd |
      op=0xdf | op=0xd9 | op=0xd5 | op=0xc1 | op=0xd1 | op=0xd7 | op=0xc3 |
-     op=0xd3)) ... & PRIMARY_OP
+     op=0xd3)) ... & PRIMARY_OP_V16
 {
-    local data:2; deref_read16(data, PRIMARY_OP);
+    local data:2 = PRIMARY_OP_V16;
     local result:4;
 
     result = sext(C) - sext(data);
@@ -522,36 +530,39 @@ BIT_OP: RefImmMF    is op=0x89; RefImmMF  { export RefImmMF; }
     goto [target];
 }
 
-CPXY_OP: SEC_OP_COMMON    is (cc=0) ... & SEC_OP_COMMON  { export SEC_OP_COMMON; }
-CPXY_OP: RefImmXF    is bbb=0; RefImmXF  { export RefImmXF; }
+
+CPXY_OP_V8: SEC_OP_COMMON    is (cc=0) ... & SEC_OP_COMMON  { local d:1; deref_read8(d, SEC_OP_COMMON); export d; }
+CPXY_OP_V8: #$imm8    is bbb=0; imm8  { export *[const]:1 imm8; }
+CPXY_OP_V16: SEC_OP_COMMON    is (cc=0) ... & SEC_OP_COMMON  { local d:2; deref_read16(d, SEC_OP_COMMON); export d; }
+CPXY_OP_V16: #$imm16    is bbb=0; imm16  { export *[const]:2 imm16; }
 
 # CPX 8 bit.
-:CPX CPXY_OP    is (ctx_XF=1 & (op=0xe0 | op=0xec | op=0xe4)) ... & CPXY_OP {
-    local data:1; deref_read8(data, CPXY_OP);
+:CPX CPXY_OP_V8    is (ctx_XF=1 & (op=0xe0 | op=0xec | op=0xe4)) ... & CPXY_OP_V8 {
+    local data:1 = CPXY_OP_V8;
     local result:4 = sext(XLow) - sext(data);
     flag8_NZ(result:1);
     CF = result s>= 0;
 }
 
 # CPX 16 bit.
-:CPX CPXY_OP    is (ctx_XF=0 & (op=0xe0 | op=0xec | op=0xe4)) ... & CPXY_OP {
-    local data:2; deref_read16(data, CPXY_OP);
+:CPX CPXY_OP_V16    is (ctx_XF=0 & (op=0xe0 | op=0xec | op=0xe4)) ... & CPXY_OP_V16 {
+    local data:2 = CPXY_OP_V16;
     local result:4 = sext(X) - sext(data);
     flag16_NZ(result:2);
     CF = result s>= 0;
 }
 
 # CPY 8 bit.
-:CPY CPXY_OP    is (ctx_XF=0 & (op=0xc0 | op=0xcc | op=0xc4)) ... & CPXY_OP {
-    local data:1; deref_read8(data, CPXY_OP);
+:CPY CPXY_OP_V8    is (ctx_XF=1 & (op=0xc0 | op=0xcc | op=0xc4)) ... & CPXY_OP_V8 {
+    local data:1 = CPXY_OP_V8;
     local result:4 = sext(YLow) - sext(data);
     flag8_NZ(result:1);
     CF = result s>= 0;
 }
 
 # CPY 16 bit.
-:CPY CPXY_OP    is (ctx_XF=1 & (op=0xc0 | op=0xcc | op=0xc4)) ... & CPXY_OP {
-    local data:2; deref_read16(data, CPXY_OP);
+:CPY CPXY_OP_V16    is (ctx_XF=0 & (op=0xc0 | op=0xcc | op=0xc4)) ... & CPXY_OP_V16 {
+    local data:2 = CPXY_OP_V16;
     local result:4 = sext(Y) - sext(data);
     flag16_NZ(result:2);
     CF = result s>= 0;
@@ -636,24 +647,24 @@ macro do_dec16(_out, _data) {
 }
 
 # EOR 8 bit.
-:EOR PRIMARY_OP    is (ctx_MF=1 &
+:EOR PRIMARY_OP_V8    is (ctx_MF=1 &
     (op=0x49 | op=0x4d | op=0x4f | op=0x45 | op=0x52 | op=0x47 | op=0x5d |
      op=0x5f | op=0x59 | op=0x55 | op=0x41 | op=0x51 | op=0x57 | op=0x43 |
-     op=0x53)) ... & PRIMARY_OP
+     op=0x53)) ... & PRIMARY_OP_V8
 {
-    local data:1; deref_read8(data, PRIMARY_OP);
+    local data:1 = PRIMARY_OP_V8;
 
     A = A ^ data;
     flag8_NZ(A);
 }
 
 # EOR 16 bit.
-:EOR PRIMARY_OP    is (ctx_MF=0 &
+:EOR PRIMARY_OP_V16    is (ctx_MF=0 &
     (op=0x49 | op=0x4d | op=0x4f | op=0x45 | op=0x52 | op=0x47 | op=0x5d |
      op=0x5f | op=0x59 | op=0x55 | op=0x41 | op=0x51 | op=0x57 | op=0x43 |
-     op=0x53)) ... & PRIMARY_OP
+     op=0x53)) ... & PRIMARY_OP_V16
 {
-    local data:2; deref_read16(data, PRIMARY_OP);
+    local data:2 = PRIMARY_OP_V16;
 
     C = C ^ data;
     flag16_NZ(C);
@@ -824,67 +835,73 @@ macro jsr_calculate_push_addr(_out) {
 }
 
 # LDA 8 bit.
-:LDA PRIMARY_OP    is (ctx_MF=1 &
+:LDA PRIMARY_OP_V8    is (ctx_MF=1 &
     (op=0xa9 | op=0xad | op=0xaf | op=0xa5 | op=0xb2 | op=0xa7 | op=0xbd |
      op=0xbf | op=0xb9 | op=0xb5 | op=0xa1 | op=0xb1 | op=0xb7 | op=0xa3 |
-     op=0xb3)) ... & PRIMARY_OP
+     op=0xb3)) ... & PRIMARY_OP_V8
 {
-    local data:1; deref_read8(data, PRIMARY_OP);
+    local data:1 = PRIMARY_OP_V8;
 
     A = data;
     flag8_NZ(A);
 }
 
 # LDA 16 bit.
-:LDA PRIMARY_OP    is (ctx_MF=0 &
+:LDA PRIMARY_OP_V16    is (ctx_MF=0 &
     (op=0xa9 | op=0xad | op=0xaf | op=0xa5 | op=0xb2 | op=0xa7 | op=0xbd |
      op=0xbf | op=0xb9 | op=0xb5 | op=0xa1 | op=0xb1 | op=0xb7 | op=0xa3 |
-     op=0xb3)) ... & PRIMARY_OP
+     op=0xb3)) ... & PRIMARY_OP_V16
 {
-    local data:2; deref_read16(data, PRIMARY_OP);
+    local data:2 = PRIMARY_OP_V16;
 
     C = data;
     flag16_NZ(C);
 }
 
-LDX_OP: SEC_OP_Y    is (aaa=5) ... & SEC_OP_Y  { export SEC_OP_Y; }
-LDX_OP: RefImmXF    is bbb=0; RefImmXF  { export RefImmXF; }
+
+LDX_OP_V8: SEC_OP_Y    is (aaa=5) ... & SEC_OP_Y  { local d:1; deref_read8(d, SEC_OP_Y); export d; }
+LDX_OP_V8: #$imm8    is bbb=0; imm8  { export *[const]:1 imm8; }
+LDX_OP_V16: SEC_OP_Y    is (aaa=5) ... & SEC_OP_Y  { local d:2; deref_read16(d, SEC_OP_Y); export d; }
+LDX_OP_V16: #$imm16    is bbb=0; imm16  { export *[const]:2 imm16; }
 
 # LDX 8 bit.
-:LDX LDX_OP    is (ctx_XF=1 &
-    (op=0xa2 | op=0xae | op=0xa6 | op=0xbe | op=0xb6)) ... & LDX_OP
+:LDX LDX_OP_V8    is (ctx_XF=1 &
+    (op=0xa2 | op=0xae | op=0xa6 | op=0xbe | op=0xb6)) ... & LDX_OP_V8
 {
-    local data:1; deref_read8(data, LDX_OP);
+    local data:1 = LDX_OP_V8;
     flag8_NZ(data);
     XLow = data;
 }
 
 # LDX 16 bit.
-:LDX LDX_OP    is (ctx_XF=0 &
-    (op=0xa2 | op=0xae | op=0xa6 | op=0xbe | op=0xb6)) ... & LDX_OP
+:LDX LDX_OP_V16    is (ctx_XF=0 &
+    (op=0xa2 | op=0xae | op=0xa6 | op=0xbe | op=0xb6)) ... & LDX_OP_V16
 {
-    local data:2; deref_read16(data, LDX_OP);
+    local data:2 = LDX_OP_V16;
     flag16_NZ(data);
     X = data;
 }
 
-LDY_OP: SEC_OP_X    is (aaa=5) ... & SEC_OP_X  { export SEC_OP_X; }
-LDY_OP: RefImmXF    is bbb=0; RefImmXF  { export RefImmXF; }
+
+LDY_OP_V8: SEC_OP_X    is (aaa=5) ... & SEC_OP_X  { local d:1; deref_read8(d, SEC_OP_X); export d; }
+LDY_OP_V8: #$imm8    is bbb=0; imm8  { export *[const]:1 imm8; }
+LDY_OP_V16: SEC_OP_X    is (aaa=5) ... & SEC_OP_X  { local d:2; deref_read16(d, SEC_OP_X); export d; }
+LDY_OP_V16: #$imm16    is bbb=0; imm16  { export *[const]:2 imm16; }
 
 # LDY 8 bit.
-:LDY LDY_OP    is (ctx_XF=1 &
-    (op=0xa0 | op=0xac | op=0xa4 | op=0xbc | op=0xb4)) ... & LDY_OP
+:LDY LDY_OP_V8    is (ctx_XF=1 &
+    (op=0xa0 | op=0xac | op=0xa4 | op=0xbc | op=0xb4)) ... & LDY_OP_V8
 {
-    local data:1; deref_read8(data, LDY_OP);
+    local data:1 = LDY_OP_V8;
     flag8_NZ(data);
     YLow = data;
 }
 
 # LDY 16 bit.
-:LDY LDY_OP    is (ctx_XF=0 &
-    (op=0xa0 | op=0xac | op=0xa4 | op=0xbc | op=0xb4)) ... & LDY_OP
+:LDY LDY_OP_V16    is (ctx_XF=0 &
+    (op=0xa0 | op=0xac | op=0xa4 | op=0xbc | op=0xb4)) ... & LDY_OP_V16
 {
-    local data:2; deref_read16(data, LDY_OP);
+    local data:2 = LDY_OP_V16;
     flag16_NZ(data);
     Y = data;
 }
@@ -1026,24 +1043,24 @@ macro do_lsr16(_out, _data) {
 :NOP    is op=0xEA  {}
 
 # ORA 8 bit.
-:ORA PRIMARY_OP    is (ctx_MF=1 &
+:ORA PRIMARY_OP_V8    is (ctx_MF=1 &
     (op=0x09 | op=0x0d | op=0x0f | op=0x05 | op=0x12 | op=0x07 | op=0x1d |
      op=0x1f | op=0x19 | op=0x15 | op=0x01 | op=0x11 | op=0x17 | op=0x03 |
-     op=0x13)) ... & PRIMARY_OP
+     op=0x13)) ... & PRIMARY_OP_V8
 {
-    local data:1; deref_read8(data, PRIMARY_OP);
+    local data:1 = PRIMARY_OP_V8;
 
     A = A | data;
     flag8_NZ(A);
 }
 
 # ORA 16 bit.
-:ORA PRIMARY_OP    is (ctx_MF=0 &
+:ORA PRIMARY_OP_V16    is (ctx_MF=0 &
     (op=0x09 | op=0x0d | op=0x0f | op=0x05 | op=0x12 | op=0x07 | op=0x1d |
      op=0x1f | op=0x19 | op=0x15 | op=0x01 | op=0x11 | op=0x17 | op=0x03 |
-     op=0x13)) ... & PRIMARY_OP
+     op=0x13)) ... & PRIMARY_OP_V16
 {
-    local data:2; deref_read16(data, PRIMARY_OP);
+    local data:2 = PRIMARY_OP_V16;
 
     C = C | data;
     flag16_NZ(C);
@@ -1562,15 +1579,15 @@ macro do_ror16(_out, _data) {
 }
 
 # SBC 8 bit binary.
-:SBC PRIMARY_OP    is (ctx_MF=1 &
+:SBC PRIMARY_OP_V8    is (ctx_MF=1 &
     (op=0xe9 | op=0xed | op=0xef | op=0xe5 | op=0xf2 | op=0xe7 | op=0xfd |
      op=0xff | op=0xf9 | op=0xf5 | op=0xe1 | op=0xf1 | op=0xf7 | op=0xe3 |
-     op=0xf3)) ... & PRIMARY_OP
+     op=0xf3)) ... & PRIMARY_OP_V8
 {
     local is_dec:1 = DF == 1;
     local not_dec:1 = DF == 0;
     local do_skip_dec_adjust:1;
-    local data:1; deref_read8(data, PRIMARY_OP);
+    local data:1 = PRIMARY_OP_V8;
     data = ~data;
     local result:4;
 
@@ -1605,15 +1622,15 @@ macro do_ror16(_out, _data) {
 }
 
 # SBC 16 bit binary.
-:SBC PRIMARY_OP    is (ctx_MF=0 &
+:SBC PRIMARY_OP_V16    is (ctx_MF=0 &
     (op=0xe9 | op=0xed | op=0xef | op=0xe5 | op=0xf2 | op=0xe7 | op=0xfd |
      op=0xff | op=0xf9 | op=0xf5 | op=0xe1 | op=0xf1 | op=0xf7 | op=0xe3 |
-     op=0xf3)) ... & PRIMARY_OP
+     op=0xf3)) ... & PRIMARY_OP_V16
 {
     local is_dec:1 = DF == 1;
     local not_dec:1 = DF == 0;
     local do_skip_dec_adjust:1;
-    local data:2; deref_read16(data, PRIMARY_OP);
+    local data:2 = PRIMARY_OP_V16;
     data = ~data;
     local result:4;
 

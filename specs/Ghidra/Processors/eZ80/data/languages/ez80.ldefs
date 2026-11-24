@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="eZ80"
+            endian="little"
+            size="24"
+            variant="ADL"
+            version="1.0"
+            slafile="ez80.sla"
+            processorspec="ez80_adl.pspec"
+            id="eZ80:LE:24:ADL">
+    <description>Zilog eZ80 (eZ80Acclaim!, eZ80F91/F92/L92) in ADL mode: 24-bit registers and addresses</description>
+    <compiler name="default" spec="ez80_adl.cspec" id="default"/>
+  </language>
+  <language processor="eZ80"
+            endian="little"
+            size="24"
+            variant="Z80"
+            version="1.0"
+            slafile="ez80.sla"
+            processorspec="ez80_z80.pspec"
+            id="eZ80:LE:24:Z80">
+    <description>Zilog eZ80 in Z80 mode: 16-bit registers, addresses {MBASE, addr[15:0]}</description>
+    <compiler name="default" spec="ez80_z80.cspec" id="default"/>
+  </language>
+</language_definitions>

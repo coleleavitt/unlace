@@ -1,0 +1,2 @@
+# Zilog Z8002 (non-segmented Z8000): 16-bit addresses. See z8000.sinc for sources.
+@include "z8000.sinc"

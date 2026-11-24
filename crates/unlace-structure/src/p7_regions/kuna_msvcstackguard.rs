@@ -470,6 +470,25 @@ fn pop_is_stated(data: &Funcdata, op: OpId) -> bool {
         .is_some_and(|i| data.get_call_specs(i).get_extra_pop() != crate::fspec::EXTRAPOP_UNKNOWN)
 }
 
+/// Record each exact checker this pass keeps because only the stack solver
+/// guessed its pop, so the replay retains the caller's return value across it
+/// (the checker preserves EAX), and request one restart. Nothing is deleted.
+fn mark_kept_checkers(data: &mut Funcdata, calls: &[(OpId, Vec<OpId>)]) {
+    let mut marked = false;
+    for (op, _) in calls {
+        let Some(site) = data.obank().get(*op).map(|o| o.get_addr().clone()) else {
+            continue;
+        };
+        if !data.get_override().is_msvc_cookie_call(&site) {
+            data.get_override_mut().insert_msvc_cookie_call(site);
+            marked = true;
+        }
+    }
+    if marked {
+        data.set_restart_pending(true);
+    }
+}
+
 /// (kuna) Strip the MSVC `/GS` frame-cookie check and its entry-side init
 /// (option `msvcstackguard`, default off).
 pub struct ActionStripMsvcStackGuard {
@@ -519,7 +538,7 @@ impl Action for ActionStripMsvcStackGuard {
         let Some(sp) = stack_pointer_storage(data) else {
             return 0;
         };
-        let calls = cookie_check_calls(data, &sp, !strip, !strip);
+        let mut calls = cookie_check_calls(data, &sp, !strip, !strip);
         if !strip {
             if calls.is_empty() {
                 return 0;
@@ -536,9 +555,11 @@ impl Action for ActionStripMsvcStackGuard {
             data.set_restart_pending(true);
             return 0;
         }
-        let Some((op, inits)) = calls.into_iter().find(|(op, _)| pop_is_stated(data, *op)) else {
+        let Some(pick) = calls.iter().position(|(op, _)| pop_is_stated(data, *op)) else {
+            mark_kept_checkers(data, &calls);
             return 0;
         };
+        let (op, inits) = calls.swap_remove(pick);
         let site = data
             .obank()
             .get(op)

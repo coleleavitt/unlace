@@ -1,0 +1,520 @@
+# Gekko / Broadway paired-single extension (Nintendo GameCube and Wii, IBM
+# PowerPC 750CL). Written for unlace from the IBM PowerPC 750CL RISC
+# Microprocessor User's Manual (chapter "Paired-Single Instructions"); decode
+# checked against powerpc-elf-objdump -M gekko 2.43.1.
+#
+# Each FPR holds two single-precision slots: ps0 is the FPR itself (fN, kept
+# in double format as the hardware does) and ps1 is the otherwise unused low
+# half of the overlaid VSX register (ps1_N). Results are rounded to single.
+# psq_l/psq_st with GQR index 0 are plain float loads and stores (the SDKs
+# keep GQR0 at zero, the float type); any other GQR is a quantized transfer
+# and a user op on that GQR (SPR 912-919).
+
+define register offset=0x4000 size=8 [
+	_ ps1_0  _ ps1_1  _ ps1_2  _ ps1_3  _ ps1_4  _ ps1_5  _ ps1_6  _ ps1_7
+	_ ps1_8  _ ps1_9  _ ps1_10 _ ps1_11 _ ps1_12 _ ps1_13 _ ps1_14 _ ps1_15
+	_ ps1_16 _ ps1_17 _ ps1_18 _ ps1_19 _ ps1_20 _ ps1_21 _ ps1_22 _ ps1_23
+	_ ps1_24 _ ps1_25 _ ps1_26 _ ps1_27 _ ps1_28 _ ps1_29 _ ps1_30 _ ps1_31 ];
+
+
+attach variables [ PSD1 PSA1 PSB1 PSC1 ] [
+	ps1_0  ps1_1  ps1_2  ps1_3  ps1_4  ps1_5  ps1_6  ps1_7
+	ps1_8  ps1_9  ps1_10 ps1_11 ps1_12 ps1_13 ps1_14 ps1_15
+	ps1_16 ps1_17 ps1_18 ps1_19 ps1_20 ps1_21 ps1_22 ps1_23
+	ps1_24 ps1_25 ps1_26 ps1_27 ps1_28 ps1_29 ps1_30 ps1_31 ];
+attach variables [ PSQ_GQR PSQX_GQR ] [ spr390 spr391 spr392 spr393 spr394 spr395 spr396 spr397 ];
+
+define pcodeop psq_load;
+define pcodeop psq_store;
+define pcodeop dcbz_l;
+
+macro psround(dst, val) {
+	local s:4 = float2float(val);
+	dst = float2float(s);
+}
+
+psrc: ""  is PS_RC=0 { }
+psrc: "." is PS_RC=1 { cr1flags(); }
+
+:ps_div^psrc fD,fA,fB is $(NOTVLE) & OP=4 & fD & fA & fB & PSD1 & PSA1 & PSB1 & BITS_6_10=0 & XOP_1_5=18 & psrc {
+	local p0:8 = fA f/ fB;
+	local p1:8 = PSA1 f/ PSB1;
+	psround(fD, p0);
+	psround(PSD1, p1);
+	build psrc;
+}
+
+:ps_sub^psrc fD,fA,fB is $(NOTVLE) & OP=4 & fD & fA & fB & PSD1 & PSA1 & PSB1 & BITS_6_10=0 & XOP_1_5=20 & psrc {
+	local p0:8 = fA f- fB;
+	local p1:8 = PSA1 f- PSB1;
+	psround(fD, p0);
+	psround(PSD1, p1);
+	build psrc;
+}
+
+:ps_add^psrc fD,fA,fB is $(NOTVLE) & OP=4 & fD & fA & fB & PSD1 & PSA1 & PSB1 & BITS_6_10=0 & XOP_1_5=21 & psrc {
+	local p0:8 = fA f+ fB;
+	local p1:8 = PSA1 f+ PSB1;
+	psround(fD, p0);
+	psround(PSD1, p1);
+	build psrc;
+}
+
+:ps_mul^psrc fD,fA,fC is $(NOTVLE) & OP=4 & fD & fA & fC & PSD1 & PSA1 & PSC1 & BITS_11_15=0 & XOP_1_5=25 & psrc {
+	local p0:8 = fA f* fC;
+	local p1:8 = PSA1 f* PSC1;
+	psround(fD, p0);
+	psround(PSD1, p1);
+	build psrc;
+}
+
+:ps_sel^psrc fD,fA,fC,fB is $(NOTVLE) & OP=4 & fD & fA & fC & fB & PSD1 & PSA1 & PSC1 & PSB1 & XOP_1_5=23 & psrc {
+	local z:8 = int2float(0:4);
+	local p0:8 = fB;
+	local p1:8 = PSB1;
+	if (fA f< z) goto <sel1>;
+	p0 = fC;
+<sel1>
+	if (PSA1 f< z) goto <done>;
+	p1 = PSC1;
+<done>
+	fD = p0;
+	PSD1 = p1;
+	build psrc;
+}
+
+:ps_res^psrc fD,fB is $(NOTVLE) & OP=4 & fD & fB & PSD1 & PSB1 & BITS_16_20=0 & BITS_6_10=0 & XOP_1_5=24 & psrc {
+	local one:8 = int2float(1:4);
+	local p0:8 = one f/ fB;
+	local p1:8 = one f/ PSB1;
+	psround(fD, p0);
+	psround(PSD1, p1);
+	build psrc;
+}
+
+:ps_rsqrte^psrc fD,fB is $(NOTVLE) & OP=4 & fD & fB & PSD1 & PSB1 & BITS_16_20=0 & BITS_6_10=0 & XOP_1_5=26 & psrc {
+	local one:8 = int2float(1:4);
+	local p0:8 = one f/ sqrt(fB);
+	local p1:8 = one f/ sqrt(PSB1);
+	psround(fD, p0);
+	psround(PSD1, p1);
+	build psrc;
+}
+
+:ps_msub^psrc fD,fA,fC,fB is $(NOTVLE) & OP=4 & fD & fA & fC & fB & PSD1 & PSA1 & PSC1 & PSB1 & XOP_1_5=28 & psrc {
+	local p0:8 = (fA f* fC) f- fB;
+	local p1:8 = (PSA1 f* PSC1) f- PSB1;
+	psround(fD, p0);
+	psround(PSD1, p1);
+	build psrc;
+}
+
+:ps_madd^psrc fD,fA,fC,fB is $(NOTVLE) & OP=4 & fD & fA & fC & fB & PSD1 & PSA1 & PSC1 & PSB1 & XOP_1_5=29 & psrc {
+	local p0:8 = (fA f* fC) f+ fB;
+	local p1:8 = (PSA1 f* PSC1) f+ PSB1;
+	psround(fD, p0);
+	psround(PSD1, p1);
+	build psrc;
+}
+
+:ps_nmsub^psrc fD,fA,fC,fB is $(NOTVLE) & OP=4 & fD & fA & fC & fB & PSD1 & PSA1 & PSC1 & PSB1 & XOP_1_5=30 & psrc {
+	local p0:8 = f- ((fA f* fC) f- fB);
+	local p1:8 = f- ((PSA1 f* PSC1) f- PSB1);
+	psround(fD, p0);
+	psround(PSD1, p1);
+	build psrc;
+}
+
+:ps_nmadd^psrc fD,fA,fC,fB is $(NOTVLE) & OP=4 & fD & fA & fC & fB & PSD1 & PSA1 & PSC1 & PSB1 & XOP_1_5=31 & psrc {
+	local p0:8 = f- ((fA f* fC) f+ fB);
+	local p1:8 = f- ((PSA1 f* PSC1) f+ PSB1);
+	psround(fD, p0);
+	psround(PSD1, p1);
+	build psrc;
+}
+
+:ps_sum0^psrc fD,fA,fC,fB is $(NOTVLE) & OP=4 & fD & fA & fC & fB & PSD1 & PSC1 & PSB1 & XOP_1_5=10 & psrc {
+	local p0:8 = fA f+ PSB1;
+	local p1:8 = PSC1;
+	psround(fD, p0);
+	PSD1 = p1;
+	build psrc;
+}
+
+:ps_sum1^psrc fD,fA,fC,fB is $(NOTVLE) & OP=4 & fD & fA & fC & fB & PSD1 & PSB1 & XOP_1_5=11 & psrc {
+	local p0:8 = fC;
+	local p1:8 = fA f+ PSB1;
+	fD = p0;
+	psround(PSD1, p1);
+	build psrc;
+}
+
+:ps_muls0^psrc fD,fA,fC is $(NOTVLE) & OP=4 & fD & fA & fC & PSD1 & PSA1 & BITS_11_15=0 & XOP_1_5=12 & psrc {
+	local p0:8 = fA f* fC;
+	local p1:8 = PSA1 f* fC;
+	psround(fD, p0);
+	psround(PSD1, p1);
+	build psrc;
+}
+
+:ps_muls1^psrc fD,fA,fC is $(NOTVLE) & OP=4 & fD & fA & fC & PSD1 & PSA1 & PSC1 & BITS_11_15=0 & XOP_1_5=13 & psrc {
+	local p0:8 = fA f* PSC1;
+	local p1:8 = PSA1 f* PSC1;
+	psround(fD, p0);
+	psround(PSD1, p1);
+	build psrc;
+}
+
+:ps_madds0^psrc fD,fA,fC,fB is $(NOTVLE) & OP=4 & fD & fA & fC & fB & PSD1 & PSA1 & PSB1 & XOP_1_5=14 & psrc {
+	local p0:8 = (fA f* fC) f+ fB;
+	local p1:8 = (PSA1 f* fC) f+ PSB1;
+	psround(fD, p0);
+	psround(PSD1, p1);
+	build psrc;
+}
+
+:ps_madds1^psrc fD,fA,fC,fB is $(NOTVLE) & OP=4 & fD & fA & fC & fB & PSD1 & PSA1 & PSC1 & PSB1 & XOP_1_5=15 & psrc {
+	local p0:8 = (fA f* PSC1) f+ fB;
+	local p1:8 = (PSA1 f* PSC1) f+ PSB1;
+	psround(fD, p0);
+	psround(PSD1, p1);
+	build psrc;
+}
+
+:ps_cmpu0 CRFD,fA,fB is $(NOTVLE) & OP=4 & CRFD & BITS_21_22=0 & fA & fB & PSA1 & PSB1 & XOP_1_10=0 & BIT_0=0 {
+	local un:1 = nan(fA) | nan(fB);
+	fp_cc0 = fA f< fB;
+	fp_cc1 = fA f> fB;
+	fp_cc2 = fA f== fB;
+	fp_cc3 = un;
+	CRFD = (fp_cc0 << 3) | (fp_cc1 << 2) | (fp_cc2 << 1) | un;
+}
+
+:ps_cmpo0 CRFD,fA,fB is $(NOTVLE) & OP=4 & CRFD & BITS_21_22=0 & fA & fB & PSA1 & PSB1 & XOP_1_10=32 & BIT_0=0 {
+	local un:1 = nan(fA) | nan(fB);
+	fp_cc0 = fA f< fB;
+	fp_cc1 = fA f> fB;
+	fp_cc2 = fA f== fB;
+	fp_cc3 = un;
+	CRFD = (fp_cc0 << 3) | (fp_cc1 << 2) | (fp_cc2 << 1) | un;
+}
+
+:ps_cmpu1 CRFD,fA,fB is $(NOTVLE) & OP=4 & CRFD & BITS_21_22=0 & fA & fB & PSA1 & PSB1 & XOP_1_10=64 & BIT_0=0 {
+	local un:1 = nan(PSA1) | nan(PSB1);
+	fp_cc0 = PSA1 f< PSB1;
+	fp_cc1 = PSA1 f> PSB1;
+	fp_cc2 = PSA1 f== PSB1;
+	fp_cc3 = un;
+	CRFD = (fp_cc0 << 3) | (fp_cc1 << 2) | (fp_cc2 << 1) | un;
+}
+
+:ps_cmpo1 CRFD,fA,fB is $(NOTVLE) & OP=4 & CRFD & BITS_21_22=0 & fA & fB & PSA1 & PSB1 & XOP_1_10=96 & BIT_0=0 {
+	local un:1 = nan(PSA1) | nan(PSB1);
+	fp_cc0 = PSA1 f< PSB1;
+	fp_cc1 = PSA1 f> PSB1;
+	fp_cc2 = PSA1 f== PSB1;
+	fp_cc3 = un;
+	CRFD = (fp_cc0 << 3) | (fp_cc1 << 2) | (fp_cc2 << 1) | un;
+}
+
+:ps_neg^psrc fD,fB is $(NOTVLE) & OP=4 & fD & fB & PSD1 & PSB1 & BITS_16_20=0 & XOP_1_10=40 & psrc {
+	local p0:8 = f- fB;
+	local p1:8 = f- PSB1;
+	fD = p0;
+	PSD1 = p1;
+	build psrc;
+}
+
+:ps_mr^psrc fD,fB is $(NOTVLE) & OP=4 & fD & fB & PSD1 & PSB1 & BITS_16_20=0 & XOP_1_10=72 & psrc {
+	local p0:8 = fB;
+	local p1:8 = PSB1;
+	fD = p0;
+	PSD1 = p1;
+	build psrc;
+}
+
+:ps_nabs^psrc fD,fB is $(NOTVLE) & OP=4 & fD & fB & PSD1 & PSB1 & BITS_16_20=0 & XOP_1_10=136 & psrc {
+	local p0:8 = f- abs(fB);
+	local p1:8 = f- abs(PSB1);
+	fD = p0;
+	PSD1 = p1;
+	build psrc;
+}
+
+:ps_abs^psrc fD,fB is $(NOTVLE) & OP=4 & fD & fB & PSD1 & PSB1 & BITS_16_20=0 & XOP_1_10=264 & psrc {
+	local p0:8 = abs(fB);
+	local p1:8 = abs(PSB1);
+	fD = p0;
+	PSD1 = p1;
+	build psrc;
+}
+
+:ps_merge00^psrc fD,fA,fB is $(NOTVLE) & OP=4 & fD & fA & fB & PSD1 & PSA1 & PSB1 & XOP_1_10=528 & psrc {
+	local p0:8 = fA;
+	local p1:8 = fB;
+	psround(fD, p0);
+	psround(PSD1, p1);
+	build psrc;
+}
+
+:ps_merge01^psrc fD,fA,fB is $(NOTVLE) & OP=4 & fD & fA & fB & PSD1 & PSA1 & PSB1 & XOP_1_10=560 & psrc {
+	local p0:8 = fA;
+	local p1:8 = PSB1;
+	psround(fD, p0);
+	psround(PSD1, p1);
+	build psrc;
+}
+
+:ps_merge10^psrc fD,fA,fB is $(NOTVLE) & OP=4 & fD & fA & fB & PSD1 & PSA1 & PSB1 & XOP_1_10=592 & psrc {
+	local p0:8 = PSA1;
+	local p1:8 = fB;
+	psround(fD, p0);
+	psround(PSD1, p1);
+	build psrc;
+}
+
+:ps_merge11^psrc fD,fA,fB is $(NOTVLE) & OP=4 & fD & fA & fB & PSD1 & PSA1 & PSB1 & XOP_1_10=624 & psrc {
+	local p0:8 = PSA1;
+	local p1:8 = PSB1;
+	psround(fD, p0);
+	psround(PSD1, p1);
+	build psrc;
+}
+
+:dcbz_l RA_OR_ZERO,B is $(NOTVLE) & OP=4 & BITS_21_25=0 & RA_OR_ZERO & B & XOP_1_10=1014 & BIT_0=0 {
+	local ea:$(REGISTER_SIZE) = RA_OR_ZERO + B;
+	dcbz_l(ea);
+}
+
+# Quantized loads and stores. W=1 moves ps0 only (a load sets ps1 to 1.0).
+:psq_l fD,PSQ_D(RA_OR_ZERO),0,PSQ_I is $(NOTVLE) & OP=56 & fD & PSD1 & RA_OR_ZERO & PSQ_W=0 & PSQ_I & PSQ_IC=0 & PSQ_D {
+	local ea:$(REGISTER_SIZE) = RA_OR_ZERO + PSQ_D;
+	local v0:4 = *:4 ea;
+	fD = float2float(v0);
+	local v1:4 = *:4 (ea + 4);
+	PSD1 = float2float(v1);
+}
+
+:psq_l fD,PSQ_D(RA_OR_ZERO),0,PSQ_I is $(NOTVLE) & OP=56 & fD & PSD1 & RA_OR_ZERO & PSQ_W=0 & PSQ_I & PSQ_GQR & PSQ_IC!=0 & PSQ_D {
+	local ea:$(REGISTER_SIZE) = RA_OR_ZERO + PSQ_D;
+	local q0:4 = psq_load(PSQ_GQR, ea, 0:1);
+	fD = float2float(q0);
+	local q1:4 = psq_load(PSQ_GQR, ea, 1:1);
+	PSD1 = float2float(q1);
+}
+
+:psq_l fD,PSQ_D(RA_OR_ZERO),1,PSQ_I is $(NOTVLE) & OP=56 & fD & PSD1 & RA_OR_ZERO & PSQ_W=1 & PSQ_I & PSQ_IC=0 & PSQ_D {
+	local ea:$(REGISTER_SIZE) = RA_OR_ZERO + PSQ_D;
+	local v0:4 = *:4 ea;
+	fD = float2float(v0);
+	PSD1 = int2float(1:4);
+}
+
+:psq_l fD,PSQ_D(RA_OR_ZERO),1,PSQ_I is $(NOTVLE) & OP=56 & fD & PSD1 & RA_OR_ZERO & PSQ_W=1 & PSQ_I & PSQ_GQR & PSQ_IC!=0 & PSQ_D {
+	local ea:$(REGISTER_SIZE) = RA_OR_ZERO + PSQ_D;
+	local q0:4 = psq_load(PSQ_GQR, ea, 0:1);
+	fD = float2float(q0);
+	PSD1 = int2float(1:4);
+}
+
+:psq_lu fD,PSQ_D(A),0,PSQ_I is $(NOTVLE) & OP=57 & fD & PSD1 & A & A_BITS!=0 & PSQ_W=0 & PSQ_I & PSQ_IC=0 & PSQ_D {
+	local ea:$(REGISTER_SIZE) = A + PSQ_D;
+	local v0:4 = *:4 ea;
+	fD = float2float(v0);
+	local v1:4 = *:4 (ea + 4);
+	PSD1 = float2float(v1);
+	A = ea;
+}
+
+:psq_lu fD,PSQ_D(A),0,PSQ_I is $(NOTVLE) & OP=57 & fD & PSD1 & A & A_BITS!=0 & PSQ_W=0 & PSQ_I & PSQ_GQR & PSQ_IC!=0 & PSQ_D {
+	local ea:$(REGISTER_SIZE) = A + PSQ_D;
+	local q0:4 = psq_load(PSQ_GQR, ea, 0:1);
+	fD = float2float(q0);
+	local q1:4 = psq_load(PSQ_GQR, ea, 1:1);
+	PSD1 = float2float(q1);
+	A = ea;
+}
+
+:psq_lu fD,PSQ_D(A),1,PSQ_I is $(NOTVLE) & OP=57 & fD & PSD1 & A & A_BITS!=0 & PSQ_W=1 & PSQ_I & PSQ_IC=0 & PSQ_D {
+	local ea:$(REGISTER_SIZE) = A + PSQ_D;
+	local v0:4 = *:4 ea;
+	fD = float2float(v0);
+	PSD1 = int2float(1:4);
+	A = ea;
+}
+
+:psq_lu fD,PSQ_D(A),1,PSQ_I is $(NOTVLE) & OP=57 & fD & PSD1 & A & A_BITS!=0 & PSQ_W=1 & PSQ_I & PSQ_GQR & PSQ_IC!=0 & PSQ_D {
+	local ea:$(REGISTER_SIZE) = A + PSQ_D;
+	local q0:4 = psq_load(PSQ_GQR, ea, 0:1);
+	fD = float2float(q0);
+	PSD1 = int2float(1:4);
+	A = ea;
+}
+
+:psq_st fD,PSQ_D(RA_OR_ZERO),0,PSQ_I is $(NOTVLE) & OP=60 & fD & PSD1 & RA_OR_ZERO & PSQ_W=0 & PSQ_I & PSQ_IC=0 & PSQ_D {
+	local ea:$(REGISTER_SIZE) = RA_OR_ZERO + PSQ_D;
+	*:4 ea = float2float(fD);
+	*:4 (ea + 4) = float2float(PSD1);
+}
+
+:psq_st fD,PSQ_D(RA_OR_ZERO),0,PSQ_I is $(NOTVLE) & OP=60 & fD & PSD1 & RA_OR_ZERO & PSQ_W=0 & PSQ_I & PSQ_GQR & PSQ_IC!=0 & PSQ_D {
+	local ea:$(REGISTER_SIZE) = RA_OR_ZERO + PSQ_D;
+	local s0:4 = float2float(fD);
+	local s1:4 = float2float(PSD1);
+	psq_store(PSQ_GQR, ea, s0, s1);
+}
+
+:psq_st fD,PSQ_D(RA_OR_ZERO),1,PSQ_I is $(NOTVLE) & OP=60 & fD & PSD1 & RA_OR_ZERO & PSQ_W=1 & PSQ_I & PSQ_IC=0 & PSQ_D {
+	local ea:$(REGISTER_SIZE) = RA_OR_ZERO + PSQ_D;
+	*:4 ea = float2float(fD);
+}
+
+:psq_st fD,PSQ_D(RA_OR_ZERO),1,PSQ_I is $(NOTVLE) & OP=60 & fD & PSD1 & RA_OR_ZERO & PSQ_W=1 & PSQ_I & PSQ_GQR & PSQ_IC!=0 & PSQ_D {
+	local ea:$(REGISTER_SIZE) = RA_OR_ZERO + PSQ_D;
+	local s0:4 = float2float(fD);
+	psq_store(PSQ_GQR, ea, s0);
+}
+
+:psq_stu fD,PSQ_D(A),0,PSQ_I is $(NOTVLE) & OP=61 & fD & PSD1 & A & A_BITS!=0 & PSQ_W=0 & PSQ_I & PSQ_IC=0 & PSQ_D {
+	local ea:$(REGISTER_SIZE) = A + PSQ_D;
+	*:4 ea = float2float(fD);
+	*:4 (ea + 4) = float2float(PSD1);
+	A = ea;
+}
+
+:psq_stu fD,PSQ_D(A),0,PSQ_I is $(NOTVLE) & OP=61 & fD & PSD1 & A & A_BITS!=0 & PSQ_W=0 & PSQ_I & PSQ_GQR & PSQ_IC!=0 & PSQ_D {
+	local ea:$(REGISTER_SIZE) = A + PSQ_D;
+	local s0:4 = float2float(fD);
+	local s1:4 = float2float(PSD1);
+	psq_store(PSQ_GQR, ea, s0, s1);
+	A = ea;
+}
+
+:psq_stu fD,PSQ_D(A),1,PSQ_I is $(NOTVLE) & OP=61 & fD & PSD1 & A & A_BITS!=0 & PSQ_W=1 & PSQ_I & PSQ_IC=0 & PSQ_D {
+	local ea:$(REGISTER_SIZE) = A + PSQ_D;
+	*:4 ea = float2float(fD);
+	A = ea;
+}
+
+:psq_stu fD,PSQ_D(A),1,PSQ_I is $(NOTVLE) & OP=61 & fD & PSD1 & A & A_BITS!=0 & PSQ_W=1 & PSQ_I & PSQ_GQR & PSQ_IC!=0 & PSQ_D {
+	local ea:$(REGISTER_SIZE) = A + PSQ_D;
+	local s0:4 = float2float(fD);
+	psq_store(PSQ_GQR, ea, s0);
+	A = ea;
+}
+
+:psq_lx fD,RA_OR_ZERO,B,0,PSQX_I is $(NOTVLE) & OP=4 & fD & PSD1 & RA_OR_ZERO & B & PSQX_W=0 & PSQX_I & PSQX_IC=0 & PSQX_XO=6 {
+	local ea:$(REGISTER_SIZE) = RA_OR_ZERO + B;
+	local v0:4 = *:4 ea;
+	fD = float2float(v0);
+	local v1:4 = *:4 (ea + 4);
+	PSD1 = float2float(v1);
+}
+
+:psq_lx fD,RA_OR_ZERO,B,0,PSQX_I is $(NOTVLE) & OP=4 & fD & PSD1 & RA_OR_ZERO & B & PSQX_W=0 & PSQX_I & PSQX_GQR & PSQX_IC!=0 & PSQX_XO=6 {
+	local ea:$(REGISTER_SIZE) = RA_OR_ZERO + B;
+	local q0:4 = psq_load(PSQX_GQR, ea, 0:1);
+	fD = float2float(q0);
+	local q1:4 = psq_load(PSQX_GQR, ea, 1:1);
+	PSD1 = float2float(q1);
+}
+
+:psq_lx fD,RA_OR_ZERO,B,1,PSQX_I is $(NOTVLE) & OP=4 & fD & PSD1 & RA_OR_ZERO & B & PSQX_W=1 & PSQX_I & PSQX_IC=0 & PSQX_XO=6 {
+	local ea:$(REGISTER_SIZE) = RA_OR_ZERO + B;
+	local v0:4 = *:4 ea;
+	fD = float2float(v0);
+	PSD1 = int2float(1:4);
+}
+
+:psq_lx fD,RA_OR_ZERO,B,1,PSQX_I is $(NOTVLE) & OP=4 & fD & PSD1 & RA_OR_ZERO & B & PSQX_W=1 & PSQX_I & PSQX_GQR & PSQX_IC!=0 & PSQX_XO=6 {
+	local ea:$(REGISTER_SIZE) = RA_OR_ZERO + B;
+	local q0:4 = psq_load(PSQX_GQR, ea, 0:1);
+	fD = float2float(q0);
+	PSD1 = int2float(1:4);
+}
+
+:psq_stx fD,RA_OR_ZERO,B,0,PSQX_I is $(NOTVLE) & OP=4 & fD & PSD1 & RA_OR_ZERO & B & PSQX_W=0 & PSQX_I & PSQX_IC=0 & PSQX_XO=7 {
+	local ea:$(REGISTER_SIZE) = RA_OR_ZERO + B;
+	*:4 ea = float2float(fD);
+	*:4 (ea + 4) = float2float(PSD1);
+}
+
+:psq_stx fD,RA_OR_ZERO,B,0,PSQX_I is $(NOTVLE) & OP=4 & fD & PSD1 & RA_OR_ZERO & B & PSQX_W=0 & PSQX_I & PSQX_GQR & PSQX_IC!=0 & PSQX_XO=7 {
+	local ea:$(REGISTER_SIZE) = RA_OR_ZERO + B;
+	local s0:4 = float2float(fD);
+	local s1:4 = float2float(PSD1);
+	psq_store(PSQX_GQR, ea, s0, s1);
+}
+
+:psq_stx fD,RA_OR_ZERO,B,1,PSQX_I is $(NOTVLE) & OP=4 & fD & PSD1 & RA_OR_ZERO & B & PSQX_W=1 & PSQX_I & PSQX_IC=0 & PSQX_XO=7 {
+	local ea:$(REGISTER_SIZE) = RA_OR_ZERO + B;
+	*:4 ea = float2float(fD);
+}
+
+:psq_stx fD,RA_OR_ZERO,B,1,PSQX_I is $(NOTVLE) & OP=4 & fD & PSD1 & RA_OR_ZERO & B & PSQX_W=1 & PSQX_I & PSQX_GQR & PSQX_IC!=0 & PSQX_XO=7 {
+	local ea:$(REGISTER_SIZE) = RA_OR_ZERO + B;
+	local s0:4 = float2float(fD);
+	psq_store(PSQX_GQR, ea, s0);
+}
+
+:psq_lux fD,A,B,0,PSQX_I is $(NOTVLE) & OP=4 & fD & PSD1 & A & A_BITS!=0 & B & PSQX_W=0 & PSQX_I & PSQX_IC=0 & PSQX_XO=38 {
+	local ea:$(REGISTER_SIZE) = A + B;
+	local v0:4 = *:4 ea;
+	fD = float2float(v0);
+	local v1:4 = *:4 (ea + 4);
+	PSD1 = float2float(v1);
+	A = ea;
+}
+
+:psq_lux fD,A,B,0,PSQX_I is $(NOTVLE) & OP=4 & fD & PSD1 & A & A_BITS!=0 & B & PSQX_W=0 & PSQX_I & PSQX_GQR & PSQX_IC!=0 & PSQX_XO=38 {
+	local ea:$(REGISTER_SIZE) = A + B;
+	local q0:4 = psq_load(PSQX_GQR, ea, 0:1);
+	fD = float2float(q0);
+	local q1:4 = psq_load(PSQX_GQR, ea, 1:1);
+	PSD1 = float2float(q1);
+	A = ea;
+}
+
+:psq_lux fD,A,B,1,PSQX_I is $(NOTVLE) & OP=4 & fD & PSD1 & A & A_BITS!=0 & B & PSQX_W=1 & PSQX_I & PSQX_IC=0 & PSQX_XO=38 {
+	local ea:$(REGISTER_SIZE) = A + B;
+	local v0:4 = *:4 ea;
+	fD = float2float(v0);
+	PSD1 = int2float(1:4);
+	A = ea;
+}
+
+:psq_lux fD,A,B,1,PSQX_I is $(NOTVLE) & OP=4 & fD & PSD1 & A & A_BITS!=0 & B & PSQX_W=1 & PSQX_I & PSQX_GQR & PSQX_IC!=0 & PSQX_XO=38 {
+	local ea:$(REGISTER_SIZE) = A + B;
+	local q0:4 = psq_load(PSQX_GQR, ea, 0:1);
+	fD = float2float(q0);
+	PSD1 = int2float(1:4);
+	A = ea;
+}
+
+:psq_stux fD,A,B,0,PSQX_I is $(NOTVLE) & OP=4 & fD & PSD1 & A & A_BITS!=0 & B & PSQX_W=0 & PSQX_I & PSQX_IC=0 & PSQX_XO=39 {
+	local ea:$(REGISTER_SIZE) = A + B;
+	*:4 ea = float2float(fD);
+	*:4 (ea + 4) = float2float(PSD1);
+	A = ea;
+}
+
+:psq_stux fD,A,B,0,PSQX_I is $(NOTVLE) & OP=4 & fD & PSD1 & A & A_BITS!=0 & B & PSQX_W=0 & PSQX_I & PSQX_GQR & PSQX_IC!=0 & PSQX_XO=39 {
+	local ea:$(REGISTER_SIZE) = A + B;
+	local s0:4 = float2float(fD);
+	local s1:4 = float2float(PSD1);
+	psq_store(PSQX_GQR, ea, s0, s1);
+	A = ea;
+}
+
+:psq_stux fD,A,B,1,PSQX_I is $(NOTVLE) & OP=4 & fD & PSD1 & A & A_BITS!=0 & B & PSQX_W=1 & PSQX_I & PSQX_IC=0 & PSQX_XO=39 {
+	local ea:$(REGISTER_SIZE) = A + B;
+	*:4 ea = float2float(fD);
+	A = ea;
+}
+
+:psq_stux fD,A,B,1,PSQX_I is $(NOTVLE) & OP=4 & fD & PSD1 & A & A_BITS!=0 & B & PSQX_W=1 & PSQX_I & PSQX_GQR & PSQX_IC!=0 & PSQX_XO=39 {
+	local ea:$(REGISTER_SIZE) = A + B;
+	local s0:4 = float2float(fD);
+	psq_store(PSQX_GQR, ea, s0);
+	A = ea;
+}

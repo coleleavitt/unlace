@@ -2438,8 +2438,13 @@ object as a message receiver. With the option on, `PrintC::push_vn_explicit`
 renders a read of a Mach-O import slot whose import is a data object (the slots
 `machodataslots` classifies from the import's mangling, chapter
 [01](01-program-prep.md)) as `&<import>` instead of `dat_<slot>`, named by the same
-`query_function` lookup. A function import's slot keeps its name, so a test of a weak
-function's address still reads the slot. It does so only for the value the loader
+`query_function` lookup. A Mach-O function import's slot keeps its name, so a test of
+a weak function's address still reads the slot. On a Windows PE (the loader's
+`image_windows_user` fact) a function import's IAT slot is read the same way as a data
+import's: MSVC caches an import's address in a register or frame slot before a loop
+(`mov eax,[__imp_GetTickCount]; mov [ebp-4],eax; ... call [ebp-4]`), and the read
+renders `&GetTickCount` instead of `dat_<slot>`; a PE import is never weak, and a
+call through the slot is deindirected before it reaches the printer. It does so only for the value the loader
 put there: a read whose varnode is a function input, or comes from one through call
 side effects (`INDIRECT`) and joins (`MULTIEQUAL`); a value the function stored into
 the slot keeps the slot name. So do a read narrower than the slot and a read by an
@@ -5848,7 +5853,12 @@ condition must pass `cond_is_boolean`. The first `if` of the run becomes
 and the tail become empty sequences. `emit_block_if` prints the first through the
 same `return_form` path, so its condition block's statements print above the
 `return`; `emit_return_value` parenthesizes a `||` operand of `&&` and a `?:`
-operand (`emit_return_operand`). The run is contiguous and every folded body is a
+operand (`emit_return_operand`). A `Not` of a condition leaf ending in a `CBRANCH` prints by
+flipping that `CBRANCH` for the one render instead of printing `!` (`return_not_flip`), so
+the comparison prints its complement (`!(v1 <= v2)` prints `v2 < v1`, `!(!x)` prints
+`x`); when the `Not` is the whole returned value, only a flippable comparison that
+still prints as a comparison (not a `truthycond` bare operand, not a `BOOL_NEGATE`)
+flips, so the value stays `0` or `1`. The run is contiguous and every folded body is a
 bare `return`, so C's own short-circuit evaluation runs the same tests in the
 same order and evaluates nothing the binary skips.
 

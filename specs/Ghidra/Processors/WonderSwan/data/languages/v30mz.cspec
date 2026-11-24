@@ -1,0 +1,241 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Derived from Ghidra's x86-16.cspec (Apache License 2.0); modified for the NEC V30MZ: see NOTICE. -->
+
+<compiler_spec>
+
+  <data_organization>
+	<absolute_max_alignment value="0" /> <!-- no maximum alignment -->
+	<machine_alignment value="2" />
+	<default_alignment value="1" />
+	<default_pointer_alignment value="2" />
+	<pointer_size value="2" /> 
+	<wchar_size value="2" />
+	<short_size value="2" />
+	<integer_size value="2" />
+	<long_size value="4" />
+	<long_long_size value="4" />
+	<float_size value="4" />
+	<double_size value="8" />
+	<long_double_size value="10" />
+	<!-- alignment varies between MIcrosoft and Borland -->
+	<!--
+	<size_alignment_map>
+		<entry size="1" alignment="1" />
+		<entry size="2" alignment="2" />
+		<entry size="4" alignment="2" />
+		<entry size="8" alignment="2" />
+	</size_alignment_map>
+	-->
+  </data_organization>
+  
+  <global>
+    <range space="ram"/>
+    <!-- I/O ports: global so loader labels / data types on io addresses name the accesses -->
+    <range space="io"/>
+  </global>
+  <stackpointer register="SP" space="ram"/>
+  <default_proto>
+    <!-- __wsasm: register convention of the hand-written / in-house-generated WonderSwan code family
+         (measured on commercial titles without a C compiler signature). Inputs in AL/AX, BX, CX, DX (some
+         titles also SI, DI, ES); result in AX (often also BX/CX: declared killed so callers don't assume them preserved);
+         no stack arguments, no stack cleanup. NOT expressible here: the carry flag used as a status result. -->
+    <prototype name="__wsasm" extrapop="unknown" stackshift="2" strategy="register">
+      <input>   <!-- strategy="register" (on the prototype): registers are independent; hand-written code uses any subset -->
+        <pentry minsize="1" maxsize="2"><register name="AX"/></pentry>
+        <pentry minsize="1" maxsize="2"><register name="BX"/></pentry>
+        <pentry minsize="1" maxsize="2"><register name="CX"/></pentry>
+        <pentry minsize="1" maxsize="2"><register name="DX"/></pentry>
+        <pentry minsize="1" maxsize="2"><register name="SI"/></pentry>
+        <pentry minsize="1" maxsize="2"><register name="DI"/></pentry>
+        <pentry minsize="2" maxsize="2"><register name="ES"/></pentry>
+        <pentry minsize="2" maxsize="2"><register name="BP"/></pentry>
+      </input>
+      <output>
+        <pentry minsize="1" maxsize="2"><register name="AX"/></pentry>
+      </output>
+      <killedbycall>
+        <register name="AX"/>
+        <register name="BX"/>
+        <register name="CX"/>
+      </killedbycall>
+      <!-- Only registers preserved by every routine of the family; DX/SI/DI are inputs in some routines and
+           preserved in others (per routine), so they are not declared unaffected here. BP likewise: a frame
+           pointer in some routines, an argument in others (the sound driver passes the sequence pointer in
+           ES:BP; its routines read BP before writing it). -->
+      <unaffected>
+        <register name="SP"/>
+        <register name="DS"/>
+        <register name="CS"/>
+        <register name="SS"/>
+        <register name="DF"/>
+      </unaffected>
+    </prototype>
+  </default_proto>
+  <prototype name="__stdcall16near" extrapop="unknown" stackshift="2">
+    <input>
+      <pentry minsize="1" maxsize="500" align="2">
+        <addr offset="2" space="stack"/>
+      </pentry>
+    </input>
+    <output>
+      <pentry minsize="1" maxsize="2">
+        <register name="AX"/>
+      </pentry>
+      <pentry minsize="3" maxsize="4">
+        <addr space="join" piece1="DX" piece2="AX"/>
+      </pentry>
+    </output>
+    <unaffected>
+      <register name="SP"/>
+      <register name="BP"/>
+      <register name="SI"/>
+      <register name="DI"/>
+      <register name="DS"/>
+      <register name="CS"/>
+      <register name="SS"/>
+      <register name="DF"/>
+    </unaffected>
+  </prototype>
+  <prototype name="__cdecl16near" extrapop="2" stackshift="2">
+    <input>
+      <pentry minsize="1" maxsize="500" align="2">
+        <addr offset="2" space="stack"/>
+      </pentry>
+    </input>
+    <output>
+        <pentry minsize="1" maxsize="2">
+          <register name="AX"/>
+        </pentry>
+        <pentry minsize="3" maxsize="4">
+          <addr space="join" piece1="DX" piece2="AX"/>
+        </pentry>
+    </output>
+    <unaffected>
+      <register name="SP"/>
+      <register name="BP"/>
+      <register name="SI"/>
+      <register name="DI"/>
+      <register name="DS"/>
+      <register name="CS"/>
+      <register name="SS"/>
+      <register name="DF"/>
+    </unaffected>
+  </prototype>
+  <prototype name="__stdcall16far" extrapop="unknown" stackshift="4">
+    <input>
+      <pentry minsize="1" maxsize="500" align="2">
+        <addr offset="4" space="stack"/>
+      </pentry>
+    </input>
+    <output>
+        <pentry minsize="1" maxsize="2">
+          <register name="AX"/>
+        </pentry>
+        <pentry minsize="3" maxsize="4">
+          <addr space="join" piece1="DX" piece2="AX"/>
+        </pentry>
+    </output>
+    <unaffected>
+      <register name="SP"/>
+      <register name="BP"/>
+      <register name="SI"/>
+      <register name="DI"/>
+      <register name="DS"/>
+      <register name="CS"/>
+      <register name="SS"/>
+      <register name="DF"/>
+    </unaffected>
+  </prototype>
+  <prototype name="__cdecl16far" extrapop="4" stackshift="4">
+    <input>
+      <pentry minsize="1" maxsize="500" align="2">
+        <addr offset="4" space="stack"/>
+      </pentry>
+    </input>
+    <output>
+      <pentry minsize="1" maxsize="2">
+        <register name="AX"/>
+      </pentry>
+    </output>
+    <unaffected>
+      <register name="SP"/>
+      <register name="BP"/>
+      <register name="SI"/>
+      <register name="DI"/>
+      <register name="DS"/>
+      <register name="CS"/>
+      <register name="SS"/>
+      <register name="DF"/>
+    </unaffected>
+  </prototype>
+  <prototype name="__regcall" extrapop="2" stackshift="2">
+    <input>
+      <pentry minsize="1" maxsize="2">
+        <register name="AX"/>
+      </pentry>
+      <pentry minsize="1" maxsize="2">
+        <register name="BX"/>
+      </pentry>
+      <pentry minsize="1" maxsize="2">
+        <register name="CX"/>
+      </pentry>
+      <pentry minsize="1" maxsize="2">
+        <register name="DX"/>
+      </pentry>
+    </input>
+    <output>
+        <pentry minsize="1" maxsize="2">
+          <register name="AX"/>
+        </pentry>
+        <pentry minsize="3" maxsize="4">
+          <addr space="join" piece1="DX" piece2="AX"/>
+        </pentry>
+    </output>
+    <unaffected>
+      <register name="SP"/>
+      <register name="BP"/>
+      <register name="CX"/>
+      <register name="DX"/>
+      <register name="SI"/>
+      <register name="DI"/>
+      <register name="DS"/>
+      <register name="CS"/>
+      <register name="SS"/>
+      <register name="DF"/>
+    </unaffected>
+  </prototype>
+  <!-- __lsic86: LSI C-86 3.x (verified on the 3.30c compiler's own output): AX, BX, CX, DX
+       filled left to right (char in the low byte; long/far pointer in BX:AX or DX:CX); caller pops (ADD SP,n);
+       returns AL/AX, long in BX:AX; preserved CX, DX, SI, DI, BP, DS, SS; scratch AX, BX, ES. The slot
+       back-fill rule for mixed int/long arguments is not modelled exactly. extrapop is measured per function
+       (near RET pops 2, far RETF 4; LSI WonderSwan code mixes both). strategy="register" and only the frame
+       registers unaffected, as __wsasm: with CX/DX/SI/DI both argument and unaffected registers, the
+       decompiler read them as unaff_CX/unaff_DX in most functions. -->
+  <prototype name="__lsic86" extrapop="unknown" stackshift="2" strategy="register">
+    <input>
+      <pentry minsize="1" maxsize="2"><register name="AX"/></pentry>
+      <pentry minsize="1" maxsize="2"><register name="BX"/></pentry>
+      <pentry minsize="1" maxsize="2"><register name="CX"/></pentry>
+      <pentry minsize="1" maxsize="2"><register name="DX"/></pentry>
+      <pentry minsize="1" maxsize="500" align="2"><addr offset="2" space="stack"/></pentry>
+    </input>
+    <output>
+      <pentry minsize="1" maxsize="2"><register name="AX"/></pentry>
+      <pentry minsize="3" maxsize="4"><addr space="join" piece1="BX" piece2="AX"/></pentry>
+    </output>
+    <killedbycall>
+      <register name="AX"/>
+      <register name="BX"/>
+      <register name="ES"/>
+    </killedbycall>
+    <unaffected>
+      <register name="SP"/>
+      <register name="BP"/>
+      <register name="DS"/>
+      <register name="CS"/>
+      <register name="SS"/>
+      <register name="DF"/>
+    </unaffected>
+  </prototype>
+</compiler_spec>

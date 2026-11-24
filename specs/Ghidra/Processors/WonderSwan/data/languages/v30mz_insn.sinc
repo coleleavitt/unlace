@@ -1,0 +1,632 @@
+# SPDX-License-Identifier: Apache-2.0
+# NEC V30MZ instruction constructors (strict / default decode).
+#
+# Ported from Ghidra x86 ia.sinc + lockable.sinc (Apache License 2.0); see v30mz.slaspec header.
+# Display strings are copied from the x86 16-bit real-mode constructors so text output matches
+# x86:LE:16:Real Mode exactly. Only 8086 + 80186 + SALC are present [brief 1]: no 0F map, no
+# x87 (D8-DF are V30MZ ESC NOPs, decoded only under hwundef=1), no FS/GS, no 66/67, no VEX/EVEX,
+# no 386+ forms.
+
+# ===== Arithmetic / logic: ADD OR ADC SBB AND SUB XOR CMP =================================
+# 82 is the group-1 byte form, identical to 80 ([ST:13097-13099]); 83 /1 /4 /6 are present.
+# SOURCE-CONFLICT (brief 10 #16): 82 is documented only by STSWS and the sign-extended 83 logic
+#   forms only by WSdev ([WI:736,1566,2200]); the datasheet shows neither [DS:3321,3327], but
+#   nothing contradicts them -> both decoded (as Ghidra x86 does).
+
+:ADD AL,imm8            is byte=0x4; AL & imm8                         { addflags(AL,imm8); AL = AL + imm8; resultflags(AL); }
+:ADD AX,imm16           is byte=0x5; AX & imm16                        { addflags(AX,imm16); AX = AX + imm16; resultflags(AX); }
+:ADD Rmr8,imm8          is (byte=0x80 | byte=0x82); mod=3 & Rmr8 & reg_opcode=0; imm8 { addflags(Rmr8,imm8); Rmr8 = Rmr8 + imm8; resultflags(Rmr8); }
+:ADD Rmr16,imm16        is byte=0x81; mod=3 & Rmr16 & reg_opcode=0; imm16 { addflags(Rmr16,imm16); Rmr16 = Rmr16 + imm16; resultflags(Rmr16); }
+:ADD Rmr16,simm8_16     is byte=0x83; mod=3 & Rmr16 & reg_opcode=0; simm8_16 { addflags(Rmr16,simm8_16); Rmr16 = Rmr16 + simm8_16; resultflags(Rmr16); }
+:ADD Rmr8,Reg8          is byte=0x00; mod=3 & Rmr8 & Reg8               { addflags(Rmr8,Reg8); Rmr8 = Rmr8 + Reg8; resultflags(Rmr8); }
+:ADD Rmr16,Reg16        is byte=0x1; mod=3 & Rmr16 & Reg16              { addflags(Rmr16,Reg16); Rmr16 = Rmr16 + Reg16; resultflags(Rmr16); }
+:ADD Reg8,rm8           is byte=0x2; rm8 & Reg8 ...                     { addflags(Reg8,rm8); Reg8 = Reg8 + rm8; resultflags(Reg8); }
+:ADD Reg16,rm16         is byte=0x3; rm16 & Reg16 ...                   { addflags(Reg16,rm16); Reg16 = Reg16 + rm16; resultflags(Reg16); }
+:ADD^lockx m8,imm8      is lockx & unlock & (byte=0x80 | byte=0x82); m8 & reg_opcode=0 ...; imm8 { build lockx; build m8; addflags(m8,imm8); m8 = m8 + imm8; resultflags(m8); build unlock; }
+:ADD^lockx m16,imm16    is lockx & unlock & byte=0x81; m16 & reg_opcode=0 ...; imm16 { build lockx; build m16; addflags(m16,imm16); m16 = m16 + imm16; resultflags(m16); build unlock; }
+:ADD^lockx m16,simm8_16 is lockx & unlock & byte=0x83; m16 & reg_opcode=0 ...; simm8_16 { build lockx; build m16; addflags(m16,simm8_16); m16 = m16 + simm8_16; resultflags(m16); build unlock; }
+:ADD^lockx m8,Reg8      is lockx & unlock & byte=0x00; m8 & Reg8 ...    { build lockx; build m8; addflags(m8,Reg8); m8 = m8 + Reg8; resultflags(m8); build unlock; }
+:ADD^lockx m16,Reg16    is lockx & unlock & byte=0x1; m16 & Reg16 ...   { build lockx; build m16; addflags(m16,Reg16); m16 = m16 + Reg16; resultflags(m16); build unlock; }
+
+:OR  AL,imm8            is byte=0x0c; AL & imm8                        { logicalflags(); AL = AL | imm8; resultflags(AL); }
+:OR  AX,imm16           is byte=0xd; AX & imm16                        { logicalflags(); AX = AX | imm16; resultflags(AX); }
+:OR  Rmr8,imm8          is (byte=0x80 | byte=0x82); mod=3 & Rmr8 & reg_opcode=1; imm8 { logicalflags(); Rmr8 = Rmr8 | imm8; resultflags(Rmr8); }
+:OR  Rmr16,imm16        is byte=0x81; mod=3 & Rmr16 & reg_opcode=1; imm16 { logicalflags(); Rmr16 = Rmr16 | imm16; resultflags(Rmr16); }
+:OR  Rmr16,usimm8_16    is byte=0x83; mod=3 & Rmr16 & reg_opcode=1; usimm8_16 { logicalflags(); Rmr16 = Rmr16 | usimm8_16; resultflags(Rmr16); }
+:OR  Rmr8,Reg8          is byte=0x8; mod=3 & Rmr8 & Reg8                { logicalflags(); Rmr8 = Rmr8 | Reg8; resultflags(Rmr8); }
+:OR  Rmr16,Reg16        is byte=0x9; mod=3 & Rmr16 & Reg16              { logicalflags(); Rmr16 = Rmr16 | Reg16; resultflags(Rmr16); }
+:OR  Reg8,rm8           is byte=0xa; rm8 & Reg8 ...                     { logicalflags(); Reg8 = Reg8 | rm8; resultflags(Reg8); }
+:OR  Reg16,rm16         is byte=0xb; rm16 & Reg16 ...                   { logicalflags(); Reg16 = Reg16 | rm16; resultflags(Reg16); }
+:OR^lockx m8,imm8       is lockx & unlock & (byte=0x80 | byte=0x82); m8 & reg_opcode=1 ...; imm8 { build lockx; build m8; logicalflags(); m8 = m8 | imm8; resultflags(m8); build unlock; }
+:OR^lockx m16,imm16     is lockx & unlock & byte=0x81; m16 & reg_opcode=1 ...; imm16 { build lockx; build m16; logicalflags(); m16 = m16 | imm16; resultflags(m16); build unlock; }
+:OR^lockx m16,usimm8_16 is lockx & unlock & byte=0x83; m16 & reg_opcode=1 ...; usimm8_16 { build lockx; build m16; logicalflags(); m16 = m16 | usimm8_16; resultflags(m16); build unlock; }
+:OR^lockx m8,Reg8       is lockx & unlock & byte=0x8; m8 & Reg8 ...     { build lockx; build m8; logicalflags(); m8 = m8 | Reg8; resultflags(m8); build unlock; }
+:OR^lockx m16,Reg16     is lockx & unlock & byte=0x9; m16 & Reg16 ...   { build lockx; build m16; logicalflags(); m16 = m16 | Reg16; resultflags(m16); build unlock; }
+
+:ADC AL,imm8            is byte=0x14; AL & imm8                        { addCarryFlags(AL, imm8:1); resultflags(AL); }
+:ADC AX,imm16           is byte=0x15; AX & imm16                       { addCarryFlags(AX, imm16:2); resultflags(AX); }
+:ADC Rmr8,imm8          is (byte=0x80 | byte=0x82); mod=3 & Rmr8 & reg_opcode=2; imm8 { addCarryFlags(Rmr8, imm8:1); resultflags(Rmr8); }
+:ADC Rmr16,imm16        is byte=0x81; mod=3 & Rmr16 & reg_opcode=2; imm16 { addCarryFlags(Rmr16, imm16:2); resultflags(Rmr16); }
+:ADC Rmr16,simm8_16     is byte=0x83; mod=3 & Rmr16 & reg_opcode=2; simm8_16 { addCarryFlags(Rmr16, simm8_16); resultflags(Rmr16); }
+:ADC Rmr8,Reg8          is byte=0x10; mod=3 & Rmr8 & Reg8               { addCarryFlags(Rmr8, Reg8); resultflags(Rmr8); }
+:ADC Rmr16,Reg16        is byte=0x11; mod=3 & Rmr16 & Reg16             { addCarryFlags(Rmr16, Reg16); resultflags(Rmr16); }
+:ADC Reg8,rm8           is byte=0x12; rm8 & Reg8 ...                    { addCarryFlags(Reg8, rm8); resultflags(Reg8); }
+:ADC Reg16,rm16         is byte=0x13; rm16 & Reg16 ...                  { addCarryFlags(Reg16, rm16); resultflags(Reg16); }
+:ADC^lockx m8,imm8      is lockx & unlock & (byte=0x80 | byte=0x82); m8 & reg_opcode=2 ...; imm8 { build lockx; build m8; addCarryFlags(m8, imm8:1); resultflags(m8); build unlock; }
+:ADC^lockx m16,imm16    is lockx & unlock & byte=0x81; m16 & reg_opcode=2 ...; imm16 { build lockx; build m16; addCarryFlags(m16, imm16:2); resultflags(m16); build unlock; }
+:ADC^lockx m16,simm8_16 is lockx & unlock & byte=0x83; m16 & reg_opcode=2 ...; simm8_16 { build lockx; build m16; addCarryFlags(m16, simm8_16); resultflags(m16); build unlock; }
+:ADC^lockx m8,Reg8      is lockx & unlock & byte=0x10; m8 & Reg8 ...    { build lockx; build m8; addCarryFlags(m8, Reg8); resultflags(m8); build unlock; }
+:ADC^lockx m16,Reg16    is lockx & unlock & byte=0x11; m16 & Reg16 ...  { build lockx; build m16; addCarryFlags(m16, Reg16); resultflags(m16); build unlock; }
+
+:SBB  AL,imm8           is byte=0x1c; AL & imm8                        { subCarryFlags(AL, imm8); resultflags(AL); }
+:SBB  AX,imm16          is byte=0x1d; AX & imm16                       { subCarryFlags(AX, imm16); resultflags(AX); }
+:SBB  Rmr8,imm8         is (byte=0x80 | byte=0x82); mod=3 & Rmr8 & reg_opcode=3; imm8 { subCarryFlags(Rmr8, imm8); resultflags(Rmr8); }
+:SBB  Rmr16,imm16       is byte=0x81; mod=3 & Rmr16 & reg_opcode=3; imm16 { subCarryFlags(Rmr16, imm16); resultflags(Rmr16); }
+:SBB  Rmr16,simm8_16    is byte=0x83; mod=3 & Rmr16 & reg_opcode=3; simm8_16 { subCarryFlags(Rmr16, simm8_16); resultflags(Rmr16); }
+:SBB  Rmr8,Reg8         is byte=0x18; mod=3 & Rmr8 & Reg8               { subCarryFlags(Rmr8, Reg8); resultflags(Rmr8); }
+:SBB  Rmr16,Reg16       is byte=0x19; mod=3 & Rmr16 & Reg16             { subCarryFlags(Rmr16, Reg16); resultflags(Rmr16); }
+:SBB  Reg8,rm8          is byte=0x1a; rm8 & Reg8 ...                    { subCarryFlags(Reg8, rm8); resultflags(Reg8); }
+:SBB  Reg16,rm16        is byte=0x1b; rm16 & Reg16 ...                  { subCarryFlags(Reg16, rm16); resultflags(Reg16); }
+:SBB^lockx  m8,imm8     is lockx & unlock & (byte=0x80 | byte=0x82); m8 & reg_opcode=3 ...; imm8 { build lockx; build m8; subCarryFlags(m8, imm8); resultflags(m8); build unlock; }
+:SBB^lockx  m16,imm16   is lockx & unlock & byte=0x81; m16 & reg_opcode=3 ...; imm16 { build lockx; build m16; subCarryFlags(m16, imm16); resultflags(m16); build unlock; }
+:SBB^lockx  m16,simm8_16 is lockx & unlock & byte=0x83; m16 & reg_opcode=3 ...; simm8_16 { build lockx; build m16; subCarryFlags(m16, simm8_16); resultflags(m16); build unlock; }
+:SBB^lockx  m8,Reg8     is lockx & unlock & byte=0x18; m8 & Reg8 ...    { build lockx; build m8; subCarryFlags(m8, Reg8); resultflags(m8); build unlock; }
+:SBB^lockx  m16,Reg16   is lockx & unlock & byte=0x19; m16 & Reg16 ...  { build lockx; build m16; subCarryFlags(m16, Reg16); resultflags(m16); build unlock; }
+
+:AND AL,imm8            is byte=0x24; AL & imm8                        { logicalflags(); AL = AL & imm8; resultflags(AL); }
+:AND AX,imm16           is byte=0x25; AX & imm16                       { logicalflags(); AX = AX & imm16; resultflags(AX); }
+:AND Rmr8,imm8          is (byte=0x80 | byte=0x82); mod=3 & Rmr8 & reg_opcode=4; imm8 { logicalflags(); Rmr8 = Rmr8 & imm8; resultflags(Rmr8); }
+:AND Rmr16,imm16        is byte=0x81; mod=3 & Rmr16 & reg_opcode=4; imm16 { logicalflags(); Rmr16 = Rmr16 & imm16; resultflags(Rmr16); }
+:AND Rmr16,usimm8_16    is byte=0x83; mod=3 & Rmr16 & reg_opcode=4; usimm8_16 { logicalflags(); Rmr16 = Rmr16 & usimm8_16; resultflags(Rmr16); }
+:AND Rmr8,Reg8          is byte=0x20; mod=3 & Rmr8 & Reg8               { logicalflags(); Rmr8 = Rmr8 & Reg8; resultflags(Rmr8); }
+:AND Rmr16,Reg16        is byte=0x21; mod=3 & Rmr16 & Reg16             { logicalflags(); Rmr16 = Rmr16 & Reg16; resultflags(Rmr16); }
+:AND Reg8,rm8           is byte=0x22; rm8 & Reg8 ...                    { logicalflags(); Reg8 = Reg8 & rm8; resultflags(Reg8); }
+:AND Reg16,rm16         is byte=0x23; rm16 & Reg16 ...                  { logicalflags(); Reg16 = Reg16 & rm16; resultflags(Reg16); }
+:AND^lockx m8,imm8      is lockx & unlock & (byte=0x80 | byte=0x82); m8 & reg_opcode=4 ...; imm8 { build lockx; build m8; logicalflags(); m8 = m8 & imm8; resultflags(m8); build unlock; }
+:AND^lockx m16,imm16    is lockx & unlock & byte=0x81; m16 & reg_opcode=4 ...; imm16 { build lockx; build m16; logicalflags(); m16 = m16 & imm16; resultflags(m16); build unlock; }
+:AND^lockx m16,usimm8_16 is lockx & unlock & byte=0x83; m16 & reg_opcode=4 ...; usimm8_16 { build lockx; build m16; logicalflags(); m16 = m16 & usimm8_16; resultflags(m16); build unlock; }
+:AND^lockx m8,Reg8      is lockx & unlock & byte=0x20; m8 & Reg8 ...    { build lockx; build m8; logicalflags(); m8 = m8 & Reg8; resultflags(m8); build unlock; }
+:AND^lockx m16,Reg16    is lockx & unlock & byte=0x21; m16 & Reg16 ...  { build lockx; build m16; logicalflags(); m16 = m16 & Reg16; resultflags(m16); build unlock; }
+
+:SUB  AL,imm8           is byte=0x2c; AL & imm8                        { subflags(AL,imm8); AL = AL - imm8; resultflags(AL); }
+:SUB  AX,imm16          is byte=0x2d; AX & imm16                       { subflags(AX,imm16); AX = AX - imm16; resultflags(AX); }
+:SUB  Rmr8,imm8         is (byte=0x80 | byte=0x82); mod=3 & Rmr8 & reg_opcode=5; imm8 { subflags(Rmr8,imm8); Rmr8 = Rmr8 - imm8; resultflags(Rmr8); }
+:SUB  Rmr16,imm16       is byte=0x81; mod=3 & Rmr16 & reg_opcode=5; imm16 { subflags(Rmr16,imm16); Rmr16 = Rmr16 - imm16; resultflags(Rmr16); }
+:SUB  Rmr16,simm8_16    is byte=0x83; mod=3 & Rmr16 & reg_opcode=5; simm8_16 { subflags(Rmr16,simm8_16); Rmr16 = Rmr16 - simm8_16; resultflags(Rmr16); }
+:SUB  Rmr8,Reg8         is byte=0x28; mod=3 & Rmr8 & Reg8               { subflags(Rmr8,Reg8); Rmr8 = Rmr8 - Reg8; resultflags(Rmr8); }
+:SUB  Rmr16,Reg16       is byte=0x29; mod=3 & Rmr16 & Reg16             { subflags(Rmr16,Reg16); Rmr16 = Rmr16 - Reg16; resultflags(Rmr16); }
+:SUB  Reg8,rm8          is byte=0x2a; rm8 & Reg8 ...                    { subflags(Reg8,rm8); Reg8 = Reg8 - rm8; resultflags(Reg8); }
+:SUB  Reg16,rm16        is byte=0x2b; rm16 & Reg16 ...                  { subflags(Reg16,rm16); Reg16 = Reg16 - rm16; resultflags(Reg16); }
+:SUB^lockx  m8,imm8     is lockx & unlock & (byte=0x80 | byte=0x82); m8 & reg_opcode=5 ...; imm8 { build lockx; build m8; subflags(m8,imm8); m8 = m8 - imm8; resultflags(m8); build unlock; }
+:SUB^lockx m16,imm16    is lockx & unlock & byte=0x81; m16 & reg_opcode=5 ...; imm16 { build lockx; build m16; subflags(m16,imm16); m16 = m16 - imm16; resultflags(m16); build unlock; }
+:SUB^lockx m16,simm8_16 is lockx & unlock & byte=0x83; m16 & reg_opcode=5 ...; simm8_16 { build lockx; build m16; subflags(m16,simm8_16); m16 = m16 - simm8_16; resultflags(m16); build unlock; }
+:SUB^lockx  m8,Reg8     is lockx & unlock & byte=0x28; m8 & Reg8 ...    { build lockx; build m8; subflags(m8,Reg8); m8 = m8 - Reg8; resultflags(m8); build unlock; }
+:SUB^lockx  m16,Reg16   is lockx & unlock & byte=0x29; m16 & Reg16 ...  { build lockx; build m16; subflags(m16,Reg16); m16 = m16 - Reg16; resultflags(m16); build unlock; }
+
+:XOR AL,imm8            is byte=0x34; AL & imm8                        { logicalflags(); AL = AL ^ imm8; resultflags(AL); }
+:XOR AX,imm16           is byte=0x35; AX & imm16                       { logicalflags(); AX = AX ^ imm16; resultflags(AX); }
+:XOR Rmr8,imm8          is (byte=0x80 | byte=0x82); mod=3 & Rmr8 & reg_opcode=6; imm8 { logicalflags(); Rmr8 = Rmr8 ^ imm8; resultflags(Rmr8); }
+:XOR Rmr16,imm16        is byte=0x81; mod=3 & Rmr16 & reg_opcode=6; imm16 { logicalflags(); Rmr16 = Rmr16 ^ imm16; resultflags(Rmr16); }
+:XOR Rmr16,usimm8_16    is byte=0x83; mod=3 & Rmr16 & reg_opcode=6; usimm8_16 { logicalflags(); Rmr16 = Rmr16 ^ usimm8_16; resultflags(Rmr16); }
+:XOR Rmr8,Reg8          is byte=0x30; mod=3 & Rmr8 & Reg8               { logicalflags(); Rmr8 = Rmr8 ^ Reg8; resultflags(Rmr8); }
+:XOR Rmr16,Reg16        is byte=0x31; mod=3 & Rmr16 & Reg16             { logicalflags(); Rmr16 = Rmr16 ^ Reg16; resultflags(Rmr16); }
+:XOR Reg8,rm8           is byte=0x32; rm8 & Reg8 ...                    { logicalflags(); Reg8 = Reg8 ^ rm8; resultflags(Reg8); }
+:XOR Reg16,rm16         is byte=0x33; rm16 & Reg16 ...                  { logicalflags(); Reg16 = Reg16 ^ rm16; resultflags(Reg16); }
+:XOR^lockx m8,imm8      is lockx & unlock & (byte=0x80 | byte=0x82); m8 & reg_opcode=6 ...; imm8 { build lockx; build m8; logicalflags(); m8 = m8 ^ imm8; resultflags(m8); build unlock; }
+:XOR^lockx m16,imm16    is lockx & unlock & byte=0x81; m16 & reg_opcode=6 ...; imm16 { build lockx; build m16; logicalflags(); m16 = m16 ^ imm16; resultflags(m16); build unlock; }
+:XOR^lockx m16,usimm8_16 is lockx & unlock & byte=0x83; m16 & reg_opcode=6 ...; usimm8_16 { build lockx; build m16; logicalflags(); m16 = m16 ^ usimm8_16; resultflags(m16); build unlock; }
+:XOR^lockx m8,Reg8      is lockx & unlock & byte=0x30; m8 & Reg8 ...    { build lockx; build m8; logicalflags(); m8 = m8 ^ Reg8; resultflags(m8); build unlock; }
+:XOR^lockx m16,Reg16    is lockx & unlock & byte=0x31; m16 & Reg16 ...  { build lockx; build m16; logicalflags(); m16 = m16 ^ Reg16; resultflags(m16); build unlock; }
+
+:CMP AL,imm8            is byte=0x3c; AL & imm8                        { subflags(AL,imm8); local tmp = AL - imm8; resultflags(tmp); }
+:CMP AX,imm16           is byte=0x3d; AX & imm16                       { subflags(AX,imm16); local tmp = AX - imm16; resultflags(tmp); }
+:CMP rm8,imm8           is (byte=0x80 | byte=0x82); rm8 & reg_opcode=7 ...; imm8 { local temp:1 = rm8; subflags(temp,imm8); local diff = temp - imm8; resultflags(diff); }
+:CMP rm16,imm16         is byte=0x81; rm16 & reg_opcode=7 ...; imm16   { local temp:2 = rm16; subflags(temp,imm16); local diff = temp - imm16; resultflags(diff); }
+:CMP rm16,simm8_16      is byte=0x83; rm16 & reg_opcode=7 ...; simm8_16 { local temp:2 = rm16; subflags(temp,simm8_16); local diff = temp - simm8_16; resultflags(diff); }
+:CMP rm8,Reg8           is byte=0x38; rm8 & Reg8 ...                    { local temp:1 = rm8; subflags(temp,Reg8); local diff = temp - Reg8; resultflags(diff); }
+:CMP rm16,Reg16         is byte=0x39; rm16 & Reg16 ...                  { local temp:2 = rm16; subflags(temp,Reg16); local diff = temp - Reg16; resultflags(diff); }
+:CMP Reg8,rm8           is byte=0x3a; rm8 & Reg8 ...                    { local temp:1 = rm8; subflags(Reg8,temp); local diff = Reg8 - temp; resultflags(diff); }
+:CMP Reg16,rm16         is byte=0x3b; rm16 & Reg16 ...                  { local temp:2 = rm16; subflags(Reg16,temp); local diff = Reg16 - temp; resultflags(diff); }
+
+# ===== Segment register push/pop (06 07 0E 16 17 1E 1F). 0F is NOT POP CS [ST:5355-5357] ====
+# SOURCE-CONFLICT (brief 10 #5): interrupts are inhibited for one instruction after MOV/POP to
+#   any sreg per STSWS [ST:4096-4100], to SS only per the datasheet/WSdev [DS:2843], [WN:43].
+#   No p-code effect (interrupt delivery is an emulator concern); not modelled here.
+:PUSH ES        is byte=0x6 & ES                { push22(ES); }
+:POP ES         is byte=0x7 & ES                { pop22(ES); }
+# PUSH CS pushes the context code segment (csval), not a value derived from the address.
+:PUSH currentCS  is byte=0xe & currentCS         { push22(currentCS); }
+:PUSH SS        is byte=0x16 & SS               { push22(SS); }
+:POP SS         is byte=0x17 & SS               { pop22(SS); }
+:PUSH DS        is byte=0x1e & DS               { push22(DS); }
+:POP DS         is byte=0x1f & DS               { pop22(DS); }
+
+# ===== BCD ================================================================================
+# Flag results per the hardware test ROM [CTR DAA/DAS/AAA/AAS/AAM/AAD] (WSCpuTest README; see docs/SOURCES.md)
+# and Mesen 2 (passes it; reference only).
+# DAA/DAS: AF/CF come only from the two comparisons; OF = signed overflow of either adjustment
+#   step (+-6, +-60h); SF/ZF/PF from the result.
+# SOURCE-CONFLICT (DAS algorithm, brief 10 #9): STSWS adjusts the low nibble first and then
+#   tests AL>9Fh [ST:6457-6497]; WSCpuTest (hardware) tests AL>99h first [CT:238]. The hardware
+#   ordering (AL>99h on the original AL, as below) is used.
+:DAA            is byte=0x27 { local oldAL = AL;
+                               local oldCF = CF;
+                               local car = ((AL & 0xf) > 9) | AF;
+                               OF = car & scarry(AL, 6:1);
+                               AL = AL + 6 * car;
+                               AF = car;
+                               car = (oldAL > 0x99) | oldCF;
+                               OF = OF | (car & scarry(AL, 0x60:1));
+                               AL = AL + 0x60 * car;
+                               CF = car;
+                               resultflags(AL); }
+:DAS            is byte=0x2f { local oldAL = AL;
+                               local oldCF = CF;
+                               local car = ((AL & 0xf) > 9) | AF;
+                               OF = car & sborrow(AL, 6:1);
+                               AL = AL - 6 * car;
+                               AF = car;
+                               car = (oldAL > 0x99) | oldCF;
+                               OF = OF | (car & sborrow(AL, 0x60:1));
+                               AL = AL - 0x60 * car;
+                               CF = car;
+                               resultflags(AL); }
+# AAA/AAS: AF = CF = ZF = adjust condition, SF = !adjust, OF = 0, PF = 1; AL keeps the low
+# nibble [CTR AAA/AAS].
+:AAA            is byte=0x37 { local car = ((AL & 0xf) > 9) | AF; AL = (AL+6*car)&0xf; AH=AH+car;
+                               CF=car; AF=car; ZF=car; SF=!car; OF=0; PF=1; }
+:AAS            is byte=0x3f { local car = ((AL & 0xf) > 9) | AF; AL = (AL-6*car)&0xf; AH=AH-car;
+                               CF=car; AF=car; ZF=car; SF=!car; OF=0; PF=1; }
+
+# AAM/AAD: the immediate is a real divisor / multiplier [ST:7003-7006], [ST:7077-7081], [CT:217,230].
+# AAD: AL = AL + low byte of (AH*imm), AH = 0; all six flags are those of that 8-bit addition
+#   [CTR AAD]. AAM: AF, CF, OF cleared; PF/ZF/SF from AL (the remainder) [CTR AAM].
+# AAM with imm8 = 0 raises INT 0 (divtrap) and leaves AX unchanged [ST:6971-6976], [CT:221-225]; on that
+# path AF, PF, SF are cleared, CF = OF = MULOV (last multiplication), ZF = (AL <= 3Fh).
+# SOURCE-CONFLICT (brief 10 #10): STSWS says AX is undefined after the fault; WSCpuTest
+#   (hardware) shows it unchanged -> AX is left unchanged.
+# SOURCE-CONFLICT (AAM 0 ZF): the WSCpuTest README text says "Zero is set if bit 6 or 7 of AL is
+#   set (AL > 0x3F)"; Mesen 2, which passes the ROM's AAM test, sets it when AL <= 3Fh, and so
+#   does this spec (the ROM's expected value is what is checked, not the README prose).
+:AAD imm8       is byte=0xd5; imm8          { local prod:1 = AH * imm8; addflags(prod, AL); AL = prod + AL; AH = 0; resultflags(AL); }
+:AAM imm8       is byte=0xd4; imm8          { AH = AL/imm8; AL = AL % imm8; logicalflags(); resultflags(AL); }
+:AAM imm8       is byte=0xd4; imm8 & imm8z=0{ AF = 0; PF = 0; SF = 0; ZF = AL <= 0x3f; CF = MULOV; OF = MULOV;
+                                              divtrap(); }
+
+# ===== INC / DEC / PUSH / POP register (40-5F) =============================================
+:INC Rmr16      is row=4 & page=0 & Rmr16   { incflags(Rmr16); Rmr16 = Rmr16 + 1; resultflags(Rmr16); }
+:DEC Rmr16      is row=4 & page=1 & Rmr16   { decflags(Rmr16); Rmr16 = Rmr16 - 1; resultflags(Rmr16); }
+:PUSH Rmr16     is row=5 & page=0 & Rmr16   { push22(Rmr16); }
+# V30MZ PUSH SP stores the DECREMENTED SP (8086 behaviour) [CT:258-265]; Ghidra x86 stores the
+# old value [IA:1945-1948].
+# SOURCE-CONFLICT: STSWS calls the behaviour "anomalous ... needs to be investigated"
+#   [ST:5444-5446]; the hardware test ROM [CT:258-265] settles it -> new SP is pushed.
+:PUSH SP        is byte=0x54 & SP           { SP = SP - 2; tmp:4 = segment(SS,SP); *:2 tmp = SP; }
+:POP Rmr16      is row=5 & page=1 & Rmr16   { local val:2 = 0; pop22(val); Rmr16 = val; }
+# POP SP: SP = [SS:SP], no visible post-increment [CT:267-270].
+:POP SP         is byte=0x5c & SP           { tmp:4 = segment(SS,SP); SP = *:2 tmp; }
+
+# ===== 80186 (60-6F) ======================================================================
+# PUSHA pushes the original SP; POPA discards the SP slot [ST:5541-5565], [ST:5384-5414].
+:PUSHA          is byte=0x60 { local tmp=SP; push22(AX); push22(CX); push22(DX); push22(BX); push22(tmp); push22(BP); push22(SI); push22(DI); }
+:POPA           is byte=0x61 { pop22(DI); pop22(SI); pop22(BP); tmp:2=0; pop22(tmp); pop22(BX); pop22(DX); pop22(CX); pop22(AX); }
+# BOUND (CHKIND): signed compare, INT 5 when out of range; the pushed IP is the next instruction
+# [ST:10264-10290], [ST:4271-4275], [CT:273-275]. Memory form only here; mod=11 is decoded only
+# under hwundef=1 (length resolved, effect a v30mz_undefined placeholder; see v30mz_hwundef.sinc).
+:BOUND Reg16,bnd16 is byte=0x62; bnd16 & Reg16 ... {
+    local lo:2 = *:2 bnd16;
+    local hiaddr:4 = bnd16 + 2;
+    local hi:2 = *:2 hiaddr;
+    if ((Reg16 s>= lo) && (Reg16 s<= hi)) goto inst_next;
+    tmp:1 = 0x5;
+    intloc:4 = swi(tmp);
+    call [intloc];
+}
+:PUSH simm16_16 is byte=0x68; simm16_16     { tmp:2=simm16_16; push22(tmp); }
+:IMUL Reg16,rm16,simm16_16 is byte=0x69; (rm16 & Reg16 ...); simm16_16 { tmp:4 = sext(rm16) * sext(simm16_16);
+                                          Reg16 = tmp(0); imultflags(Reg16,tmp); }
+:PUSH simm8_16  is byte=0x6a; simm8_16      { tmp:2=simm8_16; push22(tmp); }
+:IMUL Reg16,rm16,simm8_16 is byte=0x6b; (rm16 & Reg16 ...); simm8_16 { tmp:4 = sext(rm16) * sext(simm8_16);
+                                          Reg16 = tmp(0); imultflags(Reg16,tmp); }
+:INSB^rep^reptail eseDI1,DX is rep & reptail & byte=0x6c & eseDI1 & DX { build rep; build eseDI1; eseDI1 = *[io]:1 DX; build reptail; }
+:INSW^rep^reptail eseDI2,DX is rep & reptail & byte=0x6d & eseDI2 & DX { build rep; build eseDI2; eseDI2 = *[io]:2 DX; build reptail; }
+# INS/OUTS: io-space load/store at port DX combined with the ES:DI / seg:SI memory access.
+:OUTSB^rep^reptail DX,dseSI1 is rep & reptail & byte=0x6e & DX & dseSI1 { build rep; build dseSI1; *[io]:1 DX = dseSI1; build reptail; }
+:OUTSW^rep^reptail DX,dseSI2 is rep & reptail & byte=0x6f & DX & dseSI2 { build rep; build dseSI2; *[io]:2 DX = dseSI2; build reptail; }
+
+# ===== Jcc rel8 (70-7F) ===================================================================
+:J^cc jccRel8   is row=7 & cc; jccRel8      { if (cc) goto jccRel8; }
+
+# ===== TEST / XCHG / MOV (84-8F) ===========================================================
+:TEST  rm8,Reg8     is byte=0x84; rm8 & Reg8 ...   { logicalflags(); local tmp = rm8 & Reg8; resultflags(tmp); }
+:TEST rm16,Reg16    is byte=0x85; rm16 & Reg16 ... { logicalflags(); local tmp = rm16 & Reg16; resultflags(tmp); }
+
+:XCHG  Rmr8,Reg8    is byte=0x86; mod=3 & Rmr8 & Reg8   { local tmp = Rmr8; Rmr8 = Reg8; Reg8 = tmp; }
+:XCHG Rmr16,Reg16   is byte=0x87; mod=3 & Rmr16 & Reg16 { local tmp = Rmr16; Rmr16 = Reg16; Reg16 = tmp; }
+# XCHG with memory asserts the bus lock regardless of prefix (as in lockable.sinc). The x86
+# XACQUIRE/XRELEASE hint display (F2/F3) is not applicable to the V30MZ (F2/F3 are REP here).
+:XCHG^alwaysLock m8,Reg8   is alwaysLock & byte=0x86; m8 & Reg8 ...   { build alwaysLock; build m8; local tmp = m8; m8 = Reg8; Reg8 = tmp; UNLOCK(); }
+:XCHG^alwaysLock m16,Reg16 is alwaysLock & byte=0x87; m16 & Reg16 ... { build alwaysLock; build m16; local tmp = m16; m16 = Reg16; Reg16 = tmp; UNLOCK(); }
+
+:MOV Rmr8,Reg8      is byte=0x88; mod=3 & Rmr8 & Reg8   { Rmr8=Reg8; }
+:MOV m8,Reg8        is byte=0x88; m8 & Reg8 ...         { m8=Reg8; }
+:MOV Rmr16,Reg16    is byte=0x89; mod=3 & Rmr16 & Reg16 { Rmr16=Reg16; }
+:MOV m16,Reg16      is byte=0x89; m16 & Reg16 ...       { m16=Reg16; }
+:MOV Reg8,rm8       is byte=0x8a; rm8 & Reg8 ...        { Reg8 = rm8; }
+:MOV Reg16,rm16     is byte=0x8b; rm16 & Reg16 ...      { Reg16 = rm16; }
+
+# MOV r/m16,Sreg and MOV Sreg,r/m16. The sreg field is ModRM bits 4:3 [CT:287-289]. Strict
+# mode only accepts bit 5 = 0 (reg 4..7 would alias ES..DS; see hwundef). MOV CS,r/m (8E /1)
+# is a no-op on the V30MZ [ST:5136-5138] and is only decoded under hwundef=1.
+:MOV m16,sreg2      is byte=0x8c; (mod != 3 & reg_opcode_hb=0 & sreg2) ... & m16   { m16 = sreg2; }
+:MOV Rmr16,sreg2    is byte=0x8c; mod=3 & reg_opcode_hb=0 & Rmr16 & sreg2          { Rmr16 = sreg2; }
+:MOV sreg2,m16      is byte=0x8e; (mod != 3 & reg_opcode_hb=0 & sreg2 & (sreg2=0 | sreg2=2 | sreg2=3)) ... & m16 { sreg2 = m16; }
+:MOV sreg2,Rmr16    is byte=0x8e; mod=3 & reg_opcode_hb=0 & Rmr16 & sreg2 & (sreg2=0 | sreg2=2 | sreg2=3) { sreg2 = Rmr16; }
+
+# LEA: memory form only here. RESOLVED (CT + ARMV30MZ + Mesen2 + ares): mod=11 is a 2-byte
+# form with new base+index modes, decoded only under hwundef=1 (see v30mz_hwundef.sinc).
+:LEA Reg16,addr16   is byte=0x8D; addr16 & Reg16 ...    { Reg16 = addr16; }
+
+# POP r/m16 (8F /0).
+# RESOLVED (ARMV30MZ + Mesen2 + ares, see v30mz_hwundef.sinc): 8F /1-/7 act as 8F /0 (POP);
+# decoded only under hwundef=1.
+:POP rm16           is byte=0x8f; rm16 & reg_opcode=0 ... { local val:2 = 0; pop22(val); build rm16; rm16 = val; }
+:POP Rmr16          is byte=0x8f; mod=3 & reg_opcode=0 & r_m=4 & Rmr16 { tmp:4 = segment(SS,SP); SP = *:2 tmp; }
+
+# ===== 90-9F ================================================================================
+# NOP. F3 90 is plain REP NOP on the V30MZ (Ghidra x86 shows PAUSE).
+:NOP                is byte=0x90 { }
+:XCHG   AX,Rmr16    is row=9 & page=0 & AX & Rmr16 { local tmp = AX; AX = Rmr16; Rmr16 = tmp; }
+:CBW                is byte=0x98 { AX = sext(AL); }
+:CWD                is byte=0x99 { tmp:4 = sext(AX); DX = tmp(2); }
+# Far calls push the caller's CS:IP from the context (csval) and, after the call returns,
+# restore CS = caller's CS (the callee's RETF does this; stating it lets the decompiler keep
+# CS known across the call -- an emulator never executes p-code after a taken CALL).
+:CALLF ptr1616      is byte=0x9a; ptr1616; farRetIP & farRetCS { push22(farRetCS); build ptr1616; push22(farRetIP); call ptr1616; CS = farRetCS; }
+# WAIT/POLL: a NOP on the WonderSwan (POLL pin held low) [CT:307-309], [ST:10640-10647].
+# SOURCE-CONFLICT (brief 10 #3): the STSWS map/page define POLL as a NOP [ST:13222], [ST:10640]
+#   while its exception notes say it is treated as undefined [ST:4384-4385]. Same effect;
+#   decoded as WAIT (1 byte). Ghidra x86 instead fuses 9B with a following x87 opcode.
+:WAIT               is byte=0x9b { }
+:PUSHF              is byte=0x9c { packflags(flags); push22(flags); }
+:POPF               is byte=0x9d { pop22(flags); unpackflags(flags); }
+:SAHF               is byte=0x9e { SF = (AH & 0x80) != 0;
+                                   ZF = (AH & 0x40) != 0;
+                                   AF = (AH & 0x10) != 0;
+                                   PF = (AH & 0x04) != 0;
+                                   CF = (AH & 0x01) != 0; }
+:LAHF               is byte=0x9f { AH=(SF<<7)|(ZF<<6)|(AF<<4)|(PF<<2)|2|CF; }
+
+# ===== A0-AF ================================================================================
+:MOV AL,moffs8      is byte=0xa0; AL & moffs8  { AL=moffs8; }
+:MOV AX,moffs16     is byte=0xa1; AX & moffs16 { AX=moffs16; }
+:MOV moffs8,AL      is byte=0xa2; AL & moffs8  { moffs8=AL; }
+:MOV moffs16,AX     is byte=0xa3; AX & moffs16 { moffs16=AX; }
+:MOVSB^rep^reptail eseDI1,dseSI1 is rep & reptail & byte=0xa4 & eseDI1 & dseSI1 { build rep; build eseDI1; build dseSI1; eseDI1 = dseSI1; build reptail; }
+:MOVSW^rep^reptail eseDI2,dseSI2 is rep & reptail & byte=0xa5 & eseDI2 & dseSI2 { build rep; build eseDI2; build dseSI2; eseDI2 = dseSI2; build reptail; }
+# CMPS: SI operand - DI operand, read SI first [ST:11715-11717], [DS:554-556].
+:CMPSB^repe^repetail eseDI1,dseSI1 is repe & repetail & byte=0xa6 & dseSI1 & eseDI1 { build repe; build dseSI1; build eseDI1; local temp_DI1:1 = eseDI1; local temp_SI1:1 = dseSI1; subflags(temp_SI1,temp_DI1); local diff=temp_SI1 - temp_DI1; resultflags(diff); build repetail; }
+:CMPSW^repe^repetail eseDI2,dseSI2 is repe & repetail & byte=0xa7 & dseSI2 & eseDI2 { build repe; build dseSI2; build eseDI2; local temp_DI2:2 = eseDI2; local temp_SI2:2 = dseSI2; subflags(temp_SI2,temp_DI2); local diff=temp_SI2 - temp_DI2; resultflags(diff); build repetail; }
+:TEST   AL,imm8     is byte=0xA8; AL & imm8   { logicalflags(); local tmp = AL & imm8; resultflags(tmp); }
+:TEST   AX,imm16    is byte=0xA9; AX & imm16  { logicalflags(); local tmp = AX & imm16; resultflags(tmp); }
+:STOSB^rep^reptail eseDI1 is rep & reptail & byte=0xaa & eseDI1 { build rep; build eseDI1; eseDI1=AL; build reptail; }
+:STOSW^rep^reptail eseDI2 is rep & reptail & byte=0xab & eseDI2 { build rep; build eseDI2; eseDI2=AX; build reptail; }
+:LODSB^rep^reptail dseSI1 is rep & reptail & byte=0xAC & dseSI1 { build rep; build dseSI1; AL=dseSI1; build reptail; }
+:LODSW^rep^reptail dseSI2 is rep & reptail & byte=0xAD & dseSI2 { build rep; build dseSI2; AX=dseSI2; build reptail; }
+:SCASB^repe^repetail eseDI1 is repe & repetail & byte=0xae & eseDI1 { build repe; build eseDI1; subflags(AL,eseDI1); local diff=AL-eseDI1; resultflags(diff); build repetail; }
+:SCASW^repe^repetail eseDI2 is repe & repetail & byte=0xaf & eseDI2 { build repe; build eseDI2; subflags(AX,eseDI2); local diff=AX-eseDI2; resultflags(diff); build repetail; }
+
+# ===== B0-BF ================================================================================
+:MOV CRmr8,imm8     is row=11 & page=0 & CRmr8; imm8   { CRmr8 = imm8; }
+:MOV CRmr16,imm16   is row=11 & page=1 & CRmr16; imm16 { CRmr16 = imm16; }
+
+# ===== Shift / rotate group 2: C0 C1 (imm8, 80186) D0 D1 (1) D2 D3 (CL) ======================
+# Count masked to 5 bits [ST:8537], [DS:547]; a memory operand is written even for count 0
+# [ST:8540-8541]. /6 is undefined (writes 0) -> hwundef only.
+:ROL  rm8,n1        is byte=0xD0; rm8 & n1 & reg_opcode=0 ...       { CF = rm8 s< 0; rm8 = (rm8 << 1) | CF; OF = CF ^ (rm8 s< 0); }
+:ROL  rm8,CL        is byte=0xD2; CL & rm8 & reg_opcode=0 ...       { local cnt = CL & 0x7; local count_and_mask = CL & 0x1f; rm8 = (rm8 << cnt) | (rm8 >> (8 - cnt)); rolflags(rm8, count_and_mask); }
+:ROL  rm8,imm8      is byte=0xC0; rm8 & reg_opcode=0 ... ; imm8     { local cnt = imm8 & 0x7; rm8 = (rm8 << cnt) | (rm8 >> (8 - cnt)); rolflags(rm8,imm8 & 0x1f:1); }
+:ROL rm16,n1        is byte=0xD1; rm16 & n1 & reg_opcode=0 ...      { CF = rm16 s< 0; rm16 = (rm16 << 1) | zext(CF); OF = CF ^ (rm16 s< 0); }
+:ROL rm16,CL        is byte=0xD3; CL & rm16 & reg_opcode=0 ...      { local cnt = CL & 0xf; local count_and_mask = CL & 0x1f; rm16 = (rm16 << cnt) | (rm16 >> (16 - cnt)); rolflags(rm16,count_and_mask); }
+:ROL rm16,imm8      is byte=0xC1; rm16 & reg_opcode=0 ... ; imm8    { local cnt = imm8 & 0xf; rm16 = (rm16 << cnt) | (rm16 >> (16 - cnt)); rolflags(rm16,imm8 & 0x1f:1); }
+
+:ROR  rm8,n1        is byte=0xD0; rm8 & n1 & reg_opcode=1 ...       { CF = rm8 & 1; rm8 = (rm8 >> 1) | (CF << 7); OF = ((rm8 & 0x40) != 0) ^ (rm8 s< 0); }
+:ROR  rm8,CL        is byte=0xD2; CL & rm8 & reg_opcode=1 ...       { local cnt = CL & 0x7; local count_and_mask = CL & 0x1f; rm8 = (rm8 >> cnt) | (rm8 << (8 - cnt)); rorflags(rm8,count_and_mask); }
+:ROR  rm8,imm8      is byte=0xC0; rm8 & reg_opcode=1 ... ; imm8     { local cnt = imm8 & 0x7; rm8 = (rm8 >> cnt) | (rm8 << (8 - cnt)); rorflags(rm8,imm8 & 0x1f:1); }
+:ROR rm16,n1        is byte=0xD1; rm16 & n1 & reg_opcode=1 ...      { CF=(rm16 & 1)!=0; rm16=(rm16>>1)|(zext(CF)<<15); OF=((rm16 & 0x4000) != 0) ^ (rm16 s< 0); }
+:ROR rm16,CL        is byte=0xD3; CL & rm16 & reg_opcode=1 ...      { local cnt = CL & 0xf; local count_and_mask = CL & 0x1f; rm16 = (rm16 >> cnt) | (rm16 << (16 - cnt)); rorflags(rm16,count_and_mask); }
+:ROR rm16,imm8      is byte=0xC1; rm16 & reg_opcode=1 ... ; imm8    { local cnt = imm8 & 0xf; rm16 = (rm16 >> cnt) | (rm16 << (16 - cnt)); rorflags(rm16,imm8 & 0x1f:1); }
+
+:RCL  rm8,n1        is byte=0xD0; rm8 & n1 & reg_opcode=2 ...       { rcl8(rm8, n1:1); }
+:RCL  rm8,CL        is byte=0xD2; CL & rm8 & reg_opcode=2 ...       { rcl8(rm8, CL); }
+:RCL  rm8,imm8      is byte=0xC0; rm8 & reg_opcode=2 ... ; imm8     { rcl8(rm8, imm8:1); }
+:RCL rm16,n1        is byte=0xD1; rm16 & n1 & reg_opcode=2 ...      { rcl16(rm16, n1:1); }
+:RCL rm16,CL        is byte=0xD3; CL & rm16 & reg_opcode=2 ...      { rcl16(rm16, CL); }
+:RCL rm16,imm8      is byte=0xC1; rm16 & reg_opcode=2 ... ; imm8    { rcl16(rm16, imm8:1); }
+
+:RCR  rm8,n1        is byte=0xD0; rm8 & n1 & reg_opcode=3 ...       { rcr8(rm8, n1:1); }
+:RCR  rm8,CL        is byte=0xD2; CL & rm8 & reg_opcode=3 ...       { rcr8(rm8, CL); }
+:RCR rm8,imm8       is byte=0xC0; rm8 & reg_opcode=3 ... ; imm8     { rcr8(rm8, imm8:1); }
+:RCR rm16,n1        is byte=0xD1; rm16 & n1 & reg_opcode=3 ...      { rcr16(rm16, n1:1); }
+:RCR rm16,CL        is byte=0xD3; CL & rm16 & reg_opcode=3 ...      { rcr16(rm16, CL); }
+:RCR rm16,imm8      is byte=0xC1; rm16 & reg_opcode=3 ... ; imm8    { rcr16(rm16, imm8:1); }
+
+:SHL  rm8,n1        is byte=0xD0; rm8 & n1 & reg_opcode=4 ...       { CF = rm8 s< 0; rm8 = rm8 << 1; OF = CF ^ (rm8 s< 0); resultflags(rm8); AF = 0; }
+:SHL  rm8,CL        is byte=0xD2; CL & rm8 & reg_opcode=4 ...       { local count = CL & 0x1f; local tmp = rm8; rm8 = rm8 << count;
+                                                                      shlflags(tmp, rm8,count); shiftresultflags(rm8,count); }
+:SHL  rm8,imm8      is byte=0xC0; rm8 & reg_opcode=4 ... ; imm8     { local count = imm8 & 0x1f; local tmp = rm8; rm8 = rm8 << count;
+                                                                      shlflags(tmp, rm8,count); shiftresultflags(rm8,count); }
+:SHL rm16,n1        is byte=0xD1; rm16 & n1 & reg_opcode=4 ...      { CF = rm16 s< 0; rm16 = rm16 << 1; OF = CF ^ (rm16 s< 0); resultflags(rm16); AF = 0; }
+:SHL rm16,CL        is byte=0xD3; CL & rm16 & reg_opcode=4 ...      { local count = CL & 0x1f; local tmp = rm16; rm16 = rm16 << count;
+                                                                      shlflags(tmp, rm16,count); shiftresultflags(rm16,count); }
+:SHL rm16,imm8      is byte=0xC1; rm16 & reg_opcode=4 ... ; imm8    { local count = imm8 & 0x1f; local tmp = rm16; rm16 = rm16 << count;
+                                                                      shlflags(tmp, rm16,count); shiftresultflags(rm16,count); }
+
+:SHR  rm8,n1        is byte=0xD0; rm8 & n1 & reg_opcode=5 ...       { CF = rm8 & 1; OF = (rm8 s< 0); rm8 = rm8 >> 1; resultflags(rm8); AF = 0; }
+:SHR  rm8,CL        is byte=0xD2; CL & rm8 & reg_opcode=5 ...       { local count = CL & 0x1f; local tmp = rm8; rm8 = rm8 >> count;
+                                                                      shrflags(tmp, rm8,count); shiftresultflags(rm8,count); }
+:SHR  rm8,imm8      is byte=0xC0; rm8 & reg_opcode=5 ... ; imm8     { local count = imm8 & 0x1f; local tmp = rm8; rm8 = rm8 >> count;
+                                                                      shrflags(tmp, rm8,count); shiftresultflags(rm8,count); }
+:SHR rm16,n1        is byte=0xD1; rm16 & n1 & reg_opcode=5 ...      { CF = (rm16 & 1) != 0; OF = (rm16 s< 0); rm16 = rm16 >> 1; resultflags(rm16); AF = 0; }
+:SHR rm16,CL        is byte=0xD3; CL & rm16 & reg_opcode=5 ...      { local count = CL & 0x1f; local tmp = rm16; rm16 = rm16 >> count;
+                                                                      shrflags(tmp, rm16,count); shiftresultflags(rm16,count); }
+:SHR rm16,imm8      is byte=0xC1; rm16 & reg_opcode=5 ... ; imm8    { local count = imm8 & 0x1f; local tmp = rm16; rm16 = rm16 >> count;
+                                                                      shrflags(tmp, rm16,count); shiftresultflags(rm16,count); }
+
+:SAR  rm8,n1        is byte=0xD0; rm8 & n1 & reg_opcode=7 ...       { CF = rm8 & 1; OF = 0; rm8 = rm8 s>> 1; resultflags(rm8); AF = 0; }
+:SAR  rm8,CL        is byte=0xD2; CL & rm8 & reg_opcode=7 ...       { local count = CL & 0x1f; local tmp = rm8; rm8 = rm8 s>> count;
+                                                                      sarflags(tmp, rm8,count); shiftresultflags(rm8,count); }
+:SAR  rm8,imm8      is byte=0xC0; rm8 & reg_opcode=7 ... ; imm8     { local count = imm8 & 0x1f; local tmp = rm8; rm8 = rm8 s>> count;
+                                                                      sarflags(tmp, rm8,count); shiftresultflags(rm8,count); }
+:SAR rm16,n1        is byte=0xD1; rm16 & n1 & reg_opcode=7 ...      { CF = (rm16 & 1) != 0; OF = 0; rm16 = rm16 s>> 1; resultflags(rm16); AF = 0; }
+:SAR rm16,CL        is byte=0xD3; CL & rm16 & reg_opcode=7 ...      { local count = CL & 0x1f; local tmp = rm16; rm16 = rm16 s>> count;
+                                                                      sarflags(tmp, rm16,count); shiftresultflags(rm16,count); }
+:SAR rm16,imm8      is byte=0xC1; rm16 & reg_opcode=7 ... ; imm8    { local count = imm8 & 0x1f; local tmp = rm16; rm16 = rm16 s>> count;
+                                                                      sarflags(tmp, rm16,count); shiftresultflags(rm16,count); }
+
+# ===== C2-CF ================================================================================
+:RET imm16          is byte=0xc2; imm16 { pop22(IP); local tgt:4 = segment(CS,IP); SP=SP+imm16; return [tgt]; }
+:RET                is byte=0xc3        { pop22(IP); local tgt:4 = segment(CS,IP); return [tgt]; }
+# LES/LDS: memory form only here. RESOLVED (CT + ARMV30MZ + Mesen2 + ares): mod=11 loads through
+# the new base+index modes; decoded only under hwundef=1 (see v30mz_hwundef.sinc).
+# Two word loads (offset, then segment at segment(base, offset+2): MemHi), not one 4-byte load: the decompiler
+# types a 4-byte value as a flat pointer into the 4-byte ram space, so a far pointer constant such as
+# C000:0000 (built on the stack, then LES) became the address 0xC0000000 and decompilation failed
+# ("Offset must be between 0x0 and 0x10ffef"; seen in LSI C-86 and Borland code).
+:LES Reg16,Mem      is byte=0xC4; Mem & MemHi & Reg16 ... { local off:2 = *:2 Mem; local sg:2 = *:2 MemHi; ES = sg; Reg16 = off; }
+:LDS Reg16,Mem      is byte=0xC5; Mem & MemHi & Reg16 ... { local off:2 = *:2 Mem; local sg:2 = *:2 MemHi; DS = sg; Reg16 = off; }
+# MOV r/m,imm (C6/C7 /0).
+# RESOLVED (ARMV30MZ + Mesen2 + ares, see v30mz_hwundef.sinc): C6/C7 /1-/7 act as /0 (MOV with
+#   imm8 / imm16); decoded only under hwundef=1.
+:MOV Rmr8,imm8      is byte=0xc6; (mod=3 & Rmr8 & reg_opcode=0); imm8    { Rmr8 = imm8; }
+:MOV m8,imm8        is byte=0xc6; m8 & reg_opcode=0 ...; imm8            { m8 = imm8; }
+:MOV Rmr16,imm16    is byte=0xc7; (mod=3 & Rmr16 & reg_opcode=0); imm16  { Rmr16 = imm16; }
+:MOV m16,imm16      is byte=0xc7; m16 & reg_opcode=0 ...; imm16          { m16 = imm16; }
+
+# ENTER (PREPARE): level = imm8 & 0x1F [ST:10695-10727], [DS:550]. Nested frame pointers are
+# copied from SS:BP (Ghidra x86 reads them through the DS/override segment).
+:ENTER imm16,enterFrames is byte=0xc8; imm16; enterFrames & low5=0x00 {
+        push22(BP);
+        BP = SP;
+        SP = SP - imm16;
+}
+:ENTER imm16,enterFrames is byte=0xc8; imm16; enterFrames & low5=0x01 {
+        push22(BP);
+        frameTemp:2 = SP;
+        push22(frameTemp);
+        BP = frameTemp;
+        SP = SP - imm16;
+}
+:ENTER imm16,enterFrames is byte=0xc8; imm16; enterFrames {
+        push22(BP);
+        frameTemp:2 = SP;
+        SPt:2 = SP;
+        BPt:2 = BP;
+        ii:1 = enterFrames - 1;
+<loop>
+        BPt = BPt - 2;
+        tmp2:4 = segment(SS,BPt);
+        SPt = SPt - 2;
+        tmp:4 = segment(SS,SPt);
+        *:2 tmp = *:2 tmp2;
+        ii = ii - 1;
+        if (ii s> 0) goto <loop>;
+        tmp_offset:2 = 2 * zext(enterFrames - 1);
+        SP = SP - tmp_offset;
+        BP = BP - tmp_offset;
+        push22(frameTemp);
+        BP = frameTemp;
+        SP = SP - imm16;
+}
+:LEAVE              is byte=0xc9 { SP = BP; pop22(BP); }
+:RETF imm16         is byte=0xca; imm16 { pop22(IP); pop22(CS); local tgt:4 = segment(CS,IP); SP=SP+imm16; return [tgt]; }
+:RETF               is byte=0xcb        { pop22(IP); pop22(CS); local tgt:4 = segment(CS,IP); return [tgt]; }
+# INT3 keeps Ghidra x86's flow (treated as a non-returning trap).
+:INT3               is byte=0xcc        { tmp:1 = 0x3; intloc:4 = swi(tmp); call [intloc]; return [0:1]; }
+:INT imm8           is byte=0xcd; imm8  { tmp:1 = imm8; intloc:4 = swi(tmp); call [intloc]; }
+:INTO               is byte=0xce {
+  tmp:1 = 0x4;
+  intloc:4 = swi(tmp);
+  if (OF != 1) goto <no_overflow>;
+    call [intloc];
+  <no_overflow>
+}
+:IRET               is byte=0xcf { pop22(IP); pop22(CS); pop22(flags); unpackflags(flags); local tgt:4 = segment(CS,IP); return [tgt]; }
+
+# ===== D4-D7 ================================================================================
+# SALC (undocumented 8086, present on V30MZ): AL = CF ? FF : 00, flags unchanged
+# [ST:4763-4774], [CT:327-329].
+:SALC               is byte=0xd6 { AL = CF * 0xff; }
+# XLAT: AL = [seg:BX + zext(AL)], offset mod 64K [ST:5687-5688].
+:XLAT seg16^BX      is seg16 & byte=0xd7; BX { local off:2 = BX + zext(AL); tmp:4 = segment(seg16,off); AL = *:1 tmp; }
+
+# ===== E0-EF ================================================================================
+:LOOPNZ rel8        is byte=0xE0; rel8 { CX = CX -1; if (CX!=0 && ZF==0) goto rel8; }
+:LOOPZ  rel8        is byte=0xE1; rel8 { CX = CX -1; if (CX!=0 && ZF!=0) goto rel8; }
+:LOOP   rel8        is byte=0xE2; rel8 { CX = CX -1; if (CX!=0) goto rel8; }
+:JCXZ rel8          is byte=0xe3; rel8 { if (CX==0) goto rel8; }
+# IN/OUT: loads/stores in the io space (see v30mz.slaspec). An emulator intercepts them as
+# io-space memory accesses.
+:IN    AL, iop8b    is AL & (byte=0xe4; iop8b) { AL = iop8b; }
+:IN    AX, iop8w    is AX & (byte=0xe5; iop8w) { AX = iop8w; }
+:OUT iop8b,AL       is byte=0xe6; iop8b & AL  { iop8b = AL; }
+:OUT iop8w,AX       is byte=0xe7; iop8w & AX  { iop8w = AX; }
+:CALL rel16         is byte=0xe8; rel16 & retIP             { push22(retIP); call rel16; }
+#  When is a Call a Jump, when it jumps right after (Ghidra x86 heuristic, kept).
+:CALL rel16         is byte=0xe8; simm16=0 & rel16 & retIP  { push22(retIP); goto rel16; }
+:JMP rel16          is byte=0xe9; rel16             { goto rel16; }
+:JMPF ptr1616       is byte=0xea; ptr1616           { goto ptr1616; }
+:JMP rel8           is byte=0xeb; rel8              { goto rel8; }
+:IN    AL, DX       is AL & DX & (byte=0xec)        { AL = *[io]:1 DX; }
+:IN    AX, DX       is AX & DX & (byte=0xed)        { AX = *[io]:2 DX; }
+:OUT DX,AL          is byte=0xee & DX & AL          { *[io]:1 DX = AL; }
+:OUT DX,AX          is byte=0xef & DX & AX          { *[io]:2 DX = AX; }
+
+# ===== F4-FD ================================================================================
+# HLT: halt() (see v30mz.slaspec). The CPU waits for any interrupt request, also with IF=0, and
+# continues with the next instruction [ST:4115-4119], [ST:4473-4475]; the p-code falls through.
+# (Ghidra x86 spins with `goto inst_start`, which makes the code after HLT unreachable.)
+:HLT                is byte=0xf4 { halt(); }
+:CMC                is byte=0xf5 { CF = CF==0; }
+:CLC                is byte=0xf8 { CF = 0; }
+:STC                is byte=0xf9 { CF = 1; }
+:CLI                is byte=0xfa { IF = 0; }
+:STI                is byte=0xfb { IF = 1; }
+:CLD                is byte=0xfc { DF = 0; }
+:STD                is byte=0xfd { DF = 1; }
+
+# ===== Group 3: F6 / F7 =====================================================================
+# /1 is undefined on the V30MZ [ST:13882-13953] (the 8086 aliases it to TEST).
+# RESOLVED (ARMV30MZ + Mesen2 + ares, see v30mz_hwundef.sinc): F6/F7 /1 is a no-op with NO
+#   immediate (2 + displacement bytes); decoded only under hwundef=1.
+:TEST  rm8,imm8     is byte=0xF6; rm8 & reg_opcode=0 ... ; imm8    { logicalflags(); local tmp = rm8 & imm8; resultflags(tmp); }
+:TEST rm16,imm16    is byte=0xF7; rm16 & reg_opcode=0 ... ; imm16  { logicalflags(); local tmp = rm16 & imm16; resultflags(tmp); }
+:NOT Rmr8           is byte=0xf6; mod=3 & Rmr8 & reg_opcode=2      { Rmr8 = ~Rmr8; }
+:NOT Rmr16          is byte=0xf7; mod=3 & Rmr16 & reg_opcode=2     { Rmr16 = ~Rmr16; }
+:NOT^lockx m8       is lockx & unlock & byte=0xf6; m8 & reg_opcode=2 ...  { build lockx; build m8; m8 = ~m8; build unlock; }
+:NOT^lockx m16      is lockx & unlock & byte=0xf7; m16 & reg_opcode=2 ... { build lockx; build m16; m16 = ~m16; build unlock; }
+:NEG Rmr8           is byte=0xf6; mod=3 & Rmr8 & reg_opcode=3      { negflags(Rmr8); Rmr8 = -Rmr8; resultflags(Rmr8); }
+:NEG Rmr16          is byte=0xf7; mod=3 & Rmr16 & reg_opcode=3     { negflags(Rmr16); Rmr16 = -Rmr16; resultflags(Rmr16); }
+:NEG^lockx m8       is lockx & unlock & byte=0xf6; m8 & reg_opcode=3 ...  { build lockx; build m8; negflags(m8); m8 = -m8; resultflags(m8); build unlock; }
+:NEG^lockx m16      is lockx & unlock & byte=0xf7; m16 & reg_opcode=3 ... { build lockx; build m16; negflags(m16); m16 = -m16; resultflags(m16); build unlock; }
+# MUL/IMUL flags: see mulflags in v30mz.slaspec [CTR MUL, IMUL].
+# SOURCE-CONFLICT (brief 10 #7): MULU's Z flag: STSWS says always set [ST:7673]; WSCpuTest says
+#   cleared on ASWAN (mono), set on SPHINX (Color) [CT:24,148-149]. Hardware wins: ZF is the
+#   `mulz` constant, chosen by the colorsoc context field (0 = mono, the default; WSMachine sets
+#   it from the cartridge's colour flag). IMUL always sets ZF.
+:MUL rm8            is byte=0xf6 & mulz; rm8 & reg_opcode=4 ...   { AX=zext(AL)*zext(rm8); multflags(AH, mulz); }
+:MUL rm16           is byte=0xf7 & mulz; rm16 & reg_opcode=4 ...  { tmp:4=zext(AX)*zext(rm16); DX=tmp(2); AX=tmp(0); multflags(DX, mulz); }
+:IMUL rm8           is byte=0xf6; rm8 & reg_opcode=5 ...   { AX = sext(AL) * sext(rm8); imultflags(AL,AX); }
+:IMUL rm16          is byte=0xf7; rm16 & reg_opcode=5 ...  { tmp:4 = sext(AX) * sext(rm16);
+                                                             DX = tmp(2); AX = tmp(0); imultflags(AX,tmp); }
+# DIV/IDIV [CTR DIV, IDIV], [ST:7222-7271]: a zero divisor or a quotient out of range raises
+# INT 0 (divide error) with AX/DX unchanged; the pushed IP is the NEXT instruction (an "after"
+# trap [ST:4271-4275]; ws-test-suite interrupt_timing "/ by zero" and "REP / by zero"), raised
+# with the divtrap() userop (see v30mz.slaspec), as for AAM 0.
+# Flags: AF, PF, SF cleared; CF/OF = MULOV for the 8-bit forms, cleared for the 16-bit forms;
+# DIV and IDIV 32/16: ZF = (remainder == 0 && bit 0 of the quotient set); IDIV 16/8: CF = OF = 0
+# and PF/ZF/SF from AL. On the trap path ZF is left unchanged (the hardware value is "weird" and
+# not tested [CTR]). The signed quotient range is -(2^(n-1)-1) .. 2^(n-1)-1: -80h / -8000h trap.
+# SOURCE-CONFLICT (brief 10 #8): STSWS: a zero divisor always traps [ST:7222-7226]; WSCpuTest
+#   (hardware): IDIV of 8000h by 00 gives AX = 0081h and IDIV of 80000000h by 0000 gives
+#   DX:AX = 0000:8001h, with no trap [CT:190,204], [CTR IDIV]. Hardware wins (flags as Mesen 2:
+#   8-bit form SF=PF=1, ZF=CF=OF=0; 16-bit form ZF=1).
+:DIV rm8            is byte=0xf6; rm8 & reg_opcode=6 ...   { local d:2 = zext(rm8);
+                                                             AF = 0; PF = 0; SF = 0; CF = MULOV; OF = MULOV;
+                                                             if (d == 0) goto <trap>;
+                                                             local quotient:2 = AX / d;
+                                                             if (quotient > 0xff) goto <trap>;
+                                                             local rem:2 = AX % d;
+                                                             ZF = (rem == 0) && ((quotient & 1) != 0);
+                                                             AL = quotient:1;
+                                                             AH = rem:1;
+                                                             goto inst_next;
+                                                           <trap>
+                                                             divtrap(); }
+:DIV rm16           is byte=0xf7; rm16 & reg_opcode=6 ...  { local d:4 = zext(rm16);
+                                                             AF = 0; PF = 0; SF = 0; CF = 0; OF = 0;
+                                                             if (d == 0) goto <trap>;
+                                                             local x:4 = (zext(DX) << 16) | zext(AX);
+                                                             local quotient:4 = x / d;
+                                                             if (quotient > 0xffff) goto <trap>;
+                                                             local rem:4 = x % d;
+                                                             ZF = (rem == 0) && ((quotient & 1) != 0);
+                                                             AX = quotient:2;
+                                                             DX = rem:2;
+                                                             goto inst_next;
+                                                           <trap>
+                                                             divtrap(); }
+:IDIV rm8           is byte=0xf6; rm8 & reg_opcode=7 ...   { local d:2 = sext(rm8);
+                                                             AF = 0; CF = MULOV; OF = MULOV;
+                                                             if ((AX == 0x8000) && (d == 0)) goto <nofault>;
+                                                             if (d == 0) goto <trap>;
+                                                             local quotient:2 = AX s/ d;
+                                                             if ((quotient + 0x7f) > 0xfe) goto <trap>;
+                                                             local rem:2 = AX s% d;
+                                                             AL = quotient:1;
+                                                             AH = rem:1;
+                                                             CF = 0; OF = 0;
+                                                             resultflags(AL);
+                                                             goto inst_next;
+                                                           <nofault>
+                                                             AX = 0x0081; ZF = 0; PF = 1; SF = 1; CF = 0; OF = 0;
+                                                             goto inst_next;
+                                                           <trap>
+                                                             PF = 0; SF = 0;
+                                                             divtrap(); }
+:IDIV rm16          is byte=0xf7; rm16 & reg_opcode=7 ...  { local d:4 = sext(rm16);
+                                                             AF = 0; PF = 0; SF = 0; CF = 0; OF = 0;
+                                                             local x:4 = (zext(DX) << 16) | zext(AX);
+                                                             if ((x == 0x80000000) && (d == 0)) goto <nofault>;
+                                                             if (d == 0) goto <trap>;
+                                                             local quotient:4 = x s/ d;
+                                                             if ((quotient + 0x7fff) > 0xfffe) goto <trap>;
+                                                             local rem:4 = x s% d;
+                                                             ZF = (rem == 0) && ((quotient & 1) != 0);
+                                                             AX = quotient:2;
+                                                             DX = rem:2;
+                                                             goto inst_next;
+                                                           <nofault>
+                                                             AX = 0x8001; DX = 0; ZF = 1;
+                                                             goto inst_next;
+                                                           <trap>
+                                                             divtrap(); }
+
+# ===== Group 4/5: FE / FF ===================================================================
+# FE /0 /1 (byte INC/DEC). FE /2-/6 alias the FF word forms and FE/FF /7 are undefined
+# [ST:9875-9880], [ST:14015-14029], [CT:343-349] -> hwundef only.
+:INC  Rmr8          is byte=0xfe; mod=3 & Rmr8 & reg_opcode=0   { incflags(Rmr8); Rmr8 = Rmr8 + 1; resultflags(Rmr8); }
+:DEC Rmr8           is byte=0xfe; mod=3 & Rmr8 & reg_opcode=1   { decflags(Rmr8); Rmr8 = Rmr8 - 1; resultflags(Rmr8); }
+:INC^lockx  m8      is lockx & unlock & byte=0xfe; m8 & reg_opcode=0 ... { build lockx; build m8; incflags(m8); m8 = m8 + 1; resultflags(m8); build unlock; }
+:DEC^lockx m8       is lockx & unlock & byte=0xfe; m8 & reg_opcode=1 ... { build lockx; build m8; decflags(m8); m8 = m8 - 1; resultflags(m8); build unlock; }
+:INC Rmr16          is byte=0xff; mod=3 & Rmr16 & reg_opcode=0  { incflags(Rmr16); Rmr16 = Rmr16 + 1; resultflags(Rmr16); }
+:DEC Rmr16          is byte=0xff; mod=3 & Rmr16 & reg_opcode=1  { decflags(Rmr16); Rmr16 = Rmr16 - 1; resultflags(Rmr16); }
+:INC^lockx m16      is lockx & unlock & byte=0xff; m16 & reg_opcode=0 ... { build lockx; build m16; incflags(m16); m16 = m16 + 1; resultflags(m16); build unlock; }
+:DEC^lockx m16      is lockx & unlock & byte=0xff; m16 & reg_opcode=1 ... { build lockx; build m16; decflags(m16); m16 = m16 - 1; resultflags(m16); build unlock; }
+
+# The FF /2-/6 forms (and their FE aliases under hwundef=1).
+:CALL rm16          is ((byte=0xff | (hwundef=1 & byte=0xfe)) & currentCS & retIP); rm16 & reg_opcode=2 ... { local dest:4 = segment(currentCS,rm16); push22(retIP); call [dest]; }
+# CALLF m16:16: the V30MZ pushes CS:IP BEFORE reading the target pointer [DS:557-559],
+# [CT:355-357] (matters when the pointer overlaps the stack). Ghidra x86 reads first [IA:2954].
+:CALLF FarMem       is ((byte=0xff | (hwundef=1 & byte=0xfe)) & retIP & currentCS); FarMem & reg_opcode=3 ... {
+    local ptr:4 = FarMem;
+    push22(currentCS);
+    push22(retIP);
+    local ptr2:4 = ptr + 2;
+    local off:2 = *:2 ptr;
+    CS = *:2 ptr2;
+    local addrptr:4 = segment(CS,off);
+    call [addrptr];
+    CS = currentCS;
+}
+:JMP rm16           is ((byte=0xff | (hwundef=1 & byte=0xfe)) & currentCS); rm16 & reg_opcode=4 ... { target:4 = segment(currentCS,rm16); goto [target]; }
+:JMPF Mem           is (byte=0xff | (hwundef=1 & byte=0xfe)); Mem & reg_opcode=5 ... {
+    local ptr2:4 = Mem + 2;
+    local off:2 = *:2 Mem;
+    CS = *:2 ptr2;
+    target:4 = segment(CS,off);
+    goto [target];
+}
+:PUSH rm16          is (byte=0xff | (hwundef=1 & byte=0xfe)); rm16 & reg_opcode=6 ... { push22(rm16); }
+# PUSH SP via FF /6 (FF F4): same new-SP behaviour as 54 (inferred: same microcode path).
+:PUSH Rmr16         is (byte=0xff | (hwundef=1 & byte=0xfe)); mod=3 & reg_opcode=6 & r_m=4 & Rmr16 { SP = SP - 2; tmp:4 = segment(SS,SP); *:2 tmp = SP; }

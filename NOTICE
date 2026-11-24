@@ -213,6 +213,10 @@ specs/Ghidra/Processors/WE32100 vendors the AT&T WE32100 SLEIGH specification of
 aleph-void/ghidra-we32100 (https://github.com/aleph-void/ghidra-we32100), a fork of fletto2/ghidra-we32100, released under the
 MIT License (its license file is in that directory).
 
+specs/Ghidra/Processors/WonderSwan vendors the NEC V30MZ (WonderSwan) SLEIGH specification of
+aleph-void/ghidra-wonderswan (https://github.com/aleph-void/ghidra-wonderswan), a fork of JidouGhost-TL/ghidra-wonderswan, released under the
+Apache License, Version 2.0 (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

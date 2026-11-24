@@ -130,6 +130,7 @@ X86_UNDEF = {
     "btc": {"OF", "SF", "AF", "PF"},
     "bsf": {"CF", "OF", "SF", "AF", "PF"}, "bsr": {"CF", "OF", "SF", "AF", "PF"},
     "aaa": {"OF", "SF", "ZF", "PF"}, "aas": {"OF", "SF", "ZF", "PF"}, "daa": {"OF"}, "das": {"OF"},
+    "aad": {"OF", "AF", "CF"}, "aam": {"OF", "AF", "CF"},
     "lzcnt": {"OF", "SF", "PF", "AF"}, "tzcnt": {"OF", "SF", "PF", "AF"}, "popcnt": set(),
     "andn": {"AF", "PF"}, "bextr": {"AF", "SF", "PF"}, "blsi": {"AF", "PF"}, "blsmsk": {"AF", "PF"},
     "blsr": {"AF", "PF"}, "bzhi": {"AF", "PF"},
@@ -271,6 +272,213 @@ class X86_64Native(X86_64):
         return super().gen(rng)
 
 
+
+
+def _segment_userop(op, state, real):
+    """ia.sinc's segment(selector, offset) user operation (user-op 0 in every x86 language): the
+    real-mode linear address selector*16 + offset, or the offset itself in a flat protected mode."""
+    if op["inputs"][0]["offset"] != 0 or len(op["inputs"]) != 3:
+        return None
+    sel, off = (state.read(v["space"], v["offset"], v["size"]) for v in op["inputs"][1:])
+    if real:
+        return ((sel << 4) + off) & ((1 << (8 * op["output"]["size"])) - 1)
+    return off
+
+
+# x86 deny list for the 32-bit native oracle: stack, segment, far, BCD and branch forms run natively
+X86_32_DENY = re.compile(
+    X86_DENY.pattern
+    .replace("|enter|leave|", "|")
+    .replace("|retf|ljmp|lcall|call|push.*|pop.*|", "|")
+    .replace("|f.*|.*bound.*|arpl|lar|lsl|verr|verw|", "|f.*|lar|lsl|verr|verw|")
+    .replace("|lds|les|lfs|lgs|lss|xlatb|cmpxchg16b|cmpxchg8b|", "|cmpxchg16b|")
+    .replace("|.*rep.*|ins|outs|stos.*|lods.*|movs[bwdq]|cmps.*|scas.*|", "|.*rep.*|ins|outs|")
+    .replace("|sahf|lahf|ret|jmp|loop.*|jrcxz|jecxz|j.*)$", ")$")
+)
+
+# one-byte opcodes that only exist outside 64-bit mode, and the segment/far/stack forms around them
+X86_LEGACY_OPS = [0x06, 0x07, 0x0E, 0x16, 0x17, 0x1E, 0x1F, 0x27, 0x2F, 0x37, 0x3F, 0x60, 0x61, 0x62,
+                  0x63, 0x8C, 0x8E, 0x9A, 0xC4, 0xC5, 0xCA, 0xCB, 0xC8, 0xC9, 0xD4, 0xD5, 0xD6, 0xEA,
+                  0x9C, 0x9D, 0x9E, 0x9F, 0xD7, 0xA4, 0xA5, 0xA6, 0xA7, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE,
+                  0xAF] + list(range(0x40, 0x60)) + [0xC2, 0xC3, 0xE8, 0xE9, 0xEB, 0xE0, 0xE1, 0xE2, 0xE3]
+X86_LEGACY_0F = [0xA0, 0xA1, 0xA8, 0xA9, 0xB2, 0xB4, 0xB5, 0xC7]
+
+
+def x86_legacy_gen(rng, prefixes):
+    tail = rng.getrandbits(64).to_bytes(8, "little") + rng.getrandbits(32).to_bytes(4, "little")
+    pre = bytes(rng.choice(prefixes))
+    k = rng.random()
+    if k < 0.45:
+        op = bytes([rng.choice(X86_LEGACY_OPS)])
+    elif k < 0.55:
+        op = bytes([0x0F, rng.choice(X86_LEGACY_0F)])
+    elif k < 0.6:
+        # a far JMP/CALL to this process's code selector (0x23)
+        op = bytes([rng.choice([0x9A, 0xEA])]) + rng.getrandbits(32).to_bytes(4, "little") + b"\x23\x00"
+        return pre + op + tail
+    elif k < 0.85:
+        op = bytes([rng.getrandbits(8)])
+    else:
+        op = bytes([0x0F, rng.getrandbits(8)])
+    return pre + op + tail
+
+
+def x86_legacy_canonical(cand):
+    """False for encodings Capstone (and LLVM) accept but the CPU raises #UD for: control registers
+    that do not exist, a VEX prefix after 66/F2/F3, MOVNTI with 66/F2/F3; and AMD-only SSE4a/3DNow."""
+    b, mn, ops = cand["bytes"], cand["mnemonic"], cand["op_str"]
+    if mn == "mov" and re.search(r"\bcr(1|[5-9]|1\d)\b", ops):
+        return False
+    i = 0
+    while i < len(b) and b[i] in (0x66, 0x67, 0xF2, 0xF3, 0xF0, 0x2E, 0x36, 0x3E, 0x26, 0x64, 0x65):
+        i += 1
+    pre = set(b[:i])
+    if i < len(b) and b[i] in (0xC4, 0xC5, 0x62, 0x8F) and mn.startswith("v") and pre & {0x66, 0xF2, 0xF3, 0xF0}:
+        return False
+    if mn == "movnti" and pre & {0x66, 0xF2, 0xF3}:
+        return False
+    if 0x66 in pre and mn in ("rcpps", "rsqrtps", "movlhps", "movhlps"):
+        return False
+    return mn not in ("extrq", "insertq", "movntss", "movntsd") and not (i + 1 < len(b) and b[i:i + 2] == b"\x0f\x0f")
+
+
+class X86_32Native(X86_64):
+    """32-bit x86 against this CPU (qemu_backend.X86_32NativeHarness, an i386 static ELF run under the
+    kernel's IA-32 emulation). Draws the legacy-only forms (BCD, PUSHA/POPA, BOUND, segment register
+    moves and loads, far JMP/CALL/RET, 16-bit operand and address size) besides random encodings;
+    the segment registers are compared, starting from the selectors a 32-bit process runs with."""
+    name = "x86-32-native"
+    lang = "x86:LE:32:default"
+    elf_machine = 3
+    elf64 = False
+    pc = "EIP"
+    gprs = [(n, None) for n in "EAX ECX EDX EBX ESP EBP ESI EDI".split()]
+    vecs = [(f"XMM{i}", None) for i in range(8)]
+    deny = X86_32_DENY
+    until = (1 << 32) - 1
+    segs = {"ES": 0x2B, "CS": 0x23, "SS": 0x2B, "DS": 0x2B, "FS": 0, "GS": 0}
+
+    def capstone(self):
+        return cs.Cs(cs.CS_ARCH_X86, cs.CS_MODE_32)
+
+    def addr_ok(self, a):
+        return a < (1 << 32)
+
+    def fix_inputs(self, init, rng):
+        init["ESP"] = rng.randrange(0x680000, 0x6F0000) & ~0xF
+        # now and then a register holds a valid selector, so segment loads have something to load
+        for n in ("EAX", "ECX", "EDX", "EBX", "ESI", "EDI"):
+            if rng.random() < 0.15:
+                init[n] = (init[n] & ~0xFFFF) | rng.choice([0x2B, 0x23, 0, 3])
+
+    def extra_init(self, rng):
+        # IF is set in user mode; PUSHF stores it
+        return {**self.segs, "IF": 1}
+
+    def callother_fn(self, op, state):
+        return _segment_userop(op, state, False)
+
+    def gen(self, rng):
+        if rng.random() < 0.7:
+            return x86_legacy_gen(rng, [[], [], [], [0x66], [0x66], [0x67], [0xF3], [0xF2], [0x26], [0x2E], [0x36], [0x3E], [0x66, 0x67]])
+        return rng.getrandbits(120).to_bytes(15, "little")
+
+    def classify_decode(self, raw, kind):
+        return kind
+
+    def canonical(self, cand):
+        return x86_legacy_canonical(cand)
+
+    def skip(self, cand):
+        # X86_64.skip lists Unicorn's deviations; this CPU has none of them
+        return cand["mnemonic"].startswith("bnd")
+
+    def ignored(self, mnemonic, operands, state):
+        if mnemonic in ("lar", "lsl", "verr", "verw", "sldt", "str", "smsw", "sgdt", "sidt"):
+            return {"*"}
+        return X86_64.ignored(self, mnemonic, operands, state)
+
+
+class X86_16(X86_64):
+    """The 16-bit real-mode language against Unicorn's 16-bit mode (QEMU's real mode): segment
+    registers random, addresses selector*16 + offset."""
+    name = "x86-16"
+    lang = "x86:LE:16:Real Mode"
+    elf_machine = 3
+    elf64 = False
+    base = 0x1000
+    pc = "IP"
+    gprs = [(n, getattr(x86, "UC_X86_REG_" + n)) for n in "AX CX DX BX SP BP SI DI DS ES SS FS GS".split()]
+    vecs = []
+    deny = X86_32_DENY
+    until = (1 << 20) - 1
+
+    def unicorn(self):
+        return uc.Uc(uc.UC_ARCH_X86, uc.UC_MODE_16)
+
+    def capstone(self):
+        return cs.Cs(cs.CS_ARCH_X86, cs.CS_MODE_16)
+
+    def addr_ok(self, a):
+        return a < (1 << 21)
+
+    def fix_flags(self, word):
+        return (word & 0xCD5) | 2
+
+    def fix_inputs(self, init, rng):
+        for n in init:
+            init[n] &= 0xFFFF
+        init["SP"] = rng.randrange(0x100, 0xFF00) & ~1
+
+    def read_pc(self, emu):
+        return (emu.reg_read(x86.UC_X86_REG_CS) << 4) + emu.reg_read(x86.UC_X86_REG_IP)
+
+    def callother_fn(self, op, state):
+        return _segment_userop(op, state, True)
+
+    def gen(self, rng):
+        if rng.random() < 0.6:
+            return x86_legacy_gen(rng, [[], [], [], [0x66], [0x67], [0xF3], [0x26], [0x2E], [0x36], [0x3E], [0x64], [0x65], [0x66, 0x67]])
+        return rng.getrandbits(120).to_bytes(15, "little")
+
+    def classify_decode(self, raw, kind):
+        return kind
+
+    def canonical(self, cand):
+        return x86_legacy_canonical(cand)
+
+    def skip(self, cand):
+        b, mn = cand["bytes"], cand["mnemonic"]
+        # a far JMP/CALL with a 32-bit offset: an IP above 0xFFFF faults in real mode, and QEMU drops
+        # the high half; the 32-bit operand form of a segment-register push stores either 16 bits or a
+        # zero-extended doubleword (SDM, PUSH), QEMU the latter and recent Intel cores the former
+        if mn in ("ljmp", "lcall") and 0x66 in b[:3]:
+            return True
+        if mn == "push" and 0x66 in b[:3] and cand["op_str"] in ("cs", "ds", "es", "ss", "fs", "gs"):
+            return True
+        # a 32-bit operand near branch or return: an IP above 0xFFFF faults, QEMU truncates it
+        if 0x66 in b[:3] and (mn.startswith(("j", "call", "ret", "loop")) or mn == "retf"):
+            return True
+        return False
+
+    def rand_reg(self, rng, bits):
+        # 16-bit values, avoiding 0xFFFF: a word access at offset 0xFFFF faults on hardware and
+        # wraps under QEMU
+        v = super().rand_reg(rng, 16) & 0xFFFF
+        return v if v < 0xFFF0 else v & 0x7FFF
+
+    def ignored(self, mnemonic, operands, state):
+        if mnemonic in ("lar", "lsl", "verr", "verw", "sldt", "str", "smsw", "sgdt", "sidt", "arpl") or mnemonic.startswith("bnd"):
+            return {"*"}
+        ign = X86_64.ignored(self, mnemonic, operands, state)
+        if mnemonic in ("das", "daa"):
+            # QEMU keeps the borrow/carry of the low-nibble adjust in CF; hardware (checked natively in
+            # 32-bit mode, x86-32-native) and SLEIGH follow the SDM
+            ign = ign | {"CF"}
+        if mnemonic.startswith("bt") and "ptr" in operands and not re.search(r",\s*(0x[0-9a-f]+|\d+)$", operands):
+            # a register bit offset moves the access outside the segment's 64 KiB, which QEMU wraps
+            ign = ign | {"*"}
+        return ign
 
 def x87_value(rng):
     """An 80-bit extended value: mostly normal numbers near 1 and small integers, some zeros,
@@ -790,7 +998,7 @@ class Ppc64(Ppc32):
             out.add("cr0")  # LT/GT/EQ undefined in 64-bit mode; SO is still compared via xer_so
         if mnemonic.startswith("f") and mnemonic.endswith("."):
             out.add("cr1")  # copies FPSCR[FX,FEX,VX,OX]; the FPSCR exception bits are not modelled
-            if re.match(r"^f(n?m(add|sub)s?|sel)\.$", mnemonic):
+            if re.match(r"^f(n?m(add|sub)s?|sel|(add|sub|mul|div|sqrt)s?|res|rsqrtes?)\.$", mnemonic):
                 out.add("cr3")  # QEMU 10.2 also sets CR bit 14 for the A-form record forms
         if re.match(r"^f(n?m(add|sub))s?\.?$", mnemonic):
             out.add(operands.split(",")[0].strip())  # fused multiply-add: p-code rounds twice
@@ -843,6 +1051,211 @@ class Ppc64Isa(Ppc64):
 class Ppc64leIsa(Ppc64le):
     name = "ppc64le-isa"
     lang = "PowerPC:LE:64:A2ALT"
+
+
+PPC_DENY_P10 = re.compile(
+    r"^(sc|scv|t[wd]i?.*|rfi.*|rfci|rfmci|hrfid|rfscv|mtmsr.*|mfmsr|mfsr.*|mtsr.*|mftb.*|wrtee.*|"
+    r"mbar|msync|dcb.*|icb.*|tlb.*|slb.*|[lst][bhwdq]arx|st[bhwdq]cx\.|mfdcr|mtdcr|attn|wait.*|"
+    r"mffs.*|mtfs.*|mcrfs|ev.*|dss.*|dst.*|mfvscr|mtvscr|darn|copy|paste.*|cp_abort|cpabort|msgsnd.*|msgclr.*|"
+    r"lq|stq|ldat|lwat|stdat|stwat|mfbhrbe|clrbhrb|rfebb|bctar.*|.*ep[xX]|ld[bc]ix|st[bc]ix|lwzcix|lhzcix|"
+    r"stwcix|sthcix|hashst.*|hashchk.*|sync|lwsync|ptesync|phwsync|plwsync|stbcx.*|isync|eieio|"
+    r"lvsl|lvsr|lve[bhw]x|stve[bhw]x|lvxl?|stvxl?|xscvdpspn|xscvspdpn|dcffixqq|dctfixqq|bcd.*|"
+    r"xs.*qp.*|xs.*qpo|xsrqpi.*|xsxsigqp|xsxexpqp|xsiexpqp|xsabsqp|xsnabsqp|xsnegqp|xscpsgnqp|"
+    # instructions LLVM decodes for a future ISA (IsISAFuture), which QEMU's power10 lacks
+    r"dm.*|pmdm.*|lxvp?rll?|stxvp?rll?|lxvpb32x|stxvpb32x|mtlpl|paddis|ptesyncio|subfus\.?|tlb.*io|tlbiep|"
+    r"vucmpr.*|vupk.*to.*|xsadd(add|sub)s?uqm|xsmerge.*|xsrebase.*|xv(add|sub|mul)u[hw]m|xvmulh[su][hw]|xvrlw|"
+    r"xxaes.*|xxgfmul128.*|xxmulmul.*|xxssumudm.*)$"
+)
+
+
+class LlvmPpcDis:
+    """A Capstone stand-in that knows the Power ISA 3.1 prefixed instructions: llvm-objdump
+    -mcpu=pwr10 ($DIFFFUZZ_PPC_OBJDUMP, or llvm-objdump on PATH, with the PowerPC target)
+    decodes 8-byte slots in batches, cached by encoding."""
+
+    def __init__(self, big):
+        import os
+        import shutil
+        self.big, self.cache = big, {}
+        self.tool = os.environ.get("DIFFFUZZ_PPC_OBJDUMP") or shutil.which("llvm-objdump")
+        self.objcopy = os.path.join(os.path.dirname(self.tool), "llvm-objcopy")
+
+    def prime(self, encs):
+        import os
+        import subprocess
+        import tempfile
+        todo = sorted({self._key(e) for e in encs} - set(self.cache))
+        if not todo:
+            return
+        with tempfile.TemporaryDirectory() as d:
+            raw, obj = os.path.join(d, "t.bin"), os.path.join(d, "t.o")
+            open(raw, "wb").write(b"".join(todo))
+            fmt = "elf64-powerpc" if self.big else "elf64-powerpcle"
+            subprocess.run([self.objcopy, "-I", "binary", "-O", fmt, raw, obj], check=True)
+            out = subprocess.run([self.tool, "-d", "-D", "-j", ".data", "--mcpu=pwr10", "--no-show-raw-insn", obj],
+                                 capture_output=True, text=True, check=True).stdout
+        got = {}
+        for line in out.splitlines():
+            m = re.match(r"\s*([0-9a-f]+):\s+(\S+)\s*(.*)$", line)
+            if m:
+                got[int(m.group(1), 16)] = (m.group(2), m.group(3).strip())
+        for i, e in enumerate(todo):
+            hit = got.get(8 * i)
+            if hit is None or hit[0].startswith(("<", ".")):
+                self.cache[e] = None
+                continue
+            size = 8 if (8 * i + 4) not in got else 4
+            self.cache[e] = (e[:size], hit[0], hit[1])
+
+    def _key(self, raw):
+        e = bytes(raw[:8])
+        return e if len(e) == 8 else e + (0x60000000).to_bytes(4, "big" if self.big else "little")
+
+    def disasm(self, raw, addr):
+        e = self._key(raw)
+        if e not in self.cache:
+            self.prime([e])
+        hit = self.cache[e]
+        if hit and len(raw) >= len(hit[0]):
+            yield _ObjdumpIns(hit[0], hit[1], hit[2])
+
+
+_PPC_P10_RECORDS = None
+
+
+def _ppc_p10_records():
+    global _PPC_P10_RECORDS
+    if _PPC_P10_RECORDS is None:
+        import json
+        from pathlib import Path
+        p = Path(__file__).resolve().parents[2] / "specs/Ghidra/Processors/PowerPC/isa31_insts.json"
+        _PPC_P10_RECORDS = json.loads(p.read_text())
+    return _PPC_P10_RECORDS
+
+
+class Ppc64P10(Ppc64Isa):
+    """The Power ISA 3.0/3.1 (POWER9/POWER10) instructions against qemu-ppc64 -cpu power10: the
+    generator draws the LLVM PowerPC encodings in specs/.../PowerPC/isa31_insts.json (prefixed
+    8-byte instructions, MMA, the new VMX/VSX/fixed-point ones) and random VMX/VSX words, and the
+    QEMU harness seeds and compares vs0..vs63."""
+    name = "ppc64-p10"
+    deny = PPC_DENY_P10
+    vecs = [(f"vs{i}", None) for i in range(64)]
+    max_len = 8
+    _dis = None
+
+    def addr_ok(self, a):
+        # the harness epilogue builds page addresses with lis/ori (below 2^31)
+        return a < (1 << 31)
+
+    def capstone(self):
+        if type(self)._dis is None:
+            type(self)._dis = LlvmPpcDis(self.big)
+        return type(self)._dis
+
+    def _enc(self, rng):
+        if rng.random() < 0.75:
+            ins = rng.choice(_ppc_p10_records())
+            w = 0
+            for pos, b in enumerate(ins["bits"]):
+                w |= (b if isinstance(b, int) else rng.getrandbits(1)) << (ins["size"] - 1 - pos)
+            if ins["size"] == 64 and rng.random() < 0.7:
+                w &= ~(0x3FFFF << 32)  # small displacements, so more loads and stores land in mapped pages
+            words = [w >> 32, w & 0xFFFFFFFF] if ins["size"] == 64 else [w]
+        else:
+            words = [rng.choice((4, 60, 60, 61, 31, 57, 61)) << 26 | rng.getrandbits(26)]
+        return b"".join(x.to_bytes(4, "big" if self.big else "little") for x in words)
+
+    def gen(self, rng):
+        pool = getattr(self, "_pool", None)
+        if not pool:
+            pool = [self._enc(rng) for _ in range(512)]
+            self.capstone().prime(pool)
+            self._pool = pool
+        return pool.pop()
+
+    @staticmethod
+    def _names(mnemonic, operands):
+        """llvm-objdump prints bare register numbers: name the first (destination) operand."""
+        parts = [p.strip() for p in operands.split(",")]
+        if not parts or not parts[0].isdigit():
+            return operands
+        n = int(parts[0])
+        if re.match(r"^(x|lx|stx|plx|pstx|m[tf]vsr)", mnemonic) and not re.match(r"^(lxsd|lxssp|stxsd|stxssp|plxsd|plxssp|pstxsd|pstxssp)$", mnemonic):
+            parts[0] = f"vs{n}"
+        elif re.match(r"^(lxsd|lxssp|stxsd|stxssp|plxsd|plxssp|pstxsd|pstxssp|v)", mnemonic):
+            parts[0] = f"vs{n + 32}"
+        elif re.match(r"^(f|lf|stf|plf|pstf)", mnemonic):
+            parts[0] = f"vs{n}"
+        else:
+            parts[0] = f"r{n}"
+        return ", ".join(parts)
+
+    def ignored(self, mnemonic, operands, state):
+        import struct
+        ops = self._names(mnemonic, operands)
+        if re.match(r"^(stfsu?x?|stxsspx?|pstfs|pstxssp)$", mnemonic):
+            v = state.get(ops.split(",")[0].strip()) >> 64
+            d = struct.unpack("<d", struct.pack("<Q", v))[0]
+            try:
+                exact = struct.unpack("<f", struct.pack("<f", d))[0] == d
+            except OverflowError:
+                exact = False
+            # a double outside single precision: the ISA stores truncated bits, p-code rounds
+            return {"*"} if not exact else set()
+        if re.match(r"^(lfsu?x?|plfs|lxsspx?|plxssp)$", mnemonic):
+            return set()
+        parts = [p.strip() for p in operands.split(",")]
+        m = re.match(r"^v(div|mod)(e?)(s|u)(w|d|q)$", mnemonic)
+        if m and len(parts) == 3 and parts[2].isdigit():
+            e = {"w": 4, "d": 8, "q": 16}[m.group(4)]
+            a, b = state.get(f"vs{int(parts[1]) + 32}"), state.get(f"vs{int(parts[2]) + 32}")
+            for i in range(16 // e):
+                x, y = (a >> (8 * e * i)) & ((1 << 8 * e) - 1), (b >> (8 * e * i)) & ((1 << 8 * e) - 1)
+                if y == 0 or (m.group(3) == "s" and x == 1 << (8 * e - 1) and y == (1 << 8 * e) - 1) or m.group(2):
+                    return {"*"}  # a zero divisor or an overflowing quotient: the lane is undefined
+        m = re.match(r"^div([wd])e(u?)o?\.?$", mnemonic)
+        if m and len(parts) == 3 and parts[1].isdigit() and parts[2].isdigit():
+            bits = 32 if m.group(1) == "w" else 64
+            a, b = state.get(f"r{parts[1]}") & ((1 << bits) - 1), state.get(f"r{parts[2]}") & ((1 << bits) - 1)
+            if m.group(2):
+                bad = b == 0 or a >= b
+            else:
+                sa, sb = a - (a >> (bits - 1) << bits), b - (b >> (bits - 1) << bits)
+                bad = sb == 0 or not -(1 << (bits - 1)) <= int((sa << bits) / sb) < (1 << (bits - 1))
+            if bad:
+                return {"*"}  # the extended quotient does not fit: the result is undefined
+        if re.match(r"^xx(extractuw|insertw)$", mnemonic) and parts[-1].isdigit() and int(parts[-1]) > 12:
+            return {"*"}
+        out = super().ignored(mnemonic, ops, state)
+        if re.match(r"^x[sv]n?m(add|sub)[am][sd]p$", mnemonic):
+            out.add(ops.split(",")[0].strip())  # fused multiply-add: p-code rounds twice
+        return out
+
+    def partial(self, mnemonic, operands):
+        operands = self._names(mnemonic, operands)
+        out = super().partial(mnemonic, operands)
+        if re.match(r"^xs(?!.*qp)(?!cmp[eu]|cmpo|cmpexp|tst|xexp|xsig)[a-z]*(dp|sp|hp|ws|wz|ds|dz|xs|xd|sxds|uxds)?$", mnemonic)                 or re.match(r"^(lxssp|lxsd|lxsspx|lxsdx|lxsiwax|lxsiwzx|lxsibzx|lxsihzx|plxsd|plxssp|mtvsrd|mtvsrwa|mtvsrwz|xscvdpspn)$", mnemonic) \
+                or re.match(r"^(f|lf|plf)", mnemonic):
+            # scalar results: doubleword 1 of the target is undefined
+            dst = operands.split(",")[0].strip()
+            out[dst] = ((1 << 64) - 1) << 64
+        return out
+
+    def order(self, cands):
+        # a prefixed instruction may not cross a 64-byte boundary: 8-byte ones go first in a batch
+        return sorted(cands, key=lambda c: -len(c["bytes"]))
+
+    def canonical(self, cand):
+        if len(cand["bytes"]) == 8:
+            return True
+        return super().canonical(cand)
+
+
+class Ppc64leP10(Ppc64P10):
+    name = "ppc64le-p10"
+    lang = "PowerPC:LE:64:A2ALT"
+    big = False
 
 
 S390X_DENY = re.compile(
@@ -1961,4 +2374,4 @@ class Iq2000(ObjdumpArch):
         raise NotImplementedError("iq2000 runs with --oracle gdbsim")
 
 
-ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k(), MicroBlaze(), MicroBlazeEl(), Xtensa(), Moxie(), Ft32(), Iq2000())}
+ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), X86_32Native(), X86_16(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), Ppc64P10(), Ppc64leP10(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k(), MicroBlaze(), MicroBlazeEl(), Xtensa(), Moxie(), Ft32(), Iq2000())}

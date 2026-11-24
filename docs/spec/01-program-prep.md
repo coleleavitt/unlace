@@ -418,6 +418,16 @@ names code uses (`PAOUT` is labelled `P1OUT`, its high byte `P2OUT`). The periph
 0x1ff, or 0xfff on the 5xx/6xx/FR cores) is volatile. The `default` languages keep Ghidra's F1xx
 pspec.
 
+(unlace) The TMS320C28x device families have their own languages, `tms320c28:LE:32:<family>` (f2802x,
+f2802x0, f2803x, f2805x, f2806x, f2807x, f2823x, f2833x, f2837xd, f2837xs, f2838x, f28002x, f28003x,
+f28004x, f280013x, f280015x, f28e12x, f28p55x, f28p551x, f28p65x), chosen with `--target`, on
+`tms320c28.sla`. Each has a pspec, `tms320c28_<family>.pspec`, which `tools/gen_c28_pspec.py` writes
+from TI C2000Ware's BSD-3 device support headers: each peripheral instance is a variable of a register
+structure (`volatile struct ADC_REGS AdcaRegs;`) that the family's linker command file places
+(CPU1's on a dual-core part), so every register is labelled `<instance>_<register>`
+(`AdcaRegs_ADCCTL1`, `EPwm1Regs_TBPRD`) at its word address, with 32-bit registers on even words, and
+each instance's frame is volatile. Lines under `#if` are kept as a CPU1 build compiles them.
+
 (unlace) The PIC18F Q-series families have their own languages, `PIC-18:LE:24:Q10`, `Q20`, `Q24`,
 `Q35`, `Q40`, `Q41`, `Q43`, `Q83` and `Q84`, chosen with `--target`. Each family has a pspec,
 `pic18q_<family>.pspec`, which `tools/gen_pic18q_pspec.py` writes from Microchip's Apache-2.0

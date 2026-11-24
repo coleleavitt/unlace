@@ -486,3 +486,8 @@ builds of EDK2 modules. EDK2 is released under the BSD-2-Clause-Patent License:
 specs/Ghidra/Processors/TI_MSP430/data/languages/TI_MSP430_*.pspec name peripheral registers derived from
 Texas Instruments' MSP430 GCC support files 1.212, Copyright (c) 2021, Texas Instruments Incorporated,
 released under the BSD 3-Clause License (the notice is in specs/Ghidra/Processors/TI_MSP430/LICENSE-TI-MSP430-support-files.txt).
+
+specs/Ghidra/Processors/TMS320C28/data/languages/tms320c28_*.pspec name peripheral registers derived from the
+device support headers of Texas Instruments' C2000Ware 26.02.00.00, Copyright (C) 2013-2026 Texas Instruments
+Incorporated, released under the BSD 3-Clause License (the notice is in
+specs/Ghidra/Processors/TMS320C28/LICENSE-TI-C2000Ware-device-support.txt).

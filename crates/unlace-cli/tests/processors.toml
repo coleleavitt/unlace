@@ -2,6 +2,12 @@
 #
 # A [[family]] names a raw image (`fixture`, a path from the repository root, or `image`, a key
 # of [images] holding hex bytes), its load `base` and its SLEIGH `language` id (a list runs
+c28x_epwm1_tbprd = """
+1f76010123283412060000000000000000000000
+"""
+c28x_epwm1_tbprd_classic = """
+1f76a00105283412060000000000000000000000
+"""
 msp430_p1_classic = """
 d24220002100304100000000
 """
@@ -237,6 +243,31 @@ fixture = "crates/unlace-cli/tests/fixtures/c28x/addb_lret.bin"
 [[family.function]]
 test = "c28x_add_immediate_and_return_decompiles"
 address = "0x8000"
+
+# C2000 family languages label peripheral registers from C2000Ware's device headers:
+# movw DP,#page; mov @off,#0x1234; lretr writes EPwm1's TBPRD, at 0x4063 on the Type-4 ePWM parts
+# and at 0x6805 on the older ones (F28E12x and F28P65x place ePWM elsewhere).
+[[family]]
+name = "c28x_family_names"
+language = ["tms320c28:LE:32:f280013x", "tms320c28:LE:32:f280015x", "tms320c28:LE:32:f28002x", "tms320c28:LE:32:f28003x", "tms320c28:LE:32:f28004x", "tms320c28:LE:32:f2807x", "tms320c28:LE:32:f2837xd", "tms320c28:LE:32:f2837xs", "tms320c28:LE:32:f2838x", "tms320c28:LE:32:f28p551x", "tms320c28:LE:32:f28p55x"]
+base = "0x8000"
+image = "c28x_epwm1_tbprd"
+
+[[family.function]]
+test = "c28x_family_names_epwm"
+address = "0x8000"
+expect = ["EPwm1Regs_TBPRD = 0x1234;"]
+
+[[family]]
+name = "c28x_family_names_classic"
+language = ["tms320c28:LE:32:f2802x", "tms320c28:LE:32:f2803x", "tms320c28:LE:32:f2805x", "tms320c28:LE:32:f2806x", "tms320c28:LE:32:f2823x", "tms320c28:LE:32:f2833x"]
+base = "0x8000"
+image = "c28x_epwm1_tbprd_classic"
+
+[[family.function]]
+test = "c28x_family_names_classic_epwm"
+address = "0x8000"
+expect = ["EPwm1Regs_TBPRD = 0x1234;"]
 
 # The native C-SKY ABIv2 language decompiles code built with csky-elf-as -mcpu=ck810:
 # a load/accumulate loop closed by a 32-bit bnez, a push/bsr/pop call, and the

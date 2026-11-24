@@ -4072,6 +4072,8 @@ has invalidated earlier work does not edit backwards; it requests a restart by
 setting the restart-pending flag, having first persisted its lesson into the
 knowledge plane (§0.7).
 
+**The `ptrsubcharconstant` cleanup rule (RulePtrsubCharConstant, ruleaction.cc:7375).** Registered in the cleanup pool on every run, it fires on a PTRSUB whose base reads as a pointer to a spacebase and whose offset is a constant. Four facts must hold: the output reads as a pointer to a char-printable type (`vn_type_def_facing`), the target address is read-only at the op's address in the global scope, and the string manager decodes a string there. A stack-frame spacebase declines, because its scope is function-local and this port does not query it. When the guards pass, the PTRSUB's output is folded to a typed constant: each descendant PTRADD with a constant index becomes a COPY of the constant plus its scaled index, and the PTRSUB is destroyed when every descendant folded, otherwise it remains as a COPY of a typed constant. This is a strict parity fix with no option, so it changes the output of any function whose char-pointer constant the rule fires on.
+
 **The restart machinery, as actually implemented** (unlace): the in-tree
 RestartGroup (`crates/unlace-middle/src/infra/action.rs
 (ActionRestartGroup::apply)`, budget `max = 1`) cannot re-follow flow — the

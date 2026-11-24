@@ -42,6 +42,10 @@ specs/Ghidra/Processors/i960 vendors the Intel i960 SLEIGH specification of
 aleph-void/ghidra-i960 (https://github.com/aleph-void/ghidra-i960), released under the
 Apache License, Version 2.0 (its license file is in that directory).
 
+specs/Ghidra/Processors/Alpha vendors the DEC Alpha (21064-21364) SLEIGH specification of
+aleph-void/ghidra-alpha (https://github.com/aleph-void/ghidra-alpha), a fork of kkaempf/ghidra-alpha, released under the
+Apache License, Version 2.0 (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

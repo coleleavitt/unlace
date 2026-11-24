@@ -1,0 +1,18 @@
+<opinions>
+    <!-- EM_ALPHA: 0x9026 (36902) is the value every GNU/Linux and BSD toolchain uses; 41 is the
+         officially assigned EM_ALPHA that Tru64-era tools never adopted. The ELF header does not
+         record the CPU, so ELF files load as 21264 (Unix): user code decodes the same on every
+         implementation, and the 21264 language accepts all of BWX, FIX, CIX and MVI. -->
+    <constraint loader="Executable and Linking Format (ELF)" compilerSpecID="default">
+        <constraint primary="36902" processor="Alpha" endian="little" size="64" variant="21264 (Unix)"/>
+        <!-- Ghidra's ELF loader reports e_machine as a signed short: 0x9026 is -28634 -->
+        <constraint primary="-28634" processor="Alpha" endian="little" size="64" variant="21264 (Unix)"/>
+        <constraint primary="41"    processor="Alpha" endian="little" size="64" variant="21264 (Unix)"/>
+    </constraint>
+    <!-- Windows NT for Alpha: PE32 images with IMAGE_FILE_MACHINE_ALPHA (0x184) and the unreleased
+         64-bit Windows (IMAGE_FILE_MACHINE_ALPHA64, 0x284). -->
+    <constraint loader="Portable Executable (PE)" compilerSpecID="default">
+        <constraint primary="388" processor="Alpha" endian="little" size="64" variant="21264 (Windows NT)"/>
+        <constraint primary="644" processor="Alpha" endian="little" size="64" variant="21264 (Windows NT)"/>
+    </constraint>
+</opinions>

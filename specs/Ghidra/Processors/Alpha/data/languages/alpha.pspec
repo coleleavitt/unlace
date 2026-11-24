@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<processor_spec>
+  <programcounter register="PC"/>
+  <context_data>
+    <!-- Operating systems start programs with FPCR<59:58> (dynamic rounding mode) = 2, round to
+         nearest. Tracking that value lets the decompiler fold /D (dynamic rounding) arithmetic
+         to the normal rounding mode. -->
+    <tracked_set space="ram">
+      <set name="FPCR" val="0x0800000000000000"/>
+    </tracked_set>
+  </context_data>
+</processor_spec>

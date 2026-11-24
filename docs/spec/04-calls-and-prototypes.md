@@ -5650,6 +5650,22 @@ Off, nothing changes. On, the joined pair prints as one `long long` and the
 double-precision forms (`kuna_borrowcompare.rs`) fold its arithmetic and
 compares, instead of an `SBORROW4`/`CONCAT44` chain.
 
+### (kuna) `retindexuse` — a return value that also indexes a load
+
+`Funcdata::onlyOpUse` walks every use of a RETURN trial's value forward and
+refuses the trial at any LOAD on the way: a register whose value addresses
+memory is read as a pointer the function was handed. A loop counter that is
+also the return register falls to that test whenever the loop indexes memory
+with it, which on BPF (`r0`) and SASS makes `while (s[n]) n++; return n;`
+print `void` (unlace#865). With option `retindexuse` (default off),
+`crates/unlace-middle/src/p4_calls/kuna_retindexuse.rs (index_only_load)`
+exempts, for a RETURN trial only, a LOAD whose address is the walked value
+plus a value the walk did not reach (a base pointer), constant offsets folded
+on the way: that LOAD is an index use, and the walk goes on without it. Every
+other LOAD, and every LOAD on an argument trial, still refuses. Off by
+default, because a scratch register that indexes a loop and is left in the
+return register of a `void` function then reads as its return value.
+
 ### (kuna) `returnpair` — the register-pair return split
 
 Provenance: upstream issue GH-6990, implemented kuna-side

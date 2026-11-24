@@ -3608,6 +3608,25 @@ tier = "transform"
 symptoms = "a long long compare on i386 prints as branches over four int parameters that compare the high words before the low words|a long long equality prints as a0 == a2 && a1 == a3 over four int parameters"
 
 [[settable]]
+option = "retindexuse"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P4"
+subphase = "output-prototype"
+strength = "HARD"
+rewind = "P4"
+issue = "unlace-865"
+summary = "Keep a RETURN trial whose value also indexes a load. Funcdata::onlyOpUse (funcdata_varnode.cc:1851) refuses a return-register trial when any LOAD reads through a value derived from it, taking the register for a pointer the function was handed; a loop counter left in the return register falls to the same test whenever the loop indexes memory with it (while (s[n]) n++; return n; on BPF and SASS prints void). With the option on, a LOAD whose address is the walked value plus a value the walk did not reach (a base pointer, constant offsets folded) is an index use and does not refuse the trial."
+use_when = "Off by default: a scratch register that indexes a loop and is left in the return register of a void function becomes a return value too. Turn it on for BPF or SASS code, or any target whose return register is also the natural loop counter, when a counting function (strlen-like, a search that returns its index) prints void and its counter is declared with the return register's storage."
+example = "option retindexuse on"
+source_decompiler = "kuna"
+inspiration = "real-code sweep (#865): clang -O2 BPF and ptxas sm_80 str_len, the counter in r0/r4 when the function exits; upstream Funcdata::onlyOpUse (funcdata_varnode.cc:1851)"
+change_kind = "new-analysis"
+tier = "transform"
+symptoms = "a strlen-like loop function prints void and its counter is declared with the return register's storage|a search loop that returns its index prints void on BPF or SASS"
+
+[[settable]]
 option = "regsigned"
 values = "on|off"
 default = "off"

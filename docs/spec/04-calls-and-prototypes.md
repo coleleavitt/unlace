@@ -4284,6 +4284,19 @@ enables the INDIRECT-propagating variant, `crates/unlace-middle/src/infra/action
 (ActionUnjustifiedParams)`, the fullloop-tail repair that re-justifies an
 input recovered off-center in its containing entry.
 
+### `ActionLikelyTrash` — registers the call clobbers (protorecovery)
+
+`ActionLikelyTrash` (`coreaction_render.rs`, C++ `coreaction.cc:2198`, group `protorecovery`, flags `0`, no option) walks the
+prototype's likely-trash list (`FuncProto::trash_list`, the registers the calling convention declares a call may clobber). For each entry it finds the covering input Varnode with `find_covered_input`, skips it when it is
+type- or name-locked, and runs `trace_trash` over its descendants. The trace follows SUBPIECE and MULTIEQUAL/PIECE
+outputs, and INDIRECT outputs that are not indirect stores, and accepts only routes that stay trash: an INT_AND whose constant is an
+all-ones mask above a 1-, 2- or 4-byte boundary (it clears the low bytes, a sub-register truncation), or an INDIRECT. Persistent outputs, any other reader,
+and a MULTIEQUAL/PIECE whose inputs are not all marked, end the trace as not-trash. When the whole trace is trash, each INDIRECT
+reader has its in0 replaced by a zero constant and is marked for indirect creation (`mark_indirect_creation(op, false)`), and each
+INT_AND reader has its mask input replaced by zero, so the call's clobbered register no longer reaches the rest of the function.
+Each rewritten op counts as one change. This changes decompiled output for any function where a clobbered register that a call
+overwrites is read only through such a path.
+
 ## 4.3 Call-site ops
 
 ### How a CALL op carries its spec

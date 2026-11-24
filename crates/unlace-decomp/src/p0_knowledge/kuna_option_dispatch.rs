@@ -170,6 +170,7 @@ kuna_options! { self, p1;
     "funcboundflow" => registered!(crate::decompile_drive::FuncboundFlow),
     "overlapbranch" => registered!(crate::kuna_overlapbranch::OverlapBranch),
     "cleanupcode" => registered!(crate::kuna_cleanupcode::RemoveCleanupCode),
+    "armhoist" => registered!(crate::kuna_armhoist::ArmHoist),
     "linuxsyscall" => registered!(crate::kuna_linuxsyscall::LinuxSyscallMode),
     "msvcstrappend" => registered!(crate::kuna_msvcstrappend::MsvcStrAppend),
     "switchselector" => registered!(crate::kuna_loweredswitch::SwitchSelectorGuard),

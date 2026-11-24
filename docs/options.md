@@ -120,6 +120,10 @@ Three tiers:
 | Drop::drop / __rust_dealloc / RawVecInner::deallocate noise at every scope exit | [`cleanupcode`](#cleanupcode----on--off-default-on-destructive-opt-in) |
 | rust output is twice as long as the source because of automatic resource management | [`cleanupcode`](#cleanupcode----on--off-default-on-destructive-opt-in) |
 | flip off to see when a rust value is actually dropped or freed | [`cleanupcode`](#cleanupcode----on--off-default-on-destructive-opt-in) |
+| the same call is printed at the end of both arms of an if/else | [`armhoist`](#armhoist----on--off-default-off) |
+| an if/else whose two arms differ only in one constant before an identical call | [`armhoist`](#armhoist----on--off-default-off) |
+| identical first statements in both arms of an if | [`armhoist`](#armhoist----on--off-default-off) |
+| an if/else arm that repeats what the other arm also does | [`armhoist`](#armhoist----on--off-default-off) |
 | a syscall renders as (*(void *)swi(0x80))() - a call through a pointer nothing assigns | [`linuxsyscall`](#linuxsyscall----off--auto--on-default-auto) |
 | the mov $N,%eax before an int 0x80 has vanished from the output | [`linuxsyscall`](#linuxsyscall----off--auto--on-default-auto) |
 | an int 0x80 site shows no arguments even though the disassembly loads ebx/ecx/edx | [`linuxsyscall`](#linuxsyscall----off--auto--on-default-auto) |
@@ -1536,6 +1540,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** On by default (DIV-81). A Rust binary whose functions are dominated by drop_in_place/dealloc glue that is not in the source. Flip OFF to keep every drop and deallocation call site - e.g. when auditing a use-after-free, reasoning about when a resource is actually released, or matching the binary instruction-for-instruction. Inert on any binary with no Rust drop symbols, so C/C++ output is byte-identical either way.
 - **Where / provenance:** P2/flow-classification · oxidizer · presentation-default · oxidizer-CleanupCodeRemover
 - **Example:** `option cleanupcode off`
+
+### `armhoist` -- on | off, default `off`
+
+- **Symptoms:** the same call is printed at the end of both arms of an if/else; an if/else whose two arms differ only in one constant before an identical call; identical first statements in both arms of an if; an if/else arm that repeats what the other arm also does.
+- **What it does:** Hoist the instructions both arms of a two-way branch share out of the arms before the CFG is structured: the pre-structuring counterpart of the Hex-Rays microcode rules EXTRACT_IDENTICAL_HEAD_IF_INSNS and EXTRACT_EQUAL_IF_TAIL_INSNS. A block ending in a CBRANCH whose two successors each have it as their only predecessor is a candidate. HEAD: while the first ops of the two arms are the same op (same opcode, same output storage, every input the same storage or an equal constant), one copy moves to just before the CBRANCH and the other is destroyed. TAIL: when both arms also have a single out-edge to the same join block and the join has exactly those two in-edges, the same test runs on the last op before each arm's branch and one copy moves to the start of the join. At most 16 ops move from each end of a branch. Runs in the pre-SSA window near the top of mainloop (self-gated on the Ssa fact, beside outline), where an op is the storage it reads and writes and there is no INDIRECT or MULTIEQUAL to patch; a moved call keeps its FuncCallSpecs and the destroyed duplicate's record is deleted. Declines on any op that reads or writes the unique space (a SLEIGH temporary must not cross a block), on BRANCH, CBRANCH, BRANCHIND, RETURN, MULTIEQUAL, INDIRECT, NEW, CPOOLREF and SEGMENTOP, at the head on any op whose output overlaps the branch condition, and at the head on a CALL, CALLIND, CALLOTHER or STORE unless the condition is a constant or a unique temporary (nothing such an op touches can hold it). Only the op's position changes and nothing runs between its old and new position but the branch, so the semantics are the binary's. Downstream, a shared call prints once after the if, its argument setup becomes a phi of the per-arm values, and an arm left empty is removed by the dead-control-flow passes. dedupitetail does the same on the structured tree after structuring, leaf blocks only.
+- **When to flip:** Turn on when both arms of an if/else end (or begin) with the same call or the same assignment, so the C prints it twice, e.g. `if (c) { x = 1; f(x); } else { x = 2; f(x); }` where the source writes the call once after the if. Default off: it moves code across the branch before structuring, which changes block contents and statement placement in every affected function, and it has not been measured against the 675 datatest assertions, decbench GED or the speed budget yet.
+- **Where / provenance:** P2/flow-classification · ida · transform · ida-EXTRACT_IF_INSNS
+- **Example:** `option armhoist on`
 
 ### `linuxsyscall` -- off | auto | on, default `auto`
 

@@ -2254,6 +2254,28 @@ live_true = "on"
 live_false = "off"
 
 [[settable]]
+option = "armhoist"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P2"
+subphase = "flow-classification"
+strength = "HARD"
+rewind = "P2"
+issue = "ida-EXTRACT_IF_INSNS"
+summary = "Hoist the instructions both arms of a two-way branch share out of the arms before the CFG is structured: the pre-structuring counterpart of the Hex-Rays microcode rules EXTRACT_IDENTICAL_HEAD_IF_INSNS and EXTRACT_EQUAL_IF_TAIL_INSNS. A block ending in a CBRANCH whose two successors each have it as their only predecessor is a candidate. HEAD: while the first ops of the two arms are the same op (same opcode, same output storage, every input the same storage or an equal constant), one copy moves to just before the CBRANCH and the other is destroyed. TAIL: when both arms also have a single out-edge to the same join block and the join has exactly those two in-edges, the same test runs on the last op before each arm's branch and one copy moves to the start of the join. At most 16 ops move from each end of a branch. Runs in the pre-SSA window near the top of mainloop (self-gated on the Ssa fact, beside outline), where an op is the storage it reads and writes and there is no INDIRECT or MULTIEQUAL to patch; a moved call keeps its FuncCallSpecs and the destroyed duplicate's record is deleted. Declines on any op that reads or writes the unique space (a SLEIGH temporary must not cross a block), on BRANCH, CBRANCH, BRANCHIND, RETURN, MULTIEQUAL, INDIRECT, NEW, CPOOLREF and SEGMENTOP, at the head on any op whose output overlaps the branch condition, and at the head on a CALL, CALLIND, CALLOTHER or STORE unless the condition is a constant or a unique temporary (nothing such an op touches can hold it). Only the op's position changes and nothing runs between its old and new position but the branch, so the semantics are the binary's. Downstream, a shared call prints once after the if, its argument setup becomes a phi of the per-arm values, and an arm left empty is removed by the dead-control-flow passes. dedupitetail does the same on the structured tree after structuring, leaf blocks only."
+use_when = "Turn on when both arms of an if/else end (or begin) with the same call or the same assignment, so the C prints it twice, e.g. `if (c) { x = 1; f(x); } else { x = 2; f(x); }` where the source writes the call once after the if. Default off: it moves code across the branch before structuring, which changes block contents and statement placement in every affected function, and it has not been measured against the 675 datatest assertions, decbench GED or the speed budget yet."
+example = "option armhoist on"
+source_decompiler = "ida"
+inspiration = "Hex-Rays microcode rules EXTRACT_IDENTICAL_HEAD_IF_INSNS, EXTRACT_EQUAL_IF_TAIL_INSNS and REMOVE_IF_BRANCH (IDA 9.5 hexrays sub_18CAD0, sub_18CF30; notes/ida-hexrays-rules.md)"
+change_kind = "transform"
+tier = "transform"
+symptoms = "the same call is printed at the end of both arms of an if/else|an if/else whose two arms differ only in one constant before an identical call|identical first statements in both arms of an if|an if/else arm that repeats what the other arm also does"
+live_field = "arm_hoist"
+live_true = "on"
+live_false = "off"
+
+[[settable]]
 option = "linuxsyscall"
 values = "off|auto|on"
 default = "auto"

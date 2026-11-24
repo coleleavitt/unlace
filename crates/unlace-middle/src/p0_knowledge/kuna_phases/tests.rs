@@ -47,9 +47,9 @@ fn surface_count_is_102() {
 }
 
 #[test]
-fn settable_count_is_347() {
-    assert_eq!(kuna_num_settables(), 347);
-    assert_eq!(SETTABLE_TABLE.len(), 347);
+fn settable_count_is_348() {
+    assert_eq!(kuna_num_settables(), 348);
+    assert_eq!(SETTABLE_TABLE.len(), 348);
 }
 
 #[test]
@@ -65,7 +65,7 @@ fn tier_counts_are_70_core_172_transform_105_analysis() {
             other => panic!("invalid tier {other:?} on {}", s.option),
         }
     }
-    assert_eq!((core, transform, analysis), (70, 172, 105));
+    assert_eq!((core, transform, analysis), (70, 173, 105));
 }
 
 #[test]
@@ -976,7 +976,8 @@ fn option_values_live_value_present_for_129() {
     // +1 for `flownames` (live_field = flow_names).
     // +1 for `llscfold` (live_field = llsc_fold); `atomics` is four-valued, so it has none.
     // +1 for `armpairparam` (live_field = arm_pair_params).
-    assert_eq!(with_live, 143);
+    // +1 for `armhoist` (live_field = arm_hoist).
+    assert_eq!(with_live, 144);
 }
 
 #[test]
@@ -1309,7 +1310,8 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // +1 for `msvceh`; its P1 row follows `rtti`.
     // +1 for `phiarm`; its P6 row sits after `typemerge`.
     // +1 for `calleesaved`; its P6 row sits after `phiarm`.
-    assert_eq!(json.matches("},\n").count(), 334);
+    // +1 for `armhoist`; its P2 row sits after `cleanupcode`.
+    assert_eq!(json.matches("},\n").count(), 335);
 }
 
 #[test]

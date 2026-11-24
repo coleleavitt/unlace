@@ -72,6 +72,8 @@ pub mod kuna_libctypes;
 pub mod kuna_loadoptions;
 // (kuna) The prebuilt type library a load reads (`typelib`).
 pub mod kuna_typelib;
+// (kuna) A clsid.cfg file of extra COM ids (`comcfg`).
+pub mod kuna_comcfg;
 // (kuna) DWARF variant-part (discriminated-union) import option gate
 // (load-time, env-bridged) plus the recovered-layout side table.
 pub mod kuna_dwarfvariants;

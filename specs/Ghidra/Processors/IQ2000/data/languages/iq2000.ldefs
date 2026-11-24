@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<language_definitions>
+  <language processor="iq2000"
+    endian="big"
+    size="32"
+    variant="default"
+    version="1.0"
+    slafile="iq2000.sla"
+    processorspec="iq2000.pspec"
+    id="iq2000:BE:32:default">
+    <description>Vitesse IQ2000</description>
+    <compiler name="default" spec="iq2000.cspec" id="default"/>
+    <external_name tool="gnu" name="iq2000"/>
+  </language>
+</language_definitions>

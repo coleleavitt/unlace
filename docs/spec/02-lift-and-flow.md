@@ -30,7 +30,7 @@ with `Old` for the value the updated location holds when the instruction
 starts. The location is the pointer of the instruction's LOADs and its one
 STORE, or, under an x86 lock envelope with no LOAD or STORE (an absolute or
 RIP-relative operand), the one RAM varnode the instruction writes. Its width
-is 1, 2, 4 or 8 bytes. The instruction is rewritten when the value it writes
+is 1, 2, 4 or 8 bytes, or 16 for a compare-and-swap. The instruction is rewritten when the value it writes
 there is one of:
 
 | written value | builtin (its result is `Old`) |
@@ -63,11 +63,14 @@ to assign `Old` to the accumulator, so both paths agree on it; the branch then
 only decides the upper half of `RAX` after a 32-bit `cmpxchg`, which hardware
 zero-extends only on failure. An operand that no storage holds at the first
 load (`~X` for `ldclr`, `imm + CF` for `adc`) is rebuilt with new ops in front
-of it, which is allowed only when the instruction has no relative branch and
-updates memory through a pointer. Anything else is declined: another user
+of it, which is allowed only when the instruction updates memory through a
+pointer and none of its relative branches targets its end: a new op is
+numbered after the instruction's last op, where a branch to the end would find
+it instead of the next instruction
+(`crates/unlace-lift/src/p2_lift/kuna_atomics.rs (branches_to_end)`). Anything else is declined: another user
 operation inside the lock envelope (an HLE `xacquire`/`xrelease` hint), an
 update that leaves the location unchanged (`lock orq $0, (%rsp)`, the fence
-compilers emit, stays `LOCK(); UNLOCK();`), `lock neg`, `cmpxchg8b`/`cmpxchg16b`, `casp`, the min/max forms, an unlocked x86
+compilers emit, stays `LOCK(); UNLOCK();`), `lock neg`, the min/max forms, an unlocked x86
 update, and every instruction of a Go image (`goatomicreturn` owns those).
 
 The builtins are CALLOTHERs with the call flag, so loads, stores and calls stay
@@ -95,12 +98,32 @@ MSVC has no fetch-and-subtract: a subtraction of a constant becomes
 built in front of the instruction, and otherwise keeps
 `__sync_fetch_and_sub`. `_InterlockedCompareExchange(p, N, E)` takes the new
 value before the expected one, as MSVC declares it. The same spelling applies
-to the builtins `llscfold` produces. The 128-bit pairs (`cmpxchg16b`, `casp`)
-stay declined: the evaluation tracks values of at most 8 bytes.
+to the builtins `llscfold` produces.
+
+Register pairs. `cmpxchg8b` and `cmpxchg16b` load the whole 8- or 16-byte
+location once, compare it with `EDX:EAX`/`RDX:RAX` built by zero-extension,
+shift and or, test the result as `if (ZF == 1)` (a flag compared with 1 or 0
+reads as the comparison that set it) and store `ECX:EBX`/`RCX:RBX` on the
+equal path. They become `__sync_val_compare_and_swap(p, E, N)` on the whole
+location, `E` and `N` rebuilt in front of the load; constant folding stops at
+8 bytes, so a 16-byte location takes nothing but a compare-and-swap. An AArch64
+`casp` on W registers already loads and stores one 8-byte location; on X
+registers it loads `p` and `p + 8` separately, branches past both stores
+unless each half equals its expected register, and stores the new pair
+(`crates/unlace-lift/src/p2_lift/kuna_atomics.rs (pair)`). Both loads, both
+compares and both stores are matched on the straight path through the
+instruction, each half of `Old` being the `SUBPIECE` the data space's byte
+order puts at that address; the instruction becomes one
+`__sync_val_compare_and_swap` on the 16-byte location inserted before the
+first load, its expected and new values each a `PIECE` of two registers, the
+two loads become `SUBPIECE`s of its result and the stores dead copies. MSVC
+spells no 16-byte intrinsic with these operands (`_InterlockedCompareExchange128`
+returns a flag and writes the old value through a pointer), so the 16-byte forms
+keep the GCC name under every spelling.
 
 **(kuna) Load/store-exclusive loops — `option llscfold`, default off,
 `crates/unlace-lift/src/p2_lift/kuna_atomics.rs (ActionLlscLoop)`.**
-Without LSE, AArch64 code updates memory with a retry loop: `ldaxr w8, [x0];
+Without LSE, AArch64 code (and all ARMv6+/Thumb-2 code) updates memory with a retry loop: `ldaxr w8, [x0];
 add w9, w8, w1; stlxr w10, w9, [x0]; cbnz w10, loop`. The store-exclusive
 lifts to a block ending in a branch on `ExclusiveMonitorPass`, a block holding
 the STORE and `ExclusiveMonitorsStatus`, and the block of the `cbnz` that
@@ -109,20 +132,38 @@ compare-exchange (`ldaxr; cmp; b.ne fail; stlxr; cbnz`), its one predecessor,
 which holds the load and leaves the loop when the compare fails. Pre-SSA
 (heritage pass 0), the head, the store-exclusive's blocks and the status test
 are evaluated like one atomic instruction with the monitor passing and the
-status 0: one LOAD, in the head, and one STORE through one pointer register
-that the monitor also checks, the status test leaving the loop, and either a
+status 0: one LOAD, in the head, and one STORE through one address (compared
+as the symbolic value of each op's pointer operand) that the monitor also
+checks, the status test leaving the loop, and either a
 written value from the table above (a head without a compare) or, for a
 compare-exchange, a written value `N` independent of `Old` reached only when
 the head's compare finds `Old == E`. A value the loop reads from a register or
-temporary it also writes would differ on a retry, so such a read declines the
-fold, and so does a compare's exit that branches back to the head after doing
+temporary it also writes would differ on a retry, so an address, operand or
+stored value built from one declines the fold, and so does any other value the
+loop leaves in a storage unless that storage is dead after the loop on every
+way out: a temporary, a storage written before it is read on the straight path
+from the exit (at most four blocks), or a one-byte flag that path never reads
+before it calls, returns or jumps away
+(`crates/unlace-lift/src/p2_lift/kuna_atomics.rs (dead_after)`). ARM's `add`
+without `s` copies the carry into a scratch flag the next `mov` overwrites,
+which is the case this admits; and so does a compare's exit that branches back to the head after doing
 anything but `clrex`. The LOAD becomes `__sync_fetch_and_<op>(p, X)`,
 `__sync_lock_test_and_set(p, X)` or `__sync_val_compare_and_swap(p, E, N)`, the
 monitor's pass and status become the constants 1 and 0, and the STORE a dead
 copy; dead-branch removal then deletes the back edge. A compare-exchange that
 fails stores nothing, as the loop did, and keeps its exit (with its `clrex`).
-Only AArch64 declares the monitor user operations, so the option is inert
-elsewhere.
+
+On ARM and Thumb, `strex rd, rt, [rn]` lifts to `access = hasExclusiveAccess(rn);
+rd = 1; if (!access) goto next; rd = 0; *rn = rt`, with no status user
+operation: the monitor test is `hasExclusiveAccess`, the status is the
+constant the store's block writes, and the status test is the `cmp rd, #0;
+bne loop` that follows, which the evaluation folds through the compare's flag
+arithmetic (subtraction, borrow and carry, signed and unsigned order). Thumb's
+`ldrex` marks its load with `ExclusiveAccess(addr)`; it is accepted inside
+the loop and becomes a dead copy with the fold. The doubleword forms
+(`ldrexd`/`strexd`, `ldaxp`/`stlxp`) load and store twice and are not
+folded. Only AArch64 and ARM declare the monitor user operations, so the option
+is inert elsewhere.
 
 This phase turns an entry address into a function: raw p-code ops for every
 reachable instruction, a basic-block graph over them, a call-spec record per
@@ -4177,6 +4218,53 @@ TLBI forms match only Rt=31 (as in LLVM); another Rt stays `sys`. Exercised by
 `unlace-cli/tests/aarch64_rme.rs` (a raw image decompiles to the user
 operations).
 
+### AArch64 SVE2 and SVE2.1 (#98)
+
+`specs/Ghidra/Processors/AARCH64/data/languages/AARCH64_sve2.sinc` decodes
+SVE2 and SVE2.1 with the SVE2 crypto (AES, AES2, SHA3, SM4), BitPerm and
+B16B16 extensions: 1066 instruction forms, every LLVM 22 TableGen record with
+one of those predicates. Before, each was a bad instruction, except the B16B16
+arithmetic and the 128-bit element stores, which the SVE spec mis-decoded
+(`fadd z0.B` for `bfadd z0.h`). The file is generated by
+`tools/gen_aarch64_ext.py`: fixed bits from the TableGen records, and for
+each operand field the values `llvm-mc -M no-aliases` accepts, each with
+LLVM's text and the register or constant it exports. Each instruction lifts to
+a user operation named after its mnemonic (`SVE2_sqrdmlah`); its output is
+the register it writes (the first of a register list) and its inputs are the
+read operands, with the old destination for destructive and accumulating forms;
+the `while*` generators also set NZCV through `SVE2_sve_first`,
+`SVE2_sve_none` and `SVE2_sve_nlast`, so `b.first`/`b.none` loops keep
+their condition. Exercised by `unlace-cli/tests/aarch64_sve2.rs`: every
+record's encoding against LLVM's text (`fixtures/aarch64_sve2/probe.txt`)
+and clang-compiled ACLE functions (`svqrdmlah`, `svaddp`, `svwhilege`,
+a `svhistcnt` loop) that decompile with no bad or unimplemented instruction.
+
+### Hexagon HMX (#98)
+
+`hexagon_hmx.sinc` decodes the ten documented instructions of the Hexagon
+Matrix Extension (FP16 set, V68/V73, Hexagon V81 HMX Programmer's Reference
+Manual 80-N2040-62): `activation.hf = mxmem(Rs,Rt)` with its `:deep` and
+`:single` forms, `weight.hf = mxmem(Rs,Rt)` and its `:deep` form,
+`bias = mxmem2(Rs)`, `mxmem2(Rs) = bias`, `cvt.hf = acc(Rs)`,
+`mxmem(Rs,Rt) = cvt` and `mxclracc.hf`. They sit in LD class 9 (op 0x10, low
+byte 0xe2..0xfe, beside `memw_locked`, `memd_locked`, `memw_phys` and
+`vextract`, whose bits 7..5 are not 111) and ST class 10 op 0x37, which
+nothing else decodes, so the existing `Hexagon:LE:32:default` language takes
+them without a variant. The accumulators, convert state, bias sets and the
+VTCM buffers are not registers here: each instruction lifts to a named
+pcodeop over its decoded fields (activation: 2 KB-aligned address, the low
+control bits, Rt; weight: 128-byte-aligned address, the negate bit, the dW
+range; bias: 256-byte-aligned address and set index; convert: bias select and
+the remaining control bits), so a raw `activation.hf = mxmem(r0,r1)`
+decompiles to `hmx_activation_hf(a0 & 0xfffff800,a0 & 0x7ff,a1);`. Before,
+every HMX word was a bad instruction. The activation/weight pair must share a
+packet; such a packet disassembles, but decompiling any multi-instruction
+Hexagon packet still fails in the crossbuild step ("Could not obtain cached
+crossbuild instruction"), an existing engine gap that is not HMX-specific.
+Exercised by `unlace-cli/tests/hexagon_hmx.rs`: probe rows for all ten
+encodings against LLVM's syntax and a raw image with one instruction per
+packet. Notes in `specs/Ghidra/Processors/Hexagon/README.md`.
+
 ### Vendored community processor modules (#98)
 
 These processor directories vendor a community SLEIGH module unchanged (its
@@ -4263,9 +4351,24 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `SH` | Renesas SuperH SH-2E/SH-3/SH-3E/SH-4A | `sh3:BE:32:default`, `sh3:LE:32:default`, `sh3e:BE:32:default`, `sh3e:LE:32:default`, `sh2e:BE:32:default` | aleph-void/ghidra-sh (fork of will07c5/ghidra-sh) @ `31c6ca03e9`, MIT |
 | `M32R` | Renesas (Mitsubishi) M32R, M32RX, M32R2 | `M32R:BE:32:default` | written for unlace from the M32R software manuals and binutils CGEN `m32r.cpu` (semantics only); decode checked against `m32r-elf-objdump` 2.43.1, Apache-2.0 |
 | `PDP11` | DEC PDP-11 (base set, EIS, MFPS/MTPS) | `PDP-11:LE:16:default` | written for unlace from the DEC PDP-11 handbooks, Apache-2.0 |
+| `FR` | Fujitsu FR (FR30, FR60, FR80) | `FR:BE:32:default` | written for unlace from the Fujitsu FR instruction manual, binutils CGEN `fr30.cpu` and MAME `frdasm.cpp` (opcode map only); decode checked against `fr30-elf-objdump` 2.43.1, Apache-2.0 |
 | `Moxie` | Moxie (moxielogic) | `moxie:BE:32:default`, `moxie:LE:32:default` | written for unlace from the Moxie architecture page and the binutils opcode table |
 | `FT32` | FTDI FT32 (FT900/FT930) | `ft32:LE:32:default` | written for unlace from the FT32 documentation and the binutils opcode table |
+| `M88000` | Motorola 88000 (MC88100) | `88000:BE:32:default` | written for unlace from the MC88100 User's Manual, Apache-2.0 |
 <!-- vendor-rows -->
+
+### Motorola 88000 (#98)
+
+`specs/Ghidra/Processors/M88000` is a SLEIGH module written for unlace from the
+MC88100 RISC Microprocessor User's Manual (no prior SLEIGH existed):
+`88000:BE:32:default`. `cmp` writes the manual's condition bit vector, which
+`bb0`/`bb1` test, so a compare-and-branch folds into a C comparison; the
+`.n` forms of br, bsr, bb0, bb1, bcnd, jmp and jsr carry a one-instruction
+delay slot; r0 reads as zero; doubles live in register pairs. The cspec follows
+the 88open BCS (arguments r2-r9, result r2, return address r1, stack r31).
+Exercised by `unlace-cli/tests/m88k_raw.rs` (hand-assembled add, signed max,
+absolute load and delay-slot call routines decompile to the expected C).
+
 
 ### DEC PDP-11 (#98)
 
@@ -4293,6 +4396,18 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `HuC6280` | Hudson Soft HuC6280 (PC Engine) | `HuC6280:LE:16:default` | 65C02 and HuC6280 instruction descriptions, MAME `h6280` | `unlace-cli/tests/huc6280.rs` |
 | `4004` | Intel 4004 / 4040 | `4004:LE:16:default` | Intel MCS-4 and MCS-40 Users Manuals | `unlace-cli/tests/i4004_raw.rs` |
 | `uPD7725` | NEC uPD7725 / uPD96050 DSP | `uPD7725:LE:16:default`, `uPD96050:LE:16:default` | NEC uPD7725 data sheet, necdsp notes, MAME `upd7725` | `unlace-cli/tests/upd7725.rs` |
+| `KR1878` | Angstrem KR1878VE1 (TESEY core) | `KR1878:LE:16:default` | ChipNews 2000/1 instruction table, Angstrem datasheet | `unlace-cli/tests/kr1878_raw.rs` |
+| `Moxie` | Moxie (moxielogic) | `moxie:BE:32:default`, `moxie:LE:32:default` | Moxie architecture page, binutils `moxie` opcode table | `unlace-cli/tests/moxie_raw.rs` |
+| `FT32` | FTDI FT32 (FT900/FT930) | `ft32:LE:32:default` | FT32 programmer documentation, binutils `ft32` opcode table, GCC `config/ft32` | `unlace-cli/tests/ft32_raw.rs` |
+| `NiosII` | Altera/Intel Nios II (R1) | `nios2:LE:32:R1`, `nios2:BE:32:R1` | Nios II Processor Reference Guide and ABI, binutils 2.43 `nios2` opcode table | `unlace-cli/tests/nios2_raw.rs` |
+| `2650` | Signetics 2650 / 2650A / 2650B | `2650:BE:16:default` | Signetics 2650 Microprocessor manual, 2650 data sheet | `unlace-cli/tests/s2650_raw.rs` |
+| `MeP` | Toshiba MeP-c4 core, both byte orders | `MeP:BE:32:default`, `MeP:LE:32:default` | binutils `cpu/mep-core.cpu` (CGEN), GCC `mep.h` | `unlace-cli/tests/mep.rs` |
+| `V810` | NEC V810 (Virtual Boy, PC-FX) | `V810:LE:32:default` | NEC uPD70732 user's manual, Virtual Boy development manual, MAME `v810` | `unlace-cli/tests/v810.rs` |
+| `Lua` | Lua 5.4 VM bytecode (one function's code array) | `Lua:LE:32:5.4` | Lua 5.4 `lopcodes.h`/`lvm.c` (MIT), reference manual; oracle `luac5.4 -l -l` | `unlace-cli/tests/lua54.rs` |
+| `CDP1802` | RCA CDP1802 COSMAC | `CDP1802:BE:16:default`, `CDP1802:BE:16:SCRT` | RCA CDP1802 data sheet, User Manual MPM-201 | `unlace-cli/tests/cdp1802_raw.rs` |
+| `IQ2000` | Vitesse IQ2000 | `iq2000:BE:32:default` | binutils CGEN `cpu/iq2000.cpu` and `cpu/iq2000m.cpu`, GCC `config/iq2000` | `unlace-cli/tests/iq2000_raw.rs` |
+| `SCMP` | National SC/MP, INS8060 SC/MP II | `SCMP:LE:16:default` | National SC/MP Technical Description, INS8060 data sheet | `unlace-cli/tests/scmp_raw.rs` |
+| `KonamiCPU` | KONAMI CPU (052001/052526/053248, Konami-2) | `KONAMI:BE:16:default` | MC6809 programming manual, MAME `konami` (opcode map and postbyte) | `unlace-cli/tests/konami.rs` |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)

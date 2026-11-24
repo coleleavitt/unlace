@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="SCMP"
+            endian="little"
+            size="16"
+            variant="default"
+            version="1.0"
+            slafile="scmp.sla"
+            processorspec="scmp.pspec"
+            id="SCMP:LE:16:default">
+    <description>National Semiconductor SC/MP (ISP-8A/500, INS8060 SC/MP II)</description>
+    <compiler name="default" spec="scmp.cspec" id="default"/>
+  </language>
+</language_definitions>

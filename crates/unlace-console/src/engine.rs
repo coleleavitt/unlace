@@ -7046,6 +7046,25 @@ fn commit_analysis_output(
         out.data_objects.retain(|d| !typed.contains(&d.addr));
         out.typed_data.splice(0..0, dwarf_globals);
     }
+    // 0e. (kuna `dwarfdecls`) An import's DWARF declaration types its calls where
+    //     no other prototype fact names that import or its entry.
+    let dwarf_decls = std::mem::take(&mut out.dwarf_decl_prototypes);
+    if prog
+        .arch()
+        .kuna_options
+        .get::<unlace_decomp::kuna_analysisgates::Dwarfdecls>()
+        .0
+    {
+        let named: std::collections::BTreeSet<String> =
+            out.prototypes.iter().map(|p| p.name.clone()).collect();
+        let placed: std::collections::BTreeSet<u64> =
+            out.prototypes_at.iter().map(|(at, _)| *at).collect();
+        out.prototypes_at.extend(
+            dwarf_decls
+                .into_iter()
+                .filter(|(at, p)| !placed.contains(at) && !named.contains(&p.name)),
+        );
+    }
     let go_prototypes = if prog
         .arch()
         .kuna_options

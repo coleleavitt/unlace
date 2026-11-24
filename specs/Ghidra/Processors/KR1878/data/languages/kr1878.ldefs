@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="KR1878"
+            endian="little"
+            size="16"
+            variant="default"
+            version="1.0"
+            slafile="kr1878.sla"
+            processorspec="kr1878.pspec"
+            id="KR1878:LE:16:default">
+    <description>Angstrem KR1878VE1 (TESEY core), 16-bit program words, 256-byte data space</description>
+    <compiler name="default" spec="kr1878.cspec" id="default"/>
+  </language>
+</language_definitions>

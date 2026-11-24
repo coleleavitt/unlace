@@ -3085,6 +3085,93 @@ mod w10_printc_cast_render {
         execute_float_slice_expressions(&cases);
     }
 
+    /// A binary16 lane of an eight- or four-byte word (an AArch64 FP16 vector
+    /// load read lane by lane) is a bit reinterpretation, not a numeric cast.
+    #[test]
+    fn half_float_lanes_preserve_bits_in_c_and_rust() {
+        for from_size in [8, 4] {
+            let mut context = ContextArch::new(build_manager());
+            let types = Rc::new(crate::dtype::TypeFactoryImpl::new());
+            types.set_max_basetype_size(8);
+            types.set_default_alignment_map();
+            types.set_size_of_int(4);
+            types.set_size_of_short(2);
+            types.set_size_of_float(4);
+            types.set_size_of_long_long(8);
+            types.set_size_of_double(8);
+            for (name, size) in [("uint2", 2), ("uint4", 4), ("uint8", 8)] {
+                types
+                    .set_core_type(name, size, type_metatype::TYPE_UINT, false)
+                    .unwrap();
+            }
+            types
+                .set_core_type("float2", 2, type_metatype::TYPE_FLOAT, false)
+                .unwrap();
+            types.cache_core_types().unwrap();
+            context.types = Some(types);
+            let ram = context.manage().get_space_by_name("ram").unwrap().clone();
+            let mut fd = Funcdata::new(
+                "f",
+                "f",
+                Rc::new(context),
+                Address::new(ram.clone(), 0x1000),
+                0x1000,
+                0x40,
+            )
+            .unwrap();
+            let source = fd.new_varnode(
+                from_size,
+                &Address::new(ram.clone(), 0x400),
+                Some(named("word", from_size, type_metatype::TYPE_UINT)),
+            );
+            let op = mk_op(&mut fd, 2, 0x20, OpCode::CPUI_SUBPIECE);
+            fd.op_set_input(op, source, 0).unwrap();
+            let output = fd.new_varnode(
+                2,
+                &Address::new(ram, 0x500),
+                Some(named("float2", 2, type_metatype::TYPE_FLOAT)),
+            );
+            fd.op_set_output(op, output).unwrap();
+            fd.set_high_level();
+            let high = fd.vbank().get(source).unwrap().get_high().unwrap();
+            fd.high_bank_mut()
+                .get_mut(high)
+                .unwrap()
+                .set_kuna_name("lanes");
+            for offset in 0..=(from_size as u64 - 2) {
+                let shift = fd.new_constant(4, offset);
+                fd.op_set_input(op, shift, 1).unwrap();
+                let slice = crate::kuna_floatslice::recognize(&fd, op).unwrap();
+                assert_eq!(slice.width, 2);
+                assert_eq!(slice.shift, offset * 8);
+                for language in ["c", "rust"] {
+                    let mut printer = PrintC::new();
+                    printer.set_name(language);
+                    printer.rt_ctx.lang = printer.out_lang;
+                    printer.rt_ctx.enabled = true;
+                    printer.rt_ctx.long_is_8 = true;
+                    printer.rt_ctx.ctypes = true;
+                    printer.set_output_stream();
+                    printer.op_push_ir(&fd, &bare_arch(), op, None);
+                    let text = printer.emit_mut().output_str();
+                    assert_eq!(text.matches("lanes").count(), 1, "{text}");
+                    if language == "c" {
+                        assert!(
+                            text.starts_with("((union { unsigned short from; _Float16 to; })"),
+                            "{text}"
+                        );
+                    } else {
+                        assert!(text.starts_with("f16::from_bits("), "{text}");
+                    }
+                    assert_eq!(text.contains(">>"), offset != 0, "{text}");
+                }
+            }
+            let past = fd.new_constant(4, from_size as u64 - 1);
+            fd.op_set_input(op, past, 1).unwrap();
+            assert!(crate::kuna_floatslice::recognize(&fd, op).is_none());
+        }
+    }
+
     #[test]
     fn implied_untyped_float_slices_skip_only_untyped_call_results() {
         for producer in [OpCode::CPUI_LOAD, OpCode::CPUI_CALL] {

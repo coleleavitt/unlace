@@ -236,6 +236,7 @@ kuna_options! { self, p1;
     "switchextent" => registered!(crate::jumptable::SwitchExtent),
     "honestgaps" => registered!(crate::kuna_honestgaps::HonestGaps),
     "constselectjump" => registered!(crate::kuna_constselectjump::ConstSelectMode),
+    "rawswitch" => registered!(crate::kuna_rawswitch::RawSwitch),
     "jumptablework" => registered!(crate::kuna_jumptablework::JumpTableWork),
     "switchguardbound" => registered!(crate::jumptable::SwitchGuardBound),
     "highsliceguard" => registered!(crate::jumptable::HighsliceGuard),

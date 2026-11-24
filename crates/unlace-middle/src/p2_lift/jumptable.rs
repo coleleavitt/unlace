@@ -7229,6 +7229,29 @@ impl JumpTable {
     /// Recover the raw jump-table addresses (C++ `JumpTable::recoverAddresses`,
     /// `jumptable.cc:2773`).
     pub fn recover_addresses(&mut self, fd: &mut Funcdata) -> KunaResult<()> {
+        let recovered = self.recover_addresses_by_model(fd);
+        if recovered.is_ok() {
+            return recovered;
+        }
+        // (kuna `rawswitch`) The models failed: match the table from the
+        // dispatch's own instructions (`kuna_rawswitch.rs`).
+        let Some(indirect) = self.indirect else {
+            return recovered;
+        };
+        let max_table_size = fd.get_arch().max_jumptable_size;
+        let Some(model) = (fd.hooks().rawswitch_recover)(self, fd, indirect, 0, max_table_size)?
+        else {
+            return recovered;
+        };
+        self.jmodel = Some(model);
+        self.addresstable.clear();
+        self.loadpoints.clear();
+        self.build_checked_addresses(fd)
+    }
+
+    /// The upstream body of [`Self::recover_addresses`]: recover a model and
+    /// build its addresses.
+    fn recover_addresses_by_model(&mut self, fd: &mut Funcdata) -> KunaResult<()> {
         self.recover_model(fd, None)?;
         if self.jmodel.is_none() {
             return Err(KunaError::lowlevel(format!(

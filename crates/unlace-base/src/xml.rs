@@ -2351,7 +2351,8 @@ mod tests {
         // and kuna-guardedloop-emptybody / a do-while that prints only its test is a while (option guardedloop)
         // and kuna-guardedloop-entryconst / an unsigned counted loop's truthiness guard is its first test
         // and kuna-jvm / a Java class file and a JAR load, the constant pool names their references
-        assert_eq!(count, 1017, "corpus file count drifted");
+        // and rawswitch / an x86-64 table matched from its cmp/ja/lea/movslq/jmp instructions (option rawswitch)
+        assert_eq!(count, 1018, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

@@ -3182,6 +3182,21 @@ conditional *tail call* between two distant function entries keeps the upstream
 When the model is not admitted the branch is truncated to a `CALLIND` carrying
 `"Treating indirect jump as call"` and neither arm is ever decoded.
 
+**Model 4 — the table matched from its instructions** (`kuna_rawswitch.rs
+(JumpModelRaw)`, kuna, `option rawswitch`, default off; x86-64 only). When
+`jumptable.rs (JumpTable::recover_addresses)` fails with every model above, the
+bytes before the BRANCHIND are matched backward against gcc's and clang's PIC
+dispatch: `cmp $N,%idx; ja default`, `lea table(%rip),%base` (before or after
+the pair), `movslq (%base,%idx,4),%dst`, `add %base,%dst`, `jmp *%dst` (with
+`notrack` or a REX prefix). The table's `N + 1` rows are offsets from its start;
+each target must lie within `0xffff` of the jump and there must be two distinct
+targets, else nothing is installed. The case labels are the row indices. This is
+IDA's idiom matcher, and it is what the data flow cannot give when the index is a
+constant on the only path into the dispatch: zlib's `inflateBack` sets
+`state->mode` just before `switch (state->mode)` and gcc threads each case to the
+next, so the value-range models see one value and the other cases were never
+decoded (`tests/stages/rawswitch.toml`).
+
 **Model 0 — the jump-assist user-op** (`kuna_jumpassist.rs
 (JumpModelAssisted)`, C++ `JumpAssisted`, `option jumpassist`, default on).
 Some instruction sets compute a switch destination the SLEIGH semantics cannot

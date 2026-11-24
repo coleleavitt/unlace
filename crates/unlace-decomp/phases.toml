@@ -2822,6 +2822,25 @@ tier = "transform"
 symptoms = "indirect jump renders as a computed (code *)() call whose destinations are already constants in the emitted C|'Treating indirect jump as call' on a CMOV/predicated dispatch|the body behind a conditional indirect branch is never decoded"
 
 [[settable]]
+option = "rawswitch"
+values = "on|off"
+default = "off"
+destructive = true
+phase = "P2"
+subphase = "switch-model"
+strength = "HARD"
+rewind = "P2"
+issue = "ida-gap-ged-inflateback"
+summary = "Recover an x86-64 jump table from its own instructions when the value-range models cannot, as IDA's switch matcher does. gcc and clang emit a PIC switch as cmp $N,%idx; ja default; lea table(%rip),%base; movslq (%base,%idx,4),%dst; add %base,%dst; jmp *%dst (the lea may come first), with N + 1 offsets from the table's start. When JumpTable::recover_addresses fails, kuna_rawswitch.rs matches those bytes backward from the BRANCHIND and installs a fixed model over the N + 1 rows, each of which must land within 0xffff bytes of the jump; the case labels are the row indices. zlib's inflateBack sets state->mode = TYPE before its switch and gcc threads each case to the next, so the one path into the dispatch carries a constant index, the models fail, and the dispatch printed as a computed call with eighteen cases never decoded (GED 618 against IDA's 87). x86-64 only; off by default."
+use_when = "Turn on when an x86-64 switch prints as a computed (code *)() call after a visible cmp/ja bound and the code behind the table is missing, typically a state machine whose index is constant on the path the decompiler can see (zlib inflate/inflateBack). DESTRUCTIVE as a global default: the matched bound is the instruction's, not the data flow's, so a table whose guard does not bound its index (a computed goto reusing the shape) reads every row the cmp admits."
+example = "option rawswitch on"
+source_decompiler = "ida"
+inspiration = "IDA's x86 switch matcher (cmp/ja/lea/movsxd/jmp idioms, get_switch_info); holley2 GED triage of zlib inflateBack (notes/ida-gap/ged-vs-ida.md)"
+change_kind = "structure-recovery"
+tier = "transform"
+symptoms = "an x86-64 switch prints as a computed call right after a cmp/ja bound|a state machine's cases are never decoded|inflate or inflateBack decompiles to a few lines ending in jump-as-call"
+
+[[settable]]
 option = "dexmodel"
 values = "on|off"
 default = "on"

@@ -2795,6 +2795,14 @@ the case targets.
    table instead of dropping its branch bodies into an unresolved interior call.
    ARM's lifted PC+8 base, the predicate's fallthrough, and actual indirect calls
    retain their existing flow semantics.
+   (kuna) When one range of an intersection has a larger step,
+   `rangeutil.rs (CircleRange::new_stride)` moves the other's ends onto that
+   phase. It reports the result empty only when the first value of the new
+   phase lies outside the old range. Upstream compares the order of the two
+   ends instead, so a wrapping range whose left end rounds past the top was
+   dropped as empty. That lost the upper check of an OCaml tagged-int match:
+   `x + 1 < 0x1eb` pulled back to the even `x` is `[-1, 0x1ea)`, which is
+   `[0, 0x1ea)` at step 2 (`tests/stages/ocaml-tagged-guard.toml`).
    `find_smallest_normal` picks the candidate with the smallest reaching range
    as the normalized variable — refusing a 1-byte, 256-value candidate unless a
    table LOAD lies between it and the branch (a bare byte is not evidence of a

@@ -41,6 +41,7 @@ use flirt_sig::{Endian, FLAG_STARTUP, Matcher, Module, Signature};
 
 pub mod kuna_elf_data_names;
 pub mod kuna_rustprofiles;
+pub mod kuna_ruststdsigs;
 
 /// The environment variable that lists the `.sig` files.
 pub const FLIRT_SIGS_ENV: &str = unlace_decomp::kuna_loadoptions::FLIRT_SIGS_ENV;
@@ -66,7 +67,12 @@ impl AnalysisPass for FlirtPass {
         let Some(listing) = ctx.listing else {
             return out;
         };
-        let sigs = load_sigs(ctx.file.format());
+        let mut sigs = load_sigs(ctx.file.format());
+        if let Some(sig) = kuna_ruststdsigs::signature_bytes(ctx.file)
+            .and_then(|bytes| Signature::parse(&bytes).ok())
+        {
+            sigs.push(sig);
+        }
         if sigs.is_empty() {
             return out;
         }

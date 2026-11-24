@@ -24,6 +24,7 @@ pub mod kuna_macho_arm64e;
 // (kuna) PowerPC APU-note language selection option gate (load-time, env-bridged).
 pub mod kuna_delphiabi;
 pub mod kuna_ppcapu;
+pub mod kuna_ruststdsigs;
 // (kuna) Relocatable-object analysis-fact rebase option gate (load-time, env-bridged).
 // (kuna) Linked-image dynamic-relocation application option gate (load-time, env-bridged).
 pub mod kuna_debuglink;

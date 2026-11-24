@@ -305,6 +305,10 @@ specs/Ghidra/Processors/SH4ALDSP vendors the Renesas SH4AL-DSP SLEIGH module SH4
 Ghidra-Rare (https://github.com/aleph-void/Ghidra-Rare), released under the MIT
 License (its license files are in that directory).
 
+specs/Ghidra/Processors/TC32 vendors the TC32 SLEIGH module TC32 of
+Ghidra-Rare (https://github.com/aleph-void/Ghidra-Rare), released under the MIT
+License (its license files are in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

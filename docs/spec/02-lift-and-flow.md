@@ -4238,6 +4238,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `DSP56000` | Motorola DSP56000 / DSP56156 | `DSP56000:BE:16:default`, `DSP56000:BE:16:DSP56156` | aleph-void/Ghidra-Rare (DSP56000) @ `87cc554e33`, MIT |
 | `IA64` | Intel IA-64 (Itanium) | `IA64:LE:64:default`, `IA64:BE:64:default`, `IA64:BE:32:default` | aleph-void/Ghidra-Rare (IA64) @ `87cc554e33`, MIT |
 | `SH4ALDSP` | Renesas SH4AL-DSP | `SH4ALDSP:BE:32:default`, `SH4ALDSP:LE:32:default` | aleph-void/Ghidra-Rare (SH4ALDSP) @ `87cc554e33`, MIT |
+| `TC32` | TC32 | `TC32:LE:32:default` | aleph-void/Ghidra-Rare (TC32) @ `87cc554e33`, MIT |
 <!-- vendor-rows -->
 
 ### WDC 65816 (#98)

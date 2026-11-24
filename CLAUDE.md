@@ -130,24 +130,10 @@ from it, and binaries land in `target/<profile>/`. There is no Makefile. The ful
 (jobserver, sccache, worktree `CARGO_TARGET_DIR`, dev binaries) and the local gate script
 `tools/hooks/unlace-ci-gates.sh` are in **`docs/dev-setup.md`** — it overrides generic advice.
 
-**The gates — run all before every commit:**
-```sh
-cargo fmt --all --check
-cargo build -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli
-cargo test -p unlace-harness --test parity   # tests/datatests vs docs/baseline.json (PARITY OK 675/675)
-                                             # + tests/stages vs docs/baseline-stages.json (PARITY OK)
-python3 tools/check_spec.py              # docs/spec anchors + phase-folder ownership resolve
-PYTHONPATH=. python3 -m unittest discover -s scripts/tests -p 'test_*.py'   # Python tooling + test layout + layering
-target/debug/unlace catalog --check
-cargo nextest run --workspace --exclude unlace-wasm --profile ci   # the workspace suite (CI-required)
-```
-The parity target runs both corpora in-process (each `.sla` compiles into the `.sla` cache on first use);
-`UNLACE_BLESS=1` re-records a baseline instead of comparing. `scripts/check_layers.py` (run by the unittest line)
-fails on a new module path (`crate::`, `super::`, `self::`) from a lower
-band of unlace-decomp to a higher one (middle < lift < structure < bandb < emit < driver; the
-bands are listed in the script). Invert the dependency instead of adding it to
-`scripts/layers-allowlist.txt`; that list only shrinks.
-CI runs all of these + clippy (`-D warnings` on CLI/base/num) on push to main. On a PR from a
+**The gates — run all before every commit:** the command list, what the parity target checks,
+`UNLACE_BLESS=1` re-records and the layering check are in
+[`docs/dev-setup.md` § Gates](docs/dev-setup.md#gates); it is the one owner of that list.
+CI runs them on every PR and push to main ([`docs/dev-setup.md` § CI](docs/dev-setup.md#ci)). On a PR from a
 branch in this repo the workspace suite is skipped — **you are the gate for the nextest
 run** (or add the `full-ci` label). Workspace integration tests need built specs; missing
 specs are failures, not skips.

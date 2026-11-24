@@ -6612,7 +6612,11 @@ several clauses the selector tests stay in the handler
 (`if (eh_selector() == 1)`) and the pad comment maps each selector to its
 type.
 
-**Limits.** SjLj tables are not read. Pinned by
+**Limits.** SjLj tables are not read. A call whose exceptional edge structures as a
+loop condition prints `while (readFile(...), !eh_unwinding()) { ... }` with the pad
+after the loop, not a `try` (`eh4_x86_64.elf` `probe`), and a negated edge whose pad
+falls out of an enclosing `if` (a g++ `-fno-reorder-blocks-and-partition` build of
+the same source) stays an `if`. Pinned by
 `tests/stages/kuna-itaniumeh.toml` (two passes over the `itaniumeh/eh_x86_64.elf`
 fixture), `tests/stages/kuna-itaniumeh-cold.toml` (the partitioned build),
 `tests/stages/kuna-itaniumeh-a64.toml` (AArch64, x0/x1),

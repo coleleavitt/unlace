@@ -699,9 +699,9 @@ Three tiers:
 | a DEX method's catch blocks are missing from the output | [`javatry`](#javatry----on--off-default-on) |
 | code after a call that can throw runs on as if nothing could be thrown | [`javatry`](#javatry----on--off-default-on) |
 | throwException(x); return; instead of throw x; | [`javatry`](#javatry----on--off-default-on) |
-| a function returning a long long sum prints void on xtensa | [`carryuse`](#carryuse----on--off-default-off) |
-| a 64-bit add whose carry is a bgeu branch loses the return value | [`carryuse`](#carryuse----on--off-default-off) |
-| mul_wide returns void after call8 __umulsidi3 | [`carryuse`](#carryuse----on--off-default-off) |
+| a function returning a long long sum prints void on xtensa | [`carryuse`](#carryuse----on--off-default-on) |
+| a 64-bit add whose carry is a bgeu branch loses the return value | [`carryuse`](#carryuse----on--off-default-on) |
+| mul_wide returns void after call8 __umulsidi3 | [`carryuse`](#carryuse----on--off-default-on) |
 | a function that only ever passes its argument to a libc stdio call still declares it long or unsigned long | [`libctypes`](#libctypes----off--opaque--glibc-default-opaque) |
 | a fopen or fdopen result is a void * that nothing can name | [`libctypes`](#libctypes----off--opaque--glibc-default-opaque) |
 | a stat or lstat call fills an untyped void * buffer | [`libctypes`](#libctypes----off--opaque--glibc-default-opaque) |
@@ -1336,6 +1336,11 @@ Three tiers:
 | avx code reads SUB6432(zmm0,0) instead of ymm0 | [`vexzeroupper`](#vexzeroupper----on--off-default-on) |
 | a ymm or xmm argument shows as a 64-byte zmm local | [`vexzeroupper`](#vexzeroupper----on--off-default-on) |
 | vector values are widened to char[64] | [`vexzeroupper`](#vexzeroupper----on--off-default-on) |
+| aarch64 neon code calls NEON_smax(a,b,4) instead of vmaxq_s32 | [`neonintrin`](#neonintrin----on--all--off-default-on) |
+| a vector table lookup prints as a64_TBL | [`neonintrin`](#neonintrin----on--all--off-default-on) |
+| neon vector arguments print as char[16] or undefined16 | [`neonintrin`](#neonintrin----on--all--off-default-on) |
+| a lane extract prints as SUB164(v,4) | [`neonintrin`](#neonintrin----on--all--off-default-on) |
+| an aarch64 vector add prints as four lane statements | [`neonintrin`](#neonintrin----on--all--off-default-on) |
 | eight float additions on slices of one register instead of a vector add | [`lanefuse`](#lanefuse----on--all--off-default-on) |
 | avx-512 mask applied as sixteen per-lane multiply-or statements | [`lanefuse`](#lanefuse----on--all--off-default-on) |
 | a vector function body is one statement per lane | [`lanefuse`](#lanefuse----on--all--off-default-on) |
@@ -3007,13 +3012,13 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **Where / provenance:** P2/flow-classification · kuna · analysis-enablement · kuna-dex-loader
 - **Example:** `option javatry off`
 
-### `carryuse` -- on | off, default `off`
+### `carryuse` -- on | off, default `on`
 
 - **Symptoms:** a function returning a long long sum prints void on xtensa; a 64-bit add whose carry is a bgeu branch loses the return value; mul_wide returns void after call8 __umulsidi3.
 - **What it does:** Keep a returned sum whose low word is also compared for its carry. Upstream's onlyOpUse (funcdata_varnode.cc:1851) refuses a RETURN trial whose value reaches a branch. A target with no carry flag adds a 64-bit value as two 32-bit adds and moves the carry with an unsigned compare of the low sum against one of its addends, often as a branch (Xtensa `add a2,a10,a8; bgeu a2,a8,1f; addi a3,a3,1`), so the low word of every such returned sum is refused and a function returning `a * b + (a >> 3)` or `f(x) + 7` as a `long long` printed `void`. With the option on, an `INT_LESS` or `INT_LESSEQUAL` between the walked value, when an `INT_ADD` defines it, and one of that add's inputs (the same Varnode or an equal constant) is the sum's carry test: `kuna_carryuse.rs` skips it in the walk for a RETURN trial, and every other use is scored as before.
-- **When to flip:** Turn on when a function that returns a 64-bit sum on a 32-bit target without a carry flag (Xtensa, also any target whose compiler branches on the carry) prints `void` or returns only its low word. Leave off for upstream's scoring.
+- **When to flip:** On by default: on 15 Xtensa gcc images (the real-code sweep's windowed .o/.elf builds, libgcc softfp, test objects) only lost returns are gained, each a 64-bit sum whose low word gcc branches on for the carry (`mul_wide`, `x + y`, `f(x) + 7` now return `unsigned long long` instead of `void`); on 89 control images of every other family in the sweep (x86, AArch64, ARM/Thumb, MIPS, RISC-V, PowerPC, SPARC, LoongArch, Hexagon, ARC, C-SKY, m68k, OpenRISC, s390x, BPF, AVR, MSP430, ...) and /usr/bin/xz no line changes, and the datatest (675/675) and stage (6000/6001, the pre-existing PAIRLOCAL #1 failure) corpora are unchanged with it on. Flip off for upstream's scoring.
 - **Where / provenance:** P4/output-prototype · kuna · analysis-enablement · unlace-carryuse
-- **Example:** `option carryuse on`
+- **Example:** `option carryuse off`
 
 ### `libctypes` -- off | opaque | glibc, default `opaque`
 
@@ -4314,6 +4319,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **When to flip:** On by default: AVX code keeps xmm/ymm values at their width, which the vector calling convention (`vectorabi`) needs. Turn it off to see the SLEIGH spec's whole-ZMM writes.
 - **Where / provenance:** P2/flow-follow · kuna · correctness-fix · ida95-46
 - **Example:** `--option vexzeroupper off`
+
+### `neonintrin` -- on | all | off, default `on`
+
+- **Symptoms:** aarch64 neon code calls NEON_smax(a,b,4) instead of vmaxq_s32; a vector table lookup prints as a64_TBL; neon vector arguments print as char[16] or undefined16; a lane extract prints as SUB164(v,4); an aarch64 vector add prints as four lane statements.
+- **What it does:** Print AArch64 Advanced SIMD as the ACLE NEON intrinsics of `<arm_neon.h>` on the ACLE vector types. The AArch64 SLEIGH spec lifts most NEON instructions to `NEON_<mnemonic>` user ops whose last input is the element size in bytes (`NEON_smax(a, b, 4:1)`), plus `a64_TBL(tbx, tables..., index)`, and the lane-wise arithmetic (`add v0.4s, v1.4s, v2.4s`) as one p-code op per lane on register slices. At `on` (default) `kuna_neonintrin.rs` renames each user op to the intrinsic (`vmaxq_s32`, `vqaddq_s16`, `vrshrq_n_s32`, `vmaxvq_u32`, `vqtbl1q_u8` / `vqtbx1q_u8`, `vaeseq_u8`, `vsha256hq_u32`, the narrowing and widening forms by their source type, `vrshrn_high_n_s16`, `vmull_u32`, `vqmovun_s16`) with the element-size immediate dropped from the arguments, gives the operands and result of each user op the vector type its element type and size name (`int32x4_t`, `uint8x16_t`, `float64x2_t`, `poly64x2_t`), and prints a `SUBPIECE` that reads exactly one lane of such a vector as `vgetq_lane_s32(v, 1)`. At `all`, `lanefuse` also re-fuses lane-wise ADD/SUB/MULT and FLOAT_ADD/SUB/MULT/DIV runs over 8- and 16-byte registers into one built-in (`vaddq_s32`, `vmulq_f32`), and a run of lane copies of one scalar into `vdupq_n_s32`. AArch64 only.
+- **When to flip:** On by default: renaming only, 0/675 datatest and 0 stage assertions move. Measured on 259 NEON-dense functions (a quarter or more of their instructions on vector registers) of Debian arm64 libjpeg-turbo 3.1.3, OpenSSL 3.6.5 libcrypto, libwebp 1.6.0 and libpng 1.6.59: raw `NEON_*`/`a64_TBL` calls go from 17,041 to 26 (16,348 ACLE calls), lane pieces (`SUBnn`/`CONCAT`/`ZEXTnn16`) from 61,507 to 60,130, line count unchanged, 0 functions fail either way. Use `all` for hand-written NEON: on libcrypto's assembly it takes 78,881 lines to 63,334 (18,235 ACLE calls); on auto-vectorised C (libjpeg's `jpeg_idct_*`, libwebp's lossless encoder) it fuses the arithmetic while the widening and narrowing lane moves stay per lane, which costs more lines than it saves (libjpeg 37,380 to 56,869, libwebp 22,449 to 30,095). Flip off to see the SLEIGH user-op names.
+- **Where / provenance:** P9/naming-policy · kuna · presentation-default · unlace-neon-acle
+- **Example:** `option neonintrin all`
 
 ### `lanefuse` -- on | all | off, default `on`
 

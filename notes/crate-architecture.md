@@ -365,6 +365,13 @@ harness build scripts (`docs/dev-setup.md`). Whether to turn it on for dev build
 - Step 5, option registry: `KunaOption`/`OptionSet` in `substrate/kuna_optionset.rs` (5a, #99), then options
   moved off `Architecture`/`ArchContext` phase by phase (5b-5p: #101-#103, #107, #109, #114, #117, #121, #126,
   #133, #135, #137).
+  Left as fields on purpose: `jumptablemax`, `impliedrefs` and `termdup` stay the upstream
+  `max_jumptable_size` / `max_implied_ref` / `max_term_duplication` fields; `ppc32picimports` stays a field
+  because its reset value depends on what the loader applied (`Mode::loaded()`), which a static `shipped()`
+  cannot state; `kernelcache`, `kernelcache-boot`, `dyldimage`, `objcsdk`, `exporttrie`, `cil` and
+  `dyldcrossrefs` hold no `Architecture` field (their state is the program's load options and the env
+  bridge); the printer options (`arraynotation`, `braceelide`, `warnstyle`, ...) stay on the printer's own
+  options. `ppcapu` and `ifuncfpret` are carried across `reset_defaults_internal`, as their fields were.
 - Step 6, typed slots, as three `TypeId`-indexed tables in `unlace-middle`:
   - `FuncStates` (`substrate/kuna_funcstate.rs`): per-function side tables on `Funcdata`, created with
     `Default` on first use, dropped by `Funcdata::clear` unless `KEEP_ACROSS_CLEAR` (#132, #134, #136, #138,
@@ -377,6 +384,16 @@ harness build scripts (`docs/dev-setup.md`). Whether to turn it on for dev build
     crate can store a type alias or a std type it does not own, and lookups are a vector index.
 - Step 7, hooks: `KunaHooks` (`substrate/kuna_passhooks.rs`), filled by each band's `provide` and installed by
   the driver (#100, #104-#113, #115, #118, #120, #128, #129, #153). An unfilled hook panics with its name.
+  The table is found at link time: `kuna_passhooks::default_pass_hooks()` calls the `extern "Rust"` symbol
+  `__unlace_default_pass_hooks`, which the driver defines `#[unsafe(no_mangle)]`, so unit tests and embedders
+  need no setup call. Each band crate has `provide_all` (its own pass modules' `provide`), and its
+  `#[cfg(test)]` definition of the symbol composes its own and the lower crates' `provide_all`, filling the
+  rest with `KunaHookSlots::finish_with_stubs` (each stub panics naming its hook);
+  `unlace_decomp::PASS_HOOKS` composes all of them. Unit tests that reach a hook only a higher crate provides
+  live in the driver (`infra/{middle,lift,bandb}_tests/*_hooks.rs`).
+- Layer checks read paths, not method calls: `scripts/check_layers.py` cannot see an inherent method a pass
+  module adds to a lower type and a lower module calls. Those must move down or go through a hook, and the
+  crate boundary (E0116/E0117) is the final check.
 - Reclassified into the middle band instead of moved or hooked, because their own dependencies were already
   middle-only: `engine_translate`, `inject_sleigh`, `kuna_emulatefunction`, `kuna_decodekit`,
   `remote_provider`, `stringmanage` (#146); `modelrules`, `prefersplit` (#142); `kuna_phases` (#128);

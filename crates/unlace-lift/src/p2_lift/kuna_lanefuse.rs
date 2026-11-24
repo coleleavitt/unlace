@@ -47,9 +47,10 @@ const OPS: [(OpCode, &str); 10] = [
 const LANES: [int4; 4] = [1, 2, 4, 8];
 const TOTALS: [int4; 3] = [16, 32, 64];
 
-/// Every fused-lane built-in as `(id, intrinsic name)`.
+/// Every fused-lane built-in as `(id, intrinsic name)`: the Intel ones and the
+/// ACLE NEON ones.
 pub fn builtins() -> Vec<(uint4, String)> {
-    let mut out = Vec::new();
+    let mut out = neon_builtins();
     for (oi, (code, op)) in OPS.iter().enumerate() {
         for (li, lane) in LANES.iter().enumerate() {
             for (ti, total) in TOTALS.iter().enumerate() {
@@ -60,6 +61,229 @@ pub fn builtins() -> Vec<(uint4, String)> {
         }
     }
     out
+}
+
+/// First built-in id of the fused-lane NEON user-ops (option `neonintrin`).
+pub const BUILTIN_NEON_LANE_BASE: uint4 = 0x1000_0300;
+const NEON_TOTALS: [int4; 2] = [8, 16];
+
+/// The ACLE operation each fusable opcode is.
+fn neon_op(code: OpCode) -> Option<(&'static str, bool)> {
+    Some(match code {
+        OpCode::CPUI_FLOAT_ADD => ("add", true),
+        OpCode::CPUI_FLOAT_SUB => ("sub", true),
+        OpCode::CPUI_FLOAT_MULT => ("mul", true),
+        OpCode::CPUI_FLOAT_DIV => ("div", true),
+        OpCode::CPUI_INT_ADD => ("add", false),
+        OpCode::CPUI_INT_SUB => ("sub", false),
+        OpCode::CPUI_INT_MULT => ("mul", false),
+        _ => return None,
+    })
+}
+
+fn neon_id(oi: usize, li: usize, ti: usize) -> uint4 {
+    BUILTIN_NEON_LANE_BASE + (oi * 8 + li * 2 + ti) as uint4
+}
+
+/// Every fused-lane NEON built-in as `(id, ACLE name, vector kind)`.
+pub fn neon_builtin_kinds() -> Vec<(uint4, String, u8)> {
+    let mut out = Vec::new();
+    for (oi, (code, _)) in OPS.iter().enumerate() {
+        let Some((op, float)) = neon_op(*code) else {
+            continue;
+        };
+        for (li, lane) in LANES.iter().enumerate() {
+            for (ti, total) in NEON_TOTALS.iter().enumerate() {
+                if let Some((name, elem)) =
+                    crate::kuna_neonintrin::fused_name(op, float, *lane as u32, *total)
+                {
+                    let kind = crate::kuna_neonintrin::kind_code(elem, *lane as u32);
+                    out.push((neon_id(oi, li, ti), name, kind));
+                }
+            }
+        }
+    }
+    out
+}
+
+/// First built-in id of the NEON duplicate-scalar built-ins (`vdupq_n_s32`).
+pub const BUILTIN_NEON_DUP_BASE: uint4 = 0x1000_0380;
+
+fn neon_dup_id(li: usize, ti: usize) -> uint4 {
+    BUILTIN_NEON_DUP_BASE + (li * 2 + ti) as uint4
+}
+
+fn neon_dup_name(lane: int4, total: int4) -> String {
+    let q = if total == 16 { "q" } else { "" };
+    format!("vdup{q}_n_s{}", lane * 8)
+}
+
+fn neon_builtins() -> Vec<(uint4, String)> {
+    let mut dups = Vec::new();
+    for (li, lane) in LANES.iter().enumerate() {
+        for (ti, total) in NEON_TOTALS.iter().enumerate() {
+            if lane < total {
+                dups.push((neon_dup_id(li, ti), neon_dup_name(*lane, *total)));
+            }
+        }
+    }
+    neon_builtin_kinds()
+        .into_iter()
+        .map(|(id, name, _)| (id, name))
+        .chain(dups)
+        .collect()
+}
+
+/// Fuse a run of lane copies of one scalar into `vdup[q]_n`: `dup v0.4s, w1`
+/// lifts as four COPYs of `w1` into the four lanes of `v0`, in any order.
+fn fuse_neon_dup(data: &mut Funcdata, ops: &[OpId]) -> KunaResult<bool> {
+    let copies: Vec<(OpId, Address, int4, Address, int4)> = ops
+        .iter()
+        .filter_map(|&op| {
+            let o = data.obank().get(op)?;
+            if o.code() != OpCode::CPUI_COPY {
+                return None;
+            }
+            let out = data.vbank().get(o.get_out()?)?;
+            let src = data.vbank().get(o.get_in(0)?)?;
+            if src.is_constant() || out.get_size() != src.get_size() {
+                return None;
+            }
+            out.get_addr()
+                .get_space()
+                .is_some_and(|s| s.get_name() == "register")
+                .then(|| {
+                    (
+                        op,
+                        out.get_addr().clone(),
+                        out.get_size(),
+                        src.get_addr().clone(),
+                        src.get_size(),
+                    )
+                })
+        })
+        .collect();
+    if copies.len() < 2 {
+        return Ok(false);
+    }
+    let (lane, src_addr) = (copies[0].2, copies[0].3.clone());
+    if !copies
+        .iter()
+        .all(|c| c.2 == lane && c.3 == src_addr && c.4 == lane)
+    {
+        return Ok(false);
+    }
+    let base = copies
+        .iter()
+        .map(|c| c.1.get_offset())
+        .min()
+        .expect("copies");
+    let total = lane * copies.len() as int4;
+    let mut offsets: Vec<u64> = copies.iter().map(|c| c.1.get_offset() - base).collect();
+    offsets.sort_unstable();
+    let contiguous = offsets
+        .iter()
+        .enumerate()
+        .all(|(k, off)| *off == k as u64 * lane as u64);
+    let (Some(li), Some(ti)) = (
+        LANES.iter().position(|&l| l == lane),
+        NEON_TOTALS.iter().position(|&t| t == total),
+    ) else {
+        return Ok(false);
+    };
+    if !contiguous || lane >= total {
+        return Ok(false);
+    }
+    let out_addr = copies
+        .iter()
+        .find(|c| c.1.get_offset() == base)
+        .map(|c| c.1.clone())
+        .expect("base lane");
+    let first = copies[0].0;
+    let src = data
+        .obank()
+        .get(first)
+        .and_then(|o| o.get_in(0))
+        .expect("copy input");
+    let idc = data.new_constant(4, neon_dup_id(li, ti) as u64);
+    data.op_set_opcode_code(first, OpCode::CPUI_CALLOTHER);
+    if let Some(o) = data.obank_mut().get_mut(first) {
+        o.clear_flag(pcodeop_flags::call);
+    }
+    data.op_set_all_input(first, &[idc, src])?;
+    data.op_unset_output(first);
+    data.new_varnode_out(total, &out_addr, first)?;
+    for c in &copies[1..] {
+        data.op_destroy_raw(c.0)?;
+    }
+    Ok(true)
+}
+
+/// (kuna `neonintrin`) Fuse every AArch64 lane run among the ops of one
+/// instruction into its ACLE built-in: the same runs as [`fuse`] over 8- and
+/// 16-byte registers.
+pub fn fuse_neon(data: &mut Funcdata, ops: &[OpId]) -> KunaResult<bool> {
+    let mut changed = fuse_neon_dup(data, ops)?;
+    if changed {
+        return Ok(true);
+    }
+    let mut i = 0;
+    while i < ops.len() {
+        let Some((oi, run, end)) = run_at(data, ops, i, true) else {
+            i += 1;
+            continue;
+        };
+        let first = run[0];
+        let lane = data
+            .obank()
+            .get(first)
+            .and_then(|o| o.get_out())
+            .and_then(|v| data.vbank().get(v))
+            .map(|v| v.get_size())
+            .unwrap_or(0);
+        let total = lane * run.len() as int4;
+        let (Some(li), Some(ti)) = (
+            LANES.iter().position(|&l| l == lane),
+            NEON_TOTALS.iter().position(|&t| t == total),
+        ) else {
+            i = end;
+            continue;
+        };
+        let Some((op, float)) = neon_op(OPS[oi].0) else {
+            i = end;
+            continue;
+        };
+        if crate::kuna_neonintrin::fused_name(op, float, lane as u32, total).is_none() {
+            i = end;
+            continue;
+        }
+        let (Some(out), Some(a), Some(b)) = operands(data, first) else {
+            i = end;
+            continue;
+        };
+        let (Some(va), Some(vb)) = (whole(data, &a, total), whole(data, &b, total)) else {
+            i = end;
+            continue;
+        };
+        let Slice::Direct(_, _, out_addr) = out else {
+            i = end;
+            continue;
+        };
+        let idc = data.new_constant(4, neon_id(oi, li, ti) as u64);
+        data.op_set_opcode_code(first, OpCode::CPUI_CALLOTHER);
+        if let Some(o) = data.obank_mut().get_mut(first) {
+            o.clear_flag(pcodeop_flags::call);
+        }
+        data.op_set_all_input(first, &[idc, va, vb])?;
+        data.op_unset_output(first);
+        data.new_varnode_out(total, &out_addr, first)?;
+        for &dead in &run[1..] {
+            data.op_destroy_raw(dead)?;
+        }
+        changed = true;
+        i = end;
+    }
+    Ok(changed)
 }
 
 fn id(oi: usize, li: usize, ti: usize) -> uint4 {

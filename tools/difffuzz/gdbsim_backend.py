@@ -193,7 +193,11 @@ def run_case_gdbsim(arch, regs, row, cand, rng, seed, tmp):
         return {"status": "unmodeled", "why": str(e)}
     if not all(arch.addr_ok(a) and arch.addr_ok(a + s - 1) for a, s in st.accesses):
         return {"status": "bad-address"}
-    ignore = arch.ignored(cand["mnemonic"], cand["op_str"], st)
+    # an architecture whose binutils decoder is unreliable names the instruction by SLEIGH's text
+    if getattr(arch, "text_from_sleigh", False):
+        ignore = arch.ignored(row["mnemonic"].lower(), row["operands"].lower(), st)
+    else:
+        ignore = arch.ignored(cand["mnemonic"], cand["op_str"], st)
     if "*" in ignore:
         return {"status": "undefined"}
     if getattr(arch, "misaligned_undefined", False) and any(s in (2, 4, 8) and a % s for a, s in st.accesses):
@@ -229,7 +233,7 @@ def run_case_gdbsim(arch, regs, row, cand, rng, seed, tmp):
         if s is not None:
             s.proc.kill()
             s.log.flush()
-            tail = open(s.log.name).read().strip().splitlines()
+            tail = open(s.log.name, errors="replace").read().strip().splitlines()
             why = tail[-1][:60] if tail else why
         return {"status": "ref-exception", "why": "sim " + why}
     if not res.get("ok"):

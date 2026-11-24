@@ -81,6 +81,7 @@ fn decode(file: &str, bytes: &[u8]) -> Option<FileRun> {
         failures,
         applied: i32::try_from(applied).ok()?,
         succeeded: i32::try_from(succeeded).ok()?,
+        wall_ms: 0,
     })
 }
 
@@ -94,6 +95,7 @@ fn died(file: &str, why: &str) -> FileRun {
         failures: vec![line],
         applied: 0,
         succeeded: 0,
+        wall_ms: 0,
     }
 }
 
@@ -219,7 +221,7 @@ pub fn run_test_files_parallel(
                     };
                     let file = &files[i];
                     let started = std::time::Instant::now();
-                    let run = match worker.as_mut() {
+                    let mut run = match worker.as_mut() {
                         None => died(file, "could not be started"),
                         Some(w) => match run_on(w, file, &result) {
                             Ok(run) => run,
@@ -230,6 +232,7 @@ pub fn run_test_files_parallel(
                         },
                     };
                     let secs = started.elapsed().as_secs_f64();
+                    run.wall_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
                     if timed {
                         eprintln!("datatest time {secs:7.2} s  {file}");
                     }
@@ -281,6 +284,7 @@ mod tests {
             ],
             applied: 2,
             succeeded: 1,
+            wall_ms: 0,
         };
         let back = decode("a.toml", &encode(&run)).unwrap();
         assert_eq!(

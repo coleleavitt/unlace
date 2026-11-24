@@ -2474,6 +2474,35 @@ the slot keeps the slot name. So do a read narrower than the slot and a read by 
 operator C does not apply to a pointer (a mask, a shift, a multiply or a division:
 `dat_<slot> | 1`, never `&<import> | 1`); an addition stays `&<import> + 8`.
 
+(kuna `neonintrin`, default on) AArch64 Advanced SIMD prints as the ACLE intrinsics of
+`<arm_neon.h>` on the ACLE vector types (`crates/unlace-middle/src/substrate/kuna_neonintrin.rs`).
+The AArch64 SLEIGH spec lifts most NEON instructions to `NEON_<mnemonic>` user ops whose
+last input is the element size in bytes, plus `a64_TBL(tbx, tables..., index)`.
+`op_callother_ir` renames such an op before the `acleintrinsics` names are tried:
+
+- **Name:** the mnemonic table gives the ACLE stem and the element type (`smax` is
+  `vmax` signed, `fmax` is `vmax` float), and the element-size immediate gives the width.
+  The `q` comes from the size of the first vector input, and the immediate is not printed.
+- **Narrowing and widening:** these forms (`sqxtun`, `rshrn`, `raddhn`, `umull`,
+  `uaddlv`) are named by their source type. Their `2` forms are the `_high` intrinsics.
+  A narrowing op's first input is its destination, which only the `2` form reads.
+- **Table lookup:** `a64_TBL` is `vqtbl<n>[q]_u8` when its first input is zero (a constant
+  or its zero-extension), `vqtbx<n>[q]_u8` otherwise.
+- **Fixed names:** the crypto ops keep fixed names (`vaeseq_u8`, `vsha256hq_u32`). The
+  single-operand `aesmc`/`aesimc` drop the destination input.
+- **Scalar forms:** a user op with no element-size immediate keeps its SLEIGH name.
+
+Each op's vector operands and result get the type its element type and size name
+(`int32x4_t`, `uint8x16_t`): `vector_userops` holds a kind code per op, and a code whose
+lane nibble is `0xf` reads the lane width from the call's immediate. At the top of
+`op_push_ir_inner`, a `SUBPIECE` of a value with such a type that reads exactly one lane
+prints as `vget[q]_lane_<t>(v, n)`. At `all`, the flow walk also runs `fuse_neon`
+(`kuna_lanefuse.rs`):
+
+- a lane-wise run of ADD/SUB/MULT or FLOAT_ADD/SUB/MULT/DIV over 8- or 16-byte registers
+  becomes one built-in (`vaddq_s32`; integer lanes print signed);
+- a run of lane COPYs of one scalar covering a register becomes `vdup[q]_n_s<bits>`.
+
 (kuna `wideconst`, default on) A constant wider than 64 bits that the lifter built from
 pieces prints as one hexadecimal literal (`crates/unlace-emit/src/p9_emit/kuna_wideconst.rs`).
 A Varnode constant holds at most 64 bits, so a wider value stays an expression tree; EVM's

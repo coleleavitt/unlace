@@ -249,7 +249,7 @@ macro setResultFlags(result) {
 macro setAdd3Flags(v1, v2, v3) {
     local add13 = v1 + v3;
     $(CARRY) = carry(v1,v3) || carry(v2,add13);
-    $(OVERFLOW) = scarry(v1,v3) || scarry(v2,add13);
+    $(OVERFLOW) = scarry(v1,v3) ^^ scarry(v2,add13);
 }
 
 # Set carry and overflow flags for addition
@@ -259,15 +259,16 @@ macro setAddFlags(v1, v2) {
 }
 
 # Set overflow flags for subtraction of op3,op2 from op1 (op1-op2-op3)
+# v1 - v2 - v3 with v3 the borrow (0 or 1); C is "no borrow"
 macro setSubtract3Flags(v1, v2, v3) {
     local add12 = v1 - v2;
-    $(CARRY) = (v1 >= v2) || (add12 >= v3);
-    $(OVERFLOW) = sborrow(v1, v2) || sborrow(add12, v3);
+    $(CARRY) = (v1 > v2) || ((v1 == v2) && (v3 == 0));
+    $(OVERFLOW) = sborrow(v1, v2) ^^ sborrow(add12, v3);
 }
 
 # Set overflow flags for subtraction of op2 from op1 (op1-op2)
 macro setSubtractFlags(v1, v2) {
-    $(CARRY) = (v1 s>= v2);
+    $(CARRY) = (v1 >= v2);
     $(OVERFLOW) = sborrow(v1, v2);
 }
 
@@ -1754,7 +1755,7 @@ with: phase=1 {
 :CMP^".B:S" dst2B, R0L               is (b1_0607=1 & b1_0103=0 & b1_size_0=0 & R0L) ... & dst2B {
     tmp:1 = dst2B;
     setSubtractFlags(R0L, tmp);
-    tmp = tmp - R0L;
+    tmp = R0L - tmp;
     setResultFlags(tmp);
 }
 
@@ -1762,7 +1763,7 @@ with: phase=1 {
 :CMP^".W:S" dst2W, R0                is (b1_0607=1 & b1_0103=0 & b1_size_0=1 & R0) ... & dst2W {
     tmp:2 = dst2W;
     setSubtractFlags(R0, tmp);
-    tmp = tmp - R0;
+    tmp = R0 - tmp;
     setResultFlags(tmp);
 }
 
@@ -1983,13 +1984,15 @@ with: phase=1 {
 ##### DIV #####
 
 # (1) DIV.B #imm
+# O: a zero divisor or a quotient that does not fit the destination (signed: bits from
+# the destination's sign bit up all equal)
 :DIV.B srcSimm8                      is b1_0007=0xb0; b2_0007=0x43; srcSimm8 {
     d:2 = sext(srcSimm8);
     q:2 = R0 s/ d;
     r:2 = R0 s% d; # remainder has same sign as R0 (dividend)
     R0L = q:1;
     R0H = r:1;
-    q = q s>> 8;
+    q = q s>> 7;
     $(OVERFLOW) = (d == 0) || ((q != 0) && (q != -1));
 }
 
@@ -2000,7 +2003,7 @@ with: phase=1 {
     r:4 = R2R0 s% d; # remainder has same sign as R0 (dividend)
     R0 = q:2;
     R2 = r:2;
-    q = q s>> 16;
+    q = q s>> 15;
     $(OVERFLOW) = (d == 0) || ((q != 0) && (q != -1));
 }
 
@@ -2011,7 +2014,7 @@ with: phase=1 {
     r:2 = R0 s% d; # remainder has same sign as R0 (dividend)
     R0L = q:1;
     R0H = r:1;
-    q = q s>> 8;
+    q = q s>> 7;
     $(OVERFLOW) = (d == 0) || ((q != 0) && (q != -1));
 }
 
@@ -2022,7 +2025,7 @@ with: phase=1 {
     r:4 = R2R0 s% d; # remainder has same sign as R0 (dividend)
     R0 = q:2;
     R2 = r:2;
-    q = q s>> 16;
+    q = q s>> 15;
     $(OVERFLOW) = (d == 0) || ((q != 0) && (q != -1));
 }
 
@@ -2035,8 +2038,7 @@ with: phase=1 {
     r:2 = R0 % d;
     R0L = q:1;
     R0H = r:1;
-    q = q s>> 8;
-    $(OVERFLOW) = (d == 0) || ((q != 0) && (q != -1));
+    $(OVERFLOW) = (d == 0) || ((q >> 8) != 0);
 }
 
 # (1) DIVU.W #imm
@@ -2046,8 +2048,7 @@ with: phase=1 {
     r:4 = R2R0 % d;
     R0 = q:2;
     R2 = r:2;
-    q = q s>> 16;
-    $(OVERFLOW) = (d == 0) || ((q != 0) && (q != -1));
+    $(OVERFLOW) = (d == 0) || ((q >> 16) != 0);
 }
 
 # (2) DIVU.B src5
@@ -2057,8 +2058,7 @@ with: phase=1 {
     r:2 = R0 % d;
     R0L = q:1;
     R0H = r:1;
-    q = q s>> 8;
-    $(OVERFLOW) = (d == 0) || ((q != 0) && (q != -1));
+    $(OVERFLOW) = (d == 0) || ((q >> 8) != 0);
 }
 
 # (2) DIVU.W src5
@@ -2068,8 +2068,7 @@ with: phase=1 {
     r:4 = R2R0 % d;
     R0 = q:2;
     R2 = r:2;
-    q = q s>> 16;
-    $(OVERFLOW) = (d == 0) || ((q != 0) && (q != -1));
+    $(OVERFLOW) = (d == 0) || ((q >> 16) != 0);
 }
 
 ##### DIVX #####
@@ -2085,7 +2084,7 @@ with: phase=1 {
     r = (zext(differ) * (-r)) + (zext(!differ) * r);
     R0L = q:1;
     R0H = r:1;
-    q = q s>> 8;
+    q = q s>> 7;
     $(OVERFLOW) = (d == 0) || ((q != 0) && (q != -1));
 }
 
@@ -2100,7 +2099,7 @@ with: phase=1 {
     r = (zext(differ) * (-r)) + (zext(!differ) * r);
     R0 = q:2;
     R2 = r:2;
-    q = q s>> 16;
+    q = q s>> 15;
     $(OVERFLOW) = (d == 0) || ((q != 0) && (q != -1));
 }
 
@@ -2115,7 +2114,7 @@ with: phase=1 {
     r = (zext(differ) * (-r)) + (zext(!differ) * r);
     R0L = q:1;
     R0H = r:1;
-    q = q s>> 8;
+    q = q s>> 7;
     $(OVERFLOW) = (d == 0) || ((q != 0) && (q != -1));
 }
 
@@ -2128,7 +2127,7 @@ with: phase=1 {
     #according to the manual the remainder has the same sign as the quotient
     R0 = q:2;
     R2 = r:2;
-    q = q s>> 16;
+    q = q s>> 15;
     $(OVERFLOW) = (d == 0) || ((q != 0) && (q != -1));
 }
 
@@ -3351,70 +3350,70 @@ with: phase=1 {
 
 # (1) OR.B:G #imm, dst
 :OR^".B:G" srcImm8, dst5B            is ((b1_0407=0x8 & b1_size_0=0; b2_0005=0x2f) ... & $(DST5B)); srcImm8 {
-    tmp:1 = dst5B & srcImm8;
+    tmp:1 = dst5B | srcImm8;
     dst5B = tmp;
     setResultFlags(tmp);
 }
 
 # (1) OR.B:G #imm, Ax
 :OR^".B:G" srcImm8, dst5Ax           is ((b1_0407=0x8 & b1_size_0=0; b2_0005=0x2f) & $(DST5AX)); srcImm8 {
-    tmp:1 = dst5Ax:1 & srcImm8;
+    tmp:1 = dst5Ax:1 | srcImm8;
     dst5Ax = zext(tmp);
     setResultFlags(tmp);
 }
 
 # (1) OR.W:G #imm, dst
 :OR^".W:G" srcImm16, dst5W           is ((b1_0407=0x8 & b1_size_0=1; b2_0005=0x2f) ... & $(DST5W)); srcImm16 {
-    tmp:2 = dst5W & srcImm16;
+    tmp:2 = dst5W | srcImm16;
     dst5W = tmp;
     setResultFlags(tmp);
 }
 
 # (1) OR.W:G #imm, Ax
 :OR^".W:G" srcImm16, dst5Ax          is ((b1_0407=0x8 & b1_size_0=1; b2_0005=0x2f) & $(DST5AX)); srcImm16 {
-    tmp:2 = dst5Ax:2 & srcImm16;
+    tmp:2 = dst5Ax:2 | srcImm16;
     dst5Ax = zext(tmp);
     setResultFlags(tmp);
 }
 
 # (2) OR.B:S #imm, dst
 :OR^".B:S" srcImm8, dst2B            is ((b1_0607=1 & b1_0103=2 & b1_size_0=0) ... & dst2B); srcImm8 {
-    tmp:1 = dst2B & srcImm8;
+    tmp:1 = dst2B | srcImm8;
     dst2B = tmp;
     setResultFlags(tmp);
 }
 
 # (2) OR.W:S #imm, dst
 :OR^".W:S" srcImm16, dst2W           is ((b1_0607=1 & b1_0103=2 & b1_size_0=1) ... & dst2W); srcImm16 {
-    tmp:2 = dst2W & srcImm16;
+    tmp:2 = dst2W | srcImm16;
     dst2W = tmp;
     setResultFlags(tmp);
 }
 
 # (3) OR.B:G src5, dst5
 :OR^".B:G" src5B, dst5B_afterSrc5    is (b1_0707=1 & b1_size_0=0; b2_0003=0x5) ... & $(SRC5B) ... & $(DST5B_AFTER_SRC5) ... {
-    tmp:1 = dst5B_afterSrc5 & src5B;
+    tmp:1 = dst5B_afterSrc5 | src5B;
     dst5B_afterSrc5 = tmp;
     setResultFlags(tmp);
 } 
 
 # (3) OR.B:G src5, Ax
 :OR^".B:G" src5B, dst5Ax             is (b1_0707=1 & b1_size_0=0; b2_0003=0x5) ... & $(SRC5B) & $(DST5AX) ... {
-    tmp:1 = dst5Ax:1 & src5B;
+    tmp:1 = dst5Ax:1 | src5B;
     dst5Ax = zext(tmp);
     setResultFlags(tmp);
 } 
 
 # (3) OR.W:G src5, dst5
 :OR^".W:G" src5W, dst5W_afterSrc5    is (b1_0707=1 & b1_size_0=1; b2_0003=0x5) ... & $(SRC5W) ... & $(DST5W_AFTER_SRC5) ... {
-    tmp:2 = dst5W_afterSrc5 & src5W;
+    tmp:2 = dst5W_afterSrc5 | src5W;
     dst5W_afterSrc5 = tmp;
     setResultFlags(tmp);
 } 
 
 # (3) OR.W:G src5, Ax
 :OR^".W:G" src5W, dst5Ax             is (b1_0707=1 & b1_size_0=1; b2_0003=0x5) ... & $(SRC5W) & $(DST5AX) ... {
-    tmp:2 = dst5Ax:2 & src5W;
+    tmp:2 = dst5Ax:2 | src5W;
     dst5Ax = zext(tmp);
     setResultFlags(tmp);
 } 
@@ -3857,7 +3856,7 @@ pushRegList: "("^pushRegFB^" )"  is pushRegFB { build pushRegFB; }
 # (1) SBB.B #simm, dst
 :SBB.B srcSimm8, dst5B               is b0_0007=0x1; ((b1_0407=0x9 & b1_size_0=0; b2_0005=0x2e) ... & $(DST5B)); srcSimm8 {
     tmp:1 = dst5B;
-    c:1 = $(CARRY);
+    c:1 = $(CARRY) ^ 1;
     setSubtract3Flags(tmp, srcSimm8, c);
     tmp = tmp - srcSimm8 - c;
     dst5B = tmp;
@@ -3867,7 +3866,7 @@ pushRegList: "("^pushRegFB^" )"  is pushRegFB { build pushRegFB; }
 # (1) SBB.B #simm, Ax
 :SBB.B srcSimm8, dst5Ax              is b0_0007=0x1; ((b1_0407=0x9 & b1_size_0=0; b2_0005=0x2e) & $(DST5AX)); srcSimm8 {
     tmp:1 = dst5Ax:1;
-    c:1 = $(CARRY);
+    c:1 = $(CARRY) ^ 1;
     setSubtract3Flags(tmp, srcSimm8, c);
     tmp = tmp - srcSimm8 - c;
     dst5Ax = zext(tmp);
@@ -3877,7 +3876,7 @@ pushRegList: "("^pushRegFB^" )"  is pushRegFB { build pushRegFB; }
 # (1) SBB.W #simm, dst
 :SBB.W srcSimm16, dst5W              is b0_0007=0x1; ((b1_0407=0x9 & b1_size_0=1; b2_0005=0x2e) ... & $(DST5W)); srcSimm16 {
     tmp:2 = dst5W;
-    c:2 = zext($(CARRY));
+    c:2 = zext($(CARRY) ^ 1);
     setSubtract3Flags(tmp, srcSimm16, c);
     tmp = tmp - srcSimm16 - c;
     dst5W = tmp;
@@ -3887,7 +3886,7 @@ pushRegList: "("^pushRegFB^" )"  is pushRegFB { build pushRegFB; }
 # (1) SBB.B #simm, Ax
 :SBB.W srcSimm16, dst5Ax             is b0_0007=0x1; ((b1_0407=0x9 & b1_size_0=1; b2_0005=0x2e) & $(DST5AX)); srcSimm16 {
     tmp:2 = dst5Ax:2;
-    c:2 = zext($(CARRY));
+    c:2 = zext($(CARRY) ^ 1);
     setSubtract3Flags(tmp, srcSimm16, c);
     tmp = tmp - srcSimm16 - c;
     dst5Ax = zext(tmp);
@@ -3898,7 +3897,7 @@ pushRegList: "("^pushRegFB^" )"  is pushRegFB { build pushRegFB; }
 :SBB.B src5B, dst5B_afterSrc5        is b0_0007=0x1; ((b1_0707=1 & b1_size_0=0; b2_0003=0x6) ... & $(SRC5B) ... & $(DST5B_AFTER_SRC5) ...) {
     tmp:1 = dst5B_afterSrc5;
     s:1 = src5B;
-    c:1 = $(CARRY);
+    c:1 = $(CARRY) ^ 1;
     setSubtract3Flags(tmp, s, c);
     tmp = tmp - s - c;
     dst5B_afterSrc5 = tmp;
@@ -3909,7 +3908,7 @@ pushRegList: "("^pushRegFB^" )"  is pushRegFB { build pushRegFB; }
 :SBB.B src5B, dst5Ax                 is b0_0007=0x1; ((b1_0707=1 & b1_size_0=0; b2_0003=0x6) ... & $(SRC5B) & $(DST5AX) ...) {
     tmp:1 = dst5Ax:1;
     s:1 = src5B;
-    c:1 = $(CARRY);
+    c:1 = $(CARRY) ^ 1;
     setSubtract3Flags(tmp, s, c);
     tmp = tmp - s - c;
     dst5Ax = zext(tmp);
@@ -3920,7 +3919,7 @@ pushRegList: "("^pushRegFB^" )"  is pushRegFB { build pushRegFB; }
 :SBB.W src5W, dst5W_afterSrc5        is b0_0007=0x1; ((b1_0707=1 & b1_size_0=1; b2_0003=0x6) ... & $(SRC5W) ... & $(DST5W_AFTER_SRC5) ...) {
     tmp:2 = dst5W_afterSrc5;
     s:2 = src5W;
-    c:2 = zext($(CARRY));
+    c:2 = zext($(CARRY) ^ 1);
     setSubtract3Flags(tmp, s, c);
     tmp = tmp - s - c;
     dst5W_afterSrc5 = tmp;
@@ -3931,7 +3930,7 @@ pushRegList: "("^pushRegFB^" )"  is pushRegFB { build pushRegFB; }
 :SBB.W src5W, dst5Ax                 is b0_0007=0x1; ((b1_0707=1 & b1_size_0=1; b2_0003=0x6) ... & $(SRC5W) & $(DST5AX) ...) {
     tmp:2 = dst5Ax:2;
     s:2 = src5W;
-    c:2 = zext($(CARRY));
+    c:2 = zext($(CARRY) ^ 1);
     setSubtract3Flags(tmp, s, c);
     tmp = tmp - s - c;
     dst5Ax = zext(tmp);
@@ -3983,23 +3982,20 @@ pushRegList: "("^pushRegFB^" )"  is pushRegFB { build pushRegFB; }
 }
 
 ##### SHA #####
+# an arithmetic right shift cannot overflow
 macro SHAsetShiftRightFlags(val,shift,result) {
     local c = (val >> (shift - 1)) & 1;
     $(CARRY) = c:1;
-    local mask = ~(-(1 << shift));
-    allOnes:1 = (mask & val) == mask;
-    allZeros:1 = (mask & val) == 0;
-    $(OVERFLOW) = (result s< 0 && allOnes) || (result s>= 0 && allZeros);
+    $(OVERFLOW) = 0;
     setResultFlags(result);
 } 
 
 macro SHAsetShiftLeftFlags(val,shift,result,sze) {
     local c = (val >> (sze - shift)) & 1;
     $(CARRY) = c:1;
-    local mask = -(1 << shift);
-    allOnes:1 = (mask & val) == mask;
-    allZeros:1 = (mask & val) == 0;
-    $(OVERFLOW) = (result s< 0 && allOnes) || (result s>= 0 && allZeros);
+    # O: the bits shifted out and the new sign bit are not all copies of the old sign
+    local top = val s>> (sze - 1 - shift);
+    $(OVERFLOW) = (top != 0) && (top != -1);
     setResultFlags(result);
 }
 

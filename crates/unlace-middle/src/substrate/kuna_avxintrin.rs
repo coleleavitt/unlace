@@ -227,7 +227,11 @@ pub fn vector_type(
     size: i32,
     kind: u8,
 ) -> Option<std::rc::Rc<crate::dtype::Datatype>> {
-    let name = vector_type_name(size, kind)?;
+    let name = match crate::kuna_neonintrin::decode_kind(kind) {
+        Some((elem, lane)) => crate::kuna_neonintrin::vector_type_name(size, elem, lane)?,
+        None if kind & 0x80 != 0 => return None,
+        None => vector_type_name(size, kind)?,
+    };
     tf.get_base_named(size, crate::dtype::type_metatype::TYPE_UNKNOWN, &name)
         .ok()
 }

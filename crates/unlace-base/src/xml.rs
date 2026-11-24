@@ -2355,7 +2355,8 @@ mod tests {
         // and spphistack-mips + spphistack-aarch64 + spphistack-hexagon + spphistack-or1k / a va_list
         // walk from the incoming stack pointer is a stack-address local (option spphistack)
         // and vastart-callindirect / a va_start prologue whose field writes moved into call INDIRECTs
-        assert_eq!(count, 1023, "corpus file count drifted");
+        // and aarch64-fcvtzu / an unsigned AArch64 float conversion to a word stays unsigned
+        assert_eq!(count, 1024, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

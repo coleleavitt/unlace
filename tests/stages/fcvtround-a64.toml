@@ -183,9 +183,14 @@ count = 0
 regex = '\(u?int4\)x\b'
 
 [[match]]
-name = 'FCVTROUND #2: fcvtms rounds down (floor_i, ufloor)'
-count = 2
+name = 'FCVTROUND #2: fcvtms rounds down (floor_i)'
+count = 1
 regex = '^\s*return \(int4\)FLOAT_FLOOR\(x\);$'
+
+[[match]]
+name = 'FCVTROUND #21: fcvtmu rounds down to an unsigned word through 64 bits (ufloor)'
+count = 1
+regex = '^\s*return \(uint4\)\(int8\)FLOAT_FLOOR\(x\);$'
 
 [[match]]
 name = 'FCVTROUND #3: fcvtps rounds up (ceil_i, SIMD-scalar ceil_simd)'

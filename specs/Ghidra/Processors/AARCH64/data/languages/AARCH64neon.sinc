@@ -6637,9 +6637,21 @@ fcvt_srnd64: is b_1920=0b11 & Rn_FPR64 { export Rn_FPR64; }
 # Half-precision to 32-bit variant when sf == 0 && type == 11
 
 :^fcvt_smnemonic Rd_GPR32, Rn_FPR16
-is b_31=0 & b_2430=0b0011110 & b_2223=0b11 & b_21=1 & b_1718=0b00 & b_1015=0b000000 & fcvt_smnemonic & Rd_GPR32 & Rn_FPR16 & fcvt_srnd16 & Rd_GPR64
+is b_31=0 & b_16=0 & b_2430=0b0011110 & b_2223=0b11 & b_21=1 & b_1718=0b00 & b_1015=0b000000 & fcvt_smnemonic & Rd_GPR32 & Rn_FPR16 & fcvt_srnd16 & Rd_GPR64
 {
 	Rd_GPR32 = trunc(fcvt_srnd16);
+	zext_rs(Rd_GPR64); # zero upper 28 bytes of Rd_GPR64
+}
+
+# (unlace) The unsigned forms (opcode<0> = 1: fcvtzu, fcvtmu, fcvtnu, fcvtpu) to a
+# 32-bit register. trunc is a signed conversion, so the value is truncated to 64
+# bits and its low word kept: an input of 2^31 or more is not clamped to INT_MAX.
+
+:^fcvt_smnemonic Rd_GPR32, Rn_FPR16
+is b_31=0 & b_16=1 & b_2430=0b0011110 & b_2223=0b11 & b_21=1 & b_1718=0b00 & b_1015=0b000000 & fcvt_smnemonic & Rd_GPR32 & Rn_FPR16 & fcvt_srnd16 & Rd_GPR64
+{
+	local wide:8 = trunc(fcvt_srnd16);
+	Rd_GPR32 = wide:4;
 	zext_rs(Rd_GPR64); # zero upper 28 bytes of Rd_GPR64
 }
 
@@ -6678,9 +6690,21 @@ is b_31=1 & b_2430=0b0011110 & b_2223=0b11 & b_21=1 & b_1718=0b00 & b_1015=0b000
 # Single-precision to 32-bit variant when sf == 0 && type == 00
 
 :^fcvt_smnemonic Rd_GPR32, Rn_FPR32
-is b_31=0 & b_2430=0b0011110 & b_2223=0b00 & b_21=1 & b_1718=0b00 & b_1015=0b000000 & fcvt_smnemonic & Rd_GPR32 & Rn_FPR32 & fcvt_srnd32 & Rd_GPR64
+is b_31=0 & b_16=0 & b_2430=0b0011110 & b_2223=0b00 & b_21=1 & b_1718=0b00 & b_1015=0b000000 & fcvt_smnemonic & Rd_GPR32 & Rn_FPR32 & fcvt_srnd32 & Rd_GPR64
 {
 	Rd_GPR32 = trunc(fcvt_srnd32);
+	zext_rs(Rd_GPR64); # zero upper 28 bytes of Rd_GPR64
+}
+
+# (unlace) The unsigned forms (opcode<0> = 1: fcvtzu, fcvtmu, fcvtnu, fcvtpu) to a
+# 32-bit register. trunc is a signed conversion, so the value is truncated to 64
+# bits and its low word kept: an input of 2^31 or more is not clamped to INT_MAX.
+
+:^fcvt_smnemonic Rd_GPR32, Rn_FPR32
+is b_31=0 & b_16=1 & b_2430=0b0011110 & b_2223=0b00 & b_21=1 & b_1718=0b00 & b_1015=0b000000 & fcvt_smnemonic & Rd_GPR32 & Rn_FPR32 & fcvt_srnd32 & Rd_GPR64
+{
+	local wide:8 = trunc(fcvt_srnd32);
+	Rd_GPR32 = wide:4;
 	zext_rs(Rd_GPR64); # zero upper 28 bytes of Rd_GPR64
 }
 
@@ -6719,9 +6743,21 @@ is b_31=1 & b_2430=0b0011110 & b_2223=0b00 & b_21=1 & b_1718=0b00 & b_1015=0b000
 # Double-precision to 32-bit variant when sf == 0 && type == 01
 
 :^fcvt_smnemonic Rd_GPR32, Rn_FPR64
-is b_31=0 & b_2430=0b0011110 & b_2223=0b01 & b_21=1 & b_1718=0b00 & b_1015=0b000000 & fcvt_smnemonic & Rd_GPR32 & Rn_FPR64 & fcvt_srnd64 & Rd_GPR64
+is b_31=0 & b_16=0 & b_2430=0b0011110 & b_2223=0b01 & b_21=1 & b_1718=0b00 & b_1015=0b000000 & fcvt_smnemonic & Rd_GPR32 & Rn_FPR64 & fcvt_srnd64 & Rd_GPR64
 {
 	Rd_GPR32 = trunc(fcvt_srnd64);
+	zext_rs(Rd_GPR64); # zero upper 28 bytes of Rd_GPR64
+}
+
+# (unlace) The unsigned forms (opcode<0> = 1: fcvtzu, fcvtmu, fcvtnu, fcvtpu) to a
+# 32-bit register. trunc is a signed conversion, so the value is truncated to 64
+# bits and its low word kept: an input of 2^31 or more is not clamped to INT_MAX.
+
+:^fcvt_smnemonic Rd_GPR32, Rn_FPR64
+is b_31=0 & b_16=1 & b_2430=0b0011110 & b_2223=0b01 & b_21=1 & b_1718=0b00 & b_1015=0b000000 & fcvt_smnemonic & Rd_GPR32 & Rn_FPR64 & fcvt_srnd64 & Rd_GPR64
+{
+	local wide:8 = trunc(fcvt_srnd64);
+	Rd_GPR32 = wide:4;
 	zext_rs(Rd_GPR64); # zero upper 28 bytes of Rd_GPR64
 }
 

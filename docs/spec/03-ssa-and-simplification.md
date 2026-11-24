@@ -3889,8 +3889,9 @@ of such values. The proof is a bounded walk (64 definitions) that keeps the bits
 through constants, `COPY`, `INT_ZEXT`, `INT_OR`, `INT_AND`, shifts by a constant, `PIECE`,
 `SUBPIECE` and `MULTIEQUAL` (every input must agree). An input, any other definition or an
 exhausted budget proves nothing, except that under option `fpargboxed` (default on,
-RISC-V only) an FP argument register input (`fa0`..`fa7`, 8 bytes) has its upper 32 bits
-known as ones. The psABI passes a float argument narrower than FLEN NaN-boxed. Only those
+RISC-V only) an input in an FP argument register (`fa0`..`fa7`) has the bits that lie in
+the register's upper 32 known as ones: the whole register, or the `fa0+4:4` upper word that
+heritage splits off. The psABI passes a float argument narrower than FLEN NaN-boxed. Only those
 upper bits are claimed, so a test of a float's own bits is never folded, and a half-precision
 parameter's 48-bit test stays. *Rewrite:* the
 compare becomes a `COPY` of true (`==`) or false (`!=`), and the canonical-NaN branch of the

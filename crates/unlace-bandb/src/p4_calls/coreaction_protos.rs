@@ -1944,6 +1944,36 @@ impl ActionReturnRecovery {
             let _ = data.op_set_all_input(retop, &newparam);
             return;
         }
+        // (kuna) An aggregate returned one member per vector register (AAPCS64
+        // HFA in s0, s1, s2): join the members at a join address.  See
+        // [`crate::kuna_hfareturn`].
+        {
+            let mut members = Vec::new();
+            for i in 0..active.get_num_trials() {
+                let trial = active.get_trial(i);
+                if !trial.is_used() || trial.get_slot() >= num_input {
+                    break;
+                }
+                if let Some(vn) = data
+                    .obank()
+                    .get(retop)
+                    .and_then(|o| o.get_in(trial.get_slot()))
+                {
+                    members.push((vn, trial.get_address().clone(), trial.get_size()));
+                }
+            }
+            if crate::kuna_hfareturn::per_register_members(data, &members) {
+                if let Some(joined) = crate::kuna_hfareturn::join_members(data, retop, &members) {
+                    let mut finalparam = Vec::new();
+                    if let Some(in0) = data.obank().get(retop).and_then(|o| o.get_in(0)) {
+                        finalparam.push(in0);
+                    }
+                    finalparam.push(joined);
+                    let _ = data.op_set_all_input(retop, &finalparam);
+                    return;
+                }
+            }
+        }
         // Many-piece single-container concatenation (coreaction.cc:1915-1951):
         // walk the contiguous used trials, building a PIECE chain at the earliest
         // address.  Not reached by the default x86-64 register models (which
@@ -2015,6 +2045,63 @@ impl ActionReturnRecovery {
             finalparam.push(pre);
         }
         let _ = data.op_set_all_input(retop, &finalparam);
+    }
+}
+
+/// (kuna) `KUNA_RETREC_TRACE`: print the expression tree under `vn`.
+fn retrec_tree(data: &Funcdata, vn: crate::context::VarnodeId, depth: usize) {
+    let Some(v) = data.vbank().get(vn) else {
+        return;
+    };
+    let pad = "  ".repeat(depth);
+    let tag = if v.is_constant() {
+        format!("const {:#x}", v.get_offset())
+    } else if v.is_input() {
+        "input".to_string()
+    } else {
+        String::new()
+    };
+    let def = v.get_def().and_then(|d| data.obank().get(d));
+    eprintln!(
+        "tree {}{:#x}+{} {} {:?} descend {}",
+        pad,
+        v.get_addr().get_offset(),
+        v.get_size(),
+        tag,
+        def.map(|o| o.code()),
+        v.descend_iter().count()
+    );
+    if depth >= 7 {
+        return;
+    }
+    if let Some(o) = def {
+        for k in 0..o.num_input() {
+            if let Some(iv) = o.get_in(k) {
+                retrec_tree(data, iv, depth + 1);
+            }
+        }
+    }
+}
+
+/// (kuna) `KUNA_RETREC_TRACE`: print each output trial's state at `stage`.
+fn retrec_trace(stage: &str, data: &Funcdata, active: &crate::fspec::ParamActive) {
+    if std::env::var_os("KUNA_RETREC_TRACE").is_none() {
+        return;
+    }
+    for i in 0..active.get_num_trials() {
+        let t = active.get_trial(i);
+        eprintln!(
+            "retrec {} {} trial {} {:#x}+{} slot {} active {} used {} checked {}",
+            data.get_name(),
+            stage,
+            i,
+            t.get_address().get_offset(),
+            t.get_size(),
+            t.get_slot(),
+            t.is_active(),
+            t.is_used(),
+            t.is_checked()
+        );
     }
 }
 
@@ -2108,6 +2195,17 @@ impl Action for ActionReturnRecovery {
                 );
                 let (realistic, solid) =
                     ancestor.execute(data, op, slot, trial_size, trial_cond, trial_killed, false);
+                if std::env::var_os("KUNA_RETREC_TRACE").is_some() {
+                    eprintln!(
+                        "retrec {} ancestor trial {} {:#x}+{} realistic {} solid {}",
+                        data.get_name(),
+                        i,
+                        active.get_trial(i).get_address().get_offset(),
+                        trial_size,
+                        realistic,
+                        solid
+                    );
+                }
                 ancestor.apply_trial(active.get_trial_mut(i), realistic, solid);
                 if let Some(r) = ancestor
                     .input_fail_reader()
@@ -2125,6 +2223,12 @@ impl Action for ActionReturnRecovery {
                         let trial = active.get_trial_mut(i);
                         data.ancestor_op_use(maxancestor, vn, op, trial, 0, 0)
                     };
+                    if std::env::var_os("KUNA_RETREC_TRACE").is_some() {
+                        eprintln!("retrec {} opuse trial {} only {}", data.get_name(), i, only);
+                        if !only {
+                            retrec_tree(data, vn, 0);
+                        }
+                    }
                     if only {
                         active.get_trial_mut(i).mark_active();
                     }
@@ -2141,11 +2245,13 @@ impl Action for ActionReturnRecovery {
         }
 
         if active.is_fully_checked() {
+            retrec_trace("checked", data, &active);
             crate::kuna_zerocallregs::drop_epilogue_zeros(data, &mut active, &return_ops);
             crate::kuna_passthrough::keep_tail_return_whole(data, &mut active);
             crate::kuna_callresultuse::yield_to_own_value(data, &mut active, &return_ops);
             crate::kuna_callresultuse::settle_planted(data, &mut active);
             crate::kuna_zerofillreturn::drop_zero_fill(data, &mut active, &return_ops);
+            crate::kuna_hfareturn::keep_lower_results(data, &mut active, &return_ops);
             crate::kuna_armfloatreturn::narrow_returns(data, &mut active);
             crate::kuna_retsysreg::drop_set_aside(data, &mut active, &return_ops);
             crate::kuna_x87emptyreturn::drop_empty(data, &mut active, &return_ops);
@@ -2160,10 +2266,12 @@ impl Action for ActionReturnRecovery {
             }
             let handed_back = whole_pair.is_none()
                 && crate::kuna_bejoinpass::settle_return(data, &mut active, &return_ops);
+            retrec_trace("filtered", data, &active);
             let manager_rc = data.get_arch().manage.clone();
             let _ = data
                 .get_func_proto()
                 .derive_output_map(&mut active, &manager_rc);
+            retrec_trace("mapped", data, &active);
             crate::kuna_voidret::whole_or_none(data, &mut active);
             crate::kuna_retinputhalf::note_moved_back_returns(
                 data,

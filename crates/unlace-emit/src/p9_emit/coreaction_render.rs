@@ -1607,6 +1607,33 @@ impl Action for ActionDeindirect {
 /// Mark Varnodes built out of legal parameters with the `directwrite` attribute
 /// (C++ `ActionDirectWrite`, `coreaction.hh:243`).  `flags = 0`; carries the
 /// `propagateIndirect` config (whether to taint through `CPUI_INDIRECT`).
+/// (kuna) Whether the input `[addr, addr+sz)` is a lane of a floating-point or
+/// vector argument register: wholly inside one of the model's `TYPECLASS_FLOAT`
+/// input entries, though not at its start. `possibleInputParam` accepts only a
+/// value justified in its entry, but AArch64 code reads a vector argument's lane
+/// in place (`mov s0, v1.s[2]`, `mov d0, v0.d[1]`), and the lane is the
+/// argument's value, not an unaffected register.
+fn vector_lane_input(data: &Funcdata, addr: &Address, sz: i32) -> bool {
+    let proto = data.get_func_proto();
+    if !proto.has_model() || sz <= 0 {
+        return false;
+    }
+    let Some(space) = addr.get_space() else {
+        return false;
+    };
+    let off = addr.get_offset();
+    let Some(end) = off.checked_add(sz as u64) else {
+        return false;
+    };
+    proto.model().input().get_entry().iter().any(|e| {
+        e.get_type() == crate::dtype::type_class::TYPECLASS_FLOAT
+            && e.get_join_record().is_none()
+            && e.get_space().get_index() == space.get_index()
+            && e.get_base() <= off
+            && end <= e.get_base().saturating_add(e.get_size().max(0) as u64)
+    })
+}
+
 pub struct ActionDirectWrite {
     base: ActionBase,
     /// C++ `bool propagateIndirect` — propagate the attribute through
@@ -1695,7 +1722,9 @@ fn directwrite_apply(data: &mut Funcdata, propagate_indirect: bool) -> ApplyResu
             if is_persist || is_spacebase {
                 data.vbank_mut().get_mut(vn).expect("dw").set_direct_write();
                 worklist.push(vn);
-            } else if data.get_func_proto().possible_input_param(&addr, sz) {
+            } else if data.get_func_proto().possible_input_param(&addr, sz)
+                || vector_lane_input(data, &addr, sz)
+            {
                 // C++ `getFuncProto().possibleInputParam(...)`, called
                 // unconditionally. The kuna `has_store() &&` pre-guard was
                 // dropped (L1): `possible_input_param` is now no-store/no-model

@@ -1962,7 +1962,11 @@ at the match (01 §1.4).
   callee's reached returns do not contradict, takes the model's extrapop plus
   that value. A verdict the system pins for one direct call is the callee's,
   so the other direct calls to the same callee in the function take it too
-  when the pinned ones agree.
+  when the pinned ones agree. Before any verdict is returned, the equations
+  are solved once more with every pop of the verdicts fixed at its value
+  (`spsolve.rs (verified)`); when they no longer hold, the solve of the whole
+  function is dropped, so a pop copied to a sibling call that the system
+  contradicts applies nowhere in that function.
 
   The call sites found not to return are recorded on the function's override
   (`crates/unlace-middle/src/p0_knowledge/overrides.rs

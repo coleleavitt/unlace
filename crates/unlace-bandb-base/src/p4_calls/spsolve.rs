@@ -62,6 +62,10 @@
 //! A direct callee with no reachable return is not followed at all
 //! ([`callee_never_returns`]).
 //!
+//! The verdicts are verified before they are returned: the equations must
+//! still hold with each pop fixed at its value ([`verified`]). That is the
+//! check on the pops that `spread` copies between calls of one callee.
+//!
 //! # What it will not do
 //!
 //! * A call that ends its block and whose callee's code is not available (an
@@ -1105,10 +1109,41 @@ fn solve_calls(data: &Funcdata, sp: &Address, size: int4) -> Option<Vec<Verdict>
         }
     }
     spread(data, &mut verdicts, &pinned);
+    if !verified(&eqs, &calls, &verdicts, &nonneg) {
+        return None;
+    }
     verdicts
         .iter()
         .any(|v| *v != Verdict::Keep)
         .then_some(verdicts)
+}
+
+/// Do the equations still hold with every pop the verdicts state fixed at its
+/// value? `spread` gives a callee's pop to its other direct calls, and a call
+/// that the system keeps at zero, or at another value, contradicts it. A solve
+/// the system refutes is dropped whole, so no pop or no-return verdict of the
+/// function is applied. A pop on a call with no unknown of its own cannot be
+/// checked here and is left to the rest of the solve.
+fn verified(
+    eqs: &[Form],
+    calls: &[(usize, usize, Site)],
+    verdicts: &[Verdict],
+    nonneg: &[bool],
+) -> bool {
+    let mut forms = eqs.to_vec();
+    for &(v, i, _) in calls {
+        let Verdict::Pop(extra) = verdicts[i] else {
+            continue;
+        };
+        let Some(fixed) = extra
+            .checked_neg()
+            .and_then(|k| Form::var(v as u32).shift(k))
+        else {
+            return false;
+        };
+        forms.push(fixed);
+    }
+    eliminate_signed(&forms, nonneg).is_some()
 }
 
 /// The pops the solved values state, by call spec; `None` when a call that

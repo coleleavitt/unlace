@@ -27,10 +27,9 @@ pub fn set_cil_env(on: bool) {
     unsafe { std::env::set_var(CIL_ENV, if on { "on" } else { "off" }) };
 }
 
-/// Apply `option cil VALUE`.
-pub fn set_cil(value: &str) -> UnlaceResult<String> {
+/// The confirmation of `option cil VALUE`, or its parse error.
+pub fn cil_message(value: &str) -> UnlaceResult<String> {
     crate::options::on_or_off(value).map(|on| {
-        set_cil_env(on);
         format!(
             "managed .NET assemblies load as {}",
             if on { "CIL" } else { "native code" }

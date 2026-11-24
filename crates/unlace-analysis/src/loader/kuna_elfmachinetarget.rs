@@ -12,6 +12,13 @@
 //! - `EM_AMDGPU`: the GFX9, GFX10 or GFX11 language of `EF_AMDGPU_MACH`; wave32 on
 //!   RDNA, since the wave size is in the kernel descriptor, not the header.
 //!   GFX9.4 (gfx940-gfx950), GCN 1-4 and GFX12 have no language.
+//! - `EM_68K`: `68000:BE:32:Coldfire` for a ColdFire ISA in `EF_M68K_CF_MASK`,
+//!   `68000:BE:32:default` for `EF_M68K_M68000`, and `68000:BE:32:MC68020` otherwise.
+//! - `EM_OPENRISC`, `EM_XTENSA`: the language of the header's byte order.
+//! - `EM_CSKY`: ABIv1 (`e_flags` bits 28-31 = 1) or ABIv2, in the header's byte order.
+//! - `EM_CUDA`: the SASS language of the `sm_NN` in `e_flags` (bits 8-15 from ELF ABI
+//!   version 8, bits 0-7 before); an architecture without a language has none.
+use object::Endian;
 use object::read::elf::FileHeader;
 
 const EM_AVR: u16 = 83;
@@ -20,6 +27,11 @@ const EM_HEXAGON: u16 = 164;
 const EM_AMDGPU: u16 = 224;
 const EM_LANAI: u16 = 244;
 const EM_LOONGARCH: u16 = 258;
+const EM_68K: u16 = 4;
+const EM_OPENRISC: u16 = 92;
+const EM_XTENSA: u16 = 94;
+const EM_CUDA: u16 = 190;
+const EM_CSKY: u16 = 252;
 
 const GFX9: &[u32] = &[0x2c, 0x2d, 0x2e, 0x2f, 0x30, 0x31, 0x32, 0x3f, 0x51];
 const GFX10: &[u32] = &[
@@ -42,6 +54,28 @@ pub(crate) fn language_ids() -> impl Iterator<Item = String> {
         "AMDGPU:LE:64:GFX9:default",
         "AMDGPU:LE:64:GFX10:default",
         "AMDGPU:LE:64:GFX11:default",
+        "68000:BE:32:default:default",
+        "68000:BE:32:MC68020:default",
+        "68000:BE:32:Coldfire:default",
+        "OpenRISC:LE:32:default:default",
+        "OpenRISC:BE:32:default:default",
+        "Xtensa:LE:32:default:default",
+        "Xtensa:BE:32:default:default",
+        "CSKY:LE:32:v2:default",
+        "CSKY:BE:32:v2:default",
+        "CSKY:LE:32:v1:default",
+        "CSKY:BE:32:v1:default",
+        "SASS:LE:64:SM35:default",
+        "SASS:LE:64:SM52:default",
+        "SASS:LE:64:SM60:default",
+        "SASS:LE:64:SM70:default",
+        "SASS:LE:64:SM75:default",
+        "SASS:LE:64:SM80:default",
+        "SASS:LE:64:SM86:default",
+        "SASS:LE:64:SM89:default",
+        "SASS:LE:64:SM90:default",
+        "SASS:LE:64:SM100:default",
+        "SASS:LE:64:SM120:default",
     ]
     .into_iter()
     .map(String::from)
@@ -79,24 +113,143 @@ fn select(machine: u16, flags: u32, wide: bool) -> Option<&'static str> {
     })
 }
 
+/// The machines whose language follows the header's byte order (`big`) or its ELF ABI
+/// version (`abi`, the CUDA `e_flags` layout).
+fn select_by_header(machine: u16, flags: u32, big: bool, abi: u8) -> Option<&'static str> {
+    Some(match machine {
+        EM_68K => {
+            if flags & 0xff != 0 {
+                "68000:BE:32:Coldfire:default"
+            } else if flags & 0x0100_0000 != 0 {
+                "68000:BE:32:default:default"
+            } else {
+                "68000:BE:32:MC68020:default"
+            }
+        }
+        EM_OPENRISC if big => "OpenRISC:BE:32:default:default",
+        EM_OPENRISC => "OpenRISC:LE:32:default:default",
+        EM_XTENSA if big => "Xtensa:BE:32:default:default",
+        EM_XTENSA => "Xtensa:LE:32:default:default",
+        EM_CSKY => match (flags >> 28 == 1, big) {
+            (true, true) => "CSKY:BE:32:v1:default",
+            (true, false) => "CSKY:LE:32:v1:default",
+            (false, true) => "CSKY:BE:32:v2:default",
+            (false, false) => "CSKY:LE:32:v2:default",
+        },
+        EM_CUDA => {
+            let sm = if abi >= 8 {
+                (flags >> 8) & 0xff
+            } else {
+                flags & 0xff
+            };
+            match sm {
+                35 | 37 => "SASS:LE:64:SM35:default",
+                50 | 52 | 53 => "SASS:LE:64:SM52:default",
+                60..=62 => "SASS:LE:64:SM60:default",
+                70 | 72 => "SASS:LE:64:SM70:default",
+                75 => "SASS:LE:64:SM75:default",
+                80 => "SASS:LE:64:SM80:default",
+                86 | 87 => "SASS:LE:64:SM86:default",
+                89 => "SASS:LE:64:SM89:default",
+                90 => "SASS:LE:64:SM90:default",
+                100 | 101 | 103 => "SASS:LE:64:SM100:default",
+                120 | 121 => "SASS:LE:64:SM120:default",
+                _ => return None,
+            }
+        }
+        _ => return None,
+    })
+}
+
 pub(crate) fn language_id(file: &object::File<'_>) -> Option<String> {
-    let (machine, flags, wide) = match file {
+    let (machine, flags, wide, big, abi) = match file {
         object::File::Elf32(elf) => {
             let h = elf.elf_header();
-            (h.e_machine(elf.endian()), h.e_flags(elf.endian()), false)
+            let e = elf.endian();
+            (
+                h.e_machine(e),
+                h.e_flags(e),
+                false,
+                e.is_big_endian(),
+                h.e_ident().abi_version,
+            )
         }
         object::File::Elf64(elf) => {
             let h = elf.elf_header();
-            (h.e_machine(elf.endian()), h.e_flags(elf.endian()), true)
+            let e = elf.endian();
+            (
+                h.e_machine(e),
+                h.e_flags(e),
+                true,
+                e.is_big_endian(),
+                h.e_ident().abi_version,
+            )
         }
         _ => return None,
     };
-    select(machine, flags, wide).map(String::from)
+    select(machine, flags, wide)
+        .or_else(|| select_by_header(machine, flags, big, abi))
+        .map(String::from)
 }
 
 #[cfg(test)]
 mod tests {
     use super::select;
+    use super::select_by_header;
+
+    #[test]
+    fn header_byte_order_and_flags_select_their_language() {
+        assert_eq!(
+            select_by_header(4, 0, true, 0),
+            Some("68000:BE:32:MC68020:default")
+        );
+        assert_eq!(
+            select_by_header(4, 0x0100_0000, true, 0),
+            Some("68000:BE:32:default:default")
+        );
+        assert_eq!(
+            select_by_header(4, 0x8065, true, 0),
+            Some("68000:BE:32:Coldfire:default")
+        );
+        assert_eq!(
+            select_by_header(92, 0, true, 0),
+            Some("OpenRISC:BE:32:default:default")
+        );
+        assert_eq!(
+            select_by_header(94, 0x300, false, 0),
+            Some("Xtensa:LE:32:default:default")
+        );
+        assert_eq!(
+            select_by_header(252, 0x2100_0008, false, 0),
+            Some("CSKY:LE:32:v2:default")
+        );
+        assert_eq!(
+            select_by_header(252, 0x1000_0000, true, 0),
+            Some("CSKY:BE:32:v1:default")
+        );
+        assert_eq!(
+            select_by_header(190, 0x0600_5004, false, 8),
+            Some("SASS:LE:64:SM80:default")
+        );
+        assert_eq!(
+            select_by_header(190, 0x0050_0550, false, 7),
+            Some("SASS:LE:64:SM80:default")
+        );
+        assert_eq!(select_by_header(190, 0x0000_1e04, false, 8), None, "sm_30");
+        let ids: Vec<String> = super::language_ids().collect();
+        for (m, f, b, a) in [
+            (4, 0, true, 0),
+            (4, 0x0100_0000, true, 0),
+            (4, 0x8065, true, 0),
+            (92, 0, false, 0),
+            (94, 0, true, 0),
+            (252, 0x1000_0000, false, 0),
+            (190, 0x0000_7804, false, 8),
+        ] {
+            let id = select_by_header(m, f, b, a);
+            assert!(ids.iter().any(|i| Some(i.as_str()) == id), "{id:?}");
+        }
+    }
 
     #[test]
     fn machines_and_flags_select_their_language() {

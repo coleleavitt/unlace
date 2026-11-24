@@ -131,7 +131,7 @@ _none recorded_
   23 files: `option tailcallframe` (default on, DIV-109) in `p2_lift/kuna_tailcallframe.rs` + its
   tests, `p2_lift/flow.rs`, `infra/decompile_drive.rs`, `infra/architecture.rs`, phases.toml,
   options.rs, `docs/spec/02-lift-and-flow.md`, `docs/history.md`, `docs/options.md`,
-  `tests/stages/tailcallframe.xml` + the stages baseline + corpus count, the catalog count tests
+  `tests/stages/tailcallframe.toml` + the stages baseline + corpus count, the catalog count tests
   and bytecompat fixture, and `tests/cli/direct-address-keyboard-handler.json`.
   Its armed merge chain did NOT fire and cannot: `/tmp/b-r2-dak.final` reads `rust3=2 / DONE` and
   the chain merges only on rc 0. **That rc=2 is the worktree environment, not its code** --

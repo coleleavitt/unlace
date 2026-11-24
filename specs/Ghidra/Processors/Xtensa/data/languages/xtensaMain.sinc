@@ -199,7 +199,7 @@ call_srel_sh2: rel is call_o18 [
 ] { export *:4 rel; }
 
 srel_oex_sh2: rel is ri16_i16 [
-    rel = ((inst_start + 3) & ~3) + ((ri16_i16 | 0xffff0000) << 2);
+    rel = (((inst_start + 3) & ~3) + ((ri16_i16 | 0xffff0000) << 2)) & 0xffffffff;
 ] { export *:4 rel; }
 
 # Immediates split across the instruction.

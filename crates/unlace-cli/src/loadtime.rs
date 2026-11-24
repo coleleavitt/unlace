@@ -1,11 +1,12 @@
-//! Translate CLI options into the environment read during program loading.
+//! Translate CLI options into the load-time variables a load reads: handed to a
+//! console child through its environment, and read into `LoadOptions` for an
+//! in-process load without writing the process environment.
 //!
 //! The console subprocess and in-process loader share these conversions. Runtime
 //! option validation still runs after loading; these preserve the loader's legacy
 //! fallback values, including its different boolean vocabularies.
 
 use std::collections::BTreeMap;
-use std::ffi::OsString;
 use std::process::Command;
 use std::sync::Mutex;
 
@@ -276,8 +277,8 @@ pub(crate) fn apply_to_command(
     }
 }
 
-/// The load options `options` and `slice` state over the process environment, as
-/// [`apply_to_process`] would leave it, without changing it.
+/// The load options `options` and `slice` state over the invocation and the
+/// process environment, without changing either.
 pub(crate) fn load_options(
     options: &[(String, String)],
     slice: Option<&str>,
@@ -290,50 +291,6 @@ pub(crate) fn load_options(
         decode_lanes,
         functions_inventory,
     ))
-}
-
-pub(crate) fn apply_to_process(
-    options: &[(String, String)],
-    slice: Option<&str>,
-    decode_lanes: usize,
-    functions_inventory: bool,
-) -> LoadtimeEnv {
-    let mut env = LoadtimeEnv::default();
-    for (name, value) in settings(options, slice, decode_lanes, functions_inventory) {
-        env.set(name, value.as_deref());
-    }
-    env
-}
-
-/// Restores inherited values when an in-process load returns or unwinds.
-#[derive(Default)]
-pub(crate) struct LoadtimeEnv {
-    previous: Vec<(&'static str, Option<OsString>)>,
-}
-
-impl LoadtimeEnv {
-    fn set(&mut self, name: &'static str, value: Option<&str>) {
-        self.previous.push((name, std::env::var_os(name)));
-        match value {
-            // FIXME: Audit that the environment access only happens in single-threaded code.
-            Some(value) => unsafe { std::env::set_var(name, value) },
-            // FIXME: Audit that the environment access only happens in single-threaded code.
-            None => unsafe { std::env::remove_var(name) },
-        }
-    }
-}
-
-impl Drop for LoadtimeEnv {
-    fn drop(&mut self) {
-        for (name, previous) in self.previous.drain(..).rev() {
-            match previous {
-                // FIXME: Audit that the environment access only happens in single-threaded code.
-                Some(value) => unsafe { std::env::set_var(name, value) },
-                // FIXME: Audit that the environment access only happens in single-threaded code.
-                None => unsafe { std::env::remove_var(name) },
-            }
-        }
-    }
 }
 
 #[cfg(test)]
@@ -504,24 +461,5 @@ mod tests {
             settings(&[], None, 4, false)[unlace_analysis::listing::pdecode::DECODE_JOBS_ENV],
             Some("4".into())
         );
-    }
-
-    #[test]
-    fn process_guard_restores_overwrites_and_removals_after_unwind() {
-        const KEY: &str = "UNLACE_CLI_LOADTIME_GUARD_TEST";
-        let initial = std::env::var_os(KEY);
-        let mut outer = LoadtimeEnv::default();
-        outer.set(KEY, Some("inherited"));
-        let result = std::panic::catch_unwind(|| {
-            let mut inner = LoadtimeEnv::default();
-            inner.set(KEY, Some("temporary"));
-            inner.set(KEY, None);
-            assert_eq!(std::env::var_os(KEY), None);
-            panic!("load failed");
-        });
-        assert!(result.is_err());
-        assert_eq!(std::env::var_os(KEY), Some("inherited".into()));
-        drop(outer);
-        assert_eq!(std::env::var_os(KEY), initial);
     }
 }

@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- The ND-100 has no hardware stack. JPL links in L and EXIT (COPY SL DP)
+     returns. Arguments in A, T, D and X and the result in A (AD for 32 bits)
+     follow register-passing assembler practice; B is the base of the local
+     data area that the ND compilers address B-relative, so it is the stack
+     pointer here. -->
+<compiler_spec>
+  <data_organization>
+    <pointer_size value="2"/>
+    <short_size value="2"/>
+    <integer_size value="2"/>
+    <long_size value="4"/>
+    <long_long_size value="4"/>
+    <float_size value="4"/>
+    <double_size value="6"/>
+    <size_alignment_map>
+      <entry size="1" alignment="1"/>
+      <entry size="2" alignment="1"/>
+      <entry size="4" alignment="1"/>
+      <entry size="6" alignment="1"/>
+    </size_alignment_map>
+  </data_organization>
+  <global>
+    <range space="ram"/>
+  </global>
+  <stackpointer register="B" space="ram"/>
+  <returnaddress>
+    <register name="L"/>
+  </returnaddress>
+  <default_proto>
+    <prototype name="__stdcall" extrapop="0" stackshift="0" strategy="register">
+      <input>
+        <pentry minsize="1" maxsize="2">
+          <register name="A"/>
+        </pentry>
+        <pentry minsize="1" maxsize="2">
+          <register name="T"/>
+        </pentry>
+        <pentry minsize="1" maxsize="2">
+          <register name="D"/>
+        </pentry>
+        <pentry minsize="1" maxsize="2">
+          <register name="X"/>
+        </pentry>
+      </input>
+      <output>
+        <pentry minsize="1" maxsize="2">
+          <register name="A"/>
+        </pentry>
+        <pentry minsize="3" maxsize="4">
+          <register name="AD"/>
+        </pentry>
+      </output>
+      <unaffected>
+        <register name="B"/>
+      </unaffected>
+      <killedbycall>
+        <register name="A"/>
+        <register name="D"/>
+        <register name="T"/>
+        <register name="X"/>
+        <register name="L"/>
+        <register name="C"/>
+        <register name="Q"/>
+        <register name="M"/>
+        <register name="K"/>
+      </killedbycall>
+    </prototype>
+  </default_proto>
+</compiler_spec>

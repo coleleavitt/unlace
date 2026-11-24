@@ -15,8 +15,9 @@
 //! is interned before its members are walked, so the inner pointer names the
 //! shell (the same documented loss as `dwarfstructs`). A class contributes its
 //! base classes as `super_<Base>` members and its virtual-function-table pointer
-//! as a `__vftable` member at offset 0. Bitfield members, members that overlap
-//! an earlier one and members past the stated size are left out. A leaf the
+//! as a `__vftable` member at offset 0. A structure's bitfields keep their bit
+//! positions; members that overlap an earlier one, members past the stated size
+//! and a union's bitfields are left out. A leaf the
 //! mapper does not understand maps to nothing, and the caller skips whatever
 //! needed it. Every walk is bounded by [`MAX_DEPTH`].
 
@@ -25,7 +26,7 @@ use std::rc::Rc;
 
 use pdb::FallibleIterator;
 use unlace_base::types::{int4, uint4};
-use unlace_decomp::dtype::{Datatype, TypeFactory, TypeField, type_metatype};
+use unlace_decomp::dtype::{Datatype, TypeBitField, TypeFactory, TypeField, type_metatype};
 use unlace_decomp::fspec::PrototypePieces;
 
 /// Nesting bound for one type resolution.
@@ -317,29 +318,36 @@ impl<'t, 'f> TpiMapper<'t, 'f> {
             return Some(shell);
         };
         self.shells.insert(index.0, Rc::clone(&shell));
-        let members = self.members(fields, size, union);
+        let (members, bits) = self.members(fields, size, union);
         self.shells.remove(&index.0);
-        let align = alignment(size, &members);
+        let align = alignment(size, &members, &bits);
         let done = if union {
             self.types
                 .set_fields_union_raw(&shell, members, size, align)
         } else {
+            let extra = if bits.is_empty() {
+                0
+            } else {
+                unlace_decomp::dtype::flags::has_bitfields
+            };
             self.types
-                .set_fields_struct_raw(&shell, members, Vec::new(), size, align, 0)
+                .set_fields_struct_raw(&shell, members, bits, size, align, extra)
         };
         Some(done.unwrap_or(shell))
     }
 
     /// The members of a field list (and its continuations) that fit the
     /// aggregate: sorted by offset, inside `size`, and for a structure not
-    /// overlapping the member before them.
+    /// overlapping the member before them; and a structure's bitfields, each in
+    /// the smallest byte span that covers it (PE images are little-endian).
     fn members(
         &mut self,
         fields: Option<pdb::TypeIndex>,
         size: int4,
         union: bool,
-    ) -> Vec<TypeField> {
+    ) -> (Vec<TypeField>, Vec<TypeBitField>) {
         let mut raw: Vec<(int4, String, Rc<Datatype>)> = Vec::new();
+        let mut bits: Vec<TypeBitField> = Vec::new();
         let mut next = fields;
         let mut hops = 0;
         while let Some(list) = next {
@@ -353,7 +361,11 @@ impl<'t, 'f> TpiMapper<'t, 'f> {
             for field in &list.fields {
                 match field {
                     pdb::TypeData::Member(m) => {
-                        if matches!(self.parse(m.field_type), Some(pdb::TypeData::Bitfield(_))) {
+                        if let Some(pdb::TypeData::Bitfield(b)) = self.parse(m.field_type) {
+                            if !union {
+                                let name = m.name.to_string().into_owned();
+                                bits.extend(self.bitfield(m.offset, &b, size, name));
+                            }
                             continue;
                         }
                         let (Ok(offset), Some(t)) =
@@ -397,7 +409,38 @@ impl<'t, 'f> TpiMapper<'t, 'f> {
             let ident = out.len() as int4;
             out.push(TypeField::new(ident, offset, name, t));
         }
-        out
+        for (i, b) in bits.iter_mut().enumerate() {
+            b.ident = (out.len() + i) as int4;
+        }
+        (out, bits)
+    }
+
+    /// The bitfield a member at byte `offset` of LF_BITFIELD `b` declares, when it
+    /// lies inside the structure.
+    fn bitfield(
+        &mut self,
+        offset: u64,
+        b: &pdb::BitfieldType,
+        size: int4,
+        name: String,
+    ) -> Option<TypeBitField> {
+        let t = self.map(b.underlying_type)?;
+        let num_bits = int4::from(b.length);
+        let start = i64::try_from(offset)
+            .ok()?
+            .checked_mul(8)?
+            .checked_add(i64::from(b.position))?;
+        let byte_offset = int4::try_from(start / 8).ok()?;
+        let least_sig_bit = (start % 8) as int4;
+        let byte_size = (least_sig_bit + num_bits + 7) / 8;
+        if num_bits <= 0 || byte_offset.checked_add(byte_size)? > size {
+            return None;
+        }
+        let mut field = TypeBitField::new(0, num_bits, false, name, t);
+        field.byte_offset = byte_offset;
+        field.byte_size = byte_size;
+        field.least_sig_bit = least_sig_bit;
+        Some(field)
     }
 
     /// `void (**)()` at the target's pointer width: a pointer to the table of
@@ -620,10 +663,11 @@ impl<'t, 'f> TpiMapper<'t, 'f> {
 
 /// The aggregate's alignment: the widest member alignment, as a power of two no
 /// wider than the aggregate.
-fn alignment(size: int4, fields: &[TypeField]) -> int4 {
+fn alignment(size: int4, fields: &[TypeField], bits: &[TypeBitField]) -> int4 {
     let derived = fields
         .iter()
         .map(|f| f.field_type.get_alignment())
+        .chain(bits.iter().map(|b| b.field_type.get_alignment()))
         .max()
         .unwrap_or(1)
         .max(1);
@@ -731,6 +775,42 @@ mod tests {
         assert_eq!(names, ["super_Shape", "side"]);
         assert_eq!(tpi.vftable_slots("geo::Shape"), Some(2));
         assert_eq!(tpi.vftable_slots("geo::Square"), Some(2));
+    }
+
+    /// A structure's bitfields keep their bit positions in the smallest byte span
+    /// covering each, and its plain members stay fields.
+    #[test]
+    fn bitfields_keep_their_bits() {
+        let types = factory();
+        let mut pdb = open("pdb_bitfields.pdb");
+        let info = pdb.type_information().expect("TPI stream");
+        let mut tpi = TpiMapper::new(&info, &types, 8);
+        // 0x1006 is the field list of `Flags` (llvm-pdbutil dump --types).
+        let (plain, bits) = tpi.members(Some(pdb::TypeIndex(0x1006)), 12, false);
+        let plain: Vec<(int4, String)> = plain.iter().map(|f| (f.offset, f.name.clone())).collect();
+        assert_eq!(plain, [(8, "d".to_string())]);
+        let bits: Vec<(String, int4, int4, int4, int4)> = bits
+            .iter()
+            .map(|b| {
+                (
+                    b.name.clone(),
+                    b.byte_offset,
+                    b.byte_size,
+                    b.least_sig_bit,
+                    b.num_bits,
+                )
+            })
+            .collect();
+        assert_eq!(
+            bits,
+            [
+                ("a".to_string(), 0, 1, 0, 3),
+                ("b".to_string(), 0, 1, 3, 5),
+                ("c".to_string(), 4, 2, 0, 9),
+            ]
+        );
+        let flags = tpi.map(pdb::TypeIndex(0x1002)).expect("Flags maps");
+        assert_eq!(flags.get_size(), 12);
     }
 
     /// A member function's prototype leads with its `this` pointer.

@@ -8803,8 +8803,11 @@ both
   offsets. A forward reference resolves to the definition with the same unique
   name; an aggregate is interned before its members are walked, so a pointer to
   itself names the shell. A class carries each base class as a `super_<Base>`
-  member and its table pointer as a `__vftable` member at offset 0; bitfield
-  members, overlapping members and members past the stated size are left out.
+  member and its table pointer as a `__vftable` member at offset 0. A structure's
+  bitfield (an `LF_MEMBER` of an `LF_BITFIELD` type) keeps its bit position, placed
+  in the smallest byte span that covers it as `dwarfstructs` does (PE images are
+  little-endian); overlapping members, members past the stated size and a union's
+  bitfields are left out.
   Every procedure record in the module streams then gives its entry address a
   prototype from its type (a member function's `this` first), the parameter names
   coming from the procedure's own parameter records: the `S_LOCAL`s flagged as

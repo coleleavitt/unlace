@@ -2614,6 +2614,11 @@ for t in x86_64:x86_64-pc-windows-msvc i386:i686-pc-windows-msvc; do
 done
 ```
 
+`pdb_bitfields.pdb` (from `pdb_bitfields.cpp`, recipe in its header; only the `.pdb`
+is vendored) holds one struct of bitfields: TPI `0x1002` forward-references `Flags`,
+`0x1006` is its field list (`a:3`, `b:5` in an `unsigned` at 0, `c:9` in an
+`unsigned short` at 4, `d` at 8, 12 bytes).
+
 Pinned (`llvm-pdbutil dump --types --symbols`): x64 ImageBase `0x140000000`,
 `rect_area` at `0x140001020`; TPI `0x1002` is the forward reference to
 `geo::Rect` (32 bytes), `0x1008` `geo::Color`, `0x1009` `geo::Word`, `0x1016`

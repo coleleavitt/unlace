@@ -855,9 +855,12 @@ fn fp32_default_compiler_keeps_o32_unsigned_argument_extension() {
 
 #[test]
 fn o32_aggregate_arguments_keep_memory_order_with_wide_registers() {
-    let path = common::scratch_file("mips-o32-aggregate-placement", "elf");
-    for little in [false, true] {
-        for (fpr, abi) in [(1, 1), (2, 6)] {
+    let cases = [false, true]
+        .into_iter()
+        .flat_map(|little| [(1, 1), (2, 6)].map(|(fpr, abi)| (little, fpr, abi)));
+    common::for_each_parallel(cases, |(little, fpr, abi)| {
+        let path = common::scratch_file("mips-o32-aggregate-placement", "elf");
+        {
             for kind in ["struct", "union"] {
                 for size in [1usize, 2, 4, 8] {
                     let fields = if kind == "struct" {
@@ -921,8 +924,8 @@ fn o32_aggregate_arguments_keep_memory_order_with_wide_registers() {
                 }
             }
         }
-    }
-    std::fs::remove_file(path).unwrap();
+        std::fs::remove_file(path).unwrap();
+    });
 }
 
 fn check_emitted_mips_c(little: bool, code: &str, expression: &str) {

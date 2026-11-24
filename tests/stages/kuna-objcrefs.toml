@@ -1,0 +1,158 @@
+# Objective-C reference slots and selector stubs (`option objc on|off`).
+#
+# Issue: on a large third-party iOS app (84 MB arm64, Swift + ObjC) every message
+# send read `objc_msgSendSuper2(&super, dat_1045b76f0)` even with `objc on`,
+# and 274 of 1,622 calls in a 500-function sample were `sub_1034xxxxx(obj)`:
+# the `__objc_selrefs` slot the selector is loaded from had no name, and the
+# `__objc_stubs` entry a modern link routes most sends through (`adrp/ldr x1`
+# of the selref, `br objc_msgSend`) was an anonymous function.
+#
+# Stage / sub-stage: P1 external-refinement. `analyzers/objc/kuna_objcrefs.rs`
+# names each `__objc_selrefs` slot `selRef_<sel>`, each `__objc_classrefs` /
+# `__objc_superrefs` slot `classRef_<Class>` / `superRef_<Class>` (a chained
+# bind slot from its import name), and each `__objc_stubs` entry
+# `objc_msgSend$<sel>` with the prototype of the image's own method for that
+# selector pinned past the `x1` the stub owns. The rebase slots are reported
+# constant (the RELRO mechanism of the dynamic-relocation unpacking; formerly
+# the `objcrefconst` option, now part of `objc`), so a load through
+# one folds to the selector string / class symbol (Ghidra's
+# ObjectiveC2_ClassAnalyzer marks the same three blocks read-only). The loader
+# unpacks the LC_DYLD_CHAINED_FIXUPS rebases first (`loader/kuna_machorelocs.rs`,
+# under `dynrelocs`), without which a chained slot holds a packed chain word.
+#
+# P0 assertion: `option objc on|off`.
+#
+# The XML wrapper only supplies the harness architecture; every pass clears it
+# and loads the real arm64 fixture through the object bootstrap. The fixture
+# is `macho_objc_refs.m` (two root classes, `Derived : Base`, an undefined
+# `Remote` class resolved by dynamic lookup) linked `-fixup_chains
+# -objc_stubs_fast -x`; see the fixtures README for the stub recipe.
+#
+# Pass 1 (`option objc off`, the shipped default) reproduces the BUG: the
+# super send reads its selector from `dat_1000081f8` and its class from
+# `dat_1000081f0`, `_use` calls the anonymous stub `sub_1000008c0`, and
+# `_remote` sends to `dat_100008230`.
+# Pass 2 (`option objc on`) is the FIX: the stub call is
+# `objc_msgSend$count(a0)` and `_use2` passes `5` to `objc_msgSend$greet:`
+# with no dead `x1` argument; the slot loads fold, so the super send reads
+# `sel_greet_` with `_OBJC_CLASS_$_Derived` in the super struct (and, under
+# the default `objcresolve`, names the method it reaches, `-[Base greet:]`) and `_tag`
+# sends to `_OBJC_CLASS_$_Derived`; the bind slot `classRef_Remote` has no
+# static value and keeps its name. `objc_msgSendSuper2` is declared
+# `(void *, void *, ...)` (`analyzers/objc/kuna_objcruntime.rs`), so the
+# method's `int` argument is the open tail's whole `x2`, which the method's
+# own `int4 arg1` fills: `(uint8)(uint4)arg1`.
+
+[image]
+arch = 'AARCH64:LE:64:v8A:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c0035fd6'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_objc_refs_arm64',
+    'option objc off',
+    'read symbols',
+    'load function sub_1000007ec',
+    'decompile',
+    'print C',
+    'load function _use',
+    'decompile',
+    'print C',
+    'load function _remote',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_objc_refs_arm64',
+    'option objc on',
+    'read symbols',
+    'load addr 0x1000007ec',
+    'decompile',
+    'print C',
+    'load function _use',
+    'decompile',
+    'print C',
+    'load function _use2',
+    'decompile',
+    'print C',
+    'load function _tag',
+    'decompile',
+    'print C',
+    'load function _remote',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = "OBJCREFS #1: off leaves the super send's selector slot anonymous"
+count = 1
+literal = 'objc_msgSendSuper2(&v1,dat_1000081f8)'
+
+[[match]]
+name = 'OBJCREFS #2: off leaves the super class slot anonymous'
+count = 1
+literal = 'v3 = dat_1000081f0;'
+
+[[match]]
+name = 'OBJCREFS #3: off calls the selector stub as an anonymous function'
+count = 1
+literal = 'sub_1000008c0(a0)'
+
+[[match]]
+name = 'OBJCREFS #4: off leaves the imported class slot anonymous'
+count = 1
+literal = 'objc_msgSend(dat_100008230,dat_100008208)'
+
+[[match]]
+name = 'OBJCREFS #5: on names the stub after its selector'
+count = 1
+literal = 'objc_msgSend$count(a0)'
+
+[[match]]
+name = "OBJCREFS #6: the stub's prototype pins the argument past the selector register"
+count = 1
+literal = 'objc_msgSend$greet:(a0,5)'
+
+[[match]]
+name = 'OBJCREFS #7: a chained bind slot is named from its import'
+count = 1
+literal = 'objc_msgSend(classRef_Remote,sel'
+
+[[match]]
+name = "OBJCREFS #8: the super send's selector slot folds to the selector"
+count = 1
+literal = '-[Base greet:](&v1,sel_greet_,(uint8)(uint4)arg1)'
+
+[[match]]
+name = 'OBJCREFS #9: the super class slot folds to the class'
+count = 1
+literal = 'v2 = _OBJC_CLASS_$_Derived;'
+
+[[match]]
+name = 'OBJCREFS #10: a classref receiver folds (and objcresolve names the class method it reaches up the chain)'
+count = 1
+literal = '+[Base tag]((objc_object *)_OBJC_CLASS_$_Derived)'
+
+[[match]]
+name = "OBJCREFS #11: a plain send's selref folds"
+count = 1
+literal = 'objc_msgSend(a0,sel_greet_,2)'
+
+[[match]]
+name = 'OBJCREFS #12: the folded import slot keeps its name'
+count = 1
+literal = 'objc_msgSend(classRef_Remote,sel_tag)'
+
+[[match]]
+name = 'OBJCREFS #13: no slot load survives unfolded'
+count = 0
+regex = '(selRef_|superRef_)'

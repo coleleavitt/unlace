@@ -12,4 +12,15 @@
     <description>Toshiba TLCS-870 (TMP87xx family), 64 KiB address space</description>
     <compiler name="default" spec="tlcs870.cspec" id="default"/>
   </language>
+  <language processor="TLCS870C"
+            endian="little"
+            size="16"
+            variant="default"
+            version="1.0"
+            slafile="tlcs870c.sla"
+            processorspec="tlcs870.pspec"
+            id="TLCS870C:LE:16:default">
+    <description>Toshiba TLCS-870/C (TMP86xx family), 64 KiB address space</description>
+    <compiler name="default" spec="tlcs870c.cspec" id="default"/>
+  </language>
 </language_definitions>

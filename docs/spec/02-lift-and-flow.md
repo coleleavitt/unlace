@@ -1941,7 +1941,7 @@ statement and the fabricated return value goes away; that is not the default,
 because an `int3` does return to a debugger that steps past it, and the value of
 naming the pad does not depend on asserting that the process dies there. `option
 int3pad off` restores the unannotated rendering. Exercised by
-`tests/stages/kuna-int3pad.xml`.
+`tests/stages/kuna-int3pad.toml`.
 
 **(kuna) A `ud2` after a call is a no-return call site — `option trapaftercall`, default on, `crates/unlace-lift/src/p2_lift/flow.rs (trap_follows_call)`.** clang with trap-unreachable (the Darwin and rustc default) emits `ud2` after every call it knows cannot return. A stripped image gives such a callee no name, so no name list marks it no-return, and flow walks into the trap. `FlowInfo::check_for_flow_modification` checks that the instruction is a machine `call` (E8, or FF /2, after prefixes; a tail `jmp` turned into a call does not count) and reads the two bytes after it (its size is the visited record's); `0F 0B` plants the artificial halt, the same path a named no-return callee takes, and marks a direct call's spec no-return. An indirect call (rustc calls through GOT slots) gets the halt only: `ActionDeindirect` would find a no-return mark disagreeing with the resolved callee's prototype and restart the function, doubling its cost. IDA also reads two `int3` bytes (MSVC) this way; kuna does not, because anti-debug code returns into an `int3` pad on purpose (`int3pad` above). The evidence is per call site and x86 language ids only (`ctx.trap_after_call`). Exercised by `tests/stages/kuna-trapaftercall.xml`.
 
@@ -2032,7 +2032,7 @@ no-return halt a call that never returns gets, as `brktrap` does. A trap the
 table does not name (an `__builtin_trap`, a KGDB or kprobes breakpoint) keeps
 its rendering, and an image with no `__bug_table` pays one empty-list test per
 BRANCHIND. The AArch64 `#0x800` the previous paragraph leaves alone is matched
-here only through a table entry. Exercised by `tests/stages/kuna-kernelbug.xml`.
+here only through a table entry. Exercised by `tests/stages/kuna-kernelbug.toml`.
 
 **(kuna) The x86-64 `SYSCALL` user-op's ABI effects — `option x64syscall`,
 default `on`, x86-64-gated (DIV-152),
@@ -4122,7 +4122,7 @@ An `append` whose count the grow arm takes from a register set outside the head
 library name the image does not contain, on the strength of the grow call's
 argument shape alone, and no MSVC C++ corpus in the tree can measure it;
 `msvcstrappend` is on the `EXCLUDED_ON_PURPOSE` list in `p0_knowledge/modes.rs`,
-so `--mode aggressive` does not turn it on either. Exercised by `tests/stages/kuna-msvcstrappend.xml`: four constant appends, a loop
+so `--mode aggressive` does not turn it on either. Exercised by `tests/stages/kuna-msvcstrappend.toml`: four constant appends, a loop
 appending a register-carried byte through a specialized grow helper, a two-byte
 literal append whose returned reference is used, an unprovable register-count
 append, a collapse whose continuation zeroes the changed registers, and 29 near
@@ -4499,6 +4499,17 @@ shifts), SWAP, TSTNULL, MUL/MULU HL,DE and the ALTS/ALTSD prefixes (ALTS sources
 modelled). Every single-instruction line of z88dk's r4k and r6k tables decodes to the
 same instruction. Exercised by the `rabbit4000` row of `unlace-cli/tests/processors.toml`.
 
+### Toshiba TLCS-870/C (#98)
+
+`TLCS870C:LE:16:default` (`specs/Ghidra/Processors/TLCS870/data/languages/tlcs870c.slaspec`)
+is the TMP86 core: the TLCS-870 mnemonics with a new encoding, seven 16-bit registers and the
+SF/VF flags. Instructions are an optional prefix (source memory E0-E7/D4-D7/4F, destination
+memory F0-F7/54-57, register E8-EF) and a second opcode byte; each prefix group is its own
+subtable so the decoder resolves the second byte. Encodings follow Toshiba's TLCS-870/C
+instruction-set excerpt and were checked against the 4,212 encodings of the AS assembler's
+TLCS-870/C test (two AS deviations from the manual are corrected; see the README). Exercised
+by the `tlcs870c` row of `unlace-cli/tests/processors.toml`.
+
 ### IBM ROMP (#98)
 
 `specs/Ghidra/Processors/ROMP` is a SLEIGH module written for unlace from the IBM
@@ -4699,6 +4710,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `MIPS` (MIPS-3D, SmartMIPS) | MIPS64 with MIPS-3D, MIPS32 with SmartMIPS (pre-R6 languages) | existing `MIPS:*:64:*` and `MIPS:*:32:*` pre-R6 languages | binutils MIPS opcode table (MIPS-3D/SmartMIPS rows), MIPS-3D (MD00099) and SmartMIPS ASE specifications; checked against `mips-elf-objdump` 2.43.1 | `unlace-cli/tests/mips_ase.rs` |
 | `NFP` | Netronome NFP-6xxx flow-processor microengine (ME v2.8, 8 contexts) | `NFP:LE:32:ME28` | binutils `opcodes/nfp-dis.c` and `include/opcode/nfp.h` field layouts; checked against binutils objdump (`elf64-nfp`) | `unlace-cli/tests/nfp_raw.rs` |
 | `TLCS870` | Toshiba TLCS-870 (TMP87xx) | `TLCS870:LE:16:default` | Toshiba TLCS-870 data books; MAME tlcs870 (BSD-3) | `unlace-cli/tests/processors.toml` (`tlcs870`) |
+| `TLCS870` (870/C) | Toshiba TLCS-870/C (TMP86xx) | `TLCS870C:LE:16:default` | Toshiba TLCS-870/C Series Instruction Set (INST-1..23, 1999); encodings checked against the AS assembler's TLCS-870/C test table | `unlace-cli/tests/processors.toml` (`tlcs870c`) |
 | `MMIX` | Knuth MMIX | `MMIX:BE:64:default` | MMIXware (Knuth), binutils `mmix` opcode table, GCC `config/mmix` ABI | `unlace-cli/tests/processors.toml` (`mmix`) |
 | `Z8000` | Zilog Z8002 (non-segmented), Z8001 (segmented) | `Z8002:BE:16:default`, `Z8001:BE:32:segmented` | Zilog Z8000 CPU Technical Manual + PLZ/ASM manual; MAME z8000 (BSD-3) cross-check; tgtakaoka/libasm (Apache-2.0) | `unlace-cli/tests/processors.toml` (`z8000`) |
 | `Z380` | Zilog Z380 (Native/Extended, Word/Long Word, DDIR W/LW/IB/IW) | `Z380:LE:32:default` | Zilog Z380 User's Manual DC-8297-03 (Appendix C opcode tables); flag macros adapted from the in-repo Z80 module | `unlace-cli/tests/processors.toml` (`z380`) |
@@ -5877,10 +5889,10 @@ several clauses the selector tests stay in the handler
 type.
 
 **Limits.** SjLj tables are not read. Pinned by
-`tests/stages/kuna-itaniumeh.xml` (two passes over the `itaniumeh/eh_x86_64.elf`
-fixture), `tests/stages/kuna-itaniumeh-cold.xml` (the partitioned build),
-`tests/stages/kuna-itaniumeh-a64.xml` (AArch64, x0/x1),
-`tests/stages/kuna-itaniumeh-arm.xml` (ARM32 and stripped Thumb EHABI tables,
+`tests/stages/kuna-itaniumeh.toml` (two passes over the `itaniumeh/eh_x86_64.elf`
+fixture), `tests/stages/kuna-itaniumeh-cold.toml` (the partitioned build),
+`tests/stages/kuna-itaniumeh-a64.toml` (AArch64, x0/x1),
+`tests/stages/kuna-itaniumeh-arm.toml` (ARM32 and stripped Thumb EHABI tables,
 a type named only by its `type_info` string) and
 `tests/stages/kuna-itaniumeh-clang.xml` (clang ranges that start before the
 call, the multi-clause header) and `tests/stages/kuna-itaniumeh-sharedpad.xml`

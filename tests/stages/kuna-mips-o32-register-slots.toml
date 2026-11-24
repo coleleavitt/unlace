@@ -1,0 +1,38 @@
+# Synthetic slt v0,a0,zero; jr ra; nop. O32 sign-extends its four-byte
+# argument slot into the physical eight-byte register read by slt.
+
+[image]
+arch = 'MIPS:BE:64:64-32addr:o32'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'negative' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = '0080102a03e0000800000000'
+
+[script]
+commands = [
+    'option ctypes on',
+    'lo fu negative',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'O32 slot: inferred input remains a four-byte int'
+count = 1
+literal = 'negative(int a0)'
+
+[[match]]
+name = 'O32 slot: full-register test uses the argument'
+count = 1
+literal = 'return a0 < 0;'
+
+[[match]]
+name = 'O32 slot: no undefined upper half'
+count = 0
+regex = 'CONCAT|unaff_|in_a0|halt_baddata'

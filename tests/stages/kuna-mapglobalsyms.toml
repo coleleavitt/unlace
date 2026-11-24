@@ -1,0 +1,91 @@
+# Two functions touch one 8-byte global no symbol names: store64 writes all
+# of it, load_high reads its upper 4 bytes. Upstream Funcdata::mapGlobals
+# adds a DAT_ Symbol for the 8-byte group to the global scope while it
+# decompiles store64, so a load_high decompiled after it in the same session
+# reads a piece of that Symbol. Kuna recorded nothing (its per-function
+# GlobalQuery is a snapshot no action can write), so load_high always read a
+# free-standing dat_105004. The same holds for the coverVarnodes names:
+# read_wide reads 8 bytes at the int4 `small` and 4 at small+4, and mapGlobals names that upper half
+# small_4, and read_upper, decompiled next, reads that half alone.
+#
+# Stage model: P9 emit, naming-policy (p9_emit/coreaction_render.rs
+# map_globals records the group; p9_emit/kuna_mapglobalsyms.rs persist adds
+# it to the global scope after the function).
+#
+# Option: mapglobalsyms (default off). Pass 1 is off, pass 2 on; the same
+# two functions are decompiled in the same order in both.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'store64' },
+    { space = 'ram', offset = '0x100010', name = 'load_high' },
+    { space = 'ram', offset = '0x100020', name = 'read_wide' },
+    { space = 'ram', offset = '0x100040', name = 'read_upper' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '48893df94f0000c390909090909090908b05ee4f0000c390909090909090909048a110501000000000008b0c25145010004801c8c390909090909090909090908b042514501000c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x105000'
+hex = '11223344556677880000000000000000aabbccddeeff0011'
+
+[script]
+commands = [
+    'map address r0x105010 int4 small',
+    'lo fu store64',
+    'decompile',
+    'print C',
+    'lo fu load_high',
+    'decompile',
+    'print C',
+    'lo fu read_wide',
+    'decompile',
+    'print C',
+    'lo fu read_upper',
+    'decompile',
+    'print C',
+    'option mapglobalsyms on',
+    'lo fu store64',
+    'decompile',
+    'print C',
+    'lo fu load_high',
+    'decompile',
+    'print C',
+    'lo fu read_wide',
+    'decompile',
+    'print C',
+    'lo fu read_upper',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'MAPGLOBALSYMS #1: off, the later read is a free-standing global'
+count = 1
+literal = 'return dat_105004;'
+
+[[match]]
+name = 'MAPGLOBALSYMS #2: on, the later read is a piece of the 8-byte DAT_ Symbol store64 left'
+count = 1
+literal = 'return ((unsigned int *)&dat_105000)[1];'
+
+[[match]]
+name = 'MAPGLOBALSYMS #4: off, the upper half read alone is unnamed storage'
+count = 1
+literal = 'return dat_105014;'
+
+[[match]]
+name = 'MAPGLOBALSYMS #5: on, it keeps the cover name read_wide gave it'
+count = 1
+literal = 'return small_4;'
+
+[[match]]
+name = 'MAPGLOBALSYMS #3: the first function prints the same in both passes'
+count = 2
+literal = 'dat_105000 = a0;'

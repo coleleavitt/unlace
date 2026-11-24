@@ -1,0 +1,63 @@
+[image]
+arch = 'x86:LE:32:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/mapped_flow_boundary_32.elf',
+    'read symbols',
+    'load addr 0x10000',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/mapped_flow_straddle_32.elf',
+    'read symbols',
+    'load addr 0x10000',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'MAPPED-FLOW #1: neither function is lost to staged padding'
+count = 0
+literal = 'Unable to load 512 bytes'
+
+[[match]]
+name = 'MAPPED-FLOW #2: both mapped returns are retained'
+count = 2
+literal = 'return 7;'
+
+[[match]]
+name = 'MAPPED-FLOW #3: each missing fall-through is explicit'
+count = 2
+literal = 'halt_missing();'
+
+[[match]]
+name = 'MAPPED-FLOW #4: both recovered bodies warn about incomplete flow'
+count = 2
+literal = 'Function flows into unmapped memory'
+
+[[match]]
+name = 'MAPPED-FLOW #5: the fall-through that ends exactly at the mapped end names its successor'
+count = 1
+literal = 'r0x0001000a flows to r0x0001000f'
+
+[[match]]
+name = 'MAPPED-FLOW #6: the zero padding that is mapped is still lifted'
+count = 1
+literal = '*a0 = *a0 + (char)a0;'
+
+[[match]]
+name = 'MAPPED-FLOW #7: the padding byte whose instruction runs past the mapped end is cut'
+count = 1
+literal = 'the instruction at r0x00010011 runs past the mapped bytes'

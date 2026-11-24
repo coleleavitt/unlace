@@ -187,9 +187,8 @@ pub(super) fn reachable(img: &GoImage, meta: &TypeMeta) -> BTreeMap<u64, GoType>
 }
 
 /// The `uncommontype.pkgPath` of a named type: the import path of the package
-/// that declares it. The uncommon record follows the kind's own record; map
-/// descriptors, whose record changed size with the swiss-table maps, are not
-/// read.
+/// that declares it. The uncommon record follows the kind's own record; a map
+/// descriptor's record is sized by its layout (`GoImage::map_record`).
 fn pkg_path(img: &GoImage, meta: &TypeMeta, t: &GoType) -> Option<String> {
     if t.tflag & TFLAG_UNCOMMON == 0 || t.tflag & TFLAG_NAMED == 0 {
         return None;
@@ -200,7 +199,7 @@ fn pkg_path(img: &GoImage, meta: &TypeMeta, t: &GoType) -> Option<String> {
         KIND_CHAN => 2 * w,
         KIND_FUNC | KIND_POINTER | KIND_SLICE => w,
         KIND_INTERFACE | KIND_STRUCT => 4 * w,
-        KIND_MAP => return None,
+        KIND_MAP => img.map_record(),
         _ => 0,
     };
     let at = descriptor_off(img, meta, t.vma + img.type_base() + record)?;

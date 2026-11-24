@@ -478,11 +478,18 @@ impl Project {
     }
 
     /// Run a read-only SQL statement and return its column names and rows as JSON values
-    /// (integers, reals, text, `null`; a blob as a hex string). Writes are refused.
+    /// (integers, reals, text, `null`; a blob as a hex string). A statement that could write is
+    /// refused before it runs, and the connection is `query_only` while it does.
     pub fn query(&self, sql: &str) -> Result<(Vec<String>, Vec<Vec<serde_json::Value>>)> {
         self.conn.pragma_update(None, "query_only", "ON")?;
         let result = (|| -> Result<_> {
             let mut stmt = self.conn.prepare(sql)?;
+            if !stmt.readonly() {
+                return Err(ProjectError::Invalid(
+                    "query is read-only: use `unlace project set`/`unset`/`import` to change a project"
+                        .into(),
+                ));
+            }
             let columns: Vec<String> = stmt.column_names().into_iter().map(String::from).collect();
             let width = columns.len();
             let mut rows = stmt.query([])?;

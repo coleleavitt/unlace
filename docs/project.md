@@ -34,6 +34,10 @@ hash is of the file on disk. To bind a project to one member, extract it and `in
 
 ### Tables (schema v1)
 
+`unlace project schema --json` prints every table and column with a one-line description; the
+descriptions live in `crates/unlace-project/src/schema.rs` (`DESCRIPTION`), and a unit test keeps them
+equal to the real columns.
+
 Each table stores one kind of `--assert` directive, keyed so that a later `set` of the same key
 replaces the earlier value.
 
@@ -72,6 +76,13 @@ refused, for the same reason it is refused with `--assert`.
 `unlace project set` checks every directive against the engine's grammar before storing it, so a
 stored directive always parses. Whether the engine *applies* it is still decided per run, as for
 `--assert`. A `bytes <addr> @FILE` is read when it is set and stored as bytes.
+
+## Reading it
+
+`unlace project query FILE "<SELECT ...>"` runs any statement SQLite reports as read-only and
+refuses any other before it runs; the connection is also `query_only` while the query runs. Rows come
+back as objects keyed by column name: one document with `--json`, one object per line with `--jsonl`
+(also on `get` and `list`), which streams into `jq` or a line-oriented agent.
 
 ## Concurrent writers
 

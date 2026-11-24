@@ -43,6 +43,9 @@ mod aif_lea_padding;
 #[path = "switchextent_cli.rs"]
 mod switchextent_cli;
 
+#[path = "sbom_cli.rs"]
+mod sbom_cli;
+
 #[path = "objc_varargs_cli.rs"]
 mod objc_varargs_cli;
 

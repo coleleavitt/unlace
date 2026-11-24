@@ -1161,6 +1161,7 @@ dependencies = [
 name = "unlace-cli"
 version = "0.1.0"
 dependencies = [
+ "flate2",
  "flirt-sig",
  "object",
  "regex",

@@ -1,0 +1,99 @@
+# Swift runtime-metadata recovery (`option swiftmetadata on|off`).
+#
+# Issue: a stripped Swift binary names nothing. On a large third-party
+# iOS app (84 MB arm64, 314,038 functions, 304,309 of them `sub_<addr>`) the
+# `__swift5_*` reflection sections still describe 14,677 types, 1,317
+# protocols and 30,938 conformances, and point at 57,147 of the stripped
+# functions: every type's metadata accessor, every class vtable slot's
+# implementation, and every protocol witness.
+#
+# Stage / sub-stage: P1 external-refinement, the Swift metadata pass
+# (`unlace-analysis/src/analyzers/swift/`), beside the ObjC metadata pass.
+#
+# P0 assertion: `option swiftmetadata on|off` (default off).
+#
+# The XML wrapper only supplies the harness architecture. Both passes
+# clear it and load the real fixture `swift_metadata_elf`: an x86-64 ELF
+# executable built with swiftc 6.3 and `llvm-strip` (strip all), so no
+# symbol survives for its own functions (see the fixtures README for the
+# source and the pinned VMAs from the unstripped build).
+#
+# Pass 1 (`option swiftmetadata off`, the default) reproduces the BUG: the
+# metadata accessor at 0x30b0, the vtable method at 0x2fe0 and the witness
+# at 0x2ab0 are `sub_30b0`, `sub_2fe0`, `sub_2ab0`. Pass 2 (`option
+# swiftmetadata on`) is the FIX: the same functions are
+# `metafix.Point.type_metadata_accessor`, `metafix.Animal.vtable#4.method`
+# and `<metafix.Square:Swift.Hashable>.hash(into:)`.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/swift_metadata_elf',
+    'option swiftmetadata off',
+    'read symbols',
+    'load addr 0x30b0',
+    'decompile',
+    'print C',
+    'load addr 0x2fe0',
+    'decompile',
+    'print C',
+    'load addr 0x2ab0',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/swift_metadata_elf',
+    'option swiftmetadata on',
+    'read symbols',
+    'load addr 0x30b0',
+    'decompile',
+    'print C',
+    'load addr 0x2fe0',
+    'decompile',
+    'print C',
+    'load addr 0x2ab0',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'swiftmetadata off: the metadata accessor is a placeholder'
+count = 1
+literal = 'sub_30b0('
+
+[[match]]
+name = 'swiftmetadata off: the vtable method is a placeholder'
+count = 1
+literal = 'sub_2fe0('
+
+[[match]]
+name = 'swiftmetadata off: the protocol witness is a placeholder'
+count = 1
+literal = 'sub_2ab0('
+
+[[match]]
+name = 'swiftmetadata on: the metadata accessor is named after its type'
+count = 1
+literal = 'metafix.Point.type_metadata_accessor('
+
+[[match]]
+name = 'swiftmetadata on: the vtable slot is named by class, position and kind'
+count = 1
+literal = 'metafix.Animal.vtable#4.method('
+
+[[match]]
+name = 'swiftmetadata on: the witness is named by conformance and requirement'
+count = 1
+literal = '<metafix.Square:Swift.Hashable>.hash(into:)('

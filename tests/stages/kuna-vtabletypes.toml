@@ -1,0 +1,89 @@
+# C++ virtual calls (fixtures/vtabletypes/vtabletypes.cpp, built with g++ -O1
+# as its header says; the ABI typeinfo vtables are defined in the source, so
+# nothing else is linked). use() calls two virtual methods of a Shape *,
+# Shape::scaled calls area() on this, and local() (built at -O0) calls area()
+# through a reference to a stack Tr whose vptr store it can see.
+#
+# Stage model: P5 type-propagation (p5_types/kuna_vtabletypes.rs install,
+# lock_this; facts from analyzers/rtti/kuna_vtabletypes.rs). The recovered
+# vtable is a Shape_vtbl structure of method pointers and Shape's first field
+# a Shape_vtbl *vptr, so the slot loads are field reads; the vtable words are
+# foldable constants, so the call on the visible object folds to Tr::area.
+#
+# Option: vtabletypes (default on). Pass 1 is on, pass 2 off.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file tests/stages/fixtures/vtabletypes/vtabletypes',
+    'read symbols',
+    'load function use',
+    'decompile',
+    'print C',
+    'load function Shape::scaled',
+    'decompile',
+    'print C',
+    'load function local',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/stages/fixtures/vtabletypes/vtabletypes',
+    'option vtabletypes off',
+    'read symbols',
+    'load function use',
+    'decompile',
+    'print C',
+    'load function Shape::scaled',
+    'decompile',
+    'print C',
+    'load function local',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'VTABLETYPES #1: on, the call goes through the named slot with its arguments'
+count = 1
+literal = 'v2 = (*a0->vptr->area)(a0,a1);'
+
+[[match]]
+name = 'VTABLETYPES #2: on, the second slot is named too'
+count = 1
+literal = 'v1 = a0->vptr->scaled;'
+
+[[match]]
+name = "VTABLETYPES #3: on, a method's call on this goes through its class's slot"
+count = 1
+literal = 'v1 = (*this->vptr->area)(this,a1);'
+
+[[match]]
+name = 'VTABLETYPES #4: on, the call on the visible object is direct'
+count = 1
+regex = '^  (Tr::)?area\(v3,a0\);'
+
+[[match]]
+name = 'VTABLETYPES #5: off, the slot load is cast arithmetic and the first call loses an argument'
+count = 1
+literal = 'v2 = (*(code *)**(unsigned long **)a0)(a0,CONCAT44(v3,a1));'
+
+[[match]]
+name = "VTABLETYPES #6: off, the method's call on this takes no arguments"
+count = 1
+literal = 'v1 = (*(code *)**(unsigned long **)this)();'
+
+[[match]]
+name = 'VTABLETYPES #7: off, the call on the visible object stays indirect (through the vptr itaniumrtti names)'
+count = 1
+literal = '(*_Tr_vptr)(v3,a0);'

@@ -1,0 +1,82 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/switch_self_loop_gcc_x86_64.o',
+    'read symbols',
+    'load function self_loop',
+    'decompile',
+    'print C',
+    'load function self_loop_exit',
+    'decompile',
+    'print C',
+    'load function mixed_loop',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/switch_self_loop_clang_x86_64.o',
+    'read symbols',
+    'load function self_loop',
+    'decompile',
+    'print C',
+    'load function self_loop_exit',
+    'decompile',
+    'print C',
+    'load function mixed_loop',
+    'decompile',
+    'print C',
+    'load function direct_mixed',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/switchtable_gcc_x86_64',
+    'read symbols',
+    'load function hoist_dispatch',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'SWITCHSELFLOOP #1: each dispatch is the body of its loop'
+count = 8
+literal = [
+    'while( true ) {',
+    'switch(next_selector(',
+]
+
+[[match]]
+name = 'SWITCHSELFLOOP #2: a leaving case runs the shared tail and returns'
+count = 4
+regex = [
+    't5\(\);',
+    't0\(\);.*',
+    'return;',
+]
+
+[[match]]
+name = 'SWITCHSELFLOOP #3: the default case returns'
+count = 7
+literal = [
+    'default:',
+    'return;',
+]
+
+[[match]]
+name = 'SWITCHSELFLOOP #4: restarting the enclosing loop leaves the inner dispatch loop intact'
+count = 3
+literal = [
+    't5();',
+    'while( true ) {',
+    'switch(next_selector(',
+]

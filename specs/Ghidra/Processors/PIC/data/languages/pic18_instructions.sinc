@@ -55,12 +55,14 @@ define token instr32(32)
 	fs_57 =	(5,7)
 	fs =	(0,11)
 	fsreg =	(0,7)
+	fs_l =	(0,7)
 	qual4 =	(28,31)
 	qual8 =	(24,31)
 	fd_h =	(24,27)
 	fd_57 =	(21,23)
 	fd =	(16,27)
 	fdreg =	(16,23)
+	fd_l =	(16,23)
 	kl =	(16,23)
 	n20_h =	(16,27)  # high order 12 bits of n20
 	zd =	(16,22)
@@ -214,9 +216,15 @@ fREGLoc: f8	is a=1 & f8									{ # (Banked mode)
 #
 #  TODO: Need to add another language PIC18C that has the SFR start at 0xf80
 #
+@ifdef ACCESS_LOW
+fREGLoc: alo		is a=0 & f8_57=0x0 & f8 [ alo = f8 + $(ACCESS_LOW); ]	{ export *[DATA]:1 alo; }
+fREGLoc: alo		is a=0 & f8_57=0x1 & f8 [ alo = f8 + $(ACCESS_LOW); ]	{ export *[DATA]:1 alo; }
+fREGLoc: alo		is a=0 & f8_57=0x2 & f8 [ alo = f8 + $(ACCESS_LOW); ]	{ export *[DATA]:1 alo; }
+@else
 fREGLoc: f8			is a=0 & f8_57=0x0 & f8					{ export *[DATA]:1 f8; } # 0x00-0x1f   (Access mode)
 fREGLoc: f8			is a=0 & f8_57=0x1 & f8					{ export *[DATA]:1 f8; } # 0x20-0x3f   (Access mode)
 fREGLoc: f8			is a=0 & f8_57=0x2 & f8					{ export *[DATA]:1 f8; } # 0x40-0x5f   (Access mode)
+@endif
 fREGLoc: freg		is a=0 & freg							{ export freg; }		 # 0xf60-0xfff (Access mode)
 
 # TOSL - access mirrored into stack space using STKPTR
@@ -353,9 +361,15 @@ dfLoc: f8	is a=1 & f8									{ # (Banked mode)
 	export *[DATA]:1 addr; 
 }
 
+@ifdef ACCESS_LOW
+dfLoc: alo		is a=0 & f8_57=0x0 & f8 [ alo = f8 + $(ACCESS_LOW); ]	{ export *[DATA]:1 alo; }
+dfLoc: alo		is a=0 & f8_57=0x1 & f8 [ alo = f8 + $(ACCESS_LOW); ]	{ export *[DATA]:1 alo; }
+dfLoc: alo		is a=0 & f8_57=0x2 & f8 [ alo = f8 + $(ACCESS_LOW); ]	{ export *[DATA]:1 alo; }
+@else
 dfLoc: f8			is a=0 & f8_57=0x0 & f8					{ export *[DATA]:1 f8; } # 0x00-0x1f   (Access mode)
 dfLoc: f8			is a=0 & f8_57=0x1 & f8					{ export *[DATA]:1 f8; } # 0x20-0x3f   (Access mode)
 dfLoc: f8			is a=0 & f8_57=0x2 & f8					{ export *[DATA]:1 f8; } # 0x40-0x5f   (Access mode)
+@endif
 dfLoc: freg		is a=0 & freg							{ export freg; }		 # 0xf60-0xfff (Access mode)
 
 # TOSL - access mirrored into stack space using STKPTR
@@ -478,132 +492,132 @@ destREG: "f"	is d=1 & dfLoc									{ export dfLoc; }
 
 # Source File Registers specified by a 12-bit absolute offsets within 32-bit instriction
 srcREG32: fs	is fs											{ export *[DATA]:1 fs; } # 0x000-0xeff
-srcREG32: fs	is fs_h=0xf & fs_57=0 & fs						{ export *[DATA]:1 fs; } # 0xf00-0xf1f
-srcREG32: fs	is fs_h=0xf & fs_57=1 & fs						{ export *[DATA]:1 fs; } # 0xf20-0xf3f
-srcREG32: fs	is fs_h=0xf & fs_57=2 & fs						{ export *[DATA]:1 fs; } # 0xf40-0xf5f
-srcREG32: fsreg	is fs_h=0xf & fsreg								{ export fsreg; } 		 # 0xf60-0xfff
+srcREG32: fs	is fs_h=$(SFR_PAGE) & fs_57=0 & fs						{ export *[DATA]:1 fs; } # 0xf00-0xf1f
+srcREG32: fs	is fs_h=$(SFR_PAGE) & fs_57=1 & fs						{ export *[DATA]:1 fs; } # 0xf20-0xf3f
+srcREG32: fs	is fs_h=$(SFR_PAGE) & fs_57=2 & fs						{ export *[DATA]:1 fs; } # 0xf40-0xf5f
+srcREG32: fsreg	is fs_h=$(SFR_PAGE) & fsreg								{ export fsreg; } 		 # 0xf60-0xfff
 
 # PCL read - latch PC into PCL, PCLATH, and PCLATU
-srcREG32: "PC" is fs=0xff9										{
+srcREG32: "PC" is fs_h=$(SFR_PAGE) & fs_l=0xf9										{
 	PCLAT = inst_start;
 	export PCL; 
 }
 
 # TOSL - access mirrored into stack space using STKPTR
-srcREG32: fsreg			is fs=0xffd & fsreg				{
+srcREG32: fsreg			is fs_h=$(SFR_PAGE) & fs_l=0xfd & fsreg				{
 	addr:1 = STKPTR + 1;
 	export *[HWSTACK]:1 addr;
 }
 
 # TOSH - access mirrored into stack space using STKPTR
-srcREG32: fsreg			is fs=0xffe & fsreg				{
+srcREG32: fsreg			is fs_h=$(SFR_PAGE) & fs_l=0xfe & fsreg				{
 	addr:1 = STKPTR + 2;
 	export *[HWSTACK]:1 addr;
 }
 
 # TOSU - access mirrored into stack space using STKPTR
-srcREG32: fsreg			is fs=0xfff & fsreg				{
+srcREG32: fsreg			is fs_h=$(SFR_PAGE) & fs_l=0xff & fsreg				{
 	addr:1 = STKPTR + 3;
 	export *[HWSTACK]:1 addr;
 }
 
 # Indirect File Register access - INDF0
-srcREG32: fsreg		is fs=0xfef & fsreg					{ 
+srcREG32: fsreg		is fs_h=$(SFR_PAGE) & fs_l=0xef & fsreg					{ 
 	addr:2 = FSR0;
 	export *[DATA]:1 addr; 
 }
 
 # Indirect File Register access - INDF1
-srcREG32: fsreg		is fs=0xfe7 & fsreg					{
+srcREG32: fsreg		is fs_h=$(SFR_PAGE) & fs_l=0xe7 & fsreg					{
 	addr:2 = FSR1;
 	export *[DATA]:1 addr; 
 }
 
 # Indirect File Register access - INDF2
-srcREG32: fsreg		is fs=0xfdf & fsreg					{ 
+srcREG32: fsreg		is fs_h=$(SFR_PAGE) & fs_l=0xdf & fsreg					{ 
 	addr:2 = FSR2;
 	export *[DATA]:1 addr; 
 }
 
 # Post-increment File Register access - POSTINC0
-srcREG32: fsreg		is fs=0xfee & fsreg					{ 
+srcREG32: fsreg		is fs_h=$(SFR_PAGE) & fs_l=0xee & fsreg					{ 
 	addr:2 = FSR0;
 	FSR0 = FSR0 + 1;
 	export *[DATA]:1 addr; 
 }
 
 # Post-increment File Register access - POSTINC1
-srcREG32: fsreg		is fs=0xfe6 & fsreg					{
+srcREG32: fsreg		is fs_h=$(SFR_PAGE) & fs_l=0xe6 & fsreg					{
 	addr:2 = FSR1;
 	FSR1 = FSR1 + 1;
 	export *[DATA]:1 addr; 
 }
 
 # Post-increment File Register access - POSTINC2
-srcREG32: fsreg		is fs=0xfde & fsreg					{ 
+srcREG32: fsreg		is fs_h=$(SFR_PAGE) & fs_l=0xde & fsreg					{ 
 	addr:2 = FSR2;
 	FSR2 = FSR2 + 1;
 	export *[DATA]:1 addr; 
 }
 
 # Post-decrement File Register access - POSTDEC0
-srcREG32: fsreg		is fs=0xfed & fsreg					{ 
+srcREG32: fsreg		is fs_h=$(SFR_PAGE) & fs_l=0xed & fsreg					{ 
 	addr:2 = FSR0;
 	FSR0 = FSR0 - 1;
 	export *[DATA]:1 addr; 
 }
 
 # Post-decrement File Register access - POSTDEC1
-srcREG32: fsreg		is fs=0xfe5 & fsreg					{
+srcREG32: fsreg		is fs_h=$(SFR_PAGE) & fs_l=0xe5 & fsreg					{
 	addr:2 = FSR1;
 	FSR1 = FSR1 - 1;
 	export *[DATA]:1 addr; 
 }
 
 # Post-decrement File Register access - POSTDEC2
-srcREG32: fsreg		is fs=0xfdd & fsreg					{ 
+srcREG32: fsreg		is fs_h=$(SFR_PAGE) & fs_l=0xdd & fsreg					{ 
 	addr:2 = FSR2;
 	FSR2 = FSR2 - 1;
 	export *[DATA]:1 addr; 
 }
 
 # Pre-increment File Register access - PREINC0
-srcREG32: fsreg		is fs=0xfec & fsreg					{ 
+srcREG32: fsreg		is fs_h=$(SFR_PAGE) & fs_l=0xec & fsreg					{ 
 	FSR0 = FSR0 + 1;
 	addr:2 = FSR0;
 	export *[DATA]:1 addr; 
 }
 
 # Pre-increment File Register access - PREINC1
-srcREG32: fsreg		is fs=0xfe4 & fsreg					{
+srcREG32: fsreg		is fs_h=$(SFR_PAGE) & fs_l=0xe4 & fsreg					{
 	FSR1 = FSR1 + 1;
 	addr:2 = FSR1;
 	export *[DATA]:1 addr; 
 }
 
 # Pre-increment File Register access - PREINC2
-srcREG32: fsreg		is fs=0xfdc & fsreg					{ 
+srcREG32: fsreg		is fs_h=$(SFR_PAGE) & fs_l=0xdc & fsreg					{ 
 	FSR2 = FSR2 + 1;
 	addr:2 = FSR2;
 	export *[DATA]:1 addr; 
 }
 
 # Pre-increment w/WREG-Offset File Register access - PLUSW0
-srcREG32: fsreg		is fs=0xfeb & fsreg					{ 
+srcREG32: fsreg		is fs_h=$(SFR_PAGE) & fs_l=0xeb & fsreg					{ 
 	FSR0 = FSR0 + 1;
 	addr:2 = FSR0 + sext(WREG);
 	export *[DATA]:1 addr; 
 }
 
 # Pre-increment w/WREG-Offset File Register access - PLUSW1
-srcREG32: fsreg		is fs=0xfe3 & fsreg					{
+srcREG32: fsreg		is fs_h=$(SFR_PAGE) & fs_l=0xe3 & fsreg					{
 	FSR1 = FSR1 + 1;
 	addr:2 = FSR1 + sext(WREG);
 	export *[DATA]:1 addr; 
 }
 
 # Pre-increment w/WREG-Offset File Register access - PLUSW2
-srcREG32: fsreg		is fs=0xfdb & fsreg					{ 
+srcREG32: fsreg		is fs_h=$(SFR_PAGE) & fs_l=0xdb & fsreg					{ 
 	FSR2 = FSR2 + 1;
 	addr:2 = FSR2 + sext(WREG);
 	export *[DATA]:1 addr; 
@@ -611,132 +625,132 @@ srcREG32: fsreg		is fs=0xfdb & fsreg					{
 
 # Destination File Registers specified by a 12-bit absolute offsets within 32-bit instriction
 destREG32: fd	is fd											{ export *[DATA]:1 fd; } # 0x000-0xeff
-destREG32: fd	is fd_h=0xf & fd_57=0 & fd						{ export *[DATA]:1 fd; } # 0xf00-0xf1f
-destREG32: fd	is fd_h=0xf & fd_57=1 & fd						{ export *[DATA]:1 fd; } # 0xf20-0xf3f
-destREG32: fd	is fd_h=0xf & fd_57=2 & fd						{ export *[DATA]:1 fd; } # 0xf40-0xf5f
-destREG32: fdreg is fd_h=0xf & fdreg							{ export fdreg; } 		 # 0xf60-0xfff
+destREG32: fd	is fd_h=$(SFR_PAGE) & fd_57=0 & fd						{ export *[DATA]:1 fd; } # 0xf00-0xf1f
+destREG32: fd	is fd_h=$(SFR_PAGE) & fd_57=1 & fd						{ export *[DATA]:1 fd; } # 0xf20-0xf3f
+destREG32: fd	is fd_h=$(SFR_PAGE) & fd_57=2 & fd						{ export *[DATA]:1 fd; } # 0xf40-0xf5f
+destREG32: fdreg is fd_h=$(SFR_PAGE) & fdreg							{ export fdreg; } 		 # 0xf60-0xfff
 
-#destREG32: "PCL"	is fd=0xff9						{ 
+#destREG32: "PCL"	is fd_h=$(SFR_PAGE) & fd_l=0xf9						{ 
 #	# Storing to PCL must write the PC using both the stored PCL (PC<7:0>), PCLATH (PC<15:8>) and PCLATU (PC<21:16>)
 #	# The MOVFF and MOVSF definitions below have a specific case to handle this write to PCL
 #	export PCL; 
 #}
 
 # TOSL - access mirrored into stack space using STKPTR
-destREG32: fdreg			is fd=0xffd & fdreg				{
+destREG32: fdreg			is fd_h=$(SFR_PAGE) & fd_l=0xfd & fdreg				{
 	addr:1 = STKPTR + 1;
 	export *[HWSTACK]:1 addr;
 }
 
 # TOSH - access mirrored into stack space using STKPTR
-destREG32: fdreg			is fd=0xffe & fdreg				{
+destREG32: fdreg			is fd_h=$(SFR_PAGE) & fd_l=0xfe & fdreg				{
 	addr:1 = STKPTR + 2;
 	export *[HWSTACK]:1 addr;
 }
 
 # TOSU - access mirrored into stack space using STKPTR
-destREG32: fdreg			is fd=0xfff & fdreg				{
+destREG32: fdreg			is fd_h=$(SFR_PAGE) & fd_l=0xff & fdreg				{
 	addr:1 = STKPTR + 3;
 	export *[HWSTACK]:1 addr;
 }
 
 # Indirect File Register access - INDF0
-destREG32: fdreg		is fd=0xfef & fdreg					{ 
+destREG32: fdreg		is fd_h=$(SFR_PAGE) & fd_l=0xef & fdreg					{ 
 	addr:2 = FSR0;
 	export *[DATA]:1 addr; 
 }
 
 # Indirect File Register access - INDF1
-destREG32: fdreg		is fd=0xfe7 & fdreg					{
+destREG32: fdreg		is fd_h=$(SFR_PAGE) & fd_l=0xe7 & fdreg					{
 	addr:2 = FSR1;
 	export *[DATA]:1 addr; 
 }
 
 # Indirect File Register access - INDF2
-destREG32: fdreg		is fd=0xfdf & fdreg					{ 
+destREG32: fdreg		is fd_h=$(SFR_PAGE) & fd_l=0xdf & fdreg					{ 
 	addr:2 = FSR2;
 	export *[DATA]:1 addr; 
 }
 
 # Post-increment File Register access - POSTINC0
-destREG32: fdreg		is fd=0xfee & fdreg					{ 
+destREG32: fdreg		is fd_h=$(SFR_PAGE) & fd_l=0xee & fdreg					{ 
 	addr:2 = FSR0;
 	FSR0 = FSR0 + 1;
 	export *[DATA]:1 addr; 
 }
 
 # Post-increment File Register access - POSTINC1
-destREG32: fdreg		is fd=0xfe6 & fdreg					{
+destREG32: fdreg		is fd_h=$(SFR_PAGE) & fd_l=0xe6 & fdreg					{
 	addr:2 = FSR1;
 	FSR1 = FSR1 + 1;
 	export *[DATA]:1 addr; 
 }
 
 # Post-increment File Register access - POSTINC2
-destREG32: fdreg		is fd=0xfde & fdreg					{ 
+destREG32: fdreg		is fd_h=$(SFR_PAGE) & fd_l=0xde & fdreg					{ 
 	addr:2 = FSR2;
 	FSR2 = FSR2 + 1;
 	export *[DATA]:1 addr; 
 }
 
 # Post-decrement File Register access - POSTDEC0
-destREG32: fdreg		is fd=0xfed & fdreg					{ 
+destREG32: fdreg		is fd_h=$(SFR_PAGE) & fd_l=0xed & fdreg					{ 
 	addr:2 = FSR0;
 	FSR0 = FSR0 - 1;
 	export *[DATA]:1 addr; 
 }
 
 # Post-decrement File Register access - POSTDEC1
-destREG32: fdreg		is fd=0xfe5 & fdreg					{
+destREG32: fdreg		is fd_h=$(SFR_PAGE) & fd_l=0xe5 & fdreg					{
 	addr:2 = FSR1;
 	FSR1 = FSR1 - 1;
 	export *[DATA]:1 addr; 
 }
 
 # Post-decrement File Register access - POSTDEC2
-destREG32: fdreg		is fd=0xfdd & fdreg					{ 
+destREG32: fdreg		is fd_h=$(SFR_PAGE) & fd_l=0xdd & fdreg					{ 
 	addr:2 = FSR2;
 	FSR2 = FSR2 - 1;
 	export *[DATA]:1 addr; 
 }
 
 # Pre-increment File Register access - PREINC0
-destREG32: fdreg		is fd=0xfec & fdreg					{ 
+destREG32: fdreg		is fd_h=$(SFR_PAGE) & fd_l=0xec & fdreg					{ 
 	FSR0 = FSR0 + 1;
 	addr:2 = FSR0;
 	export *[DATA]:1 addr; 
 }
 
 # Pre-increment File Register access - PREINC1
-destREG32: fdreg		is fd=0xfe4 & fdreg					{
+destREG32: fdreg		is fd_h=$(SFR_PAGE) & fd_l=0xe4 & fdreg					{
 	FSR1 = FSR1 + 1;
 	addr:2 = FSR1;
 	export *[DATA]:1 addr; 
 }
 
 # Pre-increment File Register access - PREINC2
-destREG32: fdreg		is fd=0xfdc & fdreg					{ 
+destREG32: fdreg		is fd_h=$(SFR_PAGE) & fd_l=0xdc & fdreg					{ 
 	FSR2 = FSR2 + 1;
 	addr:2 = FSR2;
 	export *[DATA]:1 addr; 
 }
 
 # Pre-increment w/WREG-Offset File Register access - PLUSW0
-destREG32: fdreg		is fd=0xfeb & fdreg					{ 
+destREG32: fdreg		is fd_h=$(SFR_PAGE) & fd_l=0xeb & fdreg					{ 
 	FSR0 = FSR0 + 1;
 	addr:2 = FSR0 + sext(WREG);
 	export *[DATA]:1 addr; 
 }
 
 # Pre-increment w/WREG-Offset File Register access - PLUSW1
-destREG32: fdreg		is fd=0xfe3 & fdreg					{
+destREG32: fdreg		is fd_h=$(SFR_PAGE) & fd_l=0xe3 & fdreg					{
 	FSR1 = FSR1 + 1;
 	addr:2 = FSR1 + sext(WREG);
 	export *[DATA]:1 addr; 
 }
 
 # Pre-increment w/WREG-Offset File Register access - PLUSW2
-destREG32: fdreg		is fd=0xfdb & fdreg					{ 
+destREG32: fdreg		is fd_h=$(SFR_PAGE) & fd_l=0xdb & fdreg					{ 
 	FSR2 = FSR2 + 1;
 	addr:2 = FSR2 + sext(WREG);
 	export *[DATA]:1 addr; 
@@ -1058,7 +1072,7 @@ A: "BANKED"			is a=1										{ }
 	destREG32 = srcREG32;
 }
 
-:MOVFF srcREG32, destREG32	is lop4=0x0c & srcREG32 & qual4=0x0f & destREG32 & fd=0xff9	{ 
+:MOVFF srcREG32, destREG32	is lop4=0x0c & srcREG32 & qual4=0x0f & destREG32 & fd_h=$(SFR_PAGE) & fd_l=0xf9	{ 
 	#  1100 ssss ssss ssss 1111 dddd dddd dddd
 	#  1100 0000 0000 0000 1111 1111 1111 1001 -> MOVFF DAT_DATA_0000, PCL
 	addr:3 = (zext(PCLATU) << 16) + (zext(PCLATH) << 8) + zext(srcREG32);
@@ -1812,7 +1826,7 @@ A: "BANKED"			is a=1										{ }
 	destREG32 = ZS;
 }
 
-:MOVSF ZS, destREG32	is lop9=0x1d6 & ZS & qual4=0xf & destREG32 & fd=0xff9	{ 
+:MOVSF ZS, destREG32	is lop9=0x1d6 & ZS & qual4=0xf & destREG32 & fd_h=$(SFR_PAGE) & fd_l=0xf9	{ 
 	#  1110 1011 0zzz zzzz 1111 ffff ffff ffff
 	#  1110 1011 0001 0010 1111 1111 1111 1001	->	MOVSF 0x12[FSR2], PCL
 	addr:3 = (zext(PCLATU) << 16) + (zext(PCLATH) << 8) + zext(ZS);

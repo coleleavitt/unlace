@@ -13,6 +13,10 @@
 # (docs/processor-tests.md).
 
 [images]
+# PIC18: movlw 5; movwf 0xb7, a; movwf 0x01, a; return
+pic18_access = """
+050eb76e016e1200
+"""
 # AVRxt: in r24, 0x01; sts 0x0400, r24; ret
 avrxt_io = """
 81b1809300040895
@@ -4348,3 +4352,22 @@ image = "avrxt_io"
 test = "avr_dx_io_names"
 address = "0x0"
 expect = ["PORTA_DIR = VPORTA_OUT;"]
+
+# PIC18 Q-series (pic18q.sla, SFR page 0x400): an access-bank SFR is the family's register
+# (Q24 PIR1 at 0x4b7) and access-bank 0x01 is data 0x501; the classic language keeps 0xfb7 and 0x01.
+[[family]]
+name = "pic18_q_access"
+language = "PIC-18:LE:24:Q24"
+base = "0x0"
+image = "pic18_access"
+
+[[family.function]]
+test = "pic18_q24_access_bank"
+address = "0x0"
+expect = ["PIR1 = 5;", "dat_501 = 5;"]
+
+[[family.function]]
+test = "pic18_classic_access_bank"
+address = "0x0"
+language = "PIC-18:LE:24:PIC-18"
+expect = ["CCP3CON = 5;", "dat_1 = 5;"]

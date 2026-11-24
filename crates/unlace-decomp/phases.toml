@@ -4613,6 +4613,28 @@ tier = "core"
 symptoms = "v10 and v11 declared between v1 and v2|local declarations in string order v1, v10, v11, v2|a numbered local hard to find among ten or more declarations"
 
 [[settable]]
+option = "cppshortnames"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P9"
+subphase = "naming-policy"
+strength = "HARD"
+rewind = "P9"
+issue = "kuna-cppshortnames"
+summary = "Print a standard C++ name the way a C++ programmer writes it. A demangler and DWARF spell `std::string` as `std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >`. With the option on, `kuna_cppshortnames` shortens the name where the printer writes it, and the type, its Symbol and every directive keep the full name. An inline namespace right after `std` (`__cxx11`, `__1`, `__2`, `__ndk1`) is dropped from a type name and from the namespaces printed in front of a declared or called function (`std::basic_string::_M_append`). A character template whose other arguments are its defaults prints as its standard alias: `basic_string`, `basic_string_view` over `char`, `wchar_t`, `char8_t`, `char16_t` and `char32_t` (`std::string`, `std::wstring`, `std::u16string_view`), and the stream and buffer templates over `char` and `wchar_t` (`std::ostream`, `std::wistream`, `std::ostringstream`, `std::filebuf`). A DWARF name without its namespace (`basic_string<char, std::char_traits<char>, std::allocator<char> >`) counts when a default argument shows it is the standard one. A standard container loses its trailing default arguments when they name its own element, or for a map its own key and value pair: `std::vector<int, std::allocator<int> >` prints `std::vector<int>`, `std::map<int, std::string, std::less<int>, std::allocator<std::pair<int const, std::string> > >` prints `std::map<int, std::string>`, and `std::unique_ptr<Foo, std::default_delete<Foo> >` prints `std::unique_ptr<Foo>`. Any other argument stays (`std::vector<int, std::allocator<long>>`, `std::set<int, std::greater<int>>`). MSVC's `class`/`struct` argument tags are dropped. A rewritten name closes nested argument lists as `>>`. A name more than 32 template levels deep, longer than 4 KiB, or with unbalanced brackets prints as it is. The scope name of a member of the C++11-ABI string stays `basic_string`: the demangled symbol has lost its template arguments, so `char` and `wchar_t` cannot be told apart."
+use_when = "Turn on for C++ binaries: `std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > *` prints `std::string *`, and `std::__cxx11::basic_string::_M_append` prints `std::basic_string::_M_append`. Off by default because it respells names that stage assertions and CLI tests spell in full."
+example = "option cppshortnames on"
+source_decompiler = "ida"
+inspiration = "IDA prints `std::string` and `std::vector<int>` where the demangled and DWARF names spell out every inline namespace and default template argument."
+change_kind = "presentation-default"
+tier = "core"
+symptoms = "std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > instead of std::string|a std::vector or std::map type spelled with its allocator and comparator|__cxx11 or __1 in front of a std function name|C++ type names too long to read"
+live_field = "cpp_short_names"
+live_true = "on"
+live_false = "off"
+
+[[settable]]
 option = "libcnames"
 values = "on|off"
 default = "on"

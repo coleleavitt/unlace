@@ -654,6 +654,8 @@ mod tests {
         const UNEVALUATED: &[&str] = &[
             // `ptrfromlocal` (Hex-Rays printer survey row 1) is measured in its own sweep.
             "ptrfromlocal",
+            // `lvarvote` (issue #1244) changes only conflicting locals; its preset membership waits on a decbench sweep.
+            "lvarvote",
             // `charnum`, `constright` and `signeddec` (the Hex-Rays printer survey,
             // notes/ida-gap/hexrays-ctree-printer.md) print only; each is measured in its
             // own sweep before a preset or default decision.

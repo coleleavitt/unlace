@@ -728,6 +728,9 @@ mod globalwidth;
 #[path = "xrefs_unflagged_cli.rs"]
 mod xrefs_unflagged_cli;
 
+#[path = "z380_raw.rs"]
+mod z380_raw;
+
 #[path = "z8000_raw.rs"]
 mod z8000_raw;
 

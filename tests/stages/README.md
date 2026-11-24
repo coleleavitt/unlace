@@ -123,7 +123,7 @@ compare reads a zero-extended byte) and a nested max loop stay loops, and
 `kuna-atomics-riscv.toml` checks hand-encoded RV64A `amoadd.w`, `amoswap.d` and
 `amoor.w` against the builtins, and that `amomax.w` is declined.
 
-`kuna-go-atomic-return.xml` checks exact AMD64 Go direct-return atomic additions,
+`kuna-go-atomic-return.toml` checks exact AMD64 Go direct-return atomic additions,
 including old-value, flag, branch, memory-effect and width refusals. The same
 bytes retain C/Rust rendering and the non-Go source control.
 
@@ -346,7 +346,7 @@ writeup, not here.
 
 | `gh9191-switchmodbound.xml` | [GH-9191](https://github.com/NationalSecurityAgency/ghidra/issues/9191) | S2 switch model (modulo/and-mask LOAD-table index bound) | `option switchmodbound on\|off` |
 
-| `re-constselectjump.xml` | RE-friction need `conditional-indirect-branches-hide` | S2 switch model (destination selected between constant addresses by a conditional move) | `option constselectjump on\|off` |
+| `re-constselectjump.toml` | RE-friction need `conditional-indirect-branches-hide` | S2 switch model (destination selected between constant addresses by a conditional move) | `option constselectjump on\|off` |
 | `kuna-entryretdispatch.toml` | RE-friction need `entry-point-ret-dispatch` | S2 flow classification (proven entry `push continuation; push target; ret` links become calls) | always on (P2 `flow-classification`, `kuna_entryretdispatch.rs`) |
 
 | `kuna-objectview.toml` | a UEFI TE image and a `load raw` image ran no object-file analysis pass, so a string read stayed `*(char *)(v + 0x402000)` and the TE entry kept no UEFI prototype (authored C, fixtures `fixtures/objectview/`, built by `gen_objectview.py`) | P1 program-prep, code-data-partition (`loader/kuna_objectview.rs` PE/ELF views; `engine.rs run_object_view_passes`) | `option objectview on\|off` |
@@ -395,7 +395,7 @@ writeup, not here.
 | `kuna-wideslice.toml` | clang x86-64 `-O3` byte-sum regression | P3 SSA reduction (push demanded slices through 9..15-byte `PIECE`, byte shifts, and bitwise operations; the artificial aggregates heritage and the rule pool leave behind, without recognizing the source algorithm) | always on |
 | `kuna-devectorize.toml` | clang x86-64 `-O3` byte-sum regression (follow-up to `kuna-wideslice.toml`) | P3 SSA reduction (a proven vectorized integer reduction: guard, stride loop with one accumulator per lane, fold and scalar remainder loop, re-rolled into its scalar loop by removing the guard's vector edge) | `option devectorize on\|off` |
 | `kuna-devectorize-effects.toml` | hand-written x86-64 byte sums whose exits disagree on a global store | P3 SSA reduction (`devectorize` refuses a reduction whose arm, remainder loop or exits write global storage) | `option devectorize off\|on` |
-| `re-checker-stack-aggregate.xml` | RE-friction need `checker-uses-stack-aggregate` | P9 declaration emission (constant address-reference highs are not whole storage representatives) | default correctness fix (no option) |
+| `re-checker-stack-aggregate.toml` | RE-friction need `checker-uses-stack-aggregate` | P9 declaration emission (constant address-reference highs are not whole storage representatives) | default correctness fix (no option) |
 | `ghdec-unsigned-byte-vm-selector.toml` | RE-friction need `unsigned-byte-vm-selector` | P2 switch model (range-comparison signedness carried through lowered-switch recovery) | always on (P2 `switch-model`, part of `loweredswitch`: `kuna_loweredswitchlabels.rs`) |
 | `kuna-msvcstrappend.toml` | GH-468 finding 6 (inlined MSVC `std::string` appends) | P2 flow classification (a proven capacity diamond collapses to one `push_back`/`append` call; 29 one-defect near misses stay unrolled) | `option msvcstrappend on\|off` |
 | `kuna-loweredswitchvalue.toml` | GH-468 finding 4 (scrutinee soundness) | P2 switch model (a re-rolled lowered switch dispatches on the compared value, or is withdrawn) | always on (P2 `switch-model`, part of `loweredswitch`: `kuna_loweredswitchvalue.rs`) |

@@ -241,7 +241,7 @@ against the original's `b[1]=137438953505 b[2]=0`). Pruned, the export is
 `{long field_0x0; long field_0x8;}` with
 `a0->field_0x8 = (long)*(int *)((long)&a0->field_0x0 + 4) + a0->field_0x0;`,
 which recompiles to `b[1]=137438953505 b[2]=0` — the original.
-`tests/stages/structsynth-overlap-layout.xml` is that case.
+`tests/stages/structsynth-overlap-layout.toml` is that case.
 
 ## 6. Measured
 

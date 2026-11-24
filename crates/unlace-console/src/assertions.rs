@@ -581,7 +581,7 @@ fn apply_one_program_scoped(prog: &mut ConsoleProgram, body: &Body) -> Result<()
 /// `noreturn <func>` -- set the no-return property of the function's symbol,
 /// which every caller's flow following reads; a function is declared first at an
 /// entry address nothing starts at yet. `<func>` is a name or a `0x` address.
-fn apply_noreturn(prog: &mut ConsoleProgram, func: &str) -> Result<(), String> {
+pub(crate) fn apply_noreturn(prog: &mut ConsoleProgram, func: &str) -> Result<(), String> {
     let hex = func.strip_prefix("0x").or_else(|| func.strip_prefix("0X"));
     let addr = match hex.and_then(|h| u64::from_str_radix(h, 16).ok()) {
         Some(vma) => code_addr(prog, vma)?,

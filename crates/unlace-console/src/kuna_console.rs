@@ -2002,6 +2002,33 @@ impl IfaceCommandAction for IfcKunaFunctionSymbol {
     }
 }
 
+/// `function noreturn <func>`: the console form of the `noreturn` assertion
+/// (`crate::assertions`): the function, a name or a `0x` entry address, never
+/// returns; a function is declared first at an entry nothing starts at.
+pub struct IfcKunaFunctionNoReturn;
+
+impl IfaceCommandAction for IfcKunaFunctionNoReturn {
+    fn execute(&self, status: &mut IfaceStatus, s: &mut CommandStream) -> IfaceResult<()> {
+        s.skip_ws();
+        let func = s.read_token();
+        if func.is_empty() {
+            return Err(IfaceError::parse("Missing function name or address"));
+        }
+        let dcp = dcp_mut(status)?;
+        let prog = dcp
+            .conf
+            .as_mut()
+            .ok_or_else(|| IfaceError::execution("No load image present"))?;
+        crate::assertions::apply_noreturn(prog, &func).map_err(IfaceError::execution)?;
+        status.out(&format!("Marked {func} no-return\n"));
+        Ok(())
+    }
+
+    fn module(&self) -> String {
+        DECOMPILE_MODULE.to_string()
+    }
+}
+
 /// `function containing <selector>`: name the inventory entry whose extent
 /// holds the function `selector` resolves to, when that is not itself an
 /// entry, so `unlace decompile` can say it is decompiling from inside another
@@ -2145,6 +2172,7 @@ pub fn register_kuna_commands(status: &mut IfaceStatus) {
     // exposes as `--define-function`.
     status.register_com(Box::new(IfcKunaFunctionBounds), &["function", "bounds"]);
     status.register_com(Box::new(IfcKunaFunctionSymbol), &["function", "symbol"]);
+    status.register_com(Box::new(IfcKunaFunctionNoReturn), &["function", "noreturn"]);
     status.register_com(
         Box::new(IfcKunaFunctionContaining),
         &["function", "containing"],

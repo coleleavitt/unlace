@@ -20,12 +20,19 @@
 //! or one of its bases at offset 0; with none (identical-code folding,
 //! `_purecall`) it is left untyped. A vftable serving a virtual base types
 //! none of its functions.
+//!
+//! A vftable walk stops only at a slot that is not code, so a vftable laid
+//! directly before another table of code pointers runs into it. A class's own
+//! vftable is cut to the shortest one a derived class keeps for it, and any
+//! vftable is cut at a slot another pointer in the image names
+//! ([`trim_overruns`]).
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use object::read::{Object, ObjectSymbol};
 use object::{BinaryFormat, SymbolKind};
 
+use unlace_decomp::kuna_fasthash::FxHashSet;
 use unlace_decomp::kuna_vtabletypes::{VtableClass, VtableSlot};
 
 use crate::demangle::demangle_rtti_class_name;
@@ -171,7 +178,67 @@ pub(super) fn recover(img: &ImageBytes, rk: &RefKind, text: &TextRanges) -> BTre
             });
         }
     }
+    let referenced = interior_references(img, rk, &classes);
+    trim_overruns(&mut classes, &referenced, rk.ptr_size() as u64);
     classes
+}
+
+/// Every slot address, other than a vftable's first, that a pointer-width word
+/// of the image holds: something else (another table) starts there.
+fn interior_references(
+    img: &ImageBytes,
+    rk: &RefKind,
+    classes: &BTreeMap<u64, Class>,
+) -> HashSet<u64> {
+    let ptr = rk.ptr_size() as u64;
+    let interior: FxHashSet<u64> = classes
+        .values()
+        .flat_map(|c| &c.tables)
+        .flat_map(|t| (1..t.vt.slots.len() as u64).map(move |i| t.vt.base.wrapping_add(i * ptr)))
+        .collect();
+    img.scan_ptr_slots(rk, &interior)
+        .into_iter()
+        .map(|(_, target)| target)
+        .collect()
+}
+
+/// A vftable walk runs on until a slot is not code, so a vftable followed
+/// directly by another table of code pointers (an RPC server's dispatch table)
+/// takes that table in. Cut each class's own vftable to the shortest vftable a
+/// derived class keeps for its subobject (that one is never shorter than the
+/// base's), and every vftable at the first slot `referenced` names.
+pub(super) fn trim_overruns(
+    classes: &mut BTreeMap<u64, Class>,
+    referenced: &HashSet<u64>,
+    ptr: u64,
+) {
+    let mut bound: BTreeMap<u64, usize> = BTreeMap::new();
+    for (&td, c) in classes.iter() {
+        for t in &c.tables {
+            for x in served(td, c, t.offset, &[]) {
+                if x != td {
+                    let b = bound.entry(x).or_insert(usize::MAX);
+                    *b = (*b).min(t.vt.slots.len());
+                }
+            }
+        }
+    }
+    for (td, c) in classes.iter_mut() {
+        for t in &mut c.tables {
+            let mut n = t.vt.slots.len();
+            if t.offset == 0
+                && let Some(&b) = bound.get(td)
+            {
+                n = n.min(b);
+            }
+            if let Some(i) =
+                (1..n).find(|&i| referenced.contains(&t.vt.base.wrapping_add(i as u64 * ptr)))
+            {
+                n = i;
+            }
+            t.vt.slots.truncate(n.max(1));
+        }
+    }
 }
 
 fn class_name(img: &ImageBytes, rk: &RefKind, td: u64) -> Option<String> {
@@ -720,6 +787,26 @@ mod tests {
             .push(table(0, 0x2300, &[0x1300, 0x1310, 0x1320]));
         let facts = facts(&classes, &HashMap::new(), 8);
         assert!(!facts.this_types.iter().any(|(f, _)| *f == 0x1090));
+    }
+
+    /// SensorService.dll: `Sensors::BrSensor`'s vftable is directly followed by
+    /// an RPC server's dispatch table, so its walk took 15 slots where its
+    /// derived classes keep 4.
+    #[test]
+    fn a_walk_into_the_next_table_is_cut() {
+        let mut classes = hierarchy();
+        let square = classes.get_mut(&0x20).unwrap();
+        square.tables[0].vt.slots.extend([0x1500, 0x1510, 0x1520]);
+        let circle = classes.get_mut(&0x30).unwrap();
+        circle.tables[0].vt.slots.extend([0x1600, 0x1610]);
+        let referenced = HashSet::from([0x21f8 + 3 * 8]);
+        trim_overruns(&mut classes, &referenced, 8);
+        assert_eq!(classes[&0x20].tables[0].vt.slots, vec![0x1110, 0x1120]);
+        assert_eq!(
+            classes[&0x30].tables[0].vt.slots,
+            vec![0x1160, 0x1130, 0x1600]
+        );
+        assert_eq!(classes[&0x50].tables[0].vt.slots.len(), 2);
     }
 
     #[test]

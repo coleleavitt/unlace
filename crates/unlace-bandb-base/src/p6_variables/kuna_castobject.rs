@@ -58,7 +58,7 @@
 //! type and prints as nothing, and the ones C performs by assignment, argument
 //! passing and return need none.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::rc::Rc;
 
 use unlace_base::address::sign_extend;
@@ -387,7 +387,7 @@ pub fn declare_out_params(
     if refs.iter().all(|r| r.want.is_none()) {
         return declared;
     }
-    let mut wants: HashMap<uintb, Option<Rc<Datatype>>> = HashMap::new();
+    let mut wants: BTreeMap<uintb, Option<Rc<Datatype>>> = BTreeMap::new();
     for r in &refs {
         let e = wants.entry(r.off).or_insert_with(|| r.want.clone());
         if !matches!((&*e, &r.want), (Some(a), Some(b)) if same_int(a, b)) {

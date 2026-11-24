@@ -686,7 +686,9 @@ pub fn seed(arch: &mut Architecture, data: &mut Funcdata) {
         }
     }
     if let Some(earlier) = data.kuna_wide() {
-        entries.extend(earlier.verdicts.keys().copied());
+        let mut known: Vec<Entry> = earlier.verdicts.keys().copied().collect();
+        known.sort_unstable();
+        entries.extend(known);
         entries.extend(earlier.missed.borrow().iter().copied());
     }
     let mut verdicts = HashMap::new();

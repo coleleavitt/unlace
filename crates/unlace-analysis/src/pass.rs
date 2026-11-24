@@ -713,6 +713,14 @@ pub struct AnalysisOutput {
     /// load. The commit stashes them on the architecture
     /// (`Architecture::arm_float_library_prototypes`).
     pub arm_float_prototypes: Vec<(Option<u64>, unlace_decomp::fspec::PrototypePieces)>,
+    /// (kuna `honestgaps`) Prototypes the load withheld, by entry address
+    /// (`None`: by name), with why. The commit records them in the
+    /// architecture's `kuna_honestgaps::WithheldPrototypes` table.
+    pub withheld_prototypes: Vec<(
+        Option<u64>,
+        String,
+        unlace_decomp::kuna_honestgaps::WithheldCause,
+    )>,
     /// The C runtime declaration `elfmain` has for an executable's own
     /// symbol-named `main`, keyed by entry address (an ARM Thumb symbol's mode
     /// bit cleared). The commit keeps it OFF the symbol; the drive applies it
@@ -1020,6 +1028,9 @@ impl AnalysisOutput {
         self.arm_float_prototypes
             .iter_mut()
             .for_each(|(_, p)| fix_proto(p));
+        self.withheld_prototypes
+            .iter_mut()
+            .for_each(|(_, n, _)| fix(n));
         self.main_decl_at.iter_mut().for_each(|(_, p)| fix_proto(p));
         self.cpp_dwarf
             .symbols
@@ -1229,6 +1240,10 @@ impl AnalysisOutput {
         self.cpp_vtables
             .slot_ranges
             .extend(other.cpp_vtables.slot_ranges);
+        self.cpp_vtables
+            .this_types
+            .extend(other.cpp_vtables.this_types);
+        self.cpp_vtables.tables.extend(other.cpp_vtables.tables);
         self.iokit_cxx
             .vtables
             .classes
@@ -1254,6 +1269,7 @@ impl AnalysisOutput {
         self.prototypes_at.extend(other.prototypes_at);
         self.dwarf_nocall.extend(other.dwarf_nocall);
         self.arm_float_prototypes.extend(other.arm_float_prototypes);
+        self.withheld_prototypes.extend(other.withheld_prototypes);
         self.main_decl_at.extend(other.main_decl_at);
         self.c_runtime_imports.extend(other.c_runtime_imports);
         self.guard_dispatch_slots.extend(other.guard_dispatch_slots);

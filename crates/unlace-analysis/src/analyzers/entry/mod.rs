@@ -101,6 +101,8 @@ pub mod kuna_ehcold;
 pub mod kuna_fdeinterior;
 pub mod kuna_itaniumeh;
 pub mod kuna_machoehframe;
+pub mod kuna_msvceh;
+pub mod kuna_msvcfuncinfo;
 pub mod kuna_pdatainterior;
 pub mod kuna_pemain;
 pub mod kuna_pereloccode;

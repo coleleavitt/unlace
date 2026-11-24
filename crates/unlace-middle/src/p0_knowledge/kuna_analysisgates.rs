@@ -531,6 +531,16 @@ crate::kuna_flag!(
 );
 
 crate::kuna_flag!(
+    /// (kuna) Label MSVC `ThrowInfo` chains and comment x64 throw sites (option
+    /// `msvceh`). See `unlace_analysis::entry::kuna_msvceh`.
+    Msvceh,
+    "msvceh",
+    "MSVC C++ exception metadata",
+    unset: false,
+    shipped: false
+);
+
+crate::kuna_flag!(
     /// (kuna, NOVEL) Gate the Itanium (GCC/Clang) RTTI + vtable recovery pass
     /// (`itaniumrtti`); default **off**. Ghidra has no Itanium RTTI analyzer at all
     /// — its `RttiAnalyzer` is Microsoft-only and its GCC class recovery is

@@ -140,3 +140,57 @@ fn segments_are_carved_out_of_the_bytes_and_checked() {
         Err(Error::Segments(_))
     ));
 }
+
+const IDB: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../unlace-cli/tests/fixtures/idb/cat.i64"
+);
+
+#[test]
+fn an_ida_database_loads_as_its_segments_with_its_knowledge() {
+    let decompiler = Decompiler::from_idb(IDB).expect("the fixture reads");
+    let argv = decompiler.request.argv();
+    assert_eq!(flag_values(&argv, "--target"), ["x86:LE:64:default"]);
+    assert!(argv.iter().any(|a| a == "--raw-image"));
+    let raw = decompiler.request.raw.as_ref().expect("a raw load");
+    assert!(raw.segments.as_ref().is_some_and(|runs| !runs.is_empty()));
+    assert!(!raw.entries.is_empty());
+    let assertions = flag_values(&argv, "--assert");
+    assert!(
+        assertions
+            .iter()
+            .any(|d| d.starts_with("function ") && d.ends_with("=main"))
+    );
+    assert!(assertions.iter().any(|d| d.starts_with("prototype ")));
+    assert!(!decompiler.request.noreturn.is_empty());
+}
+
+#[test]
+fn an_ida_database_of_other_bytes_is_refused() {
+    let refused = Decompiler::from_bytes(b"\x7fELF other bytes")
+        .unwrap()
+        .with_idb(IDB);
+    assert!(matches!(refused, Err(Error::Request(_))));
+    assert!(matches!(
+        Decompiler::from_bytes(b"x")
+            .unwrap()
+            .with_idb("/nonexistent/db.i64"),
+        Err(Error::Io { .. })
+    ));
+    let raw = Decompiler::from_raw(vec![0xc3; 16], Target::X86_64, 0x401000, &[], &[0x401000])
+        .unwrap()
+        .with_idb(IDB)
+        .expect("a raw input is not checked");
+    assert!(
+        flag_values(&raw.request.argv(), "--assert")
+            .iter()
+            .any(|d| d.starts_with("function "))
+    );
+}
+
+#[test]
+fn an_ida_database_decompiles_without_its_binary() {
+    let mut decompiler = Decompiler::from_idb(IDB).expect("the fixture reads");
+    let main = decompiler.decompile_named("main").expect("main decompiles");
+    assert!(!main.c.is_empty());
+}

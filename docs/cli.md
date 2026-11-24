@@ -2308,7 +2308,18 @@ modeled; `structuring-declined` for a body the printer could not structure; the 
 `warnstyle inline` prints for any other warning it abbreviates (`no-return`,
 `tail-call`, `branch-flip`, `return-dupe`, `inlined`, ...), less its ` xN`
 count; the producer tag of a kuna warning (`calltrampoline`, `overlapbranch`,
-`tailcallframe`, ...); and `other` for the rest. Like `unstructured_gotos`, a
+`tailcallframe`, ...); and `other` for the rest. With `--option honestgaps on`
+two losses that are otherwise silent are listed too: `notmodelled` for an
+instruction SLEIGH has no p-code for, stepped over as a no-op under the
+`ignoreunimplemented` policy (its `message` names the instruction), and
+`debuginfo` for a DWARF register local the decompile could not bind (a header
+warning naming the local), and `withheldproto` for a prototype the load withheld
+(a library signature declaring a `float` or `double` on a target that does not
+return a `double` whole, or a DWARF signature naming a type that could not be
+built), in the header of its own function and at each call to it. The document's top-level `warning_kinds` totals the
+records' warnings by `kind`, keys in byte order, so a harness can rank a run's
+gaps without walking every record; it is always present, `{}` for a run with
+no warnings. Like `unstructured_gotos`, a
 warning does not change the verdict: `error` stays reserved for a function that
 failed to decompile, and the exit status is the same with or without warnings.
 A variable's `kind` is `arg` for a parameter, `stack` for a local with a frame
@@ -2380,7 +2391,7 @@ ones in a top-level
 whose variables were examined and none reported, and an absent `stack_objects`
 with no `omitted` still means none were recovered. A document that omits nothing
 has no `omitted` key, so the default document is unchanged. The run-level
-`language`, `count`, `error` and `assertions` and each record's `name`,
+`language`, `count`, `error`, `assertions` and `warning_kinds` and each record's `name`,
 `address`, `address_hex`, `object_location`, `size`, `code`, `error`,
 `unstructured_gotos` and `warnings` (and `interior_to` and `declared`, where
 they apply) are always present;
@@ -2394,7 +2405,7 @@ unlace decompile ./fixture audit_many --json --omit aliases,line_mappings,variab
 #    "count": 1, "error": null,
 #    "functions": [{"name": "audit_many", ..., "code": "void audit_many(void) ...",
 #                   "error": null, "unstructured_gotos": 0, "warnings": []}],
-#    "assertions": []}
+#    "assertions": [], "warning_kinds": {}}
 ```
 
 Omitting a collection also skips the work behind it where nothing else needs it.
@@ -5676,6 +5687,78 @@ unlace project import ./a.out.unlace a.out.project.json [--replace]
 `--json`, rows print tab-separated under a header line. `bookmark <addr> <title>` is the one
 project-only directive: it is stored and listed, never sent to the engine. Writers can run at the same
 time: each command is one transaction, and the later of two writes to the same key wins.
+
+## `unlace idb` — IDA databases (`.idb`, `.i64`)
+
+`unlace idb` reads an IDA database with [idb-rs](https://github.com/coleleavitt/idb-rs) (no IDA
+needed; IDA 6 through 9.5 formats, 32- and 64-bit) and turns what the analyst recorded there into the
+`--assert` vocabulary, so it reaches the engine the way any project row does.
+
+```sh
+unlace idb info target.i64 --json              # processor, SLEIGH target, input hashes, segments, counts
+unlace idb list target.i64 functions --jsonl   # or segments | names | comments | types | entries
+unlace idb import target.i64 --binary ./target # store it in ./target.unlace, bound to ./target
+unlace decompile-all ./target --project ./target.unlace --json
+```
+
+| command | does | `--json` document |
+|---|---|---|
+| `info <db>` | the database-wide facts | `{path, processor, target, address_bits, bitness, big_endian, version, file_format, compiler, input:{file,size,crc32,md5,sha256}, image_base, segments:[{start,end,name,class,perms,bitness,kind}], counts:{functions,named,typed,noreturn,library,names,comments,types,entry_points}, errors}` |
+| `list <db> [<kind>]` | one kind of record, `functions` by default; `--jsonl` prints one per line | `{kind, records:[...]}`; a function is `{start,end,name,named,noreturn,library,thunk,prototype,comment,tails}` |
+| `import <db> [--project FILE \| --binary BIN] [--no-types] [--no-comments] [--force]` | store the knowledge in a project file (below) | `{project, binary, target, stored, counts, noreturn, skipped_count, skipped:[{record,reason}]}` |
+
+`target` is the SLEIGH language id IDA's processor maps to (`metapc` → `x86:LE:{16,32,64}`, `ARM` →
+`ARM:LE:32:v8` or `AARCH64:LE:64:v8A`, `mipsl`/`mipsb`, `ppc`, `sparcb`, `riscv`, `68K`, `8051`, `avr`,
+`tricore`, `sh4`, `hppa`, `z80`, `m6502`, `msp430`, `xtensa`, `v850`); `null` when there is no mapping.
+
+**Where `import` writes.** `--project FILE` adds to an existing project. Otherwise it creates (or
+adds to) `<BIN>.unlace` bound to `--binary BIN`, or with neither `<db>.unlace` bound to the database
+file itself. The database records the SHA-256 of the file IDA loaded; a project bound to a binary
+with another hash is refused unless `--force`.
+
+**What it stores**, as the directives `unlace project set` would (each is checked against the
+`--assert` grammar first; one that does not parse is listed in `skipped`):
+- every local type as `typedef <declaration>` (`--no-types` leaves them out);
+- every function as `function <start>[-<end>][=<name>]`: the end of the entry chunk unless the
+  function has other chunks, the name unless IDA only has a dummy (`sub_…`) one;
+- every prototype IDA holds as `prototype <start> <declaration>`;
+- the function comments, and the regular and repeatable comments inside functions, as `comment
+  <addr> <text>`, one line per address (`--no-comments` leaves them out). A comment that is one
+  identifier is the argument name IDA writes beside each typed call's setup and is left out.
+
+IDA's C is rewritten into the engine's grammar: `__int8`…`__int64` (signed or not) and `_BYTE`,
+`_WORD`, `_DWORD`, `_QWORD`, `_BOOLn` become `int1`…`uint8`/`bool`; `__attribute__((…))`,
+`__spoils<…>`, `__noreturn`, `__cdecl` and IDA-only qualifiers (`__hidden`, `__struct_ptr`,
+`__cppobj`, `__ptr32`, …) are dropped, and `__stdcall`/`__fastcall`/`__thiscall` too unless the target
+is 32-bit x86; a bare reference to a local `struct`/`union`/`enum` tag gets its keyword; a function
+name that is not a C identifier is spelled with `_` in the declaration (the directive binds by
+address). A `__usercall`/`__userpurge` prototype (arguments in named registers) is skipped. IDA's
+no-return flags are reported in `noreturn`; the `--assert` vocabulary has no directive for them.
+
+### Decompiling a database directly
+
+`decompile`, `decompile-all`, `decompile-project` and `functions` take a database in place of the
+binary; the original file is not needed:
+
+```sh
+unlace decompile target.i64 main                   # text; by name, from the database's function list
+unlace decompile-all target.i64 --json --functions main,parse_args
+unlace functions target.i64 --json
+```
+
+The front end (`crates/unlace-cli/src/rawfront.rs` → `crate::idb::prepare_args`) turns the database
+into a raw load: its segments' bytes (bytes IDA does not hold read as zero) mapped at their
+addresses with their rights (`--raw-image`, `--base` the lowest segment), `--target` from the
+processor (an explicit `--target` wins), an `--entry` per function (not for `decompile`, which
+selects one), `--functions` names rewritten as `--addr`es, and the database's local types,
+functions and prototypes as `--assert @FILE` in a temporary file (comments are left out of a
+direct load; import them into a project for that). IDA's no-return flags are applied to the
+loaded program after the analysis commit. One line on stderr says what was loaded:
+`[kuna idb] target.i64: metapc 64-bit as x86:LE:64:default, 23 segments, 209 functions, 378 directives`.
+`decompile` of a database always runs in-process (text or `--json`), so `--raw`, `--regions`,
+`--trace`, `--kassert` and `--decomp-dbg` are refused. `--jobs` is refused, as for any raw image.
+`unlace idb import` with neither `--project` nor `--binary` writes `<db>.unlace` bound to the database,
+which `--project` then applies to these commands.
 
 ## Everything else
 

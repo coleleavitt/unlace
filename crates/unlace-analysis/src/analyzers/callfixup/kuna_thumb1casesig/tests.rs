@@ -79,3 +79,15 @@ fn an_image_for_another_architecture_is_not_scanned() {
     scan(&file, &mut out);
     assert!(out.symbols.is_empty() && out.call_fixups.is_empty());
 }
+
+#[test]
+fn every_armcc_switch8_form_is_named_and_tagged_once() {
+    let mut code = Vec::new();
+    let mut expect = Vec::new();
+    for (name, words) in HELPERS.iter().filter(|(n, _)| *n == "__ARM_common_switch8") {
+        expect.push((0x1000 + code.len() as u64, *name));
+        code.extend(le(words));
+    }
+    assert_eq!(expect.len(), 3);
+    assert_eq!(scan_bytes(&code, 0x1000, false), expect);
+}

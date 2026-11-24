@@ -16,6 +16,114 @@ and effects refuse. Flow overrides do not acquire a record. The record is
 cleared on restart and cannot authorize a later rendering without the final
 whole-function SSA proof described in chapter 09.
 
+**(kuna) Atomic instructions — `option atomics auto|msvc|gcc|off`, default off,
+`crates/unlace-lift/src/p2_lift/kuna_atomics.rs (rewrite)`.**
+SLEIGH lifts an x86 `lock`-prefixed read-modify-write as `LOCK()`, a load, an
+update, a store and `UNLOCK()`; an AArch64 LSE atomic (`ldadd`, `ldclr`,
+`ldeor`, `ldset`, `swp`, `cas` and their `a`/`l`/`al` and `st` forms) and a
+RISC-V AMO as the same load and store with nothing to mark them. The C showed a
+plain update between `LOCK();` and `UNLOCK();`, or no sign of atomicity at all,
+and a `cas` became a compare-and-store that later passes could move out of its
+retry loop. Right after an instruction is lifted, its p-code is evaluated
+symbolically over every path through its internal branches (at most four),
+with `Old` for the value the updated location holds when the instruction
+starts. The location is the pointer of the instruction's LOADs and its one
+STORE, or, under an x86 lock envelope with no LOAD or STORE (an absolute or
+RIP-relative operand), the one RAM varnode the instruction writes. Its width
+is 1, 2, 4 or 8 bytes. The instruction is rewritten when the value it writes
+there is one of:
+
+| written value | builtin (its result is `Old`) |
+|---|---|
+| `Old + X`, `Old - X`, `Old & X`, `Old \| X`, `Old ^ X` | `__sync_fetch_and_add/sub/and/or/xor(p, X)` |
+| `~Old` | `__sync_fetch_and_xor(p, -1)` |
+| `X` | `__sync_lock_test_and_set(p, X)` |
+| `N` on exactly the path where `Old == E` | `__sync_val_compare_and_swap(p, E, N)` |
+
+with `X`, `E` and `N` independent of `Old`. An addition of a negative constant
+prints as a subtraction of its negation. The names are the GCC/Clang `__sync`
+builtins, which return the old value and do not encode a memory order. Every
+x86 locked instruction is a full barrier, as `__sync` implies; the AArch64
+acquire and release markers (`LOAcquire()`, `LORelease()`) stay where SLEIGH
+put them.
+
+The rewrite changes ops in place and never changes how many the instruction
+has, so relative branches inside it keep their targets. Through a pointer,
+the first load becomes the builtin's CALLOTHER (keeping the load's output),
+every other load before the store a copy of a storage the evaluation shows
+still holds `Old`, every load after it a copy of the stored value, and the
+store and the `LOCK`/`UNLOCK` markers copies to fresh temporaries that
+dead-code removal deletes. Through a RAM varnode, `LOCK` becomes the builtin
+(with the address as a constant pointer and a fresh temporary output), each
+read of the varnode reads that temporary or, after the write, the written
+value, and the write goes to a fresh temporary instead. Flags and registers
+the instruction writes are still computed from `Old`. On the success path of
+an x86 `cmpxchg`, where the accumulator equals `Old`, the store's op is reused
+to assign `Old` to the accumulator, so both paths agree on it; the branch then
+only decides the upper half of `RAX` after a 32-bit `cmpxchg`, which hardware
+zero-extends only on failure. An operand that no storage holds at the first
+load (`~X` for `ldclr`, `imm + CF` for `adc`) is rebuilt with new ops in front
+of it, which is allowed only when the instruction has no relative branch and
+updates memory through a pointer. Anything else is declined: another user
+operation inside the lock envelope (an HLE `xacquire`/`xrelease` hint), an
+update that leaves the location unchanged (`lock orq $0, (%rsp)`, the fence
+compilers emit, stays `LOCK(); UNLOCK();`), `lock neg`, `cmpxchg8b`/`cmpxchg16b`, `casp`, the min/max forms, an unlocked x86
+update, and every instruction of a Go image (`goatomicreturn` owns those).
+
+The builtins are CALLOTHERs with the call flag, so loads, stores and calls stay
+ordered around them, and they write memory through their address operand:
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_memoryguard.rs (memory_ops)`
+lists them, so heritage guards writable RAM and address-tied stack ranges
+across each one as across a call, and a global updated by `lock inc` is reread
+after it. The location's type is the integer the address operand already
+points to, or else an integer of its width (unsigned for `and`/`or`/`xor`,
+signed otherwise); the address operand points to it, the result and the other
+operands have it, and a constant address operand may become an address
+reference.
+
+The option's value chooses the spelling (`crates/unlace-lift/src/p2_lift/kuna_atomics.rs (spelled)`).
+`gcc` prints the `__sync` builtins above; `msvc` prints the MSVC intrinsics
+Hex-Rays prints: `_InterlockedExchangeAdd`, `_InterlockedAnd`,
+`_InterlockedOr`, `_InterlockedXor`, `_InterlockedExchange` and
+`_InterlockedCompareExchange`, suffixed `8`, `16`, nothing or `64` by the
+location's width; `auto` prints the MSVC ones on a Windows image (a Windows
+compiler spec, or a PE the loader identified as Windows user mode) and the GCC
+ones elsewhere. Each intrinsic returns the old value, as its builtin does.
+MSVC has no fetch-and-subtract: a subtraction of a constant becomes
+`_InterlockedExchangeAdd` of its negation, a subtraction of a value becomes
+`_InterlockedExchangeAdd` of its two's complement where that operand can be
+built in front of the instruction, and otherwise keeps
+`__sync_fetch_and_sub`. `_InterlockedCompareExchange(p, N, E)` takes the new
+value before the expected one, as MSVC declares it. The same spelling applies
+to the builtins `llscfold` produces. The 128-bit pairs (`cmpxchg16b`, `casp`)
+stay declined: the evaluation tracks values of at most 8 bytes.
+
+**(kuna) Load/store-exclusive loops — `option llscfold`, default off,
+`crates/unlace-lift/src/p2_lift/kuna_atomics.rs (ActionLlscLoop)`.**
+Without LSE, AArch64 code updates memory with a retry loop: `ldaxr w8, [x0];
+add w9, w8, w1; stlxr w10, w9, [x0]; cbnz w10, loop`. The store-exclusive
+lifts to a block ending in a branch on `ExclusiveMonitorPass`, a block holding
+the STORE and `ExclusiveMonitorsStatus`, and the block of the `cbnz` that
+branches back to the loop head. The head is that first block, or, for a
+compare-exchange (`ldaxr; cmp; b.ne fail; stlxr; cbnz`), its one predecessor,
+which holds the load and leaves the loop when the compare fails. Pre-SSA
+(heritage pass 0), the head, the store-exclusive's blocks and the status test
+are evaluated like one atomic instruction with the monitor passing and the
+status 0: one LOAD, in the head, and one STORE through one pointer register
+that the monitor also checks, the status test leaving the loop, and either a
+written value from the table above (a head without a compare) or, for a
+compare-exchange, a written value `N` independent of `Old` reached only when
+the head's compare finds `Old == E`. A value the loop reads from a register or
+temporary it also writes would differ on a retry, so such a read declines the
+fold, and so does a compare's exit that branches back to the head after doing
+anything but `clrex`. The LOAD becomes `__sync_fetch_and_<op>(p, X)`,
+`__sync_lock_test_and_set(p, X)` or `__sync_val_compare_and_swap(p, E, N)`, the
+monitor's pass and status become the constants 1 and 0, and the STORE a dead
+copy; dead-branch removal then deletes the back edge. A compare-exchange that
+fails stores nothing, as the loop did, and keeps its exit (with its `clrex`).
+Only AArch64 declares the monitor user operations, so the option is inert
+elsewhere.
+
 This phase turns an entry address into a function: raw p-code ops for every
 reachable instruction, a basic-block graph over them, a call-spec record per
 call site, and — the centerpiece — a recovered `JumpTable` for every indirect
@@ -797,6 +905,34 @@ indistinguishable from a function that returns normally. The fourth cause,
 `noreturn`, is not a decode failure and is deliberately untouched: it is already
 reported on the call it follows.
 
+**(kuna) Silent losses named (`kuna_honestgaps.rs`, `option honestgaps`, default off).**
+Under the `ignoreunimplemented` policy `handle_decode_error` steps over an
+instruction SLEIGH decodes but has no p-code for, as a no-op, and only the
+once-per-function header said the function ignored unimplemented instructions,
+never which. With the option on it also buffers `notmodelled: <insn> has no
+p-code semantics; stepped over as a no-op` at the instruction's address, the
+instruction named from the decoder's `Unimpl` text (mnemonic and operands, else
+`instruction`). The decompile drive does the same for a DWARF register local
+that `seed_dwarf_register_locals` could not bind (chapter 01): a header warning
+`debuginfo: DWARF local <name> (range from 0x...) not bound: no write of its
+register reaches it`. A prototype the load withheld is recorded once per image
+in the architecture table `WithheldPrototypes` (by entry address, else by name,
+with its cause): a library signature declaring a `float` or `double` on a
+target whose convention does not return a `double` whole (the libc tables'
+load-time partition, a declared libc function, the ARM list `armfloatreturn`
+does not apply), and a DWARF signature `build_pieces` could not type. The
+decompile's seed (`kuna_honestgaps.rs (seed)`) names it as
+`withheldproto: ...; not applied` in the header of the function it belongs to
+and at each call whose callee it is, skipping a warning already buffered with
+the same type, address and text (a re-flow also drops the function's analysis
+warnings before it seeds again, and the commit adds each comment once). The tags are lowercase, so the printer's warning
+records file them under the kinds `notmodelled`, `debuginfo` and `withheldproto`, and the CLI's
+`--json` lists them with the rest and totals every kind in `warning_kinds`
+(`docs/cli.md`). Off by default because the extra comments change the text of
+every function with such a gap; the losses that already print (decode-failure
+halts, `funcboundflow`, budget and out-of-bounds truncation, unrecovered jump
+tables) are unchanged either way.
+
 When the generic `PowerPC:BE:64:default` or `PowerPC:LE:64:default` decoder
 fails on an aligned `isel` encoding, the halt also names the selected target
 and suggests an explicit `--target PowerPC:<endian>:64:A2ALT` for AltiVec code.
@@ -880,7 +1016,7 @@ which is why it is not the default.
 
 (kuna `guarddispatch`, on by default) A CALLIND through a Control Flow Guard
 dispatch slot calls the register the dispatch routine jumps to
-(`decompiler/crates/kuna-decomp/src/p2_lift/kuna_guarddispatch.rs
+(`crates/unlace-lift/src/p2_lift/kuna_guarddispatch.rs
 (calls_through_slot)`). An image built with `/guard:cf` makes every
 function-pointer call as `mov rax, target; call [__guard_dispatch_icall_fptr]`;
 the routine in the slot validates `rax` and jumps to it with the argument
@@ -4041,8 +4177,138 @@ through whatever `ra` held, so the saves, the stack adjustment and the return
 were lost. Exercised by `tests/stages/kuna-riscv-zcmp.xml` (the issue's
 `keep`, hand-written `swapcall`/`zret`/`popsep`, the raw push/popret p-code)
 and `unlace-cli/tests/riscv_zcmp.rs` (one decode per encoding shape against
-LLVM's names, RV32 and RV64). Zcb, Zicond and the T-Head vendor extensions
-the issue also lists are not decoded.
+LLVM's names, RV32 and RV64). Zcb and the T-Head vendor extensions the
+issue also lists are not decoded here; Zicond and Zcb have their own sections
+below.
+
+### RISC-V ratified bit manipulation and Zicond (#98)
+
+`riscv.rv32b.sinc` (forms common to RV32 and RV64) and `riscv.rv64b.sinc`
+(RV64-only forms) decode the ratified Zba, Zbb, Zbc and Zbs extensions
+(Bitmanip 1.0.0), Zbkb and Zbkx (Scalar Crypto 1.0.1) and Zicond (1.0). They
+replace the 0.92 bitmanip draft those files carried, whose constructors were
+all `unimpl` and whose names and encodings differ from the ratified ones: the
+RVA22 profile's `cpop` decoded as the draft `pcnt`, `bset` as `sbset`,
+`rev8` and `orc.b` as `grevi`/`gorci`, and Zicond's `czero.eqz` as the
+draft `cmov`, each an unimplemented instruction that cut the function's
+data flow. The draft-only instructions (`bdep`, `bfp`, `cmix`, `fsl`,
+`shfl`, `slo`, `crc32.*`, `bmat*`, `addwu` and the rest) were never
+ratified and no longer decode.
+
+Each instruction lifts to ordinary p-code where p-code has the operation:
+`sh1add`/`sh2add`/`sh3add` (and the `.uw` forms, which zero-extend the
+low word of `rs1` first) are a shift and an add, `add.uw`/`zext.w`,
+`slli.uw`, `sext.b`, `sext.h` and `zext.h` are extensions, `andn`, `orn`
+and `xnor` are their bitwise forms, `clz` is LZCOUNT, `cpop` is POPCOUNT,
+and `ctz` is `POPCOUNT((x & -x) - 1)`, which is the register width for
+`x = 0` as the ISA requires; the `w` forms work on the low 32 bits and
+sign-extend (`clzw`, `ctzw`, `cpopw` produce a count, which is never
+negative). `rol`, `ror`, `rori` and their `w` forms are the shift pair
+`(x << n) | (x >> (W - n))`, `rev8` is the byte-reversing shift-and-mask
+tree, the shapes `bitidioms` folds to `bswap` (and, for a constant amount,
+to a rotate) on other architectures. The Zbs single-bit operations mask the register shift amount
+to the register width. `pack`, `packh` and `packw` concatenate the low
+halves (bytes for `packh`; `packw` sign-extends its 32-bit result).
+`max`, `maxu`, `min`, `minu` and Zicond's `czero.eqz`/`czero.nez` lift
+as a write of one operand and a conditional branch to the next instruction
+around a write of the other, the shape x86 `cmov` lifts to, so the
+structurer prints a conditional assignment. Operations p-code cannot state in
+a few operators are user operations that keep the data flow:
+`clmul`, `clmulh`, `clmulr` (carry-less multiply), `orc_b`, `brev8`,
+`zip`, `unzip` (RV32 only), `xperm4` and `xperm8`.
+
+The encodings that depend on XLEN are guarded by `ADDRSIZE`: `rev8` is
+`0x698` on RV32 and `0x6b8` on RV64, `zext.h` is `pack rd, rs1, x0` on
+RV32 (OP) and `packw rd, rs1, x0` on RV64 (OP-32), and the immediate shifts
+take a 6-bit amount whose top bit must be clear on RV32 (`shamt6`). The
+default RISC-V languages decode all of them, as the GNU and LLVM
+disassemblers do without an `-march` restriction, because no other standard
+or draft instruction in these languages shares their encodings. Exercised by
+`unlace-cli/tests/riscv_bitmanip.rs`: one probe row per encoding, RV32 and
+RV64, against `llvm-objdump`'s names, and LLVM-selected `max`, `minu`,
+`cpop`, `clz`, `ctz`, `czero.eqz`, `rev8`, `andn`, `bset` and
+`sh3add.uw` functions that decompile with no unimplemented instruction.
+
+### RISC-V Zcb and Zacas (#98)
+
+`riscv.zcb.sinc` decodes the Zcb code-size extension (Zc* 1.0.0) in every
+RISC-V language: `c.lbu`, `c.lhu`, `c.lh`, `c.sb`, `c.sh` (quadrant 0,
+funct3 100; the byte forms take a 2-bit offset with bit 6 as offset bit 0 and
+bit 5 as bit 1, the halfword forms a 1-bit offset in bit 5 scaled by 2, bit 6
+choosing `c.lh` over `c.lhu`), and `c.zext.b`, `c.sext.b`, `c.zext.h`,
+`c.sext.h`, `c.zext.w` (RV64), `c.not` and `c.mul` (quadrant 1, funct6
+100111, bits 6:5 = 11 with the operation in bits 4:2, or 10 for `c.mul`).
+Those encodings are reserved in the C extension, so no other instruction
+shares them and no language variant is needed; before, a Zcb build's byte and
+halfword accesses decoded as bad instructions. The loads zero- or
+sign-extend into the register, the stores write its low byte or halfword,
+the extensions and `c.not` rewrite `rd'` in place and `c.mul` is
+`rd' = rd' * rs2'`.
+
+The Zacas compare-and-swap (Zacas 1.0, AMO funct5 00101) lifts like the other
+AMOs: `amocas.w` (`riscv.rv32a.sinc`, RV32 and RV64) reads the word at
+`(rs1)` into `rd` (sign-extended on RV64) and stores `rs2` there only when
+the word equals the old `rd`; `amocas.d` (`riscv.rv64a.sinc`) does the same
+on RV64 doublewords. The register-pair forms (RV32 `amocas.d`, RV64
+`amocas.q`) are not decoded. Exercised by `unlace-cli/tests/riscv_zcb.rs`:
+one probe row per encoding against LLVM's names, RV32 and RV64, and
+LLVM-selected `c.lbu`, `c.lh`, `c.sb`, `c.mul`/`c.not` and
+`cmpxchg`-lowered `amocas` functions that decompile with no bad or
+unimplemented instruction.
+
+### RISC-V scalar cryptography (#98)
+
+`riscv.rv32k.sinc` (RV32 and RV64) and `riscv.rv64k.sinc` (RV64 only,
+included by `riscv.lp64d.slaspec`) decode the ratified scalar cryptography
+extensions (Scalar Crypto 1.0.1): Zknh (`sha256sig0/1`, `sha256sum0/1`; on
+RV64 `sha512sig0/1`, `sha512sum0/1`; on RV32 the half-word forms
+`sha512sum0r`, `sha512sum1r`, `sha512sig0l/h`, `sha512sig1l/h`), Zksh
+(`sm3p0`, `sm3p1`), Zksed (`sm4ed`, `sm4ks`), and Zkne/Zknd (`aes32esi`,
+`aes32esmi`, `aes32dsi`, `aes32dsmi` on RV32; `aes64es`, `aes64esm`,
+`aes64ds`, `aes64dsm`, `aes64im`, `aes64ks1i`, `aes64ks2` on RV64). They
+replace the 0.6.2 draft those files carried, which put these instructions
+in the custom-1 and custom-2 opcode spaces (where vendor extensions live)
+under draft names (`ssha256.sig0`, `saes32.encs`, `pollentropy`, ...), all
+`unimpl`; the ratified encodings are in OP and OP-IMM.
+
+The hash functions lift to their definitions: each SHA-256 and SM3 function
+is three rotates or shifts of the low word XORed together, sign-extended to
+the register on RV64 (`assignW`); each RV64 SHA-512 function is the same on
+the doubleword; each RV32 SHA-512 half forms the 64-bit value `rs2:rs1`
+(`rs2` high), applies its three 64-bit rotates (for `sig0h`/`sig1h` the
+middle term shifts only the low word) and keeps the low 32 bits. The AES
+and SM4 instructions, whose results go through an S-box, are user
+operations named after the instruction, taking `rs1`, `rs2` and, for the
+RV32 AES and SM4 forms, the byte select `bs` (`aes64ks1i` takes `rnum`).
+Zbkb, Zbkc and Zbkx are in the bit manipulation files. The Zkr `seed` CSR
+and the vector crypto extensions (Zvk*) are not covered. Exercised by
+`unlace-cli/tests/riscv_crypto.rs`: one probe row per encoding against LLVM's
+names, RV32 and RV64, and intrinsic-selected functions that decompile with
+no unimplemented instruction.
+
+
+### RISC-V Zfh half-precision floating point (#98)
+
+`riscv.zfh.sinc` decodes Zfh 1.0 (and so its Zfhmin subset) in every RISC-V
+language that has the F extension: `flh`/`fsh`, `fadd.h`, `fsub.h`,
+`fmul.h`, `fdiv.h`, `fsqrt.h`, `fsgnj{,n,x}.h`, `fmin.h`/`fmax.h`, the
+fused `fmadd.h`/`fmsub.h`/`fnmsub.h`/`fnmadd.h` (fmt field 10), the
+compares `feq.h`/`flt.h`/`fle.h`, `fmv.x.h`/`fmv.h.x`, `fclass.h`, and
+the conversions between half and single, double, 32-bit and (RV64) 64-bit
+integers. Before, every one of them was a bad instruction. A half value is
+the low 16 bits of an f register: `frs1H`/`frs2H`/`frs3H` read them, and a
+write zero-extends the 2-byte result into the register as the single-precision
+forms do (`fassignS`; the ISA's NaN-boxing is not modelled, as for F).
+Arithmetic, square root, compares and conversions are the ordinary p-code
+float operations on 2-byte varnodes (`FLOAT_ADD`, `FLOAT2FLOAT`,
+`FLOAT_INT2FLOAT`, `FLOAT_TRUNC`, ...); the translator has no 2-byte float
+format, so the simplifier does not fold half-precision constants, the same as
+AArch64's FP16 forms. `fmv.x.h` sign-extends the 16-bit pattern into `rd`,
+`fmin.h`/`fmax.h` return the non-NaN operand when one is NaN, and
+`fclass.h` is the user operation `fclass_h`. Exercised by
+`unlace-cli/tests/riscv_zfh.rs`: one probe row per encoding against LLVM's
+names, RV32 and RV64, and LLVM-selected half-precision functions that
+decompile with no bad or unimplemented instruction.
 
 ### RISC-V moves and conversions from FP to integer registers (GH-831)
 

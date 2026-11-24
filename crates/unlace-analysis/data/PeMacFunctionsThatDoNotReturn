@@ -81,6 +81,28 @@ ZNSt3__120__throw_bad_weak_ptr*
 ZNSt3__119__throw_regex_error*
 ZNSt3__122__libcpp_verbose_abort*
 
+# (kuna, #28) The C++ unwind and stack-protector entry points, Darwin's
+# abort-with-reason calls and the CPython fatal exits, missing above.
+# `_Unwind_Resume`/`_Unwind_SjLj_Resume` (Itanium ABI: does not return; armv7
+# iOS unwinds SjLj), libc++abi/libsupc++ `__cxa_call_unexpected`/
+# `__cxa_call_terminate` (noreturn), `__stack_chk_fail` (the GCC/Clang stack
+# protector's failure call, also used by mingw-w64's libssp).
+Unwind_Resume
+Unwind_SjLj_Resume
+cxa_call_unexpected
+cxa_call_terminate
+stack_chk_fail
+# xnu bsd/sys/reason.h: `abort_with_reason`, `abort_with_payload`
+# (`__attribute__((noreturn, cold))`).
+abort_with_reason
+abort_with_payload
+# CPython `Py_FatalError`, `_Py_FatalErrorFunc`, `Py_Exit`,
+# `Py_ExitStatusException` (`_Py_NO_RETURN`).
+Py_FatalError
+Py_FatalErrorFunc
+Py_Exit
+Py_ExitStatusException
+
 # GNU Fortran fatal runtime diagnostics
 _gfortran_runtime_error
 _gfortran_runtime_error_at

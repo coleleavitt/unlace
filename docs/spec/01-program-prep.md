@@ -5621,7 +5621,9 @@ moves.
   prints; a narrower pointer, float or record is not widened and stays
   unbound. This also places a narrow local on a big-endian register at the
   bytes the write really covers. The matching raw varnodes have their
-  properties refreshed, as for a console `type varnode`. A parameter whose location at the entry PC is a
+  properties refreshed, as for a console `type varnode`. A local left unbound is
+  returned to the drive, which with `option honestgaps` on names it in a
+  `debuginfo:` header warning instead of dropping it silently (chapter 02). A parameter whose location at the entry PC is a
   single register (`entry_storage`) is locked to that register when the
   default model would put some parameter of the function elsewhere and gives it
   no hidden return pointer (the commit asks the model with
@@ -6534,7 +6536,11 @@ moves.
   stays in Thumb state, as the helper does (`adds r0,r1; mov lr,r0; mov pc,lr`);
   the vendored body scaled the entry by four and added it to the return
   address, which sent the cases to the wrong addresses. armcc's
-  `__ARM_common_switch8` is still matched by name only.
+  `__ARM_common_switch8` is recognized the same way in its three forms (two
+  Thumb-1 bodies, saving `r4,r5` or `r0-r3`, and the Thumb-2 one with `ite`):
+  each reads the table size from the byte before the table, clamps the index in
+  `r3` to it and branches to the table plus twice the entry, which the
+  `switch8_r3` fixup models.
 - **Linux kernel `__bug_table`** (`kernelbug`, always on, inert without the
   section; `crates/unlace-analysis/src/analyzers/kernelbug/mod.rs
   (KernelBugPass)`): the kernel's `WARN_ON`/`BUG_ON` macros plant a trap (`ud2`,
@@ -6844,6 +6850,33 @@ every other binary's pass list is byte-identical to before the pass existed):
   `verify_gotypes::stripped_go_itab_renders_named`, green on the itablinks
   and the contiguous-region layouts).
 
+  **Interface method slots** (`goitabcalls`, off by default;
+  `crates/unlace-analysis/src/analyzers/gotypes/kuna_itabtypes.rs (intern)`):
+  every itab of one interface lays its `Fun` array out in the order of the
+  interface descriptor's `Methods` slice (`Imethod {Name, Typ}` after the
+  `Type` base and the `PkgPath` word, sorted by name), so one record per
+  interface types all of them. On a 64-bit image the harvest reads the method
+  names of every interface descriptor the graph walk reaches and every itab's
+  `Inter`, and interns `go.itab.<interface>` (the linker spelling,
+  `go.itab.io.Writer`): `inter`, `_type`, `hash`, then one `code *` slot per
+  method at `24 + 8*i` named after it, with a `LangFacet::GoItab` facet naming
+  the interface. A spelling whose descriptors disagree on the method list, an
+  anonymous interface literal, an empty interface and a method name that is not
+  an ASCII identifier (or is a header field's name) get no record. Interning
+  binds nothing. With the option on, two consumers bind it. The Go DWARF
+  signature (`crates/unlace-analysis/src/analyzers/dwarf/kuna_godwarfsig/kuna_goiface.rs (input_types)`)
+  takes a formal whose type is a nominal interface typedef chain over the
+  `runtime.iface` storage, passed in the next two integer registers, as two
+  inputs, `<name>_tab` typed as a pointer to the interface's record and
+  `<name>_data` an opaque pointer; without the record the function keeps the
+  inference it had. The printer
+  (`crates/unlace-emit/src/p9_emit/kuna_goitabcall.rs (interface_method)`)
+  prints a CALLIND whose target is a LOAD of a method slot of such a record
+  (`PTRSUB` or `INT_ADD` of the record pointer and a constant at or past
+  offset 24) as `Interface.Method(args)`, the receiver first:
+  `main.Shape.Area(s_data)`. The slots carry no prototype, so the arguments
+  are the ones the call site recovers.
+
 - **Go pclntab** (`gopclntab`, Go-detected binaries only, always on;
   `crates/unlace-analysis/src/analyzers/pclntab/mod.rs`): the runtime
   needs the PC→name table for stack traces, so it survives stripping; the pass
@@ -6939,6 +6972,35 @@ every other binary's pass list is byte-identical to before the pass existed):
   exactly what a search per class would. A search per class is
   `O(classes × image)`: `torch_cpu.dll` (31,623 type descriptors in 309 MB) did
   not finish loading in 30 minutes that way.
+
+  With `vtabletypes` on (the default), a second pass
+  (`crates/unlace-analysis/src/analyzers/rtti/kuna_msvcvtabletypes.rs (facts)`)
+  runs the same recovery on its own, whatever `rtti` says, and reports the classes
+  in the shape the typed Itanium vtables use (chapter 05). Each
+  CompleteObjectLocator gives its class, the `offset` of the subobject its vftable
+  serves, and the class's whole hierarchy: every BaseClassDescriptor's class, its
+  displacement `mdisp`, and whether it is, or lies in, a virtual base (`pdisp` is
+  not -1). A vftable at offset 0 is the class's own; one at a nonzero offset serves
+  the non-virtual bases at that displacement, the most derived of them first; one
+  serving a virtual base (no non-virtual base sits at its offset) serves none. A
+  class is typed with the slots of its own vftable, and for each slot the function
+  there and every function the vftables serving it in derived classes hold at the
+  same slot; a class the image never instantiates (an abstract base) has no vftable
+  of its own and takes the slots every serving vftable shares. A slot is named
+  after the method a symbol names (`?area@Square@@...` is `area`; `??1` is
+  `dtor`; `??_G` and `??_E`, the scalar and vector deleting destructors, are
+  `deleting_dtor`), else `vfn_<i>`. A class whose structure name two classes
+  share is not typed. Each non-virtual base at a nonzero displacement is reported
+  for embedding. The pass also reports, for every function a vftable holds, the
+  class its `this` points to: MSVC calls a virtual method with `this` pointing at
+  the subobject the vftable serves (an override reached through a secondary base's
+  vftable takes the base's subobject), so it is the first class that vftable
+  serves; a function several vftables hold takes the nearest class that is, in
+  every one of them, that class or one of its bases at offset 0, and a function
+  that also sits in a vftable serving a virtual base, or whose holders share no
+  such class (identical-code folding, `_purecall`), is left untyped. Finally it
+  reports each vftable whose first class was typed, with the `rtti` label of
+  that address, and every vftable's slot words.
 - **(kuna) Itanium RTTI** (`itaniumrtti`, ELF and Mach-O, on by default and inert elsewhere;
   `crates/unlace-analysis/src/analyzers/rtti/kuna_itaniumrtti.rs`): the
   GCC/Clang counterpart of the pass above, and a capability with **no Ghidra
@@ -9486,7 +9548,7 @@ including `0x140028d1c` in `CrackVM-V2.exe`, which was four bytes into the
 `MOV RAX,[RSP+0x28]` that opens the function the vtable slot names.
 
 (kuna) **The load configuration lists address-taken functions outright**
-(`decompiler/crates/kuna-analysis/src/loader/kuna_peloadconfig.rs
+(`crates/unlace-analysis/src/loader/kuna_peloadconfig.rs
 (function_starts)`). `IMAGE_LOAD_CONFIG_DIRECTORY` (data directory 10) carries
 two tables of function starts. An image linked with `/guard:cf` has the Control
 Flow Guard function table, `GuardCFFunctionTable`/`GuardCFFunctionCount`: one
@@ -9749,6 +9811,69 @@ call-site indices, not code ranges, in its table. So every LSDA walker skips it
 (`for_each_fde_lsda`), and its function is noted as having an SjLj table. A
 personality whose name cannot be read is read as Itanium. With `itaniumeh` on,
 the pads are shown and no note is attached.
+
+**(kuna) MSVC throw metadata is labelled** (`msvceh`, default-**off**;
+`crates/unlace-analysis/src/analyzers/entry/kuna_msvceh.rs (find_throw_infos)`).
+An MSVC `throw e;` is `_CxxThrowException(&e, &ThrowInfo)` and `throw;` is
+`_CxxThrowException(0, 0)`. The `ThrowInfo` in `.rdata` holds attributes
+(`const`, `volatile`), the thrown object's destructor and a
+`CatchableTypeArray` whose entries are the types a handler may catch the object
+as, the thrown type first; each `CatchableType` names an RTTI0
+`TypeDescriptor`. On a PE the pass takes the `type_info` vftable most `.?A`
+descriptors start with, collects every descriptor that starts with it (built-in
+types such as `.H` and `.PEBD` too), and walks the image's 4-byte references
+back from them, image-relative on x64 and absolute on x86 (§1.4's RTTI pass reads
+them the same way): a `CatchableType` is the 28 bytes before a reference at +4
+whose properties fit in five bits, whose object size is non-zero and whose copy
+constructor is null or code; a `CatchableTypeArray` is a count of 1 to 64 before
+a reference to one at +4, with every entry a `CatchableType`; a `ThrowInfo` is
+the 16 bytes before a reference to an array at +12, with attributes in five bits
+and a null-or-code destructor and forward-compatibility routine. Each record is
+labelled with its type: `ThrowInfo<std::runtime_error>` (`ThrowInfo<int const>`
+for a `const` throw), `CatchableTypeArray<T>`, and `CatchableType<T>` for the
+thrown type and each base. A class is named by the MSVC demangler; a built-in or a
+pointer to one by its type code; anything else keeps its decorated name. A second
+label for the same type gets the record's address appended. On x86-64 every
+`call [rip+d]` through the `_CxxThrowException` import slot and every
+`call rel32` to its jump thunk is a throw site. When the four bytes before the
+call are `xor edx, edx; xor ecx, ecx` (either order, either encoding) the site is
+commented `rethrow`; otherwise the nearest `lea rdx, [rip+d]` of a labelled
+`ThrowInfo` in the 32 bytes before it gives the comment `throw T`. The comment
+belongs to the function whose `.pdata` record covers the call, followed through
+`UNW_FLAG_CHAININFO` to the primary record, so a split-off chunk comments its
+owner. An x86 image has no `.pdata` to name the owner, so its throw sites are not
+commented; its records are labelled.
+
+**(kuna) MSVC try blocks are listed** (`msvceh`, the same pass;
+`crates/unlace-analysis/src/analyzers/entry/kuna_msvcfuncinfo.rs (decode_fh4)`).
+An x64 function with a C++ `try` names a language-specific handler in its
+`UNWIND_INFO` (flags `EHANDLER`/`UHANDLER`, not `CHAININFO`; the handler RVA
+follows the even-padded unwind codes and the handler data follows it). For
+`__CxxFrameHandler3` and `__GSHandlerCheck_EH` the data starts with the RVA of a
+40-byte `FuncInfo` (magic `0x19930520`-`0x19930522`, `maxState`, unwind map,
+try-block map, IP-to-state map); a handler with no name (a statically linked
+runtime) is read the same way when that RVA leads to the magic. For
+`__CxxFrameHandler4` and `__GSHandlerCheck_EH4` it is the RVA of the compressed
+`FuncInfo4`: a header byte (`isCatch`, `isSeparated`, `BBT`, `UnwindMap`,
+`TryBlockMap`, `EHs`, `NoExcept`) and then only the fields the header announces,
+with every count and offset in FH4's variable-length unsigned encoding (the low
+bits of the first byte give the length: `0` one byte, `01` two, `011` three,
+`0111` four, `1111` a four-byte value after the tag byte) and every RVA a plain
+four-byte integer. A `FuncInfo4` with `isCatch` set belongs to a catch funclet
+and is skipped; an FH3 catch funclet shares its parent's `FuncInfo`, and the
+parent is the lowest function naming that `FuncInfo` that is not itself one of
+its funclets. From the try-block map each try block yields its state range and,
+per handler, the caught type (the `TypeDescriptor` named as above, or
+`catch (...)` when there is none), its `const`/`volatile`/reference adjectives
+and its funclet; from the unwind map each action that is a funclet (every FH3
+action, an FH4 entry of type RVA) yields a cleanup funclet. The parent gets one
+header comment per try block,
+`eh: try (states 0-0): catch (std::runtime_error &) -> 0x140001230; the handlers are separate funclets`,
+and a count of its cleanup funclets; each catch funclet gets
+`eh: catch (std::runtime_error &) handler of 0x140001000 (try states 0-0)` and each
+cleanup funclet `eh: unwind funclet of 0x140001000 (state 2)`. Every funclet is
+also a discovered entry. The handler bodies are not spliced into the parent's
+flow, and x86 `FuncInfo` and SEH scope tables are not read.
 
 **(kuna) `.pdata` interiors are not function starts either** (`pdatainterior`,
 always on, DIV-155;
@@ -13741,6 +13866,29 @@ family, `__assert_rtn`, `dispatch_main`, `objc_exception_throw`,
 ends a block at or lowers bounds and SIMD panics to (`runtime.block`,
 `runtime.panicrangestate`, `runtime.panicBounds`, `runtime.panicExtend`,
 `runtime.panicSimdImm` and the `panicBounds64`/`32`/`32X` helpers) and `os.Exit`.
+A second such block per list (#28) names, each with its declaration in the
+comment above it: on ELF, the remaining C++ runtime exits (`__cxa_call_terminate`,
+`__cxxabiv1::__unexpected`, `_Unwind_SjLj_Resume`, libstdc++'s
+`std::__throw_bad_weak_ptr`, `std::__throw_bad_any_cast` and
+`std::__glibcxx_assert_fail`), newlib's `__assert_func`, Android's
+`__android_log_assert`, OpenBSD's `__stack_smash_handler`, libiberty's `xexit` and
+`xmalloc_failed`, CPython's `Py_FatalError`, `_Py_FatalErrorFunc`, `Py_Exit` and
+`Py_ExitStatusException`, the two unrecoverable UBSan handlers, and the Linux
+kernel's `__noreturn` functions from objtool's `noreturns.h` whose names a user
+program is unlikely to reuse (`make_task_dead`, `kthread_exit`, `usercopy_abort`,
+`start_kernel`, …; `do_exit` and `rest_init` stay out); off-ELF,
+`_Unwind_Resume`, `_Unwind_SjLj_Resume`, `__cxa_call_unexpected`,
+`__cxa_call_terminate`, `__stack_chk_fail`, Darwin's `abort_with_reason` and
+`abort_with_payload`, and the CPython exits; on PE only (the Win32 list), the MSVC
+CRT /GS reporters (`__report_gsfailure`, `__report_securityfailure(Ex)`),
+`_amsg_exit`, the Microsoft STL `std::_X*` throwers in both decorations and
+demangled, `std::unexpected`, nine MFC `AfxThrow*Exception` functions,
+`_com_raise_error`, and ntdll's `RtlExitUserProcess`, `RtlExitUserThread` and
+`RtlRestoreContext`; for Rust, `__rust_alloc_error_handler`,
+`__rdl_alloc_error_handler` and `core::panicking::assert_failed_inner`; for Go,
+`runtime.goexit`, `runtime.morestackc` and `runtime.dieFromException`. Names whose
+declaration lets them return stay out: `_Unwind_Resume_or_Rethrow` returns when no
+handler is found, and `_com_issue_error` calls a replaceable handler.
 glibc's `__assert` is left out: stripped of its underscores it would name a
 program's own returning `assert`. The Rust list's mangled prefixes only match
 legacy symbols (`_ZN4core9panicking5panic17h...`), and current rustc emits v0

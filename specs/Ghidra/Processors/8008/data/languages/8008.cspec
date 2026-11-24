@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<compiler_spec>
+  <data_organization>
+    <pointer_size value="2" />
+    <integer_size value="1" />
+    <short_size value="1" />
+    <long_size value="2" />
+  </data_organization>
+  <global>
+    <range space="mem"/>
+  </global>
+  <stackpointer register="SP" space="mem" growth="negative"/>
+  <default_proto>
+    <prototype name="__asmA" extrapop="2" stackshift="2">
+      <input>
+        <pentry minsize="1" maxsize="1">
+          <register name="A"/>
+        </pentry>
+        <pentry minsize="1" maxsize="1">
+          <register name="B"/>
+        </pentry>
+        <pentry minsize="1" maxsize="1">
+          <register name="C"/>
+        </pentry>
+        <pentry minsize="1" maxsize="1">
+          <register name="D"/>
+        </pentry>
+        <pentry minsize="1" maxsize="1">
+          <register name="E"/>
+        </pentry>
+      </input>
+      <output>
+        <pentry minsize="1" maxsize="1">
+          <register name="A"/>
+        </pentry>
+      </output>
+      <unaffected>
+        <register name="SP"/>
+      </unaffected>
+    </prototype>
+  </default_proto>
+</compiler_spec>

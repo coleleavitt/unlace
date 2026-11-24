@@ -4188,6 +4188,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `R8C` | Renesas M16C/20 and R8C/Tiny | `R8C:LE:16:default` | AlexDev-TH/ghidra-r8c @ `6484b9470a`, Apache-2.0 |
 | `C166` | Infineon C166 / XC166, ST10 | `C166:LE:16:default`, `C166:CS:LE:16:default` | aleph-void/c166-ghidra-module (fork of keyhana/c166-ghidra-module) @ `c544f0ad16`, MIT |
 | `F2MC16` | Fujitsu F2MC-16L / 16LX | `F2MC:LE:24:default` | aleph-void/F2MC-16LX (fork of mehmooda/F2MC-16LX) @ `0308d3095a`, MIT |
+| `8008` | Intel 8008 | `8008:LE:16:default` | aleph-void/ghidra-8008 @ `71c3e7378c`, Apache-2.0 |
 <!-- vendor-rows -->
 
 ### WDC 65816 (#98)

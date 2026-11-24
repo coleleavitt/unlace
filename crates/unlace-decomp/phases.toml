@@ -9217,6 +9217,25 @@ tier = "transform"
 symptoms = "go interface method calls print as anonymous indirect calls through tab + 0x18|a go function taking an interface shows no method names at its calls|go itab dispatch renders as code pointer arithmetic"
 
 [[settable]]
+option = "godefer"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P9"
+subphase = "warning-style"
+strength = "HARD"
+rewind = "P9"
+issue = "unlace-1280-go-defer"
+summary = "(unlace `godefer`) Name the Go defer chain in a function's header comment. Go lowers `defer f(args)` on its non-open-coded path into `runtime.deferproc(siz, fn)` at the registration and `runtime.deferreturn` at exit, and `recover()` into `runtime.gorecover`. With the option on, a function on a Go image that calls `runtime.deferproc` gets header comment lines: `Go defer chain detected` (or `Go panic recovery: defer/recover chain detected` when it also calls `runtime.gorecover`), then one `defer <name>(...)` line per distinct constant funcval (the symbol's name, else `sub_<addr>`), `defer <opaque funcval>(...)` when a funcval is not a constant, and `recover()`. The registration and unwind calls print as before."
+use_when = "Off by default: the header comment adds lines above the function, so a diff against the default output shows them. Turn on for a Go binary to see which functions defer and whether they recover, without reading the runtime calls. Open-coded defers (Go 1.14 and later, which keep a deferBits byte and inline the deferred call) call no deferproc and get no line."
+example = "option godefer on"
+source_decompiler = "unlace"
+inspiration = "Go cmd/compile defer lowering (runtime.deferproc, deferreturn, gorecover); the archived unlace driver's go_defer_sites header summary"
+change_kind = "opt-in-tool"
+tier = "transform"
+symptoms = "a go function that defers prints raw runtime.deferproc calls with no sign of the defer|a go function with recover() in a deferred closure does not say it recovers|a deferred call's target is not named where the function starts"
+
+[[settable]]
 option = "condcallpush"
 values = "on|off"
 default = "on"

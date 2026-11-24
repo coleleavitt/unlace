@@ -47,6 +47,7 @@ pub mod globalref; // (unlace) a constant address used as a pointer prints as it
 pub mod goatomicreturn;
 pub mod gobyteextract;
 pub mod gobyteview;
+pub mod godefer;
 mod goitabcall;
 mod gomethod;
 pub mod goorderedcompare;

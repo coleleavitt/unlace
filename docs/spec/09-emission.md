@@ -5938,6 +5938,10 @@ succeeds at 398 of 404 log calls; the rest store an argument the decode cannot
 attribute to one variable at the call (an implied expression split across
 cells) and keep the raw form.
 
+### Go defer chain header (`godefer`)
+
+`option godefer` (default off, Go images only) prints the defer chain of a function in its header comment, after the prototype's preceding comments and before the header warnings. The function calls `runtime.deferproc` at each registration on the non-open-coded path, `runtime.deferreturn` at exit and `runtime.gorecover` for `recover()`. A function with at least one `deferproc` call gets `/* Go defer chain detected */`, or `/* Go panic recovery: defer/recover chain detected */` when it also calls `gorecover`, then one `/* defer <name>(...) */` line per distinct constant funcval, named by the function symbol at that address and `sub_<addr>` otherwise, a `/* defer <opaque funcval>(...) */` line when a funcval is not a constant, and `/* recover() */` when the frame recovers. Lines print as plain block comments, not warning slugs, and do not change the body. The registration and unwind calls keep their raw form. Open-coded defers (Go 1.14 and later) call no `deferproc` and are not named. Option off, or any non-Go image, prints the function exactly as before, so no datatest moves.
+
 ## (unlace) Printing through the C syntax tree
 
 The design is `docs/architecture/ctree.md`. `PrintC::emit_function_body` builds

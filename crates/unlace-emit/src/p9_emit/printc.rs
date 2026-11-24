@@ -3597,6 +3597,15 @@ impl PrintC {
             .filter(|c| c.tp == comment_type::warningheader && &c.func_addr == func_addr)
             .map(|c| c.text.clone())
             .collect();
+        for text in super::godefer::header_lines(fd, arch) {
+            self.emit.tag_line();
+            self.emit.tag_comment(
+                &format!("/* {text} */"),
+                SyntaxHighlight::CommentColor,
+                &space,
+                off,
+            );
+        }
         for text in headers {
             // (unlace warnstyle, DIV-39) Inline mode: header warnings collect as
             // slugs and flush at the end of the prototype line.

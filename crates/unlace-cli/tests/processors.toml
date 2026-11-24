@@ -990,8 +990,10 @@ fixture = "crates/unlace-cli/tests/fixtures/w65816/add16_store.bin"
 [[family.function]]
 test = "w65816_sixteen_bit_add_and_store_decompiles"
 address = "0x8000"
+forbid = ["concat11"]  # the immediates are constants, not reads of the code bytes
 expect = [
-    "2000",  # the store to $2000 survives
+    "0x2000) = 0x35;",  # LDA #$1234; ADC #$0001 folds: low byte of $1235 to $2000
+    "0x2001) = 0x12;",  # high byte to $2001
 ]
 
 # The Xtensa ESP32-S3 language decodes the PIE (EE.*) vector instructions: a loop of two

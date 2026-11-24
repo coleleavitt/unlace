@@ -1,0 +1,4 @@
+define endian=big;
+@define ENDIAN "big"
+
+@include "a29k.sinc"

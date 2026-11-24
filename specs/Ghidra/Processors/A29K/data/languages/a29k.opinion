@@ -1,0 +1,8 @@
+<opinions>
+    <!-- COFF magic numbers of the 29K: 0x17a (big-endian, AM29KBIGMAGIC) and 0x17b
+         (little-endian, AM29KLITTLEMAGIC) -->
+    <constraint loader="Common Object File Format (COFF)" compilerSpecID="default">
+        <constraint primary="378" processor="a29k" endian="big" />
+        <constraint primary="379" processor="a29k" endian="little" />
+    </constraint>
+</opinions>

@@ -216,17 +216,6 @@ fn usage() {
     );
 }
 
-/// Honor `--engine cpp|rust` like the Python tools: set `UNLACE_ENGINE`.  In the
-/// Rust-only world `rust` is already the default and `cpp` would fail to resolve,
-/// but the flag is accepted (and exported) for compatibility with existing
-/// invocations / the pipeline.
-fn apply_engine(engine: Option<&str>) {
-    if let Some(e) = engine {
-        // FIXME: Audit that the environment access only happens in single-threaded code.
-        unsafe { std::env::set_var("UNLACE_ENGINE", e) };
-    }
-}
-
 // --- catalog -----------------------------------------------------------------
 
 fn cmd_catalog(argv: &[String]) -> Result<i32, String> {
@@ -235,10 +224,9 @@ fn cmd_catalog(argv: &[String]) -> Result<i32, String> {
     let mut json = false;
     let mut markdown = false;
     let mut check = false;
-    let mut engine: Option<String> = None;
-    let mut decomp_dbg_flag = false;
-    // --decomp-dbg / --sleighpath are accepted (Python had them); they map to the
-    // env overrides paths.rs already honors, so just set them.
+    let mut console = catalog::Console::default();
+    // --decomp-dbg / --sleighpath / --engine are accepted (Python had them); they
+    // override UNLACE_DECOMP_DBG, UNLACE_SPECS and UNLACE_ENGINE for the console.
     let mut i = 0;
     while i < argv.len() {
         let a = argv[i].as_str();
@@ -248,23 +236,9 @@ fn cmd_catalog(argv: &[String]) -> Result<i32, String> {
             "--json" => json = true,
             "--markdown" => markdown = true,
             "--check" => check = true,
-            "--engine" => engine = Some(take_value(argv, &mut i, "--engine")?),
-            "--decomp-dbg" => {
-                // FIXME: Audit that the environment access only happens in single-threaded code.
-                unsafe {
-                    std::env::set_var(
-                        "UNLACE_DECOMP_DBG",
-                        take_value(argv, &mut i, "--decomp-dbg")?,
-                    )
-                };
-                decomp_dbg_flag = true;
-            }
-            "--sleighpath" => {
-                // FIXME: Audit that the environment access only happens in single-threaded code.
-                unsafe {
-                    std::env::set_var("UNLACE_SPECS", take_value(argv, &mut i, "--sleighpath")?)
-                };
-            }
+            "--engine" => console.engine = Some(take_value(argv, &mut i, "--engine")?),
+            "--decomp-dbg" => console.decomp_dbg = Some(take_value(argv, &mut i, "--decomp-dbg")?),
+            "--sleighpath" => console.sleighpath = Some(take_value(argv, &mut i, "--sleighpath")?),
             "-h" | "--help" => {
                 usage_catalog();
                 return Ok(0);
@@ -282,21 +256,20 @@ fn cmd_catalog(argv: &[String]) -> Result<i32, String> {
     if (json as u8) + (markdown as u8) + (check as u8) > 1 {
         return Err("--json, --markdown, --check are mutually exclusive".into());
     }
-    apply_engine(engine.as_deref());
-    let pinned_by = if decomp_dbg_flag {
+    let pinned_by = if console.decomp_dbg.is_some() {
         Some("--decomp-dbg")
     } else {
         paths::pinned_by("UNLACE_DECOMP_DBG")
     };
 
     Ok(if check {
-        catalog::cmd_check(pinned_by)
+        catalog::cmd_check(pinned_by, &console)
     } else if json {
-        catalog::cmd_json(option.as_deref(), tier.as_deref(), pinned_by)
+        catalog::cmd_json(option.as_deref(), tier.as_deref(), pinned_by, &console)
     } else if markdown {
         catalog::cmd_markdown(option.as_deref())
     } else {
-        catalog::cmd_text(option.as_deref(), tier.as_deref(), pinned_by)
+        catalog::cmd_text(option.as_deref(), tier.as_deref(), pinned_by, &console)
     })
 }
 

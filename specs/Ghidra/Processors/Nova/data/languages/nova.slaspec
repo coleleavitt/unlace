@@ -1,0 +1,293 @@
+# SLEIGH specification for the Data General Nova (Nova 1200/800/2, Nova 3 stack
+# and multiply/divide, Nova 4 byte and signed multiply/divide). Written for
+# unlace from DG's "How to Use the Nova Computers" (015-000009) and "Programmer's
+# Reference, Nova 3" (015-000037); cross-checked against SIMH's nova_cpu.c (MIT).
+# Memory is word addressed: every address below counts 16-bit words.
+
+define endian=big;
+define alignment=1;
+
+define space ram      type=ram_space      size=2 wordsize=2 default;
+define space register type=register_space size=2;
+
+define register offset=0x00 size=2 [ AC0 AC1 AC2 AC3 SP FP PC ];
+define register offset=0x20 size=1 [ C ION ];
+
+define token instr(16)
+  b15=(15,15) op2=(13,14) op4=(11,14) ac=(11,12) ind=(10,10) mode=(8,9)
+  disp=(0,7) sdisp=(0,7) signed
+  acs=(13,14) acd=(11,12) alu=(8,10) shf=(6,7) cry=(4,5) nl=(3,3) skp=(0,2)
+  iot=(8,10) pulse=(6,7) dev=(0,5) acp=(6,7)
+;
+attach variables [ ac acs acd acp ] [ AC0 AC1 AC2 AC3 ];
+
+define pcodeop io_transfer;
+define pcodeop io_skip;
+define pcodeop halt;
+define pcodeop read_switches;
+define pcodeop interrupt_acknowledge;
+define pcodeop mask_out;
+define pcodeop io_reset;
+define pcodeop trap;
+
+# Effective address: page zero, PC, AC2 or AC3 relative, optionally indirect
+# (one level; a set bit 15 in the pointer would continue the chain).
+ea: disp is ind=0 & mode=0 & disp { export *[const]:2 disp; }
+ea: addr is ind=0 & mode=1 & sdisp [ addr = (inst_start + sdisp) & 0x7fff; ] { export *[const]:2 addr; }
+ea: sdisp^",2" is ind=0 & mode=2 & sdisp { local a:2 = (AC2 + sdisp) & 0x7fff; export a; }
+ea: sdisp^",3" is ind=0 & mode=3 & sdisp { local a:2 = (AC3 + sdisp) & 0x7fff; export a; }
+ea: "@"^disp is ind=1 & mode=0 & disp { local a:2 = *:2 disp:2; a = a & 0x7fff; export a; }
+ea: "@"^addr is ind=1 & mode=1 & sdisp [ addr = (inst_start + sdisp) & 0x7fff; ] { local p:2 = addr; local a:2 = *:2 p; a = a & 0x7fff; export a; }
+ea: "@"^sdisp^",2" is ind=1 & mode=2 & sdisp { local p:2 = (AC2 + sdisp) & 0x7fff; local a:2 = *:2 p; a = a & 0x7fff; export a; }
+ea: "@"^sdisp^",3" is ind=1 & mode=3 & sdisp { local p:2 = (AC3 + sdisp) & 0x7fff; local a:2 = *:2 p; a = a & 0x7fff; export a; }
+
+# Direct jump targets are code locations.
+jt: disp is ind=0 & mode=0 & disp { export *:2 disp; }
+jt: addr is ind=0 & mode=1 & sdisp [ addr = (inst_start + sdisp) & 0x7fff; ] { export *:2 addr; }
+
+skipn: addr is b15 [ addr = inst_start + 2; ] { export *:2 addr; }
+
+# Memory reference
+:JMP jt is op4=0 & (mode=0 | mode=1) & ind=0 & jt { goto jt; }
+:JMP "0,3" is op4=0 & ind=0 & mode=3 & disp=0 { return [AC3]; }
+:JMP ea is op4=0 & ea { goto [ea]; }
+:JSR jt is op4=1 & (mode=0 | mode=1) & ind=0 & jt { AC3 = inst_next; call jt; }
+:JSR ea is op4=1 & ea { local t:2 = ea; AC3 = inst_next; call [t]; }
+:ISZ ea is op4=2 & ea & skipn { local a:2 = ea; local v:2 = *:2 a + 1; *:2 a = v; if (v == 0) goto skipn; }
+:DSZ ea is op4=3 & ea & skipn { local a:2 = ea; local v:2 = *:2 a - 1; *:2 a = v; if (v == 0) goto skipn; }
+:LDA ac, ea is op2=1 & b15=0 & ac & ea { local a:2 = ea; ac = *:2 a; }
+:STA ac, ea is op2=2 & b15=0 & ac & ea { local a:2 = ea; *:2 a = ac; }
+
+# Operate: 17-bit carry:result, then shift, skip and load
+cin: "" is cry=0 { export C; }
+cin: "Z" is cry=1 { export 0:1; }
+cin: "O" is cry=2 { export 1:1; }
+cin: "C" is cry=3 { local c:1 = C ^ 1; export c; }
+sh: "" is shf=0 { }
+sh: "L" is shf=1 { }
+sh: "R" is shf=2 { }
+sh: "S" is shf=3 { }
+ld: "" is nl=0 { }
+ld: "#" is nl=1 { }
+sk: "" is skp=0 { }
+sk: ",SKP" is skp=1 { }
+sk: ",SZC" is skp=2 { }
+sk: ",SNC" is skp=3 { }
+sk: ",SZR" is skp=4 { }
+sk: ",SNR" is skp=5 { }
+sk: ",SEZ" is skp=6 { }
+sk: ",SBN" is skp=7 { }
+macro doshift(s, k) {
+  local l:4 = ((s << 1) | (s >> 16)) & 0x1ffff;
+  local r:4 = ((s >> 1) | (s << 16)) & 0x1ffff;
+  local w:4 = ((s & 0xff) << 8) | ((s >> 8) & 0xff) | (s & 0x10000);
+  s = (s * zext(k == 0)) + (l * zext(k == 1)) + (r * zext(k == 2)) + (w * zext(k == 3));
+}
+:COM^cin^sh^ld acs, acd^sk is b15=1 & alu=0 & acs & acd & cin & sh & shf & ld & nl & sk & skp & skipn {
+  local s:4 = zext(acs) | (zext(cin) << 16);
+  local d:4 = zext(acd);
+  s = s ^ 0xffff;
+  local k:1 = shf;
+  doshift(s, k);
+  local res:2 = s:2;
+  local cy:1 = (s >> 16) != 0;
+  C = cy;
+  local ldf:1 = nl;
+  if (ldf != 0) goto <noload>;
+  acd = res;
+<noload>
+  local sc:1 = skp;
+  local doskip:1 = (sc == 1) || (sc == 2 && !cy) || (sc == 3 && cy) || (sc == 4 && res == 0) || (sc == 5 && res != 0) || (sc == 6 && (!cy || res == 0)) || (sc == 7 && cy && res != 0);
+  if (doskip) goto skipn;
+}
+:NEG^cin^sh^ld acs, acd^sk is b15=1 & alu=1 & acs & acd & cin & sh & shf & ld & nl & sk & skp & skipn {
+  local s:4 = zext(acs) | (zext(cin) << 16);
+  local d:4 = zext(acd);
+  s = ((s ^ 0xffff) + 1) & 0x1ffff;
+  local k:1 = shf;
+  doshift(s, k);
+  local res:2 = s:2;
+  local cy:1 = (s >> 16) != 0;
+  C = cy;
+  local ldf:1 = nl;
+  if (ldf != 0) goto <noload>;
+  acd = res;
+<noload>
+  local sc:1 = skp;
+  local doskip:1 = (sc == 1) || (sc == 2 && !cy) || (sc == 3 && cy) || (sc == 4 && res == 0) || (sc == 5 && res != 0) || (sc == 6 && (!cy || res == 0)) || (sc == 7 && cy && res != 0);
+  if (doskip) goto skipn;
+}
+:MOV^cin^sh^ld acs, acd^sk is b15=1 & alu=2 & acs & acd & cin & sh & shf & ld & nl & sk & skp & skipn {
+  local s:4 = zext(acs) | (zext(cin) << 16);
+  local d:4 = zext(acd);
+  
+  local k:1 = shf;
+  doshift(s, k);
+  local res:2 = s:2;
+  local cy:1 = (s >> 16) != 0;
+  C = cy;
+  local ldf:1 = nl;
+  if (ldf != 0) goto <noload>;
+  acd = res;
+<noload>
+  local sc:1 = skp;
+  local doskip:1 = (sc == 1) || (sc == 2 && !cy) || (sc == 3 && cy) || (sc == 4 && res == 0) || (sc == 5 && res != 0) || (sc == 6 && (!cy || res == 0)) || (sc == 7 && cy && res != 0);
+  if (doskip) goto skipn;
+}
+:INC^cin^sh^ld acs, acd^sk is b15=1 & alu=3 & acs & acd & cin & sh & shf & ld & nl & sk & skp & skipn {
+  local s:4 = zext(acs) | (zext(cin) << 16);
+  local d:4 = zext(acd);
+  s = (s + 1) & 0x1ffff;
+  local k:1 = shf;
+  doshift(s, k);
+  local res:2 = s:2;
+  local cy:1 = (s >> 16) != 0;
+  C = cy;
+  local ldf:1 = nl;
+  if (ldf != 0) goto <noload>;
+  acd = res;
+<noload>
+  local sc:1 = skp;
+  local doskip:1 = (sc == 1) || (sc == 2 && !cy) || (sc == 3 && cy) || (sc == 4 && res == 0) || (sc == 5 && res != 0) || (sc == 6 && (!cy || res == 0)) || (sc == 7 && cy && res != 0);
+  if (doskip) goto skipn;
+}
+:ADC^cin^sh^ld acs, acd^sk is b15=1 & alu=4 & acs & acd & cin & sh & shf & ld & nl & sk & skp & skipn {
+  local s:4 = zext(acs) | (zext(cin) << 16);
+  local d:4 = zext(acd);
+  s = ((s ^ 0xffff) + d) & 0x1ffff;
+  local k:1 = shf;
+  doshift(s, k);
+  local res:2 = s:2;
+  local cy:1 = (s >> 16) != 0;
+  C = cy;
+  local ldf:1 = nl;
+  if (ldf != 0) goto <noload>;
+  acd = res;
+<noload>
+  local sc:1 = skp;
+  local doskip:1 = (sc == 1) || (sc == 2 && !cy) || (sc == 3 && cy) || (sc == 4 && res == 0) || (sc == 5 && res != 0) || (sc == 6 && (!cy || res == 0)) || (sc == 7 && cy && res != 0);
+  if (doskip) goto skipn;
+}
+:SUB^cin^sh^ld acs, acd^sk is b15=1 & alu=5 & acs & acd & cin & sh & shf & ld & nl & sk & skp & skipn {
+  local s:4 = zext(acs) | (zext(cin) << 16);
+  local d:4 = zext(acd);
+  s = ((s ^ 0xffff) + d + 1) & 0x1ffff;
+  local k:1 = shf;
+  doshift(s, k);
+  local res:2 = s:2;
+  local cy:1 = (s >> 16) != 0;
+  C = cy;
+  local ldf:1 = nl;
+  if (ldf != 0) goto <noload>;
+  acd = res;
+<noload>
+  local sc:1 = skp;
+  local doskip:1 = (sc == 1) || (sc == 2 && !cy) || (sc == 3 && cy) || (sc == 4 && res == 0) || (sc == 5 && res != 0) || (sc == 6 && (!cy || res == 0)) || (sc == 7 && cy && res != 0);
+  if (doskip) goto skipn;
+}
+:ADD^cin^sh^ld acs, acd^sk is b15=1 & alu=6 & acs & acd & cin & sh & shf & ld & nl & sk & skp & skipn {
+  local s:4 = zext(acs) | (zext(cin) << 16);
+  local d:4 = zext(acd);
+  s = (s + d) & 0x1ffff;
+  local k:1 = shf;
+  doshift(s, k);
+  local res:2 = s:2;
+  local cy:1 = (s >> 16) != 0;
+  C = cy;
+  local ldf:1 = nl;
+  if (ldf != 0) goto <noload>;
+  acd = res;
+<noload>
+  local sc:1 = skp;
+  local doskip:1 = (sc == 1) || (sc == 2 && !cy) || (sc == 3 && cy) || (sc == 4 && res == 0) || (sc == 5 && res != 0) || (sc == 6 && (!cy || res == 0)) || (sc == 7 && cy && res != 0);
+  if (doskip) goto skipn;
+}
+:AND^cin^sh^ld acs, acd^sk is b15=1 & alu=7 & acs & acd & cin & sh & shf & ld & nl & sk & skp & skipn {
+  local s:4 = zext(acs) | (zext(cin) << 16);
+  local d:4 = zext(acd);
+  s = s & (d | 0x10000);
+  local k:1 = shf;
+  doshift(s, k);
+  local res:2 = s:2;
+  local cy:1 = (s >> 16) != 0;
+  C = cy;
+  local ldf:1 = nl;
+  if (ldf != 0) goto <noload>;
+  acd = res;
+<noload>
+  local sc:1 = skp;
+  local doskip:1 = (sc == 1) || (sc == 2 && !cy) || (sc == 3 && cy) || (sc == 4 && res == 0) || (sc == 5 && res != 0) || (sc == 6 && (!cy || res == 0)) || (sc == 7 && cy && res != 0);
+  if (doskip) goto skipn;
+}
+
+# I/O on device 1 (Nova 3 stack, multiply/divide; Nova 4 bytes and signed multiply/divide)
+:MTFP ac is op2=3 & b15=0 & ac & iot=0 & pulse=0 & dev=1 { FP = ac & 0x7fff; }
+:MFFP ac is op2=3 & b15=0 & ac & iot=0 & pulse=2 & dev=1 { ac = FP & 0x7fff; }
+:MTSP ac is op2=3 & b15=0 & ac & iot=2 & pulse=0 & dev=1 { SP = ac & 0x7fff; }
+:MFSP ac is op2=3 & b15=0 & ac & iot=2 & pulse=2 & dev=1 { ac = SP & 0x7fff; }
+:PSHA ac is op2=3 & b15=0 & ac & iot=3 & pulse=0 & dev=1 { SP = SP + 1; *:2 SP = ac; }
+:POPA ac is op2=3 & b15=0 & ac & iot=3 & pulse=2 & dev=1 { ac = *:2 SP; SP = SP - 1; }
+:SAV is op2=3 & b15=0 & iot=5 & pulse=0 & dev=1 {
+  SP = SP + 1; *:2 SP = AC0; SP = SP + 1; *:2 SP = AC1; SP = SP + 1; *:2 SP = AC2;
+  SP = SP + 1; *:2 SP = FP; SP = SP + 1; *:2 SP = (zext(C) << 15) | (AC3 & 0x7fff);
+  FP = SP; AC3 = SP;
+}
+:RET is op2=3 & b15=0 & iot=5 & pulse=2 & dev=1 {
+  SP = FP; local w:2 = *:2 SP; C = (w >> 15) != 0; local t:2 = w & 0x7fff;
+  SP = SP - 1; AC3 = *:2 SP; SP = SP - 1; AC2 = *:2 SP; SP = SP - 1; AC1 = *:2 SP; SP = SP - 1; AC0 = *:2 SP; SP = SP - 1;
+  FP = AC3 & 0x7fff;
+  return [t];
+}
+:MUL is op2=3 & b15=0 & ac=2 & iot=6 & pulse=3 & dev=1 { local m:4 = zext(AC1) * zext(AC2) + zext(AC0); AC0 = m(2); AC1 = m:2; }
+:DIV is op2=3 & b15=0 & ac=2 & iot=6 & pulse=1 & dev=1 {
+  C = (AC0 >= AC2) || (AC2 == 0);
+  if (C) goto <done>;
+  local n:4 = (zext(AC0) << 16) | zext(AC1); local dv:4 = zext(AC2);
+  local q:4 = n / dv; local r:4 = n % dv; AC1 = q:2; AC0 = r:2;
+<done>
+}
+:MULS is op2=3 & b15=0 & ac=3 & iot=6 & pulse=2 & dev=1 { local m:4 = sext(AC1) * sext(AC2) + sext(AC0); AC0 = m(2); AC1 = m:2; }
+:DIVS is op2=3 & b15=0 & ac=3 & iot=6 & pulse=0 & dev=1 {
+  C = (AC2 == 0) || ((AC0 == 0x8000) && (AC1 == 0) && (AC2 == 0xffff));
+  if (C) goto <done>;
+  local n:4 = (zext(AC0) << 16) | zext(AC1); local dv:4 = sext(AC2);
+  local q:4 = n s/ dv; local r:4 = n s% dv;
+  C = (q s> 0x7fff) || (q s< -0x8000);
+  if (C) goto <done>;
+  AC1 = q:2; AC0 = r:2;
+<done>
+}
+:LDB acp, ac is op2=3 & b15=0 & ac & iot=1 & acp & dev=1 { local bp:2 = acp; local w:2 = *:2 (bp >> 1); local bs:2 = 8 * ((~bp) & 1); ac = (w >> bs) & 0xff; }
+:STB acp, ac is op2=3 & b15=0 & ac & iot=4 & acp & dev=1 {
+  local bp:2 = acp; local a:2 = bp >> 1; local w:2 = *:2 a; local v:2 = ac & 0xff;
+  local lo:1 = (bp & 1) != 0;
+  w = ((w & 0xff00) | v) * zext(lo) + ((w & 0x00ff) | (v << 8)) * zext(!lo);
+  *:2 a = w;
+}
+
+# I/O on the CPU (device 077)
+:INTEN is op2=3 & b15=0 & iot=0 & pulse=1 & dev=0x3f { ION = 1; }
+:INTDS is op2=3 & b15=0 & iot=0 & pulse=2 & dev=0x3f { ION = 0; }
+:READS ac is op2=3 & b15=0 & ac & iot=1 & dev=0x3f { ac = read_switches(); }
+:INTA ac is op2=3 & b15=0 & ac & iot=3 & dev=0x3f { ac = interrupt_acknowledge(); }
+:MSKO ac is op2=3 & b15=0 & ac & iot=4 & dev=0x3f { mask_out(ac); }
+:IORST is op2=3 & b15=0 & iot=5 & dev=0x3f { io_reset(); ION = 0; }
+:HALT is op2=3 & b15=0 & iot=6 & dev=0x3f { halt(); goto inst_start; }
+
+# Any other device: the transfer is a user op; SKP tests a device flag.
+iop: "" is pulse=0 { }
+iop: "S" is pulse=1 { }
+iop: "C" is pulse=2 { }
+iop: "P" is pulse=3 { }
+:NIO^iop dev is op2=3 & b15=0 & iot=0 & iop & pulse & dev { io_transfer(0:1, pulse:1, dev:1); }
+:DIA^iop ac, dev is op2=3 & b15=0 & ac & iot=1 & iop & pulse & dev { ac = io_transfer(1:1, pulse:1, dev:1); }
+:DOA^iop ac, dev is op2=3 & b15=0 & ac & iot=2 & iop & pulse & dev { io_transfer(2:1, pulse:1, dev:1, ac); }
+:DIB^iop ac, dev is op2=3 & b15=0 & ac & iot=3 & iop & pulse & dev { ac = io_transfer(3:1, pulse:1, dev:1); }
+:DOB^iop ac, dev is op2=3 & b15=0 & ac & iot=4 & iop & pulse & dev { io_transfer(4:1, pulse:1, dev:1, ac); }
+:DIC^iop ac, dev is op2=3 & b15=0 & ac & iot=5 & iop & pulse & dev { ac = io_transfer(5:1, pulse:1, dev:1); }
+:DOC^iop ac, dev is op2=3 & b15=0 & ac & iot=6 & iop & pulse & dev { io_transfer(6:1, pulse:1, dev:1, ac); }
+skc: "BN" is pulse=0 { } 
+skc: "BZ" is pulse=1 { }
+skc: "DN" is pulse=2 { }
+skc: "DZ" is pulse=3 { }
+:SKP^skc dev is op2=3 & b15=0 & iot=7 & skc & pulse & dev & skipn { local f:1 = io_skip(pulse:1, dev:1); if (f) goto skipn; }

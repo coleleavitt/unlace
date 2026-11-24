@@ -61,7 +61,12 @@ the instruction writes are still computed from `Old`. On the success path of
 an x86 `cmpxchg`, where the accumulator equals `Old`, the store's op is reused
 to assign `Old` to the accumulator, so both paths agree on it; the branch then
 only decides the upper half of `RAX` after a 32-bit `cmpxchg`, which hardware
-zero-extends only on failure. An operand that no storage holds at the first
+zero-extends only on failure. A 32-bit `xadd` or `xchg` on x86-64 ends with
+`RAX = ZEXT(EAX)` after `UNLOCK()` (the hardware clear of the upper half);
+an instruction with no branch whose ops after the envelope are only such
+register-into-containing-register zero-extensions is rewritten without them,
+and they then extend the builtin's result
+(`crates/unlace-lift/src/p2_lift/kuna_atomics.rs (register_zext_tail)`). An operand that no storage holds at the first
 load (`~X` for `ldclr`, `imm + CF` for `adc`) is rebuilt with new ops in front
 of it, which is allowed only when the instruction updates memory through a
 pointer and none of its relative branches targets its end: a new op is
@@ -4579,6 +4584,21 @@ Before, each was a bad instruction. The EVEX-promoted GPR forms in
 the AVX-512 scaling of whatever tuple context was current. Exercised by the
 `x86_64_cmpccxadd` row of `unlace-cli/tests/processors.toml`.
 
+### x86 AVX-512 base-spec decode fixes (#98)
+
+Four wrong AVX-512 decodes in the Ghidra-derived tables are fixed in every x86
+language. VPBROADCASTB/W/D/Q from a GPR now read their `Rmr32`/`Rmr64` source
+(before, the operand was missing and the lift called the user operation with no
+input). The EVEX gathers and scatters address through the VSIB tables, with
+EVEX.V' selecting index registers 16-31, so `vpgatherdd zmm0{k1}, [rdi +
+4*zmm1 + 64]` lifts to the vector-indexed address (before, RCX was used as a
+scalar index). A memory broadcast prints `{1toN}`. Disp8*N is right for 16-bit
+broadcast elements: three tuple rows in `ia.sinc` (full, half and quarter
+vector with a word broadcast) give N, and the register-or-memory operand tables
+no longer evaluate `evexDisp8N` a second time, which had read tuple bits the
+first evaluation overwrote. Exercised by `unlace-cli/tests/x86_avx10.rs`
+(`base_fixes`) and the `x86_64_avx512_base` row of `processors.toml`.
+
 ### x86-64 AVX10.2 (#98)
 
 `specs/Ghidra/Processors/x86/data/languages/avx10_2.sinc` decodes AVX10.2 in
@@ -4662,6 +4682,8 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `CPython` | CPython 3.12 bytecode (one code object's co_code) | `CPython:LE:32:3.12` | CPython 3.12 `dis`/`opcode` tables, `Python/bytecodes.c` semantics; oracle `dis` | `unlace-cli/tests/cpython_raw.rs` |
 | `H8500` | Hitachi H8/500 (H8/510, H8/520, H8/532, H8/534, H8/536, H8/570) | `H8500:BE:16:minimum`, `H8500:BE:24:maximum` | H8/500 Programming Manual; MAME h8500dasm.cpp (BSD-3) | `unlace-cli/tests/processors.toml` (`h8500`) |
 | `S12Z` | NXP S12Z (MC9S12ZVL, MC9S12ZVC, MC9S12ZVM, S12ZVH) | `S12Z:BE:24:default` | NXP S12Z CPU RM; encodings checked against binutils s12z-opc.c (read only) | `unlace-cli/tests/processors.toml` (`s12z`) |
+| `V8Ignition` | V8 Ignition bytecode (V8 13.6, Node.js 24) | `V8Ignition:LE:32:13.6` | V8 `src/interpreter/bytecodes.h`, `bytecode-operands.h` (BSD-3-Clause); oracle `node --print-bytecode` | `unlace-cli/tests/v8ignition_raw.rs` |
+| `JavaCard` | Java Card virtual machine bytecode (Java Card Platform 3.1) | `JavaCard:BE:16:3.1` | Java Card Platform VM Specification v3.1, chapters 7 and 8 | `unlace-cli/tests/javacard_raw.rs` |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)
@@ -5040,22 +5062,31 @@ decompile with no bad or unimplemented instruction.
 
 ### RISC-V Zfa (#98)
 
-`riscv.zfa.sinc` decodes the rest of Zfa 1.0 next to `fli.s` (§ GH-7451):
-`fli.d` and `fli.h` (the same 32-entry constant table, lifted like `fli.s`
-through the `fli` user operation with the table index), `fminm`/`fmaxm` in
-S, D and H (as `fmin`/`fmax`, but a NaN operand is the result),
-`fround`/`froundnx` (round to an integral value in the same format; user
-operations taking the value and the rounding mode, since p-code has no
-operation parameterised by rounding mode), `fcvtmod.w.d` (the low 32 bits of
-the truncated 64-bit conversion, sign-extended on RV64), the quiet compares
-`fleq`/`fltq` (the ordinary p-code float compares, which raise no exceptions
-in p-code either), and on RV32 `fmvh.x.d` (the high word of a double) and
-`fmvp.d.x` (a double from `rs2:rs1`). The `fli` constant at index 0 now
-displays as `-1.0` (it read `min`, the name of index 1). Exercised by
-`unlace-cli/tests/riscv_zfa.rs`: one probe row per encoding (all 32 `fli`
-constants) against LLVM's names, RV32 and RV64, and LLVM-selected
-`fminm.d`, `fmaxm.s`, `fround.d`, `fli.d` and `fleq.d` functions that
-decompile with no bad or unimplemented instruction.
+`riscv.zfa.sinc` decodes Zfa 1.0. It is generated from the Sail model's
+`zfa_insts.sail` by `tools/gen_riscv_sail.py` (`docs/sleigh-from-isa-specs.md`) and
+replaces the hand-written file and `fli.s` in `riscv.rv32f.sinc` (§ GH-7451), whose
+decoding it repeats word for word. The 32 `fli` constants (`fli.s`, `fli.d`, `fli.h`)
+are one constructor each, displayed through `fliConstS`, that writes the
+constant's bit pattern (NaN-boxed for S and H) instead of calling the `fli` user
+operation. Single- and half-precision sources are NaN-unboxed as the ISA requires:
+a register whose upper bits are not all ones reads as the canonical NaN, and S/H
+results are written NaN-boxed. `fminm`/`fmaxm` follow Sail: either operand NaN
+gives the canonical NaN, `-0` orders below `+0`, otherwise the quiet `f<=`
+decides. The quiet compares `fleq`/`fltq` are `f<=`/`f<` on the unboxed values.
+`fround`/`froundnx` with a static rounding mode lift to `floor` (rdn), `ceil` (rup),
+`round` (rmm) or `floor`/`ceil` by sign (rtz); `rne` and `dyn` have no p-code
+operation and stay user operations named after the mnemonic, taking the source and
+the rounding mode. `fcvtmod.w.d` lifts Sail's modular conversion: the low 32 bits
+of the truncated integer, 0 for NaN, infinities, subnormals and exponents of 84 or
+more, sign-extended on RV64. On RV32, `fmvh.x.d` takes the high word of a double and
+`fmvp.d.x` builds one from `rs2:rs1`. Floating-point exception flags are not
+modelled. Before, the hand-written file read S and H operands without unboxing and
+returned the other operand instead of the canonical NaN, so `fminm.s`, `fmaxm.s`,
+`fleq.s` and `fltq.s` (and their H forms) disagreed with QEMU on unboxed inputs.
+Exercised by `unlace-cli/tests/riscv_zfa.rs`: one probe row per encoding (all 32
+`fli` constants) against LLVM's names, RV32 and RV64, and LLVM-selected `fminm.d`,
+`fmaxm.s`, `fround.d`, `fli.d` and `fleq.d` functions that decompile with no bad or
+unimplemented instruction.
 
 ### RISC-V cache-block operations, hints, may-be-operations and CFI (#98)
 
@@ -5105,9 +5136,9 @@ written to `rd` with `assignW`. A destination table that exports a temporary
 copy of the register would drop the write, which made these conversions
 produce no value at all. The fix is in the RISC-V SLEIGH sources, so
 `riscv.lp64d.sla`, `riscv.ilp32d.sla` and `andestar_v5.sla` must be rebuilt.
-Exercised by `tests/stages/gh831-riscv-fpmove.xml` (RV64: a call result moved
+Exercised by `tests/stages/gh831-riscv-fpmove.toml` (RV64: a call result moved
 by `fmv.x.d` and `fmv.x.w`, and all four conversions) and
-`tests/stages/gh831-riscv32-fpmove.xml` (the RV32 forms).
+`tests/stages/gh831-riscv32-fpmove.toml` (the RV32 forms).
 
 The x87 `FIST` and `FISTP` lifts preserve integer conversion as width-specific
 `x87_float_to_int16`, `x87_float_to_int32`, or `x87_float_to_int64` user operations.
@@ -5157,7 +5188,7 @@ the same operand (`vMem32z`), so the qword-index gathers still decode in
 `VPSCATTERQ*`) are still built for 64-bit mode only. An index in
 `ZMM16`..`ZMM31` (`EVEX.V'`) still reads as `ZMM0`..`ZMM15`, as for every EVEX
 VSIB operand. Exercised by
-`tests/stages/gh1627-x86-senduipi-gatherpf.xml`.
+`tests/stages/gh1627-x86-senduipi-gatherpf.toml`.
 
 In 64-bit mode the x86 spec also decodes Intel AMX (`amx.sinc`, #98):
 AMX-TILE `LDTILECFG`, `STTILECFG`, `TILERELEASE`, `TILEZERO`, `TILELOADD`,
@@ -5190,7 +5221,7 @@ decode whatever `REX.W` says, since their operand size is fixed at 64 bits
 there and compilers encode them without the prefix. `VMFUNC` and `VMCALL`
 write no flags: `VMFUNC` leaves them unchanged, and the flags after a guest's
 `VMCALL` are whatever the hypervisor returns. Exercised by
-`tests/stages/gh1628-x86-vmx-decode-flags.xml`.
+`tests/stages/gh1628-x86-vmx-decode-flags.toml`.
 
 For the bounded local policy (`kuna_localstackviews.rs`), the `FlowEmit::dump` seam in
 `crates/unlace-lift/src/p2_lift/flow.rs` records original STORE and
@@ -5275,7 +5306,9 @@ confirmed on hardware before the spec changed.
   `MOVBE r32,m32`, `MOVMSKPS`/`MOVMSKPD`, MMX `PEXTRW`, `LSL`, `RDRAND`/`RDSEED r32`,
   the VEX and EVEX `VCVT[T]SS2SI`/`VCVT[T]SD2SI`/`VCVT[T]S[SDH]2USI`/`VCVT[T]SH2SI`,
   `VMOVMSKPS`/`VMOVMSKPD`, `VPEXTRW` and `KMOV[BWD] r32`; before, `lock xadd [rdi],eax`
-  left the old upper half of RAX in place.
+  left the old upper half of RAX in place. In the locked `XADD`/`XCHG` the zero extension is
+  built right after the register write, inside the `LOCK()`..`UNLOCK()` envelope, so the
+  `atomics` fold, which requires `UNLOCK()` to be the instruction's last op, still applies.
 - `MOV r32,Sreg` and `MOV r64,Sreg` (`8C` with a register operand) zero-extend the selector
   into the whole register; only the 16-bit form writes 16 bits.
 - `90` with a REX prefix that lacks REX.B (`44 90`, `4C 90`, ...) is `NOP`, not

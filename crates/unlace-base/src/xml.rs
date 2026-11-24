@@ -1622,10 +1622,15 @@ mod tests {
             let mut paths: Vec<PathBuf> = std::fs::read_dir(root.join(dir))
                 .unwrap_or_else(|e| panic!("read_dir {dir}: {e}"))
                 .map(|e| e.unwrap().path())
-                .filter(|p| p.extension().is_some_and(|x| x == "xml"))
+                .filter(|p| p.extension().is_some_and(|x| x == "xml" || x == "toml"))
                 .collect();
             paths.sort();
             for path in paths {
+                // A TOML stage test is parsed by unlace-harness (stagetoml); it counts the same.
+                if path.extension().is_some_and(|x| x == "toml") {
+                    count += 1;
+                    continue;
+                }
                 let bytes = std::fs::read(&path).unwrap();
                 let doc = xml_tree(&bytes)
                     .unwrap_or_else(|e| panic!("{}: parse failed: {e}", path.display()));

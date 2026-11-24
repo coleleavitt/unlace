@@ -20,7 +20,7 @@ Each operand is evaluated once in p-code order. In-place forms expand to an
 assignment whose right-hand side wraps. Recovered overflow branches and panic
 calls remain separate. This is a correctness fix with no feature flag.
 
-The [stage witness](../../../tests/stages/ghangr-rust-integer-conversions.xml)
+The [stage witness](../../../tests/stages/ghangr-rust-integer-conversions.toml)
 requires each of the four original return expressions. The pre-fix release
 fails the combined assertion, and the optimized R06 release passes it. The
 authored native checks cover 40 complete emitted functions at 8, 16, 32, and 64

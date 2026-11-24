@@ -1,0 +1,240 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file tests/fixtures/go-dwarf-signatures/compressed',
+    'option godwarfsig off',
+    'read symbols',
+    'option outlang go',
+    'option gobounds off',
+    'load function main.stringLen',
+    'decompile',
+    'print C',
+    'load function main.stringIndex',
+    'decompile',
+    'print C',
+    'load function main.twoStringBits',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/go-dwarf-signatures/compressed',
+    'option godwarfsig on',
+    'read symbols',
+    'option outlang go',
+    'option gobounds off',
+    'load function main.stringLen',
+    'decompile',
+    'print C',
+    'load function main.stringBits',
+    'decompile',
+    'print C',
+    'load function main.stringCount',
+    'decompile',
+    'print C',
+    'load function main.shiftedString',
+    'decompile',
+    'print C',
+    'load function main.rawStringWords',
+    'decompile',
+    'print C',
+    'load function main.stringWrongOrder',
+    'decompile',
+    'print C',
+    'load function main.stringShortPiece',
+    'decompile',
+    'print C',
+    'load function main.stringLookalike',
+    'decompile',
+    'print C',
+    'load function main.stringNameCollision',
+    'decompile',
+    'print C',
+    'load function main.stringIndex',
+    'decompile',
+    'print C',
+    'load function main.forwardString',
+    'decompile',
+    'print C',
+    'override prototype 0x401240 uint8 stringBits(void)',
+    'decompile',
+    'print C',
+    'load function main.twoStringBits',
+    'decompile',
+    'print C',
+    'load function main.shiftedTwoStrings',
+    'decompile',
+    'print C',
+    'load function main.twoStringWrongOrder',
+    'decompile',
+    'print C',
+    'load function main.twoStringShortSecond',
+    'decompile',
+    'print C',
+    'load function main.twoStringWrongKind',
+    'decompile',
+    'print C',
+    'load function main.twoStringCollision',
+    'decompile',
+    'print C',
+    'load function main.threeStringPairs',
+    'decompile',
+    'print C',
+    'load function main.twoStringForward',
+    'decompile',
+    'print C',
+    'override prototype 0x401280 uint8 twoStringBits(void)',
+    'decompile',
+    'print C',
+    'map prototype main.twoStringBits uint8 twoStringBits(uint1 *first,int8 firstLen,uint1 *second,int8 secondLen);',
+    'load function main.twoStringBits',
+    'decompile',
+    'print C',
+    'map prototype main.stringLen int8 stringLen(uint1 *manualData,int8 manualLen);',
+    'load function main.stringLen',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'option off keeps inference for the length wrapper'
+count = 1
+regex = 'func stringLen\(a0 [^,]+, a1 [^\)]+\)'
+
+[[match]]
+name = 'Go string length gets its declared physical word'
+count = 1
+regex = [
+    '',
+    'func stringLen\(s_data \*byte, s_len int64\) int64 \{',
+    'return s_len$',
+]
+
+[[match]]
+name = 'Go string header keeps the data address bits'
+count = 1
+regex = [
+    '',
+    'func stringBits\(s_data \*byte, s_len int64\) uint64 \{',
+    'return uint64\(uintptr\(unsafe.Pointer\(s_data\)\)\) \^ uint64\(s_len\)$',
+]
+
+[[match]]
+name = 'Go string byte count uses the physical data and length operands'
+count = 1
+regex = [
+    '',
+    'for v[0-9]+ = .*v[0-9]+ < uint64\(s_len\); v[0-9]+ = v[0-9]+ \+ (0x)?1 \{',
+    'if \*\(\*byte\)\(unsafe.Add\(unsafe.Pointer\(s_data\),v[0-9]+ \* 1\)\) == wanted \{',
+]
+
+[[match]]
+name = 'an earlier scalar advances the string register pair'
+count = 1
+regex = [
+    '',
+    'func shiftedString\(bias int64, s_data \*byte, s_len int64\) int64 \{',
+    'return s_len$',
+]
+
+[[match]]
+name = 'the same machine body with separate scalar formals keeps their names'
+count = 1
+literal = 'func rawStringWords(data *byte, size int64) uint64'
+
+[[match]]
+name = 'wrong order short pieces and kind lookalikes retain inference'
+count = 3
+regex = 'func string(WrongOrder|ShortPiece|Lookalike)\(a0 [^,]+, a1 [^\)]+\)'
+
+[[match]]
+name = 'a generated header name may not collide with a real formal'
+count = 1
+regex = 'func stringNameCollision\(a0 [^,]+, a1 [^,]+, a2 [^\)]+\)'
+
+[[match]]
+name = 'bounds audit keeps the panic path before and after header import'
+count = 2
+regex = [
+    '',
+    'if (a2 < a1|uint64\(index\) < uint64\(s_len\)) \{',
+    'return \*\(\*byte\)\(unsafe\.(Pointer|Add)\(',
+    '\}',
+    'runtime.panicIndex\(.*\) // no-return',
+]
+
+[[match]]
+name = 'string input keeps both operands at an ordinary direct call'
+count = 1
+regex = 'return stringBits\(s_data,s_len\)$'
+
+[[match]]
+name = 'explicit callsite prototype overrides the recovered input pair'
+count = 1
+regex = 'return stringBits\(\)$'
+
+[[match]]
+name = 'explicit function prototype overrides both source word names'
+count = 1
+regex = [
+    '',
+    'func stringLen\(manualData \*byte, manualLen int64\) int64 \{',
+    'return manualLen$',
+]
+
+[[match]]
+name = 'two string import off retains all inferred words'
+count = 1
+regex = '^func twoStringBits\(a0 uint64, a1 uint64, a2 uint64, a3 uint64\) uint64'
+
+[[match]]
+name = 'two verified strings retain all four typed physical words'
+count = 1
+regex = [
+    '',
+    '^func twoStringBits\(a_data \*byte, a_len int64, b_data \*byte, b_len int64\) uint64 \{$',
+    '^  return uint64\(uintptr\(unsafe.Pointer\(a_data\)\)\) \^ uint64\(a_len\) \^ uint64\(uintptr\(unsafe.Pointer\(b_data\)\)\) \^ uint64\(b_len\)$',
+]
+
+[[match]]
+name = 'two verified string pairs retain physical argument order at a call'
+count = 1
+regex = [
+    '',
+    '^func twoStringForward\(a_data \*byte, a_len int64, b_data \*byte, b_len int64\) uint64 \{$',
+    '^  return twoStringBits\(a_data,a_len,b_data,b_len\)$',
+]
+
+[[match]]
+name = 'two strings advance past the scalar without consuming the float bank'
+count = 1
+regex = [
+    '',
+    '^func shiftedTwoStrings\(bias int64, a_data \*byte, a_len int64, factor float64, b_data \*byte, b_len int64\) int64 \{$',
+    '^  return a_len \+ b_len$',
+]
+
+[[match]]
+name = 'malformed second headers and excess pairs leave the entire prototype inferred'
+count = 5
+regex = '^func (twoString(WrongOrder|ShortSecond|WrongKind|Collision)|threeStringPairs)\(a0 uint64, a1 uint64, a2 uint64, a3 uint64[^\)]*\) uint64'
+
+[[match]]
+name = 'explicit site authority overrides the words of both source strings'
+count = 1
+regex = 'return twoStringBits\(\)$'
+
+[[match]]
+name = 'explicit function authority replaces the names of both source strings'
+count = 1
+regex = '^func twoStringBits\(first \*byte, firstLen int64, second \*byte, secondLen int64\) uint64'

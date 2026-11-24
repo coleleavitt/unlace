@@ -2698,7 +2698,7 @@ impl<'a> CollapseStructure<'a> {
         self.graph
             .get_exit_leaf(bl)
             .and_then(|leaf| self.graph.block(leaf).get_copy())
-            .is_some_and(|bb| self.exitleaf_facts.is_noreturn_halt(bb))
+            .is_some_and(|bb| self.exitleaf_facts.is_noreturn_call(bb))
     }
 
     /// The start address of the first leaf that executes inside a structuring
@@ -3386,6 +3386,31 @@ fn next_op_in_block(data: &Funcdata, op: crate::context::OpId) -> Option<crate::
         .expect("next_op_in_block: stale op")
         .basic_neighbours();
     next
+}
+
+/// (kuna `noretfirst`) Does the halt `tail` of `bb` follow a call?  Either a
+/// `CALL`/`CALLIND` precedes it in `bb`, or `bb` holds only the halt and every
+/// predecessor ends in a call (the `funcboundflow` halt starts its own block).
+fn halt_follows_call(data: &Funcdata, bb: BlockId, tail: crate::context::OpId) -> bool {
+    let is_call = |op: crate::context::OpId| {
+        data.obank()
+            .get(op)
+            .is_some_and(|o| matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND))
+    };
+    let prev = |op| data.obank().get(op).and_then(|o| o.basic_neighbours().0);
+    let mut cur = prev(tail);
+    if cur.is_none() {
+        let blk = data.bblocks_ref().block(bb);
+        let n = blk.size_in();
+        return n > 0 && (0..n).all(|i| last_op_of(data, blk.get_in(i)).is_some_and(is_call));
+    }
+    while let Some(op) = cur {
+        if is_call(op) {
+            return true;
+        }
+        cur = prev(op);
+    }
+    false
 }
 
 /// \brief A pair of Varnode objects that have been split (and should be merged)
@@ -4230,6 +4255,11 @@ impl Action for ActionBlockStructure {
                     let ht = op.get_halt_type();
                     if ht != 0 {
                         exitleaf_facts.halt.insert(bb, ht);
+                        if (ht & crate::op::pcodeop_flags::noreturn) != 0
+                            && halt_follows_call(data, bb, tail)
+                        {
+                            exitleaf_facts.noreturn_call.insert(bb);
+                        }
                     }
                 }
             }

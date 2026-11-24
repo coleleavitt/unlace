@@ -1,0 +1,123 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file tests/fixtures/rust-function-address/startup',
+    'read symbols',
+    'option outlang c',
+    'load function main',
+    'decompile',
+    'print C',
+    'option outlang rust',
+    'print C',
+    'option outlang c',
+    'print C',
+    'parse line extern unsigned long keyword_address(void);',
+    'parse line extern unsigned long const_address(void);',
+    'map prototype r17_probe::global_address unsigned long global_address(void);',
+    'option outlang rust',
+    'load function keyword_address',
+    'decompile',
+    'print C',
+    'load function const_address',
+    'decompile',
+    'print C',
+    'load function r17_probe::global_address',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/function_pointer_namespaces_x86_64',
+    'read symbols',
+    'parse line extern unsigned long global_shadow(unsigned long target);',
+    'parse line extern unsigned long scope_shadow(unsigned long left);',
+    'map prototype left::same_address unsigned long same_address(void);',
+    'map prototype right::cross_address unsigned long cross_address(void);',
+    'option outlang rust',
+    'load function global_shadow',
+    'decompile',
+    'print C',
+    'load function scope_shadow',
+    'decompile',
+    'print C',
+    'load function right::cross_address',
+    'decompile',
+    'print C',
+    'load function left::same_address',
+    'decompile',
+    'print C',
+    'option outlang c',
+    'print C',
+]
+
+[[match]]
+name = 'Rust startup function address keeps its distinct target'
+count = 1
+literal = 'std::rt::lang_start(r17_probe::main,argc as i64,argv,0)'
+
+[[match]]
+name = 'C startup function address survives a Rust render unchanged'
+count = 2
+literal = 'std::rt::lang_start(r17_probe::main,(int8)argc,argv,0)'
+
+[[match]]
+name = 'Rust function address quotes a keyword module'
+count = 1
+literal = 'return r#type::callback as u64;'
+
+[[match]]
+name = 'Rust global function address escapes a local callback shadow'
+count = 1
+literal = 'return crate::target as u64;'
+
+[[match]]
+name = 'Rust function address keeps the root through a module-name shadow'
+count = 1
+literal = [
+    'unsafe fn scope_shadow(mut left: u64) -> u64',
+    '{',
+    'return crate::left::target as u64;',
+]
+
+[[match]]
+name = 'Rust same-scope function value keeps its bare spelling'
+count = 1
+literal = [
+    'unsafe fn same_address() -> u64',
+    '{',
+    'return target as u64;',
+]
+
+[[match]]
+name = 'C same-scope function value keeps its bare spelling'
+count = 1
+regex = 'return (\(uint8\))?target;'
+
+[[match]]
+name = 'Rust function address quotes a C keyword module'
+count = 1
+literal = 'return r#const::callback as u64;'
+
+[[match]]
+name = 'Rust sibling-module function address starts at the crate root'
+count = 1
+literal = [
+    'unsafe fn cross_address() -> u64',
+    '{',
+    'return crate::left::target as u64;',
+]
+
+[[match]]
+name = 'Rust ancestor function address starts at the crate root'
+count = 1
+literal = 'return crate::ordinary_callback as u64;'

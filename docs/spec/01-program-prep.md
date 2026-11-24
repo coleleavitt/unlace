@@ -5326,7 +5326,8 @@ moves.
   registers.
 - **(kuna) COM ids and interfaces** (`com`, default off,
   `crates/unlace-analysis/src/analyzers/com/mod.rs (ComPass)`): on a PE
-  image, every 16-byte value at 4-byte alignment in a data section that equals
+  image, every 16-byte value at 4-byte alignment in a data or code section
+  (an i386 MSVC image merges `.rdata`, ids included, into `.text`) that equals
   a known interface or class id becomes a `GUID` (`Data1`, `Data2`, `Data3`,
   `Data4[8]`) named after it, with a numeric suffix on a repeat:
   `IID_IShellLinkW`, `CLSID_ShellLink`, `CLSID_WbemLocator`. For each interface id it
@@ -6303,7 +6304,7 @@ moves.
   actual lowercase hash follows it. The reduced-name pass keeps that component,
   and the Rust fallback keeps it when the demangler would elide it under
   alternate formatting. An accepted LLVM suffix still follows the demangler's
-  existing suffix rules. `tests/stages/ghangr-rust-uppercase-legacy-hash.xml`
+  existing suffix rules. `tests/stages/ghangr-rust-uppercase-legacy-hash.toml`
   pins these spellings and ordinary Itanium, MSVC, legacy and v0 names.
 
   A legacy Rust name with an LLVM import suffix still goes to the Rust
@@ -7195,8 +7196,13 @@ every other binary's pass list is byte-identical to before the pass existed):
   chain (x86 raw-VA vs x64 image-base-relative refs behind a refkind dispatch), and
   label `<Class>::vftable` / `RTTI_*` with the class names demangled by the
   existing MSVC arm. From each recovered `<Class>::vftable` base the pass then walks
-  the slot array (`vftable.rs`), bounded at the first NULL or non-`.text` slot, and
-  emits one **function** symbol per surviving slot at the address it points at. That
+  the slot array (`vftable.rs`), bounded at the first NULL or non-`.text` slot, and,
+  in a relocatable PE whose base-relocation table reads whole, at the first word that
+  table does not list (`TextRanges::with_relocations`): the loader fixes up every
+  slot, so an unlisted word is data however it reads, such as the UTF-16 text after
+  the last vftable of a large `.text` (Holley EFI's MFC `Holley.exe` read
+  `0x0065006e` as `CGDIPCrank::vfunc_97` and split real functions at five such
+  words). It then emits one **function** symbol per surviving slot at the address it points at. That
   symbol is named `<Class>::vfunc_<i>` — the class name comes from the RTTI0
   `TypeDescriptor` and the slot index is the only disambiguator MSVC metadata offers,
   since it records no per-method names. The stem is `vfunc_`, not `vftable_`, because
@@ -8704,8 +8710,11 @@ both
   `<Name>_Class`, `<Name>_ClassDescription` and `g<Name>MetaClass` (the global
   `metaPointer` points at), and names `New` `<Name>_New`, adding it as an
   entry. The names come from the records, so nothing is inferred from code.
-- **DriverKit IORPC dispatch types** (kuna, `dextrpc`, arm64 dexts, read
-  inside the `osclassinfo` pass, default-off;
+- **DriverKit IORPC dispatch types** (kuna, `dextrpc`, arm64 dexts, run at
+  the commit point like `com`
+  (`crates/unlace-analysis/src/passes.rs (run_dextrpc)`) when `dextrpc` and `osclassinfo` are on, because the
+  load-time pass list sees the architecture's constructor defaults rather than
+  the run's options, default-off;
   `crates/unlace-analysis/src/analyzers/iokit/kuna_dextrpc.rs (emit)`):
   every symbol the dext defines or imports that names `C::_Dispatch(C *,
   IORPC)` (`_ZN<n>C9_DispatchEPS_5IORPC`), `C::Dispatch(IORPC)`
@@ -9911,8 +9920,13 @@ and every non-null word is a function-start candidate, filtered like the rest. N
 instruction calls an initializer and a PE32 has no `.pdata`, so nothing else names
 them: Holley EFI's MFC `Holley.exe` hands 2,113 entries to `_initterm`, and about
 a megabyte of `.text` behind them was folded into one function. A statically linked
-CRT's `_initterm` is an anonymous local and is not recognized; a PE32+ is skipped,
-its `.pdata` already naming every non-leaf initializer.
+CRT's `_initterm` is an anonymous local, so a direct `E8` call to code after the same
+two pushes is read too, but only for a table in the CRT's shape: in a
+non-executable section, its first word the NULL each `.CRT$X?A` section
+contributes, every word NULL or an address in an executable section, and at least
+one entry (Holley's static-CRT `USBCAN-Driver.dll` hands three such tables to its
+local `_initterm` / `_initterm_e`, 14 initializers, and an empty fourth). A PE32+ is skipped, its `.pdata` already naming
+every non-leaf initializer.
 
 (kuna) **An address-taken function is described by nothing else in a PE**, and the
 base-relocation table is what finds it

@@ -1,0 +1,72 @@
+[image]
+arch = 'x86:LE:64:default:golang'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'select_words' },
+    { space = 'ram', offset = '0x100100', name = 'keep_low' },
+    { space = 'ram', offset = '0x100200', name = 'one_low' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '4885c97401c331c031dbc3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100100'
+readonly = true
+hex = '31dbc3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100200'
+readonly = true
+hex = 'b80100000031dbc3'
+
+[script]
+commands = [
+    'parse line typedef struct ReaderWords { void *tab; void *data; } ReaderWords;',
+    'parse line extern ReaderWords select_words(void *tab,void *data,int8 present);',
+    'parse line extern ReaderWords keep_low(void *tab);',
+    'parse line extern ReaderWords one_low(void);',
+    'option outlang go',
+    'load function select_words',
+    'decompile',
+    'print C',
+    'load function keep_low',
+    'decompile',
+    'print C',
+    'load function one_low',
+    'decompile',
+    'print C',
+    'option outlang c',
+    'load function select_words',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'A declared Go pointer pair returns the all-zero record'
+count = 1
+literal = 'return ReaderWords{}'
+
+[[match]]
+name = 'A declared Go pointer pair retains the payload on the live path'
+count = 1
+regex = '\.data = data$'
+
+[[match]]
+name = 'A declared Go pointer pair retains the table from input on both live paths'
+count = 2
+regex = '\.tab = tab$'
+
+[[match]]
+name = 'A declared Go pointer pair keeps the low nonzero constant distinct'
+count = 1
+literal = 'ZEXT816(1)'
+
+[[match]]
+name = 'The C view keeps its original zero-carrier expression'
+count = 1
+literal = 'return (ReaderWords)ZEXT816(0);'

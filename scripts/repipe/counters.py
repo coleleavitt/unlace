@@ -19,7 +19,9 @@ The counters, how each is measured, and where each is hard-coded:
                             -> kuna_phases/tests.rs   the tuple assert + the test fn NAME
     catalog buckets         field/value tallies over the same catalog rows
                             -> tests/stages/kuna-catalog.xml  per-bucket stringmatch min/max
-    stage corpus (222)      tests/datatests/*.xml + tests/stages/*.xml, non-recursive
+                            (kuna-catalog.toml computes its bucket counts from the compiled
+                            catalog at test time, so it has no hard-coded bucket sites)
+    stage corpus (222)      tests/datatests/*.xml + tests/stages/*.{xml,toml}, non-recursive
                             -> unlace-base/src/xml.rs   "corpus file count drifted"
     next ElementId (4132)   max `ElementId::new(_, N)` for N >= 4000, plus one. No hard-coded
                             site: the convention is "grep for the current highest"
@@ -67,6 +69,7 @@ REL_TESTS_RS = "crates/unlace-middle/src/p0_knowledge/kuna_phases/tests.rs"
 REL_BYTECOMPAT_RS = "crates/unlace-decomp/tests/catalog_bytecompat.rs"
 REL_CATALOG_FIXTURE = "crates/unlace-decomp/tests/fixtures/phase_catalog.json"
 REL_CATALOG_XML = "tests/stages/kuna-catalog.xml"
+REL_CATALOG_TOML = "tests/stages/kuna-catalog.toml"
 REL_BASE_XML_RS = "crates/unlace-base/src/xml.rs"
 
 TIERS = ("core", "transform", "analysis")
@@ -253,13 +256,13 @@ def catalog_rows(repo=None, kuna=None) -> list:
 
 
 def corpus_counts(repo=None) -> dict:
-    """Non-recursive `*.xml` per corpus dir -- exactly what unlace-base/src/xml.rs walks."""
+    """Non-recursive `*.xml` and `*.toml` per corpus dir -- exactly what unlace-base/src/xml.rs walks."""
     out = {}
     for rel in CORPUS_DIRS:
         d = path_of(rel, repo)
         if not d.is_dir():
             raise DeriveError("corpus dir missing: {}".format(d))
-        out[rel] = sum(1 for p in d.iterdir() if p.is_file() and p.suffix == ".xml")
+        out[rel] = sum(1 for p in d.iterdir() if p.is_file() and p.suffix in (".xml", ".toml"))
     return out
 
 
@@ -328,6 +331,40 @@ def _bucket_expect(rows, key, val, single_opts) -> int:
     return n
 
 
+def _catalog_toml_buckets(rows, repo=None) -> list:
+    """The buckets of kuna-catalog.toml: a computed `count` is no site; a literal one is checked."""
+    import tomllib
+    p = path_of(REL_CATALOG_TOML, repo)
+    doc = tomllib.loads(p.read_text(encoding="utf-8"))
+    singles = []
+    for c in doc.get("script", {}).get("commands", []):
+        com = c if isinstance(c, str) else c.get("com", "")
+        m = re.fullmatch(r"\s*phase catalog\s+(\S+?)\s*", com)
+        if m:
+            singles.append(m.group(1))
+    out = []
+    for mt in doc.get("match", []):
+        pat = mt.get("literal", mt.get("regex", ""))
+        pat = pat if isinstance(pat, str) else "\n".join(pat)
+        lo = mt.get("min", mt.get("count"))
+        hi = mt.get("max", mt.get("count"))
+        rec = {"name": mt.get("name", ""), "pattern": pat, "min": lo, "max": hi, "line": 0}
+        bm = _BUCKET_PAT_RX.match(pat)
+        if isinstance(lo, dict) or isinstance(hi, dict):
+            rec.update({"bucket": False, "expected": None,
+                        "reason": "count computed from the compiled catalog at test time"})
+        elif not bm or bm.group("key") == "option":
+            rec.update({"bucket": False, "expected": None,
+                        "reason": "per-option row assertion, not a counter"})
+        else:
+            key, val = bm.group("key"), bm.group("val") or None
+            rec.update({"bucket": True, "field": key, "value": val,
+                        "expected": _bucket_expect(rows, key, val, singles),
+                        "exact": lo == hi, "toml": True})
+        out.append(rec)
+    return out
+
+
 def catalog_buckets(rows, repo=None) -> list:
     """Derive the expected count for every *bucket* stringmatch in kuna-catalog.xml.
 
@@ -335,6 +372,8 @@ def catalog_buckets(rows, repo=None) -> list:
     The per-option row assertions (patterns that open `"option": "<name>"`) are not counters
     and are reported as skipped rather than silently ignored.
     """
+    if path_of(REL_CATALOG_TOML, repo).exists():
+        return _catalog_toml_buckets(rows, repo)
     text = _catalog_xml_text(repo)
     singles = _SINGLE_ROW_RX.findall(text)
     out = []
@@ -425,10 +464,13 @@ def check(derived=None, repo=None, kuna=None) -> list:
         exp, lo, hi = b["expected"], b["min"], b["max"]
         if b["exact"]:
             if exp != lo:
+                toml = b.get("toml", False)
                 out.append(Drift("catalog-xml.bucket:{}".format(b["pattern"].strip()),
-                                 REL_CATALOG_XML, b["line"], "catalog-bucket",
+                                 REL_CATALOG_TOML if toml else REL_CATALOG_XML, b["line"],
+                                 "catalog-bucket",
                                  "min={} max={}".format(lo, hi), "min={0} max={0}".format(exp),
-                                 True, b["name"][:80]))
+                                 not toml,
+                                 "make it a computed count" if toml else b["name"][:80]))
         elif not (lo <= exp <= hi):
             out.append(Drift("catalog-xml.bucket:{}".format(b["pattern"].strip()),
                              REL_CATALOG_XML, b["line"], "catalog-bucket",

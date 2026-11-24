@@ -1,0 +1,79 @@
+# angr TestRustStoreWidth checks that the STORE's native width survives type recovery.
+# P9 strict correctness: no option. These authored x86-64 functions write a qword
+# through a byte pointer and one byte into a recovered word field. The emitted
+# Rust must keep both physical widths without aligned dereferences or borrows.
+# The retained fmt fixture also contains a halfword store into an indexed byte
+# array in escape_unicode; the place must not become a mutable reference.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x101000', name = 'wide' },
+    { space = 'ram', offset = '0x101040', name = 'bytefield' },
+    { space = 'ram', offset = '0x101080', name = 'matched' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x101000'
+readonly = true
+hex = '488937c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x101040'
+readonly = true
+hex = '40887704c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x101080'
+readonly = true
+hex = '488937c3'
+
+[script]
+commands = [
+    'option outlang rust',
+    'parse line struct Record { uint4 head; uint4 tail; };',
+    'map prototype wide void wide(uint1 *p,uint8 v);',
+    'map prototype bytefield void bytefield(struct Record *p,uint1 v);',
+    'map prototype matched void matched(uint8 *p,uint8 v);',
+    'load function wide',
+    'decompile',
+    'print C',
+    'load function bytefield',
+    'decompile',
+    'print C',
+    'load function matched',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/rust_fmt_write_real_x86_64',
+    # bitidioms would fold the leading-zero loop and move the stack buffer this test indexes
+    'option bitidioms off',
+    'read symbols',
+    'option outlang rust',
+    'load function 0x1b509',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'Rust physical store: qword stays unaligned through the byte pointer'
+count = 1
+literal = 'value: u64, pointer: *mut u64| unsafe { ::core::ptr::write_unaligned(pointer, value) })'
+
+[[match]]
+name = 'Rust physical store: word field is addressed without borrowing'
+count = 1
+literal = '&raw mut (*p).tail as *mut u8'
+
+[[match]]
+name = 'Rust physical store: matching pointer keeps normal assignment'
+count = 1
+literal = '*p = v;'
+
+[[match]]
+name = 'Rust physical store: indexed byte array supplies a raw halfword address'
+count = 1
+regex = '\)\(0x755c,\s*&raw mut v[0-9]+\[.*\] as \*mut u16\);'

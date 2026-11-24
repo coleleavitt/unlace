@@ -91,6 +91,22 @@ other helpers the compiler cannot inline become user operations named after the 
 function, and a guard that allows several cubes of an operand's values (`rnum <_u 0xB`)
 becomes one constructor per cube.
 
+`riscv.zfa.sinc` comes from `extensions/FD/zfa_insts.sail` with
+`--exts rv_f_zfa,rv_d_zfa,rv_zfh_zfa,rv32_d_zfa --display-table constantidx=fliConstS --opaque-fallback`.
+For floating point, the compiler maps `encdec_freg` fields to `frd`/`frs1`/`frs2`/`frs3`,
+and reads and writes `F_H`/`F_S`/`F_D` with NaN-boxing for a 64-bit FLEN (`--flen`).
+It lowers the softfloat comparisons to `f<=`/`f<`, `f_is_NaN` to `nan()`, and
+`riscv_fNNroundToInt` with a static rounding mode to `floor`/`ceil`/`round`. It
+ignores `accrue_fflags`, splits a rounding-mode field into one constructor per
+mode with its name as display text, and handles tuples, `Some`/`None` and signed
+integers. `--display-table` displays a field through an existing subtable (the `fli`
+constants), and `--opaque-fallback` turns a clause the compiler cannot lower
+(`rne`, `dyn`) into a user operation instead of skipping it. The compare tool's `--fp`
+loads `fa1`/`fa2` with FP-flavoured values and compares `fa0` when the p-code
+writes it. Two NaNs of the same format count as equal, since p-code has no NaN
+payloads. On RV64 the generated file agrees with QEMU on all 34 non-opaque words
+over 128 vectors each; the hand-written file disagreed on 8.
+
 To compare another variant, copy `specs/Ghidra/Processors/RISCV/data/languages` into
 `<dir>/Ghidra/Processors/RISCV/data/languages`, replace `riscv.zb.sinc`, compile with
 `slacomp`, and pass `--sleighpath <dir>` to `unlace`.
@@ -178,15 +194,10 @@ generation time, not something the model can settle.
   clauses use record fields and tuple-valued mappings the parser does not read. Loads, stores, branches, F/D/Q, V
   and the privileged instructions are therefore out of reach until the
   compiler learns Sail's memory and control-flow primitives.
-- **Floating point, atomics and vectors.** On `zfa_insts.sail` the generator emits
-  nothing (86 clauses skipped). The encodings use the `encdec_freg` and rounding-mode
-  mappings, and the execute clauses read and write `F_D`/`F_H` with NaN-boxing, pattern-match
-  `Some(rm')`, destructure softfloat tuples and accrue `fflags`. `zaamo_insts.sail`
-  (which holds Zabha) is a single width-generic `AMO` clause over memory, exceptions and
-  reservation state. The V files have the same needs plus register groups and `vtype`.
-  `riscv.zfa.sinc`, `riscv.zabha.sinc` and `riscv.rvv.sinc` therefore stay hand-written.
-  Generating them would need an FP register mapping, p-code float operations for the
-  softfloat calls, and memory reads and writes in the compiler.
+- **Atomics and vectors.** `zaamo_insts.sail` (which holds Zabha) is one width-generic
+  `AMO` clause over memory, exceptions and reservation state. The V files also need
+  register groups and `vtype`. `riscv.zabha.sinc` and `riscv.rvv.sinc` therefore stay
+  hand-written until the compiler gains memory reads and writes.
 - **Readability is not in the model.** Sail states what an instruction does,
   not how a decompiler should show it. The `--budget` and `--opaque` knobs
   stand in for the choices a spec author makes by hand.

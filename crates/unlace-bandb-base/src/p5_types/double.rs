@@ -540,7 +540,7 @@ impl SplitVarnode {
 
     /// Verify the least significant piece is a SUBPIECE and search for the most
     /// significant piece off the same whole (C++ `inHandLo`).
-    fn in_hand_lo(&mut self, data: &Funcdata, l: VarnodeId) -> bool {
+    pub fn in_hand_lo(&mut self, data: &Funcdata, l: VarnodeId) -> bool {
         if !vn_is_precis_lo(data, l) {
             return false;
         }
@@ -571,6 +571,46 @@ impl SplitVarnode {
                         continue;
                     }
                     self.init_all(data, w, l, Some(tmphi));
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Verify the most significant piece is a SUBPIECE and search for the least
+    /// significant piece off the same whole (C++ `inHandHi`).
+    pub fn in_hand_hi(&mut self, data: &Funcdata, h: VarnodeId) -> bool {
+        if !vn_is_precis_hi(data, h) {
+            return false;
+        }
+        if vn_is_written(data, h) {
+            let op = vn_get_def(data, h).expect("in_hand_hi: written vn has def");
+            if op_code(data, op) == OpCode::CPUI_SUBPIECE {
+                let w = op_get_in(data, op, 0);
+                if vn_get_offset(data, op_get_in(data, op, 1))
+                    != (vn_get_size(data, w) - vn_get_size(data, h)) as uintb
+                {
+                    return false;
+                }
+                for tmpop in descend_ops(data, w) {
+                    if op_code(data, tmpop) != OpCode::CPUI_SUBPIECE {
+                        continue;
+                    }
+                    let tmplo = match op_get_out(data, tmpop) {
+                        Some(v) => v,
+                        None => continue,
+                    };
+                    if !vn_is_precis_lo(data, tmplo) {
+                        continue;
+                    }
+                    if vn_get_size(data, tmplo) + vn_get_size(data, h) != vn_get_size(data, w) {
+                        continue;
+                    }
+                    if vn_get_offset(data, op_get_in(data, tmpop, 1)) != 0 {
+                        continue;
+                    }
+                    self.init_all(data, w, tmplo, Some(h));
                     return true;
                 }
             }

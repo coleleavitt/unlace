@@ -92,6 +92,7 @@ use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
+use unlace_base::error::UnlaceResult;
 use unlace_base::types::{int4, uintb};
 
 use unlace_num::opcodes::OpCode;
@@ -1403,25 +1404,280 @@ impl Action for ActionParamDouble {
             base: self.base.clone(),
         }))
     }
-    fn apply(&mut self, _data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        // C++ coreaction.cc:1641 — ActionParamDouble::apply. Over each call spec:
-        //   - when fc->isInputActive(): walk active trials; for a checked,
-        //     stack-relative, PIECE-written trial, splitTrial + reorder op inputs
-        //     by endianness via fc->checkInputSplit; count += 1; j -= 1.
-        //   - else when !fc->isInputLocked() && data.isDoublePrecisOn(): scan
-        //     adjacent op inputs for SplitVarnode hi/lo pairs; fc->checkInputJoin
-        //     -> opSetInput/opRemoveInput/fc->doInputJoin; count += 1.
-        //   Function-level: when funcp.isInputLocked() && isDoublePrecisOn(), find
-        //   locked primitive-whole params split into SUBPIECE hi/lo, mark piece
-        //   Varnodes setPrecisLo/setPrecisHi; count += 1 each.
-        //
-        // STUB(W7/W8-funcdata): the per-call arms iterate
-        // `Funcdata::getCallSpecs(i)` (absent); the function-level arm reads
-        // `Funcdata::funcp` (the empty `context::FuncProto` placeholder, not the
-        // real `fspec::FuncProto`).  Deferred (count stays 0).  `isDoublePrecisOn`
-        // IS realized on `Funcdata` but is only a guard for the stubbed work.
+    fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
+        if let Err(error) = self.split_and_join_doubles(data) {
+            data.unlace_state_mut::<crate::callmechanisms::State>()
+                .failure = Some(error.to_string());
+        }
         0
     }
+}
+
+impl ActionParamDouble {
+    /// (C++ `ActionParamDouble::apply`, `coreaction.cc:1641`) Over each call spec,
+    /// splits a stack-relative PIECE-written trial or joins adjacent SUBPIECE
+    /// hi/lo inputs; then, on a locked prototype, labels the hi/lo halves of each
+    /// primitive-whole parameter as precision pieces.  A failing split or join
+    /// is reported through the call-mechanism failure slot, where the C++
+    /// `LowlevelError` would abort the decompile.
+    fn split_and_join_doubles(&mut self, data: &mut Funcdata) -> UnlaceResult<()> {
+        let arch = data.get_arch().clone();
+        let manage = arch.manage();
+        let lookup = manage.register_lookup().cloned();
+        let mut index: int4 = 0;
+        while index < data.num_calls() {
+            let fc = index;
+            index += 1;
+            let op = data.get_call_specs(fc).get_op();
+            if data.get_call_specs(fc).is_input_active() {
+                let mut trialindex: int4 = -1;
+                loop {
+                    trialindex += 1;
+                    if trialindex >= data.get_call_specs(fc).active_input().get_num_trials() {
+                        break;
+                    }
+                    let paramtrial = data
+                        .get_call_specs(fc)
+                        .active_input()
+                        .get_trial(trialindex)
+                        .clone();
+                    if paramtrial.is_checked() || paramtrial.is_unref() {
+                        continue;
+                    }
+                    let Some(spc) = paramtrial.get_address().get_space() else {
+                        continue;
+                    };
+                    if spc.get_type() != unlace_base::space::spacetype::IPTR_SPACEBASE {
+                        continue;
+                    }
+                    let slot = paramtrial.get_slot();
+                    let vn = pd_input(data, op, slot);
+                    if !data.vbank().get(vn).is_some_and(|v| v.is_written()) {
+                        continue;
+                    }
+                    let Some(concatop) = pd_def(data, vn) else {
+                        continue;
+                    };
+                    if pd_code(data, concatop) != OpCode::CPUI_PIECE {
+                        continue;
+                    }
+                    if !data.get_call_specs(fc).proto().has_model() {
+                        continue;
+                    }
+                    let mostvn = pd_input(data, concatop, 0);
+                    let leastvn = pd_input(data, concatop, 1);
+                    let big_endian = spc.is_big_endian();
+                    let splitsize = if big_endian {
+                        pd_size(data, mostvn)
+                    } else {
+                        pd_size(data, leastvn)
+                    };
+                    if data.get_call_specs(fc).proto().check_input_split(
+                        paramtrial.get_address(),
+                        paramtrial.get_size(),
+                        splitsize,
+                    ) {
+                        data.get_call_specs_mut(fc)
+                            .get_active_input()
+                            .split_trial(trialindex, splitsize)?;
+                        if big_endian {
+                            data.op_insert_input(op, mostvn, slot)?;
+                            data.op_set_input(op, leastvn, slot + 1)?;
+                        } else {
+                            data.op_insert_input(op, leastvn, slot)?;
+                            data.op_set_input(op, mostvn, slot + 1)?;
+                        }
+                        self.base.count += 1;
+                        trialindex -= 1;
+                    }
+                }
+            } else if !data.get_call_specs(fc).is_input_locked() && data.is_double_precis_on() {
+                let mut max = pd_num_input(data, op) - 1;
+                let mut slot: int4 = 0;
+                loop {
+                    slot += 1;
+                    if slot >= max {
+                        break;
+                    }
+                    let vn1 = pd_input(data, op, slot);
+                    let vn2 = pd_input(data, op, slot + 1);
+                    let mut whole = unlace_bandb_base::double::SplitVarnode::empty();
+                    let isslothi;
+                    if whole.in_hand_hi(data, vn1) {
+                        if whole.get_lo() != Some(vn2) {
+                            continue;
+                        }
+                        isslothi = true;
+                    } else if whole.in_hand_lo(data, vn1) {
+                        if whole.get_hi() != Some(vn2) {
+                            continue;
+                        }
+                        isslothi = false;
+                    } else {
+                        continue;
+                    }
+                    let vn1_size = pd_size(data, vn1);
+                    let vn2_size = pd_size(data, vn2);
+                    if !data
+                        .get_call_specs(fc)
+                        .check_input_join(slot, isslothi, vn1_size, vn2_size)
+                    {
+                        continue;
+                    }
+                    let Some(lookup) = lookup.as_deref() else {
+                        continue;
+                    };
+                    let wholevn = whole.get_whole().expect("paramdouble: joined whole");
+                    data.op_set_input(op, wholevn, slot)?;
+                    data.op_remove_input(op, slot + 1);
+                    data.get_call_specs_mut(fc)
+                        .do_input_join(slot, isslothi, manage, lookup)?;
+                    max = pd_num_input(data, op) - 1;
+                    self.base.count += 1;
+                }
+            }
+        }
+        if data.get_func_proto().is_input_locked() && data.is_double_precis_on() {
+            let mut lovec: Vec<crate::context::VarnodeId> = Vec::new();
+            let mut hivec: Vec<crate::context::VarnodeId> = Vec::new();
+            let min_double_size = manage.get_default_size();
+            let numparams = data.get_func_proto().num_params();
+            for paramindex in 0..numparams {
+                let Some(param) = data.get_func_proto().get_param(paramindex) else {
+                    continue;
+                };
+                let paddr = param.get_address();
+                let Some(tp) = param.get_type().cloned() else {
+                    continue;
+                };
+                if !tp.is_primitive_whole() {
+                    continue;
+                }
+                let tpsize = tp.get_size();
+                let Some(vn) = data.find_varnode_input(tpsize, &paddr) else {
+                    continue;
+                };
+                let vnsize = pd_size(data, vn);
+                if vnsize < min_double_size {
+                    continue;
+                }
+                let half_size = vnsize / 2;
+                lovec.clear();
+                hivec.clear();
+                let mut other_use = false;
+                for subop in pd_descend(data, vn) {
+                    if pd_code(data, subop) != OpCode::CPUI_SUBPIECE {
+                        continue;
+                    }
+                    let Some(outvn) = pd_out(data, subop) else {
+                        continue;
+                    };
+                    if pd_size(data, outvn) != half_size {
+                        continue;
+                    }
+                    let cut = pd_offset(data, pd_input(data, subop, 1));
+                    if cut == 0 {
+                        lovec.push(outvn);
+                    } else if cut == half_size as uintb {
+                        hivec.push(outvn);
+                    } else {
+                        other_use = true;
+                        break;
+                    }
+                }
+                if !other_use && !lovec.is_empty() && !hivec.is_empty() {
+                    for &piecevn in lovec.iter() {
+                        if !pd_precis_lo(data, piecevn) {
+                            data.vbank_mut()
+                                .get_mut(piecevn)
+                                .expect("paramdouble: stale lo piece")
+                                .set_precis_lo();
+                            self.base.count += 1;
+                        }
+                    }
+                    for &piecevn in hivec.iter() {
+                        if !pd_precis_hi(data, piecevn) {
+                            data.vbank_mut()
+                                .get_mut(piecevn)
+                                .expect("paramdouble: stale hi piece")
+                                .set_precis_hi();
+                            self.base.count += 1;
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+fn pd_size(data: &Funcdata, vn: crate::context::VarnodeId) -> int4 {
+    data.vbank()
+        .get(vn)
+        .expect("paramdouble: stale varnode")
+        .get_size()
+}
+
+fn pd_offset(data: &Funcdata, vn: crate::context::VarnodeId) -> uintb {
+    data.vbank()
+        .get(vn)
+        .expect("paramdouble: stale varnode")
+        .get_offset()
+}
+
+fn pd_input(data: &Funcdata, op: crate::context::OpId, slot: int4) -> crate::context::VarnodeId {
+    data.obank()
+        .get(op)
+        .expect("paramdouble: stale op")
+        .get_in(slot)
+        .expect("paramdouble: missing input")
+}
+
+fn pd_num_input(data: &Funcdata, op: crate::context::OpId) -> int4 {
+    data.obank()
+        .get(op)
+        .expect("paramdouble: stale op")
+        .num_input()
+}
+
+fn pd_code(data: &Funcdata, op: crate::context::OpId) -> OpCode {
+    data.obank().get(op).expect("paramdouble: stale op").code()
+}
+
+fn pd_out(data: &Funcdata, op: crate::context::OpId) -> Option<crate::context::VarnodeId> {
+    data.obank()
+        .get(op)
+        .expect("paramdouble: stale op")
+        .get_out()
+}
+
+fn pd_def(data: &Funcdata, vn: crate::context::VarnodeId) -> Option<crate::context::OpId> {
+    data.vbank()
+        .get(vn)
+        .expect("paramdouble: stale varnode")
+        .get_def()
+}
+
+fn pd_descend(data: &Funcdata, vn: crate::context::VarnodeId) -> Vec<crate::context::OpId> {
+    data.vbank()
+        .get(vn)
+        .expect("paramdouble: stale varnode")
+        .descend_iter()
+        .collect()
+}
+
+fn pd_precis_lo(data: &Funcdata, vn: crate::context::VarnodeId) -> bool {
+    data.vbank()
+        .get(vn)
+        .expect("paramdouble: stale varnode")
+        .is_precis_lo()
+}
+
+fn pd_precis_hi(data: &Funcdata, vn: crate::context::VarnodeId) -> bool {
+    data.vbank()
+        .get(vn)
+        .expect("paramdouble: stale varnode")
+        .is_precis_hi()
 }
 
 // =============================================================================

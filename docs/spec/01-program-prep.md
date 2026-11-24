@@ -1140,8 +1140,9 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   line up with angr's), apply the relocations, rebase defined symbols, and bind
   each undefined extern to a synthetic call target in an extern area above the
   sections so calls render by name (an extern reached by a plain data relocation
-  on the operand of an x86 `call`/`jmp`/`jcc` or an MSP430 `call #imm` counts as
-  code too, so i386 and MSP430 libcalls are named) (the next 4 KiB page plus one; on a 16-bit
+  on the operand of an x86 `call`/`jmp`/`jcc`, an MSP430 `call #imm` or an m68k
+  `jsr`/`jmp` (xxx).L or `bsr.l` counts as code too, so i386, MSP430 and m68k
+  libcalls are named) (the next 4 KiB page plus one; on a 16-bit
   machine the next 16 bytes, so AVR's 4 KiB `rcall` still reaches every libcall). A section header's size is a claim the file
   need not back, so the layout allocates zero-fill only for data — `SHT_NOBITS`
   storage and a data extent past the end of the file — and at most 256 MiB of it
@@ -1397,7 +1398,10 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   `9_X`, `7_X` are reported unsupported and leave the field untouched.
   AVR (unlace#757, little-endian 16-bit words) covers `13_PCREL` (`rjmp`/
   `rcall`) and `7_PCREL` (`brbs`/`brbc`), the word displacement from the next
-  instruction; the nine `LDI` forms (`LO8`/`HI8`/`HH8` of `S + A`, of its
+  instruction (an `rjmp`/`rcall` whose ends both lie in the first 8 KiB wraps at
+  4 KiW, as a device with at most 8 KiB of flash does and the 16-bit-PC avr8
+  language's `rel12addr` models, so an -O0 object's libcalls past 4 KiB are
+  reached; unlace#976); the nine `LDI` forms (`LO8`/`HI8`/`HH8` of `S + A`, of its
   negation, or of the word address `(S + A) >> 1`) into `ldi`'s split K; `CALL`
   (the 22-bit word address of `call`/`jmp`); and `16_PM`. AMDGPU (`EM_AMDGPU`,
   no object architecture, told apart by `e_machine`) covers the 32-bit literal

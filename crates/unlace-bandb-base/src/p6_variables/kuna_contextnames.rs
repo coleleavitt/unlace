@@ -113,7 +113,7 @@ fn loop_counters(fd: &mut Funcdata, found: &mut BTreeMap<HighVariableId, Vec<Evi
                 found
                     .entry(high)
                     .or_default()
-                    .push((LOOP, at, -1, name, true));
+                    .push((LOOP, at, -1, name.into(), true));
             }
         }
     }
@@ -189,7 +189,7 @@ fn result(fd: &mut Funcdata, found: &mut BTreeMap<HighVariableId, Vec<Evidence>>
         match &returned {
             Some((h, _)) if *h != high => return,
             Some(_) => {}
-            None => returned = Some((high, (RESULT, at, -1, "result", true))),
+            None => returned = Some((high, (RESULT, at, -1, "result".into(), true))),
         }
     }
     if let Some((high, e)) = returned {

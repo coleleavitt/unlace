@@ -16,6 +16,8 @@
 //! - `InstallProtocolInterface`, `InstallMultipleProtocolInterfaces`, their MM
 //!   twins and `InstallPpi` / `NotifyPpi` give the interface instance (or the
 //!   descriptor list) its struct and name the functions it points at;
+//! - `SmmRegisterProtocolNotify` / `MmRegisterProtocolNotify` name the
+//!   callback and type its `Interface` parameter from the GUID argument;
 //! - a member whose prototype has a `T **` out-parameter (`GetSmstLocation`)
 //!   types what it is handed;
 //! - every call through a member states the member's prototype at the call:
@@ -398,6 +400,7 @@ enum Role {
     Install { guid: usize, interface: usize },
     InstallMultiple,
     PpiList { list: usize, notify: bool },
+    MmNotify { guid: usize, function: usize },
 }
 
 fn role(owner: &str, member: &str) -> Option<Role> {
@@ -436,6 +439,10 @@ fn role(owner: &str, member: &str) -> Option<Role> {
         "InstallMultipleProtocolInterfaces" if owner == BOOT_SERVICES => {
             Some(Role::InstallMultiple)
         }
+        "RegisterProtocolNotify" if owner != BOOT_SERVICES => Some(Role::MmNotify {
+            guid: 0,
+            function: 1,
+        }),
         _ => None,
     }
 }
@@ -1749,6 +1756,13 @@ impl<'a, 'e> Walk<'a, 'e> {
                     self.ppi_list(*addr, notify);
                 }
             }
+            Some(Role::MmNotify { guid, function }) => {
+                if let (Some(Some(Val::Const(g))), Some(Some(Val::Const(f)))) =
+                    (args.get(guid), args.get(function))
+                {
+                    self.mm_notify(*g, *f);
+                }
+            }
             None => {}
         }
     }
@@ -1927,6 +1941,27 @@ impl<'a, 'e> Walk<'a, 'e> {
         Some(name)
     }
 
+    /// The `EFI_MM_NOTIFY_FN` at `function` registered for the GUID at
+    /// `guid_addr`: named `<Guid>Notify`, its `Interface` typed from the GUID.
+    fn mm_notify(&mut self, guid_addr: u64, function: u64) {
+        let Some((raw, interface)) = self.interface_at(guid_addr) else {
+            return;
+        };
+        let target = self.code_target(function);
+        if self.index_of(target).is_none() {
+            if self.text_end(target).is_some() && !self.seen.contains(&target) {
+                self.wanted.push(target);
+            }
+            return;
+        }
+        let decl = mm_notify_decl(interface.as_deref());
+        self.name_function(
+            target,
+            format!("{}Notify", guid_core(&raw, "Protocol")),
+            Some(decl),
+        );
+    }
+
     /// The `EFI_PEI_PPI_DESCRIPTOR` or `EFI_PEI_NOTIFY_DESCRIPTOR` list at
     /// `addr`, up to the entry flagged as its last.
     fn ppi_list(&mut self, addr: u64, notify: bool) {
@@ -1954,15 +1989,7 @@ impl<'a, 'e> Walk<'a, 'e> {
             let Some((raw, interface)) = self.interface_at(guid_addr) else {
                 return;
             };
-            let core = match super::guid_names().get(&raw) {
-                Some(name) => name
-                    .strip_prefix('g')
-                    .unwrap_or(name)
-                    .strip_suffix("Guid")
-                    .unwrap_or(name)
-                    .to_string(),
-                None => format!("Ppi_{:08X}", guid_data1(&raw)),
-            };
+            let core = guid_core(&raw, "Ppi");
             if notify {
                 self.found.descriptors.entry(at).or_insert(Descriptor {
                     name: format!("m{core}NotifyDescriptor"),
@@ -1988,6 +2015,26 @@ impl<'a, 'e> Walk<'a, 'e> {
             }
         }
     }
+}
+
+/// The name of a GUID without its `g` and `Guid` (`EfiFooProtocol`), or
+/// `<unknown>_<Data1>` for a GUID the EDK2 package files do not declare.
+fn guid_core(raw: &[u8; 16], unknown: &str) -> String {
+    match super::guid_names().get(raw) {
+        Some(name) => name
+            .strip_prefix('g')
+            .unwrap_or(name)
+            .strip_suffix("Guid")
+            .unwrap_or(name)
+            .to_string(),
+        None => format!("{unknown}_{:08X}", guid_data1(raw)),
+    }
+}
+
+/// The prototype of an `EFI_MM_NOTIFY_FN` registered for an interface.
+fn mm_notify_decl(interface: Option<&str>) -> String {
+    let iface = interface.map_or("VOID*".to_string(), |i| format!("{i}*"));
+    format!("EFI_STATUS(EFI_GUID* Protocol, {iface} Interface, EFI_HANDLE Handle)")
 }
 
 /// `base` moved by the `size`-byte constant `c`.
@@ -2101,6 +2148,46 @@ mod tests {
             Some(Role::PpiList { notify: true, .. })
         ));
         assert!(role("EFI_RUNTIME_SERVICES", "LocateProtocol").is_none());
+        assert!(matches!(
+            role("EFI_SMM_SYSTEM_TABLE2", "SmmRegisterProtocolNotify"),
+            Some(Role::MmNotify {
+                guid: 0,
+                function: 1
+            })
+        ));
+        assert!(matches!(
+            role("EFI_MM_SYSTEM_TABLE", "MmRegisterProtocolNotify"),
+            Some(Role::MmNotify { .. })
+        ));
+        assert!(role(BOOT_SERVICES, "RegisterProtocolNotify").is_none());
+    }
+
+    #[test]
+    fn mm_notify_callbacks_take_the_interface_type() {
+        let sw_dispatch2 = [
+            0xdc, 0xc6, 0xa3, 0x18, 0xea, 0x5e, 0xc8, 0x48, 0xa1, 0xc1, 0xb5, 0x33, 0x89, 0xf9,
+            0x89, 0x99,
+        ];
+        assert_eq!(
+            guid_core(&sw_dispatch2, "Protocol"),
+            "EfiSmmSwDispatch2Protocol"
+        );
+        assert!(guid_core(&[0xee; 16], "Protocol").starts_with("Protocol_"));
+        let decl = mm_notify_decl(Some("EFI_SMM_SW_DISPATCH2_PROTOCOL"));
+        let (ret, params, varargs) = sig_parts(&decl).unwrap();
+        assert_eq!(ret, "EFI_STATUS");
+        assert!(!varargs);
+        assert_eq!(
+            params[1],
+            (
+                "EFI_SMM_SW_DISPATCH2_PROTOCOL*".to_string(),
+                "Interface".to_string()
+            )
+        );
+        assert_eq!(
+            sig_parts(&mm_notify_decl(None)).unwrap().1[1].0,
+            "VOID*".to_string()
+        );
     }
 
     #[test]

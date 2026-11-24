@@ -1130,6 +1130,19 @@ impl ObjectLoadImage {
             }
         }
 
+        // A PE load configuration names the CRT's security cookie and guard
+        // pointer slots; each is one pointer wide.
+        let pointer_size = if file.is_64() { 8 } else { 4 };
+        for (addr, name) in crate::loader::kuna_peloadconfig::image_named_slots(bytes) {
+            if seen_data.insert(addr) {
+                datasyms.push(DataSym {
+                    addr,
+                    name: name.as_bytes().to_vec(),
+                    size: pointer_size,
+                });
+            }
+        }
+
         // 2. PLT stubs → imported library names.
         // (F) Per-format import resolution goes through the boundary; for ELF
         // `ElfFormat::resolve_imports` just calls the unchanged

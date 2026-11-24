@@ -19,6 +19,8 @@ pub mod kuna_fpuemu; // (kuna) decode the 8087 emulator's INT 34h-3Dh as the x87
 pub mod kuna_funcboundflow; // (kuna) bound fall-through at a known function entry (no cross-function merge)
 pub mod kuna_gomorestack; // (kuna) fold the Go stack-growth entry guard (docs/multilang.md W2)
 pub mod kuna_gowritebarrier; // (kuna) fold the Go GC write-barrier diamond (docs/multilang.md W2)
+pub mod kuna_guarddispatch; // (kuna `guarddispatch`) a call through a Control Flow Guard dispatch slot calls the target register
+pub mod kuna_honestgaps; // (kuna `honestgaps`) name the losses the decompile otherwise drops silently
 pub mod kuna_int3pad; // (kuna) name the int3 pad control ran into instead of printing it as a call through swi()
 pub mod kuna_itaniumeh; // (kuna `itaniumeh`) exceptional edges from each covered call to its Itanium landing pad
 pub mod kuna_javatry; // (kuna `javatry`) exception edges and try dispatches from a DEX method's try items

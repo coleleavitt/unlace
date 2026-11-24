@@ -2466,73 +2466,145 @@ impl Funcdata {
 
     /// (kuna `dwarfscopes`) Map each DWARF register local `(name, type, storage,
     /// start)` at the use point the value its register holds at `start` will
-    /// have once heritage has run: `start` itself when it begins a basic block
-    /// (the block's phi, the use point of a loop-carried value), otherwise the
-    /// last write covering the storage at or before `start`, at most 16 bytes
-    /// earlier (the defining instruction). A local whose write is not found,
-    /// or whose name is already taken, is skipped.
+    /// have once heritage has run (`kuna_dwarfregbind::reaching_write`): the
+    /// block's phi when `start` begins a basic block, else the last raw write
+    /// covering the storage before `start` in its block or up its
+    /// single-predecessor chain, else the phi where that chain meets a merge. A
+    /// write wider than an integer type binds at the write's own storage and
+    /// width with a same-signed integer type, name-locked only. A local whose
+    /// write is not found, or whose name is already taken, is skipped. Returns
+    /// the `(name, start)` of each local skipped for want of a write it can bind
+    /// at, so the caller can report it (kuna `honestgaps`).
     pub fn seed_dwarf_register_locals(
         &mut self,
         specs: &[(String, std::rc::Rc<crate::dtype::Datatype>, Address, u64)],
-    ) {
+    ) -> Vec<(String, u64)> {
+        use crate::dtype::TypeFactory;
+        use crate::kuna_dwarfregbind::{BindBlock, BindPoint, BindWrite};
         use crate::varnode::varnode_flags;
-        let starts: std::collections::BTreeSet<u64> = (0..self.bblocks_get_size())
-            .map(|i| {
-                self.bblocks_block_start(self.bblocks_get_block(i))
-                    .get_offset()
+        let ids: Vec<_> = (0..self.bblocks_get_size())
+            .map(|i| self.bblocks_get_block(i))
+            .collect();
+        let position: std::collections::BTreeMap<int4, usize> = ids
+            .iter()
+            .enumerate()
+            .map(|(i, b)| (self.bblocks.block(*b).get_index(), i))
+            .collect();
+        let blocks: Vec<BindBlock> = ids
+            .iter()
+            .map(|b| {
+                let fb = self.bblocks.block(*b);
+                BindBlock {
+                    start: self.bblocks_block_start(*b).get_offset(),
+                    stop: crate::block::block_get_stop(&self.bblocks.arena, *b).get_offset(),
+                    preds: (0..fb.size_in())
+                        .filter_map(|j| {
+                            position
+                                .get(&self.bblocks.block(fb.get_in(j)).get_index())
+                                .copied()
+                        })
+                        .collect(),
+                }
             })
             .collect();
+        let code_space = self.get_address().get_space().map(std::rc::Rc::clone);
         let mut found = Vec::new();
+        let mut unbound = Vec::new();
         for (name, ty, storage, start) in specs {
-            let up = if starts.contains(start) {
-                Some(Address::new(
-                    std::rc::Rc::clone(self.get_address().get_space().expect("code space")),
-                    *start,
-                ))
-            } else {
-                let end = storage.get_offset() + ty.get_size() as u64;
-                let mut best: Option<Address> = None;
-                for vn in self.vbank().iter_loc() {
-                    let Some(v) = self.vbank().get(vn) else {
-                        continue;
-                    };
-                    let covers = v.get_addr().get_space().map(|s| s.get_index())
-                        == storage.get_space().map(|s| s.get_index())
-                        && v.get_addr().get_offset() <= storage.get_offset()
-                        && v.get_addr().get_offset() + v.get_size() as u64 >= end;
-                    if !v.is_written() || !covers {
-                        continue;
-                    }
-                    let up = self.vn_use_point(vn);
-                    let at = up.get_offset();
-                    if at < *start
-                        && start - at <= 16
-                        && best.as_ref().is_none_or(|b| at > b.get_offset())
-                    {
-                        best = Some(up);
-                    }
+            let size = ty.get_size();
+            let end = storage.get_offset() + size as u64;
+            let mut writes = Vec::new();
+            let mut written = Vec::new();
+            for vn in self.vbank().iter_loc() {
+                let Some(v) = self.vbank().get(vn) else {
+                    continue;
+                };
+                let covers = v.get_addr().get_space().map(|s| s.get_index())
+                    == storage.get_space().map(|s| s.get_index())
+                    && v.get_addr().get_offset() <= storage.get_offset()
+                    && v.get_addr().get_offset() + v.get_size() as u64 >= end;
+                if !v.is_written() || !covers {
+                    continue;
                 }
-                best
-            };
-            if let Some(up) = up {
-                found.push((name.clone(), std::rc::Rc::clone(ty), storage.clone(), up));
+                let Some(block) = v
+                    .get_def()
+                    .and_then(|op| self.obank().get(op))
+                    .and_then(|op| op.get_parent())
+                    .and_then(|b| position.get(&self.bblocks.block(b).get_index()).copied())
+                else {
+                    continue;
+                };
+                let up = self.vn_use_point(vn);
+                writes.push(BindWrite {
+                    block,
+                    at: up.get_offset(),
+                    size: v.get_size(),
+                });
+                written.push((v.get_addr().clone(), up));
             }
+            let bind =
+                match crate::kuna_dwarfregbind::reaching_write(&blocks, &writes, *start, size) {
+                    Some(BindPoint::Phi(at)) => code_space.as_ref().map(|s| {
+                        (
+                            storage.clone(),
+                            size,
+                            Address::new(std::rc::Rc::clone(s), at),
+                        )
+                    }),
+                    Some(BindPoint::Write(i)) => {
+                        let (addr, up) = written[i].clone();
+                        Some((addr, writes[i].size, up))
+                    }
+                    None => None,
+                };
+            let Some((addr, width, up)) = bind else {
+                unbound.push((name.clone(), *start));
+                continue;
+            };
+            if width == size {
+                found.push((
+                    name.clone(),
+                    std::rc::Rc::clone(ty),
+                    storage.clone(),
+                    up,
+                    true,
+                ));
+                continue;
+            }
+            let Some(meta) = crate::kuna_dwarfregbind::widened_metatype(ty.get_metatype()) else {
+                unbound.push((name.clone(), *start));
+                continue;
+            };
+            let Some(wide) = self
+                .get_arch()
+                .types()
+                .and_then(|t| t.get_base(width, meta).ok())
+            else {
+                unbound.push((name.clone(), *start));
+                continue;
+            };
+            found.push((name.clone(), wide, addr, up, false));
         }
         let mut seeded = Vec::new();
         if let Some(lm) = self.localmap.as_mut() {
-            for (name, ty, storage, up) in found {
+            for (name, ty, storage, up, typelock) in found {
                 if lm.local_name_used(&name) {
                     continue;
                 }
                 let size = ty.get_size();
                 if let Ok(sym) = lm.add_symbol(&name, ty, &storage, &up) {
-                    lm.set_attribute(sym, varnode_flags::namelock | varnode_flags::typelock);
+                    let lock = if typelock {
+                        varnode_flags::namelock | varnode_flags::typelock
+                    } else {
+                        varnode_flags::namelock
+                    };
+                    lm.set_attribute(sym, lock);
                     seeded.push((storage, size, up));
                 }
             }
         }
         if seeded.is_empty() {
-            return;
+            return unbound;
         }
         let values: Vec<_> = self.vbank().iter_loc().collect();
         for vn in values {
@@ -2548,6 +2620,7 @@ impl Funcdata {
                 self.set_varnode_properties(vn);
             }
         }
+        unbound
     }
 
     /// Re-create the given usepoint-scoped console Symbols (the register-storage

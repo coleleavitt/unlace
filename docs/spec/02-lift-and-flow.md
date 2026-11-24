@@ -4320,6 +4320,11 @@ Exercised by `unlace-cli/tests/hexagon_hmx.rs`: probe rows for all ten
 encodings against LLVM's syntax and a raw image with one instruction per
 packet. Notes in `specs/Ghidra/Processors/Hexagon/README.md`.
 
+### AArch64 SMSTART/SMSTOP text
+
+`smstart`/`smstop` (`AARCH64base.sinc`) print as LLVM does: `smstart`, `smstart sm`, `smstart za`
+(they printed `smstart {}`, `smstart {SM}`). Their p-code is unchanged.
+
 ### AArch64 RMIF
 
 `rmif xn,#shift,#mask` (`AARCH64base.sinc`) rotates `xn` right by `shift` and copies bits

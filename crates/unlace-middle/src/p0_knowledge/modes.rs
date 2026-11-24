@@ -625,6 +625,9 @@ mod tests {
             // only adds a second pass over it.
             "varargsave",
             "dynalloca",
+            // `orexit` (issue #10) was swept on DecBench O2-noinline: it fires on
+            // 6 of 33,396 functions and moves the GED sum by +13 (2 better, 4 worse).
+            "orexit",
         ];
 
         /// Default-off options that predate this test and are **not** in the preset,

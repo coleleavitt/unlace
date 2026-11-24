@@ -471,7 +471,12 @@ creates). A call made only for its effect keeps the count, so it is not pulled
 into a condition as a comma operand. Nothing else in the count changes: the
 call itself, the branch, and any value the block computes for use elsewhere
 still count. Architectures whose call does not store a return address are
-unchanged. Default **off**.
+unchanged. Default **on**: on DecBench O2-noinline (33,396 functions,
+DecBench GED) it moves the sum by -2,062 and GED=0 from 39.09% to 39.20%,
+417 functions better and 158 worse. The losses are mostly shape trades, not
+wrong folds: a fully structured if/else with one return where the source used
+early returns (openssh `sshbuf_find`, 5 -> 18), or a call-result test folded
+into a loop condition as a comma operand (`while (pw = getpwent(), pw)`).
 
 **`condstmts` — a cap on what a folded operand prints before its test.** The
 opposite pressure: Ghidra's own non-complex budget can let a block fold whose

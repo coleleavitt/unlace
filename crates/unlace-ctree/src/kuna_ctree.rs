@@ -34,7 +34,7 @@ crate::kuna_flag!(
     "nestedand",
     "nested ifs folded into &&",
     unset: false,
-    shipped: false
+    shipped: true
 );
 
 crate::kuna_flag!(

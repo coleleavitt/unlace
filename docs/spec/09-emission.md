@@ -5878,7 +5878,7 @@ Itanium exception `if`. `emit_block_if` prints it with no else, the body through
 `emit_part` (`CTree::stmt_for` finds the `if` inside the sequence), then the
 moved arm under `NO_BRANCH`.
 
-With `option nestedand on` (C output; default off), a last pass over the
+With `option nestedand on` (C output; default on), a last pass over the
 statements, outermost first, folds an `if` with no else and no goto whose body is
 another such `if` (not rewritten above) into one `if` over `And(cond, inner)`,
 while the inner `if` prints nothing before its test (`header_prints_nothing`, no
@@ -5887,7 +5887,11 @@ switch-merge or Itanium exception `if`; the fold repeats on the new body.
 `emit_block_if` prints the header through `emit_cond_expr`, which prints an
 `And` exactly as `emit_block_condition` prints a `&&` of two condition blocks: the
 left operand in the `ONLY_BRANCH` state, the `&&` token, the right leaf
-comma-separated, each parenthesized.
+comma-separated, each parenthesized. DecBench parses each `&&` with its own
+result node, so the nested form is not isomorphic to the source's `if (a && b)`:
+on DecBench O2-noinline (33,396 functions, DecBench GED) the pass alone moves
+the sum by -588 (149 functions better, 26 worse) and by -79 more on top of
+`condcallpush`, with no measurable time cost on bash, sshd, ip, certtool and ls.
 
 With `option orexit on` (C output; default off), a pass over every sequence,
 before the `nestedand` pass, folds adjacent `if`s without else into the first
@@ -5898,6 +5902,8 @@ first must print nothing before its test, have a single-leaf condition with no
 comment and no label, and every `if` must be in statement position and not a
 switch-merge or Itanium exception `if`. The first `if`'s condition becomes
 `Or(cond, next)` and the folded `if` an empty sequence, which prints nothing.
+It stays off: on DecBench O2-noinline it fires on 6 functions and moves the
+GED sum by +13 (2 better, 4 worse).
 `emit_cond_expr` prints `Or` as it prints `And`, with the `||` token.
 
 The walk is `printc/kuna_ctreeprint.rs`. The body prints from the root's

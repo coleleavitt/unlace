@@ -621,8 +621,8 @@ Three tiers:
 | if (c) return 0; ... return 1; where the source has return a && b; | [`boolreturn`](#boolreturn----on--off-default-off) |
 | if (c) { ...long body... } else { abort(); } with the error path last | [`noretfirst`](#noretfirst----on--off-default-off) |
 | the main path of a function is nested in an if whose else only exits | [`noretfirst`](#noretfirst----on--off-default-off) |
-| if (a) { if (b) { ... } } where the source wrote one if (a && b) | [`nestedand`](#nestedand----on--off-default-off) |
-| a chain of tests on one pointer prints as nested ifs with no else | [`nestedand`](#nestedand----on--off-default-off) |
+| if (a) { if (b) { ... } } where the source wrote one if (a && b) | [`nestedand`](#nestedand----on--off-default-on) |
+| a chain of tests on one pointer prints as nested ifs with no else | [`nestedand`](#nestedand----on--off-default-on) |
 | if (c) { return a; } else { return b; } where the source returned c ? a : b | [`retternary`](#retternary----on--off-default-off) |
 | a function ends in two returns of a variable and a constant | [`retternary`](#retternary----on--off-default-off) |
 | if (a) goto L; if (b) goto L; where the source wrote one if (a  | [`orexit`](#orexit----on--off-default-off) |
@@ -631,9 +631,9 @@ Three tiers:
 | go interface method calls print as anonymous indirect calls through tab + 0x18 | [`goitabcalls`](#goitabcalls----on--off-default-on) |
 | a go function taking an interface shows no method names at its calls | [`goitabcalls`](#goitabcalls----on--off-default-on) |
 | go itab dispatch renders as code pointer arithmetic | [`goitabcalls`](#goitabcalls----on--off-default-on) |
-| nested if per call result where the source has one if (a && b && c) | [`condcallpush`](#condcallpush----on--off-default-off) |
-| an x86 test of a call result is not folded into the && chain with its neighbours | [`condcallpush`](#condcallpush----on--off-default-off) |
-| condfold on and --mode aggressive do not fold a chain of call-result tests | [`condcallpush`](#condcallpush----on--off-default-off) |
+| nested if per call result where the source has one if (a && b && c) | [`condcallpush`](#condcallpush----on--off-default-on) |
+| an x86 test of a call result is not folded into the && chain with its neighbours | [`condcallpush`](#condcallpush----on--off-default-on) |
+| condfold on and --mode aggressive do not fold a chain of call-result tests | [`condcallpush`](#condcallpush----on--off-default-on) |
 | rule pools spend most of their time re-testing ops nothing changed | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a large function's simplification repeats full sweeps for a handful of rewrites | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a DOS program's globals print as *(short *)0x308e near-pointer dereferences instead of named globals | [`mzdgroup`](#mzdgroup----on--off-default-on) |
@@ -2689,13 +2689,13 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P9/condition-form · kuna · structure-recovery · kuna-noretfirst
 - **Example:** `option noretfirst on`
 
-### `nestedand` -- on | off, default `off`
+### `nestedand` -- on | off, default `on`
 
 - **Symptoms:** if (a) { if (b) { ... } } where the source wrote one if (a && b); a chain of tests on one pointer prints as nested ifs with no else.
 - **What it does:** C output only: print an if whose whole body is another if, neither with an else, as one if over the two conditions joined by &&: `if (a) { if (b) { X } }` becomes `if ((a) && (b)) { X }`, printed the way a structured && condition prints. The inner if must print nothing before its test (no statement, no comment, no label), its condition must be a single leaf, and neither if may print as a switch or an exception form; chains fold from the outside in, so three nested ifs become one if over a && b && c. A rewrite of the C syntax tree (`docs/architecture/ctree.md`): turning it on builds the tree for every printed function. The structurer's own && folding (ruleBlockAnd, condfold) is unchanged; this covers the tests it leaves nested.
-- **When to flip:** Turn on when nested ifs with no else read as one source condition (`if (p && p->x)` chains a compiler laid out as separate tests). Leave off to keep each test as its own if, as Ghidra prints it; with no else the two forms run the same code.
+- **When to flip:** On by default: nested ifs with no else print as the one `&&` condition the source most likely wrote (`if (p && p->x)` chains a compiler laid out as separate tests). DecBench O2-noinline (33,396 functions, DecBench GED): alone sum -588, 149 functions better and 26 worse; -79 more on top of condcallpush (both on: -2,141, GED=0 39.09% -> 39.21%); no measurable time cost. Turn it off to keep each test as its own if, as Ghidra prints it; with no else the two forms run the same code.
 - **Where / provenance:** P9/condition-form · kuna · structure-recovery · kuna-nestedand
-- **Example:** `option nestedand on`
+- **Example:** `option nestedand off`
 
 ### `retternary` -- on | off, default `off`
 
@@ -2721,13 +2721,13 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P1/external-refinement · kuna · type-inference · unlace-25-go-interface-calls
 - **Example:** `option goitabcalls off`
 
-### `condcallpush` -- on | off, default `off`
+### `condcallpush` -- on | off, default `on`
 
 - **Symptoms:** nested if per call result where the source has one if (a && b && c); an x86 test of a call result is not folded into the && chain with its neighbours; condfold on and --mode aggressive do not fold a chain of call-result tests.
 - **What it does:** Do not count a call instruction's own return-address push as a statement when BlockBasic::isComplex sizes a condition block. On x86 a CALL lifts to a stack-pointer adjust, a STORE of the return address and the CALL op, all at the call's address. The main loop builds its structure on its first pass, while that STORE is still live, so every block that tests a call result counts three statements and ruleBlockOr will not put it in an `&&`/`||` chain. Dead-code removal deletes the STORE on a later pass, but the structure is kept, so the chain prints as one nested `if` per call. With this option the STORE is skipped when its block holds a call op at the same address whose result the block's branch reads; a call made only for its effect keeps the count, so it is not pulled into the condition as a comma operand.
-- **When to flip:** Turn on to fold x86 tests of call results into the `&&`/`||` chain the source wrote: `if (*s && strlen(s) <= 0xff && !strchr(s,0x2f))` instead of one nested `if` per call. Leave off to count the push as Ghidra does (one nested `if` per call-result test). Other architectures do not push a return address and are unchanged.
+- **When to flip:** On by default: x86 tests of call results fold into the `&&`/`||` chain the source wrote, `if (*s && strlen(s) <= 0xff && !strchr(s,0x2f))` instead of one nested `if` per call. DecBench O2-noinline (33,396 functions, DecBench GED): sum -2,062, GED=0 39.09% -> 39.20%, 417 functions better and 158 worse; the worst losses are early returns that now print as one if/else with a single return (openssh sshbuf_find 5 -> 18). Turn it off to count the push as Ghidra does (one nested `if` per call-result test). Other architectures do not push a return address and are unchanged.
 - **Where / provenance:** P8/goto-quality · kuna · structure-recovery · unlace-10-andorchain
-- **Example:** `option condcallpush on`
+- **Example:** `option condcallpush off`
 
 ## Analysis & loader passes
 

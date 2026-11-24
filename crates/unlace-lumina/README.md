@@ -22,7 +22,7 @@ unlace masks the operands SLEIGH resolves to addresses, so keys agree with IDA o
 masks do. Keys are always stable between unlace runs, so a self-hosted server (`unlace lumina serve`)
 shares names between unlace users.
 
-The server answers `HELO`, `PULL_MD`, `PUSH_MD`, `GET_LUMINA_INFO` and `GET_LUMINA_STATS`; every
+The server answers `HELO`, `PULL_MD`, `PUSH_MD`, `GET_POP`, `SHOW_HISTORY`, `DUMP_MD`, `GET_LUMINA_INFO` and `GET_LUMINA_STATS`; every
 other packet gets `RPC_FAIL`. The original port's placeholder modules (a JSON-over-HTTP annotation
 server, collaborative editing, a public annotation database, a sharing policy) were not carried over:
 they were behind a never-enabled feature and spoke no Lumina.

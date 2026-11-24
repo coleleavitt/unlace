@@ -414,6 +414,7 @@ unlace_options! { self, p1;
     "charptr" => registered!(crate::charptr::CharPtr),
     "cstringconst" => registered!(crate::cstringconst::CstringConst),
     "charnum" => registered!(crate::charnum::CharNum),
+    "partmacro" => registered!(crate::partmacro::PartMacro),
     "constright" => registered!(crate::constright::ConstRight),
     "signeddec" => registered!(crate::signeddec::SignedDec),
     "wideconst" => registered!(crate::wideconst::WideConst),

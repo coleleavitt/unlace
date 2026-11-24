@@ -15,7 +15,7 @@ use sha2::{Digest, Sha256};
 
 use crate::helo::Helo;
 use crate::messages::{FuncInfo, FuncInfoAndFrequency, PushMd, codes, push_mode};
-use crate::server::{Handler, HeloAccept, LuminaStats, Session};
+use crate::server::{FuncRecord, Handler, HeloAccept, HistoryRecord, LuminaStats, Session};
 
 /// SHA-256 rounds of the stored password hash.
 const PASSWORD_ROUNDS: u32 = 100_000;
@@ -368,6 +368,88 @@ impl Handler for SqliteStore {
             users: count("users")?,
         })
     }
+
+    fn get_pop(&self, _session: &Session, limit: u32) -> io::Result<Vec<FuncRecord>> {
+        let conn = self.conn();
+        let mut stmt = conn
+            .prepare(
+                "SELECT name, size, metadata, popularity, hash FROM funcs
+                 ORDER BY popularity DESC, name ASC
+                 LIMIT ?1",
+            )
+            .map_err(map_err)?;
+        let rows = stmt
+            .query_map(params![i64::from(limit)], |r| record_at(r, 0))
+            .map_err(map_err)?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(map_err)?;
+        Ok(rows)
+    }
+
+    fn show_history(&self, _session: &Session, max_entries: u32) -> io::Result<Vec<HistoryRecord>> {
+        let conn = self.conn();
+        let mut stmt = conn
+            .prepare(
+                "SELECT history.id, history.username, history.ts,
+                        history.name, history.size, history.metadata,
+                        COALESCE(funcs.popularity, 0), history.hash
+                 FROM history
+                 LEFT JOIN funcs ON funcs.hash = history.hash
+                 ORDER BY history.id DESC
+                 LIMIT ?1",
+            )
+            .map_err(map_err)?;
+        let rows = stmt
+            .query_map(params![i64::from(max_entries)], history_row)
+            .map_err(map_err)?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(map_err)?;
+        Ok(rows)
+    }
+
+    fn dump_md(&self, _session: &Session, max_entries: u32) -> io::Result<Vec<FuncRecord>> {
+        let conn = self.conn();
+        let mut stmt = conn
+            .prepare(
+                "SELECT name, size, metadata, popularity, hash FROM funcs
+                 ORDER BY rowid ASC
+                 LIMIT ?1",
+            )
+            .map_err(map_err)?;
+        let rows = stmt
+            .query_map(params![i64::from(max_entries)], |r| record_at(r, 0))
+            .map_err(map_err)?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(map_err)?;
+        Ok(rows)
+    }
+}
+
+/// A function whose columns start at `offset`: name, size, metadata, popularity, hash.
+fn record_at(r: &rusqlite::Row<'_>, offset: usize) -> rusqlite::Result<FuncRecord> {
+    let size: i64 = r.get(offset + 1)?;
+    let popularity: i64 = r.get(offset + 3)?;
+    Ok(FuncRecord {
+        key: r.get(offset + 4)?,
+        info: FuncInfo {
+            name: r.get(offset)?,
+            size: u32::try_from(size).unwrap_or(0),
+            metadata: r.get(offset + 2)?,
+        },
+        popularity: u32::try_from(popularity).unwrap_or(u32::MAX),
+    })
+}
+
+/// A `history` row: id, username, ts, then the function columns at 3.
+fn history_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<HistoryRecord> {
+    let id: i64 = r.get(0)?;
+    let ts: i64 = r.get(2)?;
+    Ok(HistoryRecord {
+        id: u64::try_from(id).unwrap_or(0),
+        username: r.get(1)?,
+        timestamp: u64::try_from(ts).unwrap_or(0),
+        func: record_at(r, 3)?,
+    })
 }
 
 #[cfg(test)]
@@ -462,6 +544,32 @@ mod tests {
         );
         assert!(db.handle_helo(peer(), &helo("root", "wrong")).is_err());
         assert!(db.handle_helo(peer(), &helo("x", "")).is_err());
+    }
+
+    #[test]
+    fn listings_read_the_funcs_and_history_tables() {
+        let db = SqliteStore::open_in_memory().unwrap();
+        let s = session();
+        db.push(&s, &push_of("first", vec![1], push_mode::OVERRIDE))
+            .unwrap();
+        db.push(&s, &push_of("second", vec![2], push_mode::OVERRIDE))
+            .unwrap();
+        let popular = db.get_pop(&s, 10).unwrap();
+        assert_eq!(popular.len(), 1);
+        assert_eq!(popular[0].key, vec![5; 16]);
+        assert_eq!(popular[0].info.name, "second");
+        assert_eq!(popular[0].popularity, 2);
+        assert!(db.get_pop(&s, 0).unwrap().is_empty());
+        let hist = db.show_history(&s, 100).unwrap();
+        assert_eq!(hist.len(), 2);
+        assert!(hist[0].id > hist[1].id);
+        assert_eq!(hist[0].func.info.name, "second");
+        assert_eq!(hist[1].func.info.name, "first");
+        assert_eq!(hist[0].username, "alice");
+        assert_eq!(db.show_history(&s, 1).unwrap().len(), 1);
+        let dumped = db.dump_md(&s, 100).unwrap();
+        assert_eq!(dumped.len(), 1);
+        assert_eq!(dumped[0].info.name, "second");
     }
 
     #[test]

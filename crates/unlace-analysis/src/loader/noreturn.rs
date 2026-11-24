@@ -796,6 +796,10 @@ mod tests {
             "?CallUnexpected@@YAXPBU_s_ESTypeList@@@Z",
             "?_inconsistency@@YAXXZ",
             "?__scrt_throw_std_bad_array_new_length@@YAXXZ",
+            "?AtlThrowImpl@ATL@@YGXJ@Z",
+            "?ThrowMemoryException@?$CSimpleStringT@_W$0A@@ATL@@KAXXZ",
+            "?AfxThrowInternetException@@YGXKK@Z",
+            "?Fail@CDataExchange@@QAEXXZ",
         ] {
             assert!(listed_noreturn(name), "{name}");
         }

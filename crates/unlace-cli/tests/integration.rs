@@ -1,4 +1,6 @@
 // Shared integration-test executable. Process-sensitive tests stay separate.
+#[path = "amdgpu_raw.rs"]
+mod amdgpu_raw;
 #[path = "arcv2_loops.rs"]
 mod arcv2_loops;
 #[path = "chip8.rs"]

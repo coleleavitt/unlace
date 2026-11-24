@@ -4574,3 +4574,32 @@ forbid = ["halt_baddata"]
 test = "ebpf_retindexuse_default_counter_is_returned"
 address = "0x0"
 expect = ["return "]
+
+# Option carryuse: Xtensa has no carry flag, so a 64-bit add branches on the low sum
+# (add a2,a2,a4; bgeu a2,a4,1f; addi a3,a3,1); the returned sum keeps its low word.
+[[family]]
+name = "xtensa_gcc_carryuse"
+loader = "auto"
+args = ["--option", "carryuse", "on"]
+fixture = "crates/unlace-cli/tests/fixtures/xtensa/wide.o"
+forbid = ["void w_"]
+
+[[family.function]]
+test = "xtensa_carryuse_add_const"
+address = "w_add7"
+expect = ["return "]
+
+[[family.function]]
+test = "xtensa_carryuse_add"
+address = "w_add"
+expect = ["return "]
+
+[[family.function]]
+test = "xtensa_carryuse_mul_wide"
+address = "w_mul3"
+expect = ["__umulsidi3(", "return "]
+
+[[family.function]]
+test = "xtensa_carryuse_call8_result"
+address = "w_call7"
+expect = ["ext64(", "return "]

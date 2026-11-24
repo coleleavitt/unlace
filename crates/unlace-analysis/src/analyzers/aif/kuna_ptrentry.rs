@@ -296,6 +296,44 @@ pub fn pointer_entry_seeds(
     accepted.into_iter().collect()
 }
 
+/// How many instructions a pointer target may run before the prologue it falls
+/// into.
+const MAX_SHRINKWRAP_INSNS: usize = 8;
+
+/// (kuna) The accepted pointer targets whose straight-line code runs into one of
+/// `roots`, the starts only the raw Thumb prologue scan found, as
+/// `(target, root)`. GCC delays a Thumb `push {..., lr}` until after the first
+/// instructions (`ldr.w r12,[r0,#0xdc]; push.w {...}`), the scan reports the
+/// `push`, and the routine the pointer names is left as a stub that falls into
+/// it. The run follows fall-through only: a call, a return or an unconditional
+/// branch before the root ends it.
+pub fn shrinkwrap_roots(
+    translate: &dyn Translate,
+    code_space: Rc<AddrSpace>,
+    exec_ranges: &[(u64, u64)],
+    targets: &[u64],
+    roots: &BTreeSet<u64>,
+) -> Vec<(u64, u64)> {
+    let mut decoder = GapDecoder::new(translate, code_space, exec_ranges);
+    let mut out = Vec::new();
+    for &target in targets {
+        let mut at = target;
+        for _ in 0..MAX_SHRINKWRAP_INSNS {
+            if at != target && roots.contains(&at) {
+                out.push((target, at));
+                break;
+            }
+            let Some(insn) = decoder.probe(at) else { break };
+            if insn.is_call || insn.is_terminal {
+                break;
+            }
+            let Some(next) = insn.fall_through else { break };
+            at = next;
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

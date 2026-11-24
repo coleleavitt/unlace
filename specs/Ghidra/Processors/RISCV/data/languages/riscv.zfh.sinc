@@ -1,0 +1,229 @@
+# Zfh / Zfhmin half-precision floating point (RISC-V Zfh 1.0). A half value
+# lives in the low 16 bits of an f register; like the single-precision forms
+# (fassignS) a write zero-extends it to the register. Encodings checked against
+# LLVM's RISC-V assembler and disassembler. Zfhmin is the subset flh, fsh,
+# fmv.x.h, fmv.h.x and the conversions to and from single and double precision.
+
+frs1H: fr1519 is fr1519 { local tmp = fr1519:$(HFLEN); export tmp; }
+frs2H: fr2024 is fr2024 { local tmp = fr2024:$(HFLEN); export tmp; }
+frs3H: fr2731 is fr2731 { local tmp = fr2731:$(HFLEN); export tmp; }
+
+define pcodeop fclass_h;
+
+:flh frd,immI(rs1) is immI & frd & rs1 & op0006=0x07 & funct3=0x1
+{
+	local ea:$(XLEN) = immI + rs1;
+	frd = zext(*[ram]:$(HFLEN) ea);
+}
+
+:fsh frs2H,immS(rs1) is frs2H & immS & rs1 & op0006=0x27 & funct3=0x1
+{
+	local ea:$(XLEN) = immS + rs1;
+	*[ram]:$(HFLEN) ea = frs2H;
+}
+
+:fadd.h frd,frs1H,frs2H,FRM is frs1H & frd & frs2H & FRM & op0006=0x53 & funct7=0x02
+{
+	local tmp:$(HFLEN) = frs1H f+ frs2H;
+	frd = zext(tmp);
+}
+
+:fsub.h frd,frs1H,frs2H,FRM is frs1H & frd & frs2H & FRM & op0006=0x53 & funct7=0x06
+{
+	local tmp:$(HFLEN) = frs1H f- frs2H;
+	frd = zext(tmp);
+}
+
+:fmul.h frd,frs1H,frs2H,FRM is frs1H & frd & frs2H & FRM & op0006=0x53 & funct7=0x0a
+{
+	local tmp:$(HFLEN) = frs1H f* frs2H;
+	frd = zext(tmp);
+}
+
+:fdiv.h frd,frs1H,frs2H,FRM is frs1H & frd & frs2H & FRM & op0006=0x53 & funct7=0x0e
+{
+	local tmp:$(HFLEN) = frs1H f/ frs2H;
+	frd = zext(tmp);
+}
+
+:fsqrt.h frd,frs1H,FRM is frs1H & frd & FRM & op0006=0x53 & funct7=0x2e & op2024=0x0
+{
+	local tmp:$(HFLEN) = sqrt(frs1H);
+	frd = zext(tmp);
+}
+
+:fsgnj.h frd,frs1H,frs2H is frs1H & frd & frs2H & op0006=0x53 & funct3=0x0 & funct7=0x12
+{
+	local tmp:$(HFLEN) = frs1H;
+	tmp[15,1] = frs2H[15,1];
+	frd = zext(tmp);
+}
+
+:fsgnjn.h frd,frs1H,frs2H is frs1H & frd & frs2H & op0006=0x53 & funct3=0x1 & funct7=0x12
+{
+	local tmp:$(HFLEN) = frs1H;
+	tmp[15,1] = !frs2H[15,1];
+	frd = zext(tmp);
+}
+
+:fsgnjx.h frd,frs1H,frs2H is frs1H & frd & frs2H & op0006=0x53 & funct3=0x2 & funct7=0x12
+{
+	local tmp:$(HFLEN) = frs1H;
+	tmp[15,1] = tmp[15,1] ^ frs2H[15,1];
+	frd = zext(tmp);
+}
+
+:fmin.h frd,frs1H,frs2H is frs1H & frd & frs2H & op0006=0x53 & funct3=0x0 & funct7=0x16
+{
+	local a:$(HFLEN) = frs1H;
+	local b:$(HFLEN) = frs2H;
+	frd = zext(a);
+	if (nan(b)) goto inst_next;
+	frd = zext(b);
+	if (nan(a)) goto inst_next;
+	if (b f<= a) goto inst_next;
+	frd = zext(a);
+}
+
+:fmax.h frd,frs1H,frs2H is frs1H & frd & frs2H & op0006=0x53 & funct3=0x1 & funct7=0x16
+{
+	local a:$(HFLEN) = frs1H;
+	local b:$(HFLEN) = frs2H;
+	frd = zext(a);
+	if (nan(b)) goto inst_next;
+	frd = zext(b);
+	if (nan(a)) goto inst_next;
+	if (b f>= a) goto inst_next;
+	frd = zext(a);
+}
+
+:fcvt.s.h frd,frs1H,FRM is frs1H & frd & FRM & op0006=0x53 & funct7=0x20 & op2024=0x2
+{
+	local tmp:$(SFLEN) = float2float(frs1H);
+	fassignS(frd, tmp);
+}
+
+:fcvt.h.s frd,frs1S,FRM is frs1S & frd & FRM & op0006=0x53 & funct7=0x22 & op2024=0x0
+{
+	local tmp:$(HFLEN) = float2float(frs1S);
+	frd = zext(tmp);
+}
+
+@if FPSIZE == "64" || FPSIZE == "128"
+:fcvt.d.h frd,frs1H,FRM is frs1H & frd & FRM & op0006=0x53 & funct7=0x21 & op2024=0x2
+{
+	local tmp:$(DFLEN) = float2float(frs1H);
+	frd = tmp;
+}
+
+:fcvt.h.d frd,frs1D,FRM is frs1D & frd & FRM & op0006=0x53 & funct7=0x22 & op2024=0x1
+{
+	local tmp:$(HFLEN) = float2float(frs1D);
+	frd = zext(tmp);
+}
+@endif
+
+:fcvt.w.h rd,frs1H,FRM is frs1H & rd & FRM & op0006=0x53 & funct7=0x62 & op2024=0x0
+{
+	local tmp:4 = trunc(frs1H);
+	assignW(rd, tmp);
+}
+
+:fcvt.wu.h rd,frs1H,FRM is frs1H & rd & FRM & op0006=0x53 & funct7=0x62 & op2024=0x1
+{
+	local wide:8 = trunc(frs1H);
+	local tmp:4 = wide:4;
+	assignW(rd, tmp);
+}
+
+:fcvt.h.w frd,rs1W,FRM is frd & rs1W & FRM & op0006=0x53 & funct7=0x6a & op2024=0x0
+{
+	local tmp:$(HFLEN) = int2float(rs1W);
+	frd = zext(tmp);
+}
+
+:fcvt.h.wu frd,rs1W,FRM is frd & rs1W & FRM & op0006=0x53 & funct7=0x6a & op2024=0x1
+{
+	local u32:$(XLEN2) = zext(rs1W);
+	local tmp:$(HFLEN) = int2float(u32);
+	frd = zext(tmp);
+}
+
+@if ADDRSIZE == "64"
+:fcvt.l.h rdL,frs1H,FRM is frs1H & rdL & FRM & op0006=0x53 & funct7=0x62 & op2024=0x2
+{
+	rdL = trunc(frs1H);
+}
+
+:fcvt.lu.h rdL,frs1H,FRM is frs1H & rdL & FRM & op0006=0x53 & funct7=0x62 & op2024=0x3
+{
+	rdL = trunc(frs1H);
+}
+
+:fcvt.h.l frd,rs1L,FRM is frd & rs1L & FRM & op0006=0x53 & funct7=0x6a & op2024=0x2
+{
+	local tmp:$(HFLEN) = int2float(rs1L);
+	frd = zext(tmp);
+}
+
+:fcvt.h.lu frd,rs1L,FRM is frd & rs1L & FRM & op0006=0x53 & funct7=0x6a & op2024=0x3
+{
+	local u64:$(XLEN2) = zext(rs1L);
+	local tmp:$(HFLEN) = int2float(u64);
+	frd = zext(tmp);
+}
+@endif
+
+:feq.h rd,frs1H,frs2H is frs1H & frs2H & rd & op0006=0x53 & funct3=0x2 & funct7=0x52
+{
+	rd = zext(frs1H f== frs2H);
+}
+
+:flt.h rd,frs1H,frs2H is frs1H & frs2H & rd & op0006=0x53 & funct3=0x1 & funct7=0x52
+{
+	rd = zext(frs1H f< frs2H);
+}
+
+:fle.h rd,frs1H,frs2H is frs1H & frs2H & rd & op0006=0x53 & funct3=0x0 & funct7=0x52
+{
+	rd = zext(frs1H f<= frs2H);
+}
+
+:fclass.h rd,frs1H is frs1H & rd & op0006=0x53 & funct3=0x1 & funct7=0x72 & op2024=0x0
+{
+	rd = fclass_h(frs1H);
+}
+
+:fmv.x.h rd,frs1H is frs1H & rd & op0006=0x53 & funct3=0x0 & funct7=0x72 & op2024=0x0
+{
+	rd = sext(frs1H);
+}
+
+:fmv.h.x frd,rs1 is frd & rs1 & op0006=0x53 & funct3=0x0 & funct7=0x7a & op2024=0x0
+{
+	frd = zext(rs1:$(HFLEN));
+}
+
+:fmadd.h frd,frs1H,frs2H,frs3H,FRM is frs1H & frd & frs2H & frs3H & FRM & op0006=0x43 & op2526=0x2
+{
+	local tmp:$(HFLEN) = (frs1H f* frs2H) f+ frs3H;
+	frd = zext(tmp);
+}
+
+:fmsub.h frd,frs1H,frs2H,frs3H,FRM is frs1H & frd & frs2H & frs3H & FRM & op0006=0x47 & op2526=0x2
+{
+	local tmp:$(HFLEN) = (frs1H f* frs2H) f- frs3H;
+	frd = zext(tmp);
+}
+
+:fnmsub.h frd,frs1H,frs2H,frs3H,FRM is frs1H & frd & frs2H & frs3H & FRM & op0006=0x4b & op2526=0x2
+{
+	local tmp:$(HFLEN) = (f- (frs1H f* frs2H)) f+ frs3H;
+	frd = zext(tmp);
+}
+
+:fnmadd.h frd,frs1H,frs2H,frs3H,FRM is frs1H & frd & frs2H & frs3H & FRM & op0006=0x4f & op2526=0x2
+{
+	local tmp:$(HFLEN) = (f- (frs1H f* frs2H)) f- frs3H;
+	frd = zext(tmp);
+}

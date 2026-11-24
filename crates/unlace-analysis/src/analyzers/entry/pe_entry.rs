@@ -129,6 +129,7 @@ fn collect_typed<Pe: ImageNtHeaders>(
     pdata_begins(pe, bytes, image_base, out);
     tls_callbacks(pe, bytes, ptr, out);
     super::kuna_pereloccode::reloc_code_pointers(pe, bytes, image_base, ptr, execs, out);
+    out.extend(crate::loader::kuna_peloadconfig::function_starts(pe, bytes));
 }
 
 /// Walk the exception directory (`.pdata`) as an array of `RUNTIME_FUNCTION`

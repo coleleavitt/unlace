@@ -63,6 +63,7 @@
 pub mod kuna_arm64evcall;
 pub mod kuna_itaniumctors;
 pub mod kuna_itaniumrtti;
+pub mod kuna_msvcvtabletypes;
 pub mod kuna_vtabletypes;
 pub mod models;
 pub mod refkind;
@@ -169,6 +170,24 @@ fn emit_classes(
     tds: &[&TypeDescriptor],
     out: &mut AnalysisOutput,
 ) {
+    let (cols, meta_slots) = find_cols(img, rk, tds);
+    for col in &cols {
+        let slots = meta_slots
+            .get(&col.addr)
+            .map(Vec::as_slice)
+            .unwrap_or_default();
+        emit_for_col(img, rk, text, col, slots, out);
+    }
+}
+
+/// Every CompleteObjectLocator naming one of `tds`, in TypeDescriptor order,
+/// and for each the full-pointer slots holding its address (the vftable
+/// `meta` words), in image order.
+pub(super) fn find_cols(
+    img: &ImageBytes,
+    rk: &RefKind,
+    tds: &[&TypeDescriptor],
+) -> (Vec<CompleteObjectLocator>, FxHashMap<u64, Vec<u64>>) {
     let refs = img.scan_refs(rk, &tds.iter().map(|td| td.addr).collect());
     let mut seen_cols = FxHashSet::<u64>::default();
     let mut cols = Vec::new();
@@ -195,19 +214,13 @@ fn emit_classes(
     for (slot, col_addr) in img.scan_ptr_slots(rk, &cols.iter().map(|c| c.addr).collect()) {
         meta_slots.entry(col_addr).or_default().push(slot);
     }
-    for col in &cols {
-        let slots = meta_slots
-            .get(&col.addr)
-            .map(Vec::as_slice)
-            .unwrap_or_default();
-        emit_for_col(img, rk, text, col, slots, out);
-    }
+    (cols, meta_slots)
 }
 
 /// Build the [`RefKind`] for a PE `ctx`: 64-bitness from the file, the image base
 /// from the typed PE optional header, endianness little (every PE arch kuna
 /// supports). `None` if the PE width/header is unparsable.
-fn ref_kind_for(ctx: &AnalysisCtx) -> Option<RefKind> {
+pub(super) fn ref_kind_for(ctx: &AnalysisCtx) -> Option<RefKind> {
     let is64 = ctx.file.is_64();
     let image_base = pe_image_base(ctx.bytes)?;
     Some(RefKind::new(is64, image_base, End::Little))
@@ -238,7 +251,7 @@ fn image_base_of<Pe: ImageNtHeaders>(pe: &object::read::pe::PeFile<Pe>) -> u64 {
 
 /// A candidate RTTI0 found by the `.?A…@@`-name scan: the decoded
 /// [`TypeDescriptor`] at the address `name_offset` bytes before a type-info name.
-fn find_type_descriptors(img: &ImageBytes, rk: &RefKind) -> Vec<TypeDescriptor> {
+pub(super) fn find_type_descriptors(img: &ImageBytes, rk: &RefKind) -> Vec<TypeDescriptor> {
     let mut out = Vec::new();
     // Scan every section for `.?A` (the MSVC type-info name prefix); each occurrence
     // is a candidate name string whose TypeDescriptor base sits `name_offset` bytes
@@ -265,7 +278,7 @@ fn find_type_info_name_addrs(img: &ImageBytes) -> Vec<u64> {
 
 /// The most-agreed-upon `type_info`-vftable pointer among the candidate
 /// TypeDescriptors, or `None` if no pointer reaches [`MIN_TYPE_INFO_AGREEMENT`].
-fn pick_common_type_info_vftable(descriptors: &[TypeDescriptor]) -> Option<u64> {
+pub(super) fn pick_common_type_info_vftable(descriptors: &[TypeDescriptor]) -> Option<u64> {
     use std::collections::HashMap;
     let mut counts: HashMap<u64, usize> = HashMap::new();
     for td in descriptors {
@@ -396,7 +409,7 @@ fn emit_vftable_methods(
 /// the vftable starts at `meta_slot + ptr_size`. `meta_slots` are the full-pointer
 /// slots holding the COL's address, in image order; the word AFTER one is the
 /// vftable base.
-fn recover_vftable(img: &ImageBytes, rk: &RefKind, meta_slots: &[u64]) -> Option<u64> {
+pub(super) fn recover_vftable(img: &ImageBytes, rk: &RefKind, meta_slots: &[u64]) -> Option<u64> {
     let ptr = rk.ptr_size() as u64;
     for &slot in meta_slots {
         let vftable = slot + ptr;

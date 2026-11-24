@@ -490,6 +490,12 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         passes.push(Box::new(
             crate::strings::kuna_strrecords::StrRecordPass::go(),
         ));
+        // (kuna `gopcln`) Source positions and inlined calls from the pclntab:
+        // header and inline-marker comments (`gopcln on`), then per-statement
+        // `file:line` comments (`gopcln lines`). Both self-gate, so a default
+        // run reads nothing.
+        passes.push(Box::new(crate::pclntab::kuna_gopcln::GoPclnPass));
+        passes.push(Box::new(crate::pclntab::kuna_gopcln::GoPclnLinesPass));
         // (kuna `gonoreturn`) BEFORE `gopclntab`, preserving that pass's
         // appended-last contract: apply the vendored Go no-return list to the
         // pclntab's own function list, so a STRIPPED Go binary (no .symtab for
@@ -546,6 +552,13 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
     // and bound to the real-PE path (the XML datatest oracle is untouched).
     if format == object::BinaryFormat::Pe {
         passes.push(Box::new(crate::rtti::RttiPass));
+        // (kuna `vtabletypes`) The typed MSVC vftables, from the same RTTI.
+        passes.push(Box::new(
+            crate::rtti::kuna_msvcvtabletypes::MsvcVtableTypesPass,
+        ));
+        // (kuna `msvceh`) ThrowInfo/CatchableType labels and x64 throw-site
+        // comments. Commit gated, default-OFF.
+        passes.push(Box::new(crate::entry::kuna_msvceh::MsvcEhPass));
     }
 
     // S1 Mach-O Core Foundation constant strings (CFStringPass): when the binary
@@ -2482,13 +2495,14 @@ mod tests {
         }
     }
 
-    /// The Go pass set is exactly the base set plus the four Go-arm passes:
-    /// `fatstrrecords` (the string-record pass's Go arm), then `gonoreturn`
+    /// The Go pass set is exactly the base set plus the six Go-arm passes:
+    /// `fatstrrecords` (the string-record pass's Go arm), then `gopcln` and
+    /// `gopcln_lines` (source positions), then `gonoreturn`
     /// (the pclntab no-return list), then `gotypes` (the runtime-type
     /// harvest), then `gopclntab` (the function-name recovery, keeping its
     /// appended-last contract); no other compiler carries the Go-only ones.
     #[test]
-    fn go_adds_only_the_four_go_passes() {
+    fn go_adds_only_the_six_go_passes() {
         let base = ids(&passes_for(Compiler::Gcc, NON_PE));
         let go = ids(&passes_for(Compiler::Go, NON_PE));
         assert_eq!(
@@ -2513,10 +2527,20 @@ mod tests {
         );
         assert_eq!(
             go.get(go.len() - 4),
+            Some(&"gopcln_lines"),
+            "gopcln_lines precedes gonoreturn"
+        );
+        assert_eq!(
+            go.get(go.len() - 5),
+            Some(&"gopcln"),
+            "gopcln precedes gopcln_lines"
+        );
+        assert_eq!(
+            go.get(go.len() - 6),
             Some(&"fatstrrecords"),
             "the record pass opens the Go block"
         );
-        assert_eq!(go.len(), base.len() + 4, "Go adds exactly four passes");
+        assert_eq!(go.len(), base.len() + 6, "Go adds exactly six passes");
         // No non-Go compiler carries the Go-only passes.
         for c in [
             Compiler::Gcc,
@@ -2529,6 +2553,10 @@ mod tests {
             assert!(
                 !set.contains(&"gopclntab"),
                 "{c:?} must not carry gopclntab"
+            );
+            assert!(
+                !set.contains(&"gopcln") && !set.contains(&"gopcln_lines"),
+                "{c:?} must not carry gopcln"
             );
             assert!(
                 !set.contains(&"gonoreturn"),

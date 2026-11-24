@@ -21,6 +21,9 @@
 //! wholes when the leaves are exactly one of the shapes above (either polarity).
 //! A high word of `b` that is the constant 0 lets the terms that vanish with it
 //! be absent (`ahi s< c`, `ahi < c`).
+//!
+//! A 64-bit `a == b` is branchless too: `(alo ^ blo) | (ahi ^ bhi)` tested
+//! against 0. [`apply_equal_rule`] folds that into one equality of the wholes.
 
 use std::collections::BTreeMap;
 
@@ -594,6 +597,141 @@ fn replace(
     true
 }
 
+/// One word of the other operand of a two-word equality.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Word {
+    Vn(VarnodeId),
+    K(uintb),
+}
+
+fn word(data: &Funcdata, vn: VarnodeId) -> Word {
+    vn_const(data, vn).map_or(Word::Vn(vn), Word::K)
+}
+
+/// The ops of code `opc` that read `vn`.
+fn ops_reading(data: &Funcdata, vn: VarnodeId, opc: OpCode) -> Vec<OpId> {
+    data.vbank()
+        .get(vn)
+        .map(|v| {
+            v.descend_iter()
+                .filter(|&op| data.obank().get(op).is_some_and(|o| o.code() == opc))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// `t` read as `w ^ y`: `y` when `t` is an INT_XOR reading `w`, 0 when `t`
+/// is `w` itself.
+fn xor_with(data: &Funcdata, t: VarnodeId, w: VarnodeId) -> Option<Word> {
+    if t == w {
+        return Some(Word::K(0));
+    }
+    let (op, opc) = def_of(data, t)?;
+    if opc != OpCode::CPUI_INT_XOR {
+        return None;
+    }
+    let (a, b) = (input(data, op, 0)?, input(data, op, 1)?);
+    if a == w {
+        Some(word(data, b))
+    } else if b == w {
+        Some(word(data, a))
+    } else {
+        None
+    }
+}
+
+/// The INT_OR `or` read as `(xlo ^ ylo) | (xhi ^ yhi)`: the words `ylo` and
+/// `yhi` of the other operand of the two-word equality.
+fn eq_pair(data: &Funcdata, or: OpId, xlo: VarnodeId, xhi: VarnodeId) -> Option<(Word, Word)> {
+    let (a, b) = (input(data, or, 0)?, input(data, or, 1)?);
+    for (l, h) in [(a, b), (b, a)] {
+        if let (Some(ylo), Some(yhi)) = (xor_with(data, l, xlo), xor_with(data, h, xhi)) {
+            return Some((ylo, yhi));
+        }
+    }
+    None
+}
+
+/// (kuna) Fold the branchless two-word equality `(xlo ^ ylo) | (xhi ^ yhi)`
+/// compared with 0 into one `==` or `!=` of the two wholes, tried from the
+/// INT_XOR or INT_OR that reads a piece of the split value `i` (called from
+/// `apply_rule_in` alongside upstream's `Equal2Form`, which only knows the
+/// `hi1 == hi2 && lo1 == lo2` form). `y` is two constants (a missing XOR is a
+/// constant 0) or two varnodes, which `find_create_whole` joins.
+#[doc(hidden)]
+pub fn apply_equal_rule(
+    i: &SplitVarnode,
+    workop: OpId,
+    _workishi: bool,
+    data: &mut Funcdata,
+) -> bool {
+    let (Some(lo), Some(hi)) = (i.get_lo(), i.get_hi()) else {
+        return false;
+    };
+    let size = size_of(data, lo);
+    if size <= 0 || size > 4 || size_of(data, hi) != size {
+        return false;
+    }
+    let Some((opc, out)) = data
+        .obank()
+        .get(workop)
+        .and_then(|o| Some((o.code(), o.get_out()?)))
+    else {
+        return false;
+    };
+    let ors = match opc {
+        OpCode::CPUI_INT_OR => vec![workop],
+        OpCode::CPUI_INT_XOR => ops_reading(data, out, OpCode::CPUI_INT_OR),
+        _ => return false,
+    };
+    for or in ors {
+        let Some((ylo, yhi)) = eq_pair(data, or, lo, hi) else {
+            continue;
+        };
+        let Some(orout) = data.obank().get(or).and_then(|o| o.get_out()) else {
+            continue;
+        };
+        if size_of(data, orout) != size {
+            continue;
+        }
+        let mut roots = ops_reading(data, orout, OpCode::CPUI_INT_EQUAL);
+        roots.extend(ops_reading(data, orout, OpCode::CPUI_INT_NOTEQUAL));
+        for root in roots {
+            let (Some(p), Some(q), Some(rc)) = (
+                input(data, root, 0),
+                input(data, root, 1),
+                data.obank().get(root).map(|o| o.code()),
+            ) else {
+                continue;
+            };
+            let zero = if p == orout { q } else { p };
+            if vn_const(data, zero) != Some(0) {
+                continue;
+            }
+            let mut other = SplitVarnode::empty();
+            match (ylo, yhi) {
+                (Word::K(l), Word::K(h)) => {
+                    other.init_partial_const(i.get_size(), (h << (8 * size)) | l)
+                }
+                (Word::Vn(l), Word::Vn(h)) => {
+                    other.init_partial_pieces(data, i.get_size(), Some(l), Some(h))
+                }
+                _ => continue,
+            }
+            if other.exceeds_const_precision() {
+                continue;
+            }
+            let mut x = i.clone();
+            if !prepare_bool_op(data, &mut x, &mut other, root) {
+                continue;
+            }
+            replace_bool_op(data, root, &mut x, &mut other, rc);
+            return true;
+        }
+    }
+    false
+}
+
 /// (kuna) Join two adjacent unlocked input words into one double-precision
 /// input when the low word's borrow or carry is consumed together with the high
 /// word (option `pairparam`).
@@ -608,7 +746,11 @@ fn replace(
 /// the two words one value. The pair is merged with upstream's
 /// `combineInputVarnodes`, its pieces are marked as double-precision pieces, and
 /// `RuleDoubleIn` folds the arithmetic or compare onto the whole, which
-/// prototype recovery then reports as one 8-byte parameter.
+/// prototype recovery then reports as one 8-byte parameter. The rule also fires
+/// on the low word's INT_XOR in the branchless equality
+/// `(xlo ^ ylo) | (xhi ^ yhi)` (folded by [`apply_equal_rule`]) when the other
+/// operand's words are a pair as well: two adjacent input words, the two
+/// SUBPIECEs of one whole, or two constants.
 pub struct RuleDoubleInputPair {
     group: String,
 }
@@ -624,6 +766,9 @@ impl RuleDoubleInputPair {
 /// that spills into an argument slot writes one half, which a joined parameter
 /// can only print as a partial store), and the prototype model accepts the two
 /// words as one parameter (a stack slot; not two separate argument registers).
+/// With option `armpairparam` an aligned argument register pair is accepted
+/// as well, written or not: a later write of a register is a new value, not a
+/// store into the parameter.
 fn input_above(data: &Funcdata, lo: VarnodeId) -> Option<VarnodeId> {
     let v = data.vbank().get(lo)?;
     if !v.is_input() || v.is_type_lock() || v.is_constant() {
@@ -644,8 +789,81 @@ fn input_above(data: &Funcdata, lo: VarnodeId) -> Option<VarnodeId> {
         .vbank()
         .iter_loc_addr_range(&base, &end)
         .any(|id| data.vbank().get(id).is_some_and(|v| v.is_written()));
-    (!h.is_type_lock() && !written && data.get_func_proto().possible_input_param(&base, 2 * size))
-        .then_some(hi)
+    let pair = crate::kuna_armpairparam::joined_pair(data, &base, 2 * size);
+    (!h.is_type_lock()
+        && (pair || (!written && data.get_func_proto().possible_input_param(&base, 2 * size))))
+    .then_some(hi)
+}
+
+/// The input word directly above `lo` in its space, if `lo` is an input.
+fn word_above(data: &Funcdata, lo: VarnodeId) -> Option<VarnodeId> {
+    let v = data.vbank().get(lo)?;
+    if !v.is_input() {
+        return None;
+    }
+    let size = v.get_size();
+    let addr = v.get_addr().clone();
+    let hiaddr = if addr.is_big_endian() {
+        &addr + -(size as i64)
+    } else {
+        &addr + size as i64
+    };
+    data.find_varnode_input(size, &hiaddr)
+}
+
+/// Whether `l` and `h` are the low and high words of one value: two adjacent
+/// input words, or the two SUBPIECEs of one whole.
+fn is_pair(data: &Funcdata, l: VarnodeId, h: VarnodeId) -> bool {
+    if word_above(data, l) == Some(h) {
+        return true;
+    }
+    let piece = |vn: VarnodeId| -> Option<(VarnodeId, uintb)> {
+        let (op, opc) = def_of(data, vn)?;
+        if opc != OpCode::CPUI_SUBPIECE {
+            return None;
+        }
+        Some((input(data, op, 0)?, vn_const(data, input(data, op, 1)?)?))
+    };
+    matches!(
+        (piece(l), piece(h)),
+        (Some((wl, 0)), Some((wh, off))) if wl == wh && off == size_of(data, l) as uintb
+    )
+}
+
+/// The equality trigger of [`RuleDoubleInputPair`]: join an input word read by
+/// the INT_XOR `op` with the word above it when an INT_OR combines `op` with
+/// that word's XOR, and the other operand's words are a pair too.
+fn xor_input_pair(data: &mut Funcdata, op: OpId) -> int4 {
+    let (Some(a), Some(b), Some(out)) = (
+        input(data, op, 0),
+        input(data, op, 1),
+        data.obank().get(op).and_then(|o| o.get_out()),
+    ) else {
+        return 0;
+    };
+    let size = size_of(data, a);
+    if size <= 0 || size > 4 || size_of(data, b) != size {
+        return 0;
+    }
+    let ors = ops_reading(data, out, OpCode::CPUI_INT_OR);
+    let mut joined = false;
+    for lo in [a, b] {
+        if !data.vbank().get(lo).is_some_and(|v| v.is_input()) {
+            continue;
+        }
+        let Some(hi) = input_above(data, lo) else {
+            continue;
+        };
+        let linked = ors.iter().any(|&or| match eq_pair(data, or, lo, hi) {
+            Some((Word::Vn(l), Word::Vn(h))) => is_pair(data, l, h),
+            Some((Word::K(_), Word::K(_))) => true,
+            _ => false,
+        });
+        if linked {
+            joined |= join(data, lo, hi);
+        }
+    }
+    joined as int4
 }
 
 /// Whether some value the carry reaches sums the carry with `hi`.
@@ -715,6 +933,7 @@ impl crate::action::Rule for RuleDoubleInputPair {
             OpCode::CPUI_INT_LESS,
             OpCode::CPUI_INT_LESSEQUAL,
             OpCode::CPUI_INT_CARRY,
+            OpCode::CPUI_INT_XOR,
         ]
     }
 
@@ -727,6 +946,13 @@ impl crate::action::Rule for RuleDoubleInputPair {
             || data.get_func_proto().is_input_locked()
         {
             return 0;
+        }
+        if data
+            .obank()
+            .get(op)
+            .is_some_and(|o| o.code() == OpCode::CPUI_INT_XOR)
+        {
+            return xor_input_pair(data, op);
         }
         let Some(o) = data.obank().get(op) else {
             return 0;

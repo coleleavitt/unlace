@@ -81,6 +81,11 @@ impl AnalysisPass for PeImportCallPass {
             _ => return out,
         }
         out.externref = crate::loader::format::import_slots(ctx.file, ctx.bytes);
+        out.guard_dispatch_slots = crate::loader::kuna_peloadconfig::image_named_slots(ctx.bytes)
+            .into_iter()
+            .filter(|(_, name)| crate::loader::kuna_peloadconfig::DISPATCH_SLOTS.contains(name))
+            .map(|(addr, _)| addr)
+            .collect();
         out
     }
 }
@@ -143,6 +148,44 @@ mod tests {
             "__crtExitProcess",
         ] {
             assert!(name_matches(want, &exact, &wildcard), "missing {want}");
+        }
+    }
+
+    /// The #28 additions: the MSVC CRT /GS reporters, the Microsoft STL `_X*`
+    /// throwers in both decorations and demangled, MFC, comdef and ntdll exits.
+    #[test]
+    fn win32_list_names_the_crt_and_framework_exits() {
+        let (exact, wildcard) = parse_list(PE_WIN32_NORETURN_LIST);
+        for want in [
+            "__report_gsfailure",
+            "__report_securityfailure",
+            "__report_securityfailureEx",
+            "_amsg_exit",
+            "?_Xlength_error@std@@YAXPBD@Z",
+            "?_Xlength_error@std@@YAXPEBD@Z",
+            "?_Xinvalid_argument@std@@YAXPEBD@Z",
+            "?_XGetLastError@std@@YAXXZ",
+            "std::_Xout_of_range",
+            "?unexpected@@YAXXZ",
+            "?AfxThrowMemoryException@@YGXXZ",
+            "?AfxThrowFileException@@YAXHJPEB_W@Z",
+            "AfxThrowInvalidArgException",
+            "?_com_raise_error@@YGXJPAUIErrorInfo@@@Z",
+            "RtlExitUserProcess",
+            "RtlExitUserThread",
+            "RtlRestoreContext",
+        ] {
+            assert!(name_matches(want, &exact, &wildcard), "missing {want}");
+        }
+        for nope in [
+            "_com_issue_error",
+            "?_com_issue_error@@YGXJ@Z",
+            "FatalAppExitA",
+        ] {
+            assert!(
+                !name_matches(nope, &exact, &wildcard),
+                "{nope} must not be no-return"
+            );
         }
     }
 

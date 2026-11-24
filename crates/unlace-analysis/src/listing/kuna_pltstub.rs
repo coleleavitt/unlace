@@ -181,10 +181,9 @@ impl<'a> PltStubs<'a> {
     /// The rows of every chain still open when the body drains, to file as
     /// they were.
     pub(super) fn drain(&mut self) -> Vec<Held> {
-        self.open
-            .drain()
-            .flat_map(|(_, chain)| chain.held)
-            .collect()
+        let mut open: Vec<(u64, Chain)> = self.open.drain().collect();
+        open.sort_unstable_by_key(|&(at, _)| at);
+        open.into_iter().flat_map(|(_, chain)| chain.held).collect()
     }
 }
 

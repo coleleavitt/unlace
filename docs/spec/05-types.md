@@ -3658,6 +3658,53 @@ Not typed: a non-virtual member that is not a constructor or destructor (its
 name cannot tell a static member from one taking `this`), and a class whose
 name two classes of the image share.
 
+### An MSVC class is typed from its RTTI (`kuna_vtabletypes.rs`)
+
+(kuna `vtabletypes`, default on; PE only.) A Windows C++ image built with RTTI
+(MSVC, or clang-cl) carries no method names, so before this a virtual member
+read its object as pointer arithmetic on an untyped first parameter and a
+virtual call as `(**(code **)(*a0 + 8))(a0)`. The MSVC recovery of chapter 01
+reports the classes in the record the typed Itanium vtables use, marked MSVC.
+`install` builds `C_vtbl` and `C` as above with two differences: the vptr
+field is named `__vftable`, the name MSVC's own debug information gives it,
+and a slot no symbol named at analysis time takes the method name of the first
+function it holds that the symbol table now names (a PDB or a demangled export
+gives `Square::area`; a placeholder `sub_`, `FUN_`, `thunk_` or the `rtti`
+pass's `vfunc_<i>` does not count) (`kuna_vtabletypes.rs (symbol_method_name)`).
+A function a vtable holds is a virtual member here too, so its inferred-tier
+`cppsig` declaration with `this` is applied as if proven.
+
+The commit (`crates/unlace-console/src/kuna_msvcclasses.rs (commit)`) then
+gives every function the analysis typed an unlocked input hint `this` of type
+`C *` in the first of RCX, ECX, x0 and r0 the language defines, the way the
+IOKit classes are hinted: the member's other parameters are still recovered from
+its body, and one that never reads the register declares no `this`. On x86 the
+hint applies where the method reads ECX and its recovery took ECX as a
+parameter (the `__thiscall` resolution of chapter 04); a COM method, `__stdcall`
+with `this` on the stack, reads no ECX and takes no hint. Each reported vftable
+whose slot count is its class's becomes a data object of type `C_vtbl`: the
+`rtti` label at its address (`Square::vftable`) is retyped and type-locked,
+else an object `C_vftable` is added.
+
+A vptr store or load types the object it goes through
+(`crates/unlace-bandb-core/src/p5_types/kuna_vtblbase.rs (class_pointer)`).
+`TypeOp::propagateToPointer` turns the type of a value stored through, or
+loaded from, a pointer into a pointer to that type, but a pointer value
+becomes a pointer to an undefined word. When the value is a `C_vtbl *` and
+`C` is a record whose first field, at offset 0, is a pointer to that same
+`C_vtbl` (which only the typed vtables build), the pointer becomes a `C *`
+instead. So a constructor's `*(undefined8 *)param_1 = &Square::vftable`
+reads `param_1->__vftable = &Square::vftable`, `param_1` is a `Square *`, and
+a virtual call on the object reads through the named slot. The rule fires on
+Itanium classes too, wherever a value is typed `C_vtbl *` (a load of a typed
+`vptr` field).
+
+Not typed: a vftable serving a virtual base, and the functions it holds (the
+virtual base has no fixed displacement); a class whose structure name two
+classes share; and `this` of a function whose holders share no class at the
+subobject's offset 0, which is what identical-code folding and `_purecall`
+leave.
+
 ## 5.3 Ranges & consume bits
 
 The rest of the S5 fact fabric (the framing derives from the study in
@@ -3933,6 +3980,20 @@ high word of `b` is read off the leaves, so `b` may be a constant, a split
 value or two unrelated words, which `find_create_whole` joins. Every leaf must
 be accounted for, so a tree with any other term is left alone.
 
+**Branchless equalities.** A 64-bit `a == b` on a 32-bit target is
+`(alo ^ blo) | (ahi ^ bhi)` tested against 0 (`xor`, `xor`, `or`, then
+`sete`/`setne` or a `jne`/`bne`); upstream's `Equal2Form` only knows
+`hi1 == hi2 && lo1 == lo2`. `kuna_borrowcompare.rs (apply_equal_rule)` is
+tried from an INT_XOR or INT_OR reading a piece of a split value, before
+`LogicalForm` on the XOR (which would otherwise build the whole `a ^ b` first)
+and after it on the OR. It reads the INT_OR as one term reading the low piece and
+one reading the high piece, each the piece XORed with a word of `b` or the
+piece itself (a word of `b` that is the constant 0, which simplification has
+already dropped), and rewrites an INT_EQUAL or INT_NOTEQUAL of the OR with 0
+as `a == b` or `a != b`. The words of `b` must be both constants or both
+varnodes, which `find_create_whole` joins. The fold is unconditional: the
+rewritten compare is the same value.
+
 **Pairing input words.** Neither form fires when the two words are separate
 parameters, because nothing marks them as pieces of one value: with no
 prototype, a `long long` parameter on i386 or 32-bit ARM is recovered as two
@@ -3947,10 +4008,16 @@ change it, leaves 4-byte writes that a joined parameter could only print as
 partial stores into it), the prototype model accepts the two words as one
 parameter (`possible_input_param` on the joined
 storage: a stack slot, not two separate argument registers such as ARM's r0
-and r1, which only a declared prototype can join), and that word appears with coefficient +-1 in the same
+and r1, which only a declared prototype or option `armpairparam` (chapter 4) can join), and that word appears with coefficient +-1 in the same
 linear sum as `c` among the values `c` reaches (or in the difference of a
 compare's operands). Propagating the low word's borrow or carry into the high
-word is what makes the two words one value. The rule merges the pair with
+word is what makes the two words one value. The rule also fires on an INT_XOR
+of such an input word: when an INT_OR combines it with the XOR of the word
+above (the branchless equality above), and the other operand's two words are a
+pair too (two adjacent input words, the two SUBPIECEs of one whole, or two
+constants), the input words are joined the same way. Requiring the other
+operand to be a pair keeps the XOR of one parameter's high word from being read
+as the low word of the next parameter. The rule merges the pair with
 `combine_input_varnodes` and marks the two SUBPIECEs it leaves as
 double-precision pieces; `RuleDoubleIn` then folds the arithmetic or compare,
 and `ActionInputPrototype` reports one 8-byte parameter. The rule does nothing

@@ -6,8 +6,16 @@ mod common;
 mod mips_elf_selection;
 #[path = "return_branch_cli.rs"]
 mod return_branch_cli;
+#[path = "riscv_bitmanip.rs"]
+mod riscv_bitmanip;
+#[path = "riscv_crypto.rs"]
+mod riscv_crypto;
+#[path = "riscv_zcb.rs"]
+mod riscv_zcb;
 #[path = "riscv_zcmp.rs"]
 mod riscv_zcmp;
+#[path = "riscv_zfh.rs"]
+mod riscv_zfh;
 #[path = "rust_signature_summary.rs"]
 mod rust_signature_summary;
 #[path = "sparc_prologue_start.rs"]
@@ -123,6 +131,8 @@ mod arm_interwork_cli;
 #[path = "arm_isa_cli.rs"]
 mod arm_isa_cli;
 
+#[path = "arm_register_pair_params.rs"]
+mod arm_register_pair_params;
 #[path = "arm_variadic_returns.rs"]
 mod arm_variadic_returns;
 
@@ -409,6 +419,8 @@ mod overlapbranch_cli;
 #[path = "own_register_returns.rs"]
 mod own_register_returns;
 
+#[path = "pair_equality_compares.rs"]
+mod pair_equality_compares;
 #[path = "pair_return_halves.rs"]
 mod pair_return_halves;
 

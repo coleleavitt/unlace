@@ -3083,6 +3083,38 @@ lines changes. The reorder applies to angr-style names, the default
 `namestyle ghidra` the declarations keep the string order. `option declorder
 name` keeps the string order everywhere.
 
+**(kuna) cppshortnames — standard C++ names as a programmer writes them.**
+A demangled or DWARF type name spells every inline namespace and default
+template argument (`std::__cxx11::basic_string<char, std::char_traits<char>,
+std::allocator<char> >`). The option `cppshortnames` (P9 `naming-policy`,
+default off) respells such a name where the printer writes it, and nothing
+else: the type, its Symbol and every directive keep the full name
+(`crates/unlace-emit/src/p9_emit/kuna_cppshortnames.rs (short_type)`). The C
+declarator speller asks for the short form of a named base type when the
+option is on. The name is parsed into template argument lists (split at
+top-level commas; brackets, parentheses and square brackets nest) and rebuilt
+bottom-up. An inline namespace right after a `std` component (`__cxx11`,
+`__1`, `__2`, `__ndk1`) goes. MSVC's `class`/`struct`/`union`/`enum` argument
+tags go. A character template whose remaining arguments are exactly its
+defaults (`std::char_traits<C>`, and for the string, string-buffer and string
+stream templates `std::allocator<C>`) becomes its alias: `basic_string` and
+`basic_string_view` over any of the five character types (`std::string`,
+`std::u16string_view`), and the stream and buffer templates over `char` and
+`wchar_t` (`std::ostream`, `std::wifstream`). An unqualified DWARF name needs at
+least one default argument to count as the standard template. A standard
+container (`vector`, `deque`, `list`, `forward_list`, the ordered and
+unordered sets and maps, `unique_ptr`) drops trailing arguments while the last
+is `std::allocator`, `std::char_traits`, `std::less`, `std::equal_to`,
+`std::hash` or `std::default_delete` of its first argument, or of
+`std::pair<K const, V>` over its first two; it keeps at least one argument. A
+rewritten name joins arguments with `, ` and closes nested lists as `>>`. A name
+more than 32 levels deep, longer than 4 KiB, or with unbalanced brackets is
+printed as it is. The namespaces printed in front of a declared or called
+function lose an inline namespace after `std` too
+(`kuna_cppshortnames.rs (short_scopes)`). A scope keeps `basic_string`,
+because the demangled symbol name no longer has the template arguments that
+would tell `std::string` from `std::wstring`.
+
 ## 9.4 Strings & comments
 
 **String literals.** A constant pointer whose target type is a character type
@@ -5735,7 +5767,14 @@ Nesting deeper than 2048 blocks stays opaque. `split_statements` then takes the
 tree to `statements`: each leaf holds its basic block's ops in order (a
 `BlockCopy` through the block it mirrors; a leaf of more than 2^20 ops is not
 split), and the leaf printer (`emit_basic_block_ops_in`, with the same filters
-as the block walk) prints from that list. `PrintC::ctree_rewrite` then takes it to `rewritten`:
+as the block walk) prints from that list. `PrintC::ctree_rewrite` first moves three print plans
+into the tree (`ctree_take_plans`): each `if` `switchmerge` prints as a switch
+becomes `SwitchOf`, and `emit_block` asks `switch_of`; `gotonext`'s goto types go
+onto the tree's goto statements (an if-goto's body, a goto block's jump), a goto
+block whose jump it drops loses that statement, and `emit_block_if` and
+`emit_block_goto_from` read both from the tree (`tree_goto_type`); the
+`voidtailreturn` `RETURN` is removed from the op list of the one leaf holding
+it, and the printer's own check is cleared. It then takes the tree to `rewritten`:
 every `if` that the `iteboolean` test and then the `iteregion` test (the same
 tests, in the same order, that `emit_block_if` made while printing) accept becomes
 an assignment statement (`dest = cond`, `dest = !cond`, or `dest = cond ? A : B`

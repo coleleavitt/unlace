@@ -42,10 +42,12 @@
 //! spelling a rename took prints its number.
 //!
 //! [`crate::kuna_contextnames`] adds evidence of its own (loop counters, the
-//! returned local) under `option contextnames`; evidence an option prints is
-//! preferred to evidence only a directive may use.
+//! returned local) under `option contextnames`, and [`crate::kuna_flownames`]
+//! (structure fields, the local's type) under `option flownames`; evidence an
+//! option prints is preferred to evidence only a directive may use.
 
 use crate::kuna_stablenames::FuncdataStablenamesExt;
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_base::address::Address;
@@ -111,19 +113,24 @@ const FOLD_DEPTH: usize = 4;
 
 /// Evidence kinds, strongest first: the value a library call returns, a loop
 /// counter ([`crate::kuna_contextnames`]), a library argument named for what
-/// it is, a role name, and the value the function returns.
+/// it is, a structure field ([`crate::kuna_flownames`]), a role name, the
+/// value the function returns, and the local's type.
 const RET: u8 = 0;
 #[doc(hidden)]
 pub const LOOP: u8 = 1;
 const ARG: u8 = 2;
-const ROLE: u8 = 3;
 #[doc(hidden)]
-pub const RESULT: u8 = 4;
+pub const FIELD: u8 = 3;
+const ROLE: u8 = 4;
+#[doc(hidden)]
+pub const RESULT: u8 = 5;
+#[doc(hidden)]
+pub const TYPE: u8 = 6;
 
 /// One piece of evidence for a local: its kind, the operation (instruction,
 /// creation time), the slot, the name, and whether the output prints it.
 #[doc(hidden)]
-pub type Evidence = (u8, (Address, u32), i32, &'static str, bool);
+pub type Evidence = (u8, (Address, u32), i32, Cow<'static, str>, bool);
 
 fn is_role(name: &str) -> bool {
     ROLE_NAMES.binary_search(&name).is_ok()
@@ -131,7 +138,8 @@ fn is_role(name: &str) -> bool {
 
 /// The value `vn` names when it is printed folded into a statement: through
 /// the implied copy or cast it feeds (`x = (T)call()`), else itself.
-fn folded_into(fd: &Funcdata, mut vn: VarnodeId) -> VarnodeId {
+#[doc(hidden)]
+pub fn folded_into(fd: &Funcdata, mut vn: VarnodeId) -> VarnodeId {
     for _ in 0..FOLD_DEPTH {
         let Some(v) = fd.vbank().get(vn) else { break };
         if !v.is_implied() {
@@ -357,7 +365,7 @@ fn evidence(fd: &mut Funcdata) -> BTreeMap<Target, (HighVariableId, bool, Vec<Ev
                     Target::Local(high),
                     high,
                     false,
-                    (RET, at.clone(), -1, ret, shown),
+                    (RET, at.clone(), -1, ret.into(), shown),
                 );
             }
         }
@@ -375,7 +383,7 @@ fn evidence(fd: &mut Funcdata) -> BTreeMap<Target, (HighVariableId, bool, Vec<Ev
                     Target::Local(high),
                     high,
                     false,
-                    (kind, at.clone(), j as i32, name, shown),
+                    (kind, at.clone(), j as i32, (*name).into(), shown),
                 );
             } else if let Some(obj) = addressed_object(fd, vn).filter(|_| !filler) {
                 if let Some(name) = pointee_name(name, obj.pointer) {
@@ -383,20 +391,30 @@ fn evidence(fd: &mut Funcdata) -> BTreeMap<Target, (HighVariableId, bool, Vec<Ev
                         Target::Object(obj.sym),
                         obj.high,
                         obj.scalar,
-                        (kind, at.clone(), j as i32, name, shown),
+                        (kind, at.clone(), j as i32, name.into(), shown),
                     );
                 }
             }
         }
     }
+    let mut context: BTreeMap<HighVariableId, Vec<Evidence>> = BTreeMap::new();
     if fd
         .get_arch()
         .kuna_options
         .get::<crate::kuna_contextnames::ContextNames>()
         .0
     {
-        let mut context: BTreeMap<HighVariableId, Vec<Evidence>> = BTreeMap::new();
         crate::kuna_contextnames::evidence(fd, &mut context);
+    }
+    if fd
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_flownames::FlowNames>()
+        .0
+    {
+        crate::kuna_flownames::evidence(fd, &mut context);
+    }
+    {
         for (high, evidence) in context {
             found
                 .entry(Target::Local(high))
@@ -410,8 +428,9 @@ fn evidence(fd: &mut Funcdata) -> BTreeMap<Target, (HighVariableId, bool, Vec<Ev
 
 /// The evidence that names a local: printed evidence before evidence only a
 /// directive may use, then the strongest kind, then the earliest call, then
-/// the lowest slot. Results that disagree name nothing, and nor do role names
-/// that disagree, nor, on a `scalar` object, argument names that disagree;
+/// the lowest slot. Results that disagree name nothing, and nor do field or
+/// role names that disagree, nor, on a `scalar` object, argument names that
+/// disagree;
 /// `usable` drops a name the printed code cannot hold (a type name, a
 /// keyword).
 fn decide(
@@ -419,14 +438,18 @@ fn decide(
     scalar: bool,
     usable: &dyn Fn(&str) -> bool,
 ) -> Option<Evidence> {
-    found.retain(|e| usable(e.3));
+    found.retain(|e| usable(&e.3));
     let agree: &[u8] = if scalar {
-        &[RET, ARG, ROLE]
+        &[RET, ARG, FIELD, ROLE]
     } else {
-        &[RET, ROLE]
+        &[RET, FIELD, ROLE]
     };
     for &kind in agree {
-        let names: BTreeSet<&str> = found.iter().filter(|e| e.0 == kind).map(|e| e.3).collect();
+        let names: BTreeSet<&str> = found
+            .iter()
+            .filter(|e| e.0 == kind)
+            .map(|e| &*e.3)
+            .collect();
         if names.len() > 1 {
             found.retain(|e| e.0 != kind);
         }
@@ -485,7 +508,7 @@ fn usable(fd: &Funcdata, name: &str) -> bool {
 pub struct Candidate {
     target: Target,
     high: HighVariableId,
-    base: &'static str,
+    base: Cow<'static, str>,
     at: (Address, u32),
     slot: i32,
     shown: bool,
@@ -518,6 +541,10 @@ pub fn candidates(fd: &mut Funcdata) -> Vec<Candidate> {
         && !arch
             .kuna_options
             .get::<crate::kuna_contextnames::ContextNames>()
+            .0
+        && !arch
+            .kuna_options
+            .get::<crate::kuna_flownames::FlowNames>()
             .0
         && !fd.kuna_record_names()
         && fd.kuna_prior_names().is_empty()
@@ -606,11 +633,11 @@ pub fn apply(fd: &mut Funcdata, candidates: &[Candidate]) {
             Target::Object(_) => index,
         };
         let alias = match prior.aliases.get(&before) {
-            Some(before) if spells(before, c.base) => {
+            Some(before) if spells(before, &c.base) => {
                 Some(before.clone()).filter(|s| free(fd, &taken, s))
             }
             _ => (1..)
-                .map(|k| spelling(c.base, k))
+                .map(|k| spelling(&c.base, k))
                 .find(|s| free(fd, &taken, s) && !(replay && printed_before.contains(s))),
         };
         let Some(alias) = alias else { continue };
@@ -787,14 +814,20 @@ mod tests {
         let at = |o: u64| (Address::new_invalid(), o as u32);
         let any = |_: &str| true;
         let e = decide(
-            vec![(ARG, at(1), 0, "size", true), (RET, at(5), -1, "len", true)],
+            vec![
+                (ARG, at(1), 0, "size".into(), true),
+                (RET, at(5), -1, "len".into(), true),
+            ],
             false,
             &any,
         )
         .unwrap();
         assert_eq!(e.3, "len");
         let e = decide(
-            vec![(ARG, at(7), 0, "fd", true), (ARG, at(3), 2, "stream", true)],
+            vec![
+                (ARG, at(7), 0, "fd".into(), true),
+                (ARG, at(3), 2, "stream".into(), true),
+            ],
             false,
             &any,
         )
@@ -809,8 +842,8 @@ mod tests {
         assert!(
             decide(
                 vec![
-                    (ROLE, at(1), 0, "dest", true),
-                    (ROLE, at(2), 1, "src", true)
+                    (ROLE, at(1), 0, "dest".into(), true),
+                    (ROLE, at(2), 1, "src".into(), true)
                 ],
                 false,
                 &any
@@ -819,9 +852,9 @@ mod tests {
         );
         let e = decide(
             vec![
-                (ROLE, at(1), 0, "s1", true),
-                (ROLE, at(2), 1, "s2", true),
-                (ARG, at(3), 0, "s", true),
+                (ROLE, at(1), 0, "s1".into(), true),
+                (ROLE, at(2), 1, "s2".into(), true),
+                (ARG, at(3), 0, "s".into(), true),
             ],
             false,
             &any,
@@ -830,8 +863,8 @@ mod tests {
         assert_eq!(e.3, "s");
         let e = decide(
             vec![
-                (ROLE, at(1), 0, "dest", true),
-                (ROLE, at(4), 0, "dest", true),
+                (ROLE, at(1), 0, "dest".into(), true),
+                (ROLE, at(4), 0, "dest".into(), true),
             ],
             false,
             &any,
@@ -840,7 +873,10 @@ mod tests {
         assert_eq!(e.3, "dest");
         assert!(
             decide(
-                vec![(RET, at(1), -1, "len", true), (RET, at(2), -1, "pid", true)],
+                vec![
+                    (RET, at(1), -1, "len".into(), true),
+                    (RET, at(2), -1, "pid".into(), true)
+                ],
                 false,
                 &any
             )
@@ -848,9 +884,9 @@ mod tests {
         );
         let e = decide(
             vec![
-                (RET, at(1), -1, "len", true),
-                (RET, at(2), -1, "pid", true),
-                (ARG, at(3), 0, "n", true),
+                (RET, at(1), -1, "len".into(), true),
+                (RET, at(2), -1, "pid".into(), true),
+                (ARG, at(3), 0, "n".into(), true),
             ],
             false,
             &any,
@@ -864,15 +900,15 @@ mod tests {
         let at = |o: u64| (Address::new_invalid(), o as u32);
         let any = |_: &str| true;
         let shared = vec![
-            (ARG, at(1), 1, "buf", true),
-            (ARG, at(2), 4, "optlen", true),
+            (ARG, at(1), 1, "buf".into(), true),
+            (ARG, at(2), 4, "optlen".into(), true),
         ];
         assert_eq!(decide(shared.clone(), false, &any).unwrap().3, "buf");
         assert!(decide(shared, true, &any).is_none());
         let e = decide(
             vec![
-                (ARG, at(1), 1, "stat_loc", true),
-                (ARG, at(2), 0, "stat_loc", true),
+                (ARG, at(1), 1, "stat_loc".into(), true),
+                (ARG, at(2), 0, "stat_loc".into(), true),
             ],
             true,
             &any,
@@ -881,9 +917,9 @@ mod tests {
         assert_eq!(e.3, "stat_loc");
         let e = decide(
             vec![
-                (ARG, at(1), 1, "buf", true),
-                (ARG, at(2), 4, "optlen", true),
-                (ROLE, at(3), 0, "dest", true),
+                (ARG, at(1), 1, "buf".into(), true),
+                (ARG, at(2), 4, "optlen".into(), true),
+                (ROLE, at(3), 0, "dest".into(), true),
             ],
             true,
             &any,
@@ -897,13 +933,63 @@ mod tests {
         let at = |o: u64| (Address::new_invalid(), o as u32);
         let not_tm = |name: &str| name != "tm";
         let e = decide(
-            vec![(RET, at(1), -1, "tm", true), (ARG, at(2), 0, "tp", true)],
+            vec![
+                (RET, at(1), -1, "tm".into(), true),
+                (ARG, at(2), 0, "tp".into(), true),
+            ],
             false,
             &not_tm,
         )
         .unwrap();
         assert_eq!(e.3, "tp");
-        assert!(decide(vec![(RET, at(1), -1, "tm", true)], false, &not_tm).is_none());
+        assert!(decide(vec![(RET, at(1), -1, "tm".into(), true)], false, &not_tm).is_none());
+    }
+
+    #[test]
+    fn a_field_name_ranks_between_an_argument_and_a_role_and_a_type_name_is_last() {
+        let at = |o: u64| (Address::new_invalid(), o as u32);
+        let any = |_: &str| true;
+        let e = decide(
+            vec![
+                (ROLE, at(1), 0, "dest".into(), true),
+                (FIELD, at(5), -1, "len".into(), true),
+            ],
+            false,
+            &any,
+        )
+        .unwrap();
+        assert_eq!(e.3, "len");
+        let e = decide(
+            vec![
+                (FIELD, at(1), -1, "len".into(), true),
+                (ARG, at(5), 2, "nbytes".into(), true),
+            ],
+            false,
+            &any,
+        )
+        .unwrap();
+        assert_eq!(e.3, "nbytes");
+        let e = decide(
+            vec![
+                (TYPE, at(1), -1, "str".into(), true),
+                (RESULT, at(9), -1, "result".into(), true),
+            ],
+            false,
+            &any,
+        )
+        .unwrap();
+        assert_eq!(e.3, "result");
+        let e = decide(
+            vec![
+                (FIELD, at(1), -1, "len".into(), true),
+                (FIELD, at(2), -1, "size".into(), true),
+                (TYPE, at(3), -1, "str".into(), true),
+            ],
+            false,
+            &any,
+        )
+        .unwrap();
+        assert_eq!(e.3, "str");
     }
 
     #[test]
@@ -912,8 +998,8 @@ mod tests {
         let any = |_: &str| true;
         let e = decide(
             vec![
-                (ARG, at(1), 2, "nbytes", true),
-                (LOOP, at(5), -1, "i", true),
+                (ARG, at(1), 2, "nbytes".into(), true),
+                (LOOP, at(5), -1, "i".into(), true),
             ],
             false,
             &any,
@@ -922,8 +1008,8 @@ mod tests {
         assert_eq!(e.3, "i");
         let e = decide(
             vec![
-                (RET, at(1), -1, "fd", false),
-                (RESULT, at(9), -1, "result", true),
+                (RET, at(1), -1, "fd".into(), false),
+                (RESULT, at(9), -1, "result".into(), true),
             ],
             false,
             &any,

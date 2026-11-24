@@ -948,6 +948,14 @@ impl MergeContext for Funcdata {
     fn vn_offset(&self, vn: VarnodeId) -> u64 {
         self.vbank().get(vn).map(|v| v.get_offset()).unwrap_or(0)
     }
+    fn storage_callee_saved(&self, addr: &unlace_base::address::Address, size: int4) -> bool {
+        self.get_func_proto().has_effect(addr, size) == crate::fspec::effect_type::UNAFFECTED
+    }
+    fn vn_storage(&self, vn: VarnodeId) -> Option<(unlace_base::address::Address, int4)> {
+        self.vbank()
+            .get(vn)
+            .map(|v| (v.get_addr().clone(), v.get_size()))
+    }
     fn vn_constant_value(&self, vn: VarnodeId) -> Option<u64> {
         self.vbank()
             .get(vn)

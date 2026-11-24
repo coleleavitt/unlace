@@ -709,6 +709,14 @@ pub struct AnalysisOutput {
     /// load. The commit stashes them on the architecture
     /// (`Architecture::arm_float_library_prototypes`).
     pub arm_float_prototypes: Vec<(Option<u64>, unlace_decomp::fspec::PrototypePieces)>,
+    /// (kuna `honestgaps`) Prototypes the load withheld, by entry address
+    /// (`None`: by name), with why. The commit records them in the
+    /// architecture's `kuna_honestgaps::WithheldPrototypes` table.
+    pub withheld_prototypes: Vec<(
+        Option<u64>,
+        String,
+        unlace_decomp::kuna_honestgaps::WithheldCause,
+    )>,
     /// The C runtime declaration `elfmain` has for an executable's own
     /// symbol-named `main`, keyed by entry address (an ARM Thumb symbol's mode
     /// bit cleared). The commit keeps it OFF the symbol; the drive applies it
@@ -720,6 +728,10 @@ pub struct AnalysisOutput {
     /// whatever the image's default convention is. The commit boundary declares
     /// the prototypes parked under these names with that model.
     pub c_runtime_imports: Vec<String>,
+    /// The Control Flow Guard dispatch pointer slots a PE load configuration
+    /// names (`__guard_dispatch_icall_fptr` and its XFG variants), as VMAs. A
+    /// call through one is the call through the target register it guards.
+    pub guard_dispatch_slots: Vec<u64>,
     /// Processor-context decode-mode paints (the kuna analog of ARM's
     /// `ARM_ElfExtension`/`ArmSymbolAnalyzer` `programContext.setValue(TMode,…)`).
     /// Each sets a SLEIGH context variable over an address range; the commit boundary
@@ -762,12 +774,14 @@ pub struct AnalysisOutput {
     /// Source-line annotations recovered from debug metadata, each to be
     /// installed as a `Comment::user2` so the decompiled output carries the
     /// `file:line` of the instruction. The commit boundary writes each into the
-    /// architecture's `commentdb`. Produced by the DWARF lines pass and the CVF
-    /// trace lines pass (`dwarf_lines on`, `cvftrace lines`); empty otherwise. See
+    /// architecture's `commentdb`. Produced by the DWARF lines pass, the CVF
+    /// trace lines pass and the Go pclntab passes (`dwarf_lines on`,
+    /// `cvftrace lines`, `gopcln`); empty otherwise. See
     /// [`CommentFact`].
     pub comments: Vec<CommentFact>,
     /// (kuna) Function header (plate) comments, keyed by `func_addr`. Produced
-    /// only by [`crate::entry::kuna_itaniumeh::EhNotePass`] (`ehnote`).
+    /// by [`crate::entry::kuna_itaniumeh::EhNotePass`] (`ehnote`) and the Go
+    /// source-position pass (`gopcln`).
     pub header_comments: Vec<CommentFact>,
     /// Functions the FID matcher re-identified by full-hash fingerprint, by
     /// `(addr, name)`. The commit boundary **renames** each (resolved by ADDRESS) only
@@ -1012,6 +1026,9 @@ impl AnalysisOutput {
         self.arm_float_prototypes
             .iter_mut()
             .for_each(|(_, p)| fix_proto(p));
+        self.withheld_prototypes
+            .iter_mut()
+            .for_each(|(_, n, _)| fix(n));
         self.main_decl_at.iter_mut().for_each(|(_, p)| fix_proto(p));
         self.cpp_dwarf
             .symbols
@@ -1220,6 +1237,10 @@ impl AnalysisOutput {
         self.cpp_vtables
             .slot_ranges
             .extend(other.cpp_vtables.slot_ranges);
+        self.cpp_vtables
+            .this_types
+            .extend(other.cpp_vtables.this_types);
+        self.cpp_vtables.tables.extend(other.cpp_vtables.tables);
         self.iokit_cxx
             .vtables
             .classes
@@ -1245,8 +1266,10 @@ impl AnalysisOutput {
         self.prototypes_at.extend(other.prototypes_at);
         self.dwarf_nocall.extend(other.dwarf_nocall);
         self.arm_float_prototypes.extend(other.arm_float_prototypes);
+        self.withheld_prototypes.extend(other.withheld_prototypes);
         self.main_decl_at.extend(other.main_decl_at);
         self.c_runtime_imports.extend(other.c_runtime_imports);
+        self.guard_dispatch_slots.extend(other.guard_dispatch_slots);
         self.context_paints.extend(other.context_paints);
         self.inventory_context_paints
             .extend(other.inventory_context_paints);

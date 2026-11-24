@@ -57,6 +57,8 @@ pub struct SpellCtx {
     /// the spelling per-architecture rather than a guess.
     pub model: crate::kuna_ctypes::CDataModel,
     pub c_type_definition: bool,
+    /// (kuna `cppshortnames`) Print standard C++ type names short.
+    pub cpp_short_names: bool,
     pub go_package: Option<Rc<str>>,
     pub go_pair_types: Option<Rc<crate::dtype::TypeFactoryImpl>>,
 }
@@ -71,6 +73,7 @@ impl SpellCtx {
         ctypes: false,
         model: crate::kuna_ctypes::CDataModel::LP64,
         c_type_definition: false,
+        cpp_short_names: false,
         go_package: None,
         go_pair_types: None,
     };

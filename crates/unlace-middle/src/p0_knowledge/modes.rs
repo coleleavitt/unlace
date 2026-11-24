@@ -607,6 +607,11 @@ mod tests {
             // CLI tests of other features, which run under `auto`, spell as
             // `vN`; it joins the preset once those are re-pinned.
             "contextnames",
+            // `flownames` renames locals from fields and types the same way.
+            "flownames",
+            // `cppshortnames` respells C++ type and scope names that stage
+            // assertions and CLI tests spell in full.
+            "cppshortnames",
             // `mapglobalsyms` makes a function's output depend on which functions
             // were decompiled before it in the same run; in the preset that would
             // make every `decompile-all` under 500 KiB order-dependent.
@@ -635,6 +640,10 @@ mod tests {
         /// `gopairreturns` remains explicit while aggregate ABI interactions across
         /// Go corpus sizes are evaluated for automatic selection.
         const UNEVALUATED: &[&str] = &[
+            // `phiarm` (issue #20) landed without a corpus sweep.
+            "phiarm",
+            // `calleesaved` (issue #20) landed without a corpus sweep.
+            "calleesaved",
             // Landed with fixture measurements only: `funcchunks` changes only FID's
             // input, `tailcallentryall` was measured on Lua and the LLVM tools, and
             "funcchunks",

@@ -522,6 +522,16 @@ crate::kuna_flag!(
 );
 
 crate::kuna_flag!(
+    /// (kuna) Label MSVC `ThrowInfo` chains and comment x64 throw sites (option
+    /// `msvceh`). See `unlace_analysis::entry::kuna_msvceh`.
+    Msvceh,
+    "msvceh",
+    "MSVC C++ exception metadata",
+    unset: false,
+    shipped: false
+);
+
+crate::kuna_flag!(
     /// (kuna, NOVEL) Gate the Itanium (GCC/Clang) RTTI + vtable recovery pass
     /// (`itaniumrtti`); default **off**. Ghidra has no Itanium RTTI analyzer at all
     /// — its `RttiAnalyzer` is Microsoft-only and its GCC class recovery is
@@ -929,6 +939,54 @@ impl crate::kuna_optionset::KunaOption for CvfTrace {
         Ok((
             CvfTrace { names, lines },
             format!("CVF .trace routine names turned {state}"),
+        ))
+    }
+}
+
+/// (kuna `gopcln`) Go pclntab source positions: function headers and inlined calls (`on`), plus every statement's `file:line` (`lines`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GoPcln {
+    pub on: bool,
+    pub lines: bool,
+}
+
+impl crate::kuna_optionset::KunaOption for GoPcln {
+    const NAME: &'static str = "gopcln";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        GoPcln {
+            on: false,
+            lines: false,
+        }
+    }
+
+    fn shipped() -> Self {
+        GoPcln {
+            on: false,
+            lines: false,
+        }
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let (on, lines) = match value.trim().to_ascii_lowercase().as_str() {
+            "on" | "1" | "true" => (true, false),
+            "lines" => (true, true),
+            "off" | "0" | "false" => (false, false),
+            other => {
+                return Err(unlace_base::error::KunaError::lowlevel(format!(
+                    "gopcln: expected `on`, `lines` or `off`, got `{other}`"
+                )));
+            }
+        };
+        let state = match (on, lines) {
+            (false, _) => "off",
+            (true, false) => "on",
+            (true, true) => "on, with source-line comments",
+        };
+        Ok((
+            GoPcln { on, lines },
+            format!("Go pclntab source positions turned {state}"),
         ))
     }
 }

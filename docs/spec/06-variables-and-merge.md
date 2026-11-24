@@ -500,6 +500,49 @@ marking (below), three passes fuse variables to reduce clutter:
   globals and 35 address-tied, and the pass made 61.4 million pair tests in
   25 s for 6 merges.
 
+  Option `typemerge` (`kuna_typemerge.rs (TypeMergeMode)`, read by
+  `coreaction_cleanup.rs (ActionMergeType)` and passed to
+  `merge_by_datatype`) narrows which same-typed highs share a group. The type
+  grouping joins two variables that only share a type wherever each is
+  stored, so two distinct source variables (two loop counters, a saved
+  argument and a later call result) can print as one reused local. `on`, the
+  default, is upstream. `storage` keys each gathered high by the one storage
+  all its instances share (`kuna_typemerge.rs (single_storage)`: same space,
+  offset and size, read through `MergeContext::vn_storage`; a high whose
+  instances differ, or whose context cannot say, has no key) and lets a
+  candidate join a group only when its key equals the group head's
+  (`kuna_typemerge.rs (TypeMergeMode::joins)`), so a slot or register the
+  compiler reused for one value still reads as one variable while values the
+  machine held apart stay apart. `off` clears the gathered list, so no high
+  is joined by type. Both narrower modes still run the prior-decompile groups
+  (`kuna_stablenames.rs (variable_groups)`) and leave every other merge pass
+  alone; they only drop speculative joins.
+
+  Option `phiarm` (`kuna_phiarm.rs (arm_slots)`, default off) acts one step
+  earlier, inside the required merge: `merge.rs (Merge::merge_op)` asks it,
+  after upstream's own trims of a MULTIEQUAL, which inputs are values of their
+  own, and gives each upstream's `trimOpInput` COPY at the end of its
+  predecessor. An input qualifies when the join variable is not address-tied,
+  persistent or an input and a non-marker op reads it; its predecessor is not
+  dominated by the join block (a back edge keeps its induction value in the
+  loop variable); it is written by an op that is not a COPY, MULTIEQUAL or
+  INDIRECT and does not read the join value; and an op other than the
+  MULTIEQUAL, not a marker, reads it. The pair (arm value, join output) is
+  recorded, and `kuna_phiarm.rs (keeps_apart)`, asked by `Merge::merge` and
+  `Merge::merge_test`, refuses any later merge that would join the two again,
+  so a later forced merge trims instead and `ActionMergeCopy` does not undo the
+  split. This is the copy form of Hex-Rays' `BREAK_PHI_ARM_MERGES`.
+
+  Option `calleesaved` (`kuna_calleesaved.rs (span_key)`, default off, set on
+  the merge by `coreaction_cleanup.rs (ActionMergeType)`) narrows
+  `merge_by_datatype` for register reuse across calls. Each gathered high that
+  lives wholly in one processor register the function's own prototype model
+  marks unaffected by calls (`MergeContext::storage_callee_saved`) and whose
+  Cover holds a CALL strictly inside it is keyed by that register; a type group
+  never takes a second high with a key it already holds, so two values the
+  compiler kept in one callee-saved register across different calls stay two
+  variables. Highs without a key group as before.
+
 **Explicit vs implied** — which values get a named token at all. Between the
 required and speculative groups, `coreaction_cleanup.rs (ActionMarkExplicit)`
 decides per Varnode via `coreaction_cleanup.rs (base_explicit)`: explicit
@@ -999,6 +1042,26 @@ is preferred to library evidence that is decided only so a directive can name
 a local, so with `libcnames` off a returned `open` descriptor still prints
 `result`. The option is off by default because it renames locals that other
 features' stage assertions and CLI tests spell as `vN`.
+
+**A local is named from the fields and the type it meets (`flownames`,
+default off).** `crates/unlace-bandb-base/src/p6_variables/kuna_flownames.rs
+(evidence)` adds two more kinds of evidence to the same walk. A field: the
+output of a `LOAD` whose address is a `PTRSUB` of a pointer to a named
+structure, the value a `STORE` through such an address writes, and the value a
+`COPY` takes out of or puts into a member of a stack structure (the Symbol
+`findContainer` gives for the varnode's address), each by the innermost field
+that exactly covers the access, nested structures followed four deep. The name
+is the field's own, leading underscores dropped; a field the analysis made up
+(`field_0x10`), padding (`pad`, `reserved`, `unused`), and any field of a
+structure it synthesized (`struct_3`, `astruct_1`, `frame_2`) give none.
+Field evidence follows the value through the folded copies and casts like
+library evidence, and fields that disagree name nothing. A type: the type of
+the local's name representative, `str` for a pointer to a one-byte `char`,
+`wstr` for a pointer to a UTF-16 or UTF-32 character, and `p_<name>` for a
+pointer to a named structure, `<name>` its last `::` component without
+template arguments. A field ranks below a library argument and above a role
+name and `result`; a type name is the weakest evidence of all, below
+`result`. Off by default for the same reason as `contextnames`.
 
 **The address of a stack object is library evidence too.** A local array,
 structure or scalar whose own address is a library argument

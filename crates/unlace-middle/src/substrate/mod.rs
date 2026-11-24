@@ -28,6 +28,7 @@ pub mod kuna_avxintrin; // (kuna `avxintrinsics`) Intel intrinsic names for the 
 pub mod kuna_budget;
 pub mod kuna_calleefacts;
 pub mod kuna_checkedarena;
+pub mod kuna_dwarfregbind; // (kuna `dwarfscopes`) where a DWARF register local binds
 pub mod kuna_emittedop;
 pub mod kuna_fnmemory;
 pub mod kuna_funcreport;

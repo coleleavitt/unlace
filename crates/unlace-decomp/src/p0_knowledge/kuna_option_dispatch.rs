@@ -133,6 +133,7 @@ kuna_options! { self, p1;
     "v850indirectbranch" => registered!(crate::kuna_v850indbranch::V850IndirectBranch),
     "ptrauthtrap" => registered!(crate::kuna_coreoptions::PtrauthTrap),
     "relronoreturn" => registered!(crate::decompile_drive::RelroNoreturn),
+    "guarddispatch" => registered!(crate::kuna_guarddispatch::GuardDispatch),
     "outlinedinline" => registered!(crate::flow::OutlinedInline),
     "calleeretpurge" => registered!(crate::kuna_calleeretpurge::CalleeRetPurge),
     "stackexitanchor" => registered!(crate::kuna_stackexitanchor::StackExitAnchor),
@@ -227,6 +228,7 @@ kuna_options! { self, p1;
     "rodatastring" => registered!(crate::kuna_rodatastring::RodataString),
     "switchmodbound" => registered!(crate::jumptable::SwitchModuloBound),
     "switchextent" => registered!(crate::jumptable::SwitchExtent),
+    "honestgaps" => registered!(crate::kuna_honestgaps::HonestGaps),
     "constselectjump" => registered!(crate::kuna_constselectjump::ConstSelectMode),
     "switchguardbound" => registered!(crate::jumptable::SwitchGuardBound),
     "highsliceguard" => registered!(crate::jumptable::HighsliceGuard),
@@ -246,6 +248,7 @@ kuna_options! { self, p1;
     "narrowargs" => registered!(crate::kuna_narrowargs::NarrowArgs),
     "regnarrow" => registered!(crate::kuna_regnarrow::NarrowLocals),
     "pairparam" => registered!(crate::kuna_borrowcompare::PairParams),
+    "armpairparam" => registered!(crate::kuna_armpairparam::ArmPairParams),
     "narrowret" => registered!(crate::kuna_narrowret::NarrowRet),
     "regsigned" => registered!(crate::kuna_regnarrow::NarrowSigned),
     "narrowext" => {
@@ -271,6 +274,8 @@ kuna_options! { self, p1;
     "devectorize" => registered!(crate::kuna_devectorize::DevectorizeReduction),
     "strlenscan" => registered!(crate::kuna_strlenscan::StrlenScan),
     "repstring" => registered!(crate::kuna_repstring::RepString),
+    "atomics" => registered!(crate::kuna_atomicops::Atomics),
+    "llscfold" => registered!(crate::kuna_atomicops::LlscFold),
     "copyrun" => registered!(crate::kuna_copyrun::CopyRun),
     "regionstructure" => registered!(crate::region_structurer::RegionStructure),
     "guardarm" => registered!(crate::kuna_ifnoexit::GuardArm),
@@ -297,6 +302,9 @@ kuna_options! { self, p1;
     "switchreturn" => registered!(crate::kuna_switchreturn::SwitchReturn),
     "foldcallret" => registered!(crate::kuna_callretfold::FoldCallReturns),
     "indirectonly" => registered!(crate::kuna_indirectonly::MarkIndirectOnly),
+    "typemerge" => registered!(crate::kuna_typemerge::TypeMergeMode),
+    "phiarm" => registered!(crate::kuna_phiarm::PhiArmSplit),
+    "calleesaved" => registered!(crate::kuna_calleesaved::CalleeSavedSplit),
     "impliedrefs" => {
         let (val, msg) = crate::kuna_impliedrefs::OptionImpliedRefs.apply(p1)?;
         self.max_implied_ref = val;
@@ -354,7 +362,9 @@ kuna_options! { self, p1;
     "castnarrow" => registered!(crate::kuna_castnarrow::CastNarrow),
     "libcnames" => registered!(crate::kuna_libcnames::LibcNames),
     "contextnames" => registered!(crate::kuna_contextnames::ContextNames),
+    "flownames" => registered!(crate::kuna_flownames::FlowNames),
     "declorder" => registered!(crate::kuna_declorder::DeclOrder),
+    "cppshortnames" => registered!(crate::kuna_cppshortnames::CppShortNames),
     "castwiden" => registered!(crate::kuna_castwiden::CastWidenMode),
     "ptrdepthcap" => registered!(crate::coreaction_infertypes::Ptrdepthcap),
     "calltargettype" => registered!(crate::kuna_coreoptions::CallTargetType),
@@ -518,11 +528,13 @@ kuna_options! { self, p1;
     },
     "dwarf" => registered!(crate::kuna_analysisgates::Dwarf),
     "cvftrace" => registered!(crate::kuna_analysisgates::CvfTrace),
+    "gopcln" => registered!(crate::kuna_analysisgates::GoPcln),
     "dwarf_lines" => {
         registered!(crate::kuna_analysisgates::DwarfLines)
     },
     "dwarfnocall" => registered!(crate::kuna_analysisgates::Dwarfnocall),
     "godwarfsig" => registered!(crate::kuna_analysisgates::Godwarfsig),
+    "goitabcalls" => registered!(crate::kuna_goitabcalls::GoItabCalls),
     "cppsig" => registered!(crate::kuna_cppsig::CppSigMode),
     "dwarfglobaltypes" => registered!(crate::kuna_analysisgates::Dwarfglobaltypes),
     "dwarfscopes" => {
@@ -558,6 +570,7 @@ kuna_options! { self, p1;
     },
     "fid" => registered!(crate::kuna_analysisgates::Fid),
     "rtti" => registered!(crate::kuna_analysisgates::Rtti),
+    "msvceh" => registered!(crate::kuna_analysisgates::Msvceh),
     "itaniumrtti" => {
         registered!(crate::kuna_analysisgates::Itaniumrtti)
     },

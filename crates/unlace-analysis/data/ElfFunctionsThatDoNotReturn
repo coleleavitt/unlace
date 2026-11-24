@@ -164,6 +164,62 @@ ZNSt3__120__throw_bad_weak_ptr*
 ZNSt3__119__throw_regex_error*
 ZNSt3__122__libcpp_verbose_abort*
 
+# (kuna, #28) More names a public declaration or a body that cannot return marks
+# no-return, each checked against its source:
+# libsupc++ unwind-cxx.h: `__cxa_call_terminate` and `__cxxabiv1::__unexpected`
+# are `__attribute__((__noreturn__))` (`__terminate` is above).
+cxa_call_terminate
+ZN10__cxxabiv112__unexpectedEPFvvE
+# libgcc unwind-sjlj.c renames `_Unwind_Resume` to `_Unwind_SjLj_Resume`; the body
+# ends in uw_install_context, and the Itanium ABI says it does not return.
+# `_Unwind_Resume_or_Rethrow` returns when no handler is found and stays out.
+Unwind_SjLj_Resume
+# libstdc++: shared_ptr_base.h `std::__throw_bad_weak_ptr` (body is
+# _GLIBCXX_THROW_OR_ABORT), <any> `[[gnu::noreturn]] std::__throw_bad_any_cast`,
+# c++config `_GLIBCXX_NORETURN std::__glibcxx_assert_fail` (GCC 13+).
+ZSt20__throw_bad_weak_ptr*
+throw_bad_weak_ptr
+ZSt20__throw_bad_any_cast*
+throw_bad_any_cast
+ZSt21__glibcxx_assert_fail*
+glibcxx_assert_fail
+# newlib assert.h `__assert_func` (`_ATTRIBUTE ((__noreturn__))`; newlib's
+# `__assert` stays out for the reason given above).
+assert_func
+# Android liblog android/log.h `__android_log_assert` (`__noreturn__`).
+android_log_assert
+# OpenBSD libc sys/stack_protector.c `__stack_smash_handler`: ends in _exit(127).
+stack_smash_handler
+# libiberty.h `xexit` and `xmalloc_failed` (ATTRIBUTE_NORETURN).
+xexit
+xmalloc_failed
+# CPython Include/pyerrors.h `Py_FatalError`, cpython/pyerrors.h
+# `_Py_FatalErrorFunc`, pylifecycle.h `Py_Exit`, cpython/pylifecycle.h
+# `Py_ExitStatusException` (all `_Py_NO_RETURN`).
+Py_FatalError
+Py_FatalErrorFunc
+Py_Exit
+Py_ExitStatusException
+# compiler-rt ubsan_handlers.h: the two UNRECOVERABLE (NORETURN) handlers.
+ubsan_handle_builtin_unreachable
+ubsan_handle_missing_return
+# Linux kernel: tools/objtool/noreturns.h, the kernel's own list of its
+# `__noreturn` functions. Generic names a user program may define with a returning
+# body (`do_exit`, `do_group_exit`, `rest_init`, `stop_this_cpu`) are left out.
+make_task_dead
+do_task_dead
+kthread_exit
+kthread_complete_and_exit
+module_put_and_kthread_exit
+usercopy_abort
+fortify_panic
+vpanic
+nmi_panic_self_stop
+panic_smp_self_stop
+rewind_stack_and_make_dead
+cpu_startup_entry
+start_kernel
+
 # GNU Fortran fatal runtime diagnostics
 _gfortran_runtime_error
 _gfortran_runtime_error_at

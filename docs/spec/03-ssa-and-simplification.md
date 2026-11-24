@@ -1749,6 +1749,23 @@ bounded boolean fan-out first, before dropping guards could hide the proof.
 Thus ordinary UCOMISS conditions keep their ordered forms without granting
 an unguarded MINSS comparison a false complement.
 
+AArch64 FCMP sets V exactly when an input is a NaN, and its signed conditions
+compare N with V: `ge` is `N == V`, `lt` is `N != V`, `gt` and `le` add Z. The
+lift states that without a branch: `ftestNAN` sets `OV = NAN(a) || NAN(b)`
+and `fcomp` sets `NG = a < b`, `ZR = a == b` and `CY = !(a < b)`, the flag
+values the processor gives an unordered compare as well
+(`specs/Ghidra/Processors/AARCH64/data/languages/AARCH64instructions.sinc`).
+Before, `ftestNAN` jumped over `fcomp` on a NaN, `RuleIgnoreNan` removed that
+jump as a NaN guard, and every condition took its ordered form: `le` printed
+as `a <= b`, false where the processor's `le` holds for a NaN. An ordered
+comparison and the NaN test of its operands are never both true, so
+`floatnegation.rs (fold_exclusive_guard)` rewrites `cmp != unordered` as
+`cmp || unordered`, which the guarded folds above then complement, and
+`cmp == unordered` as the complement itself: `(a < b) == (NAN(a) || NAN(b))`
+is `b <= a`. `RuleIgnoreNan` runs it from the NaN test before it drops
+any guard (`tests/stages/aarch64-fcmp-nan.toml`, tools/semantic
+`floats.fcmp`). A comparison that reads memory is left to `nanignore`.
+
 **A float compare read back through a flag's sign bit.** ARM VFP compares in
 `FloatVectorCompare` pack their four results into FPSCR bits 31..28, and
 `vmrs APSR_nzcv, fpscr` copies them into the flags, so `bpl` after

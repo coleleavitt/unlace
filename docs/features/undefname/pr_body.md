@@ -175,7 +175,7 @@ hand-merged: 386 -> 394, and the diff is exactly this test's 8 new keys plus the
 
 ## Test
 
-`tests/stages/ghdec-undefname.xml` carries both mechanisms as real bytes with their
+`tests/stages/ghdec-undefname.toml` carries both mechanisms as real bytes with their
 callees stubbed. Against the pre-fix build **3 of 8 assertions pass**; with the fix,
 8/8. Pass 2 sets `option dedupvardecls off` to pin that neither witness depends on the
 P9 declaration collapse -- this is a P6 naming fix, so the off path renders identically.

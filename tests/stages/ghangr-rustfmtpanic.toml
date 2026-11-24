@@ -1,0 +1,73 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/rust_fmt_panic_real_x86_64',
+    'read symbols',
+    'option setlanguage rust-language',
+    'option rustfmt off',
+    'load function panic_literal',
+    'decompile',
+    'print C',
+    'load function panic_decimal',
+    'decompile',
+    'print C',
+    'option rustfmt on',
+    'print C',
+    'load function panic_literal',
+    'decompile',
+    'print C',
+    'load function panic_hex',
+    'decompile',
+    'print C',
+    'load function panic_reorder',
+    'decompile',
+    'print C',
+    'load function panic_narrow',
+    'decompile',
+    'print C',
+    'load function panic_forwarded',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'panic off and dynamic caller location retain runtime sink'
+count = 3
+literal = 'core::panicking::panic_fmt('
+
+[[match]]
+name = 'literal panic keeps braces Unicode and both newlines'
+count = 1
+literal = 'panic!("literal {{é🙂}}\n\n")'
+
+[[match]]
+name = 'decimal panic keeps terminal LF and primitive width'
+count = 1
+regex = 'panic!\("value=\{\}\\n".*\*const u64'
+
+[[match]]
+name = 'panic hexadecimal width and alternate flag'
+count = 1
+regex = 'panic!\("hex=\{:#010x\}".*\*const u32'
+
+[[match]]
+name = 'panic repeated indices retain order and formats'
+count = 1
+literal = 'panic!("{0:#08x} {1:+06} {2:>5o} {1:+06}"'
+
+[[match]]
+name = 'panic narrow signed arguments retain interpretation'
+count = 1
+regex = 'panic!\("\{:\+\} \{:#x\} \{:08b\}".*\*const i8'

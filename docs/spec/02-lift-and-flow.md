@@ -4207,7 +4207,7 @@ registers are opaque (`lr`/`sr`/`aex` lift to `aux_read`/`aux_write`), as are
 registers, which nothing sets; `bi`/`bih` are computed jumps. The DSP, FPU and
 64-bit multiply-accumulate extensions (major opcodes 6 and 7 and the
 accumulator forms of 5) and ARCompact are not decoded. Exercised by
-`tests/stages/kuna-arcv2-zeroloop.xml` and
+`tests/stages/kuna-arcv2-zeroloop.toml` and
 `kuna-sleigh/tests/arcv2_decode.rs` (one vector per instruction class and
 operand form, assembled by the GNU ARC assembler).
 
@@ -5622,7 +5622,7 @@ opaque pcodeop over its register operands, because the semantics are not
 documented. An iOS kernelcache function that used to stop at its first
 `GENTER` with a bad-instruction halt now decodes through it. These are
 decode-table corrections with no option. Pinned by
-`tests/stages/kuna-a64-sysregs.xml`.
+`tests/stages/kuna-a64-sysregs.toml`.
 
 
 ## 2.15 Itanium exception edges

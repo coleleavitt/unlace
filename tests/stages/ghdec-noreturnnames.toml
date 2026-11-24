@@ -1,0 +1,163 @@
+# No-return names from public declarations (`noreturn_known`).
+#
+# Issue: the vendored no-return lists lacked functions that public headers
+# and sources declare never to return, so a call to one kept a fall-through
+# into whatever followed it: glibc `_Exit` and `thrd_exit`, libstdc++
+# `std::rethrow_exception`, and every Rust panic helper under v0 mangling,
+# the default of current rustc, whose `_RNv...` symbols the legacy
+# `_ZN...17h` prefixes in the Rust list never match.
+#
+# Stage / sub-stage: P1 external-refinement (`unlace-analysis`
+# `loader/noreturn.rs` and the lists under `unlace-analysis/data/`).
+#
+# P0 assertion: `option noreturn_known on|off` (with `noreturn_extern` and
+# `noreturn_externmatch` off in the first pass, which read the same ELF list
+# at flow time).
+#
+# Fixtures: `noreturn_names_x86_64` (g++ -O2, source
+# `noreturn_names_x86_64.cc`) and `rust_noreturn_v0_x86_64` (rustc 1.98.1
+# -C opt-level=2 -C overflow-checks=on, a `no_std` image, source
+# `rust_noreturn_v0_x86_64.rs`).
+#
+# A last pair loads `rust_noreturn_pie_x86_64`, the same source linked as a
+# PIE, whose calls reach the panic helpers through `R_X86_64_RELATIVE` `.got`
+# slots: with `relronoreturn` off `ActionDeindirect` binds them and restarts the
+# function to plant the halt, with it on the halt is planted during flow and
+# nothing restarts; both read the same.
+#
+# Pass 1 (both options off) is the BUG: no call is marked no-return, the C++
+# functions are truncated at the next entry and the Rust ones run into their
+# int3 padding. Pass 2 (default) is the FIX: every listed call is no-return.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/noreturn_names_x86_64',
+    'option noreturn_known off',
+    'option fdeflowbound off',
+    'option itaniumeh off',
+    'read symbols',
+    'load function quit_now',
+    'decompile',
+    'print C',
+    'load function quit_thread',
+    'decompile',
+    'print C',
+    'load function replay',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/noreturn_names_x86_64',
+    'read symbols',
+    'load function quit_now',
+    'decompile',
+    'print C',
+    'load function quit_thread',
+    'decompile',
+    'print C',
+    'load function replay',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/rust_noreturn_v0_x86_64',
+    'option noreturn_known off',
+    'option fdeflowbound off',
+    'read symbols',
+    'load function opt',
+    'decompile',
+    'print C',
+    'load function sum',
+    'decompile',
+    'print C',
+    'load function add',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/rust_noreturn_v0_x86_64',
+    'read symbols',
+    'load function opt',
+    'decompile',
+    'print C',
+    'load function sum',
+    'decompile',
+    'print C',
+    'load function add',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/rust_noreturn_pie_x86_64',
+    'read symbols',
+    'load function opt',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/rust_noreturn_pie_x86_64',
+    'option relronoreturn on',
+    'read symbols',
+    'load function opt',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'NORETURNNAMES #1: _Exit ends the flow'
+count = 1
+regex = '^\s*_Exit\(a0\); // no-return$'
+
+[[match]]
+name = 'NORETURNNAMES #2: thrd_exit ends the flow'
+count = 1
+regex = '^\s*thrd_exit\(a0\); // no-return$'
+
+[[match]]
+name = 'NORETURNNAMES #3: std::rethrow_exception ends the flow'
+count = 1
+regex = 'std::rethrow_exception\(&v1\); // no-return$'
+
+[[match]]
+name = 'NORETURNNAMES #4: off, _Exit and thrd_exit run to the next entry'
+count = 2
+literal = 'funcboundflow: fall-through reached the next function entry'
+
+[[match]]
+name = 'NORETURNNAMES #9: off, replay runs on into its landing pad'
+count = 1
+literal = '_Unwind_Resume(v1);'
+
+[[match]]
+name = 'NORETURNNAMES #10: through a RELRO .got slot the panic helpers end the flow, with relronoreturn off (after the restart) and on (during flow)'
+count = 2
+regex = 'core::option::unwrap_failed\((0x3b00|&panic_loc_rust_noreturn_pie_\w+)\); // no-return$'
+
+[[match]]
+name = 'NORETURNNAMES #5: v0 core::option::unwrap_failed ends the flow'
+count = 1
+regex = 'core::option::unwrap_failed\((0x2003f8|&panic_loc_rust_noreturn_v0_\w+)\); // no-return$'
+
+[[match]]
+name = 'NORETURNNAMES #6: v0 core::slice::index::slice_index_fail ends the flow'
+count = 1
+regex = 'core::slice::index::slice_index_fail\(0,a2,a1,(0x200428|&panic_loc_\w+)\); // no-return$'
+
+[[match]]
+name = 'NORETURNNAMES #7: v0 panic_const_add_overflow ends the flow in sum and add (rangefold drops the dead check in opt)'
+count = 2
+regex = 'core::panicking::panic_const::panic_const_add_overflow\((0x[0-9a-f]+|&panic_loc_\w+)\); // no-return$'
+
+[[match]]
+name = 'NORETURNNAMES #8: off, the Rust calls run into their int3 padding'
+count = 3
+literal = '// int3-pad x'

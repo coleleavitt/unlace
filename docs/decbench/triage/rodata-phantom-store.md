@@ -308,7 +308,7 @@ gated behind `readonlypropagate`.
 Regression surface to check in the PR: functions where a *writable* global array is
 copied and the return-copy split was producing the assignment that made the global's final
 value visible — none observed in 11,817 functions, but `make test` / `make test-stages` /
-`make rust-test` are the gate, plus a `tests/stages/ghdec-returncopysplit.xml` asserting the
+`make rust-test` are the gate, plus a `tests/stages/ghdec-returncopysplit.toml` asserting the
 phantom block is absent (single-pass: no option to toggle).
 
 ## Loose threads (unchanged from round 1, still open)

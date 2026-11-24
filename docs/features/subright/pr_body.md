@@ -136,7 +136,7 @@ which upstream lowers the same way. Corpus-wide count of that shape: 0 → 2.
 
 ## Test
 
-`tests/stages/ghdec-subright.xml`, two-pass over a real `binary -> decompile` path, on a
+`tests/stages/ghdec-subright.toml`, two-pass over a real `binary -> decompile` path, on a
 44-byte i386 bytechunk built from
 
 ```c

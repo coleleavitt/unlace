@@ -75,7 +75,7 @@ bisecting."
 
 ## Test
 
-`tests/stages/ghdec-subright.xml`, two-pass over a real `binary -> decompile`
+`tests/stages/ghdec-subright.toml`, two-pass over a real `binary -> decompile`
 path, on a 44-byte i386 bytechunk built from
 
     void put_u32_be(u8 *p, u32 v) { p[0] = (v >> 24) & 0xff; ... }

@@ -9930,7 +9930,7 @@ Declared prototypes and explicit return storage keep precedence throughout.
 This is scalar inference, not aggregate or vector ABI reconstruction: a
 homogeneous float aggregate returned in `d0`-`d3` (`struct { double a, b; }`,
 `_Complex double`) prints as a `double` holding only its first member, and needs
-a declared type. The stage test `tests/stages/kuna-arm-float-return.xml` runs a raw image,
+a declared type. The stage test `tests/stages/kuna-arm-float-return.toml` runs a raw image,
 a relocatable object and a linked PIE with the option off and on; the CLI tests
 in `crates/unlace-cli/tests/arm_float_returns.rs` cover narrowing,
 widening, metadata controls and explicit contracts. ABI references:

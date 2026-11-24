@@ -1,0 +1,177 @@
+# kuna castimplied (P9, sub-stage cast-policy; option castimplied on|off).
+#
+# Source: the 2026-09-23 cast census.  CastStrategyC::isExtensionCastImplied
+# (cast.cc:249) hides an extension only under integer arithmetic, so every
+# widening that reaches a call argument, an assignment or a return prints as
+# a cast even where C performs exactly that conversion itself.
+#
+# gcc -O0 -fno-pie of these static functions (the bytes below are .text):
+#
+#   sinki(int x)             declared below: extern int4 sinki(int4 x)
+#   sinkl(long x)            no declaration: its prototype is a trial
+#   prf(const char *f, ...)  declared below with a varargs tail
+#   argi(char c)       { return sinki(c); }
+#   argl(int i)        { return sinkl(i); }
+#   vararg(f, int i)   { return prf(f, (long)i); }
+#   asg(s, n)          { ... long x; x = s[i]; sum += x * x + x; ... }
+#   ret(int i)         { return i; }
+#   stacked(t, char c) { int i = to_uchar(c); return t[i]; }
+#   keepinner(u, o)    { *o = u >> 1; return (long)(int)u; }
+#
+# Pass 1 (option castimplied off) is the upstream rendering: #1, #5, #7, #9
+# and #11 show a cast C would perform by itself.  Pass 2 (option castimplied
+# on) leaves those out (#2, #6, #8, #10, #12): the declared int4 parameter
+# converts the char argument, the int8 local converts the loaded char, the
+# int8 return converts the int4, and the (uint4) widening under (int4) keeps
+# the value the (uint1) cast produced.  Both passes keep the casts that change
+# the value or that C does not perform: an argument to a callee with no
+# declared prototype (#3), a varargs argument (#4), the (uint1) sign change
+# under the widening (#10) and the (int4) sign change under a dropped
+# widening (#12).
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'sinki' },
+    { space = 'ram', offset = '0x100f', name = 'sinkl' },
+    { space = 'ram', offset = '0x1021', name = 'prf' },
+    { space = 'ram', offset = '0x1086', name = 'to_uchar' },
+    { space = 'ram', offset = '0x1095', name = 'argi' },
+    { space = 'ram', offset = '0x10af', name = 'argl' },
+    { space = 'ram', offset = '0x10c9', name = 'vararg' },
+    { space = 'ram', offset = '0x10f4', name = 'asg' },
+    { space = 'ram', offset = '0x1150', name = 'ret' },
+    { space = 'ram', offset = '0x115e', name = 'stacked' },
+    { space = 'ram', offset = '0x1192', name = 'keepinner' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+hex = '''
+554889e5897dfc8b45fc83c0015dc3554889e548897df8488b45f84883c0025d
+c3554889e54883ec484889bd48ffffff4889b558ffffff48899560ffffff4889
+8d68ffffff4c898570ffffff4c898d78ffffff84c074200f2945800f294d900f
+2955a00f295db00f2965c00f296dd00f2975e00f297df0488b8548ffffff0fb6
+000fbec0c9c3554889e589f88845fc0fb645fc5dc3554889e54883ec0889f888
+45fc0fbe45fc89c7e853ffffffc9c3554889e54883ec08897dfc8b45fc489848
+89c7e848ffffffc9c3554889e54883ec1048897df88975f48b45f44863d0488b
+45f84889d64889c7b800000000e82fffffffc9c3554889e548897dd88975d448
+c745f000000000c745ec00000000eb328b45ec4863d0488b45d84801d00fb600
+480fbec0488945f8488b45f8480fafc04889c2488b45f84801d0480145f08345
+ec018b45ec3b45d47cc6488b45f05dc3554889e5897dfc8b45fc48985dc35548
+89e54883ec2048897de889f08845e40fbe45e489c7e80cffffff0fb6c08945fc
+8b45fc4863d0488b45e84801d00fb600c9c3554889e5897dfc488975f08b45fc
+d1e889c2488b45f089108b45fc48985dc3
+'''
+
+[script]
+commands = [
+    'parse line extern int4 sinki(int4 x);',
+    'parse line extern int4 prf(char *f, ...);',
+    'option castimplied off',
+    'lo fu argi',
+    'decompile',
+    'print C',
+    'lo fu argl',
+    'decompile',
+    'print C',
+    'lo fu vararg',
+    'decompile',
+    'print C',
+    'lo fu asg',
+    'decompile',
+    'print C',
+    'lo fu ret',
+    'decompile',
+    'print C',
+    'lo fu stacked',
+    'decompile',
+    'print C',
+    'lo fu keepinner',
+    'decompile',
+    'print C',
+    'option castimplied on',
+    'lo fu argi',
+    'decompile',
+    'print C',
+    'lo fu argl',
+    'decompile',
+    'print C',
+    'lo fu vararg',
+    'decompile',
+    'print C',
+    'lo fu asg',
+    'decompile',
+    'print C',
+    'lo fu ret',
+    'decompile',
+    'print C',
+    'lo fu stacked',
+    'decompile',
+    'print C',
+    'lo fu keepinner',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'castimplied #1: with the option off a char passed to a declared int4 parameter carries the (int4) C applies itself'
+count = 1
+literal = 'sinki((int4)a0);'
+
+[[match]]
+name = 'castimplied #2: with the option on the argument is passed bare'
+count = 1
+literal = 'sinki(a0);'
+
+[[match]]
+name = 'castimplied #3: a callee with no declared prototype keeps the cast in both passes'
+count = 2
+literal = 'sinkl((int8)a0);'
+
+[[match]]
+name = 'castimplied #4: a varargs argument keeps the cast in both passes'
+count = 2
+literal = 'prf(a0,(int8)a1);'
+
+[[match]]
+name = 'castimplied #5: with the option off a widening assigned to a local declared int8 carries an (int8)'
+count = 1
+literal = 'v1 = (int8)a0[v2];'
+
+[[match]]
+name = 'castimplied #6: with the option on the assignment converts'
+count = 1
+literal = 'v1 = a0[v2];'
+
+[[match]]
+name = 'castimplied #7: with the option off an int4 returned from an int8 function carries an (int8)'
+count = 1
+literal = 'return (int8)a0;'
+
+[[match]]
+name = 'castimplied #8: with the option on the return converts'
+count = 1
+literal = 'return a0;'
+
+[[match]]
+name = 'castimplied #9: with the option off one byte is widened through three casts'
+count = 1
+literal = '(int4)(uint4)(uint1)to_uchar((int4)a1)'
+
+[[match]]
+name = 'castimplied #10: with the option on the widening under (int4) goes and the (uint1) sign change stays'
+count = 1
+literal = 'a0[(int4)(uint1)to_uchar((int4)a1)]'
+
+[[match]]
+name = 'castimplied #11: with the option off the return widens a sign-changed value'
+count = 1
+literal = 'return (int8)(int4)a0;'
+
+[[match]]
+name = 'castimplied #12: with the option on the widening goes and the (int4) sign change stays'
+count = 1
+literal = 'return (int4)a0;'

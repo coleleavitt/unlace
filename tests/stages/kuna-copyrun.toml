@@ -1,0 +1,116 @@
+# Unrolled element copies as memcpy (`option copyrun on|off`, default on;
+# stage P3, the late fullloop pass after `repstring`).
+#
+# The fixtures are copyrun.c (gcc -O2, x86-64: struct assignments and a
+# 31-byte memcpy gcc expands into SSE and overlapping 8-byte moves) and the
+# i386 repstring fixture, whose 32-byte struct copy gcc -Os expands into
+# eight 4-byte moves.
+#
+# The first pass of each image (`option copyrun off`) prints one assignment
+# per element. The second (the shipped default) prints one builtin_memcpy
+# per run: 64 bytes, the same 64 bytes into the second half of one struct,
+# the 31 bytes the overlapping moves cover, and the i386 32 bytes. A
+# two-word copy keeps its two assignments, and a copy into a frame local
+# (`local`) keeps its loads.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/copyrun_x86_64',
+    'option copyrun off',
+    'read symbols',
+    'load function copy_struct',
+    'decompile',
+    'print C',
+    'load function shift',
+    'decompile',
+    'print C',
+    'load function copy31',
+    'decompile',
+    'print C',
+    'load function small',
+    'decompile',
+    'print C',
+    'load function local',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/copyrun_x86_64',
+    'read symbols',
+    'load function copy_struct',
+    'decompile',
+    'print C',
+    'load function shift',
+    'decompile',
+    'print C',
+    'load function copy31',
+    'decompile',
+    'print C',
+    'load function small',
+    'decompile',
+    'print C',
+    'load function local',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/copyrun_i386',
+    'option copyrun off',
+    'read symbols',
+    'load function copy_struct',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/copyrun_i386',
+    'read symbols',
+    'load function copy_struct',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'COPYRUN #1: off, every element is its own assignment'
+count = 1
+literal = 'a0[0xf] = a0[7];'
+
+[[match]]
+name = 'COPYRUN #2: on, a 64-byte struct copy is one memcpy'
+count = 1
+literal = 'builtin_memcpy(a0,a1,0x40);'
+
+[[match]]
+name = 'COPYRUN #3: on, a copy within one struct offsets its destination'
+count = 1
+literal = 'builtin_memcpy((void *)((int8)a0 + 0x40),a0,0x40);'
+
+[[match]]
+name = 'COPYRUN #4: on, overlapping 8-byte moves cover 31 bytes'
+count = 1
+literal = 'builtin_memcpy(a0,a1,0x1f);'
+
+[[match]]
+name = 'COPYRUN #5: on, the i386 word moves are one 32-byte memcpy'
+count = 1
+literal = 'builtin_memcpy(a0,a1,0x20);'
+
+[[match]]
+name = 'COPYRUN #6: a two-word copy keeps its assignments'
+count = 2
+literal = 'a0->field_0x8 = a1->field_0x8;'
+
+[[match]]
+name = 'COPYRUN #7: a copy into a frame local keeps its loads'
+count = 2
+literal = 'v8 = a0[7];'

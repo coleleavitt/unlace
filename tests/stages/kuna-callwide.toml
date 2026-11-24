@@ -1,0 +1,94 @@
+# Kuna GH-904: P4 calls and prototypes, option callwide (default off).
+# The script loads the committed sealed MIPS32-BE ELF, including its root,
+# all six callers and consumer-only DWARF. No producer prototype is supplied.
+# Both passes explicitly use narrowext compiler, which establishes the
+# compiler extension of the same producer's narrow caller returns.
+#
+# Assert #1 is the off-pass bug: produce_sum returns only its four-byte
+# high word. Asserts #2-#3 prove the on-pass producer has an eight-byte
+# return in high:low order, including carry from the low addition.
+# Asserts #4-#7 prove the full-width sink caller and high-byte caller retain
+# their declared contracts rather than acquiring a raw pair boundary.
+# The CLI companion executes the original bytes and untouched emitted C
+# with their actual header over eight vectors and both composition helpers.
+
+[image]
+arch = 'MIPS:BE:32:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '03e0000800000000'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/callwide/mips32_be_dwarf.elf',
+    'option ctypes on',
+    'option dwarf on',
+    'option bejoin evidence',
+    'option narrowext compiler',
+    'option callwide off',
+    'read symbols',
+    'load function produce_sum',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/callwide/mips32_be_dwarf.elf',
+    'option ctypes on',
+    'option dwarf on',
+    'option bejoin evidence',
+    'option narrowext compiler',
+    'option callwide on',
+    'read symbols',
+    'callwide prepare',
+    'load function produce_sum',
+    'decompile',
+    'print C',
+    'load function caller64',
+    'decompile',
+    'print C',
+    'load function caller_high8',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'callwide #1: off keeps only the four-byte high return'
+count = 1
+regex = '^int produce_sum\('
+
+[[match]]
+name = 'callwide #2: on promotes the original producer to eight bytes'
+count = 1
+regex = '^unsigned long long produce_sum\('
+
+[[match]]
+name = 'callwide #3: on joins carry-adjusted high word then low sum'
+count = 1
+literal = 'return CONCAT44(a2 + a0 + (unsigned int)(a3 + a1 < a3),a3 + a1);'
+
+[[match]]
+name = 'callwide #4: the full-width caller keeps two eight-byte arguments'
+count = 1
+regex = '^unsigned long long caller64\(unsigned long long a0,unsigned long long a1\)'
+
+[[match]]
+name = 'callwide #5: the sink receives the unchanged full-width result'
+count = 1
+literal = 'return consume64(value);'
+
+[[match]]
+name = 'callwide #6: high-byte caller keeps its narrow result and wide inputs'
+count = 1
+regex = '^unsigned char caller_high8\(unsigned long long a0,unsigned long long a1\)'
+
+[[match]]
+name = 'callwide #7: high-byte caller reads the high word of the promoted result'
+count = 1
+regex = 'return \(unsigned long long\)produce_sum\(.*\) >> 0x20;'

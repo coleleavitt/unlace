@@ -1387,7 +1387,7 @@ conditional with remaining p-code in its instruction keeps the original flow,
 as does an unbounded conditional. `off` retains clipping for an out-of-extent
 conditional even when its target is declared. A false edge that itself crosses
 the bound still receives the missing halt and out-of-bounds warning.
-`tests/stages/kuna-conditional-tail.xml` pins argument order, both direct modes,
+`tests/stages/kuna-conditional-tail.toml` pins argument order, both direct modes,
 backward value-returning tails, no-return callees, inlining, and these refusals.
 
 `option tailcalljump` takes three values. `off` disables the rule, `direct`
@@ -1998,7 +1998,7 @@ for `BUG`/`WARN`, KGDB, kprobes, KASAN, KCFI). They keep the jump-as-call,
 except for a `#0x800` the image's `__bug_table` names (next paragraph). Only
 the AArch64 specs define `SoftwareBreakpoint`; elsewhere the lookup of its
 user-op index fails before any op is walked. Exercised by
-`tests/stages/kuna-brktrap.xml`.
+`tests/stages/kuna-brktrap.toml`.
 
 **(kuna) A Linux kernel `WARN`/`BUG` site prints as the statement it is — always
 on, `crates/unlace-lift/src/p2_lift/kuna_kernelbug.rs (rewrite)`.**

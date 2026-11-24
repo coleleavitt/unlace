@@ -1,0 +1,120 @@
+# Kuna GH-1649: embedded images and archives (`blobs on|off`, default on).
+#
+# Issue: a PNG, JPEG, GIF, zip or gzip stored in `.rodata` was visible only as
+# the string fragments of its header (`PNG`, `IHDR`, `IDATx`), and a function
+# returning it printed a bare address: `return 0x3c0;`.
+#
+# Stage / sub-stage: P1 program prep. The `blobs` pass
+# (`unlace-analysis/src/analyzers/blobs`) finds each magic number in the mapped
+# sections and keeps a candidate only when its container structure walks to
+# its end, which gives the exact length. The commit
+# (`unlace-console/src/kuna_blobdata.rs`) plants `<kind>_<addr>` typed
+# `unsigned char[length]` and drops the string facts inside the file. A
+# constant equal to a file's first address is weighed as a pointer even below
+# the pointer lower bound and with a mask-like bit pattern (`0x3c0`).
+#
+# Fixture: `crates/unlace-analysis/tests/fixtures/embedded_blobs_x86_64.so`,
+# a stripped shared object built from `embedded_blobs_x86_64.c` (recipe in the
+# file): six arrays, each returned by one function. Five are whole files
+# (PNG 69 bytes, GIF 47, JPEG 331, zip 297, gzip 86); `broken` is the PNG cut
+# before its IEND chunk.
+#
+# Two passes. Off: #1-#2 the PNG and the zip are bare addresses. Default: #3-#7
+# each whole file is returned by name, #8 the functions return a byte pointer,
+# #9 the truncated PNG stays a bare address in both passes.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/embedded_blobs_x86_64.so',
+    'option blobs off',
+    'read symbols',
+    'load function get_logo',
+    'decompile',
+    'print C',
+    'load function get_archive',
+    'decompile',
+    'print C',
+    'load function get_broken',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/embedded_blobs_x86_64.so',
+    'read symbols',
+    'load function get_logo',
+    'decompile',
+    'print C',
+    'load function get_icon',
+    'decompile',
+    'print C',
+    'load function get_photo',
+    'decompile',
+    'print C',
+    'load function get_archive',
+    'decompile',
+    'print C',
+    'load function get_packed',
+    'decompile',
+    'print C',
+    'load function get_broken',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'blobs off #1: the PNG is a bare address'
+count = 1
+regex = '^  return 0x3c0;$'
+
+[[match]]
+name = 'blobs off #2: the zip is a bare address'
+count = 1
+regex = '^  return 0x590;$'
+
+[[match]]
+name = 'blobs #3: the PNG is returned by name'
+count = 1
+regex = '^  return png_3c0;$'
+
+[[match]]
+name = 'blobs #4: the GIF is returned by name'
+count = 1
+regex = '^  return gif_410;$'
+
+[[match]]
+name = 'blobs #5: the JPEG is returned by name'
+count = 1
+regex = '^  return jpeg_440;$'
+
+[[match]]
+name = 'blobs #6: the zip is returned by name'
+count = 1
+regex = '^  return zip_590;$'
+
+[[match]]
+name = 'blobs #7: the gzip is returned by name'
+count = 1
+regex = '^  return gzip_6c0;$'
+
+[[match]]
+name = 'blobs #8: each named file is a byte pointer'
+count = 5
+regex = '^uint1 \* get_[a-z]+\('
+
+[[match]]
+name = 'blobs #9: the truncated PNG is not a file in either pass'
+count = 2
+regex = '^  return 0x720;$'

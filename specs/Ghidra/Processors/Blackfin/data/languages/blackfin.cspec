@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<compiler_spec>
+  <data_organization>
+    <absolute_max_alignment value="0"/>
+    <machine_alignment value="4"/>
+    <default_alignment value="1"/>
+    <default_pointer_alignment value="4"/>
+    <pointer_size value="4"/>
+    <wchar_size value="4"/>
+    <short_size value="2"/>
+    <integer_size value="4"/>
+    <long_size value="4"/>
+    <long_long_size value="8"/>
+    <float_size value="4"/>
+    <double_size value="8"/>
+    <long_double_size value="8"/>
+    <size_alignment_map>
+      <entry size="1" alignment="1"/>
+      <entry size="2" alignment="2"/>
+      <entry size="4" alignment="4"/>
+      <entry size="8" alignment="4"/>
+    </size_alignment_map>
+  </data_organization>
+  <global>
+    <range space="ram"/>
+  </global>
+  <stackpointer register="SP" space="ram"/>
+  <returnaddress>
+    <register name="RETS"/>
+  </returnaddress>
+  <default_proto>
+    <prototype name="__stdcall" extrapop="0" stackshift="0">
+      <input>
+        <pentry minsize="1" maxsize="4">
+          <register name="R0"/>
+        </pentry>
+        <pentry minsize="1" maxsize="4">
+          <register name="R1"/>
+        </pentry>
+        <pentry minsize="1" maxsize="4">
+          <register name="R2"/>
+        </pentry>
+        <pentry minsize="1" maxsize="500" align="4">
+          <addr offset="12" space="stack"/>
+        </pentry>
+      </input>
+      <output>
+        <pentry minsize="1" maxsize="4">
+          <register name="R0"/>
+        </pentry>
+        <pentry minsize="5" maxsize="8">
+          <addr space="join" piece1="R1" piece2="R0"/>
+        </pentry>
+      </output>
+      <unaffected>
+        <register name="R4"/>
+        <register name="R5"/>
+        <register name="R6"/>
+        <register name="R7"/>
+        <register name="P3"/>
+        <register name="P4"/>
+        <register name="P5"/>
+        <register name="FP"/>
+        <register name="SP"/>
+      </unaffected>
+      <killedbycall>
+        <register name="R0"/>
+        <register name="R1"/>
+        <register name="R2"/>
+        <register name="R3"/>
+        <register name="P0"/>
+        <register name="P1"/>
+        <register name="P2"/>
+        <register name="I0"/>
+        <register name="I1"/>
+        <register name="I2"/>
+        <register name="I3"/>
+        <register name="M0"/>
+        <register name="M1"/>
+        <register name="M2"/>
+        <register name="M3"/>
+        <register name="B0"/>
+        <register name="B1"/>
+        <register name="B2"/>
+        <register name="B3"/>
+        <register name="L0"/>
+        <register name="L1"/>
+        <register name="L2"/>
+        <register name="L3"/>
+        <register name="A0"/>
+        <register name="A1"/>
+        <register name="LC0"/>
+        <register name="LT0"/>
+        <register name="LB0"/>
+        <register name="LC1"/>
+        <register name="LT1"/>
+        <register name="LB1"/>
+        <register name="RETS"/>
+        <register name="CC"/>
+        <register name="AZ"/>
+        <register name="AN"/>
+        <register name="AC0"/>
+        <register name="AC1"/>
+        <register name="AV0"/>
+        <register name="AV0S"/>
+        <register name="AV1"/>
+        <register name="AV1S"/>
+        <register name="AQ"/>
+        <register name="V"/>
+        <register name="VS"/>
+        <register name="AC0_COPY"/>
+        <register name="V_COPY"/>
+      </killedbycall>
+    </prototype>
+  </default_proto>
+</compiler_spec>

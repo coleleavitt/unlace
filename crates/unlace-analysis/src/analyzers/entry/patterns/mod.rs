@@ -560,7 +560,7 @@ const PPC_BE: (&str, &str) = ("PPC_BE_patterns.xml", include_str!("PPC_BE_patter
 
 /// The environment variable naming a directory of pattern files that replace
 /// the vendored ones of the same name (IDA's `PATTERN_SEARCH_DIR`).
-pub const PATTERN_DIR_ENV: &str = "KUNA_PATTERN_DIR";
+pub const PATTERN_DIR_ENV: &str = "UNLACE_PATTERN_DIR";
 
 /// The contents of `name` in the user's pattern directory, when it has one.
 fn user_file(name: &str) -> Option<String> {

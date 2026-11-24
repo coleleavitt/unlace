@@ -43,7 +43,7 @@
 //! [`MAX_ROUNDS`] times. A function an installed interface points at that the
 //! budget left out is decoded then, from a reserve of its own.
 //!
-//! `KUNA_UEFI_DEBUG` prints each service call the walk read.
+//! `UNLACE_UEFI_DEBUG` prints each service call the walk read.
 
 use super::protocols;
 use super::types::EfiTypes;
@@ -148,7 +148,7 @@ pub(super) struct Found {
     pub(super) lookups: Vec<(u64, u64, [u8; 16])>,
     /// Service calls by the table they went through.
     pub(super) owners: BTreeMap<String, usize>,
-    /// `KUNA_UEFI_DEBUG`: one line per service call read.
+    /// `UNLACE_UEFI_DEBUG`: one line per service call read.
     pub(super) trace: Vec<String>,
 }
 

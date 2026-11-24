@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 
 use super::{Reader, kuna_dwarflocation};
 
-pub const DWARFSCOPES_ENV: &str = "KUNA_DWARFSCOPES";
+pub const DWARFSCOPES_ENV: &str = "UNLACE_DWARFSCOPES";
 
 pub fn enabled() -> bool {
     unlace_base::env::var(DWARFSCOPES_ENV).map_or(true, |v| {

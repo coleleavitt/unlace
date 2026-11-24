@@ -25,7 +25,7 @@
 //! rule without `AF_SIGMLT`). The names go out as [`FidMatch`] renames, so they
 //! only replace `sub_` placeholders.
 //!
-//! The signature files are named by `KUNA_FLIRT_SIGS` (`:`-separated files or
+//! The signature files are named by `UNLACE_FLIRT_SIGS` (`:`-separated files or
 //! directories).
 
 pub mod kuna_flirtpat;
@@ -100,7 +100,7 @@ impl AnalysisPass for FlirtPass {
 }
 
 /// Parse the signature files the load names (`LoadOptions::flirt_sigs`, else
-/// `KUNA_FLIRT_SIGS`: files, or directories
+/// `UNLACE_FLIRT_SIGS`: files, or directories
 /// whose `*.sig` files are all taken) that apply to a binary of `format`:
 /// startup signatures and those whose header excludes the file type are left
 /// out. Unreadable or malformed files are skipped.

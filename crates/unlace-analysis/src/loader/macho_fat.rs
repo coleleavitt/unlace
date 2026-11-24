@@ -237,7 +237,7 @@ mod tests {
     }
 
     /// The preference order the CLI and the dispatch share. A load scope stands
-    /// in for the environment, so the ambient `KUNA_MACHO_SLICE` cannot reach
+    /// in for the environment, so the ambient `UNLACE_MACHO_SLICE` cannot reach
     /// these assertions.
     #[test]
     fn slice_pref_prefers_an_explicit_slice_over_a_target_stem() {

@@ -1,0 +1,523 @@
+# ESP32-S3 PIE operand forms and instructions (generated, see xtensa_esp32s3_pie_defs.sinc).
+
+PIE0: "q0" is pie24_21_20=0 & pie24_15_15=0 { export q0; }
+PIE0: "q1" is pie24_21_20=0 & pie24_15_15=1 { export q1; }
+PIE0: "q2" is pie24_21_20=1 & pie24_15_15=0 { export q2; }
+PIE0: "q3" is pie24_21_20=1 & pie24_15_15=1 { export q3; }
+PIE0: "q4" is pie24_21_20=2 & pie24_15_15=0 { export q4; }
+PIE0: "q5" is pie24_21_20=2 & pie24_15_15=1 { export q5; }
+PIE0: "q6" is pie24_21_20=3 & pie24_15_15=0 { export q6; }
+PIE0: "q7" is pie24_21_20=3 & pie24_15_15=1 { export q7; }
+PIE1: "q0" is pie24_11_10=0 & pie24_5_5=0 { export q0; }
+PIE1: "q1" is pie24_11_10=0 & pie24_5_5=1 { export q1; }
+PIE1: "q2" is pie24_11_10=1 & pie24_5_5=0 { export q2; }
+PIE1: "q3" is pie24_11_10=1 & pie24_5_5=1 { export q3; }
+PIE1: "q4" is pie24_11_10=2 & pie24_5_5=0 { export q4; }
+PIE1: "q5" is pie24_11_10=2 & pie24_5_5=1 { export q5; }
+PIE1: "q6" is pie24_11_10=3 & pie24_5_5=0 { export q6; }
+PIE1: "q7" is pie24_11_10=3 & pie24_5_5=1 { export q7; }
+PIE2: "q0" is pie24_7_6=0 & pie24_4_4=0 { export q0; }
+PIE2: "q1" is pie24_7_6=0 & pie24_4_4=1 { export q1; }
+PIE2: "q2" is pie24_7_6=1 & pie24_4_4=0 { export q2; }
+PIE2: "q3" is pie24_7_6=1 & pie24_4_4=1 { export q3; }
+PIE2: "q4" is pie24_7_6=2 & pie24_4_4=0 { export q4; }
+PIE2: "q5" is pie24_7_6=2 & pie24_4_4=1 { export q5; }
+PIE2: "q6" is pie24_7_6=3 & pie24_4_4=0 { export q6; }
+PIE2: "q7" is pie24_7_6=3 & pie24_4_4=1 { export q7; }
+PIE3: "a0" is pie24_7_4=0 { export a0; }
+PIE3: "a1" is pie24_7_4=1 { export a1; }
+PIE3: "a2" is pie24_7_4=2 { export a2; }
+PIE3: "a3" is pie24_7_4=3 { export a3; }
+PIE3: "a4" is pie24_7_4=4 { export a4; }
+PIE3: "a5" is pie24_7_4=5 { export a5; }
+PIE3: "a6" is pie24_7_4=6 { export a6; }
+PIE3: "a7" is pie24_7_4=7 { export a7; }
+PIE3: "a8" is pie24_7_4=8 { export a8; }
+PIE3: "a9" is pie24_7_4=9 { export a9; }
+PIE3: "a10" is pie24_7_4=10 { export a10; }
+PIE3: "a11" is pie24_7_4=11 { export a11; }
+PIE3: "a12" is pie24_7_4=12 { export a12; }
+PIE3: "a13" is pie24_7_4=13 { export a13; }
+PIE3: "a14" is pie24_7_4=14 { export a14; }
+PIE3: "a15" is pie24_7_4=15 { export a15; }
+PIE4: "q0" is pie24_14_14=0 & pie24_12_11=0 { export q0; }
+PIE4: "q1" is pie24_14_14=0 & pie24_12_11=1 { export q1; }
+PIE4: "q2" is pie24_14_14=0 & pie24_12_11=2 { export q2; }
+PIE4: "q3" is pie24_14_14=0 & pie24_12_11=3 { export q3; }
+PIE4: "q4" is pie24_14_14=1 & pie24_12_11=0 { export q4; }
+PIE4: "q5" is pie24_14_14=1 & pie24_12_11=1 { export q5; }
+PIE4: "q6" is pie24_14_14=1 & pie24_12_11=2 { export q6; }
+PIE4: "q7" is pie24_14_14=1 & pie24_12_11=3 { export q7; }
+PIE5: "q0" is pie24_10_8=0 { export q0; }
+PIE5: "q1" is pie24_10_8=1 { export q1; }
+PIE5: "q2" is pie24_10_8=2 { export q2; }
+PIE5: "q3" is pie24_10_8=3 { export q3; }
+PIE5: "q4" is pie24_10_8=4 { export q4; }
+PIE5: "q5" is pie24_10_8=5 { export q5; }
+PIE5: "q6" is pie24_10_8=6 { export q6; }
+PIE5: "q7" is pie24_10_8=7 { export q7; }
+PIE6: v is pie24_5_4 [ v = (pie24_5_4 << 0); ] { export *[const]:4 v; }
+PIE7: "q0" is pie32_25_24=0 & pie32_19_19=0 { export q0; }
+PIE7: "q1" is pie32_25_24=0 & pie32_19_19=1 { export q1; }
+PIE7: "q2" is pie32_25_24=1 & pie32_19_19=0 { export q2; }
+PIE7: "q3" is pie32_25_24=1 & pie32_19_19=1 { export q3; }
+PIE7: "q4" is pie32_25_24=2 & pie32_19_19=0 { export q4; }
+PIE7: "q5" is pie32_25_24=2 & pie32_19_19=1 { export q5; }
+PIE7: "q6" is pie32_25_24=3 & pie32_19_19=0 { export q6; }
+PIE7: "q7" is pie32_25_24=3 & pie32_19_19=1 { export q7; }
+PIE8: "q0" is pie32_13_12=0 & pie32_23_23=0 { export q0; }
+PIE8: "q1" is pie32_13_12=0 & pie32_23_23=1 { export q1; }
+PIE8: "q2" is pie32_13_12=1 & pie32_23_23=0 { export q2; }
+PIE8: "q3" is pie32_13_12=1 & pie32_23_23=1 { export q3; }
+PIE8: "q4" is pie32_13_12=2 & pie32_23_23=0 { export q4; }
+PIE8: "q5" is pie32_13_12=2 & pie32_23_23=1 { export q5; }
+PIE8: "q6" is pie32_13_12=3 & pie32_23_23=0 { export q6; }
+PIE8: "q7" is pie32_13_12=3 & pie32_23_23=1 { export q7; }
+PIE9: "q0" is pie32_18_16=0 { export q0; }
+PIE9: "q1" is pie32_18_16=1 { export q1; }
+PIE9: "q2" is pie32_18_16=2 { export q2; }
+PIE9: "q3" is pie32_18_16=3 { export q3; }
+PIE9: "q4" is pie32_18_16=4 { export q4; }
+PIE9: "q5" is pie32_18_16=5 { export q5; }
+PIE9: "q6" is pie32_18_16=6 { export q6; }
+PIE9: "q7" is pie32_18_16=7 { export q7; }
+PIE10: "q0" is pie32_0_0=0 & pie32_15_14=0 { export q0; }
+PIE10: "q1" is pie32_0_0=0 & pie32_15_14=1 { export q1; }
+PIE10: "q2" is pie32_0_0=0 & pie32_15_14=2 { export q2; }
+PIE10: "q3" is pie32_0_0=0 & pie32_15_14=3 { export q3; }
+PIE10: "q4" is pie32_0_0=1 & pie32_15_14=0 { export q4; }
+PIE10: "q5" is pie32_0_0=1 & pie32_15_14=1 { export q5; }
+PIE10: "q6" is pie32_0_0=1 & pie32_15_14=2 { export q6; }
+PIE10: "q7" is pie32_0_0=1 & pie32_15_14=3 { export q7; }
+PIE11: v is pie32_9_8 [ v = (pie32_9_8 << 0); ] { export *[const]:4 v; }
+PIE12: "a0" is pie32_7_4=0 { export a0; }
+PIE12: "a1" is pie32_7_4=1 { export a1; }
+PIE12: "a2" is pie32_7_4=2 { export a2; }
+PIE12: "a3" is pie32_7_4=3 { export a3; }
+PIE12: "a4" is pie32_7_4=4 { export a4; }
+PIE12: "a5" is pie32_7_4=5 { export a5; }
+PIE12: "a6" is pie32_7_4=6 { export a6; }
+PIE12: "a7" is pie32_7_4=7 { export a7; }
+PIE12: "a8" is pie32_7_4=8 { export a8; }
+PIE12: "a9" is pie32_7_4=9 { export a9; }
+PIE12: "a10" is pie32_7_4=10 { export a10; }
+PIE12: "a11" is pie32_7_4=11 { export a11; }
+PIE12: "a12" is pie32_7_4=12 { export a12; }
+PIE12: "a13" is pie32_7_4=13 { export a13; }
+PIE12: "a14" is pie32_7_4=14 { export a14; }
+PIE12: "a15" is pie32_7_4=15 { export a15; }
+PIE13: "q0" is pie32_22_20=0 { export q0; }
+PIE13: "q1" is pie32_22_20=1 { export q1; }
+PIE13: "q2" is pie32_22_20=2 { export q2; }
+PIE13: "q3" is pie32_22_20=3 { export q3; }
+PIE13: "q4" is pie32_22_20=4 { export q4; }
+PIE13: "q5" is pie32_22_20=5 { export q5; }
+PIE13: "q6" is pie32_22_20=6 { export q6; }
+PIE13: "q7" is pie32_22_20=7 { export q7; }
+PIE14: v is pie32_25_25 [ v = (pie32_25_25 << 0); ] { export *[const]:4 v; }
+PIE15: "q0" is pie32_24_24=0 & pie32_19_19=0 & pie32_11_11=0 { export q0; }
+PIE15: "q1" is pie32_24_24=0 & pie32_19_19=0 & pie32_11_11=1 { export q1; }
+PIE15: "q2" is pie32_24_24=0 & pie32_19_19=1 & pie32_11_11=0 { export q2; }
+PIE15: "q3" is pie32_24_24=0 & pie32_19_19=1 & pie32_11_11=1 { export q3; }
+PIE15: "q4" is pie32_24_24=1 & pie32_19_19=0 & pie32_11_11=0 { export q4; }
+PIE15: "q5" is pie32_24_24=1 & pie32_19_19=0 & pie32_11_11=1 { export q5; }
+PIE15: "q6" is pie32_24_24=1 & pie32_19_19=1 & pie32_11_11=0 { export q6; }
+PIE15: "q7" is pie32_24_24=1 & pie32_19_19=1 & pie32_11_11=1 { export q7; }
+PIE16: "q0" is pie32_10_8=0 { export q0; }
+PIE16: "q1" is pie32_10_8=1 { export q1; }
+PIE16: "q2" is pie32_10_8=2 { export q2; }
+PIE16: "q3" is pie32_10_8=3 { export q3; }
+PIE16: "q4" is pie32_10_8=4 { export q4; }
+PIE16: "q5" is pie32_10_8=5 { export q5; }
+PIE16: "q6" is pie32_10_8=6 { export q6; }
+PIE16: "q7" is pie32_10_8=7 { export q7; }
+PIE17: v is pie32_26_26 [ v = (pie32_26_26 << 0); ] { export *[const]:4 v; }
+PIE18: "a0" is pie32_11_8=0 { export a0; }
+PIE18: "a1" is pie32_11_8=1 { export a1; }
+PIE18: "a2" is pie32_11_8=2 { export a2; }
+PIE18: "a3" is pie32_11_8=3 { export a3; }
+PIE18: "a4" is pie32_11_8=4 { export a4; }
+PIE18: "a5" is pie32_11_8=5 { export a5; }
+PIE18: "a6" is pie32_11_8=6 { export a6; }
+PIE18: "a7" is pie32_11_8=7 { export a7; }
+PIE18: "a8" is pie32_11_8=8 { export a8; }
+PIE18: "a9" is pie32_11_8=9 { export a9; }
+PIE18: "a10" is pie32_11_8=10 { export a10; }
+PIE18: "a11" is pie32_11_8=11 { export a11; }
+PIE18: "a12" is pie32_11_8=12 { export a12; }
+PIE18: "a13" is pie32_11_8=13 { export a13; }
+PIE18: "a14" is pie32_11_8=14 { export a14; }
+PIE18: "a15" is pie32_11_8=15 { export a15; }
+PIE19: v is pie32_25_24 & pie32_19_19 [ v = (pie32_25_24 << 1) | (pie32_19_19 << 0); ] { export *[const]:4 v; }
+PIE20: v is pie32_26_25 [ v = (pie32_26_25 << 0); ] { export *[const]:4 v; }
+PIE21: v is pie32_24_24 & pie32_19_19 [ v = (pie32_24_24 << 1) | (pie32_19_19 << 0); ] { export *[const]:4 v; }
+PIE22: v is pie32_13_12 & pie32_23_23 [ v = (pie32_13_12 << 1) | (pie32_23_23 << 0); ] { export *[const]:4 v; }
+PIE23: "q0" is pie24_14_12=0 { export q0; }
+PIE23: "q1" is pie24_14_12=1 { export q1; }
+PIE23: "q2" is pie24_14_12=2 { export q2; }
+PIE23: "q3" is pie24_14_12=3 { export q3; }
+PIE23: "q4" is pie24_14_12=4 { export q4; }
+PIE23: "q5" is pie24_14_12=5 { export q5; }
+PIE23: "q6" is pie24_14_12=6 { export q6; }
+PIE23: "q7" is pie24_14_12=7 { export q7; }
+PIE24: v is pie24_8_8 [ v = (pie24_8_8 << 0); ] { export *[const]:4 v; }
+PIE25: v is pie32_12_12 & pie32_23_23 [ v = (pie32_12_12 << 1) | (pie32_23_23 << 0); ] { export *[const]:4 v; }
+PIE26: v is pie24_10_10 [ v = (pie24_10_10 << 0); ] { export *[const]:4 v; }
+PIE27: "f0" is pie32_26_24=0 & pie32_19_19=0 { export f0; }
+PIE27: "f1" is pie32_26_24=0 & pie32_19_19=1 { export f1; }
+PIE27: "f2" is pie32_26_24=1 & pie32_19_19=0 { export f2; }
+PIE27: "f3" is pie32_26_24=1 & pie32_19_19=1 { export f3; }
+PIE27: "f4" is pie32_26_24=2 & pie32_19_19=0 { export f4; }
+PIE27: "f5" is pie32_26_24=2 & pie32_19_19=1 { export f5; }
+PIE27: "f6" is pie32_26_24=3 & pie32_19_19=0 { export f6; }
+PIE27: "f7" is pie32_26_24=3 & pie32_19_19=1 { export f7; }
+PIE27: "f8" is pie32_26_24=4 & pie32_19_19=0 { export f8; }
+PIE27: "f9" is pie32_26_24=4 & pie32_19_19=1 { export f9; }
+PIE27: "f10" is pie32_26_24=5 & pie32_19_19=0 { export f10; }
+PIE27: "f11" is pie32_26_24=5 & pie32_19_19=1 { export f11; }
+PIE27: "f12" is pie32_26_24=6 & pie32_19_19=0 { export f12; }
+PIE27: "f13" is pie32_26_24=6 & pie32_19_19=1 { export f13; }
+PIE27: "f14" is pie32_26_24=7 & pie32_19_19=0 { export f14; }
+PIE27: "f15" is pie32_26_24=7 & pie32_19_19=1 { export f15; }
+PIE28: "f0" is pie32_23_20=0 { export f0; }
+PIE28: "f1" is pie32_23_20=1 { export f1; }
+PIE28: "f2" is pie32_23_20=2 { export f2; }
+PIE28: "f3" is pie32_23_20=3 { export f3; }
+PIE28: "f4" is pie32_23_20=4 { export f4; }
+PIE28: "f5" is pie32_23_20=5 { export f5; }
+PIE28: "f6" is pie32_23_20=6 { export f6; }
+PIE28: "f7" is pie32_23_20=7 { export f7; }
+PIE28: "f8" is pie32_23_20=8 { export f8; }
+PIE28: "f9" is pie32_23_20=9 { export f9; }
+PIE28: "f10" is pie32_23_20=10 { export f10; }
+PIE28: "f11" is pie32_23_20=11 { export f11; }
+PIE28: "f12" is pie32_23_20=12 { export f12; }
+PIE28: "f13" is pie32_23_20=13 { export f13; }
+PIE28: "f14" is pie32_23_20=14 { export f14; }
+PIE28: "f15" is pie32_23_20=15 { export f15; }
+PIE29: "f0" is pie32_18_16=0 & pie32_0_0=0 { export f0; }
+PIE29: "f1" is pie32_18_16=0 & pie32_0_0=1 { export f1; }
+PIE29: "f2" is pie32_18_16=1 & pie32_0_0=0 { export f2; }
+PIE29: "f3" is pie32_18_16=1 & pie32_0_0=1 { export f3; }
+PIE29: "f4" is pie32_18_16=2 & pie32_0_0=0 { export f4; }
+PIE29: "f5" is pie32_18_16=2 & pie32_0_0=1 { export f5; }
+PIE29: "f6" is pie32_18_16=3 & pie32_0_0=0 { export f6; }
+PIE29: "f7" is pie32_18_16=3 & pie32_0_0=1 { export f7; }
+PIE29: "f8" is pie32_18_16=4 & pie32_0_0=0 { export f8; }
+PIE29: "f9" is pie32_18_16=4 & pie32_0_0=1 { export f9; }
+PIE29: "f10" is pie32_18_16=5 & pie32_0_0=0 { export f10; }
+PIE29: "f11" is pie32_18_16=5 & pie32_0_0=1 { export f11; }
+PIE29: "f12" is pie32_18_16=6 & pie32_0_0=0 { export f12; }
+PIE29: "f13" is pie32_18_16=6 & pie32_0_0=1 { export f13; }
+PIE29: "f14" is pie32_18_16=7 & pie32_0_0=0 { export f14; }
+PIE29: "f15" is pie32_18_16=7 & pie32_0_0=1 { export f15; }
+PIE30: "f0" is pie32_15_12=0 { export f0; }
+PIE30: "f1" is pie32_15_12=1 { export f1; }
+PIE30: "f2" is pie32_15_12=2 { export f2; }
+PIE30: "f3" is pie32_15_12=3 { export f3; }
+PIE30: "f4" is pie32_15_12=4 { export f4; }
+PIE30: "f5" is pie32_15_12=5 { export f5; }
+PIE30: "f6" is pie32_15_12=6 { export f6; }
+PIE30: "f7" is pie32_15_12=7 { export f7; }
+PIE30: "f8" is pie32_15_12=8 { export f8; }
+PIE30: "f9" is pie32_15_12=9 { export f9; }
+PIE30: "f10" is pie32_15_12=10 { export f10; }
+PIE30: "f11" is pie32_15_12=11 { export f11; }
+PIE30: "f12" is pie32_15_12=12 { export f12; }
+PIE30: "f13" is pie32_15_12=13 { export f13; }
+PIE30: "f14" is pie32_15_12=14 { export f14; }
+PIE30: "f15" is pie32_15_12=15 { export f15; }
+PIE31: k is pie32_11_8 [ k = ((((pie32_11_8 << 0)) ^ 8) - 8) * 16; ] { export *[const]:4 k; }
+PIE32: k is pie32_25_24 & pie32_19_16 & pie32_0_0 & pie32_8_8 [ k = ((((pie32_25_24 << 6) | (pie32_19_16 << 2) | (pie32_0_0 << 1) | (pie32_8_8 << 0)) ^ 128) - 128) * 8; ] { export *[const]:4 k; }
+PIE33: "f0" is pie24_23_20=0 { export f0; }
+PIE33: "f1" is pie24_23_20=1 { export f1; }
+PIE33: "f2" is pie24_23_20=2 { export f2; }
+PIE33: "f3" is pie24_23_20=3 { export f3; }
+PIE33: "f4" is pie24_23_20=4 { export f4; }
+PIE33: "f5" is pie24_23_20=5 { export f5; }
+PIE33: "f6" is pie24_23_20=6 { export f6; }
+PIE33: "f7" is pie24_23_20=7 { export f7; }
+PIE33: "f8" is pie24_23_20=8 { export f8; }
+PIE33: "f9" is pie24_23_20=9 { export f9; }
+PIE33: "f10" is pie24_23_20=10 { export f10; }
+PIE33: "f11" is pie24_23_20=11 { export f11; }
+PIE33: "f12" is pie24_23_20=12 { export f12; }
+PIE33: "f13" is pie24_23_20=13 { export f13; }
+PIE33: "f14" is pie24_23_20=14 { export f14; }
+PIE33: "f15" is pie24_23_20=15 { export f15; }
+PIE34: "f0" is pie24_15_12=0 { export f0; }
+PIE34: "f1" is pie24_15_12=1 { export f1; }
+PIE34: "f2" is pie24_15_12=2 { export f2; }
+PIE34: "f3" is pie24_15_12=3 { export f3; }
+PIE34: "f4" is pie24_15_12=4 { export f4; }
+PIE34: "f5" is pie24_15_12=5 { export f5; }
+PIE34: "f6" is pie24_15_12=6 { export f6; }
+PIE34: "f7" is pie24_15_12=7 { export f7; }
+PIE34: "f8" is pie24_15_12=8 { export f8; }
+PIE34: "f9" is pie24_15_12=9 { export f9; }
+PIE34: "f10" is pie24_15_12=10 { export f10; }
+PIE34: "f11" is pie24_15_12=11 { export f11; }
+PIE34: "f12" is pie24_15_12=12 { export f12; }
+PIE34: "f13" is pie24_15_12=13 { export f13; }
+PIE34: "f14" is pie24_15_12=14 { export f14; }
+PIE34: "f15" is pie24_15_12=15 { export f15; }
+PIE35: "a0" is pie24_11_8=0 { export a0; }
+PIE35: "a1" is pie24_11_8=1 { export a1; }
+PIE35: "a2" is pie24_11_8=2 { export a2; }
+PIE35: "a3" is pie24_11_8=3 { export a3; }
+PIE35: "a4" is pie24_11_8=4 { export a4; }
+PIE35: "a5" is pie24_11_8=5 { export a5; }
+PIE35: "a6" is pie24_11_8=6 { export a6; }
+PIE35: "a7" is pie24_11_8=7 { export a7; }
+PIE35: "a8" is pie24_11_8=8 { export a8; }
+PIE35: "a9" is pie24_11_8=9 { export a9; }
+PIE35: "a10" is pie24_11_8=10 { export a10; }
+PIE35: "a11" is pie24_11_8=11 { export a11; }
+PIE35: "a12" is pie24_11_8=12 { export a12; }
+PIE35: "a13" is pie24_11_8=13 { export a13; }
+PIE35: "a14" is pie24_11_8=14 { export a14; }
+PIE35: "a15" is pie24_11_8=15 { export a15; }
+PIE36: k is pie24_22_22 & pie24_14_8 [ k = ((((pie24_22_22 << 7) | (pie24_14_8 << 0)) ^ 128) - 128) * 16; ] { export *[const]:4 k; }
+PIE37: k is pie24_22_22 & pie24_14_8 [ k = ((((pie24_22_22 << 7) | (pie24_14_8 << 0)) ^ 128) - 128) * 8; ] { export *[const]:4 k; }
+PIE38: k is pie24_22_22 & pie24_14_8 [ k = ((((pie24_22_22 << 7) | (pie24_14_8 << 0)) ^ 128) - 128) * 4; ] { export *[const]:4 k; }
+PIE39: v is pie24_11_10 [ v = (pie24_11_10 << 0); ] { export *[const]:4 v; }
+PIE40: v is pie24_7_4 [ v = (pie24_7_4 << 0); ] { export *[const]:4 v; }
+PIE41: "q0" is pie24_6_4=0 { export q0; }
+PIE41: "q1" is pie24_6_4=1 { export q1; }
+PIE41: "q2" is pie24_6_4=2 { export q2; }
+PIE41: "q3" is pie24_6_4=3 { export q3; }
+PIE41: "q4" is pie24_6_4=4 { export q4; }
+PIE41: "q5" is pie24_6_4=5 { export q5; }
+PIE41: "q6" is pie24_6_4=6 { export q6; }
+PIE41: "q7" is pie24_6_4=7 { export q7; }
+PIE42: k is pie32_25_24 & pie32_19_19 & pie32_13_12 & pie32_23_23 & pie32_9_8 [ k = ((((pie32_25_24 << 6) | (pie32_19_19 << 5) | (pie32_13_12 << 3) | (pie32_23_23 << 2) | (pie32_9_8 << 0)) ^ 128) - 128) * 16; ] { export *[const]:4 k; }
+PIE43: v is pie24_14_14 [ v = (pie24_14_14 << 0); ] { export *[const]:4 v; }
+PIE44: k is pie24_14_8 [ k = ((pie24_14_8 << 0)) * 2; ] { export *[const]:4 k; }
+PIE45: k is pie24_14_8 [ k = ((pie24_14_8 << 0)) * 1; ] { export *[const]:4 k; }
+PIE46: k is pie32_27_26 & pie32_11_8 [ k = ((((pie32_27_26 << 4) | (pie32_11_8 << 0)) ^ 32) - 32) * 16; ] { export *[const]:4 k; }
+PIE47: "q0" is pie24_20_20=0 & pie24_15_15=0 & pie24_13_13=0 { export q0; }
+PIE47: "q1" is pie24_20_20=0 & pie24_15_15=0 & pie24_13_13=1 { export q1; }
+PIE47: "q2" is pie24_20_20=0 & pie24_15_15=1 & pie24_13_13=0 { export q2; }
+PIE47: "q3" is pie24_20_20=0 & pie24_15_15=1 & pie24_13_13=1 { export q3; }
+PIE47: "q4" is pie24_20_20=1 & pie24_15_15=0 & pie24_13_13=0 { export q4; }
+PIE47: "q5" is pie24_20_20=1 & pie24_15_15=0 & pie24_13_13=1 { export q5; }
+PIE47: "q6" is pie24_20_20=1 & pie24_15_15=1 & pie24_13_13=0 { export q6; }
+PIE47: "q7" is pie24_20_20=1 & pie24_15_15=1 & pie24_13_13=1 { export q7; }
+PIE48: v is pie24_21_20 & pie24_15_15 [ v = (pie24_21_20 << 1) | (pie24_15_15 << 0); ] { export *[const]:4 v; }
+PIE49: v is pie32_18_16 [ v = (pie32_18_16 << 0); ] { export *[const]:4 v; }
+PIE50: v is pie24_21_20 & pie24_15_15 & pie24_4_4 [ v = (pie24_21_20 << 2) | (pie24_15_15 << 1) | (pie24_4_4 << 0); ] { export *[const]:4 v; }
+PIE51: v is pie32_18_16 & pie32_20_20 [ v = (pie32_18_16 << 1) | (pie32_20_20 << 0); ] { export *[const]:4 v; }
+
+:ee.andq PIE0, PIE2, PIE1 is pie24_23_22=3 & pie24_19_16=13 & pie24_14_12=3 & pie24_9_8=0 & pie24_3_0=4 & PIE0 & PIE2 & PIE1 { PIE0 = PIE2 & PIE1; }
+:ee.bitrev PIE0, PIE3 is pie24_23_22=3 & pie24_19_16=13 & pie24_14_8=123 & pie24_3_0=4 & PIE0 & PIE3 { PIE0 = ee_bitrev(PIE3); }
+:ee.cmul.s16 PIE0, PIE5, PIE4, PIE6 is pie24_23_22=2 & pie24_19_16=14 & pie24_13_13=0 & pie24_7_6=0 & pie24_3_0=4 & PIE0 & PIE5 & PIE4 & PIE6 { PIE0 = ee_cmul_s16(PIE5, PIE4, PIE6); }
+:ee.cmul.s16.ld.incp PIE7, PIE12, PIE9, PIE10, PIE8, PIE11 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=0 & pie32_22_22=0 & pie32_21_21=0 & pie32_20_20=0 & pie32_11_11=1 & pie32_10_10=1 & pie32_3_1=7 & PIE7 & PIE12 & PIE9 & PIE10 & PIE8 & PIE11 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; PIE9 = ee_cmul_s16(PIE10, PIE8, PIE11); PIE7 = ldv; PIE12 = PIE12 + 16; }
+:ee.cmul.s16.st.incp PIE13, PIE12, PIE9, PIE10, PIE8, PIE11 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=1 & pie32_25_25=0 & pie32_24_24=0 & pie32_19_19=0 & pie32_11_11=0 & pie32_10_10=0 & pie32_3_1=7 & PIE13 & PIE12 & PIE9 & PIE10 & PIE8 & PIE11 { local ea:4 = PIE12 & 0xfffffff0; *[ram]:16 ea = PIE13; PIE9 = ee_cmul_s16(PIE10, PIE8, PIE11); PIE12 = PIE12 + 16; }
+:ee.fft.ams.s16.ld.incp PIE16, PIE12, PIE8, PIE15, PIE10, PIE13, PIE9, PIE14 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=0 & pie32_28_28=1 & pie32_27_27=0 & pie32_26_26=0 & pie32_3_1=7 & PIE16 & PIE12 & PIE8 & PIE15 & PIE10 & PIE13 & PIE9 & PIE14 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; PIE8 = ee_fft_ams_s16(PIE10, PIE13, PIE9, PIE14); PIE15 = ee_fft_ams_s16_out1(PIE10, PIE13, PIE9, PIE14); PIE16 = ldv; PIE12 = PIE12 + 16; }
+:ee.fft.ams.s16.ld.incp.uaup PIE16, PIE12, PIE8, PIE15, PIE10, PIE13, PIE9, PIE14 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=0 & pie32_28_28=1 & pie32_27_27=0 & pie32_26_26=1 & pie32_3_1=7 & PIE16 & PIE12 & PIE8 & PIE15 & PIE10 & PIE13 & PIE9 & PIE14 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; PIE8 = ee_fft_ams_s16(PIE10, PIE13, PIE9, PIE14); PIE15 = ee_fft_ams_s16_out1(PIE10, PIE13, PIE9, PIE14); PIE16 = ldv; PIE12 = PIE12 + 16; }
+:ee.fft.ams.s16.ld.r32.decp PIE16, PIE12, PIE8, PIE15, PIE10, PIE13, PIE9, PIE14 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=0 & pie32_28_28=1 & pie32_27_27=1 & pie32_26_26=0 & pie32_3_1=7 & PIE16 & PIE12 & PIE8 & PIE15 & PIE10 & PIE13 & PIE9 & PIE14 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; PIE8 = ee_fft_ams_s16_ld_r32(PIE10, PIE13, PIE9, PIE14); PIE15 = ee_fft_ams_s16_ld_r32_out1(PIE10, PIE13, PIE9, PIE14); PIE16 = ldv; PIE12 = PIE12 - 16; }
+:ee.fft.ams.s16.st.incp PIE13, PIE7, PIE12, PIE18, PIE9, PIE10, PIE8, PIE17 is pie32_31_31=1 & pie32_30_30=0 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_3_1=7 & PIE13 & PIE7 & PIE12 & PIE18 & PIE9 & PIE10 & PIE8 & PIE17 { local ea:4 = PIE18 & 0xfffffff0; *[ram]:16 ea = PIE13; PIE7 = ee_fft_ams_s16(PIE12, PIE9, PIE10, PIE8, PIE17); PIE18 = PIE18 + 16; }
+:ee.fft.cmul.s16.ld.xp PIE8, PIE12, PIE18, PIE9, PIE10, PIE13, PIE19 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=0 & pie32_28_28=1 & pie32_27_27=1 & pie32_26_26=1 & pie32_3_1=7 & PIE8 & PIE12 & PIE18 & PIE9 & PIE10 & PIE13 & PIE19 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; PIE9 = ee_fft_cmul_s16(PIE10, PIE13, PIE19); PIE8 = ldv; PIE12 = PIE12 + PIE18; }
+:ee.fft.cmul.s16.st.xp PIE10, PIE13, PIE9, PIE12, PIE18, PIE22, PIE21, PIE20 is pie32_31_31=1 & pie32_30_30=0 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=1 & pie32_3_1=7 & PIE10 & PIE13 & PIE9 & PIE12 & PIE18 & PIE22 & PIE21 & PIE20 { local ea:4 = PIE12 & 0xfffffff0; *[ram]:16 ea = PIE9; ee_fft_cmul_s16(PIE10, PIE13, PIE22, PIE21, PIE20); PIE12 = PIE12 + PIE18; }
+:ee.fft.r2bf.s16 PIE0, PIE23, PIE2, PIE1, PIE24 is pie24_23_22=3 & pie24_19_16=12 & pie24_9_9=0 & pie24_3_0=4 & PIE0 & PIE23 & PIE2 & PIE1 & PIE24 { PIE0 = ee_fft_r2bf_s16(PIE2, PIE1, PIE24); PIE23 = ee_fft_r2bf_s16_out1(PIE2, PIE1, PIE24); }
+:ee.fft.r2bf.s16.st.incp PIE9, PIE10, PIE13, PIE12, PIE25 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=1 & pie32_26_26=0 & pie32_25_25=0 & pie32_24_24=0 & pie32_19_19=1 & pie32_13_13=0 & pie32_11_11=0 & pie32_10_10=1 & pie32_9_9=0 & pie32_8_8=0 & pie32_3_1=7 & PIE9 & PIE10 & PIE13 & PIE12 & PIE25 { PIE9 = ee_fft_r2bf_s16(PIE10, PIE13, PIE12, PIE25); PIE12 = PIE12 + 16; }
+:ee.fft.vst.r32.decp PIE0, PIE3, PIE26 is pie24_23_22=3 & pie24_19_16=13 & pie24_14_11=6 & pie24_9_8=3 & pie24_3_0=4 & PIE0 & PIE3 & PIE26 { ee_fft_vst_r32(PIE3, PIE26); PIE3 = PIE3 - 16; }
+:ee.ldf.128.ip PIE27, PIE29, PIE30, PIE28, PIE12, PIE31 is pie32_31_31=1 & pie32_30_30=0 & pie32_29_29=0 & pie32_28_28=0 & pie32_27_27=0 & pie32_3_1=7 & PIE27 & PIE29 & PIE30 & PIE28 & PIE12 & PIE31 { local ea:4 = PIE12; PIE28 = *[ram]:4 (ea + 0); PIE30 = *[ram]:4 (ea + 4); PIE29 = *[ram]:4 (ea + 8); PIE27 = *[ram]:4 (ea + 12); PIE12 = PIE12 + PIE31; }
+:ee.ldf.128.xp PIE27, PIE29, PIE30, PIE28, PIE12, PIE18 is pie32_31_31=1 & pie32_30_30=0 & pie32_29_29=0 & pie32_28_28=0 & pie32_27_27=1 & pie32_3_1=7 & PIE27 & PIE29 & PIE30 & PIE28 & PIE12 & PIE18 { local ea:4 = PIE12; PIE28 = *[ram]:4 (ea + 0); PIE30 = *[ram]:4 (ea + 4); PIE29 = *[ram]:4 (ea + 8); PIE27 = *[ram]:4 (ea + 12); PIE12 = PIE12 + PIE18; }
+:ee.ldf.64.ip PIE30, PIE28, PIE12, PIE32 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=0 & pie32_11_11=0 & pie32_10_10=1 & pie32_9_9=0 & pie32_3_1=7 & PIE30 & PIE28 & PIE12 & PIE32 { local ea:4 = PIE12; PIE28 = *[ram]:4 (ea + 0); PIE30 = *[ram]:4 (ea + 4); PIE12 = PIE12 + PIE32; }
+:ee.ldf.64.xp PIE34, PIE33, PIE3, PIE35 is pie24_19_16=6 & pie24_3_0=0 & PIE34 & PIE33 & PIE3 & PIE35 { local ea:4 = PIE3; PIE33 = *[ram]:4 (ea + 0); PIE34 = *[ram]:4 (ea + 4); PIE3 = PIE3 + PIE35; }
+:ee.ldqa.s16.128.ip PIE3, PIE36 is pie24_23_23=0 & pie24_21_15=2 & pie24_3_0=4 & PIE3 & PIE36 { local ea:4 = PIE3; ee_ldqa_s16_128(ea); PIE3 = PIE3 + PIE36; }
+:ee.ldqa.s16.128.xp PIE3, PIE35 is pie24_23_12=2020 & pie24_3_0=4 & PIE3 & PIE35 { local ea:4 = PIE3; ee_ldqa_s16_128(ea); PIE3 = PIE3 + PIE35; }
+:ee.ldqa.s8.128.ip PIE3, PIE36 is pie24_23_23=0 & pie24_21_15=34 & pie24_3_0=4 & PIE3 & PIE36 { local ea:4 = PIE3; ee_ldqa_s8_128(ea); PIE3 = PIE3 + PIE36; }
+:ee.ldqa.s8.128.xp PIE3, PIE35 is pie24_23_12=1812 & pie24_3_0=4 & PIE3 & PIE35 { local ea:4 = PIE3; ee_ldqa_s8_128(ea); PIE3 = PIE3 + PIE35; }
+:ee.ldqa.u16.128.ip PIE3, PIE36 is pie24_23_23=0 & pie24_21_15=10 & pie24_3_0=4 & PIE3 & PIE36 { local ea:4 = PIE3; ee_ldqa_u16_128(ea); PIE3 = PIE3 + PIE36; }
+:ee.ldqa.u16.128.xp PIE3, PIE35 is pie24_23_12=1956 & pie24_3_0=4 & PIE3 & PIE35 { local ea:4 = PIE3; ee_ldqa_u16_128(ea); PIE3 = PIE3 + PIE35; }
+:ee.ldqa.u8.128.ip PIE3, PIE36 is pie24_23_23=0 & pie24_21_15=42 & pie24_3_0=4 & PIE3 & PIE36 { local ea:4 = PIE3; ee_ldqa_u8_128(ea); PIE3 = PIE3 + PIE36; }
+:ee.ldqa.u8.128.xp PIE3, PIE35 is pie24_23_12=1796 & pie24_3_0=4 & PIE3 & PIE35 { local ea:4 = PIE3; ee_ldqa_u8_128(ea); PIE3 = PIE3 + PIE35; }
+:ee.ldxq.32 PIE9, PIE10, PIE12, PIE21, PIE22 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=0 & pie32_25_25=0 & pie32_22_22=1 & pie32_21_21=1 & pie32_20_20=1 & pie32_11_11=1 & pie32_10_10=1 & pie32_9_9=0 & pie32_8_8=1 & pie32_3_1=7 & PIE9 & PIE10 & PIE12 & PIE21 & PIE22 { local ea:4 = PIE12; PIE9 = ee_ldxq_32(ea, PIE10, PIE21, PIE22); }
+:ee.ld.128.usar.ip PIE0, PIE3, PIE36 is pie24_23_23=1 & pie24_19_16=1 & pie24_3_0=4 & PIE0 & PIE3 & PIE36 { local ea:4 = PIE3 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; PIE0 = ee_ld_128_usar(ea, PIE36); PIE0 = ldv; PIE3 = PIE3 + PIE36; }
+:ee.ld.128.usar.xp PIE0, PIE3, PIE35 is pie24_23_22=2 & pie24_19_16=13 & pie24_14_12=0 & pie24_3_0=4 & PIE0 & PIE3 & PIE35 { local ea:4 = PIE3 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; PIE0 = ee_ld_128_usar(ea); PIE0 = ldv; PIE3 = PIE3 + PIE35; }
+:ee.ld.accx.ip PIE3, PIE37 is pie24_23_23=0 & pie24_21_15=28 & pie24_3_0=4 & PIE3 & PIE37 { local ea:4 = PIE3; ACCX = ee_ld_accx(ea, ACCX); PIE3 = PIE3 + PIE37; }
+:ee.ld.qacc_h.h.32.ip PIE3, PIE38 is pie24_23_23=0 & pie24_21_15=60 & pie24_3_0=4 & PIE3 & PIE38 { local ea:4 = PIE3; QACC_H = ee_ld_qacc_h_h_32(ea, QACC_H); PIE3 = PIE3 + PIE38; }
+:ee.ld.qacc_h.l.128.ip PIE3, PIE36 is pie24_23_23=0 & pie24_21_15=12 & pie24_3_0=4 & PIE3 & PIE36 { local ea:4 = PIE3; QACC_H = ee_ld_qacc_h_l_128(ea, QACC_H); PIE3 = PIE3 + PIE36; }
+:ee.ld.qacc_l.h.32.ip PIE3, PIE38 is pie24_23_23=0 & pie24_21_15=44 & pie24_3_0=4 & PIE3 & PIE38 { local ea:4 = PIE3; QACC_L = ee_ld_qacc_l_h_32(ea, QACC_L); PIE3 = PIE3 + PIE38; }
+:ee.ld.qacc_l.l.128.ip PIE3, PIE36 is pie24_23_23=0 & pie24_21_15=0 & pie24_3_0=4 & PIE3 & PIE36 { local ea:4 = PIE3; QACC_L = ee_ld_qacc_l_l_128(ea, QACC_L); PIE3 = PIE3 + PIE36; }
+:ee.ld.ua_state.ip PIE3, PIE36 is pie24_23_23=0 & pie24_21_15=32 & pie24_3_0=4 & PIE3 & PIE36 { local ea:4 = PIE3; UA_STATE = ee_ld_ua_state(ea, UA_STATE); PIE3 = PIE3 + PIE36; }
+:ee.movi.32.a PIE0, PIE3, PIE39 is pie24_23_22=3 & pie24_19_16=13 & pie24_14_12=7 & pie24_9_8=1 & pie24_3_0=4 & PIE0 & PIE3 & PIE39 { local sh:4 = PIE39 * 32; local v:16 = PIE0 >> sh; PIE3 = v:4; }
+:ee.movi.32.q PIE0, PIE3, PIE39 is pie24_23_22=3 & pie24_19_16=13 & pie24_14_12=3 & pie24_9_8=2 & pie24_3_0=4 & PIE0 & PIE3 & PIE39 { local sh:4 = PIE39 * 32; local m:16 = 0xffffffff; m = m << sh; local v:16 = zext(PIE3); PIE0 = (PIE0 & ~m) | (v << sh); }
+:ee.mov.s16.qacc PIE0 is pie24_23_22=3 & pie24_19_16=13 & pie24_14_0=32548 & PIE0 { QACC_H = ee_mov_s16_qacc_qacc_h(PIE0, QACC_H, QACC_L); QACC_L = ee_mov_s16_qacc_qacc_l(PIE0, QACC_H, QACC_L); }
+:ee.mov.s8.qacc PIE0 is pie24_23_22=3 & pie24_19_16=13 & pie24_14_0=32564 & PIE0 { QACC_H = ee_mov_s8_qacc_qacc_h(PIE0, QACC_H, QACC_L); QACC_L = ee_mov_s8_qacc_qacc_l(PIE0, QACC_H, QACC_L); }
+:ee.mov.u16.qacc PIE0 is pie24_23_22=3 & pie24_19_16=13 & pie24_14_0=32612 & PIE0 { QACC_H = ee_mov_u16_qacc_qacc_h(PIE0, QACC_H, QACC_L); QACC_L = ee_mov_u16_qacc_qacc_l(PIE0, QACC_H, QACC_L); }
+:ee.mov.u8.qacc PIE0 is pie24_23_22=3 & pie24_19_16=13 & pie24_14_0=32628 & PIE0 { QACC_H = ee_mov_u8_qacc_qacc_h(PIE0, QACC_H, QACC_L); QACC_L = ee_mov_u8_qacc_qacc_l(PIE0, QACC_H, QACC_L); }
+:ee.notq PIE0, PIE2 is pie24_23_22=3 & pie24_19_16=13 & pie24_14_8=127 & pie24_5_5=0 & pie24_3_0=4 & PIE0 & PIE2 { PIE0 = ~PIE2; }
+:ee.orq PIE0, PIE2, PIE1 is pie24_23_22=3 & pie24_19_16=13 & pie24_14_12=7 & pie24_9_8=0 & pie24_3_0=4 & PIE0 & PIE2 & PIE1 { PIE0 = PIE2 | PIE1; }
+:ee.slci.2q PIE0, PIE23, PIE40 is pie24_23_22=3 & pie24_19_16=12 & pie24_11_8=6 & pie24_3_0=4 & PIE0 & PIE23 & PIE40 { ee_slci_2q(PIE0, PIE23, PIE40); }
+:ee.slcxxp.2q PIE0, PIE23, PIE3, PIE35 is pie24_23_22=2 & pie24_19_16=6 & pie24_3_0=4 & PIE0 & PIE23 & PIE3 & PIE35 { ee_slcxxp_2q(PIE0, PIE23, PIE3); }
+:ee.srci.2q PIE0, PIE23, PIE40 is pie24_23_22=3 & pie24_19_16=12 & pie24_11_8=10 & pie24_3_0=4 & PIE0 & PIE23 & PIE40 { ee_srci_2q(PIE0, PIE23, PIE40); }
+:ee.srcmb.s16.qacc PIE0, PIE3, PIE26 is pie24_23_22=3 & pie24_19_16=13 & pie24_14_11=14 & pie24_9_8=2 & pie24_3_0=4 & PIE0 & PIE3 & PIE26 { QACC_H = ee_srcmb_s16_qacc_qacc_h(PIE3, PIE26, QACC_H, QACC_L); QACC_L = ee_srcmb_s16_qacc_qacc_l(PIE3, PIE26, QACC_H, QACC_L); }
+:ee.srcmb.s8.qacc PIE0, PIE3, PIE26 is pie24_23_22=3 & pie24_19_16=13 & pie24_14_11=15 & pie24_9_8=2 & pie24_3_0=4 & PIE0 & PIE3 & PIE26 { QACC_H = ee_srcmb_s8_qacc_qacc_h(PIE3, PIE26, QACC_H, QACC_L); QACC_L = ee_srcmb_s8_qacc_qacc_l(PIE3, PIE26, QACC_H, QACC_L); }
+:ee.srcq.128.st.incp PIE23, PIE0, PIE3 is pie24_23_22=3 & pie24_19_16=12 & pie24_11_8=14 & pie24_3_0=4 & PIE23 & PIE0 & PIE3 { ee_srcq_128(PIE23, PIE0, PIE3); PIE3 = PIE3 + 16; }
+:ee.srcxxp.2q PIE0, PIE23, PIE3, PIE35 is pie24_23_22=3 & pie24_19_16=6 & pie24_3_0=4 & PIE0 & PIE23 & PIE3 & PIE35 { ee_srcxxp_2q(PIE0, PIE23, PIE3); }
+:ee.src.q PIE41, PIE23, PIE0 is pie24_23_22=3 & pie24_19_16=12 & pie24_11_7=6 & pie24_3_0=4 & PIE41 & PIE23 & PIE0 { PIE41 = ee_src_q(PIE23, PIE0); }
+:ee.src.q.ld.ip PIE9, PIE12, PIE42, PIE10, PIE13 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=0 & pie32_11_11=0 & pie32_10_10=0 & pie32_3_1=7 & PIE9 & PIE12 & PIE42 & PIE10 & PIE13 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; ee_src_q(PIE42, PIE10, PIE13); PIE9 = ldv; PIE12 = PIE12 + PIE42; }
+:ee.src.q.ld.xp PIE9, PIE12, PIE18, PIE10, PIE13 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=1 & pie32_26_26=0 & pie32_25_25=0 & pie32_24_24=0 & pie32_23_23=0 & pie32_19_19=0 & pie32_13_13=0 & pie32_12_12=0 & pie32_3_1=7 & PIE9 & PIE12 & PIE18 & PIE10 & PIE13 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; ee_src_q(PIE10, PIE13); PIE9 = ldv; PIE12 = PIE12 + PIE18; }
+:ee.src.q.qup PIE41, PIE23, PIE0 is pie24_23_22=3 & pie24_19_16=12 & pie24_11_7=14 & pie24_3_0=4 & PIE41 & PIE23 & PIE0 { PIE41 = ee_src_q_qup(PIE23, PIE0); }
+:ee.srs.accx PIE35, PIE3, PIE43 is pie24_23_15=252 & pie24_13_12=1 & pie24_3_0=4 & PIE35 & PIE3 & PIE43 { PIE35 = ee_srs_accx(PIE3, PIE43, ACCX); ACCX = ee_srs_accx_accx(PIE3, PIE43, ACCX); }
+:ee.stf.128.ip PIE27, PIE29, PIE30, PIE28, PIE12, PIE31 is pie32_31_31=1 & pie32_30_30=0 & pie32_29_29=0 & pie32_28_28=1 & pie32_27_27=0 & pie32_3_1=7 & PIE27 & PIE29 & PIE30 & PIE28 & PIE12 & PIE31 { local ea:4 = PIE12; *[ram]:4 (ea + 0) = PIE28; *[ram]:4 (ea + 4) = PIE30; *[ram]:4 (ea + 8) = PIE29; *[ram]:4 (ea + 12) = PIE27; PIE12 = PIE12 + PIE31; }
+:ee.stf.128.xp PIE27, PIE29, PIE30, PIE28, PIE12, PIE18 is pie32_31_31=1 & pie32_30_30=0 & pie32_29_29=0 & pie32_28_28=1 & pie32_27_27=1 & pie32_3_1=7 & PIE27 & PIE29 & PIE30 & PIE28 & PIE12 & PIE18 { local ea:4 = PIE12; *[ram]:4 (ea + 0) = PIE28; *[ram]:4 (ea + 4) = PIE30; *[ram]:4 (ea + 8) = PIE29; *[ram]:4 (ea + 12) = PIE27; PIE12 = PIE12 + PIE18; }
+:ee.stf.64.ip PIE30, PIE28, PIE12, PIE32 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=0 & pie32_11_11=0 & pie32_10_10=1 & pie32_9_9=1 & pie32_3_1=7 & PIE30 & PIE28 & PIE12 & PIE32 { local ea:4 = PIE12; *[ram]:4 (ea + 0) = PIE28; *[ram]:4 (ea + 4) = PIE30; PIE12 = PIE12 + PIE32; }
+:ee.stf.64.xp PIE34, PIE33, PIE3, PIE35 is pie24_19_16=7 & pie24_3_0=0 & PIE34 & PIE33 & PIE3 & PIE35 { local ea:4 = PIE3; *[ram]:4 (ea + 0) = PIE33; *[ram]:4 (ea + 4) = PIE34; PIE3 = PIE3 + PIE35; }
+:ee.stxq.32 PIE13, PIE10, PIE12, PIE21, PIE22 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=1 & pie32_25_25=1 & pie32_18_18=0 & pie32_17_17=0 & pie32_16_16=0 & pie32_11_11=0 & pie32_10_10=0 & pie32_9_9=0 & pie32_8_8=0 & pie32_3_1=7 & PIE13 & PIE10 & PIE12 & PIE21 & PIE22 { local ea:4 = PIE12; ee_stxq_32(ea, PIE10, PIE21, PIE22); }
+:ee.st.accx.ip PIE3, PIE37 is pie24_23_23=0 & pie24_21_15=4 & pie24_3_0=4 & PIE3 & PIE37 { local ea:4 = PIE3; ee_st_accx(ea, ACCX, PIE37); PIE3 = PIE3 + PIE37; }
+:ee.st.qacc_h.h.32.ip PIE3, PIE38 is pie24_23_23=0 & pie24_21_15=36 & pie24_3_0=4 & PIE3 & PIE38 { local ea:4 = PIE3; ee_st_qacc_h_h_32(ea, QACC_H, PIE38); PIE3 = PIE3 + PIE38; }
+:ee.st.qacc_h.l.128.ip PIE3, PIE36 is pie24_23_23=0 & pie24_21_15=26 & pie24_3_0=4 & PIE3 & PIE36 { local ea:4 = PIE3; ee_st_qacc_h_l_128(ea, QACC_H, PIE36); PIE3 = PIE3 + PIE36; }
+:ee.st.qacc_l.h.32.ip PIE3, PIE38 is pie24_23_23=0 & pie24_21_15=58 & pie24_3_0=4 & PIE3 & PIE38 { local ea:4 = PIE3; ee_st_qacc_l_h_32(ea, QACC_L, PIE38); PIE3 = PIE3 + PIE38; }
+:ee.st.qacc_l.l.128.ip PIE3, PIE36 is pie24_23_23=0 & pie24_21_15=24 & pie24_3_0=4 & PIE3 & PIE36 { local ea:4 = PIE3; ee_st_qacc_l_l_128(ea, QACC_L, PIE36); PIE3 = PIE3 + PIE36; }
+:ee.st.ua_state.ip PIE3, PIE36 is pie24_23_23=0 & pie24_21_15=56 & pie24_3_0=4 & PIE3 & PIE36 { local ea:4 = PIE3; ee_st_ua_state(ea, UA_STATE, PIE36); PIE3 = PIE3 + PIE36; }
+:ee.vadds.s16 PIE0, PIE5, PIE4 is pie24_23_22=2 & pie24_19_16=14 & pie24_13_13=0 & pie24_7_0=100 & PIE0 & PIE5 & PIE4 { PIE0 = ee_vadds_s16(PIE5, PIE4); }
+:ee.vadds.s16.ld.incp PIE7, PIE12, PIE9, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=0 & pie32_22_22=0 & pie32_21_21=1 & pie32_20_20=0 & pie32_11_11=1 & pie32_10_10=1 & pie32_9_9=0 & pie32_8_8=1 & pie32_3_1=7 & PIE7 & PIE12 & PIE9 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; PIE9 = ee_vadds_s16(PIE10, PIE8); PIE7 = ldv; PIE12 = PIE12 + 16; }
+:ee.vadds.s16.st.incp PIE13, PIE12, PIE9, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=1 & pie32_25_25=0 & pie32_24_24=0 & pie32_19_19=1 & pie32_11_11=0 & pie32_10_10=0 & pie32_9_9=0 & pie32_8_8=0 & pie32_3_1=7 & PIE13 & PIE12 & PIE9 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; *[ram]:16 ea = PIE13; PIE9 = ee_vadds_s16(PIE10, PIE8); PIE12 = PIE12 + 16; }
+:ee.vadds.s32 PIE0, PIE5, PIE4 is pie24_23_22=2 & pie24_19_16=14 & pie24_13_13=0 & pie24_7_0=116 & PIE0 & PIE5 & PIE4 { PIE0 = ee_vadds_s32(PIE5, PIE4); }
+:ee.vadds.s32.ld.incp PIE7, PIE12, PIE9, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=0 & pie32_22_22=0 & pie32_21_21=1 & pie32_20_20=1 & pie32_11_11=1 & pie32_10_10=1 & pie32_9_9=0 & pie32_8_8=1 & pie32_3_1=7 & PIE7 & PIE12 & PIE9 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; PIE9 = ee_vadds_s32(PIE10, PIE8); PIE7 = ldv; PIE12 = PIE12 + 16; }
+:ee.vadds.s32.st.incp PIE13, PIE12, PIE9, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=1 & pie32_25_25=0 & pie32_24_24=0 & pie32_19_19=1 & pie32_11_11=0 & pie32_10_10=0 & pie32_9_9=0 & pie32_8_8=1 & pie32_3_1=7 & PIE13 & PIE12 & PIE9 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; *[ram]:16 ea = PIE13; PIE9 = ee_vadds_s32(PIE10, PIE8); PIE12 = PIE12 + 16; }
+:ee.vadds.s8 PIE0, PIE5, PIE4 is pie24_23_22=2 & pie24_19_16=14 & pie24_13_13=0 & pie24_7_0=132 & PIE0 & PIE5 & PIE4 { PIE0 = ee_vadds_s8(PIE5, PIE4); }
+:ee.vadds.s8.ld.incp PIE7, PIE12, PIE9, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=0 & pie32_22_22=0 & pie32_21_21=0 & pie32_20_20=1 & pie32_11_11=1 & pie32_10_10=1 & pie32_9_9=0 & pie32_8_8=0 & pie32_3_1=7 & PIE7 & PIE12 & PIE9 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; PIE9 = ee_vadds_s8(PIE10, PIE8); PIE7 = ldv; PIE12 = PIE12 + 16; }
+:ee.vadds.s8.st.incp PIE13, PIE12, PIE9, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=1 & pie32_25_25=0 & pie32_24_24=0 & pie32_19_19=1 & pie32_11_11=0 & pie32_10_10=0 & pie32_9_9=1 & pie32_8_8=0 & pie32_3_1=7 & PIE13 & PIE12 & PIE9 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; *[ram]:16 ea = PIE13; PIE9 = ee_vadds_s8(PIE10, PIE8); PIE12 = PIE12 + 16; }
+:ee.vcmp.eq.s16 PIE0, PIE5, PIE4 is pie24_23_22=2 & pie24_19_16=14 & pie24_13_13=0 & pie24_7_0=148 & PIE0 & PIE5 & PIE4 { PIE0 = ee_vcmp_eq_s16(PIE5, PIE4); }
+:ee.vcmp.eq.s32 PIE0, PIE5, PIE4 is pie24_23_22=2 & pie24_19_16=14 & pie24_13_13=0 & pie24_7_0=164 & PIE0 & PIE5 & PIE4 { PIE0 = ee_vcmp_eq_s32(PIE5, PIE4); }
+:ee.vcmp.eq.s8 PIE0, PIE5, PIE4 is pie24_23_22=2 & pie24_19_16=14 & pie24_13_13=0 & pie24_7_0=180 & PIE0 & PIE5 & PIE4 { PIE0 = ee_vcmp_eq_s8(PIE5, PIE4); }
+:ee.vcmp.gt.s16 PIE0, PIE5, PIE4 is pie24_23_22=2 & pie24_19_16=14 & pie24_13_13=0 & pie24_7_0=196 & PIE0 & PIE5 & PIE4 { PIE0 = ee_vcmp_gt_s16(PIE5, PIE4); }
+:ee.vcmp.gt.s32 PIE0, PIE5, PIE4 is pie24_23_22=2 & pie24_19_16=14 & pie24_13_13=0 & pie24_7_0=212 & PIE0 & PIE5 & PIE4 { PIE0 = ee_vcmp_gt_s32(PIE5, PIE4); }
+:ee.vcmp.gt.s8 PIE0, PIE5, PIE4 is pie24_23_22=2 & pie24_19_16=14 & pie24_13_13=0 & pie24_7_0=228 & PIE0 & PIE5 & PIE4 { PIE0 = ee_vcmp_gt_s8(PIE5, PIE4); }
+:ee.vcmp.lt.s16 PIE0, PIE5, PIE4 is pie24_23_22=2 & pie24_19_16=14 & pie24_13_13=0 & pie24_7_0=244 & PIE0 & PIE5 & PIE4 { PIE0 = ee_vcmp_lt_s16(PIE5, PIE4); }
+:ee.vcmp.lt.s32 PIE0, PIE5, PIE4 is pie24_23_22=2 & pie24_19_16=14 & pie24_13_13=1 & pie24_7_0=4 & PIE0 & PIE5 & PIE4 { PIE0 = ee_vcmp_lt_s32(PIE5, PIE4); }
+:ee.vcmp.lt.s8 PIE0, PIE5, PIE4 is pie24_23_22=2 & pie24_19_16=14 & pie24_13_13=1 & pie24_7_0=20 & PIE0 & PIE5 & PIE4 { PIE0 = ee_vcmp_lt_s8(PIE5, PIE4); }
+:ee.vldbc.16 PIE0, PIE3 is pie24_23_22=3 & pie24_19_16=13 & pie24_14_8=115 & pie24_3_0=4 & PIE0 & PIE3 { local ea:4 = PIE3; PIE0 = ee_vldbc_16(ea); }
+:ee.vldbc.16.ip PIE0, PIE3, PIE44 is pie24_23_22=2 & pie24_19_16=5 & pie24_3_0=4 & PIE0 & PIE3 & PIE44 { local ea:4 = PIE3; PIE0 = ee_vldbc_16(ea, PIE44); PIE3 = PIE3 + PIE44; }
+:ee.vldbc.16.xp PIE0, PIE3, PIE35 is pie24_23_22=2 & pie24_19_16=13 & pie24_14_12=4 & pie24_3_0=4 & PIE0 & PIE3 & PIE35 { local ea:4 = PIE3; PIE0 = ee_vldbc_16(ea); PIE3 = PIE3 + PIE35; }
+:ee.vldbc.32 PIE0, PIE3 is pie24_23_22=3 & pie24_19_16=13 & pie24_14_8=119 & pie24_3_0=4 & PIE0 & PIE3 { local ea:4 = PIE3; PIE0 = ee_vldbc_32(ea); }
+:ee.vldbc.32.ip PIE0, PIE3, PIE38 is pie24_23_23=1 & pie24_19_16=2 & pie24_3_0=4 & PIE0 & PIE3 & PIE38 { local ea:4 = PIE3; PIE0 = ee_vldbc_32(ea, PIE38); PIE3 = PIE3 + PIE38; }
+:ee.vldbc.32.xp PIE0, PIE3, PIE35 is pie24_23_22=2 & pie24_19_16=13 & pie24_14_12=1 & pie24_3_0=4 & PIE0 & PIE3 & PIE35 { local ea:4 = PIE3; PIE0 = ee_vldbc_32(ea); PIE3 = PIE3 + PIE35; }
+:ee.vldbc.8 PIE0, PIE3 is pie24_23_22=3 & pie24_19_16=13 & pie24_14_8=59 & pie24_3_0=4 & PIE0 & PIE3 { local ea:4 = PIE3; PIE0 = ee_vldbc_8(ea); }
+:ee.vldbc.8.ip PIE0, PIE3, PIE45 is pie24_23_22=3 & pie24_19_16=5 & pie24_3_0=4 & PIE0 & PIE3 & PIE45 { local ea:4 = PIE3; PIE0 = ee_vldbc_8(ea, PIE45); PIE3 = PIE3 + PIE45; }
+:ee.vldbc.8.xp PIE0, PIE3, PIE35 is pie24_23_22=2 & pie24_19_16=13 & pie24_14_12=5 & pie24_3_0=4 & PIE0 & PIE3 & PIE35 { local ea:4 = PIE3; PIE0 = ee_vldbc_8(ea); PIE3 = PIE3 + PIE35; }
+:ee.vldhbc.16.incp PIE0, PIE23, PIE3 is pie24_23_22=3 & pie24_19_16=12 & pie24_11_8=2 & pie24_3_0=4 & PIE0 & PIE23 & PIE3 { local ea:4 = PIE3; PIE0 = ee_vldhbc_16(ea); PIE23 = ee_vldhbc_16_hi(ea); PIE3 = PIE3 + 16; }
+:ee.vld.128.ip PIE0, PIE3, PIE36 is pie24_23_23=1 & pie24_19_16=3 & pie24_3_0=4 & PIE0 & PIE3 & PIE36 { local ea:4 = PIE3 & 0xfffffff0; PIE0 = *[ram]:16 ea; PIE3 = PIE3 + PIE36; }
+:ee.vld.128.xp PIE0, PIE3, PIE35 is pie24_23_22=2 & pie24_19_16=13 & pie24_14_12=2 & pie24_3_0=4 & PIE0 & PIE3 & PIE35 { local ea:4 = PIE3 & 0xfffffff0; PIE0 = *[ram]:16 ea; PIE3 = PIE3 + PIE35; }
+:ee.vld.h.64.ip PIE0, PIE3, PIE37 is pie24_23_23=1 & pie24_19_16=8 & pie24_3_0=4 & PIE0 & PIE3 & PIE37 { local ea:4 = PIE3 & 0xfffffff8; local v:8 = *[ram]:8 ea; local w:16 = zext(v); PIE0 = (PIE0 & 0xffffffffffffffff) | (w << 64); PIE3 = PIE3 + PIE37; }
+:ee.vld.h.64.xp PIE0, PIE3, PIE35 is pie24_23_22=2 & pie24_19_16=13 & pie24_14_12=6 & pie24_3_0=4 & PIE0 & PIE3 & PIE35 { local ea:4 = PIE3 & 0xfffffff8; local v:8 = *[ram]:8 ea; local w:16 = zext(v); PIE0 = (PIE0 & 0xffffffffffffffff) | (w << 64); PIE3 = PIE3 + PIE35; }
+:ee.vld.l.64.ip PIE0, PIE3, PIE37 is pie24_23_23=1 & pie24_19_16=9 & pie24_3_0=4 & PIE0 & PIE3 & PIE37 { local ea:4 = PIE3 & 0xfffffff8; local v:8 = *[ram]:8 ea; local w:16 = zext(v); PIE0 = (PIE0 & ~0xffffffffffffffff) | w; PIE3 = PIE3 + PIE37; }
+:ee.vld.l.64.xp PIE0, PIE3, PIE35 is pie24_23_22=2 & pie24_19_16=13 & pie24_14_12=3 & pie24_3_0=4 & PIE0 & PIE3 & PIE35 { local ea:4 = PIE3 & 0xfffffff8; local v:8 = *[ram]:8 ea; local w:16 = zext(v); PIE0 = (PIE0 & ~0xffffffffffffffff) | w; PIE3 = PIE3 + PIE35; }
+:ee.vmax.s16 PIE0, PIE5, PIE4 is pie24_23_22=2 & pie24_19_16=14 & pie24_13_13=1 & pie24_7_0=36 & PIE0 & PIE5 & PIE4 { PIE0 = ee_vmax_s16(PIE5, PIE4); }
+:ee.vmax.s16.ld.incp PIE7, PIE12, PIE9, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=0 & pie32_22_22=0 & pie32_21_21=0 & pie32_20_20=1 & pie32_11_11=1 & pie32_10_10=1 & pie32_9_9=0 & pie32_8_8=1 & pie32_3_1=7 & PIE7 & PIE12 & PIE9 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; PIE9 = ee_vmax_s16(PIE10, PIE8); PIE7 = ldv; PIE12 = PIE12 + 16; }
+:ee.vmax.s16.st.incp PIE13, PIE12, PIE9, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=1 & pie32_25_25=0 & pie32_24_24=0 & pie32_19_19=1 & pie32_11_11=0 & pie32_10_10=0 & pie32_9_9=1 & pie32_8_8=1 & pie32_3_1=7 & PIE13 & PIE12 & PIE9 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; *[ram]:16 ea = PIE13; PIE9 = ee_vmax_s16(PIE10, PIE8); PIE12 = PIE12 + 16; }
+:ee.vmax.s32 PIE0, PIE5, PIE4 is pie24_23_22=2 & pie24_19_16=14 & pie24_13_13=1 & pie24_7_0=52 & PIE0 & PIE5 & PIE4 { PIE0 = ee_vmax_s32(PIE5, PIE4); }
+:ee.vmax.s32.ld.incp PIE7, PIE12, PIE9, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=0 & pie32_22_22=0 & pie32_21_21=0 & pie32_20_20=1 & pie32_11_11=1 & pie32_10_10=1 & pie32_9_9=1 & pie32_8_8=0 & pie32_3_1=7 & PIE7 & PIE12 & PIE9 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; PIE9 = ee_vmax_s32(PIE10, PIE8); PIE7 = ldv; PIE12 = PIE12 + 16; }
+:ee.vmax.s32.st.incp PIE13, PIE12, PIE9, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=1 & pie32_25_25=0 & pie32_24_24=1 & pie32_19_19=0 & pie32_11_11=0 & pie32_10_10=0 & pie32_9_9=0 & pie32_8_8=0 & pie32_3_1=7 & PIE13 & PIE12 & PIE9 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; *[ram]:16 ea = PIE13; PIE9 = ee_vmax_s32(PIE10, PIE8); PIE12 = PIE12 + 16; }
+:ee.vmax.s8 PIE0, PIE5, PIE4 is pie24_23_22=2 & pie24_19_16=14 & pie24_13_13=1 & pie24_7_0=68 & PIE0 & PIE5 & PIE4 { PIE0 = ee_vmax_s8(PIE5, PIE4); }
+:ee.vmax.s8.ld.incp PIE7, PIE12, PIE9, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=0 & pie32_22_22=0 & pie32_21_21=0 & pie32_20_20=1 & pie32_11_11=1 & pie32_10_10=1 & pie32_9_9=1 & pie32_8_8=1 & pie32_3_1=7 & PIE7 & PIE12 & PIE9 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; PIE9 = ee_vmax_s8(PIE10, PIE8); PIE7 = ldv; PIE12 = PIE12 + 16; }
+:ee.vmax.s8.st.incp PIE13, PIE12, PIE9, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=1 & pie32_25_25=0 & pie32_24_24=1 & pie32_19_19=1 & pie32_11_11=0 & pie32_10_10=0 & pie32_9_9=0 & pie32_8_8=0 & pie32_3_1=7 & PIE13 & PIE12 & PIE9 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; *[ram]:16 ea = PIE13; PIE9 = ee_vmax_s8(PIE10, PIE8); PIE12 = PIE12 + 16; }
+:ee.vmin.s16 PIE0, PIE5, PIE4 is pie24_23_22=2 & pie24_19_16=14 & pie24_13_13=1 & pie24_7_0=84 & PIE0 & PIE5 & PIE4 { PIE0 = ee_vmin_s16(PIE5, PIE4); }
+:ee.vmin.s16.ld.incp PIE7, PIE12, PIE9, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=0 & pie32_22_22=0 & pie32_21_21=1 & pie32_20_20=0 & pie32_11_11=1 & pie32_10_10=1 & pie32_9_9=1 & pie32_8_8=0 & pie32_3_1=7 & PIE7 & PIE12 & PIE9 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; PIE9 = ee_vmin_s16(PIE10, PIE8); PIE7 = ldv; PIE12 = PIE12 + 16; }
+:ee.vmin.s16.st.incp PIE13, PIE12, PIE9, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=1 & pie32_25_25=0 & pie32_24_24=1 & pie32_19_19=0 & pie32_11_11=0 & pie32_10_10=0 & pie32_9_9=0 & pie32_8_8=1 & pie32_3_1=7 & PIE13 & PIE12 & PIE9 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; *[ram]:16 ea = PIE13; PIE9 = ee_vmin_s16(PIE10, PIE8); PIE12 = PIE12 + 16; }
+:ee.vmin.s32 PIE0, PIE5, PIE4 is pie24_23_22=2 & pie24_19_16=14 & pie24_13_13=1 & pie24_7_0=100 & PIE0 & PIE5 & PIE4 { PIE0 = ee_vmin_s32(PIE5, PIE4); }
+:ee.vmin.s32.ld.incp PIE7, PIE12, PIE9, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=0 & pie32_22_22=0 & pie32_21_21=1 & pie32_20_20=1 & pie32_11_11=1 & pie32_10_10=1 & pie32_9_9=1 & pie32_8_8=0 & pie32_3_1=7 & PIE7 & PIE12 & PIE9 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; PIE9 = ee_vmin_s32(PIE10, PIE8); PIE7 = ldv; PIE12 = PIE12 + 16; }
+:ee.vmin.s32.st.incp PIE13, PIE12, PIE9, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=1 & pie32_25_25=0 & pie32_24_24=1 & pie32_19_19=1 & pie32_11_11=0 & pie32_10_10=0 & pie32_9_9=0 & pie32_8_8=1 & pie32_3_1=7 & PIE13 & PIE12 & PIE9 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; *[ram]:16 ea = PIE13; PIE9 = ee_vmin_s32(PIE10, PIE8); PIE12 = PIE12 + 16; }
+:ee.vmin.s8 PIE0, PIE5, PIE4 is pie24_23_22=2 & pie24_19_16=14 & pie24_13_13=1 & pie24_7_0=116 & PIE0 & PIE5 & PIE4 { PIE0 = ee_vmin_s8(PIE5, PIE4); }
+:ee.vmin.s8.ld.incp PIE7, PIE12, PIE9, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=0 & pie32_22_22=0 & pie32_21_21=1 & pie32_20_20=0 & pie32_11_11=1 & pie32_10_10=1 & pie32_9_9=1 & pie32_8_8=1 & pie32_3_1=7 & PIE7 & PIE12 & PIE9 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; PIE9 = ee_vmin_s8(PIE10, PIE8); PIE7 = ldv; PIE12 = PIE12 + 16; }
+:ee.vmin.s8.st.incp PIE13, PIE12, PIE9, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=1 & pie32_25_25=0 & pie32_24_24=1 & pie32_19_19=0 & pie32_11_11=0 & pie32_10_10=0 & pie32_9_9=1 & pie32_8_8=0 & pie32_3_1=7 & PIE13 & PIE12 & PIE9 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; *[ram]:16 ea = PIE13; PIE9 = ee_vmin_s8(PIE10, PIE8); PIE12 = PIE12 + 16; }
+:ee.vmulas.s16.accx PIE5, PIE4 is pie24_23_15=52 & pie24_13_13=0 & pie24_7_0=132 & PIE5 & PIE4 { ACCX = ee_vmulas_s16_accx_accx(PIE5, PIE4, ACCX); }
+:ee.vmulas.s16.accx.ld.ip PIE7, PIE12, PIE46, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=1 & pie32_22_22=0 & pie32_21_21=0 & pie32_20_20=0 & pie32_18_18=0 & pie32_17_17=0 & pie32_16_16=0 & pie32_3_1=7 & PIE7 & PIE12 & PIE46 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; ACCX = ee_vmulas_s16_accx_accx(PIE46, PIE10, PIE8, ACCX); PIE7 = ldv; PIE12 = PIE12 + PIE46; }
+:ee.vmulas.s16.accx.ld.ip.qup PIE7, PIE12, PIE46, PIE10, PIE8, PIE13, PIE9 is pie32_31_31=0 & pie32_30_30=0 & pie32_29_29=0 & pie32_28_28=0 & pie32_3_1=7 & PIE7 & PIE12 & PIE46 & PIE10 & PIE8 & PIE13 & PIE9 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; ACCX = ee_vmulas_s16_accx_accx(PIE46, PIE10, PIE8, PIE13, PIE9, ACCX); PIE7 = ldv; PIE12 = PIE12 + PIE46; }
+:ee.vmulas.s16.accx.ld.xp PIE7, PIE12, PIE18, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=1 & pie32_27_27=0 & pie32_26_26=0 & pie32_22_22=0 & pie32_21_21=0 & pie32_20_20=1 & pie32_18_18=0 & pie32_17_17=0 & pie32_16_16=0 & pie32_3_1=7 & PIE7 & PIE12 & PIE18 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; ACCX = ee_vmulas_s16_accx_accx(PIE10, PIE8, ACCX); PIE7 = ldv; PIE12 = PIE12 + PIE18; }
+:ee.vmulas.s16.accx.ld.xp.qup PIE7, PIE12, PIE18, PIE10, PIE8, PIE13, PIE9 is pie32_31_31=1 & pie32_30_30=0 & pie32_29_29=1 & pie32_28_28=1 & pie32_27_27=0 & pie32_26_26=0 & pie32_3_1=7 & PIE7 & PIE12 & PIE18 & PIE10 & PIE8 & PIE13 & PIE9 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; ACCX = ee_vmulas_s16_accx_accx(PIE10, PIE8, PIE13, PIE9, ACCX); PIE7 = ldv; PIE12 = PIE12 + PIE18; }
+:ee.vmulas.s16.qacc PIE5, PIE4 is pie24_23_15=52 & pie24_13_13=1 & pie24_7_0=132 & PIE5 & PIE4 { QACC_H = ee_vmulas_s16_qacc_qacc_h(PIE5, PIE4, QACC_H, QACC_L); QACC_L = ee_vmulas_s16_qacc_qacc_l(PIE5, PIE4, QACC_H, QACC_L); }
+:ee.vmulas.s16.qacc.ldbc.incp PIE47, PIE3, PIE5, PIE4 is pie24_23_21=4 & pie24_19_16=7 & pie24_3_0=4 & PIE47 & PIE3 & PIE5 & PIE4 { local ea:4 = PIE3 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; QACC_H = ee_vmulas_s16_qacc_qacc_h(PIE5, PIE4, QACC_H, QACC_L); QACC_L = ee_vmulas_s16_qacc_qacc_l(PIE5, PIE4, QACC_H, QACC_L); PIE47 = ldv; PIE3 = PIE3 + 16; }
+:ee.vmulas.s16.qacc.ldbc.incp.qup PIE7, PIE12, PIE10, PIE8, PIE13, PIE9 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=0 & pie32_11_11=1 & pie32_10_10=0 & pie32_9_9=0 & pie32_8_8=0 & pie32_3_1=7 & PIE7 & PIE12 & PIE10 & PIE8 & PIE13 & PIE9 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; QACC_H = ee_vmulas_s16_qacc_qacc_h(PIE10, PIE8, PIE13, PIE9, QACC_H, QACC_L); QACC_L = ee_vmulas_s16_qacc_qacc_l(PIE10, PIE8, PIE13, PIE9, QACC_H, QACC_L); PIE7 = ldv; PIE12 = PIE12 + 16; }
+:ee.vmulas.s16.qacc.ld.ip PIE7, PIE12, PIE46, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=1 & pie32_22_22=0 & pie32_21_21=0 & pie32_20_20=0 & pie32_18_18=0 & pie32_17_17=0 & pie32_16_16=1 & pie32_3_1=7 & PIE7 & PIE12 & PIE46 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; QACC_H = ee_vmulas_s16_qacc_qacc_h(PIE46, PIE10, PIE8, QACC_H, QACC_L); QACC_L = ee_vmulas_s16_qacc_qacc_l(PIE46, PIE10, PIE8, QACC_H, QACC_L); PIE7 = ldv; PIE12 = PIE12 + PIE46; }
+:ee.vmulas.s16.qacc.ld.ip.qup PIE7, PIE12, PIE46, PIE10, PIE8, PIE13, PIE9 is pie32_31_31=0 & pie32_30_30=0 & pie32_29_29=0 & pie32_28_28=1 & pie32_3_1=7 & PIE7 & PIE12 & PIE46 & PIE10 & PIE8 & PIE13 & PIE9 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; QACC_H = ee_vmulas_s16_qacc_qacc_h(PIE46, PIE10, PIE8, PIE13, PIE9, QACC_H, QACC_L); QACC_L = ee_vmulas_s16_qacc_qacc_l(PIE46, PIE10, PIE8, PIE13, PIE9, QACC_H, QACC_L); PIE7 = ldv; PIE12 = PIE12 + PIE46; }
+:ee.vmulas.s16.qacc.ld.xp PIE7, PIE12, PIE18, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=1 & pie32_27_27=0 & pie32_26_26=0 & pie32_22_22=0 & pie32_21_21=0 & pie32_20_20=1 & pie32_18_18=0 & pie32_17_17=0 & pie32_16_16=1 & pie32_3_1=7 & PIE7 & PIE12 & PIE18 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; QACC_H = ee_vmulas_s16_qacc_qacc_h(PIE10, PIE8, QACC_H, QACC_L); QACC_L = ee_vmulas_s16_qacc_qacc_l(PIE10, PIE8, QACC_H, QACC_L); PIE7 = ldv; PIE12 = PIE12 + PIE18; }
+:ee.vmulas.s16.qacc.ld.xp.qup PIE7, PIE12, PIE18, PIE10, PIE8, PIE13, PIE9 is pie32_31_31=1 & pie32_30_30=0 & pie32_29_29=1 & pie32_28_28=1 & pie32_27_27=0 & pie32_26_26=1 & pie32_3_1=7 & PIE7 & PIE12 & PIE18 & PIE10 & PIE8 & PIE13 & PIE9 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; QACC_H = ee_vmulas_s16_qacc_qacc_h(PIE10, PIE8, PIE13, PIE9, QACC_H, QACC_L); QACC_L = ee_vmulas_s16_qacc_qacc_l(PIE10, PIE8, PIE13, PIE9, QACC_H, QACC_L); PIE7 = ldv; PIE12 = PIE12 + PIE18; }
+:ee.vmulas.s8.accx PIE5, PIE4 is pie24_23_15=52 & pie24_13_13=0 & pie24_7_0=196 & PIE5 & PIE4 { ACCX = ee_vmulas_s8_accx_accx(PIE5, PIE4, ACCX); }
+:ee.vmulas.s8.accx.ld.ip PIE7, PIE12, PIE46, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=1 & pie32_22_22=0 & pie32_21_21=0 & pie32_20_20=0 & pie32_18_18=0 & pie32_17_17=1 & pie32_16_16=0 & pie32_3_1=7 & PIE7 & PIE12 & PIE46 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; ACCX = ee_vmulas_s8_accx_accx(PIE46, PIE10, PIE8, ACCX); PIE7 = ldv; PIE12 = PIE12 + PIE46; }
+:ee.vmulas.s8.accx.ld.ip.qup PIE7, PIE12, PIE46, PIE10, PIE8, PIE13, PIE9 is pie32_31_31=0 & pie32_30_30=0 & pie32_29_29=1 & pie32_28_28=0 & pie32_3_1=7 & PIE7 & PIE12 & PIE46 & PIE10 & PIE8 & PIE13 & PIE9 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; ACCX = ee_vmulas_s8_accx_accx(PIE46, PIE10, PIE8, PIE13, PIE9, ACCX); PIE7 = ldv; PIE12 = PIE12 + PIE46; }
+:ee.vmulas.s8.accx.ld.xp PIE7, PIE12, PIE18, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=1 & pie32_27_27=0 & pie32_26_26=0 & pie32_22_22=0 & pie32_21_21=0 & pie32_20_20=1 & pie32_18_18=0 & pie32_17_17=1 & pie32_16_16=0 & pie32_3_1=7 & PIE7 & PIE12 & PIE18 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; ACCX = ee_vmulas_s8_accx_accx(PIE10, PIE8, ACCX); PIE7 = ldv; PIE12 = PIE12 + PIE18; }
+:ee.vmulas.s8.accx.ld.xp.qup PIE7, PIE12, PIE18, PIE10, PIE8, PIE13, PIE9 is pie32_31_31=1 & pie32_30_30=0 & pie32_29_29=1 & pie32_28_28=1 & pie32_27_27=1 & pie32_26_26=0 & pie32_3_1=7 & PIE7 & PIE12 & PIE18 & PIE10 & PIE8 & PIE13 & PIE9 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; ACCX = ee_vmulas_s8_accx_accx(PIE10, PIE8, PIE13, PIE9, ACCX); PIE7 = ldv; PIE12 = PIE12 + PIE18; }
+:ee.vmulas.s8.qacc PIE5, PIE4 is pie24_23_15=52 & pie24_13_13=1 & pie24_7_0=196 & PIE5 & PIE4 { QACC_H = ee_vmulas_s8_qacc_qacc_h(PIE5, PIE4, QACC_H, QACC_L); QACC_L = ee_vmulas_s8_qacc_qacc_l(PIE5, PIE4, QACC_H, QACC_L); }
+:ee.vmulas.s8.qacc.ldbc.incp PIE47, PIE3, PIE5, PIE4 is pie24_23_21=5 & pie24_19_16=7 & pie24_3_0=4 & PIE47 & PIE3 & PIE5 & PIE4 { local ea:4 = PIE3 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; QACC_H = ee_vmulas_s8_qacc_qacc_h(PIE5, PIE4, QACC_H, QACC_L); QACC_L = ee_vmulas_s8_qacc_qacc_l(PIE5, PIE4, QACC_H, QACC_L); PIE47 = ldv; PIE3 = PIE3 + 16; }
+:ee.vmulas.s8.qacc.ldbc.incp.qup PIE7, PIE12, PIE10, PIE8, PIE13, PIE9 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=0 & pie32_11_11=1 & pie32_10_10=0 & pie32_9_9=0 & pie32_8_8=1 & pie32_3_1=7 & PIE7 & PIE12 & PIE10 & PIE8 & PIE13 & PIE9 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; QACC_H = ee_vmulas_s8_qacc_qacc_h(PIE10, PIE8, PIE13, PIE9, QACC_H, QACC_L); QACC_L = ee_vmulas_s8_qacc_qacc_l(PIE10, PIE8, PIE13, PIE9, QACC_H, QACC_L); PIE7 = ldv; PIE12 = PIE12 + 16; }
+:ee.vmulas.s8.qacc.ld.ip PIE7, PIE12, PIE46, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=1 & pie32_22_22=0 & pie32_21_21=0 & pie32_20_20=0 & pie32_18_18=0 & pie32_17_17=1 & pie32_16_16=1 & pie32_3_1=7 & PIE7 & PIE12 & PIE46 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; QACC_H = ee_vmulas_s8_qacc_qacc_h(PIE46, PIE10, PIE8, QACC_H, QACC_L); QACC_L = ee_vmulas_s8_qacc_qacc_l(PIE46, PIE10, PIE8, QACC_H, QACC_L); PIE7 = ldv; PIE12 = PIE12 + PIE46; }
+:ee.vmulas.s8.qacc.ld.ip.qup PIE7, PIE12, PIE46, PIE10, PIE8, PIE13, PIE9 is pie32_31_31=0 & pie32_30_30=0 & pie32_29_29=1 & pie32_28_28=1 & pie32_3_1=7 & PIE7 & PIE12 & PIE46 & PIE10 & PIE8 & PIE13 & PIE9 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; QACC_H = ee_vmulas_s8_qacc_qacc_h(PIE46, PIE10, PIE8, PIE13, PIE9, QACC_H, QACC_L); QACC_L = ee_vmulas_s8_qacc_qacc_l(PIE46, PIE10, PIE8, PIE13, PIE9, QACC_H, QACC_L); PIE7 = ldv; PIE12 = PIE12 + PIE46; }
+:ee.vmulas.s8.qacc.ld.xp PIE7, PIE12, PIE18, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=1 & pie32_27_27=0 & pie32_26_26=0 & pie32_22_22=0 & pie32_21_21=0 & pie32_20_20=1 & pie32_18_18=0 & pie32_17_17=1 & pie32_16_16=1 & pie32_3_1=7 & PIE7 & PIE12 & PIE18 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; QACC_H = ee_vmulas_s8_qacc_qacc_h(PIE10, PIE8, QACC_H, QACC_L); QACC_L = ee_vmulas_s8_qacc_qacc_l(PIE10, PIE8, QACC_H, QACC_L); PIE7 = ldv; PIE12 = PIE12 + PIE18; }
+:ee.vmulas.s8.qacc.ld.xp.qup PIE7, PIE12, PIE18, PIE10, PIE8, PIE13, PIE9 is pie32_31_31=1 & pie32_30_30=0 & pie32_29_29=1 & pie32_28_28=1 & pie32_27_27=1 & pie32_26_26=1 & pie32_3_1=7 & PIE7 & PIE12 & PIE18 & PIE10 & PIE8 & PIE13 & PIE9 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; QACC_H = ee_vmulas_s8_qacc_qacc_h(PIE10, PIE8, PIE13, PIE9, QACC_H, QACC_L); QACC_L = ee_vmulas_s8_qacc_qacc_l(PIE10, PIE8, PIE13, PIE9, QACC_H, QACC_L); PIE7 = ldv; PIE12 = PIE12 + PIE18; }
+:ee.vmulas.u16.accx PIE5, PIE4 is pie24_23_15=20 & pie24_13_13=0 & pie24_7_0=132 & PIE5 & PIE4 { ACCX = ee_vmulas_u16_accx_accx(PIE5, PIE4, ACCX); }
+:ee.vmulas.u16.accx.ld.ip PIE7, PIE12, PIE46, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=1 & pie32_22_22=0 & pie32_21_21=0 & pie32_20_20=0 & pie32_18_18=1 & pie32_17_17=0 & pie32_16_16=0 & pie32_3_1=7 & PIE7 & PIE12 & PIE46 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; ACCX = ee_vmulas_u16_accx_accx(PIE46, PIE10, PIE8, ACCX); PIE7 = ldv; PIE12 = PIE12 + PIE46; }
+:ee.vmulas.u16.accx.ld.ip.qup PIE7, PIE12, PIE46, PIE10, PIE8, PIE13, PIE9 is pie32_31_31=0 & pie32_30_30=1 & pie32_29_29=0 & pie32_28_28=0 & pie32_3_1=7 & PIE7 & PIE12 & PIE46 & PIE10 & PIE8 & PIE13 & PIE9 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; ACCX = ee_vmulas_u16_accx_accx(PIE46, PIE10, PIE8, PIE13, PIE9, ACCX); PIE7 = ldv; PIE12 = PIE12 + PIE46; }
+:ee.vmulas.u16.accx.ld.xp PIE7, PIE12, PIE18, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=1 & pie32_27_27=0 & pie32_26_26=0 & pie32_22_22=0 & pie32_21_21=0 & pie32_20_20=1 & pie32_18_18=1 & pie32_17_17=0 & pie32_16_16=0 & pie32_3_1=7 & PIE7 & PIE12 & PIE18 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; ACCX = ee_vmulas_u16_accx_accx(PIE10, PIE8, ACCX); PIE7 = ldv; PIE12 = PIE12 + PIE18; }
+:ee.vmulas.u16.accx.ld.xp.qup PIE7, PIE12, PIE18, PIE10, PIE8, PIE13, PIE9 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=0 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=0 & pie32_3_1=7 & PIE7 & PIE12 & PIE18 & PIE10 & PIE8 & PIE13 & PIE9 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; ACCX = ee_vmulas_u16_accx_accx(PIE10, PIE8, PIE13, PIE9, ACCX); PIE7 = ldv; PIE12 = PIE12 + PIE18; }
+:ee.vmulas.u16.qacc PIE5, PIE4 is pie24_23_15=20 & pie24_13_13=1 & pie24_7_0=132 & PIE5 & PIE4 { QACC_H = ee_vmulas_u16_qacc_qacc_h(PIE5, PIE4, QACC_H, QACC_L); QACC_L = ee_vmulas_u16_qacc_qacc_l(PIE5, PIE4, QACC_H, QACC_L); }
+:ee.vmulas.u16.qacc.ldbc.incp PIE47, PIE3, PIE5, PIE4 is pie24_23_21=6 & pie24_19_16=7 & pie24_3_0=4 & PIE47 & PIE3 & PIE5 & PIE4 { local ea:4 = PIE3 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; QACC_H = ee_vmulas_u16_qacc_qacc_h(PIE5, PIE4, QACC_H, QACC_L); QACC_L = ee_vmulas_u16_qacc_qacc_l(PIE5, PIE4, QACC_H, QACC_L); PIE47 = ldv; PIE3 = PIE3 + 16; }
+:ee.vmulas.u16.qacc.ldbc.incp.qup PIE7, PIE12, PIE10, PIE8, PIE13, PIE9 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=0 & pie32_11_11=1 & pie32_10_10=0 & pie32_9_9=1 & pie32_8_8=0 & pie32_3_1=7 & PIE7 & PIE12 & PIE10 & PIE8 & PIE13 & PIE9 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; QACC_H = ee_vmulas_u16_qacc_qacc_h(PIE10, PIE8, PIE13, PIE9, QACC_H, QACC_L); QACC_L = ee_vmulas_u16_qacc_qacc_l(PIE10, PIE8, PIE13, PIE9, QACC_H, QACC_L); PIE7 = ldv; PIE12 = PIE12 + 16; }
+:ee.vmulas.u16.qacc.ld.ip PIE7, PIE12, PIE46, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=1 & pie32_22_22=0 & pie32_21_21=0 & pie32_20_20=0 & pie32_18_18=1 & pie32_17_17=0 & pie32_16_16=1 & pie32_3_1=7 & PIE7 & PIE12 & PIE46 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; QACC_H = ee_vmulas_u16_qacc_qacc_h(PIE46, PIE10, PIE8, QACC_H, QACC_L); QACC_L = ee_vmulas_u16_qacc_qacc_l(PIE46, PIE10, PIE8, QACC_H, QACC_L); PIE7 = ldv; PIE12 = PIE12 + PIE46; }
+:ee.vmulas.u16.qacc.ld.ip.qup PIE7, PIE12, PIE46, PIE10, PIE8, PIE13, PIE9 is pie32_31_31=0 & pie32_30_30=1 & pie32_29_29=0 & pie32_28_28=1 & pie32_3_1=7 & PIE7 & PIE12 & PIE46 & PIE10 & PIE8 & PIE13 & PIE9 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; QACC_H = ee_vmulas_u16_qacc_qacc_h(PIE46, PIE10, PIE8, PIE13, PIE9, QACC_H, QACC_L); QACC_L = ee_vmulas_u16_qacc_qacc_l(PIE46, PIE10, PIE8, PIE13, PIE9, QACC_H, QACC_L); PIE7 = ldv; PIE12 = PIE12 + PIE46; }
+:ee.vmulas.u16.qacc.ld.xp PIE7, PIE12, PIE18, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=1 & pie32_27_27=0 & pie32_26_26=0 & pie32_22_22=0 & pie32_21_21=0 & pie32_20_20=1 & pie32_18_18=1 & pie32_17_17=0 & pie32_16_16=1 & pie32_3_1=7 & PIE7 & PIE12 & PIE18 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; QACC_H = ee_vmulas_u16_qacc_qacc_h(PIE10, PIE8, QACC_H, QACC_L); QACC_L = ee_vmulas_u16_qacc_qacc_l(PIE10, PIE8, QACC_H, QACC_L); PIE7 = ldv; PIE12 = PIE12 + PIE18; }
+:ee.vmulas.u16.qacc.ld.xp.qup PIE7, PIE12, PIE18, PIE10, PIE8, PIE13, PIE9 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=0 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=1 & pie32_3_1=7 & PIE7 & PIE12 & PIE18 & PIE10 & PIE8 & PIE13 & PIE9 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; QACC_H = ee_vmulas_u16_qacc_qacc_h(PIE10, PIE8, PIE13, PIE9, QACC_H, QACC_L); QACC_L = ee_vmulas_u16_qacc_qacc_l(PIE10, PIE8, PIE13, PIE9, QACC_H, QACC_L); PIE7 = ldv; PIE12 = PIE12 + PIE18; }
+:ee.vmulas.u8.accx PIE5, PIE4 is pie24_23_15=20 & pie24_13_13=0 & pie24_7_0=196 & PIE5 & PIE4 { ACCX = ee_vmulas_u8_accx_accx(PIE5, PIE4, ACCX); }
+:ee.vmulas.u8.accx.ld.ip PIE7, PIE12, PIE46, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=1 & pie32_22_22=0 & pie32_21_21=0 & pie32_20_20=0 & pie32_18_18=1 & pie32_17_17=1 & pie32_16_16=0 & pie32_3_1=7 & PIE7 & PIE12 & PIE46 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; ACCX = ee_vmulas_u8_accx_accx(PIE46, PIE10, PIE8, ACCX); PIE7 = ldv; PIE12 = PIE12 + PIE46; }
+:ee.vmulas.u8.accx.ld.ip.qup PIE7, PIE12, PIE46, PIE10, PIE8, PIE13, PIE9 is pie32_31_31=0 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_3_1=7 & PIE7 & PIE12 & PIE46 & PIE10 & PIE8 & PIE13 & PIE9 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; ACCX = ee_vmulas_u8_accx_accx(PIE46, PIE10, PIE8, PIE13, PIE9, ACCX); PIE7 = ldv; PIE12 = PIE12 + PIE46; }
+:ee.vmulas.u8.accx.ld.xp PIE7, PIE12, PIE18, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=1 & pie32_27_27=0 & pie32_26_26=0 & pie32_22_22=0 & pie32_21_21=0 & pie32_20_20=1 & pie32_18_18=1 & pie32_17_17=1 & pie32_16_16=0 & pie32_3_1=7 & PIE7 & PIE12 & PIE18 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; ACCX = ee_vmulas_u8_accx_accx(PIE10, PIE8, ACCX); PIE7 = ldv; PIE12 = PIE12 + PIE18; }
+:ee.vmulas.u8.accx.ld.xp.qup PIE7, PIE12, PIE18, PIE10, PIE8, PIE13, PIE9 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=0 & pie32_28_28=0 & pie32_27_27=1 & pie32_26_26=0 & pie32_3_1=7 & PIE7 & PIE12 & PIE18 & PIE10 & PIE8 & PIE13 & PIE9 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; ACCX = ee_vmulas_u8_accx_accx(PIE10, PIE8, PIE13, PIE9, ACCX); PIE7 = ldv; PIE12 = PIE12 + PIE18; }
+:ee.vmulas.u8.qacc PIE5, PIE4 is pie24_23_15=20 & pie24_13_13=1 & pie24_7_0=196 & PIE5 & PIE4 { QACC_H = ee_vmulas_u8_qacc_qacc_h(PIE5, PIE4, QACC_H, QACC_L); QACC_L = ee_vmulas_u8_qacc_qacc_l(PIE5, PIE4, QACC_H, QACC_L); }
+:ee.vmulas.u8.qacc.ldbc.incp PIE47, PIE3, PIE5, PIE4 is pie24_23_21=7 & pie24_19_16=7 & pie24_3_0=4 & PIE47 & PIE3 & PIE5 & PIE4 { local ea:4 = PIE3 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; QACC_H = ee_vmulas_u8_qacc_qacc_h(PIE5, PIE4, QACC_H, QACC_L); QACC_L = ee_vmulas_u8_qacc_qacc_l(PIE5, PIE4, QACC_H, QACC_L); PIE47 = ldv; PIE3 = PIE3 + 16; }
+:ee.vmulas.u8.qacc.ldbc.incp.qup PIE7, PIE12, PIE10, PIE8, PIE13, PIE9 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=0 & pie32_11_11=1 & pie32_10_10=0 & pie32_9_9=1 & pie32_8_8=1 & pie32_3_1=7 & PIE7 & PIE12 & PIE10 & PIE8 & PIE13 & PIE9 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; QACC_H = ee_vmulas_u8_qacc_qacc_h(PIE10, PIE8, PIE13, PIE9, QACC_H, QACC_L); QACC_L = ee_vmulas_u8_qacc_qacc_l(PIE10, PIE8, PIE13, PIE9, QACC_H, QACC_L); PIE7 = ldv; PIE12 = PIE12 + 16; }
+:ee.vmulas.u8.qacc.ld.ip PIE7, PIE12, PIE46, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=1 & pie32_22_22=0 & pie32_21_21=0 & pie32_20_20=0 & pie32_18_18=1 & pie32_17_17=1 & pie32_16_16=1 & pie32_3_1=7 & PIE7 & PIE12 & PIE46 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; QACC_H = ee_vmulas_u8_qacc_qacc_h(PIE46, PIE10, PIE8, QACC_H, QACC_L); QACC_L = ee_vmulas_u8_qacc_qacc_l(PIE46, PIE10, PIE8, QACC_H, QACC_L); PIE7 = ldv; PIE12 = PIE12 + PIE46; }
+:ee.vmulas.u8.qacc.ld.ip.qup PIE7, PIE12, PIE46, PIE10, PIE8, PIE13, PIE9 is pie32_31_31=0 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=1 & pie32_3_1=7 & PIE7 & PIE12 & PIE46 & PIE10 & PIE8 & PIE13 & PIE9 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; QACC_H = ee_vmulas_u8_qacc_qacc_h(PIE46, PIE10, PIE8, PIE13, PIE9, QACC_H, QACC_L); QACC_L = ee_vmulas_u8_qacc_qacc_l(PIE46, PIE10, PIE8, PIE13, PIE9, QACC_H, QACC_L); PIE7 = ldv; PIE12 = PIE12 + PIE46; }
+:ee.vmulas.u8.qacc.ld.xp PIE7, PIE12, PIE18, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=1 & pie32_27_27=0 & pie32_26_26=0 & pie32_22_22=0 & pie32_21_21=0 & pie32_20_20=1 & pie32_18_18=1 & pie32_17_17=1 & pie32_16_16=1 & pie32_3_1=7 & PIE7 & PIE12 & PIE18 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; QACC_H = ee_vmulas_u8_qacc_qacc_h(PIE10, PIE8, QACC_H, QACC_L); QACC_L = ee_vmulas_u8_qacc_qacc_l(PIE10, PIE8, QACC_H, QACC_L); PIE7 = ldv; PIE12 = PIE12 + PIE18; }
+:ee.vmulas.u8.qacc.ld.xp.qup PIE7, PIE12, PIE18, PIE10, PIE8, PIE13, PIE9 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=0 & pie32_28_28=0 & pie32_27_27=1 & pie32_26_26=1 & pie32_3_1=7 & PIE7 & PIE12 & PIE18 & PIE10 & PIE8 & PIE13 & PIE9 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; QACC_H = ee_vmulas_u8_qacc_qacc_h(PIE10, PIE8, PIE13, PIE9, QACC_H, QACC_L); QACC_L = ee_vmulas_u8_qacc_qacc_l(PIE10, PIE8, PIE13, PIE9, QACC_H, QACC_L); PIE7 = ldv; PIE12 = PIE12 + PIE18; }
+:ee.vmul.s16 PIE0, PIE5, PIE4 is pie24_23_22=2 & pie24_19_16=14 & pie24_13_13=1 & pie24_7_0=132 & PIE0 & PIE5 & PIE4 { PIE0 = ee_vmul_s16(PIE5, PIE4); }
+:ee.vmul.s16.ld.incp PIE7, PIE12, PIE9, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=0 & pie32_22_22=0 & pie32_21_21=1 & pie32_20_20=1 & pie32_11_11=1 & pie32_10_10=1 & pie32_9_9=1 & pie32_8_8=1 & pie32_3_1=7 & PIE7 & PIE12 & PIE9 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; PIE9 = ee_vmul_s16(PIE10, PIE8); PIE7 = ldv; PIE12 = PIE12 + 16; }
+:ee.vmul.s16.st.incp PIE13, PIE12, PIE9, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=1 & pie32_25_25=0 & pie32_24_24=1 & pie32_19_19=1 & pie32_11_11=0 & pie32_10_10=0 & pie32_9_9=1 & pie32_8_8=0 & pie32_3_1=7 & PIE13 & PIE12 & PIE9 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; *[ram]:16 ea = PIE13; PIE9 = ee_vmul_s16(PIE10, PIE8); PIE12 = PIE12 + 16; }
+:ee.vmul.s8 PIE0, PIE5, PIE4 is pie24_23_22=2 & pie24_19_16=14 & pie24_13_13=1 & pie24_7_0=148 & PIE0 & PIE5 & PIE4 { PIE0 = ee_vmul_s8(PIE5, PIE4); }
+:ee.vmul.s8.ld.incp PIE7, PIE12, PIE9, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=0 & pie32_22_22=1 & pie32_21_21=0 & pie32_20_20=0 & pie32_11_11=1 & pie32_10_10=1 & pie32_9_9=0 & pie32_8_8=0 & pie32_3_1=7 & PIE7 & PIE12 & PIE9 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; PIE9 = ee_vmul_s8(PIE10, PIE8); PIE7 = ldv; PIE12 = PIE12 + 16; }
+:ee.vmul.s8.st.incp PIE13, PIE12, PIE9, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=1 & pie32_25_25=0 & pie32_24_24=1 & pie32_19_19=0 & pie32_11_11=0 & pie32_10_10=0 & pie32_9_9=1 & pie32_8_8=1 & pie32_3_1=7 & PIE13 & PIE12 & PIE9 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; *[ram]:16 ea = PIE13; PIE9 = ee_vmul_s8(PIE10, PIE8); PIE12 = PIE12 + 16; }
+:ee.vmul.u16 PIE0, PIE5, PIE4 is pie24_23_22=2 & pie24_19_16=14 & pie24_13_13=1 & pie24_7_0=164 & PIE0 & PIE5 & PIE4 { PIE0 = ee_vmul_u16(PIE5, PIE4); }
+:ee.vmul.u16.ld.incp PIE7, PIE12, PIE9, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=0 & pie32_22_22=1 & pie32_21_21=0 & pie32_20_20=1 & pie32_11_11=1 & pie32_10_10=1 & pie32_9_9=0 & pie32_8_8=0 & pie32_3_1=7 & PIE7 & PIE12 & PIE9 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; PIE9 = ee_vmul_u16(PIE10, PIE8); PIE7 = ldv; PIE12 = PIE12 + 16; }
+:ee.vmul.u16.st.incp PIE13, PIE12, PIE9, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=1 & pie32_25_25=0 & pie32_24_24=1 & pie32_19_19=1 & pie32_11_11=0 & pie32_10_10=0 & pie32_9_9=1 & pie32_8_8=1 & pie32_3_1=7 & PIE13 & PIE12 & PIE9 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; *[ram]:16 ea = PIE13; PIE9 = ee_vmul_u16(PIE10, PIE8); PIE12 = PIE12 + 16; }
+:ee.vmul.u8 PIE0, PIE5, PIE4 is pie24_23_22=2 & pie24_19_16=14 & pie24_13_13=1 & pie24_7_0=180 & PIE0 & PIE5 & PIE4 { PIE0 = ee_vmul_u8(PIE5, PIE4); }
+:ee.vmul.u8.ld.incp PIE7, PIE12, PIE9, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=0 & pie32_22_22=1 & pie32_21_21=1 & pie32_20_20=0 & pie32_11_11=1 & pie32_10_10=1 & pie32_9_9=0 & pie32_8_8=0 & pie32_3_1=7 & PIE7 & PIE12 & PIE9 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; PIE9 = ee_vmul_u8(PIE10, PIE8); PIE7 = ldv; PIE12 = PIE12 + 16; }
+:ee.vmul.u8.st.incp PIE13, PIE12, PIE9, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=1 & pie32_26_26=0 & pie32_25_25=0 & pie32_24_24=0 & pie32_19_19=1 & pie32_11_11=0 & pie32_10_10=0 & pie32_9_9=0 & pie32_8_8=0 & pie32_3_1=7 & PIE13 & PIE12 & PIE9 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; *[ram]:16 ea = PIE13; PIE9 = ee_vmul_u8(PIE10, PIE8); PIE12 = PIE12 + 16; }
+:ee.vprelu.s16 PIE0, PIE5, PIE4, PIE3 is pie24_23_22=2 & pie24_19_16=12 & pie24_13_13=0 & pie24_3_0=4 & PIE0 & PIE5 & PIE4 & PIE3 { PIE0 = ee_vprelu_s16(PIE5, PIE4, PIE3); }
+:ee.vprelu.s8 PIE0, PIE5, PIE4, PIE3 is pie24_23_22=2 & pie24_19_16=12 & pie24_13_13=1 & pie24_3_0=4 & PIE0 & PIE5 & PIE4 & PIE3 { PIE0 = ee_vprelu_s8(PIE5, PIE4, PIE3); }
+:ee.vrelu.s16 PIE0, PIE35, PIE3 is pie24_23_22=3 & pie24_19_16=13 & pie24_14_12=1 & pie24_3_0=4 & PIE0 & PIE35 & PIE3 { ee_vrelu_s16(PIE0, PIE35, PIE3); }
+:ee.vrelu.s8 PIE0, PIE35, PIE3 is pie24_23_22=3 & pie24_19_16=13 & pie24_14_12=5 & pie24_3_0=4 & PIE0 & PIE35 & PIE3 { ee_vrelu_s8(PIE0, PIE35, PIE3); }
+:ee.vsl.32 PIE41, PIE0 is pie24_23_22=3 & pie24_19_16=13 & pie24_14_7=126 & pie24_3_0=4 & PIE41 & PIE0 { PIE41 = ee_vsl_32(PIE0); }
+:ee.vsmulas.s16.qacc PIE5, PIE4, PIE48 is pie24_23_22=2 & pie24_19_16=14 & pie24_13_13=1 & pie24_7_0=196 & PIE5 & PIE4 & PIE48 { QACC_H = ee_vsmulas_s16_qacc_qacc_h(PIE5, PIE4, PIE48, QACC_H, QACC_L); QACC_L = ee_vsmulas_s16_qacc_qacc_l(PIE5, PIE4, PIE48, QACC_H, QACC_L); }
+:ee.vsmulas.s16.qacc.ld.incp PIE7, PIE12, PIE10, PIE8, PIE49 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=0 & pie32_22_22=1 & pie32_21_21=1 & pie32_20_20=1 & pie32_11_11=1 & pie32_10_10=1 & pie32_9_9=0 & pie32_8_8=0 & pie32_3_1=7 & PIE7 & PIE12 & PIE10 & PIE8 & PIE49 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; QACC_H = ee_vsmulas_s16_qacc_qacc_h(PIE10, PIE8, PIE49, QACC_H, QACC_L); QACC_L = ee_vsmulas_s16_qacc_qacc_l(PIE10, PIE8, PIE49, QACC_H, QACC_L); PIE7 = ldv; PIE12 = PIE12 + 16; }
+:ee.vsmulas.s8.qacc PIE5, PIE4, PIE50 is pie24_23_22=2 & pie24_19_16=14 & pie24_13_13=0 & pie24_7_5=2 & pie24_3_0=4 & PIE5 & PIE4 & PIE50 { QACC_H = ee_vsmulas_s8_qacc_qacc_h(PIE5, PIE4, PIE50, QACC_H, QACC_L); QACC_L = ee_vsmulas_s8_qacc_qacc_l(PIE5, PIE4, PIE50, QACC_H, QACC_L); }
+:ee.vsmulas.s8.qacc.ld.incp PIE7, PIE12, PIE10, PIE8, PIE51 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=0 & pie32_22_22=0 & pie32_21_21=1 & pie32_11_11=1 & pie32_10_10=1 & pie32_9_9=0 & pie32_8_8=0 & pie32_3_1=7 & PIE7 & PIE12 & PIE10 & PIE8 & PIE51 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; QACC_H = ee_vsmulas_s8_qacc_qacc_h(PIE10, PIE8, PIE51, QACC_H, QACC_L); QACC_L = ee_vsmulas_s8_qacc_qacc_l(PIE10, PIE8, PIE51, QACC_H, QACC_L); PIE7 = ldv; PIE12 = PIE12 + 16; }
+:ee.vsr.32 PIE41, PIE0 is pie24_23_22=3 & pie24_19_16=13 & pie24_14_7=127 & pie24_3_0=4 & PIE41 & PIE0 { PIE41 = ee_vsr_32(PIE0); }
+:ee.vst.128.ip PIE0, PIE3, PIE36 is pie24_23_23=1 & pie24_19_16=10 & pie24_3_0=4 & PIE0 & PIE3 & PIE36 { local ea:4 = PIE3 & 0xfffffff0; *[ram]:16 ea = PIE0; PIE3 = PIE3 + PIE36; }
+:ee.vst.128.xp PIE0, PIE3, PIE35 is pie24_23_22=2 & pie24_19_16=13 & pie24_14_12=7 & pie24_3_0=4 & PIE0 & PIE3 & PIE35 { local ea:4 = PIE3 & 0xfffffff0; *[ram]:16 ea = PIE0; PIE3 = PIE3 + PIE35; }
+:ee.vst.h.64.ip PIE0, PIE3, PIE37 is pie24_23_23=1 & pie24_19_16=11 & pie24_3_0=4 & PIE0 & PIE3 & PIE37 { local ea:4 = PIE3 & 0xfffffff8; *[ram]:8 ea = PIE0(8); PIE3 = PIE3 + PIE37; }
+:ee.vst.h.64.xp PIE0, PIE3, PIE35 is pie24_23_22=3 & pie24_19_16=13 & pie24_14_12=0 & pie24_3_0=4 & PIE0 & PIE3 & PIE35 { local ea:4 = PIE3 & 0xfffffff8; *[ram]:8 ea = PIE0(8); PIE3 = PIE3 + PIE35; }
+:ee.vst.l.64.ip PIE0, PIE3, PIE37 is pie24_23_23=1 & pie24_19_16=4 & pie24_3_0=4 & PIE0 & PIE3 & PIE37 { local ea:4 = PIE3 & 0xfffffff8; *[ram]:8 ea = PIE0:8; PIE3 = PIE3 + PIE37; }
+:ee.vst.l.64.xp PIE0, PIE3, PIE35 is pie24_23_22=3 & pie24_19_16=13 & pie24_14_12=4 & pie24_3_0=4 & PIE0 & PIE3 & PIE35 { local ea:4 = PIE3 & 0xfffffff8; *[ram]:8 ea = PIE0:8; PIE3 = PIE3 + PIE35; }
+:ee.vsubs.s16 PIE0, PIE5, PIE4 is pie24_23_22=2 & pie24_19_16=14 & pie24_13_13=1 & pie24_7_0=212 & PIE0 & PIE5 & PIE4 { PIE0 = ee_vsubs_s16(PIE5, PIE4); }
+:ee.vsubs.s16.ld.incp PIE7, PIE12, PIE9, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=0 & pie32_22_22=1 & pie32_21_21=0 & pie32_20_20=0 & pie32_11_11=1 & pie32_10_10=1 & pie32_9_9=0 & pie32_8_8=1 & pie32_3_1=7 & PIE7 & PIE12 & PIE9 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; PIE9 = ee_vsubs_s16(PIE10, PIE8); PIE7 = ldv; PIE12 = PIE12 + 16; }
+:ee.vsubs.s16.st.incp PIE13, PIE12, PIE9, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=1 & pie32_26_26=0 & pie32_25_25=0 & pie32_24_24=0 & pie32_19_19=1 & pie32_11_11=0 & pie32_10_10=0 & pie32_9_9=0 & pie32_8_8=1 & pie32_3_1=7 & PIE13 & PIE12 & PIE9 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; *[ram]:16 ea = PIE13; PIE9 = ee_vsubs_s16(PIE10, PIE8); PIE12 = PIE12 + 16; }
+:ee.vsubs.s32 PIE0, PIE5, PIE4 is pie24_23_22=2 & pie24_19_16=14 & pie24_13_13=1 & pie24_7_0=228 & PIE0 & PIE5 & PIE4 { PIE0 = ee_vsubs_s32(PIE5, PIE4); }
+:ee.vsubs.s32.ld.incp PIE7, PIE12, PIE9, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=0 & pie32_22_22=1 & pie32_21_21=0 & pie32_20_20=1 & pie32_11_11=1 & pie32_10_10=1 & pie32_9_9=0 & pie32_8_8=1 & pie32_3_1=7 & PIE7 & PIE12 & PIE9 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; PIE9 = ee_vsubs_s32(PIE10, PIE8); PIE7 = ldv; PIE12 = PIE12 + 16; }
+:ee.vsubs.s32.st.incp PIE13, PIE12, PIE9, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=1 & pie32_26_26=0 & pie32_25_25=0 & pie32_24_24=0 & pie32_19_19=1 & pie32_11_11=0 & pie32_10_10=0 & pie32_9_9=1 & pie32_8_8=0 & pie32_3_1=7 & PIE13 & PIE12 & PIE9 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; *[ram]:16 ea = PIE13; PIE9 = ee_vsubs_s32(PIE10, PIE8); PIE12 = PIE12 + 16; }
+:ee.vsubs.s8 PIE0, PIE5, PIE4 is pie24_23_22=2 & pie24_19_16=14 & pie24_13_13=1 & pie24_7_0=244 & PIE0 & PIE5 & PIE4 { PIE0 = ee_vsubs_s8(PIE5, PIE4); }
+:ee.vsubs.s8.ld.incp PIE7, PIE12, PIE9, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=0 & pie32_26_26=0 & pie32_22_22=1 & pie32_21_21=1 & pie32_20_20=0 & pie32_11_11=1 & pie32_10_10=1 & pie32_9_9=0 & pie32_8_8=1 & pie32_3_1=7 & PIE7 & PIE12 & PIE9 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; local ldv:16 = *[ram]:16 ea; PIE9 = ee_vsubs_s8(PIE10, PIE8); PIE7 = ldv; PIE12 = PIE12 + 16; }
+:ee.vsubs.s8.st.incp PIE13, PIE12, PIE9, PIE10, PIE8 is pie32_31_31=1 & pie32_30_30=1 & pie32_29_29=1 & pie32_28_28=0 & pie32_27_27=1 & pie32_26_26=0 & pie32_25_25=0 & pie32_24_24=0 & pie32_19_19=1 & pie32_11_11=0 & pie32_10_10=0 & pie32_9_9=1 & pie32_8_8=1 & pie32_3_1=7 & PIE13 & PIE12 & PIE9 & PIE10 & PIE8 { local ea:4 = PIE12 & 0xfffffff0; *[ram]:16 ea = PIE13; PIE9 = ee_vsubs_s8(PIE10, PIE8); PIE12 = PIE12 + 16; }
+:ee.vunzip.16 PIE23, PIE0 is pie24_23_22=3 & pie24_19_16=12 & pie24_11_0=900 & PIE23 & PIE0 { ee_vunzip_16(PIE23, PIE0); }
+:ee.vunzip.32 PIE23, PIE0 is pie24_23_22=3 & pie24_19_16=12 & pie24_11_0=916 & PIE23 & PIE0 { ee_vunzip_32(PIE23, PIE0); }
+:ee.vunzip.8 PIE23, PIE0 is pie24_23_22=3 & pie24_19_16=12 & pie24_11_0=932 & PIE23 & PIE0 { ee_vunzip_8(PIE23, PIE0); }
+:ee.vzip.16 PIE23, PIE0 is pie24_23_22=3 & pie24_19_16=12 & pie24_11_0=948 & PIE23 & PIE0 { ee_vzip_16(PIE23, PIE0); }
+:ee.vzip.32 PIE23, PIE0 is pie24_23_22=3 & pie24_19_16=12 & pie24_11_0=964 & PIE23 & PIE0 { ee_vzip_32(PIE23, PIE0); }
+:ee.vzip.8 PIE23, PIE0 is pie24_23_22=3 & pie24_19_16=12 & pie24_11_0=980 & PIE23 & PIE0 { ee_vzip_8(PIE23, PIE0); }
+:ee.xorq PIE0, PIE2, PIE1 is pie24_23_22=3 & pie24_19_16=13 & pie24_14_12=3 & pie24_9_8=1 & pie24_3_0=4 & PIE0 & PIE2 & PIE1 { PIE0 = PIE2 ^ PIE1; }
+:ee.zero.accx  is pie24_23_0=2426884 { ACCX = 0; }
+:ee.zero.q PIE0 is pie24_23_22=3 & pie24_19_16=13 & pie24_14_0=32676 & PIE0 { PIE0 = 0; }
+:ee.zero.qacc  is pie24_23_0=2426948 { QACC_H = 0; QACC_L = 0; }

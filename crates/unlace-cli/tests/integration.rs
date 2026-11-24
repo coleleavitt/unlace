@@ -1,4 +1,6 @@
 // Shared integration-test executable. Process-sensitive tests stay separate.
+#[path = "amdgpu_raw.rs"]
+mod amdgpu_raw;
 #[path = "arcv2_loops.rs"]
 mod arcv2_loops;
 #[path = "chip8.rs"]
@@ -23,8 +25,6 @@ mod mips_ase;
 #[path = "mips_elf_selection.rs"]
 mod mips_elf_selection;
 
-#[path = "v60.rs"]
-mod v60;
 
 #[path = "aarch64_rme.rs"]
 mod aarch64_rme;
@@ -60,6 +60,8 @@ mod riscv_zcmp;
 mod riscv_zfa;
 #[path = "riscv_zfh.rs"]
 mod riscv_zfh;
+#[path = "riscv_zig_void_return.rs"]
+mod riscv_zig_void_return;
 #[path = "rust_signature_summary.rs"]
 mod rust_signature_summary;
 #[path = "sbpf.rs"]
@@ -1055,6 +1057,10 @@ mod types_header;
 #[path = "typelib.rs"]
 mod typelib;
 
+#[path = "calleeargsmsvc_cli.rs"]
+mod calleeargsmsvc_cli;
+#[path = "importcache_cli.rs"]
+mod importcache_cli;
 #[path = "msvccookie_return_cli.rs"]
 mod msvccookie_return_cli;
 #[path = "msvcexport_cli.rs"]

@@ -48,12 +48,12 @@ fn surface_count_is_102() {
 
 #[test]
 fn settable_count_is_362() {
-    assert_eq!(kuna_num_settables(), 362);
-    assert_eq!(SETTABLE_TABLE.len(), 362);
+    assert_eq!(kuna_num_settables(), 363);
+    assert_eq!(SETTABLE_TABLE.len(), 363);
 }
 
 #[test]
-fn tier_counts_are_70_core_181_transform_111_analysis() {
+fn tier_counts_are_70_core_182_transform_111_analysis() {
     let mut core = 0;
     let mut transform = 0;
     let mut analysis = 0;
@@ -65,7 +65,7 @@ fn tier_counts_are_70_core_181_transform_111_analysis() {
             other => panic!("invalid tier {other:?} on {}", s.option),
         }
     }
-    assert_eq!((core, transform, analysis), (70, 181, 111));
+    assert_eq!((core, transform, analysis), (70, 182, 111));
 }
 
 #[test]
@@ -1342,7 +1342,8 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // +1 for `dextrpc`; its P1 row sits after `osclassinfo`: 359 rows, 358 commas.
     // Recounted from phases.toml with `delphiabi` (its P1 row precedes `esprom`): 361 rows, 360 commas.
     // +1 for `egraph`; its P3 row follows `mba`: 362 rows, 361 commas.
-    assert_eq!(json.matches("},\n").count(), 361);
+    // +1 for `calleeargsmsvc`; its P4 row follows `calleeargs`: 363 rows, 362 commas.
+    assert_eq!(json.matches("},\n").count(), 362);
 }
 
 #[test]

@@ -1,6 +1,7 @@
-//! (kuna `retroimage`) Loaders for five executable containers the `object`
-//! crate does not read: PlayStation PS-X EXE, Nintendo 64 ROM, BSD/SunOS/Linux
-//! a.out, AmigaDOS hunk load files and classic Mac OS PEF.
+//! (kuna `retroimage`) Loaders for executable and object containers the
+//! `object` crate does not read: PlayStation PS-X EXE, Nintendo 64 ROM,
+//! BSD/SunOS/Linux a.out, AmigaDOS hunk load files, classic Mac OS PEF, the
+//! Win16/OS/2 1.x New Executable and OMF objects and libraries.
 //!
 //! Each parser turns its header into one [`RetroImage`]: a relocated,
 //! contiguous memory module at a base address, the language that decodes it,
@@ -19,6 +20,8 @@ use unlace_sleigh::loadimage::section_flags;
 pub mod aout;
 pub mod hunk;
 pub mod n64;
+pub mod ne;
+pub mod omf;
 pub mod pef;
 pub mod psx;
 
@@ -86,13 +89,16 @@ pub struct RetroImage {
     pub notes: Vec<String>,
 }
 
-/// Whether `prefix` opens one of the five containers.
+/// Whether `prefix` opens one of the containers. An NE file is only claimed
+/// from bytes that reach its header (a 32-byte prefix never does).
 pub fn is_retro_image(prefix: &[u8]) -> bool {
     psx::probe(prefix)
         || n64::probe(prefix)
         || pef::probe(prefix)
         || hunk::probe(prefix)
         || aout::probe(prefix)
+        || ne::probe(prefix)
+        || omf::probe(prefix)
 }
 
 /// Parse `bytes` as the container [`is_retro_image`] recognized.
@@ -107,6 +113,10 @@ pub fn parse(filename: &str, bytes: &[u8]) -> KunaResult<RetroImage> {
         hunk::parse(filename, bytes)
     } else if aout::probe(bytes) {
         aout::parse(filename, bytes)
+    } else if ne::probe(bytes) {
+        ne::parse(filename, bytes)
+    } else if omf::probe(bytes) {
+        omf::parse(filename, bytes)
     } else {
         Err(KunaError::lowlevel(format!(
             "File: {filename} : not a recognized executable container"
@@ -121,7 +131,15 @@ pub fn parse(filename: &str, bytes: &[u8]) -> KunaResult<RetroImage> {
 /// Every language id a parser can select, for the gate that proves each
 /// resolves in the vendored SLEIGH database.
 pub fn retro_language_ids() -> Vec<&'static str> {
-    let mut ids = vec![psx::LANGUAGE, n64::LANGUAGE, hunk::LANGUAGE, pef::LANGUAGE];
+    let mut ids = vec![
+        psx::LANGUAGE,
+        n64::LANGUAGE,
+        hunk::LANGUAGE,
+        pef::LANGUAGE,
+        ne::LANGUAGE,
+        omf::LANGUAGE16,
+        omf::LANGUAGE32,
+    ];
     ids.extend(aout::MACHINES.iter().map(|machine| machine.language));
     ids.sort_unstable();
     ids.dedup();

@@ -1,5 +1,5 @@
-//! (kuna `retroimage`) Bootstrap of a PS-X EXE, N64 ROM, a.out, Amiga hunk
-//! or PEF executable: the container supplies the language, base, entry,
+//! (kuna `retroimage`) Bootstrap of a PS-X EXE, N64 ROM, a.out, Amiga hunk,
+//! PEF or NE executable, or an OMF object or library: the container supplies the language, base, entry,
 //! sections and names a headerless image takes from the command line, and the
 //! program is then built and discovered exactly as a raw image is.
 
@@ -23,6 +23,23 @@ pub(super) fn file_retro_image(path: &str) -> Option<Vec<u8>> {
     let mut prefix = [0u8; RETRO_PROBE_LEN];
     let mut file = std::fs::File::open(path).ok()?;
     let got = file.read(&mut prefix).ok()?;
+    if matches!(prefix.get(..2), Some(b"MZ" | b"ZM")) && got == prefix.len() {
+        // an NE header sits past the MZ stub, where the prefix does not reach;
+        // only a file whose e_lfanew names one is read whole
+        use std::io::{Seek, SeekFrom};
+        let mut lfanew = [0u8; 4];
+        let mut sig = [0u8; 2];
+        file.seek(SeekFrom::Start(0x3c)).ok()?;
+        file.read_exact(&mut lfanew).ok()?;
+        file.seek(SeekFrom::Start(u64::from(u32::from_le_bytes(lfanew))))
+            .ok()?;
+        file.read_exact(&mut sig).ok()?;
+        if &sig != b"NE" {
+            return None;
+        }
+        let bytes = std::fs::read(path).ok()?;
+        return kuna_retroimage::is_retro_image(&bytes).then_some(bytes);
+    }
     kuna_retroimage::is_retro_image(&prefix[..got])
         .then(|| std::fs::read(path).ok())
         .flatten()

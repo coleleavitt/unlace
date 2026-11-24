@@ -4289,7 +4289,23 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `SH` | Renesas SuperH SH-2E/SH-3/SH-3E/SH-4A | `sh3:BE:32:default`, `sh3:LE:32:default`, `sh3e:BE:32:default`, `sh3e:LE:32:default`, `sh2e:BE:32:default` | aleph-void/ghidra-sh (fork of will07c5/ghidra-sh) @ `31c6ca03e9`, MIT |
 | `M32R` | Renesas (Mitsubishi) M32R, M32RX, M32R2 | `M32R:BE:32:default` | written for unlace from the M32R software manuals and binutils CGEN `m32r.cpu` (semantics only); decode checked against `m32r-elf-objdump` 2.43.1, Apache-2.0 |
 | `PDP11` | DEC PDP-11 (base set, EIS, MFPS/MTPS) | `PDP-11:LE:16:default` | written for unlace from the DEC PDP-11 handbooks, Apache-2.0 |
+| `Moxie` | Moxie (moxielogic) | `moxie:BE:32:default`, `moxie:LE:32:default` | written for unlace from the Moxie architecture page and the binutils opcode table |
+| `FT32` | FTDI FT32 (FT900/FT930) | `ft32:LE:32:default` | written for unlace from the FT32 documentation and the binutils opcode table |
+| `M88000` | Motorola 88000 (MC88100) | `88000:BE:32:default` | written for unlace from the MC88100 User's Manual, Apache-2.0 |
 <!-- vendor-rows -->
+
+### Motorola 88000 (#98)
+
+`specs/Ghidra/Processors/M88000` is a SLEIGH module written for unlace from the
+MC88100 RISC Microprocessor User's Manual (no prior SLEIGH existed):
+`88000:BE:32:default`. `cmp` writes the manual's condition bit vector, which
+`bb0`/`bb1` test, so a compare-and-branch folds into a C comparison; the
+`.n` forms of br, bsr, bb0, bb1, bcnd, jmp and jsr carry a one-instruction
+delay slot; r0 reads as zero; doubles live in register pairs. The cspec follows
+the 88open BCS (arguments r2-r9, result r2, return address r1, stack r31).
+Exercised by `unlace-cli/tests/m88k_raw.rs` (hand-assembled add, signed max,
+absolute load and delay-slot call routines decompile to the expected C).
+
 
 ### DEC PDP-11 (#98)
 
@@ -4322,6 +4338,8 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `FT32` | FTDI FT32 (FT900/FT930) | `ft32:LE:32:default` | FT32 programmer documentation, binutils `ft32` opcode table, GCC `config/ft32` | `unlace-cli/tests/ft32_raw.rs` |
 | `NiosII` | Altera/Intel Nios II (R1) | `nios2:LE:32:R1`, `nios2:BE:32:R1` | Nios II Processor Reference Guide and ABI, binutils 2.43 `nios2` opcode table | `unlace-cli/tests/nios2_raw.rs` |
 | `2650` | Signetics 2650 / 2650A / 2650B | `2650:BE:16:default` | Signetics 2650 Microprocessor manual, 2650 data sheet | `unlace-cli/tests/s2650_raw.rs` |
+| `MeP` | Toshiba MeP-c4 core, both byte orders | `MeP:BE:32:default`, `MeP:LE:32:default` | binutils `cpu/mep-core.cpu` (CGEN), GCC `mep.h` | `unlace-cli/tests/mep.rs` |
+| `V810` | NEC V810 (Virtual Boy, PC-FX) | `V810:LE:32:default` | NEC uPD70732 user's manual, Virtual Boy development manual, MAME `v810` | `unlace-cli/tests/v810.rs` |
 | `Lua` | Lua 5.4 VM bytecode (one function's code array) | `Lua:LE:32:5.4` | Lua 5.4 `lopcodes.h`/`lvm.c` (MIT), reference manual; oracle `luac5.4 -l -l` | `unlace-cli/tests/lua54.rs` |
 <!-- native-rows -->
 

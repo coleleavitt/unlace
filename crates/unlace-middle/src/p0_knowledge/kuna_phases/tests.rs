@@ -314,6 +314,8 @@ fn option_values_live_value_present_for_129() {
         "dwarfscopes",
         // (kuna) DWARF global types -- a commit-time gate read console-side.
         "dwarfglobaltypes",
+        // (kuna) DWARF declarations of imports -- a commit-time gate read console-side.
+        "dwarfdecls",
         // (kuna) Global typing from stored values -- a batch ledger read in project.rs.
         "storetype",
         // (kuna) The UEFI module pass -- an analysis-pass gate read console-side. Default-ON.
@@ -1276,6 +1278,7 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // +1 for `haltloopguard`; its P3 row sits after `earlyrestart`.
     // +1 for `truncptrflow`; its P3 row sits after `haltloopguard`.
     // +1 for `clonephiorder`; its P8 row sits after `rettriangle`.
+    // +1 for `dwarfdecls`; its P1 row sits after `dwarfglobaltypes`.
     // +1 for `switchrunon`; its P2 row sits after `switchsharedcase`.
     // +1 for `bejoinpass`; its P4 row sits after `bejoin`.
     // +1 for `persistcalls`; its P3 row sits after `readonlycalls`.

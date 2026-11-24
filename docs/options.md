@@ -655,8 +655,7 @@ Three tiers:
 | a chain of tests on one pointer prints as nested ifs with no else | [`nestedand`](#nestedand----on--off-default-on) |
 | if (c) { return a; } else { return b; } where the source returned c ? a : b | [`retternary`](#retternary----on--off-default-off) |
 | a function ends in two returns of a variable and a constant | [`retternary`](#retternary----on--off-default-off) |
-| if (a) goto L; if (b) goto L; where the source wrote one if (a  | [`orexit`](#orexit----on--off-default-off) |
-|  b) | [`orexit`](#orexit----on--off-default-off) |
+| if (a) goto L; if (b) goto L; where the source wrote one if over both conditions joined by or | [`orexit`](#orexit----on--off-default-off) |
 | several adjacent ifs each return the same constant | [`orexit`](#orexit----on--off-default-off) |
 | go interface method calls print as anonymous indirect calls through tab + 0x18 | [`goitabcalls`](#goitabcalls----on--off-default-on) |
 | a go function taking an interface shows no method names at its calls | [`goitabcalls`](#goitabcalls----on--off-default-on) |
@@ -666,8 +665,7 @@ Three tiers:
 | condfold on and --mode aggressive do not fold a chain of call-result tests | [`condcallpush`](#condcallpush----on--off-default-on) |
 | an if condition assigns a call result with a comma operand where the source wrote a separate statement and guard | [`orchainlive`](#orchainlive----on--off-default-off) |
 | guard clauses returning the same constant print as one && chain | [`orchainlive`](#orchainlive----on--off-default-off) |
-| guard clauses returning the same error constant print as one && /  | [`orchainbool`](#orchainbool----on--off-default-off) |
-|  chain | [`orchainbool`](#orchainbool----on--off-default-off) |
+| guard clauses returning the same error constant print as one && or or chain | [`orchainbool`](#orchainbool----on--off-default-off) |
 | a null check and an unrelated field test are folded into one condition before a shared return -1 | [`orchainbool`](#orchainbool----on--off-default-off) |
 | rule pools spend most of their time re-testing ops nothing changed | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a large function's simplification repeats full sweeps for a handful of rewrites | [`dirtypool`](#dirtypool----on--off-default-off) |
@@ -2827,7 +2825,7 @@ The control surface: each of these can make output worse on the wrong source sha
 
 ### `orexit` -- on | off, default `off`
 
-- **Symptoms:** if (a) goto L; if (b) goto L; where the source wrote one if (a ; ;  b); several adjacent ifs each return the same constant.
+- **Symptoms:** if (a) goto L; if (b) goto L; where the source wrote one if over both conditions joined by or; several adjacent ifs each return the same constant.
 - **What it does:** C output only: fold a run of adjacent ifs without else that leave the same way into the first, over the conditions joined by ||: `if (a) goto L; if (b) goto L;` becomes `if ((a) || (b)) goto L;`, and the same for a break or continue to one target or a return of one constant or one variable. Because each body leaves, the second test only runs when the first is false, so the fold keeps the behaviour. Every if after the first must print nothing before its test (no statement, no comment, no label), its condition must be a single leaf, and no if may print as a switch or an exception form or sit inside a condition. A rewrite of the C syntax tree (`docs/architecture/ctree.md`): turning it on builds the tree for every printed function.
 - **When to flip:** Turn on when consecutive tests share one exit (argument validation, early-out chains) and read better as one condition. Leave off to keep one if per test, as Ghidra prints it.
 - **Where / provenance:** P9/condition-form · kuna · structure-recovery · kuna-orexit
@@ -2859,7 +2857,7 @@ The control surface: each of these can make output worse on the wrong source sha
 
 ### `orchainbool` -- on | off, default `off`
 
-- **Symptoms:** guard clauses returning the same error constant print as one && / ; ;  chain; a null check and an unrelated field test are folded into one condition before a shared return -1.
+- **Symptoms:** guard clauses returning the same error constant print as one && or or chain; a null check and an unrelated field test are folded into one condition before a shared return -1.
 - **What it does:** Limit the short-circuit protection of `returndup` (`kuna_orchain.rs`, DIV-69) to shared returns of 0 or 1. The protection keeps a shared constant-return block whole when `rule_block_or` could fold through it, which is right for the operand chain of a boolean expression (`return a || (b && c);`). A shared return of any other constant (`return -1`) is the exit of guard clauses the source wrote one by one (`if (!p) return -1; if (p->mode != R && p->mode != W) return -1;`). With this option such a block (its returned value is constants only, at least one of them neither 0 nor 1) does not stop `returndup` from splitting, so the guards print as early returns instead of one `&&`/`||` chain over unrelated tests.
 - **When to flip:** Turn on when guard clauses that return the same non-boolean constant (-1, an error code) print as one chain `if ((p) && (p->x == K || p->x == L)) {...} return -1;`. Leave off to keep the DIV-69 protection for every shared constant return.
 - **Where / provenance:** P8/goto-quality · kuna · structure-recovery · unlace-10-andorchain

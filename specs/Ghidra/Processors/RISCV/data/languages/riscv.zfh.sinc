@@ -951,22 +951,26 @@ define pcodeop fsub_h;
 
 :fcvt.h.w frd,rs1,"rtz" is frd & rs1 & op0006=0x53 & funct3=0x1 & op2031=0xd40
 {
-	frd = fcvt_h_w(rs1);
+	local sg1:2 = fcvt_h_w(rs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.w frd,rs1,"rdn" is frd & rs1 & op0006=0x53 & funct3=0x2 & op2031=0xd40
 {
-	frd = fcvt_h_w(rs1);
+	local sg1:2 = fcvt_h_w(rs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.w frd,rs1,"rup" is frd & rs1 & op0006=0x53 & funct3=0x3 & op2031=0xd40
 {
-	frd = fcvt_h_w(rs1);
+	local sg1:2 = fcvt_h_w(rs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.w frd,rs1,"rmm" is frd & rs1 & op0006=0x53 & funct3=0x4 & op2031=0xd40
 {
-	frd = fcvt_h_w(rs1);
+	local sg1:2 = fcvt_h_w(rs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.w frd,rs1,"dyn" is frd & rs1 & op0006=0x53 & funct3=0x7 & op2031=0xd40
@@ -988,22 +992,26 @@ define pcodeop fsub_h;
 
 :fcvt.h.wu frd,rs1,"rtz" is frd & rs1 & op0006=0x53 & funct3=0x1 & op2031=0xd41
 {
-	frd = fcvt_h_wu(rs1);
+	local sg1:2 = fcvt_h_wu(rs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.wu frd,rs1,"rdn" is frd & rs1 & op0006=0x53 & funct3=0x2 & op2031=0xd41
 {
-	frd = fcvt_h_wu(rs1);
+	local sg1:2 = fcvt_h_wu(rs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.wu frd,rs1,"rup" is frd & rs1 & op0006=0x53 & funct3=0x3 & op2031=0xd41
 {
-	frd = fcvt_h_wu(rs1);
+	local sg1:2 = fcvt_h_wu(rs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.wu frd,rs1,"rmm" is frd & rs1 & op0006=0x53 & funct3=0x4 & op2031=0xd41
 {
-	frd = fcvt_h_wu(rs1);
+	local sg1:2 = fcvt_h_wu(rs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.wu frd,rs1,"dyn" is frd & rs1 & op0006=0x53 & funct3=0x7 & op2031=0xd41
@@ -1033,26 +1041,26 @@ define pcodeop fsub_h;
 
 :fcvt.h.s frd,frs1,"rtz" is frd & frs1 & op0006=0x53 & funct3=0x1 & op2031=0x440
 {
-	local sg1:4 = fcvt_h_s(frs1);
-	frd = 0xffffffff00000000:8 | zext(sg1);
+	local sg1:2 = fcvt_h_s(frs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.s frd,frs1,"rdn" is frd & frs1 & op0006=0x53 & funct3=0x2 & op2031=0x440
 {
-	local sg1:4 = fcvt_h_s(frs1);
-	frd = 0xffffffff00000000:8 | zext(sg1);
+	local sg1:2 = fcvt_h_s(frs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.s frd,frs1,"rup" is frd & frs1 & op0006=0x53 & funct3=0x3 & op2031=0x440
 {
-	local sg1:4 = fcvt_h_s(frs1);
-	frd = 0xffffffff00000000:8 | zext(sg1);
+	local sg1:2 = fcvt_h_s(frs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.s frd,frs1,"rmm" is frd & frs1 & op0006=0x53 & funct3=0x4 & op2031=0x440
 {
-	local sg1:4 = fcvt_h_s(frs1);
-	frd = 0xffffffff00000000:8 | zext(sg1);
+	local sg1:2 = fcvt_h_s(frs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.s frd,frs1,"dyn" is frd & frs1 & op0006=0x53 & funct3=0x7 & op2031=0x440
@@ -1081,22 +1089,26 @@ define pcodeop fsub_h;
 
 :fcvt.h.d frd,frs1,"rtz" is frd & frs1 & op0006=0x53 & funct3=0x1 & op2031=0x441
 {
-	frd = fcvt_h_d(frs1);
+	local sg1:2 = fcvt_h_d(frs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.d frd,frs1,"rdn" is frd & frs1 & op0006=0x53 & funct3=0x2 & op2031=0x441
 {
-	frd = fcvt_h_d(frs1);
+	local sg1:2 = fcvt_h_d(frs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.d frd,frs1,"rup" is frd & frs1 & op0006=0x53 & funct3=0x3 & op2031=0x441
 {
-	frd = fcvt_h_d(frs1);
+	local sg1:2 = fcvt_h_d(frs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.d frd,frs1,"rmm" is frd & frs1 & op0006=0x53 & funct3=0x4 & op2031=0x441
 {
-	frd = fcvt_h_d(frs1);
+	local sg1:2 = fcvt_h_d(frs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.d frd,frs1,"dyn" is frd & frs1 & op0006=0x53 & funct3=0x7 & op2031=0x441
@@ -2346,22 +2358,26 @@ define pcodeop fsub_h;
 
 :fcvt.h.w frd,rs1,"rtz" is frd & rs1 & op0006=0x53 & funct3=0x1 & op2031=0xd40
 {
-	frd = fcvt_h_w(rs1);
+	local sg1:2 = fcvt_h_w(rs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.w frd,rs1,"rdn" is frd & rs1 & op0006=0x53 & funct3=0x2 & op2031=0xd40
 {
-	frd = fcvt_h_w(rs1);
+	local sg1:2 = fcvt_h_w(rs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.w frd,rs1,"rup" is frd & rs1 & op0006=0x53 & funct3=0x3 & op2031=0xd40
 {
-	frd = fcvt_h_w(rs1);
+	local sg1:2 = fcvt_h_w(rs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.w frd,rs1,"rmm" is frd & rs1 & op0006=0x53 & funct3=0x4 & op2031=0xd40
 {
-	frd = fcvt_h_w(rs1);
+	local sg1:2 = fcvt_h_w(rs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.w frd,rs1,"dyn" is frd & rs1 & op0006=0x53 & funct3=0x7 & op2031=0xd40
@@ -2385,22 +2401,26 @@ define pcodeop fsub_h;
 
 :fcvt.h.wu frd,rs1,"rtz" is frd & rs1 & op0006=0x53 & funct3=0x1 & op2031=0xd41
 {
-	frd = fcvt_h_wu(rs1);
+	local sg1:2 = fcvt_h_wu(rs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.wu frd,rs1,"rdn" is frd & rs1 & op0006=0x53 & funct3=0x2 & op2031=0xd41
 {
-	frd = fcvt_h_wu(rs1);
+	local sg1:2 = fcvt_h_wu(rs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.wu frd,rs1,"rup" is frd & rs1 & op0006=0x53 & funct3=0x3 & op2031=0xd41
 {
-	frd = fcvt_h_wu(rs1);
+	local sg1:2 = fcvt_h_wu(rs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.wu frd,rs1,"rmm" is frd & rs1 & op0006=0x53 & funct3=0x4 & op2031=0xd41
 {
-	frd = fcvt_h_wu(rs1);
+	local sg1:2 = fcvt_h_wu(rs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.wu frd,rs1,"dyn" is frd & rs1 & op0006=0x53 & funct3=0x7 & op2031=0xd41
@@ -2431,26 +2451,26 @@ define pcodeop fsub_h;
 
 :fcvt.h.s frd,frs1,"rtz" is frd & frs1 & op0006=0x53 & funct3=0x1 & op2031=0x440
 {
-	local sg1:4 = fcvt_h_s(frs1);
-	frd = 0xffffffff00000000:8 | zext(sg1);
+	local sg1:2 = fcvt_h_s(frs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.s frd,frs1,"rdn" is frd & frs1 & op0006=0x53 & funct3=0x2 & op2031=0x440
 {
-	local sg1:4 = fcvt_h_s(frs1);
-	frd = 0xffffffff00000000:8 | zext(sg1);
+	local sg1:2 = fcvt_h_s(frs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.s frd,frs1,"rup" is frd & frs1 & op0006=0x53 & funct3=0x3 & op2031=0x440
 {
-	local sg1:4 = fcvt_h_s(frs1);
-	frd = 0xffffffff00000000:8 | zext(sg1);
+	local sg1:2 = fcvt_h_s(frs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.s frd,frs1,"rmm" is frd & frs1 & op0006=0x53 & funct3=0x4 & op2031=0x440
 {
-	local sg1:4 = fcvt_h_s(frs1);
-	frd = 0xffffffff00000000:8 | zext(sg1);
+	local sg1:2 = fcvt_h_s(frs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.s frd,frs1,"dyn" is frd & frs1 & op0006=0x53 & funct3=0x7 & op2031=0x440
@@ -2479,22 +2499,26 @@ define pcodeop fsub_h;
 
 :fcvt.h.d frd,frs1,"rtz" is frd & frs1 & op0006=0x53 & funct3=0x1 & op2031=0x441
 {
-	frd = fcvt_h_d(frs1);
+	local sg1:2 = fcvt_h_d(frs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.d frd,frs1,"rdn" is frd & frs1 & op0006=0x53 & funct3=0x2 & op2031=0x441
 {
-	frd = fcvt_h_d(frs1);
+	local sg1:2 = fcvt_h_d(frs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.d frd,frs1,"rup" is frd & frs1 & op0006=0x53 & funct3=0x3 & op2031=0x441
 {
-	frd = fcvt_h_d(frs1);
+	local sg1:2 = fcvt_h_d(frs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.d frd,frs1,"rmm" is frd & frs1 & op0006=0x53 & funct3=0x4 & op2031=0x441
 {
-	frd = fcvt_h_d(frs1);
+	local sg1:2 = fcvt_h_d(frs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.d frd,frs1,"dyn" is frd & frs1 & op0006=0x53 & funct3=0x7 & op2031=0x441
@@ -2805,22 +2829,26 @@ define pcodeop fsub_h;
 
 :fcvt.h.l frd,rs1,"rtz" is frd & rs1 & op0006=0x53 & funct3=0x1 & op2031=0xd42
 {
-	frd = fcvt_h_l(rs1);
+	local sg1:2 = fcvt_h_l(rs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.l frd,rs1,"rdn" is frd & rs1 & op0006=0x53 & funct3=0x2 & op2031=0xd42
 {
-	frd = fcvt_h_l(rs1);
+	local sg1:2 = fcvt_h_l(rs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.l frd,rs1,"rup" is frd & rs1 & op0006=0x53 & funct3=0x3 & op2031=0xd42
 {
-	frd = fcvt_h_l(rs1);
+	local sg1:2 = fcvt_h_l(rs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.l frd,rs1,"rmm" is frd & rs1 & op0006=0x53 & funct3=0x4 & op2031=0xd42
 {
-	frd = fcvt_h_l(rs1);
+	local sg1:2 = fcvt_h_l(rs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.l frd,rs1,"dyn" is frd & rs1 & op0006=0x53 & funct3=0x7 & op2031=0xd42
@@ -2848,22 +2876,26 @@ define pcodeop fsub_h;
 
 :fcvt.h.lu frd,rs1,"rtz" is frd & rs1 & op0006=0x53 & funct3=0x1 & op2031=0xd43
 {
-	frd = fcvt_h_lu(rs1);
+	local sg1:2 = fcvt_h_lu(rs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.lu frd,rs1,"rdn" is frd & rs1 & op0006=0x53 & funct3=0x2 & op2031=0xd43
 {
-	frd = fcvt_h_lu(rs1);
+	local sg1:2 = fcvt_h_lu(rs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.lu frd,rs1,"rup" is frd & rs1 & op0006=0x53 & funct3=0x3 & op2031=0xd43
 {
-	frd = fcvt_h_lu(rs1);
+	local sg1:2 = fcvt_h_lu(rs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.lu frd,rs1,"rmm" is frd & rs1 & op0006=0x53 & funct3=0x4 & op2031=0xd43
 {
-	frd = fcvt_h_lu(rs1);
+	local sg1:2 = fcvt_h_lu(rs1);
+	frd = 0xffffffffffff0000:8 | zext(sg1);
 }
 
 :fcvt.h.lu frd,rs1,"dyn" is frd & rs1 & op0006=0x53 & funct3=0x7 & op2031=0xd43

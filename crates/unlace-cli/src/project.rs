@@ -14,19 +14,21 @@ use unlace_project::{BinaryIdentity, Project, ProjectJson};
 
 use crate::args::take_value;
 
-const USAGE: &str = "usage: unlace project <init|set|unset|get|list|query|export|import> ...\n\
+const USAGE: &str = "usage: unlace project <init|schema|set|unset|get|list|query|export|import> ...\n\
 \n\
   unlace project init <binary> [-o FILE] [--force] [--json]\n\
       create FILE (default <binary>.unlace) bound to the binary's SHA-256\n\
+  unlace project schema [--json]\n\
+      every table and column, with what it holds\n\
   unlace project set FILE <directive|@file>... [--json]\n\
       store --assert directives (and 'bookmark <addr> <title>'); each is checked first\n\
   unlace project unset FILE <directive>... [--json]\n\
       remove what a directive sets: 'unset FILE name main::v2'\n\
-  unlace project get FILE <table> <key> [--json]\n\
-  unlace project list FILE [<table>] [--json]\n\
+  unlace project get FILE <table> <key> [--json|--jsonl]\n\
+  unlace project list FILE [<table>] [--json|--jsonl]\n\
       no table: every override as the directives decompile applies\n\
-  unlace project query FILE <SQL> [--json]\n\
-      any read-only SQL; writes are refused\n\
+  unlace project query FILE <SQL> [--json|--jsonl]\n\
+      any read-only SQL (a statement that could write is refused)\n\
   unlace project export FILE [-o OUT]\n\
       canonical JSON (sorted, hex addresses) for review in git\n\
   unlace project import FILE <JSON> [--replace] [--json]\n\
@@ -34,8 +36,10 @@ const USAGE: &str = "usage: unlace project <init|set|unset|get|list|query|export
   decompile and decompile-all take --project FILE to apply it.\n\
   tables: types functions data prototypes patches assertions callsites locals comments bookmarks\n\
 \n\
-  --json roots: init {project,binary,schema_version}; set {project,stored}; unset {project,removed};\n\
-  get/query/list TABLE {columns,rows}; list {project,binary,directives}; import {project,imported,replaced}";
+  --json roots: init {project,binary,schema_version}; schema {schema_version,tables:[{name,key,description,columns}]};\n\
+  set {project,stored}; unset {project,removed}; get/query/list TABLE {columns,rows:[{column:value}]};\n\
+  list {project,binary,directives}; import {project,imported,replaced}.\n\
+  --jsonl: one JSON object per line instead: a row {column:value}, or {directive} for a plain list";
 
 pub fn run(argv: &[String]) -> i32 {
     crate::args::report(main(argv))
@@ -51,6 +55,7 @@ fn main(argv: &[String]) -> Result<i32, String> {
         return Ok(0);
     }
     let mut json = false;
+    let mut jsonl = false;
     let mut force = false;
     let mut replace = false;
     let mut out: Option<String> = None;
@@ -60,6 +65,7 @@ fn main(argv: &[String]) -> Result<i32, String> {
         let a = argv[i].as_str();
         match a {
             "--json" => json = true,
+            "--jsonl" => jsonl = true,
             "--force" => force = true,
             "--replace" => replace = true,
             "-o" | "--output" => out = Some(take_value(argv, &mut i, a)?),
@@ -74,6 +80,16 @@ fn main(argv: &[String]) -> Result<i32, String> {
         } else {
             Ok(())
         }
+    };
+    if json && jsonl {
+        return Err("--json and --jsonl are exclusive".into());
+    }
+    let rows_form = if jsonl {
+        RowsForm::Lines
+    } else if json {
+        RowsForm::Document
+    } else {
+        RowsForm::Text
     };
     let err = |e: unlace_project::ProjectError| e.to_string();
     match verb.as_str() {
@@ -90,7 +106,7 @@ fn main(argv: &[String]) -> Result<i32, String> {
             let project = Project::create(&path, &identity, force).map_err(err)?;
             let version = project.schema_version().map_err(err)?;
             Ok(emit(
-                json,
+                json || jsonl,
                 json!({
                     "project": path.to_string_lossy(),
                     "binary": identity_json(&identity),
@@ -103,6 +119,12 @@ fn main(argv: &[String]) -> Result<i32, String> {
                     identity.sha256
                 ),
             ))
+        }
+        "schema" => {
+            if positional.len() > 1 {
+                return Err(format!("unexpected argument {:?}", positional[1]));
+            }
+            Ok(emit(json || jsonl, schema_json(), schema_text()))
         }
         "set" => {
             need(2, "FILE and at least one directive")?;
@@ -120,7 +142,7 @@ fn main(argv: &[String]) -> Result<i32, String> {
                 .map_err(err)?;
             let text: String = stored.iter().map(|d| format!("stored {d}\n")).collect();
             Ok(emit(
-                json,
+                json || jsonl,
                 json!({"project": positional[0], "stored": stored}),
                 text,
             ))
@@ -133,7 +155,7 @@ fn main(argv: &[String]) -> Result<i32, String> {
                 removed += project.unset(d).map_err(err)?;
             }
             Ok(emit(
-                json,
+                json || jsonl,
                 json!({"project": positional[0], "removed": removed}),
                 format!("removed {removed}\n"),
             ))
@@ -143,7 +165,7 @@ fn main(argv: &[String]) -> Result<i32, String> {
             let project = open(&positional[0])?;
             let sql = get_sql(&positional[1], &positional[2])?;
             let (columns, rows) = project.query(&sql).map_err(err)?;
-            Ok(emit_rows(json, columns, rows))
+            Ok(emit_rows(rows_form, columns, rows))
         }
         "list" => {
             need(1, "FILE")?;
@@ -153,13 +175,20 @@ fn main(argv: &[String]) -> Result<i32, String> {
                 let (columns, rows) = project
                     .query(&format!("SELECT * FROM {table} ORDER BY 1"))
                     .map_err(err)?;
-                return Ok(emit_rows(json, columns, rows));
+                return Ok(emit_rows(rows_form, columns, rows));
             }
             let directives = project.directives().map_err(err)?;
+            if jsonl {
+                let text: String = directives
+                    .iter()
+                    .map(|d| json!({"directive": d}).to_string() + "\n")
+                    .collect();
+                return Ok(crate::output::emit_with_status(&text, 0));
+            }
             let binary = project.binary().map_err(err)?;
             let text: String = directives.iter().map(|d| format!("{d}\n")).collect();
             Ok(emit(
-                json,
+                json || jsonl,
                 json!({
                     "project": positional[0],
                     "binary": identity_json(&binary),
@@ -172,7 +201,7 @@ fn main(argv: &[String]) -> Result<i32, String> {
             need(2, "FILE and an SQL statement")?;
             let project = open(&positional[0])?;
             let (columns, rows) = project.query(&positional[1..].join(" ")).map_err(err)?;
-            Ok(emit_rows(json, columns, rows))
+            Ok(emit_rows(rows_form, columns, rows))
         }
         "export" => {
             need(1, "FILE")?;
@@ -196,7 +225,7 @@ fn main(argv: &[String]) -> Result<i32, String> {
             let parsed = ProjectJson::parse(&text).map_err(err)?;
             let imported = parsed.import_into(&mut project, replace).map_err(err)?;
             Ok(emit(
-                json,
+                json || jsonl,
                 json!({"project": positional[0], "imported": imported, "replaced": replace}),
                 format!("imported {imported} rows\n"),
             ))
@@ -337,29 +366,90 @@ fn emit(json: bool, value: Value, text: String) -> i32 {
     crate::output::emit_with_status(&body, 0)
 }
 
-fn emit_rows(json: bool, columns: Vec<String>, rows: Vec<Vec<Value>>) -> i32 {
-    if json {
-        return emit(
-            true,
-            json!({"columns": columns, "rows": rows}),
-            String::new(),
-        );
-    }
-    let mut text = columns.join("\t");
-    text.push('\n');
-    for row in rows {
-        let cells: Vec<String> = row
+/// How a command that returns rows prints them.
+#[derive(Clone, Copy)]
+enum RowsForm {
+    /// A header line and tab-separated rows.
+    Text,
+    /// One document: `{columns, rows:[{column:value}]}`.
+    Document,
+    /// One `{column:value}` object per line.
+    Lines,
+}
+
+/// A row as a JSON object in column order (written by hand, so the key order is the
+/// query's whatever `serde_json` features are on).
+fn row_object(columns: &[String], row: &[Value]) -> String {
+    let fields: Vec<String> = columns
+        .iter()
+        .zip(row)
+        .map(|(c, v)| format!("{}:{}", Value::String(c.clone()), v))
+        .collect();
+    format!("{{{}}}", fields.join(","))
+}
+
+fn emit_rows(form: RowsForm, columns: Vec<String>, rows: Vec<Vec<Value>>) -> i32 {
+    let text = match form {
+        RowsForm::Lines => rows
             .iter()
-            .map(|v| match v {
-                Value::String(s) => s.clone(),
-                Value::Null => String::new(),
-                other => other.to_string(),
-            })
-            .collect();
-        text.push_str(&cells.join("\t"));
-        text.push('\n');
-    }
+            .map(|row| row_object(&columns, row) + "\n")
+            .collect(),
+        RowsForm::Document => {
+            let objects: Vec<String> = rows.iter().map(|row| row_object(&columns, row)).collect();
+            format!(
+                "{{\"columns\":{},\"rows\":[{}]}}\n",
+                Value::from(columns.clone()),
+                objects.join(",")
+            )
+        }
+        RowsForm::Text => {
+            let mut text = columns.join("\t");
+            text.push('\n');
+            for row in rows {
+                let cells: Vec<String> = row
+                    .iter()
+                    .map(|v| match v {
+                        Value::String(s) => s.clone(),
+                        Value::Null => String::new(),
+                        other => other.to_string(),
+                    })
+                    .collect();
+                text.push_str(&cells.join("\t"));
+                text.push('\n');
+            }
+            text
+        }
+    };
     crate::output::emit_with_status(&text, 0)
+}
+
+/// `unlace project schema --json`.
+fn schema_json() -> Value {
+    let tables: Vec<Value> = unlace_project::schema::DESCRIPTION
+        .iter()
+        .map(|(name, key, description, columns)| {
+            let columns: Vec<Value> = columns
+                .iter()
+                .map(|(c, ty, d)| json!({"name": c, "type": ty, "description": d}))
+                .collect();
+            json!({"name": name, "key": key, "description": description, "columns": columns})
+        })
+        .collect();
+    json!({"schema_version": unlace_project::schema::CURRENT_VERSION, "tables": tables})
+}
+
+fn schema_text() -> String {
+    let mut out = format!("schema v{}\n", unlace_project::schema::CURRENT_VERSION);
+    for (name, key, description, columns) in unlace_project::schema::DESCRIPTION {
+        out.push_str(&format!(
+            "\n{name} (key: {}) -- {description}\n",
+            key.join(", ")
+        ));
+        for (c, ty, d) in *columns {
+            out.push_str(&format!("  {c} {ty}: {d}\n"));
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -390,6 +480,28 @@ mod tests {
             "SELECT * FROM assertions WHERE kind = 'flow' AND target = '0x10'"
         );
         assert!(get_sql("sqlite_master", "x").is_err());
+    }
+
+    #[test]
+    fn rows_are_objects_in_column_order() {
+        let columns = vec!["z".to_string(), "a".to_string()];
+        let row = vec![json!(1), json!("x\"y")];
+        assert_eq!(row_object(&columns, &row), r#"{"z":1,"a":"x\"y"}"#);
+    }
+
+    #[test]
+    fn the_schema_document_lists_every_table() {
+        let s = schema_json();
+        let names: Vec<&str> = s["tables"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t["name"].as_str().unwrap())
+            .collect();
+        for table in unlace_project::schema::TABLES {
+            assert!(names.contains(table), "{table}");
+        }
+        assert!(s["tables"][0]["columns"][0]["description"].is_string());
     }
 
     #[test]

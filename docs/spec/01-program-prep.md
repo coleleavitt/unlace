@@ -366,6 +366,11 @@ language yet, so it still needs an explicit `--target`. A relocatable ARC
 object loads, but its relocation types are not applied; a call to an undefined
 symbol keeps the unrelocated displacement.
 
+(kuna, unlace#678) A relocatable object for a 16-bit machine (AVR, MSP430) is
+laid out from `SMALL_RELOC_BASE` (0x100) instead of 0x400000, which is past
+the end of its address space; every other machine keeps 0x400000
+(`reloc_object::reloc_base`, also used by the FID relocation map).
+
 (kuna, unlace#676) Six more ELF machines are read from the header
 (`crates/unlace-analysis/src/loader/kuna_elfmachinetarget.rs`), because the
 object reader either has no language stem for them or no architecture at all:

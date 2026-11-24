@@ -369,12 +369,11 @@ impl ObjectRelocations {
         use std::collections::HashMap;
 
         const SHF_ALLOC: u64 = 0x2;
-        const RELOC_BASE: u64 = crate::loader::reloc_object::RELOC_BASE;
 
         // Replicate the reloc_object layout pass-1 section→VMA map so a section-
         // relative reloc offset maps to the same load VMA the loader assigned.
         let mut vma_of: HashMap<SectionIndex, u64> = HashMap::new();
-        let mut cursor = RELOC_BASE;
+        let mut cursor = crate::loader::reloc_object::reloc_base(file);
         for sec in file.sections() {
             let sh_flags = match sec.flags() {
                 object::SectionFlags::Elf { sh_flags } => sh_flags,

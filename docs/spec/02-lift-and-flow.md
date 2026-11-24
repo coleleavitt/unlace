@@ -4348,12 +4348,22 @@ range; bias: 256-byte-aligned address and set index; convert: bias select and
 the remaining control bits), so a raw `activation.hf = mxmem(r0,r1)`
 decompiles to `hmx_activation_hf(a0 & 0xfffff800,a0 & 0x7ff,a1);`. Before,
 every HMX word was a bad instruction. The activation/weight pair must share a
-packet; such a packet disassembles, but decompiling any multi-instruction
-Hexagon packet still fails in the crossbuild step ("Could not obtain cached
-crossbuild instruction"), an existing engine gap that is not HMX-specific.
+packet; such packets lift since the crossbuild fix below.
 Exercised by `unlace-cli/tests/hexagon_hmx.rs`: probe rows for all ten
 encodings against LLVM's syntax and a raw image with one instruction per
 packet. Notes in `specs/Ghidra/Processors/Hexagon/README.md`.
+
+### SLEIGH crossbuild targets resolve on demand (#679)
+
+A `crossbuild addr, section` names another instruction, which C++ reads out of the
+disassembly cache that the flow walk fills. `one_instruction` here resolves only the
+instruction and its delay slots, so every crossbuild failed with "Could not obtain cached
+crossbuild instruction". This is how Hexagon lifts each packet's later slots, so every
+Hexagon function failed. `SleighBuilder::append_cross_build`
+(`crates/unlace-sleigh/src/sleigh.rs`) now resolves a target that is not in the set to
+p-code state and appends it. Such an instruction is not cached for reuse, because its
+p-code depends on other addresses. The ELF loader also maps `EM_HEXAGON` to
+`Hexagon:LE:32:default`, so a Hexagon object no longer needs `--target`.
 
 ### AArch64 FEAT_PAuth_LR and the BTI hint space
 

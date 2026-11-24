@@ -3717,10 +3717,7 @@ impl JumpBasicModel {
     /// range's start.
     fn kuna_try_extent_bound_table(&mut self, fd: &Funcdata, maxtablesize: uint4) -> bool {
         let Some(tables) = fd.kuna_extent_tables().as_ref() else {
-            {
-                swx_dbg(|| "extent_bound: decline 1".to_string());
-                return false;
-            }
+            return false;
         };
         let loads: Vec<OpId> = (0..self.path_meld.num_ops())
             .filter_map(|i| self.path_meld.get_op(i))
@@ -3735,10 +3732,7 @@ impl JumpBasicModel {
             .filter_map(|&op| Some((op, (fd.hooks().switchextent_table_read)(fd, op)?)))
             .collect();
         let [(load, (table, stride, index))] = reads[..] else {
-            {
-                swx_dbg(|| "extent_bound: decline 2".to_string());
-                return false;
-            }
+            return false;
         };
         let width = fd
             .obank()
@@ -3747,76 +3741,48 @@ impl JumpBasicModel {
             .and_then(|vn| fd.vbank().get(vn))
             .map(|v| v.get_size());
         if width != Some(stride as int4) {
-            {
-                swx_dbg(|| "extent_bound: decline 3".to_string());
-                return false;
-            }
+            return false;
         }
         let count = match tables.cases.get(&table) {
             Some(&cases) => cases,
             None => {
                 let Some(&next) = tables.tables.iter().find(|&&t| t > table) else {
-                    {
-                        swx_dbg(|| "extent_bound: decline 4".to_string());
-                        return false;
-                    }
+                    return false;
                 };
                 let Some(space) = fd.get_address().get_space().cloned() else {
-                    {
-                        swx_dbg(|| "extent_bound: decline 5".to_string());
-                        return false;
-                    }
+                    return false;
                 };
                 if !fd.get_arch().in_section_of(
                     &Address::new(Rc::clone(&space), table),
                     &Address::new(space, next),
                 ) {
-                    {
-                        swx_dbg(|| "extent_bound: decline 6".to_string());
-                        return false;
-                    }
+                    return false;
                 }
                 (next - table) / stride
             }
         };
         if count < 2 || count > uintb::from(maxtablesize) {
-            {
-                swx_dbg(|| "extent_bound: decline 7".to_string());
-                return false;
-            }
+            return false;
         }
         let Some(pos) = (0..self.path_meld.num_common_varnode())
             .find(|&i| self.path_meld.get_varnode(i) == index)
         else {
-            {
-                swx_dbg(|| "extent_bound: decline 8".to_string());
-                return false;
-            }
+            return false;
         };
         let Some(startop) = self.path_meld.get_earliest_op(pos) else {
-            {
-                swx_dbg(|| "extent_bound: decline 9".to_string());
-                return false;
-            }
+            return false;
         };
         let Some(vsize) = fd.vbank().get(index).map(|v| v.get_size()) else {
-            {
-                swx_dbg(|| "extent_bound: decline 10".to_string());
-                return false;
-            }
+            return false;
         };
         if vsize < 8 && count > 1u64 << (8 * vsize) {
-            {
-                swx_dbg(|| "extent_bound: decline 11".to_string());
-                return false;
-            }
+            return false;
         }
         self.varnode_index = pos;
         let jr = self.jrange_range_mut();
         jr.set_range(CircleRange::new(0, count, vsize, 1));
         jr.set_start_vn(index);
         jr.set_start_op(startop);
-        swx_dbg(|| format!("extent_bound: ok count {count}"));
         true
     }
 
@@ -5609,14 +5575,6 @@ impl JumpModel for JumpBasicModel {
         loadcounts: Option<&Vec<int4>>,
     ) -> KunaResult<bool> {
         // C++ JumpBasic::sanityCheck (jumptable.cc:1726).
-        swx_dbg(|| {
-            format!(
-                "sanity entry {:#x}: rows {} guards {}",
-                fd.get_address().get_offset(),
-                addresstable.len(),
-                self.selectguards.len()
-            )
-        });
         if addresstable.is_empty() {
             return Ok(true);
         }
@@ -5652,18 +5610,6 @@ impl JumpModel for JumpBasicModel {
                 return Ok(true);
             }
             let own = Self::own_rows(fd, &addresstable[..i]);
-            swx_dbg(|| {
-                format!(
-                    "sanity at {:#x}: rows {} reasonable {} own {:?} later {:?} extent {:?} recovery_on {}",
-                    fd.get_address().get_offset(),
-                    addresstable.len(),
-                    i,
-                    own,
-                    fd.kuna_later_tables.as_deref(),
-                    fd.kuna_extent_tables().as_deref().map(|t| t.tables.clone()),
-                    fd.is_jumptable_recovery_on()
-                )
-            });
             match self.kuna_next_table_rows(fd, &addresstable[..own.unwrap_or(i)]) {
                 NextTableRows::Cut(rows) => {
                     i = rows;
@@ -5850,14 +5796,11 @@ impl JumpBasicModel {
         }
         let entry = fd.get_address();
         if fd.get_arch().function_owner(entry).is_none() {
-            swx_dbg(|| "next_table_rows: no function owner".to_string());
             return NextTableRows::Keep;
         }
         let Some((table, stride)) = self.kuna_table_read(fd) else {
-            swx_dbg(|| "next_table_rows: no table read".to_string());
             return NextTableRows::Keep;
         };
-        swx_dbg(|| format!("next_table_rows: table {table:#x} stride {stride}"));
         if fd.kuna_later_tables.is_none() && fd.is_jumptable_recovery_on() {
             fd.kuna_later_wanted.set(Some(table));
             return NextTableRows::Ask;
@@ -5886,12 +5829,6 @@ impl JumpBasicModel {
                 })
             })
             .min();
-        swx_dbg(|| {
-            format!(
-                "next_table_rows: next {next:?} of own {own:x?} later {later:x?}, rows {}",
-                rows.len()
-            )
-        });
         match next.map(|next| ((next - table) / stride) as usize) {
             Some(n) if n >= 2 && n < rows.len() => NextTableRows::Cut(n),
             _ => NextTableRows::Keep,
@@ -8042,10 +7979,3 @@ crate::kuna_flag!(
 
 #[cfg(test)]
 mod tests;
-
-/// Temporary switchextent tracing (`KUNA_SWX_DEBUG`); removed before merge.
-pub(crate) fn swx_dbg(msg: impl FnOnce() -> String) {
-    if std::env::var_os("KUNA_SWX_DEBUG").is_some() {
-        eprintln!("[swx] {}", msg());
-    }
-}

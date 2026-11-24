@@ -288,7 +288,7 @@ fn is_archive(bytes: &[u8]) -> bool {
 
 /// The SLEIGH spec roots (`SLEIGHHOME` then the repo `specs/` dir), matching how
 /// `decomp_dbg` resolves them.
-fn spec_roots() -> Vec<String> {
+pub(crate) fn spec_roots() -> Vec<String> {
     let mut roots: Vec<String> = Vec::new();
     if let Ok(home) = std::env::var("SLEIGHHOME")
         && !home.is_empty()

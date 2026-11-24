@@ -5440,6 +5440,108 @@ nothing tells apart are reported as a `collision:` line and left out of the
 are written once. The exit status is 0 when the files were written, 1 when an
 input cannot be read or no function is left to write, and 2 on a usage error.
 
+## `unlace lumina` — IDA's Lumina function-metadata service
+
+Lumina is IDA Pro's shared database of function metadata: a client sends a key for each function and
+gets back the name, prototype and comments someone pushed for the same code. The key is the MD5 of the
+function's bytes with every address operand masked out, so the same compiled function in two binaries
+shares a key. `unlace lumina` computes these keys from the engine's own decode, talks to a Lumina
+server, and can run one (crate `unlace-lumina`).
+
+```text
+unlace lumina hash  <binary> [--addr A].. [--json]
+unlace lumina pull  <binary> --server HOST:PORT [network flags] [--addr A].. [--define-out FILE] [--assert-out FILE] [--rename-named] [--json]
+unlace lumina push  <binary> --server HOST:PORT [network flags] [--addr A].. [--mode override-if-better|override|keep|merge] [--hostname H] [--dry-run] [--json]
+unlace lumina serve --db FILE [--bind ADDR] [--tls-cert PEM --tls-key PEM] [--json]
+unlace lumina serve --db FILE --add-user NAME [--admin]
+```
+
+**Network access.** Only `pull`, `push` (without `--dry-run`) and `serve` use the network, and only
+the server the command names; no other subcommand and no option of the decompiler ever connects.
+`hash` and `push --dry-run` are offline.
+
+**Network flags** (`pull`, `push`), each with an environment default so credentials stay off the
+command line:
+
+| Flag | Environment | Meaning |
+|---|---|---|
+| `--server HOST:PORT` | `UNLACE_LUMINA_SERVER` | The server (`[v6]:PORT` accepted). Required. |
+| `--tls` | `UNLACE_LUMINA_TLS=1` | Speak TLS. Implied by `--tls-ca`. |
+| `--tls-ca PEM` | `UNLACE_LUMINA_TLS_CA` | Trust these CAs instead of the webpki roots (a self-signed server, or the CA IDA ships for Hex-Rays' server). |
+| `--tls-server-name N` | | Verify the certificate against `N` instead of the host dialled. |
+| `--user U` | `UNLACE_LUMINA_USER` | Login name. |
+| `--password-file F` | `UNLACE_LUMINA_PASSWORD` | Password: the file's first line, else the variable. There is no password flag. |
+| `--license-file F` | `UNLACE_LUMINA_LICENSE_FILE` | Sent as the HELO license blob (Hex-Rays' servers want the `ida.key` contents). |
+| `--license-id HEX12` | | The 6-byte license id of the HELO. |
+| `--protocol N` | | HELO protocol version, 2..6 (default 6). |
+| `--timeout SECS` | | Connect/read/write timeout (default 30). |
+
+**The key.** Each function's body is the `[entry, next entry)` clip `unlace fid` uses. For each
+instruction the relocation mask (IDA's `ev_calcrel`) is the value bits of every operand SLEIGH
+resolves to a code or data address, or to a scalar that is flagged as an address or falls inside a
+mapped section. The key is `MD5(bytes & !mask ‖ mask)`. IDA builds its mask from each processor
+module's own rules, so unlace's keys match IDA's only where both masked the same operands; between
+unlace runs (and so on a server unlace users share) they always agree.
+
+**`pull`** hashes every function (or each `--addr`), asks the server for all keys in batches of
+4096, and reports each hit. It applies nothing by itself; it writes the files the other subcommands
+already read:
+
+- `--define-out FILE`: a `--define-function` file, one `0xADDR=name` line per function the binary
+  leaves unnamed (`sub_*`), or every hit with `--rename-named`. Names containing whitespace or `#`
+  are left out (the file grammar cannot carry them).
+- `--assert-out FILE`: an `--assert` file of `prototype NAME DECL` lines, for each hit whose metadata
+  holds a function type unlace can read (IDA type strings: scalars, pointers, named
+  typedef/struct/union/enum references, the usual calling conventions; arrays, function pointers and
+  type-library ordinals are refused) and whose name is a C identifier.
+
+```sh
+unlace lumina pull ./a.out --server lumina.local:65432 --define-out names.txt --assert-out protos.kuna
+unlace decompile-all ./a.out --define-function @names.txt --assert @protos.kuna --json
+```
+
+**`push`** sends every function the binary names itself (a symbol, not a `sub_*` placeholder) with
+an empty metadata blob, under the chosen `--mode` (the server's override rule; default
+`override-if-better`). It sends the input's MD5, its file name (never the path), `<name>.unlace` as
+the database name and `--hostname` (default `unlace`). Exit 1 when the server refused any function.
+
+**`serve`** runs a server over a sqlite database (created if missing), bound to `--bind` (default
+`127.0.0.1:65432`), with TLS when given `--tls-cert`/`--tls-key` (PEM). It answers `HELO`,
+`PULL_MD`, `PUSH_MD`, `GET_LUMINA_INFO` and, for administrators, `GET_LUMINA_STATS`; every other
+packet gets `RPC_FAIL`. With no user in the database it is open: anyone may pull and push, nobody is
+an administrator. `--add-user NAME [--admin]` adds a login (password from `--password-file` or
+`UNLACE_LUMINA_PASSWORD`) and exits; from then on every client must log in. Every push is kept in a
+history table. At most 64 connections are served at once; an idle one is dropped after 5 minutes.
+The server runs until killed.
+
+### The JSON documents
+
+All are objects. Addresses and hashes are hex strings.
+
+- `hash --json`: `{binary, input_md5, language, functions: [{address, name, named, size,
+  instructions, hash}], skipped: [{address, reason}]}`. `named` is true when the name is the
+  binary's own; `reason` is `no_instructions`, `mask_failed` or `not_a_function` (an `--addr`
+  that is no function entry).
+- `pull --json`: `{binary, server, tls, protocol_version, session, functions_hashed,
+  functions_skipped, matched, matches: [{address, current_name, named, hash, size, name, remote_size,
+  size_matches, popularity, prototype, calling_convention, comment, repeatable_comment,
+  metadata_keys, metadata_malformed, rename, declare}], define_out, assert_out, renames_written,
+  prototypes_written}`. `session` is the server's user object (`{username, license_name, is_admin,
+  features}`, `null` below protocol 5). `prototype` is the declaration under the name the function
+  will carry; `rename`/`declare` say whether the hit went into `--define-out`/`--assert-out`.
+  `metadata_keys` names the chunks the blob holds (`type`, `function_comment`, `comments`,
+  `frame`, `operands`, ...).
+- `push --json`: `{binary, server, tls, session, dry_run, mode, functions_hashed, pushed, added,
+  updated, failed, functions: [{address, name, hash, size, result}]}`. `result` is `added`,
+  `updated`, `bad_pattern`, `not_found`, `error` or `not_sent` (dry run); `server` is `null`
+  when nothing was sent.
+- `serve --json`: one line `{event: "listening", bind, tls, db, users, open}` once the socket is
+  bound (`bind` is the real address, so `--bind 127.0.0.1:0` reports the port chosen), or
+  `{event: "user_added", user, admin, db}` for `--add-user`.
+
+Exit status: 0 on success, 2 on a usage error, 1 when the binary cannot be loaded, the server cannot
+be reached or refuses the login, or a push was refused.
+
 ## Everything else
 
 `unlace modes` (list the option presets) also exists, plus minor flags not covered

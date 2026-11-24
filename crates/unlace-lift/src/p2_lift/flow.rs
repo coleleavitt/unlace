@@ -655,6 +655,14 @@ pub trait FlowEnvironment {
         false
     }
 
+    /// (kuna `honestgaps`) Does an instruction stepped over under the
+    /// `ignoreunimplemented` policy get a warning at its address naming it?
+    /// The default shell reports `false`.  See
+    /// [`kuna_honestgaps`](crate::kuna_honestgaps).
+    fn honest_gaps(&self) -> bool {
+        false
+    }
+
     /// Optional target-specific advice after a bad-instruction decode.
     fn decode_failure_hint(&self, _addr: &Address) -> Option<String> {
         None
@@ -2765,11 +2773,16 @@ truncating the fall-through here"
     fn handle_decode_error(&mut self, curaddr: &Address, err: KunaError) -> KunaResult<int4> {
         match &err {
             KunaError::Unimpl {
-                instruction_length, ..
+                instruction_length,
+                explain,
             } => {
                 let reports = self.env.decode_halt_reports();
                 if (self.flags & flow_flags::ignore_unimplemented) != 0 {
                     let step = *instruction_length;
+                    if self.env.honest_gaps() {
+                        let text = crate::kuna_honestgaps::not_modelled_text(explain);
+                        self.data.warning(&text, curaddr);
+                    }
                     if !self.has_unimplemented() {
                         self.flags |= flow_flags::unimplemented_present;
                         if reports {

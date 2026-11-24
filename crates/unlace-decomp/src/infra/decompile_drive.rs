@@ -345,6 +345,12 @@ impl FlowEnvironment for ArchFlowEnv {
     fn decode_halt_reports(&self) -> bool {
         true
     }
+    fn honest_gaps(&self) -> bool {
+        self.arch()
+            .kuna_options
+            .get::<crate::kuna_honestgaps::HonestGaps>()
+            .0
+    }
     fn decode_failure_hint(&self, addr: &Address) -> Option<String> {
         crate::kuna_decodehalt::powerpc_isa_hint(
             self.arch().get_description(),
@@ -2790,7 +2796,18 @@ fn decompile_func_full_with_objects_inner(
         // (kuna `dwarfscopes`) Name the register-held DWARF locals at the use
         // point of the value each register holds where its range starts.
         if let Some(specs) = arch.dwarf_reg_locals.get(&entry_addr.get_offset()) {
-            fd.seed_dwarf_register_locals(specs);
+            let unbound = fd.seed_dwarf_register_locals(specs);
+            if arch
+                .kuna_options
+                .get::<crate::kuna_honestgaps::HonestGaps>()
+                .0
+            {
+                for (name, start) in unbound {
+                    fd.warning_header(&crate::kuna_honestgaps::unbound_debug_local_text(
+                        &name, start,
+                    ));
+                }
+            }
         }
         // Re-seed the console-added dynamic (`map hash`) symbols (likewise lost).
         fd.seed_dynamic_symbols(dynamic_symbols);

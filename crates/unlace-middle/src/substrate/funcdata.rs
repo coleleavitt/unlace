@@ -2470,11 +2470,13 @@ impl Funcdata {
     /// (the block's phi, the use point of a loop-carried value), otherwise the
     /// last write covering the storage at or before `start`, at most 16 bytes
     /// earlier (the defining instruction). A local whose write is not found,
-    /// or whose name is already taken, is skipped.
+    /// or whose name is already taken, is skipped. Returns the `(name, start)`
+    /// of each local skipped because its write was not found, so the caller can
+    /// report it (kuna `honestgaps`).
     pub fn seed_dwarf_register_locals(
         &mut self,
         specs: &[(String, std::rc::Rc<crate::dtype::Datatype>, Address, u64)],
-    ) {
+    ) -> Vec<(String, u64)> {
         use crate::varnode::varnode_flags;
         let starts: std::collections::BTreeSet<u64> = (0..self.bblocks_get_size())
             .map(|i| {
@@ -2483,6 +2485,7 @@ impl Funcdata {
             })
             .collect();
         let mut found = Vec::new();
+        let mut unbound = Vec::new();
         for (name, ty, storage, start) in specs {
             let up = if starts.contains(start) {
                 Some(Address::new(
@@ -2514,8 +2517,9 @@ impl Funcdata {
                 }
                 best
             };
-            if let Some(up) = up {
-                found.push((name.clone(), std::rc::Rc::clone(ty), storage.clone(), up));
+            match up {
+                Some(up) => found.push((name.clone(), std::rc::Rc::clone(ty), storage.clone(), up)),
+                None => unbound.push((name.clone(), *start)),
             }
         }
         let mut seeded = Vec::new();
@@ -2532,7 +2536,7 @@ impl Funcdata {
             }
         }
         if seeded.is_empty() {
-            return;
+            return unbound;
         }
         let values: Vec<_> = self.vbank().iter_loc().collect();
         for vn in values {
@@ -2548,6 +2552,7 @@ impl Funcdata {
                 self.set_varnode_properties(vn);
             }
         }
+        unbound
     }
 
     /// Re-create the given usepoint-scoped console Symbols (the register-storage

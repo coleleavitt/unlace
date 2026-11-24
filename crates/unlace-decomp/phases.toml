@@ -8025,3 +8025,22 @@ inspiration = "Backlog issue 10 (tests sharing one exit print as separate ifs or
 change_kind = "structure-recovery"
 tier = "transform"
 symptoms = "if (a) goto L; if (b) goto L; where the source wrote one if (a || b)|several adjacent ifs each return the same constant"
+
+[[settable]]
+option = "honestgaps"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P2"
+subphase = "decode-error-policy"
+strength = "HARD"
+rewind = "P2"
+issue = "unlace-33-honestgaps"
+summary = "Name in the output the losses the decompile otherwise drops without a word, each as a warning comment at the site that --json lists under its own kind. An instruction SLEIGH decodes but has no p-code for, stepped over as a no-op under the ignoreunimplemented policy, gets `notmodelled: <insn> has no p-code semantics; stepped over as a no-op` at its address (before, one header line said the function ignored unimplemented instructions, never which). A DWARF register local whose register has no write within 16 bytes before its range starts, which the decompile drops so its name never appears, gets a header line `debuginfo: DWARF local <name> (range from 0x...) not bound: no write of its register found there`. Losses that already print (decode-failure halts, funcboundflow and instruction-budget truncation, out-of-bounds flow, unrecovered jump tables) are unchanged."
+use_when = "Turn on when auditing how much of a binary the output can be trusted for: with --json each record lists these sites in warnings and the document totals every warning kind in warning_kinds. Leave off for the upstream text."
+example = "option honestgaps on"
+source_decompiler = "kuna"
+inspiration = "unlace issue 33: silent loss is worse than a visible gap; a reader can work around a known gap, not a silently wrong function"
+change_kind = "opt-in-tool"
+tier = "core"
+symptoms = "a debug build shows a generic register name where the DWARF information names a local|a function with unimplemented instructions says so in its header but not where|the real-binary harness cannot tell which functions lost information"

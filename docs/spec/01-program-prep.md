@@ -5569,7 +5569,9 @@ moves.
   loop-carried value's phi), otherwise the last raw write covering the storage
   strictly before the start and at most 16 bytes earlier (the defining
   instruction); the matching raw varnodes have their properties refreshed, as
-  for a console `type varnode`. A parameter whose location at the entry PC is a
+  for a console `type varnode`. A local with no such write is not bound; the
+  function returns it, and with `option honestgaps` on the drive names it in a
+  `debuginfo:` header warning instead of dropping it silently (chapter 02). A parameter whose location at the entry PC is a
   single register (`entry_storage`) is locked to that register when the
   default model would put some parameter of the function elsewhere and gives it
   no hidden return pointer (the commit asks the model with

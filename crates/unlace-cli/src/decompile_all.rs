@@ -2568,14 +2568,7 @@ pub(crate) fn write_selected_json(
         .map(|lang| lang.print_name())
         .unwrap_or("c-language");
     let (head, tail) = document_fields(
-        binary,
-        funcs.len(),
-        language,
-        error,
-        total,
-        assertions,
-        declared,
-        omit,
+        binary, funcs, language, error, total, assertions, declared, omit,
     );
     let records = funcs
         .iter()
@@ -2702,14 +2695,7 @@ fn result_json(
 ) -> Json {
     let declared = crate::funcdecl::Declared::default();
     let (mut fields, tail) = document_fields(
-        binary,
-        funcs.len(),
-        language,
-        error,
-        total,
-        assertions,
-        &declared,
-        omit,
+        binary, funcs, language, error, total, assertions, &declared, omit,
     );
     let functions = funcs
         .iter()
@@ -2730,7 +2716,7 @@ type Fields = Vec<(String, Json)>;
 #[allow(clippy::too_many_arguments)]
 fn document_fields(
     binary: &str,
-    count: usize,
+    funcs: &[FuncResult],
     language: &str,
     error: Option<&str>,
     total: Option<usize>,
@@ -2748,7 +2734,7 @@ fn document_fields(
     if let Some(omitted) = omit.json() {
         fields.push(("omitted".to_string(), omitted));
     }
-    fields.push(("count".to_string(), Json::Number(count.to_string())));
+    fields.push(("count".to_string(), Json::Number(funcs.len().to_string())));
     if let Some(total) = total {
         fields.push(("total".to_string(), Json::Number(total.to_string())));
     }
@@ -2768,8 +2754,27 @@ fn document_fields(
     // whether it landed. Always present (`[]` when none were passed) so an agent
     // can read it unconditionally — an assertion whose fate is unreported is an
     // assertion an agent has to verify by eye, which is the whole problem.
-    let tail = vec![("assertions".to_string(), assertions_json(assertions))];
+    let tail = vec![
+        ("assertions".to_string(), assertions_json(assertions)),
+        ("warning_kinds".to_string(), warning_kinds_json(funcs)),
+    ];
     (fields, tail)
+}
+
+/// (kuna `honestgaps`) How many warnings of each kind the document's records
+/// list, by kind in byte order: the whole run's gaps in one place, so a
+/// harness can rank them without walking every record. `{}` when none.
+fn warning_kinds_json(funcs: &[FuncResult]) -> Json {
+    let mut counts = std::collections::BTreeMap::<String, usize>::new();
+    for warning in funcs.iter().flat_map(|f| &f.warnings) {
+        *counts.entry(warning.kind()).or_default() += 1;
+    }
+    Json::Object(
+        counts
+            .into_iter()
+            .map(|(kind, n)| (kind, Json::Number(n.to_string())))
+            .collect(),
+    )
 }
 
 /// One record of the document's `functions` array.
@@ -3207,6 +3212,62 @@ mod provenance_json_tests {
             ])
         );
         assert_eq!(doc["functions"][1]["warnings"], serde_json::json!([]));
+        assert_eq!(
+            doc["warning_kinds"],
+            serde_json::json!({"no-return": 1, "out-of-bounds": 1, "structuring-declined": 1})
+        );
+    }
+
+    #[test]
+    fn warning_kinds_totals_each_kind_over_the_records() {
+        use unlace_decomp::kuna_functionwarnings::Warning;
+        let gap = |text: &str| Warning {
+            address: Some(0x401000),
+            text: text.into(),
+            line: 1,
+        };
+        let first = FuncResult {
+            warnings: vec![
+                gap(
+                    "WARNING: notmodelled: `vpdpbusd` has no p-code semantics; stepped over as a no-op",
+                ),
+                gap("WARNING: Bad instruction - Truncating control flow here"),
+            ],
+            ..function()
+        };
+        let second = FuncResult {
+            warnings: vec![gap(
+                "WARNING: notmodelled: `rdrand` has no p-code semantics; stepped over as a no-op",
+            )],
+            ..function()
+        };
+        let text = dumps_indent2(&result_json(
+            "fixture",
+            &[first, second, function()],
+            "c-language",
+            None,
+            None,
+            &[],
+            &Default::default(),
+            Omit::default(),
+        ));
+        let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(
+            doc["warning_kinds"],
+            serde_json::json!({"bad-instruction": 1, "notmodelled": 2})
+        );
+        let empty = dumps_indent2(&result_json(
+            "fixture",
+            &[function()],
+            "c-language",
+            None,
+            None,
+            &[],
+            &Default::default(),
+            Omit::default(),
+        ));
+        let doc: serde_json::Value = serde_json::from_str(&empty).unwrap();
+        assert_eq!(doc["warning_kinds"], serde_json::json!({}));
     }
 
     #[test]

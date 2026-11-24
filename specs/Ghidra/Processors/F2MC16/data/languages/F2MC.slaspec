@@ -1,0 +1,1138 @@
+# Fujitsu F2MC-16LX (MB90 series)
+#
+# Original module by Asad Mehmood (@mehmooda) and @qufb, with a fix by @mkrasselt1 (MIT, see LICENSE).
+# Instruction set, registers and semantics rewritten for Ghidra-Rare from the F2MC-16LX Programming
+# Manual (Fujitsu CM44-00201-3E): instruction maps of appendix C, instruction lists of appendix B and
+# the instruction pages of chapter 9. See GHIDRA-RARE.md.
+#
+# Model notes
+# - Prefix codes (PCB DTB ADB SPB, CMR, NCC) are instructions that set the context of the next
+#   instruction (end of this file). A bank prefix shows as "DTB:" etc. on the operand it affects.
+# - SP is the active stack pointer; USP and SSP hold the inactive one. Writes to S (interrupts, RETI,
+#   POPW PS, AND/OR CCR, JCTX) swap them, so SP is always the pointer the CPU uses. SPB is the active
+#   stack bank (SSB when S=1, USB when S=0).
+# - The flags are separate registers. NCC suppresses flag changes: flag results go to nC..nT and a
+#   commit subtable (fNZ, fNZV, ...) copies them unless NCC is in effect.
+# - R0-R7, RW0-RW7 and RL0-RL3 are registers (the bank selected by RP is not mapped onto RAM).
+
+define endian=little;
+define alignment=1;
+
+define space ram      type=ram_space      size=3 default;
+define space register type=register_space size=2;
+
+define register offset=0x00 size=4 [ A ];
+define register offset=0x00 size=2 [ AL AH ];
+define register offset=0x00 size=1 [ ALb ALh AHb AHh ];
+define register offset=0x08 size=2 [ SP USP SSP ];
+define register offset=0x10 size=3 [ UPC ];
+define register offset=0x10 size=2 [ PC ];
+define register offset=0x12 size=1 [ PCB ];
+define register offset=0x14 size=1 [ DTB ADB USB SSB SPB DPR ];
+define register offset=0x20 size=1 [ C V Z N T S I ILM RP ];
+define register offset=0x30 size=1 [ nC nV nZ nN nT ];
+define register offset=0x40 size=4 [ RL0 RL1 RL2 RL3 ];
+define register offset=0x40 size=2 [ RW0 RW1 RW2 RW3 RW4 RW5 RW6 RW7 ];
+define register offset=0x48 size=1 [ R0 R1 R2 R3 R4 R5 R6 R7 ];
+define register offset=0x60 size=4 [ contextreg ];
+
+define context contextreg
+  bank  = (0,1) noflow     # bank select prefix: 0 PCB, 1 DTB, 2 ADB, 3 SPB
+  bover = (2,2) noflow     # a bank select prefix is in effect
+  ncc   = (3,3) noflow     # NCC: flags unchanged
+  cmr   = (4,4) noflow     # CMR: common register bank
+;
+
+define token opbyte (8)
+  op   = (0,7)
+  op5  = (3,7)
+  op4  = (4,7)
+  opr  = (0,2)
+  oprw = (0,2)
+  opn  = (0,3)
+  opcc = (0,3)
+;
+define token eabyte (8)
+  o2    = (0,7)
+  o2op  = (5,7)
+  ea    = (0,4)
+  eahi  = (3,4)
+  eaR   = (0,2)
+  eaRW  = (0,2)
+  eaRL  = (1,2)
+  o2i   = (5,7)
+  o2iw  = (5,7)
+  o2hi  = (4,7)
+  o2bkd = (2,3)
+  o2bks = (0,1)
+  bp    = (0,2)
+  bmode = (3,4)
+  bop   = (5,7)
+;
+define token d8tok  (8)  d8 = (0,7) signed  d8s = (7,7);
+define token d16tok (16) d16 = (0,15) signed  ud16 = (0,15)  d16s = (15,15);
+define token i8tok  (8)  imm8 = (0,7)  simm8 = (0,7) signed  simm8s = (7,7)  imm8b5 = (5,5);
+define token i16tok (16) imm16 = (0,15);
+define token i32tok (32) imm32 = (0,31);
+define token a16tok (16) ad16 = (0,15);
+define token a24tok (24) ad24 = (0,23);
+define token dirtok (8)  dir8 = (0,7);
+define token iotok  (8)  io8 = (0,7);
+define token vectok (8)  vct8 = (0,7);
+define token rlstok (8)  rlst = (0,7);
+define token reltok (8)  rel = (0,7) signed;
+
+attach variables [ opr eaR o2i ]   [ R0 R1 R2 R3 R4 R5 R6 R7 ];
+attach variables [ oprw eaRW o2iw ] [ RW0 RW1 RW2 RW3 RW4 RW5 RW6 RW7 ];
+attach variables [ eaRL ] [ RL0 RL1 RL2 RL3 ];
+
+
+################################################################
+# Flag commit tables (NCC prefix: flags keep their old values)
+################################################################
+fNZ:   is ncc=0 { N = nN; Z = nZ; }
+fNZ:   is ncc=1 { }
+fNZV:  is ncc=0 { N = nN; Z = nZ; V = nV; }
+fNZV:  is ncc=1 { }
+fNZVC: is ncc=0 { N = nN; Z = nZ; V = nV; C = nC; }
+fNZVC: is ncc=1 { }
+fNZC:  is ncc=0 { N = nN; Z = nZ; C = nC; }
+fNZC:  is ncc=1 { }
+fTNZC: is ncc=0 { T = nT; N = nN; Z = nZ; C = nC; }
+fTNZC: is ncc=1 { }
+fZ:    is ncc=0 { Z = nZ; }
+fZ:    is ncc=1 { }
+fVC:   is ncc=0 { V = nV; C = nC; }
+fVC:   is ncc=1 { }
+
+macro resNZ(r) { nN = r s< 0; nZ = r == 0; }
+
+macro opAdd(r, a, b) {
+  nC = carry(a, b); nV = scarry(a, b); r = a + b; resNZ(r);
+}
+macro opSub(r, a, b) {
+  nC = a < b; nV = sborrow(a, b); r = a - b; resNZ(r);
+}
+macro opAddc(r, a, b) {
+  local t = a + b;
+  local cin = zext(C);
+  nC = carry(a, b) | carry(t, cin); nV = scarry(a, b) ^ scarry(t, cin);
+  r = t + cin; resNZ(r);
+}
+macro opSubc(r, a, b) {
+  local t = a - b;
+  local cin = zext(C);
+  nC = (a < b) | (t < cin); nV = sborrow(a, b) ^ sborrow(t, cin);
+  r = t - cin; resNZ(r);
+}
+macro opLog(r) { nV = 0; resNZ(r); }
+macro opNeg(r, x) { nC = x != 0; nV = sborrow(0, x); r = -x; resNZ(r); }
+
+################################################################
+# Banks, stack, processor status
+################################################################
+# PCB is the bank of the instruction itself; the PCB register is kept for display and the emulator.
+pcbk: is epsilon { local ia:3 = inst_start; local b:1 = ia(2); export b; }
+
+# bank of an operand: the default of its addressing mode (manual table 2.3-1) or the bank select
+# prefix in effect
+bkO: PCB^":" is bover=1 & bank=0 & PCB { local ia:3 = inst_start; local b:1 = ia(2); export b; }
+bkO: DTB^":" is bover=1 & bank=1 & DTB { export DTB; }
+bkO: ADB^":" is bover=1 & bank=2 & ADB { export ADB; }
+bkO: SPB^":" is bover=1 & bank=3 & SPB { export SPB; }
+bkD: is bover=0 { export DTB; }
+bkD: PCB^":" is bover=1 & bank=0 & PCB { local ia:3 = inst_start; local b:1 = ia(2); export b; }
+bkD: DTB^":" is bover=1 & bank=1 & DTB { export DTB; }
+bkD: ADB^":" is bover=1 & bank=2 & ADB { export ADB; }
+bkD: SPB^":" is bover=1 & bank=3 & SPB { export SPB; }
+bkA: is bover=0 { export ADB; }
+bkA: PCB^":" is bover=1 & bank=0 & PCB { local ia:3 = inst_start; local b:1 = ia(2); export b; }
+bkA: DTB^":" is bover=1 & bank=1 & DTB { export DTB; }
+bkA: ADB^":" is bover=1 & bank=2 & ADB { export ADB; }
+bkA: SPB^":" is bover=1 & bank=3 & SPB { export SPB; }
+bkS: is bover=0 { export SPB; }
+bkS: PCB^":" is bover=1 & bank=0 & PCB { local ia:3 = inst_start; local b:1 = ia(2); export b; }
+bkS: DTB^":" is bover=1 & bank=1 & DTB { export DTB; }
+bkS: ADB^":" is bover=1 & bank=2 & ADB { export ADB; }
+bkS: SPB^":" is bover=1 & bank=3 & SPB { export SPB; }
+
+# register bank pointer as seen by the instruction (CMR selects bank 0)
+rpv: is cmr=0 { export RP; }
+rpv: is cmr=1 { export 0:1; }
+
+macro push16(v) {
+  SP = SP - 2;
+  local sa:3 = (zext(SPB) << 16) | zext(SP);
+  *[ram]:2 sa = v;
+}
+macro pop16(v) {
+  local sa:3 = (zext(SPB) << 16) | zext(SP);
+  v = *[ram]:2 sa;
+  SP = SP + 2;
+}
+
+@include "F2MC_rlist.sinc"
+
+# change the S flag: the old stack pointer goes to its shadow, the other one becomes SP
+macro setS(news) {
+  local os:2 = zext(S);
+  SSP = SP * os + SSP * (1 - os);
+  USP = SP * (1 - os) + USP * os;
+  S = news;
+  local ns:2 = zext(S);
+  SP = SSP * ns + USP * (1 - ns);
+  SPB = SSB * S + USB * (1 - S);
+}
+
+macro getPS(ps) {
+  ps = (zext(ILM) << 13) | (zext(RP) << 8) | 0x80 | (zext(I) << 6) | (zext(S) << 5) | (zext(T) << 4)
+     | (zext(N) << 3) | (zext(Z) << 2) | (zext(V) << 1) | zext(C);
+}
+macro getCCR(ccr) {
+  ccr = 0x80 | (I << 6) | (S << 5) | (T << 4) | (N << 3) | (Z << 2) | (V << 1) | C;
+}
+macro setCCR(ccr) {
+  I = (ccr >> 6) & 1; T = (ccr >> 4) & 1; N = (ccr >> 3) & 1;
+  Z = (ccr >> 2) & 1; V = (ccr >> 1) & 1; C = ccr & 1;
+  local ns:1 = (ccr >> 5) & 1;
+  setS(ns);
+}
+macro setPS(ps) {
+  local hi:2 = ps >> 8;
+  ILM = hi:1 >> 5;
+  RP = hi:1 & 0x1f;
+  local ccr:1 = ps:1;
+  setCCR(ccr);
+}
+
+# interrupt entry (INT, INT9, INTP; manual 9.1.46-49): frame on the system stack
+macro intEntry(retpc, curpcb) {
+  local ps:2;
+  getPS(ps);
+  setS(1);
+  push16(AH);
+  push16(AL);
+  local w1:2 = (zext(DPR) << 8) | zext(ADB);
+  push16(w1);
+  local w2:2 = (zext(DTB) << 8) | zext(curpcb);
+  push16(w2);
+  push16(retpc);
+  push16(ps);
+  I = 0;
+}
+
+################################################################
+# Operands
+################################################################
+dir:  bkD^"S:"^dir8 is bkD & dir8 { local a:3 = (zext(bkD) << 16) | (zext(DPR) << 8) | dir8; export a; }
+io:   "I:"^io8 is io8 { local a:3 = io8; export a; }
+adr16: "D:"^ad16 is bover=0 & ad16 { local a:3 = (zext(DTB) << 16) | ad16; export a; }
+adr16: bkO^ad16 is bover=1 & bkO & ad16 { local a:3 = (zext(bkO) << 16) | ad16; export a; }
+
+# branch targets stay inside the bank of the instruction
+rel8: dest is rel [ dest = (inst_start & 0xff0000) | ((inst_next + rel) & 0xffff); ] { export *[ram]:1 dest; }
+jad16: dest is ad16 [ dest = (inst_start & 0xff0000) | ad16; ] { export *[ram]:1 dest; }
+jad24: ad24 is ad24 { export *[ram]:1 ad24; }
+
+# signed 8-bit displacement shown as +n / -n
+sd8: "+"^d8 is d8s=0 & d8 { export *[const]:2 d8; }
+sd8: "-"^nd is d8s=1 & d8 [ nd = -d8; ] { export *[const]:2 d8; }
+sd16: "+"^d16 is d16s=0 & d16 { export *[const]:2 d16; }
+sd16: "-"^nd is d16s=1 & d16 [ nd = -d16; ] { export *[const]:2 d16; }
+
+# ea field, memory forms without side effects: exports the 24-bit address
+eaAddr: bkD^"@RW0" is ea=0x08 & bkD { local a:3 = (zext(bkD) << 16) | zext(RW0); export a; }
+eaAddr: bkD^"@RW1" is ea=0x09 & bkD { local a:3 = (zext(bkD) << 16) | zext(RW1); export a; }
+eaAddr: bkA^"@RW2" is ea=0x0a & bkA { local a:3 = (zext(bkA) << 16) | zext(RW2); export a; }
+eaAddr: bkS^"@RW3" is ea=0x0b & bkS { local a:3 = (zext(bkS) << 16) | zext(RW3); export a; }
+eaAddr: bkD^"@RW0"^sd8 is ea=0x10 & bkD; sd8 { local a:3 = (zext(bkD) << 16) | zext(RW0 + sd8); export a; }
+eaAddr: bkD^"@RW1"^sd8 is ea=0x11 & bkD; sd8 { local a:3 = (zext(bkD) << 16) | zext(RW1 + sd8); export a; }
+eaAddr: bkA^"@RW2"^sd8 is ea=0x12 & bkA; sd8 { local a:3 = (zext(bkA) << 16) | zext(RW2 + sd8); export a; }
+eaAddr: bkS^"@RW3"^sd8 is ea=0x13 & bkS; sd8 { local a:3 = (zext(bkS) << 16) | zext(RW3 + sd8); export a; }
+eaAddr: bkD^"@RW4"^sd8 is ea=0x14 & bkD; sd8 { local a:3 = (zext(bkD) << 16) | zext(RW4 + sd8); export a; }
+eaAddr: bkD^"@RW5"^sd8 is ea=0x15 & bkD; sd8 { local a:3 = (zext(bkD) << 16) | zext(RW5 + sd8); export a; }
+eaAddr: bkA^"@RW6"^sd8 is ea=0x16 & bkA; sd8 { local a:3 = (zext(bkA) << 16) | zext(RW6 + sd8); export a; }
+eaAddr: bkS^"@RW7"^sd8 is ea=0x17 & bkS; sd8 { local a:3 = (zext(bkS) << 16) | zext(RW7 + sd8); export a; }
+eaAddr: bkD^"@RW0+"^ud16 is ea=0x18 & bkD; ud16 { local a:3 = (zext(bkD) << 16) | zext(RW0 + ud16); export a; }
+eaAddr: bkD^"@RW1+"^ud16 is ea=0x19 & bkD; ud16 { local a:3 = (zext(bkD) << 16) | zext(RW1 + ud16); export a; }
+eaAddr: bkA^"@RW2+"^ud16 is ea=0x1a & bkA; ud16 { local a:3 = (zext(bkA) << 16) | zext(RW2 + ud16); export a; }
+eaAddr: bkS^"@RW3+"^ud16 is ea=0x1b & bkS; ud16 { local a:3 = (zext(bkS) << 16) | zext(RW3 + ud16); export a; }
+eaAddr: bkD^"@RW0+RW7" is ea=0x1c & bkD { local a:3 = (zext(bkD) << 16) | zext(RW0 + RW7); export a; }
+eaAddr: bkD^"@RW1+RW7" is ea=0x1d & bkD { local a:3 = (zext(bkD) << 16) | zext(RW1 + RW7); export a; }
+# @PC+disp16: address of the opcode + 4 + disp16 (manual 7.3), in the bank of the instruction
+eaAddr: bkO^"@PC"^sd16 is ea=0x1e & bover=1 & bkO; sd16 & d16 {
+  local ia:3 = inst_start; local off:2 = ia:2 + 4 + d16; local a:3 = (zext(bkO) << 16) | zext(off); export a; }
+eaAddr: "@PC"^sd16 is ea=0x1e & bover=0; sd16 & d16 {
+  local ia:3 = inst_start; local off:2 = ia:2 + 4 + d16; local a:3 = (ia & 0xff0000) | zext(off); export a; }
+eaAddr: adr16 is ea=0x1f; adr16 { export adr16; }
+
+# @RWj+ (post-increment by the operand size)
+eaPI1: bkD^"@RW0+" is ea=0x0c & bkD { local a:3 = (zext(bkD) << 16) | zext(RW0); RW0 = RW0 + 1; export a; }
+eaPI1: bkD^"@RW1+" is ea=0x0d & bkD { local a:3 = (zext(bkD) << 16) | zext(RW1); RW1 = RW1 + 1; export a; }
+eaPI1: bkA^"@RW2+" is ea=0x0e & bkA { local a:3 = (zext(bkA) << 16) | zext(RW2); RW2 = RW2 + 1; export a; }
+eaPI1: bkS^"@RW3+" is ea=0x0f & bkS { local a:3 = (zext(bkS) << 16) | zext(RW3); RW3 = RW3 + 1; export a; }
+eaPI2: bkD^"@RW0+" is ea=0x0c & bkD { local a:3 = (zext(bkD) << 16) | zext(RW0); RW0 = RW0 + 2; export a; }
+eaPI2: bkD^"@RW1+" is ea=0x0d & bkD { local a:3 = (zext(bkD) << 16) | zext(RW1); RW1 = RW1 + 2; export a; }
+eaPI2: bkA^"@RW2+" is ea=0x0e & bkA { local a:3 = (zext(bkA) << 16) | zext(RW2); RW2 = RW2 + 2; export a; }
+eaPI2: bkS^"@RW3+" is ea=0x0f & bkS { local a:3 = (zext(bkS) << 16) | zext(RW3); RW3 = RW3 + 2; export a; }
+eaPI4: bkD^"@RW0+" is ea=0x0c & bkD { local a:3 = (zext(bkD) << 16) | zext(RW0); RW0 = RW0 + 4; export a; }
+eaPI4: bkD^"@RW1+" is ea=0x0d & bkD { local a:3 = (zext(bkD) << 16) | zext(RW1); RW1 = RW1 + 4; export a; }
+eaPI4: bkA^"@RW2+" is ea=0x0e & bkA { local a:3 = (zext(bkA) << 16) | zext(RW2); RW2 = RW2 + 4; export a; }
+eaPI4: bkS^"@RW3+" is ea=0x0f & bkS { local a:3 = (zext(bkS) << 16) | zext(RW3); RW3 = RW3 + 4; export a; }
+
+# byte, word and long operands (ear: register; eam: memory)
+earB: eaR is eahi=0 & eaR { export eaR; }
+earW: eaRW is eahi=0 & eaRW { export eaRW; }
+earL: eaRL is eahi=0 & eaRL { export eaRL; }
+eamB: eaAddr is eaAddr { export *[ram]:1 eaAddr; }
+eamB: eaPI1 is eaPI1 { export *[ram]:1 eaPI1; }
+eamW: eaAddr is eaAddr { export *[ram]:2 eaAddr; }
+eamW: eaPI2 is eaPI2 { export *[ram]:2 eaPI2; }
+eamL: eaAddr is eaAddr { export *[ram]:4 eaAddr; }
+eamL: eaPI4 is eaPI4 { export *[ram]:4 eaPI4; }
+eaB: earB is earB { export earB; }
+eaB: eamB is eamB { export eamB; }
+eaW: earW is earW { export earW; }
+eaW: eamW is eamW { export eamW; }
+eaL: earL is earL { export earL; }
+eaL: eamL is eamL { export eamL; }
+# CBNE/CWBNE: @RWj+ is "use prohibited" (manual table C-5)
+eaBc: earB is earB { export earB; }
+eaBc: eaAddr is eaAddr { export *[ram]:1 eaAddr; }
+eaWc: earW is earW { export earW; }
+eaWc: eaAddr is eaAddr { export *[ram]:2 eaAddr; }
+
+# MOVEA: the 16-bit effective address (no bank, so a bank prefix does not show); for a register, the
+# address of the register in the register bank (manual 9.1.69). @RWj+ increments by 2 (word operand).
+eaEA: eaRW is eahi=0 & eaRW & rpv & ea { local x:2 = 0x180 + ea * 2 + zext(rpv) * 16; export x; }
+eaEA: "@RW0" is ea=0x08 { local x:2 = RW0; export x; }
+eaEA: "@RW1" is ea=0x09 { local x:2 = RW1; export x; }
+eaEA: "@RW2" is ea=0x0a { local x:2 = RW2; export x; }
+eaEA: "@RW3" is ea=0x0b { local x:2 = RW3; export x; }
+eaEA: "@RW0+" is ea=0x0c { local x:2 = RW0; RW0 = RW0 + 2; export x; }
+eaEA: "@RW1+" is ea=0x0d { local x:2 = RW1; RW1 = RW1 + 2; export x; }
+eaEA: "@RW2+" is ea=0x0e { local x:2 = RW2; RW2 = RW2 + 2; export x; }
+eaEA: "@RW3+" is ea=0x0f { local x:2 = RW3; RW3 = RW3 + 2; export x; }
+eaEA: "@RW0"^sd8 is ea=0x10; sd8 { local x:2 = RW0 + sd8; export x; }
+eaEA: "@RW1"^sd8 is ea=0x11; sd8 { local x:2 = RW1 + sd8; export x; }
+eaEA: "@RW2"^sd8 is ea=0x12; sd8 { local x:2 = RW2 + sd8; export x; }
+eaEA: "@RW3"^sd8 is ea=0x13; sd8 { local x:2 = RW3 + sd8; export x; }
+eaEA: "@RW4"^sd8 is ea=0x14; sd8 { local x:2 = RW4 + sd8; export x; }
+eaEA: "@RW5"^sd8 is ea=0x15; sd8 { local x:2 = RW5 + sd8; export x; }
+eaEA: "@RW6"^sd8 is ea=0x16; sd8 { local x:2 = RW6 + sd8; export x; }
+eaEA: "@RW7"^sd8 is ea=0x17; sd8 { local x:2 = RW7 + sd8; export x; }
+eaEA: "@RW0+"^ud16 is ea=0x18; ud16 { local x:2 = RW0 + ud16; export x; }
+eaEA: "@RW1+"^ud16 is ea=0x19; ud16 { local x:2 = RW1 + ud16; export x; }
+eaEA: "@RW2+"^ud16 is ea=0x1a; ud16 { local x:2 = RW2 + ud16; export x; }
+eaEA: "@RW3+"^ud16 is ea=0x1b; ud16 { local x:2 = RW3 + ud16; export x; }
+eaEA: "@RW0+RW7" is ea=0x1c { local x:2 = RW0 + RW7; export x; }
+eaEA: "@RW1+RW7" is ea=0x1d { local x:2 = RW1 + RW7; export x; }
+eaEA: "@PC"^sd16 is ea=0x1e; sd16 & d16 { local ia:3 = inst_start; local x:2 = ia:2 + 4 + d16; export x; }
+eaEA: "D:"^ad16 is ea=0x1f; ad16 { local x:2 = ad16; export x; }
+
+################################################################
+# Basic page (first byte 00..FF)
+################################################################
+:NOP is op=0x00 { }
+:INT9 is op=0x01 & pcbk {
+  local ret:2 = inst_next;
+  intEntry(ret, pcbk);
+  local vec:3 = 0xffffd8;
+  local t:3 = *[ram]:3 vec;
+  PCB = t(2); PC = t:2;
+  call [t];
+}
+:ADDDC A is op=0x02 & A & fNZVC {
+  local a:1 = AHb; local b:1 = ALb;
+  local lo:1 = (a & 0xf) + (b & 0xf) + C;
+  local hi:1 = (a >> 4) + (b >> 4);
+  local adj:1 = lo > 9;
+  lo = lo + adj * 6;
+  hi = hi + (lo >> 4);
+  lo = lo & 0xf;
+  nC = hi > 9;
+  hi = hi + nC * 6;
+  local r:1 = (hi << 4) | lo;
+  AL = zext(r);
+  nV = V; resNZ(r);
+  build fNZVC;
+}
+:NEG A is op=0x03 & A & fNZVC {
+  local x:1 = ALb; local r:1;
+  opNeg(r, x);
+  AL = sext(r);
+  build fNZVC;
+}
+:LINK "#"^imm8 is op=0x08; imm8 {
+  push16(RW3);
+  RW3 = SP;
+  SP = SP - imm8;
+}
+:UNLINK is op=0x09 {
+  SP = RW3;
+  pop16(RW3);
+}
+:MOV "RP", "#"^imm8 is op=0x0a; imm8 [ globalset(inst_next, bank); globalset(inst_next, bover); globalset(inst_next, ncc); globalset(inst_next, cmr); ] {
+  RP = imm8 & 0x1f;
+}
+:NEGW A is op=0x0b & A & fNZVC { local x:2 = AL; opNeg(AL, x); build fNZVC; }
+:LSLW A is op=0x0c & A & fNZC {
+  local x:2 = AL; nC = x s< 0; AL = x << 1; resNZ(AL); build fNZC;
+}
+:ASRW A is op=0x0e & A & fTNZC {
+  local x:2 = AL; nT = T | C; nC = x:1 & 1; AL = x s>> 1; resNZ(AL); build fTNZC;
+}
+:LSRW A is op=0x0f & A & fTNZC {
+  local x:2 = AL; nT = T | C; nC = x:1 & 1; AL = x >> 1; nN = 0; nZ = AL == 0; build fTNZC;
+}
+:SUBDC A is op=0x12 & A & fNZVC {
+  local a:1 = AHb; local b:1 = ALb;
+  local lo:1 = (a & 0xf) - (b & 0xf) - C;
+  local blo:1 = (a & 0xf) < (b & 0xf) + C;
+  lo = lo - blo * 6;
+  local hi:1 = (a >> 4) - (b >> 4) - blo;
+  nC = (a >> 4) < (b >> 4) + blo;
+  hi = hi - nC * 6;
+  local r:1 = (hi << 4) | (lo & 0xf);
+  AL = zext(r);
+  nV = V; resNZ(r);
+  build fNZVC;
+}
+:JCTX "@A" is op=0x13 & bkD {
+  local p:3 = (zext(bkD) << 16) | zext(AL);
+  local ps:2 = *[ram]:2 p;
+  local npc:2 = *[ram]:2 (p + 2);
+  local dp:2 = *[ram]:2 (p + 4);
+  local da:2 = *[ram]:2 (p + 6);
+  local nal:2 = *[ram]:2 (p + 8);
+  local nah:2 = *[ram]:2 (p + 10);
+  DTB = dp(1); PCB = dp:1;
+  DPR = da(1); ADB = da:1;
+  AL = nal; AH = nah;
+  setPS(ps);
+  PC = npc;
+  local t:3 = (zext(PCB) << 16) | zext(npc);
+  goto [t];
+}
+:EXT is op=0x14 & fNZ { AL = sext(ALb); resNZ(AL); build fNZ; }
+:ZEXT is op=0x15 & fNZ { AL = zext(ALb); nN = 0; nZ = AL == 0; build fNZ; }
+:SWAP is op=0x16 { AL = (AL << 8) | (AL >> 8); }
+:ADDSP "#"^simm8 is op=0x17; simm8 { SP = SP + simm8; }
+:ADDL A, "#"^imm32 is op=0x18 & A & fNZVC; imm32 { local x:4 = A; opAdd(A, x, imm32:4); build fNZVC; }
+:SUBL A, "#"^imm32 is op=0x19 & A & fNZVC; imm32 { local x:4 = A; opSub(A, x, imm32:4); build fNZVC; }
+:MOV "ILM", "#"^imm8 is op=0x1a; imm8 [ globalset(inst_next, bank); globalset(inst_next, bover); globalset(inst_next, ncc); globalset(inst_next, cmr); ] {
+  ILM = imm8 & 7;
+}
+:CMPL A, "#"^imm32 is op=0x1b & A & fNZVC; imm32 { local r:4; opSub(r, A, imm32:4); build fNZVC; }
+:EXTW is op=0x1c & fNZ { A = sext(AL); resNZ(A); build fNZ; }
+:ZEXTW is op=0x1d & fNZ { A = zext(AL); nN = 0; nZ = A == 0; build fNZ; }
+:SWAPW is op=0x1e { local t:2 = AL; AL = AH; AH = t; }
+:ADDSP "#"^imm16 is op=0x1f; imm16 { SP = SP + imm16; }
+
+:ADD A, dir is op=0x20 & A & fNZVC; dir { local r:1; opAdd(r, ALb, *[ram]:1 dir); AL = zext(r); build fNZVC; }
+:SUB A, dir is op=0x21 & A & fNZVC; dir { local r:1; opSub(r, ALb, *[ram]:1 dir); AL = zext(r); build fNZVC; }
+:ADDC A is op=0x22 & A & fNZVC { local r:1; opAddc(r, AHb, ALb); AL = zext(r); build fNZVC; }
+:CMP A is op=0x23 & A & fNZVC { local r:1; opSub(r, AHb, ALb); build fNZVC; }
+# AND/OR CCR: an immediate that keeps S needs no stack switch
+:AND "CCR", "#"^imm8 is op=0x24; imm8 & imm8b5=1 [ globalset(inst_next, bank); globalset(inst_next, bover); globalset(inst_next, ncc); globalset(inst_next, cmr); ] {
+  local m:1 = imm8;
+  I = I & (m >> 6); T = T & (m >> 4); N = N & (m >> 3); Z = Z & (m >> 2); V = V & (m >> 1); C = C & m;
+  I = I & 1; T = T & 1; N = N & 1; Z = Z & 1; V = V & 1; C = C & 1;
+}
+:AND "CCR", "#"^imm8 is op=0x24; imm8 & imm8b5=0 [ globalset(inst_next, bank); globalset(inst_next, bover); globalset(inst_next, ncc); globalset(inst_next, cmr); ] {
+  local ccr:1; getCCR(ccr); ccr = ccr & imm8; setCCR(ccr);
+}
+:OR "CCR", "#"^imm8 is op=0x25; imm8 & imm8b5=0 [ globalset(inst_next, bank); globalset(inst_next, bover); globalset(inst_next, ncc); globalset(inst_next, cmr); ] {
+  local m:1 = imm8;
+  I = I | ((m >> 6) & 1); T = T | ((m >> 4) & 1); N = N | ((m >> 3) & 1);
+  Z = Z | ((m >> 2) & 1); V = V | ((m >> 1) & 1); C = C | (m & 1);
+}
+:OR "CCR", "#"^imm8 is op=0x25; imm8 & imm8b5=1 [ globalset(inst_next, bank); globalset(inst_next, bover); globalset(inst_next, ncc); globalset(inst_next, cmr); ] {
+  local ccr:1; getCCR(ccr); ccr = ccr | imm8; setCCR(ccr);
+}
+:DIVU A is op=0x26 & A & fVC {
+  local d:2 = zext(ALb);
+  local x:2 = AH;
+  nC = d == 0;
+  nV = nC;
+  if (d == 0) goto <done>;
+  local q:2 = x / d;
+  nV = q > 0xff;
+  if (nV) goto <done>;
+  ALb = q:1;
+  AH = x % d;
+<done>
+  build fVC;
+}
+:MULU A is op=0x27 & A { AL = zext(AHb) * zext(ALb); }
+:ADDW A is op=0x28 & A & fNZVC { local x:2 = AL; opAdd(AL, AH, x); build fNZVC; }
+:SUBW A is op=0x29 & A & fNZVC { local x:2 = AL; opSub(AL, AH, x); build fNZVC; }
+:CBNE A, "#"^imm8, rel8 is op=0x2a & A & fNZVC; imm8; rel8 {
+  local r:1; opSub(r, ALb, imm8:1); build fNZVC;
+  if (ALb != imm8:1) goto rel8;
+}
+:CMPW A is op=0x2b & A & fNZVC { local r:2; opSub(r, AH, AL); build fNZVC; }
+:ANDW A is op=0x2c & A & fNZV { AL = AH & AL; opLog(AL); build fNZV; }
+:ORW A is op=0x2d & A & fNZV { AL = AH | AL; opLog(AL); build fNZV; }
+:XORW A is op=0x2e & A & fNZV { AL = AH ^ AL; opLog(AL); build fNZV; }
+:MULUW A is op=0x2f & A { A = zext(AH) * zext(AL); }
+
+:ADD A, "#"^imm8 is op=0x30 & A & fNZVC; imm8 { local r:1; opAdd(r, ALb, imm8:1); AL = zext(r); build fNZVC; }
+:SUB A, "#"^imm8 is op=0x31 & A & fNZVC; imm8 { local r:1; opSub(r, ALb, imm8:1); AL = zext(r); build fNZVC; }
+:SUBC A is op=0x32 & A & fNZVC { local r:1; opSubc(r, AHb, ALb); AL = zext(r); build fNZVC; }
+:CMP A, "#"^imm8 is op=0x33 & A & fNZVC; imm8 { local r:1; opSub(r, ALb, imm8:1); build fNZVC; }
+:AND A, "#"^imm8 is op=0x34 & A & fNZV; imm8 { ALb = ALb & imm8; opLog(ALb); build fNZV; }
+:OR A, "#"^imm8 is op=0x35 & A & fNZV; imm8 { ALb = ALb | imm8; opLog(ALb); build fNZV; }
+:XOR A, "#"^imm8 is op=0x36 & A & fNZV; imm8 { ALb = ALb ^ imm8; opLog(ALb); build fNZV; }
+:NOT A is op=0x37 & A & fNZV { ALb = ~ALb; opLog(ALb); build fNZV; }
+:ADDW A, "#"^imm16 is op=0x38 & A & fNZVC; imm16 { local x:2 = AL; opAdd(AL, x, imm16:2); build fNZVC; }
+:SUBW A, "#"^imm16 is op=0x39 & A & fNZVC; imm16 { local x:2 = AL; opSub(AL, x, imm16:2); build fNZVC; }
+:CWBNE A, "#"^imm16, rel8 is op=0x3a & A & fNZVC; imm16; rel8 {
+  local r:2; opSub(r, AL, imm16:2); build fNZVC;
+  if (AL != imm16:2) goto rel8;
+}
+:CMPW A, "#"^imm16 is op=0x3b & A & fNZVC; imm16 { local r:2; opSub(r, AL, imm16:2); build fNZVC; }
+:ANDW A, "#"^imm16 is op=0x3c & A & fNZV; imm16 { AL = AL & imm16; opLog(AL); build fNZV; }
+:ORW A, "#"^imm16 is op=0x3d & A & fNZV; imm16 { AL = AL | imm16; opLog(AL); build fNZV; }
+:XORW A, "#"^imm16 is op=0x3e & A & fNZV; imm16 { AL = AL ^ imm16; opLog(AL); build fNZV; }
+:NOTW A is op=0x3f & A & fNZV { AL = ~AL; opLog(AL); build fNZV; }
+
+:MOV A, dir is op=0x40 & A & fNZ; dir { local v:1 = *[ram]:1 dir; AH = AL; AL = zext(v); resNZ(v); build fNZ; }
+:MOV dir, A is op=0x41 & A & fNZ; dir { *[ram]:1 dir = ALb; resNZ(ALb); build fNZ; }
+:MOV A, "#"^imm8 is op=0x42 & A & fNZ; imm8 { local v:1 = imm8; AH = AL; AL = zext(v); resNZ(v); build fNZ; }
+:MOVX A, "#"^imm8 is op=0x43 & A & fNZ; imm8 { local v:1 = imm8; AH = AL; AL = sext(v); resNZ(v); build fNZ; }
+:MOV dir, "#"^imm8 is op=0x44; dir; imm8 { *[ram]:1 dir = imm8:1; }
+:MOVX A, dir is op=0x45 & A & fNZ; dir { local v:1 = *[ram]:1 dir; AH = AL; AL = sext(v); resNZ(v); build fNZ; }
+:MOVW A, SP is op=0x46 & A & SP & fNZ { AH = AL; AL = SP; resNZ(AL); build fNZ; }
+:MOVW SP, A is op=0x47 & A & SP & fNZ { SP = AL; resNZ(AL); build fNZ; }
+:MOVW A, dir is op=0x48 & A & fNZ; dir { AH = AL; AL = *[ram]:2 dir; resNZ(AL); build fNZ; }
+:MOVW dir, A is op=0x49 & A & fNZ; dir { *[ram]:2 dir = AL; resNZ(AL); build fNZ; }
+:MOVW A, "#"^imm16 is op=0x4a & A & fNZ; imm16 { AH = AL; AL = imm16; resNZ(AL); build fNZ; }
+:MOVL A, "#"^imm32 is op=0x4b & A & fNZ; imm32 { A = imm32; resNZ(A); build fNZ; }
+:PUSHW A is op=0x4c & A { push16(AL); }
+:PUSHW AH is op=0x4d & AH { push16(AH); }
+:PUSHW "PS" is op=0x4e { local ps:2; getPS(ps); push16(ps); }
+:PUSHW pushlist is op=0x4f; pushlist { }
+
+:MOV A, io is op=0x50 & A & fNZ; io { local v:1 = *[ram]:1 io; AH = AL; AL = zext(v); resNZ(v); build fNZ; }
+:MOV io, A is op=0x51 & A & fNZ; io { *[ram]:1 io = ALb; resNZ(ALb); build fNZ; }
+:MOV A, adr16 is op=0x52 & A & fNZ; adr16 { local v:1 = *[ram]:1 adr16; AH = AL; AL = zext(v); resNZ(v); build fNZ; }
+:MOV adr16, A is op=0x53 & A & fNZ; adr16 { *[ram]:1 adr16 = ALb; resNZ(ALb); build fNZ; }
+:MOV io, "#"^imm8 is op=0x54; io; imm8 { *[ram]:1 io = imm8:1; }
+:MOVX A, io is op=0x55 & A & fNZ; io { local v:1 = *[ram]:1 io; AH = AL; AL = sext(v); resNZ(v); build fNZ; }
+:MOVW io, "#"^imm16 is op=0x56; io; imm16 { *[ram]:2 io = imm16:2; }
+:MOVX A, adr16 is op=0x57 & A & fNZ; adr16 { local v:1 = *[ram]:1 adr16; AH = AL; AL = sext(v); resNZ(v); build fNZ; }
+:MOVW A, io is op=0x58 & A & fNZ; io { AH = AL; AL = *[ram]:2 io; resNZ(AL); build fNZ; }
+:MOVW io, A is op=0x59 & A & fNZ; io { *[ram]:2 io = AL; resNZ(AL); build fNZ; }
+:MOVW A, adr16 is op=0x5a & A & fNZ; adr16 { AH = AL; AL = *[ram]:2 adr16; resNZ(AL); build fNZ; }
+:MOVW adr16, A is op=0x5b & A & fNZ; adr16 { *[ram]:2 adr16 = AL; resNZ(AL); build fNZ; }
+:POPW A is op=0x5c & A { AH = AL; pop16(AL); }
+:POPW AH is op=0x5d & AH { pop16(AH); }
+:POPW "PS" is op=0x5e [ globalset(inst_next, bank); globalset(inst_next, bover); globalset(inst_next, ncc); globalset(inst_next, cmr); ] {
+  local ps:2; pop16(ps); setPS(ps);
+}
+:POPW poplist is op=0x5f; poplist { }
+
+:BRA rel8 is op=0x60; rel8 { goto rel8; }
+:JMP "@A" is op=0x61 & pcbk { local t:3 = (zext(pcbk) << 16) | zext(AL); PC = AL; goto [t]; }
+:JMP jad16 is op=0x62; jad16 { goto jad16; }
+:JMPP jad24 is op=0x63; jad24 & ad24 { PCB = ad24 >> 16; goto jad24; }
+:CALL jad16 is op=0x64; jad16 { local ret:2 = inst_next; push16(ret); call jad16; }
+:CALLP jad24 is op=0x65 & pcbk; jad24 {
+  local ret:2 = inst_next;
+  local pb:2 = zext(pcbk); push16(pb); push16(ret);
+  call jad24;
+}
+:RETP is op=0x66 {
+  local npc:2; local nb:2;
+  pop16(npc); pop16(nb);
+  PCB = nb:1; PC = npc;
+  local t:3 = (zext(PCB) << 16) | zext(npc);
+  return [t];
+}
+:RET is op=0x67 & pcbk {
+  local npc:2;
+  pop16(npc);
+  PC = npc;
+  local t:3 = (zext(pcbk) << 16) | zext(npc);
+  return [t];
+}
+:INT "#"^vct8 is op=0x68 & pcbk; vct8 {
+  local ret:2 = inst_next;
+  intEntry(ret, pcbk);
+  local vec:3 = 0xfffffc - 4 * vct8;
+  local t:3 = *[ram]:3 vec;
+  PCB = t(2); PC = t:2;
+  call [t];
+}
+intad: dest is ad16 [ dest = 0xff0000 | ad16; ] { export *[ram]:1 dest; }
+:INT intad is op=0x69 & pcbk; intad & ad16 {
+  local ret:2 = inst_next;
+  intEntry(ret, pcbk);
+  PCB = 0xff; PC = ad16;
+  call intad;
+}
+:INTP jad24 is op=0x6a & pcbk; jad24 & ad24 {
+  local ret:2 = inst_next;
+  intEntry(ret, pcbk);
+  PCB = ad24 >> 16; PC = ad24;
+  call jad24;
+}
+:RETI is op=0x6b {
+  setS(1);
+  local ps:2; local npc:2; local db:2; local da:2;
+  pop16(ps); pop16(npc); pop16(db); pop16(da); pop16(AL); pop16(AH);
+  DTB = db(1); PCB = db:1; DPR = da(1); ADB = da:1;
+  setPS(ps);
+  PC = npc;
+  local t:3 = (zext(PCB) << 16) | zext(npc);
+  return [t];
+}
+
+################################################################
+# Bit operations (first byte 6C)
+################################################################
+bitad: io^":"^bp is bmode=0 & bp; io { export io; }
+bitad: dir^":"^bp is bmode=1 & bp; dir { export dir; }
+bitad: adr16^":"^bp is bmode=3 & bp; adr16 { export adr16; }
+
+:MOVB A, bitad is op=0x6c & A & fNZ; (bop=0 & bp) ... & bitad {
+  local v:1 = (*[ram]:1 bitad >> bp) & 1;
+  AH = AL; AL = zext(v * 0xff);
+  nN = v; nZ = v == 0; build fNZ;
+}
+:MOVB bitad, A is op=0x6c & A & fNZ; (bop=1 & bp) ... & bitad {
+  local m:1 = 1 << bp;
+  local v:1 = *[ram]:1 bitad;
+  *[ram]:1 bitad = (v & ~m) | (m * (ALb != 0));
+  resNZ(ALb); build fNZ;
+}
+:CLRB bitad is op=0x6c; (bop=2 & bp) ... & bitad { *[ram]:1 bitad = *[ram]:1 bitad & ~(1 << bp); }
+:SETB bitad is op=0x6c; (bop=3 & bp) ... & bitad { *[ram]:1 bitad = *[ram]:1 bitad | (1 << bp); }
+:BBC bitad, rel8 is op=0x6c & fZ; (bop=4 & bp) ... & bitad; rel8 {
+  local v:1 = (*[ram]:1 bitad >> bp) & 1;
+  nZ = v == 0; build fZ;
+  if (v == 0) goto rel8;
+}
+:BBS bitad, rel8 is op=0x6c & fZ; (bop=5 & bp) ... & bitad; rel8 {
+  local v:1 = (*[ram]:1 bitad >> bp) & 1;
+  nZ = v == 0; build fZ;
+  if (v != 0) goto rel8;
+}
+:WBTS io^":"^bp is op=0x6c; bop=6 & bmode=0 & bp; io {
+<wait>
+  local v:1 = (*[ram]:1 io >> bp) & 1;
+  if (v == 0) goto <wait>;
+}
+:WBTC io^":"^bp is op=0x6c; bop=7 & bmode=0 & bp; io {
+<wait>
+  local v:1 = (*[ram]:1 io >> bp) & 1;
+  if (v != 0) goto <wait>;
+}
+:SBBS adr16^":"^bp, rel8 is op=0x6c & fZ; bop=7 & bmode=3 & bp; adr16; rel8 {
+  local m:1 = 1 << bp;
+  local v:1 = *[ram]:1 adr16;
+  *[ram]:1 adr16 = v | m;
+  nZ = (v & m) == 0; build fZ;
+  if ((v & m) != 0) goto rel8;
+}
+
+################################################################
+# String operations (first byte 6E); the banks are in the opcode (prefixes do not apply)
+################################################################
+sbk1: "PCB" is o2bkd=0 & pcbk { export pcbk; }
+sbk1: "DTB" is o2bkd=1 { export DTB; }
+sbk1: "ADB" is o2bkd=2 { export ADB; }
+sbk1: "SPB" is o2bkd=3 { export SPB; }
+sbk0: "PCB" is o2bks=0 & pcbk { export pcbk; }
+sbk0: "DTB" is o2bks=1 { export DTB; }
+sbk0: "ADB" is o2bks=2 { export ADB; }
+sbk0: "SPB" is o2bks=3 { export SPB; }
+
+:MOVSI sbk1, sbk0 is op=0x6e; o2hi=0 & sbk1 & sbk0 {
+<top>
+  if (RW0 == 0) goto <end>;
+  local s:3 = (zext(sbk0) << 16) | zext(AL);
+  local d:3 = (zext(sbk1) << 16) | zext(AH);
+  *[ram]:1 d = *[ram]:1 s;
+  AH = AH + 1; AL = AL + 1; RW0 = RW0 - 1;
+  goto <top>;
+<end>
+}
+:MOVSD sbk1, sbk0 is op=0x6e; o2hi=1 & sbk1 & sbk0 {
+<top>
+  if (RW0 == 0) goto <end>;
+  local s:3 = (zext(sbk0) << 16) | zext(AL);
+  local d:3 = (zext(sbk1) << 16) | zext(AH);
+  *[ram]:1 d = *[ram]:1 s;
+  AH = AH - 1; AL = AL - 1; RW0 = RW0 - 1;
+  goto <top>;
+<end>
+}
+:MOVSWI sbk1, sbk0 is op=0x6e; o2hi=2 & sbk1 & sbk0 {
+<top>
+  if (RW0 == 0) goto <end>;
+  local s:3 = (zext(sbk0) << 16) | zext(AL);
+  local d:3 = (zext(sbk1) << 16) | zext(AH);
+  *[ram]:2 d = *[ram]:2 s;
+  AH = AH + 2; AL = AL + 2; RW0 = RW0 - 1;
+  goto <top>;
+<end>
+}
+:MOVSWD sbk1, sbk0 is op=0x6e; o2hi=3 & sbk1 & sbk0 {
+<top>
+  if (RW0 == 0) goto <end>;
+  local s:3 = (zext(sbk0) << 16) | zext(AL);
+  local d:3 = (zext(sbk1) << 16) | zext(AH);
+  *[ram]:2 d = *[ram]:2 s;
+  AH = AH - 2; AL = AL - 2; RW0 = RW0 - 1;
+  goto <top>;
+<end>
+}
+:SCEQI sbk0 is op=0x6e & fNZVC; o2hi=8 & o2bkd=0 & sbk0 {
+  if (RW0 == 0) goto <end>;
+<top>
+  local d:3 = (zext(sbk0) << 16) | zext(AH);
+  local v:1 = *[ram]:1 d;
+  local r:1; opSub(r, v, ALb);
+  AH = AH + 1; RW0 = RW0 - 1;
+  build fNZVC;
+  if (r == 0) goto <end>;
+  if (RW0 != 0) goto <top>;
+<end>
+}
+:SCEQD sbk0 is op=0x6e & fNZVC; o2hi=9 & o2bkd=0 & sbk0 {
+  if (RW0 == 0) goto <end>;
+<top>
+  local d:3 = (zext(sbk0) << 16) | zext(AH);
+  local v:1 = *[ram]:1 d;
+  local r:1; opSub(r, v, ALb);
+  AH = AH - 1; RW0 = RW0 - 1;
+  build fNZVC;
+  if (r == 0) goto <end>;
+  if (RW0 != 0) goto <top>;
+<end>
+}
+:SCWEQI sbk0 is op=0x6e & fNZVC; o2hi=10 & o2bkd=0 & sbk0 {
+  if (RW0 == 0) goto <end>;
+<top>
+  local d:3 = (zext(sbk0) << 16) | zext(AH);
+  local v:2 = *[ram]:2 d;
+  local r:2; opSub(r, v, AL);
+  AH = AH + 2; RW0 = RW0 - 1;
+  build fNZVC;
+  if (r == 0) goto <end>;
+  if (RW0 != 0) goto <top>;
+<end>
+}
+:SCWEQD sbk0 is op=0x6e & fNZVC; o2hi=11 & o2bkd=0 & sbk0 {
+  if (RW0 == 0) goto <end>;
+<top>
+  local d:3 = (zext(sbk0) << 16) | zext(AH);
+  local v:2 = *[ram]:2 d;
+  local r:2; opSub(r, v, AL);
+  AH = AH - 2; RW0 = RW0 - 1;
+  build fNZVC;
+  if (r == 0) goto <end>;
+  if (RW0 != 0) goto <top>;
+<end>
+}
+:FILSI sbk0 is op=0x6e & fNZ; o2hi=12 & o2bkd=0 & sbk0 {
+<top>
+  if (RW0 == 0) goto <end>;
+  local d:3 = (zext(sbk0) << 16) | zext(AH);
+  *[ram]:1 d = ALb;
+  AH = AH + 1; RW0 = RW0 - 1;
+  goto <top>;
+<end>
+  resNZ(ALb); build fNZ;
+}
+:FILSWI sbk0 is op=0x6e & fNZ; o2hi=14 & o2bkd=0 & sbk0 {
+<top>
+  if (RW0 == 0) goto <end>;
+  local d:3 = (zext(sbk0) << 16) | zext(AH);
+  *[ram]:2 d = AL;
+  AH = AH + 2; RW0 = RW0 - 1;
+  goto <top>;
+<end>
+  resNZ(AL); build fNZ;
+}
+
+################################################################
+# 2-byte instructions (first byte 6F)
+################################################################
+brg2: "DTB" is o2=0x00 | o2=0x10 { export DTB; }
+brg2: "ADB" is o2=0x01 | o2=0x11 { export ADB; }
+brg2: "SSB" is o2=0x02 | o2=0x12 { export SSB; }
+brg2: "USB" is o2=0x03 | o2=0x13 { export USB; }
+brg2: "DPR" is o2=0x04 | o2=0x14 { export DPR; }
+
+aind: bkD^"@A" is bkD { local a:3 = (zext(bkD) << 16) | zext(AL); export a; }
+
+rld8: "@"^eaRL^sd8 is eaRL; sd8 { local a4:4 = eaRL + sext(sd8); local a:3 = a4:3; export a; }
+
+:MOV A, brg2 is op=0x6f & A & fNZ; o2<0x05 & brg2 { local v:1 = brg2; AH = AL; AL = zext(v); resNZ(v); build fNZ; }
+:MOV A, aind is op=0x6f & A & fNZ & aind; o2=0x05 { local v:1 = *[ram]:1 aind; AL = zext(v); resNZ(v); build fNZ; }
+:MOV A, "PCB" is op=0x6f & A & fNZ & pcbk; o2=0x06 { local v:1 = pcbk; AH = AL; AL = zext(v); resNZ(v); build fNZ; }
+:ROLC A is op=0x6f & A & fNZC; o2=0x07 {
+  local x:1 = ALb; nC = x >> 7; ALb = (x << 1) | C; resNZ(ALb); build fNZC;
+}
+:LSLW A, R0 is op=0x6f & A & R0 & fNZC; o2=0x0c {
+  local x:2 = AL; local n:1 = R0;
+  local cs:2 = (x >> (16 - n)) & 1; nC = cs:1; AL = x << n; resNZ(AL); build fNZC;
+}
+:MOVW A, aind is op=0x6f & A & fNZ & aind; o2=0x0d { AL = *[ram]:2 aind; resNZ(AL); build fNZ; }
+:ASRW A, R0 is op=0x6f & A & R0 & fTNZC; o2=0x0e {
+  local x:2 = AL; local n:1 = R0; local nz:1 = n != 0;
+  local cs = x s>> (n - 1); nC = nz & (cs:1 & 1);
+  nT = nz & ((x & ((1 << (n - 1)) - 1)) != 0);
+  AL = x s>> n; resNZ(AL); build fTNZC;
+}
+:LSRW A, R0 is op=0x6f & A & R0 & fTNZC; o2=0x0f {
+  local x:2 = AL; local n:1 = R0; local nz:1 = n != 0;
+  local cs = x >> (n - 1); nC = nz & (cs:1 & 1);
+  nT = nz & ((x & ((1 << (n - 1)) - 1)) != 0);
+  AL = x >> n; resNZ(AL); build fTNZC;
+}
+:MOV brg2, A is op=0x6f & A & fNZ; o2>=0x10 & o2<0x15 & brg2 {
+  local v:1 = ALb;
+  brg2 = v;
+  SPB = SSB * S + USB * (1 - S);
+  resNZ(v); build fNZ;
+}
+:MOV bkD^"@AL", AH is op=0x6f & AH & fNZ & bkD; o2=0x15 {
+  local a:3 = (zext(bkD) << 16) | zext(AL);
+  *[ram]:1 a = AHb; resNZ(AHb); build fNZ;
+}
+:MOVX A, aind is op=0x6f & A & fNZ & aind; o2=0x16 { local v:1 = *[ram]:1 aind; AL = sext(v); resNZ(v); build fNZ; }
+:RORC A is op=0x6f & A & fNZC; o2=0x17 {
+  local x:1 = ALb; nC = x & 1; ALb = (x >> 1) | (C << 7); resNZ(ALb); build fNZC;
+}
+:LSLL A, R0 is op=0x6f & A & R0 & fNZC; o2=0x1c {
+  local x:4 = A; local n:1 = R0;
+  local cs:4 = (x >> (32 - n)) & 1; nC = cs:1; A = x << n; resNZ(A); build fNZC;
+}
+:MOVW bkD^"@AL", AH is op=0x6f & AH & fNZ & bkD; o2=0x1d {
+  local a:3 = (zext(bkD) << 16) | zext(AL);
+  *[ram]:2 a = AH; resNZ(AH); build fNZ;
+}
+:ASRL A, R0 is op=0x6f & A & R0 & fTNZC; o2=0x1e {
+  local x:4 = A; local n:1 = R0; local nz:1 = n != 0;
+  local cs = x s>> (n - 1); nC = nz & (cs:1 & 1);
+  nT = nz & ((x & ((1 << (n - 1)) - 1)) != 0);
+  A = x s>> n; resNZ(A); build fTNZC;
+}
+:LSRL A, R0 is op=0x6f & A & R0 & fTNZC; o2=0x1f {
+  local x:4 = A; local n:1 = R0; local nz:1 = n != 0;
+  local cs = x >> (n - 1); nC = nz & (cs:1 & 1);
+  nT = nz & ((x & ((1 << (n - 1)) - 1)) != 0);
+  A = x >> n; resNZ(A); build fTNZC;
+}
+# 6F 20..4F: bit 0 of the second byte is ignored (manual table C-4 merges each even/odd pair)
+:MOVX A, rld8 is op=0x6f & A & fNZ; (o2hi=2 & o2bkd<2) ... & rld8 {
+  local v:1 = *[ram]:1 rld8; AH = AL; AL = sext(v); resNZ(v); build fNZ;
+}
+:LSL A, R0 is op=0x6f & A & R0 & fNZC; o2=0x2c {
+  local x:1 = ALb; local n:1 = R0;
+  nC = (x >> (8 - n)) & 1; ALb = x << n; resNZ(ALb); build fNZC;
+}
+:NRML A, R0 is op=0x6f & A & R0 & fZ; o2=0x2d {
+  local x:4 = A;
+  local cnt:1 = lzcount(x);
+  local nz:1 = x != 0;
+  R0 = cnt * nz;
+  A = x << R0;
+  nZ = x == 0; build fZ;
+}
+:ASR A, R0 is op=0x6f & A & R0 & fTNZC; o2=0x2e {
+  local x:1 = ALb; local n:1 = R0; local nz:1 = n != 0;
+  nC = nz & ((x s>> (n - 1)) & 1);
+  nT = nz & ((x & ((1 << (n - 1)) - 1)) != 0);
+  ALb = x s>> n; resNZ(ALb); build fTNZC;
+}
+:LSR A, R0 is op=0x6f & A & R0 & fTNZC; o2=0x2f {
+  local x:1 = ALb; local n:1 = R0; local nz:1 = n != 0;
+  nC = nz & ((x >> (n - 1)) & 1);
+  nT = nz & ((x & ((1 << (n - 1)) - 1)) != 0);
+  ALb = x >> n; resNZ(ALb); build fTNZC;
+}
+:MOV rld8, A is op=0x6f & A & fNZ; (o2hi=3 & o2bkd<2) ... & rld8 { *[ram]:1 rld8 = ALb; resNZ(ALb); build fNZ; }
+:MOVW rld8, A is op=0x6f & A & fNZ; (o2hi=3 & o2bkd>=2) ... & rld8 { *[ram]:2 rld8 = AL; resNZ(AL); build fNZ; }
+:MOV A, rld8 is op=0x6f & A & fNZ; (o2hi=4 & o2bkd<2) ... & rld8 {
+  local v:1 = *[ram]:1 rld8; AH = AL; AL = zext(v); resNZ(v); build fNZ;
+}
+:MOVW A, rld8 is op=0x6f & A & fNZ; (o2hi=4 & o2bkd>=2) ... & rld8 { AH = AL; AL = *[ram]:2 rld8; resNZ(AL); build fNZ; }
+:MUL A is op=0x6f & A; o2=0x78 { AL = sext(AHb) * sext(ALb); }
+:MULW A is op=0x6f & A; o2=0x79 { A = sext(AH) * sext(AL); }
+:DIV A is op=0x6f & A & fVC; o2=0x7a {
+  local d:2 = sext(ALb);
+  local x:2 = AH;
+  nC = d == 0;
+  nV = nC;
+  if (d == 0) goto <done>;
+  local q:2 = x s/ d;
+  nV = (q s> 127) | (q s< -128);
+  if (nV) goto <done>;
+  AL = zext(q:1);
+  local rm:2 = x s% d; AH = zext(rm:1);
+<done>
+  build fVC;
+}
+
+################################################################
+# ea instructions (first byte 70..7F)
+################################################################
+# 70
+:ADDL A, eaL is op=0x70 & A & fNZVC; (o2op=0 ... & eaL) { local x:4 = A; opAdd(A, x, eaL); build fNZVC; }
+:SUBL A, eaL is op=0x70 & A & fNZVC; (o2op=1 ... & eaL) { local x:4 = A; opSub(A, x, eaL); build fNZVC; }
+:CWBNE eaWc, "#"^imm16, rel8 is op=0x70 & fNZVC; (o2op=2 ... & eaWc); imm16; rel8 {
+  local v:2 = eaWc; local r:2; opSub(r, v, imm16:2); build fNZVC;
+  if (v != imm16:2) goto rel8;
+}
+:CMPL A, eaL is op=0x70 & A & fNZVC; (o2op=3 ... & eaL) { local r:4; opSub(r, A, eaL); build fNZVC; }
+:ANDL A, eaL is op=0x70 & A & fNZV; (o2op=4 ... & eaL) { A = A & eaL; opLog(A); build fNZV; }
+:ORL A, eaL is op=0x70 & A & fNZV; (o2op=5 ... & eaL) { A = A | eaL; opLog(A); build fNZV; }
+:XORL A, eaL is op=0x70 & A & fNZV; (o2op=6 ... & eaL) { A = A ^ eaL; opLog(A); build fNZV; }
+:CBNE eaBc, "#"^imm8, rel8 is op=0x70 & fNZVC; (o2op=7 ... & eaBc); imm8; rel8 {
+  local v:1 = eaBc; local r:1; opSub(r, v, imm8:1); build fNZVC;
+  if (v != imm8:1) goto rel8;
+}
+# 71
+:JMPP "@"^eaL is op=0x71; (o2op=0 ... & eaL) {
+  local v:4 = eaL;
+  PCB = v(2); PC = v:2;
+  local t:3 = v:3;
+  goto [t];
+}
+:CALLP "@"^eaL is op=0x71 & pcbk; (o2op=1 ... & eaL) {
+  local v:4 = eaL;
+  local ret:2 = inst_next;
+  local pb:2 = zext(pcbk); push16(pb); push16(ret);
+  local t:3 = v:3;
+  call [t];
+}
+:INCL eaL is op=0x71 & fNZV; (o2op=2 ... & eaL) {
+  local x:4 = eaL; nV = scarry(x, 1); x = x + 1; eaL = x; resNZ(x); build fNZV;
+}
+:DECL eaL is op=0x71 & fNZV; (o2op=3 ... & eaL) {
+  local x:4 = eaL; nV = sborrow(x, 1); x = x - 1; eaL = x; resNZ(x); build fNZV;
+}
+:MOVL A, eaL is op=0x71 & A & fNZ; (o2op=4 ... & eaL) { A = eaL; resNZ(A); build fNZ; }
+:MOVL eaL, A is op=0x71 & A & fNZ; (o2op=5 ... & eaL) { eaL = A; resNZ(A); build fNZ; }
+:MOV earB, "#"^imm8 is op=0x71 & fNZ; (o2op=6 & earB); imm8 { earB = imm8; resNZ(earB); build fNZ; }
+:MOV eamB, "#"^imm8 is op=0x71; (o2op=6 ... & eamB); imm8 { eamB = imm8; }
+:MOVEA A, eaEA is op=0x71 & A; (o2op=7 ... & eaEA) { AH = AL; AL = eaEA; }
+# 72
+:ROLC eaB is op=0x72 & fNZC; (o2op=0 ... & eaB) {
+  local x:1 = eaB; nC = x >> 7; x = (x << 1) | C; eaB = x; resNZ(x); build fNZC;
+}
+:RORC eaB is op=0x72 & fNZC; (o2op=1 ... & eaB) {
+  local x:1 = eaB; nC = x & 1; x = (x >> 1) | (C << 7); eaB = x; resNZ(x); build fNZC;
+}
+:INC eaB is op=0x72 & fNZV; (o2op=2 ... & eaB) {
+  local x:1 = eaB; nV = scarry(x, 1); x = x + 1; eaB = x; resNZ(x); build fNZV;
+}
+:DEC eaB is op=0x72 & fNZV; (o2op=3 ... & eaB) {
+  local x:1 = eaB; nV = sborrow(x, 1); x = x - 1; eaB = x; resNZ(x); build fNZV;
+}
+:MOV A, eaB is op=0x72 & A & fNZ; (o2op=4 ... & eaB) { local v:1 = eaB; AH = AL; AL = zext(v); resNZ(v); build fNZ; }
+:MOV eaB, A is op=0x72 & A & fNZ; (o2op=5 ... & eaB) { eaB = ALb; resNZ(ALb); build fNZ; }
+:MOVX A, eaB is op=0x72 & A & fNZ; (o2op=6 ... & eaB) { local v:1 = eaB; AH = AL; AL = sext(v); resNZ(v); build fNZ; }
+:XCH A, eaB is op=0x72 & A; (o2op=7 ... & eaB) { local v:1 = eaB; eaB = ALb; AL = zext(v); }
+# 73
+:JMP "@"^eaW is op=0x73 & pcbk; (o2op=0 ... & eaW) {
+  local v:2 = eaW; PC = v;
+  local t:3 = (zext(pcbk) << 16) | zext(v);
+  goto [t];
+}
+:CALL "@"^eaW is op=0x73 & pcbk; (o2op=1 ... & eaW) {
+  local v:2 = eaW;
+  local ret:2 = inst_next; push16(ret);
+  local t:3 = (zext(pcbk) << 16) | zext(v);
+  call [t];
+}
+:INCW eaW is op=0x73 & fNZV; (o2op=2 ... & eaW) {
+  local x:2 = eaW; nV = scarry(x, 1); x = x + 1; eaW = x; resNZ(x); build fNZV;
+}
+:DECW eaW is op=0x73 & fNZV; (o2op=3 ... & eaW) {
+  local x:2 = eaW; nV = sborrow(x, 1); x = x - 1; eaW = x; resNZ(x); build fNZV;
+}
+:MOVW A, eaW is op=0x73 & A & fNZ; (o2op=4 ... & eaW) { local v:2 = eaW; AH = AL; AL = v; resNZ(v); build fNZ; }
+:MOVW eaW, A is op=0x73 & A & fNZ; (o2op=5 ... & eaW) { eaW = AL; resNZ(AL); build fNZ; }
+:MOVW earW, "#"^imm16 is op=0x73 & fNZ; (o2op=6 & earW); imm16 { earW = imm16; resNZ(earW); build fNZ; }
+:MOVW eamW, "#"^imm16 is op=0x73; (o2op=6 ... & eamW); imm16 { eamW = imm16; }
+:XCHW A, eaW is op=0x73 & A; (o2op=7 ... & eaW) { local v:2 = eaW; eaW = AL; AL = v; }
+# 74
+:ADD A, eaB is op=0x74 & A & fNZVC; (o2op=0 ... & eaB) { local r:1; opAdd(r, ALb, eaB); AL = zext(r); build fNZVC; }
+:SUB A, eaB is op=0x74 & A & fNZVC; (o2op=1 ... & eaB) { local r:1; opSub(r, ALb, eaB); AL = zext(r); build fNZVC; }
+:ADDC A, eaB is op=0x74 & A & fNZVC; (o2op=2 ... & eaB) { local r:1; opAddc(r, ALb, eaB); AL = zext(r); build fNZVC; }
+:CMP A, eaB is op=0x74 & A & fNZVC; (o2op=3 ... & eaB) { local r:1; opSub(r, ALb, eaB); build fNZVC; }
+:AND A, eaB is op=0x74 & A & fNZV; (o2op=4 ... & eaB) { ALb = ALb & eaB; opLog(ALb); build fNZV; }
+:OR A, eaB is op=0x74 & A & fNZV; (o2op=5 ... & eaB) { ALb = ALb | eaB; opLog(ALb); build fNZV; }
+:XOR A, eaB is op=0x74 & A & fNZV; (o2op=6 ... & eaB) { ALb = ALb ^ eaB; opLog(ALb); build fNZV; }
+:DBNZ eaB, rel8 is op=0x74 & fNZV; (o2op=7 ... & eaB); rel8 {
+  local x:1 = eaB; nV = sborrow(x, 1); x = x - 1; eaB = x; resNZ(x); build fNZV;
+  if (x != 0) goto rel8;
+}
+# 75
+:ADD eaB, A is op=0x75 & A & fNZVC; (o2op=0 ... & eaB) { local x:1 = eaB; local r:1; opAdd(r, x, ALb); eaB = r; build fNZVC; }
+:SUB eaB, A is op=0x75 & A & fNZVC; (o2op=1 ... & eaB) { local x:1 = eaB; local r:1; opSub(r, x, ALb); eaB = r; build fNZVC; }
+:SUBC A, eaB is op=0x75 & A & fNZVC; (o2op=2 ... & eaB) { local r:1; opSubc(r, ALb, eaB); AL = zext(r); build fNZVC; }
+:NEG eaB is op=0x75 & fNZVC; (o2op=3 ... & eaB) { local x:1 = eaB; local r:1; opNeg(r, x); eaB = r; build fNZVC; }
+:AND eaB, A is op=0x75 & A & fNZV; (o2op=4 ... & eaB) { local r:1 = eaB & ALb; eaB = r; opLog(r); build fNZV; }
+:OR eaB, A is op=0x75 & A & fNZV; (o2op=5 ... & eaB) { local r:1 = eaB | ALb; eaB = r; opLog(r); build fNZV; }
+:XOR eaB, A is op=0x75 & A & fNZV; (o2op=6 ... & eaB) { local r:1 = eaB ^ ALb; eaB = r; opLog(r); build fNZV; }
+:NOT eaB is op=0x75 & fNZV; (o2op=7 ... & eaB) { local r:1 = ~eaB; eaB = r; opLog(r); build fNZV; }
+# 76
+:ADDW A, eaW is op=0x76 & A & fNZVC; (o2op=0 ... & eaW) { local x:2 = AL; opAdd(AL, x, eaW); build fNZVC; }
+:SUBW A, eaW is op=0x76 & A & fNZVC; (o2op=1 ... & eaW) { local x:2 = AL; opSub(AL, x, eaW); build fNZVC; }
+:ADDCW A, eaW is op=0x76 & A & fNZVC; (o2op=2 ... & eaW) { local x:2 = AL; opAddc(AL, x, eaW); build fNZVC; }
+:CMPW A, eaW is op=0x76 & A & fNZVC; (o2op=3 ... & eaW) { local r:2; opSub(r, AL, eaW); build fNZVC; }
+:ANDW A, eaW is op=0x76 & A & fNZV; (o2op=4 ... & eaW) { AL = AL & eaW; opLog(AL); build fNZV; }
+:ORW A, eaW is op=0x76 & A & fNZV; (o2op=5 ... & eaW) { AL = AL | eaW; opLog(AL); build fNZV; }
+:XORW A, eaW is op=0x76 & A & fNZV; (o2op=6 ... & eaW) { AL = AL ^ eaW; opLog(AL); build fNZV; }
+:DWBNZ eaW, rel8 is op=0x76 & fNZV; (o2op=7 ... & eaW); rel8 {
+  local x:2 = eaW; nV = sborrow(x, 1); x = x - 1; eaW = x; resNZ(x); build fNZV;
+  if (x != 0) goto rel8;
+}
+# 77
+:ADDW eaW, A is op=0x77 & A & fNZVC; (o2op=0 ... & eaW) { local x:2 = eaW; local r:2; opAdd(r, x, AL); eaW = r; build fNZVC; }
+:SUBW eaW, A is op=0x77 & A & fNZVC; (o2op=1 ... & eaW) { local x:2 = eaW; local r:2; opSub(r, x, AL); eaW = r; build fNZVC; }
+:SUBCW A, eaW is op=0x77 & A & fNZVC; (o2op=2 ... & eaW) { local x:2 = AL; opSubc(AL, x, eaW); build fNZVC; }
+:NEGW eaW is op=0x77 & fNZVC; (o2op=3 ... & eaW) { local x:2 = eaW; local r:2; opNeg(r, x); eaW = r; build fNZVC; }
+:ANDW eaW, A is op=0x77 & A & fNZV; (o2op=4 ... & eaW) { local r:2 = eaW & AL; eaW = r; opLog(r); build fNZV; }
+:ORW eaW, A is op=0x77 & A & fNZV; (o2op=5 ... & eaW) { local r:2 = eaW | AL; eaW = r; opLog(r); build fNZV; }
+:XORW eaW, A is op=0x77 & A & fNZV; (o2op=6 ... & eaW) { local r:2 = eaW ^ AL; eaW = r; opLog(r); build fNZV; }
+:NOTW eaW is op=0x77 & fNZV; (o2op=7 ... & eaW) { local r:2 = ~eaW; eaW = r; opLog(r); build fNZV; }
+# 78
+:MULU A, eaB is op=0x78 & A; (o2op=0 ... & eaB) { AL = zext(ALb) * zext(eaB); }
+:MULUW A, eaW is op=0x78 & A; (o2op=1 ... & eaW) { A = zext(AL) * zext(eaW); }
+:MUL A, eaB is op=0x78 & A; (o2op=2 ... & eaB) { AL = sext(ALb) * sext(eaB); }
+:MULW A, eaW is op=0x78 & A; (o2op=3 ... & eaW) { A = sext(AL) * sext(eaW); }
+:DIVU A, eaB is op=0x78 & A & fVC; (o2op=4 ... & eaB) {
+  local d:2 = zext(eaB);
+  local x:2 = AL;
+  nC = d == 0;
+  nV = nC;
+  if (d == 0) goto <done>;
+  local q:2 = x / d;
+  nV = q > 0xff;
+  if (nV) goto <done>;
+  ALb = q:1;
+  local rm:2 = x % d; eaB = rm:1;
+<done>
+  build fVC;
+}
+:DIVUW A, eaW is op=0x78 & A & fVC; (o2op=5 ... & eaW) {
+  local d:4 = zext(eaW);
+  local x:4 = A;
+  nC = d == 0;
+  nV = nC;
+  if (d == 0) goto <done>;
+  local q:4 = x / d;
+  nV = q > 0xffff;
+  if (nV) goto <done>;
+  AL = q:2;
+  local rm:4 = x % d; eaW = rm:2;
+<done>
+  build fVC;
+}
+:DIV A, eaB is op=0x78 & A & fVC; (o2op=6 ... & eaB) {
+  local d:2 = sext(eaB);
+  local x:2 = AL;
+  nC = d == 0;
+  nV = nC;
+  if (d == 0) goto <done>;
+  local q:2 = x s/ d;
+  nV = (q s> 127) | (q s< -128);
+  if (nV) goto <done>;
+  AL = zext(q:1);
+  local rm:2 = x s% d; eaB = rm:1;
+<done>
+  build fVC;
+}
+:DIVW A, eaW is op=0x78 & A & fVC; (o2op=7 ... & eaW) {
+  local d:4 = sext(eaW);
+  local x:4 = A;
+  nC = d == 0;
+  nV = nC;
+  if (d == 0) goto <done>;
+  local q:4 = x s/ d;
+  nV = (q s> 32767) | (q s< -32768);
+  if (nV) goto <done>;
+  AL = q:2;
+  local rm:4 = x s% d; eaW = rm:2;
+<done>
+  build fVC;
+}
+# 79..7F: register in bits 7..5 of the second byte
+:MOVEA o2iw, eaEA is op=0x79; (o2iw ... & eaEA) { o2iw = eaEA; }
+:MOV o2i, eaB is op=0x7a & fNZ; (o2i ... & eaB) { local v:1 = eaB; o2i = v; resNZ(v); build fNZ; }
+:MOVW o2iw, eaW is op=0x7b & fNZ; (o2iw ... & eaW) { local v:2 = eaW; o2iw = v; resNZ(v); build fNZ; }
+:MOV eaB, o2i is op=0x7c & fNZ; (o2i ... & eaB) { local v:1 = o2i; eaB = v; resNZ(v); build fNZ; }
+:MOVW eaW, o2iw is op=0x7d & fNZ; (o2iw ... & eaW) { local v:2 = o2iw; eaW = v; resNZ(v); build fNZ; }
+:XCH o2i, eaB is op=0x7e; (o2i ... & eaB) { local v:1 = eaB; eaB = o2i; o2i = v; }
+:XCHW o2iw, eaW is op=0x7f; (o2iw ... & eaW) { local v:2 = eaW; eaW = o2iw; o2iw = v; }
+
+# @RWi+disp8 of the basic page (B8..CF): bank by register (manual 7.3)
+rwd8: bkD^"@RW0"^sd8 is opr=0 & bkD; sd8 { local a:3 = (zext(bkD) << 16) | zext(RW0 + sd8); export a; }
+rwd8: bkD^"@RW1"^sd8 is opr=1 & bkD; sd8 { local a:3 = (zext(bkD) << 16) | zext(RW1 + sd8); export a; }
+rwd8: bkA^"@RW2"^sd8 is opr=2 & bkA; sd8 { local a:3 = (zext(bkA) << 16) | zext(RW2 + sd8); export a; }
+rwd8: bkS^"@RW3"^sd8 is opr=3 & bkS; sd8 { local a:3 = (zext(bkS) << 16) | zext(RW3 + sd8); export a; }
+rwd8: bkD^"@RW4"^sd8 is opr=4 & bkD; sd8 { local a:3 = (zext(bkD) << 16) | zext(RW4 + sd8); export a; }
+rwd8: bkD^"@RW5"^sd8 is opr=5 & bkD; sd8 { local a:3 = (zext(bkD) << 16) | zext(RW5 + sd8); export a; }
+rwd8: bkA^"@RW6"^sd8 is opr=6 & bkA; sd8 { local a:3 = (zext(bkA) << 16) | zext(RW6 + sd8); export a; }
+rwd8: bkS^"@RW7"^sd8 is opr=7 & bkS; sd8 { local a:3 = (zext(bkS) << 16) | zext(RW7 + sd8); export a; }
+
+################################################################
+# 80..FF
+################################################################
+:MOV A, opr is op5=0x10 & A & opr & fNZ { local v:1 = opr; AH = AL; AL = zext(v); resNZ(v); build fNZ; }
+:MOVW A, oprw is op5=0x11 & A & oprw & fNZ { local v:2 = oprw; AH = AL; AL = v; resNZ(v); build fNZ; }
+:MOV opr, A is op5=0x12 & A & opr & fNZ { opr = ALb; resNZ(ALb); build fNZ; }
+:MOVW oprw, A is op5=0x13 & A & oprw & fNZ { oprw = AL; resNZ(AL); build fNZ; }
+:MOV opr, "#"^imm8 is op5=0x14 & opr & fNZ; imm8 { opr = imm8; resNZ(opr); build fNZ; }
+:MOVW oprw, "#"^imm16 is op5=0x15 & oprw & fNZ; imm16 { oprw = imm16; resNZ(oprw); build fNZ; }
+:MOVX A, opr is op5=0x16 & A & opr & fNZ { local v:1 = opr; AH = AL; AL = sext(v); resNZ(v); build fNZ; }
+:MOVW A, rwd8 is (op5=0x17 ... & rwd8) & A & fNZ { AH = AL; AL = *[ram]:2 rwd8; resNZ(AL); build fNZ; }
+:MOVX A, rwd8 is (op5=0x18 ... & rwd8) & A & fNZ { local v:1 = *[ram]:1 rwd8; AH = AL; AL = sext(v); resNZ(v); build fNZ; }
+:MOVW rwd8, A is (op5=0x19 ... & rwd8) & A & fNZ { *[ram]:2 rwd8 = AL; resNZ(AL); build fNZ; }
+:MOVN A, "#"^opn is op4=0xd & A & opn & fNZ { AH = AL; AL = opn; nN = 0; nZ = AL == 0; build fNZ; }
+:CALLV "#"^opn is op4=0xe & opn & pcbk {
+  local ret:2 = inst_next;
+  push16(ret);
+  local va:3 = (zext(pcbk) << 16) | (0xfffe - 2 * opn);
+  local t:3 = (zext(pcbk) << 16) | zext(*[ram]:2 va);
+  call [t];
+}
+
+cc: "Z"  is opcc=0  { local f:1 = Z; export f; }
+cc: "NZ" is opcc=1  { local f:1 = Z == 0; export f; }
+cc: "C"  is opcc=2  { local f:1 = C; export f; }
+cc: "NC" is opcc=3  { local f:1 = C == 0; export f; }
+cc: "N"  is opcc=4  { local f:1 = N; export f; }
+cc: "P"  is opcc=5  { local f:1 = N == 0; export f; }
+cc: "V"  is opcc=6  { local f:1 = V; export f; }
+cc: "NV" is opcc=7  { local f:1 = V == 0; export f; }
+cc: "T"  is opcc=8  { local f:1 = T; export f; }
+cc: "NT" is opcc=9  { local f:1 = T == 0; export f; }
+cc: "LT" is opcc=10 { local f:1 = (V ^ N) != 0; export f; }
+cc: "GE" is opcc=11 { local f:1 = (V ^ N) == 0; export f; }
+cc: "LE" is opcc=12 { local f:1 = ((V ^ N) | Z) != 0; export f; }
+cc: "GT" is opcc=13 { local f:1 = ((V ^ N) | Z) == 0; export f; }
+cc: "LS" is opcc=14 { local f:1 = (C | Z) != 0; export f; }
+cc: "HI" is opcc=15 { local f:1 = (C | Z) == 0; export f; }
+
+:B^cc rel8 is op4=0xf & cc; rel8 { if (cc != 0) goto rel8; }
+
+################################################################
+# Prefix codes (manual chapter 5). A prefix is an instruction of its own that sets the context of the
+# next instruction; MOV ILM, AND/OR CCR and POPW PS pass a prefix on to the instruction after them
+# (manual 5.4), as do further prefixes (the last bank prefix wins).
+################################################################
+:PCB is op=0x04 [ bank = 0; bover = 1; globalset(inst_next, bank); globalset(inst_next, bover); globalset(inst_next, ncc); globalset(inst_next, cmr); ] { }
+:DTB is op=0x05 [ bank = 1; bover = 1; globalset(inst_next, bank); globalset(inst_next, bover); globalset(inst_next, ncc); globalset(inst_next, cmr); ] { }
+:ADB is op=0x06 [ bank = 2; bover = 1; globalset(inst_next, bank); globalset(inst_next, bover); globalset(inst_next, ncc); globalset(inst_next, cmr); ] { }
+:SPB is op=0x07 [ bank = 3; bover = 1; globalset(inst_next, bank); globalset(inst_next, bover); globalset(inst_next, ncc); globalset(inst_next, cmr); ] { }
+:CMR is op=0x10 [ cmr = 1; globalset(inst_next, bank); globalset(inst_next, bover); globalset(inst_next, ncc); globalset(inst_next, cmr); ] { }
+:NCC is op=0x11 [ ncc = 1; globalset(inst_next, bank); globalset(inst_next, bover); globalset(inst_next, ncc); globalset(inst_next, cmr); ] { }

@@ -1,0 +1,287 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<processor_spec>
+  <programcounter register="UPC"/>
+  <volatile outputop="write_volatile" inputop="read_volatile">
+    <range space="ram" first="0x0" last="0xff"/>
+  </volatile>
+  <context_data>
+    <!-- reset values of the bank registers (manual 3.7); override them where a program changes them -->
+    <tracked_set space="ram">
+      <set name="DTB" val="0"/>
+      <set name="ADB" val="0"/>
+      <set name="USB" val="0"/>
+      <set name="SSB" val="0"/>
+      <set name="SPB" val="0"/>
+    </tracked_set>
+  </context_data>
+  <register_data>
+    <register name="contextreg" hidden="true"/>
+    <register name="nC" hidden="true"/>
+    <register name="nV" hidden="true"/>
+    <register name="nZ" hidden="true"/>
+    <register name="nN" hidden="true"/>
+    <register name="nT" hidden="true"/>
+  </register_data>
+  <default_symbols>
+    <!-- interrupt vectors (manual table 6.4-1): INTn at FFFFFC - 4n, 24-bit address. INT8 (reset) to INT255
+         are code pointers marked as entries, so auto-analysis disassembles the reset routine and the
+         handlers; INT0-INT7 share their area with the CALLV vectors and are labels only. -->
+    <symbol name="INT0_VECTOR" address="ram:fffffc"/>
+    <symbol name="INT1_VECTOR" address="ram:fffff8"/>
+    <symbol name="INT2_VECTOR" address="ram:fffff4"/>
+    <symbol name="INT3_VECTOR" address="ram:fffff0"/>
+    <symbol name="INT4_VECTOR" address="ram:ffffec"/>
+    <symbol name="INT5_VECTOR" address="ram:ffffe8"/>
+    <symbol name="INT6_VECTOR" address="ram:ffffe4"/>
+    <symbol name="INT7_VECTOR" address="ram:ffffe0"/>
+    <symbol name="RESET_VECTOR" address="ram:ffffdc" type="code_ptr" entry="true"/>
+    <symbol name="INT9_VECTOR" address="ram:ffffd8" type="code_ptr" entry="true"/>
+    <symbol name="EXCEPTION_VECTOR" address="ram:ffffd4" type="code_ptr" entry="true"/>
+    <symbol name="INT11_VECTOR" address="ram:ffffd0" type="code_ptr" entry="true"/>
+    <symbol name="INT12_VECTOR" address="ram:ffffcc" type="code_ptr" entry="true"/>
+    <symbol name="INT13_VECTOR" address="ram:ffffc8" type="code_ptr" entry="true"/>
+    <symbol name="INT14_VECTOR" address="ram:ffffc4" type="code_ptr" entry="true"/>
+    <symbol name="INT15_VECTOR" address="ram:ffffc0" type="code_ptr" entry="true"/>
+    <symbol name="INT16_VECTOR" address="ram:ffffbc" type="code_ptr" entry="true"/>
+    <symbol name="INT17_VECTOR" address="ram:ffffb8" type="code_ptr" entry="true"/>
+    <symbol name="INT18_VECTOR" address="ram:ffffb4" type="code_ptr" entry="true"/>
+    <symbol name="INT19_VECTOR" address="ram:ffffb0" type="code_ptr" entry="true"/>
+    <symbol name="INT20_VECTOR" address="ram:ffffac" type="code_ptr" entry="true"/>
+    <symbol name="INT21_VECTOR" address="ram:ffffa8" type="code_ptr" entry="true"/>
+    <symbol name="INT22_VECTOR" address="ram:ffffa4" type="code_ptr" entry="true"/>
+    <symbol name="INT23_VECTOR" address="ram:ffffa0" type="code_ptr" entry="true"/>
+    <symbol name="INT24_VECTOR" address="ram:ffff9c" type="code_ptr" entry="true"/>
+    <symbol name="INT25_VECTOR" address="ram:ffff98" type="code_ptr" entry="true"/>
+    <symbol name="INT26_VECTOR" address="ram:ffff94" type="code_ptr" entry="true"/>
+    <symbol name="INT27_VECTOR" address="ram:ffff90" type="code_ptr" entry="true"/>
+    <symbol name="INT28_VECTOR" address="ram:ffff8c" type="code_ptr" entry="true"/>
+    <symbol name="INT29_VECTOR" address="ram:ffff88" type="code_ptr" entry="true"/>
+    <symbol name="INT30_VECTOR" address="ram:ffff84" type="code_ptr" entry="true"/>
+    <symbol name="INT31_VECTOR" address="ram:ffff80" type="code_ptr" entry="true"/>
+    <symbol name="INT32_VECTOR" address="ram:ffff7c" type="code_ptr" entry="true"/>
+    <symbol name="INT33_VECTOR" address="ram:ffff78" type="code_ptr" entry="true"/>
+    <symbol name="INT34_VECTOR" address="ram:ffff74" type="code_ptr" entry="true"/>
+    <symbol name="INT35_VECTOR" address="ram:ffff70" type="code_ptr" entry="true"/>
+    <symbol name="INT36_VECTOR" address="ram:ffff6c" type="code_ptr" entry="true"/>
+    <symbol name="INT37_VECTOR" address="ram:ffff68" type="code_ptr" entry="true"/>
+    <symbol name="INT38_VECTOR" address="ram:ffff64" type="code_ptr" entry="true"/>
+    <symbol name="INT39_VECTOR" address="ram:ffff60" type="code_ptr" entry="true"/>
+    <symbol name="INT40_VECTOR" address="ram:ffff5c" type="code_ptr" entry="true"/>
+    <symbol name="INT41_VECTOR" address="ram:ffff58" type="code_ptr" entry="true"/>
+    <symbol name="INT42_VECTOR" address="ram:ffff54" type="code_ptr" entry="true"/>
+    <symbol name="INT43_VECTOR" address="ram:ffff50" type="code_ptr" entry="true"/>
+    <symbol name="INT44_VECTOR" address="ram:ffff4c" type="code_ptr" entry="true"/>
+    <symbol name="INT45_VECTOR" address="ram:ffff48" type="code_ptr" entry="true"/>
+    <symbol name="INT46_VECTOR" address="ram:ffff44" type="code_ptr" entry="true"/>
+    <symbol name="INT47_VECTOR" address="ram:ffff40" type="code_ptr" entry="true"/>
+    <symbol name="INT48_VECTOR" address="ram:ffff3c" type="code_ptr" entry="true"/>
+    <symbol name="INT49_VECTOR" address="ram:ffff38" type="code_ptr" entry="true"/>
+    <symbol name="INT50_VECTOR" address="ram:ffff34" type="code_ptr" entry="true"/>
+    <symbol name="INT51_VECTOR" address="ram:ffff30" type="code_ptr" entry="true"/>
+    <symbol name="INT52_VECTOR" address="ram:ffff2c" type="code_ptr" entry="true"/>
+    <symbol name="INT53_VECTOR" address="ram:ffff28" type="code_ptr" entry="true"/>
+    <symbol name="INT54_VECTOR" address="ram:ffff24" type="code_ptr" entry="true"/>
+    <symbol name="INT55_VECTOR" address="ram:ffff20" type="code_ptr" entry="true"/>
+    <symbol name="INT56_VECTOR" address="ram:ffff1c" type="code_ptr" entry="true"/>
+    <symbol name="INT57_VECTOR" address="ram:ffff18" type="code_ptr" entry="true"/>
+    <symbol name="INT58_VECTOR" address="ram:ffff14" type="code_ptr" entry="true"/>
+    <symbol name="INT59_VECTOR" address="ram:ffff10" type="code_ptr" entry="true"/>
+    <symbol name="INT60_VECTOR" address="ram:ffff0c" type="code_ptr" entry="true"/>
+    <symbol name="INT61_VECTOR" address="ram:ffff08" type="code_ptr" entry="true"/>
+    <symbol name="INT62_VECTOR" address="ram:ffff04" type="code_ptr" entry="true"/>
+    <symbol name="INT63_VECTOR" address="ram:ffff00" type="code_ptr" entry="true"/>
+    <symbol name="INT64_VECTOR" address="ram:fffefc" type="code_ptr" entry="true"/>
+    <symbol name="INT65_VECTOR" address="ram:fffef8" type="code_ptr" entry="true"/>
+    <symbol name="INT66_VECTOR" address="ram:fffef4" type="code_ptr" entry="true"/>
+    <symbol name="INT67_VECTOR" address="ram:fffef0" type="code_ptr" entry="true"/>
+    <symbol name="INT68_VECTOR" address="ram:fffeec" type="code_ptr" entry="true"/>
+    <symbol name="INT69_VECTOR" address="ram:fffee8" type="code_ptr" entry="true"/>
+    <symbol name="INT70_VECTOR" address="ram:fffee4" type="code_ptr" entry="true"/>
+    <symbol name="INT71_VECTOR" address="ram:fffee0" type="code_ptr" entry="true"/>
+    <symbol name="INT72_VECTOR" address="ram:fffedc" type="code_ptr" entry="true"/>
+    <symbol name="INT73_VECTOR" address="ram:fffed8" type="code_ptr" entry="true"/>
+    <symbol name="INT74_VECTOR" address="ram:fffed4" type="code_ptr" entry="true"/>
+    <symbol name="INT75_VECTOR" address="ram:fffed0" type="code_ptr" entry="true"/>
+    <symbol name="INT76_VECTOR" address="ram:fffecc" type="code_ptr" entry="true"/>
+    <symbol name="INT77_VECTOR" address="ram:fffec8" type="code_ptr" entry="true"/>
+    <symbol name="INT78_VECTOR" address="ram:fffec4" type="code_ptr" entry="true"/>
+    <symbol name="INT79_VECTOR" address="ram:fffec0" type="code_ptr" entry="true"/>
+    <symbol name="INT80_VECTOR" address="ram:fffebc" type="code_ptr" entry="true"/>
+    <symbol name="INT81_VECTOR" address="ram:fffeb8" type="code_ptr" entry="true"/>
+    <symbol name="INT82_VECTOR" address="ram:fffeb4" type="code_ptr" entry="true"/>
+    <symbol name="INT83_VECTOR" address="ram:fffeb0" type="code_ptr" entry="true"/>
+    <symbol name="INT84_VECTOR" address="ram:fffeac" type="code_ptr" entry="true"/>
+    <symbol name="INT85_VECTOR" address="ram:fffea8" type="code_ptr" entry="true"/>
+    <symbol name="INT86_VECTOR" address="ram:fffea4" type="code_ptr" entry="true"/>
+    <symbol name="INT87_VECTOR" address="ram:fffea0" type="code_ptr" entry="true"/>
+    <symbol name="INT88_VECTOR" address="ram:fffe9c" type="code_ptr" entry="true"/>
+    <symbol name="INT89_VECTOR" address="ram:fffe98" type="code_ptr" entry="true"/>
+    <symbol name="INT90_VECTOR" address="ram:fffe94" type="code_ptr" entry="true"/>
+    <symbol name="INT91_VECTOR" address="ram:fffe90" type="code_ptr" entry="true"/>
+    <symbol name="INT92_VECTOR" address="ram:fffe8c" type="code_ptr" entry="true"/>
+    <symbol name="INT93_VECTOR" address="ram:fffe88" type="code_ptr" entry="true"/>
+    <symbol name="INT94_VECTOR" address="ram:fffe84" type="code_ptr" entry="true"/>
+    <symbol name="INT95_VECTOR" address="ram:fffe80" type="code_ptr" entry="true"/>
+    <symbol name="INT96_VECTOR" address="ram:fffe7c" type="code_ptr" entry="true"/>
+    <symbol name="INT97_VECTOR" address="ram:fffe78" type="code_ptr" entry="true"/>
+    <symbol name="INT98_VECTOR" address="ram:fffe74" type="code_ptr" entry="true"/>
+    <symbol name="INT99_VECTOR" address="ram:fffe70" type="code_ptr" entry="true"/>
+    <symbol name="INT100_VECTOR" address="ram:fffe6c" type="code_ptr" entry="true"/>
+    <symbol name="INT101_VECTOR" address="ram:fffe68" type="code_ptr" entry="true"/>
+    <symbol name="INT102_VECTOR" address="ram:fffe64" type="code_ptr" entry="true"/>
+    <symbol name="INT103_VECTOR" address="ram:fffe60" type="code_ptr" entry="true"/>
+    <symbol name="INT104_VECTOR" address="ram:fffe5c" type="code_ptr" entry="true"/>
+    <symbol name="INT105_VECTOR" address="ram:fffe58" type="code_ptr" entry="true"/>
+    <symbol name="INT106_VECTOR" address="ram:fffe54" type="code_ptr" entry="true"/>
+    <symbol name="INT107_VECTOR" address="ram:fffe50" type="code_ptr" entry="true"/>
+    <symbol name="INT108_VECTOR" address="ram:fffe4c" type="code_ptr" entry="true"/>
+    <symbol name="INT109_VECTOR" address="ram:fffe48" type="code_ptr" entry="true"/>
+    <symbol name="INT110_VECTOR" address="ram:fffe44" type="code_ptr" entry="true"/>
+    <symbol name="INT111_VECTOR" address="ram:fffe40" type="code_ptr" entry="true"/>
+    <symbol name="INT112_VECTOR" address="ram:fffe3c" type="code_ptr" entry="true"/>
+    <symbol name="INT113_VECTOR" address="ram:fffe38" type="code_ptr" entry="true"/>
+    <symbol name="INT114_VECTOR" address="ram:fffe34" type="code_ptr" entry="true"/>
+    <symbol name="INT115_VECTOR" address="ram:fffe30" type="code_ptr" entry="true"/>
+    <symbol name="INT116_VECTOR" address="ram:fffe2c" type="code_ptr" entry="true"/>
+    <symbol name="INT117_VECTOR" address="ram:fffe28" type="code_ptr" entry="true"/>
+    <symbol name="INT118_VECTOR" address="ram:fffe24" type="code_ptr" entry="true"/>
+    <symbol name="INT119_VECTOR" address="ram:fffe20" type="code_ptr" entry="true"/>
+    <symbol name="INT120_VECTOR" address="ram:fffe1c" type="code_ptr" entry="true"/>
+    <symbol name="INT121_VECTOR" address="ram:fffe18" type="code_ptr" entry="true"/>
+    <symbol name="INT122_VECTOR" address="ram:fffe14" type="code_ptr" entry="true"/>
+    <symbol name="INT123_VECTOR" address="ram:fffe10" type="code_ptr" entry="true"/>
+    <symbol name="INT124_VECTOR" address="ram:fffe0c" type="code_ptr" entry="true"/>
+    <symbol name="INT125_VECTOR" address="ram:fffe08" type="code_ptr" entry="true"/>
+    <symbol name="INT126_VECTOR" address="ram:fffe04" type="code_ptr" entry="true"/>
+    <symbol name="INT127_VECTOR" address="ram:fffe00" type="code_ptr" entry="true"/>
+    <symbol name="INT128_VECTOR" address="ram:fffdfc" type="code_ptr" entry="true"/>
+    <symbol name="INT129_VECTOR" address="ram:fffdf8" type="code_ptr" entry="true"/>
+    <symbol name="INT130_VECTOR" address="ram:fffdf4" type="code_ptr" entry="true"/>
+    <symbol name="INT131_VECTOR" address="ram:fffdf0" type="code_ptr" entry="true"/>
+    <symbol name="INT132_VECTOR" address="ram:fffdec" type="code_ptr" entry="true"/>
+    <symbol name="INT133_VECTOR" address="ram:fffde8" type="code_ptr" entry="true"/>
+    <symbol name="INT134_VECTOR" address="ram:fffde4" type="code_ptr" entry="true"/>
+    <symbol name="INT135_VECTOR" address="ram:fffde0" type="code_ptr" entry="true"/>
+    <symbol name="INT136_VECTOR" address="ram:fffddc" type="code_ptr" entry="true"/>
+    <symbol name="INT137_VECTOR" address="ram:fffdd8" type="code_ptr" entry="true"/>
+    <symbol name="INT138_VECTOR" address="ram:fffdd4" type="code_ptr" entry="true"/>
+    <symbol name="INT139_VECTOR" address="ram:fffdd0" type="code_ptr" entry="true"/>
+    <symbol name="INT140_VECTOR" address="ram:fffdcc" type="code_ptr" entry="true"/>
+    <symbol name="INT141_VECTOR" address="ram:fffdc8" type="code_ptr" entry="true"/>
+    <symbol name="INT142_VECTOR" address="ram:fffdc4" type="code_ptr" entry="true"/>
+    <symbol name="INT143_VECTOR" address="ram:fffdc0" type="code_ptr" entry="true"/>
+    <symbol name="INT144_VECTOR" address="ram:fffdbc" type="code_ptr" entry="true"/>
+    <symbol name="INT145_VECTOR" address="ram:fffdb8" type="code_ptr" entry="true"/>
+    <symbol name="INT146_VECTOR" address="ram:fffdb4" type="code_ptr" entry="true"/>
+    <symbol name="INT147_VECTOR" address="ram:fffdb0" type="code_ptr" entry="true"/>
+    <symbol name="INT148_VECTOR" address="ram:fffdac" type="code_ptr" entry="true"/>
+    <symbol name="INT149_VECTOR" address="ram:fffda8" type="code_ptr" entry="true"/>
+    <symbol name="INT150_VECTOR" address="ram:fffda4" type="code_ptr" entry="true"/>
+    <symbol name="INT151_VECTOR" address="ram:fffda0" type="code_ptr" entry="true"/>
+    <symbol name="INT152_VECTOR" address="ram:fffd9c" type="code_ptr" entry="true"/>
+    <symbol name="INT153_VECTOR" address="ram:fffd98" type="code_ptr" entry="true"/>
+    <symbol name="INT154_VECTOR" address="ram:fffd94" type="code_ptr" entry="true"/>
+    <symbol name="INT155_VECTOR" address="ram:fffd90" type="code_ptr" entry="true"/>
+    <symbol name="INT156_VECTOR" address="ram:fffd8c" type="code_ptr" entry="true"/>
+    <symbol name="INT157_VECTOR" address="ram:fffd88" type="code_ptr" entry="true"/>
+    <symbol name="INT158_VECTOR" address="ram:fffd84" type="code_ptr" entry="true"/>
+    <symbol name="INT159_VECTOR" address="ram:fffd80" type="code_ptr" entry="true"/>
+    <symbol name="INT160_VECTOR" address="ram:fffd7c" type="code_ptr" entry="true"/>
+    <symbol name="INT161_VECTOR" address="ram:fffd78" type="code_ptr" entry="true"/>
+    <symbol name="INT162_VECTOR" address="ram:fffd74" type="code_ptr" entry="true"/>
+    <symbol name="INT163_VECTOR" address="ram:fffd70" type="code_ptr" entry="true"/>
+    <symbol name="INT164_VECTOR" address="ram:fffd6c" type="code_ptr" entry="true"/>
+    <symbol name="INT165_VECTOR" address="ram:fffd68" type="code_ptr" entry="true"/>
+    <symbol name="INT166_VECTOR" address="ram:fffd64" type="code_ptr" entry="true"/>
+    <symbol name="INT167_VECTOR" address="ram:fffd60" type="code_ptr" entry="true"/>
+    <symbol name="INT168_VECTOR" address="ram:fffd5c" type="code_ptr" entry="true"/>
+    <symbol name="INT169_VECTOR" address="ram:fffd58" type="code_ptr" entry="true"/>
+    <symbol name="INT170_VECTOR" address="ram:fffd54" type="code_ptr" entry="true"/>
+    <symbol name="INT171_VECTOR" address="ram:fffd50" type="code_ptr" entry="true"/>
+    <symbol name="INT172_VECTOR" address="ram:fffd4c" type="code_ptr" entry="true"/>
+    <symbol name="INT173_VECTOR" address="ram:fffd48" type="code_ptr" entry="true"/>
+    <symbol name="INT174_VECTOR" address="ram:fffd44" type="code_ptr" entry="true"/>
+    <symbol name="INT175_VECTOR" address="ram:fffd40" type="code_ptr" entry="true"/>
+    <symbol name="INT176_VECTOR" address="ram:fffd3c" type="code_ptr" entry="true"/>
+    <symbol name="INT177_VECTOR" address="ram:fffd38" type="code_ptr" entry="true"/>
+    <symbol name="INT178_VECTOR" address="ram:fffd34" type="code_ptr" entry="true"/>
+    <symbol name="INT179_VECTOR" address="ram:fffd30" type="code_ptr" entry="true"/>
+    <symbol name="INT180_VECTOR" address="ram:fffd2c" type="code_ptr" entry="true"/>
+    <symbol name="INT181_VECTOR" address="ram:fffd28" type="code_ptr" entry="true"/>
+    <symbol name="INT182_VECTOR" address="ram:fffd24" type="code_ptr" entry="true"/>
+    <symbol name="INT183_VECTOR" address="ram:fffd20" type="code_ptr" entry="true"/>
+    <symbol name="INT184_VECTOR" address="ram:fffd1c" type="code_ptr" entry="true"/>
+    <symbol name="INT185_VECTOR" address="ram:fffd18" type="code_ptr" entry="true"/>
+    <symbol name="INT186_VECTOR" address="ram:fffd14" type="code_ptr" entry="true"/>
+    <symbol name="INT187_VECTOR" address="ram:fffd10" type="code_ptr" entry="true"/>
+    <symbol name="INT188_VECTOR" address="ram:fffd0c" type="code_ptr" entry="true"/>
+    <symbol name="INT189_VECTOR" address="ram:fffd08" type="code_ptr" entry="true"/>
+    <symbol name="INT190_VECTOR" address="ram:fffd04" type="code_ptr" entry="true"/>
+    <symbol name="INT191_VECTOR" address="ram:fffd00" type="code_ptr" entry="true"/>
+    <symbol name="INT192_VECTOR" address="ram:fffcfc" type="code_ptr" entry="true"/>
+    <symbol name="INT193_VECTOR" address="ram:fffcf8" type="code_ptr" entry="true"/>
+    <symbol name="INT194_VECTOR" address="ram:fffcf4" type="code_ptr" entry="true"/>
+    <symbol name="INT195_VECTOR" address="ram:fffcf0" type="code_ptr" entry="true"/>
+    <symbol name="INT196_VECTOR" address="ram:fffcec" type="code_ptr" entry="true"/>
+    <symbol name="INT197_VECTOR" address="ram:fffce8" type="code_ptr" entry="true"/>
+    <symbol name="INT198_VECTOR" address="ram:fffce4" type="code_ptr" entry="true"/>
+    <symbol name="INT199_VECTOR" address="ram:fffce0" type="code_ptr" entry="true"/>
+    <symbol name="INT200_VECTOR" address="ram:fffcdc" type="code_ptr" entry="true"/>
+    <symbol name="INT201_VECTOR" address="ram:fffcd8" type="code_ptr" entry="true"/>
+    <symbol name="INT202_VECTOR" address="ram:fffcd4" type="code_ptr" entry="true"/>
+    <symbol name="INT203_VECTOR" address="ram:fffcd0" type="code_ptr" entry="true"/>
+    <symbol name="INT204_VECTOR" address="ram:fffccc" type="code_ptr" entry="true"/>
+    <symbol name="INT205_VECTOR" address="ram:fffcc8" type="code_ptr" entry="true"/>
+    <symbol name="INT206_VECTOR" address="ram:fffcc4" type="code_ptr" entry="true"/>
+    <symbol name="INT207_VECTOR" address="ram:fffcc0" type="code_ptr" entry="true"/>
+    <symbol name="INT208_VECTOR" address="ram:fffcbc" type="code_ptr" entry="true"/>
+    <symbol name="INT209_VECTOR" address="ram:fffcb8" type="code_ptr" entry="true"/>
+    <symbol name="INT210_VECTOR" address="ram:fffcb4" type="code_ptr" entry="true"/>
+    <symbol name="INT211_VECTOR" address="ram:fffcb0" type="code_ptr" entry="true"/>
+    <symbol name="INT212_VECTOR" address="ram:fffcac" type="code_ptr" entry="true"/>
+    <symbol name="INT213_VECTOR" address="ram:fffca8" type="code_ptr" entry="true"/>
+    <symbol name="INT214_VECTOR" address="ram:fffca4" type="code_ptr" entry="true"/>
+    <symbol name="INT215_VECTOR" address="ram:fffca0" type="code_ptr" entry="true"/>
+    <symbol name="INT216_VECTOR" address="ram:fffc9c" type="code_ptr" entry="true"/>
+    <symbol name="INT217_VECTOR" address="ram:fffc98" type="code_ptr" entry="true"/>
+    <symbol name="INT218_VECTOR" address="ram:fffc94" type="code_ptr" entry="true"/>
+    <symbol name="INT219_VECTOR" address="ram:fffc90" type="code_ptr" entry="true"/>
+    <symbol name="INT220_VECTOR" address="ram:fffc8c" type="code_ptr" entry="true"/>
+    <symbol name="INT221_VECTOR" address="ram:fffc88" type="code_ptr" entry="true"/>
+    <symbol name="INT222_VECTOR" address="ram:fffc84" type="code_ptr" entry="true"/>
+    <symbol name="INT223_VECTOR" address="ram:fffc80" type="code_ptr" entry="true"/>
+    <symbol name="INT224_VECTOR" address="ram:fffc7c" type="code_ptr" entry="true"/>
+    <symbol name="INT225_VECTOR" address="ram:fffc78" type="code_ptr" entry="true"/>
+    <symbol name="INT226_VECTOR" address="ram:fffc74" type="code_ptr" entry="true"/>
+    <symbol name="INT227_VECTOR" address="ram:fffc70" type="code_ptr" entry="true"/>
+    <symbol name="INT228_VECTOR" address="ram:fffc6c" type="code_ptr" entry="true"/>
+    <symbol name="INT229_VECTOR" address="ram:fffc68" type="code_ptr" entry="true"/>
+    <symbol name="INT230_VECTOR" address="ram:fffc64" type="code_ptr" entry="true"/>
+    <symbol name="INT231_VECTOR" address="ram:fffc60" type="code_ptr" entry="true"/>
+    <symbol name="INT232_VECTOR" address="ram:fffc5c" type="code_ptr" entry="true"/>
+    <symbol name="INT233_VECTOR" address="ram:fffc58" type="code_ptr" entry="true"/>
+    <symbol name="INT234_VECTOR" address="ram:fffc54" type="code_ptr" entry="true"/>
+    <symbol name="INT235_VECTOR" address="ram:fffc50" type="code_ptr" entry="true"/>
+    <symbol name="INT236_VECTOR" address="ram:fffc4c" type="code_ptr" entry="true"/>
+    <symbol name="INT237_VECTOR" address="ram:fffc48" type="code_ptr" entry="true"/>
+    <symbol name="INT238_VECTOR" address="ram:fffc44" type="code_ptr" entry="true"/>
+    <symbol name="INT239_VECTOR" address="ram:fffc40" type="code_ptr" entry="true"/>
+    <symbol name="INT240_VECTOR" address="ram:fffc3c" type="code_ptr" entry="true"/>
+    <symbol name="INT241_VECTOR" address="ram:fffc38" type="code_ptr" entry="true"/>
+    <symbol name="INT242_VECTOR" address="ram:fffc34" type="code_ptr" entry="true"/>
+    <symbol name="INT243_VECTOR" address="ram:fffc30" type="code_ptr" entry="true"/>
+    <symbol name="INT244_VECTOR" address="ram:fffc2c" type="code_ptr" entry="true"/>
+    <symbol name="INT245_VECTOR" address="ram:fffc28" type="code_ptr" entry="true"/>
+    <symbol name="INT246_VECTOR" address="ram:fffc24" type="code_ptr" entry="true"/>
+    <symbol name="INT247_VECTOR" address="ram:fffc20" type="code_ptr" entry="true"/>
+    <symbol name="INT248_VECTOR" address="ram:fffc1c" type="code_ptr" entry="true"/>
+    <symbol name="INT249_VECTOR" address="ram:fffc18" type="code_ptr" entry="true"/>
+    <symbol name="INT250_VECTOR" address="ram:fffc14" type="code_ptr" entry="true"/>
+    <symbol name="INT251_VECTOR" address="ram:fffc10" type="code_ptr" entry="true"/>
+    <symbol name="INT252_VECTOR" address="ram:fffc0c" type="code_ptr" entry="true"/>
+    <symbol name="INT253_VECTOR" address="ram:fffc08" type="code_ptr" entry="true"/>
+    <symbol name="INT254_VECTOR" address="ram:fffc04" type="code_ptr" entry="true"/>
+    <symbol name="INT255_VECTOR" address="ram:fffc00" type="code_ptr" entry="true"/>
+    <symbol name="RESET_MODE" address="ram:ffffdf"/>
+  </default_symbols>
+</processor_spec>

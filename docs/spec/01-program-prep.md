@@ -7120,9 +7120,20 @@ every other binary's pass list is byte-identical to before the pass existed):
   CompleteObjectLocator gives its class, the `offset` of the subobject its vftable
   serves, and the class's whole hierarchy: every BaseClassDescriptor's class, its
   displacement `mdisp`, and whether it is, or lies in, a virtual base (`pdisp` is
-  not -1). A vftable at offset 0 is the class's own; one at a nonzero offset serves
-  the non-virtual bases at that displacement, the most derived of them first; one
-  serving a virtual base (no non-virtual base sits at its offset) serves none. A
+  not -1, and `pdisp`/`vdisp` name its vbtable entry). A vftable at offset 0 is
+  the class's own; one at a nonzero offset serves the non-virtual bases at that
+  displacement, the most derived of them first. One no non-virtual base accounts
+  for serves a virtual base, placed by the vbtable order
+  (`kuna_msvcvtabletypes.rs (vbase_offsets)`): the virtual bases follow the
+  non-virtual part in the order of their vbtable entries, so taken in
+  `(pdisp, vdisp)` order (one base reached through two vbtable pointers counted
+  once) each that keeps a vftable takes the lowest such vftable left, and the
+  bases inside it at a nonzero displacement the vftables at that displacement
+  from it. A virtual base keeps a vftable when one of its own or a non-virtual
+  subobject vftable shows it does; when that leaves a vftable over, every virtual
+  base is taken to keep one. A leftover vftable, a virtual base finding none, or
+  a slot count differing from the virtual base's own vftable drops the reading,
+  and such vftables serve none. A
   class is typed with the slots of its own vftable, and for each slot the function
   there and every function the vftables serving it in derived classes hold at the
   same slot; a class the image never instantiates (an abstract base) has no vftable
@@ -7137,10 +7148,14 @@ every other binary's pass list is byte-identical to before the pass existed):
   vftable takes the base's subobject), so it is the first class that vftable
   serves; a function several vftables hold takes the nearest class that is, in
   every one of them, that class or one of its bases at offset 0, and a function
-  that also sits in a vftable serving a virtual base, or whose holders share no
+  that also sits in a vftable no base accounts for, or whose holders share no
   such class (identical-code folding, `_purecall`), is left untyped. Finally it
   reports each vftable whose first class was typed, with the `rtti` label of
-  that address, and every vftable's slot words.
+  that address, and every vftable's slot words. At the analysis commit a third
+  pass (`crates/unlace-analysis/src/analyzers/rtti/kuna_msvcctors.rs (run)`,
+  x86 and x86-64 only) names the constructors and destructors that store a
+  class's vftable through `this` and reports their `this` class too (chapter
+  05).
 - **(kuna) Itanium RTTI** (`itaniumrtti`, ELF and Mach-O, on by default and inert elsewhere;
   `crates/unlace-analysis/src/analyzers/rtti/kuna_itaniumrtti.rs`): the
   GCC/Clang counterpart of the pass above, and a capability with **no Ghidra
@@ -8777,6 +8792,17 @@ both
   three `open` attempts, only on a PE that carries a CodeView record — and the
   `.pdb` is parsed only when one of them opens and matches.
 
+  A fourth tier is opt-in: `kuna_pdb_symsrv` names a symbol store, `<cache>` or
+  `<cache>*<url>` (an `srv*` prefix as in `_NT_SYMBOL_PATH` is accepted). Only
+  when the three tiers above find no match is the store's
+  `<cache>/<name>/<GUID hex><age hex>/<name>` (the SymStore layout, `<name>` the
+  same safe record name) tried, and with a URL a missing file is first fetched
+  from `<url>/<name>/<key>/<name>` by running `curl` (300 s, 4 GiB at most),
+  written beside its final name and renamed when complete, and tried at most
+  once per process and path; a failed fetch gets one `[kuna pdb]` line. The
+  fingerprint gate applies to it like any other candidate. Without the variable
+  nothing is looked up or fetched.
+
   **(kuna) Types, prototypes and locals** (`pdbtypes`, PE-only, default **off**;
   `crates/unlace-analysis/src/analyzers/pdb/kuna_pdbtypes.rs`,
   `kuna_pdbtpi.rs`). From the same fingerprint-matched `.pdb`, the TPI type
@@ -8802,8 +8828,14 @@ both
   the x64 stack pointer in the body is the entry stack pointer less the
   `S_FRAMEPROC` callee-saved bytes and fixed frame (`cbSaveRegs + cbFrame`, the
   convention MSVC and LLVM both write), and the i386 `EBP` frame pointer is the
-  entry stack pointer less the pushed `EBP`; an x64 frame pointer, an i386 stack
-  pointer and the virtual `$T0` frame depend on the prologue and are skipped. A
+  entry stack pointer less the pushed `EBP`. An x64 frame register (`RBP`,
+  `R13`) points where the function's `.pdata` unwind data puts it: the
+  `UNWIND_INFO` names the register and its scaled offset, and the codes listed
+  after `UWOP_SET_FPREG` ran before it, so the register is the entry stack pointer
+  less their pushes and allocations plus `16 * FrameOffset`
+  (`crates/unlace-analysis/src/analyzers/pdb/kuna_pdbframe.rs`); a chained record,
+  an epilog code or an unknown one leaves it unknown. An i386 stack pointer and the
+  virtual `$T0` frame depend on the prologue and are skipped. A
   slot below the return address becomes a named, typed stack local (the DWARF
   `LocalFact` channel); a register range of a non-parameter becomes a
   register-held local from the range's start; locals of an inlined call site
@@ -10062,7 +10094,12 @@ header comment per try block,
 and a count of its cleanup funclets; each catch funclet gets
 `eh: catch (std::runtime_error &) handler of 0x140001000 (try states 0-0)` and each
 cleanup funclet `eh: unwind funclet of 0x140001000 (state 2)`. Every funclet is
-also a discovered entry. The handler bodies are not spliced into the parent's
+also a discovered entry, and one that still has a placeholder name is renamed
+`<parent>$catch$<n>` or `<parent>$dtor$<n>` (numbered per parent in handler and
+unwind-map order), as MSVC and IDA name them; x64 SEH filter and `__finally`
+funclets become `<parent>$filt$<n>` and `<parent>$fin$<n>`. The parent is named
+by the image's own symbol or export at its address, else `sub_<addr>`. Like the other
+metadata renames, they replace only a placeholder name. The handler bodies are not spliced into the parent's
 flow.
 
 **(kuna) SEH scope tables and x86 C++ `FuncInfo` are listed too** (`msvceh`,

@@ -48,6 +48,9 @@ Three tiers:
 | if (x < 10) { if (x > 20) ... } keeps the dead branch | [`rangefold`](#rangefold----on--off-default-on) |
 | x & 0xff kept on a value an earlier range check bounds below 256 | [`rangefold`](#rangefold----on--off-default-on) |
 | a range check repeated inside the branch of the same check | [`rangefold`](#rangefold----on--off-default-on) |
+| if (&a == &b) on two distinct locals prints as a live pointer test | [`addrcompare`](#addrcompare----on--off-default-off) |
+| a != test of two stack addresses keeps a compare the frame already decides | [`addrcompare`](#addrcompare----on--off-default-off) |
+| a pointer test between two local arrays prints as a live compare | [`addrcompare`](#addrcompare----on--off-default-off) |
 | v = x + 3; if (0 <= x) v = x; return v >> 2; where the source divides by 4 | [`pow2select`](#pow2select----on--off-default-on) |
 | a signed remainder by a power of two prints as a select between x & m and -(-x & m) | [`pow2select`](#pow2select----on--off-default-on) |
 | (x + ((unsigned)(x >> 31) >> 30)) >> 2 instead of x / 4 | [`pow2select`](#pow2select----on--off-default-on) |
@@ -775,6 +778,7 @@ Three tiers:
 | an ios app function list is only __mh_execute_header, main, exports and import stubs | [`unwindstarts`](#unwindstarts----on--off-default-on) |
 | LC_FUNCTION_STARTS absent and the arm64 gap walk cannot reach the body | [`unwindstarts`](#unwindstarts----on--off-default-on) |
 | functions the unwinder describes in __unwind_info missing from the inventory | [`unwindstarts`](#unwindstarts----on--off-default-on) |
+| a jump-only stub into code that is not a function gets no thunk attribution | [`aggressivethunks`](#aggressivethunks----on--off-default-off) |
 | a stripped mach-o loses functions whose unwind info is a dwarf fde in __eh_frame | [`machoehframe`](#machoehframe----on--off-default-on) |
 | functions listed by llvm-objdump --dwarf=frames on a mach-o missing from the inventory | [`machoehframe`](#machoehframe----on--off-default-on) |
 | many sub_<addr> functions that end in _Unwind_Resume() | [`ehcold`](#ehcold----on--off-default-on) |
@@ -1101,10 +1105,10 @@ Three tiers:
 | a PEIM entry is typed (EFI_HANDLE, EFI_SYSTEM_TABLE *) | [`uefi`](#uefi----on--off-default-on) |
 | an SMM driver calls through an untyped gSmst | [`uefi`](#uefi----on--off-default-on) |
 | which module implements the protocol this driver locates | [`uefi`](#uefi----on--off-default-on) |
-| a PEIM entry point is named _ModuleEntryPoint | [`uefientry`](#uefientry----on--off-default-off) |
+| a DXE driver entry point is named _ModuleEntryPoint, not ModuleEntryPoint | [`uefientry`](#uefientry----on--off-default-off) |
 | a DXE core entry has no DxeMain name or HobStart argument | [`uefientry`](#uefientry----on--off-default-off) |
 | a PEI core entry has no PeiCore name | [`uefientry`](#uefientry----on--off-default-off) |
-| a standalone MM module's entry is named _ModuleEntryPoint | [`uefientry`](#uefientry----on--off-default-off) |
+| a combined MM_DXE module's entry is named _ModuleEntryPoint | [`uefientry`](#uefientry----on--off-default-off) |
 | a combined PEIM driver or MM_DXE module has no label saying which kinds it combines | [`uefientry`](#uefientry----on--off-default-off) |
 | SCB, NVIC or SysTick registers of Cortex-M firmware print as dat_e000ed08 or dat_e000e010 | [`cortexmscs`](#cortexmscs----on--off-default-on) |
 | an interrupt enable is a store through a computed pointer near -0x1fff1f00 | [`cortexmscs`](#cortexmscs----on--off-default-on) |
@@ -1528,6 +1532,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** On by default: 0/675 datatest assertions move and the speed is unchanged (lua -O0: user time within run-to-run noise). Flip off to see a test that an enclosing test already decides, e.g. to compare against a listing. Measured over 4,072 functions in ten x86-64 binaries (gcc/clang -O2 and gcc -O0 builds of Lua 5.4.8 and bzip2 1.0.8, -O2 zlib 1.3.2, system libexpat and libyaml): 71 functions change; `if` statements 22,188 -> 22,043, gotos 9,853 -> 9,840, lines 184,891 -> 184,573. Most folds are -O0 binary-search switch ladders (`if (v != 0x31) { if (0x31 < v) ...` after `!(0x32 < v)`), retests of the same value after a short-circuit, and repeated null checks. Four functions gain one goto: a test the compiler duplicated into two predecessors is decided in one copy only, so the copies no longer merge.
 - **Where / provenance:** P3/simplification-quiescence · unlace · transform · rangefold
 - **Example:** `option rangefold off`
+
+### `addrcompare` -- on | off, default `off`
+
+- **Symptoms:** if (&a == &b) on two distinct locals prints as a live pointer test; a != test of two stack addresses keeps a compare the frame already decides; a pointer test between two local arrays prints as a live compare.
+- **What it does:** Fold an equality test between two stack addresses of one frame. Each address is the function's spacebase value, or a PTRSUB or INT_ADD of it with a constant, so both are one frame base plus a constant, and they are equal exactly when their offsets agree modulo the operand size. The == or != then becomes the constant it always has, and ActionDeterminedBranch removes a branch on it. Ordering comparisons, and addresses from different bases or global addresses, are not folded.
+- **When to flip:** Off by default: no datatest or real-binary measurement has run for this rule yet, so the default is not flipped. Flip on to see whether a test of two distinct local objects' addresses (IDA's optimize-away-address-comparisons) still prints as a live compare. The fold decides only tests whose outcome the frame fixes, so a function with no such compare is unchanged.
+- **Where / provenance:** P3/simplification-quiescence · unlace · transform · unlace#1168
+- **Example:** `option addrcompare on`
 
 ### `pow2select` -- on | off, default `on`
 
@@ -3181,6 +3193,14 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **Where / provenance:** P1/code-data-partition · unlace · analysis-enablement · unlace-analysis-unwindstarts
 - **Example:** `--option unwindstarts on`
 
+### `aggressivethunks` -- on | off, default `off`
+
+- **Symptoms:** a jump-only stub into code that is not a function gets no thunk attribution; the body behind a hand-written jmp stub prints as an orphan block of its caller; a stripped image's jmp table entries are not functions although each only jumps.
+- **What it does:** On an x86 image, widen the thunk-promotion pass (thunkentry) from the jumps that open a function entry to every decoded direct unconditional jump, which is IDA's aggressively_convert_jumps_to_thunks. A jump-only stub that no function entry opens, such as a jump into a block only that stub reaches, then gets its target promoted to a function entry, so the body behind the stub is attributed to a thunk rather than left as an orphan. Three tests keep the widened set honest: the jump is not a fall-through target (no instruction runs into it), its target has exactly one reference in the listing (a block several jumps share is not one stub's body), and the existing rules hold (the target is not a decoded fall-through or conditional target, and the instruction after the jump is not ordinary code). Promotion never changes which instructions the walk decodes, so the option adds function entries and nothing else. Default off because it is output-changing: it adds function entries that the default walk leaves unattributed.
+- **When to flip:** Off by default. Flip on for an x86 image whose jump-only stubs into code that is not a function get no thunk attribution, for instance a hand-written table of jmp stubs in a stripped binary. Leave off on ordinary compiler output, where the default rules already find every thunk.
+- **Where / provenance:** P1/code-data-partition · unlace · analysis-enablement · unlace-analysis-thunkentry-aggressive
+- **Example:** `--option aggressivethunks on`
+
 ### `machoehframe` -- on | off, default `on`
 
 - **Symptoms:** a stripped mach-o loses functions whose unwind info is a dwarf fde in __eh_frame; functions listed by llvm-objdump --dwarf=frames on a mach-o missing from the inventory.
@@ -3873,8 +3893,8 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 
 ### `uefientry` -- on | off, default `off`
 
-- **Symptoms:** a PEIM entry point is named _ModuleEntryPoint; a DXE core entry has no DxeMain name or HobStart argument; a PEI core entry has no PeiCore name; a standalone MM module's entry is named _ModuleEntryPoint; a combined PEIM driver or MM_DXE module has no label saying which kinds it combines.
-- **What it does:** Name a firmware module's entry point by its FFS file type, as IDA's uefi_fv loader does, when the module sits in an unpacked volume beside its unlace-uefi.index (`unlace unpack <firmware> --protocols`). A PEIM and a combined PEIM driver enter as `PeimEntryPoint(EFI_PEI_FILE_HANDLE, EFI_PEI_SERVICES **)`, the PEI core as `PeiCore(VOID *SecCoreData, VOID *PpList)`, the DXE core as `DxeMain(VOID *HobStart)`, a standalone MM module as `StandaloneMmEntryPoint(EFI_HANDLE, EFI_MM_SYSTEM_TABLE *)`, and every other module (driver, application, MM, combined MM_DXE) as `ModuleEntryPoint(EFI_HANDLE, EFI_SYSTEM_TABLE *)`. A combined file's entry gets a comment naming its FFS type (COMBINED_PEIM_DRIVER, COMBINED_MM_DXE). Without the index, or for a file type not listed, the entry keeps `_ModuleEntryPoint` with the phase prototype it had. Needs `uefi` on.
+- **Symptoms:** a DXE driver entry point is named _ModuleEntryPoint, not ModuleEntryPoint; a DXE core entry has no DxeMain name or HobStart argument; a PEI core entry has no PeiCore name; a combined MM_DXE module's entry is named _ModuleEntryPoint; a combined PEIM driver or MM_DXE module has no label saying which kinds it combines.
+- **What it does:** Name a firmware module's entry point by its FFS file type, as IDA's uefi_fv loader does, when the module sits in an unpacked volume beside its unlace-uefi.index (`unlace unpack <firmware> --protocols`). A PEIM and a combined PEIM driver enter as `PeimEntryPoint(EFI_PEI_FILE_HANDLE, EFI_PEI_SERVICES **)`, the PEI core as `PeiCore(VOID *SecCoreData, VOID *PpList)`, the DXE core as `DxeMain(VOID *HobStart)`, a standalone MM module as `StandaloneMmEntryPoint(EFI_HANDLE, EFI_MM_SYSTEM_TABLE *)`, and every other module (driver, application, MM, combined MM_DXE) as `ModuleEntryPoint(EFI_HANDLE, EFI_SYSTEM_TABLE *)`. A combined file's entry gets a comment naming its FFS type (COMBINED_PEIM_DRIVER, COMBINED_MM_DXE). Without this option, a PEIM and a standalone MM module keep the names the index gives them; every other entry keeps `_ModuleEntryPoint`. Needs `uefi` on.
 - **When to flip:** Off by default. Turn it on after `unlace unpack FIRMWARE --protocols`, when you decompile the modules from the directory it wrote, to see each entry named for its phase. A module loaded alone has no FFS type, so nothing changes for it. The walk still seeds a PEI or DXE core's parameters from the phase its file type gives, so the second parameter of DxeMain or PeiCore may print with that phase's table type.
 - **Where / provenance:** P1/external-refinement · ida · analysis-enablement · unlace-1164
 - **Example:** `option uefientry on`
@@ -4074,6 +4094,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **When to flip:** On by default on AArch64 and inert on every other target: the output names the intrinsic the source called, and a pointer that was tagged is the result of a call instead of an unchanged copy. Flip off to read barriers and hints under their SLEIGH instruction names with the domain and type operands separate, or to read MTE-hardened code (for example a stack-tagging build, which tags every address-taken local) as if the core had no tags.
 - **Where / provenance:** P9/naming-policy · unlace · correctness-fix · acleintrinsics
 - **Example:** `option acleintrinsics off`
+
+### `barrierintrinsics` -- on | off, default `off`
+
+- **Symptoms:** a PowerPC lwsync prints as sync(1) where the source called __lwsync; a PowerPC isync prints as instructionSynchronize() where the source called __isync; a PowerPC ptesync prints as sync(2) where the source called __ptesync
+- **What it does:** On PowerPC, print a sync user op whose L operand is 0, 1 or 2 as the GCC and Clang barrier builtin __sync, __lwsync or __ptesync, and an instructionSynchronize user op as __isync, the names the Hex-Rays PowerPC plugin prints. Only the spelling of the call changes: the SLEIGH user ops keep their operands and their place in the flow.
+- **When to flip:** Off by default, so the output keeps the SLEIGH names sync(L) and instructionSynchronize() and existing consumers see no change. Turn on to read PowerPC barrier code under the names the source called, which separates lwsync and ptesync from a full sync; a sync whose operand is not a constant keeps its SLEIGH name.
+- **Where / provenance:** P9/naming-policy · unlace · presentation-default · barrierintrinsics
+- **Example:** `option barrierintrinsics on`
 
 ### `wideconst` -- on | off, default `on`
 

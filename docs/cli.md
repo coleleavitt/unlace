@@ -607,6 +607,9 @@ One directive per `--assert`, keyed by intent rather than by phase:
 | `volatile <addr>+<size>` | device memory: every access is a real access |
 | `bytes <addr> <hex\|@FILE>` | the bytes mapped here are these, whatever the file holds |
 | `register <name> <hex value> [<addr>+<size>]` | the register holds this value on entry to code in the range (everywhere without one), a tracked register as a processor spec's `tracked_set` states it: `register CS 0xf000 0xf0000+0x10000` |
+| `split [<func>::]<addr> <storage>` | the merged local at this use is split off from the variable it shares a merge with. Parsed, and reported as not applied until a merge stage takes it |
+| `map [<func>::]<symbol> <symbol>` | the first local is merged onto the second. Parsed, and reported as not applied until a merge stage takes it |
+| `noprop [<func>::]<addr>` | the definition at this instruction is not copied forward by propagation. Parsed, and reported as not applied until a propagation stage takes it |
 | `noreturn <func>` | the function (a name or a `0x` entry address) never returns: each caller stops at its calls to it; a function is declared at an entry nothing starts at. Every surface applies it; the console script spells it `function noreturn <func>` |
 
 Storage is a register name (`RDI`), the console's `%RDI`, or its address grammar
@@ -1460,7 +1463,8 @@ two steps, `v = new(T); v.<init>(args);`. The language is `Dalvik:LE:32:DEX_Andr
 `Dalvik:` language. An APK loads directly: its `classes.dex`, `classes2.dex`, ...
 are inflated and mapped one after another, each at a 64 KiB boundary, so one
 run covers the whole app and a call from one file into a class of another
-prints by name. CDEX, ODEX, OAT and VDEX files are not supported.
+prints by name. CDEX, ODEX, OAT and VDEX files load the same way (a VDEX must be
+version 027); see `docs/spec/01-program-prep.md`.
 
 ### MS-DOS MZ executables
 
@@ -5589,7 +5593,7 @@ have a fixed byte and differ), then by a referenced name (`wrap_mix` and
 `wrap_sum` above are the same bytes around a call to a different function, and
 the matcher accepts each only where the call goes to that name). Functions that
 nothing tells apart are reported as a `collision:` line and left out of the
-`.sig`; they stay in the `.pat`. Functions with the same bytes and the same name
+`.sig`; they stay in the `.pat`. Names that share a pattern and CRC in the `.pat` are also listed as a `collision in` line before the `.sig` is built; the `.pat` itself is written unchanged. Functions with the same bytes and the same name
 are written once. The exit status is 0 when the files were written, 1 when an
 input cannot be read or no function is left to write, and 2 on a usage error.
 

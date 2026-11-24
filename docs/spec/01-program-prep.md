@@ -2060,11 +2060,14 @@ instructions an optimized file may contain (`loadimage_dex.rs (dex_language)`).
 A version-027 **VDEX** (Android 12 and later) lists its sections in its header;
 the DEX section holds one DEX file per checksum, each 4-byte aligned after the
 previous one's `file_size`, and runs to the section's end so a compact DEX file's
-shared data stays reachable. An **OAT** file is an ELF whose `oatdata` dynamic
+shared data stays reachable. Each entry must carry a DEX or compact DEX magic,
+and a VDEX of any version other than 027 is refused as `Unsupported VDEX version`. An **OAT** file is an ELF whose `oatdata` dynamic
 symbol starts with `oat\n` and a version; up to Android 7 it embeds the DEX
 files, which are found by their own headers (a DEX magic on a 4-byte boundary
 whose header size, endian tag and file size hold up), since the `OatDexFile`
-records that locate them change with every OAT version. Every form is
+records that locate them change with every OAT version. An OAT whose `oatdata`
+holds no DEX file is refused (`Could not locate DEX file inside the OAT file`),
+not read as an empty image. Every form is
 synthesized from `tests/stages/fixtures/dex/hello.dex` and `tries.dex` by
 `tests/stages/fixtures/dex/containers.py`.
 
@@ -2110,6 +2113,18 @@ untyped rather than `void`. The loader also reports a `PT_LOAD`
 that maps an address another `PT_LOAD` already mapped from different file bytes
 (`elf_debuglink.rs (overlapping_loads)`), a shape only a hand-made or hostile
 image has; which bytes win is unchanged.
+
+(unlace) **A Mach-O image's `.dSYM` bundle** (`debuglink`, the same gate). A
+binary shipped without DWARF takes it from the bundle `dsymutil` wrote beside
+it: `<name>.dSYM/Contents/Resources/DWARF/<name>`, and for a framework or app
+the bundle named after the wrapper (`Foo.framework.dSYM` next to
+`Foo.framework`), each enclosing directory up to three levels tried.
+`crates/unlace-analysis/src/loader/macho_dsym.rs (find_dsym)` accepts a
+candidate only when its `LC_UUID` equals the image's, so a dSYM of another
+build is never applied. A universal dSYM is read slice by slice, and the thin
+slice carrying the image's UUID is the one that feeds the DWARF analyzer
+(`analyzers/dwarf/mod.rs (DwarfPass)`), which runs over it as it does over an
+ELF companion. An image with no `LC_UUID` takes no dSYM.
 
 (unlace) **MS-DOS `MZ` executables load as relocated real-mode images.**
 `crates/unlace-analysis/src/loadimage_mz.rs (MzImage)` claims a file
@@ -5460,8 +5475,9 @@ moves.
   and a driver, application, MM, MM core or combined MM_DXE module (0x07, 0x09,
   0x0a, 0x0d, 0x0c) gets `ModuleEntryPoint` with the DXE prototype. A combined
   file's entry also carries a comment naming its kinds (`module kind
-  COMBINED_PEIM_DRIVER`, `module kind COMBINED_MM_DXE`). Without the index, or
-  for an unlisted file type, the entry keeps `_ModuleEntryPoint`. The walk still
+  COMBINED_PEIM_DRIVER`, `module kind COMBINED_MM_DXE`). Without this option, a PEIM
+  and a standalone MM module keep the names the index gives them (see below), and every other entry keeps
+  `_ModuleEntryPoint`. The walk still
   seeds a PEI or DXE core's parameters from the phase the index's kind gives
   (PEI or DXE), so only the entry's name and prototype follow the file type.
 
@@ -5580,7 +5596,9 @@ moves.
   A module loaded from
   that directory takes its phase from its file type (PEIM, PEI core and
   combined PEIM/driver are PEI; MM standalone and MM core standalone are MM;
-  a traditional SMM driver is entered as a DXE driver), takes the struct
+  a traditional SMM driver is entered as a DXE driver), its entry point is
+  named `PeimEntryPoint` (a PEIM) or `StandaloneMmEntryPoint` (MM standalone)
+  rather than `_ModuleEntryPoint`, takes the struct
   another module synthesized for a GUID, and gets a comment at each interface
   lookup naming the module that installs it, the instance address and the
   member functions: `gEfiPeiRscHandlerPpiGuid is installed by
@@ -7529,6 +7547,12 @@ every other binary's pass list is byte-identical to before the pass existed):
   through the index at each record's `entry + parentPc` (the instruction whose
   position is the call site, which on every layout also gives the parent), up
   to 64 hops, and the call site is the source position at that instruction.
+  On go1.18 and later the header comment also lists the function's
+  `FUNCDATA_StackObjects` table (funcdata index 2): a `uintptr` count, then
+  16-byte records `off, size, ptrdata, gcdataoff`, read as
+  `stack objects: frame <off> size <n> ptrdata <n>; ...`, at most eight objects
+  and then `+N more`. The frame offsets are not yet applied to the stack
+  variables and `gcdataoff` is not resolved, so the clause is a comment only.
   With `lines`, a second pass (`gopcln_lines`) also comments `<file>:<line>`
   at each PC where the position changes, the Go counterpart of `dwarf_lines`.
   Both passes run at the commit point, only when the option is on
@@ -9646,7 +9670,9 @@ both
   keep its classic reference unnamed (`rand` calling an unmatched `__random`). An
   entry whose first instruction is a return is never named, nor one that returns
   right after an `endbr64`/`endbr32` or AArch64 `bti` landing pad (an empty
-  function matches every empty-function module), a name found at two
+  function matches every empty-function module), nor an entry that lies inside an
+  instruction decoded at an earlier address (a tail byte: IDA's `flirt: skip tail
+  bytes`; a Thumb entry is compared with its mode bit cleared), a name found at two
   entries goes only to the strictly best scored one or to none, and a name the
   binary already carries is not given again. A module's name is the library
   object's linkage spelling, so it is demangled the way the loader demangles an
@@ -9833,7 +9859,9 @@ both
   only a function alone with its name is resolved). Functions with the same bytes
   and the same name become one module. Whatever still collides is listed on
   stderr and left out of the `.sig`: no name is chosen and no module is merged
-  under two names.
+  under two names. The `.pat` is written unchanged, but `flirt make` lists each
+  group of functions that share a pattern and CRC under different names as a
+  `collision in` line on stderr before the `.sig` is built.
 - **Format strings** (`formatstring off|static|full`, default `static`;
   `crates/unlace-analysis/src/analyzers/formatstring/mod.rs`): what a
   `printf`/`scanf`-family call does with its variadic arguments is stated by its
@@ -10185,6 +10213,8 @@ a wrong entry is a garbage `sub_<addr>`; a missed one is invisible until a calle
 overruns into it (§1.7).
 
 (unlace) **`__unwind_info` is a stripping-proof function-start source for Mach-O** (`crates/unlace-analysis/src/analyzers/entry/unwindinfo.rs (UnwindInfoStartsPass)`, option `unwindstarts`, on by default). The linker folds each object's `__compact_unwind` records into one `__TEXT,__unwind_info` section whose second-level pages — regular `(functionOffset, encoding)` pairs, or compressed `u32`s whose low 24 bits are the offset from the page's first function — list, in ascending order, the start of each entry the unwinder looks up: a function start, though not one per function, since the linker folds a run of adjacent functions sharing one compact encoding into the entry of its first. Because the section lives in the mapped `__TEXT` segment it survives the `strip` that removes `LC_FUNCTION_STARTS` from `__LINKEDIT`, which is the whole of its value: on an App-Store app whose function starts were stripped, `LC_MAIN`, the exports, `__mod_init_func` and the thin symbol stream seed only a handful of entries, and arm64 has no always-on prologue sweep (oracle 5 is x86-64-only), so the gap between the few seeds is the entire text and nothing starts a function inside it. Measured on a 249 MB arm64 third-party iOS app with no `LC_FUNCTION_STARTS`, the default inventory is 59,222 — of which only 23 are real `__text` functions, the rest `__got` slots and `__stubs` — while `__unwind_info` records 204,800 real starts; with the option on all 204,800 are recovered and each decodes to a normal function body. On an image that still carries `LC_FUNCTION_STARTS` the oracle is a strict no-op: every unwind start is already a function-starts entry — the linker folds runs of adjacent same-encoding functions into one page entry, so the set is in fact a *subset* (on an 84 MB third-party iOS app, 185,937 unwind entries against 296,775 function starts, discovery unchanged at 314,038). Only a section named `__unwind_info` whose section and segment both name `__TEXT`, with the header version 1 that ld64 writes (`UNWIND_SECTION_VERSION`), is read; a section of that name elsewhere, or another version, gives no starts. Only the function **starts** are read; the compact encodings (frame size, saved-register set, frameless stack size) are deliberately ignored, because unlace's S5/S7 frame analysis recovers the stack frame from the code — the same reason the `.eh_frame` oracle inherits CFI rather than rebuilding it. On by default: it adds entries only on a Mach-O without `LC_FUNCTION_STARTS`, so every other image is byte-identical.
+
+(unlace `thunkentry`, option `aggressivethunks`, default off) **Aggressive jump-to-thunk conversion.** The default thunk promotion (`crates/unlace-analysis/src/listing/thunkentry.rs`) only considers a direct unconditional jump that opens a function entry. With `aggressivethunks on` the candidates are every decoded direct unconditional jump that no instruction falls through into, which is IDA's `aggressively_convert_jumps_to_thunks`. Three tests replace the entry test: the target has exactly one reference in the listing (a block several flows share is not one stub's body), no decoded instruction falls through or conditionally branches into it, and the instruction after the jump is not ordinary code. Promotion adds function entries only; the walk's decoded instructions do not change. Default off, because it adds entries the default walk leaves unattributed.
 
 (unlace) **The x86-64 half of oracle 4 reads two encodings, because "PC-relative" is
 a link model and not part of the idiom.** `main` reaches `rdi` as a `lea

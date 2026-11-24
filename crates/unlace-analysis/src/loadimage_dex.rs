@@ -39,10 +39,14 @@ pub fn is_odex(bytes: &[u8]) -> bool {
         && bytes[7] == 0
 }
 
-/// Is `bytes` a version-027 VDEX (Android 12 and later), which may hold the
-/// DEX files of an APK?
+/// Is `bytes` a VDEX (`vdex` and a three-digit version, Android 8 and later)?
+/// Only version 027 (Android 12 and later) loads; the others are refused by
+/// [`vdex_dex_files`] rather than misread as another container.
 pub fn is_vdex(bytes: &[u8]) -> bool {
-    bytes.len() >= 12 && bytes.starts_with(b"vdex027\0")
+    bytes.len() >= 12
+        && bytes.starts_with(b"vdex")
+        && bytes[4..7].iter().all(u8::is_ascii_digit)
+        && bytes[7] == 0
 }
 
 /// Is `bytes` any DEX input unlace loads: a DEX or compact DEX file, an ODEX,
@@ -138,6 +142,13 @@ fn bad_odex(what: &str) -> UnlaceError {
 /// section's end.
 fn vdex_dex_files(bytes: &[u8]) -> UnlaceResult<Vec<Vec<u8>>> {
     let bad = |what: &str| UnlaceError::lowlevel(format!("malformed VDEX: {what}"));
+    let version = bytes.get(4..7).unwrap_or_default();
+    if version != b"027" {
+        return Err(UnlaceError::lowlevel(format!(
+            "Unsupported VDEX version {}",
+            String::from_utf8_lossy(version)
+        )));
+    }
     let sections = le32(bytes, 8).ok_or_else(|| bad("truncated header"))? as usize;
     let section = |kind: u32| -> UnlaceResult<Option<(usize, usize)>> {
         for k in 0..sections.min(16) {
@@ -164,8 +175,11 @@ fn vdex_dex_files(bytes: &[u8]) -> UnlaceResult<Vec<Vec<u8>>> {
     let mut at = start;
     for _ in 0..count {
         let file_size = le32(bytes, at + 0x20).ok_or_else(|| bad("truncated DEX header"))? as usize;
-        if at + file_size > end || file_size == 0 {
+        if at + file_size > end || file_size < 0x70 {
             return Err(bad("DEX file past the section end"));
+        }
+        if !is_dex(&bytes[at..]) {
+            return Err(bad("DEX section entry without a DEX magic"));
         }
         files.push(bytes[at..end].to_vec());
         at = (at + file_size + 3) & !3;
@@ -188,10 +202,19 @@ pub fn load_dex_models(bytes: Vec<u8>) -> UnlaceResult<Vec<Rc<DexModel>>> {
     } else if is_vdex(&bytes) {
         vdex_dex_files(&bytes)?
     } else if let Some(data) = oat_data(&bytes) {
-        oat_dex_files(data)
+        let files = oat_dex_files(data);
+        if files.is_empty() {
+            return Err(UnlaceError::lowlevel(
+                "Could not locate DEX file inside the OAT file",
+            ));
+        }
+        files
     } else {
         apk_dex_files(&bytes)?
     };
+    if files.is_empty() {
+        return Err(UnlaceError::lowlevel("no DEX file in the input"));
+    }
     let mut models = Vec::with_capacity(files.len());
     let mut base: u64 = 0;
     for file in files {
@@ -526,6 +549,37 @@ mod tests {
             env!("CARGO_MANIFEST_DIR")
         ))
         .unwrap()
+    }
+
+    /// A VDEX of `version` whose checksum and DEX sections hold `dex`.
+    fn vdex(version: &[u8; 3], dex: &[u8]) -> Vec<u8> {
+        let mut out = b"vdex".to_vec();
+        out.extend_from_slice(version);
+        out.push(0);
+        out.extend_from_slice(&2u32.to_le_bytes());
+        out.extend_from_slice(&0u32.to_le_bytes());
+        out.extend_from_slice(&36u32.to_le_bytes());
+        out.extend_from_slice(&4u32.to_le_bytes());
+        out.extend_from_slice(&1u32.to_le_bytes());
+        out.extend_from_slice(&40u32.to_le_bytes());
+        out.extend_from_slice(&(dex.len() as u32).to_le_bytes());
+        out.extend_from_slice(&[0; 4]);
+        out.extend_from_slice(dex);
+        out
+    }
+
+    #[test]
+    fn a_vdex_of_another_version_is_refused_by_name() {
+        let bytes = vdex(b"019", &hello());
+        assert!(is_vdex(&bytes));
+        let err = load_dex_models(bytes).err().unwrap().to_string();
+        assert!(err.contains("Unsupported VDEX version 019"), "{err}");
+    }
+
+    #[test]
+    fn a_vdex_entry_without_a_dex_magic_is_refused() {
+        assert!(load_dex_models(vdex(b"027", &hello())).is_ok());
+        assert!(load_dex_models(vdex(b"027", &[0u8; 0x80])).is_err());
     }
 
     #[test]

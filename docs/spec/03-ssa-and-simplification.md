@@ -3315,6 +3315,8 @@ repeated null checks. Folding a test the compiler duplicated into two
 predecessors can decide one copy only, which can leave a goto where the
 copies used to merge.
 
+**Stack-address equality** (`option addrcompare`, default **off**) -- `crates/unlace-bandb-base/src/p3_dataflow/addrcompare.rs (addrcompare_apply)`, run from `ActionRangeFold` ahead of the range folds, so the action schedule is unchanged. For each `INT_EQUAL` or `INT_NOTEQUAL` whose two inputs are stack addresses of one spacebase value (the spacebase itself, or `PTRSUB`/`INT_ADD` of it with a constant), the offsets are compared modulo the operand size: matching offsets give the equality true, differing offsets false, and the comparison becomes `COPY` of that boolean. Ordering comparisons are not folded, since their result depends on wrap-around of the frame base; neither are addresses from different bases or global addresses, which are not classified yet.
+
 ## 3.5 unlace peephole rewrites
 
 Unlace-added transforms live beside the upstream rules, each resolving an
@@ -4788,6 +4790,18 @@ the checks guard the lowering into and out of the e-graph. A unit test
 emitted the way `mba` emits its own (`unlace_mba::replace`): new ops before the
 root, the root a `COPY` of the result, and a subterm the old tree already
 computes reused.
+
+Each accepted replacement is marked with how far it was checked. `Proved`:
+`mba::prove_equal` returned true at the tree's full width. `Screened`: the
+proof did not run (more than three leaves) or was inconclusive, or the
+replacement is a closed-form seed of a tree with one bitwise op (checked on
+random inputs only). A screened replacement adds one header note to the
+function, `WARNING: egraph: an MBA expression in this function was simplified
+without a full-width proof ...`, which the comment database keeps once per
+function. The marks report the checks; acceptance is unchanged. With
+`UNLACE_EGRAPH_TRACE` set, each refused candidate is printed to stderr with
+the input that refutes it (the random or small-width check); a refused full-width
+proof has no input to name and is reported as such.
 
 **Measured** (pinned build 54380310a5, with the once-per-tree-value
 regrouping). The corpus: functions whose return value is a 1-4 variable

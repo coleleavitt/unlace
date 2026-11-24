@@ -19,6 +19,9 @@ use object::{Architecture, SectionKind, SymbolKind};
 
 use flirt_sig::crc16;
 
+/// The leading pattern a function is keyed on in a `.pat` line and in a `.sig` group.
+type Head = [Option<u8>; PATTERN_LEN];
+
 /// Leading bytes of a function that form its tree pattern.
 pub const PATTERN_LEN: usize = 32;
 /// Fewest fixed bytes the leading pattern needs.
@@ -345,4 +348,32 @@ pub fn write_pat(patterns: &[FuncPattern]) -> String {
     }
     out.push_str("---\n");
     out
+}
+
+/// Groups of functions that one `.pat` line cannot tell apart by name: their
+/// leading pattern, CRC length and CRC agree and they carry at least two
+/// different preferred public names. Each group is returned as its sorted,
+/// de-duplicated names. Functions that differ only in later bytes are told
+/// apart by a tail byte in the `.sig`, so they are not listed.
+pub fn pattern_collisions(patterns: &[FuncPattern]) -> Vec<Vec<String>> {
+    let mut groups: BTreeMap<(Head, usize, u16), Vec<&FuncPattern>> = BTreeMap::new();
+    for p in patterns {
+        groups
+            .entry((p.head(), p.crc_bytes().len(), p.crc()))
+            .or_default()
+            .push(p);
+    }
+    groups
+        .into_values()
+        .map(|group| {
+            let mut names: Vec<String> = group
+                .iter()
+                .filter_map(|p| p.publics.first().cloned())
+                .collect();
+            names.sort();
+            names.dedup();
+            names
+        })
+        .filter(|names| names.len() > 1)
+        .collect()
 }

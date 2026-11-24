@@ -44,7 +44,7 @@ pub enum Change {
     /// `bookmark <addr> <title>`: project-only, never sent to the engine.
     Bookmark { address: u64, title: String },
     /// Every other directive (`param`, `return`, `flow`, `format`, `readonly`,
-    /// `volatile`, `register`, `noreturn`), stored verbatim under its kind and target.
+    /// `volatile`, `register`, `noreturn`, `split`, `map`, `noprop`), stored verbatim under its kind and target.
     Assertion {
         kind: String,
         target: String,
@@ -54,7 +54,8 @@ pub enum Change {
 
 /// The directive kinds stored verbatim in the `assertions` table.
 pub const VERBATIM: &[&str] = &[
-    "param", "return", "flow", "format", "readonly", "volatile", "register", "noreturn",
+    "param", "return", "flow", "format", "readonly", "volatile", "register", "noreturn", "split",
+    "map", "noprop",
 ];
 
 fn take_token(s: &str) -> (&str, &str) {

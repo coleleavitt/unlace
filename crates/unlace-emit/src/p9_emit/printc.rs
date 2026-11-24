@@ -9371,8 +9371,13 @@ impl PrintC {
                 }
                 return;
             }
-            let acle =
-                userop.and_then(|u| crate::acleintrinsics::intrinsic(fd, arch, op, u.get_name()));
+            let acle = userop
+                .and_then(|u| crate::acleintrinsics::intrinsic(fd, arch, op, u.get_name()))
+                .or_else(|| {
+                    userop.and_then(|u| {
+                        crate::barrierintrinsics::intrinsic(fd, arch, op, u.get_name())
+                    })
+                });
             if let Some(call) = acle {
                 self.push_acle_intrinsic(fd, arch, op, &call);
                 return;
@@ -18175,6 +18180,15 @@ crate::unlace_flag!(
     "Intel intrinsic names for AVX user-ops",
     unset: false,
     shipped: true
+);
+
+crate::unlace_flag!(
+    /// (unlace `barrierintrinsics`) Print PowerPC sync and isync user ops as the GCC and Clang barrier builtins.
+    BarrierIntrinsics,
+    "barrierintrinsics",
+    "PowerPC barrier builtins",
+    unset: false,
+    shipped: false
 );
 
 /// A new C printer for an architecture (C++ `PrintCLanguageCapability::buildLanguage`).

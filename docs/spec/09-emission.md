@@ -4999,7 +4999,23 @@ argument when the op has no result. The table covers:
 - packed integer arithmetic, saturating and unsigned forms, compares, shifts,
   min/max, averages, packs, unpacks and permutes (`_mm256_adds_epu8`,
   `_mm256_max_epu8`, `_mm256_cmpgt_epi32`, `_mm256_permutevar8x32_epi32`);
-- the bitwise forms on the whole register (`_mm256_and_si256`).
+- the bitwise forms on the whole register (`_mm256_and_si256`);
+- the AVX-512CD and AVX-512F/VL forms `vplzcnt{d,q}`, `vpconflict{d,q}` and
+  `vpternlog{d,q}` (`_mm512_lzcnt_epi64`, `_mm_conflict_epi32`,
+  `_mm256_ternarylogic_epi64`). Ternary logic keeps its immediate as the
+  fourth argument, and its masked forms take the merge source first, as the
+  Intel `_mm512_mask_ternarylogic_epi32(src, k, a, b, c, imm)` does.
+
+The element-pair conversions are named from the element pair, as IDA 9.5's
+avxlifter names them (`vpmovsxbw` → `_mm256_cvtepi8_epi16`, `vpmovzxdq` →
+`_mm256_cvtepu32_epi64`; the width comes from the result). The truncating and
+saturating narrowings are named from the AVX-512F and AVX-512BW forms only
+(`vpmovdb_avx512f` → `_mm512_cvtepi32_epi8`, `vpmovusdw` →
+`_mm512_cvtusepi32_epi16`), because those forms always read a 512-bit source;
+the VL forms read a 128- or 256-bit source under the same name and stay as
+SLEIGH prints them. The float conversions (`vcvt*`) are not named yet: their
+source and result differ in element kind, and the kind table gives one kind per
+user-op, so a name would mistype one operand.
 
 The FMA family is the one place where the argument order changes. SLEIGH passes
 the instruction's operands `(a, b, c)` in encoding order, and the form number
@@ -5014,7 +5030,11 @@ is unaffected. Changes 0/675 datatest assertions; the stage test
 `gh9184-x86-fma-ymm256.xml` now accepts either spelling of its FMA sanity
 check. Pinned by `tests/stages/avxintrinsics.toml`.
 
-Not done (the rest of IDA's avxlifter): vector datatypes (`__m256`), re-fusing
+Not done (the rest of IDA's avxlifter): AVX-512 compress and expand, gather and
+scatter, the k-mask ops, FP16, VNNI, IFMA, BF16, popcnt, permutex2var (a
+merge-masked `vpermi2` writes its index operand, so the generic `_mask`
+rewrite would order its arguments wrongly), multishift, GFNI, VAES, CLMUL and
+SHA, which keep their SLEIGH names; vector datatypes (`__m256`), re-fusing
 the per-lane SLEIGH bodies of VEX float ops into one vector op, folding
 AVX-512 `conditionalAssign` mask chains into `_mask_`/`_maskz_` forms, and a
 vector-register calling convention. A trial cspec with `YMM0`-`YMM7` input
@@ -5321,6 +5341,18 @@ therefore prints `__arm_mte_set_tag(a0);` for its first granule and
 exist only when the same option has set the `ShowMemTag` context (chapter
 02). `off` restores the SLEIGH names and the tag-free lift. Pinned by
 `tests/stages/acleintrinsics.toml`.
+
+### PowerPC barrier intrinsics (`barrierintrinsics`)
+
+**(unlace) `option barrierintrinsics on|off`, default `off`, PowerPC only,
+`crates/unlace-emit/src/p9_emit/barrierintrinsics.rs`.** SLEIGH lifts `sync L` as
+`sync(tmp)` with `tmp = L`, and `isync` as `instructionSynchronize()`. With the option on, a
+`sync` whose operand is the constant 0, 1 or 2 prints as `__sync()`, `__lwsync()` or
+`__ptesync()`, and `instructionSynchronize()` prints as `__isync()`. The operand may be the
+constant itself or the result of one COPY from it; any other operand keeps the SLEIGH name. The
+rewrite is keyed on the user-op name and is tried after `acleintrinsics`, so on an AArch64 image
+it has no effect. Only the spelling of the call changes. The MIPS `sync`/`synci` and RISC-V
+`fence`/`fence.i` names are not yet covered.
 
 ### Rust formatting macros
 

@@ -190,6 +190,23 @@ pub enum Body {
         func: Option<String>,
         symbol: String,
     },
+    /// `split [<func>::]<addr> <storage>` — the merged local at this use is split off from
+    /// the variable it shares a merge with. Parsed; no engine stage applies it yet.
+    Split {
+        func: Option<String>,
+        addr: u64,
+        storage: String,
+    },
+    /// `map [<func>::]<symbol> <symbol>` — the first local is merged onto the second.
+    /// Parsed; no engine stage applies it yet.
+    Map {
+        func: Option<String>,
+        symbol: String,
+        target: String,
+    },
+    /// `noprop [<func>::]<addr>` — the definition at this instruction is not copied
+    /// forward by propagation. Parsed; no engine stage applies it yet.
+    NoProp { func: Option<String>, addr: u64 },
     /// `readonly <addr>+<size>` — the bytes in this range never change at run
     /// time, so a load from it is its initialiser.
     Readonly { addr: u64, size: int4 },
@@ -254,6 +271,9 @@ impl Body {
             Body::Type { .. } => ("type", "P5", "type-propagation"),
             Body::Format { .. } => ("format", "P9", "literal-format"),
             Body::Isolate { .. } => ("isolate", "P6", "merge-aggressiveness"),
+            Body::Split { .. } => ("split", "P6", "merge-aggressiveness"),
+            Body::Map { .. } => ("map", "P6", "merge-aggressiveness"),
+            Body::NoProp { .. } => ("noprop", "P6", "merge-aggressiveness"),
             Body::Readonly { .. } => ("readonly", "P1", "code-data-partition"),
             Body::Volatile { .. } => ("volatile", "P1", "code-data-partition"),
             Body::Bytes { .. } => ("bytes", "P1", "code-data-partition"),
@@ -275,7 +295,10 @@ impl Body {
             | Body::Name { func, .. }
             | Body::Type { func, .. }
             | Body::Format { func, .. }
-            | Body::Isolate { func, .. } => func.as_deref(),
+            | Body::Isolate { func, .. }
+            | Body::Split { func, .. }
+            | Body::Map { func, .. }
+            | Body::NoProp { func, .. } => func.as_deref(),
             _ => None,
         }
     }
@@ -294,6 +317,9 @@ impl Body {
                 | Body::Type { .. }
                 | Body::Format { .. }
                 | Body::Isolate { .. }
+                | Body::Split { .. }
+                | Body::Map { .. }
+                | Body::NoProp { .. }
         )
     }
 
@@ -1467,6 +1493,7 @@ fn seed_one(
             seed.proto_overrides.push((at, pieces));
             Ok(())
         }
+        Body::Split { .. } | Body::Map { .. } | Body::NoProp { .. } => Err(unapplied(body)),
         _ => Err("internal: not a function-scoped directive".into()),
     }
 }
@@ -1901,6 +1928,15 @@ pub fn implies_readonly_propagation(directives: &[Directive]) -> bool {
 /// ignored assertion is the failure mode this plane exists to end.
 pub fn unclaimed(directive: &Directive) -> Outcome {
     directive.rejected("not reached by this run")
+}
+
+/// The refusal of a directive the grammar states but no engine stage applies yet
+/// (`split`, `map`, `noprop`): it is reported on its own row, never dropped.
+pub fn unapplied(body: &Body) -> String {
+    let (kind, _, _) = body.coords();
+    format!(
+        "{kind} is parsed, but no engine stage applies it yet; the directive is reported, not applied"
+    )
 }
 
 /// The mutated local scope of the first pass, in the shape the second decompile

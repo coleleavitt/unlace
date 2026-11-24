@@ -369,6 +369,7 @@ unlace_options! { self, p1;
     "gotonext" => registered!(crate::funcdata_block::GotoNext),
     "importdata" => registered!(crate::printc::ImportData),
     "rangefold" => registered!(crate::rangefold::RangeFold),
+    "addrcompare" => registered!(crate::addrcompare::AddrCompare),
     "pow2select" => registered!(crate::selectdiv::Pow2Select),
     "satconvert" => registered!(crate::satconvert::SatConvert),
     "fpargboxed" => registered!(crate::boxedcompare::FpArgBoxed),
@@ -426,6 +427,7 @@ unlace_options! { self, p1;
     "callbacktype" => registered!(crate::callbacktype::CallbackTypeMode),
     "cortexmpriv" => registered!(crate::cortexmpriv::Cortexmpriv),
     "acleintrinsics" => registered!(crate::memtag::AcleIntrinsics),
+    "barrierintrinsics" => registered!(crate::printc::BarrierIntrinsics),
     "dedupvardecls" => registered!(crate::dedupvardecls::DedupVarDecls),
     "noreturn_known" => registered!(crate::analysisgates::NoreturnKnown),
     "libgccsigs" => registered!(crate::analysisgates::Libgccsigs),
@@ -468,6 +470,9 @@ unlace_options! { self, p1;
     },
     "unwindstarts" => {
         registered!(crate::analysisgates::Unwindstarts)
+    },
+    "aggressivethunks" => {
+        registered!(crate::analysisgates::AggressiveThunks)
     },
     "exporttrie" => {
         let val = on_or_off(p1)?;

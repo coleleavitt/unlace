@@ -27,6 +27,10 @@
 //!    (run for at most three leaves, where it proves equality at the full
 //!    width). The checks guard the lowering in both directions; equality
 //!    itself follows from the rules being identities.
+//!
+//! An accepted expression is marked [`Proof::Proved`] when `prove_equal` proved
+//! it equal at the full width; otherwise [`Proof::Screened`], and the function
+//! gets a header note (see `SCREENED_NOTE`). Acceptance does not depend on it.
 
 use std::collections::BTreeSet;
 use std::sync::OnceLock;
@@ -325,20 +329,41 @@ fn lower(rec: &RecExpr<Bv>, id: Id) -> Option<Expr> {
     })
 }
 
-/// Do `a` and `b` agree on every input of their `n` leaves at the widest
-/// width (at most 8 bits) with at most `2^EXHAUSTIVE_BITS` combinations? Every op is
-/// a ring or bitwise op, so truncation to that width commutes with it and the
-/// check is a necessary condition for equality at the full width.
-fn agree_exhaustive(a: &Expr, b: &Expr, n: usize) -> bool {
+/// Print why a candidate was refused, with the input that refutes it, when
+/// `UNLACE_EGRAPH_TRACE` is set. Nothing is printed otherwise.
+fn trace_refusal(f: &Expr, cand: &Expr, why: &str, witness: Option<&[u64]>) {
+    static ON: OnceLock<bool> = OnceLock::new();
+    if !*ON.get_or_init(|| unlace_base::env::var_os("UNLACE_EGRAPH_TRACE").is_some()) {
+        return;
+    }
+    let at = witness.map_or_else(String::new, |w| {
+        let parts: Vec<String> = w
+            .iter()
+            .enumerate()
+            .map(|(i, v)| format!("l{i} = {v:#x}"))
+            .collect();
+        format!(" at {}", parts.join(", "))
+    });
+    eprintln!("egraph: refused {cand:?} for {f:?}: {why}{at}");
+}
+
+/// The leaves of the first input, among the [`EXHAUSTIVE_BITS`] combinations of
+/// the `n` leaves at the widest small width (at most 8 bits), where `a` and `b`
+/// differ; `None` when they agree on all of them. Every op is a ring or bitwise
+/// op, so truncation to that width commutes with it and the check is a necessary
+/// condition for equality at the full width.
+fn exhaustive_witness(a: &Expr, b: &Expr, n: usize) -> Option<Vec<u64>> {
     let bits = (EXHAUSTIVE_BITS / n.max(1)).clamp(1, 8);
     let mask = (1u64 << bits) - 1;
     let mut leaves = [0u64; MAX_LEAVES];
-    (0..1u64 << (bits * n.min(MAX_LEAVES))).all(|p| {
-        for (i, l) in leaves.iter_mut().enumerate().take(n) {
-            *l = (p >> (bits * i)) & mask;
-        }
-        a.eval(&leaves, mask) == b.eval(&leaves, mask)
-    })
+    (0..1u64 << (bits * n.min(MAX_LEAVES)))
+        .find(|&p| {
+            for (i, l) in leaves.iter_mut().enumerate().take(n) {
+                *l = (p >> (bits * i)) & mask;
+            }
+            a.eval(&leaves, mask) != b.eval(&leaves, mask)
+        })
+        .map(|_| leaves[..n].to_vec())
 }
 
 /// The bitwise ops of `e`.
@@ -369,6 +394,19 @@ fn run(eg: EGraph<Bv, Fold>, mask: u64, nodes: usize, iters: usize) -> Runner<Bv
         .run(rules())
 }
 
+/// How far an accepted expression was checked against the tree it replaces.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Proof {
+    /// [`mba::prove_equal`] proved the two equal at the tree's full width.
+    Proved,
+    /// Only the random full-width inputs and the small-width check agreed.
+    Screened,
+}
+
+/// The header note of a function with a screened rewrite. One text for every
+/// rewrite, so the comment database keeps one line per function.
+const SCREENED_NOTE: &str = "egraph: an MBA expression in this function was simplified without a full-width proof (checked on 64 random inputs and on every input at up to 8 bits); the simplification is assumed correct";
+
 /// The cheapest expression equal to `f` (`n` leaves, `bits` wide) that saturation
 /// finds, when it has fewer than `budget` ops and fewer than `bit_budget`
 /// bitwise ops and passes the checks. Saturation runs in two rounds: a quick
@@ -382,7 +420,7 @@ pub(crate) fn saturate(
     bits: u32,
     budget: usize,
     bit_budget: usize,
-) -> Option<Expr> {
+) -> Option<(Expr, Proof)> {
     if n == 0 || n > MAX_LEAVES {
         return None;
     }
@@ -399,25 +437,40 @@ pub(crate) fn saturate(
         let s = add(&mut eg, &s, n, mask, false);
         eg.union(root, s);
     }
-    let check = |runner: &Runner<Bv, Fold, ()>| -> Option<Expr> {
+    let check = |runner: &Runner<Bv, Fold, ()>| -> Option<(Expr, Proof)> {
         let root = runner.egraph.find(root);
         let (_, best) = Extractor::new(&runner.egraph, OpCount).find_best(root);
         let simple = lower(&best, best.root())?;
-        if simple.ops() >= budget
-            || bitwise_ops(&simple) >= bit_budget
-            || !mba::agree(f, &simple, n, mask)
-        {
+        if simple.ops() >= budget || bitwise_ops(&simple) >= bit_budget {
+            return None;
+        }
+        if let Some(leaves) = mba::agree_witness(f, &simple, n, mask) {
+            trace_refusal(f, &simple, "random inputs", Some(&leaves));
             return None;
         }
         // A proof at the full width makes the small-width check redundant.
         let proof = (n <= MAX_NONLINEAR_LEAVES)
             .then(|| mba::prove_equal(f, &simple, n, bits))
             .flatten();
-        let ok = match proof {
-            Some(p) => p,
-            None => agree_exhaustive(f, &simple, n),
-        };
-        ok.then_some(simple)
+        match proof {
+            Some(true) => Some((simple, Proof::Proved)),
+            Some(false) => {
+                trace_refusal(
+                    f,
+                    &simple,
+                    "a full-width proof found a reachable carry state where the bits differ",
+                    None,
+                );
+                None
+            }
+            None => match exhaustive_witness(f, &simple, n) {
+                Some(leaves) => {
+                    trace_refusal(f, &simple, "small-width check", Some(&leaves));
+                    None
+                }
+                None => Some((simple, Proof::Screened)),
+            },
+        }
     };
     let quick = run(eg, mask, QUICK_NODE_LIMIT, QUICK_ITER_LIMIT);
     if let Some(s) = check(&quick) {
@@ -525,7 +578,9 @@ impl Rule for RuleEgraphSimplify {
         // A tree with one bitwise op has no MBA identity to compose; the
         // closed forms of `mba` are all it gets, without an e-graph.
         let simple = if bitwise_ops(&t.expr) < 2 {
-            mba_seed(&t.expr, t.n, mba::mask_of(size)).filter(|s| s.ops() < t.budget)
+            mba_seed(&t.expr, t.n, mba::mask_of(size))
+                .filter(|s| s.ops() < t.budget)
+                .map(|s| (s, Proof::Screened))
         } else {
             // A tree already regrouped once may only lose bitwise ops now,
             // which saturation checks before the evaluations do.
@@ -536,7 +591,7 @@ impl Rule for RuleEgraphSimplify {
             };
             saturate(&t.expr, t.n, 8 * size as u32, t.budget, bits_cap)
         };
-        let Some(simple) = simple else {
+        let Some((simple, proof)) = simple else {
             self.barren.insert(key);
             return 0;
         };
@@ -548,7 +603,11 @@ impl Rule for RuleEgraphSimplify {
             return 0;
         }
         let rw = t.into_rewrite(simple);
-        mba::replace(data, op, &rw, size)
+        let done = mba::replace(data, op, &rw, size);
+        if done != 0 && proof == Proof::Screened {
+            data.warning_header(SCREENED_NOTE);
+        }
+        done
     }
 }
 
@@ -585,7 +644,7 @@ mod tests {
             bx(Expr::Xor(l(0), l(1))),
             bx(Expr::Mul(bx(Expr::And(l(0), l(1))), 2)),
         );
-        let s = saturate(&f, 2, 32, f.ops(), bitwise_ops(&f)).expect("saturates");
+        let (s, _) = saturate(&f, 2, 32, f.ops(), bitwise_ops(&f)).expect("saturates");
         assert_eq!(s.ops(), 1);
         assert!(mba::agree(&f, &s, 2, 0xffff_ffff));
     }
@@ -596,7 +655,8 @@ mod tests {
             bx(Expr::Xor(l(0), k(0x3039))),
             bx(Expr::Mul(bx(Expr::And(l(0), k(0x3039))), 2)),
         );
-        let s = saturate(&f, 1, 32, f.ops(), bitwise_ops(&f)).expect("saturates");
+        let (s, proof) = saturate(&f, 1, 32, f.ops(), bitwise_ops(&f)).expect("saturates");
+        assert_eq!(proof, Proof::Proved);
         assert_eq!(s.ops(), 1);
         assert_eq!(mba::prove_equal(&f, &s, 1, 32), Some(true));
     }
@@ -610,7 +670,7 @@ mod tests {
             bx(Expr::Mul(bx(Expr::And(l(0), l(1))), 2)),
         );
         let f = Expr::Sub(bx(a), bx(b));
-        let s = saturate(&f, 2, 64, f.ops(), bitwise_ops(&f)).expect("saturates");
+        let (s, _) = saturate(&f, 2, 64, f.ops(), bitwise_ops(&f)).expect("saturates");
         assert_eq!(s, Expr::Const(0));
     }
 
@@ -622,7 +682,8 @@ mod tests {
             bx(Expr::Xor(bx(t.clone()), l(2))),
             bx(Expr::Mul(bx(Expr::And(bx(t), l(2))), 2)),
         );
-        let s = saturate(&f, 3, 32, f.ops(), bitwise_ops(&f)).expect("saturates");
+        let (s, proof) = saturate(&f, 3, 32, f.ops(), bitwise_ops(&f)).expect("saturates");
+        assert_eq!(proof, Proof::Proved);
         assert_eq!(s.ops(), 2);
         assert!(mba::agree(&f, &s, 3, 0xffff_ffff));
         assert_eq!(mba::prove_equal(&f, &s, 3, 32), Some(true));
@@ -652,8 +713,16 @@ mod tests {
     fn exhaustive_check_refutes_a_near_miss() {
         let a = Expr::Add(l(0), l(1));
         let b = Expr::Or(l(0), l(1));
-        assert!(!agree_exhaustive(&a, &b, 2));
-        assert!(agree_exhaustive(&a, &a, 2));
+        assert!(exhaustive_witness(&a, &b, 2).is_some());
+        assert!(exhaustive_witness(&a, &a, 2).is_none());
+    }
+
+    #[test]
+    fn exhaustive_witness_is_a_differing_input() {
+        let a = Expr::Add(l(0), l(1));
+        let b = Expr::Or(l(0), l(1));
+        let w = exhaustive_witness(&a, &b, 2).expect("differs");
+        assert_ne!(a.eval(&w, 0x3f), b.eval(&w, 0x3f));
     }
 
     #[test]
@@ -668,7 +737,7 @@ mod tests {
             };
             let (a, b) = (pattern_expr(lhs), pattern_expr(rhs));
             assert!(mba::agree(&a, &b, 3, u64::MAX), "rule {}", r.name);
-            assert!(agree_exhaustive(&a, &b, 3), "rule {}", r.name);
+            assert!(exhaustive_witness(&a, &b, 3).is_none(), "rule {}", r.name);
         }
     }
 

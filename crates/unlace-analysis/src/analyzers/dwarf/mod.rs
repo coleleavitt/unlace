@@ -130,8 +130,12 @@ pub mod dwarfscopes;
 use dwarfscopes::FrameBase;
 pub(crate) mod dwarfcomplex;
 mod dwarfdecls;
+// First step of on-demand type import (#1169): the reachability set is built and
+// tested here; the snapshot is not yet narrowed to it, so the pass is unchanged.
 pub mod dwarfenumtypedef;
 mod dwarflinkage;
+#[allow(dead_code)]
+mod dwarfondemand;
 mod dwarfsignatures;
 pub mod godwarfsig;
 mod goformals;
@@ -1541,7 +1545,11 @@ impl DwarfPass {
             if unlace_decomp::debuglink::debuglink_enabled() {
                 let companion = ctx
                     .image_path
-                    .and_then(|path| crate::loader::elf_debuglink::find_companion(ctx.file, path));
+                    .and_then(|path| crate::loader::elf_debuglink::find_companion(ctx.file, path))
+                    .or_else(|| {
+                        ctx.image_path
+                            .and_then(|path| crate::loader::macho_dsym::find_dsym(ctx.file, path))
+                    });
                 if let Some((path, bytes)) = companion {
                     if let Ok(file) = object::File::parse(&*bytes) {
                         if dwarf_section_data(&file, gimli::SectionId::DebugInfo).is_some() {

@@ -272,7 +272,8 @@ pub fn rangefold_apply(data: &mut Funcdata) -> int4 {
     count
 }
 
-/// Runs [`rangefold_apply`] when option `rangefold` is on.  Registered in group
+/// Runs [`rangefold_apply`] when option `rangefold` is on, and
+/// [`crate::addrcompare::addrcompare_apply`] when option `addrcompare` is on.  Registered in group
 /// `unreachable` with `ActionDeterminedBranch`, which removes the branches it
 /// decides, so the reduced `jumptable` pipeline never sees a guard folded away.
 pub struct ActionRangeFold {
@@ -302,15 +303,22 @@ impl Action for ActionRangeFold {
         })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        if !data
+        if data
+            .get_arch()
+            .unlace_options
+            .get::<crate::addrcompare::AddrCompare>()
+            .0
+        {
+            self.base.count += crate::addrcompare::addrcompare_apply(data);
+        }
+        if data
             .get_arch()
             .unlace_options
             .get::<crate::rangefold::RangeFold>()
             .0
         {
-            return 0;
+            self.base.count += rangefold_apply(data);
         }
-        self.base.count += rangefold_apply(data);
         0
     }
 }

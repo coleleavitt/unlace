@@ -199,7 +199,14 @@ impl AnalysisPass for UefiPass {
                 .and_then(|t| entry::named(t, kind));
             let (name, decl) = match &named {
                 Some(n) => (n.name, n.decl),
-                None => ("_ModuleEntryPoint", kind.entry_decl()),
+                None => (
+                    volume
+                        .as_ref()
+                        .zip(ctx.image_path)
+                        .and_then(|(v, p)| v.entry_name(p))
+                        .unwrap_or("_ModuleEntryPoint"),
+                    kind.entry_decl(),
+                ),
             };
             function_fact(&mut out, &efi, entry, name, Some(decl));
             if let Some(label) = named.as_ref().and_then(|n| n.label) {

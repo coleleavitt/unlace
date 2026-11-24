@@ -1790,10 +1790,14 @@ macro storeReg(reg) {
 macro storeRegisterPartial(reg, ea, sa) {
 @ifdef BIT_64
   tmp:8 = reg; # workaround
-  *:4(ea) = tmp:4;
+  val:4 = tmp:4;
 @else
-  *:4(ea) = reg;
+  val:4 = reg;
 @endif
+  # only the leftmost sa bytes are stored; the rest of the word keeps its bytes
+  keep:4 = 0xffffffff >> (zext(sa) * 8);
+  old:4 = *:4(ea);
+  *:4(ea) = (val & ~keep) | (old & keep);
   ea = ea + 4;
 }
 

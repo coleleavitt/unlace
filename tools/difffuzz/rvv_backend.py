@@ -249,8 +249,9 @@ def run_case_vtype(arch, regs, row, cand, rng, seed, tmp, vlen, vtype):
             s.write("csreg", 8 * csr, 8, v)
         s.write("csreg", 8 * 0x002, 8, st["fcsr"] >> 5)
         s.write("csreg", 8 * 0xC22, 8, vlenb)
-        crng = random.Random(f"{seed}:{salt}")
-        s.callother = lambda op: crng.getrandbits(8 * op["output"]["size"])
+        crng = random.Random(seed)
+        flip = (lambda n: (1 << n) - 1) if salt == 2 else (lambda n: 0)
+        s.callother = lambda op: crng.getrandbits(8 * op["output"]["size"]) ^ flip(8 * op["output"]["size"])
         if arch.pc in regs:
             s.set(arch.pc, addr)
         nxt = step(s, ops, addr, size)

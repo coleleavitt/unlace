@@ -60,6 +60,10 @@ define register offset=0x4000 size=$(VLEN) [ v0  v1  v2  v3  v4  v5  v6  v7
        			      		     v8  v9  v10 v11 v12 v13 v14 v15
 					     v16 v17 v18 v19 v20 v21 v22 v23
 					     v24 v25 v26 v27 v28 v29 v30 v31 ];
+# register groups of 2, 4 and 8 (whole-register loads, stores and moves); 2, 4, 8 x VLEN bytes
+define register offset=0x4000 size=64  [ v0m2 v2m2 v4m2 v6m2 v8m2 v10m2 v12m2 v14m2 v16m2 v18m2 v20m2 v22m2 v24m2 v26m2 v28m2 v30m2 ];
+define register offset=0x4000 size=128 [ v0m4 v4m4 v8m4 v12m4 v16m4 v20m4 v24m4 v28m4 ];
+define register offset=0x4000 size=256 [ v0m8 v8m8 v16m8 v24m8 ];
 
   
   # SEE 3.1.1  Machine ISA Register  misa
@@ -1185,6 +1189,18 @@ define token instr (32)
   r2024=(20,24)
   fr2024=(20,24)
   v2024=(20,24)
+  vg2_0711=(8,11)
+  vg4_0711=(9,11)
+  vg8_0711=(10,11)
+  vlo2_0711=(7,7)
+  vlo4_0711=(7,8)
+  vlo8_0711=(7,9)
+  vg2_2024=(21,24)
+  vg4_2024=(22,24)
+  vg8_2024=(23,24)
+  vlo2_2024=(20,20)
+  vlo4_2024=(20,21)
+  vlo8_2024=(20,22)
   op2025=(20,25)
   op2026=(20,26)
   op2029=(20,29)

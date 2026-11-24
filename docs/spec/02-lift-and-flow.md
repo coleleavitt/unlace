@@ -4221,6 +4221,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `Falcon` | NVIDIA Falcon | `falcon:LE:32:v0`, `falcon:LE:32:v3`, `falcon:LE:32:v4`, `falcon:LE:32:v5`, `falcon:LE:32:v6` | aleph-void/ghidra_falcon (fork of marysaka/ghidra_falcon) @ `d835a7c618`, ISC |
 | `TMS34010` | TI TMS34010 (GSP) | `tms34010:LE:32:default`, `tms34020:LE:32:default` | aleph-void/Ghidra_TMS34010 (fork of ZPaul2Fresh8/Ghidra_TMS34010) @ `271d988289`, Apache-2.0 |
 | `TeakLite` | CEVA-TeakLite | `teak:LE:16:default`, `teak:LE:16:modulo` | aleph-void/TeakLite-SLEIGH (fork of SachinVin/TeakLite-SLEIGH) @ `32d05a51a3`, MIT |
+| `RockwellL39` | Rockwell C39 / L39 | `RockwellL39:LE:16:default` | aleph-void/ghidra-rockwell-l39 @ `df9c28fdc1`, Apache-2.0 |
 <!-- vendor-rows -->
 
 ### WDC 65816 (#98)

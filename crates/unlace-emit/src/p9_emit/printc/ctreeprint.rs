@@ -139,8 +139,9 @@ impl PrintC {
                 }
                 _ => false,
             },
-            StmtKind::Seq(_) if ty == BlockType::Ls => {
-                self.emit_block_ls(fd, arch, blk);
+            StmtKind::Seq(children) if ty == BlockType::Ls => {
+                let list: Vec<BlockId> = fd.sblocks_ref().block(blk).get_list().to_vec();
+                self.emit_list_items(fd, arch, blk, &list, Some(children.as_slice()));
                 true
             }
             StmtKind::Seq(_) if ty == BlockType::Goto => {

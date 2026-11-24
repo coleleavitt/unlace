@@ -9898,6 +9898,22 @@ either. Ghidra additionally routes an image whose load-config CHPE metadata
 pointer is set to its ARM parser regardless of `Machine`; kuna does not read the
 CHPE metadata, so an ARM64EC image that declares itself `AMD64` still reads at 12.
 
+(kuna) **The C runtime's initializer tables are a PE32's `INIT_ARRAY`**
+(`crates/unlace-analysis/src/analyzers/entry/kuna_initterm.rs`). MSVC gathers
+every C++ dynamic initializer (the constructor call for a global object) and every
+C initializer into `.CRT$XCA..XCZ` / `.CRT$XIA..XIZ`, merged into `.rdata`, and
+the dynamically linked CRT startup runs them with `push __xc_z; push __xc_a; call
+_initterm` (`_initterm_e` for the `XI` table). Where a call to an import named
+`_initterm` or `_initterm_e` (`E8` to its veneer or `FF 15` through its slot)
+directly follows two `push imm32`, the pushed `[begin, end)` (begin below end, a
+whole number of 4-byte words, at most 65,536 of them, held by one section) is read
+and every non-null word is a function-start candidate, filtered like the rest. No
+instruction calls an initializer and a PE32 has no `.pdata`, so nothing else names
+them: Holley EFI's MFC `Holley.exe` hands 2,113 entries to `_initterm`, and about
+a megabyte of `.text` behind them was folded into one function. A statically linked
+CRT's `_initterm` is an anonymous local and is not recognized; a PE32+ is skipped,
+its `.pdata` already naming every non-leaf initializer.
+
 (kuna) **An address-taken function is described by nothing else in a PE**, and the
 base-relocation table is what finds it
 (`crates/unlace-analysis/src/analyzers/entry/kuna_pereloccode.rs`). The

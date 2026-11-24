@@ -1,0 +1,4 @@
+# Hitachi H8/500 maximum mode (16 MiB, page registers CP/DP/EP/TP/BR). See h8500.sinc.
+@define ASZ "3"
+@define MAXMODE "1"
+@include "h8500.sinc"

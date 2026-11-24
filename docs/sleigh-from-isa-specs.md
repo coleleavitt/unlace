@@ -81,6 +81,16 @@ hand-written `riscv.rv32b.sinc` and `riscv.rv64b.sinc`, decoding every word of t
 existing RISC-V test fixtures identically. With `--opcodes`, the generator also emits
 the riscv-opcodes `$pseudo_op` aliases that fix one register operand to x0 (`zext.w`).
 
+`riscv.zk.sinc` (scalar crypto) is generated the same way from
+`extensions/K/zkn_insts.sail,extensions/K/zks_insts.sail` with
+`--exts rv_zknh,rv32_zknh,rv64_zknh,rv32_zkne,rv64_zkne,rv32_zknd,rv64_zknd,rv_zksh,rv_zksed`,
+`--decode-reserved AES64KS1I` and
+`--opaque aes32esi,aes32esmi,aes32dsi,aes32dsmi,aes64es,aes64esm,aes64ds,aes64dsm,aes64im,aes64ks1i,sm4ed,sm4ks`
+(the S-box rounds stay one user operation each). Table lookups (`aes_sbox_fwd`) and
+other helpers the compiler cannot inline become user operations named after the Sail
+function, and a guard that allows several cubes of an operand's values (`rnum <_u 0xB`)
+becomes one constructor per cube.
+
 To compare another variant, copy `specs/Ghidra/Processors/RISCV/data/languages` into
 `<dir>/Ghidra/Processors/RISCV/data/languages`, replace `riscv.zb.sinc`, compile with
 `slacomp`, and pass `--sleighpath <dir>` to `unlace`.
@@ -168,6 +178,15 @@ generation time, not something the model can settle.
   clauses use record fields and tuple-valued mappings the parser does not read. Loads, stores, branches, F/D/Q, V
   and the privileged instructions are therefore out of reach until the
   compiler learns Sail's memory and control-flow primitives.
+- **Floating point, atomics and vectors.** On `zfa_insts.sail` the generator emits
+  nothing (86 clauses skipped). The encodings use the `encdec_freg` and rounding-mode
+  mappings, and the execute clauses read and write `F_D`/`F_H` with NaN-boxing, pattern-match
+  `Some(rm')`, destructure softfloat tuples and accrue `fflags`. `zaamo_insts.sail`
+  (which holds Zabha) is a single width-generic `AMO` clause over memory, exceptions and
+  reservation state. The V files have the same needs plus register groups and `vtype`.
+  `riscv.zfa.sinc`, `riscv.zabha.sinc` and `riscv.rvv.sinc` therefore stay hand-written.
+  Generating them would need an FP register mapping, p-code float operations for the
+  softfloat calls, and memory reads and writes in the compiler.
 - **Readability is not in the model.** Sail states what an instruction does,
   not how a decompiler should show it. The `--budget` and `--opaque` knobs
   stand in for the choices a spec author makes by hand.

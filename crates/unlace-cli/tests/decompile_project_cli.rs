@@ -779,83 +779,89 @@ fn jobs_project_artifacts_are_byte_identical_to_serial() {
 /// mints as much as the ledger does, and no pool can take it.
 #[test]
 fn jobs_project_names_synthesized_structs_as_the_serial_export_does() {
-    for fixture_name in [
-        "structsynthchain_x86_64",
-        "itaniumrtti_x86_64.so",
-        "explicit_branch_assertion_pe_i386.exe",
-        "structsynth_teb_pe_x86_64.exe",
-    ] {
-        let bin = fixture(fixture_name);
-        let stem = std::path::Path::new(fixture_name)
-            .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap();
-        let export = |tag: &str, extra: &[&str], env: &[(&str, &str)]| -> (PathBuf, String, bool) {
-            let dir = out_dir(&format!("structsynth_{stem}_{tag}"));
-            let mut args = vec![
-                "decompile-project",
-                bin.as_str(),
-                "-o",
-                dir.to_str().unwrap(),
-            ];
-            args.extend_from_slice(&["--max-fn-seconds", "0", "--option", "protoorder", "off"]);
-            args.extend_from_slice(extra);
-            let sp = specs();
-            args.extend_from_slice(&["--sleighpath", sp.as_str()]);
-            let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
-                .args(&args)
-                .envs(env.iter().copied())
-                .output()
-                .expect("failed to spawn the kuna binary");
-            (
-                dir,
-                String::from_utf8_lossy(&out.stderr).into_owned(),
-                out.status.success(),
-            )
-        };
-        let (serial, stderr, ok) = export("serial", &[], &[]);
-        if !ok {
-            panic!("serial project export failed: {stderr}");
-        }
-        let names: Vec<String> = ["c", "h", "asm"]
-            .iter()
-            .map(|ext| format!("{stem}.{ext}"))
-            .chain(std::iter::once("README.md".to_string()))
-            .collect();
-        let header = std::fs::read_to_string(serial.join(&names[1])).unwrap();
-        assert!(
-            header.contains("struct struct_0 {"),
-            "{stem} stopped synthesizing:\n{header}"
-        );
-        let mut dirs = vec![serial.clone()];
-        for (tag, extra, env) in [
-            ("again", &[][..], &[][..]),
-            ("j2", &["--jobs", "2", "--jobs-chunk", "1"][..], &[][..]),
-            ("j4", &["--jobs", "4"][..], &[][..]),
-            (
-                "force",
-                &["--jobs", "3", "--jobs-chunk", "1"][..],
-                &[("KUNA_JOBS_FAULT", "synth:force")][..],
-            ),
-        ] {
-            let (dir, stderr, ok) = export(tag, extra, env);
-            assert!(ok, "{stem} {tag} project export failed: {stderr}");
-            assert!(!stderr.contains("warning"), "{stem} {tag}: {stderr}");
-            for name in &names {
-                let got = std::fs::read(dir.join(name)).expect(name);
-                let want = std::fs::read(serial.join(name)).expect(name);
-                assert!(
-                    got == want,
-                    "{stem} {tag} differs from the serial export in {name}"
-                );
+    common::for_each_parallel(
+        [
+            "structsynthchain_x86_64",
+            "itaniumrtti_x86_64.so",
+            "explicit_branch_assertion_pe_i386.exe",
+            "structsynth_teb_pe_x86_64.exe",
+        ],
+        |fixture_name| {
+            let bin = fixture(fixture_name);
+            let stem = std::path::Path::new(fixture_name)
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap();
+            let export = |tag: &str,
+                          extra: &[&str],
+                          env: &[(&str, &str)]|
+             -> (PathBuf, String, bool) {
+                let dir = out_dir(&format!("structsynth_{stem}_{tag}"));
+                let mut args = vec![
+                    "decompile-project",
+                    bin.as_str(),
+                    "-o",
+                    dir.to_str().unwrap(),
+                ];
+                args.extend_from_slice(&["--max-fn-seconds", "0", "--option", "protoorder", "off"]);
+                args.extend_from_slice(extra);
+                let sp = specs();
+                args.extend_from_slice(&["--sleighpath", sp.as_str()]);
+                let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
+                    .args(&args)
+                    .envs(env.iter().copied())
+                    .output()
+                    .expect("failed to spawn the kuna binary");
+                (
+                    dir,
+                    String::from_utf8_lossy(&out.stderr).into_owned(),
+                    out.status.success(),
+                )
+            };
+            let (serial, stderr, ok) = export("serial", &[], &[]);
+            if !ok {
+                panic!("serial project export failed: {stderr}");
             }
-            dirs.push(dir);
-        }
-        for dir in dirs {
-            let _ = std::fs::remove_dir_all(dir);
-        }
-    }
+            let names: Vec<String> = ["c", "h", "asm"]
+                .iter()
+                .map(|ext| format!("{stem}.{ext}"))
+                .chain(std::iter::once("README.md".to_string()))
+                .collect();
+            let header = std::fs::read_to_string(serial.join(&names[1])).unwrap();
+            assert!(
+                header.contains("struct struct_0 {"),
+                "{stem} stopped synthesizing:\n{header}"
+            );
+            let mut dirs = vec![serial.clone()];
+            for (tag, extra, env) in [
+                ("again", &[][..], &[][..]),
+                ("j2", &["--jobs", "2", "--jobs-chunk", "1"][..], &[][..]),
+                ("j4", &["--jobs", "4"][..], &[][..]),
+                (
+                    "force",
+                    &["--jobs", "3", "--jobs-chunk", "1"][..],
+                    &[("KUNA_JOBS_FAULT", "synth:force")][..],
+                ),
+            ] {
+                let (dir, stderr, ok) = export(tag, extra, env);
+                assert!(ok, "{stem} {tag} project export failed: {stderr}");
+                assert!(!stderr.contains("warning"), "{stem} {tag}: {stderr}");
+                for name in &names {
+                    let got = std::fs::read(dir.join(name)).expect(name);
+                    let want = std::fs::read(serial.join(name)).expect(name);
+                    assert!(
+                        got == want,
+                        "{stem} {tag} differs from the serial export in {name}"
+                    );
+                }
+                dirs.push(dir);
+            }
+            for dir in dirs {
+                let _ = std::fs::remove_dir_all(dir);
+            }
+        },
+    );
 }
 
 /// The one-worker serial path decompiles only the functions that synthesize a

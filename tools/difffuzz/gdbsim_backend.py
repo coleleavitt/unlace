@@ -266,6 +266,8 @@ def run_case_gdbsim(arch, regs, row, cand, rng, seed, tmp):
             pv = st.mem.get(p + i, fill_byte(p + i, seed))
             if bias is None and p == code_page and addr <= p + i < addr + size:
                 continue
+            if hasattr(arch, "mem_ignored") and arch.mem_ignored(p + i):
+                continue
             if pv != blob[i]:
                 diffs[f"mem[{p + i:#x}]"] = (pv, blob[i])
     if not diffs:

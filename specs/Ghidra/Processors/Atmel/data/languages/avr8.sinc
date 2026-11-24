@@ -391,7 +391,17 @@ macro setResultFlags(result) {
 	setSflag();
 }
 
+# H: the carry out of (or borrow into) bit 3 of a byte add or subtract, c the carry in
+macro setHadd(a, b, c) {
+	$(Hflag) = ((a & 0xf) + (b & 0xf) + c) > 0xf;
+}
+
+macro setHsub(a, b, c) {
+	$(Hflag) = (a & 0xf) < ((b & 0xf) + c);
+}
+
 macro doSubtract(pre,sub,res) {
+	setHsub(pre, sub, 0:1);
 	local x = pre - sub;
 	$(Vflag) = sborrow(pre,sub);
 	$(Cflag) = (pre < sub);
@@ -405,6 +415,7 @@ macro doSubtractWithCarry(pre,sub,res) {
 	local subCarry = sub + $(Cflag);
 	local x = pre - subCarry;
 	local oldZflag = $(Zflag);
+	setHsub(pre, sub, $(Cflag));
 	$(Vflag) = sborrow(pre,sub) ^^ sborrow(partial, $(Cflag));
 	$(Cflag) = (pre < sub) || (partial < $(Cflag));
 	setResultFlags(x);
@@ -575,15 +586,18 @@ define pcodeop break;
 @endif
 # Rd,Rr
 :adc RdFull,RrFull               is phase=1 & ophi6=0x7 & RdFull & RrFull {
-	local res = RdFull + RrFull + $(Cflag);
-	$(Cflag) = carry(RdFull, RrFull) || carry(RdFull + RrFull, $(Cflag));
-	$(Vflag) = scarry(RdFull, RrFull) ^^ scarry(RdFull + RrFull, $(Cflag));
+	local c = $(Cflag);
+	local res = RdFull + RrFull + c;
+	setHadd(RdFull, RrFull, c);
+	$(Cflag) = carry(RdFull, RrFull) || carry(RdFull + RrFull, c);
+	$(Vflag) = scarry(RdFull, RrFull) ^^ scarry(RdFull + RrFull, c);
 	setResultFlags(res);
 	RdFull = res;
 }
 # Rd,Rr
 :add RdFull,RrFull               is phase=1 & ophi6=0x3 & RdFull & RrFull {
 	local res = RdFull + RrFull;
+	setHadd(RdFull, RrFull, 0:1);
 	$(Cflag) = carry(RdFull,RrFull);
 	$(Vflag) = scarry(RdFull,RrFull);
 	setResultFlags(res);
@@ -594,7 +608,7 @@ define pcodeop break;
 	local pre = Rdw2;
 	Rdw2 = Rdw2 + zext(K6);
 	$(Cflag) = carry(pre,zext(K6));
-	$(Vflag) = scarry(Rdw2,zext(K6));
+	$(Vflag) = scarry(pre,zext(K6));
 	setResultFlags(Rdw2);
 }
 # and Rd,Rr
@@ -704,6 +718,7 @@ define pcodeop break;
 }
 :cp RdFull,RrFull                is phase=1 & ophi6=0x05 & RdFull & RrFull {
 	local x = RdFull - RrFull;
+	setHsub(RdFull, RrFull, 0:1);
 	$(Cflag) = (RdFull < RrFull);
 	$(Vflag) = sborrow(RdFull,RrFull);
 	setResultFlags(x);
@@ -813,9 +828,24 @@ ElpmPlus: Z^"+" is Z {}
 }
 
 # Manual uses fmul.  I prefer fracmul to distinguish from floating point
-:fracmul RdHi,RrHi               is phase=1 & ophi9=0x6 & opbit3=1 & RdHi & RrHi { todo(); }
-:fracmuls RdHi,RrHi              is phase=1 & ophi9=0x7 & opbit3=0 & RdHi & RrHi { todo(); }
-:fracmulsu RdHi,RrHi             is phase=1 & ophi9=0x7 & opbit3=1 & RdHi & RrHi { todo(); }
+# R1:R0 = (Rd * Rr) << 1 on R16..R23; C is bit 15 of the product before the shift
+macro fracmulFlags(p) {
+	$(Cflag) = ((p & 0x8000) != 0);
+	R1R0 = p << 1;
+	$(Zflag) = (R1R0 == 0);
+}
+:fracmul RdHi3,RrHi3             is phase=1 & ophi9=0x6 & opbit3=1 & RdHi3 & RrHi3 {
+	local p:2 = zext(RdHi3) * zext(RrHi3);
+	fracmulFlags(p);
+}
+:fracmuls RdHi3,RrHi3            is phase=1 & ophi9=0x7 & opbit3=0 & RdHi3 & RrHi3 {
+	local p:2 = sext(RdHi3) * sext(RrHi3);
+	fracmulFlags(p);
+}
+:fracmulsu RdHi3,RrHi3           is phase=1 & ophi9=0x7 & opbit3=1 & RdHi3 & RrHi3 {
+	local p:2 = sext(RdHi3) * zext(RrHi3);
+	fracmulFlags(p);
+}
 
 :icall                           is phase=1 & ophi16=0x9509 {
 	ptr:$(PCBYTESIZE) = inst_next >> 1;
@@ -997,6 +1027,7 @@ LpmPlus: Z^"+" is Z {}
 }
 :neg RdFull                      is phase=1 & ophi7=0x4a & oplow4=1 & RdFull {
 	RdFull = -RdFull;
+	$(Hflag) = (RdFull & 0xf) != 0;
 	$(Vflag) = (RdFull == 0x80);
 	$(Cflag) = (RdFull != 0);
 	setResultFlags(RdFull);

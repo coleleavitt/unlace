@@ -1729,9 +1729,10 @@ negative, the output starting below the stack pointer at the call), and the stor
 return label before the call has no reader left. A call spec already input-locked is
 left alone. A callee that never returns gets its arguments and no result. A terminal
 tail (a block from which every explored path ends in `RETURN`, `REVERT`, `STOP` or
-`INVALID` without a return jump) that two or more constant `JUMP`s or call return
-labels share is called rather than entered: the jump becomes a CALL to it followed by an
-artificial noreturn halt, and a call whose return label is such a tail is followed by a
+`INVALID` without a return jump) that two or more constant `JUMP`s or `JUMPI`s, call return
+labels or the fall-through from the instruction before it share is called rather than
+entered: the jump becomes a CALL to it followed by an artificial noreturn halt (for a
+`JUMPI`, the BRANCHIND of its taken edge does; the CBRANCH to the next instruction stays), and a call whose return label is such a tail is followed by a
 second CALL to the tail and the halt. Its arguments are the deepest stack word below its
 entry any of its instructions reads. solc's optimizer shares the ABI-encoding and `RETURN`
 tails between external functions, reaching them with different junk below the stack
@@ -2663,6 +2664,19 @@ shape is still reachable. Sharing is worth about 16% of the wall time of a
 two-table function, and on the interleaved shape `unrolledguard` was written for
 it recovers the same tables without any tolerance rule, because the shared
 partial's edge collection runs once while every sibling table is still empty.
+The protection upstream's `ActionRestructureVarnode` gives a switch path
+(`funcdata_block.rs (Funcdata::protect_switch_path_indirects)`, C++
+`protectSwitchPathIndirects`) walks back from the BRANCHIND through ops with one
+non-constant input and marks the earliest INDIRECT `noIndirectCollapse` when the
+walk ends at a constant. (kuna) An `INT_XOR` or `INT_SUB` of a varnode with
+itself also ends the walk as a constant: MSVC zeroes a struct through
+`xor eax,eax`, and in the partial the alias pass sees neither the struct's
+address nor its pushed copy (the calls have no inputs yet), so the struct's
+fields are marked unaliased and every call's INDIRECT on them would collapse
+before a rule folds the `xor`. With the earliest INDIRECT kept, a switch index
+read from such a field after a call stays an unknown value instead of folding
+to the value stored before the call (#871; Ghidra reaches the same state by
+folding the `xor` before its second restructure pass).
 (kuna) Under a per-function budget (`00-overview.md`, *The watchdog*) the loop is bounded in
 time as well: `flow.rs (FlowInfo::recover_jump_tables)` asks the drive's
 deadline before each table and after its attempt, and `jumptable.rs
@@ -3002,7 +3016,8 @@ the case targets.
    or a dispatch retried after an earlier recovery, is not re-run, so a
    recovery that fails for its own reasons costs one extent scan and no
    second pipeline. A function's last table has
-   no such bound and is left as it was: an object the function merely reads
+   no such bound here (an unguarded one ends at the next function's table
+   below): an object the function merely reads
    may sit anywhere in the section, and a bound taken from one could run the
    table on into another function's, whose entries are plausible code
    addresses measured from the wrong base. The discovery Listing applies the
@@ -3038,12 +3053,18 @@ the case targets.
    functions' tables measured from the wrong base: they land all over the
    next functions and back inside this one, so the run-on cut, which keeps
    every row until the first that leaves the function, keeps them all and
-   the 45-case switch printed 1,200 lines of phantom cases. When the run-on
-   cut leaves an unguarded table whose rows leave the function,
-   `jumptable.rs (JumpBasicModel::kuna_next_table_rows)` reads its table and
-   stride as above and ends it at the lowest jump table above it in the same
-   section, of this function or of the next ones, when that leaves at least
-   two rows. The next functions' tables come from the flow: the sanity check
+   the 45-case switch printed 1,200 lines of phantom cases. A byte selector
+   with no range check is the same shape on x86-64 when the rows past the
+   table stay inside the function: gnulib's regcomp (csplit `sub_13330`)
+   reads its `unsigned char` token type straight into a 37-entry table and
+   OCaml compiles an exhaustive match the same way, so the next table's
+   offsets, measured from the wrong base, became cases that land mid-instruction.
+   For every unguarded table (no guard, or guards that leave its
+   selector's top open), `jumptable.rs (JumpBasicModel::kuna_next_table_rows)`
+   reads its table and stride as above and ends it at the lowest jump table
+   above it in the same section, of this function or of the next ones, when
+   that leaves at least two rows and fewer than the rows kept so far; the
+   run-on cut applies when no table ends it sooner. The next functions' tables come from the flow: the sanity check
    inside the recovery partial records the table it wants
    (`Funcdata::kuna_later_wanted`) and fails, and
    `flow.rs (FlowInfo::recover_jump_tables)` decodes the extents after this
@@ -3056,9 +3077,8 @@ the case targets.
    request can also come from the retry the function's own tables bound
    (a row of the bounded table lies in the next known function); the flow
    then answers it in a second round. Either way the request never leaves
-   a table unrecovered. A table whose rows all stay
-   inside the function costs nothing, and the decode runs only for a table
-   already unguarded and leaving the function.
+   a table unrecovered. A guarded table costs nothing; an unguarded one
+   costs the extent decodes and one more recovery, once per function.
 
    **Guards that leave the top open (always on).**
    `jumptable.rs (JumpBasicModel::analyze_guards)` records the

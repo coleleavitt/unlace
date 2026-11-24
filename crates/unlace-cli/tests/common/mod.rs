@@ -59,3 +59,33 @@ pub fn scratch_file(stem: &str, extension: &str) -> PathBuf {
     let id = NEXT_SCRATCH_ID.fetch_add(1, Ordering::Relaxed);
     scratch_root.join(format!("{stem}-{}-{id}.{extension}", std::process::id()))
 }
+
+/// Run `body` for every item on up to four threads, re-raising the first failure once all are
+/// done. libtest already runs tests side by side; this splits the few long combinatorial tests
+/// (a compile-decompile-run loop over dozens of cases) so they do not hold up the end of the run.
+pub fn for_each_parallel<T: Send, F: Fn(T) + Sync>(items: impl IntoIterator<Item = T>, body: F) {
+    let queue = std::sync::Mutex::new(items.into_iter().collect::<Vec<T>>().into_iter());
+    let workers = std::thread::available_parallelism().map_or(1, |n| n.get().min(4));
+    std::thread::scope(|s| {
+        let handles: Vec<_> = (0..workers)
+            .map(|_| {
+                s.spawn(|| {
+                    loop {
+                        let next = queue.lock().unwrap_or_else(|e| e.into_inner()).next();
+                        let Some(item) = next else { break };
+                        body(item);
+                    }
+                })
+            })
+            .collect();
+        let mut failure = None;
+        for h in handles {
+            if let Err(panic) = h.join() {
+                failure.get_or_insert(panic);
+            }
+        }
+        if let Some(panic) = failure {
+            std::panic::resume_unwind(panic);
+        }
+    });
+}

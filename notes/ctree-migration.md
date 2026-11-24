@@ -103,6 +103,15 @@ the emitter the block printer called for the same block, and should print the sa
    `list_java_try` / `list_has_java_try` (the DEX `try` matcher on a rest; it reads
    `java_catches`, printer state, so it needs its own check).
 
+10. ctree/switchexit (edit-only, 2026-11-24): the `break` a switch arm prints on its own account
+   (`isexit` and not the last arm) is recorded on the `Switch` node when the tree is rewritten
+   (`ctree_switch_exits`, `CTree::set_switch_exits`); `emit_block_switch_c` reads it through
+   `tree_switch_exit`. The test reads only the block's case and the arm index. Not moved, and why:
+   the last arm's `break` when the emitter reports a dangling label (`label_dangling()` is emitter
+   output state); the comment block placed before a merged switch's first arm
+   (`emit_comment_block_tree` reads the comment sorter); the goto arm and the guard arm (their
+   statements are printed by the goto and block emitters; the arm itself is not a tree node yet).
+
 What still matches while printing: the DEX `try` matcher on a rest of a list (`list_has_java_try`
 for a slice), and any block the tree holds no statement for (past the depth bound) runs every
 matcher itself.

@@ -4107,6 +4107,30 @@ and `ActionInputPrototype` reports one 8-byte parameter. The rule does nothing
 when the function's prototype is locked, since the declaration already decides
 the inputs. `off` keeps the two parameters.
 
+**Pairing input words a split compare links.** A compiler that splits a 64-bit
+compare across branches (MSVC's `cmp hi; jl; jg; cmp lo; jb`, the shape
+Hex-Rays calls CMP64-JMP2 and JNZ64) leaves no borrow, carry or XOR between the
+words: the high words are compared in one block and the low words in the block
+it falls into, which upstream's `LessThreeWay` and `Equal1Form` fold only
+once the words are pieces of one value. With option `pairbranch` (default
+off; `pairparam` must be on),
+`kuna_borrowcompare.rs (branch_input_pair)` also fires on a low-word
+`INT_LESS`/`INT_LESSEQUAL` that the borrow rule above did not pair, and on a
+low-word `INT_EQUAL`/`INT_NOTEQUAL`, when one operand is an input word with an
+unlocked input word above it (the same `input_above` test) and the condition
+of a CBRANCH next to the one the compare decides compares that high word with
+the high word of the other operand: for an ordered low compare, an ordered
+compare (signed or not) in one of the one or two blocks reached by walking up
+single-entry edges; for an equality, an equality in the block directly above
+(along a single-entry edge) or in a single-entry successor. The other operand's
+words must be a pair (`is_pair`: two adjacent input words or the SUBPIECEs of
+one whole), or, for an ordered compare only, two constants. Two zero tests are
+never paired, because `!a && !b` over two separate `int` parameters gives
+the same code. The pair is joined as above and the upstream forms fold the
+compare. The option is off by default because two separate parameters compared
+lexicographically or pairwise (`x1 == x2 && y1 == y2`) compile to the same
+branches.
+
 ## 5.6 kuna extensions & the late rewrite families
 
 The remaining `p5_types` passes are the late aggregate rewrites: they run in

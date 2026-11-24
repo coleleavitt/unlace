@@ -3507,6 +3507,25 @@ tier = "transform"
 symptoms = "a long long parameter on 32-bit ARM prints as two int parameters in r0 and r1 or r2 and r3|a 64-bit compare on 32-bit ARM prints as an SBORROW4 or CONCAT44 chain over two register parameters"
 
 [[settable]]
+option = "pairbranch"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P4"
+subphase = "prototype-source"
+strength = "HARD"
+rewind = "P3"
+issue = "pairparam"
+summary = "Join two adjacent input words into one 8-byte parameter when a 64-bit compare split across branches links them: an unsigned low-word compare with an ordered high-word compare in the one or two single-entry blocks above it (MSVC's cmp hi; jl; jg; cmp lo; jb), or a low-word equality with a high-word equality in the block directly above or below it."
+use_when = "Off by default: two separate int parameters compared lexicographically or pairwise (if (x1 == x2 && y1 == y2) over adjacent parameters) compile to the same branches, so the join is a reading, not a fact. Turn it on for i386 MSVC binaries or ARM32 code with 64-bit arithmetic where a long long parameter prints as two int parameters and its compare as a chain of branches over the two words (a1 < a3, else a1 == a3 and a0 < a2; or a0 == a2 && a1 == a3). pairparam must be on; on 32-bit ARM register pairs also need armpairparam. A pair of zero tests is never joined, and neither is an equality with constants."
+example = "option pairbranch on"
+source_decompiler = "kuna"
+inspiration = "Hex-Rays CMP64-JMP2 and JNZ64 (64-bit compares split across branches on 32-bit targets); upstream LessThreeWay and Equal1Form (double.cc) fold the branch shape once the words are one value"
+change_kind = "new-analysis"
+tier = "transform"
+symptoms = "a long long compare on i386 prints as branches over four int parameters that compare the high words before the low words|a long long equality prints as a0 == a2 && a1 == a3 over four int parameters"
+
+[[settable]]
 option = "regsigned"
 values = "on|off"
 default = "off"

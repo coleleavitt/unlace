@@ -53,6 +53,7 @@ pub mod kuna_gopairreturns;
 pub mod kuna_gopointerarith;
 mod kuna_gostringindex;
 mod kuna_gozerorecord;
+pub mod kuna_halfstore;
 pub mod kuna_infloopstyle;
 pub mod kuna_javanew; // (kuna) `new T(args)` from an allocation and its <init> call
 pub mod kuna_labelstmt; // (kuna) every printed C label labels a statement

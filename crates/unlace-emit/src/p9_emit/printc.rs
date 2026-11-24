@@ -8043,6 +8043,9 @@ impl PrintC {
         if self.emit_wide_copy(fd, arch, op) {
             return;
         }
+        if self.emit_half_store(fd, arch, op) {
+            return;
+        }
         if self.options.bytearray_c && self.emit_bytearray_store(fd, arch, op) {
             return;
         }
@@ -13684,6 +13687,35 @@ impl PrintC {
     /// of piece, or a variable; a whole array variable takes a copy out of such a
     /// piece the same way. Anything else (an intrinsic, an expression) declines
     /// and the statement keeps its assignment.
+    /// (kuna `partialaccess`) `v = CONCAT44(((T *)&v)[1], x)` as the store it is,
+    /// `*(T *)&v = x` ([`crate::kuna_halfstore`]).
+    fn emit_half_store(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) -> bool {
+        if !self.options.partial_access || self.out_lang != crate::kuna_lang::OutLang::C {
+            return false;
+        }
+        let Some(store) = crate::kuna_halfstore::plan(fd, op) else {
+            return false;
+        };
+        let Some(out) = fd.obank().get(op).and_then(|o| o.get_out()) else {
+            return false;
+        };
+        let types = arch.types();
+        let Ok(pointer) = types
+            .get_base(store.size, type_metatype::TYPE_UINT)
+            .and_then(|t| types.get_type_pointer(types.get_size_of_pointer(), t, 1))
+        else {
+            return false;
+        };
+        self.push_op(&tokens::ASSIGNMENT, Some(op_key(op)));
+        self.push_op(&tokens::DEREFERENCE, Some(op_key(op)));
+        self.push_cast_open(&pointer, op);
+        self.push_op(&tokens::ADDRESSOF, Some(op_key(op)));
+        self.push_vn_explicit_ir(fd, arch, out, op);
+        self.push_cast_close(&pointer);
+        self.push_vn_ir(fd, arch, store.value, op);
+        true
+    }
+
     fn emit_wide_copy(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) -> bool {
         use crate::dtype::type_metatype;
         use crate::kuna_partialaccess::is_scalar_width;

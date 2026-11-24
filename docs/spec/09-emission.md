@@ -1962,6 +1962,14 @@ on a target with 8-byte pointers reads through `unsigned __int128`, the GCC
 and Clang 16-byte integer (`return *(unsigned __int128 *)v1;`), which is local
 to this rendering: the variable keeps the declaration it had.
 
+A store into the low half of a variable that heritage wrote as a new value of
+the whole variable, `v = PIECE(SUBPIECE(v_old, k), x)` with `v_old` and `v` one
+variable, prints as that store (`printc.rs (PrintC::emit_half_store)`,
+`kuna_halfstore.rs (plan)`): `*(unsigned int *)&v12 = v3;` instead of
+`v12 = CONCAT44(((unsigned int *)&v12)[1],v3);`, IDA's `LODWORD(v12) = v3;`.
+The SUBPIECE must be implied, take exactly the bytes above `x`, and read a value
+of the PIECE's width; `x` must be a scalar width and the space little-endian.
+
 C has no scalar of 3, 5, 6, 7 or 9 to 15 bytes, and no form may compile to a
 different meaning, so those widths are handled by what the statement does.
 `printc.rs (PrintC::emit_wide_copy)` prints a plain `COPY` into such bytes, or

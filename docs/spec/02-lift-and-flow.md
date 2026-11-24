@@ -5426,27 +5426,29 @@ no unimplemented instruction.
 ### RISC-V Zfh half-precision floating point (#98)
 
 `riscv.zfh.sinc` decodes Zfh 1.0 (and so its Zfhmin subset) in every RISC-V
-language that has the F extension: `flh`/`fsh`, `fadd.h`, `fsub.h`,
-`fmul.h`, `fdiv.h`, `fsqrt.h`, `fsgnj{,n,x}.h`, `fmin.h`/`fmax.h`, the
-fused `fmadd.h`/`fmsub.h`/`fnmsub.h`/`fnmadd.h` (fmt field 10), the
-compares `feq.h`/`flt.h`/`fle.h`, `fmv.x.h`/`fmv.h.x`, `fclass.h`, and
-the conversions between half and single, double, 32-bit and (RV64) 64-bit
-integers. Before, every one of them was a bad instruction. A half value is
-the low 16 bits of an f register: `frs1H`/`frs2H`/`frs3H` read them, and a
-write NaN-boxes the 2-byte result into the register (`fassignH`: bits above 15
-set to one), as the single-precision forms do with `fassignS`.
-Arithmetic, square root, compares and conversions are the ordinary p-code
-float operations on 2-byte varnodes (`FLOAT_ADD`, `FLOAT2FLOAT`,
-`FLOAT_INT2FLOAT`, `FLOAT_TRUNC`, ...); the translator has no 2-byte float
-format, so the simplifier does not fold half-precision constants, the same as
-AArch64's FP16 forms. `fmv.x.h` sign-extends the 16-bit pattern into `rd`,
-`fmin.h`/`fmax.h` return the non-NaN operand when one is NaN, and
-`fclass.h` is the user operation `fclass_h`. Exercised by
-`unlace-cli/tests/riscv_zfh.rs`: one probe row per encoding against LLVM's
-names, RV32 and RV64, and LLVM-selected half-precision functions that
-decompile with no bad or unimplemented instruction.
+language that has the F extension: `flh`/`fsh`, the arithmetic, square root,
+sign-injection, min/max, fused multiply-add, compare, move, `fclass.h` and conversion
+instructions, and the `fmv.h`/`fneg.h`/`fabs.h` aliases. Like `riscv.fd.sinc`, it is
+generated from the Sail model (`extensions/FD/zfh_insts.sail`, and `fext_insts.sail` for
+the half load and store), with the options of the F/D generation (see
+`docs/sleigh-from-isa-specs.md`):
+- **Writes and reads.** A half value is the low 16 bits of an f register; a write NaN-boxes
+  it (`0xffffffffffff0000 | zext(h)`). A read is NaN-unboxed exactly: when the upper 48 bits are
+  not all ones, the read is the canonical NaN `0x7e00`. `boxedcompare` folds the test for
+  boxed values, and `fpargboxed` for argument and return registers (§3).
+- **Rounding.** `rne` and `dyn` lift as p-code float operations on 2-byte varnodes. The
+  other static rounding modes, and the fused forms, are user operations.
+- **Integer conversions.** `rtz` saturates as the ISA defines. Every finite half lies in the
+  integer range, so only the infinities and NaN clamp (`x f< -65504`, `x f>= inf`), and
+  `satconvert` prints the cast.
+- **Display.** `fcvt.s.h` and `fcvt.d.h` are exact, so like LLVM they print no rounding mode.
+- **Checks.** Decode matches llvm-objdump on every sampled word and near miss; on QEMU no
+  non-opaque word differs.
+- **Tests.** `unlace-cli/tests/riscv_zfh.rs` checks one probe row per encoding against LLVM's
+  names, RV32 and RV64, and that LLVM-selected half-precision functions decompile.
 
-
+Zvfh adds no encodings: the vector FP instructions in `riscv.rvv.sinc` cover SEW 16, as user
+operations. The vector accrued flags (fflags, vxsat) are not written, as in the scalar lift.
 
 ### RISC-V F and D
 

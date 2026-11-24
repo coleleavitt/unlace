@@ -91,6 +91,13 @@ other helpers the compiler cannot inline become user operations named after the 
 function, and a guard that allows several cubes of an operand's values (`rnum <_u 0xB`)
 becomes one constructor per cube.
 
+`riscv.zfh.sinc` comes from `extensions/FD/zfh_insts.sail,extensions/FD/fext_insts.sail` with
+`--exts rv_zfh,rv64_zfh,rv_zfhmin,rv_d_zfhmin --only '^(f[ls]h$|.*\.h(\.|$))'`, the F/D options
+(`--opaque-fallback --field-table LOAD_FP.imm=immI,STORE_FP.imm=immS --dyn-rounding rne
+--unbox exact`), `--idiom fmv.h=copy,fneg.h=neg,fabs.h=abs` and `--drop-display
+'^fcvt\.(s|d)\.h$=rne'`. A half bound past the half range is the infinity of its sign; a signed
+lower bound is the largest negative finite half, so only -inf clamps low.
+
 `riscv.zfa.sinc` comes from `extensions/FD/zfa_insts.sail` with
 `--exts rv_f_zfa,rv_d_zfa,rv_zfh_zfa,rv32_d_zfa --display-table constantidx=fliConstS --opaque-fallback`.
 For floating point, the compiler maps `encdec_freg` fields to `frd`/`frs1`/`frs2`/`frs3`,

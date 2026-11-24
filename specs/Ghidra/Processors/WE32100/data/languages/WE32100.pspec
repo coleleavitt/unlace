@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<processor_spec>
+  <programcounter register="pc"/>
+
+  <!-- The default instruction context has et = 5 (sword): the tables of PUSHW and POPW, which accept no
+       {type} prefix, only have entries for that type, so that their common pattern is satisfied when the
+       instruction is matched, before the instruction sets its own default type. -->
+  <context_data>
+    <context_set space="ram">
+      <set name="et" val="5"/>
+    </context_set>
+  </context_data>
+
+  <!-- WE32100 Reset Sequence (from manual, confirmed via SIMH):
+       1. Read word at physical address 0x80 -> PCBP register
+       2. Read PCB[PCBP+0] -> PSW
+       3. Read PCB[PCBP+4] -> PC (entry point)
+       4. Read PCB[PCBP+8] -> SP
+
+       Exception handling uses a two-level gate table:
+       - Address 0x00 contains pointer to exception gate table
+       - Gate table entries are 8 bytes: PSW(4) + PC(4)
+       - Normal exception N dispatches via gate_table_base + N*8
+
+       Addresses 0x84-0xFF contain PCBPs for interrupt/exception handlers
+       (typically point to RAM where firmware installs the handlers) -->
+
+  <default_symbols>
+    <symbol name="GATE_TABLE_PTR" address="ram:0x00" entry="false"/>
+    <symbol name="RESET_PCBP"     address="ram:0x80" entry="false"/>
+    <symbol name="EXCN_PCBP_1"    address="ram:0x84" entry="false"/>
+    <symbol name="EXCN_PCBP_2"    address="ram:0x88" entry="false"/>
+    <symbol name="NMI_PCBP"       address="ram:0x8C" entry="false"/>
+    <symbol name="AUTOVEC_PCBP"   address="ram:0x90" entry="false"/>
+    <symbol name="IPL1_PCBP"      address="ram:0x94" entry="false"/>
+    <symbol name="IPL2_PCBP"      address="ram:0x98" entry="false"/>
+    <symbol name="IPL3_PCBP"      address="ram:0x9C" entry="false"/>
+    <symbol name="IPL4_PCBP"      address="ram:0xA0" entry="false"/>
+    <symbol name="IPL5_PCBP"      address="ram:0xA4" entry="false"/>
+    <symbol name="IPL6_PCBP"      address="ram:0xA8" entry="false"/>
+    <symbol name="IPL7_PCBP"      address="ram:0xAC" entry="false"/>
+    <symbol name="IPL8_PCBP"      address="ram:0xB0" entry="false"/>
+    <symbol name="IPL9_PCBP"      address="ram:0xB4" entry="false"/>
+    <symbol name="IPL10_PCBP"     address="ram:0xB8" entry="false"/>
+    <symbol name="IPL11_PCBP"     address="ram:0xBC" entry="false"/>
+    <symbol name="IPL12_PCBP"     address="ram:0xC0" entry="false"/>
+    <symbol name="IPL13_PCBP"     address="ram:0xC4" entry="false"/>
+    <symbol name="IPL14_PCBP"     address="ram:0xC8" entry="false"/>
+    <symbol name="IPL15_PCBP"     address="ram:0xCC" entry="false"/>
+  </default_symbols>
+</processor_spec>

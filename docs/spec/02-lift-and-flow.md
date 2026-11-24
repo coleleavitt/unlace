@@ -4214,6 +4214,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `unSP` | Sunplus unSP | `unsp:LE:16:default` | aleph-void/ghidra-unSP (fork of SamuelWAnderson45/ghidra-unSP) @ `a609027c50`, Apache-2.0 |
 | `VideoCore4` | Broadcom VideoCore IV | `vc4:LE:32:default` | aleph-void/ghidra-videocore4 @ `db09a308c2`, Apache-2.0 |
 | `VMU` | Sega Dreamcast VMU (LC86K) | `vmu:2:default`, `vmu:2:dynamic` | aleph-void/Ghidra-VMU-Processor (fork of RossMeikleham/Ghidra-VMU-Processor) @ `7528a82f81`, MIT |
+| `WE32100` | AT&T WE32100 | `WE32100:BE:32:default` | aleph-void/ghidra-we32100 (fork of fletto2/ghidra-we32100) @ `0324efb5cd`, MIT |
 <!-- vendor-rows -->
 
 ### WDC 65816 (#98)

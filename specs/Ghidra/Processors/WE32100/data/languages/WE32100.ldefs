@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="WE32100"
+            endian="big"
+            size="32"
+            variant="default"
+            version="1.0"
+            slafile="WE32100.sla"
+            processorspec="WE32100.pspec"
+            id="WE32100:BE:32:default">
+    <description>AT&amp;T WE 32100 Microprocessor</description>
+    <compiler name="default" spec="WE32100.cspec" id="default"/>
+  </language>
+</language_definitions>

@@ -19,3 +19,5 @@
   returns under the V9 ABI (#765).
 - `sm80.o`: `clang --target=nvptx64-nvidia-cuda -march=sm_80 -O2 -fno-inline-functions -S fx.c` (LLVM 22),
   then `ptxas -c -arch=sm_80 -O3` (CUDA 13).
+- `sm80_strlen.o`: `clang --target=nvptx64 -march=sm_80 -O2 -fno-builtin -S sm80_strlen.c` (LLVM 22),
+  then `ptxas -c -arch=sm_80` (CUDA 13.4): the `retindexuse` default on SASS (#865).

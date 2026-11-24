@@ -154,7 +154,7 @@ Same 98 runs as the previous re-run, no `--target` except the HiFi 4 `--target` 
 | m68k | | -O2 `str_len`'s `strlen` call was `sub_402000` (`R_68K_32` on `jsr`): fixed in #974 |
 | Xtensa, Xtensa HiFi 4 | | -O2 `mul_wide` still `void`: `call8` returns in `a10:a11` (#864 notes) |
 | AArch64, MIPS(el), OpenRISC, Hexagon | | `add_all`'s va_list walk reads the stack pointer as `Register0000xxxx`: #975 |
-| CUDA sm_80 | | -O2 `str_len` `void` (#865, SASS left as is); relocation type 66 still skipped |
+| CUDA sm_80 | -O2 `str_len` returns its counter by default (`retindexuse` = `bpfsass`, #865) | relocation type 66 still skipped |
 
 ## Bytecode and GPU families (sleigh-fam-e, 2026-11-24)
 

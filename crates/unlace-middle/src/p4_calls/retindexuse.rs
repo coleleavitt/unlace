@@ -19,23 +19,24 @@
 //! counts as a constant offset, and a walked operand that is a `PIECE` the
 //! walk reached through its high half only is a base pointer's high word, so
 //! neither makes a load an index use.
-//! The shipped default `bpf` applies it on eBPF only, where a
+//! The shipped default `bpfsass` applies it on eBPF and SASS, where a
 //! measurement of BPF, SASS, x86-64 and Thumb-2 builds of the same C (#865)
 //! found only right returns gained; elsewhere a scratch register that indexes
 //! a loop and is left in the return register of a `void` function would read
-//! as a return value (Thumb-2), or a 32-bit return widen to a register pair.
+//! as a return value (Thumb-2). `bpf` keeps it to eBPF.
 
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 
-/// The value of option `retindexuse`: never, on eBPF only (the shipped
-/// default), or on every target.
+/// The value of option `retindexuse`: never, on eBPF only, on eBPF and SASS
+/// (the shipped default), or on every target.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RetIndexUse {
     Off,
     Bpf,
+    BpfSass,
     On,
 }
 
@@ -48,17 +49,18 @@ impl crate::optionset::UnlaceOption for RetIndexUse {
     }
 
     fn shipped() -> Self {
-        RetIndexUse::Bpf
+        RetIndexUse::BpfSass
     }
 
     fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (choice, what) = match value.trim() {
             "off" => (RetIndexUse::Off, "off"),
             "bpf" => (RetIndexUse::Bpf, "on eBPF"),
+            "bpfsass" => (RetIndexUse::BpfSass, "on eBPF and SASS"),
             "on" => (RetIndexUse::On, "on every target"),
             other => {
                 return Err(unlace_base::error::UnlaceError::parse(format!(
-                    "retindexuse: expected off, bpf or on, got {other:?}"
+                    "retindexuse: expected off, bpf, bpfsass or on, got {other:?}"
                 )));
             }
         };
@@ -83,6 +85,19 @@ fn ebpf(data: &Funcdata) -> bool {
         && lookup.probe_register("R11").is_none()
 }
 
+/// Whether `data`'s language is NVIDIA SASS: it names `R0`..`R254` (four
+/// bytes each), `RZ`, `URZ` and `RETPC`.
+fn sass(data: &Funcdata) -> bool {
+    let Some(lookup) = data.get_arch().manage().register_lookup() else {
+        return false;
+    };
+    ["R0", "R4", "R254", "RZ"]
+        .iter()
+        .all(|r| lookup.probe_register(r).is_some_and(|v| v.size == 4))
+        && lookup.probe_register("URZ").is_some()
+        && lookup.probe_register("RETPC").is_some()
+}
+
 /// Whether the option is on, `opmatch` is a RETURN and the LOAD `op` reads
 /// through `vn`, an address that is the walked (marked) value plus a value
 /// the walk did not reach, constant offsets folded on the way.
@@ -90,6 +105,7 @@ fn index_only_load(data: &Funcdata, opmatch: OpId, op: OpId, vn: VarnodeId) -> b
     match data.get_arch().unlace_options.get::<RetIndexUse>() {
         RetIndexUse::Off => return false,
         RetIndexUse::Bpf if !ebpf(data) => return false,
+        RetIndexUse::BpfSass if !ebpf(data) && !sass(data) => return false,
         _ => {}
     }
     let obank = data.obank();

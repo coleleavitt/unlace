@@ -4575,7 +4575,7 @@ address = "0x0"
 language = "PIC-18:LE:24:PIC-18"
 expect = ["CCP3CON = 5;", "dat_1 = 5;"]
 
-# The shipped default `bpf` applies retindexuse on eBPF without the option.
+# The shipped default `bpfsass` applies retindexuse on eBPF without the option.
 [[family]]
 name = "ebpf_retindexuse_default"
 language = "eBPF:LE:64:default"
@@ -4587,6 +4587,20 @@ forbid = ["halt_baddata"]
 test = "ebpf_retindexuse_default_counter_is_returned"
 address = "0x0"
 expect = ["return "]
+
+# SASS sm_80 str_len (#865; sm80_strlen.c, clang -O2 -S then ptxas -c -arch=sm_80): the counter
+# r4 is the return register and the low half of the R6:R7 load address. The shipped default
+# `bpfsass` returns it; with `retindexuse bpf` the function prints void.
+[[family]]
+name = "sass_retindexuse_default"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/sm80_strlen.o"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "sass_retindexuse_default_counter_is_returned"
+address = "f1"
+expect = ["unsigned int f1(", "return v1;"]
 
 [[family]]
 name = "aarch64_neon_acle"

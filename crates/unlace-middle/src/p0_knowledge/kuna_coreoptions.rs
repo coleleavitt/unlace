@@ -184,7 +184,7 @@ crate::kuna_flag!(
 );
 
 crate::kuna_flag!(
-    /// (kuna) Name library functions from FLIRT `.sig` files listed in `KUNA_FLIRT_SIGS` (`flirt`). Default off.
+    /// (kuna) Name library functions from FLIRT `.sig` files listed in `UNLACE_FLIRT_SIGS` (`flirt`). Default off.
     Flirt,
     "flirt",
     "FLIRT signature matching",

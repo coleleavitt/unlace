@@ -15,7 +15,7 @@
 use unlace_base::error::KunaResult;
 
 /// Absent or any value other than the off-tokens means enabled.
-pub const CIL_ENV: &str = "KUNA_CIL";
+pub const CIL_ENV: &str = "UNLACE_CIL";
 
 /// Whether a managed assembly loads as CIL for the load in progress.
 pub fn cil_enabled() -> bool {

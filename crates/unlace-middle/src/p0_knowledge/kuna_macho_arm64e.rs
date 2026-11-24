@@ -15,7 +15,7 @@
 /// Environment variable the Mach-O loader reads to decide whether an arm64e
 /// image selects the AppleSilicon spec. Absent or an on-token ⇒ enabled; an
 /// off-token (`off`, `0`, `false`) ⇒ the generic `v8A` spec.
-pub const MACHO_ARM64E_ENV: &str = "KUNA_MACHO_ARM64E";
+pub const MACHO_ARM64E_ENV: &str = "UNLACE_MACHO_ARM64E";
 
 /// Whether an arm64e Mach-O selects the AppleSilicon spec in this process.
 pub fn macho_arm64e_enabled() -> bool {

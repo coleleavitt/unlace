@@ -50,7 +50,7 @@
 /// other than the off-tokens ⇒ **enabled**; set to `off`/`0`/`false` ⇒ disabled
 /// (the `void *` tables); set to `glibc` ⇒ enabled with the published field
 /// layouts (see [`LibcTypesLayout`]).
-pub const LIBCTYPES_ENV: &str = "KUNA_LIBCTYPES";
+pub const LIBCTYPES_ENV: &str = "UNLACE_LIBCTYPES";
 
 /// How much of an aggregate the table says.
 ///

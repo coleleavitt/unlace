@@ -112,7 +112,7 @@ use std::borrow::Cow;
 
 /// Environment variable that carries the `symbolnamechars` mode to the loader.
 /// Absent or unrecognized ⇒ [`NameChars::Safe`] (the default).
-pub const SYMBOLNAMECHARS_ENV: &str = "KUNA_SYMBOLNAMECHARS";
+pub const SYMBOLNAMECHARS_ENV: &str = "UNLACE_SYMBOLNAMECHARS";
 
 /// How much of a raw symbol name's byte content is rewritten on the way in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]

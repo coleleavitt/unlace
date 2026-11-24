@@ -29,16 +29,16 @@ use crate::options::env_toggle;
 
 /// Carries `calltargettype` to the DWARF type mapper, which runs at `load file`
 /// before any option is applied; the CLI exports it ahead of the load.
-pub const CALLTARGETTYPE_ENV: &str = "KUNA_CALLTARGETTYPE";
+pub const CALLTARGETTYPE_ENV: &str = "UNLACE_CALLTARGETTYPE";
 /// Carries `codestrings` to the string-literal pass, which runs at `load file`.
-pub const CODESTRINGS_ENV: &str = "KUNA_CODESTRINGS";
+pub const CODESTRINGS_ENV: &str = "UNLACE_CODESTRINGS";
 /// Carries `nameladder` to the load-time prototype and no-return passes.
-pub const NAMELADDER_ENV: &str = "KUNA_NAMELADDER";
+pub const NAMELADDER_ENV: &str = "UNLACE_NAMELADDER";
 /// Carries `swifttypes` to the Objective-C pass, which leaves a Swift class's
 /// layout to the Swift pass when it is on.
-pub const SWIFTTYPES_ENV: &str = "KUNA_SWIFTTYPES";
+pub const SWIFTTYPES_ENV: &str = "UNLACE_SWIFTTYPES";
 /// The `--slice` fat Mach-O slice override.
-pub const MACHO_SLICE_ENV: &str = "KUNA_MACHO_SLICE";
+pub const MACHO_SLICE_ENV: &str = "UNLACE_MACHO_SLICE";
 /// The external `.pdb` file to apply.
 pub const PDB_PATH_ENV: &str = "kuna_pdb_path";
 /// A symbol store to look the `.pdb` up in, `<cache dir>` or
@@ -47,13 +47,13 @@ pub const PDB_SYMSRV_ENV: &str = "kuna_pdb_symsrv";
 /// The external `.fid` function-ID database to apply.
 pub const FID_DB_ENV: &str = "kuna_fid_db";
 /// The FLIRT `.sig` files, or directories of them, to match.
-pub const FLIRT_SIGS_ENV: &str = "KUNA_FLIRT_SIGS";
+pub const FLIRT_SIGS_ENV: &str = "UNLACE_FLIRT_SIGS";
 /// `off` skips the Objective-C metadata pass at load.
-pub const LOAD_OBJC_ENV: &str = "KUNA_LOAD_OBJC";
+pub const LOAD_OBJC_ENV: &str = "UNLACE_LOAD_OBJC";
 /// `off` skips the string-literal pass at load.
-pub const LOAD_STRINGS_ENV: &str = "KUNA_LOAD_STRINGS";
+pub const LOAD_STRINGS_ENV: &str = "UNLACE_LOAD_STRINGS";
 /// `off` copies a thin Mach-O into memory instead of mapping it.
-pub const LOAD_MMAP_ENV: &str = "KUNA_LOAD_MMAP";
+pub const LOAD_MMAP_ENV: &str = "UNLACE_LOAD_MMAP";
 
 /// Every load-time setting, one field per option. [`Default`] is the shipped
 /// default of each option, the value an unset environment variable means.
@@ -524,7 +524,7 @@ pub mod env {
             .is_ok_and(|value| matches!(value.as_str(), "off" | "0" | "false"))
     }
 
-    /// The `"<maj>.<min>"` release in `KUNA_GOVERSION`; `None` when it is
+    /// The `"<maj>.<min>"` release in `UNLACE_GOVERSION`; `None` when it is
     /// unset or unparsable.
     pub fn go_version() -> Option<(u16, u16)> {
         let value = unlace_base::env::var(crate::architecture::GOVERSION_ENV).ok()?;

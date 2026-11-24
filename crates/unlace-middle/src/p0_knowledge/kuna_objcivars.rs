@@ -8,7 +8,7 @@
 
 /// Environment variable carrying the `objcivars` choice into the load path.
 /// Unset means on.
-pub const OBJCIVARS_ENV: &str = "KUNA_OBJCIVARS";
+pub const OBJCIVARS_ENV: &str = "UNLACE_OBJCIVARS";
 
 /// Whether the pass builds the instance layouts.
 pub fn objcivars_enabled() -> bool {

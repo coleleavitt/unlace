@@ -1,4 +1,4 @@
-//! Exclusive-time profiling of the Action tree, enabled by `KUNA_ACTION_PROF`.
+//! Exclusive-time profiling of the Action tree, enabled by `UNLACE_ACTION_PROF`.
 //!
 //! Each thread accumulates `<root>/<action>` rows. A group excludes time spent
 //! in its children. Closing the outermost frame, including during panic unwind,
@@ -90,7 +90,7 @@ impl Drop for ActionFrame {
 }
 
 /// The env var that names the output path.
-pub const ENV_VAR: &str = "KUNA_ACTION_PROF";
+pub const ENV_VAR: &str = "UNLACE_ACTION_PROF";
 
 /// Is profiling on? Read once per process.
 pub fn enabled() -> bool {

@@ -5,7 +5,7 @@
 
 /// Environment variable gating the companion lookup. Absent or any value other
 /// than an off-token means enabled.
-pub const DEBUGLINK_ENV: &str = "KUNA_DEBUGLINK";
+pub const DEBUGLINK_ENV: &str = "UNLACE_DEBUGLINK";
 
 /// Whether the companion lookup is enabled for this process.
 pub fn debuglink_enabled() -> bool {

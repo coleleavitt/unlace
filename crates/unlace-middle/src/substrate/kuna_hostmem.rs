@@ -5,7 +5,7 @@
 //! an answer a platform cannot give is `None`.
 
 /// Test-only: the directory standing in for `/sys/fs/cgroup`.
-pub const CGROUP_ROOT_ENV: &str = "KUNA_CGROUP_ROOT";
+pub const CGROUP_ROOT_ENV: &str = "UNLACE_CGROUP_ROOT";
 
 /// Memory a new process could take, and whether a cgroup's `memory.max`
 /// rather than the machine is what bounds it.

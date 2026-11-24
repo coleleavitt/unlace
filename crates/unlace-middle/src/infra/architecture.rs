@@ -475,7 +475,7 @@ pub struct Architecture {
     pub kuna_mips_pairs_painted: bool,
     /// (kuna) The loader's source-language verdict for the image being
     /// decompiled.  A FACT, not an option: written once at `load file` from
-    /// `unlace_analysis::sourcelang` (the `KUNA_SOURCELANG` override already
+    /// `unlace_analysis::sourcelang` (the `UNLACE_SOURCELANG` override already
     /// applied), and the thing `option rustabi auto` tests and
     /// `option reloadarg` stands down on.  The XML `<binaryimage>` bootstrap
     /// never runs the analyzer tier, so it stays `Unknown` there.
@@ -745,7 +745,7 @@ pub struct Architecture {
     /// generation (no C++ analogue -- the C++ `glb` *is* the live symbol table
     /// and derives nothing per function).
     symbol_snapshots: RefCell<SymbolSnapshots>,
-    /// False re-derives both on every handle (`KUNA_NO_SYMBOL_SNAPSHOT_CACHE`),
+    /// False re-derives both on every handle (`UNLACE_NO_SYMBOL_SNAPSHOT_CACHE`),
     /// so the memoized and re-derived paths can be compared.
     kuna_snapshot_cache: bool,
     /// Options that can be configured (C++ `options`).
@@ -2427,7 +2427,7 @@ impl Architecture {
     }
 
     /// Turn the `build_arch_handle` symbol-snapshot memoization on or off (on by
-    /// default; `KUNA_NO_SYMBOL_SNAPSHOT_CACHE` turns it off at construction).
+    /// default; `UNLACE_NO_SYMBOL_SNAPSHOT_CACHE` turns it off at construction).
     /// The two paths must agree -- this exists so a test can compare them.
     pub fn set_symbol_snapshot_cache(&mut self, on: bool) {
         self.kuna_snapshot_cache = on;
@@ -6270,7 +6270,7 @@ pub struct GoLayout {
 /// BEFORE the engine is built, because the shell install runs inside the
 /// cspec decode, upstream of every per-image fact write. Absent or
 /// unparsable means the go1.22 register-ABI baseline.
-pub const GOVERSION_ENV: &str = "KUNA_GOVERSION";
+pub const GOVERSION_ENV: &str = "UNLACE_GOVERSION";
 
 impl GoLayout {
     /// The go1.22 register-ABI baseline (also the unknown-version fallback).

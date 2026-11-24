@@ -9,7 +9,7 @@
 
 /// Environment variable read by `unlace-analysis::loader::kuna_ppcaputarget`.
 /// Absent or an off-token ⇒ disabled; any on-token ⇒ enabled.
-pub const PPCAPU_ENV: &str = "KUNA_PPCAPU";
+pub const PPCAPU_ENV: &str = "UNLACE_PPCAPU";
 
 /// Whether APU-based PowerPC language selection is enabled for this process.
 pub fn ppcapu_enabled() -> bool {

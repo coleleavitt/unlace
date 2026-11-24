@@ -30,8 +30,8 @@
 //!
 //! ## The fingerprint gate (the FID full-hash-match discipline)
 //!
-//! A candidate is applied **only** when its own `pdb_information().guid/age`
-//! matches the PE's CodeView record. A MISMATCH (a stale / wrong / unrelated
+//! A candidate is applied **only** when its GUID and DBI-stream age
+//! match the PE's CodeView record. A MISMATCH (a stale / wrong / unrelated
 //! `.pdb`) or an ABSENT/unreadable file moves on to the next candidate, and an
 //! exhausted list emits nothing. This is the exact "never apply the wrong external
 //! knowledge" discipline FID's full-hash bucket-collapse enforces: a wrong PDB

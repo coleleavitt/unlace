@@ -66,6 +66,10 @@ specs/Ghidra/Processors/MCORE vendors the Motorola M-CORE SLEIGH specification o
 aleph-void/ghidra-mcore (https://github.com/aleph-void/ghidra-mcore), a fork of CUB3D/ghidra-mcore, released under the
 Apache License, Version 2.0 (its license file is in that directory).
 
+specs/Ghidra/Processors/EBC vendors the EFI Byte Code SLEIGH specification of
+aleph-void/Ghidra-EFI-Byte-Code-Processor (https://github.com/aleph-void/Ghidra-EFI-Byte-Code-Processor), a fork of meromwolff/Ghidra-EFI-Byte-Code-Processor, released under the
+MIT License (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

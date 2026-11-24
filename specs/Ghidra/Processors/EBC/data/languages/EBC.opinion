@@ -1,0 +1,6 @@
+<opinions>
+    <constraint loader="Portable Executable (PE) for EFI Byte Code" compilerSpecID="default">
+        <constraint primary="3772" processor="EBC" endian="little" size="64" />
+        <constraint primary="3772" processor="EBC" endian="little" size="32" />
+    </constraint>
+</opinions>

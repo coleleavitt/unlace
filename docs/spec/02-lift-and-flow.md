@@ -4177,6 +4177,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `TLCS900H` | Toshiba TLCS-900/H | `TLCS900H:LE:32:default` | aleph-void/ghidra-tlcs900h (fork of nevesnunes/ghidra-tlcs900h) @ `585eb6070f`, MIT |
 | `LM32` | Lattice LatticeMico32 | `lm32:BE:32:default`, `lm32:LE:32:default` | aleph-void/ghidra-lm32 (fork of jevinskie/ghidra-lm32) @ `5be258ec6d`, MIT |
 | `MCORE` | Motorola M-CORE | `MCORE:BE:32:default`, `MCORE:LE:32:default` | aleph-void/ghidra-mcore (fork of CUB3D/ghidra-mcore) @ `0c10e14854`, Apache-2.0 |
+| `EBC` | EFI Byte Code | `EBC:LE:64:default`, `EBC:LE:32:default` | aleph-void/Ghidra-EFI-Byte-Code-Processor (fork of meromwolff/Ghidra-EFI-Byte-Code-Processor) @ `f27afea157`, MIT |
 <!-- vendor-rows -->
 
 ### WDC 65816 (#98)

@@ -3555,12 +3555,17 @@ test = "arcv2_conditional_delayed_return_runs_its_slot"
 address = "0x0"
 expect = ["v2 = 0;", "return v2 + *v1;"]
 
-# C-SKY ET_REL (EM_CSKY, ABIv2) routes to CSKY:LE:32:v2 (#776). chain and pick need the bsr relocations, which are not applied yet.
+# C-SKY ET_REL (EM_CSKY, ABIv2) routes to CSKY:LE:32:v2 (#776); bsr32 calls take PCREL_IMM26BY2.
 [[family]]
 name = "elfroute_csky_o"
 loader = "auto"
 fixture = "crates/unlace-cli/tests/fixtures/elfroute/csky.o"
 forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_csky_o_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
 
 [[family.function]]
 test = "elfroute_csky_o_lookup"

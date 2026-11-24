@@ -1,0 +1,75 @@
+# An element-copy run beside a global its stores may alias (`option copyrun`).
+#
+# Issue: heritage hangs one INDIRECT of every global a store may alias on
+# each store of the run, a chain per global. `copyrun` moved each of them
+# onto the one `memcpy` it puts in the run's place, so the builtin carried
+# a chain of INDIRECTs of the same global whose middle values overlap; the
+# global's variable could not be merged and printed a self-assignment per
+# INDIRECT (`token = token;` seven times, and `token = v2;` before the
+# copy).
+#
+# Stage / sub-stage: P3, `ActionCopyRun`
+# (`unlace-decomp/src/p3_dataflow/kuna_copyrun.rs`): each chain is folded to
+# one INDIRECT on the builtin, reading the chain's first input; a run whose
+# chain has another reader is left as it is.
+#
+# Fixture `copyrun_global_x86_64` (gcc -O2, x86-64; source
+# `copyrun_global.c`): `copy_guarded` copies a 64-byte struct between a
+# `swift_once`-like guarded call on the global `token` and a tail call
+# taking `token`. Pass 1 (`copyrun off`) prints the element copies; pass 2
+# (the default) one `memcpy` and no assignment of `token`.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/copyrun_global_x86_64',
+    'option copyrun off',
+    'read symbols',
+    'load function copy_guarded',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/copyrun_global_x86_64',
+    'read symbols',
+    'load function copy_guarded',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'copyrun off: the struct is copied element by element'
+count = 1
+literal = 'a0[6] = a1[6];'
+
+[[match]]
+name = 'copyrun on: the run is one memcpy'
+count = 1
+literal = 'builtin_memcpy(a0,a1,0x40);'
+
+[[match]]
+name = 'the global is never assigned to itself'
+count = 0
+literal = 'token = token;'
+
+[[match]]
+name = 'the global is never assigned at all'
+count = 0
+literal = 'token = '
+
+[[match]]
+name = 'the value read before the copy reaches the tail call'
+count = 1
+literal = 'consume(a0,v1);'

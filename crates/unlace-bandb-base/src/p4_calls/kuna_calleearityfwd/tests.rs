@@ -4,7 +4,7 @@
 //! [`kuna_calleearity`](crate::kuna_calleearity)'s and is covered by that
 //! module's tests; what is new here is the shape of the candidate
 //! list the retry hands it.  The end-to-end behaviour — a call site that
-//! finalizes before its witness — is `tests/stages/kuna-calleearityfwd.xml`.
+//! finalizes before its witness — is `tests/stages/kuna-calleearityfwd.toml`.
 
 use super::*;
 

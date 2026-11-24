@@ -1,0 +1,88 @@
+# A function decompiled alone returns what its callers read after the call
+# (kuna_callerreads.rs, always on). Issue #843.
+#
+# The script loads callerreads_x86_64_gcc_O2 (gcc -O2, source callerreads.c
+# beside it). triple is `gi = a * 3; return gi;`, compiled to
+# `lea (%rdi,%rdi,2),%eax; mov %eax,gi(%rip); ret`, the same code as a
+# function that only stores. keep loads `*p` into eax, stores it to gj and
+# `x + 1` to gi, and returns it. same tail-calls strcmp. Upstream's onlyOpUse
+# refuses a return value the function also stores or that comes straight from
+# a call, so each prints void, while main reads eax after each call. scale
+# stores `a * 5` from eax too, but main ignores its result.
+#
+# Without the rule every function prints void.  The rule decodes main from
+# the address each call returns to, which the Listing files, finds eax read
+# before it is written, and forces the return the way decompile-all does:
+# triple, keep and same return int.  scale stays void.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/callerreads_x86_64_gcc_O2',
+    'option listing on',
+    'read symbols',
+    'load function triple',
+    'decompile',
+    'print C',
+    'load function keep',
+    'decompile',
+    'print C',
+    'load function same',
+    'decompile',
+    'print C',
+    'load function scale',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'CALLERREADS #1: a value stored to a global and returned never prints void'
+count = 0
+literal = 'void triple(int4 a0)'
+
+[[match]]
+name = 'CALLERREADS #2: a loaded value stored to two globals and returned never prints void'
+count = 0
+literal = 'void keep(int4 *a0)'
+
+[[match]]
+name = "CALLERREADS #3: a tail call's result never prints void"
+count = 0
+literal = 'void same('
+
+[[match]]
+name = 'CALLERREADS #4: a value its caller reads is returned though it is also stored'
+count = 1
+literal = 'int4 triple(int4 a0)'
+
+[[match]]
+name = 'CALLERREADS #5: the stored global and the return are the same value'
+count = 1
+literal = 'return a0 * 3;'
+
+[[match]]
+name = 'CALLERREADS #6: a loaded value its caller reads is returned'
+count = 1
+literal = 'int4 keep(int4 *a0)'
+
+[[match]]
+name = 'CALLERREADS #7: a tail call whose result the caller reads is returned'
+count = 1
+literal = 'int4 same('
+
+[[match]]
+name = 'CALLERREADS #8: a function whose caller ignores the register stays void'
+count = 1
+literal = 'void scale(int4 a0)'

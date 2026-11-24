@@ -46,7 +46,7 @@ byte is spelled unsigned and the upstream reading stands.
   declared narrow parameter, an AND of unsigned bytes, a sum that fits its
   byte, and clang's forwarded narrow parameters). #10 fails with `c_range`
   disabled; #11 and #12 fail when the cast ignores the trim evidence.
-- `tests/stages/kuna-endptrbound.xml` #5: its `push_back(v2,*v3)` argument is
+- `tests/stages/kuna-endptrbound.toml` #5: its `push_back(v2,*v3)` argument is
   a `movzx edx, byte [rsi]` byte and now reads `push_back(v2,(uint1)*v3)`.
 - `roundtrip/roundtrip.sh <kuna> [<base-kuna>]` (`CC=gcc` or `CC=clang`):
   compile-and-run check of eleven callers, value by value against the binary

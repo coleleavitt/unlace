@@ -1,0 +1,167 @@
+# kuna: a constant flowing into a return value or call argument whose
+# declared type cannot hold a data pointer is not inferred as a pointer.
+# dret and cd move the bits of &table into a double (0x404040, the
+# denormal 2.08038790635732e-317); they printed (double)table, a
+# conversion of an address to a floating value, not the bits.  ebig
+# returns the address of msg in a pointer-wide enum and printed it as
+# (big)"hello world".
+#
+# Stage / sub-stage: P5 const-pointer (p9_emit/coreaction_render.rs,
+# ActionConstantPtr check_copy for returns, check_call_input for call
+# arguments).  No option.  The rest are controls that must not move: a
+# long slot is as wide as a pointer and still prints (long)table; a
+# structure passed by value whose member is a pointer still names the
+# string; a declared int * return prints table, also with inferconstptr
+# off.
+#
+# Source (gcc -O2 -fno-pie -no-pie -fcf-protection=none, bytes verbatim):
+#
+#     int table[64] = {1, 2, 3};
+#     const char msg[] = "hello world";
+#     struct S { const char *p; };
+#     enum big { BSMALL = 1, BHUGE = 0x100000000L };
+#     double td(double v) { return v * 2; }
+#     double cd(void) { double d; long v = (long)&table[0]; memcpy(&d, &v, 8); return td(d); }
+#     double dret(void) { double d; long v = (long)&table[0]; memcpy(&d, &v, 8); return d; }
+#     long tl(long v) { return v + 1; }
+#     long cl(void) { return tl((long)&table[0]); }
+#     long laddr(void) { return (long)&table[0]; }
+#     int *pret(void) { return &table[0]; }
+#     int takes(struct S s) { return s.p[0]; }
+#     int cs(void) { struct S s = { msg }; return takes(s); }
+#     enum big ebig(void) { return (enum big)(uintptr_t)msg; }
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x401150', name = 'td' },
+    { space = 'ram', offset = '0x401160', name = 'cd' },
+    { space = 'ram', offset = '0x401170', name = 'dret' },
+    { space = 'ram', offset = '0x401180', name = 'tl' },
+    { space = 'ram', offset = '0x401190', name = 'cl' },
+    { space = 'ram', offset = '0x4011a0', name = 'laddr' },
+    { space = 'ram', offset = '0x4011b0', name = 'pret' },
+    { space = 'ram', offset = '0x4011c0', name = 'takes' },
+    { space = 'ram', offset = '0x4011d0', name = 'cs' },
+    { space = 'ram', offset = '0x4011e0', name = 'ebig' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401150'
+readonly = true
+hex = '''
+f20f58c0c366662e0f1f840000000000b84040400066480f6ec0ebe40f1f4000
+b84040400066480f6ec0c30f1f440000488d4701c366662e0f1f840000000000
+bf40404000ebe9660f1f840000000000b840404000c3662e0f1f840000000000
+b840404000c3662e0f1f8400000000000fbe07c366662e0f1f84000000000090
+bf08204000ebe9660f1f840000000000b808204000c3
+'''
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x402008'
+readonly = true
+hex = '68656c6c6f20776f726c6400'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x404040'
+hex = '0100000002000000030000000000000000000000000000000000000000000000'
+
+[script]
+commands = [
+    'map address r0x404040 int4 table[64]',
+    'map address r0x402008 char msg[12]',
+    'parse line struct S { char *p; };',
+    'parse line enum big { BSMALL = 1, BHUGE = 0x100000000 };',
+    'parse line extern float8 td(float8 v);',
+    'parse line extern float8 cd(void);',
+    'parse line extern float8 dret(void);',
+    'parse line extern int8 tl(int8 v);',
+    'parse line extern int8 cl(void);',
+    'parse line extern int8 laddr(void);',
+    'parse line extern int4 *pret(void);',
+    'parse line extern int4 takes(S s);',
+    'parse line extern int4 cs(void);',
+    'parse line extern big ebig(void);',
+    'lo fu cd',
+    'decompile',
+    'print C',
+    'lo fu dret',
+    'decompile',
+    'print C',
+    'lo fu cl',
+    'decompile',
+    'print C',
+    'lo fu laddr',
+    'decompile',
+    'print C',
+    'lo fu pret',
+    'decompile',
+    'print C',
+    'lo fu cs',
+    'decompile',
+    'print C',
+    'lo fu ebig',
+    'decompile',
+    'print C',
+    'option inferconstptr off',
+    'lo fu laddr',
+    'decompile',
+    'print C',
+    'lo fu pret',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'CONSTPTRDECLARED-X86 #1: no double is converted from an address'
+count = 0
+literal = '(float8)table'
+
+[[match]]
+name = 'CONSTPTRDECLARED-X86 #2: a declared double argument keeps its bits'
+count = 1
+literal = 'td(2.08038790635732e-317)'
+
+[[match]]
+name = 'CONSTPTRDECLARED-X86 #3: a declared double return keeps its bits'
+count = 1
+literal = 'return 2.08038790635732e-317;'
+
+[[match]]
+name = 'CONSTPTRDECLARED-X86 #4: a pointer-sized long argument still names the symbol'
+count = 1
+literal = 'tl((int8)table)'
+
+[[match]]
+name = 'CONSTPTRDECLARED-X86 #5: a pointer-sized long return still names the symbol, then honors inferconstptr off'
+count = 1
+literal = 'return (int8)table;'
+
+[[match]]
+name = 'CONSTPTRDECLARED-X86 #6: a declared pointer return names the symbol in both passes'
+count = 2
+literal = 'return table;'
+
+[[match]]
+name = 'CONSTPTRDECLARED-X86 #7: inferconstptr off leaves the long return a number'
+count = 1
+literal = 'return 0x404040;'
+
+[[match]]
+name = 'CONSTPTRDECLARED-X86 #8: a structure passed by value still names its pointer member'
+count = 1
+literal = 'takes((S)"hello world")'
+
+[[match]]
+name = 'CONSTPTRDECLARED-X86 #9: a pointer-wide enum return is not an address'
+count = 0
+literal = '(big)'
+
+[[match]]
+name = 'CONSTPTRDECLARED-X86 #10: the enum return keeps its value'
+count = 1
+literal = 'return 0x402008;'

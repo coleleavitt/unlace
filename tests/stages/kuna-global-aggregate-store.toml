@@ -1,0 +1,63 @@
+# Independent SPARC record copy with a shared publish block before the copy block.
+
+[image]
+arch = 'sparc:BE:32:default:default'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'update' },
+    { space = 'ram', offset = '0x1200', name = 'fill' },
+    { space = 'ram', offset = '0x1210', name = 'publish' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = '9de3bf9021000004a014210080a6200012800006010000004000007e901000101080000c01000000400000769007bff080a220000280000701000000d41fbff0d43c0000d81fbff810bffff4d83c200881c7e00881e80000'
+
+[script]
+commands = [
+    'parse line typedef struct Record { float a; float b; float c; float d; } Record;',
+    'parse line extern void update(int enabled);',
+    'parse line extern int fill(Record *value);',
+    'parse line extern void publish(Record *value);',
+    'map addr r0x1100 Record cache',
+    'lo fu update',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'First aggregate field is published'
+count = 1
+literal = 'cache.a ='
+
+[[match]]
+name = 'Second aggregate field is published'
+count = 1
+literal = 'cache.b ='
+
+[[match]]
+name = 'Third aggregate field is published'
+count = 1
+literal = 'cache.c ='
+
+[[match]]
+name = 'Fourth aggregate field is published'
+count = 1
+literal = 'cache.d ='
+
+[[match]]
+name = 'Global aggregate fields do not become locals'
+count = 0
+regex = 'float4 cache_[0-9]+;'
+
+[[match]]
+name = 'Observer receives the complete global record'
+count = 1
+literal = 'publish(&cache);'
+
+[[match]]
+name = 'No scalar writes to the whole structure'
+count = 0
+regex = 'cache = v[0-9]+\.[cd];'

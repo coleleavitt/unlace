@@ -1,6 +1,6 @@
 //! Unit tests for the caller-to-callee decision. The end-to-end witness -- a
 //! callee decompiled again with the type its one caller passes -- is the
-//! two-pass stage test `tests/stages/kuna-calleevote.xml` and the CLI probe.
+//! two-pass stage test `tests/stages/kuna-calleevote.toml` and the CLI probe.
 
 use super::*;
 

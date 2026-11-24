@@ -8054,7 +8054,7 @@ every other binary's pass list is byte-identical to before the pass existed):
     Foundation out of an iOS 16.4 arm64e cache: 3,979 `objc_msgSend$<sel>` stubs
     named (none before), every selector, class, super and protocol reference
     slot named (6,050, 566, 481 and 33), `self` and `_cmd` typed on its methods.
-    `tests/stages/kuna-dyldcacheobjc.xml` runs the two synthetic caches of
+    `tests/stages/kuna-dyldcacheobjc.toml` runs the two synthetic caches of
     `dyld_cache_objc.py`, one with the header and one with only the
     `objc_opt_t`.
   - **SDK C prototypes** (`objcsdk`, kuna, the C half of the same directory,

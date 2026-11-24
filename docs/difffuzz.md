@@ -23,6 +23,47 @@ files under `DIR` instead of the built-in ones, so a spec edit can be checked ri
 findings by mnemonic; `--out` writes every finding with its bytes, both disassemblies, the
 input registers and the differing values.
 
+## QEMU user mode as the reference
+
+`--oracle qemu` replaces Unicorn with the installed QEMU user-mode binaries
+(`tools/difffuzz/qemu_backend.py`) for `aarch64` (`qemu-aarch64 -cpu max`), `riscv64`
+(`qemu-riscv64 -cpu max`) and `mips` (`qemu-mips64 -cpu MIPS64R2-generic`). QEMU 10 implements
+what Unicorn's older QEMU core lacks or gets wrong: BF16, I8MM (`usdot`/`sudot`), MOPS,
+`fcmla`/`fcadd`, and RISC-V NaN-boxing.
+
+```sh
+~/.local/share/difffuzz-venv/bin/python tools/difffuzz/difffuzz.py --arch aarch64 --oracle qemu \
+    --bytes 0af8424f,05fb930f --unlace target/debug/unlace
+```
+
+Each case is a static ELF. A prologue page loads every compared register (and NZCV) from a table.
+The instruction sits at the address it was lifted at, in a page that is otherwise the
+deterministic filler. Two epilogues store the registers back and `write(2)` them, with every
+data page, to stdout: one at the fall-through address and one at the address the p-code
+branches to. Which epilogue ran gives the reference's next pc. The p-code runs first, and
+every page it reads or writes is mapped with the same filler and compared byte for byte
+afterwards. The register file is unchanged.
+
+- The reference cannot touch a page the p-code did not: such an access, a trap, or a branch
+  anywhere but the two exits ends the run with a signal, counted as `ref-exception`.
+- QEMU maps guest pages one-to-one, so a page below `vm.mmap_min_addr` (64 KiB), the harness's
+  own pages, or one QEMU cannot reserve is `bad-address`. These are mostly loads through a
+  small register value, which Unicorn still covers.
+- RISC-V and MIPS have no user scratch register. The harness keeps the table address in the
+  highest general register the instruction's p-code does not write, and reads that register
+  back as its input.
+- MIPS: the installed QEMU has no 32-bit MIPS user binary, so MIPS32 code runs on a MIPS64 core
+  with every register sign-extended from its 32-bit value (the state in which MIPS64 runs a
+  MIPS32 instruction as MIPS32 does). Only the low 32 bits are compared.
+- PowerPC has no QEMU harness. `qemu-ppc64` runs in 64-bit mode (MSR.SF is not user-writable),
+  where record forms set CR0 from the 64-bit result, so it is not an exact reference for
+  32-bit PowerPC.
+
+On the #546 encodings, `--oracle qemu` runs `bfdot` and `usdot` (Unicorn raises
+`UC_ERR_EXCEPTION`) and agrees with Unicorn on the rest. In 300 random RISC-V instructions it
+finds `fle.s` reading an unboxed single (`d38c9fa1`): QEMU compares the canonical NaN and
+writes 0, SLEIGH writes 1. Unicorn misses this because it does not unbox either.
+
 ## How a case runs
 
 - **Registers.** The register file of the language comes from its `.slaspec`
@@ -68,9 +109,8 @@ input registers and the differing values.
   `--count` to a few hundred and vary `--seed`.
 - m68k and SPARC have no `Arch`: Unicorn 2.1.4 segfaults within a few hundred cases on both, and
   its m68k SR read does not include the lazily computed condition codes.
-- RISC-V: fused multiply-adds, instructions with a static rounding mode other than `rne`/`dyn`
-  (p-code float ops round to nearest), and the NaN-boxing of single-precision results in 64-bit
-  `f` registers (open, see below).
+- RISC-V: fused multiply-adds and instructions with a static rounding mode other than
+  `rne`/`dyn` (p-code float ops round to nearest).
 
 ### Reference quirks
 
@@ -83,6 +123,10 @@ Unicorn is the reference, not the truth. Each disagreement below was checked aga
   the prefix in 64-bit mode.
 - A RIP-relative `SHLD`/`SHRD` with an `imm8` addresses one byte short.
 - `INSERTQ` inserts the wrong field and `EXTRQ` keeps bits 127:64.
+- RISC-V: Unicorn's QEMU NaN-boxes a single-precision result only for `flw` and `fmv.w.x`; the
+  arithmetic, conversion and sign-injection results keep bits 63:32 as 0 (or, for `fsgnj.s`,
+  as the upper word of `rs1`). The ISA manual boxes every one ("NaN Boxing of Narrower
+  Values"), so when ours is boxed only its low 32 bits are compared (`RiscV64.normalize`).
 
 ## Findings
 
@@ -102,20 +146,22 @@ Fixed in the specs (`docs/spec/02-lift-and-flow.md` describes each change):
   `LD1`..`LD4` and `LD1R`..`LD4R` with 64-bit arrangements, ...) left bits 127:64 of the
   vector register unchanged. `FCVTZU d,d,#fbits` and `FCVTZU h,h,#fbits`, `SCVTF`/`UCVTF`
   `.4H`/`.8H` `#fbits` and scalar `URSHR d` decoded their shift with the wrong element size.
+- **AArch64 (#546).** Rounding of `SRSRA`/`URSRA` and by-element `SQRDMULH`, saturation of
+  `SQDMULH`/`SQRDMULH`/`SQDMLAL`/`SQDMLSL`/`SUQADD`, `SUDOT`/`USDOT`/`BFDOT`/`BFMLALB`/`BFMLALT` by element, and the MOPS `wt` options.
 - **RISC-V.** `c.jr`, `c.jalr` and `ret` did not clear bit 0 of the target, as `jalr` does.
+  Single-precision (and Zfh half-precision) results written to a 64-bit `f` register were
+  zero-extended instead of NaN-boxed (`flw fs4,-0x56f(tp)` left `fs4 = 0x000000009b2a6699`
+  for `0xffffffff9b2a6699`).
 - **ARM.** A conditional `STRHT` wrote its base back even when the condition failed, and stored 4
   bytes. The T32 `ANDS`, `BICS`, `MOVS.W` (immediate), `MVNS` and `ANDS.W`/`MVNS.W` with a
   shifted register did not set C from the shifter.
+- **TriCore (#563).** PSW.V was the sign bit of the 32-bit result instead of signed overflow
+  (`overflowflags`, about 110 constructors), and `SHA` never set PSW.C.
 
-Open (issues #546, #548, #549, #563):
+Open (issue #548):
 
-- AArch64: the rounding of `SQRDMULH`, `SRSHR`/`URSHR`/`SRSRA`/`URSRA` and the saturation of
-  `SQDMLAL`/`SQDMLSL`/`SUQADD` are not modelled; `FCVTMU`/`FCVTZU` of a negative value
-  wraps instead of saturating to 0; `BFDOT`, `USDOT` and `SUDOT` by element fail to lift
-  (`generateLocation: null space`); the MOPS `CPY*` and `BFMLALB/T` (vector) do not decode.
-- RISC-V: single-precision results are not NaN-boxed in the 64-bit `f` registers.
-- TriCore: PSW.V is the sign bit of the 32-bit result instead of signed overflow (`overflowflags`,
-  about 110 constructors), and `SHA` never sets PSW.C.
+- AArch64: `FCVT*U` of a negative value wraps instead of giving 0 (kept: clamping makes every
+  `(unsigned)f` unreadable); the SVE `USDOT`/`BFMLALB` and F64MM `LD1RO*` do not decode.
 - x86-64: an encoding whose REX prefix is followed by another prefix (REX is then ignored) does
   not decode; `BSF`/`BSR` with a zero source write the destination, which hardware leaves
   unchanged; `MOVSXD r16` and several 3DNow! instructions do not decode.

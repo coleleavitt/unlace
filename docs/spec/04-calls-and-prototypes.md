@@ -871,7 +871,7 @@ stack tail is left as scored. The runtime's send entry points themselves
 but are no C variadics: past the receiver and selector they carry the method's
 arguments in registers exactly as the method takes them, so a call to one keeps
 its register trials (`[super greet:x]` passes `x` in `w2`).
-`tests/stages/kuna-darwinvarargs.xml` pins both targets, and
+`tests/stages/kuna-darwinvarargs.toml` pins both targets, and
 `tests/stages/kuna-objcrefs.xml` the super send.
 
 The same two rules are also what `ActionInputPrototype` runs the function's
@@ -1826,7 +1826,7 @@ at the match (01 §1.4).
   (Database::set_function_extra_pop)`). `ActionDefaultParams` copies it into
   every call spec that targets the function, as upstream copies the callee's
   own prototype, and the function's own prototype takes it when it is
-  decompiled (`tests/stages/kuna-extrapop-function.xml`). The prototype
+  decompiled (`tests/stages/kuna-extrapop-function.toml`). The prototype
   `ArchContext::query_function` returns carries it too, so a call through a
   register or an import slot that resolves to the function pops the same
   bytes.
@@ -6636,7 +6636,7 @@ argument, and not a RETURN or the PIECE return recovery joins a returned pair
 with, which are the function's own unsettled return trial; phis, INDIRECTs and a
 return's injected no-op copy are looked through. A caller whose second-register
 read stays unexplained keeps the old rendering: the uninitialized local. The
-shape is pinned by `tests/stages/kuna-callretpairhalf.xml` (ARM and Thumb, with
+shape is pinned by `tests/stages/kuna-callretpairhalf.toml` (ARM and Thumb, with
 controls for a callee that never writes `r1` and for an indirect call) and by the
 compiled round trip in `unlace-cli/tests/call_result_high_word_reads.rs` (ARM,
 MIPS, i386, with a `void` callee and an `idiv` remainder as controls).
@@ -7994,7 +7994,7 @@ upstream's reading of it. `onlyOpUse` takes the matched
 call's read of the trial slot as the parameter use and never asks about slot 0,
 so `mov r9,0x401020; cmovz r9,r8; jmp r9` scored `r9` an active sixth argument
 of the call it is the target of, and a tail jump through `r8` read `r8` as its
-fifth argument (`tests/stages/kuna-callproto.xml`); the chain veto was all that
+fifth argument (`tests/stages/kuna-callproto.toml`); the chain veto was all that
 hid the first. Inactive, it never anchors a hole fill and is dropped from the
 end of a list, but is still filled below a later argument, where the ABI's
 order makes it an argument: `fp(fp,x+1)` is `inc %rsi; jmp *%rdi`, and
@@ -8333,7 +8333,7 @@ straight from its address (`mov rax,[g]` lifts to a COPY of the global's ram
 Varnode), so x86-64 accessors of a global keep upstream's reading.
 `option cachereturn off` restores upstream's reading everywhere.
 
-Stage test `tests/stages/kuna-cachereturn.xml`: with `option sourcelang swift`,
+Stage test `tests/stages/kuna-cachereturn.toml`: with `option sourcelang swift`,
 clang -O2 arm64 `get_cached` and `get_slot` and a hand-written two-RETURN
 accessor print `void` with the option off and return the cell with it on; with
 `option sourcelang c` they print `void` at the default; `void ensure(void) {
@@ -10427,7 +10427,7 @@ but that says nothing of the next call: Swift code goes on with the object
 it passed, and leaves the result in `x0` for a callee that takes nothing
 there (`swift_bridgeObjectRetain(v8); Foundation.Locale.current.getter(v7)`,
 or `objc_retainAutoreleasedReturnValue(..)` before
-`URL._bridgeToObjectiveC()`, whose `self` is in `x20`). `tests/stages/kuna-callresultuse-runtime.xml`
+`URL._bridgeToObjectiveC()`, whose `self` is in `x20`). `tests/stages/kuna-callresultuse-runtime.toml`
 pins both ends.
 
 So the hand-off is heritaged at all, `kuna_callresultuse.rs (plant)` gives
@@ -10489,7 +10489,7 @@ count, 275 were false (`cadvise(void)`, `onint(void)`, `yylex(void)`,
 upstream's contiguity rules follow it: gcc's ARM `push {r3,lr}; bl g; pop.w
 {r3,lr}; b.w h`, from `void t1(void) { g(6); h(); }`, gave `h` the pair
 `r1:r0`, the leftover `r2` and the reloaded `r3`, and `t1` four parameters
-(`tests/stages/kuna-callresultuse-armtail.xml` pins the default, and holds
+(`tests/stages/kuna-callresultuse-armtail.toml` pins the default, and holds
 with the option on). On x86-64 `rax` is no argument register, but a `mov
 rcx,rax` temporary at a gcc -O0 variadic call was taken for a trailing
 argument (`fprintf(stream,fmt,v1,fmt)`). With the option off every function
@@ -10649,7 +10649,7 @@ this rule deliberately does not touch), with the `type:.eq.*` equality
 helpers' whole signatures improving. At `auto` the rule acts only when the
 image's source language is Go; `always` drops the language test (the
 stage-test bytechunk); `off` keeps the faithful concatenation. Pinned by
-`tests/stages/kuna-gobool.xml` (two-pass over a hand-assembled
+`tests/stages/kuna-gobool.toml` (two-pass over a hand-assembled
 `mov %rdi,%rax; cmp $1,%rdi; sete %al; ret`).
 
 ### (kuna) The SysV x86-64 vector calling convention — `option vectorabi`, default on

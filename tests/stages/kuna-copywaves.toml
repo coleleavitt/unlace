@@ -1,0 +1,41 @@
+# GH-1034, P3 rule pools, copy-propagation waves. churn (the prunedssa
+# fixture) reads 256 read-only table words between 256 calls; its rule
+# pools propagate copies into joins and remove dead INDIRECT and MULTIEQUAL
+# chains a few changes per pass. A pass with a copy propagation is followed
+# by a wave, and an op a wave reaches for its opcode gets only the
+# far-walking rules. The body, the live IR and the ops created are the ones
+# a full sweep after every pass leaves.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/prunedssa_x86_64',
+    'read symbols',
+    'load function churn',
+    'decompile',
+    'print C',
+    'count pcode',
+]
+
+[[match]]
+name = 'copywaves #1: churn prints'
+count = 1
+regex = '^uint8 churn\(int8 a0,char \*a1\)$'
+
+[[match]]
+name = 'copywaves #2: churn keeps its 256 calls'
+count = 256
+literal = 'sink('
+
+[[match]]
+name = "copywaves #3: the live IR is the sweep's"
+count = 1
+literal = 'Count - pcode = 8135'
+
+[[match]]
+name = "copywaves #4: the ops created are the sweep's"
+count = 1
+literal = 'Count - created = 35936'

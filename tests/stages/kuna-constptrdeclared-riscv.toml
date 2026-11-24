@@ -1,0 +1,65 @@
+# kuna: a constant returned from a function whose declared return type is
+# not a pointer is not inferred as a pointer.  RISC-V lists the 2-byte
+# csreg space among the spaces a constant may point into, so a short
+# return of 1000 matched the CSR pmpaddr56 (csreg 0x3e8) and printed as
+# return (short)&pmpaddr56.
+#
+# Stage / sub-stage: P5 const-pointer (p9_emit/coreaction_render.rs,
+# ActionConstantPtr check_copy).  No option: the declared return type
+# rules the constant out.  rl is the control: an 8-byte return never
+# matches the 2-byte space and printed 1000 before and after.
+#
+# Source (clang -target riscv64-linux-gnu -march=rv64gc -O2, bytes verbatim):
+#
+#     short rq(int k) { return k > 0 ? 1000 : -1000; }
+#     unsigned short ru(int k) { if (k > 5) return 0x3e8; return 7; }
+#     long rl(int k) { return k > 0 ? 1000 : -1000; }
+
+[image]
+arch = 'RISCV:LE:64:RV64GC:gcc'
+symbols = [
+    { space = 'ram', offset = '0x10000', name = 'rq' },
+    { space = 'ram', offset = '0x10010', name = 'ru' },
+    { space = 'ram', offset = '0x10020', name = 'rl' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10000'
+readonly = true
+hex = '''
+aa851305803e6344b000130580c18280aa8515461305803e6343b6001d458280
+aa851305803e6344b000130580c18280
+'''
+
+[script]
+commands = [
+    'parse line extern int2 rq(int4 k);',
+    'parse line extern uint2 ru(int4 k);',
+    'parse line extern int8 rl(int4 k);',
+    'lo fu rq',
+    'decompile',
+    'print C',
+    'lo fu ru',
+    'decompile',
+    'print C',
+    'lo fu rl',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'CONSTPTRDECLARED-RV #1: no constant becomes a CSR address'
+count = 0
+literal = 'pmpaddr'
+
+[[match]]
+name = 'CONSTPTRDECLARED-RV #2: the short, unsigned short and long returns print 1000'
+count = 3
+literal = 'return 1000;'
+
+[[match]]
+name = 'CONSTPTRDECLARED-RV #3: the other arms are unchanged'
+count = 2
+literal = 'return -1000;'

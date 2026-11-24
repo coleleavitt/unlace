@@ -1,0 +1,85 @@
+# kuna calleeretpurge: an i386 SysV struct-returning callee pops its own
+# hidden result pointer with `ret $4`, and its caller is compiled around it.
+#
+# Source (gcc -m32 -O2 -fomit-frame-pointer):
+#
+#     struct pt { int x, y, z; };
+#     struct pt mk(int a, int b) { struct pt p; p.x = a; p.y = b; p.z = a + b; return p; }
+#     int use(int k) {
+#       struct pt p = mk(k, 7);
+#       int local[4];
+#       local[0] = p.x; local[1] = p.y; local[2] = p.z; local[3] = k;
+#       sink(local);
+#       struct pt q = mk(local[1], k);
+#       return local[0] * local[1] + local[2] - local[3] + q.z;
+#     }
+#
+#     8049190 mk:   mov eax,[esp+4] ... ret 4          ; pops the result pointer
+#     80491c0 use:  push esi; push ebx; sub esp,0x34
+#     80491c9       lea eax,[esp+8]                    ; &p
+#     80491cd       push 7; push esi; push eax
+#     80491d1       call mk                            ; esp afterwards = before - 8
+#     80491d6       mov eax,[esp+0x18]                 ; offsets assume the callee popped 4
+#
+# x86gcc.cspec's __cdecl states extrapop 4 for every callee, so the caller's
+# stack pointer after each `call mk` is modelled four bytes too low: the
+# first argument reads as `(int)&v3 + 4` and the frame slots after the call
+# shift by one word.  The callee's `ret 4` is the machine's answer.
+#
+# Stage: P4 call prototypes (ActionDefaultParams), option calleeretpurge
+# off|on.  Pass 1 (off) pins the bug, pass 2 (on, the default) the fix.
+
+[image]
+arch = 'x86:LE:32:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x8049190', name = 'mk' },
+    { space = 'ram', offset = '0x80491b0', name = 'sink' },
+    { space = 'ram', offset = '0x80491c0', name = 'use' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x8049190'
+hex = '8b4424048b5424088b4c240c891001ca894804895008c20400'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x80491b0'
+hex = '8b442404c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x80491c0'
+hex = '565383ec348b7424408d4424086a075650e8baffffff8b442418f30f7e44241089742434894424308d442428660fd644242850e8b8ffffff8b5c24308d442420565350e888ffffff8b4424340fafc30344243c2b4424400344243083c4485b5ec3'
+
+[script]
+commands = [
+    'option calleeretpurge off',
+    'lo fu use',
+    'decompile',
+    'print C',
+    'option calleeretpurge on',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'CALLEERETPURGE-X86 #1: off, the result pointer is four bytes past the slot the caller passes'
+count = 1
+regex = 'mk\(\(int4\)&\w+ \+ 4,'
+
+[[match]]
+name = "CALLEERETPURGE-X86 #2: on, mk receives the address of the caller's slot"
+count = 1
+regex = 'mk\(&\w+,'
+
+[[match]]
+name = 'CALLEERETPURGE-X86 #3: both passes, the second call passes the second stored word and k'
+count = 2
+regex = 'mk\(\w+,\(\(int4 \*\)&\w+\)\[1\],\w+\);'
+
+[[match]]
+name = 'CALLEERETPURGE-X86 #4: on, the return multiplies the first word the caller stored'
+count = 1
+regex = 'return \(\(\(int4\)\w+ \* \w+ \+'

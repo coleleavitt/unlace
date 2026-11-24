@@ -121,6 +121,127 @@ fn or_leaves(data: &Funcdata, vn: VarnodeId, depth: usize, leaves: &mut Vec<Varn
     true
 }
 
+fn same_value(data: &Funcdata, x: VarnodeId, y: VarnodeId) -> bool {
+    let (x, y) = (copied_value(data, x), copied_value(data, y));
+    functional_equality(x, y, data.vbank(), data.obank()) || same_instruction_read(data, x, y)
+}
+
+/// The inputs of the NaN tests an OR tree of them is made of, when every leaf is one.
+fn nan_guards(data: &Funcdata, vn: VarnodeId) -> Option<Vec<VarnodeId>> {
+    let mut leaves = Vec::new();
+    if !or_leaves(data, vn, 6, &mut leaves) || leaves.is_empty() {
+        return None;
+    }
+    leaves
+        .iter()
+        .map(|&leaf| {
+            let op = data
+                .vbank()
+                .get(leaf)?
+                .get_def()
+                .and_then(|id| data.obank().get(id))?;
+            if op.code() == OpCode::CPUI_FLOAT_NAN {
+                op.get_in(0)
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+/// `input` is NaN-tested by one of `guards`, or is a constant that is not a NaN.
+fn operand_guarded(data: &Funcdata, guards: &[VarnodeId], input: VarnodeId) -> bool {
+    guards.iter().any(|&g| same_value(data, g, input))
+        || data
+            .vbank()
+            .get(copied_value(data, input))
+            .is_some_and(|v| {
+                v.is_constant()
+                    && v.get_size() <= 8
+                    && data
+                        .get_arch()
+                        .get_float_format(v.get_size())
+                        .is_some_and(|fmt| fmt.op_nan(v.get_offset()) == 0)
+            })
+}
+
+/// `cmp == unordered` and `cmp != unordered`, where `cmp` is an ordered comparison of `a` and `b`
+/// and `unordered` the OR of their NaN tests: AArch64's `N == V` (`ge`, `gt`) and `N != V`
+/// (`lt`, `le`) after an FCMP. An ordered comparison is false on a NaN, so the two never hold
+/// together: `!=` is `cmp || unordered` and `==` is the exact complement of that, `b <= a` for
+/// `a < b`. Rewritten here, before `nanignore` would drop the NaN tests and leave `!(a < b)`.
+fn fold_exclusive_guard(data: &mut Funcdata, op: OpId) -> bool {
+    let Some(o) = data.obank().get(op) else {
+        return false;
+    };
+    let code = o.code();
+    if !matches!(
+        code,
+        OpCode::CPUI_INT_EQUAL
+            | OpCode::CPUI_INT_NOTEQUAL
+            | OpCode::CPUI_BOOL_XOR
+            | OpCode::CPUI_INT_XOR
+    ) {
+        return false;
+    }
+    let (Some(i0), Some(i1)) = (o.get_in(0), o.get_in(1)) else {
+        return false;
+    };
+    let bytes = |vn: VarnodeId| data.vbank().get(vn).map(|v| v.get_size());
+    if bytes(i0) != Some(1) || bytes(i1) != Some(1) {
+        return false;
+    }
+    for (cmp, guard) in [(i0, i1), (i1, i0)] {
+        let Some(def) = data
+            .vbank()
+            .get(cmp)
+            .and_then(|v| v.get_def())
+            .and_then(|id| data.obank().get(id))
+        else {
+            continue;
+        };
+        let ordered = def.code();
+        if !matches!(
+            ordered,
+            OpCode::CPUI_FLOAT_LESS | OpCode::CPUI_FLOAT_LESSEQUAL
+        ) {
+            continue;
+        }
+        let (Some(a), Some(b)) = (def.get_in(0), def.get_in(1)) else {
+            continue;
+        };
+        let Some(guards) = nan_guards(data, guard) else {
+            continue;
+        };
+        if guards
+            .iter()
+            .any(|&g| !same_value(data, g, a) && !same_value(data, g, b))
+            || !operand_guarded(data, &guards, a)
+            || !operand_guarded(data, &guards, b)
+        {
+            continue;
+        }
+        if code != OpCode::CPUI_INT_EQUAL {
+            data.op_set_opcode(op, crate::typeop::seam_type_op_for(OpCode::CPUI_BOOL_OR));
+            return true;
+        }
+        if reads_memory(data, a) || reads_memory(data, b) {
+            return false;
+        }
+        let complement = if ordered == OpCode::CPUI_FLOAT_LESS {
+            OpCode::CPUI_FLOAT_LESSEQUAL
+        } else {
+            OpCode::CPUI_FLOAT_LESS
+        };
+        data.op_set_opcode(op, crate::typeop::seam_type_op_for(complement));
+        data.op_set_all_input(op, &[b, a])
+            .expect("exclusive guard complement inputs");
+        mark_exact(data, op);
+        return true;
+    }
+    false
+}
+
 /// The exact complement of a guarded root: `lhs code rhs`.
 struct Complement {
     code: OpCode,
@@ -429,6 +550,14 @@ pub fn fold_nan_consumers(data: &mut Funcdata, nan: OpId) -> bool {
     }
     roots.sort_by(|x, y| y.1.cmp(&x.1));
     let mut changed = false;
+    let sources: Vec<VarnodeId> = std::iter::once(out)
+        .chain(roots.iter().map(|(r, _)| *r))
+        .collect();
+    for vn in sources {
+        for reader in data.descend_snapshot(vn) {
+            changed |= fold_exclusive_guard(data, reader);
+        }
+    }
     for (root, _) in roots {
         if guarded_complement(data, root).is_none() {
             continue;

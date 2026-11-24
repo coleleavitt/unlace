@@ -2357,7 +2357,8 @@ mod tests {
         // and vastart-callindirect / a va_start prologue whose field writes moved into call INDIRECTs
         // and aarch64-fcvtzu / an unsigned AArch64 float conversion to a word stays unsigned
         // and aarch64-signed-char / a sign-extended byte on AArch64 prints as signed char
-        assert_eq!(count, 1027, "corpus file count drifted");
+        // and aarch64-fcmp-nan / an unordered AArch64 FCMP takes the processor's signed conditions
+        assert_eq!(count, 1028, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

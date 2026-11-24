@@ -2,8 +2,8 @@
 //! sign-extension-mask simplification (kuna GH-1282, S3 simplification-quiescence).
 //!
 //! `RuleBoolSignShift` folds `(b << k) s>> k` into the sign-extended-mask form
-//! `0 - b` = `INT_2COMP(b)` (0 or all-ones) when the pre-shift value's NZMask
-//! occupies only the low `(width*8 - k)` bits.  Always on.
+//! `0 - b` = `INT_2COMP(b)` (0 or all-ones) when the pre-shift value is a single
+//! bit (`width*8 - k == 1`, NZMask within bit 0).  Always on.
 //!
 //! ## STUB(W6) — opcode-flag resolution
 //!
@@ -119,8 +119,12 @@ impl Rule for RuleBoolSignShift {
         if (width as uintb).wrapping_mul(8) <= sa {
             return 0;
         }
-        let tophalf: uintb = (1u64 << ((width as uintb).wrapping_mul(8) - sa)).wrapping_sub(1);
-        if (vn_nzmask(data, boolvn) & !tophalf) != 0 {
+        // `0 - b` equals `(b << sa) s>> sa` only when b is a single bit (0 or 1): a wider value
+        // in the low (width*8 - sa) bits is sign-extended from its top bit, not negated.
+        if (width as uintb).wrapping_mul(8) - sa != 1 {
+            return 0;
+        }
+        if (vn_nzmask(data, boolvn) & !1) != 0 {
             return 0;
         }
 

@@ -80,11 +80,17 @@ pub const RELOC_BASE: u64 = 0x40_0000;
 /// first page, so no laid-out symbol sits at address 0.
 pub const SMALL_RELOC_BASE: u64 = 0x100;
 
-/// The synthetic load base of a relocatable object: [`SMALL_RELOC_BASE`] for
-/// a 16-bit machine, [`RELOC_BASE`] otherwise.
+/// The MSP430 load base: the first RAM address, above the special-function
+/// and peripheral registers at 0x0-0x1ff, which the processor spec names, so a
+/// laid-out global is not read as `TBCCR5`.
+pub const MSP430_RELOC_BASE: u64 = 0x200;
+
+/// The synthetic load base of a relocatable object: [`SMALL_RELOC_BASE`] or
+/// [`MSP430_RELOC_BASE`] for a 16-bit machine, [`RELOC_BASE`] otherwise.
 pub fn reloc_base(file: &object::File) -> u64 {
     match file.architecture() {
-        Architecture::Avr | Architecture::Msp430 => SMALL_RELOC_BASE,
+        Architecture::Avr => SMALL_RELOC_BASE,
+        Architecture::Msp430 => MSP430_RELOC_BASE,
         _ => RELOC_BASE,
     }
 }
@@ -1464,7 +1470,7 @@ mod tests {
     #[test]
     fn sixteen_bit_machines_lay_out_inside_their_space() {
         for (arch, base) in [
-            (Architecture::Msp430, SMALL_RELOC_BASE),
+            (Architecture::Msp430, MSP430_RELOC_BASE),
             (Architecture::Avr, SMALL_RELOC_BASE),
             (Architecture::Riscv32, RELOC_BASE),
         ] {

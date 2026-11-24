@@ -10514,7 +10514,7 @@ G_0d8ef342: "["^SR24_31^".64+"^SUR32_37^"]" is f40_63=0 & SR24_31 & SUR32_37 {  
 { SR16_23d = sass_HFMA2(G_20278f5e, G_894df2f3, G_ef163a36, G_186d6f0b); }
 # CALL.ABS.NOINC !P1, 0x4  [fe40004c200000000000400007943]
 :^GD_619b08c9^"CALL.ABS"^G_cfbd5bc4 "!"^SP87_89^","^SI_7fff4b49 is f0_11=2371 & f81_81=1 & f90_91=1 & GD_619b08c9 & G_cfbd5bc4 & SP87_89 & SI_7fff4b49
-{ sass_CALL(); }
+{ RETPC = inst_next; local target:8 = SI_7fff4b49; call [target]; }
 # IMAD.SHL.U32 R1, R1, 0x2000, -RZ  [fe400000008ff0000200001017824]
 :^GD_619b08c9^"IMAD.SHL.U32" SR16_23d^","^G_9a4e649f^",0x2000,"^G_84dae6e6 is f0_11=2084 & f32_63=8192 & f64_71=255 & f73_74=0 & f91_91=0 & f123_123=0 & GD_619b08c9 & SR16_23d & G_9a4e649f & G_84dae6e6
 { SR16_23d = sass_IMAD(G_9a4e649f, 0x2000:4); }
@@ -21430,7 +21430,7 @@ G_0d8ef342: "["^SR24_31^".64+"^SUR32_37^"]" is f40_63=0 & SR24_31 & SUR32_37 {  
 { local oc0a:4 = SUR32_37 * 0x10000 + SI_ebf50ec1; local oc0:4 = *[cbank]:4 oc0a; local r:4 = ((~G_9a4e649f & ~oc0 & ~G_b51a524f) & (0 - ((SI_5daa8b56 >> 0) & 1))) | ((~G_9a4e649f & ~oc0 & G_b51a524f) & (0 - ((SI_5daa8b56 >> 1) & 1))) | ((~G_9a4e649f & oc0 & ~G_b51a524f) & (0 - ((SI_5daa8b56 >> 2) & 1))) | ((~G_9a4e649f & oc0 & G_b51a524f) & (0 - ((SI_5daa8b56 >> 3) & 1))) | ((G_9a4e649f & ~oc0 & ~G_b51a524f) & (0 - ((SI_5daa8b56 >> 4) & 1))) | ((G_9a4e649f & ~oc0 & G_b51a524f) & (0 - ((SI_5daa8b56 >> 5) & 1))) | ((G_9a4e649f & oc0 & ~G_b51a524f) & (0 - ((SI_5daa8b56 >> 6) & 1))) | ((G_9a4e649f & oc0 & G_b51a524f) & (0 - ((SI_5daa8b56 >> 7) & 1))); SR16_23d = r; G_2d48330e = r != 0; }
 # CALL.ABS P1, 0x4  [fe400008000000000000400007943]
 :^GD_619b08c9^"CALL.ABS"^G_cfbd5bc4 G_e52b3d2f^SI_7fff4b49 is f0_11=2371 & f90_91=0 & GD_619b08c9 & G_cfbd5bc4 & G_e52b3d2f & SI_7fff4b49
-{ sass_CALL(); }
+{ RETPC = inst_next; local target:8 = SI_7fff4b49; call [target]; }
 # NANOSLEEP !P1, 0x1  [fe40004800002000000010000795d]
 :^GD_619b08c9^"NANOSLEEP"^G_b73a1f2f "!"^SP87_89^","^SI_4ce6212f is f0_11=2397 & f65_65=1 & f83_83=0 & f90_91=1 & GD_619b08c9 & G_b73a1f2f & SP87_89 & SI_4ce6212f
 {  }

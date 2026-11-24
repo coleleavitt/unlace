@@ -156,7 +156,7 @@ before it calls, returns or jumps away
 (`crates/unlace-lift/src/p2_lift/kuna_atomics.rs (dead_after)`). ARM's `add`
 without `s` copies the carry into a scratch flag the next `mov` overwrites,
 which is the case this admits; and so does a compare's exit that branches back to the head after doing
-anything but `clrex`. The LOAD becomes `__sync_fetch_and_<op>(p, X)`,
+anything but `clrex`. An operand no storage holds at the load (`~x` for an outline `ldclr` helper's `bic`) is built with new ops in front of it. The LOAD becomes `__sync_fetch_and_<op>(p, X)`,
 `__sync_lock_test_and_set(p, X)` or `__sync_val_compare_and_swap(p, E, N)`, the
 monitor's pass and status become the constants 1 and 0, and the STORE a dead
 copy; dead-branch removal then deletes the back edge. A compare-exchange that
@@ -172,11 +172,14 @@ to the head's failure exit
 the block between (whose barrier, `DataMemoryBarrier`, stays) and the
 store-exclusive's blocks fold as above. Since a retry re-runs only the
 store-exclusive, status and reload blocks, the head's values are not
-checked against what those blocks write; instead no op of that cycle may
-read a storage a later op of the cycle writes (`cycle_invariant`), the
-values the reload block leaves must equal the head's where they stay live
-after either exit, and the store-exclusive's constant status writes are
-exempt (`dead_after`). The reload block must repeat the head: evaluated from the state the loop body
+checked against what those blocks write. Instead a storage an op of that
+cycle reads before an earlier op of the cycle writes it, while a later op
+does (ARM's `cmp` reads the old carry for its shifter carry), is followed
+forward through the ops that read it (`cycle_taint`): it may not reach a
+load, a store, a user operation or a branch, and what it still holds at the
+end must be dead after either exit. The values the reload block leaves must
+equal the head's where they stay live after either exit, and the
+store-exclusive's constant status writes are exempt (`dead_after`). The reload block must repeat the head: evaluated from the state the loop body
 leaves, its one load-exclusive reads the head's address, it reads neither
 monitor output, and it branches back exactly when the reloaded value equals
 the head's expected value (`reload_matches`). The status test then always
@@ -1282,6 +1285,32 @@ recovered switch table.
   only in its PDB), and it tags every FunctionSymbol of a matched name (a Thumb
   helper also has an `entry|1` twin, and its calls resolve to the even entry).
   The gate is on the install, as for `msvcftol`.
+
+- **AEABI floating-point helpers** (`crates/unlace-lift/src/p2_lift/kuna_aeabifloat.rs`,
+  option **`aeabifloat`**, default off): on 32-bit ARM the same payload list
+  carries the run-time ABI's floating-point helpers (RTABI32 4.1.2), each body
+  the IEEE 754 operation the helper performs on its base-standard operands.
+  `__aeabi_dadd`, `dsub`, `drsub`, `dmul`, `ddiv` and the `f` forms are
+  `f+`, `f-` (operands swapped for `rsub`), `f*`, `f/`; the `int`
+  comparisons `dcmpeq`, `dcmplt`, `dcmple`, `dcmpge`, `dcmpgt` and the `f`
+  forms are `zext` of `f==`, `f<` or `f<=` (swapped for `ge` and `gt`),
+  false on unordered operands as the helpers return 0, and `dcmpun`/`fcmpun`
+  are `nan(a) | nan(b)`; `d2iz`, `d2lz`, `f2iz`, `f2lz` are `trunc`, `d2uiz`
+  and `f2uiz` the low word of an eight-byte `trunc` (exact for every result the
+  C cast defines), `d2f`/`f2d` `float2float`, and `i2d`, `l2d`, `i2f`, `l2f`
+  `int2float`, with `ui2d`/`ui2f` converting the zero-extended word. A `double`
+  is joined from r0:r1 (r2:r3 for the second operand) low word first on
+  little-endian and high word first on big-endian, and an eight-byte result is
+  split back the same way. So `return __aeabi_dadd(a,b);` prints
+  `return a + b;` and `dscale`'s `__aeabi_dmul(v, __aeabi_i2d(n))` prints
+  `return v * (double)n;`. `d2ulz`, `f2ulz`, `ul2d` and `ul2f` have no exact
+  p-code reading and keep their calls, typed by `aeabisigs`, as do the
+  flag-returning `cdcmp`/`cfcmp` comparisons. Default off: the fold takes the
+  image's helpers to be RTABI32's round-to-nearest IEEE ones, which a library
+  built for flush-to-zero or another rounding mode is not. The gate is on the
+  install, as for `arithhelpers`. On a hard-float caller that moves the
+  `r0:r1` result into `d0` (`vmov d0, r0, r1`), the result still prints as two
+  masked halves of a union cast joined by `+`.
 
 - **Objective-C ARC bookkeeping** (`crates/unlace-lift/src/p2_lift/kuna_objcarc.rs`,
   option **`objcarc`**, default on): the second kuna-owned call-fixup family,
@@ -4226,7 +4255,9 @@ The operand mode bits select `a = b op c`, `a = b op u6`, `b = b op s12` or
 the conditional `b = b op c|u6`, whose condition skips the instruction when it
 fails. The `F` bit selects a second constructor that writes `Z`, `N`, `C` and
 `V`; carry on a subtraction is the borrow. A `.d` branch, jump or call
-evaluates its condition and target first, then runs the delay slot.
+evaluates its condition and target first, then runs the delay slot whether
+or not the condition holds, and only then branches. A delayed `bl`/`jl` links
+`blink` to the instruction after the delay slot.
 
 The zero-overhead loop is carried in the decode context. `lp end` records the
 address after itself in `lpstart` at address `end` and sets `lpend` there
@@ -4308,8 +4339,15 @@ language except Octeon, with `lsa`/`dlsa` (MSA brought them in before Release 6)
 formats are unused otherwise). The 128-bit registers `w0`-`w31` are separate from the FPRs (the
 FR=1 aliasing is not modelled). Loads and stores move each element at its own address in the
 language's byte order (element 0 is the least significant), `copy_s`/`copy_u` and `move.v`,
-`cfcmsa`/`ctcmsa` and the `bz`/`bnz` branches (with their delay slot) have real p-code; every
-other instruction is a user operation named after its mnemonic (`msa_addv_w`) with the
+`cfcmsa`/`ctcmsa` and the `bz`/`bnz` branches (with their delay slot) have real p-code, and so
+do the element-wise groups: `addv`/`subv`/`mulv` (and `addvi`/`subvi`), the bitwise `.v` and `andi`/`ori`/
+`xori`/`nori`, `bmnz`/`bmz`/`bsel`, the shifts `sll`/`srl`/`sra` (and immediates; the count is the
+element's low bits), the compares `ceq`/`clt`/`cle` (and immediates; all-ones or zero elements),
+`min`/`max` (signed, unsigned, immediates), the saturating `adds_s`/`adds_u`/`subs_s`/`subs_u`,
+`div`/`mod` (a zero divisor gives what QEMU gives: the architecture leaves it UNPREDICTABLE),
+`pcnt`/`nlzc`/`nloc`, `fill`/`ldi`/`splat`/`splati`, and the `ilv*`/`pck*` permutations. Every
+other instruction (floating point, dot products, fixed-point `q` forms, `shf`, `vshf`, `sld`, ...)
+is a user operation named after its mnemonic (`msa_addv_w`) with the
 destination as output and the read operands (and the destination, for the accumulating forms)
 as inputs.
 
@@ -4502,10 +4540,26 @@ TMS320C5x, TMS320C54x). Without that block, the self-referencing root never take
 over the ordinary constructors and the loop-back is silently dropped.
 
 C-SKY `bloop` needs none of this: it sits after the body it closes and is lifted as a
-decrement-and-branch. Not modelled: Epiphany (its loop registers are written with `movts`,
-not named by one instruction), StarCore `DOEN`/`DOSETUP` (not decoded), and Hexagon `endloop`
-(a branch through `SA0`/`SA1`, which resolves only where the decompiler propagates the
-`loop0`/`loop1` constants).
+decrement-and-branch.
+
+Hexagon is the other way round: the packet that ends the loop carries the mark (its parse
+bits, `:endloop0`/`:endloop1`), and only `loop0`/`loop1` names the start. Those
+instructions record the start in flowing (not `noflow`) context, `lp0sa`/`lp1sa`, set
+with `globalset(inst_next, ...)`, so it reaches every instruction the loop setup flows to.
+An end-of-loop packet that sees a recorded start counts `LC0`/`LC1` down and branches
+directly to it; with no recorded start (a loop set up in another function, or through
+`SA0`/`SA1` writes) it keeps the indirect branch through `SA0`/`SA1`. A packet that ends
+both loops at once keeps the indirect form.
+
+Epiphany names no loop in one instruction either: `movts ls`, `movts le` and `movts lc` write
+the loop start, the last loop instruction and the count from registers. `mov` and `movt` of a
+constant record the register and value in flowing context; `movts ls` from that register keeps
+the value, and `movts le` from it marks the instruction at its value with the kept start, so
+the root constructor adds the count-down-and-branch there as above (the test is `LC != 0`
+after the decrement). A write to that register by another instruction in between is not
+tracked; a loop register written from any other value marks nothing.
+
+Not modelled: StarCore `DOEN`/`DOSETUP` (not decoded).
 
 ### Vendored community processor modules (#98)
 
@@ -5243,6 +5297,12 @@ fix, so they stay inside the user operations; what is kept is the data flow
 between vector registers, scalar registers, FP registers and the memory
 addresses a load or store uses, so a vectorized function decompiles to a
 sequence of calls such as `v8 = vadd_vv(v8,v9)` instead of stopping.
+Whole-register loads, stores and moves (`vl<n>re<eew>.v`, `vs<n>r.v`, `vmv<n>r.v`)
+move `n` registers whatever `vtype` says, so for `n` = 2, 4 and 8 they read or write a
+register group: the overlapping registers `v0m2`..`v30m2`, `v0m4`..`v28m4` and
+`v0m8`..`v24m8` (64, 128 and 256 bytes, operand subtables `vdm<n>` and `vs2m<n>`), and
+`vmv<n>r.v` lifts as a copy of the group (`vmv1r.v` as a register copy). A register number not
+a multiple of `n` is reserved and, as in LLVM, not decoded.
 Exercised by `unlace-cli/tests/riscv_vector.rs`: all 1258 encoding shapes
 against LLVM's names (`fixtures/riscv_vector/probe64.txt`) and LLVM-lowered
 vector functions (load/add/store, a reduction into a scalar, an FMA with a
@@ -5584,6 +5644,23 @@ then whole. The caller's 160-byte register save area at `0(r15)` is in the
 callee's local range, because the callee's prologue stores into it.
 Exercised by `tests/stages/kuna-s390x.toml`.
 
+The module also decodes, with exact p-code: the high-word facility (`aih`, `alsih`,
+`alsihn`, `ahhhr`/`ahhlr`, `alhhhr`/`alhhlr`, `shhhr`/`shhlr`, `slhhhr`/`slhhlr`,
+`chhr`/`chlr`/`chf`/`cih`, `clhhr`/`clhlr`/`clhf`/`clih`, `lbh`/`lhh`/`lfh`/`llch`/`llhh`,
+`stch`/`sthh`/`stfh`, `brcth`), which operates on bits 0-31 (`rNh`) of a register; the z14
+`msrkc`/`msgrkc`/`msc`/`msgc` (condition code 3 when the signed product overflows) and `mg`;
+the z15 `ncrk`/`ncgrk`, `ocrk`/`ocgrk`, `nnrk`/`nngrk`, `nork`/`nogrk` and `nxrk`/`nxgrk`;
+`bi`/`bic` (a branch to the doubleword at the address); `cds`/`cdsy`/`cdsg` (a compare and
+swap of a register pair) and `lpq`/`stpq`; `lae`/`laey`; `bal`/`balr` (64-bit linkage, as
+`bas`/`basr`); `bxh`/`bxle`/`bxhg`/`bxleg`; `slda` (condition code 3 when a bit unlike the sign
+is shifted out); and the BFP `TEST DATA CLASS` instructions `tceb`/`tcdb`/`tcxb` (the class of
+the operand, one of zero, normal, subnormal, infinity, quiet or signalling NaN by sign, against
+the 12-bit mask in the second-operand address), which `isnan`/`isinf` compile to. Before, a
+z13+ build halted on the high-word instructions and every `isnan` halted on `tcdb`. Checked with
+`tools/difffuzz --arch s390x --oracle qemu`, which also found that `risbhg` and `risblg` took their
+start and end positions from six bits of I3/I4 instead of bits 3-7 (a position within the word),
+so `risblg r11,r1,0xdf,0xe4,11` cleared the register instead of inserting a wrapped field.
+
 ### x86-64 lifter fixes from differential fuzzing
 
 `tools/difffuzz` (see `docs/difffuzz.md`) runs single x86-64 instructions through the
@@ -5659,6 +5736,40 @@ Found by `tools/difffuzz` against Unicorn.
   shifted-register forms (`ARMTHUMBinstructions.sinc`) take `thSBIT_CZN` and
   `th_logicflags()`, so with S they set C from the shifter (`ThumbExpandImm12` or `thshift2`),
   as `ORR`, `EOR` and `TST` already did; before, `ANDS.W r8,r11,r9,ROR #21` left C unchanged.
+
+### LoongArch lifter fixes from differential fuzzing
+
+Found by `tools/difffuzz --arch loongarch64 --oracle qemu` (`qemu-loongarch64 -cpu max`).
+
+- `bstrins.w` and `bstrins.d` insert bits `[msb-lsb:0]` of `rj` at `[msb:lsb]` of `rd`; they
+  computed `bstrpick`'s field (bits `[msb:lsb]` of `rj`, shifted down) and cleared the low bits of
+  `rd`, so `bstrins.w s0,fp,23,14` left `s0` almost unchanged.
+- `slli.d`, `srli.d` and `srai.d` mask their 6-bit immediate with `0x3f`; with `0x1f` a shift by
+  32..63 was a shift by 0..31.
+- `rotr.w`, `rotri.w`, `rotr.d` and `rotri.d` rotate with a logical right shift; an arithmetic
+  one filled the rotated-in bits of a negative value with ones.
+- `bytepick.w` and `bytepick.d` concatenate the low bytes of `rk` with the high `sa` bytes of `rj`;
+  they masked the wrong ends, so `bytepick.w t5,a0,t4,0` returned `a0` instead of `t4`.
+- The float-to-integer conversions round as named: `ftintrm` toward minus infinity (`floor`),
+  `ftintrp` toward plus infinity (`ceil`), `ftintrz` toward zero; `ftint`, which uses the FCSR
+  mode, is the round-to-nearest-even user op that `ftintrne` already was. Before, all but
+  `ftintrne` truncated. The `.l.s` forms write the whole 64-bit register; they wrote its low word.
+
+### PowerPC lifter fixes from differential fuzzing
+
+Found by `tools/difffuzz --oracle qemu` (`qemu-ppc`, `qemu-ppc64` and `qemu-ppc64le`).
+
+- `divw.` (`ppc_instructions.sinc`) no longer sets XER[OV] and XER[SO]: only the `o` forms
+  record overflow, as `divwu.` already did. Before, `divw. r7,r16,r8` cleared an OV that was set.
+- `lhbrx` and `lwbrx` load the halfword or word in the image's byte order and reverse it,
+  so they are correct in the little-endian languages too; they composed the result from
+  single bytes in big-endian order, so on `PowerPC:LE:64:*` `lhbrx` returned the bytes
+  unreversed. `ldbrx` and `stdbrx` (`ppc_isa.sinc`) lift to the byte-reversed doubleword
+  load and store instead of the `LoadDoublewordByteReverseIndexed` and
+  `StoreDoublewordByteReverseIndexed` user ops, and `ldbrx` reads `(RA|0)`.
+- `stswi` with a byte count that is not a multiple of 4 stores only the leftmost bytes of its
+  last register (`storeRegisterPartial` in `ppc_common.sinc`); it stored the whole word, so
+  `stswi r23,r3,17` wrote 20 bytes.
 
 ### AArch64 rounding, saturation and by-element operands (#546)
 

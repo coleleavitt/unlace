@@ -18,7 +18,9 @@
 # a payload as its bits rather than as NAN, which compiles to other bits.
 # Passes 3 and 4 run the soft-float object the same two ways: the image
 # states the base standard, so neither option fires and both passes print
-# every value in core registers.
+# every value in core registers. Its arithmetic calls the AEABI helpers,
+# whose RTABI32 prototypes (analysis pass aeabisigs) type their values:
+# scale returns the double __aeabi_dmul returns.
 #
 # The hard-float passes also pin what the preset must leave alone.
 # scale_err converts a double to float on one exit and returns oflow's
@@ -35,7 +37,8 @@
 # armfloat_preset_m4f.o, a base-standard function a Cortex-M4F computes in
 # through the AEABI helpers, with declared prototypes that put its double
 # in d0: the call to __aeabi_dcmplt keeps its integer result in both
-# passes instead of becoming the double left live in d0. Passes 7 and 8
+# passes instead of becoming the double left live in d0, and its RTABI32
+# prototype reads the compared double from r0:r1. Passes 7 and 8
 # load armfloat_preset_m7.o (arm-none-eabi-gcc 10.3 -O2 for a Cortex-M7
 # with double-precision VFP) with the options off and under the preset.
 # neg_trunc widens its float into d0 to subtract it and returns the
@@ -260,14 +263,14 @@ count = 0
 literal = 'NAN'
 
 [[match]]
-name = 'armfloat preset #10: the soft-float image passes its doubles in core registers in both passes'
+name = "armfloat preset #10: the soft-float image passes scale's double in core registers and returns the typed helper's double in both passes"
 count = 2
-literal = 'void scale(unsigned int a0,unsigned int a1)'
+literal = 'double scale(unsigned int a0,unsigned int a1)'
 
 [[match]]
-name = 'armfloat preset #11: no soft-float function takes a floating parameter in either pass'
-count = 6
-regex = '(scale|mix|backfill)\(unsigned int a0'
+name = 'armfloat preset #11: no soft-float function takes a double from a VFP register in either pass'
+count = 0
+regex = '(scale|mix|backfill)\([^)]*double'
 
 [[match]]
 name = 'armfloat preset #12: the preset returns the NaN payload as a float, bit for bit'
@@ -290,9 +293,9 @@ count = 2
 regex = 'void save_vfp\((double|unsigned long long) \*a0\)'
 
 [[match]]
-name = 'armfloat preset #16: an AEABI helper call keeps its integer result beside a declared double in both passes'
+name = 'armfloat preset #16: an AEABI helper call keeps its integer result and takes its doubles in core registers in both passes'
 count = 2
-literal = 'if (__aeabi_dcmplt())'
+regex = 'if \(__aeabi_dcmplt\(.*,0\.0\)\)'
 
 [[match]]
 name = 'armfloat preset #17: an integer reloaded into s0 from an unoptimized spill keeps its integer parameter in both passes'

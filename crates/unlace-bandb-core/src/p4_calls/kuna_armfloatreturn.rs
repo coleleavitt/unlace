@@ -108,10 +108,12 @@ pub fn helper_model(arch: &crate::context::ArchContext, name: &str) -> Option<Rc
         .filter(|_| arch.arm_float_return && base_pcs_helper(name))
 }
 
-/// The model a declared prototype of `name` is laid out under where the option
-/// applies to the image: the core-register model for a [`base_pcs_helper`],
-/// whose debug information states its types but not that it keeps the base
-/// standard (`long long __fixdfdi(double a)` takes `a` in r0:r1).
+/// The model a declared prototype of `name` is laid out under on a 32-bit ARM
+/// image: the core-register model for a [`base_pcs_helper`], whose debug
+/// information or RTABI32 row states its types but not that it keeps the base
+/// standard (`long long __fixdfdi(double a)` takes `a` in r0:r1). The VFP
+/// default would read a `double` from `d0` even where the image's own functions
+/// pass it in r0:r1 (`-mfloat-abi=softfp`).
 pub fn declared_helper_model(
     arch: &crate::context::ArchContext,
     name: &str,

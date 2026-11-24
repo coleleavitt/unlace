@@ -2482,22 +2482,22 @@ macro fucompe(val1, val2) {
                        [ instrPhase=1; vexMode=1; rexRprefix=~vex_r; vexVVVV=~vex_vvvv; vexL=vex_l; vexMMMMM=0x1; prefix_f2=1; ] {}
 
 # 4-byte EVEX prefix
-:^instruction is $(LONGMODE_ON) & instrPhase=0 & vexMode=0 & rexprefix=0 & mandover & byte=0x62; vex_r & vex_x & vex_b & evex_rp & evex_res=0 & evex_mmm;
-                 vex_w & vex_vvvv & evex_res2=1 & vex_pp=0; evex_z & evex_lp & evex_l & evex_b & evex_vp & evex_aaa; instruction
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & vexMode=0 & rexprefix=0 & mandover & byte=0x62; vex_r & vex_x & vex_b & evex_rp & evex_res & evex_mmm;
+                 vex_w & vex_vvvv & evex_res2 & vex_pp=0; evex_z & evex_lp & evex_l & evex_b & evex_vp & evex_aaa; instruction
                        [ instrPhase=1; vexMode=2; rexRprefix=~vex_r; rexXprefix=~vex_x; rexBprefix=~vex_b; rexWprefix=vex_w; vexVVVV=~vex_vvvv;  vexMMMMM=evex_mmm;
-                         evexRp=~evex_rp; evexVp=~evex_vp; evexLp=evex_lp; vexL=evex_l; evexZ=evex_z; evexB=evex_b; evexAAA=evex_aaa; ] {}
-:^instruction is $(LONGMODE_ON) & instrPhase=0 & vexMode=0 & rexprefix=0 & mandover & byte=0x62; vex_r & vex_x & vex_b & evex_rp & evex_res=0 & evex_mmm;
-                 vex_w & vex_vvvv & evex_res2=1 & vex_pp=1; evex_z & evex_lp & evex_l & evex_b & evex_vp & evex_aaa; instruction
+                         evexRp=~evex_rp; evexVp=~evex_vp; evexLp=evex_lp; vexL=evex_l; evexZ=evex_z; evexB=evex_b; evexAAA=evex_aaa; rexR4=~evex_rp; rexX4=~evex_res2; rexB4=evex_res; ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & vexMode=0 & rexprefix=0 & mandover & byte=0x62; vex_r & vex_x & vex_b & evex_rp & evex_res & evex_mmm;
+                 vex_w & vex_vvvv & evex_res2 & vex_pp=1; evex_z & evex_lp & evex_l & evex_b & evex_vp & evex_aaa; instruction
                        [ instrPhase=1; vexMode=2; rexRprefix=~vex_r; rexXprefix=~vex_x; rexBprefix=~vex_b; rexWprefix=vex_w; vexVVVV=~vex_vvvv; vexMMMMM=evex_mmm;
-                         evexRp=~evex_rp; evexVp=~evex_vp; evexLp=evex_lp; vexL=evex_l; evexZ=evex_z; evexB=evex_b; evexAAA=evex_aaa; prefix_66=1; ] {}
-:^instruction is $(LONGMODE_ON) & instrPhase=0 & vexMode=0 & rexprefix=0 & mandover & byte=0x62; vex_r & vex_x & vex_b & evex_rp & evex_res=0 & evex_mmm;
-                 vex_w & vex_vvvv & evex_res2=1 & vex_pp=2; evex_z & evex_lp & evex_l & evex_b & evex_vp & evex_aaa; instruction
+                         evexRp=~evex_rp; evexVp=~evex_vp; evexLp=evex_lp; vexL=evex_l; evexZ=evex_z; evexB=evex_b; evexAAA=evex_aaa; rexR4=~evex_rp; rexX4=~evex_res2; rexB4=evex_res; prefix_66=1; ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & vexMode=0 & rexprefix=0 & mandover & byte=0x62; vex_r & vex_x & vex_b & evex_rp & evex_res & evex_mmm;
+                 vex_w & vex_vvvv & evex_res2 & vex_pp=2; evex_z & evex_lp & evex_l & evex_b & evex_vp & evex_aaa; instruction
                        [ instrPhase=1; vexMode=2; rexRprefix=~vex_r; rexXprefix=~vex_x; rexBprefix=~vex_b; rexWprefix=vex_w; vexVVVV=~vex_vvvv; vexMMMMM=evex_mmm;
-                         evexRp=~evex_rp; evexVp=~evex_vp; evexLp=evex_lp; vexL=evex_l; evexZ=evex_z; evexB=evex_b; evexAAA=evex_aaa; prefix_f3=1; ] {}
-:^instruction is $(LONGMODE_ON) & instrPhase=0 & vexMode=0 & rexprefix=0 & mandover & byte=0x62; vex_r & vex_x & vex_b & evex_rp & evex_res=0 & evex_mmm;
-                 vex_w & vex_vvvv & evex_res2=1 & vex_pp=3; evex_z & evex_lp & evex_l & evex_b & evex_vp & evex_aaa; instruction
+                         evexRp=~evex_rp; evexVp=~evex_vp; evexLp=evex_lp; vexL=evex_l; evexZ=evex_z; evexB=evex_b; evexAAA=evex_aaa; rexR4=~evex_rp; rexX4=~evex_res2; rexB4=evex_res; prefix_f3=1; ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & vexMode=0 & rexprefix=0 & mandover & byte=0x62; vex_r & vex_x & vex_b & evex_rp & evex_res & evex_mmm;
+                 vex_w & vex_vvvv & evex_res2 & vex_pp=3; evex_z & evex_lp & evex_l & evex_b & evex_vp & evex_aaa; instruction
                        [ instrPhase=1; vexMode=2; rexRprefix=~vex_r; rexXprefix=~vex_x; rexBprefix=~vex_b; rexWprefix=vex_w; vexVVVV=~vex_vvvv; vexMMMMM=evex_mmm;
-                         evexRp=~evex_rp; evexVp=~evex_vp; evexLp=evex_lp; vexL=evex_l; evexZ=evex_z; evexB=evex_b; evexAAA=evex_aaa; prefix_f2=1; ] {}
+                         evexRp=~evex_rp; evexVp=~evex_vp; evexLp=evex_lp; vexL=evex_l; evexZ=evex_z; evexB=evex_b; evexAAA=evex_aaa; rexR4=~evex_rp; rexX4=~evex_res2; rexB4=evex_res; prefix_f2=1; ] {}
 @endif
 
 # 32-bit 3-byte VEX

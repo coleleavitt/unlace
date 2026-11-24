@@ -45,6 +45,9 @@ Three tiers:
 | the same arithmetic expression on the same values is computed twice into two temporaries | [`latecse`](#latecse----on--off-default-off) |
 | v1 = a + b * 4; ... v2 = a + b * 4; where one would do | [`latecse`](#latecse----on--off-default-off) |
 | duplicated address arithmetic in both arms of an if | [`latecse`](#latecse----on--off-default-off) |
+| flag = 1; on one path and flag = 0; on another, then if (flag != 0) right after they meet | [`phithread`](#phithread----on--off-default-off) |
+| a variable set only to constants is tested immediately where the paths join | [`phithread`](#phithread----on--off-default-off) |
+| a small block that only assigns a constant is shared by several paths before a test of that value | [`phithread`](#phithread----on--off-default-off) |
 | a do/while that decrements a 0xffffffffffffffff counter while stepping a char pointer until the byte read is zero | [`strlenscan`](#strlenscan----on--off-default-on) |
 | if (!v3) break; v3 -= 1; inside a loop that reads one byte per step | [`strlenscan`](#strlenscan----on--off-default-on) |
 | ~v3 - 1 or ~v3 - 5 where the source computes a string length | [`strlenscan`](#strlenscan----on--off-default-on) |
@@ -1376,6 +1379,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** Turn on to see a value the source computed once and the compiler recomputed print once. Default off: over 4,072 x86-64 functions it changes 560 (many through synthesized struct numbering), and the shared values become explicit temporaries, so output grows (lines 180,432 -> 180,724, gotos 8,892 -> 8,940).
 - **Where / provenance:** P3/simplification-quiescence · kuna · transform · kuna-latecse
 - **Example:** `option latecse on`
+
+### `phithread` -- on | off, default `off`
+
+- **Symptoms:** flag = 1; on one path and flag = 0; on another, then if (flag != 0) right after they meet; a variable set only to constants is tested immediately where the paths join; a small block that only assigns a constant is shared by several paths before a test of that value.
+- **What it does:** Resolve a join that only tests a value its arms set to constants, per path. A shared arm that sets a register (`flag = 1;`) and flows into a join that immediately branches on it makes the join's MULTIEQUAL collect unrelated constants into one variable, printed as `flag = 1; ... flag = 0; ... if (flag != 0)`. ActionPhiThread (kuna_phithread.rs, after ActionConditionalExe) takes a join block ending in a CBRANCH whose condition is computed only from its MULTIEQUALs and constants and whose values are read only inside it; for each in edge whose MULTIEQUAL inputs decide the branch it moves the edge past the join to the successor the branch would take, fixing both blocks' MULTIEQUALs. An arm holding only MULTIEQUALs, COPYs and a BRANCH whose value into the join comes from a MULTIEQUAL with a constant input is first split per such predecessor (Funcdata::node_split_through), as Hex-Rays does with BREAK_PHI_ARM_MERGES, so each copy passes a constant. The join keeps at least one in edge; at most 32 edits per function. OFF, the default, is upstream byte-for-byte.
+- **When to flip:** OFF by default: it changes control flow, so it moves structuring and can duplicate small arms. Turn it ON when a function sets a flag variable to constants on several paths and then branches on it straight away (state flags, found/not-found results, error codes tested at a join), or when that flag variable merges unrelated values into one name. Not yet measured on a corpus; a default change needs the datatests, the speed budget and the DecBench variable-match and GED numbers.
+- **Where / provenance:** P3/simplification-quiescence · ida · transform · unlace-20
+- **Example:** `option phithread on`
 
 ### `strlenscan` -- on | off, default `on`
 

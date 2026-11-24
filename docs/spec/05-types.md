@@ -521,10 +521,10 @@ pair witnesses the *engine* behaviour rather than the shipped default.)
 
 With `option ptrfromlocal on` (default off), the same seed fold offers the `ptrfromuse`
 walk (`kuna_ptrfromuse::pointer_from_local_use`) to a pointer-width value a `CALL`, `CALLIND` or
-`LOAD` writes, not only to function inputs: when the value's vote is still `TYPE_UNKNOWN`, it is
-not type-locked, and the walk finds a memory-base use and no refusing use, a `void *` candidate
-is folded by `type_order` (`folds_over`). A value with any typed vote, including a callee's
-declared return, keeps it.
+`LOAD` writes, not only to function inputs: when the value's vote is unknown or an integer (the
+`int8` an `INT_ADD` reader votes), it is not type-locked, no locked callee prototype declares it,
+and the walk finds a memory-base use and no refusing use, a `void *` candidate is folded by
+`type_order` (`folds_over`). A pointer, float or composite vote keeps its type.
 
 When `ptrfromuse` is `byte` or `void` (shipped `void`),
 `crates/unlace-bandb-core/src/p5_types/kuna_ptrfromuse.rs

@@ -84,6 +84,8 @@ mod tlcs90_raw;
 mod tricore_tc18;
 #[path = "upd7725.rs"]
 mod upd7725;
+#[path = "upd7810.rs"]
+mod upd7810;
 #[path = "uxn.rs"]
 mod uxn;
 #[path = "v810.rs"]

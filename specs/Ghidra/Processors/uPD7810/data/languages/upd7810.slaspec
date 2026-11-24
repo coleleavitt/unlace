@@ -1,0 +1,1084 @@
+# SLEIGH specification for the NEC uPD7810 / uPD7811 / uPD78C10 / uPD78C11 / uPD78C14
+# 8-bit microcontrollers (Casio PV-2000 and PB-1000 peripherals, Epoch Super Cassette
+# Vision, many printers, synthesizers and arcade boards).
+#
+# Written for unlace from the NEC uPD7810/7811 user's manual instruction set. The
+# per-opcode table (prefix bytes 48, 4C, 4D, 60, 64, 70, 74) was generated from the
+# MAME project's upd7810 disassembler tables and semantics checked against its core,
+# read for reference only.
+#
+# Skip instructions (the PSW SK flag) are modelled as a conditional branch over the
+# next instruction (inst_next2). The on-chip special function registers live in the
+# separate 'sfr' space so a port read is a memory read the decompiler does not fold.
+
+define endian=little;
+define alignment=1;
+
+define space RAM      type=ram_space      size=2 default;
+define space sfr      type=ram_space      size=1;
+define space register type=register_space size=2;
+
+define register offset=0x00 size=2 [ VA BC DE HL EA SP PC ];
+define register offset=0x00 size=1 [ A V C B E D L H EAL EAH ];
+define register offset=0x10 size=2 [ VA2 BC2 DE2 HL2 EA2 ];
+define register offset=0x20 size=1 [ Z HC CY ];
+
+define token opbyte (8)
+  op    = (0,7)
+  op6hi = (6,7)
+  op3hi = (5,7)
+  op5hi = (3,7)
+  op7hi = (1,7)
+  jr6   = (0,5) signed
+  calt5 = (0,4)
+  calf3 = (0,2)
+  jre1  = (0,0)
+;
+
+define token opbyte2 (8)
+  op2 = (0,7)
+;
+
+define token data8 (8)
+  imm8 = (0,7)
+  wa   = (0,7)
+  d8   = (0,7)
+;
+
+define token data16 (16)
+  imm16 = (0,15)
+;
+
+define pcodeop enableInterrupts;
+define pcodeop disableInterrupts;
+define pcodeop halt;
+define pcodeop stop;
+define pcodeop testInterrupt;
+define pcodeop testClearInterrupt;
+
+macro packPSW(p) {
+  p = (Z << 6) | (HC << 4) | CY;
+}
+
+macro unpackPSW(p) {
+  Z = (p & 0x40) != 0;
+  HC = (p & 0x10) != 0;
+  CY = (p & 0x01) != 0;
+}
+
+JW: imm16 is imm16 { export *:2 imm16; }
+JR6: dest is jr6 [ dest = inst_next + jr6; ] { export *:2 dest; }
+JRE: dest is jre1; d8 [ dest = inst_next + (jre1 << 8) + d8 - (jre1 << 9); ] { export *:2 dest; }
+CALTT: tab is calt5 [ tab = 0x80 + 2 * calt5; ] { export *[const]:2 tab; }
+CALFT: dest is calf3; d8 [ dest = 0x800 + (calf3 << 8) + d8; ] { export *:2 dest; }
+
+:SLRC "A" is op=0x48; op2=0x01 { CY = (A & 1) != 0; A = A >> 1; if (CY != 0) goto inst_next2; }
+:SLRC "B" is op=0x48; op2=0x02 { CY = (B & 1) != 0; B = B >> 1; if (CY != 0) goto inst_next2; }
+:SLRC "C" is op=0x48; op2=0x03 { CY = (C & 1) != 0; C = C >> 1; if (CY != 0) goto inst_next2; }
+:SLLC "A" is op=0x48; op2=0x05 { CY = (A & 0x80) != 0; A = A << 1; if (CY != 0) goto inst_next2; }
+:SLLC "B" is op=0x48; op2=0x06 { CY = (B & 0x80) != 0; B = B << 1; if (CY != 0) goto inst_next2; }
+:SLLC "C" is op=0x48; op2=0x07 { CY = (C & 0x80) != 0; C = C << 1; if (CY != 0) goto inst_next2; }
+:SK "NV" is op=0x48; op2=0x08 {  }
+:SK "CY" is op=0x48; op2=0x0A { if (CY != 0) goto inst_next2; }
+:SK "HC" is op=0x48; op2=0x0B { if (HC != 0) goto inst_next2; }
+:SK "Z" is op=0x48; op2=0x0C { if (Z != 0) goto inst_next2; }
+:SKN "NV" is op=0x48; op2=0x18 { if (1:1) goto inst_next2; }
+:SKN "CY" is op=0x48; op2=0x1A { if (CY == 0) goto inst_next2; }
+:SKN "HC" is op=0x48; op2=0x1B { if (HC == 0) goto inst_next2; }
+:SKN "Z" is op=0x48; op2=0x1C { if (Z == 0) goto inst_next2; }
+:SLR "A" is op=0x48; op2=0x21 { CY = (A & 1) != 0; A = A >> 1; }
+:SLR "B" is op=0x48; op2=0x22 { CY = (B & 1) != 0; B = B >> 1; }
+:SLR "C" is op=0x48; op2=0x23 { CY = (C & 1) != 0; C = C >> 1; }
+:SLL "A" is op=0x48; op2=0x25 { CY = (A & 0x80) != 0; A = A << 1; }
+:SLL "B" is op=0x48; op2=0x26 { CY = (B & 0x80) != 0; B = B << 1; }
+:SLL "C" is op=0x48; op2=0x27 { CY = (C & 0x80) != 0; C = C << 1; }
+:JEA  is op=0x48; op2=0x28 { goto [EA]; }
+:CALB  is op=0x48; op2=0x29 { SP = SP - 2; *:2 SP = inst_next; call [BC]; }
+:CLC  is op=0x48; op2=0x2A { CY = 0; }
+:STC  is op=0x48; op2=0x2B { CY = 1; }
+:MUL "A" is op=0x48; op2=0x2D { EA = zext(A) * zext(A); }
+:MUL "B" is op=0x48; op2=0x2E { EA = zext(A) * zext(B); }
+:MUL "C" is op=0x48; op2=0x2F { EA = zext(A) * zext(C); }
+:RLR "A" is op=0x48; op2=0x31 { local c:1 = CY; CY = (A & 1) != 0; A = (A >> 1) | (c << 7); }
+:RLR "B" is op=0x48; op2=0x32 { local c:1 = CY; CY = (B & 1) != 0; B = (B >> 1) | (c << 7); }
+:RLR "C" is op=0x48; op2=0x33 { local c:1 = CY; CY = (C & 1) != 0; C = (C >> 1) | (c << 7); }
+:RLL "A" is op=0x48; op2=0x35 { local c:1 = CY; CY = (A & 0x80) != 0; A = (A << 1) | c; }
+:RLL "B" is op=0x48; op2=0x36 { local c:1 = CY; CY = (B & 0x80) != 0; B = (B << 1) | c; }
+:RLL "C" is op=0x48; op2=0x37 { local c:1 = CY; CY = (C & 0x80) != 0; C = (C << 1) | c; }
+:RLD  is op=0x48; op2=0x38 { local m:1 = *:1 HL; local t:1 = (m << 4) | (A & 0x0f); A = (A & 0xf0) | (m >> 4); *:1 HL = t; }
+:RRD  is op=0x48; op2=0x39 { local m:1 = *:1 HL; local t:1 = (A << 4) | (m >> 4); A = (A & 0xf0) | (m & 0x0f); *:1 HL = t; }
+:NEGA  is op=0x48; op2=0x3A { A = -A; }
+:HLT  is op=0x48; op2=0x3B { halt(); }
+:DIV "A" is op=0x48; op2=0x3D { local d:2 = zext(A); if (d == 0) goto <z>; local q:2 = EA / d; local rm:2 = EA % d; EA = q; A = rm:1; goto <done>; <z> A = EAL; EA = 0xffff; <done> }
+:DIV "B" is op=0x48; op2=0x3E { local d:2 = zext(B); if (d == 0) goto <z>; local q:2 = EA / d; local rm:2 = EA % d; EA = q; B = rm:1; goto <done>; <z> B = EAL; EA = 0xffff; <done> }
+:DIV "C" is op=0x48; op2=0x3F { local d:2 = zext(C); if (d == 0) goto <z>; local q:2 = EA / d; local rm:2 = EA % d; EA = q; C = rm:1; goto <done>; <z> C = EAL; EA = 0xffff; <done> }
+:SKIT "NMI" is op=0x48; op2=0x40 { local f:1 = testClearInterrupt(0:1); if (f != 0) goto inst_next2; }
+:SKIT "FT0" is op=0x48; op2=0x41 { local f:1 = testClearInterrupt(1:1); if (f != 0) goto inst_next2; }
+:SKIT "FT1" is op=0x48; op2=0x42 { local f:1 = testClearInterrupt(2:1); if (f != 0) goto inst_next2; }
+:SKIT "F1" is op=0x48; op2=0x43 { local f:1 = testClearInterrupt(3:1); if (f != 0) goto inst_next2; }
+:SKIT "F2" is op=0x48; op2=0x44 { local f:1 = testClearInterrupt(4:1); if (f != 0) goto inst_next2; }
+:SKIT "FE0" is op=0x48; op2=0x45 { local f:1 = testClearInterrupt(5:1); if (f != 0) goto inst_next2; }
+:SKIT "FE1" is op=0x48; op2=0x46 { local f:1 = testClearInterrupt(6:1); if (f != 0) goto inst_next2; }
+:SKIT "FEIN" is op=0x48; op2=0x47 { local f:1 = testClearInterrupt(7:1); if (f != 0) goto inst_next2; }
+:SKIT "FAD" is op=0x48; op2=0x48 { local f:1 = testClearInterrupt(8:1); if (f != 0) goto inst_next2; }
+:SKIT "FSR" is op=0x48; op2=0x49 { local f:1 = testClearInterrupt(9:1); if (f != 0) goto inst_next2; }
+:SKIT "FST" is op=0x48; op2=0x4A { local f:1 = testClearInterrupt(10:1); if (f != 0) goto inst_next2; }
+:SKIT "ER" is op=0x48; op2=0x4B { local f:1 = testClearInterrupt(11:1); if (f != 0) goto inst_next2; }
+:SKIT "OV" is op=0x48; op2=0x4C { local f:1 = testClearInterrupt(12:1); if (f != 0) goto inst_next2; }
+:SKIT "AN4" is op=0x48; op2=0x50 { local f:1 = testClearInterrupt(16:1); if (f != 0) goto inst_next2; }
+:SKIT "AN5" is op=0x48; op2=0x51 { local f:1 = testClearInterrupt(17:1); if (f != 0) goto inst_next2; }
+:SKIT "AN6" is op=0x48; op2=0x52 { local f:1 = testClearInterrupt(18:1); if (f != 0) goto inst_next2; }
+:SKIT "AN7" is op=0x48; op2=0x53 { local f:1 = testClearInterrupt(19:1); if (f != 0) goto inst_next2; }
+:SKIT "SB" is op=0x48; op2=0x54 { local f:1 = testClearInterrupt(20:1); if (f != 0) goto inst_next2; }
+:SKNIT "NMI" is op=0x48; op2=0x60 { local f:1 = testInterrupt(0:1); if (f == 0) goto inst_next2; }
+:SKNIT "FT0" is op=0x48; op2=0x61 { local f:1 = testInterrupt(1:1); if (f == 0) goto inst_next2; }
+:SKNIT "FT1" is op=0x48; op2=0x62 { local f:1 = testInterrupt(2:1); if (f == 0) goto inst_next2; }
+:SKNIT "F1" is op=0x48; op2=0x63 { local f:1 = testInterrupt(3:1); if (f == 0) goto inst_next2; }
+:SKNIT "F2" is op=0x48; op2=0x64 { local f:1 = testInterrupt(4:1); if (f == 0) goto inst_next2; }
+:SKNIT "FE0" is op=0x48; op2=0x65 { local f:1 = testInterrupt(5:1); if (f == 0) goto inst_next2; }
+:SKNIT "FE1" is op=0x48; op2=0x66 { local f:1 = testInterrupt(6:1); if (f == 0) goto inst_next2; }
+:SKNIT "FEIN" is op=0x48; op2=0x67 { local f:1 = testInterrupt(7:1); if (f == 0) goto inst_next2; }
+:SKNIT "FAD" is op=0x48; op2=0x68 { local f:1 = testInterrupt(8:1); if (f == 0) goto inst_next2; }
+:SKNIT "FSR" is op=0x48; op2=0x69 { local f:1 = testInterrupt(9:1); if (f == 0) goto inst_next2; }
+:SKNIT "FST" is op=0x48; op2=0x6A { local f:1 = testInterrupt(10:1); if (f == 0) goto inst_next2; }
+:SKNIT "ER" is op=0x48; op2=0x6B { local f:1 = testInterrupt(11:1); if (f == 0) goto inst_next2; }
+:SKNIT "OV" is op=0x48; op2=0x6C { local f:1 = testInterrupt(12:1); if (f == 0) goto inst_next2; }
+:SKNIT "AN4" is op=0x48; op2=0x70 { local f:1 = testInterrupt(16:1); if (f == 0) goto inst_next2; }
+:SKNIT "AN5" is op=0x48; op2=0x71 { local f:1 = testInterrupt(17:1); if (f == 0) goto inst_next2; }
+:SKNIT "AN6" is op=0x48; op2=0x72 { local f:1 = testInterrupt(18:1); if (f == 0) goto inst_next2; }
+:SKNIT "AN7" is op=0x48; op2=0x73 { local f:1 = testInterrupt(19:1); if (f == 0) goto inst_next2; }
+:SKNIT "SB" is op=0x48; op2=0x74 { local f:1 = testInterrupt(20:1); if (f == 0) goto inst_next2; }
+:LDEAX "(DE)" is op=0x48; op2=0x82 { EA = *:2 DE; }
+:LDEAX "(HL)" is op=0x48; op2=0x83 { EA = *:2 HL; }
+:LDEAX "(DE++)" is op=0x48; op2=0x84 { local ma:2 = DE; EA = *:2 ma; DE = DE + 2; }
+:LDEAX "(HL++)" is op=0x48; op2=0x85 { local ma:2 = HL; EA = *:2 ma; HL = HL + 2; }
+:LDEAX "(DE+"^imm8^")" is op=0x48; op2=0x8B; imm8 { local ma:2 = DE + imm8; EA = *:2 ma; }
+:LDEAX "(HL+A)" is op=0x48; op2=0x8C { local ma:2 = HL + zext(A); EA = *:2 ma; }
+:LDEAX "(HL+B)" is op=0x48; op2=0x8D { local ma:2 = HL + zext(B); EA = *:2 ma; }
+:LDEAX "(HL+EA)" is op=0x48; op2=0x8E { local ma:2 = HL + EA; EA = *:2 ma; }
+:LDEAX "(HL+"^imm8^")" is op=0x48; op2=0x8F; imm8 { local ma:2 = HL + imm8; EA = *:2 ma; }
+:STEAX "(DE)" is op=0x48; op2=0x92 { *:2 DE = EA; }
+:STEAX "(HL)" is op=0x48; op2=0x93 { *:2 HL = EA; }
+:STEAX "(DE++)" is op=0x48; op2=0x94 { local ma:2 = DE; *:2 ma = EA; DE = DE + 2; }
+:STEAX "(HL++)" is op=0x48; op2=0x95 { local ma:2 = HL; *:2 ma = EA; HL = HL + 2; }
+:STEAX "(DE+"^imm8^")" is op=0x48; op2=0x9B; imm8 { local ma:2 = DE + imm8; *:2 ma = EA; }
+:STEAX "(HL+A)" is op=0x48; op2=0x9C { local ma:2 = HL + zext(A); *:2 ma = EA; }
+:STEAX "(HL+B)" is op=0x48; op2=0x9D { local ma:2 = HL + zext(B); *:2 ma = EA; }
+:STEAX "(HL+EA)" is op=0x48; op2=0x9E { local ma:2 = HL + EA; *:2 ma = EA; }
+:STEAX "(HL+"^imm8^")" is op=0x48; op2=0x9F; imm8 { local ma:2 = HL + imm8; *:2 ma = EA; }
+:DSLR "EA" is op=0x48; op2=0xA0 { CY = (EA & 1) != 0; EA = EA >> 1; }
+:DSLL "EA" is op=0x48; op2=0xA4 { CY = (EA & 0x8000) != 0; EA = EA << 1; }
+:TABLE  is op=0x48; op2=0xA8 { local t:2 = inst_next + zext(A) + 1; C = *:1 t; local t1:2 = t + 1; B = *:1 t1; }
+:DRLR "EA" is op=0x48; op2=0xB0 { local c:2 = zext(CY); CY = (EA & 1) != 0; EA = (EA >> 1) | (c << 15); }
+:DRLL "EA" is op=0x48; op2=0xB4 { local c:2 = zext(CY); CY = (EA & 0x8000) != 0; EA = (EA << 1) | c; }
+:STOP  is op=0x48; op2=0xBB { stop(); }
+:DMOV "EA,ECNT" is op=0x48; op2=0xC0 { EA = *[sfr]:2 64:1; }
+:DMOV "EA,ECPT" is op=0x48; op2=0xC1 { EA = *[sfr]:2 66:1; }
+:DMOV "ETM0,EA" is op=0x48; op2=0xD2 { *[sfr]:2 68:1 = EA; }
+:DMOV "ETM1,EA" is op=0x48; op2=0xD3 { *[sfr]:2 70:1 = EA; }
+:ANA "V,A" is op=0x60; op2=0x08 { local x:1 = V; local y:1 = A; local r:1 = x & y; Z = r == 0; V = r; }
+:ANA "A,A" is op=0x60; op2=0x09 { local x:1 = A; local y:1 = A; local r:1 = x & y; Z = r == 0; A = r; }
+:ANA "B,A" is op=0x60; op2=0x0A { local x:1 = B; local y:1 = A; local r:1 = x & y; Z = r == 0; B = r; }
+:ANA "C,A" is op=0x60; op2=0x0B { local x:1 = C; local y:1 = A; local r:1 = x & y; Z = r == 0; C = r; }
+:ANA "D,A" is op=0x60; op2=0x0C { local x:1 = D; local y:1 = A; local r:1 = x & y; Z = r == 0; D = r; }
+:ANA "E,A" is op=0x60; op2=0x0D { local x:1 = E; local y:1 = A; local r:1 = x & y; Z = r == 0; E = r; }
+:ANA "H,A" is op=0x60; op2=0x0E { local x:1 = H; local y:1 = A; local r:1 = x & y; Z = r == 0; H = r; }
+:ANA "L,A" is op=0x60; op2=0x0F { local x:1 = L; local y:1 = A; local r:1 = x & y; Z = r == 0; L = r; }
+:XRA "V,A" is op=0x60; op2=0x10 { local x:1 = V; local y:1 = A; local r:1 = x ^ y; Z = r == 0; V = r; }
+:XRA "A,A" is op=0x60; op2=0x11 { local x:1 = A; local y:1 = A; local r:1 = x ^ y; Z = r == 0; A = r; }
+:XRA "B,A" is op=0x60; op2=0x12 { local x:1 = B; local y:1 = A; local r:1 = x ^ y; Z = r == 0; B = r; }
+:XRA "C,A" is op=0x60; op2=0x13 { local x:1 = C; local y:1 = A; local r:1 = x ^ y; Z = r == 0; C = r; }
+:XRA "D,A" is op=0x60; op2=0x14 { local x:1 = D; local y:1 = A; local r:1 = x ^ y; Z = r == 0; D = r; }
+:XRA "E,A" is op=0x60; op2=0x15 { local x:1 = E; local y:1 = A; local r:1 = x ^ y; Z = r == 0; E = r; }
+:XRA "H,A" is op=0x60; op2=0x16 { local x:1 = H; local y:1 = A; local r:1 = x ^ y; Z = r == 0; H = r; }
+:XRA "L,A" is op=0x60; op2=0x17 { local x:1 = L; local y:1 = A; local r:1 = x ^ y; Z = r == 0; L = r; }
+:ORA "V,A" is op=0x60; op2=0x18 { local x:1 = V; local y:1 = A; local r:1 = x | y; Z = r == 0; V = r; }
+:ORA "A,A" is op=0x60; op2=0x19 { local x:1 = A; local y:1 = A; local r:1 = x | y; Z = r == 0; A = r; }
+:ORA "B,A" is op=0x60; op2=0x1A { local x:1 = B; local y:1 = A; local r:1 = x | y; Z = r == 0; B = r; }
+:ORA "C,A" is op=0x60; op2=0x1B { local x:1 = C; local y:1 = A; local r:1 = x | y; Z = r == 0; C = r; }
+:ORA "D,A" is op=0x60; op2=0x1C { local x:1 = D; local y:1 = A; local r:1 = x | y; Z = r == 0; D = r; }
+:ORA "E,A" is op=0x60; op2=0x1D { local x:1 = E; local y:1 = A; local r:1 = x | y; Z = r == 0; E = r; }
+:ORA "H,A" is op=0x60; op2=0x1E { local x:1 = H; local y:1 = A; local r:1 = x | y; Z = r == 0; H = r; }
+:ORA "L,A" is op=0x60; op2=0x1F { local x:1 = L; local y:1 = A; local r:1 = x | y; Z = r == 0; L = r; }
+:ADDNC "V,A" is op=0x60; op2=0x20 { local x:1 = V; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; V = r; if (CY == 0) goto inst_next2; }
+:ADDNC "A,A" is op=0x60; op2=0x21 { local x:1 = A; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; if (CY == 0) goto inst_next2; }
+:ADDNC "B,A" is op=0x60; op2=0x22 { local x:1 = B; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; B = r; if (CY == 0) goto inst_next2; }
+:ADDNC "C,A" is op=0x60; op2=0x23 { local x:1 = C; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; C = r; if (CY == 0) goto inst_next2; }
+:ADDNC "D,A" is op=0x60; op2=0x24 { local x:1 = D; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; D = r; if (CY == 0) goto inst_next2; }
+:ADDNC "E,A" is op=0x60; op2=0x25 { local x:1 = E; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; E = r; if (CY == 0) goto inst_next2; }
+:ADDNC "H,A" is op=0x60; op2=0x26 { local x:1 = H; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; H = r; if (CY == 0) goto inst_next2; }
+:ADDNC "L,A" is op=0x60; op2=0x27 { local x:1 = L; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; L = r; if (CY == 0) goto inst_next2; }
+:GTA "V,A" is op=0x60; op2=0x28 { local x:1 = V; local y:1 = A; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:GTA "A,A" is op=0x60; op2=0x29 { local x:1 = A; local y:1 = A; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:GTA "B,A" is op=0x60; op2=0x2A { local x:1 = B; local y:1 = A; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:GTA "C,A" is op=0x60; op2=0x2B { local x:1 = C; local y:1 = A; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:GTA "D,A" is op=0x60; op2=0x2C { local x:1 = D; local y:1 = A; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:GTA "E,A" is op=0x60; op2=0x2D { local x:1 = E; local y:1 = A; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:GTA "H,A" is op=0x60; op2=0x2E { local x:1 = H; local y:1 = A; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:GTA "L,A" is op=0x60; op2=0x2F { local x:1 = L; local y:1 = A; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:SUBNB "V,A" is op=0x60; op2=0x30 { local x:1 = V; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; V = r; if (CY == 0) goto inst_next2; }
+:SUBNB "A,A" is op=0x60; op2=0x31 { local x:1 = A; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; if (CY == 0) goto inst_next2; }
+:SUBNB "B,A" is op=0x60; op2=0x32 { local x:1 = B; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; B = r; if (CY == 0) goto inst_next2; }
+:SUBNB "C,A" is op=0x60; op2=0x33 { local x:1 = C; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; C = r; if (CY == 0) goto inst_next2; }
+:SUBNB "D,A" is op=0x60; op2=0x34 { local x:1 = D; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; D = r; if (CY == 0) goto inst_next2; }
+:SUBNB "E,A" is op=0x60; op2=0x35 { local x:1 = E; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; E = r; if (CY == 0) goto inst_next2; }
+:SUBNB "H,A" is op=0x60; op2=0x36 { local x:1 = H; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; H = r; if (CY == 0) goto inst_next2; }
+:SUBNB "L,A" is op=0x60; op2=0x37 { local x:1 = L; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; L = r; if (CY == 0) goto inst_next2; }
+:LTA "V,A" is op=0x60; op2=0x38 { local x:1 = V; local y:1 = A; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:LTA "A,A" is op=0x60; op2=0x39 { local x:1 = A; local y:1 = A; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:LTA "B,A" is op=0x60; op2=0x3A { local x:1 = B; local y:1 = A; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:LTA "C,A" is op=0x60; op2=0x3B { local x:1 = C; local y:1 = A; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:LTA "D,A" is op=0x60; op2=0x3C { local x:1 = D; local y:1 = A; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:LTA "E,A" is op=0x60; op2=0x3D { local x:1 = E; local y:1 = A; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:LTA "H,A" is op=0x60; op2=0x3E { local x:1 = H; local y:1 = A; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:LTA "L,A" is op=0x60; op2=0x3F { local x:1 = L; local y:1 = A; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:ADD "V,A" is op=0x60; op2=0x40 { local x:1 = V; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; V = r; }
+:ADD "A,A" is op=0x60; op2=0x41 { local x:1 = A; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; }
+:ADD "B,A" is op=0x60; op2=0x42 { local x:1 = B; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; B = r; }
+:ADD "C,A" is op=0x60; op2=0x43 { local x:1 = C; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; C = r; }
+:ADD "D,A" is op=0x60; op2=0x44 { local x:1 = D; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; D = r; }
+:ADD "E,A" is op=0x60; op2=0x45 { local x:1 = E; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; E = r; }
+:ADD "H,A" is op=0x60; op2=0x46 { local x:1 = H; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; H = r; }
+:ADD "L,A" is op=0x60; op2=0x47 { local x:1 = L; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; L = r; }
+:ADC "V,A" is op=0x60; op2=0x50 { local x:1 = V; local y:1 = A; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; V = r; }
+:ADC "A,A" is op=0x60; op2=0x51 { local x:1 = A; local y:1 = A; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; }
+:ADC "B,A" is op=0x60; op2=0x52 { local x:1 = B; local y:1 = A; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; B = r; }
+:ADC "C,A" is op=0x60; op2=0x53 { local x:1 = C; local y:1 = A; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; C = r; }
+:ADC "D,A" is op=0x60; op2=0x54 { local x:1 = D; local y:1 = A; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; D = r; }
+:ADC "E,A" is op=0x60; op2=0x55 { local x:1 = E; local y:1 = A; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; E = r; }
+:ADC "H,A" is op=0x60; op2=0x56 { local x:1 = H; local y:1 = A; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; H = r; }
+:ADC "L,A" is op=0x60; op2=0x57 { local x:1 = L; local y:1 = A; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; L = r; }
+:SUB "V,A" is op=0x60; op2=0x60 { local x:1 = V; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; V = r; }
+:SUB "A,A" is op=0x60; op2=0x61 { local x:1 = A; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; }
+:SUB "B,A" is op=0x60; op2=0x62 { local x:1 = B; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; B = r; }
+:SUB "C,A" is op=0x60; op2=0x63 { local x:1 = C; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; C = r; }
+:SUB "D,A" is op=0x60; op2=0x64 { local x:1 = D; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; D = r; }
+:SUB "E,A" is op=0x60; op2=0x65 { local x:1 = E; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; E = r; }
+:SUB "H,A" is op=0x60; op2=0x66 { local x:1 = H; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; H = r; }
+:SUB "L,A" is op=0x60; op2=0x67 { local x:1 = L; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; L = r; }
+:NEA "V,A" is op=0x60; op2=0x68 { local x:1 = V; local y:1 = A; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:NEA "A,A" is op=0x60; op2=0x69 { local x:1 = A; local y:1 = A; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:NEA "B,A" is op=0x60; op2=0x6A { local x:1 = B; local y:1 = A; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:NEA "C,A" is op=0x60; op2=0x6B { local x:1 = C; local y:1 = A; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:NEA "D,A" is op=0x60; op2=0x6C { local x:1 = D; local y:1 = A; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:NEA "E,A" is op=0x60; op2=0x6D { local x:1 = E; local y:1 = A; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:NEA "H,A" is op=0x60; op2=0x6E { local x:1 = H; local y:1 = A; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:NEA "L,A" is op=0x60; op2=0x6F { local x:1 = L; local y:1 = A; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:SBB "V,A" is op=0x60; op2=0x70 { local x:1 = V; local y:1 = A; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; V = r; }
+:SBB "A,A" is op=0x60; op2=0x71 { local x:1 = A; local y:1 = A; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; }
+:SBB "B,A" is op=0x60; op2=0x72 { local x:1 = B; local y:1 = A; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; B = r; }
+:SBB "C,A" is op=0x60; op2=0x73 { local x:1 = C; local y:1 = A; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; C = r; }
+:SBB "D,A" is op=0x60; op2=0x74 { local x:1 = D; local y:1 = A; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; D = r; }
+:SBB "E,A" is op=0x60; op2=0x75 { local x:1 = E; local y:1 = A; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; E = r; }
+:SBB "H,A" is op=0x60; op2=0x76 { local x:1 = H; local y:1 = A; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; H = r; }
+:SBB "L,A" is op=0x60; op2=0x77 { local x:1 = L; local y:1 = A; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; L = r; }
+:EQA "V,A" is op=0x60; op2=0x78 { local x:1 = V; local y:1 = A; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:EQA "A,A" is op=0x60; op2=0x79 { local x:1 = A; local y:1 = A; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:EQA "B,A" is op=0x60; op2=0x7A { local x:1 = B; local y:1 = A; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:EQA "C,A" is op=0x60; op2=0x7B { local x:1 = C; local y:1 = A; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:EQA "D,A" is op=0x60; op2=0x7C { local x:1 = D; local y:1 = A; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:EQA "E,A" is op=0x60; op2=0x7D { local x:1 = E; local y:1 = A; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:EQA "H,A" is op=0x60; op2=0x7E { local x:1 = H; local y:1 = A; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:EQA "L,A" is op=0x60; op2=0x7F { local x:1 = L; local y:1 = A; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:ANA "A,V" is op=0x60; op2=0x88 { local x:1 = A; local y:1 = V; local r:1 = x & y; Z = r == 0; A = r; }
+:ANA "A,A" is op=0x60; op2=0x89 { local x:1 = A; local y:1 = A; local r:1 = x & y; Z = r == 0; A = r; }
+:ANA "A,B" is op=0x60; op2=0x8A { local x:1 = A; local y:1 = B; local r:1 = x & y; Z = r == 0; A = r; }
+:ANA "A,C" is op=0x60; op2=0x8B { local x:1 = A; local y:1 = C; local r:1 = x & y; Z = r == 0; A = r; }
+:ANA "A,D" is op=0x60; op2=0x8C { local x:1 = A; local y:1 = D; local r:1 = x & y; Z = r == 0; A = r; }
+:ANA "A,E" is op=0x60; op2=0x8D { local x:1 = A; local y:1 = E; local r:1 = x & y; Z = r == 0; A = r; }
+:ANA "A,H" is op=0x60; op2=0x8E { local x:1 = A; local y:1 = H; local r:1 = x & y; Z = r == 0; A = r; }
+:ANA "A,L" is op=0x60; op2=0x8F { local x:1 = A; local y:1 = L; local r:1 = x & y; Z = r == 0; A = r; }
+:XRA "A,V" is op=0x60; op2=0x90 { local x:1 = A; local y:1 = V; local r:1 = x ^ y; Z = r == 0; A = r; }
+:XRA "A,A" is op=0x60; op2=0x91 { local x:1 = A; local y:1 = A; local r:1 = x ^ y; Z = r == 0; A = r; }
+:XRA "A,B" is op=0x60; op2=0x92 { local x:1 = A; local y:1 = B; local r:1 = x ^ y; Z = r == 0; A = r; }
+:XRA "A,C" is op=0x60; op2=0x93 { local x:1 = A; local y:1 = C; local r:1 = x ^ y; Z = r == 0; A = r; }
+:XRA "A,D" is op=0x60; op2=0x94 { local x:1 = A; local y:1 = D; local r:1 = x ^ y; Z = r == 0; A = r; }
+:XRA "A,E" is op=0x60; op2=0x95 { local x:1 = A; local y:1 = E; local r:1 = x ^ y; Z = r == 0; A = r; }
+:XRA "A,H" is op=0x60; op2=0x96 { local x:1 = A; local y:1 = H; local r:1 = x ^ y; Z = r == 0; A = r; }
+:XRA "A,L" is op=0x60; op2=0x97 { local x:1 = A; local y:1 = L; local r:1 = x ^ y; Z = r == 0; A = r; }
+:ORA "A,V" is op=0x60; op2=0x98 { local x:1 = A; local y:1 = V; local r:1 = x | y; Z = r == 0; A = r; }
+:ORA "A,A" is op=0x60; op2=0x99 { local x:1 = A; local y:1 = A; local r:1 = x | y; Z = r == 0; A = r; }
+:ORA "A,B" is op=0x60; op2=0x9A { local x:1 = A; local y:1 = B; local r:1 = x | y; Z = r == 0; A = r; }
+:ORA "A,C" is op=0x60; op2=0x9B { local x:1 = A; local y:1 = C; local r:1 = x | y; Z = r == 0; A = r; }
+:ORA "A,D" is op=0x60; op2=0x9C { local x:1 = A; local y:1 = D; local r:1 = x | y; Z = r == 0; A = r; }
+:ORA "A,E" is op=0x60; op2=0x9D { local x:1 = A; local y:1 = E; local r:1 = x | y; Z = r == 0; A = r; }
+:ORA "A,H" is op=0x60; op2=0x9E { local x:1 = A; local y:1 = H; local r:1 = x | y; Z = r == 0; A = r; }
+:ORA "A,L" is op=0x60; op2=0x9F { local x:1 = A; local y:1 = L; local r:1 = x | y; Z = r == 0; A = r; }
+:ADDNC "A,V" is op=0x60; op2=0xA0 { local x:1 = A; local y:1 = V; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; if (CY == 0) goto inst_next2; }
+:ADDNC "A,A" is op=0x60; op2=0xA1 { local x:1 = A; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; if (CY == 0) goto inst_next2; }
+:ADDNC "A,B" is op=0x60; op2=0xA2 { local x:1 = A; local y:1 = B; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; if (CY == 0) goto inst_next2; }
+:ADDNC "A,C" is op=0x60; op2=0xA3 { local x:1 = A; local y:1 = C; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; if (CY == 0) goto inst_next2; }
+:ADDNC "A,D" is op=0x60; op2=0xA4 { local x:1 = A; local y:1 = D; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; if (CY == 0) goto inst_next2; }
+:ADDNC "A,E" is op=0x60; op2=0xA5 { local x:1 = A; local y:1 = E; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; if (CY == 0) goto inst_next2; }
+:ADDNC "A,H" is op=0x60; op2=0xA6 { local x:1 = A; local y:1 = H; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; if (CY == 0) goto inst_next2; }
+:ADDNC "A,L" is op=0x60; op2=0xA7 { local x:1 = A; local y:1 = L; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; if (CY == 0) goto inst_next2; }
+:GTA "A,V" is op=0x60; op2=0xA8 { local x:1 = A; local y:1 = V; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:GTA "A,A" is op=0x60; op2=0xA9 { local x:1 = A; local y:1 = A; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:GTA "A,B" is op=0x60; op2=0xAA { local x:1 = A; local y:1 = B; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:GTA "A,C" is op=0x60; op2=0xAB { local x:1 = A; local y:1 = C; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:GTA "A,D" is op=0x60; op2=0xAC { local x:1 = A; local y:1 = D; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:GTA "A,E" is op=0x60; op2=0xAD { local x:1 = A; local y:1 = E; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:GTA "A,H" is op=0x60; op2=0xAE { local x:1 = A; local y:1 = H; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:GTA "A,L" is op=0x60; op2=0xAF { local x:1 = A; local y:1 = L; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:SUBNB "A,V" is op=0x60; op2=0xB0 { local x:1 = A; local y:1 = V; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; if (CY == 0) goto inst_next2; }
+:SUBNB "A,A" is op=0x60; op2=0xB1 { local x:1 = A; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; if (CY == 0) goto inst_next2; }
+:SUBNB "A,B" is op=0x60; op2=0xB2 { local x:1 = A; local y:1 = B; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; if (CY == 0) goto inst_next2; }
+:SUBNB "A,C" is op=0x60; op2=0xB3 { local x:1 = A; local y:1 = C; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; if (CY == 0) goto inst_next2; }
+:SUBNB "A,D" is op=0x60; op2=0xB4 { local x:1 = A; local y:1 = D; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; if (CY == 0) goto inst_next2; }
+:SUBNB "A,E" is op=0x60; op2=0xB5 { local x:1 = A; local y:1 = E; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; if (CY == 0) goto inst_next2; }
+:SUBNB "A,H" is op=0x60; op2=0xB6 { local x:1 = A; local y:1 = H; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; if (CY == 0) goto inst_next2; }
+:SUBNB "A,L" is op=0x60; op2=0xB7 { local x:1 = A; local y:1 = L; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; if (CY == 0) goto inst_next2; }
+:LTA "A,V" is op=0x60; op2=0xB8 { local x:1 = A; local y:1 = V; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:LTA "A,A" is op=0x60; op2=0xB9 { local x:1 = A; local y:1 = A; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:LTA "A,B" is op=0x60; op2=0xBA { local x:1 = A; local y:1 = B; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:LTA "A,C" is op=0x60; op2=0xBB { local x:1 = A; local y:1 = C; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:LTA "A,D" is op=0x60; op2=0xBC { local x:1 = A; local y:1 = D; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:LTA "A,E" is op=0x60; op2=0xBD { local x:1 = A; local y:1 = E; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:LTA "A,H" is op=0x60; op2=0xBE { local x:1 = A; local y:1 = H; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:LTA "A,L" is op=0x60; op2=0xBF { local x:1 = A; local y:1 = L; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:ADD "A,V" is op=0x60; op2=0xC0 { local x:1 = A; local y:1 = V; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; }
+:ADD "A,A" is op=0x60; op2=0xC1 { local x:1 = A; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; }
+:ADD "A,B" is op=0x60; op2=0xC2 { local x:1 = A; local y:1 = B; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; }
+:ADD "A,C" is op=0x60; op2=0xC3 { local x:1 = A; local y:1 = C; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; }
+:ADD "A,D" is op=0x60; op2=0xC4 { local x:1 = A; local y:1 = D; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; }
+:ADD "A,E" is op=0x60; op2=0xC5 { local x:1 = A; local y:1 = E; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; }
+:ADD "A,H" is op=0x60; op2=0xC6 { local x:1 = A; local y:1 = H; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; }
+:ADD "A,L" is op=0x60; op2=0xC7 { local x:1 = A; local y:1 = L; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; }
+:ONA "A,V" is op=0x60; op2=0xC8 { local x:1 = A; local y:1 = V; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:ONA "A,A" is op=0x60; op2=0xC9 { local x:1 = A; local y:1 = A; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:ONA "A,B" is op=0x60; op2=0xCA { local x:1 = A; local y:1 = B; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:ONA "A,C" is op=0x60; op2=0xCB { local x:1 = A; local y:1 = C; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:ONA "A,D" is op=0x60; op2=0xCC { local x:1 = A; local y:1 = D; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:ONA "A,E" is op=0x60; op2=0xCD { local x:1 = A; local y:1 = E; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:ONA "A,H" is op=0x60; op2=0xCE { local x:1 = A; local y:1 = H; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:ONA "A,L" is op=0x60; op2=0xCF { local x:1 = A; local y:1 = L; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:ADC "A,V" is op=0x60; op2=0xD0 { local x:1 = A; local y:1 = V; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; }
+:ADC "A,A" is op=0x60; op2=0xD1 { local x:1 = A; local y:1 = A; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; }
+:ADC "A,B" is op=0x60; op2=0xD2 { local x:1 = A; local y:1 = B; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; }
+:ADC "A,C" is op=0x60; op2=0xD3 { local x:1 = A; local y:1 = C; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; }
+:ADC "A,D" is op=0x60; op2=0xD4 { local x:1 = A; local y:1 = D; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; }
+:ADC "A,E" is op=0x60; op2=0xD5 { local x:1 = A; local y:1 = E; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; }
+:ADC "A,H" is op=0x60; op2=0xD6 { local x:1 = A; local y:1 = H; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; }
+:ADC "A,L" is op=0x60; op2=0xD7 { local x:1 = A; local y:1 = L; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; }
+:OFFA "A,V" is op=0x60; op2=0xD8 { local x:1 = A; local y:1 = V; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:OFFA "A,A" is op=0x60; op2=0xD9 { local x:1 = A; local y:1 = A; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:OFFA "A,B" is op=0x60; op2=0xDA { local x:1 = A; local y:1 = B; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:OFFA "A,C" is op=0x60; op2=0xDB { local x:1 = A; local y:1 = C; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:OFFA "A,D" is op=0x60; op2=0xDC { local x:1 = A; local y:1 = D; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:OFFA "A,E" is op=0x60; op2=0xDD { local x:1 = A; local y:1 = E; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:OFFA "A,H" is op=0x60; op2=0xDE { local x:1 = A; local y:1 = H; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:OFFA "A,L" is op=0x60; op2=0xDF { local x:1 = A; local y:1 = L; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:SUB "A,V" is op=0x60; op2=0xE0 { local x:1 = A; local y:1 = V; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; }
+:SUB "A,A" is op=0x60; op2=0xE1 { local x:1 = A; local y:1 = A; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; }
+:SUB "A,B" is op=0x60; op2=0xE2 { local x:1 = A; local y:1 = B; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; }
+:SUB "A,C" is op=0x60; op2=0xE3 { local x:1 = A; local y:1 = C; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; }
+:SUB "A,D" is op=0x60; op2=0xE4 { local x:1 = A; local y:1 = D; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; }
+:SUB "A,E" is op=0x60; op2=0xE5 { local x:1 = A; local y:1 = E; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; }
+:SUB "A,H" is op=0x60; op2=0xE6 { local x:1 = A; local y:1 = H; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; }
+:SUB "A,L" is op=0x60; op2=0xE7 { local x:1 = A; local y:1 = L; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; }
+:NEA "A,V" is op=0x60; op2=0xE8 { local x:1 = A; local y:1 = V; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:NEA "A,A" is op=0x60; op2=0xE9 { local x:1 = A; local y:1 = A; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:NEA "A,B" is op=0x60; op2=0xEA { local x:1 = A; local y:1 = B; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:NEA "A,C" is op=0x60; op2=0xEB { local x:1 = A; local y:1 = C; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:NEA "A,D" is op=0x60; op2=0xEC { local x:1 = A; local y:1 = D; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:NEA "A,E" is op=0x60; op2=0xED { local x:1 = A; local y:1 = E; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:NEA "A,H" is op=0x60; op2=0xEE { local x:1 = A; local y:1 = H; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:NEA "A,L" is op=0x60; op2=0xEF { local x:1 = A; local y:1 = L; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:SBB "A,V" is op=0x60; op2=0xF0 { local x:1 = A; local y:1 = V; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; }
+:SBB "A,A" is op=0x60; op2=0xF1 { local x:1 = A; local y:1 = A; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; }
+:SBB "A,B" is op=0x60; op2=0xF2 { local x:1 = A; local y:1 = B; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; }
+:SBB "A,C" is op=0x60; op2=0xF3 { local x:1 = A; local y:1 = C; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; }
+:SBB "A,D" is op=0x60; op2=0xF4 { local x:1 = A; local y:1 = D; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; }
+:SBB "A,E" is op=0x60; op2=0xF5 { local x:1 = A; local y:1 = E; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; }
+:SBB "A,H" is op=0x60; op2=0xF6 { local x:1 = A; local y:1 = H; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; }
+:SBB "A,L" is op=0x60; op2=0xF7 { local x:1 = A; local y:1 = L; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; }
+:EQA "A,V" is op=0x60; op2=0xF8 { local x:1 = A; local y:1 = V; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:EQA "A,A" is op=0x60; op2=0xF9 { local x:1 = A; local y:1 = A; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:EQA "A,B" is op=0x60; op2=0xFA { local x:1 = A; local y:1 = B; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:EQA "A,C" is op=0x60; op2=0xFB { local x:1 = A; local y:1 = C; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:EQA "A,D" is op=0x60; op2=0xFC { local x:1 = A; local y:1 = D; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:EQA "A,E" is op=0x60; op2=0xFD { local x:1 = A; local y:1 = E; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:EQA "A,H" is op=0x60; op2=0xFE { local x:1 = A; local y:1 = H; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:EQA "A,L" is op=0x60; op2=0xFF { local x:1 = A; local y:1 = L; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:MVI "PA,"^imm8 is op=0x64; op2=0x00; imm8 { *[sfr]:1 0:1 = imm8; }
+:MVI "PB,"^imm8 is op=0x64; op2=0x01; imm8 { *[sfr]:1 1:1 = imm8; }
+:MVI "PC,"^imm8 is op=0x64; op2=0x02; imm8 { *[sfr]:1 2:1 = imm8; }
+:MVI "PD,"^imm8 is op=0x64; op2=0x03; imm8 { *[sfr]:1 3:1 = imm8; }
+:MVI "PF,"^imm8 is op=0x64; op2=0x05; imm8 { *[sfr]:1 5:1 = imm8; }
+:MVI "MKH,"^imm8 is op=0x64; op2=0x06; imm8 { *[sfr]:1 6:1 = imm8; }
+:MVI "MKL,"^imm8 is op=0x64; op2=0x07; imm8 { *[sfr]:1 7:1 = imm8; }
+:ANI "PA,"^imm8 is op=0x64; op2=0x08; imm8 { local x:1 = *[sfr]:1 0:1; local y:1 = imm8; local r:1 = x & y; Z = r == 0; *[sfr]:1 0:1 = r; }
+:ANI "PB,"^imm8 is op=0x64; op2=0x09; imm8 { local x:1 = *[sfr]:1 1:1; local y:1 = imm8; local r:1 = x & y; Z = r == 0; *[sfr]:1 1:1 = r; }
+:ANI "PC,"^imm8 is op=0x64; op2=0x0A; imm8 { local x:1 = *[sfr]:1 2:1; local y:1 = imm8; local r:1 = x & y; Z = r == 0; *[sfr]:1 2:1 = r; }
+:ANI "PD,"^imm8 is op=0x64; op2=0x0B; imm8 { local x:1 = *[sfr]:1 3:1; local y:1 = imm8; local r:1 = x & y; Z = r == 0; *[sfr]:1 3:1 = r; }
+:ANI "PF,"^imm8 is op=0x64; op2=0x0D; imm8 { local x:1 = *[sfr]:1 5:1; local y:1 = imm8; local r:1 = x & y; Z = r == 0; *[sfr]:1 5:1 = r; }
+:ANI "MKH,"^imm8 is op=0x64; op2=0x0E; imm8 { local x:1 = *[sfr]:1 6:1; local y:1 = imm8; local r:1 = x & y; Z = r == 0; *[sfr]:1 6:1 = r; }
+:ANI "MKL,"^imm8 is op=0x64; op2=0x0F; imm8 { local x:1 = *[sfr]:1 7:1; local y:1 = imm8; local r:1 = x & y; Z = r == 0; *[sfr]:1 7:1 = r; }
+:XRI "PA,"^imm8 is op=0x64; op2=0x10; imm8 { local x:1 = *[sfr]:1 0:1; local y:1 = imm8; local r:1 = x ^ y; Z = r == 0; *[sfr]:1 0:1 = r; }
+:XRI "PB,"^imm8 is op=0x64; op2=0x11; imm8 { local x:1 = *[sfr]:1 1:1; local y:1 = imm8; local r:1 = x ^ y; Z = r == 0; *[sfr]:1 1:1 = r; }
+:XRI "PC,"^imm8 is op=0x64; op2=0x12; imm8 { local x:1 = *[sfr]:1 2:1; local y:1 = imm8; local r:1 = x ^ y; Z = r == 0; *[sfr]:1 2:1 = r; }
+:XRI "PD,"^imm8 is op=0x64; op2=0x13; imm8 { local x:1 = *[sfr]:1 3:1; local y:1 = imm8; local r:1 = x ^ y; Z = r == 0; *[sfr]:1 3:1 = r; }
+:XRI "PF,"^imm8 is op=0x64; op2=0x15; imm8 { local x:1 = *[sfr]:1 5:1; local y:1 = imm8; local r:1 = x ^ y; Z = r == 0; *[sfr]:1 5:1 = r; }
+:XRI "MKH,"^imm8 is op=0x64; op2=0x16; imm8 { local x:1 = *[sfr]:1 6:1; local y:1 = imm8; local r:1 = x ^ y; Z = r == 0; *[sfr]:1 6:1 = r; }
+:XRI "MKL,"^imm8 is op=0x64; op2=0x17; imm8 { local x:1 = *[sfr]:1 7:1; local y:1 = imm8; local r:1 = x ^ y; Z = r == 0; *[sfr]:1 7:1 = r; }
+:ORI "PA,"^imm8 is op=0x64; op2=0x18; imm8 { local x:1 = *[sfr]:1 0:1; local y:1 = imm8; local r:1 = x | y; Z = r == 0; *[sfr]:1 0:1 = r; }
+:ORI "PB,"^imm8 is op=0x64; op2=0x19; imm8 { local x:1 = *[sfr]:1 1:1; local y:1 = imm8; local r:1 = x | y; Z = r == 0; *[sfr]:1 1:1 = r; }
+:ORI "PC,"^imm8 is op=0x64; op2=0x1A; imm8 { local x:1 = *[sfr]:1 2:1; local y:1 = imm8; local r:1 = x | y; Z = r == 0; *[sfr]:1 2:1 = r; }
+:ORI "PD,"^imm8 is op=0x64; op2=0x1B; imm8 { local x:1 = *[sfr]:1 3:1; local y:1 = imm8; local r:1 = x | y; Z = r == 0; *[sfr]:1 3:1 = r; }
+:ORI "PF,"^imm8 is op=0x64; op2=0x1D; imm8 { local x:1 = *[sfr]:1 5:1; local y:1 = imm8; local r:1 = x | y; Z = r == 0; *[sfr]:1 5:1 = r; }
+:ORI "MKH,"^imm8 is op=0x64; op2=0x1E; imm8 { local x:1 = *[sfr]:1 6:1; local y:1 = imm8; local r:1 = x | y; Z = r == 0; *[sfr]:1 6:1 = r; }
+:ORI "MKL,"^imm8 is op=0x64; op2=0x1F; imm8 { local x:1 = *[sfr]:1 7:1; local y:1 = imm8; local r:1 = x | y; Z = r == 0; *[sfr]:1 7:1 = r; }
+:ADINC "PA,"^imm8 is op=0x64; op2=0x20; imm8 { local x:1 = *[sfr]:1 0:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; *[sfr]:1 0:1 = r; if (CY == 0) goto inst_next2; }
+:ADINC "PB,"^imm8 is op=0x64; op2=0x21; imm8 { local x:1 = *[sfr]:1 1:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; *[sfr]:1 1:1 = r; if (CY == 0) goto inst_next2; }
+:ADINC "PC,"^imm8 is op=0x64; op2=0x22; imm8 { local x:1 = *[sfr]:1 2:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; *[sfr]:1 2:1 = r; if (CY == 0) goto inst_next2; }
+:ADINC "PD,"^imm8 is op=0x64; op2=0x23; imm8 { local x:1 = *[sfr]:1 3:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; *[sfr]:1 3:1 = r; if (CY == 0) goto inst_next2; }
+:ADINC "PF,"^imm8 is op=0x64; op2=0x25; imm8 { local x:1 = *[sfr]:1 5:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; *[sfr]:1 5:1 = r; if (CY == 0) goto inst_next2; }
+:ADINC "MKH,"^imm8 is op=0x64; op2=0x26; imm8 { local x:1 = *[sfr]:1 6:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; *[sfr]:1 6:1 = r; if (CY == 0) goto inst_next2; }
+:ADINC "MKL,"^imm8 is op=0x64; op2=0x27; imm8 { local x:1 = *[sfr]:1 7:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; *[sfr]:1 7:1 = r; if (CY == 0) goto inst_next2; }
+:GTI "PA,"^imm8 is op=0x64; op2=0x28; imm8 { local x:1 = *[sfr]:1 0:1; local y:1 = imm8; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:GTI "PB,"^imm8 is op=0x64; op2=0x29; imm8 { local x:1 = *[sfr]:1 1:1; local y:1 = imm8; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:GTI "PC,"^imm8 is op=0x64; op2=0x2A; imm8 { local x:1 = *[sfr]:1 2:1; local y:1 = imm8; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:GTI "PD,"^imm8 is op=0x64; op2=0x2B; imm8 { local x:1 = *[sfr]:1 3:1; local y:1 = imm8; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:GTI "PF,"^imm8 is op=0x64; op2=0x2D; imm8 { local x:1 = *[sfr]:1 5:1; local y:1 = imm8; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:GTI "MKH,"^imm8 is op=0x64; op2=0x2E; imm8 { local x:1 = *[sfr]:1 6:1; local y:1 = imm8; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:GTI "MKL,"^imm8 is op=0x64; op2=0x2F; imm8 { local x:1 = *[sfr]:1 7:1; local y:1 = imm8; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:SUINB "PA,"^imm8 is op=0x64; op2=0x30; imm8 { local x:1 = *[sfr]:1 0:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; *[sfr]:1 0:1 = r; if (CY == 0) goto inst_next2; }
+:SUINB "PB,"^imm8 is op=0x64; op2=0x31; imm8 { local x:1 = *[sfr]:1 1:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; *[sfr]:1 1:1 = r; if (CY == 0) goto inst_next2; }
+:SUINB "PC,"^imm8 is op=0x64; op2=0x32; imm8 { local x:1 = *[sfr]:1 2:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; *[sfr]:1 2:1 = r; if (CY == 0) goto inst_next2; }
+:SUINB "PD,"^imm8 is op=0x64; op2=0x33; imm8 { local x:1 = *[sfr]:1 3:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; *[sfr]:1 3:1 = r; if (CY == 0) goto inst_next2; }
+:SUINB "PF,"^imm8 is op=0x64; op2=0x35; imm8 { local x:1 = *[sfr]:1 5:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; *[sfr]:1 5:1 = r; if (CY == 0) goto inst_next2; }
+:SUINB "MKH,"^imm8 is op=0x64; op2=0x36; imm8 { local x:1 = *[sfr]:1 6:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; *[sfr]:1 6:1 = r; if (CY == 0) goto inst_next2; }
+:SUINB "MKL,"^imm8 is op=0x64; op2=0x37; imm8 { local x:1 = *[sfr]:1 7:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; *[sfr]:1 7:1 = r; if (CY == 0) goto inst_next2; }
+:LTI "PA,"^imm8 is op=0x64; op2=0x38; imm8 { local x:1 = *[sfr]:1 0:1; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:LTI "PB,"^imm8 is op=0x64; op2=0x39; imm8 { local x:1 = *[sfr]:1 1:1; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:LTI "PC,"^imm8 is op=0x64; op2=0x3A; imm8 { local x:1 = *[sfr]:1 2:1; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:LTI "PD,"^imm8 is op=0x64; op2=0x3B; imm8 { local x:1 = *[sfr]:1 3:1; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:LTI "PF,"^imm8 is op=0x64; op2=0x3D; imm8 { local x:1 = *[sfr]:1 5:1; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:LTI "MKH,"^imm8 is op=0x64; op2=0x3E; imm8 { local x:1 = *[sfr]:1 6:1; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:LTI "MKL,"^imm8 is op=0x64; op2=0x3F; imm8 { local x:1 = *[sfr]:1 7:1; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:ADI "PA,"^imm8 is op=0x64; op2=0x40; imm8 { local x:1 = *[sfr]:1 0:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; *[sfr]:1 0:1 = r; }
+:ADI "PB,"^imm8 is op=0x64; op2=0x41; imm8 { local x:1 = *[sfr]:1 1:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; *[sfr]:1 1:1 = r; }
+:ADI "PC,"^imm8 is op=0x64; op2=0x42; imm8 { local x:1 = *[sfr]:1 2:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; *[sfr]:1 2:1 = r; }
+:ADI "PD,"^imm8 is op=0x64; op2=0x43; imm8 { local x:1 = *[sfr]:1 3:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; *[sfr]:1 3:1 = r; }
+:ADI "PF,"^imm8 is op=0x64; op2=0x45; imm8 { local x:1 = *[sfr]:1 5:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; *[sfr]:1 5:1 = r; }
+:ADI "MKH,"^imm8 is op=0x64; op2=0x46; imm8 { local x:1 = *[sfr]:1 6:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; *[sfr]:1 6:1 = r; }
+:ADI "MKL,"^imm8 is op=0x64; op2=0x47; imm8 { local x:1 = *[sfr]:1 7:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; *[sfr]:1 7:1 = r; }
+:ONI "PA,"^imm8 is op=0x64; op2=0x48; imm8 { local x:1 = *[sfr]:1 0:1; local y:1 = imm8; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:ONI "PB,"^imm8 is op=0x64; op2=0x49; imm8 { local x:1 = *[sfr]:1 1:1; local y:1 = imm8; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:ONI "PC,"^imm8 is op=0x64; op2=0x4A; imm8 { local x:1 = *[sfr]:1 2:1; local y:1 = imm8; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:ONI "PD,"^imm8 is op=0x64; op2=0x4B; imm8 { local x:1 = *[sfr]:1 3:1; local y:1 = imm8; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:ONI "PF,"^imm8 is op=0x64; op2=0x4D; imm8 { local x:1 = *[sfr]:1 5:1; local y:1 = imm8; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:ONI "MKH,"^imm8 is op=0x64; op2=0x4E; imm8 { local x:1 = *[sfr]:1 6:1; local y:1 = imm8; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:ONI "MKL,"^imm8 is op=0x64; op2=0x4F; imm8 { local x:1 = *[sfr]:1 7:1; local y:1 = imm8; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:ACI "PA,"^imm8 is op=0x64; op2=0x50; imm8 { local x:1 = *[sfr]:1 0:1; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; *[sfr]:1 0:1 = r; }
+:ACI "PB,"^imm8 is op=0x64; op2=0x51; imm8 { local x:1 = *[sfr]:1 1:1; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; *[sfr]:1 1:1 = r; }
+:ACI "PC,"^imm8 is op=0x64; op2=0x52; imm8 { local x:1 = *[sfr]:1 2:1; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; *[sfr]:1 2:1 = r; }
+:ACI "PD,"^imm8 is op=0x64; op2=0x53; imm8 { local x:1 = *[sfr]:1 3:1; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; *[sfr]:1 3:1 = r; }
+:ACI "PF,"^imm8 is op=0x64; op2=0x55; imm8 { local x:1 = *[sfr]:1 5:1; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; *[sfr]:1 5:1 = r; }
+:ACI "MKH,"^imm8 is op=0x64; op2=0x56; imm8 { local x:1 = *[sfr]:1 6:1; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; *[sfr]:1 6:1 = r; }
+:ACI "MKL,"^imm8 is op=0x64; op2=0x57; imm8 { local x:1 = *[sfr]:1 7:1; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; *[sfr]:1 7:1 = r; }
+:OFFI "PA,"^imm8 is op=0x64; op2=0x58; imm8 { local x:1 = *[sfr]:1 0:1; local y:1 = imm8; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:OFFI "PB,"^imm8 is op=0x64; op2=0x59; imm8 { local x:1 = *[sfr]:1 1:1; local y:1 = imm8; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:OFFI "PC,"^imm8 is op=0x64; op2=0x5A; imm8 { local x:1 = *[sfr]:1 2:1; local y:1 = imm8; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:OFFI "PD,"^imm8 is op=0x64; op2=0x5B; imm8 { local x:1 = *[sfr]:1 3:1; local y:1 = imm8; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:OFFI "PF,"^imm8 is op=0x64; op2=0x5D; imm8 { local x:1 = *[sfr]:1 5:1; local y:1 = imm8; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:OFFI "MKH,"^imm8 is op=0x64; op2=0x5E; imm8 { local x:1 = *[sfr]:1 6:1; local y:1 = imm8; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:OFFI "MKL,"^imm8 is op=0x64; op2=0x5F; imm8 { local x:1 = *[sfr]:1 7:1; local y:1 = imm8; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:SUI "PA,"^imm8 is op=0x64; op2=0x60; imm8 { local x:1 = *[sfr]:1 0:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; *[sfr]:1 0:1 = r; }
+:SUI "PB,"^imm8 is op=0x64; op2=0x61; imm8 { local x:1 = *[sfr]:1 1:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; *[sfr]:1 1:1 = r; }
+:SUI "PC,"^imm8 is op=0x64; op2=0x62; imm8 { local x:1 = *[sfr]:1 2:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; *[sfr]:1 2:1 = r; }
+:SUI "PD,"^imm8 is op=0x64; op2=0x63; imm8 { local x:1 = *[sfr]:1 3:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; *[sfr]:1 3:1 = r; }
+:SUI "PF,"^imm8 is op=0x64; op2=0x65; imm8 { local x:1 = *[sfr]:1 5:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; *[sfr]:1 5:1 = r; }
+:SUI "MKH,"^imm8 is op=0x64; op2=0x66; imm8 { local x:1 = *[sfr]:1 6:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; *[sfr]:1 6:1 = r; }
+:SUI "MKL,"^imm8 is op=0x64; op2=0x67; imm8 { local x:1 = *[sfr]:1 7:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; *[sfr]:1 7:1 = r; }
+:NEI "PA,"^imm8 is op=0x64; op2=0x68; imm8 { local x:1 = *[sfr]:1 0:1; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:NEI "PB,"^imm8 is op=0x64; op2=0x69; imm8 { local x:1 = *[sfr]:1 1:1; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:NEI "PC,"^imm8 is op=0x64; op2=0x6A; imm8 { local x:1 = *[sfr]:1 2:1; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:NEI "PD,"^imm8 is op=0x64; op2=0x6B; imm8 { local x:1 = *[sfr]:1 3:1; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:NEI "PF,"^imm8 is op=0x64; op2=0x6D; imm8 { local x:1 = *[sfr]:1 5:1; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:NEI "MKH,"^imm8 is op=0x64; op2=0x6E; imm8 { local x:1 = *[sfr]:1 6:1; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:NEI "MKL,"^imm8 is op=0x64; op2=0x6F; imm8 { local x:1 = *[sfr]:1 7:1; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:SBI "PA,"^imm8 is op=0x64; op2=0x70; imm8 { local x:1 = *[sfr]:1 0:1; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; *[sfr]:1 0:1 = r; }
+:SBI "PB,"^imm8 is op=0x64; op2=0x71; imm8 { local x:1 = *[sfr]:1 1:1; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; *[sfr]:1 1:1 = r; }
+:SBI "PC,"^imm8 is op=0x64; op2=0x72; imm8 { local x:1 = *[sfr]:1 2:1; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; *[sfr]:1 2:1 = r; }
+:SBI "PD,"^imm8 is op=0x64; op2=0x73; imm8 { local x:1 = *[sfr]:1 3:1; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; *[sfr]:1 3:1 = r; }
+:SBI "PF,"^imm8 is op=0x64; op2=0x75; imm8 { local x:1 = *[sfr]:1 5:1; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; *[sfr]:1 5:1 = r; }
+:SBI "MKH,"^imm8 is op=0x64; op2=0x76; imm8 { local x:1 = *[sfr]:1 6:1; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; *[sfr]:1 6:1 = r; }
+:SBI "MKL,"^imm8 is op=0x64; op2=0x77; imm8 { local x:1 = *[sfr]:1 7:1; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; *[sfr]:1 7:1 = r; }
+:EQI "PA,"^imm8 is op=0x64; op2=0x78; imm8 { local x:1 = *[sfr]:1 0:1; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:EQI "PB,"^imm8 is op=0x64; op2=0x79; imm8 { local x:1 = *[sfr]:1 1:1; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:EQI "PC,"^imm8 is op=0x64; op2=0x7A; imm8 { local x:1 = *[sfr]:1 2:1; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:EQI "PD,"^imm8 is op=0x64; op2=0x7B; imm8 { local x:1 = *[sfr]:1 3:1; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:EQI "PF,"^imm8 is op=0x64; op2=0x7D; imm8 { local x:1 = *[sfr]:1 5:1; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:EQI "MKH,"^imm8 is op=0x64; op2=0x7E; imm8 { local x:1 = *[sfr]:1 6:1; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:EQI "MKL,"^imm8 is op=0x64; op2=0x7F; imm8 { local x:1 = *[sfr]:1 7:1; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:MVI "ANM,"^imm8 is op=0x64; op2=0x80; imm8 { *[sfr]:1 8:1 = imm8; }
+:MVI "SMH,"^imm8 is op=0x64; op2=0x81; imm8 { *[sfr]:1 9:1 = imm8; }
+:MVI "EOM,"^imm8 is op=0x64; op2=0x83; imm8 { *[sfr]:1 11:1 = imm8; }
+:MVI "TMM,"^imm8 is op=0x64; op2=0x85; imm8 { *[sfr]:1 13:1 = imm8; }
+:ANI "ANM,"^imm8 is op=0x64; op2=0x88; imm8 { local x:1 = *[sfr]:1 8:1; local y:1 = imm8; local r:1 = x & y; Z = r == 0; *[sfr]:1 8:1 = r; }
+:ANI "SMH,"^imm8 is op=0x64; op2=0x89; imm8 { local x:1 = *[sfr]:1 9:1; local y:1 = imm8; local r:1 = x & y; Z = r == 0; *[sfr]:1 9:1 = r; }
+:ANI "EOM,"^imm8 is op=0x64; op2=0x8B; imm8 { local x:1 = *[sfr]:1 11:1; local y:1 = imm8; local r:1 = x & y; Z = r == 0; *[sfr]:1 11:1 = r; }
+:ANI "TMM,"^imm8 is op=0x64; op2=0x8D; imm8 { local x:1 = *[sfr]:1 13:1; local y:1 = imm8; local r:1 = x & y; Z = r == 0; *[sfr]:1 13:1 = r; }
+:XRI "ANM,"^imm8 is op=0x64; op2=0x90; imm8 { local x:1 = *[sfr]:1 8:1; local y:1 = imm8; local r:1 = x ^ y; Z = r == 0; *[sfr]:1 8:1 = r; }
+:XRI "SMH,"^imm8 is op=0x64; op2=0x91; imm8 { local x:1 = *[sfr]:1 9:1; local y:1 = imm8; local r:1 = x ^ y; Z = r == 0; *[sfr]:1 9:1 = r; }
+:XRI "EOM,"^imm8 is op=0x64; op2=0x93; imm8 { local x:1 = *[sfr]:1 11:1; local y:1 = imm8; local r:1 = x ^ y; Z = r == 0; *[sfr]:1 11:1 = r; }
+:XRI "TMM,"^imm8 is op=0x64; op2=0x95; imm8 { local x:1 = *[sfr]:1 13:1; local y:1 = imm8; local r:1 = x ^ y; Z = r == 0; *[sfr]:1 13:1 = r; }
+:ORI "ANM,"^imm8 is op=0x64; op2=0x98; imm8 { local x:1 = *[sfr]:1 8:1; local y:1 = imm8; local r:1 = x | y; Z = r == 0; *[sfr]:1 8:1 = r; }
+:ORI "SMH,"^imm8 is op=0x64; op2=0x99; imm8 { local x:1 = *[sfr]:1 9:1; local y:1 = imm8; local r:1 = x | y; Z = r == 0; *[sfr]:1 9:1 = r; }
+:ORI "EOM,"^imm8 is op=0x64; op2=0x9B; imm8 { local x:1 = *[sfr]:1 11:1; local y:1 = imm8; local r:1 = x | y; Z = r == 0; *[sfr]:1 11:1 = r; }
+:ORI "TMM,"^imm8 is op=0x64; op2=0x9D; imm8 { local x:1 = *[sfr]:1 13:1; local y:1 = imm8; local r:1 = x | y; Z = r == 0; *[sfr]:1 13:1 = r; }
+:ADINC "ANM,"^imm8 is op=0x64; op2=0xA0; imm8 { local x:1 = *[sfr]:1 8:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; *[sfr]:1 8:1 = r; if (CY == 0) goto inst_next2; }
+:ADINC "SMH,"^imm8 is op=0x64; op2=0xA1; imm8 { local x:1 = *[sfr]:1 9:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; *[sfr]:1 9:1 = r; if (CY == 0) goto inst_next2; }
+:ADINC "EOM,"^imm8 is op=0x64; op2=0xA3; imm8 { local x:1 = *[sfr]:1 11:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; *[sfr]:1 11:1 = r; if (CY == 0) goto inst_next2; }
+:ADINC "TMM,"^imm8 is op=0x64; op2=0xA5; imm8 { local x:1 = *[sfr]:1 13:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; *[sfr]:1 13:1 = r; if (CY == 0) goto inst_next2; }
+:GTI "ANM,"^imm8 is op=0x64; op2=0xA8; imm8 { local x:1 = *[sfr]:1 8:1; local y:1 = imm8; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:GTI "SMH,"^imm8 is op=0x64; op2=0xA9; imm8 { local x:1 = *[sfr]:1 9:1; local y:1 = imm8; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:GTI "EOM,"^imm8 is op=0x64; op2=0xAB; imm8 { local x:1 = *[sfr]:1 11:1; local y:1 = imm8; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:GTI "TMM,"^imm8 is op=0x64; op2=0xAD; imm8 { local x:1 = *[sfr]:1 13:1; local y:1 = imm8; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:SUINB "ANM,"^imm8 is op=0x64; op2=0xB0; imm8 { local x:1 = *[sfr]:1 8:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; *[sfr]:1 8:1 = r; if (CY == 0) goto inst_next2; }
+:SUINB "SMH,"^imm8 is op=0x64; op2=0xB1; imm8 { local x:1 = *[sfr]:1 9:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; *[sfr]:1 9:1 = r; if (CY == 0) goto inst_next2; }
+:SUINB "EOM,"^imm8 is op=0x64; op2=0xB3; imm8 { local x:1 = *[sfr]:1 11:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; *[sfr]:1 11:1 = r; if (CY == 0) goto inst_next2; }
+:SUINB "TMM,"^imm8 is op=0x64; op2=0xB5; imm8 { local x:1 = *[sfr]:1 13:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; *[sfr]:1 13:1 = r; if (CY == 0) goto inst_next2; }
+:LTI "ANM,"^imm8 is op=0x64; op2=0xB8; imm8 { local x:1 = *[sfr]:1 8:1; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:LTI "SMH,"^imm8 is op=0x64; op2=0xB9; imm8 { local x:1 = *[sfr]:1 9:1; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:LTI "EOM,"^imm8 is op=0x64; op2=0xBB; imm8 { local x:1 = *[sfr]:1 11:1; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:LTI "TMM,"^imm8 is op=0x64; op2=0xBD; imm8 { local x:1 = *[sfr]:1 13:1; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:ADI "ANM,"^imm8 is op=0x64; op2=0xC0; imm8 { local x:1 = *[sfr]:1 8:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; *[sfr]:1 8:1 = r; }
+:ADI "SMH,"^imm8 is op=0x64; op2=0xC1; imm8 { local x:1 = *[sfr]:1 9:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; *[sfr]:1 9:1 = r; }
+:ADI "EOM,"^imm8 is op=0x64; op2=0xC3; imm8 { local x:1 = *[sfr]:1 11:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; *[sfr]:1 11:1 = r; }
+:ADI "TMM,"^imm8 is op=0x64; op2=0xC5; imm8 { local x:1 = *[sfr]:1 13:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; *[sfr]:1 13:1 = r; }
+:ONI "ANM,"^imm8 is op=0x64; op2=0xC8; imm8 { local x:1 = *[sfr]:1 8:1; local y:1 = imm8; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:ONI "SMH,"^imm8 is op=0x64; op2=0xC9; imm8 { local x:1 = *[sfr]:1 9:1; local y:1 = imm8; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:ONI "EOM,"^imm8 is op=0x64; op2=0xCB; imm8 { local x:1 = *[sfr]:1 11:1; local y:1 = imm8; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:ONI "TMM,"^imm8 is op=0x64; op2=0xCD; imm8 { local x:1 = *[sfr]:1 13:1; local y:1 = imm8; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:ACI "ANM,"^imm8 is op=0x64; op2=0xD0; imm8 { local x:1 = *[sfr]:1 8:1; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; *[sfr]:1 8:1 = r; }
+:ACI "SMH,"^imm8 is op=0x64; op2=0xD1; imm8 { local x:1 = *[sfr]:1 9:1; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; *[sfr]:1 9:1 = r; }
+:ACI "EOM,"^imm8 is op=0x64; op2=0xD3; imm8 { local x:1 = *[sfr]:1 11:1; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; *[sfr]:1 11:1 = r; }
+:ACI "TMM,"^imm8 is op=0x64; op2=0xD5; imm8 { local x:1 = *[sfr]:1 13:1; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; *[sfr]:1 13:1 = r; }
+:OFFI "ANM,"^imm8 is op=0x64; op2=0xD8; imm8 { local x:1 = *[sfr]:1 8:1; local y:1 = imm8; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:OFFI "SMH,"^imm8 is op=0x64; op2=0xD9; imm8 { local x:1 = *[sfr]:1 9:1; local y:1 = imm8; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:OFFI "EOM,"^imm8 is op=0x64; op2=0xDB; imm8 { local x:1 = *[sfr]:1 11:1; local y:1 = imm8; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:OFFI "TMM,"^imm8 is op=0x64; op2=0xDD; imm8 { local x:1 = *[sfr]:1 13:1; local y:1 = imm8; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:SUI "ANM,"^imm8 is op=0x64; op2=0xE0; imm8 { local x:1 = *[sfr]:1 8:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; *[sfr]:1 8:1 = r; }
+:SUI "SMH,"^imm8 is op=0x64; op2=0xE1; imm8 { local x:1 = *[sfr]:1 9:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; *[sfr]:1 9:1 = r; }
+:SUI "EOM,"^imm8 is op=0x64; op2=0xE3; imm8 { local x:1 = *[sfr]:1 11:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; *[sfr]:1 11:1 = r; }
+:SUI "TMM,"^imm8 is op=0x64; op2=0xE5; imm8 { local x:1 = *[sfr]:1 13:1; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; *[sfr]:1 13:1 = r; }
+:NEI "ANM,"^imm8 is op=0x64; op2=0xE8; imm8 { local x:1 = *[sfr]:1 8:1; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:NEI "SMH,"^imm8 is op=0x64; op2=0xE9; imm8 { local x:1 = *[sfr]:1 9:1; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:NEI "EOM,"^imm8 is op=0x64; op2=0xEB; imm8 { local x:1 = *[sfr]:1 11:1; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:NEI "TMM,"^imm8 is op=0x64; op2=0xED; imm8 { local x:1 = *[sfr]:1 13:1; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:SBI "ANM,"^imm8 is op=0x64; op2=0xF0; imm8 { local x:1 = *[sfr]:1 8:1; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; *[sfr]:1 8:1 = r; }
+:SBI "SMH,"^imm8 is op=0x64; op2=0xF1; imm8 { local x:1 = *[sfr]:1 9:1; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; *[sfr]:1 9:1 = r; }
+:SBI "EOM,"^imm8 is op=0x64; op2=0xF3; imm8 { local x:1 = *[sfr]:1 11:1; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; *[sfr]:1 11:1 = r; }
+:SBI "TMM,"^imm8 is op=0x64; op2=0xF5; imm8 { local x:1 = *[sfr]:1 13:1; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; *[sfr]:1 13:1 = r; }
+:EQI "ANM,"^imm8 is op=0x64; op2=0xF8; imm8 { local x:1 = *[sfr]:1 8:1; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:EQI "SMH,"^imm8 is op=0x64; op2=0xF9; imm8 { local x:1 = *[sfr]:1 9:1; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:EQI "EOM,"^imm8 is op=0x64; op2=0xFB; imm8 { local x:1 = *[sfr]:1 11:1; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:EQI "TMM,"^imm8 is op=0x64; op2=0xFD; imm8 { local x:1 = *[sfr]:1 13:1; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:SSPD imm16 is op=0x70; op2=0x0E; imm16 { *:2 imm16:2 = SP; }
+:LSPD imm16 is op=0x70; op2=0x0F; imm16 { SP = *:2 imm16:2; }
+:SBCD imm16 is op=0x70; op2=0x1E; imm16 { *:2 imm16:2 = BC; }
+:LBCD imm16 is op=0x70; op2=0x1F; imm16 { BC = *:2 imm16:2; }
+:SDED imm16 is op=0x70; op2=0x2E; imm16 { *:2 imm16:2 = DE; }
+:LDED imm16 is op=0x70; op2=0x2F; imm16 { DE = *:2 imm16:2; }
+:SHLD imm16 is op=0x70; op2=0x3E; imm16 { *:2 imm16:2 = HL; }
+:LHLD imm16 is op=0x70; op2=0x3F; imm16 { HL = *:2 imm16:2; }
+:EADD "EA,V" is op=0x70; op2=0x40 { local x:2 = EA; local y:2 = zext(V); local c:1 = 0; local r9:4 = zext(x) + zext(y) + zext(c); local r:2 = r9:2; CY = r9 > 0xffff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; EA = r; }
+:EADD "EA,A" is op=0x70; op2=0x41 { local x:2 = EA; local y:2 = zext(A); local c:1 = 0; local r9:4 = zext(x) + zext(y) + zext(c); local r:2 = r9:2; CY = r9 > 0xffff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; EA = r; }
+:EADD "EA,B" is op=0x70; op2=0x42 { local x:2 = EA; local y:2 = zext(B); local c:1 = 0; local r9:4 = zext(x) + zext(y) + zext(c); local r:2 = r9:2; CY = r9 > 0xffff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; EA = r; }
+:EADD "EA,C" is op=0x70; op2=0x43 { local x:2 = EA; local y:2 = zext(C); local c:1 = 0; local r9:4 = zext(x) + zext(y) + zext(c); local r:2 = r9:2; CY = r9 > 0xffff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; EA = r; }
+:ESUB "EA,V" is op=0x70; op2=0x60 { local x:2 = EA; local y:2 = zext(V); local c:1 = 0; local r9:4 = zext(x) - zext(y) - zext(c); local r:2 = r9:2; CY = r9 > 0xffff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; EA = r; }
+:ESUB "EA,A" is op=0x70; op2=0x61 { local x:2 = EA; local y:2 = zext(A); local c:1 = 0; local r9:4 = zext(x) - zext(y) - zext(c); local r:2 = r9:2; CY = r9 > 0xffff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; EA = r; }
+:ESUB "EA,B" is op=0x70; op2=0x62 { local x:2 = EA; local y:2 = zext(B); local c:1 = 0; local r9:4 = zext(x) - zext(y) - zext(c); local r:2 = r9:2; CY = r9 > 0xffff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; EA = r; }
+:ESUB "EA,C" is op=0x70; op2=0x63 { local x:2 = EA; local y:2 = zext(C); local c:1 = 0; local r9:4 = zext(x) - zext(y) - zext(c); local r:2 = r9:2; CY = r9 > 0xffff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; EA = r; }
+:MOV "V,("^imm16^")" is op=0x70; op2=0x68; imm16 { local mw:2 = imm16; V = *:1 mw; }
+:MOV "A,("^imm16^")" is op=0x70; op2=0x69; imm16 { local mw:2 = imm16; A = *:1 mw; }
+:MOV "B,("^imm16^")" is op=0x70; op2=0x6A; imm16 { local mw:2 = imm16; B = *:1 mw; }
+:MOV "C,("^imm16^")" is op=0x70; op2=0x6B; imm16 { local mw:2 = imm16; C = *:1 mw; }
+:MOV "D,("^imm16^")" is op=0x70; op2=0x6C; imm16 { local mw:2 = imm16; D = *:1 mw; }
+:MOV "E,("^imm16^")" is op=0x70; op2=0x6D; imm16 { local mw:2 = imm16; E = *:1 mw; }
+:MOV "H,("^imm16^")" is op=0x70; op2=0x6E; imm16 { local mw:2 = imm16; H = *:1 mw; }
+:MOV "L,("^imm16^")" is op=0x70; op2=0x6F; imm16 { local mw:2 = imm16; L = *:1 mw; }
+:MOV "("^imm16^"),V" is op=0x70; op2=0x78; imm16 { local mw:2 = imm16; *:1 mw = V; }
+:MOV "("^imm16^"),A" is op=0x70; op2=0x79; imm16 { local mw:2 = imm16; *:1 mw = A; }
+:MOV "("^imm16^"),B" is op=0x70; op2=0x7A; imm16 { local mw:2 = imm16; *:1 mw = B; }
+:MOV "("^imm16^"),C" is op=0x70; op2=0x7B; imm16 { local mw:2 = imm16; *:1 mw = C; }
+:MOV "("^imm16^"),D" is op=0x70; op2=0x7C; imm16 { local mw:2 = imm16; *:1 mw = D; }
+:MOV "("^imm16^"),E" is op=0x70; op2=0x7D; imm16 { local mw:2 = imm16; *:1 mw = E; }
+:MOV "("^imm16^"),H" is op=0x70; op2=0x7E; imm16 { local mw:2 = imm16; *:1 mw = H; }
+:MOV "("^imm16^"),L" is op=0x70; op2=0x7F; imm16 { local mw:2 = imm16; *:1 mw = L; }
+:ANAX "(BC)" is op=0x70; op2=0x89 { local x:1 = A; local y:1 = *:1 BC; local r:1 = x & y; Z = r == 0; A = r; }
+:ANAX "(DE)" is op=0x70; op2=0x8A { local x:1 = A; local y:1 = *:1 DE; local r:1 = x & y; Z = r == 0; A = r; }
+:ANAX "(HL)" is op=0x70; op2=0x8B { local x:1 = A; local y:1 = *:1 HL; local r:1 = x & y; Z = r == 0; A = r; }
+:ANAX "(DE+)" is op=0x70; op2=0x8C { local ma:2 = DE; local x:1 = A; local y:1 = *:1 ma; local r:1 = x & y; Z = r == 0; A = r; DE = DE + 1; }
+:ANAX "(HL+)" is op=0x70; op2=0x8D { local ma:2 = HL; local x:1 = A; local y:1 = *:1 ma; local r:1 = x & y; Z = r == 0; A = r; HL = HL + 1; }
+:ANAX "(DE-)" is op=0x70; op2=0x8E { local ma:2 = DE; local x:1 = A; local y:1 = *:1 ma; local r:1 = x & y; Z = r == 0; A = r; DE = DE - 1; }
+:ANAX "(HL-)" is op=0x70; op2=0x8F { local ma:2 = HL; local x:1 = A; local y:1 = *:1 ma; local r:1 = x & y; Z = r == 0; A = r; HL = HL - 1; }
+:XRAX "(BC)" is op=0x70; op2=0x91 { local x:1 = A; local y:1 = *:1 BC; local r:1 = x ^ y; Z = r == 0; A = r; }
+:XRAX "(DE)" is op=0x70; op2=0x92 { local x:1 = A; local y:1 = *:1 DE; local r:1 = x ^ y; Z = r == 0; A = r; }
+:XRAX "(HL)" is op=0x70; op2=0x93 { local x:1 = A; local y:1 = *:1 HL; local r:1 = x ^ y; Z = r == 0; A = r; }
+:XRAX "(DE+)" is op=0x70; op2=0x94 { local ma:2 = DE; local x:1 = A; local y:1 = *:1 ma; local r:1 = x ^ y; Z = r == 0; A = r; DE = DE + 1; }
+:XRAX "(HL+)" is op=0x70; op2=0x95 { local ma:2 = HL; local x:1 = A; local y:1 = *:1 ma; local r:1 = x ^ y; Z = r == 0; A = r; HL = HL + 1; }
+:XRAX "(DE-)" is op=0x70; op2=0x96 { local ma:2 = DE; local x:1 = A; local y:1 = *:1 ma; local r:1 = x ^ y; Z = r == 0; A = r; DE = DE - 1; }
+:XRAX "(HL-)" is op=0x70; op2=0x97 { local ma:2 = HL; local x:1 = A; local y:1 = *:1 ma; local r:1 = x ^ y; Z = r == 0; A = r; HL = HL - 1; }
+:ORAX "(BC)" is op=0x70; op2=0x99 { local x:1 = A; local y:1 = *:1 BC; local r:1 = x | y; Z = r == 0; A = r; }
+:ORAX "(DE)" is op=0x70; op2=0x9A { local x:1 = A; local y:1 = *:1 DE; local r:1 = x | y; Z = r == 0; A = r; }
+:ORAX "(HL)" is op=0x70; op2=0x9B { local x:1 = A; local y:1 = *:1 HL; local r:1 = x | y; Z = r == 0; A = r; }
+:ORAX "(DE+)" is op=0x70; op2=0x9C { local ma:2 = DE; local x:1 = A; local y:1 = *:1 ma; local r:1 = x | y; Z = r == 0; A = r; DE = DE + 1; }
+:ORAX "(HL+)" is op=0x70; op2=0x9D { local ma:2 = HL; local x:1 = A; local y:1 = *:1 ma; local r:1 = x | y; Z = r == 0; A = r; HL = HL + 1; }
+:ORAX "(DE-)" is op=0x70; op2=0x9E { local ma:2 = DE; local x:1 = A; local y:1 = *:1 ma; local r:1 = x | y; Z = r == 0; A = r; DE = DE - 1; }
+:ORAX "(HL-)" is op=0x70; op2=0x9F { local ma:2 = HL; local x:1 = A; local y:1 = *:1 ma; local r:1 = x | y; Z = r == 0; A = r; HL = HL - 1; }
+:ADDNCX "(BC)" is op=0x70; op2=0xA1 { local x:1 = A; local y:1 = *:1 BC; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; if (CY == 0) goto inst_next2; }
+:ADDNCX "(DE)" is op=0x70; op2=0xA2 { local x:1 = A; local y:1 = *:1 DE; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; if (CY == 0) goto inst_next2; }
+:ADDNCX "(HL)" is op=0x70; op2=0xA3 { local x:1 = A; local y:1 = *:1 HL; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; if (CY == 0) goto inst_next2; }
+:ADDNCX "(DE+)" is op=0x70; op2=0xA4 { local ma:2 = DE; local x:1 = A; local y:1 = *:1 ma; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; DE = DE + 1; if (CY == 0) goto inst_next2; }
+:ADDNCX "(HL+)" is op=0x70; op2=0xA5 { local ma:2 = HL; local x:1 = A; local y:1 = *:1 ma; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; HL = HL + 1; if (CY == 0) goto inst_next2; }
+:ADDNCX "(DE-)" is op=0x70; op2=0xA6 { local ma:2 = DE; local x:1 = A; local y:1 = *:1 ma; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; DE = DE - 1; if (CY == 0) goto inst_next2; }
+:ADDNCX "(HL-)" is op=0x70; op2=0xA7 { local ma:2 = HL; local x:1 = A; local y:1 = *:1 ma; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; HL = HL - 1; if (CY == 0) goto inst_next2; }
+:GTAX "(BC)" is op=0x70; op2=0xA9 { local x:1 = A; local y:1 = *:1 BC; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:GTAX "(DE)" is op=0x70; op2=0xAA { local x:1 = A; local y:1 = *:1 DE; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:GTAX "(HL)" is op=0x70; op2=0xAB { local x:1 = A; local y:1 = *:1 HL; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:GTAX "(DE+)" is op=0x70; op2=0xAC { local ma:2 = DE; local x:1 = A; local y:1 = *:1 ma; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); DE = DE + 1; if (x > y) goto inst_next2; }
+:GTAX "(HL+)" is op=0x70; op2=0xAD { local ma:2 = HL; local x:1 = A; local y:1 = *:1 ma; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); HL = HL + 1; if (x > y) goto inst_next2; }
+:GTAX "(DE-)" is op=0x70; op2=0xAE { local ma:2 = DE; local x:1 = A; local y:1 = *:1 ma; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); DE = DE - 1; if (x > y) goto inst_next2; }
+:GTAX "(HL-)" is op=0x70; op2=0xAF { local ma:2 = HL; local x:1 = A; local y:1 = *:1 ma; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); HL = HL - 1; if (x > y) goto inst_next2; }
+:SUBNBX "(BC)" is op=0x70; op2=0xB1 { local x:1 = A; local y:1 = *:1 BC; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; if (CY == 0) goto inst_next2; }
+:SUBNBX "(DE)" is op=0x70; op2=0xB2 { local x:1 = A; local y:1 = *:1 DE; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; if (CY == 0) goto inst_next2; }
+:SUBNBX "(HL)" is op=0x70; op2=0xB3 { local x:1 = A; local y:1 = *:1 HL; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; if (CY == 0) goto inst_next2; }
+:SUBNBX "(DE+)" is op=0x70; op2=0xB4 { local ma:2 = DE; local x:1 = A; local y:1 = *:1 ma; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; DE = DE + 1; if (CY == 0) goto inst_next2; }
+:SUBNBX "(HL+)" is op=0x70; op2=0xB5 { local ma:2 = HL; local x:1 = A; local y:1 = *:1 ma; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; HL = HL + 1; if (CY == 0) goto inst_next2; }
+:SUBNBX "(DE-)" is op=0x70; op2=0xB6 { local ma:2 = DE; local x:1 = A; local y:1 = *:1 ma; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; DE = DE - 1; if (CY == 0) goto inst_next2; }
+:SUBNBX "(HL-)" is op=0x70; op2=0xB7 { local ma:2 = HL; local x:1 = A; local y:1 = *:1 ma; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; HL = HL - 1; if (CY == 0) goto inst_next2; }
+:LTAX "(BC)" is op=0x70; op2=0xB9 { local x:1 = A; local y:1 = *:1 BC; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:LTAX "(DE)" is op=0x70; op2=0xBA { local x:1 = A; local y:1 = *:1 DE; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:LTAX "(HL)" is op=0x70; op2=0xBB { local x:1 = A; local y:1 = *:1 HL; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:LTAX "(DE+)" is op=0x70; op2=0xBC { local ma:2 = DE; local x:1 = A; local y:1 = *:1 ma; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; DE = DE + 1; if (x < y) goto inst_next2; }
+:LTAX "(HL+)" is op=0x70; op2=0xBD { local ma:2 = HL; local x:1 = A; local y:1 = *:1 ma; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; HL = HL + 1; if (x < y) goto inst_next2; }
+:LTAX "(DE-)" is op=0x70; op2=0xBE { local ma:2 = DE; local x:1 = A; local y:1 = *:1 ma; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; DE = DE - 1; if (x < y) goto inst_next2; }
+:LTAX "(HL-)" is op=0x70; op2=0xBF { local ma:2 = HL; local x:1 = A; local y:1 = *:1 ma; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; HL = HL - 1; if (x < y) goto inst_next2; }
+:ADDX "(BC)" is op=0x70; op2=0xC1 { local x:1 = A; local y:1 = *:1 BC; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; }
+:ADDX "(DE)" is op=0x70; op2=0xC2 { local x:1 = A; local y:1 = *:1 DE; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; }
+:ADDX "(HL)" is op=0x70; op2=0xC3 { local x:1 = A; local y:1 = *:1 HL; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; }
+:ADDX "(DE+)" is op=0x70; op2=0xC4 { local ma:2 = DE; local x:1 = A; local y:1 = *:1 ma; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; DE = DE + 1; }
+:ADDX "(HL+)" is op=0x70; op2=0xC5 { local ma:2 = HL; local x:1 = A; local y:1 = *:1 ma; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; HL = HL + 1; }
+:ADDX "(DE-)" is op=0x70; op2=0xC6 { local ma:2 = DE; local x:1 = A; local y:1 = *:1 ma; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; DE = DE - 1; }
+:ADDX "(HL-)" is op=0x70; op2=0xC7 { local ma:2 = HL; local x:1 = A; local y:1 = *:1 ma; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; HL = HL - 1; }
+:ONAX "(BC)" is op=0x70; op2=0xC9 { local x:1 = A; local y:1 = *:1 BC; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:ONAX "(DE)" is op=0x70; op2=0xCA { local x:1 = A; local y:1 = *:1 DE; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:ONAX "(HL)" is op=0x70; op2=0xCB { local x:1 = A; local y:1 = *:1 HL; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:ONAX "(DE+)" is op=0x70; op2=0xCC { local ma:2 = DE; local x:1 = A; local y:1 = *:1 ma; Z = (x & y) == 0; DE = DE + 1; if (Z == 0) goto inst_next2; }
+:ONAX "(HL+)" is op=0x70; op2=0xCD { local ma:2 = HL; local x:1 = A; local y:1 = *:1 ma; Z = (x & y) == 0; HL = HL + 1; if (Z == 0) goto inst_next2; }
+:ONAX "(DE-)" is op=0x70; op2=0xCE { local ma:2 = DE; local x:1 = A; local y:1 = *:1 ma; Z = (x & y) == 0; DE = DE - 1; if (Z == 0) goto inst_next2; }
+:ONAX "(HL-)" is op=0x70; op2=0xCF { local ma:2 = HL; local x:1 = A; local y:1 = *:1 ma; Z = (x & y) == 0; HL = HL - 1; if (Z == 0) goto inst_next2; }
+:ADCX "(BC)" is op=0x70; op2=0xD1 { local x:1 = A; local y:1 = *:1 BC; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; }
+:ADCX "(DE)" is op=0x70; op2=0xD2 { local x:1 = A; local y:1 = *:1 DE; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; }
+:ADCX "(HL)" is op=0x70; op2=0xD3 { local x:1 = A; local y:1 = *:1 HL; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; }
+:ADCX "(DE+)" is op=0x70; op2=0xD4 { local ma:2 = DE; local x:1 = A; local y:1 = *:1 ma; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; DE = DE + 1; }
+:ADCX "(HL+)" is op=0x70; op2=0xD5 { local ma:2 = HL; local x:1 = A; local y:1 = *:1 ma; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; HL = HL + 1; }
+:ADCX "(DE-)" is op=0x70; op2=0xD6 { local ma:2 = DE; local x:1 = A; local y:1 = *:1 ma; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; DE = DE - 1; }
+:ADCX "(HL-)" is op=0x70; op2=0xD7 { local ma:2 = HL; local x:1 = A; local y:1 = *:1 ma; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; HL = HL - 1; }
+:OFFAX "(BC)" is op=0x70; op2=0xD9 { local x:1 = A; local y:1 = *:1 BC; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:OFFAX "(DE)" is op=0x70; op2=0xDA { local x:1 = A; local y:1 = *:1 DE; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:OFFAX "(HL)" is op=0x70; op2=0xDB { local x:1 = A; local y:1 = *:1 HL; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:OFFAX "(DE+)" is op=0x70; op2=0xDC { local ma:2 = DE; local x:1 = A; local y:1 = *:1 ma; Z = (x & y) == 0; DE = DE + 1; if (Z != 0) goto inst_next2; }
+:OFFAX "(HL+)" is op=0x70; op2=0xDD { local ma:2 = HL; local x:1 = A; local y:1 = *:1 ma; Z = (x & y) == 0; HL = HL + 1; if (Z != 0) goto inst_next2; }
+:OFFAX "(DE-)" is op=0x70; op2=0xDE { local ma:2 = DE; local x:1 = A; local y:1 = *:1 ma; Z = (x & y) == 0; DE = DE - 1; if (Z != 0) goto inst_next2; }
+:OFFAX "(HL-)" is op=0x70; op2=0xDF { local ma:2 = HL; local x:1 = A; local y:1 = *:1 ma; Z = (x & y) == 0; HL = HL - 1; if (Z != 0) goto inst_next2; }
+:SUBX "(BC)" is op=0x70; op2=0xE1 { local x:1 = A; local y:1 = *:1 BC; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; }
+:SUBX "(DE)" is op=0x70; op2=0xE2 { local x:1 = A; local y:1 = *:1 DE; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; }
+:SUBX "(HL)" is op=0x70; op2=0xE3 { local x:1 = A; local y:1 = *:1 HL; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; }
+:SUBX "(DE+)" is op=0x70; op2=0xE4 { local ma:2 = DE; local x:1 = A; local y:1 = *:1 ma; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; DE = DE + 1; }
+:SUBX "(HL+)" is op=0x70; op2=0xE5 { local ma:2 = HL; local x:1 = A; local y:1 = *:1 ma; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; HL = HL + 1; }
+:SUBX "(DE-)" is op=0x70; op2=0xE6 { local ma:2 = DE; local x:1 = A; local y:1 = *:1 ma; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; DE = DE - 1; }
+:SUBX "(HL-)" is op=0x70; op2=0xE7 { local ma:2 = HL; local x:1 = A; local y:1 = *:1 ma; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; HL = HL - 1; }
+:NEAX "(BC)" is op=0x70; op2=0xE9 { local x:1 = A; local y:1 = *:1 BC; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:NEAX "(DE)" is op=0x70; op2=0xEA { local x:1 = A; local y:1 = *:1 DE; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:NEAX "(HL)" is op=0x70; op2=0xEB { local x:1 = A; local y:1 = *:1 HL; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:NEAX "(DE+)" is op=0x70; op2=0xEC { local ma:2 = DE; local x:1 = A; local y:1 = *:1 ma; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; DE = DE + 1; if (Z == 0) goto inst_next2; }
+:NEAX "(HL+)" is op=0x70; op2=0xED { local ma:2 = HL; local x:1 = A; local y:1 = *:1 ma; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; HL = HL + 1; if (Z == 0) goto inst_next2; }
+:NEAX "(DE-)" is op=0x70; op2=0xEE { local ma:2 = DE; local x:1 = A; local y:1 = *:1 ma; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; DE = DE - 1; if (Z == 0) goto inst_next2; }
+:NEAX "(HL-)" is op=0x70; op2=0xEF { local ma:2 = HL; local x:1 = A; local y:1 = *:1 ma; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; HL = HL - 1; if (Z == 0) goto inst_next2; }
+:SBBX "(BC)" is op=0x70; op2=0xF1 { local x:1 = A; local y:1 = *:1 BC; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; }
+:SBBX "(DE)" is op=0x70; op2=0xF2 { local x:1 = A; local y:1 = *:1 DE; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; }
+:SBBX "(HL)" is op=0x70; op2=0xF3 { local x:1 = A; local y:1 = *:1 HL; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; }
+:SBBX "(DE+)" is op=0x70; op2=0xF4 { local ma:2 = DE; local x:1 = A; local y:1 = *:1 ma; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; DE = DE + 1; }
+:SBBX "(HL+)" is op=0x70; op2=0xF5 { local ma:2 = HL; local x:1 = A; local y:1 = *:1 ma; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; HL = HL + 1; }
+:SBBX "(DE-)" is op=0x70; op2=0xF6 { local ma:2 = DE; local x:1 = A; local y:1 = *:1 ma; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; DE = DE - 1; }
+:SBBX "(HL-)" is op=0x70; op2=0xF7 { local ma:2 = HL; local x:1 = A; local y:1 = *:1 ma; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; HL = HL - 1; }
+:EQAX "(BC)" is op=0x70; op2=0xF9 { local x:1 = A; local y:1 = *:1 BC; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:EQAX "(DE)" is op=0x70; op2=0xFA { local x:1 = A; local y:1 = *:1 DE; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:EQAX "(HL)" is op=0x70; op2=0xFB { local x:1 = A; local y:1 = *:1 HL; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:EQAX "(DE+)" is op=0x70; op2=0xFC { local ma:2 = DE; local x:1 = A; local y:1 = *:1 ma; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; DE = DE + 1; if (Z != 0) goto inst_next2; }
+:EQAX "(HL+)" is op=0x70; op2=0xFD { local ma:2 = HL; local x:1 = A; local y:1 = *:1 ma; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; HL = HL + 1; if (Z != 0) goto inst_next2; }
+:EQAX "(DE-)" is op=0x70; op2=0xFE { local ma:2 = DE; local x:1 = A; local y:1 = *:1 ma; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; DE = DE - 1; if (Z != 0) goto inst_next2; }
+:EQAX "(HL-)" is op=0x70; op2=0xFF { local ma:2 = HL; local x:1 = A; local y:1 = *:1 ma; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; HL = HL - 1; if (Z != 0) goto inst_next2; }
+:ANI "V,"^imm8 is op=0x74; op2=0x08; imm8 { local x:1 = V; local y:1 = imm8; local r:1 = x & y; Z = r == 0; V = r; }
+:ANI "A,"^imm8 is op=0x74; op2=0x09; imm8 { local x:1 = A; local y:1 = imm8; local r:1 = x & y; Z = r == 0; A = r; }
+:ANI "B,"^imm8 is op=0x74; op2=0x0A; imm8 { local x:1 = B; local y:1 = imm8; local r:1 = x & y; Z = r == 0; B = r; }
+:ANI "C,"^imm8 is op=0x74; op2=0x0B; imm8 { local x:1 = C; local y:1 = imm8; local r:1 = x & y; Z = r == 0; C = r; }
+:ANI "D,"^imm8 is op=0x74; op2=0x0C; imm8 { local x:1 = D; local y:1 = imm8; local r:1 = x & y; Z = r == 0; D = r; }
+:ANI "E,"^imm8 is op=0x74; op2=0x0D; imm8 { local x:1 = E; local y:1 = imm8; local r:1 = x & y; Z = r == 0; E = r; }
+:ANI "H,"^imm8 is op=0x74; op2=0x0E; imm8 { local x:1 = H; local y:1 = imm8; local r:1 = x & y; Z = r == 0; H = r; }
+:ANI "L,"^imm8 is op=0x74; op2=0x0F; imm8 { local x:1 = L; local y:1 = imm8; local r:1 = x & y; Z = r == 0; L = r; }
+:XRI "V,"^imm8 is op=0x74; op2=0x10; imm8 { local x:1 = V; local y:1 = imm8; local r:1 = x ^ y; Z = r == 0; V = r; }
+:XRI "A,"^imm8 is op=0x74; op2=0x11; imm8 { local x:1 = A; local y:1 = imm8; local r:1 = x ^ y; Z = r == 0; A = r; }
+:XRI "B,"^imm8 is op=0x74; op2=0x12; imm8 { local x:1 = B; local y:1 = imm8; local r:1 = x ^ y; Z = r == 0; B = r; }
+:XRI "C,"^imm8 is op=0x74; op2=0x13; imm8 { local x:1 = C; local y:1 = imm8; local r:1 = x ^ y; Z = r == 0; C = r; }
+:XRI "D,"^imm8 is op=0x74; op2=0x14; imm8 { local x:1 = D; local y:1 = imm8; local r:1 = x ^ y; Z = r == 0; D = r; }
+:XRI "E,"^imm8 is op=0x74; op2=0x15; imm8 { local x:1 = E; local y:1 = imm8; local r:1 = x ^ y; Z = r == 0; E = r; }
+:XRI "H,"^imm8 is op=0x74; op2=0x16; imm8 { local x:1 = H; local y:1 = imm8; local r:1 = x ^ y; Z = r == 0; H = r; }
+:XRI "L,"^imm8 is op=0x74; op2=0x17; imm8 { local x:1 = L; local y:1 = imm8; local r:1 = x ^ y; Z = r == 0; L = r; }
+:ORI "V,"^imm8 is op=0x74; op2=0x18; imm8 { local x:1 = V; local y:1 = imm8; local r:1 = x | y; Z = r == 0; V = r; }
+:ORI "A,"^imm8 is op=0x74; op2=0x19; imm8 { local x:1 = A; local y:1 = imm8; local r:1 = x | y; Z = r == 0; A = r; }
+:ORI "B,"^imm8 is op=0x74; op2=0x1A; imm8 { local x:1 = B; local y:1 = imm8; local r:1 = x | y; Z = r == 0; B = r; }
+:ORI "C,"^imm8 is op=0x74; op2=0x1B; imm8 { local x:1 = C; local y:1 = imm8; local r:1 = x | y; Z = r == 0; C = r; }
+:ORI "D,"^imm8 is op=0x74; op2=0x1C; imm8 { local x:1 = D; local y:1 = imm8; local r:1 = x | y; Z = r == 0; D = r; }
+:ORI "E,"^imm8 is op=0x74; op2=0x1D; imm8 { local x:1 = E; local y:1 = imm8; local r:1 = x | y; Z = r == 0; E = r; }
+:ORI "H,"^imm8 is op=0x74; op2=0x1E; imm8 { local x:1 = H; local y:1 = imm8; local r:1 = x | y; Z = r == 0; H = r; }
+:ORI "L,"^imm8 is op=0x74; op2=0x1F; imm8 { local x:1 = L; local y:1 = imm8; local r:1 = x | y; Z = r == 0; L = r; }
+:ADINC "V,"^imm8 is op=0x74; op2=0x20; imm8 { local x:1 = V; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; V = r; if (CY == 0) goto inst_next2; }
+:ADINC "A,"^imm8 is op=0x74; op2=0x21; imm8 { local x:1 = A; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; if (CY == 0) goto inst_next2; }
+:ADINC "B,"^imm8 is op=0x74; op2=0x22; imm8 { local x:1 = B; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; B = r; if (CY == 0) goto inst_next2; }
+:ADINC "C,"^imm8 is op=0x74; op2=0x23; imm8 { local x:1 = C; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; C = r; if (CY == 0) goto inst_next2; }
+:ADINC "D,"^imm8 is op=0x74; op2=0x24; imm8 { local x:1 = D; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; D = r; if (CY == 0) goto inst_next2; }
+:ADINC "E,"^imm8 is op=0x74; op2=0x25; imm8 { local x:1 = E; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; E = r; if (CY == 0) goto inst_next2; }
+:ADINC "H,"^imm8 is op=0x74; op2=0x26; imm8 { local x:1 = H; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; H = r; if (CY == 0) goto inst_next2; }
+:ADINC "L,"^imm8 is op=0x74; op2=0x27; imm8 { local x:1 = L; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; L = r; if (CY == 0) goto inst_next2; }
+:GTI "V,"^imm8 is op=0x74; op2=0x28; imm8 { local x:1 = V; local y:1 = imm8; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:GTI "A,"^imm8 is op=0x74; op2=0x29; imm8 { local x:1 = A; local y:1 = imm8; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:GTI "B,"^imm8 is op=0x74; op2=0x2A; imm8 { local x:1 = B; local y:1 = imm8; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:GTI "C,"^imm8 is op=0x74; op2=0x2B; imm8 { local x:1 = C; local y:1 = imm8; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:GTI "D,"^imm8 is op=0x74; op2=0x2C; imm8 { local x:1 = D; local y:1 = imm8; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:GTI "E,"^imm8 is op=0x74; op2=0x2D; imm8 { local x:1 = E; local y:1 = imm8; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:GTI "H,"^imm8 is op=0x74; op2=0x2E; imm8 { local x:1 = H; local y:1 = imm8; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:GTI "L,"^imm8 is op=0x74; op2=0x2F; imm8 { local x:1 = L; local y:1 = imm8; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:SUINB "V,"^imm8 is op=0x74; op2=0x30; imm8 { local x:1 = V; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; V = r; if (CY == 0) goto inst_next2; }
+:SUINB "A,"^imm8 is op=0x74; op2=0x31; imm8 { local x:1 = A; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; if (CY == 0) goto inst_next2; }
+:SUINB "B,"^imm8 is op=0x74; op2=0x32; imm8 { local x:1 = B; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; B = r; if (CY == 0) goto inst_next2; }
+:SUINB "C,"^imm8 is op=0x74; op2=0x33; imm8 { local x:1 = C; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; C = r; if (CY == 0) goto inst_next2; }
+:SUINB "D,"^imm8 is op=0x74; op2=0x34; imm8 { local x:1 = D; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; D = r; if (CY == 0) goto inst_next2; }
+:SUINB "E,"^imm8 is op=0x74; op2=0x35; imm8 { local x:1 = E; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; E = r; if (CY == 0) goto inst_next2; }
+:SUINB "H,"^imm8 is op=0x74; op2=0x36; imm8 { local x:1 = H; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; H = r; if (CY == 0) goto inst_next2; }
+:SUINB "L,"^imm8 is op=0x74; op2=0x37; imm8 { local x:1 = L; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; L = r; if (CY == 0) goto inst_next2; }
+:LTI "V,"^imm8 is op=0x74; op2=0x38; imm8 { local x:1 = V; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:LTI "A,"^imm8 is op=0x74; op2=0x39; imm8 { local x:1 = A; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:LTI "B,"^imm8 is op=0x74; op2=0x3A; imm8 { local x:1 = B; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:LTI "C,"^imm8 is op=0x74; op2=0x3B; imm8 { local x:1 = C; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:LTI "D,"^imm8 is op=0x74; op2=0x3C; imm8 { local x:1 = D; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:LTI "E,"^imm8 is op=0x74; op2=0x3D; imm8 { local x:1 = E; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:LTI "H,"^imm8 is op=0x74; op2=0x3E; imm8 { local x:1 = H; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:LTI "L,"^imm8 is op=0x74; op2=0x3F; imm8 { local x:1 = L; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:ADI "V,"^imm8 is op=0x74; op2=0x40; imm8 { local x:1 = V; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; V = r; }
+:ADI "A,"^imm8 is op=0x74; op2=0x41; imm8 { local x:1 = A; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; }
+:ADI "B,"^imm8 is op=0x74; op2=0x42; imm8 { local x:1 = B; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; B = r; }
+:ADI "C,"^imm8 is op=0x74; op2=0x43; imm8 { local x:1 = C; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; C = r; }
+:ADI "D,"^imm8 is op=0x74; op2=0x44; imm8 { local x:1 = D; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; D = r; }
+:ADI "E,"^imm8 is op=0x74; op2=0x45; imm8 { local x:1 = E; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; E = r; }
+:ADI "H,"^imm8 is op=0x74; op2=0x46; imm8 { local x:1 = H; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; H = r; }
+:ADI "L,"^imm8 is op=0x74; op2=0x47; imm8 { local x:1 = L; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; L = r; }
+:ONI "V,"^imm8 is op=0x74; op2=0x48; imm8 { local x:1 = V; local y:1 = imm8; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:ONI "A,"^imm8 is op=0x74; op2=0x49; imm8 { local x:1 = A; local y:1 = imm8; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:ONI "B,"^imm8 is op=0x74; op2=0x4A; imm8 { local x:1 = B; local y:1 = imm8; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:ONI "C,"^imm8 is op=0x74; op2=0x4B; imm8 { local x:1 = C; local y:1 = imm8; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:ONI "D,"^imm8 is op=0x74; op2=0x4C; imm8 { local x:1 = D; local y:1 = imm8; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:ONI "E,"^imm8 is op=0x74; op2=0x4D; imm8 { local x:1 = E; local y:1 = imm8; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:ONI "H,"^imm8 is op=0x74; op2=0x4E; imm8 { local x:1 = H; local y:1 = imm8; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:ONI "L,"^imm8 is op=0x74; op2=0x4F; imm8 { local x:1 = L; local y:1 = imm8; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:ACI "V,"^imm8 is op=0x74; op2=0x50; imm8 { local x:1 = V; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; V = r; }
+:ACI "A,"^imm8 is op=0x74; op2=0x51; imm8 { local x:1 = A; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; }
+:ACI "B,"^imm8 is op=0x74; op2=0x52; imm8 { local x:1 = B; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; B = r; }
+:ACI "C,"^imm8 is op=0x74; op2=0x53; imm8 { local x:1 = C; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; C = r; }
+:ACI "D,"^imm8 is op=0x74; op2=0x54; imm8 { local x:1 = D; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; D = r; }
+:ACI "E,"^imm8 is op=0x74; op2=0x55; imm8 { local x:1 = E; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; E = r; }
+:ACI "H,"^imm8 is op=0x74; op2=0x56; imm8 { local x:1 = H; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; H = r; }
+:ACI "L,"^imm8 is op=0x74; op2=0x57; imm8 { local x:1 = L; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; L = r; }
+:OFFI "V,"^imm8 is op=0x74; op2=0x58; imm8 { local x:1 = V; local y:1 = imm8; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:OFFI "A,"^imm8 is op=0x74; op2=0x59; imm8 { local x:1 = A; local y:1 = imm8; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:OFFI "B,"^imm8 is op=0x74; op2=0x5A; imm8 { local x:1 = B; local y:1 = imm8; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:OFFI "C,"^imm8 is op=0x74; op2=0x5B; imm8 { local x:1 = C; local y:1 = imm8; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:OFFI "D,"^imm8 is op=0x74; op2=0x5C; imm8 { local x:1 = D; local y:1 = imm8; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:OFFI "E,"^imm8 is op=0x74; op2=0x5D; imm8 { local x:1 = E; local y:1 = imm8; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:OFFI "H,"^imm8 is op=0x74; op2=0x5E; imm8 { local x:1 = H; local y:1 = imm8; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:OFFI "L,"^imm8 is op=0x74; op2=0x5F; imm8 { local x:1 = L; local y:1 = imm8; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:SUI "V,"^imm8 is op=0x74; op2=0x60; imm8 { local x:1 = V; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; V = r; }
+:SUI "A,"^imm8 is op=0x74; op2=0x61; imm8 { local x:1 = A; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; }
+:SUI "B,"^imm8 is op=0x74; op2=0x62; imm8 { local x:1 = B; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; B = r; }
+:SUI "C,"^imm8 is op=0x74; op2=0x63; imm8 { local x:1 = C; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; C = r; }
+:SUI "D,"^imm8 is op=0x74; op2=0x64; imm8 { local x:1 = D; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; D = r; }
+:SUI "E,"^imm8 is op=0x74; op2=0x65; imm8 { local x:1 = E; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; E = r; }
+:SUI "H,"^imm8 is op=0x74; op2=0x66; imm8 { local x:1 = H; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; H = r; }
+:SUI "L,"^imm8 is op=0x74; op2=0x67; imm8 { local x:1 = L; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; L = r; }
+:NEI "V,"^imm8 is op=0x74; op2=0x68; imm8 { local x:1 = V; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:NEI "A,"^imm8 is op=0x74; op2=0x69; imm8 { local x:1 = A; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:NEI "B,"^imm8 is op=0x74; op2=0x6A; imm8 { local x:1 = B; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:NEI "C,"^imm8 is op=0x74; op2=0x6B; imm8 { local x:1 = C; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:NEI "D,"^imm8 is op=0x74; op2=0x6C; imm8 { local x:1 = D; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:NEI "E,"^imm8 is op=0x74; op2=0x6D; imm8 { local x:1 = E; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:NEI "H,"^imm8 is op=0x74; op2=0x6E; imm8 { local x:1 = H; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:NEI "L,"^imm8 is op=0x74; op2=0x6F; imm8 { local x:1 = L; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:SBI "V,"^imm8 is op=0x74; op2=0x70; imm8 { local x:1 = V; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; V = r; }
+:SBI "A,"^imm8 is op=0x74; op2=0x71; imm8 { local x:1 = A; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; }
+:SBI "B,"^imm8 is op=0x74; op2=0x72; imm8 { local x:1 = B; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; B = r; }
+:SBI "C,"^imm8 is op=0x74; op2=0x73; imm8 { local x:1 = C; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; C = r; }
+:SBI "D,"^imm8 is op=0x74; op2=0x74; imm8 { local x:1 = D; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; D = r; }
+:SBI "E,"^imm8 is op=0x74; op2=0x75; imm8 { local x:1 = E; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; E = r; }
+:SBI "H,"^imm8 is op=0x74; op2=0x76; imm8 { local x:1 = H; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; H = r; }
+:SBI "L,"^imm8 is op=0x74; op2=0x77; imm8 { local x:1 = L; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; L = r; }
+:EQI "V,"^imm8 is op=0x74; op2=0x78; imm8 { local x:1 = V; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:EQI "A,"^imm8 is op=0x74; op2=0x79; imm8 { local x:1 = A; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:EQI "B,"^imm8 is op=0x74; op2=0x7A; imm8 { local x:1 = B; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:EQI "C,"^imm8 is op=0x74; op2=0x7B; imm8 { local x:1 = C; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:EQI "D,"^imm8 is op=0x74; op2=0x7C; imm8 { local x:1 = D; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:EQI "E,"^imm8 is op=0x74; op2=0x7D; imm8 { local x:1 = E; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:EQI "H,"^imm8 is op=0x74; op2=0x7E; imm8 { local x:1 = H; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:EQI "L,"^imm8 is op=0x74; op2=0x7F; imm8 { local x:1 = L; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:ANAW wa is op=0x74; op2=0x88; wa { local wad:2 = (zext(V) << 8) | wa; local x:1 = A; local y:1 = *:1 wad; local r:1 = x & y; Z = r == 0; A = r; }
+:DAN "EA,BC" is op=0x74; op2=0x8D { local x:2 = EA; local y:2 = BC; local r:2 = x & y; Z = r == 0; EA = r; }
+:DAN "EA,DE" is op=0x74; op2=0x8E { local x:2 = EA; local y:2 = DE; local r:2 = x & y; Z = r == 0; EA = r; }
+:DAN "EA,HL" is op=0x74; op2=0x8F { local x:2 = EA; local y:2 = HL; local r:2 = x & y; Z = r == 0; EA = r; }
+:XRAW wa is op=0x74; op2=0x90; wa { local wad:2 = (zext(V) << 8) | wa; local x:1 = A; local y:1 = *:1 wad; local r:1 = x ^ y; Z = r == 0; A = r; }
+:DXR "EA,BC" is op=0x74; op2=0x95 { local x:2 = EA; local y:2 = BC; local r:2 = x ^ y; Z = r == 0; EA = r; }
+:DXR "EA,DE" is op=0x74; op2=0x96 { local x:2 = EA; local y:2 = DE; local r:2 = x ^ y; Z = r == 0; EA = r; }
+:DXR "EA,HL" is op=0x74; op2=0x97 { local x:2 = EA; local y:2 = HL; local r:2 = x ^ y; Z = r == 0; EA = r; }
+:ORAW wa is op=0x74; op2=0x98; wa { local wad:2 = (zext(V) << 8) | wa; local x:1 = A; local y:1 = *:1 wad; local r:1 = x | y; Z = r == 0; A = r; }
+:DOR "EA,BC" is op=0x74; op2=0x9D { local x:2 = EA; local y:2 = BC; local r:2 = x | y; Z = r == 0; EA = r; }
+:DOR "EA,DE" is op=0x74; op2=0x9E { local x:2 = EA; local y:2 = DE; local r:2 = x | y; Z = r == 0; EA = r; }
+:DOR "EA,HL" is op=0x74; op2=0x9F { local x:2 = EA; local y:2 = HL; local r:2 = x | y; Z = r == 0; EA = r; }
+:ADDNCW wa is op=0x74; op2=0xA0; wa { local wad:2 = (zext(V) << 8) | wa; local x:1 = A; local y:1 = *:1 wad; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; if (CY == 0) goto inst_next2; }
+:DADDNC "EA,BC" is op=0x74; op2=0xA5 { local x:2 = EA; local y:2 = BC; local c:1 = 0; local r9:4 = zext(x) + zext(y) + zext(c); local r:2 = r9:2; CY = r9 > 0xffff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; EA = r; if (CY == 0) goto inst_next2; }
+:DADDNC "EA,DE" is op=0x74; op2=0xA6 { local x:2 = EA; local y:2 = DE; local c:1 = 0; local r9:4 = zext(x) + zext(y) + zext(c); local r:2 = r9:2; CY = r9 > 0xffff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; EA = r; if (CY == 0) goto inst_next2; }
+:DADDNC "EA,HL" is op=0x74; op2=0xA7 { local x:2 = EA; local y:2 = HL; local c:1 = 0; local r9:4 = zext(x) + zext(y) + zext(c); local r:2 = r9:2; CY = r9 > 0xffff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; EA = r; if (CY == 0) goto inst_next2; }
+:GTAW wa is op=0x74; op2=0xA8; wa { local wad:2 = (zext(V) << 8) | wa; local x:1 = A; local y:1 = *:1 wad; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:DGT "EA,BC" is op=0x74; op2=0xAD { local x:2 = EA; local y:2 = BC; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:DGT "EA,DE" is op=0x74; op2=0xAE { local x:2 = EA; local y:2 = DE; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:DGT "EA,HL" is op=0x74; op2=0xAF { local x:2 = EA; local y:2 = HL; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:SUBNBW wa is op=0x74; op2=0xB0; wa { local wad:2 = (zext(V) << 8) | wa; local x:1 = A; local y:1 = *:1 wad; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; if (CY == 0) goto inst_next2; }
+:DSUBNB "EA,BC" is op=0x74; op2=0xB5 { local x:2 = EA; local y:2 = BC; local c:1 = 0; local r9:4 = zext(x) - zext(y) - zext(c); local r:2 = r9:2; CY = r9 > 0xffff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; EA = r; if (CY == 0) goto inst_next2; }
+:DSUBNB "EA,DE" is op=0x74; op2=0xB6 { local x:2 = EA; local y:2 = DE; local c:1 = 0; local r9:4 = zext(x) - zext(y) - zext(c); local r:2 = r9:2; CY = r9 > 0xffff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; EA = r; if (CY == 0) goto inst_next2; }
+:DSUBNB "EA,HL" is op=0x74; op2=0xB7 { local x:2 = EA; local y:2 = HL; local c:1 = 0; local r9:4 = zext(x) - zext(y) - zext(c); local r:2 = r9:2; CY = r9 > 0xffff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; EA = r; if (CY == 0) goto inst_next2; }
+:LTAW wa is op=0x74; op2=0xB8; wa { local wad:2 = (zext(V) << 8) | wa; local x:1 = A; local y:1 = *:1 wad; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:DLT "EA,BC" is op=0x74; op2=0xBD { local x:2 = EA; local y:2 = BC; local r:2 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:DLT "EA,DE" is op=0x74; op2=0xBE { local x:2 = EA; local y:2 = DE; local r:2 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:DLT "EA,HL" is op=0x74; op2=0xBF { local x:2 = EA; local y:2 = HL; local r:2 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:ADDW wa is op=0x74; op2=0xC0; wa { local wad:2 = (zext(V) << 8) | wa; local x:1 = A; local y:1 = *:1 wad; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; }
+:DADD "EA,BC" is op=0x74; op2=0xC5 { local x:2 = EA; local y:2 = BC; local c:1 = 0; local r9:4 = zext(x) + zext(y) + zext(c); local r:2 = r9:2; CY = r9 > 0xffff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; EA = r; }
+:DADD "EA,DE" is op=0x74; op2=0xC6 { local x:2 = EA; local y:2 = DE; local c:1 = 0; local r9:4 = zext(x) + zext(y) + zext(c); local r:2 = r9:2; CY = r9 > 0xffff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; EA = r; }
+:DADD "EA,HL" is op=0x74; op2=0xC7 { local x:2 = EA; local y:2 = HL; local c:1 = 0; local r9:4 = zext(x) + zext(y) + zext(c); local r:2 = r9:2; CY = r9 > 0xffff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; EA = r; }
+:ONAW wa is op=0x74; op2=0xC8; wa { local wad:2 = (zext(V) << 8) | wa; local x:1 = A; local y:1 = *:1 wad; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:DON "EA,BC" is op=0x74; op2=0xCD { local x:2 = EA; local y:2 = BC; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:DON "EA,DE" is op=0x74; op2=0xCE { local x:2 = EA; local y:2 = DE; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:DON "EA,HL" is op=0x74; op2=0xCF { local x:2 = EA; local y:2 = HL; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:ADCW wa is op=0x74; op2=0xD0; wa { local wad:2 = (zext(V) << 8) | wa; local x:1 = A; local y:1 = *:1 wad; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; }
+:DADC "EA,BC" is op=0x74; op2=0xD5 { local x:2 = EA; local y:2 = BC; local c:1 = CY; local r9:4 = zext(x) + zext(y) + zext(c); local r:2 = r9:2; CY = r9 > 0xffff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; EA = r; }
+:DADC "EA,DE" is op=0x74; op2=0xD6 { local x:2 = EA; local y:2 = DE; local c:1 = CY; local r9:4 = zext(x) + zext(y) + zext(c); local r:2 = r9:2; CY = r9 > 0xffff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; EA = r; }
+:DADC "EA,HL" is op=0x74; op2=0xD7 { local x:2 = EA; local y:2 = HL; local c:1 = CY; local r9:4 = zext(x) + zext(y) + zext(c); local r:2 = r9:2; CY = r9 > 0xffff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; EA = r; }
+:OFFAW wa is op=0x74; op2=0xD8; wa { local wad:2 = (zext(V) << 8) | wa; local x:1 = A; local y:1 = *:1 wad; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:DOFF "EA,BC" is op=0x74; op2=0xDD { local x:2 = EA; local y:2 = BC; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:DOFF "EA,DE" is op=0x74; op2=0xDE { local x:2 = EA; local y:2 = DE; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:DOFF "EA,HL" is op=0x74; op2=0xDF { local x:2 = EA; local y:2 = HL; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:SUBW wa is op=0x74; op2=0xE0; wa { local wad:2 = (zext(V) << 8) | wa; local x:1 = A; local y:1 = *:1 wad; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; }
+:DSUB "EA,BC" is op=0x74; op2=0xE5 { local x:2 = EA; local y:2 = BC; local c:1 = 0; local r9:4 = zext(x) - zext(y) - zext(c); local r:2 = r9:2; CY = r9 > 0xffff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; EA = r; }
+:DSUB "EA,DE" is op=0x74; op2=0xE6 { local x:2 = EA; local y:2 = DE; local c:1 = 0; local r9:4 = zext(x) - zext(y) - zext(c); local r:2 = r9:2; CY = r9 > 0xffff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; EA = r; }
+:DSUB "EA,HL" is op=0x74; op2=0xE7 { local x:2 = EA; local y:2 = HL; local c:1 = 0; local r9:4 = zext(x) - zext(y) - zext(c); local r:2 = r9:2; CY = r9 > 0xffff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; EA = r; }
+:NEAW wa is op=0x74; op2=0xE8; wa { local wad:2 = (zext(V) << 8) | wa; local x:1 = A; local y:1 = *:1 wad; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:DNE "EA,BC" is op=0x74; op2=0xED { local x:2 = EA; local y:2 = BC; local r:2 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:DNE "EA,DE" is op=0x74; op2=0xEE { local x:2 = EA; local y:2 = DE; local r:2 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:DNE "EA,HL" is op=0x74; op2=0xEF { local x:2 = EA; local y:2 = HL; local r:2 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:SBBW wa is op=0x74; op2=0xF0; wa { local wad:2 = (zext(V) << 8) | wa; local x:1 = A; local y:1 = *:1 wad; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; }
+:DSBB "EA,BC" is op=0x74; op2=0xF5 { local x:2 = EA; local y:2 = BC; local c:1 = CY; local r9:4 = zext(x) - zext(y) - zext(c); local r:2 = r9:2; CY = r9 > 0xffff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; EA = r; }
+:DSBB "EA,DE" is op=0x74; op2=0xF6 { local x:2 = EA; local y:2 = DE; local c:1 = CY; local r9:4 = zext(x) - zext(y) - zext(c); local r:2 = r9:2; CY = r9 > 0xffff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; EA = r; }
+:DSBB "EA,HL" is op=0x74; op2=0xF7 { local x:2 = EA; local y:2 = HL; local c:1 = CY; local r9:4 = zext(x) - zext(y) - zext(c); local r:2 = r9:2; CY = r9 > 0xffff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; EA = r; }
+:EQAW wa is op=0x74; op2=0xF8; wa { local wad:2 = (zext(V) << 8) | wa; local x:1 = A; local y:1 = *:1 wad; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:DEQ "EA,BC" is op=0x74; op2=0xFD { local x:2 = EA; local y:2 = BC; local r:2 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:DEQ "EA,DE" is op=0x74; op2=0xFE { local x:2 = EA; local y:2 = DE; local r:2 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:DEQ "EA,HL" is op=0x74; op2=0xFF { local x:2 = EA; local y:2 = HL; local r:2 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:NOP  is op=0x00 {  }
+:LDAW wa is op=0x01; wa { local wad:2 = (zext(V) << 8) | wa; A = *:1 wad; }
+:INX "SP" is op=0x02 { SP = SP + 1; }
+:DCX "SP" is op=0x03 { SP = SP - 1; }
+:LXI "SP,"^imm16 is op=0x04; imm16 { SP = imm16; }
+:ANIW wa^","^imm8 is op=0x05; wa; imm8 { local wad:2 = (zext(V) << 8) | wa; local x:1 = *:1 wad; local y:1 = imm8; local r:1 = x & y; Z = r == 0; *:1 wad = r; }
+:ANI "A,"^imm8 is op=0x07; imm8 { local x:1 = A; local y:1 = imm8; local r:1 = x & y; Z = r == 0; A = r; }
+:MOV "A,EAH" is op=0x08 { A = EAH; }
+:MOV "A,EAL" is op=0x09 { A = EAL; }
+:MOV "A,B" is op=0x0A { A = B; }
+:MOV "A,C" is op=0x0B { A = C; }
+:MOV "A,D" is op=0x0C { A = D; }
+:MOV "A,E" is op=0x0D { A = E; }
+:MOV "A,H" is op=0x0E { A = H; }
+:MOV "A,L" is op=0x0F { A = L; }
+:EXA  is op=0x10 { local t:2 = EA; EA = EA2; EA2 = t; t = VA; VA = VA2; VA2 = t; }
+:EXX  is op=0x11 { local t:2 = BC; BC = BC2; BC2 = t; t = DE; DE = DE2; DE2 = t; t = HL; HL = HL2; HL2 = t; }
+:INX "BC" is op=0x12 { BC = BC + 1; }
+:DCX "BC" is op=0x13 { BC = BC - 1; }
+:LXI "BC,"^imm16 is op=0x14; imm16 { BC = imm16; }
+:ORIW wa^","^imm8 is op=0x15; wa; imm8 { local wad:2 = (zext(V) << 8) | wa; local x:1 = *:1 wad; local y:1 = imm8; local r:1 = x | y; Z = r == 0; *:1 wad = r; }
+:XRI "A,"^imm8 is op=0x16; imm8 { local x:1 = A; local y:1 = imm8; local r:1 = x ^ y; Z = r == 0; A = r; }
+:ORI "A,"^imm8 is op=0x17; imm8 { local x:1 = A; local y:1 = imm8; local r:1 = x | y; Z = r == 0; A = r; }
+:MOV "EAH,A" is op=0x18 { EAH = A; }
+:MOV "EAL,A" is op=0x19 { EAL = A; }
+:MOV "B,A" is op=0x1A { B = A; }
+:MOV "C,A" is op=0x1B { C = A; }
+:MOV "D,A" is op=0x1C { D = A; }
+:MOV "E,A" is op=0x1D { E = A; }
+:MOV "H,A" is op=0x1E { H = A; }
+:MOV "L,A" is op=0x1F { L = A; }
+:INRW wa is op=0x20; wa { local wad:2 = (zext(V) << 8) | wa; local x:1 = *:1 wad; local r:1 = x + 1; HC = (x & 0xf) == 0xf; Z = r == 0; *:1 wad = r; if (x == 0xff) goto inst_next2; }
+:JB  is op=0x21 { goto [BC]; }
+:INX "DE" is op=0x22 { DE = DE + 1; }
+:DCX "DE" is op=0x23 { DE = DE - 1; }
+:LXI "DE,"^imm16 is op=0x24; imm16 { DE = imm16; }
+:GTIW wa^","^imm8 is op=0x25; wa; imm8 { local wad:2 = (zext(V) << 8) | wa; local x:1 = *:1 wad; local y:1 = imm8; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:ADINC "A,"^imm8 is op=0x26; imm8 { local x:1 = A; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; if (CY == 0) goto inst_next2; }
+:GTI "A,"^imm8 is op=0x27; imm8 { local x:1 = A; local y:1 = imm8; CY = x <= y; HC = (x & 0xf) <= (y & 0xf); local xx:4 = zext(x); local yy:4 = zext(y); Z = xx == (yy + 1); if (x > y) goto inst_next2; }
+:LDAX "(BC)" is op=0x29 { A = *:1 BC; }
+:LDAX "(DE)" is op=0x2A { A = *:1 DE; }
+:LDAX "(HL)" is op=0x2B { A = *:1 HL; }
+:LDAX "(DE+)" is op=0x2C { local ma:2 = DE; A = *:1 ma; DE = DE + 1; }
+:LDAX "(HL+)" is op=0x2D { local ma:2 = HL; A = *:1 ma; HL = HL + 1; }
+:LDAX "(DE-)" is op=0x2E { local ma:2 = DE; A = *:1 ma; DE = DE - 1; }
+:LDAX "(HL-)" is op=0x2F { local ma:2 = HL; A = *:1 ma; HL = HL - 1; }
+:DCRW wa is op=0x30; wa { local wad:2 = (zext(V) << 8) | wa; local x:1 = *:1 wad; local r:1 = x - 1; HC = (x & 0xf) == 0; Z = r == 0; *:1 wad = r; if (x == 0) goto inst_next2; }
+:BLOCK  is op=0x31 { <top> *:1 DE = *:1 HL; DE = DE + 1; HL = HL + 1; C = C - 1; if (C != 0xff) goto <top>; CY = 1; }
+:INX "HL" is op=0x32 { HL = HL + 1; }
+:DCX "HL" is op=0x33 { HL = HL - 1; }
+:LXI "HL,"^imm16 is op=0x34; imm16 { HL = imm16; }
+:LTIW wa^","^imm8 is op=0x35; wa; imm8 { local wad:2 = (zext(V) << 8) | wa; local x:1 = *:1 wad; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:SUINB "A,"^imm8 is op=0x36; imm8 { local x:1 = A; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; if (CY == 0) goto inst_next2; }
+:LTI "A,"^imm8 is op=0x37; imm8 { local x:1 = A; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (x < y) goto inst_next2; }
+:STAX "(BC)" is op=0x39 { *:1 BC = A; }
+:STAX "(DE)" is op=0x3A { *:1 DE = A; }
+:STAX "(HL)" is op=0x3B { *:1 HL = A; }
+:STAX "(DE+)" is op=0x3C { local ma:2 = DE; *:1 ma = A; DE = DE + 1; }
+:STAX "(HL+)" is op=0x3D { local ma:2 = HL; *:1 ma = A; HL = HL + 1; }
+:STAX "(DE-)" is op=0x3E { local ma:2 = DE; *:1 ma = A; DE = DE - 1; }
+:STAX "(HL-)" is op=0x3F { local ma:2 = HL; *:1 ma = A; HL = HL - 1; }
+:CALL JW is op=0x40; JW { SP = SP - 2; *:2 SP = inst_next; call JW; }
+:INR "A" is op=0x41 { local x:1 = A; local r:1 = x + 1; HC = (x & 0xf) == 0xf; Z = r == 0; A = r; if (x == 0xff) goto inst_next2; }
+:INR "B" is op=0x42 { local x:1 = B; local r:1 = x + 1; HC = (x & 0xf) == 0xf; Z = r == 0; B = r; if (x == 0xff) goto inst_next2; }
+:INR "C" is op=0x43 { local x:1 = C; local r:1 = x + 1; HC = (x & 0xf) == 0xf; Z = r == 0; C = r; if (x == 0xff) goto inst_next2; }
+:LXI "EA,"^imm16 is op=0x44; imm16 { EA = imm16; }
+:ONIW wa^","^imm8 is op=0x45; wa; imm8 { local wad:2 = (zext(V) << 8) | wa; local x:1 = *:1 wad; local y:1 = imm8; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:ADI "A,"^imm8 is op=0x46; imm8 { local x:1 = A; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; }
+:ONI "A,"^imm8 is op=0x47; imm8 { local x:1 = A; local y:1 = imm8; Z = (x & y) == 0; if (Z == 0) goto inst_next2; }
+:MVIX "BC,"^imm8 is op=0x49; imm8 { *:1 BC = imm8; }
+:MVIX "DE,"^imm8 is op=0x4A; imm8 { *:1 DE = imm8; }
+:MVIX "HL,"^imm8 is op=0x4B; imm8 { *:1 HL = imm8; }
+:JRE JRE is op7hi=0x27 ... & JRE { goto JRE; }
+:EXH  is op=0x50 { local t:2 = HL; HL = HL2; HL2 = t; }
+:DCR "A" is op=0x51 { local x:1 = A; local r:1 = x - 1; HC = (x & 0xf) == 0; Z = r == 0; A = r; if (x == 0) goto inst_next2; }
+:DCR "B" is op=0x52 { local x:1 = B; local r:1 = x - 1; HC = (x & 0xf) == 0; Z = r == 0; B = r; if (x == 0) goto inst_next2; }
+:DCR "C" is op=0x53 { local x:1 = C; local r:1 = x - 1; HC = (x & 0xf) == 0; Z = r == 0; C = r; if (x == 0) goto inst_next2; }
+:JMP JW is op=0x54; JW { goto JW; }
+:OFFIW wa^","^imm8 is op=0x55; wa; imm8 { local wad:2 = (zext(V) << 8) | wa; local x:1 = *:1 wad; local y:1 = imm8; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:ACI "A,"^imm8 is op=0x56; imm8 { local x:1 = A; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) + zext(y) + zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = ((x & 0xf) + (y & 0xf) + zext(c)) > 0xf; Z = r == 0; A = r; }
+:OFFI "A,"^imm8 is op=0x57; imm8 { local x:1 = A; local y:1 = imm8; Z = (x & y) == 0; if (Z != 0) goto inst_next2; }
+:BIT "0,"^wa is op=0x58; wa { local wad:2 = (zext(V) << 8) | wa; local m:1 = *:1 wad; if ((m & 1) != 0) goto inst_next2; }
+:BIT "1,"^wa is op=0x59; wa { local wad:2 = (zext(V) << 8) | wa; local m:1 = *:1 wad; if ((m & 2) != 0) goto inst_next2; }
+:BIT "2,"^wa is op=0x5A; wa { local wad:2 = (zext(V) << 8) | wa; local m:1 = *:1 wad; if ((m & 4) != 0) goto inst_next2; }
+:BIT "3,"^wa is op=0x5B; wa { local wad:2 = (zext(V) << 8) | wa; local m:1 = *:1 wad; if ((m & 8) != 0) goto inst_next2; }
+:BIT "4,"^wa is op=0x5C; wa { local wad:2 = (zext(V) << 8) | wa; local m:1 = *:1 wad; if ((m & 16) != 0) goto inst_next2; }
+:BIT "5,"^wa is op=0x5D; wa { local wad:2 = (zext(V) << 8) | wa; local m:1 = *:1 wad; if ((m & 32) != 0) goto inst_next2; }
+:BIT "6,"^wa is op=0x5E; wa { local wad:2 = (zext(V) << 8) | wa; local m:1 = *:1 wad; if ((m & 64) != 0) goto inst_next2; }
+:BIT "7,"^wa is op=0x5F; wa { local wad:2 = (zext(V) << 8) | wa; local m:1 = *:1 wad; if ((m & 128) != 0) goto inst_next2; }
+:DAA  is op=0x61 { local lo = A & 0x0f; local hi = A >> 4; local adj:1 = 0;
+  if (HC != 0) goto <hc>;
+  if (lo < 10) goto <l1>;
+  adj = 0x66; if ((hi < 9) && (CY == 0)) goto <a06>; goto <go>;
+<l1> if ((hi < 10) && (CY == 0)) goto <go>; adj = 0x60; goto <go>;
+<hc> if (lo >= 3) goto <go>; adj = 0x66; if ((hi < 10) && (CY == 0)) goto <a06>; goto <go>;
+<a06> adj = 0x06;
+<go> local s:2 = zext(A) + zext(adj); HC = ((A & 0xf) + (adj & 0xf)) > 0xf; CY = CY || (s > 0xff); A = s:1; Z = A == 0; }
+:RETI  is op=0x62 { local t:2 = *:2 SP; SP = SP + 2; local p:1 = *:1 SP; SP = SP + 1; unpackPSW(p); return [t]; }
+:STAW wa is op=0x63; wa { local wad:2 = (zext(V) << 8) | wa; *:1 wad = A; }
+:NEIW wa^","^imm8 is op=0x65; wa; imm8 { local wad:2 = (zext(V) << 8) | wa; local x:1 = *:1 wad; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:SUI "A,"^imm8 is op=0x66; imm8 { local x:1 = A; local y:1 = imm8; local c:1 = 0; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; }
+:NEI "A,"^imm8 is op=0x67; imm8 { local x:1 = A; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z == 0) goto inst_next2; }
+:MVI "V,"^imm8 is op=0x68; imm8 { V = imm8; }
+:MVI "A,"^imm8 is op=0x69; imm8 { A = imm8; }
+:MVI "B,"^imm8 is op=0x6A; imm8 { B = imm8; }
+:MVI "C,"^imm8 is op=0x6B; imm8 { C = imm8; }
+:MVI "D,"^imm8 is op=0x6C; imm8 { D = imm8; }
+:MVI "E,"^imm8 is op=0x6D; imm8 { E = imm8; }
+:MVI "H,"^imm8 is op=0x6E; imm8 { H = imm8; }
+:MVI "L,"^imm8 is op=0x6F; imm8 { L = imm8; }
+:MVIW wa^","^imm8 is op=0x71; wa; imm8 { local wad:2 = (zext(V) << 8) | wa; *:1 wad = imm8; }
+:SOFTI  is op=0x72 { local p:1 = 0; packPSW(p); SP = SP - 1; *:1 SP = p; SP = SP - 2; *:2 SP = inst_next; local sv:2 = 0x60; call [sv]; }
+:EQIW wa^","^imm8 is op=0x75; wa; imm8 { local wad:2 = (zext(V) << 8) | wa; local x:1 = *:1 wad; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:SBI "A,"^imm8 is op=0x76; imm8 { local x:1 = A; local y:1 = imm8; local c:1 = CY; local r9:2 = zext(x) - zext(y) - zext(c); local r:1 = r9:1; CY = r9 > 0xff; HC = (x & 0xf) < ((y & 0xf) + zext(c)); Z = r == 0; A = r; }
+:EQI "A,"^imm8 is op=0x77; imm8 { local x:1 = A; local y:1 = imm8; local r:1 = x - y; CY = x < y; HC = (x & 0xf) < (y & 0xf); Z = r == 0; if (Z != 0) goto inst_next2; }
+:CALF CALFT is op5hi=0xF ... & CALFT { SP = SP - 2; *:2 SP = inst_next; call CALFT; }
+:CALT CALTT is op3hi=4 & CALTT { SP = SP - 2; *:2 SP = inst_next; local t:2 = *:2 CALTT; call [t]; }
+:POP "VA" is op=0xA0 { VA = *:2 SP; SP = SP + 2; }
+:POP "BC" is op=0xA1 { BC = *:2 SP; SP = SP + 2; }
+:POP "DE" is op=0xA2 { DE = *:2 SP; SP = SP + 2; }
+:POP "HL" is op=0xA3 { HL = *:2 SP; SP = SP + 2; }
+:POP "EA" is op=0xA4 { EA = *:2 SP; SP = SP + 2; }
+:DMOV "EA,BC" is op=0xA5 { EA = BC; }
+:DMOV "EA,DE" is op=0xA6 { EA = DE; }
+:DMOV "EA,HL" is op=0xA7 { EA = HL; }
+:INX "EA" is op=0xA8 { EA = EA + 1; }
+:DCX "EA" is op=0xA9 { EA = EA - 1; }
+:EI  is op=0xAA { enableInterrupts(); }
+:LDAX "(DE+"^imm8^")" is op=0xAB; imm8 { local ma:2 = DE + imm8; A = *:1 ma; }
+:LDAX "(HL+A)" is op=0xAC { local ma:2 = HL + zext(A); A = *:1 ma; }
+:LDAX "(HL+B)" is op=0xAD { local ma:2 = HL + zext(B); A = *:1 ma; }
+:LDAX "(HL+EA)" is op=0xAE { local ma:2 = HL + EA; A = *:1 ma; }
+:LDAX "(HL+"^imm8^")" is op=0xAF; imm8 { local ma:2 = HL + imm8; A = *:1 ma; }
+:PUSH "VA" is op=0xB0 { SP = SP - 2; *:2 SP = VA; }
+:PUSH "BC" is op=0xB1 { SP = SP - 2; *:2 SP = BC; }
+:PUSH "DE" is op=0xB2 { SP = SP - 2; *:2 SP = DE; }
+:PUSH "HL" is op=0xB3 { SP = SP - 2; *:2 SP = HL; }
+:PUSH "EA" is op=0xB4 { SP = SP - 2; *:2 SP = EA; }
+:DMOV "BC,EA" is op=0xB5 { BC = EA; }
+:DMOV "DE,EA" is op=0xB6 { DE = EA; }
+:DMOV "HL,EA" is op=0xB7 { HL = EA; }
+:RET  is op=0xB8 { local t:2 = *:2 SP; SP = SP + 2; return [t]; }
+:RETS  is op=0xB9 { local t:2 = *:2 SP; SP = SP + 2; return [t]; }
+:DI  is op=0xBA { disableInterrupts(); }
+:STAX "(DE+"^imm8^")" is op=0xBB; imm8 { local ma:2 = DE + imm8; *:1 ma = A; }
+:STAX "(HL+A)" is op=0xBC { local ma:2 = HL + zext(A); *:1 ma = A; }
+:STAX "(HL+B)" is op=0xBD { local ma:2 = HL + zext(B); *:1 ma = A; }
+:STAX "(HL+EA)" is op=0xBE { local ma:2 = HL + EA; *:1 ma = A; }
+:STAX "(HL+"^imm8^")" is op=0xBF; imm8 { local ma:2 = HL + imm8; *:1 ma = A; }
+:JR JR6 is op6hi=3 & JR6 { goto JR6; }
+:MOV "A,PA" is op=0x4C; op2=0xC0 { A = *[sfr]:1 0:1; }
+:MOV "A,PB" is op=0x4C; op2=0xC1 { A = *[sfr]:1 1:1; }
+:MOV "A,PC" is op=0x4C; op2=0xC2 { A = *[sfr]:1 2:1; }
+:MOV "A,PD" is op=0x4C; op2=0xC3 { A = *[sfr]:1 3:1; }
+:MOV "A,PF" is op=0x4C; op2=0xC5 { A = *[sfr]:1 5:1; }
+:MOV "A,MKH" is op=0x4C; op2=0xC6 { A = *[sfr]:1 6:1; }
+:MOV "A,MKL" is op=0x4C; op2=0xC7 { A = *[sfr]:1 7:1; }
+:MOV "A,ANM" is op=0x4C; op2=0xC8 { A = *[sfr]:1 8:1; }
+:MOV "A,SMH" is op=0x4C; op2=0xC9 { A = *[sfr]:1 9:1; }
+:MOV "A,EOM" is op=0x4C; op2=0xCB { A = *[sfr]:1 11:1; }
+:MOV "A,TMM" is op=0x4C; op2=0xCD { A = *[sfr]:1 13:1; }
+:MOV "A,RXB" is op=0x4C; op2=0xD9 { A = *[sfr]:1 25:1; }
+:MOV "A,CR0" is op=0x4C; op2=0xE0 { A = *[sfr]:1 32:1; }
+:MOV "A,CR1" is op=0x4C; op2=0xE1 { A = *[sfr]:1 33:1; }
+:MOV "A,CR2" is op=0x4C; op2=0xE2 { A = *[sfr]:1 34:1; }
+:MOV "A,CR3" is op=0x4C; op2=0xE3 { A = *[sfr]:1 35:1; }
+:MOV "PA,A" is op=0x4D; op2=0xC0 { *[sfr]:1 0:1 = A; }
+:MOV "PB,A" is op=0x4D; op2=0xC1 { *[sfr]:1 1:1 = A; }
+:MOV "PC,A" is op=0x4D; op2=0xC2 { *[sfr]:1 2:1 = A; }
+:MOV "PD,A" is op=0x4D; op2=0xC3 { *[sfr]:1 3:1 = A; }
+:MOV "PF,A" is op=0x4D; op2=0xC5 { *[sfr]:1 5:1 = A; }
+:MOV "MKH,A" is op=0x4D; op2=0xC6 { *[sfr]:1 6:1 = A; }
+:MOV "MKL,A" is op=0x4D; op2=0xC7 { *[sfr]:1 7:1 = A; }
+:MOV "ANM,A" is op=0x4D; op2=0xC8 { *[sfr]:1 8:1 = A; }
+:MOV "SMH,A" is op=0x4D; op2=0xC9 { *[sfr]:1 9:1 = A; }
+:MOV "SML,A" is op=0x4D; op2=0xCA { *[sfr]:1 10:1 = A; }
+:MOV "EOM,A" is op=0x4D; op2=0xCB { *[sfr]:1 11:1 = A; }
+:MOV "ETMM,A" is op=0x4D; op2=0xCC { *[sfr]:1 12:1 = A; }
+:MOV "TMM,A" is op=0x4D; op2=0xCD { *[sfr]:1 13:1 = A; }
+:MOV "MM,A" is op=0x4D; op2=0xD0 { *[sfr]:1 16:1 = A; }
+:MOV "MCC,A" is op=0x4D; op2=0xD1 { *[sfr]:1 17:1 = A; }
+:MOV "MA,A" is op=0x4D; op2=0xD2 { *[sfr]:1 18:1 = A; }
+:MOV "MB,A" is op=0x4D; op2=0xD3 { *[sfr]:1 19:1 = A; }
+:MOV "MC,A" is op=0x4D; op2=0xD4 { *[sfr]:1 20:1 = A; }
+:MOV "MF,A" is op=0x4D; op2=0xD7 { *[sfr]:1 23:1 = A; }
+:MOV "TXB,A" is op=0x4D; op2=0xD8 { *[sfr]:1 24:1 = A; }
+:MOV "TM0,A" is op=0x4D; op2=0xDA { *[sfr]:1 26:1 = A; }
+:MOV "TM1,A" is op=0x4D; op2=0xDB { *[sfr]:1 27:1 = A; }
+:MOV "ZCM,A" is op=0x4D; op2=0xE8 { *[sfr]:1 40:1 = A; }

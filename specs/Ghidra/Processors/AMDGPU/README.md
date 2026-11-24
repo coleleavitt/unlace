@@ -61,7 +61,8 @@ OFFEN/IDXEN to the second word.
 
 Both languages are wave32: VCC and compare, carry and select masks are 32-bit (`vcc_lo` or one
 SGPR), `s_and_saveexec_b32` and the other `*_saveexec_b32`/`*_wrexec_b32` forms work on
-EXEC_LO, and the EXECZ/VCCZ branches test the low halves. gfx11 adds VOPD (two `v_dual_*`
+EXEC_LO, and the EXECZ/VCCZ branches test the low halves. From GFX10 on, `v_cmpx_*` writes only EXEC (the
+e64 form has no SDST: its destination field holds EXEC_LO); GFX9 `v_cmpx` also writes VCC. gfx11 adds VOPD (two `v_dual_*`
 operations that read all sources before writing), the D16 global loads into one register half,
 and the true16 `v_mov_b16`/`v_not_b16` with `.l`/`.h` halves. The scheduling, wait and
 cache-control instructions new in these generations (`s_clause`, `s_delay_alu`,

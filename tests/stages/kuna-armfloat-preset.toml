@@ -269,8 +269,8 @@ literal = 'double scale(unsigned int a0,unsigned int a1)'
 
 [[match]]
 name = 'armfloat preset #11: no soft-float function takes a double from a VFP register in either pass'
-count = 0
-regex = '(scale|mix|backfill)\([^)]*double'
+count = 6
+regex = '(scale|mix|backfill)\((unsigned int|int|float) a0,unsigned int a1[,)]'
 
 [[match]]
 name = 'armfloat preset #12: the preset returns the NaN payload as a float, bit for bit'

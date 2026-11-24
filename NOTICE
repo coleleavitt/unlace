@@ -11,6 +11,11 @@ Copyright Rubens Brandao and the idb-rs contributors: the IDB container and its 
 compression, the ID0 B-tree and root record, the ID1/IDAS/ID2 flags and NAM. Each ported
 file says so in its header.
 
+specs/Ghidra/Processors/M6800 vendors the MC6800, MC6801, HD6301 and MC68HC11
+SLEIGH specifications of GhidraMC6800 (https://github.com/sigurasg/GhidraMC6800),
+released under the Apache License, Version 2.0, Copyright 2022-2025 Sigurdur
+Asgeirsson.
+
 kuna
 Copyright 2026 The kuna Authors
 

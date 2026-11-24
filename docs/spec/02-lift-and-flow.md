@@ -4144,6 +4144,22 @@ accumulator forms of 5) and ARCompact are not decoded. Exercised by
 `kuna-sleigh/tests/arcv2_decode.rs` (one vector per instruction class and
 operand form, assembled by the GNU ARC assembler).
 
+### M6800 family: MC6800, MC6801, HD6301, MC68HC11 (#98)
+
+`specs/Ghidra/Processors/M6800` vendors the SLEIGH specifications of
+GhidraMC6800 (Apache-2.0, pinned commit in its README): `MC6800:BE:16:default`
+(MC6800/6802/6808), `MC6801:BE:16:default` (MC6801/6803 and HD6803, with the
+16-bit D register and the 6801 additions), `HD6301:BE:16:default`
+(HD6301/6303, adding the memory-immediate `AIM`, `OIM`, `EIM`, `TIM`,
+`XGDX` and `SLP`) and `MC68HC11:BE:16:default` (the Y register and the
+0x18/0x1A/0xCD prefix pages). Before, only the 6805, 6809 and 6309 of this
+lineage had languages. The files are upstream's unchanged; upstream checks
+each opcode's decode and semantics with per-processor disassembly and
+emulator tests. A raw image selects them with `--raw-image --target`.
+Exercised by `unlace-cli/tests/m6800_family.rs` (hand-assembled MC6800,
+HD6301 and MC68HC11 routines decompile with no bad or unimplemented
+instruction).
+
 ### RISC-V Zcmp and Zcmt (GH-1630)
 
 The Zc code-size extensions (`specs/Ghidra/Processors/RISCV/data/languages/riscv.zc.sinc`)

@@ -2,6 +2,8 @@
 #[path = "arcv2_loops.rs"]
 mod arcv2_loops;
 mod common;
+#[path = "m6800_family.rs"]
+mod m6800_family;
 #[path = "mips_elf_selection.rs"]
 mod mips_elf_selection;
 #[path = "return_branch_cli.rs"]

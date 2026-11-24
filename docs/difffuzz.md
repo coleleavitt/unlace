@@ -16,7 +16,8 @@ python3 -m venv ~/.local/share/difffuzz-venv
     --bytes 200080b9,20c0c039 --sleighpath specs --unlace target/debug/unlace
 ```
 
-`--arch` is `x86-64`, `aarch64` or `riscv64`. `--sleighpath DIR` lifts with the `.sla`
+`--arch` is `x86-64`, `aarch64`, `riscv64`, `arm` (A32), `thumb` (T32), `mips` (MIPS32 big-endian),
+`ppc` (PowerPC 32 big-endian) or `tricore`. `--sleighpath DIR` lifts with the `.sla`
 files under `DIR` instead of the built-in ones, so a spec edit can be checked right after
 `slacomp` without rebuilding unlace. The summary on stdout counts each outcome and lists the
 findings by mnemonic; `--out` writes every finding with its bytes, both disassemblies, the
@@ -49,6 +50,24 @@ input registers and the differing values.
 - AArch64: `FMADD`/`FMSUB`/`FNMADD`/`FNMSUB`/`FMLA`/`FMLS` (p-code has no fused multiply-add,
   so SLEIGH rounds twice); writeback loads and stores whose transfer register is the base
   (CONSTRAINED UNPREDICTABLE); every SVE/SME instruction (Unicorn has no SVE).
+- ARM and Thumb: writes to `pc`, branches, `LDM`/`STM`/`PUSH`/`POP`, VFP/NEON, exclusives,
+  coprocessor and system instructions; a writeback transfer whose register is its base
+  (UNPREDICTABLE); `Q` outside the saturating instructions. A32 encodings whose should-be-zero
+  fields are set are dropped before lifting: an encoding is kept only when Keystone assembles
+  Capstone's text back to the same bytes (`pip install keystone-engine`; without it every
+  encoding is kept).
+- MIPS: branches and jumps (delay slots), loads and stores (Unicorn maps kuseg differently, and
+  SLEIGH lifts an `lwl`/`lwr` pair as one access by design), FPU, MSA and privileged
+  instructions; HI/LO after `DIV`.
+- PowerPC: branches, FPU/AltiVec/VSX, `mfspr`/`mtspr`, CR-field moves and string ops; XER is
+  neither seeded nor compared (Unicorn's XER accessors do not reach QEMU's split SO/OV/CA, so
+  `addic`'s CA is invisible), and SO starts clear.
+- TriCore: jumps, calls, context and system instructions; a post-increment load into its own base.
+  The PSW user status bits are read from Unicorn's `PSW_USB_*` registers, since its PSW read
+  does not fold them back. Unicorn's TriCore occasionally dies with SIGFPE on long runs; keep
+  `--count` to a few hundred and vary `--seed`.
+- m68k and SPARC have no `Arch`: Unicorn 2.1.4 segfaults within a few hundred cases on both, and
+  its m68k SR read does not include the lazily computed condition codes.
 - RISC-V: fused multiply-adds, instructions with a static rounding mode other than `rne`/`dyn`
   (p-code float ops round to nearest), and the NaN-boxing of single-precision results in 64-bit
   `f` registers (open, see below).
@@ -84,14 +103,19 @@ Fixed in the specs (`docs/spec/02-lift-and-flow.md` describes each change):
   vector register unchanged. `FCVTZU d,d,#fbits` and `FCVTZU h,h,#fbits`, `SCVTF`/`UCVTF`
   `.4H`/`.8H` `#fbits` and scalar `URSHR d` decoded their shift with the wrong element size.
 - **RISC-V.** `c.jr`, `c.jalr` and `ret` did not clear bit 0 of the target, as `jalr` does.
+- **ARM.** A conditional `STRHT` wrote its base back even when the condition failed, and stored 4
+  bytes. The T32 `ANDS`, `BICS`, `MOVS.W` (immediate), `MVNS` and `ANDS.W`/`MVNS.W` with a
+  shifted register did not set C from the shifter.
 
-Open:
+Open (issues #546, #548, #549, #563):
 
 - AArch64: the rounding of `SQRDMULH`, `SRSHR`/`URSHR`/`SRSRA`/`URSRA` and the saturation of
   `SQDMLAL`/`SQDMLSL`/`SUQADD` are not modelled; `FCVTMU`/`FCVTZU` of a negative value
   wraps instead of saturating to 0; `BFDOT`, `USDOT` and `SUDOT` by element fail to lift
   (`generateLocation: null space`); the MOPS `CPY*` and `BFMLALB/T` (vector) do not decode.
 - RISC-V: single-precision results are not NaN-boxed in the 64-bit `f` registers.
+- TriCore: PSW.V is the sign bit of the 32-bit result instead of signed overflow (`overflowflags`,
+  about 110 constructors), and `SHA` never sets PSW.C.
 - x86-64: an encoding whose REX prefix is followed by another prefix (REX is then ignored) does
   not decode; `BSF`/`BSR` with a zero source write the destination, which hardware leaves
   unchanged; `MOVSXD r16` and several 3DNow! instructions do not decode.

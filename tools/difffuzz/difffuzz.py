@@ -15,6 +15,7 @@ import collections
 import json
 import os
 import random
+import resource
 import struct
 import subprocess
 import sys
@@ -67,7 +68,7 @@ def lift(unlace, arch, cands, tmp, sleighpath=None):
     idx = {x: i for i, x in enumerate(addrs)}
     start = arch.base
     while start < end:
-        cmd = [unlace, "raw-pcode", elf, f"{start:#x}-{end:#x}", "--json", "--target", arch.lang]
+        cmd = [unlace, "raw-pcode", elf, f"{start:#x}-{end:#x}", "--json", "--target", arch.lang, *arch.lift_args]
         if sleighpath:
             cmd += ["--sleighpath", sleighpath]
         p = subprocess.run(cmd,
@@ -104,14 +105,22 @@ def lift(unlace, arch, cands, tmp, sleighpath=None):
 class Mapper:
     def __init__(self, emu, seed):
         self.emu, self.seed, self.pages = emu, seed, set()
+        try:
+            self.size = max(PAGE, emu.ctl_get_page_size())
+        except (AttributeError, uc.UcError):
+            self.size = PAGE
+
+    def mapped(self, addr):
+        return (addr & ~(self.size - 1)) in self.pages
 
     def ensure(self, addr, size):
-        for pg in range(addr & ~(PAGE - 1), (addr + max(size, 1) + PAGE - 1) & ~(PAGE - 1), PAGE):
+        ps = self.size
+        for pg in range(addr & ~(ps - 1), (addr + max(size, 1) + ps - 1) & ~(ps - 1), ps):
             pg &= 0xFFFFFFFFFFFFFFFF
             if pg in self.pages:
                 continue
-            self.emu.mem_map(pg, PAGE)
-            self.emu.mem_write(pg, bytes(fill_byte(pg + i, self.seed) for i in range(PAGE)))
+            self.emu.mem_map(pg, ps)
+            self.emu.mem_write(pg, bytes(fill_byte(pg + i, self.seed) for i in range(ps)))
             self.pages.add(pg)
 
 
@@ -119,10 +128,9 @@ def run_case(arch, regs, row, cand, rng, seed):
     addr, size = cand["addr"], len(cand["bytes"])
     bits = 64 if arch.elf64 else 32
     init = {n: arch.rand_reg(rng, bits) for n, _ in arch.gprs}
-    if arch.name == "x86-64":
-        init["RSP"] = rng.randrange(0x680000, 0x6F0000) & ~0xF
+    arch.fix_inputs(init, rng)
     init_vec = {n: rng.getrandbits(8 * 16) for n, _ in arch.vecs}
-    flags = rng.getrandbits(32) & sum(1 << b for b in arch.flag_bits.values())
+    flags = rng.getrandbits(32)
     big = arch.big
 
     emu = arch.unicorn()
@@ -130,12 +138,18 @@ def run_case(arch, regs, row, cand, rng, seed):
     mp = Mapper(emu, seed)
     mp.ensure(addr, size)
     emu.mem_write(addr, cand["bytes"])
+    words = []
+    for k, fields, fixed in arch.flag_words():
+        word = emu.reg_read(k)
+        for n, (sh, wd) in fields.items():
+            word = (word & ~(((1 << wd) - 1) << sh)) | (((flags >> sh) & ((1 << wd) - 1)) << sh)
+        word = fixed(word)
+        arch.write_flags(emu, k, word)
+        words.append((fields, word))
     for n, k in arch.gprs:
         emu.reg_write(k, init[n])
     for n, k in arch.vecs:
         emu.reg_write(k, init_vec[n] & ((1 << (8 * regs[n][1])) - 1) if n in regs and regs[n][1] < 16 else init_vec[n])
-    if arch.flags_reg is not None:
-        emu.reg_write(arch.flags_reg, flags | (2 if arch.name == "x86-64" else 0))
     uwrites = {}
 
     def on_unmapped(u, access, a, sz, val, data):
@@ -152,7 +166,7 @@ def run_case(arch, regs, row, cand, rng, seed):
     pc_k = arch.pc_const
     emu.reg_write(pc_k, addr)
     try:
-        emu.emu_start(addr, 0xFFFFFFFFFFFFFFFF if bits == 64 else 0xFFFFFFFF, count=1)
+        emu.emu_start(arch.start_addr(addr), arch.until, count=1)
     except uc.UcError as e:
         return {"status": "ref-exception", "why": str(e)}
 
@@ -164,9 +178,13 @@ def run_case(arch, regs, row, cand, rng, seed):
     for n, _ in arch.vecs:
         if n in regs:
             st.set(n, init_vec[n] & ((1 << (8 * regs[n][1])) - 1))
-    for n, b in arch.flag_bits.items():
-        st.set(n, (flags >> b) & 1)
-    st.set(arch.pc, addr)
+    for fields, word in words:
+        for n, (sh, wd) in fields.items():
+            reg, off = arch.sleigh_field(n, sh, wd)
+            cur = st.get(reg) & ~(((1 << wd) - 1) << off)
+            st.set(reg, cur | (((word >> sh) & ((1 << wd) - 1)) << off))
+    if arch.pc in regs:
+        st.set(arch.pc, addr)
     try:
         nxt = step(st, row["ops"], addr, size)
     except Unmodeled as e:
@@ -185,12 +203,13 @@ def run_case(arch, regs, row, cand, rng, seed):
         a, b = arch.normalize(n, st.get(n) & w, emu.reg_read(k) & w)
         if a != b:
             diffs[n] = (a, b)
-    if arch.flags_reg is not None:
-        fv = emu.reg_read(arch.flags_reg)
-        for n, b in arch.flag_bits.items():
+    for k, fields, _ in arch.flag_words():
+        fv = arch.read_flags(emu, k)
+        for n, (sh, wd) in fields.items():
             if n in ignore:
                 continue
-            a, r = st.get(n) & 1, (fv >> b) & 1
+            reg, off = arch.sleigh_field(n, sh, wd)
+            a, r = (st.get(reg) >> off) & ((1 << wd) - 1), (fv >> sh) & ((1 << wd) - 1)
             if a != r:
                 diffs[n] = (a, r)
     upc = emu.reg_read(pc_k)
@@ -201,7 +220,7 @@ def run_case(arch, regs, row, cand, rng, seed):
         touched.update(range(a, a + sz))
     for a in sorted(touched):
         pv = st.mem.get(a, fill_byte(a, seed))
-        rv = emu.mem_read(a, 1)[0] if (a & ~(PAGE - 1)) in mp.pages else fill_byte(a, seed)
+        rv = emu.mem_read(a, 1)[0] if mp.mapped(a) else fill_byte(a, seed)
         if pv != rv:
             diffs[f"mem[{a:#x}]"] = (pv, rv)
     if not diffs:
@@ -227,11 +246,14 @@ def generate(arch, rng, n):
         if b in seen or arch.deny.match(ins.mnemonic):
             continue
         seen.add(b)
-        out.append({"bytes": b, "mnemonic": ins.mnemonic, "op_str": ins.op_str})
+        cand = {"bytes": b, "mnemonic": ins.mnemonic, "op_str": ins.op_str}
+        if arch.canonical(cand):
+            out.append(cand)
     return out
 
 
 def main():
+    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--arch", required=True, choices=sorted(ARCHES))
     ap.add_argument("--count", type=int, default=1000, help="instructions to generate")

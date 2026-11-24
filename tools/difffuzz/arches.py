@@ -29,6 +29,8 @@ class Arch:
     flag_bits: dict = {}
     deny = re.compile(r"$^")
     max_len = 4
+    lift_args: list = []
+    until = (1 << 64) - 1
 
     def unicorn(self):
         raise NotImplementedError
@@ -45,6 +47,34 @@ class Arch:
     def normalize(self, name, ours, ref):
         return ours, ref
 
+    def flag_words(self):
+        """[(unicorn register, {sleigh flag: (shift, width)}, fix)]: each flag register of the
+        reference and the SLEIGH registers that hold its fields; fix() adjusts the word read
+        back before the random fields are written into it."""
+        if self.flags_reg is None:
+            return []
+        return [(self.flags_reg, {n: (b, 1) for n, b in self.flag_bits.items()}, self.fix_flags)]
+
+    def fix_flags(self, word):
+        return word
+
+    def read_flags(self, emu, reg):
+        return emu.reg_read(reg)
+
+    def write_flags(self, emu, reg, word):
+        emu.reg_write(reg, word)
+
+    def sleigh_field(self, name, shift, width):
+        """(sleigh register, bit offset in it) holding a flag field; most SLEIGH specs keep each
+        flag in its own register."""
+        return name, 0
+
+    def fix_inputs(self, init, rng):
+        pass
+
+    def start_addr(self, addr):
+        return addr
+
     def operand_mismatch(self, cap_ops: str, sleigh_ops: str):
         """A disagreement between the immediates Capstone and SLEIGH print, or None."""
         return None
@@ -52,6 +82,10 @@ class Arch:
     def ignored(self, mnemonic: str, operands: str, state) -> set:
         """Registers whose value the architecture leaves undefined after this instruction."""
         return set()
+
+    def canonical(self, cand) -> bool:
+        """False for an encoding the reference decoder accepts but the architecture reserves."""
+        return True
 
     def skip(self, cand) -> bool:
         """An encoding whose architected result the reference is known not to follow."""
@@ -120,6 +154,12 @@ class X86_64(Arch):
 
     def unicorn(self):
         return uc.Uc(uc.UC_ARCH_X86, uc.UC_MODE_64)
+
+    def fix_flags(self, word):
+        return (word & ~0xFFF) | 2
+
+    def fix_inputs(self, init, rng):
+        init["RSP"] = rng.randrange(0x680000, 0x6F0000) & ~0xF
 
     def addr_ok(self, a):
         return a < (1 << 47)
@@ -291,4 +331,223 @@ class RiscV64(Arch):
         emu.reg_write(rv.UC_RISCV_REG_MSTATUS, emu.reg_read(rv.UC_RISCV_REG_MSTATUS) | 0x6000)
 
 
-ARCHES = {a.name: a for a in (X86_64(), AArch64(), RiscV64())}
+from unicorn import arm_const as arm  # noqa: E402
+from unicorn import mips_const as mips  # noqa: E402
+from unicorn import ppc_const as ppc  # noqa: E402
+from unicorn import tricore_const as tc  # noqa: E402
+
+
+class Arch32(Arch):
+    elf64 = False
+    until = 0xFFFFFFFF
+
+    def addr_ok(self, a):
+        return a < (1 << 32)
+
+
+ARM_DENY = re.compile(
+    r"^(svc|swi|bkpt|udf|smc|hvc|eret|rfe.*|srs.*|cps.*|setend|wfi|wfe|sev.*|yield|nop|dbg|dmb|dsb|isb|pld.*|pli|"
+    r"mrc.*|mcr.*|cdp.*|ldc.*|stc.*|mrrc.*|mcrr.*|mrs|msr|vmrs|vmsr|ldrex.*|strex.*|clrex|ldaex.*|stlex.*|lda.*|stl.*|"
+    r"b|bl|blx|bx|bxj|b\w\w|bl\w\w|bx\w\w|blx\w\w|cb.*|tb[bh]|it.*|ldm.*|stm.*|pop.*|push.*|v.*|"
+    r"subs|movs)$"
+)
+
+
+class Arm32(Arch32):
+    name = "arm"
+    lang = "ARM:LE:32:v8"
+    elf_machine = 40
+    pc = "pc"
+    gprs = [(f"r{i}", getattr(arm, f"UC_ARM_REG_R{i}")) for i in range(13)] + [
+        ("sp", arm.UC_ARM_REG_SP), ("lr", arm.UC_ARM_REG_LR)]
+    flags_reg = arm.UC_ARM_REG_CPSR
+    flag_bits = {"NG": 31, "ZR": 30, "CY": 29, "OV": 28, "Q": 27}
+    pc_const = arm.UC_ARM_REG_PC
+    deny = ARM_DENY
+    thumb = False
+
+    def unicorn(self):
+        emu = uc.Uc(uc.UC_ARCH_ARM, uc.UC_MODE_THUMB if self.thumb else uc.UC_MODE_ARM)
+        emu.ctl_set_cpu_model(arm.UC_CPU_ARM_CORTEX_A15)
+        return emu
+
+    def capstone(self):
+        return cs.Cs(cs.CS_ARCH_ARM, cs.CS_MODE_THUMB if self.thumb else cs.CS_MODE_ARM)
+
+    def fix_flags(self, word):
+        return (word & 0xF8000000) | 0x10 | (0x20 if self.thumb else 0)
+
+    def skip(self, cand):
+        # Writes to pc are left to flow tests.
+        return bool(re.search(r"\bpc\b", cand["op_str"]))
+
+    def canonical(self, cand):
+        """Capstone decodes A32 encodings whose should-be-zero fields are set; SLEIGH rejects them.
+        Keep an encoding only when Keystone assembles Capstone's text back to the same bytes."""
+        if self.thumb:
+            return True
+        try:
+            import keystone
+        except ImportError:
+            return True
+        ks = Arm32._ks = getattr(Arm32, "_ks", None) or keystone.Ks(keystone.KS_ARCH_ARM, keystone.KS_MODE_ARM)
+        try:
+            enc, _ = ks.asm(f"{cand['mnemonic']} {cand['op_str']}", 0x400000)
+        except keystone.KsError:
+            return False
+        return enc is not None and bytes(enc) == cand["bytes"]
+
+    def ignored(self, mnemonic, operands, state):
+        # A writeback transfer whose register is its base is UNPREDICTABLE.
+        m = re.match(r"^(\w+), (?:(\w+), )?\[(\w+)", operands)
+        if m and m.group(3) in (m.group(1), m.group(2)) and ("]!" in operands or re.search(r"\], ", operands)):
+            return {"*"}
+        # Q is sticky: only the saturating instructions set it, and SLEIGH does not track it elsewhere.
+        if not re.match(r"^(q|ssat|usat|smla|smul|smlaw|smulw)", mnemonic):
+            return {"Q"}
+        return set()
+
+
+class Thumb(Arm32):
+    name = "thumb"
+    thumb = True
+    lift_args = ["--isa", "thumb"]
+
+    def start_addr(self, addr):
+        return addr | 1
+
+    def gen(self, rng):
+        w = rng.getrandbits(16)
+        if (w >> 11) in (0b11101, 0b11110, 0b11111):
+            return (w | (rng.getrandbits(16) << 16)).to_bytes(4, "little")
+        return w.to_bytes(2, "little")
+
+
+MIPS_NAMES = ("zero at v0 v1 a0 a1 a2 a3 t0 t1 t2 t3 t4 t5 t6 t7 "
+              "s0 s1 s2 s3 s4 s5 s6 s7 t8 t9 k0 k1 gp sp s8 ra").split()
+MIPS_DENY = re.compile(
+    r"^(l[bhwd].*|s[bhwd].*|b.*|j.*|syscall|break|sdbbp|eret|deret|wait|ssnop|ehb|pause|sync.*|cache|pref.*|ll|sc|lld|scd|"
+    r"tlb.*|mf[ch]0|mt[ch]0|di|ei|rdhwr|rdpgpr|wrpgpr|t(eq|ge|geu|lt|ltu|ne)i?|"
+    r"c\..*|cfc1|ctc1|mf[ch]1|mt[ch]1|ldc.*|sdc.*|lwc.*|swc.*|.*\.(s|d|ps|w|l)|cop.*|mfhc.*|mthc.*|lwxc1|swxc1|ldxc1|sdxc1|luxc1|suxc1)$"
+)
+
+
+class Mips32(Arch32):
+    name = "mips"
+    lang = "MIPS:BE:32:default"
+    elf_machine = 8
+    big = True
+    pc = "pc"
+    gprs = [(n, getattr(mips, f"UC_MIPS_REG_{i}")) for i, n in enumerate(MIPS_NAMES)][1:] + [
+        ("hi", mips.UC_MIPS_REG_HI), ("lo", mips.UC_MIPS_REG_LO)]
+    pc_const = mips.UC_MIPS_REG_PC
+    deny = MIPS_DENY
+    until = 0x7FFFFFFF
+
+    def unicorn(self):
+        emu = uc.Uc(uc.UC_ARCH_MIPS, uc.UC_MODE_MIPS32 | uc.UC_MODE_BIG_ENDIAN)
+        emu.ctl_set_cpu_model(mips.UC_CPU_MIPS32_24KF)
+        return emu
+
+    def capstone(self):
+        return cs.Cs(cs.CS_ARCH_MIPS, cs.CS_MODE_MIPS32 | cs.CS_MODE_BIG_ENDIAN)
+
+    def ignored(self, mnemonic, operands, state):
+        # HI and LO after a DIV by zero are UNPREDICTABLE.
+        if mnemonic in ("div", "divu"):
+            return {"hi", "lo"}
+        return set()
+
+
+PPC_DENY = re.compile(
+    r"^(sc|t[wd]i?.*|rfi|rfci|rfmci|mtmsr.*|mfmsr|mtspr|mfspr|mfsr.*|mtsr.*|mftb.*|wrtee.*|isync|sync|lwsync|eieio|"
+    r"mbar|msync|dcb.*|icb.*|tlb.*|lwarx|stwcx\.|ldarx|stdcx\.|lbarx|stbcx\.|lharx|sthcx\.|b.*|"
+    r"mfdcr|mtdcr|attn|wait|f.*|lf.*|stf.*|mffs.*|mtfs.*|v.*|ev.*|lv.*|stv.*|dss.*|dst.*|xs.*|xv.*|"
+    r"lmw|stmw|lswi|lswx|stswi|stswx|mcrxr|mtocrf|mfocrf|mtcrf|mfcr|mcrf)$"
+)
+
+
+class Ppc32(Arch32):
+    name = "ppc"
+    lang = "PowerPC:BE:32:default"
+    elf_machine = 20
+    big = True
+    pc = "pc"
+    gprs = [(f"r{i}", getattr(ppc, f"UC_PPC_REG_{i}")) for i in range(32)] + [
+        ("LR", ppc.UC_PPC_REG_LR), ("CTR", ppc.UC_PPC_REG_CTR)]
+    pc_const = ppc.UC_PPC_REG_PC
+    deny = PPC_DENY
+
+    def unicorn(self):
+        emu = uc.Uc(uc.UC_ARCH_PPC, uc.UC_MODE_PPC32 | uc.UC_MODE_BIG_ENDIAN)
+        emu.ctl_set_cpu_model(ppc.UC_CPU_PPC32_7457_V1_2 if hasattr(ppc, "UC_CPU_PPC32_7457_V1_2") else ppc.UC_CPU_PPC32_603)
+        return emu
+
+    def capstone(self):
+        return cs.Cs(cs.CS_ARCH_PPC, cs.CS_MODE_32 | cs.CS_MODE_BIG_ENDIAN)
+
+    def flag_words(self):
+        # Unicorn's XER register reads and writes do not reach QEMU's split SO/OV/CA fields, so XER
+        # is neither seeded nor compared; SO starts clear on both sides.
+        return [(ppc.UC_PPC_REG_CR, {f"cr{i}": (28 - 4 * i, 4) for i in range(8)}, lambda w: w)]
+
+    def fix_inputs(self, init, rng):
+        pass
+
+
+TC_DENY = re.compile(
+    r"^(j.*|call.*|ret|rfe|rfm|syscall|debug|trap.*|isync|dsync|svlcx|rslcx|bisr|ldlcx|lducx|stlcx|stucx|"
+    r"mfcr|mtcr|enable|disable|wait|nop|cachea.*|cachei.*|loop.*|fcall.*|fret|cmpswap.*|swap.*|ldmst|.*\.f|q.*|madd.*|msub.*)$"
+)
+
+
+class TriCore(Arch32):
+    name = "tricore"
+    lang = "tricore:LE:32:tc29x"
+    elf_machine = 44
+    pc = "PC"
+    gprs = [(f"d{i}", getattr(tc, f"UC_TRICORE_REG_D{i}")) for i in range(16)] + [
+        (f"a{i}", getattr(tc, f"UC_TRICORE_REG_A{i}")) for i in range(16)]
+    pc_const = tc.UC_TRICORE_REG_PC
+    deny = TC_DENY
+
+    def unicorn(self):
+        return uc.Uc(uc.UC_ARCH_TRICORE, uc.UC_MODE_LITTLE_ENDIAN)
+
+    def capstone(self):
+        return cs.Cs(cs.CS_ARCH_TRICORE, cs.CS_MODE_TRICORE_162)
+
+    def sleigh_field(self, name, shift, width):
+        return name, shift
+
+    def ignored(self, mnemonic, operands, state):
+        m = re.match(r"^([ad]\d+), \[(a\d+)[+]?\]?", operands)
+        if m and m.group(1) == m.group(2):
+            return {"*"}
+        return set()
+
+    def gen(self, rng):
+        w = rng.getrandbits(32)
+        return w.to_bytes(4, "little") if w & 1 else (w & 0xFFFF).to_bytes(2, "little")
+
+    def flag_words(self):
+        return [(tc.UC_TRICORE_REG_PSW, {"PSW": (27, 5)}, lambda w: (w & 0xF8000000) | 0xB80)]
+
+    def write_flags(self, emu, reg, word):
+        emu.reg_write(reg, word)
+        w = lambda n, v: emu.reg_write(getattr(tc, "UC_TRICORE_REG_PSW_USB_" + n), v)
+        w("C", (word >> 31) & 1)
+        for n, b in (("V", 30), ("SV", 29), ("AV", 28), ("SAV", 27)):
+            w(n, ((word >> b) & 1) << 31)
+
+    def read_flags(self, emu, reg):
+        # Unicorn keeps the PSW user status bits apart (QEMU's lazy PSW_USB_*): C as 0/1, the
+        # others in bit 31, and its PSW read does not fold them back in.
+        r = lambda n: emu.reg_read(getattr(tc, "UC_TRICORE_REG_PSW_USB_" + n))
+        return ((r("C") & 1) << 31 | (r("V") >> 31) << 30 | (r("SV") >> 31) << 29
+                | (r("AV") >> 31) << 28 | (r("SAV") >> 31) << 27)
+
+
+# m68k and SPARC are left out: Unicorn 2.1.4 segfaults within a few hundred cases on both, and its
+# m68k SR read does not fold in the lazily computed condition codes.
+ARCHES = {a.name: a for a in (X86_64(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Ppc32(), TriCore())}

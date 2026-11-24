@@ -5513,6 +5513,16 @@ Found by `tools/difffuzz` against Unicorn.
   `wtwn`) at the wrong encodings, so e.g. `cpyfewtrn` did not decode, and `SETP/SETM/SETE`
   printed as `setpp`/`setpm`/`setpe`.
 
+### AArch64 SHA3, pairwise half-precision add and scalar shift-left immediates
+
+Found by `tools/difffuzz --oracle qemu`. `EOR3` computed `Rn ^ (Rm | Ra)`, `BCAX` did not
+complement Ra into an AND-NOT of Rm, and `XAR` shifted the XOR right instead of rotating it;
+they now lift as `Rn ^ Rm ^ Ra`, `Rn ^ (Rm & ~Ra)` and a 64-bit rotate. `FADDP` `.4H` put the
+pairs of Rm in the low half of the result (the other arrangements already put Rn there). The
+scalar `SQSHL`/`SQSHLU`/`UQSHL` (immediate) decoded their left shift with the right-shift
+formula (`sqshl d13, d6, #10` printed `#0x36`), and scalar `SLI d` read only 5 bits of its
+6-bit shift; they now take `Imm_uimm3`/`Imm_uimm4`/`Imm_uimm5`/`Imm_imm0_63` by element size.
+
 ## 2.9 Go stack-growth prologue folding
 
 **(kuna) `option gomorestack off|auto|always`, default auto,

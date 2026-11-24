@@ -904,57 +904,7 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR64.8B 
 :bcax Rd_VPR128.16B, Rn_VPR128.16B, Rm_VPR128.16B, Ra_VPR128.16B
 is b_2131=0b11001110001 & b_15=0 & Rd_VPR128.16B & Rn_VPR128.16B & Rm_VPR128.16B & Ra_VPR128.16B & Zd
 {
-	# simd unary TMPQ1 = ~(Ra_VPR128.16B) on lane size 1
-	TMPQ1[0,8] = ~(Ra_VPR128.16B[0,8]);
-	TMPQ1[8,8] = ~(Ra_VPR128.16B[8,8]);
-	TMPQ1[16,8] = ~(Ra_VPR128.16B[16,8]);
-	TMPQ1[24,8] = ~(Ra_VPR128.16B[24,8]);
-	TMPQ1[32,8] = ~(Ra_VPR128.16B[32,8]);
-	TMPQ1[40,8] = ~(Ra_VPR128.16B[40,8]);
-	TMPQ1[48,8] = ~(Ra_VPR128.16B[48,8]);
-	TMPQ1[56,8] = ~(Ra_VPR128.16B[56,8]);
-	TMPQ1[64,8] = ~(Ra_VPR128.16B[64,8]);
-	TMPQ1[72,8] = ~(Ra_VPR128.16B[72,8]);
-	TMPQ1[80,8] = ~(Ra_VPR128.16B[80,8]);
-	TMPQ1[88,8] = ~(Ra_VPR128.16B[88,8]);
-	TMPQ1[96,8] = ~(Ra_VPR128.16B[96,8]);
-	TMPQ1[104,8] = ~(Ra_VPR128.16B[104,8]);
-	TMPQ1[112,8] = ~(Ra_VPR128.16B[112,8]);
-	TMPQ1[120,8] = ~(Ra_VPR128.16B[120,8]);
-	# simd infix TMPQ2 = Rm_VPR128.16B & TMPQ1 on lane size 1
-	TMPQ2[0,8] = Rm_VPR128.16B[0,8] & TMPQ1[0,8];
-	TMPQ2[8,8] = Rm_VPR128.16B[8,8] & TMPQ1[8,8];
-	TMPQ2[16,8] = Rm_VPR128.16B[16,8] & TMPQ1[16,8];
-	TMPQ2[24,8] = Rm_VPR128.16B[24,8] & TMPQ1[24,8];
-	TMPQ2[32,8] = Rm_VPR128.16B[32,8] & TMPQ1[32,8];
-	TMPQ2[40,8] = Rm_VPR128.16B[40,8] & TMPQ1[40,8];
-	TMPQ2[48,8] = Rm_VPR128.16B[48,8] & TMPQ1[48,8];
-	TMPQ2[56,8] = Rm_VPR128.16B[56,8] & TMPQ1[56,8];
-	TMPQ2[64,8] = Rm_VPR128.16B[64,8] & TMPQ1[64,8];
-	TMPQ2[72,8] = Rm_VPR128.16B[72,8] & TMPQ1[72,8];
-	TMPQ2[80,8] = Rm_VPR128.16B[80,8] & TMPQ1[80,8];
-	TMPQ2[88,8] = Rm_VPR128.16B[88,8] & TMPQ1[88,8];
-	TMPQ2[96,8] = Rm_VPR128.16B[96,8] & TMPQ1[96,8];
-	TMPQ2[104,8] = Rm_VPR128.16B[104,8] & TMPQ1[104,8];
-	TMPQ2[112,8] = Rm_VPR128.16B[112,8] & TMPQ1[112,8];
-	TMPQ2[120,8] = Rm_VPR128.16B[120,8] & TMPQ1[120,8];
-	# simd infix Rd_VPR128.16B = Rn_VPR128.16B | TMPQ2 on lane size 1
-	Rd_VPR128.16B[0,8] = Rn_VPR128.16B[0,8] | TMPQ2[0,8];
-	Rd_VPR128.16B[8,8] = Rn_VPR128.16B[8,8] | TMPQ2[8,8];
-	Rd_VPR128.16B[16,8] = Rn_VPR128.16B[16,8] | TMPQ2[16,8];
-	Rd_VPR128.16B[24,8] = Rn_VPR128.16B[24,8] | TMPQ2[24,8];
-	Rd_VPR128.16B[32,8] = Rn_VPR128.16B[32,8] | TMPQ2[32,8];
-	Rd_VPR128.16B[40,8] = Rn_VPR128.16B[40,8] | TMPQ2[40,8];
-	Rd_VPR128.16B[48,8] = Rn_VPR128.16B[48,8] | TMPQ2[48,8];
-	Rd_VPR128.16B[56,8] = Rn_VPR128.16B[56,8] | TMPQ2[56,8];
-	Rd_VPR128.16B[64,8] = Rn_VPR128.16B[64,8] | TMPQ2[64,8];
-	Rd_VPR128.16B[72,8] = Rn_VPR128.16B[72,8] | TMPQ2[72,8];
-	Rd_VPR128.16B[80,8] = Rn_VPR128.16B[80,8] | TMPQ2[80,8];
-	Rd_VPR128.16B[88,8] = Rn_VPR128.16B[88,8] | TMPQ2[88,8];
-	Rd_VPR128.16B[96,8] = Rn_VPR128.16B[96,8] | TMPQ2[96,8];
-	Rd_VPR128.16B[104,8] = Rn_VPR128.16B[104,8] | TMPQ2[104,8];
-	Rd_VPR128.16B[112,8] = Rn_VPR128.16B[112,8] | TMPQ2[112,8];
-	Rd_VPR128.16B[120,8] = Rn_VPR128.16B[120,8] | TMPQ2[120,8];
+	Rd_VPR128.16B = Rn_VPR128.16B ^ (Rm_VPR128.16B & ~Ra_VPR128.16B);
 	zext_zq(Zd); # zero upper 16 bytes of Zd
 }
 
@@ -3470,40 +3420,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR64.8B 
 :eor3 Rd_VPR128.16B, Rn_VPR128.16B, Rm_VPR128.16B, Ra_VPR128.16B
 is b_2131=0b11001110000 & b_15=0 & Rd_VPR128.16B & Rn_VPR128.16B & Rm_VPR128.16B & Ra_VPR128.16B & Zd
 {
-	# simd infix TMPQ1 = Rm_VPR128.16B | Ra_VPR128.16B on lane size 1
-	TMPQ1[0,8] = Rm_VPR128.16B[0,8] | Ra_VPR128.16B[0,8];
-	TMPQ1[8,8] = Rm_VPR128.16B[8,8] | Ra_VPR128.16B[8,8];
-	TMPQ1[16,8] = Rm_VPR128.16B[16,8] | Ra_VPR128.16B[16,8];
-	TMPQ1[24,8] = Rm_VPR128.16B[24,8] | Ra_VPR128.16B[24,8];
-	TMPQ1[32,8] = Rm_VPR128.16B[32,8] | Ra_VPR128.16B[32,8];
-	TMPQ1[40,8] = Rm_VPR128.16B[40,8] | Ra_VPR128.16B[40,8];
-	TMPQ1[48,8] = Rm_VPR128.16B[48,8] | Ra_VPR128.16B[48,8];
-	TMPQ1[56,8] = Rm_VPR128.16B[56,8] | Ra_VPR128.16B[56,8];
-	TMPQ1[64,8] = Rm_VPR128.16B[64,8] | Ra_VPR128.16B[64,8];
-	TMPQ1[72,8] = Rm_VPR128.16B[72,8] | Ra_VPR128.16B[72,8];
-	TMPQ1[80,8] = Rm_VPR128.16B[80,8] | Ra_VPR128.16B[80,8];
-	TMPQ1[88,8] = Rm_VPR128.16B[88,8] | Ra_VPR128.16B[88,8];
-	TMPQ1[96,8] = Rm_VPR128.16B[96,8] | Ra_VPR128.16B[96,8];
-	TMPQ1[104,8] = Rm_VPR128.16B[104,8] | Ra_VPR128.16B[104,8];
-	TMPQ1[112,8] = Rm_VPR128.16B[112,8] | Ra_VPR128.16B[112,8];
-	TMPQ1[120,8] = Rm_VPR128.16B[120,8] | Ra_VPR128.16B[120,8];
-	# simd infix Rd_VPR128.16B = Rn_VPR128.16B | TMPQ1 on lane size 1
-	Rd_VPR128.16B[0,8] = Rn_VPR128.16B[0,8] | TMPQ1[0,8];
-	Rd_VPR128.16B[8,8] = Rn_VPR128.16B[8,8] | TMPQ1[8,8];
-	Rd_VPR128.16B[16,8] = Rn_VPR128.16B[16,8] | TMPQ1[16,8];
-	Rd_VPR128.16B[24,8] = Rn_VPR128.16B[24,8] | TMPQ1[24,8];
-	Rd_VPR128.16B[32,8] = Rn_VPR128.16B[32,8] | TMPQ1[32,8];
-	Rd_VPR128.16B[40,8] = Rn_VPR128.16B[40,8] | TMPQ1[40,8];
-	Rd_VPR128.16B[48,8] = Rn_VPR128.16B[48,8] | TMPQ1[48,8];
-	Rd_VPR128.16B[56,8] = Rn_VPR128.16B[56,8] | TMPQ1[56,8];
-	Rd_VPR128.16B[64,8] = Rn_VPR128.16B[64,8] | TMPQ1[64,8];
-	Rd_VPR128.16B[72,8] = Rn_VPR128.16B[72,8] | TMPQ1[72,8];
-	Rd_VPR128.16B[80,8] = Rn_VPR128.16B[80,8] | TMPQ1[80,8];
-	Rd_VPR128.16B[88,8] = Rn_VPR128.16B[88,8] | TMPQ1[88,8];
-	Rd_VPR128.16B[96,8] = Rn_VPR128.16B[96,8] | TMPQ1[96,8];
-	Rd_VPR128.16B[104,8] = Rn_VPR128.16B[104,8] | TMPQ1[104,8];
-	Rd_VPR128.16B[112,8] = Rn_VPR128.16B[112,8] | TMPQ1[112,8];
-	Rd_VPR128.16B[120,8] = Rn_VPR128.16B[120,8] | TMPQ1[120,8];
+	Rd_VPR128.16B = Rn_VPR128.16B ^ Rm_VPR128.16B ^ Ra_VPR128.16B;
 	zext_zq(Zd); # zero upper 16 bytes of Zd
 }
 
@@ -4332,18 +4249,18 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_21=1 & Rm_VPR128.4S &
 is b_31=0 & b_30=0 & b_2129=0b101110010 & b_1015=0b000101 & Rd_VPR64.4H & Rn_VPR64.4H & Rm_VPR64.4H & Zd
 {
 	TMPD1 = 0;
-	# sipd infix TMPD1 = f+(Rm_VPR64.4H,Rn_VPR64.4H) on pairs lane size (2 to 2)
-	local tmp2 = Rm_VPR64.4H[0,16];
-	local tmp3 = Rm_VPR64.4H[16,16];
+	# sipd infix TMPD1 = f+(Rn_VPR64.4H,Rm_VPR64.4H) on pairs lane size (2 to 2)
+	local tmp2 = Rn_VPR64.4H[0,16];
+	local tmp3 = Rn_VPR64.4H[16,16];
 	TMPD1[0,16] = tmp2 f+ tmp3;
-	tmp2 = Rm_VPR64.4H[32,16];
-	tmp3 = Rm_VPR64.4H[48,16];
-	TMPD1[16,16] = tmp2 f+ tmp3;
-	tmp2 = Rn_VPR64.4H[0,16];
-	tmp3 = Rn_VPR64.4H[16,16];
-	TMPD1[32,16] = tmp2 f+ tmp3;
 	tmp2 = Rn_VPR64.4H[32,16];
 	tmp3 = Rn_VPR64.4H[48,16];
+	TMPD1[16,16] = tmp2 f+ tmp3;
+	tmp2 = Rm_VPR64.4H[0,16];
+	tmp3 = Rm_VPR64.4H[16,16];
+	TMPD1[32,16] = tmp2 f+ tmp3;
+	tmp2 = Rm_VPR64.4H[32,16];
+	tmp3 = Rm_VPR64.4H[48,16];
 	TMPD1[48,16] = tmp2 f+ tmp3;
 	Rd_VPR64.4H = TMPD1;
 	zext_zd(Zd); # zero upper 24 bytes of Zd
@@ -17423,10 +17340,10 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2023=0x1 & Imm_uimm4 & b_1115=0xa & b_1
 # SMACRO(pseudo) ARG1 ARG2 ARG3:1 &=NEON_sli/3
 # AUNIT --inst x7f405400/mask=xffc0fc00 --status nopcodeop
 
-:sli Rd_VPR64, Rn_VPR64, Imm_uimm5
-is b_2331=0b011111110 & b_22=1 & b_1015=0b010101 & Rd_VPR64 & Rn_VPR64 & Imm_uimm5 & Zd
+:sli Rd_VPR64, Rn_VPR64, Imm_imm0_63
+is b_2331=0b011111110 & b_22=1 & b_1015=0b010101 & Rd_VPR64 & Rn_VPR64 & Imm_imm0_63 & Zd
 {
-	Rd_VPR64 = NEON_sli(Rd_VPR64, Rn_VPR64, Imm_uimm5:1);
+	Rd_VPR64 = NEON_sli(Rd_VPR64, Rn_VPR64, Imm_imm0_63:1);
 	zext_zd(Zd);
 }
 
@@ -21286,10 +21203,10 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xf & b_2023=0x1 & Imm_uimm4 & b_1115=0xe & b_1
 # AUNIT --inst x5f087400/mask=xfff8fc00 --status nopcodeop --comment "nointsat"
 # Scalar variant when immh=0001 V=FPR8 imm=Imm_shr_imm8 bb=b_1922 aa=0b0001
 
-:sqshl Rd_FPR8, Rn_FPR8, Imm_shr_imm8
-is b_2331=0b010111110 & b_1922=0b0001 & b_1015=0b011101 & Rd_FPR8 & Rn_FPR8 & Imm_shr_imm8 & Zd
+:sqshl Rd_FPR8, Rn_FPR8, Imm_uimm3
+is b_2331=0b010111110 & b_1922=0b0001 & b_1015=0b011101 & Rd_FPR8 & Rn_FPR8 & Imm_uimm3 & Zd
 {
-	Rd_FPR8 = NEON_sqshl(Rn_FPR8, Imm_shr_imm8:1);
+	Rd_FPR8 = NEON_sqshl(Rn_FPR8, Imm_uimm3:1);
 	zext_zb(Zd);
 }
 
@@ -21299,10 +21216,10 @@ is b_2331=0b010111110 & b_1922=0b0001 & b_1015=0b011101 & Rd_FPR8 & Rn_FPR8 & Im
 # AUNIT --inst x5f107400/mask=xfff0fc00 --status nopcodeop --comment "nointsat"
 # Scalar variant when immh=001x V=FPR16 imm=Imm_shr_imm16 bb=b_2022 aa=0b001
 
-:sqshl Rd_FPR16, Rn_FPR16, Imm_shr_imm16
-is b_2331=0b010111110 & b_2022=0b001 & b_1015=0b011101 & Rd_FPR16 & Rn_FPR16 & Imm_shr_imm16 & Zd
+:sqshl Rd_FPR16, Rn_FPR16, Imm_uimm4
+is b_2331=0b010111110 & b_2022=0b001 & b_1015=0b011101 & Rd_FPR16 & Rn_FPR16 & Imm_uimm4 & Zd
 {
-	Rd_FPR16 = NEON_sqshl(Rn_FPR16, Imm_shr_imm16:1);
+	Rd_FPR16 = NEON_sqshl(Rn_FPR16, Imm_uimm4:1);
 	zext_zh(Zd);
 }
 
@@ -21312,10 +21229,10 @@ is b_2331=0b010111110 & b_2022=0b001 & b_1015=0b011101 & Rd_FPR16 & Rn_FPR16 & I
 # AUNIT --inst x5f207400/mask=xffe0fc00 --status nopcodeop --comment "nointsat"
 # Scalar variant when immh=01xx V=FPR32 imm=Imm_shr_imm32 bb=b_2122 aa=0b01
 
-:sqshl Rd_FPR32, Rn_FPR32, Imm_shr_imm32
-is b_2331=0b010111110 & b_2122=0b01 & b_1015=0b011101 & Rd_FPR32 & Rn_FPR32 & Imm_shr_imm32 & Zd
+:sqshl Rd_FPR32, Rn_FPR32, Imm_uimm5
+is b_2331=0b010111110 & b_2122=0b01 & b_1015=0b011101 & Rd_FPR32 & Rn_FPR32 & Imm_uimm5 & Zd
 {
-	Rd_FPR32 = NEON_sqshl(Rn_FPR32, Imm_shr_imm32:1);
+	Rd_FPR32 = NEON_sqshl(Rn_FPR32, Imm_uimm5:1);
 	zext_zs(Zd);
 }
 
@@ -21325,10 +21242,10 @@ is b_2331=0b010111110 & b_2122=0b01 & b_1015=0b011101 & Rd_FPR32 & Rn_FPR32 & Im
 # AUNIT --inst x5f407400/mask=xffc0fc00 --status nopcodeop --comment "nointsat"
 # Scalar variant when immh=1xxx V=FPR64 imm=Imm_shr_imm64 bb=b_22 aa=1
 
-:sqshl Rd_FPR64, Rn_FPR64, Imm_shr_imm64
-is b_2331=0b010111110 & b_22=1 & b_1015=0b011101 & Rd_FPR64 & Rn_FPR64 & Imm_shr_imm64 & Zd
+:sqshl Rd_FPR64, Rn_FPR64, Imm_imm0_63
+is b_2331=0b010111110 & b_22=1 & b_1015=0b011101 & Rd_FPR64 & Rn_FPR64 & Imm_imm0_63 & Zd
 {
-	Rd_FPR64 = NEON_sqshl(Rn_FPR64, Imm_shr_imm64:1);
+	Rd_FPR64 = NEON_sqshl(Rn_FPR64, Imm_imm0_63:1);
 	zext_zd(Zd);
 }
 
@@ -21546,10 +21463,10 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2023=0x1 & Imm_uimm4 & b_1115=0xc & b_1
 # AUNIT --inst x7f086400/mask=xfff8fc00 --status nopcodeop --comment "nointsat"
 # Scalar variant when immh=0001 V=FPR8 imm=Imm_shr_imm8 bb=b_1922 aa=0b0001
 
-:sqshlu Rd_FPR8, Rn_FPR8, Imm_shr_imm8
-is b_2331=0b011111110 & b_1922=0b0001 & b_1015=0b011001 & Rd_FPR8 & Rn_FPR8 & Imm_shr_imm8 & Zd
+:sqshlu Rd_FPR8, Rn_FPR8, Imm_uimm3
+is b_2331=0b011111110 & b_1922=0b0001 & b_1015=0b011001 & Rd_FPR8 & Rn_FPR8 & Imm_uimm3 & Zd
 {
-	Rd_FPR8 = NEON_sqshlu(Rn_FPR8, Imm_shr_imm8:1);
+	Rd_FPR8 = NEON_sqshlu(Rn_FPR8, Imm_uimm3:1);
 	zext_zb(Zd);
 }
 
@@ -21559,10 +21476,10 @@ is b_2331=0b011111110 & b_1922=0b0001 & b_1015=0b011001 & Rd_FPR8 & Rn_FPR8 & Im
 # AUNIT --inst x7f106400/mask=xfff0fc00 --status nopcodeop --comment "nointsat"
 # Scalar variant when immh=001x V=FPR16 imm=Imm_shr_imm16 bb=b_2022 aa=0b001
 
-:sqshlu Rd_FPR16, Rn_FPR16, Imm_shr_imm16
-is b_2331=0b011111110 & b_2022=0b001 & b_1015=0b011001 & Rd_FPR16 & Rn_FPR16 & Imm_shr_imm16 & Zd
+:sqshlu Rd_FPR16, Rn_FPR16, Imm_uimm4
+is b_2331=0b011111110 & b_2022=0b001 & b_1015=0b011001 & Rd_FPR16 & Rn_FPR16 & Imm_uimm4 & Zd
 {
-	Rd_FPR16 = NEON_sqshlu(Rn_FPR16, Imm_shr_imm16:1);
+	Rd_FPR16 = NEON_sqshlu(Rn_FPR16, Imm_uimm4:1);
 	zext_zh(Zd);
 }
 
@@ -21572,10 +21489,10 @@ is b_2331=0b011111110 & b_2022=0b001 & b_1015=0b011001 & Rd_FPR16 & Rn_FPR16 & I
 # AUNIT --inst x7f206400/mask=xffe0fc00 --status nopcodeop --comment "nointsat"
 # Scalar variant when immh=01xx V=FPR32 imm=Imm_shr_imm32 bb=b_2122 aa=0b01
 
-:sqshlu Rd_FPR32, Rn_FPR32, Imm_shr_imm32
-is b_2331=0b011111110 & b_2122=0b01 & b_1015=0b011001 & Rd_FPR32 & Rn_FPR32 & Imm_shr_imm32 & Zd
+:sqshlu Rd_FPR32, Rn_FPR32, Imm_uimm5
+is b_2331=0b011111110 & b_2122=0b01 & b_1015=0b011001 & Rd_FPR32 & Rn_FPR32 & Imm_uimm5 & Zd
 {
-	Rd_FPR32 = NEON_sqshlu(Rn_FPR32, Imm_shr_imm32:1);
+	Rd_FPR32 = NEON_sqshlu(Rn_FPR32, Imm_uimm5:1);
 	zext_zs(Zd);
 }
 
@@ -21585,10 +21502,10 @@ is b_2331=0b011111110 & b_2122=0b01 & b_1015=0b011001 & Rd_FPR32 & Rn_FPR32 & Im
 # AUNIT --inst x7f406400/mask=xffc0fc00 --status nopcodeop --comment "nointsat"
 # Scalar variant when immh=1xxx V=FPR64 imm=Imm_shr_imm64 bb=b_22 aa=1
 
-:sqshlu Rd_FPR64, Rn_FPR64, Imm_shr_imm64
-is b_2331=0b011111110 & b_22=1 & b_1015=0b011001 & Rd_FPR64 & Rn_FPR64 & Imm_shr_imm64 & Zd
+:sqshlu Rd_FPR64, Rn_FPR64, Imm_imm0_63
+is b_2331=0b011111110 & b_22=1 & b_1015=0b011001 & Rd_FPR64 & Rn_FPR64 & Imm_imm0_63 & Zd
 {
-	Rd_FPR64 = NEON_sqshlu(Rn_FPR64, Imm_shr_imm64:1);
+	Rd_FPR64 = NEON_sqshlu(Rn_FPR64, Imm_imm0_63:1);
 	zext_zd(Zd);
 }
 
@@ -28871,10 +28788,10 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2023=0x1 & Imm_uimm4 & b_1115=0xe & b_1
 # AUNIT --inst x7f087400/mask=xfff8fc00 --status nopcodeop --comment "nointsat"
 # Scalar variant when immh=0001 V=FPR8 imm=Imm_shr_imm8 bb=b_1922 aa=0b0001
 
-:uqshl Rd_FPR8, Rn_FPR8, Imm_shr_imm8
-is b_2331=0b011111110 & b_1922=0b0001 & b_1015=0b011101 & Rd_FPR8 & Rn_FPR8 & Imm_shr_imm8 & Zd
+:uqshl Rd_FPR8, Rn_FPR8, Imm_uimm3
+is b_2331=0b011111110 & b_1922=0b0001 & b_1015=0b011101 & Rd_FPR8 & Rn_FPR8 & Imm_uimm3 & Zd
 {
-	Rd_FPR8 = NEON_uqshl(Rn_FPR8, Imm_shr_imm8:1);
+	Rd_FPR8 = NEON_uqshl(Rn_FPR8, Imm_uimm3:1);
 	zext_zb(Zd);
 }
 
@@ -28884,10 +28801,10 @@ is b_2331=0b011111110 & b_1922=0b0001 & b_1015=0b011101 & Rd_FPR8 & Rn_FPR8 & Im
 # AUNIT --inst x7f107400/mask=xfff0fc00 --status nopcodeop --comment "nointsat"
 # Scalar variant when immh=001x V=FPR16 imm=Imm_shr_imm16 bb=b_2022 aa=0b001
 
-:uqshl Rd_FPR16, Rn_FPR16, Imm_shr_imm16
-is b_2331=0b011111110 & b_2022=0b001 & b_1015=0b011101 & Rd_FPR16 & Rn_FPR16 & Imm_shr_imm16 & Zd
+:uqshl Rd_FPR16, Rn_FPR16, Imm_uimm4
+is b_2331=0b011111110 & b_2022=0b001 & b_1015=0b011101 & Rd_FPR16 & Rn_FPR16 & Imm_uimm4 & Zd
 {
-	Rd_FPR16 = NEON_uqshl(Rn_FPR16, Imm_shr_imm16:1);
+	Rd_FPR16 = NEON_uqshl(Rn_FPR16, Imm_uimm4:1);
 	zext_zh(Zd);
 }
 
@@ -28897,10 +28814,10 @@ is b_2331=0b011111110 & b_2022=0b001 & b_1015=0b011101 & Rd_FPR16 & Rn_FPR16 & I
 # AUNIT --inst x7f207400/mask=xffe0fc00 --status nopcodeop --comment "nointsat"
 # Scalar variant when immh=01xx V=FPR32 imm=Imm_shr_imm32 bb=b_2122 aa=0b01
 
-:uqshl Rd_FPR32, Rn_FPR32, Imm_shr_imm32
-is b_2331=0b011111110 & b_2122=0b01 & b_1015=0b011101 & Rd_FPR32 & Rn_FPR32 & Imm_shr_imm32 & Zd
+:uqshl Rd_FPR32, Rn_FPR32, Imm_uimm5
+is b_2331=0b011111110 & b_2122=0b01 & b_1015=0b011101 & Rd_FPR32 & Rn_FPR32 & Imm_uimm5 & Zd
 {
-	Rd_FPR32 = NEON_uqshl(Rn_FPR32, Imm_shr_imm32:1);
+	Rd_FPR32 = NEON_uqshl(Rn_FPR32, Imm_uimm5:1);
 	zext_zs(Zd);
 }
 
@@ -28910,10 +28827,10 @@ is b_2331=0b011111110 & b_2122=0b01 & b_1015=0b011101 & Rd_FPR32 & Rn_FPR32 & Im
 # AUNIT --inst x7f407400/mask=xffc0fc00 --status nopcodeop --comment "nointsat"
 # Scalar variant when immh=1xxx V=FPR64 imm=Imm_shr_imm64 bb=b_22 aa=1
 
-:uqshl Rd_FPR64, Rn_FPR64, Imm_shr_imm64
-is b_2331=0b011111110 & b_22=1 & b_1015=0b011101 & Rd_FPR64 & Rn_FPR64 & Imm_shr_imm64 & Zd
+:uqshl Rd_FPR64, Rn_FPR64, Imm_imm0_63
+is b_2331=0b011111110 & b_22=1 & b_1015=0b011101 & Rd_FPR64 & Rn_FPR64 & Imm_imm0_63 & Zd
 {
-	Rd_FPR64 = NEON_uqshl(Rn_FPR64, Imm_shr_imm64:1);
+	Rd_FPR64 = NEON_uqshl(Rn_FPR64, Imm_imm0_63:1);
 	zext_zd(Zd);
 }
 
@@ -31401,13 +31318,11 @@ is b_3131=0 & q=1 & b_2429=0xe & advSIMD3.size=1 & b_2121=0 & Rm_VPR128.8H & b_1
 :xar Rd_VPR128.2D, Rn_VPR128.2D, Rm_VPR128.2D, LSB_bitfield64_imm
 is b_2131=0b11001110100 & Rd_VPR128.2D & Rn_VPR128.2D & Rm_VPR128.2D & LSB_bitfield64_imm & Zd
 {
-	# simd infix TMPQ1 = Rn_VPR128.2D | Rm_VPR128.2D on lane size 8
-	TMPQ1[0,64] = Rn_VPR128.2D[0,64] | Rm_VPR128.2D[0,64];
-	TMPQ1[64,64] = Rn_VPR128.2D[64,64] | Rm_VPR128.2D[64,64];
-	local tmp2:8 = LSB_bitfield64_imm;
-	# simd infix Rd_VPR128.2D = TMPQ1 >> tmp2 on lane size 8
-	Rd_VPR128.2D[0,64] = TMPQ1[0,64] >> tmp2;
-	Rd_VPR128.2D[64,64] = TMPQ1[64,64] >> tmp2;
+	local xrot:8 = LSB_bitfield64_imm;
+	local xlo:8 = Rn_VPR128.2D[0,64] ^ Rm_VPR128.2D[0,64];
+	local xhi:8 = Rn_VPR128.2D[64,64] ^ Rm_VPR128.2D[64,64];
+	Rd_VPR128.2D[0,64] = (xlo >> xrot) | (xlo << (64 - xrot));
+	Rd_VPR128.2D[64,64] = (xhi >> xrot) | (xhi << (64 - xrot));
 	zext_zq(Zd); # zero upper 16 bytes of Zd
 }
 

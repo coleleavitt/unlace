@@ -1,0 +1,104 @@
+# Zacas (1.0) register-pair forms: RV32 amocas.d and RV64 amocas.q.
+# The 2*XLEN operand sits in an even/odd register pair: the even register holds
+# the low half and the odd one the high half. A pair named by x0 reads as zero
+# and is not written. Odd register numbers are reserved and stay undecoded.
+# amocas.d/amocas.q: compare the pair rd with the 2*XLEN value at (rs1); if
+# equal, store the pair rs2 there. rd receives the old memory value.
+
+zcRdLo: zero is op0711=0 & zero { local tmp:$(XLEN) = 0; export tmp; }
+zcRdLo: sp is op0711=2 & sp { export sp; }
+zcRdLo: tp is op0711=4 & tp { export tp; }
+zcRdLo: t1 is op0711=6 & t1 { export t1; }
+zcRdLo: s0 is op0711=8 & s0 { export s0; }
+zcRdLo: a0 is op0711=10 & a0 { export a0; }
+zcRdLo: a2 is op0711=12 & a2 { export a2; }
+zcRdLo: a4 is op0711=14 & a4 { export a4; }
+zcRdLo: a6 is op0711=16 & a6 { export a6; }
+zcRdLo: s2 is op0711=18 & s2 { export s2; }
+zcRdLo: s4 is op0711=20 & s4 { export s4; }
+zcRdLo: s6 is op0711=22 & s6 { export s6; }
+zcRdLo: s8 is op0711=24 & s8 { export s8; }
+zcRdLo: s10 is op0711=26 & s10 { export s10; }
+zcRdLo: t3 is op0711=28 & t3 { export t3; }
+zcRdLo: t5 is op0711=30 & t5 { export t5; }
+
+zcRdHi: is op0711=0 { local tmp:$(XLEN) = 0; export tmp; }
+zcRdHi: is op0711=2 { export gp; }
+zcRdHi: is op0711=4 { export t0; }
+zcRdHi: is op0711=6 { export t2; }
+zcRdHi: is op0711=8 { export s1; }
+zcRdHi: is op0711=10 { export a1; }
+zcRdHi: is op0711=12 { export a3; }
+zcRdHi: is op0711=14 { export a5; }
+zcRdHi: is op0711=16 { export a7; }
+zcRdHi: is op0711=18 { export s3; }
+zcRdHi: is op0711=20 { export s5; }
+zcRdHi: is op0711=22 { export s7; }
+zcRdHi: is op0711=24 { export s9; }
+zcRdHi: is op0711=26 { export s11; }
+zcRdHi: is op0711=28 { export t4; }
+zcRdHi: is op0711=30 { export t6; }
+
+zcRs2Lo: zero is op2024=0 & zero { local tmp:$(XLEN) = 0; export tmp; }
+zcRs2Lo: sp is op2024=2 & sp { export sp; }
+zcRs2Lo: tp is op2024=4 & tp { export tp; }
+zcRs2Lo: t1 is op2024=6 & t1 { export t1; }
+zcRs2Lo: s0 is op2024=8 & s0 { export s0; }
+zcRs2Lo: a0 is op2024=10 & a0 { export a0; }
+zcRs2Lo: a2 is op2024=12 & a2 { export a2; }
+zcRs2Lo: a4 is op2024=14 & a4 { export a4; }
+zcRs2Lo: a6 is op2024=16 & a6 { export a6; }
+zcRs2Lo: s2 is op2024=18 & s2 { export s2; }
+zcRs2Lo: s4 is op2024=20 & s4 { export s4; }
+zcRs2Lo: s6 is op2024=22 & s6 { export s6; }
+zcRs2Lo: s8 is op2024=24 & s8 { export s8; }
+zcRs2Lo: s10 is op2024=26 & s10 { export s10; }
+zcRs2Lo: t3 is op2024=28 & t3 { export t3; }
+zcRs2Lo: t5 is op2024=30 & t5 { export t5; }
+
+zcRs2Hi: is op2024=0 { local tmp:$(XLEN) = 0; export tmp; }
+zcRs2Hi: is op2024=2 { export gp; }
+zcRs2Hi: is op2024=4 { export t0; }
+zcRs2Hi: is op2024=6 { export t2; }
+zcRs2Hi: is op2024=8 { export s1; }
+zcRs2Hi: is op2024=10 { export a1; }
+zcRs2Hi: is op2024=12 { export a3; }
+zcRs2Hi: is op2024=14 { export a5; }
+zcRs2Hi: is op2024=16 { export a7; }
+zcRs2Hi: is op2024=18 { export s3; }
+zcRs2Hi: is op2024=20 { export s5; }
+zcRs2Hi: is op2024=22 { export s7; }
+zcRs2Hi: is op2024=24 { export s9; }
+zcRs2Hi: is op2024=26 { export s11; }
+zcRs2Hi: is op2024=28 { export t4; }
+zcRs2Hi: is op2024=30 { export t6; }
+
+@if ADDRSIZE == "32"
+# amocas.d d,t,0(s) 2800302f fe00707f (RV32: register pairs)
+:amocas.d^aqrl zcRdLo,zcRs2Lo,(rs1) is rs1 & zcRdLo & zcRdHi & zcRs2Lo & zcRs2Hi & op0001=0x3 & op0204=0x3 & op0506=0x1 & funct3=0x3 & op2731=0x5 & aqrl
+{
+	local addr = rs1;
+	local expected:8 = (zext(zcRdHi) << 32) | zext(zcRdLo);
+	local desired:8 = (zext(zcRs2Hi) << 32) | zext(zcRs2Lo);
+	local old:8 = *[ram]:8 addr;
+	zcRdLo = old:4;
+	zcRdHi = old(4);
+	if (old != expected) goto inst_next;
+	*[ram]:8 addr = desired;
+}
+@endif
+
+@if ADDRSIZE == "64"
+# amocas.q d,t,0(s) 2800402f fe00707f (RV64: register pairs)
+:amocas.q^aqrl zcRdLo,zcRs2Lo,(rs1) is rs1 & zcRdLo & zcRdHi & zcRs2Lo & zcRs2Hi & op0001=0x3 & op0204=0x3 & op0506=0x1 & funct3=0x4 & op2731=0x5 & aqrl
+{
+	local addr = rs1;
+	local expected:16 = (zext(zcRdHi) << 64) | zext(zcRdLo);
+	local desired:16 = (zext(zcRs2Hi) << 64) | zext(zcRs2Lo);
+	local old:16 = *[ram]:16 addr;
+	zcRdLo = old:8;
+	zcRdHi = old(8);
+	if (old != expected) goto inst_next;
+	*[ram]:16 addr = desired;
+}
+@endif

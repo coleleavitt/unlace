@@ -797,6 +797,24 @@ indistinguishable from a function that returns normally. The fourth cause,
 `noreturn`, is not a decode failure and is deliberately untouched: it is already
 reported on the call it follows.
 
+**(kuna) Silent losses named (`kuna_honestgaps.rs`, `option honestgaps`, default off).**
+Under the `ignoreunimplemented` policy `handle_decode_error` steps over an
+instruction SLEIGH decodes but has no p-code for, as a no-op, and only the
+once-per-function header said the function ignored unimplemented instructions,
+never which. With the option on it also buffers `notmodelled: <insn> has no
+p-code semantics; stepped over as a no-op` at the instruction's address, the
+instruction named from the decoder's `Unimpl` text (mnemonic and operands, else
+`instruction`). The decompile drive does the same for a DWARF register local
+that `seed_dwarf_register_locals` could not bind (chapter 01): a header warning
+`debuginfo: DWARF local <name> (range from 0x...) not bound: no write of its
+register reaches it`. Both tags are lowercase, so the printer's warning
+records file them under the kinds `notmodelled` and `debuginfo`, and the CLI's
+`--json` lists them with the rest and totals every kind in `warning_kinds`
+(`docs/cli.md`). Off by default because the extra comments change the text of
+every function with such a gap; the losses that already print (decode-failure
+halts, `funcboundflow`, budget and out-of-bounds truncation, unrecovered jump
+tables) are unchanged either way.
+
 When the generic `PowerPC:BE:64:default` or `PowerPC:LE:64:default` decoder
 fails on an aligned `isel` encoding, the halt also names the selected target
 and suggests an explicit `--target PowerPC:<endian>:64:A2ALT` for AltiVec code.

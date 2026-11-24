@@ -228,6 +228,7 @@ kuna_options! { self, p1;
     "rodatastring" => registered!(crate::kuna_rodatastring::RodataString),
     "switchmodbound" => registered!(crate::jumptable::SwitchModuloBound),
     "switchextent" => registered!(crate::jumptable::SwitchExtent),
+    "honestgaps" => registered!(crate::kuna_honestgaps::HonestGaps),
     "constselectjump" => registered!(crate::kuna_constselectjump::ConstSelectMode),
     "switchguardbound" => registered!(crate::jumptable::SwitchGuardBound),
     "highsliceguard" => registered!(crate::jumptable::HighsliceGuard),

@@ -2842,6 +2842,28 @@ impl ConsoleProgram {
         self.pending_prototypes.get(func)
     }
 
+    /// Mark the function at engine byte offset `offset` as never returning, so
+    /// the decompiles of its callers end their flow at each call to it. `false`
+    /// when no function symbol is there (declare it first).
+    pub fn declare_no_return(&mut self, offset: u64) -> bool {
+        let Some(space) = self.arch().manage().get_default_code_space().cloned() else {
+            return false;
+        };
+        let addr = Address::new(space, self.thumb_normalized(offset));
+        let sid = self
+            .arch()
+            .symboltab
+            .find_function_across_scopes(&addr)
+            .map(|(sid, _)| sid);
+        match sid {
+            Some(sid) => {
+                self.arch_mut().symboltab.set_function_no_return(sid, true);
+                true
+            }
+            None => false,
+        }
+    }
+
     /// Declare a function at `addr` — the in-process twin of the console
     /// `map function <addr> [name]` command (`IfcMapfunction`), plus the extent
     /// the console form cannot express on its own.
@@ -4730,7 +4752,7 @@ fn build_engine_and_init(sleigh: &mut SleighArchitecture, db: &LanguageDatabase)
         .slafile
         .ok_or_else(|| KunaError::lowlevel("build_spec_file resolved no .sla"))?;
     let sla = db
-        .read_sla_image(&resolved_sla)
+        .read_spec(&resolved_sla)
         .map_err(|e| KunaError::lowlevel(format!("read sla {resolved_sla}: {e}")))?;
 
     // The loader is handed to the translator as a dummy first; the real opened
@@ -5199,6 +5221,24 @@ pub fn bootstrap_from_raw(
         .target(target)
         .arm_isa(isa)
         .raw(path, base, entries)
+}
+
+/// Bootstrap a headerless image from separate runs of bytes, each `(address,
+/// bytes, flags)` with [`section_flags`]: the image starts at the lowest run and
+/// the space between two runs is not mapped. Addresses are byte addresses, so
+/// this serves byte-addressed targets; `path` only names the image.
+pub fn bootstrap_from_raw_segments(
+    path: &str,
+    target: &str,
+    runs: Vec<(u64, Vec<u8>, u32)>,
+    entries: &[u64],
+    isa: Option<ArmIsa>,
+    spec_roots: &[String],
+) -> KunaResult<ConsoleProgram> {
+    Bootstrap::new(spec_roots)
+        .target(target)
+        .arm_isa(isa)
+        .raw_segments(path, runs, entries)
 }
 
 /// A raw image built in memory: its bytes, and the ranges its container

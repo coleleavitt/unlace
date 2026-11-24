@@ -360,7 +360,7 @@ impl Action for ActionStackByteCopy {
                 .get::<crate::kuna_indexaliasguard::IndexAliasGuard>()
                 .0
                 == super::kuna_indexaliasguard::LEVEL_OFF
-            || fd.get_heritage_pass() != 0
+            || fd.is_settled(crate::kuna_maturity::Fact::Ssa)
         {
             return 0;
         }

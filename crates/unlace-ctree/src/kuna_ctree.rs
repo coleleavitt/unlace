@@ -15,6 +15,26 @@ use unlace_base::types::uint4;
 
 use crate::context::{BlockId, OpId, VarnodeId};
 
+crate::kuna_flag!(
+    /// (kuna `boolreturn`) Print an `if` whose two arms only return `1` and `0` as
+    /// `return c;` (or `return !c;`), a rewrite of the C syntax tree.
+    Boolreturn,
+    "boolreturn",
+    "boolean results returned directly",
+    unset: false,
+    shipped: false
+);
+
+crate::kuna_flag!(
+    /// (kuna `ctree`) Print the function body through its C syntax tree. Off by default while
+    /// the tree printer is proven to print exactly what the block printer prints.
+    Ctree,
+    "ctree",
+    "C syntax tree printing",
+    unset: false,
+    shipped: false
+);
+
 /// A statement of a [`CTree`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct StmtId(u32);
@@ -79,6 +99,9 @@ pub enum StmtKind {
     Seq(Vec<StmtId>),
     /// A basic-block leaf whose statements the printer still selects from its ops.
     Ops { leaf: BlockId },
+    /// A leaf split into its ops in order (`CMaturity::Statements`); the printer prints the
+    /// ones that make statements, in this order.
+    Stmts { leaf: BlockId, ops: Vec<OpId> },
     /// One expression statement.
     Expr(ExprId),
     /// `if`. `pre` holds the statements printed above the test (the condition block's
@@ -106,11 +129,17 @@ pub enum StmtKind {
     },
     /// An infinite loop.
     Loop { body: StmtId },
+    /// A `switch`: the structured switch's components in order, the head first, then the
+    /// case blocks.
+    Switch { parts: Vec<StmtId> },
     /// An unstructured branch: `goto`, `break` or `continue` by the block-goto flags in
     /// `gototype`.
     Goto { target: BlockId, gototype: uint4 },
-    /// `return`.
-    Return(Option<ExprId>),
+    /// `return`; `op` is the `RETURN` op the statement's markup points at.
+    Return {
+        value: Option<ExprId>,
+        op: Option<OpId>,
+    },
     /// Not modelled yet: printed from its origin block.
     Opaque,
 }
@@ -132,9 +161,11 @@ pub enum ExprKind {
     And(ExprId, ExprId),
     Or(ExprId, ExprId),
     Ternary(ExprId, ExprId, ExprId),
+    /// `dest = value`; `op` is the op the statement's markup points at.
     Assign {
         dest: VarnodeId,
         value: ExprId,
+        op: OpId,
     },
     Const {
         value: u64,
@@ -202,6 +233,13 @@ impl CTree {
         &mut self.exprs[id.index()]
     }
 
+    /// Every statement, in the order they were added.
+    pub fn stmt_ids(&self) -> Vec<StmtId> {
+        (0..self.stmts.len())
+            .map(|i| StmtId(u32::try_from(i).expect("ctree statement count")))
+            .collect()
+    }
+
     /// The number of statements.
     pub fn stmt_count(&self) -> usize {
         self.stmts.len()
@@ -251,10 +289,28 @@ impl CTree {
         out
     }
 
+    /// Component `k` of the structured block `id` was built from, as the statement the tree
+    /// holds in its place: the `k`-th statement of a sequence or switch, an `if`'s body (1) and
+    /// else (2), a top-tested loop's body (1), a bottom-tested or infinite loop's body (0).
+    /// `None` for a component the tree does not hold (a condition block, an if-goto's body).
+    pub fn part(&self, id: StmtId, k: usize) -> Option<StmtId> {
+        match &self.stmt(id).kind {
+            StmtKind::Seq(list) | StmtKind::Switch { parts: list } => list.get(k).copied(),
+            StmtKind::If { then, els, .. } => match k {
+                1 => Some(*then).filter(|then| self.stmt(*then).origin.is_some()),
+                2 => *els,
+                _ => None,
+            },
+            StmtKind::While { body, .. } | StmtKind::For { body, .. } => (k == 1).then_some(*body),
+            StmtKind::DoWhile { body, .. } | StmtKind::Loop { body } => (k == 0).then_some(*body),
+            _ => None,
+        }
+    }
+
     /// The statements directly under `id`, in print order.
     pub fn children(&self, id: StmtId) -> Vec<StmtId> {
         match &self.stmt(id).kind {
-            StmtKind::Seq(list) => list.clone(),
+            StmtKind::Seq(list) | StmtKind::Switch { parts: list } => list.clone(),
             StmtKind::If { pre, then, els, .. } => {
                 pre.iter().copied().chain([*then]).chain(*els).collect()
             }
@@ -263,9 +319,10 @@ impl CTree {
             | StmtKind::For { body, .. }
             | StmtKind::Loop { body } => vec![*body],
             StmtKind::Ops { .. }
+            | StmtKind::Stmts { .. }
             | StmtKind::Expr(_)
             | StmtKind::Goto { .. }
-            | StmtKind::Return(_)
+            | StmtKind::Return { .. }
             | StmtKind::Opaque => Vec::new(),
         }
     }
@@ -274,6 +331,7 @@ impl CTree {
         let head = match &stmt.kind {
             StmtKind::Seq(list) => format!("seq[{}]", list.len()),
             StmtKind::Ops { .. } => "ops".to_string(),
+            StmtKind::Stmts { ops, .. } => format!("stmts[{}]", ops.len()),
             StmtKind::Expr(e) => format!("expr {}", self.expr_text(*e)),
             StmtKind::If { cond, els, .. } => format!(
                 "if {}{}",
@@ -284,9 +342,10 @@ impl CTree {
             StmtKind::DoWhile { cond, .. } => format!("do-while {}", self.expr_text(*cond)),
             StmtKind::For { cond, .. } => format!("for {}", self.expr_text(*cond)),
             StmtKind::Loop { .. } => "loop".to_string(),
+            StmtKind::Switch { parts } => format!("switch[{}]", parts.len()),
             StmtKind::Goto { gototype, .. } => format!("goto type={gototype:#x}"),
-            StmtKind::Return(None) => "return".to_string(),
-            StmtKind::Return(Some(e)) => format!("return {}", self.expr_text(*e)),
+            StmtKind::Return { value: None, .. } => "return".to_string(),
+            StmtKind::Return { value: Some(e), .. } => format!("return {}", self.expr_text(*e)),
             StmtKind::Opaque => "opaque".to_string(),
         };
         match stmt.origin {
@@ -308,7 +367,9 @@ impl CTree {
                 self.expr_text(*a),
                 self.expr_text(*b)
             ),
-            ExprKind::Assign { dest, value } => format!("{dest:?} = {}", self.expr_text(*value)),
+            ExprKind::Assign { dest, value, .. } => {
+                format!("{dest:?} = {}", self.expr_text(*value))
+            }
             ExprKind::Const { value, size } => format!("{value:#x}:{size}"),
         }
     }

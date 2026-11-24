@@ -1383,17 +1383,23 @@ they are not part of either child.
 (kuna) **Loading a spec.** A `.sla` is a zlib stream behind a `sla\x04` header,
 inflated and checksum-verified in full before a single element is decoded
 (`crates/unlace-sleigh/src/slaformat.rs (FormatDecode::ingest_stream)`).
-The decoder also takes the same packed payload uncompressed, behind a 12-byte
-header (`slu`, the format version, the payload length as 8 little-endian bytes;
-`raw_sla_image`): a length that disagrees with the bytes present is rejected,
-which stands in for the checksum on this form. The engine bootstrap reads a
-`.sla` on disk through `crates/unlace-slacomp/src/slacache.rs (read_image)`,
-which keeps one such uncompressed copy per image in the `.sla` cache (named by
-the compiler fingerprint and the `.sla`'s path, size and modification time) and
-returns it, so the inflate is paid once per image rather than once per process
-(and the `--jobs` decode lanes, rebuilt from the bytes the bootstrap consumed,
-skip it too). Both forms ingest the identical buffer, so what decodes is the
-same. `UNLACE_SLA_RAW=0` reads the compressed `.sla` as before.
+
+(kuna) **Constructor templates on first use.** Most of a `.sla` is the
+`<construct_tpl>` p-code template of every constructor, and a run builds p-code
+for few of them. The symbol-table decode therefore keeps each template's encoded
+bytes (`Decoder::skip_element_raw`, which only a byte-encoded decoder provides;
+an XML decoder decodes eagerly as before) and reads just its `section` and
+`delay` attributes, which place the handle in its constructor and answer
+instruction resolution's delay-slot question. The template itself is decoded
+by the eager `ConstructTpl::decode`, over the same bytes and against the
+engine's own address-space manager, the first time the p-code builder or an
+exported operand needs it
+(`crates/unlace-sleigh/src/kuna_lazytemplates.rs (LazyTemplates::get)`), and
+kept. Spaces keep the indices the `.sla` gave them, so the value is the one an
+eager decode makes, whenever it is made; encoding a lazily decoded spec decodes
+all of them first. The one visible difference is when a corrupt template is
+reported: at its first use instead of at load. `UNLACE_SLA_LAZY=0` decodes
+every template at load.
 The decompressed buffer is then *handed* to the packed decoder rather than
 copied into it (`crates/unlace-base/src/marshal.rs
 (PackedDecode::ingest_owned)`): the inflate buffer becomes the decoder's leading
@@ -4353,15 +4359,22 @@ level. The pre-SSA passes of mainloop's head (`cleanupcode`, `gojumpchain`,
 `gomorestack`, `gowritebarrier`, `ptrauthtrap`, `chkstkdarwin`, `rustprobestack`,
 `outline`, the lowered-switch install) ask `is_settled(Fact::Ssa)` instead of reading
 the heritage pass counter, and `condstmts` asks `is_settled(Fact::HighVariables)`;
-both are the same test by definition. `gotoreduce` and `ifelseflatten` assert the
+both are the same test by definition. So do `stackbytecopy` and `passthrough`'s Go
+stack-guard claim (`Fact::Ssa`, the pre-SSA window) and `inputprototype`'s trial
+typing (`Fact::HighVariables`). `gotoreduce` and `ifelseflatten` assert the
 casts and the block structure they edit. In the one-shot tail, `startcleanup` and
 `inputprototype` assert dataflow (fullloop's fixed point), `assignhigh` clean-up,
 `mergerequired` and `markexplicit` high-variables, `outputprototype`, `namevars` and
-`setcasts` merge, `mapglobals` prototype, and `prototypewarnings` casts. A pass that relies on an earlier phase states it with
+`setcasts` merge, `mapglobals` prototype, and `prototypewarnings` casts. Around them, `armfloatargs` and
+`returnselector` assert clean-up, `typevote` merge, `calltargettype` prototype, and
+the structure tail after `setcasts` (`postinc`, `taildup`, `crossjumprevert`,
+`dedupitetail`, `iteregion`, `iteboolean`, `gotosink`, `crossjumptail`,
+`guardedloop`, `paramcopyhoist`) casts. A pass that relies on an earlier phase states it with
 `debug_assert_settled!(fd, Fact)`, which checks only in debug builds and only for
 a function driven through the full `decompile` root (`run_pipeline`). A unit test
 that applies one action to a hand-built `Funcdata`, or a reduced variant, is not
 held to the tree's order. The level is reported by the console's `phase status` (`maturity: <level> (settled:
-<facts>)`, after the three option lines, when a function is selected).
+<facts>)`, after the three option lines, when a function is selected), and
+`unlace decompile --trace` prints that dump on stderr after the C (`docs/cli.md`).
 Marking a level changes no analysis: it is a record of where the scheduler is, not
 a new decision.

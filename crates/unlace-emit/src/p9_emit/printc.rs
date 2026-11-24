@@ -1808,6 +1808,8 @@ pub struct PrintC {
     /// Per-body spelling of a goto-target leaf whose address label another
     /// printed label already uses (see [`assign_label_names`](PrintC::assign_label_names)).
     label_names: std::collections::BTreeMap<BlockId, String>,
+    /// (kuna `ctree`) The C syntax tree of the function being printed, with `option ctree on`.
+    ctree: Option<crate::kuna_ctree::CTree>,
 }
 
 impl Default for PrintC {
@@ -1867,6 +1869,7 @@ impl PrintC {
             globalref: crate::kuna_globalref::Plan::default(),
             named_globals: crate::kuna_namedglobals::References::default(),
             label_names: std::collections::BTreeMap::new(),
+            ctree: None,
         }
     }
 
@@ -4856,7 +4859,20 @@ impl PrintC {
                 Default::default()
             };
         self.assign_label_names(fd, sroot);
-        self.emit_block_graph(fd, arch, sroot);
+        let tree_on = arch.kuna_options.get::<crate::kuna_ctree::Ctree>().0
+            || arch.kuna_options.get::<crate::kuna_ctree::Boolreturn>().0;
+        self.ctree = if tree_on && !self.is_flat() {
+            crate::kuna_ctreebuild::build(fd)
+        } else {
+            None
+        };
+        if let Some(tree) = self.ctree.as_mut() {
+            crate::kuna_ctreebuild::split_statements(fd, tree);
+        }
+        self.ctree_rewrite(fd, arch);
+        if !self.emit_ctree_body(fd, arch, sroot) {
+            self.emit_block_graph(fd, arch, sroot);
+        }
         while let Some(id) = self.eh_open_catch.pop() {
             self.emit.close_brace_indent(self.lang().kw_close_curly, id);
         }
@@ -4866,6 +4882,7 @@ impl PrintC {
         self.goto_rewrites = Default::default();
         self.switch_plans = Default::default();
         self.label_names.clear();
+        self.ctree = None;
     }
 
     /// Give every printed label a distinct name.  Block duplication (return
@@ -4916,8 +4933,18 @@ impl PrintC {
 
     /// Dispatch one structured block to its emitter (C++ the virtual
     /// `FlowBlock::emit(PrintLanguage*)` -> `PrintC::emitBlock*`).
+    /// With `option ctree on`, the statement the function's C syntax tree built from
+    /// `blk` prints instead, when the tree printer models it (`kuna_ctreeprint`).
     #[doc(hidden)]
     pub fn emit_block(&mut self, fd: &Funcdata, arch: &Architecture, blk: BlockId) {
+        if self.ctree.is_some() && self.emit_ctree_block(fd, arch, blk) {
+            return;
+        }
+        self.emit_block_raw(fd, arch, blk);
+    }
+
+    /// The block printer's own dispatch, for a block the C syntax tree leaves to it.
+    fn emit_block_raw(&mut self, fd: &Funcdata, arch: &Architecture, blk: BlockId) {
         use crate::block::BlockType;
         match fd.sblocks_ref().block(blk).get_type() {
             BlockType::Copy => self.emit_block_copy(fd, arch, blk),
@@ -5023,6 +5050,18 @@ impl PrintC {
     /// C++ `PrintC::emitBlockCopy` (printc.cc:2908): emit the underlying basic
     /// block (the `BlockCopy.copy` points back into `bblocks`).
     fn emit_block_copy(&mut self, fd: &Funcdata, arch: &Architecture, blk: BlockId) {
+        self.emit_block_copy_in(fd, arch, blk, None);
+    }
+
+    /// [`emit_block_copy`](Self::emit_block_copy) printing `ops` when given (a leaf of the C
+    /// syntax tree at `statements`).
+    fn emit_block_copy_in(
+        &mut self,
+        fd: &Funcdata,
+        arch: &Architecture,
+        blk: BlockId,
+        ops: Option<&[OpId]>,
+    ) {
         // emitBlockCopy -> emitAnyLabelStatement(bl) (printc.cc:2894): a label line
         // for an unstructured-goto target.  Its `tag_line(0)` fires any pending
         // `else if` brace, forcing `else { label: if ... }` (the `else if`
@@ -5032,7 +5071,7 @@ impl PrintC {
         self.emit_any_label_statement(fd, blk);
         if let Some(under) = fd.sblocks_ref().block(blk).get_copy() {
             // The copy's `copy` field is a *bblocks* BlockId.
-            self.emit_basic_block_ops(fd, arch, under, true);
+            self.emit_basic_block_ops_in(fd, arch, under, true, ops);
         }
     }
 
@@ -5721,12 +5760,19 @@ impl PrintC {
                 return;
             }
         }
-        if let Some(m) = self.ite_boolean_match(fd, blk) {
-            self.emit_block_if_bool(fd, arch, m);
-            return;
+        match self.ite_form(fd, arch, blk) {
+            Some(kuna_ctreeprint::IteForm::Bool(m)) => {
+                self.emit_block_if_bool(fd, arch, m);
+                return;
+            }
+            Some(kuna_ctreeprint::IteForm::Ternary(m)) => {
+                self.emit_block_if_ite(fd, arch, m);
+                return;
+            }
+            None => {}
         }
-        if let Some(m) = self.ite_ternary_match(fd, arch, blk) {
-            self.emit_block_if_ite(fd, arch, m);
+        if let Some((cond_block, ret_op, negate)) = self.return_form(blk) {
+            self.emit_block_if_return(fd, arch, cond_block, ret_op, negate);
             return;
         }
         let size = fd.sblocks_ref().block(blk).get_size();
@@ -5856,10 +5902,9 @@ impl PrintC {
             // (kuna warnstyle, DIV-39) condition-attached warnings land at the
             // end of the braceless `if (cond)` header line.
             self.flush_eol_warnings();
-            let body = fd.sblocks_ref().block(blk).get_block(1);
             let id = self.emit.start_indent();
             let id1 = self.emit.begin_block(0);
-            self.emit_block(fd, arch, body);
+            self.emit_part(fd, arch, blk, 1);
             self.emit.end_block(id1);
             self.emit.stop_indent(id);
             if size == 3 {
@@ -5876,7 +5921,7 @@ impl PrintC {
                 if else_is_if {
                     self.context.set_mod(modifiers::PENDING_BRACE);
                     let id2 = self.emit.begin_block(0);
-                    self.emit_block(fd, arch, else_block);
+                    self.emit_part(fd, arch, blk, 2);
                     self.emit.end_block(id2);
                 } else {
                     let id2 = self.emit.open_brace_indent(
@@ -5884,7 +5929,7 @@ impl PrintC {
                         self.output_brace(self.options.brace_ifelse),
                     );
                     let id3 = self.emit.begin_block(0);
-                    self.emit_block(fd, arch, else_block);
+                    self.emit_part(fd, arch, blk, 2);
                     self.emit.end_block(id3);
                     self.emit
                         .close_brace_indent(self.lang().kw_close_curly, id2);
@@ -5901,7 +5946,7 @@ impl PrintC {
             // the `if (cond) {` header brace.
             self.flush_eol_warnings();
             let id1 = self.emit.begin_block(0);
-            self.emit_block(fd, arch, fd.sblocks_ref().block(blk).get_block(1));
+            self.emit_part(fd, arch, blk, 1);
             self.emit.end_block(id1);
             self.emit.close_brace_indent(self.lang().kw_close_curly, id);
 
@@ -5922,7 +5967,7 @@ impl PrintC {
                     // so the child BlockIf registers a lazy brace.
                     self.context.set_mod(modifiers::PENDING_BRACE);
                     let id2 = self.emit.begin_block(0);
-                    self.emit_block(fd, arch, else_block);
+                    self.emit_part(fd, arch, blk, 2);
                     self.emit.end_block(id2);
                 } else {
                     let id2 = self.emit.open_brace_indent(
@@ -5930,7 +5975,7 @@ impl PrintC {
                         self.output_brace(self.options.brace_ifelse),
                     );
                     let id3 = self.emit.begin_block(0);
-                    self.emit_block(fd, arch, else_block);
+                    self.emit_part(fd, arch, blk, 2);
                     self.emit.end_block(id3);
                     self.emit
                         .close_brace_indent(self.lang().kw_close_curly, id2);
@@ -6286,6 +6331,75 @@ impl PrintC {
             .print(self.lang().kw_semicolon, SyntaxHighlight::NoColor);
         // (kuna warnstyle, DIV-39) condition-attached warnings land at the end of
         // the assignment line.
+        self.flush_eol_warnings();
+
+        if my_pending_indent >= 0 {
+            self.emit
+                .close_brace_indent(self.lang().kw_close_curly, my_pending_indent);
+        }
+        self.context.pop_mod();
+    }
+
+    /// (kuna `boolreturn`) Emit an `if` whose arms only return `1` and `0` as
+    /// `return ( cond );`, or `return !( cond );` when the body returns `0`. The
+    /// condition goes through the same `ONLY_BRANCH` render as the `if` header, and the
+    /// pending-brace and comment handling mirror [`emit_block_if_bool`].
+    fn emit_block_if_return(
+        &mut self,
+        fd: &Funcdata,
+        arch: &Architecture,
+        cond_block: BlockId,
+        ret_op: OpId,
+        negate: bool,
+    ) {
+        use crate::prettyprint::Emit;
+
+        let mut registered_pending = false;
+        let mut my_pending_gen = 0u64;
+        if self.context.is_set(modifiers::PENDING_BRACE) {
+            self.emit
+                .set_pending_brace(self.output_brace(self.options.brace_ifelse));
+            my_pending_gen = self.emit.pending_reg_gen();
+            registered_pending = true;
+        }
+        self.context.push_mod();
+        self.context
+            .unset_mod(modifiers::NO_BRANCH | modifiers::ONLY_BRANCH | modifiers::PENDING_BRACE);
+
+        self.context.push_mod();
+        self.context.set_mod(modifiers::NO_BRANCH);
+        self.emit_block(fd, arch, cond_block);
+        self.context.pop_mod();
+        self.emit_comment_block_tree(fd, cond_block);
+
+        self.emit.tag_line();
+        let mut my_pending_indent = -1;
+        if registered_pending {
+            my_pending_indent = self.emit.pending_fired_indent(my_pending_gen);
+        }
+
+        let stmt_markup = self.op_markup(fd, ret_op);
+        let sid = self.emit.begin_statement(&stmt_markup);
+        self.emit.tag_op(
+            self.lang().kw_return,
+            SyntaxHighlight::KeywordColor,
+            &stmt_markup,
+        );
+        self.emit.spaces(1, 0);
+        if negate {
+            self.emit.tag_op(
+                tokens::BOOLEAN_NOT.print1,
+                SyntaxHighlight::NoColor,
+                &MarkupRef::none(),
+            );
+        }
+        self.context.push_mod();
+        self.context.set_mod(modifiers::ONLY_BRANCH);
+        self.emit_block(fd, arch, cond_block);
+        self.context.pop_mod();
+        self.emit.end_statement(sid);
+        self.emit
+            .print(self.lang().kw_semicolon, SyntaxHighlight::NoColor);
         self.flush_eol_warnings();
 
         if my_pending_indent >= 0 {
@@ -6892,7 +7006,7 @@ impl PrintC {
             let list = fd.sblocks_ref().block(inner).get_list().to_vec();
             self.emit_block_list(fd, arch, inner, &list[skip..]);
         } else {
-            self.emit_block(fd, arch, inner);
+            self.emit_part(fd, arch, blk, 0);
         }
         self.context.pop_mod();
         if self.goto_rewrites.silent.contains(&blk) {
@@ -6967,7 +7081,7 @@ impl PrintC {
         self.flush_eol_warnings();
         self.context.set_mod(modifiers::NO_BRANCH); // Don't print goto at bottom of clause
         let id2 = self.emit.begin_block(0);
-        self.emit_block(fd, arch, fd.sblocks_ref().block(blk).get_block(1));
+        self.emit_part(fd, arch, blk, 1);
         self.emit.end_block(id2);
         self.emit
             .close_brace_indent(self.lang().kw_close_curly, indent);
@@ -7070,7 +7184,7 @@ impl PrintC {
         }
         self.context.set_mod(modifiers::NO_BRANCH); // don't print goto at bottom of clause
         let id2 = self.emit.begin_block(0);
-        self.emit_block(fd, arch, fd.sblocks_ref().block(blk).get_block(1));
+        self.emit_part(fd, arch, blk, 1);
         self.emit.end_block(id2);
         self.emit
             .close_brace_indent(self.lang().kw_close_curly, indent);
@@ -7115,7 +7229,7 @@ impl PrintC {
         self.context.push_mod();
         let id2 = self.emit.begin_block(0);
         self.context.set_mod(modifiers::NO_BRANCH);
-        self.emit_block(fd, arch, body);
+        self.emit_part(fd, arch, blk, 0);
         self.emit.end_block(id2);
         self.context.pop_mod();
         self.emit.close_brace_indent(self.lang().kw_close_curly, id);
@@ -7162,7 +7276,7 @@ impl PrintC {
         self.flush_eol_warnings();
         self.context.set_mod(modifiers::NO_BRANCH);
         let id2 = self.emit.begin_block(0);
-        self.emit_block(fd, arch, body);
+        self.emit_part(fd, arch, blk, 0);
         self.emit.end_block(id2);
         self.emit.close_brace_indent(self.lang().kw_close_curly, id);
         self.context.pop_mod();
@@ -7197,9 +7311,8 @@ impl PrintC {
             self.lang().kw_open_curly,
             self.output_brace(self.options.brace_loop),
         );
-        let body = fd.sblocks_ref().block(blk).get_block(0);
         let id1 = self.emit.begin_block(0);
-        self.emit_block(fd, arch, body);
+        self.emit_part(fd, arch, blk, 0);
         self.emit.end_block(id1);
         self.emit.close_brace_indent(self.lang().kw_close_curly, id);
         if !self.options.inf_loop_top {
@@ -7277,6 +7390,19 @@ impl PrintC {
         bb: BlockId,
         bblocks: bool,
     ) {
+        self.emit_basic_block_ops_in(fd, arch, bb, bblocks, None);
+    }
+
+    /// [`emit_basic_block_ops`](Self::emit_basic_block_ops) over `ops` when given (a leaf of
+    /// the C syntax tree at `statements`), else over the block's own op list.
+    fn emit_basic_block_ops_in(
+        &mut self,
+        fd: &Funcdata,
+        arch: &Architecture,
+        bb: BlockId,
+        bblocks: bool,
+        ops: Option<&[OpId]>,
+    ) {
         // commsorter.setupBlockList(bb) (printc.cc:2833): the comment walk window
         // for this basic block.  The index is the *bblocks* BlockBasic's index
         // (the sblocks node is a BlockCopy mirror, so resolve through `copy`).
@@ -7301,16 +7427,23 @@ impl PrintC {
             return;
         }
         let mut separator = false;
-        let mut cur = if bblocks {
-            fd.bb_op_head(bb)
-        } else {
-            sblocks_basic_head(fd, bb)
+        let mut at = 0usize;
+        let mut cur = match ops {
+            Some(list) => list.first().copied(),
+            None if bblocks => fd.bb_op_head(bb),
+            None => sblocks_basic_head(fd, bb),
         };
         while let Some(inst) = cur {
             if crate::kuna_budget::deadline_passed_in("rendering C") {
                 break;
             }
-            cur = fd.bb_op_next(inst);
+            cur = match ops {
+                Some(list) => {
+                    at += 1;
+                    list.get(at).copied()
+                }
+                None => fd.bb_op_next(inst),
+            };
             let o = match fd.obank().get(inst) {
                 Some(o) => o,
                 None => continue,
@@ -7361,7 +7494,13 @@ impl PrintC {
                 self.emit.tag_line();
             }
             if let Some(last) = self.emit_rust_array_init(fd, arch, inst) {
-                cur = fd.bb_op_next(last);
+                cur = match ops {
+                    Some(list) => list.iter().position(|&op| op == last).and_then(|p| {
+                        at = p + 1;
+                        list.get(at).copied()
+                    }),
+                    None => fd.bb_op_next(last),
+                };
             } else {
                 self.emit_statement(fd, arch, inst);
             }
@@ -17233,6 +17372,7 @@ fn to_emit_hl(hl: crate::printlanguage::SyntaxHighlight) -> SyntaxHighlight {
 }
 
 mod kuna_cpoolprint;
+mod kuna_ctreeprint;
 mod kuna_javatryprint;
 
 #[path = "kuna_rustarrayinit.rs"]

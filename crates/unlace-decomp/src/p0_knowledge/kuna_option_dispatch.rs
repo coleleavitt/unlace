@@ -637,6 +637,8 @@ kuna_options! { self, p1;
     "swiftruntime" => registered!(crate::kuna_analysisgates::Swiftruntime),
     "typelib" => registered!(crate::kuna_typelib::TypeLib),
     "pdb" => registered!(crate::kuna_analysisgates::Pdb),
+    "ctree" => registered!(crate::kuna_ctree::Ctree),
+    "boolreturn" => registered!(crate::kuna_ctree::Boolreturn),
     "macho-arm64e" => {
         let (val, msg) = <crate::kuna_macho_arm64e::MachoArm64e as crate::kuna_optionset::KunaOption>::parse(p1)?;
         self.load_options_mut().macho_arm64e = val.0;

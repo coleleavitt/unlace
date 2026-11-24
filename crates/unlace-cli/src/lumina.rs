@@ -50,7 +50,7 @@ fn usage() {
          \x20      unlace lumina pull  <binary> --server HOST:PORT [--tls] [--tls-ca PEM] [--tls-server-name N]\n\
          \x20                          [--user U] [--password-file F] [--license-file F] [--license-id HEX12]\n\
          \x20                          [--protocol N] [--timeout SECS] [--addr A].. [--define-out FILE]\n\
-         \x20                          [--assert-out FILE] [--rename-named] [--json]\n\
+         \x20                          [--assert-out FILE] [--project FILE] [--rename-named] [--json]\n\
          \x20      unlace lumina push  <binary> --server HOST:PORT [same network flags] [--addr A]..\n\
          \x20                          [--mode override-if-better|override|keep|merge] [--hostname H] [--dry-run] [--json]\n\
          \x20      unlace lumina serve --db FILE [--bind ADDR (default {DEFAULT_BIND})] [--tls-cert PEM --tls-key PEM] [--json]\n\
@@ -60,7 +60,8 @@ fn usage() {
          hash computes the keys offline. pull asks a server for them and reports names, prototypes and\n\
          comments; --define-out writes the names as a --define-function file (only for functions the\n\
          binary leaves unnamed, unless --rename-named) and --assert-out the prototypes as --assert\n\
-         'prototype NAME DECL' lines; pass those files to decompile/decompile-all to apply them.\n\
+         'prototype NAME DECL' lines; pass those files to decompile/decompile-all to apply them, or\n\
+         --project FILE stores the same directives in an 'unlace project' file bound to the binary.\n\
          push sends the binary's named functions; serve runs a server over a sqlite database (open to\n\
          anyone until --add-user provisions a login; then every client must log in).\n\
          Only pull, push and serve use the network, and only the server named. --server, --user,\n\
@@ -94,6 +95,7 @@ struct Args {
     net: Net,
     define_out: Option<String>,
     assert_out: Option<String>,
+    project: Option<String>,
     rename_named: bool,
     dry_run: bool,
     mode: Option<u32>,
@@ -213,6 +215,7 @@ fn parse(sub: &str, argv: &[String]) -> Result<Args, String> {
             }
             "--define-out" if sub == "pull" => a.define_out = Some(take_value(argv, &mut i, tok)?),
             "--assert-out" if sub == "pull" => a.assert_out = Some(take_value(argv, &mut i, tok)?),
+            "--project" if sub == "pull" => a.project = Some(take_value(argv, &mut i, tok)?),
             "--rename-named" if sub == "pull" => a.rename_named = true,
             "--dry-run" if sub == "push" => a.dry_run = true,
             "--mode" if sub == "push" => {
@@ -491,6 +494,7 @@ fn cmd_pull(args: &Args) -> Result<i32, String> {
         &session.server,
         &matches,
     )?;
+    let stored = write_project(args.project.as_deref(), binary, &matches)?;
 
     if args.json {
         let rows: Vec<Value> = matches
@@ -536,6 +540,8 @@ fn cmd_pull(args: &Args) -> Result<i32, String> {
             "assert_out": args.assert_out,
             "renames_written": renames,
             "prototypes_written": prototypes,
+            "project": args.project,
+            "project_directives": stored,
         })));
     }
     let mut text = String::new();
@@ -604,6 +610,40 @@ fn write_assert_file(
     }
     std::fs::write(path, text).map_err(|e| format!("--assert-out {path}: {e}"))?;
     Ok(n)
+}
+
+/// The directives a pull applies: a `function` entry per rename, a `prototype` per declaration.
+fn pulled_directives(matches: &[Match]) -> Vec<String> {
+    let mut out: Vec<String> = matches
+        .iter()
+        .filter(|m| m.rename)
+        .map(|m| {
+            unlace_project::directive::function_directive(m.entry, None, Some(m.name.as_str()))
+        })
+        .collect();
+    for m in matches.iter().filter(|m| m.declare) {
+        let name = if m.rename { &m.name } else { &m.current };
+        if let Some(p) = &m.prototype {
+            out.push(format!("prototype {name} {p}"));
+        }
+    }
+    out
+}
+
+/// Store the pulled names and prototypes in a project file bound to `binary`; the number stored.
+fn write_project(path: Option<&str>, binary: &str, matches: &[Match]) -> Result<usize, String> {
+    let Some(path) = path else { return Ok(0) };
+    let mut project = unlace_project::Project::open(std::path::Path::new(path))
+        .map_err(|e| format!("--project {path}: {e}"))?;
+    let live = unlace_project::BinaryIdentity::of_file(std::path::Path::new(binary))
+        .map_err(|e| format!("{binary}: {e}"))?;
+    project
+        .check_binary(&live)
+        .map_err(|e| format!("--project {path}: {e}"))?;
+    let directives = pulled_directives(matches);
+    project
+        .set_all(directives.iter().map(String::as_str))
+        .map_err(|e| format!("--project {path}: {e}"))
 }
 
 fn result_name(r: Option<i32>) -> &'static str {
@@ -836,6 +876,49 @@ mod tests {
         assert!(!writable_name("operator new"));
         assert!(!writable_name("a#b"));
         assert!(!writable_name(""));
+    }
+
+    fn hit(name: &str, named: bool, rename: bool, prototype: Option<&str>) -> Match {
+        Match {
+            entry: 0x401000,
+            current: if named {
+                "kept".into()
+            } else {
+                "sub_401000".into()
+            },
+            named,
+            size: 16,
+            hash: [0; 16],
+            name: name.into(),
+            remote_size: 16,
+            popularity: 1,
+            prototype: prototype.map(str::to_string),
+            calling_convention: None,
+            comment: None,
+            repeatable_comment: None,
+            metadata_keys: Vec::new(),
+            metadata_malformed: false,
+            rename,
+            declare: prototype.is_some(),
+        }
+    }
+
+    #[test]
+    fn pulled_directives_name_then_declare() {
+        let matches = [
+            hit("parse", false, true, Some("int parse(char *buf)")),
+            hit("other", true, false, Some("void kept(void)")),
+            hit("bare", false, true, None),
+        ];
+        assert_eq!(
+            pulled_directives(&matches),
+            vec![
+                "function 0x401000=parse".to_string(),
+                "function 0x401000=bare".to_string(),
+                "prototype parse int parse(char *buf)".to_string(),
+                "prototype kept void kept(void)".to_string(),
+            ]
+        );
     }
 
     #[test]

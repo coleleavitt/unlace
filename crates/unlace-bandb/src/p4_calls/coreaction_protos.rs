@@ -2387,7 +2387,7 @@ impl Action for ActionInputPrototype {
             // here so the trial Varnodes (`&mut Funcdata`) can be read.  The
             // recovery path is high-on (HighVariables assigned), so the typed form
             // runs; the no-types form pins each input to `getBase(size,UNKNOWN)`.
-            if data.is_high_on() {
+            if data.is_settled(crate::kuna_maturity::Fact::HighVariables) {
                 update_input_types(data, &triallist, &mut active);
             } else {
                 update_input_no_types(data, &triallist, &mut active);

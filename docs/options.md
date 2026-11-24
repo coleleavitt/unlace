@@ -582,6 +582,8 @@ Three tiers:
 | a call to a function that returns a struct prints with no arguments, e.g. mk();, and the next call takes the wrong local | [`spsolve`](#spsolve----on--off-default-on-destructive-opt-in) |
 | code after a call to an abort or assert-failure helper is merged into the other branch with a v = &Stack... assignment | [`spsolve`](#spsolve----on--off-default-on-destructive-opt-in) |
 | a parameter read after a call through a function pointer prints as an unassigned local | [`spsolve`](#spsolve----on--off-default-on-destructive-opt-in) |
+| if (c) { return 1; } else { return 0; } where the source returns the comparison | [`boolreturn`](#boolreturn----on--off-default-off) |
+| a predicate function prints as an if/else of two constant returns | [`boolreturn`](#boolreturn----on--off-default-off) |
 | rule pools spend most of their time re-testing ops nothing changed | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a large function's simplification repeats full sweeps for a handful of rewrites | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a DOS program's globals print as *(short *)0x308e near-pointer dereferences instead of named globals | [`mzdgroup`](#mzdgroup----on--off-default-on) |
@@ -1225,6 +1227,8 @@ Three tiers:
 | many case labels that only goto the code default: runs | [`switchmerge`](#switchmerge----on--off-default-on) |
 | one source switch printed as several nested switches | [`switchmerge`](#switchmerge----on--off-default-on) |
 | case N: goto label_X; next to default: label_X: | [`switchmerge`](#switchmerge----on--off-default-on) |
+| output printed with option ctree on differs from the same function printed with it off | [`ctree`](#ctree----on--off-default-off) |
+| a C-level cleanup needs the printed statement tree rather than the structured block graph | [`ctree`](#ctree----on--off-default-off) |
 
 ## Toggleable transforms
 
@@ -2502,6 +2506,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P4/extrapop · kuna · new-analysis · kuna-spsolve
 - **Example:** `option spsolve off`
 
+### `boolreturn` -- on | off, default `off`
+
+- **Symptoms:** if (c) { return 1; } else { return 0; } where the source returns the comparison; a predicate function prints as an if/else of two constant returns.
+- **What it does:** C output only: print an if/else whose body and else each print one statement, `return 1;` and `return 0;` in either order, as the one statement `return (cond);`, or `return !(cond);` when the body returns 0. Each arm must be a basic-block leaf with no label line and no comment whose only printed statement is a RETURN of the constant 0 or 1; the condition prints through the same render as the if header, and the statements in front of the test print above it as before. A rewrite of the C syntax tree (`docs/architecture/ctree.md`): turning it on builds the tree for every printed function, as `option ctree on` does.
+- **When to flip:** Turn on when the source likely returned a comparison directly (predicates, `is_x` helpers, comparison callbacks), which compilers lower to two constant returns. Leave off to keep the if/else the binary literally has: the same object code comes from a source that wrote the if/else.
+- **Where / provenance:** P9/condition-form · kuna · structure-recovery · kuna-boolreturn
+- **Example:** `option boolreturn on`
+
 ## Analysis & loader passes
 
 Program-prep enablement: what is discovered, decoded, and named before any function is decompiled.
@@ -2550,7 +2562,7 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 
 - **Symptoms:** a call into libc that no table declares passes untyped arguments and its result needs a cast; a struct pollfd, rlimit, sockaddr_in or glob_t on the stack is several unrelated locals; a local is read after a libc call without ever being written; qsort, signal, lseek or pthread_create is declared `void f(void)` in the import stubs; a libc struct pointer argument is an unsigned long *.
 - **What it does:** On an x86-64 Linux ELF dynamically linked against glibc or musl, declare the libc imports no other source declared from a prebuilt type library; inert on every other target. The built-in prototype tables (`libproto`, `libcsigs`, `libctypes`) are written by hand and cover about 740 functions and nine record layouts; the library is generated from the musl 1.2.6 headers (MIT) by `scripts/typelib/gen_musl.py` and carries 1,447 functions, 347 records and 190 typedefs, each record with the size, alignment and member offsets the compiler measured. `auto` reads the library built into kuna, `off` reads none, and a path reads a library file instead (same text format, for an image of the target the file names). Only what the image imports is read: a prototype is parsed when its function is an import nothing else declared, and that interns the types it names and no others. A type name already held (debug information, a `libctypes` shell) is used as it is. For a glibc image an entry is offered only where glibc agrees with musl, which the generator measures by compiling one assertion per entry against the glibc headers (glibc 2.43: 136 names differ, 1,374 of the 1,447 functions are offered); a prototype passing a `long double` by value is never offered. `poll(&v1,1,a1)` over three unrelated locals becomes one `pollfd v1` with `v1.events = 1; v1.fd = a0;` and `return v1.revents & 1;`, `getrlimit(7,&v2)` over an `unsigned long` becomes `rlimit v5` with `v5.rlim_cur = v5.rlim_max;`, and `qsort`, `signal`, `glob`, `pthread_create`, `posix_spawnp` and `lseek` print their declared parameters.
-- **When to flip:** Auto (default). Measured on glibc 2.43 `-O2` binaries with `decompile-all`: coreutils `ls` changes 14 of 442 functions, `sort` 31 of 399 and `curl` 19 of 440 (the import stubs the library declares and the callers of those imports), every other function is byte-identical, and the cost is 1.8 ms to parse the library plus under 1 ms to read the declarations of curl's imports, below the run-to-run noise of the whole decompile. The tables already declare the most common functions, so what moves is the long tail: `poll`, `getsockname`, `lseek`, `ftruncate`, `time`, `posix_spawn*`, `pthread_create`, `mbrtoc32`. Turn off (`option typelib off`) to see the output without it, when a `--types` header must define a record the library also defines (a header's redefinition is rejected, as any redefinition is), or when a caller is worse for a typed callee: a pointer parameter naming a record sizes the stack object whose address is passed, so a caller that passes the address of something else there prints that object as the record, and an `int` result returned through a function whose own return is recovered as the whole register prints the unset half (`CONCAT44(v3,getrlimit(7,&v5))`). Pass a path to use declarations of your own for a C library the built-in one does not cover; a file that is not a library is refused, and a malformed entry is reported with its line.
+- **When to flip:** Auto (default). Measured on glibc 2.43 `-O2` binaries with `decompile-all`: coreutils `ls` changes 14 of 442 functions, `sort` 31 of 399 and `curl` 19 of 440 (the import stubs the library declares and the callers of those imports), every other function is byte-identical, and the cost is 1.8 ms to parse the library plus under 1 ms to read the declarations of curl's imports, below the run-to-run noise of the whole decompile. The tables already declare the most common functions, so what moves is the long tail: `poll`, `getsockname`, `lseek`, `ftruncate`, `time`, `posix_spawn*`, `pthread_create`, `mbrtoc32`. Turn off (`option typelib off`) to see the output without it, when a `--types` header must define a record the library also defines (a header's redefinition is rejected, as any redefinition is), or when a caller is worse for a typed callee: a pointer parameter naming a record sizes the stack object whose address is passed, so a caller that passes the address of something else there prints that object as the record, and an `int` result returned through a function whose own return is recovered as the whole register prints the unset half (`CONCAT44(v3,getrlimit(7,&v5))`). Pass a path to use declarations of your own for a C library the built-in one does not cover; a file that is not a library is refused, and a malformed entry is reported with its line. Pass an IDA type library (a `.til` file) the same way to declare the imports of an image of any target from it: its prototypes, records (laid out from their members, bit-fields left holes), enums and typedefs are read like a library file's.
 - **Where / provenance:** P1/external-refinement · kuna · analysis-enablement · kuna-typelib
 - **Example:** `option typelib off`
 
@@ -3837,6 +3849,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **When to flip:** On by default: 0/675 datatest assertions move. Flip off to print each jump table as its own switch and every hole as a `case` label, for example to read the table layout the compiler emitted.
 - **Where / provenance:** P8/goto-quality · kuna · presentation-default · kuna-switchmerge
 - **Example:** `option switchmerge off`
+
+### `ctree` -- on | off, default `off`
+
+- **Symptoms:** output printed with option ctree on differs from the same function printed with it off; a C-level cleanup needs the printed statement tree rather than the structured block graph.
+- **What it does:** Print the function body through its C syntax tree (`docs/architecture/ctree.md`): a statement tree built from the final structured block tree after structuring, one statement per structured block, with its own maturity (`built` here). The root's statements, the statements of a `BlockGraph`, the basic-block leaves and the arms of an `if` print from the tree; every other statement prints from its block as before, and its children come back through the tree. Built and walked per printed function, never in flat printing. With the option on the output is meant to be byte-identical to the block printer's; a difference is a bug in the tree path.
+- **When to flip:** Leave it off. Turn it on to check the tree printer against the block printer on a binary (nothing should change), or while moving a C-level cleanup into the tree. It is a migration switch: once the tree path is the only printer, the option goes away.
+- **Where / provenance:** P9/brace-form · kuna · opt-in-tool · kuna-ctree
+- **Example:** `option ctree on`
 
 ## Programmatic use
 

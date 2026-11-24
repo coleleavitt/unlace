@@ -25,7 +25,7 @@ use unlace_analysis::loader::macho_fat::SlicePref;
 use unlace_base::address::Address;
 use unlace_console::engine::{
     ArmIsa, ConsoleProgram, EntryLookupError, EntrySelector, FunctionEntry, ObjectLocation,
-    bootstrap_from_image_with_isa, bootstrap_from_raw,
+    bootstrap_from_image_with_isa, bootstrap_from_raw, bootstrap_from_raw_segments,
 };
 // The decompile loop + result shape live in the shared decompile-project core
 // (`unlace_console::project` — also reused by the `unlace_wasm` front-end).
@@ -1367,12 +1367,11 @@ fn run_summary(args: &Args, filters: &Filters) -> i32 {
     };
     let loaded = match request {
         Some(request) => {
-            load_program_with_rust_profiles(args, DriverDefaults::Functions, Some(request)).map(
-                |prog| {
+            load_program_with_rust_profiles(args, DriverDefaults::Functions, Some(request), None)
+                .map(|prog| {
                     let all = prog.function_entries_canonical();
                     (prog, all)
-                },
-            )
+                })
         }
         None => list_functions(args),
     };
@@ -1600,9 +1599,23 @@ pub(crate) fn decompile_entries(
     pointer_arguments: bool,
     tail_callees: bool,
 ) -> Vec<FuncResult> {
+    decompile_entries_with(prog, args, targets, pointer_arguments, tail_callees, false)
+}
+
+/// [`decompile_entries`], also capturing each function's prototype line when
+/// `want_proto` (the embedding API reports it beside the body).
+pub(crate) fn decompile_entries_with(
+    prog: &mut ConsoleProgram,
+    args: &Args,
+    targets: Vec<FunctionEntry>,
+    pointer_arguments: bool,
+    tail_callees: bool,
+    want_proto: bool,
+) -> Vec<FuncResult> {
     arm_fn_budgets(prog, args);
     let opts = DecompileOptions {
         no_vars: args.no_vars,
+        want_proto,
         want_provenance: args.wants_provenance(),
         single_target: targets.len() == 1,
         want_pointer_arguments: pointer_arguments,
@@ -1909,13 +1922,28 @@ pub(crate) fn load_program(
             crate::rust_signatures::load(std::path::Path::new(path)).map(|(request, _)| request)
         })
         .transpose()?;
-    load_program_with_rust_profiles(args, defaults, request)
+    load_program_with_rust_profiles(args, defaults, request, None)
+}
+
+/// [`load_program`] over disjoint runs of bytes an embedding caller already
+/// holds, each `(address, bytes, flags)`, in place of `args.binary`'s bytes.
+/// `args` must be a raw-image parse; its file still sizes the `auto` mode.
+pub(crate) fn load_program_segments(
+    args: &Args,
+    defaults: DriverDefaults,
+    runs: Vec<(u64, Vec<u8>, u32)>,
+) -> Result<ConsoleProgram, String> {
+    if !args.raw_image {
+        return Err("segments load only as a raw image".to_string());
+    }
+    load_program_with_rust_profiles(args, defaults, None, Some(runs))
 }
 
 fn load_program_with_rust_profiles(
     args: &Args,
     defaults: DriverDefaults,
     request: Option<unlace_analysis::flirt::kuna_rustprofiles::Request>,
+    segments: Option<Vec<(u64, Vec<u8>, u32)>>,
 ) -> Result<ConsoleProgram, String> {
     let binary = std::fs::canonicalize(&args.binary)
         .map_err(|_| format!("binary not found: {}", args.binary))?
@@ -1956,14 +1984,19 @@ fn load_program_with_rust_profiles(
                 _ => None,
             })
             .collect();
-        bootstrap_from_raw(
-            &binary,
-            target,
-            args.base.expect("raw parser requires --base"),
-            &entries,
-            args.isa,
-            &spec_roots,
-        )
+        match segments {
+            Some(runs) => {
+                bootstrap_from_raw_segments(&binary, target, runs, &entries, args.isa, &spec_roots)
+            }
+            None => bootstrap_from_raw(
+                &binary,
+                target,
+                args.base.expect("raw parser requires --base"),
+                &entries,
+                args.isa,
+                &spec_roots,
+            ),
+        }
     } else {
         bootstrap_from_image_with_isa(&binary, target, &spec_roots, args.isa)
     }
@@ -3326,6 +3359,7 @@ pub(crate) fn parse_args_with_filters(
     let mut func_decls: Vec<crate::funcdecl::FuncDecl> = Vec::new();
     let mut assertions: Vec<unlace_console::assertions::Directive> = Vec::new();
     let mut assert_strict = false;
+    let mut project_file: Option<String> = None;
     let mut types: Vec<String> = Vec::new();
     let mut types_cpp: Option<String> = None;
     let mut mode: Option<String> = None;
@@ -3405,6 +3439,7 @@ pub(crate) fn parse_args_with_filters(
                 assertions.extend(crate::assertdecl::parse_flag(&v)?);
             }
             "--assert-strict" => assert_strict = true,
+            "--project" => project_file = Some(take(argv, &mut i, "--project")?),
             "--types" => types.push(take(argv, &mut i, "--types")?),
             "--types-cpp" => types_cpp = Some(take(argv, &mut i, "--types-cpp")?),
             "--jobs" if jobs_flag => {
@@ -3535,6 +3570,15 @@ pub(crate) fn parse_args_with_filters(
     }
 
     let binary = binary.ok_or_else(|| format!("{cmd} requires <binary>"))?;
+    // `--project`: its overrides come first, so a command-line --assert still wins.
+    if let Some(project) = &project_file {
+        let mut stored = Vec::new();
+        for directive in crate::project::directives_for(project, &binary)? {
+            stored.extend(crate::assertdecl::parse_flag(&directive)?);
+        }
+        stored.append(&mut assertions);
+        assertions = stored;
+    }
     let assertions = crate::assertdecl::with_types(&types, types_cpp.as_deref(), assertions)?;
     if filters.rust_signature_manifest.is_some() {
         if apply_rust_signatures.is_some() {
@@ -3784,7 +3828,7 @@ fn parse_entry_selector(s: &str) -> Result<EntrySelector, String> {
 
 fn usage_decompile_all() {
     eprintln!(
-        "usage: unlace decompile-all <binary> [--json] [--functions a,b,..] [--addr 0xVMA].. \\\n\
+        "usage: unlace decompile-all <binary> [--json] [--project FILE] [--functions a,b,..] [--addr 0xVMA].. \\\n\
          \x20                   [--no-vars] [--omit aliases,line_mappings,variables,types] \\\n\
          \x20                   [--max-fn-seconds N] [--max-fn-memory MiB] \\\n\
          \x20                   [--mode auto|reliable|aggressive|fast] \\\n\

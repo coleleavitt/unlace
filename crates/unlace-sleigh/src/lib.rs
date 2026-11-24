@@ -13,6 +13,7 @@ pub mod kuna_ctxsnapshot;
 mod kuna_expressionplan;
 mod kuna_handleview;
 mod kuna_instructionbytes;
+pub mod kuna_lazytemplates;
 pub mod kuna_sharedbytes;
 pub mod loadimage;
 pub mod loadimage_xml;

@@ -131,7 +131,7 @@ sources, or with no `.slaspec` at all (a release tree), is used as is.
 | `KUNA_SPECS` | The SLEIGH tree passed as `-sleighpath` (`SLEIGHHOME` is the engine's own name for the same thing). Wins over a built-in tree. |
 | `KUNA_DECOMP_DBG` | A separate `decomp_dbg` binary to run instead of the built-in console; a non-empty value also makes `catalog` query that build. `--decomp-dbg PATH` does the same for one `decompile` or `catalog` run, and wins over the variable. |
 | `UNLACE_SLA_CACHE` | Where compiled `.sla` images are cached (default `$XDG_CACHE_HOME/unlace/sla`, else `~/.cache/unlace/sla`). Content-addressed by the sources and the compiler; safe to delete. |
-| `UNLACE_SLA_RAW` | `0` loads the compressed `.sla` itself instead of its uncompressed copy (`.slr`, kept in the `.sla` cache so only the first process inflates an image). For A/B timing; the output is the same either way. |
+| `UNLACE_SLA_LAZY` | `0` decodes every constructor's p-code template when the `.sla` loads, instead of on its first use. For A/B timing; the output is the same either way. |
 | `KUNA_SLACOMP` | A separate `slacomp` binary for `unlace specs` to run instead of the built-in compiler. |
 | `KUNA_ROOT` | The repo root, when the binaries are not in-tree: `specs/` is read from it. |
 | `KUNA_DECODE_JOBS` | Decode lanes for the discovery walk, without `--jobs` — what `--jobs N` exports for the duration of the load (capped at 32, forced to `1` in pool workers). |
@@ -233,6 +233,12 @@ flag, and exit 1 instead of spinning on.
 selection: `--no-vars` and `--omit aliases,line_mappings,variables,types` behave as they
 do there. Without `--json` both are refused, since the C text carries none of
 those collections.
+
+`--trace` adds, on stderr after the C, the `phase status` dump for the decompiled
+function: the pipeline variant, and the maturity its last pass reached with the facts
+settled there (`maturity: complete (settled: ssa, high-variables, flow, ...)`, see
+`docs/spec/00-overview.md` §0.10). Stdout is unchanged; `--trace` is refused with
+`--json`, whose record keys stay as they are.
 
 An option **name** is checked before anything is loaded, on every surface that takes
 `--option`, and an unrecognized one exits 2 rather than running as if it had not been
@@ -1180,6 +1186,16 @@ or an `--assert`'s declaration of it. A record the library already defined is
 not redefined by a header: that definition is rejected with the usual warning,
 so pass `--option typelib off` when your header's layout must win.
 
+**IDA type libraries.** `--option typelib <file.til>` reads an IDA type library
+(`gnulnx_x64.til`, `mssdk64_win10.til`, one exported from your own database) the
+same way, on an image of any target: its function prototypes declare the
+imports nothing else declared, and its records, enums and typedefs come with
+them. Records are laid out from their members' sizes (a `.til` records no
+offsets); a bit-field is a hole. A type the library leaves to a base library it
+depends on is not available, so the entries that name it are skipped; pass the
+library that defines it instead. A file is told apart from a text library by its
+`IDATIL` header.
+
 The text must be preprocessed C. kuna runs no preprocessor on its own: it skips
 `#` lines, so a header that needs its macros or its `#include`s expanded leaves
 declarations that do not parse. **`--types-cpp <cc>`** runs your preprocessor
@@ -2116,7 +2132,7 @@ images, incomplete or ambiguous profiles, and absent bank agreement are errors.
 flag. It rejects archive inputs before member listing, selection or fan-out, as
 well as byte overlays, raw images, slice/target/ISA/image-selection changes, `--jobs` values other than `1`, and batch/project/graph commands. Single
 function application uses the in-process engine for text and JSON and rejects
-`--raw`, `--regions`, `--kassert`, `--decomp-dbg`, and `--engine`.
+`--raw`, `--regions`, `--trace`, `--kassert`, `--decomp-dbg`, and `--engine`.
 
 ```json
 {"binary":"…","count":1150,"total":1150,"error":null,"warnings":[],
@@ -4099,6 +4115,78 @@ unparseable binary, an unknown `--section`, or an `--extract` directory that
 cannot be written is exit `1` with the reason on stderr; a malformed command
 line is exit `2` with the usage block.
 
+## `unlace sbom` — a software bill of materials
+
+```bash
+unlace sbom ./app                                  # one line per component
+unlace sbom ./app --json                           # CycloneDX 1.5 JSON
+unlace sbom ./app --json --format spdx             # SPDX 2.3 JSON
+unlace sbom ./app.dylib --slice arm64 -o app.cdx.json
+```
+
+Lists the components a binary records about itself, read straight off the
+image (no load into the engine, no processor spec):
+
+| `kind` | found from |
+|---|---|
+| `shared-library` | ELF `DT_NEEDED` (with `unlace:requires`, the highest `.gnu.version_r` version needed, e.g. `GLIBC_2.34`); Mach-O `LC_LOAD_DYLIB`, `LC_LOAD_WEAK_DYLIB`, `LC_REEXPORT_DYLIB`, `LC_LAZY_LOAD_DYLIB`, `LC_LOAD_UPWARD_DYLIB` (current version as the version, compatibility version as a property); PE imports |
+| `go-module` | the Go build info's `dep` lines (go1.18+ inline form), a `=>` replacement taking the dependency's place (`unlace:go-replaces` keeps the original), `unlace:go-sum` the module hash |
+| `rust-crate` | cargo-auditable's `.dep-v0` section, and the registry source paths panics and debug info carry (`.../registry/src/<index>/<crate>-<version>/...`) |
+| `embedded` | version banners of libraries linked in: OpenSSL, LibreSSL, BoringSSL, Mbed TLS, wolfSSL, zlib, libpng, libjpeg-turbo, libcurl, glibc, BusyBox, Lua, expat, OpenSSH, Dropbear, SQLite, PCRE2, liblzma, libxml2 |
+
+The binary itself is the document's subject: its SHA-256, format,
+architecture, role (`application`, or `library` for a shared object), entry,
+detected compiler, build identity (ELF build-id, Mach-O UUID, install name and
+source version, PE CodeView GUID/age/PDB path, Go build settings), toolchain
+records (ELF `.comment`, Go toolchain version, Mach-O `LC_BUILD_VERSION`
+platform, SDK and tools) and PE version-resource strings (`ProductName`,
+`FileVersion`, ..., plus the fixed file and product versions). Its version is
+the Go main module's or cargo-auditable root package's, else the PE
+`ProductVersion` or `FileVersion`; its purl is the module's.
+
+A component seen by two readers (a crate in both `.dep-v0` and a source path)
+is listed once, with both evidences. Nothing is inferred from function bodies:
+a statically linked library with no banner and no metadata is not listed.
+
+### Output
+
+```
+# fauxware sha256=... format=elf arch=x86_64 role=application compiler=gcc
+# toolchain GCC: (Ubuntu/Linaro 4.6.3-1ubuntu5) 4.6.3
+# kind	name	version	evidence
+shared-library	libc.so.6	-	DT_NEEDED
+```
+
+`--json` (or `-o FILE`, which writes it to the file) emits a CycloneDX 1.5
+document, an object:
+
+```json
+{"bomFormat": "CycloneDX", "specVersion": "1.5", "serialNumber": "urn:uuid:...", "version": 1,
+ "metadata": {"timestamp", "tools": {"components": [{"type","name":"unlace","version"}]},
+              "component": {"type","bom-ref":"binary","name","version"?,"purl"?,
+                            "hashes": [{"alg":"SHA-256","content"}], "properties": [{"name","value"}]}},
+ "components": [{"type":"library","bom-ref","name","version"?,"purl"?,"scope":"required",
+                 "properties": [{"name":"unlace:kind"},{"name":"unlace:evidence"},...]}],
+ "dependencies": [{"ref":"binary","dependsOn":[bom-ref...]}]}
+```
+
+`--format spdx` emits SPDX 2.3: `{spdxVersion,dataLicense,SPDXID,name,documentNamespace,
+creationInfo,packages,relationships}`, the binary as `SPDXRef-Binary` (with its
+SHA256 checksum), each component a package with a `purl` external reference,
+related to the binary by `DEPENDS_ON` (a shared library) or `CONTAINS`
+(linked in). Properties go to each package's `comment` as `name=value` lines.
+
+Purls: `pkg:cargo/<name>@<version>`, `pkg:golang/<module path>@<version>`,
+`pkg:generic/<name>@<version>` for a banner; a shared library has none. The
+serial number is derived from the file's SHA-256, so one binary always gets the
+same one. The timestamp is the current time, or `SOURCE_DATE_EPOCH` when set.
+A fat Mach-O is read at the `--slice` it selects (`--slice`, below); the
+document hashes the whole file and records the slice's own hash as
+`unlace:image-sha256`.
+
+An unreadable or unparseable binary is exit `1` with the reason on stderr; a
+malformed command line (an unknown `--format`) is exit `2` with the usage block.
+
 ## `unlace unpack` — statically unpack a UPX-, NEOLite- or PKLITE-packed executable
 
 ```bash
@@ -5450,7 +5538,7 @@ server, and can run one (crate `unlace-lumina`).
 
 ```text
 unlace lumina hash  <binary> [--addr A].. [--json]
-unlace lumina pull  <binary> --server HOST:PORT [network flags] [--addr A].. [--define-out FILE] [--assert-out FILE] [--rename-named] [--json]
+unlace lumina pull  <binary> --server HOST:PORT [network flags] [--addr A].. [--define-out FILE] [--assert-out FILE] [--project FILE] [--rename-named] [--json]
 unlace lumina push  <binary> --server HOST:PORT [network flags] [--addr A].. [--mode override-if-better|override|keep|merge] [--hostname H] [--dry-run] [--json]
 unlace lumina serve --db FILE [--bind ADDR] [--tls-cert PEM --tls-key PEM] [--json]
 unlace lumina serve --db FILE --add-user NAME [--admin]
@@ -5494,6 +5582,9 @@ already read:
   holds a function type unlace can read (IDA type strings: scalars, pointers, named
   typedef/struct/union/enum references, the usual calling conventions; arrays, function pointers and
   type-library ordinals are refused) and whose name is a C identifier.
+- `--project FILE`: the same `function 0xADDR=name` and `prototype` directives, stored in an
+  `unlace project` file (which must be bound to this binary; see `unlace project init`), so every
+  later `--project FILE` run applies them.
 
 ```sh
 unlace lumina pull ./a.out --server lumina.local:65432 --define-out names.txt --assert-out protos.kuna
@@ -5526,9 +5617,9 @@ All are objects. Addresses and hashes are hex strings.
   functions_skipped, matched, matches: [{address, current_name, named, hash, size, name, remote_size,
   size_matches, popularity, prototype, calling_convention, comment, repeatable_comment,
   metadata_keys, metadata_malformed, rename, declare}], define_out, assert_out, renames_written,
-  prototypes_written}`. `session` is the server's user object (`{username, license_name, is_admin,
+  prototypes_written, project, project_directives}`. `session` is the server's user object (`{username, license_name, is_admin,
   features}`, `null` below protocol 5). `prototype` is the declaration under the name the function
-  will carry; `rename`/`declare` say whether the hit went into `--define-out`/`--assert-out`.
+  will carry; `rename`/`declare` say whether the hit went into `--define-out`/`--assert-out` (and `--project`).
   `metadata_keys` names the chunks the blob holds (`type`, `function_comment`, `comments`,
   `frame`, `operands`, ...).
 - `push --json`: `{binary, server, tls, session, dry_run, mode, functions_hashed, pushed, added,
@@ -5541,6 +5632,44 @@ All are objects. Addresses and hashes are hex strings.
 
 Exit status: 0 on success, 2 on a usage error, 1 when the binary cannot be loaded, the server cannot
 be reached or refuses the login, or a push was refused.
+
+## `unlace project` — the project file
+
+A project file is a SQLite database of overrides for one binary, the durable form of `--assert`
+(`docs/project.md` is the design). `--project FILE` on `decompile` and `decompile-all` applies it:
+its rows go in as `--assert` directives ahead of the command line's own, which still win, and each is
+reported in the run's `assertions` array.
+
+```bash
+unlace project init ./a.out                       # creates ./a.out.unlace, bound to the SHA-256
+unlace project set ./a.out.unlace 'function 0x401000=main' \
+    'prototype main int main(int argc,char **argv)' 'name main::v2 credbuf' 'bookmark 0x401000 start'
+unlace project set ./a.out.unlace @overrides.kuna # an --assert @file, one directive per line
+unlace decompile ./a.out main --project ./a.out.unlace
+unlace project list ./a.out.unlace                # the directives decompile applies
+unlace project query ./a.out.unlace "SELECT printf('0x%x', address), name FROM functions" --json
+unlace project unset ./a.out.unlace 'name main::v2'
+unlace project export ./a.out.unlace -o a.out.project.json   # canonical JSON, for git
+unlace project import ./a.out.unlace a.out.project.json [--replace]
+```
+
+| command | does | `--json` document |
+|---|---|---|
+| `init <binary> [-o FILE] [--force]` | create the file (default `<binary>.unlace`); `--force` replaces one | `{project, binary:{sha256,path,size}, schema_version}` |
+| `schema` | every table and column with a one-line description (no file needed) | `{schema_version, tables:[{name, key:[column], description, columns:[{name, type, description}]}]}` |
+| `set FILE <directive\|@file>...` | store directives, all or none; each is checked against the `--assert` grammar first | `{project, stored:[directive]}` |
+| `unset FILE <directive>...` | remove what a directive sets (its value may be left off) | `{project, removed}` |
+| `get FILE <table> <key>` | one row: an address for `functions`/`data`/`patches`/`bookmarks`, `<kind> <target>` for `assertions`, the stored text otherwise | `{columns:[name], rows:[{column:value}]}` |
+| `list FILE [<table>]` | no table: every override as the directive it applies; a table: its rows | `{project, binary, directives:[directive]}`, or `{columns, rows}` |
+| `query FILE <SQL>` | any read-only SQL: a statement that could write is refused before it runs | `{columns, rows}` |
+| `export FILE [-o OUT]` | canonical JSON: sorted, hex addresses | the export itself: `{format:"unlace-project", schema_version, binary, functions, prototypes, locals, types, data, comments, callsites, patches, bookmarks, assertions}` |
+| `import FILE <JSON> [--replace]` | write an export back; refuses another binary's | `{project, imported, replaced}` |
+
+`get`, `list` and `query` also take `--jsonl`: one JSON object per line instead of one document, a row as `{column:value}` (keys in the query's column order) or, for a plain `list`, `{directive}`. In `{columns, rows}` each row is an object keyed by column name; an integer is a JSON number (an address above `i64::MAX` is negative: select
+`printf('0x%x', address)`), text is a string, a blob is a hex string and NULL is `null`. Without
+`--json`, rows print tab-separated under a header line. `bookmark <addr> <title>` is the one
+project-only directive: it is stored and listed, never sent to the engine. Writers can run at the same
+time: each command is one transaction, and the later of two writes to the same key wins.
 
 ## Everything else
 

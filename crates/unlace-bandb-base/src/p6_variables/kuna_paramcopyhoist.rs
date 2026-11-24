@@ -139,6 +139,7 @@ impl Action for ActionParamCopyHoist {
         }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
+        unlace_middle::debug_assert_settled!(data, Casts);
         // P0 assertion `option paramcopyhoist on|off`, carried on the Architecture
         // boundary.  Off => nothing moves => byte-identical output.
         if !data

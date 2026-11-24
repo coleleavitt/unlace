@@ -18,6 +18,9 @@ unlace-slacomp.workspace = true
 unlace-num.workspace = true
 # `unlace lumina`: the Lumina protocol, its sqlite server store and TLS.
 unlace-lumina.workspace = true
+# `sbom` inflates cargo-auditable dependency lists.
+flate2.workspace = true
+unlace-project.workspace = true
 # FID and FLIRT construction also read archive members.
 object = { workspace = true, features = ["archive"] }
 regex.workspace = true
@@ -44,6 +47,12 @@ unlace-slacomp.workspace = true
 
 [lints]
 workspace = true
+
+# The command line as a library, so the `unlace` embedding crate reuses its code paths.
+[lib]
+name = "unlace_cli"
+path = "src/lib.rs"
+doctest = false
 
 [[bin]]
 name = "unlace"

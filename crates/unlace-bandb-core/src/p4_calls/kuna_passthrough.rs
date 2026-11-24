@@ -701,7 +701,7 @@ pub fn claim_after_go_stack_guard(data: &mut Funcdata) {
         .get::<crate::kuna_passthrough::PassThrough>()
         .0
         || !data.get_arch().source_lang.is_go()
-        || data.get_heritage_pass() != 0
+        || data.is_settled(crate::kuna_maturity::Fact::Ssa)
         || data.num_calls() != 1
         || !go_register_model(proto)
         || proto.is_input_locked()

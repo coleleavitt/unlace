@@ -12,8 +12,8 @@ autotests = false
 md-5 = "0.11"
 sha2 = "0.11"
 # The self-hosted server's store. `bundled` compiles SQLite's C amalgamation (cc only, no system
-# library); unlace-cli is the only crate that depends on this one, and unlace-wasm does not.
-rusqlite = { version = "0.37", features = ["bundled"] }
+# library); the same version as unlace-project, since only one libsqlite3-sys may link.
+rusqlite = { version = "0.43", features = ["bundled"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"], optional = true }
 webpki-roots = { version = "1", optional = true }
 

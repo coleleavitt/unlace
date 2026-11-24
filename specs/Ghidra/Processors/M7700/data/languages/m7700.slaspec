@@ -1,0 +1,1074 @@
+# Mitsubishi / Renesas 7700 Family CPU (M37700, M37702, M37710, ... and the 7750/7751 additions).
+# Written for unlace (#98) from the Renesas 7700 Family Software Manual: chapter 4 instruction pages
+# and the Appendix 2 hexadecimal instruction code tables (opcode pages 1, 42h and 89h).
+# Data length (m), index length (x) and decimal mode (D) are decode-time context bits that
+# SEP/CLP/SEM/CLM commit along the flow; memory is the 16 MB space of bank:address.
+
+define endian=little;
+define alignment=1;
+
+define space ram      type=ram_space      size=3 default;
+define space register type=register_space size=2;
+
+define register offset=0x00 size=2 [ A B X Y _ DPR PC PS ];
+define register offset=0x30 size=3 [ S ];
+define register offset=0x00 size=1 [ AL AH BL BH XL XH YL YH ];
+define register offset=0x20 size=1 [ PG DT fN fV fm fx fD fI fZ fC IPL ];
+define register offset=0x40 size=4 [ contextreg ];
+
+define context contextreg
+  mflag = (0,0)
+  xflag = (1,1)
+  dmode = (2,2)
+;
+
+define token op0(8) o0 = (0,7);
+define token op1(8) o1 = (0,7);
+define token t8(8) u8 = (0,7) s8 = (0,7) signed b8_m = (5,5) b8_x = (4,4) b8_d = (3,3);
+define token t8b(8) v8 = (0,7);
+define token t8c(8) w8 = (0,7) sw8 = (0,7) signed;
+define token t16(16) u16 = (0,15) s16 = (0,15) signed;
+define token t16b(16) v16 = (0,15);
+define token t24(24) u24 = (0,23);
+
+define pcodeop software_interrupt;
+define pcodeop wait;
+define pcodeop stop;
+define pcodeop decimal_add;
+define pcodeop decimal_sub;
+define pcodeop decimal_add_carry;
+define pcodeop decimal_sub_carry;
+
+macro packPS(v) {
+  v = (zext(IPL) << 8) | (zext(fN) << 7) | (zext(fV) << 6) | (zext(fm) << 5) | (zext(fx) << 4)
+    | (zext(fD) << 3) | (zext(fI) << 2) | (zext(fZ) << 1) | zext(fC);
+  PS = v;
+}
+macro unpackPS(v) {
+  PS = v & 0x7ff;
+  IPL = v[8,3]; fN = v[7,1]; fV = v[6,1]; fm = v[5,1]; fx = v[4,1]; fD = v[3,1]; fI = v[2,1]; fZ = v[1,1]; fC = v[0,1];
+}
+macro push1(v) { *:1 S = v; S = S - 1; }
+macro push2(v) { S = S - 2; *:2 (S + 1) = v; }
+macro pull1(v) { S = S + 1; v = *:1 S; }
+macro pull2(v) { v = *:2 (S + 1); S = S + 2; }
+macro resZN1(r) { fZ = (r == 0); fN = (r s< 0); }
+macro resZN2(r) { fZ = (r == 0); fN = (r s< 0); }
+
+XR: is xflag=0 { export X; }
+XR: is xflag=1 { t:2 = zext(X:1); export t; }
+YR: is xflag=0 { export Y; }
+YR: is xflag=1 { t:2 = zext(Y:1); export t; }
+
+Dir: u8 is u8 { a:3 = zext(DPR) + u8; export a; }
+DirX: u8^",X" is u8 & XR { a:3 = zext(DPR) + u8 + zext(XR); export a; }
+DirY: u8^",Y" is u8 & YR { a:3 = zext(DPR) + u8 + zext(YR); export a; }
+DirInd: "("^u8^")" is u8 { p:3 = zext(DPR) + u8; q:2 = *:2 p; a:3 = (zext(DT) << 16) | zext(q); export a; }
+DirXInd: "("^u8^",X)" is u8 & XR { p:3 = zext(DPR) + u8 + zext(XR); q:2 = *:2 p; a:3 = (zext(DT) << 16) | zext(q); export a; }
+DirIndY: "("^u8^"),Y" is u8 & YR { p:3 = zext(DPR) + u8; q:2 = *:2 p; a:3 = ((zext(DT) << 16) | zext(q)) + zext(YR); export a; }
+DirLInd: "L("^u8^")" is u8 { p:3 = zext(DPR) + u8; a:3 = *:3 p; export a; }
+DirLIndY: "L("^u8^"),Y" is u8 & YR { p:3 = zext(DPR) + u8; q:3 = *:3 p; a:3 = q + zext(YR); export a; }
+Sr: u8^",S" is u8 { a:3 = S + u8; export a; }
+SrIndY: "("^u8^",S),Y" is u8 & YR { p:3 = S + u8; q:2 = *:2 p; a:3 = ((zext(DT) << 16) | zext(q)) + zext(YR); export a; }
+Abs: u16 is u16 { a:3 = (zext(DT) << 16) | u16; export a; }
+AbsX: u16^",X" is u16 & XR { a:3 = ((zext(DT) << 16) | u16) + zext(XR); export a; }
+AbsY: u16^",Y" is u16 & YR { a:3 = ((zext(DT) << 16) | u16) + zext(YR); export a; }
+Abl: u24 is u24 { export *[const]:3 u24; }
+AblX: u24^",X" is u24 & XR { a:3 = u24 + zext(XR); export a; }
+
+Imm8: "#"^u8 is u8 { export *[const]:1 u8; }
+Imm16: "#"^u16 is u16 { export *[const]:2 u16; }
+Imm8b: "#"^v8 is v8 { export *[const]:1 v8; }
+Imm16b: "#"^v16 is v16 { export *[const]:2 v16; }
+
+Rel8: dest is s8 [ dest = (inst_next & 0xff0000) | ((inst_next + s8) & 0xffff); ] { export *:1 dest; }
+Rel8b: dest is sw8 [ dest = (inst_next & 0xff0000) | ((inst_next + sw8) & 0xffff); ] { export *:1 dest; }
+Rel16: dest is s16 [ dest = (inst_next & 0xff0000) | ((inst_next + s16) & 0xffff); ] { export *:1 dest; }
+JAbs: dest is u16 [ dest = (inst_start & 0xff0000) | u16; ] { export *:1 dest; }
+JAbl: u24 is u24 { export *:1 u24; }
+
+:BRK Imm8 is o0=0x00; Imm8 { r2:2 = inst_next; push1(PG); push2(r2); p:2 = 0; packPS(p); push2(p); fI = 1; software_interrupt(Imm8); }
+:ORA "A", DirXInd is mflag=0 & o0=0x01; DirXInd { r:2 = A | *:2 DirXInd; resZN2(r); A = r; }
+:ORA "A", DirXInd is mflag=1 & o0=0x01; DirXInd { r:1 = AL | *:1 DirXInd; resZN1(r); AL = r; }
+:ORA "A", Sr is mflag=0 & o0=0x03; Sr { r:2 = A | *:2 Sr; resZN2(r); A = r; }
+:ORA "A", Sr is mflag=1 & o0=0x03; Sr { r:1 = AL | *:1 Sr; resZN1(r); AL = r; }
+:SEB Imm16b, Dir is mflag=0 & o0=0x04; Dir; Imm16b { *:2 Dir = *:2 Dir | Imm16b; }
+:SEB Imm8b, Dir is mflag=1 & o0=0x04; Dir; Imm8b { *:1 Dir = *:1 Dir | Imm8b; }
+:ORA "A", Dir is mflag=0 & o0=0x05; Dir { r:2 = A | *:2 Dir; resZN2(r); A = r; }
+:ORA "A", Dir is mflag=1 & o0=0x05; Dir { r:1 = AL | *:1 Dir; resZN1(r); AL = r; }
+:ASL Dir is mflag=0 & o0=0x06; Dir { v:2 = *:2 Dir; fC = (v s< 0); r:2 = v << 1; resZN2(r); *:2 Dir = r; }
+:ASL Dir is mflag=1 & o0=0x06; Dir { v:1 = *:1 Dir; fC = (v s< 0); r:1 = v << 1; resZN1(r); *:1 Dir = r; }
+:ORA "A", DirLInd is mflag=0 & o0=0x07; DirLInd { r:2 = A | *:2 DirLInd; resZN2(r); A = r; }
+:ORA "A", DirLInd is mflag=1 & o0=0x07; DirLInd { r:1 = AL | *:1 DirLInd; resZN1(r); AL = r; }
+:PHP is o0=0x08 { v:2 = 0; packPS(v); push2(v); }
+:ORA "A", Imm16 is mflag=0 & o0=0x09; Imm16 { r:2 = A | Imm16; resZN2(r); A = r; }
+:ORA "A", Imm8 is mflag=1 & o0=0x09; Imm8 { r:1 = AL | Imm8; resZN1(r); AL = r; }
+:ASL "A" is mflag=0 & o0=0x0a { v:2 = A; fC = (v s< 0); r:2 = v << 1; resZN2(r); A = r; }
+:ASL "A" is mflag=1 & o0=0x0a { v:1 = AL; fC = (v s< 0); r:1 = v << 1; resZN1(r); AL = r; }
+:PHD is o0=0x0b { push2(DPR); }
+:SEB Imm16b, Abs is mflag=0 & o0=0x0c; Abs; Imm16b { *:2 Abs = *:2 Abs | Imm16b; }
+:SEB Imm8b, Abs is mflag=1 & o0=0x0c; Abs; Imm8b { *:1 Abs = *:1 Abs | Imm8b; }
+:ORA "A", Abs is mflag=0 & o0=0x0d; Abs { r:2 = A | *:2 Abs; resZN2(r); A = r; }
+:ORA "A", Abs is mflag=1 & o0=0x0d; Abs { r:1 = AL | *:1 Abs; resZN1(r); AL = r; }
+:ASL Abs is mflag=0 & o0=0x0e; Abs { v:2 = *:2 Abs; fC = (v s< 0); r:2 = v << 1; resZN2(r); *:2 Abs = r; }
+:ASL Abs is mflag=1 & o0=0x0e; Abs { v:1 = *:1 Abs; fC = (v s< 0); r:1 = v << 1; resZN1(r); *:1 Abs = r; }
+:ORA "A", Abl is mflag=0 & o0=0x0f; Abl { r:2 = A | *:2 Abl; resZN2(r); A = r; }
+:ORA "A", Abl is mflag=1 & o0=0x0f; Abl { r:1 = AL | *:1 Abl; resZN1(r); AL = r; }
+:BPL Rel8 is o0=0x10; Rel8 { if (!fN) goto Rel8; }
+:ORA "A", DirIndY is mflag=0 & o0=0x11; DirIndY { r:2 = A | *:2 DirIndY; resZN2(r); A = r; }
+:ORA "A", DirIndY is mflag=1 & o0=0x11; DirIndY { r:1 = AL | *:1 DirIndY; resZN1(r); AL = r; }
+:ORA "A", DirInd is mflag=0 & o0=0x12; DirInd { r:2 = A | *:2 DirInd; resZN2(r); A = r; }
+:ORA "A", DirInd is mflag=1 & o0=0x12; DirInd { r:1 = AL | *:1 DirInd; resZN1(r); AL = r; }
+:ORA "A", SrIndY is mflag=0 & o0=0x13; SrIndY { r:2 = A | *:2 SrIndY; resZN2(r); A = r; }
+:ORA "A", SrIndY is mflag=1 & o0=0x13; SrIndY { r:1 = AL | *:1 SrIndY; resZN1(r); AL = r; }
+:CLB Imm16b, Dir is mflag=0 & o0=0x14; Dir; Imm16b { *:2 Dir = *:2 Dir & ~Imm16b; }
+:CLB Imm8b, Dir is mflag=1 & o0=0x14; Dir; Imm8b { *:1 Dir = *:1 Dir & ~Imm8b; }
+:ORA "A", DirX is mflag=0 & o0=0x15; DirX { r:2 = A | *:2 DirX; resZN2(r); A = r; }
+:ORA "A", DirX is mflag=1 & o0=0x15; DirX { r:1 = AL | *:1 DirX; resZN1(r); AL = r; }
+:ASL DirX is mflag=0 & o0=0x16; DirX { v:2 = *:2 DirX; fC = (v s< 0); r:2 = v << 1; resZN2(r); *:2 DirX = r; }
+:ASL DirX is mflag=1 & o0=0x16; DirX { v:1 = *:1 DirX; fC = (v s< 0); r:1 = v << 1; resZN1(r); *:1 DirX = r; }
+:ORA "A", DirLIndY is mflag=0 & o0=0x17; DirLIndY { r:2 = A | *:2 DirLIndY; resZN2(r); A = r; }
+:ORA "A", DirLIndY is mflag=1 & o0=0x17; DirLIndY { r:1 = AL | *:1 DirLIndY; resZN1(r); AL = r; }
+:CLC is o0=0x18 { fC = 0; }
+:ORA "A", AbsY is mflag=0 & o0=0x19; AbsY { r:2 = A | *:2 AbsY; resZN2(r); A = r; }
+:ORA "A", AbsY is mflag=1 & o0=0x19; AbsY { r:1 = AL | *:1 AbsY; resZN1(r); AL = r; }
+:DEC "A" is mflag=0 & o0=0x1a { v:2 = A; r:2 = v - 1; resZN2(r); A = r; }
+:DEC "A" is mflag=1 & o0=0x1a { v:1 = AL; r:1 = v - 1; resZN1(r); AL = r; }
+:TAS is o0=0x1b { S = zext(A); }
+:CLB Imm16b, Abs is mflag=0 & o0=0x1c; Abs; Imm16b { *:2 Abs = *:2 Abs & ~Imm16b; }
+:CLB Imm8b, Abs is mflag=1 & o0=0x1c; Abs; Imm8b { *:1 Abs = *:1 Abs & ~Imm8b; }
+:ORA "A", AbsX is mflag=0 & o0=0x1d; AbsX { r:2 = A | *:2 AbsX; resZN2(r); A = r; }
+:ORA "A", AbsX is mflag=1 & o0=0x1d; AbsX { r:1 = AL | *:1 AbsX; resZN1(r); AL = r; }
+:ASL AbsX is mflag=0 & o0=0x1e; AbsX { v:2 = *:2 AbsX; fC = (v s< 0); r:2 = v << 1; resZN2(r); *:2 AbsX = r; }
+:ASL AbsX is mflag=1 & o0=0x1e; AbsX { v:1 = *:1 AbsX; fC = (v s< 0); r:1 = v << 1; resZN1(r); *:1 AbsX = r; }
+:ORA "A", AblX is mflag=0 & o0=0x1f; AblX { r:2 = A | *:2 AblX; resZN2(r); A = r; }
+:ORA "A", AblX is mflag=1 & o0=0x1f; AblX { r:1 = AL | *:1 AblX; resZN1(r); AL = r; }
+:JSR JAbs is o0=0x20; JAbs { r2:2 = inst_next; push2(r2); call JAbs; }
+:AND "A", DirXInd is mflag=0 & o0=0x21; DirXInd { r:2 = A & *:2 DirXInd; resZN2(r); A = r; }
+:AND "A", DirXInd is mflag=1 & o0=0x21; DirXInd { r:1 = AL & *:1 DirXInd; resZN1(r); AL = r; }
+:JSRL JAbl is o0=0x22; JAbl & u24 { rp:3 = inst_next; g0:1 = PG; push1(g0); r2:2 = rp:2; push2(r2); t:3 = u24; PG = t(2); call JAbl; }
+:AND "A", Sr is mflag=0 & o0=0x23; Sr { r:2 = A & *:2 Sr; resZN2(r); A = r; }
+:AND "A", Sr is mflag=1 & o0=0x23; Sr { r:1 = AL & *:1 Sr; resZN1(r); AL = r; }
+:BBS Imm16b, Dir, Rel8b is mflag=0 & o0=0x24; Dir; Imm16b; Rel8b { if ((*:2 Dir & Imm16b) == Imm16b) goto Rel8b; }
+:BBS Imm8b, Dir, Rel8b is mflag=1 & o0=0x24; Dir; Imm8b; Rel8b { if ((*:1 Dir & Imm8b) == Imm8b) goto Rel8b; }
+:AND "A", Dir is mflag=0 & o0=0x25; Dir { r:2 = A & *:2 Dir; resZN2(r); A = r; }
+:AND "A", Dir is mflag=1 & o0=0x25; Dir { r:1 = AL & *:1 Dir; resZN1(r); AL = r; }
+:ROL Dir is mflag=0 & o0=0x26; Dir { v:2 = *:2 Dir; c0:2 = zext(fC); fC = (v s< 0); r:2 = (v << 1) | c0; resZN2(r); *:2 Dir = r; }
+:ROL Dir is mflag=1 & o0=0x26; Dir { v:1 = *:1 Dir; c0:1 = zext(fC); fC = (v s< 0); r:1 = (v << 1) | c0; resZN1(r); *:1 Dir = r; }
+:AND "A", DirLInd is mflag=0 & o0=0x27; DirLInd { r:2 = A & *:2 DirLInd; resZN2(r); A = r; }
+:AND "A", DirLInd is mflag=1 & o0=0x27; DirLInd { r:1 = AL & *:1 DirLInd; resZN1(r); AL = r; }
+:PLP is o0=0x28 { v:2 = 0; pull2(v); unpackPS(v); }
+:AND "A", Imm16 is mflag=0 & o0=0x29; Imm16 { r:2 = A & Imm16; resZN2(r); A = r; }
+:AND "A", Imm8 is mflag=1 & o0=0x29; Imm8 { r:1 = AL & Imm8; resZN1(r); AL = r; }
+:ROL "A" is mflag=0 & o0=0x2a { v:2 = A; c0:2 = zext(fC); fC = (v s< 0); r:2 = (v << 1) | c0; resZN2(r); A = r; }
+:ROL "A" is mflag=1 & o0=0x2a { v:1 = AL; c0:1 = zext(fC); fC = (v s< 0); r:1 = (v << 1) | c0; resZN1(r); AL = r; }
+:PLD is o0=0x2b { v:2 = 0; pull2(v); DPR = v; }
+:BBS Imm16b, Abs, Rel8b is mflag=0 & o0=0x2c; Abs; Imm16b; Rel8b { if ((*:2 Abs & Imm16b) == Imm16b) goto Rel8b; }
+:BBS Imm8b, Abs, Rel8b is mflag=1 & o0=0x2c; Abs; Imm8b; Rel8b { if ((*:1 Abs & Imm8b) == Imm8b) goto Rel8b; }
+:AND "A", Abs is mflag=0 & o0=0x2d; Abs { r:2 = A & *:2 Abs; resZN2(r); A = r; }
+:AND "A", Abs is mflag=1 & o0=0x2d; Abs { r:1 = AL & *:1 Abs; resZN1(r); AL = r; }
+:ROL Abs is mflag=0 & o0=0x2e; Abs { v:2 = *:2 Abs; c0:2 = zext(fC); fC = (v s< 0); r:2 = (v << 1) | c0; resZN2(r); *:2 Abs = r; }
+:ROL Abs is mflag=1 & o0=0x2e; Abs { v:1 = *:1 Abs; c0:1 = zext(fC); fC = (v s< 0); r:1 = (v << 1) | c0; resZN1(r); *:1 Abs = r; }
+:AND "A", Abl is mflag=0 & o0=0x2f; Abl { r:2 = A & *:2 Abl; resZN2(r); A = r; }
+:AND "A", Abl is mflag=1 & o0=0x2f; Abl { r:1 = AL & *:1 Abl; resZN1(r); AL = r; }
+:BMI Rel8 is o0=0x30; Rel8 { if (fN) goto Rel8; }
+:AND "A", DirIndY is mflag=0 & o0=0x31; DirIndY { r:2 = A & *:2 DirIndY; resZN2(r); A = r; }
+:AND "A", DirIndY is mflag=1 & o0=0x31; DirIndY { r:1 = AL & *:1 DirIndY; resZN1(r); AL = r; }
+:AND "A", DirInd is mflag=0 & o0=0x32; DirInd { r:2 = A & *:2 DirInd; resZN2(r); A = r; }
+:AND "A", DirInd is mflag=1 & o0=0x32; DirInd { r:1 = AL & *:1 DirInd; resZN1(r); AL = r; }
+:AND "A", SrIndY is mflag=0 & o0=0x33; SrIndY { r:2 = A & *:2 SrIndY; resZN2(r); A = r; }
+:AND "A", SrIndY is mflag=1 & o0=0x33; SrIndY { r:1 = AL & *:1 SrIndY; resZN1(r); AL = r; }
+:BBC Imm16b, Dir, Rel8b is mflag=0 & o0=0x34; Dir; Imm16b; Rel8b { if ((*:2 Dir & Imm16b) == 0) goto Rel8b; }
+:BBC Imm8b, Dir, Rel8b is mflag=1 & o0=0x34; Dir; Imm8b; Rel8b { if ((*:1 Dir & Imm8b) == 0) goto Rel8b; }
+:AND "A", DirX is mflag=0 & o0=0x35; DirX { r:2 = A & *:2 DirX; resZN2(r); A = r; }
+:AND "A", DirX is mflag=1 & o0=0x35; DirX { r:1 = AL & *:1 DirX; resZN1(r); AL = r; }
+:ROL DirX is mflag=0 & o0=0x36; DirX { v:2 = *:2 DirX; c0:2 = zext(fC); fC = (v s< 0); r:2 = (v << 1) | c0; resZN2(r); *:2 DirX = r; }
+:ROL DirX is mflag=1 & o0=0x36; DirX { v:1 = *:1 DirX; c0:1 = zext(fC); fC = (v s< 0); r:1 = (v << 1) | c0; resZN1(r); *:1 DirX = r; }
+:AND "A", DirLIndY is mflag=0 & o0=0x37; DirLIndY { r:2 = A & *:2 DirLIndY; resZN2(r); A = r; }
+:AND "A", DirLIndY is mflag=1 & o0=0x37; DirLIndY { r:1 = AL & *:1 DirLIndY; resZN1(r); AL = r; }
+:SEC is o0=0x38 { fC = 1; }
+:AND "A", AbsY is mflag=0 & o0=0x39; AbsY { r:2 = A & *:2 AbsY; resZN2(r); A = r; }
+:AND "A", AbsY is mflag=1 & o0=0x39; AbsY { r:1 = AL & *:1 AbsY; resZN1(r); AL = r; }
+:INC "A" is mflag=0 & o0=0x3a { v:2 = A; r:2 = v + 1; resZN2(r); A = r; }
+:INC "A" is mflag=1 & o0=0x3a { v:1 = AL; r:1 = v + 1; resZN1(r); AL = r; }
+:TSA is o0=0x3b { A = S:2; }
+:BBC Imm16b, Abs, Rel8b is mflag=0 & o0=0x3c; Abs; Imm16b; Rel8b { if ((*:2 Abs & Imm16b) == 0) goto Rel8b; }
+:BBC Imm8b, Abs, Rel8b is mflag=1 & o0=0x3c; Abs; Imm8b; Rel8b { if ((*:1 Abs & Imm8b) == 0) goto Rel8b; }
+:AND "A", AbsX is mflag=0 & o0=0x3d; AbsX { r:2 = A & *:2 AbsX; resZN2(r); A = r; }
+:AND "A", AbsX is mflag=1 & o0=0x3d; AbsX { r:1 = AL & *:1 AbsX; resZN1(r); AL = r; }
+:ROL AbsX is mflag=0 & o0=0x3e; AbsX { v:2 = *:2 AbsX; c0:2 = zext(fC); fC = (v s< 0); r:2 = (v << 1) | c0; resZN2(r); *:2 AbsX = r; }
+:ROL AbsX is mflag=1 & o0=0x3e; AbsX { v:1 = *:1 AbsX; c0:1 = zext(fC); fC = (v s< 0); r:1 = (v << 1) | c0; resZN1(r); *:1 AbsX = r; }
+:AND "A", AblX is mflag=0 & o0=0x3f; AblX { r:2 = A & *:2 AblX; resZN2(r); A = r; }
+:AND "A", AblX is mflag=1 & o0=0x3f; AblX { r:1 = AL & *:1 AblX; resZN1(r); AL = r; }
+:RTI is o0=0x40 { p:2 = 0; pull2(p); unpackPS(p); v:2 = 0; pull2(v); g:1 = 0; pull1(g); PG = g; t:3 = (zext(g) << 16) | zext(v); return [t]; }
+:EOR "A", DirXInd is mflag=0 & o0=0x41; DirXInd { r:2 = A ^ *:2 DirXInd; resZN2(r); A = r; }
+:EOR "A", DirXInd is mflag=1 & o0=0x41; DirXInd { r:1 = AL ^ *:1 DirXInd; resZN1(r); AL = r; }
+:EOR "A", Sr is mflag=0 & o0=0x43; Sr { r:2 = A ^ *:2 Sr; resZN2(r); A = r; }
+:EOR "A", Sr is mflag=1 & o0=0x43; Sr { r:1 = AL ^ *:1 Sr; resZN1(r); AL = r; }
+:MVP u8, v8 is o0=0x44; u8; v8 { DT = u8; s0:3 = (zext(v8:1) << 16) | zext(X); d0:3 = (zext(u8:1) << 16) | zext(Y); *:1 d0 = *:1 s0; X = X - 1; Y = Y - 1; A = A - 1; if (A != 0xffff) goto inst_start; }
+:EOR "A", Dir is mflag=0 & o0=0x45; Dir { r:2 = A ^ *:2 Dir; resZN2(r); A = r; }
+:EOR "A", Dir is mflag=1 & o0=0x45; Dir { r:1 = AL ^ *:1 Dir; resZN1(r); AL = r; }
+:LSR Dir is mflag=0 & o0=0x46; Dir { v:2 = *:2 Dir; fC = (v & 1) != 0; r:2 = v >> 1; resZN2(r); *:2 Dir = r; }
+:LSR Dir is mflag=1 & o0=0x46; Dir { v:1 = *:1 Dir; fC = (v & 1) != 0; r:1 = v >> 1; resZN1(r); *:1 Dir = r; }
+:EOR "A", DirLInd is mflag=0 & o0=0x47; DirLInd { r:2 = A ^ *:2 DirLInd; resZN2(r); A = r; }
+:EOR "A", DirLInd is mflag=1 & o0=0x47; DirLInd { r:1 = AL ^ *:1 DirLInd; resZN1(r); AL = r; }
+:PHA is mflag=0 & o0=0x48 { push2(A); }
+:PHA is mflag=1 & o0=0x48 { v:1 = A:1; push1(v); }
+:EOR "A", Imm16 is mflag=0 & o0=0x49; Imm16 { r:2 = A ^ Imm16; resZN2(r); A = r; }
+:EOR "A", Imm8 is mflag=1 & o0=0x49; Imm8 { r:1 = AL ^ Imm8; resZN1(r); AL = r; }
+:LSR "A" is mflag=0 & o0=0x4a { v:2 = A; fC = (v & 1) != 0; r:2 = v >> 1; resZN2(r); A = r; }
+:LSR "A" is mflag=1 & o0=0x4a { v:1 = AL; fC = (v & 1) != 0; r:1 = v >> 1; resZN1(r); AL = r; }
+:PHG is o0=0x4b { push1(PG); }
+:JMP JAbs is o0=0x4c; JAbs { goto JAbs; }
+:EOR "A", Abs is mflag=0 & o0=0x4d; Abs { r:2 = A ^ *:2 Abs; resZN2(r); A = r; }
+:EOR "A", Abs is mflag=1 & o0=0x4d; Abs { r:1 = AL ^ *:1 Abs; resZN1(r); AL = r; }
+:LSR Abs is mflag=0 & o0=0x4e; Abs { v:2 = *:2 Abs; fC = (v & 1) != 0; r:2 = v >> 1; resZN2(r); *:2 Abs = r; }
+:LSR Abs is mflag=1 & o0=0x4e; Abs { v:1 = *:1 Abs; fC = (v & 1) != 0; r:1 = v >> 1; resZN1(r); *:1 Abs = r; }
+:EOR "A", Abl is mflag=0 & o0=0x4f; Abl { r:2 = A ^ *:2 Abl; resZN2(r); A = r; }
+:EOR "A", Abl is mflag=1 & o0=0x4f; Abl { r:1 = AL ^ *:1 Abl; resZN1(r); AL = r; }
+:BVC Rel8 is o0=0x50; Rel8 { if (!fV) goto Rel8; }
+:EOR "A", DirIndY is mflag=0 & o0=0x51; DirIndY { r:2 = A ^ *:2 DirIndY; resZN2(r); A = r; }
+:EOR "A", DirIndY is mflag=1 & o0=0x51; DirIndY { r:1 = AL ^ *:1 DirIndY; resZN1(r); AL = r; }
+:EOR "A", DirInd is mflag=0 & o0=0x52; DirInd { r:2 = A ^ *:2 DirInd; resZN2(r); A = r; }
+:EOR "A", DirInd is mflag=1 & o0=0x52; DirInd { r:1 = AL ^ *:1 DirInd; resZN1(r); AL = r; }
+:EOR "A", SrIndY is mflag=0 & o0=0x53; SrIndY { r:2 = A ^ *:2 SrIndY; resZN2(r); A = r; }
+:EOR "A", SrIndY is mflag=1 & o0=0x53; SrIndY { r:1 = AL ^ *:1 SrIndY; resZN1(r); AL = r; }
+:MVN u8, v8 is o0=0x54; u8; v8 { DT = u8; s0:3 = (zext(v8:1) << 16) | zext(X); d0:3 = (zext(u8:1) << 16) | zext(Y); *:1 d0 = *:1 s0; X = X + 1; Y = Y + 1; A = A - 1; if (A != 0xffff) goto inst_start; }
+:EOR "A", DirX is mflag=0 & o0=0x55; DirX { r:2 = A ^ *:2 DirX; resZN2(r); A = r; }
+:EOR "A", DirX is mflag=1 & o0=0x55; DirX { r:1 = AL ^ *:1 DirX; resZN1(r); AL = r; }
+:LSR DirX is mflag=0 & o0=0x56; DirX { v:2 = *:2 DirX; fC = (v & 1) != 0; r:2 = v >> 1; resZN2(r); *:2 DirX = r; }
+:LSR DirX is mflag=1 & o0=0x56; DirX { v:1 = *:1 DirX; fC = (v & 1) != 0; r:1 = v >> 1; resZN1(r); *:1 DirX = r; }
+:EOR "A", DirLIndY is mflag=0 & o0=0x57; DirLIndY { r:2 = A ^ *:2 DirLIndY; resZN2(r); A = r; }
+:EOR "A", DirLIndY is mflag=1 & o0=0x57; DirLIndY { r:1 = AL ^ *:1 DirLIndY; resZN1(r); AL = r; }
+:CLI is o0=0x58 { fI = 0; }
+:EOR "A", AbsY is mflag=0 & o0=0x59; AbsY { r:2 = A ^ *:2 AbsY; resZN2(r); A = r; }
+:EOR "A", AbsY is mflag=1 & o0=0x59; AbsY { r:1 = AL ^ *:1 AbsY; resZN1(r); AL = r; }
+:PHY is xflag=0 & o0=0x5a { push2(Y); }
+:PHY is xflag=1 & o0=0x5a { v:1 = Y:1; push1(v); }
+:TAD is o0=0x5b { DPR = A; }
+:JMPL JAbl is o0=0x5c; JAbl & u24 { t:3 = u24; PG = t(2); goto JAbl; }
+:EOR "A", AbsX is mflag=0 & o0=0x5d; AbsX { r:2 = A ^ *:2 AbsX; resZN2(r); A = r; }
+:EOR "A", AbsX is mflag=1 & o0=0x5d; AbsX { r:1 = AL ^ *:1 AbsX; resZN1(r); AL = r; }
+:LSR AbsX is mflag=0 & o0=0x5e; AbsX { v:2 = *:2 AbsX; fC = (v & 1) != 0; r:2 = v >> 1; resZN2(r); *:2 AbsX = r; }
+:LSR AbsX is mflag=1 & o0=0x5e; AbsX { v:1 = *:1 AbsX; fC = (v & 1) != 0; r:1 = v >> 1; resZN1(r); *:1 AbsX = r; }
+:EOR "A", AblX is mflag=0 & o0=0x5f; AblX { r:2 = A ^ *:2 AblX; resZN2(r); A = r; }
+:EOR "A", AblX is mflag=1 & o0=0x5f; AblX { r:1 = AL ^ *:1 AblX; resZN1(r); AL = r; }
+:RTS is o0=0x60 { v:2 = 0; pull2(v); t:3 = (zext(PG) << 16) | zext(v); return [t]; }
+:ADC "A", DirXInd is mflag=0 & dmode=0 & o0=0x61; DirXInd { a:2 = A; b:2 = *:2 DirXInd; t:2 = a + b; r:2 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN2(r); A = r; }
+:ADC "A", DirXInd is mflag=0 & dmode=1 & o0=0x61; DirXInd { a:2 = A; b:2 = *:2 DirXInd; r:2 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN2(r); A = r; }
+:ADC "A", DirXInd is mflag=1 & dmode=0 & o0=0x61; DirXInd { a:1 = AL; b:1 = *:1 DirXInd; t:1 = a + b; r:1 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN1(r); AL = r; }
+:ADC "A", DirXInd is mflag=1 & dmode=1 & o0=0x61; DirXInd { a:1 = AL; b:1 = *:1 DirXInd; r:1 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN1(r); AL = r; }
+:PER Imm16 is o0=0x62; Imm16 { v:2 = inst_next; v = v + Imm16; push2(v); }
+:ADC "A", Sr is mflag=0 & dmode=0 & o0=0x63; Sr { a:2 = A; b:2 = *:2 Sr; t:2 = a + b; r:2 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN2(r); A = r; }
+:ADC "A", Sr is mflag=0 & dmode=1 & o0=0x63; Sr { a:2 = A; b:2 = *:2 Sr; r:2 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN2(r); A = r; }
+:ADC "A", Sr is mflag=1 & dmode=0 & o0=0x63; Sr { a:1 = AL; b:1 = *:1 Sr; t:1 = a + b; r:1 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN1(r); AL = r; }
+:ADC "A", Sr is mflag=1 & dmode=1 & o0=0x63; Sr { a:1 = AL; b:1 = *:1 Sr; r:1 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN1(r); AL = r; }
+:LDM Imm16b, Dir is mflag=0 & o0=0x64; Dir; Imm16b { *:2 Dir = Imm16b; }
+:LDM Imm8b, Dir is mflag=1 & o0=0x64; Dir; Imm8b { *:1 Dir = Imm8b; }
+:ADC "A", Dir is mflag=0 & dmode=0 & o0=0x65; Dir { a:2 = A; b:2 = *:2 Dir; t:2 = a + b; r:2 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN2(r); A = r; }
+:ADC "A", Dir is mflag=0 & dmode=1 & o0=0x65; Dir { a:2 = A; b:2 = *:2 Dir; r:2 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN2(r); A = r; }
+:ADC "A", Dir is mflag=1 & dmode=0 & o0=0x65; Dir { a:1 = AL; b:1 = *:1 Dir; t:1 = a + b; r:1 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN1(r); AL = r; }
+:ADC "A", Dir is mflag=1 & dmode=1 & o0=0x65; Dir { a:1 = AL; b:1 = *:1 Dir; r:1 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN1(r); AL = r; }
+:ROR Dir is mflag=0 & o0=0x66; Dir { v:2 = *:2 Dir; c0:2 = zext(fC) << 15; fC = (v & 1) != 0; r:2 = (v >> 1) | c0; resZN2(r); *:2 Dir = r; }
+:ROR Dir is mflag=1 & o0=0x66; Dir { v:1 = *:1 Dir; c0:1 = zext(fC) << 7; fC = (v & 1) != 0; r:1 = (v >> 1) | c0; resZN1(r); *:1 Dir = r; }
+:ADC "A", DirLInd is mflag=0 & dmode=0 & o0=0x67; DirLInd { a:2 = A; b:2 = *:2 DirLInd; t:2 = a + b; r:2 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN2(r); A = r; }
+:ADC "A", DirLInd is mflag=0 & dmode=1 & o0=0x67; DirLInd { a:2 = A; b:2 = *:2 DirLInd; r:2 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN2(r); A = r; }
+:ADC "A", DirLInd is mflag=1 & dmode=0 & o0=0x67; DirLInd { a:1 = AL; b:1 = *:1 DirLInd; t:1 = a + b; r:1 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN1(r); AL = r; }
+:ADC "A", DirLInd is mflag=1 & dmode=1 & o0=0x67; DirLInd { a:1 = AL; b:1 = *:1 DirLInd; r:1 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN1(r); AL = r; }
+:PLA is mflag=0 & o0=0x68 { v:2 = 0; pull2(v); A = v; resZN2(v); }
+:PLA is mflag=1 & o0=0x68 { v:1 = 0; pull1(v); A = (A & 0xff00) | zext(v); resZN1(v); }
+:ADC "A", Imm16 is mflag=0 & dmode=0 & o0=0x69; Imm16 { a:2 = A; b:2 = Imm16; t:2 = a + b; r:2 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN2(r); A = r; }
+:ADC "A", Imm16 is mflag=0 & dmode=1 & o0=0x69; Imm16 { a:2 = A; b:2 = Imm16; r:2 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN2(r); A = r; }
+:ADC "A", Imm8 is mflag=1 & dmode=0 & o0=0x69; Imm8 { a:1 = AL; b:1 = Imm8; t:1 = a + b; r:1 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN1(r); AL = r; }
+:ADC "A", Imm8 is mflag=1 & dmode=1 & o0=0x69; Imm8 { a:1 = AL; b:1 = Imm8; r:1 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN1(r); AL = r; }
+:ROR "A" is mflag=0 & o0=0x6a { v:2 = A; c0:2 = zext(fC) << 15; fC = (v & 1) != 0; r:2 = (v >> 1) | c0; resZN2(r); A = r; }
+:ROR "A" is mflag=1 & o0=0x6a { v:1 = AL; c0:1 = zext(fC) << 7; fC = (v & 1) != 0; r:1 = (v >> 1) | c0; resZN1(r); AL = r; }
+:RTL is o0=0x6b { v:2 = 0; pull2(v); g:1 = 0; pull1(g); PG = g; t:3 = (zext(g) << 16) | zext(v); return [t]; }
+:JMP "("^u16^")" is o0=0x6c; u16 { p:3 = u16; q:2 = *:2 p; t:3 = (zext(PG) << 16) | zext(q); goto [t]; }
+:ADC "A", Abs is mflag=0 & dmode=0 & o0=0x6d; Abs { a:2 = A; b:2 = *:2 Abs; t:2 = a + b; r:2 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN2(r); A = r; }
+:ADC "A", Abs is mflag=0 & dmode=1 & o0=0x6d; Abs { a:2 = A; b:2 = *:2 Abs; r:2 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN2(r); A = r; }
+:ADC "A", Abs is mflag=1 & dmode=0 & o0=0x6d; Abs { a:1 = AL; b:1 = *:1 Abs; t:1 = a + b; r:1 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN1(r); AL = r; }
+:ADC "A", Abs is mflag=1 & dmode=1 & o0=0x6d; Abs { a:1 = AL; b:1 = *:1 Abs; r:1 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN1(r); AL = r; }
+:ROR Abs is mflag=0 & o0=0x6e; Abs { v:2 = *:2 Abs; c0:2 = zext(fC) << 15; fC = (v & 1) != 0; r:2 = (v >> 1) | c0; resZN2(r); *:2 Abs = r; }
+:ROR Abs is mflag=1 & o0=0x6e; Abs { v:1 = *:1 Abs; c0:1 = zext(fC) << 7; fC = (v & 1) != 0; r:1 = (v >> 1) | c0; resZN1(r); *:1 Abs = r; }
+:ADC "A", Abl is mflag=0 & dmode=0 & o0=0x6f; Abl { a:2 = A; b:2 = *:2 Abl; t:2 = a + b; r:2 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN2(r); A = r; }
+:ADC "A", Abl is mflag=0 & dmode=1 & o0=0x6f; Abl { a:2 = A; b:2 = *:2 Abl; r:2 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN2(r); A = r; }
+:ADC "A", Abl is mflag=1 & dmode=0 & o0=0x6f; Abl { a:1 = AL; b:1 = *:1 Abl; t:1 = a + b; r:1 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN1(r); AL = r; }
+:ADC "A", Abl is mflag=1 & dmode=1 & o0=0x6f; Abl { a:1 = AL; b:1 = *:1 Abl; r:1 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN1(r); AL = r; }
+:BVS Rel8 is o0=0x70; Rel8 { if (fV) goto Rel8; }
+:ADC "A", DirIndY is mflag=0 & dmode=0 & o0=0x71; DirIndY { a:2 = A; b:2 = *:2 DirIndY; t:2 = a + b; r:2 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN2(r); A = r; }
+:ADC "A", DirIndY is mflag=0 & dmode=1 & o0=0x71; DirIndY { a:2 = A; b:2 = *:2 DirIndY; r:2 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN2(r); A = r; }
+:ADC "A", DirIndY is mflag=1 & dmode=0 & o0=0x71; DirIndY { a:1 = AL; b:1 = *:1 DirIndY; t:1 = a + b; r:1 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN1(r); AL = r; }
+:ADC "A", DirIndY is mflag=1 & dmode=1 & o0=0x71; DirIndY { a:1 = AL; b:1 = *:1 DirIndY; r:1 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN1(r); AL = r; }
+:ADC "A", DirInd is mflag=0 & dmode=0 & o0=0x72; DirInd { a:2 = A; b:2 = *:2 DirInd; t:2 = a + b; r:2 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN2(r); A = r; }
+:ADC "A", DirInd is mflag=0 & dmode=1 & o0=0x72; DirInd { a:2 = A; b:2 = *:2 DirInd; r:2 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN2(r); A = r; }
+:ADC "A", DirInd is mflag=1 & dmode=0 & o0=0x72; DirInd { a:1 = AL; b:1 = *:1 DirInd; t:1 = a + b; r:1 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN1(r); AL = r; }
+:ADC "A", DirInd is mflag=1 & dmode=1 & o0=0x72; DirInd { a:1 = AL; b:1 = *:1 DirInd; r:1 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN1(r); AL = r; }
+:ADC "A", SrIndY is mflag=0 & dmode=0 & o0=0x73; SrIndY { a:2 = A; b:2 = *:2 SrIndY; t:2 = a + b; r:2 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN2(r); A = r; }
+:ADC "A", SrIndY is mflag=0 & dmode=1 & o0=0x73; SrIndY { a:2 = A; b:2 = *:2 SrIndY; r:2 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN2(r); A = r; }
+:ADC "A", SrIndY is mflag=1 & dmode=0 & o0=0x73; SrIndY { a:1 = AL; b:1 = *:1 SrIndY; t:1 = a + b; r:1 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN1(r); AL = r; }
+:ADC "A", SrIndY is mflag=1 & dmode=1 & o0=0x73; SrIndY { a:1 = AL; b:1 = *:1 SrIndY; r:1 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN1(r); AL = r; }
+:LDM Imm16b, DirX is mflag=0 & o0=0x74; DirX; Imm16b { *:2 DirX = Imm16b; }
+:LDM Imm8b, DirX is mflag=1 & o0=0x74; DirX; Imm8b { *:1 DirX = Imm8b; }
+:ADC "A", DirX is mflag=0 & dmode=0 & o0=0x75; DirX { a:2 = A; b:2 = *:2 DirX; t:2 = a + b; r:2 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN2(r); A = r; }
+:ADC "A", DirX is mflag=0 & dmode=1 & o0=0x75; DirX { a:2 = A; b:2 = *:2 DirX; r:2 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN2(r); A = r; }
+:ADC "A", DirX is mflag=1 & dmode=0 & o0=0x75; DirX { a:1 = AL; b:1 = *:1 DirX; t:1 = a + b; r:1 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN1(r); AL = r; }
+:ADC "A", DirX is mflag=1 & dmode=1 & o0=0x75; DirX { a:1 = AL; b:1 = *:1 DirX; r:1 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN1(r); AL = r; }
+:ROR DirX is mflag=0 & o0=0x76; DirX { v:2 = *:2 DirX; c0:2 = zext(fC) << 15; fC = (v & 1) != 0; r:2 = (v >> 1) | c0; resZN2(r); *:2 DirX = r; }
+:ROR DirX is mflag=1 & o0=0x76; DirX { v:1 = *:1 DirX; c0:1 = zext(fC) << 7; fC = (v & 1) != 0; r:1 = (v >> 1) | c0; resZN1(r); *:1 DirX = r; }
+:ADC "A", DirLIndY is mflag=0 & dmode=0 & o0=0x77; DirLIndY { a:2 = A; b:2 = *:2 DirLIndY; t:2 = a + b; r:2 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN2(r); A = r; }
+:ADC "A", DirLIndY is mflag=0 & dmode=1 & o0=0x77; DirLIndY { a:2 = A; b:2 = *:2 DirLIndY; r:2 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN2(r); A = r; }
+:ADC "A", DirLIndY is mflag=1 & dmode=0 & o0=0x77; DirLIndY { a:1 = AL; b:1 = *:1 DirLIndY; t:1 = a + b; r:1 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN1(r); AL = r; }
+:ADC "A", DirLIndY is mflag=1 & dmode=1 & o0=0x77; DirLIndY { a:1 = AL; b:1 = *:1 DirLIndY; r:1 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN1(r); AL = r; }
+:SEI is o0=0x78 { fI = 1; }
+:ADC "A", AbsY is mflag=0 & dmode=0 & o0=0x79; AbsY { a:2 = A; b:2 = *:2 AbsY; t:2 = a + b; r:2 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN2(r); A = r; }
+:ADC "A", AbsY is mflag=0 & dmode=1 & o0=0x79; AbsY { a:2 = A; b:2 = *:2 AbsY; r:2 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN2(r); A = r; }
+:ADC "A", AbsY is mflag=1 & dmode=0 & o0=0x79; AbsY { a:1 = AL; b:1 = *:1 AbsY; t:1 = a + b; r:1 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN1(r); AL = r; }
+:ADC "A", AbsY is mflag=1 & dmode=1 & o0=0x79; AbsY { a:1 = AL; b:1 = *:1 AbsY; r:1 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN1(r); AL = r; }
+:PLY is xflag=0 & o0=0x7a { v:2 = 0; pull2(v); Y = v; resZN2(v); }
+:PLY is xflag=1 & o0=0x7a { v:1 = 0; pull1(v); Y = zext(v); resZN1(v); }
+:TDA is o0=0x7b { A = DPR; }
+:JMP "("^u16^",X)" is o0=0x7c; u16 & XR { p:3 = (zext(PG) << 16) | zext(u16 + XR); q:2 = *:2 p; t:3 = (zext(PG) << 16) | zext(q); goto [t]; }
+:ADC "A", AbsX is mflag=0 & dmode=0 & o0=0x7d; AbsX { a:2 = A; b:2 = *:2 AbsX; t:2 = a + b; r:2 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN2(r); A = r; }
+:ADC "A", AbsX is mflag=0 & dmode=1 & o0=0x7d; AbsX { a:2 = A; b:2 = *:2 AbsX; r:2 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN2(r); A = r; }
+:ADC "A", AbsX is mflag=1 & dmode=0 & o0=0x7d; AbsX { a:1 = AL; b:1 = *:1 AbsX; t:1 = a + b; r:1 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN1(r); AL = r; }
+:ADC "A", AbsX is mflag=1 & dmode=1 & o0=0x7d; AbsX { a:1 = AL; b:1 = *:1 AbsX; r:1 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN1(r); AL = r; }
+:ROR AbsX is mflag=0 & o0=0x7e; AbsX { v:2 = *:2 AbsX; c0:2 = zext(fC) << 15; fC = (v & 1) != 0; r:2 = (v >> 1) | c0; resZN2(r); *:2 AbsX = r; }
+:ROR AbsX is mflag=1 & o0=0x7e; AbsX { v:1 = *:1 AbsX; c0:1 = zext(fC) << 7; fC = (v & 1) != 0; r:1 = (v >> 1) | c0; resZN1(r); *:1 AbsX = r; }
+:ADC "A", AblX is mflag=0 & dmode=0 & o0=0x7f; AblX { a:2 = A; b:2 = *:2 AblX; t:2 = a + b; r:2 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN2(r); A = r; }
+:ADC "A", AblX is mflag=0 & dmode=1 & o0=0x7f; AblX { a:2 = A; b:2 = *:2 AblX; r:2 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN2(r); A = r; }
+:ADC "A", AblX is mflag=1 & dmode=0 & o0=0x7f; AblX { a:1 = AL; b:1 = *:1 AblX; t:1 = a + b; r:1 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN1(r); AL = r; }
+:ADC "A", AblX is mflag=1 & dmode=1 & o0=0x7f; AblX { a:1 = AL; b:1 = *:1 AblX; r:1 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN1(r); AL = r; }
+:BRA Rel8 is o0=0x80; Rel8 { goto Rel8; }
+:STA "A", DirXInd is mflag=0 & o0=0x81; DirXInd { *:2 DirXInd = A; }
+:STA "A", DirXInd is mflag=1 & o0=0x81; DirXInd { *:1 DirXInd = AL; }
+:BRAL Rel16 is o0=0x82; Rel16 { goto Rel16; }
+:STA "A", Sr is mflag=0 & o0=0x83; Sr { *:2 Sr = A; }
+:STA "A", Sr is mflag=1 & o0=0x83; Sr { *:1 Sr = AL; }
+:STY Dir is xflag=0 & o0=0x84; Dir { *:2 Dir = Y; }
+:STY Dir is xflag=1 & o0=0x84; Dir { *:1 Dir = YL; }
+:STA "A", Dir is mflag=0 & o0=0x85; Dir { *:2 Dir = A; }
+:STA "A", Dir is mflag=1 & o0=0x85; Dir { *:1 Dir = AL; }
+:STX Dir is xflag=0 & o0=0x86; Dir { *:2 Dir = X; }
+:STX Dir is xflag=1 & o0=0x86; Dir { *:1 Dir = XL; }
+:STA "A", DirLInd is mflag=0 & o0=0x87; DirLInd { *:2 DirLInd = A; }
+:STA "A", DirLInd is mflag=1 & o0=0x87; DirLInd { *:1 DirLInd = AL; }
+:DEY is xflag=0 & o0=0x88 { r:2 = Y - 1; Y = r; resZN2(r); }
+:DEY is xflag=1 & o0=0x88 { r:1 = Y:1 - 1; Y = zext(r); resZN1(r); }
+:TXA is mflag=0 & o0=0x8a { r:2 = X; A = r; resZN2(r); }
+:TXA is mflag=1 & o0=0x8a { r:1 = X:1; A = (A & 0xff00) | zext(r); resZN1(r); }
+:PHT is o0=0x8b { push1(DT); }
+:STY Abs is xflag=0 & o0=0x8c; Abs { *:2 Abs = Y; }
+:STY Abs is xflag=1 & o0=0x8c; Abs { *:1 Abs = YL; }
+:STA "A", Abs is mflag=0 & o0=0x8d; Abs { *:2 Abs = A; }
+:STA "A", Abs is mflag=1 & o0=0x8d; Abs { *:1 Abs = AL; }
+:STX Abs is xflag=0 & o0=0x8e; Abs { *:2 Abs = X; }
+:STX Abs is xflag=1 & o0=0x8e; Abs { *:1 Abs = XL; }
+:STA "A", Abl is mflag=0 & o0=0x8f; Abl { *:2 Abl = A; }
+:STA "A", Abl is mflag=1 & o0=0x8f; Abl { *:1 Abl = AL; }
+:BCC Rel8 is o0=0x90; Rel8 { if (!fC) goto Rel8; }
+:STA "A", DirIndY is mflag=0 & o0=0x91; DirIndY { *:2 DirIndY = A; }
+:STA "A", DirIndY is mflag=1 & o0=0x91; DirIndY { *:1 DirIndY = AL; }
+:STA "A", DirInd is mflag=0 & o0=0x92; DirInd { *:2 DirInd = A; }
+:STA "A", DirInd is mflag=1 & o0=0x92; DirInd { *:1 DirInd = AL; }
+:STA "A", SrIndY is mflag=0 & o0=0x93; SrIndY { *:2 SrIndY = A; }
+:STA "A", SrIndY is mflag=1 & o0=0x93; SrIndY { *:1 SrIndY = AL; }
+:STY DirX is xflag=0 & o0=0x94; DirX { *:2 DirX = Y; }
+:STY DirX is xflag=1 & o0=0x94; DirX { *:1 DirX = YL; }
+:STA "A", DirX is mflag=0 & o0=0x95; DirX { *:2 DirX = A; }
+:STA "A", DirX is mflag=1 & o0=0x95; DirX { *:1 DirX = AL; }
+:STX DirY is xflag=0 & o0=0x96; DirY { *:2 DirY = X; }
+:STX DirY is xflag=1 & o0=0x96; DirY { *:1 DirY = XL; }
+:STA "A", DirLIndY is mflag=0 & o0=0x97; DirLIndY { *:2 DirLIndY = A; }
+:STA "A", DirLIndY is mflag=1 & o0=0x97; DirLIndY { *:1 DirLIndY = AL; }
+:TYA is mflag=0 & o0=0x98 { r:2 = Y; A = r; resZN2(r); }
+:TYA is mflag=1 & o0=0x98 { r:1 = Y:1; A = (A & 0xff00) | zext(r); resZN1(r); }
+:STA "A", AbsY is mflag=0 & o0=0x99; AbsY { *:2 AbsY = A; }
+:STA "A", AbsY is mflag=1 & o0=0x99; AbsY { *:1 AbsY = AL; }
+:TXS is o0=0x9a { S = zext(X); }
+:TXY is xflag=0 & o0=0x9b { r:2 = X; Y = r; resZN2(r); }
+:TXY is xflag=1 & o0=0x9b { r:1 = X:1; Y = zext(r); resZN1(r); }
+:LDM Imm16b, Abs is mflag=0 & o0=0x9c; Abs; Imm16b { *:2 Abs = Imm16b; }
+:LDM Imm8b, Abs is mflag=1 & o0=0x9c; Abs; Imm8b { *:1 Abs = Imm8b; }
+:STA "A", AbsX is mflag=0 & o0=0x9d; AbsX { *:2 AbsX = A; }
+:STA "A", AbsX is mflag=1 & o0=0x9d; AbsX { *:1 AbsX = AL; }
+:LDM Imm16b, AbsX is mflag=0 & o0=0x9e; AbsX; Imm16b { *:2 AbsX = Imm16b; }
+:LDM Imm8b, AbsX is mflag=1 & o0=0x9e; AbsX; Imm8b { *:1 AbsX = Imm8b; }
+:STA "A", AblX is mflag=0 & o0=0x9f; AblX { *:2 AblX = A; }
+:STA "A", AblX is mflag=1 & o0=0x9f; AblX { *:1 AblX = AL; }
+:LDY Imm16 is xflag=0 & o0=0xa0; Imm16 { r:2 = Imm16; resZN2(r); Y = r; }
+:LDY Imm8 is xflag=1 & o0=0xa0; Imm8 { r:1 = Imm8; resZN1(r); Y = zext(r); }
+:LDA "A", DirXInd is mflag=0 & o0=0xa1; DirXInd { r:2 = *:2 DirXInd; resZN2(r); A = r; }
+:LDA "A", DirXInd is mflag=1 & o0=0xa1; DirXInd { r:1 = *:1 DirXInd; resZN1(r); AL = r; }
+:LDX Imm16 is xflag=0 & o0=0xa2; Imm16 { r:2 = Imm16; resZN2(r); X = r; }
+:LDX Imm8 is xflag=1 & o0=0xa2; Imm8 { r:1 = Imm8; resZN1(r); X = zext(r); }
+:LDA "A", Sr is mflag=0 & o0=0xa3; Sr { r:2 = *:2 Sr; resZN2(r); A = r; }
+:LDA "A", Sr is mflag=1 & o0=0xa3; Sr { r:1 = *:1 Sr; resZN1(r); AL = r; }
+:LDY Dir is xflag=0 & o0=0xa4; Dir { r:2 = *:2 Dir; resZN2(r); Y = r; }
+:LDY Dir is xflag=1 & o0=0xa4; Dir { r:1 = *:1 Dir; resZN1(r); Y = zext(r); }
+:LDA "A", Dir is mflag=0 & o0=0xa5; Dir { r:2 = *:2 Dir; resZN2(r); A = r; }
+:LDA "A", Dir is mflag=1 & o0=0xa5; Dir { r:1 = *:1 Dir; resZN1(r); AL = r; }
+:LDX Dir is xflag=0 & o0=0xa6; Dir { r:2 = *:2 Dir; resZN2(r); X = r; }
+:LDX Dir is xflag=1 & o0=0xa6; Dir { r:1 = *:1 Dir; resZN1(r); X = zext(r); }
+:LDA "A", DirLInd is mflag=0 & o0=0xa7; DirLInd { r:2 = *:2 DirLInd; resZN2(r); A = r; }
+:LDA "A", DirLInd is mflag=1 & o0=0xa7; DirLInd { r:1 = *:1 DirLInd; resZN1(r); AL = r; }
+:TAY is xflag=0 & o0=0xa8 { r:2 = A; Y = r; resZN2(r); }
+:TAY is xflag=1 & o0=0xa8 { r:1 = A:1; Y = zext(r); resZN1(r); }
+:LDA "A", Imm16 is mflag=0 & o0=0xa9; Imm16 { r:2 = Imm16; resZN2(r); A = r; }
+:LDA "A", Imm8 is mflag=1 & o0=0xa9; Imm8 { r:1 = Imm8; resZN1(r); AL = r; }
+:TAX is xflag=0 & o0=0xaa { r:2 = A; X = r; resZN2(r); }
+:TAX is xflag=1 & o0=0xaa { r:1 = A:1; X = zext(r); resZN1(r); }
+:PLT is o0=0xab { v:1 = 0; pull1(v); DT = v; resZN1(v); }
+:LDY Abs is xflag=0 & o0=0xac; Abs { r:2 = *:2 Abs; resZN2(r); Y = r; }
+:LDY Abs is xflag=1 & o0=0xac; Abs { r:1 = *:1 Abs; resZN1(r); Y = zext(r); }
+:LDA "A", Abs is mflag=0 & o0=0xad; Abs { r:2 = *:2 Abs; resZN2(r); A = r; }
+:LDA "A", Abs is mflag=1 & o0=0xad; Abs { r:1 = *:1 Abs; resZN1(r); AL = r; }
+:LDX Abs is xflag=0 & o0=0xae; Abs { r:2 = *:2 Abs; resZN2(r); X = r; }
+:LDX Abs is xflag=1 & o0=0xae; Abs { r:1 = *:1 Abs; resZN1(r); X = zext(r); }
+:LDA "A", Abl is mflag=0 & o0=0xaf; Abl { r:2 = *:2 Abl; resZN2(r); A = r; }
+:LDA "A", Abl is mflag=1 & o0=0xaf; Abl { r:1 = *:1 Abl; resZN1(r); AL = r; }
+:BCS Rel8 is o0=0xb0; Rel8 { if (fC) goto Rel8; }
+:LDA "A", DirIndY is mflag=0 & o0=0xb1; DirIndY { r:2 = *:2 DirIndY; resZN2(r); A = r; }
+:LDA "A", DirIndY is mflag=1 & o0=0xb1; DirIndY { r:1 = *:1 DirIndY; resZN1(r); AL = r; }
+:LDA "A", DirInd is mflag=0 & o0=0xb2; DirInd { r:2 = *:2 DirInd; resZN2(r); A = r; }
+:LDA "A", DirInd is mflag=1 & o0=0xb2; DirInd { r:1 = *:1 DirInd; resZN1(r); AL = r; }
+:LDA "A", SrIndY is mflag=0 & o0=0xb3; SrIndY { r:2 = *:2 SrIndY; resZN2(r); A = r; }
+:LDA "A", SrIndY is mflag=1 & o0=0xb3; SrIndY { r:1 = *:1 SrIndY; resZN1(r); AL = r; }
+:LDY DirX is xflag=0 & o0=0xb4; DirX { r:2 = *:2 DirX; resZN2(r); Y = r; }
+:LDY DirX is xflag=1 & o0=0xb4; DirX { r:1 = *:1 DirX; resZN1(r); Y = zext(r); }
+:LDA "A", DirX is mflag=0 & o0=0xb5; DirX { r:2 = *:2 DirX; resZN2(r); A = r; }
+:LDA "A", DirX is mflag=1 & o0=0xb5; DirX { r:1 = *:1 DirX; resZN1(r); AL = r; }
+:LDX DirY is xflag=0 & o0=0xb6; DirY { r:2 = *:2 DirY; resZN2(r); X = r; }
+:LDX DirY is xflag=1 & o0=0xb6; DirY { r:1 = *:1 DirY; resZN1(r); X = zext(r); }
+:LDA "A", DirLIndY is mflag=0 & o0=0xb7; DirLIndY { r:2 = *:2 DirLIndY; resZN2(r); A = r; }
+:LDA "A", DirLIndY is mflag=1 & o0=0xb7; DirLIndY { r:1 = *:1 DirLIndY; resZN1(r); AL = r; }
+:CLV is o0=0xb8 { fV = 0; }
+:LDA "A", AbsY is mflag=0 & o0=0xb9; AbsY { r:2 = *:2 AbsY; resZN2(r); A = r; }
+:LDA "A", AbsY is mflag=1 & o0=0xb9; AbsY { r:1 = *:1 AbsY; resZN1(r); AL = r; }
+:TSX is xflag=0 & o0=0xba { r:2 = S:2; X = r; resZN2(r); }
+:TSX is xflag=1 & o0=0xba { r:1 = S:1; X = zext(r); resZN1(r); }
+:TYX is xflag=0 & o0=0xbb { r:2 = Y; X = r; resZN2(r); }
+:TYX is xflag=1 & o0=0xbb { r:1 = Y:1; X = zext(r); resZN1(r); }
+:LDY AbsX is xflag=0 & o0=0xbc; AbsX { r:2 = *:2 AbsX; resZN2(r); Y = r; }
+:LDY AbsX is xflag=1 & o0=0xbc; AbsX { r:1 = *:1 AbsX; resZN1(r); Y = zext(r); }
+:LDA "A", AbsX is mflag=0 & o0=0xbd; AbsX { r:2 = *:2 AbsX; resZN2(r); A = r; }
+:LDA "A", AbsX is mflag=1 & o0=0xbd; AbsX { r:1 = *:1 AbsX; resZN1(r); AL = r; }
+:LDX AbsY is xflag=0 & o0=0xbe; AbsY { r:2 = *:2 AbsY; resZN2(r); X = r; }
+:LDX AbsY is xflag=1 & o0=0xbe; AbsY { r:1 = *:1 AbsY; resZN1(r); X = zext(r); }
+:LDA "A", AblX is mflag=0 & o0=0xbf; AblX { r:2 = *:2 AblX; resZN2(r); A = r; }
+:LDA "A", AblX is mflag=1 & o0=0xbf; AblX { r:1 = *:1 AblX; resZN1(r); AL = r; }
+:CPY Imm16 is xflag=0 & o0=0xc0; Imm16 { a:2 = Y; b:2 = Imm16; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CPY Imm8 is xflag=1 & o0=0xc0; Imm8 { a:1 = YL; b:1 = Imm8; r:1 = a - b; fC = a >= b; resZN1(r); }
+:CMP "A", DirXInd is mflag=0 & o0=0xc1; DirXInd { a:2 = A; b:2 = *:2 DirXInd; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CMP "A", DirXInd is mflag=1 & o0=0xc1; DirXInd { a:1 = AL; b:1 = *:1 DirXInd; r:1 = a - b; fC = a >= b; resZN1(r); }
+:CLP Imm8 is o0=0xc2; Imm8 & b8_m & b8_x & b8_d [ mflag = mflag & ~b8_m; xflag = xflag & ~b8_x; dmode = dmode & ~b8_d; globalset(inst_next, mflag); globalset(inst_next, xflag); globalset(inst_next, dmode); ] { p:2 = 0; packPS(p); p = p & ~zext(Imm8); unpackPS(p); }
+:CMP "A", Sr is mflag=0 & o0=0xc3; Sr { a:2 = A; b:2 = *:2 Sr; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CMP "A", Sr is mflag=1 & o0=0xc3; Sr { a:1 = AL; b:1 = *:1 Sr; r:1 = a - b; fC = a >= b; resZN1(r); }
+:CPY Dir is xflag=0 & o0=0xc4; Dir { a:2 = Y; b:2 = *:2 Dir; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CPY Dir is xflag=1 & o0=0xc4; Dir { a:1 = YL; b:1 = *:1 Dir; r:1 = a - b; fC = a >= b; resZN1(r); }
+:CMP "A", Dir is mflag=0 & o0=0xc5; Dir { a:2 = A; b:2 = *:2 Dir; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CMP "A", Dir is mflag=1 & o0=0xc5; Dir { a:1 = AL; b:1 = *:1 Dir; r:1 = a - b; fC = a >= b; resZN1(r); }
+:DEC Dir is mflag=0 & o0=0xc6; Dir { v:2 = *:2 Dir; r:2 = v - 1; resZN2(r); *:2 Dir = r; }
+:DEC Dir is mflag=1 & o0=0xc6; Dir { v:1 = *:1 Dir; r:1 = v - 1; resZN1(r); *:1 Dir = r; }
+:CMP "A", DirLInd is mflag=0 & o0=0xc7; DirLInd { a:2 = A; b:2 = *:2 DirLInd; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CMP "A", DirLInd is mflag=1 & o0=0xc7; DirLInd { a:1 = AL; b:1 = *:1 DirLInd; r:1 = a - b; fC = a >= b; resZN1(r); }
+:INY is xflag=0 & o0=0xc8 { r:2 = Y + 1; Y = r; resZN2(r); }
+:INY is xflag=1 & o0=0xc8 { r:1 = Y:1 + 1; Y = zext(r); resZN1(r); }
+:CMP "A", Imm16 is mflag=0 & o0=0xc9; Imm16 { a:2 = A; b:2 = Imm16; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CMP "A", Imm8 is mflag=1 & o0=0xc9; Imm8 { a:1 = AL; b:1 = Imm8; r:1 = a - b; fC = a >= b; resZN1(r); }
+:DEX is xflag=0 & o0=0xca { r:2 = X - 1; X = r; resZN2(r); }
+:DEX is xflag=1 & o0=0xca { r:1 = X:1 - 1; X = zext(r); resZN1(r); }
+:WIT is o0=0xcb { wait(); }
+:CPY Abs is xflag=0 & o0=0xcc; Abs { a:2 = Y; b:2 = *:2 Abs; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CPY Abs is xflag=1 & o0=0xcc; Abs { a:1 = YL; b:1 = *:1 Abs; r:1 = a - b; fC = a >= b; resZN1(r); }
+:CMP "A", Abs is mflag=0 & o0=0xcd; Abs { a:2 = A; b:2 = *:2 Abs; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CMP "A", Abs is mflag=1 & o0=0xcd; Abs { a:1 = AL; b:1 = *:1 Abs; r:1 = a - b; fC = a >= b; resZN1(r); }
+:DEC Abs is mflag=0 & o0=0xce; Abs { v:2 = *:2 Abs; r:2 = v - 1; resZN2(r); *:2 Abs = r; }
+:DEC Abs is mflag=1 & o0=0xce; Abs { v:1 = *:1 Abs; r:1 = v - 1; resZN1(r); *:1 Abs = r; }
+:CMP "A", Abl is mflag=0 & o0=0xcf; Abl { a:2 = A; b:2 = *:2 Abl; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CMP "A", Abl is mflag=1 & o0=0xcf; Abl { a:1 = AL; b:1 = *:1 Abl; r:1 = a - b; fC = a >= b; resZN1(r); }
+:BNE Rel8 is o0=0xd0; Rel8 { if (!fZ) goto Rel8; }
+:CMP "A", DirIndY is mflag=0 & o0=0xd1; DirIndY { a:2 = A; b:2 = *:2 DirIndY; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CMP "A", DirIndY is mflag=1 & o0=0xd1; DirIndY { a:1 = AL; b:1 = *:1 DirIndY; r:1 = a - b; fC = a >= b; resZN1(r); }
+:CMP "A", DirInd is mflag=0 & o0=0xd2; DirInd { a:2 = A; b:2 = *:2 DirInd; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CMP "A", DirInd is mflag=1 & o0=0xd2; DirInd { a:1 = AL; b:1 = *:1 DirInd; r:1 = a - b; fC = a >= b; resZN1(r); }
+:CMP "A", SrIndY is mflag=0 & o0=0xd3; SrIndY { a:2 = A; b:2 = *:2 SrIndY; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CMP "A", SrIndY is mflag=1 & o0=0xd3; SrIndY { a:1 = AL; b:1 = *:1 SrIndY; r:1 = a - b; fC = a >= b; resZN1(r); }
+:PEI Dir is o0=0xd4; Dir { v:2 = *:2 Dir; push2(v); }
+:CMP "A", DirX is mflag=0 & o0=0xd5; DirX { a:2 = A; b:2 = *:2 DirX; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CMP "A", DirX is mflag=1 & o0=0xd5; DirX { a:1 = AL; b:1 = *:1 DirX; r:1 = a - b; fC = a >= b; resZN1(r); }
+:DEC DirX is mflag=0 & o0=0xd6; DirX { v:2 = *:2 DirX; r:2 = v - 1; resZN2(r); *:2 DirX = r; }
+:DEC DirX is mflag=1 & o0=0xd6; DirX { v:1 = *:1 DirX; r:1 = v - 1; resZN1(r); *:1 DirX = r; }
+:CMP "A", DirLIndY is mflag=0 & o0=0xd7; DirLIndY { a:2 = A; b:2 = *:2 DirLIndY; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CMP "A", DirLIndY is mflag=1 & o0=0xd7; DirLIndY { a:1 = AL; b:1 = *:1 DirLIndY; r:1 = a - b; fC = a >= b; resZN1(r); }
+:CLM is o0=0xd8 [ mflag = 0; globalset(inst_next, mflag); ] { fm = 0; }
+:CMP "A", AbsY is mflag=0 & o0=0xd9; AbsY { a:2 = A; b:2 = *:2 AbsY; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CMP "A", AbsY is mflag=1 & o0=0xd9; AbsY { a:1 = AL; b:1 = *:1 AbsY; r:1 = a - b; fC = a >= b; resZN1(r); }
+:PHX is xflag=0 & o0=0xda { push2(X); }
+:PHX is xflag=1 & o0=0xda { v:1 = X:1; push1(v); }
+:STP is o0=0xdb { stop(); }
+:JMPL "L("^u16^")" is o0=0xdc; u16 { p:3 = u16; t:3 = *:3 p; PG = t(2); goto [t]; }
+:CMP "A", AbsX is mflag=0 & o0=0xdd; AbsX { a:2 = A; b:2 = *:2 AbsX; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CMP "A", AbsX is mflag=1 & o0=0xdd; AbsX { a:1 = AL; b:1 = *:1 AbsX; r:1 = a - b; fC = a >= b; resZN1(r); }
+:DEC AbsX is mflag=0 & o0=0xde; AbsX { v:2 = *:2 AbsX; r:2 = v - 1; resZN2(r); *:2 AbsX = r; }
+:DEC AbsX is mflag=1 & o0=0xde; AbsX { v:1 = *:1 AbsX; r:1 = v - 1; resZN1(r); *:1 AbsX = r; }
+:CMP "A", AblX is mflag=0 & o0=0xdf; AblX { a:2 = A; b:2 = *:2 AblX; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CMP "A", AblX is mflag=1 & o0=0xdf; AblX { a:1 = AL; b:1 = *:1 AblX; r:1 = a - b; fC = a >= b; resZN1(r); }
+:CPX Imm16 is xflag=0 & o0=0xe0; Imm16 { a:2 = X; b:2 = Imm16; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CPX Imm8 is xflag=1 & o0=0xe0; Imm8 { a:1 = XL; b:1 = Imm8; r:1 = a - b; fC = a >= b; resZN1(r); }
+:SBC "A", DirXInd is mflag=0 & dmode=0 & o0=0xe1; DirXInd { a:2 = A; b:2 = *:2 DirXInd; nb:2 = zext(!fC); t:2 = a - b; r:2 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN2(r); A = r; }
+:SBC "A", DirXInd is mflag=0 & dmode=1 & o0=0xe1; DirXInd { a:2 = A; b:2 = *:2 DirXInd; r:2 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN2(r); A = r; }
+:SBC "A", DirXInd is mflag=1 & dmode=0 & o0=0xe1; DirXInd { a:1 = AL; b:1 = *:1 DirXInd; nb:1 = zext(!fC); t:1 = a - b; r:1 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN1(r); AL = r; }
+:SBC "A", DirXInd is mflag=1 & dmode=1 & o0=0xe1; DirXInd { a:1 = AL; b:1 = *:1 DirXInd; r:1 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN1(r); AL = r; }
+:SEP Imm8 is o0=0xe2; Imm8 & b8_m & b8_x & b8_d [ mflag = mflag | b8_m; xflag = xflag | b8_x; dmode = dmode | b8_d; globalset(inst_next, mflag); globalset(inst_next, xflag); globalset(inst_next, dmode); ] { p:2 = 0; packPS(p); p = p | zext(Imm8); unpackPS(p); }
+:SBC "A", Sr is mflag=0 & dmode=0 & o0=0xe3; Sr { a:2 = A; b:2 = *:2 Sr; nb:2 = zext(!fC); t:2 = a - b; r:2 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN2(r); A = r; }
+:SBC "A", Sr is mflag=0 & dmode=1 & o0=0xe3; Sr { a:2 = A; b:2 = *:2 Sr; r:2 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN2(r); A = r; }
+:SBC "A", Sr is mflag=1 & dmode=0 & o0=0xe3; Sr { a:1 = AL; b:1 = *:1 Sr; nb:1 = zext(!fC); t:1 = a - b; r:1 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN1(r); AL = r; }
+:SBC "A", Sr is mflag=1 & dmode=1 & o0=0xe3; Sr { a:1 = AL; b:1 = *:1 Sr; r:1 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN1(r); AL = r; }
+:CPX Dir is xflag=0 & o0=0xe4; Dir { a:2 = X; b:2 = *:2 Dir; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CPX Dir is xflag=1 & o0=0xe4; Dir { a:1 = XL; b:1 = *:1 Dir; r:1 = a - b; fC = a >= b; resZN1(r); }
+:SBC "A", Dir is mflag=0 & dmode=0 & o0=0xe5; Dir { a:2 = A; b:2 = *:2 Dir; nb:2 = zext(!fC); t:2 = a - b; r:2 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN2(r); A = r; }
+:SBC "A", Dir is mflag=0 & dmode=1 & o0=0xe5; Dir { a:2 = A; b:2 = *:2 Dir; r:2 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN2(r); A = r; }
+:SBC "A", Dir is mflag=1 & dmode=0 & o0=0xe5; Dir { a:1 = AL; b:1 = *:1 Dir; nb:1 = zext(!fC); t:1 = a - b; r:1 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN1(r); AL = r; }
+:SBC "A", Dir is mflag=1 & dmode=1 & o0=0xe5; Dir { a:1 = AL; b:1 = *:1 Dir; r:1 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN1(r); AL = r; }
+:INC Dir is mflag=0 & o0=0xe6; Dir { v:2 = *:2 Dir; r:2 = v + 1; resZN2(r); *:2 Dir = r; }
+:INC Dir is mflag=1 & o0=0xe6; Dir { v:1 = *:1 Dir; r:1 = v + 1; resZN1(r); *:1 Dir = r; }
+:SBC "A", DirLInd is mflag=0 & dmode=0 & o0=0xe7; DirLInd { a:2 = A; b:2 = *:2 DirLInd; nb:2 = zext(!fC); t:2 = a - b; r:2 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN2(r); A = r; }
+:SBC "A", DirLInd is mflag=0 & dmode=1 & o0=0xe7; DirLInd { a:2 = A; b:2 = *:2 DirLInd; r:2 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN2(r); A = r; }
+:SBC "A", DirLInd is mflag=1 & dmode=0 & o0=0xe7; DirLInd { a:1 = AL; b:1 = *:1 DirLInd; nb:1 = zext(!fC); t:1 = a - b; r:1 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN1(r); AL = r; }
+:SBC "A", DirLInd is mflag=1 & dmode=1 & o0=0xe7; DirLInd { a:1 = AL; b:1 = *:1 DirLInd; r:1 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN1(r); AL = r; }
+:INX is xflag=0 & o0=0xe8 { r:2 = X + 1; X = r; resZN2(r); }
+:INX is xflag=1 & o0=0xe8 { r:1 = X:1 + 1; X = zext(r); resZN1(r); }
+:SBC "A", Imm16 is mflag=0 & dmode=0 & o0=0xe9; Imm16 { a:2 = A; b:2 = Imm16; nb:2 = zext(!fC); t:2 = a - b; r:2 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN2(r); A = r; }
+:SBC "A", Imm16 is mflag=0 & dmode=1 & o0=0xe9; Imm16 { a:2 = A; b:2 = Imm16; r:2 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN2(r); A = r; }
+:SBC "A", Imm8 is mflag=1 & dmode=0 & o0=0xe9; Imm8 { a:1 = AL; b:1 = Imm8; nb:1 = zext(!fC); t:1 = a - b; r:1 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN1(r); AL = r; }
+:SBC "A", Imm8 is mflag=1 & dmode=1 & o0=0xe9; Imm8 { a:1 = AL; b:1 = Imm8; r:1 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN1(r); AL = r; }
+:NOP is o0=0xea {  }
+:PSH Imm8 is mflag=0 & xflag=0 & o0=0xeb; Imm8 { if ((Imm8 & 128) == 0) goto <s7>; p:2 = 0; packPS(p); push2(p); <s7> if ((Imm8 & 64) == 0) goto <s6>; push1(PG); <s6> if ((Imm8 & 32) == 0) goto <s5>; push1(DT); <s5> if ((Imm8 & 16) == 0) goto <s4>; push2(DPR); <s4> if ((Imm8 & 8) == 0) goto <s3>; push2(Y); <s3> if ((Imm8 & 4) == 0) goto <s2>; push2(X); <s2> if ((Imm8 & 2) == 0) goto <s1>; push2(B); <s1> if ((Imm8 & 1) == 0) goto <s0>; push2(A); <s0> }
+:PSH Imm8 is mflag=0 & xflag=1 & o0=0xeb; Imm8 { if ((Imm8 & 128) == 0) goto <s7>; p:2 = 0; packPS(p); push2(p); <s7> if ((Imm8 & 64) == 0) goto <s6>; push1(PG); <s6> if ((Imm8 & 32) == 0) goto <s5>; push1(DT); <s5> if ((Imm8 & 16) == 0) goto <s4>; push2(DPR); <s4> if ((Imm8 & 8) == 0) goto <s3>; vY:1 = Y:1; push1(vY); <s3> if ((Imm8 & 4) == 0) goto <s2>; vX:1 = X:1; push1(vX); <s2> if ((Imm8 & 2) == 0) goto <s1>; push2(B); <s1> if ((Imm8 & 1) == 0) goto <s0>; push2(A); <s0> }
+:PSH Imm8 is mflag=1 & xflag=0 & o0=0xeb; Imm8 { if ((Imm8 & 128) == 0) goto <s7>; p:2 = 0; packPS(p); push2(p); <s7> if ((Imm8 & 64) == 0) goto <s6>; push1(PG); <s6> if ((Imm8 & 32) == 0) goto <s5>; push1(DT); <s5> if ((Imm8 & 16) == 0) goto <s4>; push2(DPR); <s4> if ((Imm8 & 8) == 0) goto <s3>; push2(Y); <s3> if ((Imm8 & 4) == 0) goto <s2>; push2(X); <s2> if ((Imm8 & 2) == 0) goto <s1>; vB:1 = B:1; push1(vB); <s1> if ((Imm8 & 1) == 0) goto <s0>; vA:1 = A:1; push1(vA); <s0> }
+:PSH Imm8 is mflag=1 & xflag=1 & o0=0xeb; Imm8 { if ((Imm8 & 128) == 0) goto <s7>; p:2 = 0; packPS(p); push2(p); <s7> if ((Imm8 & 64) == 0) goto <s6>; push1(PG); <s6> if ((Imm8 & 32) == 0) goto <s5>; push1(DT); <s5> if ((Imm8 & 16) == 0) goto <s4>; push2(DPR); <s4> if ((Imm8 & 8) == 0) goto <s3>; vY:1 = Y:1; push1(vY); <s3> if ((Imm8 & 4) == 0) goto <s2>; vX:1 = X:1; push1(vX); <s2> if ((Imm8 & 2) == 0) goto <s1>; vB:1 = B:1; push1(vB); <s1> if ((Imm8 & 1) == 0) goto <s0>; vA:1 = A:1; push1(vA); <s0> }
+:CPX Abs is xflag=0 & o0=0xec; Abs { a:2 = X; b:2 = *:2 Abs; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CPX Abs is xflag=1 & o0=0xec; Abs { a:1 = XL; b:1 = *:1 Abs; r:1 = a - b; fC = a >= b; resZN1(r); }
+:SBC "A", Abs is mflag=0 & dmode=0 & o0=0xed; Abs { a:2 = A; b:2 = *:2 Abs; nb:2 = zext(!fC); t:2 = a - b; r:2 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN2(r); A = r; }
+:SBC "A", Abs is mflag=0 & dmode=1 & o0=0xed; Abs { a:2 = A; b:2 = *:2 Abs; r:2 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN2(r); A = r; }
+:SBC "A", Abs is mflag=1 & dmode=0 & o0=0xed; Abs { a:1 = AL; b:1 = *:1 Abs; nb:1 = zext(!fC); t:1 = a - b; r:1 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN1(r); AL = r; }
+:SBC "A", Abs is mflag=1 & dmode=1 & o0=0xed; Abs { a:1 = AL; b:1 = *:1 Abs; r:1 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN1(r); AL = r; }
+:INC Abs is mflag=0 & o0=0xee; Abs { v:2 = *:2 Abs; r:2 = v + 1; resZN2(r); *:2 Abs = r; }
+:INC Abs is mflag=1 & o0=0xee; Abs { v:1 = *:1 Abs; r:1 = v + 1; resZN1(r); *:1 Abs = r; }
+:SBC "A", Abl is mflag=0 & dmode=0 & o0=0xef; Abl { a:2 = A; b:2 = *:2 Abl; nb:2 = zext(!fC); t:2 = a - b; r:2 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN2(r); A = r; }
+:SBC "A", Abl is mflag=0 & dmode=1 & o0=0xef; Abl { a:2 = A; b:2 = *:2 Abl; r:2 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN2(r); A = r; }
+:SBC "A", Abl is mflag=1 & dmode=0 & o0=0xef; Abl { a:1 = AL; b:1 = *:1 Abl; nb:1 = zext(!fC); t:1 = a - b; r:1 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN1(r); AL = r; }
+:SBC "A", Abl is mflag=1 & dmode=1 & o0=0xef; Abl { a:1 = AL; b:1 = *:1 Abl; r:1 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN1(r); AL = r; }
+:BEQ Rel8 is o0=0xf0; Rel8 { if (fZ) goto Rel8; }
+:SBC "A", DirIndY is mflag=0 & dmode=0 & o0=0xf1; DirIndY { a:2 = A; b:2 = *:2 DirIndY; nb:2 = zext(!fC); t:2 = a - b; r:2 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN2(r); A = r; }
+:SBC "A", DirIndY is mflag=0 & dmode=1 & o0=0xf1; DirIndY { a:2 = A; b:2 = *:2 DirIndY; r:2 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN2(r); A = r; }
+:SBC "A", DirIndY is mflag=1 & dmode=0 & o0=0xf1; DirIndY { a:1 = AL; b:1 = *:1 DirIndY; nb:1 = zext(!fC); t:1 = a - b; r:1 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN1(r); AL = r; }
+:SBC "A", DirIndY is mflag=1 & dmode=1 & o0=0xf1; DirIndY { a:1 = AL; b:1 = *:1 DirIndY; r:1 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN1(r); AL = r; }
+:SBC "A", DirInd is mflag=0 & dmode=0 & o0=0xf2; DirInd { a:2 = A; b:2 = *:2 DirInd; nb:2 = zext(!fC); t:2 = a - b; r:2 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN2(r); A = r; }
+:SBC "A", DirInd is mflag=0 & dmode=1 & o0=0xf2; DirInd { a:2 = A; b:2 = *:2 DirInd; r:2 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN2(r); A = r; }
+:SBC "A", DirInd is mflag=1 & dmode=0 & o0=0xf2; DirInd { a:1 = AL; b:1 = *:1 DirInd; nb:1 = zext(!fC); t:1 = a - b; r:1 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN1(r); AL = r; }
+:SBC "A", DirInd is mflag=1 & dmode=1 & o0=0xf2; DirInd { a:1 = AL; b:1 = *:1 DirInd; r:1 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN1(r); AL = r; }
+:SBC "A", SrIndY is mflag=0 & dmode=0 & o0=0xf3; SrIndY { a:2 = A; b:2 = *:2 SrIndY; nb:2 = zext(!fC); t:2 = a - b; r:2 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN2(r); A = r; }
+:SBC "A", SrIndY is mflag=0 & dmode=1 & o0=0xf3; SrIndY { a:2 = A; b:2 = *:2 SrIndY; r:2 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN2(r); A = r; }
+:SBC "A", SrIndY is mflag=1 & dmode=0 & o0=0xf3; SrIndY { a:1 = AL; b:1 = *:1 SrIndY; nb:1 = zext(!fC); t:1 = a - b; r:1 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN1(r); AL = r; }
+:SBC "A", SrIndY is mflag=1 & dmode=1 & o0=0xf3; SrIndY { a:1 = AL; b:1 = *:1 SrIndY; r:1 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN1(r); AL = r; }
+:PEA Imm16 is o0=0xf4; Imm16 { push2(Imm16); }
+:SBC "A", DirX is mflag=0 & dmode=0 & o0=0xf5; DirX { a:2 = A; b:2 = *:2 DirX; nb:2 = zext(!fC); t:2 = a - b; r:2 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN2(r); A = r; }
+:SBC "A", DirX is mflag=0 & dmode=1 & o0=0xf5; DirX { a:2 = A; b:2 = *:2 DirX; r:2 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN2(r); A = r; }
+:SBC "A", DirX is mflag=1 & dmode=0 & o0=0xf5; DirX { a:1 = AL; b:1 = *:1 DirX; nb:1 = zext(!fC); t:1 = a - b; r:1 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN1(r); AL = r; }
+:SBC "A", DirX is mflag=1 & dmode=1 & o0=0xf5; DirX { a:1 = AL; b:1 = *:1 DirX; r:1 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN1(r); AL = r; }
+:INC DirX is mflag=0 & o0=0xf6; DirX { v:2 = *:2 DirX; r:2 = v + 1; resZN2(r); *:2 DirX = r; }
+:INC DirX is mflag=1 & o0=0xf6; DirX { v:1 = *:1 DirX; r:1 = v + 1; resZN1(r); *:1 DirX = r; }
+:SBC "A", DirLIndY is mflag=0 & dmode=0 & o0=0xf7; DirLIndY { a:2 = A; b:2 = *:2 DirLIndY; nb:2 = zext(!fC); t:2 = a - b; r:2 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN2(r); A = r; }
+:SBC "A", DirLIndY is mflag=0 & dmode=1 & o0=0xf7; DirLIndY { a:2 = A; b:2 = *:2 DirLIndY; r:2 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN2(r); A = r; }
+:SBC "A", DirLIndY is mflag=1 & dmode=0 & o0=0xf7; DirLIndY { a:1 = AL; b:1 = *:1 DirLIndY; nb:1 = zext(!fC); t:1 = a - b; r:1 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN1(r); AL = r; }
+:SBC "A", DirLIndY is mflag=1 & dmode=1 & o0=0xf7; DirLIndY { a:1 = AL; b:1 = *:1 DirLIndY; r:1 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN1(r); AL = r; }
+:SEM is o0=0xf8 [ mflag = 1; globalset(inst_next, mflag); ] { fm = 1; }
+:SBC "A", AbsY is mflag=0 & dmode=0 & o0=0xf9; AbsY { a:2 = A; b:2 = *:2 AbsY; nb:2 = zext(!fC); t:2 = a - b; r:2 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN2(r); A = r; }
+:SBC "A", AbsY is mflag=0 & dmode=1 & o0=0xf9; AbsY { a:2 = A; b:2 = *:2 AbsY; r:2 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN2(r); A = r; }
+:SBC "A", AbsY is mflag=1 & dmode=0 & o0=0xf9; AbsY { a:1 = AL; b:1 = *:1 AbsY; nb:1 = zext(!fC); t:1 = a - b; r:1 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN1(r); AL = r; }
+:SBC "A", AbsY is mflag=1 & dmode=1 & o0=0xf9; AbsY { a:1 = AL; b:1 = *:1 AbsY; r:1 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN1(r); AL = r; }
+:PLX is xflag=0 & o0=0xfa { v:2 = 0; pull2(v); X = v; resZN2(v); }
+:PLX is xflag=1 & o0=0xfa { v:1 = 0; pull1(v); X = zext(v); resZN1(v); }
+:PUL Imm8 is mflag=0 & xflag=0 & o0=0xfb; Imm8 { if ((Imm8 & 1) == 0) goto <s0>; vA:2 = 0; pull2(vA); A = vA; <s0> if ((Imm8 & 2) == 0) goto <s1>; vB:2 = 0; pull2(vB); B = vB; <s1> if ((Imm8 & 4) == 0) goto <s2>; vX:2 = 0; pull2(vX); X = vX; <s2> if ((Imm8 & 8) == 0) goto <s3>; vY:2 = 0; pull2(vY); Y = vY; <s3> if ((Imm8 & 16) == 0) goto <s4>; vDPR:2 = 0; pull2(vDPR); DPR = vDPR; <s4> if ((Imm8 & 32) == 0) goto <s5>; vDT:1 = 0; pull1(vDT); DT = vDT; <s5> if ((Imm8 & 64) == 0) goto <s6>; vPG:1 = 0; pull1(vPG); PG = vPG; <s6> if ((Imm8 & 128) == 0) goto <s7>; p:2 = 0; pull2(p); unpackPS(p); <s7> }
+:PUL Imm8 is mflag=0 & xflag=1 & o0=0xfb; Imm8 { if ((Imm8 & 1) == 0) goto <s0>; vA:2 = 0; pull2(vA); A = vA; <s0> if ((Imm8 & 2) == 0) goto <s1>; vB:2 = 0; pull2(vB); B = vB; <s1> if ((Imm8 & 4) == 0) goto <s2>; vX:1 = 0; pull1(vX); X = zext(vX); <s2> if ((Imm8 & 8) == 0) goto <s3>; vY:1 = 0; pull1(vY); Y = zext(vY); <s3> if ((Imm8 & 16) == 0) goto <s4>; vDPR:2 = 0; pull2(vDPR); DPR = vDPR; <s4> if ((Imm8 & 32) == 0) goto <s5>; vDT:1 = 0; pull1(vDT); DT = vDT; <s5> if ((Imm8 & 64) == 0) goto <s6>; vPG:1 = 0; pull1(vPG); PG = vPG; <s6> if ((Imm8 & 128) == 0) goto <s7>; p:2 = 0; pull2(p); unpackPS(p); <s7> }
+:PUL Imm8 is mflag=1 & xflag=0 & o0=0xfb; Imm8 { if ((Imm8 & 1) == 0) goto <s0>; vA:1 = 0; pull1(vA); A = (A & 0xff00) | zext(vA); <s0> if ((Imm8 & 2) == 0) goto <s1>; vB:1 = 0; pull1(vB); B = (B & 0xff00) | zext(vB); <s1> if ((Imm8 & 4) == 0) goto <s2>; vX:2 = 0; pull2(vX); X = vX; <s2> if ((Imm8 & 8) == 0) goto <s3>; vY:2 = 0; pull2(vY); Y = vY; <s3> if ((Imm8 & 16) == 0) goto <s4>; vDPR:2 = 0; pull2(vDPR); DPR = vDPR; <s4> if ((Imm8 & 32) == 0) goto <s5>; vDT:1 = 0; pull1(vDT); DT = vDT; <s5> if ((Imm8 & 64) == 0) goto <s6>; vPG:1 = 0; pull1(vPG); PG = vPG; <s6> if ((Imm8 & 128) == 0) goto <s7>; p:2 = 0; pull2(p); unpackPS(p); <s7> }
+:PUL Imm8 is mflag=1 & xflag=1 & o0=0xfb; Imm8 { if ((Imm8 & 1) == 0) goto <s0>; vA:1 = 0; pull1(vA); A = (A & 0xff00) | zext(vA); <s0> if ((Imm8 & 2) == 0) goto <s1>; vB:1 = 0; pull1(vB); B = (B & 0xff00) | zext(vB); <s1> if ((Imm8 & 4) == 0) goto <s2>; vX:1 = 0; pull1(vX); X = zext(vX); <s2> if ((Imm8 & 8) == 0) goto <s3>; vY:1 = 0; pull1(vY); Y = zext(vY); <s3> if ((Imm8 & 16) == 0) goto <s4>; vDPR:2 = 0; pull2(vDPR); DPR = vDPR; <s4> if ((Imm8 & 32) == 0) goto <s5>; vDT:1 = 0; pull1(vDT); DT = vDT; <s5> if ((Imm8 & 64) == 0) goto <s6>; vPG:1 = 0; pull1(vPG); PG = vPG; <s6> if ((Imm8 & 128) == 0) goto <s7>; p:2 = 0; pull2(p); unpackPS(p); <s7> }
+:JSR "("^u16^",X)" is o0=0xfc; u16 & XR { r2:2 = inst_next; push2(r2); p:3 = (zext(PG) << 16) | zext(u16 + XR); q:2 = *:2 p; t:3 = (zext(PG) << 16) | zext(q); call [t]; }
+:SBC "A", AbsX is mflag=0 & dmode=0 & o0=0xfd; AbsX { a:2 = A; b:2 = *:2 AbsX; nb:2 = zext(!fC); t:2 = a - b; r:2 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN2(r); A = r; }
+:SBC "A", AbsX is mflag=0 & dmode=1 & o0=0xfd; AbsX { a:2 = A; b:2 = *:2 AbsX; r:2 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN2(r); A = r; }
+:SBC "A", AbsX is mflag=1 & dmode=0 & o0=0xfd; AbsX { a:1 = AL; b:1 = *:1 AbsX; nb:1 = zext(!fC); t:1 = a - b; r:1 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN1(r); AL = r; }
+:SBC "A", AbsX is mflag=1 & dmode=1 & o0=0xfd; AbsX { a:1 = AL; b:1 = *:1 AbsX; r:1 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN1(r); AL = r; }
+:INC AbsX is mflag=0 & o0=0xfe; AbsX { v:2 = *:2 AbsX; r:2 = v + 1; resZN2(r); *:2 AbsX = r; }
+:INC AbsX is mflag=1 & o0=0xfe; AbsX { v:1 = *:1 AbsX; r:1 = v + 1; resZN1(r); *:1 AbsX = r; }
+:SBC "A", AblX is mflag=0 & dmode=0 & o0=0xff; AblX { a:2 = A; b:2 = *:2 AblX; nb:2 = zext(!fC); t:2 = a - b; r:2 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN2(r); A = r; }
+:SBC "A", AblX is mflag=0 & dmode=1 & o0=0xff; AblX { a:2 = A; b:2 = *:2 AblX; r:2 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN2(r); A = r; }
+:SBC "A", AblX is mflag=1 & dmode=0 & o0=0xff; AblX { a:1 = AL; b:1 = *:1 AblX; nb:1 = zext(!fC); t:1 = a - b; r:1 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN1(r); AL = r; }
+:SBC "A", AblX is mflag=1 & dmode=1 & o0=0xff; AblX { a:1 = AL; b:1 = *:1 AblX; r:1 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN1(r); AL = r; }
+:ORA "B", DirXInd is mflag=0 & o0=0x42; o1=0x01; DirXInd { r:2 = B | *:2 DirXInd; resZN2(r); B = r; }
+:ORA "B", DirXInd is mflag=1 & o0=0x42; o1=0x01; DirXInd { r:1 = BL | *:1 DirXInd; resZN1(r); BL = r; }
+:ORA "B", Sr is mflag=0 & o0=0x42; o1=0x03; Sr { r:2 = B | *:2 Sr; resZN2(r); B = r; }
+:ORA "B", Sr is mflag=1 & o0=0x42; o1=0x03; Sr { r:1 = BL | *:1 Sr; resZN1(r); BL = r; }
+:ORA "B", Dir is mflag=0 & o0=0x42; o1=0x05; Dir { r:2 = B | *:2 Dir; resZN2(r); B = r; }
+:ORA "B", Dir is mflag=1 & o0=0x42; o1=0x05; Dir { r:1 = BL | *:1 Dir; resZN1(r); BL = r; }
+:ORA "B", DirLInd is mflag=0 & o0=0x42; o1=0x07; DirLInd { r:2 = B | *:2 DirLInd; resZN2(r); B = r; }
+:ORA "B", DirLInd is mflag=1 & o0=0x42; o1=0x07; DirLInd { r:1 = BL | *:1 DirLInd; resZN1(r); BL = r; }
+:ORA "B", Imm16 is mflag=0 & o0=0x42; o1=0x09; Imm16 { r:2 = B | Imm16; resZN2(r); B = r; }
+:ORA "B", Imm8 is mflag=1 & o0=0x42; o1=0x09; Imm8 { r:1 = BL | Imm8; resZN1(r); BL = r; }
+:ASL "B" is mflag=0 & o0=0x42; o1=0x0a { v:2 = B; fC = (v s< 0); r:2 = v << 1; resZN2(r); B = r; }
+:ASL "B" is mflag=1 & o0=0x42; o1=0x0a { v:1 = BL; fC = (v s< 0); r:1 = v << 1; resZN1(r); BL = r; }
+:ORA "B", Abs is mflag=0 & o0=0x42; o1=0x0d; Abs { r:2 = B | *:2 Abs; resZN2(r); B = r; }
+:ORA "B", Abs is mflag=1 & o0=0x42; o1=0x0d; Abs { r:1 = BL | *:1 Abs; resZN1(r); BL = r; }
+:ORA "B", Abl is mflag=0 & o0=0x42; o1=0x0f; Abl { r:2 = B | *:2 Abl; resZN2(r); B = r; }
+:ORA "B", Abl is mflag=1 & o0=0x42; o1=0x0f; Abl { r:1 = BL | *:1 Abl; resZN1(r); BL = r; }
+:ORA "B", DirIndY is mflag=0 & o0=0x42; o1=0x11; DirIndY { r:2 = B | *:2 DirIndY; resZN2(r); B = r; }
+:ORA "B", DirIndY is mflag=1 & o0=0x42; o1=0x11; DirIndY { r:1 = BL | *:1 DirIndY; resZN1(r); BL = r; }
+:ORA "B", DirInd is mflag=0 & o0=0x42; o1=0x12; DirInd { r:2 = B | *:2 DirInd; resZN2(r); B = r; }
+:ORA "B", DirInd is mflag=1 & o0=0x42; o1=0x12; DirInd { r:1 = BL | *:1 DirInd; resZN1(r); BL = r; }
+:ORA "B", SrIndY is mflag=0 & o0=0x42; o1=0x13; SrIndY { r:2 = B | *:2 SrIndY; resZN2(r); B = r; }
+:ORA "B", SrIndY is mflag=1 & o0=0x42; o1=0x13; SrIndY { r:1 = BL | *:1 SrIndY; resZN1(r); BL = r; }
+:ORA "B", DirX is mflag=0 & o0=0x42; o1=0x15; DirX { r:2 = B | *:2 DirX; resZN2(r); B = r; }
+:ORA "B", DirX is mflag=1 & o0=0x42; o1=0x15; DirX { r:1 = BL | *:1 DirX; resZN1(r); BL = r; }
+:ORA "B", DirLIndY is mflag=0 & o0=0x42; o1=0x17; DirLIndY { r:2 = B | *:2 DirLIndY; resZN2(r); B = r; }
+:ORA "B", DirLIndY is mflag=1 & o0=0x42; o1=0x17; DirLIndY { r:1 = BL | *:1 DirLIndY; resZN1(r); BL = r; }
+:ORA "B", AbsY is mflag=0 & o0=0x42; o1=0x19; AbsY { r:2 = B | *:2 AbsY; resZN2(r); B = r; }
+:ORA "B", AbsY is mflag=1 & o0=0x42; o1=0x19; AbsY { r:1 = BL | *:1 AbsY; resZN1(r); BL = r; }
+:DEC "B" is mflag=0 & o0=0x42; o1=0x1a { v:2 = B; r:2 = v - 1; resZN2(r); B = r; }
+:DEC "B" is mflag=1 & o0=0x42; o1=0x1a { v:1 = BL; r:1 = v - 1; resZN1(r); BL = r; }
+:TBS is o0=0x42; o1=0x1b { S = zext(B); }
+:ORA "B", AbsX is mflag=0 & o0=0x42; o1=0x1d; AbsX { r:2 = B | *:2 AbsX; resZN2(r); B = r; }
+:ORA "B", AbsX is mflag=1 & o0=0x42; o1=0x1d; AbsX { r:1 = BL | *:1 AbsX; resZN1(r); BL = r; }
+:ORA "B", AblX is mflag=0 & o0=0x42; o1=0x1f; AblX { r:2 = B | *:2 AblX; resZN2(r); B = r; }
+:ORA "B", AblX is mflag=1 & o0=0x42; o1=0x1f; AblX { r:1 = BL | *:1 AblX; resZN1(r); BL = r; }
+:AND "B", DirXInd is mflag=0 & o0=0x42; o1=0x21; DirXInd { r:2 = B & *:2 DirXInd; resZN2(r); B = r; }
+:AND "B", DirXInd is mflag=1 & o0=0x42; o1=0x21; DirXInd { r:1 = BL & *:1 DirXInd; resZN1(r); BL = r; }
+:AND "B", Sr is mflag=0 & o0=0x42; o1=0x23; Sr { r:2 = B & *:2 Sr; resZN2(r); B = r; }
+:AND "B", Sr is mflag=1 & o0=0x42; o1=0x23; Sr { r:1 = BL & *:1 Sr; resZN1(r); BL = r; }
+:AND "B", Dir is mflag=0 & o0=0x42; o1=0x25; Dir { r:2 = B & *:2 Dir; resZN2(r); B = r; }
+:AND "B", Dir is mflag=1 & o0=0x42; o1=0x25; Dir { r:1 = BL & *:1 Dir; resZN1(r); BL = r; }
+:AND "B", DirLInd is mflag=0 & o0=0x42; o1=0x27; DirLInd { r:2 = B & *:2 DirLInd; resZN2(r); B = r; }
+:AND "B", DirLInd is mflag=1 & o0=0x42; o1=0x27; DirLInd { r:1 = BL & *:1 DirLInd; resZN1(r); BL = r; }
+:AND "B", Imm16 is mflag=0 & o0=0x42; o1=0x29; Imm16 { r:2 = B & Imm16; resZN2(r); B = r; }
+:AND "B", Imm8 is mflag=1 & o0=0x42; o1=0x29; Imm8 { r:1 = BL & Imm8; resZN1(r); BL = r; }
+:ROL "B" is mflag=0 & o0=0x42; o1=0x2a { v:2 = B; c0:2 = zext(fC); fC = (v s< 0); r:2 = (v << 1) | c0; resZN2(r); B = r; }
+:ROL "B" is mflag=1 & o0=0x42; o1=0x2a { v:1 = BL; c0:1 = zext(fC); fC = (v s< 0); r:1 = (v << 1) | c0; resZN1(r); BL = r; }
+:AND "B", Abs is mflag=0 & o0=0x42; o1=0x2d; Abs { r:2 = B & *:2 Abs; resZN2(r); B = r; }
+:AND "B", Abs is mflag=1 & o0=0x42; o1=0x2d; Abs { r:1 = BL & *:1 Abs; resZN1(r); BL = r; }
+:AND "B", Abl is mflag=0 & o0=0x42; o1=0x2f; Abl { r:2 = B & *:2 Abl; resZN2(r); B = r; }
+:AND "B", Abl is mflag=1 & o0=0x42; o1=0x2f; Abl { r:1 = BL & *:1 Abl; resZN1(r); BL = r; }
+:AND "B", DirIndY is mflag=0 & o0=0x42; o1=0x31; DirIndY { r:2 = B & *:2 DirIndY; resZN2(r); B = r; }
+:AND "B", DirIndY is mflag=1 & o0=0x42; o1=0x31; DirIndY { r:1 = BL & *:1 DirIndY; resZN1(r); BL = r; }
+:AND "B", DirInd is mflag=0 & o0=0x42; o1=0x32; DirInd { r:2 = B & *:2 DirInd; resZN2(r); B = r; }
+:AND "B", DirInd is mflag=1 & o0=0x42; o1=0x32; DirInd { r:1 = BL & *:1 DirInd; resZN1(r); BL = r; }
+:AND "B", SrIndY is mflag=0 & o0=0x42; o1=0x33; SrIndY { r:2 = B & *:2 SrIndY; resZN2(r); B = r; }
+:AND "B", SrIndY is mflag=1 & o0=0x42; o1=0x33; SrIndY { r:1 = BL & *:1 SrIndY; resZN1(r); BL = r; }
+:AND "B", DirX is mflag=0 & o0=0x42; o1=0x35; DirX { r:2 = B & *:2 DirX; resZN2(r); B = r; }
+:AND "B", DirX is mflag=1 & o0=0x42; o1=0x35; DirX { r:1 = BL & *:1 DirX; resZN1(r); BL = r; }
+:AND "B", DirLIndY is mflag=0 & o0=0x42; o1=0x37; DirLIndY { r:2 = B & *:2 DirLIndY; resZN2(r); B = r; }
+:AND "B", DirLIndY is mflag=1 & o0=0x42; o1=0x37; DirLIndY { r:1 = BL & *:1 DirLIndY; resZN1(r); BL = r; }
+:AND "B", AbsY is mflag=0 & o0=0x42; o1=0x39; AbsY { r:2 = B & *:2 AbsY; resZN2(r); B = r; }
+:AND "B", AbsY is mflag=1 & o0=0x42; o1=0x39; AbsY { r:1 = BL & *:1 AbsY; resZN1(r); BL = r; }
+:INC "B" is mflag=0 & o0=0x42; o1=0x3a { v:2 = B; r:2 = v + 1; resZN2(r); B = r; }
+:INC "B" is mflag=1 & o0=0x42; o1=0x3a { v:1 = BL; r:1 = v + 1; resZN1(r); BL = r; }
+:TSB is o0=0x42; o1=0x3b { B = S:2; }
+:AND "B", AbsX is mflag=0 & o0=0x42; o1=0x3d; AbsX { r:2 = B & *:2 AbsX; resZN2(r); B = r; }
+:AND "B", AbsX is mflag=1 & o0=0x42; o1=0x3d; AbsX { r:1 = BL & *:1 AbsX; resZN1(r); BL = r; }
+:AND "B", AblX is mflag=0 & o0=0x42; o1=0x3f; AblX { r:2 = B & *:2 AblX; resZN2(r); B = r; }
+:AND "B", AblX is mflag=1 & o0=0x42; o1=0x3f; AblX { r:1 = BL & *:1 AblX; resZN1(r); BL = r; }
+:EOR "B", DirXInd is mflag=0 & o0=0x42; o1=0x41; DirXInd { r:2 = B ^ *:2 DirXInd; resZN2(r); B = r; }
+:EOR "B", DirXInd is mflag=1 & o0=0x42; o1=0x41; DirXInd { r:1 = BL ^ *:1 DirXInd; resZN1(r); BL = r; }
+:EOR "B", Sr is mflag=0 & o0=0x42; o1=0x43; Sr { r:2 = B ^ *:2 Sr; resZN2(r); B = r; }
+:EOR "B", Sr is mflag=1 & o0=0x42; o1=0x43; Sr { r:1 = BL ^ *:1 Sr; resZN1(r); BL = r; }
+:EOR "B", Dir is mflag=0 & o0=0x42; o1=0x45; Dir { r:2 = B ^ *:2 Dir; resZN2(r); B = r; }
+:EOR "B", Dir is mflag=1 & o0=0x42; o1=0x45; Dir { r:1 = BL ^ *:1 Dir; resZN1(r); BL = r; }
+:EOR "B", DirLInd is mflag=0 & o0=0x42; o1=0x47; DirLInd { r:2 = B ^ *:2 DirLInd; resZN2(r); B = r; }
+:EOR "B", DirLInd is mflag=1 & o0=0x42; o1=0x47; DirLInd { r:1 = BL ^ *:1 DirLInd; resZN1(r); BL = r; }
+:PHB is mflag=0 & o0=0x42; o1=0x48 { push2(B); }
+:PHB is mflag=1 & o0=0x42; o1=0x48 { v:1 = B:1; push1(v); }
+:EOR "B", Imm16 is mflag=0 & o0=0x42; o1=0x49; Imm16 { r:2 = B ^ Imm16; resZN2(r); B = r; }
+:EOR "B", Imm8 is mflag=1 & o0=0x42; o1=0x49; Imm8 { r:1 = BL ^ Imm8; resZN1(r); BL = r; }
+:LSR "B" is mflag=0 & o0=0x42; o1=0x4a { v:2 = B; fC = (v & 1) != 0; r:2 = v >> 1; resZN2(r); B = r; }
+:LSR "B" is mflag=1 & o0=0x42; o1=0x4a { v:1 = BL; fC = (v & 1) != 0; r:1 = v >> 1; resZN1(r); BL = r; }
+:EOR "B", Abs is mflag=0 & o0=0x42; o1=0x4d; Abs { r:2 = B ^ *:2 Abs; resZN2(r); B = r; }
+:EOR "B", Abs is mflag=1 & o0=0x42; o1=0x4d; Abs { r:1 = BL ^ *:1 Abs; resZN1(r); BL = r; }
+:EOR "B", Abl is mflag=0 & o0=0x42; o1=0x4f; Abl { r:2 = B ^ *:2 Abl; resZN2(r); B = r; }
+:EOR "B", Abl is mflag=1 & o0=0x42; o1=0x4f; Abl { r:1 = BL ^ *:1 Abl; resZN1(r); BL = r; }
+:EOR "B", DirIndY is mflag=0 & o0=0x42; o1=0x51; DirIndY { r:2 = B ^ *:2 DirIndY; resZN2(r); B = r; }
+:EOR "B", DirIndY is mflag=1 & o0=0x42; o1=0x51; DirIndY { r:1 = BL ^ *:1 DirIndY; resZN1(r); BL = r; }
+:EOR "B", DirInd is mflag=0 & o0=0x42; o1=0x52; DirInd { r:2 = B ^ *:2 DirInd; resZN2(r); B = r; }
+:EOR "B", DirInd is mflag=1 & o0=0x42; o1=0x52; DirInd { r:1 = BL ^ *:1 DirInd; resZN1(r); BL = r; }
+:EOR "B", SrIndY is mflag=0 & o0=0x42; o1=0x53; SrIndY { r:2 = B ^ *:2 SrIndY; resZN2(r); B = r; }
+:EOR "B", SrIndY is mflag=1 & o0=0x42; o1=0x53; SrIndY { r:1 = BL ^ *:1 SrIndY; resZN1(r); BL = r; }
+:EOR "B", DirX is mflag=0 & o0=0x42; o1=0x55; DirX { r:2 = B ^ *:2 DirX; resZN2(r); B = r; }
+:EOR "B", DirX is mflag=1 & o0=0x42; o1=0x55; DirX { r:1 = BL ^ *:1 DirX; resZN1(r); BL = r; }
+:EOR "B", DirLIndY is mflag=0 & o0=0x42; o1=0x57; DirLIndY { r:2 = B ^ *:2 DirLIndY; resZN2(r); B = r; }
+:EOR "B", DirLIndY is mflag=1 & o0=0x42; o1=0x57; DirLIndY { r:1 = BL ^ *:1 DirLIndY; resZN1(r); BL = r; }
+:EOR "B", AbsY is mflag=0 & o0=0x42; o1=0x59; AbsY { r:2 = B ^ *:2 AbsY; resZN2(r); B = r; }
+:EOR "B", AbsY is mflag=1 & o0=0x42; o1=0x59; AbsY { r:1 = BL ^ *:1 AbsY; resZN1(r); BL = r; }
+:TBD is o0=0x42; o1=0x5b { DPR = B; }
+:EOR "B", AbsX is mflag=0 & o0=0x42; o1=0x5d; AbsX { r:2 = B ^ *:2 AbsX; resZN2(r); B = r; }
+:EOR "B", AbsX is mflag=1 & o0=0x42; o1=0x5d; AbsX { r:1 = BL ^ *:1 AbsX; resZN1(r); BL = r; }
+:EOR "B", AblX is mflag=0 & o0=0x42; o1=0x5f; AblX { r:2 = B ^ *:2 AblX; resZN2(r); B = r; }
+:EOR "B", AblX is mflag=1 & o0=0x42; o1=0x5f; AblX { r:1 = BL ^ *:1 AblX; resZN1(r); BL = r; }
+:ADC "B", DirXInd is mflag=0 & dmode=0 & o0=0x42; o1=0x61; DirXInd { a:2 = B; b:2 = *:2 DirXInd; t:2 = a + b; r:2 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN2(r); B = r; }
+:ADC "B", DirXInd is mflag=0 & dmode=1 & o0=0x42; o1=0x61; DirXInd { a:2 = B; b:2 = *:2 DirXInd; r:2 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN2(r); B = r; }
+:ADC "B", DirXInd is mflag=1 & dmode=0 & o0=0x42; o1=0x61; DirXInd { a:1 = BL; b:1 = *:1 DirXInd; t:1 = a + b; r:1 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN1(r); BL = r; }
+:ADC "B", DirXInd is mflag=1 & dmode=1 & o0=0x42; o1=0x61; DirXInd { a:1 = BL; b:1 = *:1 DirXInd; r:1 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN1(r); BL = r; }
+:ADC "B", Sr is mflag=0 & dmode=0 & o0=0x42; o1=0x63; Sr { a:2 = B; b:2 = *:2 Sr; t:2 = a + b; r:2 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN2(r); B = r; }
+:ADC "B", Sr is mflag=0 & dmode=1 & o0=0x42; o1=0x63; Sr { a:2 = B; b:2 = *:2 Sr; r:2 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN2(r); B = r; }
+:ADC "B", Sr is mflag=1 & dmode=0 & o0=0x42; o1=0x63; Sr { a:1 = BL; b:1 = *:1 Sr; t:1 = a + b; r:1 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN1(r); BL = r; }
+:ADC "B", Sr is mflag=1 & dmode=1 & o0=0x42; o1=0x63; Sr { a:1 = BL; b:1 = *:1 Sr; r:1 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN1(r); BL = r; }
+:ADC "B", Dir is mflag=0 & dmode=0 & o0=0x42; o1=0x65; Dir { a:2 = B; b:2 = *:2 Dir; t:2 = a + b; r:2 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN2(r); B = r; }
+:ADC "B", Dir is mflag=0 & dmode=1 & o0=0x42; o1=0x65; Dir { a:2 = B; b:2 = *:2 Dir; r:2 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN2(r); B = r; }
+:ADC "B", Dir is mflag=1 & dmode=0 & o0=0x42; o1=0x65; Dir { a:1 = BL; b:1 = *:1 Dir; t:1 = a + b; r:1 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN1(r); BL = r; }
+:ADC "B", Dir is mflag=1 & dmode=1 & o0=0x42; o1=0x65; Dir { a:1 = BL; b:1 = *:1 Dir; r:1 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN1(r); BL = r; }
+:ADC "B", DirLInd is mflag=0 & dmode=0 & o0=0x42; o1=0x67; DirLInd { a:2 = B; b:2 = *:2 DirLInd; t:2 = a + b; r:2 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN2(r); B = r; }
+:ADC "B", DirLInd is mflag=0 & dmode=1 & o0=0x42; o1=0x67; DirLInd { a:2 = B; b:2 = *:2 DirLInd; r:2 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN2(r); B = r; }
+:ADC "B", DirLInd is mflag=1 & dmode=0 & o0=0x42; o1=0x67; DirLInd { a:1 = BL; b:1 = *:1 DirLInd; t:1 = a + b; r:1 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN1(r); BL = r; }
+:ADC "B", DirLInd is mflag=1 & dmode=1 & o0=0x42; o1=0x67; DirLInd { a:1 = BL; b:1 = *:1 DirLInd; r:1 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN1(r); BL = r; }
+:PLB is mflag=0 & o0=0x42; o1=0x68 { v:2 = 0; pull2(v); B = v; resZN2(v); }
+:PLB is mflag=1 & o0=0x42; o1=0x68 { v:1 = 0; pull1(v); B = (B & 0xff00) | zext(v); resZN1(v); }
+:ADC "B", Imm16 is mflag=0 & dmode=0 & o0=0x42; o1=0x69; Imm16 { a:2 = B; b:2 = Imm16; t:2 = a + b; r:2 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN2(r); B = r; }
+:ADC "B", Imm16 is mflag=0 & dmode=1 & o0=0x42; o1=0x69; Imm16 { a:2 = B; b:2 = Imm16; r:2 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN2(r); B = r; }
+:ADC "B", Imm8 is mflag=1 & dmode=0 & o0=0x42; o1=0x69; Imm8 { a:1 = BL; b:1 = Imm8; t:1 = a + b; r:1 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN1(r); BL = r; }
+:ADC "B", Imm8 is mflag=1 & dmode=1 & o0=0x42; o1=0x69; Imm8 { a:1 = BL; b:1 = Imm8; r:1 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN1(r); BL = r; }
+:ROR "B" is mflag=0 & o0=0x42; o1=0x6a { v:2 = B; c0:2 = zext(fC) << 15; fC = (v & 1) != 0; r:2 = (v >> 1) | c0; resZN2(r); B = r; }
+:ROR "B" is mflag=1 & o0=0x42; o1=0x6a { v:1 = BL; c0:1 = zext(fC) << 7; fC = (v & 1) != 0; r:1 = (v >> 1) | c0; resZN1(r); BL = r; }
+:ADC "B", Abs is mflag=0 & dmode=0 & o0=0x42; o1=0x6d; Abs { a:2 = B; b:2 = *:2 Abs; t:2 = a + b; r:2 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN2(r); B = r; }
+:ADC "B", Abs is mflag=0 & dmode=1 & o0=0x42; o1=0x6d; Abs { a:2 = B; b:2 = *:2 Abs; r:2 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN2(r); B = r; }
+:ADC "B", Abs is mflag=1 & dmode=0 & o0=0x42; o1=0x6d; Abs { a:1 = BL; b:1 = *:1 Abs; t:1 = a + b; r:1 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN1(r); BL = r; }
+:ADC "B", Abs is mflag=1 & dmode=1 & o0=0x42; o1=0x6d; Abs { a:1 = BL; b:1 = *:1 Abs; r:1 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN1(r); BL = r; }
+:ADC "B", Abl is mflag=0 & dmode=0 & o0=0x42; o1=0x6f; Abl { a:2 = B; b:2 = *:2 Abl; t:2 = a + b; r:2 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN2(r); B = r; }
+:ADC "B", Abl is mflag=0 & dmode=1 & o0=0x42; o1=0x6f; Abl { a:2 = B; b:2 = *:2 Abl; r:2 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN2(r); B = r; }
+:ADC "B", Abl is mflag=1 & dmode=0 & o0=0x42; o1=0x6f; Abl { a:1 = BL; b:1 = *:1 Abl; t:1 = a + b; r:1 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN1(r); BL = r; }
+:ADC "B", Abl is mflag=1 & dmode=1 & o0=0x42; o1=0x6f; Abl { a:1 = BL; b:1 = *:1 Abl; r:1 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN1(r); BL = r; }
+:ADC "B", DirIndY is mflag=0 & dmode=0 & o0=0x42; o1=0x71; DirIndY { a:2 = B; b:2 = *:2 DirIndY; t:2 = a + b; r:2 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN2(r); B = r; }
+:ADC "B", DirIndY is mflag=0 & dmode=1 & o0=0x42; o1=0x71; DirIndY { a:2 = B; b:2 = *:2 DirIndY; r:2 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN2(r); B = r; }
+:ADC "B", DirIndY is mflag=1 & dmode=0 & o0=0x42; o1=0x71; DirIndY { a:1 = BL; b:1 = *:1 DirIndY; t:1 = a + b; r:1 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN1(r); BL = r; }
+:ADC "B", DirIndY is mflag=1 & dmode=1 & o0=0x42; o1=0x71; DirIndY { a:1 = BL; b:1 = *:1 DirIndY; r:1 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN1(r); BL = r; }
+:ADC "B", DirInd is mflag=0 & dmode=0 & o0=0x42; o1=0x72; DirInd { a:2 = B; b:2 = *:2 DirInd; t:2 = a + b; r:2 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN2(r); B = r; }
+:ADC "B", DirInd is mflag=0 & dmode=1 & o0=0x42; o1=0x72; DirInd { a:2 = B; b:2 = *:2 DirInd; r:2 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN2(r); B = r; }
+:ADC "B", DirInd is mflag=1 & dmode=0 & o0=0x42; o1=0x72; DirInd { a:1 = BL; b:1 = *:1 DirInd; t:1 = a + b; r:1 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN1(r); BL = r; }
+:ADC "B", DirInd is mflag=1 & dmode=1 & o0=0x42; o1=0x72; DirInd { a:1 = BL; b:1 = *:1 DirInd; r:1 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN1(r); BL = r; }
+:ADC "B", SrIndY is mflag=0 & dmode=0 & o0=0x42; o1=0x73; SrIndY { a:2 = B; b:2 = *:2 SrIndY; t:2 = a + b; r:2 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN2(r); B = r; }
+:ADC "B", SrIndY is mflag=0 & dmode=1 & o0=0x42; o1=0x73; SrIndY { a:2 = B; b:2 = *:2 SrIndY; r:2 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN2(r); B = r; }
+:ADC "B", SrIndY is mflag=1 & dmode=0 & o0=0x42; o1=0x73; SrIndY { a:1 = BL; b:1 = *:1 SrIndY; t:1 = a + b; r:1 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN1(r); BL = r; }
+:ADC "B", SrIndY is mflag=1 & dmode=1 & o0=0x42; o1=0x73; SrIndY { a:1 = BL; b:1 = *:1 SrIndY; r:1 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN1(r); BL = r; }
+:ADC "B", DirX is mflag=0 & dmode=0 & o0=0x42; o1=0x75; DirX { a:2 = B; b:2 = *:2 DirX; t:2 = a + b; r:2 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN2(r); B = r; }
+:ADC "B", DirX is mflag=0 & dmode=1 & o0=0x42; o1=0x75; DirX { a:2 = B; b:2 = *:2 DirX; r:2 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN2(r); B = r; }
+:ADC "B", DirX is mflag=1 & dmode=0 & o0=0x42; o1=0x75; DirX { a:1 = BL; b:1 = *:1 DirX; t:1 = a + b; r:1 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN1(r); BL = r; }
+:ADC "B", DirX is mflag=1 & dmode=1 & o0=0x42; o1=0x75; DirX { a:1 = BL; b:1 = *:1 DirX; r:1 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN1(r); BL = r; }
+:ADC "B", DirLIndY is mflag=0 & dmode=0 & o0=0x42; o1=0x77; DirLIndY { a:2 = B; b:2 = *:2 DirLIndY; t:2 = a + b; r:2 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN2(r); B = r; }
+:ADC "B", DirLIndY is mflag=0 & dmode=1 & o0=0x42; o1=0x77; DirLIndY { a:2 = B; b:2 = *:2 DirLIndY; r:2 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN2(r); B = r; }
+:ADC "B", DirLIndY is mflag=1 & dmode=0 & o0=0x42; o1=0x77; DirLIndY { a:1 = BL; b:1 = *:1 DirLIndY; t:1 = a + b; r:1 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN1(r); BL = r; }
+:ADC "B", DirLIndY is mflag=1 & dmode=1 & o0=0x42; o1=0x77; DirLIndY { a:1 = BL; b:1 = *:1 DirLIndY; r:1 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN1(r); BL = r; }
+:ADC "B", AbsY is mflag=0 & dmode=0 & o0=0x42; o1=0x79; AbsY { a:2 = B; b:2 = *:2 AbsY; t:2 = a + b; r:2 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN2(r); B = r; }
+:ADC "B", AbsY is mflag=0 & dmode=1 & o0=0x42; o1=0x79; AbsY { a:2 = B; b:2 = *:2 AbsY; r:2 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN2(r); B = r; }
+:ADC "B", AbsY is mflag=1 & dmode=0 & o0=0x42; o1=0x79; AbsY { a:1 = BL; b:1 = *:1 AbsY; t:1 = a + b; r:1 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN1(r); BL = r; }
+:ADC "B", AbsY is mflag=1 & dmode=1 & o0=0x42; o1=0x79; AbsY { a:1 = BL; b:1 = *:1 AbsY; r:1 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN1(r); BL = r; }
+:TDB is o0=0x42; o1=0x7b { B = DPR; }
+:ADC "B", AbsX is mflag=0 & dmode=0 & o0=0x42; o1=0x7d; AbsX { a:2 = B; b:2 = *:2 AbsX; t:2 = a + b; r:2 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN2(r); B = r; }
+:ADC "B", AbsX is mflag=0 & dmode=1 & o0=0x42; o1=0x7d; AbsX { a:2 = B; b:2 = *:2 AbsX; r:2 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN2(r); B = r; }
+:ADC "B", AbsX is mflag=1 & dmode=0 & o0=0x42; o1=0x7d; AbsX { a:1 = BL; b:1 = *:1 AbsX; t:1 = a + b; r:1 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN1(r); BL = r; }
+:ADC "B", AbsX is mflag=1 & dmode=1 & o0=0x42; o1=0x7d; AbsX { a:1 = BL; b:1 = *:1 AbsX; r:1 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN1(r); BL = r; }
+:ADC "B", AblX is mflag=0 & dmode=0 & o0=0x42; o1=0x7f; AblX { a:2 = B; b:2 = *:2 AblX; t:2 = a + b; r:2 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN2(r); B = r; }
+:ADC "B", AblX is mflag=0 & dmode=1 & o0=0x42; o1=0x7f; AblX { a:2 = B; b:2 = *:2 AblX; r:2 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN2(r); B = r; }
+:ADC "B", AblX is mflag=1 & dmode=0 & o0=0x42; o1=0x7f; AblX { a:1 = BL; b:1 = *:1 AblX; t:1 = a + b; r:1 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = scarry(a, b) ^^ scarry(t, zext(fC)); resZN1(r); BL = r; }
+:ADC "B", AblX is mflag=1 & dmode=1 & o0=0x42; o1=0x7f; AblX { a:1 = BL; b:1 = *:1 AblX; r:1 = decimal_add(a, b, fC); cy:1 = decimal_add_carry(a, b, fC); fC = cy; resZN1(r); BL = r; }
+:STA "B", DirXInd is mflag=0 & o0=0x42; o1=0x81; DirXInd { *:2 DirXInd = B; }
+:STA "B", DirXInd is mflag=1 & o0=0x42; o1=0x81; DirXInd { *:1 DirXInd = BL; }
+:STA "B", Sr is mflag=0 & o0=0x42; o1=0x83; Sr { *:2 Sr = B; }
+:STA "B", Sr is mflag=1 & o0=0x42; o1=0x83; Sr { *:1 Sr = BL; }
+:STA "B", Dir is mflag=0 & o0=0x42; o1=0x85; Dir { *:2 Dir = B; }
+:STA "B", Dir is mflag=1 & o0=0x42; o1=0x85; Dir { *:1 Dir = BL; }
+:STA "B", DirLInd is mflag=0 & o0=0x42; o1=0x87; DirLInd { *:2 DirLInd = B; }
+:STA "B", DirLInd is mflag=1 & o0=0x42; o1=0x87; DirLInd { *:1 DirLInd = BL; }
+:TXB is mflag=0 & o0=0x42; o1=0x8a { r:2 = X; B = r; resZN2(r); }
+:TXB is mflag=1 & o0=0x42; o1=0x8a { r:1 = X:1; B = (B & 0xff00) | zext(r); resZN1(r); }
+:STA "B", Abs is mflag=0 & o0=0x42; o1=0x8d; Abs { *:2 Abs = B; }
+:STA "B", Abs is mflag=1 & o0=0x42; o1=0x8d; Abs { *:1 Abs = BL; }
+:STA "B", Abl is mflag=0 & o0=0x42; o1=0x8f; Abl { *:2 Abl = B; }
+:STA "B", Abl is mflag=1 & o0=0x42; o1=0x8f; Abl { *:1 Abl = BL; }
+:STA "B", DirIndY is mflag=0 & o0=0x42; o1=0x91; DirIndY { *:2 DirIndY = B; }
+:STA "B", DirIndY is mflag=1 & o0=0x42; o1=0x91; DirIndY { *:1 DirIndY = BL; }
+:STA "B", DirInd is mflag=0 & o0=0x42; o1=0x92; DirInd { *:2 DirInd = B; }
+:STA "B", DirInd is mflag=1 & o0=0x42; o1=0x92; DirInd { *:1 DirInd = BL; }
+:STA "B", SrIndY is mflag=0 & o0=0x42; o1=0x93; SrIndY { *:2 SrIndY = B; }
+:STA "B", SrIndY is mflag=1 & o0=0x42; o1=0x93; SrIndY { *:1 SrIndY = BL; }
+:STA "B", DirX is mflag=0 & o0=0x42; o1=0x95; DirX { *:2 DirX = B; }
+:STA "B", DirX is mflag=1 & o0=0x42; o1=0x95; DirX { *:1 DirX = BL; }
+:STA "B", DirLIndY is mflag=0 & o0=0x42; o1=0x97; DirLIndY { *:2 DirLIndY = B; }
+:STA "B", DirLIndY is mflag=1 & o0=0x42; o1=0x97; DirLIndY { *:1 DirLIndY = BL; }
+:TYB is mflag=0 & o0=0x42; o1=0x98 { r:2 = Y; B = r; resZN2(r); }
+:TYB is mflag=1 & o0=0x42; o1=0x98 { r:1 = Y:1; B = (B & 0xff00) | zext(r); resZN1(r); }
+:STA "B", AbsY is mflag=0 & o0=0x42; o1=0x99; AbsY { *:2 AbsY = B; }
+:STA "B", AbsY is mflag=1 & o0=0x42; o1=0x99; AbsY { *:1 AbsY = BL; }
+:STA "B", AbsX is mflag=0 & o0=0x42; o1=0x9d; AbsX { *:2 AbsX = B; }
+:STA "B", AbsX is mflag=1 & o0=0x42; o1=0x9d; AbsX { *:1 AbsX = BL; }
+:STA "B", AblX is mflag=0 & o0=0x42; o1=0x9f; AblX { *:2 AblX = B; }
+:STA "B", AblX is mflag=1 & o0=0x42; o1=0x9f; AblX { *:1 AblX = BL; }
+:LDA "B", DirXInd is mflag=0 & o0=0x42; o1=0xa1; DirXInd { r:2 = *:2 DirXInd; resZN2(r); B = r; }
+:LDA "B", DirXInd is mflag=1 & o0=0x42; o1=0xa1; DirXInd { r:1 = *:1 DirXInd; resZN1(r); BL = r; }
+:LDA "B", Sr is mflag=0 & o0=0x42; o1=0xa3; Sr { r:2 = *:2 Sr; resZN2(r); B = r; }
+:LDA "B", Sr is mflag=1 & o0=0x42; o1=0xa3; Sr { r:1 = *:1 Sr; resZN1(r); BL = r; }
+:LDA "B", Dir is mflag=0 & o0=0x42; o1=0xa5; Dir { r:2 = *:2 Dir; resZN2(r); B = r; }
+:LDA "B", Dir is mflag=1 & o0=0x42; o1=0xa5; Dir { r:1 = *:1 Dir; resZN1(r); BL = r; }
+:LDA "B", DirLInd is mflag=0 & o0=0x42; o1=0xa7; DirLInd { r:2 = *:2 DirLInd; resZN2(r); B = r; }
+:LDA "B", DirLInd is mflag=1 & o0=0x42; o1=0xa7; DirLInd { r:1 = *:1 DirLInd; resZN1(r); BL = r; }
+:TBY is xflag=0 & o0=0x42; o1=0xa8 { r:2 = B; Y = r; resZN2(r); }
+:TBY is xflag=1 & o0=0x42; o1=0xa8 { r:1 = B:1; Y = zext(r); resZN1(r); }
+:LDA "B", Imm16 is mflag=0 & o0=0x42; o1=0xa9; Imm16 { r:2 = Imm16; resZN2(r); B = r; }
+:LDA "B", Imm8 is mflag=1 & o0=0x42; o1=0xa9; Imm8 { r:1 = Imm8; resZN1(r); BL = r; }
+:TBX is xflag=0 & o0=0x42; o1=0xaa { r:2 = B; X = r; resZN2(r); }
+:TBX is xflag=1 & o0=0x42; o1=0xaa { r:1 = B:1; X = zext(r); resZN1(r); }
+:LDA "B", Abs is mflag=0 & o0=0x42; o1=0xad; Abs { r:2 = *:2 Abs; resZN2(r); B = r; }
+:LDA "B", Abs is mflag=1 & o0=0x42; o1=0xad; Abs { r:1 = *:1 Abs; resZN1(r); BL = r; }
+:LDA "B", Abl is mflag=0 & o0=0x42; o1=0xaf; Abl { r:2 = *:2 Abl; resZN2(r); B = r; }
+:LDA "B", Abl is mflag=1 & o0=0x42; o1=0xaf; Abl { r:1 = *:1 Abl; resZN1(r); BL = r; }
+:LDA "B", DirIndY is mflag=0 & o0=0x42; o1=0xb1; DirIndY { r:2 = *:2 DirIndY; resZN2(r); B = r; }
+:LDA "B", DirIndY is mflag=1 & o0=0x42; o1=0xb1; DirIndY { r:1 = *:1 DirIndY; resZN1(r); BL = r; }
+:LDA "B", DirInd is mflag=0 & o0=0x42; o1=0xb2; DirInd { r:2 = *:2 DirInd; resZN2(r); B = r; }
+:LDA "B", DirInd is mflag=1 & o0=0x42; o1=0xb2; DirInd { r:1 = *:1 DirInd; resZN1(r); BL = r; }
+:LDA "B", SrIndY is mflag=0 & o0=0x42; o1=0xb3; SrIndY { r:2 = *:2 SrIndY; resZN2(r); B = r; }
+:LDA "B", SrIndY is mflag=1 & o0=0x42; o1=0xb3; SrIndY { r:1 = *:1 SrIndY; resZN1(r); BL = r; }
+:LDA "B", DirX is mflag=0 & o0=0x42; o1=0xb5; DirX { r:2 = *:2 DirX; resZN2(r); B = r; }
+:LDA "B", DirX is mflag=1 & o0=0x42; o1=0xb5; DirX { r:1 = *:1 DirX; resZN1(r); BL = r; }
+:LDA "B", DirLIndY is mflag=0 & o0=0x42; o1=0xb7; DirLIndY { r:2 = *:2 DirLIndY; resZN2(r); B = r; }
+:LDA "B", DirLIndY is mflag=1 & o0=0x42; o1=0xb7; DirLIndY { r:1 = *:1 DirLIndY; resZN1(r); BL = r; }
+:LDA "B", AbsY is mflag=0 & o0=0x42; o1=0xb9; AbsY { r:2 = *:2 AbsY; resZN2(r); B = r; }
+:LDA "B", AbsY is mflag=1 & o0=0x42; o1=0xb9; AbsY { r:1 = *:1 AbsY; resZN1(r); BL = r; }
+:LDA "B", AbsX is mflag=0 & o0=0x42; o1=0xbd; AbsX { r:2 = *:2 AbsX; resZN2(r); B = r; }
+:LDA "B", AbsX is mflag=1 & o0=0x42; o1=0xbd; AbsX { r:1 = *:1 AbsX; resZN1(r); BL = r; }
+:LDA "B", AblX is mflag=0 & o0=0x42; o1=0xbf; AblX { r:2 = *:2 AblX; resZN2(r); B = r; }
+:LDA "B", AblX is mflag=1 & o0=0x42; o1=0xbf; AblX { r:1 = *:1 AblX; resZN1(r); BL = r; }
+:CMP "B", DirXInd is mflag=0 & o0=0x42; o1=0xc1; DirXInd { a:2 = B; b:2 = *:2 DirXInd; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CMP "B", DirXInd is mflag=1 & o0=0x42; o1=0xc1; DirXInd { a:1 = BL; b:1 = *:1 DirXInd; r:1 = a - b; fC = a >= b; resZN1(r); }
+:CMP "B", Sr is mflag=0 & o0=0x42; o1=0xc3; Sr { a:2 = B; b:2 = *:2 Sr; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CMP "B", Sr is mflag=1 & o0=0x42; o1=0xc3; Sr { a:1 = BL; b:1 = *:1 Sr; r:1 = a - b; fC = a >= b; resZN1(r); }
+:CMP "B", Dir is mflag=0 & o0=0x42; o1=0xc5; Dir { a:2 = B; b:2 = *:2 Dir; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CMP "B", Dir is mflag=1 & o0=0x42; o1=0xc5; Dir { a:1 = BL; b:1 = *:1 Dir; r:1 = a - b; fC = a >= b; resZN1(r); }
+:CMP "B", DirLInd is mflag=0 & o0=0x42; o1=0xc7; DirLInd { a:2 = B; b:2 = *:2 DirLInd; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CMP "B", DirLInd is mflag=1 & o0=0x42; o1=0xc7; DirLInd { a:1 = BL; b:1 = *:1 DirLInd; r:1 = a - b; fC = a >= b; resZN1(r); }
+:CMP "B", Imm16 is mflag=0 & o0=0x42; o1=0xc9; Imm16 { a:2 = B; b:2 = Imm16; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CMP "B", Imm8 is mflag=1 & o0=0x42; o1=0xc9; Imm8 { a:1 = BL; b:1 = Imm8; r:1 = a - b; fC = a >= b; resZN1(r); }
+:CMP "B", Abs is mflag=0 & o0=0x42; o1=0xcd; Abs { a:2 = B; b:2 = *:2 Abs; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CMP "B", Abs is mflag=1 & o0=0x42; o1=0xcd; Abs { a:1 = BL; b:1 = *:1 Abs; r:1 = a - b; fC = a >= b; resZN1(r); }
+:CMP "B", Abl is mflag=0 & o0=0x42; o1=0xcf; Abl { a:2 = B; b:2 = *:2 Abl; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CMP "B", Abl is mflag=1 & o0=0x42; o1=0xcf; Abl { a:1 = BL; b:1 = *:1 Abl; r:1 = a - b; fC = a >= b; resZN1(r); }
+:CMP "B", DirIndY is mflag=0 & o0=0x42; o1=0xd1; DirIndY { a:2 = B; b:2 = *:2 DirIndY; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CMP "B", DirIndY is mflag=1 & o0=0x42; o1=0xd1; DirIndY { a:1 = BL; b:1 = *:1 DirIndY; r:1 = a - b; fC = a >= b; resZN1(r); }
+:CMP "B", DirInd is mflag=0 & o0=0x42; o1=0xd2; DirInd { a:2 = B; b:2 = *:2 DirInd; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CMP "B", DirInd is mflag=1 & o0=0x42; o1=0xd2; DirInd { a:1 = BL; b:1 = *:1 DirInd; r:1 = a - b; fC = a >= b; resZN1(r); }
+:CMP "B", SrIndY is mflag=0 & o0=0x42; o1=0xd3; SrIndY { a:2 = B; b:2 = *:2 SrIndY; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CMP "B", SrIndY is mflag=1 & o0=0x42; o1=0xd3; SrIndY { a:1 = BL; b:1 = *:1 SrIndY; r:1 = a - b; fC = a >= b; resZN1(r); }
+:CMP "B", DirX is mflag=0 & o0=0x42; o1=0xd5; DirX { a:2 = B; b:2 = *:2 DirX; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CMP "B", DirX is mflag=1 & o0=0x42; o1=0xd5; DirX { a:1 = BL; b:1 = *:1 DirX; r:1 = a - b; fC = a >= b; resZN1(r); }
+:CMP "B", DirLIndY is mflag=0 & o0=0x42; o1=0xd7; DirLIndY { a:2 = B; b:2 = *:2 DirLIndY; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CMP "B", DirLIndY is mflag=1 & o0=0x42; o1=0xd7; DirLIndY { a:1 = BL; b:1 = *:1 DirLIndY; r:1 = a - b; fC = a >= b; resZN1(r); }
+:CMP "B", AbsY is mflag=0 & o0=0x42; o1=0xd9; AbsY { a:2 = B; b:2 = *:2 AbsY; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CMP "B", AbsY is mflag=1 & o0=0x42; o1=0xd9; AbsY { a:1 = BL; b:1 = *:1 AbsY; r:1 = a - b; fC = a >= b; resZN1(r); }
+:CMP "B", AbsX is mflag=0 & o0=0x42; o1=0xdd; AbsX { a:2 = B; b:2 = *:2 AbsX; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CMP "B", AbsX is mflag=1 & o0=0x42; o1=0xdd; AbsX { a:1 = BL; b:1 = *:1 AbsX; r:1 = a - b; fC = a >= b; resZN1(r); }
+:CMP "B", AblX is mflag=0 & o0=0x42; o1=0xdf; AblX { a:2 = B; b:2 = *:2 AblX; r:2 = a - b; fC = a >= b; resZN2(r); }
+:CMP "B", AblX is mflag=1 & o0=0x42; o1=0xdf; AblX { a:1 = BL; b:1 = *:1 AblX; r:1 = a - b; fC = a >= b; resZN1(r); }
+:SBC "B", DirXInd is mflag=0 & dmode=0 & o0=0x42; o1=0xe1; DirXInd { a:2 = B; b:2 = *:2 DirXInd; nb:2 = zext(!fC); t:2 = a - b; r:2 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN2(r); B = r; }
+:SBC "B", DirXInd is mflag=0 & dmode=1 & o0=0x42; o1=0xe1; DirXInd { a:2 = B; b:2 = *:2 DirXInd; r:2 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN2(r); B = r; }
+:SBC "B", DirXInd is mflag=1 & dmode=0 & o0=0x42; o1=0xe1; DirXInd { a:1 = BL; b:1 = *:1 DirXInd; nb:1 = zext(!fC); t:1 = a - b; r:1 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN1(r); BL = r; }
+:SBC "B", DirXInd is mflag=1 & dmode=1 & o0=0x42; o1=0xe1; DirXInd { a:1 = BL; b:1 = *:1 DirXInd; r:1 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN1(r); BL = r; }
+:SBC "B", Sr is mflag=0 & dmode=0 & o0=0x42; o1=0xe3; Sr { a:2 = B; b:2 = *:2 Sr; nb:2 = zext(!fC); t:2 = a - b; r:2 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN2(r); B = r; }
+:SBC "B", Sr is mflag=0 & dmode=1 & o0=0x42; o1=0xe3; Sr { a:2 = B; b:2 = *:2 Sr; r:2 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN2(r); B = r; }
+:SBC "B", Sr is mflag=1 & dmode=0 & o0=0x42; o1=0xe3; Sr { a:1 = BL; b:1 = *:1 Sr; nb:1 = zext(!fC); t:1 = a - b; r:1 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN1(r); BL = r; }
+:SBC "B", Sr is mflag=1 & dmode=1 & o0=0x42; o1=0xe3; Sr { a:1 = BL; b:1 = *:1 Sr; r:1 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN1(r); BL = r; }
+:SBC "B", Dir is mflag=0 & dmode=0 & o0=0x42; o1=0xe5; Dir { a:2 = B; b:2 = *:2 Dir; nb:2 = zext(!fC); t:2 = a - b; r:2 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN2(r); B = r; }
+:SBC "B", Dir is mflag=0 & dmode=1 & o0=0x42; o1=0xe5; Dir { a:2 = B; b:2 = *:2 Dir; r:2 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN2(r); B = r; }
+:SBC "B", Dir is mflag=1 & dmode=0 & o0=0x42; o1=0xe5; Dir { a:1 = BL; b:1 = *:1 Dir; nb:1 = zext(!fC); t:1 = a - b; r:1 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN1(r); BL = r; }
+:SBC "B", Dir is mflag=1 & dmode=1 & o0=0x42; o1=0xe5; Dir { a:1 = BL; b:1 = *:1 Dir; r:1 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN1(r); BL = r; }
+:SBC "B", DirLInd is mflag=0 & dmode=0 & o0=0x42; o1=0xe7; DirLInd { a:2 = B; b:2 = *:2 DirLInd; nb:2 = zext(!fC); t:2 = a - b; r:2 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN2(r); B = r; }
+:SBC "B", DirLInd is mflag=0 & dmode=1 & o0=0x42; o1=0xe7; DirLInd { a:2 = B; b:2 = *:2 DirLInd; r:2 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN2(r); B = r; }
+:SBC "B", DirLInd is mflag=1 & dmode=0 & o0=0x42; o1=0xe7; DirLInd { a:1 = BL; b:1 = *:1 DirLInd; nb:1 = zext(!fC); t:1 = a - b; r:1 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN1(r); BL = r; }
+:SBC "B", DirLInd is mflag=1 & dmode=1 & o0=0x42; o1=0xe7; DirLInd { a:1 = BL; b:1 = *:1 DirLInd; r:1 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN1(r); BL = r; }
+:SBC "B", Imm16 is mflag=0 & dmode=0 & o0=0x42; o1=0xe9; Imm16 { a:2 = B; b:2 = Imm16; nb:2 = zext(!fC); t:2 = a - b; r:2 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN2(r); B = r; }
+:SBC "B", Imm16 is mflag=0 & dmode=1 & o0=0x42; o1=0xe9; Imm16 { a:2 = B; b:2 = Imm16; r:2 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN2(r); B = r; }
+:SBC "B", Imm8 is mflag=1 & dmode=0 & o0=0x42; o1=0xe9; Imm8 { a:1 = BL; b:1 = Imm8; nb:1 = zext(!fC); t:1 = a - b; r:1 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN1(r); BL = r; }
+:SBC "B", Imm8 is mflag=1 & dmode=1 & o0=0x42; o1=0xe9; Imm8 { a:1 = BL; b:1 = Imm8; r:1 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN1(r); BL = r; }
+:SBC "B", Abs is mflag=0 & dmode=0 & o0=0x42; o1=0xed; Abs { a:2 = B; b:2 = *:2 Abs; nb:2 = zext(!fC); t:2 = a - b; r:2 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN2(r); B = r; }
+:SBC "B", Abs is mflag=0 & dmode=1 & o0=0x42; o1=0xed; Abs { a:2 = B; b:2 = *:2 Abs; r:2 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN2(r); B = r; }
+:SBC "B", Abs is mflag=1 & dmode=0 & o0=0x42; o1=0xed; Abs { a:1 = BL; b:1 = *:1 Abs; nb:1 = zext(!fC); t:1 = a - b; r:1 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN1(r); BL = r; }
+:SBC "B", Abs is mflag=1 & dmode=1 & o0=0x42; o1=0xed; Abs { a:1 = BL; b:1 = *:1 Abs; r:1 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN1(r); BL = r; }
+:SBC "B", Abl is mflag=0 & dmode=0 & o0=0x42; o1=0xef; Abl { a:2 = B; b:2 = *:2 Abl; nb:2 = zext(!fC); t:2 = a - b; r:2 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN2(r); B = r; }
+:SBC "B", Abl is mflag=0 & dmode=1 & o0=0x42; o1=0xef; Abl { a:2 = B; b:2 = *:2 Abl; r:2 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN2(r); B = r; }
+:SBC "B", Abl is mflag=1 & dmode=0 & o0=0x42; o1=0xef; Abl { a:1 = BL; b:1 = *:1 Abl; nb:1 = zext(!fC); t:1 = a - b; r:1 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN1(r); BL = r; }
+:SBC "B", Abl is mflag=1 & dmode=1 & o0=0x42; o1=0xef; Abl { a:1 = BL; b:1 = *:1 Abl; r:1 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN1(r); BL = r; }
+:SBC "B", DirIndY is mflag=0 & dmode=0 & o0=0x42; o1=0xf1; DirIndY { a:2 = B; b:2 = *:2 DirIndY; nb:2 = zext(!fC); t:2 = a - b; r:2 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN2(r); B = r; }
+:SBC "B", DirIndY is mflag=0 & dmode=1 & o0=0x42; o1=0xf1; DirIndY { a:2 = B; b:2 = *:2 DirIndY; r:2 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN2(r); B = r; }
+:SBC "B", DirIndY is mflag=1 & dmode=0 & o0=0x42; o1=0xf1; DirIndY { a:1 = BL; b:1 = *:1 DirIndY; nb:1 = zext(!fC); t:1 = a - b; r:1 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN1(r); BL = r; }
+:SBC "B", DirIndY is mflag=1 & dmode=1 & o0=0x42; o1=0xf1; DirIndY { a:1 = BL; b:1 = *:1 DirIndY; r:1 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN1(r); BL = r; }
+:SBC "B", DirInd is mflag=0 & dmode=0 & o0=0x42; o1=0xf2; DirInd { a:2 = B; b:2 = *:2 DirInd; nb:2 = zext(!fC); t:2 = a - b; r:2 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN2(r); B = r; }
+:SBC "B", DirInd is mflag=0 & dmode=1 & o0=0x42; o1=0xf2; DirInd { a:2 = B; b:2 = *:2 DirInd; r:2 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN2(r); B = r; }
+:SBC "B", DirInd is mflag=1 & dmode=0 & o0=0x42; o1=0xf2; DirInd { a:1 = BL; b:1 = *:1 DirInd; nb:1 = zext(!fC); t:1 = a - b; r:1 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN1(r); BL = r; }
+:SBC "B", DirInd is mflag=1 & dmode=1 & o0=0x42; o1=0xf2; DirInd { a:1 = BL; b:1 = *:1 DirInd; r:1 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN1(r); BL = r; }
+:SBC "B", SrIndY is mflag=0 & dmode=0 & o0=0x42; o1=0xf3; SrIndY { a:2 = B; b:2 = *:2 SrIndY; nb:2 = zext(!fC); t:2 = a - b; r:2 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN2(r); B = r; }
+:SBC "B", SrIndY is mflag=0 & dmode=1 & o0=0x42; o1=0xf3; SrIndY { a:2 = B; b:2 = *:2 SrIndY; r:2 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN2(r); B = r; }
+:SBC "B", SrIndY is mflag=1 & dmode=0 & o0=0x42; o1=0xf3; SrIndY { a:1 = BL; b:1 = *:1 SrIndY; nb:1 = zext(!fC); t:1 = a - b; r:1 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN1(r); BL = r; }
+:SBC "B", SrIndY is mflag=1 & dmode=1 & o0=0x42; o1=0xf3; SrIndY { a:1 = BL; b:1 = *:1 SrIndY; r:1 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN1(r); BL = r; }
+:SBC "B", DirX is mflag=0 & dmode=0 & o0=0x42; o1=0xf5; DirX { a:2 = B; b:2 = *:2 DirX; nb:2 = zext(!fC); t:2 = a - b; r:2 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN2(r); B = r; }
+:SBC "B", DirX is mflag=0 & dmode=1 & o0=0x42; o1=0xf5; DirX { a:2 = B; b:2 = *:2 DirX; r:2 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN2(r); B = r; }
+:SBC "B", DirX is mflag=1 & dmode=0 & o0=0x42; o1=0xf5; DirX { a:1 = BL; b:1 = *:1 DirX; nb:1 = zext(!fC); t:1 = a - b; r:1 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN1(r); BL = r; }
+:SBC "B", DirX is mflag=1 & dmode=1 & o0=0x42; o1=0xf5; DirX { a:1 = BL; b:1 = *:1 DirX; r:1 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN1(r); BL = r; }
+:SBC "B", DirLIndY is mflag=0 & dmode=0 & o0=0x42; o1=0xf7; DirLIndY { a:2 = B; b:2 = *:2 DirLIndY; nb:2 = zext(!fC); t:2 = a - b; r:2 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN2(r); B = r; }
+:SBC "B", DirLIndY is mflag=0 & dmode=1 & o0=0x42; o1=0xf7; DirLIndY { a:2 = B; b:2 = *:2 DirLIndY; r:2 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN2(r); B = r; }
+:SBC "B", DirLIndY is mflag=1 & dmode=0 & o0=0x42; o1=0xf7; DirLIndY { a:1 = BL; b:1 = *:1 DirLIndY; nb:1 = zext(!fC); t:1 = a - b; r:1 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN1(r); BL = r; }
+:SBC "B", DirLIndY is mflag=1 & dmode=1 & o0=0x42; o1=0xf7; DirLIndY { a:1 = BL; b:1 = *:1 DirLIndY; r:1 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN1(r); BL = r; }
+:SBC "B", AbsY is mflag=0 & dmode=0 & o0=0x42; o1=0xf9; AbsY { a:2 = B; b:2 = *:2 AbsY; nb:2 = zext(!fC); t:2 = a - b; r:2 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN2(r); B = r; }
+:SBC "B", AbsY is mflag=0 & dmode=1 & o0=0x42; o1=0xf9; AbsY { a:2 = B; b:2 = *:2 AbsY; r:2 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN2(r); B = r; }
+:SBC "B", AbsY is mflag=1 & dmode=0 & o0=0x42; o1=0xf9; AbsY { a:1 = BL; b:1 = *:1 AbsY; nb:1 = zext(!fC); t:1 = a - b; r:1 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN1(r); BL = r; }
+:SBC "B", AbsY is mflag=1 & dmode=1 & o0=0x42; o1=0xf9; AbsY { a:1 = BL; b:1 = *:1 AbsY; r:1 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN1(r); BL = r; }
+:SBC "B", AbsX is mflag=0 & dmode=0 & o0=0x42; o1=0xfd; AbsX { a:2 = B; b:2 = *:2 AbsX; nb:2 = zext(!fC); t:2 = a - b; r:2 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN2(r); B = r; }
+:SBC "B", AbsX is mflag=0 & dmode=1 & o0=0x42; o1=0xfd; AbsX { a:2 = B; b:2 = *:2 AbsX; r:2 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN2(r); B = r; }
+:SBC "B", AbsX is mflag=1 & dmode=0 & o0=0x42; o1=0xfd; AbsX { a:1 = BL; b:1 = *:1 AbsX; nb:1 = zext(!fC); t:1 = a - b; r:1 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN1(r); BL = r; }
+:SBC "B", AbsX is mflag=1 & dmode=1 & o0=0x42; o1=0xfd; AbsX { a:1 = BL; b:1 = *:1 AbsX; r:1 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN1(r); BL = r; }
+:SBC "B", AblX is mflag=0 & dmode=0 & o0=0x42; o1=0xff; AblX { a:2 = B; b:2 = *:2 AblX; nb:2 = zext(!fC); t:2 = a - b; r:2 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN2(r); B = r; }
+:SBC "B", AblX is mflag=0 & dmode=1 & o0=0x42; o1=0xff; AblX { a:2 = B; b:2 = *:2 AblX; r:2 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN2(r); B = r; }
+:SBC "B", AblX is mflag=1 & dmode=0 & o0=0x42; o1=0xff; AblX { a:1 = BL; b:1 = *:1 AblX; nb:1 = zext(!fC); t:1 = a - b; r:1 = t - nb; fC = (a >= b) && (t >= nb); fV = sborrow(a, b) ^^ sborrow(t, nb); resZN1(r); BL = r; }
+:SBC "B", AblX is mflag=1 & dmode=1 & o0=0x42; o1=0xff; AblX { a:1 = BL; b:1 = *:1 AblX; r:1 = decimal_sub(a, b, fC); cy:1 = decimal_sub_carry(a, b, fC); fC = cy; resZN1(r); BL = r; }
+:MPY DirXInd is mflag=0 & o0=0x89; o1=0x01; DirXInd { p:4 = zext(A) * zext(*:2 DirXInd); A = p:2; B = p(2); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPY DirXInd is mflag=1 & o0=0x89; o1=0x01; DirXInd { p:2 = zext(AL) * zext(*:1 DirXInd); AL = p:1; BL = p(1); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPY Sr is mflag=0 & o0=0x89; o1=0x03; Sr { p:4 = zext(A) * zext(*:2 Sr); A = p:2; B = p(2); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPY Sr is mflag=1 & o0=0x89; o1=0x03; Sr { p:2 = zext(AL) * zext(*:1 Sr); AL = p:1; BL = p(1); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPY Dir is mflag=0 & o0=0x89; o1=0x05; Dir { p:4 = zext(A) * zext(*:2 Dir); A = p:2; B = p(2); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPY Dir is mflag=1 & o0=0x89; o1=0x05; Dir { p:2 = zext(AL) * zext(*:1 Dir); AL = p:1; BL = p(1); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPY DirLInd is mflag=0 & o0=0x89; o1=0x07; DirLInd { p:4 = zext(A) * zext(*:2 DirLInd); A = p:2; B = p(2); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPY DirLInd is mflag=1 & o0=0x89; o1=0x07; DirLInd { p:2 = zext(AL) * zext(*:1 DirLInd); AL = p:1; BL = p(1); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPY Imm16 is mflag=0 & o0=0x89; o1=0x09; Imm16 { p:4 = zext(A) * zext(Imm16); A = p:2; B = p(2); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPY Imm8 is mflag=1 & o0=0x89; o1=0x09; Imm8 { p:2 = zext(AL) * zext(Imm8); AL = p:1; BL = p(1); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPY Abs is mflag=0 & o0=0x89; o1=0x0d; Abs { p:4 = zext(A) * zext(*:2 Abs); A = p:2; B = p(2); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPY Abs is mflag=1 & o0=0x89; o1=0x0d; Abs { p:2 = zext(AL) * zext(*:1 Abs); AL = p:1; BL = p(1); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPY Abl is mflag=0 & o0=0x89; o1=0x0f; Abl { p:4 = zext(A) * zext(*:2 Abl); A = p:2; B = p(2); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPY Abl is mflag=1 & o0=0x89; o1=0x0f; Abl { p:2 = zext(AL) * zext(*:1 Abl); AL = p:1; BL = p(1); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPY DirIndY is mflag=0 & o0=0x89; o1=0x11; DirIndY { p:4 = zext(A) * zext(*:2 DirIndY); A = p:2; B = p(2); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPY DirIndY is mflag=1 & o0=0x89; o1=0x11; DirIndY { p:2 = zext(AL) * zext(*:1 DirIndY); AL = p:1; BL = p(1); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPY DirInd is mflag=0 & o0=0x89; o1=0x12; DirInd { p:4 = zext(A) * zext(*:2 DirInd); A = p:2; B = p(2); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPY DirInd is mflag=1 & o0=0x89; o1=0x12; DirInd { p:2 = zext(AL) * zext(*:1 DirInd); AL = p:1; BL = p(1); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPY SrIndY is mflag=0 & o0=0x89; o1=0x13; SrIndY { p:4 = zext(A) * zext(*:2 SrIndY); A = p:2; B = p(2); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPY SrIndY is mflag=1 & o0=0x89; o1=0x13; SrIndY { p:2 = zext(AL) * zext(*:1 SrIndY); AL = p:1; BL = p(1); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPY DirX is mflag=0 & o0=0x89; o1=0x15; DirX { p:4 = zext(A) * zext(*:2 DirX); A = p:2; B = p(2); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPY DirX is mflag=1 & o0=0x89; o1=0x15; DirX { p:2 = zext(AL) * zext(*:1 DirX); AL = p:1; BL = p(1); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPY DirLIndY is mflag=0 & o0=0x89; o1=0x17; DirLIndY { p:4 = zext(A) * zext(*:2 DirLIndY); A = p:2; B = p(2); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPY DirLIndY is mflag=1 & o0=0x89; o1=0x17; DirLIndY { p:2 = zext(AL) * zext(*:1 DirLIndY); AL = p:1; BL = p(1); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPY AbsY is mflag=0 & o0=0x89; o1=0x19; AbsY { p:4 = zext(A) * zext(*:2 AbsY); A = p:2; B = p(2); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPY AbsY is mflag=1 & o0=0x89; o1=0x19; AbsY { p:2 = zext(AL) * zext(*:1 AbsY); AL = p:1; BL = p(1); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPY AbsX is mflag=0 & o0=0x89; o1=0x1d; AbsX { p:4 = zext(A) * zext(*:2 AbsX); A = p:2; B = p(2); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPY AbsX is mflag=1 & o0=0x89; o1=0x1d; AbsX { p:2 = zext(AL) * zext(*:1 AbsX); AL = p:1; BL = p(1); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPY AblX is mflag=0 & o0=0x89; o1=0x1f; AblX { p:4 = zext(A) * zext(*:2 AblX); A = p:2; B = p(2); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPY AblX is mflag=1 & o0=0x89; o1=0x1f; AblX { p:2 = zext(AL) * zext(*:1 AblX); AL = p:1; BL = p(1); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:DIV DirXInd is mflag=0 & o0=0x89; o1=0x21; DirXInd { d:4 = zext(*:2 DirXInd); n:4 = (zext(B) << 16) | zext(A); q:4 = n / d; m:4 = n % d; A = q:2; B = m:2; fV = q > 0xffff; fZ = (A == 0); fN = (A s< 0); fC = 0; }
+:DIV DirXInd is mflag=1 & o0=0x89; o1=0x21; DirXInd { d:2 = zext(*:1 DirXInd); n:2 = (zext(BL) << 8) | zext(AL); q:2 = n / d; m:2 = n % d; AL = q:1; BL = m:1; fV = q > 0xff; fZ = (AL == 0); fN = (AL s< 0); fC = 0; }
+:DIV Sr is mflag=0 & o0=0x89; o1=0x23; Sr { d:4 = zext(*:2 Sr); n:4 = (zext(B) << 16) | zext(A); q:4 = n / d; m:4 = n % d; A = q:2; B = m:2; fV = q > 0xffff; fZ = (A == 0); fN = (A s< 0); fC = 0; }
+:DIV Sr is mflag=1 & o0=0x89; o1=0x23; Sr { d:2 = zext(*:1 Sr); n:2 = (zext(BL) << 8) | zext(AL); q:2 = n / d; m:2 = n % d; AL = q:1; BL = m:1; fV = q > 0xff; fZ = (AL == 0); fN = (AL s< 0); fC = 0; }
+:DIV Dir is mflag=0 & o0=0x89; o1=0x25; Dir { d:4 = zext(*:2 Dir); n:4 = (zext(B) << 16) | zext(A); q:4 = n / d; m:4 = n % d; A = q:2; B = m:2; fV = q > 0xffff; fZ = (A == 0); fN = (A s< 0); fC = 0; }
+:DIV Dir is mflag=1 & o0=0x89; o1=0x25; Dir { d:2 = zext(*:1 Dir); n:2 = (zext(BL) << 8) | zext(AL); q:2 = n / d; m:2 = n % d; AL = q:1; BL = m:1; fV = q > 0xff; fZ = (AL == 0); fN = (AL s< 0); fC = 0; }
+:DIV DirLInd is mflag=0 & o0=0x89; o1=0x27; DirLInd { d:4 = zext(*:2 DirLInd); n:4 = (zext(B) << 16) | zext(A); q:4 = n / d; m:4 = n % d; A = q:2; B = m:2; fV = q > 0xffff; fZ = (A == 0); fN = (A s< 0); fC = 0; }
+:DIV DirLInd is mflag=1 & o0=0x89; o1=0x27; DirLInd { d:2 = zext(*:1 DirLInd); n:2 = (zext(BL) << 8) | zext(AL); q:2 = n / d; m:2 = n % d; AL = q:1; BL = m:1; fV = q > 0xff; fZ = (AL == 0); fN = (AL s< 0); fC = 0; }
+:XAB is o0=0x89; o1=0x28 { t:2 = A; A = B; B = t; }
+:DIV Imm16 is mflag=0 & o0=0x89; o1=0x29; Imm16 { d:4 = zext(Imm16); n:4 = (zext(B) << 16) | zext(A); q:4 = n / d; m:4 = n % d; A = q:2; B = m:2; fV = q > 0xffff; fZ = (A == 0); fN = (A s< 0); fC = 0; }
+:DIV Imm8 is mflag=1 & o0=0x89; o1=0x29; Imm8 { d:2 = zext(Imm8); n:2 = (zext(BL) << 8) | zext(AL); q:2 = n / d; m:2 = n % d; AL = q:1; BL = m:1; fV = q > 0xff; fZ = (AL == 0); fN = (AL s< 0); fC = 0; }
+:DIV Abs is mflag=0 & o0=0x89; o1=0x2d; Abs { d:4 = zext(*:2 Abs); n:4 = (zext(B) << 16) | zext(A); q:4 = n / d; m:4 = n % d; A = q:2; B = m:2; fV = q > 0xffff; fZ = (A == 0); fN = (A s< 0); fC = 0; }
+:DIV Abs is mflag=1 & o0=0x89; o1=0x2d; Abs { d:2 = zext(*:1 Abs); n:2 = (zext(BL) << 8) | zext(AL); q:2 = n / d; m:2 = n % d; AL = q:1; BL = m:1; fV = q > 0xff; fZ = (AL == 0); fN = (AL s< 0); fC = 0; }
+:DIV Abl is mflag=0 & o0=0x89; o1=0x2f; Abl { d:4 = zext(*:2 Abl); n:4 = (zext(B) << 16) | zext(A); q:4 = n / d; m:4 = n % d; A = q:2; B = m:2; fV = q > 0xffff; fZ = (A == 0); fN = (A s< 0); fC = 0; }
+:DIV Abl is mflag=1 & o0=0x89; o1=0x2f; Abl { d:2 = zext(*:1 Abl); n:2 = (zext(BL) << 8) | zext(AL); q:2 = n / d; m:2 = n % d; AL = q:1; BL = m:1; fV = q > 0xff; fZ = (AL == 0); fN = (AL s< 0); fC = 0; }
+:DIV DirIndY is mflag=0 & o0=0x89; o1=0x31; DirIndY { d:4 = zext(*:2 DirIndY); n:4 = (zext(B) << 16) | zext(A); q:4 = n / d; m:4 = n % d; A = q:2; B = m:2; fV = q > 0xffff; fZ = (A == 0); fN = (A s< 0); fC = 0; }
+:DIV DirIndY is mflag=1 & o0=0x89; o1=0x31; DirIndY { d:2 = zext(*:1 DirIndY); n:2 = (zext(BL) << 8) | zext(AL); q:2 = n / d; m:2 = n % d; AL = q:1; BL = m:1; fV = q > 0xff; fZ = (AL == 0); fN = (AL s< 0); fC = 0; }
+:DIV DirInd is mflag=0 & o0=0x89; o1=0x32; DirInd { d:4 = zext(*:2 DirInd); n:4 = (zext(B) << 16) | zext(A); q:4 = n / d; m:4 = n % d; A = q:2; B = m:2; fV = q > 0xffff; fZ = (A == 0); fN = (A s< 0); fC = 0; }
+:DIV DirInd is mflag=1 & o0=0x89; o1=0x32; DirInd { d:2 = zext(*:1 DirInd); n:2 = (zext(BL) << 8) | zext(AL); q:2 = n / d; m:2 = n % d; AL = q:1; BL = m:1; fV = q > 0xff; fZ = (AL == 0); fN = (AL s< 0); fC = 0; }
+:DIV SrIndY is mflag=0 & o0=0x89; o1=0x33; SrIndY { d:4 = zext(*:2 SrIndY); n:4 = (zext(B) << 16) | zext(A); q:4 = n / d; m:4 = n % d; A = q:2; B = m:2; fV = q > 0xffff; fZ = (A == 0); fN = (A s< 0); fC = 0; }
+:DIV SrIndY is mflag=1 & o0=0x89; o1=0x33; SrIndY { d:2 = zext(*:1 SrIndY); n:2 = (zext(BL) << 8) | zext(AL); q:2 = n / d; m:2 = n % d; AL = q:1; BL = m:1; fV = q > 0xff; fZ = (AL == 0); fN = (AL s< 0); fC = 0; }
+:DIV DirX is mflag=0 & o0=0x89; o1=0x35; DirX { d:4 = zext(*:2 DirX); n:4 = (zext(B) << 16) | zext(A); q:4 = n / d; m:4 = n % d; A = q:2; B = m:2; fV = q > 0xffff; fZ = (A == 0); fN = (A s< 0); fC = 0; }
+:DIV DirX is mflag=1 & o0=0x89; o1=0x35; DirX { d:2 = zext(*:1 DirX); n:2 = (zext(BL) << 8) | zext(AL); q:2 = n / d; m:2 = n % d; AL = q:1; BL = m:1; fV = q > 0xff; fZ = (AL == 0); fN = (AL s< 0); fC = 0; }
+:DIV DirLIndY is mflag=0 & o0=0x89; o1=0x37; DirLIndY { d:4 = zext(*:2 DirLIndY); n:4 = (zext(B) << 16) | zext(A); q:4 = n / d; m:4 = n % d; A = q:2; B = m:2; fV = q > 0xffff; fZ = (A == 0); fN = (A s< 0); fC = 0; }
+:DIV DirLIndY is mflag=1 & o0=0x89; o1=0x37; DirLIndY { d:2 = zext(*:1 DirLIndY); n:2 = (zext(BL) << 8) | zext(AL); q:2 = n / d; m:2 = n % d; AL = q:1; BL = m:1; fV = q > 0xff; fZ = (AL == 0); fN = (AL s< 0); fC = 0; }
+:DIV AbsY is mflag=0 & o0=0x89; o1=0x39; AbsY { d:4 = zext(*:2 AbsY); n:4 = (zext(B) << 16) | zext(A); q:4 = n / d; m:4 = n % d; A = q:2; B = m:2; fV = q > 0xffff; fZ = (A == 0); fN = (A s< 0); fC = 0; }
+:DIV AbsY is mflag=1 & o0=0x89; o1=0x39; AbsY { d:2 = zext(*:1 AbsY); n:2 = (zext(BL) << 8) | zext(AL); q:2 = n / d; m:2 = n % d; AL = q:1; BL = m:1; fV = q > 0xff; fZ = (AL == 0); fN = (AL s< 0); fC = 0; }
+:DIV AbsX is mflag=0 & o0=0x89; o1=0x3d; AbsX { d:4 = zext(*:2 AbsX); n:4 = (zext(B) << 16) | zext(A); q:4 = n / d; m:4 = n % d; A = q:2; B = m:2; fV = q > 0xffff; fZ = (A == 0); fN = (A s< 0); fC = 0; }
+:DIV AbsX is mflag=1 & o0=0x89; o1=0x3d; AbsX { d:2 = zext(*:1 AbsX); n:2 = (zext(BL) << 8) | zext(AL); q:2 = n / d; m:2 = n % d; AL = q:1; BL = m:1; fV = q > 0xff; fZ = (AL == 0); fN = (AL s< 0); fC = 0; }
+:DIV AblX is mflag=0 & o0=0x89; o1=0x3f; AblX { d:4 = zext(*:2 AblX); n:4 = (zext(B) << 16) | zext(A); q:4 = n / d; m:4 = n % d; A = q:2; B = m:2; fV = q > 0xffff; fZ = (A == 0); fN = (A s< 0); fC = 0; }
+:DIV AblX is mflag=1 & o0=0x89; o1=0x3f; AblX { d:2 = zext(*:1 AblX); n:2 = (zext(BL) << 8) | zext(AL); q:2 = n / d; m:2 = n % d; AL = q:1; BL = m:1; fV = q > 0xff; fZ = (AL == 0); fN = (AL s< 0); fC = 0; }
+:RLA Imm16 is mflag=0 & o0=0x89; o1=0x49; Imm16 { n:2 = Imm16 % 16; A = (A << n) | (A >> (16 - n)); }
+:RLA Imm8 is mflag=1 & o0=0x89; o1=0x49; Imm8 { n:1 = Imm8 % 8; AL = (AL << n) | (AL >> (8 - n)); }
+:MPYS DirXInd is mflag=0 & o0=0x89; o1=0x81; DirXInd { p:4 = sext(A) * sext(*:2 DirXInd); A = p:2; B = p(2); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPYS DirXInd is mflag=1 & o0=0x89; o1=0x81; DirXInd { p:2 = sext(AL) * sext(*:1 DirXInd); AL = p:1; BL = p(1); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPYS Sr is mflag=0 & o0=0x89; o1=0x83; Sr { p:4 = sext(A) * sext(*:2 Sr); A = p:2; B = p(2); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPYS Sr is mflag=1 & o0=0x89; o1=0x83; Sr { p:2 = sext(AL) * sext(*:1 Sr); AL = p:1; BL = p(1); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPYS Dir is mflag=0 & o0=0x89; o1=0x85; Dir { p:4 = sext(A) * sext(*:2 Dir); A = p:2; B = p(2); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPYS Dir is mflag=1 & o0=0x89; o1=0x85; Dir { p:2 = sext(AL) * sext(*:1 Dir); AL = p:1; BL = p(1); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPYS DirLInd is mflag=0 & o0=0x89; o1=0x87; DirLInd { p:4 = sext(A) * sext(*:2 DirLInd); A = p:2; B = p(2); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPYS DirLInd is mflag=1 & o0=0x89; o1=0x87; DirLInd { p:2 = sext(AL) * sext(*:1 DirLInd); AL = p:1; BL = p(1); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPYS Imm16 is mflag=0 & o0=0x89; o1=0x89; Imm16 { p:4 = sext(A) * sext(Imm16); A = p:2; B = p(2); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPYS Imm8 is mflag=1 & o0=0x89; o1=0x89; Imm8 { p:2 = sext(AL) * sext(Imm8); AL = p:1; BL = p(1); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:EXTS "A" is o0=0x89; o1=0x8b { A = sext(A:1); resZN2(A); }
+:MPYS Abs is mflag=0 & o0=0x89; o1=0x8d; Abs { p:4 = sext(A) * sext(*:2 Abs); A = p:2; B = p(2); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPYS Abs is mflag=1 & o0=0x89; o1=0x8d; Abs { p:2 = sext(AL) * sext(*:1 Abs); AL = p:1; BL = p(1); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPYS Abl is mflag=0 & o0=0x89; o1=0x8f; Abl { p:4 = sext(A) * sext(*:2 Abl); A = p:2; B = p(2); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPYS Abl is mflag=1 & o0=0x89; o1=0x8f; Abl { p:2 = sext(AL) * sext(*:1 Abl); AL = p:1; BL = p(1); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPYS DirIndY is mflag=0 & o0=0x89; o1=0x91; DirIndY { p:4 = sext(A) * sext(*:2 DirIndY); A = p:2; B = p(2); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPYS DirIndY is mflag=1 & o0=0x89; o1=0x91; DirIndY { p:2 = sext(AL) * sext(*:1 DirIndY); AL = p:1; BL = p(1); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPYS DirInd is mflag=0 & o0=0x89; o1=0x92; DirInd { p:4 = sext(A) * sext(*:2 DirInd); A = p:2; B = p(2); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPYS DirInd is mflag=1 & o0=0x89; o1=0x92; DirInd { p:2 = sext(AL) * sext(*:1 DirInd); AL = p:1; BL = p(1); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPYS DirX is mflag=0 & o0=0x89; o1=0x95; DirX { p:4 = sext(A) * sext(*:2 DirX); A = p:2; B = p(2); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPYS DirX is mflag=1 & o0=0x89; o1=0x95; DirX { p:2 = sext(AL) * sext(*:1 DirX); AL = p:1; BL = p(1); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPYS DirLIndY is mflag=0 & o0=0x89; o1=0x97; DirLIndY { p:4 = sext(A) * sext(*:2 DirLIndY); A = p:2; B = p(2); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPYS DirLIndY is mflag=1 & o0=0x89; o1=0x97; DirLIndY { p:2 = sext(AL) * sext(*:1 DirLIndY); AL = p:1; BL = p(1); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPYS AbsY is mflag=0 & o0=0x89; o1=0x99; AbsY { p:4 = sext(A) * sext(*:2 AbsY); A = p:2; B = p(2); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPYS AbsY is mflag=1 & o0=0x89; o1=0x99; AbsY { p:2 = sext(AL) * sext(*:1 AbsY); AL = p:1; BL = p(1); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPYS AbsX is mflag=0 & o0=0x89; o1=0x9d; AbsX { p:4 = sext(A) * sext(*:2 AbsX); A = p:2; B = p(2); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPYS AbsX is mflag=1 & o0=0x89; o1=0x9d; AbsX { p:2 = sext(AL) * sext(*:1 AbsX); AL = p:1; BL = p(1); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPYS AblX is mflag=0 & o0=0x89; o1=0x9f; AblX { p:4 = sext(A) * sext(*:2 AblX); A = p:2; B = p(2); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPYS AblX is mflag=1 & o0=0x89; o1=0x9f; AblX { p:2 = sext(AL) * sext(*:1 AblX); AL = p:1; BL = p(1); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:DIVS DirXInd is mflag=0 & o0=0x89; o1=0xa1; DirXInd { d:4 = sext(*:2 DirXInd); n:4 = (zext(B) << 16) | zext(A); q:4 = n s/ d; m:4 = n s% d; A = q:2; B = m:2; fV = q > 0xffff; fZ = (A == 0); fN = (A s< 0); fC = 0; }
+:DIVS DirXInd is mflag=1 & o0=0x89; o1=0xa1; DirXInd { d:2 = sext(*:1 DirXInd); n:2 = (zext(BL) << 8) | zext(AL); q:2 = n s/ d; m:2 = n s% d; AL = q:1; BL = m:1; fV = q > 0xff; fZ = (AL == 0); fN = (AL s< 0); fC = 0; }
+:DIVS Sr is mflag=0 & o0=0x89; o1=0xa3; Sr { d:4 = sext(*:2 Sr); n:4 = (zext(B) << 16) | zext(A); q:4 = n s/ d; m:4 = n s% d; A = q:2; B = m:2; fV = q > 0xffff; fZ = (A == 0); fN = (A s< 0); fC = 0; }
+:DIVS Sr is mflag=1 & o0=0x89; o1=0xa3; Sr { d:2 = sext(*:1 Sr); n:2 = (zext(BL) << 8) | zext(AL); q:2 = n s/ d; m:2 = n s% d; AL = q:1; BL = m:1; fV = q > 0xff; fZ = (AL == 0); fN = (AL s< 0); fC = 0; }
+:DIVS Dir is mflag=0 & o0=0x89; o1=0xa5; Dir { d:4 = sext(*:2 Dir); n:4 = (zext(B) << 16) | zext(A); q:4 = n s/ d; m:4 = n s% d; A = q:2; B = m:2; fV = q > 0xffff; fZ = (A == 0); fN = (A s< 0); fC = 0; }
+:DIVS Dir is mflag=1 & o0=0x89; o1=0xa5; Dir { d:2 = sext(*:1 Dir); n:2 = (zext(BL) << 8) | zext(AL); q:2 = n s/ d; m:2 = n s% d; AL = q:1; BL = m:1; fV = q > 0xff; fZ = (AL == 0); fN = (AL s< 0); fC = 0; }
+:DIVS DirLInd is mflag=0 & o0=0x89; o1=0xa7; DirLInd { d:4 = sext(*:2 DirLInd); n:4 = (zext(B) << 16) | zext(A); q:4 = n s/ d; m:4 = n s% d; A = q:2; B = m:2; fV = q > 0xffff; fZ = (A == 0); fN = (A s< 0); fC = 0; }
+:DIVS DirLInd is mflag=1 & o0=0x89; o1=0xa7; DirLInd { d:2 = sext(*:1 DirLInd); n:2 = (zext(BL) << 8) | zext(AL); q:2 = n s/ d; m:2 = n s% d; AL = q:1; BL = m:1; fV = q > 0xff; fZ = (AL == 0); fN = (AL s< 0); fC = 0; }
+:DIVS Imm16 is mflag=0 & o0=0x89; o1=0xa9; Imm16 { d:4 = sext(Imm16); n:4 = (zext(B) << 16) | zext(A); q:4 = n s/ d; m:4 = n s% d; A = q:2; B = m:2; fV = q > 0xffff; fZ = (A == 0); fN = (A s< 0); fC = 0; }
+:DIVS Imm8 is mflag=1 & o0=0x89; o1=0xa9; Imm8 { d:2 = sext(Imm8); n:2 = (zext(BL) << 8) | zext(AL); q:2 = n s/ d; m:2 = n s% d; AL = q:1; BL = m:1; fV = q > 0xff; fZ = (AL == 0); fN = (AL s< 0); fC = 0; }
+:EXTZ "A" is o0=0x89; o1=0xab { A = zext(A:1); resZN2(A); }
+:DIVS Abs is mflag=0 & o0=0x89; o1=0xad; Abs { d:4 = sext(*:2 Abs); n:4 = (zext(B) << 16) | zext(A); q:4 = n s/ d; m:4 = n s% d; A = q:2; B = m:2; fV = q > 0xffff; fZ = (A == 0); fN = (A s< 0); fC = 0; }
+:DIVS Abs is mflag=1 & o0=0x89; o1=0xad; Abs { d:2 = sext(*:1 Abs); n:2 = (zext(BL) << 8) | zext(AL); q:2 = n s/ d; m:2 = n s% d; AL = q:1; BL = m:1; fV = q > 0xff; fZ = (AL == 0); fN = (AL s< 0); fC = 0; }
+:DIVS Abl is mflag=0 & o0=0x89; o1=0xaf; Abl { d:4 = sext(*:2 Abl); n:4 = (zext(B) << 16) | zext(A); q:4 = n s/ d; m:4 = n s% d; A = q:2; B = m:2; fV = q > 0xffff; fZ = (A == 0); fN = (A s< 0); fC = 0; }
+:DIVS Abl is mflag=1 & o0=0x89; o1=0xaf; Abl { d:2 = sext(*:1 Abl); n:2 = (zext(BL) << 8) | zext(AL); q:2 = n s/ d; m:2 = n s% d; AL = q:1; BL = m:1; fV = q > 0xff; fZ = (AL == 0); fN = (AL s< 0); fC = 0; }
+:DIVS DirIndY is mflag=0 & o0=0x89; o1=0xb1; DirIndY { d:4 = sext(*:2 DirIndY); n:4 = (zext(B) << 16) | zext(A); q:4 = n s/ d; m:4 = n s% d; A = q:2; B = m:2; fV = q > 0xffff; fZ = (A == 0); fN = (A s< 0); fC = 0; }
+:DIVS DirIndY is mflag=1 & o0=0x89; o1=0xb1; DirIndY { d:2 = sext(*:1 DirIndY); n:2 = (zext(BL) << 8) | zext(AL); q:2 = n s/ d; m:2 = n s% d; AL = q:1; BL = m:1; fV = q > 0xff; fZ = (AL == 0); fN = (AL s< 0); fC = 0; }
+:DIVS DirInd is mflag=0 & o0=0x89; o1=0xb2; DirInd { d:4 = sext(*:2 DirInd); n:4 = (zext(B) << 16) | zext(A); q:4 = n s/ d; m:4 = n s% d; A = q:2; B = m:2; fV = q > 0xffff; fZ = (A == 0); fN = (A s< 0); fC = 0; }
+:DIVS DirInd is mflag=1 & o0=0x89; o1=0xb2; DirInd { d:2 = sext(*:1 DirInd); n:2 = (zext(BL) << 8) | zext(AL); q:2 = n s/ d; m:2 = n s% d; AL = q:1; BL = m:1; fV = q > 0xff; fZ = (AL == 0); fN = (AL s< 0); fC = 0; }
+:DIVS SrIndY is mflag=0 & o0=0x89; o1=0xb3; SrIndY { d:4 = sext(*:2 SrIndY); n:4 = (zext(B) << 16) | zext(A); q:4 = n s/ d; m:4 = n s% d; A = q:2; B = m:2; fV = q > 0xffff; fZ = (A == 0); fN = (A s< 0); fC = 0; }
+:DIVS SrIndY is mflag=1 & o0=0x89; o1=0xb3; SrIndY { d:2 = sext(*:1 SrIndY); n:2 = (zext(BL) << 8) | zext(AL); q:2 = n s/ d; m:2 = n s% d; AL = q:1; BL = m:1; fV = q > 0xff; fZ = (AL == 0); fN = (AL s< 0); fC = 0; }
+:DIVS DirX is mflag=0 & o0=0x89; o1=0xb5; DirX { d:4 = sext(*:2 DirX); n:4 = (zext(B) << 16) | zext(A); q:4 = n s/ d; m:4 = n s% d; A = q:2; B = m:2; fV = q > 0xffff; fZ = (A == 0); fN = (A s< 0); fC = 0; }
+:DIVS DirX is mflag=1 & o0=0x89; o1=0xb5; DirX { d:2 = sext(*:1 DirX); n:2 = (zext(BL) << 8) | zext(AL); q:2 = n s/ d; m:2 = n s% d; AL = q:1; BL = m:1; fV = q > 0xff; fZ = (AL == 0); fN = (AL s< 0); fC = 0; }
+:DIVS DirLIndY is mflag=0 & o0=0x89; o1=0xb7; DirLIndY { d:4 = sext(*:2 DirLIndY); n:4 = (zext(B) << 16) | zext(A); q:4 = n s/ d; m:4 = n s% d; A = q:2; B = m:2; fV = q > 0xffff; fZ = (A == 0); fN = (A s< 0); fC = 0; }
+:DIVS DirLIndY is mflag=1 & o0=0x89; o1=0xb7; DirLIndY { d:2 = sext(*:1 DirLIndY); n:2 = (zext(BL) << 8) | zext(AL); q:2 = n s/ d; m:2 = n s% d; AL = q:1; BL = m:1; fV = q > 0xff; fZ = (AL == 0); fN = (AL s< 0); fC = 0; }
+:DIVS AbsY is mflag=0 & o0=0x89; o1=0xb9; AbsY { d:4 = sext(*:2 AbsY); n:4 = (zext(B) << 16) | zext(A); q:4 = n s/ d; m:4 = n s% d; A = q:2; B = m:2; fV = q > 0xffff; fZ = (A == 0); fN = (A s< 0); fC = 0; }
+:DIVS AbsY is mflag=1 & o0=0x89; o1=0xb9; AbsY { d:2 = sext(*:1 AbsY); n:2 = (zext(BL) << 8) | zext(AL); q:2 = n s/ d; m:2 = n s% d; AL = q:1; BL = m:1; fV = q > 0xff; fZ = (AL == 0); fN = (AL s< 0); fC = 0; }
+:DIVS AbsX is mflag=0 & o0=0x89; o1=0xbd; AbsX { d:4 = sext(*:2 AbsX); n:4 = (zext(B) << 16) | zext(A); q:4 = n s/ d; m:4 = n s% d; A = q:2; B = m:2; fV = q > 0xffff; fZ = (A == 0); fN = (A s< 0); fC = 0; }
+:DIVS AbsX is mflag=1 & o0=0x89; o1=0xbd; AbsX { d:2 = sext(*:1 AbsX); n:2 = (zext(BL) << 8) | zext(AL); q:2 = n s/ d; m:2 = n s% d; AL = q:1; BL = m:1; fV = q > 0xff; fZ = (AL == 0); fN = (AL s< 0); fC = 0; }
+:DIVS AblX is mflag=0 & o0=0x89; o1=0xbf; AblX { d:4 = sext(*:2 AblX); n:4 = (zext(B) << 16) | zext(A); q:4 = n s/ d; m:4 = n s% d; A = q:2; B = m:2; fV = q > 0xffff; fZ = (A == 0); fN = (A s< 0); fC = 0; }
+:DIVS AblX is mflag=1 & o0=0x89; o1=0xbf; AblX { d:2 = sext(*:1 AblX); n:2 = (zext(BL) << 8) | zext(AL); q:2 = n s/ d; m:2 = n s% d; AL = q:1; BL = m:1; fV = q > 0xff; fZ = (AL == 0); fN = (AL s< 0); fC = 0; }
+:LDT Imm8 is o0=0x89; o1=0xc2; Imm8 { DT = Imm8; resZN1(Imm8); }
+:MPYS SrIndY is mflag=0 & o0=0x89; o1=0x93; SrIndY { p:4 = sext(A) * sext(*:2 SrIndY); A = p:2; B = p(2); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:MPYS SrIndY is mflag=1 & o0=0x89; o1=0x93; SrIndY { p:2 = sext(AL) * sext(*:1 SrIndY); AL = p:1; BL = p(1); fZ = (p == 0); fN = (p s< 0); fC = 0; }
+:ASR "A" is mflag=0 & o0=0x89; o1=0x08 { v:2 = A; fC = (v & 1) != 0; r:2 = v s>> 1; resZN2(r); A = r; }
+:ASR "A" is mflag=1 & o0=0x89; o1=0x08 { v:1 = AL; fC = (v & 1) != 0; r:1 = v s>> 1; resZN1(r); AL = r; }
+:ASR Dir is mflag=0 & o0=0x89; o1=0x06; Dir { v:2 = *:2 Dir; fC = (v & 1) != 0; r:2 = v s>> 1; resZN2(r); *:2 Dir = r; }
+:ASR Dir is mflag=1 & o0=0x89; o1=0x06; Dir { v:1 = *:1 Dir; fC = (v & 1) != 0; r:1 = v s>> 1; resZN1(r); *:1 Dir = r; }
+:ASR DirX is mflag=0 & o0=0x89; o1=0x16; DirX { v:2 = *:2 DirX; fC = (v & 1) != 0; r:2 = v s>> 1; resZN2(r); *:2 DirX = r; }
+:ASR DirX is mflag=1 & o0=0x89; o1=0x16; DirX { v:1 = *:1 DirX; fC = (v & 1) != 0; r:1 = v s>> 1; resZN1(r); *:1 DirX = r; }
+:ASR Abs is mflag=0 & o0=0x89; o1=0x0e; Abs { v:2 = *:2 Abs; fC = (v & 1) != 0; r:2 = v s>> 1; resZN2(r); *:2 Abs = r; }
+:ASR Abs is mflag=1 & o0=0x89; o1=0x0e; Abs { v:1 = *:1 Abs; fC = (v & 1) != 0; r:1 = v s>> 1; resZN1(r); *:1 Abs = r; }
+:ASR AbsX is mflag=0 & o0=0x89; o1=0x1e; AbsX { v:2 = *:2 AbsX; fC = (v & 1) != 0; r:2 = v s>> 1; resZN2(r); *:2 AbsX = r; }
+:ASR AbsX is mflag=1 & o0=0x89; o1=0x1e; AbsX { v:1 = *:1 AbsX; fC = (v & 1) != 0; r:1 = v s>> 1; resZN1(r); *:1 AbsX = r; }
+:ASR "B" is mflag=0 & o0=0x42; o1=0x08 { v:2 = B; fC = (v & 1) != 0; r:2 = v s>> 1; resZN2(r); B = r; }
+:ASR "B" is mflag=1 & o0=0x42; o1=0x08 { v:1 = BL; fC = (v & 1) != 0; r:1 = v s>> 1; resZN1(r); BL = r; }
+:EXTS "B" is o0=0x42; o1=0x8b { B = sext(B:1); resZN2(B); }
+:EXTZ "B" is o0=0x42; o1=0xab { B = zext(B:1); resZN2(B); }

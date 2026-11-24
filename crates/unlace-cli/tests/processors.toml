@@ -13,6 +13,9 @@
 # (docs/processor-tests.md).
 
 [images]
+m7700 = """
+c964009003a9640060eaeaeaeaeaeaeaa934122000001869010060eaeaeaeaea89c200f8a97f8d4000d860eaeaeaeaea
+"""
 s1c88 = """
 31e502cc11f8ffffb005b103f0f380f8b0000391f5fdf8ff
 """
@@ -2092,3 +2095,32 @@ expect = [
     "luaIDiv(",
     "return ~(",
 ]
+
+# The 7700 Family language decompiles routines hand-assembled from the software manual's
+# instruction pages: a 16-bit compare and BCC clamp, a JSR caller, and an 8-bit store
+# after SEM and LDT (data bank 0).
+[[family]]
+name = "m7700"
+language = "M7700:LE:24:default"
+base = "0x0"
+image = "m7700"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "m7700_compare_and_branch_clamps"
+address = "0x0"
+expect = [
+    "if (a0 <= 99)",  # CMP A,#100 then BCC skips LDA A,#100
+    "return 100;",
+]
+
+[[family.function]]
+test = "m7700_jsr_call_decompiles"
+address = "0x10"
+expect = ["return sub_0(0x1234) + 1;"]
+
+[[family.function]]
+test = "m7700_sem_store_is_one_byte"
+address = "0x20"
+expect = ["dat_40 = 0x7f;"]

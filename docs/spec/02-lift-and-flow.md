@@ -5353,6 +5353,11 @@ in their own p-code). `fassignH` boxes a Zfh half result the same way (bits 63:1
 takes the low 32 bits without checking that the register is boxed (the ISA reads an
 unboxed value as the canonical NaN). Found by `tools/difffuzz`.
 
+The float argument and return entries of `riscv32-fp.cspec` and `riscv64-fp.cspec` take
+2-byte values (`minsize="2"`), since the LP64D/ILP32D ABIs pass a `_Float16` NaN-boxed in
+`fa0`..`fa7`. With `minsize="4"` a half argument was not recognised and `fadd.h fa0,fa0,fa1;
+ret` decompiled to `return a;`.
+
 ### RISC-V compressed indirect jumps clear bit 0
 
 `c.jr`, `c.jalr` and `ret` (`riscv.rvc.sinc`) expand to `jalr`, which clears bit 0 of the

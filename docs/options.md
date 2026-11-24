@@ -545,6 +545,9 @@ Three tiers:
 | one local holds a value computed and used on one branch arm and an unrelated value from the other arm | [`phiarm`](#phiarm----on--off-default-off) |
 | a variable is assigned different kinds of values on two paths that meet at a join | [`phiarm`](#phiarm----on--off-default-off) |
 | two source variables that meet only at a join print as one name | [`phiarm`](#phiarm----on--off-default-off) |
+| one local in a callee-saved register holds unrelated values around different calls | [`calleesaved`](#calleesaved----on--off-default-off) |
+| a variable kept across one call is reused for a different value kept across a later call | [`calleesaved`](#calleesaved----on--off-default-off) |
+| a pointer and a count share one declared local in rbx or x19 | [`calleesaved`](#calleesaved----on--off-default-off) |
 | an inlined callee body is spliced into the caller and should read as a call | [`outline`](#outline----off----default-off-destructive-opt-in) |
 | want to pull a chosen region out of a function into a named pseudofunction | [`outline`](#outline----off----default-off-destructive-opt-in) |
 | acting on an almostregion inline-candidate report by hand or with an llm | [`outline`](#outline----off----default-off-destructive-opt-in) |
@@ -608,9 +611,11 @@ Three tiers:
 | if (c) { return a; } else { return b; } where the source returned c ? a : b | [`retternary`](#retternary----on--off-default-off) |
 | a function ends in two returns of a variable and a constant | [`retternary`](#retternary----on--off-default-off) |
 | if (a) goto L; if (b) goto L; where the source wrote one if (a  | [`orexit`](#orexit----on--off-default-off) |
-|  | [`orexit`](#orexit----on--off-default-off) |
 |  b) | [`orexit`](#orexit----on--off-default-off) |
 | several adjacent ifs each return the same constant | [`orexit`](#orexit----on--off-default-off) |
+| go interface method calls print as anonymous indirect calls through tab + 0x18 | [`goitabcalls`](#goitabcalls----on--off-default-off) |
+| a go function taking an interface shows no method names at its calls | [`goitabcalls`](#goitabcalls----on--off-default-off) |
+| go itab dispatch renders as code pointer arithmetic | [`goitabcalls`](#goitabcalls----on--off-default-off) |
 | rule pools spend most of their time re-testing ops nothing changed | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a large function's simplification repeats full sweeps for a handful of rewrites | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a DOS program's globals print as *(short *)0x308e near-pointer dereferences instead of named globals | [`mzdgroup`](#mzdgroup----on--off-default-on) |
@@ -2467,6 +2472,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P6/merge-aggressiveness · ida · presentation-default · unlace-20
 - **Example:** `option phiarm on`
 
+### `calleesaved` -- on | off, default `off`
+
+- **Symptoms:** one local in a callee-saved register holds unrelated values around different calls; a variable kept across one call is reused for a different value kept across a later call; a pointer and a count share one declared local in rbx or x19.
+- **What it does:** Keep apart two variables that the compiler held in the same callee-saved register across different calls. A value that must survive a call lives in a register the calling convention preserves (rbx, r12-r15 on x86-64, x19-x28 on AArch64), and the compiler reuses that register for an unrelated value that must survive a later call. The two are separate SSA webs with no data flow between them, but they share the register and often the type, so Merge::mergeByDatatype (merge.cc:359-401) joins them and both print under one name. ON keys every high ActionMergeType gathers that lives wholly in one processor register which the function's own prototype model marks unaffected by calls (FuncProto::hasEffect == unaffected), and whose Cover holds a CALL strictly inside it (kuna_calleesaved.rs (span_key)); merge_by_datatype never puts two highs with the same key in one type group, so they stay two variables. Highs without a key group as before, under whichever typemerge mode is set. OFF, the default, is upstream byte-for-byte.
+- **When to flip:** OFF by default: a source variable reassigned between two calls (`p = a; f(p); p = b; g(p);`) compiles to the same two webs in the same register, and ON prints it as two variables. Turn it ON when one local declared in a callee-saved register is used for unrelated things around different calls (a buffer pointer before one call and a count after another), or when comparing variable boundaries against DWARF. Not yet measured on a corpus; a default change needs the DecBench variable-match and declaration-count numbers.
+- **Where / provenance:** P6/merge-aggressiveness · kuna · presentation-default · unlace-20
+- **Example:** `option calleesaved on`
+
 ### `outline` -- off | <fn>:<head>-<exit>[;...], default `off` (destructive opt-in)
 
 - **Symptoms:** an inlined callee body is spliced into the caller and should read as a call; want to pull a chosen region out of a function into a named pseudofunction; acting on an almostregion inline-candidate report by hand or with an llm.
@@ -2626,6 +2639,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** Turn on when consecutive tests share one exit (argument validation, early-out chains) and read better as one condition. Leave off to keep one if per test, as Ghidra prints it.
 - **Where / provenance:** P9/condition-form · kuna · structure-recovery · kuna-orexit
 - **Example:** `option orexit on`
+
+### `goitabcalls` -- on | off, default `off`
+
+- **Symptoms:** go interface method calls print as anonymous indirect calls through tab + 0x18; a go function taking an interface shows no method names at its calls; go itab dispatch renders as code pointer arithmetic.
+- **What it does:** Name Go interface method calls. A Go interface value is an itab pointer and a data pointer, and a method call through it loads one slot of the itab's `Fun` array and calls it with the data word as receiver, so it printed as an anonymous `(*(code **)(tab + 0x18))(data)`. The gotypes harvest (64-bit images) reads every non-empty interface descriptor's method set, the `Imethod` names in the order every itab of that interface lays out its `Fun` array, and interns one record per interface, `go.itab.` plus the interface's linker spelling (`go.itab.io.Writer`): the `inter`, `_type` and `hash` header words, then one function-pointer slot per method at offset 24 plus 8 per method, named after the method, with a language facet naming the interface; an interface spelling two descriptors give different method lists, an anonymous interface literal, or a method name that is not an ASCII identifier gets no record. Interning is output-neutral. With the option on, a Go DWARF signature (`godwarfsig`) whose formal is a nominal interface over the `runtime.iface` storage, passed in a register pair, keeps its two ABI words as two inputs, `s_tab` typed as a pointer to the interface's record and `s_data` an opaque pointer, and an indirect call whose target is a load of one method slot of such a record prints as `Interface.Method(receiver, ...)` (`main.Shape.Area(s_data)`). A function whose interface record is missing keeps the inference it had. Method signatures are not applied: the slots are untyped function pointers, so argument recovery at the call is unchanged.
+- **When to flip:** Turn on to read interface calls in a Go binary that keeps its DWARF by method name. Off by default while the typing only reaches interface formals (stripped binaries, struct fields and type assertion results keep their anonymous calls), and because it changes the signature of every function that takes an interface. Non-Go binaries are byte-identical either way.
+- **Where / provenance:** P1/external-refinement · kuna · type-inference · unlace-25-go-interface-calls
+- **Example:** `option goitabcalls on`
 
 ## Analysis & loader passes
 

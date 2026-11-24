@@ -1016,7 +1016,7 @@ which is why it is not the default.
 
 (kuna `guarddispatch`, on by default) A CALLIND through a Control Flow Guard
 dispatch slot calls the register the dispatch routine jumps to
-(`decompiler/crates/kuna-decomp/src/p2_lift/kuna_guarddispatch.rs
+(`crates/unlace-lift/src/p2_lift/kuna_guarddispatch.rs
 (calls_through_slot)`). An image built with `/guard:cf` makes every
 function-pointer call as `mov rax, target; call [__guard_dispatch_icall_fptr]`;
 the routine in the slot validates `rax` and jumps to it with the argument

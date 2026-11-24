@@ -85,6 +85,19 @@ fn constant_offset(fd: &Funcdata, vn: VarnodeId) -> Option<(VarnodeId, i64)> {
         }
         def = fd.obank().get(fd.vbank().get(def.get_in(0)?)?.get_def()?)?;
     }
+    // `PTRADD(base, #index, #size)`: an indexed pointer (a receiver typed as
+    // `int *` reads its fields as `a0[6]`) at a constant element.
+    if def.code() == OpCode::CPUI_PTRADD {
+        let index = fd.vbank().get(def.get_in(1)?)?;
+        let size = fd.vbank().get(def.get_in(2)?)?;
+        if !index.is_constant() || !size.is_constant() {
+            return None;
+        }
+        let bytes = i64::try_from(index.get_offset())
+            .ok()?
+            .checked_mul(i64::try_from(size.get_offset()).ok()?)?;
+        return Some((def.get_in(0)?, bytes));
+    }
     if !matches!(def.code(), OpCode::CPUI_PTRSUB | OpCode::CPUI_INT_ADD) {
         return None;
     }

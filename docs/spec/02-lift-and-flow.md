@@ -4310,6 +4310,39 @@ AArch64's FP16 forms. `fmv.x.h` sign-extends the 16-bit pattern into `rd`,
 names, RV32 and RV64, and LLVM-selected half-precision functions that
 decompile with no bad or unimplemented instruction.
 
+
+### RISC-V cache-block operations, hints, may-be-operations and CFI (#98)
+
+`riscv.hints.sinc` decodes, in every RISC-V language:
+Zicbom/Zicboz `cbo.clean`, `cbo.flush`, `cbo.inval`, `cbo.zero` (MISC-MEM
+funct3 010, lifted as user operations on `rs1`, since the block size is
+not known statically); the Zicbop prefetches `prefetch.i/r/w` (the `ori x0`
+encodings with `rs2` 0, 1, 3, offset `imm[11:5] << 5`; no-ops); Zawrs
+`wrs.nto`/`wrs.sto` and Zihintpause `pause` (user operations); Ztso
+`fence.tso` (`fence()`, which plain `fence` with its `fm=0` pattern never
+matched); and the Zihintntl hints `ntl.p1`, `ntl.pall`, `ntl.s1`, `ntl.all`
+and their `c.ntl.*` forms (no-ops, in the `add x0,x0,rs2` and `c.add x0,rs2`
+HINT space). Before, the cache-block, wait and may-be-operation encodings
+were bad instructions and the hints printed as `ori`, `fence` or `add`.
+
+Zimop `mop.r.0`..`mop.r.31` and `mop.rr.0`..`mop.rr.7` (SYSTEM funct3 100
+with bit 31 set, disjoint from the hypervisor loads and stores there) write
+zero to `rd`, their behaviour unless an extension redefines them; Zcmop
+`c.mop.1`..`c.mop.15` (the reserved `c.lui` with an odd register and a zero
+immediate) do nothing. The number in each mnemonic comes from a display-only
+subtable. Zicfiss redefines some of them: `sspush` (`mop.rr.7` with
+`rs2` = `ra` or `t0`), `sspopchk` (`mop.r.28` with `rs1` = `ra` or `t0`),
+`c.sspush ra` (`c.mop.1`) and `c.sspopchk t0` (`c.mop.5`), whose shadow-stack
+push and check do not touch the program's own data and lift as no-ops, as
+x86 `endbr64` does; `ssrdp rd` (`mop.r.28` with `rs1` = 0) reads the
+shadow-stack pointer through a user operation; and `ssamoswap.w`/`.d` (AMO
+funct5 01001) swap like `amoswap`. Zicfilp's `lpad` (`auipc x0`) is a no-op.
+Exercised by `unlace-cli/tests/riscv_hints.rs`: one probe row per encoding
+against LLVM's names, RV32 and RV64, and hand-written functions using them
+that decompile with no bad or unimplemented instruction (`cfi_add`, whose
+landing pad and shadow-stack push and check surround `add a0,a0,a1`, still
+returns `a0 + a1`).
+
 ### RISC-V moves and conversions from FP to integer registers (GH-831)
 
 `fmv.x.d` copies the 64-bit pattern of its FP source into the integer

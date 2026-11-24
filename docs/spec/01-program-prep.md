@@ -6918,6 +6918,18 @@ every other binary's pass list is byte-identical to before the pass existed):
   offset 24) as `Interface.Method(args)`, the receiver first:
   `main.Shape.Area(s_data)`. The slots carry no prototype, so the arguments
   are the ones the call site recovers.
+  The table pointer need not be typed: the printer also follows it back
+  through copies and joins whose inputs all agree to a LOAD of the first word
+  of an interface-typed field of a named struct, read through a chain of
+  constant offsets from a pointer to the struct (`h->S.tab`, nested structs
+  included). The harvest records those fields
+  (`crates/unlace-analysis/src/analyzers/gotypes/kuna_ifacefields.rs (register)`):
+  for each named struct descriptor, the byte offset and interface of every
+  field whose type descriptor is an interface, as a
+  `LangFacet::GoInterfaceFields` facet on the struct's reflection and linker
+  spellings, so it holds whether the harvest or DWARF built the layout. A name
+  the harvest marked ambiguous, whose descriptors disagree, or that already
+  carries a facet gets none.
 
 - **Go pclntab** (`gopclntab`, Go-detected binaries only, always on;
   `crates/unlace-analysis/src/analyzers/pclntab/mod.rs`): the runtime

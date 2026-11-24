@@ -3741,3 +3741,11 @@ catches an `int`; `sorted` catches a hidden-visibility class `Odd`, which only i
 symbol in the stripped build, where `.ARM.exidx` alone states its start. Used by
 `tests/stages/kuna-itaniumeh-arm.xml` and the `entry::kuna_itaniumeh` /
 `entry::kuna_armexidx` unit tests.
+
+`msvceh_x64.exe` (SHA-256 `34c314f187d1336f98c556d6a5c17134c6d5abbdb0aa6b64ae05b629962fb938`) is a
+4 KB x64 PE built by clang-cl 22.1.8 from `msvceh_x64.cpp` and `msvceh_stubs.c` against an
+import library made from `msvceh_vcruntime140.def` (commands in the `.cpp` header), with no C
+runtime: `thrower` throws an `Err`, a `Derived` and an `int` through `_CxxThrowException`,
+`catcher` has one try with `catch (Err &)`, `catch (Base &)` and `catch (...)` funclets under
+`__CxxFrameHandler3`, and `rethrower`'s catch funclet rethrows. Used by the
+`entry::kuna_msvceh` unit test.

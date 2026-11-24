@@ -302,12 +302,20 @@ of `*(metadata - 8)` hangs on.
 
 - `kcu.so`: typed `OSDynamicCast` call sites ("cast: … call sites typed"), `kalloc_type` views laid out as
   types, `IOExternalMethodDispatch` records typed, OSMetaClass vtables named and typed, a `MetaClass::alloc`
-  shared by several abstract classes folded. kuna: open #1738, #1810.
+  shared by several abstract classes folded. unlace (2026-11-24): `iokitclasses` and `xnutables` cover all of
+  these but the `OSDynamicCast` typing, which is row 30 of `notes/ida-gap/apple-objc-macho.md`.
 - `dscu.so`: dyld-cache GOT detection ("Detecting global offset tables"), branch islands, slide detection,
   sub-cache lookup. kuna: dyld cache loader in `unlace-analysis` (#1735 for the bind names).
 - `objc.so` local stack blocks (`sub_2E170`: find `_NSConcreteStackBlock` isa stores, build a per-site
   `Block_layout_<addr>` struct, type the invoke). kuna is already ahead here (blocks named
   `-[… setMeasurementEnabledState:]_block_invoke(Block_layout_… *block)` with `block->capture_0`).
+
+## Loader and metadata coverage
+
+The module-by-module survey of IDA's ObjC, Mach-O, dyld-cache and kernelcache support against unlace
+(34 rows, ranked top 10: SDK C prototypes, Mach-O `.o` relocations, the Swift caller rule of row 1 here,
+`OSDynamicCast` typing, KDK symbol import, thin-image `LC_DATA_IN_CODE`, thread-local variables, ObjC header
+export, ObjC 1, DTrace probes) is `notes/ida-gap/apple-objc-macho.md`.
 
 ## Where kuna is already ahead (keep)
 

@@ -1256,7 +1256,8 @@ fn relocation_name(architecture: Architecture, r_type: u32) -> &'static str {
 /// opcode in front of it, where the relocation type itself is a plain data
 /// form? x86 calls an extern through `R_386_PC32`/`R_X86_64_PC32` on the rel32
 /// of `call` (E8), `jmp` (E9) or `jcc` (0F 8x); MSP430 through
-/// `R_MSP430_16_BYTE` on `call #imm` (`12b0`). Such an extern is code and gets
+/// `R_MSP430_16_BYTE` on `call #imm` (`12b0`); m68k through `R_68K_32` on
+/// `jsr`/`jmp` (xxx).L (`4eb9`/`4ef9`) or `R_68K_PC32` on `bsr.l` (`61ff`). Such an extern is code and gets
 /// its name, as a PLT-relative one does.
 fn field_is_branch_operand(
     architecture: Architecture,
@@ -1270,6 +1271,13 @@ fn field_is_branch_operand(
                 || (off >= 2 && data[off - 2] == 0x0f && data[off - 1] & 0xf0 == 0x80)
         }
         Architecture::Msp430 if width == 2 && off >= 2 => data[off - 2..off] == [0xb0, 0x12],
+        // m68k `jsr`/`jmp` (xxx).L and `bsr.l` with their 32-bit operand.
+        Architecture::M68k if width == 4 && off >= 2 => {
+            matches!(
+                data[off - 2..off],
+                [0x4e, 0xb9] | [0x4e, 0xf9] | [0x61, 0xff]
+            )
+        }
         _ => false,
     }
 }
@@ -1538,6 +1546,22 @@ mod tests {
             "mov #imm"
         );
         assert!(!field_is_branch_operand(Architecture::Aarch64, &call, 2, 4));
+        assert!(field_is_branch_operand(
+            Architecture::M68k,
+            &[0x4e, 0xb9, 0, 0, 0, 0],
+            2,
+            4
+        ));
+        assert!(field_is_branch_operand(
+            Architecture::M68k,
+            &[0x61, 0xff, 0, 0, 0, 0],
+            2,
+            4
+        ));
+        assert!(
+            !field_is_branch_operand(Architecture::M68k, &[0x20, 0x3c, 0, 0, 0, 0], 2, 4),
+            "move.l #imm"
+        );
     }
 
     #[test]

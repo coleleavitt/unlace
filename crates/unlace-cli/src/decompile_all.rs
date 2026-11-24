@@ -3404,8 +3404,32 @@ fn mode_and_options_for_binary(
         0
     };
     let mut resolved = resolved_mode(Some(requested), size)?;
+    if resolved.name == "fast" && is_i386_pe(binary) {
+        for (option, value) in &mut resolved.options {
+            if option == "funcstart_patterns" {
+                *value = "on".to_string();
+            }
+        }
+    }
     resolved.options.extend(explicit);
     Ok(resolved)
+}
+
+/// (kuna) Is `binary` a 32-bit x86 PE? On one, `fast` keeps the prologue-pattern
+/// starts (`funcstart_patterns`). Its MSVC CRT and MFC code is packed function
+/// after function with no padding and no reference to many of them; measured on
+/// PEGRP32F.dll against IDA 9.5, the patterns cut the missing IDA starts from
+/// 389 to 213 for 6 more functions IDA does not list, at no measurable cost.
+fn is_i386_pe(binary: &str) -> bool {
+    crate::image::inspect(binary, |bytes| {
+        unlace_analysis::loadimage_object::parse_object(bytes)
+            .ok()
+            .map(|file| {
+                file.format() == object::BinaryFormat::Pe
+                    && file.architecture() == object::Architecture::I386
+            })
+    })
+    .unwrap_or(false)
 }
 
 /// Parse `argv` for `cmd`, discarding the triage half.

@@ -2602,4 +2602,106 @@ class Mn10300(ObjdumpArch):
         return set()
 
 
-ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), X86_32Native(), X86_16(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), Ppc64P10(), Ppc64leP10(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k(), MicroBlaze(), MicroBlazeEl(), Xtensa(), Moxie(), Ft32(), Iq2000(), V850(), Mn10300())}
+LM32_DENY = re.compile(r"^(b[a-z]*|bi|call[a-z]*|ret|eret|bret|scall|break|wcsr|rcsr|nop|mvhi\s*r0.*)$")
+
+
+class Lm32(ObjdumpArch):
+    """LatticeMico32 (big endian) against gdb's lm32 simulator (--oracle gdbsim), 16 MiB of RAM
+    from 0. LM32 has no flags (compares write a register). Branches, calls, returns, system calls
+    and CSR moves are not generated."""
+    name = "lm32"
+    lang = "lm32:BE:32:default"
+    elf_machine = 138
+    big = True
+    pc = "PC"
+    gprs = [(n, None) for n in [f"r{i}" for i in range(26)] + ["gp", "fp", "sp", "ra", "ea", "ba"]]
+    pc_const = None
+    deny = LM32_DENY
+    objdump_machine = "lm32"
+    gdbsim = "lm32"
+    gdb_pc = "PC"
+    sim_args = ("--memory-region", "0x0,0x1000000")
+    misaligned_undefined = True
+
+    def unicorn(self):
+        raise NotImplementedError("lm32 runs with --oracle gdbsim")
+
+    def addr_ok(self, a):
+        return a < 0x1000000
+
+    def fix_inputs(self, init, rng):
+        init["r0"] = 0                         # r0 reads as zero by convention; sim/lm32 keeps a real register
+
+
+class M32rDis(BinutilsDis):
+    """M32R words hold one 32-bit instruction (bit 31 set) or two 16-bit ones; a 16-bit candidate
+    is decoded with a NOP after it."""
+
+    def __init__(self):
+        BinutilsDis.__init__(self, "m32r2", True, 4)
+
+    def length(self, raw):
+        return 4 if raw[0] & 0x80 else 2
+
+    def pack(self, raw):
+        return raw[:4] if raw[0] & 0x80 else raw[:2] + b"\x70\x00"
+
+    def disasm(self, raw, addr):
+        raw = bytes(raw)
+        if raw not in self.cache:
+            self.prime([raw])
+        e = self.cache[raw]
+        if e is not None and "||" not in e[1]:
+            yield _Insn(raw[:self.length(raw)], e[0], e[1].split(" -> ")[0].strip())
+
+
+M32R_DENY = re.compile(
+    r"^(bra|bc|bnc|bl|beq|bne|beqz|bnez|bltz|bgez|blez|bgtz|bcl|bncl|jmp|jl|jc|jnc|trap|rte|rtt|mvtc|mvfc|"
+    r"mac[a-z0-9]*|mul[a-z0-9]*a|mulhi|mullo|mulwhi|mulwlo|macwhi|macwlo|mvfach|mvfacl|mvfacmi|mvtach|mvtacl|"
+    r"rac|rach|sadd|msblo|lock|unlock|nop|setpsw|clrpsw|sleep|sc|snc|ldb|ldh|ldub|lduh|\*unknown\*)$"
+)
+
+
+class M32r(ObjdumpArch):
+    """Renesas M32R (M32R2, big endian) against gdb's m32r simulator (--oracle gdbsim). C is PSW
+    (the CBR register). A 16-bit instruction runs with a NOP after it in its word. Branches, jumps, traps,
+    control-register moves, the accumulator (DSP) instructions and LOCK/UNLOCK are not generated."""
+    name = "m32r"
+    lang = "M32R:BE:32:default"
+    elf_machine = 88
+    big = True
+    pc = "pc"
+    gprs = [(n, None) for n in [f"r{i}" for i in range(13)] + ["fp", "lr", "sp"]]
+    pc_const = None
+    flags_reg = "psw"
+    flag_bits = {"C": 0}
+    deny = M32R_DENY
+    gdbsim = "m32r"
+    gdb_pc = "pc"
+
+    def canonical(self, cand):
+        # sim/m32r runs the base M32R; its M32RX/M32R2 mode does not keep C in PSW or CBR
+        return not re.match(r"(cmpeq|cmpz|pcmpbz|satb|sath|sat|sadd|bset|bclr|btst|divh|divuh|divb|divub|"
+                            r"remh|remuh|remb|remub|jc|jnc|mulwhi|mulwlo|macwhi|macwlo)$", cand["mnemonic"])
+    gdb_insn_pad = b"\x70\x00"
+    lift_align, lift_pad = 4, b"\x70\x00"     # 32-bit instructions sit on a word boundary
+    misaligned_undefined = True
+
+    def unicorn(self):
+        raise NotImplementedError("m32r runs with --oracle gdbsim")
+
+    def capstone(self):
+        if self._dis is None:
+            self._dis = M32rDis()
+        return self._dis
+
+    def draw(self, rng):
+        if rng.random() < 0.5:
+            return (rng.getrandbits(32) | 0x80000000).to_bytes(4, "big")
+        return (rng.getrandbits(16) & 0x7FFF).to_bytes(2, "big")
+
+    def addr_ok(self, a):
+        return a < 0x1000000
+
+
+ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), X86_32Native(), X86_16(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), Ppc64P10(), Ppc64leP10(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k(), MicroBlaze(), MicroBlazeEl(), Xtensa(), Moxie(), Ft32(), Iq2000(), V850(), Mn10300(), Lm32(), M32r())}

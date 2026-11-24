@@ -211,6 +211,18 @@ afterwards. The register file is unchanged.
     (sim/mn10300 only tests a zero divisor). Fixed in `mn103_base.sinc`: the register forms of
     ADD/SUB read the source register again for the flags after writing the destination, so
     `add d3,d3` set C and V from the sum. Seed 2, 2000 encodings: 5190 matches.
+  - LatticeMico32 (`--arch lm32`, `lm32:BE:32:default`; `--memory-region 0x0,0x1000000`): r0 is
+    loaded with 0 (sim/lm32 keeps it as a real register). Seed 2, 2500 encodings: 5797 matches; no
+    fix needed.
+  - M32R (`--arch m32r`, `M32R:BE:32:default`): candidates sit on word boundaries (`lift_align`),
+    a 16-bit one with a NOP after it (`gdb_insn_pad`); C is PSW bit 0. sim/m32r runs the base M32R:
+    its M32RX/M32R2 mode does not keep C in PSW or CBR, so the M32RX/M32R2-only instructions and
+    the accumulator (DSP) ones are not generated. Seed 2, 1500 encodings: 4048 matches; no fix
+    needed.
+  - The simulators that cache decoded instructions (the CGEN ones) do not notice code rewritten
+    at an address they ran, so a different instruction at a used address starts a fresh
+    simulator. MCORE and MSP430 are not wired: sim/mcore's single step leaves PC elsewhere, and
+    sim/msp430 models 20-bit MSP430X addressing and keeps V where the MSP430 manual clears it.
 - PowerPC has no QEMU harness. `qemu-ppc64` runs in 64-bit mode (MSR.SF is not user-writable),
   where record forms set CR0 from the 64-bit result, so it is not an exact reference for
   32-bit PowerPC.

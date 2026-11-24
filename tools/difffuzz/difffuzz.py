@@ -58,12 +58,18 @@ def make_elf(code, arch):
 
 def lift(unlace, arch, cands, tmp, sleighpath=None):
     """{address: raw-pcode row} for the candidates, plus per-candidate lift problems."""
-    code = b"".join(c["bytes"] for c in cands)
+    # an architecture with lift_align places every candidate on that boundary, padded with lift_pad
+    align, pad = getattr(arch, "lift_align", 1), getattr(arch, "lift_pad", b"")
+    code = b""
     addrs = []
     a = arch.base
     for c in cands:
+        while align > 1 and a % align:
+            code += pad
+            a += len(pad)
         c["addr"] = a
         addrs.append(a)
+        code += c["bytes"]
         a += len(c["bytes"])
     end = a
     elf = os.path.join(tmp, "batch.elf")

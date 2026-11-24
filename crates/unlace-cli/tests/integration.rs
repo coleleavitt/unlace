@@ -52,6 +52,8 @@ mod mips_ase;
 mod mips_elf_selection;
 #[path = "moxie_raw.rs"]
 mod moxie_raw;
+#[path = "nfp_raw.rs"]
+mod nfp_raw;
 #[path = "nios2_raw.rs"]
 mod nios2_raw;
 #[path = "pdp11_raw.rs"]

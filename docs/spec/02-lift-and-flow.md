@@ -4564,6 +4564,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `M16C` (`M32C_80`) | Renesas M32C/80 (M16C/80 set plus `MUL.L`, `DIV*.L`, `SHANC.L`, `SHLNC.L`) | `M32C/80:LE:24:default` | Renesas M32C/80 Series Software Manual REJ09B0319; checked against `m32c-elf-as` 2.43.1 | `unlace-cli/tests/m32c_raw.rs` |
 | `Propeller` | Parallax Propeller 1 (P8X32A) cog | `propeller:LE:16:default` | Propeller Manual v1.2 assembly reference, P8X32A datasheet opcode matrix | `unlace-cli/tests/propeller_raw.rs` |
 | `MIPS` (MIPS-3D, SmartMIPS) | MIPS64 with MIPS-3D, MIPS32 with SmartMIPS (pre-R6 languages) | existing `MIPS:*:64:*` and `MIPS:*:32:*` pre-R6 languages | binutils MIPS opcode table (MIPS-3D/SmartMIPS rows), MIPS-3D (MD00099) and SmartMIPS ASE specifications; checked against `mips-elf-objdump` 2.43.1 | `unlace-cli/tests/mips_ase.rs` |
+| `NFP` | Netronome NFP-6xxx flow-processor microengine (ME v2.8, 8 contexts) | `NFP:LE:32:ME28` | binutils `opcodes/nfp-dis.c` and `include/opcode/nfp.h` field layouts; checked against binutils objdump (`elf64-nfp`) | `unlace-cli/tests/nfp_raw.rs` |
 | `TLCS870` | Toshiba TLCS-870 (TMP87xx) | `TLCS870:LE:16:default` | Toshiba TLCS-870 data books; MAME tlcs870 (BSD-3) | `unlace-cli/tests/tlcs870_raw.rs` |
 <!-- native-rows -->
 
@@ -5174,6 +5175,12 @@ Found by `tools/difffuzz` against Unicorn and checked against the Arm ARM.
 - The fixed-point `FCVTZU d,d,#fbits` and `FCVTZU h,h,#fbits`, `SCVTF`/`UCVTF` `.4H`/`.8H`
   `#fbits` and scalar `URSHR d,d,#shift` decode their shift with the element size of the
   destination (`Imm_shr_imm64`/`Imm_shr_imm16`); `fcvtzu d22,d5,#50` printed `#-0xe`.
+
+### RISC-V compressed indirect jumps clear bit 0
+
+`c.jr`, `c.jalr` and `ret` (`riscv.rvc.sinc`) expand to `jalr`, which clears bit 0 of the
+target; they now jump to `rs1 & ~1` as the `jalr` constructors in `riscv.rv32i.sinc` already
+did. Found by `tools/difffuzz`.
 
 ## 2.9 Go stack-growth prologue folding
 

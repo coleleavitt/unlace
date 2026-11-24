@@ -4,4 +4,6 @@ Vendored from aleph-void/Ghidra-VMU-Processor (https://github.com/aleph-void/Ghi
 `data/languages` hold the upstream SLEIGH, processor, compiler
 and ldefs files unchanged; upstream build files, scripts and tests are not vendored.
 
-Languages: `vmu:2:default`, `default`, `vmu:2:dynamic`, `default`.
+Languages: `LC8670:LE:8:VMU`, `default`, `LC8670:LE:8:VMU-dynamic`, `default`.
+
+Local modification: the language ids `vmu:2:default` -> `LC8670:LE:8:VMU`, `vmu:2:dynamic` -> `LC8670:LE:8:VMU-dynamic` in `data/languages/vmu.ldefs` (The upstream ids vmu:2:default and vmu:2:dynamic have no endian or size field, so the decompiler rejected them as language ids). Nothing else in the upstream files changed.

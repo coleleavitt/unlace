@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  
+  <language processor="XaviX"
+            endian="little"
+            size="24"
+            variant="default"
+            version="1.0"
+            slafile="XaviX.sla"
+            processorspec="XaviX.pspec"
+            manualindexfile="../manuals/XaviX.idx"
+            id="XaviX:LE:24:default">
+    <description>XaviX 6502 Microcontroller</description>
+    <compiler name="default" spec="XaviX.cspec" id="default"/>
+  </language>
+  
+</language_definitions>

@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<processor_spec>
+  <properties>
+    <property key="assemblyRating:XaviX:LE:24:default" value="SILVER"/>
+  </properties>
+
+  <programcounter register="PC"/>
+	<data_space space="lowbus"/>
+  <segmentop space="extbus" userop="segment" farpointer="yes">
+    <pcode>
+      <input name="base" size="1"/>
+      <input name="inner" size="2"/>
+      <output name="res" size="3"/>
+      <body><![CDATA[
+        res = ((zext(base) << 16) + zext(inner)) & 0x3fffff;
+      ]]></body>
+    </pcode>
+    <constresolve>
+      <register name="CODE_BANK"/>
+    </constresolve>
+  </segmentop>
+  <default_symbols>
+    <symbol name="code_bank" address="lowbus:00FE"/>
+    <symbol name="data_bank" address="lowbus:00FF"/>
+    <symbol name="xavix_memoryemu_txarray" address="lowbus:4000"/>
+    <symbol name="spriteram" address="lowbus:6000"/>
+    <symbol name="palram_sh" address="lowbus:6800"/>
+    <symbol name="palram_l" address="lowbus:6900"/>
+    <symbol name="segment_regs" address="lowbus:6A00"/>
+    <symbol name="tmap1_regs" address="lowbus:6FC8"/>
+    <symbol name="tmap2_regs" address="lowbus:6FD0"/>
+    <symbol name="spriteregs" address="lowbus:6FD8"/>
+    <symbol name="spritefragment_dma_trg" address="lowbus:6FE0" volatile="true"/>
+    <symbol name="spritefragment_dma_params_1" address="lowbus:6FE1"/>
+    <symbol name="spritefragment_dma_params_2" address="lowbus:6FE5"/>
+    <symbol name="arena_start" address="lowbus:6FE8"/>
+    <symbol name="arena_end" address="lowbus:6FE9"/>
+    <symbol name="arena_control" address="lowbus:6FEA" volatile="true"/>
+    <symbol name="colmix_sh" address="lowbus:6FF0"/>
+    <symbol name="colmix_l" address="lowbus:6FF1"/>
+    <symbol name="colmix_6ff2" address="lowbus:6FF2"/>
+    <symbol name="dispctrl_6ff8" address="lowbus:6FF8" volatile="true"/>
+    <symbol name="pal_ntsc" address="lowbus:6FF9" volatile="true"/>
+    <symbol name="dispctrl_posirq_x" address="lowbus:6FFA"/>
+    <symbol name="dispctrl_posirq_y" address="lowbus:6FFB"/>
+    <symbol name="lightgun" address="lowbus:6FFC" volatile="true"/>
+    <symbol name="sound_startstop" address="lowbus:75F0"/>
+    <symbol name="sound_updateenv" address="lowbus:75F2"/>
+    <symbol name="sound_sta16" address="lowbus:75F4" volatile="true"/>
+    <symbol name="sound_volume" address="lowbus:75F6"/>
+    <symbol name="sound_regbase" address="lowbus:75F7"/>
+    <symbol name="sound_75f8" address="lowbus:75F8"/>
+    <symbol name="sound_75f9" address="lowbus:75F9"/>
+    <symbol name="sound_timer0" address="lowbus:75FA"/>
+    <symbol name="sound_timer1" address="lowbus:75FB"/>
+    <symbol name="sound_timer2" address="lowbus:75FC"/>
+    <symbol name="sound_timer3" address="lowbus:75FD"/>
+    <symbol name="sound_irqstatus" address="lowbus:75FE" volatile="true"/>
+    <symbol name="sound_75ff" address="lowbus:75FF"/>
+    <symbol name="slotreg_7810" address="lowbus:7810"/>
+    <symbol name="extintrf_790x" address="lowbus:7900"/>
+    <symbol name="rom_dmatrg" address="lowbus:7980" volatile="true"/>
+    <symbol name="rom_dmasrc" address="lowbus:7981"/>
+    <symbol name="rom_dmadst" address="lowbus:7984"/>
+    <symbol name="rom_dmalen" address="lowbus:7986"/>
+    <symbol name="io0_data" address="lowbus:7A00" volatile="true"/>
+    <symbol name="io1_data" address="lowbus:7A01" volatile="true"/>
+    <symbol name="io0_direction" address="lowbus:7A02"/>
+    <symbol name="io1_direction" address="lowbus:7A03"/>
+    <symbol name="ioevent_enable" address="lowbus:7A80"/>
+    <symbol name="ioevent_irqack_and_state" address="lowbus:7A81" volatile="true"/>
+    <symbol name="mouse_7b00" address="lowbus:7B00" volatile="true"/>
+    <symbol name="mouse_7b01" address="lowbus:7B01" volatile="true"/>
+    <symbol name="mouse_7b10" address="lowbus:7B10" volatile="true"/>
+    <symbol name="mouse_7b11" address="lowbus:7B11" volatile="true"/>
+    <symbol name="adc_7b80" address="lowbus:7B80" volatile="true"/>
+    <symbol name="adc_7b81" address="lowbus:7B81" volatile="true"/>
+    <symbol name="timer_control_and_status" address="lowbus:7C00" volatile="true"/>
+    <symbol name="timer_baseval" address="lowbus:7C01"/>
+    <symbol name="timer_freq" address="lowbus:7C02"/>
+    <symbol name="timer_curval" address="lowbus:7C03" volatile="true"/>
+    <symbol name="barrel" address="lowbus:7FF0" volatile="true"/>
+    <symbol name="mult_param" address="lowbus:7FF2" volatile="true"/>
+    <symbol name="mult" address="lowbus:7FF6" volatile="true"/>
+    <symbol name="vector_enable" address="lowbus:7FF9"/>
+    <symbol name="nmi_vector_lo" address="lowbus:7FFA"/>
+    <symbol name="nmi_vector_hi" address="lowbus:7FFB"/>
+    <symbol name="irq_source" address="lowbus:7FFC" volatile="true"/>
+    <symbol name="irq_vector_lo" address="lowbus:7FFE"/>
+    <symbol name="irq_vector_hi" address="lowbus:7FFF"/>
+    <symbol name="NMI" address="extbus:00FFFA" entry="true" type="code_ptr"/>
+    <symbol name="RES" address="extbus:00FFFC" entry="true" type="code_ptr"/>
+    <symbol name="IRQ" address="extbus:00FFFE" entry="true" type="code_ptr"/>
+  </default_symbols>
+
+  <default_memory_blocks>
+    <memory_block name="ZERO_PAGE" start_address="lowbus:0000" length="0x100" initialized="false"/>
+    <memory_block name="STACK" start_address="lowbus:0100" length="0x100" initialized="false"/>
+    <memory_block name="mainram" start_address="lowbus:0200" length="0x3E00" initialized="false"/>
+    <memory_block name="xavix_memoryemu_txarray" start_address="lowbus:4000" length="0x1000" initialized="false"/>
+    <memory_block name="control" start_address="lowbus:6000" length="0x2000" initialized="false"/>
+  </default_memory_blocks>
+</processor_spec>

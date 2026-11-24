@@ -1,0 +1,1659 @@
+# sleigh specification file for MOS 6502 based XaviX Microcontroller
+
+define endian=little;
+define alignment=1;
+
+define space lowbus    type=ram_space      size=2;
+define space extbus    type=ram_space      size=3  default;
+define space bankstack type=ram_space      size=1;
+define space register  type=register_space size=1;
+
+define register offset=0x00 size=1 [ A X Y P ];
+define register offset=0x20 size=2 [ PC SP ];
+define register offset=0x20 size=1 [ PCL PCH S SH ];
+define register offset=0x30 size=1 [ N V B D I Z C ]; # status bits
+define register offset=0x40 size=1 [ SSP ];
+
+define lowbus offset=0xFE   size=1 [ CODE_BANK DATA_BANK ];
+define lowbus offset=0x7FF9 size=1 [ VECEN NMIVL NMIVH IRQSRC UNK7FFD IRQVL IRQVH ];
+
+# TOKENS
+
+define token opbyte (8)
+  op  = (0,7)
+  aaa = (5,7)
+  bbb = (2,4)
+  cc  = (0,1)
+;
+
+define token data8 (8)
+  imm8 = (0,7)
+  rel  = (0,7) signed
+;
+
+define token data (16)
+  imm16    = (0,15)
+  imm16msb = (15,15)
+;
+
+define token data24 (24)
+  imm24hi = (0,7)
+  imm24hibit = (7,7)
+  imm24lo = (8,23)
+  imm24lomsb = (23,23)
+;
+
+################################################################
+# Helpers
+################################################################
+
+# The pspec's segmentop is implemented by the `segment` userop (kept so the decompiler knows the
+# far-pointer shape).  The instruction semantics use the same arithmetic inline, because a userop
+# cannot be executed by Ghidra's emulator: ext address = ((bank << 16) + offset) & 0x3fffff.
+define pcodeop segment;
+
+macro segptr(bank, inner, out) {
+  local b3:3 = zext(bank);
+  local i3:3 = zext(inner);
+  out = ((b3 << 16) + i3) & 0x3fffff;
+}
+
+# Destination of an indirect jump, return or interrupt: the bank applies when it is >= $80 or the
+# address is >= $8000, otherwise the code is in the low RAM half and the bank is ignored.  Written
+# without branches: two conditional branches in front of the return made the decompiler fail with
+# "Conditional execution: Illegal op in iblock" when they followed a push/pop pair.
+macro farTarget(bank, inner, out) {
+  local sel:1 = (bank >= 0x80) | ((inner & 0x8000) != 0);
+  local eff:1 = bank * sel;
+  segptr(eff, inner, out);
+}
+
+macro pushByte(value) {
+  local spaddr:2 = zext(S) + 0x100;
+  local v:1 = value;
+  *[lowbus]:1 spaddr = v;
+  S = S - 1;
+}
+
+macro popByte(out) {
+  S = S + 1;
+  local spaddr:2 = zext(S) + 0x100;
+  out = *[lowbus]:1 spaddr;
+}
+
+macro pushSpecial(value) {
+  local v:1 = value;
+  *[bankstack]:1 SSP = v;
+  SSP = SSP - 1;
+}
+
+macro popSpecial(out) {
+  SSP = SSP + 1;
+  out = *[bankstack]:1 SSP;
+}
+
+macro pushWord(value) {
+  local tmp:2 = value;
+  # One byte at a time: a store takes the size of its value, so passing the 16-bit tmp >> 8 used to
+  # write two bytes and clobber the byte above the stack top with zero.
+  local hi:1 = tmp[8,8];
+  local lo:1 = tmp[0,8];
+  pushByte(hi);
+  pushByte(lo);
+}
+
+macro popWord(out) {
+  local lo:1;
+  local hi:1;
+  popByte(lo);
+  popByte(hi);
+  out = zext(lo) | (zext(hi) << 8);
+}
+
+macro popSR() {
+  local ccr:1;
+  popByte(ccr);
+  N = ccr[7,1];
+  V = ccr[6,1];
+  # MAME forces B/E high when pulling status on XaviX.
+  B = 1;
+  D = ccr[3,1];
+  I = ccr[2,1];
+  Z = ccr[1,1];
+  C = ccr[0,1];
+}
+
+macro pushSR(bval) {
+  local ccr:1 = 0xff;
+  ccr[7,1] = N;
+  ccr[6,1] = V;
+  ccr[4,1] = bval;
+  ccr[3,1] = D;
+  ccr[2,1] = I;
+  ccr[1,1] = Z;
+  ccr[0,1] = C;
+  pushByte(ccr);
+}
+
+macro resultFlags(value) {
+  Z = (value == 0);
+  N = (value s< 0);
+}
+
+macro doCMP(lhs, rhs) {
+  local l:1 = lhs;
+  local r:1 = rhs;
+  local l2:2 = zext(l);
+  local r2:2 = zext(r);
+  local result:1 = l - r;
+  resultFlags(result);
+  C = (l2 >= r2);
+}
+
+macro doADC(rhs) {
+  local l:1 = A;
+  local r:1 = rhs;
+  if (D == 0) goto <nd>;
+  local cIn:1 = C;
+  local al:2 = zext(l & 0x0f) + zext(r & 0x0f) + zext(cIn);
+  if (al > 9) goto <adc_d_al_adj>;
+  goto <adc_d_al_done>;
+<adc_d_al_adj>
+  al = al + 6;
+<adc_d_al_done>
+  local carryLo:1 = (al > 15);
+  local ah:2 = zext(l >> 4) + zext(r >> 4) + zext(carryLo);
+  local raw:2 = zext(l) + zext(r) + zext(cIn);
+  Z = ((raw & 0xff) == 0);
+  N = ((raw & 0xff) != 0) & ((ah & 0x08) != 0);
+  local ahShiftWide:2 = ah << 4;
+  local ahShift:1 = ahShiftWide[0,8];
+  V = ((~(l ^ r) & (l ^ ahShift) & 0x80) != 0);
+  if (ah > 9) goto <adc_d_ah_adj>;
+  goto <adc_d_ah_done>;
+<adc_d_ah_adj>
+  ah = ah + 6;
+<adc_d_ah_done>
+  C = (ah > 15);
+  local hiNibbleWide:2 = ah << 4;
+  local hiNibble:1 = hiNibbleWide[0,8];
+  local al8:1 = al[0,8];
+  local loNibble:1 = al8 & 0x0f;
+  A = hiNibble | loNibble;
+  goto <done>;
+<nd>
+  local cInNd:1 = C;
+  local sum:2 = zext(l) + zext(r) + zext(cInNd);
+  local result:1 = l + r + cInNd;
+  A = result;
+  resultFlags(A);
+  V = ((~(l ^ r) & (l ^ result) & 0x80) != 0);
+  C = ((sum & 0x100) != 0);
+<done>
+}
+
+macro doSBC(rhs) {
+  local l:1 = A;
+  local r:1 = rhs;
+  if (D == 0) goto <nd>;
+  local borrowIn:1 = !C;
+  local diff:2 = zext(l) - zext(r) - zext(borrowIn);
+  local al:2 = zext(l & 0x0f) - zext(r & 0x0f) - zext(borrowIn);
+  if (al s< 0) goto <sbc_d_al_adj>;
+  goto <sbc_d_al_done>;
+<sbc_d_al_adj>
+  al = al - 6;
+<sbc_d_al_done>
+  local alBorrow:1 = (al s< 0);
+  local ah:2 = zext(l >> 4) - zext(r >> 4) - zext(alBorrow);
+  Z = ((diff & 0xff) == 0);
+  N = ((diff & 0x80) != 0);
+  local diff8:1 = diff[0,8];
+  V = (((l ^ r) & (l ^ diff8) & 0x80) != 0);
+  C = ((diff & 0xff00) == 0);
+  if (ah s< 0) goto <sbc_d_ah_adj>;
+  goto <sbc_d_ah_done>;
+<sbc_d_ah_adj>
+  ah = ah - 6;
+<sbc_d_ah_done>
+  local hiNibbleWide:2 = ah << 4;
+  local hiNibble:1 = hiNibbleWide[0,8];
+  local al8:1 = al[0,8];
+  local loNibble:1 = al8 & 0x0f;
+  A = hiNibble | loNibble;
+  goto <done>;
+<nd>
+  local borrowInNd:1 = !C;
+  local l2:2 = zext(l);
+  local r2:2 = zext(r);
+  local b2:2 = zext(borrowInNd);
+  local result:1 = l - r - borrowInNd;
+  A = result;
+  resultFlags(A);
+  V = (((l ^ r) & (l ^ result) & 0x80) != 0);
+  local rhs2:2 = r2 + b2;
+  C = (l2 >= rhs2);
+<done>
+}
+
+macro doARR() {
+  if (D != 0) goto <arr_d>;
+  local carryIn:1 = C;
+  A = A >> 1;
+  if (carryIn == 0) goto <carry_done>;
+  A = A | 0x80;
+<carry_done>
+  resultFlags(A);
+  local bit6:1 = (A & 0x40) != 0;
+  local bit5:1 = (A & 0x20) != 0;
+  C = bit6;
+  V = (bit6 != bit5);
+  goto <done>;
+<arr_d>
+  local carryInD:1 = C;
+  local oldA:1 = A;
+  local a:1 = oldA >> 1;
+  C = 0;
+  if (carryInD != 0) goto <arr_d_carry_in>;
+  goto <arr_d_after_carry_in>;
+<arr_d_carry_in>
+  a = a | 0x80;
+<arr_d_after_carry_in>
+  Z = (a == 0);
+  N = (a s< 0);
+  V = (((a ^ oldA) & 0x40) != 0);
+  if ((oldA & 0x0f) >= 0x05) goto <arr_d_low_adj>;
+  goto <arr_d_low_done>;
+<arr_d_low_adj>
+  a = ((a + 6) & 0x0f) | (a & 0xf0);
+<arr_d_low_done>
+  if ((oldA & 0xf0) >= 0x50) goto <arr_d_carry>;
+  A = a;
+  goto <done>;
+<arr_d_carry>
+  a = a + 0x60;
+  C = 1;
+  A = a;
+<done>
+}
+
+macro dataRead(addr, out) {
+  local ea:2 = addr;
+  local db:1 = DATA_BANK;
+  if (db >= 0x80) goto <ext>;
+  if (ea >= 0x8000) goto <ext>;
+  out = *[lowbus]:1 ea;
+  goto <done>;
+<ext>
+  local ptr:3;
+  segptr(db, ea, ptr);
+  out = *:1 ptr;
+<done>
+}
+
+macro dataWrite(addr, value) {
+  local ea:2 = addr;
+  local db:1 = DATA_BANK;
+  local v:1 = value;
+  if (db >= 0x80) goto <ext>;
+  if (ea >= 0x8000) goto <ext>;
+  *[lowbus]:1 ea = v;
+  goto <done>;
+<ext>
+  local ptr:3;
+  segptr(db, ea, ptr);
+  *:1 ptr = v;
+<done>
+}
+
+macro codeRead(addr, out) {
+  local ea:2 = addr;
+  local cb:1 = CODE_BANK;
+  if (cb >= 0x80) goto <ext>;
+  if (ea >= 0x8000) goto <ext>;
+  out = *[lowbus]:1 ea;
+  goto <done>;
+<ext>
+  local ptr:3;
+  segptr(cb, ea, ptr);
+  out = *:1 ptr;
+<done>
+}
+
+macro zpageRead(addr, out) {
+  local ea:2 = addr & 0x00ff;
+  out = *[lowbus]:1 ea;
+}
+
+macro zpageWrite(addr, value) {
+  local ea:2 = addr & 0x00ff;
+  local v:1 = value;
+  *[lowbus]:1 ea = v;
+}
+
+macro dummyDataRead(addr) {
+}
+
+macro dummyCodeRead(addr) {
+}
+
+macro dummyZpageRead(addr) {
+}
+
+macro dummyStackRead(sp) {
+}
+
+macro zpageIndexedAddr(base, idx, out) {
+  dummyZpageRead(base);
+  out = zext((base + idx) & 0x00ff);
+}
+
+macro fetchZpagePointer(base, out) {
+  local ptr:2 = base;
+  ptr = ptr & 0x00ff;
+  local lo:1 = *[lowbus]:1 ptr;
+  ptr = (ptr + 1) & 0x00ff;
+  local hi:1 = *[lowbus]:1 ptr;
+  out = zext(lo) | (zext(hi) << 8);
+}
+
+macro dummyIndexedRead(base, indexed) {
+}
+
+macro dummyPageCrossRead(base, indexed) {
+}
+
+macro dummyBranchTakenReads(target) {
+}
+
+macro writeHighMasked(base, idx, source) {
+  local b:2 = base;
+  local addr:2 = b + zext(idx);
+  dummyIndexedRead(b, addr);
+  local highPlus1:1 = b[8,8] + 1;
+  local src:1 = source;
+  local val:1 = src & highPlus1;
+  if ((b & 0xff00) == (addr & 0xff00)) goto <same_page>;
+  addr = (addr & 0x00ff) | (zext(val) << 8);
+<same_page>
+  dataWrite(addr, val);
+}
+
+################################################################
+# Constructors
+################################################################
+
+REL: reloc is rel [ reloc = inst_next + rel; ] { export *:2 reloc; }
+
+OP1R: "#"imm8 is bbb=2; imm8 {
+  tmp:1 = imm8;
+  export tmp;
+}
+
+OP1R: imm8 is bbb=1; imm8 {
+  local zp:1 = imm8;
+  local ea:2 = zext(zp);
+  local v:1;
+  zpageRead(ea, v);
+  export v;
+}
+
+OP1R: imm8,X is bbb=5 & X; imm8 {
+  local ea:2;
+  zpageIndexedAddr(imm8, X, ea);
+  local v:1;
+  zpageRead(ea, v);
+  export v;
+}
+
+OP1R: imm16 is bbb=3; imm16 {
+  local ea:2 = imm16;
+  local v:1;
+  dataRead(ea, v);
+  export v;
+}
+
+OP1R: imm16,X is bbb=7 & X; imm16 {
+  local ea:2 = imm16 + zext(X);
+  dummyPageCrossRead(imm16, ea);
+  local v:1;
+  dataRead(ea, v);
+  export v;
+}
+
+OP1R: imm16,Y is bbb=6 & Y; imm16 {
+  local ea:2 = imm16 + zext(Y);
+  dummyPageCrossRead(imm16, ea);
+  local v:1;
+  dataRead(ea, v);
+  export v;
+}
+
+OP1R: (imm8,X) is bbb=0 & X; imm8 {
+  local idx:2;
+  zpageIndexedAddr(imm8, X, idx);
+  local ea:2;
+  fetchZpagePointer(idx, ea);
+  local v:1;
+  dataRead(ea, v);
+  export v;
+}
+
+OP1R: (imm8),Y is bbb=4 & Y; imm8 {
+  local base:2;
+  fetchZpagePointer(imm8, base);
+  local ea:2 = base + zext(Y);
+  dummyPageCrossRead(base, ea);
+  local v:1;
+  dataRead(ea, v);
+  export v;
+}
+
+OP1MZP: imm8 is bbb=1; imm8 {
+  local zp:1 = imm8;
+  local ea:2 = zext(zp);
+  export ea;
+}
+
+OP1MZP: imm8,X is bbb=5 & X; imm8 {
+  local ea:2;
+  zpageIndexedAddr(imm8, X, ea);
+  export ea;
+}
+
+OP1MDB: imm16 is bbb=3; imm16 {
+  local ea:2 = imm16;
+  export ea;
+}
+
+OP1MDB: imm16,X is bbb=7 & X; imm16 {
+  local ea:2 = imm16 + zext(X);
+  dummyIndexedRead(imm16, ea);
+  export ea;
+}
+
+OP1MDB: imm16,Y is bbb=6 & Y; imm16 {
+  local ea:2 = imm16 + zext(Y);
+  dummyIndexedRead(imm16, ea);
+  export ea;
+}
+
+OP1MDB: (imm8,X) is bbb=0 & X; imm8 {
+  local idx:2;
+  zpageIndexedAddr(imm8, X, idx);
+  local ea:2;
+  fetchZpagePointer(idx, ea);
+  export ea;
+}
+
+OP1MDB: (imm8),Y is bbb=4 & Y; imm8 {
+  local base:2;
+  fetchZpagePointer(imm8, base);
+  local ea:2 = base + zext(Y);
+  dummyIndexedRead(base, ea);
+  export ea;
+}
+
+OP2R: "#"imm8 is bbb=0; imm8 {
+  tmp:1 = imm8;
+  export tmp;
+}
+
+OP2R: imm8 is bbb=1; imm8 {
+  local zp:1 = imm8;
+  local ea:2 = zext(zp);
+  local v:1;
+  zpageRead(ea, v);
+  export v;
+}
+
+OP2R: imm8,X is bbb=5 & X; imm8 {
+  local ea:2;
+  zpageIndexedAddr(imm8, X, ea);
+  local v:1;
+  zpageRead(ea, v);
+  export v;
+}
+
+OP2R: imm16 is bbb=3; imm16 {
+  local ea:2 = imm16;
+  local v:1;
+  dataRead(ea, v);
+  export v;
+}
+
+OP2R: imm16,X is bbb=7 & X; imm16 {
+  local ea:2 = imm16 + zext(X);
+  dummyPageCrossRead(imm16, ea);
+  local v:1;
+  dataRead(ea, v);
+  export v;
+}
+
+OP2MZP: imm8 is bbb=1; imm8 {
+  local zp:1 = imm8;
+  local ea:2 = zext(zp);
+  export ea;
+}
+
+OP2MZP: imm8,X is bbb=5 & X; imm8 {
+  local ea:2;
+  zpageIndexedAddr(imm8, X, ea);
+  export ea;
+}
+
+OP2MDB: imm16 is bbb=3; imm16 {
+  local ea:2 = imm16;
+  export ea;
+}
+
+OP2MDB: imm16,X is bbb=7 & X; imm16 {
+  local ea:2 = imm16 + zext(X);
+  dummyIndexedRead(imm16, ea);
+  export ea;
+}
+
+OP2LDR: "#"imm8 is bbb=0; imm8 {
+  tmp:1 = imm8;
+  export tmp;
+}
+
+OP2LDR: imm8 is bbb=1; imm8 {
+  local zp:1 = imm8;
+  local ea:2 = zext(zp);
+  local v:1;
+  zpageRead(ea, v);
+  export v;
+}
+
+OP2LDR: imm8,Y is bbb=5 & Y; imm8 {
+  local ea:2;
+  zpageIndexedAddr(imm8, Y, ea);
+  local v:1;
+  zpageRead(ea, v);
+  export v;
+}
+
+OP2LDR: imm16 is bbb=3; imm16 {
+  local ea:2 = imm16;
+  local v:1;
+  dataRead(ea, v);
+  export v;
+}
+
+OP2LDR: imm16,Y is bbb=7 & Y; imm16 {
+  local ea:2 = imm16 + zext(Y);
+  dummyPageCrossRead(imm16, ea);
+  local v:1;
+  dataRead(ea, v);
+  export v;
+}
+
+OP2STMZP: imm8 is bbb=1; imm8 {
+  local zp:1 = imm8;
+  local ea:2 = zext(zp);
+  export ea;
+}
+
+OP2STMZP: imm8,Y is bbb=5 & Y; imm8 {
+  local ea:2;
+  zpageIndexedAddr(imm8, Y, ea);
+  export ea;
+}
+
+OP2STMDB: imm16 is bbb=3; imm16 {
+  local ea:2 = imm16;
+  export ea;
+}
+
+ADDR16LO: imm16 is imm16 & imm16msb=0 {
+  export *[lowbus]:2 imm16;
+}
+
+ADDR16HI: far is imm16 & imm16msb=1 [ far = (inst_start & 0xff0000) | imm16; ] {
+  export *[extbus]:3 far;
+}
+
+ADDR24LO: far is imm24hi & imm24lo & imm24lomsb=0 [ far = (imm24hi << 16) | imm24lo; ] {
+  export *[lowbus]:2 imm24lo;
+}
+
+ADDR24LOEXT: far is imm24hi & imm24lo & imm24lomsb=0 [ far = ((imm24hi << 16) | imm24lo) & 0x3fffff; ] {
+  export *[extbus]:3 far;
+}
+
+ADDR24HI: far is imm24hi & imm24lo & imm24lomsb=1 [ far = ((imm24hi << 16) | imm24lo) & 0x3fffff; ] {
+  export *[extbus]:3 far;
+}
+
+ADDRI: (imm16) is imm16 {
+  addr:2 = imm16;
+  local lo:1;
+  dataRead(addr, lo);
+  local next:2 = addr + 1;
+  next = (addr & 0xff00) | (next & 0x00ff);
+  local hi:1;
+  dataRead(next, hi);
+  tmp:2 = zext(lo) | (zext(hi) << 8);
+  export tmp;
+}
+
+################################################################
+# Instructions
+################################################################
+
+:ADC OP1R is (cc=1 & aaa=3) ... & OP1R
+{
+  doADC(OP1R);
+}
+
+:AND OP1R is (cc=1 & aaa=1) ... & OP1R
+{
+  A = A & OP1R;
+  resultFlags(A);
+}
+
+:ASL is op=0x0A
+{
+  local tmp:1 = A;
+  C = tmp >> 7;
+  tmp = tmp << 1;
+  A = tmp;
+  resultFlags(tmp);
+}
+
+:ASL OP2MZP is (op=0x06 | op=0x0E | op=0x16 | op=0x1E) ... & OP2MZP
+{
+  local ea:2 = OP2MZP;
+  local opv:1;
+  zpageRead(ea, opv);
+  zpageWrite(ea, opv);
+  C = opv >> 7;
+  local tmp:1 = opv << 1;
+  zpageWrite(ea, tmp);
+  resultFlags(tmp);
+}
+
+:ASL OP2MDB is (op=0x06 | op=0x0E | op=0x16 | op=0x1E) ... & OP2MDB
+{
+  local ea:2 = OP2MDB;
+  local opv:1;
+  dataRead(ea, opv);
+  dataWrite(ea, opv);
+  C = opv >> 7;
+  local tmp:1 = opv << 1;
+  dataWrite(ea, tmp);
+  resultFlags(tmp);
+}
+
+:BCC REL is op=0x90; REL
+{
+  if (C == 0) goto <taken>;
+  goto <done>;
+<taken>
+  dummyBranchTakenReads(REL);
+  goto REL;
+<done>
+}
+
+:BCS REL is op=0xB0; REL
+{
+  if (C) goto <taken>;
+  goto <done>;
+<taken>
+  dummyBranchTakenReads(REL);
+  goto REL;
+<done>
+}
+
+:BEQ REL is op=0xF0; REL
+{
+  if (Z) goto <taken>;
+  goto <done>;
+<taken>
+  dummyBranchTakenReads(REL);
+  goto REL;
+<done>
+}
+
+:BIT OP2R is (op=0x24 | op=0x2C) ... & OP2R
+{
+  local op2:1 = OP2R;
+  N = (op2 & 0x80) == 0x80;
+  V = (op2 & 0x40) == 0x40;
+  Z = ((A & op2) == 0);
+}
+
+:BMI REL is op=0x30; REL
+{
+  if (N) goto <taken>;
+  goto <done>;
+<taken>
+  dummyBranchTakenReads(REL);
+  goto REL;
+<done>
+}
+
+:BNE REL is op=0xD0; REL
+{
+  if (Z == 0) goto <taken>;
+  goto <done>;
+<taken>
+  dummyBranchTakenReads(REL);
+  goto REL;
+<done>
+}
+
+:BPL REL is op=0x10; REL
+{
+  if (N == 0) goto <taken>;
+  goto <done>;
+<taken>
+  dummyBranchTakenReads(REL);
+  goto REL;
+<done>
+}
+
+:BRK is op=0x00
+{
+  # Models explicit BRK opcode behavior (not asynchronous IRQ entry).
+  dummyCodeRead(inst_next);
+  local savedBank:1 = CODE_BANK;
+  pushSpecial(savedBank);
+  # BRK pushes PC+2 on 6502-family cores.
+  local retpc:2 = inst_next + 1;
+  pushWord(retpc);
+  B = 1;
+  pushSR(1);
+  I = 1;
+  CODE_BANK = 0;
+  local inner:2;
+  # NOTE: MAME can redirect BRK to NMI in the nmi_pending race window.
+  # SLEIGH has no dynamic nmi_pending/irq_taken state, so BRK always uses IRQ.
+  if (VECEN != 0) goto <use_custom_irq_vector>;
+  local romBank:1 = 0;
+  local vectorAddr:2 = 0xfffe;
+  local target:3;
+  segptr(romBank, vectorAddr, target);
+  inner = *:2 target;
+  goto <dispatch_vector>;
+<use_custom_irq_vector>
+  local vlo:1 = IRQVL;
+  local vhi:1 = IRQVH;
+  inner = zext(vlo) | (zext(vhi) << 8);
+<dispatch_vector>
+  local ptr:3;
+  farTarget(CODE_BANK, inner, ptr);
+  goto [ptr];
+}
+
+:BVC REL is op=0x50; REL
+{
+  if (V == 0) goto <taken>;
+  goto <done>;
+<taken>
+  dummyBranchTakenReads(REL);
+  goto REL;
+<done>
+}
+
+:BVS REL is op=0x70; REL
+{
+  if (V) goto <taken>;
+  goto <done>;
+<taken>
+  dummyBranchTakenReads(REL);
+  goto REL;
+<done>
+}
+
+:CLC is op=0x18
+{
+  C = 0;
+}
+
+:CLD is op=0xD8
+{
+  D = 0;
+}
+
+:CLI is op=0x58
+{
+  I = 0;
+}
+
+:CLV is op=0xB8
+{
+  V = 0;
+}
+
+:CMP OP1R is (cc=1 & aaa=6) ... & OP1R
+{
+  local rhs:1 = OP1R;
+  doCMP(A, rhs);
+}
+
+:CPX OP2R is (op=0xE0 | op=0xE4 | op=0xEC) ... & OP2R
+{
+  local rhs:1 = OP2R;
+  doCMP(X, rhs);
+}
+
+:CPY OP2R is (op=0xC0 | op=0xC4 | op=0xCC) ... & OP2R
+{
+  local rhs:1 = OP2R;
+  doCMP(Y, rhs);
+}
+
+:DEC OP2MZP is (op=0xC6 | op=0xCE | op=0xD6 | op=0xDE) ... & OP2MZP
+{
+  local ea:2 = OP2MZP;
+  local opv:1;
+  zpageRead(ea, opv);
+  zpageWrite(ea, opv);
+  local tmp:1 = opv - 1;
+  zpageWrite(ea, tmp);
+  resultFlags(tmp);
+}
+
+:DEC OP2MDB is (op=0xC6 | op=0xCE | op=0xD6 | op=0xDE) ... & OP2MDB
+{
+  local ea:2 = OP2MDB;
+  local opv:1;
+  dataRead(ea, opv);
+  dataWrite(ea, opv);
+  local tmp:1 = opv - 1;
+  dataWrite(ea, tmp);
+  resultFlags(tmp);
+}
+
+:DEX is op=0xCA
+{
+  X = X - 1;
+  resultFlags(X);
+}
+
+:DEY is op=0x88
+{
+  Y = Y - 1;
+  resultFlags(Y);
+}
+
+:EOR OP1R is (cc=1 & aaa=2) ... & OP1R
+{
+  A = A ^ OP1R;
+  resultFlags(A);
+}
+
+:INC OP2MZP is (op=0xE6 | op=0xEE | op=0xF6 | op=0xFE) ... & OP2MZP
+{
+  local ea:2 = OP2MZP;
+  local opv:1;
+  zpageRead(ea, opv);
+  zpageWrite(ea, opv);
+  local tmp:1 = opv + 1;
+  zpageWrite(ea, tmp);
+  resultFlags(tmp);
+}
+
+:INC OP2MDB is (op=0xE6 | op=0xEE | op=0xF6 | op=0xFE) ... & OP2MDB
+{
+  local ea:2 = OP2MDB;
+  local opv:1;
+  dataRead(ea, opv);
+  dataWrite(ea, opv);
+  local tmp:1 = opv + 1;
+  dataWrite(ea, tmp);
+  resultFlags(tmp);
+}
+
+:INY is op=0xC8
+{
+  Y = Y + 1;
+  resultFlags(Y);
+}
+
+:INX is op=0xE8
+{
+  X = X + 1;
+  resultFlags(X);
+}
+
+:JMP ADDR16LO is op=0x4C; ADDR16LO & imm16
+{
+  # The conditional branch targets a label, not ADDR16LO: a CBRANCH to an address outside the
+  # function made the decompiler fail ("Could not find op at target address").
+  if (CODE_BANK >= 0x80) goto <far>;
+  goto ADDR16LO;
+<far>
+  local off16:2 = imm16;
+  local ptr:3;
+  segptr(CODE_BANK, off16, ptr);
+  goto [ptr];
+}
+
+:JMP ADDR16HI is op=0x4C; ADDR16HI
+{
+  goto ADDR16HI;
+}
+
+:JMP ADDRI is op=0x6C; ADDRI
+{
+  local inner:2 = ADDRI;
+  local ptr:3;
+  farTarget(CODE_BANK, inner, ptr);
+  goto [ptr];
+}
+
+:JSR ADDR16LO is op=0x20; ADDR16LO & imm16
+{
+  dummyStackRead(SP);
+  pushWord(inst_next - 1);
+  if (CODE_BANK < 0x80) goto <jsr_abs_lo_near>;
+  local off16:2 = imm16;
+  local ptr:3;
+  segptr(CODE_BANK, off16, ptr);
+  call [ptr];
+  goto <jsr_abs_lo_done>;
+<jsr_abs_lo_near>
+  call ADDR16LO;
+<jsr_abs_lo_done>
+}
+
+:JSR ADDR16HI is op=0x20; ADDR16HI
+{
+  dummyStackRead(SP);
+  pushWord(inst_next - 1);
+  call ADDR16HI;
+}
+
+:LDA OP1R is (cc=1 & aaa=5) ... & OP1R
+{
+  A = OP1R;
+  resultFlags(A);
+}
+
+:LDY OP2R is (op=0xA0 | op=0xA4 | op=0xAC | op=0xB4 | op=0xBC) ... & OP2R
+{
+  Y = OP2R;
+  resultFlags(Y);
+}
+
+:LDX OP2LDR is (op=0xA2 | op=0xA6 | op=0xAE | op=0xB6 | op=0xBE) ... & OP2LDR
+{
+  X = OP2LDR;
+  resultFlags(X);
+}
+
+:LSR is op=0x4A
+{
+  local tmp:1 = A;
+  C = tmp & 1;
+  tmp = tmp >> 1;
+  A = tmp;
+  Z = (tmp == 0);
+  N = 0;
+}
+
+:LSR OP2MZP is (op=0x46 | op=0x4E | op=0x56 | op=0x5E) ... & OP2MZP
+{
+  local ea:2 = OP2MZP;
+  local opv:1;
+  zpageRead(ea, opv);
+  zpageWrite(ea, opv);
+  C = opv & 1;
+  local tmp:1 = opv >> 1;
+  zpageWrite(ea, tmp);
+  Z = (tmp == 0);
+  N = 0;
+}
+
+:LSR OP2MDB is (op=0x46 | op=0x4E | op=0x56 | op=0x5E) ... & OP2MDB
+{
+  local ea:2 = OP2MDB;
+  local opv:1;
+  dataRead(ea, opv);
+  dataWrite(ea, opv);
+  C = opv & 1;
+  local tmp:1 = opv >> 1;
+  dataWrite(ea, tmp);
+  Z = (tmp == 0);
+  N = 0;
+}
+
+:NOP is op=0xEA
+{
+}
+
+:NOP is (op=0x1A | op=0x3A | op=0x5A | op=0x7A | op=0xDA | op=0xFA)
+{
+}
+
+:NOP "#"imm8 is (op=0x82 | op=0x89 | op=0xC2 | op=0xE2); imm8
+{
+}
+
+:NOP imm8 is (op=0x04 | op=0x44 | op=0x64); imm8
+{
+  dummyZpageRead(imm8);
+}
+
+:NOP imm8,X is (op=0x14 | op=0x34 | op=0x54 | op=0x74 | op=0xD4 | op=0xF4) & X; imm8
+{
+  local addr:2;
+  zpageIndexedAddr(imm8, X, addr);
+  dummyZpageRead(addr);
+}
+
+:NOP imm16 is op=0x0C; imm16
+{
+  dummyDataRead(imm16);
+}
+
+:NOP imm16,X is (op=0x1C | op=0x3C | op=0x5C | op=0x7C | op=0xDC | op=0xFC) & X; imm16
+{
+  local addr:2 = imm16 + zext(X);
+  dummyPageCrossRead(imm16, addr);
+  dummyDataRead(addr);
+}
+
+:ORA OP1R is (cc=1 & aaa=0) ... & OP1R
+{
+  A = A | OP1R;
+  resultFlags(A);
+}
+
+:PHP is op=0x08
+{
+  dummyCodeRead(inst_next);
+  # PHP always pushes the B bit set, whatever the B flag register holds.
+  pushSR(1);
+}
+
+:PLP is op=0x28
+{
+  dummyCodeRead(inst_next);
+  dummyStackRead(SP);
+  popSR();
+}
+
+:PHA is op=0x48
+{
+  dummyCodeRead(inst_next);
+  pushByte(A);
+}
+
+:PLA is op=0x68
+{
+  dummyCodeRead(inst_next);
+  dummyStackRead(SP);
+  popByte(A);
+  resultFlags(A);
+}
+
+:ROL is op=0x2A
+{
+  local inC:1 = C;
+  local tmp:1 = A;
+  C = tmp >> 7;
+  tmp = (tmp << 1) | inC;
+  A = tmp;
+  resultFlags(tmp);
+}
+
+:ROL OP2MZP is (op=0x26 | op=0x2E | op=0x36 | op=0x3E) ... & OP2MZP
+{
+  local ea:2 = OP2MZP;
+  local inC:1 = C;
+  local opv:1;
+  zpageRead(ea, opv);
+  zpageWrite(ea, opv);
+  C = opv >> 7;
+  local tmp:1 = (opv << 1) | inC;
+  zpageWrite(ea, tmp);
+  resultFlags(tmp);
+}
+
+:ROL OP2MDB is (op=0x26 | op=0x2E | op=0x36 | op=0x3E) ... & OP2MDB
+{
+  local ea:2 = OP2MDB;
+  local inC:1 = C;
+  local opv:1;
+  dataRead(ea, opv);
+  dataWrite(ea, opv);
+  C = opv >> 7;
+  local tmp:1 = (opv << 1) | inC;
+  dataWrite(ea, tmp);
+  resultFlags(tmp);
+}
+
+:ROR is op=0x6A
+{
+  local inC:1 = C << 7;
+  local tmp:1 = A;
+  C = tmp & 1;
+  tmp = (tmp >> 1) | inC;
+  A = tmp;
+  resultFlags(tmp);
+}
+
+:ROR OP2MZP is (op=0x66 | op=0x6E | op=0x76 | op=0x7E) ... & OP2MZP
+{
+  local ea:2 = OP2MZP;
+  local inC:1 = C << 7;
+  local opv:1;
+  zpageRead(ea, opv);
+  zpageWrite(ea, opv);
+  C = opv & 1;
+  local tmp:1 = (opv >> 1) | inC;
+  zpageWrite(ea, tmp);
+  resultFlags(tmp);
+}
+
+:ROR OP2MDB is (op=0x66 | op=0x6E | op=0x76 | op=0x7E) ... & OP2MDB
+{
+  local ea:2 = OP2MDB;
+  local inC:1 = C << 7;
+  local opv:1;
+  dataRead(ea, opv);
+  dataWrite(ea, opv);
+  C = opv & 1;
+  local tmp:1 = (opv >> 1) | inC;
+  dataWrite(ea, tmp);
+  resultFlags(tmp);
+}
+
+:RTI is op=0x40
+{
+  dummyCodeRead(inst_next);
+  dummyStackRead(SP);
+  local inner:2;
+  local base:1;
+  popSR();
+  popWord(inner);
+  popSpecial(base);
+  CODE_BANK = base;
+  local res:3;
+  farTarget(base, inner, res);
+  return [res];
+}
+
+:RTS is op=0x60
+{
+  dummyCodeRead(inst_next);
+  dummyStackRead(SP);
+  local inner:2;
+  popWord(inner);
+  dummyCodeRead(inner);
+  inner = inner + 1;
+  local res:3;
+  farTarget(CODE_BANK, inner, res);
+  return [res];
+}
+
+:SBC OP1R is (cc=1 & aaa=7) ... & OP1R
+{
+  local rhs:1 = OP1R;
+  doSBC(rhs);
+}
+
+:SBC "#"imm8 is op=0xEB; imm8
+{
+  local rhs:1 = imm8;
+  doSBC(rhs);
+}
+
+:SEC is op=0x38
+{
+  C = 1;
+}
+
+:SED is op=0xF8
+{
+  D = 1;
+}
+
+:SEI is op=0x78
+{
+  I = 1;
+}
+
+:STA OP1MZP is (cc=1 & aaa=4) ... & OP1MZP
+{
+  local ea:2 = OP1MZP;
+  zpageWrite(ea, A);
+}
+
+:STA OP1MDB is (op=0x81 | op=0x8D | op=0x99 | op=0x9D) ... & OP1MDB
+{
+  local ea:2 = OP1MDB;
+  dataWrite(ea, A);
+}
+
+:STA (imm8),Y is op=0x91 & Y; imm8
+{
+  local base:2;
+  fetchZpagePointer(imm8, base);
+  local ea:2 = base + zext(Y);
+  local spill:2 = (base & 0xff00) | (ea & 0x00ff);
+  # XaviX quirk: sta_xav_idy dummy cycle uses read_zeropage(set_l(...)).
+  dummyZpageRead(spill);
+  dataWrite(ea, A);
+}
+
+:STX OP2STMZP is (op=0x86 | op=0x8E | op=0x96) ... & OP2STMZP
+{
+  local ea:2 = OP2STMZP;
+  zpageWrite(ea, X);
+}
+
+:STX OP2STMDB is (op=0x86 | op=0x8E | op=0x96) ... & OP2STMDB
+{
+  local ea:2 = OP2STMDB;
+  dataWrite(ea, X);
+}
+
+:STY OP2MZP is (op=0x84 | op=0x8C | op=0x94) ... & OP2MZP
+{
+  local ea:2 = OP2MZP;
+  zpageWrite(ea, Y);
+}
+
+:STY OP2MDB is (op=0x84 | op=0x8C | op=0x94) ... & OP2MDB
+{
+  local ea:2 = OP2MDB;
+  dataWrite(ea, Y);
+}
+
+:TAX is op=0xAA
+{
+  X = A;
+  resultFlags(X);
+}
+
+:TAY is op=0xA8
+{
+  Y = A;
+  resultFlags(Y);
+}
+
+:TSX is op=0xBA
+{
+  X = S;
+  resultFlags(X);
+}
+
+:TXA is op=0x8A
+{
+  A = X;
+  resultFlags(A);
+}
+
+:TXS is op=0x9A
+{
+  S = X;
+}
+
+:TYA is op=0x98
+{
+  A = Y;
+  resultFlags(A);
+}
+
+# Undocumented opcodes used by XaviX
+
+:DCP OP1MZP is (op=0xC7 | op=0xD7) ... & OP1MZP
+{
+  local ea:2 = OP1MZP;
+  local opv:1;
+  zpageRead(ea, opv);
+  zpageWrite(ea, opv);
+  local tmp:1 = opv - 1;
+  zpageWrite(ea, tmp);
+  doCMP(A, tmp);
+}
+
+:DCP OP1MDB is (op=0xC3 | op=0xCF | op=0xD3 | op=0xDB | op=0xDF) ... & OP1MDB
+{
+  local ea:2 = OP1MDB;
+  local opv:1;
+  dataRead(ea, opv);
+  dataWrite(ea, opv);
+  local tmp:1 = opv - 1;
+  dataWrite(ea, tmp);
+  doCMP(A, tmp);
+}
+
+:ISB OP1MZP is (op=0xE7 | op=0xF7) ... & OP1MZP
+{
+  local ea:2 = OP1MZP;
+  local opv:1;
+  zpageRead(ea, opv);
+  zpageWrite(ea, opv);
+  local tmp:1 = opv + 1;
+  zpageWrite(ea, tmp);
+  doSBC(tmp);
+}
+
+:ISB OP1MDB is (op=0xE3 | op=0xEF | op=0xF3 | op=0xFB | op=0xFF) ... & OP1MDB
+{
+  local ea:2 = OP1MDB;
+  local opv:1;
+  dataRead(ea, opv);
+  dataWrite(ea, opv);
+  local tmp:1 = opv + 1;
+  dataWrite(ea, tmp);
+  doSBC(tmp);
+}
+
+:RLA OP1MZP is (op=0x27 | op=0x37) ... & OP1MZP
+{
+  local ea:2 = OP1MZP;
+  local inC:1 = C;
+  local opv:1;
+  zpageRead(ea, opv);
+  zpageWrite(ea, opv);
+  C = opv >> 7;
+  local tmp:1 = (opv << 1) | inC;
+  zpageWrite(ea, tmp);
+  A = A & tmp;
+  resultFlags(A);
+}
+
+:RLA OP1MDB is (op=0x23 | op=0x2F | op=0x33 | op=0x3B | op=0x3F) ... & OP1MDB
+{
+  local ea:2 = OP1MDB;
+  local inC:1 = C;
+  local opv:1;
+  dataRead(ea, opv);
+  dataWrite(ea, opv);
+  C = opv >> 7;
+  local tmp:1 = (opv << 1) | inC;
+  dataWrite(ea, tmp);
+  A = A & tmp;
+  resultFlags(A);
+}
+
+:RRA OP1MZP is (op=0x67 | op=0x77) ... & OP1MZP
+{
+  local ea:2 = OP1MZP;
+  local inC:1 = C << 7;
+  local opv:1;
+  zpageRead(ea, opv);
+  zpageWrite(ea, opv);
+  C = opv & 1;
+  local tmp:1 = (opv >> 1) | inC;
+  zpageWrite(ea, tmp);
+  doADC(tmp);
+}
+
+:RRA OP1MDB is (op=0x63 | op=0x6F | op=0x73 | op=0x7B | op=0x7F) ... & OP1MDB
+{
+  local ea:2 = OP1MDB;
+  local inC:1 = C << 7;
+  local opv:1;
+  dataRead(ea, opv);
+  dataWrite(ea, opv);
+  C = opv & 1;
+  local tmp:1 = (opv >> 1) | inC;
+  dataWrite(ea, tmp);
+  doADC(tmp);
+}
+
+:SLO OP1MZP is (op=0x07 | op=0x17) ... & OP1MZP
+{
+  local ea:2 = OP1MZP;
+  local opv:1;
+  zpageRead(ea, opv);
+  zpageWrite(ea, opv);
+  C = opv >> 7;
+  local tmp:1 = opv << 1;
+  zpageWrite(ea, tmp);
+  A = A | tmp;
+  resultFlags(A);
+}
+
+:SLO OP1MDB is (op=0x03 | op=0x0F | op=0x13 | op=0x1B | op=0x1F) ... & OP1MDB
+{
+  local ea:2 = OP1MDB;
+  local opv:1;
+  dataRead(ea, opv);
+  dataWrite(ea, opv);
+  C = opv >> 7;
+  local tmp:1 = opv << 1;
+  dataWrite(ea, tmp);
+  A = A | tmp;
+  resultFlags(A);
+}
+
+:SRE OP1MZP is (op=0x47 | op=0x57) ... & OP1MZP
+{
+  local ea:2 = OP1MZP;
+  local opv:1;
+  zpageRead(ea, opv);
+  zpageWrite(ea, opv);
+  C = opv & 1;
+  local tmp:1 = opv >> 1;
+  zpageWrite(ea, tmp);
+  A = A ^ tmp;
+  resultFlags(A);
+}
+
+:SRE OP1MDB is (op=0x43 | op=0x4F | op=0x53 | op=0x5B | op=0x5F) ... & OP1MDB
+{
+  local ea:2 = OP1MDB;
+  local opv:1;
+  dataRead(ea, opv);
+  dataWrite(ea, opv);
+  C = opv & 1;
+  local tmp:1 = opv >> 1;
+  dataWrite(ea, tmp);
+  A = A ^ tmp;
+  resultFlags(A);
+}
+
+:LAX OP1R is (op=0xA3 | op=0xA7 | op=0xAF | op=0xB3) ... & OP1R
+{
+  A = OP1R;
+  X = A;
+  resultFlags(A);
+}
+
+:LAX imm8,Y is op=0xB7 & Y; imm8
+{
+  local ea:2;
+  zpageIndexedAddr(imm8, Y, ea);
+  local val:1;
+  zpageRead(ea, val);
+  A = val;
+  X = val;
+  resultFlags(A);
+}
+
+:LAX imm16,Y is op=0xBF & Y; imm16
+{
+  local ea:2 = imm16 + zext(Y);
+  dummyPageCrossRead(imm16, ea);
+  local val:1;
+  dataRead(ea, val);
+  A = val;
+  X = val;
+  resultFlags(A);
+}
+
+:SAX (imm8,X) is op=0x83 & X; imm8
+{
+  local idx:2;
+  zpageIndexedAddr(imm8, X, idx);
+  local ea:2;
+  fetchZpagePointer(idx, ea);
+  local val:1 = A & X;
+  dataWrite(ea, val);
+}
+
+:SAX imm8 is op=0x87; imm8
+{
+  local zp:1 = imm8;
+  local addr:2 = zext(zp);
+  local a:1 = A;
+  local x:1 = X;
+  local val:1 = a & x;
+  zpageWrite(addr, val);
+}
+
+:SAX imm16 is op=0x8F; imm16
+{
+  local addr:2 = imm16;
+  local a:1 = A;
+  local x:1 = X;
+  local val:1 = a & x;
+  dataWrite(addr, val);
+}
+
+:SAX imm8,Y is op=0x97 & Y; imm8
+{
+  local addr:2;
+  zpageIndexedAddr(imm8, Y, addr);
+  local val:1 = A & X;
+  zpageWrite(addr, val);
+}
+
+:ANC "#"imm8 is (op=0x0B | op=0x2B); imm8
+{
+  A = A & imm8;
+  resultFlags(A);
+  C = N;
+}
+
+:ANE "#"imm8 is op=0x8B; imm8
+{
+  A = A & X & imm8;
+  resultFlags(A);
+}
+
+:ASR "#"imm8 is op=0x4B; imm8
+{
+  local tmp:1 = A & imm8;
+  C = tmp & 1;
+  A = tmp >> 1;
+  Z = (A == 0);
+  N = 0;
+}
+
+:ARR "#"imm8 is op=0x6B; imm8
+{
+  A = A & imm8;
+  doARR();
+}
+
+:LAS OP1R is op=0xBB ... & OP1R
+{
+  local val:1 = OP1R;
+  A = val | 0x51;
+  X = 0xFF;
+  resultFlags(val);
+}
+
+:LXA "#"imm8 is op=0xAB; imm8
+{
+  A = imm8;
+  X = imm8;
+  resultFlags(A);
+}
+
+:SBX "#"imm8 is op=0xCB; imm8
+{
+  local rhs:1 = imm8;
+  local a:1 = A;
+  local x:1 = X;
+  local ax:1 = a & x;
+  local ax2:2 = zext(ax);
+  local rhs2:2 = zext(rhs);
+  C = (ax2 >= rhs2);
+  X = ax - rhs;
+  resultFlags(X);
+}
+
+:SHA (imm8),Y is op=0x93 & Y; imm8
+{
+  local base:2;
+  fetchZpagePointer(imm8, base);
+  writeHighMasked(base, Y, A & X);
+}
+
+:SHA imm16,Y is op=0x9F & Y; imm16
+{
+  local base:2 = imm16;
+  writeHighMasked(base, Y, A & X);
+}
+
+:SHS imm16,Y is op=0x9B & Y; imm16
+{
+  S = A & X;
+  local base:2 = imm16;
+  writeHighMasked(base, Y, S);
+}
+
+:SHX imm16,Y is op=0x9E & Y; imm16
+{
+  local base:2 = imm16;
+  writeHighMasked(base, Y, X);
+}
+
+:SHY imm16,X is op=0x9C & X; imm16
+{
+  local base:2 = imm16;
+  writeHighMasked(base, X, Y);
+}
+
+:KIL is (op=0x02 | op=0x12 | op=0x32 | op=0x42 | op=0x52 | op=0x62 | op=0x72 | op=0x92 | op=0xB2 | op=0xD2 | op=0xF2)
+{
+  # The core locks up (it keeps reading $FFFF forever). A p-code loop with no operations inside
+  # hangs Ghidra's analysis, so the lock-up is a jump to the instruction itself.
+  goto inst_start;
+}
+
+
+:CALLF ADDR24LO is op=0x22; ADDR24LO & imm24hi & imm24hibit=0
+{
+  dummyStackRead(SP);
+  pushSpecial(CODE_BANK);
+  pushWord(inst_next - 1);
+  CODE_BANK = imm24hi;
+  call ADDR24LO;
+}
+
+:CALLF ADDR24LOEXT is op=0x22; ADDR24LOEXT & imm24hi & imm24hibit=1
+{
+  dummyStackRead(SP);
+  pushSpecial(CODE_BANK);
+  pushWord(inst_next - 1);
+  CODE_BANK = imm24hi;
+  call ADDR24LOEXT;
+}
+
+:CALLF ADDR24HI is op=0x22; ADDR24HI & imm24hi
+{
+  dummyStackRead(SP);
+  pushSpecial(CODE_BANK);
+  pushWord(inst_next - 1);
+  CODE_BANK = imm24hi;
+  call ADDR24HI;
+}
+
+:RETF is op=0x80
+{
+  dummyCodeRead(inst_next);
+  dummyStackRead(SP);
+  local inner:2;
+  local base:1;
+  popWord(inner);
+  popSpecial(base);
+  CODE_BANK = base;
+  dummyCodeRead(inner);
+  inner = inner + 1;
+  local res:3;
+  farTarget(base, inner, res);
+  return [res];
+}
+

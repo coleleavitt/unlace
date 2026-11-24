@@ -1292,7 +1292,7 @@ in the symbol table, and the stating modes (`types` and the default `cycles`),
 which are the ones this rule reads, return before them. The declared-`...` decline cannot fire on a stripped
 image at all, because a declared prototype is rejected one branch earlier. A
 stripped SysV variadic is therefore *stated*: `long vlog(int,long,...)` built
-with `gcc -O2` and stripped states three parameters, and `KUNA_PROTOORDER_TRACE=1`
+with `gcc -O2` and stripped states three parameters, and `UNLACE_PROTOORDER_TRACE=1`
 prints `state sub_11d0 params=3` for it. What declines the drop there is the list
 itself — a register-save prologue reads every argument register the convention
 has, so the recovered list carries the register the drop would take. Where a
@@ -2179,7 +2179,7 @@ classified:
   the walk cannot place leaves the extent unstated as well, except the
   caller's frame pointer, which the CRT's `_NLG_Notify` records in a global; a
   local's address handed to a call is still taken to stay among the locals.
-  `KUNA_CALLEEPURGE_DEBUG=1` prints on stderr where each walk first gives up
+  `UNLACE_CALLEEPURGE_DEBUG=1` prints on stderr where each walk first gives up
   on a property, and the extent each call site was given; it changes no output.
   (kuna `calleeargsmsvc`, default off, with `calleeargs` on) Two more pieces
   of the MSVC frame boilerplate are read as no escape
@@ -2200,7 +2200,7 @@ classified:
   after a call that does not return (`_CxxThrowException`, which the walk cannot
   see does not return), and falling through it ran into the next function, whose
   return left the stack unbalanced, so every caller of a stream inserter that can
-  throw (`basic_ios::setstate`) lost its extent (`KUNA_CALLEEPURGE_DEBUG` on
+  throw (`basic_ios::setstate`) lost its extent (`UNLACE_CALLEEPURGE_DEBUG` on
   Holley `USBCAN-Driver.dll`: `0x10001eb0` falls from `0x10001f1f` into `0x10001f20`).
   A third piece places the stack pointer again in the epilogue
   (`kuna_calleepurge.rs (msvc_saved_sp)`). An EH prologue saves the exact
@@ -9020,7 +9020,7 @@ is. Of the other inert surfaces, two say so on stderr (`warn_protoorder_inert`,
 shared with `protoorder`): `decompile-project --stream` and `decompile-graph`. `unlace decompile` does not,
 and neither does `protoorder` there — it forks one `decomp_dbg` per function,
 which is a surface neither option has ever reached.
-`KUNA_CALLBACKTYPE_TRACE=1` prints every decision and its reason on stderr.
+`UNLACE_CALLBACKTYPE_TRACE=1` prints every decision and its reason on stderr.
 
 ### (kuna) `calleevote` — the type every caller passes
 
@@ -9258,7 +9258,7 @@ Everything is inert where there is no callee-first pass: `unlace decompile`
 triage filter, `--jobs N`, `decompile-project --stream`, a raw image and
 `--option protoorder off`. The
 variable rows a function exports keep their number; only their types move.
-`KUNA_CALLEEVOTE_TRACE=1` prints every decision and its reason on stderr.
+`UNLACE_CALLEEVOTE_TRACE=1` prints every decision and its reason on stderr.
 
 ### (kuna) `callerptr` — a parameter every caller passes a pointer is one
 

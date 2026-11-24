@@ -356,10 +356,10 @@ run. Removing Rule B reverts its second pass to its first.
 folds through Rule A too, because at `wide` Rule A's budget also admits its
 guard blocks.
 
-Both are observable. `KUNA_CONDFOLD_DEBUG=1` traces every per-block admission
+Both are observable. `UNLACE_CONDFOLD_DEBUG=1` traces every per-block admission
 verdict (with its decline reason and both of Rule B's measures) and every
 relaxed fold, naming the engine that took it and the rule that admitted it;
-`KUNA_CONDFOLD_DEBUG=ops` additionally lists each op `printed_shape` charges,
+`UNLACE_CONDFOLD_DEBUG=ops` additionally lists each op `printed_shape` charges,
 the terminal `CBRANCH` included, so the listing is exactly as long as the width
 the same walk reports and a measurement can be reconciled element by element.
 

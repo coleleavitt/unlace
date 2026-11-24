@@ -77,7 +77,7 @@ and 18 tags**.
 2. **specs** — compiles every `.slaspec` → `.sla` once on Linux and packages
    the whole `specs/` tree as `kuna-v<ver>-specs.tar.gz`. `.sla` files are
    platform-independent, so one tree serves every OS: each **build** row
-   embeds it, and it also ships as an asset (for `KUNA_SPECS`, and the
+   embeds it, and it also ships as an asset (for `UNLACE_SPECS`, and the
    nightly's speed baseline).
 3. **build** (matrix, after **specs**) — lays the compiled tree over the
    checkout's `specs/`, then `cargo build --release` of `unlace-cli` (with
@@ -131,8 +131,8 @@ and 18 tags**.
 `unlace` is the only file a release needs. It runs its own decompiler console
 and SLEIGH compiler, and carries the compiled SLEIGH tree, which it unpacks
 once — on first use, under a name derived from the tree's contents — into the
-per-user cache directory (`%LOCALAPPDATA%\kuna` on Windows,
-`~/Library/Caches/kuna` on macOS, `$XDG_CACHE_HOME/kuna` or `~/.cache/kuna`
+per-user cache directory (`%LOCALAPPDATA%\unlace` on Windows,
+`~/Library/Caches/unlace` on macOS, `$XDG_CACHE_HOME/unlace` or `~/.cache/unlace`
 elsewhere, and the system temp directory when none of those is writable):
 
 ```bash
@@ -140,7 +140,7 @@ tar xzf kuna-v<ver>-linux-x86_64.tar.gz
 ./kuna-v<ver>-linux-x86_64/kuna decompile ./a.out main
 ```
 
-`KUNA_SPECS` still overrides the built-in tree (for example with the
+`UNLACE_SPECS` still overrides the built-in tree (for example with the
 `kuna-v<ver>-specs.tar.gz` asset, or a tree of your own); the full list of
 overrides is in `docs/cli.md`. A release whose specs did not change reuses
 the tree already unpacked. Old trees are never removed automatically; deleting

@@ -5567,6 +5567,28 @@ live_true = "on"
 live_false = "off"
 
 [[settable]]
+option = "egraph"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P3"
+subphase = "simplification-quiescence"
+strength = "HARD"
+rewind = "P3"
+issue = "kuna-egraph"
+summary = "Simplify mixed boolean-arithmetic (MBA) trees by equality saturation. RuleEgraphSimplify collects the tree under an arithmetic or bitwise root the way the mba option's nonlinear path does (arithmetic under bitwise ops, the ops of several readers inlined, constants kept as numbers; at most 6 leaves and 48 nodes) when it mixes bitwise and arithmetic ops and no op of the set is its one reader, and adds it to an e-graph (the egg crate). Each subterm that the mba option's linear or polynomial solver folds is merged with its folded form, and the root with the mba option's proven nonlinear candidate. The e-graph is then saturated with ring and boolean-algebra identities (commutativity, associativity, distribution, De Morgan, ~a = -a - 1, absorption) and the MBA identities obfuscators apply (`(a ^ b) + 2*(a & b)` is `a + b`, `(a | b) - (a & b)` is `a ^ b`, `(a & ~b) - (~a & b)` is `a - b`), each an identity modulo 2^w at every width, with constant folding at the root's width, up to 4000 e-nodes or 12 iterations with deterministic hashing. The expression with the fewest ops is extracted; it replaces the tree when it has fewer ops than the tree keeps for itself, agrees on 64 random full-width inputs and on every input at a width small enough for 2^16 combinations, and is not refuted by the mba option's bit-serial proof (run for up to 3 leaves, where it proves equality at the full width). So one substitution applied to the result of another, `(((x & ~y) + y) ^ z) + 2*(((x & ~y) + y) & z)`, becomes `(x | y) + z`."
+use_when = "Off by default. Turn it on for obfuscated code where option mba leaves xor/and/or soup: substitutions stacked on each other, or linear and nonlinear MBA mixed in one tree. It costs one saturation per such tree."
+example = "--option egraph on"
+source_decompiler = "kuna"
+inspiration = "egg equality saturation (Willsey et al., POPL 2021); MBA identities as in SiMBA, MBA-Blast and OLLVM instruction substitution"
+change_kind = "new-analysis"
+tier = "transform"
+symptoms = "obfuscated arithmetic that option mba leaves unsimplified|one mba identity applied to the result of another|ollvm substitution chains such as (a ^ ~b) & a instead of a & b"
+live_field = "egraph"
+live_true = "on"
+live_false = "off"
+
+[[settable]]
 option = "avxintrinsics"
 values = "on|off"
 default = "on"

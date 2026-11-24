@@ -4579,3 +4579,93 @@ the option on: +0.67% instructions over `/usr/bin/patchelf` decompile-all, with
 no function changed. Not done: candidates beyond the table above (gooMBA's
 precomputed oracle of simplest forms indexed by I/O fingerprint), products of
 two non-constant terms in a nonlinear tree, and more than three leaves there.
+
+
+## (kuna) Equality saturation over MBA trees — `option egraph`, default off
+
+**`crates/unlace-bandb-base/src/p3_dataflow/kuna_egraph.rs (RuleEgraphSimplify)`,
+in oppool1 after `mba`.** The `mba` option solves classes of MBA in closed
+form: a linear MBA by its truth table on the 0/1 points, a polynomial MBA by its
+conjunction-basis polynomial, and a small table of nonlinear candidates under
+the bit-serial proof. An expression built by stacking several obfuscating
+substitutions, each on the result of the last, or one that mixes those classes
+in one tree, has no closed form there. Equality saturation searches for the
+small form instead: it keeps every equal spelling of every subterm at once in an
+e-graph, so the order the rewrites are tried in does not matter, and extracts
+the cheapest. The e-graph is the `egg` crate (MIT, pure Rust), built with its
+`deterministic` feature so its hash maps iterate in insertion order.
+
+**Collecting.** The rule fires on the same ops as `mba` and reads the tree the
+way `mba`'s nonlinear path does (`collect_deep`): arithmetic under bitwise ops
+and ops with several readers are inlined, constants stay numbers, and an
+`INT_LEFT` by a constant is a multiply; at most six leaves and 48 nodes. It
+goes on only when the tree mixes bitwise and arithmetic ops, and only at a
+root: an op whose one reader is an op of the set (at the same size) is part of
+that reader's tree, and extraction there picks the best form of every subterm
+anyway. The tree is added to the e-graph one e-class per distinct subterm, with
+the operators `+`, `-`, `*`, unary `neg`, `&`, `|`, `^`, `~`, constants and
+leaves. A multiply by a constant is a `*` of a constant class.
+
+**Seeds.** Every subterm that mixes the two kinds of op is handed to `mba`'s
+solvers: a linear subterm to the truth-table solver and any other to the
+polynomial normal form. A result with fewer ops that agrees on random inputs is
+added and merged with the subterm's class. The root, when it has at most three
+leaves, is also merged with `mba`'s proven nonlinear candidate. The closed forms
+are so rewrites of the search, and saturation composes them with the identities
+below.
+
+**Rules.** Every rule is an identity of the integers modulo `2^w` for every
+width `w`, so a rewrite never depends on the root's width:
+
+- commutativity of `+`, `*`, `&`, `|`, `^`, and associativity in one direction
+  (with commutativity that reaches every grouping);
+- ring identities: `a - b` = `a + neg b` both ways, `neg neg a`, `a + 0`,
+  `a * 1`, `a * 0`, `a + neg a`, `neg` over `+` and `*` both ways, `a + a` =
+  `a * 2` both ways, distribution of `*` over `+` both ways, and `a + a*b` =
+  `a * (b + 1)`;
+- boolean identities: double complement, `0` and all-ones operands, `a op a`,
+  `a op ~a`, absorption, De Morgan both ways, `a ^ ~b` = `~(a ^ b)` both ways,
+  factoring a common operand out of `|`, `&` and `^` of two terms, and the
+  xor spellings `(a & ~b) | (~a & b)`, `(a | b) & ~(a & b)`, `(a | b) ^ (a & b)`;
+  also `(a & b) | (a ^ b)` = `a | b` and `(a ^ ~b) & a` = `a & b` (OLLVM's
+  substitutions for `|` and `&`);
+- complement as arithmetic: `~a` = `neg a - 1` both ways, `neg ~a` = `a + 1`,
+  `~neg a` = `a - 1`, `a + ~b + 1` = `a - b`, `a - ~b - 1` = `a + b`;
+- linear MBA identities, each in the direction that removes ops:
+  `(a ^ b) + 2*(a & b)`, `(a | b) + (a & b)` and `2*(a | b) - (a ^ b)` are
+  `a + b`; `(a | b) - (a & b)` and `(a + b) - 2*(a & b)` are `a ^ b`;
+  `(a ^ b) + (a & b)`, `(a + b) - (a & b)` and `(a & ~b) + b` are `a | b`;
+  `(a | b) - (a ^ b)` and `(a + b) - (a | b)` are `a & b`; `(a | b) - b` and
+  `a - (a & b)` are `a & ~b`; `(a ^ b) - 2*(~a & b)`, `(a & ~b) - (~a & b)` and
+  `2*(a & ~b) - (a ^ b)` are `a - b`.
+
+A constant-folding analysis gives every class whose value is a constant at the
+root's width that constant as a node, so a pattern that names `0`, `1`, `2` or
+`~0` matches a folded subterm too. Saturation stops when no rule adds anything,
+at 4000 e-nodes, or after 12 iterations; a 2-second time limit is a guard only,
+since the node limit stops a search first. With the deterministic hashing the
+same tree gives the same result every run.
+
+**Extraction and checks.** The expression with the fewest ops (leaves and
+constants free) is extracted from the root's class. It replaces the tree only
+when it has fewer ops than the tree keeps for itself (the ops under an op with
+several readers stay for those readers), agrees with the tree on 64
+pseudo-random full-width inputs, agrees on every input at the widest width
+(at most 8 bits) where the leaves take at most `2^16` combinations, and is not
+refuted by `mba`'s bit-serial proof, which runs for at most three leaves and
+proves equality at the full width when it finishes. Truncation to a narrower
+width commutes with every op of the tree, so the small-width check is a
+necessary condition. Equality itself follows from the rules being identities;
+the checks guard the lowering into and out of the e-graph. A unit test
+(`every_rule_is_an_identity`) evaluates both sides of every rule at random
+64-bit inputs and at every 5-bit input of three variables. The replacement is
+emitted the way `mba` emits its own (`kuna_mba::replace`): new ops before the
+root, the root a `COPY` of the result, and a subterm the old tree already
+computes reused.
+
+Example: `(((x & ~y) + y) ^ z) + 2*(((x & ~y) + y) & z)`, one substitution
+applied to the result of another, becomes `(x | y) + z`: the seed folds the
+inner `(x & ~y) + y` to `x | y`, and the outer `(t ^ z) + 2*(t & z)` rule then
+matches with `t` that class. Not done: rules that need a side condition (a
+constant that is a power of two, a shift amount), `INT_RIGHT` and the
+extensions, trees wider than 8 bytes, and more than six leaves.

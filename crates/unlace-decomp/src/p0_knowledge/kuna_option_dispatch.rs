@@ -382,6 +382,7 @@ kuna_options! { self, p1;
     "lanefuse" => registered!(crate::kuna_coreoptions::LaneFuse),
     "strcodelen" => registered!(crate::kuna_analysisgates::Strcodelen),
     "mba" => registered!(crate::kuna_mba::Mba),
+    "egraph" => registered!(crate::kuna_egraph::Egraph),
     "avxintrinsics" => registered!(crate::printc::AvxIntrinsics),
     "x87depth" => registered!(crate::kuna_x87depth::X87Depth),
     "trapaftercall" => registered!(crate::kuna_coreoptions::TrapAfterCall),

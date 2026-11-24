@@ -122,7 +122,8 @@ fn ladder(data: &Funcdata, phi: OpId) -> Option<(Vec<Clamp>, VarnodeId, VarnodeI
     for _ in 0..3 {
         let (cond, values) = select_condition(data, op)?;
         let o = data.obank().get(op)?;
-        let (a, b) = (o.get_in(0)?, o.get_in(1)?);
+        // a MULTIEQUAL never reads a constant directly: each clamp is a COPY of one
+        let (a, b) = (source(data, o.get_in(0)?), source(data, o.get_in(1)?));
         let (slot, rest) = match (constant(data, a), constant(data, b)) {
             (Some(_), None) => (0usize, b),
             (None, Some(_)) => (1usize, a),

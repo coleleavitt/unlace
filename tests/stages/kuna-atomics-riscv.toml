@@ -1,0 +1,76 @@
+# kuna_atomics (option atomics, docs/spec/02-lift-and-flow.md): a RISC-V AMO lifts to one __sync
+# builtin. Hand-encoded RV64A instructions, each followed by ret:
+#   amo_add:  amoadd.w a0, a1, (a0)
+#   amo_swap: amoswap.d.aqrl a0, a1, (a0)
+#   amo_or:   amoor.w zero, a1, (a0)
+#   amo_max:  amomax.w a0, a1, (a0)   (min/max forms are declined)
+
+[image]
+arch = 'RISCV:LE:64:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'amo_add' },
+    { space = 'ram', offset = '0x100010', name = 'amo_swap' },
+    { space = 'ram', offset = '0x100020', name = 'amo_or' },
+    { space = 'ram', offset = '0x100030', name = 'amo_max' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '2f25b50067800000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100010'
+readonly = true
+hex = '2f35b50e67800000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100020'
+readonly = true
+hex = '2f20b54067800000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100030'
+readonly = true
+hex = '2f25b5a067800000'
+
+[script]
+commands = [
+    'option atomics auto',
+    'load function amo_add',
+    'decompile',
+    'print C',
+    'load function amo_swap',
+    'decompile',
+    'print C',
+    'load function amo_or',
+    'decompile',
+    'print C',
+    'load function amo_max',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'amoadd.w'
+count = 1
+regex = '^  return __sync_fetch_and_add\(\w+,\w+\);$'
+
+[[match]]
+name = 'amoswap.d'
+count = 1
+regex = '^  return __sync_lock_test_and_set\(\w+,\w+\);$'
+
+[[match]]
+name = 'amoor.w into zero'
+count = 1
+regex = '^  __sync_fetch_and_or\(\w+,\w+\);$'
+
+[[match]]
+name = 'amomax.w is declined'
+count = 3
+literal = '__sync_'

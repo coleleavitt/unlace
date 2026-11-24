@@ -1,0 +1,67 @@
+# Kuna (IDA 9.5 avxlifter naming): P9 naming policy, option avxintrinsics
+# (default on).
+#
+#   0x1000 vadd: vpaddd ymm0,ymm0,ymm1; ret
+#   0x1010 vfma: vfmadd132ps ymm0,ymm2,ymm1; ret     (ymm0 = ymm0*ymm1 + ymm2)
+#
+# Asserts #1-#2 are the off pass: the SLEIGH user-op names.
+# Asserts #3-#4 are the on pass: the Intel intrinsics, the FMA one with its
+# operands in intrinsic order (multiplicands first, addend last).
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'vadd' },
+    { space = 'ram', offset = '0x1010', name = 'vfma' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = 'c5fdfec1c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1010'
+readonly = true
+hex = 'c4e26d98c1c3'
+
+[script]
+commands = [
+    'option avxintrinsics off',
+    'lo fu vadd',
+    'decompile',
+    'print C',
+    'lo fu vfma',
+    'decompile',
+    'print C',
+    'option avxintrinsics on',
+    'lo fu vadd',
+    'decompile',
+    'print C',
+    'lo fu vfma',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'avxintrinsics #1: off prints the SLEIGH add user-op'
+count = 1
+literal = 'vpaddd_avx2('
+
+[[match]]
+name = 'avxintrinsics #2: off prints the SLEIGH FMA user-op'
+count = 1
+literal = 'vfmadd132ps_fma('
+
+[[match]]
+name = 'avxintrinsics #3: on prints _mm256_add_epi32'
+count = 1
+literal = '_mm256_add_epi32('
+
+[[match]]
+name = 'avxintrinsics #4: on prints _mm256_fmadd_ps'
+count = 1
+literal = '_mm256_fmadd_ps('

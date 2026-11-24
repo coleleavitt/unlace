@@ -1,0 +1,47 @@
+# Existing redistributable fixture, source beside it. The stripped cross-bank
+# signature uses VFP then core order; the variadic destination uses base AAPCS.
+
+[image]
+arch = 'ARM:LE:32:v7'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+hex = '1eff2fe1'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/fmtlf_armhf',
+    'option armfloatreturn on',
+    'option armfloatargs off',
+    'option formatstring full',
+    'read symbols',
+    'lo fu show2',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/fmtlf_armhf',
+    'option armfloatreturn on',
+    'option armfloatargs on',
+    'option formatstring full',
+    'read symbols',
+    'lo fu show2',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'ARM-FLOAT-ARGS #1: off retains the integer-typed VFP bits'
+count = 1
+literal = 'void show2(unsigned long long a0,unsigned int a1)'
+
+[[match]]
+name = 'ARM-FLOAT-ARGS #2: on recovers the floating width and core input'
+count = 1
+literal = 'void show2(float8 a0,int4 a1)'
+
+[[match]]
+name = 'ARM-FLOAT-ARGS #3: the variadic destination keeps the source values'
+count = 2
+literal = '__printf_chk(2,"n=%d v=%lf\n",a1,a0);'

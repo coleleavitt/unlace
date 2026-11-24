@@ -9,7 +9,7 @@ the numbers behind it.
 |---|---|
 | `decompiler/crates/kuna-decomp/src/infra/architecture.rs` | `decode_default_proto` split into a thin `<default_proto>` locator plus a reusable `decode_proto_model(<prototype>, root)` (which also gains the `hasthis`/`constructor` attribute reads and the `__thiscall` name rule); **new** `decode_named_protos` (the `<prototype>`/`<resolveprototype>`/`<modelalias>` dispatch plus the guaranteed-`__thiscall` tail) and `decode_resolve_proto` (the `ProtoModelMerged` fold-in); **new** free fns `decode_bool_attr` and `create_model_alias`; `build_default_proto` registers the named models after the default one |
 | `decompiler/crates/kuna-decomp/tests/verify_cspecprotos.rs` | **new** - 5 registry assertions over four real vendored cspecs |
-| `tests/stages/ghdec-cspecprotos.xml` | **new** - two-pass end-to-end witness, 6 assertions |
+| `tests/stages/ghdec-cspecprotos.toml` | **new** - two-pass end-to-end witness, 6 assertions |
 | `decompiler/crates/kuna-base/src/xml.rs` | corpus file count 191 to 192 (read off a live failing run on the rebased tree, not arithmetic) |
 | `docs/baseline-stages.json` | re-recorded from a live run on the rebased tree: 394 to 400 keys, purely the 6 new ones |
 | `docs/spec/04-calls-and-prototypes.md` | 4.1 rewritten: the named-model registration, the deliberate non-selection, and the merged-model producer |
@@ -136,7 +136,7 @@ invariant).
 
 ### End-to-end witness
 
-`tests/stages/ghdec-cspecprotos.xml` - two MSVC-shaped member-function bodies with the
+`tests/stages/ghdec-cspecprotos.toml` - two MSVC-shaped member-function bodies with the
 `this` pointer in ECX, on `x86:LE:32:default:windows`.
 
 Pass 1 (default `__stdcall`) - the `this` pointer is lost:

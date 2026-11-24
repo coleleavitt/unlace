@@ -3832,7 +3832,7 @@ could override the method. The reference walk
 same table: a site with one method is a `call` edge to it, a site with
 several a `vcall` edge to each, and every method in the image's code is
 walked as a function.
-Stage test: `tests/stages/kuna-arm64evcall.xml`, each of three fixtures with the
+Stage test: `tests/stages/kuna-arm64evcall.toml`, each of three fixtures with the
 option off and on.
 
 Two arch-marker passes paint **decode context** rather than names, because a wrong

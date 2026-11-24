@@ -66,7 +66,7 @@ already gone, and go away with them.
 
 ## The tests
 
-`tests/stages/ghdec-indexaliasguard.xml` decompiles the witness twice: `off`
+`tests/stages/ghdec-indexaliasguard.toml` decompiles the witness twice: `off`
 pins the bug (array declared, XORed, never assigned) and `load` pins all four
 recovered stores; the read-side assertions are `min=2 max=2`, so the reads
 provably do not move. The acceptance probe is promoted to

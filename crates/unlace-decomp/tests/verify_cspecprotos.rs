@@ -9,7 +9,7 @@
 //! These assertions run against the *real* vendored cspecs (x86win, x86-64-win,
 //! x86gcc, x86-64-gcc), decoded through the same `init_post_engine` path the CLI
 //! uses.  They are the sharp form of the end-to-end witness in
-//! `tests/stages/ghdec-cspecprotos.xml`: a registry query, not a rendering.
+//! `tests/stages/ghdec-cspecprotos.toml`: a registry query, not a rendering.
 
 use std::path::PathBuf;
 use std::rc::Rc;

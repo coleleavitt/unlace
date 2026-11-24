@@ -1,0 +1,104 @@
+# Authored A32 branch instructions, assembled from unlace-cli/tests/fixtures/arm_conditional_switch.S.
+
+[image]
+arch = 'ARM:LE:32:v5t:default'
+symbols = [
+    { space = 'ram', offset = '0x10000', name = 'arm_switch_conditional' },
+    { space = 'ram', offset = '0x10054', name = 'arm_switch_unconditional' },
+    { space = 'ram', offset = '0x100a4', name = 'arm_switch_addls' },
+    { space = 'ram', offset = '0x100e8', name = 'arm_switch_frame' },
+    { space = 'ram', offset = '0x10148', name = 'arm_indirect_call' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10000'
+hex = '000050e3100000ba3d0050e30e0000ca3a0050e200f18f500b0000ea020000ea030000ea040000ea050000ea0b00a0e31eff2fe10c00a0e31eff2fe10d00a0e31eff2fe10e00a0e31eff2fe10000e0e31eff2fe1'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10054'
+hex = '000050e30f0000ba030050e30d0000ca00f18fe00b0000ea020000ea030000ea040000ea050000ea1500a0e31eff2fe11600a0e31eff2fe11700a0e31eff2fe11800a0e31eff2fe10000e0e31eff2fe1'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100a4'
+hex = '030050e300f18f900b0000ea020000ea030000ea040000ea050000ea1f00a0e31eff2fe12000a0e31eff2fe12100a0e31eff2fe12200a0e31eff2fe10000e0e31eff2fe1'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100e8'
+hex = '10402de90140a0e1000050e3100000ba3d0050e30e0000ca3a0050e200f18f500b0000ea020000ea030000ea040000ea050000ea2900a0e3060000ea2a00a0e3040000ea2b00a0e3020000ea2c00a0e3000000ea0000e0e3040080e01080bde8'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10148'
+hex = '10402de9004090e50100a0e134ff2fe1010080e21080bde8'
+
+[script]
+commands = [
+    'parse line typedef struct Callback { int4 (*invoke)(int4); } Callback;',
+    'parse line extern int4 arm_switch_conditional(int4 input);',
+    'parse line extern int4 arm_switch_unconditional(int4 input);',
+    'parse line extern int4 arm_switch_addls(int4 input);',
+    'parse line extern int4 arm_switch_frame(int4 input, int4 bias);',
+    'parse line extern int4 arm_indirect_call(struct Callback *target, int4 input);',
+    'option tailcalljump on',
+    'load function arm_switch_conditional',
+    'decompile',
+    'print C',
+    'load function arm_switch_unconditional',
+    'decompile',
+    'print C',
+    'load function arm_switch_addls',
+    'decompile',
+    'print C',
+    'load function arm_switch_frame',
+    'decompile',
+    'print C',
+    'load function arm_indirect_call',
+    'decompile',
+    'print C',
+    'option tailcalljump off',
+    'load function arm_switch_conditional',
+    'decompile',
+    'print C',
+    'load function arm_switch_unconditional',
+    'decompile',
+    'print C',
+    'load function arm_switch_addls',
+    'decompile',
+    'print C',
+    'load function arm_switch_frame',
+    'decompile',
+    'print C',
+    'load function arm_indirect_call',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'ARM GUARD RANGE #1: both ADDPL tables and healthy controls recover switches'
+count = 8
+regex = 'switch\s*\('
+
+[[match]]
+name = 'ARM GUARD RANGE #2: branch entries never become calls'
+count = 0
+regex = 'jump-as-call|\(code \*\)'
+
+[[match]]
+name = 'ARM GUARD RANGE #3: all four cases remain'
+count = 8
+regex = 'case (3|0x3d|61):'
+
+[[match]]
+name = 'ARM GUARD RANGE #4: signed lower-bound guards remain'
+count = 6
+regex = 'input <= -1|0 <= input'
+
+[[match]]
+name = 'ARM GUARD RANGE #5: the genuine indirect call remains'
+count = 2
+regex = 'return \(\*v[0-9]+\)\(input\) \+ 1;'

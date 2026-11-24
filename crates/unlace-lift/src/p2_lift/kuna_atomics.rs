@@ -847,16 +847,27 @@ pub fn rewrite(fd: &mut Funcdata, ops: &[OpId]) -> Option<OpId> {
             .map(|(id, _)| id as u32)
     };
     let mut envelope = None;
+    let mut cut = None;
     if let Some((lock, unlock)) = userops.lock {
         let marks: Vec<usize> = (0..ops.len()).filter(|&i| callother(i).is_some()).collect();
         let [first, last] = marks[..] else {
             return None;
         };
-        if callother(first)? != lock || callother(last)? != unlock || last != ops.len() - 1 {
+        if callother(first)? != lock || callother(last)? != unlock {
             return None;
+        }
+        if last != ops.len() - 1 {
+            if !register_zext_tail(fd, &ops[last + 1..]) || has_branch(fd, ops) {
+                return None;
+            }
+            cut = Some(last);
         }
         envelope = Some((first, last));
     }
+    let ops = match cut {
+        Some(last) => &ops[..=last],
+        None => ops,
+    };
     let Some((access, first_load, store, width)) = access(fd, ops, envelope.is_some()) else {
         return match envelope {
             None => pair(fd, ops, &userops),
@@ -919,6 +930,47 @@ pub fn rewrite(fd: &mut Funcdata, ops: &[OpId]) -> Option<OpId> {
         &state,
         (first_load, store, width, envelope),
     )
+}
+
+/// Whether every op of `tail`, the ops an instruction emits after its
+/// UNLOCK, zero-extends a register into the register holding it: the clear
+/// of the upper half x86-64 does for a 32-bit `xadd` or `xchg` destination
+/// (`EAX = old; UNLOCK(); RAX = ZEXT(EAX)`). The envelope is rewritten
+/// without the tail, which then extends the builtin's result.
+fn register_zext_tail(fd: &Funcdata, tail: &[OpId]) -> bool {
+    let Some(ram) = fd
+        .get_arch()
+        .manage()
+        .get_default_data_space()
+        .map(|s| s.get_index())
+    else {
+        return false;
+    };
+    tail.iter().all(|&id| {
+        let Some(o) = fd.obank().get(id) else {
+            return false;
+        };
+        let (Some(i), Some(out)) = (
+            o.get_in(0).and_then(|v| storage(fd, v)),
+            o.get_out().and_then(|v| storage(fd, v)),
+        ) else {
+            return false;
+        };
+        o.code() == OpCode::CPUI_INT_ZEXT
+            && i.space == out.space
+            && i.space != ram
+            && out.overlaps(i)
+            && space(fd, i.space).is_some_and(|sp| sp.get_type() == spacetype::IPTR_PROCESSOR)
+    })
+}
+
+/// Whether the instruction `ops` has a BRANCH or CBRANCH.
+fn has_branch(fd: &Funcdata, ops: &[OpId]) -> bool {
+    ops.iter().any(|&id| {
+        fd.obank()
+            .get(id)
+            .is_none_or(|o| matches!(o.code(), OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH))
+    })
 }
 
 /// Whether a relative branch of the instruction `ops` targets its end. New

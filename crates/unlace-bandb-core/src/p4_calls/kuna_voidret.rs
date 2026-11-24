@@ -148,16 +148,16 @@ fn signed_use(data: &Funcdata, outvn: crate::context::VarnodeId, inline: bool) -
 #[derive(Debug, Default, Clone)]
 pub struct Ledger {
     /// Per called function, the return storage each call to it reads.
-    pub read: BTreeMap<(int4, uintb), Vec<(Address, int4)>>,
+    pub read: Watched<Vec<(Address, int4)>>,
     /// Per called function, the functions that read it.
     pub readers: BTreeMap<(int4, uintb), BTreeSet<(int4, uintb)>>,
     /// Per function decompiled again, the storage its callers read.
-    pub forced: BTreeMap<(int4, uintb), (Address, int4)>,
+    pub forced: Watched<(Address, int4)>,
     /// What each function without a declared prototype was last recovered to
     /// return.
-    pub returns: BTreeMap<(int4, uintb), Returns>,
+    pub returns: Watched<Returns>,
     /// Per function recovered returning a value, the storage it returns it in.
-    pub storage: BTreeMap<(int4, uintb), (Address, int4)>,
+    pub storage: Watched<(Address, int4)>,
     /// Per reader and callee, how the reader's last decompile holds the call's
     /// result ([`Held`]).
     pub held: BTreeMap<((int4, uintb), (int4, uintb)), Held>,
@@ -168,7 +168,7 @@ pub struct Ledger {
     pub float_refused: BTreeMap<(int4, uintb), BTreeSet<(int4, uintb)>>,
     /// The functions whose float return is withdrawn: redone without the
     /// float-register vote on the return, and without a forced return.
-    pub withdrawn: BTreeSet<(int4, uintb)>,
+    pub withdrawn: WatchedSet,
     /// Per function returning a float, the callees whose float return it hands
     /// on as its own ([`float_sources`]).
     pub float_sources: BTreeMap<(int4, uintb), BTreeSet<(int4, uintb)>>,
@@ -1404,16 +1404,19 @@ pub fn due(arch: &mut Architecture) -> BTreeSet<(int4, uintb)> {
     let mut force: Vec<((int4, uintb), (Address, int4))> = Vec::new();
     let mut withdraw: Vec<(int4, uintb)> = Vec::new();
     let mut displace: Vec<(int4, uintb)> = Vec::new();
-    let (mut forced, mut returns, mut storage) = (
-        Seek::new(&ledger.forced),
-        Seek::new(&ledger.returns),
-        Seek::new(&ledger.storage),
-    );
-    for (callee, claims) in &ledger.read {
+    let mut changed = ledger.read.take_changed();
+    changed.append(&mut ledger.forced.take_changed());
+    changed.append(&mut ledger.returns.take_changed());
+    changed.append(&mut ledger.storage.take_changed());
+    changed.append(&mut ledger.withdrawn.take_changed());
+    for callee in &changed {
+        let Some(claims) = ledger.read.get(callee) else {
+            continue;
+        };
         let Some(first) = claims.first() else {
             continue;
         };
-        let was_forced = forced.get(callee);
+        let was_forced = ledger.forced.get(callee);
         if was_forced.is_some() && ledger.withdrawn.contains(callee) {
             continue;
         }
@@ -1426,10 +1429,16 @@ pub fn due(arch: &mut Architecture) -> BTreeSet<(int4, uintb)> {
         match was_forced {
             None if agree => {
                 let widest = widest();
-                let recovered = returns.get(callee);
+                let recovered = ledger.returns.get(callee);
                 if recovered == Some(&Returns::Void) {
                     force.push((*callee, widest.clone()));
-                } else if displaced(ledger, callee, recovered, storage.get(callee), widest) {
+                } else if displaced(
+                    ledger,
+                    callee,
+                    recovered,
+                    ledger.storage.get(callee),
+                    widest,
+                ) {
                     displace.push(*callee);
                     force.push((*callee, widest.clone()));
                 }
@@ -1498,25 +1507,123 @@ fn displaced(
             .is_some_and(|(addr, size)| register(addr) && !overlaps(addr, *size, &read.0, read.1))
 }
 
-/// A forward cursor over a ledger map: [`Seek::get`] answers `map.get(k)` for keys asked in
-/// ascending order, walking the map once instead of searching it per key.
-struct Seek<'a, V> {
-    it: std::iter::Peekable<std::collections::btree_map::Iter<'a, (int4, uintb), V>>,
+/// A ledger map that also records every key written since [`due`] last took
+/// them. `due` re-decides only those callees: a decision reads nothing but the
+/// callee's entries in `read`, `forced`, `returns`, `storage` and `withdrawn`,
+/// and one that acts writes `forced` or `withdrawn`, so a callee nobody wrote
+/// since still decides to do nothing. Reads go through `Deref`; every write
+/// goes through a method that records its key. A clone keeps the record with the
+/// data, so a ledger put back from a copy stays consistent.
+#[derive(Debug, Clone)]
+pub struct Watched<V> {
+    map: BTreeMap<(int4, uintb), V>,
+    changed: BTreeSet<(int4, uintb)>,
 }
 
-impl<'a, V> Seek<'a, V> {
-    fn new(map: &'a BTreeMap<(int4, uintb), V>) -> Self {
+impl<V> Default for Watched<V> {
+    fn default() -> Self {
         Self {
-            it: map.iter().peekable(),
+            map: BTreeMap::new(),
+            changed: BTreeSet::new(),
         }
     }
+}
 
-    fn get(&mut self, k: &(int4, uintb)) -> Option<&'a V> {
-        while self.it.next_if(|&(key, _)| key < k).is_some() {}
-        self.it
-            .peek()
-            .filter(|&&(key, _)| key == k)
-            .map(|&(_, v)| v)
+impl<V> std::ops::Deref for Watched<V> {
+    type Target = BTreeMap<(int4, uintb), V>;
+    fn deref(&self) -> &Self::Target {
+        &self.map
+    }
+}
+
+impl<'a, V> IntoIterator for &'a Watched<V> {
+    type Item = (&'a (int4, uintb), &'a V);
+    type IntoIter = std::collections::btree_map::Iter<'a, (int4, uintb), V>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.map.iter()
+    }
+}
+
+impl<V> Extend<((int4, uintb), V)> for Watched<V> {
+    fn extend<I: IntoIterator<Item = ((int4, uintb), V)>>(&mut self, iter: I) {
+        for (k, v) in iter {
+            self.insert(k, v);
+        }
+    }
+}
+
+impl<V> Watched<V> {
+    pub fn insert(&mut self, k: (int4, uintb), v: V) -> Option<V> {
+        self.changed.insert(k);
+        self.map.insert(k, v)
+    }
+
+    pub fn remove(&mut self, k: &(int4, uintb)) -> Option<V> {
+        self.changed.insert(*k);
+        self.map.remove(k)
+    }
+
+    pub fn get_mut(&mut self, k: &(int4, uintb)) -> Option<&mut V> {
+        self.changed.insert(*k);
+        self.map.get_mut(k)
+    }
+
+    pub fn entry(
+        &mut self,
+        k: (int4, uintb),
+    ) -> std::collections::btree_map::Entry<'_, (int4, uintb), V> {
+        self.changed.insert(k);
+        self.map.entry(k)
+    }
+
+    fn take_changed(&mut self) -> BTreeSet<(int4, uintb)> {
+        std::mem::take(&mut self.changed)
+    }
+}
+
+/// [`Watched`] for a set of functions.
+#[derive(Debug, Clone, Default)]
+pub struct WatchedSet {
+    set: BTreeSet<(int4, uintb)>,
+    changed: BTreeSet<(int4, uintb)>,
+}
+
+impl std::ops::Deref for WatchedSet {
+    type Target = BTreeSet<(int4, uintb)>;
+    fn deref(&self) -> &Self::Target {
+        &self.set
+    }
+}
+
+impl<'a> IntoIterator for &'a WatchedSet {
+    type Item = &'a (int4, uintb);
+    type IntoIter = std::collections::btree_set::Iter<'a, (int4, uintb)>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.set.iter()
+    }
+}
+
+impl Extend<(int4, uintb)> for WatchedSet {
+    fn extend<I: IntoIterator<Item = (int4, uintb)>>(&mut self, iter: I) {
+        for k in iter {
+            self.insert(k);
+        }
+    }
+}
+
+impl WatchedSet {
+    pub fn insert(&mut self, k: (int4, uintb)) -> bool {
+        self.changed.insert(k);
+        self.set.insert(k)
+    }
+
+    pub fn remove(&mut self, k: &(int4, uintb)) -> bool {
+        self.changed.insert(*k);
+        self.set.remove(k)
+    }
+
+    fn take_changed(&mut self) -> BTreeSet<(int4, uintb)> {
+        std::mem::take(&mut self.changed)
     }
 }
 

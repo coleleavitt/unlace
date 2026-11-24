@@ -61,16 +61,18 @@ ptr1616: reloc is protectedMode=0 & opsize=0 & imm16; j16 [ reloc = j16*0x10 + i
 currentCS: CS is protectedMode=0 & vexMode=0 & CS & realCurrentCS { CS = realCurrentCS; export CS; }
 
 with : lockprefx=0 {
-:CALL rel16 is $(LONGMODE_OFF) & vexMode=0 & addrsize=0 & opsize=0 & protectedMode=0 & byte=0xe8; rel16 & realNextIP { push22(realNextIP); call rel16; }
-:CALL rel16 is $(LONGMODE_OFF) & vexMode=0 & addrsize=1 & opsize=0 & protectedMode=0 & byte=0xe8; rel16 & realNextIP { push42(realNextIP); call rel16; }
-:CALL rel16 is $(LONGMODE_OFF) & vexMode=0 & addrsize=0 & opsize=0 & protectedMode=0 & byte=0xe8; simm16=0 & rel16 & realNextIP { push22(realNextIP); goto rel16; }
-:CALL rel16 is $(LONGMODE_OFF) & vexMode=0 & addrsize=1 & opsize=0 & protectedMode=0 & byte=0xe8; simm16=0 & rel16 & realNextIP { push42(realNextIP); goto rel16; }
-:CALL rm16 is $(LONGMODE_OFF) & vexMode=0 & addrsize=0 & opsize=0 & protectedMode=0 & byte=0xff & currentCS & realNextIP; rm16 & reg_opcode=2 ... { local dest:4 = segment(currentCS,rm16); push22(realNextIP); call [dest]; }
-:CALL rm16 is $(LONGMODE_OFF) & vexMode=0 & addrsize=1 & opsize=0 & protectedMode=0 & byte=0xff & realNextIP; rm16 & reg_opcode=2 ... { local dest:2 = rm16; push42(realNextIP); call [dest]; }
-:CALLF ptr1616 is vexMode=0 & addrsize=0 & opsize=0 & protectedMode=0 & byte=0x9a & farNextIP; ptr1616 { push22(CS); build ptr1616; push22(farNextIP); call ptr1616; }
-:CALLF ptr1616 is vexMode=0 & addrsize=1 & opsize=0 & protectedMode=0 & byte=0x9a & farNextIP; ptr1616 { push42(CS); build ptr1616; push42(farNextIP); call ptr1616; }
-:CALLF addr16 is vexMode=0 & addrsize=0 & opsize=0 & protectedMode=0 & byte=0xff & realNextIP; addr16 & reg_opcode=3 ... { local ptr:$(SIZE) = segment(DS,addr16); local addrptr:$(SIZE) = segment(*:2 (ptr+2),*:2 ptr); push22(CS); push22(realNextIP); call [addrptr]; }
-:CALLF addr32 is vexMode=0 & addrsize=1 & opsize=0 & protectedMode=0 & byte=0xff & realNextIP; addr32 & reg_opcode=3 ... { local dest:4 = addr32; push42(CS); push42(realNextIP); call [dest]; }
+:CALL rel16 is $(LONGMODE_OFF) & vexMode=0 & $(STACK16) & opsize=0 & protectedMode=0 & byte=0xe8; rel16 & realNextIP { push22(realNextIP); call rel16; }
+:CALL rel16 is $(LONGMODE_OFF) & vexMode=0 & $(STACK32) & opsize=0 & protectedMode=0 & byte=0xe8; rel16 & realNextIP { push42(realNextIP); call rel16; }
+:CALL rel16 is $(LONGMODE_OFF) & vexMode=0 & $(STACK16) & opsize=0 & protectedMode=0 & byte=0xe8; simm16=0 & rel16 & realNextIP { push22(realNextIP); goto rel16; }
+:CALL rel16 is $(LONGMODE_OFF) & vexMode=0 & $(STACK32) & opsize=0 & protectedMode=0 & byte=0xe8; simm16=0 & rel16 & realNextIP { push42(realNextIP); goto rel16; }
+:CALL rm16 is $(LONGMODE_OFF) & vexMode=0 & $(STACK16) & opsize=0 & protectedMode=0 & byte=0xff & currentCS & realNextIP; rm16 & reg_opcode=2 ... { local dest:4 = segment(currentCS,rm16); push22(realNextIP); call [dest]; }
+:CALL rm16 is $(LONGMODE_OFF) & vexMode=0 & $(STACK32) & opsize=0 & protectedMode=0 & byte=0xff & realNextIP; rm16 & reg_opcode=2 ... { local dest:2 = rm16; push42(realNextIP); call [dest]; }
+:CALLF ptr1616 is vexMode=0 & $(STACK16) & opsize=0 & protectedMode=0 & byte=0x9a & farNextIP; ptr1616 { push22(CS); build ptr1616; push22(farNextIP); call ptr1616; }
+:CALLF ptr1616 is vexMode=0 & $(STACK32) & opsize=0 & protectedMode=0 & byte=0x9a & farNextIP; ptr1616 { push42(CS); build ptr1616; push42(farNextIP); call ptr1616; }
+:CALLF Mem16 is vexMode=0 & $(STACK16) & opsize=0 & protectedMode=0 & addrsize=0 & byte=0xff & realNextIP; Mem16 & reg_opcode=3 ... { local ptr:$(SIZE) = Mem16; local addrptr:$(SIZE) = segment(*:2 (ptr+2),*:2 ptr); push22(CS); push22(realNextIP); call [addrptr]; }
+# a far JMP through memory loads the segment too (ia.sinc's form keeps only the offset)
+:JMPF Mem is vexMode=0 & opsize=0 & protectedMode=0 & byte=0xff; Mem & reg_opcode=5 ... { local ptr:$(SIZE) = Mem; local target:$(SIZE) = segment(*:2 (ptr+2),*:2 ptr); goto [target]; }
+:CALLF addr32 is vexMode=0 & $(STACK32) & opsize=0 & protectedMode=0 & byte=0xff & realNextIP; addr32 & reg_opcode=3 ... { local dest:4 = addr32; push42(CS); push42(realNextIP); call [dest]; }
 
 :^x87 is vexMode=0 & high5=0x1B ... & x87 { }
 :^x87 is vexMode=0 & fpuEmu=1 & byte=0xcd; (byte>=0x34 & byte<=0x3b) ... & x87 [ fpuEsc=1; ] { }

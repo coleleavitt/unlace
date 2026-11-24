@@ -174,6 +174,8 @@ def run_case(arch, regs, row, cand, rng, seed):
         return {"status": "ref-exception", "why": str(e)}
 
     st = State(big, lambda a: fill_byte(a, seed), regs)
+    if hasattr(arch, "callother_fn"):
+        st.callother = lambda op: arch.callother_fn(op, st)
     for i, b in enumerate(cand["bytes"]):
         st.mem[addr + i] = b
     for n, _ in arch.gprs:
@@ -215,7 +217,7 @@ def run_case(arch, regs, row, cand, rng, seed):
             a, r = (st.get(reg) >> off) & ((1 << wd) - 1), (fv >> sh) & ((1 << wd) - 1)
             if a != r:
                 diffs[n] = (a, r)
-    upc = emu.reg_read(pc_k)
+    upc = arch.read_pc(emu) if hasattr(arch, "read_pc") else emu.reg_read(pc_k)
     if nxt & ((1 << bits) - 1) != upc:
         diffs["pc"] = (nxt, upc)
     touched = set(st.writes)
@@ -280,8 +282,8 @@ def main():
                          "this CPU (native, --arch x86-64-native)")
     args = ap.parse_args()
     if args.oracle == "native":
-        if args.arch not in ("x86-64-native", "x86-64-x87"):
-            sys.exit("--oracle native needs --arch x86-64-native or x86-64-x87")
+        if args.arch not in ("x86-64-native", "x86-64-x87", "x86-32-native"):
+            sys.exit("--oracle native needs --arch x86-64-native, x86-64-x87 or x86-32-native")
         args.oracle = "qemu"
     vector = args.arch == "riscv64v"
     arch = ARCHES["riscv64" if vector else args.arch]
@@ -309,6 +311,8 @@ def main():
         cands = llvmgen.generate(rng, args.count, args.objdump, args.llvm_mattr, args.only, 64 if arch.elf64 else 32)
     else:
         cands = generate(arch, rng, args.count)
+    if hasattr(arch, "order"):
+        cands = arch.order(cands)
     dis = arch.capstone()
     counts = collections.Counter()
     findings = []

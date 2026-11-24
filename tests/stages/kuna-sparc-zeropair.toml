@@ -74,6 +74,7 @@ f027bffcf207bffc81c7e00891e80000
 
 [script]
 commands = [
+    'option boolreturn off',
     'lo fu keep_zero',
     'decompile',
     'print C',

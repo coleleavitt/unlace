@@ -136,7 +136,10 @@ def step(state, ops, addr, size, max_steps=20000):
                 state.skipped_callother = True
                 continue
             if out is not None and state.callother is not None:
-                state.write(*_vn(out), state.callother(op))
+                v = state.callother(op)
+                if v is None:
+                    raise Unmodeled("CALLOTHER")
+                state.write(*_vn(out), v)
                 continue
             raise Unmodeled("CALLOTHER")
         if opc == "STORE":
@@ -259,6 +262,8 @@ def _float(opc, ins, a, asz, b, osz):
     if opc == "FLOAT_ABS":
         return a & ~(1 << (8 * asz - 1))
     if opc == "FLOAT2FLOAT":
+        if math.isnan(x):
+            raise Unmodeled("nan result")
         return from_float(x, osz)
     if opc in ("TRUNC", "CEIL", "FLOOR", "ROUND"):
         if math.isnan(x) or math.isinf(x):

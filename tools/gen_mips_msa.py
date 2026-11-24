@@ -400,6 +400,266 @@ def semantics3(mn, suf, imm):
     L.append(_pack(res, s))
     return L
 
+FBITS = {4: dict(sign=0x80000000, half=0x3f000000, two31=0x4f000000, two32=0x4f800000, mant=0x4b000000, exp=0x7f800000, man=0x7fffff, quiet=0x400000),
+         8: dict(sign=0x8000000000000000, half=0x3fe0000000000000, two31=0x43e0000000000000, two32=0x43f0000000000000,
+                 mant=0x4330000000000000, exp=0x7ff0000000000000, man=0xfffffffffffff, quiet=0x8000000000000)}
+# two31 / two32 are 2^(B-1) and 2^B for the element width B (2^31/2^32 for .w, 2^63/2^64 for .d); mant is 2^23 / 2^52
+
+
+def _rne(L, i, x, s, isz):
+    """Round-to-nearest-even of float x (which must be finite and in range) to an integer of isz bytes."""
+    F = FBITS[s]
+    L.append("local mt%d:%d = trunc(%s);" % (i, isz, x))
+    L.append("local mft%d:%d = int2float(mt%d);" % (i, s, i))
+    L.append("local mfr%d:%d = %s f- mft%d;" % (i, s, x, i))
+    L.append("local mhf%d:%d = 0x%x;" % (i, s, F["half"]))
+    L.append("local mnh%d:%d = 0x%x;" % (i, s, F["half"] | F["sign"]))
+    L.append("local modd%d:1 = (mt%d & 1) == 1;" % (i, i))
+    L.append("local mup%d:1 = (mfr%d f> mhf%d) || ((mfr%d f== mhf%d) && modd%d);" % (i, i, i, i, i, i))
+    L.append("local mdn%d:1 = (mfr%d f< mnh%d) || ((mfr%d f== mnh%d) && modd%d);" % (i, i, i, i, i, i))
+    return "(mt%d + zext(mup%d) - zext(mdn%d))" % (i, i, i)
+
+
+def semantics4(mn, suf, imm):
+    """MSA floating point, IEEE-exact where the operation is (round to nearest, as MSACSR's reset
+    mode). Signalling compares give the same result as the quiet ones; no FP flag in MSACSR is
+    modelled."""
+    base = mn.split(".")[0]
+    if suf not in ("w", "d", "h"):
+        return None
+    s = SIZE[suf]; n = 16 // s; B = 8 * s
+    L = []
+    arith = {"fadd": "f+", "fsub": "f-", "fmul": "f*", "fdiv": "f/"}
+    cmps = {"caf", "cun", "ceq", "cueq", "clt", "cult", "cle", "cule", "cor", "cune", "cne",
+            "saf", "sun", "seq", "sueq", "slt", "sult", "sle", "sule", "sor", "sune", "sne"}
+    is_cmp = base.startswith("f") and base[1:] in cmps
+    known = set(arith) | {"fmadd", "fmsub", "fsqrt", "fmax", "fmin", "fmax_a", "fmin_a", "fclass", "ffint_s",
+                          "ffint_u", "ftrunc_s", "ftrunc_u", "ftint_s", "ftint_u", "frint", "frcp", "frsqrt",
+                          "fexupl", "fexupr", "fexdo"}
+    if not (is_cmp or base in known):
+        return None
+    if base in ("fexupl", "fexupr"):
+        hs = s // 2
+        off = n if base == "fexupl" else 0
+        res = []
+        for i in range(n):
+            L.append("local mh%d:%d = msa_ws(%d);" % (i, hs, (off + i) * hs))
+            L.append("local mr%d:%d = float2float(mh%d);" % (i, s, i))
+            res.append("mr%d" % i)
+        L.append(_pack(res, s))
+        return L
+    if base == "fexdo":
+        # wd's right half from wt, its left half from ws, each element narrowed to half the width
+        hs = s // 2 if suf == "w" else None
+        if suf == "h":
+            ws_, ns = 4, 4  # fexdo.h: float32 -> float16
+        else:
+            ws_, ns = 8, 2  # fexdo.w: float64 -> float32
+        hs = ws_ // 2
+        res = []
+        for i in range(2 * ns):
+            src = "msa_wt" if i < ns else "msa_ws"
+            k = i if i < ns else i - ns
+            L.append("local mx%d:%d = %s(%d);" % (i, ws_, src, k * ws_))
+            L.append("local mr%d:%d = float2float(mx%d);" % (i, hs, i))
+            res.append("mr%d" % i)
+        L.append(_pack(res, hs))
+        return L
+    if suf == "h":
+        return None
+    F = FBITS[s]
+    L += _elems("msa_ws", s, n, "ma")
+    two = base in arith or base in ("fmadd", "fmsub", "fmax", "fmin", "fmax_a", "fmin_a") or is_cmp
+    if two:
+        L += _elems("msa_wt", s, n, "mb")
+    if base in ("fmadd", "fmsub"):
+        L += _elems("msa_wd", s, n, "mc")
+    res = []
+    for i in range(n):
+        x, r = "ma%d" % i, "mr%d" % i
+        y = "mb%d" % i
+        if base in arith:
+            L.append("local %s:%d = %s %s %s;" % (r, s, x, arith[base], y))
+        elif base in ("fmadd", "fmsub"):
+            o = "f+" if base == "fmadd" else "f-"
+            if s == 4:
+                # fused: the product of two float32 is exact in float64, so only the sum rounds twice
+                L.append("local mxd%d:8 = float2float(%s);" % (i, x))
+                L.append("local myd%d:8 = float2float(%s);" % (i, y))
+                L.append("local mcd%d:8 = float2float(mc%d);" % (i, i))
+                L.append("local msum%d:8 = mcd%d %s (mxd%d f* myd%d);" % (i, i, o, i, i))
+                L.append("local %s:4 = float2float(msum%d);" % (r, i))
+            else:
+                L.append("local %s:%d = mc%d %s (%s f* %s);" % (r, s, i, o, x, y))
+        elif base == "fsqrt":
+            L.append("local %s:%d = sqrt(%s);" % (r, s, x))
+        elif base in ("frcp", "frsqrt"):
+            L.append("local mone%d:%d = int2float(1:4);" % (i, s))
+            L.append("local %s:%d = mone%d f/ %s;" % (r, s, i, "sqrt(%s)" % x if base == "frsqrt" else x))
+        elif base in ("fmax", "fmin", "fmax_a", "fmin_a"):
+            if base.endswith("_a"):
+                L.append("local mxa%d:%d = abs(%s);" % (i, s, x))
+                L.append("local mya%d:%d = abs(%s);" % (i, s, y))
+                cx, cy = "mxa%d" % i, "mya%d" % i
+            else:
+                cx, cy = x, y
+            gt = "f>" if base.startswith("fmax") else "f<"
+            tie = "&" if base.startswith("fmax") else "|"
+            L.append("local mnx%d:1 = nan(%s);" % (i, x))
+            L.append("local mny%d:1 = nan(%s);" % (i, y))
+            L.append("local mpx%d:1 = !mnx%d && !mny%d && (%s %s %s);" % (i, i, i, cx, gt, cy))
+            L.append("local mpy%d:1 = !mnx%d && !mny%d && (%s %s %s);" % (i, i, i, cy, gt, cx))
+            L.append("local meq%d:1 = !mnx%d && !mny%d && !mpx%d && !mpy%d;" % (i, i, i, i, i))
+            # IEEE 754-2008 maxNum/minNum: a signalling NaN gives that NaN quieted, a quiet NaN the other operand
+            L.append("local msx%d:1 = mnx%d && ((%s & 0x%x) == 0);" % (i, i, x, F["quiet"]))
+            L.append("local msy%d:1 = mny%d && ((%s & 0x%x) == 0);" % (i, i, y, F["quiet"]))
+            L.append("local msn%d:1 = msx%d || msy%d;" % (i, i, i))
+            L.append("local mqn%d:%d = ((%s | 0x%x) * zext(msx%d)) | ((%s | 0x%x) * zext(!msx%d && msy%d));" % (i, s, x, F["quiet"], i, y, F["quiet"], i, i))
+            L.append("local mnum%d:%d = (%s * zext(mpx%d || (mny%d && !mnx%d))) | (%s * zext(mpy%d || (mnx%d && !mny%d))) | ((%s %s %s) * zext(meq%d)) | (%s * zext(mnx%d && mny%d));" % (i, s, x, i, i, i, y, i, i, i, x, tie, y, i, x, i, i))
+            L.append("local %s:%d = (mqn%d * zext(msn%d)) | (mnum%d * zext(!msn%d));" % (r, s, i, i, i, i))
+        elif is_cmp:
+            c = base[2:]
+            un = "(nan(%s) || nan(%s))" % (x, y)
+            expr = {"af": "0", "un": un, "eq": "(%s f== %s)" % (x, y), "ueq": "(%s || (%s f== %s))" % (un, x, y),
+                    "lt": "(%s f< %s)" % (x, y), "ult": "(%s || (%s f< %s))" % (un, x, y),
+                    "le": "(%s f<= %s)" % (x, y), "ule": "(%s || (%s f<= %s))" % (un, x, y),
+                    "or": "!%s" % un, "une": "(%s || (%s f!= %s))" % (un, x, y), "ne": "(!%s && (%s f!= %s))" % (un, x, y)}[c]
+            if c == "af":
+                L.append("local %s:%d = 0;" % (r, s))
+            else:
+                L.append("local %s:%d = 0 - zext(%s);" % (r, s, expr))
+        elif base == "fclass":
+            mant = "(%s & 0x%x)" % (x, F["man"])
+            ex = "(%s & 0x%x)" % (x, F["exp"])
+            neg = "((%s & 0x%x) != 0)" % (x, F["sign"])
+            L.append("local mex%d:1 = %s == 0x%x;" % (i, ex, F["exp"]))
+            L.append("local mez%d:1 = %s == 0;" % (i, ex))
+            L.append("local mmz%d:1 = %s == 0;" % (i, mant))
+            L.append("local mng%d:1 = %s;" % (i, neg))
+            L.append("local mqt%d:1 = (%s & 0x%x) != 0;" % (i, x, F["quiet"]))
+            parts = [("mex%d && !mmz%d && !mqt%d" % (i, i, i), 0x1), ("mex%d && !mmz%d && mqt%d" % (i, i, i), 0x2),
+                     ("mex%d && mmz%d && mng%d" % (i, i, i), 0x4), ("!mex%d && !mez%d && mng%d" % (i, i, i), 0x8),
+                     ("mez%d && !mmz%d && mng%d" % (i, i, i), 0x10), ("mez%d && mmz%d && mng%d" % (i, i, i), 0x20),
+                     ("mex%d && mmz%d && !mng%d" % (i, i, i), 0x40), ("!mex%d && !mez%d && !mng%d" % (i, i, i), 0x80),
+                     ("mez%d && !mmz%d && !mng%d" % (i, i, i), 0x100), ("mez%d && mmz%d && !mng%d" % (i, i, i), 0x200)]
+            L.append("local %s:%d = %s;" % (r, s, " | ".join("(0x%x * zext(%s))" % (v, c) for c, v in parts)))
+        elif base in ("ffint_s", "ffint_u"):
+            src = x if base == "ffint_s" else "mzx%d" % i
+            if base == "ffint_u":
+                L.append("local mzx%d:%d = zext(%s);" % (i, 2 * s, x))
+            L.append("local %s:%d = int2float(%s);" % (r, s, src))
+        elif base in ("ftrunc_s", "ftrunc_u", "ftint_s", "ftint_u", "frint"):
+            if base == "frint":
+                L.append("local mbig%d:1 = nan(%s) || (abs(%s) f>= 0x%x:%d);" % (i, x, x, F["mant"], s))
+                L.append("local mxs%d:%d = %s * zext(!mbig%d);" % (i, s, x, i))
+                rv = _rne(L, i, "mxs%d" % i, s, s)
+                L.append("local mrv%d:%d = int2float%s | (%s & 0x%x);" % (i, s, rv, x, F["sign"]))
+                L.append("local %s:%d = (%s * zext(mbig%d)) | (mrv%d * zext(!mbig%d));" % (r, s, x, i, i, i))
+            else:
+                signed = base.endswith("_s")
+                isz = s if signed else 2 * s
+                lim = F["two31"] if signed else F["two32"]
+                L.append("local mnan%d:1 = nan(%s);" % (i, x))
+                L.append("local mhi%d:1 = !mnan%d && (%s f>= 0x%x:%d);" % (i, i, x, lim, s))
+                if signed:
+                    L.append("local mlo%d:1 = !mnan%d && (%s f< 0x%x:%d);" % (i, i, x, F["two31"] | F["sign"], s))
+                else:
+                    L.append("local mlo%d:1 = !mnan%d && (%s f< 0:%d);" % (i, i, x, s))
+                L.append("local mok%d:1 = !(mnan%d || mhi%d || mlo%d);" % (i, i, i, i))
+                L.append("local mxs%d:%d = %s * zext(mok%d);" % (i, s, x, i))
+                if base.startswith("ftrunc"):
+                    L.append("local mti%d:%d = trunc(mxs%d);" % (i, isz, i))
+                    ival = "mti%d" % i
+                else:
+                    ival = _rne(L, i, "mxs%d" % i, s, isz)
+                hi = _smax(s) if signed else _umax(s)
+                lo = _smin(s) if signed else "0"
+                L.append("local mi%d:%d = %s;" % (i, isz, ival))
+                L.append("local %s:%d = (mi%d:%d * zext(mok%d)) | (%s * zext(mhi%d)) | (%s * zext(mlo%d));" % (r, s, i, s, i, hi, i, lo, i))
+        res.append(r)
+    L.append(_pack(res, s))
+    return L
+
+def semantics5(mn, suf, imm):
+    """The fixed-point Q formats: Q15 (.h) and Q31 (.w) multiplies and the Q/float conversions,
+    with the saturation of QEMU's helpers."""
+    base = mn.split(".")[0]
+    if suf not in SIZE:
+        return None
+    s = SIZE[suf]; n = 16 // s; B = 8 * s
+    L = []
+    if base in ("mul_q", "mulr_q", "madd_q", "maddr_q", "msub_q", "msubr_q"):
+        if suf not in ("h", "w"):
+            return None
+        L += _elems("msa_ws", s, n, "ma")
+        L += _elems("msa_wt", s, n, "mb")
+        if base.startswith("madd") or base.startswith("msub"):
+            L += _elems("msa_wd", s, n, "mc")
+        W4 = 4 * s
+        rnd = (1 << (B - 2)) if "r_" in base else 0
+        res = []
+        for i in range(n):
+            x, y, r = "ma%d" % i, "mb%d" % i, "mr%d" % i
+            L.append("local mp%d:%d = sext(%s) * sext(%s);" % (i, W4, x, y))
+            if base.startswith("mul"):
+                L.append("local msat%d:1 = (%s == %s) && (%s == %s);" % (i, x, _smin(s), y, _smin(s)))
+                L.append("local mq%d:%d = (mp%d + %d) s>> %d;" % (i, W4, i, rnd, B - 1))
+                L.append("local %s:%d = (mq%d:%d * zext(!msat%d)) | (%s * zext(msat%d));" % (r, s, i, s, i, _smax(s), i))
+            else:
+                o = "+" if base.startswith("madd") else "-"
+                L.append("local mq%d:%d = ((sext(mc%d) << %d) %s mp%d + %d) s>> %d;" % (i, W4, i, B - 1, o, i, rnd, B - 1))
+                L.append("local mh%d:1 = mq%d s> %s;" % (i, i, _smax(s)))
+                L.append("local ml%d:1 = mq%d s< %s;" % (i, i, _smin(s)))
+                L.append("local %s:%d = (mq%d:%d * zext(!(mh%d || ml%d))) | (%s * zext(mh%d)) | (%s * zext(ml%d));" % (r, s, i, s, i, i, _smax(s), i, _smin(s), i))
+            res.append(r)
+        L.append(_pack(res, s))
+        return L
+    if base in ("ffql", "ffqr"):
+        if suf not in ("w", "d"):
+            return None
+        hs = s // 2
+        off = n if base == "ffql" else 0
+        scale = {4: 0x38000000, 8: 0x3e00000000000000}[s]   # 2^-15, 2^-31
+        res = []
+        for i in range(n):
+            L.append("local mh%d:%d = msa_ws(%d);" % (i, hs, (off + i) * hs))
+            L.append("local mf%d:%d = int2float(mh%d);" % (i, s, i))
+            L.append("local mr%d:%d = mf%d f* 0x%x:%d;" % (i, s, i, scale, s))
+            res.append("mr%d" % i)
+        L.append(_pack(res, s))
+        return L
+    if base == "ftq":
+        if suf == "h":
+            fs_, ns = 4, 4
+        elif suf == "w":
+            fs_, ns = 8, 2
+        else:
+            return None
+        hs = fs_ // 2
+        F = FBITS[fs_]
+        scale = {4: 0x47000000, 8: 0x41e0000000000000}[fs_]   # 2^15, 2^31
+        lim = {4: 0x47000000, 8: 0x41e0000000000000}[fs_]
+        res = []
+        for i in range(2 * ns):
+            src = "msa_wt" if i < ns else "msa_ws"
+            k = i if i < ns else i - ns
+            L.append("local mx%d:%d = %s(%d);" % (i, fs_, src, k * fs_))
+            L.append("local my%d:%d = mx%d f* 0x%x:%d;" % (i, fs_, i, scale, fs_))
+            L.append("local mnan%d:1 = nan(mx%d);" % (i, i))
+            L.append("local mhi%d:1 = !mnan%d && (my%d f>= 0x%x:%d);" % (i, i, i, lim, fs_))
+            L.append("local mlo%d:1 = !mnan%d && (my%d f< 0x%x:%d);" % (i, i, i, lim | F["sign"], fs_))
+            L.append("local mok%d:1 = !(mnan%d || mhi%d || mlo%d);" % (i, i, i, i))
+            L.append("local mys%d:%d = my%d * zext(mok%d);" % (i, fs_, i, i))
+            iv = _rne(L, i, "mys%d" % i, fs_, fs_)
+            L.append("local miv%d:%d = %s;" % (i, fs_, iv))
+            # rounding up to 2^15 (2^31) still saturates
+            L.append("local mov%d:1 = miv%d s> %s;" % (i, i, _smax(hs)))
+            L.append("local mr%d:%d = (miv%d:%d * zext(mok%d && !mov%d)) | (%s * zext(mhi%d || (mok%d && mov%d))) | (%s * zext(mlo%d));" % (i, hs, i, hs, i, i, _smax(hs), i, i, i, _smin(hs), i))
+            res.append("mr%d" % i)
+        L.append(_pack(res, hs))
+        return L
+    return None
+
 out = []
 skipped = []
 for name, fmt, args in encs:
@@ -530,7 +790,7 @@ for name, mn, suf, cons, ops, asm, wd_in, signed_imm, fmt in out:
                 ins.append("msa_" + op)
         if imm:
             ins.append(imm + ":4")
-        sem = semantics(mn, suf, imm) or semantics2(mn, suf, imm) or semantics3(mn, suf, imm)
+        sem = semantics(mn, suf, imm) or semantics2(mn, suf, imm) or semantics3(mn, suf, imm) or semantics4(mn, suf, imm) or semantics5(mn, suf, imm)
         if sem:
             body = sem
         else:

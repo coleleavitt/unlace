@@ -57,6 +57,16 @@ crate::kuna_flag!(
 );
 
 crate::kuna_flag!(
+    /// (kuna `orexit`) Fold adjacent `if`s without else that leave the same way into one
+    /// `if` over `a || b`, a rewrite of the C syntax tree.
+    Orexit,
+    "orexit",
+    "same-exit ifs folded into ||",
+    unset: false,
+    shipped: false
+);
+
+crate::kuna_flag!(
     /// (kuna `ctree`) Print the function body through its C syntax tree. Off by default while
     /// the tree printer is proven to print exactly what the block printer prints.
     Ctree,

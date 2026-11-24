@@ -5789,6 +5789,17 @@ switch-merge or Itanium exception `if`; the fold repeats on the new body.
 left operand in the `ONLY_BRANCH` state, the `&&` token, the right leaf
 comma-separated, each parenthesized.
 
+With `option orexit on` (C output; default off), a pass over every sequence,
+before the `nestedand` pass, folds adjacent `if`s without else into the first
+while they leave the same way (`fold_equal_exits`): if-gotos to one target whose
+`gotonext` goto type matches, or bodies each printing only a `return` of the same
+constant (value and size) or the same explicit HighVariable. Every `if` after the
+first must print nothing before its test, have a single-leaf condition with no
+comment and no label, and every `if` must be in statement position and not a
+switch-merge or Itanium exception `if`. The first `if`'s condition becomes
+`Or(cond, next)` and the folded `if` an empty sequence, which prints nothing.
+`emit_cond_expr` prints `Or` as it prints `And`, with the `||` token.
+
 The walk is `printc/kuna_ctreeprint.rs`. The body prints from the root's
 statements; `emit_block` first asks the tree for the statement built from its
 block, and the walk prints a `BlockGraph` sequence (each statement in its own

@@ -115,6 +115,7 @@ impl PrintC {
                 }
                 true
             }
+            StmtKind::Seq(children) if children.is_empty() => true,
             StmtKind::Stmts { leaf, ops } => match ty {
                 BlockType::Copy => {
                     self.emit_block_copy_in(fd, arch, leaf, Some(ops.as_slice()));
@@ -155,6 +156,8 @@ impl PrintC {
         let ret_ternary = arch.kuna_options.get::<crate::kuna_ctree::Retternary>().0
             && self.out_lang == crate::kuna_lang::OutLang::C;
         let noret_first = arch.kuna_options.get::<crate::kuna_ctree::Noretfirst>().0
+            && self.out_lang == crate::kuna_lang::OutLang::C;
+        let or_exit = arch.kuna_options.get::<crate::kuna_ctree::Orexit>().0
             && self.out_lang == crate::kuna_lang::OutLang::C;
         let nested_and = arch.kuna_options.get::<crate::kuna_ctree::Nestedand>().0
             && self.out_lang == crate::kuna_lang::OutLang::C;
@@ -254,6 +257,11 @@ impl PrintC {
             };
             let expr = tree.add_expr(assign);
             tree.stmt_mut(id).kind = StmtKind::Expr(expr);
+        }
+        if or_exit {
+            for id in ids_rev(self.ctree.as_ref()) {
+                self.fold_equal_exits(fd, id);
+            }
         }
         if nested_and {
             for id in ids_rev(self.ctree.as_ref()) {
@@ -645,13 +653,165 @@ impl PrintC {
         true
     }
 
-    /// The `&&` chain the tree gave the condition of the `BlockIf` `blk` (`nestedand`).
+    /// (kuna `orexit`) In the sequence `id`, fold each run of adjacent `if`s without else that
+    /// leave the same way (the same `goto`/`break`/`continue` target, or a `return` of the same
+    /// constant or variable) into the first: `if (a) goto L; if (b) goto L;` becomes
+    /// `if ((a) || (b)) goto L;`. A folded `if` stays in the tree as an empty sequence, which
+    /// prints nothing.
+    fn fold_equal_exits(&mut self, fd: &Funcdata, id: StmtId) {
+        let Some(list) = self
+            .ctree
+            .as_ref()
+            .and_then(|tree| match &tree.stmt(id).kind {
+                StmtKind::Seq(list) => Some(list.clone()),
+                _ => None,
+            })
+        else {
+            return;
+        };
+        let mut i = 0;
+        while i < list.len() {
+            let mut j = i + 1;
+            while j < list.len() && self.fold_exit_pair(fd, list[i], list[j]) {
+                j += 1;
+            }
+            i = j;
+        }
+    }
+
+    /// Fold the `if` `second` into the `if` `first` (`fold_equal_exits`); true when it did.
+    fn fold_exit_pair(&mut self, fd: &Funcdata, first: StmtId, second: StmtId) -> bool {
+        let Some((blk_a, cond_a, then_a, blk_b, cond_b, then_b)) =
+            self.ctree.as_ref().and_then(|tree| {
+                let a = tree.stmt(first);
+                let b = tree.stmt(second);
+                let StmtKind::If {
+                    cond: cond_a,
+                    then: then_a,
+                    els: None,
+                    ..
+                } = &a.kind
+                else {
+                    return None;
+                };
+                let StmtKind::If {
+                    cond: cond_b,
+                    then: then_b,
+                    els: None,
+                    ..
+                } = &b.kind
+                else {
+                    return None;
+                };
+                let ExprKind::Branch(cond_b) = tree.expr(*cond_b).kind else {
+                    return None;
+                };
+                if !is_and_chain(tree, *cond_a)
+                    || tree.node_for(a.origin?) != Some(first)
+                    || tree.node_for(b.origin?) != Some(second)
+                {
+                    return None;
+                }
+                Some((a.origin?, *cond_a, *then_a, b.origin?, cond_b, *then_b))
+            })
+        else {
+            return false;
+        };
+        let sb = fd.sblocks_ref();
+        for blk in [blk_a, blk_b] {
+            if sb.block(blk).get_type() != BlockType::If
+                || self.switch_plans.ifs.contains_key(&blk)
+                || self.is_eh_if(fd, blk)
+                || !in_statement_position(fd, blk)
+            {
+                return false;
+            }
+        }
+        if sb.block(blk_b).get_block(0) != cond_b
+            || sb.block(cond_b).get_type() != BlockType::Copy
+            || !self.header_prints_nothing(fd, cond_b)
+            || (sb.block(cond_b).is_unstructured_target()
+                && !self.goto_rewrites.labels.contains(&cond_b))
+        {
+            return false;
+        }
+        let (block_a, block_b) = (sb.block(blk_a), sb.block(blk_b));
+        let same_exit = match (block_a.get_if_goto_target(), block_b.get_if_goto_target()) {
+            (Some(target_a), Some(target_b)) => {
+                target_a == target_b
+                    && self
+                        .goto_rewrites
+                        .gototype(blk_a, block_a.get_if_goto_type())
+                        == self
+                            .goto_rewrites
+                            .gototype(blk_b, block_b.get_if_goto_type())
+            }
+            (None, None) if block_a.get_size() == 2 && block_b.get_size() == 2 => {
+                let leaves = self
+                    .ctree
+                    .as_ref()
+                    .and_then(|tree| Some((tree.stmt(then_a).origin?, tree.stmt(then_b).origin?)));
+                match leaves {
+                    Some((leaf_a, leaf_b)) => self.same_return(fd, leaf_a, leaf_b),
+                    None => false,
+                }
+            }
+            _ => false,
+        };
+        if !same_exit {
+            return false;
+        }
+        let Some(under) = sb.block(cond_b).get_copy() else {
+            return false;
+        };
+        let bb_index = fd.bblocks_ref().block(under).get_index();
+        self.commsorter.setup_block_list(bb_index);
+        self.commsorter.setup_op_list(None);
+        if self.commsorter.has_next() {
+            return false;
+        }
+        let Some(tree) = self.ctree.as_mut() else {
+            return false;
+        };
+        let right = tree.add_expr(ExprKind::Branch(cond_b));
+        let chain = tree.add_expr(ExprKind::Or(cond_a, right));
+        if let StmtKind::If { cond, .. } = &mut tree.stmt_mut(first).kind {
+            *cond = chain;
+        }
+        tree.stmt_mut(second).kind = StmtKind::Seq(Vec::new());
+        true
+    }
+
+    /// Do the leaves `a` and `b` each print only a `return` of the same value (one constant,
+    /// or one explicit variable)?
+    fn same_return(&mut self, fd: &Funcdata, a: BlockId, b: BlockId) -> bool {
+        let (Some((_, va)), Some((_, vb))) = (self.single_return(fd, a), self.single_return(fd, b))
+        else {
+            return false;
+        };
+        let (Some(va), Some(vb)) = (fd.vbank().get(va), fd.vbank().get(vb)) else {
+            return false;
+        };
+        if va.is_constant() || vb.is_constant() {
+            return va.is_constant()
+                && vb.is_constant()
+                && va.get_offset() == vb.get_offset()
+                && va.get_size() == vb.get_size();
+        }
+        va.is_explicit()
+            && vb.is_explicit()
+            && va.get_high().is_some()
+            && va.get_high() == vb.get_high()
+    }
+
+    /// The `&&`/`||` chain the tree gave the condition of the `BlockIf` `blk` (`nestedand`,
+    /// `orexit`).
     pub(super) fn and_condition(&self, blk: BlockId) -> Option<crate::kuna_ctree::ExprId> {
         let tree = self.ctree.as_ref()?;
         let StmtKind::If { cond, .. } = &tree.stmt(tree.stmt_for(blk)?).kind else {
             return None;
         };
-        matches!(tree.expr(*cond).kind, ExprKind::And(..)).then_some(*cond)
+        matches!(tree.expr(*cond).kind, ExprKind::And(..) | ExprKind::Or(..)).then_some(*cond)
     }
 }
 
@@ -686,12 +846,12 @@ fn ids_rev(tree: Option<&crate::kuna_ctree::CTree>) -> Vec<StmtId> {
     ids
 }
 
-/// A condition `emit_cond_expr` prints: a `Branch`, or an `And` whose left operand is one of
-/// these and whose right operand is a `Branch`.
+/// A condition `emit_cond_expr` prints: a `Branch`, or an `And` or `Or` whose left operand is
+/// one of these and whose right operand is a `Branch`.
 fn is_and_chain(tree: &crate::kuna_ctree::CTree, expr: crate::kuna_ctree::ExprId) -> bool {
     match tree.expr(expr).kind {
         ExprKind::Branch(_) => true,
-        ExprKind::And(left, right) => {
+        ExprKind::And(left, right) | ExprKind::Or(left, right) => {
             matches!(tree.expr(right).kind, ExprKind::Branch(_)) && is_and_chain(tree, left)
         }
         _ => false,

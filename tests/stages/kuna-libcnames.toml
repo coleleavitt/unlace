@@ -48,6 +48,7 @@ commands = [
     'load file crates/unlace-analysis/tests/fixtures/libcnames_x86_64',
     'read symbols',
     'option condcallpush off',
+    'option boolreturn off',
     'option helperroles off',
     'option libcnames off',
     'lo fu copy_file',

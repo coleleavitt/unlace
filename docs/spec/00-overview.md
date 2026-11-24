@@ -3277,6 +3277,9 @@ runtime `on_or_off` parser.
 | `KUNA_IFUNCFPRET` | `ifuncfpret` | x86-64 IFUNC (`R_X86_64_IRELATIVE`) stub naming, `crates/unlace-middle/src/p0_knowledge/kuna_ifuncfpret.rs (IFUNCFPRET_ENV)` |
 | `KUNA_PPCAPU` | `ppcapu` | PowerPC32 e500 selection from an SPE APU note, `crates/unlace-middle/src/p0_knowledge/kuna_ppcapu.rs (PPCAPU_ENV)` |
 | `KUNA_CALLTARGETTYPE` | `calltargettype` | DWARF `DW_TAG_subroutine_type` import as a function prototype (on unless the option is set off, and never for Rust output), `crates/unlace-bandb/src/p5_types/kuna_calltargettype.rs (CALLTARGETTYPE_ENV)` |
+| `KUNA_CODESTRINGS` | `codestrings` | the code-section string rule of the string-literal pass, `crates/unlace-middle/src/p0_knowledge/kuna_loadoptions.rs (CODESTRINGS_ENV)` |
+| `KUNA_NAMELADDER` | `nameladder` | the undecorated-name retries of the prototype and no-return passes, `crates/unlace-middle/src/p0_knowledge/kuna_loadoptions.rs (NAMELADDER_ENV)` |
+| `KUNA_SWIFTTYPES` | `swifttypes` | whether the Objective-C pass leaves a Swift class's layout to the Swift pass, `crates/unlace-middle/src/p0_knowledge/kuna_loadoptions.rs (SWIFTTYPES_ENV)` |
 | `KUNA_MACHO_SLICE` | `--slice` | Mach-O fat-binary slice peel, `crates/unlace-console/src/engine.rs (select_macho_slice)` |
 | `KUNA_MACHO_ARM64E` | `macho-arm64e` | arm64e spec selection (on by default), `crates/unlace-middle/src/p0_knowledge/kuna_macho_arm64e.rs (MACHO_ARM64E_ENV)` |
 | `KUNA_ARM_ISA` | `--isa` | explicit ARM/Thumb `TMode` selection over the mapped code ranges, `crates/unlace-console/src/engine.rs (ARM_ISA_ENV)` |

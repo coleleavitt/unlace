@@ -119,7 +119,7 @@ afterwards. The register file is unchanged.
   4000 encodings on sparc64: 10650 matches; seed 6, 3000 on sparc: 8251; no mismatches.
 - PA-RISC 1.1 (`--arch hppa`, `pa-risc:BE:32:default`, `--oracle qemu` with `qemu-hppa` from
   QEMU 8.2). Capstone 5 has no PA-RISC, so candidates are decoded by a multi-target binutils
-  `objdump` (`ObjdumpDis`/`ObjdumpArch`: `$DIFFFUZZ_OBJDUMP`, default
+  `objdump` (`BinutilsDis`/`ObjdumpArch`: `$DIFFFUZZ_OBJDUMP`, default
   `~/.local/share/difffuzz-binutils/bin/objdump`, built from binutils 2.45 with
   `--enable-targets=all`), a batch of 4096 encodings per objdump run. binutils also decodes the
   PA 2.0 forms, which are dropped. SAR and the carry bit go in and out through `mtsar`/`mfctl`
@@ -153,6 +153,28 @@ afterwards. The register file is unchanged.
   instructions, and `l.extws`/`l.extwz` (QEMU lacks them). QEMU 8.2 takes `l.mulu`'s carry from
   a signed multiply, so CY is not compared there. Seed 6, 3000 encodings: 8803 matches, no
   mismatches; the SLEIGH lifts needed no fix.
+- MicroBlaze (`--arch microblaze` / `microblazeel`, `MicroBlaze:BE:32:default` /
+  `MicroBlaze:LE:32:default`, `--oracle qemu` with `qemu-microblaze` / `qemu-microblazeel` from QEMU
+  8.2), decoded by the binutils `objdump` (`ObjdumpArch`). The carry goes in with `addi -1` and
+  back with `addc`; `imm` + `braid` reaches the instruction and its delay slot restores the table
+  register. The generator draws the register (type A) forms with their reserved bits clear, and
+  encodings with reserved bits set are not generated (binutils decodes them anyway). Not
+  generated: branches, returns, traps, special-register moves, stream (FSL), cache,
+  exclusive-access, `imm` prefixes, FP and `pcmpbc` (QEMU lacks it). Fixed in `microblaze.sinc`
+  after the first run: the reversed byte and halfword accesses (`lbur`, `lhur`, `sbr`, `shr`)
+  also flip the low address bits (address ^ 3, ^ 2), as QEMU reads them. Seeds 4 and 5, 3000 encodings each (big and
+  little endian): 8497 and 8449 matches, no mismatches.
+- Xtensa (`--arch xtensa`, `Xtensa:LE:32:default`, `--oracle qemu` with `qemu-xtensa` from QEMU 8.2, its
+  default dc232b core), decoded by the binutils `objdump` through `XtensaDis`: a candidate is 2 or 3
+  bytes (op0 8..13 is a narrow instruction) and sits in an 8-byte slot padded with NOP/NOP.N so
+  every slot decodes in step. a0..a15 and SAR are compared; the table register is loaded last and
+  a J reaches the instruction. The generator favours the RRR and LSAI formats; FLIX bundles are
+  not generated. Not generated: branches, calls, window, loop, system, cache/TLB, atomic, MAC16,
+  boolean and FP instructions, L32R, MULUH/MULSH (dc232b has no MUL32_HIGH) and SLLI by 32 (its
+  reserved encoded amount 0). Fixed in `xtensaInstructions.sinc` after the first run: NSA counted the
+  leading zeros of the complement, so it returned 0 for every non-negative value; it is now the
+  number of leading sign bits less one (31 for 0 and -1). Seeds 4 and 5, 3000 encodings each:
+  7040 and 7164 matches, no mismatches.
 - PowerPC has no QEMU harness. `qemu-ppc64` runs in 64-bit mode (MSR.SF is not user-writable),
   where record forms set CR0 from the 64-bit result, so it is not an exact reference for
   32-bit PowerPC.
@@ -285,6 +307,20 @@ First run (unlace-2feb8da847, seed 1, 200 per configuration): every available co
 `ok`. Unavailable were `ppc`, `ppc64le`, `ppc64le-isa` and `s390x` on QEMU (no
 `qemu-ppc`/`qemu-ppc64le`/`qemu-s390x` on this host). `riscv64v` had 66 findings, all in its four
 documented classes.
+
+`tools/difffuzz/sweep_ci.sh <unlace>` is the cron/CI entry point. It runs the whole sweep with
+the venv's python (`DIFFFUZZ_PYTHON`), the QEMU directories
+`~/.local/share/qemu-8.2-user:~/.local/share/qemu-10.2-user` (`DIFFFUZZ_QEMU_DIR`), rustup's
+rustc-master llvm-objdump for RVV (`DIFFFUZZ_OBJDUMP`) and
+`~/.local/share/difffuzz-tools/loongarch64-linux-gnu-objdump` (`DIFFFUZZ_LA_OBJDUMP`). It goes
+through `kuna-slot` when that exists, with core dumps off, and writes the summary to
+`~/.local/share/difffuzz-sweeps/sweep-<UTC time>-<binary>.json` (`DIFFFUZZ_SWEEP_OUT`). Its
+exit status is sweep.py's. LoongArch without an objdump is `unavailable`.
+
+Full sweep (unlace-5dac424f4f, 37 configurations, all oracles installed): exit 0, every
+configuration `ok`, no mismatches beyond riscv64v's 15 known ones. The `decode` findings (s390x
+97, ppc 25, tricore 12, x86-64-native 7, a few elsewhere) are spec gaps or encodings Capstone
+accepts that the ISA leaves invalid. They are listed in #862.
 
 ## How a case runs
 
@@ -468,6 +504,31 @@ scalar float arithmetic, integer and flag semantics are compared.
 
 `tools/x86_avx512_sweep.py --enc EncVEX` / `--enc EncNormal` (with VEX or legacy `--predicates`) is the
 matching decode check against `llvm-objdump` for those encodings.
+
+### 32-bit x86 (`--arch x86-32-native`) and real mode (`--arch x86-16`)
+
+`--arch x86-32-native --oracle native` builds an i386 static ELF (`X86_32NativeHarness`) the kernel
+runs under its IA-32 emulation: EAX-EDI, EFLAGS, XMM0-XMM7 and the six segment registers are
+compared, the p-code state starting from the selectors a 32-bit process has (CS 0x23, DS/ES/SS
+0x2B, FS/GS 0) with IF set. The epilogue stores through SS until it has reloaded DS and ES, so an
+instruction that loads a null DS still reports. The generator favours the forms 64-bit mode lacks:
+BCD adjusts, PUSHA/POPA, BOUND, PUSH/POP and MOV of segment registers, LDS/LES/LSS/LFS/LGS, far
+JMP/CALL to selector 0x23 and RETF, string instructions, 0x66/0x67 prefixes; registers now and then
+hold a valid selector. Branches and calls run (a taken branch lands on a second epilogue).
+
+`--arch x86-16` lifts with `x86:LE:16:Real Mode` and runs Unicorn's 16-bit mode (QEMU's real mode) with
+random DS/ES/SS/FS/GS and CS 0. `segment(selector, offset)` (user operation 0) is evaluated as
+selector*16 + offset here and as the offset in the flat 32-bit mode. Encodings this CPU raises #UD
+for although Capstone and LLVM decode them (control registers that do not exist, VEX after a
+66/F2/F3 prefix, MOVNTI with 66/F2/F3, 66-prefixed RCPPS/RSQRTPS/MOVLHPS/MOVHLPS), AMD-only SSE4a
+and 3DNow are not generated.
+
+```sh
+~/.local/share/difffuzz-venv/bin/python tools/difffuzz/difffuzz.py --arch x86-32-native --oracle native \
+    --count 2500 --seed 6 --unlace <unlace> --sleighpath specs
+~/.local/share/difffuzz-venv/bin/python tools/difffuzz/difffuzz.py --arch x86-16 \
+    --count 1500 --seed 4 --unlace <unlace> --sleighpath specs
+```
 
 ### x87 (`--arch x86-64-x87`)
 

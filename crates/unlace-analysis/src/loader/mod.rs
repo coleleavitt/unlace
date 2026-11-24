@@ -36,6 +36,7 @@ pub(crate) mod kuna_elfmachinetarget;
 pub(crate) mod kuna_mipstarget;
 pub(crate) mod kuna_ppc64elfv2target;
 pub(crate) mod kuna_ppcaputarget;
+pub(crate) mod kuna_tilocallabels;
 // (kuna `retroimage`) PS-X EXE, N64 ROM, a.out, Amiga hunk and PEF containers.
 pub mod kuna_retroimage;
 // (kuna) WebAssembly bodies lowered from stack form to register form.
@@ -84,6 +85,7 @@ mod kuna_commonalloc;
 mod kuna_mipsreloc;
 mod kuna_s390xplt;
 mod kuna_sparc_relcode;
+mod kuna_x86_relcode;
 // (kuna) `relocrebase`: rebase the load-time analysis facts of a relocatable
 // object into the loaded image's address space (GH-289).
 pub mod kuna_objectview;

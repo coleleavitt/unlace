@@ -58,6 +58,23 @@ Checked: every one of the 213 encodings, with random operand values over five pa
 disassembles to its own mnemonic and length; the CLI test images (base instructions from
 `llvm-mc`, EE words encoded from the TableGen fields) decompile to the expected loop.
 
+## Floating-point divide and square-root steps (local change)
+
+The Xtensa floating-point option of the ESP32, the ESP32-S3 and the HiFi cores with an FPU has
+operations the base module lacked:
+- the approximation and step operations `div0.s`, `divn.s`, `recip0.s`, `sqrt0.s`, `rsqrt0.s`,
+  `nexp01.s`, `mksadj.s`, `mkdadj.s`, `addexp.s`, `addexpm.s` and `const.s`, which lift to named
+  p-code ops;
+- `maddn.s`, a fused multiply-add.
+
+Before this, ROM `__divsf3` stopped at its first `div0.s` as bad instruction data.
+
+The encodings are from the HiFi cores' `xtensa-modules.c` (below) and match their objdump. They
+sit with the other FP constructors under `@ifndef XTENSA_NO_FP`.
+
+`ball`, `bany`, `bnall` and `bnone` print their operands in the ISA order (`bany a10, a4, target`),
+and `movi.n` prints its signed immediate (`-1`, not `0xff`).
+
 ## Cadence HiFi DSP cores (generated)
 
 Each HiFi language is one Cadence core configuration. The encodings are per core, so each needs its
@@ -68,9 +85,9 @@ under the Cadence permission notice that heads every generated file.
 
 | language | core | overlay | FLIX formats | constructors |
 |---|---|---|---|---|
-| `Xtensa:LE:32:hifi1_rt700` | HiFi 1, NXP i.MX RT700 (LX7) | `xtensa_nxp_rt700_hifi1` | 4 | 1826 |
-| `Xtensa:LE:32:hifi3_tgl` | HiFi 3, Intel Tiger Lake audio DSP (cAVS 2.5, LX6) | `xtensa_intel_tgl_adsp` | 4 | 2310 |
-| `Xtensa:LE:32:hifi4_rt700` | HiFi 4, NXP i.MX RT700 (LX7) | `xtensa_nxp_rt700_hifi4` | 7 | 3662 |
+| `Xtensa:LE:32:hifi1_rt700` | HiFi 1, NXP i.MX RT700 (LX7) | `xtensa_nxp_rt700_hifi1` | 4 | 1829 |
+| `Xtensa:LE:32:hifi3_tgl` | HiFi 3, Intel Tiger Lake audio DSP (cAVS 2.5, LX6) | `xtensa_intel_tgl_adsp` | 4 | 2298 |
+| `Xtensa:LE:32:hifi4_rt700` | HiFi 4, NXP i.MX RT700 (LX7) | `xtensa_nxp_rt700_hifi4` | 7 | 3684 |
 | `Xtensa:LE:32:hifi5_mt8196` | HiFi 5, MediaTek MT8196 (LX7) | `xtensa_mtk_mt8196_adsp` | 10 | 8383 |
 
 How the generator gets its input: `tools/xtensa_hifi_probe.c`, built against binutils 2.45 with the
@@ -116,9 +133,9 @@ Checked: `tools/xtensa_hifi_vectors.c` emits one bundle per (format, slot, opcod
 in the other slots, at two sets of operand values. In both sets, every vector a generated
 constructor decodes disassembles like that core's overlay `xtensa-elf-objdump`, in mnemonic,
 operands and length:
-- HiFi 1: 1,826 of 1,826
-- HiFi 3: 2,310 of 2,310
-- HiFi 4: 3,662 of 3,662
+- HiFi 1: 1,829 of 1,829
+- HiFi 3: 2,298 of 2,298
+- HiFi 4: 3,684 of 3,684
 - HiFi 5: 8,383 of 8,383. The one textual difference is the literal value objdump prints after an
   `l32r` target.
 

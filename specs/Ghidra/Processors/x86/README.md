@@ -279,3 +279,36 @@ Checked: x87 difffuzz, 9000 encodings over four seeds, has no mismatch left beyo
 classes (C1 as the round-up bit, the double-precision constants, FPREM's partial remainder);
 `decompile-all` of libm.so.6 differs only in functions that read the status word or use `FXAM`.
 Left: `FIST`/`FISTP`, `FBLD`/`FBSTP`, `FFREE` and the transcendentals stay user operations.
+
+## 32-bit and real-mode legacy forms (`ia.sinc`, `lockable.sinc`, `x86-16.slaspec`)
+
+`tools/difffuzz` now runs 32-bit x86 natively (`--arch x86-32-native --oracle native`, an i386 static
+ELF under the kernel's IA-32 emulation, segment registers compared) and the real-mode language
+against Unicorn's 16-bit mode (`--arch x86-16`, random segment registers). Both generators lean on
+the legacy-only forms (BCD, PUSHA/POPA, BOUND, segment moves and loads, far JMP/CALL/RET, 66/67
+prefixes). They found:
+
+- A 0x67 prefix also switched pushes, pops, calls, returns, ENTER/LEAVE and PUSHA/POPA to the
+  other stack width (SP for ESP); the stack width is the stack segment's. Constructors that test
+  the stack width now use `$(STACK16)`/`$(STACK32)`, the address size with a new `prefix_67` context
+  bit undone. A repeated 0x67 toggled the address size back; it now changes nothing.
+- AAA/AAS adjusted AL and AH separately (AAA must add 0x106 to AX, AAS subtract 6 from AX and 1
+  from AH); AAD/AAM set SF/ZF/PF from AX instead of AL.
+- PUSH and POP of a segment register ignored a 0x66 prefix (a 16-bit push in 32-bit code); a 32-bit
+  far CALL pushed CS as a word into a doubleword slot instead of zero-extended; PUSHF/PUSHFD stored
+  EFLAGS bit 1 as 0.
+- XADD with memory wrote its register before the sum, so a register that is also in the address
+  (`xadd [ebx], bh`) moved the store.
+- In 16-bit code: 32-bit addressing (0x67) and the ESI/EDI string forms and XLAT dropped the
+  segment (now selector*16 + offset in real mode, selector*0x10000 in protected mode, SS for an
+  EBP/ESP base); an indirect far CALL/JMP through memory ignored the segment override (CALL) or
+  the loaded selector (JMP); RETF imm16 returned to IP without CS; ENTER read outer frame pointers
+  through the override segment instead of SS and ignored 0x66 for levels 0 and 1; LZCNT/TZCNT r16
+  needed a 0x66 prefix; MOVNTI needed a 32-bit operand size (it ignores it; 66/F2/F3 are #UD).
+
+Checked: 32-bit native difffuzz (7000 encodings over four seeds) and real-mode difffuzz (3200
+over three seeds) end with no mismatch after the fixes; the x86-64, x86-64-native and x87 configurations are
+unchanged; libc.so.6 disassembles the same, `decompile-all /usr/bin/ls` and of a 32-bit Lua build are
+byte-identical. Not compared: implementation-defined pushes of a segment register with a 32-bit
+operand in real mode, 32-bit operand near/far branches in real mode (an IP above 0xFFFF faults),
+and QEMU's DAS/DAA CF (it differs from hardware, which matches SLEIGH).

@@ -1046,6 +1046,12 @@ fn restore_slot(
     let r = regs.exact(out?)?;
     let i = CALLEE_SAVED.iter().position(|&c| c == r)?;
     let slot = state.4[i]?;
+    trace(|| {
+        format!(
+            "msvc: pop {} at {at:?}, esp {:?}, saved slot {slot:#x}",
+            GPRS[r], state.0[SP]
+        )
+    });
     let Some(Val::Stack { lo, hi, own: false }) = state.0[SP] else {
         return None;
     };

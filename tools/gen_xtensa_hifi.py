@@ -354,6 +354,9 @@ def main():
     for name, rprefix, size, num in core_regfiles(isa):
         REG[name] = (rprefix, size)
     base_sinc = open(f"{outdir}/xtensaInstructions.sinc").read()
+    if not any(r["name"] == "FR" for r in isa["regfiles"]):
+        # an FPU-less core defines XTENSA_NO_FP, which drops the base FP constructors
+        base_sinc = re.sub(r"^@ifndef XTENSA_NO_FP\n.*?^@endif\n", "", base_sinc, flags=re.M | re.S)
     base = set(re.findall(r"^:([a-z0-9_.]+)", base_sinc, re.M))
     g = Gen(isa, base)
     modules_c = open(modules).read()

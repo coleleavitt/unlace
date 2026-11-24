@@ -216,9 +216,8 @@ movi_si16: tmp is op_st_i8 & ri8_i8 [
 
 # An “asymmetric” immediate from -32..95, used by MOVI.N.
 movin_si8: tmp is n_op_s_0_3 & ri6_si6_0_4 [
-    tmp = ((((n_op_s_0_3 & 7) << 4) | (ri6_si6_0_4 & 15)) |
-          ((((n_op_s_0_3 >> 2) & 1) & ((n_op_s_0_3 >> 1) & 1)) << 7));
-] { export *[const]:1 tmp; }
+    tmp = (((((n_op_s_0_3 & 7) << 4) | (ri6_si6_0_4 & 15)) + 32) & 127) - 32;
+] { export *[const]:4 tmp; }
 
 # Immediates shifted or with offset.
 ri8_si8_sh8:  tmp is ri8_si8     [ tmp = ri8_si8  << 8; ] { export *[const]:4 tmp; }

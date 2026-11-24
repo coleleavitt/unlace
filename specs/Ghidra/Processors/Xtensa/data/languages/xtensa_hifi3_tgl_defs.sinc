@@ -156,8 +156,6 @@ define token h8t0(64)
   h8t0_9_14 = (9,14)
 ;
 
-define pcodeop hifi_addexp_s;
-define pcodeop hifi_addexpm_s;
 define pcodeop hifi_ae_abs16s;
 define pcodeop hifi_ae_abs24s;
 define pcodeop hifi_ae_abs32;
@@ -1154,17 +1152,7 @@ define pcodeop hifi_bnei_w18;
 define pcodeop hifi_bnez_w18;
 define pcodeop hifi_bnone_w18;
 define pcodeop hifi_circular_add;
-define pcodeop hifi_const_s;
-define pcodeop hifi_div0_s;
-define pcodeop hifi_divn_s;
 define pcodeop hifi_diwbui_p;
 define pcodeop hifi_lddr32_p;
-define pcodeop hifi_maddn_s;
-define pcodeop hifi_mkdadj_s;
-define pcodeop hifi_mksadj_s;
-define pcodeop hifi_nexp01_s;
-define pcodeop hifi_recip0_s;
-define pcodeop hifi_rsqrt0_s;
 define pcodeop hifi_s32nb;
 define pcodeop hifi_sddr32_p;
-define pcodeop hifi_sqrt0_s;

@@ -1063,6 +1063,12 @@ impl ObjectLoadImage {
             if sym.is_undefined() {
                 continue; // UND / import placeholder, not a real code address
             }
+            if sym
+                .name_bytes()
+                .is_ok_and(crate::loader::kuna_tilocallabels::is_ti_local_label)
+            {
+                continue;
+            }
             let addr = elfv1.code_address(sym.address());
             if outside_code(addr) {
                 continue;

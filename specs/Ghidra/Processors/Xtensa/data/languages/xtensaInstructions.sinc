@@ -118,13 +118,13 @@
 }
 
 # BALL - Branch if All Bits Set (RRI8), pg. 264.
-:ball ri8_srel, as, at is ri8_srel & ar = 0b0100 & as & at & op0 = 0b0111 {
+:ball as, at, ri8_srel is ri8_srel & ar = 0b0100 & as & at & op0 = 0b0111 {
 	local test:4 = ~as & at;
 	if (test == 0)	goto ri8_srel;
 }
 
 # BANY - Branch if Any Bit Set (RRI8), pg. 265.
-:bany ri8_srel, as, at, is ri8_srel & ar = 0b1000 & as & at & op0 = 0b0111 {
+:bany as, at, ri8_srel is ri8_srel & ar = 0b1000 & as & at & op0 = 0b0111 {
 	local test:4 = as & at;
 	if (test != 0)	goto ri8_srel;
 }
@@ -264,7 +264,7 @@ macro extract_bit(bit, result) {
 }
 
 # BNALL - Branch if Not-All Bits Set (RRI8), pg. 287.
-:bnall ri8_srel, as, at is ri8_srel & ar = 0b1100 & as & at & op0 = 0b0111 {
+:bnall as, at, ri8_srel is ri8_srel & ar = 0b1100 & as & at & op0 = 0b0111 {
     if ((~as & at) != 0)
         goto ri8_srel;
 }
@@ -294,7 +294,7 @@ macro extract_bit(bit, result) {
 }
 
 # BNONE - Branch if No Bit Set (RRI8), pg. 292.
-:bnone ri8_srel, as, at, is ri8_srel & ar = 0 & as & at & op0 = 0b0111 {
+:bnone as, at, ri8_srel is ri8_srel & ar = 0 & as & at & op0 = 0b0111 {
     if ((as & at) == 0)
         goto ri8_srel;
 }
@@ -804,8 +804,7 @@ macro extract_bit(bit, result) {
 
 # MOVI.N - Narrow Move Immediate (RI7), pg. 422.
 :movi.n n_as, movin_si8 is movin_si8 & n_as & n_op_s_3 = 0 & n_op0 = 0b1100 {
-    local val:4 = sext(movin_si8);
-    n_as = val;
+    n_as = movin_si8;
 }
 
 # MOVLTZ - Move if Less Than Zero (RRR), pg. 423.
@@ -926,7 +925,9 @@ macro extract_bit(bit, result) {
 
 # NSA - Normalization Shift Amount (RRR), pg. 461.
 :nsa at, as is op2 = 0b0100 & op1 = 0 & ar = 0b1110 & as & at & op0 = 0 {
-    at = lzcount(~as);
+    # leading bits equal to the sign bit, less one: 31 for 0 and -1
+    local v:4 = as ^ (as s>> 31);
+    at = lzcount(v) - 1;
 }
 
 # NSAU - Normalization Shift Amount Unsigned (RRR), pg. 462. (Count leading zeros)
@@ -2002,3 +2003,32 @@ LoopOffset8: loc is ri8_i8 [ loc = inst_start + ri8_i8 + 4; ] { export *:4 loc; 
 	LEND = &LoopOffset8;
 	if (as == 0) goto LoopOffset8;
 }
+
+# Divide and square-root steps of the Xtensa floating-point option (ESP32, ESP32-S3 and the
+# HiFi cores with an FPU); encodings from the cores' xtensa-modules.c. The approximation and
+# Newton-step operations are named ops; MADDN.S is the fused multiply-add they iterate with.
+@ifndef XTENSA_NO_FP
+define pcodeop div0_s;
+define pcodeop divn_s;
+define pcodeop recip0_s;
+define pcodeop sqrt0_s;
+define pcodeop rsqrt0_s;
+define pcodeop nexp01_s;
+define pcodeop mksadj_s;
+define pcodeop mkdadj_s;
+define pcodeop addexp_s;
+define pcodeop addexpm_s;
+define pcodeop const_s;
+:div0.s fr, fs is op2 = 0b1111 & op1 = 0b1010 & fr & fs & at = 0b0111 & op0 = 0 { fr = div0_s(fs); }
+:recip0.s fr, fs is op2 = 0b1111 & op1 = 0b1010 & fr & fs & at = 0b1000 & op0 = 0 { fr = recip0_s(fs); }
+:sqrt0.s fr, fs is op2 = 0b1111 & op1 = 0b1010 & fr & fs & at = 0b1001 & op0 = 0 { fr = sqrt0_s(fs); }
+:rsqrt0.s fr, fs is op2 = 0b1111 & op1 = 0b1010 & fr & fs & at = 0b1010 & op0 = 0 { fr = rsqrt0_s(fs); }
+:nexp01.s fr, fs is op2 = 0b1111 & op1 = 0b1010 & fr & fs & at = 0b1011 & op0 = 0 { fr = nexp01_s(fs); }
+:mksadj.s fr, fs is op2 = 0b1111 & op1 = 0b1010 & fr & fs & at = 0b1100 & op0 = 0 { fr = mksadj_s(fs); }
+:mkdadj.s fr, fs is op2 = 0b1111 & op1 = 0b1010 & fr & fs & at = 0b1101 & op0 = 0 { fr = mkdadj_s(fr, fs); }
+:addexp.s fr, fs is op2 = 0b1111 & op1 = 0b1010 & fr & fs & at = 0b1110 & op0 = 0 { fr = addexp_s(fr, fs); }
+:addexpm.s fr, fs is op2 = 0b1111 & op1 = 0b1010 & fr & fs & at = 0b1111 & op0 = 0 { fr = addexpm_s(fr, fs); }
+:const.s fr, op_s is op2 = 0b1111 & op1 = 0b1010 & fr & op_s & at = 0b0011 & op0 = 0 { local k:1 = op_s; fr = const_s(k); }
+:maddn.s fr, fs, ft is op2 = 0b0110 & op1 = 0b1010 & fr & fs & ft & op0 = 0 { fr = fr f+ (fs f* ft); }
+:divn.s fr, fs, ft is op2 = 0b0111 & op1 = 0b1010 & fr & fs & ft & op0 = 0 { fr = divn_s(fr, fs, ft); }
+@endif

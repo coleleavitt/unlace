@@ -14,6 +14,7 @@
 //!   GFX9.4 (gfx940-gfx950), GCN 1-4 and GFX12 have no language.
 //! - `EM_68K`: `68000:BE:32:Coldfire` for a ColdFire ISA in `EF_M68K_CF_MASK`,
 //!   `68000:BE:32:default` for `EF_M68K_M68000`, and `68000:BE:32:MC68020` otherwise.
+//! - `EM_TI_C2000`: `tms320c28:LE:32:default` (cl2000 EABI objects).
 //! - `EM_OPENRISC`, `EM_XTENSA`: the language of the header's byte order.
 //! - `EM_CSKY`: ABIv1 (`e_flags` bits 28-31 = 1) or ABIv2, in the header's byte order.
 //! - `EM_CUDA`: the SASS language of the `sm_NN` in `e_flags` (bits 8-15 from ELF ABI
@@ -32,6 +33,7 @@ const EM_OPENRISC: u16 = 92;
 const EM_XTENSA: u16 = 94;
 const EM_CUDA: u16 = 190;
 const EM_CSKY: u16 = 252;
+const EM_TI_C2000: u16 = 141;
 
 const GFX9: &[u32] = &[0x2c, 0x2d, 0x2e, 0x2f, 0x30, 0x31, 0x32, 0x3f, 0x51];
 const GFX10: &[u32] = &[
@@ -55,6 +57,7 @@ pub(crate) fn language_ids() -> impl Iterator<Item = String> {
         "AMDGPU:LE:64:GFX10:default",
         "AMDGPU:LE:64:GFX11:default",
         "68000:BE:32:default:default",
+        "tms320c28:LE:32:default:default",
         "68000:BE:32:MC68020:default",
         "68000:BE:32:Coldfire:default",
         "OpenRISC:LE:32:default:default",
@@ -126,6 +129,7 @@ fn select_by_header(machine: u16, flags: u32, big: bool, abi: u8) -> Option<&'st
                 "68000:BE:32:MC68020:default"
             }
         }
+        EM_TI_C2000 => "tms320c28:LE:32:default:default",
         EM_OPENRISC if big => "OpenRISC:BE:32:default:default",
         EM_OPENRISC => "OpenRISC:LE:32:default:default",
         EM_XTENSA if big => "Xtensa:BE:32:default:default",
@@ -210,6 +214,10 @@ mod tests {
         assert_eq!(
             select_by_header(4, 0x8065, true, 0),
             Some("68000:BE:32:Coldfire:default")
+        );
+        assert_eq!(
+            select_by_header(141, 0, false, 0),
+            Some("tms320c28:LE:32:default:default")
         );
         assert_eq!(
             select_by_header(92, 0, true, 0),

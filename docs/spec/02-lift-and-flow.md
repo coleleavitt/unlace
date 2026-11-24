@@ -5046,22 +5046,31 @@ decompile with no bad or unimplemented instruction.
 
 ### RISC-V Zfa (#98)
 
-`riscv.zfa.sinc` decodes the rest of Zfa 1.0 next to `fli.s` (§ GH-7451):
-`fli.d` and `fli.h` (the same 32-entry constant table, lifted like `fli.s`
-through the `fli` user operation with the table index), `fminm`/`fmaxm` in
-S, D and H (as `fmin`/`fmax`, but a NaN operand is the result),
-`fround`/`froundnx` (round to an integral value in the same format; user
-operations taking the value and the rounding mode, since p-code has no
-operation parameterised by rounding mode), `fcvtmod.w.d` (the low 32 bits of
-the truncated 64-bit conversion, sign-extended on RV64), the quiet compares
-`fleq`/`fltq` (the ordinary p-code float compares, which raise no exceptions
-in p-code either), and on RV32 `fmvh.x.d` (the high word of a double) and
-`fmvp.d.x` (a double from `rs2:rs1`). The `fli` constant at index 0 now
-displays as `-1.0` (it read `min`, the name of index 1). Exercised by
-`unlace-cli/tests/riscv_zfa.rs`: one probe row per encoding (all 32 `fli`
-constants) against LLVM's names, RV32 and RV64, and LLVM-selected
-`fminm.d`, `fmaxm.s`, `fround.d`, `fli.d` and `fleq.d` functions that
-decompile with no bad or unimplemented instruction.
+`riscv.zfa.sinc` decodes Zfa 1.0. It is generated from the Sail model's
+`zfa_insts.sail` by `tools/gen_riscv_sail.py` (`docs/sleigh-from-isa-specs.md`) and
+replaces the hand-written file and `fli.s` in `riscv.rv32f.sinc` (§ GH-7451), whose
+decoding it repeats word for word. The 32 `fli` constants (`fli.s`, `fli.d`, `fli.h`)
+are one constructor each, displayed through `fliConstS`, that writes the
+constant's bit pattern (NaN-boxed for S and H) instead of calling the `fli` user
+operation. Single- and half-precision sources are NaN-unboxed as the ISA requires:
+a register whose upper bits are not all ones reads as the canonical NaN, and S/H
+results are written NaN-boxed. `fminm`/`fmaxm` follow Sail: either operand NaN
+gives the canonical NaN, `-0` orders below `+0`, otherwise the quiet `f<=`
+decides. The quiet compares `fleq`/`fltq` are `f<=`/`f<` on the unboxed values.
+`fround`/`froundnx` with a static rounding mode lift to `floor` (rdn), `ceil` (rup),
+`round` (rmm) or `floor`/`ceil` by sign (rtz); `rne` and `dyn` have no p-code
+operation and stay user operations named after the mnemonic, taking the source and
+the rounding mode. `fcvtmod.w.d` lifts Sail's modular conversion: the low 32 bits
+of the truncated integer, 0 for NaN, infinities, subnormals and exponents of 84 or
+more, sign-extended on RV64. On RV32, `fmvh.x.d` takes the high word of a double and
+`fmvp.d.x` builds one from `rs2:rs1`. Floating-point exception flags are not
+modelled. Before, the hand-written file read S and H operands without unboxing and
+returned the other operand instead of the canonical NaN, so `fminm.s`, `fmaxm.s`,
+`fleq.s` and `fltq.s` (and their H forms) disagreed with QEMU on unboxed inputs.
+Exercised by `unlace-cli/tests/riscv_zfa.rs`: one probe row per encoding (all 32
+`fli` constants) against LLVM's names, RV32 and RV64, and LLVM-selected `fminm.d`,
+`fmaxm.s`, `fround.d`, `fli.d` and `fleq.d` functions that decompile with no bad or
+unimplemented instruction.
 
 ### RISC-V cache-block operations, hints, may-be-operations and CFI (#98)
 

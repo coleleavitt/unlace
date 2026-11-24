@@ -258,6 +258,8 @@ Three tiers:
 | a long long equality on i386 prints as an OR of two XORs compared with 0, over four int parameters | [`pairparam`](#pairparam----on--off-default-on) |
 | a long long parameter on 32-bit ARM prints as two int parameters in r0 and r1 or r2 and r3 | [`armpairparam`](#armpairparam----on--off-default-off) |
 | a 64-bit compare on 32-bit ARM prints as an SBORROW4 or CONCAT44 chain over two register parameters | [`armpairparam`](#armpairparam----on--off-default-off) |
+| a long long compare on i386 prints as branches over four int parameters that compare the high words before the low words | [`pairbranch`](#pairbranch----on--off-default-off) |
+| a long long equality prints as a0 == a2 && a1 == a3 over four int parameters | [`pairbranch`](#pairbranch----on--off-default-off) |
 | a signed char loaded with ldrsb is declared int | [`regsigned`](#regsigned----on--off-default-off) |
 | a short counter prints as int with (int)(short) casts at every use | [`regsigned`](#regsigned----on--off-default-off) |
 | an int local prints as long on x86-64 though every value is a movsxd | [`regsigned`](#regsigned----on--off-default-off) |
@@ -636,6 +638,10 @@ Three tiers:
 | condfold on and --mode aggressive do not fold a chain of call-result tests | [`condcallpush`](#condcallpush----on--off-default-on) |
 | an if condition assigns a call result with a comma operand where the source wrote a separate statement and guard | [`orchainlive`](#orchainlive----on--off-default-off) |
 | guard clauses returning the same constant print as one && chain | [`orchainlive`](#orchainlive----on--off-default-off) |
+| guard clauses returning the same error constant print as one && /  | [`orchainbool`](#orchainbool----on--off-default-off) |
+|  | [`orchainbool`](#orchainbool----on--off-default-off) |
+|  chain | [`orchainbool`](#orchainbool----on--off-default-off) |
+| a null check and an unrelated field test are folded into one condition before a shared return -1 | [`orchainbool`](#orchainbool----on--off-default-off) |
 | rule pools spend most of their time re-testing ops nothing changed | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a large function's simplification repeats full sweeps for a handful of rewrites | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a DOS program's globals print as *(short *)0x308e near-pointer dereferences instead of named globals | [`mzdgroup`](#mzdgroup----on--off-default-on) |
@@ -1919,6 +1925,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P4/prototype-source · kuna · new-analysis · pairparam
 - **Example:** `option armpairparam on`
 
+### `pairbranch` -- on | off, default `off`
+
+- **Symptoms:** a long long compare on i386 prints as branches over four int parameters that compare the high words before the low words; a long long equality prints as a0 == a2 && a1 == a3 over four int parameters.
+- **What it does:** Join two adjacent input words into one 8-byte parameter when a 64-bit compare split across branches links them: an unsigned low-word compare with an ordered high-word compare in the one or two single-entry blocks above it (MSVC's cmp hi; jl; jg; cmp lo; jb), or a low-word equality with a high-word equality in the block directly above or below it.
+- **When to flip:** Off by default: two separate int parameters compared lexicographically or pairwise (if (x1 == x2 && y1 == y2) over adjacent parameters) compile to the same branches, so the join is a reading, not a fact. Turn it on for i386 MSVC binaries or ARM32 code with 64-bit arithmetic where a long long parameter prints as two int parameters and its compare as a chain of branches over the two words (a1 < a3, else a1 == a3 and a0 < a2; or a0 == a2 && a1 == a3). pairparam must be on; on 32-bit ARM register pairs also need armpairparam. A pair of zero tests is never joined, and neither is an equality with constants.
+- **Where / provenance:** P4/prototype-source · kuna · new-analysis · pairparam
+- **Example:** `option pairbranch on`
+
 ### `regsigned` -- on | off, default `off`
 
 - **Symptoms:** a signed char loaded with ldrsb is declared int; a short counter prints as int with (int)(short) casts at every use; an int local prints as long on x86-64 though every value is a movsxd.
@@ -2742,6 +2756,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** Turn on when guard clauses that return the same constant print as one `&&`/`||` chain whose operand assigns a call result used later. Leave off to keep the DIV-69 protection for every fold.
 - **Where / provenance:** P8/goto-quality · kuna · structure-recovery · unlace-10-andorchain
 - **Example:** `option orchainlive on`
+
+### `orchainbool` -- on | off, default `off`
+
+- **Symptoms:** guard clauses returning the same error constant print as one && / ; ;  chain; a null check and an unrelated field test are folded into one condition before a shared return -1.
+- **What it does:** Limit the short-circuit protection of `returndup` (`kuna_orchain.rs`, DIV-69) to shared returns of 0 or 1. The protection keeps a shared constant-return block whole when `rule_block_or` could fold through it, which is right for the operand chain of a boolean expression (`return a || (b && c);`). A shared return of any other constant (`return -1`) is the exit of guard clauses the source wrote one by one (`if (!p) return -1; if (p->mode != R && p->mode != W) return -1;`). With this option such a block (its returned value is constants only, at least one of them neither 0 nor 1) does not stop `returndup` from splitting, so the guards print as early returns instead of one `&&`/`||` chain over unrelated tests.
+- **When to flip:** Turn on when guard clauses that return the same non-boolean constant (-1, an error code) print as one chain `if ((p) && (p->x == K || p->x == L)) {...} return -1;`. Leave off to keep the DIV-69 protection for every shared constant return.
+- **Where / provenance:** P8/goto-quality · kuna · structure-recovery · unlace-10-andorchain
+- **Example:** `option orchainbool on`
 
 ## Analysis & loader passes
 

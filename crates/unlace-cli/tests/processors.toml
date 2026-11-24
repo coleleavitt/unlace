@@ -36,6 +36,15 @@ c18c3200c40c38008116fffc021400008296fff89293fffc0290000822100008
 6418005a8116fffc021400008296fff89293fffc0290000822100008f19b5801
 f19f2000f41b58028116fffc021400008296fff8
 """
+mmix = """
+3002000140020005220200002200020022000001f801000026000100f8010000
+4c01000bc10200003b01010322010001e30000008d0302002200000323020208
+300302015b03fffcf8010000e3000000f8010000c700005af8010000fe010004
+23030001f302fffcf604000123000202f8010000810200013b0202383f020238
+a702010081000002f8010000c1020000c1040100c6ff02043603000460040403
+36030002600202031e030204360200036003ff02360200016001010236ff0000
+600000ff1e000001fe020006360100026802ff0122000302f8010000
+"""
 moxie = """
 0e23d80329320223040029230400
 """
@@ -433,6 +442,32 @@ expect = [
     "v1 = sub_0();",
     "(v2 + 8) = 0x12345678;",
     "return v1 + a0;",
+]
+
+# The MMIX language decompiles GCC (`mmix`, -O2) output: a compare-and-branch routine, and a
+# PUSHJ call whose argument travels through the register stack (caller's $3 is the callee's
+# $0) and whose result comes back in the caller's $2.
+[[family]]
+name = "mmix"
+language = "MMIX:BE:64:default"
+base = "0x100"
+image = "mmix"
+
+[[family.function]]
+test = "mmix_compare_branch_decompiles"
+address = "0x100"
+expect = [
+    "long sub_100(long a0,long a1)",
+    "return a0 * 3 + a1;",
+    "return a1 - a0;",
+]
+
+[[family.function]]
+test = "mmix_pushj_call_decompiles"
+address = "0x15c"
+expect = [
+    "long sub_15c(long a0)",
+    "return sub_154(a0 + 1) + 2;",
 ]
 
 # The Moxie language decompiles a compare-and-branch routine built with moxie-elf-as.

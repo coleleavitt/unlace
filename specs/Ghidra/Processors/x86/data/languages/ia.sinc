@@ -754,9 +754,19 @@ attach variables [ xmmreg1_r xmmreg2_x xmm_vsib_v ] [ XMM16 XMM17 XMM18 XMM19 XM
 
 attach variables [ xmmreg1_rx xmmreg2_bx xmm_vsib_vx ] [ XMM24 XMM25 XMM26 XMM27 XMM28 XMM29 XMM30 XMM31 ];
 
+@ifdef IA64
 attach variables [ vexVVVV_XmmReg Xmm_imm8_7_4 ] [ XMM0 XMM1 XMM2 XMM3 XMM4 XMM5 XMM6 XMM7 XMM8 XMM9 XMM10 XMM11 XMM12 XMM13 XMM14 XMM15 ];
+@else
+# outside 64-bit mode VEX/XOP.vvvv bit 3 and is4 bit 7 are ignored (checked natively; an unused vvvv
+# must still be 1111b, which the instructions test on vexVVVV itself)
+attach variables [ vexVVVV_XmmReg Xmm_imm8_7_4 ] [ XMM0 XMM1 XMM2 XMM3 XMM4 XMM5 XMM6 XMM7 XMM0 XMM1 XMM2 XMM3 XMM4 XMM5 XMM6 XMM7 ];
+@endif
 
+@ifdef IA64
 attach variables [ vexVVVV_YmmReg Ymm_imm8_7_4 ] [ YMM0 YMM1 YMM2 YMM3 YMM4 YMM5 YMM6 YMM7 YMM8 YMM9 YMM10 YMM11 YMM12 YMM13 YMM14 YMM15 ];
+@else
+attach variables [ vexVVVV_YmmReg Ymm_imm8_7_4 ] [ YMM0 YMM1 YMM2 YMM3 YMM4 YMM5 YMM6 YMM7 YMM0 YMM1 YMM2 YMM3 YMM4 YMM5 YMM6 YMM7 ];
+@endif
 
 attach variables [ vexVVVV_ZmmReg ] [ ZMM0  ZMM1  ZMM2  ZMM3  ZMM4  ZMM5  ZMM6  ZMM7  ZMM8  ZMM9  ZMM10 ZMM11 ZMM12 ZMM13 ZMM14 ZMM15 ];
 
@@ -773,7 +783,7 @@ attach variables [ evexV5_ZmmReg ] [ ZMM0  ZMM1  ZMM2  ZMM3  ZMM4  ZMM5  ZMM6  Z
 attach variables [ vexVVVV_r32 ] [ EAX  ECX  EDX  EBX  ESP  EBP  ESI  EDI R8D  R9D  R10D R11D R12D R13D R14D R15D ];
 attach variables [ vexVVVV_r64 ] [ RAX  RCX  RDX  RBX  RSP  RBP  RSI  RDI R8   R9   R10  R11  R12  R13  R14  R15 ];
 @else
-attach variables [ vexVVVV_r32 ] [ EAX  ECX  EDX  EBX  ESP  EBP  ESI  EDI _    _    _    _    _    _    _    _ ];
+attach variables [ vexVVVV_r32 ] [ EAX  ECX  EDX  EBX  ESP  EBP  ESI  EDI EAX  ECX  EDX  EBX  ESP  EBP  ESI  EDI ];
 @endif
 
 attach variables [ evexOpmask opmaskreg opmaskrm evexVopmask ] [ K0  K1  K2  K3  K4  K5  K6  K7 ];
@@ -2633,6 +2643,10 @@ macro fucompe(val1, val2) {
 @define VEX_MAP4	"vexMMMMM=4"
 @define VEX_MAP5	"vexMMMMM=5"
 @define VEX_MAP6	"vexMMMMM=6"
+# AMD XOP maps (the 8F prefix below, amd_xop.sinc)
+@define XOP_MAP8	"vexMMMMM=8"
+@define XOP_MAP9	"vexMMMMM=9"
+@define XOP_MAPA	"vexMMMMM=10"
 
 # Specification is "WIG", "W0", or "W1".
 @define VEX_WIG		"rexWprefix"
@@ -2666,6 +2680,10 @@ macro fucompe(val1, val2) {
 :^instruction is $(LONGMODE_ON) & instrPhase=0 & vexMode=0 & rexprefix=0 & mandover=0 & byte=0xC5; vex_r & vex_vvvv & vex_l & vex_pp=3; instruction
                        [ instrPhase=1; vexMode=1; rexRprefix=~vex_r; vexVVVV=~vex_vvvv; vexL=vex_l; vexMMMMM=0x1; prefix_f2=1; ] {}
 
+# 64-bit 3-byte XOP (AMD): 8F with map select 8..0Ah, which a POP r/m (8F /0) cannot be; pp must be 0
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & vexMode=0 & rexprefix=0 & mandover=0 & byte=0x8F; vex_r & vex_x & vex_b & (vex_mmmmm=8 | vex_mmmmm=9 | vex_mmmmm=10) & vex_mmmmm; vex_w & vex_vvvv & vex_l & vex_pp=0; instruction
+                       [ instrPhase=1; vexMode=1; rexRprefix=~vex_r; rexXprefix=~vex_x; rexBprefix=~vex_b; vexMMMMM=vex_mmmmm; rexWprefix=vex_w;  vexVVVV=~vex_vvvv; vexL=vex_l; ] {}
+
 # 4-byte EVEX prefix
 :^instruction is $(LONGMODE_ON) & instrPhase=0 & vexMode=0 & rexprefix=0 & mandover & byte=0x62; vex_r & vex_x & vex_b & evex_rp & evex_res & evex_mmm;
                  vex_w & vex_vvvv & evex_res2 & vex_pp=0; evex_z & evex_lp & evex_l & evex_b & evex_vp & evex_aaa; instruction
@@ -2694,6 +2712,10 @@ macro fucompe(val1, val2) {
                        [ instrPhase=1; vexMode=1; rexBprefix=~vex_b; vexMMMMM=vex_mmmmm; rexWprefix=vex_w;  vexVVVV=~vex_vvvv; vexL=vex_l; prefix_f3=1; ] {}
 :^instruction is $(LONGMODE_OFF) & instrPhase=0 & vexMode=0 & rexprefix=0 & mandover=0 & byte=0xC4; vex_r=1 & vex_x=1 & vex_b & vex_mmmmm; vex_w & vex_vvvv & vex_l & vex_pp=3; instruction
                        [ instrPhase=1; vexMode=1; rexBprefix=~vex_b; vexMMMMM=vex_mmmmm; rexWprefix=vex_w;  vexVVVV=~vex_vvvv; vexL=vex_l; prefix_f2=1; ] {}
+
+# 32-bit 3-byte XOP (AMD)
+:^instruction is $(LONGMODE_OFF) & instrPhase=0 & vexMode=0 & rexprefix=0 & mandover=0 & byte=0x8F; vex_r=1 & vex_x=1 & vex_b & (vex_mmmmm=8 | vex_mmmmm=9 | vex_mmmmm=10) & vex_mmmmm; vex_w & vex_vvvv & vex_l & vex_pp=0; instruction
+                       [ instrPhase=1; vexMode=1; rexBprefix=~vex_b; vexMMMMM=vex_mmmmm; rexWprefix=vex_w;  vexVVVV=~vex_vvvv; vexL=vex_l; ] {}
 
 # 32-bit 2-byte VEX
 :^instruction is $(LONGMODE_OFF) & instrPhase=0 & vexMode=0 & rexprefix=0 & mandover=0 & byte=0xC5; vex_r=1 & vex_x=1 & vex_vvvv & vex_l & vex_pp=0; instruction

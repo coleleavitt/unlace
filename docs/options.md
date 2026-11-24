@@ -741,6 +741,12 @@ Three tiers:
 | many sub_<addr> functions that end in _Unwind_Resume() | [`ehcold`](#ehcold----on--off-default-on) |
 | a stripped c++ binary's function list is full of cleanup fragments from .text.unlikely | [`ehcold`](#ehcold----on--off-default-on) |
 | a function that starts by reading an undefined rbx and frees buffers before _Unwind_Resume | [`ehcold`](#ehcold----on--off-default-on) |
+| an mfc window class's message handlers are missing from the function list | [`mfcmsgmap`](#mfcmsgmap----on--off-default-off) |
+| a function in an mfc image spans several handlers that a message map names | [`mfcmsgmap`](#mfcmsgmap----on--off-default-off) |
+| IDA lists functions at the pfn addresses of an AFX_MSGMAP_ENTRY array that unlace folds into a neighbour | [`mfcmsgmap`](#mfcmsgmap----on--off-default-off) |
+| an msvc i386 image lists far fewer functions than IDA | [`msvcptrentry`](#msvcptrentry----on--off-default-off) |
+| a function in an msvc i386 c++ image spans several of IDA's functions | [`msvcptrentry`](#msvcptrentry----on--off-default-off) |
+| a vtable slot or callback in a 32-bit dll is not in the function list | [`msvcptrentry`](#msvcptrentry----on--off-default-off) |
 | a tail jump to an undeclared import drops an argument the function passes through | [`importvote`](#importvote----on--off-default-on) |
 | a forwarder to a library function prints void and no return | [`importvote`](#importvote----on--off-default-on) |
 | return helper() with fewer arguments than the other calls to helper pass | [`importvote`](#importvote----on--off-default-on) |
@@ -3020,6 +3026,22 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **When to flip:** On by default. Keep it on for gcc -O2 C++ binaries, where cleanup ladders otherwise flood the function list with sub_<addr> fragments that start from an undefined register and end in _Unwind_Resume(). Flip OFF to list and decompile the cold cleanup code on its own (to read what a destructor chain frees).
 - **Where / provenance:** P1/code-data-partition · kuna · analysis-enablement · ida95-22-ehcold
 - **Example:** `--option ehcold off`
+
+### `mfcmsgmap` -- on | off, default `off`
+
+- **Symptoms:** an mfc window class's message handlers are missing from the function list; a function in an mfc image spans several handlers that a message map names; IDA lists functions at the pfn addresses of an AFX_MSGMAP_ENTRY array that unlace folds into a neighbour.
+- **What it does:** On a 32-bit PE, list the handlers of every MFC message map as functions. An MFC window class routes messages through a static AFX_MSGMAP in .rdata (pfnGetBaseMap, lpEntries) whose AFX_MSGMAP_ENTRY array (nMessage, nCode, nID, nLastID, nSig, pfn; 24 bytes each, ending in an all-zero entry) names each handler. The handlers are reached only through that table, so no entry oracle or direct-call walk finds them and each was folded into the function before it. A table is read only where the base relocations vouch for it: lpEntries and the pfnGetBaseMap word before it are relocated, pfnGetBaseMap points into code, the entries lie in a non-executable section, and every entry's pfn is a relocated pointer into code with nMessage below 0x10000 and nSig below 0x100. The handlers are walked as roots, so their callees are found too.
+- **When to flip:** Off by default. Turn it on for MFC applications and DLLs built with MSVC for i386, where window-message handlers (OnPaint, OnCommand handlers) are missing from the function list and their code is folded into the function before them. Measured on PEGRP32F.dll: 29 maps, 198 handlers, every one an IDA 9.5 function start, 194 of them missing before.
+- **Where / provenance:** P1/code-data-partition · kuna · analysis-enablement · holley-i386-ptrdisc
+- **Example:** `--option mfcmsgmap on`
+
+### `msvcptrentry` -- on | off, default `off`
+
+- **Symptoms:** an msvc i386 image lists far fewer functions than IDA; a function in an msvc i386 c++ image spans several of IDA's functions; a vtable slot or callback in a 32-bit dll is not in the function list.
+- **What it does:** On a 32-bit PE, make every executable address a base-relocated word points at a function entry when its bytes are an MSVC frame prologue (push ebp; mov ebp,esp as 55 8B EC, or 8B FF 55 8B EC with the hot-patch prefix). Vtable slots, MFC tables, callbacks pushed for the Win32 API and thread procedures are reached only through such pointers, so the walk never found them and each was folded into the function before it. The relocation table lists every pointer word in code and data. The prologue test keeps out the address-taken labels that are not functions: MSVC's own (switch targets, catch continuations, SEH handlers) start with no frame, and GCC/MinGW encode mov ebp,esp as 89 E5, so their SJLJ landing pads never match. The targets are walked as roots, so their callees are found too.
+- **When to flip:** Off by default. Turn it on for MSVC-built 32-bit C++ and MFC images with frame pointers, where many functions IDA lists are missing and a function spans several of IDA's. Measured on PEGRP32F.dll: 1,255 targets, all IDA 9.5 function starts, 452 missing before; walked as roots they reach 2,082 of the 2,455 starts that were missing. No false start on USBCAN-Driver, CP210xManufacturing or SLABHIDDevice. It finds nothing in code built with frame-pointer omission.
+- **Where / provenance:** P1/code-data-partition · kuna · analysis-enablement · holley-i386-ptrdisc
+- **Example:** `--option msvcptrentry on`
 
 ### `importvote` -- on | off, default `on`
 

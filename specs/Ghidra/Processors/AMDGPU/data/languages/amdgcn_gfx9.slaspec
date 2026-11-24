@@ -2326,3 +2326,4 @@ DSA: "["^jv0^"+"^dsoff16^"]" is dsoff16 ; jv0 { a:4 = jv0 + dsoff16; export a; }
 # Generated: the VOP3 forms LLVM decodes for gfx900 that the constructors above lack, and VOP3P.
 @include "amdgcn_gfx9_valu.sinc"
 @include "amdgcn_gfx9_vop3p.sinc"
+@include "amdgcn_gfx9_dpp.sinc"

@@ -4261,6 +4261,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | Directory | Processors | Languages | Sources | Test |
 |---|---|---|---|---|
 | `CHIP8` | CHIP-8 (COSMAC VIP) and SUPER-CHIP 1.1 | `CHIP8:BE:16:VIP`, `CHIP8:BE:16:SCHIP` | COSMAC VIP manual, SUPER-CHIP 1.1 notes | `unlace-cli/tests/chip8.rs` |
+| `Lua` | Lua 5.4 VM bytecode (one function's code array) | `Lua:LE:32:5.4` | Lua 5.4 `lopcodes.h`/`lvm.c` (MIT), reference manual; oracle `luac5.4 -l -l` | `unlace-cli/tests/lua54.rs` |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)

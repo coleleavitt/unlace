@@ -6,6 +6,8 @@ mod c28x_raw;
 #[path = "chip8.rs"]
 mod chip8;
 mod common;
+#[path = "lua54.rs"]
+mod lua54;
 #[path = "m6800_family.rs"]
 mod m6800_family;
 #[path = "mips_elf_selection.rs"]

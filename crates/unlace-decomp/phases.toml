@@ -5825,6 +5825,26 @@ change_kind = "analysis-enablement"
 tier = "analysis"
 symptoms = "an mfc window class's message handlers are missing from the function list|a function in an mfc image spans several handlers that a message map names|IDA lists functions at the pfn addresses of an AFX_MSGMAP_ENTRY array that unlace folds into a neighbour"
 
+
+[[settable]]
+option = "msvcptrentry"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P1"
+subphase = "code-data-partition"
+strength = "HARD"
+rewind = "P1"
+issue = "holley-i386-ptrdisc"
+summary = "On a 32-bit PE, make every executable address a base-relocated word points at a function entry when its bytes are an MSVC frame prologue (push ebp; mov ebp,esp as 55 8B EC, or 8B FF 55 8B EC with the hot-patch prefix). Vtable slots, MFC tables, callbacks pushed for the Win32 API and thread procedures are reached only through such pointers, so the walk never found them and each was folded into the function before it. The relocation table lists every pointer word in code and data. The prologue test keeps out the address-taken labels that are not functions: MSVC's own (switch targets, catch continuations, SEH handlers) start with no frame, and GCC/MinGW encode mov ebp,esp as 89 E5, so their SJLJ landing pads never match. The targets are walked as roots, so their callees are found too."
+use_when = "Off by default. Turn it on for MSVC-built 32-bit C++ and MFC images with frame pointers, where many functions IDA lists are missing and a function spans several of IDA's. Measured on PEGRP32F.dll: 1,255 targets, all IDA 9.5 function starts, 452 missing before; walked as roots they reach 2,082 of the 2,455 starts that were missing. No false start on USBCAN-Driver, CP210xManufacturing or SLABHIDDevice. It finds nothing in code built with frame-pointer omission."
+example = "--option msvcptrentry on"
+source_decompiler = "kuna"
+inspiration = "IDA 9.5 on PEGRP32F.dll (MFC, MSVC i386): 2,455 function starts unlace missed, most reached only through relocated pointers"
+change_kind = "analysis-enablement"
+tier = "analysis"
+symptoms = "an msvc i386 image lists far fewer functions than IDA|a function in an msvc i386 c++ image spans several of IDA's functions|a vtable slot or callback in a 32-bit dll is not in the function list"
+
 [[settable]]
 option = "importvote"
 values = "on|off"

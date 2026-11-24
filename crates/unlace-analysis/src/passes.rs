@@ -714,6 +714,7 @@ fn deferred_entry_passes() -> Vec<Box<dyn AnalysisPass>> {
         Box::new(crate::entry::kuna_coldentry::ColdEntryPass),
         Box::new(crate::entry::kuna_ehcold::EhColdPass),
         Box::new(crate::entry::kuna_mfcmsgmap::MfcMsgMapPass),
+        Box::new(crate::entry::kuna_msvcptrentry::MsvcPtrEntryPass),
         Box::new(crate::protos::kuna_importvote::ImportVotePass),
         // (kuna `pdbtypes`/`pdblines`) A full read of the `.pdb`'s type,
         // module and line streams: paid only when its gate (and `pdb`) is on.

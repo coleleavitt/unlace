@@ -27,6 +27,7 @@ pub mod kuna_paramcopyhoist;
 pub mod kuna_pointeevalue;
 pub mod kuna_registerepochs;
 pub mod kuna_slotptr;
+pub mod kuna_spphistack; // (kuna `spphistack`) a bare input stack pointer at a phi is a stack address
 pub mod kuna_stablenames;
 pub mod kuna_stackexitanchor; // (kuna) the epilogue settles the last unknown call's purge
 pub mod kuna_stackranges;

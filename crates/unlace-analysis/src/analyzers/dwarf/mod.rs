@@ -1479,6 +1479,12 @@ impl DwarfPass {
                                     &dies,
                                     &mut out.dwarf_nocall,
                                 );
+                            } else if signatures {
+                                out.withheld_prototypes.push((
+                                    Some(low_pc),
+                                    snap.name.clone(),
+                                    unlace_decomp::kuna_honestgaps::WithheldCause::DwarfType,
+                                ));
                             }
                             // subtask 3: named, typed stack LOCALS. Each direct
                             // `DW_TAG_variable`/`DW_TAG_formal_parameter` child with a

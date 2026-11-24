@@ -47,13 +47,13 @@ fn surface_count_is_102() {
 }
 
 #[test]
-fn settable_count_is_338() {
-    assert_eq!(kuna_num_settables(), 338);
-    assert_eq!(SETTABLE_TABLE.len(), 338);
+fn settable_count_is_340() {
+    assert_eq!(kuna_num_settables(), 340);
+    assert_eq!(SETTABLE_TABLE.len(), 340);
 }
 
 #[test]
-fn tier_counts_are_69_core_168_transform_101_analysis() {
+fn tier_counts_are_70_core_169_transform_101_analysis() {
     let mut core = 0;
     let mut transform = 0;
     let mut analysis = 0;
@@ -65,7 +65,7 @@ fn tier_counts_are_69_core_168_transform_101_analysis() {
             other => panic!("invalid tier {other:?} on {}", s.option),
         }
     }
-    assert_eq!((core, transform, analysis), (69, 168, 101));
+    assert_eq!((core, transform, analysis), (70, 169, 101));
 }
 
 #[test]
@@ -960,7 +960,7 @@ fn option_values_live_value_present_for_129() {
     // +1 for `guarddispatch` (live_field = guard_dispatch).
     // +1 for `flownames` (live_field = flow_names).
     // +2 for `atomics` and `llscfold` (live_field = atomics, llsc_fold).
-    assert_eq!(with_live, 142);
+    assert_eq!(with_live, 143);
 }
 
 #[test]
@@ -1291,7 +1291,8 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // +1 for `honestgaps`; its P2 row.
     // +2 for `atomics` and `llscfold`.
     // +1 for `msvceh`; its P1 row follows `rtti`.
-    assert_eq!(json.matches("},\n").count(), 331);
+    // +1 for `phiarm`; its P6 row sits after `typemerge`.
+    assert_eq!(json.matches("},\n").count(), 333);
 }
 
 #[test]

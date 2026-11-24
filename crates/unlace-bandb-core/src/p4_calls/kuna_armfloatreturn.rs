@@ -35,6 +35,16 @@ pub fn park_float_library_prototypes(arch: &mut Architecture) {
     }
     let pending = std::mem::take(&mut arch.arm_float_library_prototypes);
     if !applies(arch) {
+        let withheld = arch
+            .kuna_tables
+            .get_mut::<unlace_lift::kuna_honestgaps::WithheldPrototypes>();
+        for (at, pieces) in &pending {
+            withheld.record(
+                at.as_ref().map(|a| a.get_offset()),
+                &pieces.name,
+                unlace_lift::kuna_honestgaps::WithheldCause::FloatConvention,
+            );
+        }
         return;
     }
     for (at, pieces) in pending {

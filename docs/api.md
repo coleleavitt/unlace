@@ -35,6 +35,8 @@ Runnable versions: `cargo run -p unlace --example raw_blob` and
 | `Decompiler::from_bytes(bytes)` | The same, for a container held in memory (written to a private temporary file, removed on drop). | |
 | `Decompiler::from_raw(bytes, target, base, segments, entries)` | Headerless bytes at `base`, decoded as `target` (a SLEIGH language id: `Target::X86_64`, `Target::new("ARM:LE:32:v8T")`). No `segments`: the whole blob is code. With segments: only those ranges of `bytes` are mapped, each with its `Perms`. | `--raw-image --target T --base B --entry E` |
 | `Decompiler::from_memory(target, regions, entries)` | Disjoint `(address, bytes, perms)` regions; the gaps are unmapped. | |
+| `Decompiler::from_idb(path)` | An IDA database (`.idb`/`.i64`) without its binary: the segments mapped with their rights, decoded as the SLEIGH target IDA's processor maps to, with the database's local types, functions, prototypes and no-return flags declared. | `unlace decompile <db>` |
+| `.with_idb(path)?` | Declare an IDA database's local types, functions (entries, extents, names), prototypes and no-return flags on this input; a container must be the file IDA loaded (its SHA-256). | `unlace idb import` + `--project` |
 | `.with_function(start, Some(end), Some(name))` | Declare a function: entry, exclusive end (bounds flow following), name. Outranks discovery. | `--define-function start-end=name` |
 | `.with_prototype(addr, "int f(char *s)")` | The function's C prototype. | `--assert "prototype addr decl"` |
 | `.with_noreturn(addr)` | The function never returns; callers stop at calls to it. | (API only) |
@@ -46,6 +48,10 @@ Runnable versions: `cargo run -p unlace --example raw_blob` and
 | `.decompile(addr)`, `.decompile_named(name)` | One function: `Decompiled { name, address, c, prototype, warnings, json }`. | `unlace decompile --json` |
 | `.decompile_all()` | Every function with a body, address order, one load, one `Result` per function. | |
 | `.architecture()` | The SLEIGH language id the load chose. | |
+
+Both IDA methods read the database with idb-rs and lower it to the directives `unlace idb import`
+stores (`docs/cli.md`, "unlace idb"): IDA's C spellings rewritten into the engine's grammar,
+`__usercall` prototypes left out, comments not included.
 
 Errors are `unlace::Error` (thiserror): `Io`, `NonUtf8Path`, `Request` (an option, bound,
 prototype or assertion that does not parse), `Load`, `NotFound`, `Decompile` (carries the

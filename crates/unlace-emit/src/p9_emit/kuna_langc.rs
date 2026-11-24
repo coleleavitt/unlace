@@ -169,6 +169,8 @@ impl TypeSpeller for CSpeller {
             n.into_owned()
         } else if base.get_name().is_empty() {
             self.anonymous(base)
+        } else if cx.cpp_short_names {
+            crate::kuna_cppshortnames::short_type(base.get_display_name()).into_owned()
         } else {
             base.get_display_name().to_string()
         };

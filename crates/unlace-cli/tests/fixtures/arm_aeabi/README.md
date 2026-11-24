@@ -15,4 +15,6 @@ floating-point operation is a call to an `__aeabi_*` helper. The last is hard-fl
 single-precision FPU: its `double` operations call the helpers, passing the values in core
 registers (`vmov r0, r1, d0`).
 
+`libm.c` is built the same way at `-O2 -g0` for `arm-freestanding-eabi` (`libm-arm.o`) and Cortex-M0 (`libm-thumbv6m.o`).
+
 The `-nodebug.o` objects are the soft-float ones with `llvm-objcopy --strip-debug`.

@@ -9909,6 +9909,16 @@ the run. With them the readers see `double log(double)` the first time, which
 also types the arguments (`sincos` keeps libvorbis `mdct_init` from returning the
 `double` it leaves in `d0` for the next call).
 
+The same list is parked on an image that states the base standard
+(`Tag_ABI_VFP_args` 0 or absent in a relocatable object,
+`EF_ARM_ABI_FLOAT_SOFT` in a linked one), whatever the option: `armbasepcs`
+binds every import and external function there to `__stdcall_softfp`, a
+relocatable object's undefined symbols included (`kuna_armbasepcs.rs
+(base_pcs_functions)`), so `double fmod(double, double)` takes its values in
+`r0:r1` and `r2:r3` and returns one in `r0:r1`. Lua's `luaV_modf` built
+without debug information printed `fmod(a2,a3,a4,a5)` over four words and now
+takes `double a2,double a3`.
+
 On such an image each function's copy of the default model gains an 8-byte
 float entry for every `d0`-`d7` register over its two s-register entries, on
 input, and one for `d0` on output; `d1`-`d3` are not return storage. A whole

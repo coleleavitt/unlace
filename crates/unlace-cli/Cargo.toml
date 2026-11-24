@@ -16,6 +16,8 @@ unlace-analysis.workspace = true
 unlace-sleigh.workspace = true
 unlace-slacomp.workspace = true
 unlace-num.workspace = true
+# `unlace lumina`: the Lumina protocol, its sqlite server store and TLS.
+unlace-lumina.workspace = true
 # `sbom` inflates cargo-auditable dependency lists.
 flate2.workspace = true
 unlace-project.workspace = true

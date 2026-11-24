@@ -1,0 +1,30 @@
+[package]
+name = "unlace-lumina"
+description = "IDA Lumina function-metadata protocol: wire codec, calcrel hash, client and a sqlite-backed server"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+autotests = false
+
+[dependencies]
+md-5 = "0.11"
+sha2 = "0.11"
+# The self-hosted server's store. `bundled` compiles SQLite's C amalgamation (cc only, no system
+# library); the same version as unlace-project, since only one libsqlite3-sys may link.
+rusqlite = { version = "0.43", features = ["bundled"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"], optional = true }
+webpki-roots = { version = "1", optional = true }
+
+[features]
+default = ["tls"]
+# TLS for `unlace lumina pull/push` (`--tls`) and `serve` (`--tls-cert/--tls-key`).
+tls = ["dep:rustls", "dep:webpki-roots"]
+
+[lints]
+workspace = true
+
+[[test]]
+name = "integration"
+path = "tests/integration.rs"

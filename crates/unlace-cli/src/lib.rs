@@ -38,6 +38,7 @@ mod jsonfmt;
 mod kuna_allocrelease;
 mod limits;
 mod loadtime;
+mod lumina;
 mod optname;
 mod output;
 mod paths;
@@ -80,6 +81,7 @@ const COMMANDS: &[(&str, CommandHandler)] = &[
     ("specs", specs::run),
     ("fid", fid::run),
     ("flirt", flirt::run),
+    ("lumina", lumina::run),
     ("rust-signatures", rust_signatures::run),
     ("sbom", sbom::run),
     ("project", project::run),
@@ -198,6 +200,7 @@ fn usage() {
          unlace fid query <binary> --db <file.fid> --addr <address> [--addr <address> ...] --json\n\
          unlace flirt make <lib.a|*.o ...> -o <out.pat> [--sig <out.sig>] [--libname NAME]\n\
          unlace rust-signatures check [--manifest PATH] [--json]\n\
+         unlace lumina hash|pull|push <binary> [--server HOST:PORT] [--json] ...   unlace lumina serve --db FILE [--bind ADDR]\n\
          unlace sbom <binary> [--json] [--format cyclonedx|spdx] [-o FILE] [--slice ARCH]\n\
          unlace project <init|schema|set|unset|get|list|query|export|import> ... [--json|--jsonl]   # the SQLite project file of overrides\n\
          unlace --version\n\

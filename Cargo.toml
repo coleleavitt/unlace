@@ -48,6 +48,7 @@ unlace-console = { path = "crates/unlace-console" }
 unlace-project = { path = "crates/unlace-project" }
 unlace-cli = { path = "crates/unlace-cli" }
 unlace-slacomp = { path = "crates/unlace-slacomp" }
+unlace-lumina = { path = "crates/unlace-lumina" }
 unlace-decomp-dylib = { path = "crates/unlace-decomp-dylib" }
 
 [workspace.lints.clippy]

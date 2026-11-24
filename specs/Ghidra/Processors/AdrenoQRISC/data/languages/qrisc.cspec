@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<compiler_spec>
+  <!-- QRisc has a hidden hardware return-address stack (no data stack frame).
+       We model a synthetic call-stack pointer 'csp' over the 'stack' space so the
+       decompiler can render call/ret as functions. -->
+  <global>
+    <range space="code"/>
+    <range space="MEM"/>
+    <range space="CREG"/>
+    <range space="SREG"/>
+  </global>
+  <stackpointer register="csp" space="hwstack" growth="negative"/>
+  <default_proto>
+    <prototype name="__qrisc_call" extrapop="0" stackshift="0">
+      <input>
+        <pentry minsize="1" maxsize="4">
+          <register name="r02"/>
+        </pentry>
+        <pentry minsize="1" maxsize="4">
+          <register name="r03"/>
+        </pentry>
+        <pentry minsize="1" maxsize="4">
+          <register name="r04"/>
+        </pentry>
+      </input>
+      <output>
+        <pentry minsize="1" maxsize="4">
+          <register name="r02"/>
+        </pentry>
+      </output>
+      <unaffected>
+        <register name="r12"/>
+        <register name="r13"/>
+        <register name="r14"/>
+        <register name="lr"/>
+        <register name="csp"/>
+      </unaffected>
+    </prototype>
+  </default_proto>
+</compiler_spec>

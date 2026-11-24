@@ -4222,6 +4222,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `TMS34010` | TI TMS34010 (GSP) | `tms34010:LE:32:default`, `tms34020:LE:32:default` | aleph-void/Ghidra_TMS34010 (fork of ZPaul2Fresh8/Ghidra_TMS34010) @ `271d988289`, Apache-2.0 |
 | `TeakLite` | CEVA-TeakLite | `teak:LE:16:default`, `teak:LE:16:modulo` | aleph-void/TeakLite-SLEIGH (fork of SachinVin/TeakLite-SLEIGH) @ `32d05a51a3`, MIT |
 | `RockwellL39` | Rockwell C39 / L39 | `RockwellL39:LE:16:default` | aleph-void/ghidra-rockwell-l39 @ `df9c28fdc1`, Apache-2.0 |
+| `AdrenoQRISC` | Qualcomm Adreno SQE / QRISC | `QRisc:LE:32:a6xx`, `QRisc:LE:32:a7xx`, `QRisc:LE:32:a7xx_gen3`, `QRisc:LE:32:a8xx` | aleph-void/ida-adreno-qrisc (fork of locus-x64/ida-adreno-qrisc) @ `f5b3d0de28`, MIT |
 <!-- vendor-rows -->
 
 ### WDC 65816 (#98)

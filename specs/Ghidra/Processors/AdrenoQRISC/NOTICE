@@ -1,0 +1,28 @@
+ida-adreno-qrisc
+================
+
+ISA and PM4 packet definitions are generated from Mesa 3D:
+
+  https://gitlab.freedesktop.org/mesa/mesa
+
+Files used at generation time to produce `common/qrisc_isa_tables.py`:
+
+  src/freedreno/qrisc/qrisc.xml
+  src/freedreno/registers/adreno/adreno_control_regs.xml
+  src/freedreno/registers/adreno/adreno_pm4.xml
+
+These are MIT-licensed, copyright Google, Inc.; Valve Corporation; Rob Clark;
+and other Mesa contributors, per the Mesa repository.
+
+The generator (`gen/qrisc_isa_gen.py`) reuses Mesa's `isa.py` parser
+(`src/compiler/isaspec/isa.py`, MIT, copyright Google) at generation time. No
+Mesa code or data is required at runtime.
+
+Pinned Mesa commit at release:
+  4bf8fd5121122abd87aafb31e43bbbe9e3d2e921 (main, 2026-06-22)
+
+Test fixtures `fixtures/qrisc_test*.fw` and `fixtures/qrisc_test*.asm` are
+reproduced from Mesa's `src/freedreno/tests/` and remain under their original
+license.
+
+This project's own code is licensed under the MIT License (see LICENSE).

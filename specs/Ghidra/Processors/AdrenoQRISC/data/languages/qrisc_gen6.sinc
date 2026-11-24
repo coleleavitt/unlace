@@ -1,0 +1,471 @@
+# AUTO-GENERATED instruction constructors -- do not edit.
+
+:^rep^xmov^peek^"cmp" d11, s21, s16k is op0_4=0x10 & op27_31=0x13 & rep & reppre & reppost & xmov & xmovsem & peek & d11 & s21 & s16k {
+  build reppre;
+  build s21;
+  build s16k;
+  cmp3(d11, s21, s16k);
+  build xmovsem;
+  build reppost;
+}
+:^rep^xmov^peek^"ishr" d11, s21, s16k is op0_4=0xb & op27_31=0x13 & rep & reppre & reppost & xmov & xmovsem & peek & d11 & s21 & s16k {
+  build reppre;
+  build s21;
+  build s16k;
+  d11 = s21 s>> (s16k & 31);
+  build xmovsem;
+  build reppost;
+}
+:^rep^xmov^peek^"max" d11, s21, s16k is op0_4=0xf & op27_31=0x13 & rep & reppre & reppost & xmov & xmovsem & peek & d11 & s21 & s16k {
+  build reppre;
+  build s21;
+  build s16k;
+  maxu(d11, s21, s16k);
+  build xmovsem;
+  build reppost;
+}
+:^rep^xmov^peek^"min" d11, s21, s16k is op0_4=0xe & op27_31=0x13 & rep & reppre & reppost & xmov & xmovsem & peek & d11 & s21 & s16k {
+  build reppre;
+  build s21;
+  build s16k;
+  minu(d11, s21, s16k);
+  build xmovsem;
+  build reppost;
+}
+:^rep^xmov^"msb" d11, s16 is op0_4=0x14 & op27_31=0x13 & rep & reppre & reppost & xmov & xmovsem & d11 & s16 {
+  build reppre;
+  build s16;
+  msb(d11, s16);
+  build xmovsem;
+  build reppost;
+}
+:^rep^xmov^peek^"mul8" d11, s21, s16k is op0_4=0xd & op27_31=0x13 & rep & reppre & reppost & xmov & xmovsem & peek & d11 & s21 & s16k {
+  build reppre;
+  build s21;
+  build s16k;
+  d11 = (s21 & 0xff) * (s16k & 0xff);
+  build xmovsem;
+  build reppost;
+}
+:^rep^xmov^peek^"rot" d11, s21, s16k is op0_4=0xc & op27_31=0x13 & rep & reppre & reppost & xmov & xmovsem & peek & d11 & s21 & s16k {
+  build reppre;
+  build s21;
+  build s16k;
+  rotl(d11, s21, s16k);
+  build xmovsem;
+  build reppost;
+}
+:^rep^xmov^peek^"shl" d11, s21, s16k is op0_4=0x9 & op27_31=0x13 & rep & reppre & reppost & xmov & xmovsem & peek & d11 & s21 & s16k {
+  build reppre;
+  build s21;
+  build s16k;
+  d11 = s21 << (s16k & 31);
+  build xmovsem;
+  build reppost;
+}
+:^rep^xmov^peek^"ushr" d11, s21, s16k is op0_4=0xa & op27_31=0x13 & rep & reppre & reppost & xmov & xmovsem & peek & d11 & s21 & s16k {
+  build reppre;
+  build s21;
+  build s16k;
+  d11 = s21 >> (s16k & 31);
+  build xmovsem;
+  build reppost;
+}
+:^rep^"clrbit" d16, s21, "b"^bit_1_5 is op0_0=0x0 & op27_31=0x12 & rep & reppre & reppost & d16 & s21 & bit_1_5 {
+  build reppre;
+  build s21;
+  local b:4 = bit_1_5;
+  d16 = s21 & ~ (1:4 << b);
+  build reppost;
+}
+:^rep^"setbit" d16, s21, "b"^bit_1_5 is op0_0=0x1 & op27_31=0x12 & rep & reppre & reppost & d16 & s21 & bit_1_5 {
+  build reppre;
+  build s21;
+  local b:4 = bit_1_5;
+  d16 = s21 | (1:4 << b);
+  build reppost;
+}
+:^rep^"cmp" d16, s21, imm_0_15 is op27_31=0x10 & rep & reppre & reppost & d16 & s21 & imm_0_15 {
+  build reppre;
+  build s21;
+  local i:4 = imm_0_15;
+  cmp3(d16, s21, i);
+  build reppost;
+}
+:^rep^"ishr" d16, s21, imm_0_15 is op27_31=0xb & rep & reppre & reppost & d16 & s21 & imm_0_15 {
+  build reppre;
+  build s21;
+  local i:4 = imm_0_15;
+  d16 = s21 s>> (i & 31);
+  build reppost;
+}
+:^rep^"max" d16, s21, imm_0_15 is op27_31=0xf & rep & reppre & reppost & d16 & s21 & imm_0_15 {
+  build reppre;
+  build s21;
+  local i:4 = imm_0_15;
+  maxu(d16, s21, i);
+  build reppost;
+}
+:^rep^"min" d16, s21, imm_0_15 is op27_31=0xe & rep & reppre & reppost & d16 & s21 & imm_0_15 {
+  build reppre;
+  build s21;
+  local i:4 = imm_0_15;
+  minu(d16, s21, i);
+  build reppost;
+}
+:^rep^"mov" d16, imm_0_15 << sh5 is op27_31=0x11 & rep & reppre & reppost & d16 & imm_0_15 & sh5 {
+  build reppre;
+  local i:4 = imm_0_15;
+  local s:4 = sh5;
+  d16 = i << s;
+  build reppost;
+}
+:^rep^"mov" d16, imm_0_15 is op27_31=0x11 & rep & reppre & reppost & d16 & imm_0_15 & sh5=0 {
+  build reppre;
+  local i:4 = imm_0_15;
+  d16 = i;
+  build reppost;
+}
+:^rep^"mul8" d16, s21, imm_0_15 is op27_31=0xd & rep & reppre & reppost & d16 & s21 & imm_0_15 {
+  build reppre;
+  build s21;
+  local i:4 = imm_0_15;
+  d16 = (s21 & 0xff) * (i & 0xff);
+  build reppost;
+}
+:^rep^"rot" d16, s21, imm_0_15 is op27_31=0xc & rep & reppre & reppost & d16 & s21 & imm_0_15 {
+  build reppre;
+  build s21;
+  local i:4 = imm_0_15;
+  rotl(d16, s21, i);
+  build reppost;
+}
+:^rep^"shl" d16, s21, imm_0_15 is op27_31=0x9 & rep & reppre & reppost & d16 & s21 & imm_0_15 {
+  build reppre;
+  build s21;
+  local i:4 = imm_0_15;
+  d16 = s21 << (i & 31);
+  build reppost;
+}
+:^rep^"ushr" d16, s21, imm_0_15 is op27_31=0xa & rep & reppre & reppost & d16 & s21 & imm_0_15 {
+  build reppre;
+  build s21;
+  local i:4 = imm_0_15;
+  d16 = s21 >> (i & 31);
+  build reppost;
+}
+:^rep^xmov^peek^"add" d11, s21, s16k is op0_4=0x1 & op27_31=0x13 & rep & reppre & reppost & xmov & xmovsem & peek & d11 & s21 & s16k {
+  build reppre;
+  build s21;
+  build s16k;
+  local r:4 = s21 + s16k;
+  carry = zext(carry(s21, s16k));
+  d11 = r;
+  build xmovsem;
+  build reppost;
+}
+:^rep^xmov^peek^"addhi" d11, s21, s16k is op0_4=0x2 & op27_31=0x13 & rep & reppre & reppost & xmov & xmovsem & peek & d11 & s21 & s16k {
+  build reppre;
+  build s21;
+  build s16k;
+  d11 = s21 + s16k + carry;
+  build xmovsem;
+  build reppost;
+}
+:^rep^xmov^peek^"and" d11, s21, s16k is op0_4=0x5 & op27_31=0x13 & rep & reppre & reppost & xmov & xmovsem & peek & d11 & s21 & s16k {
+  build reppre;
+  build s21;
+  build s16k;
+  d11 = s21 & s16k;
+  build xmovsem;
+  build reppost;
+}
+:^rep^xmov^"not" d11, s16 is op0_4=0x8 & op27_31=0x13 & rep & reppre & reppost & xmov & xmovsem & d11 & s16 {
+  build reppre;
+  build s16;
+  d11 = ~s16;
+  build xmovsem;
+  build reppost;
+}
+:^rep^xmov^peek^"or" d11, s21, s16k is op0_4=0x6 & op27_31=0x13 & rep & reppre & reppost & xmov & xmovsem & peek & d11 & s21 & s16k {
+  build reppre;
+  build s21;
+  build s16k;
+  d11 = s21 | s16k;
+  build xmovsem;
+  build reppost;
+}
+:^rep^xmov^peek^"mov" d11, s16k is op0_4=0x6 & op27_31=0x13 & rep & reppre & reppost & xmov & xmovsem & peek & d11 & rs21=0 & s16k {
+  build reppre;
+  build s16k;
+  d11 = s16k;
+  build xmovsem;
+  build reppost;
+}
+:^rep^xmov^peek^"sub" d11, s21, s16k is op0_4=0x3 & op27_31=0x13 & rep & reppre & reppost & xmov & xmovsem & peek & d11 & s21 & s16k {
+  build reppre;
+  build s21;
+  build s16k;
+  local r:4 = s21 - s16k;
+  carry = 0 - zext(s21 < s16k);
+  d11 = r;
+  build xmovsem;
+  build reppost;
+}
+:^rep^xmov^peek^"subhi" d11, s21, s16k is op0_4=0x4 & op27_31=0x13 & rep & reppre & reppost & xmov & xmovsem & peek & d11 & s21 & s16k {
+  build reppre;
+  build s21;
+  build s16k;
+  d11 = s21 - s16k + carry;
+  build xmovsem;
+  build reppost;
+}
+:^rep^xmov^peek^"xor" d11, s21, s16k is op0_4=0x7 & op27_31=0x13 & rep & reppre & reppost & xmov & xmovsem & peek & d11 & s21 & s16k {
+  build reppre;
+  build s21;
+  build s16k;
+  d11 = s21 ^ s16k;
+  build xmovsem;
+  build reppost;
+}
+:iret is op25_31=0x69 & pendpost [ inslot = 1; globalset(inst_next, inslot); ] {
+  build pendpost;
+  local ra:4 = *[hwstack]:4 csp;
+  csp = csp + 4;
+  delayslot(1);
+  pflag = 0;
+  return [ra];
+}
+:ret is op25_31=0x68 & pendpost [ inslot = 1; globalset(inst_next, inslot); ] {
+  build pendpost;
+  local ra:4 = *[hwstack]:4 csp;
+  csp = csp + 4;
+  delayslot(1);
+  pflag = 0;
+  return [ra];
+}
+:bl "#"^abs is op26_31=0x38 & abs & pendpost [ inslot = 1; globalset(inst_next, inslot); ] {
+  build pendpost;
+  lr = (inst_start >> 2) + 2;
+  delayslot(1);
+  pflag = 0;
+  call abs;
+}
+:breq s21, "b"^bit5b, "#"^rel is op26_31=0x33 & s21 & bit5b & rel & pendpost [ inslot = 1; globalset(inst_next, inslot); ] {
+  build pendpost;
+  local t:1 = ((s21 >> bit5b) & 1) != 0;
+  delayslot(1);
+  pflag = pflag & (t == 0);
+  if (t) goto rel;
+}
+:breq s21, "b"^bit5b, "#"^rel is op26_31=0x33 & s21 & bit5b & rel & inslot=1 & boff [ pend = 1; ptgt = (inst_start >> 2) + boff; globalset(inst_next, pend); globalset(inst_next, ptgt); ] {
+  local t:1 = ((s21 >> bit5b) & 1) != 0;
+  pflag = t;
+}
+:breq s21, imm5, "#"^rel is op26_31=0x31 & s21 & imm5 & rel & pendpost [ inslot = 1; globalset(inst_next, inslot); ] {
+  build pendpost;
+  local t:1 = s21 == imm5;
+  delayslot(1);
+  pflag = pflag & (t == 0);
+  if (t) goto rel;
+}
+:breq s21, imm5, "#"^rel is op26_31=0x31 & s21 & imm5 & rel & inslot=1 & boff [ pend = 1; ptgt = (inst_start >> 2) + boff; globalset(inst_next, pend); globalset(inst_next, ptgt); ] {
+  local t:1 = s21 == imm5;
+  pflag = t;
+}
+:jump "#"^rel is op26_31=0x32 & bit5b=0 & rs21=0 & rel & pendpost [ inslot = 1; globalset(inst_next, inslot); ] {
+  build pendpost;
+  delayslot(1);
+  pflag = 0;
+  goto rel;
+}
+:jump "#"^rel is op26_31=0x32 & bit5b=0 & rs21=0 & rel & inslot=1 & boff [ pend = 1; ptgt = (inst_start >> 2) + boff; globalset(inst_next, pend); globalset(inst_next, ptgt); ] {
+  local t:1 = 1;
+  pflag = t;
+}
+:brne s21, "b"^bit5b, "#"^rel is op26_31=0x32 & s21 & bit5b & rel & pendpost [ inslot = 1; globalset(inst_next, inslot); ] {
+  build pendpost;
+  local t:1 = ((s21 >> bit5b) & 1) == 0;
+  delayslot(1);
+  pflag = pflag & (t == 0);
+  if (t) goto rel;
+}
+:brne s21, "b"^bit5b, "#"^rel is op26_31=0x32 & s21 & bit5b & rel & inslot=1 & boff [ pend = 1; ptgt = (inst_start >> 2) + boff; globalset(inst_next, pend); globalset(inst_next, ptgt); ] {
+  local t:1 = ((s21 >> bit5b) & 1) == 0;
+  pflag = t;
+}
+:brne s21, imm5, "#"^rel is op26_31=0x30 & s21 & imm5 & rel & pendpost [ inslot = 1; globalset(inst_next, inslot); ] {
+  build pendpost;
+  local t:1 = s21 != imm5;
+  delayslot(1);
+  pflag = pflag & (t == 0);
+  if (t) goto rel;
+}
+:brne s21, imm5, "#"^rel is op26_31=0x30 & s21 & imm5 & rel & inslot=1 & boff [ pend = 1; ptgt = (inst_start >> 2) + boff; globalset(inst_next, pend); globalset(inst_next, ptgt); ] {
+  local t:1 = s21 != imm5;
+  pflag = t;
+}
+:call "#"^abs is op26_31=0x35 & abs & pendpost [ inslot = 1; globalset(inst_next, inslot); ] {
+  build pendpost;
+  local ra:4 = inst_start + 8;
+  csp = csp - 4;
+  *[hwstack]:4 csp = ra;
+  delayslot(1);
+  pflag = 0;
+  call abs;
+}
+:setsecure "r02", "#"^skip3 is op26_31=0x3b & skip3 & pendpost {
+  local ok:1 = qrisc_setsecure(r02);
+  build pendpost;
+  if (ok) goto skip3;
+}
+:waitin is op26_31=0x36 & pendpost [ inslot = 1; globalset(inst_next, inslot); ] {
+  build pendpost;
+  delayslot(1);
+  pflag = 0;
+  local h:4 = qrisc_waitin();
+  goto [h];
+}
+:^rep^"addhi" d16, s21, imm_0_15 is op27_31=0x2 & rep & reppre & reppost & d16 & s21 & imm_0_15 {
+  build reppre;
+  build s21;
+  local i:4 = imm_0_15;
+  d16 = s21 + i + carry;
+  build reppost;
+}
+:^rep^"add" d16, s21, imm_0_15 is op27_31=0x1 & rep & reppre & reppost & d16 & s21 & imm_0_15 {
+  build reppre;
+  build s21;
+  local i:4 = imm_0_15;
+  local r:4 = s21 + i;
+  carry = zext(carry(s21, i));
+  d16 = r;
+  build reppost;
+}
+:^rep^"and" d16, s21, imm_0_15 is op27_31=0x5 & rep & reppre & reppost & d16 & s21 & imm_0_15 {
+  build reppre;
+  build s21;
+  local i:4 = imm_0_15;
+  d16 = s21 & i;
+  build reppost;
+}
+:^rep^"not" d16, imm_0_15 is op27_31=0x8 & rep & reppre & reppost & d16 & imm_0_15 {
+  build reppre;
+  local i:4 = imm_0_15;
+  d16 = ~i;
+  build reppost;
+}
+:^rep^"or" d16, s21, imm_0_15 is op27_31=0x6 & rep & reppre & reppost & d16 & s21 & imm_0_15 {
+  build reppre;
+  build s21;
+  local i:4 = imm_0_15;
+  d16 = s21 | i;
+  build reppost;
+}
+:^rep^"subhi" d16, s21, imm_0_15 is op27_31=0x4 & rep & reppre & reppost & d16 & s21 & imm_0_15 {
+  build reppre;
+  build s21;
+  local i:4 = imm_0_15;
+  d16 = s21 - i + carry;
+  build reppost;
+}
+:^rep^"sub" d16, s21, imm_0_15 is op27_31=0x3 & rep & reppre & reppost & d16 & s21 & imm_0_15 {
+  build reppre;
+  build s21;
+  local i:4 = imm_0_15;
+  local r:4 = s21 - i;
+  carry = 0 - zext(s21 < i);
+  d16 = r;
+  build reppost;
+}
+:^rep^"xor" d16, s21, imm_0_15 is op27_31=0x7 & rep & reppre & reppost & d16 & s21 & imm_0_15 {
+  build reppre;
+  build s21;
+  local i:4 = imm_0_15;
+  d16 = s21 ^ i;
+  build reppost;
+}
+:^rep^"nop" is op0_25=0x1000000 & op27_31=0x0 & rep & reppre & reppost {
+  build reppre;
+  
+  build reppost;
+}
+:^rep^"cread" d16, [s21 + cbase]preinc is op12_13=0x0 & op15_15=0x0 & op27_31=0x17 & rep & reppre & reppost & d16 & s21 & cbase & preinc & preincv & rs21 {
+  build reppre;
+  build s21;
+  local a:4 = s21 + cbase;
+  local pi:1 = preincv;
+  if (pi == 0) goto <rd>;
+  rs21 = a;
+<rd>
+  d16 = *[CREG]:4 (a * 4);
+  build reppost;
+}
+:^rep^"load" d16, [s21 + imm_0_11]preinc is op12_13=0x0 & op15_15=0x0 & op27_31=0x16 & rep & reppre & reppost & d16 & s21 & imm_0_11 & preinc & preincv & rs21 {
+  build reppre;
+  build s21;
+  local o:4 = imm_0_11;
+  local a:8;
+  lsaddr(a, s21);
+  a = a + zext(o);
+  local pi:1 = preincv;
+  if (pi == 0) goto <ld>;
+  rs21 = s21 + o;
+<ld>
+  d16 = *[MEM]:4 a;
+  build reppost;
+}
+:^rep^"sread" d16, [s21 + sbase]preinc is op12_13=0x0 & op15_15=0x1 & op27_31=0x17 & rep & reppre & reppost & d16 & s21 & sbase & preinc & preincv & rs21 {
+  build reppre;
+  build s21;
+  local a:4 = s21 + sbase;
+  local pi:1 = preincv;
+  if (pi == 0) goto <rd>;
+  rs21 = a;
+<rd>
+  d16 = *[SREG]:4 (a * 4);
+  build reppost;
+}
+:^rep^"store" s16, [s21 + imm_0_11]preinc is op12_13=0x0 & op15_15=0x0 & op27_31=0x14 & rep & reppre & reppost & s16 & s21 & imm_0_11 & preinc & preincv & rs21 {
+  build reppre;
+  build s16;
+  build s21;
+  local v:4 = s16;
+  local o:4 = imm_0_11;
+  local a:8;
+  lsaddr(a, s21);
+  a = a + zext(o);
+  local pi:1 = preincv;
+  if (pi == 0) goto <st>;
+  rs21 = s21 + o;
+<st>
+  *[MEM]:4 a = v;
+  build reppost;
+}
+:^rep^"swrite" s16, [s21 + sbase]preinc is op12_13=0x0 & op15_15=0x1 & op27_31=0x15 & rep & reppre & reppost & s16 & s21 & sbase & preinc & preincv & rs21 {
+  build reppre;
+  build s16;
+  build s21;
+  local v:4 = s16;
+  local a:4 = s21 + sbase;
+  local pi:1 = preincv;
+  if (pi == 0) goto <wr>;
+  rs21 = a;
+<wr>
+  *[SREG]:4 (a * 4) = v;
+  build reppost;
+}
+:^rep^sds^"cwrite" s16, [s21 + cbase]preinc is op15_15=0x0 & op27_31=0x15 & rep & reppre & reppost & sds & sdsx & s16 & s21 & cbase & preinc & preincv & rs21 {
+  build reppre;
+  build s16;
+  build s21;
+  local v:4 = s16;
+  local a:4 = s21 + cbase;
+  local pi:1 = preincv;
+  if (pi == 0) goto <wr>;
+  rs21 = a;
+<wr>
+  *[CREG]:4 (a * 4) = v;
+  build sdsx;
+  build reppost;
+}

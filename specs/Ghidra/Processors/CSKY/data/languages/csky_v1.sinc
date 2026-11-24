@@ -1,0 +1,295 @@
+# SLEIGH specification for the C-SKY ABIv1 instruction set (CK510, CK610), the
+# 16-bit integer ISA with the coprocessor interface and the CK610 DSP multiply set.
+#
+# Written for unlace (issue #98). Encodings follow the GNU binutils C-SKY opcode
+# table (opcodes/csky-opc.h, csky_v1_opcodes, read for encoding facts only) and
+# were checked against csky-elf-objdump; semantics follow the CK610 instruction
+# set manual. r0 is the stack pointer and r15 the link register.
+
+@ifdef CSKY_BE
+define endian=big;
+@else
+define endian=little;
+@endif
+define alignment=2;
+
+define space ram      type=ram_space      size=4 default;
+define space register type=register_space size=4;
+
+define register offset=0x00 size=4 [ r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 ];
+define register offset=0x100 size=4 [ pc hi lo ];
+define register offset=0x200 size=1 [ C ];
+
+define token hw(16)
+	op15_12 = (12,15)
+	op15_11 = (11,15)
+	op15_10 = (10,15)
+	op15_9  = (9,15)
+	op15_8  = (8,15)
+	op15_7  = (7,15)
+	op15_4  = (4,15)
+	op15_3  = (3,15)
+	op15_2  = (2,15)
+	op15_0  = (0,15)
+	b11_8   = (8,11)
+	b10_0s  = (0,10) signed
+	b10_4   = (4,10)
+	b8_4    = (4,8)
+	crname  = (4,8)
+	cprname = (4,8)
+	cpcrname = (3,7)
+	cpidx   = (0,3)
+	b7_4    = (4,7)
+	b7_3    = (3,7)
+	b7_0    = (0,7)
+	b3_0    = (0,3)
+	b2_0    = (0,2)
+	b1_0    = (0,1)
+	b3      = (3,3)
+	rz      = (0,3)
+	rx      = (4,7)
+	ry      = (8,11)
+	rz8     = (0,2)
+	rzd     = (0,3)
+;
+
+attach variables [ rz rx ry rzd ] [ r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 ];
+attach variables [ rz8 ] [ r0 r1 r2 r3 r4 r5 r6 r7 ];
+attach names [ crname ] [ "cr0" "cr1" "cr2" "cr3" "cr4" "cr5" "cr6" "cr7" "cr8" "cr9" "cr10" "cr11" "cr12" "cr13" "cr14" "cr15" "cr16" "cr17" "cr18" "cr19" "cr20" "cr21" "cr22" "cr23" "cr24" "cr25" "cr26" "cr27" "cr28" "cr29" "cr30" "cr31" ];
+attach names [ cprname ] [ "cpr0" "cpr1" "cpr2" "cpr3" "cpr4" "cpr5" "cpr6" "cpr7" "cpr8" "cpr9" "cpr10" "cpr11" "cpr12" "cpr13" "cpr14" "cpr15" "cpr16" "cpr17" "cpr18" "cpr19" "cpr20" "cpr21" "cpr22" "cpr23" "cpr24" "cpr25" "cpr26" "cpr27" "cpr28" "cpr29" "cpr30" "cpr31" ];
+attach names [ cpcrname ] [ "cpcr0" "cpcr1" "cpcr2" "cpcr3" "cpcr4" "cpcr5" "cpcr6" "cpcr7" "cpcr8" "cpcr9" "cpcr10" "cpcr11" "cpcr12" "cpcr13" "cpcr14" "cpcr15" "cpcr16" "cpcr17" "cpcr18" "cpcr19" "cpcr20" "cpcr21" "cpcr22" "cpcr23" "cpcr24" "cpcr25" "cpcr26" "cpcr27" "cpcr28" "cpcr29" "cpcr30" "cpcr31" ];
+attach names [ cpidx ] [ "cp0" "cp1" "cp2" "cp3" "cp4" "cp5" "cp6" "cp7" "cp8" "cp9" "cp10" "cp11" "cp12" "cp13" "cp14" "cp15" ];
+
+define pcodeop breakpoint;
+define pcodeop sync;
+define pcodeop return_from_exception;
+define pcodeop return_from_interrupt;
+define pcodeop stop;
+define pcodeop wait;
+define pcodeop doze;
+define pcodeop idly4;
+define pcodeop trap;
+define pcodeop read_cr;
+define pcodeop write_cr;
+define pcodeop psr_set;
+define pcodeop psr_clear;
+define pcodeop coprocessor;
+define pcodeop dsp;
+
+macro bitrev(d, s) {
+	local v:4 = s;
+	v = ((v >> 1) & 0x55555555) | ((v & 0x55555555) << 1);
+	v = ((v >> 2) & 0x33333333) | ((v & 0x33333333) << 2);
+	v = ((v >> 4) & 0x0f0f0f0f) | ((v & 0x0f0f0f0f) << 4);
+	v = ((v >> 8) & 0x00ff00ff) | ((v & 0x00ff00ff) << 8);
+	d = (v >> 16) | (v << 16);
+}
+
+imm5: b8_4 is b8_4 { export *[const]:4 b8_4; }
+oimm5: v is b8_4 [ v = b8_4 + 1; ] { export *[const]:4 v; }
+imm7: b10_4 is b10_4 { export *[const]:4 b10_4; }
+memw: "("^rz^", "^v^")" is rz & b7_4 [ v = b7_4 << 2; ] { local a:4 = rz + v; export a; }
+memh: "("^rz^", "^v^")" is rz & b7_4 [ v = b7_4 << 1; ] { local a:4 = rz + v; export a; }
+memb: "("^rz^", "^b7_4^")" is rz & b7_4 { local a:4 = rz + b7_4; export a; }
+br11: dest is b10_0s [ dest = inst_start + 2 + (b10_0s << 1); ] { export *:4 dest; }
+lit: "[pc, "^v^"]" is b7_0 [ v = b7_0 << 2; ] { local a:4 = (inst_start + 2 + v) & 0xfffffffc; export *:4 a; }
+litaddr: a is b7_0 [ a = (inst_start + 2 + (b7_0 << 2)) & 0xfffffffc; ] { export *:4 a; }
+
+psrlist: "af" is b2_0=0 { export 0:1; }
+psrlist: "ie" is b2_0=1 { export 1:1; }
+psrlist: "fe" is b2_0=2 { export 2:1; }
+psrlist: "ie, fe" is b2_0=3 { export 3:1; }
+psrlist: "ee" is b2_0=4 { export 4:1; }
+psrlist: "ie, ee" is b2_0=5 { export 5:1; }
+psrlist: "fe, ee" is b2_0=6 { export 6:1; }
+psrlist: "ie, fe, ee" is b2_0=7 { export 7:1; }
+
+################################################################
+# 0x0000 - 0x01ff
+################################################################
+
+:bkpt is op15_0=0x0000 { breakpoint(); }
+:sync is op15_0=0x0001 { sync(); }
+:rte is op15_0=0x0002 { local t:4 = return_from_exception(); return [t]; }
+:rfi is op15_0=0x0003 { local t:4 = return_from_interrupt(); return [t]; }
+:stop is op15_0=0x0004 { stop(); }
+:wait is op15_0=0x0005 { wait(); }
+:doze is op15_0=0x0006 { doze(); }
+:idly4 is op15_0=0x0007 { idly4(); }
+:trap b1_0 is op15_2=0x0002 & b1_0 { local t:1 = b1_0; trap(t); }
+:cpseti cpidx is op15_4=0x001 & cpidx & b3_0 { local n:1 = b3_0; coprocessor(7:1, n); }
+:cprc is op15_0=0x000d { C = coprocessor(8:1); }
+:mvc rz is op15_4=0x002 & rz { rz = zext(C); }
+:mvcv rz is op15_4=0x003 & rz { rz = zext(!C); }
+:ldq "r4-r7, ("^rz^")" is op15_4=0x004 & rz { local a:4 = rz; r4 = *:4 a; r5 = *:4 (a + 4); r6 = *:4 (a + 8); r7 = *:4 (a + 12); }
+:stq "r4-r7, ("^rz^")" is op15_4=0x005 & rz { local a:4 = rz; *:4 a = r4; *:4 (a + 4) = r5; *:4 (a + 8) = r6; *:4 (a + 12) = r7; }
+:ldm "r0-r15, (r0)" is op15_4=0x006 & b3_0=0 { local a:4 = r0; r0 = *:4 (a + 0); r1 = *:4 (a + 4); r2 = *:4 (a + 8); r3 = *:4 (a + 12); r4 = *:4 (a + 16); r5 = *:4 (a + 20); r6 = *:4 (a + 24); r7 = *:4 (a + 28); r8 = *:4 (a + 32); r9 = *:4 (a + 36); r10 = *:4 (a + 40); r11 = *:4 (a + 44); r12 = *:4 (a + 48); r13 = *:4 (a + 52); r14 = *:4 (a + 56); r15 = *:4 (a + 60); }
+:ldm "r1-r15, (r0)" is op15_4=0x006 & b3_0=1 { local a:4 = r0; r1 = *:4 (a + 0); r2 = *:4 (a + 4); r3 = *:4 (a + 8); r4 = *:4 (a + 12); r5 = *:4 (a + 16); r6 = *:4 (a + 20); r7 = *:4 (a + 24); r8 = *:4 (a + 28); r9 = *:4 (a + 32); r10 = *:4 (a + 36); r11 = *:4 (a + 40); r12 = *:4 (a + 44); r13 = *:4 (a + 48); r14 = *:4 (a + 52); r15 = *:4 (a + 56); }
+:ldm "r2-r15, (r0)" is op15_4=0x006 & b3_0=2 { local a:4 = r0; r2 = *:4 (a + 0); r3 = *:4 (a + 4); r4 = *:4 (a + 8); r5 = *:4 (a + 12); r6 = *:4 (a + 16); r7 = *:4 (a + 20); r8 = *:4 (a + 24); r9 = *:4 (a + 28); r10 = *:4 (a + 32); r11 = *:4 (a + 36); r12 = *:4 (a + 40); r13 = *:4 (a + 44); r14 = *:4 (a + 48); r15 = *:4 (a + 52); }
+:ldm "r3-r15, (r0)" is op15_4=0x006 & b3_0=3 { local a:4 = r0; r3 = *:4 (a + 0); r4 = *:4 (a + 4); r5 = *:4 (a + 8); r6 = *:4 (a + 12); r7 = *:4 (a + 16); r8 = *:4 (a + 20); r9 = *:4 (a + 24); r10 = *:4 (a + 28); r11 = *:4 (a + 32); r12 = *:4 (a + 36); r13 = *:4 (a + 40); r14 = *:4 (a + 44); r15 = *:4 (a + 48); }
+:ldm "r4-r15, (r0)" is op15_4=0x006 & b3_0=4 { local a:4 = r0; r4 = *:4 (a + 0); r5 = *:4 (a + 4); r6 = *:4 (a + 8); r7 = *:4 (a + 12); r8 = *:4 (a + 16); r9 = *:4 (a + 20); r10 = *:4 (a + 24); r11 = *:4 (a + 28); r12 = *:4 (a + 32); r13 = *:4 (a + 36); r14 = *:4 (a + 40); r15 = *:4 (a + 44); }
+:ldm "r5-r15, (r0)" is op15_4=0x006 & b3_0=5 { local a:4 = r0; r5 = *:4 (a + 0); r6 = *:4 (a + 4); r7 = *:4 (a + 8); r8 = *:4 (a + 12); r9 = *:4 (a + 16); r10 = *:4 (a + 20); r11 = *:4 (a + 24); r12 = *:4 (a + 28); r13 = *:4 (a + 32); r14 = *:4 (a + 36); r15 = *:4 (a + 40); }
+:ldm "r6-r15, (r0)" is op15_4=0x006 & b3_0=6 { local a:4 = r0; r6 = *:4 (a + 0); r7 = *:4 (a + 4); r8 = *:4 (a + 8); r9 = *:4 (a + 12); r10 = *:4 (a + 16); r11 = *:4 (a + 20); r12 = *:4 (a + 24); r13 = *:4 (a + 28); r14 = *:4 (a + 32); r15 = *:4 (a + 36); }
+:ldm "r7-r15, (r0)" is op15_4=0x006 & b3_0=7 { local a:4 = r0; r7 = *:4 (a + 0); r8 = *:4 (a + 4); r9 = *:4 (a + 8); r10 = *:4 (a + 12); r11 = *:4 (a + 16); r12 = *:4 (a + 20); r13 = *:4 (a + 24); r14 = *:4 (a + 28); r15 = *:4 (a + 32); }
+:ldm "r8-r15, (r0)" is op15_4=0x006 & b3_0=8 { local a:4 = r0; r8 = *:4 (a + 0); r9 = *:4 (a + 4); r10 = *:4 (a + 8); r11 = *:4 (a + 12); r12 = *:4 (a + 16); r13 = *:4 (a + 20); r14 = *:4 (a + 24); r15 = *:4 (a + 28); }
+:ldm "r9-r15, (r0)" is op15_4=0x006 & b3_0=9 { local a:4 = r0; r9 = *:4 (a + 0); r10 = *:4 (a + 4); r11 = *:4 (a + 8); r12 = *:4 (a + 12); r13 = *:4 (a + 16); r14 = *:4 (a + 20); r15 = *:4 (a + 24); }
+:ldm "r10-r15, (r0)" is op15_4=0x006 & b3_0=10 { local a:4 = r0; r10 = *:4 (a + 0); r11 = *:4 (a + 4); r12 = *:4 (a + 8); r13 = *:4 (a + 12); r14 = *:4 (a + 16); r15 = *:4 (a + 20); }
+:ldm "r11-r15, (r0)" is op15_4=0x006 & b3_0=11 { local a:4 = r0; r11 = *:4 (a + 0); r12 = *:4 (a + 4); r13 = *:4 (a + 8); r14 = *:4 (a + 12); r15 = *:4 (a + 16); }
+:ldm "r12-r15, (r0)" is op15_4=0x006 & b3_0=12 { local a:4 = r0; r12 = *:4 (a + 0); r13 = *:4 (a + 4); r14 = *:4 (a + 8); r15 = *:4 (a + 12); }
+:ldm "r13-r15, (r0)" is op15_4=0x006 & b3_0=13 { local a:4 = r0; r13 = *:4 (a + 0); r14 = *:4 (a + 4); r15 = *:4 (a + 8); }
+:ldm "r14-r15, (r0)" is op15_4=0x006 & b3_0=14 { local a:4 = r0; r14 = *:4 (a + 0); r15 = *:4 (a + 4); }
+:ldm "r15-r15, (r0)" is op15_4=0x006 & b3_0=15 { local a:4 = r0; r15 = *:4 (a + 0); }
+:stm "r0-r15, (r0)" is op15_4=0x007 & b3_0=0 { local a:4 = r0; *:4 (a + 0) = r0; *:4 (a + 4) = r1; *:4 (a + 8) = r2; *:4 (a + 12) = r3; *:4 (a + 16) = r4; *:4 (a + 20) = r5; *:4 (a + 24) = r6; *:4 (a + 28) = r7; *:4 (a + 32) = r8; *:4 (a + 36) = r9; *:4 (a + 40) = r10; *:4 (a + 44) = r11; *:4 (a + 48) = r12; *:4 (a + 52) = r13; *:4 (a + 56) = r14; *:4 (a + 60) = r15; }
+:stm "r1-r15, (r0)" is op15_4=0x007 & b3_0=1 { local a:4 = r0; *:4 (a + 0) = r1; *:4 (a + 4) = r2; *:4 (a + 8) = r3; *:4 (a + 12) = r4; *:4 (a + 16) = r5; *:4 (a + 20) = r6; *:4 (a + 24) = r7; *:4 (a + 28) = r8; *:4 (a + 32) = r9; *:4 (a + 36) = r10; *:4 (a + 40) = r11; *:4 (a + 44) = r12; *:4 (a + 48) = r13; *:4 (a + 52) = r14; *:4 (a + 56) = r15; }
+:stm "r2-r15, (r0)" is op15_4=0x007 & b3_0=2 { local a:4 = r0; *:4 (a + 0) = r2; *:4 (a + 4) = r3; *:4 (a + 8) = r4; *:4 (a + 12) = r5; *:4 (a + 16) = r6; *:4 (a + 20) = r7; *:4 (a + 24) = r8; *:4 (a + 28) = r9; *:4 (a + 32) = r10; *:4 (a + 36) = r11; *:4 (a + 40) = r12; *:4 (a + 44) = r13; *:4 (a + 48) = r14; *:4 (a + 52) = r15; }
+:stm "r3-r15, (r0)" is op15_4=0x007 & b3_0=3 { local a:4 = r0; *:4 (a + 0) = r3; *:4 (a + 4) = r4; *:4 (a + 8) = r5; *:4 (a + 12) = r6; *:4 (a + 16) = r7; *:4 (a + 20) = r8; *:4 (a + 24) = r9; *:4 (a + 28) = r10; *:4 (a + 32) = r11; *:4 (a + 36) = r12; *:4 (a + 40) = r13; *:4 (a + 44) = r14; *:4 (a + 48) = r15; }
+:stm "r4-r15, (r0)" is op15_4=0x007 & b3_0=4 { local a:4 = r0; *:4 (a + 0) = r4; *:4 (a + 4) = r5; *:4 (a + 8) = r6; *:4 (a + 12) = r7; *:4 (a + 16) = r8; *:4 (a + 20) = r9; *:4 (a + 24) = r10; *:4 (a + 28) = r11; *:4 (a + 32) = r12; *:4 (a + 36) = r13; *:4 (a + 40) = r14; *:4 (a + 44) = r15; }
+:stm "r5-r15, (r0)" is op15_4=0x007 & b3_0=5 { local a:4 = r0; *:4 (a + 0) = r5; *:4 (a + 4) = r6; *:4 (a + 8) = r7; *:4 (a + 12) = r8; *:4 (a + 16) = r9; *:4 (a + 20) = r10; *:4 (a + 24) = r11; *:4 (a + 28) = r12; *:4 (a + 32) = r13; *:4 (a + 36) = r14; *:4 (a + 40) = r15; }
+:stm "r6-r15, (r0)" is op15_4=0x007 & b3_0=6 { local a:4 = r0; *:4 (a + 0) = r6; *:4 (a + 4) = r7; *:4 (a + 8) = r8; *:4 (a + 12) = r9; *:4 (a + 16) = r10; *:4 (a + 20) = r11; *:4 (a + 24) = r12; *:4 (a + 28) = r13; *:4 (a + 32) = r14; *:4 (a + 36) = r15; }
+:stm "r7-r15, (r0)" is op15_4=0x007 & b3_0=7 { local a:4 = r0; *:4 (a + 0) = r7; *:4 (a + 4) = r8; *:4 (a + 8) = r9; *:4 (a + 12) = r10; *:4 (a + 16) = r11; *:4 (a + 20) = r12; *:4 (a + 24) = r13; *:4 (a + 28) = r14; *:4 (a + 32) = r15; }
+:stm "r8-r15, (r0)" is op15_4=0x007 & b3_0=8 { local a:4 = r0; *:4 (a + 0) = r8; *:4 (a + 4) = r9; *:4 (a + 8) = r10; *:4 (a + 12) = r11; *:4 (a + 16) = r12; *:4 (a + 20) = r13; *:4 (a + 24) = r14; *:4 (a + 28) = r15; }
+:stm "r9-r15, (r0)" is op15_4=0x007 & b3_0=9 { local a:4 = r0; *:4 (a + 0) = r9; *:4 (a + 4) = r10; *:4 (a + 8) = r11; *:4 (a + 12) = r12; *:4 (a + 16) = r13; *:4 (a + 20) = r14; *:4 (a + 24) = r15; }
+:stm "r10-r15, (r0)" is op15_4=0x007 & b3_0=10 { local a:4 = r0; *:4 (a + 0) = r10; *:4 (a + 4) = r11; *:4 (a + 8) = r12; *:4 (a + 12) = r13; *:4 (a + 16) = r14; *:4 (a + 20) = r15; }
+:stm "r11-r15, (r0)" is op15_4=0x007 & b3_0=11 { local a:4 = r0; *:4 (a + 0) = r11; *:4 (a + 4) = r12; *:4 (a + 8) = r13; *:4 (a + 12) = r14; *:4 (a + 16) = r15; }
+:stm "r12-r15, (r0)" is op15_4=0x007 & b3_0=12 { local a:4 = r0; *:4 (a + 0) = r12; *:4 (a + 4) = r13; *:4 (a + 8) = r14; *:4 (a + 12) = r15; }
+:stm "r13-r15, (r0)" is op15_4=0x007 & b3_0=13 { local a:4 = r0; *:4 (a + 0) = r13; *:4 (a + 4) = r14; *:4 (a + 8) = r15; }
+:stm "r14-r15, (r0)" is op15_4=0x007 & b3_0=14 { local a:4 = r0; *:4 (a + 0) = r14; *:4 (a + 4) = r15; }
+:stm "r15-r15, (r0)" is op15_4=0x007 & b3_0=15 { local a:4 = r0; *:4 (a + 0) = r15; }
+:dect rz, rzd, 1 is op15_4=0x008 & rzd & rz { if (!C) goto inst_next; rz = rz - 1; }
+:decf rz, rzd, 1 is op15_4=0x009 & rzd & rz { if (C) goto inst_next; rz = rz - 1; }
+:inct rz, rzd, 1 is op15_4=0x00a & rzd & rz { if (!C) goto inst_next; rz = rz + 1; }
+:incf rz, rzd, 1 is op15_4=0x00b & rzd & rz { if (C) goto inst_next; rz = rz + 1; }
+:jmp rz is op15_4=0x00c & rz { goto [rz]; }
+:jmp rz is op15_4=0x00c & rz & rz=15 { return [rz]; }
+:jsr rz is op15_4=0x00d & rz { local t:4 = rz; r15 = inst_next; call [t]; }
+:ff1 rz, rzd is op15_4=0x00e & rzd & rz { rz = lzcount(rz); }
+:brev rz, rzd is op15_4=0x00f & rzd & rz { bitrev(rz, rz); }
+:xtrb3 "r1", rz is op15_4=0x010 & rz { r1 = rz & 0xff; C = r1 != 0; }
+:xtrb2 "r1", rz is op15_4=0x011 & rz { r1 = (rz >> 8) & 0xff; C = r1 != 0; }
+:xtrb1 "r1", rz is op15_4=0x012 & rz { r1 = (rz >> 16) & 0xff; C = r1 != 0; }
+:xtrb0 "r1", rz is op15_4=0x013 & rz { r1 = rz >> 24; C = r1 != 0; }
+:zextb rz, rzd is op15_4=0x014 & rzd & rz { rz = zext(rz:1); }
+:sextb rz, rzd is op15_4=0x015 & rzd & rz { rz = sext(rz:1); }
+:zexth rz, rzd is op15_4=0x016 & rzd & rz { rz = zext(rz:2); }
+:sexth rz, rzd is op15_4=0x017 & rzd & rz { rz = sext(rz:2); }
+:declt rz, rzd, 1 is op15_4=0x018 & rzd & rz { rz = rz - 1; C = rz s< 0; }
+:tstnbz rz is op15_4=0x019 & rz { local v:4 = rz; C = ((v & 0xff) != 0) && ((v & 0xff00) != 0) && ((v & 0xff0000) != 0) && ((v & 0xff000000) != 0); }
+:decgt rz, rzd, 1 is op15_4=0x01a & rzd & rz { rz = rz - 1; C = rz s> 0; }
+:decne rz, rzd, 1 is op15_4=0x01b & rzd & rz { rz = rz - 1; C = rz != 0; }
+:clrt rz is op15_4=0x01c & rz { if (!C) goto inst_next; rz = 0; }
+:clrf rz is op15_4=0x01d & rz { if (C) goto inst_next; rz = 0; }
+:abs rz, rzd is op15_4=0x01e & rzd & rz { local v:4 = rz; if (v s>= 0) goto inst_next; rz = -v; }
+:not rz, rzd is op15_4=0x01f & rzd & rz { rz = ~rz; }
+
+################################################################
+# 0x0200 - 0x1fff: two-register forms (rz = bits 3-0, rx = bits 7-4)
+################################################################
+
+:movt rz, rx is op15_8=0x02 & rz & rx { if (!C) goto inst_next; rz = rx; }
+:mult rz, rzd, rx is op15_8=0x03 & rzd & rz & rx { rz = rz * rx; }
+:subu rz, rzd, rx is op15_8=0x05 & rzd & rz & rx { rz = rz - rx; }
+:addc rz, rzd, rx is op15_8=0x06 & rzd & rz & rx { local a:4 = rz; local b:4 = rx; local c:4 = zext(C); C = carry(a, b) || carry(a + b, c); rz = a + b + c; }
+:subc rz, rzd, rx is op15_8=0x07 & rzd & rz & rx { local a:4 = rz; local b:4 = rx; local nb:4 = zext(!C); C = (a >= b) && ((a - b) >= nb); rz = a - b - nb; }
+:cprgr rz, cprname is op15_9=0x04 & rz & cprname & b8_4 { local n:1 = b8_4; rz = coprocessor(0:1, n); }
+:movf rz, rx is op15_8=0x0a & rz & rx { if (C) goto inst_next; rz = rx; }
+:lsr rz, rzd, rx is op15_8=0x0b & rzd & rz & rx { local n:4 = rx & 63; rz = rz >> n; }
+:cmphs rz, rx is op15_8=0x0c & rz & rx { C = rz >= rx; }
+:cmplt rz, rx is op15_8=0x0d & rz & rx { C = rz s< rx; }
+:tst rz, rx is op15_8=0x0e & rz & rx { C = (rz & rx) != 0; }
+:cmpne rz, rx is op15_8=0x0f & rz & rx { C = rz != rx; }
+:mfcr rz, crname is op15_9=0x08 & rz & crname & b8_4 { local n:1 = b8_4; rz = read_cr(n); }
+:psrclr psrlist is op15_3=0x23e & psrlist { local t:1 = psrlist; psr_clear(t); }
+:psrset psrlist is op15_3=0x23f & psrlist { local t:1 = psrlist; psr_set(t); }
+:mov rz, rx is op15_8=0x12 & rz & rx { rz = rx; }
+:bgenr rz, rx is op15_8=0x13 & rz & rx { local n:4 = rx & 63; rz = 1 << n; }
+:rsub rz, rzd, rx is op15_8=0x14 & rzd & rz & rx { rz = rx - rz; }
+:ixw rz, rzd, rx is op15_8=0x15 & rzd & rz & rx { rz = rz + (rx << 2); }
+:and rz, rzd, rx is op15_8=0x16 & rzd & rz & rx { rz = rz & rx; }
+:xor rz, rzd, rx is op15_8=0x17 & rzd & rz & rx { rz = rz ^ rx; }
+:mtcr rz, crname is op15_9=0x0c & rz & crname & b8_4 { local n:1 = b8_4; write_cr(n, rz); }
+:asr rz, rzd, rx is op15_8=0x1a & rzd & rz & rx { local n:4 = rx & 63; if (n < 32) goto <shok>; n = 31; <shok> rz = rz s>> n; }
+:lsl rz, rzd, rx is op15_8=0x1b & rzd & rz & rx { local n:4 = rx & 63; rz = rz << n; }
+:addu rz, rzd, rx is op15_8=0x1c & rzd & rz & rx { rz = rz + rx; }
+:ixh rz, rzd, rx is op15_8=0x1d & rzd & rz & rx { rz = rz + (rx << 1); }
+:or rz, rzd, rx is op15_8=0x1e & rzd & rz & rx { rz = rz | rx; }
+:andn rz, rzd, rx is op15_8=0x1f & rzd & rz & rx { rz = rz & ~rx; }
+
+################################################################
+# 0x2000 - 0x3fff: register-immediate forms
+################################################################
+
+:addi rz, rzd, oimm5 is op15_9=0x10 & rzd & rz & oimm5 { rz = rz + oimm5; }
+:cmplti rz, oimm5 is op15_9=0x11 & rz & oimm5 { C = rz s< oimm5; }
+:subi rz, rzd, oimm5 is op15_9=0x12 & rzd & rz & oimm5 { rz = rz - oimm5; }
+:cpwgr rz, cprname is op15_9=0x13 & rz & cprname & b8_4 { local n:1 = b8_4; coprocessor(1:1, n, rz); }
+:rsubi rz, rzd, imm5 is op15_9=0x14 & rzd & rz & imm5 { rz = imm5 - rz; }
+:cmpnei rz, imm5 is op15_9=0x15 & rz & imm5 { C = rz != imm5; }
+:bmaski rz, imm5 is op15_9=0x16 & rz & imm5 { local n:4 = imm5; rz = 0xffffffff; if (n == 0) goto inst_next; rz = (1 << n) - 1; }
+:divu rz, rzd, "r1" is op15_4=0x2c1 & rzd & rz { rz = rz / r1; }
+:mflos rz is op15_4=0x2c2 & rz { rz = dsp(0:1, lo); }
+:mfhis rz is op15_4=0x2c3 & rz { rz = dsp(1:1, hi); }
+:mtlo rz is op15_4=0x2c4 & rz { lo = rz; }
+:mthi rz is op15_4=0x2c5 & rz { hi = rz; }
+:mflo rz is op15_4=0x2c6 & rz { rz = lo; }
+:mfhi rz is op15_4=0x2c7 & rz { rz = hi; }
+:andi rz, rzd, imm5 is op15_9=0x17 & rzd & rz & imm5 { rz = rz & imm5; }
+:bclri rz, rzd, imm5 is op15_9=0x18 & rzd & rz & imm5 { rz = rz & ~(1 << imm5); }
+:bgeni rz, imm5 is op15_9=0x19 & rz & imm5 { rz = 1 << imm5; }
+:cpwir rz is op15_4=0x320 & rz { coprocessor(2:1, rz); }
+:divs rz, rzd, "r1" is op15_4=0x321 & rzd & rz { rz = rz s/ r1; }
+:cprsr rz is op15_4=0x322 & rz { rz = coprocessor(3:1); }
+:cpwsr rz is op15_4=0x323 & rz { coprocessor(4:1, rz); }
+:bseti rz, rzd, imm5 is op15_9=0x1a & rzd & rz & imm5 { rz = rz | (1 << imm5); }
+:btsti rz, imm5 is op15_9=0x1b & rz & imm5 { C = ((rz >> imm5) & 1) != 0; }
+:xsr rz, rzd, 1 is op15_9=0x1c & rzd & b8_4=0 & rz { local v:4 = rz; local c:4 = zext(C); C = (v & 1) != 0; rz = (v >> 1) | (c << 31); }
+:rotli rz, rzd, imm5 is op15_9=0x1c & rzd & rz & imm5 { local v:4 = rz; rz = (v << imm5) | (v >> (32 - imm5)); }
+:asrc rz, rzd, 1 is op15_9=0x1d & rzd & b8_4=0 & rz { C = (rz & 1) != 0; rz = rz s>> 1; }
+:asri rz, rzd, imm5 is op15_9=0x1d & rzd & rz & imm5 { rz = rz s>> imm5; }
+:lslc rz, rzd, 1 is op15_9=0x1e & rzd & b8_4=0 & rz { C = (rz s< 0); rz = rz << 1; }
+:lsli rz, rzd, imm5 is op15_9=0x1e & rzd & rz & imm5 { rz = rz << imm5; }
+:lsrc rz, rzd, 1 is op15_9=0x1f & rzd & b8_4=0 & rz { C = (rz & 1) != 0; rz = rz >> 1; }
+:lsri rz, rzd, imm5 is op15_9=0x1f & rzd & rz & imm5 { rz = rz >> imm5; }
+
+################################################################
+# 0x5000 - 0x6fff: DSP multiplies, movi, mulsh, coprocessor control
+################################################################
+
+:muls rz, rx is op15_8=0x50 & rz & rx { local p:8 = sext(rz) * sext(rx); lo = p:4; hi = p(4); }
+:mulsa rz, rx is op15_8=0x51 & rz & rx { local acc:8 = (zext(hi) << 32) | zext(lo); acc = acc + sext(rz) * sext(rx); lo = acc:4; hi = acc(4); }
+:mulss rz, rx is op15_8=0x52 & rz & rx { local acc:8 = (zext(hi) << 32) | zext(lo); acc = acc - sext(rz) * sext(rx); lo = acc:4; hi = acc(4); }
+:mulu rz, rx is op15_8=0x54 & rz & rx { local p:8 = zext(rz) * zext(rx); lo = p:4; hi = p(4); }
+:mulua rz, rx is op15_8=0x55 & rz & rx { local acc:8 = (zext(hi) << 32) | zext(lo); acc = acc + zext(rz) * zext(rx); lo = acc:4; hi = acc(4); }
+:mulus rz, rx is op15_8=0x56 & rz & rx { local acc:8 = (zext(hi) << 32) | zext(lo); acc = acc - zext(rz) * zext(rx); lo = acc:4; hi = acc(4); }
+:vmulsh rz, rx is op15_8=0x58 & rz & rx { dsp(2:1, rz, rx); }
+:vmulsha rz, rx is op15_8=0x59 & rz & rx { dsp(3:1, rz, rx); }
+:vmulshs rz, rx is op15_8=0x5a & rz & rx { dsp(4:1, rz, rx); }
+:vmulsw rz, rx is op15_8=0x5c & rz & rx { dsp(5:1, rz, rx); }
+:vmulswa rz, rx is op15_8=0x5d & rz & rx { dsp(6:1, rz, rx); }
+:vmulsws rz, rx is op15_8=0x5e & rz & rx { dsp(7:1, rz, rx); }
+:movi rz, imm7 is op15_11=0x0c & rz & imm7 { rz = imm7; }
+:mulsh rz, rzd, rx is op15_8=0x68 & rzd & rz & rx { rz = sext(rz:2) * sext(rx:2); }
+:mulsha rz, rx is op15_8=0x69 & rz & rx { local local_p:4 = sext(rz:2) * sext(rx:2); local acc:8 = (zext(hi) << 32) | zext(lo); acc = acc + sext(local_p); lo = acc:4; hi = acc(4); }
+:mulshs rz, rx is op15_8=0x6a & rz & rx { local local_p:4 = sext(rz:2) * sext(rx:2); local acc:8 = (zext(hi) << 32) | zext(lo); acc = acc - sext(local_p); lo = acc:4; hi = acc(4); }
+:cprcr rz8, cpcrname is op15_8=0x6b & rz8 & cpcrname & b7_3 { local n:1 = b7_3; rz8 = coprocessor(5:1, n); }
+:mulsw rz, rx is op15_8=0x6c & rz & rx { dsp(8:1, rz, rx); }
+:mulswa rz, rx is op15_8=0x6d & rz & rx { dsp(9:1, rz, rx); }
+:mulsws rz, rx is op15_8=0x6e & rz & rx { dsp(10:1, rz, rx); }
+:cpwcr rz8, cpcrname is op15_8=0x6f & rz8 & cpcrname & b7_3 { local n:1 = b7_3; coprocessor(6:1, n, rz8); }
+
+################################################################
+# 0x7000 - 0xffff: literal pool, loads and stores, branches
+################################################################
+
+:jmpi litaddr is op15_8=0x70 & litaddr { local t:4 = litaddr; goto [t]; }
+:lrw ry, lit is op15_12=0x7 & ry & lit { ry = lit; }
+:jsri litaddr is op15_8=0x7f & litaddr { local t:4 = litaddr; r15 = inst_next; call [t]; }
+:ld.w ry, memw is op15_12=0x8 & ry & memw { ry = *:4 memw; }
+:st.w ry, memw is op15_12=0x9 & ry & memw { *:4 memw = ry; }
+:ld.b ry, memb is op15_12=0xa & ry & memb { ry = zext(*:1 memb); }
+:st.b ry, memb is op15_12=0xb & ry & memb { *:1 memb = ry:1; }
+:ld.h ry, memh is op15_12=0xc & ry & memh { ry = zext(*:2 memh); }
+:st.h ry, memh is op15_12=0xd & ry & memh { *:2 memh = ry:2; }
+:bt br11 is op15_11=0x1c & br11 { if (C) goto br11; }
+:bf br11 is op15_11=0x1d & br11 { if (!C) goto br11; }
+:br br11 is op15_11=0x1e & br11 { goto br11; }
+:bsr br11 is op15_11=0x1f & br11 { r15 = inst_next; call br11; }

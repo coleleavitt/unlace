@@ -23,7 +23,7 @@ crate::kuna_flag!(
     "condcallpush",
     "skipping a call's return-address push in condition complexity",
     unset: false,
-    shipped: false
+    shipped: true
 );
 
 /// Bound on the varnodes visited walking back from the branch.

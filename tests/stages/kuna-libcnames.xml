@@ -30,6 +30,8 @@
     it: `fd` to `src` leaves `fd_2` as it was and gives the freed `fd` to no
     one; `v5` to `n` takes read's library name, so that local prints its
     number `v3`; and `v3` to `got` reaches it by that number.
+    Every pass sets `option condcallpush off`: the test pins the structure
+    that counts a call's return-address push, not the condcallpush fold.
 -->
 <bytechunk space="ram" offset="0x100000" readonly="true">
 c3
@@ -40,6 +42,7 @@ c3
   <com>clear architecture</com>
   <com>load file crates/unlace-analysis/tests/fixtures/libcnames_x86_64</com>
   <com>read symbols</com>
+  <com>option condcallpush off</com>
   <com>option helperroles off</com>
   <com>option libcnames off</com>
   <com>lo fu copy_file</com>

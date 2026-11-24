@@ -92,6 +92,8 @@
     in the second pass, and the de Morgan orientation ruleBlockOr applies turns
     the two equality guards into the inverted disjunction "su_euid() != " that
     guards the terminating arm.
+    Every pass sets `option condcallpush off`: the test pins the structure
+    that counts a call's return-address push, not the condcallpush fold.
 -->
 <bytechunk space="ram" offset="0x100000">
 b801000000c3662e0f1f840000000000b802000000c3662e0f1f840000000000b803000000c3662e0f1f840000000000b805000000c3662e0f1f840000000000b806000000c3662e0f1f840000000000c366662e0f1f8400000000000f1f400089f9e899ffffff85c07412e8a0ffffff39f07574e8a7ffffff39d0756be8beffffff89cf31c0e8c5ffffff8d7901e8bdffffff8d7902e8b5ffffff8d7903e8adffffff8d7904e8a5ffffff8d7905e89dffffff8d7906e895ffffff8d7907e88dffffff8d7908e885ffffff8d7909e87dffffff8d790ae875ffffff8d790be86dffffffc30f1f4000e843ffffffb8ffffffffc3
@@ -105,6 +107,7 @@ b801000000c3662e0f1f840000000000b802000000c3662e0f1f840000000000b803000000c3662e
 <symbol space="ram" offset="0x100060" name="f"/>
 </binaryimage>
 <script>
+  <com>option condcallpush off</com>
   <com>option condstmts off</com>
   <com>option condfold off</com>
   <com>lo fu f</com>

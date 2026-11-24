@@ -1,7 +1,11 @@
 @define IA64 "IA64"
 @include "x86.slaspec"
+@include "apx.sinc"
+@include "apx_map4.sinc"
+@include "apx_rex2map1.sinc"
 with : lockprefx=0 {
 @include "sgx.sinc"
 @include "fma.sinc"
 @include "amx.sinc"
 }
+@include "apx_evex.sinc"

@@ -25,7 +25,16 @@ fn scmp_fill_loop_decompiles() {
     assert!(!lower.contains("unimplemented"), "{stdout}");
     assert!(!lower.contains("bad instruction"), "{stdout}");
     assert!(!lower.contains("halt_baddata"), "{stdout}");
-    assert!(stdout.contains("(char *)0x1000"), "P1 is built with XPAH/XPAL: {stdout}");
-    assert!(stdout.contains("do {"), "the JNZ loop is recovered: {stdout}");
-    assert!(stdout.contains("0xfff"), "the pointer wraps in its 4 KiB page: {stdout}");
+    assert!(
+        stdout.contains("(char *)0x1000"),
+        "P1 is built with XPAH/XPAL: {stdout}"
+    );
+    assert!(
+        stdout.contains("do {"),
+        "the JNZ loop is recovered: {stdout}"
+    );
+    assert!(
+        stdout.contains("0xfff"),
+        "the pointer wraps in its 4 KiB page: {stdout}"
+    );
 }

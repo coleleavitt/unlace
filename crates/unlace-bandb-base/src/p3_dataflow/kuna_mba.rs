@@ -60,7 +60,7 @@ use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 
 /// Most distinct leaves the truth table covers (`2^6` evaluations).
-const MAX_LEAVES: usize = 6;
+pub(crate) const MAX_LEAVES: usize = 6;
 /// Highest degree and most monomials of a polynomial MBA.
 const MAX_DEGREE: usize = 4;
 const MAX_MONOMIALS: usize = 128;
@@ -70,14 +70,14 @@ const MAX_NODES: usize = 48;
 const MIN_BITWISE_OPS: usize = 3;
 const MAX_BITWISE_LEAVES: usize = 3;
 /// Most leaves of a nonlinear tree: its proof tries `2^n` inputs at every bit.
-const MAX_NONLINEAR_LEAVES: usize = 3;
+pub(crate) const MAX_NONLINEAR_LEAVES: usize = 3;
 /// Widest constant multiplier (or negated multiplier) the proof runs bit by bit.
 const MAX_MUL_BITS: u32 = 16;
 /// Most reachable carry states the proof follows before it gives up.
 const MAX_STATES: usize = 1024;
 
 #[derive(Clone, Debug, PartialEq)]
-enum Expr {
+pub(crate) enum Expr {
     Leaf(usize),
     Const(u64),
     Add(Box<Expr>, Box<Expr>),
@@ -93,7 +93,7 @@ enum Expr {
 }
 
 impl Expr {
-    fn eval(&self, leaves: &[u64], mask: u64) -> u64 {
+    pub(crate) fn eval(&self, leaves: &[u64], mask: u64) -> u64 {
         let v = match self {
             Expr::Leaf(i) => leaves[*i],
             Expr::Const(c) => *c,
@@ -110,7 +110,7 @@ impl Expr {
         v & mask
     }
 
-    fn ops(&self) -> usize {
+    pub(crate) fn ops(&self) -> usize {
         match self {
             Expr::Leaf(_) | Expr::Const(_) => 0,
             // `a + b * -1` is the IR's own spelling of `a - b`: the multiply is
@@ -143,7 +143,7 @@ impl Expr {
     }
 
     /// A linear combination of bitwise subterms and constants.
-    fn is_linear(&self) -> bool {
+    pub(crate) fn is_linear(&self) -> bool {
         match self {
             Expr::Const(_) => true,
             Expr::Add(a, b) | Expr::Sub(a, b) => a.is_linear() && b.is_linear(),
@@ -167,7 +167,7 @@ impl Expr {
         }
     }
 
-    fn has_arith(&self) -> bool {
+    pub(crate) fn has_arith(&self) -> bool {
         match self {
             Expr::Add(..) | Expr::Sub(..) | Expr::Neg(_) | Expr::Mul(..) | Expr::Prod(..) => true,
             Expr::And(a, b) | Expr::Or(a, b) | Expr::Xor(a, b) => a.has_arith() || b.has_arith(),
@@ -699,7 +699,7 @@ fn group_terms(b: &[u64], vars: &[usize], mask: u64) -> (Vec<(Expr, u64)>, u64) 
 }
 
 /// The cheapest expression equal to the linear MBA `f` over `n` leaves.
-fn simplify(f: &Expr, n: usize, mask: u64) -> Expr {
+pub(crate) fn simplify(f: &Expr, n: usize, mask: u64) -> Expr {
     let b = coefficients(f, n, mask);
     let multi: Vec<usize> = (1..b.len())
         .filter(|&s| s.count_ones() > 1 && b[s] != 0)
@@ -741,7 +741,7 @@ fn simplify(f: &Expr, n: usize, mask: u64) -> Expr {
 
 /// A polynomial over the conjunctions `AND(S)`: each monomial is the sorted
 /// list of its factors' leaf sets (the empty list is the constant term).
-type Poly = std::collections::BTreeMap<Vec<usize>, u64>;
+pub(crate) type Poly = std::collections::BTreeMap<Vec<usize>, u64>;
 
 fn poly_add(p: &mut Poly, m: Vec<usize>, c: u64, mask: u64) {
     let e = p.entry(m.clone()).or_insert(0);
@@ -753,7 +753,7 @@ fn poly_add(p: &mut Poly, m: Vec<usize>, c: u64, mask: u64) {
 
 /// The polynomial of `e`, or `None` past the degree or size cap or for a
 /// bitwise operator over arithmetic.
-fn to_poly(e: &Expr, n: usize, mask: u64) -> Option<Poly> {
+pub(crate) fn to_poly(e: &Expr, n: usize, mask: u64) -> Option<Poly> {
     let mut p = Poly::new();
     match e {
         Expr::Const(c) => poly_add(&mut p, Vec::new(), *c, mask),
@@ -800,7 +800,7 @@ fn to_poly(e: &Expr, n: usize, mask: u64) -> Option<Poly> {
 
 /// The normal form of a polynomial MBA: its linear part through [`simplify`]
 /// plus each higher-degree monomial as a product of conjunctions.
-fn from_poly(p: &Poly, n: usize, mask: u64) -> Expr {
+pub(crate) fn from_poly(p: &Poly, n: usize, mask: u64) -> Expr {
     let k = p.get(&Vec::new()).copied().unwrap_or(0);
     let linear = sum(
         p.iter()
@@ -840,7 +840,7 @@ fn splitmix(state: &mut u64) -> u64 {
 }
 
 /// Do `a` and `b` agree on 64 pseudo-random full-width inputs?
-fn agree(a: &Expr, b: &Expr, n: usize, mask: u64) -> bool {
+pub(crate) fn agree(a: &Expr, b: &Expr, n: usize, mask: u64) -> bool {
     let mut st = 0x6b75_6e61u64;
     (0..64).all(|_| {
         let leaves: Vec<u64> = (0..n).map(|_| splitmix(&mut st) & mask).collect();
@@ -848,7 +848,7 @@ fn agree(a: &Expr, b: &Expr, n: usize, mask: u64) -> bool {
     })
 }
 
-fn is_candidate(op: OpCode) -> bool {
+pub(crate) fn is_candidate(op: OpCode) -> bool {
     matches!(
         op,
         OpCode::CPUI_INT_ADD
@@ -1087,7 +1087,7 @@ impl Collector<'_> {
 }
 
 /// A replacement for the tree under one op.
-struct Rewrite {
+pub(crate) struct Rewrite {
     simple: Expr,
     leaves: Vec<LeafRef>,
     seen: Vec<(VarnodeId, Expr)>,
@@ -1314,7 +1314,7 @@ impl Circuit {
 /// is a proof and `Some(false)` a reachable state where the bits differ.
 /// `None`: a product of two terms, a multiplier too wide, or more than
 /// [`MAX_STATES`] states.
-fn prove_equal(a: &Expr, b: &Expr, n: usize, bits: u32) -> Option<bool> {
+pub(crate) fn prove_equal(a: &Expr, b: &Expr, n: usize, bits: u32) -> Option<bool> {
     let mask = if bits >= 64 {
         u64::MAX
     } else {
@@ -1361,7 +1361,7 @@ fn xor_const(e: Expr, k: u64) -> Expr {
 /// xor-ed back with `k = f(0)`, and for one leaf `x | f(0)` and
 /// `x & f(-1)`. The cheapest that agrees on random inputs and that
 /// [`prove_equal`] proves stands.
-fn nonlinear_simplify(f: &Expr, n: usize, bits: u32, budget: usize) -> Option<Expr> {
+pub(crate) fn nonlinear_simplify(f: &Expr, n: usize, bits: u32, budget: usize) -> Option<Expr> {
     let mask = if bits >= 64 {
         u64::MAX
     } else {
@@ -1392,6 +1392,46 @@ fn nonlinear_simplify(f: &Expr, n: usize, bits: u32, budget: usize) -> Option<Ex
 /// under bitwise ops and ops of several readers inlined and constants kept as
 /// numbers, tried only when such an arithmetic op was met.
 fn rewrite_nonlinear(data: &Funcdata, op: OpId, code: OpCode, size: int4) -> Option<Rewrite> {
+    let t = collect_deep(data, op, code, size)?;
+    if !t.mixed || t.n == 0 || t.n > MAX_NONLINEAR_LEAVES {
+        return None;
+    }
+    let simple = nonlinear_simplify(&t.expr, t.n, 8 * size as u32, t.budget)?;
+    Some(t.into_rewrite(simple))
+}
+
+/// The deep reading of the tree under an op ([`rewrite_nonlinear`]'s, and the
+/// `egraph` option's): arithmetic under bitwise ops, every op with several
+/// readers inlined, constants kept as numbers.
+pub(crate) struct DeepTree {
+    pub(crate) expr: Expr,
+    pub(crate) n: usize,
+    /// The tree mixes bitwise and arithmetic ops.
+    pub(crate) mixed: bool,
+    /// The op count a replacement must stay under: the ops under an op with
+    /// several readers stay for the other readers.
+    pub(crate) budget: usize,
+    leaves: Vec<LeafRef>,
+    seen: Vec<(VarnodeId, Expr)>,
+}
+
+impl DeepTree {
+    pub(crate) fn into_rewrite(self, simple: Expr) -> Rewrite {
+        Rewrite {
+            simple,
+            leaves: self.leaves,
+            seen: self.seen,
+        }
+    }
+}
+
+/// Collect the tree under `op` the deep way (at most [`MAX_LEAVES`] leaves).
+pub(crate) fn collect_deep(
+    data: &Funcdata,
+    op: OpId,
+    code: OpCode,
+    size: int4,
+) -> Option<DeepTree> {
     let mut col = Collector {
         data,
         size,
@@ -1408,21 +1448,30 @@ fn rewrite_nonlinear(data: &Funcdata, op: OpId, code: OpCode, size: int4) -> Opt
         mixed: false,
     };
     let expr = col.op(op, code, false)?;
-    let n = col.leaves.len();
-    let mba = col.mixed || (col.bitwise && expr.has_arith());
-    if !mba || n == 0 || n > MAX_NONLINEAR_LEAVES {
-        return None;
-    }
+    let mixed = col.mixed || (col.bitwise && expr.has_arith());
     let budget = expr.ops().saturating_sub(col.shared_ops);
-    let simple = nonlinear_simplify(&expr, n, 8 * size as u32, budget)?;
-    Some(Rewrite {
-        simple,
+    Some(DeepTree {
+        n: col.leaves.len(),
+        expr,
+        mixed,
+        budget,
         leaves: col.leaves,
         seen: col.seen,
     })
 }
 
-fn mask_of(size: int4) -> u64 {
+/// Materialize `rw` before `op` and make `op` a `COPY` of it.
+pub(crate) fn replace(data: &mut Funcdata, op: OpId, rw: &Rewrite, size: int4) -> int4 {
+    let res = emit(data, op, &rw.simple, rw, size);
+    let copy = crate::context::TypeOp::new(OpCode::CPUI_COPY, 0, "COPY");
+    data.op_set_opcode(op, copy);
+    if data.op_set_all_input(op, &[res]).is_err() {
+        return 0;
+    }
+    1
+}
+
+pub(crate) fn mask_of(size: int4) -> u64 {
     if size >= 8 {
         u64::MAX
     } else {
@@ -1559,13 +1608,7 @@ impl Rule for RuleMbaSimplify {
                 None => return 0,
             },
         };
-        let res = emit(data, op, &rw.simple, &rw, size);
-        let copy = crate::context::TypeOp::new(OpCode::CPUI_COPY, 0, "COPY");
-        data.op_set_opcode(op, copy);
-        if data.op_set_all_input(op, &[res]).is_err() {
-            return 0;
-        }
-        1
+        replace(data, op, &rw, size)
     }
 }
 

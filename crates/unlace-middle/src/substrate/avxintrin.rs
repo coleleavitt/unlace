@@ -62,6 +62,9 @@ pub fn intrinsic(name: &str, size: i32) -> Option<(String, Vec<usize>)> {
         return Some(rest_fma(rest, w));
     }
     let m = mnem.strip_prefix('v')?;
+    if let Some(named) = conversion(m, ext, size) {
+        return Some((named, vec![0]));
+    }
     // Packed float: add/sub/mul/div/min/max/sqrt/and/or/xor/andn + ps|pd.
     for (op, intr) in [
         ("add", "add"),
@@ -191,6 +194,64 @@ pub fn intrinsic(name: &str, size: i32) -> Option<(String, Vec<usize>)> {
     Some((named, ident(n)))
 }
 
+/// The element-pair conversions: `vpmovsx*` and `vpmovzx*` widen, named by the
+/// result width (`_mm256_cvtepi8_epi16`, `_mm256_cvtepu32_epi64`). The truncating and
+/// saturating narrowings (`vpmovdb`, `vpmovusdw`, `vpmovwb`) take their name from the
+/// source width, which the AVX-512F and AVX-512BW forms fix at 512 bits, so only those
+/// forms are named (`_mm512_cvtepi32_epi8`). The VL narrowings share one name across
+/// 128- and 256-bit sources and stay unnamed. Both keep the vector kind `i` on input and
+/// output, so the printed types agree.
+fn conversion(m: &str, ext: &str, size: i32) -> Option<String> {
+    let bits = |c: char| match c {
+        'b' => Some(8u32),
+        'w' => Some(16),
+        'd' => Some(32),
+        'q' => Some(64),
+        _ => None,
+    };
+    let pair = |p: &str| -> Option<(u32, u32)> {
+        let cs: Vec<char> = p.chars().collect();
+        let &[a, b] = cs.as_slice() else {
+            return None;
+        };
+        Some((bits(a)?, bits(b)?))
+    };
+    if let Some((sign, p)) = m
+        .strip_prefix("pmovsx")
+        .map(|p| ('i', p))
+        .or_else(|| m.strip_prefix("pmovzx").map(|p| ('u', p)))
+    {
+        let w = match size {
+            16 => "",
+            32 => "256",
+            64 => "512",
+            _ => return None,
+        };
+        let (sb, db) = pair(p)?;
+        if sb >= db {
+            return None;
+        }
+        return Some(format!("_mm{w}_cvtep{sign}{sb}_epi{db}"));
+    }
+    let (sat, p) = match m.strip_prefix("pmovus") {
+        Some(p) => ("cvtusep", p),
+        None => match m.strip_prefix("pmovs") {
+            Some(p) => ("cvtsep", p),
+            None => ("cvtep", m.strip_prefix("pmov")?),
+        },
+    };
+    let (sb, db) = pair(p)?;
+    let need = match sb {
+        16 => "avx512bw",
+        32 | 64 => "avx512f",
+        _ => return None,
+    };
+    if ext != need || db >= sb {
+        return None;
+    }
+    Some(format!("_mm512_{sat}i{sb}_epi{db}"))
+}
+
 /// The element kind of an intrinsic's vectors: `b'f'` for `_ps`/`_ss`,
 /// `b'd'` for `_pd`/`_sd`, `b'i'` for the integer forms.
 pub fn element_kind(intrinsic: &str) -> u8 {
@@ -273,6 +334,45 @@ pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn element_pair_conversions() {
+        assert_eq!(
+            intrinsic("vpmovsxbw_avx2", 32),
+            Some(("_mm256_cvtepi8_epi16".into(), vec![0]))
+        );
+        assert_eq!(
+            intrinsic("vpmovzxdq_avx2", 32),
+            Some(("_mm256_cvtepu32_epi64".into(), vec![0]))
+        );
+        assert_eq!(
+            intrinsic("vpmovsxbd_avx", 16),
+            Some(("_mm_cvtepi8_epi32".into(), vec![0]))
+        );
+        assert_eq!(
+            intrinsic("vpmovzxwd_avx512f", 64),
+            Some(("_mm512_cvtepu16_epi32".into(), vec![0]))
+        );
+        assert_eq!(
+            intrinsic("vpmovdb_avx512f", 16),
+            Some(("_mm512_cvtepi32_epi8".into(), vec![0]))
+        );
+        assert_eq!(
+            intrinsic("vpmovusdw_avx512f", 32),
+            Some(("_mm512_cvtusepi32_epi16".into(), vec![0]))
+        );
+        assert_eq!(
+            intrinsic("vpmovswb_avx512bw", 32),
+            Some(("_mm512_cvtsepi16_epi8".into(), vec![0]))
+        );
+        assert_eq!(
+            intrinsic("vpmovwb_avx512bw_mask", 32),
+            Some(("_mm512_mask_cvtepi16_epi8".into(), vec![0, 1, 2]))
+        );
+        assert_eq!(intrinsic("vpmovdb_avx512vl", 16), None);
+        assert_eq!(intrinsic("vpmovwb_avx512f", 16), None);
+        assert_eq!(intrinsic("vpmovsxbw_avx2", 8), None);
+    }
 
     #[test]
     fn names_and_orders() {

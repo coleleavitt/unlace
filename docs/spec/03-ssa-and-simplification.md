@@ -4242,7 +4242,12 @@ pair. Without the copies the parameters read as uninitialized frame registers.
 type-recovery flag — the gate the oppool2 pointer rules and
 `ActionInferTypes` key on (chapter 05) — and `ActionStartCleanUp` marks the
 transition into the cleanup phase. `ActionNormalizeSetup` (normalize variant
-only) strips prototype locks for the normalization style.
+only) strips prototype locks for the normalization style: it clears every input
+parameter, then drops the model lock and the output lock (C++ `coreaction.cc:4801`),
+so the prototype is re-derived from the model. It changes no count, so the pass
+reports no change of its own; the effect shows in the functions the normalize
+variant then recovers. A prototype with no symbol store has no inputs or output
+lock, so only the model lock is dropped there.
 
 **Per-iteration maintenance** (mainloop): `ActionSpacebase` marks
 stack-pointer varnodes and their types ahead of heritage; `ActionHeritage`

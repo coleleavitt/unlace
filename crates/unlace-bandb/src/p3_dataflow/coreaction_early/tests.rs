@@ -197,10 +197,56 @@ fn normalizesetup_reset_sets_normalization() {
         "reset must setNormalization(true)"
     );
 
-    // apply body is the W4-stubbed lock-stripping => no change count.
+    // apply strips prototype locks and signals no change count (C++ returns 0).
     let res = act.apply(&mut fd, &mut ctx);
     assert_eq!(res, 0);
     assert_eq!(act.base().count, 0);
+}
+
+// -----------------------------------------------------------------------------
+// ActionNormalizeSetup (apply): clears input, model and output locks
+// -----------------------------------------------------------------------------
+
+#[test]
+fn normalizesetup_apply_clears_proto_locks() {
+    use crate::dtype::{Datatype, type_metatype};
+
+    let mut fd = build_fd();
+    let mut ctx = ActionContext::new();
+    let mut act = ActionNormalizeSetup::boxed("base");
+
+    let void_type = Rc::new(Datatype::new(0, type_metatype::TYPE_VOID));
+    {
+        let fp = fd.get_func_proto_mut();
+        fp.attach_internal_store(void_type);
+        fp.set_model_lock(true);
+        fp.set_output_lock(true);
+    }
+    assert!(fd.get_func_proto().is_model_locked());
+    assert!(fd.get_func_proto().is_output_locked());
+
+    let res = act.apply(&mut fd, &mut ctx);
+    assert_eq!(res, 0);
+    assert_eq!(act.base().count, 0);
+    assert!(!fd.get_func_proto().is_model_locked(), "model lock cleared");
+    assert!(
+        !fd.get_func_proto().is_output_locked(),
+        "output lock cleared"
+    );
+}
+
+#[test]
+fn normalizesetup_apply_without_store_clears_model_lock() {
+    let mut fd = build_fd();
+    let mut ctx = ActionContext::new();
+    let mut act = ActionNormalizeSetup::boxed("base");
+
+    fd.get_func_proto_mut().set_model_lock(true);
+    assert!(fd.get_func_proto().is_model_locked());
+
+    let res = act.apply(&mut fd, &mut ctx);
+    assert_eq!(res, 0);
+    assert!(!fd.get_func_proto().is_model_locked(), "model lock cleared");
 }
 
 // -----------------------------------------------------------------------------

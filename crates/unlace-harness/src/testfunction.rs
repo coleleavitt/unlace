@@ -53,7 +53,6 @@ use unlace_base::types::{int4, uint4};
 use unlace_base::xml::{DocumentStorage, Element};
 
 use unlace_console::console::register_unlace_commands;
-use unlace_console::engine::bootstrap_program;
 use unlace_console::ifacedecomp::{
     DECOMPILE_MODULE, IfaceDecompData, execute, mainloop, register_console_commands,
     register_decomp_commands,
@@ -494,9 +493,13 @@ impl FunctionTestCollection {
             self.saw_program = true;
             return Ok(());
         }
-        let prog = bootstrap_program(Rc::clone(bi), &arch_id, &self.spec_roots).map_err(|e| {
-            TestError::Execution(format!("Error during architecture initialization: {e}"))
-        })?;
+        let options = unlace_decomp::loadoptions::LoadOptions::from_env_for_load();
+        let prog = unlace_console::engine::Bootstrap::new(&self.spec_roots)
+            .options(&options)
+            .xml_image(Rc::clone(bi), &arch_id)
+            .map_err(|e| {
+                TestError::Execution(format!("Error during architecture initialization: {e}"))
+            })?;
         if let Some(dcp) = self.dcp_mut() {
             dcp.conf = Some(prog);
         }

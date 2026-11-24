@@ -1327,10 +1327,7 @@ decomp_command!(
 /// the load, which is what every gate of an environment-mode load reads, with
 /// the Go release left to the image as an environment-mode load leaves it.
 fn console_load_options() -> unlace_decomp::loadoptions::LoadOptions {
-    unlace_decomp::loadoptions::LoadOptions {
-        go_version: None,
-        ..unlace_decomp::loadoptions::LoadOptions::from_env()
-    }
+    unlace_decomp::loadoptions::LoadOptions::from_env_for_load()
 }
 
 /// `load file`: [`bootstrap_from_file`] with [`console_load_options`] and the

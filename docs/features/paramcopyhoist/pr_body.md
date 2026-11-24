@@ -187,7 +187,7 @@ kuna catalog --check -> catalog OK: documents exactly the registered kuna option
 ## Artifacts
 
 `docs/features/paramcopyhoist/` — `analysis.md`, `plan.md`, `record.json`.
-Test: `tests/stages/ghdec-paramcopyhoist.xml` (two-pass; pass 1 `option
+Test: `tests/stages/ghdec-paramcopyhoist.toml` (two-pass; pass 1 `option
 paramcopyhoist off` asserts the bug, pass 2 `on` asserts the fix).
 Spec: `docs/spec/06-variables-and-merge.md` §6.4.
 

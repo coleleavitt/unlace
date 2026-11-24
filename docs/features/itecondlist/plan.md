@@ -18,7 +18,7 @@ Decided in favour of a **new named option** on three grounds:
 3. **The test.** A new flag is what buys the two-pass stage test that pins the
    *exact* `ceil(N/2)` defect. Reusing a pre-existing flag cannot: turning
    `iteregion` off removes **all** ternaries, so pass 1 would assert "no ternaries
-   at all", not "every other one missing". `tests/stages/ghdec-itecondlist.xml`
+   at all", not "every other one missing". `tests/stages/ghdec-itecondlist.toml`
    pins 2-of-3 with the option off and 3-of-3 with it on, over the same bytes.
 
 The alternative framing — "a coverage bug inside the already-gated

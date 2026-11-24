@@ -262,7 +262,7 @@ None of the 83 catalog rows controls SUBPIECE truncation lowering (grepped
   operator). This is a faithful-port completion whose *only* effect is emitted C, so per
   AGENTS.md's "when in doubt, gate it" it should ship as a settable row in `phases.toml`
   + `p0_knowledge/options.rs`, with the default-ON flip carried by the 0/675 ablation.
-- **Stage test**: `tests/stages/ghdec-subright.xml` (no angr analog) — two-pass, an
+- **Stage test**: `tests/stages/ghdec-subright.toml` (no angr analog) — two-pass, an
   8-byte big-endian store loop; option off = `SUB81(x,7)`, default = `(char)(x >> 0x38)`.
 - **Correctness value**: `SUB81` / `SUB84` are undeclared identifiers — kuna emits no
   helper header for them (grepped `unlace-cli`/`unlace-console`), so 5,919 call sites across

@@ -150,7 +150,7 @@ of the literal into the stack buffer) is untouched.
 - **`kuna catalog --check` → `catalog OK`** (no option added: `phases.toml`,
   `p0_knowledge/options.rs`, the catalog counts and `docs/options.md` are untouched).
 
-`tests/stages/ghdec-returncopysplit.xml` — **3 of 6 assertions pass pre-fix, 6/6 post-fix**.
+`tests/stages/ghdec-returncopysplit.toml` — **3 of 6 assertions pass pre-fix, 6/6 post-fix**.
 Real `ip` bytes: `__get_hz` at its real VMA `0x6cbf0` (433 bytes verbatim, plus one synthetic
 `0xc3` so the fall-through of the final `call __stack_chk_fail` terminates — the PLT stub is
 outside the chunk, so the engine cannot know it does not return), plus the 32-byte

@@ -42,7 +42,7 @@ the call that follows the clear.
 
 ## The tests
 
-`tests/stages/ghdec-zeroidiomuse.xml`, two-pass over a vendored reduction of the
+`tests/stages/ghdec-zeroidiomuse.toml`, two-pass over a vendored reduction of the
 witness loop: `option zeroidiomuse off` emits `watchdog()`, the default emits
 `watchdog(timers,2)`. 11 unit cases for the predicate, and the acceptance probe
 promoted to `tests/cli/argument-recovery-drops-both.json`.

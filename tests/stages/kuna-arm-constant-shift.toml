@@ -1,0 +1,119 @@
+# Authored ARM fixed-count LSL, adjacent to Kuna #849's register-count case.
+# A locked signed parameter shifted before an unsigned return conversion
+# has C11 UB for negative inputs and positive overflow. Pass 1 (default,
+# option armconstshift off) prints the shift as written (the bug). Pass 2
+# (armconstshift on) casts the shiftee before the operation, keeps signed
+# consumers, and declines signed compound assignment. No application bytes
+# are used.
+# The unchanged generated-C runtime oracle is arm_constant_shift.rs.
+
+[image]
+arch = 'ARM:LE:32:v5t:default'
+symbols = [
+    { space = 'ram', offset = '0x10000', name = 'ShiftLeftTwo' },
+    { space = 'ram', offset = '0x10040', name = 'ShiftSigned' },
+    { space = 'ram', offset = '0x10080', name = 'ShiftArithmetic' },
+    { space = 'ram', offset = '0x100c0', name = 'ShiftAndStore' },
+    { space = 'ram', offset = '0x10100', name = 'ShiftUnsigned' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10000'
+hex = '0001a0e11eff2fe1'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10040'
+hex = '0001a0e11eff2fe1'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10080'
+hex = '0001a0e1c00fa0e11eff2fe1'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100c0'
+hex = '0001a0e1000081e51eff2fe1'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10100'
+hex = '0001a0e11eff2fe1'
+
+[script]
+commands = [
+    'parse line extern uint4 ShiftLeftTwo(int4 value);',
+    'parse line extern int4 ShiftSigned(int4 value);',
+    'parse line extern int4 ShiftArithmetic(int4 value);',
+    'parse line extern int4 ShiftAndStore(int4 value, int4 *output);',
+    'parse line extern uint4 ShiftUnsigned(uint4 value);',
+    'load function ShiftLeftTwo',
+    'decompile',
+    'print C',
+    'load function ShiftSigned',
+    'decompile',
+    'print C',
+    'load function ShiftArithmetic',
+    'decompile',
+    'print C',
+    'load function ShiftAndStore',
+    'decompile',
+    'print C',
+    'load function ShiftUnsigned',
+    'decompile',
+    'print C',
+    'option armconstshift on',
+    'load function ShiftLeftTwo',
+    'decompile',
+    'print C',
+    'load function ShiftSigned',
+    'decompile',
+    'print C',
+    'load function ShiftArithmetic',
+    'decompile',
+    'print C',
+    'load function ShiftAndStore',
+    'decompile',
+    'print C',
+    'load function ShiftUnsigned',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'ARM constant LSL #1: armconstshift off shifts the four signed operands as written (bug reproduces), plus the unsigned control in pass 2'
+count = 5
+literal = 'return value << 2;'
+
+[[match]]
+name = 'ARM constant LSL #2: armconstshift on converts signed operands before shifting'
+count = 5
+regex = '\(uint4\)value\s*<<\s*2'
+
+[[match]]
+name = 'ARM constant LSL #3: armconstshift on restores signed results for signed consumers'
+count = 5
+regex = '\(int4\)\s*\(\s*\(uint4\)value'
+
+[[match]]
+name = 'ARM constant LSL #4: both passes preserve the locked signed parameter'
+count = 2
+literal = 'uint4 ShiftLeftTwo(int4 value)'
+
+[[match]]
+name = 'ARM constant LSL #5: neither pass shifts a signed variable in place'
+count = 0
+literal = '<<='
+
+[[match]]
+name = 'ARM constant LSL #6: both passes keep the arithmetic right shift'
+count = 2
+regex = '>>\s*(31|0x1f)'
+
+[[match]]
+name = 'ARM constant LSL #7: constants need no register-count guard'
+count = 0
+literal = '32u ?'

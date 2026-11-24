@@ -1,0 +1,52 @@
+# Kuna #849 signed consumers: converting the LSL shiftee to uint4 makes
+# counts 0..31 defined, but the guarded conditional must still deliver the
+# original signed result when its value is consumed by signed code.
+#
+# ShiftNegative tests the ARM N/V signed comparison after a register LSL.
+# ShiftArithmetic consumes the same result with ASR #31, which distinguishes
+# a signed result (-1 for a set sign bit) from an unsigned 0/1 result.
+
+[image]
+arch = 'ARM:LE:32:v5t:default'
+symbols = [
+    { space = 'ram', offset = '0x10000', name = 'ShiftNegative' },
+    { space = 'ram', offset = '0x10100', name = 'ShiftArithmetic' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10000'
+hex = '0110a0e31120a0e1000052e30100a0b30000a0a31eff2fe1'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10100'
+hex = '0110a0e31120a0e1c20fa0e11eff2fe1'
+
+[script]
+commands = [
+    'parse line extern int4 ShiftNegative(uint4 count);',
+    'parse line extern int4 ShiftArithmetic(uint4 count);',
+    'load function ShiftNegative',
+    'decompile',
+    'print C',
+    'load function ShiftArithmetic',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'ARM LSL signed consumers #1: cast the defined unsigned shift back to its signed p-code result type'
+count = 2
+regex = '\(int4\)\s*\(\s*\(uint4\)'
+
+[[match]]
+name = 'ARM LSL signed consumers #2: preserve the signed comparison with zero'
+count = 1
+regex = '(<\s*0|<=\s*-1)'
+
+[[match]]
+name = 'ARM LSL signed consumers #3: preserve arithmetic right shift of the sign bit'
+count = 1
+regex = '>>\s*(31|0x1f)'

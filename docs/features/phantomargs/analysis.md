@@ -486,7 +486,7 @@ with the option on**.
 **What the fixtures test now.** `tests/stages/kuna-argclobber.xml` is re-cut onto
 the real witness shape (clobber on one path, `idivl` remainder on the other) and
 asserts that the *quotient* the caller uses survives both passes while the
-remainder and the third argument go. `tests/stages/kuna-argclobber-guards.xml`
+remainder and the third argument go. `tests/stages/kuna-argclobber-guards.toml`
 uses that same caller so the only thing keeping its argument is the callee-body
-clause. `tests/stages/kuna-argclobber-forward.xml` is the review's `fix2.s`,
+clause. `tests/stages/kuna-argclobber-forward.toml` is the review's `fix2.s`,
 asserting that both the argument and the second parameter survive both passes.

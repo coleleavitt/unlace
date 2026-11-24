@@ -1,0 +1,86 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/rust_fmt_str_real_x86_64',
+    'read symbols',
+    'option setlanguage rust-language',
+    'option rustfmt off',
+    'load function str_plain',
+    'decompile',
+    'print C',
+    'option rustfmt on',
+    'print C',
+    'load function str_flags',
+    'decompile',
+    'print C',
+    'load function str_pair',
+    'decompile',
+    'print C',
+    'load function str_integer',
+    'decompile',
+    'print C',
+    'load function str_result',
+    'decompile',
+    'print C',
+    'load function str_panic',
+    'decompile',
+    'print C',
+    'load function str_stderr',
+    'decompile',
+    'print C',
+    'load function str_debug',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'off and unknown Debug preserve the runtime sink'
+count = 2
+literal = '_print('
+
+[[match]]
+name = 'all seven calls use the original string data and length'
+count = 7
+literal = 'std::str::from_utf8_unchecked(std::slice::from_raw_parts('
+
+[[match]]
+name = 'plain string printing'
+count = 1
+literal = 'print!("{}"'
+
+[[match]]
+name = 'string widths precision and repeated indices'
+count = 1
+regex = 'println!\("\|\{0:·<8\}\|\{0:🦀\^10.3\}\|\{0:>7.3\}\|"'
+
+[[match]]
+name = 'two string arguments preserve order'
+count = 1
+literal = 'println!("{} / {}"'
+
+[[match]]
+name = 'String results retain destination writes'
+count = 2
+literal = 'std::ptr::write('
+
+[[match]]
+name = 'string panic message'
+count = 1
+literal = 'panic!("bad {}"'
+
+[[match]]
+name = 'string stderr message'
+count = 1
+literal = 'eprintln!("stderr {}"'

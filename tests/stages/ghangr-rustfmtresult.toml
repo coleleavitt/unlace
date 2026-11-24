@@ -1,0 +1,59 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/rust_fmt_result_real_x86_64',
+    'read symbols',
+    'option setlanguage rust-language',
+    'option rustfmt off',
+    'load function hex_width',
+    'decompile',
+    'print C',
+    'option rustfmt on',
+    'print C',
+    'load function decimal',
+    'decompile',
+    'print C',
+    'load function reordered',
+    'decompile',
+    'print C',
+    'load function local',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'format result off and incomplete local storage keep runtime calls'
+count = 2
+regex = '\bformat_inner\('
+
+[[match]]
+name = 'format String initializes the original destination with static width'
+count = 1
+regex = 'std::ptr::write\(.*std::string::String,format!\("0x\{:08x\} \{:>5\}"'
+
+[[match]]
+name = 'format String retains terminal newline'
+count = 1
+literal = 'format!("value {}\n"'
+
+[[match]]
+name = 'format String retains repeated argument indices'
+count = 1
+literal = 'format!("{0:#06x}/{1:+}/{0:#06x}"'
+
+[[match]]
+name = 'format String preserves hidden destination returns'
+count = 4
+literal = 'return a0;'

@@ -4207,7 +4207,7 @@ registers are opaque (`lr`/`sr`/`aex` lift to `aux_read`/`aux_write`), as are
 registers, which nothing sets; `bi`/`bih` are computed jumps. The DSP, FPU and
 64-bit multiply-accumulate extensions (major opcodes 6 and 7 and the
 accumulator forms of 5) and ARCompact are not decoded. Exercised by
-`tests/stages/kuna-arcv2-zeroloop.xml` and
+`tests/stages/kuna-arcv2-zeroloop.toml` and
 `kuna-sleigh/tests/arcv2_decode.rs` (one vector per instruction class and
 operand form, assembled by the GNU ARC assembler).
 
@@ -4257,6 +4257,22 @@ each of these was a bad instruction. Exercised by
 images whose C is checked (`div64` is a 64-bit division of the register
 pairs, `shuffle` with 0x1b is `bswap`, `itodf` a `(double)` cast). Gaps
 are listed in `specs/Ghidra/Processors/tricore/README.md`.
+
+### TriCore overflow and carry flags (#563)
+
+The 32-bit integer arithmetic of every TriCore language sets PSW.V from the exact
+result: each constructor computes the result in 64 bits (sign-extended operands,
+zero-extended for the `.u` forms) and `vflags`/`vflagsu` set V when it does not fit
+in 32 bits, with AV from bits 31 and 30 of the stored result. Before, V was the
+result's sign bit. The saturating forms clamp that exact value (`ssov32`,
+`suov32a`, `suov32s`); `msubs`/`msubs.u` multiply (they subtracted), `csubn`
+subtracts when D[d] is zero, `cadd`/`caddn`/`csub`/`csubn` leave the flags alone when
+their condition is false, `subc` takes its carry from D[a] + ~D[b] + C, and the
+`madd.q`/`msub.q`/`mul.q` 32x16 and 32x32 products are no longer truncated to 32
+bits before the shift. `sha` sets C to the OR of the bits shifted out (the top
+`count` bits left, the low `-count` bits right); `shas` leaves C alone. The 64-bit
+(E register) multiply-accumulate forms set V from the add's signed overflow (unsigned
+carry for `madds.u`). Checked with `tools/difffuzz` against Unicorn.
 ### AArch64 SVE2 and SVE2.1 (#98)
 
 `specs/Ghidra/Processors/AARCH64/data/languages/AARCH64_sve2.sinc` decodes
@@ -4932,16 +4948,20 @@ Notes in `specs/Ghidra/Processors/RISCV/README.md`.
 
 ### RISC-V Zabha (#98)
 
-`riscv.zabha.sinc` decodes Zabha 1.0, the byte (funct3 000) and halfword
+`riscv.zabha.sinc`, generated from the Sail model's `AMO` clause
+(`zaamo_insts.sail`, `--only` the byte and halfword forms) by `tools/gen_riscv_sail.py`
+under its abstract memory model (no translation faults, triggers or misalignment traps;
+a read is a RAM load and a write a RAM store), decodes Zabha 1.0, the byte (funct3 000) and halfword
 (funct3 001) forms of every A-extension AMO (`amoswap`, `amoadd`, `amoxor`,
 `amoand`, `amoor`, `amomin`, `amomax`, `amominu`, `amomaxu`) and, with
 Zacas, `amocas.b`/`amocas.h`, with the `.aq`/`.rl`/`.aqrl` suffixes, in RV32
 and RV64. They lift like the word forms: `rd` receives the old memory value
 sign-extended to the register, the arithmetic and logical forms store the
-combined value, min/max store `rs2` only when it wins the (signed or
-unsigned) comparison, and `amocas` stores `rs2` only when memory equals the
-low byte or halfword of the old `rd`. Before, all of them were bad
-instructions. Exercised by `unlace-cli/tests/riscv_zabha.rs`: one probe row
+combined value, min/max store whichever of `rs2` and the old value wins the
+(signed or unsigned) comparison, as Sail always writes back, and `amocas` stores `rs2` only when memory equals the
+low byte or halfword of the old `rd`. The ordering bits `aq`/`rl` change only the
+mnemonic. The generated file decodes every word the hand-written one did, and both
+agree with QEMU. Before the hand-written file, all of them were bad instructions. Exercised by `unlace-cli/tests/riscv_zabha.rs`: one probe row
 per encoding against LLVM's names, RV32 and RV64, and LLVM-selected 8- and
 16-bit `atomicrmw`/`cmpxchg` functions that decompile with no bad or
 unimplemented instruction.
@@ -5618,7 +5638,7 @@ opaque pcodeop over its register operands, because the semantics are not
 documented. An iOS kernelcache function that used to stop at its first
 `GENTER` with a bad-instruction halt now decodes through it. These are
 decode-table corrections with no option. Pinned by
-`tests/stages/kuna-a64-sysregs.xml`.
+`tests/stages/kuna-a64-sysregs.toml`.
 
 
 ## 2.15 Itanium exception edges

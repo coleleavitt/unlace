@@ -63,7 +63,7 @@ normally. Every primitive the tail needs already existed
 Confirmed by construction rather than by reading: with the rule disabled at
 runtime (`option togglerule subright off`) today's build reproduces the exact
 pre-fix rendering, and with it enabled it produces upstream's shape — see
-`tests/stages/ghdec-subright.xml`, whose two passes are precisely that A/B.
+`tests/stages/ghdec-subright.toml`, whose two passes are precisely that A/B.
 
 ## Not covered by any existing option
 

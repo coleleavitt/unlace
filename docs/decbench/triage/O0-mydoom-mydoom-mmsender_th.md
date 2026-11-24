@@ -255,7 +255,7 @@ Risks to settle at build time:
 - Guard on "the address has an import-origin FunctionSymbol", not merely "any
   symbol", so a genuine indirect call through a data pointer is untouched.
 
-Stage test: `tests/stages/ghdec-peimportcall.xml` (no angr analog), two-pass — option
+Stage test: `tests/stages/ghdec-peimportcall.toml` (no angr analog), two-pass — option
 off = the overrun body, default = the function ends at the no-return call. Speed via
 `scripts.pipeline.timeit`; benchmark delta via
 `scripts.decbench.rescore --case O0-mydoom-mydoom-mmsender_th --siblings`, and it

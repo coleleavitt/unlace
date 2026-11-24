@@ -143,7 +143,7 @@ tractable part: the variable-merge (P6) and type-factory (P5) legs needed no cha
 
 ## Test
 
-`tests/stages/kuna-arraysubfield.xml`. Single image, four functions, gcc -O2 -no-pie:
+`tests/stages/kuna-arraysubfield.toml`. Single image, four functions, gcc -O2 -no-pie:
 `lo8`/`hi8` read 8 bytes at offsets 0 and 8 of a `char g[16]` global (the repair),
 `elem` reads one byte at offset 3 (the preservation), `shift64` is the reported
 reproducer. Assertion #7 pins `return v1 << 0x40;` — the part that is *not* fixed.

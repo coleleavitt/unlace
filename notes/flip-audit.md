@@ -47,7 +47,7 @@ Every run exited 0, and the two default runs were byte-identical for all 16 inpu
 - `retindexuse` (default `bpf`) does not change the clang-built `ebpf` fixtures. It does
   change `bpf_strlen` (the `ebpf_retindexuse` image in `crates/unlace-cli/tests/processors.toml`,
   run with `--raw-image --target eBPF:LE:64:default --base 0 --addr 0x0`).
-- Switching `evmcalls` off makes the ERC-20 runtime about 8x slower (0.68 s against 0.09 s): with
+- Switching `evmcalls` off makes the ERC-20 runtime about 9x slower (0.38 s against 0.04 s): with
   evmcalls off, the dispatcher goes through jump-table recovery.
 - The ARM inputs (`arm_aeabi` objects, ARM and Thumb) and the RISC-V Zfa/Zfh fixtures all change
   with their flips off.

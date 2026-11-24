@@ -124,7 +124,13 @@ fn query_is_read_only_and_reports_columns() {
         rows,
         vec![vec![serde_json::json!(16), serde_json::json!("cc")]]
     );
-    assert!(p.query("DELETE FROM patches").is_err());
+    assert!(
+        p.query("DELETE FROM patches")
+            .unwrap_err()
+            .to_string()
+            .contains("read-only")
+    );
+    assert!(p.query("PRAGMA user_version = 7").is_err());
     // writes still work after a refused query
     p.set("bytes 0x20 90").unwrap();
     assert_eq!(p.directives().unwrap().len(), 2);
@@ -193,4 +199,32 @@ fn a_file_project_is_created_once_and_reopened() {
     assert_eq!(p.directives().unwrap(), vec!["function 0x10=f"]);
     drop(p);
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_schema_description_names_every_real_column() {
+    let p = project();
+    for (table, keys, _, columns) in schema::DESCRIPTION {
+        let (_, rows) = p
+            .query(&format!(
+                "SELECT name FROM pragma_table_info('{table}') ORDER BY cid"
+            ))
+            .unwrap();
+        let real: Vec<String> = rows
+            .iter()
+            .map(|r| r[0].as_str().unwrap().to_string())
+            .collect();
+        let described: Vec<String> = columns.iter().map(|c| c.0.to_string()).collect();
+        assert_eq!(real, described, "{table}");
+        assert!(
+            keys.iter().all(|k| described.iter().any(|d| d == k)),
+            "{table}"
+        );
+    }
+    for table in schema::TABLES {
+        assert!(
+            schema::DESCRIPTION.iter().any(|d| d.0 == *table),
+            "{table} undescribed"
+        );
+    }
 }

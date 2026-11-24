@@ -191,7 +191,7 @@ fn usage() {
          unlace flirt make <lib.a|*.o ...> -o <out.pat> [--sig <out.sig>] [--libname NAME]\n\
          unlace rust-signatures check [--manifest PATH] [--json]\n\
          unlace sbom <binary> [--json] [--format cyclonedx|spdx] [-o FILE] [--slice ARCH]\n\
-         unlace project <init|set|unset|get|list|query|export|import> ... [--json]   # the SQLite project file of overrides\n\
+         unlace project <init|schema|set|unset|get|list|query|export|import> ... [--json|--jsonl]   # the SQLite project file of overrides\n\
          unlace --version\n\
          \n\
          --image NAME[+NAME...] (any subcommand): load those images of a dyld shared cache\n\

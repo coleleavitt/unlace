@@ -5541,15 +5541,16 @@ unlace project import ./a.out.unlace a.out.project.json [--replace]
 | command | does | `--json` document |
 |---|---|---|
 | `init <binary> [-o FILE] [--force]` | create the file (default `<binary>.unlace`); `--force` replaces one | `{project, binary:{sha256,path,size}, schema_version}` |
+| `schema` | every table and column with a one-line description (no file needed) | `{schema_version, tables:[{name, key:[column], description, columns:[{name, type, description}]}]}` |
 | `set FILE <directive\|@file>...` | store directives, all or none; each is checked against the `--assert` grammar first | `{project, stored:[directive]}` |
 | `unset FILE <directive>...` | remove what a directive sets (its value may be left off) | `{project, removed}` |
-| `get FILE <table> <key>` | one row: an address for `functions`/`data`/`patches`/`bookmarks`, `<kind> <target>` for `assertions`, the stored text otherwise | `{columns:[name], rows:[[value]]}` |
+| `get FILE <table> <key>` | one row: an address for `functions`/`data`/`patches`/`bookmarks`, `<kind> <target>` for `assertions`, the stored text otherwise | `{columns:[name], rows:[{column:value}]}` |
 | `list FILE [<table>]` | no table: every override as the directive it applies; a table: its rows | `{project, binary, directives:[directive]}`, or `{columns, rows}` |
-| `query FILE <SQL>` | any read-only SQL; a write is refused | `{columns, rows}` |
+| `query FILE <SQL>` | any read-only SQL: a statement that could write is refused before it runs | `{columns, rows}` |
 | `export FILE [-o OUT]` | canonical JSON: sorted, hex addresses | the export itself: `{format:"unlace-project", schema_version, binary, functions, prototypes, locals, types, data, comments, callsites, patches, bookmarks, assertions}` |
 | `import FILE <JSON> [--replace]` | write an export back; refuses another binary's | `{project, imported, replaced}` |
 
-In `{columns, rows}` an integer is a JSON number (an address above `i64::MAX` is negative: select
+`get`, `list` and `query` also take `--jsonl`: one JSON object per line instead of one document, a row as `{column:value}` (keys in the query's column order) or, for a plain `list`, `{directive}`. In `{columns, rows}` each row is an object keyed by column name; an integer is a JSON number (an address above `i64::MAX` is negative: select
 `printf('0x%x', address)`), text is a string, a blob is a hex string and NULL is `null`. Without
 `--json`, rows print tab-separated under a header line. `bookmark <addr> <title>` is the one
 project-only directive: it is stored and listed, never sent to the engine. Writers can run at the same

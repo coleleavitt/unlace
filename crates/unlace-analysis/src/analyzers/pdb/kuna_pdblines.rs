@@ -9,9 +9,9 @@
 //! per address wins; the compiler's "hidden" line numbers (`0xfeefee`,
 //! `0xf00f00`) and line 0 are dropped.
 //!
-//! Inert unless `pdb` locates a fingerprint-matching `.pdb` beside a PE, and
-//! committed only under `option pdblines on` (default off: it adds comments to
-//! the output).
+//! Inert unless `pdb` locates a fingerprint-matching `.pdb` beside a PE. Run at
+//! the commit (a deferred pass) and only under `option pdblines on` (default
+//! off: it adds comments to the output).
 
 use pdb::FallibleIterator;
 
@@ -34,12 +34,13 @@ impl AnalysisPass for PdbLinesPass {
     }
 
     fn run(&self, ctx: &AnalysisCtx) -> AnalysisOutput {
-        let mut out = AnalysisOutput::default();
-        let Some((mut pdb, image_base)) = super::open_matched(ctx) else {
-            return out;
-        };
-        out.comments = line_comments(&mut pdb, image_base);
-        out
+        super::guarded("pdblines", || {
+            let mut out = AnalysisOutput::default();
+            if let Some((mut pdb, image_base)) = super::open_matched(ctx) {
+                out.comments = line_comments(&mut pdb, image_base);
+            }
+            out
+        })
     }
 }
 

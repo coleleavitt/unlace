@@ -835,6 +835,12 @@ the schedule (`crates/unlace-decomp/src/infra/universalaction.rs
   cloned, SSA/def-use is untouched, and the printer re-emits the same ops in
   the new layout.
 
+`dedupitetail` has a pre-structuring counterpart, `option armhoist` (default
+off, `crates/unlace-lift/src/p2_lift/kuna_armhoist.rs (ActionArmHoist)`, §2.17):
+it moves the ops both arms of a branch share at their head or tail out of the
+arms in the pre-SSA p-code, so this chapter's structurer sees one copy instead
+of merging two leaves afterwards.
+
 A CFG split must leave every path performing the same writes, the same number
 of times. The p-code half of `node_split`,
 `crates/unlace-middle/src/substrate/funcdata_block.rs (CloneBlockOps)`,

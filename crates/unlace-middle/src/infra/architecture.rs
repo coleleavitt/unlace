@@ -3425,6 +3425,8 @@ impl Architecture {
             userops.register_builtin(BUILTIN_CTZ, &adapter)?;
             userops.register_builtin(BUILTIN_STRCPY, &adapter)?;
             userops.register_builtin(BUILTIN_VAARG, &adapter)?;
+            // (kuna satmul) the overflow-saturating multiply before operator new[].
+            userops.register_builtin(crate::userop::BUILTIN_SATURATED_MUL, &adapter)?;
             // (kuna kernelbug) the Linux `__bug_table` trap statements.
             userops.register_builtin(BUILTIN_KERNEL_BUG, &adapter)?;
             userops.register_builtin(BUILTIN_KERNEL_WARN, &adapter)?;

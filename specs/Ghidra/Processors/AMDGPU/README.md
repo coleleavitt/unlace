@@ -103,4 +103,3 @@ Source operand codes 235-239 (`src_shared_base`, `src_shared_limit`, `src_privat
 `aperture_register` user op (their values are set by the hardware), and GFX9 decodes
 `v_swap_b32` (VOP1 opcode 81). Found by the real-code sweep (`notes/real-code-sweep.md`):
 clang's gfx900 output reads `src_private_base` in every function that takes a stack address.
-||||||| dfe64ae908

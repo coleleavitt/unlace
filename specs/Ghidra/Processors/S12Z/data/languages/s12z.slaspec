@@ -34,6 +34,14 @@ define token oprtok(8)
   opr = (0,7)
   opr2 = (6,7)
   opr6 = (0,5)
+  oprr = (4,5)
+  oprlo = (0,3)
+  oprb5 = (5,5)
+  oprb3 = (3,3)
+  oprb2 = (2,2)
+  oprb1 = (1,1)
+  oprb0 = (0,0)
+  oprd = (0,2)
 ;
 define token rel7tok(8)
   r7flag = (7,7)
@@ -45,7 +53,7 @@ define token rel15tok(16)
 ;
 define token imm8tok(8) imm8 = (0,7);
 define token imm16tok(16) imm16 = (0,15);
-define token imm24tok(24) imm24 = (0,23);
+define token imm24tok(24) imm24 = (0,23) simm24 = (0,23) signed;
 define token imm32tok(32) imm32 = (0,31);
 
 attach variables rW [ D2 D3 D4 D5 ];
@@ -73,9 +81,50 @@ DB: rBL is rhi=1 & rmid=0 & rBL { export rBL; }
 DL: D6 is rhi=1 & rmid=1 & rBL=0 & D6 { export D6; }
 DL: D7 is rhi=1 & rmid=1 & rBL=1 & D7 { export D7; }
 
-# OPR memory operand (subset): 24-bit direct (0xFB) and 14-bit direct (10aaaaaa aaaaaaaa).
-OPRA: imm24 is opr=0xfb; imm24 { export *[const]:3 imm24; }
-OPRA: addr is opr2=2 & opr6; imm8 [ addr = (opr6 << 8) | imm8; ] { export *[const]:3 addr; }
+# OPR postbyte, memory modes. Base register field bits 5:4 = X, Y, S, PC; the
+# index register field bits 2:0 uses the data-register numbering above. Auto
+# increment/decrement, the register operand (10111ddd) and the short immediate
+# (0111nnnn) are not modelled yet.
+XYSP: X is oprr=0 & X { export X; }
+XYSP: Y is oprr=1 & Y { export Y; }
+XYSP: SP is oprr=2 & SP { export SP; }
+XYSP: PC is oprr=3 & PC { local p:3 = inst_start; export p; }
+
+ODn: D2 is oprd=0 & D2 { local v:3 = zext(D2); export v; }
+ODn: D3 is oprd=1 & D3 { local v:3 = zext(D3); export v; }
+ODn: D4 is oprd=2 & D4 { local v:3 = zext(D4); export v; }
+ODn: D5 is oprd=3 & D5 { local v:3 = zext(D5); export v; }
+ODn: D0 is oprd=4 & D0 { local v:3 = zext(D0); export v; }
+ODn: D1 is oprd=5 & D1 { local v:3 = zext(D1); export v; }
+ODn: D6 is oprd=6 & D6 { local v:3 = D6:3; export v; }
+ODn: D7 is oprd=7 & D7 { local v:3 = D7:3; export v; }
+
+# 01rrnnnn: (u4, xys)
+OPRA: oprlo, XYSP is opr2=1 & oprr!=3 & oprlo & XYSP { local ea:3 = XYSP + oprlo; export ea; }
+# 00aaaaaa aaaaaaaa: 14-bit direct
+OPRA: addr is opr2=0 & opr6; imm8 [ addr = (opr6 << 8) | imm8; ] { export *[const]:3 addr; }
+# 11111010 + 24 bits: direct
+OPRA: imm24 is opr=0xfa; imm24 { export *[const]:3 imm24; }
+# 11111110 + 24 bits: [ext24]
+OPRA: [imm24] is opr=0xfe; imm24 { local ea:3 = *:3 imm24:3; export ea; }
+# 11111a0b + 16 bits: 18-bit direct
+OPRA: addr is opr2=3 & oprr=3 & oprb3=1 & oprb1=0 & oprb2 & oprb0; imm16 [ addr = (oprb2 << 17) | (oprb0 << 16) | imm16; ] { export *[const]:3 addr; }
+# 11rr000s + 8 bits: (s9, xysp)
+OPRA: off, XYSP is opr2=3 & oprb3=0 & oprb2=0 & oprb1=0 & oprb0 & XYSP; imm8 [ off = imm8 - (oprb0 << 8); ] { local ea:3 = XYSP + off; export ea; }
+# 11rr010s + 8 bits: [s9, xysp]
+OPRA: [off, XYSP] is opr2=3 & oprb3=0 & oprb2=1 & oprb1=0 & oprb0 & XYSP; imm8 [ off = imm8 - (oprb0 << 8); ] { local p:3 = XYSP + off; local ea:3 = *:3 p; export ea; }
+# 11rr0010 + 24 bits: (s24, xysp)
+OPRA: simm24, XYSP is opr2=3 & oprlo=2 & XYSP; simm24 { local ea:3 = XYSP + simm24; export ea; }
+# 11rr0110 + 24 bits: [s24, xysp]
+OPRA: [simm24, XYSP] is opr2=3 & oprlo=6 & XYSP; simm24 { local p:3 = XYSP + simm24; local ea:3 = *:3 p; export ea; }
+# 10rr1ddd: (Dn, xys)
+OPRA: ODn, XYSP is opr2=2 & oprb3=1 & oprr!=3 & ODn & XYSP { local ea:3 = XYSP + ODn; export ea; }
+# 110r1ddd: [Dn, xy]
+OPRA: [ODn, XYSP] is opr2=3 & oprb5=0 & oprb3=1 & ODn & XYSP { local p:3 = XYSP + ODn; local ea:3 = *:3 p; export ea; }
+# 10hh0ddd + 16 bits: (u18, Dn)
+OPRA: off, ODn is opr2=2 & oprb3=0 & oprr & ODn; imm16 [ off = (oprr << 16) | imm16; ] { local ea:3 = off + ODn; export ea; }
+# 11101ddd + 24 bits: (u24, Dn)
+OPRA: imm24, ODn is opr2=3 & oprr=2 & oprb3=1 & ODn; imm24 { local ea:3 = imm24 + ODn; export ea; }
 
 rel: dest is r7flag=0 & r7 [ dest = inst_start + r7; ] { export *:3 dest; }
 rel: dest is r15flag=1 & r15 [ dest = inst_start + r15; ] { export *:3 dest; }

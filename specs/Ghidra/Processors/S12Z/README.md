@@ -53,3 +53,18 @@ unsigned short sub_0(short a0)
   return 0;
 }
 ```
+
+
+## Encoding check (second round)
+
+The opcode page 1 rows used here, the register field numbering (0-3 D2-D5,
+4-5 D0-D1, 6-7 D6-D7), the 7/15-bit branch displacement and the OPR postbyte
+modes were re-checked against the GNU binutils S12Z disassembler tables
+(sourceware.org binutils-gdb, opcodes/s12z-opc.c, read only for the encoding;
+no text taken). Corrections: the 14-bit direct OPR form is 00aaaaaa (not
+10aaaaaa) and the 24-bit direct form is postbyte 0xFA (0xFB is -(S)). Added
+OPR modes: (u4,xys), (s9,xysp), [s9,xysp], (s24,xysp), [s24,xysp], (Dn,xys),
+[Dn,xy], (u18,Dn), (u24,Dn), 18-bit direct and [ext24]. Still missing: the
+auto increment/decrement and stack push/pop OPR forms, the register (10111ddd)
+and short-immediate (0111nnnn) OPR operands, PC-relative OPR base is taken as
+the instruction start.

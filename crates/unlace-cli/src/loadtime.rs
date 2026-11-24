@@ -10,8 +10,9 @@ use std::process::Command;
 
 use unlace_decomp::{
     kuna_calltargettype, kuna_debuglink, kuna_delphiabi, kuna_dyldcache, kuna_exporttrie,
-    kuna_goabi, kuna_ifuncfpret, kuna_kernelcache, kuna_libctypes, kuna_macho_arm64e,
-    kuna_objcivars, kuna_objcsdk, kuna_ppcapu, kuna_sourcelang, kuna_symbolnamechars,
+    kuna_goabi, kuna_ifuncfpret, kuna_kernelcache, kuna_libctypes, kuna_loadoptions,
+    kuna_macho_arm64e, kuna_objcivars, kuna_objcsdk, kuna_ppcapu, kuna_sourcelang,
+    kuna_symbolnamechars,
 };
 
 #[derive(Clone, Copy)]
@@ -59,6 +60,9 @@ fn binding(name: &str) -> Option<(&'static str, Encoding)> {
         "dyldimage" => (kuna_dyldcache::DYLDIMAGE_ENV, Trimmed),
         "dyldcrossrefs" => (kuna_dyldcache::DYLDCROSSREFS_ENV, DefaultOn),
         "exporttrie" => (kuna_exporttrie::EXPORTTRIE_ENV, DefaultOn),
+        "codestrings" => (kuna_loadoptions::CODESTRINGS_ENV, DefaultOn),
+        "nameladder" => (kuna_loadoptions::NAMELADDER_ENV, DefaultOn),
+        "swifttypes" => (kuna_loadoptions::SWIFTTYPES_ENV, DefaultOn),
         _ => return None,
     })
 }

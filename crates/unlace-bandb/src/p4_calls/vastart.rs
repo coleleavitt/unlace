@@ -113,7 +113,7 @@ struct VaStart {
     list: u64,
     /// The COPYs of the two offsets.
     offsets: Vec<OpId>,
-    /// The writes of `overflow_arg_area` and `reg_save_area`.
+    /// Every write of the `overflow_arg_area` and `reg_save_area` values to their fields.
     pointers: Vec<OpId>,
     spacebase: VarnodeId,
     address_op: OpCode,
@@ -122,8 +122,16 @@ struct VaStart {
     gp: int4,
 }
 
+/// The block of the op that defines `vn`.
+fn def_block(data: &Funcdata, vn: VarnodeId) -> Option<crate::context::BlockId> {
+    data.obank()
+        .get(data.vbank().get(vn)?.get_def()?)?
+        .get_parent()
+}
+
 fn find(data: &Funcdata) -> Option<VaStart> {
     let writes = stack_writes(data);
+    let mut weak = None;
     let at = |off: u64, size: int4| {
         writes
             .iter()
@@ -145,6 +153,7 @@ fn find(data: &Funcdata) -> Option<VaStart> {
                     // gcc leaves fp_offset unwritten when no va_arg reads a double;
                     // taken only with vaargconst on, which leaves that shape behind
                     None if crate::vaargconst::enabled(data)
+                        && gp >= 8
                         && at(x.wrapping_add(4), 4).next().is_none() =>
                     {
                         (vec![op], gp, 48)
@@ -154,34 +163,54 @@ fn find(data: &Funcdata) -> Option<VaStart> {
             }
             _ => continue,
         };
-        let block = data.obank().get(op)?.get_parent()?;
-        let same = |o: &OpId| {
-            data.obank().get(*o).and_then(|p| p.get_parent()) == Some(block)
-                && written(data, *o).is_some()
-        };
-        let Some(overflow) = at(x.wrapping_add(8), 8).find(same) else {
+        let Some(block) = data.obank().get(op).and_then(|o| o.get_parent()) else {
             continue;
         };
-        let Some((save, spacebase, save_area, address_op)) =
-            at(x.wrapping_add(16), 8).filter(same).find_map(|s| {
-                stack_address(data, written(data, s)?).map(|(sb, off, code)| (s, sb, off, code))
+        // A pointer write counts when it, or the value it writes, is in the offset's block:
+        // once the fields are heritaged their writes can survive only as the INDIRECTs a
+        // later call carries, while the values stay where va_start computed them.
+        let here = |o: OpId| {
+            let Some(v) = written(data, o) else {
+                return None;
+            };
+            let defined = def_block(data, v) == Some(block);
+            (defined || data.obank().get(o).and_then(|p| p.get_parent()) == Some(block))
+                .then_some((o, v, defined))
+        };
+        let Some((_, overflow, ov_def)) = at(x.wrapping_add(8), 8).find_map(|o| here(o)) else {
+            continue;
+        };
+        let Some((save, spacebase, save_area, address_op, sv_def)) = at(x.wrapping_add(16), 8)
+            .find_map(|s| {
+                let (_, v, defined) = here(s)?;
+                stack_address(data, v).map(|(sb, off, code)| (v, sb, off, code, defined))
             })
         else {
             continue;
         };
+        let mut pointers: Vec<OpId> = at(x.wrapping_add(8), 8)
+            .filter(|&o| written(data, o) == Some(overflow))
+            .collect();
+        pointers.extend(at(x.wrapping_add(16), 8).filter(|&o| written(data, o) == Some(save)));
         let named = (gp / 8 + (fp - 48) / 16) as int4;
-        return Some(VaStart {
+        let m = VaStart {
             list: x,
             offsets,
-            pointers: vec![overflow, save],
+            pointers,
             spacebase,
             address_op,
             save_area,
             named,
             gp: (gp / 8) as int4,
-        });
+        };
+        // a gp_offset store that only steps the offset (a va_arg gcc folded) sits in a block
+        // that carries the pointer fields without computing them; prefer the real va_start
+        if ov_def && sv_def {
+            return Some(m);
+        }
+        weak.get_or_insert(m);
     }
-    None
+    weak
 }
 
 /// The input that carries the last named argument: the prototype's parameter
@@ -264,6 +293,7 @@ fn rewrite(data: &mut Funcdata, m: &VaStart) -> unlace_base::error::UnlaceResult
         }
         data.op_insert_before(op, call);
     }
+    let mut values: Vec<(Address, int4, VarnodeId)> = Vec::new();
     for &op in &m.pointers {
         let Some(out) = data.obank().get(op).and_then(|o| o.get_out()) else {
             continue;
@@ -273,12 +303,23 @@ fn rewrite(data: &mut Funcdata, m: &VaStart) -> unlace_base::error::UnlaceResult
             .get(out)
             .map(|v| (v.get_addr().clone(), v.get_size()))
             .ok_or_else(|| UnlaceError::lowlevel("vastart: stale out"))?;
-        let created = data.new_indirect_creation(call, &addr, size, false);
-        let value = data
-            .obank()
-            .get(created)
-            .and_then(|o| o.get_out())
-            .ok_or_else(|| UnlaceError::lowlevel("vastart: no creation"))?;
+        let found = values
+            .iter()
+            .find(|(a, s, _)| *a == addr && *s == size)
+            .map(|(_, _, v)| *v);
+        let value = match found {
+            Some(value) => value,
+            None => {
+                let created = data.new_indirect_creation(call, &addr, size, false);
+                let value = data
+                    .obank()
+                    .get(created)
+                    .and_then(|o| o.get_out())
+                    .ok_or_else(|| UnlaceError::lowlevel("vastart: no creation"))?;
+                values.push((addr, size, value));
+                value
+            }
+        };
         data.op_set_input(op, value, 0)?;
     }
     if let Some(stack) = data.get_arch().manage().get_stack_space().cloned() {

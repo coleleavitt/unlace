@@ -1,0 +1,37 @@
+# AArch64 fcvtzu (and fcvtmu/fcvtnu/fcvtpu) to a 32-bit register is an unsigned
+# conversion. SLEIGH's trunc is signed, so the scalar constructors lifted
+# (unsigned)f as (int)f, which saturates 3e9 to INT_MAX when the C is compiled
+# (tools/semantic floats.f2u). The unsigned forms now truncate to 64 bits and
+# keep the low word.
+#   f2u:  fcvtzu w0, s0 ; ret        (unsigned f2u(float f) { return f; })
+
+[image]
+arch = 'AARCH64:LE:64:v8A:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'f2u' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '0000391ec0035fd6'
+
+[script]
+commands = [
+    'option ctypes on',
+    'lo fu f2u',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'AArch64 fcvtzu #1: the conversion goes through 64 bits'
+count = 1
+regex = '\(long\)a0'
+
+[[match]]
+name = 'AArch64 fcvtzu #2: no signed 32-bit conversion'
+count = 0
+literal = 'return (int)a0;'

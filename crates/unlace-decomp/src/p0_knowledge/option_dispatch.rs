@@ -741,7 +741,6 @@ unlace_options! { self, p1;
     "pdb" => registered!(crate::analysisgates::Pdb),
     "pdbtypes" => registered!(crate::analysisgates::Pdbtypes),
     "pdblines" => registered!(crate::analysisgates::Pdblines),
-    "ctree" => registered!(crate::ctree::Ctree),
     "boolreturn" => registered!(crate::ctree::Boolreturn),
     "noretfirst" => registered!(crate::ctree::Noretfirst),
     "nestedand" => registered!(crate::ctree::Nestedand),

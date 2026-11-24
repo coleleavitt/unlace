@@ -4646,6 +4646,18 @@ PAC instructions of the arm64e iOS 16.4.1 `backboardd`, `trustd` and `debugserve
 (`AARCH64instructions.sinc`) now leaves the other flags unchanged (it used to copy N into
 them), and the source is rotated, not shifted. Found by `tools/difffuzz --oracle qemu`.
 
+### AArch64 unsigned float-to-integer conversions
+
+`fcvtzu`, `fcvtmu`, `fcvtnu` and `fcvtpu` to a 32-bit register (`AARCH64neon.sinc`, the
+scalar-integer constructors from `Rn_FPR16`, `Rn_FPR32` and `Rn_FPR64`) shared their
+constructors with the signed forms and lifted as `trunc`, which is a signed conversion: `(unsigned)f`
+printed as `(int)f`, which saturates 3e9 to `INT_MAX` when the C is compiled (tools/semantic
+`floats.f2u`). The unsigned forms (opcode bit 16 set) now have their own constructors, which
+truncate to 64 bits and keep the low word, exact for every value below 2^32
+(`tests/stages/aarch64-fcvtzu.toml`). A negative input or one of 2^32 or more is not
+clamped as the instruction does; neither is a 64-bit destination's input of 2^63 or more,
+whose constructors still use the signed `trunc`.
+
 ### AArch64 SVE matrix multiply and BFloat16 (#98)
 
 `AARCH64_svemm.sinc` decodes the SVE forms of FEAT_F64MM (`ld1ro*`, `fmmla .d`, the

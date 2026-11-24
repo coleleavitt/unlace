@@ -149,6 +149,33 @@ Each `UNLACE_*` variable is also read under its old `UNLACE_*` name (a deprecate
 An override wins over all of these, and one pointing at nothing is reported as
 such rather than silently re-probed.
 
+### Load-time option variables
+
+The options a load reads before any `option` command can run also have
+variables. Each entry point (`unlace`, the console, the datatest harness) reads
+them once per load into the program's load options (`LoadOptions`,
+`crates/unlace-middle/src/p0_knowledge/loadoptions.rs`). The program keeps those
+values for its analysis commit and its decompiles. `--option NAME VALUE` and the
+console's `option NAME VALUE` set the same option for one run. The variables are
+meant as input only, and a console child process gets them through its own
+environment. Some `option` arms and the in-process `decompile-all` load still
+write them while `notes/load-options-plan.md` is in progress.
+
+| Variable | Option |
+|---|---|
+| `UNLACE_GOABI`, `UNLACE_CIL`, `UNLACE_DELPHIABI`, `UNLACE_PPCAPU`, `UNLACE_PPC32PICIMPORTS`, `UNLACE_MACHO_ARM64E` | `goabi`, `cil`, `delphiabi`, `ppcapu`, `ppc32picimports`, `macho-arm64e` (language and loader selection) |
+| `UNLACE_KERNELCACHE`, `UNLACE_KERNELCACHE_BOOT`, `UNLACE_DYLD_IMAGE`, `UNLACE_DYLDCROSSREFS`, `UNLACE_MACHO_SLICE` | `kernelcache`, `kernelcache-boot`, `dyldimage` (`--image`), `dyldcrossrefs`, `--slice` (which image of a file is read) |
+| `UNLACE_IFUNCFPRET`, `UNLACE_EXPORTTRIE`, `UNLACE_DEBUGLINK`, `UNLACE_SYMBOLNAMECHARS`, `UNLACE_NAMELADDER` | `ifuncfpret`, `exporttrie`, `debuglink`, `symbolnamechars`, `nameladder` (symbol names) |
+| `UNLACE_SOURCELANG`, `UNLACE_LIBCTYPES`, `UNLACE_CALLTARGETTYPE`, `UNLACE_DWARFSCOPES`, `UNLACE_DWARFENUMTYPEDEF`, `UNLACE_RUSTSTDSIGS` | `sourcelang`, `libctypes`, `calltargettype`, `dwarfscopes`, `dwarfenumtypedef`, `ruststdsigs` (types and signatures) |
+| `UNLACE_OBJCIVARS`, `UNLACE_OBJCSDK`, `UNLACE_SWIFTTYPES`, `UNLACE_CODESTRINGS` | `objcivars`, `objcsdk`, `swifttypes`, `codestrings` |
+| `UNLACE_LOAD_OBJC`, `UNLACE_LOAD_STRINGS`, `UNLACE_LOAD_MMAP` | `off` skips the Objective-C or string pass at load, or copies a thin Mach-O instead of mapping it |
+| `unlace_pdb_path`, `unlace_pdb_symsrv`, `unlace_fid_db`, `UNLACE_FLIRT_SIGS` | the `.pdb` file and symbol store, the `.fid` database, the FLIRT `.sig` files |
+| `UNLACE_ARM_ISA` | the ARM/Thumb decode mode of a 32-bit ARM load that names none |
+
+Trace, debug and fault-injection variables (`UNLACE_*_TRACE`, `UNLACE_*_DEBUG`,
+`UNLACE_DUMP`, `UNLACE_ACTION_PROF` and the test-only ones above) are read where
+they act and are never option state.
+
 A separate engine binary can come from a different build than `unlace`: an
 override pointing at another install. (The built-in console is `unlace` itself, so it always
 matches.) `unlace` passes its build identity to every `decomp_dbg` it runs (as

@@ -4220,14 +4220,16 @@ semantics, including an actual caller read of the saved RBP value.
 A va_list that a function spills to its frame and reloads becomes, once the
 stack is heritaged and the `+4` steps are simplified into the loop, a loop phi
 whose entry value is the input stack pointer itself (`u = sp(i) ? u + 4`;
-MIPS o32 and AArch64 `add_all`, unlace#975). `ActionMergeRequired` merges
+MIPS o32, AArch64, Hexagon and OpenRISC `add_all`, unlace#975). `ActionMergeRequired` merges
 every MULTIEQUAL input into the phi's HighVariable, so the loop pointer takes
 the stack pointer's `addrtied` storage name from `build_variable_name`
 (`Register` + offset) and prints as an assignment to it. With option
-`spphistack` (default off),
+`spphistack` (default on),
 `crates/unlace-bandb-base/src/p6_variables/spphistack.rs (ActionSpPhiStack)`
 runs just before `ActionAssignHigh`: each MULTIEQUAL input that is the
 spacebase input register is replaced by `PTRSUB(sp(i), 0)`, computed at the end
 of that edge's predecessor, so the phi merges with an ordinary value whose
-source prints as a stack reference, as an `sp(i) + c` already does. Off, no op
-is added.
+source prints as a stack reference, as an `sp(i) + c` already does: a local
+array at offset 0 (MIPS o32's home area for `a0`..`a3`) or `&Stack00000000`.
+Off, no op is added and the phi keeps the stack pointer's storage name. Stage
+tests `spphistack-{mips,aarch64,hexagon,or1k}.toml` pin both settings.

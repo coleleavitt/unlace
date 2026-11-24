@@ -1,0 +1,63 @@
+# unlace option spphistack (unlace#975): a va_list walk that starts at the
+# incoming stack pointer is a local holding a stack address, not the stack
+# pointer register.
+#
+# OpenRISC passes the variadic arguments on the stack at the incoming sp (r1);
+# the walk pointer starts as sp(i) and printed
+#     Register00001004 = (int4 *)((int4)Register00001004 + 4);
+#
+# Stage: P6 variables and merge (merge-aggressiveness), option spphistack
+# off|on.  Pass 1 (off) pins the old print, where the loop pointer takes the
+# stack pointer's addrtied storage name; pass 2 (on, the default) merges the
+# phi with PTRSUB(sp, 0), which prints as a stack reference.
+#
+# Source (hand-assembled, the shape or1k gcc -O2 emits (variadic arguments on the stack): l.sfgtsi r3,0 / l.bnf / l.ori r11,r0,0 / l.ori r4,r1,0 / loop: l.lwz r5,0(r4) / l.addi r3,r3,-1 / l.add r11,r11,r5 / l.sfnei r3,0 / l.bf loop / l.addi r4,r4,4 / l.jr r9 / l.nop):
+#     #include <stdarg.h>
+#     int v2(int n, ...) { va_list ap; va_start(ap, n); int s = 0;
+#         for (int i = 0; i < n; i++) s += va_arg(ap, int); va_end(ap); return s; }
+#
+# Assert #1: off, the loop pointer prints under the stack pointer's storage.
+# Assert #2: only the off pass names that storage at all.
+# Assert #3: on, the walk starts from a stack reference held in a local.
+
+[image]
+arch = 'OpenRISC:BE:32:default'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'v2' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = '''
+bd4300000c000009a9600000a881000084a400009c63ffffe16b2800bc230000
+13fffffc9c8400044400480015000000
+'''
+
+[script]
+commands = [
+    'lo fu v2',
+    'option spphistack off',
+    'decompile',
+    'print C',
+    'option spphistack on',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'spphistack or1k #1: off, the walk is named after the stack pointer'
+count = 1
+literal = 'Register00001004 = (int4 *)((int4)Register00001004 + 4);'
+
+[[match]]
+name = 'spphistack or1k #2: only the off pass names the stack pointer storage'
+count = 2
+literal = 'Register000'
+
+[[match]]
+name = 'spphistack or1k #3: on, the walk starts at a stack reference'
+count = 1
+literal = 'v1 = (int4 *)(unsigned int)&Stack00000000;'

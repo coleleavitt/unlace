@@ -131,6 +131,21 @@ pub fn specs_dir() -> PathBuf {
     if let Some(specs) = env_path("UNLACE_SPECS") {
         return specs;
     }
+    specs_dir_unpinned()
+}
+
+/// [`specs_dir`] with `specs` in place of `UNLACE_SPECS` when it is `Some`; an
+/// empty path pins nothing, as an empty `UNLACE_SPECS` does.
+pub fn specs_dir_with(specs: Option<&Path>) -> PathBuf {
+    match specs {
+        None => specs_dir(),
+        Some(specs) if !specs.as_os_str().is_empty() => specs.to_path_buf(),
+        Some(_) => specs_dir_unpinned(),
+    }
+}
+
+/// [`specs_dir`] after `UNLACE_SPECS`.
+fn specs_dir_unpinned() -> PathBuf {
     if let Some(root) = env_path("UNLACE_ROOT") {
         return root.join("specs");
     }
@@ -210,7 +225,17 @@ pub const SLACOMP_SUBCOMMAND: &str = "slacomp";
 
 /// `env_var`'s binary when it is set, otherwise this `unlace` running `subcommand`.
 fn builtin(env_var: &str, subcommand: &'static str) -> Result<Program, String> {
-    if let Some(path) = env_path(env_var) {
+    builtin_at(env_path(env_var), env_var, subcommand)
+}
+
+/// `pinned` (named `env_var` in a diagnostic) when it is set, otherwise this
+/// `unlace` running `subcommand`.
+fn builtin_at(
+    pinned: Option<PathBuf>,
+    env_var: &str,
+    subcommand: &'static str,
+) -> Result<Program, String> {
+    if let Some(path) = pinned {
         if !path.exists() {
             return Err(format!(
                 "{subcommand} not found at {} ({env_var})",
@@ -232,6 +257,19 @@ fn builtin(env_var: &str, subcommand: &'static str) -> Result<Program, String> {
 /// The decompiler console `unlace decompile` and `unlace catalog` drive.
 pub fn decomp_dbg() -> Result<Program, String> {
     builtin("UNLACE_DECOMP_DBG", DECOMP_DBG_SUBCOMMAND)
+}
+
+/// [`decomp_dbg`] with `path` in place of `UNLACE_DECOMP_DBG` when it is `Some`;
+/// an empty path pins nothing, as an empty `UNLACE_DECOMP_DBG` does.
+pub fn decomp_dbg_with(path: Option<&Path>) -> Result<Program, String> {
+    match path {
+        None => decomp_dbg(),
+        Some(path) => builtin_at(
+            Some(path.to_path_buf()).filter(|p| !p.as_os_str().is_empty()),
+            "UNLACE_DECOMP_DBG",
+            DECOMP_DBG_SUBCOMMAND,
+        ),
+    }
 }
 
 /// The SLEIGH compiler `unlace specs` runs.

@@ -1833,7 +1833,7 @@ pub struct PrintC {
     /// Per-body spelling of a goto-target leaf whose address label another
     /// printed label already uses (see [`assign_label_names`](PrintC::assign_label_names)).
     label_names: std::collections::BTreeMap<BlockId, String>,
-    /// (unlace `ctree`) The C syntax tree of the function being printed, with `option ctree on`.
+    /// (unlace `ctree`) The C syntax tree of the function being printed (none in flat printing).
     ctree: Option<crate::ctree::CTree>,
     /// (unlace `noretfirst`) `CBRANCH` ops whose condition prints negated, for an `if` whose
     /// arms the tree swapped.
@@ -4904,13 +4904,7 @@ impl PrintC {
             Default::default()
         };
         self.assign_label_names(fd, sroot);
-        let tree_on = arch.unlace_options.get::<crate::ctree::Ctree>().0
-            || arch.unlace_options.get::<crate::ctree::Boolreturn>().0
-            || arch.unlace_options.get::<crate::ctree::Noretfirst>().0
-            || arch.unlace_options.get::<crate::ctree::Nestedand>().0
-            || arch.unlace_options.get::<crate::ctree::Retternary>().0
-            || arch.unlace_options.get::<crate::ctree::Orexit>().0;
-        self.ctree = if tree_on && !self.is_flat() {
+        self.ctree = if !self.is_flat() {
             crate::ctreebuild::build(fd)
         } else {
             None
@@ -4983,8 +4977,8 @@ impl PrintC {
 
     /// Dispatch one structured block to its emitter (C++ the virtual
     /// `FlowBlock::emit(PrintLanguage*)` -> `PrintC::emitBlock*`).
-    /// With `option ctree on`, the statement the function's C syntax tree built from
-    /// `blk` prints instead, when the tree printer models it (`unlace_ctreeprint`).
+    /// The statement the function's C syntax tree built from `blk` prints instead, when the
+    /// tree printer models it (`unlace_ctreeprint`).
     #[doc(hidden)]
     pub fn emit_block(&mut self, fd: &Funcdata, arch: &Architecture, blk: BlockId) {
         if self.ctree.is_some() && self.emit_ctree_block(fd, arch, blk) {

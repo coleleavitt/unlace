@@ -1,0 +1,66 @@
+# unlace option spphistack (unlace#975): a va_list walk that starts at the
+# incoming stack pointer is a local holding a stack address, not the stack
+# pointer register.
+#
+# MIPS o32 spills a1..a3 above the incoming sp and sets ap = sp_in + 4; once
+# the stack is heritaged the spill and reload become one loop phi whose entry
+# value is sp(i) itself, so the loop printed
+#     Register00000074 = (int4 *)((int4)Register00000074 + 4);   (sp is 0x74)
+#
+# Stage: P6 variables and merge (merge-aggressiveness), option spphistack
+# off|on.  Pass 1 (off) pins the old print, where the loop pointer takes the
+# stack pointer's addrtied storage name; pass 2 (on, the default) merges the
+# phi with PTRSUB(sp, 0), which prints as a stack reference.
+#
+# Source (zig cc -target mips-freestanding -O2 -c, .text; the j at +0x4c relocated to 0x10000):
+#     #include <stdarg.h>
+#     int v2(int n, ...) { va_list ap; va_start(ap, n); int s = 0;
+#         for (int i = 0; i < n; i++) s += va_arg(ap, int); va_end(ap); return s; }
+#
+# Assert #1: off, the loop pointer prints under the stack pointer's storage.
+# Assert #2: only the off pass names that storage at all.
+# Assert #3: on, the walk starts from a stack reference held in a local.
+
+[image]
+arch = 'MIPS:BE:32:default:default'
+symbols = [
+    { space = 'ram', offset = '0x10000', name = 'v2' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10000'
+readonly = true
+hex = '''
+27bdfff0afbf000cafbe000803a0f025afc7001cafc60018afc5001427c10014
+1880000cafc100048fc100042423000424020000afc300048c61fffc00221021
+2484ffff1480fffb2463000408004016000000002402000003c0e8258fbe0008
+8fbf000c03e0000827bd0010
+'''
+
+[script]
+commands = [
+    'lo fu v2',
+    'option spphistack off',
+    'decompile',
+    'print C',
+    'option spphistack on',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'spphistack mips #1: off, the walk is named after the stack pointer'
+count = 1
+literal = 'Register00000074 = (int4 *)((int4)Register00000074 + 4);'
+
+[[match]]
+name = 'spphistack mips #2: only the off pass names the stack pointer storage'
+count = 2
+literal = 'Register000'
+
+[[match]]
+name = 'spphistack mips #3: on, the walk starts at a stack reference'
+count = 1
+literal = 'v1 = (int4 *)(unsigned int)v3;'

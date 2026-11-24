@@ -15,10 +15,24 @@ use unlace_decomp::phases::{emit_catalog_json, emit_catalog_json_one, emit_catal
 use crate::jsonfmt::{Json, dumps_indent2, extract_json_span, parse};
 use crate::paths;
 
+/// The console overrides `unlace catalog` was given: `--decomp-dbg`,
+/// `--sleighpath` and `--engine`, each in place of its environment variable
+/// (`UNLACE_DECOMP_DBG`, `UNLACE_SPECS`, `UNLACE_ENGINE`).
+#[derive(Default)]
+pub struct Console {
+    pub decomp_dbg: Option<String>,
+    pub sleighpath: Option<String>,
+    pub engine: Option<String>,
+}
+
 /// Read the local static catalog unless the caller selected an external console.
-fn run_catalog(option: Option<&str>, pinned_by: Option<&str>) -> Result<Json, String> {
+fn run_catalog(
+    option: Option<&str>,
+    pinned_by: Option<&str>,
+    console: &Console,
+) -> Result<Json, String> {
     if pinned_by.is_some() {
-        return run_external_catalog(option, pinned_by);
+        return run_external_catalog(option, pinned_by, console);
     }
     let out = match option {
         Some(option) => emit_catalog_json_one(option, None)
@@ -29,16 +43,29 @@ fn run_catalog(option: Option<&str>, pinned_by: Option<&str>) -> Result<Json, St
 }
 
 /// Run `decomp_dbg phase catalog [<option>]` for an explicit console override.
-fn run_external_catalog(option: Option<&str>, pinned_by: Option<&str>) -> Result<Json, String> {
-    let engine = paths::decomp_dbg()?;
-    let specs = paths::specs_dir();
+fn run_external_catalog(
+    option: Option<&str>,
+    pinned_by: Option<&str>,
+    console: &Console,
+) -> Result<Json, String> {
+    let engine = paths::decomp_dbg_with(console.decomp_dbg.as_deref().map(std::path::Path::new))?;
+    let specs = paths::specs_dir_with(console.sleighpath.as_deref().map(std::path::Path::new));
     let cmd = match option {
         None => "phase catalog\nquit\n".to_string(),
         Some(o) => format!("phase catalog {o}\nquit\n"),
     };
 
-    let output = engine
-        .command()
+    let mut command = engine.command();
+    for (var, value) in [
+        ("UNLACE_DECOMP_DBG", &console.decomp_dbg),
+        ("UNLACE_SPECS", &console.sleighpath),
+        ("UNLACE_ENGINE", &console.engine),
+    ] {
+        if let Some(value) = value {
+            command.env(var, value);
+        }
+    }
+    let output = command
         .arg("-s")
         .arg(&specs)
         .env("SLEIGHHOME", &specs)
@@ -136,8 +163,13 @@ fn arr_field(entry: &Json, key: &str) -> Vec<String> {
 
 /// `--json`: byte-identical to `json.dumps(entries, indent=2)`, keeping the rows
 /// of `tier` only when one is given.
-pub fn cmd_json(option: Option<&str>, tier: Option<&str>, pinned_by: Option<&str>) -> i32 {
-    match run_catalog(option, pinned_by) {
+pub fn cmd_json(
+    option: Option<&str>,
+    tier: Option<&str>,
+    pinned_by: Option<&str>,
+    console: &Console,
+) -> i32 {
+    match run_catalog(option, pinned_by, console) {
         Ok(v) => {
             // Python always re-dumps the *list* form (catalog() returns a list,
             // wrapping a single dict in `[data]`).
@@ -173,8 +205,13 @@ pub fn cmd_markdown(option: Option<&str>) -> i32 {
 
 /// (default) the human-readable table (port of catalog.main's text branch).
 /// `tier` filters to one of transform|analysis|core.
-pub fn cmd_text(option: Option<&str>, tier: Option<&str>, pinned_by: Option<&str>) -> i32 {
-    let v = match run_catalog(option, pinned_by) {
+pub fn cmd_text(
+    option: Option<&str>,
+    tier: Option<&str>,
+    pinned_by: Option<&str>,
+    console: &Console,
+) -> i32 {
+    let v = match run_catalog(option, pinned_by, console) {
         Ok(v) => v,
         Err(e) => {
             eprintln!("error: {e}");
@@ -231,8 +268,8 @@ pub fn cmd_text(option: Option<&str>, tier: Option<&str>, pinned_by: Option<&str
 /// (`UNLACE_OPTION_NAMES`). A registered option with no row is undiscoverable;
 /// a row matching no registered option is stale. An explicit console override
 /// selects that binary's catalog; otherwise both sets come from this build.
-pub fn cmd_check(pinned_by: Option<&str>) -> i32 {
-    let v = match run_catalog(None, pinned_by) {
+pub fn cmd_check(pinned_by: Option<&str>, console: &Console) -> i32 {
+    let v = match run_catalog(None, pinned_by, console) {
         Ok(v) => v,
         Err(e) => {
             eprintln!("error: {e}");

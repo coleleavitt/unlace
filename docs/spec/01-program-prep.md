@@ -5764,7 +5764,7 @@ moves.
   drops the untyped entry for those addresses and maps the typed one,
   typelocked and namelocked, first among the typed data facts, so
   `cfg._12_4_ + cfg._8_4_` reads `cfg.flags + cfg.port` and
-  `*(char **)&modes[i * 8L]` reads `modes[i]`. (kuna `dwarfdecls`, default off) A
+  `*(char **)&modes[i * 8L]` reads `modes[i]`. (kuna `dwarfdecls`, default on) A
   declaration-only `DW_TAG_subprogram` (`DW_AT_declaration`, no `DW_AT_low_pc`) is kept
   when its linkage name, or else its name, is an ELF import with PLT entries, no DWARF
   definition of it exists in the file, it is prototyped, and every unit declaring it
@@ -5775,7 +5775,7 @@ moves.
   import and no address-keyed one sits at that entry, so library signatures, type
   libraries and DWARF definitions keep precedence. Calls to the import then take its
   types: an enum parameter prints a constant argument as its member
-  (`gnutls_bye(s,GNUTLS_SHUT_WR)`). (kuna `dwarfenumtypedef`, default off; a load-time
+  (`gnutls_bye(s,GNUTLS_SHUT_WR)`). (kuna `dwarfenumtypedef`, default on; a load-time
   env bridge, `KUNA_DWARFENUMTYPEDEF`) An anonymous `DW_TAG_enumeration_type` reached
   through a typedef is interned as an enum under the typedef's name, the alias
   `strip_qualifiers` already gives an anonymous aggregate
@@ -7195,8 +7195,13 @@ every other binary's pass list is byte-identical to before the pass existed):
   chain (x86 raw-VA vs x64 image-base-relative refs behind a refkind dispatch), and
   label `<Class>::vftable` / `RTTI_*` with the class names demangled by the
   existing MSVC arm. From each recovered `<Class>::vftable` base the pass then walks
-  the slot array (`vftable.rs`), bounded at the first NULL or non-`.text` slot, and
-  emits one **function** symbol per surviving slot at the address it points at. That
+  the slot array (`vftable.rs`), bounded at the first NULL or non-`.text` slot, and,
+  in a relocatable PE whose base-relocation table reads whole, at the first word that
+  table does not list (`TextRanges::with_relocations`): the loader fixes up every
+  slot, so an unlisted word is data however it reads, such as the UTF-16 text after
+  the last vftable of a large `.text` (Holley EFI's MFC `Holley.exe` read
+  `0x0065006e` as `CGDIPCrank::vfunc_97` and split real functions at five such
+  words). It then emits one **function** symbol per surviving slot at the address it points at. That
   symbol is named `<Class>::vfunc_<i>` — the class name comes from the RTTI0
   `TypeDescriptor` and the slot index is the only disambiguator MSVC metadata offers,
   since it records no per-method names. The stem is `vfunc_`, not `vftable_`, because
@@ -9897,6 +9902,22 @@ Chained fragments are not decoded on the ARM form — Ghidra does not decode the
 either. Ghidra additionally routes an image whose load-config CHPE metadata
 pointer is set to its ARM parser regardless of `Machine`; kuna does not read the
 CHPE metadata, so an ARM64EC image that declares itself `AMD64` still reads at 12.
+
+(kuna) **The C runtime's initializer tables are a PE32's `INIT_ARRAY`**
+(`crates/unlace-analysis/src/analyzers/entry/kuna_initterm.rs`). MSVC gathers
+every C++ dynamic initializer (the constructor call for a global object) and every
+C initializer into `.CRT$XCA..XCZ` / `.CRT$XIA..XIZ`, merged into `.rdata`, and
+the dynamically linked CRT startup runs them with `push __xc_z; push __xc_a; call
+_initterm` (`_initterm_e` for the `XI` table). Where a call to an import named
+`_initterm` or `_initterm_e` (`E8` to its veneer or `FF 15` through its slot)
+directly follows two `push imm32`, the pushed `[begin, end)` (begin below end, a
+whole number of 4-byte words, at most 65,536 of them, held by one section) is read
+and every non-null word is a function-start candidate, filtered like the rest. No
+instruction calls an initializer and a PE32 has no `.pdata`, so nothing else names
+them: Holley EFI's MFC `Holley.exe` hands 2,113 entries to `_initterm`, and about
+a megabyte of `.text` behind them was folded into one function. A statically linked
+CRT's `_initterm` is an anonymous local and is not recognized; a PE32+ is skipped,
+its `.pdata` already naming every non-leaf initializer.
 
 (kuna) **An address-taken function is described by nothing else in a PE**, and the
 base-relocation table is what finds it

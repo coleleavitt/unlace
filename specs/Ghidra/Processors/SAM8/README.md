@@ -76,7 +76,7 @@ entry 0100h and marks the peripheral control registers volatile.
 ## Test vectors
 
 No SAM8 assembler, simulator or emulator is installed, so the CLI test
-`crates/unlace-cli/tests/sam8_raw.rs` decompiles a hand-assembled image
+`crates/unlace-cli/tests/processors.toml` row `sam8` decompiles a hand-assembled image
 (`crates/unlace-cli/tests/fixtures/sam8/add_store.bin`, listing in
 `add_store.s`), encoded by hand from the chapter 6 opcode map, base 0100h:
 

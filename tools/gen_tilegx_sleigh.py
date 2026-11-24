@@ -121,8 +121,6 @@ def semantics(e, pipe, names, kinds):
     f = {'T': T, 'U': U}
     for i, nm in enumerate(names):
         f[str(i)] = nm
-    dst = [names[i] for i, kd in enumerate(kinds) if kd in ('dst',)]
-    sd = [names[i] for i, kd in enumerate(kinds) if kd == 'srcdst']
     def fmt(s):
         return re.sub(r'\{(\w+)\}', lambda mm: f[mm.group(1)], s)
     if n in ALU:

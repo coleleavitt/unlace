@@ -4680,13 +4680,16 @@ same tree gives the same result every run.
 constants free), and of those the fewest bitwise ops, is extracted from the
 root's class. It replaces the tree only when it has fewer ops than the tree
 keeps for itself (the ops under an op with several readers stay for those
-readers) and fewer bitwise ops than the tree's, less every op kept that way.
-The second condition is what makes repeated firing terminate: a form that only
-regroups the arithmetic is the core rules' business (`collect_terms` regroups
-a sum the other way, and the two rules traded forms until the per-function
-budget ran out on `((x + c) ^ 2*(x & c)) - 2*(~(x + c) & 2*(x & c))`), and the
-arithmetic core rules add no bitwise op, so each rewrite lowers a count none
-of them raises. The result agrees with the tree on 64
+readers). A form that keeps every bitwise op only regroups the arithmetic,
+which the core rules may regroup back (`collect_terms` regrouped a sum the
+other way, and the two rules traded forms until the per-function budget ran
+out on `((x + c) ^ 2*(x & c)) - 2*(~(x + c) & 2*(x & c))`). Such a rewrite is
+therefore done once per tree value in a function: the rule keeps the
+fingerprint of each tree it regrouped (the tree evaluated at four inputs where
+each leaf takes a value hashed from its varnode, the same for every spelling
+and leaf order) and refuses a tree whose fingerprint it has seen, until the
+next function. A rewrite that removes a bitwise op always stands; the
+arithmetic core rules add none back, so those cannot cycle either. The result agrees with the tree on 64
 pseudo-random full-width inputs, agrees on every input at the widest width
 (at most 8 bits) where the leaves take at most `2^16` combinations, and is not
 refuted by `mba`'s bit-serial proof, which runs for at most three leaves and
@@ -4699,6 +4702,34 @@ the checks guard the lowering into and out of the e-graph. A unit test
 emitted the way `mba` emits its own (`kuna_mba::replace`): new ops before the
 root, the root a `COPY` of the result, and a subterm the old tree already
 computes reused.
+
+**Measured** (pinned build 54380310a5, with the once-per-tree-value
+regrouping). The corpus: functions whose return value is a 1-4 variable
+expression (sometimes with a 32-bit constant) hidden by OLLVM-style
+substitutions stacked 1-3 deep (A, 120 functions, 15.7 ops on average) or 2-4
+deep (B, 150 functions, 19.6 ops), each built with clang 22 and gcc at -O0 and
+-O1. A function counts as solved when the output has no more ops than the
+original expression. Every output was compiled back and compared with the
+source on 20,000 inputs; none differs under any option set, and every function
+decompiles within its budget.
+
+| solved | A clang -O0 | A gcc -O0 | A clang -O1 | A gcc -O1 | B clang -O0 | B gcc -O0 | B clang -O1 | B gcc -O1 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| no option | 2 | 24 | 47 | 35 | 2 | 32 | 59 | 37 |
+| `mba` | 93 | 106 | 117 | 117 | 133 | 139 | 143 | 142 |
+| `egraph` | 85 | 100 | 111 | 110 | 111 | 134 | 140 | 138 |
+| `mba` + `egraph` | **106** | **112** | **117** | **118** | **136** | **142** | **144** | **146** |
+
+Output ops over corpus A at clang -O0 fall from 368 with `mba` to 286 with
+both. `egraph` alone trails `mba` because it fires only at roots; the pair is
+never worse than `mba` and gains most at -O0. With the earlier rule that
+every rewrite remove a bitwise op (build ee52a6ca35) `egraph` alone solved
+only 83 and 78 at A -O1; without any guard (d80c1b8d69) one function per -O1
+corpus hung against `collect_terms`. On `libCoreADI.so` (19 functions found)
+`egraph` changes 3 functions, one of them beyond `mba`:
+`(-((~a0 | 0x4cee331d) + (a0 | 0xb311cce2)) - 2 ^ 0x53a5c4e9) * K` becomes
+`(a0 ^ 0x1f4bf7f4) * K`. `/usr/bin/patchelf` (332 functions) and
+`/usr/bin/bzip2` (84) are unchanged, at the same CPU time within noise.
 
 Example: `(((x & ~y) + y) ^ z) + 2*(((x & ~y) + y) & z)`, one substitution
 applied to the result of another, becomes `(x | y) + z`: the seed folds the

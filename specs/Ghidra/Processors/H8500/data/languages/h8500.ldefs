@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="H8500"
+            endian="big"
+            size="16"
+            variant="minimum"
+            version="1.0"
+            slafile="h8500_min.sla"
+            processorspec="h8500.pspec"
+            id="H8500:BE:16:minimum">
+    <description>Hitachi H8/500 (H8/510, H8/520, H8/532, H8/534, H8/536, H8/570), minimum mode, 64 KiB address space</description>
+    <compiler name="default" spec="h8500_min.cspec" id="default"/>
+  </language>
+  <language processor="H8500"
+            endian="big"
+            size="24"
+            variant="maximum"
+            version="1.0"
+            slafile="h8500_max.sla"
+            processorspec="h8500.pspec"
+            id="H8500:BE:24:maximum">
+    <description>Hitachi H8/500 maximum mode, 16 MiB address space, page registers CP/DP/EP/TP and base register BR</description>
+    <compiler name="default" spec="h8500_max.cspec" id="default"/>
+  </language>
+</language_definitions>

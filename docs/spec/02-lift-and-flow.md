@@ -4416,6 +4416,8 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `ROMP` | IBM ROMP (RT PC) | `ROMP:BE:32:default` | written for unlace from the RT PC Hardware Technical Reference, Apache-2.0 |
 | `FRV` | Fujitsu FR-V (FR400, FR450, FR500, FR550) | `FRV:BE:32:default` | written for unlace from the FR-V ISA manuals; decode table generated from binutils CGEN `frv-opc.c` (field layout and mask/value only); decode checked against `frv-elf-objdump` 2.43.1 on all 743 instructions, Apache-2.0 |
 | `Nova` | Data General Nova (Nova 1200/800/2, Nova 3, Nova 4) | `Nova:BE:16:default` | written for unlace from the DG Nova programmer's references, Apache-2.0 |
+| `SH5` | SuperH SH-5 (SHmedia) | `SH5:LE:64:SHmedia`, `SH5:BE:64:SHmedia` | written for unlace from the SH-5 CPU Core Architecture manual (SHmedia); decode checked against `sh64-elf-objdump` 2.29.1, Apache-2.0 |
+| `ND100` | Norsk Data ND-100 (NORD-10, ND-110) | `ND100:BE:16:default` | written for unlace from the ND-100 Reference Manual (ND-06.014.02), Apache-2.0 |
 <!-- vendor-rows -->
 
 ### Data General Nova (#98)
@@ -4430,6 +4432,36 @@ comparison. `JSR` links in AC3 and `JMP 0,3` returns; the Nova 3 `SAV`/`RET`
 frame lives on an upward-growing stack. Device I/O is a user op. Exercised by
 `unlace-cli/tests/nova_raw.rs` (hand-assembled add, unsigned max, page-zero
 load/store, rotate and Nova 3 frame-call routines decompile to the expected C).
+
+### SuperH SH-5 SHmedia (#98)
+
+`specs/Ghidra/Processors/SH5` is a SLEIGH module written for unlace from the
+SuperH SH-5 CPU Core Architecture manual (no prior SLEIGH existed):
+`SH5:LE:64:SHmedia` and `SH5:BE:64:SHmedia`, the 32-bit SHmedia instruction set.
+Branches go through the eight target registers: `pta`/`ptb`/`ptabs`/`ptrel` load
+one and the conditional branches and `blink` use it. The target a `pta` loads is
+tracked in the decode context along the flow (cleared when a target register is
+rewritten, after a call and at a return), so `pta label,tr0; blink tr0,r18` is a
+direct call; `ptabs r18,trN; blink trN,r63` returns. r63 reads as zero; the
+multimedia, matrix and cache instructions are user ops; SHcompact is not decoded.
+The decode agrees with `sh64-elf-objdump` (binutils 2.29.1) on a 6,639-word probe
+except the reserved odd FP register forms. Exercised by the `sh5` and `sh5-be`
+families of `unlace-cli/tests/processors.toml` (add, signed max, absolute load,
+direct call and float add routines built with `sh64-elf-as`).
+
+### Norsk Data ND-100 (#98)
+
+`specs/Ghidra/Processors/ND100` is a SLEIGH module written for unlace from the
+ND-100 Reference Manual (ND-06.014.02); the only prior SLEIGH carries no licence
+and was not opened: `ND100:BE:16:default`. Memory is word addressed. Memory
+reference instructions take the eight ,X / I / ,B modes relative to the
+instruction's own address; ROP is one constructor per sub-instruction code of
+the manual's table (CLD, CM1, AD1, ADC, RAD), a P destination jumps and `EXIT`
+(COPY SL DP) returns; JPL links in L. SKP tests dr - sr; the status flags are
+registers for the bit operations. The ND 48-bit floating point, I/O and system
+instructions are user ops. Exercised by the `nd100` family of
+`unlace-cli/tests/processors.toml` (hand-assembled add, signed max, P-relative
+load/store, call, shift and add-argument routines).
 
 ### IBM ROMP (#98)
 
@@ -4601,28 +4633,35 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `uPD7810` | NEC uPD7810 / 7811 / 78C10 / 78C11 / 78C14 | `uPD7810:LE:16:default` | NEC uPD7810/7811 user's manual, MAME `upd7810` tables | `unlace-cli/tests/upd7810.rs` |
 | `sBPF` | Solana sBPF (SBPFv0/v1 and SBPFv2) | `sBPF:LE:64:v1`, `sBPF:LE:64:v2` | anza-xyz/sbpf `doc/bytecode.md`, RFC 9669; syscall hashes labelled | `unlace-cli/tests/sbpf.rs` |
 | `TLCS90` | Toshiba TLCS-90 (TMP90C840, TMP90C841, TMP90C844) | `TLCS90:LE:16:default` | Toshiba TLCS-48/90 data book (1988); MAME tlcs90 core | `unlace-cli/tests/tlcs90_raw.rs` |
-| `SAM8` | Samsung SAM8 (S3C8/S3F8), SAM88RCRI (S3C9/S3F9) | `SAM8:BE:16:default`, `SAM88RCRI:BE:16:default` | Samsung S3C8-series user's manual ch. 6 (instruction set), S3C9454B/F9454B user's manual | `unlace-cli/tests/sam8_raw.rs` |
+| `SAM8` | Samsung SAM8 (S3C8/S3F8), SAM88RCRI (S3C9/S3F9) | `SAM8:BE:16:default`, `SAM88RCRI:BE:16:default` | Samsung S3C8-series user's manual ch. 6 (instruction set), S3C9454B/F9454B user's manual | `unlace-cli/tests/processors.toml` (`sam8`) |
 | `EVM` | Ethereum Virtual Machine bytecode, Cancun opcode set | `EVM:BE:32:Cancun` | Ethereum Yellow Paper appendix H, evm.codes opcode reference, EIPs 145/1153/3855/4844/5656/7516 | `unlace-cli/tests/evm.rs` |
-| `Rabbit` | Rabbit Semiconductor Rabbit 2000 / Rabbit 3000A | `Rabbit2000:LE:16:default`, `Rabbit3000:LE:16:default` | Rabbit 2000/3000 Instruction Reference Manual (019-0098), Rabbit 2000/3000 User's Manuals, Dynamic C docs | `unlace-cli/tests/rabbit_raw.rs` |
+| `Rabbit` | Rabbit Semiconductor Rabbit 2000 / Rabbit 3000A | `Rabbit2000:LE:16:default`, `Rabbit3000:LE:16:default` | Rabbit 2000/3000 Instruction Reference Manual (019-0098), Rabbit 2000/3000 User's Manuals, Dynamic C docs | `unlace-cli/tests/processors.toml` (`rabbit`) |
 | `Lanai` | Lanai v11 (Myricom, Google) | `lanai:BE:32:default` | LLVM Lanai backend (`LanaiInstrFormats.td` format descriptions, `LanaiInstrInfo.td`, `LanaiCallingConv.td`) | `unlace-cli/tests/processors.toml` (`lanai`) |
 | `META` | Imagination Technologies META (Meta 1.1, 1.2, 2.1), GP instructions | `META:LE:32:default` | binutils `include/opcode/metag.h` and `opcodes/metag-dis.c` field layouts, Linux `arch/metag` ABI; checked against `metag-linux-gnu-objdump` | `unlace-cli/tests/meta_raw.rs` |
 | `S1C` | Epson S1C17 and S1C33000 cores | `S1C17:LE:24:default`, `S1C33:LE:32:default` | Epson S1C17 Core Manual Rev. 1.2, S1C33000 Core CPU Manual, S1C17 Startup Manual, S1C33 Application Note | `unlace-cli/tests/s1c_raw.rs` |
-| `ST20` | Inmos/ST ST20-C2 and ST20-C4 integer cores | `ST20:LE:32:default` | ST20C2/C4 Core Instruction Set Reference Manual (72-TRN-273-01), transputer compiler writer's guide | `unlace-cli/tests/st20_raw.rs` |
+| `ST20` | Inmos/ST ST20-C2 and ST20-C4 integer cores | `ST20:LE:32:default` | ST20C2/C4 Core Instruction Set Reference Manual (72-TRN-273-01), transputer compiler writer's guide | `unlace-cli/tests/processors.toml` (`st20`) |
 | `TILEGX` | Tilera TILE-Gx (TILE-Gx8000 family), parallel X/Y-mode bundles | `TILEGX:LE:64:default` | TILE-Gx ISA reference (UG401); encodings generated from the binutils `tilegx` opcode table by `tools/gen_tilegx_sleigh.py`; checked against `tilegx-linux-gnu-objdump` | `unlace-cli/tests/tilegx_raw.rs` |
-| `V60` | NEC V60 (uPD70616), V70 (uPD70632) | `V60:LE:32:default` | NEC V60/V70 user's manuals (instruction formats, addressing modes); MAME `v60` disassembler as length oracle | `unlace-cli/tests/v60.rs` |
+| `V60` | NEC V60 (uPD70616), V70 (uPD70632) | `V60:LE:32:default` | NEC V60/V70 user's manuals (instruction formats, addressing modes); MAME `v60` disassembler as length oracle | `unlace-cli/tests/processors.toml` (`v60*`) |
 | `PowerPC` (Gekko) | IBM Gekko / Broadway (PowerPC 750CL) paired singles | `PowerPC:BE:32:Gekko` | IBM PowerPC 750CL User's Manual (paired-single chapter); checked against `powerpc-elf-objdump -M gekko` 2.43.1 | `unlace-cli/tests/ppc_gekko.rs` |
 | `PowerPC` (SPE2) | NXP e200z4/e200z7 with SPE2 and EFS2 | `PowerPC:BE:32:e200-SPE2` | binutils PowerPC opcode table (SPE2/EFS2 rows), SPE2 intrinsic names; checked against `powerpc-elf-objdump` 2.43.1 | `unlace-cli/tests/ppc_spe2.rs` |
 | `M16C` (`M32C_80`) | Renesas M32C/80 (M16C/80 set plus `MUL.L`, `DIV*.L`, `SHANC.L`, `SHLNC.L`) | `M32C/80:LE:24:default` | Renesas M32C/80 Series Software Manual REJ09B0319; checked against `m32c-elf-as` 2.43.1 | `unlace-cli/tests/m32c_raw.rs` |
 | `Propeller` | Parallax Propeller 1 (P8X32A) cog | `propeller:LE:16:default` | Propeller Manual v1.2 assembly reference, P8X32A datasheet opcode matrix | `unlace-cli/tests/processors.toml` (`propeller`) |
 | `MIPS` (MIPS-3D, SmartMIPS) | MIPS64 with MIPS-3D, MIPS32 with SmartMIPS (pre-R6 languages) | existing `MIPS:*:64:*` and `MIPS:*:32:*` pre-R6 languages | binutils MIPS opcode table (MIPS-3D/SmartMIPS rows), MIPS-3D (MD00099) and SmartMIPS ASE specifications; checked against `mips-elf-objdump` 2.43.1 | `unlace-cli/tests/mips_ase.rs` |
 | `NFP` | Netronome NFP-6xxx flow-processor microengine (ME v2.8, 8 contexts) | `NFP:LE:32:ME28` | binutils `opcodes/nfp-dis.c` and `include/opcode/nfp.h` field layouts; checked against binutils objdump (`elf64-nfp`) | `unlace-cli/tests/nfp_raw.rs` |
-| `TLCS870` | Toshiba TLCS-870 (TMP87xx) | `TLCS870:LE:16:default` | Toshiba TLCS-870 data books; MAME tlcs870 (BSD-3) | `unlace-cli/tests/tlcs870_raw.rs` |
+| `TLCS870` | Toshiba TLCS-870 (TMP87xx) | `TLCS870:LE:16:default` | Toshiba TLCS-870 data books; MAME tlcs870 (BSD-3) | `unlace-cli/tests/processors.toml` (`tlcs870`) |
 | `MMIX` | Knuth MMIX | `MMIX:BE:64:default` | MMIXware (Knuth), binutils `mmix` opcode table, GCC `config/mmix` ABI | `unlace-cli/tests/processors.toml` (`mmix`) |
-| `Z8000` | Zilog Z8002 (non-segmented), Z8001 (segmented) | `Z8002:BE:16:default`, `Z8001:BE:32:segmented` | Zilog Z8000 CPU Technical Manual + PLZ/ASM manual; MAME z8000 (BSD-3) cross-check; tgtakaoka/libasm (Apache-2.0) | `unlace-cli/tests/z8000_raw.rs` |
-| `Z380` | Zilog Z380 (Native/Extended, Word/Long Word, DDIR W/LW/IB/IW) | `Z380:LE:32:default` | Zilog Z380 User's Manual DC-8297-03 (Appendix C opcode tables); flag macros adapted from the in-repo Z80 module | `unlace-cli/tests/z380_raw.rs` |
-| `VAX` | DEC VAX (base, G/H floating and vector encodings) | `VAX:LE:32:default` | VAX Architecture Reference Manual; MAME `vax` disassembler (opcode table, length oracle) | `unlace-cli/tests/vax.rs` |
+| `Z8000` | Zilog Z8002 (non-segmented), Z8001 (segmented) | `Z8002:BE:16:default`, `Z8001:BE:32:segmented` | Zilog Z8000 CPU Technical Manual + PLZ/ASM manual; MAME z8000 (BSD-3) cross-check; tgtakaoka/libasm (Apache-2.0) | `unlace-cli/tests/processors.toml` (`z8000`) |
+| `Z380` | Zilog Z380 (Native/Extended, Word/Long Word, DDIR W/LW/IB/IW) | `Z380:LE:32:default` | Zilog Z380 User's Manual DC-8297-03 (Appendix C opcode tables); flag macros adapted from the in-repo Z80 module | `unlace-cli/tests/processors.toml` (`z380`) |
+| `VAX` | DEC VAX (base, G/H floating and vector encodings) | `VAX:LE:32:default` | VAX Architecture Reference Manual; MAME `vax` disassembler (opcode table, length oracle) | `unlace-cli/tests/processors.toml` (`vax_*`) |
 | `Xtensa` (ESP32-S3 PIE) | Xtensa LX7 with the ESP32-S3 Processor Instruction Extensions (`EE.*`) | `Xtensa:LE:32:esp32s3` | Espressif LLVM `XtensaS3DSPInstrInfo.td` (encodings, generated), ESP32-S3 TRM PIE chapter | `unlace-cli/tests/processors.toml` (`xtensa_esp32s3_pie_*`) |
+| `eZ80` | Zilog eZ80 (eZ80Acclaim! eZ80F91/F92/F93/L92, eZ80190), ADL and Z80 modes | `eZ80:LE:24:ADL`, `eZ80:LE:24:Z80` | Zilog UM0077/UM0080; MAME z80 (BSD-3); libasm (Apache-2.0); binutils z80-dis.c read to cross-check encodings only | `unlace-cli/tests/processors.toml` (`ez80`) |
 | `eZ80` | Zilog eZ80 (eZ80Acclaim! eZ80F91/F92/F93/L92, eZ80190), ADL and Z80 modes | `eZ80:LE:24:ADL`, `eZ80:LE:24:Z80` | Zilog UM0077/UM0080; MAME z80 (BSD-3); libasm (Apache-2.0); binutils z80-dis.c read to cross-check encodings only | `unlace-cli/tests/ez80_raw.rs` |
+| `AMDGPU` | AMD GCN5 (Vega, gfx900-gfx90a) shader ISA, one-lane lift | `AMDGPU:LE:64:GFX9` | LLVM AMDGPU encodings (`llvm-mc -show-encoding`), AMD Vega ISA reference; checked on clang-built OpenCL kernels | `unlace-cli/tests/amdgpu_raw.rs` |
+| `KVX` | Kalray KVX kv3-1 (Coolidge v1) and kv3-2 (Coolidge v2), 64-bit mode; bundles of up to eight syllables with tail immediate extensions | `KVX:LE:64:kv3-1`, `KVX:LE:64:kv3-2` | encodings generated from the binutils `kvx` opcode table and disassembler register classes by `tools/gen_kvx_sleigh.py`; checked against `kvx-elf-objdump` | `unlace-cli/tests/kvx_raw.rs` |
+| `CPython` | CPython 3.12 bytecode (one code object's co_code) | `CPython:LE:32:3.12` | CPython 3.12 `dis`/`opcode` tables, `Python/bytecodes.c` semantics; oracle `dis` | `unlace-cli/tests/cpython_raw.rs` |
+| `H8500` | Hitachi H8/500 (H8/510, H8/520, H8/532, H8/534, H8/536, H8/570) | `H8500:BE:16:minimum`, `H8500:BE:24:maximum` | H8/500 Programming Manual; MAME h8500dasm.cpp (BSD-3) | `unlace-cli/tests/processors.toml` (`h8500`) |
+| `S12Z` | NXP S12Z (MC9S12ZVL, MC9S12ZVC, MC9S12ZVM, S12ZVH) | `S12Z:BE:24:default` | NXP S12Z CPU RM; encodings checked against binutils s12z-opc.c (read only) | `unlace-cli/tests/processors.toml` (`s12z`) |
+| `V8Ignition` | V8 Ignition bytecode (V8 13.6, Node.js 24) | `V8Ignition:LE:32:13.6` | V8 `src/interpreter/bytecodes.h`, `bytecode-operands.h` (BSD-3-Clause); oracle `node --print-bytecode` | `unlace-cli/tests/v8ignition_raw.rs` |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)
@@ -4703,10 +4742,12 @@ below.
 
 ### RISC-V ratified bit manipulation and Zicond (#98)
 
-`riscv.rv32b.sinc` (forms common to RV32 and RV64) and `riscv.rv64b.sinc`
-(RV64-only forms) decode the ratified Zba, Zbb, Zbc and Zbs extensions
-(Bitmanip 1.0.0), Zbkb and Zbkx (Scalar Crypto 1.0.1) and Zicond (1.0). They
-replace the 0.92 bitmanip draft those files carried, whose constructors were
+`riscv.zb.sinc` decodes the ratified Zba, Zbb, Zbc and Zbs extensions
+(Bitmanip 1.0.0), Zbkb and Zbkx (Scalar Crypto 1.0.1) and Zicond (1.0). It
+is generated from the Sail RISC-V model by `tools/gen_riscv_sail.py`
+(`docs/sleigh-from-isa-specs.md` has the command and the comparison with the
+hand-written `riscv.rv32b.sinc` and `riscv.rv64b.sinc` it replaced, which
+decoded every word the same way). Those files had replaced the 0.92 bitmanip draft they carried, whose constructors were
 all `unimpl` and whose names and encodings differ from the ratified ones: the
 RVA22 profile's `cpop` decoded as the draft `pcnt`, `bset` as `sbset`,
 `rev8` and `orc.b` as `grevi`/`gorci`, and Zicond's `czero.eqz` as the
@@ -4730,17 +4771,23 @@ to a rotate) on other architectures. The Zbs single-bit operations mask the regi
 to the register width. `pack`, `packh` and `packw` concatenate the low
 halves (bytes for `packh`; `packw` sign-extends its 32-bit result).
 `max`, `maxu`, `min`, `minu` and Zicond's `czero.eqz`/`czero.nez` lift
-as a write of one operand and a conditional branch to the next instruction
-around a write of the other, the shape x86 `cmov` lifts to, so the
-structurer prints a conditional assignment. Operations p-code cannot state in
-a few operators are user operations that keep the data flow:
-`clmul`, `clmulh`, `clmulr` (carry-less multiply), `orc_b`, `brev8`,
-`zip`, `unzip` (RV32 only), `xperm4` and `xperm8`.
+as a copy of the Sail `if` expression's then-value into a temporary, a
+conditional branch around a copy of the else-value, and one write of `rd`,
+so the structurer prints a conditional assignment. `xperm4` and `xperm8`
+lift to one such select per nibble or byte (an in-range index picks that
+lane of `rs1`, any other gives 0), and `zip`/`unzip` (RV32 only) to their
+bit-by-bit shuffles, which the hand-written file had as user operations.
+The user operations left are `carryless_mul` (`clmul` is its low half,
+`clmulh` its high half), `carryless_mulr` and `brev8`, whose inlined
+p-code would exceed the generator's budget, and `orc_b`, kept opaque so a
+string scan reads `orc_b(x)` rather than eight byte tests. `zext.w` is the
+riscv-opcodes display alias of `add.uw` with `rs2 = x0`.
 
 The encodings that depend on XLEN are guarded by `ADDRSIZE`: `rev8` is
 `0x698` on RV32 and `0x6b8` on RV64, `zext.h` is `pack rd, rs1, x0` on
 RV32 (OP) and `packw rd, rs1, x0` on RV64 (OP-32), and the immediate shifts
-take a 6-bit amount whose top bit must be clear on RV32 (`shamt6`). The
+take a 6-bit amount whose top bit must be clear on RV32 (on RV32 the
+generator fixes bit 25 to 0 and the amount is `op2024`). The
 default RISC-V languages decode all of them, as the GNU and LLVM
 disassemblers do without an `-march` restriction, because no other standard
 or draft instruction in these languages shares their encodings. Exercised by
@@ -4932,15 +4979,17 @@ instruction, RV32 and RV64.
 
 ### RISC-V scalar cryptography (#98)
 
-`riscv.rv32k.sinc` (RV32 and RV64) and `riscv.rv64k.sinc` (RV64 only,
-included by `riscv.lp64d.slaspec`) decode the ratified scalar cryptography
+`riscv.zk.sinc`, generated from the Sail model's `zkn_insts.sail` and
+`zks_insts.sail` by `tools/gen_riscv_sail.py` (`docs/sleigh-from-isa-specs.md`),
+decodes the ratified scalar cryptography
 extensions (Scalar Crypto 1.0.1): Zknh (`sha256sig0/1`, `sha256sum0/1`; on
 RV64 `sha512sig0/1`, `sha512sum0/1`; on RV32 the half-word forms
 `sha512sum0r`, `sha512sum1r`, `sha512sig0l/h`, `sha512sig1l/h`), Zksh
 (`sm3p0`, `sm3p1`), Zksed (`sm4ed`, `sm4ks`), and Zkne/Zknd (`aes32esi`,
 `aes32esmi`, `aes32dsi`, `aes32dsmi` on RV32; `aes64es`, `aes64esm`,
-`aes64ds`, `aes64dsm`, `aes64im`, `aes64ks1i`, `aes64ks2` on RV64). They
-replace the 0.6.2 draft those files carried, which put these instructions
+`aes64ds`, `aes64dsm`, `aes64im`, `aes64ks1i`, `aes64ks2` on RV64). It
+replaces the hand-written `riscv.rv32k.sinc` and `riscv.rv64k.sinc`, which
+decoded every word the same way; those had replaced the 0.6.2 draft, which put these instructions
 in the custom-1 and custom-2 opcode spaces (where vendor extensions live)
 under draft names (`ssha256.sig0`, `saes32.encs`, `pollentropy`, ...), all
 `unimpl`; the ratified encodings are in OP and OP-IMM.
@@ -4952,8 +5001,11 @@ the doubleword; each RV32 SHA-512 half forms the 64-bit value `rs2:rs1`
 (`rs2` high), applies its three 64-bit rotates (for `sig0h`/`sig1h` the
 middle term shifts only the low word) and keeps the low 32 bits. The AES
 and SM4 instructions, whose results go through an S-box, are user
-operations named after the instruction, taking `rs1`, `rs2` and, for the
-RV32 AES and SM4 forms, the byte select `bs` (`aes64ks1i` takes `rnum`).
+operations named after the instruction (`--opaque`), taking `rs1`, `rs2`
+and, for the RV32 AES and SM4 forms, the byte select `bs` (`aes64ks1i`
+takes `rnum`). `aes64ks2` lifts to its XOR definition. `aes64ks1i` decodes
+every `rnum`, as LLVM does, though Sail reserves 0xB..0xF
+(`--decode-reserved AES64KS1I`).
 Zbkb, Zbkc and Zbkx are in the bit manipulation files. The Zkr `seed` CSR
 and the vector crypto extensions (Zvk*) are not covered. Exercised by
 `unlace-cli/tests/riscv_crypto.rs`: one probe row per encoding against LLVM's
@@ -5223,7 +5275,9 @@ confirmed on hardware before the spec changed.
   `MOVBE r32,m32`, `MOVMSKPS`/`MOVMSKPD`, MMX `PEXTRW`, `LSL`, `RDRAND`/`RDSEED r32`,
   the VEX and EVEX `VCVT[T]SS2SI`/`VCVT[T]SD2SI`/`VCVT[T]S[SDH]2USI`/`VCVT[T]SH2SI`,
   `VMOVMSKPS`/`VMOVMSKPD`, `VPEXTRW` and `KMOV[BWD] r32`; before, `lock xadd [rdi],eax`
-  left the old upper half of RAX in place.
+  left the old upper half of RAX in place. In the locked `XADD`/`XCHG` the zero extension is
+  built right after the register write, inside the `LOCK()`..`UNLOCK()` envelope, so the
+  `atomics` fold, which requires `UNLOCK()` to be the instruction's last op, still applies.
 - `MOV r32,Sreg` and `MOV r64,Sreg` (`8C` with a register operand) zero-extend the selector
   into the whole register; only the 16-bit form writes 16 bits.
 - `90` with a REX prefix that lacks REX.B (`44 90`, `4C 90`, ...) is `NOP`, not
@@ -5257,6 +5311,17 @@ Found by `tools/difffuzz` against Unicorn and checked against the Arm ARM.
 `c.jr`, `c.jalr` and `ret` (`riscv.rvc.sinc`) expand to `jalr`, which clears bit 0 of the
 target; they now jump to `rs1 & ~1` as the `jalr` constructors in `riscv.rv32i.sinc` already
 did. Found by `tools/difffuzz`.
+
+### ARM lifter fixes from differential fuzzing
+
+Found by `tools/difffuzz` against Unicorn.
+
+- `STRHT` (`ARMinstructions.sinc`) builds its `addrmode3` after `COND`, so a failing
+  condition no longer writes the base register back, and stores `Rd:2` (it stored all 4 bytes).
+- The T32 `AND`, `BIC`, `MOV.W` and `MVN` immediate forms and the `AND.W` and `MVN.W`
+  shifted-register forms (`ARMTHUMBinstructions.sinc`) take `thSBIT_CZN` and
+  `th_logicflags()`, so with S they set C from the shifter (`ThumbExpandImm12` or `thshift2`),
+  as `ORR`, `EOR` and `TST` already did; before, `ANDS.W r8,r11,r9,ROR #21` left C unchanged.
 
 ## 2.9 Go stack-growth prologue folding
 

@@ -1,0 +1,84 @@
+# Hitachi H8/500 (H8/510, H8/520, H8/532, H8/534, H8/536, H8/570) shared SLEIGH body.
+# Clean-room: encodings from the Hitachi H8/500 Series Programming Manual and the MAME
+# h8500 disassembler (BSD-3-Clause, AJR). No GPL text and no community Ghidra module was used.
+
+define endian=big;
+define alignment=1;
+define space ram type=ram_space size=$(ASZ) default;
+define space register type=register_space size=1;
+
+define register offset=0x00 size=2 [ R0 R1 R2 R3 R4 R5 R6 R7 ];
+define register offset=0x00 size=1 [ R0H R0L R1H R1L R2H R2L R3H R3L R4H R4L R5H R5L R6H R6L R7H R7L ];
+define register offset=0x00 size=4 [ RR0 RR2 RR4 RR6 ];
+define register offset=0x20 size=$(ASZ) [ PC ];
+define register offset=0x30 size=2 [ SR ];
+define register offset=0x30 size=1 [ SRH CCR ];
+define register offset=0x38 size=1 [ CP DP EP TP BR ];
+define register offset=0x40 size=1 [ fN fZ fV fC fT ];
+
+@define N "fN"
+@define Z "fZ"
+@define V "fV"
+@define C "fC"
+
+define token op8 (8)
+  op = (0,7)
+  ealo = (0,7)
+  eamode = (4,7)
+  eaw = (3,3)
+  ear = (0,2)
+  earW = (0,2)
+  earB = (0,2)
+  g5 = (3,7)
+  g4 = (4,7)
+  g4b = (4,7)
+  g3 = (3,3)
+  grn = (0,2)
+  gRB = (0,2)
+  gRW = (0,2)
+  gRR = (0,2)
+  crB = (0,2)
+  bitn = (0,3)
+  cond = (0,3)
+  sr3 = (0,2)
+  srW = (0,2)
+  srB = (0,2)
+;
+define token imm8tok (8) imm8 = (0,7) simm8 = (0,7) signed;
+define token imm16tok (16) imm16 = (0,15) simm16 = (0,15) signed;
+define token imm24tok (24) imm24 = (0,23);
+
+attach variables [ ear earW gRW srW ] [ R0 R1 R2 R3 R4 R5 R6 R7 ];
+attach variables [ earB gRB srB ] [ R0L R1L R2L R3L R4L R5L R6L R7L ];
+attach variables [ gRR ] [ RR0 _ RR2 _ RR4 _ RR6 _ ];
+attach variables [ crB ] [ _ _ _ BR EP DP _ TP ];
+
+define pcodeop dadd;
+define pcodeop dsub;
+define pcodeop movfpeB;
+define pcodeop movfpeW;
+define pcodeop movtpe;
+define pcodeop trapa;
+define pcodeop trapvs;
+define pcodeop sleep;
+
+@if defined(MAXMODE)
+macro mkaddr(res, page, a) { res = (zext(page) << 16) | zext(a); }
+@else
+macro mkaddr(res, page, a) { res = a; }
+@endif
+
+macro setNZ(r) { $(N) = r s< 0; $(Z) = r == 0; }
+macro addflags(a, b) { $(C) = carry(a, b); $(V) = scarry(a, b); }
+macro subflags(a, b) { $(C) = a < b; $(V) = sborrow(a, b); }
+macro packCCR() { CCR = ($(N) << 3) | ($(Z) << 2) | ($(V) << 1) | $(C); }
+macro unpackCCR() { $(N) = (CCR & 8) != 0; $(Z) = (CCR & 4) != 0; $(V) = (CCR & 2) != 0; $(C) = (CCR & 1) != 0; }
+macro push16(v) { R7 = R7 - 2; local a:$(ASZ); mkaddr(a, TP, R7); *:2 a = v; }
+macro pop16(v) { local a:$(ASZ); mkaddr(a, TP, R7); v = *:2 a; R7 = R7 + 2; }
+
+rpg: is ear < 4 { export DP; }
+rpg: is ear = 4 | ear = 5 { export EP; }
+rpg: is ear > 5 { export TP; }
+
+@include "h8500_general.sinc"
+@include "h8500_short.sinc"

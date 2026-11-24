@@ -13,5 +13,4 @@ define endian=little;
 @include "riscv.table.sinc"
 @include "riscv.instr.sinc"
 
-@include "riscv.rv64k.sinc"    # current encoding is in custom space
 @include "riscv.custom.sinc"

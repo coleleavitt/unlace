@@ -1,20 +1,25 @@
 // Shared integration-test executable. Process-sensitive tests stay separate.
+#[path = "amdgpu_raw.rs"]
+mod amdgpu_raw;
 #[path = "arcv2_loops.rs"]
 mod arcv2_loops;
 #[path = "chip8.rs"]
 mod chip8;
+#[path = "cpython_raw.rs"]
+mod cpython_raw;
 mod common;
 #[path = "evm.rs"]
 mod evm;
-#[path = "ez80_raw.rs"]
-mod ez80_raw;
-
 #[path = "hexagon_hmx.rs"]
 mod hexagon_hmx;
 #[path = "huc6280.rs"]
 mod huc6280;
 #[path = "konami.rs"]
 mod konami;
+#[path = "v8ignition_raw.rs"]
+mod v8ignition_raw;
+#[path = "kvx_raw.rs"]
+mod kvx_raw;
 #[path = "lua54.rs"]
 mod lua54;
 #[path = "m6800_family.rs"]
@@ -26,10 +31,6 @@ mod mips_ase;
 #[path = "mips_elf_selection.rs"]
 mod mips_elf_selection;
 
-#[path = "v60.rs"]
-mod v60;
-#[path = "vax.rs"]
-mod vax;
 
 #[path = "aarch64_rme.rs"]
 mod aarch64_rme;
@@ -735,12 +736,6 @@ mod globalwidth;
 #[path = "xrefs_unflagged_cli.rs"]
 mod xrefs_unflagged_cli;
 
-#[path = "z380_raw.rs"]
-mod z380_raw;
-
-#[path = "z8000_raw.rs"]
-mod z8000_raw;
-
 #[path = "zero_extended_returns.rs"]
 mod zero_extended_returns;
 
@@ -1070,6 +1065,8 @@ mod typelib;
 
 #[path = "calleeargsmsvc_cli.rs"]
 mod calleeargsmsvc_cli;
+#[path = "importcache_cli.rs"]
+mod importcache_cli;
 #[path = "msvccookie_return_cli.rs"]
 mod msvccookie_return_cli;
 #[path = "msvcexport_cli.rs"]
@@ -1078,3 +1075,7 @@ mod msvcexport_cli;
 mod processors;
 #[path = "vexzeroupper_cli.rs"]
 mod vexzeroupper_cli;
+#[path = "initterm_cli.rs"]
+mod initterm_cli;
+#[path = "vftablerelocs_cli.rs"]
+mod vftablerelocs_cli;

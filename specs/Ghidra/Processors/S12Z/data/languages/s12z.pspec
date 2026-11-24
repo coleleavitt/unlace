@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- NXP S12Z. The reset vector is the 3-byte entry at FFFFFD; the vector table base
+     is set by IVBR. -->
+<processor_spec>
+  <programcounter register="PC"/>
+  <register_data>
+    <register name="CCR" group="Flags"/>
+    <register name="fC" group="Flags"/>
+    <register name="fV" group="Flags"/>
+    <register name="fZ" group="Flags"/>
+    <register name="fN" group="Flags"/>
+    <register name="fI" group="Flags"/>
+    <register name="fH" group="Flags"/>
+    <register name="fX" group="Flags"/>
+    <register name="fU" group="Flags"/>
+    <register name="fS" group="Flags"/>
+  </register_data>
+</processor_spec>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<language_definitions>
+  <language processor="V8Ignition"
+            endian="little"
+            size="32"
+            variant="13.6"
+            version="1.0"
+            slafile="ignition_v8_13.sla"
+            processorspec="ignition.pspec"
+            id="V8Ignition:LE:32:13.6">
+    <description>V8 Ignition bytecode, V8 13.6 (Node.js 24)</description>
+    <compiler name="default" spec="ignition.cspec" id="default"/>
+  </language>
+</language_definitions>

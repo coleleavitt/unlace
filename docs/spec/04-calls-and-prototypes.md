@@ -2211,7 +2211,14 @@ classified:
   virtual call `mov eax,[ecx]; call [eax+4]` between statements) takes no
   stack argument, so it pops none and the stack pointer stays at the saved
   value. Without that, every push of a local's address after such a call reads
-  as an unplaced store. This one does change what the pop proof reads, so with
+  as an unplaced store. Functions without an EH frame restore their
+  callee-saved registers the same way (`kuna_calleepurge.rs (note_saved_register,
+  restore_slot)`). The walk records the slot where each of EBX, EBP, ESI and
+  EDI is first pushed while it still holds its entry value (`push ebp`,
+  `push esi` in the prologue). A pop into that register at a stack pointer that
+  unread calls left only bounded, where the bounds contain the slot, is placed
+  at the slot: compiled code restores each register from where it saved it.
+  That covers `pop esi; pop ebp; ret 4` after a call to an import. This one does change what the pop proof reads, so with
   the option on an MSVC EH function whose virtual calls left its stack pointer
   bounded can prove its pop.
   The rest of this bookkeeping runs only with the option on and never changes

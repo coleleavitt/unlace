@@ -12,7 +12,10 @@
 //!   parameter names from the parameter records that follow it, emitted on
 //!   [`AnalysisOutput::prototypes_at`]. A member function's `this` pointer is its
 //!   first parameter. On i386 the stated calling convention binds the matching
-//!   `x86win.cspec` model ([`AnalysisOutput::models`]).
+//!   `x86win.cspec` model ([`AnalysisOutput::models`]). An address that
+//!   identical-COMDAT folding gave several procedures of different types gets
+//!   nothing, and a lone `T_NOTYPE` argument (C's `int f()`) states no
+//!   parameters rather than a variadic list.
 //! - **Stack locals.** `S_LOCAL` with an `S_DEFRANGE_FRAMEPOINTER_REL`,
 //!   `S_DEFRANGE_FRAMEPOINTER_REL_FULL_SCOPE` or `S_DEFRANGE_REGISTER_REL` range, and
 //!   the MSVC `S_REGREL32`/`S_BPREL32` records, placed in kuna stack coordinates
@@ -508,10 +511,12 @@ fn collect(
         collect_vftables(&mut table.iter(), &map, image_base, &mut tpi, &mut globals);
     }
     procs.sort_by_key(|p| p.start);
-    procs.dedup_by_key(|p| p.start);
-
-    for proc in &procs {
-        emit_proc(proc, family, &mut tpi, out);
+    for group in procs.chunk_by(|a, b| a.start == b.start) {
+        // Identical-COMDAT folding gives several procedures one address; when
+        // their types differ the address has no single prototype or frame.
+        if group.iter().all(|p| p.type_index == group[0].type_index) {
+            emit_proc(&group[0], family, &mut tpi, out);
+        }
     }
     out.typed_data.extend(globals.into_values());
 }

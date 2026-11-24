@@ -64,7 +64,8 @@ pub struct EvmCallMap {
     pub returns: BTreeSet<u64>,
     /// Callees no path of which returns.
     pub noreturn: BTreeSet<u64>,
-    /// Constant jumps into a terminal tail that two or more jumps share (solc's
+    /// Constant jumps and conditional jumps into a terminal tail that two or more
+    /// of them, a call's return or the fall-through share (solc's
     /// optimizer shares the ABI-encoding and `RETURN` tail between external
     /// functions), by site: the target and the stack words the tail reads.
     pub tails: BTreeMap<u64, u64>,
@@ -587,9 +588,7 @@ pub fn classify(code: &[u8]) -> EvmCallMap {
     }
     let mut sharers: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
     for (site, t) in &map.jumps {
-        if img.ins[img.index[site]].op == 0x56 {
-            sharers.entry(*t).or_default().push(*site);
-        }
+        sharers.entry(*t).or_default().push(*site);
     }
     let mut ret_sharers: BTreeMap<u64, usize> = BTreeMap::new();
     for c in map.calls.values() {
@@ -599,8 +598,16 @@ pub fn classify(code: &[u8]) -> EvmCallMap {
         let (_, never, _, lowest) = walk_function(&img, &final_events, &pops, t);
         u32::try_from(-lowest).ok().filter(|a| never && *a <= 16)
     };
+    let falls_into = |t: u64| {
+        img.index
+            .get(&t)
+            .and_then(|i| i.checked_sub(1))
+            .is_some_and(|k| !matches!(img.ins[k].op, 0x56) && !terminates(img.ins[k].op))
+    };
     for (t, sites) in sharers {
-        if sites.len() + ret_sharers.get(&t).copied().unwrap_or(0) < 2 {
+        let entries =
+            sites.len() + ret_sharers.get(&t).copied().unwrap_or(0) + usize::from(falls_into(t));
+        if entries < 2 {
             continue;
         }
         if let Some(args) = tail_args(t) {

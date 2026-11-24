@@ -1,0 +1,337 @@
+# Zilog Z8000 (Z8001 segmented, Z8002 non-segmented): shared instruction set.
+# Written for this repository (clean room) from the Zilog Z8000 CPU Technical Manual and
+# the Z8000 PLZ/ASM Assembly Language Programming Manual opcode tables; MAME's z8000 core
+# (BSD-3-Clause) and tgtakaoka/libasm (Apache-2.0) were read as encoding cross-checks.
+# Big-endian 16-bit instruction words. Bits 15-14 of the first word select the addressing
+# mode (00 IR/IM, 01 DA/X, 10 R); bits 7-4 name the address/source register, bits 3-0 the
+# register operand. SEGMENTED (Z8001) turns pointers into register pairs and addresses into
+# segment:offset; the segment number lands in bits 22-16 of the flat ram address.
+
+define endian=big;
+define alignment=2;
+
+@if defined(SEGMENTED)
+define space ram      type=ram_space      size=4  default;
+@define ASZ "4"
+@else
+define space ram      type=ram_space      size=2  default;
+@define ASZ "2"
+@endif
+define space io       type=ram_space      size=2;
+define space register type=register_space size=4;
+
+define register offset=0x00 size=2 [ R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15 ];
+define register offset=0x00 size=1 [ RH0 RL0 RH1 RL1 RH2 RL2 RH3 RL3 RH4 RL4 RH5 RL5 RH6 RL6 RH7 RL7 ];
+define register offset=0x00 size=4 [ RR0 RR2 RR4 RR6 RR8 RR10 RR12 RR14 ];
+define register offset=0x00 size=8 [ RQ0 RQ4 RQ8 RQ12 ];
+@if defined(SEGMENTED)
+define register offset=0x40 size=4 [ PC ];
+@else
+define register offset=0x40 size=2 [ PC ];
+@endif
+define register offset=0x48 size=2 [ FCW REFRESH PSAPSEG PSAPOFF NSPSEG NSPOFF ];
+define register offset=0x60 size=1 [ C Z S V D H ];
+
+define token w0 (16)
+  mode = (14,15)
+  op6  = (8,13)
+  opb  = (8,15)
+  opH  = (12,15)
+  f11  = (8,11)
+  f11r_b = (8,11)
+  hi   = (4,7)
+  lo   = (0,3)
+  hiS  = (4,7)
+  loS  = (0,3)
+  rA_w = (4,7)
+  rA_b = (4,7)
+  rA_l = (4,7)
+  rB_w = (0,3)
+  rB_b = (0,3)
+  rB_l = (0,3)
+  rB_q = (0,3)
+rA_q = (4,7)
+  rC_w = (8,11)
+  cc   = (0,3)
+  jcc  = (8,11)
+  imm8 = (0,7)
+  simm8 = (0,7) signed
+  sdisp12 = (0,11) signed
+  djbit = (7,7)
+  disp7 = (0,6)
+  low8 = (0,7)
+  bit2 = (2,2)
+  bit3 = (3,3)
+  lo3 = (0,2)
+;
+define token w1 (16)
+  imm16  = (0,15)
+  simm16 = (0,15) signed
+  s16neg = (15,15)
+  i16lo  = (0,7)
+  a_long = (15,15)
+  a_seg  = (8,14)
+  a_off8 = (0,7)
+  x2hi   = (8,11)
+  x2r_w  = (8,11)
+  x2r_b  = (8,11)
+  x2lo   = (4,7)
+  x2cc   = (0,3)
+;
+define token w2 (16)
+  imm16b = (0,15)
+;
+define token d32 (32)
+  imm32 = (0,31)
+;
+
+attach variables [ rA_w rB_w rC_w x2r_w ] [ R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15 ];
+attach variables [ rA_b rB_b f11r_b x2r_b ] [ RH0 RH1 RH2 RH3 RH4 RH5 RH6 RH7 RL0 RL1 RL2 RL3 RL4 RL5 RL6 RL7 ];
+attach variables [ rA_l rB_l ] [ RR0 _ RR2 _ RR4 _ RR6 _ RR8 _ RR10 _ RR12 _ RR14 _ ];
+attach variables [ rB_q rA_q ] [ RQ0 _ _ _ RQ4 _ _ _ RQ8 _ _ _ RQ12 _ _ _ ];
+
+define pcodeop disableInterrupts;
+define pcodeop enableInterrupts;
+define pcodeop halt;
+define pcodeop systemCall;
+define pcodeop interruptReturn;
+define pcodeop decimalAdjust;
+define pcodeop multiMicroRequest;
+define pcodeop loadControl;
+define pcodeop storeControl;
+define pcodeop ioIn;
+define pcodeop ioOut;
+define pcodeop parity;
+
+macro logicFlags(r) { Z = (r == 0); S = (r s< 0); }
+macro addFlags(a, b, r) { C = carry(a, b); V = scarry(a, b); Z = (r == 0); S = (r s< 0); }
+macro subFlags(a, b, r) { C = a < b; V = sborrow(a, b); Z = (r == 0); S = (r s< 0); }
+macro addFlagsB(a, b, r) { C = carry(a, b); V = scarry(a, b); Z = (r == 0); S = (r s< 0); H = carry(a & 0xf, b & 0xf) || (((a & 0xf) + (b & 0xf)) > 0xf); D = 0; }
+macro subFlagsB(a, b, r) { C = a < b; V = sborrow(a, b); Z = (r == 0); S = (r s< 0); H = (a & 0xf) < (b & 0xf); D = 1; }
+
+@if defined(SEGMENTED)
+macro segaddr(dst, v) { dst = ((v >> 8) & 0x7f0000) | (v & 0xffff); }
+macro push16(v) { R15 = R15 - 2; local a:4; segaddr(a, RR14); *:2 a = v; }
+macro pop16(v) { local a:4; segaddr(a, RR14); v = *:2 a; R15 = R15 + 2; }
+macro push32(v) { R15 = R15 - 4; local a:4; segaddr(a, RR14); *:4 a = v; }
+macro pop32(v) { local a:4; segaddr(a, RR14); v = *:4 a; R15 = R15 + 4; }
+macro pushPC(v) { R15 = R15 - 4; local a:4; segaddr(a, RR14); *:4 a = ((v & 0x7f0000) << 8) | (v & 0xffff); }
+macro popPC(v) { local a:4; segaddr(a, RR14); local t:4 = *:4 a; R15 = R15 + 4; segaddr(v, t); }
+@else
+macro push16(v) { R15 = R15 - 2; *:2 R15 = v; }
+macro pop16(v) { v = *:2 R15; R15 = R15 + 2; }
+macro push32(v) { R15 = R15 - 4; *:4 R15 = v; }
+macro pop32(v) { v = *:4 R15; R15 = R15 + 4; }
+macro pushPC(v) { R15 = R15 - 2; *:2 R15 = v; }
+macro popPC(v) { v = *:2 R15; R15 = R15 + 2; }
+@endif
+
+# ---- effective addresses (address register in bits 7-4) ----
+@if defined(SEGMENTED)
+ir: "@"^rA_l is mode=0 & hi!=0 & rA_l { local a:4; segaddr(a, rA_l); export a; }
+dab: addr is mode=1 & hi=0 ; a_long=0 & a_seg & a_off8 [ addr = (a_seg << 16) | a_off8; ] { export *[const]:4 addr; }
+dab: addr is mode=1 & hi=0 ; a_long=1 & a_seg ; imm16b [ addr = (a_seg << 16) | imm16b; ] { export *[const]:4 addr; }
+xa: addr^"("^rA_w^")" is mode=1 & rA_w ; a_long=0 & a_seg & a_off8 [ addr = (a_seg << 16) | a_off8; ] { local a:4 = addr + zext(rA_w); export a; }
+xa: addr^"("^rA_w^")" is mode=1 & rA_w ; a_long=1 & a_seg ; imm16b [ addr = (a_seg << 16) | imm16b; ] { local a:4 = addr + zext(rA_w); export a; }
+@else
+ir: "@"^rA_w is mode=0 & hi!=0 & rA_w { export rA_w; }
+dab: imm16 is mode=1 & hi=0 ; imm16 { export *[const]:2 imm16; }
+xa: imm16^"("^rA_w^")" is mode=1 & hi!=0 & rA_w ; imm16 { local a:2 = imm16 + rA_w; export a; }
+@endif
+
+pr: "@"^rA_w is rA_w { export rA_w; }
+
+# memory/address operands without immediate (modes IR, DA, X)
+mem: ir  is ir  { export ir; }
+mem: dab is dab { export dab; }
+mem: xa  is xa  { export xa; }
+
+# general source operands: R, IM, IR, DA, X
+s_b: rA_b is mode=2 & rA_b { export rA_b; }
+s_b: "#"^i16lo is mode=0 & hi=0 ; i16lo { export *[const]:1 i16lo; }
+s_b: mem is mem { export *:1 mem; }
+s_w: rA_w is mode=2 & rA_w { export rA_w; }
+s_w: "#"^imm16 is mode=0 & hi=0 ; imm16 { export *[const]:2 imm16; }
+s_w: mem is mem { export *:2 mem; }
+s_l: rA_l is mode=2 & rA_l { export rA_l; }
+s_l: "#"^imm32 is mode=0 & hi=0 ; imm32 { export *[const]:4 imm32; }
+s_l: mem is mem { export *:4 mem; }
+
+# destination operands: R, IR, DA, X
+d_b: rA_b is mode=2 & rA_b { export rA_b; }
+d_b: mem is mem { export *:1 mem; }
+d_w: rA_w is mode=2 & rA_w { export rA_w; }
+d_w: mem is mem { export *:2 mem; }
+
+# condition codes
+cond: "F"   is cc=0  { export 0:1; }
+cond: "LT"  is cc=1  { local t:1 = S != V; export t; }
+cond: "LE"  is cc=2  { local t:1 = Z || (S != V); export t; }
+cond: "ULE" is cc=3  { local t:1 = C || Z; export t; }
+cond: "OV"  is cc=4  { export V; }
+cond: "MI"  is cc=5  { export S; }
+cond: "EQ"  is cc=6  { export Z; }
+cond: "ULT" is cc=7  { export C; }
+cond: "GE"  is cc=9  { local t:1 = S == V; export t; }
+cond: "GT"  is cc=10 { local t:1 = !Z && (S == V); export t; }
+cond: "UGT" is cc=11 { local t:1 = !C && !Z; export t; }
+cond: "NOV" is cc=12 { local t:1 = !V; export t; }
+cond: "PL"  is cc=13 { local t:1 = !S; export t; }
+cond: "NE"  is cc=14 { local t:1 = !Z; export t; }
+cond: "UGE" is cc=15 { local t:1 = !C; export t; }
+
+jcond: "F"   is jcc=0  { export 0:1; }
+jcond: "LT"  is jcc=1  { local t:1 = S != V; export t; }
+jcond: "LE"  is jcc=2  { local t:1 = Z || (S != V); export t; }
+jcond: "ULE" is jcc=3  { local t:1 = C || Z; export t; }
+jcond: "OV"  is jcc=4  { export V; }
+jcond: "MI"  is jcc=5  { export S; }
+jcond: "EQ"  is jcc=6  { export Z; }
+jcond: "ULT" is jcc=7  { export C; }
+jcond: "GE"  is jcc=9  { local t:1 = S == V; export t; }
+jcond: "GT"  is jcc=10 { local t:1 = !Z && (S == V); export t; }
+jcond: "UGT" is jcc=11 { local t:1 = !C && !Z; export t; }
+jcond: "NOV" is jcc=12 { local t:1 = !V; export t; }
+jcond: "PL"  is jcc=13 { local t:1 = !S; export t; }
+jcond: "NE"  is jcc=14 { local t:1 = !Z; export t; }
+jcond: "UGE" is jcc=15 { local t:1 = !C; export t; }
+
+rel8: dest is simm8 [ dest = inst_next + simm8 * 2; ] { export *[ram]:$(ASZ) dest; }
+rel12: dest is sdisp12 [ dest = inst_next - sdisp12 * 2; ] { export *[ram]:$(ASZ) dest; }
+rel7: dest is disp7 [ dest = inst_next - disp7 * 2; ] { export *[ram]:$(ASZ) dest; }
+incn: n is lo [ n = lo + 1; ] { export *[const]:2 n; }
+
+# ---- arithmetic and logic: op Rd, src ----
+:ADDB rB_b, s_b is (mode!=3 & op6=0x00 & rB_b) ... & s_b { local a = rB_b; local b = s_b; rB_b = a + b; addFlagsB(a, b, rB_b); }
+:ADD rB_w, s_w  is (mode!=3 & op6=0x01 & rB_w) ... & s_w { local a = rB_w; local b = s_w; rB_w = a + b; addFlags(a, b, rB_w); }
+:SUBB rB_b, s_b is (mode!=3 & op6=0x02 & rB_b) ... & s_b { local a = rB_b; local b = s_b; rB_b = a - b; subFlagsB(a, b, rB_b); }
+:SUB rB_w, s_w  is (mode!=3 & op6=0x03 & rB_w) ... & s_w { local a = rB_w; local b = s_w; rB_w = a - b; subFlags(a, b, rB_w); }
+:ORB rB_b, s_b  is (mode!=3 & op6=0x04 & rB_b) ... & s_b { rB_b = rB_b | s_b; logicFlags(rB_b); V = parity(rB_b); }
+:OR rB_w, s_w   is (mode!=3 & op6=0x05 & rB_w) ... & s_w { rB_w = rB_w | s_w; logicFlags(rB_w); }
+:ANDB rB_b, s_b is (mode!=3 & op6=0x06 & rB_b) ... & s_b { rB_b = rB_b & s_b; logicFlags(rB_b); V = parity(rB_b); }
+:AND rB_w, s_w  is (mode!=3 & op6=0x07 & rB_w) ... & s_w { rB_w = rB_w & s_w; logicFlags(rB_w); }
+:XORB rB_b, s_b is (mode!=3 & op6=0x08 & rB_b) ... & s_b { rB_b = rB_b ^ s_b; logicFlags(rB_b); V = parity(rB_b); }
+:XOR rB_w, s_w  is (mode!=3 & op6=0x09 & rB_w) ... & s_w { rB_w = rB_w ^ s_w; logicFlags(rB_w); }
+:CPB rB_b, s_b  is (mode!=3 & op6=0x0A & rB_b) ... & s_b { local a = rB_b; local b = s_b; local r = a - b; subFlags(a, b, r); }
+:CP rB_w, s_w   is (mode!=3 & op6=0x0B & rB_w) ... & s_w { local a = rB_w; local b = s_w; local r = a - b; subFlags(a, b, r); }
+:CPL rB_l, s_l  is (mode!=3 & op6=0x10 & rB_l) ... & s_l { local a = rB_l; local b = s_l; local r = a - b; subFlags(a, b, r); }
+:SUBL rB_l, s_l is (mode!=3 & op6=0x12 & rB_l) ... & s_l { local a = rB_l; local b = s_l; rB_l = a - b; subFlags(a, b, rB_l); }
+:ADDL rB_l, s_l is (mode!=3 & op6=0x16 & rB_l) ... & s_l { local a = rB_l; local b = s_l; rB_l = a + b; addFlags(a, b, rB_l); }
+:MULTL rB_q, s_l is (mode!=3 & op6=0x18 & rB_q) ... & s_l { local a:8 = sext(rB_q:4); rB_q = a * sext(s_l); logicFlags(rB_q); V = 0; C = (rB_q s< -0x80000000) || (rB_q s> 0x7fffffff); }
+:MULT rB_l, s_w is (mode!=3 & op6=0x19 & rB_l) ... & s_w { local a:4 = sext(rB_l:2); rB_l = a * sext(s_w); logicFlags(rB_l); V = 0; C = (rB_l s< -0x8000) || (rB_l s> 0x7fff); }
+:DIVL rB_q, s_l is (mode!=3 & op6=0x1A & rB_q) ... & s_l { local d:8 = sext(s_l); local q:8 = rB_q s/ d; local m:8 = rB_q s% d; rB_q = (m << 32) | (q & 0xffffffff); local ql:4 = q:4; logicFlags(ql); V = (d == 0); C = 0; }
+:DIV rB_l, s_w  is (mode!=3 & op6=0x1B & rB_l) ... & s_w { local d:4 = sext(s_w); local q:4 = rB_l s/ d; local m:4 = rB_l s% d; rB_l = (m << 16) | (q & 0xffff); local qw:2 = q:2; logicFlags(qw); V = (d == 0); C = 0; }
+
+:ADCB rB_b, rA_b is opb=0xB4 & rB_b & rA_b { local a = rB_b; local b = rA_b; local c = zext(C); rB_b = a + b + c; C = carry(a, b) || carry(a + b, c); V = scarry(a, b); Z = rB_b == 0; S = rB_b s< 0; D = 0; }
+:ADC rB_w, rA_w  is opb=0xB5 & rB_w & rA_w { local a = rB_w; local b = rA_w; local c = zext(C); rB_w = a + b + c; C = carry(a, b) || carry(a + b, c); V = scarry(a, b); Z = rB_w == 0; S = rB_w s< 0; }
+:SBCB rB_b, rA_b is opb=0xB6 & rB_b & rA_b { local a = rB_b; local b = rA_b; local c = zext(C); rB_b = a - b - c; C = (a < b) || ((a - b) < c); V = sborrow(a, b); Z = rB_b == 0; S = rB_b s< 0; D = 1; }
+:SBC rB_w, rA_w  is opb=0xB7 & rB_w & rA_w { local a = rB_w; local b = rA_w; local c = zext(C); rB_w = a - b - c; C = (a < b) || ((a - b) < c); V = sborrow(a, b); Z = rB_w == 0; S = rB_w s< 0; }
+
+# ---- loads and stores ----
+:LDB rB_b, s_b is (mode!=3 & op6=0x20 & rB_b) ... & s_b { rB_b = s_b; }
+:LD rB_w, s_w  is (mode!=3 & op6=0x21 & rB_w) ... & s_w { rB_w = s_w; }
+:LDL rB_l, s_l is (mode!=3 & op6=0x14 & rB_l) ... & s_l { rB_l = s_l; }
+:LDB mem, rB_b is (mode!=3 & op6=0x2E & mode!=2 & rB_b) ... & mem { *:1 mem = rB_b; }
+:LD mem, rB_w  is (mode!=3 & op6=0x2F & mode!=2 & rB_w) ... & mem { *:2 mem = rB_w; }
+:LDL mem, rB_l is (mode!=3 & op6=0x1D & mode!=2 & rB_l) ... & mem { *:4 mem = rB_l; }
+:LDB f11r_b, "#"^imm8 is opH=0xC & f11r_b & imm8 { f11r_b = imm8; }
+:LDK rA_w, "#"^lo is opb=0xBD & rA_w & lo { rA_w = lo; }
+:LDA rB_w, mem is (mode!=3 & op6=0x36 & mode=1 & rB_w) ... & mem { rB_w = mem:2; }
+
+# ---- single-operand group 0C/0D (byte/word), code in bits 3-0 ----
+:COMB d_b is (mode!=3 & op6=0x0C & lo=0) ... & d_b { d_b = ~d_b; logicFlags(d_b); }
+:COM d_w  is (mode!=3 & op6=0x0D & lo=0) ... & d_w { d_w = ~d_w; logicFlags(d_w); }
+:CPB mem, "#"^i16lo is (mode!=3 & op6=0x0C & mode!=2 & lo=1) ... & mem ; i16lo { local a:1 = *:1 mem; local b:1 = i16lo; local r = a - b; subFlags(a, b, r); }
+:CP mem, "#"^imm16  is (mode!=3 & op6=0x0D & mode!=2 & lo=1) ... & mem ; imm16 { local a:2 = *:2 mem; local b:2 = imm16; local r = a - b; subFlags(a, b, r); }
+:NEGB d_b is (mode!=3 & op6=0x0C & lo=2) ... & d_b { local a = d_b; d_b = -a; subFlags(0:1, a, d_b); }
+:NEG d_w  is (mode!=3 & op6=0x0D & lo=2) ... & d_w { local a = d_w; d_w = -a; subFlags(0:2, a, d_w); }
+:TESTB d_b is (mode!=3 & op6=0x0C & lo=4) ... & d_b { logicFlags(d_b); }
+:TEST d_w  is (mode!=3 & op6=0x0D & lo=4) ... & d_w { logicFlags(d_w); }
+:LDB mem, "#"^i16lo is (mode!=3 & op6=0x0C & mode!=2 & lo=5) ... & mem ; i16lo { *:1 mem = i16lo; }
+:LD mem, "#"^imm16  is (mode!=3 & op6=0x0D & mode!=2 & lo=5) ... & mem ; imm16 { *:2 mem = imm16; }
+:TSETB d_b is (mode!=3 & op6=0x0C & lo=6) ... & d_b { S = d_b s< 0; d_b = 0xff; }
+:TSET d_w  is (mode!=3 & op6=0x0D & lo=6) ... & d_w { S = d_w s< 0; d_w = 0xffff; }
+:CLRB d_b is (mode!=3 & op6=0x0C & lo=8) ... & d_b { d_b = 0; }
+:CLR d_w  is (mode!=3 & op6=0x0D & lo=8) ... & d_w { d_w = 0; }
+:PUSH ir, "#"^imm16 is opb=0x0D & lo=9 & ir ; imm16 { push16(imm16:2); }
+:NOP is opb=0x8D & hi=0 & lo=7 { }
+:SETFLG hi is opb=0x8D & lo=1 & hi { local m:1 = hi; C = C || ((m & 8) != 0); Z = Z || ((m & 4) != 0); S = S || ((m & 2) != 0); V = V || ((m & 1) != 0); }
+:RESFLG hi is opb=0x8D & lo=3 & hi { local m:1 = hi; C = C && ((m & 8) == 0); Z = Z && ((m & 4) == 0); S = S && ((m & 2) == 0); V = V && ((m & 1) == 0); }
+:COMFLG hi is opb=0x8D & lo=5 & hi { local m:1 = hi; C = C ^^ ((m & 8) != 0); Z = Z ^^ ((m & 4) != 0); S = S ^^ ((m & 2) != 0); V = V ^^ ((m & 1) != 0); }
+
+# ---- increment / decrement ----
+:INCB d_b, incn is (mode!=3 & op6=0x28 & incn) ... & d_b { local a = d_b; local b:1 = incn:1; d_b = a + b; V = scarry(a, b); Z = d_b == 0; S = d_b s< 0; }
+:INC d_w, incn  is (mode!=3 & op6=0x29 & incn) ... & d_w { local a = d_w; local b = incn; d_w = a + b; V = scarry(a, b); Z = d_w == 0; S = d_w s< 0; }
+:DECB d_b, incn is (mode!=3 & op6=0x2A & incn) ... & d_b { local a = d_b; local b:1 = incn:1; d_b = a - b; V = sborrow(a, b); Z = d_b == 0; S = d_b s< 0; }
+:DEC d_w, incn  is (mode!=3 & op6=0x2B & incn) ... & d_w { local a = d_w; local b = incn; d_w = a - b; V = sborrow(a, b); Z = d_w == 0; S = d_w s< 0; }
+
+# ---- bit operations, static bit number in bits 3-0 ----
+:RESB d_b, "#"^lo is (mode!=3 & op6=0x22 & lo & hi!=0) ... & d_b { d_b = d_b & ~(1 << lo); }
+:RES d_w, "#"^lo  is (mode!=3 & op6=0x23 & lo & hi!=0) ... & d_w { d_w = d_w & ~(1 << lo); }
+:SETB d_b, "#"^lo is (mode!=3 & op6=0x24 & lo & hi!=0) ... & d_b { d_b = d_b | (1 << lo); }
+:SET d_w, "#"^lo  is (mode!=3 & op6=0x25 & lo & hi!=0) ... & d_w { d_w = d_w | (1 << lo); }
+:BITB d_b, "#"^lo is (mode!=3 & op6=0x26 & lo & hi!=0) ... & d_b { Z = (d_b & (1 << lo)) == 0; }
+:BIT d_w, "#"^lo  is (mode!=3 & op6=0x27 & lo & hi!=0) ... & d_w { Z = (d_w & (1 << lo)) == 0; }
+
+# ---- stack ----
+:PUSH pr, rB_w is opb=0x93 & pr & rB_w { push16(rB_w); }
+:POP rB_w, pr is opb=0x97 & pr & rB_w { pop16(rB_w); }
+:PUSHL pr, rB_l is opb=0x91 & pr & rB_l { push32(rB_l); }
+:POPL rB_l, pr is opb=0x95 & pr & rB_l { pop32(rB_l); }
+
+# ---- exchange, extend, decimal adjust ----
+:EXB rB_b, rA_b is opb=0xAC & rB_b & rA_b { local t = rB_b; rB_b = rA_b; rA_b = t; }
+:EX rB_w, rA_w  is opb=0xAD & rB_w & rA_w { local t = rB_w; rB_w = rA_w; rA_w = t; }
+:EXTSB rA_w is opb=0xB1 & lo=0 & rA_w { rA_w = sext(rA_w:1); }
+:EXTS rA_l is opb=0xB1 & lo=10 & rA_l { rA_l = sext(rA_l:2); }
+:EXTSL rA_q is opb=0xB1 & lo=7 & rA_q { rA_q = sext(rA_q:4); }
+:DAB rA_b is opb=0xB0 & lo=0 & rA_b { rA_b = decimalAdjust(rA_b, C, H, D); }
+
+# ---- shifts by an immediate count (second word, negative = right) ----
+:SLAB rA_b, "#"^simm16 is opb=0xB2 & lo=9 & rA_b ; simm16 & s16neg=0 { C = ((rA_b << (simm16 - 1)) & 0x80) != 0; rA_b = rA_b << simm16; logicFlags(rA_b); }
+:SRAB rA_b, "#"^n is opb=0xB2 & lo=9 & rA_b ; simm16 & s16neg=1 [ n = -simm16; ] { C = ((rA_b s>> (n - 1)) & 1) != 0; rA_b = rA_b s>> n; logicFlags(rA_b); }
+:SLLB rA_b, "#"^simm16 is opb=0xB2 & lo=1 & rA_b ; simm16 & s16neg=0 { C = ((rA_b << (simm16 - 1)) & 0x80) != 0; rA_b = rA_b << simm16; logicFlags(rA_b); }
+:SRLB rA_b, "#"^n is opb=0xB2 & lo=1 & rA_b ; simm16 & s16neg=1 [ n = -simm16; ] { C = ((rA_b >> (n - 1)) & 1) != 0; rA_b = rA_b >> n; logicFlags(rA_b); }
+:SLA rA_w, "#"^simm16 is opb=0xB3 & lo=9 & rA_w ; simm16 & s16neg=0 { C = ((rA_w << (simm16 - 1)) & 0x8000) != 0; rA_w = rA_w << simm16; logicFlags(rA_w); }
+:SRA rA_w, "#"^n is opb=0xB3 & lo=9 & rA_w ; simm16 & s16neg=1 [ n = -simm16; ] { C = ((rA_w s>> (n - 1)) & 1) != 0; rA_w = rA_w s>> n; logicFlags(rA_w); }
+:SLL rA_w, "#"^simm16 is opb=0xB3 & lo=1 & rA_w ; simm16 & s16neg=0 { C = ((rA_w << (simm16 - 1)) & 0x8000) != 0; rA_w = rA_w << simm16; logicFlags(rA_w); }
+:SRL rA_w, "#"^n is opb=0xB3 & lo=1 & rA_w ; simm16 & s16neg=1 [ n = -simm16; ] { C = ((rA_w >> (n - 1)) & 1) != 0; rA_w = rA_w >> n; logicFlags(rA_w); }
+:SLAL rA_l, "#"^simm16 is opb=0xB3 & lo=13 & rA_l ; simm16 & s16neg=0 { C = ((rA_l << (simm16 - 1)) & 0x80000000) != 0; rA_l = rA_l << simm16; logicFlags(rA_l); }
+:SRAL rA_l, "#"^n is opb=0xB3 & lo=13 & rA_l ; simm16 & s16neg=1 [ n = -simm16; ] { C = ((rA_l s>> (n - 1)) & 1) != 0; rA_l = rA_l s>> n; logicFlags(rA_l); }
+:SLLL rA_l, "#"^simm16 is opb=0xB3 & lo=5 & rA_l ; simm16 & s16neg=0 { C = ((rA_l << (simm16 - 1)) & 0x80000000) != 0; rA_l = rA_l << simm16; logicFlags(rA_l); }
+:SRLL rA_l, "#"^n is opb=0xB3 & lo=5 & rA_l ; simm16 & s16neg=1 [ n = -simm16; ] { C = ((rA_l >> (n - 1)) & 1) != 0; rA_l = rA_l >> n; logicFlags(rA_l); }
+
+# ---- rotates by 1 or 2 (B2 byte / B3 word, code in bits 3-0) ----
+:RLB rA_b, "#1" is opb=0xB2 & lo=0 & rA_b { rA_b = (rA_b << 1) | (rA_b >> 7); C = (rA_b & 1) != 0; logicFlags(rA_b); }
+:RLB rA_b, "#2" is opb=0xB2 & lo=2 & rA_b { rA_b = (rA_b << 2) | (rA_b >> 6); C = (rA_b & 1) != 0; logicFlags(rA_b); }
+:RL rA_w, "#1" is opb=0xB3 & lo=0 & rA_w { rA_w = (rA_w << 1) | (rA_w >> 15); C = (rA_w & 1) != 0; logicFlags(rA_w); }
+:RL rA_w, "#2" is opb=0xB3 & lo=2 & rA_w { rA_w = (rA_w << 2) | (rA_w >> 14); C = (rA_w & 1) != 0; logicFlags(rA_w); }
+:RRB rA_b, "#1" is opb=0xB2 & lo=4 & rA_b { rA_b = (rA_b >> 1) | (rA_b << 7); C = (rA_b & 0x80) != 0; logicFlags(rA_b); }
+:RRB rA_b, "#2" is opb=0xB2 & lo=6 & rA_b { rA_b = (rA_b >> 2) | (rA_b << 6); C = (rA_b & 0x80) != 0; logicFlags(rA_b); }
+:RR rA_w, "#1" is opb=0xB3 & lo=4 & rA_w { rA_w = (rA_w >> 1) | (rA_w << 15); C = (rA_w & 0x8000) != 0; logicFlags(rA_w); }
+:RR rA_w, "#2" is opb=0xB3 & lo=6 & rA_w { rA_w = (rA_w >> 2) | (rA_w << 14); C = (rA_w & 0x8000) != 0; logicFlags(rA_w); }
+
+# ---- control transfer ----
+:JP cond, mem is (mode!=3 & op6=0x1E & mode!=2 & cond) ... & mem { if (!cond) goto inst_next; goto [mem]; }
+:JP mem is (mode!=3 & op6=0x1E & mode!=2 & cc=8) ... & mem { goto [mem]; }
+:JR jcond, rel8 is opH=0xE & jcond & rel8 { if (jcond) goto rel8; }
+:JR rel8 is opH=0xE & jcc=8 & rel8 { goto rel8; }
+:CALL mem is (mode!=3 & op6=0x1F & mode!=2 & lo=0) ... & mem { local t = mem; local r:$(ASZ) = inst_next; pushPC(r); call [t]; }
+:CALR rel12 is opH=0xD & rel12 { local r:$(ASZ) = inst_next; pushPC(r); call rel12; }
+:RET cond is opb=0x9E & hi=0 & cond { if (!cond) goto inst_next; local t:$(ASZ); popPC(t); return [t]; }
+:RET is opb=0x9E & hi=0 & cc=8 { local t:$(ASZ); popPC(t); return [t]; }
+:DJNZ rC_w, rel7 is opH=0xF & rC_w & djbit=1 & rel7 { rC_w = rC_w - 1; if (rC_w != 0) goto rel7; }
+:DBJNZ f11r_b, rel7 is opH=0xF & f11r_b & djbit=0 & rel7 { f11r_b = f11r_b - 1; if (f11r_b != 0) goto rel7; }
+:IRET is opb=0x7B & low8=0 { local t:$(ASZ) = interruptReturn(); return [t]; }
+:SC "#"^imm8 is opb=0x7F & imm8 { systemCall(imm8:1); }
+:HALT is opb=0x7A & low8=0 { halt(); }
+:DI lo is opb=0x7C & bit3=0 & bit2=0 & lo { disableInterrupts(); }
+:EI lo is opb=0x7C & bit3=0 & bit2=1 & lo { enableInterrupts(); }
+:LDCTL rA_w, lo3 is opb=0x7D & bit3=0 & rA_w & lo3 { rA_w = loadControl(lo3:1); }
+:LDCTL lo3, rA_w is opb=0x7D & bit3=1 & rA_w & lo3 { storeControl(lo3:1, rA_w); }
+
+# ---- I/O (direct port) ----
+:INB rB_b, imm16 is opb=0x3A & lo=4 & rB_b ; imm16 { rB_b = ioIn(imm16:2); }
+:IN rA_w, imm16 is opb=0x3B & lo=4 & rA_w ; imm16 { rA_w = ioIn(imm16:2); }
+:OUTB imm16, rA_b is opb=0x3A & lo=6 & rA_b ; imm16 { ioOut(imm16:2, rA_b); }
+:OUT imm16, rA_w is opb=0x3B & lo=6 & rA_w ; imm16 { ioOut(imm16:2, rA_w); }

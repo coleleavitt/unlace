@@ -152,6 +152,9 @@ struct Held {
     /// The [`Found`] `Data` row that formed it, if one did.
     formed: Option<usize>,
     loaded: bool,
+    /// The low half a `movw`/`movz` wrote ([`HalfPairs`]): below the floor, kept
+    /// only for the `movt`/`movk` that completes it.
+    half: bool,
 }
 
 /// What one instruction hands its fall-through: the registers, and the
@@ -180,8 +183,30 @@ pub(super) struct Machine<'a> {
     /// The width of a pointer, the only load whose result can be a callee.
     ptr: u32,
     /// AArch64's code, whose `adrp` forms a page the instruction completing
-    /// it supersedes.
+    /// it supersedes; ARM's too when [`Machine::halves`] reads its `movw`.
     code: Option<PoolImage<'a>>,
+    /// (kuna `movwpairs`) How a `movw`/`movt` or `movz`/`movk` pair is read.
+    halves: HalfPairs,
+    /// The image is AArch64 (its `adrp`, its `movz`/`movk`).
+    a64: bool,
+}
+
+/// (kuna `movwpairs`) What a register pair that builds a 32-bit (or wider) value in
+/// 16-bit halves contributes: `movw r0,#lo; movt r0,#hi` (A32/T32) or `movz
+/// x0,#lo; movk x0,#hi,lsl #16` (AArch64). The low half is usually below the
+/// `checkOperands` floor, so it starts no carry on its own and the pair named
+/// nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(super) enum HalfPairs {
+    /// The low half starts no carry (the pre-option behaviour).
+    #[default]
+    Off,
+    /// The completed value is carried: a load or store through it is a read or
+    /// a write of the address it builds.
+    Access,
+    /// As `Access`, and the completed value is also a reference where it lands
+    /// in a mapped section (IDA's "valid addresses only").
+    On,
 }
 
 impl<'a> Machine<'a> {
@@ -192,6 +217,7 @@ impl<'a> Machine<'a> {
         preserved: &'a [(u64, u64)],
         mapped: &'a [(u64, u64)],
         pool: Option<&'a PoolImage<'a>>,
+        halves: HalfPairs,
     ) -> Option<Self> {
         use object::Object;
         let reg = Rc::clone(reg?);
@@ -204,8 +230,9 @@ impl<'a> Machine<'a> {
                 file.architecture(),
                 object::Architecture::X86_64 | object::Architecture::Aarch64
             );
+        let big_endian = reg.is_big_endian();
         Some(Machine {
-            big_endian: reg.is_big_endian(),
+            big_endian,
             reg,
             data: data_space.cloned(),
             data_index: data_space.and_then(|d| u64::try_from(d.get_index()).ok()),
@@ -214,17 +241,58 @@ impl<'a> Machine<'a> {
             mapped,
             pool,
             ptr: if file.is_64() { 8 } else { 4 },
-            code: code(file),
+            code: code(file, halves != HalfPairs::Off),
+            halves: if big_endian { HalfPairs::Off } else { halves },
+            a64: matches!(
+                file.architecture(),
+                object::Architecture::Aarch64 | object::Architecture::Aarch64_Ilp32
+            ),
         })
+    }
+
+    /// The 16-bit half move at `vma`, read off its encoding: `Some(false)` for a
+    /// low half that zeroes the rest (A32/T32 `movw`, AArch64 `movz` with no
+    /// shift), `Some(true)` for a high half inserted into the register (`movt`,
+    /// `movk` with a shift).
+    fn half_move(&self, vma: u64) -> Option<bool> {
+        if self.halves == HalfPairs::Off {
+            return None;
+        }
+        let b = self.code.as_ref()?.bytes_at(vma, 4)?;
+        let w = u32::from_le_bytes([b[0], b[1], b[2], b[3]]);
+        if self.a64 {
+            let hw = (w >> 21) & 3;
+            return match w & 0x7f80_0000 {
+                0x5280_0000 if hw == 0 => Some(false),
+                0x7280_0000 if hw != 0 => Some(true),
+                _ => None,
+            };
+        }
+        let hw1 = w & 0xffff;
+        match hw1 & 0xfbf0 {
+            0xf240 => return Some(false),
+            0xf2c0 => return Some(true),
+            _ => {}
+        }
+        if w >> 28 == 0xf {
+            return None;
+        }
+        match w & 0x0ff0_0000 {
+            0x0300_0000 => Some(false),
+            0x0340_0000 => Some(true),
+            _ => None,
+        }
     }
 
     /// Is the instruction at `vma` an AArch64 `adrp`? Read off its encoding,
     /// since `adr` to a page-aligned label lifts to the same `COPY`.
     fn is_adrp(&self, vma: u64) -> bool {
-        self.code
-            .as_ref()
-            .and_then(|c| c.bytes_at(vma, 4))
-            .is_some_and(|b| b[3] & 0x9f == 0x90)
+        self.a64
+            && self
+                .code
+                .as_ref()
+                .and_then(|c| c.bytes_at(vma, 4))
+                .is_some_and(|b| b[3] & 0x9f == 0x90)
     }
 
     fn is_register(&self, vn: &VarnodeData) -> bool {
@@ -245,13 +313,16 @@ impl<'a> Machine<'a> {
     }
 }
 
-/// An AArch64 image's executable sections, which an `adrp` is read from.
-fn code<'a>(file: &object::File<'a>) -> Option<PoolImage<'a>> {
+/// An AArch64 image's executable sections, which an `adrp` is read from, and an
+/// ARM image's when its `movw`/`movt` pairs are read (`halves`).
+fn code<'a>(file: &object::File<'a>, halves: bool) -> Option<PoolImage<'a>> {
     use object::{Object, ObjectSection};
-    if !matches!(
-        file.architecture(),
+    let arch = file.architecture();
+    let a64 = matches!(
+        arch,
         object::Architecture::Aarch64 | object::Architecture::Aarch64_Ilp32
-    ) {
+    );
+    if !a64 && !(halves && arch == object::Architecture::Arm) {
         return None;
     }
     let ranges = file
@@ -347,6 +418,9 @@ struct Val {
     /// backwards (Swift's string object, `sub x8,x8,#0x20` before the `orr` of
     /// its discriminator), not one of its own.
     bias: bool,
+    /// Computed from a low half ([`Held::half`]) that no high half has
+    /// completed yet.
+    half: bool,
 }
 
 impl Val {
@@ -436,6 +510,9 @@ fn has_seed(m: &Machine, insn: &Insn) -> bool {
     if insn.calls {
         return false;
     }
+    if m.half_move(insn.vma) == Some(false) {
+        return true;
+    }
     let slot_load = |op: &FullOp| {
         op.opcode == OpCode::CPUI_COPY
             && op.out.as_ref().is_some_and(|o| m.is_register(o))
@@ -503,6 +580,7 @@ fn constant(vma: u64, formed: &Formed, vn: &VarnodeData) -> Val {
         base: None,
         loaded: false,
         bias: false,
+        half: false,
     }
 }
 
@@ -674,6 +752,7 @@ fn fold(op: &FullOp, a: Option<Val>, b: Option<Val>) -> Option<Val> {
                 base,
                 loaded: false,
                 bias,
+                half: a.half || b.half,
             })
         }
         _ => None,
@@ -762,6 +841,7 @@ impl Tracker {
                 base: None,
                 loaded: h.loaded,
                 bias: false,
+                half: h.half,
             };
             (h.off, h.size, val)
         }));
@@ -780,6 +860,7 @@ impl Tracker {
             }
         };
         let fall_vma = fall.unwrap_or(u64::MAX);
+        let half_move = m.half_move(vma);
         let mut conditional = false;
         let mut joined = false;
         for op in ops {
@@ -873,7 +954,34 @@ impl Tracker {
                         if op.opcode == OpCode::CPUI_INT_ADD {
                             pin(found, v);
                         }
-                        if v.carried
+                        // A high half completes what a low half began: the value is
+                        // whole now, and with `movwpairs on` it is a reference
+                        // where it lands in a mapped section.
+                        let completes = v.half
+                            && half_move == Some(true)
+                            && m.is_register(out)
+                            && looks_like_address(v.v);
+                        if completes {
+                            v.half = false;
+                        }
+                        if completes
+                            && m.halves == HalfPairs::On
+                            && v.carried
+                            && !joined
+                            && m.is_register(out)
+                            && looks_like_address(v.v)
+                            && m.admits(v.v, false)
+                        {
+                            let base = base_of(found, v, v.v);
+                            hits.push(Hit {
+                                to: v.v,
+                                kind: XrefKind::Data,
+                                age: v.age,
+                                base,
+                                page: false,
+                            });
+                            v.formed = Some(first + hits.len() - 1);
+                        } else if v.carried
                             && !joined
                             && !v.bias
                             && v.composed == Some(out.size)
@@ -946,8 +1054,12 @@ impl Tracker {
         let Some(next) = fall else { return };
         let mut held: SmallVec<[Held; MAX_TRACKED]> = SmallVec::new();
         for &(off, size, v) in &frame.regs {
+            // A low half is kept on its own say-so: its encoding is a `movw`/`movz`
+            // and it was written here from a constant.
+            let low = half_move == Some(false) && !v.carried && v.v <= 0xffff;
+            let half = v.half || low;
             let keep = usize::from(v.age) < MAX_HOPS
-                && (v.addr || looks_like_address(v.v))
+                && (v.addr || half || looks_like_address(v.v))
                 && (v.carried || v.pc || !m.pc_only)
                 && !(conditional && frame.written.iter().any(|&w| overlaps(w, (off, size))));
             if keep {
@@ -961,6 +1073,7 @@ impl Tracker {
                     addr: v.addr,
                     formed: v.formed,
                     loaded: v.loaded,
+                    half: half && !looks_like_address(v.v),
                 });
             }
         }
@@ -1072,6 +1185,8 @@ mod tests {
                 pool: None,
                 ptr: 8,
                 code: None,
+                halves: HalfPairs::Off,
+                a64: false,
             }
         }
         fn k(&self, v: u64) -> VarnodeData {
@@ -1402,6 +1517,88 @@ mod tests {
         assert!(scratch.is_empty(), "{scratch:?}");
     }
 
+    /// `movw r0,#0x1cc; movt r0,#3` (T32), then `movw r1,#0x1d0`; `movt r1,#3`.
+    const THUMB_PAIRS: [u8; 16] = [
+        0x40, 0xf2, 0xcc, 0x10, 0xc0, 0xf2, 0x03, 0x00, 0x40, 0xf2, 0xd0, 0x11, 0xc0, 0xf2, 0x03,
+        0x01,
+    ];
+
+    fn halves_machine<'a>(isa: &'a Isa, halves: HalfPairs) -> Machine<'a> {
+        Machine {
+            code: PoolImage::from_ranges(vec![(0x20000, 0x20010, &THUMB_PAIRS[..])], 4, true),
+            halves,
+            ..isa.machine(false)
+        }
+    }
+
+    /// `xD = (xD & 0xffff) | (hi << 16)`, as SLEIGH lifts `movt`.
+    fn movt(isa: &Isa, d: u64, hi: u64) -> Vec<FullOp> {
+        vec![
+            op(
+                OpCode::CPUI_INT_AND,
+                Some(isa.t(1)),
+                vec![isa.x(d), isa.k(0xffff)],
+            ),
+            op(
+                OpCode::CPUI_INT_OR,
+                Some(isa.x(d)),
+                vec![isa.t(1), isa.k(hi << 16)],
+            ),
+        ]
+    }
+
+    #[test]
+    fn a_movw_movt_pair_below_the_floor_builds_an_address() {
+        let isa = Isa::new();
+        let run = [
+            isa.set(0, 0x1cc),
+            movt(&isa, 0, 3),
+            isa.load(2, 0, 0),
+            isa.store(2, 0, 4),
+        ];
+        let off = walk(&halves_machine(&isa, HalfPairs::Off), &run, &[]);
+        assert!(off.is_empty(), "the low half starts no carry: {off:?}");
+        let access = walk(&halves_machine(&isa, HalfPairs::Access), &run, &[]);
+        assert_eq!(
+            access,
+            [
+                (0x20008, 0x301cc, XrefKind::Read),
+                (0x2000c, 0x301d0, XrefKind::Write)
+            ],
+            "the completed base is read and written through"
+        );
+        let on = walk(&halves_machine(&isa, HalfPairs::On), &run, &[]);
+        assert_eq!(
+            on,
+            [
+                (0x20004, 0x301cc, XrefKind::Data),
+                (0x20008, 0x301cc, XrefKind::Read),
+                (0x2000c, 0x301d0, XrefKind::Write),
+            ],
+            "and the pair forms the address it lands on"
+        );
+    }
+
+    #[test]
+    fn a_half_alone_or_after_a_join_is_no_reference() {
+        let isa = Isa::new();
+        let m = halves_machine(&isa, HalfPairs::On);
+        let alone = walk(&m, &[isa.set(0, 0x1cc), isa.load(2, 0, 0)], &[]);
+        assert!(
+            alone.is_empty(),
+            "a low half is a number until completed: {alone:?}"
+        );
+        let joined = walk(
+            &m,
+            &[isa.set(0, 0x1cc), movt(&isa, 0, 3), isa.load(2, 0, 0)],
+            &[0x20004],
+        );
+        assert!(joined.is_empty(), "another path into the movt: {joined:?}");
+        // The pair lands outside every mapped section: no reference.
+        let unmapped = walk(&m, &[isa.set(0, 0x1cc), movt(&isa, 0, 0x99)], &[]);
+        assert!(unmapped.is_empty(), "{unmapped:?}");
+    }
+
     #[test]
     fn a_register_the_call_itself_writes_does_not_survive_it() {
         let isa = Isa::new();
@@ -1676,6 +1873,7 @@ mod tests {
         let img = PoolImage::from_ranges(vec![(0x20000, 0x20010, &adrp[..])], 8, true).unwrap();
         let m = Machine {
             code: Some(img),
+            a64: true,
             ..isa.machine(false)
         };
         let (gone, rows) = pages(&m, &[isa.set(16, 0x24000), isa.load(16, 16, 0x10)], &[]);

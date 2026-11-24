@@ -9,6 +9,8 @@
     (substrate/block.rs "invalid SlotMap key used"; Ghidra 12.1.2's
     llio_i386.dll sub_10001fee hit it).  The goto now names the arm's sole
     component, which starts at the same statement and prints the same label.
+    Every pass sets `option condcallpush off`: the test pins the structure
+    that counts a call's return-address push, not the condcallpush fold.
 
     Stage / sub-stage: P8 structure, goto-quality
     (p8_structure/kuna_dedupitetail.rs, BlockGraph::kuna_hoist_ite_suffix).
@@ -45,6 +47,7 @@ c331c0c331c0c331c0c3c3c3c3
 <symbol space="ram" offset="0x10004c" name="post"/>
 </binaryimage>
 <script>
+  <com>option condcallpush off</com>
   <com>option dedupitetail off</com>
   <com>lo fu g</com>
   <com>decompile</com>

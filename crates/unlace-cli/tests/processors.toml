@@ -1055,3 +1055,52 @@ expect = [
 test = "x86_enqcmd_status_is_zf"
 address = "0x10"
 expect = ["return enqcmd(a0,*a1);"]
+
+# The eZ80 ADL-mode language decompiles a hand-assembled add/compare/store routine.
+[[family]]
+name = "ez80"
+language = "eZ80:LE:24:ADL"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/ez80/add_store.bin"
+
+[[family.function]]
+test = "ez80_adl_add_compare_store_decompiles"
+address = "0x0"
+expect = [
+    "if ((unsigned char)(dat_c000 + 3U) <= 0xf) {",  # the CP / JR NC test survives
+    "dat_8000 = dat_c000 + 3U;",  # the store to 0x8000
+    "return 5;",  # the taken path
+    "return 0;",  # the fall-back path
+]
+
+# The Zilog Z380 language decompiles a hand-assembled add/compare/store routine.
+[[family]]
+name = "z380"
+language = "Z380:LE:32:default"
+base = "0x100"
+fixture = "crates/unlace-cli/tests/fixtures/z380/add_store.bin"
+
+[[family.function]]
+test = "z380_add_compare_store_decompiles"
+address = "0x100"
+expect = [
+    "if (0x10 <= (unsigned char)(dat_8000 + 5U))",  # the ADD / CP / JR C test survives
+    "dat_8001 = dat_8000 + 5U;",  # the store to 0x8001
+    "return;",
+]
+
+# The Zilog Z8002 language decompiles a hand-assembled add/compare/store routine.
+[[family]]
+name = "z8000"
+language = "Z8002:BE:16:default"
+base = "0x1000"
+fixture = "crates/unlace-cli/tests/fixtures/z8000/add_store.bin"
+
+[[family.function]]
+test = "z8002_add_compare_store_decompiles"
+address = "0x1000"
+expect = [
+    "if (0x65 <= a0 + a1)",  # the ADD / CP / JR LE test survives
+    "dat_2000 = a0 + a1;",  # the store to 0x2000
+    "return;",  # the returns
+]

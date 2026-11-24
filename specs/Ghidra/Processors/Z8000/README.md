@@ -72,7 +72,7 @@ Languages:
 
 `crates/unlace-cli/tests/fixtures/z8000/add_store.bin` (listing `add_store.s`), loaded at
 0x1000 for `Z8002:BE:16:default`: ADD R7,R6; CP R7,#100; JR LE; LD 0x2000,R7; RET; RET.
-`unlace-cli/tests/z8000_raw.rs` decompiles it and expects:
+`crates/unlace-cli/tests/processors.toml` row `z8000` decompiles it and expects:
 
 ```c
 void sub_1000(short a0,short a1)

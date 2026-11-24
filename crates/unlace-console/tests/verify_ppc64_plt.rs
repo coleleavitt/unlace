@@ -55,8 +55,8 @@ fn ppc64_plt_calls_are_named_in_decompiled_c() {
     let bin = bin.to_str().expect("UTF-8 fixture path").to_string();
 
     // The arch is auto-detected from the ELF machine (PowerPC64, little-endian);
-    // the loader picks the `PowerPC:LE:64:default` language and bootstrap resolves
-    // `ppc_64_le.sla`.
+    // the loader picks the ELFv2 `PowerPC:LE:64:A2ALT` language and bootstrap resolves
+    // `ppc_64_isa_altivec_le.sla`.
     let prog = bootstrap_from_object(&bin, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
 

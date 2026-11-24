@@ -8680,7 +8680,7 @@ both
   lives in a separate `.pdb` the PE only fingerprints, so the pass reads the
   CodeView record, locates the file, applies a hard **fingerprint gate**, then walks
   the global symbol stream (S_PUB32/S_GPROC32) and renames stripped functions behind
-  the label gate. Name-level only; types and lines are deferred. A C++ public is
+  the label gate. Names only; the passes below add types and lines. A C++ public is
   decorated (`??0Box@app@@QEAA@H@Z`), so the pass reduces it with the same
   name-only demangler the loader applies to a COFF or ELF symbol: `app::Box::Box`,
   nested under its namespace. MSVC spells a compiler-generated member and a
@@ -8715,6 +8715,56 @@ both
   sidecar, and that is not a defect. The cost of the search is per *load* — at most
   three `open` attempts, only on a PE that carries a CodeView record — and the
   `.pdb` is parsed only when one of them opens and matches.
+
+  **(kuna) Types, prototypes and locals** (`pdbtypes`, PE-only, default **off**;
+  `crates/unlace-analysis/src/analyzers/pdb/kuna_pdbtypes.rs`,
+  `kuna_pdbtpi.rs`). From the same fingerprint-matched `.pdb`, the TPI type
+  stream is mapped onto kuna types the way the DWARF mapper builds them:
+  primitives by width and sign, pointers and references at the record's width,
+  modifiers transparent, arrays flattened to their element, enumerations with
+  their constants, and structures, classes and unions at the compiler's member
+  offsets. A forward reference resolves to the definition with the same unique
+  name; an aggregate is interned before its members are walked, so a pointer to
+  itself names the shell. A class carries each base class as a `super_<Base>`
+  member and its table pointer as a `__vftable` member at offset 0; bitfield
+  members, overlapping members and members past the stated size are left out.
+  Every procedure record in the module streams then gives its entry address a
+  prototype from its type (a member function's `this` first), the parameter names
+  coming from the procedure's own parameter records: the `S_LOCAL`s flagged as
+  parameters, or for MSVC's unflagged `S_REGREL32`/`S_BPREL32` the ones above the
+  return address, used only when their count matches the type's. On i386 the
+  stated calling convention binds the `x86win.cspec` model of that name. A
+  variable's location comes from its def-range (`S_DEFRANGE_FRAMEPOINTER_REL`,
+  its full-scope form, `S_DEFRANGE_REGISTER_REL`, `S_DEFRANGE_REGISTER`) or from
+  the record itself (`S_REGREL32`, `S_BPREL32`, `S_REGISTER`). A frame-relative
+  offset is placed in kuna stack coordinates only where the records fix the base:
+  the x64 stack pointer in the body is the entry stack pointer less the
+  `S_FRAMEPROC` callee-saved bytes and fixed frame (`cbSaveRegs + cbFrame`, the
+  convention MSVC and LLVM both write), and the i386 `EBP` frame pointer is the
+  entry stack pointer less the pushed `EBP`; an x64 frame pointer, an i386 stack
+  pointer and the virtual `$T0` frame depend on the prologue and are skipped. A
+  slot below the return address becomes a named, typed stack local (the DWARF
+  `LocalFact` channel); a register range of a non-parameter becomes a
+  register-held local from the range's start; locals of an inlined call site
+  belong to the inlinee and are skipped. `S_GDATA32`/`S_LDATA32` with a complete
+  type become typed globals, and each `??_7` vftable public is typed as an array
+  of code pointers, one per slot the virtuals its class or its primary base
+  introduces occupy (a per-base table of a multiply-inheriting class is left
+  untyped). The facts are computed at load whenever `pdb` finds a `.pdb` and
+  committed only with `pdb` and `pdbtypes` both on. Default off: it changes the
+  output of every PE with a matching `.pdb`, and the x64 frame math has been
+  measured only on the clang-built fixtures `pdb_types_x86_64` and
+  `pdb_types_i386` (`unlace-console/tests/verify_pdbtypes.rs`).
+
+  **(kuna) Source lines** (`pdblines`, PE-only, default **off**;
+  `crates/unlace-analysis/src/analyzers/pdb/kuna_pdblines.rs`). The PDB twin of
+  `dwarf_lines`: each module's C13 line program maps code to `file:line`, and
+  every line entry inside a procedure becomes an instruction comment at its
+  address, attached to that procedure. Only the file's base name is kept, the
+  first entry per address wins, and the compiler's hidden line numbers
+  (`0xfeefee`, `0xf00f00`) and line 0 are dropped. Committed only with `pdb` and
+  `pdblines` both on, and left out of the `aggressive` preset for the reason
+  `dwarf_lines` is.
 - **CVF trace** (`cvftrace`, PE32 i386 only, default `on`;
   `crates/unlace-analysis/src/analyzers/kuna_cvftrace/mod.rs`): Compaq
   Visual Fortran links a `.trace` section of traceback records into its images,

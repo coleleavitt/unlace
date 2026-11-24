@@ -796,6 +796,13 @@ impl AliasChecker {
         };
 
         access.gather_additive_base(spacebase, &mut self.add_base);
+        if crate::heritage::kuna_jt_trace() {
+            eprintln!(
+                "jt-trace alias gather spacebase={:?} bases={}",
+                spacebase,
+                self.add_base.len()
+            );
+        }
         // C++ iterates addBase, computing one alias offset per AddBase.
         let word_size = space.get_word_size();
         let entries: Vec<crate::context::VarnodeId> =

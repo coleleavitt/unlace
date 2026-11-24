@@ -818,6 +818,8 @@ fn option_values_live_value_present_for_129() {
                             | "condcallpush"
                             | "orchainlive"
                             | "orchainbool"
+                            | "retindexuse"
+                            | "wideconst"
                     ) || PASS_GATES.contains(&st.option),
                     "unexpected option with no live reader: {}",
                     st.option

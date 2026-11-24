@@ -227,3 +227,13 @@ names, now printed as the immediate, see below); the memory-form sweep, every AV
   immediate like `vfpclassps`/`vfpclasspd` and LLVM, so the whole spec agrees and both AVX-512
   sweeps (`tools/x86_avx512_sweep.py`, memory and register forms) report no differences. The lifted
   user operation takes the same constant either way.
+
+## Real-code checks (APX, AVX10.2)
+
+Lua 5.3, zlib and SQLite built with clang 22 and gcc 15 at -O2/-O3 with `-mapxf` and with
+`-mavx10.2`: every instruction of `.text` decodes at the address and length `llvm-objdump` gives,
+the APX and EVEX vector instructions print the same operands (scale and sign spelling aside), and
+`decompile-all` of the Lua and zlib libraries has no bad or unimplemented instruction. The APX
+lifts were checked against Unicorn with `tools/difffuzz/apxcheck.py` (see `docs/difffuzz.md`).
+The one wrong decode found: the AVX-512 `vpcmp[u]{b,w,d,q}` predicate 4 printed as `vpcmpeq*`;
+it is `vpcmpneq*` (the p-code was already right, it passes the immediate).

@@ -1,0 +1,6 @@
+#  TMS320C6000 big-endian processor specification.
+#  Apache-2.0.  Encodings derived from TI SPRUFE8B; see NOTICE.md.
+@define ENDIAN "big"
+@define FP_MODEL "exact"
+define endian=big;
+@include "c6000.sinc"

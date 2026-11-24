@@ -1,0 +1,783 @@
+#  TMS320C6000 (C64x / C64x+ / C67x / C67x+ / C674x) SLEIGH definitions.
+#
+#  Part of the ghidra-c6000 processor extension, Apache License 2.0.
+#  Written independently from the public Texas Instruments documentation;
+#  every encoding and semantic rule is traceable to a figure, table or
+#  section of
+#
+#      SPRUFE8B - TMS320C674x CPU and Instruction Set Reference Guide
+#                 (literature number SPRUFE8B, July 2010)
+#
+#  and to SPRUH91D / SPRS590 for the C6745/C6747 control registers.  See
+#  NOTICE.md for the full provenance record.  No third-party disassembler
+#  source was copied into this file.
+#
+#  The including .slaspec sets the endianness before @include-ing this file.
+
+# ---------------------------------------------------------------------------
+# Address spaces
+# ---------------------------------------------------------------------------
+
+define space ram       type=ram_space      size=4 default;
+define space register  type=register_space size=4;
+
+# ---------------------------------------------------------------------------
+# General purpose registers
+#
+# SPRUFE8B section 2.2: two register files, A0-A31 and B0-B31, each 32 bits.
+# B15 is the stack pointer (SP), B14 the data pointer (DP) and A15 the frame
+# pointer (FP) by the C6000 ABI.
+# ---------------------------------------------------------------------------
+
+@if ENDIAN == "big"
+# In big-endian register space the odd word must precede the even word so
+# an overlapping 64-bit pair still has the even register as its low half.
+define register offset=0x0000 size=4
+  [ A1  A0  A3  A2  A5  A4  A7  A6
+    A9  A8  A11 A10 A13 A12 A15 A14
+    A17 A16 A19 A18 A21 A20 A23 A22
+    A25 A24 A27 A26 A29 A28 A31 A30 ];
+define register offset=0x1000 size=4
+  [ B1  B0  B3  B2  B5  B4  B7  B6
+    B9  B8  B11 B10 B13 B12 B15 B14
+    B17 B16 B19 B18 B21 B20 B23 B22
+    B25 B24 B27 B26 B29 B28 B31 B30 ];
+@else
+define register offset=0x0000 size=4
+  [ A0  A1  A2  A3  A4  A5  A6  A7
+    A8  A9  A10 A11 A12 A13 A14 A15
+    A16 A17 A18 A19 A20 A21 A22 A23
+    A24 A25 A26 A27 A28 A29 A30 A31 ];
+
+define register offset=0x1000 size=4
+  [ B0  B1  B2  B3  B4  B5  B6  B7
+    B8  B9  B10 B11 B12 B13 B14 B15
+    B16 B17 B18 B19 B20 B21 B22 B23
+    B24 B25 B26 B27 B28 B29 B30 B31 ];
+@endif
+
+# Overlapping doubleword views preserve the architectural odd:even order.
+define register offset=0x0000 size=8
+  [ A1_A0 A3_A2 A5_A4 A7_A6 A9_A8 A11_A10 A13_A12 A15_A14
+    A17_A16 A19_A18 A21_A20 A23_A22 A25_A24 A27_A26 A29_A28 A31_A30 ];
+define register offset=0x1000 size=8
+  [ B1_B0 B3_B2 B5_B4 B7_B6 B9_B8 B11_B10 B13_B12 B15_B14
+    B17_B16 B19_B18 B21_B20 B23_B22 B25_B24 B27_B26 B29_B28 B31_B30 ];
+
+# ---------------------------------------------------------------------------
+# Control registers
+#
+# SPRUFE8B sections 2.8, 2.9 and 2.10, with the MVC register addresses of
+# Table 3-27 (page 378).  These are exposed as 32-bit registers so that
+# the supported 32-bit MVC forms can be lifted to real register moves.
+# ---------------------------------------------------------------------------
+
+define register offset=0x2000 size=4
+  [ AMR CSR GFPGFR ICR IER IFR IRP ISR ISTP NRP PCE1
+    DIER DNUM ECR EFR GPLYA GPLYB IERR ILC ITSR NTSR REP RILC SSR
+    TSCL TSCH TSR FADCR FAUCR FMCR ];
+
+# Control registers TI dis6x names but SPRUFE8B Table 3-27 does not list: ARP, DESR, DETR
+# and EM in the main MVC space, and the emulation/debug registers it reaches with
+# crhi = 11111 (Ghidra-Rare; register numbers learned from dis6x, CGT 8.3.12).
+define register offset=0x2100 size=4
+  [ ARP DESR DETR EM DMSG CMSG DT_DMA_ADDR DT_DMA_DATA DT_DMA_CNTL TCU_CNTL
+    RTDX_REG_CNTL RTDX_XMT_CNTL RTDX_CFG RTDX_RDATA RTDX_WDATA RTDX_RADDR RTDX_WADDR
+    MFREG0 DBG_STAT BRK_EN HWBP0_CNT HWBP0 HWBP1 HWBP2 HWBP3 OVERLAY PC_PROF ATSR TRR
+    TCRR ];
+
+# Context register carrying the compact fetch-packet decode parameters that a
+# 16-bit opcode cannot express (SPRUFE8B section 3.10).  It is populated by
+# the C6000PacketAnalyzer / C6000PacketContext Java helper shipped in this
+# extension; with no context set, every word decodes as a normal 32-bit
+# instruction.
+define register offset=0x3000 size=4 [ contextreg ];
+
+# Synthetic execution address for Ghidra's p-code emulator.  C6000 exposes
+# PCE1 to instructions, while the emulator needs a distinct current PC.
+define register offset=0x3100 size=4 [ PC ];
+
+# Every field is `noflow`: each describes the fetch packet that physically
+# contains the slot, so it must never be inherited from the instruction that
+# happens to precede it.  Without `noflow` the disassembler propagates the
+# previous instruction's value along the flow and a compact slot reached by
+# fall-through is decoded as a 32-bit instruction.
+define context contextreg
+  c_is16 = (0,0)   noflow  # this 2-byte slot holds a 16-bit compact instruction
+  c_rs   = (1,1)   noflow  # header RS  : register set for compact data registers
+  c_dsz  = (2,4)   noflow  # header DSZ : primary/secondary LD/ST data size
+  c_sat  = (5,5)   noflow  # header SAT : saturating compact arithmetic
+  c_br   = (6,6)   noflow  # header BR  : S-unit compact opcodes are branches
+  c_prot = (7,7)   noflow  # header PROT: protected loads (pipeline timing only)
+  c_isheader = (8,8) noflow # eighth word of a compact fetch packet
+  c_branch_terminal = (9,9) noflow # selected register branches after code discovery
+  c_pfollow = (10,13) noflow # instructions parallel after this compact branch
+  c_hdrpkt = (14,14) noflow # slot lies in a header-based (compact) fetch packet
+  c_dsh = (15,21) noflow   # branch delay-slot window in half-words (C6000DelaySlots)
+  c_fcyc = (22,24) noflow  # SPKERNEL: fcyc field width + 1 from the preceding SPLOOP's ii, 0 = unknown
+;
+
+# ---------------------------------------------------------------------------
+# Instruction token
+#
+# C6000 instructions are 32 bits in a standard fetch packet and 16 bits in a
+# compact fetch packet (SPRUFE8B sections 3.2 and 3.10).  Bit 0 of a 32-bit
+# word is the p-bit; the global endianness maps this correctly for big-endian
+# images as well.
+#
+# The per-bit fields i0..i31 let the generated decode table (see
+# c6000_decode.sinc) express the constant bits of an opcode map compactly.
+# Overlapping named fields provide the operands.
+# ---------------------------------------------------------------------------
+
+define token insn32 (32)
+  i0=(0,0)    i1=(1,1)    i2=(2,2)    i3=(3,3)
+  i4=(4,4)    i5=(5,5)    i6=(6,6)    i7=(7,7)
+  i8=(8,8)    i9=(9,9)    i10=(10,10) i11=(11,11)
+  i12=(12,12) i13=(13,13) i14=(14,14) i15=(15,15)
+  i16=(16,16) i17=(17,17) i18=(18,18) i19=(19,19)
+  i20=(20,20) i21=(21,21) i22=(22,22) i23=(23,23)
+  i24=(24,24) i25=(25,25) i26=(26,26) i27=(27,27)
+  i28=(28,28) i29=(29,29) i30=(30,30) i31=(31,31)
+
+  creg=(29,31)  z=(28,28)  cregz=(28,31)
+
+  # five-bit register fields, A-side view, and B-side view of the same bits
+  ra_dst=(23,27)  rb_dst=(23,27)
+  pair_index=(24,27)
+  src2_pair_index=(19,22)
+  src1_pair_index=(14,17)
+  ra_src1=(13,17) rb_src1=(13,17)
+  ra_src2=(18,22) rb_src2=(18,22)
+  ra_src=(18,22)  rb_src=(18,22)
+  ra_base=(18,22) rb_base=(18,22)
+  base_idx=(18,22) src2_idx=(18,22)
+  ra_off=(13,17)  rb_off=(13,17)
+  crf=(18,22) crhi=(13,17)
+
+  # opcode / selector fields
+  op7=(5,11)  op6=(6,11)  op5=(7,11)  op4=(6,9)  op3=(4,6)
+  opm=(7,11)  opn=(6,10)  opd=(6,9)
+
+  # operand fields
+  xbit=(12,12)  ybit=(7,7)  hbit=(6,6)  nbit=(13,16)
+  scbit=(23,23) nabit=(5,5)  rbit=(8,8)
+  ucst5=(13,17) scst5=(13,17) signed cst5=(13,17)
+  cst5_hi=(18,22) scst5_hi=(18,22) signed crf_dst=(23,27)
+  scst16=(7,22) signed
+  csta=(13,17)  cstb=(8,12)
+  cst16=(7,22)  cst21=(7,27) signed  ucst15=(8,22)
+  akpc_disp=(16,22) signed  akpc_nop=(13,15)
+  mode=(9,12)   offr=(13,17)  off15=(8,22)  off4=(5,8)
+  fstg=(13,15)  fcyc=(11,12)
+  bnopd=(16,27) signed  bnopc=(13,15)
+  scst10=(13,22) signed
+  ii=(23,27)
+  spmask=(18,25)  kfstg=(22,27)
+  hdr_layout=(21,27) hdr_exp=(14,20) hdr_pbits=(0,13)
+  spl7=(16,22) spn3=(13,15) spn1=(7,7) spv3=(4,6)
+
+;
+
+# 16-bit compact instruction token (SPRUFE8B appendices C.4/D.4/E.4/F.4/G.3/H.4)
+define token insn16 (16)
+  j0=(0,0)   j1=(1,1)   j2=(2,2)   j3=(3,3)
+  j4=(4,4)   j5=(5,5)   j6=(6,6)   j7=(7,7)
+  j8=(8,8)   j9=(9,9)   j10=(10,10) j11=(11,11)
+  j12=(12,12) j13=(13,13) j14=(14,14) j15=(15,15)
+  q_t=(12,12)
+  q_s=(0,0)
+  q_ldst=(3,3)
+  q_sz=(9,9)
+  q_na=(4,4)
+  q_r3=(13,15)
+  q_r3b=(7,9)
+  q_r2=(8,9)
+  q_r2b=(5,6)
+  q_pair710=(7,10)
+  q_uc2=(13,13)
+  q_uc4=(13,15)
+  q_off5=(7,11)
+  q_off9=(6,14)
+  q_disp7=(6,12)
+  q_unit=(3,4)
+  q_mvk=(13,15)
+
+  # --- compact (16-bit) register slots -------------------------------
+  # The header RS bit selects the low (A0-A7/B0-B7) or high
+  # (A16-A23/B16-B23) data register set, and the opcode side bit (t or
+  # s) selects the A or B file.  SLEIGH can attach only one register
+  # list to a field, so every compact register slot is declared once
+  # per (file, register set) combination: _a0 = A side low, _b0 = B
+  # side low, _a1 = A side high, _b1 = B side high.
+  cq_1513_a0=(13,15) cq_1513_b0=(13,15) cq_1513_a1=(13,15) cq_1513_b1=(13,15)
+  cq_97_a0=(7,9) cq_97_b0=(7,9) cq_97_a1=(7,9) cq_97_b1=(7,9)
+  cq_64_a0=(4,6) cq_64_b0=(4,6) cq_64_a1=(4,6) cq_64_b1=(4,6)
+  cq_1110_a0=(10,11) cq_1110_b0=(10,11) cq_1110_a1=(10,11) cq_1110_b1=(10,11)
+  cq_65_a0=(5,6) cq_65_b0=(5,6) cq_65_a1=(5,6) cq_65_b1=(5,6)
+  cq_4_a0=(4,4) cq_4_b0=(4,4) cq_4_a1=(4,4) cq_4_b1=(4,4)
+  cq_710_a=(7,10) cq_710_b=(7,10)
+  cq_710b_b0=(7,10)
+  cq_87_a0=(7,8) cq_87_b0=(7,8) cq_87_a1=(7,8) cq_87_b1=(7,8)
+  cq_117_a=(7,11) cq_117_b=(7,11) cq_117_a1=(7,11) cq_117_b1=(7,11)
+
+  # compact immediates / opcode sub-fields
+  cq_uc43=(11,12)  cq_uc98=(8,9)   cq_uc65=(5,6)   cq_u21=(13,14)
+  cq_scst7=(6,12) signed   cq_scst10=(6,15) signed   cq_ucst8=(6,13)
+  cq_ii3=(14,14)   cq_spk43=(14,15)
+  cq_acc=(0,0)     cq_ret=(0,0)
+;
+
+# ---------------------------------------------------------------------------
+# Attach register fields to register files
+# ---------------------------------------------------------------------------
+
+attach variables [ ra_dst ra_src1 ra_src2 ra_src ra_base ra_off ]
+  [ A0  A1  A2  A3  A4  A5  A6  A7
+    A8  A9  A10 A11 A12 A13 A14 A15
+    A16 A17 A18 A19 A20 A21 A22 A23
+    A24 A25 A26 A27 A28 A29 A30 A31 ];
+
+attach variables [ rb_dst rb_src1 rb_src2 rb_src rb_base rb_off ]
+  [ B0  B1  B2  B3  B4  B5  B6  B7
+    B8  B9  B10 B11 B12 B13 B14 B15
+    B16 B17 B18 B19 B20 B21 B22 B23
+    B24 B25 B26 B27 B28 B29 B30 B31 ];
+
+# Compact-instruction register fields (SPRUFE8B section 3.10.2.2).  Each
+# (slot, file, register-set) combination has its own attached register
+# list; the comment in the insn16 token above explains why.
+attach variables [ cq_1513_a0 cq_97_a0 cq_64_a0 ]
+  [ A0 A1 A2 A3 A4 A5 A6 A7 ];
+
+attach variables [ cq_1513_b0 cq_97_b0 cq_64_b0 ]
+  [ B0 B1 B2 B3 B4 B5 B6 B7 ];
+
+attach variables [ cq_1513_a1 cq_97_a1 cq_64_a1 ]
+  [ A16 A17 A18 A19 A20 A21 A22 A23 ];
+
+attach variables [ cq_1513_b1 cq_97_b1 cq_64_b1 ]
+  [ B16 B17 B18 B19 B20 B21 B22 B23 ];
+
+attach variables [ cq_1110_a0 cq_65_a0 ]
+  [ A0 A2 A4 A6 ];
+
+attach variables [ cq_1110_b0 cq_65_b0 ]
+  [ B0 B2 B4 B6 ];
+
+attach variables [ cq_1110_a1 cq_65_a1 ]
+  [ A16 A18 A20 A22 ];
+
+attach variables [ cq_1110_b1 cq_65_b1 ]
+  [ B16 B18 B20 B22 ];
+
+attach variables [ cq_4_a0 ]
+  [ A0 A1 ];
+
+attach variables [ cq_4_b0 ]
+  [ B0 B1 ];
+
+# L2c dst (figure D-7) ignores the header RS bit: A0/A1 or B0/B1 only.
+attach variables [ cq_4_a1 ]
+  [ A0 A1 ];
+
+attach variables [ cq_4_b1 ]
+  [ B0 B1 ];
+
+attach variables [ cq_710_a ]
+  [ A0 A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 A13 A14 A15 ];
+
+attach variables [ cq_710_b cq_710b_b0 ]
+  [ B0 B1 B2 B3 B4 B5 B6 B7 B8 B9 B10 B11 B12 B13 B14 B15 ];
+
+attach variables [ cq_87_a0 ]
+  [ A4 A5 A6 A7 ];
+
+attach variables [ cq_87_b0 ]
+  [ B4 B5 B6 B7 ];
+
+attach variables [ cq_87_a1 ]
+  [ A20 A21 A22 A23 ];
+
+attach variables [ cq_87_b1 ]
+  [ B20 B21 B22 B23 ];
+
+attach variables [ cq_117_a ]
+  [ A0 A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 A13 A14 A15
+    A16 A17 A18 A19 A20 A21 A22 A23 A24 A25 A26 A27 A28 A29 A30 A31 ];
+
+attach variables [ cq_117_b ]
+  [ B0 B1 B2 B3 B4 B5 B6 B7 B8 B9 B10 B11 B12 B13 B14 B15
+    B16 B17 B18 B19 B20 B21 B22 B23 B24 B25 B26 B27 B28 B29 B30 B31 ];
+
+# The header RS bit shifts an LSDmv full register number by 16. GNU prints
+# numbers above 31 for some raw words; a 5-bit hardware register index wraps.
+attach variables [ cq_117_a1 ]
+  [ A16 A17 A18 A19 A20 A21 A22 A23 A24 A25 A26 A27 A28 A29 A30 A31
+    A0 A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 A13 A14 A15 ];
+
+attach variables [ cq_117_b1 ]
+  [ B16 B17 B18 B19 B20 B21 B22 B23 B24 B25 B26 B27 B28 B29 B30 B31
+    B0 B1 B2 B3 B4 B5 B6 B7 B8 B9 B10 B11 B12 B13 B14 B15 ];
+
+# Fixed compact operands named by the s bit: the A0/B0 accumulator and the
+# A3/B3 link register.
+attach variables [ cq_acc ]
+  [ A0 B0 ];
+
+attach variables [ cq_ret ]
+  [ A3 B3 ];
+
+# ---------------------------------------------------------------------------
+# Branch delay slots.  A branch takes effect five cycles after its execute
+# packet issues; C6000DelaySlots (run by the packet analyzer) stores the length
+# of the instructions issued in between, in half-words, in c_dsh.  0 means no
+# window (none computed, or it would hold another branch, which Ghidra cannot
+# nest): the branch then transfers control at once.
+# ---------------------------------------------------------------------------
+DSlot: is c_dsh=0 { }
+DSlot: is c_dsh=1 { delayslot(2); }
+DSlot: is c_dsh=2 { delayslot(4); }
+DSlot: is c_dsh=3 { delayslot(6); }
+DSlot: is c_dsh=4 { delayslot(8); }
+DSlot: is c_dsh=5 { delayslot(10); }
+DSlot: is c_dsh=6 { delayslot(12); }
+DSlot: is c_dsh=7 { delayslot(14); }
+DSlot: is c_dsh=8 { delayslot(16); }
+DSlot: is c_dsh=9 { delayslot(18); }
+DSlot: is c_dsh=10 { delayslot(20); }
+DSlot: is c_dsh=11 { delayslot(22); }
+DSlot: is c_dsh=12 { delayslot(24); }
+DSlot: is c_dsh=13 { delayslot(26); }
+DSlot: is c_dsh=14 { delayslot(28); }
+DSlot: is c_dsh=15 { delayslot(30); }
+DSlot: is c_dsh=16 { delayslot(32); }
+DSlot: is c_dsh=17 { delayslot(34); }
+DSlot: is c_dsh=18 { delayslot(36); }
+DSlot: is c_dsh=19 { delayslot(38); }
+DSlot: is c_dsh=20 { delayslot(40); }
+DSlot: is c_dsh=21 { delayslot(42); }
+DSlot: is c_dsh=22 { delayslot(44); }
+DSlot: is c_dsh=23 { delayslot(46); }
+DSlot: is c_dsh=24 { delayslot(48); }
+DSlot: is c_dsh=25 { delayslot(50); }
+DSlot: is c_dsh=26 { delayslot(52); }
+DSlot: is c_dsh=27 { delayslot(54); }
+DSlot: is c_dsh=28 { delayslot(56); }
+DSlot: is c_dsh=29 { delayslot(58); }
+DSlot: is c_dsh=30 { delayslot(60); }
+DSlot: is c_dsh=31 { delayslot(62); }
+DSlot: is c_dsh=32 { delayslot(64); }
+DSlot: is c_dsh=33 { delayslot(66); }
+DSlot: is c_dsh=34 { delayslot(68); }
+DSlot: is c_dsh=35 { delayslot(70); }
+DSlot: is c_dsh=36 { delayslot(72); }
+DSlot: is c_dsh=37 { delayslot(74); }
+DSlot: is c_dsh=38 { delayslot(76); }
+DSlot: is c_dsh=39 { delayslot(78); }
+DSlot: is c_dsh=40 { delayslot(80); }
+DSlot: is c_dsh=41 { delayslot(82); }
+DSlot: is c_dsh=42 { delayslot(84); }
+DSlot: is c_dsh=43 { delayslot(86); }
+DSlot: is c_dsh=44 { delayslot(88); }
+DSlot: is c_dsh=45 { delayslot(90); }
+DSlot: is c_dsh=46 { delayslot(92); }
+DSlot: is c_dsh=47 { delayslot(94); }
+DSlot: is c_dsh=48 { delayslot(96); }
+DSlot: is c_dsh=49 { delayslot(98); }
+DSlot: is c_dsh=50 { delayslot(100); }
+DSlot: is c_dsh=51 { delayslot(102); }
+DSlot: is c_dsh=52 { delayslot(104); }
+DSlot: is c_dsh=53 { delayslot(106); }
+DSlot: is c_dsh=54 { delayslot(108); }
+DSlot: is c_dsh=55 { delayslot(110); }
+DSlot: is c_dsh=56 { delayslot(112); }
+DSlot: is c_dsh=57 { delayslot(114); }
+DSlot: is c_dsh=58 { delayslot(116); }
+DSlot: is c_dsh=59 { delayslot(118); }
+DSlot: is c_dsh=60 { delayslot(120); }
+DSlot: is c_dsh=61 { delayslot(122); }
+DSlot: is c_dsh=62 { delayslot(124); }
+DSlot: is c_dsh=63 { delayslot(126); }
+DSlot: is c_dsh=64 { delayslot(128); }
+DSlot: is c_dsh=65 { delayslot(130); }
+DSlot: is c_dsh=66 { delayslot(132); }
+DSlot: is c_dsh=67 { delayslot(134); }
+DSlot: is c_dsh=68 { delayslot(136); }
+DSlot: is c_dsh=69 { delayslot(138); }
+DSlot: is c_dsh=70 { delayslot(140); }
+DSlot: is c_dsh=71 { delayslot(142); }
+DSlot: is c_dsh=72 { delayslot(144); }
+DSlot: is c_dsh=73 { delayslot(146); }
+DSlot: is c_dsh=74 { delayslot(148); }
+DSlot: is c_dsh=75 { delayslot(150); }
+DSlot: is c_dsh=76 { delayslot(152); }
+DSlot: is c_dsh=77 { delayslot(154); }
+DSlot: is c_dsh=78 { delayslot(156); }
+DSlot: is c_dsh=79 { delayslot(158); }
+DSlot: is c_dsh=80 { delayslot(160); }
+DSlot: is c_dsh=81 { delayslot(162); }
+DSlot: is c_dsh=82 { delayslot(164); }
+DSlot: is c_dsh=83 { delayslot(166); }
+DSlot: is c_dsh=84 { delayslot(168); }
+DSlot: is c_dsh=85 { delayslot(170); }
+DSlot: is c_dsh=86 { delayslot(172); }
+DSlot: is c_dsh=87 { delayslot(174); }
+DSlot: is c_dsh=88 { delayslot(176); }
+DSlot: is c_dsh=89 { delayslot(178); }
+DSlot: is c_dsh=90 { delayslot(180); }
+DSlot: is c_dsh=91 { delayslot(182); }
+DSlot: is c_dsh=92 { delayslot(184); }
+DSlot: is c_dsh=93 { delayslot(186); }
+DSlot: is c_dsh=94 { delayslot(188); }
+DSlot: is c_dsh=95 { delayslot(190); }
+DSlot: is c_dsh=96 { delayslot(192); }
+DSlot: is c_dsh=97 { delayslot(194); }
+DSlot: is c_dsh=98 { delayslot(196); }
+DSlot: is c_dsh=99 { delayslot(198); }
+DSlot: is c_dsh=100 { delayslot(200); }
+DSlot: is c_dsh=101 { delayslot(202); }
+DSlot: is c_dsh=102 { delayslot(204); }
+DSlot: is c_dsh=103 { delayslot(206); }
+DSlot: is c_dsh=104 { delayslot(208); }
+DSlot: is c_dsh=105 { delayslot(210); }
+DSlot: is c_dsh=106 { delayslot(212); }
+DSlot: is c_dsh=107 { delayslot(214); }
+DSlot: is c_dsh=108 { delayslot(216); }
+DSlot: is c_dsh=109 { delayslot(218); }
+DSlot: is c_dsh=110 { delayslot(220); }
+DSlot: is c_dsh=111 { delayslot(222); }
+DSlot: is c_dsh=112 { delayslot(224); }
+DSlot: is c_dsh=113 { delayslot(226); }
+DSlot: is c_dsh=114 { delayslot(228); }
+DSlot: is c_dsh=115 { delayslot(230); }
+DSlot: is c_dsh=116 { delayslot(232); }
+DSlot: is c_dsh=117 { delayslot(234); }
+DSlot: is c_dsh=118 { delayslot(236); }
+DSlot: is c_dsh=119 { delayslot(238); }
+DSlot: is c_dsh=120 { delayslot(240); }
+DSlot: is c_dsh=121 { delayslot(242); }
+DSlot: is c_dsh=122 { delayslot(244); }
+DSlot: is c_dsh=123 { delayslot(246); }
+DSlot: is c_dsh=124 { delayslot(248); }
+DSlot: is c_dsh=125 { delayslot(250); }
+DSlot: is c_dsh=126 { delayslot(252); }
+DSlot: is c_dsh=127 { delayslot(254); }
+
+# ---------------------------------------------------------------------------
+# SPKERNEL fstg,fcyc.  The six-bit field splits by the initiation interval of
+# the loop (fcyc takes ceil(log2(ii)) low bits, fstg the rest bit-reversed);
+# C6000DelaySlots finds the preceding SPLOOP and stores the fcyc width + 1 in
+# c_fcyc.  Without it the raw field is shown.
+# ---------------------------------------------------------------------------
+SpkFld: kfstg is c_fcyc=0 & kfstg { export *[const]:4 kfstg; }
+SpkFld: SpkFldfs^","^SpkFldfc is c_fcyc=1 & kfstg [ SpkFldfs = ((((kfstg) >> 0) & 1) << 5) | ((((kfstg) >> 1) & 1) << 4) | ((((kfstg) >> 2) & 1) << 3) | ((((kfstg) >> 3) & 1) << 2) | ((((kfstg) >> 4) & 1) << 1) | ((((kfstg) >> 5) & 1) << 0); SpkFldfc = 0; ] { local v:4 = kfstg; export v; }
+SpkFld: SpkFldfs^","^SpkFldfc is c_fcyc=2 & kfstg [ SpkFldfs = ((((kfstg) >> 1) & 1) << 4) | ((((kfstg) >> 2) & 1) << 3) | ((((kfstg) >> 3) & 1) << 2) | ((((kfstg) >> 4) & 1) << 1) | ((((kfstg) >> 5) & 1) << 0); SpkFldfc = (kfstg) & 1; ] { local v:4 = kfstg; export v; }
+SpkFld: SpkFldfs^","^SpkFldfc is c_fcyc=3 & kfstg [ SpkFldfs = ((((kfstg) >> 2) & 1) << 3) | ((((kfstg) >> 3) & 1) << 2) | ((((kfstg) >> 4) & 1) << 1) | ((((kfstg) >> 5) & 1) << 0); SpkFldfc = (kfstg) & 3; ] { local v:4 = kfstg; export v; }
+SpkFld: SpkFldfs^","^SpkFldfc is c_fcyc=4 & kfstg [ SpkFldfs = ((((kfstg) >> 3) & 1) << 2) | ((((kfstg) >> 4) & 1) << 1) | ((((kfstg) >> 5) & 1) << 0); SpkFldfc = (kfstg) & 7; ] { local v:4 = kfstg; export v; }
+SpkFld: SpkFldfs^","^SpkFldfc is c_fcyc=5 & kfstg [ SpkFldfs = ((((kfstg) >> 4) & 1) << 1) | ((((kfstg) >> 5) & 1) << 0); SpkFldfc = (kfstg) & 15; ] { local v:4 = kfstg; export v; }
+
+# ---------------------------------------------------------------------------
+# Predication - SPRUFE8B Table 3-9
+# ---------------------------------------------------------------------------
+
+Cond: ""      is z=0 & creg=0 { export 1:1; }   # unconditional
+Cond: "[!B0]" is z=1 & creg=1 { local p:1 = (B0 == 0); export p; }
+Cond: "[!B1]" is z=1 & creg=2 { local p:1 = (B1 == 0); export p; }
+Cond: "[!B2]" is z=1 & creg=3 { local p:1 = (B2 == 0); export p; }
+Cond: "[!A1]" is z=1 & creg=4 { local p:1 = (A1 == 0); export p; }
+Cond: "[!A2]" is z=1 & creg=5 { local p:1 = (A2 == 0); export p; }
+Cond: "[!A0]" is z=1 & creg=6 { local p:1 = (A0 == 0); export p; }
+Cond: "[B0]"  is z=0 & creg=1 { local p:1 = (B0 != 0); export p; }
+Cond: "[B1]"  is z=0 & creg=2 { local p:1 = (B1 != 0); export p; }
+Cond: "[B2]"  is z=0 & creg=3 { local p:1 = (B2 != 0); export p; }
+Cond: "[A1]"  is z=0 & creg=4 { local p:1 = (A1 != 0); export p; }
+Cond: "[A2]"  is z=0 & creg=5 { local p:1 = (A2 != 0); export p; }
+Cond: "[A0]"  is z=0 & creg=6 { local p:1 = (A0 != 0); export p; }
+
+# Boolean pcode value of the predicate, for the semantic templates.
+
+# ---------------------------------------------------------------------------
+# Register operands
+# ---------------------------------------------------------------------------
+
+Src1: ra_src1 is ra_src1 & i1=0 { export ra_src1; }
+Src1: rb_src1 is rb_src1 & i1=1 { export rb_src1; }
+
+# A few .L subtraction/saturation formats apply x to src1 rather than src2.
+Src1X: ra_src1 is ra_src1 & i1=0 & i12=0 { export ra_src1; }
+Src1X: rb_src1 is rb_src1 & i1=0 & i12=1 { export rb_src1; }
+Src1X: rb_src1 is rb_src1 & i1=1 & i12=0 { export rb_src1; }
+Src1X: ra_src1 is ra_src1 & i1=1 & i12=1 { export ra_src1; }
+
+Dst: ra_dst is ra_dst & i1=0 { export ra_dst; }
+Dst: rb_dst is rb_dst & i1=1 { export rb_dst; }
+
+# .D stores encode their data source in bits 27..23, whereas baseR occupies
+# bits 22..18.
+StoreSrc: ra_dst is ra_dst & i1=0 { export ra_dst; }
+StoreSrc: rb_dst is rb_dst & i1=1 { export rb_dst; }
+
+# src2 is read from the opposite register file when the cross-path bit x is
+# set (SPRUFE8B section 2.4).
+Src2: ra_src2 is ra_src2 & i1=0 & i12=0 { export ra_src2; }
+Src2: rb_src2 is rb_src2 & i1=0 & i12=1 { export rb_src2; }
+Src2: rb_src2 is rb_src2 & i1=1 & i12=0 { export rb_src2; }
+Src2: ra_src2 is ra_src2 & i1=1 & i12=1 { export ra_src2; }
+
+Src2Local: ra_src2 is ra_src2 & i1=0 { export ra_src2; }
+Src2Local: rb_src2 is rb_src2 & i1=1 { export rb_src2; }
+
+# MVC control-file addressing, SPRUFE8B Table 3-27.  The crhi field accepts
+# 0xxxx aliases for the first eight control addresses, but read and write
+# directions differ at IFR/ISR and EFR/ECR.  Reserved or inaccessible entries
+# have no constructor, so they remain undefined instead of naming a register.
+CtlReg: "AMR" is crf=0  & i17=0 { export AMR; }
+CtlReg: "CSR" is crf=1  & i17=0 { export CSR; }
+CtlReg: "IFR" is crf=2  & crhi=0 { export IFR; }
+CtlReg: "IFR" is crf=2  & crhi=2 { export IFR; }
+CtlReg: "IER" is crf=4  & i17=0 { export IER; }
+CtlReg: "ISTP" is crf=5  & i17=0 { export ISTP; }
+CtlReg: "IRP" is crf=6  & i17=0 { export IRP; }
+CtlReg: "NRP" is crf=7  & i17=0 { export NRP; }
+CtlReg: "TSCL" is crf=10 & crhi=0 { export TSCL; }
+CtlReg: "TSCH" is crf=11 & crhi=0 { export TSCH; }
+CtlReg: "ILC" is crf=13 & crhi=0 { export ILC; }
+CtlReg: "RILC" is crf=14 & crhi=0 { export RILC; }
+CtlReg: "REP" is crf=15 & crhi=0 { export REP; }
+CtlReg: "PCE1"   is crf=16 & crhi=0 { export PCE1; }
+CtlReg: "PCE1"   is crf=16 & crhi=16 { export PCE1; }
+CtlReg: "DNUM" is crf=17 & crhi=0 { export DNUM; }
+CtlReg: "FADCR" is crf=18 & crhi=0 { export FADCR; }
+CtlReg: "FAUCR" is crf=19 & crhi=0 { export FAUCR; }
+CtlReg: "FMCR" is crf=20 & crhi=0 { export FMCR; }
+CtlReg: "SSR" is crf=21 & crhi=0 { export SSR; }
+CtlReg: "GPLYA" is crf=22 & crhi=0 { export GPLYA; }
+CtlReg: "GPLYB" is crf=23 & crhi=0 { export GPLYB; }
+CtlReg: "GFPGFR" is crf=24 & crhi=0 { export GFPGFR; }
+CtlReg: "DIER" is crf=25 & crhi=0 { export DIER; }
+CtlReg: "TSR" is crf=26 & crhi=0 { export TSR; }
+CtlReg: "ITSR" is crf=27 & crhi=0 { export ITSR; }
+CtlReg: "NTSR" is crf=28 & crhi=0 { export NTSR; }
+CtlReg: "EFR" is crf=29 & crhi=0 { export EFR; }
+CtlReg: "IERR" is crf=31 & crhi=0 { export IERR; }
+CtlReg: "DESR" is crf=8 & crhi=0 { export DESR; }
+CtlReg: "DETR" is crf=9 & crhi=0 { export DETR; }
+CtlReg: "ARP" is crf=12 & crhi=0 { export ARP; }
+CtlReg: "EM" is crf=30 & crhi=0 { export EM; }
+CtlReg: "DMSG" is crf=0 & crhi=31 { export DMSG; }
+CtlReg: "CMSG" is crf=1 & crhi=31 { export CMSG; }
+CtlReg: "DT_DMA_ADDR" is crf=2 & crhi=31 { export DT_DMA_ADDR; }
+CtlReg: "DT_DMA_DATA" is crf=3 & crhi=31 { export DT_DMA_DATA; }
+CtlReg: "DT_DMA_CNTL" is crf=4 & crhi=31 { export DT_DMA_CNTL; }
+CtlReg: "TCU_CNTL" is crf=5 & crhi=31 { export TCU_CNTL; }
+CtlReg: "RTDX_REG_CNTL" is crf=6 & crhi=31 { export RTDX_REG_CNTL; }
+CtlReg: "RTDX_XMT_CNTL" is crf=7 & crhi=31 { export RTDX_XMT_CNTL; }
+CtlReg: "RTDX_CFG" is crf=8 & crhi=31 { export RTDX_CFG; }
+CtlReg: "RTDX_RDATA" is crf=9 & crhi=31 { export RTDX_RDATA; }
+CtlReg: "RTDX_WDATA" is crf=10 & crhi=31 { export RTDX_WDATA; }
+CtlReg: "RTDX_RADDR" is crf=11 & crhi=31 { export RTDX_RADDR; }
+CtlReg: "RTDX_WADDR" is crf=12 & crhi=31 { export RTDX_WADDR; }
+CtlReg: "MFREG0" is crf=14 & crhi=31 { export MFREG0; }
+CtlReg: "DBG_STAT" is crf=15 & crhi=31 { export DBG_STAT; }
+CtlReg: "BRK_EN" is crf=16 & crhi=31 { export BRK_EN; }
+CtlReg: "HWBP0_CNT" is crf=17 & crhi=31 { export HWBP0_CNT; }
+CtlReg: "HWBP0" is crf=18 & crhi=31 { export HWBP0; }
+CtlReg: "HWBP1" is crf=19 & crhi=31 { export HWBP1; }
+CtlReg: "HWBP2" is crf=20 & crhi=31 { export HWBP2; }
+CtlReg: "HWBP3" is crf=21 & crhi=31 { export HWBP3; }
+CtlReg: "OVERLAY" is crf=22 & crhi=31 { export OVERLAY; }
+CtlReg: "PC_PROF" is crf=23 & crhi=31 { export PC_PROF; }
+CtlReg: "ATSR" is crf=24 & crhi=31 { export ATSR; }
+CtlReg: "TRR" is crf=30 & crhi=31 { export TRR; }
+CtlReg: "TCRR" is crf=31 & crhi=31 { export TCRR; }
+
+CtlDst: "AMR"    is crf_dst=0  & i17=0 { export AMR; }
+CtlDst: "CSR"    is crf_dst=1  & i17=0 { export CSR; }
+CtlDst: "ISR"    is crf_dst=2  & i17=0 { export ISR; }
+CtlDst: "ICR"    is crf_dst=3  & i17=0 { export ICR; }
+CtlDst: "IER"    is crf_dst=4  & i17=0 { export IER; }
+CtlDst: "ISTP"   is crf_dst=5  & i17=0 { export ISTP; }
+CtlDst: "IRP"    is crf_dst=6  & i17=0 { export IRP; }
+CtlDst: "NRP"    is crf_dst=7  & i17=0 { export NRP; }
+CtlDst: "ILC"    is crf_dst=13 & crhi=0 { export ILC; }
+CtlDst: "RILC"   is crf_dst=14 & crhi=0 { export RILC; }
+CtlDst: "REP"    is crf_dst=15 & crhi=0 { export REP; }
+CtlDst: "FADCR"  is crf_dst=18 & crhi=0 { export FADCR; }
+CtlDst: "FAUCR"  is crf_dst=19 & crhi=0 { export FAUCR; }
+CtlDst: "FMCR"   is crf_dst=20 & crhi=0 { export FMCR; }
+CtlDst: "SSR"    is crf_dst=21 & crhi=0 { export SSR; }
+CtlDst: "GPLYA"  is crf_dst=22 & crhi=0 { export GPLYA; }
+CtlDst: "GPLYB"  is crf_dst=23 & crhi=0 { export GPLYB; }
+CtlDst: "GFPGFR" is crf_dst=24 & crhi=0 { export GFPGFR; }
+CtlDst: "DIER"   is crf_dst=25 & crhi=0 { export DIER; }
+CtlDst: "TSR"    is crf_dst=26 & crhi=0 { export TSR; }
+CtlDst: "ITSR"   is crf_dst=27 & crhi=0 { export ITSR; }
+CtlDst: "NTSR"   is crf_dst=28 & crhi=0 { export NTSR; }
+CtlDst: "ECR"    is crf_dst=29 & crhi=0 { export ECR; }
+CtlDst: "IERR"   is crf_dst=31 & crhi=0 { export IERR; }
+CtlDst: "DESR" is crf_dst=8 & crhi=0 { export DESR; }
+CtlDst: "DETR" is crf_dst=9 & crhi=0 { export DETR; }
+CtlDst: "ARP" is crf_dst=12 & crhi=0 { export ARP; }
+CtlDst: "EM" is crf_dst=30 & crhi=0 { export EM; }
+CtlDst: "DMSG" is crf_dst=0 & crhi=31 { export DMSG; }
+CtlDst: "CMSG" is crf_dst=1 & crhi=31 { export CMSG; }
+CtlDst: "DT_DMA_ADDR" is crf_dst=2 & crhi=31 { export DT_DMA_ADDR; }
+CtlDst: "DT_DMA_DATA" is crf_dst=3 & crhi=31 { export DT_DMA_DATA; }
+CtlDst: "DT_DMA_CNTL" is crf_dst=4 & crhi=31 { export DT_DMA_CNTL; }
+CtlDst: "TCU_CNTL" is crf_dst=5 & crhi=31 { export TCU_CNTL; }
+CtlDst: "RTDX_REG_CNTL" is crf_dst=6 & crhi=31 { export RTDX_REG_CNTL; }
+CtlDst: "RTDX_XMT_CNTL" is crf_dst=7 & crhi=31 { export RTDX_XMT_CNTL; }
+CtlDst: "RTDX_CFG" is crf_dst=8 & crhi=31 { export RTDX_CFG; }
+CtlDst: "RTDX_RDATA" is crf_dst=9 & crhi=31 { export RTDX_RDATA; }
+CtlDst: "RTDX_WDATA" is crf_dst=10 & crhi=31 { export RTDX_WDATA; }
+CtlDst: "RTDX_RADDR" is crf_dst=11 & crhi=31 { export RTDX_RADDR; }
+CtlDst: "RTDX_WADDR" is crf_dst=12 & crhi=31 { export RTDX_WADDR; }
+CtlDst: "MFREG0" is crf_dst=14 & crhi=31 { export MFREG0; }
+CtlDst: "DBG_STAT" is crf_dst=15 & crhi=31 { export DBG_STAT; }
+CtlDst: "BRK_EN" is crf_dst=16 & crhi=31 { export BRK_EN; }
+CtlDst: "HWBP0_CNT" is crf_dst=17 & crhi=31 { export HWBP0_CNT; }
+CtlDst: "HWBP0" is crf_dst=18 & crhi=31 { export HWBP0; }
+CtlDst: "HWBP1" is crf_dst=19 & crhi=31 { export HWBP1; }
+CtlDst: "HWBP2" is crf_dst=20 & crhi=31 { export HWBP2; }
+CtlDst: "HWBP3" is crf_dst=21 & crhi=31 { export HWBP3; }
+CtlDst: "OVERLAY" is crf_dst=22 & crhi=31 { export OVERLAY; }
+CtlDst: "PC_PROF" is crf_dst=23 & crhi=31 { export PC_PROF; }
+CtlDst: "ATSR" is crf_dst=24 & crhi=31 { export ATSR; }
+CtlDst: "TRR" is crf_dst=30 & crhi=31 { export TRR; }
+CtlDst: "TCRR" is crf_dst=31 & crhi=31 { export TCRR; }
+
+# ---------------------------------------------------------------------------
+# Immediates
+# ---------------------------------------------------------------------------
+
+UCst5:  ucst5  is ucst5  { export *[const]:4 ucst5; }
+Cst5:   cst5   is cst5   { export *[const]:4 cst5; }
+SCst5:  scst5  is scst5 { export *[const]:4 scst5; }
+Cst5Hi: cst5_hi is cst5_hi { export *[const]:4 cst5_hi; }
+SCst5Hi: scst5_hi is scst5_hi { export *[const]:4 scst5_hi; }
+UCst15: ucst15 is ucst15 { export *[const]:4 ucst15; }
+Csta:   csta   is csta   { export *[const]:4 csta; }
+Cstb:   cstb   is cstb   { export *[const]:4 cstb; }
+Cst16:  cst16  is cst16  { export *[const]:4 cst16; }
+SCst16: scst16 is scst16 { export *[const]:4 scst16; }
+AKPCDisp: akpc_disp is akpc_disp { export *[const]:4 akpc_disp; }
+AKPCTgt: reloc is akpc_disp
+  [ reloc = (inst_start & 0xffffffe0) + (akpc_disp << 2); ]
+  { export *[const]:4 reloc; }
+AKPCNop: akpc_nop is akpc_nop { export *[const]:4 akpc_nop; }
+Nbit: count is nbit [ count = nbit + 1; ] { export *[const]:4 count; }
+
+# Branch displacement: signed 21-bit, scaled by 4 and added to the address of
+# the instruction after the delay slots (SPRUFE8B, B/CALLP instruction
+# descriptions: target = PC + 4 + (cst21 << 2)).
+# Branch target: signed 21-bit displacement scaled by four, added to PCE1 -
+# the address of the first instruction of the fetch packet that contains the
+# branch (SPRUFE8B B/CALLP execution blocks).
+BranchTarget: reloc is cst21
+  [ reloc = (inst_start & 0xffffffe0) + (cst21 << 2); ] { export *[ram]:4 reloc; }
+
+# BNOP displacement target (SPRUFE8B figure F-10, BNOP execution block).
+# Inside a header-based fetch packet the displacement counts halfwords, so a
+# 32-bit BNOP can reach 16-bit instructions; elsewhere it counts words.
+BnopTgt: reloc is c_hdrpkt=0 & bnopd
+  [ reloc = (inst_start & 0xffffffe0) + (bnopd * 4); ] { export *[ram]:4 reloc; }
+BnopTgt: reloc is c_hdrpkt=1 & bnopd
+  [ reloc = (inst_start & 0xffffffe0) + (bnopd * 2); ] { export *[ram]:4 reloc; }
+
+# BDEC/BPOS encode a signed ten-bit fetch-packet-relative branch displacement.
+BdecTgt: reloc is scst10
+  [ reloc = (inst_start & 0xffffffe0) + (scst10 << 2); ] { export *[ram]:4 reloc; }
+
+# ---------------------------------------------------------------------------
+# .D unit addressing modes - SPRUFE8B Table C-3 / section 3.9.3
+#
+# The base address register comes from the baseR field; its register file is
+# selected by the y bit (the .D1/.D2 unit), not by the s bit - see SPRUFE8B
+# Table C-2.  This is the encoding detail that naive .D-unit decoders get
+# wrong.
+# ---------------------------------------------------------------------------
+
+BaseReg: ra_base is ra_base & i7=0 { export ra_base; }
+BaseReg: rb_base is rb_base & i7=1 { export rb_base; }
+
+OffReg: ra_off is ra_off & i7=0 { export ra_off; }
+OffReg: rb_off is rb_off & i7=1 { export rb_off; }
+
+# Size-specific addressing, including pre/post updates, is generated from
+# SPRUFE8B section 3.9.3 and Table C-3. Long forms use B14/B15 selected by
+# y, while short forms select the .D unit and base register file by y.
+# SPRUFE8B sections 2.8.3 and 3.9.2: AMR selects circular arithmetic only
+# for A4-A7/B4-B7. BK0/BK1 encode the log2 block size minus one. The
+# high bits of the original base remain fixed across the calculation.
+macro c6000_circular_mask(index, side, mask) {
+  local selected:4 = index;
+  local file:4 = side;
+  mask = 0xffffffff;
+  if (selected < 4 || selected > 7) goto <done>;
+  local modeShift:4 = ((selected - 4) << 1) + (file << 3);
+  local addressMode:4 = (AMR >> modeShift) & 3;
+  if (addressMode == 0 || addressMode == 3) goto <done>;
+  local blockBits:4 = ((AMR >> 16) & 31) + 1;
+  if (addressMode == 2) goto <bk1>;
+  goto <haveBits>;
+  <bk1> blockBits = ((AMR >> 21) & 31) + 1;
+  <haveBits>
+  mask = (1 << blockBits) - 1;
+  <done>
+}
+
+macro c6000_wrap_address(base, delta, index, side, result) {
+  local original:4 = base;
+  local mask:4;
+  c6000_circular_mask(index, side, mask);
+  result = original + delta;
+  result = (original & ~mask) | (result & mask);
+}
+
+@include "c6000_memory.sinc"
+
+# ---------------------------------------------------------------------------
+# Unimplemented-operation placeholders and instruction semantics
+#
+# c6000_placeholders.sinc declares one userop per instruction whose semantics
+# are not yet modelled; c6000_semantics.sinc holds the hand-written semantics
+# for the instructions that are modelled.  Both are generated/hand written
+# alongside this file.
+# ---------------------------------------------------------------------------
+
+@include "c6000_placeholders.sinc"
+define pcodeop c6000_idle;
+define pcodeop c6000_link_load;
+define pcodeop c6000_link_store;
+define pcodeop c6000_link_commit;
+@if FP_MODEL == "analysis"
+define pcodeop c6000_fp_status;
+@endif
+@include "c6000_semantics.sinc"
+# Figure F-8 pointer branches use op=110 (IRP) or 111 (NRP).
+# The op field overlaps the five-bit register field of Figure F-7; match
+# these fully encoded forms before the general B-register constructors.
+:"B.S2" "IRP" is c_is16=0 & creg=0 & z=0 &
+  i27=0 & i26=0 & i25=0 & i24=0 & i23=0 & i22=0 & i21=0 &
+  i20=1 & i19=1 & i18=0 & i17=0 & i16=0 & i15=0 & i14=0 &
+  i13=0 & i12=0 & i11=0 & i10=0 & i9=0 & i8=0 &
+  i7=1 & i6=1 & i5=1 & i4=0 & i3=0 & i2=0 & i1=1
+  { c6000_sem_b_ind(IRP); }
+:"B.S2" "NRP" is c_is16=0 & creg=0 & z=0 &
+  i27=0 & i26=0 & i25=0 & i24=0 & i23=0 & i22=0 & i21=0 &
+  i20=1 & i19=1 & i18=1 & i17=0 & i16=0 & i15=0 & i14=0 &
+  i13=0 & i12=0 & i11=0 & i10=0 & i9=0 & i8=0 &
+  i7=1 & i6=1 & i5=1 & i4=0 & i3=0 & i2=0 & i1=1
+  { c6000_sem_b_ind(NRP); }
+
+@include "c6000_decode.sinc"
+define pcodeop c6000_sploop;
+define pcodeop c6000_sploopd;
+define pcodeop c6000_sploopw;
+define pcodeop c6000_spkernel;
+define pcodeop c6000_spkernelr;
+define pcodeop c6000_spmask;
+define pcodeop c6000_spmaskr;
+@include "c6000_compact.sinc"
+@include "c6000_manual.sinc"

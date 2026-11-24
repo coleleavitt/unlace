@@ -1,0 +1,2896 @@
+#  Hand-written p-code semantics for the C6000 instructions that are modelled.
+#
+#  Apache-2.0.  Every macro below is traceable to the "Execution" block of the
+#  matching instruction description in TI SPRUFE8B; the section is named in
+#  the comment above each group.
+#
+#  tools/gen_decode.py scans this file for `# SEM: MNEMONIC` markers and emits
+#  a call to `c6000_sem_<mnemonic>(<operands>)` for those instructions.  The
+#  argument order is the operand order of the generated constructor, which
+#  follows the manual's syntax line.
+
+# ---------------------------------------------------------------------------
+# Integer arithmetic and logic - SPRUFE8B section 3.12, ADD/SUB/AND/OR/XOR/
+# ANDN/ADDU.
+# ---------------------------------------------------------------------------
+
+# SEM: ADD
+macro c6000_sem_add(a, b, d) { d = a + b; }
+# Long .L results are signed 40-bit values stored with zero in the upper
+# 24 bits of the high register. The source pair's upper 24 bits are ignored.
+macro c6000_sem_add40_32(a, b, d) {
+  d = (sext(a) + sext(b)) & 0xffffffffff;
+}
+macro c6000_sem_add40_pair(a, b, d) {
+  d = (sext(a) + (b & 0xffffffffff)) & 0xffffffffff;
+}
+# SEM: ADDU
+macro c6000_sem_addu(a, b, d) { d = a + b; }
+macro c6000_sem_addu40_32(a, b, d) {
+  d = (zext(a) + zext(b)) & 0xffffffffff;
+}
+macro c6000_sem_addu40_pair(a, b, d) {
+  d = (zext(a) + (b & 0xffffffffff)) & 0xffffffffff;
+}
+# SEM: SUB
+macro c6000_sem_sub(a, b, d) { d = a - b; }
+macro c6000_sem_sub40_32(a, b, d) {
+  d = (sext(a) - sext(b)) & 0xffffffffff;
+}
+macro c6000_sem_sub40_pair(a, b, d) {
+  d = (sext(a) - (b & 0xffffffffff)) & 0xffffffffff;
+}
+# SEM: ADDSUB
+macro c6000_sem_addsub(a, b, d) {
+  local sum:4 = a + b;
+  local difference:4 = a - b;
+  d = (zext(sum) << 32) | zext(difference);
+}
+# SEM: DMV
+macro c6000_sem_dmv(a, b, d) { d = (zext(a) << 32) | zext(b); }
+# Packed arithmetic and comparisons (SPRUFE8B ADD2, ADD4, SUB2, SUB4,
+# CMPEQ2, CMPEQ4, CMPGT2, CMPGTU4). Each lane wraps independently;
+# comparison results are collected in the low two or four bits.
+# SEM: ADD2
+macro c6000_sem_add2(a, b, d) {
+  local lo:4 = ((a & 0xffff) + (b & 0xffff)) & 0xffff;
+  local hi:4 = ((a >> 16) + (b >> 16)) & 0xffff;
+  d = lo | (hi << 16);
+}
+# SEM: ADD4
+macro c6000_sem_add4(a, b, d) {
+  local b0:4 = ((a & 0xff) + (b & 0xff)) & 0xff;
+  local b1:4 = (((a >> 8) & 0xff) + ((b >> 8) & 0xff)) & 0xff;
+  local b2:4 = (((a >> 16) & 0xff) + ((b >> 16) & 0xff)) & 0xff;
+  local b3:4 = ((a >> 24) + (b >> 24)) & 0xff;
+  d = b0 | (b1 << 8) | (b2 << 16) | (b3 << 24);
+}
+# SEM: SUB2
+macro c6000_sem_sub2(a, b, d) {
+  local lo:4 = ((a & 0xffff) - (b & 0xffff)) & 0xffff;
+  local hi:4 = ((a >> 16) - (b >> 16)) & 0xffff;
+  d = lo | (hi << 16);
+}
+# SEM: ADDSUB2
+macro c6000_sem_addsub2(a, b, d) {
+  local sum:4 = 0;
+  local difference:4 = 0;
+  c6000_sem_add2(a, b, sum);
+  c6000_sem_sub2(a, b, difference);
+  d = (zext(sum) << 32) | zext(difference);
+}
+# SEM: SUB4
+macro c6000_sem_sub4(a, b, d) {
+  local b0:4 = ((a & 0xff) - (b & 0xff)) & 0xff;
+  local b1:4 = (((a >> 8) & 0xff) - ((b >> 8) & 0xff)) & 0xff;
+  local b2:4 = (((a >> 16) & 0xff) - ((b >> 16) & 0xff)) & 0xff;
+  local b3:4 = ((a >> 24) - (b >> 24)) & 0xff;
+  d = b0 | (b1 << 8) | (b2 << 16) | (b3 << 24);
+}
+# SEM: CMPEQ2
+macro c6000_sem_cmpeq2(a, b, d) {
+  local lo:4 = zext((a & 0xffff) == (b & 0xffff));
+  local hi:4 = zext((a >> 16) == (b >> 16));
+  d = lo | (hi << 1);
+}
+# SEM: CMPEQ4
+macro c6000_sem_cmpeq4(a, b, d) {
+  local c0:4 = zext((a & 0xff) == (b & 0xff));
+  local c1:4 = zext(((a >> 8) & 0xff) == ((b >> 8) & 0xff));
+  local c2:4 = zext(((a >> 16) & 0xff) == ((b >> 16) & 0xff));
+  local c3:4 = zext((a >> 24) == (b >> 24));
+  d = c0 | (c1 << 1) | (c2 << 2) | (c3 << 3);
+}
+# SEM: CMPGT2
+macro c6000_sem_cmpgt2(a, b, d) {
+  local al:4 = (a << 16) s>> 16;
+  local bl:4 = (b << 16) s>> 16;
+  local ah:4 = a s>> 16;
+  local bh:4 = b s>> 16;
+  local lo:4 = zext(al s> bl);
+  local hi:4 = zext(ah s> bh);
+  d = lo | (hi << 1);
+}
+# SEM: CMPGTU4
+macro c6000_sem_cmpgtu4(a, b, d) {
+  local c0:4 = zext((a & 0xff) > (b & 0xff));
+  local c1:4 = zext(((a >> 8) & 0xff) > ((b >> 8) & 0xff));
+  local c2:4 = zext(((a >> 16) & 0xff) > ((b >> 16) & 0xff));
+  local c3:4 = zext((a >> 24) > (b >> 24));
+  d = c0 | (c1 << 1) | (c2 << 2) | (c3 << 3);
+}
+# Packed extrema (SPRUFE8B MIN2, MAX2, MINU4, MAXU4). Sign-extend only
+# the signed halfword comparisons; preserve the original lane bits.
+# SEM: MIN2
+macro c6000_sem_min2(a, b, d) {
+  local al:4 = (a << 16) s>> 16;
+  local bl:4 = (b << 16) s>> 16;
+  local ah:4 = a s>> 16;
+  local bh:4 = b s>> 16;
+  local ml:4 = 0 - zext(al s< bl);
+  local mh:4 = 0 - zext(ah s< bh);
+  local lo:4 = ((a & ml) | (b & ~ml)) & 0xffff;
+  local hi:4 = (((a >> 16) & mh) | ((b >> 16) & ~mh)) & 0xffff;
+  d = lo | (hi << 16);
+}
+# SEM: MAX2
+macro c6000_sem_max2(a, b, d) {
+  local al:4 = (a << 16) s>> 16;
+  local bl:4 = (b << 16) s>> 16;
+  local ah:4 = a s>> 16;
+  local bh:4 = b s>> 16;
+  local ml:4 = 0 - zext(al s> bl);
+  local mh:4 = 0 - zext(ah s> bh);
+  local lo:4 = ((a & ml) | (b & ~ml)) & 0xffff;
+  local hi:4 = (((a >> 16) & mh) | ((b >> 16) & ~mh)) & 0xffff;
+  d = lo | (hi << 16);
+}
+# SEM: MINU4
+macro c6000_sem_minu4(a, b, d) {
+  local m0:4 = 0 - zext((a & 0xff) < (b & 0xff));
+  local m1:4 = 0 - zext(((a >> 8) & 0xff) < ((b >> 8) & 0xff));
+  local m2:4 = 0 - zext(((a >> 16) & 0xff) < ((b >> 16) & 0xff));
+  local m3:4 = 0 - zext((a >> 24) < (b >> 24));
+  local r0:4 = ((a & m0) | (b & ~m0)) & 0xff;
+  local r1:4 = (((a >> 8) & m1) | ((b >> 8) & ~m1)) & 0xff;
+  local r2:4 = (((a >> 16) & m2) | ((b >> 16) & ~m2)) & 0xff;
+  local r3:4 = (((a >> 24) & m3) | ((b >> 24) & ~m3)) & 0xff;
+  d = r0 | (r1 << 8) | (r2 << 16) | (r3 << 24);
+}
+# SEM: MAXU4
+macro c6000_sem_maxu4(a, b, d) {
+  local m0:4 = 0 - zext((a & 0xff) > (b & 0xff));
+  local m1:4 = 0 - zext(((a >> 8) & 0xff) > ((b >> 8) & 0xff));
+  local m2:4 = 0 - zext(((a >> 16) & 0xff) > ((b >> 16) & 0xff));
+  local m3:4 = 0 - zext((a >> 24) > (b >> 24));
+  local r0:4 = ((a & m0) | (b & ~m0)) & 0xff;
+  local r1:4 = (((a >> 8) & m1) | ((b >> 8) & ~m1)) & 0xff;
+  local r2:4 = (((a >> 16) & m2) | ((b >> 16) & ~m2)) & 0xff;
+  local r3:4 = (((a >> 24) & m3) | ((b >> 24) & ~m3)) & 0xff;
+  d = r0 | (r1 << 8) | (r2 << 16) | (r3 << 24);
+}
+# Rounded averages (SPRUFE8B AVG2 and AVGU4). Perform the extra-bit
+# addition before shifting so an input pair at its maximum cannot wrap.
+# SEM: AVG2
+macro c6000_sem_avg2(a, b, d) {
+  local al:4 = (a << 16) s>> 16;
+  local bl:4 = (b << 16) s>> 16;
+  local ah:4 = a s>> 16;
+  local bh:4 = b s>> 16;
+  local lo:4 = ((al + bl + 1) s>> 1) & 0xffff;
+  local hi:4 = ((ah + bh + 1) s>> 1) & 0xffff;
+  d = lo | (hi << 16);
+}
+# SEM: AVGU4
+macro c6000_sem_avgu4(a, b, d) {
+  local b0:4 = ((a & 0xff) + (b & 0xff) + 1) >> 1;
+  local b1:4 = (((a >> 8) & 0xff) + ((b >> 8) & 0xff) + 1) >> 1;
+  local b2:4 = (((a >> 16) & 0xff) + ((b >> 16) & 0xff) + 1) >> 1;
+  local b3:4 = ((a >> 24) + (b >> 24) + 1) >> 1;
+  d = b0 | (b1 << 8) | (b2 << 16) | (b3 << 24);
+}
+# SEM: SUBU
+macro c6000_sem_subu(a, b, d) {
+  local lhs:8 = zext(a);
+  local rhs:8 = zext(b);
+  # The long register stores a zero-extended signed 40-bit result.
+  d = (lhs - rhs) & 0xffffffffff;
+}
+# SEM: NORM
+macro c6000_sem_norm32(a, d) {
+  # Count redundant sign bits, excluding the sign bit itself.
+  if (a s< 0) goto <negative>;
+  d = lzcount(a) - 1;
+  goto <done>;
+  <negative> d = lzcount(~a) - 1;
+  <done>
+}
+macro c6000_sem_norm40(a, d) {
+  # A C6000 long occupies a register pair but is 40 bits wide.  Mask the
+  # unused upper 24 bits before counting.  Count the high eight and low 32
+  # bits separately: some p-code interpreters cap lzcount at its 32-bit
+  # result width even when the input has 64 bits.
+  local bits:8 = a & 0xffffffffff;
+  if ((bits & 0x8000000000) == 0) goto <positive>;
+  bits = (~bits) & 0xffffffffff;
+  <positive>
+  local upper:8 = bits >> 32;
+  local hi:4 = upper:4;
+  local lo:4 = bits:4;
+  if (hi == 0) goto <low>;
+  d = lzcount(hi) - 25;
+  goto <done>;
+  <low> d = lzcount(lo) + 7;
+  <done>
+}
+
+# Compact saturating arithmetic (SPRUFE8B Figures D-4, E-5, F-22, F-25,
+# F-26).  P-code records the final CSR.SAT value; the CPU's one-cycle-later
+# flag write belongs to the execute-packet/pipeline model.
+# SEM: SADD
+macro c6000_sem_sadd32(a, b, d) {
+  local x:8 = sext(a);
+  local y:8 = sext(b);
+  local result:8 = x + y;
+  if (result s> 0x7fffffff) goto <positive>;
+  if (result s< -0x80000000) goto <negative>;
+  d = result:4;
+  goto <done>;
+  <positive> d = 0x7fffffff;
+  CSR = CSR | 0x200;
+  goto <done>;
+  <negative> d = 0x80000000;
+  CSR = CSR | 0x200;
+  <done>
+}
+# SEM: SSUB
+macro c6000_sem_ssub32(a, b, d) {
+  local x:8 = sext(a);
+  local y:8 = sext(b);
+  local result:8 = x - y;
+  if (result s> 0x7fffffff) goto <positive>;
+  if (result s< -0x80000000) goto <negative>;
+  d = result:4;
+  goto <done>;
+  <positive> d = 0x7fffffff;
+  CSR = CSR | 0x200;
+  goto <done>;
+  <negative> d = 0x80000000;
+  CSR = CSR | 0x200;
+  <done>
+}
+macro c6000_sem_sadd40(a, b, d) {
+  local lhs:8 = sext(a);
+  local rhs:8 = (b << 24) s>> 24;
+  local result:8 = lhs + rhs;
+  if (result s> 0x7fffffffff) goto <positive>;
+  if (result s< -0x8000000000) goto <negative>;
+  d = result & 0xffffffffff;
+  goto <done>;
+  <positive> d = 0x7fffffffff;
+  CSR = CSR | 0x200;
+  goto <done>;
+  <negative> d = 0x8000000000;
+  CSR = CSR | 0x200;
+  <done>
+}
+macro c6000_sem_ssub40(a, b, d) {
+  local lhs:8 = sext(a);
+  local rhs:8 = (b << 24) s>> 24;
+  local result:8 = lhs - rhs;
+  if (result s> 0x7fffffffff) goto <positive>;
+  if (result s< -0x8000000000) goto <negative>;
+  d = result & 0xffffffffff;
+  goto <done>;
+  <positive> d = 0x7fffffffff;
+  CSR = CSR | 0x200;
+  goto <done>;
+  <negative> d = 0x8000000000;
+  CSR = CSR | 0x200;
+  <done>
+}
+macro c6000_sem_smpy16(a, b, d) {
+  local product:4 = a * b;
+  local shifted:4 = product << 1;
+  if (shifted == 0x80000000) goto <sat>;
+  d = shifted;
+  goto <done>;
+  <sat> d = 0x7fffffff;
+  CSR = CSR | 0x200;
+  <done>
+}
+# SEM: SMPY
+macro c6000_sem_smpy(a, b, d) {
+  local x:4 = (a << 16) s>> 16;
+  local y:4 = (b << 16) s>> 16;
+  c6000_sem_smpy16(x, y, d);
+}
+# SEM: SMPYH
+macro c6000_sem_smpyh(a, b, d) {
+  local x:4 = a s>> 16;
+  local y:4 = b s>> 16;
+  local shifted:4 = (x * y) << 1;
+  if (shifted == 0x80000000) goto <sat>;
+  d = shifted;
+  goto <done>;
+  <sat> d = 0x7fffffff;
+  CSR = CSR | 0x200;
+  <done>
+}
+# SEM: SMPYHL
+macro c6000_sem_smpyhl(a, b, d) {
+  local x:4 = a s>> 16;
+  local y:4 = (b << 16) s>> 16;
+  c6000_sem_smpy16(x, y, d);
+}
+# SEM: SMPYLH
+macro c6000_sem_smpylh(a, b, d) {
+  local x:4 = (a << 16) s>> 16;
+  local y:4 = b s>> 16;
+  c6000_sem_smpy16(x, y, d);
+}
+# SEM: SMPY2
+macro c6000_sem_smpy2(a, b, d) {
+  local a_lo:4 = (a << 16) s>> 16;
+  local b_lo:4 = (b << 16) s>> 16;
+  local a_hi:4 = a s>> 16;
+  local b_hi:4 = b s>> 16;
+  local low:4 = 0;
+  local high:4 = 0;
+  c6000_sem_smpy16(a_lo, b_lo, low);
+  c6000_sem_smpy16(a_hi, b_hi, high);
+  d = (zext(high) << 32) | zext(low);
+}
+macro c6000_sem_sshl32(v, c, d) {
+  local count:4 = c & 63;
+  if (count > 31) goto <large>;
+  local wide:8 = sext(v);
+  wide = wide << count;
+  if (wide s> 0x7fffffff) goto <positive>;
+  if (wide s< -0x80000000) goto <negative>;
+  d = wide:4;
+  goto <done>;
+  <large> if (v s> 0) goto <positive>;
+  if (v s< 0) goto <negative>;
+  d = 0;
+  goto <done>;
+  <positive> d = 0x7fffffff;
+  CSR = CSR | 0x200;
+  goto <done>;
+  <negative> d = 0x80000000;
+  CSR = CSR | 0x200;
+  <done>
+}
+# SEM: AND
+macro c6000_sem_and(a, b, d) { d = a & b; }
+# SEM: OR
+macro c6000_sem_or(a, b, d) { d = a | b; }
+# SEM: XOR
+macro c6000_sem_xor(a, b, d) { d = a ^ b; }
+# SEM: ANDN
+macro c6000_sem_andn(a, b, d) { d = a & (~b); }
+
+# SEM: NOT
+macro c6000_sem_not(a, d) { d = ~a; }
+# SEM: NEG
+macro c6000_sem_neg(a, d) { d = -a; }
+macro c6000_sem_neg40(a, d) { d = (-a) & 0xffffffffff; }
+# SEM: ABS
+macro c6000_sem_abs(a, d, ssr_bit) {
+  if (a == 0x80000000) goto <sat>;
+  if (a s< 0) goto <neg>;
+  d = a;
+  goto <done>;
+  <neg> d = -a;
+  goto <done>;
+  <sat> d = 0x7fffffff;
+  CSR = CSR | 0x200;
+  SSR = SSR | ssr_bit;
+  <done>
+}
+macro c6000_sem_abs40(a, d, ssr_bit) {
+  local value:8 = (a << 24) s>> 24;
+  if (value == -0x8000000000) goto <sat>;
+  if (value s< 0) goto <neg>;
+  d = value & 0xffffffffff;
+  goto <done>;
+  <neg> d = (-value) & 0xffffffffff;
+  goto <done>;
+  <sat> d = 0x7fffffffff;
+  CSR = CSR | 0x200;
+  SSR = SSR | ssr_bit;
+  <done>
+}
+# SEM: ABS2
+# Each halfword saturates independently. SPRUFE8B explicitly says CSR.SAT
+# is unaffected by this operation.
+macro c6000_sem_abs2(a, d) {
+  local lo:4 = a & 0xffff;
+  local hi:4 = (a >> 16) & 0xffff;
+  if (lo < 0x8000) goto <loReady>;
+  if (lo == 0x8000) goto <loSaturate>;
+  lo = 0x10000 - lo;
+  goto <loReady>;
+  <loSaturate> lo = 0x7fff;
+  <loReady>
+  if (hi < 0x8000) goto <hiReady>;
+  if (hi == 0x8000) goto <hiSaturate>;
+  hi = 0x10000 - hi;
+  goto <hiReady>;
+  <hiSaturate> hi = 0x7fff;
+  <hiReady> d = (hi << 16) | lo;
+}
+# SEM: BITC4
+macro c6000_sem_bitc4(a, d) {
+  local x:4 = a;
+  x = (x & 0x55555555) + ((x >> 1) & 0x55555555);
+  x = (x & 0x33333333) + ((x >> 2) & 0x33333333);
+  d = (x & 0x0f0f0f0f) + ((x >> 4) & 0x0f0f0f0f);
+}
+# SEM: BITR
+macro c6000_sem_bitr(a, d) {
+  local x:4 = a;
+  x = ((x & 0x55555555) << 1) | ((x >> 1) & 0x55555555);
+  x = ((x & 0x33333333) << 2) | ((x >> 2) & 0x33333333);
+  x = ((x & 0x0f0f0f0f) << 4) | ((x >> 4) & 0x0f0f0f0f);
+  x = ((x & 0x00ff00ff) << 8) | ((x >> 8) & 0x00ff00ff);
+  d = (x << 16) | (x >> 16);
+}
+# SEM: SHFL
+macro c6000_sem_shfl(a, d) {
+  local even:4 = a & 0xffff;
+  local odd:4 = (a >> 16) & 0xffff;
+  even = (even | (even << 8)) & 0x00ff00ff;
+  even = (even | (even << 4)) & 0x0f0f0f0f;
+  even = (even | (even << 2)) & 0x33333333;
+  even = (even | (even << 1)) & 0x55555555;
+  odd = (odd | (odd << 8)) & 0x00ff00ff;
+  odd = (odd | (odd << 4)) & 0x0f0f0f0f;
+  odd = (odd | (odd << 2)) & 0x33333333;
+  odd = (odd | (odd << 1)) & 0x55555555;
+  d = even | (odd << 1);
+}
+# SEM: DEAL
+macro c6000_sem_deal(a, d) {
+  local even:4 = a & 0x55555555;
+  local odd:4 = (a >> 1) & 0x55555555;
+  even = (even | (even >> 1)) & 0x33333333;
+  even = (even | (even >> 2)) & 0x0f0f0f0f;
+  even = (even | (even >> 4)) & 0x00ff00ff;
+  even = (even | (even >> 8)) & 0x0000ffff;
+  odd = (odd | (odd >> 1)) & 0x33333333;
+  odd = (odd | (odd >> 2)) & 0x0f0f0f0f;
+  odd = (odd | (odd >> 4)) & 0x00ff00ff;
+  odd = (odd | (odd >> 8)) & 0x0000ffff;
+  d = even | (odd << 16);
+}
+# SEM: SHFL3
+# src1 contributes two halfwords; src2 contributes its low halfword.
+macro c6000_sem_shfl3(a, b, d) {
+  local lane0:8 = zext(b & 0xffff);
+  local lane1:8 = zext(a & 0xffff);
+  local lane2:8 = zext(a >> 16);
+  local result:8 = 0;
+  local i:4 = 0;
+  <next>
+  if (i >= 16) goto <done>;
+  local shift:4 = i * 3;
+  result = result | (((lane0 >> i) & 1) << shift);
+  result = result | (((lane1 >> i) & 1) << (shift + 1));
+  result = result | (((lane2 >> i) & 1) << (shift + 2));
+  i = i + 1;
+  goto <next>;
+  <done> d = result;
+}
+# SEM: DPACK2
+macro c6000_sem_dpack2(a, b, d) {
+  local even:4 = ((a & 0xffff) << 16) | (b & 0xffff);
+  local odd:4 = (a & 0xffff0000) | ((b >> 16) & 0xffff);
+  d = (zext(odd) << 32) | zext(even);
+}
+# SEM: DPACKX2
+macro c6000_sem_dpackx2(a, b, d) {
+  local even:4 = ((a & 0xffff) << 16) | ((b >> 16) & 0xffff);
+  local odd:4 = ((b & 0xffff) << 16) | ((a >> 16) & 0xffff);
+  d = (zext(odd) << 32) | zext(even);
+}
+# SEM: RPACK2
+# The SPRUFE8B worked example prints FDBA for FEDCBA98 << 1, whereas its
+# Execution rule yields FDB9. Model the stated saturating-shift operation.
+macro c6000_sem_rpack2(a, b, d, ssr_bit) {
+  local x:8 = sext(a);
+  local y:8 = sext(b);
+  local sx:8 = x << 1;
+  local sy:8 = y << 1;
+  local saturated:1 = 0;
+  if (sx s> 0x7fffffff) goto <xPositive>;
+  if (sx s< -0x80000000) goto <xNegative>;
+  goto <xDone>;
+  <xPositive> sx = 0x7fffffff;
+  saturated = 1;
+  goto <xDone>;
+  <xNegative> sx = -0x80000000;
+  saturated = 1;
+  <xDone>
+  if (sy s> 0x7fffffff) goto <yPositive>;
+  if (sy s< -0x80000000) goto <yNegative>;
+  goto <yDone>;
+  <yPositive> sy = 0x7fffffff;
+  saturated = 1;
+  goto <yDone>;
+  <yNegative> sy = -0x80000000;
+  saturated = 1;
+  <yDone>
+  d = ((sx:4 & 0xffff0000) | ((sy:4 >> 16) & 0xffff));
+  if (saturated == 0) goto <done>;
+  CSR = CSR | 0x200;
+  SSR = SSR | ssr_bit;
+  <done>
+}
+# SEM: MPY2IR
+macro c6000_sem_mpy2ir(a, b, d, ssr_bit) {
+  local hi:8 = sext(a s>> 16);
+  local lo:8 = sext((a << 16) s>> 16);
+  local multiplier:8 = sext(b);
+  local oddWide:8 = (hi * multiplier + 0x4000) s>> 15;
+  local evenWide:8 = (lo * multiplier + 0x4000) s>> 15;
+  local odd:4 = oddWide:4;
+  local even:4 = evenWide:4;
+  local saturated:1 = 0;
+  if (b != 0x80000000) goto <pack>;
+  if ((a >> 16) != 0x8000) goto <lowCheck>;
+  odd = 0x7fffffff;
+  saturated = 1;
+  <lowCheck>
+  if ((a & 0xffff) != 0x8000) goto <pack>;
+  even = 0x7fffffff;
+  saturated = 1;
+  <pack>
+  d = (zext(odd) << 32) | zext(even);
+  if (saturated == 0) goto <done>;
+  CSR = CSR | 0x200;
+  SSR = SSR | ssr_bit;
+  <done>
+}
+# SEM: SMPY32
+macro c6000_sem_smpy32(a, b, d, ssr_bit) {
+  if (a != 0x80000000) goto <normal>;
+  if (b != 0x80000000) goto <normal>;
+  d = 0x7fffffff;
+  CSR = CSR | 0x200;
+  SSR = SSR | ssr_bit;
+  goto <done>;
+  <normal>
+  local product:8 = sext(a) * sext(b);
+  local shifted:8 = product << 1;
+  local upper:8 = shifted >> 32;
+  d = upper:4;
+  <done>
+}
+# SWE/SWENR raise EFR.SXF in E1 and clear NTSR.HWE. When GEE is set,
+# SWE saves context and branches to the ISTP NMI/exception vector; SWENR
+# leaves NTSR/NRP alone and branches to REP. This instruction-level model
+# uses inst_next for NRP, exact for a SWE that ends its execute packet.
+# A packet interpreter must compute the next execute-packet address when SWE
+# is issued in parallel with NOP and handle simultaneous exceptions.
+# SEM: SWE
+macro c6000_sem_swe() {
+  EFR = EFR | 1;
+  NTSR = NTSR & 0xfffeffff;
+  if ((TSR & 4) == 0) goto <done>;
+  NTSR = TSR & 0x0000ffff;
+  NRP = inst_next;
+  TSR = (TSR & 0x14) | 0x400;
+  local vector:4 = (ISTP & 0xfffffc00) + 0x20;
+  goto [vector];
+  <done>
+}
+# SEM: SWENR
+macro c6000_sem_swenr() {
+  EFR = EFR | 1;
+  NTSR = NTSR & 0xfffeffff;
+  TSR = TSR | 0x8000;
+  if ((TSR & 4) == 0) goto <done>;
+  TSR = (TSR & 0x14) | 0x400;
+  goto [REP];
+  <done>
+}
+# SEM: SAT
+# The long register stores a signed 40-bit value in a 64-bit pair.
+macro c6000_sem_sat(a, d, ssr_bit) {
+  local value:8 = (a << 24) s>> 24;
+  if (value s> 0x7fffffff) goto <positive>;
+  if (value s< -0x80000000) goto <negative>;
+  d = value:4;
+  goto <done>;
+  <positive> d = 0x7fffffff;
+  CSR = CSR | 0x200;
+  SSR = SSR | ssr_bit;
+  goto <done>;
+  <negative> d = 0x80000000;
+  CSR = CSR | 0x200;
+  SSR = SSR | ssr_bit;
+  <done>
+}
+# SEM: SWAP4
+macro c6000_sem_swap4(a, d) {
+  d = ((a & 0x00ff00ff) << 8) | ((a >> 8) & 0x00ff00ff);
+}
+# SEM: UNPKHU4
+macro c6000_sem_unpkhu4(a, d) {
+  d = ((a >> 8) & 0x00ff0000) | ((a >> 16) & 0xff);
+}
+# SEM: ABSDP
+macro c6000_sem_absdp(a, d, side) {
+  local raw:8 = a;
+  local exponent:8 = (raw >> 52) & 2047;
+  local fraction:8 = raw & 0xfffffffffffff;
+  local flags:4 = 0;
+  local sideShift:4 = side;
+  if (exponent == 2047) goto <special>;
+  if (exponent != 0) goto <normal>;
+  if (fraction == 0) goto <normal>;
+  d = 0;
+  flags = 0x88;
+  goto <done>;
+  <normal> d = raw & 0x7fffffffffffffff;
+  goto <done>;
+  <special>
+  if (fraction != 0) goto <nan>;
+  d = 0x7ff0000000000000;
+  flags = 0x20;
+  goto <done>;
+  <nan> d = 0x7fffffffffffffff;
+  flags = 2;
+  if ((fraction & 0x8000000000000) != 0) goto <done>;
+  flags = 0x12;
+  <done> FAUCR = FAUCR | (flags << sideShift);
+}
+
+# SEM: MV
+macro c6000_sem_mv(a, d) { d = a; }
+macro c6000_sem_mv40(a, d) { d = a & 0xffffffffff; }
+# SEM: MVD
+macro c6000_sem_mvd(a, d) { d = a; }
+# SEM: ZERO
+macro c6000_sem_zero(d) { d = 0; }
+
+# ---------------------------------------------------------------------------
+# Immediates - SPRUFE8B section 3.12, ADDK / MVK / MVKL / MVKH / ADDKPC.
+#
+# MVKH writes the high half; MVK/MVKL write the low half.  ADDKPC adds a
+# 7-bit signed constant, shifted left by two, to PCE1 (the address of the
+# first instruction of the containing fetch packet).
+# ---------------------------------------------------------------------------
+
+# SEM: ADDK
+macro c6000_sem_addk(v, d) { d = d + ((v << 16) s>> 16); }
+# SEM: MVK
+macro c6000_sem_mvk5(v, d) { d = (v << 27) s>> 27; }
+macro c6000_sem_mvk16(v, d) { d = (v << 16) s>> 16; }
+# SEM: MVKL
+macro c6000_sem_mvkl(v, d) { d = (v << 16) s>> 16; }
+# SEM: MVKH
+macro c6000_sem_mvkh(v, d) { d = (d & 0xffff) | (zext(v) << 16); }
+# SEM: ADDKPC
+macro c6000_sem_addkpc(v, d, n) { d = (inst_start & 0xffffffe0) + (v << 2); }
+
+# .D-unit address arithmetic - SPRUFE8B sections 3.9.1-3.9.2 and the
+# ADDAB/ADDAH/ADDAW/ADDAD and SUBAB/SUBAH/SUBAW execution blocks. The
+# long-immediate forms use B14/B15, which cannot have circular AMR modes.
+# SEM: ADDAB
+macro c6000_sem_addab(b, a, d) { d = b + a; }
+# SEM: ADDAH
+macro c6000_sem_addah(b, a, d) { d = b + (a << 1); }
+# SEM: ADDAW
+macro c6000_sem_addaw(b, a, d) { d = b + (a << 2); }
+# SEM: ADDAD
+macro c6000_sem_addad(b, a, d) { d = b + (a << 3); }
+# SEM: SUBAB
+macro c6000_sem_subab(b, a, d) { d = b - a; }
+# SEM: SUBAH
+macro c6000_sem_subah(b, a, d) { d = b - (a << 1); }
+# SEM: SUBAW
+macro c6000_sem_subaw(b, a, d) { d = b - (a << 2); }
+
+macro c6000_sem_addab_circ(b, a, d, index, side) {
+  c6000_wrap_address(b, a, index, side, d);
+}
+macro c6000_sem_addah_circ(b, a, d, index, side) {
+  c6000_wrap_address(b, a << 1, index, side, d);
+}
+macro c6000_sem_addaw_circ(b, a, d, index, side) {
+  c6000_wrap_address(b, a << 2, index, side, d);
+}
+macro c6000_sem_addad_circ(b, a, d, index, side) {
+  c6000_wrap_address(b, a << 3, index, side, d);
+}
+macro c6000_sem_subab_circ(b, a, d, index, side) {
+  c6000_wrap_address(b, 0 - a, index, side, d);
+}
+macro c6000_sem_subah_circ(b, a, d, index, side) {
+  c6000_wrap_address(b, 0 - (a << 1), index, side, d);
+}
+macro c6000_sem_subaw_circ(b, a, d, index, side) {
+  c6000_wrap_address(b, 0 - (a << 2), index, side, d);
+}
+
+# SEM: SUBC
+macro c6000_sem_subc(a, b, d) {
+  if (a < b) goto <less>;
+  d = ((a - b) << 1) + 1;
+  goto <done>;
+  <less> d = a << 1;
+  <done>
+}
+# SEM: ROTL
+macro c6000_sem_rotl(v, n, d) {
+  local count:4 = n & 31;
+  d = (v << count) | (v >> ((32 - count) & 31));
+}
+# SEM: LMBD
+macro c6000_sem_lmbd(bit, v, d) {
+  if ((bit & 1) == 0) goto <zeros>;
+  d = lzcount(v);
+  goto <done>;
+  <zeros> d = lzcount(~v);
+  <done>
+}
+
+# 16x16 integer multiplies and MPYLI - SPRUFE8B MPY, MPYU, MPYSU,
+# MPYUS and MPYLI execution blocks.  Signed five-bit constants are decoded
+# by SCst5 before reaching these macros.
+# SEM: MPY
+macro c6000_sem_mpy(a, b, d) {
+  local x:4 = (a << 16) s>> 16;
+  local y:4 = (b << 16) s>> 16;
+  d = x * y;
+}
+# SEM: MPYU
+macro c6000_sem_mpyu(a, b, d) { d = (a & 0xffff) * (b & 0xffff); }
+# SEM: MPYSU
+macro c6000_sem_mpysu(a, b, d) {
+  local x:4 = (a << 16) s>> 16;
+  d = x * (b & 0xffff);
+}
+# SEM: MPYUS
+macro c6000_sem_mpyus(a, b, d) {
+  local y:4 = (b << 16) s>> 16;
+  d = (a & 0xffff) * y;
+}
+# SEM: MPYLI
+macro c6000_sem_mpyli(a, b, d) {
+  local x:4 = (a << 16) s>> 16;
+  local x64:8 = sext(x);
+  local y64:8 = sext(b);
+  d = x64 * y64;
+}
+# SEM: MPYID
+macro c6000_sem_mpyid(a, b, d) {
+  local x:8 = sext(a);
+  local y:8 = sext(b);
+  d = x * y;
+}
+# SEM: MPYLHU
+macro c6000_sem_mpylhu(a, b, d) { d = (a & 0xffff) * (b >> 16); }
+# SEM: MPYHL
+macro c6000_sem_mpyhl(a, b, d) {
+  local y:4 = (b << 16) s>> 16;
+  d = (a s>> 16) * y;
+}
+# SEM: MPYH
+macro c6000_sem_mpyh(a, b, d) {
+  d = (a s>> 16) * (b s>> 16);
+}
+# SEM: MPYHI
+macro c6000_sem_mpyhi(a, b, d) {
+  local high:4 = a s>> 16;
+  local lhs:8 = sext(high);
+  local rhs:8 = sext(b);
+  d = lhs * rhs;
+}
+# SEM: MPYHSLU
+macro c6000_sem_mpyhslu(a, b, d) {
+  d = (a s>> 16) * (b & 0xffff);
+}
+# SEM: MPYHSU
+macro c6000_sem_mpyhsu(a, b, d) {
+  d = (a s>> 16) * (b >> 16);
+}
+# SEM: MPYHU
+macro c6000_sem_mpyhu(a, b, d) {
+  d = (a >> 16) * (b >> 16);
+}
+# SEM: MPYHULS
+macro c6000_sem_mpyhuls(a, b, d) {
+  local low:4 = (b << 16) s>> 16;
+  d = (a >> 16) * low;
+}
+# SEM: MPYHUS
+macro c6000_sem_mpyhus(a, b, d) {
+  d = (a >> 16) * (b s>> 16);
+}
+# SEM: MPYLSHU
+macro c6000_sem_mpylshu(a, b, d) {
+  local low:4 = (a << 16) s>> 16;
+  d = low * (b >> 16);
+}
+# SEM: MPYLUHS
+macro c6000_sem_mpyluhs(a, b, d) {
+  d = (a & 0xffff) * (b s>> 16);
+}
+# SEM: MPY2
+macro c6000_sem_mpy2(a, b, d) {
+  local low:4 = ((a << 16) s>> 16) * ((b << 16) s>> 16);
+  local high:4 = (a s>> 16) * (b s>> 16);
+  d = (zext(high) << 32) | zext(low);
+}
+# SEM: MPYSU4
+macro c6000_sem_mpysu4(a, b, d) {
+  local a0:4 = (a << 24) s>> 24;
+  local a1:4 = (a << 16) s>> 24;
+  local a2:4 = (a << 8) s>> 24;
+  local a3:4 = a s>> 24;
+  local p0:4 = (a0 * (b & 0xff)) & 0xffff;
+  local p1:4 = (a1 * ((b >> 8) & 0xff)) & 0xffff;
+  local p2:4 = (a2 * ((b >> 16) & 0xff)) & 0xffff;
+  local p3:4 = (a3 * (b >> 24)) & 0xffff;
+  d = zext(p0) | (zext(p1) << 16) | (zext(p2) << 32) | (zext(p3) << 48);
+}
+# SEM: MPYU4
+macro c6000_sem_mpyu4(a, b, d) {
+  local p0:4 = ((a & 0xff) * (b & 0xff)) & 0xffff;
+  local p1:4 = (((a >> 8) & 0xff) * ((b >> 8) & 0xff)) & 0xffff;
+  local p2:4 = (((a >> 16) & 0xff) * ((b >> 16) & 0xff)) & 0xffff;
+  local p3:4 = ((a >> 24) * (b >> 24)) & 0xffff;
+  d = zext(p0) | (zext(p1) << 16) | (zext(p2) << 32) | (zext(p3) << 48);
+}
+# SEM: DDOTP4
+macro c6000_sem_ddotp4(a, b, d) {
+  local a0:4 = (a << 16) s>> 16;
+  local a1:4 = a s>> 16;
+  local b0:4 = (b << 24) s>> 24;
+  local b1:4 = (b << 16) s>> 24;
+  local b2:4 = (b << 8) s>> 24;
+  local b3:4 = b s>> 24;
+  local even:4 = a1 * b1 + a0 * b0;
+  local odd:4 = a1 * b3 + a0 * b2;
+  d = (zext(odd) << 32) | zext(even);
+}
+# GFPGFR.SIZE encodes the field degree minus one; POLY is the low byte of
+# the reduction polynomial (SPRUFE8B sections 2.7 and 2.8.5).
+macro c6000_sem_gf8_step(x, y, mask, top, poly, product) {
+  if ((y & 1) == 0) goto <no_product>;
+  product = product ^ x;
+  <no_product>
+  local carry:1 = (x & top) != 0;
+  x = (x << 1) & mask;
+  if (carry == 0) goto <no_reduce>;
+  x = x ^ (poly & mask);
+  <no_reduce>
+  y = y >> 1;
+}
+macro c6000_sem_gf_mul8(a, b, poly, size, d) {
+  local bits:4 = (size & 7) + 1;
+  local mask:4 = (1 << bits) - 1;
+  local top:4 = 1 << (bits - 1);
+  local x:4 = a & mask;
+  local y:4 = b & mask;
+  local product:4 = 0;
+  c6000_sem_gf8_step(x, y, mask, top, poly, product);
+  c6000_sem_gf8_step(x, y, mask, top, poly, product);
+  c6000_sem_gf8_step(x, y, mask, top, poly, product);
+  c6000_sem_gf8_step(x, y, mask, top, poly, product);
+  c6000_sem_gf8_step(x, y, mask, top, poly, product);
+  c6000_sem_gf8_step(x, y, mask, top, poly, product);
+  c6000_sem_gf8_step(x, y, mask, top, poly, product);
+  c6000_sem_gf8_step(x, y, mask, top, poly, product);
+  d = product & mask;
+}
+# SEM: GMPY4
+macro c6000_sem_gmpy4(a, b, d) {
+  local size:4 = (GFPGFR >> 24) & 7;
+  local poly:4 = GFPGFR & 0xff;
+  local r0:4 = 0;
+  local r1:4 = 0;
+  local r2:4 = 0;
+  local r3:4 = 0;
+  c6000_sem_gf_mul8(a & 0xff, b & 0xff, poly, size, r0);
+  c6000_sem_gf_mul8((a >> 8) & 0xff, (b >> 8) & 0xff, poly, size, r1);
+  c6000_sem_gf_mul8((a >> 16) & 0xff, (b >> 16) & 0xff, poly, size, r2);
+  c6000_sem_gf_mul8(a >> 24, b >> 24, poly, size, r3);
+  d = r0 | (r1 << 8) | (r2 << 16) | (r3 << 24);
+}
+# GMPY/XORMPY use a nine-bit multiplier and reduce each left shift with
+# the selected 32-bit polynomial. SPRUFE8B GMPY and XORMPY execution blocks.
+macro c6000_sem_gmpy_poly(a, b, poly, d) {
+  local product:4 = 0;
+  local mask:4 = 0x100;
+  local count:4 = 0;
+  <next>
+  if (count >= 8) goto <last>;
+  if ((b & mask) == 0) goto <shift>;
+  product = product ^ a;
+  <shift>
+  mask = mask >> 1;
+  local carry:1 = (product & 0x80000000) != 0;
+  product = product << 1;
+  if (carry == 0) goto <continue>;
+  product = product ^ poly;
+  <continue>
+  count = count + 1;
+  goto <next>;
+  <last>
+  if ((b & 1) == 0) goto <done>;
+  product = product ^ a;
+  <done> d = product;
+}
+# SEM: GMPY
+macro c6000_sem_gmpy(a, b, d, side) {
+  local sideNum:4 = side;
+  local poly:4 = GPLYA;
+  if (sideNum == 1) goto <calculate>;
+  poly = GPLYB;
+  <calculate> c6000_sem_gmpy_poly(a, b, poly, d);
+}
+# SEM: XORMPY
+macro c6000_sem_xormpy(a, b, d) {
+  local zeroPoly:4 = 0;
+  c6000_sem_gmpy_poly(a, b, zeroPoly, d);
+}
+# The DDOTPH2/DDOTPL2 family reads adjacent 32-bit words as d3:d2:d1:d0.
+# Work in 64 bits so the two signed dot products and rounding bias cannot
+# overflow before the instruction's 32-bit saturation step.
+macro c6000_sem_ddot_h(a, b, odd, even) {
+  local upper:8 = a >> 32;
+  local odd_word:4 = upper:4;
+  local even_word:4 = a:4;
+  local d0:8 = sext((even_word << 16) s>> 16);
+  local d1:8 = sext(even_word s>> 16);
+  local d2:8 = sext((odd_word << 16) s>> 16);
+  local d3:8 = sext(odd_word s>> 16);
+  local c0:8 = sext((b << 16) s>> 16);
+  local c1:8 = sext(b s>> 16);
+  odd = d3 * c1 + d2 * c0;
+  even = d2 * c1 + d1 * c0;
+}
+macro c6000_sem_ddot_l(a, b, odd, even) {
+  local upper:8 = a >> 32;
+  local odd_word:4 = upper:4;
+  local even_word:4 = a:4;
+  local d0:8 = sext((even_word << 16) s>> 16);
+  local d1:8 = sext(even_word s>> 16);
+  local d2:8 = sext((odd_word << 16) s>> 16);
+  local c0:8 = sext((b << 16) s>> 16);
+  local c1:8 = sext(b s>> 16);
+  odd = d2 * c1 + d1 * c0;
+  even = d1 * c1 + d0 * c0;
+}
+macro c6000_sem_ddot_sat32(v, d, saturated) {
+  if (v s> 0x7fffffff) goto <positive>;
+  if (v s< -0x80000000) goto <negative>;
+  d = v:4;
+  goto <done>;
+  <positive> d = 0x7fffffff;
+  saturated = 1;
+  goto <done>;
+  <negative> d = 0x80000000;
+  saturated = 1;
+  <done>
+}
+# SEM: DDOTPH2
+macro c6000_sem_ddotph2(a, b, d, ssr_bit) {
+  local odd_wide:8 = 0;
+  local even_wide:8 = 0;
+  local odd:4 = 0;
+  local even:4 = 0;
+  local saturated:1 = 0;
+  c6000_sem_ddot_h(a, b, odd_wide, even_wide);
+  c6000_sem_ddot_sat32(odd_wide, odd, saturated);
+  c6000_sem_ddot_sat32(even_wide, even, saturated);
+  d = (zext(odd) << 32) | zext(even);
+  if (saturated == 0) goto <done>;
+  CSR = CSR | 0x200;
+  SSR = SSR | ssr_bit;
+  <done>
+}
+# SEM: DDOTPL2
+macro c6000_sem_ddotpl2(a, b, d, ssr_bit) {
+  local odd_wide:8 = 0;
+  local even_wide:8 = 0;
+  local odd:4 = 0;
+  local even:4 = 0;
+  local saturated:1 = 0;
+  c6000_sem_ddot_l(a, b, odd_wide, even_wide);
+  c6000_sem_ddot_sat32(odd_wide, odd, saturated);
+  c6000_sem_ddot_sat32(even_wide, even, saturated);
+  d = (zext(odd) << 32) | zext(even);
+  if (saturated == 0) goto <done>;
+  CSR = CSR | 0x200;
+  SSR = SSR | ssr_bit;
+  <done>
+}
+# SEM: DDOTPH2R
+macro c6000_sem_ddotph2r(a, b, d, ssr_bit) {
+  local odd_wide:8 = 0;
+  local even_wide:8 = 0;
+  local odd:4 = 0;
+  local even:4 = 0;
+  local saturated:1 = 0;
+  c6000_sem_ddot_h(a, b, odd_wide, even_wide);
+  c6000_sem_ddot_sat32(odd_wide + 0x8000, odd, saturated);
+  c6000_sem_ddot_sat32(even_wide + 0x8000, even, saturated);
+  d = (odd & 0xffff0000) | (even >> 16);
+  if (saturated == 0) goto <done>;
+  CSR = CSR | 0x200;
+  SSR = SSR | ssr_bit;
+  <done>
+}
+# SEM: DDOTPL2R
+macro c6000_sem_ddotpl2r(a, b, d, ssr_bit) {
+  local odd_wide:8 = 0;
+  local even_wide:8 = 0;
+  local odd:4 = 0;
+  local even:4 = 0;
+  local saturated:1 = 0;
+  c6000_sem_ddot_l(a, b, odd_wide, even_wide);
+  c6000_sem_ddot_sat32(odd_wide + 0x8000, odd, saturated);
+  c6000_sem_ddot_sat32(even_wide + 0x8000, even, saturated);
+  d = (odd & 0xffff0000) | (even >> 16);
+  if (saturated == 0) goto <done>;
+  CSR = CSR | 0x200;
+  SSR = SSR | ssr_bit;
+  <done>
+}
+macro c6000_sem_cmpy_raw(a, b, real_wide, imag_wide) {
+  local ah:8 = sext(a s>> 16);
+  local bh:8 = sext(b s>> 16);
+  local al32:4 = (a << 16) s>> 16;
+  local bl32:4 = (b << 16) s>> 16;
+  local al:8 = sext(al32);
+  local bl:8 = sext(bl32);
+  real_wide = ah * bh - al * bl;
+  imag_wide = al * bh + ah * bl;
+}
+# SEM: CMPY
+# SPRUFE8B's third example marks CSR/SSR unchanged for the all-0x8000
+# overflow case, contrary to both its own description and the general SSR
+# rule. Model the stated saturation rule; the example still fixes the result.
+macro c6000_sem_cmpy(a, b, d, ssr_bit) {
+  local real_wide:8 = 0;
+  local imag_wide:8 = 0;
+  c6000_sem_cmpy_raw(a, b, real_wide, imag_wide);
+  local real:4 = real_wide:4;
+  local imag:4 = 0;
+  local saturated:1 = 0;
+  c6000_sem_ddot_sat32(imag_wide, imag, saturated);
+  d = (zext(real) << 32) | zext(imag);
+  if (saturated == 0) goto <done>;
+  CSR = CSR | 0x200;
+  SSR = SSR | ssr_bit;
+  <done>
+}
+# SEM: CMPYR
+macro c6000_sem_cmpyr(a, b, d, ssr_bit) {
+  local real_wide:8 = 0;
+  local imag_wide:8 = 0;
+  local real_tmp:4 = 0;
+  local imag_tmp:4 = 0;
+  local real_rounded:4 = 0;
+  local imag_rounded:4 = 0;
+  local saturated:1 = 0;
+  c6000_sem_cmpy_raw(a, b, real_wide, imag_wide);
+  c6000_sem_ddot_sat32(real_wide, real_tmp, saturated);
+  c6000_sem_ddot_sat32(imag_wide, imag_tmp, saturated);
+  local real_extended:8 = sext(real_tmp);
+  local imag_extended:8 = sext(imag_tmp);
+  local real_biased:8 = real_extended + 0x8000;
+  local imag_biased:8 = imag_extended + 0x8000;
+  c6000_sem_ddot_sat32(real_biased, real_rounded, saturated);
+  c6000_sem_ddot_sat32(imag_biased, imag_rounded, saturated);
+  d = (real_rounded & 0xffff0000) | (imag_rounded >> 16);
+  if (saturated == 0) goto <done>;
+  CSR = CSR | 0x200;
+  SSR = SSR | ssr_bit;
+  <done>
+}
+# SEM: CMPYR1
+# The printed execution line uses tmp_e for both halves; the description and
+# examples require the real tmp_o result for the upper half.
+macro c6000_sem_cmpyr1(a, b, d, ssr_bit) {
+  local real_wide:8 = 0;
+  local imag_wide:8 = 0;
+  local real_tmp:4 = 0;
+  local imag_tmp:4 = 0;
+  local real_rounded:4 = 0;
+  local imag_rounded:4 = 0;
+  local saturated:1 = 0;
+  c6000_sem_cmpy_raw(a, b, real_wide, imag_wide);
+  c6000_sem_ddot_sat32(real_wide, real_tmp, saturated);
+  c6000_sem_ddot_sat32(imag_wide, imag_tmp, saturated);
+  local real_extended:8 = sext(real_tmp);
+  local imag_extended:8 = sext(imag_tmp);
+  local real_biased:8 = (real_extended + 0x4000) << 1;
+  local imag_biased:8 = (imag_extended + 0x4000) << 1;
+  c6000_sem_ddot_sat32(real_biased, real_rounded, saturated);
+  c6000_sem_ddot_sat32(imag_biased, imag_rounded, saturated);
+  d = (real_rounded & 0xffff0000) | (imag_rounded >> 16);
+  if (saturated == 0) goto <done>;
+  CSR = CSR | 0x200;
+  SSR = SSR | ssr_bit;
+  <done>
+}
+# SEM: MPYHLU
+macro c6000_sem_mpyhlu(a, b, d) { d = (a >> 16) * (b & 0xffff); }
+# SEM: MPYHIR
+macro c6000_sem_mpyhir(a, b, d) {
+  local half:8 = sext(a s>> 16);
+  local word:8 = sext(b);
+  local rounded:8 = ((half * word) + 0x4000) s>> 15;
+  d = rounded:4;
+}
+# SEM: MPYLIR
+macro c6000_sem_mpyilr(word, half_source, d) {
+  local half:8 = sext((half_source << 16) s>> 16);
+  local signed_word:8 = sext(word);
+  local rounded:8 = ((half * signed_word) + 0x4000) s>> 15;
+  d = rounded:4;
+}
+macro c6000_sem_mpylir(half_source, word, d) {
+  c6000_sem_mpyilr(word, half_source, d);
+}
+# SEM: MPYLH
+macro c6000_sem_mpylh(a, b, d) {
+  local x:4 = (a << 16) s>> 16;
+  d = x * (b s>> 16);
+}
+# SEM: MPY32
+macro c6000_sem_mpy32_32(a, b, d) { d = a * b; }
+macro c6000_sem_mpy32_64(a, b, d) {
+  local x:8 = sext(a);
+  local y:8 = sext(b);
+  d = x * y;
+}
+# SEM: MPY32U
+macro c6000_sem_mpy32u(a, b, d) {
+  local x:8 = zext(a);
+  local y:8 = zext(b);
+  d = x * y;
+}
+# SEM: MPY32SU
+macro c6000_sem_mpy32su(a, b, d) {
+  local x:8 = sext(a);
+  local y:8 = zext(b);
+  d = x * y;
+}
+# SEM: MPY32US
+macro c6000_sem_mpy32us(a, b, d) {
+  local x:8 = zext(a);
+  local y:8 = sext(b);
+  d = x * y;
+}
+# SEM: MPYI
+macro c6000_sem_mpyi(a, b, d) { d = a * b; }
+
+# Packed dot products (SPRUFE8B DOTP2, DOTPN2, DOTPSU4, DOTPU4).
+# SEM: DOTP2
+macro c6000_sem_dotp2_32(a, b, d) {
+  local a_lo:4 = (a << 16) s>> 16;
+  local b_lo:4 = (b << 16) s>> 16;
+  d = (a s>> 16) * (b s>> 16) + a_lo * b_lo;
+}
+macro c6000_sem_dotp2_64(a, b, d) {
+  local a_hi:8 = sext(a s>> 16);
+  local b_hi:8 = sext(b s>> 16);
+  local a_low:4 = (a << 16) s>> 16;
+  local b_low:4 = (b << 16) s>> 16;
+  local a_lo:8 = sext(a_low);
+  local b_lo:8 = sext(b_low);
+  d = a_hi * b_hi + a_lo * b_lo;
+}
+# SEM: DOTPN2
+macro c6000_sem_dotpn2(a, b, d) {
+  local a_lo:4 = (a << 16) s>> 16;
+  local b_lo:4 = (b << 16) s>> 16;
+  d = (a s>> 16) * (b s>> 16) - a_lo * b_lo;
+}
+# SEM: DOTPNRSU2
+macro c6000_sem_dotpnrsu2(a, b, d) {
+  local a_hi:8 = sext(a s>> 16);
+  local b_hi:8 = zext(b >> 16);
+  local a_low:4 = (a << 16) s>> 16;
+  local a_lo:8 = sext(a_low);
+  local b_lo:8 = zext(b & 0xffff);
+  local result:8 = a_hi * b_hi - a_lo * b_lo + 0x8000;
+  local shifted:8 = result s>> 16;
+  d = shifted:4;
+}
+# SEM: DOTPRSU2
+macro c6000_sem_dotprsu2(a, b, d) {
+  local a_hi:8 = sext(a s>> 16);
+  local b_hi:8 = zext(b >> 16);
+  local a_low:4 = (a << 16) s>> 16;
+  local a_lo:8 = sext(a_low);
+  local b_lo:8 = zext(b & 0xffff);
+  local result:8 = a_hi * b_hi + a_lo * b_lo + 0x8000;
+  local shifted:8 = result s>> 16;
+  d = shifted:4;
+}
+# SEM: DOTPSU4
+macro c6000_sem_dotpsu4(a, b, d) {
+  local a0:4 = (a << 24) s>> 24;
+  local a1:4 = (a << 16) s>> 24;
+  local a2:4 = (a << 8) s>> 24;
+  local a3:4 = a s>> 24;
+  d = a0 * (b & 0xff) + a1 * ((b >> 8) & 0xff) +
+      a2 * ((b >> 16) & 0xff) + a3 * (b >> 24);
+}
+# SEM: DOTPU4
+macro c6000_sem_dotpu4(a, b, d) {
+  d = (a & 0xff) * (b & 0xff) +
+      ((a >> 8) & 0xff) * ((b >> 8) & 0xff) +
+      ((a >> 16) & 0xff) * ((b >> 16) & 0xff) +
+      (a >> 24) * (b >> 24);
+}
+# SEM: PACK2
+macro c6000_sem_pack2(a, b, d) { d = ((a & 0xffff) << 16) | (b & 0xffff); }
+# SEM: PACKH2
+macro c6000_sem_packh2(a, b, d) {
+  d = (a & 0xffff0000) | ((b >> 16) & 0xffff);
+}
+# SEM: PACKH4
+macro c6000_sem_packh4(a, b, d) {
+  d = (a & 0xff000000) | ((a & 0xff00) << 8) |
+      ((b >> 16) & 0xff00) | ((b >> 8) & 0xff);
+}
+# SEM: PACKHL2
+macro c6000_sem_packhl2(a, b, d) {
+  d = (a & 0xffff0000) | (b & 0xffff);
+}
+# SEM: PACKLH2
+macro c6000_sem_packlh2(a, b, d) {
+  d = (a << 16) | (b >> 16);
+}
+# Packed saturation helpers clamp lanes independently and leave CSR.SAT unchanged.
+macro c6000_sem_clamp_s16(v, d) {
+  d = v;
+  if (v s> 0x7fff) goto <positive>;
+  if (v s< -0x8000) goto <negative>;
+  goto <done>;
+  <positive> d = 0x7fff;
+  goto <done>;
+  <negative> d = 0x8000;
+  <done>
+}
+macro c6000_sem_clamp_u8(v, d) {
+  d = v;
+  if (v s< 0) goto <negative>;
+  if (v s> 0xff) goto <positive>;
+  goto <done>;
+  <positive> d = 0xff;
+  goto <done>;
+  <negative> d = 0;
+  <done>
+}
+macro c6000_sem_clamp_u16(v, d) {
+  d = v;
+  if (v s< 0) goto <negative>;
+  if (v s> 0xffff) goto <positive>;
+  goto <done>;
+  <positive> d = 0xffff;
+  goto <done>;
+  <negative> d = 0;
+  <done>
+}
+# SEM: SADD2
+macro c6000_sem_sadd2(a, b, d) {
+  local hi:4 = (a s>> 16) + (b s>> 16);
+  local lo:4 = ((a << 16) s>> 16) + ((b << 16) s>> 16);
+  c6000_sem_clamp_s16(hi, hi);
+  c6000_sem_clamp_s16(lo, lo);
+  d = ((hi & 0xffff) << 16) | (lo & 0xffff);
+}
+# SEM: SADDSUB
+macro c6000_sem_saddsub(a, b, d, ssr_bit) {
+  local lhs:8 = sext(a);
+  local rhs:8 = sext(b);
+  local sum:8 = lhs + rhs;
+  local difference:8 = lhs - rhs;
+  local odd:4 = sum:4;
+  local even:4 = difference:4;
+  local saturated:1 = 0;
+  if (sum s> 0x7fffffff) goto <sum_positive>;
+  if (sum s< -0x80000000) goto <sum_negative>;
+  goto <sum_done>;
+  <sum_positive> odd = 0x7fffffff;
+  saturated = 1;
+  goto <sum_done>;
+  <sum_negative> odd = 0x80000000;
+  saturated = 1;
+  <sum_done>
+  if (difference s> 0x7fffffff) goto <difference_positive>;
+  if (difference s< -0x80000000) goto <difference_negative>;
+  goto <difference_done>;
+  <difference_positive> even = 0x7fffffff;
+  saturated = 1;
+  goto <difference_done>;
+  <difference_negative> even = 0x80000000;
+  saturated = 1;
+  <difference_done>
+  d = (zext(odd) << 32) | zext(even);
+  if (saturated == 0) goto <done>;
+  CSR = CSR | 0x200;
+  SSR = SSR | ssr_bit;
+  <done>
+}
+# SEM: SADDUS2
+macro c6000_sem_saddus2(a, b, d) {
+  local hi:4 = (a >> 16) + (b s>> 16);
+  local lo:4 = (a & 0xffff) + ((b << 16) s>> 16);
+  c6000_sem_clamp_u16(hi, hi);
+  c6000_sem_clamp_u16(lo, lo);
+  d = ((hi & 0xffff) << 16) | (lo & 0xffff);
+}
+# SEM: SADDU4
+macro c6000_sem_saddu4(a, b, d) {
+  local r0:4 = (a & 0xff) + (b & 0xff);
+  local r1:4 = ((a >> 8) & 0xff) + ((b >> 8) & 0xff);
+  local r2:4 = ((a >> 16) & 0xff) + ((b >> 16) & 0xff);
+  local r3:4 = (a >> 24) + (b >> 24);
+  c6000_sem_clamp_u8(r0, r0);
+  c6000_sem_clamp_u8(r1, r1);
+  c6000_sem_clamp_u8(r2, r2);
+  c6000_sem_clamp_u8(r3, r3);
+  d = r0 | (r1 << 8) | (r2 << 16) | (r3 << 24);
+}
+# SEM: SSUB2
+macro c6000_sem_ssub2(a, b, d) {
+  local hi:4 = (a s>> 16) - (b s>> 16);
+  local lo:4 = ((a << 16) s>> 16) - ((b << 16) s>> 16);
+  c6000_sem_clamp_s16(hi, hi);
+  c6000_sem_clamp_s16(lo, lo);
+  d = ((hi & 0xffff) << 16) | (lo & 0xffff);
+}
+# SEM: SADDSUB2
+macro c6000_sem_saddsub2(a, b, d) {
+  local sum:4 = 0;
+  local difference:4 = 0;
+  c6000_sem_sadd2(a, b, sum);
+  c6000_sem_ssub2(a, b, difference);
+  d = (zext(sum) << 32) | zext(difference);
+}
+macro c6000_sem_absdiff8(a, b, d) {
+  d = a - b;
+  if (d s< 0) goto <negative>;
+  goto <done>;
+  <negative> d = -d;
+  <done>
+}
+# SEM: SUBABS4
+macro c6000_sem_subabs4(a, b, d) {
+  local r0:4 = 0;
+  local r1:4 = 0;
+  local r2:4 = 0;
+  local r3:4 = 0;
+  c6000_sem_absdiff8(a & 0xff, b & 0xff, r0);
+  c6000_sem_absdiff8((a >> 8) & 0xff, (b >> 8) & 0xff, r1);
+  c6000_sem_absdiff8((a >> 16) & 0xff, (b >> 16) & 0xff, r2);
+  c6000_sem_absdiff8(a >> 24, b >> 24, r3);
+  d = r0 | (r1 << 8) | (r2 << 16) | (r3 << 24);
+}
+# SEM: SPACK2
+macro c6000_sem_spack2(a, b, d) {
+  local high:4 = 0;
+  local low:4 = 0;
+  c6000_sem_clamp_s16(a, high);
+  c6000_sem_clamp_s16(b, low);
+  d = ((high & 0xffff) << 16) | (low & 0xffff);
+}
+# SEM: SPACKU4
+macro c6000_sem_spacku4(a, b, d) {
+  local a_hi:4 = a s>> 16;
+  local a_lo:4 = (a << 16) s>> 16;
+  local b_hi:4 = b s>> 16;
+  local b_lo:4 = (b << 16) s>> 16;
+  local r3:4 = 0;
+  local r2:4 = 0;
+  local r1:4 = 0;
+  local r0:4 = 0;
+  c6000_sem_clamp_u8(a_hi, r3);
+  c6000_sem_clamp_u8(a_lo, r2);
+  c6000_sem_clamp_u8(b_hi, r1);
+  c6000_sem_clamp_u8(b_lo, r0);
+  d = (r3 << 24) | (r2 << 16) | (r1 << 8) | r0;
+}
+# SEM: PACKL4
+macro c6000_sem_packl4(a, b, d) {
+  d = ((a & 0x00ff0000) << 8) | ((a & 0xff) << 16) |
+      ((b & 0x00ff0000) >> 8) | (b & 0xff);
+}
+# SEM: UNPKLU4
+macro c6000_sem_unpklu4(v, d) { d = ((v & 0xff00) << 8) | (v & 0xff); }
+# SEM: XPND2
+macro c6000_sem_xpnd2(v, d) {
+  local lo:4 = (0 - (v & 1)) & 0xffff;
+  local hi:4 = (0 - ((v >> 1) & 1)) & 0xffff;
+  d = (hi << 16) | lo;
+}
+# SEM: XPND4
+macro c6000_sem_xpnd4(v, d) {
+  local b0:4 = (0 - (v & 1)) & 0xff;
+  local b1:4 = (0 - ((v >> 1) & 1)) & 0xff;
+  local b2:4 = (0 - ((v >> 2) & 1)) & 0xff;
+  local b3:4 = (0 - ((v >> 3) & 1)) & 0xff;
+  d = (b3 << 24) | (b2 << 16) | (b1 << 8) | b0;
+}
+
+# ---------------------------------------------------------------------------
+# Bit-field operations - SPRUFE8B CLR, EXT, EXTU and SET descriptions.
+# The register forms pack csta in src1[9:5] and cstb in src1[4:0].
+# The manual declares register-form results invalid when src1[31:10] != 0;
+# p-code uses the specified low ten bits in that case.
+# ---------------------------------------------------------------------------
+
+# SEM: CLR
+macro c6000_sem_clr(s, a, b, d) {
+  if (b < a) goto <copy>;
+  local mask:4 = (0xffffffff >> (31 - (b - a))) << a;
+  d = s & (~mask);
+  goto <done>;
+  <copy> d = s;
+  <done>
+}
+macro c6000_sem_clr_r(s, v, d) {
+  local a:4 = (v >> 5) & 31;
+  local b:4 = v & 31;
+  c6000_sem_clr(s, a, b, d);
+}
+
+# SEM: EXT
+macro c6000_sem_ext(s, a, b, d) { d = (s << a) s>> b; }
+macro c6000_sem_ext_r(s, v, d) {
+  local a:4 = (v >> 5) & 31;
+  local b:4 = v & 31;
+  c6000_sem_ext(s, a, b, d);
+}
+
+# SEM: EXTU
+macro c6000_sem_extu(s, a, b, d) { d = (s << a) >> b; }
+macro c6000_sem_extu_r(s, v, d) {
+  local a:4 = (v >> 5) & 31;
+  local b:4 = v & 31;
+  c6000_sem_extu(s, a, b, d);
+}
+
+# SEM: SET
+macro c6000_sem_set(s, a, b, d) {
+  if (b < a) goto <copy>;
+  local mask:4 = (0xffffffff >> (31 - (b - a))) << a;
+  d = s | mask;
+  goto <done>;
+  <copy> d = s;
+  <done>
+}
+macro c6000_sem_set_r(s, v, d) {
+  local a:4 = (v >> 5) & 31;
+  local b:4 = v & 31;
+  c6000_sem_set(s, a, b, d);
+}
+
+# ---------------------------------------------------------------------------
+# Single-precision floating point and integer conversions - SPRUFE8B
+# section 3.12. These operate on one 32-bit register per operand. Double-
+# precision instructions use register pairs.
+# ---------------------------------------------------------------------------
+
+# SEM: ABSSP
+macro c6000_sem_abssp(a, d, side) {
+  local raw:4 = a;
+  local exponent:4 = (raw >> 23) & 255;
+  local fraction:4 = raw & 0x7fffff;
+  local flags:4 = 0;
+  local sideShift:4 = side;
+  if (exponent == 255) goto <special>;
+  if (exponent != 0) goto <normal>;
+  if (fraction == 0) goto <normal>;
+  d = 0;
+  flags = 0x88; # INEX | DEN2
+  goto <done>;
+  <normal> d = raw & 0x7fffffff;
+  goto <done>;
+  <special>
+  if (fraction != 0) goto <nan>;
+  d = 0x7f800000;
+  flags = 0x20; # INFO
+  goto <done>;
+  <nan> d = 0x7fffffff;
+  flags = 2; # NAN2
+  if ((fraction & 0x400000) != 0) goto <done>;
+  flags = 0x12; # INVAL | NAN2
+  <done> FAUCR = FAUCR | (flags << sideShift);
+}
+# Round a finite quad-precision intermediate to a C6000 DP result.  A quad
+# significand retains the exact product of two DP significands and all but
+# the most widely separated DP additions; the add/sub caller handles those.
+macro c6000_sem_round_qp_to_dp(exact, d, mode, flags) {
+  local zeroDP:8 = 0;
+  local zeroQP:16 = float2float(zeroDP);
+  local high:16 = exact >> 64;
+  local sign:8 = high:8 & 0x8000000000000000;
+  local magnitude:16 = exact;
+  local roundMode:4 = mode;
+  if (sign == 0) goto <bounds>;
+  magnitude = zeroQP f- exact;
+  <bounds>
+  local maxDP:8 = 0x7fefffffffffffff;
+  local minDP:8 = 0x0010000000000000;
+  local maxQP:16 = float2float(maxDP);
+  local minQP:16 = float2float(minDP);
+  if (magnitude f> maxQP) goto <overflow>;
+  if (magnitude f< minQP && magnitude f!= zeroQP) goto <underflow>;
+  d = float2float(exact);
+  local rounded:16 = float2float(d);
+  if (rounded f== exact) goto <done>;
+  flags = flags | 0x80;
+  if (roundMode == 0) goto <done>;
+  if (roundMode == 1) goto <towardZero>;
+  if (roundMode == 2) goto <towardPositive>;
+  if (rounded f> exact) goto <stepNegative>;
+  goto <done>;
+  <towardZero>
+  if (sign == 0) goto <zeroPositive>;
+  if (rounded f< exact) goto <stepPositive>;
+  goto <done>;
+  <zeroPositive>
+  if (rounded f> exact) goto <stepNegative>;
+  goto <done>;
+  <towardPositive>
+  if (rounded f< exact) goto <stepPositive>;
+  goto <done>;
+  <stepPositive>
+  if (sign == 0) goto <increment>;
+  goto <decrement>;
+  <stepNegative>
+  if (sign == 0) goto <decrement>;
+  <increment> d = d + 1;
+  goto <done>;
+  <decrement> d = d - 1;
+  goto <done>;
+  <overflow>
+  flags = flags | 0xc0;
+  d = sign | 0x7ff0000000000000;
+  if (roundMode == 1) goto <largest>;
+  if (roundMode == 2 && sign != 0) goto <largest>;
+  if (roundMode == 3 && sign == 0) goto <largest>;
+  goto <done>;
+  <largest> d = sign | 0x7fefffffffffffff;
+  goto <done>;
+  <underflow>
+  flags = flags | 0x180;
+  d = sign;
+  if (roundMode == 2 && sign == 0) goto <smallest>;
+  if (roundMode == 3 && sign != 0) goto <smallest>;
+  goto <done>;
+  <smallest> d = sign | 0x0010000000000000;
+  <done>
+}
+# SEM: ADDDP
+# SEM: SUBDP
+# a and b are the encoded source ports.  Reverse SUBDP forms compute b-a.
+macro c6000_sem_addsub_dp(a, b, d, side, subtract, reverse) {
+  local aRaw:8 = a;
+  local bRaw:8 = b;
+  local aExp:8 = (aRaw >> 52) & 2047;
+  local bExp:8 = (bRaw >> 52) & 2047;
+  local aFrac:8 = aRaw & 0xfffffffffffff;
+  local bFrac:8 = bRaw & 0xfffffffffffff;
+  local aClean:8 = aRaw;
+  local bClean:8 = bRaw;
+  local flags:4 = 0;
+  local sideShift:4 = side;
+  local roundMode:4 = (FADCR >> (9 + sideShift)) & 3;
+  local subtracting:4 = subtract;
+  local reversed:4 = reverse;
+  if (aExp == 2047 && aFrac != 0) goto <aNaN>;
+  if (aExp == 0 && aFrac != 0) goto <aDenormal>;
+  goto <classifyB>;
+  <aNaN> flags = flags | 1;
+  if ((aFrac & 0x8000000000000) != 0) goto <classifyB>;
+  flags = flags | 0x10;
+  goto <classifyB>;
+  <aDenormal> flags = flags | 4;
+  aClean = aRaw & 0x8000000000000000;
+  <classifyB>
+  if (bExp == 2047 && bFrac != 0) goto <bNaN>;
+  if (bExp == 0 && bFrac != 0) goto <bDenormal>;
+  goto <prepare>;
+  <bNaN> flags = flags | 2;
+  if ((bFrac & 0x8000000000000) != 0) goto <prepare>;
+  flags = flags | 0x10;
+  goto <prepare>;
+  <bDenormal> flags = flags | 8;
+  bClean = bRaw & 0x8000000000000000;
+  <prepare>
+  if ((flags & 4) != 0 && bExp != 2047) goto <aInexact>;
+  goto <checkBInexact>;
+  <aInexact> flags = flags | 0x80;
+  <checkBInexact>
+  if ((flags & 8) != 0 && aExp != 2047) goto <bInexact>;
+  goto <checkNaN>;
+  <bInexact> flags = flags | 0x80;
+  <checkNaN>
+  if ((flags & 3) != 0) goto <nan>;
+  local leftRaw:8 = aClean;
+  local rightRaw:8 = bClean;
+  if (reversed == 0) goto <direction>;
+  leftRaw = bClean;
+  rightRaw = aClean;
+  <direction>
+  if (subtracting == 0) goto <special>;
+  rightRaw = rightRaw ^ 0x8000000000000000;
+  <special>
+  local leftExp:8 = (leftRaw >> 52) & 2047;
+  local rightExp:8 = (rightRaw >> 52) & 2047;
+  if (leftExp == 2047) goto <leftInfinity>;
+  if (rightExp == 2047) goto <rightInfinity>;
+  if ((leftRaw & 0x7fffffffffffffff) != 0) goto <finite>;
+  if ((rightRaw & 0x7fffffffffffffff) != 0) goto <finite>;
+  if (((leftRaw ^ rightRaw) & 0x8000000000000000) != 0) goto <oppositeZero>;
+  d = leftRaw & 0x8000000000000000;
+  goto <done>;
+  <oppositeZero> d = 0;
+  if (roundMode == 3) goto <negativeZero>;
+  goto <done>;
+  <negativeZero> d = 0x8000000000000000;
+  goto <done>;
+  <leftInfinity>
+  if (rightExp != 2047) goto <leftInfiniteResult>;
+  if (((leftRaw ^ rightRaw) & 0x8000000000000000) != 0) goto <invalid>;
+  <leftInfiniteResult> d = leftRaw;
+  flags = flags | 0x20;
+  goto <done>;
+  <rightInfinity> d = rightRaw;
+  flags = flags | 0x20;
+  goto <done>;
+  <invalid> flags = flags | 0x10;
+  <nan> d = 0x7fffffffffffffff;
+  goto <done>;
+  <finite>
+  local left:16 = float2float(leftRaw);
+  local right:16 = float2float(rightRaw);
+  local sum:16 = left f+ right;
+  local zeroDP:8 = 0;
+  local zeroQP:16 = float2float(zeroDP);
+  if (sum f== zeroQP) goto <canceled>;
+  local lost:4 = 0;
+  local lostSign:8 = 0;
+  if ((leftRaw & 0x7fffffffffffffff) == 0) goto <round>;
+  if ((rightRaw & 0x7fffffffffffffff) == 0) goto <round>;
+  if (sum f== left) goto <lostRight>;
+  if (sum f== right) goto <lostLeft>;
+  goto <round>;
+  <lostRight> lost = 1;
+  lostSign = rightRaw & 0x8000000000000000;
+  goto <round>;
+  <lostLeft> lost = 1;
+  lostSign = leftRaw & 0x8000000000000000;
+  <round>
+  c6000_sem_round_qp_to_dp(sum, d, roundMode, flags);
+  if (lost == 0) goto <done>;
+  flags = flags | 0x80;
+  local resultSign:8 = d & 0x8000000000000000;
+  if ((d & 0x7fffffffffffffff) != 0x7fefffffffffffff) goto <lostRound>;
+  if (resultSign == lostSign) goto <lostOverflow>;
+  <lostRound>
+  if (roundMode == 0) goto <done>;
+  if (roundMode == 1) goto <lostTowardZero>;
+  if (roundMode == 2) goto <lostTowardPositive>;
+  if (lostSign == 0) goto <done>;
+  if (resultSign == 0) goto <decrement>;
+  goto <increment>;
+  <lostTowardZero>
+  if (resultSign == lostSign) goto <done>;
+  goto <decrement>;
+  <lostTowardPositive>
+  if (lostSign != 0) goto <done>;
+  if (resultSign == 0) goto <increment>;
+  goto <decrement>;
+  <increment> d = d + 1;
+  goto <done>;
+  <decrement> d = d - 1;
+  goto <done>;
+  <lostOverflow>
+  flags = flags | 0xc0;
+  if (roundMode == 1) goto <done>;
+  if (roundMode == 2 && resultSign != 0) goto <done>;
+  if (roundMode == 3 && resultSign == 0) goto <done>;
+  d = resultSign | 0x7ff0000000000000;
+  goto <done>;
+  <canceled> d = 0;
+  if (roundMode == 3) goto <canceledNegative>;
+  goto <done>;
+  <canceledNegative> d = 0x8000000000000000;
+  <done> FADCR = FADCR | (flags << sideShift);
+}
+# SEM: MPYDP
+macro c6000_sem_mpydp(a, b, d, side) {
+  local aRaw:8 = a;
+  local bRaw:8 = b;
+  local aExp:8 = (aRaw >> 52) & 2047;
+  local bExp:8 = (bRaw >> 52) & 2047;
+  local aFrac:8 = aRaw & 0xfffffffffffff;
+  local bFrac:8 = bRaw & 0xfffffffffffff;
+  local sign:8 = (aRaw ^ bRaw) & 0x8000000000000000;
+  local aClean:8 = aRaw;
+  local bClean:8 = bRaw;
+  local flags:4 = 0;
+  local sideShift:4 = side;
+  local roundMode:4 = (FMCR >> (9 + sideShift)) & 3;
+  if (aExp == 2047 && aFrac != 0) goto <aNaN>;
+  if (aExp == 0 && aFrac != 0) goto <aDenormal>;
+  goto <classifyB>;
+  <aNaN> flags = flags | 1;
+  if ((aFrac & 0x8000000000000) != 0) goto <classifyB>;
+  flags = flags | 0x10;
+  goto <classifyB>;
+  <aDenormal> flags = flags | 4;
+  aClean = aRaw & 0x8000000000000000;
+  <classifyB>
+  if (bExp == 2047 && bFrac != 0) goto <bNaN>;
+  if (bExp == 0 && bFrac != 0) goto <bDenormal>;
+  goto <prepare>;
+  <bNaN> flags = flags | 2;
+  if ((bFrac & 0x8000000000000) != 0) goto <prepare>;
+  flags = flags | 0x10;
+  goto <prepare>;
+  <bDenormal> flags = flags | 8;
+  bClean = bRaw & 0x8000000000000000;
+  <prepare>
+  if ((flags & 4) != 0 && bExp != 2047 && (bRaw & 0x7fffffffffffffff) != 0) goto <aInexact>;
+  goto <checkBInexact>;
+  <aInexact> flags = flags | 0x80;
+  <checkBInexact>
+  if ((flags & 8) != 0 && aExp != 2047 && (aRaw & 0x7fffffffffffffff) != 0) goto <bInexact>;
+  goto <checkNaN>;
+  <bInexact> flags = flags | 0x80;
+  <checkNaN>
+  if ((flags & 3) != 0) goto <nan>;
+  if (aExp == 2047) goto <aInfinity>;
+  if (bExp == 2047) goto <bInfinity>;
+  if ((aClean & 0x7fffffffffffffff) == 0) goto <zero>;
+  if ((bClean & 0x7fffffffffffffff) == 0) goto <zero>;
+  local left:16 = float2float(aClean);
+  local right:16 = float2float(bClean);
+  local product:16 = left f* right;
+  c6000_sem_round_qp_to_dp(product, d, roundMode, flags);
+  goto <done>;
+  <aInfinity>
+  if ((bClean & 0x7fffffffffffffff) == 0) goto <invalid>;
+  goto <infinity>;
+  <bInfinity>
+  if ((aClean & 0x7fffffffffffffff) == 0) goto <invalid>;
+  <infinity> d = sign | 0x7ff0000000000000;
+  flags = flags | 0x20; # INFO
+  goto <done>;
+  <invalid> flags = flags | 0x10;
+  <nan> d = sign | 0x7fffffffffffffff;
+  goto <done>;
+  <zero> d = sign;
+  <done> FMCR = FMCR | (flags << sideShift);
+}
+# SEM: MPYSPDP
+macro c6000_sem_mpyspdp(a, b, d, side) {
+  local aRaw:4 = a;
+  local bRaw:8 = b;
+  local aExp:4 = (aRaw >> 23) & 255;
+  local bExp:8 = (bRaw >> 52) & 2047;
+  local aFrac:4 = aRaw & 0x7fffff;
+  local bFrac:8 = bRaw & 0xfffffffffffff;
+  local aSign:4 = aRaw & 0x80000000;
+  local sign:8 = (zext(aSign) << 32) ^ (bRaw & 0x8000000000000000);
+  local aClean:4 = aRaw;
+  local bClean:8 = bRaw;
+  local flags:4 = 0;
+  local sideShift:4 = side;
+  local roundMode:4 = (FMCR >> (9 + sideShift)) & 3;
+  if (aExp == 255 && aFrac != 0) goto <aNaN>;
+  if (aExp == 0 && aFrac != 0) goto <aDenormal>;
+  goto <classifyB>;
+  <aNaN> flags = flags | 1;
+  if ((aFrac & 0x400000) != 0) goto <classifyB>;
+  flags = flags | 0x10;
+  goto <classifyB>;
+  <aDenormal> flags = flags | 4;
+  aClean = aSign;
+  <classifyB>
+  if (bExp == 2047 && bFrac != 0) goto <bNaN>;
+  if (bExp == 0 && bFrac != 0) goto <bDenormal>;
+  goto <prepare>;
+  <bNaN> flags = flags | 2;
+  if ((bFrac & 0x8000000000000) != 0) goto <prepare>;
+  flags = flags | 0x10;
+  goto <prepare>;
+  <bDenormal> flags = flags | 8;
+  bClean = bRaw & 0x8000000000000000;
+  <prepare>
+  if ((flags & 4) != 0 && bExp != 2047 &&
+      (bRaw & 0x7fffffffffffffff) != 0) goto <aInexact>;
+  goto <checkBInexact>;
+  <aInexact> flags = flags | 0x80;
+  <checkBInexact>
+  if ((flags & 8) != 0 && aExp != 255 &&
+      (aRaw & 0x7fffffff) != 0) goto <bInexact>;
+  goto <checkNaN>;
+  <bInexact> flags = flags | 0x80;
+  <checkNaN>
+  if ((flags & 3) != 0) goto <nan>;
+  if (aExp == 255) goto <aInfinity>;
+  if (bExp == 2047) goto <bInfinity>;
+  if ((aClean & 0x7fffffff) == 0) goto <zero>;
+  if ((bClean & 0x7fffffffffffffff) == 0) goto <zero>;
+  local converted:8 = float2float(aClean);
+  local left:16 = float2float(converted);
+  local right:16 = float2float(bClean);
+  local product:16 = left f* right;
+  c6000_sem_round_qp_to_dp(product, d, roundMode, flags);
+  goto <done>;
+  <aInfinity>
+  if ((bClean & 0x7fffffffffffffff) == 0) goto <invalid>;
+  goto <infinity>;
+  <bInfinity>
+  if ((aClean & 0x7fffffff) == 0) goto <invalid>;
+  <infinity> d = sign | 0x7ff0000000000000;
+  flags = flags | 0x20; # INFO
+  goto <done>;
+  <invalid> flags = flags | 0x10;
+  <nan> d = sign | 0x7fffffffffffffff;
+  goto <done>;
+  <zero> d = sign;
+  <done> FMCR = FMCR | (flags << sideShift);
+}
+# SEM: MPYSP2DP
+# A product of two normalized 24-bit SP significands fits exactly in the
+# 53-bit DP significand; the exponent range also fits DP, so normal inputs
+# need neither rounding nor result underflow/overflow handling here.
+macro c6000_sem_mpysp2dp(a, b, d, side) {
+  local leftRaw:4 = a;
+  local rightRaw:4 = b;
+  local leftExp:4 = (leftRaw >> 23) & 255;
+  local rightExp:4 = (rightRaw >> 23) & 255;
+  local leftFrac:4 = leftRaw & 0x7fffff;
+  local rightFrac:4 = rightRaw & 0x7fffff;
+  local sign:4 = (leftRaw ^ rightRaw) & 0x80000000;
+  local signWide:8 = zext(sign);
+  local signedResult:8 = signWide << 32;
+  local flags:4 = 0;
+  local sideShift:4 = side;
+  if (leftExp == 255 && leftFrac != 0) goto <leftNaN>;
+  if (leftExp == 0 && leftFrac != 0) goto <leftDenormal>;
+  goto <classifyRight>;
+  <leftNaN> flags = flags | 1;
+  if ((leftFrac & 0x400000) != 0) goto <classifyRight>;
+  flags = flags | 0x10;
+  goto <classifyRight>;
+  <leftDenormal> flags = flags | 4;
+  <classifyRight>
+  if (rightExp == 255 && rightFrac != 0) goto <rightNaN>;
+  if (rightExp == 0 && rightFrac != 0) goto <rightDenormal>;
+  goto <choose>;
+  <rightNaN> flags = flags | 2;
+  if ((rightFrac & 0x400000) != 0) goto <choose>;
+  flags = flags | 0x10;
+  goto <choose>;
+  <rightDenormal> flags = flags | 8;
+  <choose>
+  if ((flags & 3) != 0) goto <nan>;
+  if (leftExp == 255) goto <leftInfinity>;
+  if (rightExp == 255) goto <rightInfinity>;
+  if ((flags & 4) == 0) goto <checkRightDenormal>;
+  if (rightExp != 255 && (rightExp != 0 || rightFrac != 0)) goto <leftInexact>;
+  goto <checkRightDenormal>;
+  <leftInexact> flags = flags | 0x80;
+  <checkRightDenormal>
+  if ((flags & 8) == 0) goto <multiply>;
+  if (leftExp != 255 && (leftExp != 0 || leftFrac != 0)) goto <rightInexact>;
+  goto <multiply>;
+  <rightInexact> flags = flags | 0x80;
+  <multiply>
+  if (leftExp == 0) goto <zero>;
+  if (rightExp == 0) goto <zero>;
+  local left:8 = float2float(a);
+  local right:8 = float2float(b);
+  d = left f* right;
+  goto <done>;
+  <zero> d = signedResult;
+  goto <done>;
+  <leftInfinity>
+  if (rightExp == 0) goto <invalid>;
+  goto <infinity>;
+  <rightInfinity>
+  if (leftExp == 0) goto <invalid>;
+  <infinity> d = signedResult | 0x7ff0000000000000;
+  flags = flags | 0x20; # INFO
+  goto <done>;
+  <invalid> flags = flags | 0x10;
+  <nan> d = signedResult | 0x7fffffffffffffff;
+  <done> FMCR = FMCR | (flags << sideShift);
+}
+# SPRUFE8B RCPSP/RSQRSP/RCPDP/RSQRDP: special values and FAUCR status
+# are specified exactly. The ordinary seed is guaranteed only through the
+# eighth mantissa bit; TI does not publish its lookup table. Truncating an
+# IEEE reciprocal to eight mantissa bits satisfies that documented bound and
+# matches the published examples, but other low bits may differ from silicon.
+# SEM: RCPSP
+# SEM: RSQRSP
+macro c6000_sem_recip_sp(a, d, side, rsqrt) {
+  local raw:4 = a;
+  local sign:4 = raw & 0x80000000;
+  local exponent:4 = (raw >> 23) & 255;
+  local fraction:4 = raw & 0x7fffff;
+  local flags:4 = 0;
+  local sideShift:4 = side;
+  local inverseRoot:4 = rsqrt;
+  if (exponent == 255) goto <special>;
+  if (exponent == 0) goto <zeroOrDenormal>;
+  if (inverseRoot != 0) goto <sqrtCheck>;
+  if (exponent > 253) goto <underflow>;
+  if (exponent != 253) goto <calculate>;
+  if (fraction != 0) goto <underflow>;
+  goto <calculate>;
+  <sqrtCheck>
+  if (sign != 0) goto <negative>;
+  <calculate>
+  local one:4 = 0x3f800000;
+  if (inverseRoot == 0) goto <divide>;
+  local root:4 = sqrt(a);
+  one = one f/ root;
+  goto <seed>;
+  <divide> one = one f/ a;
+  <seed> d = one & 0xffff8000;
+  goto <done>;
+  <special>
+  if (fraction != 0) goto <nan>;
+  if (inverseRoot == 0) goto <infinity>;
+  if (sign != 0) goto <negative>;
+  d = 0;
+  goto <done>;
+  <infinity> d = sign;
+  goto <done>;
+  <nan> d = 0x7fffffff;
+  flags = 2;
+  if ((fraction & 0x400000) != 0) goto <done>;
+  flags = 0x12;
+  goto <done>;
+  <zeroOrDenormal>
+  d = sign | 0x7f800000;
+  flags = 0x420;
+  if (fraction == 0) goto <done>;
+  if (inverseRoot != 0) goto <rootDenormal>;
+  flags = 0x4e8;
+  goto <done>;
+  <rootDenormal> flags = 0x488;
+  goto <done>;
+  <underflow> d = sign;
+  flags = 0x180;
+  goto <done>;
+  <negative> d = 0x7fffffff;
+  flags = 0x10;
+  <done> FAUCR = FAUCR | (flags << sideShift);
+}
+# SEM: RCPDP
+# SEM: RSQRDP
+macro c6000_sem_recip_dp(a, d, side, rsqrt) {
+  local raw:8 = a;
+  local sign:8 = raw & 0x8000000000000000;
+  local exponent:8 = (raw >> 52) & 2047;
+  local fraction:8 = raw & 0xfffffffffffff;
+  local flags:4 = 0;
+  local sideShift:4 = side;
+  local inverseRoot:4 = rsqrt;
+  if (exponent == 2047) goto <special>;
+  if (exponent == 0) goto <zeroOrDenormal>;
+  if (inverseRoot != 0) goto <sqrtCheck>;
+  if (exponent > 2045) goto <underflow>;
+  if (exponent != 2045) goto <calculate>;
+  if (fraction != 0) goto <underflow>;
+  goto <calculate>;
+  <sqrtCheck>
+  if (sign != 0) goto <negative>;
+  <calculate>
+  local one:8 = 0x3ff0000000000000;
+  if (inverseRoot == 0) goto <divide>;
+  local root:8 = sqrt(a);
+  one = one f/ root;
+  goto <seed>;
+  <divide> one = one f/ a;
+  <seed> d = one & 0xfffff00000000000;
+  goto <done>;
+  <special>
+  if (fraction != 0) goto <nan>;
+  if (inverseRoot == 0) goto <infinity>;
+  if (sign != 0) goto <negative>;
+  d = 0;
+  goto <done>;
+  <infinity> d = sign;
+  goto <done>;
+  <nan> d = 0x7fffffffffffffff;
+  flags = 2;
+  if ((fraction & 0x8000000000000) != 0) goto <done>;
+  flags = 0x12;
+  goto <done>;
+  <zeroOrDenormal>
+  d = sign | 0x7ff0000000000000;
+  flags = 0x420;
+  if (fraction == 0) goto <done>;
+  if (inverseRoot != 0) goto <rootDenormal>;
+  flags = 0x4e8;
+  goto <done>;
+  <rootDenormal> flags = 0x488;
+  goto <done>;
+  <underflow> d = sign;
+  flags = 0x180;
+  goto <done>;
+  <negative> d = 0x7fffffffffffffff;
+  flags = 0x10;
+  <done> FAUCR = FAUCR | (flags << sideShift);
+}
+# SEM: INTDP
+macro c6000_sem_intdp(a, d) { d = int2float(a); }
+# SEM: INTDPU
+macro c6000_sem_intdpu(a, d) { local unsigned:8 = zext(a); d = int2float(unsigned); }
+# SEM: SPDP
+macro c6000_sem_spdp(a, d, side) {
+  local raw:4 = a;
+  local sign:4 = raw & 0x80000000;
+  local exponent:4 = (raw >> 23) & 255;
+  local fraction:4 = raw & 0x7fffff;
+  local flags:4 = 0;
+  local sideShift:4 = side;
+  local bigSign:8 = zext(sign);
+  if (exponent == 255) goto <special>;
+  if (exponent != 0) goto <normal>;
+  if (fraction == 0) goto <normal>;
+  d = bigSign << 32;
+  flags = 0x88; # INEX | DEN2
+  goto <done>;
+  <normal> d = float2float(a);
+  goto <done>;
+  <special>
+  if (fraction != 0) goto <nan>;
+  d = (bigSign << 32) | 0x7ff0000000000000;
+  flags = 0x20; # INFO
+  goto <done>;
+  <nan> d = 0x7fffffffffffffff;
+  flags = 2; # NAN2
+  if ((fraction & 0x400000) != 0) goto <done>;
+  flags = 0x12; # INVAL | NAN2
+  <done> FAUCR = FAUCR | (flags << sideShift);
+}
+# Convert a finite, non-denormal DP value to SP using the selected rounding
+# mode. The caller accumulates its warning bits in flags and writes the
+# instruction's FADCR or FMCR half after this macro returns.
+macro c6000_sem_round_dp_to_sp(a, d, mode, flags) {
+  local raw:8 = a;
+  local sign:8 = raw & 0x8000000000000000;
+  local magnitude:8 = raw & 0x7fffffffffffffff;
+  local high:8 = raw >> 32;
+  local signSP:4 = high:4 & 0x80000000;
+  local roundMode:4 = mode;
+  if (magnitude == 0) goto <convert>;
+  if (magnitude > 0x47efffffe0000000) goto <overflow>;
+  if (magnitude < 0x3810000000000000) goto <underflow>;
+  <convert>
+  d = float2float(a);
+  local rounded:8 = float2float(d);
+  if (rounded f== a) goto <done>;
+  flags = flags | 0x80; # INEX
+  if (roundMode == 0) goto <done>;
+  if (roundMode == 1) goto <towardZero>;
+  if (roundMode == 2) goto <towardPositive>;
+  if (rounded f> a) goto <stepNegative>;
+  goto <done>;
+  <towardZero>
+  if (sign == 0) goto <zeroPositive>;
+  if (rounded f< a) goto <stepPositive>;
+  goto <done>;
+  <zeroPositive>
+  if (rounded f> a) goto <stepNegative>;
+  goto <done>;
+  <towardPositive>
+  if (rounded f< a) goto <stepPositive>;
+  goto <done>;
+  <stepPositive>
+  if (sign == 0) goto <increment>;
+  goto <decrement>;
+  <stepNegative>
+  if (sign == 0) goto <decrement>;
+  <increment> d = d + 1;
+  goto <done>;
+  <decrement> d = d - 1;
+  goto <done>;
+  <overflow>
+  flags = flags | 0xc0; # INEX | OVER
+  d = signSP | 0x7f800000;
+  if (roundMode == 1) goto <largest>;
+  if (roundMode == 2 && sign != 0) goto <largest>;
+  if (roundMode == 3 && sign == 0) goto <largest>;
+  goto <done>;
+  <largest> d = signSP | 0x7f7fffff;
+  goto <done>;
+  <underflow>
+  flags = flags | 0x180; # INEX | UNDER
+  d = signSP;
+  if (roundMode == 2 && sign == 0) goto <smallest>;
+  if (roundMode == 3 && sign != 0) goto <smallest>;
+  goto <done>;
+  <smallest> d = signSP | 0x00800000;
+  <done>
+}
+# SEM: DPSP
+macro c6000_sem_dpsp(a, d, side) {
+  local raw:8 = a;
+  local exponent:8 = (raw >> 52) & 2047;
+  local fraction:8 = raw & 0xfffffffffffff;
+  local high:8 = raw >> 32;
+  local signSP:4 = high:4 & 0x80000000;
+  local sideShift:4 = side;
+  local roundMode:4 = (FADCR >> (9 + sideShift)) & 3;
+  local flags:4 = 0;
+  if (exponent == 2047) goto <special>;
+  if (exponent != 0) goto <finite>;
+  if (fraction == 0) goto <finite>;
+  d = signSP;
+  flags = 0x88; # INEX | DEN2
+  goto <done>;
+  <special>
+  if (fraction != 0) goto <nan>;
+  d = signSP | 0x7f800000;
+  flags = 0x20; # INFO
+  goto <done>;
+  <nan> d = 0x7fffffff;
+  flags = 2; # NAN2
+  if ((fraction & 0x8000000000000) != 0) goto <done>;
+  flags = 0x12; # INVAL | NAN2
+  goto <done>;
+  <finite> c6000_sem_round_dp_to_sp(raw, d, roundMode, flags);
+  <done> FADCR = FADCR | (flags << sideShift);
+}
+# SEM: MPYSP
+@if FP_MODEL == "analysis"
+macro c6000_sem_mpysp(a, b, d, side) {
+  local sideShift:4 = side;
+  d = a f* b;
+  FMCR = c6000_fp_status(FMCR, a, b, sideShift);
+}
+@else
+macro c6000_sem_mpysp(a, b, d, side) {
+  local product:8 = 0;
+  c6000_sem_mpysp2dp(a, b, product, side);
+  local exponent:8 = (product >> 52) & 2047;
+  local fraction:8 = product & 0xfffffffffffff;
+  local high:8 = product >> 32;
+  local signSP:4 = high:4 & 0x80000000;
+  local sideShift:4 = side;
+  local roundMode:4 = (FMCR >> (9 + sideShift)) & 3;
+  local flags:4 = 0;
+  if (exponent != 2047) goto <finite>;
+  if (fraction != 0) goto <nan>;
+  d = signSP | 0x7f800000;
+  goto <done>;
+  <nan> d = signSP | 0x7fffffff;
+  goto <done>;
+  <finite> c6000_sem_round_dp_to_sp(product, d, roundMode, flags);
+  <done> FMCR = FMCR | (flags << sideShift);
+}
+@endif
+# SEM: ADDSP
+# SEM: SUBSP
+# reverse selects SUBSP's machine src2 - src1 encoding. Warning bits still
+# refer to the encoded src1/src2 ports, regardless of displayed operand order.
+@if FP_MODEL == "analysis"
+macro c6000_sem_addsub_sp(a, b, d, side, subtract, reverse) {
+  local sideShift:4 = side;
+  local subtracting:4 = subtract;
+  local reversed:4 = reverse;
+  if (subtracting != 0) goto <doSub>;
+  d = a f+ b;
+  goto <status>;
+  <doSub>
+  if (reversed != 0) goto <doReverse>;
+  d = a f- b;
+  goto <status>;
+  <doReverse> d = b f- a;
+  <status> FADCR = c6000_fp_status(FADCR, a, b, sideShift);
+}
+@else
+macro c6000_sem_addsub_sp(a, b, d, side, subtract, reverse) {
+  local aRaw:4 = a;
+  local bRaw:4 = b;
+  local aExp:4 = (aRaw >> 23) & 255;
+  local bExp:4 = (bRaw >> 23) & 255;
+  local aFrac:4 = aRaw & 0x7fffff;
+  local bFrac:4 = bRaw & 0x7fffff;
+  local aClean:4 = aRaw;
+  local bClean:4 = bRaw;
+  local flags:4 = 0;
+  local sideShift:4 = side;
+  local roundMode:4 = (FADCR >> (9 + sideShift)) & 3;
+  local subtracting:4 = subtract;
+  local reversed:4 = reverse;
+  if (aExp == 255 && aFrac != 0) goto <aNaN>;
+  if (aExp == 0 && aFrac != 0) goto <aDenormal>;
+  goto <classifyB>;
+  <aNaN> flags = flags | 1;
+  if ((aFrac & 0x400000) != 0) goto <classifyB>;
+  flags = flags | 0x10;
+  goto <classifyB>;
+  <aDenormal> flags = flags | 4;
+  aClean = aRaw & 0x80000000;
+  <classifyB>
+  if (bExp == 255 && bFrac != 0) goto <bNaN>;
+  if (bExp == 0 && bFrac != 0) goto <bDenormal>;
+  goto <prepare>;
+  <bNaN> flags = flags | 2;
+  if ((bFrac & 0x400000) != 0) goto <prepare>;
+  flags = flags | 0x10;
+  goto <prepare>;
+  <bDenormal> flags = flags | 8;
+  bClean = bRaw & 0x80000000;
+  <prepare>
+  if ((flags & 4) != 0 && bExp != 255) goto <aInexact>;
+  goto <checkBInexact>;
+  <aInexact> flags = flags | 0x80;
+  <checkBInexact>
+  if ((flags & 8) != 0 && aExp != 255) goto <bInexact>;
+  goto <checkNaN>;
+  <bInexact> flags = flags | 0x80;
+  <checkNaN>
+  if ((flags & 3) != 0) goto <nan>;
+  local leftRaw:4 = aClean;
+  local rightRaw:4 = bClean;
+  if (reversed == 0) goto <direction>;
+  leftRaw = bClean;
+  rightRaw = aClean;
+  <direction>
+  if (subtracting == 0) goto <special>;
+  rightRaw = rightRaw ^ 0x80000000;
+  <special>
+  local leftExp:4 = (leftRaw >> 23) & 255;
+  local rightExp:4 = (rightRaw >> 23) & 255;
+  if (leftExp == 255) goto <leftInfinity>;
+  if (rightExp == 255) goto <rightInfinity>;
+  if ((leftRaw & 0x7fffffff) != 0) goto <finite>;
+  if ((rightRaw & 0x7fffffff) != 0) goto <finite>;
+  if (((leftRaw ^ rightRaw) & 0x80000000) != 0) goto <oppositeZero>;
+  d = leftRaw & 0x80000000;
+  goto <done>;
+  <oppositeZero>
+  d = 0;
+  if (roundMode == 3) goto <negativeZero>;
+  goto <done>;
+  <negativeZero> d = 0x80000000;
+  goto <done>;
+  <leftInfinity>
+  if (rightExp != 255) goto <leftInfiniteResult>;
+  if (((leftRaw ^ rightRaw) & 0x80000000) != 0) goto <invalid>;
+  <leftInfiniteResult> d = leftRaw;
+  flags = flags | 0x20;
+  goto <done>;
+  <rightInfinity> d = rightRaw;
+  flags = flags | 0x20;
+  goto <done>;
+  <invalid> flags = flags | 0x10;
+  <nan> d = 0x7fffffff;
+  goto <done>;
+  <finite>
+  local left:8 = float2float(leftRaw);
+  local right:8 = float2float(rightRaw);
+  local sum:8 = left f+ right;
+  if (sum f== 0:8) goto <canceled>;
+  local lost:4 = 0;
+  local lostSign:4 = 0;
+  if ((leftRaw & 0x7fffffff) == 0) goto <round>;
+  if ((rightRaw & 0x7fffffff) == 0) goto <round>;
+  if (sum f== left) goto <lostRight>;
+  if (sum f== right) goto <lostLeft>;
+  goto <round>;
+  <lostRight> lost = 1;
+  lostSign = rightRaw & 0x80000000;
+  goto <round>;
+  <lostLeft> lost = 1;
+  lostSign = leftRaw & 0x80000000;
+  <round>
+  c6000_sem_round_dp_to_sp(sum, d, roundMode, flags);
+  if (lost == 0) goto <done>;
+  flags = flags | 0x80;
+  local resultSign:4 = d & 0x80000000;
+  if ((d & 0x7fffffff) != 0x7f7fffff) goto <lostRound>;
+  if (resultSign == lostSign) goto <lostOverflow>;
+  <lostRound>
+  if (roundMode == 0) goto <done>;
+  if (roundMode == 1) goto <lostTowardZero>;
+  if (roundMode == 2) goto <lostTowardPositive>;
+  if (lostSign == 0) goto <done>;
+  if (resultSign == 0) goto <decrement>;
+  goto <increment>;
+  <lostTowardZero>
+  if (resultSign == lostSign) goto <done>;
+  goto <decrement>;
+  <lostTowardPositive>
+  if (lostSign != 0) goto <done>;
+  if (resultSign == 0) goto <increment>;
+  goto <decrement>;
+  <increment> d = d + 1;
+  goto <done>;
+  <decrement> d = d - 1;
+  goto <done>;
+  <lostOverflow>
+  flags = flags | 0xc0;
+  if (roundMode == 1) goto <done>;
+  if (roundMode == 2 && resultSign != 0) goto <done>;
+  if (roundMode == 3 && resultSign == 0) goto <done>;
+  d = resultSign | 0x7f800000;
+  goto <done>;
+  <canceled> d = 0;
+  if (roundMode == 3) goto <canceledNegative>;
+  goto <done>;
+  <canceledNegative> d = 0x80000000;
+  <done> FADCR = FADCR | (flags << sideShift);
+}
+@endif
+# SEM: INTSP
+# SEM: INTSPU
+@if FP_MODEL == "analysis"
+macro c6000_sem_int_to_sp(a, d, side, unsignedMode) {
+  local sideShift:4 = side;
+  local useUnsigned:4 = unsignedMode;
+  if (useUnsigned != 0) goto <unsigned>;
+  d = int2float(a);
+  goto <status>;
+  <unsigned>
+  local widened:8 = zext(a);
+  local converted:8 = int2float(widened);
+  d = float2float(converted);
+  <status> FADCR = c6000_fp_status(FADCR, a, sideShift, useUnsigned);
+}
+@else
+macro c6000_sem_int_to_sp(a, d, side, unsignedMode) {
+  local wide:8 = sext(a);
+  local useUnsigned:4 = unsignedMode;
+  if (useUnsigned == 0) goto <convert>;
+  wide = zext(a);
+  <convert>
+  local exact:8 = int2float(wide);
+  local sideShift:4 = side;
+  local roundMode:4 = (FADCR >> (9 + sideShift)) & 3;
+  local flags:4 = 0;
+  c6000_sem_round_dp_to_sp(exact, d, roundMode, flags);
+  FADCR = FADCR | (flags << sideShift);
+}
+@endif
+# The .L1 and .L2 conversion units use separate FADCR halves.  RMODE is at
+# bits 10:9/26:25; source flags are in the corresponding low/high half.
+# SPRUFE8B sections 2.10.1 and 3.12, SPINT/SPTRUNC execution blocks.
+# SEM: SPINT
+# SEM: SPTRUNC
+macro c6000_sem_sp_to_int(a, d, side, forceTrunc) {
+  local sideShift:4 = side;
+  local forced:4 = forceTrunc;
+  local raw:4 = a;
+  local sign:4 = raw >> 31;
+  local exponent:4 = (raw >> 23) & 0xff;
+  local fraction:4 = raw & 0x7fffff;
+  local flags:4 = 0;
+  local roundMode:4 = (FADCR >> (9 + sideShift)) & 3;
+  if (forced == 0) goto <modeReady>;
+  roundMode = 1;
+  <modeReady>
+
+  if (exponent == 255) goto <special>;
+  if (exponent != 0) goto <normal>;
+  if (fraction != 0) goto <denormal>;
+  <normal>
+  if (exponent > 158) goto <overflow>;
+  if (exponent != 158) goto <rounding>;
+  if (sign == 0) goto <overflow>;
+  if (fraction != 0) goto <overflow>;
+  <rounding>
+
+  local rounded:4 = a;
+  if (roundMode == 0) goto <nearest>;
+  if (roundMode == 1) goto <zero>;
+  if (roundMode == 2) goto <up>;
+  rounded = floor(a);
+  goto <convert>;
+  <nearest>
+  # SLEIGH's FLOAT_ROUND rounds halfway cases away from zero.  The C6000
+  # RMODE=0 rule is ties-to-even, so correct even-integer halfway cases.
+  rounded = round(a);
+  local truncatedInt:4 = trunc(a);
+  if ((truncatedInt & 1) != 0) goto <convert>;
+  local truncatedFloat:4 = int2float(truncatedInt);
+  local delta:4 = a f- truncatedFloat;
+  local half:4 = 0x3f000000;
+  local absDelta:4 = abs(delta);
+  if (absDelta f!= half) goto <convert>;
+  rounded = truncatedFloat;
+  goto <convert>;
+  <zero> goto <convert>;
+  <up> rounded = ceil(a);
+  <convert> d = trunc(rounded);
+  local back:4 = int2float(d);
+  if (back f== a) goto <done>;
+  flags = 0x80;
+  goto <done>;
+
+  <special>
+  if (fraction == 0) goto <overflow>;
+  flags = 0x12; # NAN2 | INVAL
+  goto <saturate>;
+  <overflow> flags = 0xc0; # INEX | OVER
+  <saturate>
+  if (sign == 0) goto <positive>;
+  d = 0x80000000;
+  goto <done>;
+  <positive> d = 0x7fffffff;
+  goto <done>;
+
+  <denormal>
+  d = 0;
+  flags = 0x88; # INEX | DEN2
+  <done>
+  FADCR = FADCR | (flags << sideShift);
+}
+# SEM: DPINT
+# SEM: DPTRUNC
+macro c6000_sem_dp_to_int(a, d, side, forceTrunc) {
+  local sideShift:4 = side;
+  local forced:4 = forceTrunc;
+  local raw:8 = a;
+  local signWide:8 = raw >> 63;
+  local sign:4 = signWide:4;
+  local exponent:8 = (raw >> 52) & 0x7ff;
+  local fraction:8 = raw & 0xfffffffffffff;
+  local flags:4 = 0;
+  local roundMode:4 = (FADCR >> (9 + sideShift)) & 3;
+  if (forced == 0) goto <modeReady>;
+  roundMode = 1;
+  <modeReady>
+
+  if (exponent == 2047) goto <special>;
+  if (exponent != 0) goto <normal>;
+  if (fraction != 0) goto <denormal>;
+  <normal>
+  if (exponent > 1054) goto <overflow>;
+  if (exponent != 1054) goto <rounding>;
+  if (sign == 0) goto <overflow>;
+  if (fraction != 0) goto <overflow>;
+  <rounding>
+
+  local rounded:8 = a;
+  if (roundMode == 0) goto <nearest>;
+  if (roundMode == 1) goto <zero>;
+  if (roundMode == 2) goto <up>;
+  rounded = floor(a);
+  goto <convert>;
+  <nearest>
+  rounded = round(a);
+  local truncatedInt:4 = trunc(a);
+  if ((truncatedInt & 1) != 0) goto <convert>;
+  local truncatedFloat:8 = int2float(truncatedInt);
+  local delta:8 = a f- truncatedFloat;
+  local half:8 = 0x3fe0000000000000;
+  local absDelta:8 = abs(delta);
+  if (absDelta f!= half) goto <convert>;
+  rounded = truncatedFloat;
+  goto <convert>;
+  <zero> goto <convert>;
+  <up> rounded = ceil(a);
+  <convert> d = trunc(rounded);
+  local back:8 = int2float(d);
+  if (back f== a) goto <done>;
+  flags = 0x80;
+  goto <done>;
+
+  <special>
+  if (fraction == 0) goto <overflow>;
+  flags = 0x12; # NAN2 | INVAL
+  goto <saturate>;
+  <overflow> flags = 0xc0; # INEX | OVER
+  <saturate>
+  if (sign == 0) goto <positive>;
+  d = 0x80000000;
+  goto <done>;
+  <positive> d = 0x7fffffff;
+  goto <done>;
+
+  <denormal>
+  d = 0;
+  flags = 0x88; # INEX | DEN2
+  <done>
+  FADCR = FADCR | (flags << sideShift);
+}
+# SEM: CMPEQSP
+# SEM: CMPGTSP
+# SEM: CMPLTSP
+# kind: equality=0, greater-than=1, less-than=2. Denormals compare as
+# signed zero; NaN comparisons are unordered, with INVAL for ordered tests.
+@if FP_MODEL == "analysis"
+macro c6000_sem_compare_sp(a, b, d, side, kind) {
+  local sideShift:4 = side;
+  local operation:4 = kind;
+  if (operation == 0) goto <equal>;
+  if (operation == 1) goto <greater>;
+  d = zext(a f< b);
+  goto <status>;
+  <equal> d = zext(a f== b);
+  goto <status>;
+  <greater> d = zext(a f> b);
+  <status> FAUCR = c6000_fp_status(FAUCR, a, b, sideShift);
+}
+@else
+macro c6000_sem_compare_sp(a, b, d, side, kind) {
+  local left:4 = a;
+  local right:4 = b;
+  local lexp:4 = (left >> 23) & 255;
+  local rexp:4 = (right >> 23) & 255;
+  local lfrac:4 = left & 0x7fffff;
+  local rfrac:4 = right & 0x7fffff;
+  local flags:4 = 0;
+  local sideShift:4 = side;
+  local operation:4 = kind;
+  if (lexp == 255 && lfrac != 0) goto <leftnan>;
+  if (lexp == 0 && lfrac != 0) goto <leftden>;
+  goto <rightclass>;
+  <leftnan> flags = flags | 1;
+  goto <rightclass>;
+  <leftden> flags = flags | 4;
+  left = left & 0x80000000;
+  <rightclass>
+  if (rexp == 255 && rfrac != 0) goto <rightnan>;
+  if (rexp == 0 && rfrac != 0) goto <rightden>;
+  goto <compare>;
+  <rightnan> flags = flags | 2;
+  goto <compare>;
+  <rightden> flags = flags | 8;
+  right = right & 0x80000000;
+  <compare>
+  if ((flags & 3) != 0) goto <unordered>;
+  if (operation == 0) goto <equal>;
+  if (operation == 1) goto <greater>;
+  d = zext(left f< right);
+  goto <done>;
+  <equal> d = zext(left f== right);
+  goto <done>;
+  <greater> d = zext(left f> right);
+  goto <done>;
+  <unordered> d = 0;
+  flags = flags | 0x200;
+  if (operation == 0) goto <done>;
+  flags = flags | 0x10;
+  <done> FAUCR = FAUCR | (flags << sideShift);
+}
+@endif
+# SEM: CMPEQDP
+# SEM: CMPGTDP
+# SEM: CMPLTDP
+macro c6000_sem_compare_dp(a, b, d, side, kind) {
+  local left:8 = a;
+  local right:8 = b;
+  local lexp:8 = (left >> 52) & 2047;
+  local rexp:8 = (right >> 52) & 2047;
+  local lfrac:8 = left & 0xfffffffffffff;
+  local rfrac:8 = right & 0xfffffffffffff;
+  local flags:4 = 0;
+  local sideShift:4 = side;
+  local operation:4 = kind;
+  if (lexp == 2047 && lfrac != 0) goto <leftnan>;
+  if (lexp == 0 && lfrac != 0) goto <leftden>;
+  goto <rightclass>;
+  <leftnan> flags = flags | 1;
+  goto <rightclass>;
+  <leftden> flags = flags | 4;
+  left = left & 0x8000000000000000;
+  <rightclass>
+  if (rexp == 2047 && rfrac != 0) goto <rightnan>;
+  if (rexp == 0 && rfrac != 0) goto <rightden>;
+  goto <compare>;
+  <rightnan> flags = flags | 2;
+  goto <compare>;
+  <rightden> flags = flags | 8;
+  right = right & 0x8000000000000000;
+  <compare>
+  if ((flags & 3) != 0) goto <unordered>;
+  if (operation == 0) goto <equal>;
+  if (operation == 1) goto <greater>;
+  d = zext(left f< right);
+  goto <done>;
+  <equal> d = zext(left f== right);
+  goto <done>;
+  <greater> d = zext(left f> right);
+  goto <done>;
+  <unordered> d = 0;
+  flags = flags | 0x200;
+  if (operation == 0) goto <done>;
+  flags = flags | 0x10;
+  <done> FAUCR = FAUCR | (flags << sideShift);
+}
+
+# ---------------------------------------------------------------------------
+# Shifts - SPRUFE8B section 3.12, SHL / SHR / SHRU / SSHL.
+# ---------------------------------------------------------------------------
+
+# SEM: SHL
+# Register counts use their six low bits (SPRUFE8B SHL/SHR/SHRU: counts above 39 act as
+# 40, which for a 32-bit result is the same as any count of 32 or more).
+macro c6000_sem_shl(v, c, d) { local count:4 = c & 63; d = v << count; }
+# The architecture's long shift operands use only the low 40 bits of a
+# register pair. The upper 24 bits of the high register are cleared on write.
+macro c6000_sem_shl40(v, c, d) {
+  local count:4 = c & 63;
+  if (count < 40) goto <shift>;
+  count = 40;
+  <shift>
+  d = ((v & 0xffffffffff) << count) & 0xffffffffff;
+}
+macro c6000_sem_shl_to40(v, c, d) {
+  local count:4 = c & 63;
+  if (count < 40) goto <shift>;
+  count = 40;
+  <shift>
+  d = (zext(v) << count) & 0xffffffffff;
+}
+# SEM: SHR
+macro c6000_sem_shr(v, c, d) { local count:4 = c & 63; d = v s>> count; }
+macro c6000_sem_shr40(v, c, d) {
+  local count:4 = c & 63;
+  if (count < 40) goto <shift>;
+  count = 40;
+  <shift>
+  local value:8 = v & 0xffffffffff;
+  if ((value & 0x8000000000) == 0) goto <positive>;
+  value = value | 0xffffff0000000000;
+  <positive>
+  d = (value s>> count) & 0xffffffffff;
+}
+# SEM: SHRU
+macro c6000_sem_shru(v, c, d) { local count:4 = c & 63; d = v >> count; }
+macro c6000_sem_shru40(v, c, d) {
+  local count:4 = c & 63;
+  if (count < 40) goto <shift>;
+  count = 40;
+  <shift>
+  d = ((v & 0xffffffffff) >> count) & 0xffffffffff;
+}
+# SEM: SHLMB
+macro c6000_sem_shlmb(a, b, d) {
+  d = (b << 8) | (a >> 24);
+}
+# SEM: SHRMB
+macro c6000_sem_shrmb(a, b, d) {
+  d = (b >> 8) | (a << 24);
+}
+# SEM: SHR2
+macro c6000_sem_shr2(v, c, d) {
+  local count:4 = c & 31;
+  if (count < 16) goto <shift>;
+  count = 15;
+  <shift>
+  local low:4 = ((v << 16) s>> 16) s>> count;
+  local high:4 = (v s>> 16) s>> count;
+  d = (low & 0xffff) | ((high & 0xffff) << 16);
+}
+# SEM: SHRU2
+macro c6000_sem_shru2(v, c, d) {
+  local count:4 = c & 31;
+  if (count < 16) goto <shift>;
+  d = 0;
+  goto <done>;
+  <shift>
+  local low:4 = (v & 0xffff) >> count;
+  local high:4 = (v >> 16) >> count;
+  d = low | (high << 16);
+  <done>
+}
+macro c6000_sem_satleft32(v, count, d) {
+  local result:8 = sext(v) << count;
+  if (result s> 0x7fffffff) goto <positive>;
+  if (result s< -0x80000000) goto <negative>;
+  d = result:4;
+  goto <done>;
+  <positive> d = 0x7fffffff;
+  CSR = CSR | 0x200;
+  goto <done>;
+  <negative> d = 0x80000000;
+  CSR = CSR | 0x200;
+  <done>
+}
+# SEM: SSHVL
+macro c6000_sem_sshvl(v, c, d) {
+  local count:8 = sext(c);
+  if (count s< 0) goto <right>;
+  if (count s<= 31) goto <left>;
+  count = 31;
+  <left> c6000_sem_satleft32(v, count, d);
+  goto <done>;
+  <right> count = -count;
+  if (count <= 31) goto <rightshift>;
+  count = 31;
+  <rightshift> d = v s>> count;
+  <done>
+}
+# SEM: SSHVR
+macro c6000_sem_sshvr(v, c, d) {
+  local count:8 = sext(c);
+  if (count s< 0) goto <left>;
+  if (count s<= 31) goto <right>;
+  count = 31;
+  <right> d = v s>> count;
+  goto <done>;
+  <left> count = -count;
+  if (count <= 31) goto <leftshift>;
+  count = 31;
+  <leftshift> c6000_sem_satleft32(v, count, d);
+  <done>
+}
+# SEM: SSHL
+macro c6000_sem_sshl(v, c, d) {
+  # The register form uses its low six count bits; the immediate form has
+  # only five. Any nonzero input shifted by more than 31 saturates.
+  local count:4 = c & 63;
+  if (count <= 31) goto <shift>;
+  if (v == 0) goto <zero>;
+  if (v s< 0) goto <negative>;
+  d = 0x7fffffff;
+  CSR = CSR | 0x200;
+  goto <done>;
+  <negative> d = 0x80000000;
+  CSR = CSR | 0x200;
+  goto <done>;
+  <zero> d = 0;
+  goto <done>;
+  <shift> c6000_sem_satleft32(v, count, d);
+  <done>
+}
+
+# ---------------------------------------------------------------------------
+# Comparisons - SPRUFE8B section 3.12, CMPEQ / CMPLT / CMPGT / CMPLTU /
+# CMPGTU.  These write 0 or 1.
+# ---------------------------------------------------------------------------
+
+# SEM: CMPEQ
+macro c6000_sem_cmpeq(a, b, d) { local t = (a == b); if (t) goto <y>; d = 0; goto <e>; <y> d = 1; <e> }
+macro c6000_sem_cmpeq40(a, b, d) {
+  local left:8 = sext(a);
+  local right:8 = b & 0xffffffffff;
+  d = 0;
+  if ((left & 0xffffffffff) != right) goto <done>;
+  d = 1;
+  <done>
+}
+# Signed long comparisons sign-extend bit 39 of the register-pair source.
+macro c6000_sem_cmplt40(a, b, d) {
+  local left:8 = sext(a);
+  local right:8 = b & 0xffffffffff;
+  if ((right & 0x8000000000) == 0) goto <compare>;
+  right = right | 0xffffff0000000000;
+  <compare>
+  d = 0;
+  if (!(left s< right)) goto <done>;
+  d = 1;
+  <done>
+}
+# SEM: CMPLT
+macro c6000_sem_cmplt(a, b, d) { local t = (a s< b); if (t) goto <y>; d = 0; goto <e>; <y> d = 1; <e> }
+# SEM: CMPGT
+macro c6000_sem_cmpgt(a, b, d) { local t = (a s> b); if (t) goto <y>; d = 0; goto <e>; <y> d = 1; <e> }
+macro c6000_sem_cmpgt40(a, b, d) {
+  local left:8 = sext(a);
+  local right:8 = b & 0xffffffffff;
+  if ((right & 0x8000000000) == 0) goto <compare>;
+  right = right | 0xffffff0000000000;
+  <compare>
+  d = 0;
+  if (!(left s> right)) goto <done>;
+  d = 1;
+  <done>
+}
+# Unsigned long comparisons ignore the pair's unused upper 24 bits.
+macro c6000_sem_cmpltu40(a, b, d) {
+  local left:8 = zext(a);
+  local right:8 = b & 0xffffffffff;
+  d = 0;
+  if (!(left < right)) goto <done>;
+  d = 1;
+  <done>
+}
+# SEM: CMPLTU
+macro c6000_sem_cmpltu(a, b, d) { local t = (a < b); if (t) goto <y>; d = 0; goto <e>; <y> d = 1; <e> }
+# SEM: CMPGTU
+macro c6000_sem_cmpgtu(a, b, d) { local t = (a > b); if (t) goto <y>; d = 0; goto <e>; <y> d = 1; <e> }
+macro c6000_sem_cmpgtu40(a, b, d) {
+  local left:8 = zext(a);
+  local right:8 = b & 0xffffffffff;
+  d = 0;
+  if (!(left > right)) goto <done>;
+  d = 1;
+  <done>
+}
+
+# ---------------------------------------------------------------------------
+# Loads and stores - SPRUFE8B section 3.12 and Table 3-11.  The memory
+# operand in the decode table evaluates to the effective address, so the
+# access size and sign extension are applied here.
+# ---------------------------------------------------------------------------
+
+# SEM: LDW
+# LDW requires a word-aligned address (SPRUFE8B). Keeping the p-code LOAD
+# aligned also prevents a misaligned address propagated on a predicated path,
+# such as 0xffffffff in the firmware, from crashing Ghidra's decompiler
+# when it folds the LOAD to a RAM varnode. Valid LDW addresses are unchanged.
+macro c6000_sem_ldw(a, d) {
+  local aligned:4 = a & 0xfffffffc;
+  d = *[ram]:4 aligned;
+}
+# SEM: LDDW
+macro c6000_sem_lddw(a, d) { d = *[ram]:8 a; }
+# SEM: LDNW
+# SEM: LDNDW
+# SEM: STNW
+# SEM: STNDW
+@include "c6000_nonalign.sinc"
+# SEM: LDB
+macro c6000_sem_ldb(a, d) { d = sext(*[ram]:1 a); }
+# SEM: LDBU
+macro c6000_sem_ldbu(a, d) { d = zext(*[ram]:1 a); }
+# SEM: LDH
+macro c6000_sem_ldh(a, d) { d = sext(*[ram]:2 a); }
+# SEM: LDHU
+macro c6000_sem_ldhu(a, d) { d = zext(*[ram]:2 a); }
+
+# SEM: STW
+macro c6000_sem_stw(s, a) { *[ram]:4 a = s; }
+# SEM: STDW
+macro c6000_sem_stdw(s, a) { *[ram]:8 a = s; }
+# SEM: STB
+macro c6000_sem_stb(s, a) { *[ram]:1 a = s:1; }
+# SEM: STH
+macro c6000_sem_sth(s, a) { *[ram]:2 a = s:2; }
+
+# ---------------------------------------------------------------------------
+# Branches - SPRUFE8B section 3.12, B / CALLP, and section 3.4 for the delay
+# slots.  The target operand already carries the PCE1-relative address (see
+# the BranchTarget / BnopTgt tables in c6000.sinc and c6000_manual.sinc).
+#
+# C6000 branches have five delay slots, so the return address a CALLP leaves
+# in A3/B3 is the instruction after the five delay slots: inst_start + 4 + 20.
+# ---------------------------------------------------------------------------
+
+# SEM: B
+macro c6000_sem_b(t) { goto t; }
+# SEM: CALLP
+macro c6000_sem_callp(t) { B3 = inst_start + 24; call t; }
+
+# Indirect branches through a register (B .S2 src2, B IRP, B NRP).
+macro c6000_sem_b_ind(t) { goto [t]; }
+
+# ---------------------------------------------------------------------------
+# Miscellaneous - SPRUFE8B section 3.12.
+# ---------------------------------------------------------------------------
+
+# SEM: NOP
+macro c6000_sem_nop(n) { }
+# SEM: IDLE
+macro c6000_sem_idle() { c6000_idle(); }
+# SEM: DINT
+macro c6000_sem_dint() {
+  local gie:4 = TSR & 1;
+  TSR = (TSR & 0xfffffffc) | (gie << 1);
+  CSR = CSR & 0xfffffffe;
+}
+# SEM: RINT
+macro c6000_sem_rint() {
+  local saved:4 = (TSR >> 1) & 1;
+  TSR = (TSR & 0xfffffffc) | saved;
+  CSR = (CSR & 0xfffffffe) | saved;
+}

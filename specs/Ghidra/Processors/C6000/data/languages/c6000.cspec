@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  TMS320C6000 compiler specification.
+
+  Calling convention per the TI C6000 C/C++ ABI (SPRU187 / the C6000
+  Optimizing Compiler User's Guide, and the CGT 7.3.4 headers):
+
+    * integer/pointer arguments are passed in A4, B4, A6, B6, A8, B8,
+      A10, B10, A12, B12, then on the stack;
+    * a 32-bit result is returned in A4; a 64-bit result in A5:A4;
+    * B3 holds the return address, B15 is the stack pointer, A15 is the
+      frame pointer and B14 is the data (near-data) pointer;
+    * A10-A15 and B10-B15 are callee-saved.
+
+  Verified against the CGT 7.3.4 headers/sources and against the prologue of
+  the CDJ-2000NXS stage-1 image, which builds B15/B14 with MVK/MVKH pairs
+  exactly as this convention requires.
+-->
+<compiler_spec>
+  <global>
+    <range space="ram"/>
+  </global>
+  <stackpointer register="B15" space="ram" growth="negative"/>
+  <returnaddress>
+    <register name="B3"/>
+  </returnaddress>
+  <default_proto>
+    <prototype name="__c6000" extrapop="0" stackshift="0" strategy="register">
+      <input>
+        <!-- One argument slot per register pair: a 32-bit value uses the even
+             register, a 40/64-bit value (long, long long, double) the pair. -->
+        <pentry minsize="1" maxsize="8"><register name="A5_A4"/></pentry>
+        <pentry minsize="1" maxsize="8"><register name="B5_B4"/></pentry>
+        <pentry minsize="1" maxsize="8"><register name="A7_A6"/></pentry>
+        <pentry minsize="1" maxsize="8"><register name="B7_B6"/></pentry>
+        <pentry minsize="1" maxsize="8"><register name="A9_A8"/></pentry>
+        <pentry minsize="1" maxsize="8"><register name="B9_B8"/></pentry>
+        <pentry minsize="1" maxsize="8"><register name="A11_A10"/></pentry>
+        <pentry minsize="1" maxsize="8"><register name="B11_B10"/></pentry>
+        <pentry minsize="1" maxsize="8"><register name="A13_A12"/></pentry>
+        <pentry minsize="1" maxsize="8"><register name="B13_B12"/></pentry>
+        <!-- Further arguments go on the stack, starting at B15 + 4 at entry. -->
+        <pentry minsize="1" maxsize="500" align="4">
+          <addr offset="4" space="stack"/>
+        </pentry>
+      </input>
+      <output>
+        <pentry minsize="1" maxsize="8"><register name="A5_A4"/></pentry>
+      </output>
+      <unaffected>
+        <register name="A10"/><register name="A11"/><register name="A12"/>
+        <register name="A13"/><register name="A14"/><register name="A15"/>
+        <register name="B10"/><register name="B11"/><register name="B12"/>
+        <register name="B13"/><register name="B14"/><register name="B15"/>
+      </unaffected>
+    </prototype>
+  </default_proto>
+</compiler_spec>

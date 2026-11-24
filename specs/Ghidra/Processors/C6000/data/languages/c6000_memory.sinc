@@ -1,0 +1,448 @@
+# GENERATED FILE - tools/gen_memory.py; edit the generator, not this file.
+# .D-unit addressing modes and scaled offsets (SPRUFE8B section 3.9.3).
+
+BaseLong: "B14" is i7=0 { export B14; }
+BaseLong: "B15" is i7=1 { export B15; }
+
+DstPair: "A1:A0" is pair_index=0 & i23=0 & i1=0 { export A1_A0; }
+StoreSrcPair: "A1:A0" is pair_index=0 & i23=0 & i1=0 { export A1_A0; }
+DstPairN: "A1:A0" is pair_index=0 & i1=0 { export A1_A0; }
+StoreSrcPairN: "A1:A0" is pair_index=0 & i1=0 { export A1_A0; }
+DstPair: "A3:A2" is pair_index=1 & i23=0 & i1=0 { export A3_A2; }
+StoreSrcPair: "A3:A2" is pair_index=1 & i23=0 & i1=0 { export A3_A2; }
+DstPairN: "A3:A2" is pair_index=1 & i1=0 { export A3_A2; }
+StoreSrcPairN: "A3:A2" is pair_index=1 & i1=0 { export A3_A2; }
+DstPair: "A5:A4" is pair_index=2 & i23=0 & i1=0 { export A5_A4; }
+StoreSrcPair: "A5:A4" is pair_index=2 & i23=0 & i1=0 { export A5_A4; }
+DstPairN: "A5:A4" is pair_index=2 & i1=0 { export A5_A4; }
+StoreSrcPairN: "A5:A4" is pair_index=2 & i1=0 { export A5_A4; }
+DstPair: "A7:A6" is pair_index=3 & i23=0 & i1=0 { export A7_A6; }
+StoreSrcPair: "A7:A6" is pair_index=3 & i23=0 & i1=0 { export A7_A6; }
+DstPairN: "A7:A6" is pair_index=3 & i1=0 { export A7_A6; }
+StoreSrcPairN: "A7:A6" is pair_index=3 & i1=0 { export A7_A6; }
+DstPair: "A9:A8" is pair_index=4 & i23=0 & i1=0 { export A9_A8; }
+StoreSrcPair: "A9:A8" is pair_index=4 & i23=0 & i1=0 { export A9_A8; }
+DstPairN: "A9:A8" is pair_index=4 & i1=0 { export A9_A8; }
+StoreSrcPairN: "A9:A8" is pair_index=4 & i1=0 { export A9_A8; }
+DstPair: "A11:A10" is pair_index=5 & i23=0 & i1=0 { export A11_A10; }
+StoreSrcPair: "A11:A10" is pair_index=5 & i23=0 & i1=0 { export A11_A10; }
+DstPairN: "A11:A10" is pair_index=5 & i1=0 { export A11_A10; }
+StoreSrcPairN: "A11:A10" is pair_index=5 & i1=0 { export A11_A10; }
+DstPair: "A13:A12" is pair_index=6 & i23=0 & i1=0 { export A13_A12; }
+StoreSrcPair: "A13:A12" is pair_index=6 & i23=0 & i1=0 { export A13_A12; }
+DstPairN: "A13:A12" is pair_index=6 & i1=0 { export A13_A12; }
+StoreSrcPairN: "A13:A12" is pair_index=6 & i1=0 { export A13_A12; }
+DstPair: "A15:A14" is pair_index=7 & i23=0 & i1=0 { export A15_A14; }
+StoreSrcPair: "A15:A14" is pair_index=7 & i23=0 & i1=0 { export A15_A14; }
+DstPairN: "A15:A14" is pair_index=7 & i1=0 { export A15_A14; }
+StoreSrcPairN: "A15:A14" is pair_index=7 & i1=0 { export A15_A14; }
+DstPair: "A17:A16" is pair_index=8 & i23=0 & i1=0 { export A17_A16; }
+StoreSrcPair: "A17:A16" is pair_index=8 & i23=0 & i1=0 { export A17_A16; }
+DstPairN: "A17:A16" is pair_index=8 & i1=0 { export A17_A16; }
+StoreSrcPairN: "A17:A16" is pair_index=8 & i1=0 { export A17_A16; }
+DstPair: "A19:A18" is pair_index=9 & i23=0 & i1=0 { export A19_A18; }
+StoreSrcPair: "A19:A18" is pair_index=9 & i23=0 & i1=0 { export A19_A18; }
+DstPairN: "A19:A18" is pair_index=9 & i1=0 { export A19_A18; }
+StoreSrcPairN: "A19:A18" is pair_index=9 & i1=0 { export A19_A18; }
+DstPair: "A21:A20" is pair_index=10 & i23=0 & i1=0 { export A21_A20; }
+StoreSrcPair: "A21:A20" is pair_index=10 & i23=0 & i1=0 { export A21_A20; }
+DstPairN: "A21:A20" is pair_index=10 & i1=0 { export A21_A20; }
+StoreSrcPairN: "A21:A20" is pair_index=10 & i1=0 { export A21_A20; }
+DstPair: "A23:A22" is pair_index=11 & i23=0 & i1=0 { export A23_A22; }
+StoreSrcPair: "A23:A22" is pair_index=11 & i23=0 & i1=0 { export A23_A22; }
+DstPairN: "A23:A22" is pair_index=11 & i1=0 { export A23_A22; }
+StoreSrcPairN: "A23:A22" is pair_index=11 & i1=0 { export A23_A22; }
+DstPair: "A25:A24" is pair_index=12 & i23=0 & i1=0 { export A25_A24; }
+StoreSrcPair: "A25:A24" is pair_index=12 & i23=0 & i1=0 { export A25_A24; }
+DstPairN: "A25:A24" is pair_index=12 & i1=0 { export A25_A24; }
+StoreSrcPairN: "A25:A24" is pair_index=12 & i1=0 { export A25_A24; }
+DstPair: "A27:A26" is pair_index=13 & i23=0 & i1=0 { export A27_A26; }
+StoreSrcPair: "A27:A26" is pair_index=13 & i23=0 & i1=0 { export A27_A26; }
+DstPairN: "A27:A26" is pair_index=13 & i1=0 { export A27_A26; }
+StoreSrcPairN: "A27:A26" is pair_index=13 & i1=0 { export A27_A26; }
+DstPair: "A29:A28" is pair_index=14 & i23=0 & i1=0 { export A29_A28; }
+StoreSrcPair: "A29:A28" is pair_index=14 & i23=0 & i1=0 { export A29_A28; }
+DstPairN: "A29:A28" is pair_index=14 & i1=0 { export A29_A28; }
+StoreSrcPairN: "A29:A28" is pair_index=14 & i1=0 { export A29_A28; }
+DstPair: "A31:A30" is pair_index=15 & i23=0 & i1=0 { export A31_A30; }
+StoreSrcPair: "A31:A30" is pair_index=15 & i23=0 & i1=0 { export A31_A30; }
+DstPairN: "A31:A30" is pair_index=15 & i1=0 { export A31_A30; }
+StoreSrcPairN: "A31:A30" is pair_index=15 & i1=0 { export A31_A30; }
+DstPair: "B1:B0" is pair_index=0 & i23=0 & i1=1 { export B1_B0; }
+StoreSrcPair: "B1:B0" is pair_index=0 & i23=0 & i1=1 { export B1_B0; }
+DstPairN: "B1:B0" is pair_index=0 & i1=1 { export B1_B0; }
+StoreSrcPairN: "B1:B0" is pair_index=0 & i1=1 { export B1_B0; }
+DstPair: "B3:B2" is pair_index=1 & i23=0 & i1=1 { export B3_B2; }
+StoreSrcPair: "B3:B2" is pair_index=1 & i23=0 & i1=1 { export B3_B2; }
+DstPairN: "B3:B2" is pair_index=1 & i1=1 { export B3_B2; }
+StoreSrcPairN: "B3:B2" is pair_index=1 & i1=1 { export B3_B2; }
+DstPair: "B5:B4" is pair_index=2 & i23=0 & i1=1 { export B5_B4; }
+StoreSrcPair: "B5:B4" is pair_index=2 & i23=0 & i1=1 { export B5_B4; }
+DstPairN: "B5:B4" is pair_index=2 & i1=1 { export B5_B4; }
+StoreSrcPairN: "B5:B4" is pair_index=2 & i1=1 { export B5_B4; }
+DstPair: "B7:B6" is pair_index=3 & i23=0 & i1=1 { export B7_B6; }
+StoreSrcPair: "B7:B6" is pair_index=3 & i23=0 & i1=1 { export B7_B6; }
+DstPairN: "B7:B6" is pair_index=3 & i1=1 { export B7_B6; }
+StoreSrcPairN: "B7:B6" is pair_index=3 & i1=1 { export B7_B6; }
+DstPair: "B9:B8" is pair_index=4 & i23=0 & i1=1 { export B9_B8; }
+StoreSrcPair: "B9:B8" is pair_index=4 & i23=0 & i1=1 { export B9_B8; }
+DstPairN: "B9:B8" is pair_index=4 & i1=1 { export B9_B8; }
+StoreSrcPairN: "B9:B8" is pair_index=4 & i1=1 { export B9_B8; }
+DstPair: "B11:B10" is pair_index=5 & i23=0 & i1=1 { export B11_B10; }
+StoreSrcPair: "B11:B10" is pair_index=5 & i23=0 & i1=1 { export B11_B10; }
+DstPairN: "B11:B10" is pair_index=5 & i1=1 { export B11_B10; }
+StoreSrcPairN: "B11:B10" is pair_index=5 & i1=1 { export B11_B10; }
+DstPair: "B13:B12" is pair_index=6 & i23=0 & i1=1 { export B13_B12; }
+StoreSrcPair: "B13:B12" is pair_index=6 & i23=0 & i1=1 { export B13_B12; }
+DstPairN: "B13:B12" is pair_index=6 & i1=1 { export B13_B12; }
+StoreSrcPairN: "B13:B12" is pair_index=6 & i1=1 { export B13_B12; }
+DstPair: "B15:B14" is pair_index=7 & i23=0 & i1=1 { export B15_B14; }
+StoreSrcPair: "B15:B14" is pair_index=7 & i23=0 & i1=1 { export B15_B14; }
+DstPairN: "B15:B14" is pair_index=7 & i1=1 { export B15_B14; }
+StoreSrcPairN: "B15:B14" is pair_index=7 & i1=1 { export B15_B14; }
+DstPair: "B17:B16" is pair_index=8 & i23=0 & i1=1 { export B17_B16; }
+StoreSrcPair: "B17:B16" is pair_index=8 & i23=0 & i1=1 { export B17_B16; }
+DstPairN: "B17:B16" is pair_index=8 & i1=1 { export B17_B16; }
+StoreSrcPairN: "B17:B16" is pair_index=8 & i1=1 { export B17_B16; }
+DstPair: "B19:B18" is pair_index=9 & i23=0 & i1=1 { export B19_B18; }
+StoreSrcPair: "B19:B18" is pair_index=9 & i23=0 & i1=1 { export B19_B18; }
+DstPairN: "B19:B18" is pair_index=9 & i1=1 { export B19_B18; }
+StoreSrcPairN: "B19:B18" is pair_index=9 & i1=1 { export B19_B18; }
+DstPair: "B21:B20" is pair_index=10 & i23=0 & i1=1 { export B21_B20; }
+StoreSrcPair: "B21:B20" is pair_index=10 & i23=0 & i1=1 { export B21_B20; }
+DstPairN: "B21:B20" is pair_index=10 & i1=1 { export B21_B20; }
+StoreSrcPairN: "B21:B20" is pair_index=10 & i1=1 { export B21_B20; }
+DstPair: "B23:B22" is pair_index=11 & i23=0 & i1=1 { export B23_B22; }
+StoreSrcPair: "B23:B22" is pair_index=11 & i23=0 & i1=1 { export B23_B22; }
+DstPairN: "B23:B22" is pair_index=11 & i1=1 { export B23_B22; }
+StoreSrcPairN: "B23:B22" is pair_index=11 & i1=1 { export B23_B22; }
+DstPair: "B25:B24" is pair_index=12 & i23=0 & i1=1 { export B25_B24; }
+StoreSrcPair: "B25:B24" is pair_index=12 & i23=0 & i1=1 { export B25_B24; }
+DstPairN: "B25:B24" is pair_index=12 & i1=1 { export B25_B24; }
+StoreSrcPairN: "B25:B24" is pair_index=12 & i1=1 { export B25_B24; }
+DstPair: "B27:B26" is pair_index=13 & i23=0 & i1=1 { export B27_B26; }
+StoreSrcPair: "B27:B26" is pair_index=13 & i23=0 & i1=1 { export B27_B26; }
+DstPairN: "B27:B26" is pair_index=13 & i1=1 { export B27_B26; }
+StoreSrcPairN: "B27:B26" is pair_index=13 & i1=1 { export B27_B26; }
+DstPair: "B29:B28" is pair_index=14 & i23=0 & i1=1 { export B29_B28; }
+StoreSrcPair: "B29:B28" is pair_index=14 & i23=0 & i1=1 { export B29_B28; }
+DstPairN: "B29:B28" is pair_index=14 & i1=1 { export B29_B28; }
+StoreSrcPairN: "B29:B28" is pair_index=14 & i1=1 { export B29_B28; }
+DstPair: "B31:B30" is pair_index=15 & i23=0 & i1=1 { export B31_B30; }
+StoreSrcPair: "B31:B30" is pair_index=15 & i23=0 & i1=1 { export B31_B30; }
+DstPairN: "B31:B30" is pair_index=15 & i1=1 { export B31_B30; }
+StoreSrcPairN: "B31:B30" is pair_index=15 & i1=1 { export B31_B30; }
+
+Src1Pair: "A1:A0" is src1_pair_index=0 & i13=0 & i1=0 { export A1_A0; }
+Src1Pair: "A3:A2" is src1_pair_index=1 & i13=0 & i1=0 { export A3_A2; }
+Src1Pair: "A5:A4" is src1_pair_index=2 & i13=0 & i1=0 { export A5_A4; }
+Src1Pair: "A7:A6" is src1_pair_index=3 & i13=0 & i1=0 { export A7_A6; }
+Src1Pair: "A9:A8" is src1_pair_index=4 & i13=0 & i1=0 { export A9_A8; }
+Src1Pair: "A11:A10" is src1_pair_index=5 & i13=0 & i1=0 { export A11_A10; }
+Src1Pair: "A13:A12" is src1_pair_index=6 & i13=0 & i1=0 { export A13_A12; }
+Src1Pair: "A15:A14" is src1_pair_index=7 & i13=0 & i1=0 { export A15_A14; }
+Src1Pair: "A17:A16" is src1_pair_index=8 & i13=0 & i1=0 { export A17_A16; }
+Src1Pair: "A19:A18" is src1_pair_index=9 & i13=0 & i1=0 { export A19_A18; }
+Src1Pair: "A21:A20" is src1_pair_index=10 & i13=0 & i1=0 { export A21_A20; }
+Src1Pair: "A23:A22" is src1_pair_index=11 & i13=0 & i1=0 { export A23_A22; }
+Src1Pair: "A25:A24" is src1_pair_index=12 & i13=0 & i1=0 { export A25_A24; }
+Src1Pair: "A27:A26" is src1_pair_index=13 & i13=0 & i1=0 { export A27_A26; }
+Src1Pair: "A29:A28" is src1_pair_index=14 & i13=0 & i1=0 { export A29_A28; }
+Src1Pair: "A31:A30" is src1_pair_index=15 & i13=0 & i1=0 { export A31_A30; }
+Src1Pair: "B1:B0" is src1_pair_index=0 & i13=0 & i1=1 { export B1_B0; }
+Src1Pair: "B3:B2" is src1_pair_index=1 & i13=0 & i1=1 { export B3_B2; }
+Src1Pair: "B5:B4" is src1_pair_index=2 & i13=0 & i1=1 { export B5_B4; }
+Src1Pair: "B7:B6" is src1_pair_index=3 & i13=0 & i1=1 { export B7_B6; }
+Src1Pair: "B9:B8" is src1_pair_index=4 & i13=0 & i1=1 { export B9_B8; }
+Src1Pair: "B11:B10" is src1_pair_index=5 & i13=0 & i1=1 { export B11_B10; }
+Src1Pair: "B13:B12" is src1_pair_index=6 & i13=0 & i1=1 { export B13_B12; }
+Src1Pair: "B15:B14" is src1_pair_index=7 & i13=0 & i1=1 { export B15_B14; }
+Src1Pair: "B17:B16" is src1_pair_index=8 & i13=0 & i1=1 { export B17_B16; }
+Src1Pair: "B19:B18" is src1_pair_index=9 & i13=0 & i1=1 { export B19_B18; }
+Src1Pair: "B21:B20" is src1_pair_index=10 & i13=0 & i1=1 { export B21_B20; }
+Src1Pair: "B23:B22" is src1_pair_index=11 & i13=0 & i1=1 { export B23_B22; }
+Src1Pair: "B25:B24" is src1_pair_index=12 & i13=0 & i1=1 { export B25_B24; }
+Src1Pair: "B27:B26" is src1_pair_index=13 & i13=0 & i1=1 { export B27_B26; }
+Src1Pair: "B29:B28" is src1_pair_index=14 & i13=0 & i1=1 { export B29_B28; }
+Src1Pair: "B31:B30" is src1_pair_index=15 & i13=0 & i1=1 { export B31_B30; }
+
+Src2PairLocal: "A1:A0" is src2_pair_index=0 & i18=0 & i1=0 { export A1_A0; }
+Src2PairLocal: "A3:A2" is src2_pair_index=1 & i18=0 & i1=0 { export A3_A2; }
+Src2PairLocal: "A5:A4" is src2_pair_index=2 & i18=0 & i1=0 { export A5_A4; }
+Src2PairLocal: "A7:A6" is src2_pair_index=3 & i18=0 & i1=0 { export A7_A6; }
+Src2PairLocal: "A9:A8" is src2_pair_index=4 & i18=0 & i1=0 { export A9_A8; }
+Src2PairLocal: "A11:A10" is src2_pair_index=5 & i18=0 & i1=0 { export A11_A10; }
+Src2PairLocal: "A13:A12" is src2_pair_index=6 & i18=0 & i1=0 { export A13_A12; }
+Src2PairLocal: "A15:A14" is src2_pair_index=7 & i18=0 & i1=0 { export A15_A14; }
+Src2PairLocal: "A17:A16" is src2_pair_index=8 & i18=0 & i1=0 { export A17_A16; }
+Src2PairLocal: "A19:A18" is src2_pair_index=9 & i18=0 & i1=0 { export A19_A18; }
+Src2PairLocal: "A21:A20" is src2_pair_index=10 & i18=0 & i1=0 { export A21_A20; }
+Src2PairLocal: "A23:A22" is src2_pair_index=11 & i18=0 & i1=0 { export A23_A22; }
+Src2PairLocal: "A25:A24" is src2_pair_index=12 & i18=0 & i1=0 { export A25_A24; }
+Src2PairLocal: "A27:A26" is src2_pair_index=13 & i18=0 & i1=0 { export A27_A26; }
+Src2PairLocal: "A29:A28" is src2_pair_index=14 & i18=0 & i1=0 { export A29_A28; }
+Src2PairLocal: "A31:A30" is src2_pair_index=15 & i18=0 & i1=0 { export A31_A30; }
+Src1PairX: "A1:A0" is src1_pair_index=0 & i13=0 & i1=0 & i12=0 { export A1_A0; }
+Src1PairX: "A3:A2" is src1_pair_index=1 & i13=0 & i1=0 & i12=0 { export A3_A2; }
+Src1PairX: "A5:A4" is src1_pair_index=2 & i13=0 & i1=0 & i12=0 { export A5_A4; }
+Src1PairX: "A7:A6" is src1_pair_index=3 & i13=0 & i1=0 & i12=0 { export A7_A6; }
+Src1PairX: "A9:A8" is src1_pair_index=4 & i13=0 & i1=0 & i12=0 { export A9_A8; }
+Src1PairX: "A11:A10" is src1_pair_index=5 & i13=0 & i1=0 & i12=0 { export A11_A10; }
+Src1PairX: "A13:A12" is src1_pair_index=6 & i13=0 & i1=0 & i12=0 { export A13_A12; }
+Src1PairX: "A15:A14" is src1_pair_index=7 & i13=0 & i1=0 & i12=0 { export A15_A14; }
+Src1PairX: "A17:A16" is src1_pair_index=8 & i13=0 & i1=0 & i12=0 { export A17_A16; }
+Src1PairX: "A19:A18" is src1_pair_index=9 & i13=0 & i1=0 & i12=0 { export A19_A18; }
+Src1PairX: "A21:A20" is src1_pair_index=10 & i13=0 & i1=0 & i12=0 { export A21_A20; }
+Src1PairX: "A23:A22" is src1_pair_index=11 & i13=0 & i1=0 & i12=0 { export A23_A22; }
+Src1PairX: "A25:A24" is src1_pair_index=12 & i13=0 & i1=0 & i12=0 { export A25_A24; }
+Src1PairX: "A27:A26" is src1_pair_index=13 & i13=0 & i1=0 & i12=0 { export A27_A26; }
+Src1PairX: "A29:A28" is src1_pair_index=14 & i13=0 & i1=0 & i12=0 { export A29_A28; }
+Src1PairX: "A31:A30" is src1_pair_index=15 & i13=0 & i1=0 & i12=0 { export A31_A30; }
+Src1PairX: "B1:B0" is src1_pair_index=0 & i13=0 & i1=0 & i12=1 { export B1_B0; }
+Src1PairX: "B3:B2" is src1_pair_index=1 & i13=0 & i1=0 & i12=1 { export B3_B2; }
+Src1PairX: "B5:B4" is src1_pair_index=2 & i13=0 & i1=0 & i12=1 { export B5_B4; }
+Src1PairX: "B7:B6" is src1_pair_index=3 & i13=0 & i1=0 & i12=1 { export B7_B6; }
+Src1PairX: "B9:B8" is src1_pair_index=4 & i13=0 & i1=0 & i12=1 { export B9_B8; }
+Src1PairX: "B11:B10" is src1_pair_index=5 & i13=0 & i1=0 & i12=1 { export B11_B10; }
+Src1PairX: "B13:B12" is src1_pair_index=6 & i13=0 & i1=0 & i12=1 { export B13_B12; }
+Src1PairX: "B15:B14" is src1_pair_index=7 & i13=0 & i1=0 & i12=1 { export B15_B14; }
+Src1PairX: "B17:B16" is src1_pair_index=8 & i13=0 & i1=0 & i12=1 { export B17_B16; }
+Src1PairX: "B19:B18" is src1_pair_index=9 & i13=0 & i1=0 & i12=1 { export B19_B18; }
+Src1PairX: "B21:B20" is src1_pair_index=10 & i13=0 & i1=0 & i12=1 { export B21_B20; }
+Src1PairX: "B23:B22" is src1_pair_index=11 & i13=0 & i1=0 & i12=1 { export B23_B22; }
+Src1PairX: "B25:B24" is src1_pair_index=12 & i13=0 & i1=0 & i12=1 { export B25_B24; }
+Src1PairX: "B27:B26" is src1_pair_index=13 & i13=0 & i1=0 & i12=1 { export B27_B26; }
+Src1PairX: "B29:B28" is src1_pair_index=14 & i13=0 & i1=0 & i12=1 { export B29_B28; }
+Src1PairX: "B31:B30" is src1_pair_index=15 & i13=0 & i1=0 & i12=1 { export B31_B30; }
+Src2PairLocal: "B1:B0" is src2_pair_index=0 & i18=0 & i1=1 { export B1_B0; }
+Src2PairLocal: "B3:B2" is src2_pair_index=1 & i18=0 & i1=1 { export B3_B2; }
+Src2PairLocal: "B5:B4" is src2_pair_index=2 & i18=0 & i1=1 { export B5_B4; }
+Src2PairLocal: "B7:B6" is src2_pair_index=3 & i18=0 & i1=1 { export B7_B6; }
+Src2PairLocal: "B9:B8" is src2_pair_index=4 & i18=0 & i1=1 { export B9_B8; }
+Src2PairLocal: "B11:B10" is src2_pair_index=5 & i18=0 & i1=1 { export B11_B10; }
+Src2PairLocal: "B13:B12" is src2_pair_index=6 & i18=0 & i1=1 { export B13_B12; }
+Src2PairLocal: "B15:B14" is src2_pair_index=7 & i18=0 & i1=1 { export B15_B14; }
+Src2PairLocal: "B17:B16" is src2_pair_index=8 & i18=0 & i1=1 { export B17_B16; }
+Src2PairLocal: "B19:B18" is src2_pair_index=9 & i18=0 & i1=1 { export B19_B18; }
+Src2PairLocal: "B21:B20" is src2_pair_index=10 & i18=0 & i1=1 { export B21_B20; }
+Src2PairLocal: "B23:B22" is src2_pair_index=11 & i18=0 & i1=1 { export B23_B22; }
+Src2PairLocal: "B25:B24" is src2_pair_index=12 & i18=0 & i1=1 { export B25_B24; }
+Src2PairLocal: "B27:B26" is src2_pair_index=13 & i18=0 & i1=1 { export B27_B26; }
+Src2PairLocal: "B29:B28" is src2_pair_index=14 & i18=0 & i1=1 { export B29_B28; }
+Src2PairLocal: "B31:B30" is src2_pair_index=15 & i18=0 & i1=1 { export B31_B30; }
+Src1PairX: "B1:B0" is src1_pair_index=0 & i13=0 & i1=1 & i12=0 { export B1_B0; }
+Src1PairX: "B3:B2" is src1_pair_index=1 & i13=0 & i1=1 & i12=0 { export B3_B2; }
+Src1PairX: "B5:B4" is src1_pair_index=2 & i13=0 & i1=1 & i12=0 { export B5_B4; }
+Src1PairX: "B7:B6" is src1_pair_index=3 & i13=0 & i1=1 & i12=0 { export B7_B6; }
+Src1PairX: "B9:B8" is src1_pair_index=4 & i13=0 & i1=1 & i12=0 { export B9_B8; }
+Src1PairX: "B11:B10" is src1_pair_index=5 & i13=0 & i1=1 & i12=0 { export B11_B10; }
+Src1PairX: "B13:B12" is src1_pair_index=6 & i13=0 & i1=1 & i12=0 { export B13_B12; }
+Src1PairX: "B15:B14" is src1_pair_index=7 & i13=0 & i1=1 & i12=0 { export B15_B14; }
+Src1PairX: "B17:B16" is src1_pair_index=8 & i13=0 & i1=1 & i12=0 { export B17_B16; }
+Src1PairX: "B19:B18" is src1_pair_index=9 & i13=0 & i1=1 & i12=0 { export B19_B18; }
+Src1PairX: "B21:B20" is src1_pair_index=10 & i13=0 & i1=1 & i12=0 { export B21_B20; }
+Src1PairX: "B23:B22" is src1_pair_index=11 & i13=0 & i1=1 & i12=0 { export B23_B22; }
+Src1PairX: "B25:B24" is src1_pair_index=12 & i13=0 & i1=1 & i12=0 { export B25_B24; }
+Src1PairX: "B27:B26" is src1_pair_index=13 & i13=0 & i1=1 & i12=0 { export B27_B26; }
+Src1PairX: "B29:B28" is src1_pair_index=14 & i13=0 & i1=1 & i12=0 { export B29_B28; }
+Src1PairX: "B31:B30" is src1_pair_index=15 & i13=0 & i1=1 & i12=0 { export B31_B30; }
+Src1PairX: "A1:A0" is src1_pair_index=0 & i13=0 & i1=1 & i12=1 { export A1_A0; }
+Src1PairX: "A3:A2" is src1_pair_index=1 & i13=0 & i1=1 & i12=1 { export A3_A2; }
+Src1PairX: "A5:A4" is src1_pair_index=2 & i13=0 & i1=1 & i12=1 { export A5_A4; }
+Src1PairX: "A7:A6" is src1_pair_index=3 & i13=0 & i1=1 & i12=1 { export A7_A6; }
+Src1PairX: "A9:A8" is src1_pair_index=4 & i13=0 & i1=1 & i12=1 { export A9_A8; }
+Src1PairX: "A11:A10" is src1_pair_index=5 & i13=0 & i1=1 & i12=1 { export A11_A10; }
+Src1PairX: "A13:A12" is src1_pair_index=6 & i13=0 & i1=1 & i12=1 { export A13_A12; }
+Src1PairX: "A15:A14" is src1_pair_index=7 & i13=0 & i1=1 & i12=1 { export A15_A14; }
+Src1PairX: "A17:A16" is src1_pair_index=8 & i13=0 & i1=1 & i12=1 { export A17_A16; }
+Src1PairX: "A19:A18" is src1_pair_index=9 & i13=0 & i1=1 & i12=1 { export A19_A18; }
+Src1PairX: "A21:A20" is src1_pair_index=10 & i13=0 & i1=1 & i12=1 { export A21_A20; }
+Src1PairX: "A23:A22" is src1_pair_index=11 & i13=0 & i1=1 & i12=1 { export A23_A22; }
+Src1PairX: "A25:A24" is src1_pair_index=12 & i13=0 & i1=1 & i12=1 { export A25_A24; }
+Src1PairX: "A27:A26" is src1_pair_index=13 & i13=0 & i1=1 & i12=1 { export A27_A26; }
+Src1PairX: "A29:A28" is src1_pair_index=14 & i13=0 & i1=1 & i12=1 { export A29_A28; }
+Src1PairX: "A31:A30" is src1_pair_index=15 & i13=0 & i1=1 & i12=1 { export A31_A30; }
+
+Src2Pair: "A1:A0" is src2_pair_index=0 & i18=0 & i1=0 & i12=0 { export A1_A0; }
+Src2Pair: "A3:A2" is src2_pair_index=1 & i18=0 & i1=0 & i12=0 { export A3_A2; }
+Src2Pair: "A5:A4" is src2_pair_index=2 & i18=0 & i1=0 & i12=0 { export A5_A4; }
+Src2Pair: "A7:A6" is src2_pair_index=3 & i18=0 & i1=0 & i12=0 { export A7_A6; }
+Src2Pair: "A9:A8" is src2_pair_index=4 & i18=0 & i1=0 & i12=0 { export A9_A8; }
+Src2Pair: "A11:A10" is src2_pair_index=5 & i18=0 & i1=0 & i12=0 { export A11_A10; }
+Src2Pair: "A13:A12" is src2_pair_index=6 & i18=0 & i1=0 & i12=0 { export A13_A12; }
+Src2Pair: "A15:A14" is src2_pair_index=7 & i18=0 & i1=0 & i12=0 { export A15_A14; }
+Src2Pair: "A17:A16" is src2_pair_index=8 & i18=0 & i1=0 & i12=0 { export A17_A16; }
+Src2Pair: "A19:A18" is src2_pair_index=9 & i18=0 & i1=0 & i12=0 { export A19_A18; }
+Src2Pair: "A21:A20" is src2_pair_index=10 & i18=0 & i1=0 & i12=0 { export A21_A20; }
+Src2Pair: "A23:A22" is src2_pair_index=11 & i18=0 & i1=0 & i12=0 { export A23_A22; }
+Src2Pair: "A25:A24" is src2_pair_index=12 & i18=0 & i1=0 & i12=0 { export A25_A24; }
+Src2Pair: "A27:A26" is src2_pair_index=13 & i18=0 & i1=0 & i12=0 { export A27_A26; }
+Src2Pair: "A29:A28" is src2_pair_index=14 & i18=0 & i1=0 & i12=0 { export A29_A28; }
+Src2Pair: "A31:A30" is src2_pair_index=15 & i18=0 & i1=0 & i12=0 { export A31_A30; }
+Src2Pair: "B1:B0" is src2_pair_index=0 & i18=0 & i1=0 & i12=1 { export B1_B0; }
+Src2Pair: "B3:B2" is src2_pair_index=1 & i18=0 & i1=0 & i12=1 { export B3_B2; }
+Src2Pair: "B5:B4" is src2_pair_index=2 & i18=0 & i1=0 & i12=1 { export B5_B4; }
+Src2Pair: "B7:B6" is src2_pair_index=3 & i18=0 & i1=0 & i12=1 { export B7_B6; }
+Src2Pair: "B9:B8" is src2_pair_index=4 & i18=0 & i1=0 & i12=1 { export B9_B8; }
+Src2Pair: "B11:B10" is src2_pair_index=5 & i18=0 & i1=0 & i12=1 { export B11_B10; }
+Src2Pair: "B13:B12" is src2_pair_index=6 & i18=0 & i1=0 & i12=1 { export B13_B12; }
+Src2Pair: "B15:B14" is src2_pair_index=7 & i18=0 & i1=0 & i12=1 { export B15_B14; }
+Src2Pair: "B17:B16" is src2_pair_index=8 & i18=0 & i1=0 & i12=1 { export B17_B16; }
+Src2Pair: "B19:B18" is src2_pair_index=9 & i18=0 & i1=0 & i12=1 { export B19_B18; }
+Src2Pair: "B21:B20" is src2_pair_index=10 & i18=0 & i1=0 & i12=1 { export B21_B20; }
+Src2Pair: "B23:B22" is src2_pair_index=11 & i18=0 & i1=0 & i12=1 { export B23_B22; }
+Src2Pair: "B25:B24" is src2_pair_index=12 & i18=0 & i1=0 & i12=1 { export B25_B24; }
+Src2Pair: "B27:B26" is src2_pair_index=13 & i18=0 & i1=0 & i12=1 { export B27_B26; }
+Src2Pair: "B29:B28" is src2_pair_index=14 & i18=0 & i1=0 & i12=1 { export B29_B28; }
+Src2Pair: "B31:B30" is src2_pair_index=15 & i18=0 & i1=0 & i12=1 { export B31_B30; }
+Src2Pair: "B1:B0" is src2_pair_index=0 & i18=0 & i1=1 & i12=0 { export B1_B0; }
+Src2Pair: "B3:B2" is src2_pair_index=1 & i18=0 & i1=1 & i12=0 { export B3_B2; }
+Src2Pair: "B5:B4" is src2_pair_index=2 & i18=0 & i1=1 & i12=0 { export B5_B4; }
+Src2Pair: "B7:B6" is src2_pair_index=3 & i18=0 & i1=1 & i12=0 { export B7_B6; }
+Src2Pair: "B9:B8" is src2_pair_index=4 & i18=0 & i1=1 & i12=0 { export B9_B8; }
+Src2Pair: "B11:B10" is src2_pair_index=5 & i18=0 & i1=1 & i12=0 { export B11_B10; }
+Src2Pair: "B13:B12" is src2_pair_index=6 & i18=0 & i1=1 & i12=0 { export B13_B12; }
+Src2Pair: "B15:B14" is src2_pair_index=7 & i18=0 & i1=1 & i12=0 { export B15_B14; }
+Src2Pair: "B17:B16" is src2_pair_index=8 & i18=0 & i1=1 & i12=0 { export B17_B16; }
+Src2Pair: "B19:B18" is src2_pair_index=9 & i18=0 & i1=1 & i12=0 { export B19_B18; }
+Src2Pair: "B21:B20" is src2_pair_index=10 & i18=0 & i1=1 & i12=0 { export B21_B20; }
+Src2Pair: "B23:B22" is src2_pair_index=11 & i18=0 & i1=1 & i12=0 { export B23_B22; }
+Src2Pair: "B25:B24" is src2_pair_index=12 & i18=0 & i1=1 & i12=0 { export B25_B24; }
+Src2Pair: "B27:B26" is src2_pair_index=13 & i18=0 & i1=1 & i12=0 { export B27_B26; }
+Src2Pair: "B29:B28" is src2_pair_index=14 & i18=0 & i1=1 & i12=0 { export B29_B28; }
+Src2Pair: "B31:B30" is src2_pair_index=15 & i18=0 & i1=1 & i12=0 { export B31_B30; }
+Src2Pair: "A1:A0" is src2_pair_index=0 & i18=0 & i1=1 & i12=1 { export A1_A0; }
+Src2Pair: "A3:A2" is src2_pair_index=1 & i18=0 & i1=1 & i12=1 { export A3_A2; }
+Src2Pair: "A5:A4" is src2_pair_index=2 & i18=0 & i1=1 & i12=1 { export A5_A4; }
+Src2Pair: "A7:A6" is src2_pair_index=3 & i18=0 & i1=1 & i12=1 { export A7_A6; }
+Src2Pair: "A9:A8" is src2_pair_index=4 & i18=0 & i1=1 & i12=1 { export A9_A8; }
+Src2Pair: "A11:A10" is src2_pair_index=5 & i18=0 & i1=1 & i12=1 { export A11_A10; }
+Src2Pair: "A13:A12" is src2_pair_index=6 & i18=0 & i1=1 & i12=1 { export A13_A12; }
+Src2Pair: "A15:A14" is src2_pair_index=7 & i18=0 & i1=1 & i12=1 { export A15_A14; }
+Src2Pair: "A17:A16" is src2_pair_index=8 & i18=0 & i1=1 & i12=1 { export A17_A16; }
+Src2Pair: "A19:A18" is src2_pair_index=9 & i18=0 & i1=1 & i12=1 { export A19_A18; }
+Src2Pair: "A21:A20" is src2_pair_index=10 & i18=0 & i1=1 & i12=1 { export A21_A20; }
+Src2Pair: "A23:A22" is src2_pair_index=11 & i18=0 & i1=1 & i12=1 { export A23_A22; }
+Src2Pair: "A25:A24" is src2_pair_index=12 & i18=0 & i1=1 & i12=1 { export A25_A24; }
+Src2Pair: "A27:A26" is src2_pair_index=13 & i18=0 & i1=1 & i12=1 { export A27_A26; }
+Src2Pair: "A29:A28" is src2_pair_index=14 & i18=0 & i1=1 & i12=1 { export A29_A28; }
+Src2Pair: "A31:A30" is src2_pair_index=15 & i18=0 & i1=1 & i12=1 { export A31_A30; }
+
+Src2PairDpsp: "A1:A0" is src2_pair_index=0 & i1=0 & i12=0 { export A1_A0; }
+Src2PairDpsp: "A3:A2" is src2_pair_index=1 & i1=0 & i12=0 { export A3_A2; }
+Src2PairDpsp: "A5:A4" is src2_pair_index=2 & i1=0 & i12=0 { export A5_A4; }
+Src2PairDpsp: "A7:A6" is src2_pair_index=3 & i1=0 & i12=0 { export A7_A6; }
+Src2PairDpsp: "A9:A8" is src2_pair_index=4 & i1=0 & i12=0 { export A9_A8; }
+Src2PairDpsp: "A11:A10" is src2_pair_index=5 & i1=0 & i12=0 { export A11_A10; }
+Src2PairDpsp: "A13:A12" is src2_pair_index=6 & i1=0 & i12=0 { export A13_A12; }
+Src2PairDpsp: "A15:A14" is src2_pair_index=7 & i1=0 & i12=0 { export A15_A14; }
+Src2PairDpsp: "A17:A16" is src2_pair_index=8 & i1=0 & i12=0 { export A17_A16; }
+Src2PairDpsp: "A19:A18" is src2_pair_index=9 & i1=0 & i12=0 { export A19_A18; }
+Src2PairDpsp: "A21:A20" is src2_pair_index=10 & i1=0 & i12=0 { export A21_A20; }
+Src2PairDpsp: "A23:A22" is src2_pair_index=11 & i1=0 & i12=0 { export A23_A22; }
+Src2PairDpsp: "A25:A24" is src2_pair_index=12 & i1=0 & i12=0 { export A25_A24; }
+Src2PairDpsp: "A27:A26" is src2_pair_index=13 & i1=0 & i12=0 { export A27_A26; }
+Src2PairDpsp: "A29:A28" is src2_pair_index=14 & i1=0 & i12=0 { export A29_A28; }
+Src2PairDpsp: "A31:A30" is src2_pair_index=15 & i1=0 & i12=0 { export A31_A30; }
+Src2PairDpsp: "B1:B0" is src2_pair_index=0 & i1=1 & i12=0 { export B1_B0; }
+Src2PairDpsp: "B3:B2" is src2_pair_index=1 & i1=1 & i12=0 { export B3_B2; }
+Src2PairDpsp: "B5:B4" is src2_pair_index=2 & i1=1 & i12=0 { export B5_B4; }
+Src2PairDpsp: "B7:B6" is src2_pair_index=3 & i1=1 & i12=0 { export B7_B6; }
+Src2PairDpsp: "B9:B8" is src2_pair_index=4 & i1=1 & i12=0 { export B9_B8; }
+Src2PairDpsp: "B11:B10" is src2_pair_index=5 & i1=1 & i12=0 { export B11_B10; }
+Src2PairDpsp: "B13:B12" is src2_pair_index=6 & i1=1 & i12=0 { export B13_B12; }
+Src2PairDpsp: "B15:B14" is src2_pair_index=7 & i1=1 & i12=0 { export B15_B14; }
+Src2PairDpsp: "B17:B16" is src2_pair_index=8 & i1=1 & i12=0 { export B17_B16; }
+Src2PairDpsp: "B19:B18" is src2_pair_index=9 & i1=1 & i12=0 { export B19_B18; }
+Src2PairDpsp: "B21:B20" is src2_pair_index=10 & i1=1 & i12=0 { export B21_B20; }
+Src2PairDpsp: "B23:B22" is src2_pair_index=11 & i1=1 & i12=0 { export B23_B22; }
+Src2PairDpsp: "B25:B24" is src2_pair_index=12 & i1=1 & i12=0 { export B25_B24; }
+Src2PairDpsp: "B27:B26" is src2_pair_index=13 & i1=1 & i12=0 { export B27_B26; }
+Src2PairDpsp: "B29:B28" is src2_pair_index=14 & i1=1 & i12=0 { export B29_B28; }
+Src2PairDpsp: "B31:B30" is src2_pair_index=15 & i1=1 & i12=0 { export B31_B30; }
+
+MemRegB: "*-" ^ BaseReg ^ "[" ^ UCst5 ^ "]" is mode=0x0 & ucst5 & BaseReg & UCst5 & base_idx & i7 { local delta:4 = UCst5; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegB: "*+" ^ BaseReg ^ "[" ^ UCst5 ^ "]" is mode=0x1 & ucst5 & BaseReg & UCst5 & base_idx & i7 { local delta:4 = UCst5; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegB: "*-" ^ BaseReg ^ "[" ^ OffReg ^ "]" is mode=0x4 & offr & BaseReg & OffReg & base_idx & i7 { local delta:4 = OffReg; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegB: "*+" ^ BaseReg ^ "[" ^ OffReg ^ "]" is mode=0x5 & offr & BaseReg & OffReg & base_idx & i7 { local delta:4 = OffReg; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegB: "*--" ^ BaseReg ^ "[" ^ UCst5 ^ "]" is mode=0x8 & ucst5 & BaseReg & UCst5 & base_idx & i7 { local delta:4 = UCst5; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegB: "*++" ^ BaseReg ^ "[" ^ UCst5 ^ "]" is mode=0x9 & ucst5 & BaseReg & UCst5 & base_idx & i7 { local delta:4 = UCst5; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegB: "*" ^ BaseReg ^ "--[" ^ UCst5 ^ "]" is mode=0xa & ucst5 & BaseReg & UCst5 & base_idx & i7 { local delta:4 = UCst5; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegB: "*" ^ BaseReg ^ "++[" ^ UCst5 ^ "]" is mode=0xb & ucst5 & BaseReg & UCst5 & base_idx & i7 { local delta:4 = UCst5; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegB: "*--" ^ BaseReg ^ "[" ^ OffReg ^ "]" is mode=0xc & offr & BaseReg & OffReg & base_idx & i7 { local delta:4 = OffReg; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegB: "*++" ^ BaseReg ^ "[" ^ OffReg ^ "]" is mode=0xd & offr & BaseReg & OffReg & base_idx & i7 { local delta:4 = OffReg; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegB: "*" ^ BaseReg ^ "--[" ^ OffReg ^ "]" is mode=0xe & offr & BaseReg & OffReg & base_idx & i7 { local delta:4 = OffReg; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegB: "*" ^ BaseReg ^ "++[" ^ OffReg ^ "]" is mode=0xf & offr & BaseReg & OffReg & base_idx & i7 { local delta:4 = OffReg; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+
+MemRegH: "*-" ^ BaseReg ^ "[" ^ UCst5 ^ "]" is mode=0x0 & ucst5 & BaseReg & UCst5 & base_idx & i7 { local delta:4 = UCst5; delta = delta << 1; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegH: "*+" ^ BaseReg ^ "[" ^ UCst5 ^ "]" is mode=0x1 & ucst5 & BaseReg & UCst5 & base_idx & i7 { local delta:4 = UCst5; delta = delta << 1; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegH: "*-" ^ BaseReg ^ "[" ^ OffReg ^ "]" is mode=0x4 & offr & BaseReg & OffReg & base_idx & i7 { local delta:4 = OffReg; delta = delta << 1; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegH: "*+" ^ BaseReg ^ "[" ^ OffReg ^ "]" is mode=0x5 & offr & BaseReg & OffReg & base_idx & i7 { local delta:4 = OffReg; delta = delta << 1; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegH: "*--" ^ BaseReg ^ "[" ^ UCst5 ^ "]" is mode=0x8 & ucst5 & BaseReg & UCst5 & base_idx & i7 { local delta:4 = UCst5; delta = delta << 1; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegH: "*++" ^ BaseReg ^ "[" ^ UCst5 ^ "]" is mode=0x9 & ucst5 & BaseReg & UCst5 & base_idx & i7 { local delta:4 = UCst5; delta = delta << 1; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegH: "*" ^ BaseReg ^ "--[" ^ UCst5 ^ "]" is mode=0xa & ucst5 & BaseReg & UCst5 & base_idx & i7 { local delta:4 = UCst5; delta = delta << 1; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegH: "*" ^ BaseReg ^ "++[" ^ UCst5 ^ "]" is mode=0xb & ucst5 & BaseReg & UCst5 & base_idx & i7 { local delta:4 = UCst5; delta = delta << 1; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegH: "*--" ^ BaseReg ^ "[" ^ OffReg ^ "]" is mode=0xc & offr & BaseReg & OffReg & base_idx & i7 { local delta:4 = OffReg; delta = delta << 1; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegH: "*++" ^ BaseReg ^ "[" ^ OffReg ^ "]" is mode=0xd & offr & BaseReg & OffReg & base_idx & i7 { local delta:4 = OffReg; delta = delta << 1; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegH: "*" ^ BaseReg ^ "--[" ^ OffReg ^ "]" is mode=0xe & offr & BaseReg & OffReg & base_idx & i7 { local delta:4 = OffReg; delta = delta << 1; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegH: "*" ^ BaseReg ^ "++[" ^ OffReg ^ "]" is mode=0xf & offr & BaseReg & OffReg & base_idx & i7 { local delta:4 = OffReg; delta = delta << 1; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+
+MemRegW: "*-" ^ BaseReg ^ "[" ^ UCst5 ^ "]" is mode=0x0 & ucst5 & BaseReg & UCst5 & base_idx & i7 { local delta:4 = UCst5; delta = delta << 2; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegW: "*+" ^ BaseReg ^ "[" ^ UCst5 ^ "]" is mode=0x1 & ucst5 & BaseReg & UCst5 & base_idx & i7 { local delta:4 = UCst5; delta = delta << 2; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegW: "*-" ^ BaseReg ^ "[" ^ OffReg ^ "]" is mode=0x4 & offr & BaseReg & OffReg & base_idx & i7 { local delta:4 = OffReg; delta = delta << 2; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegW: "*+" ^ BaseReg ^ "[" ^ OffReg ^ "]" is mode=0x5 & offr & BaseReg & OffReg & base_idx & i7 { local delta:4 = OffReg; delta = delta << 2; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegW: "*--" ^ BaseReg ^ "[" ^ UCst5 ^ "]" is mode=0x8 & ucst5 & BaseReg & UCst5 & base_idx & i7 { local delta:4 = UCst5; delta = delta << 2; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegW: "*++" ^ BaseReg ^ "[" ^ UCst5 ^ "]" is mode=0x9 & ucst5 & BaseReg & UCst5 & base_idx & i7 { local delta:4 = UCst5; delta = delta << 2; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegW: "*" ^ BaseReg ^ "--[" ^ UCst5 ^ "]" is mode=0xa & ucst5 & BaseReg & UCst5 & base_idx & i7 { local delta:4 = UCst5; delta = delta << 2; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegW: "*" ^ BaseReg ^ "++[" ^ UCst5 ^ "]" is mode=0xb & ucst5 & BaseReg & UCst5 & base_idx & i7 { local delta:4 = UCst5; delta = delta << 2; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegW: "*--" ^ BaseReg ^ "[" ^ OffReg ^ "]" is mode=0xc & offr & BaseReg & OffReg & base_idx & i7 { local delta:4 = OffReg; delta = delta << 2; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegW: "*++" ^ BaseReg ^ "[" ^ OffReg ^ "]" is mode=0xd & offr & BaseReg & OffReg & base_idx & i7 { local delta:4 = OffReg; delta = delta << 2; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegW: "*" ^ BaseReg ^ "--[" ^ OffReg ^ "]" is mode=0xe & offr & BaseReg & OffReg & base_idx & i7 { local delta:4 = OffReg; delta = delta << 2; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegW: "*" ^ BaseReg ^ "++[" ^ OffReg ^ "]" is mode=0xf & offr & BaseReg & OffReg & base_idx & i7 { local delta:4 = OffReg; delta = delta << 2; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+
+MemRegD: "*-" ^ BaseReg ^ "[" ^ UCst5 ^ "]" is mode=0x0 & ucst5 & BaseReg & UCst5 & base_idx & i7 { local delta:4 = UCst5; delta = delta << 3; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegD: "*+" ^ BaseReg ^ "[" ^ UCst5 ^ "]" is mode=0x1 & ucst5 & BaseReg & UCst5 & base_idx & i7 { local delta:4 = UCst5; delta = delta << 3; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegD: "*-" ^ BaseReg ^ "[" ^ OffReg ^ "]" is mode=0x4 & offr & BaseReg & OffReg & base_idx & i7 { local delta:4 = OffReg; delta = delta << 3; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegD: "*+" ^ BaseReg ^ "[" ^ OffReg ^ "]" is mode=0x5 & offr & BaseReg & OffReg & base_idx & i7 { local delta:4 = OffReg; delta = delta << 3; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegD: "*--" ^ BaseReg ^ "[" ^ UCst5 ^ "]" is mode=0x8 & ucst5 & BaseReg & UCst5 & base_idx & i7 { local delta:4 = UCst5; delta = delta << 3; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegD: "*++" ^ BaseReg ^ "[" ^ UCst5 ^ "]" is mode=0x9 & ucst5 & BaseReg & UCst5 & base_idx & i7 { local delta:4 = UCst5; delta = delta << 3; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegD: "*" ^ BaseReg ^ "--[" ^ UCst5 ^ "]" is mode=0xa & ucst5 & BaseReg & UCst5 & base_idx & i7 { local delta:4 = UCst5; delta = delta << 3; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegD: "*" ^ BaseReg ^ "++[" ^ UCst5 ^ "]" is mode=0xb & ucst5 & BaseReg & UCst5 & base_idx & i7 { local delta:4 = UCst5; delta = delta << 3; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegD: "*--" ^ BaseReg ^ "[" ^ OffReg ^ "]" is mode=0xc & offr & BaseReg & OffReg & base_idx & i7 { local delta:4 = OffReg; delta = delta << 3; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegD: "*++" ^ BaseReg ^ "[" ^ OffReg ^ "]" is mode=0xd & offr & BaseReg & OffReg & base_idx & i7 { local delta:4 = OffReg; delta = delta << 3; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegD: "*" ^ BaseReg ^ "--[" ^ OffReg ^ "]" is mode=0xe & offr & BaseReg & OffReg & base_idx & i7 { local delta:4 = OffReg; delta = delta << 3; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegD: "*" ^ BaseReg ^ "++[" ^ OffReg ^ "]" is mode=0xf & offr & BaseReg & OffReg & base_idx & i7 { local delta:4 = OffReg; delta = delta << 3; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+
+MemRegN: "*-" ^ BaseReg ^ "(" ^ UCst5 ^ ")" is mode=0x0 & ucst5 & BaseReg & UCst5 & base_idx & i7 & scbit=0 { local delta:4 = UCst5; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegN: "*+" ^ BaseReg ^ "(" ^ UCst5 ^ ")" is mode=0x1 & ucst5 & BaseReg & UCst5 & base_idx & i7 & scbit=0 { local delta:4 = UCst5; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegN: "*-" ^ BaseReg ^ "(" ^ OffReg ^ ")" is mode=0x4 & offr & BaseReg & OffReg & base_idx & i7 & scbit=0 { local delta:4 = OffReg; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegN: "*+" ^ BaseReg ^ "(" ^ OffReg ^ ")" is mode=0x5 & offr & BaseReg & OffReg & base_idx & i7 & scbit=0 { local delta:4 = OffReg; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegN: "*--" ^ BaseReg ^ "(" ^ UCst5 ^ ")" is mode=0x8 & ucst5 & BaseReg & UCst5 & base_idx & i7 & scbit=0 { local delta:4 = UCst5; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegN: "*++" ^ BaseReg ^ "(" ^ UCst5 ^ ")" is mode=0x9 & ucst5 & BaseReg & UCst5 & base_idx & i7 & scbit=0 { local delta:4 = UCst5; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegN: "*" ^ BaseReg ^ "--(" ^ UCst5 ^ ")" is mode=0xa & ucst5 & BaseReg & UCst5 & base_idx & i7 & scbit=0 { local delta:4 = UCst5; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegN: "*" ^ BaseReg ^ "++(" ^ UCst5 ^ ")" is mode=0xb & ucst5 & BaseReg & UCst5 & base_idx & i7 & scbit=0 { local delta:4 = UCst5; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegN: "*--" ^ BaseReg ^ "(" ^ OffReg ^ ")" is mode=0xc & offr & BaseReg & OffReg & base_idx & i7 & scbit=0 { local delta:4 = OffReg; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegN: "*++" ^ BaseReg ^ "(" ^ OffReg ^ ")" is mode=0xd & offr & BaseReg & OffReg & base_idx & i7 & scbit=0 { local delta:4 = OffReg; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegN: "*" ^ BaseReg ^ "--(" ^ OffReg ^ ")" is mode=0xe & offr & BaseReg & OffReg & base_idx & i7 & scbit=0 { local delta:4 = OffReg; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegN: "*" ^ BaseReg ^ "++(" ^ OffReg ^ ")" is mode=0xf & offr & BaseReg & OffReg & base_idx & i7 & scbit=0 { local delta:4 = OffReg; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegN: "*-" ^ BaseReg ^ "[" ^ UCst5 ^ "]" is mode=0x0 & ucst5 & BaseReg & UCst5 & base_idx & i7 & scbit=1 { local delta:4 = UCst5; delta = delta << 3; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegN: "*+" ^ BaseReg ^ "[" ^ UCst5 ^ "]" is mode=0x1 & ucst5 & BaseReg & UCst5 & base_idx & i7 & scbit=1 { local delta:4 = UCst5; delta = delta << 3; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegN: "*-" ^ BaseReg ^ "[" ^ OffReg ^ "]" is mode=0x4 & offr & BaseReg & OffReg & base_idx & i7 & scbit=1 { local delta:4 = OffReg; delta = delta << 3; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegN: "*+" ^ BaseReg ^ "[" ^ OffReg ^ "]" is mode=0x5 & offr & BaseReg & OffReg & base_idx & i7 & scbit=1 { local delta:4 = OffReg; delta = delta << 3; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegN: "*--" ^ BaseReg ^ "[" ^ UCst5 ^ "]" is mode=0x8 & ucst5 & BaseReg & UCst5 & base_idx & i7 & scbit=1 { local delta:4 = UCst5; delta = delta << 3; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegN: "*++" ^ BaseReg ^ "[" ^ UCst5 ^ "]" is mode=0x9 & ucst5 & BaseReg & UCst5 & base_idx & i7 & scbit=1 { local delta:4 = UCst5; delta = delta << 3; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegN: "*" ^ BaseReg ^ "--[" ^ UCst5 ^ "]" is mode=0xa & ucst5 & BaseReg & UCst5 & base_idx & i7 & scbit=1 { local delta:4 = UCst5; delta = delta << 3; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegN: "*" ^ BaseReg ^ "++[" ^ UCst5 ^ "]" is mode=0xb & ucst5 & BaseReg & UCst5 & base_idx & i7 & scbit=1 { local delta:4 = UCst5; delta = delta << 3; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegN: "*--" ^ BaseReg ^ "[" ^ OffReg ^ "]" is mode=0xc & offr & BaseReg & OffReg & base_idx & i7 & scbit=1 { local delta:4 = OffReg; delta = delta << 3; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegN: "*++" ^ BaseReg ^ "[" ^ OffReg ^ "]" is mode=0xd & offr & BaseReg & OffReg & base_idx & i7 & scbit=1 { local delta:4 = OffReg; delta = delta << 3; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegN: "*" ^ BaseReg ^ "--[" ^ OffReg ^ "]" is mode=0xe & offr & BaseReg & OffReg & base_idx & i7 & scbit=1 { local delta:4 = OffReg; delta = delta << 3; delta = 0 - delta; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+MemRegN: "*" ^ BaseReg ^ "++[" ^ OffReg ^ "]" is mode=0xf & offr & BaseReg & OffReg & base_idx & i7 & scbit=1 { local delta:4 = OffReg; delta = delta << 3; local a:4 = BaseReg; c6000_wrap_address(BaseReg, delta, base_idx, i7, a); export a; }
+
+MemLongB: "*+B14[" ^ UCst15 ^ "]" is i7=0 & ucst15 & UCst15 { local a:4 = B14 + UCst15; export a; }
+MemLongB: "*+B15[" ^ UCst15 ^ "]" is i7=1 & ucst15 & UCst15 { local a:4 = B15 + UCst15; export a; }
+
+MemLongH: "*+B14[" ^ UCst15 ^ "]" is i7=0 & ucst15 & UCst15 { local a:4 = B14 + (UCst15 << 1); export a; }
+MemLongH: "*+B15[" ^ UCst15 ^ "]" is i7=1 & ucst15 & UCst15 { local a:4 = B15 + (UCst15 << 1); export a; }
+
+MemLongW: "*+B14[" ^ UCst15 ^ "]" is i7=0 & ucst15 & UCst15 { local a:4 = B14 + (UCst15 << 2); export a; }
+MemLongW: "*+B15[" ^ UCst15 ^ "]" is i7=1 & ucst15 & UCst15 { local a:4 = B15 + (UCst15 << 2); export a; }

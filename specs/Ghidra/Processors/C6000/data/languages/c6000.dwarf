@@ -1,0 +1,13 @@
+<dwarf>
+  <!-- C6000 EABI / GCC DWARF register numbers (gcc/config/c6x/c6x.cc debugger_register_map):
+       0-15 = A0-A15, 16-31 = B0-B15, 37-52 = A16-A31, 53-68 = B16-B31.
+       B15 is the stack pointer; at function entry the CFA is B15 + 0. -->
+  <register_mappings>
+    <register_mapping dwarf="0" ghidra="A0" auto_count="16"/>
+    <register_mapping dwarf="16" ghidra="B0" auto_count="15"/>
+    <register_mapping dwarf="31" ghidra="B15" stackpointer="true"/>
+    <register_mapping dwarf="37" ghidra="A16" auto_count="16"/>
+    <register_mapping dwarf="53" ghidra="B16" auto_count="16"/>
+  </register_mappings>
+  <call_frame_cfa value="0"/>
+</dwarf>

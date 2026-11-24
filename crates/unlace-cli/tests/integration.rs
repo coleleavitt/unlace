@@ -60,6 +60,8 @@ mod x86_amx;
 mod aarch64_rme;
 #[path = "i4004_raw.rs"]
 mod i4004_raw;
+#[path = "s2650_raw.rs"]
+mod s2650_raw;
 
 #[path = "firmware_raw.rs"]
 mod firmware_raw;

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="2650"
+            endian="big"
+            size="16"
+            variant="default"
+            version="1.0"
+            slafile="2650.sla"
+            processorspec="2650.pspec"
+            id="2650:BE:16:default">
+    <description>Signetics 2650 / 2650A / 2650B</description>
+    <compiler name="default" spec="2650.cspec" id="default"/>
+  </language>
+</language_definitions>

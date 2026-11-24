@@ -4294,6 +4294,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `4004` | Intel 4004 / 4040 | `4004:LE:16:default` | Intel MCS-4 and MCS-40 Users Manuals | `unlace-cli/tests/i4004_raw.rs` |
 | `uPD7725` | NEC uPD7725 / uPD96050 DSP | `uPD7725:LE:16:default`, `uPD96050:LE:16:default` | NEC uPD7725 data sheet, necdsp notes, MAME `upd7725` | `unlace-cli/tests/upd7725.rs` |
 | `KR1878` | Angstrem KR1878VE1 (TESEY core) | `KR1878:LE:16:default` | ChipNews 2000/1 instruction table, Angstrem datasheet | `unlace-cli/tests/kr1878_raw.rs` |
+| `2650` | Signetics 2650 / 2650A / 2650B | `2650:BE:16:default` | Signetics 2650 Microprocessor manual, 2650 data sheet | `unlace-cli/tests/s2650_raw.rs` |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)

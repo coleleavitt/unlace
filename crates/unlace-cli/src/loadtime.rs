@@ -232,6 +232,22 @@ pub(crate) fn apply_to_command(
     }
 }
 
+/// The load options `options` and `slice` state over the process environment, as
+/// [`apply_to_process`] would leave it, without changing it.
+pub(crate) fn load_options(
+    options: &[(String, String)],
+    slice: Option<&str>,
+    decode_lanes: usize,
+    functions_inventory: bool,
+) -> loadoptions::LoadOptions {
+    loadoptions::LoadOptions::from_env_with(&settings(
+        options,
+        slice,
+        decode_lanes,
+        functions_inventory,
+    ))
+}
+
 pub(crate) fn apply_to_process(
     options: &[(String, String)],
     slice: Option<&str>,

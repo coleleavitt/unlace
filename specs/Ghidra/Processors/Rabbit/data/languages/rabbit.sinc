@@ -25,6 +25,7 @@ define context contextreg
   pfx    = (0,1)
   ioflag = (2,3)
   altd   = (4,4)
+  p7f    = (5,5)
 ;
 
 define token opbyte (8)
@@ -72,6 +73,13 @@ define pcodeop uma;
 define pcodeop ums;
 
 @define NP "pfx=0 & "
+
+# Rabbit 4000: LD r,g and the 8-bit ALU on a register or (HL) take the 7F prefix.
+@ifdef R4000
+@define P7F "p7f=1 & "
+@else
+@define P7F ""
+@endif
 
 ################################################################
 # Macros
@@ -341,14 +349,23 @@ rstn: "38" is v3=7 { export 0x70:2; }
 :^instruction is pfx=0 & ioflag=0 & op0_8=0xDB ; instruction [ ioflag=2; ] { build instruction; }
 :^instruction is pfx=0 & op0_8=0xDD ; instruction [ pfx=1; ] { build instruction; }
 :^instruction is pfx=0 & op0_8=0xFD ; instruction [ pfx=2; ] { build instruction; }
+@ifdef R4000
+:^instruction is pfx=0 & p7f=0 & op0_8=0x7F ; instruction [ p7f=1; ] { build instruction; }
+@endif
+@ifdef R6000
+# ALTS (alternate source) and ALTSD (alternate source and destination). ALTS is
+# decoded; sources still read the main register set (see README).
+:^instruction is pfx=0 & altd=0 & op0_8=0x40 ; instruction { build instruction; }
+:^instruction is pfx=0 & altd=0 & op0_8=0x64 ; instruction [ altd=1; ] { build instruction; }
+@endif
 
 ################################################################
 # 8-bit loads
 ################################################################
 
-:LD dR3,r0 is $(NP) op6_2=1 & dR3 & r0 { dR3 = r0; }
+:LD dR3,r0 is $(NP) $(P7F)op6_2=1 & dR3 & r0 { dR3 = r0; }
 :LD dR3,cbHL is op6_2=1 & dR3 & op0_3=6 & cbHL { dR3 = cbHL; }
-:LD dR3,cbXY is op6_2=1 & dR3 & op0_3=6 ; cbXY { dR3 = cbXY; }
+:LD dR3,cbXY is pfx!=0 & op6_2=1 & dR3 & op0_3=6 ; cbXY { dR3 = cbXY; }
 :LD cbHL,r0 is op6_2=1 & op3_3=6 & r0 & cbHL { cbHL = r0; }
 :LD cbXY,r0 is op6_2=1 & op3_3=6 & r0 ; cbXY { cbXY = r0; }
 :LD dR3,imm8 is $(NP) op6_2=0 & dR3 & op0_3=6 ; imm8 { dR3 = imm8; }
@@ -412,45 +429,45 @@ rstn: "38" is v3=7 { export 0x70:2; }
 ################################################################
 # 8-bit arithmetic and logic
 ################################################################
-:ADD dA,r0 is $(NP) op6_2=2 & op3_3=0 & r0 & dA { add8(dA, A, r0); }
-:ADD dA,cbHL is op6_2=2 & op3_3=0 & op0_3=6 & dA & cbHL { add8(dA, A, cbHL); }
-:ADD dA,cbXY is op6_2=2 & op3_3=0 & op0_3=6 & dA ; cbXY { add8(dA, A, cbXY); }
+:ADD dA,r0 is $(NP) $(P7F)op6_2=2 & op3_3=0 & r0 & dA { add8(dA, A, r0); }
+:ADD dA,cbHL is $(P7F)op6_2=2 & op3_3=0 & op0_3=6 & dA & cbHL { add8(dA, A, cbHL); }
+:ADD dA,cbXY is pfx!=0 & op6_2=2 & op3_3=0 & op0_3=6 & dA ; cbXY { add8(dA, A, cbXY); }
 :ADD dA,imm8 is $(NP) op6_2=3 & op3_3=0 & op0_3=6 & dA ; imm8 { add8(dA, A, imm8:1); }
-:ADC dA,r0 is $(NP) op6_2=2 & op3_3=1 & r0 & dA { adc8(dA, A, r0); }
-:ADC dA,cbHL is op6_2=2 & op3_3=1 & op0_3=6 & dA & cbHL { adc8(dA, A, cbHL); }
-:ADC dA,cbXY is op6_2=2 & op3_3=1 & op0_3=6 & dA ; cbXY { adc8(dA, A, cbXY); }
+:ADC dA,r0 is $(NP) $(P7F)op6_2=2 & op3_3=1 & r0 & dA { adc8(dA, A, r0); }
+:ADC dA,cbHL is $(P7F)op6_2=2 & op3_3=1 & op0_3=6 & dA & cbHL { adc8(dA, A, cbHL); }
+:ADC dA,cbXY is pfx!=0 & op6_2=2 & op3_3=1 & op0_3=6 & dA ; cbXY { adc8(dA, A, cbXY); }
 :ADC dA,imm8 is $(NP) op6_2=3 & op3_3=1 & op0_3=6 & dA ; imm8 { adc8(dA, A, imm8:1); }
-:SUB r0 is $(NP) op6_2=2 & op3_3=2 & r0 & dA { sub8(dA, A, r0); }
-:SUB cbHL is op6_2=2 & op3_3=2 & op0_3=6 & dA & cbHL { sub8(dA, A, cbHL); }
-:SUB cbXY is op6_2=2 & op3_3=2 & op0_3=6 & dA ; cbXY { sub8(dA, A, cbXY); }
+:SUB r0 is $(NP) $(P7F)op6_2=2 & op3_3=2 & r0 & dA { sub8(dA, A, r0); }
+:SUB cbHL is $(P7F)op6_2=2 & op3_3=2 & op0_3=6 & dA & cbHL { sub8(dA, A, cbHL); }
+:SUB cbXY is pfx!=0 & op6_2=2 & op3_3=2 & op0_3=6 & dA ; cbXY { sub8(dA, A, cbXY); }
 :SUB imm8 is $(NP) op6_2=3 & op3_3=2 & op0_3=6 & dA ; imm8 { sub8(dA, A, imm8:1); }
-:SBC dA,r0 is $(NP) op6_2=2 & op3_3=3 & r0 & dA { sbc8(dA, A, r0); }
-:SBC dA,cbHL is op6_2=2 & op3_3=3 & op0_3=6 & dA & cbHL { sbc8(dA, A, cbHL); }
-:SBC dA,cbXY is op6_2=2 & op3_3=3 & op0_3=6 & dA ; cbXY { sbc8(dA, A, cbXY); }
+:SBC dA,r0 is $(NP) $(P7F)op6_2=2 & op3_3=3 & r0 & dA { sbc8(dA, A, r0); }
+:SBC dA,cbHL is $(P7F)op6_2=2 & op3_3=3 & op0_3=6 & dA & cbHL { sbc8(dA, A, cbHL); }
+:SBC dA,cbXY is pfx!=0 & op6_2=2 & op3_3=3 & op0_3=6 & dA ; cbXY { sbc8(dA, A, cbXY); }
 :SBC dA,imm8 is $(NP) op6_2=3 & op3_3=3 & op0_3=6 & dA ; imm8 { sbc8(dA, A, imm8:1); }
-:AND r0 is $(NP) op6_2=2 & op3_3=4 & r0 & dA { local r:1 = A & r0; logic8(r); dA = r; }
-:AND cbHL is op6_2=2 & op3_3=4 & op0_3=6 & dA & cbHL { local r:1 = A & cbHL; logic8(r); dA = r; }
-:AND cbXY is op6_2=2 & op3_3=4 & op0_3=6 & dA ; cbXY { local r:1 = A & cbXY; logic8(r); dA = r; }
+:AND r0 is $(NP) $(P7F)op6_2=2 & op3_3=4 & r0 & dA { local r:1 = A & r0; logic8(r); dA = r; }
+:AND cbHL is $(P7F)op6_2=2 & op3_3=4 & op0_3=6 & dA & cbHL { local r:1 = A & cbHL; logic8(r); dA = r; }
+:AND cbXY is pfx!=0 & op6_2=2 & op3_3=4 & op0_3=6 & dA ; cbXY { local r:1 = A & cbXY; logic8(r); dA = r; }
 :AND imm8 is $(NP) op6_2=3 & op3_3=4 & op0_3=6 & dA ; imm8 { local r:1 = A & imm8:1; logic8(r); dA = r; }
-:XOR r0 is $(NP) op6_2=2 & op3_3=5 & r0 & dA { local r:1 = A ^ r0; logic8(r); dA = r; }
-:XOR cbHL is op6_2=2 & op3_3=5 & op0_3=6 & dA & cbHL { local r:1 = A ^ cbHL; logic8(r); dA = r; }
-:XOR cbXY is op6_2=2 & op3_3=5 & op0_3=6 & dA ; cbXY { local r:1 = A ^ cbXY; logic8(r); dA = r; }
+:XOR r0 is $(NP) $(P7F)op6_2=2 & op3_3=5 & r0 & dA { local r:1 = A ^ r0; logic8(r); dA = r; }
+:XOR cbHL is $(P7F)op6_2=2 & op3_3=5 & op0_3=6 & dA & cbHL { local r:1 = A ^ cbHL; logic8(r); dA = r; }
+:XOR cbXY is pfx!=0 & op6_2=2 & op3_3=5 & op0_3=6 & dA ; cbXY { local r:1 = A ^ cbXY; logic8(r); dA = r; }
 :XOR imm8 is $(NP) op6_2=3 & op3_3=5 & op0_3=6 & dA ; imm8 { local r:1 = A ^ imm8:1; logic8(r); dA = r; }
-:OR r0 is $(NP) op6_2=2 & op3_3=6 & r0 & dA { local r:1 = A | r0; logic8(r); dA = r; }
-:OR cbHL is op6_2=2 & op3_3=6 & op0_3=6 & dA & cbHL { local r:1 = A | cbHL; logic8(r); dA = r; }
-:OR cbXY is op6_2=2 & op3_3=6 & op0_3=6 & dA ; cbXY { local r:1 = A | cbXY; logic8(r); dA = r; }
+:OR r0 is $(NP) $(P7F)op6_2=2 & op3_3=6 & r0 & dA { local r:1 = A | r0; logic8(r); dA = r; }
+:OR cbHL is $(P7F)op6_2=2 & op3_3=6 & op0_3=6 & dA & cbHL { local r:1 = A | cbHL; logic8(r); dA = r; }
+:OR cbXY is pfx!=0 & op6_2=2 & op3_3=6 & op0_3=6 & dA ; cbXY { local r:1 = A | cbXY; logic8(r); dA = r; }
 :OR imm8 is $(NP) op6_2=3 & op3_3=6 & op0_3=6 & dA ; imm8 { local r:1 = A | imm8:1; logic8(r); dA = r; }
-:CP r0 is $(NP) op6_2=2 & op3_3=7 & r0 & dA { cp8(A, r0); }
-:CP cbHL is op6_2=2 & op3_3=7 & op0_3=6 & dA & cbHL { cp8(A, cbHL); }
-:CP cbXY is op6_2=2 & op3_3=7 & op0_3=6 & dA ; cbXY { cp8(A, cbXY); }
+:CP r0 is $(NP) $(P7F)op6_2=2 & op3_3=7 & r0 & dA { cp8(A, r0); }
+:CP cbHL is $(P7F)op6_2=2 & op3_3=7 & op0_3=6 & dA & cbHL { cp8(A, cbHL); }
+:CP cbXY is pfx!=0 & op6_2=2 & op3_3=7 & op0_3=6 & dA ; cbXY { cp8(A, cbXY); }
 :CP imm8 is $(NP) op6_2=3 & op3_3=7 & op0_3=6 & dA ; imm8 { cp8(A, imm8:1); }
 
 :INC dR3 is $(NP) op6_2=0 & dR3 & r3 & op0_3=4 { local r:1 = r3 + 1; LV_flag = scarry(r3, 1:1); resultFlags(r); dR3 = r; }
 :DEC dR3 is $(NP) op6_2=0 & dR3 & r3 & op0_3=5 { local r:1 = r3 - 1; LV_flag = sborrow(r3, 1:1); resultFlags(r); dR3 = r; }
 :INC cbHL is op0_8=0x34 & cbHL { local v:1 = cbHL; local r:1 = v + 1; LV_flag = scarry(v, 1:1); resultFlags(r); cbHL = r; }
-:INC cbXY is op0_8=0x34 ; cbXY { local v:1 = cbXY; local r:1 = v + 1; LV_flag = scarry(v, 1:1); resultFlags(r); cbXY = r; }
+:INC cbXY is pfx!=0 & op0_8=0x34 ; cbXY { local v:1 = cbXY; local r:1 = v + 1; LV_flag = scarry(v, 1:1); resultFlags(r); cbXY = r; }
 :DEC cbHL is op0_8=0x35 & cbHL { local v:1 = cbHL; local r:1 = v - 1; LV_flag = sborrow(v, 1:1); resultFlags(r); cbHL = r; }
-:DEC cbXY is op0_8=0x35 ; cbXY { local v:1 = cbXY; local r:1 = v - 1; LV_flag = sborrow(v, 1:1); resultFlags(r); cbXY = r; }
+:DEC cbXY is pfx!=0 & op0_8=0x35 ; cbXY { local v:1 = cbXY; local r:1 = v - 1; LV_flag = sborrow(v, 1:1); resultFlags(r); cbXY = r; }
 :NEG dA is $(NP) op0_8=0xED ; op0_8=0x44 & dA { sub8(dA, 0:1, A); }
 :CPL dA is $(NP) op0_8=0x2F & dA { dA = ~A; }
 :RLCA is $(NP) op0_8=0x07 & dA { C_flag = A >> 7; dA = (A << 1) | (A >> 7); }
@@ -483,35 +500,35 @@ rstn: "38" is v3=7 { export 0x70:2; }
 ################################################################
 :RLC dR0 is $(NP) op0_8=0xCB ; op6_2=0 & op3_3=0 & dR0 & r0 { local v:1 = r0; C_flag = v >> 7; local r:1 = (v << 1) | (v >> 7); rotFlags8(r); dR0 = r; }
 :RLC cbHL is op0_8=0xCB & cbHL ; op6_2=0 & op3_3=0 & op0_3=6 { local v:1 = cbHL; C_flag = v >> 7; local r:1 = (v << 1) | (v >> 7); rotFlags8(r); cbHL = r; }
-:RLC cbXY is op0_8=0xCB ; cbXY ; op6_2=0 & op3_3=0 & op0_3=6 { local v:1 = cbXY; C_flag = v >> 7; local r:1 = (v << 1) | (v >> 7); rotFlags8(r); cbXY = r; }
+:RLC cbXY is pfx!=0 & op0_8=0xCB ; cbXY ; op6_2=0 & op3_3=0 & op0_3=6 { local v:1 = cbXY; C_flag = v >> 7; local r:1 = (v << 1) | (v >> 7); rotFlags8(r); cbXY = r; }
 :RRC dR0 is $(NP) op0_8=0xCB ; op6_2=0 & op3_3=1 & dR0 & r0 { local v:1 = r0; C_flag = v & 1; local r:1 = (v >> 1) | (v << 7); rotFlags8(r); dR0 = r; }
 :RRC cbHL is op0_8=0xCB & cbHL ; op6_2=0 & op3_3=1 & op0_3=6 { local v:1 = cbHL; C_flag = v & 1; local r:1 = (v >> 1) | (v << 7); rotFlags8(r); cbHL = r; }
-:RRC cbXY is op0_8=0xCB ; cbXY ; op6_2=0 & op3_3=1 & op0_3=6 { local v:1 = cbXY; C_flag = v & 1; local r:1 = (v >> 1) | (v << 7); rotFlags8(r); cbXY = r; }
+:RRC cbXY is pfx!=0 & op0_8=0xCB ; cbXY ; op6_2=0 & op3_3=1 & op0_3=6 { local v:1 = cbXY; C_flag = v & 1; local r:1 = (v >> 1) | (v << 7); rotFlags8(r); cbXY = r; }
 :RL dR0 is $(NP) op0_8=0xCB ; op6_2=0 & op3_3=2 & dR0 & r0 { local v:1 = r0; local c:1 = C_flag; C_flag = v >> 7; local r:1 = (v << 1) | c; rotFlags8(r); dR0 = r; }
 :RL cbHL is op0_8=0xCB & cbHL ; op6_2=0 & op3_3=2 & op0_3=6 { local v:1 = cbHL; local c:1 = C_flag; C_flag = v >> 7; local r:1 = (v << 1) | c; rotFlags8(r); cbHL = r; }
-:RL cbXY is op0_8=0xCB ; cbXY ; op6_2=0 & op3_3=2 & op0_3=6 { local v:1 = cbXY; local c:1 = C_flag; C_flag = v >> 7; local r:1 = (v << 1) | c; rotFlags8(r); cbXY = r; }
+:RL cbXY is pfx!=0 & op0_8=0xCB ; cbXY ; op6_2=0 & op3_3=2 & op0_3=6 { local v:1 = cbXY; local c:1 = C_flag; C_flag = v >> 7; local r:1 = (v << 1) | c; rotFlags8(r); cbXY = r; }
 :RR dR0 is $(NP) op0_8=0xCB ; op6_2=0 & op3_3=3 & dR0 & r0 { local v:1 = r0; local c:1 = C_flag; C_flag = v & 1; local r:1 = (v >> 1) | (c << 7); rotFlags8(r); dR0 = r; }
 :RR cbHL is op0_8=0xCB & cbHL ; op6_2=0 & op3_3=3 & op0_3=6 { local v:1 = cbHL; local c:1 = C_flag; C_flag = v & 1; local r:1 = (v >> 1) | (c << 7); rotFlags8(r); cbHL = r; }
-:RR cbXY is op0_8=0xCB ; cbXY ; op6_2=0 & op3_3=3 & op0_3=6 { local v:1 = cbXY; local c:1 = C_flag; C_flag = v & 1; local r:1 = (v >> 1) | (c << 7); rotFlags8(r); cbXY = r; }
+:RR cbXY is pfx!=0 & op0_8=0xCB ; cbXY ; op6_2=0 & op3_3=3 & op0_3=6 { local v:1 = cbXY; local c:1 = C_flag; C_flag = v & 1; local r:1 = (v >> 1) | (c << 7); rotFlags8(r); cbXY = r; }
 :SLA dR0 is $(NP) op0_8=0xCB ; op6_2=0 & op3_3=4 & dR0 & r0 { local v:1 = r0; C_flag = v >> 7; local r:1 = v << 1; rotFlags8(r); dR0 = r; }
 :SLA cbHL is op0_8=0xCB & cbHL ; op6_2=0 & op3_3=4 & op0_3=6 { local v:1 = cbHL; C_flag = v >> 7; local r:1 = v << 1; rotFlags8(r); cbHL = r; }
-:SLA cbXY is op0_8=0xCB ; cbXY ; op6_2=0 & op3_3=4 & op0_3=6 { local v:1 = cbXY; C_flag = v >> 7; local r:1 = v << 1; rotFlags8(r); cbXY = r; }
+:SLA cbXY is pfx!=0 & op0_8=0xCB ; cbXY ; op6_2=0 & op3_3=4 & op0_3=6 { local v:1 = cbXY; C_flag = v >> 7; local r:1 = v << 1; rotFlags8(r); cbXY = r; }
 :SRA dR0 is $(NP) op0_8=0xCB ; op6_2=0 & op3_3=5 & dR0 & r0 { local v:1 = r0; C_flag = v & 1; local r:1 = v s>> 1; rotFlags8(r); dR0 = r; }
 :SRA cbHL is op0_8=0xCB & cbHL ; op6_2=0 & op3_3=5 & op0_3=6 { local v:1 = cbHL; C_flag = v & 1; local r:1 = v s>> 1; rotFlags8(r); cbHL = r; }
-:SRA cbXY is op0_8=0xCB ; cbXY ; op6_2=0 & op3_3=5 & op0_3=6 { local v:1 = cbXY; C_flag = v & 1; local r:1 = v s>> 1; rotFlags8(r); cbXY = r; }
+:SRA cbXY is pfx!=0 & op0_8=0xCB ; cbXY ; op6_2=0 & op3_3=5 & op0_3=6 { local v:1 = cbXY; C_flag = v & 1; local r:1 = v s>> 1; rotFlags8(r); cbXY = r; }
 :SRL dR0 is $(NP) op0_8=0xCB ; op6_2=0 & op3_3=7 & dR0 & r0 { local v:1 = r0; C_flag = v & 1; local r:1 = v >> 1; rotFlags8(r); dR0 = r; }
 :SRL cbHL is op0_8=0xCB & cbHL ; op6_2=0 & op3_3=7 & op0_3=6 { local v:1 = cbHL; C_flag = v & 1; local r:1 = v >> 1; rotFlags8(r); cbHL = r; }
-:SRL cbXY is op0_8=0xCB ; cbXY ; op6_2=0 & op3_3=7 & op0_3=6 { local v:1 = cbXY; C_flag = v & 1; local r:1 = v >> 1; rotFlags8(r); cbXY = r; }
+:SRL cbXY is pfx!=0 & op0_8=0xCB ; cbXY ; op6_2=0 & op3_3=7 & op0_3=6 { local v:1 = cbXY; C_flag = v & 1; local r:1 = v >> 1; rotFlags8(r); cbXY = r; }
 
 :BIT bit3,r0 is $(NP) op0_8=0xCB ; op6_2=1 & bit3 & r0 { Z_flag = ((r0 >> bit3) & 1) == 0; }
 :BIT bit3,cbHL is op0_8=0xCB & cbHL ; op6_2=1 & bit3 & op0_3=6 { Z_flag = ((cbHL >> bit3) & 1) == 0; }
-:BIT bit3,cbXY is op0_8=0xCB ; cbXY ; op6_2=1 & bit3 & op0_3=6 { Z_flag = ((cbXY >> bit3) & 1) == 0; }
+:BIT bit3,cbXY is pfx!=0 & op0_8=0xCB ; cbXY ; op6_2=1 & bit3 & op0_3=6 { Z_flag = ((cbXY >> bit3) & 1) == 0; }
 :RES bit3,dR0 is $(NP) op0_8=0xCB ; op6_2=2 & bit3 & dR0 & r0 { dR0 = r0 & ~(1 << bit3); }
 :RES bit3,cbHL is op0_8=0xCB & cbHL ; op6_2=2 & bit3 & op0_3=6 { cbHL = cbHL & ~(1 << bit3); }
-:RES bit3,cbXY is op0_8=0xCB ; cbXY ; op6_2=2 & bit3 & op0_3=6 { cbXY = cbXY & ~(1 << bit3); }
+:RES bit3,cbXY is pfx!=0 & op0_8=0xCB ; cbXY ; op6_2=2 & bit3 & op0_3=6 { cbXY = cbXY & ~(1 << bit3); }
 :SET bit3,dR0 is $(NP) op0_8=0xCB ; op6_2=3 & bit3 & dR0 & r0 { dR0 = r0 | (1 << bit3); }
 :SET bit3,cbHL is op0_8=0xCB & cbHL ; op6_2=3 & bit3 & op0_3=6 { cbHL = cbHL | (1 << bit3); }
-:SET bit3,cbXY is op0_8=0xCB ; cbXY ; op6_2=3 & bit3 & op0_3=6 { cbXY = cbXY | (1 << bit3); }
+:SET bit3,cbXY is pfx!=0 & op0_8=0xCB ; cbXY ; op6_2=3 & bit3 & op0_3=6 { cbXY = cbXY | (1 << bit3); }
 
 ################################################################
 # Control flow
@@ -578,6 +595,13 @@ physAddr: is epsilon { local p:3 = zext(A & 0x0F); p = p << 16; export p; }
 :PUSH "SU" is $(NP) op0_8=0xED ; op0_8=0x66 { push8(SU); }
 :POP "SU" is $(NP) op0_8=0xED ; op0_8=0x6E { pop8(SU); }
 :SYSCALL is $(NP) op0_8=0xED ; op0_8=0x75 { push16(&:2 inst_next); syscall(); }
+@endif
+
+@ifdef R4000
+@include "rabbit4000.sinc"
+@endif
+@ifdef R6000
+@include "rabbit6000.sinc"
 @endif
 
 :NOP is $(NP) op0_8=0x00 { }

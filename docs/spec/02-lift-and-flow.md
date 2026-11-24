@@ -4185,7 +4185,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `A29K` | AMD Am29000 | `a29k:LE:32:default`, `a29k:BE:32:default` | aleph-void/ghidra_a29k (fork of mumbel/ghidra_a29k) @ `f3b6ab7373`, Apache-2.0 |
 | `uPD78xx` | NEC 78K0 / 78K0S / 78K4 (uPD78xx) | `upd78:LE:16:default` | aleph-void/ghidra-upd78xx @ `036419037e`, Apache-2.0 |
 | `R8C` | Renesas M16C/20 and R8C/Tiny | `R8C:LE:16:default` | AlexDev-TH/ghidra-r8c @ `6484b9470a`, Apache-2.0 |
-| `C166` | Infineon C166 / XC166, ST10 | `C166:LE:16:default`, `C166:CS:LE:16:default` | aleph-void/c166-ghidra-module (fork of keyhana/c166-ghidra-module) @ `c544f0ad16`, MIT |
+| `C166` | Infineon C166 / XC166, ST10 | `C166:LE:16:default`, `C166:LE:16:CS` | aleph-void/c166-ghidra-module (fork of keyhana/c166-ghidra-module) @ `c544f0ad16`, MIT |
 | `F2MC16` | Fujitsu F2MC-16L / 16LX | `F2MC:LE:24:default` | aleph-void/F2MC-16LX (fork of mehmooda/F2MC-16LX) @ `0308d3095a`, MIT |
 | `8008` | Intel 8008 | `8008:LE:16:default` | aleph-void/ghidra-8008 @ `71c3e7378c`, Apache-2.0 |
 | `F8` | Fairchild F8 | `F8:BE:16:default`, `F8:BE:16:F3850`, `F8:BE:16:MK3870`, `F8:BE:16:F3870`, `F8:BE:16:MK3873` | aleph-void/ghidra-f8 @ `bad5887f84`, Apache-2.0 |
@@ -4212,7 +4212,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `TMS320C54x` | TI TMS320C54x | `TMS320C54x:BE:16:default` | aleph-void/ghidra-tms320c54x (fork of gabtremblay/ghidra-tms320c54x) @ `bef69d7c53`, Apache-2.0 |
 | `unSP` | Sunplus unSP | `unsp:LE:16:default` | aleph-void/ghidra-unSP (fork of SamuelWAnderson45/ghidra-unSP) @ `a609027c50`, Apache-2.0 |
 | `VideoCore4` | Broadcom VideoCore IV | `vc4:LE:32:default` | aleph-void/ghidra-videocore4 @ `db09a308c2`, Apache-2.0 |
-| `VMU` | Sega Dreamcast VMU (LC86K) | `vmu:2:default`, `vmu:2:dynamic` | aleph-void/Ghidra-VMU-Processor (fork of RossMeikleham/Ghidra-VMU-Processor) @ `7528a82f81`, MIT |
+| `VMU` | Sega Dreamcast VMU (LC86K) | `LC8670:LE:8:VMU`, `LC8670:LE:8:VMU-dynamic` | aleph-void/Ghidra-VMU-Processor (fork of RossMeikleham/Ghidra-VMU-Processor) @ `7528a82f81`, MIT |
 | `WE32100` | AT&T WE32100 | `WE32100:BE:32:default` | aleph-void/ghidra-we32100 (fork of fletto2/ghidra-we32100) @ `0324efb5cd`, MIT |
 | `WonderSwan` | NEC V30MZ (WonderSwan) | `V30MZ:LE:16:default` | aleph-void/ghidra-wonderswan (fork of JidouGhost-TL/ghidra-wonderswan) @ `f499014b08`, Apache-2.0 |
 | `XaviX` | XaviX | `XaviX:LE:24:default` | aleph-void/ghidra-xavix @ `8a94e7953b`, MIT |

@@ -12,8 +12,8 @@
 //! A forward reference resolves to the definition with the same unique name (the
 //! TPI stream keeps one of each), so a pointer to `struct Rect` declared before the
 //! structure is complete still reaches its layout. A self-referential aggregate
-//! is interned before its members are walked, so the inner pointer names the
-//! shell (the same documented loss as `dwarfstructs`). A class contributes its
+//! is declared before its members are walked, and a pointer built to the
+//! declaration reads the completed record. A class contributes its
 //! base classes as `super_<Base>` members and its virtual-function-table pointer
 //! as a `__vftable` member at offset 0. A structure's bitfields keep their bit
 //! positions; members that overlap an earlier one, members past the stated size
@@ -305,11 +305,10 @@ impl<'t, 'f> TpiMapper<'t, 'f> {
         let shell = match existing {
             Some(t) => t,
             None => {
-                let built = if union {
-                    self.types.get_type_union(&text)
-                } else {
-                    self.types.get_type_struct(&text)
-                };
+                // A declared record: a pointer built to the shell while the
+                // members are walked (a self-reference, or the same structure
+                // reached first through a global) reads the completed layout.
+                let built = self.types.kuna_declare_record(&text, union);
                 built.ok().filter(|t| t.get_metatype() == want)?
             }
         };

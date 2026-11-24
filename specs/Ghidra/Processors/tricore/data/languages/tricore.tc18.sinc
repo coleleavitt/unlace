@@ -1,0 +1,431 @@
+# TriCore TC1.6.2 and TC1.8 additions (AURIX TC3xx, TC4x), decoded only by the
+# tricore_tc18 language. Source: Infineon "TriCore TC1.8 architecture manual
+# volume 2" V1.0.0 (2024-02-14), chapter 3 opcode diagrams.
+
+define pcodeop crc32_b;
+define pcodeop crc32l_w;
+define pcodeop crcn;
+define pcodeop clmul_bytes;
+define pcodeop lsync;
+define pcodeop trapinv;
+define pcodeop hvcall;
+define pcodeop float_to_half;
+define pcodeop half_to_float;
+define pcodeop cache_address_ivld_vm;
+define pcodeop cache_address_wb_vm;
+define pcodeop cache_address_wi_vm;
+define pcodeop cache_index_ivld_vm;
+define pcodeop cache_index_wb_vm;
+define pcodeop cache_index_wi_vm;
+
+off18h: reloc is PCPMode=0 & op1215 ; op1621 & op2225 & op2831 [ reloc = (op1215 << 28) | (op2225 << 24) | (op2831 << 20) | (op1621 << 14); ] { local tmp:4 = reloc; export tmp; }
+
+macro bitrev8(b) {
+	b = ((b & 0xf0) >> 4) | ((b & 0x0f) << 4);
+	b = ((b & 0xcc) >> 2) | ((b & 0x33) << 2);
+	b = ((b & 0xaa) >> 1) | ((b & 0x55) << 1);
+}
+
+macro div64flags(a, b, signed) {
+	local ovf:1 = (b == 0) || (signed && (b == 0xffffffffffffffff) && (a == 0x8000000000000000));
+	$(PSW_V) = ovf;
+	$(PSW_SV) = $(PSW_SV) | ovf;
+	$(PSW_AV) = 0;
+}
+
+# Integer: CRC, population count, byte shuffle, carry-less multiply
+
+:crc32b.w Rd2831,Rd1215,Rd0811 is PCPMode=0 & Rd0811 & Rd1215 & op0007=0x4b ; Rd2831 & op1627=0x30
+{
+	Rd2831 = crc32(Rd1215, Rd0811);
+}
+
+:crc32l.w Rd2831,Rd1215,Rd0811 is PCPMode=0 & Rd0811 & Rd1215 & op0007=0x4b ; Rd2831 & op1627=0x70
+{
+	Rd2831 = crc32l_w(Rd1215, Rd0811);
+}
+
+:crc32.b Rd2831,Rd1215,Rd0811 is PCPMode=0 & Rd0811 & Rd1215 & op0007=0x4b ; Rd2831 & op1627=0x60
+{
+	Rd2831 = crc32_b(Rd1215, Rd0811);
+}
+
+:crcn Rd2831,Rd2427,Rd0811,Rd1215 is PCPMode=0 & Rd0811 & Rd1215 & op0007=0x6b ; Rd2427 & Rd2831 & op1623=0x10
+{
+	Rd2831 = crcn(Rd2427, Rd0811, Rd1215);
+}
+
+:popcnt.w Rd2831,Rd0811 is PCPMode=0 & Rd0811 & op0007=0x4b & op1215=0x0 ; Rd2831 & op1627=0x220
+{
+	Rd2831 = popcount(Rd0811);
+}
+
+:shuffle Rd2831,Rd0811,const1220Z is PCPMode=0 & ( Rd0811 & op0007=0x8f ; Rd2831 & op2127=0x7 & op2020=0 ) & const1220Z
+{
+	local s:4 = const1220Z;
+	local src:4 = Rd0811;
+	local b0:4 = (src >> ((s & 3) * 8)) & 0xff;
+	local b1:4 = (src >> (((s >> 2) & 3) * 8)) & 0xff;
+	local b2:4 = (src >> (((s >> 4) & 3) * 8)) & 0xff;
+	local b3:4 = (src >> (((s >> 6) & 3) * 8)) & 0xff;
+	Rd2831 = b0 | (b1 << 8) | (b2 << 16) | (b3 << 24);
+}
+
+:shuffle Rd2831,Rd0811,const1220Z is PCPMode=0 & ( Rd0811 & op0007=0x8f ; Rd2831 & op2127=0x7 & op2020=1 ) & const1220Z
+{
+	local s:4 = const1220Z;
+	local src:4 = Rd0811;
+	local b0:4 = (src >> ((s & 3) * 8)) & 0xff;
+	local b1:4 = (src >> (((s >> 2) & 3) * 8)) & 0xff;
+	local b2:4 = (src >> (((s >> 4) & 3) * 8)) & 0xff;
+	local b3:4 = (src >> (((s >> 6) & 3) * 8)) & 0xff;
+	bitrev8(b0);
+	bitrev8(b1);
+	bitrev8(b2);
+	bitrev8(b3);
+	Rd2831 = b0 | (b1 << 8) | (b2 << 16) | (b3 << 24);
+}
+
+:mulp.b Re2831,Rd0811,Rd1215 is PCPMode=0 & Rd0811 & Rd1215 & op0007=0x4b ; Re2831 & op1627=0x2b0
+{
+	Re2831 = clmul_bytes(Rd0811, Rd1215);
+}
+
+# Integer: 64-bit divide and remainder
+
+:div64 Re2831,Re0811,Re1215 is PCPMode=0 & Re0811 & Re1215 & op0007=0x4b ; Re2831 & op1627=0x202
+{
+	local a:8 = Re0811;
+	local b:8 = Re1215;
+	div64flags(a, b, 1:1);
+	Re2831 = a s/ b;
+}
+
+:div64.u Re2831,Re0811,Re1215 is PCPMode=0 & Re0811 & Re1215 & op0007=0x4b ; Re2831 & op1627=0x212
+{
+	local a:8 = Re0811;
+	local b:8 = Re1215;
+	div64flags(a, b, 0:1);
+	Re2831 = a / b;
+}
+
+:rem64 Re2831,Re0811,Re1215 is PCPMode=0 & Re0811 & Re1215 & op0007=0x4b ; Re2831 & op1627=0x342
+{
+	local a:8 = Re0811;
+	local b:8 = Re1215;
+	div64flags(a, b, 1:1);
+	Re2831 = a s% b;
+}
+
+:rem64.u Re2831,Re0811,Re1215 is PCPMode=0 & Re0811 & Re1215 & op0007=0x4b ; Re2831 & op1627=0x352
+{
+	local a:8 = Re0811;
+	local b:8 = Re1215;
+	div64flags(a, b, 0:1);
+	Re2831 = a % b;
+}
+
+# Address, branch and call
+
+:lha Ra0811,off18h is PCPMode=0 & ( Ra0811 & op0007=0xc5 ; op2627=0x1 ) & off18h
+{
+	Ra0811 = off18h;
+}
+
+:jri Ra0811 is PCPMode=0 & Ra0811 & op0007=0x2d & op1215=0x0 ; op1631=0x130
+{
+	local tmp:4 = inst_start + Ra0811;
+	tmp = tmp & 0xfffffffe;
+	goto [tmp];
+}
+
+:calli Ra0811 is PCPMode=0 & Ra0811 & op0007=0xdc & op1215=0x1
+{
+	saveCallerState(FCX, LCX, PCXI);
+	a11 = inst_next;
+	local tmp:4 = Ra0811 & 0xfffffffe;
+	call [tmp];
+}
+
+# System: core register pairs, synchronization, traps, hypervisor
+
+:mfdcr Re2831,const1227Z is PCPMode=0 & ( op0007=0x4f & op0811=0x0 ; Re2831 ) & const1227Z
+{
+	Re2831 = *[register]:8 const1227Z;
+}
+
+:mtdcr const1227Z,Re0811 is PCPMode=0 & ( Re0811 & op0007=0xcf ; op2831=0x0 ) & const1227Z
+{
+	*[register]:8 const1227Z = Re0811;
+}
+
+:lsync is PCPMode=0 & op0007=0xd & op0815=0x0 ; op1631=0x880
+{
+	lsync();
+}
+
+:trapinv is PCPMode=0 & op0007=0x36 & op0815=0x0
+{
+	trapinv();
+}
+
+:hvcall const1220Z is PCPMode=0 & ( op0007=0xad & op0811=0x0 ; op2131=0x2 ) & const1220Z
+{
+	hvcall(const1220Z[0,8]);
+}
+
+:rfh is PCPMode=0 & op0007=0xd & op0815=0x0 ; op1631=0x5c0
+{
+	local tmp:4 = a11 & 0xfffffffe;
+	restoreCallerState(FCX, LCX, PCXI);
+	return [tmp];
+}
+
+# Cache maintenance of another virtual machine's lines (BO, op1 49H)
+
+:cachea.i.vm BO is PCPMode=0 & ( op0405=0 & op0607=0x1 & op0811=0x0 ; op2225=0xe ) & BO
+{
+	build BO;
+	cache_address_ivld_vm(BO);
+}
+
+:cachea.w.vm BO is PCPMode=0 & ( op0405=0 & op0607=0x1 & op0811=0x0 ; op2225=0xc ) & BO
+{
+	build BO;
+	cache_address_wb_vm(BO);
+}
+
+:cachea.wi.vm BO is PCPMode=0 & ( op0405=0 & op0607=0x1 & op0811=0x0 ; op2225=0xd ) & BO
+{
+	build BO;
+	cache_address_wi_vm(BO);
+}
+
+:cachei.i.vm BO is PCPMode=0 & ( op0405=0 & op0607=0x1 & op0811=0x0 ; op2225=0xa ) & BO
+{
+	build BO;
+	cache_index_ivld_vm(BO);
+}
+
+:cachei.w.vm BO is PCPMode=0 & ( op0405=0 & op0607=0x1 & op0811=0x0 ; op2225=0xb ) & BO
+{
+	build BO;
+	cache_index_wb_vm(BO);
+}
+
+:cachei.wi.vm BO is PCPMode=0 & ( op0405=0 & op0607=0x1 & op0811=0x0 ; op2225=0xf ) & BO
+{
+	build BO;
+	cache_index_wi_vm(BO);
+}
+
+# Single-precision FPU additions (RR, op1 4BH, n=1)
+
+:abs.f Rd2831,Rd0811 is PCPMode=0 & Rd0811 & op0007=0x4b & op1215=0x0 ; Rd2831 & op1627=0x301
+{
+	Rd2831 = Rd0811 & 0x7fffffff;
+}
+
+:neg.f Rd2831,Rd0811 is PCPMode=0 & Rd0811 & op0007=0x4b & op1215=0x0 ; Rd2831 & op1627=0x311
+{
+	Rd2831 = Rd0811 ^ 0x80000000;
+}
+
+:max.f Rd2831,Rd0811,Rd1215 is PCPMode=0 & Rd0811 & Rd1215 & op0007=0x4b ; Rd2831 & op1627=0x321
+{
+	local a:4 = Rd0811;
+	local b:4 = Rd1215;
+	local takea:1 = nan(b) || (!nan(a) && (a f>= b));
+	Rd2831 = b;
+	if (!takea) goto <done>;
+	Rd2831 = a;
+<done>
+}
+
+:min.f Rd2831,Rd0811,Rd1215 is PCPMode=0 & Rd0811 & Rd1215 & op0007=0x4b ; Rd2831 & op1627=0x331
+{
+	local a:4 = Rd0811;
+	local b:4 = Rd1215;
+	local takea:1 = nan(b) || (!nan(a) && (a f<= b));
+	Rd2831 = b;
+	if (!takea) goto <done>;
+	Rd2831 = a;
+<done>
+}
+
+:ftoin Rd2831,Rd0811 is PCPMode=0 & Rd0811 & op0007=0x4b & op1215=0x0 ; Rd2831 & op1627=0x371
+{
+	Rd2831 = trunc(round(Rd0811));
+}
+
+:ftohp Rd2831,Rd0811 is PCPMode=0 & Rd0811 & op0007=0x4b & op1215=0x0 ; Rd2831 & op1627=0x251
+{
+	local h:2 = float_to_half(Rd0811);
+	Rd2831 = zext(h);
+}
+
+:hptof Rd2831,Rd0811 is PCPMode=0 & Rd0811 & op0007=0x4b & op1215=0x0 ; Rd2831 & op1627=0x241
+{
+	Rd2831 = half_to_float(Rd0811:2);
+}
+
+# Double-precision FPU (RR and RRR, op1 4BH/6BH, n=2)
+
+:add.df Re2831,Re2427,Re0811 is PCPMode=0 & Re0811 & op0007=0x6b & op1215=0x0 ; Re2427 & Re2831 & op1623=0x22
+{
+	Re2831 = Re2427 f+ Re0811;
+}
+
+:sub.df Re2831,Re2427,Re0811 is PCPMode=0 & Re0811 & op0007=0x6b & op1215=0x0 ; Re2427 & Re2831 & op1623=0x32
+{
+	Re2831 = Re2427 f- Re0811;
+}
+
+:madd.df Re2831,Re2427,Re0811,Re1215 is PCPMode=0 & Re0811 & Re1215 & op0007=0x6b ; Re2427 & Re2831 & op1623=0x62
+{
+	Re2831 = Re2427 f+ (Re0811 f* Re1215);
+}
+
+:msub.df Re2831,Re2427,Re0811,Re1215 is PCPMode=0 & Re0811 & Re1215 & op0007=0x6b ; Re2427 & Re2831 & op1623=0x72
+{
+	Re2831 = Re2427 f- (Re0811 f* Re1215);
+}
+
+:mul.df Re2831,Re0811,Re1215 is PCPMode=0 & Re0811 & Re1215 & op0007=0x4b ; Re2831 & op1627=0x042
+{
+	Re2831 = Re0811 f* Re1215;
+}
+
+:div.df Re2831,Re0811,Re1215 is PCPMode=0 & Re0811 & Re1215 & op0007=0x4b ; Re2831 & op1627=0x052
+{
+	Re2831 = Re0811 f/ Re1215;
+}
+
+:cmp.df Rd2831,Re0811,Re1215 is PCPMode=0 & Re0811 & Re1215 & op0007=0x4b ; Rd2831 & op1627=0x002
+{
+	local a:8 = Re0811;
+	local b:8 = Re1215;
+	Rd2831 = 0;
+	Rd2831[0,1] = a f< b;
+	Rd2831[1,1] = a f== b;
+	Rd2831[2,1] = a f> b;
+	Rd2831[3,1] = nan(a) || nan(b);
+	Rd2831[4,1] = (a[52,11] == 0) && (a[0,52] != 0);
+	Rd2831[5,1] = (b[52,11] == 0) && (b[0,52] != 0);
+}
+
+:abs.df Re2831,Re0811 is PCPMode=0 & Re0811 & op0007=0x4b & op1215=0x0 ; Re2831 & op1627=0x302
+{
+	Re2831 = Re0811 & 0x7fffffffffffffff;
+}
+
+:neg.df Re2831,Re0811 is PCPMode=0 & Re0811 & op0007=0x4b & op1215=0x0 ; Re2831 & op1627=0x312
+{
+	Re2831 = Re0811 ^ 0x8000000000000000;
+}
+
+:max.df Re2831,Re0811,Re1215 is PCPMode=0 & Re0811 & Re1215 & op0007=0x4b ; Re2831 & op1627=0x322
+{
+	local a:8 = Re0811;
+	local b:8 = Re1215;
+	local takea:1 = nan(b) || (!nan(a) && (a f>= b));
+	Re2831 = b;
+	if (!takea) goto <done>;
+	Re2831 = a;
+<done>
+}
+
+:min.df Re2831,Re0811,Re1215 is PCPMode=0 & Re0811 & Re1215 & op0007=0x4b ; Re2831 & op1627=0x332
+{
+	local a:8 = Re0811;
+	local b:8 = Re1215;
+	local takea:1 = nan(b) || (!nan(a) && (a f<= b));
+	Re2831 = b;
+	if (!takea) goto <done>;
+	Re2831 = a;
+<done>
+}
+
+:qseed.df Re2831,Re0811 is PCPMode=0 & Re0811 & op0007=0x4b & op1215=0x0 ; Re2831 & op1627=0x192
+{
+	local one:8 = int2float(1:4);
+	Re2831 = one f/ sqrt(Re0811);
+}
+
+:dftoi Rd2831,Re0811 is PCPMode=0 & Re0811 & op0007=0x4b & op1215=0x0 ; Rd2831 & op1627=0x102
+{
+	Rd2831 = trunc(round(Re0811));
+}
+
+:dftoin Rd2831,Re0811 is PCPMode=0 & Re0811 & op0007=0x4b & op1215=0x0 ; Rd2831 & op1627=0x372
+{
+	Rd2831 = trunc(round(Re0811));
+}
+
+:dftoiz Rd2831,Re0811 is PCPMode=0 & Re0811 & op0007=0x4b & op1215=0x0 ; Rd2831 & op1627=0x132
+{
+	Rd2831 = trunc(Re0811);
+}
+
+:dftou Rd2831,Re0811 is PCPMode=0 & Re0811 & op0007=0x4b & op1215=0x0 ; Rd2831 & op1627=0x122
+{
+	local t:8 = trunc(round(Re0811));
+	Rd2831 = t:4;
+}
+
+:dftouz Rd2831,Re0811 is PCPMode=0 & Re0811 & op0007=0x4b & op1215=0x0 ; Rd2831 & op1627=0x172
+{
+	local t:8 = trunc(Re0811);
+	Rd2831 = t:4;
+}
+
+:dftol Re2831,Re0811 is PCPMode=0 & Re0811 & op0007=0x4b & op1215=0x0 ; Re2831 & op1627=0x1a2
+{
+	Re2831 = trunc(round(Re0811));
+}
+
+:dftolz Re2831,Re0811 is PCPMode=0 & Re0811 & op0007=0x4b & op1215=0x0 ; Re2831 & op1627=0x1b2
+{
+	Re2831 = trunc(Re0811);
+}
+
+:dftoul Re2831,Re0811 is PCPMode=0 & Re0811 & op0007=0x4b & op1215=0x0 ; Re2831 & op1627=0x1e2
+{
+	Re2831 = trunc(round(Re0811));
+}
+
+:dftoulz Re2831,Re0811 is PCPMode=0 & Re0811 & op0007=0x4b & op1215=0x0 ; Re2831 & op1627=0x1f2
+{
+	Re2831 = trunc(Re0811);
+}
+
+:itodf Re2831,Rd0811 is PCPMode=0 & Rd0811 & op0007=0x4b & op1215=0x0 ; Re2831 & op1627=0x142
+{
+	Re2831 = int2float(Rd0811);
+}
+
+:utodf Re2831,Rd0811 is PCPMode=0 & Rd0811 & op0007=0x4b & op1215=0x0 ; Re2831 & op1627=0x162
+{
+	local z:8 = zext(Rd0811);
+	Re2831 = int2float(z);
+}
+
+:ltodf Re2831,Re0811 is PCPMode=0 & Re0811 & op0007=0x4b & op1215=0x0 ; Re2831 & op1627=0x262
+{
+	Re2831 = int2float(Re0811);
+}
+
+:ultodf Re2831,Re0811 is PCPMode=0 & Re0811 & op0007=0x4b & op1215=0x0 ; Re2831 & op1627=0x272
+{
+	Re2831 = int2float(Re0811);
+}
+
+:dftof Rd2831,Re0811 is PCPMode=0 & Re0811 & op0007=0x4b & op1215=0x0 ; Rd2831 & op1627=0x282
+{
+	Rd2831 = float2float(Re0811);
+}
+
+:ftodf Re2831,Rd0811 is PCPMode=0 & Rd0811 & op0007=0x4b & op1215=0x0 ; Re2831 & op1627=0x292
+{
+	Re2831 = float2float(Rd0811);
+}

@@ -70,6 +70,8 @@ mod riscv_zfa;
 mod riscv_zfh;
 #[path = "rust_signature_summary.rs"]
 mod rust_signature_summary;
+#[path = "sbpf.rs"]
+mod sbpf;
 #[path = "sparc_prologue_start.rs"]
 mod sparc_prologue_start;
 #[path = "stm8_raw.rs"]

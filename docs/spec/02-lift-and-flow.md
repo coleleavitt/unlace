@@ -4449,6 +4449,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `Visium` | Visium (CDS GR5/GR6) | `visium:BE:32:default` | binutils `visium` opcode table and disassembler, GCC `config/visium` | `unlace-cli/tests/visium_raw.rs` |
 | `TMS9900` | TI TMS9900 | `TMS9900:BE:16:default` | TI TMS9900 Microprocessor Data Manual, TMS9900 Family System Development Manual | `unlace-cli/tests/tms9900_raw.rs` |
 | `Blackfin` | Analog Devices Blackfin (ADSP-BF5xx, BF6xx) | `Blackfin:LE:32:default` | Blackfin Processor Programming Reference rev 2.2, binutils `bfin.h` layouts; checked against `bfin-elf-objdump` | `unlace-cli/tests/blackfin_raw.rs` |
+| `sBPF` | Solana sBPF (SBPFv0/v1 and SBPFv2) | `sBPF:LE:64:v1`, `sBPF:LE:64:v2` | anza-xyz/sbpf `doc/bytecode.md`, RFC 9669; syscall hashes labelled | `unlace-cli/tests/sbpf.rs` |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)

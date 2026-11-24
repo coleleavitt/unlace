@@ -5731,7 +5731,11 @@ a `do`-`while` whose condition is its body's branch, a `BlockInfLoop` an infinit
 loop, a `BlockSwitch` a switch over its components, a `BlockGoto` a sequence of
 its body and a goto statement, and a condition or multi-goto block an opaque
 statement.
-Nesting deeper than 2048 blocks stays opaque. The tree is at `built`.
+Nesting deeper than 2048 blocks stays opaque. `split_statements` then takes the
+tree to `statements`: each leaf holds its basic block's ops in order (a
+`BlockCopy` through the block it mirrors; a leaf of more than 2^20 ops is not
+split), and the leaf printer (`emit_basic_block_ops_in`, with the same filters
+as the block walk) prints from that list.
 
 The walk is `printc/kuna_ctreeprint.rs`. The body prints from the root's
 statements; `emit_block` first asks the tree for the statement built from its

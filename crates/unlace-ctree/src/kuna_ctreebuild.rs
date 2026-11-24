@@ -11,10 +11,13 @@
 //! multi-goto blocks are [`StmtKind::Opaque`] and print from their origin block. The builder decides nothing a
 //! printer would print differently: a tree printed node for node gives the block printer's text.
 
-use crate::block::BlockType;
-use crate::context::BlockId;
+use crate::block::{BlockKind, BlockType};
+use crate::context::{BlockId, OpId};
 use crate::funcdata::Funcdata;
 use crate::kuna_ctree::{CMaturity, CTree, ExprKind, StmtId, StmtKind};
+
+/// More ops than this in one leaf are not split (the walk is bounded on hostile input).
+const MAX_LEAF_OPS: usize = 1 << 20;
 
 /// Deeper nesting than this is left opaque, so a hostile block tree cannot exhaust the stack.
 const MAX_DEPTH: usize = 2048;
@@ -137,4 +140,37 @@ fn build_if(fd: &Funcdata, tree: &mut CTree, blk: BlockId, depth: usize) -> Stmt
         then,
         els,
     }
+}
+
+/// Take the tree to [`CMaturity::Statements`]: every [`StmtKind::Ops`] leaf becomes a
+/// [`StmtKind::Stmts`] holding its basic block's ops in order (a `BlockCopy` through the
+/// basic block it mirrors). A leaf longer than `MAX_LEAF_OPS` stays `Ops`.
+pub fn split_statements(fd: &Funcdata, tree: &mut CTree) {
+    for id in tree.stmt_ids() {
+        let leaf = match &tree.stmt(id).kind {
+            StmtKind::Ops { leaf } => *leaf,
+            _ => continue,
+        };
+        if let Some(ops) = leaf_ops(fd, leaf) {
+            tree.stmt_mut(id).kind = StmtKind::Stmts { leaf, ops };
+        }
+    }
+    tree.advance(CMaturity::Statements);
+}
+
+fn leaf_ops(fd: &Funcdata, leaf: BlockId) -> Option<Vec<OpId>> {
+    let mut cur = match fd.sblocks_ref().block(leaf).kind() {
+        BlockKind::Copy { copy: Some(under) } => fd.bb_op_head(*under),
+        BlockKind::Basic(basic) => basic.op_head,
+        _ => None,
+    };
+    let mut ops = Vec::new();
+    while let Some(op) = cur {
+        if ops.len() >= MAX_LEAF_OPS {
+            return None;
+        }
+        ops.push(op);
+        cur = fd.bb_op_next(op);
+    }
+    Some(ops)
 }

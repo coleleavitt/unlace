@@ -1075,3 +1075,5 @@ mod processors;
 mod vexzeroupper_cli;
 #[path = "initterm_cli.rs"]
 mod initterm_cli;
+#[path = "vftablerelocs_cli.rs"]
+mod vftablerelocs_cli;

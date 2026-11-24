@@ -10403,17 +10403,26 @@ impl PrintC {
         static C_BITS: OpToken =
             op_token("", " }).to", 2, 66, false, TokenType::Postsurround, 0, 0);
         let rust = self.out_lang == crate::kuna_lang::OutLang::Rust;
+        let half = slice.width == 2;
         if rust {
             self.push_op(&tokens::FUNCTION_CALL, Some(op_key(op)));
             self.push_atom(&Atom::syntax(
-                "f32::from_bits",
+                if half {
+                    "f16::from_bits"
+                } else {
+                    "f32::from_bits"
+                },
                 TagType::FuncToken,
                 SyntaxHighlight::funcname_color,
             ));
         } else {
             self.push_op(&C_BITS, Some(op_key(op)));
             self.push_atom(&Atom::syntax(
-                "((union { unsigned int from; float to; }){ .from = ",
+                if half {
+                    "((union { unsigned short from; _Float16 to; }){ .from = "
+                } else {
+                    "((union { unsigned int from; float to; }){ .from = "
+                },
                 TagType::TypeToken,
                 SyntaxHighlight::type_color,
             ));

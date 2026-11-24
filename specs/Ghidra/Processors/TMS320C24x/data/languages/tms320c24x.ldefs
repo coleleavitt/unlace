@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- See Relax specification: Ghidra/Framework/SoftwareModeling/data/languages/language_definitions.rxg -->
+
+<language_definitions>
+
+  <language processor="tms320c24x"
+            endian="little"
+            size="16"
+            variant="default"
+            version="1.1"
+            slafile="tms320c24x.sla"
+            processorspec="tms320c24x.pspec"
+            id="TMS320c24x:LE:16:default">
+    <description>TI TMS320F/C24x (and C20x) DSP controller, 16-bit words stored low byte first</description>
+    <compiler name="default" spec="tms320c24x.cspec" id="default"/>
+  </language>
+
+  <language processor="tms320c24x"
+            endian="big"
+            size="16"
+            variant="default"
+            version="1.1"
+            slafile="tms320c24x_be.sla"
+            processorspec="tms320c24x.pspec"
+            id="TMS320c24x:BE:16:default">
+    <description>TI TMS320F/C24x (and C20x) DSP controller, 16-bit words stored high byte first</description>
+    <compiler name="default" spec="tms320c24x.cspec" id="default"/>
+  </language>
+
+</language_definitions>

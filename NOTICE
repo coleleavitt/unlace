@@ -189,6 +189,10 @@ specs/Ghidra/Processors/SuperFX vendors the SuperFX (GSU) SLEIGH specification o
 aleph-void/ghidra-superfx (https://github.com/aleph-void/ghidra-superfx), a fork of ChekeEdd/ghidra-superfx, released under the
 BSD 3-Clause License (its license file is in that directory).
 
+specs/Ghidra/Processors/TMS320C24x vendors the TI TMS320C24x SLEIGH specification of
+aleph-void/ghidra-tms320c24x (https://github.com/aleph-void/ghidra-tms320c24x), a fork of banksy-git/ghidra-tms320c24x, released under the
+Apache License, Version 2.0 (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

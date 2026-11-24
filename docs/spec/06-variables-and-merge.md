@@ -507,8 +507,9 @@ marking (below), three passes fuse variables to reduce clutter:
   stored, so two distinct source variables (two loop counters, a saved
   argument and a later call result) can print as one reused local. `on` is
   upstream. `storage`, the default (issue #20: on DecBench O2-noinline it cut
-  the decompiled locals that stand for several DWARF variables by 15% for GED
-  +24 and about 13% more declarations), keys each gathered high by the storages
+  the decompiled locals that stand for several DWARF variables by 13% and the
+  variables spread over several locals by 6%, for GED -2 and about 10% more
+  declarations), keys each gathered high by the storages
   its instances sit in (`kuna_typemerge.rs (storages)`: same space, offset and
   size, read through `MergeContext::vn_storage`; a high whose context cannot
   say for one instance has no key) and lets a candidate join a group only when

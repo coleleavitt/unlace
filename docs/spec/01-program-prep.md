@@ -1419,7 +1419,10 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   `9_X`, `7_X` are reported unsupported and leave the field untouched.
   AVR (unlace#757, little-endian 16-bit words) covers `13_PCREL` (`rjmp`/
   `rcall`) and `7_PCREL` (`brbs`/`brbc`), the word displacement from the next
-  instruction; the nine `LDI` forms (`LO8`/`HI8`/`HH8` of `S + A`, of its
+  instruction (an `rjmp`/`rcall` whose ends both lie in the first 8 KiB wraps at
+  4 KiW, as a device with at most 8 KiB of flash does and the 16-bit-PC avr8
+  language's `rel12addr` models, so an -O0 object's libcalls past 4 KiB are
+  reached; unlace#976); the nine `LDI` forms (`LO8`/`HI8`/`HH8` of `S + A`, of its
   negation, or of the word address `(S + A) >> 1`) into `ldi`'s split K; `CALL`
   (the 22-bit word address of `call`/`jmp`); and `16_PM`. AMDGPU (`EM_AMDGPU`,
   no object architecture, told apart by `e_machine`) covers the 32-bit literal

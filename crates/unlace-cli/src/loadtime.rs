@@ -7,6 +7,7 @@
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::process::Command;
+use std::sync::Mutex;
 
 use unlace_decomp::{
     calltargettype, debuglink, delphiabi, dyldcache, exporttrie, goabi, ifuncfpret, kernelcache,
@@ -117,14 +118,57 @@ pub(crate) fn is_loadtime_gate(name: &str) -> bool {
 /// the dyld shared cache image.
 const IMAGE_SELECTION: [&str; 3] = ["kernelcache", "kernelcache-boot", "dyldimage"];
 
-/// Export the image-selection gates `argv` sets with `--option NAME VALUE` for
+/// The load-time variables this invocation states for every surface and every
+/// child process: the global `--image`, the image-selection `--option`s, and
+/// the images `--follow-images` adds. Set in `main`, read in place of the
+/// environment; the process environment itself is never written.
+static INVOCATION: Mutex<BTreeMap<&'static str, Option<String>>> = Mutex::new(BTreeMap::new());
+
+/// Set one invocation variable ([`INVOCATION`]).
+pub(crate) fn set_invocation_var(name: &'static str, value: &str) {
+    INVOCATION
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(name, Some(value.to_string()));
+}
+
+/// The invocation variables ([`INVOCATION`]).
+pub(crate) fn invocation() -> BTreeMap<&'static str, Option<String>> {
+    INVOCATION.lock().unwrap_or_else(|e| e.into_inner()).clone()
+}
+
+/// `name` as this invocation states it: its invocation value, else the
+/// environment's.
+pub(crate) fn invocation_var(name: &str) -> Option<String> {
+    match invocation().get(name) {
+        Some(value) => value.clone(),
+        None => unlace_base::env::var(name).ok(),
+    }
+}
+
+/// The load options this invocation states: the environment with the
+/// invocation variables over it. `main` enters them for the whole run.
+pub(crate) fn invocation_options() -> loadoptions::LoadOptions {
+    loadoptions::LoadOptions::from_env_with(&invocation())
+}
+
+/// Hand the invocation variables to a child process.
+pub(crate) fn apply_invocation(cmd: &mut Command) {
+    for (name, value) in invocation() {
+        match value {
+            Some(value) => cmd.env(name, value),
+            None => cmd.env_remove(name),
+        };
+    }
+}
+
+/// Record the image-selection gates `argv` sets with `--option NAME VALUE` for
 /// the whole invocation, as the global `--image` is: every surface that reads
 /// the image itself (the reference walk, the string and constant scans, the
 /// call graph) then reads the image the engine loads. The last value wins.
 pub(crate) fn export_image_selection(argv: &[String]) {
     for (key, value) in image_selection(argv) {
-        // FIXME: Audit that the environment access only happens in single-threaded code.
-        unsafe { std::env::set_var(key, value) };
+        set_invocation_var(key, &value);
     }
 }
 
@@ -170,7 +214,7 @@ fn settings(
     decode_lanes: usize,
     functions_inventory: bool,
 ) -> BTreeMap<&'static str, Option<String>> {
-    let mut values = BTreeMap::new();
+    let mut values = invocation();
     for (name, value) in options {
         if let Some((key, encoding)) = binding(name) {
             values.insert(key, encoding.encode(value));

@@ -1356,7 +1356,7 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   no object architecture, told apart by `e_machine`) covers the 32-bit literal
   halves `REL32_LO`/`REL32_HI` (`S + A - P`, the `s_getpc_b64` pair of every
   call and global) and `ABS32_LO`/`ABS32_HI`, and the `ABS32`, `REL32`, `ABS64`
-  and `REL64` data words; the GOT forms stay unsupported. eBPF objects are REL-only and every program ships as one,
+  and `REL64` data words; the GOT forms stay unsupported. A TI C2000 object (`EM_TI_C2000`) counts symbol values, symbol sizes and `r_offset` in 16-bit words, while its section sizes and bytes are in bytes. The layout keeps byte VMAs and scales those three by the address unit (`loader/kuna_wordaddr.rs`), so a function's entry, extent and relocation sites land on its bytes. eBPF objects are REL-only and every program ships as one,
   so its three instruction forms are encoded rather than written as plain words:
   `R_BPF_64_64` names the 16-byte `lddw` (a map or global reference) and lands
   `S + A` in the two 32-bit `imm` fields at +4 and +12, the addend read back from
@@ -10433,6 +10433,23 @@ call-site indices, not code ranges, in its table. So every LSDA walker skips it
 (`for_each_fde_lsda`), and its function is noted as having an SjLj table. A
 personality whose name cannot be read is read as Itanium. With `itaniumeh` on,
 the pads are shown and no note is attached.
+
+**(kuna) MFC message-map handlers are functions** (`mfcmsgmap`, default-**off**;
+`crates/unlace-analysis/src/analyzers/entry/kuna_mfcmsgmap.rs`). An MFC window
+class routes messages through a static `AFX_MSGMAP` in `.rdata`
+(`pfnGetBaseMap`, `lpEntries`), and its `AFX_MSGMAP_ENTRY` array (`nMessage,
+nCode, nID, nLastID, nSig, pfn`, 24 bytes each, ending in an all-zero entry)
+names each handler. `CWnd::OnWndMsg` calls `pfn` indirectly, so nothing else
+finds the handlers, and each was folded into the function before it. On a
+32-bit PE the deferred entry pass reads every table the base relocations vouch
+for: `lpEntries` and the `pfnGetBaseMap` word before it are relocated,
+`pfnGetBaseMap` points into an executable section, the entries lie in a
+non-executable section, and every entry's `pfn` is a relocated pointer into
+code, with `nMessage` below 0x10000 and `nSig` below 0x100. A run that
+breaks any of these is not read. The handlers join the committed entries, so
+the walk also uses them as roots. On PEGRP32F.dll it reads 29 maps and 198
+handlers. Every handler is an IDA 9.5 function start, and 194 were missing
+from the inventory before.
 
 **(kuna) MSVC throw metadata is labelled** (`msvceh`, default-**off**;
 `crates/unlace-analysis/src/analyzers/entry/kuna_msvceh.rs (find_throw_infos)`).

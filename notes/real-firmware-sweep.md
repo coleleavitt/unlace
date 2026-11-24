@@ -4,7 +4,9 @@ Five embedded and DSP families unlace supports but had not run on vendor-built c
 TI C2000, AVR, PIC18 and dsPIC33. Each was decompiled with the pinned `unlace-bin/unlace-543e581001`:
 - `decompile-all --json --max-fn-seconds 30`;
 - for flat images, `--raw-image --target --base 0`, seeded with the reset and interrupt vectors
-  and re-run with every `sub_XXXX` a run named until no new one appeared (#875, item 2).
+  and re-run with every `sub_XXXX` a run named until no new one appeared. Passing the seeds as
+  `--entry` instead of `--addr` gets the same inventory in one run: `--addr` selects, `--entry`
+  seeds (#875, item 2; #894 adds a stderr note).
 
 The checks were the exit code, the per-function errors, and `halt_baddata`, bad-instruction,
 unimplemented and unmapped-flow markers in the C. A read of the C followed for a sample of

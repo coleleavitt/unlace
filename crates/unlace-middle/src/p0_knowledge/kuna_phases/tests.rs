@@ -49,7 +49,7 @@ fn surface_count_is_102() {
 #[test]
 fn settable_count_is_362() {
     assert_eq!(kuna_num_settables(), 368);
-    assert_eq!(SETTABLE_TABLE.len(), 368);
+    assert_eq!(SETTABLE_TABLE.len(), 369);
 }
 
 #[test]
@@ -371,6 +371,7 @@ fn option_values_live_value_present_for_129() {
         "machobinds",
         "machoehframe",
         "ehcold",
+        "mfcmsgmap",
         "importvote",
         "ehnote",
         // (kuna) The full byte-pattern function-start pass — an analysis-pass gate

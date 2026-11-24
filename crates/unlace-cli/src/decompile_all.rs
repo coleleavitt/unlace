@@ -3722,6 +3722,13 @@ pub(crate) fn parse_args_with_filters(
         if slice.is_some() {
             return Err("--slice does not apply to --raw-image input".into());
         }
+        if batch && entry_seeds.is_empty() && !addrs.is_empty() {
+            eprintln!(
+                "[kuna raw] --addr selects: only these {} address(es) are decompiled; pass them \
+                 as --entry to seed the load and decompile what they call too",
+                addrs.len()
+            );
+        }
     } else {
         if base.is_some() {
             return Err("--base requires --raw-image".into());

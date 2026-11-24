@@ -1615,7 +1615,8 @@ $ unlace functions fw.bin --json --raw-image \
 
 `--entry` therefore seeds the load without *selecting*: an unfiltered
 `decompile-all` decompiles the discovered inventory, not just the seed. `--addr`
-still does both, so it remains the way to narrow a raw run to named addresses.
+still does both, so it remains the way to narrow a raw run to named addresses; a batch run
+given only `--addr` seeds says so on stderr (`[kuna raw] --addr selects: ...`).
 A function no direct call reaches and no seed names is still undiscovered;
 `--define-function` asserts it. Named `--functions`, section-relative selectors
 and `--slice` are rejected. Support covers `decompile` (text and JSON),

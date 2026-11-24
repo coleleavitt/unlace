@@ -23,6 +23,8 @@ mod mips_ase;
 #[path = "mips_elf_selection.rs"]
 mod mips_elf_selection;
 
+#[path = "aarch64_pauth.rs"]
+mod aarch64_pauth;
 #[path = "aarch64_rme.rs"]
 mod aarch64_rme;
 #[path = "aarch64_sme.rs"]
@@ -31,8 +33,6 @@ mod aarch64_sme;
 mod aarch64_sve2;
 #[path = "aarch64_svemm.rs"]
 mod aarch64_svemm;
-#[path = "aarch64_pauth.rs"]
-mod aarch64_pauth;
 #[path = "ppc_gekko.rs"]
 mod ppc_gekko;
 #[path = "ppc_spe2.rs"]

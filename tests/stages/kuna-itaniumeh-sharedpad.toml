@@ -1,0 +1,55 @@
+# Kuna option itaniumeh (default on): a landing pad folded into the handler
+# it jumps to still prints as a try region.
+#
+# The script loads the committed itaniumeh/eh4_x86_64.elf (g++ -O2, source
+# eh4.cc beside it), the shape of patchelf's shrinkRPath:
+# probe() makes a shared_ptr from readFile() inside a try that catches
+# SysError. g++'s pads for operator new and for the Image constructor only
+# load the exception registers and jump on into cleanup and catch code they
+# share, so once the pad's own block is folded away, the arm the exceptional
+# edge enters starts at that shared code, not at the pad's address.
+#
+# The printer took the pad from the arm's first instruction and printed
+# both edges as `if (eh_unwinding()) { ... }` (#1). It now names the pad
+# from the call-site record of the call the edge follows and finds the
+# arm by the edge's own successor, so each prints as a try with a SysError
+# catch (#2); the shared handler still rethrows unless errNo is ENOENT (#3).
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/itaniumeh/eh4_x86_64.elf',
+    'option itaniumeh on',
+    'read symbols',
+    'load function probe',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'itaniumeh sharedpad #1: no exceptional edge to a folded pad prints as an if'
+count = 0
+literal = 'if (eh_unwinding())'
+
+[[match]]
+name = 'itaniumeh sharedpad #2: each pad of the try prints as a SysError catch'
+count = 3
+literal = '} catch (SysError) {'
+
+[[match]]
+name = 'itaniumeh sharedpad #3: the shared handler rethrows unless errNo is ENOENT'
+count = 1
+regex = '__cxa_begin_catch\(v\d+\)\)\[2\] != 2\)'

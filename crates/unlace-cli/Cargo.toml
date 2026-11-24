@@ -40,6 +40,7 @@ embed-specs = []
 dynamic_linking = ["dep:unlace-decomp-dylib", "unlace-console/dynamic_linking"]
 
 [dev-dependencies]
+unlace-stagefile.workspace = true
 flirt-sig.workspace = true
 object = { workspace = true, features = ["write"] }
 serde_json = { version = "1", features = ["preserve_order"] }

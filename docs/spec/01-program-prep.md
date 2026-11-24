@@ -4858,7 +4858,7 @@ moves.
   (`effective_libctypes_layout`), and the declared-name path below is handed it as
   a fact about the image. Scaling the table per architecture would need a
   measured width for every row on every ABI, and is not attempted.
-  `tests/stages/kuna-libctypes.xml` pass 14 is the i386 witness.
+  `tests/stages/kuna-libctypes.toml` pass 14 is the i386 witness.
 
   Growth is also why a named vote is held to what the caller does with the
   pointer. A libc aggregate is often the first member of a larger object, whose
@@ -5025,7 +5025,7 @@ moves.
 
   The default is `opaque`. No datatest loads a file, so the 675 assertions
   cannot see this tier either way; the stage corpus can, and
-  `tests/stages/kuna-libctypes.xml` pins the row in both arms. The evidence for
+  `tests/stages/kuna-libctypes.toml` pins the row in both arms. The evidence for
   the default is therefore the corpus type-recovery sweep: over the decbench
   slices at `-O0`, `-O2` and `-O2 -fno-inline`, naming these pointees moves 70
   functions to a perfect type score and one to a worse one — a `hash_do_for_each`
@@ -6335,7 +6335,7 @@ moves.
   name-only subset reached 26%, at no measurable cost (demangling the whole
   symbol table takes under 10 ms). The unit-test corpus is real symbols
   pinned with the `swift-demangle` output; the stage test
-  `tests/stages/kuna-swiftdemangle.xml` loads `macho_swift_names_arm64`, a
+  `tests/stages/kuna-swiftdemangle.toml` loads `macho_swift_names_arm64`, a
   clang-built arm64 Mach-O whose root class carries the runtime name
   `_TtC4main7Greeter` through `objc_runtime_name` and whose exported function
   carries the symbol `_$s4main10countWords2ofS2i_tF` through an `asm` label,
@@ -7730,7 +7730,7 @@ every other binary's pass list is byte-identical to before the pass existed):
     commit of its facts) says; when it does not run at all (`sourcelang`
     forced to another language) the ivar list builds the struct, under the
     demangled name. The stage test
-    `tests/stages/kuna-swiftclassnames.xml` proves both spellings on
+    `tests/stages/kuna-swiftclassnames.toml` proves both spellings on
     `macho_swift_classnames_arm64`, and both owners of the layout on
     `macho_swift_classnames_fieldmd_arm64`. Off (the option is read
     at load as `KUNA_OBJCIVARS` for the structs and at the commit for `self`
@@ -8034,7 +8034,7 @@ every other binary's pass list is byte-identical to before the pass existed):
     `block.block.invoke = …; block.capture_1 = &cell_1; cell_1.forwarding = block.capture_1;`
     — Hex-Rays' `Block_layout_<ea>` frame members. A capture's signedness is
     not modelled. The stage tests
-    `tests/stages/kuna-objcstructs.xml` and `tests/stages/kuna-objcblocks.xml`
+    `tests/stages/kuna-objcstructs.toml` and `tests/stages/kuna-objcblocks.toml`
     run `macho_objc_structs_arm64` and `macho_objc_blocks_arm64`.
 
     On an x86-64 Mach-O the same recovery reads x86-64 creators
@@ -10814,7 +10814,7 @@ pinned rather than only described: the in-repo fixture `elfmainextra_x86_64`
 @0x1026 reads `r8` into a call argument and stores `r9` to a global, so its
 body-driven signature is `unsigned long sub_1026(unsigned int a0,unsigned long
 a1,unsigned long a2,unsigned long a3,unsigned long a4,unsigned long a5)` and the
-default arm shows both losses at once (`tests/stages/kuna-elfmain.xml` §§5-8,
+default arm shows both losses at once (`tests/stages/kuna-elfmain.toml` §§5-8,
 `tests/cli/elf-main-extra-register-args.json`). Whichever way call-site argument
 recovery removes the fabrication, those assertions move.
 

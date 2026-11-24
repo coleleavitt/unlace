@@ -227,7 +227,7 @@ to three names, at load.
 
 ## Tests
 
-`tests/stages/kuna-libctypes.xml` passes 6-9 — the executable and the shared
+`tests/stages/kuna-libctypes.toml` passes 6-9 — the executable and the shared
 object built from one source (`libctypes_streams_x86_64.c`), each once `off` and
 once `opaque` — with assertions #16-#25, plus pass 10 for the `datasyms off` interaction (#26):
 

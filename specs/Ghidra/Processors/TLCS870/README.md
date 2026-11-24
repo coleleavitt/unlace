@@ -45,4 +45,15 @@ Flags JF, ZF, CF, HF are separate 1-byte registers; carry and half carry follow 
 ## Test vectors
 
 `crates/unlace-cli/tests/fixtures/tlcs870/add_store.bin` (listing `add_store.s`), checked by
-`crates/unlace-cli/tests/tlcs870_raw.rs`.
+`crates/unlace-cli/tests/tlcs870_raw.rs`, which expects
+
+```c
+char sub_e000(char a0)
+{
+  if ((char)(a0 + '\x05') == '\x10') {
+    dat_80 = a0 + '\x05';
+    return 0x10;
+  }
+  return 0;
+}
+```

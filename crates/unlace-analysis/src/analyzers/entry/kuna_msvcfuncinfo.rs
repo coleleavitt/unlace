@@ -154,7 +154,7 @@ pub fn collect(file: &object::File, bytes: &[u8], img: &ImageBytes) -> AnalysisO
         let Some(&parent) = funcs.iter().find(|f| !funclets.contains(f)) else {
             continue;
         };
-        notes(parent, &decoded, &mut out);
+        notes(parent, &decoded, true, &mut out);
         for f in funclets {
             if entries.insert(f) {
                 out.entries.push(f);
@@ -165,8 +165,40 @@ pub fn collect(file: &object::File, bytes: &[u8], img: &ImageBytes) -> AnalysisO
     out
 }
 
-/// The header comments of one parent and its funclets.
-fn notes(parent: u64, info: &EhFuncInfo, out: &mut AnalysisOutput) {
+/// The header comments of one parent and its funclets. With `separate` false
+/// (x86) the handlers are blocks the runtime calls inside the parent's code, so
+/// only the parent is commented.
+pub(crate) fn notes(parent: u64, info: &EhFuncInfo, separate: bool, out: &mut AnalysisOutput) {
+    if !separate {
+        for t in &info.tries {
+            let list: Vec<String> = t
+                .catches
+                .iter()
+                .map(|c| format!("{} -> {:#x}", c.header(), c.handler))
+                .collect();
+            out.header_comments.push(CommentFact {
+                func_addr: parent,
+                addr: parent,
+                text: format!(
+                    "eh: try (states {}-{}): {}; the handler blocks are not shown",
+                    t.low,
+                    t.high,
+                    list.join(", ")
+                ),
+            });
+        }
+        if !info.cleanups.is_empty() {
+            out.header_comments.push(CommentFact {
+                func_addr: parent,
+                addr: parent,
+                text: format!(
+                    "eh: {} unwind actions run destructors when an exception passes",
+                    info.cleanups.len()
+                ),
+            });
+        }
+        return;
+    }
     for t in &info.tries {
         let list: Vec<String> = t
             .catches
@@ -245,7 +277,7 @@ pub fn handler_kind(name: &str) -> Option<Handler> {
 }
 
 /// `(BeginAddress, UNWIND_INFO)` of every x64 `RUNTIME_FUNCTION`, as addresses.
-fn runtime_functions(pe: &PeFile64, bytes: &[u8], base: u64) -> Vec<(u64, u64)> {
+pub(crate) fn runtime_functions(pe: &PeFile64, bytes: &[u8], base: u64) -> Vec<(u64, u64)> {
     let Some(dir) = pe
         .data_directories()
         .get(object::pe::IMAGE_DIRECTORY_ENTRY_EXCEPTION)
@@ -281,7 +313,7 @@ pub fn language_handler(img: &ImageBytes, base: u64, unwind: u64) -> Option<(u64
     (handler != 0).then_some((base + handler, at + 4))
 }
 
-fn is_fh3(img: &ImageBytes, info: u64) -> bool {
+pub(crate) fn is_fh3(img: &ImageBytes, info: u64) -> bool {
     img.read(info, 4)
         .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
         .is_some_and(|m| (FH3_MAGIC_MIN..=FH3_MAGIC_MAX).contains(&m))
@@ -307,9 +339,10 @@ fn caught_type(img: &ImageBytes, rk: &RefKind, base: u64, td_rva: u32) -> Option
     })
 }
 
-/// The 40-byte x64 `FuncInfo` at `info`.
+/// The `FuncInfo` at `info`: x64 references are RVAs from `base`, x86 ones
+/// absolute addresses (`base` 0), and an x86 `HandlerType` is 16 bytes, not 20.
 pub fn decode_fh3(img: &ImageBytes, rk: &RefKind, base: u64, info: u64) -> Option<EhFuncInfo> {
-    let b = img.read(info, 40)?;
+    let b = img.read(info, 20)?;
     let w = |i: usize| u32::from_le_bytes([b[i], b[i + 1], b[i + 2], b[i + 3]]);
     if !(FH3_MAGIC_MIN..=FH3_MAGIC_MAX).contains(&w(0)) {
         return None;
@@ -338,7 +371,8 @@ pub fn decode_fh3(img: &ImageBytes, rk: &RefKind, base: u64, info: u64) -> Optio
         }
         let mut catches = Vec::new();
         for k in 0..n_catch as u64 {
-            let h = img.read(base + handlers as u64 + k * 20, 20)?;
+            let stride = if rk.is64 { 20 } else { 16 };
+            let h = img.read(base + handlers as u64 + k * stride, 16)?;
             let g = |o: usize| u32::from_le_bytes([h[o], h[o + 1], h[o + 2], h[o + 3]]);
             if g(12) == 0 {
                 continue;

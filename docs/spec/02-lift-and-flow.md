@@ -923,7 +923,9 @@ load-time partition, a declared libc function, the ARM list `armfloatreturn`
 does not apply), and a DWARF signature `build_pieces` could not type. The
 decompile's seed (`kuna_honestgaps.rs (seed)`) names it as
 `withheldproto: ...; not applied` in the header of the function it belongs to
-and at each call whose callee it is. The tags are lowercase, so the printer's warning
+and at each call whose callee it is, skipping a warning already buffered with
+the same type, address and text (a re-flow also drops the function's analysis
+warnings before it seeds again, and the commit adds each comment once). The tags are lowercase, so the printer's warning
 records file them under the kinds `notmodelled`, `debuginfo` and `withheldproto`, and the CLI's
 `--json` lists them with the rest and totals every kind in `warning_kinds`
 (`docs/cli.md`). Off by default because the extra comments change the text of
@@ -4283,6 +4285,83 @@ and the vector crypto extensions (Zvk*) are not covered. Exercised by
 `unlace-cli/tests/riscv_crypto.rs`: one probe row per encoding against LLVM's
 names, RV32 and RV64, and intrinsic-selected functions that decompile with
 no unimplemented instruction.
+
+
+### RISC-V Zfh half-precision floating point (#98)
+
+`riscv.zfh.sinc` decodes Zfh 1.0 (and so its Zfhmin subset) in every RISC-V
+language that has the F extension: `flh`/`fsh`, `fadd.h`, `fsub.h`,
+`fmul.h`, `fdiv.h`, `fsqrt.h`, `fsgnj{,n,x}.h`, `fmin.h`/`fmax.h`, the
+fused `fmadd.h`/`fmsub.h`/`fnmsub.h`/`fnmadd.h` (fmt field 10), the
+compares `feq.h`/`flt.h`/`fle.h`, `fmv.x.h`/`fmv.h.x`, `fclass.h`, and
+the conversions between half and single, double, 32-bit and (RV64) 64-bit
+integers. Before, every one of them was a bad instruction. A half value is
+the low 16 bits of an f register: `frs1H`/`frs2H`/`frs3H` read them, and a
+write zero-extends the 2-byte result into the register as the single-precision
+forms do (`fassignS`; the ISA's NaN-boxing is not modelled, as for F).
+Arithmetic, square root, compares and conversions are the ordinary p-code
+float operations on 2-byte varnodes (`FLOAT_ADD`, `FLOAT2FLOAT`,
+`FLOAT_INT2FLOAT`, `FLOAT_TRUNC`, ...); the translator has no 2-byte float
+format, so the simplifier does not fold half-precision constants, the same as
+AArch64's FP16 forms. `fmv.x.h` sign-extends the 16-bit pattern into `rd`,
+`fmin.h`/`fmax.h` return the non-NaN operand when one is NaN, and
+`fclass.h` is the user operation `fclass_h`. Exercised by
+`unlace-cli/tests/riscv_zfh.rs`: one probe row per encoding against LLVM's
+names, RV32 and RV64, and LLVM-selected half-precision functions that
+decompile with no bad or unimplemented instruction.
+
+
+
+### RISC-V Zfa (#98)
+
+`riscv.zfa.sinc` decodes the rest of Zfa 1.0 next to `fli.s` (§ GH-7451):
+`fli.d` and `fli.h` (the same 32-entry constant table, lifted like `fli.s`
+through the `fli` user operation with the table index), `fminm`/`fmaxm` in
+S, D and H (as `fmin`/`fmax`, but a NaN operand is the result),
+`fround`/`froundnx` (round to an integral value in the same format; user
+operations taking the value and the rounding mode, since p-code has no
+operation parameterised by rounding mode), `fcvtmod.w.d` (the low 32 bits of
+the truncated 64-bit conversion, sign-extended on RV64), the quiet compares
+`fleq`/`fltq` (the ordinary p-code float compares, which raise no exceptions
+in p-code either), and on RV32 `fmvh.x.d` (the high word of a double) and
+`fmvp.d.x` (a double from `rs2:rs1`). The `fli` constant at index 0 now
+displays as `-1.0` (it read `min`, the name of index 1). Exercised by
+`unlace-cli/tests/riscv_zfa.rs`: one probe row per encoding (all 32 `fli`
+constants) against LLVM's names, RV32 and RV64, and LLVM-selected
+`fminm.d`, `fmaxm.s`, `fround.d`, `fli.d` and `fleq.d` functions that
+decompile with no bad or unimplemented instruction.
+
+### RISC-V cache-block operations, hints, may-be-operations and CFI (#98)
+
+`riscv.hints.sinc` decodes, in every RISC-V language:
+Zicbom/Zicboz `cbo.clean`, `cbo.flush`, `cbo.inval`, `cbo.zero` (MISC-MEM
+funct3 010, lifted as user operations on `rs1`, since the block size is
+not known statically); the Zicbop prefetches `prefetch.i/r/w` (the `ori x0`
+encodings with `rs2` 0, 1, 3, offset `imm[11:5] << 5`; no-ops); Zawrs
+`wrs.nto`/`wrs.sto` and Zihintpause `pause` (user operations); Ztso
+`fence.tso` (`fence()`, which plain `fence` with its `fm=0` pattern never
+matched); and the Zihintntl hints `ntl.p1`, `ntl.pall`, `ntl.s1`, `ntl.all`
+and their `c.ntl.*` forms (no-ops, in the `add x0,x0,rs2` and `c.add x0,rs2`
+HINT space). Before, the cache-block, wait and may-be-operation encodings
+were bad instructions and the hints printed as `ori`, `fence` or `add`.
+
+Zimop `mop.r.0`..`mop.r.31` and `mop.rr.0`..`mop.rr.7` (SYSTEM funct3 100
+with bit 31 set, disjoint from the hypervisor loads and stores there) write
+zero to `rd`, their behaviour unless an extension redefines them; Zcmop
+`c.mop.1`..`c.mop.15` (the reserved `c.lui` with an odd register and a zero
+immediate) do nothing. The number in each mnemonic comes from a display-only
+subtable. Zicfiss redefines some of them: `sspush` (`mop.rr.7` with
+`rs2` = `ra` or `t0`), `sspopchk` (`mop.r.28` with `rs1` = `ra` or `t0`),
+`c.sspush ra` (`c.mop.1`) and `c.sspopchk t0` (`c.mop.5`), whose shadow-stack
+push and check do not touch the program's own data and lift as no-ops, as
+x86 `endbr64` does; `ssrdp rd` (`mop.r.28` with `rs1` = 0) reads the
+shadow-stack pointer through a user operation; and `ssamoswap.w`/`.d` (AMO
+funct5 01001) swap like `amoswap`. Zicfilp's `lpad` (`auipc x0`) is a no-op.
+Exercised by `unlace-cli/tests/riscv_hints.rs`: one probe row per encoding
+against LLVM's names, RV32 and RV64, and hand-written functions using them
+that decompile with no bad or unimplemented instruction (`cfi_add`, whose
+landing pad and shadow-stack push and check surround `add a0,a0,a1`, still
+returns `a0 + a1`).
 
 ### RISC-V moves and conversions from FP to integer registers (GH-831)
 

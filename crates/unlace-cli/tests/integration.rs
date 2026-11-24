@@ -10,10 +10,16 @@ mod return_branch_cli;
 mod riscv_bitmanip;
 #[path = "riscv_crypto.rs"]
 mod riscv_crypto;
+#[path = "riscv_hints.rs"]
+mod riscv_hints;
 #[path = "riscv_zcb.rs"]
 mod riscv_zcb;
 #[path = "riscv_zcmp.rs"]
 mod riscv_zcmp;
+#[path = "riscv_zfa.rs"]
+mod riscv_zfa;
+#[path = "riscv_zfh.rs"]
+mod riscv_zfh;
 #[path = "rust_signature_summary.rs"]
 mod rust_signature_summary;
 #[path = "sparc_prologue_start.rs"]
@@ -129,6 +135,8 @@ mod arm_interwork_cli;
 #[path = "arm_isa_cli.rs"]
 mod arm_isa_cli;
 
+#[path = "arm_register_pair_params.rs"]
+mod arm_register_pair_params;
 #[path = "arm_variadic_returns.rs"]
 mod arm_variadic_returns;
 

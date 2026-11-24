@@ -248,6 +248,7 @@ kuna_options! { self, p1;
     "narrowargs" => registered!(crate::kuna_narrowargs::NarrowArgs),
     "regnarrow" => registered!(crate::kuna_regnarrow::NarrowLocals),
     "pairparam" => registered!(crate::kuna_borrowcompare::PairParams),
+    "armpairparam" => registered!(crate::kuna_armpairparam::ArmPairParams),
     "narrowret" => registered!(crate::kuna_narrowret::NarrowRet),
     "regsigned" => registered!(crate::kuna_regnarrow::NarrowSigned),
     "narrowext" => {
@@ -414,6 +415,7 @@ kuna_options! { self, p1;
     "tlsnames" => registered!(crate::kuna_tlsnames::Tlsnames),
     "uefi" => registered!(crate::kuna_analysisgates::Uefi),
     "cortexmscs" => registered!(crate::kuna_analysisgates::Cortexmscs),
+    "com" => registered!(crate::kuna_analysisgates::Com),
     "strings" => registered!(crate::kuna_analysisgates::Strings),
     "widestrings" => {
         registered!(crate::kuna_analysisgates::Widestrings)
@@ -528,6 +530,7 @@ kuna_options! { self, p1;
     },
     "dwarf" => registered!(crate::kuna_analysisgates::Dwarf),
     "cvftrace" => registered!(crate::kuna_analysisgates::CvfTrace),
+    "gopcln" => registered!(crate::kuna_analysisgates::GoPcln),
     "dwarf_lines" => {
         registered!(crate::kuna_analysisgates::DwarfLines)
     },
@@ -649,6 +652,8 @@ kuna_options! { self, p1;
     "swiftruntime" => registered!(crate::kuna_analysisgates::Swiftruntime),
     "typelib" => registered!(crate::kuna_typelib::TypeLib),
     "pdb" => registered!(crate::kuna_analysisgates::Pdb),
+    "pdbtypes" => registered!(crate::kuna_analysisgates::Pdbtypes),
+    "pdblines" => registered!(crate::kuna_analysisgates::Pdblines),
     "ctree" => registered!(crate::kuna_ctree::Ctree),
     "boolreturn" => registered!(crate::kuna_ctree::Boolreturn),
     "noretfirst" => registered!(crate::kuna_ctree::Noretfirst),

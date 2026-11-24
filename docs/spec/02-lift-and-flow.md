@@ -5042,8 +5042,21 @@ parent's frame. The funclet's `ret` with a known continuation becomes a
 `BRANCH` to it, so the handler rejoins the parent and the printer shows
 `try { ... } catch (Err &) { <funclet body> }` through the Itanium forms
 above. When the funclet is decompiled on its own, its entry gets no pad
-definitions and its `ret` stays a return. x64 only; x86 C++ handlers and
-SEH `__except` blocks are not spliced.
+definitions and its `ret` stays a return. x64 only; x86 C++ handlers are not
+spliced.
+
+**(kuna) x64 SEH `__except` blocks as pads** (`msvceh`;
+`crates/unlace-analysis/src/analyzers/entry/kuna_msvcseh.rs (x64_scopes)`).
+An x64 `__C_specific_handler` scope record's `__except` block lies inside
+the function, so it is an ordinary Itanium-style call-site record: range
+`[BeginAddress, EndAddress)`, pad `JumpTarget`, one clause whose type is the
+header `__except (<filter>)` (a constant filter by its `excpt.h` name, a
+filter funclet by its `<parent>$filt$<n>` name). The first call in the range
+gets the edge, the pad defines RAX (the exception code the handler block
+reads) and RDX as at any pad, and the printer's catch header prints a lone
+`__except` clause as given: `try { ... } __except (EXCEPTION_EXECUTE_HANDLER)
+{ ... }`. A `__try` with no call in it gets no edge; `__finally` funclets and
+x86 scope tables are not spliced.
 
 ## 2.13 VEX zero-upper writes and per-lane vector p-code
 

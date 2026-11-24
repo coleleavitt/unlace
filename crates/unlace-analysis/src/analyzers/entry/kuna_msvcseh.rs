@@ -31,9 +31,11 @@ use crate::pass::{AnalysisOutput, CommentFact};
 use crate::rtti::models::ImageBytes;
 use crate::rtti::refkind::{End, RefKind};
 use crate::rtti::vftable::TextRanges;
+use unlace_decomp::kuna_itaniumeh::{EhCallSite, EhClause};
 
 use super::kuna_msvcfuncinfo::{
-    decode_fh3, is_fh3, language_handler, name_funclet, notes, parent_names, runtime_functions,
+    decode_fh3, funclet_name, is_fh3, language_handler, name_funclet, notes, parent_names,
+    runtime_functions,
 };
 
 /// Most scope records one table is read for.
@@ -79,10 +81,7 @@ impl SehScope {
             SehKind::Except { filter, handler } => {
                 let f = match filter {
                     Filter::Code(a) => format!("filter {a:#x}"),
-                    Filter::Constant(1) => "EXCEPTION_EXECUTE_HANDLER".to_string(),
-                    Filter::Constant(0) => "EXCEPTION_CONTINUE_SEARCH".to_string(),
-                    Filter::Constant(-1) => "EXCEPTION_CONTINUE_EXECUTION".to_string(),
-                    Filter::Constant(c) => format!("{c}"),
+                    Filter::Constant(c) => constant_filter(*c),
                 };
                 format!("{head}: __except ({f}) -> {handler:#x}")
             }
@@ -166,6 +165,29 @@ fn x64_scopes(file: &object::File, bytes: &[u8], img: &ImageBytes, out: &mut Ana
             continue;
         };
         scope_notes(func, &scopes, true, out);
+        let mut code_filters = 0usize;
+        for s in &scopes {
+            let (Some((start, end)), SehKind::Except { filter, handler }) = (s.range, &s.kind)
+            else {
+                continue;
+            };
+            let f = match filter {
+                Filter::Code(_) => {
+                    code_filters += 1;
+                    funclet_name(&names, func, "filt", code_filters - 1)
+                }
+                Filter::Constant(c) => constant_filter(*c),
+            };
+            out.eh_call_sites.push(EhCallSite {
+                start,
+                end,
+                pad: *handler,
+                clauses: vec![EhClause::Catch {
+                    selector: 1,
+                    type_name: Some(format!("__except ({f})")),
+                }],
+            });
+        }
         let (mut filters, mut finallys) = (0usize, 0usize);
         for s in &scopes {
             let funclet = match s.kind {
@@ -193,6 +215,16 @@ fn x64_scopes(file: &object::File, bytes: &[u8], img: &ImageBytes, out: &mut Ana
                 out.entries.push(funclet.0);
             }
         }
+    }
+}
+
+/// A constant filter expression by its `excpt.h` name.
+pub fn constant_filter(c: i32) -> String {
+    match c {
+        1 => "EXCEPTION_EXECUTE_HANDLER".to_string(),
+        0 => "EXCEPTION_CONTINUE_SEARCH".to_string(),
+        -1 => "EXCEPTION_CONTINUE_EXECUTION".to_string(),
+        c => format!("{c}"),
     }
 }
 
@@ -507,6 +539,13 @@ mod tests {
         code.push(0xE8);
         code.extend_from_slice(&[0, 0, 0, 0]);
         assert_eq!(x86_eh_prologue(&code, 2), Some((0, 0x0040_1900)));
+    }
+
+    #[test]
+    fn constant_filter_names() {
+        assert_eq!(constant_filter(1), "EXCEPTION_EXECUTE_HANDLER");
+        assert_eq!(constant_filter(-1), "EXCEPTION_CONTINUE_EXECUTION");
+        assert_eq!(constant_filter(7), "7");
     }
 
     #[test]

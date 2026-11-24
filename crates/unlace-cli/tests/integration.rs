@@ -30,6 +30,8 @@ mod iq2000_raw;
 mod konami;
 #[path = "kr1878_raw.rs"]
 mod kr1878_raw;
+#[path = "lanai_raw.rs"]
+mod lanai_raw;
 #[path = "lua54.rs"]
 mod lua54;
 #[path = "m32r_raw.rs"]

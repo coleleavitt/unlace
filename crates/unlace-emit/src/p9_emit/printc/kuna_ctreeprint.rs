@@ -763,22 +763,28 @@ impl PrintC {
                     .into_iter()
                     .all(|part| self.clean_guard_cond_at(fd, part, depth + 1));
         }
-        let why = if sb.block(cond).get_type() != BlockType::Copy {
-            Some("not a copy leaf")
-        } else if !self.header_prints_nothing(fd, cond) {
-            Some("prints before its test")
-        } else if sb.block(cond).is_unstructured_target()
-            && !self.goto_rewrites.labels.contains(&cond)
-        {
-            Some("label")
-        } else {
-            None
+        let ty = sb.block(cond).get_type();
+        let under = match ty {
+            BlockType::Copy => sb.block(cond).get_copy(),
+            BlockType::Basic => Some(cond),
+            _ => None,
+        };
+        let why = match under {
+            None => Some("not a leaf"),
+            Some(bb) if !self.ops_print_nothing(fd, bb) => Some("prints before its test"),
+            Some(_)
+                if sb.block(cond).is_unstructured_target()
+                    && !self.goto_rewrites.labels.contains(&cond) =>
+            {
+                Some("label")
+            }
+            Some(_) => None,
         };
         if let Some(why) = why {
-            boolreturn_trace(fd, || format!("condition {cond:?}: {why}"));
+            boolreturn_trace(fd, || format!("condition {cond:?} ({ty:?}): {why}"));
             return false;
         }
-        let Some(under) = sb.block(cond).get_copy() else {
+        let Some(under) = under else {
             return false;
         };
         let bb_index = fd.bblocks_ref().block(under).get_index();

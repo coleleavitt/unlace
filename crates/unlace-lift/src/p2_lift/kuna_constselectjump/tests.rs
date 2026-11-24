@@ -1,7 +1,7 @@
 //! Logic-level tests for the `constselectjump` gate and its destination filter.
 //!
 //! The end-to-end recovery (a `CMOVZ`-selected `JMP reg` becoming a switch) is
-//! covered by `tests/stages/re-constselectjump.xml`; this file covers the two
+//! covered by `tests/stages/re-constselectjump.toml`; this file covers the two
 //! decisions this module owns on its own.
 
 use super::*;

@@ -1,0 +1,314 @@
+# Pinned angr G18 atomic-add behavior, P2 instruction provenance and P9 Go output.
+# These independent bytes are only decompiled. Exact signed direct returns should
+# become one atomic.Add call. The branch, old value, flags, unlocked operation,
+# intervening effect, retry, call, HLE, narrow update and exchange remain explicit.
+# P0: asserted Go source and typed prototypes; C/Rust output and C source refuse.
+
+[image]
+arch = 'x86:LE:64:default:golang'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'add32_new' },
+    { space = 'ram', offset = '0x100100', name = 'add64_new' },
+    { space = 'ram', offset = '0x100200', name = 'dec32_branch' },
+    { space = 'ram', offset = '0x100300', name = 'old32_live' },
+    { space = 'ram', offset = '0x100400', name = 'carry_live' },
+    { space = 'ram', offset = '0x100500', name = 'unlocked_add' },
+    { space = 'ram', offset = '0x100600', name = 'locked_add' },
+    { space = 'ram', offset = '0x100700', name = 'intervening_store' },
+    { space = 'ram', offset = '0x100800', name = 'hle_add' },
+    { space = 'ram', offset = '0x100900', name = 'narrow_add' },
+    { space = 'ram', offset = '0x100a00', name = 'exchange' },
+    { space = 'ram', offset = '0x100b00', name = 'unsigned_add' },
+    { space = 'ram', offset = '0x100c00', name = 'untrusted_add' },
+    { space = 'ram', offset = '0x100d00', name = 'shadowed_add' },
+    { space = 'ram', offset = '0x100e00', name = 'wrong_delta' },
+    { space = 'ram', offset = '0x100f00', name = 'extra_old' },
+    { space = 'ram', offset = '0x101000', name = 'twice_add' },
+    { space = 'ram', offset = '0x101100', name = 'volatile_add' },
+    { space = 'ram', offset = '0x101200', name = 'retry_add' },
+    { space = 'ram', offset = '0x101300', name = 'add_then_call' },
+    { space = 'ram', offset = '0x101340', name = 'observe_result' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '89d9f00fc1088d040bc3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100100'
+readonly = true
+hex = '4889d9f0480fc14808488d040bc3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100200'
+readonly = true
+hex = 'b9fffffffff00fc108ffc97503c6030789c8c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100300'
+readonly = true
+hex = 'f00fc11889d8c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100400'
+readonly = true
+hex = '89d9f00fc1080f92c28d040b0fb6d201d0c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100500'
+readonly = true
+hex = '89d90fc1088d040bc3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100600'
+readonly = true
+hex = 'f001188b00c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100700'
+readonly = true
+hex = '89d9f00fc108c64008078d040bc3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100800'
+readonly = true
+hex = '89d9f2f00fc1088d040bc3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100900'
+readonly = true
+hex = '89d966f00fc1086601d90fb7c1c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100a00'
+readonly = true
+hex = '871889d8c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100b00'
+readonly = true
+hex = '89d9f00fc1088d040bc3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100c00'
+readonly = true
+hex = '89d9f00fc1088d040bc3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100d00'
+readonly = true
+hex = '89d9f00fc1088d040bc3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100e00'
+readonly = true
+hex = '89d9f00fc1088d040bffc0c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100f00'
+readonly = true
+hex = '89d9f00fc1088d040b01c8c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x101000'
+readonly = true
+hex = '89d9f00fc10889d9f00fc1088d040bc3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x101100'
+readonly = true
+hex = '89d9f00fc1088d040bc3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x101200'
+readonly = true
+hex = '89d9f00fc10801d974f689c8c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x101300'
+readonly = true
+hex = '89d9f00fc1088d040b50e83100000058c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x101340'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'option sourcelang go',
+    'option outlang go',
+    'map prototype add32_new int4 add32_new(int4 *p,int4 d);',
+    'map prototype add64_new int8 add64_new(int8 *p,int8 d);',
+    'map prototype dec32_branch int4 dec32_branch(int4 *p,int1 *out);',
+    'map prototype old32_live int4 old32_live(int4 *p,int4 d);',
+    'map prototype carry_live int4 carry_live(int4 *p,int4 d);',
+    'map prototype unlocked_add int4 unlocked_add(int4 *p,int4 d);',
+    'map prototype locked_add int4 locked_add(int4 *p,int4 d);',
+    'map prototype intervening_store int4 intervening_store(int4 *p,int4 d);',
+    'map prototype hle_add int4 hle_add(int4 *p,int4 d);',
+    'map prototype narrow_add int4 narrow_add(int2 *p,int4 d);',
+    'map prototype exchange int4 exchange(int4 *p,int4 d);',
+    'map prototype unsigned_add uint4 unsigned_add(uint4 *p,uint4 d);',
+    'map prototype shadowed_add int4 shadowed_add(int4 *p,int4 atomic);',
+    'map prototype wrong_delta int4 wrong_delta(int4 *p,int4 d);',
+    'map prototype extra_old int4 extra_old(int4 *p,int4 d);',
+    'map prototype twice_add int4 twice_add(int4 *p,int4 d);',
+    'map prototype volatile_add int4 volatile_add(volatile int4 *p,int4 d);',
+    'map prototype retry_add int4 retry_add(int4 *p,int4 d);',
+    'map prototype add_then_call int4 add_then_call(int4 *p,int4 d);',
+    'map prototype observe_result void observe_result(void);',
+    'load function add32_new',
+    'decompile',
+    'print C',
+    'load function add64_new',
+    'decompile',
+    'print C',
+    'load function dec32_branch',
+    'decompile',
+    'print C',
+    'load function old32_live',
+    'decompile',
+    'print C',
+    'load function carry_live',
+    'decompile',
+    'print C',
+    'load function unlocked_add',
+    'decompile',
+    'print C',
+    'load function locked_add',
+    'decompile',
+    'print C',
+    'load function intervening_store',
+    'decompile',
+    'print C',
+    'load function hle_add',
+    'decompile',
+    'print C',
+    'load function narrow_add',
+    'decompile',
+    'print C',
+    'load function exchange',
+    'decompile',
+    'print C',
+    'load function unsigned_add',
+    'decompile',
+    'print C',
+    'load function untrusted_add',
+    'decompile',
+    'print C',
+    'load function shadowed_add',
+    'decompile',
+    'print C',
+    'load function wrong_delta',
+    'decompile',
+    'print C',
+    'load function extra_old',
+    'decompile',
+    'print C',
+    'load function twice_add',
+    'decompile',
+    'print C',
+    'load function volatile_add',
+    'decompile',
+    'print C',
+    'load function retry_add',
+    'decompile',
+    'print C',
+    'load function add_then_call',
+    'decompile',
+    'print C',
+    'option outlang c',
+    'load function add32_new',
+    'decompile',
+    'print C',
+    'option outlang rust',
+    'decompile',
+    'print C',
+    'option outlang go',
+    'option sourcelang c',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'exact one direct-return signed 32-bit atomic addition'
+count = 1
+regex = '^  return atomic\.AddInt32\(p, *d\)$'
+
+[[match]]
+name = 'exact one signed 64-bit atomic addition'
+count = 1
+regex = '^  return atomic\.AddInt64\(.*unsafe\.Pointer\(p\).*, *d\)$'
+
+[[match]]
+name = 'refusals and foreign renderings retain LOCK'
+count = 21
+regex = '^ +LOCK\(\)'
+
+[[match]]
+name = 'refusals and foreign renderings retain UNLOCK'
+count = 21
+regex = '^ +UNLOCK\(\)'
+
+[[match]]
+name = 'carry value remains consumed'
+count = 1
+literal = 'CARRY4(v1,d)'
+
+[[match]]
+name = 'transaction hint remains explicit'
+count = 1
+literal = 'XACQUIRE()'
+
+[[match]]
+name = 'narrow result keeps 16-bit modular width'
+count = 1
+literal = 'return int32(uint16(v1 + int16(d)))'
+
+[[match]]
+name = 'old-valued exchange and add remain explicit'
+count = 2
+regex = 'return v1$'
+
+[[match]]
+name = 'Go retry retains the locked update inside the loop'
+count = 1
+regex = [
+    '^  for _kuna_first_[0-9]+ := true; .*uint32\(v[0-9]+ \+ d\) == 0x0.* \{$',
+    '^    LOCK\(\)$',
+    '^    v[0-9]+ = \*p$',
+    '^    \*p = \*p \+ d$',
+    '^    UNLOCK\(\)$',
+]
+
+[[match]]
+name = 'Go call after the atomic update keeps its order and the returned value'
+count = 1
+regex = [
+    '^  UNLOCK\(\)$',
+    '^  observe_result\(\)$',
+    '^  return d \+ v[0-9]+$',
+]

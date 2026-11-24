@@ -43,7 +43,7 @@ structure-recovery`, tier `transform`, default `off`. Registered in
   `a_callers_synthesized_record_does_not_replace_a_headless_record`) and `kuna_structsynth::tests::a_record_read_only_past_its_start_needs_the_headless_rule`
   (`accepts_record` admits `ls`'s `sub_53e7` layout only under the rule, and
   still declines an index, a uniform run and one narrow field).
-* Stage: `tests/stages/structheadless-closed-only.xml`, a negative control -- the
+* Stage: `tests/stages/structheadless-closed-only.toml`, a negative control -- the
   console harness decompiles one function and never marks it closed, so both
   passes (`off`, `closed`) read through the untyped pointer and mint no record, as the
   `calleevote` stage does.

@@ -656,21 +656,25 @@ fn ends_with_operator_head(out: &str) -> bool {
 /// bracket groups of the whole rendering left `{virtual override thunk}` for
 /// every thunk of an image.
 fn thunk_target(demangled: &str) -> Option<&str> {
-    let inner = demangled
+    let mut rest = demangled
         .strip_prefix("{virtual override thunk(")?
         .strip_suffix(")}")?;
-    let mut depth = 0i32;
-    let mut last = None;
-    for (i, ch) in inner.char_indices() {
-        match ch {
-            '(' | '{' | '[' => depth += 1,
-            ')' | '}' | ']' => depth -= 1,
-            ',' if depth == 0 => last = Some(i),
-            _ => {}
-        }
+    // The offsets come first, each one brace group (`{offset(16)}`,
+    // `{virtual offset(0, -24)}`) followed by `, `; the target is the rest,
+    // whose template arguments carry commas of their own.
+    while rest.starts_with('{') {
+        let mut depth = 0i32;
+        let end = rest.char_indices().find_map(|(i, ch)| {
+            match ch {
+                '{' => depth += 1,
+                '}' => depth -= 1,
+                _ => {}
+            }
+            (depth == 0).then_some(i)
+        })?;
+        rest = rest[end + 1..].strip_prefix(',')?.trim_start();
     }
-    let target = inner[last? + 1..].trim_start();
-    (!target.is_empty()).then_some(target)
+    (!rest.is_empty()).then_some(rest)
 }
 
 fn strip_bracket_groups(s: &str) -> String {
@@ -1344,6 +1348,10 @@ mod tests {
         assert_eq!(
             demangle_name("_ZThn8_N3foo3Bar3getEv"),
             Some("foo::Bar::get".to_string())
+        );
+        assert_eq!(
+            demangle_name("_ZTv0_n24_NSt3__113basic_istreamIcNS_11char_traitsIcEEED1Ev"),
+            Some("std::__1::basic_istream::~basic_istream".to_string())
         );
     }
 

@@ -137,7 +137,7 @@ regex = '^  if \(0 <= stat\(a0,&buf\)\)$'
 [[match]]
 name = "libcnames-addr #6: waitpid's status is stat_loc"
 count = 1
-regex = '^    waitpid\(pid,&stat_loc,0\);$'
+regex = '^ +waitpid\(pid,&stat_loc,0\);$'
 
 [[match]]
 name = "libcnames-addr #7: strtol's end pointer is endptr, a pointer named for a pointer"

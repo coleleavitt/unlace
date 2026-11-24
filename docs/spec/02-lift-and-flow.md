@@ -61,7 +61,11 @@ the instruction writes are still computed from `Old`. On the success path of
 an x86 `cmpxchg`, where the accumulator equals `Old`, the store's op is reused
 to assign `Old` to the accumulator, so both paths agree on it; the branch then
 only decides the upper half of `RAX` after a 32-bit `cmpxchg`, which hardware
-zero-extends only on failure. A 32-bit `xadd` or `xchg` on x86-64 ends with
+zero-extends only on failure. `cmpxchg8b`/`cmpxchg16b` compare and, on
+failure, refill a register pair (`EDX:EAX`, `RDX:RAX`) from `Old`'s halves; on
+its success path the op that built the new value and the store become those
+same two `SUBPIECE`s of `Old` (`Plan::pair_accumulator`), so both paths agree
+and the C no longer re-tests `expected != result` to copy the halves back. A 32-bit `xadd` or `xchg` on x86-64 ends with
 `RAX = ZEXT(EAX)` after `UNLOCK()` (the hardware clear of the upper half);
 an instruction with no branch whose ops after the envelope are only such
 register-into-containing-register zero-extensions is rewritten without them,
@@ -4297,6 +4301,13 @@ borrow for `.u`) instead of bit 63, and saturate on it; `msubs.u` multiplies (it
 The 32-bit `msub.q`/`msubs.q` (32x32 and 32x16) subtract at full precision and then drop the
 low bits, as `madd.q` does, so the result is `D[d] - ceil(product)` rather than
 `D[d] - floor(product)`, matching Unicorn's TriCore core.
+
+The packed multiply-accumulate forms (`madd(s).h`, `msub(s).h`, `maddsu(s).h`, `msubad(s).h`, the
+rounding `...r(s).h` and the multi-precision `...m(s).h` families) compute each half's result
+exactly: V is set when either 32-bit half (or the 64-bit `m` result) overflows, not from the halves'
+sign bits, and the saturating forms clamp the exact value. The rounding forms with a D[d]
+accumulator take `sext(D[d][31:16]) << 16` (the halfword was shifted inside its 16 bits, so it was
+0), and the `m` forms add `(mul_res1 +/- mul_res0) << 16` in 64 bits (the sum was truncated to 32).
 ### AArch64 SVE2 and SVE2.1 (#98)
 
 `specs/Ghidra/Processors/AARCH64/data/languages/AARCH64_sve2.sinc` decodes
@@ -5240,8 +5251,8 @@ FPSIZE 64, the only FLEN any RISC-V language uses.
   zext(fadd_s(...))`. Single-precision sources are NaN-unboxed as the ISA requires
   (`--unbox exact`): a register whose upper 32 bits are not all ones reads as the canonical NaN.
   `boxedcompare` (§3) folds the test for values written boxed or loaded boxed. Under
-  `fpargboxed` it also folds the test for the FP argument registers on entry, so compiled code
-  prints no unboxing except on a call's return value.
+  `fpargboxed` it also folds the test for the FP argument registers on entry and a call's
+  `fa0`/`fa1` result, which the psABI boxes, so compiled code prints no unboxing.
 
 The generated file decodes what LLVM decodes: 2496/2496 RV64 and 2176/2176 RV32 sampled words, plus
 every near miss. The hand-written files rejected `fcvt.d.s`, `fcvt.d.w` and `fcvt.d.wu` with a

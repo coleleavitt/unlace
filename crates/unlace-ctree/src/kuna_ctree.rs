@@ -173,6 +173,9 @@ pub enum StmtKind {
     /// A `switch`: the structured switch's components in order, the head first, then the
     /// case blocks.
     Switch { parts: Vec<StmtId> },
+    /// An `if` that prints as the structured switch `switch` it was merged into
+    /// (`switchmerge`).
+    SwitchOf { switch: BlockId },
     /// An unstructured branch: `goto`, `break` or `continue` by the block-goto flags in
     /// `gototype`.
     Goto { target: BlockId, gototype: uint4 },
@@ -378,6 +381,7 @@ impl CTree {
             | StmtKind::Expr(_)
             | StmtKind::Goto { .. }
             | StmtKind::Return { .. }
+            | StmtKind::SwitchOf { .. }
             | StmtKind::Opaque => Vec::new(),
         }
     }
@@ -401,6 +405,7 @@ impl CTree {
             StmtKind::Goto { gototype, .. } => format!("goto type={gototype:#x}"),
             StmtKind::Return { value: None, .. } => "return".to_string(),
             StmtKind::Return { value: Some(e), .. } => format!("return {}", self.expr_text(*e)),
+            StmtKind::SwitchOf { switch } => format!("switch-of {switch:?}"),
             StmtKind::Opaque => "opaque".to_string(),
         };
         match stmt.origin {

@@ -397,6 +397,15 @@ matching generic targets). RDNA images take the wave32 language, because the
 wave size is in the kernel descriptor, not the ELF header; wave64 code and
 GFX9.4, GCN 1-4 and GFX12 images still need an explicit `--target`.
 
+(unlace) The AVR-Dx parts (AVRxt core) have their own languages,
+`avr8:LE:16:avrda`, `avrdb`, `avrdd` and `avrdu`, chosen with `--target`; the ELF
+header cannot tell an AVR-Dx part from an Xmega. They share `avr8xt.sla`: I/O at data address 0,
+so `in`/`out` and `lds`/`sts` reach the same bytes; R0-R31 outside the data space; and a
+16-bit PC. Each series has its own pspec, `avr8dx_<series>.pspec`, which
+`tools/gen_avr_dx_pspec.py` writes from Microchip's Apache-2.0 AVR-Dx device pack. The pspec
+labels every data-space register `<instance>_<register>` (`PORTA_DIR`, `TCA0_CNT`), so a
+peripheral access prints by name, not as `dat_400`.
+
 Five further machines are routed the same way:
 - `EM_68K` (4) selects `68000:BE:32:Coldfire` when `e_flags` names a ColdFire ISA
   (`EF_M68K_CF_MASK`), `68000:BE:32:default` for `EF_M68K_M68000`, and `68000:BE:32:MC68020`

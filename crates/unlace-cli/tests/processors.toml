@@ -13,6 +13,10 @@
 # (docs/processor-tests.md).
 
 [images]
+# AVRxt: in r24, 0x01; sts 0x0400, r24; ret
+avrxt_io = """
+81b1809300040895
+"""
 bpf_strlen = """
 b4000000ffffffff0400000001000000bf120000000000000f0200000000000071220000000000005602fbff000000009500000000000000
 """
@@ -4331,3 +4335,16 @@ test = "tricore_tc18_gcc_shl_reg"
 address = "g_shlv"
 expect = ["a0 << "]
 forbid = ["-(int)"]
+
+# The AVR-Dx languages (avr8xt.sla, I/O at data 0, one pspec per series from Microchip's AVR-Dx_DFP)
+# name an `in` from the VPORT window and an `sts` to the PORT block.
+[[family]]
+name = "avr_dx_io"
+language = ["avr8:LE:16:avrda", "avr8:LE:16:avrdb", "avr8:LE:16:avrdd", "avr8:LE:16:avrdu"]
+base = "0x0"
+image = "avrxt_io"
+
+[[family.function]]
+test = "avr_dx_io_names"
+address = "0x0"
+expect = ["PORTA_DIR = VPORTA_OUT;"]

@@ -1,0 +1,13 @@
+<dwarf>
+  <register_mappings>
+    <register_mapping dwarf="0" ghidra="er0"/>
+    <register_mapping dwarf="1" ghidra="er1"/>
+    <register_mapping dwarf="2" ghidra="er2"/>
+    <register_mapping dwarf="3" ghidra="er3"/>
+    <register_mapping dwarf="4" ghidra="er4"/>
+    <register_mapping dwarf="5" ghidra="er5"/>
+    <register_mapping dwarf="6" ghidra="er6"/>
+    <register_mapping dwarf="7" ghidra="er7" stackpointer="true"/>
+  </register_mappings>
+  <call_frame_cfa value="2"/>
+</dwarf>

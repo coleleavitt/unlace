@@ -1,0 +1,215 @@
+# Hitachi/Renesas H8 family: registers, address calculation and stack helpers shared by every
+# core and CPU operating mode.  The including .slaspec defines
+#   CORE  "300" | "300h" | "h8s" | "sx"
+#   MODE  "normal" | "advanced24" (H8/300H, H8S advanced: 16-Mbyte space) | "middle" |
+#         "advanced" | "maximum" (H8SX)
+#   ASZ   address-space size in bytes, PTR  size of a return address / branch vector
+#   AMASK address mask, PMASK program-address mask, D32X expression for a 32-bit data address
+# References: H8/300 Programming Manual, H8/300H Series Software Manual (REJ09B0213),
+# H8S/2600, H8S/2000 Series Software Manual (REJ09B0139), H8SX Family Software Manual
+# (REJ09B0102).
+
+define endian=big;
+define alignment=2;
+
+define space ram type=ram_space size=$(ASZ) default;
+define space register type=register_space size=4;
+
+@if CORE == "300"
+define register offset=0x00 size=2 [ r0 r1 r2 r3 r4 r5 r6 r7 ];
+define register offset=0x00 size=1 [ r0h r0l r1h r1l r2h r2l r3h r3l r4h r4l r5h r5l r6h r6l r7h r7l ];
+@define SP "r7"
+@define AW "2"
+@else
+define register offset=0x00 size=4 [ er0 er1 er2 er3 er4 er5 er6 er7 ];
+define register offset=0x00 size=2 [ e0 r0 e1 r1 e2 r2 e3 r3 e4 r4 e5 r5 e6 r6 e7 r7 ];
+define register offset=0x00 size=1 [ _ _ r0h r0l _ _ r1h r1l _ _ r2h r2l _ _ r3h r3l
+                                     _ _ r4h r4l _ _ r5h r5l _ _ r6h r6l _ _ r7h r7l ];
+@define SP "er7"
+@define AW "4"
+# the low 24 bits of ER7: the stack pointer the 24-bit (advanced H8/300H, H8S) compiler specs
+# give the decompiler, whose stack offsets must fit the 3-byte address space
+define register offset=0x1d size=3 [ sp24 ];
+@endif
+
+define register offset=0x40 size=$(ASZ) [ pc ];
+# CCR is kept as separate flag registers (I UI H U N Z V C); LDC/STC/ANDC/ORC/XORC and the
+# exception frames pack and unpack them.
+define register offset=0x48 size=1 [ I UI H U N Z V C ];
+define register offset=0x50 size=1 [ exr ];
+define register offset=0x54 size=4 [ vbr sbr ];
+# MAC = MACH:MACL (42 significant bits); macn, macz, macv are the multiplier's N-MULT, Z-MULT
+# and (sticky) V-MULT flags, which STMAC copies to CCR
+define register offset=0x60 size=4 [ mach macl ];
+define register offset=0x60 size=8 [ mac ];
+define register offset=0x68 size=1 [ macn macz macv ];
+
+@if CORE == "h8s" || CORE == "sx"
+# Run-time configuration the instruction stream does not show, set per program or address
+# (Set Register Values): exrvalid = EXR is valid (interrupt control mode 2), so exception frames
+# hold EXR; macsat = MAC saturating mode (SYSCR.MACS).  Both 0 at reset.
+define register offset=0x80 size=4 contextreg;
+define context contextreg
+	exrvalid = (0,0)
+	macsat = (1,1)
+;
+@endif
+
+define pcodeop sleep;
+
+# ---------------------------------------------------------------------------------------
+# Effective addresses.  DEA: data address from a register-sized value; PEA: branch address.
+# The truncations use SUBPIECE (v(0)): SLEIGH compiles "reg:2" of a big-endian register passed
+# into a macro as the register's first (most significant) two bytes.
+macro DEA(ea, v) {
+@if CORE == "300"
+	ea = v;
+@elif MODE == "normal"
+	ea = v(0);
+@elif MODE == "advanced24"
+	ea = v(0);
+@elif MODE == "middle"
+	# middle mode: the lower 16 bits are valid, the upper 8 sign-extended
+	local lo:2 = v(0);
+	ea = sext(lo);
+@else
+	ea = v;
+@endif
+}
+
+macro PEA(ea, v) {
+@if MODE == "normal"
+	ea = v(0);
+@elif MODE == "advanced24" || MODE == "middle"
+	ea = v(0);
+@elif MODE == "advanced"
+	# advanced mode: branch addresses are 24 bits, the upper 8 bits read as 0
+	ea = v & 0xffffff;
+@else
+	ea = v;
+@endif
+}
+
+macro GETCCR(c) {
+	c = (I << 7) | (UI << 6) | (H << 5) | (U << 4) | (N << 3) | (Z << 2) | (V << 1) | C;
+}
+
+macro SETCCR(c) {
+	I = (c >> 7) & 1; UI = (c >> 6) & 1; H = (c >> 5) & 1; U = (c >> 4) & 1;
+	N = (c >> 3) & 1; Z = (c >> 2) & 1; V = (c >> 1) & 1; C = c & 1;
+}
+
+# Return addresses: one word in normal mode, one longword in the other modes
+macro PUSHRET(a) {
+	local ra:$(ASZ) = a;
+	$(SP) = $(SP) - $(PTR);
+	local s:$(ASZ); DEA(s, $(SP));
+@if ASZ == "3"
+	*:4 s = zext(ra);
+@else
+	*:$(PTR) s = ra;
+@endif
+}
+
+macro POPRET(t) {
+	local s:$(ASZ); DEA(s, $(SP));
+	local v:$(PTR) = *:$(PTR) s;
+	$(SP) = $(SP) + $(PTR);
+	PEA(t, v);
+}
+
+# Exception frames (TRAPA/RTE).  EXR is saved only in maximum mode: whether it is "valid" on
+# other parts is a hardware setting the instruction stream does not show.
+macro PUSHEXC(a) {
+	local ra:$(ASZ) = a;
+	local c:1; GETCCR(c);
+@if PTR == "2"
+	$(SP) = $(SP) - 2; local s1:$(ASZ); DEA(s1, $(SP)); *:2 s1 = ra;
+	$(SP) = $(SP) - 2; local s2:$(ASZ); DEA(s2, $(SP)); *:2 s2 = (zext(c) << 8) | zext(c);
+@elif MODE == "maximum"
+	$(SP) = $(SP) - 4; local s1:$(ASZ); DEA(s1, $(SP)); *:4 s1 = ra;
+	$(SP) = $(SP) - 2; local s2:$(ASZ); DEA(s2, $(SP)); *:2 s2 = zext(c) << 8;
+	$(SP) = $(SP) - 2; local s3:$(ASZ); DEA(s3, $(SP)); *:2 s3 = zext(exr) << 8;
+@else
+	local w:4 = (zext(c) << 24) | (zext(ra) & 0xffffff);
+	$(SP) = $(SP) - 4; local s1:$(ASZ); DEA(s1, $(SP)); *:4 s1 = w;
+@endif
+}
+
+macro POPEXC(t) {
+@if PTR == "2"
+	local s1:$(ASZ); DEA(s1, $(SP)); local c:2 = *:2 s1; $(SP) = $(SP) + 2;
+	local s2:$(ASZ); DEA(s2, $(SP)); local p:2 = *:2 s2; $(SP) = $(SP) + 2;
+	local cc:1 = c(1); SETCCR(cc);
+	PEA(t, p);
+@elif MODE == "maximum"
+	local s0:$(ASZ); DEA(s0, $(SP)); local e:2 = *:2 s0; $(SP) = $(SP) + 2;
+	local s1:$(ASZ); DEA(s1, $(SP)); local c:2 = *:2 s1; $(SP) = $(SP) + 2;
+	local s2:$(ASZ); DEA(s2, $(SP)); local p:4 = *:4 s2; $(SP) = $(SP) + 4;
+	exr = e(1); local cc:1 = c(1); SETCCR(cc);
+	PEA(t, p);
+@else
+	local s1:$(ASZ); DEA(s1, $(SP)); local w:4 = *:4 s1; $(SP) = $(SP) + 4;
+	local cc:1 = w(3); SETCCR(cc);
+	PEA(t, w);
+@endif
+}
+
+# Frames with EXR (exrvalid, and always in maximum mode): an EXR word below the CCR/PC frame
+macro PUSHEXCX(a) {
+@if MODE == "maximum"
+	PUSHEXC(a);
+@else
+	PUSHEXC(a);
+	$(SP) = $(SP) - 2; local s9:$(ASZ); DEA(s9, $(SP)); *:2 s9 = zext(exr) << 8;
+@endif
+}
+
+macro POPEXCX(t) {
+@if MODE == "maximum"
+	POPEXC(t);
+@else
+	local s9:$(ASZ); DEA(s9, $(SP)); local e9:2 = *:2 s9; $(SP) = $(SP) + 2;
+	exr = e9(1);
+	POPEXC(t);
+@endif
+}
+
+# MAC: (EAn) x (EAm) + MAC.  Non-saturating: 42-bit MACH:MACL, V-MULT when the sum leaves the
+# 42-bit range.  Saturating (macsat): MACL limited to H'80000000..H'7FFFFFFF, the LSB of MACH
+# shows V-MULT.  N-MULT and Z-MULT describe the result (section 2.2.64).
+macro MACACC(p) {
+	local s:8 = mac + sext(p);
+	local w:8 = (s << 22) s>> 22;
+	macv = macv | (w != s);
+	mac = w;
+	macn = mac s< 0; macz = mac == 0;
+}
+
+macro MACACCSAT(p) {
+	local s:8 = sext(macl) + sext(p);
+	local hi:1 = s s> 0x7fffffff;
+	local lo:1 = s s< -0x80000000;
+	local v:4 = s:4;
+	if (hi == 0) goto <nothi>; v = 0x7fffffff; <nothi>
+	if (lo == 0) goto <notlo>; v = 0x80000000; <notlo>
+	macv = macv | hi | lo;
+	macl = v;
+	mach = (mach & 0xfffffffe) | zext(macv);
+	macn = v s< 0; macz = v == 0;
+}
+
+# TRAPA #n vector: H'0010+2n (normal) or H'000020+4n (other modes); the H8SX adds VBR
+macro TRAPVEC(t, n) {
+@if PTR == "2"
+	local va:$(ASZ) = 0x10 + n * 2;
+@else
+	local va:$(ASZ) = 0x20 + n * 4;
+@endif
+@if CORE == "sx"
+	local vb:$(ASZ); DEA(vb, vbr);
+	va = va + vb;
+@endif
+	local v:$(PTR) = *:$(PTR) va;
+	PEA(t, v);
+}

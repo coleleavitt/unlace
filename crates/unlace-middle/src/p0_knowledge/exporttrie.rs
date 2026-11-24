@@ -10,7 +10,7 @@
 pub const EXPORTTRIE_ENV: &str = "UNLACE_EXPORTTRIE";
 
 pub fn exporttrie_enabled() -> bool {
-    crate::options::env_toggle(EXPORTTRIE_ENV, true)
+    crate::loadoptions::scoped(|o| o.exporttrie).unwrap_or_else(crate::loadoptions::env::exporttrie)
 }
 
 pub fn set_exporttrie_env(on: bool) {

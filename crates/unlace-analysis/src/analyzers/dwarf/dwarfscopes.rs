@@ -17,15 +17,12 @@ use std::collections::BTreeMap;
 
 use super::{Reader, dwarflocation};
 
-pub const DWARFSCOPES_ENV: &str = "UNLACE_DWARFSCOPES";
+pub const DWARFSCOPES_ENV: &str = unlace_decomp::loadoptions::DWARFSCOPES_ENV;
 
+/// `LoadOptions::dwarfscopes` for the load in progress, else [`DWARFSCOPES_ENV`].
 pub fn enabled() -> bool {
-    unlace_base::env::var(DWARFSCOPES_ENV).map_or(true, |v| {
-        !matches!(
-            v.trim().to_ascii_lowercase().as_str(),
-            "off" | "0" | "false"
-        )
-    })
+    use unlace_decomp::loadoptions::{env, scoped};
+    scoped(|o| o.dwarfscopes).unwrap_or_else(env::dwarfscopes)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -4532,4 +4532,10 @@ which also prints as `undefinedN`) keeps its type, because its union field
 reads hang on it. Merge copies added after type inference start untyped, so a
 parameter printed `unsigned int a1` read as `(unsigned int)a1 >> 0x18`; voted,
 it reads `a1 >> 0x18`. The variables left undefined are union pieces,
-odd-sized (3, 5, 6, 7 byte) values and returned values.
+odd-sized (3, 5, 6, 7 byte) values and returned values. When a variable gets
+both signed and unsigned votes, `UNLACE_TYPEVOTE_TRACE=1` prints the witness
+that separates the two readings: the sign bit of its width, which reads
+negative signed and large positive unsigned, with the side the vote chose. That
+witness is fixed by construction, not searched, and the dump changes no output.
+Searching the candidate widths for a witness, and explaining a choice made by
+another pass, are not yet done.

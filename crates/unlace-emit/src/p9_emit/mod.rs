@@ -10,6 +10,7 @@ pub mod armconstantshift;
 pub mod armregistershift; // (unlace) defined C for ARM register-controlled LSL
 pub mod arraycoverwidth;
 pub mod arraynotation;
+pub mod barrierintrinsics; // (unlace) PowerPC sync and isync user ops as the GCC/Clang barrier builtins
 pub mod bitcast;
 pub mod braceelide;
 pub mod bytearrayc;

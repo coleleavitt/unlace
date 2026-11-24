@@ -4071,6 +4071,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **Where / provenance:** P9/naming-policy · unlace · correctness-fix · acleintrinsics
 - **Example:** `option acleintrinsics off`
 
+### `barrierintrinsics` -- on | off, default `off`
+
+- **Symptoms:** a PowerPC lwsync prints as sync(1) where the source called __lwsync; a PowerPC isync prints as instructionSynchronize() where the source called __isync; a PowerPC ptesync prints as sync(2) where the source called __ptesync
+- **What it does:** On PowerPC, print a sync user op whose L operand is 0, 1 or 2 as the GCC and Clang barrier builtin __sync, __lwsync or __ptesync, and an instructionSynchronize user op as __isync, the names the Hex-Rays PowerPC plugin prints. Only the spelling of the call changes: the SLEIGH user ops keep their operands and their place in the flow.
+- **When to flip:** Off by default, so the output keeps the SLEIGH names sync(L) and instructionSynchronize() and existing consumers see no change. Turn on to read PowerPC barrier code under the names the source called, which separates lwsync and ptesync from a full sync; a sync whose operand is not a constant keeps its SLEIGH name.
+- **Where / provenance:** P9/naming-policy · unlace · presentation-default · barrierintrinsics
+- **Example:** `option barrierintrinsics on`
+
 ### `wideconst` -- on | off, default `on`
 
 - **Symptoms:** a 160-bit or 256-bit constant prints as a chain of zext732/zext832 shifts and ors; an evm address mask prints as ((zext732(0xffffffffffffff) << 0x40 ;  ...); an event topic hash spans several lines of shifted pieces.

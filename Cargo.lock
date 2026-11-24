@@ -1573,6 +1573,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "unlace-plugin"
+version = "0.1.0"
+dependencies = [
+ "unlace-middle",
+ "unlace-sleigh",
+]
+
+[[package]]
 name = "unlace-project"
 version = "0.1.0"
 dependencies = [

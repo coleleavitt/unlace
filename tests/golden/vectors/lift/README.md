@@ -121,19 +121,19 @@ the gate):
 | corpus test | language id |
 | `tests/datatests/floatprint.xml` | x86:LE:64:default:gcc |
 | `tests/datatests/promotecompare.xml` | x86:LE:32:default:gcc |
-| `tests/stages/gh7139-x86-16-disp16-signed.xml` | x86:LE:16:Real Mode |
+| `tests/stages/gh7139-x86-16-disp16-signed.toml` | x86:LE:16:Real Mode |
 | `tests/datatests/condexesub.xml` | ARM:LE:32:v8:default |
 | `tests/datatests/ccmp.xml` | AARCH64:LE:64:v8A:default |
 | `tests/datatests/gp.xml` | MIPS:BE:32:default:default |
 | `tests/datatests/lzcount.xml` | PowerPC:BE:32:default:default |
-| `tests/stages/gh6990-returnpair.xml` | sparc:BE:32:default:default |
-| `tests/stages/gh8817-v850indbranch.xml` | V850:LE:32:default |
+| `tests/stages/gh6990-returnpair.toml` | sparc:BE:32:default:default |
+| `tests/stages/gh8817-v850indbranch.toml` | V850:LE:32:default |
 | `tests/datatests/boolless.xml` | 8051:BE:16:default:default |
-| `tests/stages/gh8844-avr-rjmpwrap.xml` | avr8:LE:16:default |
+| `tests/stages/gh8844-avr-rjmpwrap.toml` | avr8:LE:16:default |
 | `tests/datatests/readvolatile.xml` | 68000:BE:32:MC68020:default |
-| `tests/stages/gh9203-condexe-loopcopy.xml` | RISCV:LE:64:default |
-| `tests/stages/gh8913-addcarrychain.xml` | 6502:LE:16:default |
-| `tests/stages/gh9001-hcs12brn.xml` | HCS12:BE:24:default |
+| `tests/stages/gh9203-condexe-loopcopy.toml` | RISCV:LE:64:default |
+| `tests/stages/gh8913-addcarrychain.toml` | 6502:LE:16:default |
+| `tests/stages/gh9001-hcs12brn.toml` | HCS12:BE:24:default |
 | `tests/datatests/skipnext2.xml` | Toy:BE:32:builder.align2:default |
 
 Corpus language ids NOT pinned (available for future fixtures):

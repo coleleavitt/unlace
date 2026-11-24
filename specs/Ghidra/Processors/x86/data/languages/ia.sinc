@@ -904,8 +904,8 @@ XmmReg1:  xmmreg1_r  is rexRprefix=0 & evexRp=1 & xmmreg1_r             { export
 XmmReg1:  xmmreg1_rx is rexRprefix=1 & evexRp=1 & xmmreg1_rx            { export xmmreg1_rx; }
 XmmReg2:  xmmreg2   is rexBprefix=0 & xmmreg2                           { export xmmreg2; }
 XmmReg2:  xmmreg2_b is rexBprefix=1 & xmmreg2_b                         { export xmmreg2_b; }
-XmmReg2:  xmmreg2_x is rexBprefix=0 & rexXprefix=1 & xmmreg2_x          { export xmmreg2_x; }
-XmmReg2:  xmmreg2_bx is rexBprefix=1 & rexXprefix=1 & xmmreg2_bx        { export xmmreg2_bx; }
+XmmReg2:  xmmreg2_x is vexMode=2 & rexBprefix=0 & rexXprefix=1 & xmmreg2_x          { export xmmreg2_x; }
+XmmReg2:  xmmreg2_bx is vexMode=2 & rexBprefix=1 & rexXprefix=1 & xmmreg2_bx        { export xmmreg2_bx; }
 
 YmmReg1:  ymmreg1   is rexRprefix=0 & ymmreg1                           { export ymmreg1; }
 YmmReg1:  ymmreg1_x is rexRprefix=1 & ymmreg1_x                         { export ymmreg1_x; }
@@ -913,8 +913,8 @@ YmmReg1:  ymmreg1_r  is rexRprefix=0 & evexRp=1 & ymmreg1_r             { export
 YmmReg1:  ymmreg1_rx is rexRprefix=1 & evexRp=1 & ymmreg1_rx            { export ymmreg1_rx; }
 YmmReg2:  ymmreg2   is rexBprefix=0 & ymmreg2                           { export ymmreg2; }
 YmmReg2:  ymmreg2_b is rexBprefix=1 & ymmreg2_b                         { export ymmreg2_b; }
-YmmReg2:  ymmreg2_x is rexBprefix=0 & rexXprefix=1 & ymmreg2_x          { export ymmreg2_x; }
-YmmReg2:  ymmreg2_bx is rexBprefix=1 & rexXprefix=1 & ymmreg2_bx        { export ymmreg2_bx; }
+YmmReg2:  ymmreg2_x is vexMode=2 & rexBprefix=0 & rexXprefix=1 & ymmreg2_x          { export ymmreg2_x; }
+YmmReg2:  ymmreg2_bx is vexMode=2 & rexBprefix=1 & rexXprefix=1 & ymmreg2_bx        { export ymmreg2_bx; }
 
 ZmmReg1:  zmmreg1   is rexRprefix=0 & zmmreg1                           { export zmmreg1; }
 ZmmReg1:  zmmreg1_x is rexRprefix=1 & zmmreg1_x                         { export zmmreg1_x; }
@@ -922,8 +922,8 @@ ZmmReg1:  zmmreg1_r  is rexRprefix=0 & evexRp=1 & zmmreg1_r             { export
 ZmmReg1:  zmmreg1_rx is rexRprefix=1 & evexRp=1 & zmmreg1_rx            { export zmmreg1_rx; }
 ZmmReg2:  zmmreg2   is rexBprefix=0 & zmmreg2                           { export zmmreg2; }
 ZmmReg2:  zmmreg2_b is rexBprefix=1 & zmmreg2_b                         { export zmmreg2_b; }
-ZmmReg2:  zmmreg2_x is rexBprefix=0 & rexXprefix=1 & zmmreg2_x          { export zmmreg2_x; }
-ZmmReg2:  zmmreg2_bx is rexBprefix=1 & rexXprefix=1 & zmmreg2_bx        { export zmmreg2_bx; }
+ZmmReg2:  zmmreg2_x is vexMode=2 & rexBprefix=0 & rexXprefix=1 & zmmreg2_x          { export zmmreg2_x; }
+ZmmReg2:  zmmreg2_bx is vexMode=2 & rexBprefix=1 & rexXprefix=1 & zmmreg2_bx        { export zmmreg2_bx; }
 
 Xmm_vsib:  xmm_vsib       is rexXprefix=0 & xmm_vsib                             { export xmm_vsib; }
 Xmm_vsib:  xmm_vsib_x     is rexXprefix=1 & xmm_vsib_x                           { export xmm_vsib_x; }
@@ -10213,16 +10213,16 @@ define pcodeop blendpd;
 :BLENDPD XmmReg1, XmmReg2, imm8 is vexMode=0 & $(PRE_66) & byte=0x0F; byte=0x3A; byte=0x0D; xmmmod=3 & XmmReg1 & XmmReg2; imm8 { XmmReg1 = blendpd(XmmReg1, XmmReg2, imm8:8); }
 
 define pcodeop blendvps;
-:BLENDVPS XmmReg, m128     is vexMode=0 & $(PRE_66) & byte=0x0F; byte=0x38; byte=0x14; XmmReg ... & m128 { XmmReg = blendvps(XmmReg, m128, XMM0); }
-:BLENDVPS XmmReg1, XmmReg2 is vexMode=0 & $(PRE_66) & byte=0x0F; byte=0x38; byte=0x14; xmmmod=3 & XmmReg1 & XmmReg2 { XmmReg1 = blendvps(XmmReg1, XmmReg2, XMM0); }
+:BLENDVPS XmmReg, m128, "XMM0"     is vexMode=0 & $(PRE_66) & byte=0x0F; byte=0x38; byte=0x14; XmmReg ... & m128 { XmmReg = blendvps(XmmReg, m128, XMM0); }
+:BLENDVPS XmmReg1, XmmReg2, "XMM0" is vexMode=0 & $(PRE_66) & byte=0x0F; byte=0x38; byte=0x14; xmmmod=3 & XmmReg1 & XmmReg2 { XmmReg1 = blendvps(XmmReg1, XmmReg2, XMM0); }
 
 define pcodeop blendvpd;
-:BLENDVPD XmmReg, m128     is vexMode=0 & $(PRE_66) & byte=0x0F; byte=0x38; byte=0x15; XmmReg ... & m128 { XmmReg = blendvpd(XmmReg, m128, XMM0); }
-:BLENDVPD XmmReg1, XmmReg2 is vexMode=0 & $(PRE_66) & byte=0x0F; byte=0x38; byte=0x15; xmmmod=3 & XmmReg1 & XmmReg2 { XmmReg1 = blendvpd(XmmReg1, XmmReg2, XMM0); }
+:BLENDVPD XmmReg, m128, "XMM0"     is vexMode=0 & $(PRE_66) & byte=0x0F; byte=0x38; byte=0x15; XmmReg ... & m128 { XmmReg = blendvpd(XmmReg, m128, XMM0); }
+:BLENDVPD XmmReg1, XmmReg2, "XMM0" is vexMode=0 & $(PRE_66) & byte=0x0F; byte=0x38; byte=0x15; xmmmod=3 & XmmReg1 & XmmReg2 { XmmReg1 = blendvpd(XmmReg1, XmmReg2, XMM0); }
 
 define pcodeop pblendvb;
-:PBLENDVB XmmReg, m128     is vexMode=0 & $(PRE_66) & byte=0x0F; byte=0x38; byte=0x10; XmmReg ... & m128 { XmmReg = pblendvb(XmmReg, m128, XMM0); }
-:PBLENDVB XmmReg1, XmmReg2 is vexMode=0 & $(PRE_66) & byte=0x0F; byte=0x38; byte=0x10; xmmmod=3 & XmmReg1 & XmmReg2 { XmmReg1 = pblendvb(XmmReg1, XmmReg2, XMM0); }
+:PBLENDVB XmmReg, m128, "XMM0"     is vexMode=0 & $(PRE_66) & byte=0x0F; byte=0x38; byte=0x10; XmmReg ... & m128 { XmmReg = pblendvb(XmmReg, m128, XMM0); }
+:PBLENDVB XmmReg1, XmmReg2, "XMM0" is vexMode=0 & $(PRE_66) & byte=0x0F; byte=0x38; byte=0x10; xmmmod=3 & XmmReg1 & XmmReg2 { XmmReg1 = pblendvb(XmmReg1, XmmReg2, XMM0); }
 
 define pcodeop pblendw;
 :PBLENDW XmmReg, m128, imm8     is vexMode=0 & $(PRE_66) & byte=0x0F; byte=0x3A; byte=0x0E; XmmReg ... & m128; imm8 { XmmReg = pblendw(XmmReg, m128, imm8:8); }
@@ -10353,13 +10353,16 @@ define pcodeop insertps;
 :INSERTPS XmmReg, m32, imm8     is vexMode=0 & $(PRE_66) & byte=0x0F; byte=0x3A; byte=0x21; XmmReg ... & m32; imm8 { XmmReg = insertps(XmmReg, m32, imm8:8); }
 :INSERTPS XmmReg1, XmmReg2, imm8 is vexMode=0 & $(PRE_66) & byte=0x0F; byte=0x3A; byte=0x21; xmmmod=3 & XmmReg1 & XmmReg2; imm8 { XmmReg1 = insertps(XmmReg1, XmmReg2, imm8:8); }
 
-:PINSRB XmmReg, rm32, imm8       is vexMode=0 & $(PRE_66) & byte=0x0F; byte=0x3A; byte=0x20; XmmReg ... & rm32; imm8 
+# PINSRB reads a byte: the low byte of r32, or m8
+PinsrbSrc: Rmr32 is mod=3 & Rmr32 { local t:1 = Rmr32:1; export t; }
+PinsrbSrc: m8 is m8 { export m8; }
+:PINSRB XmmReg, PinsrbSrc, imm8       is vexMode=0 & $(PRE_66) & byte=0x0F; byte=0x3A; byte=0x20; XmmReg ... & PinsrbSrc; imm8 
 { 
     local destIndex:1 = (imm8 & 0xf) * 8:1;
     local useLow:1 = destIndex < 64:1;
-    local newLow:8 = zext(rm32:1) << destIndex;
+    local newLow:8 = zext(PinsrbSrc) << destIndex;
     newLow = (XmmReg[0,64] & ~(0xff:8 << destIndex)) |  newLow;
-    local newHigh:8 = zext(rm32:1) << (destIndex-64:1);
+    local newHigh:8 = zext(PinsrbSrc) << (destIndex-64:1);
     newHigh = (XmmReg[64,64] & ~(0xff:8 << (destIndex - 64:1))) | newHigh;
     conditionalAssign(XmmReg[0,64],useLow,newLow,XmmReg[0,64]);
     conditionalAssign(XmmReg[64,64],!useLow,newHigh,XmmReg[64,64]);
@@ -10388,7 +10391,8 @@ define pcodeop insertps;
 
 define pcodeop extractps;
 @ifdef IA64
-:EXTRACTPS rm64, XmmReg, imm8  is $(LONGMODE_ON) & vexMode=0 & bit64=1 & $(PRE_66) & byte=0x0F; byte=0x3A; byte=0x17; XmmReg ... & rm64; imm8 { rm64 = extractps(XmmReg, imm8:8); }
+# EXTRACTPS writes 32 bits: to m32, or to a GPR zero-extended to 64 bits in 64-bit mode
+:EXTRACTPS Rmr32, XmmReg, imm8  is $(LONGMODE_ON) & vexMode=0 & bit64=1 & $(PRE_66) & byte=0x0F; byte=0x3A; byte=0x17; mod=3 & XmmReg & Rmr32 & Rmr64; imm8 { local t:4 = extractps(XmmReg, imm8:8); Rmr64 = zext(t); }
 @endif
 :EXTRACTPS rm32, XmmReg, imm8  is vexMode=0 & $(PRE_66) & byte=0x0F; byte=0x3A; byte=0x17; XmmReg ... & rm32 & check_rm32_dest ...; imm8 { rm32 = extractps(XmmReg, imm8:8); build check_rm32_dest; }
 

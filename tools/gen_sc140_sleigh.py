@@ -69,7 +69,7 @@ def parse_rows():
 def parse_titles():
     titles = []
     for k in range(START, len(TEXT)):
-        m = re.match(r'^([A-Z][A-Z0-9.]*)\s{2,}(.*?)\s{2,}([A-Z][A-Z0-9.]*)\s*$', TEXT[k])
+        m = re.match(r'^([A-Z][A-Z0-9.]*|DO[A-Z]+n)\s{2,}(.*?)\s{2,}([A-Z][A-Z0-9.]*|DO[A-Z]+n)\s*$', TEXT[k])
         if m and m.group(1) == m.group(3):
             t = m.group(2) + ' ' + TEXT[k + 1].strip()
             u = re.search(r'\((DALU|AGU|BMU|[^)]*)\)', t)
@@ -266,7 +266,7 @@ w = OUT.append
 TOKFIELDS = {}     # (word, lo, hi) -> name
 SUBT = []
 SUBT_DONE = set()
-PCODEOPS = {'invalid_word'}
+PCODEOPS = {'invalid_word', 'sc_active_lc'}
 
 
 def tf(word, lo, hi):
@@ -477,7 +477,7 @@ def emit_row(row, syntax, sec):
     regops = []
     for fdef, bits in picked:
         nm = fdef['names']
-        if nm in ('EA', 'ea', 'Rn@ea') or not fdef['table'] or nm.startswith('#') or nm == 'k':
+        if nm in ('EA', 'ea', 'Rn@ea', 'displacement') or not fdef['table'] or nm.startswith('#') or nm == 'k':
             continue
         names = re.split(r'[,:]', nm)
         for i, sub in enumerate(names):
@@ -536,7 +536,7 @@ def emit_form(row, syntax, sec, mn, ops, picked, regops, combo, cons, star, unit
                 queues.setdefault(c, []).append(kk)
     for fdef, bits in picked:
         nm = fdef['names']
-        if nm == 'Rn@ea' or (fdef['table'] and not nm.startswith('#') and nm != 'k' and nm not in ('EA', 'ea')):
+        if nm == 'Rn@ea' or (fdef['table'] and not nm.startswith('#') and nm not in ('k', 'displacement', 'EA', 'ea')):
             continue
         if nm in ('EA', 'ea'):
             key = eatable(fdef, bits, rnkey, sizeof(mn))
@@ -657,6 +657,8 @@ def emit_form(row, syntax, sec, mn, ops, picked, regops, combo, cons, star, unit
         STATS['userop'] += 1
     else:
         STATS['pcode'] += 1
+    if len(sem) > 3:
+        acts.append(sem[3])
     if sem[2]:
         kind, delay, tgt = sem[2]
         acts.append('brk = %d; brd = %d;' % (kind, delay))
@@ -691,6 +693,21 @@ def semantics(mn, syntax, ops, v, size, unit, agu):
         return 'if (!PRED) goto <skip>; %s <skip>' % code if code else ''
     def val(name):
         return v.get(name) or v.get(name.lstrip('#'))
+    lp = re.match(r'^(DOEN|DOENSH|DOSETUP)([0-3])$', mn)
+    if lp:
+        n = int(lp.group(2))
+        if lp.group(1) == 'DOSETUP':
+            return guard('SA%d = %s;' % (n, v['label'][0])), '', None, \
+                'sa%d = %s; globalset(inst_next, sa%d);' % (n, EXPR[v['label'][0]], n)
+        src = val('#u6') or val('#u16') or v.get('DR')
+        if src is None:
+            return None
+        return guard('LC%d = %s;' % (n, conv(src[0], src[1], 4, False))), '', None, \
+            'lfm = lfm | %d; slf = %d; globalset(inst_next, lfm); globalset(inst_next, slf);' % (1 << n, lp.group(1) == 'DOENSH')
+    if mn == 'SKIPLS' and 'label' in v:
+        return 'BC = ALC s<= 0;', '', (BR_COND, 0, v['label'][0])
+    if mn == 'BREAK' and 'label' in v:
+        return '', '', (BR_GOTO, 0, v['label'][0])
     if d in ('BRA', 'JMP') and 'label' in v:
         return '', '', (BR_GOTO, delay, v['label'][0])
     if d in ('BT', 'JT') and 'label' in v:
@@ -807,15 +824,62 @@ def semantics(mn, syntax, ops, v, size, unit, agu):
     return None
 
 
+ACTIVE = ['lf3=0 & lf2=0 & lf1=0 & lf0=1', 'lf3=0 & lf2=0 & lf1=1', 'lf3=0 & lf2=1', 'lf3=1']
+
+
+def emit_loop_tables():
+    for k in range(4):
+        w('ALC: is %s { export LC%d; }' % (ACTIVE[k], k))
+        w('SAK%d: is sa%d { export *[ram]:4 sa%d; }' % (k, k, k))
+    w('ALC: is lfm=0 { local l_lc:4 = sc_active_lc(); export l_lc; }')
+    w('LPSA: is lpsa { export *[ram]:4 lpsa; }')
+
+
+def emit_loops():
+    """Hardware loops. DOSETUPn records SAn (sa0-sa3) and DOENn/DOENSHn the enabled loops (lfm,
+    the highest one is active) and the short-loop flag (slf) in flowing context.  The prefix
+    marks (lpa = LPMARKA, lpb = LPMARKB) end an iteration: LPMARKA at the last set of a long
+    loop or at a one-set short loop, LPMARKB two sets before the last of a long loop or at the
+    first set of a two-set short loop.  A mark that ends the iteration later is carried as
+    noflow context (lpb1 to the next set, then lpend with lpk and lpsa), so the back edge is a
+    direct branch after the last set of the loop."""
+    def back(k, tgt, clear):
+        ctx = ''
+        if clear:
+            ctx = ' [ lfm = lfm & %d; slf = 0; globalset(inst_next, lfm); globalset(inst_next, slf); ]' % (15 & ~(1 << k))
+        return '%s { if (LC%d s<= 1) goto <done>; LC%d = LC%d - 1; goto %s; <done> LC%d = 0; }' % (
+            ctx, k, k, k, tgt, k)
+    for k in range(4):
+        w('LOOP: is lpend=1 & lpk=%d & LPSA%s' % (k, back(k, 'LPSA', True)))
+        free = 'lpend=0 & lpb1=0 & %s' % ACTIVE[k]
+        w('LOOP: is %s & lpa=1 & lpb=0 & slf=0 & SAK%d%s' % (free, k, back(k, 'SAK%d' % k, True)))
+        w('LOOP: is %s & lpa=1 & lpb=0 & slf=1%s' % (free, back(k, 'inst_start', True)))
+        w('LOOP: is %s & lpa=0 & lpb=1 & slf=1 [ lpend = 1; lpk = %d; lpsa = inst_start; globalset(inst_next, lpend);'
+          ' globalset(inst_next, lpk); globalset(inst_next, lpsa); ] { }' % (free, k))
+        w('LOOP: is %s & lpa=0 & lpb=1 & slf=0 [ lpb1 = 1; lpk = %d; lpsa = sa%d; globalset(inst_next, lpb1);'
+          ' globalset(inst_next, lpk); globalset(inst_next, lpsa); ] { }' % (free, k, k))
+    w('LOOP: is lpend=0 & lpb1=1 [ lpend = 1; globalset(inst_next, lpend); globalset(inst_next, lpk);'
+      ' globalset(inst_next, lpsa); ] { }')
+    w('LOOP: is epsilon { }')
+    w('')
+
+
 def main():
     for k, lo, hi in [(0, 12, 15), (0, 8, 8), (0, 5, 7), (0, 9, 11), (0, 0, 2), (0, 7, 7), (0, 6, 6), (0, 5, 5),
-                      (1, 13, 15), (0, 0, 15)] + [(1, b, b) for b in range(13)]:
+                      (1, 13, 15), (0, 0, 15), (0, 3, 3), (0, 4, 4)] + [(1, b, b) for b in range(13)]:
         tf(k, lo, hi)
     for r in ROWS:
         s = section_of(r['line'])
         if r['syntax'][0].startswith('IFc'):
             continue
         for syn in r['syntax']:
+            if re.match(r'^DO[A-Z]+n\b', syn) and any('n' in wd for wd in r['words']):
+                for n in range(4):
+                    bits = '{:02b}'.format(n)
+                    words = [[bits[sum(1 for t in wd[:k] if t == 'n')] if t == 'n' else t for k, t in enumerate(wd)]
+                             for wd in r['words']]
+                    emit_row(dict(r, words=words), re.sub(r'^(DO[A-Z]+)n', r'\g<1>%d' % n, syn), s)
+                continue
             emit_row(r, syn, s)
     seen, instr = set(), []
     # SLEIGH tries overlapping leaf patterns in declaration order: longer forms first, so a
@@ -842,13 +906,16 @@ def main():
     w('define register offset=0x400 size=8 [ %s ];' % ' '.join('TT8_%d' % k for k in range(SLOTS)))
     w('define register offset=0x480 size=4 [ %s BRT ];' % ' '.join('TT4_%d' % k for k in range(SLOTS)))
     w('define register offset=0x4c0 size=2 [ %s ];' % ' '.join('TT2_%d' % k for k in range(SLOTS)))
-    w('define register offset=0x500 size=16 [ contextreg ];')
+    w('define register offset=0x500 size=32 [ contextreg ];')
     w('')
     w('define context contextreg')
-    for n, a, b in [('brtgt', 0, 31), ('pfx', 32, 32), ('rem', 33, 35), ('slast', 36, 36), ('ccc', 37, 39),
+    for n, a, b, *nf in [('brtgt', 0, 31), ('pfx', 32, 32), ('rem', 33, 35), ('slast', 36, 36), ('ccc', 37, 39),
                     ('pe', 40, 51), ('ph', 52, 53), ('pl', 54, 55), ('di', 56, 57), ('ai', 58, 58), ('x1', 59, 59),
-                    ('x2', 60, 60), ('x3', 61, 61), ('pos3', 64, 66), ('pr', 67, 68), ('brk', 69, 71), ('brd', 72, 72)]:
-        w('  %s = (%d,%d)' % (n, a, b))
+                    ('x2', 60, 60), ('x3', 61, 61), ('pos3', 64, 66), ('pr', 67, 68), ('brk', 69, 71), ('brd', 72, 72),
+                    ('lpa', 73, 73), ('lpb', 74, 74), ('lfm', 76, 79), ('lf3', 76, 76), ('lf2', 77, 77), ('lf1', 78, 78),
+                    ('lf0', 79, 79), ('slf', 80, 80), ('lpend', 81, 81, 1), ('lpb1', 82, 82, 1), ('lpk', 84, 85, 1),
+                    ('lpsa', 96, 127, 1), ('sa0', 128, 159), ('sa1', 160, 191), ('sa2', 192, 223), ('sa3', 224, 255)]:
+        w('  %s = (%d,%d)%s' % (n, a, b, ' noflow' if nf else ''))
     w(';')
     w('')
     for k in range(3):
@@ -871,12 +938,13 @@ def main():
     w('PRED: is pr=1 { export T; }')
     w('PRED: is pr=2 { local l_f:1 = !T; export l_f; }')
     w('PRED: is pr=3 { export 1:1; }')
+    emit_loop_tables()
     w('')
     for wd, line in SUBT:
         w(line)
     w('')
     def with_temps(i):
-        temps = [t for t in ('TT8', 'TT4', 'TT2', 'TT1', 'PRED') if re.search(r'\b%s\b' % t, i['exec'] + i['wb'])]
+        temps = [t for t in ('TT8', 'TT4', 'TT2', 'TT1', 'PRED', 'ALC') if re.search(r'\b%s\b' % t, i['exec'] + i['wb'])]
         segs = i['pattern'].split(' ; ')
         segs[0] += ''.join(' & ' + t for t in temps)
         return ' ; '.join(segs)
@@ -887,12 +955,15 @@ def main():
             act = i['actions'].replace('pos = pos + 1;', 'pos3 = pos3 + 1;')
             w('I%d: %s is %s [ %s ] { %s }' % (n, i['disp'], with_temps(i), act, i['exec']))
         if n == 1:
-            w('I1: "[1w]" is w0_12_15=0x9 & w0_8_8=0 & w0_5_7=0x6 & w0_9_11 & w0_0_2 [ pfx = 1; rem = w0_9_11; ccc = w0_0_2; ] { }')
+            w('I1: "[1w]" is w0_12_15=0x9 & w0_8_8=0 & w0_5_7=0x6 & w0_9_11 & w0_0_2 & w0_3_3 & w0_4_4'
+              ' [ pfx = 1; rem = w0_9_11; ccc = w0_0_2; lpa = w0_3_3; lpb = w0_4_4; ] { }')
             w('I1: "?invalid" is w0_0_15 [ slast = 1; rem = 0; ] { invalid_word(); }')
         if n == 2:
-            w('I2: "[2w]" is w0_12_15=0x3 & w0_8_8=0 & w0_9_11 & w0_0_2 & w0_7_7 & w0_6_6 & w0_5_5 ; w1_13_15=0x5 & '
+            w('I2: "[2w]" is w0_12_15=0x3 & w0_8_8=0 & w0_9_11 & w0_0_2 & w0_7_7 & w0_6_6 & w0_5_5 & w0_3_3 & w0_4_4'
+              ' ; w1_13_15=0x5 & '
               + ' & '.join('w1_%d_%d' % (b, b) for b in range(13))
-              + ' [ pfx = 1; rem = w0_9_11 - 1; ccc = w0_0_2; ph = (w0_7_7 << 1) | w1_8_8; pl = (w0_5_5 << 1) | w0_6_6;'
+              + ' [ pfx = 1; rem = w0_9_11 - 1; ccc = w0_0_2; lpa = w0_3_3; lpb = w0_4_4;'
+              ' ph = (w0_7_7 << 1) | w1_8_8; pl = (w0_5_5 << 1) | w0_6_6;'
               ' pe = (w1_9_9 << 11) | (w1_4_4 << 10) | (w1_0_0 << 9) | (w1_10_10 << 8) | (w1_5_5 << 7) | (w1_1_1 << 6)'
               ' | (w1_11_11 << 5) | (w1_6_6 << 4) | (w1_2_2 << 3) | (w1_12_12 << 2) | (w1_7_7 << 1) | w1_3_3; ] { }')
         for i in instr:
@@ -921,7 +992,8 @@ def main():
     for n in (3, 2, 1):
         w('S: I%d^" "^S is ((pfx=1 & rem!=0) | (pfx=0 & slast=0)) & I%d & IW%d ; S { build I%d; build S; build IW%d; }' % (n, n, n, n, n))
     w('')
-    w(':^S is S & END { Tn = T; build S; build END; }')
+    emit_loops()
+    w(':^S is S & END & LOOP { Tn = T; build S; build END; build LOOP; }')
     print('\n'.join(OUT))
     sys.stderr.write('forms %d pcode %d userop %d skipped %d\n' % (len(instr), STATS['pcode'], STATS['userop'], len(SKIPPED)))
     for s in SKIPPED:

@@ -1,0 +1,100 @@
+# Length-bounded internal strings remain pointers in Go expressions.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'plain' },
+    { space = 'ram', offset = '0x100100', name = 'escaped' },
+    { space = 'ram', offset = '0x100200', name = 'unicode' },
+    { space = 'ram', offset = '0x101000', name = 'sink' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '488d3df91f0000be0b000000e8ef0f000031c0c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x102000'
+readonly = true
+hex = '706c61696e206279746573'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100100'
+readonly = true
+hex = '488d3df91f0000be1b000000e8ef0e000031c0c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x102100'
+readonly = true
+hex = '71756f74652220736c6173685c2074616209206e65776c696e650a'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100200'
+readonly = true
+hex = '488d3df91f0000be05000000e8ef0d000031c0c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x102200'
+readonly = true
+hex = '636166c3a9'
+
+[script]
+commands = [
+    'map prototype sink void sink(void *p, unsigned long n);',
+    'map prototype plain void plain(void);',
+    'map prototype escaped void escaped(void);',
+    'map prototype unicode void unicode(void);',
+    'option fatstr always',
+    'option outlang c',
+    'load function plain',
+    'decompile',
+    'print C',
+    'load function escaped',
+    'decompile',
+    'print C',
+    'load function unicode',
+    'decompile',
+    'print C',
+    'option outlang go',
+    'load function plain',
+    'decompile',
+    'print C',
+    'load function escaped',
+    'decompile',
+    'print C',
+    'load function unicode',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'C keeps ordinary byte string syntax'
+count = 1
+literal = 'sink("plain bytes",0xb);'
+
+[[match]]
+name = 'Go internal strings use data pointers'
+count = 3
+regex = 'unsafe.StringData\('
+
+[[match]]
+name = 'Go byte string pointers retain a terminating zero'
+count = 3
+literal = '\x00"'
+
+[[match]]
+name = 'Go keeps the pointer conversion to the formal type'
+count = 3
+regex = 'sink\(unsafe.Pointer\('
+
+[[match]]
+name = 'Go never converts a string directly to a pointer'
+count = 0
+regex = 'unsafe.Pointer\("'

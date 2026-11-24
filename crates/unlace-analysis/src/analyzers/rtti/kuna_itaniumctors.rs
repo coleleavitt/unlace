@@ -496,6 +496,10 @@ pub(super) struct Walker<'a> {
     /// method returning its class by value returns the slot's address in it.
     ret_reg: Option<Key>,
     extrapop: i64,
+    /// Calls the walk steps over as if absent: frame-setup helpers such as
+    /// MSVC's `__EH_prolog3`, which run before a function's own code and keep
+    /// `this` where it arrived.
+    transparent: HashSet<u64>,
 }
 
 impl<'a> Walker<'a> {
@@ -567,7 +571,14 @@ impl<'a> Walker<'a> {
             second_slot,
             ret_reg,
             extrapop,
+            transparent: HashSet::new(),
         })
+    }
+
+    /// The same walker stepping over every call to one of `helpers`.
+    pub(super) fn with_transparent_calls(mut self, helpers: HashSet<u64>) -> Self {
+        self.transparent = helpers;
+        self
     }
 
     /// Walk the function at `entry` along its fall-through path for at most
@@ -623,6 +634,11 @@ impl<'a> Walker<'a> {
                         conditional = true;
                     }
                     OpCode::CPUI_CALL => {
+                        if ins.first().is_some_and(|t| {
+                            !is_constant(t) && self.transparent.contains(&t.offset)
+                        }) {
+                            continue;
+                        }
                         if let Some(target) = ins.first().filter(|t| !is_constant(t)) {
                             walk.calls.push(target.offset);
                         }

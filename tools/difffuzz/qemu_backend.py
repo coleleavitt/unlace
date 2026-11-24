@@ -820,6 +820,87 @@ class Sparc32Harness(SparcHarness):
     flags = 0x100            # EF_SPARC_32PLUS
     elf32 = True
     trap = 0x10
+# ---------------------------------------------------------------- LoongArch64
+
+def la_li(rd, v):
+    return [0x14000000 | ((v >> 12) & 0xFFFFF) << 5 | rd, 0x03800000 | (v & 0xFFF) << 10 | rd << 5 | rd]
+
+
+def la_ld(rd, rj, off):
+    return 0x28C00000 | (off & 0xFFF) << 10 | rj << 5 | rd
+
+
+def la_st(rd, rj, off):
+    return 0x29C00000 | (off & 0xFFF) << 10 | rj << 5 | rd
+
+
+def la_addi(rd, rj, v):
+    return 0x02C00000 | (v & 0xFFF) << 10 | rj << 5 | rd                                 # addi.d
+
+
+class LaHarness:
+    """r1..r31 at 8*i, f0..f31 at 264 + 8*i. A scratch register the instruction does not write
+    holds the table address and reads back as its input."""
+    qemu = ("qemu-loongarch64", ["-cpu", "max"])
+    machine = 258
+    big = False
+    flags = 0x43  # EF_LOONGARCH_ABI_DOUBLE_FLOAT | EF_LOONGARCH_OBJABI_V1
+    table_size = 264 + 256
+    marker_at = 256
+
+    def __init__(self):
+        self.scratch = 31
+        self.scratch_names = ["s8"]
+
+    def choose_scratch(self, arch, regs, written):
+        for r in range(31, 1, -1):
+            n = arch.gprs[r - 1][0]
+            if n in regs and not written & set(range(regs[n][0], regs[n][0] + regs[n][1])):
+                self.scratch, self.scratch_names = r, [n]
+                return True
+        return False
+
+    def prologue(self, target):
+        s = self.scratch
+        c = la_li(s, TABLES)
+        for i in range(32):
+            c.append(0x2B800000 | (264 + 8 * i) << 10 | s << 5 | i)                     # fld.d fi
+        for i in range(1, 32):
+            if i != s:
+                c.append(la_ld(i, s, 8 * i))
+        c.append(la_ld(s, s, 8 * s))
+        off = (target - (PROLOGUE + 4 * len(c))) >> 2
+        c.append(0x50000000 | (off & 0xFFFF) << 10 | (off >> 16) & 0x3FF)               # b target
+        return words(c)
+
+    def epilogue(self, dumps, marker):
+        s = self.scratch
+        t = 1 if s != 1 else 2
+        c = la_li(s, OUT)
+        for i in range(1, 32):
+            if i != s:
+                c.append(la_st(i, s, 8 * i))
+        for i in range(32):
+            c.append(0x2BC00000 | (264 + 8 * i) << 10 | s << 5 | i)                     # fst.d fi
+        c += la_li(t, marker) + [la_st(t, s, self.marker_at)]
+        for base, size in [(OUT, self.table_size)] + [(p, PAGE) for p in dumps]:
+            c += [la_addi(4, 0, 1)] + la_li(5, base) + la_li(6, size) + [la_addi(11, 0, 64), 0x002B0000]  # write
+        c += [la_addi(4, 0, 0), la_addi(11, 0, 93), 0x002B0000]                                        # exit(0)
+        return words(c)
+
+    def table(self, arch, init, init_vec, flagword):
+        t = bytearray(self.table_size)
+        for i, (n, _) in enumerate(arch.gprs, start=1):
+            struct.pack_into("<Q", t, 8 * i, init.get(n, 0) & (2 ** 64 - 1))
+        for i, (n, _) in enumerate(arch.vecs):
+            struct.pack_into("<Q", t, 264 + 8 * i, init_vec.get(n, 0) & (2 ** 64 - 1))
+        return bytes(t)
+
+    def parse(self, arch, out):
+        regs = {n: struct.unpack_from("<Q", out, 8 * i)[0] for i, (n, _) in enumerate(arch.gprs, start=1)}
+        for i, (n, _) in enumerate(arch.vecs):
+            regs[n] = struct.unpack_from("<Q", out, 264 + 8 * i)[0]
+        return regs, 0
 
 
 HARNESSES = {"aarch64": A64Harness, "riscv64": RvHarness, "mips": MipsHarness, "mips64": Mips64Harness,
@@ -829,7 +910,7 @@ HARNESSES = {"aarch64": A64Harness, "riscv64": RvHarness, "mips": MipsHarness, "
              "ppc64le": lambda: PpcHarness(("qemu-ppc64le", ["-cpu", "power10"]), 21, False, True, 2),
              "ppc64-isa": lambda: PpcHarness(("qemu-ppc64", ["-cpu", "power10"]), 21, True, True, 2),
              "ppc64le-isa": lambda: PpcHarness(("qemu-ppc64le", ["-cpu", "power10"]), 21, False, True, 2),
-             "s390x": S390xHarness, "m68k": M68kHarness, "sparc64": SparcHarness, "sparc": Sparc32Harness}
+             "s390x": S390xHarness, "m68k": M68kHarness, "loongarch64": LaHarness, "sparc64": SparcHarness, "sparc": Sparc32Harness}
 
 
 def qemu_path(name):
@@ -958,9 +1039,86 @@ class PpcHarness:
 
 
 
+# ---------------------------------------------------------------- x86-64, run natively
+
+def _x86_mov_load(reg, disp):
+    """mov reg64, [rax + disp32]."""
+    return bytes([0x48 | (4 if reg >= 8 else 0), 0x8B, 0x80 | ((reg & 7) << 3)]) + struct.pack("<i", disp)
+
+
+def _x86_mov_store(reg, disp):
+    """mov [rax + disp32], reg64."""
+    return bytes([0x48 | (4 if reg >= 8 else 0), 0x89, 0x80 | ((reg & 7) << 3)]) + struct.pack("<i", disp)
+
+
+def _x86_vmovdqu(reg, disp, store):
+    """vmovdqu ymm, [rax + disp32] (or the store)."""
+    return bytes([0xC5, (0x7E if reg >= 8 else 0xFE), 0x7F if store else 0x6F, 0x80 | ((reg & 7) << 3)]) + struct.pack("<i", disp)
+
+
+class X86NativeHarness:
+    """RAX..R15 at 8*i (arch.gprs order), RFLAGS at 128, YMM0..YMM15 at 192 + 32*i. Runs as a
+    native process (no QEMU): the case runs on this CPU, so only instructions it implements give
+    a reference; any other one ends with SIGILL (ref-exception)."""
+    qemu = None
+    machine = 62
+    big = False
+    table_size = 192 + 512 + 16
+    marker_at = 192 + 512
+
+    def prologue(self, target):
+        c = b"\x48\xB8" + struct.pack("<Q", TABLES)                      # movabs rax, TABLES
+        for i in range(16):
+            c += _x86_vmovdqu(i, 192 + 32 * i, False)
+        c += b"\xFF\xB0" + struct.pack("<i", 128) + b"\x9D"              # push [rax+128]; popfq
+        for i in range(1, 16):
+            c += _x86_mov_load(i, 8 * i)
+        c += _x86_mov_load(0, 0)
+        here = PROLOGUE + len(c) + 5
+        return c + b"\xE9" + struct.pack("<i", target - here)           # jmp target
+
+    def epilogue(self, dumps, marker):
+        c = b"\x48\xA3" + struct.pack("<Q", OUT)                         # mov [OUT], rax
+        c += b"\x48\xB8" + struct.pack("<Q", OUT)                        # movabs rax, OUT
+        for i in range(1, 16):
+            c += _x86_mov_store(i, 8 * i)
+        c += b"\x48\xBC" + struct.pack("<Q", TABLES + 0xF00)             # movabs rsp, private stack
+        c += b"\x9C\x5B" + _x86_mov_store(3, 128)                        # pushfq; pop rbx; store
+        for i in range(16):
+            c += _x86_vmovdqu(i, 192 + 32 * i, True)
+        c += b"\x48\xC7\x80" + struct.pack("<iI", self.marker_at, marker)
+        for base, size in [(OUT, self.table_size)] + [(p, PAGE) for p in dumps]:
+            c += b"\xB8\x01\x00\x00\x00\xBF\x01\x00\x00\x00"              # eax=1 (write); edi=1
+            c += b"\x48\xBE" + struct.pack("<Q", base)                   # movabs rsi, base
+            c += b"\xBA" + struct.pack("<I", size) + b"\x0F\x05"         # edx=size; syscall
+        c += b"\xB8\x3C\x00\x00\x00\x31\xFF\x0F\x05"                     # exit(0)
+        return c
+
+    def table(self, arch, init, init_vec, flagword):
+        t = bytearray(self.table_size)
+        for i, (n, _) in enumerate(arch.gprs):
+            struct.pack_into("<Q", t, 8 * i, init.get(n, 0) & (2 ** 64 - 1))
+        struct.pack_into("<Q", t, 128, flagword)
+        for i in range(16):
+            v = init_vec.get(f"YMM{i}", 0)
+            t[192 + 32 * i:224 + 32 * i] = (v & (2 ** 256 - 1)).to_bytes(32, "little")
+        return bytes(t)
+
+    def parse(self, arch, out):
+        regs = {n: struct.unpack_from("<Q", out, 8 * i)[0] for i, (n, _) in enumerate(arch.gprs)}
+        for i in range(16):
+            regs[f"YMM{i}"] = int.from_bytes(out[192 + 32 * i:224 + 32 * i], "little")
+        return regs, struct.unpack_from("<Q", out, 128)[0]
+
+
+HARNESSES["x86-64-native"] = X86NativeHarness
+
+
 def available(arch):
     """The QEMU user binary for this architecture, or None."""
     h = HARNESSES.get(arch.name)
+    if h and h().qemu is None:
+        return "native"
     return h and qemu_path(h().qemu[0])
 
 
@@ -970,7 +1128,7 @@ def run_case_qemu(arch, regs, row, cand, rng, seed, tmp):
     bits = 64 if arch.elf64 else 32
     init = {n: arch.rand_reg(rng, bits) for n, _ in arch.gprs}
     arch.fix_inputs(init, rng)
-    init_vec = {n: rng.getrandbits(8 * 16) for n, _ in arch.vecs}
+    init_vec = {n: rng.getrandbits(8 * max(16, regs[n][1] if n in regs else 16)) for n, _ in arch.vecs}
     flags = rng.getrandbits(32)
     if hasattr(arch, "qemu_bit_values"):
         bits_ = arch.qemu_bit_values(rng)
@@ -1086,7 +1244,8 @@ def run_case_qemu(arch, regs, row, cand, rng, seed, tmp):
         f.write(build(segs, PROLOGUE, h.machine, h.big, getattr(h, "flags", 0), align=align))
     os.chmod(path, 0o755)
     try:
-        p = subprocess.run([qemu_path(h.qemu[0]), *h.qemu[1], path], capture_output=True, timeout=10)
+        cmd = [path] if h.qemu is None else [qemu_path(h.qemu[0]), *h.qemu[1], path]
+        p = subprocess.run(cmd, capture_output=True, timeout=10)
     except subprocess.TimeoutExpired:
         return {"status": "ref-exception", "why": "qemu timeout"}
     want = h.table_size + PAGE * len(data_pages)

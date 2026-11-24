@@ -156,7 +156,7 @@ before it calls, returns or jumps away
 (`crates/unlace-lift/src/p2_lift/kuna_atomics.rs (dead_after)`). ARM's `add`
 without `s` copies the carry into a scratch flag the next `mov` overwrites,
 which is the case this admits; and so does a compare's exit that branches back to the head after doing
-anything but `clrex`. The LOAD becomes `__sync_fetch_and_<op>(p, X)`,
+anything but `clrex`. An operand no storage holds at the load (`~x` for an outline `ldclr` helper's `bic`) is built with new ops in front of it. The LOAD becomes `__sync_fetch_and_<op>(p, X)`,
 `__sync_lock_test_and_set(p, X)` or `__sync_val_compare_and_swap(p, E, N)`, the
 monitor's pass and status become the constants 1 and 0, and the STORE a dead
 copy; dead-branch removal then deletes the back edge. A compare-exchange that
@@ -1286,6 +1286,32 @@ recovered switch table.
   helper also has an `entry|1` twin, and its calls resolve to the even entry).
   The gate is on the install, as for `msvcftol`.
 
+- **AEABI floating-point helpers** (`crates/unlace-lift/src/p2_lift/kuna_aeabifloat.rs`,
+  option **`aeabifloat`**, default off): on 32-bit ARM the same payload list
+  carries the run-time ABI's floating-point helpers (RTABI32 4.1.2), each body
+  the IEEE 754 operation the helper performs on its base-standard operands.
+  `__aeabi_dadd`, `dsub`, `drsub`, `dmul`, `ddiv` and the `f` forms are
+  `f+`, `f-` (operands swapped for `rsub`), `f*`, `f/`; the `int`
+  comparisons `dcmpeq`, `dcmplt`, `dcmple`, `dcmpge`, `dcmpgt` and the `f`
+  forms are `zext` of `f==`, `f<` or `f<=` (swapped for `ge` and `gt`),
+  false on unordered operands as the helpers return 0, and `dcmpun`/`fcmpun`
+  are `nan(a) | nan(b)`; `d2iz`, `d2lz`, `f2iz`, `f2lz` are `trunc`, `d2uiz`
+  and `f2uiz` the low word of an eight-byte `trunc` (exact for every result the
+  C cast defines), `d2f`/`f2d` `float2float`, and `i2d`, `l2d`, `i2f`, `l2f`
+  `int2float`, with `ui2d`/`ui2f` converting the zero-extended word. A `double`
+  is joined from r0:r1 (r2:r3 for the second operand) low word first on
+  little-endian and high word first on big-endian, and an eight-byte result is
+  split back the same way. So `return __aeabi_dadd(a,b);` prints
+  `return a + b;` and `dscale`'s `__aeabi_dmul(v, __aeabi_i2d(n))` prints
+  `return v * (double)n;`. `d2ulz`, `f2ulz`, `ul2d` and `ul2f` have no exact
+  p-code reading and keep their calls, typed by `aeabisigs`, as do the
+  flag-returning `cdcmp`/`cfcmp` comparisons. Default off: the fold takes the
+  image's helpers to be RTABI32's round-to-nearest IEEE ones, which a library
+  built for flush-to-zero or another rounding mode is not. The gate is on the
+  install, as for `arithhelpers`. On a hard-float caller that moves the
+  `r0:r1` result into `d0` (`vmov d0, r0, r1`), the result still prints as two
+  masked halves of a union cast joined by `+`.
+
 - **Objective-C ARC bookkeeping** (`crates/unlace-lift/src/p2_lift/kuna_objcarc.rs`,
   option **`objcarc`**, default on): the second kuna-owned call-fixup family,
   registered next to the one above. An ARC-compiled method is strewn with
@@ -1314,7 +1340,7 @@ recovered switch table.
   by stub and slot address: `id objc_retain(id)`, `void objc_storeStrong(id *, id)`,
   `id objc_alloc_init(Class)`, …, and `id objc_retain_x19(id obj @ x19)` returning
   in `x0`), so `obj = objc_retainAutoreleasedReturnValue((objc_object *)objc_msgSend(arg1,sel_inner))`
-  reads with its argument. The stage test `tests/stages/kuna-objcarc.xml` runs
+  reads with its argument. The stage test `tests/stages/kuna-objcarc.toml` runs
   `macho_objc_arc_arm64` (clang `-fobjc-arc -O2`) both ways: default,
   `-[Holder total:]` is `v1 = objc_msgSend(arg1,sel_count); v2 = objc_msgSend(arg1,sel_inner); return objc_msgSend(v2,sel_count) + v1;`
   with no release left; off, the five ARC calls are shown typed.
@@ -2576,6 +2602,17 @@ table reached once the deadline has passed is not attempted — its BRANCHIND is
 truncated like any unrecovered one, so the loop drains instead of staging more
 sub-decompilations — and the budget error names the step and the indirect
 jump's address. Without a budget each probe is one thread-local read.
+(kuna `jumptablework`, default 250000) The loop is also bounded in work.
+Each recovery costs the number of instructions flowed when it starts, because
+its partial decompile covers all of them, and
+`flow.rs (FlowInfo::jt_work_exhausted)` adds that to the function's sum
+before each table. Once the sum passes the bound, that table and every later one
+are not attempted. They are truncated like an unrecovered table, and one warning
+at the first of them names the option. This is what stops a function whose
+recovered tables lead into more and more code: an obfuscated arm64e image that
+dispatches every branch through a shared table of signed pointers grows a
+972-byte function past 20,000 flowed instructions, one recovery at a time.
+`off` removes the bound.
 Two pre-checks bound the attempt:
 `funcdata_block.rs (Funcdata::early_jump_table_fail)` backtracks up to 8 ops
 through value-preserving arithmetic looking for a computation the recovery can
@@ -4525,8 +4562,24 @@ directly to it; with no recorded start (a loop set up in another function, or th
 `SA0`/`SA1` writes) it keeps the indirect branch through `SA0`/`SA1`. A packet that ends
 both loops at once keeps the indirect form.
 
-Not modelled: Epiphany (its loop registers are written with `movts`, not named by one
-instruction) and StarCore `DOEN`/`DOSETUP` (not decoded).
+Epiphany names no loop in one instruction either: `movts ls`, `movts le` and `movts lc` write
+the loop start, the last loop instruction and the count from registers. `mov` and `movt` of a
+constant record the register and value in flowing context; `movts ls` from that register keeps
+the value, and `movts le` from it marks the instruction at its value with the kept start, so
+the root constructor adds the count-down-and-branch there as above (the test is `LC != 0`
+after the decrement). A write to that register by another instruction in between is not
+tracked; a loop register written from any other value marks nothing.
+
+StarCore SC140 marks loop ends in the prefix words of execution sets (`LPMARKA`, `LPMARKB`),
+not by address. `DOSETUPn` records the start `SAn` and `DOENn`/`DOENSHn` the enabled loops
+and the short-loop flag in flowing context; the highest enabled loop is the active one. A
+mark that ends an iteration later than its own set passes noflow context forward set by set:
+`LPMARKB` two sets before the end of a long loop, or on the first set of a two-set short
+loop, reaches the last set, and `LPMARKA` on the last set (or on a one-set short loop) acts
+there. The root constructor adds the manual's test after that set: while `LCn > 1`, count
+down and branch directly to the start; otherwise clear `LCn`. The loop end clears the loop's
+enable bit for the code after it, so an enclosing loop becomes active again. A set carrying
+both marks (an inner and an outer loop ending together) and `CONT`/`CONTD` are not modelled.
 
 ### Vendored community processor modules (#98)
 
@@ -4797,6 +4850,16 @@ Before, each was a bad instruction. The EVEX-promoted GPR forms in
 the AVX-512 scaling of whatever tuple context was current. Exercised by the
 `x86_64_cmpccxadd` row of `unlace-cli/tests/processors.toml`.
 
+### x86 legacy/VEX fixes from the native oracle (#98)
+
+Checking SSE, VEX and integer instructions against this CPU (`tools/difffuzz --oracle native`)
+fixed: a REX.X or VEX.X bit no longer extends a ModRM.rm vector register to XMM16-31 (only EVEX's
+does); the VEX scalar add/subtract/multiply keep bits 127:32/127:64 from the first source; 34 VEX
+scalar instructions ignore VEX.L; `lzcnt` with one register as source and destination takes CF from
+the source; `extractps m32` stores four bytes and `pinsrb` reads one. GFNI (legacy and VEX), the
+VEX.256 VAES and VPCLMULQDQ forms and AVX-NE-CONVERT decode (`gfni_vaes.sinc`, `avx_ne_convert.sinc`).
+Exercised by the `x86_64_native_oracle` row of `unlace-cli/tests/processors.toml`.
+
 ### x86 MOV DRn mod and VFPCLASSPH/SH display (#98)
 
 `MOV DRn, r64` decodes whatever ModRM.mod holds (the SDM says the field is ignored), as the
@@ -4935,14 +4998,14 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `Xtensa` (ESP32-S3 PIE) | Xtensa LX7 with the ESP32-S3 Processor Instruction Extensions (`EE.*`) | `Xtensa:LE:32:esp32s3` | Espressif LLVM `XtensaS3DSPInstrInfo.td` (encodings, generated), ESP32-S3 TRM PIE chapter | `unlace-cli/tests/processors.toml` (`xtensa_esp32s3_pie_*`) |
 | `eZ80` | Zilog eZ80 (eZ80Acclaim! eZ80F91/F92/F93/L92, eZ80190), ADL and Z80 modes | `eZ80:LE:24:ADL`, `eZ80:LE:24:Z80` | Zilog UM0077/UM0080; MAME z80 (BSD-3); libasm (Apache-2.0); binutils z80-dis.c read to cross-check encodings only | `unlace-cli/tests/processors.toml` (`ez80`) |
 | `eZ80` | Zilog eZ80 (eZ80Acclaim! eZ80F91/F92/F93/L92, eZ80190), ADL and Z80 modes | `eZ80:LE:24:ADL`, `eZ80:LE:24:Z80` | Zilog UM0077/UM0080; MAME z80 (BSD-3); libasm (Apache-2.0); binutils z80-dis.c read to cross-check encodings only | `unlace-cli/tests/ez80_raw.rs` |
-| `AMDGPU` | AMD GCN5 (Vega, gfx900-gfx90a), RDNA 1/2 (gfx10) and RDNA 3 (gfx11) shader ISAs, one-lane lift (RDNA wave32, and wave64 with 64-bit lane masks) | `AMDGPU:LE:64:GFX9`, `AMDGPU:LE:64:GFX10`, `AMDGPU:LE:64:GFX11`, `AMDGPU:LE:64:GFX10-W64`, `AMDGPU:LE:64:GFX11-W64` | LLVM AMDGPU encodings (`llvm-mc -show-encoding` / `--disassemble`), AMD Vega ISA reference; checked on clang-built OpenCL kernels | `unlace-cli/tests/processors.toml` (`amdgpu*`) |
+| `AMDGPU` | AMD GCN5 (Vega, gfx900-gfx90a), RDNA 1/2 (gfx10) and RDNA 3 (gfx11) shader ISAs, one-lane lift (RDNA wave32, and wave64 with 64-bit lane masks; gfx11 true16 halves, VOP3P/WMMA and MIMG from generated includes) | `AMDGPU:LE:64:GFX9`, `AMDGPU:LE:64:GFX10`, `AMDGPU:LE:64:GFX11`, `AMDGPU:LE:64:GFX10-W64`, `AMDGPU:LE:64:GFX11-W64` | LLVM AMDGPU encodings (`llvm-mc -show-encoding` / `--disassemble`, `llvm-objdump` tables read by `tools/amdgpu_gfx11_probe.py`), AMD Vega ISA reference; checked on clang-built OpenCL kernels | `unlace-cli/tests/processors.toml` (`amdgpu*`) |
 | `KVX` | Kalray KVX kv3-1 (Coolidge v1) and kv3-2 (Coolidge v2), 64-bit mode; bundles of up to eight syllables with tail immediate extensions | `KVX:LE:64:kv3-1`, `KVX:LE:64:kv3-2` | encodings generated from the binutils `kvx` opcode table and disassembler register classes by `tools/gen_kvx_sleigh.py`; checked against `kvx-elf-objdump` | `unlace-cli/tests/processors.toml` (`kvx`, `kvx_wide`) |
 | `CPython` | CPython 3.12 bytecode (one code object's co_code) | `CPython:LE:32:3.12` | CPython 3.12 `dis`/`opcode` tables, `Python/bytecodes.c` semantics; oracle `dis` | `unlace-cli/tests/cpython_raw.rs` |
 | `H8500` | Hitachi H8/500 (H8/510, H8/520, H8/532, H8/534, H8/536, H8/570) | `H8500:BE:16:minimum`, `H8500:BE:24:maximum` | H8/500 Programming Manual; MAME h8500dasm.cpp (BSD-3) | `unlace-cli/tests/processors.toml` (`h8500`) |
 | `S12Z` | NXP S12Z (MC9S12ZVL, MC9S12ZVC, MC9S12ZVM, S12ZVH) | `S12Z:BE:24:default` | NXP S12Z CPU RM; encodings checked against binutils s12z-opc.c (read only) | `unlace-cli/tests/processors.toml` (`s12z`) |
 | `V8Ignition` | V8 Ignition bytecode (V8 13.6, Node.js 24) | `V8Ignition:LE:32:13.6` | V8 `src/interpreter/bytecodes.h`, `bytecode-operands.h` (BSD-3-Clause); oracle `node --print-bytecode` | `unlace-cli/tests/v8ignition_raw.rs` |
 | `JavaCard` | Java Card virtual machine bytecode (Java Card Platform 3.1) | `JavaCard:BE:16:3.1` | Java Card Platform VM Specification v3.1, chapters 7 and 8 | `unlace-cli/tests/javacard_raw.rs` |
-| `StarCore` | NXP (Freescale) StarCore SC140 DSP core, variable-length execution sets with prefix and serial grouping | `StarCore:LE:32:SC140` | SC140 DSP Core Reference Manual rev 4.1 (encoding and field tables read by `tools/gen_sc140_sleigh.py`); no public toolchain, checked for decode self-consistency and on hand-assembled sets | `unlace-cli/tests/processors.toml` (`starcore`, `starcore_max`) |
+| `StarCore` | NXP (Freescale) StarCore SC140 DSP core, variable-length execution sets with prefix and serial grouping | `StarCore:LE:32:SC140` | SC140 DSP Core Reference Manual rev 4.1 (encoding and field tables read by `tools/gen_sc140_sleigh.py`); no public toolchain, checked for decode self-consistency and on hand-assembled sets | `unlace-cli/tests/processors.toml` (`starcore`, `starcore_max`, `starcore_loops`) |
 | `PowerPC` (Xenon VMX128) | Xbox 360 Xenon (64-bit PowerPC, AltiVec, VMX128) | `PowerPC:BE:64:Xenon` | Xenia emulator `ppc-instructions.xml` and VX128 decode formats (BSD-3) | `unlace-cli/tests/processors.toml` (`ppc_xenon_vmx128`) |
 | `S1C6200` | Seiko Epson S1C6200 / E0C6200 / E0C6200A 4-bit core | `S1C6200:BE:16:default` | Epson E0C6200/6200A Core CPU Manual (MF297-06a); checked against MAME `e0c6200` on all 4,096 encodings | `unlace-cli/tests/processors.toml` (`s1c6200`) |
 | `Propeller` (P2) | Parallax Propeller 2 (P2X8C4M64P), hub execution | `propeller2:LE:32:default` | Parallax "Propeller 2 Instructions" table v35 (encodings, operations, flags); checked against the flexspin assembler | `unlace-cli/tests/processors.toml` (`propeller2`) |
@@ -5270,6 +5333,36 @@ register group: the overlapping registers `v0m2`..`v30m2`, `v0m4`..`v28m4` and
 `v0m8`..`v24m8` (64, 128 and 256 bytes, operand subtables `vdm<n>` and `vs2m<n>`), and
 `vmv<n>r.v` lifts as a copy of the group (`vmv1r.v` as a register copy). A register number not
 a multiple of `n` is reserved and, as in LLVM, not decoded.
+
+The other operands are register groups too, of a size `vtype` decides, so `vtype` is tracked
+as context (`tools/gen_rvv_groups.py` generates the tables and the constructors).
+- **Context.** `vsetvli` and `vsetivli` set context fields from their immediate for the
+  instructions after them (`globalset(inst_next, ...)`, subtable `vtctx`): `vknown`, and
+  log2 of the group size of each operand class. The classes are `gk` for LMUL, `wk` for 2*LMUL,
+  and `e8k`..`e64k` for EEW/SEW*LMUL; the field is 0 for one register and when the vtype makes
+  the encoding reserved. `vsetvl`, whose vtype is a register, clears `vknown`. The context holds
+  from the `vsetvli` to the next one in address order. Compiled code sets vtype before each
+  strip-mined loop and after each call, so that matches execution there.
+- **Groups.** After each constructor there is one constructor per group shape, under a pattern
+  over those fields, whose operands are fixed-size subtables (`vd_k4a4` is a 4-register group at
+  a 4-aligned vd). The register file has an overlapping register for every run of 2..8
+  registers (`v8m2`, `v9_11`); a run past v31, which only a reserved segment encoding names,
+  reaches into unused register space.
+  - Data, index and destination groups are LMUL for most operands, 2*LMUL for widening results
+    and `.w` sources, and 2*LMUL for narrowing sources.
+  - Loads and stores use EEW/SEW*LMUL for their data, and indexed ones for their index.
+  - A segment access covers nf groups; with no known vtype it still writes its nf registers.
+  - Reduction, mask and scalar-move operands stay one register.
+  - A misaligned group at a known vtype is reserved and falls back to the single-register form.
+- **Old destination.** Every user operation that writes a vector register takes the old
+  destination (group) as its first input. Tail- or mask-undisturbed elements, and every element
+  when vl = 0, keep their old values.
+- **`vset*`.** `vsetvli`, `vsetivli` and `vsetvl` write `vl` (the user operation's result, also
+  in `rd`) and `vtype`. `vtype` is the immediate, or `rs2`, unless the vtype is reserved: then
+  `vill` is set. Reserved here means bits above 7 set, LMUL encoding 4, or SEW above 64. A
+  fractional LMUL with SEW > LMUL*ELEN is implementation-defined; QEMU accepts it, and so does
+  the lift. `vsetvli x0, x0` keeps `vl`.
+- **Not written.** The accrued flags (fflags, vxsat) are not written, as in the scalar F/D lift.
 Exercised by `unlace-cli/tests/riscv_vector.rs`: all 1258 encoding shapes
 against LLVM's names (`fixtures/riscv_vector/probe64.txt`) and LLVM-lowered
 vector functions (load/add/store, a reduction into a scalar, an FMA with a
@@ -5609,7 +5702,7 @@ or `f0`, the return address in `r14`. A `float` is the leftmost four bytes of
 its register, so each floating-point register is listed as its short view and
 then whole. The caller's 160-byte register save area at `0(r15)` is in the
 callee's local range, because the callee's prologue stores into it.
-Exercised by `tests/stages/kuna-s390x.xml`.
+Exercised by `tests/stages/kuna-s390x.toml`.
 
 The module also decodes, with exact p-code: the high-word facility (`aih`, `alsih`,
 `alsihn`, `ahhhr`/`ahhlr`, `alhhhr`/`alhhlr`, `shhhr`/`shhlr`, `slhhhr`/`slhhlr`,
@@ -5703,6 +5796,24 @@ Found by `tools/difffuzz` against Unicorn.
   shifted-register forms (`ARMTHUMBinstructions.sinc`) take `thSBIT_CZN` and
   `th_logicflags()`, so with S they set C from the shifter (`ThumbExpandImm12` or `thshift2`),
   as `ORR`, `EOR` and `TST` already did; before, `ANDS.W r8,r11,r9,ROR #21` left C unchanged.
+
+### LoongArch lifter fixes from differential fuzzing
+
+Found by `tools/difffuzz --arch loongarch64 --oracle qemu` (`qemu-loongarch64 -cpu max`).
+
+- `bstrins.w` and `bstrins.d` insert bits `[msb-lsb:0]` of `rj` at `[msb:lsb]` of `rd`; they
+  computed `bstrpick`'s field (bits `[msb:lsb]` of `rj`, shifted down) and cleared the low bits of
+  `rd`, so `bstrins.w s0,fp,23,14` left `s0` almost unchanged.
+- `slli.d`, `srli.d` and `srai.d` mask their 6-bit immediate with `0x3f`; with `0x1f` a shift by
+  32..63 was a shift by 0..31.
+- `rotr.w`, `rotri.w`, `rotr.d` and `rotri.d` rotate with a logical right shift; an arithmetic
+  one filled the rotated-in bits of a negative value with ones.
+- `bytepick.w` and `bytepick.d` concatenate the low bytes of `rk` with the high `sa` bytes of `rj`;
+  they masked the wrong ends, so `bytepick.w t5,a0,t4,0` returned `a0` instead of `t4`.
+- The float-to-integer conversions round as named: `ftintrm` toward minus infinity (`floor`),
+  `ftintrp` toward plus infinity (`ceil`), `ftintrz` toward zero; `ftint`, which uses the FCSR
+  mode, is the round-to-nearest-even user op that `ftintrne` already was. Before, all but
+  `ftintrne` truncated. The `.l.s` forms write the whole 64-bit register; they wrote its low word.
 
 ### PowerPC lifter fixes from differential fuzzing
 
@@ -6196,8 +6307,8 @@ fixture), `tests/stages/kuna-itaniumeh-cold.toml` (the partitioned build),
 `tests/stages/kuna-itaniumeh-a64.toml` (AArch64, x0/x1),
 `tests/stages/kuna-itaniumeh-arm.toml` (ARM32 and stripped Thumb EHABI tables,
 a type named only by its `type_info` string) and
-`tests/stages/kuna-itaniumeh-clang.xml` (clang ranges that start before the
-call, the multi-clause header) and `tests/stages/kuna-itaniumeh-sharedpad.xml`
+`tests/stages/kuna-itaniumeh-clang.toml` (clang ranges that start before the
+call, the multi-clause header) and `tests/stages/kuna-itaniumeh-sharedpad.toml`
 (pads folded into a shared handler).
 
 **(kuna) MSVC x64 catch funclets as pads** (`option msvceh on`, with

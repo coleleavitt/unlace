@@ -118,13 +118,21 @@ pub fn classify(ops: &[RawOp], vma: u64, len: u32) -> Classified {
 
     // Fall-through is the LAST-op test (gotcha 2): falls through unless the last
     // op is BRANCH / BRANCHIND / RETURN. No ops at all ⇒ falls through.
-    let has_fallthrough = match ops.last() {
-        None => true,
-        Some(last) => !matches!(
-            last.opcode,
-            OpCode::CPUI_BRANCH | OpCode::CPUI_BRANCHIND | OpCode::CPUI_RETURN
-        ),
-    };
+    // A call whose own p-code ends in a RETURN guarded by a CBRANCH to the next
+    // instruction still falls through there: SPARC lifts `call` as
+    // `didrestore = 0; CALL f; if (didrestore == 0) goto next; RETURN o7`, the
+    // RETURN only for a callee that ran `restore` in its delay slot.
+    let returning_call = flow.is_call
+        && matches!(ops.last(), Some(last) if last.opcode == OpCode::CPUI_RETURN)
+        && jumps.iter().any(|&at| flows[at] == fall_vma);
+    let has_fallthrough = returning_call
+        || match ops.last() {
+            None => true,
+            Some(last) => !matches!(
+                last.opcode,
+                OpCode::CPUI_BRANCH | OpCode::CPUI_BRANCHIND | OpCode::CPUI_RETURN
+            ),
+        };
     flow.has_fallthrough = has_fallthrough;
     let fall_through = has_fallthrough.then_some(fall_vma);
     if flow.is_call && has_fallthrough {
@@ -235,6 +243,31 @@ mod tests {
         assert!(c.flow.has_fallthrough);
         assert_eq!(c.flows, vec![0x2000]);
         assert_eq!(c.fall_through, Some(0x1004));
+    }
+
+    /// SPARC's `call`: the CALL, then a CBRANCH to the next instruction ahead of
+    /// a RETURN that only a `restore`-in-delay-slot callee takes. It falls
+    /// through, and the skip is not a callee.
+    #[test]
+    fn a_call_with_a_guarded_return_falls_through() {
+        let (ram, _cst) = spaces();
+        let ops = vec![
+            op(OpCode::CPUI_CALL, Some(vn(&ram, 0x2000))),
+            op(OpCode::CPUI_CBRANCH, Some(vn(&ram, 0x1008))),
+            op(OpCode::CPUI_RETURN, Some(vn(&ram, 0))),
+        ];
+        let c = classify(&ops, 0x1000, 8);
+        assert!(c.flow.is_call && c.flow.has_fallthrough);
+        assert_eq!(
+            (c.flows.clone(), c.fall_through),
+            (vec![0x2000], Some(0x1008))
+        );
+        let elsewhere = vec![
+            op(OpCode::CPUI_CALL, Some(vn(&ram, 0x2000))),
+            op(OpCode::CPUI_CBRANCH, Some(vn(&ram, 0x3000))),
+            op(OpCode::CPUI_RETURN, Some(vn(&ram, 0))),
+        ];
+        assert_eq!(classify(&elsewhere, 0x1000, 8).fall_through, None);
     }
 
     /// A predicated computed jump keeps its skip as a flow and names it as

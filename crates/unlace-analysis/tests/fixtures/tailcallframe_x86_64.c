@@ -1,6 +1,6 @@
 /* Minimal reproduction of the round-2 RE-friction shape: a callback reachable
  * ONLY through a code pointer in initialized data, whose -O2 tail jump lands in
- * a routine no discovery oracle finds.  See tests/stages/tailcallframe.xml for
+ * a routine no discovery oracle finds.  See tests/stages/tailcallframe.toml for
  * the byte-level twin and docs/spec/02-lift-and-flow.md for the rule. */
 typedef __SIZE_TYPE__ size_t;
 extern size_t strlen(const char *);

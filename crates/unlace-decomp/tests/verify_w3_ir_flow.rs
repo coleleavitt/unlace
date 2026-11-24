@@ -687,7 +687,9 @@ fn parse_meta(text: &str) -> FixtureMeta {
 /// with the function entry at the first lift point.
 fn build_sleigh_flow(meta: &FixtureMeta) -> (Funcdata, SleighEnv) {
     let root = repo_root();
-    let xml = std::fs::read(root.join(&meta.corpus)).expect("read corpus xml");
+    let xml = unlace_stagefile::read_as_xml(&root.join(&meta.corpus))
+        .expect("read corpus")
+        .into_bytes();
     let mut store = DocumentStorage::new();
     let doc_root = store
         .parse_document(&xml)

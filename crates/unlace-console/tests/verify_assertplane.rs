@@ -1030,7 +1030,7 @@ fn a_renamed_stack_local_does_not_get_a_second_symbol() {
 #[test]
 fn a_one_formal_custom_input_carries_the_getter_result() {
     let root = repo_root();
-    let xml = root.join("tests/stages/kuna-custom-call-storage.xml");
+    let xml = stage_xml("kuna-custom-call-storage");
     let mut prog = bootstrap_from_file(
         xml.to_str().unwrap(),
         "",
@@ -1269,4 +1269,18 @@ fn callable_return_lock_void_first_without_parameters() {
 #[test]
 fn callable_return_lock_unknown_first_without_parameters() {
     check_callable_return_lock("void handler(void);", true);
+}
+
+/// A TOML stage test written out as the `<decompilertest>` file the console bootstrap reads.
+fn stage_xml(stem: &str) -> std::path::PathBuf {
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let xml = unlace_stagefile::read_as_xml(&root.join(format!("tests/stages/{stem}.toml")))
+        .expect("read the stage test");
+    let path = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!(
+        "{stem}-{}-{:?}.xml",
+        std::process::id(),
+        std::thread::current().id()
+    ));
+    std::fs::write(&path, xml).expect("write the stage test as XML");
+    path
 }

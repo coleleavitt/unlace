@@ -35,13 +35,13 @@ def bits(lst):
     return sum(b << i for i, b in enumerate(lst))
 
 
-def lines(path, want, forms):
+def lines(path, want, forms, enc="EncEVEX"):
     J = json.load(open(path))
     for n in sorted(J["!instanceof"]["X86Inst"]):
         r = J[n]
         if r.get("isPseudo") or r.get("isCodeGenOnly") or r.get("isAsmParserOnly"):
             continue
-        if r["OpEnc"]["def"] != "EncEVEX":
+        if r["OpEnc"]["def"] != enc:
             continue
         ps = [p["def"] for p in r.get("Predicates", [])]
         if not set(ps) & want or any(p.startswith("HasAVX10_2") or p in SKIP for p in ps):
@@ -55,7 +55,8 @@ def lines(path, want, forms):
         intel = asm.split("|", 1)[1].rsplit("}", 1)[0]
         names = dict((a[1], a[0]["def"]) for a in r["OutOperandList"]["args"] + r["InOperandList"]["args"])
         cd8 = bits(r["CD8_Scale"]) or 1
-        regno = {"dst": 1, "src1": 18, "src2": 3, "src3": 4, "src": 18}
+        hi = 18 if enc == "EncEVEX" else 10
+        regno = {"dst": 1, "src1": hi, "src2": 3, "src3": 4, "src": hi}
         ok = [True]
 
         def sub(m):
@@ -163,12 +164,14 @@ def main():
     ap.add_argument("--predicates", default=PREDICATES)
     ap.add_argument("--forms", default="mem")
     ap.add_argument("--mattr", default=MATTR)
+    ap.add_argument("--enc", default="EncEVEX", choices=("EncEVEX", "EncVEX", "EncNormal"),
+                    help="the encoding of the records to sweep (EncVEX/EncNormal with --predicates for the VEX and legacy forms)")
     ap.add_argument("--work")
     ap.add_argument("--list", type=int, default=40)
     a = ap.parse_args()
     work = a.work or tempfile.mkdtemp(prefix="avx512sweep")
     os.makedirs(work, exist_ok=True)
-    recs = list(lines(a.json, set(a.predicates.split(",")), set(a.forms.split(","))))
+    recs = list(lines(a.json, set(a.predicates.split(",")), set(a.forms.split(",")), a.enc))
     keep, elf = assemble(recs, work, a.mattr)
     L = llvm_rows(elf, a.mattr)
     end = max(L) + 16

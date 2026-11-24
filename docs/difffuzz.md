@@ -19,7 +19,7 @@ python3 -m venv ~/.local/share/difffuzz-venv
 `--arch` is `x86-64`, `aarch64`, `riscv64`, `arm` (A32), `thumb` (T32), `mips` (MIPS32 big-endian),
 `mips64`, `mips64r6`, `mipsr6` (MIPS64, MIPS64 Release 6 and MIPS32 Release 6, big-endian; use
 `--oracle qemu`), `ppc` (PowerPC 32 big-endian), `tricore`, or (QEMU oracle only) `ppc64`, `ppc64le`, `ppc64-isa`,
-`ppc64le-isa` and `s390x`. `--sleighpath DIR` lifts with the `.sla`
+`ppc64le-isa`, `s390x` and `loongarch64`. `--sleighpath DIR` lifts with the `.sla`
 files under `DIR` instead of the built-in ones, so a spec edit can be checked right after
 `slacomp` without rebuilding unlace. The summary on stdout counts each outcome and lists the
 findings by mnemonic; `--out` writes every finding with its bytes, both disassemblies, the
@@ -32,7 +32,7 @@ input registers and the differing values.
 (`qemu-riscv64 -cpu max`), `mips` and `mips64` (`qemu-mips64 -cpu MIPS64R2-generic`), and `mipsr6`
 and `mips64r6` (`qemu-mips64 -cpu I6400`, an R6 ELF with no HI/LO in the harness). `ppc` (`qemu-ppc -cpu 7457`), and the QEMU-only `ppc64`, `ppc64le` (`PowerPC:*:64:default`),
 `ppc64-isa` and `ppc64le-isa` (`PowerPC:*:64:A2ALT`, Power ISA 3.0) on `qemu-ppc64` /
-`qemu-ppc64le -cpu power10`, and `s390x` on `qemu-s390x -cpu max`. `DIFFFUZZ_QEMU_DIR` names a directory searched before `PATH`
+`qemu-ppc64le -cpu power10`, `s390x` on `qemu-s390x -cpu max`, and `loongarch64` on `qemu-loongarch64 -cpu max`. `DIFFFUZZ_QEMU_DIR` names a directory searched before `PATH`
 for the QEMU binaries (a `--target-list=ppc-linux-user,...` build of QEMU 10 works). QEMU 10 implements
 what Unicorn's older QEMU core lacks or gets wrong: BF16, I8MM (`usdot`/`sudot`), MOPS,
 `fcmla`/`fcadd`, and RISC-V NaN-boxing.
@@ -132,6 +132,14 @@ afterwards. The register file is unchanged.
   (the ISA stores truncated bits) is `undefined`, and an `lfs` of a single sNaN (widened
   without quieting) is not compared. QEMU 10.2 also sets CR bit 14 for the A-form FP record
   forms (`fmadd.`, `fsel.`, ...), so CR3 is not compared there.
+- LoongArch64 (`Loongarch:LE:64:lp64d`) has no Unicorn or Capstone 5 support, so it runs only with
+  `--oracle qemu`, and its encodings are decoded in batches by binutils objdump
+  (`DIFFFUZZ_LA_OBJDUMP`, or `loongarch64-linux-gnu-objdump` on `PATH`; a `--target=loongarch64-linux-gnu`
+  binutils build works). The harness loads r1..r31 and keeps the table address in a register the
+  instruction does not write, and f0..f31 (`fld.d`/`fst.d`). A single-precision or word result
+  in an FPR is compared in its low word only (bits 63:32 are undefined; QEMU NaN-boxes them),
+  and a fused multiply-add's result is not compared. LSX/LASX, LBT, CSR, FCSR moves, timer,
+  `ll`/`sc` and privileged instructions are left out.
 - s390x: r0..r15 and f0..f15 are seeded and compared; the condition code is set with `spm` and
   read back with `ipm`, and is seeded one-hot into `CC0`..`CC3` with `CCA`/`CCB` to match. The
   table address is kept in a register the instruction does not write. Vector, decimal, hexadecimal
@@ -155,6 +163,9 @@ mnemonics). Capstone 5 does not decode them. QEMU runs with
   vtype, vxsat, vxrm, fcsr and vstart. Half of the x registers point into a 64 KiB data
   region, which is always mapped and compared. When QEMU raises SIGILL (a register group, SEW
   or EEW the instruction does not allow) the case is retried at LMUL 1 with each SEW.
+- **vtype as context.** Each encoding is lifted after a `vsetvli x0, x0` of each vtype it is run
+  at (`lift_variants`), so the decoder sees the vtype the harness sets, and the case is run with
+  the first of those vtypes QEMU accepts.
 - **What is compared.** `riscv.rvv.sinc` lifts every vector instruction to a user operation,
   so element values cannot be compared. The p-code runs twice, each time with different
   random user-operation results. A byte written the same way in both runs must equal QEMU's
@@ -163,6 +174,9 @@ mnemonics). Capstone 5 does not decode them. QEMU runs with
   gives every register the p-code does not read new contents, keeping vl, vtype, vxrm and
   fcsr. If a byte the p-code writes through a user operation changes, the result is
   `missing-input`, tagged with the case's tail/mask policy (`tu/mu` etc.).
+- **After vtype context (`tools/gen_rvv_groups.py`)** (pinned `unlace-92c033f5ca`, 400
+  encodings, seeds 5/6): VLEN 128 247 match, 17 with findings; VLEN 256 239 match, 29 with
+  findings. Every remaining finding is fflags or vxsat, which the lift leaves out.
 - **First run** (pinned `unlace-cc4eab698b`, 400 encodings each):
   - VLEN 128: 146 match, 111 with findings, 143 reference exceptions. The exceptions are
     SIGSEGV on indexed and strided addresses outside the region, and SIGILL on encodings
@@ -180,6 +194,39 @@ On the #546 encodings, `--oracle qemu` runs `bfdot` and `usdot` (Unicorn raises
 `UC_ERR_EXCEPTION`) and agrees with Unicorn on the rest. In 300 random RISC-V instructions it
 finds `fle.s` reading an unboxed single (`d38c9fa1`): QEMU compares the canonical NaN and
 writes 0, SLEIGH writes 1. Unicorn misses this because it does not unbox either.
+
+## Regression sweep
+
+`tools/difffuzz/sweep.py` runs every configuration (each `--arch` with the Unicorn oracle where
+Unicorn emulates it, with `--oracle qemu`, including `riscv64v`, and `x86-64-native` with
+`--oracle native`) at a fixed seed and a small
+count, one difffuzz process per configuration, and prints one line per configuration:
+
+```sh
+DIFFFUZZ_QEMU_DIR=~/.local/share/qemu-8.2-user ~/.local/share/difffuzz-venv/bin/python \
+    tools/difffuzz/sweep.py --unlace target/debug/unlace --objdump <llvm-objdump with RVV> --jobs 4 --out sweep.json
+x86-64       unicorn  ok    match    270  mismatch    0 (+0 known)  decode    0  ref-exc    8  unmodeled    9
+riscv64v     qemu     ok    match    126  mismatch    0 (+66 known)  decode    0  ref-exc   83  unmodeled    0
+s390x        qemu     unavailable: no QEMU user binary
+```
+
+`--count` (200), `--trials` (2) and `--seed` (1) are passed through, and so are `--sleighpath`
+(to check spec edits) and `--only REGEX` (over `arch/oracle`). A configuration whose oracle is
+not installed is `unavailable`, not a failure. `--out` writes the outcome counts of each
+configuration and up to `--keep` (10) of its failing cases.
+
+The exit status is 1 when a configuration has a finding of a failing kind (`mismatch`,
+`length`, `missing-output`, `missing-input`) that `tools/difffuzz/sweep_known.json` does not
+accept, 2 when a configuration errored, and 0 otherwise. `sweep_known.json` maps
+`arch/oracle` to the difference keys (a register, `missing-output`, `missing-input`) and the
+fnmatch patterns over their values that are documented open classes. Today that is only the RISC-V
+vector accrued flags (fflags, vxsat), which the lift leaves out as the scalar F/D lift does. A value
+mismatch is never accepted.
+
+First run (unlace-2feb8da847, seed 1, 200 per configuration): every available configuration is
+`ok`. Unavailable were `ppc`, `ppc64le`, `ppc64le-isa` and `s390x` on QEMU (no
+`qemu-ppc`/`qemu-ppc64le`/`qemu-s390x` on this host). `riscv64v` had 66 findings, all in its four
+documented classes.
 
 ## How a case runs
 
@@ -280,6 +327,9 @@ Fixed in the specs (`docs/spec/02-lift-and-flow.md` describes each change):
 - **PowerPC.** `divw.` set XER[OV]/[SO]; `lhbrx`/`lwbrx` were not byte-reversed in the
   little-endian languages; `ldbrx`/`stdbrx` were user ops; `stswi` with a partial last
   register stored the whole word.
+- **LoongArch.** `bstrins.w`/`.d` had `bstrpick`'s semantics; `slli.d`/`srli.d`/`srai.d` masked the
+  shift with `0x1f`; the rotates shifted arithmetically; `bytepick.w`/`.d` picked the wrong bytes;
+  `ftintrm`/`ftintrp`/`ftint` truncated and the `.l.s` forms wrote only the low word.
 - **s390x.** `risbhg`/`risblg` took the start and end positions from six bits of I3/I4 (bit 2
   set gave a position past the word) and `risblg`'s `+ 32` bound tighter than the mask.
 - **TriCore (#563).** PSW.V was the sign bit of the 32-bit result instead of signed overflow
@@ -329,3 +379,24 @@ in a copy of `apx_map4.sinc` makes the check report it (122 and 360 mismatches).
 
 There is no reference for the AVX-512 or AVX10.2 lifts here: Unicorn and QEMU (11.0) have no
 AVX-512, and Intel SDE needs Intel's licence accepted to download.
+
+## x86-64 against this CPU (`--oracle native`)
+
+`--arch x86-64-native --oracle native` runs each case natively instead of under Unicorn: the QEMU
+harness of `qemu_backend.py` (prologue loading every register, the instruction at its lifted
+address, an epilogue that writes the registers and touched pages to stdout) gets an x86-64 form,
+`X86NativeHarness`, whose ELF is executed directly. YMM0-YMM15 are compared at 256 bits, and the
+generator draws mostly from the legacy SSE, VEX and x87 opcode spaces, which Unicorn's QEMU core
+leaves out (AVX2, FMA, F16C, AES/VAES, VPCLMULQDQ, GFNI, SHA, AVX-VNNI, BMI, ADX on a CPU that has
+them; an instruction this CPU lacks ends with SIGILL and counts as `ref-exception`). The p-code of
+most vector arithmetic is a user operation, so those cases are `unmodeled`; moves, shuffles, blends,
+scalar float arithmetic, integer and flag semantics are compared.
+
+```sh
+~/.local/share/difffuzz-venv/bin/python tools/difffuzz/difffuzz.py --arch x86-64-native --oracle native \
+    --count 1500 --seed 41 --unlace <unlace> --sleighpath specs
+```
+
+`tools/x86_avx512_sweep.py --enc EncVEX` / `--enc EncNormal` (with VEX or legacy `--predicates`) is the
+matching decode check against `llvm-objdump` for those encodings. x87 is not compared: the p-code
+emulator has no 80-bit float.

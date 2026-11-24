@@ -1,4 +1,4 @@
-// Functions the Swift metadata does not bind (`tests/stages/kuna-swiftinfer.xml`).
+// Functions the Swift metadata does not bind (`tests/stages/kuna-swiftinfer.toml`).
 public final class Box {
     public var value: Int
     public init(_ v: Int) { value = v }

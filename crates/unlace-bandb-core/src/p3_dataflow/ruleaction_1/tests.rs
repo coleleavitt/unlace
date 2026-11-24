@@ -1245,3 +1245,89 @@ fn selectcse_declines_at_csehash_stub() {
     let mut r = RuleSelectCse::new("analysis");
     assert_eq!(r.apply_op(op, &mut fd), 0);
 }
+
+// -----------------------------------------------------------------------------
+// (kuna) RuleMaskJoin — (x & m1) + (x & m2) => x, or x & (m1 | m2)
+// -----------------------------------------------------------------------------
+
+/// `join(x & m1, x & m2)` on 8-byte values, the AND outputs at 0x100 and 0x108.
+fn mask_join(fd: &mut Funcdata, opc: OpCode, m1: u64, m2: u64) -> (OpId, VarnodeId) {
+    let x = make_reg(fd, 0x40, 8);
+    let and1 = make_op(fd, 0x1000, OpCode::CPUI_INT_AND);
+    let c1 = make_const(fd, m1, 8);
+    wire_input(fd, and1, x, 0);
+    wire_input(fd, and1, c1, 1);
+    let lo = give_output(fd, and1, 0x100, 8);
+    let and2 = make_op(fd, 0x1004, OpCode::CPUI_INT_AND);
+    let c2 = make_const(fd, m2, 8);
+    wire_input(fd, and2, x, 0);
+    wire_input(fd, and2, c2, 1);
+    let hi = give_output(fd, and2, 0x108, 8);
+    let op = make_op(fd, 0x1008, opc);
+    wire_input(fd, op, hi, 0);
+    wire_input(fd, op, lo, 1);
+    let _out = give_output(fd, op, 0x110, 8);
+    (op, x)
+}
+
+#[test]
+fn maskjoin_covering_halves_are_the_value() {
+    for opc in [
+        OpCode::CPUI_INT_ADD,
+        OpCode::CPUI_INT_OR,
+        OpCode::CPUI_INT_XOR,
+    ] {
+        let mut fd = build_fd();
+        let (op, x) = mask_join(&mut fd, opc, 0xffff_ffff, 0xffff_ffff_0000_0000);
+        let mut r = crate::kuna_maskjoin::RuleMaskJoin::new("analysis");
+        assert_eq!(r.apply_op(op, &mut fd), 1, "{opc:?}");
+        assert_eq!(code_of(&fd, op), OpCode::CPUI_COPY);
+        assert_eq!(numin(&fd, op), 1);
+        assert_eq!(in_of(&fd, op, 0), Some(x));
+    }
+}
+
+#[test]
+fn maskjoin_partial_masks_join_into_one_and() {
+    let mut fd = build_fd();
+    let (op, x) = mask_join(&mut fd, OpCode::CPUI_INT_ADD, 0xff, 0xff00);
+    let mut r = crate::kuna_maskjoin::RuleMaskJoin::new("analysis");
+    assert_eq!(r.apply_op(op, &mut fd), 1);
+    assert_eq!(code_of(&fd, op), OpCode::CPUI_INT_AND);
+    assert_eq!(in_of(&fd, op, 0), Some(x));
+    let m = in_of(&fd, op, 1).unwrap();
+    assert!(is_const(&fd, m));
+    assert_eq!(off_of(&fd, m), 0xffff);
+}
+
+#[test]
+fn maskjoin_declines_overlapping_masks() {
+    let mut fd = build_fd();
+    let (op, _) = mask_join(&mut fd, OpCode::CPUI_INT_ADD, 0x1ff, 0xff00);
+    let mut r = crate::kuna_maskjoin::RuleMaskJoin::new("analysis");
+    assert_eq!(r.apply_op(op, &mut fd), 0);
+    assert_eq!(code_of(&fd, op), OpCode::CPUI_INT_ADD);
+}
+
+#[test]
+fn maskjoin_declines_masks_of_different_values() {
+    let mut fd = build_fd();
+    let x = make_reg(&mut fd, 0x40, 8);
+    let y = make_reg(&mut fd, 0x48, 8);
+    let and1 = make_op(&mut fd, 0x1000, OpCode::CPUI_INT_AND);
+    let c1 = make_const(&mut fd, 0xffff_ffff, 8);
+    wire_input(&mut fd, and1, x, 0);
+    wire_input(&mut fd, and1, c1, 1);
+    let lo = give_output(&mut fd, and1, 0x100, 8);
+    let and2 = make_op(&mut fd, 0x1004, OpCode::CPUI_INT_AND);
+    let c2 = make_const(&mut fd, 0xffff_ffff_0000_0000, 8);
+    wire_input(&mut fd, and2, y, 0);
+    wire_input(&mut fd, and2, c2, 1);
+    let hi = give_output(&mut fd, and2, 0x108, 8);
+    let op = make_op(&mut fd, 0x1008, OpCode::CPUI_INT_OR);
+    wire_input(&mut fd, op, hi, 0);
+    wire_input(&mut fd, op, lo, 1);
+    let _out = give_output(&mut fd, op, 0x110, 8);
+    let mut r = crate::kuna_maskjoin::RuleMaskJoin::new("analysis");
+    assert_eq!(r.apply_op(op, &mut fd), 0);
+}

@@ -76,7 +76,7 @@ position, `:3902` calls it during `parse_compiler_config`, and `:1869` copies it
 into the ArchSeam that `Funcdata` reads (`substrate/context.rs:797`). Two other
 consumers already read it live - `p2_lift/jumptable.rs:3661` and
 `p3_dataflow/ruleaction_6.rs:609` (`RulePtrsubUndo::preserve_thumb_funcptr`,
-GH-8471/DIV-2, whose stage test `tests/stages/gh8471-thumbfuncptr.xml` passes
+GH-8471/DIV-2, whose stage test `tests/stages/gh8471-thumbfuncptr.toml` passes
 today and is reachable **only** through a non-zero `funcptr_align`).
 
 ## The fix

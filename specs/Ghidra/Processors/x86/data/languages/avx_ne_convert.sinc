@@ -1,0 +1,67 @@
+# AVX-NE-CONVERT (Intel SDM / ISE 319433): VEX.128/256, W0, memory sources only except VCVTNEPS2BF16.
+# VBCSTNEBF162PS F3 0F38 B1, VBCSTNESH2PS 66 0F38 B1, VCVTNEEBF162PS F3 0F38 B0, VCVTNEEPH2PS 66 0F38 B0,
+# VCVTNEOBF162PS F2 0F38 B0, VCVTNEOPH2PS NP 0F38 B0, VCVTNEPS2BF16 F3 0F38 72. Each is a user operation.
+
+define pcodeop vbcstnebf162ps;
+:VBCSTNEBF162PS XmmReg1, m16 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F3) & $(VEX_0F38) & $(VEX_W0); byte=0xb1; (XmmReg1 & ZmmReg1) ... & m16 {
+	local tmp:16 = vbcstnebf162ps(m16);
+	ZmmReg1 = zext(tmp);
+}
+:VBCSTNEBF162PS YmmReg1, m16 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_F3) & $(VEX_0F38) & $(VEX_W0); byte=0xb1; (YmmReg1 & ZmmReg1) ... & m16 {
+	local tmp:32 = vbcstnebf162ps(m16);
+	ZmmReg1 = zext(tmp);
+}
+define pcodeop vbcstnesh2ps;
+:VBCSTNESH2PS XmmReg1, m16 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0); byte=0xb1; (XmmReg1 & ZmmReg1) ... & m16 {
+	local tmp:16 = vbcstnesh2ps(m16);
+	ZmmReg1 = zext(tmp);
+}
+:VBCSTNESH2PS YmmReg1, m16 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0); byte=0xb1; (YmmReg1 & ZmmReg1) ... & m16 {
+	local tmp:32 = vbcstnesh2ps(m16);
+	ZmmReg1 = zext(tmp);
+}
+define pcodeop vcvtneebf162ps;
+:VCVTNEEBF162PS XmmReg1, m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F3) & $(VEX_0F38) & $(VEX_W0); byte=0xb0; (XmmReg1 & ZmmReg1) ... & m128 {
+	local tmp:16 = vcvtneebf162ps(m128);
+	ZmmReg1 = zext(tmp);
+}
+:VCVTNEEBF162PS YmmReg1, m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_F3) & $(VEX_0F38) & $(VEX_W0); byte=0xb0; (YmmReg1 & ZmmReg1) ... & m256 {
+	local tmp:32 = vcvtneebf162ps(m256);
+	ZmmReg1 = zext(tmp);
+}
+define pcodeop vcvtneeph2ps;
+:VCVTNEEPH2PS XmmReg1, m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0); byte=0xb0; (XmmReg1 & ZmmReg1) ... & m128 {
+	local tmp:16 = vcvtneeph2ps(m128);
+	ZmmReg1 = zext(tmp);
+}
+:VCVTNEEPH2PS YmmReg1, m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0); byte=0xb0; (YmmReg1 & ZmmReg1) ... & m256 {
+	local tmp:32 = vcvtneeph2ps(m256);
+	ZmmReg1 = zext(tmp);
+}
+define pcodeop vcvtneobf162ps;
+:VCVTNEOBF162PS XmmReg1, m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F2) & $(VEX_0F38) & $(VEX_W0); byte=0xb0; (XmmReg1 & ZmmReg1) ... & m128 {
+	local tmp:16 = vcvtneobf162ps(m128);
+	ZmmReg1 = zext(tmp);
+}
+:VCVTNEOBF162PS YmmReg1, m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_F2) & $(VEX_0F38) & $(VEX_W0); byte=0xb0; (YmmReg1 & ZmmReg1) ... & m256 {
+	local tmp:32 = vcvtneobf162ps(m256);
+	ZmmReg1 = zext(tmp);
+}
+define pcodeop vcvtneoph2ps;
+:VCVTNEOPH2PS XmmReg1, m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W0); byte=0xb0; (XmmReg1 & ZmmReg1) ... & m128 {
+	local tmp:16 = vcvtneoph2ps(m128);
+	ZmmReg1 = zext(tmp);
+}
+:VCVTNEOPH2PS YmmReg1, m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W0); byte=0xb0; (YmmReg1 & ZmmReg1) ... & m256 {
+	local tmp:32 = vcvtneoph2ps(m256);
+	ZmmReg1 = zext(tmp);
+}
+define pcodeop vcvtneps2bf16_vex;
+:VCVTNEPS2BF16 XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F3) & $(VEX_0F38) & $(VEX_W0); byte=0x72; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128 {
+	local tmp:8 = vcvtneps2bf16_vex(XmmReg2_m128);
+	ZmmReg1 = zext(tmp);
+}
+:VCVTNEPS2BF16 XmmReg1, YmmReg2_m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_F3) & $(VEX_0F38) & $(VEX_W0); byte=0x72; (XmmReg1 & ZmmReg1) ... & YmmReg2_m256 {
+	local tmp:16 = vcvtneps2bf16_vex(YmmReg2_m256);
+	ZmmReg1 = zext(tmp);
+}

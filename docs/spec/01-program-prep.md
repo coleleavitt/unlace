@@ -6541,6 +6541,14 @@ moves.
   member is brought to `msvc_demangler`'s (`dtor` is `destructor`) so a member
   reads the same whichever crate demangled it.
 
+  **Lambda closures** (`crates/unlace-analysis/src/analyzers/demangle/lambda.rs`,
+  `is_lambda_symbol`) are flagged, not renamed. A closure type's `operator()` is
+  recognised from three signals, any one enough: the Itanium closure-type name
+  `Ul <sig> E [digits] _` (the `Ul` at a nested-name, substitution or length
+  boundary), clang's `$_<n>` source name (in the mangled form, or at the start of
+  a demangled component), and libiberty's `{lambda(...)#N}` text. The flag is
+  metadata only; it changes no emitted name.
+
   **(unlace, docs/multilang.md) Swift names demangle through a pure-Rust
   demangler written for unlace** (`crates/unlace-analysis/src/analyzers/demangle/swift.rs
   (demangle_swift_name)`, with the parser in `swift/parse.rs`, the

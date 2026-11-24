@@ -775,6 +775,7 @@ Three tiers:
 | an ios app function list is only __mh_execute_header, main, exports and import stubs | [`unwindstarts`](#unwindstarts----on--off-default-on) |
 | LC_FUNCTION_STARTS absent and the arm64 gap walk cannot reach the body | [`unwindstarts`](#unwindstarts----on--off-default-on) |
 | functions the unwinder describes in __unwind_info missing from the inventory | [`unwindstarts`](#unwindstarts----on--off-default-on) |
+| a jump-only stub into code that is not a function gets no thunk attribution | [`aggressivethunks`](#aggressivethunks----on--off-default-off) |
 | a stripped mach-o loses functions whose unwind info is a dwarf fde in __eh_frame | [`machoehframe`](#machoehframe----on--off-default-on) |
 | functions listed by llvm-objdump --dwarf=frames on a mach-o missing from the inventory | [`machoehframe`](#machoehframe----on--off-default-on) |
 | many sub_<addr> functions that end in _Unwind_Resume() | [`ehcold`](#ehcold----on--off-default-on) |
@@ -3175,6 +3176,14 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **When to flip:** On by default: a Mach-O whose LC_FUNCTION_STARTS was stripped (a common App-Store app) gets its function inventory back from __unwind_info -- the tell-tale without it is an inventory of a few named entries and many __stubs/__got slots over a large __text that holds real code. Inert on every non-Mach-O image and on any Mach-O that still carries LC_FUNCTION_STARTS, where the unwind starts are already a subset of what is discovered. Flip off to keep only the LC_FUNCTION_STARTS, LC_MAIN, export and __mod_init_func starts.
 - **Where / provenance:** P1/code-data-partition · unlace · analysis-enablement · unlace-analysis-unwindstarts
 - **Example:** `--option unwindstarts on`
+
+### `aggressivethunks` -- on | off, default `off`
+
+- **Symptoms:** a jump-only stub into code that is not a function gets no thunk attribution; the body behind a hand-written jmp stub prints as an orphan block of its caller; a stripped image's jmp table entries are not functions although each only jumps.
+- **What it does:** On an x86 image, widen the thunk-promotion pass (thunkentry) from the jumps that open a function entry to every decoded direct unconditional jump, which is IDA's aggressively_convert_jumps_to_thunks. A jump-only stub that no function entry opens, such as a jump into a block only that stub reaches, then gets its target promoted to a function entry, so the body behind the stub is attributed to a thunk rather than left as an orphan. Three tests keep the widened set honest: the jump is not a fall-through target (no instruction runs into it), its target has exactly one reference in the listing (a block several jumps share is not one stub's body), and the existing rules hold (the target is not a decoded fall-through or conditional target, and the instruction after the jump is not ordinary code). Promotion never changes which instructions the walk decodes, so the option adds function entries and nothing else. Default off because it is output-changing: it adds function entries that the default walk leaves unattributed.
+- **When to flip:** Off by default. Flip on for an x86 image whose jump-only stubs into code that is not a function get no thunk attribution, for instance a hand-written table of jmp stubs in a stripped binary. Leave off on ordinary compiler output, where the default rules already find every thunk.
+- **Where / provenance:** P1/code-data-partition · unlace · analysis-enablement · unlace-analysis-thunkentry-aggressive
+- **Example:** `--option aggressivethunks on`
 
 ### `machoehframe` -- on | off, default `on`
 

@@ -468,6 +468,9 @@ unlace_options! { self, p1;
     "unwindstarts" => {
         registered!(crate::analysisgates::Unwindstarts)
     },
+    "aggressivethunks" => {
+        registered!(crate::analysisgates::AggressiveThunks)
+    },
     "exporttrie" => {
         let val = on_or_off(p1)?;
         self.load_options_mut().exporttrie = val;

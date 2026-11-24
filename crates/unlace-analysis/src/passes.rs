@@ -2046,7 +2046,11 @@ pub fn run_listing_consumers_replaying_observed(
     // (unlace `thunkentry`) The targets of the walk's jump thunks join the walk's own
     // function set wherever that set is committed. See `listing/thunkentry.rs`.
     let thunk_targets = if walk_committed {
-        crate::listing::thunkentry::thunk_entries(&file, &listing)
+        let aggressive = arch
+            .unlace_options
+            .get::<unlace_decomp::analysisgates::AggressiveThunks>()
+            .0;
+        crate::listing::thunkentry::thunk_entries(&file, &listing, aggressive)
     } else {
         Vec::new()
     };

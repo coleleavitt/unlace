@@ -4487,6 +4487,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `Epiphany` | Adapteva Epiphany | `epiphany:LE:32:default` | Epiphany Architecture Reference, binutils CGEN `cpu/epiphany.cpu`, GCC `config/epiphany` | `unlace-cli/tests/epiphany_raw.rs` |
 | `uPD7810` | NEC uPD7810 / 7811 / 78C10 / 78C11 / 78C14 | `uPD7810:LE:16:default` | NEC uPD7810/7811 user's manual, MAME `upd7810` tables | `unlace-cli/tests/upd7810.rs` |
 | `sBPF` | Solana sBPF (SBPFv0/v1 and SBPFv2) | `sBPF:LE:64:v1`, `sBPF:LE:64:v2` | anza-xyz/sbpf `doc/bytecode.md`, RFC 9669; syscall hashes labelled | `unlace-cli/tests/sbpf.rs` |
+| `TLCS90` | Toshiba TLCS-90 (TMP90C840, TMP90C841, TMP90C844) | `TLCS90:LE:16:default` | Toshiba TLCS-48/90 data book (1988); MAME tlcs90 core | `unlace-cli/tests/tlcs90_raw.rs` |
 | `SAM8` | Samsung SAM8 (S3C8/S3F8), SAM88RCRI (S3C9/S3F9) | `SAM8:BE:16:default`, `SAM88RCRI:BE:16:default` | Samsung S3C8-series user's manual ch. 6 (instruction set), S3C9454B/F9454B user's manual | `unlace-cli/tests/sam8_raw.rs` |
 <!-- native-rows -->
 

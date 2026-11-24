@@ -86,9 +86,13 @@ fn load_cases(text: &str, root: &Path) -> Result<Vec<Case>, String> {
         .and_then(|f| f.as_array())
         .ok_or("processors.toml: no [[family]] rows")?;
     let mut cases = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
     for fam in families {
         let fam = fam.as_table().ok_or("a [[family]] row is not a table")?;
         let name = str_field(fam, "name", "[[family]]")?;
+        if !seen.insert(name) {
+            return Err(format!("{name}: family name used twice"));
+        }
         check_keys(
             fam,
             &[

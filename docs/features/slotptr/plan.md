@@ -5,7 +5,7 @@
 `restructure_varnode` already folds each pass's stack symbols into the
 `framelayout` union (`Funcdata::record_frame_slots`). Right after it, and only
 when the per-function seam flag `ArchContext::slot_ptr` is set,
-`kuna_slotptr::record_pass` walks the live stack-space Varnodes once and notes
+`unlace_slotptr::record_pass` walks the live stack-space Varnodes once and notes
 into `Funcdata::slot_evidence`:
 
 - every `(offset, size)` any live stack Varnode occupies (read or written);
@@ -31,7 +31,7 @@ rebuilt, so `Funcdata::clear` clears the record.
 
 `extract_variables` section 3 appends the filler rows, then
 `type_filler_slots_from_stores` visits each one whose byte range overlaps no
-other exported row and calls `kuna_slotptr::slot_pointer_type`:
+other exported row and calls `unlace_slotptr::slot_pointer_type`:
 
 1. No store at exactly `(offset, size)` → keep the width.
 2. Any access at another offset or width inside the slot → keep the width

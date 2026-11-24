@@ -10,7 +10,7 @@ script sets.
     python3 scripts/stage_index.py --markdown    # a Markdown table
     python3 scripts/stage_index.py --json        # every field, as JSON
     python3 scripts/stage_index.py --missing     # files with no leading comment
-    python3 scripts/stage_index.py kuna-swift    # only files whose name contains a word
+    python3 scripts/stage_index.py unlace-swift    # only files whose name contains a word
 """
 import argparse
 import json

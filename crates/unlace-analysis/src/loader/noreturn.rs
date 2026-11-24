@@ -1164,7 +1164,7 @@ mod tests {
         // private GOCACHE/GOPATH so the build is hermetic and never touches the
         // user's environment. Un-stripped (the default) so `runtime.*` FUNC
         // symbols survive in `.symtab` for the matcher.
-        let dir = std::env::temp_dir().join(format!("kuna_go_noreturn_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("unlace_go_noreturn_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("mkdir temp go dir");
         std::fs::write(

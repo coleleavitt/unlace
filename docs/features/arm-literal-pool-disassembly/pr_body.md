@@ -1,12 +1,12 @@
 ## The problem
 
-`kuna disassemble` on an ARM function walks past the epilogue into the function's
+`unlace disassemble` on an ARM function walks past the epilogue into the function's
 own literal pool. The first pool word is a bit pattern the ARM translator will
 not decode, and the walk recovers from that by advancing **one byte** — so every
 row after it starts at an address no ARM instruction can begin at:
 
 ```
-$ kuna disassemble decompiler/crates/kuna-analysis/tests/fixtures/armpoolgrid_le32 0x10000 --addr
+$ unlace disassemble decompiler/crates/unlace-analysis/tests/fixtures/armpoolgrid_le32 0x10000 --addr
 # 13 instructions at sub_10000 @ 0x10000 (0x10000..0x10031, 49 bytes)
 ...
 0x10008       10009fe5              ldr r0,[0x10020]
@@ -47,7 +47,7 @@ whole five-word pool to one refused byte.
   Thumb, which is not enough to put an A32 listing back on its 4-byte grid.
 - `.byte` rows now spell every byte they cover (`.byte 0xb8,0xfe,0xff,0xff`).
 
-Nothing else changed: this is the listing walk in `kuna-cli`, no engine pass and
+Nothing else changed: this is the listing walk in `unlace-cli`, no engine pass and
 no emitted C.
 
 ## The tests
@@ -62,6 +62,6 @@ again.
 
 Gates: `make test` 675/675 PARITY OK · `make test-stages` 654/654 PARITY OK ·
 `make rust-test` 5,802 passed · `make check-spec` OK · `make test-cli` 58/58 ·
-`kuna catalog --check` OK.
+`unlace catalog --check` OK.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

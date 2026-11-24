@@ -1,4 +1,4 @@
-kuna swaps C's pointer-to-array and array-of-pointers spellings: a pointer to a 16-byte block is cast as an array of 16 pointers, which is not C, and a declared pointer to an array loses its array. The `--json` variable types have the same inversion and list nested array dimensions backwards (`char[16][2]` for two 16-byte arrays).
+unlace swaps C's pointer-to-array and array-of-pointers spellings: a pointer to a 16-byte block is cast as an array of 16 pointers, which is not C, and a declared pointer to an array loses its array. The `--json` variable types have the same inversion and list nested array dimensions backwards (`char[16][2]` for two 16-byte arrays).
 
 ```
 $ cat > t.c <<'EOF'
@@ -13,12 +13,12 @@ int use_rows(int i) {
 int main(int argc, char **argv) { return use_rows(argc); }
 EOF
 $ gcc -O2 -g -fno-inline -o t t.c
-$ kuna decompile t get_row
+$ unlace decompile t get_row
 char * get_row(int i)
 {
   return (char *[16])&(&rows)[(unsigned long)(i & 3) * 4];
 }
-$ kuna decompile t use_rows
+$ unlace decompile t use_rows
 int use_rows(int i)
 {
   char *v1; // rax

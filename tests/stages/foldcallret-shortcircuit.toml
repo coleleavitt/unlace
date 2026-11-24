@@ -1,4 +1,4 @@
-# kuna issue GH-684 (P6, sub-stage explicit-marking).
+# unlace issue GH-684 (P6, sub-stage explicit-marking).
 #
 # `foldcallret` (default-on) folds an order-safe single-use call output into
 # the statement that consumes it.  P-code's BOOL_AND/BOOL_OR evaluate both

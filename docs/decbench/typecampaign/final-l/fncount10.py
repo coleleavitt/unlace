@@ -7,13 +7,13 @@ BINS = {"fmt": f"{R}/O2/coreutils/stripped/fmt", "ls": f"{R}/O2/coreutils/stripp
         "dpkg-divert-O2ni": f"{R}/O2-noinline/dpkg/stripped/dpkg-divert",
         "crontab-O2ni": f"{R}/O2-noinline/cronie/stripped/crontab"}
 SP = "/home/mahaloz/kwt/_final-main/specs"
-BUILDS = {"base": ("/home/mahaloz/kwt/_baseline/kuna", "/home/mahaloz/github/kuna/specs"),
-          "G": ("/home/mahaloz/kwt/_final-g/kuna", SP), "L": ("/home/mahaloz/kwt/_final-l/kuna", SP)}
+BUILDS = {"base": ("/home/mahaloz/kwt/_baseline/unlace", "/home/mahaloz/github/unlace/specs"),
+          "G": ("/home/mahaloz/kwt/_final-g/unlace", SP), "L": ("/home/mahaloz/kwt/_final-l/unlace", SP)}
 out = {}
 for name, b in BINS.items():
     out[name] = {}
     for lab, (kb, sp) in BUILDS.items():
-        env = dict(os.environ, SLEIGHHOME=sp, KUNA_SPECS=sp)
+        env = dict(os.environ, SLEIGHHOME=sp, UNLACE_SPECS=sp)
         p = subprocess.run([kb, "decompile-all", b, "--json", "--max-fn-seconds", "120"], capture_output=True, env=env)
         d = json.loads(p.stdout)
         fs = d["functions"]

@@ -38,7 +38,7 @@ Navigate to the function name returned by strings.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_100a3be"
@@ -68,7 +68,7 @@ Navigate to the function name returned by strings.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_100a3be"

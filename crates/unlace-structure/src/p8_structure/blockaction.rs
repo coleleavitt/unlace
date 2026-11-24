@@ -1439,7 +1439,7 @@ impl<'a> TraceDAG<'a> {
 /// the node here; this returns an `Err` so the stub is visible.  See losses.
 fn new_block_switch_stub(_has_exit: bool) -> UnlaceResult<()> {
     Err(UnlaceError::lowlevel(
-        "kuna rust port: BlockGraph::newBlockSwitch needs getExitLeaf + grabCaseBasic \
+        "unlace rust port: BlockGraph::newBlockSwitch needs getExitLeaf + grabCaseBasic \
          (JumpTable labels, W4) which block.rs leaves as STUB(W7); not available at this \
          item's boundary",
     ))

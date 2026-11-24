@@ -16,7 +16,7 @@ fn complete_integer_field_callers_match_source_values_and_call_counts() {
     if process::optional_output(Command::new("cc").arg("--version")).is_none() {
         return;
     }
-    let assertions = common::fixture("integer_field_extract.kuna");
+    let assertions = common::fixture("integer_field_extract.unlace");
     let declarations = std::fs::read_to_string(&assertions).unwrap();
     let names: Vec<_> = declarations
         .lines()

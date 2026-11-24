@@ -60,7 +60,7 @@ fn entry_names(bin: &str) -> Vec<String> {
 /// The covered name renders demangled, the autodiff derivative passes through.
 #[test]
 fn swift_symbols_demangle_through_the_name_surfaces() {
-    let dir = std::env::temp_dir().join(format!("kuna_swiftdemangle_{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace_swiftdemangle_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let fixture = build_fixture(&dir);
     let bin = fixture.to_str().expect("utf8 path");

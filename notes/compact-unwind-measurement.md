@@ -49,7 +49,7 @@ Three more iOS system binaries (16 KB extracts with 1–2 starts each) also show
 On app A, `unlace functions` finds 314,038 functions with the option off and the
 same 314,038 with it on.
 
-The compact encodings add nothing for kuna either. App A has 123,580
+The compact encodings add nothing for unlace either. App A has 123,580
 frame-based, 43,202 frameless (43,162 with stack size 0), 18,865 DWARF-mode and
 290 empty encodings, and none with an LSDA bit set. S5/S7 recovers the frame
 from the code, exception tables come from `__eh_frame`, and the encoding has no

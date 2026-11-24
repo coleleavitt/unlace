@@ -43,7 +43,7 @@
 # that actually reads the constant's varnode, and all three print the entry
 # value there.  tworet* are relocated from 0x401000 to 0x601000.
 #
-# Stage / sub-stage: P4 "output-prototype" (kuna_condexeret.rs, always on).
+# Stage / sub-stage: P4 "output-prototype" (unlace_condexeret.rs, always on).
 
 [image]
 arch = 'x86:LE:64:default:gcc'

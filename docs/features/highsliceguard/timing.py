@@ -1,7 +1,7 @@
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor
 import datetime,gzip,hashlib,itertools,json,multiprocessing,os,random,resource,statistics,subprocess,threading,time
-w=Path('/tmp/kuna-highslice-optin')
+w=Path('/tmp/unlace-highslice-optin')
 def sha(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 def sample():
  return {'time':time.monotonic(),'cpus':{int(p[0][3:]):list(map(int,p[1:]))for line in Path('/proc/stat').read_text().splitlines()if(p:=line.split())and p[0].startswith('cpu')and p[0][3:].isdigit()}}
@@ -9,10 +9,10 @@ def case(job):
  plan,row,index,cpu=job;name,binary,selector,language=row;os.sched_setaffinity(0,{cpu});rng=random.Random(plan['seed']+index)
  raw={arm:[]for arm in plan['arms']};orders=[];fixture_sha=sha(binary)
  def run(arm):
-  root=Path(plan['base']if arm=='parent'else plan['root']);cmd=[str(root/'decompiler/target/release/kuna'),'decompile',binary,selector,'--language',language]
+  root=Path(plan['base']if arm=='parent'else plan['root']);cmd=[str(root/'decompiler/target/release/unlace'),'decompile',binary,selector,'--language',language]
   if language=='go':cmd+=['--option','godwarfsig','on']
   before=resource.getrusage(resource.RUSAGE_CHILDREN);start=time.perf_counter()
-  subprocess.run(cmd,cwd=plan['root'],env=os.environ|{'KUNA_SPECS':str(Path(plan['root'])/'specs')},stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,check=True)
+  subprocess.run(cmd,cwd=plan['root'],env=os.environ|{'UNLACE_SPECS':str(Path(plan['root'])/'specs')},stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,check=True)
   elapsed=time.perf_counter()-start;after=resource.getrusage(resource.RUSAGE_CHILDREN)
   return {'cpu_ms':1000*(after.ru_utime+after.ru_stime-before.ru_utime-before.ru_stime),'wall_ms':1000*elapsed}
  for _ in range(plan['warmups_per_arm']):
@@ -35,13 +35,13 @@ def main():
   if not p.name.isdigit()or int(p.name)==os.getpid():continue
   try:args=(p/'cmdline').read_bytes().decode(errors='replace').split('\0')
   except OSError:continue
-  if args and Path(args[0]).name not in ['bash','timeout','rg']and any(prefix in ' '.join(args)for prefix in ['/home/mahaloz/kwt/angr-narrow-table-guard','/tmp/kuna-highslice-optin','/home/mahaloz/kwt/angr-rust-','/tmp/kuna-rust-','/home/mahaloz/kwt/angr-fnptr-namespace','/tmp/kuna-fnptr-namespace','/home/mahaloz/kwt/angr-base-1d5f','/home/mahaloz/kwt/angr-base-c5fc','/tmp/kuna-dwarf-namespace','/home/mahaloz/kwt/angr-dwarf-namespace']):unexpected.append({'pid':int(p.name),'args':args})
+  if args and Path(args[0]).name not in ['bash','timeout','rg']and any(prefix in ' '.join(args)for prefix in ['/home/mahaloz/kwt/angr-narrow-table-guard','/tmp/unlace-highslice-optin','/home/mahaloz/kwt/angr-rust-','/tmp/unlace-rust-','/home/mahaloz/kwt/angr-fnptr-namespace','/tmp/unlace-fnptr-namespace','/home/mahaloz/kwt/angr-base-1d5f','/home/mahaloz/kwt/angr-base-c5fc','/tmp/unlace-dwarf-namespace','/home/mahaloz/kwt/angr-dwarf-namespace']):unexpected.append({'pid':int(p.name),'args':args})
  assert not unexpected,unexpected
  manifests={}
  for label,name in [('current',w/'production-source-before-validation.json'),('parent',w/'parent-source-before-timing.json')]:
   data=json.loads(name.read_text());files=data if label=='current'else data['files'];root=Path(plan['root']if label=='current'else plan['base'])
   assert all(sha(root/path)==digest for path,digest in files.items());manifests[label]=sha(name)
- binaries={arm:Path(plan['base']if arm=='parent'else plan['root'])/'decompiler/target/release/kuna'for arm in plan['arms']};digests={arm:sha(path)for arm,path in binaries.items()}
+ binaries={arm:Path(plan['base']if arm=='parent'else plan['root'])/'decompiler/target/release/unlace'for arm in plan['arms']};digests={arm:sha(path)for arm,path in binaries.items()}
  assert digests['candidate']==plan['build']['new_cli_sha256'] and digests['parent']==plan['build']['parent_cli_sha256']
  spec_path=Path(plan['compiled_spec_verification']['manifest']);specs=json.loads(spec_path.read_text())
  assert sha(spec_path)==plan['compiled_spec_verification']['sha256']

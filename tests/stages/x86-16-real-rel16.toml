@@ -1,6 +1,6 @@
-# kuna #1288: an x86 real-mode near branch wraps IP inside its code segment,
+# unlace #1288: an x86 real-mode near branch wraps IP inside its code segment,
 # and a real-mode address is the linear CS*16 + IP, where CS need not be a
-# multiple of 0x1000. kuna's GH-7418 fix (tests/stages/
+# multiple of 0x1000. unlace's GH-7418 fix (tests/stages/
 # gh7418-x86-call-rel16-mask.xml) masked every rel16 target to its low 16
 # bits, which is right only for CS 0, so a DOS program loaded at segment
 # 0x1000 lost all but 12 of its 330 functions. The linear sum is right only

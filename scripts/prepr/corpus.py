@@ -3,11 +3,11 @@
 Nothing here is committed to the repository: each entry names where the bytes
 come from (a URL, or a member of a downloaded archive) and the hash both the
 download and the extracted file must have. Files are cached under
-``$KUNA_PREPR_CACHE`` (default ``~/.cache/kuna-prepr``).
+``$UNLACE_PREPR_CACHE`` (default ``~/.cache/unlace-prepr``).
 
 The ``local`` corpus is whatever binaries one machine has and may not share:
-one path per line in ``$KUNA_PREPR_LOCAL`` (default
-``~/.config/kuna-prepr/local.txt``), blank lines and ``#`` comments ignored.
+one path per line in ``$UNLACE_PREPR_LOCAL`` (default
+``~/.config/unlace-prepr/local.txt``), blank lines and ``#`` comments ignored.
 """
 import hashlib
 import io
@@ -57,7 +57,7 @@ CORPORA = {
 
 
 def cache_dir() -> Path:
-    return Path(os.environ.get("KUNA_PREPR_CACHE", Path.home() / ".cache" / "kuna-prepr"))
+    return Path(os.environ.get("UNLACE_PREPR_CACHE", Path.home() / ".cache" / "unlace-prepr"))
 
 
 def sha256(data: bytes) -> str:
@@ -97,7 +97,7 @@ def fetch(entry: Entry, cache: Optional[Path] = None) -> Path:
 
 
 def local_list() -> Path:
-    return Path(os.environ.get("KUNA_PREPR_LOCAL", Path.home() / ".config" / "kuna-prepr" / "local.txt"))
+    return Path(os.environ.get("UNLACE_PREPR_LOCAL", Path.home() / ".config" / "unlace-prepr" / "local.txt"))
 
 
 def local() -> list[Path]:

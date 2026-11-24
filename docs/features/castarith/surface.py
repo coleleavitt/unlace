@@ -4,7 +4,7 @@ off and on (one build) and count, per function, signature and variable
 (name, kind, type) differences, and the instruction addresses that
 `line_mappings` and `variables[].addresses` carry in one arm and not the other.
 
-  surface.py KUNA OUTDIR OPT/PROJECT/BIN...
+  surface.py UNLACE OUTDIR OPT/PROJECT/BIN...
 
 A converted access prints as a subscript, and a subscript is a surround token
 that carries no op (upstream PrintLanguage::emitOp), so an instruction whose
@@ -16,11 +16,11 @@ from pathlib import Path
 R = Path("/home/mahaloz/github/decbench/results/full_run_address_2026-09-11")
 
 
-def load(kuna, binary, out, arm):
+def load(unlace, binary, out, arm):
     p = out / f"{binary.parent.parent.parent.name}-{binary.name}-{arm}.json"
     if not p.exists():
         extra = ["--option", "castarith", "off"] if arm == "off" else []
-        r = subprocess.run([kuna, "decompile-all", str(binary), "--json"] + extra,
+        r = subprocess.run([unlace, "decompile-all", str(binary), "--json"] + extra,
                            capture_output=True, text=True, check=True)
         p.write_text(r.stdout)
     return {f["address"]: f for f in json.loads(p.read_text()).get("functions", [])}
@@ -39,12 +39,12 @@ def varaddrs(f):
 
 
 def main():
-    kuna, out = sys.argv[1], Path(sys.argv[2])
+    unlace, out = sys.argv[1], Path(sys.argv[2])
     out.mkdir(parents=True, exist_ok=True)
     tot = dict(funcs=0, sig_diff=0, var_diff=0, vars_off=0, vars_on=0, mapped_off=0, lm_lost=0, lm_gained=0, lm_funcs=0, va_lost=0, va_gained=0, va_funcs=0)
     for spec in sys.argv[3:]:
         binary = R / spec.split("/")[0] / spec.split("/")[1] / "stripped" / spec.split("/")[2]
-        off, on = load(kuna, binary, out, "off"), load(kuna, binary, out, "on")
+        off, on = load(unlace, binary, out, "off"), load(unlace, binary, out, "on")
         for addr in sorted(set(off) & set(on)):
             a, b = off[addr], on[addr]
             tot["funcs"] += 1

@@ -1,4 +1,4 @@
-# kuna octeoneffects: an Octeon atomic or load-linked accesses memory through
+# unlace octeoneffects: an Octeon atomic or load-linked accesses memory through
 # its address operand, but a user operation has no memory effect of its own,
 # so a store before it was forwarded past it or dropped. Upstream's MIPS spec
 # lifts ll/sc as a plain load/store and sync as SYNC(n); `off` restores that.

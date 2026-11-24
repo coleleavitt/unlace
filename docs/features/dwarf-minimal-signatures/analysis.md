@@ -3,9 +3,9 @@
 The pinned angr fixture `tests/x86_64/rust/fmt_arguments/fmtdemo-1.93.1`
 contains Rust standard-library DWARF with names, ranges and inline call sites,
 but no type or parameter records. `_print` at native address `0x48650` is one
-such function. Both Kuna DWARF prototype producers interpreted those omissions
+such function. Both Unlace DWARF prototype producers interpreted those omissions
 as `void _print(void)`, erasing the template and argument pointers at its callers.
-The fixture is PIE: angr maps it at `0x400000`, whereas Kuna uses its native VMAs.
+The fixture is PIE: angr maps it at `0x400000`, whereas Unlace uses its native VMAs.
 
 The importer now tests each compilation unit once for signature evidence.
 Without any type reference or formal/variadic parameter record, neither
@@ -45,7 +45,7 @@ comparison. Thus these bodies recover the existing dataflow result when the
 uninformative debug signatures are absent; the retained qualified debug names
 do not introduce different argument or control-flow behavior. This is not a
 claim that all existing Rust output is correct: unstructured branches still
-carry Kuna's existing warning and diverging placeholder in Rust output.
+carry Unlace's existing warning and diverging placeholder in Rust output.
 
 The final 31-pair timing is 327.71 → 324.18 ms (−1.08%) for the Rust 1.93
 `print_one` caller, including loading. CPU time is −1.23%. Raw samples and

@@ -1,6 +1,6 @@
 Authored integer aggregate field extractions with single-evaluation helpers.
 Original build:
-cc -O2 -g -fwrapv -fno-pie -no-pie /tmp/kuna-integer-field-extract/matrix.c -o /tmp/kuna-integer-field-extract/matrix
+cc -O2 -g -fwrapv -fno-pie -no-pie /tmp/unlace-integer-field-extract/matrix.c -o /tmp/unlace-integer-field-extract/matrix
 Equivalent rebuild from this directory:
 cc -O2 -g -fwrapv -fno-pie -no-pie integer_field_extract.c -o integer_field_extract_x86_64
 

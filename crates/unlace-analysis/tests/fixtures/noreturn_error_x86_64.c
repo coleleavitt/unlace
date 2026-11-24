@@ -6,7 +6,7 @@
  * `err_fatal` is declared `_Noreturn` (exactly like GNU diffutils
  * `pfatal_with_name`), so gcc emits its tail as `call error(2,errno,"%s",m)`
  * with NO `ret` + trailing NOP alignment padding — but the *stripped* binary
- * carries no noreturn annotation, so kuna must INFER it from the call:
+ * carries no noreturn annotation, so unlace must INFER it from the call:
  * glibc error(status,...) calls exit(status) and never returns WHEN status != 0.
  *
  * `err_warn` is the CONTROL: its tail is `error(0,errno,"%s",m)` — status 0, so

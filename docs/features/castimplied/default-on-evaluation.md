@@ -29,7 +29,7 @@ field name, the named global, the loop variable).
 
 ## Value preservation
 
-`kuna-cli/tests/decompile_all_cli.rs` `an_implied_cast_round_trips_through_the_printed_c`
+`unlace-cli/tests/decompile_all_cli.rs` `an_implied_cast_round_trips_through_the_printed_c`
 compiles the printed functions of `castimplied_{gcc,clang}_O0_x86_64` with the
 option off and on, with gcc and with clang, and requires every build to print what
 the binary prints (negative `char`s, `0xfffffff0u`, negative `short`s, a varargs

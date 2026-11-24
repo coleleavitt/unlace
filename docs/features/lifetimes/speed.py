@@ -1,6 +1,6 @@
 """Compare release builds on lifetime fixtures, alternating run order.
 
-python3 docs/features/lifetimes/speed.py BEFORE_KUNA AFTER_KUNA results.json
+python3 docs/features/lifetimes/speed.py BEFORE_UNLACE AFTER_UNLACE results.json
 Both binaries need their matching decomp_dbg and decomp_test_dbg siblings.
 The checkout must contain built processor specs.
 """
@@ -24,14 +24,14 @@ def main():
     if args.samples < 1:
         parser.error("--samples must be positive")
     root = Path(__file__).resolve().parents[3]
-    fixtures = root / "decompiler/crates/kuna-analysis/tests/fixtures"
+    fixtures = root / "decompiler/crates/unlace-analysis/tests/fixtures"
 
     def command(fixture, functions):
         image = fixtures / fixture
         return [
             "decompile-all", str(image), "--functions", functions,
             "--mode", "reliable", "--sleighpath", str(root / "specs"),
-            "--json", "--assert-strict", "--assert", "@" + str(image) + ".kuna",
+            "--json", "--assert-strict", "--assert", "@" + str(image) + ".unlace",
         ]
 
     reuse = command("lifetimes_objects_x86_64", "obj_reuse")

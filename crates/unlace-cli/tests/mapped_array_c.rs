@@ -253,7 +253,7 @@ fn arm_copy_uses_target_endian_and_preserves_struct_and_volatile_controls() {
             "--target".into(),
             format!("ARM:{endian}:32:v5t:default"),
             "--assert".into(),
-            format!("@{}", fixture("copy_array.kuna").display()),
+            format!("@{}", fixture("copy_array.unlace").display()),
         ]);
         let code = |v: serde_json::Value| v["functions"][0]["code"].as_str().unwrap().to_owned();
         let original = code(unlace(&args));
@@ -291,7 +291,7 @@ fn arm_copy_uses_target_endian_and_preserves_struct_and_volatile_controls() {
             }
         }
         args.truncate(args.len() - 3);
-        *args.last_mut().unwrap() = format!("@{}", fixture("copy_struct.kuna").display());
+        *args.last_mut().unwrap() = format!("@{}", fixture("copy_struct.unlace").display());
         let structure = code(unlace(&args));
         args.extend(["--option".into(), "bytearrayc".into(), "on".into()]);
         assert_eq!(
@@ -311,7 +311,7 @@ fn arm_copy_uses_target_endian_and_preserves_struct_and_volatile_controls() {
             );
         }
         args.truncate(args.len() - 3);
-        *args.last_mut().unwrap() = format!("@{}", fixture("copy_array.kuna").display());
+        *args.last_mut().unwrap() = format!("@{}", fixture("copy_array.unlace").display());
         args.extend(["--assert".into(), "volatile 0x11014+20".into()]);
         let volatile = code(unlace(&args));
         args.extend(["--option".into(), "bytearrayc".into(), "on".into()]);

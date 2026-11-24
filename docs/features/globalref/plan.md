@@ -13,10 +13,10 @@ move.
 ## 2. The facts it reads
 
 - `Architecture::globalref_ranges`: the sections the object loader classifies as
-  holding program data (`kuna-analysis/src/loader/globalref.rs`), installed
+  holding program data (`unlace-analysis/src/loader/globalref.rs`), installed
   by the object bootstrap beside the `litpoolconst` ranges. Empty without a
   section table, so the XML datatest corpus is untouched by construction.
-- `kuna_globalref::plan`, once per function: the constant values read as numbers,
+- `unlace_globalref::plan`, once per function: the constant values read as numbers,
   the direct accesses to the data space, and the pointed-to types each in-range
   address is read at.
 

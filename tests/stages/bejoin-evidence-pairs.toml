@@ -1,4 +1,4 @@
-# kuna option bejoin evidence (the default), GH-904: a long long read from
+# unlace option bejoin evidence (the default), GH-904: a long long read from
 # memory, or handed back by a call and moved back into r3:r4, joins high
 # word first.
 #

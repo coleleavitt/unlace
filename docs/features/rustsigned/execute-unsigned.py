@@ -1,6 +1,6 @@
 from pathlib import Path
 import subprocess,ctypes,mmap,json,hashlib
-w=Path('/tmp/kuna-rust-signed-bytes');r=Path('/home/mahaloz/kwt/angr-rust-signed-bytes');base=Path('/home/mahaloz/kwt/angr-rust-userop');fixture=r/'tests/fixtures/rust-signed-bytes';functions=json.loads((w/'unsigned-functions.json').read_text())
+w=Path('/tmp/unlace-rust-signed-bytes');r=Path('/home/mahaloz/kwt/angr-rust-signed-bytes');base=Path('/home/mahaloz/kwt/angr-rust-userop');fixture=r/'tests/fixtures/rust-signed-bytes';functions=json.loads((w/'unsigned-functions.json').read_text())
 values=sorted(set(list(range(256))+[v for bits in [16,32,64] for v in [(1<<(bits-1))-1,1<<(bits-1),(1<<(bits-1))+1,(1<<bits)-1]]));assert len(values)==268
 maps=[];native=[]
 for name,hexcode,proto in functions:

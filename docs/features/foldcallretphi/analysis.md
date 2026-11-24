@@ -20,7 +20,7 @@ in the same basic block, a couple of ops later, with nothing between them that
 touches memory. `foldcallret` is on by default and its order-safety predicate
 (`callretfold.rs (call_output_foldable)`) accepts both. They still spill.
 
-## What actually blocks them (instrumented build, `KUNA_DBG_FCR=1`)
+## What actually blocks them (instrumented build, `UNLACE_DBG_FCR=1`)
 
 The E2 report's hypothesis was that `ActionMergeRequired` runs before
 `ActionMarkExplicit`, so a force-merged call output fails `num_instances() > 1`
@@ -53,7 +53,7 @@ reads or might touch.
 
 Upstream never reaches this arm with a call output: Ghidra's `base_explicit`
 returns `-1` for `op->isCall()` unconditionally, so the arm's call-output half is
-live only because of kuna's `foldcallret` escape. It is being asked a question it
+live only because of unlace's `foldcallret` escape. It is being asked a question it
 was not written for, and it answers with a conflict the fold itself creates.
 
 ## The control
@@ -322,7 +322,7 @@ per-sample spread, 4.20-5.93 s in both arms, is wider than the delta), inside
 the +5% budget.
 
 `make test-cli` does not hold. `tests/cli/no-cli-rename-or-prototype-override`
-runs `kuna decompile fauxware authenticate --assert 'type v2 char[16]'
+runs `unlace decompile fauxware authenticate --assert 'type v2 char[16]'
 --assert 'name v2 credbuf'`, and those directives address a variable by its
 auto-generated `vN` name. Folding `v1 = strcmp(pass,sneaky)` into its `if`
 removes a declaration, renumbers the rest, and `v2` then designates a different
@@ -339,7 +339,7 @@ own evidence rather than inherit it from here.
 
 The option is metric-neutral either way.
 
-It is metric-neutral by construction and by measurement. decbench scores kuna's
+It is metric-neutral by construction and by measurement. decbench scores unlace's
 `--json variables[]`, which carries arguments, ScopeLocal stack symbols and
 `framelayout` slots but never register locals, and every declaration this removes
 is a register local. Measured off vs on: `fmt` 737 variables both arms (1

@@ -9,11 +9,11 @@ Measured on `main` 2e28ece4a (round C), over the 444-slice decbench set
 
 Ground-truth `char *` is the largest single class in the corpus: **14,645** of
 the 65,715 scored ground-truth variables on these slices (25.9% of the whole
-134,209-variable ground truth). kuna matches **4,204 = 28.7%**.
+134,209-variable ground truth). unlace matches **4,204 = 28.7%**.
 
 ## Split by where the variable lives — this is the whole story
 
-| GT `char *` storage | n | kuna | binja | ida | ghidra |
+| GT `char *` storage | n | unlace | binja | ida | ghidra |
 |---|---|---|---|---|---|
 | argument | 4,186 | 2,717 (64.9%) | 2,907 (71.5%) | 1,948 (47.8%) | 1,428 (34.3%) |
 | stack local | 3,316 | 1,487 (44.8%) | 2,365 (71.4%) | 1,590 (47.9%) | 1,244 (37.5%) |
@@ -25,16 +25,16 @@ the 65,715 scored ground-truth variables on these slices (25.9% of the whole
 Three facts follow, and they decided this feature:
 
 1. **Half the class is unreachable for everyone.** 7,143 of the 14,645 GT
-   variables are register-only locals. kuna exports no register locals at all,
+   variables are register-only locals. unlace exports no register locals at all,
    and the best rival scores 0.7% on them.
-2. **kuna's argument recovery is nearly saturated.** 64.9% against binja's
+2. **unlace's argument recovery is nearly saturated.** 64.9% against binja's
    71.5% is 190 variables of headroom on the whole corpus.
 3. **Nine tenths of the gap is stack locals** — 878 variables — and it is not
    mainly a typing failure.
 
-## What kuna spells instead, for the misses that have a kuna variable
+## What unlace spells instead, for the misses that have a unlace variable
 
-| kuna spelling | argument misses | stack misses |
+| unlace spelling | argument misses | stack misses |
 |---|---|---|
 | `undefined8` | 0 | 932 |
 | `unsigned long` | 806 | 216 |
@@ -45,15 +45,15 @@ Three facts follow, and they decided this feature:
 | `unsigned long *` | 16 | 8 |
 | `stat *` | 9 | 9 |
 | everything else | 35 | 76 |
-| no kuna variable matched | 148 | 181 |
+| no unlace variable matched | 148 | 181 |
 
 **The 932 `undefined8` stack misses are not a type-inference failure.** They are
 `framelayout` filler slots: the frame slot exists in the union `Funcdata`
 records per restructure pass, and the value that lived there has been
-copy-propagated into a register `HighVariable` that kuna does not export.
+copy-propagated into a register `HighVariable` that unlace does not export.
 Witness, `coreutils -O0 basename::perform_basename`: ground truth `char *name`
-at `DW_OP_fbreg -24` (= `rbp-40`), kuna reports `local_28  undefined8  -40`,
-and kuna's own body says `char *v2; // rax`. Making `record_frame_slots` prefer
+at `DW_OP_fbreg -24` (= `rbp-40`), unlace reports `local_28  undefined8  -40`,
+and unlace's own body says `char *v2; // rax`. Making `record_frame_slots` prefer
 a later pass's *committed* type over the first pass's uncommitted one was tried
 and changes nothing — measured, no slot moves — because by the time types are
 inferred the symbol is already gone. Closing that bucket is a chapter-06
@@ -61,7 +61,7 @@ inferred the symbol is already gone. Closing that bucket is a chapter-06
 
 ## The evidence census over the population this rule can reach
 
-Collected with `KUNA_CHARPTR_CENSUS=1`, which prints one line per candidate the
+Collected with `UNLACE_CHARPTR_CENSUS=1`, which prints one line per candidate the
 rule considers (a function input the prototype model could place a parameter in,
 or a Varnode in the stack space, of pointer width, whose current vote is not
 already a pointer at something named). Deduplicated per (function, storage);
@@ -128,7 +128,7 @@ three functions seen in more than one build.
 - `head::elide_tail_bytes_pipe` (O2-noinline): a GT `__off_t`, an integer the
   body also uses as an address.
 - `tar::check_compressed_archive` (O0, O2, O2-noinline): the byte at
-  `fbreg -41` is GT `_Bool temp`; kuna reports it `undefined1`, which the metric
+  `fbreg -41` is GT `_Bool temp`; unlace reports it `undefined1`, which the metric
   credits on width alone, and typing the pointer it is read through knocks the
   byte on to `char`, which the metric then scores exactly and rejects. That is
   the same cost in the other direction: committing a type forfeits the
@@ -149,10 +149,10 @@ that. It is not true of the class. diffutils `diff` at `-O0`, `sub_2180a` (an
 v1[4104]` output buffer — and with the option on the assignment printed a string:
 
 ```
-$ kuna decompile-all O0/diffutils/stripped/diff --addr 0x2180a
+$ unlace decompile-all O0/diffutils/stripped/diff --addr 0x2180a
     v2 = (char *)0x1000;
     v8 = iconv(a2,&v5,&v4,&v3,&v2);
-$ kuna decompile-all O0/diffutils/stripped/diff --addr 0x2180a --option charptr on
+$ unlace decompile-all O0/diffutils/stripped/diff --addr 0x2180a --option charptr on
     v2 = "5";                       <-- before the fix
     v8 = iconv(a2,&v5,&v4,&v3,&v2);
 ```
@@ -236,7 +236,7 @@ on before this change and `(void *a0)` after.
 The `PTRADD` arm now reads its index: a constant non-zero index sets the offset
 flag, index zero is identity, and a one-byte step taken from an offset value
 forwards without counting. Only an index the program computes, from the base,
-is character evidence (`kuna_charptr::ptradd_step`, unit-tested).
+is character evidence (`unlace_charptr::ptradd_step`, unit-tested).
 
 That removes nearly all of what the option was measured to gain, because the
 gain was the same shape. Two correct idioms start at a fixed offset from the

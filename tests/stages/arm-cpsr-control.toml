@@ -1,4 +1,4 @@
-# Kuna GH-848, ARM MRS/MSR CPSR: P1 instruction semantics and P2 lifting.
+# Unlace GH-848, ARM MRS/MSR CPSR: P1 instruction semantics and P2 lifting.
 # Strict architectural correctness fix, no P0 option. Before the fix the
 # first two functions returned 0 with no status writes. The fixture checks
 # IRQ-bit reads, register/immediate writes, and NZCVQ preservation/update.

@@ -282,7 +282,7 @@ def emit(args):
         "consumer_only_dwarf": dwarf,
         "producer_dwarf_or_declaration": args.case == "declared-narrow",
         "dwarf_validation_required": dwarf,
-        "kuna_base_options": ["--option", "bejoin", "evidence", "--option", "dwarf", "on" if dwarf else "off"] + (["--option", "narrowext", "compiler"] if dwarf and args.arch == "mips32-be" else []),
+        "unlace_base_options": ["--option", "bejoin", "evidence", "--option", "dwarf", "on" if dwarf else "off"] + (["--option", "narrowext", "compiler"] if dwarf and args.arch == "mips32-be" else []),
         "serial_assertions": None if dwarf else str(out / "assertions.txt"),
         "callwide_ablation": ["off", "on"],
         "refusal_requires_full_off_on_output_equality": args.arch != "mips32-be" or args.case not in {"positive", "xor-sink", "identity-sink", "mixed-refusal"},

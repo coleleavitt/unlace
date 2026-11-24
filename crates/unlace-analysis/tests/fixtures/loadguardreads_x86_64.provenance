@@ -1,5 +1,5 @@
 loadguardreads_x86_64 -- the GH-1034 LOAD guard fixture for option `loadguardreads`
-(tests/stages/kuna-loadguardreads.toml).
+(tests/stages/unlace-loadguardreads.toml).
 
 What it is
   A 24,224-byte x86-64 ELF built from loadguardreads_x86_64.c, which is

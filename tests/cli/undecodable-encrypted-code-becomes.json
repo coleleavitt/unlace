@@ -2,7 +2,7 @@
   "schema": "re-probe/1",
   "kind": "cli",
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "stub"
@@ -34,5 +34,5 @@
       "case 0x[0-9a-f]+:\\s*return;"
     ]
   },
-  "notes": "need undecodable-encrypted-code-becomes. Witness: crackmes.one Defender.exe sub_401746, a self-decrypting stub that XORs its payload in place and jumps into it; the bytes there are ciphertext at load time, so kuna decoded until one would not decode and printed switch(0x40190e) { case 0x40190e: return; } with error null. Retargeted onto the vendored decodehalt_x86_64, same shape."
+  "notes": "need undecodable-encrypted-code-becomes. Witness: crackmes.one Defender.exe sub_401746, a self-decrypting stub that XORs its payload in place and jumps into it; the bytes there are ciphertext at load time, so unlace decoded until one would not decode and printed switch(0x40190e) { case 0x40190e: return; } with error null. Retargeted onto the vendored decodehalt_x86_64, same shape."
 }

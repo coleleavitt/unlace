@@ -38,7 +38,7 @@ Inventory the main function at 0x11a9b.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "functions",
     "{{BIN}}",
     "--json"
@@ -68,7 +68,7 @@ Inventory the main function at 0x11a9b.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "functions",
     "{{BIN}}",
     "--json"
@@ -115,7 +115,7 @@ _not yet refuted_
 ## Decision log
 
 - filed by cluster.py from 1 observation(s)
-- split by captain at T_DEDUP from round 12's `silent-failure|functions|exit_code,json` bucket: cluster.py's signature (kind|subcommand|clause-shape) collapsed unrelated defects, so the crop was hand-partitioned one observation per need and filed via `--from-file`. See `.kuna-repipe/rounds/12/dedup/MARKER.json`; do NOT run `cluster --round 12` bare.
+- split by captain at T_DEDUP from round 12's `silent-failure|functions|exit_code,json` bucket: cluster.py's signature (kind|subcommand|clause-shape) collapsed unrelated defects, so the crop was hand-partitioned one observation per need and filed via `--from-file`. See `.unlace-repipe/rounds/12/dedup/MARKER.json`; do NOT run `cluster --round 12` bare.
 - round 12 REFUTER: hypothesis **upheld** (was inconclusive). UPHELD and reduced to one byte pattern. The symptom stands (34 functions, no 0x11a9b) and the filed cause -- CRT-target discovery does not recognise this startup sequence -- is exactly right; what the refutation adds is WHICH oracle and WHY, plus three closed lines.
 
 MECHANISM. Whole-binary discovery is EntryDiscoveryPass's union of five oracles (unlace-analysis/src/analyzers/entry/mod.rs). For this image three of them are silent and the other two cannot reach main:
@@ -127,7 +127,7 @@ DEAD LINE CLOSED, and this is the one the last tick asked about: this is NOT a s
 
 THE LOSS IS BIGGER THAN ONE FUNCTION, which matters for ranking. Because main is never a function, nothing decodes its body, so its callees are invisible too: main calls 0x11266 at 0x11aa0, and 'xrefs --to 0x11266' reports count 0. Seeding main is what makes that subtree reachable at all.
 
-TWO CAUTIONS FOR THE BUILDER. First, do not read 'unlace xrefs --to 0x11a9b' as proof kuna already knows about a function there: it answers with target.name sub_11a9b and a to_function block, but that is synthesized from the queried address, not evidence of an inventory entry -- 'functions' is the oracle, and it does not list it. Second, the inventory's last row is sub_112e9 with size 2230, i.e. 0x112e9..0x11b9f, which SWALLOWS 0x11a9b; expect the bounding of that run-on function to move once main is seeded, and check it rather than assuming the fix is purely additive.
+TWO CAUTIONS FOR THE BUILDER. First, do not read 'unlace xrefs --to 0x11a9b' as proof unlace already knows about a function there: it answers with target.name sub_11a9b and a to_function block, but that is synthesized from the queried address, not evidence of an inventory entry -- 'functions' is the oracle, and it does not list it. Second, the inventory's last row is sub_112e9 with size 2230, i.e. 0x112e9..0x11b9f, which SWALLOWS 0x11a9b; expect the bounding of that run-on function to move once main is seeded, and check it rather than assuming the fix is purely additive.
 
 Acceptance is sound: a positive json clause on functions[*].address == 72347 (0x11a9b), which cannot be satisfied by losing anything.
 - round 12 CAPTAIN (B_FANOUT, pre-dispatch brief): PROMOTION CAVEAT -- this need's probe target is `binary_source: dataset`, and `verify --promote` refuses anything that is not `in-repo` (verify.py:750, "CI has no dataset"); `--force` does not override it. B_DONE can therefore CLOSE this need on the measured acceptance flip but cannot promote its probe into `tests/cli/`, so the fix ships with no regression guard unless the builder vendors an in-repo fixture (or reuses a vendored twin) in the SAME PR and points a promotable copy of the probe at it. Same refusal already blocked virtualalloc-protection-argument-disappears and arm-inventory-invents-function.

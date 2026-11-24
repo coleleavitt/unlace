@@ -1,6 +1,6 @@
 ## What
 
-kuna re-rolls only **every other** ternary in a chain. In a run of N structurally
+unlace re-rolls only **every other** ternary in a chain. In a run of N structurally
 identical two-arm assignment diamonds, `iteregion`/`iteboolean` recover exactly
 `ceil(N/2)` of them; the rest print as `if (c) V = A; else { V = B; }`. Which ones
 are missed depends on the *neighbouring* structure, not on the diamond itself.
@@ -168,7 +168,7 @@ extra pointer chase per candidate `BlockIf` and mutates no p-code.
 | `make test-stages` | `datatests: 381/381 assertions passed` — **PARITY OK** |
 | `make rust-test` | `passed=4424 failed=0 ignored=37`, exit 0 |
 | `make check-spec` | `check-spec OK (lenient mode)` / `check-spec OK (strict mode)` |
-| `kuna catalog --check` | `catalog OK: documents exactly the registered kuna options` |
+| `unlace catalog --check` | `catalog OK: documents exactly the registered unlace options` |
 
 ## Not fixed here (deliberately)
 

@@ -1,4 +1,4 @@
-// help.js — "How to use Kuna": the keys worth knowing first, every shortcut
+// help.js — "How to use Unlace": the keys worth knowing first, every shortcut
 // behind a disclosure, and the names a decompiler invents, each in one short
 // line. DOM-free: returns the dialog's HTML for app.js to mount.
 
@@ -69,7 +69,7 @@ const kbd = (k) => k.split(/ · | – /).map((x) => `<kbd>${x}</kbd>`).join(k.in
 
 export function helpHtml() {
   const rows = (list) => list.map(([k, v]) => `<tr><td>${kbd(k)}</td><td>${v}</td></tr>`).join('');
-  return '<div class="hh"><h2 id="helptitle">How to use Kuna</h2>' +
+  return '<div class="hh"><h2 id="helptitle">How to use Unlace</h2>' +
     '<button class="d2-iconbtn small" data-act="help-close" aria-label="Close" title="Close">×</button></div>' +
     '<div class="hb2">' +
     '<p>Pick a function on the left. To find text such as a flag or a password prompt, switch the list to <b>Strings</b>, search, and click a function under a string to go to the code that uses it. Click a line of code to see the assembly it becomes; click a name to learn about it, and double-click a variable to rename it. Double-click a function to open it, or a global to see its value, its type and who uses it in the <b>Data</b> tab. Turn on <b>Show hints</b> for tips and for cards that explain what the pointer rests on. Your changes are kept in this browser.</p>' +

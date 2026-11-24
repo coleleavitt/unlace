@@ -6,7 +6,7 @@
 # `(**(code **)(*obj + off))(...)` with no hint of the method. iOS 16.4.1
 # debugserver has 295 such sites.
 #
-# Stage / sub-stage: P1 external-refinement. `analyzers/rtti/kuna_arm64evcall.rs`
+# Stage / sub-stage: P1 external-refinement. `analyzers/rtti/unlace_arm64evcall.rs`
 # indexes every run of IA-signed, address-diversified `__const` slots by
 # (index in run, diversifier) from the chained fixups, walks back from each
 # call to its `movk #d, lsl #48` and the authenticated vtable-pointer load,

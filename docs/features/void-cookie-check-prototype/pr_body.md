@@ -1,7 +1,7 @@
 ## The problem
 
 The faithful PE's `sub_1400012f0` has three constant-result exits that share an
-MSVC `/GS` cookie check. Even with that checker asserted as locked `void`, kuna
+MSVC `/GS` cookie check. Even with that checker asserted as locked `void`, unlace
 returned an unassigned EAX local instead of the machine's zero and one values.
 
 ## The fix

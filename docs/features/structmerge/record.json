@@ -1,6 +1,6 @@
 {
- "opportunity": "structsynth measures one function at a time and the layout ledger shares a struct_N only when one reader's claims are a SUBSET of the other's, so two functions that read overlapping-but-different parts of one record get a name each and each is declared to have only the fields its own function touched. On the eight layout builds 23 of the 77 ground-truth records kuna types at all are given more than one struct_N.",
- "test_name": "tests/stages/structmerge-siblings.xml (6 two-arm assertions: with `option structmerge off` each of two overlapping readers keeps its own record and re-deciding the first changes nothing; with `siblings` the second reader is answered by the union and re-deciding the first moves it onto the union) + unit tests (kuna_structmerge::tests: the option surface, the union of two overlapping readers with the first superseded, a contradicted claim at the same offset and one over the same bytes at a different offset, a single shared claim, the growth bound, the unclaimed-bytes veto, and off minting a record per reader)",
+ "opportunity": "structsynth measures one function at a time and the layout ledger shares a struct_N only when one reader's claims are a SUBSET of the other's, so two functions that read overlapping-but-different parts of one record get a name each and each is declared to have only the fields its own function touched. On the eight layout builds 23 of the 77 ground-truth records unlace types at all are given more than one struct_N.",
+ "test_name": "tests/stages/structmerge-siblings.xml (6 two-arm assertions: with `option structmerge off` each of two overlapping readers keeps its own record and re-deciding the first changes nothing; with `siblings` the second reader is answered by the union and re-deciding the first moves it onto the union) + unit tests (unlace_structmerge::tests: the option surface, the union of two overlapping readers with the first superseded, a contradicted claim at the same offset and one over the same bytes at a different offset, a single shared claim, the growth bound, the unclaimed-bytes veto, and off minting a record per reader)",
  "binary": "/tmp/layoutrecall-demo/two (gcc -O1, stripped; source in docs/features/structmerge/analysis.md) and the decbench full_run_address_2026-09-11 tree",
  "selector": "name",
  "func_addr": "0x1149 / 0x115d in the demo binary",
@@ -11,8 +11,8 @@
  "element_id": "n/a (no new ElementId)",
  "change_kind": "structure-recovery",
  "tier": "transform",
- "source_decompiler": "kuna",
- "inspiration": "RecStruct (ASE 2021) section 4.2 merges the access patterns of every function that reaches one allocation site before deciding a layout; kuna had the per-function measurement and the program-wide ledger but no rule for combining two readers that merely overlap.",
+ "source_decompiler": "unlace",
+ "inspiration": "RecStruct (ASE 2021) section 4.2 merges the access patterns of every function that reaches one allocation site before deciding a layout; unlace had the per-function measurement and the program-wide ledger but no rule for combining two readers that merely overlap.",
  "default_on": false,
  "default_value": "off",
  "census": {
@@ -23,8 +23,8 @@
   "per_function_touch_ceiling": 1469,
   "cross_function_touch_ceiling": 5922,
   "cross_function_ceiling_over_accepted_readers": 3818,
-  "ceiling_on_the_200_params_kuna_types": 1451,
-  "kuna_claims_correct_today": 817,
+  "ceiling_on_the_200_params_unlace_types": 1451,
+  "unlace_claims_correct_today": 817,
   "records_given_more_than_one_struct_N": "23 of 77",
   "struct_N_covering_more_than_one_record": "1 of 136",
   "fields_lost_to_the_layout_prune": 4,
@@ -149,7 +149,7 @@
   "the_one_respelling": "grep -O2 sub_7110: the record gains a long member where it had undefined1 filler, so `v1 = a0->field_0x20` (an array member decaying to its address) becomes `v1 = &a0->field_0x20`, the same address with the pointer typed by the member Outside this set the class is larger: e2fsprogs e2fsck -O2 (1,421 functions) changes 56, 54 record-name-only, 2 respelled bodies, 1 of them a declaration-count delta (dict_insert 7 -> 6 declarations, every access at the same address; ext2fs_file_read passes &a0->field_0x14 where filler decayed to a0->field_0x14). Worked in hunks.md.",
   "scope": "the counts below are these ten binaries, not a general rate",
   "eleventh_binary": "e2fsprogs e2fsck -O0 (1,908 functions, 18,080 exported variables) holds a class the ten do not: 185 functions change (175 record-name-only, 9 field-accesses-only, 1 declaration-count delta) and 265 variables, of which 3 LOSE a synthesized record for `void *`, 1 gains one, and reconfigure_bool's two `char *` parameters become `unsigned long` (type_match 0.6667 -> 0.3333). So `siblings` can leave a function worse typed than `off`. The cause is the convergence sweep's redo of every reader of a superseded record, not the union: `--option protoorder lock` leaves not one variable on the binary changing type. Worked in hunks.md.",
-  "merged_mint_fallback": "lookup_or_mint falls through to the reader's own claims when the union will not mint, so a declined union never leaves a reader untyped where `off` types it. Measured inert on the corpus: KUNA_STRUCTMERGE_TRACE=1 over e2fsck -O0 plus twelve campaign binaries (ls/sort/du/fmt -O0 and -O2, grep, gzip, diff, tar, find, useradd, bzip2) traces 37,571 candidates and 0 mint failures, so the typesweep and layoutscore numbers above are unchanged by it.",
+  "merged_mint_fallback": "lookup_or_mint falls through to the reader's own claims when the union will not mint, so a declined union never leaves a reader untyped where `off` types it. Measured inert on the corpus: UNLACE_STRUCTMERGE_TRACE=1 over e2fsck -O0 plus twelve campaign binaries (ls/sort/du/fmt -O0 and -O2, grep, gzip, diff, tar, find, useradd, bzip2) traces 37,571 candidates and 0 mint failures, so the typesweep and layoutscore numbers above are unchanged by it.",
   "rebase_recheck": "four of the ten binaries (coreutils du -O2, findutils find -O2, grep -O2, tar -O2) re-classified on the rebased tree: | **total** | 2552 | 76 | 76 | 0 | 0 | (columns: functions, changed, record name only, field accesses only, read) -- no skeleton delta, no declaration-count delta, nothing unclassified."
  },
  "jobs": "a --jobs N worker answers through the shard replay, which records the layout each request measured, so it never merges and a sharded run behaves as off -- the same divergence structsynth already has. Verified: coreutils fmt -O2 with --jobs 2 is byte-identical with the option off and with siblings.",
@@ -158,16 +158,16 @@
   "make test-stages": "PARITY OK, datatests 1329/1329 (rebased)",
   "make test-cli": "tests/cli 236/236 passed (rebased)",
   "make check-spec": "OK (lenient) + OK (strict)",
-  "kuna catalog --check": "catalog OK: documents exactly the registered kuna options",
+  "unlace catalog --check": "catalog OK: documents exactly the registered unlace options",
   "counters --check": "no drift: every hard-coded site agrees with the derived truth",
-  "docs/options.md": "byte-fresh from `kuna catalog --markdown`",
-  "make rust-test": "RUST_TEST_RC=0 on the rebased tree, 422 test-result blocks and none with a failure (lane script, env -u KUNA_DECOMP_TEST). Run 2026-09-23 15:54:16Z -> 16:19:28Z, after the last source write at 15:52:46Z, with all eight kuna_structmerge tests green; re-run 16:30:52Z -> 16:56:31Z for the phases.toml/phase_catalog.json/doc-comment edit that followed (RUST_TEST_RC=0 again, 422 blocks, none failed, after the newest source write at 16:28:33Z). Earlier runs: 14:43:19Z -> 15:09:00Z RC=0, and one pre-rebase RC=2 on two sites this change owns (the live-value allowlist in phases/tests.rs and the docs/options.md kuna-cli embeds), both fixed and green since."
+  "docs/options.md": "byte-fresh from `unlace catalog --markdown`",
+  "make rust-test": "RUST_TEST_RC=0 on the rebased tree, 422 test-result blocks and none with a failure (lane script, env -u UNLACE_DECOMP_TEST). Run 2026-09-23 15:54:16Z -> 16:19:28Z, after the last source write at 15:52:46Z, with all eight unlace_structmerge tests green; re-run 16:30:52Z -> 16:56:31Z for the phases.toml/phase_catalog.json/doc-comment edit that followed (RUST_TEST_RC=0 again, 422 blocks, none failed, after the newest source write at 16:28:33Z). Earlier runs: 14:43:19Z -> 15:09:00Z RC=0, and one pre-rebase RC=2 on two sites this change owns (the live-value allowlist in phases/tests.rs and the docs/options.md unlace-cli embeds), both fixed and green since."
  },
- "counters": "settables 228 -> 229; tier counts 72 core / 92 -> 93 transform / 64 analysis; catalog.xml #7 structure-recovery 31 -> 32; phases-tests catalog-json-records 227 -> 228; catalog_bytecompat fixture recaptured (229 options); tests/stages corpus file count 334 -> 335; docs/baseline-stages.json re-recorded (+6 STRUCTMERGE assertions and the renamed KUNA-CATALOG #7 key, nothing moved)",
+ "counters": "settables 228 -> 229; tier counts 72 core / 92 -> 93 transform / 64 analysis; catalog.xml #7 structure-recovery 31 -> 32; phases-tests catalog-json-records 227 -> 228; catalog_bytecompat fixture recaptured (229 options); tests/stages corpus file count 334 -> 335; docs/baseline-stages.json re-recorded (+6 STRUCTMERGE assertions and the renamed UNLACE-CATALOG #7 key, nothing moved)",
  "base": "rebased onto origin/main 796939d54 (round G: slotptr, protoorder cycles, structsynth locals, calleevote, libcwiden, passthrough all in); designed and tuned on 31ac2b26e",
  "default_decision": "off",
  "speed": {
-  "method": "interleaved whole-binary `kuna decompile-all --json --max-fn-seconds 120`, `--option structmerge off` against `siblings`, arms alternating, min-of-15 (docs/features/structmerge/speed.py); the box carried eight other campaign lanes throughout, load average 17-27 on 80 cores, so only the within-run deltas are comparable",
+  "method": "interleaved whole-binary `unlace decompile-all --json --max-fn-seconds 120`, `--option structmerge off` against `siblings`, arms alternating, min-of-15 (docs/features/structmerge/speed.py); the box carried eight other campaign lanes throughout, load average 17-27 on 80 cores, so only the within-run deltas are comparable",
   "per_binary": {
    "coreutils fmt -O2": {
     "off_min_ms": 4607.7,

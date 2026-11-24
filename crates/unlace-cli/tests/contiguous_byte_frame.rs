@@ -12,9 +12,9 @@ fn emitted_frame(mutable: bool, options: &[&str]) -> String {
         .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
         .collect();
     let image = common::scratch_file("contiguous-byte-frame", "bin");
-    let assertions = common::scratch_file("contiguous-byte-frame", "kuna");
+    let assertions = common::scratch_file("contiguous-byte-frame", "unlace");
     std::fs::write(&image, bytes).unwrap();
-    let declarations = include_str!("fixtures/contiguous_byte_frame.kuna");
+    let declarations = include_str!("fixtures/contiguous_byte_frame.unlace");
     std::fs::write(
         &assertions,
         if mutable {

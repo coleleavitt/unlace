@@ -51,11 +51,14 @@ fn unlace(args: &[&str]) -> (String, String, i32) {
         .args(args)
         .env("SLEIGHHOME", common::repo_root().join("specs"))
         .output()
-        .expect("spawn kuna");
+        .expect("spawn unlace");
     (
         String::from_utf8(output.stdout).expect("UTF-8 stdout"),
         String::from_utf8(output.stderr).expect("UTF-8 stderr"),
-        output.status.code().expect("kuna exited without a signal"),
+        output
+            .status
+            .code()
+            .expect("unlace exited without a signal"),
     )
 }
 
@@ -157,7 +160,7 @@ fn a_selected_member_leaves_no_staging_files() {
         .env("TMP", staging.path())
         .env("TEMP", staging.path())
         .output()
-        .expect("spawn kuna");
+        .expect("spawn unlace");
     assert_eq!(output.status.code(), Some(0));
     assert!(String::from_utf8_lossy(&output.stdout).contains("return a0 * a0;"));
     assert_eq!(std::fs::read_dir(staging.path()).unwrap().count(), 0);

@@ -1,4 +1,4 @@
-# kuna-1288 follow-on, P4 calls and prototypes (output-prototype, the
+# unlace-1288 follow-on, P4 calls and prototypes (output-prototype, the
 # uncomputed-half repair `strip_uncomputed_return_piece`); no option, a bug
 # fix inside the repair.
 #

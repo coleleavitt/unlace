@@ -1,5 +1,5 @@
 persistcalls_sem_x86_64 -- the GH-1034 correctness fixture for option
-`persistcalls` (tests/stages/kuna-persistcalls.toml).
+`persistcalls` (tests/stages/unlace-persistcalls.toml).
 
 What it is
   A 16,216-byte x86-64 ELF built from persistcalls_sem_x86_64.c. `revisit`

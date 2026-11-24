@@ -14,7 +14,7 @@ static PROCESS_SETUP: Mutex<()> = Mutex::new(());
 
 /// A directory holding nothing but a copy of `unlace`.
 fn lone_unlace(tag: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("kuna_single_{}_{tag}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace_single_{}_{tag}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("create sandbox");
     dir
@@ -26,27 +26,27 @@ fn run_alone(dir: &Path, args: &[&str]) -> Output {
     let exe = dir.join(format!("unlace{}", std::env::consts::EXE_SUFFIX));
     let child = {
         let _setup = PROCESS_SETUP.lock().unwrap();
-        std::fs::copy(env!("CARGO_BIN_EXE_unlace"), &exe).expect("copy kuna");
+        std::fs::copy(env!("CARGO_BIN_EXE_unlace"), &exe).expect("copy unlace");
         Command::new(&exe)
             .current_dir(dir)
             .args(args)
             .env("UNLACE_SPECS", repo_root().join("specs"))
             .env_remove("SLEIGHHOME")
             .env_remove("UNLACE_ROOT")
-            .env_remove("KUNA_ROOT")
+            .env_remove("UNLACE_ROOT")
             .env_remove("UNLACE_DECOMP_DBG")
-            .env_remove("KUNA_DECOMP_DBG")
+            .env_remove("UNLACE_DECOMP_DBG")
             .env_remove("UNLACE_SLACOMP")
-            .env_remove("KUNA_SLACOMP")
+            .env_remove("UNLACE_SLACOMP")
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .expect("run the relocated kuna")
+            .expect("run the relocated unlace")
     };
     child
         .wait_with_output()
-        .expect("wait for the relocated kuna")
+        .expect("wait for the relocated unlace")
 }
 
 #[test]
@@ -62,7 +62,7 @@ fn a_lone_unlace_decompiles_with_its_built_in_console() {
         String::from_utf8_lossy(&out.stderr)
     );
     assert!(stdout.contains("main("), "{stdout}");
-    assert_eq!(entries, 1, "decompile left files beside kuna");
+    assert_eq!(entries, 1, "decompile left files beside unlace");
 }
 
 #[test]
@@ -100,7 +100,7 @@ fn the_hidden_console_subcommand_is_decomp_dbg() {
         .env_remove("SLEIGHHOME")
         .stdin(Stdio::null())
         .output()
-        .expect("run kuna decomp_dbg");
+        .expect("run unlace decomp_dbg");
     assert_eq!(out.status.code(), Some(1));
     assert!(
         String::from_utf8_lossy(&out.stderr)

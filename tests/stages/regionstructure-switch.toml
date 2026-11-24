@@ -30,7 +30,7 @@
 # Under `option regionstructure on`, `ActionBlockStructure` swaps Ghidra's
 # `CollapseStructure` for the region structurer
 # (`s8_structure::region_structurer`).  Its Inc 4 switch schema
-# (`match_acyclic_switch_cases`, the kuna analog of angr
+# (`match_acyclic_switch_cases`, the unlace analog of angr
 # `phoenix._match_acyclic_switch_cases_address_computed` ->
 # `_switch_build_cases` -> `_make_switch_cases_core`) matches the `f_switch_out`
 # head, resolves the recovered `JumpTable` via the precomputed

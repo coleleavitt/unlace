@@ -1,6 +1,6 @@
 // A hand-written stand-in for an SDK framework header (no Apple text): the
-// fast-enumeration declarations a for-in loop sends. Read by the kuna_objcsdk
-// unit tests and the kuna-objcforin stage test.
+// fast-enumeration declarations a for-in loop sends. Read by the unlace_objcsdk
+// unit tests and the unlace-objcforin stage test.
 typedef unsigned long NSUInteger;
 
 typedef struct {

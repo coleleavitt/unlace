@@ -3078,7 +3078,7 @@ impl Architecture {
         let mut register = |root: &Rc<unlace_base::xml::Element>| {
             let mut decoder = XmlDecode::new_with_root(&manager, &registry, root, 0);
             self.pcodeinjectlib.decode_inject(
-                b" : kuna compiler helpers",
+                b" : unlace compiler helpers",
                 b"",
                 crate::pcodeinject::CALLFIXUP_TYPE,
                 &mut decoder,

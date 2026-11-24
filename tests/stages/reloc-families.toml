@@ -1,4 +1,4 @@
-# Kuna #63 (personal): P1 relocatable-object layout, instruction relocation
+# Unlace #63 (personal): P1 relocatable-object layout, instruction relocation
 # families (option relocobjects, default on). Objects built from
 # fixtures/relocs/t.c and a64.s as their headers say. Before this change
 # each family below was "unsupported" and its field kept the assembler's

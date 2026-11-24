@@ -42,7 +42,7 @@ fn run(msabi: bool, typed: bool) -> String {
         .map(PathBuf::from)
         .unwrap_or_else(|| root.join("specs"));
     let dir = std::env::temp_dir().join(format!(
-        "kuna-typed-vtable-{}-{msabi}-{typed}",
+        "unlace-typed-vtable-{}-{msabi}-{typed}",
         std::process::id()
     ));
     std::fs::create_dir_all(&dir).unwrap();
@@ -78,7 +78,7 @@ fn run(msabi: bool, typed: bool) -> String {
     for decl in declarations {
         cmd.args(["--assert", &decl]);
     }
-    let out = cmd.output().expect("run kuna");
+    let out = cmd.output().expect("run unlace");
     let _ = std::fs::remove_dir_all(&dir);
     assert!(
         out.status.success(),

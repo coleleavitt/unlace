@@ -1,8 +1,8 @@
 /* Fixture for the `--assert` range directives — `readonly`, `volatile`, and the
- * `global add`/`global remove` console pair (kuna RE-need
+ * `global add`/`global remove` console pair (unlace RE-need
  * `no-cli-data-code-override`).
  *
- * Three facts an agent knows and kuna cannot derive:
+ * Three facts an agent knows and unlace cannot derive:
  *
  *   - `scale` and `bias` live in `.data`, which is writable, so the loader never
  *     reports them read-only -- but nothing ever stores to them, so their

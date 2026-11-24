@@ -34,9 +34,9 @@ const big = 'int sum_to(int n) { int s = 0; while (n > 0) s += n--; return s; }\
 const raw = new Uint8Array(4096);
 for (let i = 0; i < raw.length; i++) raw[i] = (i * 7 + 13) & 0xff;
 const entries = [
-  { name: 'sample.kuna/sample.c', data: big },
-  { name: 'sample.kuna/README.md', data: '# sample\n\nexported by kuna\n' },
-  { name: 'sample.kuna/raw.bin', data: raw },
+  { name: 'sample.unlace/sample.c', data: big },
+  { name: 'sample.unlace/README.md', data: '# sample\n\nexported by unlace\n' },
+  { name: 'sample.unlace/raw.bin', data: raw },
 ];
 
 const zip = makeZip(entries);
@@ -99,7 +99,7 @@ ok('deterministic: two builds byte-identical');
 
 // Bonus: a real extractor accepts it (skip silently if `unzip` is absent).
 if (!spawnSync('unzip', ['-v'], { stdio: 'ignore' }).error) {
-  const dir = mkdtempSync(join(tmpdir(), 'kuna-zip-'));
+  const dir = mkdtempSync(join(tmpdir(), 'unlace-zip-'));
   const zf = join(dir, 'out.zip');
   writeFileSync(zf, zip);
   const r = spawnSync('unzip', ['-t', zf], { encoding: 'utf8' });

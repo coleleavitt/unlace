@@ -1,7 +1,7 @@
 # Go output language on the existing emission plane
 
 Pinned angr exposes a Go flavor and tests Go signatures, declarations, operators,
-loops, switches and complete statement coverage. Kuna already recognizes Go
+loops, switches and complete statement coverage. Unlace already recognizes Go
 images and recovers runtime metadata, but its output-language registry contains
 only C and Rust. Even `main.add` cannot be requested in Go syntax.
 

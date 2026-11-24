@@ -1,13 +1,13 @@
 """Prove that no call changed its evaluation point in a foldcallretphi sweep.
 
 Extracts each function's call sequence in evaluation order (nested calls first,
-since C evaluates arguments before the call) from a `kuna decompile-all` pair and
+since C evaluates arguments before the call) from a `unlace decompile-all` pair and
 reports every function whose sequence differs.
 
     mkdir sweep
     for b in fmt ls sort du grep gzip; do
-      kuna decompile-all <path>/$b                              > sweep/$b.off.c
-      kuna decompile-all <path>/$b --option foldcallretphi on   > sweep/$b.on.c
+      unlace decompile-all <path>/$b                              > sweep/$b.off.c
+      unlace decompile-all <path>/$b --option foldcallretphi on   > sweep/$b.on.c
     done
     python3 callorder.py <sweep-dir> fmt ls sort du grep gzip
 """

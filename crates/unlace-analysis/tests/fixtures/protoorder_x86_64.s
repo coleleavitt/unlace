@@ -1,4 +1,4 @@
-# (kuna) `protoorder` fixture -- two functions whose own recovered prototypes
+# (unlace) `protoorder` fixture -- two functions whose own recovered prototypes
 # are the only evidence their callers have, and one whose recovery UNDER-counts.
 #
 # `callee` reads rdi as a byte pointer and esi as a number, so decompiling it

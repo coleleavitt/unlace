@@ -7,7 +7,7 @@
 # edges collapsed into one and `FlowBlock::getOut(1)` indexed off the end of the
 # edge list.  Stage model: S2 flow classification (`process_instruction`
 # fall-through).  Correctness fix, no option, because the old output was not valid
-# C.  kuna GH-403.
+# C.  unlace GH-403.
 #
 # Layout (linked flat, one .text run):
 #   branchcut @ 0x100040 : mov/add/test then `je cold`; fall-through is 0x100049

@@ -26,7 +26,7 @@ fn specs() -> String {
 fn decomp_dbg() -> String {
     PathBuf::from(env!("CARGO_BIN_EXE_unlace"))
         .parent()
-        .expect("kuna binary lives in a profile directory")
+        .expect("unlace binary lives in a profile directory")
         .join("decomp_dbg")
         .to_string_lossy()
         .into_owned()
@@ -42,7 +42,7 @@ fn run(args: &[&str]) -> (String, String, bool) {
     let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .output()
-        .expect("spawn kuna");
+        .expect("spawn unlace");
     (
         String::from_utf8_lossy(&output.stdout).into_owned(),
         String::from_utf8_lossy(&output.stderr).into_owned(),

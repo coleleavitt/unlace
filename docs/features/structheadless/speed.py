@@ -3,8 +3,8 @@ import json, os, statistics, subprocess, sys, time
 R = "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11/O2"
 ALL = {"fmt": f"{R}/coreutils/stripped/fmt", "ls": f"{R}/coreutils/stripped/ls",
        "sort": f"{R}/coreutils/stripped/sort", "bash": f"{R}/bash/stripped/bash"}
-KUNA = os.environ.get("KUNA_BIN", "decompiler/target/release/kuna")
-SPECS = os.environ.get("KUNA_SPECS", "specs")
+UNLACE = os.environ.get("UNLACE_BIN", "decompiler/target/release/unlace")
+SPECS = os.environ.get("UNLACE_SPECS", "specs")
 ARMS = {"off": ["--option", "structheadless", "off"],
         "closed": ["--option", "structheadless", "closed"]}
 NAMES = list(ARMS)
@@ -18,9 +18,9 @@ for name in which:
     for i in range(N):
         order = NAMES[i % 2:] + NAMES[:i % 2]
         for lab in order:
-            env = dict(os.environ, SLEIGHHOME=SPECS, KUNA_SPECS=SPECS)
+            env = dict(os.environ, SLEIGHHOME=SPECS, UNLACE_SPECS=SPECS)
             t0 = time.perf_counter()
-            p = subprocess.run([KUNA, "decompile-all", b, "--json", "--max-fn-seconds", "120"]
+            p = subprocess.run([UNLACE, "decompile-all", b, "--json", "--max-fn-seconds", "120"]
                                + ARMS[lab], stdout=subprocess.DEVNULL,
                                stderr=subprocess.DEVNULL, env=env)
             t[lab].append(round((time.perf_counter() - t0) * 1000, 1))

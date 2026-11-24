@@ -8,7 +8,7 @@ implementation worker independently re-derived and measured.
 ## The symptom
 
 Every SUBPIECE with a **nonzero byte offset** reached the printer as a raw p-code
-operator. `SUBnn` is an undeclared identifier — kuna emits no helper header that
+operator. `SUBnn` is an undeclared identifier — unlace emits no helper header that
 defines it — so the emitted function is not compilable C.
 
 openssh `ssh` (O2-noinline, stripped) `sshbuf_put_u64` @ `0x4cd60`, `--mode reliable`:
@@ -30,14 +30,14 @@ Upstream Ghidra on the same function:
 
 and the source (`sshbuf-getput-basic.i`) is a plain shift:
 `((u_char *)(p))[0] = (__v >> 56) & 0xff;`. So the construct is ordinary
-arithmetic that kuna failed to reassemble, not honest bitfield code — and the
-last line of kuna's own pane is the proof that the printer was never at fault:
+arithmetic that unlace failed to reassemble, not honest bitfield code — and the
+last line of unlace's own pane is the proof that the printer was never at fault:
 the offset-0 SUBPIECE already renders as `(char)a1`.
 
 ## The owning phase and the decision
 
 **P3, simplification quiescence, cleanup pool.**
-`decompiler/crates/kuna-decomp/src/p3_dataflow/ruleaction_6.rs (RuleSubRight)`
+`decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_6.rs (RuleSubRight)`
 (upstream `ruleaction.cc:7271`, pinned `GHIDRA_REV=cef869af`) is the rule that
 normalizes a non-least-significant truncation into `sub(V,c) => sub(V>>c*8,0)`.
 
@@ -75,16 +75,16 @@ that changes it is `togglerule`, which names the rule itself.
 ## Breadth
 
 Triage's corpus-wide count (matched per-function comparison over 788 binaries /
-76,046 functions both kuna and ghidra recovered, nesting-aware balanced-argument
+76,046 functions both unlace and ghidra recovered, nesting-aware balanced-argument
 scanner):
 
 | | SUBPIECE with offset != 0 |
 |---|---|
-| kuna | **5,919 in 2,394 functions (3.1%)** |
+| unlace | **5,919 in 2,394 functions (3.1%)** |
 | ghidra | 18 in 13 functions (0.017%) |
 | ida | 0 |
 
-A **329x** ratio. Shape distribution over kuna's 7,839 occurrences: SUB41 2,640,
+A **329x** ratio. Shape distribution over unlace's 7,839 occurrences: SUB41 2,640,
 SUB84 2,568, SUB81 1,021, SUB87 496, SUB42 472, SUB21 377, rest < 200.
 
 The before/after measured directly for this PR is in `record.json` and the PR
@@ -101,8 +101,8 @@ extractions on the special-print branch. `subright` owns 1,817 of the 1,912.
 
 ## Not the CONCAT half of the case
 
-The triage cluster also named CONCAT soup. That half is **disproven as a kuna
-defect** — corpus-wide kuna 4,198 vs ghidra 3,700, and on the two rows that named
+The triage cluster also named CONCAT soup. That half is **disproven as a unlace
+defect** — corpus-wide unlace 4,198 vs ghidra 3,700, and on the two rows that named
 it (`cleanflight::ftoa`, `betaflight/cleanflight::applyLedFixedLayers`) ghidra
 emits the same or more. This PR does not touch it.
 

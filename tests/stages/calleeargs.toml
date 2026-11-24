@@ -1,11 +1,11 @@
-# kuna issue testcase: an x86-32 callee's own code bounds the stack arguments
+# unlace issue testcase: an x86-32 callee's own code bounds the stack arguments
 # a call passes it (`option calleeargs on|off`, default-ON).
 #
-# Issue:      kuna GH-1562 - calls in a function that builds a by-value
+# Issue:      unlace GH-1562 - calls in a function that builds a by-value
 #             struct argument lose their pushed arguments, and a push for an
 #             outer call is credited to an inner this-only call.
 # Stage:      P4 calls - checkInputTrialUse's stack trials
-#             (`p4_calls/kuna_calleestackargs.rs`, `funcdata_callsite.rs`).
+#             (`p4_calls/unlace_calleestackargs.rs`, `funcdata_callsite.rs`).
 # P0 assert:  `option calleeargs on|off`.
 #
 # Each fixture is decompiled twice: `option calleeargs off`, then the
@@ -389,7 +389,7 @@ literal = 'sub_4027b1(a0,0,4)'
 [[match]]
 name = 'CALLEEARGS #16: the SEH-framed callee keeps both arguments'
 count = 2
-regex = 'sub_4010b0\("kuna.txt",0x80000000\);'
+regex = 'sub_4010b0\("unlace.txt",0x80000000\);'
 
 [[match]]
 name = 'CALLEEARGS #17: the caller of the alloca helper keeps four'

@@ -1,5 +1,5 @@
 // Self-contained Mach-O fixture for Swift runtime class names in types
-// (`swiftdemangle` + `objcivars`, tests/stages/kuna-swiftclassnames.toml). No
+// (`swiftdemangle` + `objcivars`, tests/stages/unlace-swiftclassnames.toml). No
 // Swift toolchain is needed: `objc_runtime_name` gives each class the name
 // swiftc registers for `main.Engine` / `main.Car`, so the instance struct, the
 // embedded superclass, the `@"_TtC4main6Engine"` ivar type and the typed

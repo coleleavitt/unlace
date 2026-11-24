@@ -134,7 +134,7 @@ class RtcLink extends Inbox {
  * once, as if the page had gone, so a page offers or answers a link only once
  * its own lock is held (or PRESENCE_MS has passed).
  */
-const lockName = (peer) => `kuna.d2.peer.${peer}`;
+const lockName = (peer) => `unlace.d2.peer.${peer}`;
 const PRESENCE_MS = 5000;
 let heldFor = null;
 let held = null;
@@ -274,7 +274,7 @@ export async function makeOffer({ me, iceServers = [] } = {}) {
     throw new Error('this browser gave no usable connection details');
   }
   if (globalThis.BroadcastChannel) {
-    channel = new BroadcastChannel(`kuna.d2.link.${id}`);
+    channel = new BroadcastChannel(`unlace.d2.link.${id}`);
     let knocked = null;
     let expire = 0;
     channel.onmessage = ({ data }) => {
@@ -322,7 +322,7 @@ export async function makeOffer({ me, iceServers = [] } = {}) {
 export async function takeOffer({ me, id, sdp, iceServers = [] } = {}) {
   await present();
   if (globalThis.BroadcastChannel) {
-    const channel = new BroadcastChannel(`kuna.d2.link.${id}`);
+    const channel = new BroadcastChannel(`unlace.d2.link.${id}`);
     const reply = await new Promise((done) => {
       let over = false;
       const timer = setTimeout(() => { over = true; done(null); }, KNOCK_MS);

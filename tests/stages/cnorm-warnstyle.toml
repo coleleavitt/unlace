@@ -1,9 +1,9 @@
-# kuna C-surface normalization: analysis warnings render as terse `// slug`
+# unlace C-surface normalization: analysis warnings render as terse `// slug`
 # end-of-line comments on the line they describe, instead of full
 # `/* WARNING: ... */` banner lines at the comment indent (user-reported
 # readability issue on the angr fmt corpus binary; no upstream GH issue).
 #
-# kuna adds the settable option `warnstyle inline|banner` (DIV-38,
+# unlace adds the settable option `warnstyle inline|banner` (DIV-38,
 # docs/history.md), default inline: emit_comment_group maps each WARNING
 # comment through warning_slug and flush_eol_warnings appends the slugs at
 # the owning line's last token (statement `;`, `if (cond) {` header,

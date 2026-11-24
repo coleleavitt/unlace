@@ -1,4 +1,4 @@
-# kuna castternary (P9, sub-stage cast-policy; option castternary on|off).
+# unlace castternary (P9, sub-stage cast-policy; option castternary on|off).
 #
 # Source: a base64 decoder whose four table lookups `iteregion` prints as
 # `a = (c != '=') ? (int4)*(char *)(t + c) : 0;`.  Each conditional arm keeps
@@ -15,7 +15,7 @@
 #   narrow(p, k)    long v = k ? p[k] : -5L                   (int p)
 #   less(a, b, k)   unsigned int v = k ? (unsigned int)(a < b) : 0xffffffffu
 #
-# iteexpr is on in both passes (it is in the aggressive preset kuna selects for
+# iteexpr is on in both passes (it is in the aggressive preset unlace selects for
 # binaries under 500 KiB) so the load arms print as conditionals.  Pass 1
 # (option castternary off) keeps every arm cast: #1, #3, #5, #7.  Pass 2
 # (option castternary on) leaves out the widenings the conditional performs

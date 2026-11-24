@@ -2,7 +2,7 @@
 
 The pinned angr `TestBuiltinsGo122Unoptimized` test expects compiler write-barrier
 helpers to disappear from unoptimized Go output. In its `builtins_N` fixture,
-Kuna's `main.push` retains two `runtime.gcWriteBarrier2` calls and their buffer
+Unlace's `main.push` retains two `runtime.gcWriteBarrier2` calls and their buffer
 writes. The actual application stores are `n.next = head` and `head = n`.
 
 Raw p-code before SSA shows why: both successors of each flag test contain a

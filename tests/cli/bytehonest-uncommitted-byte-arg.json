@@ -3,7 +3,7 @@
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "close_stdout_set_ignore_EPIPE",
@@ -50,5 +50,5 @@
     "selector": "close_stdout_set_ignore_EPIPE",
     "selector_kind": "name"
   },
-  "notes": "bytehonest at its default. The one-byte argument of this function is a _Bool in the coreutils source; kuna's recovery never commits to an element type for it, so the JSON surface reports the width (undefined1) and not the char the C text spells it. The last clause pins that the C text is unchanged: the divergence between the two surfaces is deliberate."
+  "notes": "bytehonest at its default. The one-byte argument of this function is a _Bool in the coreutils source; unlace's recovery never commits to an element type for it, so the JSON surface reports the width (undefined1) and not the char the C text spells it. The last clause pins that the C text is unchanged: the divergence between the two surfaces is deliberate."
 }

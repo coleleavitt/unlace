@@ -1,5 +1,5 @@
 /* armfloatreturn and armfloatargs as members of the aggressive preset
-   (tests/stages/kuna-armfloat-preset.toml).
+   (tests/stages/unlace-armfloat-preset.toml).
    clang --target=armv7a-linux-gnueabihf -mfloat-abi=hard -mfpu=vfpv3-d16 -O2 -c armfloat_preset.c -o armfloat_preset_hard.o
    clang --target=armv7a-linux-gnueabi -mfloat-abi=soft -O2 -c armfloat_preset.c -o armfloat_preset_soft.o */
 #define NI __attribute__((noinline))

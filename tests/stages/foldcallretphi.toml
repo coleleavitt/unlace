@@ -1,4 +1,4 @@
-# kuna issue `foldcallretphi` (P6, sub-stage explicit-marking).
+# unlace issue `foldcallretphi` (P6, sub-stage explicit-marking).
 #
 # `foldcallret` (default-on) lets an order-safe single-use call output fall
 # through ActionMarkExplicit::baseExplicit's forced-explicit call arm, but

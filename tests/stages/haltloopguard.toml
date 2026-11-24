@@ -1,5 +1,5 @@
 # GH-1344. Stage P3, heritage guards: the exitless-loop guard
-# (p3_dataflow/kuna_haltloopguard.rs), always on.
+# (p3_dataflow/unlace_haltloopguard.rs), always on.
 #
 # Heritage reads every global at each RETURN, and that read is what keeps a
 # store to a global alive through dead-code removal. A function that ends in

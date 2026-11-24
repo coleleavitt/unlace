@@ -1,8 +1,8 @@
 {
   "slug": "cppcallnames",
   "opportunity": "C++ symbol names must be rendered at call sites (and in the --addr function header)",
-  "test_name": "kuna vs IDA Pro 9.2 / Ghidra 12.1 on a purpose-built C++ probe (probe.cpp, g++ -O0/-O2) plus the vendored cpp_noreturn_x86_64 / cpp_mangled_x86_64 / eh_lsda_x86_64 fixtures",
-  "binary": "decompiler/crates/kuna-analysis/tests/fixtures/cpp_noreturn_x86_64",
+  "test_name": "unlace vs IDA Pro 9.2 / Ghidra 12.1 on a purpose-built C++ probe (probe.cpp, g++ -O0/-O2) plus the vendored cpp_noreturn_x86_64 / cpp_mangled_x86_64 / eh_lsda_x86_64 fixtures",
+  "binary": "decompiler/crates/unlace-analysis/tests/fixtures/cpp_noreturn_x86_64",
   "selector": "fail",
   "func_addr": "0x4011b6",
   "second_witness_binary": "probe_O0 (g++ -O0, purpose-built)",
@@ -17,15 +17,15 @@
   "spec_chapter": "docs/spec/00-overview.md",
   "div": "DIV-59",
   "source_decompiler": "ida",
-  "inspiration": "IDA Pro 9.2 and Ghidra 12.1 both render `d = Account::deposit(a, amount);` on the same unstripped binary where kuna rendered `d = sub_271c(a,amount);`",
+  "inspiration": "IDA Pro 9.2 and Ghidra 12.1 both render `d = Account::deposit(a, amount);` on the same unstripped binary where unlace rendered `d = sub_271c(a,amount);`",
   "default_on": true,
   "upstream_anchor": "Scope::queryFunction (database.hh) -- resolves a FunctionSymbol through the scope tree, not one scope",
   "upstream_fidelity": "restores the upstream resolution semantics the port narrowed to a single scope",
   "root_cause": "Scope shadowing in the gated-commit seam. read_loader_symbols installs a demangled C++ funcsym in its NAMESPACE scope (std::terminate = base `terminate` in scope `std`). A discovery pass (fast_funcdisc / funcstart_patterns, both in AGGRESSIVE_OVERRIDES) re-reports the same VMA; commit_analysis_output's discovered-entry arm named it sub_<addr>, resolved that synthetic name to a scope (no `::` -> GLOBAL) and probed find_function(scope, addr) in that scope ONLY, so it missed the real symbol and installed a DUPLICATE generic FunctionSymbol in GLOBAL. find_function_across_scopes -- the resolver FlowInfo::queryCall uses -- searches global first, so the duplicate shadowed the real name at every call site.",
   "ruled_out": [
-    "the name is stored only as an alias (false: it is the primary symbol; `aliases` in `kuna functions --json` comes from register_symbol, a different stream)",
+    "the name is stored only as an alias (false: it is the primary symbol; `aliases` in `unlace functions --json` comes from register_symbol, a different stream)",
     "a validity/identifier filter rejects `::` or `<` (false: no such filter exists, and --mode reliable renders `::` names today)",
-    "the call-site path reads a different symbol table than `kuna functions` (false: same Database, same address key)",
+    "the call-site path reads a different symbol table than `unlace functions` (false: same Database, same address key)",
     "a demangler defect (false: a demangled name with no namespace, _Z8topleveli -> `toplevel`, renders fine)"
   ],
   "mode_dependence": {
@@ -42,7 +42,7 @@
     "make test-stages": "PARITY OK, no re-pin",
     "make rust-test": "green",
     "make check-spec": "OK",
-    "kuna catalog --check": "catalog OK"
+    "unlace catalog --check": "catalog OK"
   },
   "baseline_repin": false,
   "stage_test": null,
@@ -53,7 +53,7 @@
     "console/tests/verify_cppcallnames.rs::discovery_still_names_genuinely_unknown_entries"
   ],
   "sweep": {
-    "surface": "kuna decompile-all, before (main build) vs after (this build)",
+    "surface": "unlace decompile-all, before (main build) vs after (this build)",
     "binaries": 13,
     "c_binaries": 8,
     "c_binaries_byte_identical": 8,
@@ -64,7 +64,7 @@
     "classified_addr_taken_rename": 3,
     "classified_unexplained": 0,
     "lines_added_or_removed": 0,
-    "note": "every C++ diff is exactly -N/+N: no line added or removed, no structural or signature change. The 3 address-taken lines (sub_2ca0 -> perimeter, sub_2d20 -> emit, sub_401120 -> ~runtime_error) render the symbol's BASE name because Funcdata::link_spacebase_symbol binds name_for_global_varnode (unscoped) where the sibling ActionNameVars path uses name_for_global_varnode_scoped + kuna_qualify_global_name. Pre-existing and unrelated: on main the same fixture already emits {virtual override thunk} in that position and void Account::~Account(void) as a function header. Recorded as follow-up 2."
+    "note": "every C++ diff is exactly -N/+N: no line added or removed, no structural or signature change. The 3 address-taken lines (sub_2ca0 -> perimeter, sub_2d20 -> emit, sub_401120 -> ~runtime_error) render the symbol's BASE name because Funcdata::link_spacebase_symbol binds name_for_global_varnode (unscoped) where the sibling ActionNameVars path uses name_for_global_varnode_scoped + unlace_qualify_global_name. Pre-existing and unrelated: on main the same fixture already emits {virtual override thunk} in that position and void Account::~Account(void) as a function header. Recorded as follow-up 2."
   },
   "recompilability": {
     "question": "does this worsen the `::`-in-a-C-header problem that blocks recompilation?",
@@ -95,50 +95,50 @@
     "project-export identifier sanitization (console/src/project.rs build_header/build_c)",
     "address-taken function names render unqualified (Funcdata::link_spacebase_symbol uses the unscoped name_for_global_varnode; pre-existing, 3 lines in this sweep)",
     "the sibling commit arms (out.symbols, read_loader_symbols) still use a scope-local probe; no witness implicated them, so they were left alone rather than changed on suspicion",
-    "a debug-info name does not displace a weaker loader name in the Database: on macho_dwarf.o the symtab _l0 is installed first, so the DWARF fact first_byte lives only in the register_symbol stream -- kuna functions reports first_byte (entry_name_rank prefers it) while --addr 0x0 reports _l0 (the Database). Pre-existing on both sides of this change; a naming-policy question, not a lookup fix."
+    "a debug-info name does not displace a weaker loader name in the Database: on macho_dwarf.o the symtab _l0 is installed first, so the DWARF fact first_byte lives only in the register_symbol stream -- unlace functions reports first_byte (entry_name_rank prefers it) while --addr 0x0 reports _l0 (the Database). Pre-existing on both sides of this change; a naming-policy question, not a lookup fix."
   ],
   "speed": {
-    "method": "no option to flip, so scripts.pipeline.timeit (which times ONE binary off vs on) does not apply -- the same reason DIV-58 recorded its own measurement. The OFF arm is the pre-change `kuna` from the main tree, the ON arm is this build; runs are interleaved to cancel drift. MINIMUM reported: the box is shared with concurrent agents, so medians are contaminated (a first 5-pair pass reported +40.96% on probe_O0 that an 11-pair re-run resolved to -0.46% on the minimum).",
+    "method": "no option to flip, so scripts.pipeline.timeit (which times ONE binary off vs on) does not apply -- the same reason DIV-58 recorded its own measurement. The OFF arm is the pre-change `unlace` from the main tree, the ON arm is this build; runs are interleaved to cancel drift. MINIMUM reported: the box is shared with concurrent agents, so medians are contaminated (a first 5-pair pass reported +40.96% on probe_O0 that an 11-pair re-run resolved to -0.46% on the minimum).",
     "units": "ms (wall clock, whole process incl. spawn + spec mmap + load)",
     "budget_pct": 5.0,
     "rows_5pair_min": [
       {
-        "surface": "kuna decompile-all",
+        "surface": "unlace decompile-all",
         "binary": "probe_O0 (C++)",
         "off": 367.8,
         "on": 518.4,
         "delta_pct": 40.96
       },
       {
-        "surface": "kuna decompile-all",
+        "surface": "unlace decompile-all",
         "binary": "cpp_noreturn (C++)",
         "off": 156.4,
         "on": 122.4,
         "delta_pct": -21.74
       },
       {
-        "surface": "kuna decompile-all",
+        "surface": "unlace decompile-all",
         "binary": "fmt_x86_64 (C)",
         "off": 148.5,
         "on": 148.1,
         "delta_pct": -0.27
       },
       {
-        "surface": "kuna decompile-all",
+        "surface": "unlace decompile-all",
         "binary": "/usr/bin/ls (C, stripped)",
         "off": 31445.3,
         "on": 31030.3,
         "delta_pct": -1.32
       },
       {
-        "surface": "kuna functions",
+        "surface": "unlace functions",
         "binary": "/bin/grep (C, stripped)",
         "off": 617.2,
         "on": 616.8,
         "delta_pct": -0.06
       },
       {
-        "surface": "kuna decompile",
+        "surface": "unlace decompile",
         "binary": "probe_O0 probe_member_fields",
         "off": 157.9,
         "on": 152.5,
@@ -147,7 +147,7 @@
     ],
     "rows_11pair": [
       {
-        "surface": "kuna functions",
+        "surface": "unlace functions",
         "binary": "probe_O0 (C++, load+commit only)",
         "off_min": 149.2,
         "on_min": 142.8,
@@ -158,7 +158,7 @@
         "n": 11
       },
       {
-        "surface": "kuna decompile-all",
+        "surface": "unlace decompile-all",
         "binary": "probe_O0 (C++)",
         "off_min": 358.1,
         "on_min": 356.5,
@@ -169,7 +169,7 @@
         "n": 11
       },
       {
-        "surface": "kuna decompile-all",
+        "surface": "unlace decompile-all",
         "binary": "cpp_noreturn (C++)",
         "off_min": 111.7,
         "on_min": 110.4,
@@ -180,7 +180,7 @@
         "n": 11
       },
       {
-        "surface": "kuna decompile-all",
+        "surface": "unlace decompile-all",
         "binary": "eh_lsda (C++)",
         "off_min": 118.9,
         "on_min": 117.6,
@@ -193,7 +193,7 @@
     ],
     "worst_delta_pct": -0.46,
     "within_budget": true,
-    "note": "The changed code is one probe per discovered entry at commit time. find_function_across_scopes still hits the global scope first (the common case, and the only case on a C binary), and only walks the remaining scopes on a miss. The `kuna functions` row isolates load+commit with no decompilation and shows no cost. Every 11-pair minimum is between -4.29% and -0.46%."
+    "note": "The changed code is one probe per discovered entry at commit time. find_function_across_scopes still hits the global scope first (the common case, and the only case on a C binary), and only walks the remaining scopes on a miss. The `unlace functions` row isolates load+commit with no decompilation and shows no cost. Every 11-pair minimum is between -4.29% and -0.46%."
   },
   "speed_budget_pct": 5.0,
   "speed_within_budget": true,
@@ -215,7 +215,7 @@
     "verify_multiformat_dwarf": "the only test in the workspace that moved. It used load addr -- with the DWARF pass still ON -- as its no-DWARF-name baseline, asserting sub_140001550 / sub_0; that held only because load addr ignored the symbol table, i.e. it was pinning the bug. The baseline arm now turns the pass off (option dwarf off), which is what it always meant: on the PE nothing else names 0x140001550 (COFF FUNC entry --strip-symbol-removed) so the sub_140001550 assertion is unchanged and now truthful; on the Mach-O the --redefine-sym-ed symtab entry _l0 remains, so the baseline asserts _l0 -- a sharper statement of DWARF-only than a placeholder. Both DWARF-recovery assertions untouched."
   },
   "discovery_inventory_check": {
-    "surface": "kuna functions --json, before vs after, name + alias set per entry address",
+    "surface": "unlace functions --json, before vs after, name + alias set per entry address",
     "fixtures": 15,
     "fixtures_identical": 15,
     "covered": [

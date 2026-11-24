@@ -1,4 +1,4 @@
-# kuna loader (dynrelocs, always on), GH-904: same-image calls and
+# unlace loader (dynrelocs, always on), GH-904: same-image calls and
 # data accesses through a MIPS PIC GOT.
 #
 # A MIPS dynamic image relocates its primary GOT with no relocation
@@ -11,7 +11,7 @@
 #     *(int4 *)(dat_10428 + 0x458) = *(int4 *)(dat_10428 + 0x458) + 1;
 #     v2 = (*v1)();                                      (bug, c_calls)
 # Those slots already hold their run-time values at the link-time
-# addresses kuna maps the image at, so they are now constant too and the
+# addresses unlace maps the image at, so they are now constant too and the
 # call names add64, the weak wfn, and the reads name counter and gdata.
 #
 # Stage: P1 program prep (loader constant ranges).  Single pass; the loader

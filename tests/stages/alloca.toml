@@ -1,4 +1,4 @@
-# kuna alloca: a variable-length array under stack-clash protection.
+# unlace alloca: a variable-length array under stack-clash protection.
 #
 # Source (gcc -O2 -fstack-clash-protection, the Ubuntu default):
 #

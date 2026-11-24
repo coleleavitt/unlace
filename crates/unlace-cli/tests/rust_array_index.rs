@@ -8,7 +8,7 @@ fn complete_rust_array_indices_match_native_memory_addresses_and_calls() {
     if process::optional_output(Command::new("cc").arg("--version")).is_none() {
         return;
     }
-    let declarations = std::fs::read_to_string(common::fixture("array_index.kuna")).unwrap();
+    let declarations = std::fs::read_to_string(common::fixture("array_index.unlace")).unwrap();
     let names: Vec<_> = declarations
         .lines()
         .map(|line| line.split_whitespace().nth(1).unwrap())
@@ -56,7 +56,7 @@ fn complete_rust_array_indices_match_native_memory_addresses_and_calls() {
         "--language",
         "rust",
         "--assert",
-        &format!("@{}", common::fixture("array_index.kuna")),
+        &format!("@{}", common::fixture("array_index.unlace")),
         "--option",
         "ctypes",
         "off",

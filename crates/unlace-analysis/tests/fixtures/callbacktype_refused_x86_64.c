@@ -42,7 +42,7 @@
  *
  * `noipa` rather than `noinline`: gcc's interprocedural register allocation
  * otherwise hoists an argument register past a call to a function it knows
- * does not clobber it, and kuna's call-site recovery -- which has only the
+ * does not clobber it, and unlace's call-site recovery -- which has only the
  * convention to go on -- then reads the argument as the wrong call's.
  *
  * Build (symbols kept, no DWARF):

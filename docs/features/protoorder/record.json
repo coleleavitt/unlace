@@ -1,7 +1,7 @@
 {
  "opportunity": "A callee's recovered prototype never reaches its callers. ActionDefaultParams reads a call's callee signature from the PrototypePieces parked on the callee's FunctionSymbol, and every writer of that slot is a DECLARED fact (a libc/libctypes table entry, DWARF, a demangled name, `parse line extern`, `--assert prototype`). Nothing parks what recovery found, so each caller types a call from its own local evidence: coreutils fmt -O2 renders the same two-parameter callee with one, two and three arguments inside main, and the FILE * the caller holds stops at the call.",
  "status": "Implemented. `protoorder off|types|lock`, DEFAULT `types`. `types` states the callee's recovered PARAMETER types as a vote at matching call arguments; the vote never sets a cast's required type and is refused wherever the caller holds contrary evidence (frame objects and frame memory, declared or global values, a different-class reader or writer, float disagreement, a float or composite pointee the caller's own loads and stores contradict, a value loaded through itself, a type deeper than the inferred pointer cap). The result vote is not stated. `lock` keeps the round-4 arity claim, opt-in.",
- "test_name": "26 hermetic unit tests in p4_calls/protoorder/tests.rs (member lookup and strides among them); fourteen tests/cli probes over nine in-repo fixtures (protoorder_x86_64: off / default / arity pin / lock register-save decline; protoorder_stackarray_x86_64 and protoorder_stackstruct_x86_64, gcc -O0, a frame object that must stay whole; protoorder_codeptr_thumb_le32, a Thumb function address that must not print as &sub_8130[1]; protoorder_floatgpr_mipsel, MIPS o32, a float passed in a general register whose word the caller also uses as an integer; protoorder_floatstore_x86_64, a float stored beside an int; protoorder_floatreg_armhf.o, ARM hard-float values in s0 that keep the vote; protoorder_floatpointee_x86_64, gcc -O2, a union and struct copies written with integer bits through a pointer a callee reads as double *, struct P * and struct M *; protoorder_narrowvote_x86_64, gcc -O2, a caller storing eight constant bytes through the buffer it hands a callee whose recovered parameter is unsigned char *); kuna-cli tests jobs_output_is_byte_identical_to_serial, jobs_notes_that_the_default_callee_first_order_is_serial_only, jobs_run_workers_with_structsynth_off (serial reference with protoorder off), a_narrowed_run_orders_callees_first_only_when_asked, raw_image_discovers_called_functions_beyond_its_seeds, a_float_in_a_general_register_keeps_its_integer_uses_round_trip (seven MIPS callers compiled against a bit-preserving h), a_float_pointee_keeps_the_callers_integer_stores_round_trip (six x86-64 callers compiled from the default and the protoorder-off output and compared byte for byte with the source; all six differ on the pre-fix engine), a_byte_pointee_vote_keeps_the_callers_wide_stores (the default and --option ptrfromuse void keep fill's eight-byte store; both printed eight byte stores on the pre-fix engine)",
+ "test_name": "26 hermetic unit tests in p4_calls/protoorder/tests.rs (member lookup and strides among them); fourteen tests/cli probes over nine in-repo fixtures (protoorder_x86_64: off / default / arity pin / lock register-save decline; protoorder_stackarray_x86_64 and protoorder_stackstruct_x86_64, gcc -O0, a frame object that must stay whole; protoorder_codeptr_thumb_le32, a Thumb function address that must not print as &sub_8130[1]; protoorder_floatgpr_mipsel, MIPS o32, a float passed in a general register whose word the caller also uses as an integer; protoorder_floatstore_x86_64, a float stored beside an int; protoorder_floatreg_armhf.o, ARM hard-float values in s0 that keep the vote; protoorder_floatpointee_x86_64, gcc -O2, a union and struct copies written with integer bits through a pointer a callee reads as double *, struct P * and struct M *; protoorder_narrowvote_x86_64, gcc -O2, a caller storing eight constant bytes through the buffer it hands a callee whose recovered parameter is unsigned char *); unlace-cli tests jobs_output_is_byte_identical_to_serial, jobs_notes_that_the_default_callee_first_order_is_serial_only, jobs_run_workers_with_structsynth_off (serial reference with protoorder off), a_narrowed_run_orders_callees_first_only_when_asked, raw_image_discovers_called_functions_beyond_its_seeds, a_float_in_a_general_register_keeps_its_integer_uses_round_trip (seven MIPS callers compiled against a bit-preserving h), a_float_pointee_keeps_the_callers_integer_stores_round_trip (six x86-64 callers compiled from the default and the protoorder-off output and compared byte for byte with the source; all six differ on the pre-fix engine), a_byte_pointee_vote_keeps_the_callers_wide_stores (the default and --option ptrfromuse void keep fill's eight-byte store; both printed eight byte stores on the pre-fix engine)",
  "binary": "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11/O2/coreutils/stripped/fmt",
  "selector": "0x3700",
  "func_addr": "0x3700",
@@ -16,7 +16,7 @@
  "source_decompiler": "angr",
  "inspiration": "angr's Clinic propagates a recovered SimTypeFunction back onto the callee's Function.prototype, so later callers read it; Ghidra's decompiler-parameter-ID analyzer commits recovered prototypes to the program database before the callers are decompiled.",
  "witness": {
-  "command": "kuna decompile-all .../O2/coreutils/stripped/fmt --option protoorder off|types",
+  "command": "unlace decompile-all .../O2/coreutils/stripped/fmt --option protoorder off|types",
   "ground_truth": "int fmt (FILE *fp, char const *file)",
   "off": "unsigned long sub_3700(FILE *a0,unsigned long a1)",
   "types": "unsigned long sub_3700(FILE *a0,char *a1)",
@@ -264,7 +264,7 @@
   }
  },
  "speed": {
-  "method": "round 12: main (a d96e3408 build; 75f832e3 differs only in docs) vs this branch's round-12 engine vs the round-11 engine, whole-binary `kuna decompile-all --json`, three arms rotated and reversed inside each iteration, min and median of 15, three slice groups side by side (box load 9-41)",
+  "method": "round 12: main (a d96e3408 build; 75f832e3 differs only in docs) vs this branch's round-12 engine vs the round-11 engine, whole-binary `unlace decompile-all --json`, three arms rotated and reversed inside each iteration, min and median of 15, three slice groups side by side (box load 9-41)",
   "budget_pct": 5,
   "slices": {
    "fmt -O2": {
@@ -361,7 +361,7 @@
   "verdict": "every slice inside +5% on the minimum vs main: fmt -5.2%, kmod +2.4%, ls +0.7%, libselinux -0.0%, ip -0.4% (re-run -1.0%), e2fsck +1.4%, tar +1.6%, betaflight +1.4%; vs the round-11 engine every slice is within noise (ip's +6.6% in the first run was two outlying round-11 samples; the re-run gives -0.1%)",
   "note": "rounds 8-10 measured against e1139df9 and are kept under round8/round9/round10; round 11 on d96e3408 under round11_on_d96e3408",
   "round9": {
-   "method": "main (origin/main e1139df9 build) vs this branch after the round-9 float refusal, whole-binary `kuna decompile-all --json`, interleaved (order swapped every iteration), min and median of 15, two groups side by side on the shared 80-core box (load 13-28); .scratch/r9/speed.py",
+   "method": "main (origin/main e1139df9 build) vs this branch after the round-9 float refusal, whole-binary `unlace decompile-all --json`, interleaved (order swapped every iteration), min and median of 15, two groups side by side on the shared 80-core box (load 13-28); .scratch/r9/speed.py",
    "slices": {
     "fmt -O2": {
      "main_min_ms": 4374,
@@ -406,7 +406,7 @@
    }
   },
   "round10": {
-   "method": "main (origin/main e1139df9 build) vs this branch at engine 2761aca9, whole-binary `kuna decompile-all --json`, interleaved (order swapped every iteration), min and median of 15, three groups side by side (load 30-45 falling to 6); libselinux re-run twice as main / round 9 / round 10 in one rotation; tar re-run at load 5-12; .scratch/r10/speed.py and speed3arm.py",
+   "method": "main (origin/main e1139df9 build) vs this branch at engine 2761aca9, whole-binary `unlace decompile-all --json`, interleaved (order swapped every iteration), min and median of 15, three groups side by side (load 30-45 falling to 6); libselinux re-run twice as main / round 9 / round 10 in one rotation; tar re-run at load 5-12; .scratch/r10/speed.py and speed3arm.py",
    "slices": {
     "fmt -O2": {
      "main_min_ms": 5053,
@@ -518,7 +518,7 @@
    "verdict": "every slice within +5% on the minimum; round 10 vs round 9 on libselinux in one rotation: +1.0% and -2.1%"
   },
   "round8": {
-   "method": "main (origin/main e1139df9 build) vs this branch (default types), whole-binary `kuna decompile-all --json`, main and branch alternating inside each iteration (order swapped every iteration), min and median of 15, three slice groups run side by side on a shared 80-core box (load 20-51 during the run); .scratch/r8/speed.py in the implementing worktree",
+   "method": "main (origin/main e1139df9 build) vs this branch (default types), whole-binary `unlace decompile-all --json`, main and branch alternating inside each iteration (order swapped every iteration), min and median of 15, three slice groups run side by side on a shared 80-core box (load 20-51 during the run); .scratch/r8/speed.py in the implementing worktree",
    "slices": {
     "fmt -O2": {
      "main_min_ms": 4406,
@@ -639,7 +639,7 @@
     }
    },
    "verdict": "every slice within +5% on the minimum; the worst is betaflight, +4.2% and +3.2% on the minimum in two runs, +0.5% and +0.7% on the median",
-   "note": "scripts.pipeline.timeit times `kuna decompile`, where the option is inert; the narrowed ip run shows the call-graph skip (no fixed cost). ip, tar and e2fsck are the >=500 KiB binaries the round-1 review asked for; libselinux is the shared object it named."
+   "note": "scripts.pipeline.timeit times `unlace decompile`, where the option is inert; the narrowed ip run shows the call-graph skip (no fixed cost). ip, tar and e2fsck are the >=500 KiB binaries the round-1 review asked for; libselinux is the shared object it named."
   },
   "round11_on_6e4f6fa5": {
    "slices": {
@@ -694,7 +694,7 @@
    }
   },
   "round11_on_d96e3408": {
-   "method": "main (a d96e3408 build) vs this branch's final engine rebased onto it, whole-binary `kuna decompile-all --json`, main and branch alternating inside each iteration (order swapped every iteration), min and median of 15, three slice groups side by side on a shared 80-core box (load 2-9)",
+   "method": "main (a d96e3408 build) vs this branch's final engine rebased onto it, whole-binary `unlace decompile-all --json`, main and branch alternating inside each iteration (order swapped every iteration), min and median of 15, three slice groups side by side on a shared 80-core box (load 2-9)",
    "slices": {
     "fmt -O2": {
      "main_min_ms": 4111,
@@ -815,7 +815,7 @@
  "invariants_checked": {
   "off_is_origin_main": "round 11: `--option protoorder off --json` is byte-identical to a fresh origin/main d96e3408 build on all 60 corpus binaries (and to 6e4f6fa5 on all 60 before the charbyte rebase); round 12: the final engine's `--option protoorder off --json` is byte-identical to main on 10 of 10 re-run binaries (fmt, ls, kmod, libselinux, betaflight, nuttx, dash, grep -O0, zlib, crazyflie cf2); after the rebase onto d6c5862f, off == main on the same 10 binaries, with call arguments 67,928 = 67,928, argument rows 18,930 = 18,930 and never-assigned arguments 468 = 468 between the arms; round 13: byte-identical to a fresh a3bf6a15 build on all 60 corpus binaries; after the rebase onto 3831d703: byte-identical to a fresh 3831d703 build on all 60; after the rebase onto e76fd044: byte-identical to a fresh e76fd044 build on all 60",
   "determinism": "two default runs of fmt -O2 --json are byte-identical",
-  "jobs": "an explicit `--option protoorder` with --jobs N exits 2; under the default a --jobs run states nothing and prints a note on stderr; with --option protoorder off it is byte-identical to the serial run (kuna-cli tests)",
+  "jobs": "an explicit `--option protoorder` with --jobs N exits 2; under the default a --jobs run states nothing and prints a note on stderr; with --option protoorder off it is byte-identical to the serial run (unlace-cli tests)",
   "assert": "`--assert prototype` declares the entry, so the recovered statement declines and the declared branch of getInputLocal answers first",
   "bad_value": "`--option protoorder bogus` exits 1 naming off|types|lock",
   "inert_surfaces": "decompile-project and decompile-graph warn on stderr when the option is asked for explicitly",
@@ -830,7 +830,7 @@
   "make test-stages": "datatests: 1250/1250 assertions passed / PARITY OK; a re-record of docs/baseline-stages.json is byte-identical to the committed one",
   "make test-cli": "tests/cli: 206/206 passed (protoorder-types-keeps-a-word-fill-whole; #675's structsynth-sweep-mints-no-third-name, which failed on the rebased branch before the callee-first sweep; #673's printf-varargs probe)",
   "check-spec": "check-spec OK (lenient mode) / check-spec OK (strict mode)",
-  "kuna catalog --check": "catalog OK: documents exactly the registered kuna options",
+  "unlace catalog --check": "catalog OK: documents exactly the registered unlace options",
   "counters --check": "no drift: every hard-coded site agrees with the derived truth (223 settables)",
   "docs/options.md": "byte-fresh against the final build (OPTIONS_FRESH); phase_catalog.json recaptured for the reworded protoorder row",
   "make rust-test": "RUST_TEST_RC=0 (7,285 passed / 0 failed; lane 2026-09-19T21:55:19Z -> 22:11:27Z on 5e3e6222, the final code and phases.toml; the two later commits are docs only). Earlier on this base: 7,285/0 at 20:42Z before the use_when reword. A lane at 17:53Z under heavy load (two typesweeps plus a 60-binary corpus) had one failure, jobs_a_stalled_worker_loses_only_the_function_that_stalled (_init past a 1 s per-function budget in the debug build, the --jobs path); it passed in every other lane and in release"
@@ -842,7 +842,7 @@
   "fixture": "protoorder_narrowvote_x86_64 (sha256 6c0b1c906cfb2c96e5210178c98ed6d41aaccd6359657d7e5ef61cdfe7e8c0ed)",
   "witness_before": "int fill(unsigned char *a0,int a1) ... a0[0x10] = 0x75; a0[0x11] = 0x75; ... a0[0x17] = 0x20; (default and ptrfromuse void)",
   "witness_after": "int fill(long a0,int a1) ... *(unsigned long *)(a0 + 0x10) = 0x2020726174737575; (default; ptrfromuse void: void *a0 and ((long)a0 + 0x10)); identical to main",
-  "tests": "kuna-cli a_byte_pointee_vote_keeps_the_callers_wide_stores (default + ptrfromuse void), probe tests/cli/protoorder-types-keeps-a-wide-store-whole.json; both fail on the pre-fix engine",
+  "tests": "unlace-cli a_byte_pointee_vote_keeps_the_callers_wide_stores (default + ptrfromuse void), probe tests/cli/protoorder-types-keeps-a-wide-store-whole.json; both fail on the pre-fix engine",
   "typesweep": "0 of 10,748 rows move at the default (1,105 = 1,105) and 0 with --option ptrfromuse void (1,309 = 1,309); firmware 0 of 3,451 in both arms",
   "corpus_default": "60 binaries: 26 of 32,406 functions change vs the round-11 engine: 11 store splits undone, 9 caller argument casts follow, 6 refused votes give back main's type; arity 258,249 = 258,249, argument rows 57,938 = 57,938, never-assigned arguments 1,179 = 1,179",
   "corpus_ptrfromuse_void": "13 binaries: 14 of 10,549 functions change: 9 store splits undone, 5 caller casts",
@@ -854,7 +854,7 @@
   "fixture": "protoorder_widefill_x86_64 (sha256 ca48818092626783e00d2f69b91c88ed4d6833ddd2ba0398ad9df7faf955ef90): fill_words (word-fill loop) and fill_many (520 stores)",
   "witness_before": "round-12 engine, default and ptrfromuse void: int fill_words(unsigned char *a0,int a1) with v2[0] = 8; ... v2[7] = 1; and int fill_many(unsigned char *a0,int a1) with 4,160 byte stores",
   "witness_after": "identical to main a3bf6a15 in both arms: fill_words(unsigned long *a0,...) with *v2 = 0x102030405060708; fill_many(long a0,...) (void: void *a0) with *(unsigned long *)(a0 + 0x10) = 0x2020726174737575;",
-  "tests": "kuna-cli a_byte_pointee_vote_keeps_word_fills_and_long_callers_whole (both functions, default + ptrfromuse void; fails on the round-12 engine), probe tests/cli/protoorder-types-keeps-a-word-fill-whole.json (a-e8c923519c05; passes main and round 13, fails round 12)",
+  "tests": "unlace-cli a_byte_pointee_vote_keeps_word_fills_and_long_callers_whole (both functions, default + ptrfromuse void; fails on the round-12 engine), probe tests/cli/protoorder-types-keeps-a-word-fill-whole.json (a-e8c923519c05; passes main and round 13, fails round 12)",
   "corpus": "60 binaries: 4 of 32,406 functions change vs the round-12 engine, the same 4 in both arms: crond O0 sub_6b7b (walk limit; two argument casts back to main spelling), betaflight sub_801379c (== main), sub_8013818 (== main), sub_80130a4 (integer votes only)",
   "typesweep": "0 of 10,748 rows move in either arm; firmware 1 of 3,451 (read_data_sector back to main)",
   "not_taken": "narrower-access refusal (+ undefined pointees): measured +3 improved default / +18 ptrfromuse void, 0 worse, fixes stat O2 sub_df20 (char * -> int *, (char)*a0); changes 209 functions on 33 binaries; analysis §10"
@@ -862,7 +862,7 @@
  "round13_rebase_3831d703": {
   "finding": "after the rebase onto #675, the callee-first path skipped the structsynth convergence sweep (converge_synthesized_structs runs only in decompile_batch): tests/cli/structsynth-sweep-mints-no-third-name failed (fb kept struct_0 where main moves it to fc's struct_1)",
   "change": "decompile_all.rs converge_callee_first: after the callee-first loop, redo the results naming a superseded struct in plan order with each target's park decision; not under lock. project.rs exposes superseded_struct_names/names_any_type/redo_replaces (the batch path is unchanged)",
-  "tests": "kuna-cli callee_first_runs_the_structsynth_convergence_sweep (fails on the rebased engine without the sweep, passes with it); the #675 probe passes",
+  "tests": "unlace-cli callee_first_runs_the_structsynth_convergence_sweep (fails on the rebased engine without the sweep, passes with it); the #675 probe passes",
   "corpus": "off == main 60/60; changed 9,654; REVIEW 100 (same functions, same labels as a3bf6a15); arity 258,249 = 258,249, argument rows 57,938 =, never-assigned 1,179 =, under-arity 13,853 =; goto 0, return 0, statements +98",
   "typesweep": "identical rows to a3bf6a15 in both arms and firmware; the sweep moves 0 rows (it rewrites variables[] in 144 functions at the default)"
  }

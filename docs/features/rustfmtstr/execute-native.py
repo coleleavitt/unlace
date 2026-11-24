@@ -1,7 +1,7 @@
 from pathlib import Path
 import subprocess,os,json,hashlib,re
-w=Path('/tmp/kuna-rust-fmt-str');r=Path('/home/mahaloz/kwt/angr-rust-fmt-str');base=Path('/home/mahaloz/kwt/angr-rust-fmt-pieces')
-fixture=r/'decompiler/crates/kuna-analysis/tests/fixtures/rust_fmt_str.rs'
+w=Path('/tmp/unlace-rust-fmt-str');r=Path('/home/mahaloz/kwt/angr-rust-fmt-str');base=Path('/home/mahaloz/kwt/angr-rust-fmt-pieces')
+fixture=r/'decompiler/crates/unlace-analysis/tests/fixtures/rust_fmt_str.rs'
 prefix=fixture.read_text().split('fn main()')[0]
 main=r'''fn main() {
     std::panic::set_hook(Box::new(|_|{}));
@@ -46,7 +46,7 @@ code='';captures=[]
 for name,params,bindings,result in rows:
  outputs={}
  for side,tree in [('before',base),('after',r)]:
-  body=subprocess.check_output(['taskset','-c','0-78',str(tree/'decompiler/target/release/kuna'),'decompile',str(native),name,'--language','rust'],env=os.environ|{'KUNA_SPECS':str(r/'specs')},text=True)
+  body=subprocess.check_output(['taskset','-c','0-78',str(tree/'decompiler/target/release/unlace'),'decompile',str(native),name,'--language','rust'],env=os.environ|{'UNLACE_SPECS':str(r/'specs')},text=True)
   outputs[side]=body;(w/f'native-{name}-{side}.rs').write_text(body)
  lines=[line for line in outputs['after'].splitlines()if 'from_utf8_unchecked'in line];assert len(lines)==1,(name,outputs)
  assert 'from_utf8_unchecked'not in outputs['before']
@@ -67,11 +67,11 @@ for version in ['1.90.0','1.93.1','1.99.1']:
  print(version,'all native streams and panic payloads exact',flush=True)
 controls=[]
 for name in ['str_custom','str_debug','str_dynamic','str_reference','str_owned']:
- outputs=[subprocess.check_output(['taskset','-c','0-78',str(tree/'decompiler/target/release/kuna'),'decompile',str(native),name,'--language','rust'],env=os.environ|{'KUNA_SPECS':str(r/'specs')})for tree in [base,r]]
+ outputs=[subprocess.check_output(['taskset','-c','0-78',str(tree/'decompiler/target/release/unlace'),'decompile',str(native),name,'--language','rust'],env=os.environ|{'UNLACE_SPECS':str(r/'specs')})for tree in [base,r]]
  assert outputs[0]==outputs[1] and b'from_utf8_unchecked'not in outputs[1];controls.append(name)
 for version in ['1.90.0','1.99.1']:
  binary=w/f'native-control-{version}';build(version,source,binary,True)
  for name in ['str_plain','str_integer','str_panic']:
-  outputs=[subprocess.check_output(['taskset','-c','0-78',str(tree/'decompiler/target/release/kuna'),'decompile',str(binary),name,'--language','rust'],env=os.environ|{'KUNA_SPECS':str(r/'specs')})for tree in [base,r]]
+  outputs=[subprocess.check_output(['taskset','-c','0-78',str(tree/'decompiler/target/release/unlace'),'decompile',str(binary),name,'--language','rust'],env=os.environ|{'UNLACE_SPECS':str(r/'specs')})for tree in [base,r]]
   assert outputs[0]==outputs[1] and b'from_utf8_unchecked'not in outputs[1];controls.append(version+':'+name)
 (w/'native-execution.json').write_text(json.dumps({'producer':'1.93.1','input_sha256':hashlib.sha256(native.read_bytes()).hexdigest(),'strings':156,'integer_values':9,'calls_per_string':24,'stream_calls_per_executor':3744,'panic_payloads_per_executor':156,'executions':records,'unchanged_macros':captures,'full_body_compilation_claimed':False,'original_panic_location_equivalence_claimed':False,'refusal_controls':controls,'streams':{mode:{stream:{'bytes':len(getattr(value,stream)),'sha256':hashlib.sha256(getattr(value,stream)).hexdigest()}for stream in ['stdout','stderr']}for mode,value in oracles.items()}},indent=2)+'\n')

@@ -1,4 +1,4 @@
-# GH-1034, P2 switch model, kuna_switchrunon.
+# GH-1034, P2 switch model, unlace_switchrunon.
 #
 # pick dispatches on a byte with no bounds check, the shape a compiler
 # emits when it knows the selector is in range (Rust matching on a u8 enum

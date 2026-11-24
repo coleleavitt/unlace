@@ -22,7 +22,7 @@
 #
 # Stage / sub-stage: P2 "flow-classification".  Under `tailcalljump on` a
 # one-destination computed jump to a function with no bytes is a tail call
-# (the GOT-slot rule of kuna_gottailcall): the halt_missing form is pinned
+# (the GOT-slot rule of unlace_gottailcall): the halt_missing form is pinned
 # to zero (#1) and the call prints with the argument the caller set (#2).
 # Controls: a slot naming unmapped memory that is no function (#3), and a
 # slot naming a label in the function's own code, which RuleSwitchSingle

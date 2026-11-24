@@ -1,6 +1,6 @@
 # The option surface study
 
-How kuna's 395 runtime options were classified, what changes, and why. The rules this
+How unlace's 395 runtime options were classified, what changes, and why. The rules this
 study produced are in `docs/agents.md` (*Adding features*) and
 `docs/improvement-pipeline.md` (*Standing requirements*); this file is the record of the
 decisions behind them, one row per option.

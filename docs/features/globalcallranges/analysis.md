@@ -27,9 +27,9 @@ cross product intact.
 With the same current processor specs and release engine, run:
 
 ```sh
-/usr/bin/time -v kuna decompile SKSE/Plugins/CrashLogger.dll 0x180005650 --addr \
+/usr/bin/time -v unlace decompile SKSE/Plugins/CrashLogger.dll 0x180005650 --addr \
   --max-fn-memory 4096 --max-fn-seconds 120 --option globalcallranges off --json
-/usr/bin/time -v kuna decompile SKSE/Plugins/CrashLogger.dll 0x180005650 --addr \
+/usr/bin/time -v unlace decompile SKSE/Plugins/CrashLogger.dll 0x180005650 --addr \
   --max-fn-memory 4096 --max-fn-seconds 120 --option globalcallranges on --json
 ```
 

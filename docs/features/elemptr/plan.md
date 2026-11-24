@@ -67,7 +67,7 @@ per call it lives across.
 - The string probe declines a literal the index can provably run past, and an empty
   literal under any non-zero index. A constant whose character-pointer type comes
   from the rule alone (it reaches a pointer the rule typed or a callee parameter the
-  callee stated, `kuna_elemptr::state`, and nothing reads it as a C string) prints
+  callee stated, `unlace_elemptr::state`, and nothing reads it as a C string) prints
   as its address (`reaches_element_pointer`).
 - Globals and tables are typed only in a batch that decides its functions
   together (`start(arch, objects)`); a `--jobs` worker, a streamed export and a

@@ -11,7 +11,7 @@
   "phase": "P4",
   "tier": "core",
   "change_kind": "new-caller-evidence",
-  "source_decompiler": "kuna",
+  "source_decompiler": "unlace",
   "inspiration": "One declared eight-byte consuming formal plus whole-return provenance and complete callable-consumer evidence",
   "issue": 904,
   "proposal": true,
@@ -152,12 +152,12 @@
       "typed-comparison.json": "d6dd63f2c828cbaa79b3fa14f1b97d3dc1bf076fa6a377f71d4b4e88e3f19ecc"
     },
     "source_seams_sha256": {
-      "decompiler/crates/kuna-decomp/src/p4_calls/bejoin.rs": "934583e6cbd193eee55d68ecba4fcaa6ecd0b5a3caa49009734ce93bc7d7cc68",
-      "decompiler/crates/kuna-decomp/src/p4_calls/bejoin/evidence.rs": "db9012bf4374ab26024b95b868e6666e868fe434dd6368ff043663919325529c",
-      "decompiler/crates/kuna-decomp/src/p4_calls/coreaction_protos.rs": "6e606e8678cb8790608affd3ad3423909b49aac36404b017f3ffc54b0d6a5bfc",
-      "decompiler/crates/kuna-decomp/src/p4_calls/callerreads.rs": "5ceadb83414dbda5b4674356ced10351b21e1a29d9ce5e4687a1619793e63cc2",
-      "decompiler/crates/kuna-cli/src/callgraph.rs": "13410ce56c6837888ac978d9b19cff55fa8b481515f949fba35925471dfd206c",
-      "decompiler/crates/kuna-cli/src/callgraph/arm_closure.rs": "f8c32c3cc6602839a1885d2a285fdfa9647cc739e19f3c89aaf0f351f8246c75"
+      "decompiler/crates/unlace-decomp/src/p4_calls/bejoin.rs": "934583e6cbd193eee55d68ecba4fcaa6ecd0b5a3caa49009734ce93bc7d7cc68",
+      "decompiler/crates/unlace-decomp/src/p4_calls/bejoin/evidence.rs": "db9012bf4374ab26024b95b868e6666e868fe434dd6368ff043663919325529c",
+      "decompiler/crates/unlace-decomp/src/p4_calls/coreaction_protos.rs": "6e606e8678cb8790608affd3ad3423909b49aac36404b017f3ffc54b0d6a5bfc",
+      "decompiler/crates/unlace-decomp/src/p4_calls/callerreads.rs": "5ceadb83414dbda5b4674356ced10351b21e1a29d9ce5e4687a1619793e63cc2",
+      "decompiler/crates/unlace-cli/src/callgraph.rs": "13410ce56c6837888ac978d9b19cff55fa8b481515f949fba35925471dfd206c",
+      "decompiler/crates/unlace-cli/src/callgraph/arm_closure.rs": "f8c32c3cc6602839a1885d2a285fdfa9647cc739e19f3c89aaf0f351f8246c75"
     },
     "self_contained_repro": {
       "document": "analysis.md",
@@ -263,8 +263,8 @@
     },
     "rust_workspace_environment": {
       "unset": [
-        "KUNA_DECOMP_TEST",
-        "KUNA_DECOMP_DBG"
+        "UNLACE_DECOMP_TEST",
+        "UNLACE_DECOMP_DBG"
       ],
       "CARGO_INCREMENTAL": "0",
       "CARGO_PROFILE_DEV_DEBUG": "0",
@@ -275,7 +275,7 @@
     "main_sla_symlinks": 149,
     "own_debug_target_removed": true,
     "release_trio_sha256": {
-      "kuna": "785fb5797ad9001206b85f572fd00fa9469449a8eb90e636edeea7f4190a1bca",
+      "unlace": "785fb5797ad9001206b85f572fd00fa9469449a8eb90e636edeea7f4190a1bca",
       "decomp_dbg": "15e4a3f1171001799f614b66d5036fda2236adede1a55f52756ab42b2c90cc10",
       "decomp_test_dbg": "f380ca54ada2e8cbdabed15ac6d89d68ccdd14122a6ce1de688aa32e69e82961"
     },
@@ -340,7 +340,7 @@
       "project_header_tests_passed": 15,
       "preflight_tests_passed": 10,
       "runtime_acceptance": "pending matching eighth trio and final-base replay",
-      "real_fd_print_order_report": "/tmp/kuna-callwide-frontend-checks-20261020/real-fd/print-order-report.json",
+      "real_fd_print_order_report": "/tmp/unlace-callwide-frontend-checks-20261020/real-fd/print-order-report.json",
       "capture_order": "original post-print position, before body publication"
     },
     "eighth_candidate": {
@@ -473,14 +473,14 @@
           "sha256": "472b1b56a6d6fc1aa349c87ed6b33255178c5616737f46ca2988379a7e23ce0b"
         }
       },
-      "/home/mahaloz/kwt/issues1019/scratch/904-caller/implementation-preparation/final-candidate-74d/kuna catalog --check": {
+      "/home/mahaloz/kwt/issues1019/scratch/904-caller/implementation-preparation/final-candidate-74d/unlace catalog --check": {
         "exit_code": 0,
         "log": {
           "path": "/home/mahaloz/kwt/issues1019/scratch/904-caller/implementation-preparation/reanchor-74d/catalog.log",
           "sha256": "7852f1712deaef86097ab707621d739a18eec75b56acd8d719751595f4978daa"
         }
       },
-      "python3 -m scripts.repipe.mergecheck --against origin/main --kuna /home/mahaloz/kwt/issues1019/scratch/904-caller/implementation-preparation/final-candidate-74d/kuna --json": {
+      "python3 -m scripts.repipe.mergecheck --against origin/main --unlace /home/mahaloz/kwt/issues1019/scratch/904-caller/implementation-preparation/final-candidate-74d/unlace --json": {
         "exit_code": 0,
         "log": {
           "path": "/home/mahaloz/kwt/issues1019/scratch/904-caller/implementation-preparation/reanchor-74d/mergecheck.json",
@@ -513,23 +513,23 @@
     },
     "acceptance": {
       "final_all_seven": {
-        "path": "/tmp/kuna-callwide-fixture-validation-20261020/cli-acceptance/reanchor74d-all-seven/report.json",
+        "path": "/tmp/unlace-callwide-fixture-validation-20261020/cli-acceptance/reanchor74d-all-seven/report.json",
         "sha256": "4be81174a8122d216cc1b68b2bd43359ebb0616c004d298e60dcce53f376ed8d"
       },
       "final_true_firing_stage": {
-        "path": "/tmp/kuna-callwide-fixture-validation-20261020/cli-acceptance/reanchor74d-stage/report.json",
+        "path": "/tmp/unlace-callwide-fixture-validation-20261020/cli-acceptance/reanchor74d-stage/report.json",
         "sha256": "e3b60d479926e131981d5774ce513fc712591d41b893d1326aa073e5a6df9ec5"
       },
       "final_runtime_whitelist": {
-        "path": "/tmp/kuna-callwide-fixture-validation-20261020/cli-acceptance/reanchor74d-all-seven/safe-runtime-whitelist.json",
+        "path": "/tmp/unlace-callwide-fixture-validation-20261020/cli-acceptance/reanchor74d-all-seven/safe-runtime-whitelist.json",
         "sha256": "269db6028bfc87475c1fafc2d359563317ac03e1e4e205a8bcdfb8f44dd58bc9"
       },
       "final_projection": {
-        "path": "/tmp/kuna-callwide-fixture-validation-20261020/cli-acceptance/reanchor74d-all-seven/projection-receipt.json",
+        "path": "/tmp/unlace-callwide-fixture-validation-20261020/cli-acceptance/reanchor74d-all-seven/projection-receipt.json",
         "sha256": "36641645e4c9e47d0eef357ac0869391332afc1ade4c7642186e219f2f008de5"
       },
       "final_stream_arrivals": {
-        "path": "/tmp/kuna-callwide-fixture-validation-20261020/cli-acceptance/reanchor74d-all-seven/stream-arrival-receipt.json",
+        "path": "/tmp/unlace-callwide-fixture-validation-20261020/cli-acceptance/reanchor74d-all-seven/stream-arrival-receipt.json",
         "sha256": "961093b33fda335b83690926a1b8a7172c15bca3b7a839be9e7244b2f270dd31"
       },
       "independent_default_refusal": {
@@ -614,7 +614,7 @@
         "historical_implementation_failures": "Preserved first through eighth immutable snapshots and reports; final actual-main acceptance supersedes them without deleting them."
       },
       "actual_engine_FIFO_native": {
-        "path": "/tmp/kuna-callwide-fixture-validation-20261020/cli-acceptance/actual-main-fifo-native/report.json",
+        "path": "/tmp/unlace-callwide-fixture-validation-20261020/cli-acceptance/actual-main-fifo-native/report.json",
         "sha256": "03ba7537975be62fe1f8034c411e49261813228515748783d0c1b63c899757aa"
       },
       "note": "Historical receipts unchanged. Fresh full-workspace execution includes the same actual-engine FIFO test; its native composition receipt remains explicitly historical."
@@ -625,7 +625,7 @@
         "sha256": "40c237afea512076817e0f53e71b80ac190aa658d6dd274115cb303189bb3e0f"
       },
       "foreign_paths_preserved": [
-        "decompiler/crates/kuna-analysis/src/listing/x86listingswitch.rs",
+        "decompiler/crates/unlace-analysis/src/listing/x86listingswitch.rs",
         "decompiler/crates/console/tests/verify_x86listingswitch.rs",
         "docs/spec/01-program-prep.md"
       ],

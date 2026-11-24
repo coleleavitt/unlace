@@ -38,7 +38,7 @@ Unambiguous 16-byte memory accesses in the vectorized XOR loop.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_1400012f0"
@@ -68,7 +68,7 @@ Unambiguous 16-byte memory accesses in the vectorized XOR loop.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_1400012f0"

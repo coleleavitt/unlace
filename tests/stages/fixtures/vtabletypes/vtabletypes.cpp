@@ -1,4 +1,4 @@
-// Fixture for kuna-vtabletypes.xml. Built with
+// Fixture for unlace-vtabletypes.xml. Built with
 //   g++ -O1 -fno-pic -no-pie -fno-exceptions -fno-stack-protector
 //       -fno-asynchronous-unwind-tables -ffreestanding -nostdlib -static
 //       -Wl,-z,noseparate-code -Wl,--build-id=none -o vtabletypes vtabletypes.cpp

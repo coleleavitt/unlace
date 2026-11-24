@@ -1,4 +1,4 @@
-# Kuna #810. P3 callee-memory summaries / P6 physical-write liveness. option stackviews off (default) retains the first initializer; on removes it through a stack-passed pointer. Direct caller-frame reads, const-declared writes and returned-pointer reads before/after overwrite preserve native behavior.
+# Unlace #810. P3 callee-memory summaries / P6 physical-write liveness. option stackviews off (default) retains the first initializer; on removes it through a stack-passed pointer. Direct caller-frame reads, const-declared writes and returned-pointer reads before/after overwrite preserve native behavior.
 
 [image]
 arch = 'x86:LE:32:default:gcc'

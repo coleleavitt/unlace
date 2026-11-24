@@ -1,6 +1,6 @@
 A `call` whose callee throws the pushed return address away and jumps back into
 the caller never returns to the return address — but `CPUI_CALL` is a fall-through
-op, so kuna decodes the byte sitting there anyway. On a protected binary that byte
+op, so unlace decodes the byte sitting there anyway. On a protected binary that byte
 is junk, and it lifts into the emitted C as a store to a global that does not
 exist, with everything after it one byte out of phase with the real instruction
 stream.
@@ -10,8 +10,8 @@ decompile it on `main`:
 
 ```
 $ gcc -m32 -nostdlib -static -Wl,-e,_start -o /tmp/tramp \
-      decompiler/crates/kuna-analysis/tests/fixtures/calltrampoline_i386.s
-$ kuna decompile /tmp/tramp protected
+      decompiler/crates/unlace-analysis/tests/fixtures/calltrampoline_i386.s
+$ unlace decompile /tmp/tramp protected
 void protected(void)
 {
   dat_5d5cc083 = tramp();
@@ -55,7 +55,7 @@ the vendored `calltrampoline_i386`.
 
 Gates on the rebased tree: `make test` PARITY OK 675/675, `make test-stages` PARITY
 OK 714/714 (2 new assertions, none moved), `make test-cli` 102/102, `make
-check-spec` green (strict too), `kuna catalog --check` OK, workspace suite green.
+check-spec` green (strict too), `unlace catalog --check` OK, workspace suite green.
 Sweep: `decompile-all` in both arms over 73 PE images plus 155 ELF/mixed binaries of the arena and fixture corpora, **37,465 functions -- 87 changed (0.23%), 0 added, 0 removed**, and all 87 are in the one protected image the need was filed against (every other binary, PE and ELF alike, is byte-identical). All 87 hunks are the same repair: 23 removed lines are a store to a junk global (`dat_<hex> =`), the rest replace arithmetic on undefined registers with the real recovered body -- on `sub_40c580`, `(**(void **)(v2 + 3))(*(unsigned int *)(v2 + 0xf),v5)` plus six lines of garbage becomes the `*(v3 + 0x8c)` resolver-dispatch guard. Speed −2.4% on the
 witness (median of 7, 155.98 ms vs 159.81 ms).
 

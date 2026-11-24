@@ -9,7 +9,7 @@
 [package]
 autotests = false
 name = "unlace-ghidra"
-description = "kuna Rust port: ghidra-mode process front-end (Ghidra's `decompile` binary)"
+description = "unlace Rust port: ghidra-mode process front-end (Ghidra's `decompile` binary)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -39,7 +39,7 @@ dynamic_linking = ["dep:unlace-decomp-dylib"]
 
 [dev-dependencies]
 # The ghidra-sim test harness (tests/ghidra_sim/) answers the wire queries from
-# kuna's OWN analysis of real vendored ELFs: unlace-console provides the
+# unlace's OWN analysis of real vendored ELFs: unlace-console provides the
 # in-process bootstrap/decompile drive (the CLI path — also the differential
 # ground truth), unlace-analysis rides in through it.  Dev-only and cycle-free:
 # nothing depends on unlace-ghidra, and dev-deps do not propagate.

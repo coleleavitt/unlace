@@ -1,5 +1,5 @@
 persistcalls_x86_64 -- the GH-1034 call-guard fixture for option `persistcalls`
-(tests/stages/kuna-persistcalls.toml).
+(tests/stages/unlace-persistcalls.toml).
 
 What it is
   A 33,624-byte x86-64 ELF built from persistcalls_x86_64.c, which is generated

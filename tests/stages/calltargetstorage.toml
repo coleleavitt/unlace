@@ -28,7 +28,7 @@
 # cast is added at its call (assert 4).
 #
 # Pass 3 declares the record, with add as void * and done as a prototype-less
-# code *, the way a declaration that does not say what it holds reaches kuna.
+# code *, the way a declaration that does not say what it holds reaches unlace.
 # That type is declared, so done is cast at its call instead (assert 10); the
 # local add is read into takes the call's type itself (assert 11).
 #

@@ -281,7 +281,7 @@ mod verify_w3_ir_userop_inject;
 #[path = "verify_w3_ir_varnode.rs"]
 mod verify_w3_ir_varnode;
 
-#[path = "verify_w3_kuna_flow_pack.rs"]
+#[path = "verify_w3_unlace_flow_pack.rs"]
 mod verify_w3_unlace_flow_pack;
 
 #[path = "verify_w4_fw_action.rs"]
@@ -302,7 +302,7 @@ mod verify_w4_fw_cpool_graph;
 #[path = "verify_w4_fw_options.rs"]
 mod verify_w4_fw_options;
 
-#[path = "verify_w4_kuna_p0_pack.rs"]
+#[path = "verify_w4_unlace_p0_pack.rs"]
 mod verify_w4_unlace_p0_pack;
 
 #[path = "verify_w4_p0_database.rs"]
@@ -317,7 +317,7 @@ mod verify_w4x_flow_linkage;
 #[path = "verify_w5_dtype_expand.rs"]
 mod verify_w5_dtype_expand;
 
-#[path = "verify_w5_kuna_rule_pack.rs"]
+#[path = "verify_w5_unlace_rule_pack.rs"]
 mod verify_w5_unlace_rule_pack;
 
 #[path = "verify_w5_s3_condexe_expression.rs"]
@@ -365,7 +365,7 @@ mod verify_w5x_helpers_completion;
 #[path = "verify_w6_harness_unittests.rs"]
 mod verify_w6_harness_unittests;
 
-#[path = "verify_w6_kuna_s4s5_pack.rs"]
+#[path = "verify_w6_unlace_s4s5_pack.rs"]
 mod verify_w6_unlace_s4s5_pack;
 
 #[path = "verify_w6_s4_coreaction_protos.rs"]
@@ -446,13 +446,13 @@ mod verify_w7_s6_varmap_r3;
 #[path = "verify_w7_s7_blockaction.rs"]
 mod verify_w7_s7_blockaction;
 
-#[path = "verify_w7_s7_kuna_loweredswitch.rs"]
+#[path = "verify_w7_s7_unlace_loweredswitch.rs"]
 mod verify_w7_s7_unlace_loweredswitch;
 
-#[path = "verify_w7_s7_kuna_regiongraph.rs"]
+#[path = "verify_w7_s7_unlace_regiongraph.rs"]
 mod verify_w7_s7_unlace_regiongraph;
 
-#[path = "verify_w7_s7_kuna_regionid.rs"]
+#[path = "verify_w7_s7_unlace_regionid.rs"]
 mod verify_w7_s7_unlace_regionid;
 
 #[path = "verify_w8_fw_universalaction.rs"]

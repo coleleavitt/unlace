@@ -12,7 +12,7 @@ For the **first** parameter the guard's join predecessors intersect at the entry
 block, so `buildDominantCopy`'s `findCommonBlock` lands the copy there and it
 renders correctly. For every later parameter the intersection is the previous
 guard's join, so the copy sinks below that guard and splits the source's single
-entry block in two. kuna is internally inconsistent about the identical
+entry block in two. unlace is internally inconsistent about the identical
 construct; upstream Ghidra sinks it the same way, so this ships as an **option**
 (`paramcopyhoist`, default-OFF), not as a bug fix.
 
@@ -26,7 +26,7 @@ Both producing sub-cases are covered:
 
 ## Before / after
 
-`kuna decompile ~/…/O0/e2fsprogs/stripped/e2fsck --addr 0x4eeb6`
+`unlace decompile ~/…/O0/e2fsprogs/stripped/e2fsck --addr 0x4eeb6`
 
 ```diff
    v11 = *(unsigned long *)(v4 + 0x28);
@@ -139,7 +139,7 @@ placement and the **final** high — with the `a_cover` def point taken at the
 *start* of the entry block so it over-approximates and errs toward rejecting.
 That test is what correctly declines `ext2fs_read_inode2`.
 
-The only ported-core edit is one `// (kuna)` visibility widening:
+The only ported-core edit is one `// (unlace)` visibility widening:
 `FuncdataCoverCtx` becomes `pub(crate)`.
 
 ## Default
@@ -181,7 +181,7 @@ make test        -> datatests: 675/675 assertions passed   PARITY OK
 make test-stages -> datatests: 361/361 assertions passed   PARITY OK
 make rust-test   -> green
 make check-spec  -> check-spec OK (strict mode)
-kuna catalog --check -> catalog OK: documents exactly the registered kuna options
+unlace catalog --check -> catalog OK: documents exactly the registered unlace options
 ```
 
 ## Artifacts

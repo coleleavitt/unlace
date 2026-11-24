@@ -74,7 +74,7 @@ shipped default-off `--option spillargtrial reload` already satisfies by
 already correct. The replacement (`a-a94fa26848a4`) asserts all three:
 
 ```
-$ kuna decompile "trappy attack.exe" 0x1400011c0 --addr
+$ unlace decompile "trappy attack.exe" 0x1400011c0 --addr
 ...
       v10 = (char ****)sub_140002c90(v11 + 0x27);     <- still exactly one argument
 ...
@@ -86,7 +86,7 @@ above is the *entire* change to that function.
 
 Promoted to `tests/cli/argument-recovery-knobs-still.json`, re-pointed at the new
 vendored `alignednew_x86_64` fixture (CI has no dataset) and additionally pinned by
-a cargo test in `kuna-cli/tests/decompile_cli.rs`, since nothing in CI runs
+a cargo test in `unlace-cli/tests/decompile_cli.rs`, since nothing in CI runs
 `tests/cli/`.
 
 ## The second witness
@@ -115,7 +115,7 @@ ELF O0/O2 across x86-64/ARM/Cortex-M, and 45 crackmes (PE x86-64 + static ELF).
 - The largest structural change is a *recovery*: in `p0tp.exe` the aligned
   `operator delete` mirror goes from a collapsed `sub_14000c538();` under a folded
   disjunction to the full `ptr`/`size` computation and `sub_14000c538(v31,v40)`,
-  matching the shape kuna already emits where the arguments survive.
+  matching the shape unlace already emits where the arguments survive.
 - **One residual, found by the sweep and named rather than hidden**: in
   `bobxREAL.exe` a CRT `_errno` site gains `(v10,v11)` because a sibling site in the
   **same function** had already over-recovered two registers with this option OFF.
@@ -131,7 +131,7 @@ ELF O0/O2 across x86-64/ARM/Cortex-M, and 45 crackmes (PE x86-64 + static ELF).
 | `make test-stages` | **PARITY OK — 597/597** (594 → 597 for the new two-pass `tests/stages/calleearityfwd.toml`) |
 | `make rust-test` | green |
 | `make check-spec` | green |
-| `kuna catalog --check` | `catalog OK` |
+| `unlace catalog --check` | `catalog OK` |
 | `verify --need argument-recovery-knobs-still` | **acceptance PASS** |
 
 **Speed flat.** Witness function `0x1400011c0`: **-1.69%** over 11 interleaved
@@ -146,7 +146,7 @@ once per `ActionActiveParam::apply`; there is no per-op cost.
 T_TRIAGE asked for a new **default-off** option. This ships as a new option (never
 an edit to `calleearity`'s rule, so the ablation is intact and `calleearity off`
 still disables both directions) but **default-on**, because the replaced acceptance
-probe runs `kuna decompile ... --addr` with **no options** and can only pass on
+probe runs `unlace decompile ... --addr` with **no options** and can only pass on
 default output. The `docs/agents.md` default-ON bar is met on its own terms: 0/675
 datatest assertions change, 0 stage assertions regress, the sweep classifies every
 hunk, and the speed delta is inside the noise floor. Recorded in

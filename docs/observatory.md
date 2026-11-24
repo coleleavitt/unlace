@@ -1,6 +1,6 @@
 # The codebase observatory
 
-Local, generated views of the codebase — run `PYTHONPATH=. python3 -m scripts.observatory.generate --out observatory --kuna target/release/unlace` from the repo
+Local, generated views of the codebase — run `PYTHONPATH=. python3 -m scripts.observatory.generate --out observatory --unlace target/release/unlace` from the repo
 root and open `observatory/index.html` in a browser (the pages are
 self-contained and work over `file://`). Nothing under `observatory/` is
 committed; regenerate at will. Generators live in `scripts/observatory/`
@@ -8,9 +8,9 @@ committed; regenerate at will. Generators live in `scripts/observatory/`
 
 | Page | Shows | Regenerate |
 |---|---|---|
-| `observatory/atlas.html` | The architecture atlas: the P0–P9 pipeline with per-phase cards (owned artifact, modules by size, sub-phases, options, console surfaces, owning `docs/spec/` chapter), the shared layers (`substrate/`, `infra/`), the workspace crate graph, and the real pass order. | `PYTHONPATH=. python3 -m scripts.observatory.generate --out observatory --kuna target/release/unlace` |
-| `observatory/churn.html` | Churn & ownership: a squarified treemap of every tracked file (area = live size or windowed churn; color = churn intensity, agent share, or recency), with scope/window controls and a per-group rollup table. | `PYTHONPATH=. python3 -m scripts.observatory.generate --out observatory --kuna target/release/unlace` |
-| `observatory/walkthrough.html` | Bytes → C: one pinned function (`main` of the `aliasoverlap_x86_64` fixture) at every stage — bytes, disassembly, raw p-code (pre-analysis), final IR (post Band B), region tree, C — each pane naming its owning phase(s) and the command that produced it. Raw dumps land in `observatory/walkthrough/NN-*.txt`. | `PYTHONPATH=. python3 -m scripts.observatory.generate --out observatory --kuna target/release/unlace` |
+| `observatory/atlas.html` | The architecture atlas: the P0–P9 pipeline with per-phase cards (owned artifact, modules by size, sub-phases, options, console surfaces, owning `docs/spec/` chapter), the shared layers (`substrate/`, `infra/`), the workspace crate graph, and the real pass order. | `PYTHONPATH=. python3 -m scripts.observatory.generate --out observatory --unlace target/release/unlace` |
+| `observatory/churn.html` | Churn & ownership: a squarified treemap of every tracked file (area = live size or windowed churn; color = churn intensity, agent share, or recency), with scope/window controls and a per-group rollup table. | `PYTHONPATH=. python3 -m scripts.observatory.generate --out observatory --unlace target/release/unlace` |
+| `observatory/walkthrough.html` | Bytes → C: one pinned function (`main` of the `aliasoverlap_x86_64` fixture) at every stage — bytes, disassembly, raw p-code (pre-analysis), final IR (post Band B), region tree, C — each pane naming its owning phase(s) and the command that produced it. Raw dumps land in `observatory/walkthrough/NN-*.txt`. | `PYTHONPATH=. python3 -m scripts.observatory.generate --out observatory --unlace target/release/unlace` |
 | `observatory/coverage.html` | Merged line coverage: workspace suite + datatest/stages corpora + tests/cli probes through instrumented binaries, per crate / per phase folder / per file, with the llvm-cov HTML report under `observatory/coverage/`. The atlas phase cards pick the numbers up too. | `bash scripts/coverage.sh` |
 
 Each page inlines its data; the same data is written as raw JSON under

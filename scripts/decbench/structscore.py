@@ -1,4 +1,4 @@
-"""Score kuna's struct recovery — the instrument `type_match` cannot be.
+"""Score unlace's struct recovery — the instrument `type_match` cannot be.
 
 `type_match` is blind to this lane by construction: a synthesized `struct_0 *`
 never matches a DWARF `Word *`, so a pass that recovers a perfect layout scores
@@ -11,10 +11,10 @@ layout: typedefs resolved, anonymous struct/union members expanded in place,
 gaps made explicit as padding (padding is reported but never scored -- it is not
 a recovered field). A field matches on `(offset, size)`; layout-F1 is the
 field-level P/R/F1 and nesting-F1 scores `(offset -> pointee struct)` pairs, a
-pair counting as recovered when kuna both puts a pointer at the right offset and
-recovers at least one field of what it points to. The predicted side is kuna's
+pair counting as recovered when unlace both puts a pointer at the right offset and
+recovers at least one field of what it points to. The predicted side is unlace's
 own: `decompile-all --json` for each parameter's type, and the struct bodies
-from a `decompile-project` header. **kuna synthesizes no structs today, so the
+from a `decompile-project` header. **unlace synthesizes no structs today, so the
 score is 0 by construction** — the number that matters right now is the
 denominator it is 0 out of.
 
@@ -22,7 +22,7 @@ denominator it is 0 out of.
 `Defined? -> IsCPointer? -> PointerLevel? -> IsCStruct? -> SignIgnoredPrimitive?
 -> CPrimitive?` with `f = p1*(1+p2*(1+p3*(1+p4*(1+p5*(1+p6)))))`, so an expected
 `uint64_t` scores `char*` 1, `struct{…}` 3, `double` 4, `int64_t` 5, `uint64_t`
-6. Scored over kuna's `--json variables[]` (the surface decbench scores) against
+6. Scored over unlace's `--json variables[]` (the surface decbench scores) against
 `decbench.metrics.type_match.extract_ground_truth_types`, paired by
 `pair_variables` — the metric's own three passes (arg index, calibrated stack
 offset, name), its binary-wide calibration shift, and its type-preferring
@@ -59,7 +59,7 @@ The pool is then **split by evidence**, because the two halves answer different
 questions. `*(T *)(B + K)` and `B->f` commit to a field; `B[k]` and `*B` do not
 — `char *s; s[0]; s[1]` is a string walk, and 1,123 of the 1,312 candidates in
 the recorded census have no other evidence. Each half is then measured against
-the ground truth for how many of its candidates kuna **already** types right:
+the ground truth for how many of its candidates unlace **already** types right:
 that is the match->miss channel a synthesis pass would spend, and on the
 field-committed half it is ~zero (1/82 at O0, 0/69 at O2), which is what makes
 struct synthesis a *quality* feature rather than a metric one.
@@ -495,7 +495,7 @@ def dwarf_functions(unstripped: Path) -> dict:
 
 
 # --------------------------------------------------------------------------
-# predicted layouts (kuna's own header)
+# predicted layouts (unlace's own header)
 # --------------------------------------------------------------------------
 
 STRUCT_RE = re.compile(r"^struct\s+(\w+)\s*\{(.*?)^\};", re.M | re.S)
@@ -507,7 +507,7 @@ FIELD_OFFSET_RE = re.compile(r"^(?:field|_pad)_?(0x[0-9a-fA-F]+|\d+)$")
 def header_layouts(header: str) -> dict:
     """Parse `decompile-project`'s .h into {struct name: layout}.
 
-    Offsets come from the member names when kuna encodes them (`field_0x28`,
+    Offsets come from the member names when unlace encodes them (`field_0x28`,
     `_pad4`) and from running sizes otherwise; a struct with an unsized member
     is reported with the offsets it could compute and ``complete: false``.
     """
@@ -546,7 +546,7 @@ def header_layouts(header: str) -> dict:
 
 
 # --------------------------------------------------------------------------
-# running kuna
+# running unlace
 # --------------------------------------------------------------------------
 
 def _options(options: list[list[str]]) -> list[str]:
@@ -557,20 +557,20 @@ def _options(options: list[list[str]]) -> list[str]:
 
 
 def run_json(binary: Path, options, timeout: int) -> dict:
-    cmd = [config.kuna_bin(), "decompile-all", str(binary), "--json",
+    cmd = [config.unlace_bin(), "decompile-all", str(binary), "--json",
            "--max-fn-seconds", "120"] + _options(options)
     p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     if not p.stdout.strip():
-        raise RuntimeError(f"kuna --json empty ({p.returncode}): {p.stderr[-300:]}")
+        raise RuntimeError(f"unlace --json empty ({p.returncode}): {p.stderr[-300:]}")
     return json.loads(p.stdout)
 
 
 def run_text(binary: Path, options, timeout: int) -> str:
-    cmd = [config.kuna_bin(), "decompile-all", str(binary),
+    cmd = [config.unlace_bin(), "decompile-all", str(binary),
            "--max-fn-seconds", "120"] + _options(options)
     p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     if not p.stdout.strip():
-        raise RuntimeError(f"kuna text empty ({p.returncode}): {p.stderr[-300:]}")
+        raise RuntimeError(f"unlace text empty ({p.returncode}): {p.stderr[-300:]}")
     return p.stdout
 
 
@@ -578,7 +578,7 @@ def run_header(binary: Path, options, timeout: int) -> str:
     """The project export's .h, written to a temporary directory and removed."""
     out = Path(tempfile.mkdtemp(prefix="structscore-"))
     try:
-        cmd = [config.kuna_bin(), "decompile-project", str(binary), "-o", str(out),
+        cmd = [config.unlace_bin(), "decompile-project", str(binary), "-o", str(out),
                "--max-fn-seconds", "120"] + _options(options)
         subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
         headers = sorted(out.glob("*.h"))
@@ -588,11 +588,11 @@ def run_header(binary: Path, options, timeout: int) -> str:
 
 
 # --------------------------------------------------------------------------
-# pairing kuna's variables to the ground truth
+# pairing unlace's variables to the ground truth
 # --------------------------------------------------------------------------
 
 class _Var:
-    """A stand-in for decbench's ``VariableInfo`` over one kuna JSON variable.
+    """A stand-in for decbench's ``VariableInfo`` over one unlace JSON variable.
 
     ``_effective_offset`` and ``_uncommitted_size`` read attributes, not dict
     keys, and the fields map one-for-one onto the JSON surface the metric is
@@ -637,7 +637,7 @@ def binary_calibration_shift(payload: dict, gt_by_name: dict, addr2name: dict):
 
 
 def pair_variables(variables: list[dict], gt_vars: list[dict], binary_shift=None):
-    """GT index -> kuna variable index, exactly as `_match_structured` pairs them.
+    """GT index -> unlace variable index, exactly as `_match_structured` pairs them.
 
     Pass 1 args by ABI position, pass 2 stack variables by calibrated offset,
     pass 3 by exact name. Passes 2 and 3 go through decbench's `claim()`, which
@@ -724,7 +724,7 @@ def pair_variables(variables: list[dict], gt_vars: list[dict], binary_shift=None
     return pairs
 
 
-def gt_matches_kuna(pred_type: str, pred_size, gt_forms: list[str]) -> bool:
+def gt_matches_unlace(pred_type: str, pred_size, gt_forms: list[str]) -> bool:
     """decbench's `_matches`, including the width-only free pass.
 
     ``gt_forms`` are decbench's ground-truth forms, which
@@ -762,7 +762,7 @@ def measure_trex(payload: dict, gt_by_name: dict, addr2name: dict,
     late in the order can fail far more often than an early one and still be
     worth a fraction of it.
 
-    ``gt_variables`` counts the ground truth of every kuna function that resolves
+    ``gt_variables`` counts the ground truth of every unlace function that resolves
     to a DWARF name, which is the set the metric scores too: a name two
     subprograms share is counted once per resolving address, and a subprogram
     ``dwarf_functions`` cannot name is not counted at all.
@@ -880,7 +880,7 @@ def measure_layout(payload: dict, header: str, functions: dict) -> dict:
                 if precision + recall else 0.0}
     return {
         "ptr_to_struct_params": params,
-        "params_kuna_typed_as_a_struct": predicted_params,
+        "params_unlace_typed_as_a_struct": predicted_params,
         "structs_in_header": len(layouts),
         "layout": f1(tp, pred_fields, gt_fields),
         "nesting": f1(tp_nest, pred_nest, gt_nest),
@@ -914,7 +914,7 @@ DECL_LINE = re.compile(
 DECLARATOR = re.compile(
     r"(?P<type>[A-Za-z_]\w*(?:\s+[A-Za-z_]\w*)*)\s*(?P<stars>\**)\s*"
     r"(?P<name>[A-Za-z_]\w*)\s*(?P<arr>\[\s*(?:\d+|0x[0-9a-fA-F]+)?\s*\])?\s*(?=[;,)])")
-# kuna spells a file-scope datum `dat_<hex>`; it is an identifier like any other
+# unlace spells a file-scope datum `dat_<hex>`; it is an identifier like any other
 # and is counted as a base, but it is never on the `--json` variable surface.
 GLOBAL_NAME = re.compile(r"^dat_[0-9a-fA-F]+$")
 WIDTH_SUFFIX = re.compile(r"^(?:undefined|xunknown|unknown|int|uint|float)(\d+)$")
@@ -1043,7 +1043,7 @@ def _channel() -> dict:
             "candidate_is_an_arg": 0, "candidate_is_a_named_local": 0,
             "candidate_is_a_global": 0, "candidate_not_on_the_json_surface": 0,
             "candidates_paired_with_ground_truth": 0,
-            "candidates_kuna_already_types_correctly": 0,
+            "candidates_unlace_already_types_correctly": 0,
             "candidates_whose_truth_is_a_struct_pointer": 0}
 
 
@@ -1090,7 +1090,7 @@ def measure_census(text: str, payload: dict, gt_by_name: dict, addr2name: dict,
                 kind = "candidate_is_a_named_local"
             paired = index is not None and index in back
             gv = gt_vars[back[index]] if paired else None
-            already = paired and gt_matches_kuna(
+            already = paired and gt_matches_unlace(
                 variables[index].get("type"), variables[index].get("size"),
                 gv.get("type") or [])
             gt = gt_parse_forms(gv.get("type") or []) if paired else None
@@ -1100,7 +1100,7 @@ def measure_census(text: str, payload: dict, gt_by_name: dict, addr2name: dict,
                 acc[kind] += 1
                 acc["candidate_not_on_the_json_surface"] += int(index is None)
                 acc["candidates_paired_with_ground_truth"] += int(paired)
-                acc["candidates_kuna_already_types_correctly"] += int(already)
+                acc["candidates_unlace_already_types_correctly"] += int(already)
                 acc["candidates_whose_truth_is_a_struct_pointer"] += int(struct_ptr)
     return {
         "functions": functions,
@@ -1126,12 +1126,12 @@ def measure(binary: Path, unstripped: Path, modes: set, options, timeout: int,
     gt_by_name = extract_ground_truth_types(unstripped)
     out = {
         "binary": str(binary), "unstripped": str(unstripped),
-        "kuna_bin": config.kuna_bin(), "options": options,
+        "unlace_bin": config.unlace_bin(), "options": options,
         "dwarf_functions": len(functions),
         "dwarf_functions_with_variables": len(gt_by_name),
     }
     payload = run_json(binary, options, timeout)
-    out["kuna_functions"] = len(payload.get("functions") or [])
+    out["unlace_functions"] = len(payload.get("functions") or [])
     # One shift for the whole binary, as `compute_for_binary` does it.
     shift = binary_calibration_shift(payload, gt_by_name, addr2name)
     out["calibration_shift"] = shift
@@ -1184,14 +1184,14 @@ def report(rows: list[dict]) -> str:
         lines.append("")
     if any("layout" in r for r in rows):
         lines += ["## layout / nesting F1 vs DWARF (pointer-to-struct parameters)", "",
-                  "| binary | GT params | kuna struct params | GT fields | layout F1 | "
+                  "| binary | GT params | unlace struct params | GT fields | layout F1 | "
                   "GT nestings | nesting F1 |", "|---|---|---|---|---|---|---|"]
         for r in rows:
             l = r.get("layout")
             if not l:
                 continue
             lines.append(f"| {Path(r['binary']).name} | {l['ptr_to_struct_params']} | "
-                         f"{l['params_kuna_typed_as_a_struct']} | "
+                         f"{l['params_unlace_typed_as_a_struct']} | "
                          f"{l['layout']['ground_truth']} | {l['layout']['f1']} | "
                          f"{l['nesting']['ground_truth']} | {l['nesting']['f1']} |")
         lines.append("")
@@ -1215,7 +1215,7 @@ def report(rows: list[dict]) -> str:
                     f"| {Path(r['binary']).name} | {c['functions']} | "
                     f"{ch['functions_with_a_candidate']} | {ch['candidates']} | "
                     f"{ch['candidates_paired_with_ground_truth']} | "
-                    f"{ch['candidates_kuna_already_types_correctly']} | "
+                    f"{ch['candidates_unlace_already_types_correctly']} | "
                     f"{ch['candidates_whose_truth_is_a_struct_pointer']} |")
             lines.append("")
     return "\n".join(lines) + "\n"
@@ -1309,7 +1309,7 @@ def pairing_checks() -> list:
                    "is_arg": False, "arg_index": None},
                   {"name": "at16", "type": ["int"], "rbp_offset": [-0x10], "size": 4,
                    "is_arg": False, "arg_index": None}]
-    # One arg kuna gets right and one stack variable it calls `undefined8`
+    # One arg unlace gets right and one stack variable it calls `undefined8`
     # against a GT `char *`: the loss is one is_c_pointer failure, 5 points.
     payload = {"functions": [{"address": 0x1000, "variables": [
         {"name": "a0", "type": "char *", "size": 8, "arg_index": 0, "kind": "arg"},
@@ -1439,7 +1439,7 @@ def main(argv=None) -> int:
     ap.add_argument("--strict-defined", action="store_true",
                     help="score an uncommitted spelling (undefined8) as undefined")
     ap.add_argument("--option", nargs=2, action="append", metavar=("NAME", "VALUE"),
-                    default=[], help="kuna option for this run (repeatable)")
+                    default=[], help="unlace option for this run (repeatable)")
     ap.add_argument("--timeout", type=int, default=1800)
     ap.add_argument("--out", type=Path, help="write the full JSON here")
     ap.add_argument("--selftest", action="store_true")

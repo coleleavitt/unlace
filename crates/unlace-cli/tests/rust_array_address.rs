@@ -8,7 +8,7 @@ fn complete_rust_array_addresses_match_native_without_memory_reads() {
     if process::optional_output(Command::new("cc").arg("--version")).is_none() {
         return;
     }
-    let declarations = std::fs::read_to_string(common::fixture("array_address.kuna")).unwrap();
+    let declarations = std::fs::read_to_string(common::fixture("array_address.unlace")).unwrap();
     let names: Vec<_> = declarations
         .lines()
         .map(|line| line.split_whitespace().nth(1).unwrap())
@@ -56,7 +56,7 @@ fn complete_rust_array_addresses_match_native_without_memory_reads() {
         "--language",
         "rust",
         "--assert",
-        &format!("@{}", common::fixture("array_address.kuna")),
+        &format!("@{}", common::fixture("array_address.unlace")),
         "--option",
         "ctypes",
         "off",

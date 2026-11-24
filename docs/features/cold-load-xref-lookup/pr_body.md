@@ -3,7 +3,7 @@
 RE-need `cold-load-xref-lookup` (round 2, 1 instance, challenge `5bd1d1bb33c5d4110a29b31e`):
 
 > **Cold-load xref lookup takes about four seconds on a 466 KB ELF.** The actual
-> `kuna xrefs ./target/Obfuscation1 --to 0x80ba3d2 --json` invocation took 4.1303 seconds.
+> `unlace xrefs ./target/Obfuscation1 --to 0x80ba3d2 --json` invocation took 4.1303 seconds.
 > Every independent query reloads analysis state.
 
 The filed diagnosis — no persistent session — names the *workflow* cost, not the per-query one.
@@ -82,8 +82,8 @@ restored), `nikos_crack_me.exe` 1 query short by 134. Two residuals, both record
   Listing's — the seeds and therefore the gaps differ, so a few speculative accepts differ;
 * on an **x86-64 image under 500 KiB** the base answered with `aif` on, because it resolved
   `--mode auto` to `aggressive` — the exact C-quality-preset leak this need is about. The new
-  default matches `kuna functions` and `kuna decompile-all` on that architecture (DIV-20: `aif` is
-  off on x86-64). `kuna xrefs --option aif on` answers **more** than the base did there (1066 vs
+  default matches `unlace functions` and `unlace decompile-all` on that architecture (DIV-20: `aif` is
+  off on x86-64). `unlace xrefs --option aif on` answers **more** than the base did there (1066 vs
   1044) in 600 ms against the base's ~1000.
 
 ## Gates
@@ -93,8 +93,8 @@ restored), `nikos_crack_me.exe` 1 query short by 134. Two residuals, both record
 | `make test` | **PARITY OK** 675/675 |
 | `make test-stages` | **PARITY OK** |
 | `make check-spec` | green |
-| `kuna catalog --check` | catalog OK |
-| `make rust-test` | 212 suites green except one **pre-existing** failure — `kuna-decomp::verify_w10_proto_unlock::w10_proto_unlock_const_return_collapses_no_tied_roundtrip`. Verified pre-existing by restoring `a13f570d`'s `kuna-sleigh/src/sleigh.rs` and re-running that single test alone: it fails identically. Post-rebase the full-workspace run was killed early three times on this box for reasons outside the tree (no failures, no build error, truncated mid-suite); the three crates this PR touches were then re-run in full and are green — `-p kuna-sleigh -p kuna-analysis -p kuna-cli`, 0 failed. |
+| `unlace catalog --check` | catalog OK |
+| `make rust-test` | 212 suites green except one **pre-existing** failure — `unlace-decomp::verify_w10_proto_unlock::w10_proto_unlock_const_return_collapses_no_tied_roundtrip`. Verified pre-existing by restoring `a13f570d`'s `unlace-sleigh/src/sleigh.rs` and re-running that single test alone: it fails identically. Post-rebase the full-workspace run was killed early three times on this box for reasons outside the tree (no failures, no build error, truncated mid-suite); the three crates this PR touches were then re-run in full and are green — `-p unlace-sleigh -p unlace-analysis -p unlace-cli`, 0 failed. |
 
 New cargo coverage: `xrefs_cli::a_function_no_descent_reaches_still_answers_for_itself` and
 `xrefs_cli::the_gap_walk_finds_call_sites_a_descent_cannot_reach`, both on the vendored

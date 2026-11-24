@@ -1,4 +1,4 @@
-# A call's own return-address push is part of the call (kuna_callpush.rs,
+# A call's own return-address push is part of the call (unlace_callpush.rs,
 # always on).
 #
 # The XML wrapper only provides the harness architecture. The script clears

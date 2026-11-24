@@ -25,11 +25,11 @@ reject_reason: null
 
 ## Symptom
 
-Filed by a round-1 tester; gated `admitted`. Verbatim observation and replayed transcript in `.kuna-repipe/rounds/1/gate.json` (result index 9).
+Filed by a round-1 tester; gated `admitted`. Verbatim observation and replayed transcript in `.unlace-repipe/rounds/1/gate.json` (result index 9).
 
 > **GetProcAddress result is discarded and an uninitialized pointer is called** (blocker, `65acadf3eef082e477ff5ede`)
 > *What I wanted:* dataflow connecting the result of GetProcAddress to the subsequent indirect call.
-> *What kuna did:* emitted `v12 = (void *)GetProcAddress(...)`, then called `(*v108)(v113,0,v27,0x30)` even though v108 was initialized to NULL and never assigned the result.
+> *What unlace did:* emitted `v12 = (void *)GetProcAddress(...)`, then called `(*v108)(v113,0,v27,0x30)` even though v108 was initialized to NULL and never assigned the result.
 
 Still reproduces verbatim on main at 3ae69cbc (captain replay, round 2), in `sub_140002530` of ObfuscationFiesta.exe:
 
@@ -68,7 +68,7 @@ Passes today == the bug is present.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_140002530"
@@ -120,7 +120,7 @@ the pointer, so a correct decompilation may legitimately keep that line.
   "kind": "cli",
   "timeout_s": 120,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_140002530"
@@ -209,7 +209,7 @@ WHAT IT CONTAINS -- a coherent mechanism, plumbed end to end (98 insertions, 6 f
 - a new default-off option `tiedstorekeep`, wired the whole way: `infra/architecture.rs` (field +
   `reset_defaults` + the `apply` arm), `substrate/context.rs` (the `ArchContext` field **and** the
   ArchSeam copy -- the seam that silently drops per-function flags if you forget it),
-  `p0_knowledge/options.rs` (`KUNA_OPTION_NAMES`);
+  `p0_knowledge/options.rs` (`UNLACE_OPTION_NAMES`);
 - `p3_dataflow/tiedstorekeep.rs`, a `declines()` predicate plus a written-out diagnosis:
   `RulePropagateCopy` rewrites the readers of an address-tied `COPY` output to read the register
   directly; when the LAST remaining reader is a *marker* (`INDIRECT`/`MULTIEQUAL`, which never

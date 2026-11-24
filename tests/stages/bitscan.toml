@@ -50,27 +50,27 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-BITSCAN #1: cmov abs folds to abs (default)'
+name = 'UNLACE-BITSCAN #1: cmov abs folds to abs (default)'
 count = 1
 literal = 'return abs('
 
 [[match]]
-name = 'KUNA-BITSCAN #2: the tzcnt loop folds to ctz (default)'
+name = 'UNLACE-BITSCAN #2: the tzcnt loop folds to ctz (default)'
 count = 1
 literal = 'return ctz('
 
 [[match]]
-name = 'KUNA-BITSCAN #3: the bsr loop folds to LZCOUNT (default)'
+name = 'UNLACE-BITSCAN #3: the bsr loop folds to LZCOUNT (default)'
 count = 1
 literal = 'LZCOUNT('
 
 [[match]]
-name = 'KUNA-BITSCAN #4: bitidioms off keeps the tzcnt loop'
+name = 'UNLACE-BITSCAN #4: bitidioms off keeps the tzcnt loop'
 count = 1
 literal = 'for ('
 
 [[match]]
-name = 'KUNA-BITSCAN #5: bitidioms off keeps the negation diamond'
+name = 'UNLACE-BITSCAN #5: bitidioms off keeps the negation diamond'
 min = 1
 max = 2
 literal = '= -'

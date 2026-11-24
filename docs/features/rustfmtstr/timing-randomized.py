@@ -15,12 +15,12 @@ def case(job):
     binary=Path(binary);fixture_sha=sha(binary);rng=random.Random(plan['seed']+index)
     raw={side:[]for side in ['baseline','off','patched']};orders=[]
     def run(side):
-        executable=(base if side=='baseline'else root)/'decompiler/target/release/kuna'
+        executable=(base if side=='baseline'else root)/'decompiler/target/release/unlace'
         options=['--option','godwarfsig','on']if language=='go'else[]
         if side=='off':options+=['--option',config['option'],'off']
         command=['taskset','-c',str(cpu),str(executable),'decompile',str(binary),selector,'--language',language]+options
         before=resource.getrusage(resource.RUSAGE_CHILDREN);started=time.perf_counter()
-        subprocess.run(command,cwd=root,env=os.environ|{'KUNA_SPECS':str(root/'specs')},stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,check=True)
+        subprocess.run(command,cwd=root,env=os.environ|{'UNLACE_SPECS':str(root/'specs')},stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,check=True)
         wall=time.perf_counter()-started;after=resource.getrusage(resource.RUSAGE_CHILDREN)
         return {'wall_ms':wall*1000,'cpu_ms':1000*((after.ru_utime+after.ru_stime)-(before.ru_utime+before.ru_stime))}
     for _ in range(plan['warmups_per_arm']):
@@ -77,12 +77,12 @@ def main():
     selected=sorted(pairs,key=lambda p:(min(idle[c]for c in p),sum(idle[c]for c in p),p),reverse=True)[:len(rows)]
     assignments={row[0]:{'target_cpu':max(pair),'sibling_cpu':min(pair)}for row,pair in zip(rows,selected)}
     assert len({cpu for pair in selected for cpu in pair})==len(rows)*2
-    os.environ['KUNA_TIMING_CPU']=str(max(selected[0]));os.environ['KUNA_TIMING_MIN_IDLE']='0'
+    os.environ['UNLACE_TIMING_CPU']=str(max(selected[0]));os.environ['UNLACE_TIMING_MIN_IDLE']='0'
     runpy.run_path(str(w/'audit-idle.py'),run_name='__main__')
     attempt=w/'timing-randomized-attempts'/time.strftime('%Y%m%d-%H%M%S',time.gmtime());attempt.mkdir(parents=True)
     for name in ['timing-randomized-plan.json','timing-cases.json','cpu-audit.json','owned-process-audit.json']:shutil.copy2(w/name,attempt/name)
     (attempt/'cpu-selection.json').write_text(json.dumps({'assignments':assignments,'idle_pct':idle,'method':plan['cpu_selection']},indent=2)+'\n')
-    binaries={side:Path(config[key])/'decompiler/target/release/kuna'for side,key in [('baseline','base'),('patched','root')]};digests={side:sha(path)for side,path in binaries.items()}
+    binaries={side:Path(config[key])/'decompiler/target/release/unlace'for side,key in [('baseline','base'),('patched','root')]};digests={side:sha(path)for side,path in binaries.items()}
     os.sched_setaffinity(0,allowed-{cpu for pair in selected for cpu in pair})
     telemetry=[sample()];done=threading.Event()
     def monitor():

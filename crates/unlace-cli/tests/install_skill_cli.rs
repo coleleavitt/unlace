@@ -38,7 +38,7 @@ fn command_in(home: &Path, argv: &[&str]) -> Command {
 fn run_in(home: &Path, argv: &[&str]) -> Output {
     command_in(home, argv)
         .output()
-        .expect("failed to spawn the kuna binary")
+        .expect("failed to spawn the unlace binary")
 }
 
 fn stderr(out: &Output) -> String {

@@ -10,7 +10,7 @@
 # AARCH64_apple.cspec: trial scoring made it active and it sorted ahead of
 # x0, so a three-argument call printed four.
 #
-# Stage / sub-stage: P4 "active-input-trial-scoring" (kuna_hiddenretarg.rs,
+# Stage / sub-stage: P4 "active-input-trial-scoring" (unlace_hiddenretarg.rs,
 # always on).  On arm64e a value whose bits 48..55 are known and are neither
 # all clear nor all set is not an address, so it is not a result buffer and
 # the trial is rescored no-use.

@@ -3,11 +3,11 @@
 # `MultiStatementExpression` relaxation, phoenix.py:2688), S8 "goto-quality"
 # sub-stage.  Closes proposal issue angr-tr-build-spec-list.
 #
-# THE GAP.  Both of kuna's structurers implement Ghidra's `ruleBlockOr`
+# THE GAP.  Both of unlace's structurers implement Ghidra's `ruleBlockOr`
 # short-circuit schema, which declines the `A || B` fold whenever the SIBLING
 # condition block is *complex* (`BlockBasic::isComplex`, block.cc:2403: more
 # than two statements).  One spill or address computation parked in front of
-# the second test is enough to decline it, and kuna then emits the second
+# the second test is enough to decline it, and unlace then emits the second
 # condition as its own block that jumps back into the first arm's clause: a
 # crossing goto where angr emits one compound condition.  On coreutils
 # tr::build_spec_list that is literally
@@ -22,7 +22,7 @@
 # block whose printed prefix is bounded (<=1 statement-root call; <=5
 # statements at `on`, angr's own threshold, <=9 at `wide`), branch-free, and
 # comment-free.  Rule A is tried first and is the disjunct that fires here
-# (traced with KUNA_CONDFOLD_DEBUG=1).  Rule B (the statement-shape allowlist,
+# (traced with UNLACE_CONDFOLD_DEBUG=1).  Rule B (the statement-shape allowlist,
 # from PR #194) is isolated end to end by the companion witness
 # tests/stages/ghangr-condfold-ruleb.xml, whose middle guard holds two
 # statement-root calls and is therefore outside Rule A at every policy level;

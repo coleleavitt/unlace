@@ -4,7 +4,7 @@
     python3 hunks.py <off-arm-dir> <on-arm-dir> [--list]
 
 Each arm is a `castbench.py run` directory (`<opt>/<project>/<binary>.c`, one
-`// Function:` block per function, `kuna decompile-all` output). Buckets, in
+`// Function:` block per function, `unlace decompile-all` output). Buckets, in
 order: a skeleton delta (a control-flow keyword or a call token moved), a
 declaration-count delta, `record name only` (identical once every `struct_N`
 number and every `vN`/`aN` is spelled the same way), `fields, declared types

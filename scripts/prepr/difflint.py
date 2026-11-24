@@ -22,7 +22,7 @@ Checks the changes from the merge base of BASE and HEAD to the working tree
   change to justify, not a test to adjust: add a commit-message trailer
   `Assertion-change: <test name>: <why the new expectation is right>`.
   `catalog.xml` is exempt: every new option bumps its registry counts.
-* warning `option-policy`: a new `kuna_*.rs` module with no `phases.toml`
+* warning `option-policy`: a new `unlace_*.rs` module with no `phases.toml`
   change. That is right only for a strict correctness fix (docs/agents.md,
   "Adding features").
 """
@@ -161,7 +161,7 @@ def lint(root: Path, base: str) -> list[Finding]:
                                         f"'Assertion-change: {stem}: <reason>'"))
 
     new_modules = [p for p, s in changes.items()
-                   if s == "A" and re.search(r"(^|/)kuna_[a-z0-9_]+\.rs$", p) and "/tests" not in p]
+                   if s == "A" and re.search(r"(^|/)unlace_[a-z0-9_]+\.rs$", p) and "/tests" not in p]
     if new_modules and not any(p.endswith("phases.toml") for p in changes):
         for path in new_modules:
             findings.append(Finding("warning", "option-policy", path,

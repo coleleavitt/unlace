@@ -14,7 +14,7 @@
     "selector_kind": "none"
   },
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "functions",
     "{{BIN}}",
     "--json"

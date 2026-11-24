@@ -1,4 +1,4 @@
-# kuna calleeretpreserves: an MSVC /GS caller loses the zero it set before the
+# unlace calleeretpreserves: an MSVC /GS caller loses the zero it set before the
 # frame-cookie check, and the call it makes acquires a return value the machine
 # never computes.
 #

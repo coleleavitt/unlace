@@ -8,13 +8,13 @@
   "worker": "b-r2-ppc64-localentry",
   "branch": "feat/re-ppc64-localentry-splits-function",
   "hypothesis_status": "upheld",
-  "binary": "decompiler/crates/kuna-analysis/tests/fixtures/plt_ppc64le",
+  "binary": "decompiler/crates/unlace-analysis/tests/fixtures/plt_ppc64le",
   "selector": "__do_global_ctors_aux",
   "decisions": [
     {
       "id": "root-cause-confirmed-and-its-open-half-closed",
       "claim": "The filed hypothesis is upheld in full, and the half it left open -- 'whether the +8 entries come from call targets, from a prologue matcher, or from the ELF reader' -- resolves to CALL TARGETS in the Listing walk's function worklist, and nothing else.",
-      "evidence": "`kuna xrefs plt_ppc64le --to 0x948` reports exactly one reference, `0x5f4 call _init+0x34  bl 0x948`, and the same for 0x6f8 (from 0x87c), 0x7c8 (from 0xa14) and 0x8b8 (from 0x5ec). Ablation pins the producer: `--option funcstart_patterns off`, `--option aif off` and `--option listing off` each leave all four entries in place, while `listing off` PLUS `fast_funcdisc off` removes them -- and both of those consumers commit `listing.functions()`, which only the walk fills. The ELF reader is excluded directly: no relocation, no `.eh_frame` FDE and no `.ctors`/`.dtors`/`.data.rel.ro` pointer in the image names a +8 address (`readelf -r`, `readelf --debug-dump=frames-interp`, `objdump -s`)."
+      "evidence": "`unlace xrefs plt_ppc64le --to 0x948` reports exactly one reference, `0x5f4 call _init+0x34  bl 0x948`, and the same for 0x6f8 (from 0x87c), 0x7c8 (from 0xa14) and 0x8b8 (from 0x5ec). Ablation pins the producer: `--option funcstart_patterns off`, `--option aif off` and `--option listing off` each leave all four entries in place, while `listing off` PLUS `fast_funcdisc off` removes them -- and both of those consumers commit `listing.functions()`, which only the walk fills. The ELF reader is excluded directly: no relocation, no `.eh_frame` FDE and no `.ctors`/`.dtors`/`.data.rel.ro` pointer in the image names a +8 address (`readelf -r`, `readelf --debug-dump=frames-interp`, `objdump -s`)."
     },
     {
       "id": "register_tm_clones-is-the-control",
@@ -23,8 +23,8 @@
     },
     {
       "id": "ablation-caveat-explained",
-      "claim": "The need's warning that `--option ... off` on this path 'appears' not to take effect has a mundane cause and is not a precedence bug: `kuna functions` accepts no `--option` at all.",
-      "evidence": "`kuna functions <binary> [--json] [--mode ...] [--define-function ...]` is the whole grammar (`kuna --help`); the discovery bundle is injected by `driver_default_options` and there is no user override on that surface. Driving the same ablations through `decompile-all`, which does take `--option`, makes every one of them take effect -- that is how the producer above was isolated."
+      "claim": "The need's warning that `--option ... off` on this path 'appears' not to take effect has a mundane cause and is not a precedence bug: `unlace functions` accepts no `--option` at all.",
+      "evidence": "`unlace functions <binary> [--json] [--mode ...] [--define-function ...]` is the whole grammar (`unlace --help`); the discovery bundle is injected by `driver_default_options` and there is no user override on that surface. Driving the same ablations through `decompile-all`, which does take `--option`, makes every one of them take effect -- that is how the producer above was isolated."
     },
     {
       "id": "seam-choice",
@@ -49,7 +49,7 @@
     {
       "id": "residual-call-site-naming",
       "claim": "A call site to a folded local entry still renders as `sub_6f8()`, a generated name for an address no longer in the inventory. Recorded, not hidden, and deliberately left out of scope.",
-      "evidence": "Naming it after its enclosing function is a call-resolution change in kuna-decomp, a second mechanism in a different crate from the discovery fold -- and kuna's function symbols carry no extent (the gap `fdeinterior` documents), so there is no cheap 'which function contains this address' answer to hang it on. It is strictly smaller than the defect fixed: before this PR the body itself was unreachable under its real name. The same follow-up would give `kuna xrefs --to <named function>` its intra-module callers back."
+      "evidence": "Naming it after its enclosing function is a call-resolution change in unlace-decomp, a second mechanism in a different crate from the discovery fold -- and unlace's function symbols carry no extent (the gap `fdeinterior` documents), so there is no cheap 'which function contains this address' answer to hang it on. It is strictly smaller than the defect fixed: before this PR the body itself was unreachable under its real name. The same follow-up would give `unlace xrefs --to <named function>` its intra-module callers back."
     },
     {
       "id": "no-stages-testcase",
@@ -58,7 +58,7 @@
     },
     {
       "id": "default-on",
-      "claim": "Shipped default-ON (DIV-107). The acceptance probe runs `kuna decompile BIN __do_global_ctors_aux` with no options, so only default output can close the need -- and the flip is evidence-backed rather than asserted.",
+      "claim": "Shipped default-ON (DIV-107). The acceptance probe runs `unlace decompile BIN __do_global_ctors_aux` with no options, so only default output can close the need -- and the flip is evidence-backed rather than asserted.",
       "evidence": "0/675 datatest assertions and 0/603 stage assertions move (both PARITY OK, docs/baseline.json untouched), because the fold is architecture-gated to PPC64 and both corpora are x86-family bytechunks. It is a strict correction rather than a judgement -- the ABI defines the two entries as the same routine -- and it is bounded by four guards, so the option exists as an ablation lever, not because the rule is a guess."
     },
     {
@@ -79,7 +79,7 @@
     "make test-stages": "PARITY OK 603/603",
     "make rust-test": "green, 5341 passed / 0 failed",
     "make check-spec": "OK (lenient and --strict)",
-    "kuna catalog --check": "catalog OK (138 settables)",
+    "unlace catalog --check": "catalog OK (138 settables)",
     "scripts.repipe.clitests": "19/19",
     "scripts.repipe.counters": "no drift",
     "acceptance a-fb2b9c0f7f5b": "PASS"

@@ -1,9 +1,9 @@
-# ARM32 `probe` (little- and big-endian) ends in a call kuna cannot prove no-return, followed by
+# ARM32 `probe` (little- and big-endian) ends in a call unlace cannot prove no-return, followed by
 # its PC-relative literal pool; the walk took the call's fall-through, decoded the constants as
 # instructions and printed `halt_baddata(); // warn: Bad instruction` after the call. P2 flow
-# classification (`p2_lift/kuna_funcboundflow.rs` `kuna_should_bound_at_pool`): a call's
+# classification (`p2_lift/unlace_funcboundflow.rs` `unlace_should_bound_at_pool`): a call's
 # fall-through onto a literal pool the Listing's trusted loads prove (`unlace-analysis`
-# `listing/kuna_poolextents.rs`) ends the function `option funcboundflow off\ on`
+# `listing/unlace_poolextents.rs`) ends the function `option funcboundflow off\ on`
 
 [image]
 arch = 'ARM:LE:32:v8:default'

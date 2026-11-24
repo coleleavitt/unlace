@@ -1,4 +1,4 @@
-# kuna protoranges: the address of a Win64 home slot prints as a raw stack
+# unlace protoranges: the address of a Win64 home slot prints as a raw stack
 # location instead of the local that holds the value.
 #
 # MSVC x64 spills a value into the home slot its caller allocated above the
@@ -15,7 +15,7 @@
 #     140001080  31 c0 c3               worker_proc: XOR EAX,EAX; RET
 #
 # x86-64-win.cspec declares the home area (stack 8..39) in its prototypes'
-# <localrange> and the stack parameters in an <input> entry at 40.  kuna
+# <localrange> and the stack parameters in an <input> entry at 40.  unlace
 # ignored both and used the default ranges, which put the home area in the
 # parameter range, so no local was ever mapped over the slot: the store
 # printed as one variable and the call as &Stack0000000000000018.  With the

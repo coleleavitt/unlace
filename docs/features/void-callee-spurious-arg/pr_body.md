@@ -7,7 +7,7 @@ RE-friction round 2, need `void-callee-spurious-arg` (major, 1 instance, challen
 > `_secret_function(void)` but calls `_secret_function(v2)`, producing internally
 > inconsistent and invalid prototype usage.
 
-kuna's own whole-binary export contradicted itself inside one file:
+unlace's own whole-binary export contradicted itself inside one file:
 
 ```c
 int _secret_function(void);          // practice_2_rengr.h
@@ -34,7 +34,7 @@ to the same callee, they are only ever additive, and there is one call site.
 
 ## Mechanism — `option calleedeadarg on|off`, default on (DIV-112)
 
-New module `decompiler/crates/kuna-decomp/src/p4_calls/calleedeadarg.rs`. The veto
+New module `decompiler/crates/unlace-decomp/src/p4_calls/calleedeadarg.rs`. The veto
 needs **two independent conditions**, and the pass is only as safe as their conjunction:
 
 1. **The callee's own body proves the register dead at its entry.** A bounded decode from
@@ -95,7 +95,7 @@ that asserts **both** arms and runs in `make test-stages`, a required CI gate.
 
 ## Collateral sweep — every changed line read
 
-`kuna decompile-all --json` with the option off vs on over **61 binaries / 24,306
+`unlace decompile-all --json` with the option off vs on over **61 binaries / 24,306
 functions** (decbench O0 + O2 ELF x86-64/ARM/Cortex-M/PE, plus 22 RE-dataset crackmes
 including Mach-O arm64 and PE):
 
@@ -130,7 +130,7 @@ Two calls whose result was discarded are now bound to a variable
 | `make test-stages` | **PARITY OK — 613/613** (610 + 3 new `calleedeadarg` assertions) |
 | `make rust-test` | green |
 | `make check-spec` | OK |
-| `kuna catalog --check` | catalog OK |
+| `unlace catalog --check` | catalog OK |
 | acceptance probe | **PASS** |
 
 Speed, interleaved min-of-N with the order flipped every pair: **+0.44%** on the witness
@@ -144,7 +144,7 @@ decoded instructions; both are re-pinned with that reason in the comment.
 * `tests/stages/calleedeadarg.toml` — hand-assembled AArch64 two-pass fixture
   (`caller` → `producer` → `target`): `option off` renders `target(producer())` (the bug),
   `option on` renders `producer(); target();`.
-* `decompiler/crates/kuna-decomp/src/p4_calls/calleedeadarg/tests.rs` — option
+* `decompiler/crates/unlace-decomp/src/p4_calls/calleedeadarg/tests.rs` — option
   parsing, registration, and the incomplete-summary contract.
 * Prose in `docs/spec/04-calls-and-prototypes.md` (`ActionActiveParam` trial scoring),
   DIV-112 in `docs/history.md`, full record in

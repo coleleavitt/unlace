@@ -1,5 +1,5 @@
 # decbench cases-missing pool (coreutils timeout/split main, bash 7 functions,
-# tar 3, grep, openssh scp/sftp/sftp-server, coreutils -O2 ls): kuna emitted
+# tar 3, grep, openssh scp/sftp/sftp-server, coreutils -O2 ls): unlace emitted
 # NO OUTPUT AT ALL for these functions - the whole decompilation died and the
 # user got an error record instead of C.
 #

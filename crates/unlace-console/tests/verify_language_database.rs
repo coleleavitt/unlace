@@ -118,7 +118,7 @@ fn a_database_without_the_language_refuses_the_image() {
 fn a_bootstrap_over_a_database_does_not_rescan_the_roots() {
     let languages = "Ghidra/Processors/x86/data/languages";
     let root = PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
-        .join(format!("kuna_language_database_{}", std::process::id()));
+        .join(format!("unlace_language_database_{}", std::process::id()));
     let copy = root.join(languages);
     std::fs::create_dir_all(&copy).unwrap();
     for entry in std::fs::read_dir(repo_root().join("specs").join(languages)).unwrap() {

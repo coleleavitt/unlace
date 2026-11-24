@@ -70,7 +70,7 @@ fn run_unlace(args: &[&str]) -> (String, String, bool) {
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .output()
-        .expect("failed to spawn the kuna binary");
+        .expect("failed to spawn the unlace binary");
     (
         String::from_utf8_lossy(&out.stdout).into_owned(),
         String::from_utf8_lossy(&out.stderr).into_owned(),
@@ -84,7 +84,7 @@ struct Scratch(PathBuf);
 
 impl Scratch {
     fn new(tag: &str) -> Self {
-        let dir = std::env::temp_dir().join(format!("kuna-unpack-{}-{tag}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("unlace-unpack-{}-{tag}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("create scratch dir");
         Scratch(dir)

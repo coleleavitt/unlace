@@ -1,4 +1,4 @@
-# kuna-1288 follow-on, P2 jump-table recovery (JumpBasic sanity check),
+# unlace-1288 follow-on, P2 jump-table recovery (JumpBasic sanity check),
 # segment ops always on.
 #
 # With a segment op a recovered jump table with a row outside the load image

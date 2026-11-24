@@ -11,7 +11,7 @@ Every ARM/Thumb indirect call in the corpus was emitted with an ISA-mode
 bit-clear the source never performs, and the mask also cost the callee its type:
 
 ```c
-/* kuna, before */
+/* unlace, before */
 if ((dwIsClockProblem(a0)) && (*(uint4 *)(a0 + 0x44)))
   (*(code *)(*(uint4 *)(a0 + 0x44) & 0xfffffffe))(a0);
 
@@ -53,11 +53,11 @@ first line of that macro, the `setISAMode` CALLOTHER; this is the second line,
 which #231 did not touch.)
 
 Upstream Ghidra erases that AND in `RuleFuncPtrEncoding`
-(`decompiler/cpp/ruleaction.cc:9928`). kuna's port of the rule body is a
+(`decompiler/cpp/ruleaction.cc:9928`). unlace's port of the rule body is a
 line-for-line transcription and is registered in the pool
 (`infra/universalaction.rs:515`, `funcptrencoding`) - but its **only** input was
 a hard-coded stub, in
-`decompiler/crates/kuna-decomp/src/p3_dataflow/ruleaction_8.rs`:
+`decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_8.rs`:
 
 ```rust
 /// `data.getArch()->funcptr_align` (C++).  // STUB(W4)
@@ -107,8 +107,8 @@ Three independent checks:
 1. **Upstream does not special-case `align`.** `RuleFuncPtrEncoding::applyOp` in
    Ghidra 12.1 is a single code path: `slide = ~0 << align; if ((testmask &
    slide) == val) { opRemoveInput; opSetOpcode(COPY); }`. There is no `align ==
-   1` branch. kuna's port is the same arithmetic, so honouring `align = 2` is
-   not a kuna choice - it is upstream's declared contract, and the comparison is
+   1` branch. unlace's port is the same arithmetic, so honouring `align = 2` is
+   not a unlace choice - it is upstream's declared contract, and the comparison is
    **exact** (a `& ~3` matches, a `& ~1` does not).
 2. **AArch64's own lifting emits no mask.** `AARCH64base.sinc:887`,
    `:blr Rn_GPR64 { pc = Rn_GPR64; x30 = inst_start + 4; call [pc]; }` - no AND.
@@ -121,11 +121,11 @@ Three independent checks:
 
    | | `handle` (no mask) | `handle_masked` (`& ~3`) |
    |---|---|---|
-   | kuna before | `(**(code **)&a0[2])()` | `(*(code *)(*(uint8 *)&a0[2] & 0xfffffffffffffffc))(*a0)` |
-   | kuna after | `(**(code **)&a0[2])()` | `(**(code **)&a0[2])(*a0)` |
+   | unlace before | `(**(code **)&a0[2])()` | `(*(code *)(*(uint8 *)&a0[2] & 0xfffffffffffffffc))(*a0)` |
+   | unlace after | `(**(code **)&a0[2])()` | `(**(code **)&a0[2])(*a0)` |
    | **Ghidra 12.1** | `(**(code **)(param_1 + 2))()` | `(**(code **)(param_1 + 2))(*param_1)` |
 
-   kuna's post-fix rendering matches stock Ghidra on both. The align=4 arm is
+   unlace's post-fix rendering matches stock Ghidra on both. The align=4 arm is
    also pinned at the rule level by a new unit test
    (`funcptrencoding_strips_aarch64_word_alignment`), which additionally asserts
    that a `& ~1` on an align=2 architecture is **declined**.
@@ -140,20 +140,20 @@ datatests are unchanged (675/675).
 
 **P3 - definition web**, the rule pool (`docs/spec/03-ssa-and-simplification.md`
 section 3.2). One module, one function body:
-`decompiler/crates/kuna-decomp/src/p3_dataflow/ruleaction_8.rs`.
+`decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_8.rs`.
 
 ## Why no option
 
 `CLAUDE.md`: *"a strict bug fix that only corrects wrong output needs no flag"*.
 All four tests apply here:
 
-- The *processor cspec*, not kuna, declares `<funcptr align="N"/>`; the width is
-  not a kuna judgment call.
-- Upstream honours it unconditionally, and kuna's rule body is already a
+- The *processor cspec*, not unlace, declares `<funcptr align="N"/>`; the width is
+  not a unlace judgment call.
+- Upstream honours it unconditionally, and unlace's rule body is already a
   line-for-line port - this finishes a stubbed port rather than adding policy.
   It **removes** a divergence.
 - The emitted C stated an operation the program does not perform.
-- The ablation is clean: `kuna test --all --baseline docs/baseline.json` stays
+- The ablation is clean: `unlace test --all --baseline docs/baseline.json` stays
   **PARITY OK 675/675** with the fix live, and `make test-stages` stays PARITY
   OK, with **no re-pin and no per-test opt-out**.
 

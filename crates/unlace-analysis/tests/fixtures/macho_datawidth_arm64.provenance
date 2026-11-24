@@ -7,7 +7,7 @@ What it is
     struct pt origin = {1, 2};  -> _origin  @ 0x100004000 (__DATA,__data, 8 bytes)
     int counter = 5;            -> _counter @ 0x100004008 (__DATA,__data, last, 4 bytes)
     _bump @ 0x100000378 reads and increments both with 32-bit loads and stores.
-  An nlist records no size, so kuna sizes each data symbol to the next symbol of
+  An nlist records no size, so unlace sizes each data symbol to the next symbol of
   its section (or the section end), capped at 8 bytes: _origin is 8 bytes and
   _counter 4.
 

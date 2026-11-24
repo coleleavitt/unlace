@@ -68,7 +68,7 @@ assert.equal(top(plain, 'greeting').type, '12 bytes', 'a type nobody knows is it
 assert.match(top(plain, 'primes').value, /^02 00 00 00 03 00 00 00 05 00 00 00 07 00 00 00 …$/, 'other unknown bytes are hex');
 assert.equal(top(plain, 'primes').count, 2, 'that opens to its 16-byte lines');
 assert.deepEqual(childRows(plain, top(plain, 'primes')).map((r) => r.value), ['02 00 00 00 03 00 00 00 05 00 00 00 07 00 00 00', '0b 00 00 00 0d 00 00 00 11 00 00 00 13 00 00 00']);
-assert.equal(top(plain, 'banner').value, '→ "kuna data tab"', 'an untyped word that holds the address of a string points at it');
+assert.equal(top(plain, 'banner').value, '→ "unlace data tab"', 'an untyped word that holds the address of a string points at it');
 assert.deepEqual(top(plain, 'op').link, { hex: '0x1189', kind: 'fn', label: 'twice' }, 'one that holds a function\'s entry points at the function');
 assert.equal(top(plain, 'favorite').value, '→ primes + 0xc');
 assert.deepEqual(top(plain, 'favorite').link, { hex: '0x404c', kind: 'data', label: 'primes + 0xc' });
@@ -91,7 +91,7 @@ assert.deepEqual(childRows(typed, origin).map((r) => [r.name, r.type, r.value]),
   [['x', 'int', '3'], ['y', 'int', '4'], ['label', 'char *', '→ "origin"']]);
 assert.equal(top(typed, 'favorite').value, '→ primes[3]', 'a pointer into an int array names the element');
 assert.equal(top(typed, 'op').value, '→ twice');
-assert.equal(top(typed, 'banner').value, '→ "kuna data tab"');
+assert.equal(top(typed, 'banner').value, '→ "unlace data tab"');
 assert.deepEqual(placeOf(typed, 0x404cn), { key: '0x4040/3', row: childRows(typed, primes)[3], open: ['0x4040'] }, 'an address inside an array opens it to the element');
 assert.equal(placeOf(typed, 0x4068n).key, '0x4060/2', 'and inside a struct to the field');
 assert.equal(rowOf(typed, '0x4060/2').name, 'label');

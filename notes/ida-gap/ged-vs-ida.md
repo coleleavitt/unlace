@@ -14,8 +14,8 @@ and the numbers.
   for graphs over 200 nodes.
   - Testbed `decbench-O2ni`, about 31,500 functions per build. Builds: `ida-9.2-published`
     (DecBench's published IDA output, rescored), `ida-9.5` (a local run of DecBench's raw IDA
-    backend on the stripped binaries), `kuna-1.515-published`, `kuna-upstream-c84797043` and
-    `kuna-stack-287b582a4`.
+    backend on the stripped binaries), `unlace-1.515-published`, `unlace-upstream-c84797043` and
+    `unlace-stack-287b582a4`.
   - Testbeds `o2ni-cmark` and `perplexity-cmark` are a few hundred cmark functions each. Only
     `perplexity-cmark` has an IDA column.
   - How it was made: the `decompiler-structure-quality` skill, `references/hexrays-structuring.md`,
@@ -43,7 +43,7 @@ Everything comes from the skill's `scripts/decbench-e2e/`, with the binaries and
 4. The rows are joined to `ged.sqlite` on `(project/binary/function, addr)`.
 
 The local evaluator reproduces the published per-function GED exactly for about 90% (IDA) and
-93% (kuna) of functions (see the skill reference). Quote these numbers only against other
+93% (unlace) of functions (see the skill reference). Quote these numbers only against other
 numbers from the same evaluator.
 
 ## Numbers
@@ -55,9 +55,9 @@ The skill's patching study treats GED <= 3 as patchable and >= 12 as failing.
 |---|---:|---:|---:|---:|---:|---:|
 | IDA 9.2 (published, rescored) | 36.3% | 11.81 | 5 | 44.6% | 26.8% | 14.7% |
 | IDA 9.5 (local run) | 36.5% | 11.63 | 5 | 45.1% | 26.1% | 14.2% |
-| kuna 1.515 (published, rescored) | 35.8% | 11.40 | 5 | 45.7% | 23.9% | 13.4% |
-| kuna upstream c84797043 | 36.3% | 11.15 | 5 | 46.4% | 23.7% | 13.3% |
-| kuna stack 287b582a4 | 36.7% | 11.10 | 5 | 46.6% | 23.5% | 13.3% |
+| unlace 1.515 (published, rescored) | 35.8% | 11.40 | 5 | 45.7% | 23.9% | 13.4% |
+| unlace upstream c84797043 | 36.3% | 11.15 | 5 | 46.4% | 23.7% | 13.3% |
+| unlace stack 287b582a4 | 36.7% | 11.10 | 5 | 46.6% | 23.5% | 13.3% |
 | **unlace f7e6edec8e** | **39.1%** | **10.67** | **4** | **48.9%** | **23.0%** | **12.8%** |
 
 On the larger set where only unlace and IDA 9.5 both scored (31,264 functions):
@@ -70,7 +70,7 @@ On the larger set where only unlace and IDA 9.5 both scored (31,264 functions):
 Per function against IDA 9.5: unlace is better on 9,416, ties on 15,625, and is worse on 6,223.
 IDA is better by 3 or more on 4,663 functions, a summed gap of 39,584.
 
-Against kuna upstream c84797043 (33,385 functions): 3,108 better, 1,372 worse.
+Against unlace upstream c84797043 (33,385 functions): 3,108 better, 1,372 worse.
 
 openssh-portable is 7,871 of the functions, about a quarter, across 10 binaries that share
 code, and unlace leads most there (mean 8.85 vs 11.30). Without it (23,393 functions), unlace
@@ -100,7 +100,7 @@ so each counts three times.
 
 ## Caveats
 
-- The IDA column is the stored 9.5 run, not re-run today. Every kuna and IDA column was scored
+- The IDA column is the stored 9.5 run, not re-run today. Every unlace and IDA column was scored
   by the same local evaluator.
 - `--mode auto` on this corpus resolves to `aggressive` below 500 KiB and `reliable` above
   (no binary reaches `fast`), the same option surface DecBench measures.

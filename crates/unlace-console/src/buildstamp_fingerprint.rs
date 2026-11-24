@@ -422,7 +422,7 @@ mod tests {
 
     fn workspace(tag: &str) -> PathBuf {
         let root = std::env::temp_dir().join(format!(
-            "kuna_buildstamp_fingerprint_{}_{}",
+            "unlace_buildstamp_fingerprint_{}_{}",
             std::process::id(),
             tag
         ));

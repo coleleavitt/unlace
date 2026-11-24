@@ -5,9 +5,9 @@ improvement at a time" methodology (the loweredswitch work) into an observable,
 mostly-autonomous pipeline:
 
     worklist  -> enumerate a reference decompiler's testcases as (binary, function) targets
-    compare   -> for one target, diff the reference decompilation against kuna's
+    compare   -> for one target, diff the reference decompilation against unlace's
     sweep     -> run compare across a corpus, rank where the reference is better
-    worker    -> implement ONE option-gated kuna feature closing a gap, open a PR
+    worker    -> implement ONE option-gated unlace feature closing a gap, open a PR
     state/status -> observe the running loop (how many workers, what phase, which PR)
 
 The reference side is abstracted (`scripts.pipeline.reference`) so angr can later be joined

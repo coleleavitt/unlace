@@ -2,7 +2,7 @@
 
 Writes <out>/{off,on}/<name>.c in castbench's per-function layout so
 hunkclass.py can classify every changed line.
-  python3 corpus-extra.py <kuna> <out>
+  python3 corpus-extra.py <unlace> <out>
 """
 import concurrent.futures as cf
 import json

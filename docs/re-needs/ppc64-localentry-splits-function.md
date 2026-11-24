@@ -64,7 +64,7 @@ discovery bundle a retry-on-miss rather than an up-front injection.
   "schema": "re-probe/1",
   "kind": "cli",
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "__do_global_ctors_aux"
@@ -96,7 +96,7 @@ discovery bundle a retry-on-miss rather than an up-front injection.
       "while"
     ]
   },
-  "notes": "The husk as shipped: kuna emits __do_global_ctors_aux with an empty body because a spurious entry sits 8 bytes into it (the PPC64 ELFv2 local entry point) and funcboundflow truncates the flow there."
+  "notes": "The husk as shipped: unlace emits __do_global_ctors_aux with an empty body because a spurious entry sits 8 bytes into it (the PPC64 ELFv2 local entry point) and funcboundflow truncates the flow there."
 }
 ```
 
@@ -110,7 +110,7 @@ present, no loop emitted.
   "schema": "re-probe/1",
   "kind": "cli",
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "__do_global_ctors_aux"
@@ -159,7 +159,7 @@ backlog **this acceptance is promotable into `tests/cli/` verbatim** when it clo
 overturned while the symptom stood in all 8.
 
 - Two facts compose. (1) On PPC64 ELFv2 a caller inside the same module branches to the **local** entry
-  point, `st_value + 8`, so a call-target-seeded discovery files 0x948 as a function of its own. kuna has
+  point, `st_value + 8`, so a call-target-seeded discovery files 0x948 as a function of its own. unlace has
   the information to know better and does not use it: `readelf -sW` shows these symbols carry
   `st_size == 0` and `[<localentry>: 8]` in `st_other`, and nothing in `unlace-analysis` consumes that
   ELFv2 annotation. (2) `funcboundflow` (`p2_lift/funcboundflow.rs`) then does exactly what it says

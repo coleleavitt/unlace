@@ -3,7 +3,7 @@
 `docs/re-needs/functions-json-size.md` (4 instances, one in-repo fixture + three
 dataset crackmes):
 
-> `kuna functions <bin> --json` is the one cheap, whole-binary call kuna offers:
+> `unlace functions <bin> --json` is the one cheap, whole-binary call unlace offers:
 > it loads once and answers "what is in here". Its records carry only `name`,
 > `address`, `address_hex` and `aliases` — there is no extent. An agent triaging
 > a 250-function binary therefore has no way to order its work except by address,
@@ -17,7 +17,7 @@ next to a five-field one. The field is emitted — but its value is `0` on every
 record of every binary:
 
 ```
-$ kuna decompile-all …/aif_gap_x86_64 --json | jq '[.functions[].size] | unique'
+$ unlace decompile-all …/aif_gap_x86_64 --json | jq '[.functions[].size] | unique'
 [0]                       # and 0 nonzero sizes across every fixture in the tree
 ```
 
@@ -30,18 +30,18 @@ which no CLI surface reaches.
 
 So this was never a one-field copy. Copying the field across would have satisfied
 the acceptance probe's `exists` clause with a column of zeroes and closed nothing.
-kuna had no function-extent value on *any* surface.
+unlace had no function-extent value on *any* surface.
 
 ## Mechanism
 
-kuna's model of a function is its **entry** — the Listing is keyed by entry VMA
+unlace's model of a function is its **entry** — the Listing is keyed by entry VMA
 and nothing in it records a body. New module
 `decompiler/crates/console/src/funcextent.rs` reconstructs the extent as the
 **address-contiguous clip** `[entry, min(next_entry, end_of_containing_CODE_section))`.
 
-That is not invented here: it is the same reconstruction kuna already applies
+That is not invented here: it is the same reconstruction unlace already applies
 wherever it needs a body from an entry-keyed model —
-`kuna-analysis/src/analyzers/fid/extent.rs::calculate_extent`, whose module doc
+`unlace-analysis/src/analyzers/fid/extent.rs::calculate_extent`, whose module doc
 documents the identical LOSS, and the `noreturn_disc` call-site reasoning.
 It reuses the entry list and the loader section table, both already in hand, so
 it adds no decode.
@@ -57,7 +57,7 @@ name"). The extent is reported on the error and external arms too: it is an
 inventory fact and does not depend on the decompile succeeding.
 
 ```
-$ kuna functions …/aif_gap_x86_64 --json | jq -c '.functions[] | {n:.name, s:.size}'
+$ unlace functions …/aif_gap_x86_64 --json | jq -c '.functions[] | {n:.name, s:.size}'
 {"n":"_DT_INIT","s":27}      # exactly .init
 {"n":"sub_1020","s":16}      # .plt stub
 {"n":"__cxa_finalize","s":8} # .plt.got thunk
@@ -72,8 +72,8 @@ $ kuna functions …/aif_gap_x86_64 --json | jq -c '.functions[] | {n:.name, s:.
   produced an all-zero column on the very binary the acceptance targets. A hybrid
   makes `size` mean two different things depending on whether the binary is
   stripped.
-- **A flow-reachable extent from the Listing** — kuna deliberately does *not*
-  build the Listing for `kuna functions` on x86-64 (it is measured entry-neutral
+- **A flow-reachable extent from the Listing** — unlace deliberately does *not*
+  build the Listing for `unlace functions` on x86-64 (it is measured entry-neutral
   there), so this would put a full linear decode behind the one call whose whole
   purpose is being cheap. This is the cost question the need's Refutation section
   asked to be settled first.
@@ -146,7 +146,7 @@ No measurable cost — the cheap inventory call stays cheap.
 | `make test-stages` | **PARITY OK** — 574/574 assertions |
 | `make rust-test` | green (incl. `decompile_all_cli` 22/22, `funcextent` 8/8) |
 | `make check-spec` | check-spec OK |
-| `kuna catalog --check` | catalog OK |
+| `unlace catalog --check` | catalog OK |
 
 No option added: a JSON metadata field cannot change emitted C, so there is no
 `phases.toml` row, no `options.rs` registration and no catalog counter to bump.

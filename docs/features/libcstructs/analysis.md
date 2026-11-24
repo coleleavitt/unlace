@@ -23,7 +23,7 @@ Three further inputs decide reachability, none of them a guess:
   per function, restricted to names the platform declares;
 * **which aggregate each libc function traffics in** — `gcc -aux-info` over the
   installed headers with `_GNU_SOURCE` + `_FORTIFY_SOURCE=2` (3,428 declarations), the
-  same reduction `kuna_libcsigs` documents. No signature in this round was written from
+  same reduction `unlace_libcsigs` documents. No signature in this round was written from
   memory.
 
 A variable is *reachable* when its own function calls, directly, a libc function whose
@@ -327,7 +327,7 @@ classification set below.
 
 ### The undefined high half (`dat_4`)
 
-A declared `int` return feeding a caller kuna recovered as returning 8 bytes renders
+A declared `int` return feeding a caller unlace recovered as returning 8 bytes renders
 the upper half of `rax` as `dat_4`: `return CONCAT44(dat_4,fclose(a0));` appears 1,408
 times on `main`. This branch adds 121, in 109 functions: 98 `-O0` gnulib `rpl_fseeko`
 wrappers (`return CONCAT44(dat_4,fseeko(a0,a1,a2));`, where `main` printed a `void`
@@ -485,7 +485,7 @@ its confirmation run.
 
 Splitting the obstack channel added one more symbol-table walk to the load
 (the defined-name set), which is below the noise floor of the path it is on: min-of-9
-interleaved `kuna functions` over `-O2` tar, 0.144s before against 0.142s after.
+interleaved `unlace functions` over `-O2` tar, 0.144s before against 0.142s after.
 
 ## After merge: the width gate and the fit rule (#706)
 
@@ -516,7 +516,7 @@ they mint the same 216-byte `FILE` and `structdefs` reports that size. Two
 
 ### A struct that starts with a libc aggregate is not that aggregate
 
-`kuna_libcfit` declines a table's struct vote when the caller reaches the
+`unlace_libcfit` declines a table's struct vote when the caller reaches the
 argument outside the struct, and propagation refuses the same type on the same
 evidence (spec 05). Over the 663 x86-64 binaries:
 

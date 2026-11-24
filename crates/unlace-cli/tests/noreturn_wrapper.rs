@@ -20,7 +20,7 @@ fn fixture() -> Option<Fixture> {
     let driver = common::scratch_file("noreturn-wrapper-driver", "c");
     let image = common::scratch_file("noreturn-wrapper", "elf");
     let native = common::scratch_file("noreturn-wrapper-native", "elf");
-    let assertions = common::scratch_file("noreturn-wrapper", "kuna");
+    let assertions = common::scratch_file("noreturn-wrapper", "unlace");
     std::fs::write(&source, include_str!("fixtures/noreturn_wrapper.S")).unwrap();
     std::fs::write(&driver, include_str!("fixtures/noreturn_wrapper_driver.c")).unwrap();
     common::process::required_output(

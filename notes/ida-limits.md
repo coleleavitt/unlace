@@ -87,7 +87,7 @@ gates (`docs/api.md`), so two loads with different gates in one process are not 
 Re-check: `q $CG "select caller_mod,count(*) from calls where callee_name in ('qthread_create','pthread_create') group by 1"`,
 `q $D "select callee_name,sites from api_use where caller_mod='hexx64' and callee_name like 'q%thread%' or (caller_mod='hexx64' and callee_name like 'qmutex%')"`.
 
-unlace: parallel by process (`--jobs`), and by decode lanes in discovery (`KUNA_DECODE_JOBS`,
+unlace: parallel by process (`--jobs`), and by decode lanes in discovery (`UNLACE_DECODE_JOBS`,
 `docs/cli.md`). No main-thread rule.
 
 ## 3. Storage: a 1990 B-tree with values capped at 1 KB, every write journaled for undo

@@ -13,7 +13,7 @@ The folder holds **two structuring engines and one pass family**: Ghidra's
 fallback), the angr Phoenix/SAILR **region structurer** (§8.2, the primary
 path since DIV-12), and the **goto-quality passes** (§8.3), almost all
 angr-derived (SAILR; Basque et al., USENIX Security 2024). §8.4 covers the
-quality *signal* — what kuna can measure about a structuring, and what it
+quality *signal* — what unlace can measure about a structuring, and what it
 deliberately does not yet do with the measurement. This is the chapter with
 the heaviest angr provenance: untagged prose is the Ghidra port; everything
 option-gated below is registered with `source_decompiler = "angr"` in
@@ -95,7 +95,7 @@ information here: `negateCondition`'s `swapEdges` re-orients the block between
 the two `collapse_all` runs the action pool performs, so the orientation the
 rule sees is not the orientation the branch was assembled with, and the
 `i == 0` arm is as likely to be the `return` as the fatal call. When it is the
-`return`, kuna emits `if (ok) return v; fatal();` where the source, IDA and
+`return`, unlace emits `if (ok) return v; fatal();` where the source, IDA and
 Ghidra all write `if (!ok) fatal(); return v;` — the condition negated, the
 body re-parented one level deeper, and the fatal call demoted to the
 function's trailing fall-through.
@@ -207,7 +207,7 @@ rendering.
 `if`.** `gotosink.rs (ActionGotoSink)` runs after the other
 blockrecovery passes that edit the tree (last before `paramcopyhoist`), with
 `gotosink on` (the default). It first splices every `BlockList` that is a
-member of a list or graph into its parent (`BlockGraph::kuna_flatten_lists`):
+member of a list or graph into its parent (`BlockGraph::unlace_flatten_lists`):
 a nested list prints its members in order anyway, so the edit is invisible,
 and a jump that named the list now names its first member, where it lands.
 Then, to a fixpoint over every list:
@@ -228,7 +228,7 @@ Then, to a fixpoint over every list:
   (`Funcdata::block_basic_negate_lastop`) so it prints `if (!c)`.
 
 Labels no carrier reaches any more are released
-(`kuna_gotolabel::release_converted_labels`), and `mark_label_bump_up` runs
+(`unlace_gotolabel::release_converted_labels`), and `mark_label_bump_up` runs
 again so a new loop prints its head's label above itself.
 
 An `if` whose condition is an exceptional edge (`eh_unwinding()` from
@@ -253,7 +253,7 @@ and they are the two proposals this option closes:
 * a **goto + label into a guard cascade's shared body** — three permission
   guards whose arms reconverge cannot fold pairwise, so one of the two edges
   into the body has to be virtualized. On lighttpd `server.c::main` (angr
-  corpus binary `newbury`) kuna emits 1 goto / 1 label where angr emits 0 / 0.
+  corpus binary `newbury`) unlace emits 1 goto / 1 label where angr emits 0 / 0.
 
 angr does not decline on either. `phoenix._match_acyclic_short_circuit_conditions`
 (types a–d) checks `_is_single_statement_block` and, on a multi-statement
@@ -261,8 +261,8 @@ sibling, wraps the operand in an AIL `MultiStatementExpression` — a C **comma
 expression** — under the `_should_use_multistmtexprs` policy (`MAX_ONE_CALL`:
 at most one call and at most `_multistmtexpr_stmt_threshold`, default 5,
 non-label statements), refusing outright on a non-terminal conditional jump or
-any unconditional jump. kuna's `comma_separate` printer modifier *is*
-`MultiStatementExpression`; kuna's `bb_is_complex` *is*
+any unconditional jump. unlace's `comma_separate` printer modifier *is*
+`MultiStatementExpression`; unlace's `bb_is_complex` *is*
 `_is_single_statement_block`.
 
 `crates/unlace-structure/src/p8_structure/condfold.rs` ports exactly
@@ -435,12 +435,12 @@ Option `condfold`, default **off**, three-valued: `on` uses angr's statement
 threshold (width budget 5, and Rule A additionally 1 statement-root call) and
 `wide` raises the width budget to 9 for **both** rules; Rule A's call cap, Rule
 B's shape allowlist and scored caps, the cross-leaf caps and every soundness or
-rendering guard are identical at both levels. `wide` exists because kuna's
+rendering guard are identical at both levels. `wide` exists because unlace's
 *printed* statement granularity is finer than angr's AIL for the same block —
 argument recovery may leave operand computations as separate assignments where
 angr renders one call statement, and an address-tied stack variable prints copy
 shadows the AIL never materializes — so a block angr folds as one statement can
-print as seven in kuna. Both levels apply to **both** engines (`blockaction.rs
+print as seven in unlace. Both levels apply to **both** engines (`blockaction.rs
 (CollapseStructure::rule_block_or)` and `region_structurer.rs
 (RegionStructurer::try_block_or)`, which are verbatim copies of each other);
 implementing only one would no-op on functions where the other converges. Off,
@@ -455,7 +455,7 @@ decline a block that already carries a comment, but the check only sees the
 comments buffered in `Funcdata` at structuring time, while `comma_separate`
 suppresses `emit_comment_group` for the whole operand — so an advisory emitted
 by a pass that runs after structuring can still vanish (`newbury::main` emits
-four `WARNING:` lines at `off` and three at `on`). Those are kuna
+four `WARNING:` lines at `off` and three at `on`). Those are unlace
 annotations, never a correctness signal, and the emitted C is unaffected.
 
 **`condcallpush` — a call's return-address push is not a statement.** The
@@ -625,7 +625,7 @@ emits. It marks the front leaf of a `BlockGoto`'s target, a `BlockIf`'s goto
 target, and each `BlockSwitch` case arm whose edge stayed unstructured.
 Upstream marks a `BlockGoto`'s target only when `gotoPrints()` holds — the
 target is not the block flow reaches next — because upstream's
-`PrintC::emitBlockGoto` suppresses the goto under the same test. kuna's
+`PrintC::emitBlockGoto` suppresses the goto under the same test. unlace's
 printer (`crates/unlace-emit/src/p9_emit/printc.rs
 (PrintC::emit_block_goto)`) emits the trailing goto for every target it has,
 so the mark here is deliberately wider than upstream's: gating it left the
@@ -692,7 +692,7 @@ collapse governs the result, and its ownership rule is chapter 09's
 *pending-brace ownership* (a nested frame that steals the collapse hoists the
 arm's body onto the then-path).
 
-**(kuna `javatry`) DEX `try` dispatches.** `ActionBlockStructure` drops the
+**(unlace `javatry`) DEX `try` dispatches.** `ActionBlockStructure` drops the
 exceptional `java_throws` edges from the structuring graph after seeding it
 (`p2_lift/javatry.rs (drop_throws_edges)`), so each catch handler is
 reached only from its `java_try` dispatch (chapter 2), and sends a function with
@@ -718,10 +718,10 @@ by DIV-12 under `option regionstructure`.
 **Input.** `region_structurer.rs (run_region_structurer)` first runs the
 chapter-07 region identifier fresh over the real CFG
 (`crates/unlace-structure/src/p7_regions/regionid.rs
-(KunaRegionIdentifier)`) and consumes two things from it: the deterministic
+(UnlaceRegionIdentifier)`) and consumes two things from it: the deterministic
 node order (tie-breaking for edge virtualization) and — when
 `regionlooprefine` is on — the `regionid.rs
-(KunaRegionIdentifier::cyclic_loops)` projection: each loop's refined body
+(UnlaceRegionIdentifier::cyclic_loops)` projection: each loop's refined body
 and exit frontier keyed by block start address, which absorbs
 dominated switch-case successors that a purely structural natural-loop walk
 on the collapsing graph misses. Identification failure is non-fatal: the
@@ -791,7 +791,7 @@ address lies in a pending switch-loop body, or another live component shares
 it (a later body set could then name it). A declined attempt is discarded
 whole, so stopping early changes no output; it only skips rounds. That matters
 on a large goto-heavy function, which declines once per `structure_reset` the
-CFG passes take: Bash's `declare_internal` declines 18 times in one `kuna
+CFG passes take: Bash's `declare_internal` declines 18 times in one `unlace
 decompile`, and each attempt strands a component within its first ~100 of
 ~800 rounds.
 
@@ -836,7 +836,7 @@ it — see the catalog).
 The base cyclic schemas fold only the clean shape: single entry, one
 structural exit, one back-edge. Real loops have secondary exits (error
 paths), secondary latches, and mid-body entries. `region_structurer.rs
-(RegionStructurer::refine_loop_edges)` — the kuna analog of angr's
+(RegionStructurer::refine_loop_edges)` — the unlace analog of angr's
 `_refine_loop_successors_to_guarded_successors` / `force_loop_single_exit` —
 virtualizes exactly the abnormal edges so the loop *becomes* the clean shape,
 in a strict order, one class per round so the acyclic schemas can re-collapse
@@ -893,7 +893,7 @@ A CFG split must leave every path performing the same writes, the same number
 of times. The p-code half of `node_split`,
 `crates/unlace-middle/src/substrate/funcdata_block.rs (CloneBlockOps)`,
 copies two kinds of op that write nothing but name a global as their output.
-Upstream's clone let copy propagation turn both into stores (kuna #1355):
+Upstream's clone let copy propagation turn both into stores (unlace #1355):
 
 - *The return guard.* A RETURN block carries one `Heritage::guardReturns`
   `glob = glob` COPY per persistent global (§3.1). It is flagged `return_copy`,
@@ -927,7 +927,7 @@ at the start of the clone, after every store the predecessor kept; several such
 stores print in the order the phis are cloned. That order is set by
 `crates/unlace-structure/src/p8_structure/clonephiorder.rs (order_global_phis)`,
 always on: the phis on globals are cloned after the others and in address
-order, which is how kuna printed most of these stores before the clone kept its
+order, which is how unlace printed most of these stores before the clone kept its
 guards' flag. Block order would be the reverse of heritage's placement
 (heritage inserts each phi at the block start in ascending address order, so
 one pass's phis end up in descending address order). Only the clone is reordered: the original block keeps its op order,
@@ -964,7 +964,7 @@ qualify, and each tier is its own pass:
   (ActionGotoReduce)` alone. *Pattern:* a `BlockIf` rendering as
   `if (cond) goto T` where `T` is a single-successor basic-block chain ending
   in `return`. *Transform:* the tail is inlined into the `if` arm
-  (`kuna_inline_return_tail`). *Bounds/failure:* the chain is capped at
+  (`unlace_inline_return_tail`). *Bounds/failure:* the chain is capped at
   `gotoreduce.rs (MAX_TAIL_BLOCKS)` = 3 blocks and `(MAX_TAIL_OPS)` = 8
   ops, and **any** `CALL`/`CALLIND`/`CALLOTHER`/`STORE` in the tail declines
   the match.
@@ -1016,7 +1016,7 @@ the printer would otherwise drop but can never remove one.
 `crates/unlace-structure/src/p8_structure/retsplitglobal.rs`, read by
 `crates/unlace-middle/src/substrate/funcdata_block.rs
 (Funcdata::return_split_is_splittable)` — the predicate BOTH return splitters
-consult, upstream `ActionReturnSplit` and kuna's `ActionReturnDup`
+consult, upstream `ActionReturnSplit` and unlace's `ActionReturnDup`
 (`returndup`), which is why `option returndup off` does not change the shapes
 this option governs. *Pattern:* upstream's `isSplittable` (`blockaction.cc:2242`)
 asks whether a multi-predecessor RETURN block is a *bare* epilogue, cheap enough
@@ -1065,7 +1065,7 @@ its gotos stay; `off` restores the unlimited split. *Bounds:* the test is per
 block and in cloned ops, so a block under the limit splits exactly as upstream
 and the C changes only in a function that would have cloned more, where those
 paths print a `goto` to the shared return instead of their own `return`. Like
-`retsplitglobal` it can only decline a split. The kuna const-return peelers that
+`retsplitglobal` it can only decline a split. The unlace const-return peelers that
 also call `node_split` (`returndup`, `earlyreturn`, `switchreturn`) do not
 consult the limit; their own in-edge caps bound them. Settable `retsplitlimit`,
 shipped default **1048576**: the costliest return split in ordinary code is a
@@ -1112,7 +1112,7 @@ printed ops and one call, built of statements and `if`s with no jump, loop,
 switch, `return` or `for` header statement, and never holds `G`. With
 `loopbreak_recovery` on, a goto to where flow goes after its innermost loop,
 with no switch in between, prints `break;`. The copies are new print-tree
-nodes over the same basic blocks (`BlockGraph::kuna_clone_subtree`), so no
+nodes over the same basic blocks (`BlockGraph::unlace_clone_subtree`), so no
 p-code changes; a label no plain goto reaches any more is released. On the
 clang `-O2 -fno-inline` arm64 cmark build (593 functions) the gotos drop from
 168 to 110 (26 of them the switch-case jumps of `cmark_utf8proc_case_fold`),
@@ -1167,7 +1167,7 @@ multi-goto edge elsewhere in the tree can still name one of those nodes. A
 goto from one arm into the start of the other names that whole arm. Before a
 node is freed, every branch that names it is pointed at the node that took its
 place (`crates/unlace-middle/src/substrate/block.rs
-(kuna_free_replaced)`). An unwrapped arm hands over to its sole component,
+(unlace_free_replaced)`). An unwrapped arm hands over to its sole component,
 which starts at the same leaf, so the goto keeps its label and lands on the
 same statement. A dropped copy hands over to the copy that was kept. Before
 this, the goto kept the freed node's id and printing its label panicked.
@@ -1178,7 +1178,7 @@ this, the goto kept the freed node's id and printing its label panicked.
 (ActionIteRegion)`. *Pattern:* the assignment diamond a source ternary
 compiles to — a 3-component `BlockIf` with no goto, whose condition leaf's
 only printed op is the `CBRANCH` and whose two arms are each a single `COPY`
-to the same storage. *Transform:* **print-only** — set the `kuna_iteregion`
+to the same storage. *Transform:* **print-only** — set the `unlace_iteregion`
 addl-flag on the matched CBRANCH; the S9 printer
 (`crates/unlace-emit/src/p9_emit/printc.rs`, via
 `iteregion.rs (match_ite_assignment)`) re-derives the match and emits
@@ -1192,7 +1192,7 @@ op (`v = *p`, `v = b + 5` — a `LOAD`/`INT_*`/`PTR*`/`CAST`/`SUBPIECE`, whose
 second-level operands are single-use implied varnodes), rejecting only
 side-effecting/control ops; the print-only render (`op_push_ir`) already handles
 arbitrary arm expressions. This matches angr's aggressive `?:` recovery (angr emits
-~8× more ternaries than kuna on decbench O0). It is a **readability** change only:
+~8× more ternaries than unlace on decbench O0). It is a **readability** change only:
 Joern gives a `?:` and its equivalent `if/else` the identical CFG, so GED is
 unaffected — hence `iteexpr` ships default-off (a `--mode aggressive` member), not a
 DIV flip. This one is an explicit **runtime
@@ -1209,7 +1209,7 @@ function.
 two arms are each a single `COPY` of the constants `1` and `0` (in either order)
 to the same integral storage, and whose condition component is either a clean
 `CBRANCH` leaf or the folded short-circuit `BlockCondition` chain. *Transform:*
-**print-only** — set the `kuna_iteboolean` addl-flag on the condition's terminal
+**print-only** — set the `unlace_iteboolean` addl-flag on the condition's terminal
 `CBRANCH`; the S9 printer (via `iteboolean.rs (match_ite_boolean)`)
 re-derives the match and emits the single statement `v = ( c );` — or
 `v = !( c );` when the `0` arm is the true arm — in place of the `if/else`.
@@ -1253,7 +1253,7 @@ concatenates a just-collapsed predecessor together with the following condition
 block into a two-component `BlockList`, and *that list* becomes component 0 of
 the next `BlockIf`. A run of structurally identical diamonds therefore alternates
 between the bare-leaf shape and the concatenated shape, and only the bare-leaf
-ones are re-rolled: over a chain of N diamonds kuna recovers exactly `ceil(N/2)`
+ones are re-rolled: over a chain of N diamonds unlace recovers exactly `ceil(N/2)`
 (measured for N = 1..8: 1 1 2 2 3 3 4 4). The tell is that *which* diamonds are
 missed depends on the **neighbouring** structure rather than on the diamond
 itself — an immediately preceding structured `if` suppresses the very next one.
@@ -1296,7 +1296,7 @@ whenever they do (DIV-56), so their options are the only ones that reach it.
 (ActionEarlyReturn)`. *Pattern:* the leading argument-validity guard — a
 shared RETURN block computing `v = MULTIEQUAL(#K /*guard arm*/, <var> /*body
 arm*/); return v`, a **mixed** phi that whole-block gates structurally cannot
-touch. Without it kuna renders the inverted diamond `if (guard) { entire
+touch. Without it unlace renders the inverted diamond `if (guard) { entire
 body } else { v = K; } return v;`. *Transform:* compute the phi input slots
 that resolve to constants (`funcdata_block.rs
 (Funcdata::earlyreturn_const_edges)`; slot *i* aligns with in-edge *i*) and
@@ -1340,8 +1340,8 @@ summed GED, 3:0 improved:regressed, zero regressions).
 ### loopbreak_recovery — `goto` → `break;` (Ghidra `scopeBreak`, angr-surfaced)
 
 `crates/unlace-structure/src/p8_structure/loopbreak_recovery.rs
-(kuna_scope_break)`. The mechanism is the faithful port of upstream Ghidra's
-`BlockGraph::scopeBreak` — which upstream runs unconditionally but kuna's
+(unlace_scope_break)`. The mechanism is the faithful port of upstream Ghidra's
+`BlockGraph::scopeBreak` — which upstream runs unconditionally but unlace's
 port had left stubbed; the gap was found and the pass registered through the
 angr comparison (record `docs/features/1after909-doit-73591e/`, hence the
 angr provenance row). *Pattern:* after collapse, an edge that leaves a loop
@@ -1365,7 +1365,7 @@ goto. Flipped on by DIV-10.
 (`crates/unlace-emit/src/p9_emit/printc.rs (PrintC::emit_function_body)`).
 Upstream prints a `BlockGoto`'s jump only when `BlockGoto::gotoPrints`
 holds: the jump's target is not the block that `nextFlowAfter` says runs
-next. kuna's printer printed every such jump, so a switch case falling into
+next. unlace's printer printed every such jump, so a switch case falling into
 the next case, and an `if` arm whose last statement jumps to the statement
 after the `if`, printed `goto label_X;` directly above `label_X:`. Passes that
 edit the structured tree after `scopeBreak` also leave jumps to the statement
@@ -1705,17 +1705,17 @@ returns and calls what the source does.
 
 ## 8.4 The quality signal
 
-What kuna can *measure* about a structuring today is the goto census. The
+What unlace can *measure* about a structuring today is the goto census. The
 structured tree is walked by `crates/unlace-middle/src/substrate/block.rs
-(BlockGraph::kuna_count_quality)`, tallying `BlockGoto` nodes — split into
+(BlockGraph::unlace_count_quality)`, tallying `BlockGoto` nodes — split into
 nodes and *printed* gotos, because a `BlockGoto` whose target is exactly the
 next block in normal flow prints nothing (`block.rs
 (BlockGraph::goto_prints)`, which asks `next_flow_after`) — plus
 `BlockMultiGoto` virtual edges and `BlockIf` if-goto edges still tagged as
 real gotos. The console command `quality`
-(`crates/unlace-console/src/console.rs (IfcKunaQuality)`,
+(`crates/unlace-console/src/console.rs (IfcUnlaceQuality)`,
 surfaced through `crates/unlace-middle/src/substrate/funcdata.rs
-(Funcdata::kuna_quality_counts)`) reports the census for the current
+(Funcdata::unlace_quality_counts)`) reports the census for the current
 function — basic-block count, goto nodes (and printed), multi-goto edges,
 if-goto edges, and the unstructured total — and refuses politely when the
 function has no structured blocks yet. Alongside the census, every §8.3 pass
@@ -1723,10 +1723,10 @@ logs its firings as warning comments in the output (`earlyreturn:`,
 `switchreturn:`, `branchflip:`, `crossjumprevert:`, `ifelseflatten:` …), so
 a diff of the rendered C always shows *which* quality pass produced it.
 
-What kuna deliberately does **not** have is speculate-validate-rollback:
+What unlace deliberately does **not** have is speculate-validate-rollback:
 angr's `StructuringOptimizationPass` wraps every de-optimization in an
 edit → re-structure → measure → restore-on-regression loop
-(`prevent_new_gotos`, `strictly_less_gotos` et al.); kuna's passes are all
+(`prevent_new_gotos`, `strictly_less_gotos` et al.); unlace's passes are all
 greedy accept-only, with the correctness burden carried up front by their
 structural preconditions and caps. This is a recorded, intentional gap: the
 `goto-quality-acceptance` subphase row in
@@ -1789,7 +1789,7 @@ run: it is applied once and every function is then decompiled under it.
 ### The region is re-derived, never trusted
 
 The value names only a head and an exit. The member set is recomputed from the live
-`bblocks` with `kuna_check_region`, a transcription of the private `check_region` in
+`bblocks` with `unlace_check_region`, a transcription of the private `check_region` in
 `p7_regions/regionid.rs` (that file is a line-faithful port pinned by
 `docs/spec/07-regions.md` and is not modified to expose it). A region is a block
 **set**, never the interval `head..exit`: an inlined callee is routinely laid out in
@@ -1874,7 +1874,7 @@ classes v1 cannot take at all:
 * **Multi-exit inlines.** The compiler routinely fuses a callee's return-value
   dispatch into the caller's control flow, so the inlined body has two exits reaching
   two different places. No single join block exists, so no `exit` address bounds the
-  region and `kuna_check_region` can never accept it.
+  region and `unlace_check_region` can never accept it.
   `__xargmatch_internal` — present in every coreutils binary — is this shape: the
   inlined `argmatch_exact` scan exits both to the "not found" tail and to the
   "return the index" tail.
@@ -1889,7 +1889,7 @@ a caller-side branch, and a purity allowlist so compiler intrinsics such as
 `__addvsi3` under `-ftrapv` stop blocking otherwise-clean regions — is the work that
 would make the transform generally applicable.
 
-**Loop rotation** (`looprotate`, default on; kuna;
+**Loop rotation** (`looprotate`, default on; unlace;
 `crates/unlace-structure/src/p8_structure/looprotate.rs (ActionLoopRotate)`,
 in the main loop just before `ActionBlockStructure`): compilers rotate
 `while (c) body` into `if (c) { do body while (c); }`. The action matches, on
@@ -1951,14 +1951,14 @@ of an outer switch, such a case is not a continue either: folding it as a
 terminal case would make its self-edge internal and drop the inner loop, so
 the outer switch declines until the loop schema has wrapped it.
 
-**Guarded loops** (`guardedloop`, default on, C output only; kuna;
+**Guarded loops** (`guardedloop`, default on, C output only; unlace;
 `crates/unlace-structure/src/p8_structure/guardedloop.rs (ActionGuardedLoop)`,
 in the block-recovery group after `crossjumptail`): the rotations `looprotate`
 leaves, mostly because the loop test reads memory or a value the body computes,
 print as `if (g) { I; do B while (c); }`. On the final tree, a do-while in an arm
 of a `BlockIf` whose arm before the loop holds only basic blocks with no call,
 STORE or branch (the assignments `I`) prints as `while (c) B` (block flag
-`f_kuna_top_test`, printed by `emit_block_top_tested_c`) when the guard implies
+`f_unlace_top_test`, printed by `emit_block_top_tested_c`) when the guard implies
 `c` on entry. `Compare::same` matches the two expressions op by op: a variable of
 `c` that `I` writes is replaced by the right-hand side of its last assignment,
 other variables match by HighVariable, constants by value and size. A test is
@@ -1986,9 +1986,9 @@ an unsigned test against zero is an equality (`0 < x` is `x != 0`, `x < 1` is
 guard equivalent to the loop's first test, and prints `i = 0; while (i < n) B`.
 
 A do-while whose body is one basic block that prints nothing but its test
-(`empty_body`: the block branches back to itself and `kuna_condfold::printed_shape`
+(`empty_body`: the block branches back to itself and `unlace_condfold::printed_shape`
 counts only the terminal CBRANCH) needs no guard: `do {} while (c);` and
-`while (c) {}` run the same code, so it takes `f_kuna_top_test` directly. This is
+`while (c) {}` run the same code, so it takes `f_unlace_top_test` directly. This is
 the busy-wait on a device register that firmware writes as `while (!(REG & BIT));`
 (Hex-Rays prints it as `while ( ... ) ;`). DecBench O2-noinline has 200 of them
 in 44 binaries; with the loop printed at the top, GED over those binaries' 21,658

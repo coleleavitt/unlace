@@ -1138,7 +1138,7 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
             weak_storage_start,
             extern_cursor - weak_storage_start,
             fmt.section_bits(
-                ".kuna.weak",
+                ".unlace.weak",
                 SectionKind::Data,
                 object::SectionFlags::Elf {
                     sh_flags: u64::from(object::elf::SHF_ALLOC | object::elf::SHF_WRITE),

@@ -1,4 +1,4 @@
-# Stripped PE32 i386 fixture for kuna_calleepurge (tests/stages/kuna-calleepurge.toml).
+# Stripped PE32 i386 fixture for unlace_calleepurge (tests/stages/unlace-calleepurge.toml).
 #
 # stdcallpurge_pe_i386.c is compiled by Visual C++ 2005 SP1 (`cl /O2 /c`, output
 # renamed stdcallpurge_pe_i386_c.obj). The two `jmp` stubs below stand in for the

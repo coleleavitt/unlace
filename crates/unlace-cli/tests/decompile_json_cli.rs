@@ -43,7 +43,7 @@ fn run_unlace(args: &[&str]) -> (String, String, Option<i32>) {
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .output()
-        .expect("failed to spawn the kuna binary");
+        .expect("failed to spawn the unlace binary");
     (
         String::from_utf8_lossy(&out.stdout).into_owned(),
         String::from_utf8_lossy(&out.stderr).into_owned(),
@@ -63,7 +63,7 @@ fn json_field(doc: &str, key: &str) -> Option<String> {
 fn temp_image(tag: &str, bytes: &[u8]) -> PathBuf {
     let id = TEMP_ID.fetch_add(1, Ordering::Relaxed);
     let path = std::env::temp_dir().join(format!(
-        "kuna_json_cli_{tag}_{}_{id}.bin",
+        "unlace_json_cli_{tag}_{}_{id}.bin",
         std::process::id()
     ));
     std::fs::write(&path, bytes).expect("write the scratch image");

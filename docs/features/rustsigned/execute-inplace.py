@@ -1,6 +1,6 @@
 from pathlib import Path
 import subprocess,ctypes,mmap,json,os,hashlib
-w=Path('/tmp/kuna-rust-signed-bytes');r=Path('/home/mahaloz/kwt/angr-rust-signed-bytes');base=Path('/home/mahaloz/kwt/angr-rust-userop')
+w=Path('/tmp/unlace-rust-signed-bytes');r=Path('/home/mahaloz/kwt/angr-rust-signed-bytes');base=Path('/home/mahaloz/kwt/angr-rust-userop')
 code=bytes.fromhex('4088f885f67406d0f8ffce75fac3')
 mem=mmap.mmap(-1,len(code),prot=mmap.PROT_READ|mmap.PROT_WRITE|mmap.PROT_EXEC);mem.write(code)
 fn=ctypes.CFUNCTYPE(ctypes.c_uint8,ctypes.c_int8,ctypes.c_uint32)(ctypes.addressof(ctypes.c_char.from_buffer(mem)))

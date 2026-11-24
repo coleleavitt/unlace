@@ -1,4 +1,4 @@
-// ip-set_qlen  ip @ 0x2b420  (kuna after the undefname fix)
+// ip-set_qlen  ip @ 0x2b420  (unlace after the undefname fix)
 // ScopeLocal symbol table (the --json `variables` array):
 //   {"name": "param_1", "type": "unsigned long", "kind": "arg", "arg_index": 0, "stack_offset": null, "size": 8}
 //   {"name": "param_2", "type": "unsigned int", "kind": "arg", "arg_index": 1, "stack_offset": null, "size": 4}

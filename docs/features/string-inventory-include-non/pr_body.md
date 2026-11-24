@@ -1,6 +1,6 @@
 ## The problem
 
-`kuna strings` took only NUL-terminated runs, so a length-prefixed name table —
+`unlace strings` took only NUL-terminated runs, so a length-prefixed name table —
 each identifier preceded by its own length byte, none of them terminated — was
 reported as no strings at all. That is the shape a bundled JavaScript or bytecode
 payload carries, and on the reported 977 KB Node bundle it is most of `.rodata`:
@@ -13,7 +13,7 @@ $ xxd -s 0xb2020 -l 32 crackme.x86_64.elf
 $ strings -a crackme.x86_64.elf | grep -cE '^(_0x|out\.js)'
 635
 
-$ kuna strings crackme.x86_64.elf --section .rodata --filter '_0x|out.js' \
+$ unlace strings crackme.x86_64.elf --section .rodata --filter '_0x|out.js' \
       --encoding all --min-length 4 --json
 { ..., "count": 0, "strings": [] }
 ```
@@ -23,11 +23,11 @@ $ kuna strings crackme.x86_64.elf --section .rodata --filter '_0x|out.js' \
 - The matcher takes a termination policy (`strings/mod.rs (scan_runs)`, mirrored
   at 2-byte width in `widestrings.rs`). `Nul` is Ghidra's `requireNullEnd`;
   `Any` also accepts a run closed by an ordinary byte or by the end of its region.
-- `kuna strings` gains `--termination nul|any` and **defaults to `any`** — the
+- `unlace strings` gains `--termination nul|any` and **defaults to `any`** — the
   probe's command line carries no new flag, and `strings(1)`'s rule is what an
   analyst is comparing against. `--termination nul` restores the previous view.
   On the reported image the default now reports 5,138 rows where `strings -a -n 5`
-  reports 5,164; the difference is the non-allocated sections kuna does not scan.
+  reports 5,164; the difference is the non-allocated sections unlace does not scan.
 - Rows say which ending they had: `nul_terminated` per row, `termination` at the
   top level and in the text header. An unterminated row's `byte_length` stops at
   its last visible byte, so an xref extent never claims a terminator that is not
@@ -57,7 +57,7 @@ Two existing expectations moved with the default and are updated, not weakened:
 the x86-64 slice); the fauxware header count is 13 → 14.
 
 Gates: `make test` PARITY OK (675/675) · `make test-stages` PARITY OK (683/683) ·
-`make test-cli` 78/78 · `make check-spec` OK · `kuna catalog --check` OK ·
+`make test-cli` 78/78 · `make check-spec` OK · `unlace catalog --check` OK ·
 `make rust-test` green.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

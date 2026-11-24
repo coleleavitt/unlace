@@ -2,7 +2,7 @@
 # (binaries/tests/x86_64/decompiler/tail.o, x86-64, ELF relocatable object).
 #
 # In an ET_REL `.o` a libc no-return like `__stack_chk_fail` is an UNDEFINED
-# EXTERNAL symbol (UND, NOTYPE, size 0, no address of its own).  kuna's
+# EXTERNAL symbol (UND, NOTYPE, size 0, no address of its own).  unlace's
 # analysis-tier known-no-return pass (`noreturn_known`, default on) keys its
 # facts on the ADDRESS of a *defined* FUNC symbol, so it never marks the UND
 # extern.  At decompile flow time the call to `__stack_chk_fail` resolves to a

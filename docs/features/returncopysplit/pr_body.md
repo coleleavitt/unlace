@@ -1,6 +1,6 @@
 ## The bug
 
-kuna emitted a block of per-byte assignments **storing into a `.rodata` string literal**, on
+unlace emitted a block of per-byte assignments **storing into a `.rodata` string literal**, on
 a return path where the binary performs no store at all.
 
 iproute2 `ip` (O2-noinline, stripped) `netns_add` @ `0x20e10`, today's build, **no flags**:
@@ -64,7 +64,7 @@ The actual chain:
 2. `Heritage::guard_returns` inserts a synthetic `glob = glob` COPY before each RETURN,
    flagged `return_copy` and address-tied at the **same** address on both sides — correctly
    declined by upstream's existing gate, and then hidden by `Merge::mark_internal_copies`.
-3. kuna's `ActionStripStackGuard` (option `stackguard`, DIV-14, default on) strips the
+3. unlace's `ActionStripStackGuard` (option `stackguard`, DIV-14, default on) strips the
    canary epilogue, leaving a **bare-epilogue RETURN block** that passes
    `Funcdata::return_split_is_splittable`.
 4. `ActionReturnSplit` (`p8_structure/blockaction.rs:3908`, inside `fullloop`, i.e. **before**
@@ -82,7 +82,7 @@ One predicate in `SplitDatatype::test_copy_constraints`
 (`p3_dataflow/subflow.rs`, upstream `subflow.cc:2390`):
 
 ```rust
-// (kuna) A COPY whose output lands in a read-only address range is never a
+// (unlace) A COPY whose output lands in a read-only address range is never a
 // store the program performs; splitting it turns one invisible whole-range
 // assignment into per-element assignments that survive
 // `Merge::mark_internal_copies` and print as stores into `.rodata`.
@@ -102,7 +102,7 @@ warning path — it is just gated behind `readonlypropagate`.
 call (`CLAUDE.md`: "a strict bug fix that only corrects wrong output needs no flag").
 `option togglerule splitcopy off` already gives a bisector the pre-fix pipeline. It is
 recorded as **DIV-55** rather than a Convergence, because the test does not exist upstream
-and the CFG shape that exposes the hole is produced by kuna's own `stackguard` divergence.
+and the CFG shape that exposes the hole is produced by unlace's own `stackguard` divergence.
 
 Deliberately **not** in this PR: carrying `return_copy` across `build_op_clone`. That mask is
 a verbatim transcription of upstream `funcdata_block.cc:982-988` and changing it would be a
@@ -111,7 +111,7 @@ emitted-C bug on its own, corpus-wide.
 
 ## Breadth and regression sweep
 
-Whole-binary `kuna decompile-all --json`, before/after release builds of this worktree,
+Whole-binary `unlace decompile-all --json`, before/after release builds of this worktree,
 diffed **per function** over 12 corpus binaries:
 
 | binary | functions | changed | -lines | +lines | rodata stores before/after |
@@ -147,7 +147,7 @@ of the literal into the stack buffer) is untouched.
   additively (369 → 375 keys), no existing assertion moved, no per-test opt-out.
 - **`make rust-test` → green** (whole workspace, `docs/options.md` freshness fence included).
 - **`make check-spec` → `check-spec OK (lenient mode)`**.
-- **`kuna catalog --check` → `catalog OK`** (no option added: `phases.toml`,
+- **`unlace catalog --check` → `catalog OK`** (no option added: `phases.toml`,
   `p0_knowledge/options.rs`, the catalog counts and `docs/options.md` are untouched).
 
 `tests/stages/ghdec-returncopysplit.toml` — **3 of 6 assertions pass pre-fix, 6/6 post-fix**.

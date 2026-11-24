@@ -24,7 +24,7 @@ fn capture(strategy: &str) -> serde_json::Value {
         "c",
         "--assert-strict",
         "--assert",
-        &format!("@{}", common::fixture("function_pointer_namespaces.kuna")),
+        &format!("@{}", common::fixture("function_pointer_namespaces.unlace")),
         "--option",
         "namespacestrategy",
         strategy,

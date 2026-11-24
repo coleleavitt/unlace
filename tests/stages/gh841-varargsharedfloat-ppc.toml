@@ -1,4 +1,4 @@
-# GH-841 (kuna): "PowerPC -O0: a variadic call drops a trailing double whose
+# GH-841 (unlace): "PowerPC -O0: a variadic call drops a trailing double whose
 # register also feeds an earlier argument".
 # https://github.com/Noelo-Lab/kuna/issues/841
 #

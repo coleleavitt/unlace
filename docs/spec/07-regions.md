@@ -5,7 +5,7 @@ Anchors:
   - crates/unlace-structure/src/p7_regions
 ```
 
-This phase computes kuna's S7 artifact: the **region tree** — a nesting of
+This phase computes unlace's S7 artifact: the **region tree** — a nesting of
 single-entry subgraphs over a function's basic blocks, with loops found first
 and acyclic regions carved out by dominance. Unlike every other phase, its
 lineage is angr, not Ghidra: the folder is a line-faithful port of angr's
@@ -32,43 +32,43 @@ collapsing* a graph — merging chains into multi-nodes, replacing whole node
 sets with a single region wrapper — and the decompiler's own `BlockGraph` must
 never be mutated by an analysis. So the phase carries its own substrate:
 `crates/unlace-structure/src/p7_regions/regiongraph.rs
-(KunaRegionGraph)`, a mutable digraph in the image of `networkx.DiGraph`, over
-nodes pooled in `regiongraph.rs (KunaNodePool)`. A node
-(`regiongraph.rs (KunaRegionNode)`) is one of four kinds: a leaf `Block`
+(UnlaceRegionGraph)`, a mutable digraph in the image of `networkx.DiGraph`, over
+nodes pooled in `regiongraph.rs (UnlaceNodePool)`. A node
+(`regiongraph.rs (UnlaceRegionNode)`) is one of four kinds: a leaf `Block`
 (a real basic block, or a synthetic address-only test node), a `Multi` (a
 merged single-out→single-in chain, angr's `MultiNode`), a `Region` wrapper
 carrying a collapsed region payload, or the `Dummy` end node the acyclic phase
 fabricates.
 
 **The determinism contract.** angr's algorithm leans on Python dict insertion
-order; kuna replaces that with one global strict weak order — compare
-`(address, creation-index)` (`regiongraph.rs (KunaNodeKey)`, the C++
-port's `KunaNodeOrder`). Every container the algorithm *iterates* in an
+order; unlace replaces that with one global strict weak order — compare
+`(address, creation-index)` (`regiongraph.rs (UnlaceNodeKey)`, the C++
+port's `UnlaceNodeOrder`). Every container the algorithm *iterates* in an
 output-affecting way is keyed on that order; membership-only sets are keyed on
 the raw arena id and never drive iteration; per-node predecessor/successor
 lists keep edge insertion order (the networkx adjacency analog), with a sorted
-accessor (`regiongraph.rs (KunaRegionGraph::get_sorted_succs)`) where the
+accessor (`regiongraph.rs (UnlaceRegionGraph::get_sorted_succs)`) where the
 algorithm needs the canonical order. The consequence is documented rather than
 hidden: on equal-address ties the tree can differ from angr's dict-order tree
 while remaining a valid region tree. One arithmetic wrinkle is preserved
 exactly: angr sorts edges by the arbitrary-precision sum of endpoint
 addresses, so the port compares `(carry, low-64-bits)` lexicographically
-(`regiongraph.rs (kuna_edge_sum_cmp)`) to keep the order right even when
+(`regiongraph.rs (unlace_edge_sum_cmp)`) to keep the order right even when
 an address sum crosses 2^64.
 
 **The utility layer.** Four algorithms, all deterministic ports:
 
 - *Back edges* — iterative DFS reporting every edge into a node still on the
   DFS stack-path, children visited in node order
-  (`regiongraph.rs (kuna_dfs_back_edges)`).
+  (`regiongraph.rs (unlace_dfs_back_edges)`).
 - *Deterministic DFS postorder* — successors pushed ascending so the
   largest-addressed one is explored first, matching angr's
   `dfs_postorder_nodes_deterministic` exactly
-  (`regiongraph.rs (kuna_dfs_postorder_deterministic)`).
-- *Quasi-topological sort* (`regiongraph.rs (kuna_quasi_topo_sort)`) —
+  (`regiongraph.rs (unlace_dfs_postorder_deterministic)`).
+- *Quasi-topological sort* (`regiongraph.rs (unlace_quasi_topo_sort)`) —
   Tarjan SCC condensation, topological order over the condensation, then each
   non-trivial SCC is expanded recursively after picking its loop head
-  (`regiongraph.rs (kuna_append_scc)`): the head is the unique in-SCC
+  (`regiongraph.rs (unlace_append_scc)`): the head is the unique in-SCC
   successor of the latest already-ordered node, or on a multi-way entry the
   candidate with the smallest total pairwise shortest-path distance (ties
   resolved last-in-address-order, matching angr's dict-inversion semantics).
@@ -76,7 +76,7 @@ an address sum crosses 2^64.
   that is denser than 1.4 edges per node would converge one node at a time,
   so back edges are stripped (in edge-sum order) until density falls to 1.4 —
   the order gets coarser but stays valid, and the sort terminates.
-- *Slicing* — `regiongraph.rs (kuna_subgraph_between_nodes)` copies the
+- *Slicing* — `regiongraph.rs (unlace_subgraph_between_nodes)` copies the
   graph, cuts edges into the source, keeps only paths that can still reach the
   frontier (one reverse BFS replaces angr's per-successor `has_path` probes —
   equivalent because the working copy is not mutated), and prunes dangling
@@ -91,29 +91,29 @@ entries, preserving the caller-visible contract.
 
 **Dominators, incrementally.** Immediate dominators are Cooper–Harvey–Kennedy
 over the deterministic reverse postorder
-(`regiongraph.rs (kuna_immediate_dominators)`). Because the acyclic phase
+(`regiongraph.rs (unlace_immediate_dominators)`). Because the acyclic phase
 collapses a region after nearly every test, recomputing dominators each time
 would be quadratic in practice; instead
-`regiongraph.rs (KunaIncrementalDominators)` (port of angr
+`regiongraph.rs (UnlaceIncrementalDominators)` (port of angr
 `utils/doms.py`) maintains the (post-)dominator tree and lazily-built
 dominance frontiers under exactly one mutation shape — "a node set was
-replaced by one new node" (`KunaIncrementalDominators::graph_updated`):
+replaced by one new node" (`UnlaceIncrementalDominators::graph_updated`):
 dominatees of replaced nodes are re-pointed at the wrapper, the wrapper
 inherits the replaced head's frontier, and frontier sets are patched by
 substitution. A from-scratch cross-check exists
-(`KunaIncrementalDominators::verify`) and any inconsistency (a broken dom
+(`UnlaceIncrementalDominators::verify`) and any inconsistency (a broken dom
 chain, a dominatee missing from the inverted tree) is an error, not a silent
 wrong answer.
 
 ## 7.2 The region identifier (angr)
 
 **The artifact.** `crates/unlace-structure/src/p7_regions/regionid.rs
-(KunaRegionIdentifier)` collapses the working graph into a nested
-`regionid.rs (KunaGraphRegion)` tree. A region records its head, its
+(UnlaceRegionIdentifier)` collapses the working graph into a nested
+`regionid.rs (UnlaceGraphRegion)` tree. A region records its head, its
 internal subgraph, its external successor frontier (plus the
 subgraph-with-successors view), the cyclic flag, and — for loops — the *full*
 graph of every edge among loop nodes including entries and exits. Two inputs
-exist: `regionid.rs (KunaRegionIdentifier::build_from_block_graph)` reads
+exist: `regionid.rs (UnlaceRegionIdentifier::build_from_block_graph)` reads
 the decompiled `bblocks` read-only (one leaf node per basic block keyed on its
 start address, one edge per CFG out-edge, entry = block 0's start, and a
 per-block precomputation of "ends with BRANCHIND/CBRANCH" since the CFG cannot
@@ -122,7 +122,7 @@ change mid-analysis), and a synthetic address-only builder mirroring angr's
 
 **Preprocessing.** The simple-case rule: keep one weakly connected component
 (the one containing the entry address, else the largest), then build the
-**supergraph** (`regionid.rs (KunaRegionIdentifier::make_supergraph)`) by
+**supergraph** (`regionid.rs (UnlaceRegionIdentifier::make_supergraph)`) by
 repeatedly merging every single-out→single-in edge into a `Multi` chain — with
 two refusals: never merge *into* the entry node, and never absorb a successor
 that itself ends in BRANCHIND or CBRANCH — never form a chain whose *new* tail
@@ -131,11 +131,11 @@ quasi-topological node order is computed once; collapsed wrappers inherit an
 order (a loop wrapper takes its head's, an acyclic wrapper the minimum over
 its members) so every later sort stays total without re-sorting the world.
 
-**The cyclic phase** (`regionid.rs (KunaRegionIdentifier::make_regions)`,
+**The cyclic phase** (`regionid.rs (UnlaceRegionIdentifier::make_regions)`,
 loop half). Loop headers are the back-edge targets in node order; they are
 processed in reverse, restarting the header scan after every successful
 collapse. For one header, `regionid.rs
-(KunaRegionIdentifier::make_cyclic_region)`:
+(UnlaceRegionIdentifier::make_cyclic_region)`:
 
 1. *Initial body*: slice from the head to its latching nodes (with angr's
    self-loop hack — an infinite `x -> x` slices to nothing, so the body is
@@ -148,18 +148,18 @@ collapse. For one header, `regionid.rs
    the live list — the inner loop must collapse first; the outer header is
    re-found on a later sweep.
 
-   *(kuna)* Most attempts end here, and the bail is decided before the
+   *(unlace)* Most attempts end here, and the bail is decided before the
    expensive steps. Every collapse restarts the sweep, so an outer header is
    tried again after each inner loop collapses. CPython 3.11's
    `_PyEval_EvalFrameDefault` (2,760 nodes, 75 loops) makes 6,445 attempts,
    and 6,370 of them bail. Steps 1-2 run in this order:
    - *Back edges*. They come from `find_loop_headers`'s depth-first walk of
-     the same graph (`KunaRegionIdentifier::back_edges`). No collapse happens
+     the same graph (`UnlaceRegionIdentifier::back_edges`). No collapse happens
      between that walk and the attempts, so step 1 does not walk the graph
      again for its latching nodes.
    - *Forward walk*. The slice's forward walk runs first, without building
      the slice (`crates/unlace-structure/src/p7_regions/regiongraph.rs
-     (kuna_slice_visits)`). It stops at the first other live header it visits.
+     (unlace_slice_visits)`). It stops at the first other live header it visits.
      Pruning keeps every node that walk visits: each visited node is entered
      from a visited node and has a successor that is visited or on the
      frontier.
@@ -169,13 +169,13 @@ collapse. For one header, `regionid.rs
      other header. It only adds nodes, so any header the slice holds would
      still be in the body and the attempt would still bail.
 
-   The slice itself (`regiongraph.rs (kuna_subgraph_between_nodes)`)
+   The slice itself (`regiongraph.rs (unlace_subgraph_between_nodes)`)
    reads the cut of the head's in-edges off the graph. angr cuts them on a
    copy of the whole graph each time; skipping the copy gives the same slice
    (both are compared on random graphs). The regions, and so the output, are
    unchanged: the same 6,445 attempts reach the same answers, and the
    identification of that function drops from 423 s to 4.8 s.
-3. *Loop refinement* (`regionid.rs (KunaRegionIdentifier::refine_loop)`),
+3. *Loop refinement* (`regionid.rs (UnlaceRegionIdentifier::refine_loop)`),
    which only runs when there is more than one exit (option
    `refine_loops_with_single_successor`, angr default false, would extend it
    to single-exit loops): stage 1 absorbs exit nodes with in-degree 1 and
@@ -193,11 +193,11 @@ collapse. For one header, `regionid.rs
    loop keeps zero exits.
 4. *Exit split*: with several refined exits, the **normal** exit is the first
    in DFS postorder from the head and the rest become abnormal exits. angr
-   uses non-deterministic `networkx.dfs_postorder_nodes` here; kuna
+   uses non-deterministic `networkx.dfs_postorder_nodes` here; unlace
    substitutes the deterministic variant — a documented strict improvement,
    not a silent divergence.
 5. *Collapse*: `regionid.rs
-   (KunaRegionIdentifier::abstract_cyclic_region)` replaces the body with a
+   (UnlaceRegionIdentifier::abstract_cyclic_region)` replaces the body with a
    region wrapper, recording the successor frontier and the full loop graph;
    any in-edge not from a known entry, or out-edge not to a known exit, is an
    inconsistency error.
@@ -209,19 +209,19 @@ jumps at loop exits) and `_refine_loop_successors_to_guarded_successors` (the
 exit). They are not lost: chapter 08's structurer re-realizes that refinement
 on its own graph by virtualizing secondary exits to gotos, reading this
 phase's loop identification through `regionid.rs
-(KunaRegionIdentifier::cyclic_loops)` — per cyclic region, the head, body, and
+(UnlaceRegionIdentifier::cyclic_loops)` — per cyclic region, the head, body, and
 exit-frontier *block start addresses* (option `regionlooprefine`, default on,
 DIV-14).
 
 **The acyclic phase** (`regionid.rs
-(KunaRegionIdentifier::make_acyclic_region)`), run over each collapsed loop's
+(UnlaceRegionIdentifier::make_acyclic_region)`), run over each collapsed loop's
 body and then the residual top-level graph. The simple-case rule: walking the
 deterministic postorder, a candidate region is the span from a node to its
 immediate post-dominator, accepted when the dominance-frontier predicate
-`regionid.rs (KunaRegionIdentifier::check_region)` proves it single-entry
+`regionid.rs (UnlaceRegionIdentifier::check_region)` proves it single-entry
 and single-exit (no frontier edge enters below the start, none leaves except
 through the end); an accepted span is sliced out
-(`KunaRegionIdentifier::compute_region` — single-node spans are not regions)
+(`UnlaceRegionIdentifier::compute_region` — single-node spans are not regions)
 and collapsed to a wrapper, and both the dominator and post-dominator trees
 are *patched*, not recomputed (§7.1). On rejection the search climbs the
 post-dominator chain — but only while the start still dominates the candidate
@@ -233,14 +233,14 @@ fabricated so a single post-dominator root exists; a lone isolated leaf is
 wrapped in a trivial region because the root of the hierarchy must be a
 region. The third angr option, `complete_successors` (default false), only
 widens how a child region's successor view is backpatched from its parent.
-None of the three angr options is a kuna `option` — per the `phases.toml`
+None of the three angr options is a unlace `option` — per the `phases.toml`
 `loop-refinement` subphase row they are LATENT, settable on the object but not
 exposed; the §7.4 surfaces are their observable half.
 
 **Guard caps and failure modes.** Every fixpoint loop of the identifier — the
 switch-case expansion, refinement stages 1 and 2, the cyclic outer/inner
 sweeps, and the per-subgraph acyclic collapse loop — is bounded by
-`regionid.rs (kuna_guard_cap)`: `2*n² + 64` iterations, computed in
+`regionid.rs (unlace_guard_cap)`: `2*n² + 64` iterations, computed in
 64-bit so the cap is inert for any real graph (a 32-bit `2*n*n` would overflow
 at n ≥ 32768 and fire instantly). The caps exist for one reason: to turn a
 mis-ported convergence guard into an *error* instead of a hang. The identifier
@@ -262,7 +262,7 @@ is, the identification fails with a typed error naming `region
 identification` as the budget's site, the structurer stops at its own budget
 check, and the drive reports the budget. Without a budget nothing is polled.
 
-## 7.3 kuna passes at the region tier: stackguard (angr)
+## 7.3 unlace passes at the region tier: stackguard (angr)
 
 The folder's one scheduled, output-changing pass:
 `crates/unlace-structure/src/p7_regions/stackguard.rs
@@ -287,7 +287,7 @@ CBRANCH, no-return-handler and saved-slot rules are unchanged, so a function
 that compares that global for another reason keeps its compare unless its
 failing branch is a call.
 
-**What it matches.** Detection is purely structural — kuna's loader does not
+**What it matches.** Detection is purely structural — unlace's loader does not
 reliably resolve a PLT stub to `__stack_chk_fail`, so the callee *name* is
 never consulted. The canary check is pinned by its compare: a basic block with
 exactly two out-edges whose tail CBRANCH tests an `INT_EQUAL`/`INT_NOTEQUAL`
@@ -314,7 +314,7 @@ apply (the
 fullloop re-invokes it and it self-gates once the compare is gone). The
 entry-side canary **init store** (`slot = *(fs:0x28)`) goes with the check —
 angr's simplifier pops exactly that statement (`statements.pop(stmt_idx)`),
-and kuna realizes the pop as a liveness release: the init writes an addrtied
+and unlace realizes the pop as a liveness release: the init writes an addrtied
 stack varnode that `directwrite` marking makes address-forced, which is what
 kept dead-code from ever collecting it. Before the strip the pass re-walks
 the compare's own derivation chains (`stackguard.rs
@@ -368,7 +368,7 @@ wrong is asymmetric by design: a missed canary just leaves the check in the
 output (the upstream rendering), while a false match would delete live code —
 hence the both-operands-derive rule and the handler-call gate.
 
-## 7.4 kuna passes at the region tier: securitycheck (angr)
+## 7.4 unlace passes at the region tier: securitycheck (angr)
 
 The folder's second scheduled, output-changing pass:
 `crates/unlace-structure/src/p7_regions/securitycheck.rs
@@ -406,7 +406,7 @@ before the first `<` (a generic-argument list such as
 `slice_start_index_len_fail<usize>` is not part of the path) with a legacy
 `::h<16 hex>` component trimmed, and accepts either the full path or a
 trailing `::`-component suffix of it — down to the bare leaf, which is the
-shape kuna's x86-64 ELF symbol path actually produces. A suffix match is
+shape unlace's x86-64 ELF symbol path actually produces. A suffix match is
 whole-component only, so the sibling `core::str::slice_error_fail_rt` is a
 different leaf and never matches. None of the seven names exists in a C
 program, which is why the option is structurally inert on a C binary and can
@@ -431,7 +431,7 @@ way is never orphaned: the edit severs only this edge, and
 remains. One check per apply; the fullloop re-invokes and the pass self-gates.
 
 **The divergence fact.** The `size_out() == 0` guard only fires for a helper
-kuna already knows never returns, and its address-keyed no-return discovery
+unlace already knows never returns, and its address-keyed no-return discovery
 walks only the helper bodies it can reach. The same option therefore asserts
 the fact from the name at the flow seam
 (`crates/unlace-decomp/src/infra/decompile_drive.rs
@@ -455,13 +455,13 @@ genuinely unused, and parameter recovery may then trim it — the same trade the
 `stackguard` option makes with the canary slot, and the reason the option
 exists. `tests/stages/oxidizer-securitycheck.toml` pins both directions.
 
-## 7.5 kuna passes at the region tier: msvcstackguard (kuna)
+## 7.5 unlace passes at the region tier: msvcstackguard (unlace)
 
 The folder's third scheduled, output-changing pass:
 `crates/unlace-structure/src/p7_regions/msvcstackguard.rs
 (ActionStripMsvcStackGuard)` — the Windows sibling of §7.3 (`option
 msvcstackguard`, [docs/options.md](../options.md); registry row
-P7/`edge-virtualization`, `source_decompiler = "kuna"`, GH-468 finding 3).
+P7/`edge-virtualization`, `source_decompiler = "unlace"`, GH-468 finding 3).
 Registered in the same `returnsplit` group, immediately after
 `ActionStripStackGuard`.
 
@@ -612,9 +612,9 @@ exact-cookie callee that writes XMM0 before an unresolved nested call, and a
 lane remains killed. Unit coverage adds nine exact checker sites marked before
 one restart.
 
-## 7.5b kuna passes at the region tier: the post-SSA write-barrier arm (kuna)
+## 7.5b unlace passes at the region tier: the post-SSA write-barrier arm (unlace)
 
-**(kuna) `option gowritebarrier`, post-SSA arm,
+**(unlace) `option gowritebarrier`, post-SSA arm,
 `crates/unlace-structure/src/p7_regions/gowbphi.rs
 (ActionGoWriteBarrierPhi)`.** The pre-SSA one-hop fold (chapter 02, §2.10)
 takes the textbook write-barrier diamond; real Go binaries carry two shapes it
@@ -646,11 +646,11 @@ re-validates the shape against the edited graph. The witness is
 stores read the call result), and the unlace-console `verify_go_writebarrier`
 family carries the store-preservation oracle over real Go builds.
 
-## 7.6 Observability (kuna)
+## 7.6 Observability (unlace)
 
 Three console commands expose the region tree
-(`crates/unlace-console/src/console.rs (IfcKunaRegionTree,
-IfcKunaRegionBlocks, IfcKunaRegionWalk)`): `region tree` renders the nested
+(`crates/unlace-console/src/console.rs (IfcUnlaceRegionTree,
+IfcUnlaceRegionBlocks, IfcUnlaceRegionWalk)`): `region tree` renders the nested
 hierarchy (the angr `GraphRegion.dbg_print` analog), `region blocks` the flat
 per-region block-address lists (`regions_by_block_addrs`), and `region walk`
 the recursive region-order visit of every leaf block. Each invocation builds a
@@ -663,8 +663,8 @@ nesting level; `region head=0x<hex> nodes=<N>[ cyclic]` per region; `block
 0x<hex>` per leaf (a merged `Multi` chain prints one `block` line per member);
 one bracketed `[0x<hex>, ...]` line per flat region; `walk 0x<hex>` per
 visited leaf; hex lowercase and unpadded. The rendering itself lives with the
-identifier (`regionid.rs (KunaRegionIdentifier::render_tree)`; the walk
-drives the `regionid.rs (KunaRegionVisitor)` callback trait, which
+identifier (`regionid.rs (UnlaceRegionIdentifier::render_tree)`; the walk
+drives the `regionid.rs (UnlaceRegionVisitor)` callback trait, which
 brackets nested regions and fires once per leaf). In `phases.toml` the three
 surfaces are registered at P7/`loop-refinement` — the observable half of that
 subphase's LATENT region-shaping assertions. The CLI mirror is
@@ -678,7 +678,7 @@ structurer: when `regionstructure` is on (default since DIV-12),
 (ActionBlockStructure)` routes S8 through
 `crates/unlace-structure/src/p8_structure/region_structurer.rs
 (run_region_structurer)`, which builds and computes a fresh
-`KunaRegionIdentifier` over the real CFG per structuring attempt and consumes
+`UnlaceRegionIdentifier` over the real CFG per structuring attempt and consumes
 ONE thing from this phase: when `regionlooprefine` is on, the `cyclic_loops()`
 projection — the identifier's refined loop bodies and exit frontiers keyed by
 block start address — as the read side of the omitted
@@ -690,7 +690,7 @@ identification is recomputed by every consumer. How the structurer matches
 schemas over this tree, virtualizes edges, and falls back to
 `CollapseStructure` is chapter [08 — Structuring](08-structuring.md).
 
-**Dynamic alloca** (`dynalloca`, default off; kuna;
+**Dynamic alloca** (`dynalloca`, default off; unlace;
 `crates/unlace-structure/src/p7_regions/dynalloca.rs (RuleDynAlloca)`):
 a variable-length array or an `alloca` moves the stack pointer by a run-time
 amount (`sub rsp, rax`); once types are in, the new stack pointer value is

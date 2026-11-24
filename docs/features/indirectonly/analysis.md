@@ -52,7 +52,7 @@ That last clause is the safety property. The unit test
 
 ## 3. Which of the two readers is actually live
 
-Instrumented build (`KUNA_IO_DEBUG`, throwaway), `decompile-all` over three
+Instrumented build (`UNLACE_IO_DEBUG`, throwaway), `decompile-all` over three
 coreutils binaries:
 
 | slice | illegal inputs marked |
@@ -133,7 +133,7 @@ and the binary fills both halves before taking the address:
 592c: call 11320                        <- hash_delete(..., &di)
 ```
 
-With the flag dead, kuna prints the two loads into register locals and never into
+With the flag dead, unlace prints the two loads into register locals and never into
 the slot, so `unsigned long v38; // stack - 0x50` is declared and **never assigned
 and never read anywhere in the function**, and `hash_delete` is handed memory the
 emitted C never wrote. With the flag set, both halves are filled.
@@ -198,8 +198,8 @@ point, so no local test can recover it.
 
 This is upstream behaviour, not a porting gap. Stock **Ghidra 12.1.2** on the same
 `walk.so` emits `local_30 = local_30 + -1;` — the identical fabricated store
-(`counterexample.md` §5). kuna with the option **on** reproduces Ghidra exactly;
-kuna's shipped default declines to.
+(`counterexample.md` §5). unlace with the option **on** reproduces Ghidra exactly;
+unlace's shipped default declines to.
 
 ## 7. Speed and type_match
 
@@ -249,7 +249,7 @@ which this change does not touch — 10739 of 10748 functions have byte-identica
 **Default off.** The port is faithful — `check_indirect_use` and
 `mark_indirect_only` match `funcdata_varnode.cc:801-858` opcode for opcode, and
 `merge_test_adjacent`'s lifted refusal matches `merge.cc:189-211` — and with
-`--option indirectonly on` kuna reproduces Ghidra's partitioning, including on the
+`--option indirectonly on` unlace reproduces Ghidra's partitioning, including on the
 counterexample. But the behaviour itself is wrong on a shape that occurs in the
 corpus, and off is the arm that does not fabricate a store, so off is what ships.
 

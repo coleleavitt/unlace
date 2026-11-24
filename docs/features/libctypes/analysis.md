@@ -6,8 +6,8 @@
 
 ## The opportunity
 
-kuna's two built-in prototype tables share one type vocabulary (`Ty`,
-`kuna-analysis/src/analyzers/protos/mod.rs`), and that vocabulary is
+unlace's two built-in prototype tables share one type vocabulary (`Ty`,
+`unlace-analysis/src/analyzers/protos/mod.rs`), and that vocabulary is
 **width-stable by construction**: every slot is `void`, exactly 4 bytes, or
 exactly pointer-width on every ILP32/LP64 target. There is therefore no spelling
 for an aggregate, and all 108 aggregate-pointer slots across the two tables are
@@ -18,7 +18,7 @@ the one thing the table actually knows. `int fclose(FILE *)` is a declaration,
 not an inference.
 
 Measured consequence on the scored surface: over a 92-binary DWARF sample,
-named-struct pointers are 22.5% of matchable ground-truth variables, and kuna
+named-struct pointers are 22.5% of matchable ground-truth variables, and unlace
 scores **0.0%** on that class while ida scores 432 / ghidra 382 / binja 523 true
 positives on the same sample. The libc/POSIX-namable slice of it is ~4.1% of
 matchable ground truth (`FILE` 605 occurrences, `stat` 255, `passwd` 136, …).
@@ -29,7 +29,7 @@ its width-only generosity table.
 
 An option `libctypes` (`off|opaque`, default **off**), a P1 analysis-tier
 enablement, owning one new module
-`kuna-analysis/src/analyzers/protos/libctypes.rs` and one new `Ty` variant.
+`unlace-analysis/src/analyzers/protos/libctypes.rs` and one new `Ty` variant.
 
 * **One new variant, pointer-only.** `Ty::NamedPtr(&'static str)`. No slot in
   these tables is taken or returned by value, because no libc declaration
@@ -102,7 +102,7 @@ interns it under the identical bare spelling. Two things had to be settled: who
 wins, and what happens to the pointers.
 
 **Who wins: DWARF, and it is not close.** The pass is registered AFTER
-`DwarfPass` (`kuna-analysis/src/passes.rs`) and `named_aggregate` adopts a held
+`DwarfPass` (`unlace-analysis/src/passes.rs`) and `named_aggregate` adopts a held
 aggregate of the declared width — under the name, or under the spelling the
 platform's headers use for it (`FILE` -> `struct _IO_FILE`; without that alias
 the image carries two stream types and the body casts between them). A name held
@@ -176,15 +176,15 @@ here for two separate reasons:
   Architecture with the constructor default — measured: with the commit arm in
   place, pass 2 of the stage test produced `fclose(void *)`.
 
-So the gate is the load-time env bridge `KUNA_LIBCTYPES`, the same one
+So the gate is the load-time env bridge `UNLACE_LIBCTYPES`, the same one
 `dwarfstructs` and `typedepth` use: set by the console's `option libctypes` arm
-before `load file`, exported by `kuna decompile` onto the subprocess and by
+before `load file`, exported by `unlace decompile` onto the subprocess and by
 `decompile-all` before the bootstrap, and read once at the top of the pass. The
 same `libctypes_enabled()` call gates `declared_libc_prototype`, so the operator
 path agrees:
 
 ```
-kuna decompile fmt --addr 0x2f30 --define-function 0x2f30=fclose --option libctypes off
+unlace decompile fmt --addr 0x2f30 --define-function 0x2f30=fclose --option libctypes off
   -> int fclose(void *a0)
                                                             ... --option libctypes opaque
   -> int fclose(FILE *a0)
@@ -235,9 +235,9 @@ named aggregate impossible in the output, and the earlier phrasing of this
 document claimed it did. Type propagation reaches by-value positions on its own:
 
 ```
-$ kuna decompile-all <O2/coreutils/stripped/ls> --addr 0x10210 --option libctypes off
+$ unlace decompile-all <O2/coreutils/stripped/ls> --addr 0x10210 --option libctypes off
 undefined16 sub_10210(void)  { char v1 [16]; clock_gettime(0,v1); return v1._0_16_; }
-$ kuna decompile-all <O2/coreutils/stripped/ls> --addr 0x10210 --option libctypes opaque
+$ unlace decompile-all <O2/coreutils/stripped/ls> --addr 0x10210 --option libctypes opaque
 timespec sub_10210(void)     { timespec v1;  clock_gettime(0,&v1); return v1; }
 ```
 
@@ -329,7 +329,7 @@ Ground truth for both is `int get_prefix(FILE *f)` / `get_line(FILE *f, int c)`.
 
 ## `off` is inert, checked against the tree it branched from
 
-`kuna decompile-all` over the whole `O2/coreutils/stripped/fmt`, this branch with
+`unlace decompile-all` over the whole `O2/coreutils/stripped/fmt`, this branch with
 `--option libctypes off` vs the main tree's own build: **0 lines differ** (4,069
 lines each), and the same check on `O2/coreutils/stripped/ls` is byte-identical
 too (13,677 lines each). With the gate off the pass returns before it interns
@@ -338,7 +338,7 @@ to find.
 
 ## The project export: the `.h` stays valid C, the `.c` does not
 
-`kuna decompile-project <bin> --option libctypes opaque` on
+`unlace decompile-project <bin> --option libctypes opaque` on
 `tests/fixtures/stripped_dynamic_x86_64`:
 
 ```c
@@ -361,7 +361,7 @@ parsing at the clash — and took every declaration after it down. That is not n
 to this option; it reproduces on `main` with any `-g` image that calls `stat()`:
 
 ```
-$ gcc -g -O1 -o t2g t2.c && kuna decompile-project t2g -o P    # main, no options
+$ gcc -g -O1 -o t2g t2.c && unlace decompile-project t2g -o P    # main, no options
 $ cc -std=c99 -fsyntax-only P/t2g.h
 P/t2g.h:67:5: error: 'sigaction' redeclared as different kind of symbol
    67 | int sigaction(int a0,void *a1,void *a2);
@@ -375,7 +375,7 @@ the file depends on it, while the prototype is one line and is still printed:
 /* `sigaction` is a type name above; prototype omitted: int sigaction(int a0,sigaction *a1,sigaction *a2); */
 ```
 
-`decompiler/crates/kuna-cli/tests/decompile_project_cli.rs
+`decompiler/crates/unlace-cli/tests/decompile_project_cli.rs
 (header_syntax_checks_when_a_type_shares_a_name_with_a_function)` runs
 `cc -std=c99 -fsyntax-only` over the generated header in both arms.
 
@@ -387,10 +387,10 @@ so, because the shells stay `type_incomplete`: the `.h` says
 type and reads fields out of them.
 
 ```
-$ kuna decompile-project <O2/coreutils/stripped/ls> -o D --option libctypes off
+$ unlace decompile-project <O2/coreutils/stripped/ls> -o D --option libctypes off
 $ cc -std=c99 -fsyntax-only -I D D/ls.c 2>&1 | grep -c 'error:'
 911
-$ kuna decompile-project <O2/coreutils/stripped/ls> -o D --option libctypes opaque
+$ unlace decompile-project <O2/coreutils/stripped/ls> -o D --option libctypes opaque
 $ cc -std=c99 -fsyntax-only -I D D/ls.c 2>&1 | grep -c 'error:'
 969
 ```

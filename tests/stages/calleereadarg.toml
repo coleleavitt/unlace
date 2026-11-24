@@ -3,7 +3,7 @@
 #     int t9(int *p) { int x = *p + 2; if (x) return ext(x) + 1; return 5; }
 #
 # gcc -O2 computes x straight into the argument register and tests it there
-# (lea 0x2(%rax),%edi; test %edi,%edi; je; call ext), and kuna printed
+# (lea 0x2(%rax),%edi; test %edi,%edi; je; call ext), and unlace printed
 # `return ext() + 1;`.  gcc's `int fwd(int *p) { int x = *p; if (x > 5)
 # return x; return ext(x); }` loads x into edi, compares it, returns it on
 # one path and tail-calls ext on the other, and printed `ext()` the same way.
@@ -14,7 +14,7 @@
 # Stage / sub-stage: P4 active input-trial scoring.  A call's settled
 # argument list gains a refused register the caller wrote when the callee's
 # own body (the bounded entry decode calleedeadarg takes, cached per callee)
-# reads that register on entry (kuna_calleereadarg.rs, always on).
+# reads that register on entry (unlace_calleereadarg.rs, always on).
 #
 # The fixture is hand-assembled SysV x86-64 (the gcc -O2 code for t9 and fwd
 # with ext defined in the same image), plus two controls that keep the same

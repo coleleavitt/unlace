@@ -2,7 +2,7 @@
 # `regionstructure` (default OFF).  This proves the structuring seam end to end:
 # under `option regionstructure on`, `ActionBlockStructure` replaces Ghidra's
 # `CollapseStructure` with the region-driven structurer
-# (`s8_structure::region_structurer`), which runs the KunaRegionIdentifier over
+# (`s8_structure::region_structurer`), which runs the UnlaceRegionIdentifier over
 # the real CFG (the W7 `build_from_block_graph` adapter) and structures the
 # seeded `sblocks` graph with the acyclic-sequence schema + structural-ITE
 # schema + the SAILR-ordered virtualize-to-goto fallback.
@@ -61,7 +61,7 @@ fc8b45fcf7d88905ea2e0000d165fc8b
 
 [script]
 commands = [
-    # kuna: the 9 angr structuring/switch flags below are now default-on (DIV-13); this stage test asserts the pre-sweep (flags-off) baseline in pass 1, so pass 1 turns them all OFF (each pass-2 'option <flag> on' re-enables only the flag under test)
+    # unlace: the 9 angr structuring/switch flags below are now default-on (DIV-13); this stage test asserts the pre-sweep (flags-off) baseline in pass 1, so pass 1 turns them all OFF (each pass-2 'option <flag> on' re-enables only the flag under test)
     'option gotoreduce off',
     'option crossjumprevert off',
     'option dedupitetail off',

@@ -8,7 +8,7 @@
 # an argument on both arms and gave it to the undeclared `call eax` too,
 # which printed `(*jmp->UnwindFunc)(jmp,frame)`; the callee pops one slot.
 # Stage / sub-stage: P4 call-site input recovery (`check_call_double_use`,
-# `p4_calls/kuna_sharedpush.rs`). A strict fix, always on.
+# `p4_calls/unlace_sharedpush.rs`). A strict fix, always on.
 # The fixture `sharedpush_regparm_pe_i386.exe` is assembled from
 # `sharedpush_regparm_pe_i386.asm` (see the fixtures README). local_unwind
 # and stack_free are declared here the way debug information declares them.

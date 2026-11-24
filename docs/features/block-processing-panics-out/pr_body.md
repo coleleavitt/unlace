@@ -5,7 +5,7 @@ A protected stub crashes the decompiler instead of producing C. On
 116-byte function at `0x41cd08` exits 1:
 
 ```
-$ kuna decompile thief_crackme.exe 0x41cd08 --addr
+$ unlace decompile thief_crackme.exe 0x41cd08 --addr
 void sub_41cd08(void)
 {
   /* WARNING: decompilation failed: decompile pipeline reached an un-ported seam
@@ -13,13 +13,13 @@ void sub_41cd08(void)
 }
 error: decompilation failed for sub_41cd08 ...
 note: decomp_dbg stderr:
-thread 'main' panicked at crates/kuna-decomp/src/substrate/block.rs:648:22:
+thread 'main' panicked at crates/unlace-decomp/src/substrate/block.rs:648:22:
 index out of bounds: the len is 1 but the index is 1
 ```
 
 The same panic accounts for 39 functions across 17 images in the RE dataset. A
-vendored 5 KiB reproducer is in this PR: `kuna decompile-all
-decompiler/crates/kuna-analysis/tests/fixtures/phimarkerrun_pe_i386.exe`.
+vendored 5 KiB reproducer is in this PR: `unlace decompile-all
+decompiler/crates/unlace-analysis/tests/fixtures/phimarkerrun_pe_i386.exe`.
 
 ## The fix
 
@@ -54,6 +54,6 @@ branch** (60 re-run under a full before/after `decompile-all` are byte-identical
 survivors fail on a different seam.
 
 `make test` PARITY OK 675/675 · `make test-stages` PARITY OK · `make rust-test`
-green · `make check-spec` OK · `make test-cli` 123/123 · `kuna catalog --check` OK.
+green · `make check-spec` OK · `make test-cli` 123/123 · `unlace catalog --check` OK.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

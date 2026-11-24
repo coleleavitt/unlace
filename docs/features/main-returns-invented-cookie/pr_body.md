@@ -5,7 +5,7 @@ the machine plainly returns zero: the compiler sets `EAX` *before* the call,
 because `__security_check_cookie` never touches `RAX`.
 
 ```
-$ kuna decompile ./decompiler/crates/kuna-analysis/tests/fixtures/pe_cookiecheck_x86_64.exe 0x140001000 --addr
+$ unlace decompile ./decompiler/crates/unlace-analysis/tests/fixtures/pe_cookiecheck_x86_64.exe 0x140001000 --addr
 unsigned int sub_140001000(unsigned int argc,unsigned long long argv,unsigned long long envp)
 {
   ...
@@ -70,7 +70,7 @@ probe over the vendored `pe_cookiecheck_x86_64.exe`. Gates: `make test` PARITY O
 675/675 (0 assertions moved), `make test-stages` PARITY OK 683/683 (purely
 additive), `make test-cli` 74/74, `make rust-test` 5,989 passed / 0 failed across
 371 targets, `make check-spec` green,
-`kuna catalog --check` OK. Sweep over 28 crackmes.one binaries / 9,355 functions:
+`unlace catalog --check` OK. Sweep over 28 crackmes.one binaries / 9,355 functions:
 51 functions changed (0.55%) in 4 binaries, 0 added or removed, every binary exit
 0 in both arms. Speed `decompile-all pe_imports.exe` 2.562 s -> 2.486 s (median
 of 6).

@@ -1,7 +1,7 @@
 # FID prototype layout fixture
 
 Records whose types the C parser could rebuild wrongly.
-`crates/kuna-cli/tests/fid_proto_cli.rs` builds a `.fid` from these
+`crates/unlace-cli/tests/fid_proto_cli.rs` builds a `.fid` from these
 objects and checks what the match does with it.
 
 - `lib.c` / `lib.o` (with debug information) / `prog` (`main.c` linked with a

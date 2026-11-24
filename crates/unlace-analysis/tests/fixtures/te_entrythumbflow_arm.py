@@ -4,7 +4,7 @@
 Thumb bit and whose one ``.text`` section holds a Thumb function followed by
 an A32 one.
 
-The layout is the one every kuna TE test shares (``loadimage_te::synthetic``
+The layout is the one every unlace TE test shares (``loadimage_te::synthetic``
 in ``unlace-analysis``): ``StrippedSize`` 0x1d8, ``ImageBase`` 0x400000,
 ``.text`` at RVA 0x1000 with ``PointerToRawData`` 0x1000, so the code lands at
 file offset 0xe50 and address 0x401000. Regenerate with

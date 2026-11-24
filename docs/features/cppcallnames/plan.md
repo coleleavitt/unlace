@@ -11,7 +11,7 @@ plus the numbers behind it.
 | `decompiler/crates/console/src/ifacedecomp.rs` | `IfcAddrrangeLoad`: with no explicit name token, prefer the qualified `function_display_name_across_scopes(offset)`; `name_function` stays the fallback for an unknown address |
 | `decompiler/crates/console/tests/verify_cppcallnames.rs` | **new** — 3 tests: the call-site render, the `load addr` header, and the control that discovery still names its genuinely-unknown finds `sub_<addr>` |
 | `decompiler/crates/console/tests/verify_multiformat_dwarf.rs` | baseline arm switched from "`load addr` with the pass on" to `option dwarf off` — the existing test was pinning the `--addr` bug (see Decision 5) |
-| `docs/spec/00-overview.md` | 0.1 (the gated-commit idempotence contract is cross-scope) and 0.2 (`kuna decompile`'s two selection forms name identically) |
+| `docs/spec/00-overview.md` | 0.1 (the gated-commit idempotence contract is cross-scope) and 0.2 (`unlace decompile`'s two selection forms name identically) |
 | `docs/history.md` | DIV-59 row |
 | `docs/features/cppcallnames/` | this bundle |
 
@@ -24,14 +24,14 @@ No option, no `phases.toml` row, no catalog-count bump, no baseline re-pin.
 Three independent reasons, in order of weight:
 
 1. **There is no driver-tier option machinery to gate it with.** Every settable in
-   `phases.toml` carries an engine phase P1–P9; `console`/`kuna-cli` only ever
+   `phases.toml` carries an engine phase P1–P9; `console`/`unlace-cli` only ever
    *write* options. Gating this would mean inventing a new axis, not filling in a
    row. The precedent for driver policy deliberately kept out of the catalog is
    `--max-fn-seconds` ("Driver policy, not a stage-model settable", `docs/cli.md`);
    the closest recent behavior change of this shape is issue #197.
 2. **The "after" behavior already ships.** `--mode reliable` renders
    `Account::deposit(a,amount)` today. This does not introduce a new rendering
-   policy — it removes an inconsistency in which two of kuna's four modes silently
+   policy — it removes an inconsistency in which two of unlace's four modes silently
    lost names the other two kept. Anyone who wants the old text can still get it
    with `--option fast_funcdisc off --option funcstart_patterns off`.
 3. **There is no judgment call in it.** A synthetic `sub_<addr>` shadowing a real
@@ -104,7 +104,7 @@ control passes, which is exactly the intended split.
 
 ### Two-arm sweep
 
-`kuna decompile-all` before (main build) vs after (this build), 13 binaries, every
+`unlace decompile-all` before (main build) vs after (this build), 13 binaries, every
 changed line classified by script:
 
 ```
@@ -121,11 +121,11 @@ signature change anywhere.
 ### Repo fixture, before vs after
 
 ```
-$ kuna decompile decompiler/crates/kuna-analysis/tests/fixtures/cpp_noreturn_x86_64 fail
+$ unlace decompile decompiler/crates/unlace-analysis/tests/fixtures/cpp_noreturn_x86_64 fail
 - void fail(void) {  sub_401070();      // no-return }
 + void fail(void) {  std::terminate();  // no-return }
 
-$ kuna decompile ... --addr 0x401070
+$ unlace decompile ... --addr 0x401070
 - void sub_401070(void)
 + void std::terminate(void)
 ```
@@ -138,11 +138,11 @@ $ kuna decompile ... --addr 0x401070
 | `make test-stages` | PARITY OK, no re-pin |
 | `make rust-test` | green |
 | `make check-spec` | OK |
-| `kuna catalog --check` | catalog OK |
+| `unlace catalog --check` | catalog OK |
 
 ### Speed
 
 There is no option to flip, so `scripts.pipeline.timeit` (which times one binary
 OFF vs ON) does not apply — the same reason DIV-58 recorded its own interleaved
-measurement. Arms are the pre-change `kuna` and this build, runs interleaved to
+measurement. Arms are the pre-change `unlace` and this build, runs interleaved to
 cancel drift, minimum of 5 pairs reported. Numbers in `record.json`.

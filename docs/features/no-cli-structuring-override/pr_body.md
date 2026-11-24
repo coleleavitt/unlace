@@ -2,14 +2,14 @@
 
 > `override flow <addr> branch|call|callreturn|return` is fully ported and works — it is the
 > one structuring override that is not a stub — and it is reachable only from the console. The
-> `kuna` binary's `--assert` plane carries eleven directives (`function`, `typedef`,
+> `unlace` binary's `--assert` plane carries eleven directives (`function`, `typedef`,
 > `prototype`, `data`, `param`, `return`, `comment`, `name`, `type`, `readonly`, `volatile`)
 > and `flow` is not among them, so an agent driving the CLI cannot correct a misclassified
 > call/branch/return at all.
 >
 > — `docs/re-needs/no-cli-structuring-override.md` (1 instance, severity major, track tooling)
 
-kuna decides at P2 whether an instruction branches, calls, calls-and-does-not-return, or
+unlace decides at P2 whether an instruction branches, calls, calls-and-does-not-return, or
 returns. On an obfuscated or hand-written image it gets that wrong, and everything downstream
 inherits the mistake — the function absorbs its neighbours, the body fills with dead
 temporaries, the structurer gives up. The console has had the correction all along; the
@@ -18,7 +18,7 @@ binary an agent actually drives did not.
 ## Mechanism
 
 A twelfth directive: **`flow [<func>::]<addr> branch|call|callreturn|return`**, at P2
-flow-classification. No engine change — `kuna-decomp` is untouched by this PR.
+flow-classification. No engine change — `unlace-decomp` is untouched by this PR.
 
 * `console/src/assertions.rs` gains `Body::Flow`, **function-scoped**: a flow fact is
   consumed at flow time (the follower reads it while it is still deciding which bytes belong
@@ -30,14 +30,14 @@ flow-classification. No engine change — `kuna-decomp` is untouched by this PR.
   **after** them on purpose: `insertFlowOverride` is a map store, so at an address both name
   the caller's fact wins. What was declared outranks what was inferred, the same rule the rest
   of the plane runs on.
-* `kuna-cli/src/assertdecl.rs` parses the directive and lowers it to the `Slot::Function`
+* `unlace-cli/src/assertdecl.rs` parses the directive and lowers it to the `Slot::Function`
   console line `override flow <addr> <kind>`, which lands on the already-ported
   `IfcFlowOverride`.
 
 **Both surfaces, because they are different code paths.** The hypothesis asked a builder to
 confirm the CLI re-seeds the override the way the console does. It does — but not by the
 console's route, and getting this wrong would have shipped a directive that works on
-`kuna decompile` and is inert on `kuna decompile --json`, which is the surface the acceptance
+`unlace decompile` and is inert on `unlace decompile --json`, which is the surface the acceptance
 probe uses. `--json` does not fork `decomp_dbg`; it loads in-process, where the console's
 `pending_flow_overrides` stash is never consulted. Hence the two seedings. Measured emitting
 byte-identical C on both, for all four spellings.
@@ -70,7 +70,7 @@ Controls: no directive ⇒ byte-identical output and an empty `assertions[]`;
 `a-158ef4220dee` — the need's own, unchanged, all six clauses:
 
 ```
-kuna decompile <fixture> --addr 0x13c9 --json --assert 'flow 0x1405 return' --assert-strict
+unlace decompile <fixture> --addr 0x13c9 --json --assert 'flow 0x1405 return' --assert-strict
   exit 0 · stdout is JSON · assertions[0].kind == "flow" · assertions[0].status == "applied"
   · code contains "return dat_4014;" · code does not contain "v25"
 ```
@@ -84,7 +84,7 @@ on all six clauses at `9d5ab78a`). Promoted verbatim to
 **`phases.toml` is byte-identical to `main`, and that is the one part of the brief this PR
 does not deliver.** The need's hypothesis left the `exposure` call to the builder. The call:
 P2 flow-classification's `command override flow; option noreturn` is now untrue, and should
-read `command override flow; kuna --assert 'flow <addr> branch|call|callreturn|return'; option
+read `command override flow; unlace --assert 'flow <addr> branch|call|callreturn|return'; option
 noreturn`. That edit was made and measured — regenerates through `build.rs`, catalog stays
 green, no count moves — and then **reverted**, because `mergecheck` shape-C guards
 `phases.toml` as a keep-both table and rejects the disappearance of any line present on
@@ -107,7 +107,7 @@ engine work and the need's own decision log says to re-file them with a witnesse
 | `make rust-test` | green (7 new cases in `verify_assertflow.rs`, 1 new + 2 extended in `assertdecl`) |
 | `make check-spec` | OK |
 | `make test-cli` | 25/25 |
-| `kuna catalog --check` | catalog OK |
+| `unlace catalog --check` | catalog OK |
 
 No option row, no stages case, no catalog counters, no DIV row — a CLI surface cannot change
 emitted C on its own; this one changes it only when a caller states a fact.

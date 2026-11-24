@@ -6,7 +6,7 @@
 #     csel x5, x5, x8, hi
 #     br   x6
 #
-# and kuna printed `(*a6)(); // jump-as-call` with the clamp gone: the call
+# and unlace printed `(*a6)(); // jump-as-call` with the clamp gone: the call
 # took no arguments, so the `csel` had no reader and dead-code removal took
 # it.  Every Swift async `resume_parent` continuation and every vtable or
 # witness tail dispatch in the app had the same empty call.
@@ -21,7 +21,7 @@
 # was filled below the active trial.
 #
 # Stage / sub-stage: P4 "active-input-trial-scoring", option `passthrough`
-# (kuna_passthrough.rs, default on).  At a CALL SITE a REGISTER the function
+# (unlace_passthrough.rs, default on).  At a CALL SITE a REGISTER the function
 # hands on untouched (unreferenced, or the function's own input Varnode in
 # place) counts toward neither the run nor its end; the tail loop that
 # fills the holes below the last active trial takes it.  Off reproduces the

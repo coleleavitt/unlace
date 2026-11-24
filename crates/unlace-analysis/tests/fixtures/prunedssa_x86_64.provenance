@@ -1,5 +1,5 @@
 prunedssa_x86_64 -- the GH-1034 heritage-marker fixture for options `readonlycalls`
-and `prunedssa` (tests/stages/kuna-prunedssa.toml).
+and `prunedssa` (tests/stages/unlace-prunedssa.toml).
 
 What it is
   A 32,584-byte x86-64 ELF built from prunedssa_x86_64.c, which is generated

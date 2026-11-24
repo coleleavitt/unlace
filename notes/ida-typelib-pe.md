@@ -59,8 +59,8 @@ table is ever committed, the `.til` files stay a runtime input from the user's I
 
 | step | change | where | size |
 |---|---|---|---|
-| 1 | **Precedence.** When `typelib` names a library, a declaration from it replaces a `win32sigs` (and `libcsigs`) entry for the same import; the hand tables stay the fallback when no library is given. | `kuna_typelib::seed` (the "no earlier source declared" filter), or `win32sigs` consulting `TypeLibFacts` | S |
-| 2 | **Several libraries.** `typelib` takes a `:`-separated list (as `KUNA_FLIRT_SIGS` does); the first library that declares a name wins. Lets `mssdk64_win10.til:ntapi64_win10.til` work together. | `TypeLib` option type, `library_text` | S |
+| 1 | **Precedence.** When `typelib` names a library, a declaration from it replaces a `win32sigs` (and `libcsigs`) entry for the same import; the hand tables stay the fallback when no library is given. | `unlace_typelib::seed` (the "no earlier source declared" filter), or `win32sigs` consulting `TypeLibFacts` | S |
+| 2 | **Several libraries.** `typelib` takes a `:`-separated list (as `UNLACE_FLIRT_SIGS` does); the first library that declares a name wins. Lets `mssdk64_win10.til:ntapi64_win10.til` work together. | `TypeLib` option type, `library_text` | S |
 | 3 | **Choose automatically from a directory.** A til directory (env `UNLACE_TIL_DIR` pointing at `<ida>/til`) plus IDA's rules from §2: PE32/PE32+ x subsystem -> `mssdk[64]_win10` or `ntddk[64]_win10` (newest present); EFI subsystems 10-13 -> `uefi[64]`; then `ntapi[64]_win10`. Report the choice on stderr. | `protos/typelib.rs` (facts: subsystem, magic) + console | S-M |
 | 4 | **Names beyond imports.** Seed the library for functions named by FLIRT, FID or a PDB (IDA's "Types applied to %d names"), not only for imports. | `seed`: walk `named` (already in `TypeLibFacts`) as well as `imports` | S |
 | 5 | **Docs.** The `typelib` row and spec chapter state that a `.til` path works on any target. | `phases.toml`, `docs/spec`, regenerate `docs/options.md` | S |

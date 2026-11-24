@@ -1,4 +1,4 @@
-# Round 4 grounding: where the kuna-vs-IDA gap actually is
+# Round 4 grounding: where the unlace-vs-IDA gap actually is
 
 Measured on 2026-08-10 against HEAD `82dd39a7`, before any triage was read. Round 3's
 lesson was that triaging a stale pool spends the round on defects that no longer exist;
@@ -6,22 +6,22 @@ this round opens by locating the gap in the scoreboard itself so the triage samp
 aimed rather than sampled uniformly.
 
 All GED figures recomputed directly from `~/github/decbench/results/full_run/ged_new.json`,
-which is the run's own per-function metric store. kuna's column comes from the pinned build
+which is the run's own per-function metric store. unlace's column comes from the pinned build
 `9623dc27`; every rival's is frozen from its own last run. Treat the tree as a mining
 instrument, not a publishable leaderboard.
 
 ## O0 is the only level where IDA holds more perfect functions
 
-| opt | ida perfect / scored | ida % | kuna perfect / scored | kuna % | perfect deficit | scored delta |
+| opt | ida perfect / scored | ida % | unlace perfect / scored | unlace % | perfect deficit | scored delta |
 |---|---|---:|---|---:|---:|---:|
 | O0 | 14,983 / 32,401 | 46.24% | 14,709 / 32,339 | 45.48% | **+274 for ida** | -62 |
-| O2 | 7,269 / 21,639 | 33.59% | 7,378 / 22,549 | 32.72% | -109 (kuna ahead) | +910 |
-| O2-noinline | 10,586 / 28,880 | 36.66% | 11,059 / 30,313 | 36.48% | -473 (kuna ahead) | +1,433 |
+| O2 | 7,269 / 21,639 | 33.59% | 7,378 / 22,549 | 32.72% | -109 (unlace ahead) | +910 |
+| O2-noinline | 10,586 / 28,880 | 36.66% | 11,059 / 30,313 | 36.48% | -473 (unlace ahead) | +1,433 |
 
-Total perfect functions: **ida 32,838, kuna 33,146 (+308 for kuna)**.
+Total perfect functions: **ida 32,838, unlace 33,146 (+308 for unlace)**.
 
-The percentage table reads as "kuna trails at all three levels". The count table says
-something different and more useful: at O2 and O2-noinline kuna's lower *rate* is a
+The percentage table reads as "unlace trails at all three levels". The count table says
+something different and more useful: at O2 and O2-noinline unlace's lower *rate* is a
 denominator effect -- it is scored on 2,343 more functions than IDA and holds more perfect
 ones at both. **O0 is the only level with a real deficit**, and it is 274 functions.
 
@@ -31,9 +31,9 @@ At O0, per function, comparing perfect-vs-not:
 
 | | count |
 |---|---:|
-| IDA perfect, kuna not (both scored) | 3,067 |
-| kuna perfect, IDA not | 3,054 |
-| IDA perfect, kuna produced nothing scoreable | 261 |
+| IDA perfect, unlace not (both scored) | 3,067 |
+| unlace perfect, IDA not | 3,054 |
+| IDA perfect, unlace produced nothing scoreable | 261 |
 | **net** | **+274 for ida** |
 
 The net deficit is **4% of the 6,121-function disagreement volume**. A change that flips
@@ -44,7 +44,7 @@ priced against BOTH populations.
 
 Per-project net (top contributors):
 
-| project | ida-only | kuna-unscored | kuna-only | net |
+| project | ida-only | unlace-unscored | unlace-only | net |
 |---|---:|---:|---:|---:|
 | betaflight | 256 | 169 | 222 | +203 |
 | gnutls | 236 | 0 | 44 | +192 |
@@ -56,28 +56,28 @@ Per-project net (top contributors):
 
 ## Half the O0 deficit is recall, and it is one shape
 
-324 functions IDA scores at O0 produce no usable GED from kuna at all -- a guaranteed zero
+324 functions IDA scores at O0 produce no usable GED from unlace at all -- a guaranteed zero
 on every one. Probed against `unlace functions --json --mode aggressive` on today's build:
 
-- **322 of 324 (99.4%) are INTERIOR to a kuna entry.** kuna discovered a function that
-  starts before the true entry. Only 2 are entries kuna found and simply scores badly.
+- **322 of 324 (99.4%) are INTERIOR to a unlace entry.** unlace discovered a function that
+  starts before the true entry. Only 2 are entries unlace found and simply scores badly.
 - Every one is ARM Cortex-M: betaflight 210, cleanflight 97, crazyflie 8, riot-os 5,
   chibios 1, nuttx 1 (plus 2 exact-entry in libbsd).
 - The distance to the containing entry is not uniform:
 
-| bytes past the containing kuna entry | 2 | 4 | 6 | 8 | <=16 | <=64 | <=256 | median |
+| bytes past the containing unlace entry | 2 | 4 | 6 | 8 | <=16 | <=64 | <=256 | median |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | count | **64** | 6 | 18 | 6 | 147 | 284 | 315 | 18 |
 
-**64 of 322 are exactly 2 bytes -- one Thumb halfword.** A general "kuna merges functions"
+**64 of 322 are exactly 2 bytes -- one Thumb halfword.** A general "unlace merges functions"
 story does not produce a spike at exactly one instruction. On the worked witness
-(betaflight `RcStatsGetFullThrottleTimeUs`, true entry `0x803d314`, kuna's entry
+(betaflight `RcStatsGetFullThrottleTimeUs`, true entry `0x803d314`, unlace's entry
 `sub_803d312`) both addresses decompile to an identical body, so the only thing wrong is
 the entry address.
 
 Closing that pool is worth more than any structuring feature in the round:
 
-| O0 recall recovered perfect | kuna O0 | ida O0 |
+| O0 recall recovered perfect | unlace O0 | ida O0 |
 |---:|---:|---:|
 | +94 (the <=8-byte class) | 45.64% | 46.24% |
 | +162 | 45.76% | 46.24% |
@@ -85,10 +85,10 @@ Closing that pool is worth more than any structuring feature in the round:
 
 ## The structural signature of the remaining 3,067
 
-Structural metrics of kuna's stored pane minus IDA's, over all 3,067 O0 functions where IDA
-is perfect and kuna is not (paired panes, 3,067 of 3,067):
+Structural metrics of unlace's stored pane minus IDA's, over all 3,067 O0 functions where IDA
+is perfect and unlace is not (paired panes, 3,067 of 3,067):
 
-| metric | mean (kuna - ida) | median |
+| metric | mean (unlace - ida) | median |
 |---|---:|---:|
 | ifs | **+0.59** | 0 |
 | loc | +0.23 | +1 |
@@ -100,10 +100,10 @@ is perfect and kuna is not (paired panes, 3,067 of 3,067):
 | cases | -0.02 | 0 |
 
 **It is not goto density and it is not loop shape.** It is extra conditional branches. The
-control population (kuna perfect, IDA not; n=2,938) shows the mirror: kuna is 3.37 LOC
+control population (unlace perfect, IDA not; n=2,938) shows the mirror: unlace is 3.37 LOC
 shorter, with no `if` excess.
 
-71% of the losing set is a small delta: kuna GED median 6, and 2,185 of 3,067 score <= 8.
+71% of the losing set is a small delta: unlace GED median 6, and 2,185 of 3,067 score <= 8.
 
 ## Two suspects tested, one killed
 
@@ -119,8 +119,8 @@ shorter, with no `if` excess.
 
 | population | n | fires | mean if delta ON | mean if delta OFF | better OFF | worse OFF |
 |---|---:|---:|---:|---:|---:|---:|
-| IDA perfect, kuna not | 78 | 28 | 1.38 | 0.79 | **20** | 1 |
-| kuna perfect, IDA not (control) | 83 | 13 | 0.51 | 0.59 | 0 | **7** |
+| IDA perfect, unlace not | 78 | 28 | 1.38 | 0.79 | **20** | 1 |
+| unlace perfect, IDA not (control) | 83 | 13 | 0.51 | 0.59 | 0 | **7** |
 
 `returndup` accounts for roughly 43% of the if-excess on the losing set. Naively scaled to
 the full populations that is about +786 improved against -258 regressed.
@@ -141,7 +141,7 @@ Same harness, one ablation per arm, scoring total shape distance to IDA's pane s
 | `earlyreturn=off` | 1.20 | +0.00 | 0 | 0 | 21 |
 | `taildup=off` | 1.20 | +0.00 | 0 | 0 | 21 |
 
-And the price, on the population where kuna already wins:
+And the price, on the population where unlace already wins:
 
 | ablation | mean shape dist (the price, n=44) | vs baseline | closer | farther | exact match |
 |---|---:|---:|---:|---:|---:|
@@ -158,7 +158,7 @@ that is roughly +400 newly exact against -69 lost -- against an O0 deficit of 27
 That scaling is a proxy and must not be quoted as a result. What it does establish is where
 the expensive measurement belongs, and that a global flip is almost certainly the wrong
 answer: DIV-54 bought +417 GED-perfect at O2 and O2-noinline, so the shippable outcome is a
-**structural gate** that separates the O0 harm, not an opt-level switch -- which kuna cannot
+**structural gate** that separates the O0 harm, not an opt-level switch -- which unlace cannot
 observe at runtime in any case.
 
 This matters because of what DIV-54 measured. PR #246 flipped `returndup` default-ON on an

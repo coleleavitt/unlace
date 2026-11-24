@@ -4,7 +4,7 @@ RE-friction round 2, need `overlapping-anti-disassembly-sequence` (blocker, 1 in
 challenge `5ab77f6333c5d40ad448ca52` — `pcme0`, i386 ELF, stripped). The tester's report:
 
 > **Overlapping anti-disassembly sequence produces bogus out-of-image code and corrupted
-> checker dataflow** — Kuna treated the intentionally overlapping bytes at 0x8048837 as a
+> checker dataflow** — Unlace treated the intentionally overlapping bytes at 0x8048837 as a
 > CALL, emitted a call to out-of-image `sub_b10cdc7`, writes through uninitialized pointers,
 > a bogus `dat_d98ddd00` global, malformed split arguments, and an unreadable comparison.
 
@@ -61,7 +61,7 @@ both are ordinary compiler output.
 is junk. glibc's conditional-`LOCK` idiom is *compiler-generated* and does exactly this — a
 `74 01` `JE` hopping over an `f0` prefix byte, so the fall-through is `LOCK OR [rdi+4],1` and
 the branch target is the same `OR` without the prefix. Both streams are real and they
-**reconverge**: the two decodes end at the same address. `kuna_streams_reconverge` decodes the
+**reconverge**: the two decodes end at the same address. `unlace_streams_reconverge` decodes the
 branch target's own length and declines whenever `target + target_len == curaddr + step` (and
 whenever the target does not decode at all). It is architecture-neutral — no prefix-byte
 table — and it runs only after the strict-interior test has already matched, which it never
@@ -87,7 +87,7 @@ does in ordinary code. **This clause was ablated, not argued** — see *Refutati
   orphaned and no instruction boundary already committed to is moved. That is what keeps this
   out of the "repair the flow graph afterwards" class of change the triage was worried about.
 * `badinstruction` and not `noreturn` was bought by measurement: a `noreturn` halt is folded
-  by `kuna_ifnoexit` into an empty `if (cond) { }`, which reads as though the fall-through
+  by `unlace_ifnoexit` into an empty `if (cond) { }`, which reads as though the fall-through
   does nothing and carries on — the one rendering that is actually wrong about where control
   goes. Both were built and compared.
 
@@ -128,14 +128,14 @@ asked for. No `sub_b10cdc7`, no `dat_d98ddd00`.
 * `tests/cli/overlapping-anti-disassembly-sequence.json` — the acceptance probe promoted.
   Its clauses are verbatim; only the target is re-pointed, because the need's own target is
   a dataset crackme and CI has no dataset. It runs against a vendored 2 KiB ELF32 fixture,
-  `decompiler/crates/kuna-analysis/tests/fixtures/overlapbranch_i386` (generator
+  `decompiler/crates/unlace-analysis/tests/fixtures/overlapbranch_i386` (generator
   `overlapbranch_i386.py` beside it), which carries the same idiom at the same address and
   reproduces both forbidden patterns with the option off.
 * 11 unit tests on the two decision predicates (`overlapbranch/tests.rs`): the witness,
   the gate, every ordinary forward/backward branch shape that must not fire, and the four
   reconvergence cases (glibc's `LOCK` prefix, the witness's non-reconvergent overlap, an
   undecodable target, and a target that outruns the fall-through).
-* `decompiler/crates/kuna-cli/tests/overlapbranch_cli.rs` — an end-to-end two-pass gate that
+* `decompiler/crates/unlace-cli/tests/overlapbranch_cli.rs` — an end-to-end two-pass gate that
   runs the promoted probe's clauses verbatim under `make rust-test` over the vendored
   fixture, plus an `option overlapbranch off` pass proving the clauses are discriminating
   (`tests/cli/` is executed by `scripts.repipe.clitests`, which is not a CI job).
@@ -148,7 +148,7 @@ asked for. No `sub_b10cdc7`, no `dat_d98ddd00`.
 | `make test-stages` | **PARITY OK — 603/603** (600 + 3 new; baseline re-recorded) |
 | `make rust-test` | **green — 5,330 passed, 0 failed** (345 suites) |
 | `make check-spec` | OK (also `--strict` OK) |
-| `kuna catalog --check` | catalog OK (136 → 137 settables) |
+| `unlace catalog --check` | catalog OK (136 → 137 settables) |
 | acceptance `a-52c2ad89b522` | **PASS** |
 | `python -m scripts.repipe.clitests` | **18/18** (includes the newly promoted probe) |
 
@@ -205,7 +205,7 @@ carries it is the reconvergence exclusion, so it was measured directly.
 [OB] reconverge curaddr=0x401004 step=5 target=0x401005 tlen=4     -> true   (declined)
 ```
 
-**Ablated — `kuna_streams_reconverge` forced to `false`, nothing else changed:**
+**Ablated — `unlace_streams_reconverge` forced to `false`, nothing else changed:**
 
 ```c
 /* shipped */                             /* exclusion ablated */

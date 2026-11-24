@@ -50,7 +50,7 @@ one level deeper each pass. The markers are the *carriers*; the spacebase PTRSUB
 Upstream already has the rule. `TypeFactory::getTypePointerNoDepth` (`type.cc:1509`) refuses to
 build a pointer whose target is a pointer-to-pointer, substituting `ptr(undefined<N>)`, and
 returns an existing `ptr(undefined<N>)` unchanged — a **fixed point**. Ghidra calls it from
-`TypeOpLoad`/`TypeOpStore::propagateType` only, and kuna's port of that (`propagate_to_pointer`)
+`TypeOpLoad`/`TypeOpStore::propagateType` only, and unlace's port of that (`propagate_to_pointer`)
 is faithful. The escalation here does not go through LOAD/STORE, so the rule never runs.
 
 `ptrdepthcap` calls that same rule at the one funnel every adopted type passes through
@@ -93,7 +93,7 @@ in the need's Decision log:
 
 Catalog default **OFF** (it changes inferred types and the XML datatest corpus pins the upstream
 spellings while applying no mode), **ON in the `aggressive` preset** — which `auto` selects for
-anything under 500 KiB, so the cap is the default rendering of `kuna decompile`,
+anything under 500 KiB, so the cap is the default rendering of `unlace decompile`,
 `decompile-all`, `decompile-project` and the web front-end. This is the `ctypes` (DIV-75),
 `voidtailreturn` (DIV-98) and `cortexmpriv` (DIV-99) delivery route, for the same reason.
 `--option ptrdepthcap off` restores upstream's unbounded escalation byte for byte.
@@ -154,7 +154,7 @@ repairs is. `--option ptrdepthcap off` restores the old cost, and the old output
 | `make test-stages` | **PARITY OK 605/605** (602 → 605, the new two-pass case) |
 | `make rust-test` | green |
 | `make check-spec` | OK |
-| `kuna catalog --check` | catalog OK (139 settables) |
+| `unlace catalog --check` | catalog OK (139 settables) |
 | `scripts.repipe.verify --need c-string-objects-become` | **acceptance PASS**, 8/8 clauses |
 
 Registry: **DIV-108** (`docs/history.md`). Bundle: `docs/features/c-string-objects-become/`.

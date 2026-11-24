@@ -6,7 +6,7 @@
 
 The feature has three moving parts and they are useless apart:
 
-1. **`externref` over the IAT slots** (`kuna-analysis/src/loader/peimportcall.rs`
+1. **`externref` over the IAT slots** (`unlace-analysis/src/loader/peimportcall.rs`
    + `pe_iat::resolve_pe_import_slots`, committed by `engine.rs` as
    `Database::set_property_range(varnode_flags::externref, ...)`). Binds the call.
 2. **`GlobalEntry::func_no_return`** (`p0_knowledge/database.rs::build_global_query`,
@@ -27,9 +27,9 @@ measurements confirm.
 Upstream maps an `ExternRefSymbol` at the slot: a pointer-to-code type of pointer
 width carrying `externref|typelock`, whose `refaddr` points at the real function, and
 `queryExternalRefFunction` resolves `refaddr` through `queryFunction`. Porting that
-shape would mean two symbols mapped at one address (the import `FunctionSymbol` kuna
+shape would mean two symbols mapped at one address (the import `FunctionSymbol` unlace
 already registers there, plus the ExternRef) and would change naming and typing at the
-slot. kuna's `query_function` keys on the Varnode's **own** address instead of
+slot. unlace's `query_function` keys on the Varnode's **own** address instead of
 upstream's `refaddr` indirection, so the slot-VA registration already lines up; all
 that is missing is the flag.
 
@@ -43,12 +43,12 @@ branch. That makes `set_property_range` the minimal, surgical carrier -- and
 ## Why the PE and Mach-O no-return lists stay separate
 
 Upstream ships `PEFunctionsThatDoNotReturn` and `MachOFunctionsThatDoNotReturn` as two
-files selected by `noReturnFunctionConstraints.xml`'s per-executable-format arms; kuna
+files selected by `noReturnFunctionConstraints.xml`'s per-executable-format arms; unlace
 merged them into one `PeMacFunctionsThatDoNotReturn` carrying only the shared CRT
 names. Widening that merged file with `ExitProcess`/`KeBugCheck`/`?_Xbad_alloc@std@@YAXXZ`
 would match Windows names against a Mach-O. The vendored PE list therefore stays its
 own file on its own format arm (`BinaryFormat::Pe | Coff`), which is *more* faithful
-than the merge, not less. kuna's Mach-O list is still missing upstream's Mach-O names
+than the merge, not less. unlace's Mach-O list is still missing upstream's Mach-O names
 (`objc_exception_throw`, `cxa_throw`, `pthread_exit`, `longjmp`, the Swift family) --
 a separate, out-of-scope gap, recorded here.
 
@@ -56,7 +56,7 @@ a separate, out-of-scope gap, recorded here.
 
 The load-time-flag trap (an `Architecture` flag read inside a load-time pass silently
 does nothing, because load-time passes run before `--option` is applied) is avoided
-without an env-var bridge: kuna-analysis passes compute their facts at load and the
+without an env-var bridge: unlace-analysis passes compute their facts at load and the
 console **merges them per-pass-id at `read symbols`**, after options are in effect
 (`engine.rs::analysis_pass_enabled`). So a new pass id is the gate. The decompiler-core
 half (2) is an ordinary `Architecture` flag copied into the ArchSeam in

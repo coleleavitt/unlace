@@ -381,7 +381,7 @@ fn verify_filemanage_component_walk_matches_cpp_oracle() {
 /// those two entries (the documented loss).
 #[test]
 fn verify_filemanage_fs_layouts_match_cpp_oracle() {
-    let root = std::env::temp_dir().join(format!("kuna_verify_w1util_{}", std::process::id()));
+    let root = std::env::temp_dir().join(format!("unlace_verify_w1util_{}", std::process::id()));
     let _ = fs::remove_dir_all(&root);
     for d in [
         "devroot/ghidra.master.git/Ghidra/bin",

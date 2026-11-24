@@ -14,7 +14,7 @@
 //   * `Account::make_id` — a `static` member (no artificial `this`), proving the
 //     drop was never about the `this` DIE.
 //   * `maxof<int>` / `maxof<double>` — template instantiations. These DO carry
-//     their own `DW_AT_name`, but the name is `maxof<int>` while kuna's symbol
+//     their own `DW_AT_name`, but the name is `maxof<int>` while unlace's symbol
 //     table normalizes the demangled name to `maxof`, so the by-NAME prototype
 //     park misses them; only the address-keyed park binds.
 //   * `probe_virtual_call` — a plain free function whose parameter is a pointer

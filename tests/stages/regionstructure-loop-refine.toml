@@ -6,13 +6,13 @@
 #
 # What this proves end to end:
 #
-#   * `KunaRegionIdentifier::cyclic_loops()` projects each identified cyclic
+#   * `UnlaceRegionIdentifier::cyclic_loops()` projects each identified cyclic
 #     region onto basic-block start addresses (head / refined loop body / exit
 #     frontier) and hands it to the S8 structurer.
 #   * For a MULTI-EXIT loop the base cyclic schemas (`try_fold_loop`) decline,
 #     `region_structurer::refine_loop_edges` fires (it virtualizes the loop's
 #     SECONDARY exits to gotos so the body collapses to a single-exit shape) -
-#     confirmed live via `KUNA_RS_DEBUG=1` (`[rs] RI loop head=...` +
+#     confirmed live via `UNLACE_RS_DEBUG=1` (`[rs] RI loop head=...` +
 #     `[rs]   refined loop head#N`).
 #
 # `mexit` is a multi-exit loop (a `for` with an early `return -1` AND a

@@ -1,7 +1,7 @@
-/* Fixture for data-global naming from DWARF (kuna Feature #1, matching IDA/Ghidra).
+/* Fixture for data-global naming from DWARF (unlace Feature #1, matching IDA/Ghidra).
  *
  * Multi-byte file-scope globals with DWARF `DW_TAG_variable` + `DW_OP_addr`
- * locations. Before the fix, kuna installed each data global with a size-1 code
+ * locations. Before the fix, unlace installed each data global with a size-1 code
  * type, so a 4-/8-byte memory access queried `queryContainer(addr, 4|8)` and
  * found no covering SymbolEntry -- the global rendered `dat_<addr>`. The fix maps
  * each DWARF global with an `undefined<size>` type (size from `DW_AT_type`), so

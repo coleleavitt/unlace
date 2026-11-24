@@ -26,7 +26,7 @@ fn decompile_with(function: &str, extra: &[&str]) -> String {
     let out = command
         .args(["--sleighpath", &sleigh])
         .output()
-        .expect("spawn kuna");
+        .expect("spawn unlace");
     let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
     if !out.status.success() {

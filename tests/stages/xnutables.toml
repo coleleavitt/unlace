@@ -1,4 +1,4 @@
-# Kuna `xnutables` option (P1 external refinement): kalloc_type views and
+# Unlace `xnutables` option (P1 external refinement): kalloc_type views and
 # IOExternalMethodDispatch tables on an XNU kext.
 #
 # The fixture (gen_iokit.py) adds to the iokitclasses kext one

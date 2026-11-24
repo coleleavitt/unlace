@@ -3,7 +3,7 @@
   "probe_id": "p-c354ee2a485d",
   "kind": "cli",
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "functions",
     "{{BIN}}",
     "--json"
@@ -38,5 +38,5 @@
       }
     ]
   },
-  "notes": "CURRENT BAD BEHAVIOUR. On a section-header-stripped PIE ELF kuna finds nothing and says so with exit 0, so an agent cannot tell 'no functions' from 'I could not parse this'. Work dir is the challenge dir."
+  "notes": "CURRENT BAD BEHAVIOUR. On a section-header-stripped PIE ELF unlace finds nothing and says so with exit 0, so an agent cannot tell 'no functions' from 'I could not parse this'. Work dir is the challenge dir."
 }

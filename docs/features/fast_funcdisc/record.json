@@ -1,7 +1,7 @@
 {
   "opportunity": "user-report::fast-project-missing-bodies",
   "test_name": "ghdec-fast-funcdisc",
-  "binary": "decompiler/crates/kuna-analysis/tests/fixtures/pdb_prog.exe",
+  "binary": "decompiler/crates/unlace-analysis/tests/fixtures/pdb_prog.exe",
   "selector": "sub_140001000",
   "func_addr": null,
   "angr_version": null,
@@ -11,7 +11,7 @@
   "phase": "P1",
   "subphase": "code-data-partition",
   "change_kind": "correctness-fix",
-  "source_decompiler": "kuna",
+  "source_decompiler": "unlace",
   "inspiration": "Ghidra recursive disassembly/CreateFunctionCmd and AddressTableAnalyzer; AIF fingerprint histogram and PseudoDisassembler.checkValidSubroutine",
   "default_on": false,
   "enabled_by_modes": [
@@ -28,7 +28,7 @@
   "speed_budget_pct": 5,
   "speed_within_budget": false,
   "speed_forced_off": true,
-  "speed_method": "Median wall time for `kuna functions <private> --mode fast --json --option fast_funcdisc VALUE`; off consistently returned 693 canonical entries and omitted 0x402d80, on consistently returned 3495 and included it.",
+  "speed_method": "Median wall time for `unlace functions <private> --mode fast --json --option fast_funcdisc VALUE`; off consistently returned 693 canonical entries and omitted 0x402d80, on consistently returned 3495 and included it.",
   "speed_off_samples_ms": [
     1582.87,
     1496.28,
@@ -44,7 +44,7 @@
     3930.01
   ],
   "project_benchmark": {
-    "command": "kuna decompile-project <private> --mode fast --max-fn-seconds 10",
+    "command": "unlace decompile-project <private> --mode fast --max-fn-seconds 10",
     "elapsed_seconds": 462.28,
     "peak_rss_mib": 1475.1,
     "definitions": 3153,

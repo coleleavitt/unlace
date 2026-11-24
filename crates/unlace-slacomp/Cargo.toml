@@ -3,7 +3,7 @@
 [package]
 autotests = false
 name = "unlace-slacomp"
-description = "kuna Rust port: SLEIGH compiler (.slaspec -> .sla), the sleigh_opt replacement"
+description = "unlace Rust port: SLEIGH compiler (.slaspec -> .sla), the sleigh_opt replacement"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

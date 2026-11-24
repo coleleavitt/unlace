@@ -1,4 +1,4 @@
-# GH-829 (kuna): "A variadic call drops an argument the caller forwards
+# GH-829 (unlace): "A variadic call drops an argument the caller forwards
 # unchanged in its own register", AArch64 half.
 # https://github.com/Noelo-Lab/kuna/issues/829
 #
@@ -17,7 +17,7 @@
 #
 # Stage model: P4 call recovery, active-input-trial scoring.  Upstream fails
 # a trial whose value is the function's own input (AncestorRealistic) or
-# another call's output (ancestorOpUse).  kuna_varargforward.rs (always on) keeps it at
+# another call's output (ancestorOpUse).  unlace_varargforward.rs (always on) keeps it at
 # a call whose prototype ends in `...` when the value is a declared parameter
 # of the caller, or the result of a call whose return type is declared, and
 # nothing else reads it.

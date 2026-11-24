@@ -1,4 +1,4 @@
-# kuna switchtrim: a switch with an unreachable default has no range check.
+# unlace switchtrim: a switch with an unreachable default has no range check.
 #
 # gcc -O2 -fno-pic -no-pie of
 #     int f(unsigned x, int y) { int r = y * 3; sink = r;

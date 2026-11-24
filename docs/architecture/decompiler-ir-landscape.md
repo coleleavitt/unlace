@@ -132,7 +132,7 @@ before the split (Ghidra-style, one crate, one cycle)
 
 now (rustc_middle + providers style; lines of src/*.rs incl. in-tree tests, 2026-11-23)
 └─ unlace-middle     168k  IR, types, prototype model, Architecture, option registry,
-   │                       FuncState/ArchStates slots, KunaHooks table   (like rustc_middle)
+   │                       FuncState/ArchStates slots, UnlaceHooks table   (like rustc_middle)
    ├─ unlace-lift          43k   P1–P2   (SLEIGH p-code → Funcdata)
    ├─ unlace-structure     29k   P7–P8
    ├─ unlace-bandb-base    84k   P3–P6   the modules outside the fixpoint's cycle (step 10)
@@ -152,5 +152,5 @@ unlace-decomp            18k   driver: schedule, option dispatch, fills the hook
   the scheduler has got through the current pass (`raw` … `band-b` … `complete`), and passes ask
   whether a fact is settled instead of reading ad-hoc flags. Because the middle is one fixpoint
   that restarts, a level only rises within a pass and drops back to `raw` on a restart
-  (`docs/spec/00-overview.md` §0.10; `unlace-middle`'s `kuna_maturity`, marked by the driver's
+  (`docs/spec/00-overview.md` §0.10; `unlace-middle`'s `unlace_maturity`, marked by the driver's
   schedule).

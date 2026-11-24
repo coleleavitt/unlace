@@ -1,5 +1,5 @@
 {
- "opportunity": "kuna declares a byte read through a `char *` as `unsigned char`, and pushes `unsigned char *` back over the pointer, because x86 loads every byte with movzx and TypeOpIntZext::getInputLocal's uint1 vote outranks char (SUB_UINT_PLAIN 16 < SUB_INT_CHAR 19). Over fmt/ls/sort/grep -O0/-O2: 40 LOAD sites where a char * meets a uint1 byte, 65 where the byte pushes unsigned char * over char *; 39 declarations and 15 signature lines move when fixed. Readability item: type_match strips `unsigned`, so its metric effect is zero by construction.",
+ "opportunity": "unlace declares a byte read through a `char *` as `unsigned char`, and pushes `unsigned char *` back over the pointer, because x86 loads every byte with movzx and TypeOpIntZext::getInputLocal's uint1 vote outranks char (SUB_UINT_PLAIN 16 < SUB_INT_CHAR 19). Over fmt/ls/sort/grep -O0/-O2: 40 LOAD sites where a char * meets a uint1 byte, 65 where the byte pushes unsigned char * over char *; 39 declarations and 15 signature lines move when fixed. Readability item: type_match strips `unsigned`, so its metric effect is zero by construction.",
  "test_name": "tests/stages/charbyte.xml (21 two-pass assertions: witness, unsigned char * control, unsigned-compare control, the 0xe9 constant, a pointer that is char * only through strlen, and four controls that keep uint1 in both passes: a byte passed to a call, a sibling byte passed to a call, a counter, a switch with case 0x80) + 4 unit tests",
  "binary": "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11/O2/coreutils/stripped/fmt",
  "selector": "0x79b0",
@@ -61,7 +61,7 @@
   }
  },
  "corpus_sweep": {
-  "method": "kuna decompile-all --json both arms, one build, fmt/ls/sort/grep -O0/-O2; every changed line classified (analysis.md section 4)",
+  "method": "unlace decompile-all --json both arms, one build, fmt/ls/sort/grep -O0/-O2; every changed line classified (analysis.md section 4)",
   "functions_changed": 21,
   "hunk_classes": [
    "unsigned char -> char type spelling (decls, params, returns)",
@@ -214,7 +214,7 @@
   }
  },
  "speed": {
-  "method": "one pinned release binary (6e4f6fa5 + this branch), `kuna decompile-all --json --option charbyte off|on`, arms interleaved and order-alternated run by run, one warm-up discarded; min and median of 15. Other campaign lanes were running on the box (load average 5-15 on 80 cores), so the minima are the figure.",
+  "method": "one pinned release binary (6e4f6fa5 + this branch), `unlace decompile-all --json --option charbyte off|on`, arms interleaved and order-alternated run by run, one warm-up discarded; min and median of 15. Other campaign lanes were running on the box (load average 5-15 on 80 cores), so the minima are the figure.",
   "measurements": [
    {
     "label": "fmt -O2 whole binary (151 functions)",
@@ -260,7 +260,7 @@
   "make_test_stages": "datatests: 1177/1177 assertions passed, PARITY OK (+21 charbyte, 0 moved)",
   "make_test_cli": "tests/cli: 189/189 passed",
   "check_spec": "check-spec OK (lenient mode) + check-spec OK (strict mode)",
-  "kuna_catalog_check": "catalog OK: documents exactly the registered kuna options",
+  "unlace_catalog_check": "catalog OK: documents exactly the registered unlace options",
   "counters_check": "no drift: every hard-coded site agrees with the derived truth",
   "options_md": "byte-fresh",
   "make_rust_test": "RUST_TEST_RC=0 (7204 passed, 0 failed, 416 test binaries)"

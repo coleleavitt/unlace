@@ -1,7 +1,7 @@
 # arraysubfield — sized sub-field rendering for partial accesses into array symbols
 
 Status: **shipped** (was `[PROPOSAL] wideintrender`, PR #288, rescoped to Option A).
-Origin: the interp-bee/jit-bee IDA-vs-kuna study (`docs/features/funcboundflow/analysis.md`,
+Origin: the interp-bee/jit-bee IDA-vs-unlace study (`docs/features/funcboundflow/analysis.md`,
 finding #4).
 
 This file is the record of what shipped, what did not, and why the two things that did
@@ -28,17 +28,17 @@ Two separate defects sit in that four-line function, and only one of them shippe
 
 1. `v1[0] = a0` names one `char`, so the statement **claims a one-byte store** where the
    program stores eight. `v1[8] = 0` claims the ninth byte. Ghidra emits
-   `v1._0_8_` / `v1._8_8_` here; kuna was a regression from upstream. **Fixed.**
+   `v1._0_8_` / `v1._8_8_` here; unlace was a regression from upstream. **Fixed.**
 2. `return v1 << 0x40;` shifts an array. Ghidra emits this too — it is upstream-faithful,
-   not a kuna bug — and it is still not compilable C. **Not fixed** (see *Option B*).
+   not a unlace bug — and it is still not compilable C. **Not fixed** (see *Option B*).
 
 ## What shipped: the routing gate (Option A)
 
-`decompiler/crates/kuna-decomp/src/p9_emit/printc.rs`, ~10 lines.
+`decompiler/crates/unlace-decomp/src/p9_emit/printc.rs`, ~10 lines.
 
 Upstream `PrintC::pushSymbolDetail` (`printlanguage.cc:256-258`) routes **every** partial
 cover of a mapped Symbol through `pushPartialSymbol` and lets that walk's per-type arms
-choose the token. kuna's port routed `TYPE_STRUCT` and `TYPE_UNION` into the walk but split
+choose the token. unlace's port routed `TYPE_STRUCT` and `TYPE_UNION` into the walk but split
 `TYPE_ARRAY` off into a dedicated branch (`printc.rs:7241`) that computes
 
 ```rust
@@ -80,7 +80,7 @@ things:
 **Zero** genuine in-element renders move. There is no judgment call in the set, so it ships
 unflagged, as a *convergence* onto upstream's own rendering rather than a divergence — a
 Convergences row in `docs/history.md`, not a DIV row (the registry's own rule: "a port
-defect whose fix moves kuna back onto upstream's default earns no DIV row").
+defect whose fix moves unlace back onto upstream's default earns no DIV row").
 
 ## What did NOT ship, and what blocks it
 
@@ -91,7 +91,7 @@ Would make `return v1 << 0x40;` legal by typing the value a scalar instead of
 `substrate/dtype.rs:6088` (`if s > self.max_basetype_size.get()` → array of unknown bytes)
 is the right site and the change there is small, but `p9_emit/ctypes.rs:109
 (integer_spelling)` only knows `int_size` / `long_size` / `long_long_size` — there is no
-16-byte entry, so a scalar 16-byte `TYPE_INT` prints as `uint16`, a kuna type name and
+16-byte entry, so a scalar 16-byte `TYPE_INT` prints as `uint16`, a unlace type name and
 still not compilable C. Option B needs an `__int128` spelling added to the ctypes table
 first, and is only worth doing once that exists.
 
@@ -121,9 +121,9 @@ An existing shipped option already gives the valid-but-lossy IDA rendering for t
 subcase, which the original proposal did not mention:
 
 ```
-$ kuna decompile ./repro.o shift64  --option returnpair single
+$ unlace decompile ./repro.o shift64  --option returnpair single
 unsigned long shift64(void) { return 0; }
-$ kuna decompile ./repro.o mul_wide --option returnpair single
+$ unlace decompile ./repro.o mul_wide --option returnpair single
 long mul_wide(long a0,long a1) { return a0 * a1; }
 ```
 

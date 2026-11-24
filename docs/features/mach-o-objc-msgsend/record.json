@@ -10,14 +10,14 @@
   "div": "DIV-171",
   "phase": "P1",
   "subphase": "external-refinement",
-  "module": "decompiler/crates/kuna-analysis/src/loader/peimportcall.rs",
-  "binary": "decompiler/crates/kuna-analysis/tests/fixtures/macho_import_slots",
+  "module": "decompiler/crates/unlace-analysis/src/loader/peimportcall.rs",
+  "binary": "decompiler/crates/unlace-analysis/tests/fixtures/macho_import_slots",
   "selector": "_call_slots",
   "func_addr": "0x1000003c0",
   "angr_version": null,
   "element_id": null,
   "change_kind": "correctness-fix",
-  "source_decompiler": "kuna",
+  "source_decompiler": "unlace",
   "inspiration": "RE-friction need mach-o-objc-msgsend; Ghidra Mach-O external-reference import-slot modelling",
   "ablation_changed": 0,
   "parity": "OK",
@@ -29,7 +29,7 @@
     "Update typed-mach-o-tail's regression pins from the deliberately superseded raw-slot spelling to the same argument-preservation contract under the imported name; the fixture still proves fmt and value survive, while the new two-pass tests pin the raw off arm."
   ],
   "acceptance": {
-    "target": "kuna-re-dataset challenge 5ab77f5633c5d40ad448c29b, CrackMe.app, 0x100001d2b",
+    "target": "unlace-re-dataset challenge 5ab77f5633c5d40ad448c29b, CrackMe.app, 0x100001d2b",
     "replays": 3,
     "result": "PASS: 7 raw dat_100004038 calls become 7 objc_msgSend calls; dat_100004038 absent",
     "negative_control": "both calls through __objc_msgrefs word dat_100004d60 remain raw"
@@ -44,7 +44,7 @@
     "end_to_end": "console/tests/verify_macho_import_slots.rs (default/off, typed slot plus ordinary-data control)",
     "stage": "tests/stages/ghdec-peimportcall.xml assertions #6-#8 (off/on plus negative control)",
     "promoted_cli": "tests/cli/mach-o-objc-msgsend.json",
-    "compatibility": "kuna-cli/tests/typed_macho_tail_cli.rs and tests/cli/typed-mach-o-tail.json preserve typed import arguments under the new bound name"
+    "compatibility": "unlace-cli/tests/typed_macho_tail_cli.rs and tests/cli/typed-mach-o-tail.json preserve typed import arguments under the new bound name"
   },
   "gates": {
     "make test": "675/675 PARITY OK",
@@ -52,7 +52,7 @@
     "make test-cli": "152/153 full; sole cold-load timing threshold rerun green; all functional probes 153/153",
     "make rust-test": "green (6691 passed, 0 failed; 38 ignored)",
     "make check-spec": "strict OK",
-    "kuna catalog --check": "catalog OK",
+    "unlace catalog --check": "catalog OK",
     "acceptance probe": "PASS 3/3"
   },
   "speed_off_ms": 124.7,

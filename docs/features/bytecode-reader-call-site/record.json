@@ -4,8 +4,8 @@
   "scope": "small",
   "option": "calleearitycut",
   "default": "on",
-  "module": "decompiler/crates/kuna-decomp/src/p4_calls/calleearitycut.rs",
-  "witness": "crackme.x86_64.elf (ELF x86-64 `Layers`, challenge 673da52e9b533b4c22bd2eeb) sub_9d9c0 -> sub_875e0 @0x9d9d8, reduced and vendored as decompiler/crates/kuna-analysis/tests/fixtures/calleearitycut_x86_64",
+  "module": "decompiler/crates/unlace-decomp/src/p4_calls/calleearitycut.rs",
+  "witness": "crackme.x86_64.elf (ELF x86-64 `Layers`, challenge 673da52e9b533b4c22bd2eeb) sub_9d9c0 -> sub_875e0 @0x9d9d8, reduced and vendored as decompiler/crates/unlace-analysis/tests/fixtures/calleearitycut_x86_64",
   "decisions": [
     "The need filed no hypothesis. The measured cause has two halves, and neither is the one the title suggests (`calleearity`/`varargstackargs` being on is irrelevant -- both are default-on already and neither can reach this site).",
     "CALLER SIDE: rdi/rsi/rdx are the caller's OWN incoming parameters passed straight through, and `AncestorRealistic::execute` (funcdata_varnode.cc:2159) returns (false,false) for an input Varnode on principle -- upstream policy, `if the parameter itself is an input, we don't consider this realistic, we expect to see active movement into the parameter`. Instrumented: trial0 (rcx, written by `mov ecx,1`) scores realistic+solid+onlyOpUse and is ACTIVE; trials 1-4 (rdx/rsi/rdi/r8) all score realistic=false solid=false and fall to `mark_inactive` via the `vn_is_input` arm. `ParamListStandard::fillinMap` then reads the three-register hole in front of the one active register as the end of the list, so the site recovers NOTHING -- not even the rcx it accepted.",
@@ -16,7 +16,7 @@
     "The rule is its own option rather than a widening of `calleearitybody` because it is a judgement call with a real cost (see the ARM truncation in `sweep`), and `calleearitybody` shipped default-on with the narrower contract."
   ],
   "sweep": {
-    "corpus": "82 decbench binaries (O0 / O2 / O2-noinline, x86-64 and ARM, stratified by size), kuna decompile-all, option off vs on",
+    "corpus": "82 decbench binaries (O0 / O2 / O2-noinline, x86-64 and ARM, stratified by size), unlace decompile-all, option off vs on",
     "changed_binaries": 8,
     "empty_argument_lists_filled": 53,
     "calls_that_lost_an_argument": 0,
@@ -38,9 +38,9 @@
   "gates": {
     "make test": "PARITY OK 675/675",
     "make test-stages": "PARITY OK 687/687",
-    "make rust-test": "green (6006 passed, 0 failed) with `env -u KUNA_DECOMP_TEST`; the repipe launcher points that variable at kuna's own decomp_test_dbg, which makes verify_w10_proto_unlock's C++ oracle assertion unsatisfiable for any kuna build",
+    "make rust-test": "green (6006 passed, 0 failed) with `env -u UNLACE_DECOMP_TEST`; the repipe launcher points that variable at unlace's own decomp_test_dbg, which makes verify_w10_proto_unlock's C++ oracle assertion unsatisfiable for any unlace build",
     "make check-spec": "OK",
-    "kuna catalog --check": "catalog OK",
+    "unlace catalog --check": "catalog OK",
     "make test-cli": "78/78",
     "acceptance": "PASS"
   },

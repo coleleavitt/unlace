@@ -58,13 +58,13 @@ capture over the previous sources reproduces the previous fixture exactly.
 
 ```bash
 cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli        # rebuild decomp_dbg after any C++ change
-~/.virtualenvs/kuna/bin/python tools/rust-port/gen_lift.py
+~/.virtualenvs/unlace/bin/python tools/rust-port/gen_lift.py
 ```
 
 Determinism gate -- two consecutive runs must diff empty:
 
 ```bash
-~/.virtualenvs/kuna/bin/python tools/rust-port/gen_lift.py --out-dir /tmp/lift2
+~/.virtualenvs/unlace/bin/python tools/rust-port/gen_lift.py --out-dir /tmp/lift2
 diff -r tests/golden/vectors/lift /tmp/lift2
 ```
 

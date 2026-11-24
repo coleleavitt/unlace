@@ -1,4 +1,4 @@
-# kuna `option guardarm` (default-OFF opt-in), S8 goto-quality sub-stage:
+# unlace `option guardarm` (default-OFF opt-in), S8 goto-quality sub-stage:
 # the arm tie-break inside `CollapseStructure::ruleBlockIfNoExit`
 # (`p8_structure/blockaction.rs`).
 #

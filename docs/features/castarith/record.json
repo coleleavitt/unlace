@@ -1,5 +1,5 @@
 {
- "opportunity": "kuna prints a pointer plus a constant byte offset as an integer round trip, *(T *)((long)p + K): two casts per access where IDA prints one (or none). The cast census measured 3,771 such casts on the 4,815 functions kuna and IDA share (IDA: 0), 99.8% with sizeof(T) dividing K. The ops are INT_ADD from the start (PTRSUB->INT_ADD demotion fires 0 times): a void * base has no field and no element size, so P5 builds neither PTRSUB nor PTRADD.",
+ "opportunity": "unlace prints a pointer plus a constant byte offset as an integer round trip, *(T *)((long)p + K): two casts per access where IDA prints one (or none). The cast census measured 3,771 such casts on the 4,815 functions unlace and IDA share (IDA: 0), 99.8% with sizeof(T) dividing K. The ops are INT_ADD from the start (PTRSUB->INT_ADD demotion fires 0 times): a void * base has no field and no element size, so P5 builds neither PTRSUB nor PTRADD.",
  "test_name": "tests/stages/castarith.xml (12 assertions, pass 1 option castarith off, pass 2 on, pass 3 arraynotation off) + 25 unit tests (p9_emit/castarith/tests.rs) + compiled round trip decompile_all_cli.rs a_pointer_plus_whole_elements_round_trips_through_the_printed_c (fixture castarith_x86_64.c, 24 functions, gcc -O0 / clang -O0 / gcc -O2, option on and off) + compiled round trip decompile_all_cli.rs an_enum_element_keeps_the_integer_form_and_round_trips (fixture castarith_enum_x86_64.c, packed 1- and 2-byte enums, a plain enum and an enum pointer passed on, gcc -O0 / gcc -O2 with -g, option on and off; spelling check of the g++ -O2 enum class : uint8_t / uint16_t build castarith_enum_x86_64.cc)",
  "binary": "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11/O0/coreutils/stripped/ls",
  "selector": "0x53e7",
@@ -52,7 +52,7 @@
   }
  },
  "corpus_sweep": {
-  "method": "kuna decompile-all both arms of one build (--option castarith off vs default), every changed line classified by docs/features/castarith/hunks.py (pointer width and console spellings taken from the file); control flow compared by docs/features/castarith/structural.py",
+  "method": "unlace decompile-all both arms of one build (--option castarith off vs default), every changed line classified by docs/features/castarith/hunks.py (pointer width and console spellings taken from the file); control flow compared by docs/features/castarith/structural.py",
   "base": "origin/main 5458b7ab5; the off arm is byte-identical to a build of the base on all 201 binaries",
   "read_by_hand": "138 lines over both sets, all the same address: 41 nested subscripts (&(*(uint2 **)((int8)a0 + 8))[2] -> &((uint2 **)a0)[1][2]), 21 integer bases under a shared cast (*(uint1 *)(a0[1] + 10) -> ((uint1 *)a0[1])[10], one cast each), 13 wchar_t elements, 24 stack-probe loop steps (old outer cast (char *)), 16 pointer-to-array elements, 10 assigned pointers or stores inside an expression differing in element sign only, 11 assignments whose outer cast differs, 2 offsets with a U suffix",
   "hunks_outside_documented_effect": 0,
@@ -95,10 +95,10 @@
  },
  "soundness": {
   "construction": "k * sizeof(T) == K exactly (K signed, divisibility required); base converted pointer to pointer; element size == access width == C's sizeof of the printed element (enums refused; only widths the target's C data model names); alignment unchanged",
-  "round_trip": "24 functions x (gcc -O0, clang -O0, gcc -O2) x (on, off): printed C recompiled and run prints exactly the binary's output in all 6 arms; includes a byte widened for a signed compare and a word widened for an index (castimplied through the subscript), an integer base (kept), and far_idx: 8/4/2-byte reads at indexes -2^31 and -(2^32-1) (kept: C reads 0x80000000..0xffffffff as unsigned int) and -(2^31-1), +2^31 (converted), through a 48 GiB MAP_NORESERVE map; enum round trip: 4 functions x (gcc -O0, gcc -O2, -g) x (on, off) compiled with kuna's own enum typedefs print exactly the binary's output in all 4 arms (before the enum refusal both on arms printed color 85 | mark 23637 | set 141 | 36 200 where the binary prints color 22 | mark 12843 | set 36 | 200 141)",
+  "round_trip": "24 functions x (gcc -O0, clang -O0, gcc -O2) x (on, off): printed C recompiled and run prints exactly the binary's output in all 6 arms; includes a byte widened for a signed compare and a word widened for an index (castimplied through the subscript), an integer base (kept), and far_idx: 8/4/2-byte reads at indexes -2^31 and -(2^32-1) (kept: C reads 0x80000000..0xffffffff as unsigned int) and -(2^31-1), +2^31 (converted), through a 48 GiB MAP_NORESERVE map; enum round trip: 4 functions x (gcc -O0, gcc -O2, -g) x (on, off) compiled with unlace's own enum typedefs print exactly the binary's output in all 4 arms (before the enum refusal both on arms printed color 85 | mark 23637 | set 141 | 36 200 where the binary prints color 22 | mark 12843 | set 36 | 200 141)",
   "refusals": [
    "non-whole or variable offset",
-   "enum element: kuna prints every enum as a plain enum, which C sizes as an int, while a packed enum, -fshort-enums or a C++ enum class : uint8_t is 1 or 2 bytes in the binary (((color *)p)[3] would read p + 12); all enums, since C fixes no enum's size",
+   "enum element: unlace prints every enum as a plain enum, which C sizes as an int, while a packed enum, -fshort-enums or a C++ enum class : uint8_t is 1 or 2 bytes in the binary (((color *)p)[3] would read p + 12); all enums, since C fixes no enum's size",
    "element whose C sizeof is not its width in the target's data model (long double, 16-byte integers, a pointer narrower than the model's pointers)",
    "negative index of 2^31 elements or more (C types 0x80000000..0xffffffff as unsigned int, so p[-0x80000000] would index forward)",
    "aggregate/padded element",
@@ -114,7 +114,7 @@
   "enum_refusal_effect": "0 printed lines change on castbench full (45/45 outputs byte-identical to the build without it) and on the 156 disjoint binaries (156/156): the stripped corpora carry no enum-typed values"
  },
  "castbench": {
-  "set": "full, 4,815 shared functions (kuna x IDA x main)",
+  "set": "full, 4,815 shared functions (unlace x IDA x main)",
   "ida": {
    "casts": 37821,
    "per_kloc": 155.4
@@ -164,7 +164,7 @@
   "note": "presentation-only: runs after every type and variable is final; measured on the final build (bin-fix2), both arms"
  },
  "speed": {
-  "method": "one pinned release binary (final engine), kuna decompile-all --json, --option castarith off vs default, arms interleaved and order-alternated, one warm-up discarded, min and median-of-ratios of 15; a workspace test run shared the box during fmt/ls/sort",
+  "method": "one pinned release binary (final engine), unlace decompile-all --json, --option castarith off vs default, arms interleaved and order-alternated, one warm-up discarded, min and median-of-ratios of 15; a workspace test run shared the box during fmt/ls/sort",
   "measurements": [
    {
     "label": "fmt_O2",
@@ -229,7 +229,7 @@
   "make_test_stages": "datatests: 1353/1353 assertions passed, PARITY OK (baseline re-recorded: 12 castarith keys; 4 keys renamed with their assertion, see default_on_evaluation.b_stages)",
   "make_test_cli": "tests/cli: 237/237 passed (6 probes updated, see default_on_evaluation.c_test_cli)",
   "check_spec": "check-spec OK (lenient mode) + check-spec OK (strict mode)",
-  "kuna_catalog_check": "catalog OK: documents exactly the registered kuna options",
+  "unlace_catalog_check": "catalog OK: documents exactly the registered unlace options",
   "counters_check": "no drift: every hard-coded site agrees with the derived truth",
   "options_md": "byte-fresh",
   "make_rust_test": "RUST_TEST_RC=0 (7,509 passed, 0 failed; 422 test results); lane started 04:22:48Z after the last code change (1760723ae, 04:21:20Z)"

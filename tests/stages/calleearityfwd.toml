@@ -39,7 +39,7 @@
 # same pass when every spec is final.
 #
 # Stage / sub-stage: P4 "trial-finalization".  The retry
-# (kuna_calleearityfwd.rs, always on) reuses every one of the sibling
+# (unlace_calleearityfwd.rs, always on) reuses every one of the sibling
 # reconciliation's refusals.
 #
 # The fixture is the same construct on SysV x86-64 (rdi rather than rcx),

@@ -3,7 +3,7 @@
   "need_id": "decompiling-3396-byte-main",
   "route": "RE-friction loop (docs/re-pipeline.md), round 2, track perf -- ATTEMPT 6 (captain-briefed: run the code A/B first, do not fix)",
   "challenge": "69a3822f7b3cc38c80464da4",
-  "binary": ".kuna-repipe/probebin/bcfacd743bc607be/nikos_crack_me.exe (PE x86-64, 235725 bytes)",
+  "binary": ".unlace-repipe/probebin/bcfacd743bc607be/nikos_crack_me.exe (PE x86-64, 235725 bytes)",
   "selector": "sub_140023350",
   "scope": "small",
   "attempt": 7,
@@ -17,7 +17,7 @@
   ],
   "phase": "P1",
   "modules": [
-    "decompiler/crates/kuna-analysis/src/analyzers/entry/pdatainterior.rs"
+    "decompiler/crates/unlace-analysis/src/analyzers/entry/pdatainterior.rs"
   ],
   "change_kind": "correctness-fix",
   "option": "pdatainterior",
@@ -25,11 +25,11 @@
   "gating_rationale": "Changes which function starts a PE's discovery emits, so it can change emitted C; default-ON with a per-run off switch that restores the previous discovery set exactly, mirroring its ELF twin fdeinterior (DIV-61).",
   "hypothesis_filed": "wave 39 captain: #406 (simdlane + retsplitglobal) regressed this witness by ~680 ms on top of a 341 ms drift; the shape to look at first is cumulative default-ON schedule cost.",
   "hypothesis_verdict": "confirmed-then-superseded: the wave-3 attribution of the +596 ms step to #541 (the PE base-relocation entry oracle) is CONFIRMED by an in-tree ablation A/B, but the prescribed follow-up -- \"amortize the base-reloc oracle's added starts\" -- does not exist. The oracle itself costs +50 ms (read symbols 0.95 -> 1.00 s). Its cost is a CASCADE: the 19 starts it recovers shift aif's gap map, aif then mints three starts INSIDE the witness's own 43,152-byte .pdata body, and funcboundflow truncates main there.",
-  "root_cause": "A kuna FunctionSymbol has no extent, so nothing rejects a discovered entry that is interior to a known function. fdeinterior (DIV-61) answers this from .eh_frame on ELF; PE had no counterpart, though .pdata records [BeginAddress, EndAddress) per function. nikos_crack_me.exe declares one body at [0x140023350, 0x14002dbe0) and aif starts sub_140023e34 / sub_14002b324 / sub_14002b6a8 inside it.",
+  "root_cause": "A unlace FunctionSymbol has no extent, so nothing rejects a discovered entry that is interior to a known function. fdeinterior (DIV-61) answers this from .eh_frame on ELF; PE had no counterpart, though .pdata records [BeginAddress, EndAddress) per function. nikos_crack_me.exe declares one body at [0x140023350, 0x14002dbe0) and aif starts sub_140023e34 / sub_14002b324 / sub_14002b6a8 inside it.",
   "fix": "New P1 analysis pass pdatainterior: report the RUNTIME_FUNCTION bodies that describe exactly one function on the same AnalysisOutput::fde_bodies channel fdeinterior uses, so the existing commit-boundary filter covers PE. Eligibility mirrors the FDE test: no other named start inside, no other record BeginAddress inside, no overlap with the range kept before it. x86/x64 PE only.",
-  "profiling_method": "Stage split by feeding decomp_dbg prefixes of the script kuna decompile generates (load file+options 0.15 s / read symbols 0.80 s / load function 2.91 s / decompile 6.63 s), plus a per-iteration instrument on the fullloop repeat group printing elapsed ms, the change count and the actions that reported changes.",
+  "profiling_method": "Stage split by feeding decomp_dbg prefixes of the script unlace decompile generates (load file+options 0.15 s / read symbols 0.80 s / load function 2.91 s / decompile 6.63 s), plus a per-iteration instrument on the fullloop repeat group printing elapsed ms, the change count and the actions that reported changes.",
   "measurement": {
-    "lever": "--option pdatainterior on|off, same binary both arms (so the kuna->decomp_dbg fork cannot time a different engine)",
+    "lever": "--option pdatainterior on|off, same binary both arms (so the unlace->decomp_dbg fork cannot time a different engine)",
     "design": "ABBA-balanced, 6 blocks of 4 runs (ON,OFF,OFF,ON)",
     "on_median_ms": 9988,
     "off_median_ms": 10432,
@@ -73,14 +73,14 @@
   },
   "refuted_leads": [
     "Amortizing the base-reloc oracle: its own scan costs +50 ms; there is nothing to amortize.",
-    "ActionInferTypes running uncapped: kuna ports the localcount>=7 ceiling exactly (verified against coreaction.cc).",
-    "The jumptable group being richer than upstream: kuna set_group(\"jumptable\") is character-for-character upstream buildDefaultGroups.",
-    "ActionDoNothing removing one block per call being a kuna bug: upstream returns after one removal too.",
+    "ActionInferTypes running uncapped: unlace ports the localcount>=7 ceiling exactly (verified against coreaction.cc).",
+    "The jumptable group being richer than upstream: unlace set_group(\"jumptable\") is character-for-character upstream buildDefaultGroups.",
+    "ActionDoNothing removing one block per call being a unlace bug: upstream returns after one removal too.",
     "Free option flips: screening all 15 AGGRESSIVE_OVERRIDES decompile options one at a time moved nothing outside +/-5% box noise (an apparent -3.5% for unrolledguard off did not replicate)."
   ],
   "left_on_the_table": "The convergence tail. The next structural lever is not a pass but the fullloop itself: iterations 2-7 re-run heritage/deadcode/infertypes/oppool1 over the whole IR to find ~60 changes each. Every one of those passes is a full sweep by upstream design, so the win requires making them incremental -- a campaign, not a fix.",
   "tests": [
-    "kuna-analysis kuna_pdatainterior: 7 unit tests over the existing pe_reloctable_x86_64.exe fixture (interior rejected, BeginAddress and EndAddress kept, shared suppression helper, both eligibility guards, zeroed exception directory abstains, ARM64 machine abstains, non-PE abstains)"
+    "unlace-analysis unlace_pdatainterior: 7 unit tests over the existing pe_reloctable_x86_64.exe fixture (interior rejected, BeginAddress and EndAddress kept, shared suppression helper, both eligibility guards, zeroed exception directory abstains, ARM64 machine abstains, non-PE abstains)"
   ],
   "regression_sweep": {
     "corpus": "201 x86/x64 PE images (crackmes archive + repipe probe binaries)",
@@ -94,15 +94,15 @@
     "make test-stages": "PARITY OK 749/749",
     "make rust-test": "green",
     "make check-spec": "green",
-    "kuna catalog --check": "catalog OK",
+    "unlace catalog --check": "catalog OK",
     "make test-cli": "119/119"
   },
   "decisions": [
     "The brief's flat branch was taken literally: the A/B came back flat, so no fix was attempted and the bar was NOT relaxed. Re-cutting `< 10000` would redefine `closed` as 'a builder tried'; five captains have declined to move it and the sixth attempt did not need it moved.",
-    "The profiler ships without an option row. `docs/agents.md` gates anything that CAN change emitted C; this times `apply` and writes a file, and its off-path is one cached read. It follows the existing env-gated debug-hook convention (`KUNA_DEFAULT_ON`, `KUNA_SYMBOLNAMEBOUND`) rather than the settable-option convention.",
+    "The profiler ships without an option row. `docs/agents.md` gates anything that CAN change emitted C; this times `apply` and writes a file, and its off-path is one cached read. It follows the existing env-gated debug-hook convention (`UNLACE_DEFAULT_ON`, `UNLACE_SYMBOLNAMEBOUND`) rather than the settable-option convention.",
     "Rows are keyed by root variant, not by the root Action's own name: `clone_filtered` keeps the universal tree's name, so every row came back as `universal/...` until the label was taken from `ActionDatabase::set_current` instead.",
     "The stale `/tmp/<worker>.rust.rc` from a previous attempt on this same worker id read 0 minutes into this session's suite. Any rc-file wait on a reused worker id must delete the file first or check its mtime.",
-    "`make rust-test` is RED in a repipe worktree for a reason that is not the tree: the harness exports KUNA_DECOMP_TEST, and `cpp_oracle_bin()` in the verify_w10_* tests uses it as the C++ oracle. With the C++ tree gone that fallback path does not exist, so those oracle assertions are normally skipped; pointed at kuna's own decomp_test_dbg they assert upstream spellings kuna deliberately changed (`xunknown4` vs DIV-6 `unsigned int`) and fail. Confirmed by bisection: the same test fails on unmodified HEAD and passes under `env -u KUNA_DECOMP_TEST`. Run the suite with that env var unset.",
+    "`make rust-test` is RED in a repipe worktree for a reason that is not the tree: the harness exports UNLACE_DECOMP_TEST, and `cpp_oracle_bin()` in the verify_w10_* tests uses it as the C++ oracle. With the C++ tree gone that fallback path does not exist, so those oracle assertions are normally skipped; pointed at unlace's own decomp_test_dbg they assert upstream spellings unlace deliberately changed (`xunknown4` vs DIV-6 `unsigned int`) and fail. Confirmed by bisection: the same test fails on unmodified HEAD and passes under `env -u UNLACE_DECOMP_TEST`. Run the suite with that env var unset.",
     "attempt 7: the wave-3 #541 attribution is confirmed by ablation (-6.7% +/- 5.25, t=3.1, median-of-medians -7.4%) but the prescribed fix does not exist; the recoverable half of that cost is aif planting starts inside a .pdata body, which is a correctness defect with a perf dividend, and that is what shipped.",
     "the acceptance is still not closed by this alone: ON median 9,988 ms against a 10,000 ms bar. The bar was not moved."
   ]

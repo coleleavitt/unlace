@@ -1,6 +1,6 @@
 {
  "opportunity": "structsynth param never nests: a pointer field of a synthesized record keeps the scalar its loads carried, so every read through a loaded field is raw offset arithmetic again (`v1 = a0->field_0x0; ... (long)*(int *)((long)v1 + 0xc)`), and results.md D.8 ranked struct layout recall 0.093 / nesting F1 0 as the third lever.",
- "test_name": "tests/stages/structsynth-nest.xml (8 two-pass assertions: pass 1 `option structsynth param` = raw reads through loaded fields, pass 2 `nest` = nested record + self-pointing tree node) + unit tests (kuna_structsynth::tests nest/absorb/self-mint/resolve, nest::tests same-record, shard::tests self request not portable)",
+ "test_name": "tests/stages/structsynth-nest.xml (8 two-pass assertions: pass 1 `option structsynth param` = raw reads through loaded fields, pass 2 `nest` = nested record + self-pointing tree node) + unit tests (unlace_structsynth::tests nest/absorb/self-mint/resolve, nest::tests same-record, shard::tests self request not portable)",
  "binary": "tests/stages/structsynth-nest.xml bytechunk (gcc -O2, max-inline-recursive-depth-auto=3: use_outer + treewalk)",
  "selector": "use_outer, treewalk",
  "func_addr": "0x100000, 0x100020",
@@ -27,7 +27,7 @@
   "evidence": "every LOAD of one pointer-sized field of an accepted record is merged (Evidence::absorb, the replay of Evidence::record) and held to accepts_record: already TYPE_PTR, not type-locked, no phi/index/integer use, 2+ offsets incl. 0, < MAX_FIELD_OFFSET, not an array run; pruned and made dense like a parameter",
   "same_record": "the loaded record's claims are a subset of the enclosing record's (offset, width, type spelling) with its unclaimed bytes laid out alike (ledger::keeps_unclaimed); checked after the standalone rules so one coincident word never counts (obstack/_obstack_newchunk)",
   "self_mint": "ledger::mint completes the structure around its incomplete shell (a completed struct is a fresh Rc); the self field is keyed SELF so self-pointing layouts of one shape dedupe; SynthRequest with a self or nested field has no recipe (non-portable) so --jobs names it in its one ordered worker",
-  "shell_resolution": "kuna_structsynth::resolve_self_pointer: a LOAD/STORE value type that is a pointer to a synthesized record's own shell takes the pointer to the completed record (infertypes propagate_load_store, casts get_output_token_load/get_input_cast_store); DWARF shells untouched",
+  "shell_resolution": "unlace_structsynth::resolve_self_pointer: a LOAD/STORE value type that is a pointer to a synthesized record's own shell takes the pointer to the completed record (infertypes propagate_load_store, casts get_output_token_load/get_input_cast_store); DWARF shells untouched",
   "depth": "MAX_NEST_DEPTH = 2 records below the parameter; only the immediately enclosing record is compared for self-reference"
  },
  "instrument_fix": "scripts/decbench/structscore.header_layouts recorded a pointee only for a struct defined earlier in the header; now any struct the header defines (selftest 35/35, 2 new cases). With the fix param already has 68 struct-pointer members on 14 builds (62 real), carried by protoorder.",
@@ -297,7 +297,7 @@
   "make_test_stages": "datatests: 1280/1280 assertions passed; PARITY OK",
   "make_test_cli": "tests/cli: 218/218 passed (a first run under rust-test load failed only cold-load-xref-lookup wall_ms 1195 vs < 1100, the known timing flake)",
   "check_spec": "check-spec OK (lenient mode); check-spec OK (strict mode)",
-  "catalog_check": "catalog OK: documents exactly the registered kuna options",
+  "catalog_check": "catalog OK: documents exactly the registered unlace options",
   "counters_check": "no drift: every hard-coded site agrees with the derived truth",
   "options_md": "byte-fresh",
   "rust_test": "RUST_TEST_RC=0, 7354 passed, 0 failed",
@@ -314,7 +314,7 @@
  },
  "base": "measured on 97315551d and re-measured (typesweep) on 2e8e407be; gates on d07234191 (#695 charptr is default off)",
  "counters": {
-  "stage_corpus": "328 -> 329 (kuna-base xml.rs, via counters --fix)",
+  "stage_corpus": "328 -> 329 (unlace-base xml.rs, via counters --fix)",
   "settables": "unchanged (a value of an existing option)",
   "phase_catalog_json": "recaptured: structsynth values off|param|nest"
  }

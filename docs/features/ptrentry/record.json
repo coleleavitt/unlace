@@ -1,7 +1,7 @@
 {
   "opportunity": "decbench:arm-entry-granularity step 2 (PROPOSAL PR #239) \u2014 the pointer sub-class",
-  "test_name": "kuna-analysis entry recall, decbench ARM Cortex-M corpus (16 binaries x 3 opt levels, 48 images, 41378 DWARF entries)",
-  "binary": "decompiler/crates/kuna-analysis/tests/fixtures/cortexm_ptrentry_le32",
+  "test_name": "unlace-analysis entry recall, decbench ARM Cortex-M corpus (16 binaries x 3 opt levels, 48 images, 41378 DWARF entries)",
+  "binary": "decompiler/crates/unlace-analysis/tests/fixtures/cortexm_ptrentry_le32",
   "selector": "sub_8000048",
   "func_addr": "0x8000048",
   "angr_version": null,
@@ -10,8 +10,8 @@
   "element_id": null,
   "change_kind": "analysis-enablement",
   "tier": "analysis",
-  "source_decompiler": "kuna",
-  "inspiration": "decbench:O2-nuttx-nuttx, O2-betaflight-betaflight_STM32F405, O2-cleanflight-cleanflight_DALRCF405, O2-crazyflie-cf2, O2-libopencm3-cdcacm; kuna's own ARM entry-recall measurement (docs/features/ptrentry/analysis.md; step 2 of the arm-entry-granularity proposal). Precision model after Ghidra's OperandReferenceAnalyzer / DataOperandReferenceAnalyzer split.",
+  "source_decompiler": "unlace",
+  "inspiration": "decbench:O2-nuttx-nuttx, O2-betaflight-betaflight_STM32F405, O2-cleanflight-cleanflight_DALRCF405, O2-crazyflie-cf2, O2-libopencm3-cdcacm; unlace's own ARM entry-recall measurement (docs/features/ptrentry/analysis.md; step 2 of the arm-entry-granularity proposal). Precision model after Ghidra's OperandReferenceAnalyzer / DataOperandReferenceAnalyzer split.",
   "default_on": false,
   "ablation_changed": 0,
   "parity": "OK",
@@ -93,42 +93,42 @@
     "budget_pct": 5.0,
     "rows": [
       {
-        "surface": "kuna functions",
+        "surface": "unlace functions",
         "binary": "cleanflight",
         "off": 2417.8,
         "on": 2435.4,
         "delta_pct": 0.73
       },
       {
-        "surface": "kuna functions",
+        "surface": "unlace functions",
         "binary": "nuttx",
         "off": 1006.8,
         "on": 1010.9,
         "delta_pct": 0.4
       },
       {
-        "surface": "kuna functions",
+        "surface": "unlace functions",
         "binary": "libopencm3 msc.elf",
         "off": 144.3,
         "on": 137.9,
         "delta_pct": -4.41
       },
       {
-        "surface": "kuna functions",
+        "surface": "unlace functions",
         "binary": "gzip (x86-64, strict no-op)",
         "off": 341.9,
         "on": 332.9,
         "delta_pct": -2.62
       },
       {
-        "surface": "kuna decompile-all",
+        "surface": "unlace decompile-all",
         "binary": "nuttx",
         "off": 9166.3,
         "on": 9529.1,
         "delta_pct": 3.96
       },
       {
-        "surface": "kuna decompile-all",
+        "surface": "unlace decompile-all",
         "binary": "libopencm3 msc.elf",
         "off": 538.5,
         "on": 590.9,
@@ -142,13 +142,13 @@
     "make test-stages": "PARITY OK 386/386",
     "make rust-test": "green",
     "make check-spec": "green (strict)",
-    "kuna catalog --check": "catalog OK"
+    "unlace catalog --check": "catalog OK"
   },
   "files": {
-    "pass": "decompiler/crates/kuna-analysis/src/analyzers/aif/ptrentry.rs",
-    "wiring": "decompiler/crates/kuna-analysis/src/passes.rs",
-    "fixture": "decompiler/crates/kuna-analysis/tests/fixtures/cortexm_ptrentry_le32",
-    "fixture_generator": "decompiler/crates/kuna-analysis/tests/fixtures/cortexm_ptrentry_le32.py",
+    "pass": "decompiler/crates/unlace-analysis/src/analyzers/aif/ptrentry.rs",
+    "wiring": "decompiler/crates/unlace-analysis/src/passes.rs",
+    "fixture": "decompiler/crates/unlace-analysis/tests/fixtures/cortexm_ptrentry_le32",
+    "fixture_generator": "decompiler/crates/unlace-analysis/tests/fixtures/cortexm_ptrentry_le32.py",
     "e2e": "decompiler/crates/console/tests/verify_ptrentry.rs",
     "spec": "docs/spec/01-program-prep.md"
   },
@@ -158,7 +158,7 @@
     "catalog_json_rows": "86 -> 87",
     "bytecompat_fixture": "87 -> 88",
     "live_value_count": "29 (unchanged: ptrentry declares no codegen live_field)",
-    "note": "Derived from a fresh `phase catalog` capture on the rebased tree (origin/main 208bb155), not by arithmetic; `kuna catalog --check`, the kuna_phases count tests and catalog_bytecompat confirm. peimportcall (#254) is transform-tier despite being P1, so this row is the only one that moved the analysis-tier counter."
+    "note": "Derived from a fresh `phase catalog` capture on the rebased tree (origin/main 208bb155), not by arithmetic; `unlace catalog --check`, the unlace_phases count tests and catalog_bytecompat confirm. peimportcall (#254) is transform-tier despite being P1, so this row is the only one that moved the analysis-tier counter."
   },
   "div_row": null,
   "notes": "Default-OFF. No DIV row: default output is byte-identical. The precision numbers need a human read before any default flip \u2014 this is the step of the arm-entry-granularity sequence with a real precision/recall trade-off.",

@@ -1,6 +1,6 @@
 """Interleaved min-of-N speed, one binary, `--option castindex off` vs the default (on).
 
-usage: speed.py <kuna> <specs> <N> <out.json> [name,...]
+usage: speed.py <unlace> <specs> <N> <out.json> [name,...]
 """
 import json, os, statistics, subprocess, sys, time
 
@@ -11,7 +11,7 @@ K, SP, N, outf = sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4]
 which = sys.argv[5].split(",") if len(sys.argv) > 5 else list(ALL)
 ARMS = {"off": ["--option", "castindex", "off"], "on": []}
 out = json.load(open(outf)) if os.path.exists(outf) else {}
-env = dict(os.environ, SLEIGHHOME=SP, KUNA_SPECS=SP)
+env = dict(os.environ, SLEIGHHOME=SP, UNLACE_SPECS=SP)
 for name in which:
     t = {"off": [], "on": []}
     ratios = []

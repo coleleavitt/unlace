@@ -1,4 +1,4 @@
-# kuna: a signed read of an expression that prints as unsigned.
+# unlace: a signed read of an expression that prints as unsigned.
 #
 # The constant of `a0 - 1` is marked `1U` (markExplicitUnsigned) when its
 # type is unsigned and a0 is not, which makes the C expression unsigned while
@@ -19,7 +19,7 @@
 #     L ucmp(U a) { U t = a + 2; return (4 < t) + (L)(int)t; }
 # ucmp is the control for the unsigned reader: its compare keeps `a0 + 2U`.
 #
-# Stage: P9 cast placement (ActionSetCasts; p9_emit/kuna_signedread.rs).
+# Stage: P9 cast placement (ActionSetCasts; p9_emit/unlace_signedread.rs).
 # Correctness fix, no option: #1-#5 fail on the unpatched engine, #6 holds
 # before and after.
 

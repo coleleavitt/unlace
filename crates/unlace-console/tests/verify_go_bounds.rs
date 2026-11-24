@@ -65,7 +65,7 @@ fn go_bounds_and_division_checks_with_explicit_panic_control() {
         eprintln!("skipping Go fixture: compiler unavailable");
         return;
     }
-    let dir = std::env::temp_dir().join(format!("kuna-go-bounds-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace-go-bounds-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("main.go"), SOURCE).unwrap();
     for arch in ["amd64", "arm64"] {

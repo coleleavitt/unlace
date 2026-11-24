@@ -24,7 +24,7 @@
 /// Prefix of every `<callfixup name=...>` this module registers; the installer
 /// (`unlace_analysis::analyzers::callfixup`) skips them unless
 /// `option aeabifloat on`.
-pub const FIXUP_PREFIX: &str = "kuna_aeabifloat_";
+pub const FIXUP_PREFIX: &str = "unlace_aeabifloat_";
 
 /// The `(helper, body)` pairs for one byte order, the helper without its
 /// `__aeabi_` prefix.
@@ -191,7 +191,7 @@ mod tests {
     fn a_helper_also_targets_the_libgcc_routine_it_is() {
         let dmul = payload_xml(false)
             .into_iter()
-            .find(|x| x.contains("kuna_aeabifloat_dmul"))
+            .find(|x| x.contains("unlace_aeabifloat_dmul"))
             .unwrap();
         for t in ["__aeabi_dmul", "___aeabi_dmul", "__muldf3", "___muldf3"] {
             assert!(dmul.contains(&format!("<target name=\"{t}\"/>")), "{dmul}");

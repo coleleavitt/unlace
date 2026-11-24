@@ -1,9 +1,9 @@
-# kuna C-surface normalization: a zero pointer constant renders as the NULL
+# unlace C-surface normalization: a zero pointer constant renders as the NULL
 # token instead of a casted hex zero (user-reported readability issue on the
 # angr fmt corpus binary: `v8 = (char *)0x0;`; no upstream GH issue).
 #
 # Upstream Ghidra ships option_NULL (PrintC::pushConstant's nullToken gate)
-# default-off, so a null pointer renders `(char *)0x0`.  kuna flips the
+# default-off, so a null pointer renders `(char *)0x0`.  unlace flips the
 # default on (DIV-34, docs/history.md): the same constant renders `NULL`.
 # The upstream form stays reachable via the ported nullprinting option.
 #

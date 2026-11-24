@@ -28,5 +28,5 @@ int add(int a, int b) {
 }
 
 int main(void) {
-    return first_byte("kuna") + add(2, 3);
+    return first_byte("unlace") + add(2, 3);
 }

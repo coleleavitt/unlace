@@ -15,11 +15,11 @@ BINS = {"fmt": f"{R}/O2/coreutils/stripped/fmt", "ls": f"{R}/O2/coreutils/stripp
         "dpkg-divert-O2ni": f"{R}/O2-noinline/dpkg/stripped/dpkg-divert",
         "crontab-O2ni": f"{R}/O2-noinline/cronie/stripped/crontab"}
 SP = "/home/mahaloz/kwt/_final-main/specs"
-BUILDS = {"base": ("/home/mahaloz/kwt/_baseline/kuna", "/home/mahaloz/github/kuna/specs"),
-          "F": ("/home/mahaloz/kwt/_final-f/kuna", SP), "G": ("/home/mahaloz/kwt/_final-g/kuna", SP),
-          "I": ("/home/mahaloz/kwt/_final-i/kuna", SP), "L": ("/home/mahaloz/kwt/_final-l/kuna", SP),
-          "J": ("/home/mahaloz/kwt/castbench/bin-c960fb18d/kuna", SP),
-          "K": ("/home/mahaloz/kwt/castbench/bin-0096e984d/kuna", SP)}
+BUILDS = {"base": ("/home/mahaloz/kwt/_baseline/unlace", "/home/mahaloz/github/unlace/specs"),
+          "F": ("/home/mahaloz/kwt/_final-f/unlace", SP), "G": ("/home/mahaloz/kwt/_final-g/unlace", SP),
+          "I": ("/home/mahaloz/kwt/_final-i/unlace", SP), "L": ("/home/mahaloz/kwt/_final-l/unlace", SP),
+          "J": ("/home/mahaloz/kwt/castbench/bin-c960fb18d/unlace", SP),
+          "K": ("/home/mahaloz/kwt/castbench/bin-0096e984d/unlace", SP)}
 def arm(a):
     if a in BUILDS:
         kb, sp = BUILDS[a]
@@ -48,7 +48,7 @@ for name in which:
         order = arms[i % len(arms):] + arms[:i % len(arms)]
         for lab in order:
             kb, sp, extra = arm(lab)
-            env = dict(os.environ, SLEIGHHOME=sp, KUNA_SPECS=sp)
+            env = dict(os.environ, SLEIGHHOME=sp, UNLACE_SPECS=sp)
             u0 = resource.getrusage(resource.RUSAGE_CHILDREN)
             t0 = time.perf_counter()
             p = subprocess.run([kb, "decompile-all", b, "--json", "--max-fn-seconds", "120"] + extra,

@@ -1,21 +1,21 @@
 ## The problem
 
-A Mach-O universal ("fat") binary loads for `kuna functions` and dies for
-`kuna strings`, `kuna xrefs`, and `kuna functions --summary` — on the same file,
+A Mach-O universal ("fat") binary loads for `unlace functions` and dies for
+`unlace strings`, `unlace xrefs`, and `unlace functions --summary` — on the same file,
 in the same run. The vendored 2-slice fixture shows it without a dataset:
 
 ```
-$ kuna functions decompiler/crates/kuna-analysis/tests/fixtures/macho_fat --json | head -4
+$ unlace functions decompiler/crates/unlace-analysis/tests/fixtures/macho_fat --json | head -4
 {
-  "binary": "decompiler/crates/kuna-analysis/tests/fixtures/macho_fat",
+  "binary": "decompiler/crates/unlace-analysis/tests/fixtures/macho_fat",
   "count": 6,
   "total": 6,
 
-$ kuna strings decompiler/crates/kuna-analysis/tests/fixtures/macho_fat --json
-error: could not parse decompiler/crates/kuna-analysis/tests/fixtures/macho_fat: Unsupported file format
+$ unlace strings decompiler/crates/unlace-analysis/tests/fixtures/macho_fat --json
+error: could not parse decompiler/crates/unlace-analysis/tests/fixtures/macho_fat: Unsupported file format
 
-$ kuna functions decompiler/crates/kuna-analysis/tests/fixtures/macho_fat --summary --json
-error: could not parse decompiler/crates/kuna-analysis/tests/fixtures/macho_fat: Unsupported file format
+$ unlace functions decompiler/crates/unlace-analysis/tests/fixtures/macho_fat --summary --json
+error: could not parse decompiler/crates/unlace-analysis/tests/fixtures/macho_fat: Unsupported file format
 ```
 
 `--slice x86_64` fails identically: the token was parsed and threaded into the

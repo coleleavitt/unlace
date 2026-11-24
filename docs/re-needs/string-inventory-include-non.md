@@ -28,7 +28,7 @@ reject_reason: null
 Inventory embedded bytecode names, with a scan-policy option if necessary.
 
 > **String inventory cannot include non-NUL-terminated printable runs** (major, `673da52e9b533b4c22bd2eeb`)
-> Returned count 0 even with encoding all and minimum length 4. Kuna read shows out.js at 0xb2024 and numerous identifiers separated by control bytes. The catalog exposes only NUL-terminated detection.
+> Returned count 0 even with encoding all and minimum length 4. Unlace read shows out.js at 0xb2024 and numerous identifiers separated by control bytes. The catalog exposes only NUL-terminated detection.
 
 ## Reproduction
 
@@ -38,7 +38,7 @@ Inventory embedded bytecode names, with a scan-policy option if necessary.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "strings",
     "{{BIN}}",
     "--section",
@@ -81,7 +81,7 @@ Inventory embedded bytecode names, with a scan-policy option if necessary.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "strings",
     "{{BIN}}",
     "--section",

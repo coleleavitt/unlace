@@ -35,11 +35,11 @@ count() { # count <label> <expect:zero|nonzero> <grep args...>
 CRATES=crates
 
 echo "== rename completeness (expect 0 when the rename milestones are done) =="
-count "KunaStage/KunaSubStage identifiers"      zero -E '\bKunaStage\b|\bKunaSubStage\b' --include='*.rs' "$CRATES"
-n_ks=$(grep -rnE '\bkuna_stages\b' --include='*.rs' "$CRATES" 2>/dev/null | grep -v '/target/' | grep -vE 'kuna_stages\.(cc|hh)' | wc -l)
-if [ "$n_ks" -eq 0 ]; then echo "OK    (0)        kuna_stages module refs (protected .cc anchors excluded)"; else
-    echo "RESID ($n_ks)       kuna_stages module refs (protected .cc anchors excluded)"; [ "$STRICT" = 1 ] && FAIL=1; fi
-count "SUBSTAGE_TABLE / substage API"           zero -E 'SUBSTAGE_TABLE|lookup_substage|kuna_num_substages|kuna_substage_by_index' --include='*.rs' "$CRATES"
+count "UnlaceStage/UnlaceSubStage identifiers"      zero -E '\bUnlaceStage\b|\bUnlaceSubStage\b' --include='*.rs' "$CRATES"
+n_ks=$(grep -rnE '\bkuna_stages\b' --include='*.rs' "$CRATES" 2>/dev/null | grep -v '/target/' | grep -vE 'unlace_stages\.(cc|hh)' | wc -l)
+if [ "$n_ks" -eq 0 ]; then echo "OK    (0)        unlace_stages module refs (protected .cc anchors excluded)"; else
+    echo "RESID ($n_ks)       unlace_stages module refs (protected .cc anchors excluded)"; [ "$STRICT" = 1 ] && FAIL=1; fi
+count "SUBSTAGE_TABLE / substage API"           zero -E 'SUBSTAGE_TABLE|lookup_substage|unlace_num_substages|unlace_substage_by_index' --include='*.rs' "$CRATES"
 count "SEAM markers in source"                  zero -E 'SEAM' --include='*.rs' "$CRATES"
 count "ArchSeam / seams:: refs"                 zero -E 'ArchSeam|\bseams::' --include='*.rs' "$CRATES"
 count "stages.toml references (code+scripts)"   zero -E 'stages\.toml' --include='*.rs' --include='*.py' --include='*.toml' "$CRATES" scripts tools

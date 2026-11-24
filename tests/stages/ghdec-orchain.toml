@@ -33,7 +33,7 @@
 # `collapse_conditions` runs later, so the loss is permanent.
 #
 # The fix (part of `returndup`) replays `collapse_conditions` read-only on the
-# bblocks CFG before splitting (`kuna_orchain::shortcircuit_shared_targets`,
+# bblocks CFG before splitting (`unlace_orchain::shortcircuit_shared_targets`,
 # mirroring ruleBlockOr's own admission test: one in-edge, two out-edges, not a
 # switch, not BlockBasic::isComplex, and a shared out-target) and declines the
 # function's splits when one of its own candidates is a fold target.  It also

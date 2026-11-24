@@ -9,12 +9,12 @@
 # matched), and a selector this image only declared in a protocol
 # (`UITableViewDelegate`'s 53 methods) typed nothing.
 #
-# Stage / sub-stage: P1 external-refinement. `analyzers/objc/kuna_objccats.rs`
+# Stage / sub-stage: P1 external-refinement. `analyzers/objc/unlace_objccats.rs`
 # reads `__objc_catlist`/`__objc_nlcatlist` (class off its class_t, or off the
 # chained import / classic LC_DYLD_INFO bind name) so the method walk renames
-# `-[Class(Category) sel]`; `kuna_objcprotos.rs` reads `__objc_protolist`,
+# `-[Class(Category) sel]`; `unlace_objcprotos.rs` reads `__objc_protolist`,
 # names each `protocol_t` `_OBJC_PROTOCOL_$_<P>` and records the declared
-# encodings for the `objc_msgSend$<sel>` stub prototypes; `kuna_objcivars.rs`
+# encodings for the `objc_msgSend$<sel>` stub prototypes; `unlace_objcivars.rs`
 # builds `struct <Class>` from `class_ro_t.ivars` (offset variable values,
 # encodings) and types `self`, with the offset variables reported constant
 # through the `dynrelocs` fold path (P3) under `objcivars`.

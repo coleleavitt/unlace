@@ -3,8 +3,8 @@
 use std::fs::{File, OpenOptions};
 use std::path::{Path, PathBuf};
 
-const POOL_PREFIX: &str = "kuna-jobs-";
-const SCRATCH_PREFIX: &str = "kuna-jobs-v2-";
+const POOL_PREFIX: &str = "unlace-jobs-";
+const SCRATCH_PREFIX: &str = "unlace-jobs-v2-";
 const OWNER_LOCK: &str = "owner.lock";
 
 pub(super) struct ScratchDir {
@@ -153,22 +153,22 @@ mod tests {
     #[test]
     fn a_worker_recognizes_only_its_own_scratch_dir() {
         assert_eq!(
-            pool_scratch("/tmp/kuna-jobs-4242-99"),
-            Some(PathBuf::from("/tmp/kuna-jobs-4242-99"))
+            pool_scratch("/tmp/unlace-jobs-4242-99"),
+            Some(PathBuf::from("/tmp/unlace-jobs-4242-99"))
         );
-        for foreign in ["/tmp", "/home/u/out", "kuna-jobs-1/nested", "/"] {
+        for foreign in ["/tmp", "/home/u/out", "unlace-jobs-1/nested", "/"] {
             assert_eq!(
                 pool_scratch(foreign),
                 None,
                 "{foreign} is not a pool scratch dir"
             );
         }
-        assert_eq!(scratch_owner("kuna-jobs-v2-4242-17384"), Some(4242));
+        assert_eq!(scratch_owner("unlace-jobs-v2-4242-17384"), Some(4242));
         for bad in [
-            "kuna-jobs-4242-17384",
-            "kuna-jobs-v2-",
-            "kuna-jobs-v2-abc-1",
-            "kuna-jobs-v2-1-",
+            "unlace-jobs-4242-17384",
+            "unlace-jobs-v2-",
+            "unlace-jobs-v2-abc-1",
+            "unlace-jobs-v2-1-",
             "kunajobs-1-2",
             "tmpdir",
         ] {
@@ -184,7 +184,7 @@ mod tests {
         let mine = dir.path().to_path_buf();
         let temp = base.path();
         let dead = temp.join(format!("{SCRATCH_PREFIX}{}-11", u32::MAX));
-        let unrelated = temp.join(format!("kuna-not-a-job-{}", std::process::id()));
+        let unrelated = temp.join(format!("unlace-not-a-job-{}", std::process::id()));
         std::fs::create_dir_all(&dead).unwrap();
         File::create(dead.join(OWNER_LOCK)).unwrap();
         std::fs::create_dir_all(&unrelated).unwrap();
@@ -269,7 +269,7 @@ mod tests {
     #[test]
     fn a_legacy_directory_is_not_reaped_from_an_unrelated_pid_view() {
         let base = tempfile::tempdir().unwrap();
-        let legacy = base.path().join("kuna-jobs-4294967295-live");
+        let legacy = base.path().join("unlace-jobs-4294967295-live");
         std::fs::create_dir(&legacy).unwrap();
         std::fs::write(legacy.join("inventory.spec"), b"live inventory").unwrap();
         sweep_stale_scratch(base.path());
@@ -283,7 +283,7 @@ mod tests {
     fn an_owner_lock_controls_cleanup_without_consulting_the_pid() {
         let base = tempfile::tempdir().unwrap();
         for pid in [u32::MAX, std::process::id()] {
-            let dir = base.path().join(format!("kuna-jobs-v2-{pid}-owner"));
+            let dir = base.path().join(format!("unlace-jobs-v2-{pid}-owner"));
             std::fs::create_dir(&dir).unwrap();
             let owner = std::fs::File::create(dir.join("owner.lock")).unwrap();
             owner.try_lock().unwrap();
@@ -305,7 +305,7 @@ mod tests {
     #[test]
     fn an_unpublished_owner_is_not_swept() {
         let base = tempfile::tempdir().unwrap();
-        let dir = base.path().join("kuna-jobs-v2-4294967295-publishing");
+        let dir = base.path().join("unlace-jobs-v2-4294967295-publishing");
         std::fs::create_dir(&dir).unwrap();
         let pending = tempfile::NamedTempFile::new_in(&dir).unwrap();
         pending.as_file().try_lock().unwrap();

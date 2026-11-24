@@ -1,7 +1,7 @@
 from pathlib import Path
 import json,re,hashlib,shutil,subprocess,gzip
 
-w=Path('/tmp/kuna-rust-fmt-str');r=Path('/home/mahaloz/kwt/angr-rust-fmt-str');out=r/'docs/features/rustfmtstr'
+w=Path('/tmp/unlace-rust-fmt-str');r=Path('/home/mahaloz/kwt/angr-rust-fmt-str');out=r/'docs/features/rustfmtstr'
 assert json.loads((w/'gates-passed.json').read_text())['all_four_gates_passed']
 assert all(hashlib.sha256((r/p).read_bytes()).hexdigest()==h for p,h in json.loads((w/'production-source-before-validation.json').read_text()).items())
 assert 'ALL 12 CHANGED MACROS AND SOURCE MAPPINGS REVIEWED' in (w/'postreview.log').read_text()
@@ -18,17 +18,17 @@ assert all('PARITY OK' in(w/f'{name}.log').read_text()for name in ['original','s
 assert json.loads((r/'docs/baseline-stages.json').read_text())['data_footer']==[3531,3531]
 subprocess.run(['git','diff','--exit-code','--','docs/baseline.json'],cwd=r,check=True)
 breadth=json.loads((w/'breadth/record.json').read_text());summary=json.loads((w/'breadth-summary.json').read_text());macros=json.loads((w/'all-macros.json').read_text());native=json.loads((w/'native-execution.json').read_text())
-digest=hashlib.sha256((r/'decompiler/target/release/kuna').read_bytes()).hexdigest()
+digest=hashlib.sha256((r/'decompiler/target/release/unlace').read_bytes()).hexdigest()
 
 ready=json.loads((w/'breadth/capture-ready.json').read_text())
-assert ready['patched_kuna_sha256']==digest
+assert ready['patched_unlace_sha256']==digest
 for fixture in ready['fixtures']:
     for language in fixture['languages']:
         prefix=w/'breadth'/f"{fixture['fixture']}-{language['language']}"
         assert hashlib.sha256(Path(str(prefix)+'.json').read_bytes()).hexdigest()==language['after_file_sha256']
         if language['language']=='rust':assert hashlib.sha256(Path(str(prefix)+'-off.json').read_bytes()).hexdigest()==language['off_file_sha256']
 
-assert breadth['patched_kuna_sha256']==digest and not breadth['semantic_evidence_pending'] and not breadth['baseline_has_pending_feature']
+assert breadth['patched_unlace_sha256']==digest and not breadth['semantic_evidence_pending'] and not breadth['baseline_has_pending_feature']
 assert summary['changed_functions']==macros['changed_functions']==macros['recovered_calls']==12
 assert macros['all_template_bytes_and_argument_bindings_verified'] and not macros['source_mapping_classification_pending']
 assert native['strings']==156 and native['integer_values']==9 and len(native['executions'])==3
@@ -45,7 +45,7 @@ assert reanchor['new_baseline_commit']==parent_head==(w/'baseline-commit.txt').r
 assert reanchor['release_binary_unchanged']and reanchor['release_binary_sha256']==digest
 assert not subprocess.check_output(['git','status','--porcelain'],cwd=config['base'])
 
-assert hashlib.sha256((Path(config['base'])/'decompiler/target/release/kuna').read_bytes()).hexdigest()==parent_identity['binary_sha256']
+assert hashlib.sha256((Path(config['base'])/'decompiler/target/release/unlace').read_bytes()).hexdigest()==parent_identity['binary_sha256']
 for row in timings:
     assert row['binaries_sha256']['baseline']==parent_identity['binary_sha256']
     assert row['binaries_sha256']['patched']==digest and row['plan']['maximum_looks']==1 and row['plan']['family_alpha']==0.05
@@ -56,7 +56,7 @@ maxima={comparison:{metric:max(row['delta_pct'][comparison][metric]for row in ti
 out.mkdir(parents=True,exist_ok=True)
 record={
     'option':'rustfmtstr','default':'on','baseline_commit':(w/'baseline-commit.txt').read_text().strip(),
-    'integrated_main_commit':'69fad3ce4cbdbb3232680938252bd75c2bec5a68','kuna_sha256':digest,
+    'integrated_main_commit':'69fad3ce4cbdbb3232680938252bd75c2bec5a68','unlace_sha256':digest,
     'reference_angr_commit':'6afa0c79a83d9f677a46b0275cdb63bf16c1979e','reference_binaries_commit':'76ad9e296dde8f82b8ede93ce06a578cd1933639',
     'datatests':dict(passed=675,total=675,baseline_unchanged=True),
     'stages':dict(passed=3531,total=3531,new_case_before=0,new_case_after=8,new_case_assertions=8,before_case_omits_new_option_commands=True),
@@ -80,8 +80,8 @@ for name in files:shutil.copy2(w/name,out/name)
 shutil.copy2(w/'breadth/record.json',out/'breadth.json')
 for name in ['capture-race-69fa.json','ambiguous-overlap-capture.log','ambiguous-breadth-69fa.log']:
     shutil.copy2(w/name,out/name)
-shutil.copy2('/tmp/kuna-angr-reference/breadth-69fa-recovery.py',out/'breadth-69fa-recovery.py')
-shutil.copy2('/tmp/kuna-angr-reference/breadth-69fa-recovery.log',out/'breadth-69fa-recovery.log')
+shutil.copy2('/tmp/unlace-angr-reference/breadth-69fa-recovery.py',out/'breadth-69fa-recovery.py')
+shutil.copy2('/tmp/unlace-angr-reference/breadth-69fa-recovery.log',out/'breadth-69fa-recovery.log')
 for name in ['overlap-capture-plan.json','capture-ready.json']:
     shutil.copy2(w/'breadth'/name,out/name)
 shutil.copy2(w/'overlap-capture.log',out/'overlap-capture.log')

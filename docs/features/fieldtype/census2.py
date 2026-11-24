@@ -28,7 +28,7 @@ def find_casts_j(toks, vocab):
         cc.add(j)
         out.append((ty, CC.operand_shape(toks, k, n), toks[i].line, "", j))
     return out
-def classify(text, vocab, is_kuna):
+def classify(text, vocab, is_unlace):
     toks = CC.tokenize(text); out = []
     d = decls(text)
     lines = text.splitlines()
@@ -76,7 +76,7 @@ def main():
             for key, ty, L in classify(iff[a], iv, False):
                 ida_cnt[key[0]] += 1
     tot = sum(cnt.values())
-    print('kuna (T *)&... casts on shared set:', tot)
+    print('unlace (T *)&... casts on shared set:', tot)
     for k, v in cnt.most_common(): print(f'{v:6d}  {k}')
     print('ida by operand form:', dict(ida_cnt))
     for k in ex:

@@ -2,10 +2,10 @@
 
 ## 1. The change
 
-New module `decompiler/crates/kuna-decomp/src/p4_calls/argclobber.rs`, one
+New module `decompiler/crates/unlace-decomp/src/p4_calls/argclobber.rs`, one
 entry point called from `build_input_from_trials`
 (`p4_calls/funcdata_callsite.rs`) immediately after
-`kuna_calleearity::unify_with_sibling_call`:
+`unlace_calleearity::unify_with_sibling_call`:
 
 ```rust
 pub fn drop_clobber_tail_arg(fc: &mut FuncCallSpecs, data: &mut Funcdata)
@@ -20,7 +20,7 @@ immediate indirect-creation input, every one of those creations is a creation of
 the trial's OWN register and every OTHER input of that join is a division
 by-product (`clobber_of_this_register_reaches` / `is_division_byproduct`); the
 callee's entry-liveness summary does not `proves_input` those bytes; and
-`kuna_calleearity::best_witness_for` has no already-final sibling call to the same
+`unlace_calleearity::best_witness_for` has no already-final sibling call to the same
 callee entry carrying an argument at that storage.
 
 The same-register and callee preconditions were added in review round 2
@@ -47,18 +47,18 @@ list and reconciles to it.
 * `p0_knowledge/options.rs` registration; `phases.toml` `[[settable]]` row
   (P4 / `active-input-trial-scoring`, `change_kind = "correctness-fix"`,
   `tier = "core"`, `live_field = "arg_clobber"`, `source_decompiler = "ghidra"`).
-* `ELEM_ARGCLOBBER = 4173` (next free in the kuna 4000+ range).
+* `ELEM_ARGCLOBBER = 4173` (next free in the unlace 4000+ range).
 
 ## 3. Counter sites moved
 
 Re-derived against `origin/main` at rebase time with
 `python3 -m scripts.repipe.counters --rederive/--fix` on a freshly built tree,
 never by arithmetic: 208 -> 209 settables (`phases/tests.rs` fn-name,
-`kuna_num_settables`, `SETTABLE_TABLE-len`, tier tuple 67->68 core,
+`unlace_num_settables`, `SETTABLE_TABLE-len`, tier tuple 67->68 core,
 catalog-json-records 207->208; `tests/catalog_bytecompat.rs`, 4 sites) and the
 captured `tests/fixtures/phase_catalog.json` (re-captured with `phase catalog`, no
 program loaded); `option_values_live_value_present_for_86` -> `_for_87` (the option
-has a `live_field`); stage corpus count `kuna-base/src/xml.rs` 294 -> 298 (four
+has a `live_field`); stage corpus count `unlace-base/src/xml.rs` 294 -> 298 (four
 stage files); `docs/baseline-stages.json` re-recorded (1021 keys), not hand-merged;
 `docs/options.md` regenerated.
 

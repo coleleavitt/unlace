@@ -1,12 +1,12 @@
 ## The problem
 
-kuna carries libc prototypes and not one Windows API signature, so on a PE every
+unlace carries libc prototypes and not one Windows API signature, so on a PE every
 `LoadLibraryExW` / `WriteFile` / `VirtualQuery` call has to have its arguments
 guessed from the call site — and when that guess loses, the values are left
 behind as stack locals.
 
 ```
-$ kuna decompile ./win32sigs_pe_i386.exe 0x401020
+$ unlace decompile ./win32sigs_pe_i386.exe 0x401020
 void sub_401020(void)
 {
   int v1; // edx
@@ -53,8 +53,8 @@ arguments to the documented arity, 16 shed invented ones
 (`GetCurrentProcess(CONCAT44(dat_c,argc))` → `GetCurrentProcess()`). Parity is
 675/675 and 704/704, and `sub_401ba0` decompiles 16.9% faster.
 
-One kuna-owned stage assertion moved with the change. `ghdec-peimportcall` pinned
-`ExitProcess(); // no-return`, an empty-parens spelling from before kuna had any
+One unlace-owned stage assertion moved with the change. `ghdec-peimportcall` pinned
+`ExitProcess(); // no-return`, an empty-parens spelling from before unlace had any
 Win32 prototype. `ExitProcess` takes one `UINT`, and that fixture's
 `bail(int code)` passes it, so `ExitProcess(a0)` is the correct rendering and the
 old regex was pinning the argument being lost. What the test exists to protect,

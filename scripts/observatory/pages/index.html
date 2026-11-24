@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kuna Observatory</title>
+<title>Unlace Observatory</title>
 <style>
 @@BASE_CSS@@
 .launch { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-top: 18px; }
@@ -22,10 +22,10 @@
 <body>
 @@DATA@@
 <main class="wrap">
-  <h1>Kuna Observatory</h1>
-  <p class="lede">Local, generated views of the kuna codebase: what the pieces are, how bytes
+  <h1>Unlace Observatory</h1>
+  <p class="lede">Local, generated views of the unlace codebase: what the pieces are, how bytes
   become C, where change concentrates, and what the tests cover. Regenerate with
-  <code>PYTHONPATH=. python3 -m scripts.observatory.generate --out observatory --kuna target/release/unlace</code> (fast) and <code>bash scripts/coverage.sh</code> (heavy, on demand).
+  <code>PYTHONPATH=. python3 -m scripts.observatory.generate --out observatory --unlace target/release/unlace</code> (fast) and <code>bash scripts/coverage.sh</code> (heavy, on demand).
   Raw data for agents lives beside these pages in <code>observatory/data/*.json</code>.</p>
   <div class="launch" id="launch"></div>
   <p class="hint" id="footnote"></p>

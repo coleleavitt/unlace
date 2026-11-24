@@ -1,4 +1,4 @@
-"""Emit decompiler/crates/kuna-analysis/tests/fixtures/calleevote_budget_x86_64.c.
+"""Emit decompiler/crates/unlace-analysis/tests/fixtures/calleevote_budget_x86_64.c.
 
 The fixture is `calleevote_long_x86_64.c` plus enough filler functions that 5% of
 what the binary prints covers `scan_long`'s 45 lines, so the redo budget buys it.
@@ -6,7 +6,7 @@ N is the only thing worth changing: 150 fillers print 2,275 lines, a 113-line
 budget, against the 64 the two callees charge.
 
     python3 docs/features/calleevote/budget-fixture.py > \
-      decompiler/crates/kuna-analysis/tests/fixtures/calleevote_budget_x86_64.c
+      decompiler/crates/unlace-analysis/tests/fixtures/calleevote_budget_x86_64.c
     gcc -O2 -fno-inline -fno-stack-protector -fcf-protection=none \
       -o calleevote_budget_x86_64 calleevote_budget_x86_64.c
 """

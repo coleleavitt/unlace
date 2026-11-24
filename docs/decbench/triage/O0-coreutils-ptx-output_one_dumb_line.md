@@ -49,7 +49,7 @@ costs a 2-block `if` (no `else`), and keeps **two** variables:
                  (DAT_00114848 - DAT_00114840)) - lVar2);
 ```
 
-**kuna (stored, 2026-07-27 benchmark, GED 98)** and **kuna (fresh, today)** —
+**unlace (stored, 2026-07-27 benchmark, GED 98)** and **unlace (fresh, today)** —
 structurally identical to each other; only the DIV-34..39 print normalization
 differs (truthy conditions, brace elision, `// branch-flip` inline warnings):
 
@@ -68,7 +68,7 @@ differs (truthy conditions, brace elision, `// branch-flip` inline warnings):
 ```
 
 Structural metrics (from the triage dump): angr 10 `if`s + 6 ternaries; ghidra 16
-`if`s + 0; kuna stored 16 + 0; kuna fresh 16 + 0. `10 + 6 == 16` — the entire
+`if`s + 0; unlace stored 16 + 0; unlace fresh 16 + 0. `10 + 6 == 16` — the entire
 `if`-count delta versus angr is the six unfolded selects.
 
 ## Source
@@ -94,7 +94,7 @@ pair in the `head.start < head.end` region. Source CFG is 22 nodes / 31 edges �
 real, non-degenerate control-flow graph, and `source_exact` is false but
 `approximated` is false too, so the GED numbers are meaningful. angr's 0 is a
 genuine structural match, not a truncation artifact (its body is complete and 78
-LOC against kuna's 79).
+LOC against unlace's 79).
 
 ## Analysis
 
@@ -102,16 +102,16 @@ LOC against kuna's 79).
 renders as a full three-component assignment diamond
 `if (dat_14870) v1 = dat_14838; else { v1 = 0; }` instead of a `?:`. Six of them,
 each adding a condition node, two arm nodes and their edges where the source has
-none — that is 6 of kuna's 16 `if`s and the whole 98-vs-0 GED margin.
+none — that is 6 of unlace's 16 `if`s and the whole 98-vs-0 GED margin.
 
-**The miner hint is only 18% right.** `bucket: kuna-specific` and "kuna far worse
+**The miner hint is only 18% right.** `bucket: unlace-specific` and "unlace far worse
 than ghidra" overstate it: ghidra 80, binja 66, ida 65 all lose badly to angr's 0
 on the same six selects. 80 of the 98 points is a family-wide ternary-recovery
-gap; only the ~18-point kuna-vs-ghidra residue is kuna-specific (ghidra hoists one
-arm and pays a 2-block `if`, kuna pays a 3-block `if/else`). Fixing the ternary
+gap; only the ~18-point unlace-vs-ghidra residue is unlace-specific (ghidra hoists one
+arm and pays a 2-block `if`, unlace pays a 3-block `if/else`). Fixing the ternary
 fold closes all 98 at once, so that is the lever worth pulling.
 
-**Root cause — one predicate in P8.** kuna already ships the pass for exactly this
+**Root cause — one predicate in P8.** unlace already ships the pass for exactly this
 shape: `iteregion` (default-ON, DIV-17) plus its `iteexpr` extension. Neither
 fires here, and `--option iteexpr on` does not change a single line
 (verified). The declining predicate is
@@ -170,9 +170,9 @@ variables and subtracts the right values. The *structural* gap in this record (s
 selects rendering as diamonds instead of `?:`) is untouched and still open.
 
 **Spin-off defect, different phase, NOT the same root cause.** The reproducer above
-also shows that kuna's C is *semantically wrong*: `v1` is written twice and both
+also shows that unlace's C is *semantically wrong*: `v1` is written twice and both
 reads are folded into one expression printed after the second write, so with
-`f1=1, t1=100, f2=0` kuna's C subtracts 0 where the binary subtracts 100. ghidra
+`f1=1, t1=100, f2=0` unlace's C subtracts 0 where the binary subtracts 100. ghidra
 (`lVar1`/`lVar2`), ida (`v0`/`v2`) and angr all keep the two values apart. The IR
 covers are disjoint (`RAX` select read at `0x58b1`, `RCX` select defined at
 `0x58dc`), so the P6 speculative merge is cover-legal; what is not legal is that
@@ -209,4 +209,4 @@ be claimed to fix, the `v1`-aliasing correctness bug above.
 
 **Expected payoff.** 6 `if`s -> 6 ternaries in this function, giving 10 `if`s / 6
 ternaries — angr's exact shape, i.e. the full 98-point margin, and it also closes
-the ~18-point kuna-vs-ghidra residue without needing ghidra's arm-hoisting.
+the ~18-point unlace-vs-ghidra residue without needing ghidra's arm-hoisting.

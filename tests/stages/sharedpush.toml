@@ -6,7 +6,7 @@
 # reads unless that call's own trial is still open, and a call through a
 # declared import slot has no trial, so the declared call always kept the push.
 # Stage / sub-stage: P4 call-site input recovery (`check_call_double_use`,
-# `p4_calls/kuna_sharedpush.rs`). A strict fix, always on.
+# `p4_calls/unlace_sharedpush.rs`). A strict fix, always on.
 # The fixture `sharedpush_pe_i386.exe` is assembled from
 # `sharedpush_pe_i386.asm` (see the fixtures README).
 # 0x401000 pushes 0x14 for malloc or the internal wrapper at 0x4010d0, then the

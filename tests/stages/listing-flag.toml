@@ -1,10 +1,10 @@
-# kuna infrastructure test: the Listing/xref disassembly tier flag
+# unlace infrastructure test: the Listing/xref disassembly tier flag
 # (`option listing on|off`, default-OFF), PR1 of the Listing/xref tier.
 #
 # The Listing/xref tier (docs/listing-tier-design.md) builds a program-wide
 # recursive-descent disassembly model ONLY on the real-ELF bootstrap path,
 # never the XML datatest path. PR1 wires the `option listing` flag end to
-# end (architecture flag/default/reset/set_kuna_option, KUNA_OPTION_NAMES,
+# end (architecture flag/default/reset/set_unlace_option, UNLACE_OPTION_NAMES,
 # analysis_pass_enabled, the stages.toml settable row, the AnalysisCtx field)
 # but does NOT build the Listing yet (PR2). The flag is therefore INERT: by
 # default-OFF, and on the XML path it is unreachable regardless.
@@ -46,6 +46,6 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-LISTING #1: option listing on parses and round-trips, and is inert: the source form x <= 8 renders identically in both passes (default-off + flag-on parity)'
+name = 'UNLACE-LISTING #1: option listing on parses and round-trips, and is inert: the source form x <= 8 renders identically in both passes (default-off + flag-on parity)'
 count = 2
 literal = 'if (x <= 8)'

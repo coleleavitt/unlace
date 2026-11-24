@@ -28,7 +28,7 @@ reject_reason: null
 A raw byte or typed-data view of the encoded globals at 0x140032950 through 0x1400329ad
 
 > **Disassembling a non-executable .rdata range silently presents data as code** (minor, `69a3822f7b3cc38c80464da4`)
-> kuna exited successfully and decoded .rdata bytes as instructions such as SBB, POP, PUSH, JNC and JO, with no warning that the address range is non-executable. The JSON bytes were usable, but the instruction presentation is actively misleading.
+> unlace exited successfully and decoded .rdata bytes as instructions such as SBB, POP, PUSH, JNC and JO, with no warning that the address range is non-executable. The JSON bytes were usable, but the instruction presentation is actively misleading.
 
 ## Reproduction
 
@@ -38,7 +38,7 @@ A raw byte or typed-data view of the encoded globals at 0x140032950 through 0x14
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "disassemble",
     "{{BIN}}",
     "0x140032950-0x1400329ad",
@@ -79,7 +79,7 @@ A raw byte or typed-data view of the encoded globals at 0x140032950 through 0x14
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "disassemble",
     "{{BIN}}",
     "0x140032950-0x1400329ad",
@@ -120,6 +120,6 @@ _not yet refuted_
 ## Decision log
 
 - filed by cluster.py from 1 observation(s)
-- round 2 T_DEDUP (captain): second instance of the 'kuna will not tell me about data' family; see [cli-mode-read-raw] for why the two were not merged into one record.
-- round 2 T_TRIAGE (captain): track tooling / touches unlace-cli / scope small / severity minor CONFIRMED. The defect is silence, not the decode: kuna exited 0 and presented .rdata bytes as SBB/POP/PUSH/JNC with nothing saying the range is non-executable. A warning (or a refusal behind a flag) is a bounded CLI change. See cli-mode-read-raw -- a data view would answer both.
+- round 2 T_DEDUP (captain): second instance of the 'unlace will not tell me about data' family; see [cli-mode-read-raw] for why the two were not merged into one record.
+- round 2 T_TRIAGE (captain): track tooling / touches unlace-cli / scope small / severity minor CONFIRMED. The defect is silence, not the decode: unlace exited 0 and presented .rdata bytes as SBB/POP/PUSH/JNC with nothing saying the range is non-executable. A warning (or a refusal behind a flag) is a bounded CLI change. See cli-mode-read-raw -- a data view would answer both.
 - closed: acceptance a-c42440103c7d now PASSES at 3ae69cbcec70

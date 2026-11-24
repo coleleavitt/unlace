@@ -89,4 +89,4 @@ literal = 'goto label_'
 [[match]]
 name = "LOOPCONTINUE-WHILE #5: Rust's loop-and-break do-while keeps the jump to its test as a goto marker"
 count = 1
-literal = 'panic!("kuna: unstructured goto to label_407fe6")'
+literal = 'panic!("unlace: unstructured goto to label_407fe6")'

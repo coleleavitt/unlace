@@ -1,5 +1,5 @@
-/* (kuna castsign) Values the program compares signed and also compares for
- * equality with a constant whose top bit is set.  kuna may print such a constant
+/* (unlace castsign) Values the program compares signed and also compares for
+ * equality with a constant whose top bit is set.  unlace may print such a constant
  * in decimal with no suffix (`3000000000`, `10000000000000000000`), and a
  * decimal literal of 2^31 or more has a C type wider than `int` (2^63 or more,
  * wider than `long`).  `v == 3000000000` converts `v` to that type: zero-extended
@@ -8,7 +8,7 @@
  * `castsign` must leave `v` unsigned in d_eq32, c_eq64, c_ne64 and c_or64 (the
  * constant meets the value after a `|`).  c_eq7 compares with a small
  * constant, whose type is `int`, and is declared signed.  The round-trip test in
- * unlace-cli/tests/decompile_all_cli.rs compiles the functions as kuna prints them
+ * unlace-cli/tests/decompile_all_cli.rs compiles the functions as unlace prints them
  * with gcc and clang at -O0 and -O2, and checks that each build prints what this
  * program prints:
  *

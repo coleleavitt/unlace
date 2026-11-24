@@ -5,7 +5,7 @@ group_id: bash::shell_initialize
 status: already-fixed
 tier: M
 margin: 72
-fresh_verdict: today's build scores GED 0 — kuna's CFG is *isomorphic* to the source (9 nodes / 12 edges, same as angr and ida). The recorded 72 was three `if (chain) v = 1; else v = 0;` boolean-materialization diamonds that `iteboolean` (DIV-51, PR #241) now folds into the short-circuit chain. Mode-independent (identical output under `--mode reliable`, `aggressive` and no-flag).
+fresh_verdict: today's build scores GED 0 — unlace's CFG is *isomorphic* to the source (9 nodes / 12 edges, same as angr and ida). The recorded 72 was three `if (chain) v = 1; else v = 0;` boolean-materialization diamonds that `iteboolean` (DIV-51, PR #241) now folds into the short-circuit chain. Mode-independent (identical output under `--mode reliable`, `aggressive` and no-flag).
 option_closing: null
 feature_slug: null
 scope: small
@@ -19,14 +19,14 @@ $ ~/.virtualenvs/decbench/bin/python -m scripts.decbench.rescore \
       --case O2-noinline-bash-bash-shell_initialize
 [rescore] METRIC-DRIFT: recorded 72 vs recomputed 0
  "ged_recorded": 72.0,  "ged_before": 0.0,  "ged_after": 0.0,
- "ged_perfect_after": true,  "ged_kuna_commit": "9623dc27"
+ "ged_perfect_after": true,  "ged_unlace_commit": "9623dc27"
 ```
 
 Per-decompiler CFG probe on the stored artifacts (today's evaluator):
 
 ```
 source shell.i:   9n/12e
-kuna:   9n/12e  ged=0.0   iso=True    method=isomorphism
+unlace:   9n/12e  ged=0.0   iso=True    method=isomorphism
 angr:   9n/12e  ged=0.0   iso=True
 ida:    9n/12e  ged=0.0   iso=True
 ghidra: 29n/41e ged=84.0  iso=False   method=vj_ged
@@ -47,19 +47,19 @@ $ unlace decompile-all .../O2-noinline/bash/stripped/bash --json --addr 0x34460 
 
 `ghidra`, `ida`, `angr` and `binja` all reproduce their recorded values exactly, so the
 2026-07-28 decbench GED overhaul (`e6e6b0f`, isomorphism early-out before `vj_ged`) is not
-what moved kuna. Running the *old* evaluator (raw `cfgutils.similarity.vj_ged`, no
-isomorphism early-out) on the stored kuna artifact also gives **0.0**:
+what moved unlace. Running the *old* evaluator (raw `cfgutils.similarity.vj_ged`, no
+isomorphism early-out) on the stored unlace artifact also gives **0.0**:
 
 ```
-$ vjprobe O2-noinline-bash-bash-shell_initialize kuna
+$ vjprobe O2-noinline-bash-bash-shell_initialize unlace
 source shell.i: 9n/12e
-kuna: 9n/12e  iso=True  RAW_vj_ged=0.0
+unlace: 9n/12e  iso=True  RAW_vj_ged=0.0
 ```
 
-So kuna's *output* changed. (The `O2-noinline` kuna artifact in the results tree was
+So unlace's *output* changed. (The `O2-noinline` unlace artifact in the results tree was
 regenerated on Aug 1 — `mtime 2026-08-01 23:28` — which is why `triage`'s "stored" pane
 already equals the fresh one. **The results tree is live user WIP and is being written
-concurrently**; several `O0/*/decompiled/kuna_*.c` files carry `Aug 3 05:10` mtimes.
+concurrently**; several `O0/*/decompiled/unlace_*.c` files carry `Aug 3 05:10` mtimes.
 Never treat a "stored" pane as run-era without checking its mtime.)
 
 ## What the run-era output looked like
@@ -101,7 +101,7 @@ At `O2-noinline` all three were still if/else at run time (9 -> 15 nodes), which
   initialize_bashopts (privileged_mode||restricted||should_be_restricted||running_setuid);
 ```
 
-Today kuna prints the chain inline at all three call sites, matching the source, angr and
+Today unlace prints the chain inline at all three call sites, matching the source, angr and
 IDA:
 
 ```c
@@ -118,7 +118,7 @@ IDA:
 
 Closed by **`iteboolean`** (P8, DIV-51 / PR #241 — "re-roll short-circuit 0/1 select
 diamonds into a boolean assignment"), default-ON and mode-independent. Ghidra still scores
-84 here, so this is a kuna-only win over its own ancestor.
+84 here, so this is a unlace-only win over its own ancestor.
 
 **But the run-era O0 pane above is also a live witness of a different defect**: `iteboolean`
 re-rolled only *one* of the three identical diamonds, and it still does today —

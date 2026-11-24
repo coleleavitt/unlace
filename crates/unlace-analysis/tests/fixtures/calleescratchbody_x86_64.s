@@ -1,4 +1,4 @@
-# (kuna) `calleescratchbody` fixture -- RE-friction round 12, need
+# (unlace) `calleescratchbody` fixture -- RE-friction round 12, need
 # `rax-preserving-stack-probe` (challenge 69d7f15a8afd9d6c48b48871, PE x86-64
 # `crackme_shroud.exe`, sub_140001000 -> __chkstk @0x1408d0000), reduced to one
 # caller/callee pair.

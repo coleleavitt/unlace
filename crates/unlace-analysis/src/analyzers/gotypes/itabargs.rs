@@ -332,7 +332,7 @@ impl AnalysisPass for GoItabArgsPass {
             .collect();
         if itabs.is_empty() {
             if unlace_base::env::var_os("UNLACE_GOITABARGS_DEBUG").is_some() {
-                eprintln!("[kuna goitabargs] no static itabs located");
+                eprintln!("[unlace goitabargs] no static itabs located");
             }
             return AnalysisOutput::default();
         }
@@ -355,7 +355,7 @@ impl AnalysisPass for GoItabArgsPass {
                 .map(|(&at, _)| at)
                 .collect();
             eprintln!(
-                "[kuna goitabargs] instructions={} assembly={} lea={} itab_lea={} scanned_lea={scanned} itabs={} votes={}",
+                "[unlace goitabargs] instructions={} assembly={} lea={} itab_lea={} scanned_lea={scanned} itabs={} votes={}",
                 listing.num_instructions(),
                 listing.has_assembly(),
                 leas,
@@ -393,7 +393,7 @@ impl AnalysisPass for GoItabArgsPass {
                         call_after(listing, *at, reg)
                     });
                 eprintln!(
-                    "[kuna goitabargs] lea {at:#x} -> {:x?}: {}",
+                    "[unlace goitabargs] lea {at:#x} -> {:x?}: {}",
                     outcome,
                     trail.join(" ; ")
                 );
@@ -429,7 +429,7 @@ impl AnalysisPass for GoItabArgsPass {
         if debug {
             for hint in &hints {
                 eprintln!(
-                    "[kuna goitabargs] hint {:#x} {} {}",
+                    "[unlace goitabargs] hint {:#x} {} {}",
                     hint.func_addr, hint.reg, hint.name
                 );
             }

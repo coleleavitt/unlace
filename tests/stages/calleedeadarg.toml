@@ -1,5 +1,5 @@
 # RE-friction round 2, need `void-callee-spurious-arg`, challenge
-# 68149b8a8f555589f353117c (Mach-O arm64 `practice_2_rengr`): one kuna output
+# 68149b8a8f555589f353117c (Mach-O arm64 `practice_2_rengr`): one unlace output
 # contradicted itself.  The header declared `int _secret_function(void);` and
 # the body of `_main` called `_secret_function(v3);`, where `v3` was the
 # return value of the preceding `scanf`.  The export does not recompile, and
@@ -17,7 +17,7 @@
 # same callee, they are only ever additive, and here there is one call site.
 #
 # Stage / sub-stage: P4 "active-input-trial-scoring".  A bounded decode of
-# the CALLEE's own body vetoes the trial (kuna_calleedeadarg.rs, always on):
+# the CALLEE's own body vetoes the trial (unlace_calleedeadarg.rs, always on):
 # a register the callee provably overwrites, on every path from its entry and
 # before ever reading it, is dead there and cannot be carrying an argument.
 #

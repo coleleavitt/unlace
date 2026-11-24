@@ -1,7 +1,7 @@
 ## The problem
 
 When a dispatch picks its destination with a conditional move instead of a
-table, kuna throws away everything behind the branch — even though both
+table, unlace throws away everything behind the branch — even though both
 destinations are already constants it printed.
 
 ```
@@ -13,7 +13,7 @@ $ printf '\x48\x85\xff\x49\xb8\x30\x00\x10\x00\x00\x00\x00\x00\x49\xb9\x20\x00\x
  0x100017: 4d 0f 44 c8     cmove r9, r8
  0x10001b: 41 ff e1        jmp r9
 
-$ kuna decompile ./a.out csjmp
+$ unlace decompile ./a.out csjmp
 void csjmp(long a0)
 {
   void *v1; // r9

@@ -3,7 +3,7 @@
 # The XML wrapper only provides the harness architecture. Both passes clear it
 # and load the real public PE fixture through the same object bootstrap the
 # CLI uses. `pdb_prog.exe` records the CodeView name `pdb_prog.pdb` and the
-# matching `pdb_prog.pdb` is vendored beside it; kuna's loader never names
+# matching `pdb_prog.pdb` is vendored beside it; unlace's loader never names
 # functions from a COFF symbol table, so `0x140001000` has no name of its own.
 #
 # Both passes run `mode fast`, whose rooted discovery inventories the direct

@@ -1,19 +1,19 @@
 from pathlib import Path
 import subprocess,json,hashlib,os
-r=Path('/home/mahaloz/kwt/angr-dwarf-namespace');base=Path('/home/mahaloz/kwt/angr-base-1d5f');w=Path('/tmp/kuna-dwarf-namespace-p9');out=w/'native-proof';out.mkdir(exist_ok=False)
+r=Path('/home/mahaloz/kwt/angr-dwarf-namespace');base=Path('/home/mahaloz/kwt/angr-base-1d5f');w=Path('/tmp/unlace-dwarf-namespace-p9');out=w/'native-proof';out.mkdir(exist_ok=False)
 build=json.loads((w/'build.json').read_text());sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
-assert sha(r/'decompiler/target/release/kuna')==build['new_cli_sha256'];assert sha(base/'decompiler/target/release/kuna')==build['parent_cli_sha256']
+assert sha(r/'decompiler/target/release/unlace')==build['new_cli_sha256'];assert sha(base/'decompiler/target/release/unlace')==build['parent_cli_sha256']
 inputs=[0,1,7,12345,0x7fffffff,0x80000000,0xffffffd7,0xfffffff5,0xffffffff]
 records=[]
 for lang,output,count,compilers in [('cpp','c',5,['clang++','g++']),('rust','rust',4,['rustc'])]:
- fixture=r/f'decompiler/crates/kuna-analysis/tests/fixtures/dwarf_namespaces_{lang}_x86_64'
+ fixture=r/f'decompiler/crates/unlace-analysis/tests/fixtures/dwarf_namespaces_{lang}_x86_64'
  names='direct_left,direct_nested,direct_right,direct_global'+(',direct_shadow'if lang=='cpp'else '')
- source=(r/f'decompiler/crates/kuna-analysis/tests/fixtures/dwarf_namespaces.{"cpp"if lang=="cpp"else "rs"}').read_text()
+ source=(r/f'decompiler/crates/unlace-analysis/tests/fixtures/dwarf_namespaces.{"cpp"if lang=="cpp"else "rs"}').read_text()
  helpers=source.split('extern "C"'if lang=='cpp'else '#[no_mangle]')[0]
  main=('int main(int argc, char **argv) { uint32_t x = static_cast<uint32_t>(std::strtoul(argv[1], nullptr, 0)); std::printf("%u %u %u %u %u\\n", direct_left(x), direct_nested(x), direct_right(x), direct_global(x), direct_shadow(x)); }'if lang=='cpp'else 'fn main() { let x = std::env::args().nth(1).unwrap().parse::<u32>().unwrap(); unsafe { println!("{} {} {} {}", direct_left(x), direct_nested(x), direct_right(x), direct_global(x)); } }')
  for arm,root in [('parent',base),('candidate',r)]:
-  cmd=[str(root/'decompiler/target/release/kuna'),'decompile-all',str(fixture),'--json','--language',output,'--option','cppproto','on','--functions',names]
-  env=os.environ|{'KUNA_SPECS':str(r/'specs'),'SLEIGHHOME':str(r/'specs')}
+  cmd=[str(root/'decompiler/target/release/unlace'),'decompile-all',str(fixture),'--json','--language',output,'--option','cppproto','on','--functions',names]
+  env=os.environ|{'UNLACE_SPECS':str(r/'specs'),'SLEIGHHOME':str(r/'specs')}
   capture=subprocess.run(cmd,cwd=r,env=env,capture_output=True,text=True,check=True);doc=json.loads(capture.stdout);assert len(doc['functions'])==count
   (out/f'{lang}-{arm}.json').write_text(capture.stdout);(out/f'{lang}-{arm}.log').write_text(capture.stderr)
   bodies='\n'.join(f['code']for f in doc['functions']);assert all(not f.get('error')for f in doc['functions'])

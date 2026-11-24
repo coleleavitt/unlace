@@ -2,14 +2,14 @@
 
 A call that returns a 16-byte struct gets no output at all, and every use of the
 returned value reads a variable that has no definition anywhere in the function.
-Ask kuna about the callee and it agrees there is a 16-byte return; ask it about
+Ask unlace about the callee and it agrees there is a 16-byte return; ask it about
 the caller and the call is a bare statement:
 
 ```
-$ kuna decompile ./crackme.x86_64.elf sub_875e0 | head -1
+$ unlace decompile ./crackme.x86_64.elf sub_875e0 | head -1
 undefined16 sub_875e0(int8 a0,char *a1,int8 a2,uint4 a3)
 
-$ kuna decompile ./crackme.x86_64.elf sub_9d9c0
+$ unlace decompile ./crackme.x86_64.elf sub_9d9c0
 void sub_9d9c0(unsigned long a0,unsigned long a1,unsigned long a2,int4 a3)
 {
   int4 *v1; // rax          <- declared, read five times, NEVER ASSIGNED
@@ -36,7 +36,7 @@ returned in `r0:r1` on ARM.
 ## The fix
 
 - `FuncCallSpecs::buildOutputFromTrials` moves one used output trial to the CALL.
-  Upstream handles two; kuna shipped that arm as a stub, so a call whose cspec
+  Upstream handles two; unlace shipped that arm as a stub, so a call whose cspec
   output rule asked for a register pair got nothing and the INDIRECT creations
   standing for "the callee wrote something here" survived as the undefined locals
   above. New `option callretpair on|off` (default **on**) completes it.
@@ -61,7 +61,7 @@ the promoted acceptance probe.
 
 Gates: `make test` PARITY OK 675/675 (0 assertions changed), `make test-stages`
 PARITY OK 774/774, `make test-cli` 126/126, `make rust-test` green,
-`make check-spec` OK strict, `kuna catalog --check` OK. Three pre-existing stage
+`make check-spec` OK strict, `unlace catalog --check` OK. Three pre-existing stage
 tests had their isolation restored rather than their expectations moved — details
 in the DIV-162 row.
 

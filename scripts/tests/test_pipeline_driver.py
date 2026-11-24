@@ -14,7 +14,7 @@ import os
 from pathlib import Path
 import sys
 
-root = Path(os.environ["KUNA_REPO"])
+root = Path(os.environ["UNLACE_REPO"])
 scenario = os.environ["DRIVER_TEST_SCENARIO"]
 command = Path(sys.argv[0]).name
 arguments = sys.argv[1:]
@@ -73,7 +73,7 @@ sys.exit(99)
 
 class DriverTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="kuna-driver-test-")
+        temporary = tempfile.TemporaryDirectory(prefix="unlace-driver-test-")
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         commands = self.root / "bin"
@@ -85,23 +85,23 @@ class DriverTests(unittest.TestCase):
         worker = self.root / "worker.sh"
         worker.write_text(
             '#!/usr/bin/env bash\n'
-            'touch "$KUNA_REPO/worker-started"\n'
+            'touch "$UNLACE_REPO/worker-started"\n'
             'if [ "$DRIVER_TEST_SCENARIO" = drain_error ]; then\n'
             '  for ((attempt=0; attempt<1000; attempt++)); do\n'
-            '    [ -f "$KUNA_REPO/release-worker" ] && break\n'
+            '    [ -f "$UNLACE_REPO/release-worker" ] && break\n'
             '    sleep 0.01\n'
             '  done\n'
-            '  [ -f "$KUNA_REPO/release-worker" ] || exit 2\n'
+            '  [ -f "$UNLACE_REPO/release-worker" ] || exit 2\n'
             'fi\n'
-            'touch "$KUNA_REPO/worker-finished"\n'
+            'touch "$UNLACE_REPO/worker-finished"\n'
         )
         self.environment = dict(os.environ, **{
             "PATH": str(commands) + os.pathsep + os.environ["PATH"],
-            "KUNA_REPO": str(self.root),
-            "KUNA_ROOT": str(self.root),
-            "KUNA_PY": str(commands / "python"),
+            "UNLACE_REPO": str(self.root),
+            "UNLACE_ROOT": str(self.root),
+            "UNLACE_PY": str(commands / "python"),
             "PYTHONPATH": str(ROOT),
-            "KUNA_PIPELINE_DOCS_DIR": str(self.root / "docs"),
+            "UNLACE_PIPELINE_DOCS_DIR": str(self.root / "docs"),
             "PIPELINE_STATE_DIRNAME": "state",
             "PIPELINE_SELECT_MOD": "scripts.pipeline.select",
             "PIPELINE_WORKER_SCRIPT": "worker.sh",

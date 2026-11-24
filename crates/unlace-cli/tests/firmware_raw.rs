@@ -91,9 +91,9 @@ fn unpack_protocols_indexes_what_each_module_installs() {
     let out_dir = dir.path().to_string_lossy().into_owned();
     let (_, err, code) = common::run_unlace(&["unpack", &fv, "-o", &out_dir, "--protocols"]);
     assert_eq!(code, 0, "{err}");
-    let index = std::fs::read_to_string(dir.path().join("kuna-uefi.index")).unwrap();
+    let index = std::fs::read_to_string(dir.path().join("unlace-uefi.index")).unwrap();
     assert!(
-        index.starts_with("kuna-uefi-index 1\nmodule DiskIoDxe.efi 07\n"),
+        index.starts_with("unlace-uefi-index 1\nmodule DiskIoDxe.efi 07\n"),
         "{index}"
     );
     let binding = "install DiskIoDxe.efi ab31a01843b41a4da5c00c09261e9f71 1920 EFI_DRIVER_BINDING_PROTOCOL \

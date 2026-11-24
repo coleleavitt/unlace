@@ -1,4 +1,4 @@
-# (kuna) Option `calltable`: a switch whose case body opens like a function
+# (unlace) Option `calltable`: a switch whose case body opens like a function
 # (push rbp; mov rbp,rsp), a call through a table of functions, an unchecked
 # jump table of 16-aligned case labels, and a function table that runs into
 # the next switch's table.

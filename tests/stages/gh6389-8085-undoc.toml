@@ -7,7 +7,7 @@
 # constructor (the decompiler aborts; in Ghidra's listing they render as `??`
 # bad bytes).
 #
-# Fix (kuna GH-6389, modeled on upstream Ghidra commit 1577081): add the nine
+# Fix (unlace GH-6389, modeled on upstream Ghidra commit 1577081): add the nine
 # single-opcode undocumented instructions plus the undocumented K and V flag
 # registers:
 #   DSUB 0x08, ARHL 0x10, RDEL 0x18, LDSI 0x38, SHLX 0xD9, LHLX 0xED,

@@ -44,7 +44,7 @@ Resolve checkCode: to its actual implementation and preserve adjacent method bod
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "functions",
     "{{BIN}}",
     "--json",
@@ -80,7 +80,7 @@ Resolve checkCode: to its actual implementation and preserve adjacent method bod
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "-[CrackMeManager checkCode:]",

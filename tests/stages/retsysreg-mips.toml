@@ -1,9 +1,9 @@
-# kuna: a register a MIPS function sets for coprocessor 0 is not the high
+# unlace: a register a MIPS function sets for coprocessor 0 is not the high
 # word of its return; a prefetch, cache op or coprocessor 2 move of it is
 # no such write.
 #
 # Stage / sub-stage: P4 return recovery, the output trials of the
-# function's own RETURN (ActionReturnRecovery, p4_calls/kuna_retsysreg.rs).
+# function's own RETURN (ActionReturnRecovery, p4_calls/unlace_retsysreg.rs).
 # The rule is always on.
 #
 # Source (mipsel-linux-gnu-gcc -O2, bytes verbatim; 0x1000 and 0x1100):

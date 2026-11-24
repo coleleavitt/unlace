@@ -1,5 +1,5 @@
 /* The counterexample a recovered prototype alone cannot decline: `fwd` names
-   rdi and rsi and nothing else, so kuna recovers TWO parameters for it while
+   rdi and rsi and nothing else, so unlace recovers TWO parameters for it while
    the function it tail-calls through `o->fn` consumes three.  Those two are
    exactly the arguments a drop would leave behind, so the accounting clause is
    satisfied and the forwarded rdx argument goes -- unless the callee's body is

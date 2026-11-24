@@ -244,7 +244,8 @@ fn same_named_modified_helper_remains_a_call() {
         .collect();
     assert_eq!(matches.len(), 1);
     bytes[matches[0]] = 0x90;
-    let path = std::env::temp_dir().join(format!("kuna-modified-rustprobe-{}", std::process::id()));
+    let path =
+        std::env::temp_dir().join(format!("unlace-modified-rustprobe-{}", std::process::id()));
     std::fs::write(&path, bytes).unwrap();
     let mut fd = raw(&path, 0x56420, "always", "auto");
     std::fs::remove_file(path).unwrap();

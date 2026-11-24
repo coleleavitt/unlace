@@ -1,4 +1,4 @@
-# kuna issue testcase: on an Apple AArch64 image a callee whose own body runs
+# unlace issue testcase: on an Apple AArch64 image a callee whose own body runs
 # va_start is variadic at its call sites (a strict fix, no option).
 #
 # Issue:      an iOS 16.4.1 kernelcache rendered
@@ -8,7 +8,7 @@
 #             from [sp]; the variadic stack-section split scores that tail
 #             only for a callee whose prototype says `...`, and nothing
 #             declares panic.
-# Stage:      P4 active-input trial scoring (`p4_calls/kuna_darwinvarargs.rs`
+# Stage:      P4 active-input trial scoring (`p4_calls/unlace_darwinvarargs.rs`
 #             marks the callee from its entry block: Apple's va_start keeps
 #             the address entry-sp + 0 in a variable).
 #
@@ -51,21 +51,21 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-DARWINVARARGS #1: the stack-passed variadic arguments are not dropped'
+name = 'UNLACE-DARWINVARARGS #1: the stack-passed variadic arguments are not dropped'
 count = 0
 literal = '_report("NULL passed @%s:%ld");'
 
 [[match]]
-name = 'KUNA-DARWINVARARGS #2: both arguments the caller stored at [sp] and [sp+8] are recovered'
+name = 'UNLACE-DARWINVARARGS #2: both arguments the caller stored at [sp] and [sp+8] are recovered'
 count = 1
 literal = '_report("NULL passed @%s:%ld",a1,a2);'
 
 [[match]]
-name = 'KUNA-DARWINVARARGS #3: AAPCS64 ELF keeps its register-passed variadic arguments'
+name = 'UNLACE-DARWINVARARGS #3: AAPCS64 ELF keeps its register-passed variadic arguments'
 count = 1
 regex = '[^_]report\("NULL passed @%s:%ld",a1,a2\);'
 
 [[match]]
-name = 'KUNA-DARWINVARARGS #4: the non-variadic callee keeps its stack argument in both passes'
+name = 'UNLACE-DARWINVARARGS #4: the non-variadic callee keeps its stack argument in both passes'
 count = 2
 literal = 'sum9(v1,1,2,3,4,5,6,7,a2);'

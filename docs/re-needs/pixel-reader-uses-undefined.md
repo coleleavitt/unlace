@@ -28,7 +28,7 @@ reject_reason: null
 Recover the ReadFile buffer and bytes-read variable in the bitmap decoder at 0x401290.
 
 > **Pixel reader uses undefined stack objects after an accepted API prototype** (blocker, `5ab77f5d33c5d40ad448c6f6`)
-> The LocalAlloc prototype is applied, but ReadFile writes to undeclared Stackffffffe0 and Stackffffffe4 objects. The character sum uses a separate variable assigned zero. Explicit ReadFile and SetFilePointer prototypes did not repair this. Kuna disassembly shows the loop reading the same ESP-relative slots passed to ReadFile. Probe passed and acceptance failed in local verification.
+> The LocalAlloc prototype is applied, but ReadFile writes to undeclared Stackffffffe0 and Stackffffffe4 objects. The character sum uses a separate variable assigned zero. Explicit ReadFile and SetFilePointer prototypes did not repair this. Unlace disassembly shows the loop reading the same ESP-relative slots passed to ReadFile. Probe passed and acceptance failed in local verification.
 
 > **Windows DWORD argument includes undefined upper stack bytes** (major, `68bffbe9224c0ec5dcedbe7a`)
 > Protection flags become CONCAT44((int)(vN >> 0x20),0x40), although the instruction writes DWORD 0x40. CreateProcessW similarly consumes undefined upper bytes for BOOL. Explicit standard-width prototypes remove these artifacts.
@@ -44,7 +44,7 @@ Recover the ReadFile buffer and bytes-read variable in the bitmap decoder at 0x4
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_401290",
@@ -85,7 +85,7 @@ Recover the ReadFile buffer and bytes-read variable in the bitmap decoder at 0x4
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_401290",
@@ -147,7 +147,7 @@ _not yet refuted_
 ## Decision log
 
 - filed by cluster.py from 3 observation(s)
-- round 6 REFUTER: hypothesis **upheld** (was inconclusive). REFUTED IN-TICK BY THE CAPTAIN (round 6) on the WITNESS ONLY (5ab77f5d33c5d40ad448c6f6 / Imagination.exe, PE32 x86), kuna @ 9c4c4508. SCOPE FIRST: this need carries 3 hypotheses that belong to its 3 different instances. I tested the witness, so I judge H1 ('possibly incorrect x86 Windows callee stack-cleanup tracking'). H2 (arg widths, 68bffbe9...) and H3 (preservation summary, 6a172640...) were NOT tested here -- do not read this verdict as covering them.
+- round 6 REFUTER: hypothesis **upheld** (was inconclusive). REFUTED IN-TICK BY THE CAPTAIN (round 6) on the WITNESS ONLY (5ab77f5d33c5d40ad448c6f6 / Imagination.exe, PE32 x86), unlace @ 9c4c4508. SCOPE FIRST: this need carries 3 hypotheses that belong to its 3 different instances. I tested the witness, so I judge H1 ('possibly incorrect x86 Windows callee stack-cleanup tracking'). H2 (arg widths, 68bffbe9...) and H3 (preservation summary, 6a172640...) were NOT tested here -- do not read this verdict as covering them.
 
 VERDICT ON H1: UPHELD, and the truth is worse than filed -- THE EMITTED C IS SEMANTICALLY WRONG, NOT MERELY UNDECLARED.
 
@@ -159,12 +159,12 @@ GROUND TRUTH from the disassembly, frame traced by hand (E = entry ESP; prologue
   0x4012eb  MOV EAX,[ESP+0x10]  = E-8   <- reads slot_B == THE VERY BUFFER ReadFile FILLED
 So lpBuffer and the checksum source ARE THE SAME SLOT (E-8). Every one of these offsets is relative to a MOVING ESP -- the lpBuffer LEA sits between two PUSHes -- which is exactly the tracking H1 names.
 
-WHAT kuna PRODUCES INSTEAD:
+WHAT unlace PRODUCES INSTEAD:
   ReadFile(v5,&Stackffffffe0,4,&Stackffffffe4,0);
   wsprintfA(v1,0x406030,v1,(v3 >> 8 & 0xff) + (v3 >> 0x10 & 0xff) + (v3 & 0xff));   // v3, 'stack - 0x34', assigned v3 = 0 in the loop
-The one slot E-8 has been SPLIT INTO TWO INDEPENDENT OBJECTS: the buffer (&Stackffffffe0) and the checksum source (v3). Because the second is never written by the ReadFile edge, kuna assigns it 0, so THE EMITTED PROGRAM CHECKSUMS A CONSTANT ZERO. An RE agent reading this gets a wrong algorithm, not just an ugly name. That is the blocker, and the need's title understates it.
+The one slot E-8 has been SPLIT INTO TWO INDEPENDENT OBJECTS: the buffer (&Stackffffffe0) and the checksum source (v3). Because the second is never written by the ReadFile edge, unlace assigns it 0, so THE EMITTED PROGRAM CHECKSUMS A CONSTANT ZERO. An RE agent reading this gets a wrong algorithm, not just an ugly name. That is the blocker, and the need's title understates it.
 
-SECOND, INDEPENDENT DEFECT ON THE SAME FUNCTION: PARAMETER RECOVERY FAILED. hFile is read from E+4 (an incoming argument) but kuna declares 'void *sub_401290(void)' and models it as v5, an uninitialized local at 'stack - 0x4', then emits 'v4 = v5;' and 'SetFilePointer(v5,...)' reading it before any write. The probe's LocalAlloc prototype assertion cannot reach this; no --assert on a CALLEE fixes the SUBJECT's own missing parameter.
+SECOND, INDEPENDENT DEFECT ON THE SAME FUNCTION: PARAMETER RECOVERY FAILED. hFile is read from E+4 (an incoming argument) but unlace declares 'void *sub_401290(void)' and models it as v5, an uninitialized local at 'stack - 0x4', then emits 'v4 = v5;' and 'SetFilePointer(v5,...)' reading it before any write. The probe's LocalAlloc prototype assertion cannot reach this; no --assert on a CALLEE fixes the SUBJECT's own missing parameter.
 
 THE FRAME IS NOT MISSING THE SYMBOLS -- THE REFERENCES DO NOT BIND TO THEM. 'variables' already contains local_20 (stack_offset -32 = 0xffffffe0) and local_1c (stack_offset -28 = 0xffffffe4), i.e. symbols at EXACTLY the offsets the synthetic Stackffffffe0/Stackffffffe4 names encode -- both with line_numbers [] and addresses [], so they are mapped and unreferenced while the printer emits a synthetic name. So this is a binding/identity failure, NOT a missing-frame-layout failure. Do not go build frame layout.
 

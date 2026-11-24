@@ -5,11 +5,11 @@ Reference: angr `6afa0c79a83d9f677a46b0275cdb63bf16c1979e`,
 `angr/go/optimization_passes/check_remover.py`.
 
 The Go compiler emits an out-of-range branch to `runtime.panicIndex` (older
-versions) or the `runtime.panicBounds` dispatcher (newer versions). Kuna already
+versions) or the `runtime.panicBounds` dispatcher (newer versions). Unlace already
 knows Go's ABI and many no-return names, but its `securitycheck` matcher accepts
 only Rust helpers. This leaves one extra branch at each checked access.
 
-A source-oriented view can omit these compiler checks, just as Kuna's existing
+A source-oriented view can omit these compiler checks, just as Unlace's existing
 Rust securitycheck option does. This does not preserve panic behavior and is
 therefore explicitly marked destructive and reversible with `gobounds off`.
 Unlike an unrestricted name-based deletion, the matcher rejects observable

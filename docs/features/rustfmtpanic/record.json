@@ -3,7 +3,7 @@
   "default": "on",
   "baseline_commit": "f8746b9730b525a065c89c26e358ffd7c2328bc7",
   "integration_parent_commit": "78183c657032066c628cc063a0596c19f354f331",
-  "kuna_sha256": "1836bb945a73318f83b9972cf63ab8a2e1c1d7f548f6dd0b2ffebc41e9ce9ff0",
+  "unlace_sha256": "1836bb945a73318f83b9972cf63ab8a2e1c1d7f548f6dd0b2ffebc41e9ce9ff0",
   "reference_angr_commit": "6afa0c79a83d9f677a46b0275cdb63bf16c1979e",
   "reference_binaries_commit": "76ad9e296dde8f82b8ede93ce06a578cd1933639",
   "datatests": {
@@ -3549,7 +3549,7 @@
         "study_looks": 2,
         "family_alpha_each_look": 0.025,
         "included_runs": [
-          "/tmp/kuna-rust-panic-f874/timing-randomized-attempts/20261101-221936"
+          "/tmp/unlace-rust-panic-f874/timing-randomized-attempts/20261101-221936"
         ]
       },
       {
@@ -6961,7 +6961,7 @@
         "study_looks": 2,
         "family_alpha_each_look": 0.025,
         "included_runs": [
-          "/tmp/kuna-rust-panic-f874/timing-randomized-attempts/20261101-221936"
+          "/tmp/unlace-rust-panic-f874/timing-randomized-attempts/20261101-221936"
         ]
       },
       {
@@ -20169,8 +20169,8 @@
           75
         ],
         "included_runs": [
-          "/tmp/kuna-rust-panic-f874/timing-randomized-attempts/20261101-221936",
-          "/tmp/kuna-rust-panic-f874/timing-randomized-attempts/20261101-223000"
+          "/tmp/unlace-rust-panic-f874/timing-randomized-attempts/20261101-221936",
+          "/tmp/unlace-rust-panic-f874/timing-randomized-attempts/20261101-223000"
         ]
       },
       {
@@ -23582,7 +23582,7 @@
         "study_looks": 2,
         "family_alpha_each_look": 0.025,
         "included_runs": [
-          "/tmp/kuna-rust-panic-f874/timing-randomized-attempts/20261101-221936"
+          "/tmp/unlace-rust-panic-f874/timing-randomized-attempts/20261101-221936"
         ]
       },
       {
@@ -36790,15 +36790,15 @@
           69
         ],
         "included_runs": [
-          "/tmp/kuna-rust-panic-f874/timing-randomized-attempts/20261101-221936",
-          "/tmp/kuna-rust-panic-f874/timing-randomized-attempts/20261101-223000"
+          "/tmp/unlace-rust-panic-f874/timing-randomized-attempts/20261101-221936",
+          "/tmp/unlace-rust-panic-f874/timing-randomized-attempts/20261101-223000"
         ]
       }
     ],
     "monitor": {
       "method": "balanced_randomized_block_bootstrap",
       "execution": "Shared scheduler; independent cases across three features on disjoint physical CPU pairs",
-      "attempt": "/tmp/kuna-rust-panic-f874/timing-randomized-attempts/20261101-223000",
+      "attempt": "/tmp/unlace-rust-panic-f874/timing-randomized-attempts/20261101-223000",
       "cpu_assignments": {
         "0:panic-integers": {
           "target_cpu": 75,

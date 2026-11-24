@@ -4,7 +4,7 @@
 
 gzip -O2 `gzip_base_name` is `endbr64; jmp last_component`. It hands its own
 `rdi` to the callee and returns what the callee returns. In the same
-whole-binary run kuna recovers the callee as `char *last_component(char *a0)`,
+whole-binary run unlace recovers the callee as `char *last_component(char *a0)`,
 yet renders the wrapper as
 
 ```
@@ -117,7 +117,7 @@ its output takes the callee's recovered return type (`tail_return_type`).
 The evidence is a recovery, not a fact.
 
 - **A callee whose own return is wrong.** `version_etc_arn` is DWARF `void`, but
-  kuna over-recovers it as returning `long` (its body ends in a `__fprintf_chk`
+  unlace over-recovers it as returning `long` (its body ends in a `__fprintf_chk`
   whose result stays live at the RETURN), and every `version_etc_ar` wrapper
   inherited that through the tail-return half. This is now gated: a callee
   states a return only where `every_return_computes` holds of its body -- every
@@ -138,7 +138,7 @@ The evidence is a recovery, not a fact.
   `open_safer`'s `mode`) was believed, which cost 159 contradicted parameters of
   1,691 checkable on a corpus outside the eight projects this campaign is scored
   on. Such a parameter is now recorded on the statement and never claimed
-  (`kuna_varargtail`), and neither is a claim that could only reach its slot by
+  (`unlace_varargtail`), and neither is a claim that could only reach its slot by
   materializing a register the function writes before reading (`no_hole_before`).
   Across both corpora — 574 slices, 25 projects — nothing DWARF contradicts is
   left.
@@ -151,13 +151,13 @@ contradicted, nothing lost, over two corpora), with the return arm's residual
 2.8% — the undecidable `void` tail-call wrapper — stated rather than claimed
 away (`default-on-evaluation.md`).
 
-Nothing is added where a callee stated nothing: `kuna decompile`, a narrowed or
+Nothing is added where a callee stated nothing: `unlace decompile`, a narrowed or
 sharded `decompile-all`, an import, `--option protoorder off`, and under
 `--option protoorder types` a recursive component, all leave every call as it
 was (under the default `cycles` a recursive callee states its list like any
 other). `tests/stages/passthrough.toml`
 is the negative control for that clause; the positive witness is
-`decompiler/crates/kuna-analysis/tests/fixtures/passthrough_x86_64` under
+`decompiler/crates/unlace-analysis/tests/fixtures/passthrough_x86_64` under
 `tests/cli/passthrough-gives-a-forwarding-function-its-parameter.json`, with a
 clobbered forward and a variadic callee as its controls, plus three shapes that
 must keep every option-off argument (`noop(); twoarg(p,3)`, `vout(p);

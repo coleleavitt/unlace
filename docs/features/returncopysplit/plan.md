@@ -7,11 +7,11 @@ no structuring change.
 
 ## The change
 
-`decompiler/crates/kuna-decomp/src/p3_dataflow/subflow.rs`,
+`decompiler/crates/unlace-decomp/src/p3_dataflow/subflow.rs`,
 `SplitDatatype::test_copy_constraints` (upstream `subflow.cc:2390`):
 
 ```rust
-// (kuna) A COPY whose output lands in a read-only address range is never a
+// (unlace) A COPY whose output lands in a read-only address range is never a
 // store the program performs; splitting it turns one invisible whole-range
 // assignment into per-element assignments that survive
 // `Merge::mark_internal_copies` and print as stores into `.rodata`.
@@ -40,7 +40,7 @@ pool (`infra/universalaction.rs:558`).
 Because the added test is a divergence from upstream `subflow.cc:2390` (rather than the
 restoration of an upstream behaviour a port dropped), it is recorded as a **DIV row**
 (DIV-55) in `docs/history.md`, not a Convergence. The precondition it guards against is
-itself created by a kuna divergence (`stackguard`, DIV-14), which is the second reason it
+itself created by a unlace divergence (`stackguard`, DIV-14), which is the second reason it
 cannot be a Convergence.
 
 ## Why not the filed predicate
@@ -61,7 +61,7 @@ cloned form. See `analysis.md` section 3.
    their real VMAs plus the read-only literal chunk; pass 1 default (the fix), pass 2
    `option togglerule splitcopy off` (the reference rendering with no split at all).
 4. **Gates** -- `make test` (675/675 PARITY OK, no re-pin), `make test-stages` (re-recorded
-   baseline), `make rust-test`, `make check-spec`, `kuna catalog --check`.
+   baseline), `make rust-test`, `make check-spec`, `unlace catalog --check`.
 5. **Speed** -- interleaved A/B medians on the two builds; `scripts.pipeline.timeit` cannot
    be used because it measures an option flip and there is no option.
 6. **GED** -- `scripts.decbench.rescore` on the campaign case. Expected ~zero: removing

@@ -1,8 +1,8 @@
-# kuna C-surface normalization: a single-statement if body drops its braces
+# unlace C-surface normalization: a single-statement if body drops its braces
 # and prints the statement indented on the next line (user-reported
 # readability issue on the angr fmt corpus binary; no upstream GH issue).
 #
-# Upstream Ghidra always braces the body.  kuna adds the settable option
+# Upstream Ghidra always braces the body.  unlace adds the settable option
 # `braceelide` (DIV-37, docs/history.md), default-on: emit_block_if elides
 # the braces when the then-body is a plain single-statement BlockCopy leaf
 # (no label, no comment, exactly one printed op).  Labels, comments,

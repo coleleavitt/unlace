@@ -1,4 +1,4 @@
-# Kuna #850: the branch at 0x10008 targets a separately discovered entry inside the
+# Unlace #850: the branch at 0x10008 targets a separately discovered entry inside the
 # asserted outer function.  It is an ordinary local edge, so tailcalljump
 # must keep both return paths.  A second, exact four-byte veneer branches to
 # a known helper outside its declared extent; that transfer remains a tail

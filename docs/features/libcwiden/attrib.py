@@ -32,7 +32,7 @@ for k in gap:
     buckets[(b,s)]+=1
     if b=="b_missing_libc_import":
         for n in miss: per_import[n]+=1; per_import_fn[n].add((sk,fn))
-    detail[b].append((sk,fn,d.get("gt_name"),s,d.get("kuna_type"),sorted(miss)[:4],isva))
+    detail[b].append((sk,fn,d.get("gt_name"),s,d.get("unlace_type"),sorted(miss)[:4],isva))
 print()
 for (b,s),n in sorted(buckets.items()): print(f"  {b:22s} {s:5s} {n}")
 tot=collections.Counter(b for (b,s) in buckets for _ in range(buckets[(b,s)]))

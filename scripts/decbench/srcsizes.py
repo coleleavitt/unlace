@@ -4,7 +4,7 @@ The GED metric compares a decompiled function's CFG against the Joern-parsed CFG
 of the ORIGINAL source. When that source CFG is degenerate (a single node — Joern
 failed to parse the body, or the function is a one-liner), the score carries no
 structural information: every decompiler that emits more than one basic block
-scores badly and the "gap" is a decbench artifact, not a kuna deficit
+scores badly and the "gap" is a decbench artifact, not a unlace deficit
 (``docs/decbench-loop.md`` → *Caveats*).
 
 The run stores those graphs at ``<results>/ged_src/<project>.pkl`` as
@@ -17,7 +17,7 @@ writes a plain-JSON cache the rest of the campaign tooling (plain python3) reads
 
     ~/.virtualenvs/decbench/bin/python -m scripts.decbench.srcsizes
 
-    -> ~/.cache/decbench/kuna-src-sizes.json
+    -> ~/.cache/decbench/unlace-src-sizes.json
        {"by_function": {"<project>::<fn>": [nodes, edges, bodies]},
         "by_case":     {"<opt>::<project>::<binary>::<fn>": [nodes, edges, over60]}}
 
@@ -33,7 +33,7 @@ the regime where decbench stops computing a real edit distance and APPROXIMATES
 the GED as |dnodes| + |dedges|. A case listed there with ``over60`` carries a
 score that must not be read as an edit distance.
 
-Override the location with ``KUNA_DECBENCH_SRC_SIZES``. Regenerate after a new
+Override the location with ``UNLACE_DECBENCH_SRC_SIZES``. Regenerate after a new
 benchmark run; it is a cache, never committed.
 """
 from __future__ import annotations

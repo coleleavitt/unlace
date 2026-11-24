@@ -1,7 +1,7 @@
-# kuna #1639: the stable Rust compiler version was read only from the ELF
+# unlace #1639: the stable Rust compiler version was read only from the ELF
 # `.comment` record, so an image whose `.comment` was removed lost every
 # version-gated recovery. Stage: P0 knowledge (loader image facts,
-# `unlace-analysis/src/analyzers/sourcelang/kuna_rustversion.rs`). No option: the
+# `unlace-analysis/src/analyzers/sourcelang/unlace_rustversion.rs`). No option: the
 # commit in the standard library's `/rustc/<commit>/` source paths is mapped to
 # its stable release. The fixture is `rust_fmt_args_x86_64` linked without
 # `.comment` and with one 1.93.1 source path; the 1.93 `rustfmt` argument

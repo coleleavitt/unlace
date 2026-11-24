@@ -35,7 +35,7 @@ function renderTopbar(active) {
     const label = entry.nav || name.replace(/^./, (ch) => ch.toUpperCase());
     const here = active === name ? " here" : "";
     const off = entry.available ? "" : " off";
-    const title = entry.available ? "" : ` title="not generated yet — run: ${esc(entry.regen || "PYTHONPATH=. python3 -m scripts.observatory.generate --out observatory --kuna target/release/unlace")}"`;
+    const title = entry.available ? "" : ` title="not generated yet — run: ${esc(entry.regen || "PYTHONPATH=. python3 -m scripts.observatory.generate --out observatory --unlace target/release/unlace")}"`;
     return `<a class="${here}${off}" href="./${name}.html"${title}>${esc(label)}${entry.available ? "" : " ·"}</a>`;
   }).join("");
   const atlasMeta = (status.datasets.atlas || {}).meta || {};
@@ -50,7 +50,7 @@ function renderTopbar(active) {
 }
 function missingNotice(name) {
   const status = dataOf("status") || { datasets: {} };
-  const entry = status.datasets[name] || { regen: "PYTHONPATH=. python3 -m scripts.observatory.generate --out observatory --kuna target/release/unlace" };
+  const entry = status.datasets[name] || { regen: "PYTHONPATH=. python3 -m scripts.observatory.generate --out observatory --unlace target/release/unlace" };
   return `<div class="missing">This page's data has not been generated yet.
     Run <code>${esc(entry.regen)}</code> from the repo root, then reload.</div>`;
 }

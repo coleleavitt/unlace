@@ -4,8 +4,8 @@
   "scope": "small",
   "option": "calleepop",
   "default": "on",
-  "module": "decompiler/crates/kuna-decomp/src/p6_variables/calleepop.rs",
-  "witness": "Imagination.exe (PE32 x86, MSVC) sub_401290, vendored as decompiler/crates/kuna-analysis/tests/fixtures/stdcallpop_pe_i386.exe",
+  "module": "decompiler/crates/unlace-decomp/src/p6_variables/calleepop.rs",
+  "witness": "Imagination.exe (PE32 x86, MSVC) sub_401290, vendored as decompiler/crates/unlace-analysis/tests/fixtures/stdcallpop_pe_i386.exe",
   "decisions": [
     "Hypothesis H1 ('possibly incorrect x86 Windows callee stack-cleanup tracking') is UPHELD and now located exactly: StackSolver::build (coreaction.cc:238) contributes the guessed equation `extrapop = 4` for every call whose model carries extrapop=unknown, which is every call under x86win.cspec's __stdcall default. Measured drift on the witness: hFile off by 8 (LocalAlloc's 2 args), the ReadFile buffer/count off by 24 (LocalAlloc+SetFilePointer), the checksum load off by 44 (+ReadFile+GetLastError) -- exactly the cumulative unpopped argument bytes.",
     "The captain's refutation note is confirmed and its acceptance trap avoided: the promoted probe additionally requires the wsprintfA checksum operand to be the same vN the ReadFile lpBuffer points at, so a cosmetic rename cannot pass.",
@@ -25,7 +25,7 @@
     "note": "option off is byte-identical to the pre-change build over the whole binary"
   },
   "speed": {
-    "command": "kuna decompile-all stdcallpop_pe_i386.exe",
+    "command": "unlace decompile-all stdcallpop_pe_i386.exe",
     "reps": 7,
     "median_ms_on": 926,
     "median_ms_off": 942,
@@ -36,7 +36,7 @@
     "make test": "PARITY OK 675/675",
     "make test-stages": "PARITY OK",
     "make check-spec": "OK",
-    "kuna catalog --check": "catalog OK",
+    "unlace catalog --check": "catalog OK",
     "make test-cli": "68/68",
     "acceptance": "PASS"
   }

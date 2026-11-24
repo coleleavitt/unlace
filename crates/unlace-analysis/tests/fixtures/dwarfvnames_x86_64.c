@@ -1,5 +1,5 @@
 /*
- * Source locals and parameters named like kuna's own defaults (`v1`, `v2`), with
+ * Source locals and parameters named like unlace's own defaults (`v1`, `v2`), with
  * DWARF.  Their names are name-locked Symbols; the default numbering used to
  * hand `v1` to an unrelated local as well, so the source's `v1` printed as
  * `v1_1` (`widest`'s `long v1`) or a temporary took `v1_1` beside the parameter

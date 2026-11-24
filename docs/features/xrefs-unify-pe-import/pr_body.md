@@ -6,13 +6,13 @@ round 2, challenge `694fd2f60c16072f40f5a4b3`).
 
 ## What was broken
 
-> `kuna functions --filter VirtualProtect` exposed both a thunk at `0x140019980`
+> `unlace functions --filter VirtualProtect` exposed both a thunk at `0x140019980`
 > and an IAT symbol at `0x1400f4690` under the same name. xrefs to the thunk
 > returned count 0, although decompilation calls VirtualProtect; only manually
 > targeting the second alias address returned the two references.
 
 The tester is right that the tool invited a question and then answered it wrong, and
-`kuna` really does have two `VirtualProtect`s: `pe_iat` names both the **IAT slot** the
+`unlace` really does have two `VirtualProtect`s: `pe_iat` names both the **IAT slot** the
 loader fills in and the **`FF 25` veneer** (`jmp qword ptr [slot]`) a direct `call` can
 target. Two independent defects sat behind the symptom.
 
@@ -34,7 +34,7 @@ is called through the veneer, so the *slot* reports 0. Same bug, opposite addres
 
 ## The mechanism
 
-`kuna-analysis/src/listing/xrefs.rs`, two changes, both confined to this read-only query:
+`unlace-analysis/src/listing/xrefs.rs`, two changes, both confined to this read-only query:
 
 - `BRANCHIND`/`CALLIND` leave the `is_target_slot` skip list. A `ram` `in0` is now the
   `read` of the slot it is.
@@ -53,7 +53,7 @@ is called through the veneer, so the *slot* reports 0. Same bug, opposite addres
   other half, not a caller of it, and excluding it is what makes both addresses answer
   identically. The class comes from the decoded jump, **never from a shared name**.
 
-`refs_to` itself is untouched, so `kuna strings` and the `decompile-all` call graph read
+`refs_to` itself is untouched, so `unlace strings` and the `decompile-all` call graph read
 exactly the edges they did before. `target.aliases` and a `# same import at …` line
 disclose the other address, and every row still carries the real `to_address`, so an
 agent can see which end each call site actually went through.
@@ -67,7 +67,7 @@ On the recorded binary the answer is **2**, and both rows are the real uses:
 0x14000d8f0  read  sub_14000d83f+0xb1   MOV RAX,qword ptr [0x1400f4690]
 ```
 
-`kuna decompile --addr 0x14000d560` emits `v2 = VirtualProtect(v4[0],v6,v9,…)` — that
+`unlace decompile --addr 0x14000d560` emits `v2 = VirtualProtect(v4[0],v6,v9,…)` — that
 call site is `0x14000d800`. The veneer's own `JMP qword ptr [0x1400f4690]` at
 `0x140019980` is **not** among them. Asking the slot `0x1400f4690` now returns the same
 two rows, and `wcrtomb` — called through its veneer — goes from 0 to its 5 real call
@@ -125,11 +125,11 @@ reasoning in place.
 | `make test-stages` | **PARITY OK** — 594/594 assertions |
 | `make rust-test` | green |
 | `make check-spec` | green |
-| `kuna catalog --check` | catalog OK |
+| `unlace catalog --check` | catalog OK |
 | `tests/cli` (`scripts.repipe.clitests`) | 11/11 |
 | `scripts.repipe.verify --need xrefs-unify-pe-import` | acceptance **PASS** |
 
-Speed: `kuna xrefs` on the 986 KB / 4,168-function recorded PE, interleaved child CPU
+Speed: `unlace xrefs` on the 986 KB / 4,168-function recorded PE, interleaved child CPU
 time, min of 15 — **+2.57%** (1.3574 s → 1.3923 s) against a **−0.03%** null control
 (before vs before through the same harness). The cost is the veneer probe: at most 2
 extra decodes per decoded entry, against the hundreds of thousands the walk itself

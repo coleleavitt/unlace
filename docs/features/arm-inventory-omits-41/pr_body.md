@@ -1,6 +1,6 @@
 ## The problem
 
-On a stripped, non-PIE ARM32 executable `kuna functions` stops at the C runtime:
+On a stripped, non-PIE ARM32 executable `unlace functions` stops at the C runtime:
 everything `main` calls is missing from the inventory, and one entry swallows the
 whole program. On the reported image (a 26 KB ARM crackme) it listed 17 functions
 and omitted all 41 validators `main` calls, with `_INIT_0` reported as 17736 bytes
@@ -9,12 +9,12 @@ and omitted all 41 validators `main` calls, with `_INIT_0` reported as 17736 byt
 The repo carries a 1 KB fixture in the same shape; before this change:
 
 ```
-$ kuna functions decompiler/crates/kuna-analysis/tests/fixtures/armdiscseed_le32 --json
+$ unlace functions decompiler/crates/unlace-analysis/tests/fixtures/armdiscseed_le32 --json
   0x10150  __libc_start_main  12
   0x10160  sub_10160          32
   0x10180  main               28      <- 0x10180..0x1019c, the callee is inside it
 
-$ kuna xrefs decompiler/crates/kuna-analysis/tests/fixtures/armdiscseed_le32 --to 0x10190 --json
+$ unlace xrefs decompiler/crates/unlace-analysis/tests/fixtures/armdiscseed_le32 --to 0x10190 --json
   "count": 1, "instruction": "bl 0x10190", "from_function": { "name": "main" }
 ```
 
@@ -30,7 +30,7 @@ $ kuna xrefs decompiler/crates/kuna-analysis/tests/fixtures/armdiscseed_le32 --t
 - `armlibcmain`'s non-PIE ARM `main` is the case that bites: it is the only
   address that reaches the program, and `_start` hands it to `__libc_start_main`
   through a literal pool word rather than a branch, so a walk rooted at `e_entry`
-  alone stops inside crt1. `kuna xrefs` seeds its own descent from the *committed*
+  alone stops inside crt1. `unlace xrefs` seeds its own descent from the *committed*
   inventory, which is why the two surfaces disagreed.
 - Seeds ride the same `funcstart_patterns` gate as the prologue starts, so x86-64
   (where that flag is off) is unchanged by construction, and they are

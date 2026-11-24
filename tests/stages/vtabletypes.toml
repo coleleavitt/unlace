@@ -4,8 +4,8 @@
 # Shape::scaled calls area() on this, and local() (built at -O0) calls area()
 # through a reference to a stack Tr whose vptr store it can see.
 #
-# Stage model: P5 type-propagation (p5_types/kuna_vtabletypes.rs install,
-# lock_this; facts from analyzers/rtti/kuna_vtabletypes.rs). The recovered
+# Stage model: P5 type-propagation (p5_types/unlace_vtabletypes.rs install,
+# lock_this; facts from analyzers/rtti/unlace_vtabletypes.rs). The recovered
 # vtable is a Shape_vtbl structure of method pointers and Shape's first field
 # a Shape_vtbl *vptr, so the slot loads are field reads; the vtable words are
 # foldable constants, so the call on the visible object folds to Tr::area.

@@ -4,10 +4,10 @@ sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
 build=json.loads((w/'build.json').read_text())
 records=[]
 for arm,root in [('parent',Path('/home/mahaloz/kwt/angr-base-c5fc')),('candidate',r)]:
- cli=root/'decompiler/target/release/kuna'
+ cli=root/'decompiler/target/release/unlace'
  cmd=[str(cli),'decompile',str(w/'public-probe'),'check','--language','c','--option','sourcelang','rust','--json']
  if arm=='candidate':cmd+=['--option','rustprobestack','auto']
- p=subprocess.run(cmd,cwd=r,env=env|{'KUNA_SPECS':str(r/'specs')},capture_output=True,text=True,check=True)
+ p=subprocess.run(cmd,cwd=r,env=env|{'UNLACE_SPECS':str(r/'specs')},capture_output=True,text=True,check=True)
  (w/f'public-off-{arm}.json').write_text(p.stdout);(w/f'public-off-{arm}.log').write_text(p.stderr)
  body=json.loads(p.stdout)['functions'][0]['code']
  if arm=='parent':assert 'helper();'in body and 'return v1;'in body

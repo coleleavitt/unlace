@@ -5,8 +5,8 @@ module, and emits no C, if any branch inside it targets an address the image
 does not map. Build the 346-byte reduction and ask for it:
 
 ```
-$ python3 decompiler/crates/kuna-analysis/tests/fixtures/unmapped_branch_x86_64.py
-$ kuna disassemble decompiler/crates/kuna-analysis/tests/fixtures/unmapped_branch_x86_64 --addr 0x401000 --count 6
+$ python3 decompiler/crates/unlace-analysis/tests/fixtures/unmapped_branch_x86_64.py
+$ unlace disassemble decompiler/crates/unlace-analysis/tests/fixtures/unmapped_branch_x86_64 --addr 0x401000 --count 6
 # 6 instructions at sub_401000 @ 0x401000 (0x401000..0x401011, 17 bytes)
 0x401000      31c0                  XOR EAX,EAX
 0x401002      85ff                  TEST EDI,EDI
@@ -15,7 +15,7 @@ $ kuna disassemble decompiler/crates/kuna-analysis/tests/fixtures/unmapped_branc
 0x40100b      c3                    RET
 0x40100c      e9efefbfff            JMP 0x0
 
-$ kuna decompile decompiler/crates/kuna-analysis/tests/fixtures/unmapped_branch_x86_64 sub_401000
+$ unlace decompile decompiler/crates/unlace-analysis/tests/fixtures/unmapped_branch_x86_64 sub_401000
 // sub_401000: external symbol -- no code at this address in this module
 ```
 
@@ -41,7 +41,7 @@ UPX unpacking stub of the vendored `upx_packed_pe_i386.exe` fixture.
   decode: the only address that fails it is one with no bytes behind it, which
   previously ended the function outright.
 - No option. There is no judgement call between "lose the function" and "clip the
-  one dead edge under a warning kuna already emits" — the same call as #422 and
+  one dead edge under a warning unlace already emits" — the same call as #422 and
   the declared-extent stub fix.
 
 ## The tests
@@ -54,11 +54,11 @@ warning at its branch site, and the premise (the entry is mapped, the target is
 not). All four fail on the unpatched tree.
 
 Sweep: `decompile-all` over all 167 binary fixtures under
-`kuna-analysis/tests/fixtures`, before and after — no exit code moved, and two
+`unlace-analysis/tests/fixtures`, before and after — no exit code moved, and two
 documents differ, both from an error line to a full body (the new fixture, and
 `upx_packed_pe_i386.exe`'s `sub_4100a0`: 1 error line -> 185 lines of C).
 Gates: `make test` 675/675 PARITY OK, `make test-stages` 687/687 PARITY OK,
 `make rust-test` 6069 passed / 0 failed, `make check-spec` OK, `make test-cli`
-85/85, `kuna catalog --check` OK.
+85/85, `unlace catalog --check` OK.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

@@ -4,13 +4,13 @@ import subprocess, os, json, hashlib, difflib, re, sys
 
 root = Path('/home/mahaloz/kwt/angr-rust-fmt-pieces')
 base = Path('/home/mahaloz/kwt/angr-rust-panic-main')
-old = Path('/tmp/kuna-rust-panic-69fa/breadth')
-out = Path('/tmp/kuna-rust-fmt-pieces-f874/breadth')
+old = Path('/tmp/unlace-rust-panic-69fa/breadth')
+out = Path('/tmp/unlace-rust-fmt-pieces-f874/breadth')
 out.mkdir(exist_ok=True)
-patched_sha=hashlib.sha256((root/'decompiler/target/release/kuna').read_bytes()).hexdigest()
-assert hashlib.sha256((base/'decompiler/target/release/kuna').read_bytes()).hexdigest()==json.loads(Path('/tmp/kuna-rust-panic-69fa/breadth/record.json').read_text())['patched_kuna_sha256']
-refs = Path('/tmp/kuna-angr-reference/binaries')
-sha = Path('/tmp/kuna-rust-fmt-pieces-f874/baseline-commit.txt').read_text().strip()
+patched_sha=hashlib.sha256((root/'decompiler/target/release/unlace').read_bytes()).hexdigest()
+assert hashlib.sha256((base/'decompiler/target/release/unlace').read_bytes()).hexdigest()==json.loads(Path('/tmp/unlace-rust-panic-69fa/breadth/record.json').read_text())['patched_unlace_sha256']
+refs = Path('/tmp/unlace-angr-reference/binaries')
+sha = Path('/tmp/unlace-rust-fmt-pieces-f874/baseline-commit.txt').read_text().strip()
 assert subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], cwd=base) == subprocess.check_output(['git', 'rev-parse', sha+'^{tree}'], cwd=base)
 pending=subprocess.run(['git','rev-parse','--verify','MERGE_HEAD'],cwd=base,capture_output=True,text=True)
 pending_main=pending.stdout.strip() if pending.returncode==0 else None
@@ -19,7 +19,7 @@ if pending_main: assert pending_main=='69fad3ce4cbdbb3232680938252bd75c2bec5a68'
 inputs = [
     ('hermetic', root/'tests/fixtures/go-dwarf-signatures/compressed', ['c','go']),
     ('hermetic-plain', root/'tests/fixtures/go-dwarf-signatures/uncompressed', ['c','go']),
-    ('native', Path('/tmp/kuna-go-output/output-go'), ['c','go']),
+    ('native', Path('/tmp/unlace-go-output/output-go'), ['c','go']),
     ('basics122', refs/'tests/x86_64/go/go1.22.5/basics', ['c','go']),
     ('basics127', refs/'tests/x86_64/go/go1.27.1/basics', ['c','go']),
     ('langdetect', refs/'tests/x86_64/langdetect_go', ['c','go']),
@@ -28,18 +28,18 @@ inputs = [
     ('grep', root/'tests/bug-repro/grep', ['c','rust']),
     ('rust', refs/'rust-fmtdemo-1931', ['c','rust']),
     ('entry-ranges', root/'tests/fixtures/go-dwarf-entry-ranges/entry-ranges', ['c','go']),
-    ('native1273', Path('/tmp/kuna-go-dwarf-signatures/native1273'), ['c','go']),
+    ('native1273', Path('/tmp/unlace-go-dwarf-signatures/native1273'), ['c','go']),
 ]
 inputs += [('entry-plain', root/'tests/fixtures/go-dwarf-entry-ranges/entry-ranges-plain', ['c','go'])]
-inputs += [(name, Path('/tmp/kuna-go-dwarf-formals-5e05-review')/name, ['c','go']) for name in ['native-plain','native1273-plain','basics127-plain']]
+inputs += [(name, Path('/tmp/unlace-go-dwarf-formals-5e05-review')/name, ['c','go']) for name in ['native-plain','native1273-plain','basics127-plain']]
 
-inputs += [('rust2025', refs/'rust-fmt-2025-O3', ['c','rust']), ('native-rust', Path('/tmp/kuna-rust-extensions-c281-review/native-1.93.1'), ['c','rust'])]
+inputs += [('rust2025', refs/'rust-fmt-2025-O3', ['c','rust']), ('native-rust', Path('/tmp/unlace-rust-extensions-c281-review/native-1.93.1'), ['c','rust'])]
 
 
-inputs += [(name, root/'decompiler/crates/kuna-analysis/tests/fixtures'/fixture, ['c','rust','go']) for name,fixture in [('panic-native','rust_fmt_panic_real_x86_64'),('panic-shapes','rust_fmt_panic_x86_64')]]
+inputs += [(name, root/'decompiler/crates/unlace-analysis/tests/fixtures'/fixture, ['c','rust','go']) for name,fixture in [('panic-native','rust_fmt_panic_real_x86_64'),('panic-shapes','rust_fmt_panic_x86_64')]]
 
-inputs += [("pieces-"+version, root/'decompiler/crates/kuna-analysis/tests/fixtures'/('rust_fmt_pieces_'+version), ['c','rust','go']) for version in ['1.89.0','1.90.0','nightly-2025-05-22','x86_64']]
-exec((Path('/tmp/kuna-rust-fmt-pieces-f874')/'evidence.py').read_text())
+inputs += [("pieces-"+version, root/'decompiler/crates/unlace-analysis/tests/fixtures'/('rust_fmt_pieces_'+version), ['c','rust','go']) for version in ['1.89.0','1.90.0','nightly-2025-05-22','x86_64']]
+exec((Path('/tmp/unlace-rust-fmt-pieces-f874')/'evidence.py').read_text())
 
 def run(row):
     name,binary,languages=row;data=binary.read_bytes();digest=hashlib.sha256(data).hexdigest();memory=Image(data);symbols=demangled_symbols(binary)
@@ -49,14 +49,14 @@ def run(row):
         with destination.open('w') as f,destination.with_suffix('.log').open('w') as log:
             cmd=['taskset','-c','0-78',str(executable),'decompile-all',str(binary),'--language',language,'--json','--jobs','1','--max-fn-seconds','600','--option','godwarfsig','on']
             if off: cmd += ['--option','rustfmtpieces','off']
-            subprocess.run(cmd,cwd=root,env=os.environ|{'KUNA_SPECS':str(root/'specs')},stdout=f,stderr=log,check=True)
+            subprocess.run(cmd,cwd=root,env=os.environ|{'UNLACE_SPECS':str(root/'specs')},stdout=f,stderr=log,check=True)
     def language_capture(language):
         before=(old if cached else out)/f'{name}-{language}.json' if cached else out/f'{name}-{language}-before.json'
         after=out/f'{name}-{language}.json';off=out/f'{name}-{language}-off.json'
         if '--review-existing' not in sys.argv:
-            if not cached: capture(base/'decompiler/target/release/kuna',language,before)
-            capture(root/'decompiler/target/release/kuna',language,after)
-            if language=='rust': capture(root/'decompiler/target/release/kuna',language,off,True)
+            if not cached: capture(base/'decompiler/target/release/unlace',language,before)
+            capture(root/'decompiler/target/release/unlace',language,after)
+            if language=='rust': capture(root/'decompiler/target/release/unlace',language,off,True)
         return language,before,after,off
     with ThreadPoolExecutor(max_workers=3) as pool:
         captures=list(pool.map(language_capture,languages))
@@ -64,11 +64,11 @@ def run(row):
     for language,prior,path,off in captures:
         a={x['address']:x for x in json.loads(prior.read_text())['functions']}
         b={x['address']:x for x in json.loads(path.read_text())['functions']};assert a.keys()==b.keys()
-        previous={x['address']:x for x in json.loads((Path('/tmp/kuna-rust-fmt-pieces/breadth')/f'{name}-{language}.json').read_text())['functions']};assert b==previous,('integration changes reviewed output',name,language)
+        previous={x['address']:x for x in json.loads((Path('/tmp/unlace-rust-fmt-pieces/breadth')/f'{name}-{language}.json').read_text())['functions']};assert b==previous,('integration changes reviewed output',name,language)
         if language=='rust':
             ablation={x['address']:x for x in json.loads(off.read_text())['functions']}
             assert a==ablation, ('option off differs from parent',name)
-            verifier=subprocess.run(['/tmp/kuna-rust-fmt-pieces/verifier/target/debug/rust-pieces-verifier',str(prior),str(path)],capture_output=True,text=True)
+            verifier=subprocess.run(['/tmp/unlace-rust-fmt-pieces/verifier/target/debug/rust-pieces-verifier',str(prior),str(path)],capture_output=True,text=True)
             (out/f'{name}-ast.log').write_text(verifier.stderr)
             assert verifier.returncode==0, verifier.stderr
             proofs=json.loads(verifier.stdout)
@@ -96,7 +96,7 @@ def run(row):
                 variable_mappings.append({'name':x['name'],'added_call_addresses':[hex(v) for v in sorted(added)],'lost_call_addresses':[hex(v) for v in sorted(lost)]})
             evidence=out/f'{name}-{addr:x}-descriptor.jsonl'
             if not evidence.exists():
-                evidence.write_bytes(subprocess.check_output(['/tmp/kuna-rust-fmt-pieces-f874/descriptor-evidence',str(binary),hex(addr)]))
+                evidence.write_bytes(subprocess.check_output(['/tmp/unlace-rust-fmt-pieces-f874/descriptor-evidence',str(binary),hex(addr)]))
             calls=[json.loads(line) for line in evidence.read_text().splitlines()]
             for site in proof['changes']:
                 verify_site(site,a[addr],calls,memory,symbols)
@@ -105,7 +105,7 @@ def run(row):
             patch+=diff+['\n']
         parsed=0
         if language=='go':
-            p=subprocess.run(['/tmp/kuna-go-output/parse',str(path)],capture_output=True,text=True);assert p.returncode==0,p.stdout+p.stderr;parsed=len(b)
+            p=subprocess.run(['/tmp/unlace-go-output/parse',str(path)],capture_output=True,text=True);assert p.returncode==0,p.stdout+p.stderr;parsed=len(b)
         (out/f'{name}-{language}.diff').write_text(''.join(patch))
         result['languages'].append({'language':language,'functions':len(b),'changed':changes,'parsed':parsed,'errors':0,'off_equals_parent':language=='rust'})
     (out/f'{name}-record.json').write_text(json.dumps(result,indent=2)+'\n')
@@ -115,5 +115,5 @@ def run(row):
 results=[]
 with ThreadPoolExecutor(max_workers=8) as pool:
     for future in as_completed([pool.submit(run,row) for row in inputs]): results.append(future.result())
-assert patched_sha==hashlib.sha256((root/'decompiler/target/release/kuna').read_bytes()).hexdigest()
-(out/'record.json').write_text(json.dumps({'patched_kuna_sha256':patched_sha,'baseline_commit':sha,'baseline_pending_merge_commit':pending_main,'options':{'godwarfsig':'on'},'fixtures':results},indent=2)+'\n')
+assert patched_sha==hashlib.sha256((root/'decompiler/target/release/unlace').read_bytes()).hexdigest()
+(out/'record.json').write_text(json.dumps({'patched_unlace_sha256':patched_sha,'baseline_commit':sha,'baseline_pending_merge_commit':pending_main,'options':{'godwarfsig':'on'},'fixtures':results},indent=2)+'\n')

@@ -41,11 +41,11 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-DYNALLOCA #1: dynalloca on, the run-time stack move is alloca'
+name = 'UNLACE-DYNALLOCA #1: dynalloca on, the run-time stack move is alloca'
 count = 1
 literal = 'alloca('
 
 [[match]]
-name = 'KUNA-DYNALLOCA #2: dynalloca off (default), the stack arithmetic stays'
+name = 'UNLACE-DYNALLOCA #2: dynalloca off (default), the stack arithmetic stays'
 count = 1
 literal = 'Stack'

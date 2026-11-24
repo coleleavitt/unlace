@@ -30,7 +30,7 @@ fn query_for(fixture_name: &str, function: &str, enabled: bool, directives: &[St
         .args(["--option", "protoorder", "off", "--option", "stackviews"])
         .arg(if enabled { "on" } else { "off" })
         .args(["--assert-strict", "--assert"])
-        .arg(format!("@{fixture}.kuna"))
+        .arg(format!("@{fixture}.unlace"))
         .arg("--sleighpath")
         .arg(common::repo_root().join("specs"));
     for directive in directives {

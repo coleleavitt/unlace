@@ -1,4 +1,4 @@
-# Kuna DEX loader, Java allocation: P9 presentation, option javanew
+# Unlace DEX loader, Java allocation: P9 presentation, option javanew
 # (default on). The script loads the committed DEX fixture built from
 # tests/stages/fixtures/dex/Hello.java and prints Java.
 #

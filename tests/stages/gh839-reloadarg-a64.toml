@@ -1,4 +1,4 @@
-# GH-839 (kuna): the AArch64 guard for the frame-reload rule (kuna_reloadarg.rs).
+# GH-839 (unlace): the AArch64 guard for the frame-reload rule (unlace_reloadarg.rs).
 # clang 14 -O2 for aarch64-linux-gnu of
 #   void fa1(void){ use(__builtin_frame_address(1)); }
 #   void fa2(int k){ printf("%d %p\n", k, __builtin_frame_address(1)); }

@@ -2,7 +2,7 @@ argclobber corpus sweep, 2026-09-20 -- the recovered prototype plus the
 forwarding walk (direct calls resolved against their targets)
 ======================================================================
 
-`kuna decompile-all <bin> --option argclobber off|on` over every stripped ELF in
+`unlace decompile-all <bin> --option argclobber off|on` over every stripped ELF in
 decbench results/full_run_address_2026-09-11 (O0, O2, O2-noinline).
 
   binaries swept ............ 770
@@ -19,7 +19,7 @@ O2 levels:
   O2/O2-noinline bash expand_prompt: `xrealloc(dat_14d868,v5,v11)` keeps its
   third argument now. xrealloc(void *, size_t) really does take two, so this is
   a drop LOST, not a bug fixed: xrealloc's entry reaches `call sbrk@plt` with
-  rdx unwritten, kuna has no signature for sbrk (it renders `void sbrk(void)`),
+  rdx unwritten, unlace has no signature for sbrk (it renders `void sbrk(void)`),
   and the import's PLT stub jumps through its GOT slot, so nothing can say what
   becomes of rdx there. The preceding call's `SUB168(v,8)` return narrowing that
   came with that drop is gone with it.

@@ -1,4 +1,4 @@
-# kuna golden lift fixture (per-instruction raw p-code from the C++ oracle)
+# unlace golden lift fixture (per-instruction raw p-code from the C++ oracle)
 # corpus: tests/stages/gh9001-hcs12brn.toml
 # sla: Ghidra/Processors/HCS12/data/languages/HCS12X.sla (relative to specs/)
 # cap: 80 instructions per lift point

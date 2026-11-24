@@ -1985,7 +1985,7 @@ fn load_program_with_rust_profiles(
         // nothing with it -- every other surface prints one line saying which
         // walk it took.
         if jobs::decode_lanes(args) > 1 {
-            eprintln!("[kuna --jobs] decode: serial (a raw image's discovery walk has no lanes)");
+            eprintln!("[unlace --jobs] decode: serial (a raw image's discovery walk has no lanes)");
         }
         // Both forms seed the load: `--entry` says where the image starts and
         // `--addr` names a function to decompile, and a raw image must be able
@@ -3795,7 +3795,7 @@ pub(crate) fn parse_args_with_filters(
         }
         if batch && entry_seeds.is_empty() && !addrs.is_empty() {
             eprintln!(
-                "[kuna raw] --addr selects: only these {} address(es) are decompiled; pass them \
+                "[unlace raw] --addr selects: only these {} address(es) are decompiled; pass them \
                  as --entry to seed the load and decompile what they call too",
                 addrs.len()
             );
@@ -4068,7 +4068,7 @@ fn usage_functions() {
          \x20               [--rust-signature-manifest PATH (requires --summary --json)]\n\
          \x20               [--apply-rust-signatures PATH (trusted manifest; --jobs 1)]\n\
          \n\
-         List every function kuna discovers in a binary as `<addr>\\t<name>` (or\n\
+         List every function unlace discovers in a binary as `<addr>\\t<name>` (or\n\
          --json: {{binary,count,total,functions:[{{name,address,address_hex,aliases,size}}]}}).\n\
          \n\
          Triage: --filter REGEX matches the name or any alias; --min-size/--max-size\n\
@@ -4188,7 +4188,7 @@ mod discovery_tests {
     fn temp_image(tag: &str, bytes: &[u8]) -> std::path::PathBuf {
         let id = TEMP_ID.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
-            "kuna-discovery-{tag}-{}-{id}.bin",
+            "unlace-discovery-{tag}-{}-{id}.bin",
             std::process::id()
         ));
         std::fs::write(&path, bytes).expect("write the discovery fixture");
@@ -4416,7 +4416,7 @@ mod mode_tests {
     fn sparse_binary(size: u64) -> std::path::PathBuf {
         let id = TEMP_ID.fetch_add(1, Ordering::Relaxed);
         let path =
-            std::env::temp_dir().join(format!("kuna-auto-mode-{}-{id}.bin", std::process::id()));
+            std::env::temp_dir().join(format!("unlace-auto-mode-{}-{id}.bin", std::process::id()));
         let file = std::fs::File::create(&path).expect("create auto-mode fixture");
         file.set_len(size).expect("size auto-mode fixture");
         path
@@ -4441,8 +4441,10 @@ mod mode_tests {
 
     #[test]
     fn explicit_concrete_mode_ignores_binary_metadata() {
-        let missing =
-            std::env::temp_dir().join(format!("kuna-auto-mode-missing-{}.bin", std::process::id()));
+        let missing = std::env::temp_dir().join(format!(
+            "unlace-auto-mode-missing-{}.bin",
+            std::process::id()
+        ));
         let options =
             mode_options_for_binary(Some("fast"), missing.to_str().unwrap(), Vec::new()).unwrap();
         assert_eq!(options, mode_override_pairs("fast").unwrap());
@@ -4667,7 +4669,7 @@ mod triage_tests {
     fn sparse_binary() -> std::path::PathBuf {
         let id = TEMP_ID.fetch_add(1, Ordering::Relaxed);
         let path =
-            std::env::temp_dir().join(format!("kuna-triage-{}-{id}.bin", std::process::id()));
+            std::env::temp_dir().join(format!("unlace-triage-{}-{id}.bin", std::process::id()));
         std::fs::File::create(&path)
             .expect("create triage fixture")
             .set_len(1024)

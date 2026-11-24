@@ -18,9 +18,9 @@ floor to its result would report nothing here.
 Layout:
 
   .rodata @0x00000300  SHF_ALLOC                 (read-only)
-      0x00000300 PROMPT   "kuna picpool prompt"   <- reached by an adjacent pair
-      0x00000320 SECOND   "kuna picpool second"   <- reached by a scheduled pair
-      0x00000340 NUMBER   "kuna picpool number"   <- reached by nothing
+      0x00000300 PROMPT   "unlace picpool prompt"   <- reached by an adjacent pair
+      0x00000320 SECOND   "unlace picpool second"   <- reached by a scheduled pair
+      0x00000340 NUMBER   "unlace picpool number"   <- reached by nothing
   .text   @0x00000400  SHF_ALLOC|SHF_EXECINSTR   (read-only)
       0x00000400 _start        push {lr} ; bl x3 ; pop {pc}
       0x00000420 uses_prompt   ldr r0,[0x42c] ; add r0,pc,r0 ; bx lr
@@ -33,7 +33,7 @@ Layout:
 `uses_prompt` is the whole defect in eight bytes: the address of PROMPT is in
 neither instruction and in the pool word least of all — the word is the signed
 distance -0x12c, which is not an address and lands in no section, so following
-it as a pointer (`kuna_poolref`) correctly declines and the literal ends up
+it as a pointer (`unlace_poolref`) correctly declines and the literal ends up
 referenced by nothing.
 
 `scheduled` is the same pair with two instructions between the load and the add,
@@ -137,9 +137,9 @@ def build_text():
 
 def build_rodata():
     r = bytearray(0x60)
-    r[0x00:] = b'kuna picpool prompt\0'.ljust(0x20, b'\0')
-    r[0x20:] = b'kuna picpool second\0'.ljust(0x20, b'\0')
-    r[0x40:] = b'kuna picpool number\0'.ljust(0x20, b'\0')
+    r[0x00:] = b'unlace picpool prompt\0'.ljust(0x20, b'\0')
+    r[0x20:] = b'unlace picpool second\0'.ljust(0x20, b'\0')
+    r[0x40:] = b'unlace picpool number\0'.ljust(0x20, b'\0')
     return bytes(r[:0x60])
 
 

@@ -3,12 +3,12 @@
   "probe_id": "a-fbaaba8ade8a",
   "kind": "cli",
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "strings",
     "{{BIN}}",
     "--json",
     "--filter",
-    "kuna picpool prompt"
+    "unlace picpool prompt"
   ],
   "cwd": "{{WORK}}",
   "env": {

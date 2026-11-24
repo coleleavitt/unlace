@@ -23,17 +23,17 @@ without re-snapshotting the C++ oracle.
 
 ## Regenerating
 
-The snapshots are produced by `kuna.goldens` (the stage-boundary harness) run against the
+The snapshots are produced by `unlace.goldens` (the stage-boundary harness) run against the
 **main checkout's** built `decomp_dbg` + `.sla` artifacts. From the main tree
-(`/home/mahaloz/github/kuna`, with `decompiler/cpp/decomp_dbg` built; the `.sla` images compile
+(`/home/mahaloz/github/unlace`, with `decompiler/cpp/decomp_dbg` built; the `.sla` images compile
 into the `.sla` cache on first use):
 
 ```bash
-cd /home/mahaloz/github/kuna
-source ~/.virtualenvs/kuna/bin/activate
+cd /home/mahaloz/github/unlace
+source ~/.virtualenvs/unlace/bin/activate
 
 # Snapshot B2 for every fixture's corpus test (the --xml flag repeats).
-python -m kuna.goldens snapshot --boundary B2 --engine cpp \
+python -m unlace.goldens snapshot --boundary B2 --engine cpp \
   --xml lzcount --xml boolless --xml skipnext2 --xml floatprint \
   --xml promotecompare --xml readvolatile --xml condconst --xml gh6990-returnpair \
   --xml ccmp --xml convert --xml nan --xml gh1243-8051-addc \

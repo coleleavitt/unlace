@@ -29,7 +29,7 @@ fn run_fixture_options(
 ) -> (String, Vec<String>) {
     let root = common::repo_root();
     let fixture = common::fixture(fixture_name);
-    let baseline = format!("@{}.kuna", fixture);
+    let baseline = format!("@{}.unlace", fixture);
     let specs = std::env::var_os("SLEIGHHOME")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| root.join("specs"));
@@ -45,7 +45,7 @@ fn run_fixture_options(
             "--sleighpath",
         ])
         .arg(specs);
-    if std::path::Path::new(&format!("{fixture}.kuna")).exists() {
+    if std::path::Path::new(&format!("{fixture}.unlace")).exists() {
         command.args(["--assert", &baseline]);
     }
     for directive in extra {
@@ -57,7 +57,7 @@ fn run_fixture_options(
     if json {
         command.arg("--json");
     }
-    let output = command.output().expect("run kuna");
+    let output = command.output().expect("run unlace");
     let stdout = String::from_utf8(output.stdout).unwrap();
     let stderr = String::from_utf8(output.stderr).unwrap();
     if !json {
@@ -361,7 +361,7 @@ fn equal_width_renames_survive_separate_decompiles() {
             ),
         ] {
             let baseline =
-                std::fs::read_to_string(format!("{}.kuna", common::fixture("lifetimes_x86_64")))
+                std::fs::read_to_string(format!("{}.unlace", common::fixture("lifetimes_x86_64")))
                     .unwrap();
             let declarations: Vec<_> = baseline
                 .lines()

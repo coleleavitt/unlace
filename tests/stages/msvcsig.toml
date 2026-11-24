@@ -7,7 +7,7 @@
 # arity took the pushes meant for the next call.
 #
 # Stage / sub-stage: P1 external-refinement (`unlace-analysis`
-# `analyzers/demangle/kuna_msvcsig.rs` reads the declaration off the import
+# `analyzers/demangle/unlace_msvcsig.rs` reads the declaration off the import
 # name; the commit parks it by address under the stated convention's model
 # and locks it onto the import symbol) feeding P4 prototype-source
 # (`ActionDefaultParams` / `ActionDeindirect` at the IAT call). The arm runs
@@ -30,7 +30,7 @@
 # imported) is what proves MakeStack returns Arr through that pointer.
 # MakeStack's by-value `Arr` has a size the name does not state, so the
 # parameters after it are left open until the by-value sizing
-# (kuna_msvcbyval.rs, always on; tests/stages/msvcbyval.xml) reads the
+# (unlace_msvcbyval.rs, always on; tests/stages/msvcbyval.xml) reads the
 # class's size from the caller's cleanup and MakeStack takes every argument.
 
 [image]

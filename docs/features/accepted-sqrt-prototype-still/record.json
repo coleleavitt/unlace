@@ -18,7 +18,7 @@
     },
     {
       "what": "the by-NAME form is broken here too, and is deliberately NOT fixed",
-      "detail": "`--assert 'prototype sqrt ...'` also fails on this image, for a different reason: `kuna functions` reports TWO FunctionSymbols named `sqrt` -- the import thunk at 0x140003ddf that all four calls target, and the IAT slot at 0x140005238 -- and the global by-name query answers with the slot. Measured: the callee-proto snapshot after the by-name park contains `off=0x140005238 name=sqrt` and nothing at 0x140003ddf. Disambiguating a duplicated import name would have to change the library-prototype pass (`bootstrap`'s step 5, which parks memcpy/malloc/sqrt by name) and could move both parity corpora. The address form is the sound way to say which one you mean, and it is what the need's own command already said."
+      "detail": "`--assert 'prototype sqrt ...'` also fails on this image, for a different reason: `unlace functions` reports TWO FunctionSymbols named `sqrt` -- the import thunk at 0x140003ddf that all four calls target, and the IAT slot at 0x140005238 -- and the global by-name query answers with the slot. Measured: the callee-proto snapshot after the by-name park contains `off=0x140005238 name=sqrt` and nothing at 0x140003ddf. Disambiguating a duplicated import name would have to change the library-prototype pass (`bootstrap`'s step 5, which parks memcpy/malloc/sqrt by name) and could move both parity corpora. The address form is the sound way to say which one you mean, and it is what the need's own command already said."
     },
     {
       "what": "name first, address second -- and only a `0x` prefix may error",
@@ -26,7 +26,7 @@
     },
     {
       "what": "one resolver, both surfaces",
-      "detail": "The script surface (`kuna decompile` -> forked decomp_dbg -> `map prototype` -> `ifacedecomp::bind_prototype`) and the in-process surface (`decompile-all`/`--json` -> `assertions::apply_prototype`) had already drifted apart once on this exact directive (`text-output-silently-ignores`). Both now call the same `assertions::resolve_proto_target` + `assertions::park_prototype`, and the CLI test asserts the two agree rather than testing either alone. That also closes a smaller pre-existing gap: `bind_prototype` retyped the symbol but never parked the pieces, leaning on the by-name re-park at `decompile` time, which the address form has no key for."
+      "detail": "The script surface (`unlace decompile` -> forked decomp_dbg -> `map prototype` -> `ifacedecomp::bind_prototype`) and the in-process surface (`decompile-all`/`--json` -> `assertions::apply_prototype`) had already drifted apart once on this exact directive (`text-output-silently-ignores`). Both now call the same `assertions::resolve_proto_target` + `assertions::park_prototype`, and the CLI test asserts the two agree rather than testing either alone. That also closes a smaller pre-existing gap: `bind_prototype` retyped the symbol but never parked the pieces, leaning on the by-name re-park at `decompile` time, which the address form has no key for."
     },
     {
       "what": "no option, no stages XML, no catalog counter, no DIV row",
@@ -45,10 +45,10 @@
   "gates": {
     "make test": "PARITY OK, 675/675 assertions (rebased tree)",
     "make test-stages": "PARITY OK, 650/650 assertions (rebased tree)",
-    "make rust-test": "5,779 passed / 0 failed with KUNA_DECOMP_TEST unset. With the loop's own KUNA_DECOMP_TEST exported (it points at this worktree's decomp_test_dbg) the run is 5,768/1: verify_w10_proto_unlock::w10_proto_unlock_const_return_collapses_no_tied_roundtrip reports 'oracle promote_compare signature drifted', the known repipe-worktree artifact, and passes 4/4 with the variable unset. Re-run on the rebased tree.",
+    "make rust-test": "5,779 passed / 0 failed with UNLACE_DECOMP_TEST unset. With the loop's own UNLACE_DECOMP_TEST exported (it points at this worktree's decomp_test_dbg) the run is 5,768/1: verify_w10_proto_unlock::w10_proto_unlock_const_return_collapses_no_tied_roundtrip reports 'oracle promote_compare signature drifted', the known repipe-worktree artifact, and passes 4/4 with the variable unset. Re-run on the rebased tree.",
     "make check-spec": "OK (lenient mode)",
     "make test-cli": "54/54 with the probe promoted",
-    "kuna catalog --check": "catalog OK: documents exactly the registered kuna options"
+    "unlace catalog --check": "catalog OK: documents exactly the registered unlace options"
   },
   "acceptance": {
     "acceptance_id": "a-94788ed2c81d",
@@ -56,12 +56,12 @@
     "result": "PASS",
     "transition": "closed",
     "promoted_to": "tests/cli/accepted-sqrt-prototype-still.json",
-    "promotion_note": "The filed acceptance targets the dataset image (crackmes.one 640a526833c5d447bc761899, KeyCheker.exe) and PASSES there after the fix -- `scripts.repipe.verify --need accepted-sqrt-prototype-still` reported 1 pass / 0 fail / closed on the original block before it was retargeted. `--promote` refuses a dataset target and CI has no dataset, so the acceptance was re-pointed at the vendored `kuna-analysis/tests/fixtures/fauxware`, whose `accepted` at 0x4006ed is argumentless for the same reason: `--assert 'prototype 0x4006ed int4 accepted(int4 status)'` must print `accepted(` and must not print `accepted()`. Re-cutting cmd+expect re-derived the id a-bb9896e9cfbb -> a-94788ed2c81d; the need's front matter and Decision log were updated in the same commit.",
+    "promotion_note": "The filed acceptance targets the dataset image (crackmes.one 640a526833c5d447bc761899, KeyCheker.exe) and PASSES there after the fix -- `scripts.repipe.verify --need accepted-sqrt-prototype-still` reported 1 pass / 0 fail / closed on the original block before it was retargeted. `--promote` refuses a dataset target and CI has no dataset, so the acceptance was re-pointed at the vendored `unlace-analysis/tests/fixtures/fauxware`, whose `accepted` at 0x4006ed is argumentless for the same reason: `--assert 'prototype 0x4006ed int4 accepted(int4 status)'` must print `accepted(` and must not print `accepted()`. Re-cutting cmd+expect re-derived the id a-bb9896e9cfbb -> a-94788ed2c81d; the need's front matter and Decision log were updated in the same commit.",
     "reproduction_confirmed_on_main": "On c92dddbb the witness prints `v26 = (double)sqrt();` four times with an empty stderr and exit 0; after the fix it prints `v26 = sqrt(v35._0_8_);`. The vendored twin on c92dddbb prints `accepted();` with the directive reported `applied`; after the fix, `accepted((int)v4);`."
   },
   "not_closed": [
     "`--assert 'prototype sqrt ...'` still parks on the IAT slot rather than the thunk on this image, because two FunctionSymbols share the name. Fixing that means teaching the by-name park which of the two a caller reaches, which is the library-prototype pass's problem and reaches both parity corpora.",
-    "A `0x` operand issued BEFORE `read symbols` in a hand-driven console session is now rejected rather than parked, since no symbol exists yet to resolve it against. The generated script always emits `map prototype` after the analysis commit, so no `kuna` invocation can hit this.",
+    "A `0x` operand issued BEFORE `read symbols` in a hand-driven console session is now rejected rather than parked, since no symbol exists yet to resolve it against. The generated script always emits `map prototype` after the analysis commit, so no `unlace` invocation can hit this.",
     "docs/re-needs/index.json is deliberately NOT regenerated: `needs reindex` runs over the whole backlog and this worktree holds only the tracked need docs. The captain reindexes."
   ],
   "pr": "https://github.com/Noelo-Lab/kuna/pull/470",

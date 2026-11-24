@@ -1,9 +1,9 @@
-# kuna issue testcase: a `rep movsd` that copies a by-value struct into the
+# unlace issue testcase: a `rep movsd` that copies a by-value struct into the
 # outgoing argument area with a known count is expanded before the stack is
-# heritaged (`p3_dataflow/kuna_repframecopy.rs`, always on; `indexaliasguard
+# heritaged (`p3_dataflow/unlace_repframecopy.rs`, always on; `indexaliasguard
 # off` turns it off with the other stack guards).
 #
-# Issue:      kuna GH-1562 - x86-32 MSVC: a by-value struct argument copied
+# Issue:      unlace GH-1562 - x86-32 MSVC: a by-value struct argument copied
 #             with `rep movsd` makes the call that takes it print with no
 #             arguments, and a pushed return address prints as a value.
 # Stage:      P3 dataflow - right after the first heritage pass, before the

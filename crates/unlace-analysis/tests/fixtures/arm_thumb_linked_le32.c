@@ -2,11 +2,11 @@
  *
  * This is the linked-executable counterpart to the bare `arm_thumb_le32.o`
  * (ET_REL) symbol-scan fixture: a real ET_EXEC/ET_DYN with a PT_LOAD segment so
- * kuna's ObjectLoadImage (which reads only segments, never sections) can load it.
+ * unlace's ObjectLoadImage (which reads only segments, never sections) can load it.
  * It proves the analysis-tier `arm_markers` TMode paint + Thumb-FUNC re-home
  * actually drive a correct Thumb decode through the full pipeline.
  *
- * Built in the kuna-dev container (arm-linux-gnueabihf-gcc 11.4.0) with:
+ * Built in the unlace-dev container (arm-linux-gnueabihf-gcc 11.4.0) with:
  *   arm-linux-gnueabihf-gcc -mthumb -static -nostdlib -e _start \
  *       arm_thumb_linked_le32.c -o arm_thumb_linked_le32
  *

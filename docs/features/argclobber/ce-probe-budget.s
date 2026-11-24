@@ -1,4 +1,4 @@
-# tests/stages/kuna-argclobber-guards.xml's caller, byte for byte in
+# tests/stages/unlace-argclobber-guards.xml's caller, byte for byte in
 # shape (a clobber on one path, an idivl remainder on the other), with a
 # callee that READS rdx in its first instruction -- but whose call-free body
 # is longer than the entry probe's 192-instruction budget.

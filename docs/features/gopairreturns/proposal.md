@@ -53,7 +53,7 @@ one ordinary struct and returns its two fields. A language-level probe over
 162 input pairs on Go 1.22/1.27 confirms single evaluation and name isolation;
 it is a design check, not a test of the unimplemented emitter.
 
-New emission logic belongs in the P9 `kuna_gopairreturns` module. Extend the
+New emission logic belongs in the P9 `unlace_gopairreturns` module. Extend the
 existing Go DWARF importer and the facet representation through narrow hooks.
 Update the P1 and P9 specification chapters together with the option row,
 generated catalog and shared counter fixtures. C and Rust may show the proven

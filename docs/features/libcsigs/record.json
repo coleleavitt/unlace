@@ -1,7 +1,7 @@
 {
-  "opportunity": "kuna's built-in libc prototype table has 27 entries -- a documented minimal stand-in for the Ghidra .gdt archives kuna cannot vendor. Every libc callee outside those 27 leaves its callers' arguments an inferred `unsigned long`. Of the 1587 cases where IDA scores a perfect C type_match and kuna does not, 568 (35.8%) sit in a function that calls a libc name the table did not know, against 395 (24.9%) that call one it did. type_match is kuna's weakest metric on plain C.",
+  "opportunity": "unlace's built-in libc prototype table has 27 entries -- a documented minimal stand-in for the Ghidra .gdt archives unlace cannot vendor. Every libc callee outside those 27 leaves its callers' arguments an inferred `unsigned long`. Of the 1587 cases where IDA scores a perfect C type_match and unlace does not, 568 (35.8%) sit in a function that calls a libc name the table did not know, against 395 (24.9%) that call one it did. type_match is unlace's weakest metric on plain C.",
   "test_name": "console verify_libcsigs (5 two-pass e2e assertions on the vendored fauxware fixture) + 5 hermetic table-invariant unit tests",
-  "binary": "decompiler/crates/kuna-analysis/tests/fixtures/fauxware",
+  "binary": "decompiler/crates/unlace-analysis/tests/fixtures/fauxware",
   "selector": "authenticate",
   "func_addr": "0x4006b6",
   "angr_version": null,
@@ -10,7 +10,7 @@
   "element_id": null,
   "change_kind": "correctness-fix",
   "tier": "analysis",
-  "source_decompiler": "kuna",
+  "source_decompiler": "unlace",
   "inspiration": "Ghidra ApplyDataArchiveAnalyzer (.gdt library archives); IDA Pro's til type libraries",
   "default_on": true,
   "default_value": "on",
@@ -25,7 +25,7 @@
     "corpus_call_sites_covered": 196747,
     "ida_perfect_cases_whose_function_calls_one": 568
   },
-  "selection_rule": ">= 100 call sites over the 547 frozen-decbench C binaries that carry a scored case, OR >= 3 of the 1587 ida-perfect/kuna-imperfect type_match cases, plus a named-witness set (canonicalize_file_name, dirname, asprintf, the err/warn family)",
+  "selection_rule": ">= 100 call sites over the 547 frozen-decbench C binaries that carry a scored case, OR >= 3 of the 1587 ida-perfect/unlace-imperfect type_match cases, plus a named-witness set (canonicalize_file_name, dirname, asprintf, the err/warn family)",
   "signature_provenance": {
     "gcc_aux_info": "193 entries reduced by a fixed rule from the 1520 NC-line prototypes `gcc -aux-info` emits over a TU including the platform headers with _GNU_SOURCE + _FORTIFY_SOURCE=2",
     "header_redirect": "__isoc99_{scanf,sscanf,fscanf} -- /usr/include/stdio.h:434-441 declares them via __REDIRECT FROM scanf/sscanf/fscanf, which is the header proving ABI identity",
@@ -62,7 +62,7 @@
     "parameter_slots_lost_note": "both are grep-O2ni Pexecute, `char *` -> `void *`, where the loss is the TRUTHFUL prototype: memchr/rawmemchr really do declare `const void *`."
   },
   "sweep": {
-    "surface": "kuna decompile-all off vs on, 11 stripped binaries / 5,589 functions, every changed function classified",
+    "surface": "unlace decompile-all off vs on, 11 stripped binaries / 5,589 functions, every changed function classified",
     "binaries": "coreutils dircolors (O0), coreutils sort (O2), coreutils ls (O2-noinline), grep (O0), grep (O2-noinline), gzip (O2), zlib minigzip (O0), openssh scp (O0), nuttx (O0, statically linked), leveldb leveldbutil + libleveldb.so (O0, C++)",
     "functions_off": 5589,
     "functions_on": 5589,
@@ -142,7 +142,7 @@
   },
   "speed": {
     "decompile": "scripts.pipeline.timeit --option libcsigs, grep/main, 15 samples: 1547.61 -> 1547.82 ms (+0.01%), budget 5%",
-    "load": "interleaved `kuna functions` (load + the whole analysis pass list + commit, no function body decompiled), min AND median of 21 pairs: coreutils-dircolors 293.6 -> 289.4 min (-1.45%) / 321.6 -> 320.7 median (-0.28%); openssh-scp 836.5 -> 835.4 (-0.12%) / 851.9 -> 846.0 (-0.69%); nuttx 1423.4 -> 1432.2 (+0.62%) / 1465.9 -> 1452.2 (-0.93%); grep 849.9 -> 695.4 (-18.18%) / 1012.6 -> 1014.9 (+0.23%) -- the grep MINIMUM is noise in both directions (an earlier 15-pair run of the same case reported +13.99%), the medians are the honest read",
+    "load": "interleaved `unlace functions` (load + the whole analysis pass list + commit, no function body decompiled), min AND median of 21 pairs: coreutils-dircolors 293.6 -> 289.4 min (-1.45%) / 321.6 -> 320.7 median (-0.28%); openssh-scp 836.5 -> 835.4 (-0.12%) / 851.9 -> 846.0 (-0.69%); nuttx 1423.4 -> 1432.2 (+0.62%) / 1465.9 -> 1452.2 (-0.93%); grep 849.9 -> 695.4 (-18.18%) / 1012.6 -> 1014.9 (+0.23%) -- the grep MINIMUM is noise in both directions (an earlier 15-pair run of the same case reported +13.99%), the medians are the honest read",
     "decompile_all": "interleaved min/median of 13: coreutils-dircolors 1832.4 -> 1827.1 (-0.29%) / 1852.6 -> 1848.6 (-0.22%); zlib minigzip 4973.3 -> 4981.3 (+0.16%) / 5034.3 -> 5047.5 (+0.26%)",
     "worst_stable_delta_pct": 0.62,
     "budget_pct": 5.0,
@@ -153,21 +153,21 @@
     "make test-stages": "PARITY OK (400/400)",
     "make rust-test": "green",
     "make check-spec": "OK (lenient + strict)",
-    "kuna catalog --check": "catalog OK"
+    "unlace catalog --check": "catalog OK"
   },
   "files": [
-    "decompiler/crates/kuna-analysis/src/analyzers/protos/libcsigs.rs",
-    "decompiler/crates/kuna-analysis/src/analyzers/protos/mod.rs",
-    "decompiler/crates/kuna-analysis/src/passes.rs",
+    "decompiler/crates/unlace-analysis/src/analyzers/protos/libcsigs.rs",
+    "decompiler/crates/unlace-analysis/src/analyzers/protos/mod.rs",
+    "decompiler/crates/unlace-analysis/src/passes.rs",
     "decompiler/crates/console/src/engine.rs",
     "decompiler/crates/console/src/console.rs",
     "decompiler/crates/console/tests/verify_libcsigs.rs",
-    "decompiler/crates/kuna-decomp/phases.toml",
-    "decompiler/crates/kuna-decomp/src/infra/architecture.rs",
-    "decompiler/crates/kuna-decomp/src/p0_knowledge/options.rs",
-    "decompiler/crates/kuna-decomp/src/p0_knowledge/phases/tests.rs",
-    "decompiler/crates/kuna-decomp/tests/catalog_bytecompat.rs",
-    "decompiler/crates/kuna-decomp/tests/fixtures/phase_catalog.json",
+    "decompiler/crates/unlace-decomp/phases.toml",
+    "decompiler/crates/unlace-decomp/src/infra/architecture.rs",
+    "decompiler/crates/unlace-decomp/src/p0_knowledge/options.rs",
+    "decompiler/crates/unlace-decomp/src/p0_knowledge/phases/tests.rs",
+    "decompiler/crates/unlace-decomp/tests/catalog_bytecompat.rs",
+    "decompiler/crates/unlace-decomp/tests/fixtures/phase_catalog.json",
     "docs/spec/01-program-prep.md",
     "docs/missing-ghidra-analyses.md",
     "docs/history.md",

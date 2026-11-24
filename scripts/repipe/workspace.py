@@ -19,14 +19,14 @@ not a request: a prompt-level "please do not look" would be worthless because co
 
 Two dataset facts drive the copying. **Exec bits are broken**: 4 of 287 shipped binaries are
 mode 600 and 54 are 644, so every copy is chmod 0755 -- otherwise the tester's first `./target`
-run fails for a reason that has nothing to do with kuna. **`bin/` preserves recursive-extraction
+run fails for a reason that has nothing to do with unlace. **`bin/` preserves recursive-extraction
 path shapes** (`bin/GiveMeMoney.zip.__x/33bits/KeyVal2.exe`), and two binaries in one challenge
 routinely share a basename, so the tree under `bin/` is mirrored under `target/` and the primary
 is always resolved through `detected.primary.path`, never by globbing.
 
-**The shims are load-bearing.** kuna emits no timing at all in any of its JSON, so
+**The shims are load-bearing.** unlace emits no timing at all in any of its JSON, so
 `notes/toolcalls.jsonl` is the pipeline's only per-call latency signal; it also turns tool usage
-counts and the kuna-vs-IDA time split into measurements rather than model self-report, and lets
+counts and the unlace-vs-IDA time split into measurements rather than model self-report, and lets
 a probe be auto-derived from a real recorded argv instead of one a model transcribed.
 
 `sanity_check()` is the assertion side of all of the above, so the smoke test and the captain
@@ -227,7 +227,7 @@ DECLIB_SERVER_REGISTRY="$ARENA/.declib/servers"
 # TMPDIR cannot live in the arena, and this is a hard limit rather than a preference.
 # declib binds an AF_UNIX socket at $TMPDIR/declib_server_<10 hex>/decompiler.sock -- 41
 # bytes of suffix -- and sun_path is 108 bytes. The arena root is already ~71
-# (.kuna-repipe/arena/<round>/<24-char hexid> under the repo), so even `$ARENA/t` computes
+# (.unlace-repipe/arena/<round>/<24-char hexid> under the repo), so even `$ARENA/t` computes
 # to 114 and bind(2) fails. The server then exits before registering, having logged nothing
 # past "Using headless interface", which is why this read for two rounds as "IDA is broken".
 # So: a short directory under the system temp, one per arena, cleaned with the round.
@@ -293,10 +293,10 @@ fi
 '''
 
 
-def _shim_kuna(real: str) -> str:
+def _shim_unlace(real: str) -> str:
     head = _SHIM_HEAD.format(
         title="Shim for unlace. Logs every call to notes/toolcalls.jsonl -- unlace emits no timing\n# of its own, so this file is the pipeline's only per-call latency signal.",
-        real_var="REPIPE_REAL_KUNA", real_default=real)
+        real_var="REPIPE_REAL_UNLACE", real_default=real)
     tail = _SHIM_TAIL.format(tool="unlace", invoke='"$REAL" "$@"')
     return head + tail
 
@@ -304,7 +304,7 @@ def _shim_kuna(real: str) -> str:
 def _shim_ida(real: str) -> str:
     head = _SHIM_HEAD.format(
         title="Shim for the declib/IDA reference CLI. IDA is a logged last resort, never a\n"
-              "# parallel track: every call here auto-drafts an observation, because \"kuna made\n"
+              "# parallel track: every call here auto-drafts an observation, because \"unlace made\n"
               "# testers leave N times this round\" is a headline metric.\n#\n"
               "# The server registry and the project DBs (IDA's .i64 among them) are forced inside\n"
               "# the arena so they die with the round, as does declib's unix socket -- codex's\n"
@@ -455,8 +455,8 @@ the network.
 """
 
 
-def _agents_md(kuna_bin) -> str:
-    """The tool protocol, with kuna's subcommand list read out of the binary being shipped.
+def _agents_md(unlace_bin) -> str:
+    """The tool protocol, with unlace's subcommand list read out of the binary being shipped.
 
     Frozen prose rots one round after it is written: round 4's arenas still told testers there
     was no `xrefs`, `strings` or `disassemble` subcommand and that `decompile` rejected
@@ -465,7 +465,7 @@ def _agents_md(kuna_bin) -> str:
     """
     names = []
     try:
-        r = subprocess.run([str(kuna_bin), "--help"], capture_output=True, text=True,
+        r = subprocess.run([str(unlace_bin), "--help"], capture_output=True, text=True,
                            timeout=60)
         for line in (r.stdout + r.stderr).splitlines():
             if line.startswith("usage: unlace <") and ">" in line:
@@ -474,7 +474,7 @@ def _agents_md(kuna_bin) -> str:
     except (OSError, subprocess.SubprocessError):
         names = []
     if not names:
-        raise RuntimeError("cannot read kuna's subcommand list from %s --help" % kuna_bin)
+        raise RuntimeError("cannot read unlace's subcommand list from %s --help" % unlace_bin)
     head = _AGENTS_MD_HEAD.format(n=len(names),
                                   subcommands=", ".join("`%s`" % n for n in names))
     return head + _AGENTS_MD_TAIL
@@ -549,7 +549,7 @@ def build(hexid: str, round_n: int = 0, out=None, force: bool = False) -> Path:
             kept_extras.append(erel)
 
     _write(staging / "bin" / "_shimlog.py", _SHIMLOG_PY, 0o644)
-    _write(staging / "bin" / "unlace", _shim_kuna(str(config.kuna_bin())), SHIM_MODE)
+    _write(staging / "bin" / "unlace", _shim_unlace(str(config.unlace_bin())), SHIM_MODE)
     _write(staging / "bin" / "ida-decompile", _shim_ida(str(config.decompiler_cli())), SHIM_MODE)
 
     (staging / "notes").mkdir(exist_ok=True)
@@ -558,7 +558,7 @@ def build(hexid: str, round_n: int = 0, out=None, force: bool = False) -> Path:
     primary_t = _target_rel(prim_rel)
     others = [c["arena_rel"][len("target/"):] for c in copied_bins[1:]]
     _write(staging / "TASK.md", _task_md(meta, primary_t, others, kept_extras))
-    _write(staging / "AGENTS.md", _agents_md(config.kuna_bin()))
+    _write(staging / "AGENTS.md", _agents_md(config.unlace_bin()))
 
     record = {
         "schema": "repipe/arena/1",
@@ -570,7 +570,7 @@ def build(hexid: str, round_n: int = 0, out=None, force: bool = False) -> Path:
         "flag_in_path": flag_in_path(meta),
         "extras_kept": ["extras/" + e for e in kept_extras],
         "extras_dropped": [d for d in decisions if d["decision"] == "drop"],
-        "tools": {"kuna": str(config.kuna_bin()), "ida": str(config.decompiler_cli())},
+        "tools": {"unlace": str(config.unlace_bin()), "ida": str(config.decompiler_cli())},
     }
     _write(staging / ".repipe" / "build.json", json.dumps(record, indent=2) + "\n")
 

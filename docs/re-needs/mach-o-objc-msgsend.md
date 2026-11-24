@@ -38,7 +38,7 @@ Carry the loader-resolved import name into calls through its slot.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x100001d2b",
@@ -82,7 +82,7 @@ Carry the loader-resolved import name into calls through its slot.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x100001d2b",

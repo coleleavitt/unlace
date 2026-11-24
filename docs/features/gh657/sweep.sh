@@ -1,13 +1,13 @@
 #!/bin/bash
-# The 37-binary corpus sweep. $1 = out subdir, $2 = kuna binary, $3 = extra args.
-# KUNA_GH657_VARIANT selects one of the instrumented second-span builds used for
+# The 37-binary corpus sweep. $1 = out subdir, $2 = unlace binary, $3 = extra args.
+# UNLACE_GH657_VARIANT selects one of the instrumented second-span builds used for
 # the cause attribution in analysis.md (the instrumentation is not committed; the
 # variants it selects are described in cause.py).
-# $1 = out subdir name under .scratch/sweep36, $2 = kuna binary, $3 = extra args (may be empty)
+# $1 = out subdir name under .scratch/sweep36, $2 = unlace binary, $3 = extra args (may be empty)
 set -u
 V=$1; K=$2; EXTRA=${3:-}
 export SLEIGHHOME=/home/mahaloz/kwt/gh657/specs
-export KUNA_SPECS=/home/mahaloz/kwt/gh657/specs
+export UNLACE_SPECS=/home/mahaloz/kwt/gh657/specs
 R=/home/mahaloz/github/decbench/results/full_run_address_2026-09-11
 T=/home/mahaloz/kwt/gh657/tests/bug-repro
 OUT=/home/mahaloz/kwt/gh657/.scratch/sweep36/$V

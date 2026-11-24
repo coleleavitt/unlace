@@ -2,8 +2,8 @@ A PE whose DOS `e_magic` is not `MZ` is rejected outright, even when `e_lfanew` 
 
 ```
 $ python3 -c "import sys;b=bytearray(open(sys.argv[1],'rb').read());b[0]=0x15;open('bad.exe','wb').write(b)" \
-    decompiler/crates/kuna-analysis/tests/fixtures/calleeprotostack_pe_i386.exe
-$ kuna functions bad.exe --summary --json
+    decompiler/crates/unlace-analysis/tests/fixtures/calleeprotostack_pe_i386.exe
+$ unlace functions bad.exe --summary --json
 error: could not build an architecture for bad.exe: File: bad.exe : not in recognized object file format: Unknown file magic; for a headerless image use --raw-image ...
 $ echo $?
 1
@@ -12,7 +12,7 @@ $ echo $?
 With this change the same command loads the image and says what it repaired:
 
 ```
-[kuna] PE DOS header e_magic is 0x5a15, not MZ (0x5a4d); loaded via e_lfanew 0x40 -> PE signature (repaired in memory; the file is unchanged)
+[unlace] PE DOS header e_magic is 0x5a15, not MZ (0x5a4d); loaded via e_lfanew 0x40 -> PE signature (repaired in memory; the file is unchanged)
 {
   "binary": "bad.exe",
   "count": 4,
@@ -27,7 +27,7 @@ With this change the same command loads the image and says what it repaired:
 ## Fix
 
 - New `loader/pe_dosmagic.rs`: when `object` recognizes no format and `e_lfanew` points at `PE\0\0`, `MZ` is written over `e_magic` in the loaded copy. The file on disk is never touched; anything that already parses is passed through byte for byte.
-- Applied at the same point as the existing ELF section-table and `NumberOfRvaAndSizes` repairs (before the latter, which reads the headers behind `e_lfanew`), in both the engine bootstrap and `read_image`, so `strings`, `xrefs`, `disassemble` and `decompile-all` see the same view. The `load file` format sniff behind `kuna decompile` admits the same images.
+- Applied at the same point as the existing ELF section-table and `NumberOfRvaAndSizes` repairs (before the latter, which reads the headers behind `e_lfanew`), in both the engine bootstrap and `read_image`, so `strings`, `xrefs`, `disassemble` and `decompile-all` see the same view. The `load file` format sniff behind `unlace decompile` admits the same images.
 - The loader's header repairs are kept on the loaded program and published as a `warnings` array in `functions --summary --json` (and `warning\t...` lines in its text form); a well-formed image has `"warnings": []`.
 
 ## Tests

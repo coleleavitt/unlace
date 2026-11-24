@@ -1,6 +1,6 @@
 # `callbacktype` whole-corpus hunk classification
 
-Before/after `kuna decompile-all` over 70 decbench binaries and the 5 callbacktype fixtures (40,724
+Before/after `unlace decompile-all` over 70 decbench binaries and the 5 callbacktype fixtures (40,724
 functions), `--option callbacktype off` against the default, same build (be75f8cc8 on 0096e984d),
 every changed function classified by `hunks-corpus.py`. The binaries are the implementer's 12 and
 the 9, 12, 14, 12 and 11 that successive reviews chose to be disjoint from the ones before.

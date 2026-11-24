@@ -5,7 +5,7 @@ corrupted DOS `e_magic` (RE-need `pe-dos-magic`).
 
 The first byte is 0x15 instead of 'M' (`e_magic` 0x5a15), as in the reported
 image, while `e_lfanew` still points at an intact `PE\\0\\0` signature. `object`
-sniffs the format from the magic alone, so every kuna surface used to reject
+sniffs the format from the magic alone, so every unlace surface used to reject
 the file as "Unknown file magic" before a byte of code was mapped.
 
     python3 pe_dosmagic_i386.py

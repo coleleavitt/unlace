@@ -3,7 +3,7 @@
 global 200 times, each store followed by a load through the pointer, a store
 through another pointer, a load through the global and an early return.
 
-Every store keeps its COPY (chapter 03, `kuna_pointeestorekeep`), so the global
+Every store keeps its COPY (chapter 03, `unlace_pointeestorekeep`), so the global
 has 200 values, and each early return makes the rule pool ask about all of
 them again. `tests/cli/repeated-global-pointer-stores-decompile-fast.json`
 times the decompile (issue #818). Regenerate with:

@@ -1,6 +1,6 @@
 [package]
 name = "unlace-analysis"
-description = "kuna Rust port: program-prep loader + analyzer layer (the Ghidra 'Run Analysis' tier)"
+description = "unlace Rust port: program-prep loader + analyzer layer (the Ghidra 'Run Analysis' tier)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

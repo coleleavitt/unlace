@@ -13,7 +13,7 @@ class InlineJsonTests(unittest.TestCase):
 
 class RenderTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="kuna-observatory-")
+        temporary = tempfile.TemporaryDirectory(prefix="unlace-observatory-")
         self.addCleanup(temporary.cleanup)
         self.out = Path(temporary.name)
 

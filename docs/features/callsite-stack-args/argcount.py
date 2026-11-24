@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Count call sites whose rendered argument list is shorter than the callee's own
-recovered parameter count, from a `kuna decompile-all --json` dump.
+recovered parameter count, from a `unlace decompile-all --json` dump.
 
-Self-consistent metric: kuna itself declares `callee` as taking P parameters
+Self-consistent metric: unlace itself declares `callee` as taking P parameters
 (callee-side recovery is known-good); we count call sites of that same callee
 that render with fewer than P arguments.
 """

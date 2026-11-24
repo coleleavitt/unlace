@@ -2,7 +2,7 @@
 
 `type_match` cannot see variable *count*: decbench scores the JSON `variables[]`
 array (args + stack symbols + framelayout slots) and a merged-away temporary was
-never in it. So "kuna declares fewer/more locals than it should" needs its own
+never in it. So "unlace declares fewer/more locals than it should" needs its own
 number, and this is it.
 
 Over one binary's `unlace decompile-all` text, per function:
@@ -18,7 +18,7 @@ Over one binary's `unlace decompile-all` text, per function:
   (`char *`, `unsigned long`, `char [16]`);
 * **params** — the arity of the emitted signature.
 
-A function counts as a *thunk* when its body carries kuna's `jump-as-call`
+A function counts as a *thunk* when its body carries unlace's `jump-as-call`
 marker; those are the PLT stubs and they are excluded from the non-thunk
 declaration total, which is the number to quote.
 
@@ -33,12 +33,12 @@ Usage::
     python3 -m scripts.pipeline.varcensus <binary> --option foldcallret off
     python3 -m scripts.pipeline.varcensus <binary> --baseline before.json
     python3 -m scripts.pipeline.varcensus --baseline a.json --compare b.json
-    python3 -m scripts.pipeline.varcensus --text captured.txt        # no kuna run
+    python3 -m scripts.pipeline.varcensus --text captured.txt        # no unlace run
     python3 -m scripts.pipeline.varcensus --selftest
 
 Nothing is written anywhere unless ``--out`` is given.
 
-Pinned baseline (kuna main @809712e9, coreutils `fmt` -O2, the **unstripped**
+Pinned baseline (unlace main @809712e9, coreutils `fmt` -O2, the **unstripped**
 twin — the stripped copy is one function and 37 declarations away)::
 
     functions 152 · declarations 332 (295 non-thunk) · single-def/single-read 31
@@ -225,17 +225,17 @@ def json_surface(payload: dict) -> dict:
     return {"totals": dict(sorted(tot.items())), "json_types": dict(types.most_common())}
 
 
-def run_kuna(binary: Path, options: list[list[str]], mode: str | None,
+def run_unlace(binary: Path, options: list[list[str]], mode: str | None,
              want_json: bool, timeout: int) -> tuple[str, dict | None]:
-    kuna = paths.binary("unlace", "KUNA_BIN")
-    base = [str(kuna), "decompile-all", str(binary)]
+    unlace = paths.binary("unlace", "UNLACE_BIN")
+    base = [str(unlace), "decompile-all", str(binary)]
     if mode:
         base += ["--mode", mode]
     for k, v in options:
         base += ["--option", k, v]
     text = subprocess.run(base, capture_output=True, text=True, timeout=timeout)
     if not text.stdout.strip():
-        sys.exit(f"kuna produced no output ({text.returncode}): {text.stderr[-400:]}")
+        sys.exit(f"unlace produced no output ({text.returncode}): {text.stderr[-400:]}")
     payload = None
     if want_json:
         js = subprocess.run(base + ["--json"], capture_output=True, text=True,
@@ -243,7 +243,7 @@ def run_kuna(binary: Path, options: list[list[str]], mode: str | None,
         try:
             payload = json.loads(js.stdout)
         except json.JSONDecodeError:
-            sys.exit(f"kuna --json produced no JSON: {js.stderr[-400:]}")
+            sys.exit(f"unlace --json produced no JSON: {js.stderr[-400:]}")
     return text.stdout, payload
 
 
@@ -377,10 +377,10 @@ def main(argv=None) -> int:
     ap.add_argument("binary", nargs="?", type=Path, help="binary to decompile")
     ap.add_argument("--text", type=Path, help="parse a captured decompile-all dump instead")
     ap.add_argument("--json", action="store_true",
-                    help="also count the scored JSON surface (a second kuna run)")
+                    help="also count the scored JSON surface (a second unlace run)")
     ap.add_argument("--option", nargs=2, action="append", metavar=("NAME", "VALUE"),
-                    default=[], help="kuna option for this run (repeatable)")
-    ap.add_argument("--mode", help="kuna --mode for this run")
+                    default=[], help="unlace option for this run (repeatable)")
+    ap.add_argument("--mode", help="unlace --mode for this run")
     ap.add_argument("--timeout", type=int, default=1800)
     ap.add_argument("--out", type=Path, help="write the full census JSON here")
     ap.add_argument("--baseline", type=Path, help="census JSON to diff against (the 'before')")
@@ -399,7 +399,7 @@ def main(argv=None) -> int:
     elif args.text:
         doc = build(args.text, args.text.read_text(), None, args.option, args.mode)
     elif args.binary:
-        text, payload = run_kuna(args.binary, args.option, args.mode, args.json,
+        text, payload = run_unlace(args.binary, args.option, args.mode, args.json,
                                  args.timeout)
         doc = build(args.binary, text, payload, args.option, args.mode)
     else:

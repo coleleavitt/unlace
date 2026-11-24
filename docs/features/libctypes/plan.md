@@ -7,7 +7,7 @@
 ## Goal
 
 Make a pointer to a libc/POSIX aggregate spell its name on the surface decbench
-scores (`kuna decompile-all --json`'s `variables[]`), where every such slot is
+scores (`unlace decompile-all --json`'s `variables[]`), where every such slot is
 `void *` today and `void *` never matches ground truth `FILE *`.
 
 ## Shape
@@ -17,8 +17,8 @@ scores (`kuna decompile-all --json`'s `variables[]`), where every such slot is
 | option | `libctypes`, values `off\|opaque`, default `off` |
 | phase / subphase | P1 / `external-refinement` |
 | tier / change_kind | `analysis` / `analysis-enablement` |
-| owner | `kuna-analysis/src/analyzers/protos/libctypes.rs` (`LibcTypesPass`) |
-| gate | load-time env bridge `KUNA_LIBCTYPES` (`kuna-decomp/src/p0_knowledge/libctypes.rs`) |
+| owner | `unlace-analysis/src/analyzers/protos/libctypes.rs` (`LibcTypesPass`) |
+| gate | load-time env bridge `UNLACE_LIBCTYPES` (`unlace-decomp/src/p0_knowledge/libctypes.rs`) |
 | spec | `docs/spec/01-program-prep.md`, prototype-sources section |
 
 ## Steps taken
@@ -51,7 +51,7 @@ scores (`kuna decompile-all --json`'s `variables[]`), where every such slot is
    outranked. Self-gated on the env bridge at the top of `run()`.
 5. The same gate on `declared_libc_prototype`, so `--define-function …=fopen`
    agrees with what the pass parks on an imported `fopen`.
-6. Env bridge wired through the console `option` arm, `kuna decompile`'s
+6. Env bridge wired through the console `option` arm, `unlace decompile`'s
    subprocess env and `decompile-all`'s `is_loadtime_gate` / `apply_loadtime_env`.
 7. Stage test `tests/stages/libctypes.toml`, three `load file` passes over
    two real ELFs. Passes 1/2 use `libctypes_stat_x86_64`, written so the two

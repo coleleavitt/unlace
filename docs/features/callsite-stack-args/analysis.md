@@ -3,7 +3,7 @@
 **Verdict up front: this is a MIS-PORTED PREDICATE, not an unported feature and not a
 deliberate simplification.** One argument, in one `if`, in one function. Stack-parameter
 trials *are* registered at call sites, on every architecture; they are then scored `no-use`
-because kuna checks the wrong address against the caller's local stack range. Changing that
+because unlace checks the wrong address against the caller's local stack range. Changing that
 one argument restores the entire capability, and the datatest corpus does not move
 (675/675 PARITY OK).
 
@@ -21,15 +21,15 @@ Full triage: `docs/decbench/triage/O0-mydoom-mydoom-msg_b64enc.md`,
 Source calls `sshlog(file, func, line, showfunc, level, suffix, fmt, ...)` with 16 arguments;
 arguments 7..16 are stack-passed and are produced by eight `?:` NULL-default ternaries.
 
-kuna today (reproduced on this build):
+unlace today (reproduced on this build):
 
 ```c
   sub_28730("ssh-add.c","parse_dest_constraint",0x2f3,1,6,0);
 ```
 
 Arguments 7..16 never become call inputs, so the eight ternaries have no consumer and are
-dead-code eliminated: kuna emits **2 `if`s** where IDA, Ghidra, angr, binja and phoenix all
-emit **6** and score GED 0. kuna scores GED 34.
+dead-code eliminated: unlace emits **2 `if`s** where IDA, Ghidra, angr, binja and phoenix all
+emit **6** and score GED 0. unlace scores GED 34.
 
 ### 1b. `O0-mydoom-mydoom-msg_b64enc` (i386, PE)
 
@@ -54,11 +54,11 @@ int main(int argc,char**argv){ return (int)caller(argc,(long)argv); }
 ```
 
 ```
-$ kuna decompile ./wit callee          # CALLEE SIDE IS CORRECT
+$ unlace decompile ./wit callee          # CALLEE SIDE IS CORRECT
 int8 callee(int8 a0,int8 a1,int8 a2,int8 a3,int8 a4,int8 a5,int8 a6,int8 a7)
 { return a6 * 3 + a0 + a1 + a2 + a3 + a4 + a5 + a7 * 5; }
 
-$ kuna decompile ./wit caller          # CALLER SIDE DROPS BOTH STACK ARGS
+$ unlace decompile ./wit caller          # CALLER SIDE DROPS BOTH STACK ARGS
 void caller(void)
 { callee(1,2,3,4,5,6); return; }
 ```
@@ -144,7 +144,7 @@ the `LEA`/`MOV` chain in mydoom and the ternaries in ssh-add.
 
 ### 3a. The exact divergence
 
-`decompiler/crates/kuna-decomp/src/p4_calls/funcdata_callsite.rs:116` (function
+`decompiler/crates/unlace-decomp/src/p4_calls/funcdata_callsite.rs:116` (function
 `check_input_trial_use`, ported from `fspec.cc:5585 FuncCallSpecs::checkInputTrialUse`):
 
 ```rust
@@ -191,7 +191,7 @@ Three independent pieces of evidence:
    *"a stack location outside the **callee's** local range"*. Upstream's range is the caller's.
    The wrong address was chosen deliberately-but-mistakenly to match a wrong mental model —
    the signature of a mis-port, not of a stub.
-2. **kuna's own spec already says the right thing.**
+2. **unlace's own spec already says the right thing.**
    `docs/spec/04-calls-and-prototypes.md`, section *"`ActionActiveParam` — does this argument
    exist?"*: *"outside the **caller's** local stack range (the model's `localrange`,
    `FuncProto::get_local_range`) -> no-use"*. The implementation contradicts its own normative
@@ -204,7 +204,7 @@ Three independent pieces of evidence:
    `ruleaction.cc:4300-4325`, `fspec.cc:5685`). The only `// STUB` marker anywhere on the
    spacebase input chain is `resolve_spacebase_relative`'s un-emitted
    `warningHeader("This function may have set the stack pointer")` (`fspec.rs:6918`), which is
-   cosmetic and unreachable here. No `(kuna)` divergence marker exists on the path either — so
+   cosmetic and unreachable here. No `(unlace)` divergence marker exists on the path either — so
    this was never recorded as an intentional simplification.
 
 Introduced in `5cd4d518 rport/w10-callsite-args` (the original port of the file) and preserved
@@ -234,16 +234,16 @@ behaviours (`KSTACKFIX=1`):
 
 ## 5. Corpus quantification
 
-Method: `kuna decompile-all <bin> --json`, stock vs fixed, on the same binary. The analysis
-script builds a map *callee -> parameter count kuna itself recovered for that callee* (the
+Method: `unlace decompile-all <bin> --json`, stock vs fixed, on the same binary. The analysis
+script builds a map *callee -> parameter count unlace itself recovered for that callee* (the
 callee side is known-good, section 2) and counts direct call sites of that callee rendered with
 fewer arguments. Columns:
 
-- `total_calls` — direct call sites whose target kuna also decompiled.
+- `total_calls` — direct call sites whose target unlace also decompiled.
 - `short_calls` / `empty_short` — rendered with fewer than / with none of the callee's own
   recovered parameters.
 - `calls_ge7_args` — call sites rendered with >= 7 arguments. On x86-64 SysV **every** such call
-  requires stack-argument recovery. Stock kuna scores 0 on 25 of the 30 sampled binaries; the
+  requires stack-argument recovery. Stock unlace scores 0 on 25 of the 30 sampled binaries; the
   handful of non-zero stock counts come from the *locked*-prototype path (`libproto`/DWARF
   signatures, which never reach the broken predicate) and are themselves evidence for the
   blast-radius statement below.
@@ -258,7 +258,7 @@ Measured (this build, whole-binary runs):
 | | | `short_calls` | 192 | 7 |
 
 Reference counts on the same `ssh-add` (from the triage; definitions included, so slightly
-inflated): ghidra 300, ida 338, binja 300, angr 263, dewolf 147 — kuna goes 0 -> 282, i.e. from
+inflated): ghidra 300, ida 338, binja 300, angr 263, dewolf 147 — unlace goes 0 -> 282, i.e. from
 "structurally impossible" to the same order as every other decompiler.
 
 Note on `short_calls` for x86-64: it barely moves (203 -> 194) because both sides of the ratio
@@ -390,7 +390,7 @@ consumer of a computation, dead-code elimination deletes real basic blocks.
 So the GED payoff is confined to functions where a stack argument is the sole consumer of
 control-flow-bearing computation — a minority of call sites, but a systematically recurring one
 (every `?:`-heavy logging macro, every `&local` output parameter past the register budget,
-every `snprintf`-family wrapper). The correctness payoff — kuna currently *deletes live loops*
+every `snprintf`-family wrapper). The correctness payoff — unlace currently *deletes live loops*
 and emits code that does not implement the binary — is not conditional on GED at all, and is
 the stronger argument.
 
@@ -398,8 +398,8 @@ the stronger argument.
 
 | Gate | Result |
 |---|---|
-| `kuna test --datatests --baseline docs/baseline.json` | **675/675, PARITY OK** — zero assertions move |
-| `kuna test --datatests --datatests-dir tests/stages` | 304/305 — **one** assertion moves (below) |
+| `unlace test --datatests --baseline docs/baseline.json` | **675/675, PARITY OK** — zero assertions move |
+| `unlace test --datatests --datatests-dir tests/stages` | 304/305 — **one** assertion moves (below) |
 | `cargo test --release` (whole workspace) | green apart from `w10_adv_r2_guard_is_not_a_skipped_false_green`, which fails identically **without** the fix (it needs an 8051 `.sla` this worktree does not build) |
 | speed, `decompile-all` | **SUPERSEDED — see the correction below.** The original min-of-3, non-interleaved measurement reported "no measurable delta"; a proper interleaved 9-repetition run says otherwise on i386. |
 
@@ -419,7 +419,7 @@ int4 p(int4 a0) {                    int4 p(int4 a0) {
                                      }
 ```
 
-`f` is a **struct-return** function; stock kuna dropped the hidden struct-return buffer pointer
+`f` is a **struct-return** function; stock unlace dropped the hidden struct-return buffer pointer
 entirely (`f()`), and with the fix it is passed (`f(v2)`, `v2 = &v1`) and the 8-byte buffer is
 typed as such. The assertion regresses only because it pins the exact expression
 `return v1 + a0`, which now correctly renders `return v1[0] + a0`. That XML's own comment
@@ -463,8 +463,8 @@ In mydoom, `CloseHandle` renders `(*dat_411298)(v10,v6,v7,v8,v9)` — five argum
 takes one. The outgoing-argument slots from the *previous* `ReadFile` call are still live and
 unmodified at the `CloseHandle` site, and ancestor-realism accepts them. This is upstream
 Ghidra's behaviour too for a genuinely unprototyped `__cdecl` callee; Ghidra escapes it by
-applying the PE IAT import prototype (`CloseHandle(local_28)`), which kuna does not yet do for
-indirect-call targets even though `kuna functions mydoom.exe --json` already lists
+applying the PE IAT import prototype (`CloseHandle(local_28)`), which unlace does not yet do for
+indirect-call targets even though `unlace functions mydoom.exe --json` already lists
 `CloseHandle @ 0x411298`. Trading 192 empty argument lists for a handful of over-long ones is
 plainly the right trade, but it is a real, visible artifact, and the follow-up that closes it
 (PE IAT prototypes) is named in the proposal's sequencing.

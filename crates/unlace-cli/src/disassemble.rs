@@ -1432,10 +1432,10 @@ fn usage() {
          `partial` (with fixups_reason) when some of that metadata could not be read.\n\
          provenance:[{{start,end,size,source,file_offset,segment,overlaps}}] cuts the\n\
          span where its bytes' source changes: `file`, `zero-fill` (memory the segment\n\
-         declares past its file content), `repaired` (a header field kuna rewrote so\n\
+         declares past its file content), `repaired` (a header field unlace rewrote so\n\
          the image parses) or `unknown`; segment carries the segment's table index,\n\
          name, extent, file extent and declared permissions (`r-x`, `---`). Where\n\
-         segments overlap, kuna reads the lowest-starting one (the first listed among\n\
+         segments overlap, unlace reads the lowest-starting one (the first listed among\n\
          equal starts; zero fill gives way to the next segment's bytes), and overlaps\n\
          lists every other segment declaring the range, with its file offset."
     );
@@ -1548,11 +1548,11 @@ mod tests {
         assert_eq!(r.ascii(), "................");
         let text = DataRow {
             addr: 0,
-            bytes: b"kuna \x7f\"\\".to_vec(),
+            bytes: b"unlace \x7f\"\\".to_vec(),
         };
         assert_eq!(
             text.ascii(),
-            "kuna .\"\\",
+            "unlace .\"\\",
             "0x7f is not printable; 0x20 and quotes are"
         );
     }

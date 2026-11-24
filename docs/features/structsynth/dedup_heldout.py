@@ -2,8 +2,8 @@
 """Layout precision and record identity for the ledger, on tuning and held-out builds.
 
     D=docs/features/structsynth/dedup_heldout.py
-    ~/.virtualenvs/decbench/bin/python $D fetch main <main kuna>     # cache json + .h
-    ~/.virtualenvs/decbench/bin/python $D fetch branch <branch kuna>
+    ~/.virtualenvs/decbench/bin/python $D fetch main <main unlace>     # cache json + .h
+    ~/.virtualenvs/decbench/bin/python $D fetch branch <branch unlace>
     ~/.virtualenvs/decbench/bin/python $D score branch               # fields-only P/R/F1
     ~/.virtualenvs/decbench/bin/python $D absorb main branch         # record identity
 
@@ -92,7 +92,7 @@ SETS = (("TUNING", TUNING), ("HELDOUT", HELDOUT), ("HELDOUT2", HELDOUT2),
         ("REVIEW2", REVIEW2), ("FRESH6", FRESH6))
 CACHE = Path(os.environ.get("DEDUP_CACHE", "/tmp/structdedup-heldout"))
 OPTS = ["--option", "structsynth", "param"]
-ENV = dict(os.environ, KUNA_SPECS=os.environ.get("KUNA_SPECS", str(WT / "specs")),
+ENV = dict(os.environ, UNLACE_SPECS=os.environ.get("UNLACE_SPECS", str(WT / "specs")),
            SLEIGHHOME=os.environ.get("SLEIGHHOME", str(WT / "specs")))
 
 
@@ -100,13 +100,13 @@ def stem(p, b, o):
     return f"{o}-{p}-{b}"
 
 
-def fetch_one(build, kuna, p, b, o):
+def fetch_one(build, unlace, p, b, o):
     d = CACHE / build
     d.mkdir(parents=True, exist_ok=True)
     binary = RES / o / p / "stripped" / b
     jp, hp = d / f"{stem(p, b, o)}.json", d / f"{stem(p, b, o)}.h"
     if not jp.exists():
-        r = subprocess.run([kuna, "decompile-all", str(binary), "--json", "--max-fn-seconds", "120"]
+        r = subprocess.run([unlace, "decompile-all", str(binary), "--json", "--max-fn-seconds", "120"]
                            + OPTS, capture_output=True, text=True, timeout=3600, env=ENV)
         if not r.stdout.strip():
             return f"{build} {stem(p, b, o)} json EMPTY rc={r.returncode} {r.stderr[-200:]}"
@@ -114,7 +114,7 @@ def fetch_one(build, kuna, p, b, o):
     if not hp.exists():
         out = Path(tempfile.mkdtemp(prefix="structdedup-ls-"))
         try:
-            subprocess.run([kuna, "decompile-project", str(binary), "-o", str(out),
+            subprocess.run([unlace, "decompile-project", str(binary), "-o", str(out),
                             "--max-fn-seconds", "120"] + OPTS,
                            capture_output=True, text=True, timeout=3600, env=ENV)
             hs = sorted(out.glob("*.h"))
@@ -266,12 +266,12 @@ if __name__ == "__main__":
     import collections
     cmd = sys.argv[1]
     if cmd == "fetch":
-        build, kuna = sys.argv[2], sys.argv[3]
+        build, unlace = sys.argv[2], sys.argv[3]
         jobs = int(os.environ.get("LS_JOBS", "6"))
         todo = sorted({t for _, bins in SETS for t in bins},
                       key=lambda t: -(RES / t[2] / t[0] / "stripped" / t[1]).stat().st_size)
         with ThreadPoolExecutor(jobs) as ex:
-            for line in ex.map(lambda t: fetch_one(build, kuna, *t), todo):
+            for line in ex.map(lambda t: fetch_one(build, unlace, *t), todo):
                 print(line, flush=True)
     elif cmd == "score":
         score(sys.argv[2])

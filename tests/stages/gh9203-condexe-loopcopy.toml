@@ -16,7 +16,7 @@
 #   } while (iVar1 != 0);
 #
 # Stage model: S3 "simplification-quiescence" (WHERE a propagated constant is
-# materialized).  The kuna fix is an anchor-edit at the decision point in
+# materialized).  The unlace fix is an anchor-edit at the decision point in
 # handlePhiNodes(), always on: when the MULTIEQUAL edge predecessor block has
 # a looping in-edge (bl->hasLoopIn()), decline to place the constant COPY
 # there and leave the MULTIEQUAL input intact.

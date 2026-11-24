@@ -13,7 +13,7 @@ confidence: high
 
 ## Side-by-side
 
-Recorded: angr GED=0, kuna GED=12 (ghidra 12, ida 17, binja 3, phoenix 0). Source CFG
+Recorded: angr GED=0, unlace GED=12 (ghidra 12, ida 17, binja 3, phoenix 0). Source CFG
 13 nodes / 14 edges, so the GED is a real edit distance, not the >60-node approximation.
 
 angr (stored, GED 0) — four guards, three of them early returns:
@@ -36,7 +36,7 @@ void factor(unsigned long long *a0, unsigned long long a1, struct_0 *idx)
 }
 ```
 
-kuna (stored, 2026-07-27 benchmark run = `reliable` + `listing on`) — the two source
+unlace (stored, 2026-07-27 benchmark run = `reliable` + `listing on`) — the two source
 early returns are fused into ONE short-circuit condition with a comma expression, so the
 whole body sits one level deeper and two CFG nodes vanish:
 
@@ -49,7 +49,7 @@ whole body sits one level deeper and two CFG nodes vanish:
   return;
 ```
 
-kuna (fresh, today's build, NO flags — `auto` resolves to `aggressive` at 92,544 bytes):
+unlace (fresh, today's build, NO flags — `auto` resolves to `aggressive` at 92,544 bytes):
 
 ```c
 void factor(int8 a0,uint8 a1,int8 a2) // return-dupe x4
@@ -71,7 +71,7 @@ void factor(int8 a0,uint8 a1,int8 a2) // return-dupe x4
 ```
 
 That is angr's CFG exactly (4 ifs, 0 gotos, per-guard early returns, `else` flattened by
-the default-on `ifelseflatten`), and it is the source's CFG. kuna's callee argument
+the default-on `ifelseflatten`), and it is the source's CFG. unlace's callee argument
 recovery is in fact cleaner than angr's here (`sub_5a75(v2,1,a2)` = 3 args, matching the
 source; angr invents `v3,v4,v5`).
 
@@ -139,7 +139,7 @@ predecessor before final structuring (angr SAILR `ReturnDuplicatorHigh`).
 **That fix already exists and already ships in the default.** It is the `returndup`
 option (P8 / `goto-quality`, `decompiler/crates/unlace-decomp/phases.toml`), and this exact
 case is named in its own metadata — `inspiration = "decbench:O0-coreutils-factor-factor;
-..."` and `use_when` literally records "coreutils factor: kuna 3 ifs / 0 early returns ->
+..."` and `use_when` literally records "coreutils factor: unlace 3 ifs / 0 early returns ->
 4 ifs / early returns, GED 12 -> 0". It landed default-ON, then **DIV-18** reverted the
 default on 2026-07-05 because the decbench aggregate measured −976 GED-perfect functions
 (most source functions do NOT use early returns, so unconditional duplication diverges
@@ -153,7 +153,7 @@ What closed the case since the benchmark is therefore a **mode default, not a co
 exactly like the source. The `// return-dupe x4` slug on the prototype (DIV-39 warnstyle)
 is the pass announcing its four duplications.
 
-The benchmark ran the equivalent of `--mode reliable`, which is why the stored kuna block
+The benchmark ran the equivalent of `--mode reliable`, which is why the stored unlace block
 shows the old shape. This is a stale-benchmark case, not a missing feature.
 
 Two caveats worth carrying forward, neither of which changes this verdict:

@@ -19,7 +19,7 @@
 # not fill is no argument however the callee fills it.  Only an
 # Objective-C selector stub (objc_msgSend$<sel>), whose convention has no
 # parameter in the selector register, steps over it
-# (kuna_calleefilledarg.rs, option calleefilledarg).
+# (unlace_calleefilledarg.rs, option calleefilledarg).
 #
 # Stage / sub-stage: P4 "active-input-trial-scoring".  Bytes are clang
 # 14: tramp/tramp2 at -O2, the callers at -O0; puts is a ret stub.

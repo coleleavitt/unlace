@@ -1,4 +1,4 @@
-# kuna calleeretpurge: an i386 struct-returning callee pops its hidden pointer.
+# unlace calleeretpurge: an i386 struct-returning callee pops its hidden pointer.
 #
 # Built with clang -m32 -O1 -fomit-frame-pointer from
 #     struct S{int a,b,c;};

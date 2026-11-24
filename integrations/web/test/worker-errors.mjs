@@ -1,9 +1,9 @@
 // worker-errors.mjs — pin fatal Worker lifecycle behavior without a wasm build.
 import assert from 'node:assert/strict';
-import { KunaWorkerClient } from '../kuna-worker-client.js';
+import { UnlaceWorkerClient } from '../unlace-worker-client.js';
 
 const options = (workerFactory) => ({
-  workerUrl: 'https://worker.test/kuna-worker.js',
+  workerUrl: 'https://worker.test/unlace-worker.js',
   wasmUrl: 'https://worker.test/unlace_wasm.wasm',
   specRoot: 'https://worker.test/specs',
   workerFactory,
@@ -11,7 +11,7 @@ const options = (workerFactory) => ({
 const blockedPattern = /content blocker or browser privacy setting.*allow this site and reload/i;
 
 assert.throws(
-  () => new KunaWorkerClient(options(() => { throw new Error('blocked by client'); })),
+  () => new UnlaceWorkerClient(options(() => { throw new Error('blocked by client'); })),
   blockedPattern,
   'a synchronous Worker constructor failure gives actionable guidance',
 );
@@ -33,7 +33,7 @@ class ControlledWorker {
 }
 
 let startupWorker;
-const blocked = new KunaWorkerClient(options(() => {
+const blocked = new UnlaceWorkerClient(options(() => {
   startupWorker = new ControlledWorker();
   return startupWorker;
 }));
@@ -61,7 +61,7 @@ assert.strictEqual(
 blocked.close();
 
 let decodeWorker;
-const unreadable = new KunaWorkerClient(options(() => {
+const unreadable = new UnlaceWorkerClient(options(() => {
   decodeWorker = new ControlledWorker();
   return decodeWorker;
 }));
@@ -74,7 +74,7 @@ await assert.rejects(
 unreadable.close();
 
 let runtimeWorker;
-const runtime = new KunaWorkerClient(options(() => {
+const runtime = new UnlaceWorkerClient(options(() => {
   runtimeWorker = new ControlledWorker();
   return runtimeWorker;
 }));
@@ -98,7 +98,7 @@ runtime.close();
 // Worker's `detail` (exit code, stderr, a partial JSON payload) reaches the
 // caller as `error.detail`, so the page can show a rejected directive's reason.
 let detailWorker;
-const detailed = new KunaWorkerClient(options(() => {
+const detailed = new UnlaceWorkerClient(options(() => {
   detailWorker = new ControlledWorker();
   return detailWorker;
 }));

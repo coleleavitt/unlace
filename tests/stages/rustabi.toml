@@ -1,4 +1,4 @@
-# kuna: a rustc ScalarPair return (Result/Option) loses its payload twice - the
+# unlace: a rustc ScalarPair return (Result/Option) loses its payload twice - the
 # producer's second return register is deleted, and at the call site the payload
 # register is a local the function never assigns.
 #
@@ -22,14 +22,14 @@
 #
 # rustc returns the Result in the EAX:EDX pair - EAX the variant discriminant,
 # EDX the payload - which is the storage the x86-64 cspec's join_dual_class
-# output rule already describes, and kuna already recovers.
+# output rule already describes, and unlace already recovers.
 #
 # The bug (pass 1, the default): the discriminant is materialized as
 # `xor %eax,%eax; setb %al`, so RAX is a ONE-BIT logical value. Subvariable flow
 # truncates the RETURN to that width, deleting the other register with it, and
 # `prod` recovers as `bool prod(uint4)` with no payload at all. The call site
 # is whole in both passes: the two-register CALL output arm of
-# buildOutputFromTrials is open on every image (kuna_callretpair.rs), so the
+# buildOutputFromTrials is open on every image (unlace_callretpair.rs), so the
 # call carries the join-space output and both halves are SUBPIECEs of it.
 #
 # The fix (pass 2, option rustabi always): the concatenation is recognized as a

@@ -62,7 +62,7 @@ Held opt-in. The gain is real and one-directional but small — +4.93 of an
 aggregate 3657.76, which is +0.13% of the corpus — and it does not buy
 re-pinning two other features' regression probes. The class census in
 `analysis.md` says why the gain is small and where the rest of the `char *` gap
-actually is (register-only ground-truth variables, and frame slots kuna reports
+actually is (register-only ground-truth variables, and frame slots unlace reports
 as `undefined8`), so the case for flipping this option should be re-made only
 together with that work, not on its own.
 

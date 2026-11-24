@@ -1,4 +1,4 @@
-// run-wasm.mjs — run the kuna decompiler wasm under Node's built-in WASI
+// run-wasm.mjs — run the unlace decompiler wasm under Node's built-in WASI
 // (preview1). This is the SAME WASI preview1 ABI a browser WASI shim
 // (@bjorn3/browser_wasi_shim) implements, so a green run here is direct evidence
 // the wasm decompiles client-side with no server. The specs tree and the target

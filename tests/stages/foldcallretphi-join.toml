@@ -1,4 +1,4 @@
-# kuna issue `foldcallretphi-join` (P6, sub-stage explicit-marking).
+# unlace issue `foldcallretphi-join` (P6, sub-stage explicit-marking).
 #
 # `foldcallret` lets a call's single-use output fold past the
 # merge conflict its own INDIRECT on a global argument creates, but only
@@ -17,7 +17,7 @@
 #           / test ecx,ecx / je +1 / ret / mov eax,1 / xor edx,edx / ret
 #   g (0x1050) = 1
 #
-# kuna prints `big` as `unsigned long long big(int4)`, so the folded
+# unlace prints `big` as `unsigned long long big(int4)`, so the folded
 # `if (big(dat_1050) != -1) return 7;` reads as 0xffffffff != -1 and returns
 # 7, where the binary compares eax alone and returns 1.
 #

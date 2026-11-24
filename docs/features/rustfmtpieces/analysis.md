@@ -57,7 +57,7 @@ variable-use changes are confined to the recovered arguments. Complete raw
 diffs and per-function proofs are retained alongside this record.
 
 The original angr fmt fixture is included in this comparison. Its functions
-remain unchanged: it is stripped and Kuna has no recovered print sink identities
+remain unchanged: it is stripped and Unlace has no recovered print sink identities
 there. This layout feature alone does not satisfy that integration test; symbol
 recovery, older allocating-format consumers and aggregate types remain gaps.
 

@@ -1,7 +1,7 @@
 """Generate the LIBC_EXT additions from the reduced platform declarations.
 
 Selection rule (mechanical): the name is an UNDEFINED FUNC symbol in >= 3 of the
-665 dynamically linked binaries of the frozen decbench corpus, kuna's shipped
+665 dynamically linked binaries of the frozen decbench corpus, unlace's shipped
 tables do not already carry it, and its platform declaration reduces whole to the
 width-stable `Ty` vocabulary.
 """

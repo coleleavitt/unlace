@@ -1,5 +1,5 @@
 /* castindex round-trip fixture: a pointer plus a variable index, and the
- * difference of two byte pointers.  The round trip compiles the prelude, kuna's
+ * difference of two byte pointers.  The round trip compiles the prelude, unlace's
  * printing of every function between the markers, and the original main, and
  * compares its output with this binary's.  Built with -std=gnu11 at gcc -O0,
  * clang -O0 and gcc -O2. */

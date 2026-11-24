@@ -1,12 +1,12 @@
 ## The problem
 
-`kuna strings` ends a run at every byte `>= 0x80`, so a literal that opens with a
+`unlace strings` ends a run at every byte `>= 0x80`, so a literal that opens with a
 non-ASCII character is reported starting at the byte *after* its last multi-byte
 sequence. That address is not one the image refers to, so the row also comes back
 with no references and no owning function.
 
 ```
-$ kuna strings ./no-standards --encoding all --json --filter magical
+$ unlace strings ./no-standards --encoding all --json --filter magical
       "address_hex": "0x200c",
       "text": ")/ so what was the magical keycombination? ",
       "length": 43,
@@ -14,10 +14,10 @@ $ kuna strings ./no-standards --encoding all --json --filter magical
       "xrefs_count": 0,
       "functions": []
 
-$ kuna strings ./no-standards --encoding utf16 --json --filter magical
+$ unlace strings ./no-standards --encoding utf16 --json --filter magical
       "count": 0
 
-$ kuna xrefs ./no-standards --to 0x2000 --json          # the literal's real start
+$ unlace xrefs ./no-standards --to 0x2000 --json          # the literal's real start
       "count": 1,
       "instruction": "LEA RBX,[0x2000]"
 ```
@@ -62,10 +62,10 @@ terminations.
 
 Gates: `make test` PARITY OK 675/675 · `make test-stages` PARITY OK 698/698 ·
 `make rust-test` green · `make check-spec` OK · `make test-cli` 95/95 ·
-`kuna catalog --check` OK. Sweep over `/usr/bin/ncat`, `/usr/bin/htop` and
+`unlace catalog --check` OK. Sweep over `/usr/bin/ncat`, `/usr/bin/htop` and
 `/bin/ls`: `.rodata` is byte-identical on all three under both terminations
 (713/713, 856/856, 409/409 rows); every changed row is in `.text`, the documented
-cost of scanning code at all. `kuna strings --encoding all --no-xrefs` on htop:
+cost of scanning code at all. `unlace strings --encoding all --no-xrefs` on htop:
 0.01 s before and after.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

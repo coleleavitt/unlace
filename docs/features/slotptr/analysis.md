@@ -2,12 +2,12 @@
 
 ## 1. The symptom
 
-At -O0 every C local has its own stack slot. kuna's `variables[]` reports those
+At -O0 every C local has its own stack slot. unlace's `variables[]` reports those
 slots, but mostly as eight bytes of unknown type, while the C body declares the
 value that lived there as a pointer:
 
 ```
-$ kuna decompile-all O0/coreutils/stripped/pinky --addr 0x3075 --json
+$ unlace decompile-all O0/coreutils/stripped/pinky --addr 0x3075 --json
   "code": "... v1 = getpwnam(v5); ... v2 = strchr(*(char **)&v1->field_0x18,0x2c); ..."
   {"name": "local_1f0", "type": "undefined8", "stack_offset": -496, ...}   <- pw
   {"name": "local_1e8", "type": "undefined8", "stack_offset": -488, ...}   <- comma
@@ -18,7 +18,7 @@ The ground truth is `struct passwd *pw; char *comma; char *display_name;`.
 
 Across the campaign's 444 decbench slices this is the largest single piece of
 the `char *` gap to Binary Ninja: 805 of the 1,625 ground-truth `char *`
-variables binja gets right and kuna missed are such slots
+variables binja gets right and unlace missed are such slots
 (`docs/features/charptr/next-levers.md` on `feat/charptr-on`).
 
 ## 2. Why the type is lost
@@ -45,7 +45,7 @@ the COPY exists and resolved when the types are final.
 
 ## 3. Why only pointers
 
-A width-only `undefined8` is kuna's honest statement that it never settled the
+A width-only `undefined8` is unlace's honest statement that it never settled the
 slot's scalar type. Replacing it with a scalar would assert something the
 recovery did not establish, and it is also exactly where the type_match metric
 stops crediting the width (`undefinedN` is accepted against a same-width scalar
@@ -60,13 +60,13 @@ The slot gets the type the C body gives the stored value. Where the body's type
 is wrong, the slot's is wrong the same way. All 9 ground-truth variables the
 sweep loses are of this kind:
 
-- a length or count computed from two pointers that kuna prints as pointer
+- a length or count computed from two pointers that unlace prints as pointer
   arithmetic (`&v7[-(int8)v3]`, `&v3[0xfffffffffffffffe - (long)a0]`) and
   therefore types `char *` / `unsigned char *` / `long *`: diff
   `scan_char_literal` `digits`, diff `find_and_hash_each_line` `length`, tar
   `xheader_string_end` `p` and `size`, tar `expand_pax_option` `__len`, split -O2
   `main` `to_write`, grep -O2 `main` `newkeycc`;
-- a register variable that kuna merges across an `lseek` result and an `errno`
+- a register variable that unlace merges across an `lseek` result and an `errno`
   pointer, which the body declares `int *`: shred `dorewind` `offset`, tail
   `tail_lines` `end_pos`.
 

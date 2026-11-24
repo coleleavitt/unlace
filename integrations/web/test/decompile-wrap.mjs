@@ -1,4 +1,4 @@
-// decompile-wrap.mjs — the C pane's line wrapping, kuna's end-of-line notes
+// decompile-wrap.mjs — the C pane's line wrapping, unlace's end-of-line notes
 // in words, the `x` dialog's helpers and instruction grouping by basic block,
 // from the source tree (no build, no browser).
 //
@@ -82,7 +82,7 @@ assert.deepEqual(rowsOf(lineHtml(segs, {}, { breaks: [{ at: 7, eat: 0, indent: 2
 assert.ok(!/class="wl"/.test(lineHtml(segs, {}, null)), 'no plan: the line renders as before');
 checks.push('wrapPlan/applyPlan/lineHtml');
 
-// ── kuna's end-of-line notes ───────────────────────────────────────────────
+// ── unlace's end-of-line notes ───────────────────────────────────────────────
 assert.equal(commentStart('  puts("a // b"); // no-return'), 18, 'a // inside a string is not a comment');
 assert.deepEqual(lineTags('    if (0x31 <= a1) { // branch-flip').map((t) => t.tag), ['branch-flip']);
 assert.match(lineTags('    if (0x31 <= a1) { // branch-flip')[0].words, /flipped this if/);

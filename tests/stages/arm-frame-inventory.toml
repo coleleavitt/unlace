@@ -1,4 +1,4 @@
-# Kuna #926 frame recovery and GH-299 literal-pool entries.
+# Unlace #926 frame recovery and GH-299 literal-pool entries.
 # P1 code/data partition: armframes inventory (default) recovers disconnected
 # A32 frames, and aifpoolslide preserves the input after a loaded literal.
 # The two authored ELF fixtures have generators beside them. The first keeps

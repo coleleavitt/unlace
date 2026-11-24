@@ -1,4 +1,4 @@
-# kuna option bejoin (off by default, GH-904; on here): SPARC returns a long long in %o0:%o1 with the
+# unlace option bejoin (off by default, GH-904; on here): SPARC returns a long long in %o0:%o1 with the
 # HIGH word in %o0, and returns an int in %o0 alone.
 # The same join-order bug as bejoin.xml (the PowerPC case): return
 # recovery joined %o0 as the LOW word, so wide_mul printed

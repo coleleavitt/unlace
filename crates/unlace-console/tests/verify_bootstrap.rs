@@ -292,9 +292,9 @@ fn a_failed_load_leaves_no_options_in_force() {
     let junk = Scratch::new("bootstrap-failed-junk", "bin", &[0u8; 64]);
     let raw = Scratch::new("bootstrap-failed-raw", "bin", &X86_ADD);
     let failures: Vec<(&str, UnlaceResult<ConsoleProgram>)> = vec![
-        ("missing object", load.object("/nonexistent/kuna/image")),
+        ("missing object", load.object("/nonexistent/unlace/image")),
         ("unknown format", load.object(junk.path())),
-        ("missing file", load.file("/nonexistent/kuna/image")),
+        ("missing file", load.file("/nonexistent/unlace/image")),
         (
             "raw without a language",
             load.target("nosuch:LE:64:default")

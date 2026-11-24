@@ -25,7 +25,7 @@ reject_reason: null
 
 ## Symptom
 
-Inspect bytes at referenced data VMAs such as 0x100003f30 without leaving kuna.
+Inspect bytes at referenced data VMAs such as 0x100003f30 without leaving unlace.
 
 > **No CLI mode to read raw bytes from data addresses** (major, `653d88600f4238b24302b0ec`)
 > The new disassemble command returned raw instruction bytes, but there is no analogous data/hexdump mode; strings discarded non-printable constants.
@@ -38,7 +38,7 @@ Inspect bytes at referenced data VMAs such as 0x100003f30 without leaving kuna.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "disassemble",
     "{{BIN}}",
     "sub_100003790",
@@ -75,7 +75,7 @@ Inspect bytes at referenced data VMAs such as 0x100003f30 without leaving kuna.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "disassemble",
     "{{BIN}}",
     "0x100003f30-0x100003f40",
@@ -121,6 +121,6 @@ _not yet refuted_
 ## Decision log
 
 - filed by cluster.py from 1 observation(s)
-- round 2 T_DEDUP (captain): kept SEPARATE from [disassembling-non-executable-rdata] (69a3822f, bad-ux: `disassemble` silently presents .rdata as instructions) although they are one user-facing gap -- 'I asked kuna about data and it either had nothing or lied'. cluster.py cannot merge across `kind`, and the remedies differ (a byte-read surface vs a guard on an existing one). Together with [strings-inventory-omits-statically] these are the three-instance TESTER demand that the captain-seeded `no-cli-data-code-override` was missing.
+- round 2 T_DEDUP (captain): kept SEPARATE from [disassembling-non-executable-rdata] (69a3822f, bad-ux: `disassemble` silently presents .rdata as instructions) although they are one user-facing gap -- 'I asked unlace about data and it either had nothing or lied'. cluster.py cannot merge across `kind`, and the remedies differ (a byte-read surface vs a guard on an existing one). Together with [strings-inventory-omits-statically] these are the three-instance TESTER demand that the captain-seeded `no-cli-data-code-override` was missing.
 - round 2 T_TRIAGE (captain): track tooling / touches unlace-cli / scope small CONFIRMED as filed, and kind is `absence` (there is no data-read mode), which is why T_REFUTE correctly skipped it. Companion of disassembling-non-executable-rdata: a hexdump/typed-data view is the same missing surface seen once as 'I cannot read bytes' and once as 'disassemble happily decoded .rdata as instructions'. Kept separate -- each is independently probeable and closing one does not close the other -- but whichever is dispatched first should read the other, because one subcommand plausibly answers both and the second would then close as already-supported.
 - closed: acceptance a-ecb7f35d39aa now PASSES at 3ae69cbcec70

@@ -58,7 +58,7 @@ impl FidDbReport {
             FidDbStatus::Loaded => return None,
             FidDbStatus::Missing => "no such file".to_string(),
             FidDbStatus::Unreadable => format!("cannot be read ({reason})"),
-            FidDbStatus::Invalid => format!("not a kuna .fid database ({reason})"),
+            FidDbStatus::Invalid => format!("not a unlace .fid database ({reason})"),
             FidDbStatus::Incompatible => reason.to_string(),
         };
         Some(format!(

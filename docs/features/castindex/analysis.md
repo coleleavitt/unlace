@@ -5,7 +5,7 @@
 `castarith` (#722) keeps a pointer plus a *constant* in pointer terms. The same
 `INT_ADD` with a *variable* addend, and every `INT_SUB` of two pointers, still reach
 `ActionSetCasts` as integer arithmetic: `(long)` on the pointer, and a cast back on
-the sum. On main `b3878d32e` (`kuna decompile-all <bin> --addr <a>`):
+the sum. On main `b3878d32e` (`unlace decompile-all <bin> --addr <a>`):
 
 ```c
 // coreutils sort -O0 mergefps (sub_a5c0)            IDA at the same address
@@ -19,7 +19,7 @@ v2 = memrchr(a1,v13,(long)v20 - (long)a1);           memrchr(a2, v15, &string[v3
 
 ## 2. Census (STEP 1): the `(long)v` residue
 
-Instrument: the castbench counter over the 4,815 functions kuna and IDA both emit (45
+Instrument: the castbench counter over the 4,815 functions unlace and IDA both emit (45
 binaries x O0/O2/O2-noinline), main arm `/home/mahaloz/kwt/castbench/main-b3878d32e`.
 Every 64-bit integer cast of a bare variable (`(i64|u64)<var>`), classified by the
 operand's declared type and its context (`census.py`). This key is wider than the

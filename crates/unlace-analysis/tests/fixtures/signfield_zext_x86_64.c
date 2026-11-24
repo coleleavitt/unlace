@@ -1,4 +1,4 @@
-/* (kuna) One 16-bit field read twice through the same pointer: once into a
+/* (unlace) One 16-bit field read twice through the same pointer: once into a
  * signed comparison, and, after a call that forces a reload, zero-extended
  * (`movzwl`) into a 32-bit argument.  `structsynth` types the field from its
  * reads; when it took the signed read's type, the printed call sign-extended

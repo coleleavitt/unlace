@@ -39,7 +39,7 @@ fn unlace(args: &[&str]) -> std::process::Output {
         .args(args)
         .env("SLEIGHHOME", repo_root().join("specs"))
         .output()
-        .expect("failed to spawn the kuna binary")
+        .expect("failed to spawn the unlace binary")
 }
 
 /// Stdout with every whitespace character removed.
@@ -233,7 +233,7 @@ fn jumptablemax_is_catalogued_and_refuses_anything_but_a_positive_count() {
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["catalog", "--json"])
         .output()
-        .expect("failed to spawn the kuna binary");
+        .expect("failed to spawn the unlace binary");
     assert!(
         out.status.success(),
         "catalog failed: {}",

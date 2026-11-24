@@ -4,7 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 sys.path.insert(0, os.path.dirname(__file__))
 from census1 import split_args, call_args, arg_type  # noqa
 R = "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11"
-KUNA = sys.argv[1]; rows = json.load(open(sys.argv[2])); outdir = sys.argv[3]
+UNLACE = sys.argv[1]; rows = json.load(open(sys.argv[2])); outdir = sys.argv[3]
 os.makedirs(outdir, exist_ok=True)
 def committed(t):
     t = re.sub(r"\((param|local|cast|lit)\)$", "", t).strip()
@@ -17,7 +17,7 @@ def work(key):
     proj, opt, binn = key.split("::")
     jf = f"{outdir}/{proj}.{opt}.{binn}.json"
     if not os.path.exists(jf):
-        subprocess.run([KUNA, "decompile-all", f"{R}/{opt}/{proj}/stripped/{binn}", "--json", "--max-fn-seconds", "120"], stdout=open(jf, "w"), stderr=subprocess.DEVNULL)
+        subprocess.run([UNLACE, "decompile-all", f"{R}/{opt}/{proj}/stripped/{binn}", "--json", "--max-fn-seconds", "120"], stdout=open(jf, "w"), stderr=subprocess.DEVNULL)
     try: d = json.load(open(jf))
     except Exception: return []
     nm = subprocess.run(["nm", f"{R}/{opt}/{proj}/compiled/{binn}"], capture_output=True, text=True).stdout
@@ -59,7 +59,7 @@ def work(key):
                 ct = [committed(t) for t in types]
                 if types and all(ct) and len(set(re.sub(r"struct_\d+", "struct_N", c) for c in ct)) == 1: st = "agree:" + re.sub(r"struct_\d+", "struct_N", ct[0])
                 else: st = "no"
-            out.append(dict(key=key, fn=fn, i=i, gt=dd["gt_type"], cls=dd["cls"], kt=dd["kuna_type"], st=st, types=types[:5], solo=sum(1 for x in ds if x["ok"] is not True) == 1))
+            out.append(dict(key=key, fn=fn, i=i, gt=dd["gt_type"], cls=dd["cls"], kt=dd["unlace_type"], st=st, types=types[:5], solo=sum(1 for x in ds if x["ok"] is not True) == 1))
     return out
 keys = [k for k in rows if k.split("::")[1] != "O0"]
 allr = []

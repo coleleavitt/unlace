@@ -6,7 +6,7 @@ round 2), **1 instance**, severity **blocker**, challenge `65acadf3eef082e477ff5
 
 > **GetProcAddress result is discarded and an uninitialized pointer is called.**
 > *What I wanted:* dataflow connecting the result of GetProcAddress to the subsequent
-> indirect call. *What kuna did:* emitted `v12 = (void *)GetProcAddress(...)`, then called
+> indirect call. *What unlace did:* emitted `v12 = (void *)GetProcAddress(...)`, then called
 > `(*v108)(v113,0,v27,0x30)` even though v108 was initialized to NULL and never assigned
 > the result.
 
@@ -142,7 +142,7 @@ this section is.
 
 ## Corpus sweep (standing requirement 7)
 
-7 binaries A/B'd whole-binary (`kuna decompile-all`, every function) across ELF
+7 binaries A/B'd whole-binary (`unlace decompile-all`, every function) across ELF
 x86-64/i386/ARM and PE x86-64, diffed raw, with `v\d+` normalized, and as **sorted statement
 multisets per function**:
 
@@ -188,7 +188,7 @@ walks, and it only ever *declines* work.
 | `make test-stages` | **PARITY OK — 600/600** (unchanged) |
 | `make rust-test` | green |
 | `make check-spec` | OK |
-| `kuna catalog --check` | catalog OK |
+| `unlace catalog --check` | catalog OK |
 | acceptance `a-f2df446f39d5` | **PASS** |
 
 `scripts.repipe.mergecheck --against origin/main` reports **12 rejects, all of them

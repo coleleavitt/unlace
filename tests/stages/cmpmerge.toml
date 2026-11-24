@@ -1,4 +1,4 @@
-# kuna `cmpmerge`: two comparisons of the same operands, combined by a
+# unlace `cmpmerge`: two comparisons of the same operands, combined by a
 # boolean op or by two branches in a row to one target, often state one
 # relation.  gcc -O0 compiles `a < b || a == b` as two branches, which
 # print as `(a1 <= a0) && (a0 != a1)`; on doubles `a > b || a == b` and

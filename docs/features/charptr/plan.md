@@ -3,20 +3,20 @@
 ## Question
 
 Ground-truth `char *` is the largest class in the decbench corpus (25.9% of all
-ground-truth variables) and kuna matched 28.7% of it on `main` 2e28ece4a,
+ground-truth variables) and unlace matched 28.7% of it on `main` 2e28ece4a,
 against Binary Ninja's 36.8%. Where is that gap, and what evidence would close
 it?
 
 ## Step 1 — measure before building
 
 Census the class from the round-C decision dump (`analysis.md`): split every
-ground-truth `char *` by the storage it lives in, by the spelling kuna gave the
+ground-truth `char *` by the storage it lives in, by the spelling unlace gave the
 variable the metric matched, and against what the three rivals spell for the
-same variables. Then census, inside kuna, what evidence actually exists for the
+same variables. Then census, inside unlace, what evidence actually exists for the
 values the rule could reach.
 
 Result: half the class is register-only and unreachable for every decompiler;
-kuna's *argument* recovery is within 6.6 points of binja's; nine tenths of the
+unlace's *argument* recovery is within 6.6 points of binja's; nine tenths of the
 remaining gap is stack locals, and 932 of those 1,648 stack misses are
 `framelayout` filler slots with no recovered type attached, which is a
 chapter-06 problem. The evidence census says the dominant category for what is

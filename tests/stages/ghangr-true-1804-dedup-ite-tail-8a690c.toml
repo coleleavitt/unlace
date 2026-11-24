@@ -2,14 +2,14 @@
 # (test_decompiling_true_1804_x86_64::usage) then the angr structurer ITE
 # region-deduplication (the INVERSE of the SAILR duplication passes).
 #
-# kuna inherits Ghidra's collapse-based structurer, which, when a basic block is
+# unlace inherits Ghidra's collapse-based structurer, which, when a basic block is
 # reachable from BOTH arms of an if/else, CLONES it into each arm instead of
 # converging the two predecessors onto one copy.  On true_ubuntu1804::usage the
 # trailing `if (v4 == 0) { A } else { B }` emits a shared online-help printf /
 # setlocale / Full-documentation tail TWICE (loc 121 / 9 ifs vs angr's 112 / 6).
 # angr emits each shared continuation once.  This is the exact inverse of
 # gotoreduce/crossjumprevert (which DUPLICATE a shared tail to remove a
-# goto): here kuna over-duplicated, and the readability win is to MERGE the copies.
+# goto): here unlace over-duplicated, and the readability win is to MERGE the copies.
 #
 # The `dedupitetail` pass (option-gated, default-off) does the sound, bounded
 # subset of that convergence: when both arms of a 3-component if/else share a
@@ -29,7 +29,7 @@
 # (`if (cond_K()) body_K();`) and then call the SAME shared epilogue `shared(y)` in
 # its own basic block, converging to `post(y)`.  That shared `shared(y)` block is
 # reached from both arms - exactly the ISC-condensed shared continuation Ghidra's
-# CollapseStructure (and kuna's region structurer) clones into each arm:
+# CollapseStructure (and unlace's region structurer) clones into each arm:
 #
 #   g:    if (!x) goto else_arm;
 #         true_arm:  if (cond_a()) body_a();
@@ -39,7 +39,7 @@
 #         conv:      post(y);
 #   cond_a/cond_b/body_a/body_b/shared/post: ret stubs.
 #
-# Pass 1 (option dedupitetail off, the DEFAULT): kuna clones the shared epilogue
+# Pass 1 (option dedupitetail off, the DEFAULT): unlace clones the shared epilogue
 # into each arm, so `shared(...)` appears in BOTH the `if` and `else` bodies (two
 # clones).
 # Pass 2 (option dedupitetail on): the shared suffix is hoisted out of the if (one
@@ -76,7 +76,7 @@ hex = '5389f385ff7417e83200000085c07405e82f00000089dfe82a000000eb17e81e00000085c
 
 [script]
 commands = [
-    # kuna: the 9 angr structuring/switch flags below are now default-on (DIV-13); this stage test asserts the pre-sweep (flags-off) baseline in pass 1, so pass 1 turns them all OFF (each pass-2 'option <flag> on' re-enables only the flag under test)
+    # unlace: the 9 angr structuring/switch flags below are now default-on (DIV-13); this stage test asserts the pre-sweep (flags-off) baseline in pass 1, so pass 1 turns them all OFF (each pass-2 'option <flag> on' re-enables only the flag under test)
     'option gotoreduce off',
     'option crossjumprevert off',
     'option dedupitetail off',

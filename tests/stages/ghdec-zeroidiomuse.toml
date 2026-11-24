@@ -1,4 +1,4 @@
-# kuna re-argument-recovery-drops-both: a call inside a loop renders with an
+# unlace re-argument-recovery-drops-both: a call inside a loop renders with an
 # empty argument list while the two instructions before it plainly load its
 # argument registers, and the very same function recovers arguments fine at a
 # call that is not in that loop.

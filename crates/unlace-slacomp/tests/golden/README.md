@@ -38,7 +38,7 @@ the four Octeon entries only. The pinned native compiler reproduces their four
 previous digests on the previous sources and matches the Rust compiler on the
 updated ones.
 
-The SPARC entries include kuna's destination corrections for `fdtoi`, `fqtoi`,
+The SPARC entries include unlace's destination corrections for `fdtoi`, `fqtoi`,
 `fstox` and `fqtox`. The first three were regenerated with Ghidra's C++
 compiler on the corrected sources, which reproduces the previous hashes on the
 unmodified sources; the `fqtox` correction was regenerated with `slacomp`,
@@ -55,7 +55,7 @@ constructor that keeps a near branch inside its 64 KiB code segment (x86.sla
 only; it shares a source line with the masked form so no later constructor's
 line moves and the x86-64 digest is unchanged).
 They were regenerated with the recorded C++ compiler after checking that it
-reproduces both unmodified x86 hashes; kuna’s compiler produces the same changed
+reproduces both unmodified x86 hashes; unlace’s compiler produces the same changed
 element streams.
 The combined digests were produced with `slacomp`, which reproduces the
 pinned C++ digests for each of those changes applied alone.
@@ -79,7 +79,7 @@ in place (each quoted mnemonic and `X87_Dn` macro expands back to the old
 text outside 16-bit x86, and the table's `with` block is under `@ifdef IA16`),
 so the `x86.slaspec` and `x86-64.slaspec` digests are again unchanged.
 
-The AArch64 entry includes kuna's rounding-mode corrections for the
+The AArch64 entry includes unlace's rounding-mode corrections for the
 `FCVT{A,M,N,P}{S,U}`, `FRINT*` and `FRINT32/64*` constructors, their four
 rounding user ops, and the `FRINT32/64*` zeroing of the register bits above
 the result. Its digest was regenerated with the recorded C++ compiler,
@@ -125,8 +125,8 @@ names.
 
 Regenerate only for a reviewed compiler or upstream-spec change. Build
 `sleigh_opt` from the recorded Ghidra revision using its C++ directory's
-`make sleigh_opt` target. From the kuna repository root, run the following with
-that executable's absolute path. Do not generate expectations with kuna's own
+`make sleigh_opt` target. From the unlace repository root, run the following with
+that executable's absolute path. Do not generate expectations with unlace's own
 compiler.
 
 ```bash

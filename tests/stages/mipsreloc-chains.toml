@@ -1,4 +1,4 @@
-# kuna relocatable-object loader: a MIPS relocation may be one operation of
+# unlace relocatable-object loader: a MIPS relocation may be one operation of
 # a longer expression. GNU as writes `%hi(%neg(%gp_rel(f)))` in an N32
 # object as three records at one offset, GPREL16, SUB and HI16, each taking
 # the result of the one before; an N64 record packs up to three operations

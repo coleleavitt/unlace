@@ -1,11 +1,11 @@
 {
   "opportunity": "The first round of `libctypes` was designed from the platform headers. This one was designed from the corpus's ground truth: of the 11,687 pointer-to-named-struct variables the 444 corpus twins hold, which could a libc declaration have named, and which declaration? The answer is dominated by one name the shipped table could never reach -- `obstack`, 431 GT variables, 371 of them inside a function that calls `_obstack_newchunk` or `_obstack_begin` DIRECTLY, and imported in 0 of the 444 slices because gnulib links its copy in and the linker exports the symbols from the program (15 slices elsewhere in the same results tree -- the five dpkg programs at each optimization level -- do import glibc's, which is why the size slots follow the channel rather than the corpus).",
-  "test_name": "tests/stages/libctypes.xml #27-#32 (two new fixtures: libctypes_obstack_x86_64, where _obstack_newchunk is DEFINED by the image and putspent imported, and libctypes_obstack_import_x86_64, where _obstack_newchunk is imported from glibc and must take that header's `int` size slot) + 6 unit tests in analyzers::protos::kuna_libctypes::tests (the_defined_table_is_obstack_entry_points_only, the_two_obstack_tables_differ_only_in_the_size_slots, each_obstack_channel_keeps_its_own_size_spelling, the_account_database_slots_name_both_aggregates, and the duplicate/width tests) + tests/cli/sharded-project-export-keeps-serial-structs.json",
+  "test_name": "tests/stages/libctypes.xml #27-#32 (two new fixtures: libctypes_obstack_x86_64, where _obstack_newchunk is DEFINED by the image and putspent imported, and libctypes_obstack_import_x86_64, where _obstack_newchunk is imported from glibc and must take that header's `int` size slot) + 6 unit tests in analyzers::protos::unlace_libctypes::tests (the_defined_table_is_obstack_entry_points_only, the_two_obstack_tables_differ_only_in_the_size_slots, each_obstack_channel_keeps_its_own_size_spelling, the_account_database_slots_name_both_aggregates, and the duplicate/width tests) + tests/cli/sharded-project-export-keeps-serial-structs.json",
   "binary": "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11/O2/grep/stripped/grep",
   "selector": "0xcec0",
   "func_addr": "0xcec0",
   "option": "libctypes",
-  "flag": "KUNA_LIBCTYPES (load-time env bridge) -- no new option",
+  "flag": "UNLACE_LIBCTYPES (load-time env bridge) -- no new option",
   "element_id": null,
   "change_kind": "analysis-enablement",
   "tier": "analysis",
@@ -268,9 +268,9 @@
     "make test": "PARITY OK, 675/675",
     "make test-stages": "PARITY OK, 1278/1278",
     "make test-cli": "219/219",
-    "make rust-test": "lane RUST_TEST_RC=0, 7,353 passed / 0 failed on the #702-rebased tree (2026-09-21T17:54:27Z -> 18:21:17Z); earlier 7,333/0 on the #695-rebased tree. #703 touches no file this PR touches; on the #703-rebased tree its own new/changed targets (kuna-cli ambiguous_selector_cli, console verify_entry_selectors + verify_assertplane) and this PR's (kuna-analysis --lib 878, kuna-cli decompile_project_cli, kuna-ghidra ghidra_sim_e2e) pass, and CI runs the full workspace suite on the head (full-ci)",
+    "make rust-test": "lane RUST_TEST_RC=0, 7,353 passed / 0 failed on the #702-rebased tree (2026-09-21T17:54:27Z -> 18:21:17Z); earlier 7,333/0 on the #695-rebased tree. #703 touches no file this PR touches; on the #703-rebased tree its own new/changed targets (unlace-cli ambiguous_selector_cli, console verify_entry_selectors + verify_assertplane) and this PR's (unlace-analysis --lib 878, unlace-cli decompile_project_cli, unlace-ghidra ghidra_sim_e2e) pass, and CI runs the full workspace suite on the head (full-ci)",
     "make check-spec": "OK (lenient) + OK (strict)",
-    "kuna catalog --check": "OK",
+    "unlace catalog --check": "OK",
     "counters --check": "no drift",
     "docs/options.md": "byte-fresh",
     "carry_over": "the typesweep and corpus runs used main f39f67b6e vs f39f67b6e+branch; since then #699 (opt-in stackaddrargtrial, off) and #695 (charptr, off, plus a strict loader-table fix) landed. decompile-all on O2 grep, O0 cp, O2 gzip, O2-noinline find is byte-identical between the measured build and the final one; O2 ls and O0 useradd differ by one line each, both #695's loader fix (a constant no longer printed as a string from .dynstr)"
@@ -294,7 +294,7 @@
     },
     "option_off_identity": "`--option libctypes off` on both arms is cmp -s IDENTICAL to a build of 3de41f06d on 9 whole binaries: O2 sysvinit/last, sysvinit/utmpdump, shadow/chage, cronie/crond, dpkg/dpkg-query, tar, kmod; O0 bzip2, findutils/find",
     "default_arm_unchanged_by_the_rebase": "changed-line counts against the new base reproduce the 69d252df3 numbers exactly: last 60, utmpdump 24, chage 178, crond 9, dpkg-query 39, bzip2 0",
-    "typesweep_not_re-run": "`decompile-all --json`, which is what the sweep scores, is byte-identical between 69d252df3 and 3de41f06d on gzip O2, who O0, grep O2, diff O2, and the branch's own kuna-analysis/phases.toml source is byte-identical to the pre-rebase tip, so the round-3 sweep (1,349 -> 1,353 perfect) stands unmoved"
+    "typesweep_not_re-run": "`decompile-all --json`, which is what the sweep scores, is byte-identical between 69d252df3 and 3de41f06d on gzip O2, who O0, grep O2, diff O2, and the branch's own unlace-analysis/phases.toml source is byte-identical to the pre-rebase tip, so the round-3 sweep (1,349 -> 1,353 perfect) stands unmoved"
   },
   "minor_review_answers": {
     "utmp_utmpx_rows": "not unpaid: 24 corpus binaries import getutent/getutxent/pututline and the name reaches a caller's own local, not only the PLT thunk -- O2 coreutils who `short *v4` -> `utmpx *v4` with v4[0x16]/v4[0xbc] becoming v4->field_0x2c/field_0x178, O2 shadow logoutd and sysvinit runlevel the same for `utmp *`",
@@ -330,7 +330,7 @@
     "O0_cp_witness": "round 4 printed utimensat(v18,v26,&v12,0,v3); with the row dropped this branch prints main's utimensat(v18,v26,&v12,0)"
   },
   "undefined_high_half": {
-    "what": "a declared int return feeding a caller kuna recovered as returning 8 bytes renders the upper half of rax as dat_4",
+    "what": "a declared int return feeding a caller unlace recovered as returning 8 bytes renders the upper half of rax as dat_4",
     "main_occurrences": 1408,
     "branch_added": 121,
     "functions": 109,
@@ -466,7 +466,7 @@
       "make test-stages": "PARITY OK, 1296/1296 (baseline re-recorded: +7 LIBCTYPES keys, #15 renamed)",
       "make test-cli": "219/219",
       "make check-spec": "OK lenient and strict",
-      "kuna catalog --check": "OK",
+      "unlace catalog --check": "OK",
       "counters --check": "no drift",
       "docs/options.md": "byte-fresh; phase_catalog.json recaptured",
       "make rust-test": "lane RUST_TEST_RC=0, 7,374 passed / 0 failed on acc5bd5a0 (2026-09-21T21:31:57Z -> 21:59:06Z); only docs changed after it"

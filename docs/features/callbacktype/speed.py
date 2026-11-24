@@ -1,4 +1,4 @@
-"""Interleaved min-of-N, `callbacktype off` vs `on`, one kuna binary, both arms."""
+"""Interleaved min-of-N, `callbacktype off` vs `on`, one unlace binary, both arms."""
 import json, os, statistics, subprocess, sys, time
 R = "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11"
 ALL = {"fmt-O2": f"{R}/O2/coreutils/stripped/fmt",
@@ -8,7 +8,7 @@ ALL = {"fmt-O2": f"{R}/O2/coreutils/stripped/fmt",
        "tar-O0": f"{R}/O0/tar/stripped/tar",
        "libselinux-O0": f"{R}/O0/libselinux/stripped/libselinux.so.1",
        "libselinux-O2-noinline": f"{R}/O2-noinline/libselinux/stripped/libselinux.so.1"}
-K = os.environ.get("KUNA_BIN", "/home/mahaloz/kwt/callbacktype/decompiler/target/release/kuna")
+K = os.environ.get("UNLACE_BIN", "/home/mahaloz/kwt/callbacktype/decompiler/target/release/unlace")
 SP = "/home/mahaloz/kwt/callbacktype/specs"
 ARMS = ["off", "on"]
 N = int(sys.argv[1]) if len(sys.argv) > 1 else 15
@@ -21,7 +21,7 @@ for name in which:
     for i in range(N):
         order = ARMS[i % 2:] + ARMS[:i % 2]
         for lab in order:
-            env = dict(os.environ, SLEIGHHOME=SP, KUNA_SPECS=SP)
+            env = dict(os.environ, SLEIGHHOME=SP, UNLACE_SPECS=SP)
             t0 = time.perf_counter()
             p = subprocess.run([K, "decompile-all", b, "--json", "--max-fn-seconds", "120",
                                 "--option", "callbacktype", lab],

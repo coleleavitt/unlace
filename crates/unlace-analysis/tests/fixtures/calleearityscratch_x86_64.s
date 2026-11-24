@@ -1,4 +1,4 @@
-# (kuna) `calleearityscratch` fixture -- RE-friction round 9, need
+# (unlace) `calleearityscratch` fixture -- RE-friction round 9, need
 # `hint-printing-call-loses` (challenge 5e51836e33c5d4439bb2dc24, ELF x86-64
 # `cr4ckm3_0x`, 0x400f30 -> sub_417f80 @0x401007), reduced to four caller/callee
 # pairs.

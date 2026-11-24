@@ -63,9 +63,9 @@
  "gates": {
   "make test": "PARITY OK 675/675 (docs/baseline.json byte-identical to origin/main)",
   "make test-stages": "PARITY OK 605/605 (602 -> 605, the new two-pass ptrdepthcap.xml)",
-  "make rust-test": "green, 5,427 passed / 0 failed (run with KUNA_DECOMP_TEST unset -- when it is set, cpp_oracle_bin() resolves to the RUST binary and verify_w10_proto_unlock fails spuriously on a pre-existing xunknown4-vs-unsigned-int spelling)",
+  "make rust-test": "green, 5,427 passed / 0 failed (run with UNLACE_DECOMP_TEST unset -- when it is set, cpp_oracle_bin() resolves to the RUST binary and verify_w10_proto_unlock fails spuriously on a pre-existing xunknown4-vs-unsigned-int spelling)",
   "make check-spec": "OK",
-  "kuna catalog --check": "catalog OK (139 settables)",
+  "unlace catalog --check": "catalog OK (139 settables)",
   "scripts.repipe.mergecheck": "shape-B all shared counters re-derived and agree (139 settables, tiers 32/56/51, 232 corpus files, next ElementId 4139); baseline untouched; DIV-108 is the next free number. The 12 shape-C rejects are the known false positive for adding a [[settable]] row -- each boilerplate key line of the new row appears one more time in phases.toml.",
   "acceptance a-4ac515df8701": "PASS, 8/8 clauses (re-verified on the rebased tree)"
  }

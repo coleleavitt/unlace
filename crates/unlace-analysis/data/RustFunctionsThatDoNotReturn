@@ -26,7 +26,7 @@ rust_begin_unwind
 rg_oom
 abort
 
-# (kuna) Rust paths, matched against the hash-less demangling of a legacy
+# (unlace) Rust paths, matched against the hash-less demangling of a legacy
 # (`_ZN...17h<hash>E`) or v0 (`_RNv...`) symbol, so they hold across the
 # mangling switch and across hashes. Each is declared `-> !` in the Rust
 # 1.98.1 and 1.85.0 standard library sources (core/src/panicking.rs, option.rs,
@@ -93,7 +93,7 @@ std::panicking::panic_with_hook
 std::panicking::rust_panic_without_hook
 std::panicking::rust_panic
 
-# (kuna, #28) alloc/src/alloc.rs: `__rust_alloc_error_handler` (the extern the
+# (unlace, #28) alloc/src/alloc.rs: `__rust_alloc_error_handler` (the extern the
 # allocator shim defines, `-> !`) and its default `__rdl_alloc_error_handler`
 # (`-> !`); core/src/panicking.rs `assert_failed_inner` (`-> !`).
 rust_alloc_error_handler

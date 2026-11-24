@@ -1,9 +1,9 @@
-# kuna issue testcase: an Espressif application image gets its chip's
+# unlace issue testcase: an Espressif application image gets its chip's
 # mask-ROM names and memory map (`option esprom`, default `auto`).
 #
 # Stage:      P1 loader + analysis commit
 #             (`loader/firmware/esp.rs`, `loader/firmware/esprom.rs`,
-#             `console/src/kuna_esprom.rs`).
+#             `console/src/unlace_esprom.rs`).
 # The XML wrapper only provides the harness architecture.  Both passes clear
 # it and load `esprom_esp32.bin` (written by `esprom_esp32.py` beside it): an
 # ESP32 image with a DROM and an IRAM segment.  `sub_40080020` calls the
@@ -54,31 +54,31 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-ESPROM #1: the ROM call is named with the chip in force'
+name = 'UNLACE-ESPROM #1: the ROM call is named with the chip in force'
 count = 1
 regex = 'memcpy\(.*,.*,0x10\)'
 
 [[match]]
-name = 'KUNA-ESPROM #2: off leaves the call through the bare address'
+name = 'UNLACE-ESPROM #2: off leaves the call through the bare address'
 count = 1
 regex = '0x4000c2c8\)\(.*,.*,0x10\)'
 
 [[match]]
-name = 'KUNA-ESPROM #3: the peripheral register is read twice with the chip in force'
+name = 'UNLACE-ESPROM #3: the peripheral register is read twice with the chip in force'
 count = 1
 regex = '= .*3ff4001c;'
 
 [[match]]
-name = 'KUNA-ESPROM #4: off folds the two reads into one'
+name = 'UNLACE-ESPROM #4: off folds the two reads into one'
 count = 1
 literal = '3ff4001c * 2'
 
 [[match]]
-name = 'KUNA-ESPROM #5: the three functions of the image are listed in both passes'
+name = 'UNLACE-ESPROM #5: the three functions of the image are listed in both passes'
 count = 2
 literal = '0x40080040 sub_40080040'
 
 [[match]]
-name = 'KUNA-ESPROM #6: a ROM function is a name, not an inventory entry'
+name = 'UNLACE-ESPROM #6: a ROM function is a name, not an inventory entry'
 count = 0
 literal = '0x4000c2c8 memcpy'

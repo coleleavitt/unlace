@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Standalone angr decompilation runner.
 
-This file is executed by the ANGR interpreter ($KUNA_PIPELINE_ANGR_PYTHON, e.g. the
-decbench venv's python) -- NOT by the kuna venv (which has no angr). It imports only the
+This file is executed by the ANGR interpreter ($UNLACE_PIPELINE_ANGR_PYTHON, e.g. the
+decbench venv's python) -- NOT by the unlace venv (which has no angr). It imports only the
 stdlib + angr, and emits exactly one JSON object on stdout with the decompiled C text.
 All angr / cle / loader log noise is silenced and kept off stdout so the parent can parse
 stdout as pure JSON (mirrors how scripts.decompile isolates decomp_dbg's `print C`).

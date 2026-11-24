@@ -29,9 +29,9 @@ fn specs() -> String {
 fn decompile(binary: &str, selector: &str) -> (String, String, bool) {
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .env_remove("UNLACE_DECOMP_DBG")
-        .env_remove("KUNA_DECOMP_DBG")
+        .env_remove("UNLACE_DECOMP_DBG")
         .env_remove("UNLACE_SLACOMP")
-        .env_remove("KUNA_SLACOMP")
+        .env_remove("UNLACE_SLACOMP")
         .args([
             "decompile",
             &fixture(binary),
@@ -40,7 +40,7 @@ fn decompile(binary: &str, selector: &str) -> (String, String, bool) {
             &specs(),
         ])
         .output()
-        .expect("run kuna");
+        .expect("run unlace");
     (
         String::from_utf8_lossy(&out.stdout).into_owned(),
         String::from_utf8_lossy(&out.stderr).into_owned(),
@@ -102,9 +102,9 @@ fn a_stripped_image_still_gets_the_addr_advice() {
 fn a_macho_data_name_is_reported_as_data() {
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .env_remove("UNLACE_DECOMP_DBG")
-        .env_remove("KUNA_DECOMP_DBG")
+        .env_remove("UNLACE_DECOMP_DBG")
         .env_remove("UNLACE_SLACOMP")
-        .env_remove("KUNA_SLACOMP")
+        .env_remove("UNLACE_SLACOMP")
         .args([
             "functions",
             &fixture("macho_datasyms_arm64"),
@@ -144,9 +144,9 @@ fn a_macho_data_name_is_reported_as_data() {
 
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .env_remove("UNLACE_DECOMP_DBG")
-        .env_remove("KUNA_DECOMP_DBG")
+        .env_remove("UNLACE_DECOMP_DBG")
         .env_remove("UNLACE_SLACOMP")
-        .env_remove("KUNA_SLACOMP")
+        .env_remove("UNLACE_SLACOMP")
         .args([
             "decompile",
             &fixture("macho_datasyms_arm64"),

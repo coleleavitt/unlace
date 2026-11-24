@@ -1,4 +1,4 @@
-# kuna issue testcase: an x86-32 function's stack-pointer deltas, solved for
+# unlace issue testcase: an x86-32 function's stack-pointer deltas, solved for
 # the calls that pop arguments or do not return (`option spsolve on|off`,
 # default on).
 #
@@ -9,7 +9,7 @@
 #             with different stack pointers: the stack pointer stays a
 #             variable, arguments are written through it and calls lose
 #             them.
-# Stage:      P4 calls - ActionExtraPopSetup (`p4_calls/kuna_spsolve.rs`).
+# Stage:      P4 calls - ActionExtraPopSetup (`p4_calls/unlace_spsolve.rs`).
 # P0 assert:  option spsolve on|off (default on).
 #
 # spsolve_elf_i386 (source and build line in spsolve_elf_i386.s):

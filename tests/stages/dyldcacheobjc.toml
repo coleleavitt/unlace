@@ -8,9 +8,9 @@
 # region outside the image; `class_ro_t.baseMethods` with its low bit set is
 # a relative list of lists.
 #
-# Fix: `loader/kuna_dyldcache.rs` finds the selector base in the cache
+# Fix: `loader/unlace_dyldcache.rs` finds the selector base in the cache
 # header's ObjCOptimizationHeader, else in libobjc's `objc_opt_t`
-# (`__objc_opt_ro`, version 16); `analyzers/objc/kuna_objccache.rs` reads
+# (`__objc_opt_ro`, version 16); `analyzers/objc/unlace_objccache.rs` reads
 # addresses outside the image through the cache; `methods.rs` decodes the
 # flags; `classt.rs` walks the list of lists.
 #

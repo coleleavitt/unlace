@@ -4,8 +4,8 @@ KataVM dispatches opcode `0x8b` through an `unsigned char`, but lowered-switch
 recovery prints the matching case as the unreachable signed value `-0x75`:
 
 ```bash
-decompiler/target/release/kuna decompile \
-  decompiler/crates/kuna-analysis/tests/fixtures/katavm_level1_x86_64 \
+decompiler/target/release/unlace decompile \
+  decompiler/crates/unlace-analysis/tests/fixtures/katavm_level1_x86_64 \
   0x12d0 --addr
 ```
 

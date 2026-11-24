@@ -1,4 +1,4 @@
-// Source of Hello.class, the class-file fixture of tests/stages/kuna-jvm.toml.
+// Source of Hello.class, the class-file fixture of tests/stages/unlace-jvm.toml.
 //
 //   javac --release 8 -g:none -d . Hello.java && mv demo/Hello.class .
 //   jar cf hello.jar demo/Hello.class   (from a directory holding demo/Hello.class)

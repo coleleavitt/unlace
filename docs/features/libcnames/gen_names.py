@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate the NAMES rows of kuna-analysis/src/analyzers/protos/libcnames.rs.
+"""Regenerate the NAMES rows of unlace-analysis/src/analyzers/protos/libcnames.rs.
 
 usage: python3 gen_names.py > rows.rs   (needs clang and the glibc headers)
 
@@ -11,7 +11,7 @@ the slots they share with it. Return names are the RET table below.
 import json, os, re, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-PROTOS = os.path.join(HERE, '../../../decompiler/crates/kuna-analysis/src/analyzers/protos/')
+PROTOS = os.path.join(HERE, '../../../decompiler/crates/unlace-analysis/src/analyzers/protos/')
 SIG = re.compile(r'\("(\w+)", Sig \{ ret: [^,]+(?:\([^)]*\))?, params: &\[([^\]]*)\], vararg: (-?\d+) \}\)')
 C_KEYWORDS = set('auto break case char const continue default do double else enum extern float for goto if inline int '
                  'long register restrict return short signed sizeof static struct switch typedef union unsigned void '

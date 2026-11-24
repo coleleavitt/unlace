@@ -1,11 +1,11 @@
 # The problem
 
-An ARM function can return a number that appears nowhere in kuna's output. A wide
+An ARM function can return a number that appears nowhere in unlace's output. A wide
 immediate is not in the instruction — the compiler parks it in a literal pool in
 `.text` and loads it PC-relatively — so the value ends up as an opaque global.
 
 ```
-$ kuna decompile 1337ARM.bin main | tail -6
+$ unlace decompile 1337ARM.bin main | tail -6
     v3 = dat_8458;
   }
   else {
@@ -14,12 +14,12 @@ $ kuna decompile 1337ARM.bin main | tail -6
   return v3;
 }
 
-$ kuna disassemble 1337ARM.bin main | tail -2
+$ unlace disassemble 1337ARM.bin main | tail -2
 0x8440        10309fe5              ldr r3,[0x8458]
 0x8458        39050000              .word 0x00000539
 ```
 
-kuna's own disassembler names the word. The decompiler never hears about it, and
+unlace's own disassembler names the word. The decompiler never hears about it, and
 reading the success value means inspecting the pool by hand.
 
 # The fix
@@ -51,7 +51,7 @@ two-pass gate: off prints `return dat_42c + 0x42c;`, default prints `return 0x30
 Unit tests cover the range derivation and the `getCodepoint` truncation.
 
 `make test` PARITY OK 675/675 · `make test-stages` PARITY OK · `make test-cli` 85/85 ·
-`make check-spec` green · `kuna catalog --check` OK. Sweep of `decompile-all` on both
+`make check-spec` green · `unlace catalog --check` OK. Sweep of `decompile-all` on both
 arms over 65 decbench binaries: 25 byte-identical, 40 changed, no function lost or
 added. Speed 127.4 → 125.7 ms on the witness (median of 7).
 

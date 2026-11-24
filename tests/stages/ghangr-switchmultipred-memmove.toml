@@ -18,7 +18,7 @@
 # Stage model: S2 switch-model.  The basic guard walk
 # (JumpBasic::analyzeGuards) bounds a table by backing up through
 # SINGLE-predecessor blocks to the dominating guard.  With size_in() > 1 it
-# short-circuits to checkUnrolledGuard, which kuna left as an empty SEAM stub;
+# short-circuits to checkUnrolledGuard, which unlace left as an empty SEAM stub;
 # no bound was found, the normalized range stayed > maxtablesize, the basic
 # model declined, and flow.rs truncated the indirect jump to a call
 # (rendered as a computed (code *)() call).
@@ -49,7 +49,7 @@ hex = '4c8bd94c8bd24983f8100f86b9000000482bd1730f498bc24903c0483bc80f8c960300000
 
 [script]
 commands = [
-    # kuna: the 9 angr structuring/switch flags below are now default-on (DIV-13); this stage test asserts the pre-sweep (flags-off) baseline in pass 1, so pass 1 turns them all OFF (each pass-2 'option <flag> on' re-enables only the flag under test)
+    # unlace: the 9 angr structuring/switch flags below are now default-on (DIV-13); this stage test asserts the pre-sweep (flags-off) baseline in pass 1, so pass 1 turns them all OFF (each pass-2 'option <flag> on' re-enables only the flag under test)
     'option gotoreduce off',
     'option crossjumprevert off',
     'option dedupitetail off',

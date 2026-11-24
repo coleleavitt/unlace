@@ -1,4 +1,4 @@
-# returncopysplit -- kuna stores into `.rodata` on a path with no store
+# returncopysplit -- unlace stores into `.rodata` on a path with no store
 
 decbench campaign case `O2-noinline-iproute2-ip-netns_add`, NOVEL pool.
 Triage record on main: `docs/decbench/triage/rodata-phantom-store.md` (its *symptom* stands;
@@ -6,7 +6,7 @@ its *proposed mechanism* is refuted below and superseded).
 
 ## 1. The symptom
 
-`kuna decompile ~/github/decbench/results/full_run/O2-noinline/iproute2/stripped/ip --addr 0x20e10`
+`unlace decompile ~/github/decbench/results/full_run/O2-noinline/iproute2/stripped/ip --addr 0x20e10`
 (`netns_add`), today's build, **no flags**:
 
 ```c
@@ -69,7 +69,7 @@ Two ops produce all 16 statements (2 halves x 8 bytes). Both have `rc=false`, an
    `SplitDatatype::test_copy_constraints` (`p3_dataflow/subflow.rs:3553`, upstream
    `subflow.cc:2390`) declines it, and `Merge::mark_internal_copies` then marks it
    non-printing. **This is all correct and is not the bug.**
-4. kuna's `ActionStripStackGuard` (option `stackguard`, DIV-14, default on;
+4. unlace's `ActionStripStackGuard` (option `stackguard`, DIV-14, default on;
    `infra/universalaction.rs`) strips the `-fstack-protector` epilogue. What is left is a
    **bare-epilogue RETURN block** that passes `Funcdata::return_split_is_splittable`.
 5. `ActionReturnSplit` (`p8_structure/blockaction.rs:3908`, scheduled inside `fullloop`,
@@ -91,7 +91,7 @@ memory".
 
 ## 5. Breadth
 
-`kuna decompile-all --json` over 12 corpus binaries / 15,386 functions, counting assignment
+`unlace decompile-all --json` over 12 corpus binaries / 15,386 functions, counting assignment
 statements whose LHS is an address-named global:
 
 | binary | functions | phantom `.rodata` stores |

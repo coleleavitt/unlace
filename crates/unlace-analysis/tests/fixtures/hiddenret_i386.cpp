@@ -1,4 +1,4 @@
-// (kuna) cppsig hidden struct return on i386 System V: mk returns S by value,
+// (unlace) cppsig hidden struct return on i386 System V: mk returns S by value,
 // so the caller passes a hidden pointer the callee pops with `ret $4`.
 // Build: clang++ -m32 -O1 -fno-stack-protector -fno-pic -nostdlib -ffreestanding
 //        -static -fno-exceptions -o hiddenret_i386 hiddenret_i386.cpp

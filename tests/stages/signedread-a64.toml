@@ -1,4 +1,4 @@
-# kuna: a signed read of an expression that prints as unsigned (AArch64).
+# unlace: a signed read of an expression that prints as unsigned (AArch64).
 #
 # glibc's __sigismember (aarch64 libc.so.6 2.17 symbol version, bytes
 # verbatim): `sub w1,w1,#1; sxtw x2,w1; lsr x2,x2,#6; ldr x0,[x0,x2,lsl #3]`
@@ -7,7 +7,7 @@
 # zero extension: sig 0 indexed word 0x3ffffff instead of word -1.  It now
 # prints `(unsigned long)(int)(a1 - 1U)`.
 #
-# Stage: P9 cast placement (ActionSetCasts; p9_emit/kuna_signedread.rs).
+# Stage: P9 cast placement (ActionSetCasts; p9_emit/unlace_signedread.rs).
 # Correctness fix, no option: #1 and #2 fail on the unpatched engine.
 
 [image]

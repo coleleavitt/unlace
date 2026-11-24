@@ -44,7 +44,7 @@ Recover the four pushed ptrace arguments.
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_80483b0",
@@ -82,7 +82,7 @@ Recover the four pushed ptrace arguments.
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_80483b0",
@@ -127,4 +127,4 @@ _not yet refuted_
 ## Decision log
 
 - filed by cluster.py from 1 observation(s)
-- round 10 REFUTER: hypothesis **overturned** (was inconclusive). REFUTER RAN (captain, tick 10:05Z). Filed cause -- 'dynamic stack alignment and loop-carried stack pointers may defeat argument recovery' -- is WRONG PASS. Caller-side stack-argument recovery is NOT defeated: adding only a signature repairs every call site through those very same loop-carried esp accesses. Experiment on .kuna-repipe/arena/10/5ab77f5c33c5d40ad448c615/target/trace-p.zip.__x/crackme: default (with calleearity+varargstackargs on) emits 'v16 += ptrace();' at 15 sites; adding --assert 'prototype ptrace long ptrace(int req,int pid,void *addr,void *data)' turns every one into 4-argument form reading exactly the pushed slots, e.g. ptrace(v18[-0xc],v18[-0xb],(void *)v18[-10],(void *)v18[-9]). The loop-carried esp variable is untouched by the fix. REAL CAUSE: callee ARITY inference. unlace functions --json shows 0x8048968 is NOT a body-less import -- it is a 552-byte statically-linked body -- so this is NOT the size-0-import case of sha-finalization-receives-two. glibc's ptrace is a VARARGS wrapper (long ptrace(enum __ptrace_request, ...) fetching the rest with va_arg), so no amount of body analysis can derive arity 4; it can only come from a libc signature/type-library. A builder must NOT rework stack-arg recovery or the esp/alignment model -- that pass is proven working here. BUILDER WARNING: the probe pins --define-function 0x8048968=ptrace, which names the callee but supplies no signature, so a name-to-signature libc table is what flips this acceptance.
+- round 10 REFUTER: hypothesis **overturned** (was inconclusive). REFUTER RAN (captain, tick 10:05Z). Filed cause -- 'dynamic stack alignment and loop-carried stack pointers may defeat argument recovery' -- is WRONG PASS. Caller-side stack-argument recovery is NOT defeated: adding only a signature repairs every call site through those very same loop-carried esp accesses. Experiment on .unlace-repipe/arena/10/5ab77f5c33c5d40ad448c615/target/trace-p.zip.__x/crackme: default (with calleearity+varargstackargs on) emits 'v16 += ptrace();' at 15 sites; adding --assert 'prototype ptrace long ptrace(int req,int pid,void *addr,void *data)' turns every one into 4-argument form reading exactly the pushed slots, e.g. ptrace(v18[-0xc],v18[-0xb],(void *)v18[-10],(void *)v18[-9]). The loop-carried esp variable is untouched by the fix. REAL CAUSE: callee ARITY inference. unlace functions --json shows 0x8048968 is NOT a body-less import -- it is a 552-byte statically-linked body -- so this is NOT the size-0-import case of sha-finalization-receives-two. glibc's ptrace is a VARARGS wrapper (long ptrace(enum __ptrace_request, ...) fetching the rest with va_arg), so no amount of body analysis can derive arity 4; it can only come from a libc signature/type-library. A builder must NOT rework stack-arg recovery or the esp/alignment model -- that pass is proven working here. BUILDER WARNING: the probe pins --define-function 0x8048968=ptrace, which names the callee but supplies no signature, so a name-to-signature libc table is what flips this acceptance.

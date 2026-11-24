@@ -95,7 +95,7 @@ impl Decision {
             if let std::collections::btree_map::Entry::Vacant(slot) = models.entry(key) {
                 let (regs, thisptr) = key_registers(key);
                 let Some(model) = prog.arch().unlace_build_reginput_model(
-                    &format!("__kuna_reg_{key:x}"),
+                    &format!("__unlace_reg_{key:x}"),
                     &regs,
                     thisptr,
                 ) else {

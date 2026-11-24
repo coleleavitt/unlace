@@ -1,7 +1,7 @@
 ---
 case_id: audit-uncatalogued-options
 pool: novel
-group_id: kuna::option-catalog
+group_id: unlace::option-catalog
 status: feature-candidate
 tier: A
 margin: 0
@@ -23,17 +23,17 @@ family.
 
 ## Verify-first: what today's build actually does
 
-### 1. The kuna-owned half is perfectly in sync — the gap is elsewhere
+### 1. The unlace-owned half is perfectly in sync — the gap is elsewhere
 
 ```
 $ unlace catalog --json | (count) -> 83
-KUNA_OPTION_NAMES                  -> 83
-in KUNA_OPTION_NAMES not in phases.toml settableTable: []
-in phases.toml settableTable not in KUNA_OPTION_NAMES: []
+UNLACE_OPTION_NAMES                  -> 83
+in UNLACE_OPTION_NAMES not in phases.toml settableTable: []
+in phases.toml settableTable not in UNLACE_OPTION_NAMES: []
 ```
 
 `unlace catalog --check` (`unlace-cli/src/catalog.rs:221`) enforces **bidirectional** equality
-between the emitted catalog and `KUNA_OPTION_NAMES`, and it is green. So the contract that
+between the emitted catalog and `UNLACE_OPTION_NAMES`, and it is green. So the contract that
 exists is being honoured; the problem is what the contract does not cover.
 
 ### 2. All 38 upstream ArchOptions are invisible
@@ -71,7 +71,7 @@ inferconstptr            invisible
 ### 3. They are nonetheless a live `--option` surface that changes emitted C
 
 `unlace-cli/src/decompile_all.rs:455 apply_runtime_options` routes any name **not** in
-`KUNA_OPTION_NAMES` through `registry().find_element(name, 0)` into `OptionDatabase::set`.
+`UNLACE_OPTION_NAMES` through `registry().find_element(name, 0)` into `OptionDatabase::set`.
 So `unlace decompile-all <bin> --option readonly on` works today. A/B on three stripped
 corpus binaries (changed lines in the full `decompile-all` output vs a no-flag run):
 
@@ -106,7 +106,7 @@ $ unlace decompile-all factor --option warning off
 error: option warning: Bad action/rule specifier: off
 ```
 
-`hideextensions` is genuinely dead: its `ELEM_HIDEEXTENSIONS` (kuna-local id 4090) is
+`hideextensions` is genuinely dead: its `ELEM_HIDEEXTENSIONS` (unlace-local id 4090) is
 deliberately **not** in `UPSTREAM_OPTION_ELEMENTS`, so `find_element` returns 0 from both
 the CLI (`decompile_all.rs:465`) and the console (`ifacedecomp.rs:761`). It is an
 `ArchOption` impl with no caller. `splitdatatype`/`warning` are reachable but take
@@ -114,7 +114,7 @@ multi-token values the single-`p1` `--option NAME VALUE` form cannot express.
 
 ## Analysis
 
-**Symptom (one, named):** the option catalog — kuna's entire discovery surface for the LLM
+**Symptom (one, named):** the option catalog — unlace's entire discovery surface for the LLM
 control API — documents 83 of the 121 options the binary actually accepts, and the 38 it
 omits include the ones that flip read-only constant propagation, constant-pointer
 inference, for-loop recovery, jump-table bounds, cast printing, and integer radix. An agent
@@ -126,7 +126,7 @@ This is the `docs/improvement-pipeline.md` *provenance contract* being satisfied
 half of the surface that was born after the contract. CLAUDE.md's rule — *"anything that can
 change emitted C ships behind a named option ... `unlace catalog --check` must stay green"* —
 is enforced by a check that structurally cannot see the upstream family, because
-`cmd_check` compares the catalog to `KUNA_OPTION_NAMES` and the upstream options are not in
+`cmd_check` compares the catalog to `UNLACE_OPTION_NAMES` and the upstream options are not in
 that list by construction.
 
 **Owning phase: P0** (knowledge/configuration plane). Owning files:
@@ -200,11 +200,11 @@ into `UPSTREAM_OPTION_ELEMENTS` or deleted; that is a separate one-line judgemen
 ### The blocker nobody has noticed
 
 Adding a `settableTable` row alone **fails `unlace catalog --check`**: `cmd_check`
-(`catalog.rs:233-246`) reports `catalog row "readonly" matches no registered kuna option
-(stale)`. Adding the name to `KUNA_OPTION_NAMES` instead **breaks dispatch**, because both
+(`catalog.rs:233-246`) reports `catalog row "readonly" matches no registered unlace option
+(stale)`. Adding the name to `UNLACE_OPTION_NAMES` instead **breaks dispatch**, because both
 `apply_runtime_options` (`decompile_all.rs:457`) and the console `IfcOption`
-(`ifacedecomp.rs:748`) check `KUNA_OPTION_NAMES.contains()` **first** and route to
-`Architecture::set_kuna_option`, whose `match name` (`architecture.rs:1283`) has no arm for
+(`ifacedecomp.rs:748`) check `UNLACE_OPTION_NAMES.contains()` **first** and route to
+`Architecture::set_unlace_option`, whose `match name` (`architecture.rs:1283`) has no arm for
 upstream names and would return a parse error. So the naive "just add the rows" PR
 regresses `--option readonly on` from working to erroring.
 
@@ -212,12 +212,12 @@ regresses `--option readonly on` from working to erroring.
 
 Two viable shapes; recommend the second.
 
-1. **Passthrough arm.** Add the 16 names to `KUNA_OPTION_NAMES` and give
-   `Architecture::set_kuna_option` a fallback arm that forwards to
+1. **Passthrough arm.** Add the 16 names to `UNLACE_OPTION_NAMES` and give
+   `Architecture::set_unlace_option` a fallback arm that forwards to
    `OptionDatabase::new().set(self, find_element(name), p1, "", "")`. One new match arm +
    one helper in `infra/architecture.rs`. Keeps `cmd_check` unchanged.
 2. **Teach `cmd_check` the upstream class** (recommended, smaller and truthful). Leave
-   `KUNA_OPTION_NAMES` alone; relax `cmd_check`'s `cat.difference(&registered)` arm to also
+   `UNLACE_OPTION_NAMES` alone; relax `cmd_check`'s `cat.difference(&registered)` arm to also
    accept a name that resolves in `UPSTREAM_OPTION_ELEMENTS`. ~6 lines in
    `unlace-cli/src/catalog.rs`, no dispatch change, and the two dispatch sites keep working
    unmodified because upstream names still fall through to `OptionDatabase`. Rows omit
@@ -231,7 +231,7 @@ files, adding 16 rows costs:
 
 | site | what | 83 → 99 |
 |---|---|---|
-| `src/p0_knowledge/phases/tests.rs:48,49` | `kuna_num_settables()`, `SETTABLE_TABLE.len()` | 2 edits |
+| `src/p0_knowledge/phases/tests.rs:48,49` | `unlace_num_settables()`, `SETTABLE_TABLE.len()` | 2 edits |
 | `tests/catalog_bytecompat.rs:82,84,86` | `"option":` / `"tier":` / `"symptoms":` counts | 3 edits |
 | `tests/fixtures/phase_catalog.json` | the **byte-for-byte** catalog fixture (`assert_eq!(rust, FIXTURE)`) | regenerate |
 | `tests/stages/catalog.toml:40,44` | `#5 use_when` / `#9 change_kind` are `min="10" max="160"` | **no bump** (99 < 160) |

@@ -1,6 +1,6 @@
 Authored C callbacks returning two signed 64-bit fields, plus scalar and void controls.
 Original build:
-cc -O2 -g -fwrapv -fno-pie -no-pie -o /tmp/kuna-joined-callback-return/callback /tmp/kuna-joined-callback-return/callback.c
+cc -O2 -g -fwrapv -fno-pie -no-pie -o /tmp/unlace-joined-callback-return/callback /tmp/unlace-joined-callback-return/callback.c
 The original callback.c is byte-identical to joined_callback_return.c.
 Equivalent rebuild from this directory:
 cc -O2 -g -fwrapv -fno-pie -no-pie -o joined_callback_return_x86_64 joined_callback_return.c

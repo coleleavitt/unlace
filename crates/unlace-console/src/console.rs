@@ -824,7 +824,7 @@ pub struct IfcUnlacePhaseList;
 impl IfaceCommandAction for IfcUnlacePhaseList {
     fn execute(&self, status: &mut IfaceStatus, _s: &mut CommandStream) -> IfaceResult<()> {
         let mut os = String::new();
-        os.push_str("Phases (kuna phase model, docs/phases.md):\n");
+        os.push_str("Phases (unlace phase model, docs/phases.md):\n");
         for stage in STAGES_IN_ORDER {
             os.push_str("  ");
             os.push_str(stage.code());
@@ -1289,7 +1289,7 @@ impl IfaceCommandAction for IfcUnlaceAssert {
             Dispatch::Latent => {
                 // C++: throw IfaceExecutionError("Sub-stage <name> is LATENT: ...")
                 Err(IfaceError::execution(format!(
-                    "Sub-phase {subname} is LATENT: no override surface exists yet (kuna roadmap)"
+                    "Sub-phase {subname} is LATENT: no override surface exists yet (unlace roadmap)"
                 )))
             }
             Dispatch::Unroutable => {

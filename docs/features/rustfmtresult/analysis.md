@@ -1,7 +1,7 @@
 # Recover String-valued format calls without changing the lowered ABI
 
 Pinned angr's template test expects `format!("0x{:08x} {:>5}", ...)` for
-fmtdemo `hex_width` at 0x11100. Kuna currently prints
+fmtdemo `hex_width` at 0x11100. Unlace currently prints
 `alloc::fmt::format::format_inner(a0,0x6de2,&mut v2)` and leaves the hidden result
 pointer explicit. The static specifications and exact u32 formatter identities
 are now available, but the print-only consumer refuses this three-input call.

@@ -1,5 +1,5 @@
 # A value a function returns in a register its calling convention reserves
-# for floating point is a float of that register's width (kuna_floatreg.rs).
+# for floating point is a float of that register's width (unlace_floatreg.rs).
 # A strict correction: there is no option, and the one pass is the fix.
 #
 # The XML wrapper only provides the harness architecture. The script loads

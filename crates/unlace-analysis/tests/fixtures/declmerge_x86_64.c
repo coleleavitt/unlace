@@ -4,7 +4,7 @@
  *     gcc -O2 -no-pie -fno-pic declmerge_x86_64.c -o declmerge_x86_64
  *
  * `make_dir_clone` (a reduction of tar's make_directory) has a size phi
- * `sz = (…) ? len : len + 1` that kuna's merge phase fails to coalesce with the
+ * `sz = (…) ? len : len + 1` that unlace's merge phase fails to coalesce with the
  * strlen result. The un-coalesced phi output picks up an instance overlapping a
  * parameter register, so `PrintC::emit_local_var_decls`' `is_param`
  * storage-containment test used to SKIP it — yet it is still referenced in the body,

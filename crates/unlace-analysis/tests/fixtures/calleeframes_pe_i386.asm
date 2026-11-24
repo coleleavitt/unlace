@@ -1,6 +1,6 @@
 ; Clean-room repro: x86-32 callees whose returns do not, or do, state what
-; they pop, in the shapes an MSVC /O2 image links them (kuna_calleepurge,
-; kuna_calleestackargs).
+; they pop, in the shapes an MSVC /O2 image links them (unlace_calleepurge,
+; unlace_calleestackargs).
 ;
 ;   seh_prolog4 / seh_epilog4  the CRT's frame helpers: the prolog lowers its
 ;                              caller's stack by a size it is passed and leaves
@@ -272,7 +272,7 @@ entry:
     ret
 
 section .rdata
-path: db 'kuna.txt', 0
+path: db 'unlace.txt', 0
 fmt: db '%d %d', 0
     align 2, db 0
 src: dw 'a', 'b', 'c', 'd', 0

@@ -38,7 +38,7 @@ See the timer-array pointer and count passed after each input byte.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x113d9",
@@ -80,7 +80,7 @@ See the timer-array pointer and count passed after each input byte.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x113d9",
@@ -138,9 +138,9 @@ _none recorded_
 ## Decision log
 
 - filed by cluster.py from 1 observation(s)
-- split by captain at T_DEDUP from round 12's `wrong-output|decompile|exit_code,stdout_absent,stdout_matches` bucket: cluster.py's signature (kind|subcommand|clause-shape) collapsed unrelated defects, so the crop was hand-partitioned one observation per need and filed via `--from-file`. See `.kuna-repipe/rounds/12/dedup/MARKER.json`; do NOT run `cluster --round 12` bare.
+- split by captain at T_DEDUP from round 12's `wrong-output|decompile|exit_code,stdout_absent,stdout_matches` bucket: cluster.py's signature (kind|subcommand|clause-shape) collapsed unrelated defects, so the crop was hand-partitioned one observation per need and filed via `--from-file`. See `.unlace-repipe/rounds/12/dedup/MARKER.json`; do NOT run `cluster --round 12` bare.
 - sibling of `bytecode-append-call-loses` — same family (callee-arity under-applied at a call site; explicit prototype restores). Kept separate: signatures differ and Jaccard is 0.138, each carries its own acceptance, and merging would drop this need's regression_of onto a witness that lacks it. Consider forcing one builder via a shared `cluster:` at T_TRIAGE.
-- round 12 REFUTER: hypothesis **overturned** (was inconclusive). REFUTER (captain in-tick, 05:0xZ round 12). VERDICT OVERTURNED -- the SYMPTOM STANDS EXACTLY AS FILED, the DIAGNOSIS DOES NOT, and the regression_of link is unearned. Everything below was measured on the arena binary .kuna-repipe/arena/12/67f9bdc38f555589f3530a85/target/WeeperVM--Level_1 (ELF x86-64, stripped) against release kuna at aa18e56d.
+- round 12 REFUTER: hypothesis **overturned** (was inconclusive). REFUTER (captain in-tick, 05:0xZ round 12). VERDICT OVERTURNED -- the SYMPTOM STANDS EXACTLY AS FILED, the DIAGNOSIS DOES NOT, and the regression_of link is unearned. Everything below was measured on the arena binary .unlace-repipe/arena/12/67f9bdc38f555589f3530a85/target/WeeperVM--Level_1 (ELF x86-64, stripped) against release unlace at aa18e56d.
 
 SYMPTOM REPRODUCED: the filed probe emits `if (watchdog()) {` at line 35. The disassembly the tester cited is exact -- 0x1146a MOV ESI,0x2 / 0x1146f MOV EDI,0x13050 / 0x11474 INC R12 / 0x11477 CALL 0x110ff.
 

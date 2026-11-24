@@ -28,7 +28,7 @@ fn fauxware() -> PathBuf {
 /// An executable stub at a fresh temp path. `answers_as` is the identity it
 /// compares the parent's against; `None` is a child that predates the handshake.
 fn stub(tag: &str, answers_as: Option<&str>, body: &str) -> PathBuf {
-    let path = std::env::temp_dir().join(format!("kuna_buildstamp_{tag}_{}", std::process::id()));
+    let path = std::env::temp_dir().join(format!("unlace_buildstamp_{tag}_{}", std::process::id()));
     let handshake = answers_as
         .map(|id| {
             format!(
@@ -61,12 +61,12 @@ fn unlace(args: &[&str], envs: &[(&str, &Path)]) -> Output {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
     cmd.args(args)
         .env_remove("UNLACE_DECOMP_DBG")
-        .env_remove("KUNA_DECOMP_DBG")
+        .env_remove("UNLACE_DECOMP_DBG")
         .env_remove(PARENT_ENV);
     for (k, v) in envs {
         cmd.env(k, v);
     }
-    cmd.output().expect("spawn kuna")
+    cmd.output().expect("spawn unlace")
 }
 
 fn text(bytes: &[u8]) -> String {

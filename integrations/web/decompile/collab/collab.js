@@ -15,7 +15,7 @@ import { makeOffer, takeOffer, holdPresenceLock } from './link.js';
 import { crossesNetworks } from './sdp.js';
 import { createPresence, anchorAt, findAnchor } from './presence.js';
 
-export const PREFS_KEY = 'kuna.d2.collab';
+export const PREFS_KEY = 'unlace.d2.collab';
 const STUN = 'stun:stun.cloudflare.com:3478';
 const JOIN_MS = 20000;
 const VIEW_WORDS = { c: 'Code', split: 'Side by side', asm: 'Assembly', bytes: 'Bytes', stack: 'Stack', data: 'Data' };
@@ -25,7 +25,7 @@ const PEOPLE = '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="tru
   '<circle cx="11.3" cy="6" r="1.9" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M11 9.6c1.7 0 2.9 1.1 3.3 3.2" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>';
 const CLOSED = 'This reply is for an invite that is no longer open. Make a new invite link.';
 
-/** The collab setting (`kuna.d2.collab`): the name last used, and the connection setting. */
+/** The collab setting (`unlace.d2.collab`): the name last used, and the connection setting. */
 export function loadCollabPrefs(storage) {
   try {
     const p = JSON.parse(storage?.getItem(PREFS_KEY) || '{}');
@@ -148,7 +148,7 @@ class Collab {
       }
     });
     if (globalThis.BroadcastChannel) {
-      this.replyChannel = new BroadcastChannel('kuna.d2.reply');
+      this.replyChannel = new BroadcastChannel('unlace.d2.reply');
       this.replyChannel.onmessage = ({ data }) => this.#handOff(data);
     }
   }
@@ -362,7 +362,7 @@ class Collab {
     if (!code) return { ok: false, text: 'That is not a reply link. It starts with the page address and has #reply= in it.' };
     const r = await decodeCode(code, 'reply');
     if (!r.ok) {
-      return { ok: false, text: r.why === 'version' ? 'That reply was made by a different version of Kuna. Reload both pages and try again.'
+      return { ok: false, text: r.why === 'version' ? 'That reply was made by a different version of Unlace. Reload both pages and try again.'
         : 'That reply link is not complete. Copy all of it and try again.' };
     }
     const inv = this.invites.get(r.id);
@@ -416,7 +416,7 @@ class Collab {
     if (!inv.ok) {
       this.#show({
         kind: 'notice', title: 'This invite link does not work',
-        text: inv.why === 'version' ? 'It was made by a different version of Kuna. Ask for a new link, and reload this page first.'
+        text: inv.why === 'version' ? 'It was made by a different version of Unlace. Ask for a new link, and reload this page first.'
           : 'Part of it is missing. Ask for the link again, and copy all of it.',
       });
       return;
@@ -517,7 +517,7 @@ class Collab {
     const who = info.name || this.join?.sponsorName || this.join?.inv?.n || 'The other person';
     switch (reason) {
       case 'full': return 'This session is full (8 people).';
-      case 'mismatch': return `${who}'s page is a different version of Kuna; reload both.`;
+      case 'mismatch': return `${who}'s page is a different version of Unlace; reload both.`;
       case 'closed': return `${who}'s page closed the connection before you joined. Ask for a new invite link.`;
       case 'sponsor': return `${who}'s page closed the connection before you finished joining. Ask for a new invite link.`;
       case 'stalled': return `${who}'s page stopped answering while you were joining. Ask for a new invite link.`;
@@ -575,7 +575,7 @@ class Collab {
     if (!r.ok) {
       this.#show({
         kind: 'notice', title: 'This reply link does not work',
-        text: r.why === 'version' ? 'It was made by a different version of Kuna. Reload both pages and try again.'
+        text: r.why === 'version' ? 'It was made by a different version of Unlace. Reload both pages and try again.'
           : 'Part of it is missing. Copy all of it and try again.',
       });
       return;
@@ -602,7 +602,7 @@ class Collab {
       return;
     }
     const from = randomId(8);
-    const listen = new BroadcastChannel('kuna.d2.reply');
+    const listen = new BroadcastChannel('unlace.d2.reply');
     let give = 0;
     const end = (state, text = '') => {
       clearTimeout(timer);
@@ -899,7 +899,7 @@ class Collab {
         this.presence.forget(info.peer);
         break;
       case 'mismatch':
-        this.api.toast(`${name}'s page is a different version of Kuna; reload both.`, { kind: 'err' });
+        this.api.toast(`${name}'s page is a different version of Unlace; reload both.`, { kind: 'err' });
         break;
       case 'misbehaved':
         this.api.toast(`${name}'s page sent changes this page cannot accept, so it stopped linking to it.`, {
@@ -1126,12 +1126,12 @@ class Collab {
     if (v.state === 'nobody') {
       return {
         title,
-        body: '<p>No Kuna tab in this browser has this invite open. If you made the invite in this browser, its tab was closed or reloaded: make a new invite link. Otherwise open this reply link in the browser you sent the invite from.</p>' +
+        body: '<p>No Unlace tab in this browser has this invite open. If you made the invite in this browser, its tab was closed or reloaded: make a new invite link. Otherwise open this reply link in the browser you sent the invite from.</p>' +
           this.#copyRow(`${this.#base()}#reply=${v.code}`, 'Reply link'),
       };
     }
     const [text, cls] = {
-      handing: [`Handing ${v.reply.n}'s reply to your Kuna tab…`, 'busy'],
+      handing: [`Handing ${v.reply.n}'s reply to your Unlace tab…`, 'busy'],
       connecting: [`Connecting to ${v.reply.n}…`, 'busy'],
       open: ['Connected — you can close this tab.', 'ok'],
       failed: [v.text || networkText(crossesNetworks(v.reply.d)), 'err'],

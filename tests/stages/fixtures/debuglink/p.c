@@ -1,4 +1,4 @@
-/* Source of link, link.debug and mini (tests/stages/kuna-debuglink.xml), built
+/* Source of link, link.debug and mini (tests/stages/unlace-debuglink.xml), built
  * with gcc -O1 -g -fno-inline -Wl,--build-id p.c. link: objcopy --only-keep-debug
  * into link.debug, strip --strip-all, objcopy --add-gnu-debuglink=link.debug.
  * mini: the gdb MiniDebugInfo recipe (function symbols only, xz, added as

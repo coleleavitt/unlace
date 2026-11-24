@@ -1,4 +1,4 @@
-"""Per-function before/after diff of `kuna decompile-all --json` pairs (<bin>.base.json / <bin>.fix.json).
+"""Per-function before/after diff of `unlace decompile-all --json` pairs (<bin>.base.json / <bin>.fix.json).
 
 Every changed line must be the insertion of an unsigned narrow cast at a call argument
 (optionally replacing a signed narrow cast); anything else, and any change to a JSON field

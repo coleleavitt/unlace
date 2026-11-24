@@ -114,7 +114,7 @@ fn signed_constant_lsl_is_defined_and_preserves_signed_consumers() {
     let probes = probes();
     let dir = tempfile::tempdir().unwrap();
     let image = dir.path().join("lsl.bin");
-    let assertions = dir.path().join("lsl.kuna");
+    let assertions = dir.path().join("lsl.unlace");
     let mut bytes = Vec::new();
     let mut declarations = String::new();
     let mut entries = Vec::new();

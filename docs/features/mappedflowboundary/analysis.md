@@ -39,7 +39,7 @@ succeeds; a failed reload preserves the selected body's existing diagnostics.
 The registered input (`5ee1f28c`, SHA-256 `506fc3c8...890`) is a movfuscated
 i386 keygenme: its whole 562,613-byte text is one function that ends
 `mov cs,eax` followed by three zero alignment bytes before a gap to the data
-segment. Its acceptance, `kuna decompile keygenme 0x804834c --addr --json`,
+segment. Its acceptance, `unlace decompile keygenme 0x804834c --addr --json`,
 now exits 0 with a null error and about 1 MB of C that ends in the lifted
 padding `add [eax],al` and `halt_missing()`; with the option off it still exits
 1 at `r0x080d1955`. The size of that function is the program, not decoded

@@ -1,4 +1,4 @@
-# Kuna #1535: AArch64 FCVTMS/FCVTPS were lifted as truncation, so
+# Unlace #1535: AArch64 FCVTMS/FCVTPS were lifted as truncation, so
 # (int)floorf(x) and (int)ceilf(x) both printed (int)x and table_lerp's
 # lo != hi branch was folded away.  Every scalar, SIMD-scalar and vector
 # FCVT{A,M,N,P,Z}{S,U} lifted as TRUNC(x), and FRINT{A,I,M,N,P,X,Z} and

@@ -172,7 +172,7 @@ pub fn detect(file: &object::File) -> UnlaceResult<Box<dyn ObjectFormat>> {
         BinaryFormat::Coff => Ok(Box::new(coff::CoffFormat)),
         other => Err(UnlaceError::lowlevel(format!(
             "unsupported object format {other:?} \
-             (kuna supports ELF/PE/Mach-O/COFF)"
+             (unlace supports ELF/PE/Mach-O/COFF)"
         ))),
     }
 }

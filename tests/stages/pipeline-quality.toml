@@ -1,4 +1,4 @@
-# kuna infrastructure test: reduced pipelines as sub-queries (roadmap item
+# unlace infrastructure test: reduced pipelines as sub-queries (roadmap item
 # 3) + the goto-count structure-quality metric (observable half of roadmap
 # item 4).
 #
@@ -85,21 +85,21 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-PIPELINE #1: pipeline list names the variants with decompile current'
+name = 'UNLACE-PIPELINE #1: pipeline list names the variants with decompile current'
 count = 1
 literal = 'decompile  (current)'
 
 [[match]]
-name = 'KUNA-PIPELINE #2: reduced normalize variant produces no structuring'
+name = 'UNLACE-PIPELINE #2: reduced normalize variant produces no structuring'
 count = 1
 literal = 'No structured blocks for testElseIf'
 
 [[match]]
-name = 'KUNA-QUALITY #1: full pipeline reports the single if-goto edge (before and after the sub-query)'
+name = 'UNLACE-QUALITY #1: full pipeline reports the single if-goto edge (before and after the sub-query)'
 count = 2
 literal = 'if-goto edges: 1'
 
 [[match]]
-name = 'KUNA-QUALITY #2: unstructured total is the goto-count quality signal'
+name = 'UNLACE-QUALITY #2: unstructured total is the goto-count quality signal'
 count = 2
 literal = 'unstructured total: 1'

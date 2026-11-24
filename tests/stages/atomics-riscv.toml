@@ -1,4 +1,4 @@
-# kuna_atomics (option atomics, docs/spec/02-lift-and-flow.md): a RISC-V AMO lifts to one __sync
+# unlace_atomics (option atomics, docs/spec/02-lift-and-flow.md): a RISC-V AMO lifts to one __sync
 # builtin. Hand-encoded RV64A instructions, each followed by ret:
 #   amo_add:  amoadd.w a0, a1, (a0)
 #   amo_swap: amoswap.d.aqrl a0, a1, (a0)

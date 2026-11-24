@@ -8,7 +8,7 @@
 # returned a value fabricated from a call through the trap
 # (`return (*v1)();`).
 #
-# Stage / sub-stage: P2 flow classification. `p2_lift/kuna_brktrap.rs` matches
+# Stage / sub-stage: P2 flow classification. `p2_lift/unlace_brktrap.rs` matches
 # a BRANCHIND through the result of a `SoftwareBreakpoint` CALLOTHER in the
 # same instruction whose immediate a compiler emits for a trap that does not
 # return (#1 llvm.trap, #1000 GCC __builtin_trap, #0x5500-#0x55ff

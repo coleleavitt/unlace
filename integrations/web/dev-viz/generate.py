@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Export a reproducible, public development snapshot from tracked Kuna evidence.
+"""Export a reproducible, public development snapshot from tracked Unlace evidence.
 
 Requires Python 3.11+, complete git history, and cargo (the architecture section
 reuses the observatory's atlas generator, scripts/observatory/atlas.py). No
@@ -49,9 +49,9 @@ MILESTONES = [
     {"date": "2026-07-04", "title": "DecBench loop", "commit": "6b270a3e",
      "detail": "The benchmark loop starts finding, reproducing, and measuring changes on compiled programs."},
     {"date": "2026-08-08", "title": "Top of optimized C", "url": "https://decbench.com/",
-     "detail": "Kuna ranks first on DecBench’s optimized C dataset."},
+     "detail": "Unlace ranks first on DecBench’s optimized C dataset."},
     {"date": "2026-08-31", "title": "RE-needs pipeline starts", "commit": "63a124ae",
-     "detail": "The first run records problems found while using Kuna for reverse engineering; fixes follow from the re-needs backlog."},
+     "detail": "The first run records problems found while using Unlace for reverse engineering; fixes follow from the re-needs backlog."},
 ]
 
 
@@ -160,9 +160,9 @@ def architecture(repo: Path) -> dict:
         phases[phase["id"]] = {
             "title": phase["name"], "folder": phase["folder"], "role": plain(phase["readsAs"]),
             "spec": phase["specChapter"], "files": phase["files"], "loc": phase["loc"],
-            "kunaLoc": sum(m["loc"] for m in phase["modules"] if m["native"]),
+            "unlaceLoc": sum(m["loc"] for m in phase["modules"] if m["native"]),
             "subphases": len(phase["subphases"]),
-            "modules": [{"file": m["file"], "loc": m["loc"], "kuna": m["native"]}
+            "modules": [{"file": m["file"], "loc": m["loc"], "unlace": m["native"]}
                         for m in phase["modules"] if not re.search(r"(^|/)tests?(\.rs|/)", m["file"])][:4],
         }
     passes, loops, open_loops = [], [], []
@@ -248,7 +248,7 @@ def export(repo: Path) -> dict:
             item["ged"] = {"before": rec["ged_before"], "after": rec["ged_after"],
                            "approximated": rec.get("ged_approximated"),
                            "case": rec.get("ged_case") or rec.get("case_id") or rec.get("opportunity") or slug,
-                           "commit": rec.get("ged_kuna_commit")}
+                           "commit": rec.get("ged_unlace_commit")}
         records.append(item)
 
     baseline = json.loads((repo / "docs/baseline.json").read_text())

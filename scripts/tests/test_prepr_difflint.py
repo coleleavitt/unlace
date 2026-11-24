@@ -19,14 +19,14 @@ STAGE = '<stringmatch name="T #1: x" min="1" max="1">sub_100074\\(2,1\\)</string
 
 class DiffLintTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="kuna-difflint-test-")
+        temporary = tempfile.TemporaryDirectory(prefix="unlace-difflint-test-")
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.git("init", "-q", "-b", "main")
         self.git("config", "user.email", "t@example.invalid")
         self.git("config", "user.name", "t")
         self.write(FIXTURES / "README.md", "| `old.exe` | recipe |\n")
-        self.write("tests/stages/kuna-old.xml", STAGE)
+        self.write("tests/stages/unlace-old.xml", STAGE)
         self.write("tests/stages/catalog.xml", STAGE)
         self.commit("base")
         self.git("checkout", "-q", "-b", "feature")
@@ -72,16 +72,16 @@ class DiffLintTests(unittest.TestCase):
     def test_a_local_path_in_an_added_binary_or_test_line_is_an_error(self):
         self.write(FIXTURES / "README.md", "| `old.exe` |\n| `a.exe` |\n")
         self.write(FIXTURES / "a.exe", b"MZ\0\0C:\\Users\\me\\build\\a.pdb")
-        self.write("tests/stages/kuna-new.xml", f"<com>load file {LEAKED}</com>\n")
+        self.write("tests/stages/unlace-new.xml", f"<com>load file {LEAKED}</com>\n")
         self.commit("leak")
-        self.assertEqual(self.checks(), [("error", "local-path", "a.exe"), ("error", "local-path", "kuna-new.xml")])
+        self.assertEqual(self.checks(), [("error", "local-path", "a.exe"), ("error", "local-path", "unlace-new.xml")])
 
     def test_an_unreferenced_intermediate_is_an_error(self):
         self.write(FIXTURES / "README.md", "| `old.exe` |\n| `x_c.obj` |\n")
         self.write(FIXTURES / "x_c.obj", b"\x4c\x01\0\0object")
         self.commit("obj")
         self.assertIn(("error", "intermediate", "x_c.obj"), self.checks())
-        self.write("tests/stages/kuna-x.xml", "<com>load file fixtures/x_c.obj</com>\n")
+        self.write("tests/stages/unlace-x.xml", "<com>load file fixtures/x_c.obj</com>\n")
         self.commit("used by a stage test")
         self.assertNotIn(("error", "intermediate", "x_c.obj"), self.checks())
 
@@ -93,30 +93,30 @@ class DiffLintTests(unittest.TestCase):
         self.assertEqual(self.checks(), [("error", "intermediate", "-e.o")])
 
     def test_an_edited_assertion_needs_a_trailer(self):
-        self.write("tests/stages/kuna-old.xml", STAGE.replace("(2,1\\)", "(2\\)"))
+        self.write("tests/stages/unlace-old.xml", STAGE.replace("(2,1\\)", "(2\\)"))
         self.write("tests/stages/catalog.xml", STAGE.replace('min="1" max="1"', 'min="2" max="2"'))
         self.commit("re-pin")
-        self.assertEqual(self.checks(), [("error", "assertion-edit", "kuna-old.xml")])
-        self.git("commit", "-q", "--allow-empty", "-m", "why\n\nAssertion-change: kuna-old: the helper reads one argument")
+        self.assertEqual(self.checks(), [("error", "assertion-edit", "unlace-old.xml")])
+        self.git("commit", "-q", "--allow-empty", "-m", "why\n\nAssertion-change: unlace-old: the helper reads one argument")
         self.assertEqual(self.checks(), [])
 
     def test_an_edited_toml_assertion_needs_a_trailer(self):
         self.git("checkout", "-q", "main")
-        self.write("tests/stages/kuna-t.toml", "[[match]]\nname = 'T #1'\ncount = 1\nliteral = 'a'\n")
+        self.write("tests/stages/unlace-t.toml", "[[match]]\nname = 'T #1'\ncount = 1\nliteral = 'a'\n")
         self.commit("toml stage test")
         self.git("checkout", "-q", "feature")
         self.git("merge", "-q", "main")
-        self.write("tests/stages/kuna-t.toml", "[[match]]\nname = 'T #1'\ncount = 2\nliteral = 'a'\n")
+        self.write("tests/stages/unlace-t.toml", "[[match]]\nname = 'T #1'\ncount = 2\nliteral = 'a'\n")
         self.commit("re-pin")
-        self.assertEqual(self.checks(), [("error", "assertion-edit", "kuna-t.toml")])
-        self.write("tests/stages/kuna-t.toml", "# a note\n[[match]]\nname = 'T #1'\ncount = 1\nliteral = 'a'\n")
+        self.assertEqual(self.checks(), [("error", "assertion-edit", "unlace-t.toml")])
+        self.write("tests/stages/unlace-t.toml", "# a note\n[[match]]\nname = 'T #1'\ncount = 1\nliteral = 'a'\n")
         self.commit("only a comment")
         self.assertEqual(self.checks(), [])
 
     def test_a_new_module_without_an_option_row_is_a_warning(self):
-        self.write("crates/unlace-decomp/src/p4_calls/kuna_thing.rs", "fn f() {}\n")
+        self.write("crates/unlace-decomp/src/p4_calls/unlace_thing.rs", "fn f() {}\n")
         self.commit("module")
-        self.assertEqual(self.checks(), [("warning", "option-policy", "kuna_thing.rs")])
+        self.assertEqual(self.checks(), [("warning", "option-policy", "unlace_thing.rs")])
         with contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(difflint.main(["main", "--root", str(self.root)]), 0)
 

@@ -1,5 +1,5 @@
 # An MSVC __cdecl import's by-value class argument is sized at the call site
-# (kuna_msvcbyval.rs, always on).
+# (unlace_msvcbyval.rs, always on).
 #
 # Issue: GH Noelo-Lab/kuna#990. An MSVC name states every parameter's type but
 # not the size of a class passed by value, so msvcsig applies such an import's
@@ -8,7 +8,7 @@
 # call-site recovery refuses every slot from that address up, and the call
 # keeps only the parameters before the class.
 #
-# Stage / sub-stage: P4 callee-prototype (`p4_calls/kuna_msvcbyval.rs`, run at
+# Stage / sub-stage: P4 callee-prototype (`p4_calls/unlace_msvcbyval.rs`, run at
 # the end of ActionDefaultParams on the raw p-code) feeding P3 heritage (the
 # constructor call creates the slot) and P6 ActionRestrictLocal (the slot
 # stays a mapped local).

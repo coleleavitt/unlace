@@ -38,7 +38,7 @@ Readable pseudocode for the initializer so I could recover the generated prompt,
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_100003790"
@@ -78,7 +78,7 @@ or a short diagnostic for this function would have "passed" and closed a live ne
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_100003790"
@@ -147,12 +147,12 @@ _none recorded_
 
 - round 2 B_DRAIN (captain): **ATTEMPT 1 ENDED ON THE $30 BUDGET CAP, AND THE WORK IS COMPLETE AND
   PUSHED — do not re-file, do not redesign.** Builder `b-r2-simd-constant-st` ran 63 min / 202
-  turns / $30.20 and died at the merge step: `.kuna-repipe/logs/b-r2-simd-constant-st.result.json`
+  turns / $30.20 and died at the merge step: `.unlace-repipe/logs/b-r2-simd-constant-st.result.json`
   says `subtype: error_max_budget_usd`, `terminal_reason: budget_exhausted`, so `status: failed`
-  here means "ran out of money", not "failed to build the thing" ([[kuna-repipe-budget-cap-salvage]]).
+  here means "ran out of money", not "failed to build the thing" ([[unlace-repipe-budget-cap-salvage]]).
   What exists: **PR #406**, branch `feat/re-simd-constant-string-initializer` @ `f22d7325`, one
   commit, 31 files, local tip == pushed head, worktree
-  `.kuna-repipe/worktrees/b-r2-simd-constant-st` CLEAN, and the commit's parent is `78025620` ==
+  `.unlace-repipe/worktrees/b-r2-simd-constant-st` CLEAN, and the commit's parent is `78025620` ==
   `origin/main` exactly, so **no rebase is owed and no count/baseline re-derivation is owed**.
 - round 2 B_DRAIN (captain): **hypothesis inconclusive -> upheld, with a correction the next tick
   must carry.** The filed cause (constant-mask `pshufb` lanes never fold, so 32 `SUB161` temporaries
@@ -168,9 +168,9 @@ _none recorded_
   IN_PROGRESS as of 15:20Z (mergeStateStatus UNSTABLE is that one running check, not a conflict).
   A salvage dispatch must be MERGE-BUTTON-ONLY: `RESUME_BRANCH=feat/re-simd-constant-string-initializer`,
   no redesign, no force-push, wait for the workspace suite, then merge under the `merge` lease.
-  Two mechanical traps first — `git worktree remove .kuna-repipe/worktrees/b-r2-simd-constant-st`
+  Two mechanical traps first — `git worktree remove .unlace-repipe/worktrees/b-r2-simd-constant-st`
   before spawning (the wid is derived from the need id and `git worktree add` fails on an occupied
-  path, falling back to a SILENT detached worktree, [[kuna-repipe-detached-branch-trap]]), and
+  path, falling back to a SILENT detached worktree, [[unlace-repipe-detached-branch-trap]]), and
   never `git branch -D` this branch.
 - closed: acceptance a-9667a93853f5 now PASSES at 96224463c9dc
 - round 2 wave 39 B_DONE (captain): closed on #406 (squash 96224463) with `closing_pr` written by

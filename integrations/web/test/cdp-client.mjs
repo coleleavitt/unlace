@@ -33,7 +33,7 @@ export async function launchChrome(chromePath = findChrome(), { width = 1280, he
   if (!Number.isFinite(startupTimeoutMs) || startupTimeoutMs < 0) {
     throw new Error('Chrome startup timeout must be a nonnegative finite number');
   }
-  const profile = mkdtempSync(join(tmpdir(), 'kuna-cdp-'));
+  const profile = mkdtempSync(join(tmpdir(), 'unlace-cdp-'));
   let child;
   let dispose = () => {};
   const cleanup = () => {

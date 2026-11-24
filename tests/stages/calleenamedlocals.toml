@@ -1,4 +1,4 @@
-# kuna issue #762 (P6 variables, naming-policy; P9 emission, declaration
+# unlace issue #762 (P6 variables, naming-policy; P9 emission, declaration
 # emission).  Two distinct pointer locals both took the name `object` from
 # the parameter of the callee they are passed to, and `dedupvardecls` then
 # collapsed their two identical declarations into one, so the emitted C read
@@ -76,7 +76,7 @@
 #
 # The naming fix: upstream gives every named high its own local Symbol, so
 # `lookForFuncParamNames`' `makeNameUnique` sees the first `object` and the
-# second becomes `object_00`.  kuna binds these names on the HighVariable
+# second becomes `object_00`.  unlace binds these names on the HighVariable
 # without a Symbol, so the uniqueness check now also consults the names
 # already bound in the pass, and a struct root only shares its name with other
 # roots.  The declaration fix: the identical-line collapse only merges lines

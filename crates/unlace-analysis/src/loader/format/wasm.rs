@@ -1079,7 +1079,7 @@ mod tests {
             .global("__stack_pointer", I32, true, 0x1_0000)
             .global("limit", I32, false, 64)
             .table(&[1], true)
-            .data(16, b"kuna");
+            .data(16, b"unlace");
         let bytes = builder.build();
         let module = Module::parse(&bytes).unwrap();
         assert_eq!(module.imported_functions(), 1);
@@ -1097,7 +1097,7 @@ mod tests {
         assert_eq!(module.stack_pointer(), Some(0));
         assert_eq!(module.globals[1].init, ConstExpr::I32(64));
         assert_eq!(module.elements[0].funcs, vec![Some(1)]);
-        assert_eq!(&bytes[module.data[0].bytes.clone()], b"kuna");
+        assert_eq!(&bytes[module.data[0].bytes.clone()], b"unlace");
         assert_eq!(module.exports.last().unwrap().kind, ExportKind::Table);
     }
 

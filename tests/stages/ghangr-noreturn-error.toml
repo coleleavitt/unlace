@@ -1,7 +1,7 @@
 # decbench F2: the error(nonzero,...)-conditional no-return recognizer
 # (part of `option noreturn_known`, DIV-16).
 #
-# kuna analog of the value-conditional slice of Ghidra's discovered-no-return
+# unlace analog of the value-conditional slice of Ghidra's discovered-no-return
 # analyzer (and angr's CFGBase._determine_function_returning callgraph
 # returning-fixpoint). glibc error(int status, int errnum, const char *fmt, ...)
 # and error_at_line() call exit(status) and NEVER return WHEN status != 0 - but

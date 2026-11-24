@@ -30,7 +30,7 @@
 #
 # Stage / sub-stage: P4 "own-input-prototype-recovery".  A run of unused
 # ARGUMENT REGISTERS inside the FUNCTION'S OWN input recovery does not veto a
-# later register the body reads before writing (kuna_inputparamgap.rs,
+# later register the body reads before writing (unlace_inputparamgap.rs,
 # always on).  Call sites are untouched: there a trial is
 # scored from the caller's data flow, where a live argument register really is
 # ambiguous and a long empty run really is evidence the recovery ran past the

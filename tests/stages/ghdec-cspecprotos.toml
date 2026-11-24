@@ -1,6 +1,6 @@
 # P4 calls / prototype-model registry (`cspecprotos`).
 #
-# kuna's `__thiscall` machinery was fully ported and permanently dead:
+# unlace's `__thiscall` machinery was fully ported and permanently dead:
 # ProtoModel::hasThisPointer, FuncProto::hasThisPointer/updateThisPointer/
 # getThisPointerStorage and ParameterPieces::isThisPointer all exist, are
 # driven from ActionInputPrototype and are consumed by P5 type inference,
@@ -30,7 +30,7 @@
 # it is emitted as an uninitialized local read before assignment (`int4 v1;
 # // ecx`), which is not valid C and loses the member access.  Asserts
 # #1/#2/#3 pin that this never happens: the spec's <eval_current_prototype>
-# nomination (kuna_evalcurrentproto.rs, always on) resolves the merged
+# nomination (unlace_evalcurrentproto.rs, always on) resolves the merged
 # __fastcall/__thiscall/__stdcall model per function and recovers ECX.
 #
 # Pass 2 (`option defaultprototype __thiscall`, the model this PR registers)
@@ -57,7 +57,7 @@ hex = '8b410cc38b0103442404c3'
 
 [script]
 commands = [
-    # kuna: `evalcurrentproto` default-on (DIV-71) makes the spec's own
+    # unlace: `evalcurrentproto` default-on (DIV-71) makes the spec's own
     # <eval_current_prototype> merged model recover ECX with no model named by
     # hand, which is this testcase's pass-2 result reached automatically. Pin
     # the historical <default_proto>-only evaluation here so both passes keep

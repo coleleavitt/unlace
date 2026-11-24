@@ -1,4 +1,4 @@
-# GH-873 (kuna): an AArch64 function returning a double in d0 prints as
+# GH-873 (unlace): an AArch64 function returning a double in d0 prints as
 # `undefined16 f(..)` with `v1._8_8_ = 0; return v1._0_16_;`.  The AArch64
 # cspec's floating output entries are the 16-byte q0..q3, and SLEIGH lifts
 # a scalar or 64-bit vector write (`fmov d0,#1.5`, `ldr d0,[x1]`,
@@ -11,7 +11,7 @@
 # Stage / sub-stage: P4 "output-prototype".  A return trial above the low
 # lane of a q register, whose value at every RETURN is the zero fill a narrow
 # write left (marked on the p-code as lifted), is retired
-# (kuna_zerofillreturn.rs, always on).
+# (unlace_zerofillreturn.rs, always on).
 #
 # Chunk 0x100000, clang 14 -O2 for aarch64-linux-gnu:
 #   double scale(int a, const double *g) { return *g * 1.5 + a; }

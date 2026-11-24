@@ -1,4 +1,4 @@
-# Kuna #810 / P6 byte origins and P9 shared storage. stackviews off reads fictitious upper fields; on prints the native byte/word stores without synthetic whole-RGB rewrites.
+# Unlace #810 / P6 byte origins and P9 shared storage. stackviews off reads fictitious upper fields; on prints the native byte/word stores without synthetic whole-RGB rewrites.
 
 [image]
 arch = 'x86:LE:64:default:windows'

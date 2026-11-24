@@ -1,4 +1,4 @@
-# Kuna DEX loader, synchronized and finally: P9 Java output, option
+# Unlace DEX loader, synchronized and finally: P9 Java output, option
 # javasync (default off; dex-javatry.xml covers the off form). The
 # script loads the committed DEX fixture built from
 # tests/stages/fixtures/dex/Tries.java and prints Java with the option on.

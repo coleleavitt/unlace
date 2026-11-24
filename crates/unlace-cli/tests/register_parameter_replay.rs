@@ -7,8 +7,8 @@ use std::process::Command;
 fn independent_byte_hash_and_pointer_values_do_not_share_a_register_local() {
     let fixture = common::fixture("lifetimes_register_domains_x86_64");
     common::process::required_output(&mut Command::new(&fixture));
-    let inferred = common::scratch_file("inferred-register-domains", "kuna");
-    let declarations = std::fs::read_to_string(format!("{fixture}.kuna")).unwrap();
+    let inferred = common::scratch_file("inferred-register-domains", "unlace");
+    let declarations = std::fs::read_to_string(format!("{fixture}.unlace")).unwrap();
     std::fs::write(
         &inferred,
         declarations
@@ -19,7 +19,7 @@ fn independent_byte_hash_and_pointer_values_do_not_share_a_register_local() {
     )
     .unwrap();
     for (declared, knowledge) in [
-        (true, format!("@{fixture}.kuna")),
+        (true, format!("@{fixture}.unlace")),
         (false, format!("@{}", inferred.display())),
     ] {
         for stack_views in ["off", "on"] {
@@ -135,7 +135,7 @@ fn renaming_the_dispatch_key_keeps_the_incoming_property() {
                 "stackviews",
                 stack_views,
                 "--assert",
-                &format!("@{fixture}.kuna"),
+                &format!("@{fixture}.unlace"),
             ]);
             for assertion in &assertions {
                 command.args(["--assert", assertion]);

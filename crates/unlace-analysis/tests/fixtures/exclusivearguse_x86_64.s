@@ -1,4 +1,4 @@
-# (kuna) `exclusivearguse` fixture -- RE-friction round 12, need
+# (unlace) `exclusivearguse` fixture -- RE-friction round 12, need
 # `bytecode-append-call-loses` (challenge 69b7492049fa49a2a260218f, stripped
 # MSVC x86-64 PE `vm.exe`, sub_140004540 -> sub_140007be0 @0x1400046cc),
 # reduced to one branch and re-spelled in the SysV ABI.

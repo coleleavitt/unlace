@@ -10,7 +10,7 @@ offset = '0x100000'
 readonly = true
 hex = '03e0000800000000'
 
-# kuna constselectjump reentry: a dispatcher loop jumps through one register,
+# unlace constselectjump reentry: a dispatcher loop jumps through one register,
 # and each step's code loads the next step's address and jumps back to the
 # dispatch. Flow recovers the dispatch's first target before the code that
 # re-enters it is decoded, so upstream keeps a one-entry table and drops every

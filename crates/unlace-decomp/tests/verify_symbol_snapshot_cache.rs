@@ -209,7 +209,7 @@ fn symbol_snapshot_cache_reuses_and_invalidation_rebuilds() {
     // 3. A mutation between two `build_arch_handle` calls must move the snapshot.
     arch.set_symbol_snapshot_cache(true);
     let e = arch.build_arch_handle();
-    map_a_global(arch, "kuna_snapshot_probe", 0xb000);
+    map_a_global(arch, "unlace_snapshot_probe", 0xb000);
     let f = arch.build_arch_handle();
     assert!(
         !Rc::ptr_eq(
@@ -224,7 +224,7 @@ fn symbol_snapshot_cache_reuses_and_invalidation_rebuilds() {
         "the new global never reached the global query"
     );
     assert!(
-        gq_after.contains("kuna_snapshot_probe"),
+        gq_after.contains("unlace_snapshot_probe"),
         "the rebuilt global query does not carry the symbol that invalidated it"
     );
 

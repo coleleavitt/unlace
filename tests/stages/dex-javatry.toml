@@ -1,4 +1,4 @@
-# Kuna DEX loader, try/catch: P2 flow + P8 structure + P9 Java output,
+# Unlace DEX loader, try/catch: P2 flow + P8 structure + P9 Java output,
 # option javatry (default on). The script loads the committed DEX fixture
 # built from tests/stages/fixtures/dex/Tries.java and prints Java.
 #

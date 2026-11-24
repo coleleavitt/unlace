@@ -170,7 +170,7 @@ export async function encodeCode(kind, fields) {
 
 /**
  * A code back into its fields: `{ok: true, ...}`, or `{ok: false, why}` with
- * `why` 'version' (another version of Kuna made it) or 'bad'.
+ * `why` 'version' (another version of Unlace made it) or 'bad'.
  */
 export async function decodeCode(code, kind) {
   if (typeof code !== 'string' || !CODE.test(code)) return { ok: false, why: 'bad' };

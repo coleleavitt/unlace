@@ -1,28 +1,28 @@
 ## The problem
 
-`kuna unpack` can only unpack what its `PackHeader` search finds. A repacker that
+`unlace unpack` can only unpack what its `PackHeader` search finds. A repacker that
 strips that header — or a private packer that borrows only UPX's codec — leaves an
 image whose payload is intact and whose metadata is gone, and there is no way to tell
-kuna where the stream is. Clobber the `UPX!` magic in the vendored witness and the
+unlace where the stream is. Clobber the `UPX!` magic in the vendored witness and the
 whole command is a wall:
 
 ```console
-$ python3 -c "b=bytearray(open('decompiler/crates/kuna-analysis/tests/fixtures/upx_packed_lzma_x86_64','rb').read()); b[0x3194:0x3198]=b'\0'*4; open('/tmp/stripped','wb').write(bytes(b))"
-$ kuna unpack /tmp/stripped
+$ python3 -c "b=bytearray(open('decompiler/crates/unlace-analysis/tests/fixtures/upx_packed_lzma_x86_64','rb').read()); b[0x3194:0x3198]=b'\0'*4; open('/tmp/stripped','wb').write(bytes(b))"
+$ unlace unpack /tmp/stripped
 error: /tmp/stripped: no UPX PackHeader found
-note: kuna unpack handles UPX-packed executables; this file is not one
-$ kuna unpack --help
-usage: kuna unpack <binary> [-o OUT] [--json]
+note: unlace unpack handles UPX-packed executables; this file is not one
+$ unlace unpack --help
+usage: unlace unpack <binary> [-o OUT] [--json]
 ```
 
 The stream is still at file offset `0x10c`, still LZMA1, still decodable. On the
 witness that filed this — a UPX0/UPX1/.rsrc PE with no `PackHeader` — the reader had
 already read the decoder's setup code, knew the range and the coder parameters, and
-had to leave kuna and finish the job in Python.
+had to leave unlace and finish the job in Python.
 
 ## The fix
 
-- `kuna unpack --raw-lzma START:END` skips discovery and decodes that range as one raw
+- `unlace unpack --raw-lzma START:END` skips discovery and decodes that range as one raw
   LZMA1 stream. Endpoints are virtual addresses, resolved through the object's section
   table and clamped to the bytes the file stores; `--raw-offsets` reads them as file
   offsets, which is also the only reading for an image no object parser recognises.
@@ -50,7 +50,7 @@ of that same block, with no `PackHeader` anywhere.
 
 Gates: `make test` PARITY OK 675/675 · `make test-stages` PARITY OK 687/687 ·
 `make rust-test` 6,103 passed / 377 targets, 0 failed · `make check-spec` OK ·
-`make test-cli` 88/88 · `kuna catalog --check` OK. On the filing witness the override
+`make test-cli` 88/88 · `unlace catalog --check` OK. On the filing witness the override
 recovers 5,489,913 bytes in 0.16 s, byte-identical to the reader's Python.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

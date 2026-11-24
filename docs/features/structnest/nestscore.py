@@ -7,7 +7,7 @@ sys.path.insert(0, os.environ.get("PINDB_DIR", str(Path(__file__).resolve().pare
 import pindb; pindb.pin()
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from scripts.decbench import structscore as SS
-RES = Path(os.environ.get("KUNA_DECBENCH_RESULTS", "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11"))
+RES = Path(os.environ.get("UNLACE_DECBENCH_RESULTS", "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11"))
 ARMS = {"param": [["structsynth", "param"]], "nest": [["structsynth", "nest"]]}
 BINS = [("coreutils", b, o) for b in ("fmt", "ls", "sort", "du") for o in ("O0", "O2")] + \
        [("grep", "grep", "O2"), ("tar", "tar", "O2"), ("findutils", "find", "O2"), ("diffutils", "diff", "O2"),
@@ -44,7 +44,7 @@ def one(job):
     SS.header_layouts = _raw
     return (f"{b} {o}", arm, {"layout_fields": out["fields"]["layout"], "layout_filler": out["filler"]["layout"],
             "nesting": out["raw"]["nesting"], "structs": out["raw"]["structs_in_header"],
-            "typed_params": out["raw"]["params_kuna_typed_as_a_struct"]})
+            "typed_params": out["raw"]["params_unlace_typed_as_a_struct"]})
 
 if __name__ == "__main__":
     jobs = [(p, b, o, a) for (p, b, o) in BINS for a in ARMS]

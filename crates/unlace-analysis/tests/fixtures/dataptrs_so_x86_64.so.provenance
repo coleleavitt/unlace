@@ -19,6 +19,6 @@ How it was built
   relocation kinds do not depend on the host toolchain.
 
 What it pins
-  kuna_dataptrs lists all four words with coverage dynamic-relocations, and
+  unlace_dataptrs lists all four words with coverage dynamic-relocations, and
   `unlace xrefs --to audit_target` reports exported_tab's first word as a pointer
   row.

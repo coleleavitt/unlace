@@ -1,6 +1,6 @@
 ## The problem
 
-`kuna functions` loses `main` on a non-PIE x86-64 executable, and with it
+`unlace functions` loses `main` on a non-PIE x86-64 executable, and with it
 everything `main` calls. `_start` names `main` explicitly, but the entry oracle
 only reads the position-independent encoding of that hand-over.
 
@@ -8,7 +8,7 @@ The repro is in the tree — `funcstart_patterns_x86_64` is a stripped, non-PIE
 fixture whose `main` sits at `0x401020`:
 
 ```
-$ kuna functions decompiler/crates/kuna-analysis/tests/fixtures/funcstart_patterns_x86_64 --json \
+$ unlace functions decompiler/crates/unlace-analysis/tests/fixtures/funcstart_patterns_x86_64 --json \
     | jq -r '.count, (.functions[] | .address_hex)'
 8
 0x401000
@@ -25,7 +25,7 @@ $ kuna functions decompiler/crates/kuna-analysis/tests/fixtures/funcstart_patter
 
 ```
 $ objdump -d --start-address=0x401058 --stop-address=0x401065 \
-    decompiler/crates/kuna-analysis/tests/fixtures/funcstart_patterns_x86_64
+    decompiler/crates/unlace-analysis/tests/fixtures/funcstart_patterns_x86_64
   401058: 48 c7 c7 20 10 40 00   mov    $0x401020,%rdi
   40105f: ff 15 8b 2f 00 00      call   *0x2f8b(%rip)     # __libc_start_main
 ```
@@ -60,7 +60,7 @@ newly-recovered start was checked against its disassembly.
 
 `tests/cli/elf-discovery-omits-explicit.json` is the acceptance probe on the
 vendored fixture above; it fails without this change. Three cargo tests in
-`kuna-analysis` cover the fixture's `main`, the three guards (no following call,
+`unlace-analysis` cover the fixture's `main`, the three guards (no following call,
 two competing immediates, an immediate outside every executable section), and the
 `ff /2` vs `ff /4` ModRM read.
 
@@ -68,6 +68,6 @@ Sweeps: 119 of the 131 fallback-reachable system binaries were runnable on both
 builds and two changed, both gaining a real `main` (`/usr/bin/busybox` 2116 → 2164);
 across the 43 ELF binaries in the RE corpus, two changed, both gaining a real
 `main`. `make test` 675/675, `make test-stages` 725/725, `make rust-test`,
-`make check-spec`, `make test-cli` 109/109 and `kuna catalog --check` all green.
+`make check-spec`, `make test-cli` 109/109 and `unlace catalog --check` all green.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

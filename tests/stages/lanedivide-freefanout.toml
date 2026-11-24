@@ -1,4 +1,4 @@
-# kuna lane division: a split whose lanes would give a free varnode two
+# unlace lane division: a split whose lanes would give a free varnode two
 # readers.  sub_e87b0 of Ubuntu 26.04's bash (package bash 5.3-2ubuntu1,
 # amd64, /usr/bin/bash sha256
 # 3efccc187bafa75ff1e37d246270ab3e7aa559f242c7a52bf3ec2a1b5450bdbd), image

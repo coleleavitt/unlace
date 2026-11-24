@@ -5,11 +5,11 @@
 A function parameter that the body only ever dereferences is declared as an
 integer, and whether it gets a pointer type at all depends on nothing more than
 whether the first field the compiler reads happens to sit at offset 0. Three
-lines of C, stock `gcc -O2`, nothing kuna-specific:
+lines of C, stock `gcc -O2`, nothing unlace-specific:
 
 ```
 $ printf 'struct S { long pad; int a; int b; };\nint sum(struct S *s) { return s->a + s->b; }\nint main(void){ struct S s={0,1,2}; return sum(&s); }\n' > st.c && gcc -O2 -o st st.c
-$ kuna decompile ./st sum
+$ unlace decompile ./st sum
 int sum(long a0)
 {
   return *(int *)(a0 + 8) + *(int *)(a0 + 0xc);
@@ -21,9 +21,9 @@ split shows on two neighbouring functions of coreutils `fmt` -O2 (stripped),
 with `--option libctypes off` so the callee tables do not answer first:
 
 ```
-$ kuna decompile-all fmt --addr 0x3000 --option libctypes off | sed -n 2p
+$ unlace decompile-all fmt --addr 0x3000 --option libctypes off | sed -n 2p
 void sub_3000(unsigned long *a0)          # dereferenced at offset 0
-$ kuna decompile-all fmt --addr 0x3420 --option libctypes off | sed -n 2p
+$ unlace decompile-all fmt --addr 0x3420 --option libctypes off | sed -n 2p
 void sub_3420(long a0,unsigned int a1)    # dereferenced at +8 and +0x10
 ```
 
@@ -60,7 +60,7 @@ GT-dominant `char *`. The up-edge is recorded here as a possible v2, not shipped
 
 ## 3. The rule
 
-`kuna_ptrfromuse::pointer_from_use(data, vn, mode)`, called from
+`unlace_ptrfromuse::pointer_from_use(data, vn, mode)`, called from
 `build_localtypes`, returns a candidate only when:
 
 * `vn` is a function **input** whose storage `FuncProto::possible_input_param`

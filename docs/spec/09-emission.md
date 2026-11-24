@@ -144,11 +144,11 @@ sub-decisions `cast-policy`, `naming-policy`, `literal-format`,
 `type-definition-preamble`, `constant-address-global`, and `external-refinement` — plus, via the `presentcompare` group row, the P9 half of the P3-declared `comparison-canonicalization` decision
 (the console/`kassert` assertion writer — an output *consumer* that writes P0
 assertions for the next run, not an algorithm of this folder). One P9-registered
-pass lives outside the folder: the (kuna, GH-558) comparison canonicalizer
+pass lives outside the folder: the (unlace, GH-558) comparison canonicalizer
 `crates/unlace-bandb-base/src/p3_dataflow/compareform.rs
 (ActionPresentCompareForm)`, group `presentcompare`, is described with its
 folder in chapter [03](03-ssa-and-simplification.md). Option defaults, tiers,
-and flip guidance for the kuna settable options named below live in the
+and flip guidance for the unlace settable options named below live in the
 generated catalog ([docs/options.md](../options.md)); the upstream console
 knobs (`nocastprinting`, `integerformat`, `nullprinting`, `inplaceops`,
 `maxlinewidth`, `indentincrement`) are surfaceTable rows in `phases.toml`, set
@@ -239,7 +239,7 @@ to same-width casts, because the slice does not infer a callee's return
 prototype. Explicit floating conversion opcodes retain their numeric
 conversion, and structured member extraction retains priority.
 
-(kuna) Under `option nanignore none`, a retained widening `FLOAT_FLOAT2FLOAT`
+(unlace) Under `option nanignore none`, a retained widening `FLOAT_FLOAT2FLOAT`
 whose input may be a signaling NaN and whose result reaches a conversion back
 to the source format materializes its C result in a volatile compound literal
 (`crates/unlace-emit/src/p9_emit/printc.rs (PrintC::op_float_quiet_ir)`,
@@ -441,7 +441,7 @@ conversions after any required input reinterpretation.
 **Condition form (P9/`condition-form`, `option truthycond`).** In boolean
 contexts — an if/while/for/ternary condition, or an operand of `&&`/`||`/`!`
 — a comparison against zero carries no information beyond the value's own
-truthiness, so the kuna default (DIV-37) renders `if (x != 0)` as `if (x)`
+truthiness, so the unlace default (DIV-37) renders `if (x != 0)` as `if (x)`
 and `if (p == NULL)` as `if (!p)`. The printer threads a
 `CONDITION_CONTEXT` mod bit from the condition push sites
 (`printc.rs (PrintC::op_push_ir)` scopes it off across every
@@ -456,7 +456,7 @@ truthycond off` restores upstream Ghidra's explicit comparisons, exercised
 by `tests/stages/cnorm-truthycond.toml`.
 
 **Brace form (P9/`brace-form`, `option braceelide`).** A single-statement if
-body renders braceless with the statement indented on the next line (kuna
+body renders braceless with the statement indented on the next line (unlace
 default, DIV-38): `printc.rs (PrintC::emit_block_if)` consults
 `printc.rs (PrintC::if_body_elides)` — the body must be a plain
 single-statement `BlockCopy` leaf (exactly one op that the statement walk
@@ -467,7 +467,7 @@ braces; the pre-existing `if (cond) goto L;` one-liner and the `else if`
 collapse are unaffected. `option braceelide off` restores upstream Ghidra's
 braced form, exercised by `tests/stages/cnorm-braceelide.toml`.
 
-**(kuna) Decode-failure halt statements (`decodehalt.rs`, always on).**
+**(unlace) Decode-failure halt statements (`decodehalt.rs`, always on).**
 A `CPUI_RETURN` the flow follower planted because the bytes would not decode
 (chapter 02) is not a return, and printing it as one asserts something about the
 program that the analysis never established. `printc.rs` renders the three
@@ -510,13 +510,13 @@ function's trailing block, and the reason the direct `sblocks_basic_tail` lookup
 is not sufficient. The motivation is measured and structural as well as
 stylistic: pyjoern merges `FUNCTION_END` into its predecessor only when that
 predecessor's sole successor is `FUNCTION_END`, so a source function whose tail
-is an `if` or a loop has NO node there at all, while kuna's printed `return;`
+is an `if` or a loop has NO node there at all, while unlace's printed `return;`
 re-materialises one — one extra node, one or two extra edges, and an
 `is_exitpoint` role flip that on its own defeats the GED isomorphism test.
 
 **Warning style (P9/`warning-style`, `option warnstyle`).** Analysis warnings
 render as terse `// slug` end-of-line comments on the line they describe
-(kuna default `inline`, DIV-39): `printc.rs (PrintC::emit_comment_group)`
+(unlace default `inline`, DIV-39): `printc.rs (PrintC::emit_comment_group)`
 maps each WARNING-type comment through the slug table
 (`printc.rs (warning_slug)` — `no-return`, `branch-flip`, `return-dupe`,
 `jump-as-call`, count-suffixed slugs like the header's `early-return x3` and
@@ -649,9 +649,9 @@ is a union but the high's preferred type is scalar. The operand then prints as
 `storage.integer` rather than a cast of the whole `storage` union, which C
 rejects. Only an existing selection is copied; no field is chosen anew.
 
-**A float stored into unknown bytes (kuna).** `cast_standard` needs no cast
+**A float stored into unknown bytes (unlace).** `cast_standard` needs no cast
 into `TYPE_UNKNOWN`, so upstream prints a float stored through a pointer to
-unknown bytes as `*puVar1 = fVar2`, a bit copy into an `undefined4`. kuna's C
+unknown bytes as `*puVar1 = fVar2`, a bit copy into an `undefined4`. unlace's C
 declares unknown bytes as an integer, and the same assignment is C's numeric
 float-to-integer conversion: a pointer whose other stores are integer bit
 patterns (clang stores a `1.0f` constant as `0x3f800000` from an integer
@@ -668,7 +668,7 @@ pointee prints as `xunknown4`, upstream's bit copy, and the store keeps
 upstream's text. A float narrower than C's `float` (a half float) has no C type
 to point at and is left alone. This is a correctness fix with no option.
 
-**A signed read of an unsigned-printing expression (kuna).** The `U` suffix
+**A signed read of an unsigned-printing expression (unlace).** The `U` suffix
 `mark_explicit_unsigned` gives a constant makes its whole C expression
 unsigned (`a0 - 1U`), and so does an operand declared `unsigned` or
 `undefinedN` at the expression's own width or wider, but the Varnode the
@@ -689,7 +689,7 @@ and the read prints `(unsigned long)(int)(a1 - 1U) >> 6`. The suffix stays: an
 unsigned reader of the same expression (`4 < a4 + 2U`) still needs it. This is
 a correctness fix with no option.
 
-**An unsigned read of an expression C evaluates as signed (kuna).** The
+**An unsigned read of an expression C evaluates as signed (unlace).** The
 mirror case: C promotes an operand narrower than `int` to `int`, so
 `(*a1 ^ 0x80) - 0x80` over an `unsigned short *a1` is an `int` in C, and so
 is `(int)a0 + 1`, while `arithmeticOutputStandard` types the 32-bit Varnode
@@ -720,7 +720,7 @@ converts this one itself). Expressions narrower than `int` are left to the
 upstream integer-promotion checks (`checkIntPromotionForCompare`,
 `checkIntPromotionForExtension`). This is a correctness fix with no option.
 
-**A switch on an expression narrower than `int` (kuna).** A `BRANCHIND`
+**A switch on an expression narrower than `int` (unlace).** A `BRANCHIND`
 selector of one or two bytes is computed at its own width, so a byte
 `a0 + 1` is 0x80 when `a0` is 0x7f, but C adds the promoted operands as
 `int`: `switch(a0 + '\x01')` switched on 128 and missed the `case -0x80:`
@@ -733,7 +733,7 @@ value already extends the way that type does
 case labels already follow the selector's type. Only output languages with C's
 integer promotion get the cast. This is a correctness fix with no option.
 
-**A narrow equality of mixed sign (kuna).** An `INT_EQUAL` or `INT_NOTEQUAL`
+**A narrow equality of mixed sign (unlace).** An `INT_EQUAL` or `INT_NOTEQUAL`
 of operands narrower than `int` compares their bytes, but C promotes each side
 to `int` by the sign of its own type before it compares. The upstream rule casts
 both sides to the more ordered of the two types only where an operand's
@@ -755,7 +755,7 @@ where the binary's byte compare does not. An integer operand beside a `bool`
 of its size is the compared type instead (`integer_beside_bool`), and the
 comparison prints `*a0 == (a1 != 0)`. This is a correctness fix with no option.
 
-**Integer equality on float bits (kuna).** An `INT_EQUAL` or `INT_NOTEQUAL`
+**Integer equality on float bits (unlace).** An `INT_EQUAL` or `INT_NOTEQUAL`
 compares bits, but when the more ordered operand type is a 4- or 8-byte float
 the upstream rule coerces both sides to the float, and the comparison printed
 as a C float `==`: `(v.u == 0x80000000u)` printed `a0 == -0.0`, true for
@@ -779,7 +779,7 @@ still print `a0 == 1.0f`; and against `+0.0` when the other side is a
 (`-7.4544637e-06`, `1.4013e-45`) prints its bits instead.
 `FLOAT_EQUAL`/`FLOAT_NOTEQUAL` are other opcodes and still print `a == b`.
 
-**Narrowed call arguments (kuna).** Dead-code analysis counts only the
+**Narrowed call arguments (unlace).** Dead-code analysis counts only the
 possibly-nonzero bits of a call input as consumed, so when a caller
 zero-extends a sub-`int` value into its argument register the subvariable-flow
 rules (chapter [03](03-ssa-and-simplification.md)) trim the input to the narrow
@@ -917,7 +917,7 @@ Structure renaming first adjusts the recorded byte columns. Streamed exports, no
 reconcile incomplete batches. The worker path still matches
 serial output with `--option protoorder off` on both.
 
-**Casts C already performs (kuna `castimplied`).** `is_extension_cast_implied`
+**Casts C already performs (unlace `castimplied`).** `is_extension_cast_implied`
 hides an extension only when integer arithmetic, or a comparison against an
 explicit operand of the same metatype, reads it; for every other reader, and for
 any extension at the top of a statement, it answers no. So upstream prints
@@ -998,7 +998,7 @@ output language without implicit integer conversions (Rust). The ported
 whose functions print the same values with the option off and on, under gcc and
 clang.
 
-**Casts the conditional performs (kuna `castternary`).** `iteregion` prints an
+**Casts the conditional performs (unlace `castternary`).** `iteregion` prints an
 assignment diamond as `dest = c ? a : b;`, and each arm keeps the cast the IR
 put on it: a table-driven decoder reads `v2 = (s[i] != '=') ? (int)*(char *)(t +
 s[i]) : 0;`. The same diamond printed as if/else has no cast, because
@@ -1047,7 +1047,7 @@ base64 decoder and arms of `char`, `unsigned char`, `short` and `int` against
 `int`, unsigned, `long` and negative arms, built with gcc and clang at -O0 and
 -O2, printing the binary's values with the option off and on.
 
-**Widenings C performs by itself (kuna `castwiden`).** Upstream hides an
+**Widenings C performs by itself (unlace `castwiden`).** Upstream hides an
 INT_SEXT/INT_ZEXT under arithmetic only when the other operand is an explicit
 variable of the same metatype (or a constant no wider than `int`), so a widened
 `int` beside a loaded `long` prints `((long *)a0)[1] + (long)a1`, beside a
@@ -1126,13 +1126,13 @@ output. Pinned by `tests/stages/castwiden.toml` (three passes) and by a
 compiled round trip (`unlace-cli/tests/decompile_all_cli.rs`,
 `an_implied_widening_round_trips_through_the_printed_c`) over gcc and clang
 builds at -O0 and -O2, printed with each value and compiled with gcc and clang
-at -O0 and -O2 (`-fwrapv`, so the 32-bit arithmetic kuna prints as `int` wraps as
+at -O0 and -O2 (`-fwrapv`, so the 32-bit arithmetic unlace prints as `int` wraps as
 the machine's does), all printing the binary's values for negative inputs,
 0x80000000..0xffffffff, sums past 32 bits and squares past 2^32, including the
 shared, parenthesized and regrouped shapes above.
 
-**Whole-struct copies as assignments (kuna `structassign`).** A compiler copies a
-struct with `memcpy` (or inlines the copy, which kuna's copy folds turn back into
+**Whole-struct copies as assignments (unlace `structassign`).** A compiler copies a
+struct with `memcpy` (or inlines the copy, which unlace's copy folds turn back into
 `memcpy`), so `*d = *s;` prints as `memcpy(d,s,0x18);`. With the option
 `structassign` on (default off), the C printer's call path asks
 `crates/unlace-emit/src/p9_emit/structassign.rs (recover)` before it
@@ -1147,7 +1147,7 @@ text changes; the call stays in the IR. This is Hex-Rays' structure-copy
 recognition (hexx64 `sub_4C8BB0`), which checks the same size against the
 pointee type.
 
-**Narrowings C performs by itself (kuna `castnarrow`).** `castimplied` leaves
+**Narrowings C performs by itself (unlace `castnarrow`).** `castimplied` leaves
 a widening out where the destination converts the value anyway, and keeps every
 truncation and sign change. So a value narrowed into a destination of exactly
 the narrow type kept its cast: `v1 = (unsigned int)a0;` into an
@@ -1225,7 +1225,7 @@ beside a pointer, or holds a float statement's result as a float or raw bytes
 (`callrettype.rs (refused_token)`, chapter 04): the listing declares that
 return, so the caller prints the conversion (`v1 = (long)sub_eecc(a0,v3)`)
 instead of an assignment C rejects or pointer arithmetic it would scale, and
-stores a float through a `float *`. (kuna `floatbits.rs`) Before any of that, a
+stores a float through a `float *`. (unlace `floatbits.rs`) Before any of that, a
 call to a callee whose float return is the bits of its float-register input
 (chapter 05), whose output the caller holds as an integer of the float's width
 in another register than the callee returns in (what the call left there),
@@ -1261,7 +1261,7 @@ same last-chance the C++ takes. A resolved pointer edge materializes as a
 compatible field choice instead of casting when one exists, so unions prefer
 field syntax over cast syntax.
 
-**Pointer arithmetic in pointer terms (kuna, `castarith`).** A pointer plus a
+**Pointer arithmetic in pointer terms (unlace, `castarith`).** A pointer plus a
 constant byte offset reaches this pass as a plain `INT_ADD` whenever chapter 05
 could build no `PTRSUB` or `PTRADD` for it: a `void *` base has no field at the
 offset and no element size, and a typed base whose element is not the access
@@ -1316,7 +1316,7 @@ base is converted pointer to pointer with no integer in between (or, under a
 shared cast, from the integer the integer form converted too), the element
 is the access width, C's `sizeof` of the printed `T` is that same width, and
 the printed index reads back as `k`. The `sizeof` condition is why an enum
-element keeps the integer form (`castarith.rs (plan)`). kuna prints every
+element keeps the integer form (`castarith.rs (plan)`). unlace prints every
 enum as a plain `enum`, whose size C leaves to the implementation (an `int`
 under gcc and clang), while a packed enum, one compiled with `-fshort-enums`,
 or a C++ `enum class : uint8_t` is 1 or 2 bytes in the binary, so
@@ -1377,7 +1377,7 @@ carries no op, as for every native subscript, so an instruction whose only
 printed ops were the add and the access through it maps to no line in
 `line_mappings` and drops out of its variable's `addresses`.
 
-**A variable index and a byte-pointer difference (kuna, `castindex`).** The
+**A variable index and a byte-pointer difference (unlace, `castindex`).** The
 same `INT_ADD` reaches this pass when the addend is a variable, and an `INT_SUB`
 of two pointers reaches it as integer arithmetic too: the default input arm
 converts both operands to the signed integer of their width. An array walk
@@ -1458,7 +1458,7 @@ for the stack. A reference into a mapped global therefore keeps its symbol and
 field (`mapped_samples[i & 3].imag`, `&g_recs[0x30]`) instead of falling back
 to the absolute address, which recompiled C would read from the wrong place.
 The upstream LOAD/STORE pointer diagnostics (`checkPointerIssues`) are
-warnings-only in C++, and in kuna the hook `coreaction_casts.rs
+warnings-only in C++, and in unlace the hook `coreaction_casts.rs
 (Funcdata::cast_check_pointer_issues)` is a faithful no-op — a missing
 diagnostic comment, never a changed expression. Apart from the narrowed
 call arguments above, including the open 32-to-64-bit case, when the cast
@@ -1592,7 +1592,7 @@ selector emits `-0xd =>` where it once printed `0xfff3 =>`, a pattern rustc
 rejects as out of range for `i16`, and a sign-extended `i16` selector no
 longer carries the widened `0xfffffff3`.
 
-**(kuna) Dynamic ARM LSL in C.** ARM register-controlled `LSL` uses the low
+**(unlace) Dynamic ARM LSL in C.** ARM register-controlled `LSL` uses the low
 eight bits of its count, so counts 32 through 255 must produce zero for a
 32-bit value. C makes a shift by 32 or more undefined. The selector and
 repeatability proof live in
@@ -1633,7 +1633,7 @@ same plain way, `(uint4)x << (count & 0xff)`, which matches ARM only for counts
 below 32 and drops the conditional's branch from the control-flow graph. Both
 cases are pinned in `tests/stages/armshiftguard.toml`.
 
-**(kuna) Fixed ARM LSL with a signed operand in C.** A constant-count 32-bit
+**(unlace) Fixed ARM LSL with a signed operand in C.** A constant-count 32-bit
 `INT_LEFT` still computes the low 32 bits when its declared operand is signed.
 C11 instead makes a negative signed shiftee or signed overflow undefined,
 including when the function converts the result to unsigned on return.
@@ -1671,7 +1671,7 @@ signed-comparison probes pass the shifted result to a typed comparison helper
 so the comparison cannot canonicalize the shift into signed multiplication.
 Defining signed multiplication on overflow is outside this repair.
 
-**(kuna) Fixed 64-bit shifts in C — `option armconstshift all`.** The value
+**(unlace) Fixed 64-bit shifts in C — `option armconstshift all`.** The value
 `all` extends the ARM repair above to every architecture's fixed 64-bit left
 shift whose count is below 64 and whose operand prints as signed, including an
 implied sign extension of a narrower value. It computes through an unsigned
@@ -1692,7 +1692,7 @@ default spelling and the converted one on x86-64, AArch64, PowerPC64 and MIPS64
 objects from `tests/fixtures/wide-integer-emission/`; `unlace-cli/tests/wide_shift_emission.rs`
 executes the emitted C at O0/O2 under UBSan over signed boundary bit patterns.
 
-**(kuna) Wrapping widened additions — `option wrapadd`.** A four-byte addition
+**(unlace) Wrapping widened additions — `option wrapadd`.** A four-byte addition
 whose result a wider sign extension observes, such as MIPS `addiu` or RISC-V
 `addw` feeding a 64-bit register, wraps at 32 bits on the machine. Printed as
 `(long)(a + 1)` over signed operands, the C addition overflows an `int` instead,
@@ -1772,13 +1772,13 @@ end-to-end by `tests/stages/ghdec-branchflip-armswap.toml`.
 produced no `sblocks`), the printer does not emit a flat op listing: it keeps
 the brace-matched prototype shell and plants a single comment in the body
 (`printc.rs (PrintC::emit_function_document)`). The failure mode is
-deliberately loud and syntactically valid, so batch consumers (`kuna
+deliberately loud and syntactically valid, so batch consumers (`unlace
 decompile-all --json`) get a parseable function with an explicit tombstone
 rather than pseudo-C garbage. The comment distinguishes the two ways a
 function can arrive here, because they call for different investigations: when
 the drive recorded *why* the pipeline aborted for this function
 (`crates/unlace-middle/src/substrate/funcdata.rs
-(Funcdata::set_kuna_pipeline_failure)` — chapter [00](00-overview.md) §0.2), the tombstone is
+(Funcdata::set_unlace_pipeline_failure)` — chapter [00](00-overview.md) §0.2), the tombstone is
 `/* WARNING: decompilation failed: <reason> */`, naming the recoverable error
 verbatim; otherwise the pipeline genuinely ran and structuring produced
 nothing, and the tombstone is `/* WARNING: structured blocks unavailable
@@ -1814,7 +1814,7 @@ a nested single-field container must not be resolved a second time through a
 cache lookup for a type that is not the value on that edge. Off keeps the
 upstream walk, which descends into every single-field struct.
 
-(kuna) The character formatter prints a byte above 0x7f of a `signed char` or
+(unlace) The character formatter prints a byte above 0x7f of a `signed char` or
 `unsigned char` type (a character type that is not the target's own `char`,
 chapter 01's DWARF reader makes them) as a number of the type's sign, not as
 `'\xc8'`: that literal is -56 or 200 by the sign of the compiling target's
@@ -1830,7 +1830,7 @@ where it printed the functional `ZEXT14(b[0])`
 
 **Which symbols enter the partial walk.** Upstream routes *every* partial cover
 of a mapped Symbol through that walk — the walk itself decides, per type, what
-token describes the access — and kuna does the same: STRUCT, UNION and ARRAY
+token describes the access — and unlace does the same: STRUCT, UNION and ARRAY
 symbols all enter it. The array case is the one worth stating, because an array
 is the only composite whose member token can be chosen without looking at the
 access size, and doing so is wrong. The walk's ARRAY arm applies upstream's
@@ -1852,11 +1852,11 @@ subscript into the cached field (`arr[3].ffield`).
 upstream breaks out at the top of the walk whenever the request is the symbol
 in full (offset 0, size equal to the symbol's) and leaves the caller to render
 a bare name. For an array that break is the same size-blindness one level up:
-kuna's caller then took its own whole-array `name[index]` branch, and a
+unlace's caller then took its own whole-array `name[index]` branch, and a
 sixteen-byte `movaps` transfer through a `char v30[16]` VM register bank
 printed `v30[0] = v32[0];` — one byte named on each side of a sixteen-byte
 copy — while the four-byte accesses to the same bank a few lines away printed
-`v30._0_4_`. **(kuna) arraycoverwidth** (always on,
+`v30._0_4_`. **(unlace) arraycoverwidth** (always on,
 `crates/unlace-emit/src/p9_emit/arraycoverwidth.rs
 (spans_multiple_elements)`) suppresses that break for a TYPE_ARRAY whose
 element stride is smaller than the access, so a full-width cover falls to the
@@ -1902,9 +1902,9 @@ Partial and whole-array covers use the same checked interval:
 the offset plus access size must fit within the mapped object. This does not
 change the declared array type or the recovered operations.
 
-Reads call an emitted `kuna_bytearray_load<bits>_<le|be>` helper through the
+Reads call an emitted `unlace_bytearray_load<bits>_<le|be>` helper through the
 address of the first byte, then convert to the read-facing integer type. Stores
-call the matching `kuna_bytearray_store<bits>_<le|be>` helper with the value
+call the matching `unlace_bytearray_store<bits>_<le|be>` helper with the value
 expression evaluated once. Same-width integer casts into an array view use
 scalar bits instead of an invalid C array cast. The helper reads or writes exactly the requested
 bytes through character pointers; it neither dereferences a wider pointer nor
@@ -1914,8 +1914,8 @@ the host byte order. A read used in a store argument completes before the store
 helper starts, preserving overlapping copies. Each width/endian pair has guarded
 static inline definitions so independently emitted functions can share one C
 translation unit. The preamble includes `<stdint.h>` and `<limits.h>` and asserts
-that a C byte has eight bits. The `kuna_bytearray_` helper names and
-`KUNA_BYTEARRAY_C_` guards belong to this generated support surface.
+that a C byte has eight bits. The `unlace_bytearray_` helper names and
+`UNLACE_BYTEARRAY_C_` guards belong to this generated support surface.
 
 The option deliberately leaves volatile accesses in their existing form:
 splitting a wide device access into several volatile byte accesses changes the
@@ -1933,7 +1933,7 @@ bodies at `-O0` and `-O2` with strict aliasing and UBSan, including unaligned
 transfers, overlapping stores, signed reads, const sources, both ARM endian
 variants and an unchanged named-struct control.
 
-**Partial accesses as C (kuna `partialaccess`, default `on`).** Everywhere
+**Partial accesses as C (unlace `partialaccess`, default `on`).** Everywhere
 else the walk ends on the artificial member, which is Ghidra's notation and not
 C: `v1._4_2_ == 2`. `option partialaccess off` keeps that notation, and the
 datatest scripts that pin it set the option off. With the option on, `printc.rs (PrintC::push_partial_walk)` takes the
@@ -2005,13 +2005,13 @@ intrinsic's value. Nothing else changes.
 
 **Leaves with no Symbol.** Not every leaf has one. When no mapped symbol covers
 the storage the leaf falls through to the upstream `pushUnnamedLocation`
-naming, `printc.rs (kuna_unnamed_location_name)`: the register name covering
+naming, `printc.rs (unlace_unnamed_location_name)`: the register name covering
 `(address, size)` if the translator has one, else the angr-style `dat_<addr>`
 for a data space (§9.3), else the capitalized `Space<hex>` form —
 `Stack00000008`, `Unique00001a80`. These name the *storage*, not a variable,
 and are deliberately never declared: they are extern-like markers that a value
 lives somewhere the analysis never resolved to a variable, exactly as upstream's
-`stack0x00000008` is (kuna capitalizes the space and drops the `0x` so the
+`stack0x00000008` is (unlace capitalizes the space and drops the `0x` so the
 token is at least a legal C identifier).
 
 **Globals wider than their Symbol.** `coreaction_render.rs (ActionMapGlobals)`
@@ -2023,11 +2023,11 @@ each interior Varnode of the group that no Symbol holds is named after the
 Symbol and its byte distance from it (`small_4`, upstream `coverVarnodes`).
 These names live on the function (`Funcdata::global_covers`). For a group no
 Symbol holds, upstream creates a `DAT_` Symbol, typed by the widest Varnode when
-it spans the group and `undefined<N>` otherwise. Kuna records the same group
+it spans the group and `undefined<N>` otherwise. Unlace records the same group
 (`Funcdata::new_globals`) and names that storage `dat_<addr>` when it prints it.
 
 Upstream adds both kinds of Symbol to the global scope, so every function
-decompiled after this one in the session sees them. Kuna's per-function
+decompiled after this one in the session sees them. Unlace's per-function
 `GlobalQuery` is a snapshot no action can write, so with `option mapglobalsyms
 on` (default off) the decompile driver adds them once the function is done
 (`crates/unlace-emit/src/p9_emit/mapglobalsyms.rs (persist)`,
@@ -2065,7 +2065,7 @@ names real storage, and it renders `&Stack00000008` through the same
 unnamed-location leaf (`printc.rs (PrintC::push_spacebase_unnamed_ir)`, whose
 address comes from `printc.rs (spacebase_unnamed_address)`, the C++
 `TypeSpacebase::getAddress`). What that arm must not do is fall back to the
-*functional* render `PTRSUB(ESP, 8)`, kuna's behavior before this leaf existed:
+*functional* render `PTRSUB(ESP, 8)`, unlace's behavior before this leaf existed:
 `PTRSUB` is an internal p-code operator and `ESP` a raw machine register, and
 emitting either makes the whole function something no C parser accepts
 (`tests/stages/ghdec-spacebase-unnamed.toml`, DIV-46).
@@ -2098,7 +2098,7 @@ cast and rebuild without pointer-compatibility warnings.
 
 The structure arm has the same failure through a different door. C++
 `opPtrsub` reads the pointer type of the *variable* the base belongs to
-(`getHighTypeReadFacing`), and the kuna printer reads the base Varnode's own
+(`getHighTypeReadFacing`), and the unlace printer reads the base Varnode's own
 type, which is the same thing until one member of a merged variable carries a
 narrower pointer than the rest. A global assigned a `struct_N *` and also read
 back into a loop over `unsigned int *` is such a variable: `ActionSetCasts`
@@ -2141,7 +2141,7 @@ carries each C operator's precedence, associativity, arity stage, spacing, and
 its negated complement — and *at push time* decides parenthesization by the
 pure predicate `printlanguage.rs (parentheses)`: compare the enclosing token's
 precedence/associativity/type against the incoming one, with special stages
-for pre/post-surround tokens (calls, subscripts, casts) and the (kuna, DIV-1,
+for pre/post-surround tokens (calls, subscripts, casts) and the (unlace, DIV-1,
 GH-2786) rule that adjacent identical `-`/`+` prefix tokens always
 parenthesize so they cannot merge into `--`/`++`.
 
@@ -2176,7 +2176,7 @@ feeding a STORE address prints `*ptr` or hides the dereference
 comparison token to its complement instead of printing `!`.
 
 **The pretty-printer.** All of the above emits *logical* tokens. By default
-kuna prints them straight to the plain emitter, one statement per line,
+unlace prints them straight to the plain emitter, one statement per line,
 where upstream always breaks lines at 100 columns. `option maxlinewidth N`
 (20 to 10000) selects upstream's line breaking for plain text:
 `printc.rs (PrintC::set_max_line_size)` puts `EmitPrettyPrint` in front of the
@@ -2212,7 +2212,7 @@ line limit (`option maxlinewidth`), indent step 2 (`option indentincrement`),
 comment indent 20; brace placement per construct via the four `braceformat`
 fields of `printc.rs (PrintCOptions)`: if/loop/switch braces sit on the same
 line as their construct, and a function's brace sits directly under its
-prototype (kuna DIV-34 — upstream's `skip_line` default leaves a blank line
+prototype (unlace DIV-34 — upstream's `skip_line` default leaves a blank line
 between the prototype and `{`; `option braceformat function skip` restores
 it, exercised by `tests/stages/cnorm-protogap.toml`).
 
@@ -2226,7 +2226,7 @@ ghidra-mode front-end) `<variable>` elements carry `varref`/`opref` (declaration
 construction, which is how the Ghidra client maps a clicked token back to
 p-code, and how statement groups map to addresses.
 
-**Token source map** (kuna). A front-end that links the C to the machine code
+**Token source map** (unlace). A front-end that links the C to the machine code
 needs every token of the *plain* text with its place in it, and the plain
 emitter keeps no references. `EmitMarkup` therefore optionally records each
 token as it encodes it (`crates/unlace-emit/src/p9_emit/prettyprint.rs
@@ -2282,10 +2282,10 @@ resolved from it would dangle.
 constant/type-name chokepoints of this walk: `option integerformat`
 (hex/dec/best — "best" scores which base makes the constant's digit pattern
 most natural, `printlanguage.rs (most_natural_base)`), `option nullprinting`
-(the `NULL` token for pointer zeros — kuna DIV-35 flips it default-ON, so a
+(the `NULL` token for pointer zeros — unlace DIV-35 flips it default-ON, so a
 null pointer renders `NULL` where upstream renders `(type *)0x0`; `option
 nullprinting off` restores the casted form, exercised by
-`tests/stages/cnorm-nullprint.toml`), `option inplaceops` (kuna DIV-36
+`tests/stages/cnorm-nullprint.toml`), `option inplaceops` (unlace DIV-36
 default-ON with the `emitInplaceOp` consumer ported: a standalone statement
 `out = out OP y` whose first input is the same HighVariable as the output
 renders as the compound assignment `out OP= y` for the ten integer
@@ -2298,7 +2298,7 @@ form a plain assignment uses (`*(int *)&origin += 1`,
 the spelled-out upstream form, so `for (...; i = i + 1)` is unchanged;
 `option inplaceops off` restores everything, exercised by
 `tests/stages/cnorm-compoundassign.toml`), and
-the (kuna, DIV-6) `realtypes` relabel: residual `TYPE_UNKNOWN` values render
+the (unlace, DIV-6) `realtypes` relabel: residual `TYPE_UNKNOWN` values render
 as size-correct real C types (`char`/`unsigned short`/`unsigned
 int`/`unsigned long`) at the declarator/cast chokepoints, without touching
 the actual data-type lattice — `option realtypes off` restores
@@ -2345,9 +2345,9 @@ Named typedefs and code types without a stored prototype retain their existing
 spelling. This only prints the recorded type; it does not infer a callback
 signature or change indirect-call ABI recovery.
 
-**Valid C type names** (kuna, DIV-75, `option ctypes`). `realtypes` covers only
+**Valid C type names** (unlace, DIV-75, `option ctypes`). `realtypes` covers only
 residual `TYPE_UNKNOWN`, and the *named* core types beside it are not C at all:
-kuna interns them as `uint1`/`int4`/`float8`/`float10`/`code`, a verbatim port of
+unlace interns them as `uint1`/`int4`/`float8`/`float10`/`code`, a verbatim port of
 upstream's no-`<coretypes>` fallback branch, which the real Ghidra application
 never takes because its Java side supplies its own names over the wire. That
 split is directly observable — one function declares `unsigned int v3;` (relabelled)
@@ -2365,7 +2365,7 @@ x86-64 System V and `unsigned long long` on i386, from one table.
 
 Three cases resist an exact answer, and each is decided rather than left to fall
 out of the table. A 1-byte integer is `signed char`/`unsigned char`, never bare
-`char` — its signedness is implementation-defined, and kuna reserves the `char`
+`char` — its signedness is implementation-defined, and unlace reserves the `char`
 core type for text. `code` is Ghidra's pseudo-type for a function body and only
 ever reaches the output as `code *`, which becomes `void *`. And floating point
 is the one place an approximation is unavoidable: an exact width match wins, but
@@ -2409,7 +2409,7 @@ angr|ghidra` (default `angr` since DIV-5; live flag `name_style_angr` set in
 and recovered names are never touched. The policy helpers live in
 `crates/unlace-bandb-base/src/p6_variables/naming.rs` with the pure
 address renderers in `crates/unlace-middle/src/p0_knowledge/database.rs
-(kuna_global_data_name, kuna_function_name, kuna_label_name, kuna_arg_name)`.
+(unlace_global_data_name, unlace_function_name, unlace_label_name, unlace_arg_name)`.
 Under the angr scheme: locals and decompiler temporaries are `v1`, `v2`, … —
 **sequential per function**, not SSA-subscripted (one name per merged
 HighVariable, exactly one counter); parameters with no recovered name are
@@ -2431,8 +2431,8 @@ target's front leaf through the same table, so it names the copy it jumps
 to. A function with no shared label prints exactly as before. Under `ghidra` the upstream scheme
 returns: `param_N`, type-prefixed `iVar1`/`uVar2`-style locals
 (`crates/unlace-bandb/src/p6_variables/coreaction_cleanup.rs
-(kuna_default_local_name)`), `func_`/`code_` addresses. Both schemes are
-recognized as "generated" by `naming.rs (kuna_is_generated_name)` so
+(unlace_default_local_name)`), `func_`/`code_` addresses. Both schemes are
+recognized as "generated" by `naming.rs (unlace_is_generated_name)` so
 cross-function name recommendation never propagates a default name.
 
 A data read through an import slot is the exception to `dat_<addr>` (`importdata`,
@@ -2482,7 +2482,7 @@ the slot keeps the slot name. So do a read narrower than the slot and a read by 
 operator C does not apply to a pointer (a mask, a shift, a multiply or a division:
 `dat_<slot> | 1`, never `&<import> | 1`); an addition stays `&<import> + 8`.
 
-(kuna `neonintrin`, default on) AArch64 Advanced SIMD prints as the ACLE intrinsics of
+(unlace `neonintrin`, default on) AArch64 Advanced SIMD prints as the ACLE intrinsics of
 `<arm_neon.h>` on the ACLE vector types (`crates/unlace-middle/src/substrate/neonintrin.rs`).
 The AArch64 SLEIGH spec lifts most NEON instructions to `NEON_<mnemonic>` user ops whose
 last input is the element size in bytes, plus `a64_TBL(tbx, tables..., index)`.
@@ -2511,7 +2511,7 @@ prints as `vget[q]_lane_<t>(v, n)`. At `all`, the flow walk also runs `fuse_neon
   becomes one built-in (`vaddq_s32`; integer lanes print signed);
 - a run of lane COPYs of one scalar covering a register becomes `vdup[q]_n_s<bits>`.
 
-(kuna `wideconst`, default on) A constant wider than 64 bits that the lifter built from
+(unlace `wideconst`, default on) A constant wider than 64 bits that the lifter built from
 pieces prints as one hexadecimal literal (`crates/unlace-emit/src/p9_emit/wideconst.rs`).
 A Varnode constant holds at most 64 bits, so a wider value stays an expression tree; EVM's
 `PUSH20`/`PUSH32` lift a 7-byte and an 8-byte immediate and shift in the continuation bytes,
@@ -2524,7 +2524,7 @@ its Varnode's size; when the whole tree is constant, the hexadecimal literal is 
 constant atom in place of the tree. `PIECE` is not folded: a two-word `CONCAT` of constants
 is a Go or Swift pair, which keeps its form (the stage corpus pins those).
 
-(kuna `selectmul`, default on) A select the lifter wrote as arithmetic prints as C's
+(unlace `selectmul`, default on) A select the lifter wrote as arithmetic prints as C's
 conditional operator (`crates/unlace-emit/src/p9_emit/selectmul.rs`). SLEIGH has no
 select, so a spec that picks one of two values without a branch computes
 `a * zext(c) + b * zext(!c)`; TriCore's `ternary` macro (behind `sel`, `min`, `max`,
@@ -2542,7 +2542,7 @@ the condition is the strict compare or `!=` of the pair, the operand of a negati
 the first input's boolean. A term in a named variable, a float compare and a single
 product (`a * zext(c)` with no complement) keep the arithmetic.
 
-(kuna `cstringconst`, default on) A pointer-wide constant inside a string-literal
+(unlace `cstringconst`, default on) A pointer-wide constant inside a string-literal
 section prints as the literal there, whatever type it reaches the printer with
 (`crates/unlace-emit/src/p9_emit/cstringconst.rs`). `pushConstant`
 renders a constant as a quoted string only when its type is a pointer to a
@@ -2573,13 +2573,13 @@ reach `push_ptr_char_constant_ir`, which reads and escapes the bytes as for a
 `char *` constant and declines when they are not a string. Off keeps the
 integer or address.
 
-(kuna) **The ghidra-mode third style (Phase 3, DIV-77).** The ghidra-mode
+(unlace) **The ghidra-mode third style (Phase 3, DIV-77).** The ghidra-mode
 process sets a separate `name_style_ghidra` flag alongside (not instead of)
-the angr default; the resolver `Architecture::kuna_name_style` /
-`ArchContext::kuna_name_style` gives it precedence at exactly the
+the angr default; the resolver `Architecture::unlace_name_style` /
+`ArchContext::unlace_name_style` gives it precedence at exactly the
 ADDRESS-DERIVED fallback sites — an unresolved callee prints `FUN_%08x`
 (`crates/unlace-middle/src/p4_calls/fspec.rs (fspec_printed_name)`),
-an unnamed global `DAT_%08x` (`printc.rs (kuna_global_data_name)`), a goto
+an unnamed global `DAT_%08x` (`printc.rs (unlace_global_data_name)`), a goto
 target `LAB_%08x` (`printc.rs (PrintC::block_label_name)`), the renderers in
 `crates/unlace-middle/src/p0_knowledge/database.rs
 (ghidra_function_name, ghidra_global_data_name, ghidra_label_name)` — because
@@ -2598,9 +2598,9 @@ name, which is also what keeps a register/global copy-shadow merge reading as
 a single variable. Recovered prototype inputs cross that boundary through
 `Funcdata::link_proto_params`: an unnamed input is materialized as `aN` exactly
 when `name_style_angr` is set, and otherwise as `param_N`, using the same
-`kuna_materialized_param_name` helper as the signature and declaration
+`unlace_materialized_param_name` helper as the signature and declaration
 suppression paths. The test is deliberately the local-style flag rather than
-`kuna_name_style`: GUI Ghidra mode sets its address-style override while leaving
+`unlace_name_style`: GUI Ghidra mode sets its address-style override while leaving
 `name_style_angr` on, so its parameters remain `aN`. An explicit nonempty
 prototype name always wins. The angr scheme's second visible artifact is P9-owned: each
 local declaration gains a trailing storage comment — `// rax` (register,
@@ -2635,14 +2635,14 @@ computation or a store remain homes. Parameters have no separate source comments
 DIV-5 re-pinned 185 of the 675 upstream datatest assertions
 to the angr names; `option namestyle ghidra` reproduces the pre-DIV-5 bytes.
 
-**(kuna) declhightype — the declared type is the merged variable's own.**
+**(unlace) declhightype — the declared type is the merged variable's own.**
 Walking HighVariables rather than the symbol table also decides *which type* a
 declaration states. Upstream writes `sym->getType()`, and a symbol's type is the
 merged HighVariable's — the type of the member Varnode
 `HighVariable::getTypeRepresentative` picks as the most specialized, which is
 also the type `ActionSetCasts` queried through `getHighTypeReadFacing` when it
 decided whether each use in the body needed a cast. Declaration and body
-therefore agree by construction. kuna instead reads the type off its
+therefore agree by construction. unlace instead reads the type off its
 *declaration representative* — the first address-tied member, else member zero —
 which is a different Varnode, and for a high whose members disagree the
 declaration then states a type no use was ever checked against. The witness is
@@ -2650,13 +2650,13 @@ an obfuscated x86-64 dispatch loop that merges one RAX across the whole
 function: a `char *`-returning call feeds `MOVSX EAX,byte ptr [RAX]`, the cast
 machinery sees a one-byte pointee and leaves the dereference uncast, and the
 declaration says `unsigned long long *` — so the same `*v9` reads eight bytes
-past the object and drops the sign extension. kuna declares the type
+past the object and drops the sign extension. unlace declares the type
 representative's type (always on), which is the
 `sym->getType()` upstream would have written
 (`crates/unlace-bandb-base/src/p6_variables/declhightype.rs
 (type_representative)`). It is presentation only: no cast, no statement and no
 p-code moves. It applies only to a high the symbol table does not describe — a
-mapped local keeps the declaration representative's type, because kuna does not
+mapped local keeps the declaration representative's type, because unlace does not
 always type-lock the storage a symbol claims and the most specialized member of
 a mapped local can be a transient the symbol never described. A whole mapped
 local whose Symbol is type-locked (a DWARF or `--assert type` declaration) with
@@ -2675,7 +2675,7 @@ a declaration. The declaration
 representative still supplies the array adornment and the
 composite mapped-symbol override, all of which outrank this.
 
-**(kuna) signedness — an integer local is declared at the signedness its
+**(unlace) signedness — an integer local is declared at the signedness its
 operations ask for.** The declaration also states a *signedness*, and the type
 lattice decides that in a way the body often contradicts. `Datatype::type_order`
 ranks `SUB_UINT_PLAIN` (16) ahead of `SUB_INT_PLAIN` (17), so in
@@ -2752,7 +2752,7 @@ signedness-independent at a fixed width — `+ - * & | ^ == !=`, unary `~` and
 a concatenation — because two's-complement arithmetic and a same-width
 conversion produce identical bits either way.
 
-kuna's own cast strategy draws the same line, which corroborates the split
+unlace's own cast strategy draws the same line, which corroborates the split
 without proving it. The ordered comparisons, `/ %`, `>>` and the two extensions
 pass `care_uint_int = true` to `CastStrategyC::cast_standard`
 (`crates/unlace-emit/src/p9_emit/coreaction_casts.rs
@@ -2777,7 +2777,7 @@ neutral: `(short)-1 == -1` is true while `(unsigned short)0xffff == -1` is a
 constant false, and `+ - * & | ^ << == !=` all diverge the same way. The pass
 therefore declines any high whose declared type is narrower than the promotion
 width, whatever the operations say — and the promotion width that decides this
-is **the `int` of the compiler that reads kuna's output, not the target's**.
+is **the `int` of the compiler that reads unlace's output, not the target's**.
 Emitted C is read and compiled where `int` is 4 bytes however small the target
 cspec's `<data_organization><integer_size>` is; that value is 2 on `avr8gcc`,
 `avr8egcc`, `TI_MSP430`, `TI_MSP430X`, `CR16`, `PIC24` and `x86-16`, and reading
@@ -2824,9 +2824,9 @@ the change: `if (0 <= (int)v1)` becomes `if (0 <= v1)`. The drop is authorized
 only by the declaration the emitter actually wrote, so a mapped-symbol, array or
 collapse override that takes the declared type back also takes the cast back.
 
-**(kuna) castsign — the same rule for frame locals and pointer indexes.**
+**(unlace) castsign — the same rule for frame locals and pointer indexes.**
 `signedness` leaves three places alone where the program compares a value only
-signed, and those account for a quarter of the unsigned-to-signed casts kuna
+signed, and those account for a quarter of the unsigned-to-signed casts unlace
 printed in the 2026-09-23 cast census: `unsigned long v15; // stack - 0x60` …
 `if (0 <= (long)v15)`. First, every high mapped onto a Symbol is skipped, and a
 stack local *is* mapped onto its frame Symbol, at offset 0. Second, a
@@ -2968,11 +2968,11 @@ finds it true for `v1 == LONG_MAX`). Nor does that walk check wide literals: cla
 carries the measured agreement rate against DWARF on unstripped binaries, which
 is the number this option is judged on.
 
-**(kuna) paramrefdecl — an `&parameter` reference is the parameter.** Because
+**(unlace) paramrefdecl — an `&parameter` reference is the parameter.** Because
 the emitter walks HighVariables rather than the symbol table, it also has to
 decide for itself which highs upstream would *not* have declared:
 `PrintC::emitScopeVarDecls` is asked only for `no_category` symbols, so a
-`function_parameter` symbol appears in the prototype and nowhere else. kuna
+`function_parameter` symbol appears in the prototype and nowhere else. unlace
 answers that by asking whether a `function_parameter` symbol contains the
 storage of one of the high's member Varnodes — which is right for every high
 that has storage of its own, and blind to a parameter whose address is the only
@@ -2996,8 +2996,8 @@ symbol and keeps its body declaration.
 
 `paramrefdecl.rs` (always on) supplies the missing half
 of the same predicate, on symbol identity rather than storage: a high whose
-bound symbol — the identity `linkSpacebaseSymbol` already recorded, kuna's
-`HighVariable::kuna_ref_symbol` for upstream `Varnode::setSymbolReference` — has
+bound symbol — the identity `linkSpacebaseSymbol` already recorded, unlace's
+`HighVariable::unlace_ref_symbol` for upstream `Varnode::setSymbolReference` — has
 category `function_parameter` is that parameter, so no declaration is emitted and
 the `&a0` in the body resolves to the prototype's own `a0`
 (`crates/unlace-emit/src/p9_emit/paramrefdecl.rs
@@ -3017,7 +3017,7 @@ storage-backed or name-backed evidence was found
 object survives, and the function-scope uniqueness invariant gives it a suffix
 instead of re-declaring the parameter's identifier.
 
-*(kuna perf)* Whether a high is a reference, piece or strict partial whose
+*(unlace perf)* Whether a high is a reference, piece or strict partial whose
 declaration belongs to a same-named sibling (the whole symbol, the storage local
 a `&symbol` reference points at, the group's owner) is answered from the
 function's named highs grouped by name once per declaration walk, each group in
@@ -3026,7 +3026,7 @@ name's group instead of every high of the function, and finds the same first
 sibling it found before. With the other GH-1034 fixes in, serde-hkx's 174 KB
 deserializer drops from 238 s to 152 s, nearly all of it in these walks.
 
-**(angr) dedupvardecls — collapsing duplicate declarations.** kuna's
+**(angr) dedupvardecls — collapsing duplicate declarations.** unlace's
 declaration emitter walks HighVariables, not the upstream symbol table (which
 declares each Symbol exactly once), so many scalar HighVariables sharing one
 stack slot — all bound to the same name by the shared-storage naming — would
@@ -3050,7 +3050,7 @@ emission order. When the collapsing highs *agree* about the slot's type, that
 recovered type stands, being the sharper information. When they *disagree*, the
 survivor declares the symbol's own type — upstream `emitVarDecl` declares
 `sym->getType()` — unless the symbol's type is narrower than the widest storage
-the group covers, in which case the widest member wins. kuna's `ScopeLocal`
+the group covers, in which case the widest member wins. unlace's `ScopeLocal`
 ranges can be narrower than the accesses that reach them, and a declaration
 smaller than the object the body writes through would be a new defect rather
 than a faithful one.
@@ -3156,7 +3156,7 @@ option-controlled collapses; overlap-owner collapsing and collision suffixing
 remain active because unique, correctly bound C identifiers are an output
 validity invariant rather than a presentation choice.
 
-**(kuna) declorder — the order the declarations print in.** The collapses
+**(unlace) declorder — the order the declarations print in.** The collapses
 and the suffix allocation above walk the locals sorted by name, a plain string
 sort under which every two-digit name lands between `v1` and `v2`: a function
 with eleven numbered locals declared `v1, v10, v11, v2, ..., v9`. Once the
@@ -3179,7 +3179,7 @@ lines changes. The reorder applies to angr-style names, the default
 `namestyle ghidra` the declarations keep the string order. `option declorder
 name` keeps the string order everywhere.
 
-**(kuna) cppshortnames — standard C++ names as a programmer writes them.**
+**(unlace) cppshortnames — standard C++ names as a programmer writes them.**
 A demangled or DWARF type name spells every inline namespace and default
 template argument (`std::__cxx11::basic_string<char, std::char_traits<char>,
 std::allocator<char> >`). The option `cppshortnames` (P9 `naming-policy`,
@@ -3244,7 +3244,7 @@ and `printc.rs (print_unicode)` emits the named C escapes then falls to `print_c
 (not in the loadimage) can be registered under a constant-space hash address
 and resolve through the same cache.
 
-**Bounded literals** (kuna, `printc.rs (bounded_char_array)`). A Rust or Go
+**Bounded literals** (unlace, `printc.rs (bounded_char_array)`). A Rust or Go
 literal committed as a length-bounded `char[N]` (chapter 01's `fatstrrecords`
 and `strcodelen`) has no NUL, and the next literal follows it directly. Read to
 a NUL, it would print glued to its neighbours. So when the address is the start
@@ -3273,7 +3273,7 @@ character arrays — but the reference it builds for an interior hit is a spaceb
 `PTRSUB` plus an `INT_ADD` of the residual, and constant folding collapses the
 pair straight back to the bare constant, discarding the type; the exact-start
 case survives only because its residual is zero. Upstream repairs this later
-(`RulePtrsubCharConstant` rewrites the reference into a typed constant); kuna
+(`RulePtrsubCharConstant` rewrites the reference into a typed constant); unlace
 instead types the constant where the evidence already exists — the covering
 symbol is a character-printable array, which is stronger proof than inspecting
 the bytes — and leaves the exact-hit path untouched
@@ -3319,7 +3319,7 @@ What separates the two is the evidence the emptiness test never looked at — th
 bytes *past* the terminator. A genuine `""` is followed by the next literal in
 the table (`00 00 00 65 72 72 6f 72 20 69 6e 20 72 65 67 75`, the `""` `nl`
 hands `setlocale`); a blob pointer is followed by bytes no C string holds
-(`00 00 00 00 00 00 00 00 00 77 df 77 ff fd ff 7f`). **(kuna) emptystrconst**
+(`00 00 00 00 00 00 00 00 00 77 df 77 ff fd ff 7f`). **(unlace) emptystrconst**
 (always on, `crates/unlace-emit/src/p9_emit/emptystrconst.rs
 (declines_literal, reads_as_string_data)`) reads sixteen bytes at the constant
 and declines the literal only when the escape walk emitted no characters *and*
@@ -3353,7 +3353,7 @@ and tar's `get_date` parsers index bison tables (`yycheck`, `yytable`) that prin
 escape string indexed by the parser state, and coreutils `sort` indexes a
 256-byte table whose first byte is zero, which printed `""[*v15._0_8_]`. So an
 unbounded index declines the literal too. The bound is consulted only for a
-constant `elemptr` itself typed (`Funcdata::kuna_elemptr_typed_constant`): a
+constant `elemptr` itself typed (`Funcdata::unlace_elemptr_typed_constant`): a
 character array another pass already recovered keeps the spelling it had
 (`sort`'s `"CCc"[v21]`, `tar`'s base64 alphabet, `&" %s"[v0]`). A declined
 literal falls through to the address, and so to the array name `globalref` gives
@@ -3395,15 +3395,15 @@ printing so overlapping windows never repeat it.
 
 ## 9.5 Pointer & array notation
 
-**(kuna) arraynotation** — the second GH-558 decision (its registry row
+**(unlace) arraynotation** — the second GH-558 decision (its registry row
 records `ghidra-upstream` because the upstream *issue*, not upstream code,
-motivated it; the implementation is kuna-original). A scaled pointer-add
+motivated it; the implementation is unlace-original). A scaled pointer-add
 (`PTRADD`) has three renders, decided at `printc.rs (PrintC::op_ptradd_ir)`:
 inside a load/store context (the `print_load_value`/`print_store_value`
 modifier is set, i.e. the pointer is being dereferenced) it is always the
 subscript `base[index]` — that is upstream behavior and not optional; a
 *standalone* PTRADD — the address value itself, passed to a call or stored —
-is upstream `base + index`, and kuna's `option arraynotation` (default **on**,
+is upstream `base + index`, and unlace's `option arraynotation` (default **on**,
 DIV-2 lineage; option struct in
 `crates/unlace-emit/src/p9_emit/arraynotation.rs
 (OptionArrayNotation)`, the flag on `printc.rs (PrintCOptions)`) renders it
@@ -3418,7 +3418,7 @@ Flip `off` for consumers that diff against raw pointer arithmetic
 ([docs/options.md](../options.md)); the toggle is per-render and pure
 presentation.
 
-**(kuna) containerof** — the container idiom (default **off**, C output only;
+**(unlace) containerof** — the container idiom (default **off**, C output only;
 `crates/unlace-emit/src/p9_emit/containerof.rs (PrintC::push_container_of)`,
 tried first in `printc.rs (PrintC::op_type_cast_ir_with)`). A CAST to `S *` whose
 operand is printed inline and is made of constant steps from a pointer `p`
@@ -3435,10 +3435,10 @@ change (`tests/stages/containerof.toml`).
 
 ## 9.6 Alternate languages
 
-**(kuna) The output-language plane.** The C++ tree kuna was ported from selected a
+**(unlace) The output-language plane.** The C++ tree unlace was ported from selected a
 back-end through a `PrintLanguageCapability` registry over a three-level hierarchy
 (`PrintLanguage` → `PrintC` → `PrintJava : public PrintC`); the port flattened
-that into one concrete `PrintC`. kuna re-erects the seam by **parameterizing** the
+that into one concrete `PrintC`. unlace re-erects the seam by **parameterizing** the
 single emitter rather than growing a second one: `PrintC` carries one `out_lang`
 field, and every language-varying site reads a `&'static` policy object through
 `printc.rs (PrintC::lang)` instead of naming a `keywords::`/`tokens::` constant.
@@ -3453,10 +3453,10 @@ Three artifacts make up the plane, all in
 - **`lang.rs`** — `OutLang` (the selector), `LangProfile` (the surface
   vocabulary: the keyword and punctuation spellings the emitters use, plus the
   `OpToken`s whose *spelling* varies; the ~40 arithmetic/comparison/shift tokens
-  are identical in every language kuna targets and stay in `printc.rs (tokens)`),
+  are identical in every language unlace targets and stay in `printc.rs (tokens)`),
   and `LangCaps` — **what the emitter is allowed to produce**. `LangCaps` is what
   lets a language that cannot express a construct never be handed one, instead of
-  the operator being asked to flip the kuna rendering defaults that would produce
+  the operator being asked to flip the unlace rendering defaults that would produce
   it (`truthycond`'s implicit-bool condition, `braceelide`'s braceless body,
   `condfold`'s comma operand, `nullprinting`'s `NULL`). Its load-bearing member is
   `switch_captures_break`: a C `switch` captures a bare `break`, which is why
@@ -3521,7 +3521,7 @@ since `printlanguage.rs (parentheses)` decides parenthesization with `ptr::eq`.
 Reading the C profile therefore produces the identical token, so introducing the
 plane is a byte-identical rewrite and `docs/baseline.json` is never re-pinned.
 
-**(kuna) The rust-language back-end.** `option setlanguage rust-language` selects
+**(unlace) The rust-language back-end.** `option setlanguage rust-language` selects
 it (`p0_knowledge/options.rs (OptionSetLanguage)`, the upstream selector, which
 now rejects a name no back-end claims rather than silently keeping C). The
 recovered function is not re-analysed: the same `Funcdata`, the same types, the
@@ -3655,7 +3655,7 @@ What differs, and why each is a language fact rather than a preference:
   Rust has no `'\xff'`; and a string body escaped with Rust's set, which has no
   `\a`/`\b`/`\v`/`\f` and in which a single quote must be BARE — `"PCRE\'s"`
   does not tokenize.
-- **Three kuna rendering defaults are suppressed by capability, not by asking an
+- **Three unlace rendering defaults are suppressed by capability, not by asking an
   operator to flip them**: `truthycond` (DIV-37) would emit `if x` on a `u32`,
   `braceelide` (DIV-38) would emit a braceless body, and `nullprinting` (DIV-35)
   would emit `NULL` (Rust spells it `core::ptr::null_mut()`). `condfold`'s comma
@@ -3670,7 +3670,7 @@ What differs, and why each is a language fact rather than a preference:
 - **What Rust cannot express** is marked, never silently emitted. The structurer
   manufactures `goto`s as its escape hatch and Rust has no form for one that is
   neither a `break` nor a `continue`; those render as a comment plus a **diverging**
-  `panic!("kuna: unstructured goto to <label>")`. Diverging so the document still
+  `panic!("unlace: unstructured goto to <label>")`. Diverging so the document still
   type-checks in any position, loud so a reader cannot mistake it for a
   translation, and greppable because that count over a whole-binary render IS the
   quality number for this back-end — exactly what `gotoreduce`,
@@ -3738,7 +3738,7 @@ store, and each address is mapped to the target's address units as
 (`STEMS`: decode failures, flow truncation, out-of-bounds and unmapped flow,
 unrecovered jump tables, declined structuring), else the slug
 `printc.rs (warning_slug)` gives the text, less its ` xN` count, so a slug added
-there is a kind at once; else a kuna warning's producer tag, else `other`.
+there is a kind at once; else a unlace warning's producer tag, else `other`.
 `message` is the stored text less its `WARNING: ` marker. Both warning styles
 give the same records but for `line`. The verdict does not move here either;
 `error` stays reserved for a failed function.
@@ -4040,7 +4040,7 @@ profile, the type speller and the Java string escapes, and
   through a reference prints the referenced value, with `[0]` only for an
   array reference that is not itself a field, an index or a pool reference
   (`PrintJava::needZeroArray`).
-- **Allocation** (kuna, `option javanew`, default on). Dalvik allocates an
+- **Allocation** (unlace, `option javanew`, default on). Dalvik allocates an
   object with `new-instance` and initializes it with a separate `invoke-direct`
   of `<init>`, and upstream's Java output keeps both statements:
   `v = new(T); v.<init>(args);`. `p9_emit/javanew.rs (pairs)` finds each
@@ -4051,7 +4051,7 @@ profile, the type speller and the Java string escapes, and
   statements and order, which is sound because Java evaluates them after the
   allocation too. A pair split across blocks — an `if` choosing between two
   constructors — keeps the two-statement form.
-- **Constructors** (kuna, `option javanew`). A constructor (`<init>`, with or
+- **Constructors** (unlace, `option javanew`). A constructor (`<init>`, with or
   without its overload suffix) is declared by its class name, the part after
   the last `$`, with no return type. In a constructor, an `<init>` call on the
   method's own `this` input is Java's `this(args)` when the called method
@@ -4059,7 +4059,7 @@ profile, the type speller and the Java string escapes, and
   (`javanew.rs (ctor_calls)`, the class read from the DEX model). The
   no-argument `super()` to `java.lang.Object` is the call Java inserts
   implicitly, so it prints nothing.
-- **Exceptions** (kuna, `option javatry`, default on). Dalvik's `throw` lifts to
+- **Exceptions** (unlace, `option javatry`, default on). Dalvik's `throw` lifts to
   `throwException(x)` followed by a RETURN; the RETURN is a halt (chapter 2),
   and the pair prints `throw x;`. A `java_try` dispatch (chapter 2) prints as a
   `try` statement (`printc/javatryprint.rs`). The dispatch structures as an
@@ -4079,7 +4079,7 @@ profile, the type speller and the Java string escapes, and
   `if (dispatch) goto L` is a catch whose body is that jump. The clause binds
   the variable `java_caught` defines (declared only there) and names the types
   its handler catches, `A | B` for several.
-- **synchronized and finally** (kuna, `option javasync`, default off; the
+- **synchronized and finally** (unlace, `option javasync`, default off; the
   idioms are read in chapter 2, `javasync.rs (idioms)`). A `try` whose
   one clause is a monitor release prints as `synchronized (x) { }`, `x` the
   operand of the `monitorEnter`, with no catch clause. The `monitorEnter` ends
@@ -4112,7 +4112,7 @@ call follows as its own statement, as in upstream's output, unless Java's
 
 ## 9.7 Whole-program document renders (`unlace decompile-project`, `unlace decompile-graph`)
 
-**(kuna) Three additive render surfaces** back the `unlace decompile-project`
+**(unlace) Three additive render surfaces** back the `unlace decompile-project`
 project export (the CLI driver is
 `crates/unlace-cli/src/decompile_project.rs`; usage in
 `CLAUDE.md`). All three are pure *readers* of finished state — they run
@@ -4150,13 +4150,13 @@ minted are moved after every other type, in ascending `N`
 (`crates/unlace-bandb-core/src/p5_types/structsynth/ledger.rs
 (in_name_order)`), because the tree orders them by the address of a field's type
 and the header would otherwise change from run to run (chapter
-[05](05-types.md), struct synthesis). Two documented `(kuna)`
+[05](05-types.md), struct synthesis). Two documented `(unlace)`
 divergences from the upstream emission, both in service of "the `.h` always
 compiles":
 
 - **Forward-declaration block first.** Upstream prints one anonymous
   `typedef struct {…} name;` per type — a form that cannot express a
-  self-referential or mutually recursive pointer field. kuna instead emits a
+  self-referential or mutually recursive pointer field. unlace instead emits a
   `typedef struct <n> <n>;` tag+typedef forward declaration for every
   struct/union up front, then the bodies as plain `struct <n> { … };` in
   dependency order; an incomplete (field-less) struct emits *only* the
@@ -4179,7 +4179,7 @@ A later duplicate name emits a
 `/* duplicate type name skipped */` comment instead of a redefinition — the
 first definition wins.
 
-**(kuna) A type name and a function name cannot be the same name.** C keeps
+**(unlace) A type name and a function name cannot be the same name.** C keeps
 typedefs and functions in one namespace at file scope, and POSIX supplies
 several spellings that are both: `stat`, `sigaction`, `group` are each a struct
 tag and a function. An image that carries `struct stat` in its debug info and
@@ -4217,7 +4217,7 @@ generates the typedef block that makes the other two renders compile: one
 standard-C typedef per interned *core* scalar type (`typedef unsigned int
 uint4;`, …; 8-byte integers always spell `long long` so the text is
 data-model independent; `bool` is covered by `#include <stdbool.h>`;
-`char`/`void` are real C and emit nothing), then the fixed Ghidra/kuna
+`char`/`void` are real C and emit nothing), then the fixed Ghidra/unlace
 `undefined` family — `undefined`, `undefined1..8` (3/5/6/7 mapped to the next
 larger unsigned integer, each carrying a sizeof-divergence note) and
 `undefined16`/`undefined32` as byte-array structs. The non-printer half of
@@ -4429,7 +4429,7 @@ does not name is almost always a dependency of one it does.
 **The preamble is C, and says so by declining.** The renderer builds the
 project export's `.h`, so its output is C whatever the active output language
 is: under `--language rust` a `struct X { … };` block carrying Rust-spelled
-field types would be neither valid Rust nor readable C. `kuna
+field types would be neither valid Rust nor readable C. `unlace
 decompile-project` refuses a non-C output language outright for exactly that
 reason (§9.6, §9.7); the preamble takes the same decision one step smaller —
 it declines, and the body is emitted as it would have been. Teaching the
@@ -4457,13 +4457,13 @@ in the pointer arm of `printc.rs (PrintC::push_vn_explicit_ir)`: the forced-hex
 integer behind a typecast, `sub_e4ca((struct_2 *)0x2b080)`. Upstream reaches a
 name only through `coreaction_render.rs (ActionConstantPtr)`, which links a
 constant to a Symbol that already exists, and a stripped image has none for most
-of its data — while kuna prints `dat_2b080` two statements away for the same
+of its data — while unlace prints `dat_2b080` two statements away for the same
 address, because *reading* an unnamed global goes through the unnamed-location
 leaf (§9.3), which names it. The type campaign made the cast commoner rather
 than rarer: once a callee's parameter is recovered as `struct_2 *`, the
 constant a caller passes it is typed `struct_2 *` too, so `sub_e4ca(0x2b080)` at
 the campaign baseline became `sub_e4ca((struct_2 *)0x2b080)` (572 such casts on
-the functions kuna and IDA both emit before the campaign, 1,118 after it). IDA
+the functions unlace and IDA both emit before the campaign, 1,118 after it). IDA
 prints `sub_E4CA(qword_2B080)` and no cast.
 
 `option globalref` (P9 sub-decision `constant-address-global`, default **on**)
@@ -4678,7 +4678,7 @@ leave it undeclared with a comment too: a body reads `dat_4020[i]` at whatever
 element the header declares, so either declaration would change what the other
 body computes. The batch's agreement pass (05-types §5.2) keeps that from arising
 within one process; a sharded `--jobs` worker cannot see the other functions, so
-it names no table an array at all (`Funcdata::kuna_elemptr_objects`), nor does
+it names no table an array at all (`Funcdata::unlace_elemptr_objects`), nor does
 any run of several functions that is not the callee-first batch, and a pool
 prints what the serial run with `--option protoorder off` prints. An
 array whose storage this function also reads or writes directly keeps its cast
@@ -4711,7 +4711,7 @@ a `char *` that is not a string, and four controls that keep the cast.
 O0, O2 and O2-noinline) every one of the 1,883 lines the option changes is the
 `(T *)0x<addr>` → `&dat_<addr>` substitution and nothing else, removing 1,979
 casts; with the option off the output is byte-identical to the build without it.
-On the 4,815 functions kuna and IDA both emit, casts fall from 45,126 to 44,001
+On the 4,815 functions unlace and IDA both emit, casts fall from 45,126 to 44,001
 and no function gains one. Variables and types are untouched, so `type_match`
 cannot move (1,609 perfect functions in both arms of the 444-slice sweep).
 
@@ -4966,7 +4966,7 @@ member type, since the declaration representative covers only the field. A
 scalar local or global keeps the type its declaration prints, which can differ
 from its Symbol's scalar type (`pointerstorecast.rs (target)`).
 
-## (kuna) Intel intrinsic names for AVX user-ops — `option avxintrinsics`, default on
+## (unlace) Intel intrinsic names for AVX user-ops — `option avxintrinsics`, default on
 
 **`crates/unlace-middle/src/substrate/avxintrin.rs (intrinsic)`,
 called from `printc.rs (op_callother_ir)`.** The x86 SLEIGH spec lifts most
@@ -5006,7 +5006,7 @@ entries recovers the second and third `__m256` arguments, but the first one and
 the result stay hidden, because a VEX write zero-extends into `ZMM0` and the
 heritage reads `ZMM0` whole.
 
-**Post-increment** (`postinc`, default on, C output only; kuna;
+**Post-increment** (`postinc`, default on, C output only; unlace;
 `crates/unlace-emit/src/p9_emit/postinc.rs (ActionPostIncrement)`,
 run after the final structure): an in-place pointer step `p = p + c` (an
 `INT_ADD` of a constant `c`, or a `PTRADD` of one element of `c` bytes, whose
@@ -5242,7 +5242,7 @@ including weak keywords, keep their spelling.
 
 Rust renders a non-ASCII or invalid name, including a name with punctuation or
 one of `_`, `crate`, `self`, `Self`, and `super`, as
-`__kuna_userop_<index>_<stem>`. Non-ASCII names use this indexed ASCII spelling
+`__unlace_userop_<index>_<stem>`. Non-ASCII names use this indexed ASCII spelling
 because Rust normalizes identifiers to NFC: distinct user-operation labels
 with equivalent normalized spellings must still identify distinct operations.
 The existing selector supplies that identity without a normalization dependency.
@@ -5251,7 +5251,7 @@ letters and digits to underscores and keeps up to 64 characters. Missing and
 empty names use only the index. A selector that exceeds the table's index
 width keeps its full value in that fallback. Each generated name identifies
 its operation even when two source names produce the same stem. A table name
-starting with `__kuna_userop_` is also rewritten to keep generated names
+starting with `__unlace_userop_` is also rewritten to keep generated names
 distinct. The existing ACLE spelling takes precedence for a resolved intrinsic.
 Arguments keep their original order. Callers may bind these opaque
 operations to external implementations. C, Go and the special non-call display
@@ -5259,9 +5259,9 @@ modes retain their existing rendering.
 
 ### AArch64 ACLE intrinsics (`acleintrinsics`)
 
-**(kuna) `option acleintrinsics on|off`, default on, AArch64 only,
+**(unlace) `option acleintrinsics on|off`, default on, AArch64 only,
 `crates/unlace-emit/src/p9_emit/acleintrinsics.rs
-(intrinsic)`; Kuna #1626.** A functional `CALLOTHER` prints under the name
+(intrinsic)`; Unlace #1626.** A functional `CALLOTHER` prints under the name
 its SLEIGH spec gave the user op, which describes the instruction:
 `DataMemoryBarrier(2,3)`, `WaitForInterrupt()`. The source called an
 intrinsic of `<arm_acle.h>`, `__dmb(11)` or `__wfi()`. `op_callother_ir`
@@ -5479,7 +5479,7 @@ or earlier formatting layouts, and it does not change C or Go output.
 
 ## Verified Rust piece-array printing
 
-`kuna_rustfmtpieces` extends source printing to the pre-template
+`unlace_rustfmtpieces` extends source printing to the pre-template
 `fmt::Arguments` representation. Under `rustfmt on` it accepts
 x86-64 little-endian ELF executables from stable Rust 1.89.0 and 1.90.0 and
 nightly 1.89.0 `bf64d66bd` dated 2025-05-21. Compiler comments must identify one
@@ -5798,7 +5798,7 @@ the 5% budget; wall median changed by -0.119%. The C path does not call this Rus
 helper, so this records the measured failure without attributing a cause. The
 original measurement is retained and the correction ships as an explicit opt-in.
 
-**Post-increment** (`postinc`, default on, C output only; kuna;
+**Post-increment** (`postinc`, default on, C output only; unlace;
 `crates/unlace-emit/src/p9_emit/postinc.rs (ActionPostIncrement)`,
 run after the final structure): an in-place pointer step `p = p + c` (an
 `INT_ADD` of a constant `c`, or a `PTRADD` of one element of `c` bytes, whose
@@ -5890,14 +5890,14 @@ succeeds at 398 of 404 log calls; the rest store an argument the decode cannot
 attribute to one variable at the call (an implied expression split across
 cells) and keep the raw form.
 
-## (kuna) Printing through the C syntax tree — `option ctree`, default off
+## (unlace) Printing through the C syntax tree — `option ctree`, default off
 
 The design is `docs/architecture/ctree.md`. With `option ctree on`,
 `PrintC::emit_function_body` builds a C syntax tree for the function before it
 prints the body, unless the printer is in flat mode. The tree lives in
-`crates/unlace-ctree/src`: `kuna_ctree` holds the statement and expression
+`crates/unlace-ctree/src`: `unlace_ctree` holds the statement and expression
 arenas and the tree's maturity (`built`, `statements`, `rewritten`, `final`,
-which only rises), and `kuna_ctreebuild::build` makes one statement per
+which only rises), and `unlace_ctreebuild::build` makes one statement per
 structured block from `sblocks.root`: a `BlockList` or `BlockGraph` becomes a
 sequence, a `BlockCopy` or `BlockBasic` leaf an ops statement, a `BlockIf` an
 `if` whose pre-statements and condition both name the condition block (an
@@ -5989,12 +5989,12 @@ same order and evaluates nothing the binary skips.
 With `option charnum on` (default off), `push_char_constant_ir` prints a one-byte constant
 of a character type as a number instead of a character literal when it is zero or not
 printable (outside 0x20-0x7e) and the reading op is an ordered comparison or an integer
-arithmetic or bitwise op, or, for a non-zero value, an equality (`kuna_charnum::as_number`):
+arithmetic or bitwise op, or, for a non-zero value, an equality (`unlace_charnum::as_number`):
 `'\\0' <= c` prints `0 <= c`, `c == '\\x03'` prints `c == 3`. A printable character, and a
 zero read by an equality, a store, a copy or a call, keep the literal.
 
 With `option constright on` (C output; default off), `op_binary_ir` mirrors an integer `<` or
-`<=` whose first operand is a constant and whose second is not (`kuna_constright::mirrors`):
+`<=` whose first operand is a constant and whose second is not (`unlace_constright::mirrors`):
 it prints the other comparison token (`token_mirror`: `<` and `>`, `<=` and `>=`, taken after
 any negated token is resolved) and the operands in the opposite order, so `0x3b < x` prints
 `x > 0x3b`.
@@ -6003,7 +6003,7 @@ With `option signeddec on` (default off), the integer path (`signed_decimal`, at
 constant push of `push_vn_explicit_ir` and the two token builders that predict it) prints a
 constant read as a signed integer in decimal when no symbol or type fixes its format, its
 signed magnitude is below 0x10000 and the reading op is not a bitwise `&`, `|`, `^` or shift
-(`kuna_signeddec::decimal`). Unsigned constants keep `mostNaturalBase`.
+(`unlace_signeddec::decimal`). Unsigned constants keep `mostNaturalBase`.
 
 With `option retternary on` (C output; default off), an `if`/`else` the forms
 above leave, whose arms are such leaves each printing one `RETURN` of a constant

@@ -1,4 +1,4 @@
-import { wasmCommandArgs } from '../kuna-web.js';
+import { wasmCommandArgs } from '../unlace-web.js';
 
 function assertArgs(actual, expected, label) {
   if (actual.join('\0') !== expected.join('\0')) {

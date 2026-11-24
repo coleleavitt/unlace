@@ -1,4 +1,4 @@
-# kuna analysis (options funcstart_patterns and aif), GH-904: no function
+# unlace analysis (options funcstart_patterns and aif), GH-904: no function
 # starts inside the extent a sized function symbol declares.
 #
 # gcc sinks buf_dup_char's frame setup past its early return:

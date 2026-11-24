@@ -23,7 +23,7 @@
 # The fix (no option, a strict bug fix on both counts):
 #   * `blockRemoveInternal` now drops a removed BRANCHIND's jump table, and
 #     `ActionSwitchNorm` skips a table whose indirect op is gone;
-#   * `kunaInstallLoweredSwitch` DECLINES when its rewiring would strand a
+#   * `unlaceInstallLoweredSwitch` DECLINES when its rewiring would strand a
 #     block whose tail BRANCHIND already owns a recovered JumpTable, so the
 #     genuine switch is kept instead of being replaced by the cascade dispatch.
 #

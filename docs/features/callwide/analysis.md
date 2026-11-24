@@ -29,13 +29,13 @@ Ambiguous instructions alone cannot prove the width: PPC and ARM compile a
 
 ## Self-contained reproduction
 
-Run Bash from the repository root with built kuna/specs, Clang 14 and LLD 14. The
+Run Bash from the repository root with built unlace/specs, Clang 14 and LLD 14. The
 source contains both the positive producer and a narrow negative control; no
-producer prototype is supplied to kuna in the failing arm.
+producer prototype is supplied to unlace in the failing arm.
 
 ```sh
-mkdir -p /tmp/kuna-callwide-repro
-cat > /tmp/kuna-callwide-repro/caller.c <<'C'
+mkdir -p /tmp/unlace-callwide-repro
+cat > /tmp/unlace-callwide-repro/caller.c <<'C'
 typedef unsigned long long u64;
 typedef unsigned int u32;
 __attribute__((noinline)) u64 produce_sum(u64 a,u64 b) { return a+b; }
@@ -49,16 +49,16 @@ CALLWIDE_LD="$(command -v ld.lld-14 || command -v ld.lld)"
 clang --target=mips-linux-gnu "-fuse-ld=$CALLWIDE_LD" \
   -march=mips32 -mabi=32 -fno-pic -mno-abicalls \
   -O2 -fno-inline -fno-optimize-sibling-calls -nostdlib -no-pie \
-  -Wl,-Ttext=0x100000,-e,caller /tmp/kuna-callwide-repro/caller.c \
-  -o /tmp/kuna-callwide-repro/mips.elf
+  -Wl,-Ttext=0x100000,-e,caller /tmp/unlace-callwide-repro/caller.c \
+  -o /tmp/unlace-callwide-repro/mips.elf
 CALLWIDE_ARGS=(--sleighpath "$PWD/specs" --option dwarf off \
   --option bejoin evidence \
   --assert 'prototype consume64 unsigned long long consume64(unsigned long long x)' \
   --assert 'prototype consume32 unsigned int consume32(unsigned int x)' \
   --assert 'prototype caller unsigned long long caller(unsigned long long a,unsigned long long b)' \
   --assert 'prototype caller32 unsigned int caller32(unsigned long long a,unsigned long long b)')
-decompiler/target/release/kuna decompile-project \
-  /tmp/kuna-callwide-repro/mips.elf -o /tmp/kuna-callwide-repro/before \
+decompiler/target/release/unlace decompile-project \
+  /tmp/unlace-callwide-repro/mips.elf -o /tmp/unlace-callwide-repro/before \
   "${CALLWIDE_ARGS[@]}"
 ```
 
@@ -85,15 +85,15 @@ v1 = produce_sum((int)(a >> 0x20),(int)a,(int)(b >> 0x20),(unsigned int)b);
 return consume64(CONCAT44((int)v1,(int)((unsigned long long)v1 >> 0x20)));
 ```
 
-Replay the actual generated C and header. The helper only supplies kuna's
+Replay the actual generated C and header. The helper only supplies unlace's
 concatenation operation; it does not repair the output.
 
 ```sh
-cat > /tmp/kuna-callwide-repro/support.h <<'C'
+cat > /tmp/unlace-callwide-repro/support.h <<'C'
 #include <stdint.h>
 #define CONCAT44(a,b) (((uint64_t)(uint32_t)(a)<<32)|(uint32_t)(b))
 C
-cat > /tmp/kuna-callwide-repro/replay.c <<'C'
+cat > /tmp/unlace-callwide-repro/replay.c <<'C'
 #include <stdio.h>
 #include "mips.elf.h"
 int main(void) {
@@ -104,11 +104,11 @@ int main(void) {
   return got!=expected;
 }
 C
-cc -O2 -fwrapv -include /tmp/kuna-callwide-repro/support.h \
-  -I/tmp/kuna-callwide-repro/before \
-  /tmp/kuna-callwide-repro/before/mips.elf.c \
-  /tmp/kuna-callwide-repro/replay.c -o /tmp/kuna-callwide-repro/replay
-/tmp/kuna-callwide-repro/replay
+cc -O2 -fwrapv -include /tmp/unlace-callwide-repro/support.h \
+  -I/tmp/unlace-callwide-repro/before \
+  /tmp/unlace-callwide-repro/before/mips.elf.c \
+  /tmp/unlace-callwide-repro/replay.c -o /tmp/unlace-callwide-repro/replay
+/tmp/unlace-callwide-repro/replay
 # expected=112233405566778e got=1122334055667788; exit 1
 ```
 
@@ -116,23 +116,23 @@ A supplied producer prototype is a positive control, not the proposed
 implementation:
 
 ```sh
-decompiler/target/release/kuna decompile-project \
-  /tmp/kuna-callwide-repro/mips.elf -o /tmp/kuna-callwide-repro/typed \
+decompiler/target/release/unlace decompile-project \
+  /tmp/unlace-callwide-repro/mips.elf -o /tmp/unlace-callwide-repro/typed \
   "${CALLWIDE_ARGS[@]}" \
   --assert 'prototype produce_sum unsigned long long produce_sum(unsigned long long a,unsigned long long b)' \
   --assert 'prototype produce_high unsigned int produce_high(unsigned long long a,unsigned long long b)'
-cc -O2 -fwrapv -include /tmp/kuna-callwide-repro/support.h \
-  -I/tmp/kuna-callwide-repro/typed \
-  /tmp/kuna-callwide-repro/typed/mips.elf.c \
-  /tmp/kuna-callwide-repro/replay.c -o /tmp/kuna-callwide-repro/replay-typed
-/tmp/kuna-callwide-repro/replay-typed
+cc -O2 -fwrapv -include /tmp/unlace-callwide-repro/support.h \
+  -I/tmp/unlace-callwide-repro/typed \
+  /tmp/unlace-callwide-repro/typed/mips.elf.c \
+  /tmp/unlace-callwide-repro/replay.c -o /tmp/unlace-callwide-repro/replay-typed
+/tmp/unlace-callwide-repro/replay-typed
 # expected=112233405566778e got=112233405566778e; exit 0.
 ```
 
 ## Diagnosis and evidence limits
 
 P4's `bejoin/evidence.rs::seed` caches producer-body proofs only.
-`kuna_callerreads::read` handles recovered-void outputs and one register; it
+`unlace_callerreads::read` handles recovered-void outputs and one register; it
 does not establish this pair. `ActionReturnRecovery::apply` scores output
 trials before selecting their join order. On this MIPS witness the low word
 also feeds the carry, so ordinary use scoring rejects it; changing the join

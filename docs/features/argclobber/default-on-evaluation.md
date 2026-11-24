@@ -34,7 +34,7 @@ gcc -O2 -fno-inline -o b ce-probe-budget.c && strip b             # caller 0x177
 gcc -nostdlib -static -o c ce-probe-budget.s                      # caller 0x401000
 gcc -O2 -shared -fPIC -o libce.so ce-import-lib.c
 gcc -O2 -fno-inline -o d ce-import.c -L. -lce && strip d          # caller 0x1180
-kuna decompile-all <x> --addr <caller> --option argclobber off|on
+unlace decompile-all <x> --addr <caller> --option argclobber off|on
 ```
 
 Every shape clause of the rule passes at all four. The only clause that could decline is the
@@ -58,11 +58,11 @@ path and an `idivl` remainder on the other.
 
 ```
 $ gcc -O2 -fno-inline -o ce ce-remainder-or-pair.c && strip ce
-$ kuna decompile-all ce --addr 0x1200 --option argclobber off
+$ unlace decompile-all ce --addr 0x1200 --option argclobber off
   if (a0) { v1 = a1 / a2;  a1 %= a2; }
   else    { v3 = sub_1160(a1);  a1 = SUB168(v3,8);  v1 = SUB168(v3,0); }
   return sub_1170(v2 & 0xffffffff,v1,a1) + 1;
-$ kuna decompile-all ce --addr 0x1200 --option argclobber on
+$ unlace decompile-all ce --addr 0x1200 --option argclobber on
   if (a0) a1 /= a2;
   else    { a1 = sub_1160(a1); }
   return sub_1170(v1 & 0xffffffff,a1) + 1;
@@ -74,8 +74,8 @@ diff appears at all four callers: `sub_1160(...,v1,a1)` in `b`, and
 `ext3(...,v1,a1)` in `d`, each lose their third argument. In `c`,
 `sub_401031(a0,5,v3)` becomes `sub_401031(a0,5)` and `v3 = v1 % 200` is
 deleted. The #652 review built the `rax:rdx` shape with a *direct* forward
-(`p = mk(x); use3(op, p.a, p.b)`) and could not get a phantom out of kuna. That
-matches what we see here: at a direct forward, kuna already renders two
+(`p = mk(x); use3(op, p.a, p.b)`) and could not get a phantom out of unlace. That
+matches what we see here: at a direct forward, unlace already renders two
 arguments with the option off, so the option changes nothing there. That is a
 separate baseline defect. What the option adds is the joined shape above.
 
@@ -101,13 +101,13 @@ declines three of the four drops #652 shipped as correct:
 
 So the fmt drop is correct because of what `fmt` is. Nothing the rule reads
 shows it. The evidence that does separate the two sets is the **callee's own
-recovered prototype**. All four shipped drops land on a callee kuna itself
+recovered prototype**. All four shipped drops land on a callee unlace itself
 recovers with two parameters (`sub_3700(FILE *, ulong)`, `sub_3a30(FILE *,
 ulong)`, `ext2fs_dblist_sort2(int8, code *)`, `xrealloc(void *, uint8)`).
 Every counterexample callee recovers three, or has no body. A sound version
 needs callee-first ordering to read that prototype, which is protoorder's
 machinery (PR #669). It would decline whenever the callee has no recovered
-prototype: an import, `kuna decompile` of a single function, or a callee not
+prototype: an import, `unlace decompile` of a single function, or a callee not
 yet decompiled.
 
 ## 3. Flip procedure results (default-on build, same base)
@@ -138,8 +138,8 @@ exiting non-zero. The full table and the hunk classes are in
 * The arity lens finds no wrong drop. All 22 land on the true arity: DWARF on
   the unstripped twin, or the libgcc/e2fsprogs header where the callee has no
   DWARF (`__addvsi3`, `__mulvsi3`, `ext2fs_badblocks_list_create`). 21 also land
-  on the arity kuna recovers for the callee. The exception is
-  `ext2fs_badblocks_list_create`, a one-`jmp` tail-call thunk that kuna renders
+  on the arity unlace recovers for the callee. The exception is
+  `ext2fs_badblocks_list_create`, a one-`jmp` tail-call thunk that unlace renders
   `(void)`.
 * **19 of the 22 are right for a reason the rule never reads.** At those 19 the callee
   walk is complete but "silent": it neither sees a read nor sees the register

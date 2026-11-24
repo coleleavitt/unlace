@@ -13,15 +13,15 @@ set -u
 WT=${WT:-$(git rev-parse --show-toplevel)}
 OUT=${OUT:-$WT/.scratch/sweep}
 R=${R:-/home/mahaloz/github/decbench/results/full_run_address_2026-09-11}
-export SLEIGHHOME=$WT/specs KUNA_SPECS=$WT/specs
-P=$WT/decompiler/crates/kuna-decomp/src/p5_types/ptrfromuse.rs
+export SLEIGHHOME=$WT/specs UNLACE_SPECS=$WT/specs
+P=$WT/decompiler/crates/unlace-decomp/src/p5_types/ptrfromuse.rs
 mkdir -p "$OUT"
 cp "$P" /tmp/ptrfromuse-guard-keep.rs
 sed -i 's/match const_base_evidence(data, op, other_vn) {/match BaseEvidence::No {/' "$P"
 grep -q "match BaseEvidence::No {" "$P" || { echo "SED_FAILED"; exit 1; }
 cd "$WT" && CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_BUILD_JOBS=12 make binaries \
   > /tmp/ptrfromuse-ablate-build.log 2>&1 || { echo BUILD_FAILED; cp /tmp/ptrfromuse-guard-keep.rs "$P"; exit 1; }
-K=$WT/decompiler/target/release/kuna
+K=$WT/decompiler/target/release/unlace
 for opt in O2 O0; do
   for b in coreutils/fmt coreutils/ls grep/grep gzip/gzip bzip2/bzip2 dash/dash tar/tar diffutils/diff; do
     name=$opt-$(echo "$b" | tr '/' '-')

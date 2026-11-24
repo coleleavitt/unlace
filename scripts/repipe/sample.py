@@ -6,7 +6,7 @@ and 79 carry no obfuscation class whatsoever. Nine uniformly-drawn challenges ar
 most often nine x86-64 PEs -- and a round that only ever sees one loader shape only ever
 finds one loader's worth of friction. The four dimensions sampled here (format, primary
 arch, declared difficulty, obfuscation-class count) are the ones that actually change which
-part of kuna is exercised: the loader, the sleigh spec, the analysis depth, and the
+part of unlace is exercised: the loader, the sleigh spec, the analysis depth, and the
 structuring.
 
 Why deterministic: a captain tick is bounded (REPIPE_CAPTAIN_TIMEOUT) and can die inside
@@ -15,7 +15,7 @@ replay of a crashed T_PLAN produces the identical slate, so the arenas already o
 still the right arenas. The seed defaults to a fixed string rather than to entropy for the
 same reason -- an unseeded run must still replay.
 
-Why the large-binary cap: kuna's worst measured case on this machine is 445 s at 1,476 MiB
+Why the large-binary cap: unlace's worst measured case on this machine is 445 s at 1,476 MiB
 RSS for a 3.4 MB PE `decompile-project`, and 342 s for an 866 KB challenge ELF in
 `aggressive` (99 s in `reliable`). Nine of those in one round is a round that spends its
 entire wall-clock budget inside decompile-all and reports no friction at all. `--max-large`
@@ -43,7 +43,7 @@ import sys
 from . import config
 from ..atomic import atomic_text_writer
 
-# `kuna --mode auto` picks its pipeline from the input size at these byte boundaries.
+# `unlace --mode auto` picks its pipeline from the input size at these byte boundaries.
 AGGRESSIVE_MAX = 512_000
 RELIABLE_MAX = 2_097_152
 
@@ -55,9 +55,9 @@ MAX_LARGE = int(os.environ.get("REPIPE_MAX_LARGE", "2"))
 # challenge whose friction is already filed.
 RECENT_ROUNDS = int(os.environ.get("REPIPE_RECENT_ROUNDS", "3"))
 
-DEFAULT_SEED = os.environ.get("REPIPE_SEED", "kuna-repipe")
+DEFAULT_SEED = os.environ.get("REPIPE_SEED", "unlace-repipe")
 
-# Ceiling for a single kuna invocation against a target of this size, used by probe.py when
+# Ceiling for a single unlace invocation against a target of this size, used by probe.py when
 # a tester does not supply one. Anchored on the two measured worst cases above, floored at
 # REPIPE_PROBE_TIMEOUT so it is never tighter than the generic probe budget.
 CALL_BUDGET_S = {"aggressive": 400, "reliable": 500, "fast": 600}
@@ -91,7 +91,7 @@ def difficulty_band(rec):
 
 
 def obfuscation_band(rec):
-    """0 / 1-2 / 3-4 / 5+ classes. The count is what predicts how hard kuna's structuring
+    """0 / 1-2 / 3-4 / 5+ classes. The count is what predicts how hard unlace's structuring
     is hit; which particular classes matter is the tester's problem, not the sampler's."""
     n = len((rec.get("obfuscation") or {}).get("classes") or [])
     if n == 0:
@@ -105,7 +105,7 @@ def obfuscation_band(rec):
 
 def arch_of(rec):
     """Primary arch. Fat binaries are recorded as 'x86-64+x86'; the first component is the
-    one kuna will actually be pointed at, so that is the stratum."""
+    one unlace will actually be pointed at, so that is the stratum."""
     return (_primary(rec).get("arch") or "unknown").split("+")[0]
 
 
@@ -119,7 +119,7 @@ def levels(rec):
 
 
 def mode_for(size):
-    """The mode `kuna --mode auto` will select for a binary of this size."""
+    """The mode `unlace --mode auto` will select for a binary of this size."""
     if size < AGGRESSIVE_MAX:
         return "aggressive"
     if size < RELIABLE_MAX:
@@ -133,7 +133,7 @@ def budget_for(size):
     Identical arithmetic to render_tester_prompt._time_budget_minutes so the slate and the
     rendered prompt cannot disagree: a >=2 MB target gets the full REPIPE_TESTER_TIMEOUT
     because one decompile-all on it has been measured at 445 s, and a small target gets 60%
-    of it because on a <512 KB binary kuna is fast and the time goes on thinking instead.
+    of it because on a <512 KB binary unlace is fast and the time goes on thinking instead.
     """
     base = max(1, config.TESTER_TIMEOUT // 60)
     if size >= RELIABLE_MAX:

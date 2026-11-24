@@ -1,11 +1,11 @@
 ## The problem
 
-`kuna disassemble` decodes forward from one end, so a branch that jumps over a
+`unlace disassemble` decodes forward from one end, so a branch that jumps over a
 junk byte pulls the rest of the listing out of phase — and nothing in the output
 says so. On an i386 PE from crackmes.one (`5ab77f6633c5d40ad448cbec`):
 
 ```
-$ kuna disassemble ./corrupt.exe 0x43d060 --addr --count 70
+$ unlace disassemble ./corrupt.exe 0x43d060 --addr --count 70
 0x43d08c      eb04                  JMP 0x43d092
 0x43d08f      eb01                  JMP 0x43d092
 0x43d091      c2aceb                RET 0xebac        <- covers 0x43d092
@@ -58,12 +58,12 @@ carries the DIV row.
 
 `tests/cli/linear-disassembly-silently-skips.json` is the acceptance probe
 re-pointed at a new vendored fixture, `jumpoverdecoy_i386` — the witness's own 60
-bytes rebased to `0x10000` — since CI has no dataset. Four `kuna-cli` integration
+bytes rebased to `0x10000` — since CI has no dataset. Four `unlace-cli` integration
 tests cover the note, the `--follow` recovery, that `--follow` is a no-op on an
 ordinary function, and that both modes cover the same bytes; one `console`
 unit test pins the fall-through rule including the `goto`-to-fall-through case.
 
-Sweep of `kuna disassemble` with and without `--follow` over ~800 functions of
+Sweep of `unlace disassemble` with and without `--follow` over ~800 functions of
 every vendored fixture: 2 listings differ, both anti-disassembly cases; the
 always-on note fires on 8 of the ~800, every one a real desynchronization.
 `make test` 675/675, `make test-stages` PARITY OK, `make test-cli` 114/114,

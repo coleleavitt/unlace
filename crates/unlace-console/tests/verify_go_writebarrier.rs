@@ -183,7 +183,7 @@ fn stripped_go_pointer_store_folds_its_write_barrier_under_auto() {
         eprintln!("verify_go_writebarrier: skipping (`go` not on PATH)");
         return;
     }
-    let dir = std::env::temp_dir().join(format!("kuna_go_wb_{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace_go_wb_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let out_bin = dir.join("go_stripped");
     if !build_go(&dir, &out_bin) {
@@ -292,7 +292,7 @@ fn phi_fed_barrier_arms_fold_and_preserve_every_program_store() {
         eprintln!("verify_go_writebarrier: skipping (`go` not on PATH)");
         return;
     }
-    let dir = std::env::temp_dir().join(format!("kuna_go_wbphi_{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace_go_wbphi_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let out_bin = dir.join("go_wbphi");
     if !build_go(&dir, &out_bin) {
@@ -366,7 +366,7 @@ fn staged_return_across_barrier_is_not_folded() {
         eprintln!("verify_go_writebarrier: skipping (`go` not on PATH)");
         return;
     }
-    let dir = std::env::temp_dir().join(format!("kuna_go_wbret_{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace_go_wbret_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let out_bin = dir.join("go_wbret");
     if !build_go_src(&dir, &out_bin, RETURN_GO) {

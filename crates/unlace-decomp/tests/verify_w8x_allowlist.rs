@@ -117,7 +117,7 @@ fn w8x_dump_is_byte_equal_to_snapshot() {
     let dump = rust_dump();
     assert_eq!(
         dump, SNAPSHOT,
-        "rendered decompile dump is not byte-equal to the kuna snapshot"
+        "rendered decompile dump is not byte-equal to the unlace snapshot"
     );
 }
 
@@ -150,7 +150,7 @@ fn w8x_all_ten_formerly_allowlisted_passes_are_present() {
         );
         assert!(
             named_snapshot.iter().any(|l| last_token(l) == Some(name)),
-            "{name:?} missing from the kuna snapshot (stale fixture?)"
+            "{name:?} missing from the unlace snapshot (stale fixture?)"
         );
     }
 }

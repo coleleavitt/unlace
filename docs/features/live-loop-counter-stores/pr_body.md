@@ -5,7 +5,7 @@ another, so the induction variable is never updated and the loop as written
 cannot terminate. Five loops in one function come out this way:
 
 ```
-$ kuna decompile ObfuscationFiesta.exe sub_140002530
+$ unlace decompile ObfuscationFiesta.exe sub_140002530
       for (v55 = 0; v55 <= 4; v7 = v55 + 1) {
         v46 = (v46 ^ v55 * 0x17) + 0x11;
       }
@@ -24,7 +24,7 @@ $ cstool -a 0x1400035f4 x64 eb108b842484000000ffc08984248400000083bc248400000005
  0x14000360e  jge  0x140003629
 ```
 
-One slot is loaded, incremented, stored back and re-read by the test. kuna
+One slot is loaded, incremented, stored back and re-read by the test. unlace
 renders the load side on the slot (`v55 <= 4`) and the store side on the
 register (`v7 = ...`), and `v7` collects the increments of four other counters
 and three call returns besides.
@@ -59,7 +59,7 @@ and three call returns besides.
 ## The tests
 
 `make test` PARITY OK 675/675, `make test-stages` PARITY OK 714/714,
-`make rust-test` green, `make check-spec` green in strict mode, `kuna catalog
+`make rust-test` green, `make check-spec` green in strict mode, `unlace catalog
 --check` OK. `loopcounterstore_defaults_on_and_toggles` pins the option
 default and its ArchSeam copy. Corpus sweep over 134 binaries / 54,471
 functions in both arms: the only differences are the five repaired loops plus

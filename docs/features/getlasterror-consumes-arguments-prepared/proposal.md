@@ -17,19 +17,19 @@ workspace suite and fixing exactly the three failures below.
 - new module `p4_calls/calleeprotostack.rs`
 - DIV-142 registry row, spec prose, `docs/options.md` regenerated
 - promoted acceptance probe; fixture
-  `decompiler/crates/kuna-analysis/tests/fixtures/calleeprotostack_pe_i386.exe` + its generator
+  `decompiler/crates/unlace-analysis/tests/fixtures/calleeprotostack_pe_i386.exe` + its generator
 
 **`parity gates` is GREEN in CI on this branch** (run 34267248765): `make test`,
-`make test-stages`, `make check-spec`, `make test-cli`, `kuna catalog --check` all pass. All 6
+`make test-stages`, `make check-spec`, `make test-cli`, `unlace catalog --check` all pass. All 6
 CodeQL jobs pass. **Only `make rust-test` is red.**
 
 ## The 3 deterministic failures — fix these and nothing else
 
 Identical across two independent local runs. The noisy `verify_w10_*` / `verify_w3_*` tail is a
-KNOWN worktree artifact of `KUNA_DECOMP_TEST`, not a regression: relaunch the gate with
-`env -u KUNA_DECOMP_TEST make rust-test` and it disappears. Do not chase it.
+KNOWN worktree artifact of `UNLACE_DECOMP_TEST`, not a regression: relaunch the gate with
+`env -u UNLACE_DECOMP_TEST make rust-test` and it disappears. Do not chase it.
 
-**(a) `p0_knowledge::kuna_phases::tests::option_values_live_value_present_for_58_suppressed_for_101`**
+**(a) `p0_knowledge::unlace_phases::tests::option_values_live_value_present_for_58_suppressed_for_101`**
 `left: 59, right: 58` at `phases/tests.rs:732`. A FOURTH hidden count assert, in a file
 where this branch already bumped three (settable_count 171->172, tier_counts 48->49 core, the
 `json.matches("},\n")` 170->171). Because `calleeprotostack` declares
@@ -39,8 +39,8 @@ where this branch already bumped three (settable_count 171->172, tier_counts 48-
 and **rename the fn** to `option_values_live_value_present_for_59_suppressed_for_101` — the
 count is in the name.
 
-**(b) `p4_calls::kuna_calleeprotostack::tests::declared_caller_frame_floor_declines_without_evidence`**
-**(c) `p4_calls::kuna_calleeprotostack::tests::resolve_declared_extra_pop_leaves_a_model_that_states_its_own`**
+**(b) `p4_calls::unlace_calleeprotostack::tests::declared_caller_frame_floor_declines_without_evidence`**
+**(c) `p4_calls::unlace_calleeprotostack::tests::resolve_declared_extra_pop_leaves_a_model_that_states_its_own`**
 Both panic `FuncProto::store: null` at `p4_calls/fspec.rs:5242:31`. These are the branch's OWN
 new unit tests against its OWN new module — **a real bug, not bookkeeping.** Decide which side is
 wrong: is the test fixture under-constructed (build the `FuncProto` with a store), or must the

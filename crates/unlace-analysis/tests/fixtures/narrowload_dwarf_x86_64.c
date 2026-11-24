@@ -3,7 +3,7 @@
  * itself: a call's result, a loop's phi, and a pointer read out of another
  * record.  Every object the byte is read from ends at that byte, at the end of
  * a readable page, so a printed read of the whole field faults where the
- * binary does not.  The round trip compiles kuna's printing of every function
+ * binary does not.  The round trip compiles unlace's printing of every function
  * between the markers against the export's header, links it with the prelude
  * and main, and compares the output with this binary's.  Built with
  * -std=gnu11 -g at gcc -O0, clang -O0, gcc -O2 and clang -O2. */

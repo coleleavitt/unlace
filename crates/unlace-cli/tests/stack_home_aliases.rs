@@ -27,7 +27,7 @@ fn decompile() -> String {
             "on",
         ])
         .args(["--assert-strict", "--assert"])
-        .arg(format!("@{fixture}.kuna"))
+        .arg(format!("@{fixture}.unlace"))
         .arg("--sleighpath")
         .arg(common::repo_root().join("specs"));
     let output = common::process::output_with_timeout(

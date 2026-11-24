@@ -44,7 +44,7 @@ Override the callee's ECX/EDX parameter storage.
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_402020",
@@ -78,7 +78,7 @@ Override the callee's ECX/EDX parameter storage.
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_402020",

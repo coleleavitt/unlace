@@ -20,7 +20,7 @@
 # "Aborting process").
 #
 # Stage model: S6 "alias-facets" sub-stage (dynamic-symbol attachment, keyed on
-# DynamicHash).  kuna_dynamichashmax.rs (always on) raises uniqueHash's
+# DynamicHash).  unlace_dynamichashmax.rs (always on) raises uniqueHash's
 # collision budget 8 to 16, large enough to admit a unique hash for these
 # dense-but-not-pathological cases while still fitting the existing 3-bit
 # total/pos hash encoding.

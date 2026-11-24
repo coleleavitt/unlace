@@ -97,7 +97,7 @@ fn rust_print_c_for(file: &str) -> Option<String> {
 /// [`rust_print_c_for`] over a copy of `file` whose script first sets `option`,
 /// for a comparison against the C++ oracle's spelling of an option unlace ships on.
 fn rust_print_c_with(file: &str, option: &str) -> Option<String> {
-    let dir = std::env::temp_dir().join(format!("kuna-w10-{}-{file}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace-w10-{}-{file}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("create the pinned datatest dir");
     let text = std::fs::read_to_string(datatests_root().join(file)).expect("read the datatest");
     let pinned = text.replacen(
@@ -128,9 +128,9 @@ fn rust_print_c_in(dir: &std::path::Path, file: &str) -> Option<String> {
         .output()
         .ok()?;
     let text = String::from_utf8_lossy(&out.stdout);
-    let begin = text.find("===KUNA_DUMP_BEGIN")?;
+    let begin = text.find("===UNLACE_DUMP_BEGIN")?;
     let after_begin = text[begin..].find('\n')? + begin + 1;
-    let mid = text[after_begin..].find("===KUNA_DUMP_MID===")? + after_begin;
+    let mid = text[after_begin..].find("===UNLACE_DUMP_MID===")? + after_begin;
     Some(text[after_begin..mid].to_string())
 }
 

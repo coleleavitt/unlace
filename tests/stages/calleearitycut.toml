@@ -33,7 +33,7 @@
 # reachable error is a missing trailing argument, never a misplaced one.
 #
 # Stage / sub-stage: P4 "trial-finalization".  The widened boundary
-# (kuna_calleearitycut.rs, always on) applies to the callee-body recovery.
+# (unlace_calleearitycut.rs, always on) applies to the callee-body recovery.
 #
 # The fixture is the same construct on SysV x86-64:
 #
@@ -57,7 +57,7 @@
 # `caller3` writes `mov $2,%r8d` before the CALL, so the register the run stops
 # at is carrying a fifth argument and truncating there would hide it.  Both are
 # declined by this rule.  Their lists are then filled from the caller's side
-# alone, by `passthrough` (kuna_passthrough.rs, default on): the three
+# alone, by `passthrough` (unlace_passthrough.rs, default on): the three
 # forwarded registers in front of the written one no longer count as the
 # inactive chain that ended the list, so forceInactiveChain's hole fill takes
 # them, and `caller3` keeps its fifth argument.  With `passthrough off` both

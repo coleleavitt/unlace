@@ -74,7 +74,7 @@ impl UnlaceRestartReason {
             }
             UnlaceRestartReason::ProtoForced => "prototype forced late at call site (S4, edge 5)",
             UnlaceRestartReason::LoweredSwitch => {
-                "lowered comparison-cascade switch (S2 switch model, kuna angr-port)"
+                "lowered comparison-cascade switch (S2 switch model, unlace angr-port)"
             }
         }
     }

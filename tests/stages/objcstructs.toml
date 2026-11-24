@@ -11,7 +11,7 @@
 #
 # Fix: `encoding.rs` decodes `{...}` through `struct_type` (the quoted member
 # names an ivar encoding carries, nested structs flattened) and `[n T]` to an
-# array; `kuna_objcblocks.rs` types every `_NSConcreteGlobalBlock` literal as
+# array; `unlace_objcblocks.rs` types every `_NSConcreteGlobalBlock` literal as
 # `Block_layout`, names its invoke `block_invoke_<addr>` and types it from the
 # descriptor's signature.
 #

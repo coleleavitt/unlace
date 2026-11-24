@@ -2,10 +2,10 @@
 
 `--assert type <local> <T>` reaches the locals that sit on the stack and dies on
 the ones that sit in a register — which is most of them. The register locals are
-the ones kuna prints with a storage comment:
+the ones unlace prints with a storage comment:
 
 ```
-$ kuna decompile decompiler/crates/kuna-analysis/tests/fixtures/cet_pie_x86_64 \
+$ unlace decompile decompiler/crates/unlace-analysis/tests/fixtures/cet_pie_x86_64 \
       get_elf_header --assert 'type v1 unsigned int *' --json | jq -r '.assertions[0] | "\(.status): \(.detail)"'
 rejected: No symbol named: v1
 ```
@@ -19,7 +19,7 @@ Elf64_Ehdr * get_elf_header(_IO_FILE *fp)
 ```
 
 `name v1 hdr` fails the same way, and so does `type v2 char[16]` — the form
-`kuna decompile --help` gives as its worked example. Reported once against
+`unlace decompile --help` gives as its worked example. Reported once against
 crackmes.one `69761b7a39e9c4d85c2f9fc1` (graphy `sub_1005350`), where the whole
 VM state lives in `rax`.
 
@@ -58,6 +58,6 @@ rejections, and the batch case where an earlier `name` renamed the symbol a late
 Sweep: every printed local of 9 graphy functions × 2 directives (168 runs) — 0
 duplicate declarations, 0 undeclared identifiers. `make test` 675/675 PARITY OK,
 `make test-stages` PARITY OK, `make rust-test` green, `make check-spec` OK,
-`kuna catalog --check` OK, `make test-cli` 114/114.
+`unlace catalog --check` OK, `make test-cli` 114/114.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

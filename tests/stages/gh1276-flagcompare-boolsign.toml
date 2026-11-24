@@ -10,7 +10,7 @@
 #   while ((BANK0_R4 < uVar1) << 7 < '\0') { ... }
 #
 # Stage model: S3 "simplification-quiescence" (which algebraic/peephole rules
-# fire).  kuna's RuleBoolSignLess (group "analysis", always on) recognizes
+# fire).  unlace's RuleBoolSignLess (group "analysis", always on) recognizes
 # `INT_SLESS(INT_LEFT(b,k), 0)` where b's NZMask is exactly the single bit
 # that the shift lands in the sign position, and rewrites it to `b != 0`,
 # dropping the shift entirely: the condition is a clean boolean comparison

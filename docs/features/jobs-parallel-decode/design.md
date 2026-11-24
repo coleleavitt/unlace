@@ -1,4 +1,4 @@
-# `kuna --jobs N` parallel discovery decode — final design (2026-09-12), annotated as built
+# `unlace --jobs N` parallel discovery decode — final design (2026-09-12), annotated as built
 
 Synthesis of a three-design panel (partition / shared-claim / prefetch) and three judges. The
 winner is **address-interval ownership with bulk-synchronous reconciliation** ("decode
@@ -7,8 +7,8 @@ self-check grafted in. Full panel material: `DESIGN-partition.md`, `DESIGN-share
 `DESIGN-prefetch.md`, `JUDGES-pdecode.json`, and the reader map `UNDERSTAND-pdecode.txt`.
 
 ## What it does
-`kuna functions|decompile-all|decompile-project|decompile-graph <bin> --jobs N` runs the
-whole-binary function-discovery walk (`kuna-analysis/src/listing/walk.rs`) on N threads inside
+`unlace functions|decompile-all|decompile-project|decompile-graph <bin> --jobs N` runs the
+whole-binary function-discovery walk (`unlace-analysis/src/listing/walk.rs`) on N threads inside
 the parent process. Byte-identical output on every surface where it engages; the serial walk
 runs unchanged wherever the gate refuses. On the 147 MB x86-64 target the walk is 71 s of a 80 s
 load (decode 59 s); projected total at 16 lanes ~18-20 s (~4x), ~15 s after the follow-up that
@@ -59,10 +59,10 @@ consumer iterates `BTreeMap`s in address order and `fast_funcdisc` sorts+dedups 
 | G4 | `max_delay_slot_bytes() == 0` | a delay-slot decode fetches past the instruction inside one `one_instruction`; Sparc waits |
 | G5 | the parent loader answers `shared_bytes()` (an `ObjectLoadImage`) and the `ContextPainter` is empty | lanes must read the parent's LIVE patched bytes (dynrelocs, `--assert bytes`), never re-read the file |
 | G6 | **image precondition: every address of every exec range `[lo, hi)` is mapped by some segment** | `ObjectLoadImage::load_fill`'s 512-byte window is history-dependent in exactly one case: a fetch whose FIRST byte is unmapped (`fill_span` breaks only at `offset == 0`, loadimage_object.rs:1081/1092; a covering window returns zeroes where a direct fill returns `Err`). Every fetch the walk makes starts at an `in_exec` address, so with G6 no fetch can start unmapped and the window is unobservable. Belt and braces: each lane carries a `saw_unmapped_first_byte` tripwire; if it ever fires, discard and re-walk serially |
-| G7 | exec bytes ≥ 8 MiB, overridable by `KUNA_DECODE_MIN_BYTES` (tests set 0) | 2×100 ms of engine builds must not dominate a small walk; the override is what keeps the equivalence tests NON-vacuous |
+| G7 | exec bytes ≥ 8 MiB, overridable by `UNLACE_DECODE_MIN_BYTES` (tests set 0) | 2×100 ms of engine builds must not dominate a small walk; the override is what keeps the equivalence tests NON-vacuous |
 | G8 | not wasm | the WASI front-end has no threads |
-Observability: with `--jobs > 1` exactly one stderr line, `[kuna --jobs] decode: 16 lanes, 512
-intervals` or `[kuna --jobs] decode: serial (<reason>)`; nothing printed when `--jobs` is absent.
+Observability: with `--jobs > 1` exactly one stderr line, `[unlace --jobs] decode: 16 lanes, 512
+intervals` or `[unlace --jobs] decode: serial (<reason>)`; nothing printed when `--jobs` is absent.
 Post-walk assertion: the parent's context region list is unchanged.
 
 ## The per-lane engine kit (built ONCE per `run_listing_consumers`, reused across rebuilds)
@@ -74,21 +74,21 @@ ascending with `set_context_region`; a `ContextDatabase` cannot be cloned — `F
 zeroes the explicit-set mask — and `encode()` is blind to the default blob, so no fingerprint),
 plus `allow_context_set(false)`, plus a `SharedBytesImage` view (Arc-shared segment bytes, its
 OWN 512-byte window, its OWN `Rc<AddrSpace>` — space identity is `Rc::ptr_eq`). Lane startup
-compares 1,024 sampled decodes against the parent; `KUNA_DECODE_SELFCHECK=1` re-decodes every
+compares 1,024 sampled decodes against the parent; `UNLACE_DECODE_SELFCHECK=1` re-decodes every
 address with the parent's engine (or runs both walks and compares field by field, returning the
 serial result) — the acceptance evidence for the feature PR, not a follow-up.
 
 ## The knob
 `--jobs N|auto` is accepted by `functions` too (rewrite the stale comment at
 decompile_all.rs:2550, do not delete it); `--jobs-chunk/--jobs-full-load/--jobs-worker` stay
-batch-only. `apply_loadtime_env` bridges it as `KUNA_DECODE_JOBS=N` for the duration of
+batch-only. `apply_loadtime_env` bridges it as `UNLACE_DECODE_JOBS=N` for the duration of
 `load_program` (the existing RAII guard restores it before the pool spawns); `jobs.rs` also
-forces `KUNA_DECODE_JOBS=1` in worker children next to the `fast_funcdisc off` forcing. Lane cap
+forces `UNLACE_DECODE_JOBS=1` in worker children next to the `fast_funcdisc off` forcing. Lane cap
 32 (measured throughput knee), distinct from the pool's `MAX_AUTO_JOBS = 16`; document both.
 Driver-tier resource setting: no `phases.toml` row, no catalog counts; DIV row narrowing
 DIV-145's "the engine cannot thread" (the decompile pipeline still cannot; the discovery decode
 now runs N independent engines with only plain data crossing threads); docs/cli.md (the
-`--jobs` section, the `functions` usage line, an explicit "`kuna xrefs`/`kuna strings` run a
+`--jobs` section, the `functions` usage line, an explicit "`unlace xrefs`/`unlace strings` run a
 different, order-dependent walk and are out of scope"), docs/spec/01-program-prep.md prose.
 
 ## Failure modes
@@ -112,7 +112,7 @@ before walking. Merge collision → discard + serial. Memory: +48 MB per lane + 
   `run_listing_consumers` to `build_with_meta_planned`; `build_with_meta` keeps its signature),
   the knob, tests (unit; `verify_pdecode.rs` differential at lanes 2/3/4/8 × K variants ×
   PARTITION_ONLY/FULL with the size override; CLI matrix incl. the plan line and the ARM
-  decline; injected-panic fallback; `make test-cli --reps 5` at `KUNA_DECODE_JOBS=8`), docs,
+  decline; injected-panic fallback; `make test-cli --reps 5` at `UNLACE_DECODE_JOBS=8`), docs,
   DIV row, the corpus sweep (1,368 x86-64 + 98 ARM decbench ELFs) and interleaved min-of-5
   timings at lanes 1/4/8/16/32 on the target, libLLVM and gdb (`--max-fn-seconds 0` on any
   decompiling surface).
@@ -133,11 +133,11 @@ listed landed as written.
   where the engine is (`WalkPlan::from_env`, called once in
   `engine.rs (commit_pending_analysis)`); what needs the walk's own inputs — the
   painter, the seeds, the executable ranges, the size floor — is decided at
-  `walk()` (`kuna_pdecode::admit`). The observable contract is unchanged: one
+  `walk()` (`unlace_pdecode::admit`). The observable contract is unchanged: one
   all-or-nothing decision, one stderr line, the serial walk on refusal.
 * **`WalkPlan` carries the kit seed, not a `DecodeKitFactory` trait object.** The
   recipe, the `Arc<dyn ImageBytes>` and the `ContextValueSnapshot` are plain data,
-  so there was no need for a trait or for kuna-analysis to reach into console;
+  so there was no need for a trait or for unlace-analysis to reach into console;
   the plan is built once per `run_listing_consumers` and reused across all four
   rebuild sites.
 * **Lane 0 is the calling thread.** The pre-spawn probe has to build a kit on this
@@ -166,11 +166,11 @@ listed landed as written.
   instead of leaving them at a barrier nobody will reach.
 * **`--jobs auto` resolves twice.** `jobs::parse_jobs` still caps the pool at 16;
   `jobs::decode_lanes` caps the lanes at 32. A worker child is given
-  `KUNA_DECODE_JOBS=1` explicitly rather than relying on the parent's RAII guard.
-* **Env surface as shipped:** `KUNA_DECODE_JOBS` (the bridge `--jobs` sets),
-  `KUNA_DECODE_MIN_BYTES` (the size floor; tests set `0`), `KUNA_DECODE_INTERVALS`
-  (intervals per lane), `KUNA_DECODE_SELFCHECK=1|abort`, `KUNA_DECODE_STATS=1`, and
-  the test-only `KUNA_DECODE_FAULT=<lane>`.
+  `UNLACE_DECODE_JOBS=1` explicitly rather than relying on the parent's RAII guard.
+* **Env surface as shipped:** `UNLACE_DECODE_JOBS` (the bridge `--jobs` sets),
+  `UNLACE_DECODE_MIN_BYTES` (the size floor; tests set `0`), `UNLACE_DECODE_INTERVALS`
+  (intervals per lane), `UNLACE_DECODE_SELFCHECK=1|abort`, `UNLACE_DECODE_STATS=1`, and
+  the test-only `UNLACE_DECODE_FAULT=<lane>`.
 * **The DIV row is DIV-169**, not DIV-164: five rows landed between the design and
   the implementation, two of them while this branch was in review.
 * **A `MAX_ROUNDS = 1024` runaway guard** exists, which the design body deliberately
@@ -192,7 +192,7 @@ listed landed as written.
   naming: it swallows a panic on any other thread of the process during that
   window (none exist on this path today — the pool opens after the load), and a
   genuine lane bug would otherwise be unreportable, so the hook is NOT installed
-  when `KUNA_DECODE_STATS`, `KUNA_DECODE_SELFCHECK` or `RUST_BACKTRACE` is set.
+  when `UNLACE_DECODE_STATS`, `UNLACE_DECODE_SELFCHECK` or `RUST_BACKTRACE` is set.
 * **A refused lane spawn is a refusal, not a panic.** `thread::scope`'s `spawn`
   panics on `EAGAIN`/`ENOMEM` and joins the lanes already parked at the first
   barrier before resuming it — a deadlock with no output. The spawner uses
@@ -208,8 +208,8 @@ listed landed as written.
   final `BTreeMap` fresh on the main thread, so both are resident across the
   merge rather than one replacing the other. `MALLOC_ARENA_MAX`, or dropping each
   shard on its producing lane, is the follow-up. Because that peak is what the
-  worker pool sizes itself from, `kuna_pdecode::run` records the lane-induced
-  excess in a process-wide counter (`lane_peak_excess_bytes()`; `KUNA_DECODE_STATS=1`
+  worker pool sizes itself from, `unlace_pdecode::run` records the lane-induced
+  excess in a process-wide counter (`lane_peak_excess_bytes()`; `UNLACE_DECODE_STATS=1`
   reports the current walk's figure) and `jobs::worker_estimate` subtracts it.
   That excess is **capped at the lanes' own footprint** — `lanes x 48 MB` of
   rebuilt engine plus the shard bytes the merge counts as it consumes them.

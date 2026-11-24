@@ -334,7 +334,7 @@ fn word(image: &[u8], off: usize) -> u64 {
 
 /// A fresh directory holding copies of the named `linked/` fixtures.
 fn linked_dir(tag: &str, files: &[&str]) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("kuna-kclinked-{tag}-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace-kclinked-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     for name in files {

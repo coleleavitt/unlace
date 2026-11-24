@@ -1,4 +1,4 @@
-// Fixture source for tests/stages/kuna-itaniumeh-clang.toml (eh3_x86_64_clang.so):
+// Fixture source for tests/stages/unlace-itaniumeh-clang.toml (eh3_x86_64_clang.so):
 //   clang++ -O2 -fPIC -shared -o eh3_x86_64_clang.so eh3.cc   (clang 22.1.8)
 // clang starts a call-site range at the call's argument set-up, not at the call.
 struct Base { int c; Base(int v) : c(v) {} virtual ~Base(); virtual int code() const { return c; } };

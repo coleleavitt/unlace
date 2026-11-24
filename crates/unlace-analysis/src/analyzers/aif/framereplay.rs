@@ -7,7 +7,7 @@ use std::collections::BTreeSet;
 
 use super::entrychecks::CheckedAif;
 
-const HEADER: &str = "kuna-armframes 1";
+const HEADER: &str = "unlace-armframes 1";
 
 /// The final root set, code-pointer and AIF entries, and retained prior
 /// entries of one frame recovery; `recovered` is false when no frame validated.

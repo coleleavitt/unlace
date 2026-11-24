@@ -1,6 +1,6 @@
 from pathlib import Path
 import runpy,time,json,sys,os
-w=Path('/tmp/kuna-rust-panic-d850');history=w/'idle-waits';history.mkdir(exist_ok=True)
+w=Path('/tmp/unlace-rust-panic-d850');history=w/'idle-waits';history.mkdir(exist_ok=True)
 allowed=os.sched_getaffinity(0)
 pairs=set()
 for cpu in sorted(allowed):
@@ -19,7 +19,7 @@ for index in range(40):
  (history/(stamp+'-selection.json')).write_text(json.dumps(record,indent=2)+'\n')
  if min(idle[c]for c in chosen)<95:
   print('No idle pair',stamp,chosen,[idle[c]for c in chosen],flush=True);time.sleep(30);continue
- os.environ['KUNA_TIMING_CPU']=str(max(chosen));sys.argv=[str(w/'timing-monitored.py'),'rust-large-control','go-control']
+ os.environ['UNLACE_TIMING_CPU']=str(max(chosen));sys.argv=[str(w/'timing-monitored.py'),'rust-large-control','go-control']
  before=set((w/'timing-attempts').glob('*'))
  try:
   print('Selected idle pair',stamp,chosen,[idle[c]for c in chosen],flush=True)

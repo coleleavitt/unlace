@@ -5,9 +5,9 @@
   "opportunity": "elfmain",
   "witness": "decbench coreutils fmt built -O2 and stripped (full_run_address_2026-09-11/O2/coreutils/stripped/fmt), main @0x26a0",
   "selector": "0x26a0",
-  "source_decompiler": "kuna",
+  "source_decompiler": "unlace",
   "phase": "P1 (program prep, entry discovery / prototype source)",
-  "module": "decompiler/crates/kuna-analysis/src/analyzers/entry/elfmain.rs (ElfMainPass)",
+  "module": "decompiler/crates/unlace-analysis/src/analyzers/entry/elfmain.rs (ElfMainPass)",
   "change_kind": "correctness-fix",
   "tier": "analysis",
   "option": "elfmain",
@@ -25,7 +25,7 @@
   ],
   "acceptance": {
     "probe_id": "tests/cli/elf-libc-start-main-unnamed.json",
-    "command": "kuna decompile-all decompiler/crates/kuna-analysis/tests/fixtures/stripped_dynamic_x86_64 --addr 0x1405 --json",
+    "command": "unlace decompile-all decompiler/crates/unlace-analysis/tests/fixtures/stripped_dynamic_x86_64 --addr 0x1405 --json",
     "before": "functions[0].name == \"sub_1405\", code `unsigned long sub_1405(int a0,unsigned long *a1)`, the argument vector untyped so `sub_1357(a1[1])`",
     "after": "functions[0].name == \"main\", code `int main(int argc,char **argv,char **envp)` and `sub_1357(argv[1])`",
     "verify": "make test-cli => tests/cli: 174/174 passed",
@@ -34,13 +34,13 @@
   "ablation": {
     "method": "--option elfmain off on the witness and on every in-repo ELF fixture the pass fires on",
     "result": "the previous output returns exactly: no `main` symbol, the sub_<addr> declaration and the body-driven signature, byte for byte (the whole-corpus sweep below is the proof -- 130 of 143 fixtures are byte-identical in both arms and the 13 that differ differ only in the hunks classified there)",
-    "cross_build_control": "`kuna decompile-all` from the branch with `--option elfmain off` is byte-identical to the same command from the base commit's own binary (809712e9) on stripped_dynamic_x86_64, aif_gap_x86_64, eh_lsda_x86_64, fmt_x86_64 and entrymain_arm -- so the only behavioural change on the branch is behind the gate."
+    "cross_build_control": "`unlace decompile-all` from the branch with `--option elfmain off` is byte-identical to the same command from the base commit's own binary (809712e9) on stripped_dynamic_x86_64, aif_gap_x86_64, eh_lsda_x86_64, fmt_x86_64 and entrymain_arm -- so the only behavioural change on the branch is behind the gate."
   },
   "oracle_check": {
-    "method": "kuna functions on every stripped decbench ELF that has an unstripped twin, comparing the address named `main` against the twin's `main` from nm",
+    "method": "unlace functions on every stripped decbench ELF that has an unstripped twin, comparing the address named `main` against the twin's `main` from nm",
     "images_with_a_twin": 758,
     "excluded_pass_refuses": 33,
-    "excluded_why": "33 of the 758 are stripped only of .symtab and still export `main` from .dynsym, so main_claim() returns None and the name comes from the symbol table exactly as it did before this option existed -- bash plus its six build tools (bashversion, man2html, mkbuiltins, mksignames, mksyntax, psize.aux), e2fsprogs/e2fsck, iproute2/ip, iproute2/rtmon and rsyslog/rsyslogd, at all three optimisation levels. Confirmed on O0/bash/bashversion: `kuna decompile-all` is byte-identical with and without `--option elfmain off`. Those rows are not evidence about this pass and are not counted.",
+    "excluded_why": "33 of the 758 are stripped only of .symtab and still export `main` from .dynsym, so main_claim() returns None and the name comes from the symbol table exactly as it did before this option existed -- bash plus its six build tools (bashversion, man2html, mkbuiltins, mksignames, mksyntax, psize.aux), e2fsprogs/e2fsck, iproute2/ip, iproute2/rtmon and rsyslog/rsyslogd, at all three optimisation levels. Confirmed on O0/bash/bashversion: `unlace decompile-all` is byte-identical with and without `--option elfmain off`. Those rows are not evidence about this pass and are not counted.",
     "images_the_pass_can_fire_on": 725,
     "images_the_pass_actually_fires_on": 612,
     "match": 612,
@@ -48,11 +48,11 @@
     "miss": 113,
     "miss_classification": "90 are bare-metal firmware with no glibc crt1 (libopencm3 69, crazyflie 6, riot-os 3, freertos 3, cleanflight 3, chibios 3, betaflight 3) -- the __libc_start_main refusal; 23 are shared libraries whose twin has no `main` either.",
     "raw": "docs/features/elfmain/sweep/decbench-main-oracle.txt (all 758 rows, MATCH/MISMATCH/MISS as first measured)",
-    "match_rate": "612/612 of the images the pass fires on are the twin's own `main`; on the other 113 it declines and kuna reports no `main` at all, exactly as it did before the option existed."
+    "match_rate": "612/612 of the images the pass fires on are the twin's own `main`; on the other 113 it declines and unlace reports no `main` at all, exactly as it did before the option existed."
   },
   "regression_sweep": {
     "fixtures": {
-      "method": "kuna decompile-all in both arms over every in-repo ELF fixture under 300 KB (143 images), whole-binary diff, every hunk read",
+      "method": "unlace decompile-all in both arms over every in-repo ELF fixture under 300 KB (143 images), whole-binary diff, every hunk read",
       "fired_on": 13,
       "fired": [
         "aif_gap_x86_64",
@@ -74,7 +74,7 @@
     },
     "real_binaries": {
       "why": "The fixture mains are a few statements long, so they cannot show what the option does to a main of a few hundred lines. Same command, eight stripped decbench binaries.",
-      "method": "kuna decompile-all in both arms on O0/grep/grep, O2/tar/tar, O2-noinline/diffutils/cmp, O2/gzip/gzip, O0/coreutils/ls, O2/findutils/find, O0/dash/dash and O2/coreutils/fmt; every changed line attributed back to its enclosing function",
+      "method": "unlace decompile-all in both arms on O0/grep/grep, O2/tar/tar, O2-noinline/diffutils/cmp, O2/gzip/gzip, O0/coreutils/ls, O2/findutils/find, O0/dash/dash and O2/coreutils/fmt; every changed line attributed back to its enclosing function",
       "changed_lines": "grep O0 682, tar O2 496, cmp O2-noinline 112, fmt O2 92, find O2 42, gzip O2 24, ls O0 18, dash O0 8",
       "blast_radius": "In all eight, exactly two functions change: `main` itself and the `_start` that passes it to __libc_start_main (2 lines: the argument is now spelled `main`). No other function moves a byte.",
       "largest_case": "grep O0 main @0xa7d1: the body goes 670 -> 554 lines",
@@ -93,7 +93,7 @@
     "classification": "Every hunk is a consequence of the name, the three declared parameters or the int return -- including the last class, which is what the third declared parameter and the lock COST rather than what they buy. The two typed facts propagate, so on a real main the change is not confined to the declaration line: expressions fold and the region shape can change. It is bounded to main and its _start in all 21 images swept, and in the 775-image parameter sweep as well.",
     "parameter_lock": {
       "question": "what the LOCKED three-parameter prototype does to a main whose body recovers a parameter past the third",
-      "method": "kuna functions --filter '^main$' for the address, then kuna decompile-all --addr <it> in both arms, over every stripped ELF in the decbench tree (O0/O2/O2-noinline, all projects); a register local counts as never-assigned when nothing in the body assigns it, takes its address or writes through it",
+      "method": "unlace functions --filter '^main$' for the address, then unlace decompile-all --addr <it> in both arms, over every stripped ELF in the decbench tree (O0/O2/O2-noinline, all projects); a register local counts as never-assigned when nothing in the body assigns it, takes its address or writes through it",
       "population": 775,
       "with_a_named_main": 645,
       "more_than_three_body_parameters": 28,
@@ -101,7 +101,7 @@
       "lost_the_slot_with_no_new_local": "15 -- the body also writes that register somewhere, so the demoted slot becomes an ordinary assigned local (shadow usermod @0x6340: `a5 = *v13` on five paths), or the value goes away with the fabricated slot (coreutils true/false)",
       "ground_truth": "openssh sftp -O2 @0x5250 and shadow login -O2 @0x3d20 both declare `int main(int argc, char **argv)` in their unstripped twin's DWARF, so the extra slots the body recovers are fabrications in either arm",
       "improvements_in_the_same_class": "coreutils true/false -O2 and -O2-noinline: the fabricated fourth slot was producing `undefined16` and `return v2._0_16_ << 0x40`; the locked prototype gives `return 0`",
-      "pinned_by": "decompiler/crates/kuna-analysis/tests/fixtures/elfmainextra_x86_64 (+ .s source) via tests/stages/elfmain.xml #5-#8 and tests/cli/elf-main-extra-register-args.json",
+      "pinned_by": "decompiler/crates/unlace-analysis/tests/fixtures/elfmainextra_x86_64 (+ .s source) via tests/stages/elfmain.xml #5-#8 and tests/cli/elf-main-extra-register-args.json",
       "rows": "docs/features/elfmain/sweep-params/{summary.txt,population.txt}"
     }
   },
@@ -130,33 +130,33 @@
   },
   "speed": {
     "method": "Order-alternating paired runs: each iteration times both arms back to back and flips which arm goes first, so a drifting machine cancels; the reported number is the MEDIAN of the per-pair deltas. min-of-N was tried first and rejected -- on this contended box (load average 14, six other worktrees building) the control's min-of-41 delta came out +4.7%, i.e. larger than anything being measured.",
-    "witness_function": "decbench fmt O2 `kuna decompile-all --addr 0x26a0`, 41 pairs: -0.07%",
+    "witness_function": "decbench fmt O2 `unlace decompile-all --addr 0x26a0`, 41 pairs: -0.07%",
     "control": "fauxware `authenticate` (unstripped, the pass refuses, so the true delta is 0), 41 pairs: -0.43% -- the noise floor",
-    "whole_binary": "stripped_dynamic_x86_64 `kuna decompile-all`, 41 pairs: +0.17%",
+    "whole_binary": "stripped_dynamic_x86_64 `unlace decompile-all`, 41 pairs: +0.17%",
     "budget_pct": 5.0,
     "within_budget": true,
     "reading": "All three are inside +-0.5%, and the witness is closer to zero than the control. The pass's per-load work is one pass over the symbol names (which the refusals need anyway) and one more entry in a locked prototype."
   },
   "tests": {
-    "unit": "decompiler/crates/kuna-analysis/src/analyzers/entry/elfmain.rs (6 tests over main_claim: both x86-64 encodings, all four oracle-4 architectures, the two non-PIE ARM shapes, the extra-register fixture, the unstripped-ELF refusal, the non-ELF and no-crt1 refusals)",
+    "unit": "decompiler/crates/unlace-analysis/src/analyzers/entry/elfmain.rs (6 tests over main_claim: both x86-64 encodings, all four oracle-4 architectures, the two non-PIE ARM shapes, the extra-register fixture, the unstripped-ELF refusal, the non-ELF and no-crt1 refusals)",
     "stage_test": "tests/stages/elfmain.xml (8 assertions, two-pass over two fixtures: `option elfmain off` = the bug, default = the fix, over the full load file -> decompile path. #1-#4 stripped_dynamic_x86_64 (the headline); #5-#8 elfmainextra_x86_64, which pins what the lock COSTS -- a six-parameter body-driven signature off, and on, the named/declared main with `unsigned long v1; // r9` assigned nowhere plus a call that passes three arguments where the body passes four)",
     "cli": "tests/cli/elf-libc-start-main-unnamed.json (the x86-64 acceptance), tests/cli/elf-libc-start-main-drops.json (the ARM regression the review found: a main that FORWARDS its third argument register without touching it -- a two-parameter park deleted that parameter and left `unsigned int v4; // r2` assigned nowhere, still passed to __printf_chk), tests/cli/elf-main-extra-register-args.json (the cost class, on elfmainextra_x86_64: the demoted r9 local and the dropped r8 call argument) and tests/cli/define-function-name-outranks-analysis.json (a declared `--define-function 0x1405=stage1` outranks the `main` this pass supplies at the same address, which keeps it as an alias). make test-cli 176/176",
-    "corpus_count": "decompiler/crates/kuna-base/src/xml.rs 293 -> 295 (this branch's stage test plus the one main gained in the same window; the round-3 assertions went into the SAME file, so the count did not move again). docs/baseline-stages.json re-recorded 1017 -> 1021.",
+    "corpus_count": "decompiler/crates/unlace-base/src/xml.rs 293 -> 295 (this branch's stage test plus the one main gained in the same window; the round-3 assertions went into the SAME file, so the count did not move again). docs/baseline-stages.json re-recorded 1017 -> 1021.",
     "moved_expectations": [
       "decompiler/crates/console/tests/verify_crossarch_entry_main.rs -- now runs BOTH arms: with elfmain off it is the pre-existing oracle-4 gate verbatim (sub_<addr>, return a0), and by default it is main / return argc at the same address.",
       "decompiler/crates/console/tests/verify_s1_entry.rs -- its subject is the generated sub_<addr> name format, so it runs with the option off; the default path on that same fixture is gated by tests/stages/elfmain.xml.",
       "decompiler/crates/console/tests/verify_assertflow.rs -- the qualified directive names aif_gap's 0x13c9 `main`, which is what it is.",
       "decompiler/crates/console/tests/verify_aif.rs -- same fixture, same address, same rename. Its default-arm assertion is now pinned on the thing that test is actually about: that the call through the 0x3df0 function-pointer table is still an unresolved `(**(code **)` deref when the gate is off.",
-      "decompiler/crates/kuna-ghidra/tests/ghidra_sim_e2e.rs -- PIN_FAILLOG_PLACEHOLDERS[0] 27 -> 26: 0x2620 is no longer an unnamed entity. Every other faillog measurement is unchanged, including c_lines 285, the getPcode traffic (2121 / 1044 decoded) and getMappedSymbols 1448."
+      "decompiler/crates/unlace-ghidra/tests/ghidra_sim_e2e.rs -- PIN_FAILLOG_PLACEHOLDERS[0] 27 -> 26: 0x2620 is no longer an unnamed entity. Every other faillog measurement is unchanged, including c_lines 285, the getPcode traffic (2121 / 1044 decoded) and getMappedSymbols 1448."
     ],
     "no_cli_probe_expectation_changed": "None of the ~50 tests/cli probes pinning a literal sub_<addr> needed editing. The one that broke, no-cli-function-boundary-override, was reporting `main` for a function the caller had declared `stage1`; that is the declared-name precedence fix, not an expectation change.",
-    "fixture": "decompiler/crates/kuna-analysis/tests/fixtures/elfmainextra_x86_64 (+ elfmainextra_x86_64.s, the assembler source and the two-line build command): a stripped x86-64 PIE with the crt1 idiom whose main forwards r8 into a call argument and stores r9 to a global, so the body-driven signature has six parameters"
+    "fixture": "decompiler/crates/unlace-analysis/tests/fixtures/elfmainextra_x86_64 (+ elfmainextra_x86_64.s, the assembler source and the two-line build command): a stripped x86-64 PIE with the crt1 idiom whose main forwards r8 into a call argument and stores r9 to a global, so the body-driven signature has six parameters"
   },
   "counts": {
     "settables": "206 -> 209 after two rounds of merging origin/main, which added three options of its own in the same window (impliedrefs/termdup, then bytehonest); phases.toml, phases/tests.rs, catalog_bytecompat.rs and tests/fixtures/phase_catalog.json all re-derived on a fresh build with `counters --rederive`/`--fix`, never by arithmetic. The bytehonest merge's settable assert auto-merged SILENTLY at 208 on both sides (the known trap) and was resolved to 209.",
     "tiers": "(66, 78, 61) -> (67, 80, 62): +2 transform (impliedrefs/termdup) and +1 core (bytehonest) from origin/main, +1 analysis from this branch",
     "catalog_rows": "205 -> 208 comma-terminated rows",
-    "catalog_buckets": "unchanged (source_decompiler kuna, change_kind correctness-fix)",
+    "catalog_buckets": "unchanged (source_decompiler unlace, change_kind correctness-fix)",
     "live_value": "unchanged -- no live_field, so the PASS_GATES allowlist is the site instead"
   },
   "gates": {
@@ -165,9 +165,9 @@
     "make rust-test": "RUST_TEST_RC=0 on the MERGED tree via the serialized lane (LANE: done rc=0 2026-09-16T23:48:53Z, 415 `test result: ok` lines, none with a non-zero failure count); rc=0 again on the pre-merge round-3 tree (23:22:48Z, 414 ok). One run in between died rc=2 on a single target, console --test verify_symbolnamebound :: the_original_name_still_resolves_through_the_fold, which passes on its own (4/4) and is a race inside that test binary: verify_symbolnamebound.rs:194 calls bound_scope_path OUTSIDE the file's GATE mutex, so it re-reads the bound env var while a sibling test has it flipped. Nothing on this branch touches that code.",
     "make check-spec": "check-spec OK (lenient mode) + check-spec OK (strict mode)",
     "make test-cli": "tests/cli: 178/178 passed after the merge (176 on this branch alone: two probes added in round 3, the cost class and the declared-name precedence; no existing probe edited)",
-    "kuna catalog --check": "catalog OK: documents exactly the registered kuna options",
+    "unlace catalog --check": "catalog OK: documents exactly the registered unlace options",
     "counters --check": "no drift: every hard-coded site agrees with the derived truth (re-run after the bytehonest merge)",
-    "docs/options.md": "byte-fresh (`kuna catalog --markdown` reproduces it)",
+    "docs/options.md": "byte-fresh (`unlace catalog --markdown` reproduces it)",
     "CI": "parity gates PASS; full-ci label added so the cargo workspace suite runs there too. origin/main merged in, so the PR is mergeable."
   },
   "docs": {

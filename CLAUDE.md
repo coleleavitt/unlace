@@ -16,16 +16,16 @@ It adds **Apple support** ported from Cole's earlier research decompiler (the ol
 archived on branch `master` and tag `unlace-v1-final`; do not touch either) plus fixes from an
 IDA 9.5 comparison. **Preserve** upstream's phase model, option catalog, parity gates, and speed.
 
-## Naming: what is unlace and what stays kuna
+## Naming: what is unlace and what stays unlace
 The crates (`unlace-*`, `use unlace_*`) and the CLI binary (`unlace`; also `unlace_ghidra`,
 `unlace_wasm`, `unlace-lift-diff`) carry the new name. These internal identifiers keep the
 upstream name on purpose, because renaming them would change baselines and make every upstream
-merge conflict: the `kuna_<slug>.rs` module files and their `kuna_*` items, option names,
-stage-test names and IDs (`tests/stages/kuna-*.xml`, `KUNA-CATALOG`, ...), ElementIds,
-`docs/baseline*.json`, the `KUNA_*` environment variables, the Ghidra extension
-(`KunaDecompiler`, its `/* Kuna v... */` marker), the `kuna:` prefix of Rust-output goto
+merge conflict: the `unlace_<slug>.rs` module files and their `unlace_*` items, option names,
+stage-test names and IDs (`tests/stages/unlace-*.xml`, `UNLACE-CATALOG`, ...), ElementIds,
+`docs/baseline*.json`, the `UNLACE_*` environment variables, the Ghidra extension
+(`UnlaceDecompiler`, its `/* Unlace v... */` marker), the `unlace:` prefix of Rust-output goto
 markers, and the archived evidence under `docs/features/`. Keep new code consistent with this
-split: new modules are still `kuna_<slug>.rs`.
+split: new modules are still `unlace_<slug>.rs`.
 
 ## Architecture First
 Each tier only builds on the ones below it; new behavior ships behind a named option.
@@ -34,7 +34,7 @@ Each tier only builds on the ones below it; new behavior ships behind a named op
 |---|---|
 | `Cargo.toml` + `crates/` | The engine (the cargo workspace is the repo root). `unlace-decomp` = the decompiler's driver and facade (`src/infra/`: scheduling, `decompile_drive`, the pass-hook composition; `src/p0_knowledge/option_dispatch.rs`; `phases.toml`), re-exporting `unlace-middle`, `unlace-lift`, `unlace-structure`, `unlace-bandb` and `unlace-emit`, so callers keep `unlace_decomp::` paths; `unlace-emit` = its emit band (`p9_emit/`: the printers, the output-language plane, final casts and rendering; same folder layout, builds on the four bands below it); `unlace-bandb` = its Band B (`p3_dataflow/`…`p6_variables/`: dataflow, calls, types, variables; same folder layout): the passes above the fixpoint's cyclic core, building on `unlace-bandb-core` = that core (the strongly connected modules of all four phases) and `unlace-bandb-base` = the Band B modules below or beside the core (same four folders, builds on the three bands below it; `notes/crate-architecture.md` step 10); `unlace-structure` = its structure band (`p7_regions/`, `p8_structure/`: regions and control-flow structuring; same folder layout, builds on `unlace-middle` and `unlace-lift`); `unlace-ctree` = the C syntax tree between structuring and printing (`docs/architecture/ctree.md`; builds on `unlace-middle`); `unlace-lift` = its lift band (`p1_partition/`, `p2_lift/`: partition, flow, switch recovery, call fixups; same folder layout, builds only on `unlace-middle`); `unlace-middle` = its IR band (`substrate/`: the IR incl. `typeop`/`variable`/`cover`/`dynamic`; `p0_knowledge/`: the option/catalog plane; `infra/`: `Architecture`, actions; `engine/`: the SLEIGH engine seam, injection, emulation; `spec/`: modelrules, prefersplit, segmentop; phase folders keep only fspec, heritage, merge, varmap, jump tables; the pass-hook table; `build.rs` generates the catalog tables from `unlace-decomp/phases.toml`); `unlace-analysis` = loader/analyzer tier (ELF/Mach-O, chained fixups, dyld cache, kernelcache, ObjC, Swift, DWARF, DEX, strings, function discovery); `unlace-sleigh`/`unlace-slacomp` = SLEIGH runtime/compiler (`slacomp`); `unlace-console` = `decomp_dbg`; `unlace-cli` = the `unlace` binary; `unlace-project` = the SQLite project file of user overrides (`unlace project`, `--project`; `docs/project.md`); `unlace-idb` = the IDA database (`.idb`/`.i64`) reader behind `unlace idb` and decompiling a database directly (a port of idb-rs's readers, no C dependencies); `unlace-ghidra`/`unlace-wasm` = Ghidra and browser front-ends; `unlace-harness` = the datatest runner, the parity gates (`tests/parity.rs`) and `decomp_test_dbg`; `unlace-base`/`unlace-num`/`unlace-lift-diff` = support; `unlace-decomp-dylib` = dev-only dylib of the engine behind the front-ends' `dynamic_linking` feature (off by default, excluded from the workspace; `docs/dev-setup.md`). |
 | `tests/datatests/` | Vendored XML regression corpus (675 assertions) vs `docs/baseline.json` — `cargo test -p unlace-harness --test parity datatests`. |
-| `tests/stages/` | kuna-owned issue testcases (TOML, each its own baseline) — `cargo test -p unlace-harness --test parity stage_tests` (`tests/stages/README.md`). |
+| `tests/stages/` | unlace-owned issue testcases (TOML, each its own baseline) — `cargo test -p unlace-harness --test parity stage_tests` (`tests/stages/README.md`). |
 | `tests/golden/` | Differential golden vectors for the workspace suite. |
 | `specs/Ghidra/Processors/` | Vendored SLEIGH sources. Each `.sla` is compiled from its `.slaspec` on first use into the `.sla` cache (`$XDG_CACHE_HOME/unlace/sla`, `crates/unlace-slacomp/src/slacache.rs`); nothing to build by hand. |
 | `scripts/` + `tools/` | Python helpers + the improvement pipeline, RE-friction loop, decbench campaign drivers. |
@@ -52,8 +52,8 @@ Each tier only builds on the ones below it; new behavior ships behind a named op
 - Decisions are flipped per run with `--option NAME VALUE`; discover them via `unlace catalog --json`.
 
 ## Current State
-- `main` (the default branch) is the combined build: upstream kuna merged in plus the
-  IDA-informed Apple tracks. It continues the kuna fork's `all` branch. Merge `upstream/main`
+- `main` (the default branch) is the combined build: upstream unlace merged in plus the
+  IDA-informed Apple tracks. It continues the unlace fork's `all` branch. Merge `upstream/main`
   (Noelo-Lab/kuna) into it; never rebase it.
 - Anything sent to Noelo-Lab/kuna comes from an upstream-clean branch cut from `upstream/main`,
   never from `main`.
@@ -68,13 +68,13 @@ Each tier only builds on the ones below it; new behavior ships behind a named op
   It exists only where the outcome is questionable (faithfulness vs readability, a
   speculative recovery, a speed trade, a heuristic scanner); a strict correctness fix
   ships unconditional, and a refinement extends the option it refines. New logic goes in
-  a `kuna_<slug>.rs` module in its owning phase folder (template:
+  a `unlace_<slug>.rs` module in its owning phase folder (template:
   `p2_lift/loweredswitch.rs`). Adding or dropping an option changes only
   `tests/fixtures/phase_catalog.json` (the byte-compat capture) and `docs/options.md`, both
   regenerated, never hand-counted: the counts in `phases/tests.rs` and
   `tests/catalog_bytecompat.rs` are read from `phases.toml`, a `live_field` row is the only
   kind with a codegen live reader, and `tests/stages/catalog.toml` computes its bucket
-  counts from the compiled catalog. Run `cargo test -p unlace-middle --lib kuna_phases` after
+  counts from the compiled catalog. Run `cargo test -p unlace-middle --lib unlace_phases` after
   any catalog edit.
 - **The spec is live**: describe every feature/behavior change in prose in the owning
   `docs/spec/` chapter in the same change; run `python3 tools/check_spec.py`.
@@ -89,13 +89,13 @@ Each tier only builds on the ones below it; new behavior ships behind a named op
   is not re-recorded; it still bumps the corpus count in `unlace-base/src/xml.rs`.
 - **Edition 2024 and rustfmt**: the workspace is edition 2024; run `cargo fmt --all`
   (2024 style, `rustfmt.toml`) before committing. CI and the `fast` gate check it.
-- **IDA/Hex-Rays material is allowed** (since 2026-11-23): unlace has diverged from upstream kuna
+- **IDA/Hex-Rays material is allowed** (since 2026-11-23): unlace has diverged from upstream unlace
   and sends nothing to Noelo-Lab/kuna, so IDA-informed features, readers for IDA formats (TIL,
   `.sig`/FLIRT, Lumina), IDA comparison output and IDA-derived notes may be committed.
 - **Comments are rare**: file header or function header only; inline only for a genuinely
   confusing hack. New functionality → new modules matching surrounding conventions (ported
   files name methods after their C++ originals).
-- kuna ElementIds use the 4000+ range; kuna PcodeOp addlflags bits start at 0x1000. Code
+- unlace ElementIds use the 4000+ range; unlace PcodeOp addlflags bits start at 0x1000. Code
   comments citing `decompiler/cpp/<file>.{cc,hh}` are **upstream Ghidra anchors**, not repo paths.
 - Don't commit build artifacts (`target/`, `*.sla`). Commit at milestones with
   descriptive messages. Public auto-created things (PRs/issues/comments) start with `[AUTOMATED]`.
@@ -149,7 +149,7 @@ it until the label is gone.
 - `CLAUDE.local.md`: git-excluded, optional machine-local notes.
 - `MEMORY.md`: local scratch/handoff state (git-ignored).
 - `.claude/` (local-only): `agents/` (researcher, verifier), `commands/` (audit, repro),
-  `rules/` (code-style, security, testing), `skills/kuna-apple-port/`.
+  `rules/` (code-style, security, testing), `skills/unlace-apple-port/`.
 
 ## Doc map (look up on demand — don't preload)
 | Doc | Open it when you need |
@@ -170,7 +170,7 @@ it until the label is gone.
 | `docs/quality-harness.md` | The ground-truth quality harness: compile a DWARF corpus, score per function, A/B an option into SQLite. |
 | `docs/modes.md` | `--mode auto\|reliable\|aggressive\|fast` presets and thresholds. |
 | `docs/multilang.md` | Multi-language source support (Rust/Go/Swift): sourcelang plane, idiom engine. |
-| `docs/observatory.md` | The local codebase observatory (`PYTHONPATH=. python3 -m scripts.observatory.generate --out observatory --kuna target/release/unlace`). |
+| `docs/observatory.md` | The local codebase observatory (`PYTHONPATH=. python3 -m scripts.observatory.generate --out observatory --unlace target/release/unlace`). |
 | `docs/missing-ghidra-analyses.md` | The `unlace-analysis` tier: analyzer gap vs Ghidra. |
 | `docs/ghidra-integration.md` | unlace as Ghidra's decompiler core (architecture + wire protocol). |
 | `docs/web-integration.md` | The WASM/browser front-end and the project site. |

@@ -1,4 +1,4 @@
-# kuna issue `indirectonly` (P6, sub-stage merge-aggressiveness).
+# unlace issue `indirectonly` (P6, sub-stage merge-aggressiveness).
 #
 # An ILLEGAL INPUT is an input Varnode that ActionDirectWrite never reached,
 # so nothing a formal parameter feeds can be responsible for its value: on a
@@ -7,7 +7,7 @@
 # involving such a variable, and HighVariable::hasName refuses to name an
 # unaffected input whose members are all of that kind.  Both refusals end
 # "unless the illegal input is only used indirectly", and that exception needs
-# the `indirectonly` Varnode flag, which nothing in kuna set:
+# the `indirectonly` Varnode flag, which nothing in unlace set:
 # Funcdata::markIndirectOnly / checkIndirectUse (funcdata_varnode.cc:801-858)
 # were unported and ActionMarkIndirectOnly was a documented no-op, so
 # isIndirectOnly() answered false everywhere.

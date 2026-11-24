@@ -12,9 +12,9 @@
  "change_kind": "presentation-default",
  "tier": "transform",
  "source_decompiler": "ida",
- "inspiration": "castbench residue: 64-bit widenings are kuna's largest cast excess over IDA; IDA prints 12LL * j / 4LL * v5 where kuna printed (long)j * 0xc",
+ "inspiration": "castbench residue: 64-bit widenings are unlace's largest cast excess over IDA; IDA prints 12LL * j / 4LL * v5 where unlace printed (long)j * 0xc",
  "witness": {
-  "repro": "printf 'long idx(int j, int k) { return (k + 12L * j) * 128; }\\nlong ld(long *p, int i) { return p[1] + i; }\\nvoid st(long *p, int i) { p[1] = i; }\\n' > w.c && gcc -O0 -c w.c && kuna decompile-all w.o",
+  "repro": "printf 'long idx(int j, int k) { return (k + 12L * j) * 128; }\\nlong ld(long *p, int i) { return p[1] + i; }\\nvoid st(long *p, int i) { p[1] = i; }\\n' > w.c && gcc -O0 -c w.c && unlace decompile-all w.o",
   "before": [
    "return ((long)a0 * 0xc + (long)a1) * 0x80;",
    "return (long)a1 + ((long *)a0)[1];",
@@ -26,7 +26,7 @@
    "((long *)a0)[1] = a1;"
   ],
   "review_round_2": {
-   "repro": "printf 'long sq(int i) { return (long)i * i; }\\nlong pa(long *p, int a, int b) { return p[1] + (int)((unsigned)a + (unsigned)b); }\\nlong ch(long *p, int a, int b) { return (long)a + ((long)b + p[0]); }\\n' > w.c && clang -O0 -c w.c && kuna decompile-all w.o",
+   "repro": "printf 'long sq(int i) { return (long)i * i; }\\nlong pa(long *p, int a, int b) { return p[1] + (int)((unsigned)a + (unsigned)b); }\\nlong ch(long *p, int a, int b) { return (long)a + ((long)b + p[0]); }\\n' > w.c && clang -O0 -c w.c && unlace decompile-all w.o",
    "first_version": [
     "return (long)a0 * a0;  (gcc -O2: a0 * a0)",
     "return ((long *)a0)[1] + a1 + a2;",
@@ -55,7 +55,7 @@
   "doc": "docs/features/castwiden/analysis.md"
  },
  "castbench": {
-  "set": "full: 45 binaries x O0/O2/O2-noinline; functions kuna and IDA both emit",
+  "set": "full: 45 binaries x O0/O2/O2-noinline; functions unlace and IDA both emit",
   "base": "castwiden off on the same build 07d37d9ba over main 29cfedee0 (= main 0096e984d arm byte for byte in all 45 files)",
   "shared_functions": 4815,
   "ida_casts": 37821,
@@ -240,7 +240,7 @@
   }
  },
  "speed": {
-  "method": "interleaved min-of-15 kuna decompile-all --json, castwiden off vs the default (literal), same binary 07d37d9ba (docs/features/castwiden/speed.py)",
+  "method": "interleaved min-of-15 unlace decompile-all --json, castwiden off vs the default (literal), same binary 07d37d9ba (docs/features/castwiden/speed.py)",
   "per_binary": {
    "fmt": {
     "off_min_ms": 4139.9,
@@ -275,7 +275,7 @@
   "test_cli": "262/262 on 243177605; 2 probes moved to the new spelling"
  },
  "soundness": {
-  "round_trip": "kuna-cli/tests/decompile_all_cli.rs an_implied_widening_round_trips_through_the_printed_c: castwiden_{gcc,clang}_{O0,O2}_x86_64 printed with off/on/literal, compiled by gcc and clang at -O0 and -O2 with -fwrapv: all print the binary's output (negative values, 0x80000000..0xffffffff, sums past 32 bits, squares past 2^32), including one widened value read twice (sq, usq, sq_diff, dist), a 32-bit sum or product beside a long of the same operator (par_add, par_mul) and a widened operand beside a chain the printer writes without parentheses (chain_add, chain_mul, chain_add3, chain_xor); the pins fail on the first version",
+  "round_trip": "unlace-cli/tests/decompile_all_cli.rs an_implied_widening_round_trips_through_the_printed_c: castwiden_{gcc,clang}_{O0,O2}_x86_64 printed with off/on/literal, compiled by gcc and clang at -O0 and -O2 with -fwrapv: all print the binary's output (negative values, 0x80000000..0xffffffff, sums past 32 bits, squares past 2^32), including one widened value read twice (sq, usq, sq_diff, dist), a 32-bit sum or product beside a long of the same operator (par_add, par_mul) and a widened operand beside a chain the printer writes without parentheses (chain_add, chain_mul, chain_add3, chain_xor); the pins fail on the first version",
   "unit": "p9_emit/castwiden/tests.rs: fits() accepts exactly the (target, operand, other) combinations whose type and value C leaves unchanged, over sample values and all ten operators; literal typing in both bases",
   "pre_existing_bugs_found": [
    "(long)i + -0x80000000 prints an unsigned literal whose negation is +2^31 (off too; left alone)",
@@ -291,7 +291,7 @@
  },
  "default_on_evaluation": "docs/features/castwiden/default-on-evaluation.md",
  "corpus_sweep": {
-  "instrument": "docs/features/castwiden/semhunks.py over docs/features/castwiden/semrun.py output (kuna decompile-all --json --option structdefs on; castwiden off vs the default, one build 07d37d9ba)",
+  "instrument": "docs/features/castwiden/semhunks.py over docs/features/castwiden/semrun.py output (unlace decompile-all --json --option structdefs on; castwiden off vs the default, one build 07d37d9ba)",
   "rule": "each changed line is parsed as C on both sides (casts found by castcount's grammar with the file's own type vocabulary); the trees must be equal once casts are set aside (GROUPING otherwise); no cast may be added (ADDED), removed from anything but an 8-byte integer cast (SCOPE), removed under a shift, comparison or unary op (FORBIDDEN), or removed from both operands of one op (BOTH_LOST); every removed cast is typed from the function's declarations, struct definitions and signatures: under + - * / % & | ^ the op must keep its type, or at 64 bits inside a chain of + - * & | ^ the chain must end with the same type; a destination must be the cast's type or an 8-byte integer (NARROW otherwise); anything whose type the text does not state is UNVERIFIED and listed",
   "corpora": {
    "castbench": {

@@ -1,6 +1,6 @@
 from pathlib import Path
 import json,subprocess,hashlib
-r=Path('/home/mahaloz/kwt/angr-rust-empty-match');w=Path('/tmp/kuna-rust-empty-match');f=r/'decompiler/crates/kuna-analysis/tests/fixtures';parts=['.text\n'];names=['empty_case','empty_default','empty_shared','empty_loop','loop_break_control']
+r=Path('/home/mahaloz/kwt/angr-rust-empty-match');w=Path('/tmp/unlace-rust-empty-match');f=r/'decompiler/crates/unlace-analysis/tests/fixtures';parts=['.text\n'];names=['empty_case','empty_default','empty_shared','empty_loop','loop_break_control']
 for name in names[:4]:
  loop=name=='empty_loop';s=f'.globl {name}\n.type {name},@function\n{name}:\n'
  if loop:s+='xor %edx,%edx\ntest %esi,%esi\njle .Lempty_loop_done\n'
@@ -50,5 +50,5 @@ int main(int argc,char **argv) {
     return 0;
 }
 ''')
-(f/'rust_empty_match.kuna').write_text(''.join(f'prototype {n} int {n}(unsigned long x)\n'for n in names[:3])+'prototype empty_loop int empty_loop(unsigned long x, int n)\nprototype loop_break_control int loop_break_control(int x, int n)\n')
+(f/'rust_empty_match.unlace').write_text(''.join(f'prototype {n} int {n}(unsigned long x)\n'for n in names[:3])+'prototype empty_loop int empty_loop(unsigned long x, int n)\nprototype loop_break_control int loop_break_control(int x, int n)\n')
 cmd=['gcc','-O2','-fno-pie','-no-pie','-Wl,--build-id=none','rust_empty_match.S','rust_empty_match.c','-o','rust_empty_match_x86_64'];subprocess.run(cmd,cwd=f,check=True);(w/'fixture-names.json').write_text(json.dumps(names));record={'command':cmd,'compiler':subprocess.check_output(['gcc','--version'],text=True).splitlines()[0],'files':{p.name:hashlib.sha256(p.read_bytes()).hexdigest()for p in f.glob('rust_empty_match*')}};(w/'fixture-build.json').write_text(json.dumps(record,indent=2)+'\n');print('Five authored fixtures built.')

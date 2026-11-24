@@ -10,7 +10,7 @@ and used it instead of the formal parameter.
 The repair gives all three sites one parameter-name helper. An empty prototype
 name becomes `aN` exactly when the local `name_style_angr` flag is set and
 becomes `param_N` otherwise. A nonempty recovered or explicit name is returned
-unchanged. This deliberately does not consult `kuna_name_style()`: GUI Ghidra
+unchanged. This deliberately does not consult `unlace_name_style()`: GUI Ghidra
 mode sets the separate address-style override while retaining angr local and
 parameter names.
 

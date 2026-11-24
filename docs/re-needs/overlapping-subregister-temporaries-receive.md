@@ -38,7 +38,7 @@ Read the process-name comparison routine with unambiguous locals.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x402820",
@@ -68,7 +68,7 @@ Read the process-name comparison routine with unambiguous locals.
   "schema": "re-probe/1",
   "kind": "cli",
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "overlap_bytes"

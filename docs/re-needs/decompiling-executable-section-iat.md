@@ -38,7 +38,7 @@ Inspect GetDlgItemTextA as an import without decoding its four-byte pointer slot
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "GetDlgItemTextA"
@@ -75,7 +75,7 @@ Inspect GetDlgItemTextA as an import without decoding its four-byte pointer slot
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "VirtualAlloc"
@@ -108,7 +108,7 @@ _not yet refuted_
 
 ## Reference
 
-- `objdump -p target/GiTS_2010_Crypto_Crackmes.zip.__x/crypto4.exe` — Identifies GetDlgItemTextA as the fourth USER32.dll import, placing its pointer slot at 0x401078. The bytes kuna decoded are import data. IDA's server failed before registering.
+- `objdump -p target/GiTS_2010_Crypto_Crackmes.zip.__x/crypto4.exe` — Identifies GetDlgItemTextA as the fourth USER32.dll import, placing its pointer slot at 0x401078. The bytes unlace decoded are import data. IDA's server failed before registering.
 
 ## Instances
 
@@ -117,19 +117,19 @@ _not yet refuted_
 ## Decision log
 
 - filed by cluster.py from 1 observation(s)
-- split by captain at T_DEDUP from round 12's `wrong-output|decompile|stdout_absent` bucket: cluster.py's signature (kind|subcommand|clause-shape) collapsed unrelated defects, so the crop was hand-partitioned one observation per need and filed via `--from-file`. See `.kuna-repipe/rounds/12/dedup/MARKER.json`; do NOT run `cluster --round 12` bare.
+- split by captain at T_DEDUP from round 12's `wrong-output|decompile|stdout_absent` bucket: cluster.py's signature (kind|subcommand|clause-shape) collapsed unrelated defects, so the crop was hand-partitioned one observation per need and filed via `--from-file`. See `.unlace-repipe/rounds/12/dedup/MARKER.json`; do NOT run `cluster --round 12` bare.
 - sibling of `pe-import-calls-become` — shared root condition (IAT data inside .text); kept separate, this half is a CLI refusal.
 - round 12 REFUTER: hypothesis **overturned** (was inconclusive). OVERTURNED. The symptom is exact and now reproduces on a SECOND, unrelated binary, but the hypothesis's discriminator -- "when their section is executable" -- is measurably false, and the clause that is true is misframed in a way that would send a builder at load-bearing code.
 
 MEASURED ON b9029a8f (release binaries rebuilt 05:39).
 
-THE CONTROL THAT OVERTURNS IT. crates/unlace-analysis/tests/fixtures/pe_imports.exe puts its IAT in .idata at 0x14000d000, flags CONTENTS ALLOC LOAD DATA -- WRITABLE and NOT EXECUTABLE, the exact opposite of the filed condition. kuna registers 50 functions inside that .idata range (DeleteCriticalSection 0x14000d1dc, EnterCriticalSection 0x14000d1e4, GetLastError 0x14000d1ec, ...), and unlace decompile <fixture> 0x14000d1ec --addr emits the SAME class of invented arithmetic body: "v2 = *v8; *(unsigned int *)CONCAT71(v3,v2) = *(int *)CONCAT71(v3,v2) << (v4 & 0x1f) | ...; *(char *)CONCAT71(v3,v2) = *(char *)CONCAT71(v3,v2) + v2;". Pointer arithmetic and a memory write off decoded import-pointer bytes, in a non-executable data section. Section permission is NOT the discriminator. A builder who adds an is-executable guard changes nothing on either binary.
+THE CONTROL THAT OVERTURNS IT. crates/unlace-analysis/tests/fixtures/pe_imports.exe puts its IAT in .idata at 0x14000d000, flags CONTENTS ALLOC LOAD DATA -- WRITABLE and NOT EXECUTABLE, the exact opposite of the filed condition. unlace registers 50 functions inside that .idata range (DeleteCriticalSection 0x14000d1dc, EnterCriticalSection 0x14000d1e4, GetLastError 0x14000d1ec, ...), and unlace decompile <fixture> 0x14000d1ec --addr emits the SAME class of invented arithmetic body: "v2 = *v8; *(unsigned int *)CONCAT71(v3,v2) = *(int *)CONCAT71(v3,v2) << (v4 & 0x1f) | ...; *(char *)CONCAT71(v3,v2) = *(char *)CONCAT71(v3,v2) + v2;". Pointer arithmetic and a memory write off decoded import-pointer bytes, in a non-executable data section. Section permission is NOT the discriminator. A builder who adds an is-executable guard changes nothing on either binary.
 
 BOTH SHIPPED OPTIONS ARE PROVEN INNOCENT on the reported command. unlace decompile crypto4.exe GetDlgItemTextA emits the identical CARRY1 body under --option litpoolconst off AND under --option peimportcall off. So this is NOT the constant-fold defect its sibling turned out to be (see pe-import-calls-become, UPHELD, cause litpoolconst) -- the two needs do not share a root cause, only a binary.
 
-WHAT IS ACTUALLY HAPPENING, and why the other clause is misframed. It is not that "function-body selection does not exclude known IAT slots". kuna's PE loader POSITIVELY ASSERTS that each IAT slot is a function: loader/pe_iat.rs registers a FunctionSymbol at every slot VA, and peimportcall.rs:28-31 says so in as many words -- "ActionDeindirect resolves it through the FunctionSymbol pe_iat already registered at the slot VA... kuna's query_function keys on the Varnode's own address rather than upstream's ExternRefSymbol::refaddr indirection, so the slot-VA registration lines up without a second symbol." THE SLOT-VA FUNCTION REGISTRATION IS LOAD-BEARING FOR DIV-57. Deleting it, or teaching body selection to skip IAT slots wholesale, breaks peimportcall's import binding on every PE. That is the trap in the filed wording and it is why this reads overturned rather than upheld-with-detail.
+WHAT IS ACTUALLY HAPPENING, and why the other clause is misframed. It is not that "function-body selection does not exclude known IAT slots". unlace's PE loader POSITIVELY ASSERTS that each IAT slot is a function: loader/pe_iat.rs registers a FunctionSymbol at every slot VA, and peimportcall.rs:28-31 says so in as many words -- "ActionDeindirect resolves it through the FunctionSymbol pe_iat already registered at the slot VA... unlace's query_function keys on the Varnode's own address rather than upstream's ExternRefSymbol::refaddr indirection, so the slot-VA registration lines up without a second symbol." THE SLOT-VA FUNCTION REGISTRATION IS LOAD-BEARING FOR DIV-57. Deleting it, or teaching body selection to skip IAT slots wholesale, breaks peimportcall's import binding on every PE. That is the trap in the filed wording and it is why this reads overturned rather than upheld-with-detail.
 
-The real gap is narrower: an import is modelled as a function whose ENTRY is its IAT slot, and nothing between that symbol and the decoder distinguishes "this entry exists so a call can be bound by address" from "this entry has a body worth lifting". kuna's own decoder already notices the collision -- the emitted body carries "warn: overlapbranch: this instruction overlaps the branch target at 0x00401088", and 0x401088 is SetWindowPos, the NEIGHBOURING IAT slot, also registered as a function. The registered sizes admit it too: in crypto4 the slots come out size 4, or size 8 for the last entry of a DLL block where the null terminator is absorbed (SetBkMode 0x40100c, HeapDestroy 0x401064); in the control they come out size 0.
+The real gap is narrower: an import is modelled as a function whose ENTRY is its IAT slot, and nothing between that symbol and the decoder distinguishes "this entry exists so a call can be bound by address" from "this entry has a body worth lifting". unlace's own decoder already notices the collision -- the emitted body carries "warn: overlapbranch: this instruction overlaps the branch target at 0x00401088", and 0x401088 is SetWindowPos, the NEIGHBOURING IAT slot, also registered as a function. The registered sizes admit it too: in crypto4 the slots come out size 4, or size 8 for the last entry of a DLL block where the null terminator is absorbed (SetBkMode 0x40100c, HeapDestroy 0x401064); in the control they come out size 0.
 
 REDIRECT, not a proven line: make the refusal at the decompile entry point, on the fact that the target is a known import slot (loader/pe_iat.rs:93 resolve_pe_import_slots already returns exactly those ranges), and keep the symbol. An import has no body in this image by definition, so declining with the import's identity -- name, ordinal, DLL -- is strictly more useful to an agent than four bytes of decoded pointer.
 

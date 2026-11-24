@@ -100,7 +100,7 @@ output is byte-identical to the build measured above on all 45 binaries, and
 option off is byte-identical to the `0096e984d` main arm on all 45, so none of
 them reaches the corpus. There: `make test` 675/675 and `make test-stages`
 1413/1413 PARITY OK, `make test-cli` 249/249, check-spec lenient and strict
-OK, `kuna catalog --check` and `counters --check` clean, `make rust-test`
+OK, `unlace catalog --check` and `counters --check` clean, `make rust-test`
 7,631 passed and 0 failed.
 
 ## Re-checked on `243177605` (#718 `callbacktype`)
@@ -123,5 +123,5 @@ changed functions, the same 67 statement changes, 0 arity, void or
 store becomes `((T *)a0)[3] = sub_8a563(...)`, and the option spells `T` as
 the callee's stated `uint8` where off prints `unsigned long` (same width, same
 value). There: `make test` 675/675 and `make test-stages` 1416/1416 PARITY OK,
-`make test-cli` 264/264, check-spec lenient and strict OK, `kuna catalog
+`make test-cli` 264/264, check-spec lenient and strict OK, `unlace catalog
 --check` and `counters --check` clean, `make rust-test` 7,666 passed and 0 failed.

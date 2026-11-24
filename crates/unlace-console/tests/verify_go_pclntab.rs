@@ -166,7 +166,7 @@ fn stripped_go_functions_recovered_from_pclntab() {
         eprintln!("verify_go_pclntab: skipping (`go` not on PATH)");
         return;
     }
-    let dir = std::env::temp_dir().join(format!("kuna_go_pclntab_{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace_go_pclntab_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let out_bin = dir.join("go_stripped");
     if !build_go(&dir, &out_bin, "linux", "amd64", /* strip */ true) {
@@ -207,7 +207,7 @@ fn stripped_go_pie_functions_recovered_from_pclntab() {
         eprintln!("verify_go_pclntab: skipping (`go` not on PATH)");
         return;
     }
-    let dir = std::env::temp_dir().join(format!("kuna_go_pclntab_pie_{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace_go_pclntab_pie_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let out_bin = dir.join("go_stripped_pie");
     if !build_go_flags(
@@ -246,7 +246,7 @@ fn stripped_go_macho_functions_recovered_from_pclntab() {
         eprintln!("verify_go_pclntab: skipping (`go` not on PATH)");
         return;
     }
-    let dir = std::env::temp_dir().join(format!("kuna_go_pclntab_macho_{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace_go_pclntab_macho_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let out_bin = dir.join("go_stripped_macho");
     if !build_go(&dir, &out_bin, "darwin", "arm64", /* strip */ true) {
@@ -297,7 +297,7 @@ fn stripped_go_pe_functions_recovered_from_pclntab() {
     }
     for goarch in ["amd64", "386", "arm64"] {
         let dir = std::env::temp_dir().join(format!(
-            "kuna_go_pclntab_pe_{goarch}_{}",
+            "unlace_go_pclntab_pe_{goarch}_{}",
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&dir);
@@ -342,7 +342,7 @@ fn fast_inventory_walk_leaves_pclntab_functions_to_the_table() {
     }
     for (goos, file) in [("linux", "go_stripped"), ("windows", "go_stripped.exe")] {
         let dir =
-            std::env::temp_dir().join(format!("kuna_go_walkprune_{goos}_{}", std::process::id()));
+            std::env::temp_dir().join(format!("unlace_go_walkprune_{goos}_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let out_bin = dir.join(file);
         if !build_go(&dir, &out_bin, goos, "amd64", /* strip */ true) {
@@ -432,7 +432,7 @@ fn wiped_pclntab_magic_recovers_the_same_functions() {
         ("linux", "386"),
     ] {
         let dir = std::env::temp_dir().join(format!(
-            "kuna_go_wiped_{goos}_{goarch}_{}",
+            "unlace_go_wiped_{goos}_{goarch}_{}",
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&dir);

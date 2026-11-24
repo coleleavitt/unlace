@@ -22,7 +22,7 @@ fn xrefs(args: &[&str]) -> String {
         .arg("xrefs")
         .args(args)
         .output()
-        .expect("failed to spawn the kuna binary");
+        .expect("failed to spawn the unlace binary");
     assert!(
         out.status.success(),
         "unlace xrefs {args:?}: {}",

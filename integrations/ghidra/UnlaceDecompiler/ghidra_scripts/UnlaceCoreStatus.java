@@ -1,16 +1,16 @@
 //Prints which native decompiler executable Ghidra will spawn for the NEXT decompiler
-//process (the kuna core-swap seam). Reads the private static field
+//process (the unlace core-swap seam). Reads the private static field
 //ghidra.app.decompiler.DecompileProcessFactory.exepath by reflection: null means the
 //stock resolution (Application.getOSFile("decompile")) runs lazily on first use.
 //Already-running decompiler processes may still be an older core; this reports what
 //future spawns will use.
-//@category Kuna
+//@category Unlace
 import java.lang.reflect.Field;
 
 import ghidra.app.decompiler.DecompileProcessFactory;
 import ghidra.app.script.GhidraScript;
 
-public class KunaCoreStatus extends GhidraScript {
+public class UnlaceCoreStatus extends GhidraScript {
 
 	@Override
 	public void run() throws Exception {
@@ -22,14 +22,14 @@ public class KunaCoreStatus extends GhidraScript {
 			println("DecompileProcessFactory.exepath = (unset)");
 			println("Next decompiler process: STOCK core, resolved lazily via " +
 				"Application.getOSFile(\"decompile\").");
-			println("(The KunaDecompilerPlugin is not active, or the stock core was " +
+			println("(The UnlaceDecompilerPlugin is not active, or the stock core was " +
 				"restored without an eager re-resolve.)");
 			return;
 		}
 
 		println("DecompileProcessFactory.exepath = " + path);
 		if (path.contains("unlace_ghidra")) {
-			println("Next decompiler process: KUNA core.");
+			println("Next decompiler process: UNLACE core.");
 		}
 		else if (path.endsWith("decompile") || path.endsWith("decompile.exe")) {
 			println("Next decompiler process: STOCK core.");

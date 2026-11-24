@@ -16,7 +16,7 @@ fn entries(path: &PathBuf, extra: &[&str]) -> Vec<u64> {
         ])
         .args(extra)
         .output()
-        .expect("run source-built kuna");
+        .expect("run source-built unlace");
     assert!(
         out.status.success(),
         "{}",

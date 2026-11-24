@@ -1,4 +1,4 @@
-# kuna bug repro binaries
+# unlace bug repro binaries
 
 Binaries that reproduce open output bugs, kept here so an issue can be acted on
 without reconstructing a corpus first (same idea as `tests/hang-repro/`, which
@@ -15,7 +15,7 @@ Every binary is a **stripped**, optimized build produced by the
 `noelo-lab/decbench-dataset`) and copied verbatim from that run's results tree at
 `<opt>/<project>/stripped/<name>`. They are builds of public upstream sources
 (GPL/BSD, per project); DecBench's `projects/*.toml` records the exact source
-revision and compiler flags for each. Nothing here is kuna-authored.
+revision and compiler flags for each. Nothing here is unlace-authored.
 
 | file | sha256 (first 16) | project · build | DecBench path |
 |---|---|---|---|

@@ -2,16 +2,16 @@
 
 Status: **draft architecture / [PROPOSAL] material** — not yet implemented.
 
-kuna decompiles every binary as if a C compiler produced it: NUL-terminated
+unlace decompiles every binary as if a C compiler produced it: NUL-terminated
 strings, one return value, the format-derived cspec, C struct layout, and C
 control-flow idioms. Rust, Go and Swift binaries violate every one of those
 assumptions, each in its own way. This document is the top-down plan for making
 the *source language* a first-class, per-run-flippable dimension of the
-pipeline — the same move kuna already made for the *output* language
+pipeline — the same move unlace already made for the *output* language
 (`p9_emit/lang.rs`, PRs #320–#323), applied to the input side.
 
 Everything here builds on seams that already exist. The repeated finding from
-the survey below is that kuna has grown five or six *partial* language planes
+the survey below is that unlace has grown five or six *partial* language planes
 independently; the refactor is mostly consolidation plus three genuinely new
 mechanisms (the idiom-reduction engine, the type-facet table, and
 length-carried strings).
@@ -25,7 +25,7 @@ length-carried strings).
 | CFG idioms | Rust panic/drop handling: `cleanupcode`, `securitycheck`; plus the stripper family (`stackguard`, `msvcstackguard`, `devectorize`, `msvcstrappend`, `strlenscan`, `outline`) | `p2_lift/cleanupcode.rs`, `p7_regions/securitycheck.rs`, … | All hand-coded; **no generic subgraph matcher**; nothing for Go (`morestack`, write barriers, `panicIndex`) or Swift (ARC, exclusivity) |
 | Types | Rust DWARF enum layouts parsed into `VariantLayout` side table | `analyzers/dwarf/dwarfvariants.rs`, `p0_knowledge/dwarfvariants.rs` | **Nothing reads the table yet**; no notion of slices/fat pointers/interfaces/tuples; zero-sized fields dropped; sizes are `int4` so unsized types unrepresentable |
 | Strings | NUL-terminated scan (`StringLiteralPass`), NUL-terminated render (`StringManagerUnicode::get_string_data`) | `analyzers/strings/mod.rs`, `p9_emit/stringmanage.rs` | Go/Rust strings carry length, not NUL; Go rodata is one unterminated blob. BUT: a bounded, NUL-free literal path already exists — `Funcdata::get_internal_string` → `BUILTIN_STRINGDATA` (used only by `constseq.rs`) |
-| Symbols | pclntab pass (names + extents, go1.2–1.20); Rust v0/legacy + Itanium + MSVC demangling; per-language no-return lists | `analyzers/pclntab/`, `analyzers/demangle/`, `loader/noreturn.rs` + `data/{Rust,Golang}FunctionsThatDoNotReturn` | No Go runtime type info (typelinks/moduledata); Swift demangler done (`kuna_swift`, `$s` + `_Tt`); `__swift5_*` metadata naming done (`analyzers/swift`, option `swiftmetadata`); struct/class layouts from static type metadata done (`swifttypes`; symbolic references resolved); `__swiftcall` / `__swiftcall_throws` models (derived from each AArch64 and x86-64 spec's default) with model-only bindings and an unlocked `self` hint (`swiftcall`), throwing calls detected by the caller's zeroing of the error register; the error value is still an anonymous local, not a second return |
+| Symbols | pclntab pass (names + extents, go1.2–1.20); Rust v0/legacy + Itanium + MSVC demangling; per-language no-return lists | `analyzers/pclntab/`, `analyzers/demangle/`, `loader/noreturn.rs` + `data/{Rust,Golang}FunctionsThatDoNotReturn` | No Go runtime type info (typelinks/moduledata); Swift demangler done (`unlace_swift`, `$s` + `_Tt`); `__swift5_*` metadata naming done (`analyzers/swift`, option `swiftmetadata`); struct/class layouts from static type metadata done (`swifttypes`; symbolic references resolved); `__swiftcall` / `__swiftcall_throws` models (derived from each AArch64 and x86-64 spec's default) with model-only bindings and an unlocked `self` hint (`swiftcall`), throwing calls detected by the caller's zeroing of the error register; the error value is still an anonymous local, not a second return |
 | Output | Full outlang plane: `OutLang{C,Rust}`, `LangProfile`, `TypeSpeller`, `LangAbi` (stub: `extern_marker` only, doc names Go multi-return as the known omission) | `p9_emit/lang.rs`, `langrust.rs`, `p4_calls/langabi.rs` | Rust output has no type definitions renderer; no tuple/multi-return form |
 
 Two structural facts shape the whole design:
@@ -177,7 +177,7 @@ only where language behavior differs:
 
 **Providers** (all through the existing `AnalysisPass → AnalysisOutput →
 typed_data/prototypes` seam):
-- DWARF (Rust and unstripped Go both emit it; `kuna_dwarfvariants` already
+- DWARF (Rust and unstripped Go both emit it; `unlace_dwarfvariants` already
   parses the hard part), tagging facets from `DW_AT_language` + shape.
 - **Go runtime type metadata** (moduledata → typelinks → `_type` graph): full
   struct/interface/signature recovery on *fully stripped* Go binaries. This is
@@ -186,7 +186,7 @@ typed_data/prototypes` seam):
 - Swift `__swift5_*` reflection metadata (field descriptors + mangled type
   names) — **done** as `swifttypes` (`analyzers/swift/swifttypes.rs`):
   layouts from the static type metadata, field types through
-  `kuna_swift::demangle_swift_type` with its symbolic references resolved.
+  `unlace_swift::demangle_swift_type` with its symbolic references resolved.
 - **Synthesized well-known shells** registered by each pack even with no
   debug info (`runtime.g`, `go.string`, `go.slice`, `go.iface`,
   `swift.refcounted`), so P5 recognizers can type a `(ptr,len)` pair loaded
@@ -229,7 +229,7 @@ trials currently hit a stub and render as never-assigned locals. Two stages:
   partial-piece machinery, and the emitters render `(a, b) = f(...)` (Rust) /
   `struct f_ret r = f(...)` (C). Requires extending
   `build_output_from_trials` past the 2-trial special cases
-  (`kuna_callretpair`, `kuna_rustabi::build_call_output_pair` are the
+  (`unlace_callretpair`, `unlace_rustabi::build_call_output_pair` are the
   templates) — this also retires the `rustabi` pair-join as a special case of
   the general mechanism.
 - *Stage 2 (explicitly deferred)*: true tuple return types in `FuncProto`.
@@ -269,7 +269,7 @@ toolchain in the devcontainer):
   for essentially every non-leaf Go function. *Measured (F3, go1.22 stripped
   hello-world, 1,543 fns): folds 623 of 1,144 guard-carrying functions and
   makes the whole-binary run 3.8% faster; the 521 misses are dominated by one
-  cause — the grow arm physically follows a `runtime.panic*` call kuna does
+  cause — the grow arm physically follows a `runtime.panic*` call unlace does
   not know is no-return (`panicshift`, `panicunsafestringlen`, …), so the
   bogus fallthrough edge breaks the tight-cycle shape. The fix is the
   no-return coverage item below, not a looser matcher.*
@@ -284,7 +284,7 @@ toolchain in the devcontainer):
   `runtime.panicunsafestringnilptr` and siblings are absent, so their call
   sites keep a bogus fallthrough edge that both corrupts the panic path's
   rendering and breaks the morestack fold's shape on every function whose
-  grow arm follows one. One kuna-owned additive name list (gated like the
+  grow arm follows one. One unlace-owned additive name list (gated like the
   vendored ones), measured against the full `runtime.panic*`/`runtime.goPanic*`
   surface of a current Go runtime.
 - pclntab already supplies names + extents; add Go-version → default-ABI

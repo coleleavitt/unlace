@@ -14,7 +14,7 @@ import uuid
 def atomic_text_writer(path, *, encoding=None, mode=None):
     """Replace path on successful exit; otherwise retain it and remove our scratch file."""
     path = Path(path)
-    temporary = path.with_name(f".kuna-{uuid.uuid4().hex}.tmp")
+    temporary = path.with_name(f".unlace-{uuid.uuid4().hex}.tmp")
     stream = temporary.open("x", encoding=encoding)
     try:
         with stream:

@@ -1,6 +1,6 @@
-# MSVC __ftol-family helpers in a stripped PE (kuna_msvcftolsig).
+# MSVC __ftol-family helpers in a stripped PE (unlace_msvcftolsig).
 #
-# The kuna_msvcftol call-fixup is installed by name. In a stripped PE the
+# The unlace_msvcftol call-fixup is installed by name. In a stripped PE the
 # statically linked helper has none, so `fld ...; call sub_XXXX` keeps the
 # ST0 argument invisible and the feeding x87 expression is dead-code
 # eliminated. The recognizer names the helpers from their VS2005 CRT bytes.

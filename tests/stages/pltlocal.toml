@@ -1,7 +1,7 @@
 # GH-1342: a call through a PLT stub that the image's own relocation binds to
 # a function it defines takes that definition's prototype.
 #
-# Stage: P4 calls and prototypes, prototype source (kuna_pltlocal.rs, always
+# Stage: P4 calls and prototypes, prototype source (unlace_pltlocal.rs, always
 # on).
 #
 # The XML wrapper only provides the harness architecture. The script clears it

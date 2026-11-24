@@ -5,9 +5,9 @@
 #   tools/repipe/run.sh --once          # exactly one full cycle
 #   tools/repipe/run.sh --preflight     # check the machine and exit
 #
-#   touch .kuna-repipe/STOP     graceful drain: in-flight agents finish, INTEGRATE still runs
-#   touch .kuna-repipe/PAUSE    finish what is running, spawn nothing new
-#   touch .kuna-repipe/ABORT    hard stop: SIGTERM recorded pids, leave every worktree intact
+#   touch .unlace-repipe/STOP     graceful drain: in-flight agents finish, INTEGRATE still runs
+#   touch .unlace-repipe/PAUSE    finish what is running, spawn nothing new
+#   touch .unlace-repipe/ABORT    hard stop: SIGTERM recorded pids, leave every worktree intact
 #
 # This process is deliberately dumb. It does not know what a round is; it re-invokes the
 # captain, which performs at most one guarded state transition per tick and exits. That split
@@ -15,9 +15,9 @@
 # invocation resumes from the recorded state.
 set -uo pipefail
 
-REPO="${KUNA_REPO:-$(git -C "$(dirname "$0")" rev-parse --show-toplevel)}"
-KUNA_PY="${KUNA_PY:-$HOME/.virtualenvs/kuna/bin/python}"
-STATE_DIR="$REPO/${REPIPE_STATE_DIRNAME:-.kuna-repipe}"
+REPO="${UNLACE_REPO:-$(git -C "$(dirname "$0")" rev-parse --show-toplevel)}"
+UNLACE_PY="${UNLACE_PY:-$HOME/.virtualenvs/unlace/bin/python}"
+STATE_DIR="$REPO/${REPIPE_STATE_DIRNAME:-.unlace-repipe}"
 POLL="${REPIPE_POLL:-15}"
 ROUNDS="${REPIPE_ROUNDS:-3}"
 HOURS="${REPIPE_HOURS:-0}"
@@ -32,10 +32,10 @@ for a in "$@"; do
   esac
 done
 
-export KUNA_REPO="$REPO" KUNA_PY="$KUNA_PY"
+export UNLACE_REPO="$REPO" UNLACE_PY="$UNLACE_PY"
 export PYTHONPATH="$REPO${PYTHONPATH:+:$PYTHONPATH}"
-export KUNA_PIPELINE_STATE_DIR="$STATE_DIR"
-export REPIPE_STATE_DIRNAME="${REPIPE_STATE_DIRNAME:-.kuna-repipe}"
+export UNLACE_PIPELINE_STATE_DIR="$STATE_DIR"
+export REPIPE_STATE_DIRNAME="${REPIPE_STATE_DIRNAME:-.unlace-repipe}"
 mkdir -p "$STATE_DIR/logs" "$STATE_DIR/rounds" "$STATE_DIR/arena" "$STATE_DIR/runs" "$STATE_DIR/worktrees"
 
 log() { echo "[$(date +%H:%M:%S)] supervisor: $*" | tee -a "$STATE_DIR/logs/supervisor.log"; }
@@ -45,7 +45,7 @@ log() { echo "[$(date +%H:%M:%S)] supervisor: $*" | tee -a "$STATE_DIR/logs/supe
 # when a helper verifies the inherited locked FD and this shell's PID-bound capability. Foreground
 # descendants retain the FD, so a killed shell cannot release ownership around an orphan captain.
 if [ "${PREFLIGHT_ONLY:-0}" != 1 ]; then
-  LOCK_PY="${REPIPE_LOCK_PY:-$KUNA_PY}"
+  LOCK_PY="${REPIPE_LOCK_PY:-$UNLACE_PY}"
   if [ -n "${REPIPE_SUPERVISOR_LOCK_FD:-}" ] \
      && [ -n "${REPIPE_SUPERVISOR_LOCK_OWNER_PID:-}" ] \
      && "$LOCK_PY" -m scripts.repipe.supervisor_lock --verify \
@@ -58,14 +58,14 @@ if [ "${PREFLIGHT_ONLY:-0}" != 1 ]; then
   fi
 fi
 
-if ! "$KUNA_PY" -m scripts.repipe.captain --preflight; then
+if ! "$UNLACE_PY" -m scripts.repipe.captain --preflight; then
   log "preflight failed; refusing to start"
   exit 1
 fi
 [ "${PREFLIGHT_ONLY:-0}" = 1 ] && exit 0
 
-START_STATE="$("$KUNA_PY" -m scripts.repipe.captain --status 2>/dev/null \
-  | "$KUNA_PY" -c 'import json,sys; print(json.load(sys.stdin)["states"]["supervisor"])' 2>/dev/null)"
+START_STATE="$("$UNLACE_PY" -m scripts.repipe.captain --status 2>/dev/null \
+  | "$UNLACE_PY" -c 'import json,sys; print(json.load(sys.stdin)["states"]["supervisor"])' 2>/dev/null)"
 if [ -z "$START_STATE" ]; then
   log "could not read supervisor state; refusing to start"
   exit 1
@@ -75,7 +75,7 @@ if [ -f "$STATE_DIR/ABORT" ]; then
   exit 1
 fi
 if [ "$START_STATE" = "STOPPED" ]; then
-  if ! "$KUNA_PY" -m scripts.repipe.captain --restart-stopped --consume-stop \
+  if ! "$UNLACE_PY" -m scripts.repipe.captain --restart-stopped --consume-stop \
       >>"$STATE_DIR/logs/captain.log" 2>&1; then
     log "STOPPED restart refused; see $STATE_DIR/logs/captain.log"
     exit 1
@@ -90,13 +90,13 @@ DEADLINE=0
 [ "$HOURS" != "0" ] && DEADLINE=$(( START + HOURS * 3600 ))
 
 log "starting (rounds=$ROUNDS hours=${HOURS:-unbounded} once=$ONCE)"
-log "watch it: $KUNA_PY -m scripts.repipe.webui --port 8787"
+log "watch it: $UNLACE_PY -m scripts.repipe.webui --port 8787"
 
 TICKS=0
 while :; do
   if [ -f "$STATE_DIR/ABORT" ]; then
     log "ABORT: terminating recorded agent pids; worktrees and arenas left intact"
-    "$KUNA_PY" - <<'PY'
+    "$UNLACE_PY" - <<'PY'
 import json, os, signal
 from scripts.repipe import config
 inv = config.state_dir() / "inventory.json"
@@ -122,7 +122,7 @@ PY
   #   2. the LLM captain session, which is what actually advances TestTrack and BuildTrack:
   #      picking a slate, spawning testers, gating, clustering, judging proposals.
   # Running only (1) leaves the loop inert -- it would tick forever at T_IDLE/B_IDLE.
-  OUT="$("$KUNA_PY" -m scripts.repipe.captain --tick 2>&1)"
+  OUT="$("$UNLACE_PY" -m scripts.repipe.captain --tick 2>&1)"
   RC=$?
   TICKS=$((TICKS+1))
   printf '%s\n' "$OUT" >> "$STATE_DIR/logs/captain.log"
@@ -141,14 +141,14 @@ PY
     [ $CRC -ne 0 ] && log "captain session rc=$CRC"
   fi
 
-  SUP="$("$KUNA_PY" -m scripts.repipe.captain --status 2>/dev/null | "$KUNA_PY" -c 'import json,sys; print(json.load(sys.stdin)["states"]["supervisor"])' 2>/dev/null)"
+  SUP="$("$UNLACE_PY" -m scripts.repipe.captain --status 2>/dev/null | "$UNLACE_PY" -c 'import json,sys; print(json.load(sys.stdin)["states"]["supervisor"])' 2>/dev/null)"
   case "$SUP" in
     HALTED)  log "captain HALTED: $(cat "$STATE_DIR/HALT_REASON" 2>/dev/null | head -3)"; break;;
     STOPPED) log "captain STOPPED"; break;;
   esac
 
   # The captain drives the ROUNDS budget; this is only the outer safety net.
-  CUR="$("$KUNA_PY" -m scripts.repipe.captain --status 2>/dev/null | "$KUNA_PY" -c 'import json,sys; print(json.load(sys.stdin)["round"])' 2>/dev/null)"
+  CUR="$("$UNLACE_PY" -m scripts.repipe.captain --status 2>/dev/null | "$UNLACE_PY" -c 'import json,sys; print(json.load(sys.stdin)["round"])' 2>/dev/null)"
   if [ "$ROUNDS" != "0" ] && [ -n "$CUR" ] && [ "$CUR" -gt "$ROUNDS" ]; then
     log "round budget ($ROUNDS) exhausted"; touch "$STATE_DIR/STOP"
   fi
@@ -158,7 +158,7 @@ done
 
 log "draining: waiting for in-flight agents"
 for _ in $(seq 1 120); do
-  N="$("$KUNA_PY" -c 'import json,sys
+  N="$("$UNLACE_PY" -c 'import json,sys
 from scripts.repipe import config
 p = config.state_dir()/"inventory.json"
 d = json.load(open(p)) if p.exists() else {}
@@ -166,6 +166,6 @@ print(sum(len((v.get("held") or {})) for k,v in (d.get("slots") or {}).items() i
   [ "${N:-0}" = "0" ] && break
   sleep 10
 done
-"$KUNA_PY" -m scripts.pipeline.state reap --stale-seconds 0 >/dev/null 2>&1
+"$UNLACE_PY" -m scripts.pipeline.state reap --stale-seconds 0 >/dev/null 2>&1
 log "done after $TICKS tick(s)."
-"$KUNA_PY" -m scripts.repipe.captain --status || true
+"$UNLACE_PY" -m scripts.repipe.captain --status || true

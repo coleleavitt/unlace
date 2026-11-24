@@ -1,4 +1,4 @@
-# Kuna #850: an asserted outer function contains a separately discovered
+# Unlace #850: an asserted outer function contains a separately discovered
 # interior entry.
 # The first instruction falls through to that entry, then the body returns 7:
 #

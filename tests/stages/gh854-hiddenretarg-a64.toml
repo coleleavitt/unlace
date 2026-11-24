@@ -1,4 +1,4 @@
-# GH-854 (kuna): on AArch64 a value a function leaves in x8 before a call is
+# GH-854 (unlace): on AArch64 a value a function leaves in x8 before a call is
 # printed as that call's first argument.  x8 is the indirect-result register,
 # the cspec's `hiddenret` input entry, so checkInputTrialUse scores a value
 # the caller wrote there and never read again as the hidden return-buffer
@@ -7,7 +7,7 @@
 # leftover value becomes the call's first argument.
 #
 # Stage / sub-stage: P4 "active-input-trial-scoring".  That trial is scored
-# no-use (kuna_hiddenretarg.rs, always on) when the callee never takes x8 (no
+# no-use (unlace_hiddenretarg.rs, always on) when the callee never takes x8 (no
 # path reads it before writing it, none leaves for unread code with it
 # unwritten) or x8 holds a constant in the null page (below 0x1000).
 #

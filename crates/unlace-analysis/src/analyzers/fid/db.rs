@@ -567,9 +567,9 @@ mod tests {
         // Build a DB in memory, serialize, re-load, and assert the records +
         // find_by_full_hash match (the §-Tests round-trip gate).
         let records = vec![
-            rec(0x1111_1111_1111_1111, 0xaaaa, 10, 3, "kuna_crc32"),
-            rec(0x2222_2222_2222_2222, 0xbbbb, 7, 1, "kuna_strlen"),
-            rec(0x3333_3333_3333_3333, 0xcccc, 5, 0, "kuna_memset"),
+            rec(0x1111_1111_1111_1111, 0xaaaa, 10, 3, "unlace_crc32"),
+            rec(0x2222_2222_2222_2222, 0xbbbb, 7, 1, "unlace_strlen"),
+            rec(0x3333_3333_3333_3333, 0xcccc, 5, 0, "unlace_memset"),
         ];
         let db = FidDb::from_records("x86:LE:64:default", "gcc", records.clone());
 

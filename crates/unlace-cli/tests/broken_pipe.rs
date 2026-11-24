@@ -15,14 +15,14 @@ fn run_with_closed_stdout(args: &[&str]) -> std::process::Output {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .expect("spawn kuna");
+        .expect("spawn unlace");
 
     let mut stdout = child.stdout.take().expect("stdout pipe");
     let mut prefix = [0u8; 64];
     stdout.read_exact(&mut prefix).expect("read output prefix");
     drop(stdout);
 
-    child.wait_with_output().expect("wait for kuna")
+    child.wait_with_output().expect("wait for unlace")
 }
 
 fn assert_no_panic(output: &std::process::Output) {

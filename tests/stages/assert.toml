@@ -1,4 +1,4 @@
-# kuna infrastructure test: the typed assertion API (kassert).
+# unlace infrastructure test: the typed assertion API (kassert).
 #
 # Proves the stage-model.md section-12 facade end to end:
 #   - kassert validates <stage>/<substage> against the registry catalog and
@@ -41,16 +41,16 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-ASSERT #1: routed assertions take effect (compareform original + namelock rename)'
+name = 'UNLACE-ASSERT #1: routed assertions take effect (compareform original + namelock rename)'
 count = 2
 regex = '^int4 gh558\(int4 xvar\)$|^  if \(xvar <= 8\)$'
 
 [[match]]
-name = 'KUNA-ASSERT #2: kassert list reports the P3 config assertion with rewind scope'
+name = 'UNLACE-ASSERT #2: kassert list reports the P3 config assertion with rewind scope'
 count = 1
 literal = '[gh558] P3/comparison-canonicalization original  strength=HARD  rewind->P3'
 
 [[match]]
-name = 'KUNA-ASSERT #3: kassert list reports the cosmetic P9 assertion as HINT via HARD mechanism'
+name = 'UNLACE-ASSERT #3: kassert list reports the cosmetic P9 assertion as HINT via HARD mechanism'
 count = 1
 literal = '[gh558] P9/naming-policy x xvar  strength=HINT (applied via HARD mechanism)  rewind->P9'

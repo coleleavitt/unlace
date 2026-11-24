@@ -38,7 +38,7 @@ An inventory that recovers strings deterministically built by the initializer, i
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "strings",
     "{{BIN}}",
     "--json",
@@ -75,7 +75,7 @@ An inventory that recovers strings deterministically built by the initializer, i
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "strings",
     "{{BIN}}",
     "--json",
@@ -123,5 +123,5 @@ _none recorded_
 ## Decision log
 
 - filed by cluster.py from 1 observation(s)
-- round 2 T_DEDUP (captain): third instance of the 'kuna will not tell me about data' family (see [cli-mode-read-raw]). Same challenge as [simd-constant-string-initializer] and plausibly the same root -- a string the program builds with SIMD stores is invisible to the string scanner AND explodes in the emitted C -- but the fixes sit in different tiers, so a builder closing one should re-check the other rather than assume it followed.
+- round 2 T_DEDUP (captain): third instance of the 'unlace will not tell me about data' family (see [cli-mode-read-raw]). Same challenge as [simd-constant-string-initializer] and plausibly the same root -- a string the program builds with SIMD stores is invisible to the string scanner AND explodes in the emitted C -- but the fixes sit in different tiers, so a builder closing one should re-check the other rather than assume it followed.
 - round 2 T_TRIAGE (captain): track tooling -> QUALITY, scope small -> LARGE, touches unlace-cli -> unlace-analysis/src/analyzers/strings. The strings the tester wanted are never in the image as bytes: they are BUILT by the SIMD initializer at run time, so no scanner setting (min length 2, all encodings) can ever find them -- this is not a strings surface gap. The fix is synthesising strings from constant stores, a new analyzer capability that ships behind an option, hence `quality` and its counter leases. See simd-constant-string-initializer, its decompiler-side twin.

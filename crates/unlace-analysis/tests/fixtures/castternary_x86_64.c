@@ -1,4 +1,4 @@
-/* (kuna castternary) Conversions the conditional operator performs by itself.
+/* (unlace castternary) Conversions the conditional operator performs by itself.
  * `b64_decode` is a textbook base64 decoder: every input character is looked up
  * in a signed decode table unless it is the '=' pad, so each quantum is four
  * `c != '=' ? table[c] : 0` conditionals.  The small functions put one widened
@@ -6,7 +6,7 @@
  * unsigned constant, a long literal, an unsigned long, and a second cast.  The
  * last group must keep its cast: the conversions of the two bare arms would give
  * the conditional another type, or the cast changes the value.  The round-trip test
- * in unlace-cli/tests/decompile_all_cli.rs compiles the functions as kuna prints
+ * in unlace-cli/tests/decompile_all_cli.rs compiles the functions as unlace prints
  * them, with the option off and on, and checks both print what this program
  * prints:
  *

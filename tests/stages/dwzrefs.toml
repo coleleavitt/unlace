@@ -1,4 +1,4 @@
-# kuna issue: DWARF that dwz rewrote keeps its types out of the unit that uses them.
+# unlace issue: DWARF that dwz rewrote keeps its types out of the unit that uses them.
 #
 # `dwz` moves the types several compilation units share into partial units and
 # points the units at them with DW_FORM_ref_addr (same file, `dwz file`) or, for

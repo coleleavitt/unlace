@@ -1,4 +1,4 @@
-# Kuna (IDA 9.5 eh34 design): P2 flow classification, option itaniumeh
+# Unlace (IDA 9.5 eh34 design): P2 flow classification, option itaniumeh
 # (default off), on AArch64. The script loads the committed
 # itaniumeh/eh_aarch64.so (clang++ for aarch64-linux-gnu, source eh2.cc and
 # the command in the README beside it). The unwinder's registers are x0

@@ -4,7 +4,7 @@ R="/home/mahaloz/github/decbench/results/full_run_address_2026-09-11"
 BINS=[("O2/tar/tar"),("O2/grep/grep"),("O2/coreutils/ls"),("O0/grep/grep"),("O2/coreutils/sort")]
 N=int(sys.argv[1]) if len(sys.argv)>1 else 15
 env=dict(os.environ, SLEIGHHOME="/home/mahaloz/kwt/libcstructs/specs",
-         KUNA_SPECS="/home/mahaloz/kwt/libcstructs/specs")
+         UNLACE_SPECS="/home/mahaloz/kwt/libcstructs/specs")
 out={}
 for spec in BINS:
     opt,proj,b=spec.split("/")
@@ -12,7 +12,7 @@ for spec in BINS:
     best={"base":1e9,"new":1e9}
     for i in range(N):
         for arm in ("base","new"):
-            k=f"/home/mahaloz/kwt/libcstructs/.scratch/kuna-{arm}"
+            k=f"/home/mahaloz/kwt/libcstructs/.scratch/unlace-{arm}"
             t=time.time()
             subprocess.run([k,"decompile-all",path,"--max-fn-seconds","120"],
                            stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,env=env)

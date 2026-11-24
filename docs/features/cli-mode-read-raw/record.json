@@ -5,15 +5,15 @@
   "scope": "small",
   "round": 2,
   "branch": "feat/re-cli-mode-read-raw",
-  "summary": "kuna disassemble gains a byte view (--as code|data|auto, plus the `kuna read` spelling): a data address answers with a hexdump, an ASCII gutter and the span as one contiguous hex string, instead of a decode of .rodata into ADD/OR rows.",
+  "summary": "unlace disassemble gains a byte view (--as code|data|auto, plus the `unlace read` spelling): a data address answers with a hexdump, an ASCII gutter and the span as one contiguous hex string, instead of a decode of .rodata into ADD/OR rows.",
   "decisions": [
     {
       "what": "hypothesis UPHELD, but the remedy is a view on the existing walk, not a new memory-range surface",
-      "detail": "The need's hypothesis -- 'raw-byte exposure was implemented only for decoded instructions, not as a general memory-range view' -- is right about the gap. It is wrong about the cost: the walk already resolves names, addresses and explicit ranges, already reads the image's own bytes (ConsoleProgram::read_bytes_into), and already bounds itself with --count/--bytes/an extent. The only thing missing was a second RENDERING of what it already had. So this is one branch in render(), not a new command with its own target grammar -- which is also why `kuna read` could be a 3-line alias rather than a parallel implementation."
+      "detail": "The need's hypothesis -- 'raw-byte exposure was implemented only for decoded instructions, not as a general memory-range view' -- is right about the gap. It is wrong about the cost: the walk already resolves names, addresses and explicit ranges, already reads the image's own bytes (ConsoleProgram::read_bytes_into), and already bounds itself with --count/--bytes/an extent. The only thing missing was a second RENDERING of what it already had. So this is one branch in render(), not a new command with its own target grammar -- which is also why `unlace read` could be a 3-line alias rather than a parallel implementation."
     },
     {
       "what": "the view is INFERRED by default, not flag-gated, because the tester never knew to ask",
-      "detail": "A --as data that must be typed would have left the recorded symptom intact: the agent asked `disassemble 0x100003f30` and believed the ADD/OR rows. So `auto` consults the loader's own section classification -- DATA without CODE, kuna_sleigh::loadimage::section_flags -- and flips. Two guards keep the inference from being a guess: a target that resolved to a discovered function entry is code wherever it was linked (packed code in .data still decodes), and an address in NO published section is silence, not evidence, and keeps the instruction listing -- which is what leaves the XML <binaryimage> corpus and raw blobs untouched."
+      "detail": "A --as data that must be typed would have left the recorded symptom intact: the agent asked `disassemble 0x100003f30` and believed the ADD/OR rows. So `auto` consults the loader's own section classification -- DATA without CODE, unlace_sleigh::loadimage::section_flags -- and flips. Two guards keep the inference from being a guess: a target that resolved to a discovered function entry is code wherever it was linked (packed code in .data still decodes), and an address in NO published section is silence, not evidence, and keeps the instruction listing -- which is what leaves the XML <binaryimage> corpus and raw blobs untouched."
     },
     {
       "what": "the note goes on stderr AND in the JSON, never in the stdout document",
@@ -25,26 +25,26 @@
     },
     {
       "what": "no option, no stages XML, no catalog counter, no DIV row",
-      "detail": "A rendering choice inside a read-only query surface cannot change emitted C: nothing here is committed into the engine, no decompilation runs, and the diff is confined to kuna-cli/src/{disassemble.rs,main.rs} plus its Cargo edge. The kuna-decomp engine is untouched, which is also why this collides with neither builder live this wave."
+      "detail": "A rendering choice inside a read-only query surface cannot change emitted C: nothing here is committed into the engine, no decompilation runs, and the diff is confined to unlace-cli/src/{disassemble.rs,main.rs} plus its Cargo edge. The unlace-decomp engine is untouched, which is also why this collides with neither builder live this wave."
     }
   ],
   "inertness": {
-    "method": "no engine source is touched at all (git diff --stat: kuna-cli/src/disassemble.rs, kuna-cli/src/main.rs, kuna-cli/Cargo.toml, Cargo.lock, docs, tests), so emitted C cannot move; the parity gates confirm it",
+    "method": "no engine source is touched at all (git diff --stat: unlace-cli/src/disassemble.rs, unlace-cli/src/main.rs, unlace-cli/Cargo.toml, Cargo.lock, docs, tests), so emitted C cannot move; the parity gates confirm it",
     "note": "The failure mode this change COULD have introduced is the opposite one -- a code target wrongly flipped to the byte view -- so the sweep below asks that question instead of the emitted-C one."
   },
   "sweep": {
     "question": "does auto ever answer `data` for an address that is a real function entry?",
-    "method": "every discovered entry (capped at 40 per image) of every binary fixture under kuna-analysis/tests/fixtures and tests/hang-repro, through `kuna disassemble <f> <addr> --addr --count 1 --json`, asserting kind == \"code\"",
+    "method": "every discovered entry (capped at 40 per image) of every binary fixture under unlace-analysis/tests/fixtures and tests/hang-repro, through `unlace disassemble <f> <addr> --addr --count 1 --json`, asserting kind == \"code\"",
     "result": "1,299 entries across 73 binary fixtures answered kind=\"code\"; 0 flipped to the byte view. The 17 non-answers are the PRE-EXISTING unmapped-entry exit-1 path (an ET_REL undefined extern at a synthetic address, a 0x0 entry) -- vma_bytes_mapped fails before view selection is ever reached, so they are unchanged by this PR."
   },
   "gates": {
     "make test": "PARITY OK, 675/675 assertions",
     "make test-stages": "PARITY OK, 597/597 assertions",
-    "make rust-test": "green \u2014 5,296 passed / 1 failed / 38 ignored. The single failure is `verify_w10_proto_unlock::w10_proto_unlock_const_return_collapses_no_tied_roundtrip`, the known repipe-harness artifact: the loop exports `KUNA_DECOMP_TEST` pointing at a **Rust** `decomp_test_dbg`, so that test compares Rust against Rust. Re-run with it unset: 4/4 pass.",
+    "make rust-test": "green \u2014 5,296 passed / 1 failed / 38 ignored. The single failure is `verify_w10_proto_unlock::w10_proto_unlock_const_return_collapses_no_tied_roundtrip`, the known repipe-harness artifact: the loop exports `UNLACE_DECOMP_TEST` pointing at a **Rust** `decomp_test_dbg`, so that test compares Rust against Rust. Re-run with it unset: 4/4 pass.",
     "make check-spec": "OK (lenient mode)",
     "make test-cli": "15/15",
-    "kuna catalog --check": "catalog OK",
-    "cargo test -p kuna-cli --test disassemble_cli": "96/96"
+    "unlace catalog --check": "catalog OK",
+    "cargo test -p unlace-cli --test disassemble_cli": "96/96"
   },
   "acceptance": {
     "acceptance_id": "a-ecb7f35d39aa",

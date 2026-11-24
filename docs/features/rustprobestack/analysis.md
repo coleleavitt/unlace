@@ -2,7 +2,7 @@
 
 The pinned angr general test `test_decompiling_rust_binary_rust_probestack`
 requires `linux_encryptor::files::create_note` to retain its filename and lose
-the compiler probe. Kuna previously kept the helper and an authored caller that
+the compiler probe. Unlace previously kept the helper and an authored caller that
 used R11 returned an undefined local. The decision belongs to P2, before ordinary
 call setup and SSA recovery. No source text or helper name identifies the fold.
 

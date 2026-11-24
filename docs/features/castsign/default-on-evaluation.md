@@ -93,7 +93,7 @@ to take by re-declaring:
 - -O0 register temporaries (`// eax`) that merge unrelated values, one read
   unsigned and another signed.
 - Values that leave through a zero-extension whose high bits are read: a 64-bit
-  return from a function kuna types `unsigned long`, or a varargs slot.
+  return from a function unlace types `unsigned long`, or a varargs slot.
 - Values really compared both ways.
 
 Parameters carry 95 more (unchanged). Re-signing one is a prototype change: the
@@ -106,7 +106,7 @@ built.
 
 ## Value preservation
 
-`kuna-cli/tests/decompile_all_cli.rs`
+`unlace-cli/tests/decompile_all_cli.rs`
 `a_signed_only_variable_round_trips_through_the_printed_c` decompiles
 `castsign_wrap_{gcc,clang}_O0_x86_64` and `castsign_wrap_gcc_O1_x86_64` (new;
 `castsign_wrap_x86_64.c`) and the original `castsign_{gcc,clang}_O{0,1}_x86_64`,
@@ -162,7 +162,7 @@ On the final code (branch merged onto `52202840d`, last code commit `e120ab7df`;
 later commits are docs only): `make test` 675/675 PARITY OK; `make test-stages`
 1362/1362 PARITY OK; `make test-cli` 237/237; `make rust-test` RC=0 (7,511
 passed, 0 failed; the lane started 08:34:55Z, after `e120ab7df` at 08:34:43Z);
-`make check-spec` and `--strict` OK; `kuna catalog --check` OK;
+`make check-spec` and `--strict` OK; `unlace catalog --check` OK;
 `counters --check` no drift; `docs/options.md` and `phase_catalog.json`
 byte-fresh.
 

@@ -75,7 +75,7 @@ fn parse(source: &str) -> (syn::File, BTreeMap<&'static str,usize>) {
                 && matches!(items.get(i+1),Some(TokenTree::Punct(p)) if p.as_char()==':')
                 && matches!(items.get(i+2),Some(TokenTree::Punct(p)) if p.as_char()==':') => {
                 *count.entry("placeholder_namespace").or_insert(0)+=1;
-                TokenTree::Ident(Ident::new("__kuna_unresolved_namespace",id.span()))
+                TokenTree::Ident(Ident::new("__unlace_unresolved_namespace",id.span()))
             }
             _ => t.clone(),
         }).collect()

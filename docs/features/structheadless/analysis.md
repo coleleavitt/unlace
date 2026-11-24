@@ -75,7 +75,7 @@ cases DWARF can speak to. Where the function's address is stored, 53 of 255 are
 `void *` and which the metric scores against it.
 
 **The cast census's `void *`-base sites.** Of the 1,080 `*(T *)((long)p + K)`
-sites over a `void *` base on the shared (kuna and IDA) function set: 366 at 49
+sites over a `void *` base on the shared (unlace and IDA) function set: 366 at 49
 bases are closed-function headless parameters; 228 at 74 bases are headless in a
 function whose address is stored; 117 at 91 are one-field reads in such a
 function (declined on purpose by the lone-field rule); 143 at 31 are stack-passed
@@ -219,7 +219,7 @@ one member's width), so all 17 uses keep a cast (+16). tar -O0 `0x1b745` passes
 `dat_9fa90` inside that record directly, which the option-off arm's unsized
 `void *` object never overlapped (+1). The record is the right kind in every one
 of these; the casts come back because globalref declares one object per address
-and refuses rather than print the other uses as casts of it, and because kuna
+and refuses rather than print the other uses as casts of it, and because unlace
 cannot yet print a direct read inside a named record as its member. They are
 priced here, not fixed: the rule that would remove them belongs to globalref.
 The other 21 (+30) are the functions the b3878d32e measurement listed: eleven are a call that now passes an

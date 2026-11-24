@@ -2,7 +2,7 @@
 
 Dedup here keys off the PROBE, not the prose. Two testers who hit the same gap will describe
 it in two different essays but will run substantially the same command and assert
-substantially the same thing, so the signature is built from the kuna subcommand, the
+substantially the same thing, so the signature is built from the unlace subcommand, the
 observation kind, and the shape of the expect clauses. Text similarity is a tie-breaker, not
 the key.
 
@@ -11,7 +11,7 @@ appending a challenge to an existing need is pure Python and costs nothing, so o
 genuinely novel observation is ever worth an agent's attention.
 
 Only `admitted` observations reach this module — verify.py's two-arm gate has already
-discarded the ones that did not reproduce and the ones kuna could already do.
+discarded the ones that did not reproduce and the ones unlace could already do.
 """
 from __future__ import annotations
 
@@ -26,11 +26,11 @@ from . import config
 
 _WORD = re.compile(r"[a-z0-9]+")
 
-# Words that carry no discriminating power in a kuna friction report; every observation has
+# Words that carry no discriminating power in a unlace friction report; every observation has
 # them, so leaving them in makes everything look similar to everything else.
 _STOP = frozenset("""
 a an the and or but of to in on for with is are was were be been it its this that these those
-kuna decompiler binary function functions output cannot could would should does did not no
+unlace decompiler binary function functions output cannot could would should does did not no
 i my we you when then than there here what which how why very really just only also more most
 """.split())
 
@@ -54,7 +54,7 @@ def _as_probe(probe):
 
 
 def _subcommand(probe):
-    """The kuna subcommand a probe drives, which is most of a friction report's identity."""
+    """The unlace subcommand a probe drives, which is most of a friction report's identity."""
     cmd = _as_probe(probe).get("cmd") or []
     known = {"decompile", "decompile-all", "decompile-project", "functions",
              "test", "catalog", "modes", "specs", "fid"}
@@ -122,9 +122,9 @@ def group(observations):
 
 
 # A need_id becomes a branch name, a tests/cli/ filename and the thing a builder is told to
-# fix, so "kuna-has-no-way-to" is not good enough. Filler is dropped before truncation.
+# fix, so "unlace-has-no-way-to" is not good enough. Filler is dropped before truncation.
 _SLUG_DROP = frozenset("""
-kuna the a an is are was were be to of for on in at it its this that with and or but
+unlace the a an is are was were be to of for on in at it its this that with and or but
 no not cannot could would should does did has have had any all only just very
 """.split())
 
@@ -254,7 +254,7 @@ def credibility(grp):
     challenges = {o.get("_hexid") for o in grp if o.get("_hexid")}
     score = 0.3 + 0.25 * min(len(testers), 3) + 0.15 * min(len(challenges), 3)
     if any(o.get("reference_better") for o in grp):
-        score += 0.15   # "IDA does this and kuna cannot" is the most concrete evidence there is
+        score += 0.15   # "IDA does this and unlace cannot" is the most concrete evidence there is
     return round(min(score, 1.0), 2)
 
 
@@ -297,7 +297,7 @@ def _sections(grp, witness):
     quotes = "\n".join(
         "> **%s** (%s, `%s`)\n> %s\n" % (_quote(o.get("title", ""), 200),
                                          o.get("severity", "?"), o.get("_hexid", "?"),
-                                         _quote(o.get("what_kuna_did", ""), 600))
+                                         _quote(o.get("what_unlace_did", ""), 600))
         for o in grp[:6])
     refs = [o for o in grp if o.get("reference_better")]
     ref_md = "\n".join("- `%s` — %s" % (_quote(r["reference_better"].get("command", ""), 200),

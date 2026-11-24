@@ -2,18 +2,18 @@
 
 ## 1. The measured symptom
 
-`kuna decompile` accepted a `--option NAME VALUE` pair whose VALUE the engine
+`unlace decompile` accepted a `--option NAME VALUE` pair whose VALUE the engine
 refuses, exited 0, and printed the default C.
 
 ```console
-$ kuna decompile fmt 0x26a0 --addr --option realtypes zzz > bad.c ; echo $?
+$ unlace decompile fmt 0x26a0 --addr --option realtypes zzz > bad.c ; echo $?
 0
-$ kuna decompile fmt 0x26a0 --addr                          > default.c ; echo $?
+$ unlace decompile fmt 0x26a0 --addr                          > default.c ; echo $?
 0
 $ cmp bad.c default.c && echo identical
 identical
 
-$ kuna decompile-all fmt --addr 0x26a0 --option realtypes zzz ; echo $?
+$ unlace decompile-all fmt --addr 0x26a0 --option realtypes zzz ; echo $?
 error: option realtypes: Must specify toggle value, on/off
 1
 ```
@@ -33,14 +33,14 @@ value, on/off` and exit 1. Only the subprocess surface disagreed.
 
 ## 2. Root cause
 
-`kuna decompile` does not hold an error object: it builds a `decomp_dbg` script
-and pipes it on **stdin** (`kuna-cli/src/decompile.rs (build_script_for_input)`,
+`unlace decompile` does not hold an error object: it builds a `decomp_dbg` script
+and pipes it on **stdin** (`unlace-cli/src/decompile.rs (build_script_for_input)`,
 the spawn at `decompile.rs`), then recovers what failed by reading the transcript
 (`check_errors`).
 
 The console does report the refusal — `IfcOption::execute`
 (`console/src/ifacedecomp.rs`) routes the pair to
-`Architecture::set_kuna_option` or `OptionDatabase::set` and maps either one's
+`Architecture::set_unlace_option` or `OptionDatabase::set` and maps either one's
 error to `IfaceError::execution`, which prints
 
 ```
@@ -60,9 +60,9 @@ for `option`, so nothing read that line.
 ## 3. Why the VALUE cannot be checked in the parser
 
 The NAME is checkable up front because there are exactly two tables to look in
-(`KUNA_OPTION_NAMES`, `UPSTREAM_OPTION_ELEMENTS`). The VALUE is not: each option
+(`UNLACE_OPTION_NAMES`, `UPSTREAM_OPTION_ELEMENTS`). The VALUE is not: each option
 owns its grammar, and only the setter knows it. Measured over every catalogued
-option (205 rows, `kuna catalog --json`, each fed `zzzbadvalue` through the
+option (205 rows, `unlace catalog --json`, each fed `zzzbadvalue` through the
 console):
 
 | refusal wording | options |
@@ -117,11 +117,11 @@ driver-injected bundles — `RELIABLE_OVERRIDES` / `AGGRESSIVE_OVERRIDES` /
 `aif on`, and the `option readonly on` an `--assert` range implies: **0**
 diagnostics. So no `--mode` and no `--assert` can synthesize a fatal line.
 
-End to end: one `kuna decompile fauxware main` carrying all 205 options at
+End to end: one `unlace decompile fauxware main` carrying all 205 options at
 their default value exits 0, as does each of `--mode auto|reliable|aggressive|fast`,
 alone and with an `--assert` range.
 
-And one `kuna decompile` per pair, over every catalogued option crossed with
+And one `unlace decompile` per pair, over every catalogued option crossed with
 every catalogued value — 420 invocations — exits 0 on 418. The two that do not
 are the catalog's placeholder tokens, `symbolnamebound <n>` and
 `outline <fn>:<head>-<exit>[;...]`, which are not values.
@@ -150,8 +150,8 @@ lowers to the three tokens the console wants and is accepted, before and after.
 
 **Read statically, not just swept.** `IfcOption` maps both setters' errors
 unconditionally to `IfaceError::execution`, so the prefix is always
-`Execution error: ` whatever the `KunaError` kind, and no option setter's
-message contains a newline (the only multi-line `KunaError` in `kuna-decomp` is
+`Execution error: ` whatever the `UnlaceError` kind, and no option setter's
+message contains a newline (the only multi-line `UnlaceError` in `unlace-decomp` is
 `p2_lift/flow.rs`'s `Basic blocks already calculated`). The two parse errors the
 command itself can raise (`Missing option name`, `Too many option parameters`)
 arrive under `Command parsing error:`, also in `CONSOLE_DIAGNOSTICS`.

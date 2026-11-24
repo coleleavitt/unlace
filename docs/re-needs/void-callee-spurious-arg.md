@@ -25,7 +25,7 @@ reject_reason: null
 
 ## Symptom
 
-A call consistent with kuna's own recovered declaration `int _secret_function(void)`.
+A call consistent with unlace's own recovered declaration `int _secret_function(void)`.
 
 > **Void secret function is called with a spurious argument** (major, `68149b8a8f555589f353117c`)
 > The same output declares `_secret_function(void)` but calls `_secret_function(v2)`, producing internally inconsistent and invalid prototype usage.
@@ -38,7 +38,7 @@ A call consistent with kuna's own recovered declaration `int _secret_function(vo
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "_main"
@@ -71,7 +71,7 @@ A call consistent with kuna's own recovered declaration `int _secret_function(vo
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "_main"
@@ -117,7 +117,7 @@ _none recorded_
 ## Decision log
 
 - round 1: gated `admitted`, NOT built (round 1 closed 12 of 23). Carried into round 2.
-- round 2 wave 20 (captain): **RESTORED FROM `.kuna-repipe/rounds/1/gate.json` + the arena
+- round 2 wave 20 (captain): **RESTORED FROM `.unlace-repipe/rounds/1/gate.json` + the arena
   report** and RE-GATED against merged main 509bb7a3. This record carried only a `## Symptom`
   stub, no probe and no acceptance, so it was undispatchable by `select` and unclosable by
   B_DONE; the two arms below existed all along in round-1 state and were never transcribed.

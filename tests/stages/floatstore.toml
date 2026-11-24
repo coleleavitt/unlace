@@ -1,11 +1,11 @@
 # GH-1343. Stage P9, cast insertion (p9_emit/coreaction_casts.rs
-# get_input_cast_store, p9_emit/kuna_floatstore.rs). Strict fix, no option.
+# get_input_cast_store, p9_emit/unlace_floatstore.rs). Strict fix, no option.
 #
 # A pointer whose other stores are integers (clang stores each 1.0f constant
 # as the bit pattern 0x3f800000 from an integer register) is typed as a
 # pointer to unknown bytes. Upstream needs no cast to store any value into
 # unknown bytes, so the float a vstr / movss / str s0 writes printed as
-# `v1[2] = a0 * a1 + 0.5f;` with `unsigned int *v1`: kuna declares unknown
+# `v1[2] = a0 * a1 + 0.5f;` with `unsigned int *v1`: unlace declares unknown
 # bytes as an integer, and in C that assignment converts the float
 # numerically (1.5f stores 1, not 0x3fc00000). The store now goes through a
 # pointer to the value's own type, `*(float *)&v1[2] = ...`, which is the bit

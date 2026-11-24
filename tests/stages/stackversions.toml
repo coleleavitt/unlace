@@ -1,4 +1,4 @@
-# Kuna #810 / P6 merge order and P9 memory versions. stackviews off keeps the old scalar frame model; on keeps conditional native stores and a genuine saved word without printing reconstructed frame writes.
+# Unlace #810 / P6 merge order and P9 memory versions. stackviews off keeps the old scalar frame model; on keeps conditional native stores and a genuine saved word without printing reconstructed frame writes.
 
 [image]
 arch = 'x86:LE:64:default:gcc'

@@ -1,9 +1,9 @@
-# kuna issue testcase: the PE CRT entry-function prototype.
+# unlace issue testcase: the PE CRT entry-function prototype.
 #
 # Issue:      unlace-analysis-entrymainproto - `unlace decompile` on
 #             crackmes.one/65acadf3eef082e477ff5ede (ObfuscationFiesta.exe,
 #             PE32+ x86-64, stripped) renders `void sub_140002530(void)`
-#             while kuna's own decompilation of sub_14000518c renders
+#             while unlace's own decompilation of sub_14000518c renders
 #             `sub_140002530(v7,v1,v6)` three lines after the
 #             __p___argc / __p___argv / _get_initial_narrow_environment
 #             accessor calls.
@@ -51,6 +51,6 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-ENTRYMAINPROTO #1: the XML path renders the source form x <= 8'
+name = 'UNLACE-ENTRYMAINPROTO #1: the XML path renders the source form x <= 8'
 count = 1
 literal = 'if (x <= 8)'

@@ -22,7 +22,7 @@ closing_pr: "398"
 ## Symptom
 
 `override flow <addr> branch|call|callreturn|return` is fully ported and works -- it is the one
-structuring override that is not a stub -- and it is reachable only from the console. The `kuna`
+structuring override that is not a stub -- and it is reachable only from the console. The `unlace`
 binary's `--assert` plane carries eleven directives (`function`, `typedef`, `prototype`, `data`,
 `param`, `return`, `comment`, `name`, `type`, `readonly`, `volatile`) and `flow` is not among them,
 so an agent driving the CLI cannot correct a misclassified call/branch/return at all.
@@ -45,7 +45,7 @@ is ever reached (`unlace-cli/src/assertdecl.rs:275`), exit 2, nothing on stdout.
   "schema": "re-probe/1",
   "kind": "cli",
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "--addr",
@@ -82,7 +82,7 @@ is ever reached (`unlace-cli/src/assertdecl.rs:275`), exit 2, nothing on stdout.
       "unknown directive \"flow\""
     ]
   },
-  "notes": "The gap as it stands: the one structuring override whose engine path IS ported (IfcFlowOverride, unlace-console/src/ifacedecomp.rs:2911) has no spelling on the --assert plane, so an agent driving the kuna binary cannot reclassify a flow at all.",
+  "notes": "The gap as it stands: the one structuring override whose engine path IS ported (IfcFlowOverride, unlace-console/src/ifacedecomp.rs:2911) has no spelling on the --assert plane, so an agent driving the unlace binary cannot reclassify a flow at all.",
   "probe_id": "p-a862d011f87f"
 }
 ```
@@ -101,7 +101,7 @@ promotes to `tests/cli/` verbatim.
   "schema": "re-probe/1",
   "kind": "cli",
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "--addr",
@@ -192,7 +192,7 @@ exist). `kind` is effectively `absence`, which is the case `REPIPE_REFUTE_MODE=a
 ## Decision log
 
 - seeded for round 2 from a source survey of the override surface, after round 1 showed testers
-  hitting obfuscated images with no lever to correct kuna with. Not tester-filed: round 2 should
+  hitting obfuscated images with no lever to correct unlace with. Not tester-filed: round 2 should
   confirm the demand.
 - round 2 T_TRIAGE (captain): track tooling / touches [unlace-console/src/ifacedecomp.rs,
   unlace-decomp/phases.toml] / scope large CONFIRMED, with one lease consequence worth stating: it is
@@ -231,7 +231,7 @@ exist). `kind` is effectively `absence`, which is the case `REPIPE_REFUTE_MODE=a
       byte for byte, on this fixture.
     * the subphase `exposure` field DOES need to stop saying console-only -- and this PR does
       NOT change it, the one part of the brief it does not deliver. The replacement text was
-      written and measured (`command override flow; kuna --assert 'flow <addr>
+      written and measured (`command override flow; unlace --assert 'flow <addr>
       branch|call|callreturn|return'; option noreturn`: regenerates through build.rs, catalog
       stays green, no count moves), then reverted, because `mergecheck` shape-C guards
       phases.toml as a keep-both table and rejects any line present on origin/main that is

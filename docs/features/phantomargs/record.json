@@ -15,7 +15,7 @@
   "default_on": false,
   "ablation_changed": 0,
   "parity": "OK",
-  "root_cause": "Not a kuna scheduling divergence and not the is_checked() guard. Instrumented (KUNA_DBG_TRIAL) on the witness call: the RDX trial is checked on ActionActiveParam pass 0, the three-input MULTIEQUAL already exists at that point, AncestorRealistic returns realistic=1 solid=0 and sets ind_create_formed=1, and the trial is active+used from then on. The bit IS set (contradicting the refuter's inference, which mis-anchored fspec.rs:3249/:3264-3267 to fillin_map_standard; those lines are inside fillin_map_standard_out, fn at :3235). The input list simply has no reader of the bit, faithfully to upstream: stock Ghidra emits the same three-argument call on the same binary and names the phantoms extraout_RDX/extraout_RDX_00.",
+  "root_cause": "Not a unlace scheduling divergence and not the is_checked() guard. Instrumented (UNLACE_DBG_TRIAL) on the witness call: the RDX trial is checked on ActionActiveParam pass 0, the three-input MULTIEQUAL already exists at that point, AncestorRealistic returns realistic=1 solid=0 and sets ind_create_formed=1, and the trial is active+used from then on. The bit IS set (contradicting the refuter's inference, which mis-anchored fspec.rs:3249/:3264-3267 to fillin_map_standard; those lines are inside fillin_map_standard_out, fn at :3235). The input list simply has no reader of the bit, faithfully to upstream: stock Ghidra emits the same three-argument call on the same binary and names the phantoms extraout_RDX/extraout_RDX_00.",
   "upstream_faithful": true,
   "ghidra_reference": "decbench full_run_address_2026-09-11/O2/coreutils/decompiled/ghidra_fmt.c: `bVar2 = FUN_00103700(stdin,&DAT_00108792,uVar11);` with `ulong extraout_RDX; ulong extraout_RDX_00;`",
   "witness": {
@@ -24,7 +24,7 @@
     "declarations": "15 -> 12 locals in fmt::main"
   },
   "corpus_sweep": {
-    "method": "kuna decompile-all, whole binary, option off vs on, per-function diff with vN renumbering normalized; every changed call group then classified against the callee's OWN recovered prototype arity and, where one exists, against DWARF or the library's own header. Artifact: docs/features/phantomargs/sweep-2026-09-16.txt Re-run unchanged after the rebase onto elfmain.",
+    "method": "unlace decompile-all, whole binary, option off vs on, per-function diff with vN renumbering normalized; every changed call group then classified against the callee's OWN recovered prototype arity and, where one exists, against DWARF or the library's own header. Artifact: docs/features/phantomargs/sweep-2026-09-16.txt Re-run unchanged after the rebase onto elfmain.",
     "binaries": 46,
     "projects": [
       "coreutils (fmt/ls/sort/du, O0+O2+O2-noinline)",
@@ -68,18 +68,18 @@
     "statement_moves": 0,
     "control_flow_changes": "0 in the swept set (46 binaries / 41,258 functions)",
     "false_positive_avoided": "tar parse_datetime2 @0x48e10 -> str_days @0x46550 (DWARF: 3 params). Its RDX trial is MULTIEQUAL(COPY, MULTIEQUAL) -- the clobber is one phi deeper -- so the direct-clobber clause declines it and the real argument is kept.",
-    "option_off_is_inert": "kuna decompile-all with the option OFF is byte-identical to the pinned pre-change binary on all four binaries the option changes plus four controls (fmt, e2fsck, bash, grep, u-boot, ssh-keygen, crazyflie cf2.elf, betaflight): 0 differing lines each."
+    "option_off_is_inert": "unlace decompile-all with the option OFF is byte-identical to the pinned pre-change binary on all four binaries the option changes plus four controls (fmt, e2fsck, bash, grep, u-boot, ssh-keygen, crazyflie cf2.elf, betaflight): 0 differing lines each."
   },
   "ground_truth_check": {
     "method": "readelf --debug-dump=info on the unstripped decbench twin (DW_TAG_formal_parameter count at the callee's DW_AT_low_pc), or the project's own public header for a named import",
-    "fmt 0x3700": "fmt(FILE *f, char const *file), 2 DW_TAG_formal_parameter (kuna rendered 3 at one site)",
+    "fmt 0x3700": "fmt(FILE *f, char const *file), 2 DW_TAG_formal_parameter (unlace rendered 3 at one site)",
     "fmt -O2-noinline 0x3a30": "the same function in the -O2-noinline build, same DWARF",
     "e2fsck ext2fs_dblist_sort2": "2 parameters (ext2_dblist, EXT2_QSORT_TYPE (*)(...)) in the e2fsprogs public header",
     "bash xrealloc": "xrealloc(void *, size_t), 2 parameters, bash xmalloc.h",
     "tar 0x46550": "str_days, 3 params -- declined by the direct-clobber clause"
   },
   "benchmark": {
-    "method": "kuna decompile-all --addr <fn> --json, variables[] rows (kind, name-class, type) compared off vs on, on ALL 4 functions the sweep changes, with the automatic vN names normalized. The pass can in principle delete a `kind: arg` row, so this is measured rather than argued.",
+    "method": "unlace decompile-all --addr <fn> --json, variables[] rows (kind, name-class, type) compared off vs on, on ALL 4 functions the sweep changes, with the automatic vN names normalized. The pass can in principle delete a `kind: arg` row, so this is measured rather than argued.",
     "functions_checked": 4,
     "variables_identical": 3,
     "variables_changed": 1,
@@ -96,10 +96,10 @@
   "speed_within_budget": true,
   "speed_forced_off": false,
   "speed": {
-    "method": "interleaved off/on pairs, MINIMUM of 21 pairs, `kuna decompile-all <bin> --addr <fn> --option argclobber off|on` (the CLI surface that rejects a bad option value). Re-measured on the round-3 rule, on a box with load average 4.2 and no gate running.",
+    "method": "interleaved off/on pairs, MINIMUM of 21 pairs, `unlace decompile-all <bin> --addr <fn> --option argclobber off|on` (the CLI surface that rejects a bad option value). Re-measured on the round-3 rule, on a box with load average 4.2 and no gate running.",
     "rows": {
-      "kuna decompile-all fmt O2 main 0x26a0 (the option fires)": "211.2 -> 209.9 ms (-0.61%)",
-      "kuna decompile-all grep O2 0xcec0 (control: 1,000-line function, never fires)": "1071.0 -> 1070.4 ms (-0.05%)"
+      "unlace decompile-all fmt O2 main 0x26a0 (the option fires)": "211.2 -> 209.9 ms (-0.61%)",
+      "unlace decompile-all grep O2 0xcec0 (control: 1,000-line function, never fires)": "1071.0 -> 1070.4 ms (-0.05%)"
     },
     "worst_delta_pct": -0.05,
     "within_budget": true,
@@ -123,7 +123,7 @@
     "u-boot 0x608715f0 -> sub_60871420 (r1)": "STILL FIRES, and it is correct: readelf on the decbench u-boot twin says 0x60871420 is get_ticks, DW_TAG_formal_parameter count 0, and 0x608715f0 is __udelay with ONE formal parameter (`usec`). The `kind: arg` row the review saw deleted was itself fabricated; the narrowed prototype matches DWARF.",
     "unmodelled-variadic callee (the required change)": "answered structurally by the callee clause, not by a per-function scan: u-boot's printf spills r1-r3 into the va_list save area, so proves_input holds for every one of its 1,924 sites at once."
   },
-  "ablation": "MEASURED, not asserted: with the default flipped to `true` in Architecture and ArchContext and the tree rebuilt, `kuna test --datatests --baseline docs/baseline.json` is 675/675 PARITY OK and `--datatests-dir tests/stages --baseline docs/baseline-stages.json` is 1029/1029 PARITY OK. The flip was reverted; the shipped default is off, and it is off because of the rax:rdx return shape no clause can see and because a wrong drop is a DELETED expression, not because of the corpora.",
+  "ablation": "MEASURED, not asserted: with the default flipped to `true` in Architecture and ArchContext and the tree rebuilt, `unlace test --datatests --baseline docs/baseline.json` is 675/675 PARITY OK and `--datatests-dir tests/stages --baseline docs/baseline-stages.json` is 1029/1029 PARITY OK. The flip was reverted; the shipped default is off, and it is off because of the rax:rdx return shape no clause can see and because a wrong drop is a DELETED expression, not because of the corpora.",
   "review_round3": {
     "blocker": "clobber_of_this_register_reaches put no condition on a MULTIEQUAL input whose def was not an indirect creation, so one clobber among a join's incoming values condemned the whole join. Repro (20-line .s, gcc -nostdlib -static, no corpus binary needed): a caller that forwards its own second parameter into rdx on the non-clobber path rendered `void sub_401000(long a0)` / `sub_40102f(a0,5)` with the option on, against `void sub_401000(long a0,unsigned long a1)` / `sub_40102f(a0,5,a1)` off -- both the argument and the parameter deleted, including from the scored variables[] surface.",
     "close": "the join clause (clause 4). Both reviewer repros (fix.s, the constant; fix2.s, the forwarded parameter) now render identically with the option on and off, and the fmt witness still collapses 3/2/1 -> 2/2/2.",
@@ -149,7 +149,7 @@
       "bash O0"
     ],
     "named_sites_rechecked": {
-      "method": "kuna decompile-all <bin> --addr <fn> [--option argclobber on], output compared byte for byte on the shipped tree",
+      "method": "unlace decompile-all <bin> --addr <fn> [--option argclobber on], output compared byte for byte on the shipped tree",
       "crazyflie cf2.elf 0x803bec8": "identical (the extra kind: arg deletion the review found is gone)",
       "crazyflie cf2.elf 0x80104d4": "identical (the two loop-condition rewrites are gone)",
       "betaflight 0x802f5b4": "identical",

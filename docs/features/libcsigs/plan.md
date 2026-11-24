@@ -9,8 +9,8 @@ Chosen. It is one PR, it ships the whole measured head, and the risk per entry i
 uniform and bounded.
 
 **(b) Generate the table from a machine-readable source at build time.** Rejected
-for this PR, deliberately. Making the build read `/usr/include` would make kuna's
-output depend on the *build host's* libc — a kuna built on musl or on a glibc with
+for this PR, deliberately. Making the build read `/usr/include` would make unlace's
+output depend on the *build host's* libc — a unlace built on musl or on a glibc with
 a different `_FORTIFY_SOURCE` default would emit different C for the same binary,
 and CI would stop being reproducible. It also cannot work at all for the three
 groups that have no header prototype (`__stack_chk_fail`, the `*_chk` builtins,
@@ -34,7 +34,7 @@ safe where 27 were safe by luck.
   and `build_ty` the matching arms. The base table is otherwise untouched.
 - Gate: `Architecture::analysis_libcsigs`, default ON, read at the analysis commit
   boundary via `engine.rs::analysis_pass_enabled`, printed by
-  `kuna_console::kuna_live_value`. No `live_field` in `phases.toml`, matching
+  `unlace_console::unlace_live_value`. No `live_field` in `phases.toml`, matching
   `libproto` and every other analysis-pass gate.
 
 ## Preset membership: deliberately NOT in `AGGRESSIVE_OVERRIDES`
@@ -78,7 +78,7 @@ default-ON decision alone.
 `console/tests/verify_libcsigs.rs`, five two-pass assertions over the existing
 vendored `fauxware` fixture. **No `tests/stages/*.xml` case**: the XML datatest
 bootstrap builds its program from a `<binaryimage>` element and never runs the
-analyzer tier, so no `kuna_analysis` pass can fire there — the same reason
+analyzer tier, so no `unlace_analysis` pass can fire there — the same reason
 `verify_cppsig.rs`, `verify_cppproto.rs` and `verify_fdeinterior.rs` exist. Both
 gate settings are asserted in every test.
 

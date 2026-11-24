@@ -4,22 +4,22 @@
   "track": "tooling",
   "round": 4,
   "test_name": "repipe round 4, challenge 605443e333c5d42c3d016f59",
-  "binary": "kuna-re-dataset/challenges/605443e333c5d42c3d016f59/bin/KataVM_Level_1.7z.__x/KataVM_Level_1/KataVM_L1",
+  "binary": "unlace-re-dataset/challenges/605443e333c5d42c3d016f59/bin/KataVM_Level_1.7z.__x/KataVM_Level_1/KataVM_L1",
   "selector": "0x6b22",
   "func_addr": "0x1170",
   "option": null,
   "flag": null,
   "element_id": null,
   "change_kind": "correctness-fix",
-  "source_decompiler": "kuna",
+  "source_decompiler": "unlace",
   "inspiration": "repipe round 4 need sectionless-elf-loses-string; the shape already exists one layer over, in entry::executable_sections' program-header fallback for the plausible-code oracle",
   "default_on": true,
   "div": null,
   "scope": "small",
   "files": [
-    "decompiler/crates/kuna-analysis/src/listing/xrefs.rs",
-    "decompiler/crates/kuna-analysis/tests/fixtures/sectionless_x86_64",
-    "decompiler/crates/kuna-analysis/tests/fixtures/sectionless_x86_64.py",
+    "decompiler/crates/unlace-analysis/src/listing/xrefs.rs",
+    "decompiler/crates/unlace-analysis/tests/fixtures/sectionless_x86_64",
+    "decompiler/crates/unlace-analysis/tests/fixtures/sectionless_x86_64.py",
     "tests/cli/sectionless-elf-loses-string.json",
     "docs/spec/01-program-prep.md",
     "docs/re-needs/sectionless-elf-loses-string.md"
@@ -29,9 +29,9 @@
     "make test": "PARITY OK 675/675",
     "make test-stages": "PARITY OK 640/640",
     "make check-spec": "OK",
-    "kuna catalog --check": "catalog OK",
+    "unlace catalog --check": "catalog OK",
     "make test-cli": "45/45",
-    "make rust-test": "green with `env -u KUNA_DECOMP_TEST`; the first run failed only verify_w10_proto_unlock with `oracle promote_compare signature drifted`, which is the repipe launcher pointing KUNA_DECOMP_TEST at kuna's own decomp_test_dbg (the C++ oracle is gone, so CI skips that block). The target passes on its own with the variable unset and no kuna-decomp file is touched by this change."
+    "make rust-test": "green with `env -u UNLACE_DECOMP_TEST`; the first run failed only verify_w10_proto_unlock with `oracle promote_compare signature drifted`, which is the repipe launcher pointing UNLACE_DECOMP_TEST at unlace's own decomp_test_dbg (the C++ oracle is gone, so CI skips that block). The target passes on its own with the variable unset and no unlace-decomp file is touched by this change."
   },
   "probe_flip": {
     "probe_still_passes": false,
@@ -42,12 +42,12 @@
   "promoted_probe": {
     "path": "tests/cli/sectionless-elf-loses-string.json",
     "retargeted_from": "dataset bin/KataVM_Level_1.7z.__x/KataVM_Level_1/KataVM_L1 (string 0x6b22, LEA RDI,[0x6b22] at 0x1181)",
-    "retargeted_to": "decompiler/crates/kuna-analysis/tests/fixtures/sectionless_x86_64 (string 0x2000, LEA RDI,[0x2000] at 0x1004)",
+    "retargeted_to": "decompiler/crates/unlace-analysis/tests/fixtures/sectionless_x86_64 (string 0x2000, LEA RDI,[0x2000] at 0x1004)",
     "why": "CI has no dataset; the vendored 8 KB twin carries the identical defect in the identical shape -- e_shoff=0, one PF_X PT_LOAD holding the function and one PF_R PT_LOAD holding the string -- and reports functions: [] on the unpatched build",
-    "verified_on_witness": "the acceptance also passes on the dataset original: kuna strings KataVM_L1 --filter Correct now reports xrefs_count 1 and functions [sub_1170], and kuna xrefs --to 0x6b22 returns the LEA RDI,[0x6b22] row at 0x1181"
+    "verified_on_witness": "the acceptance also passes on the dataset original: unlace strings KataVM_L1 --filter Correct now reports xrefs_count 1 and functions [sub_1170], and unlace xrefs --to 0x6b22 returns the LEA RDI,[0x6b22] row at 0x1181"
   },
   "speed_method": "warmup discarded, 11 repeats, median and min reported; box carried a concurrent workspace suite, so treat both as an upper bound",
-  "speed_target": "kuna strings <675 KB section-less ELF, Sh4ll8> --json",
+  "speed_target": "unlace strings <675 KB section-less ELF, Sh4ll8> --json",
   "speed_off_ms": 170.6,
   "speed_on_ms": 171.5,
   "speed_delta_pct": 0.53,
@@ -73,7 +73,7 @@
     "The ET_REL guard is left exactly as it is, per the refutation. A relocatable object HAS sections that describe a different address space, so it never reaches mapped_ranges at all -- sections_are_runtime is false for it because no seed lands in a pre-link section. The fallback is therefore reachable only when there is no section table, which is the one case where the PT_LOAD table IS the runtime layout.",
     "A PT_LOAD with p_vaddr 0 is included rather than skipped, unlike the section arm's `lo == 0` guard. The two zeros mean different things: a section at address 0 is unallocated pre-link metadata, while a PIE's first PT_LOAD genuinely maps at 0. Including it is also inert, since looks_like_address rejects everything under 4096.",
     "No option, no phases.toml row, no catalog counter and no tests/stages case: tooling track, and this is a strict wrong-output fix in the read-only reference index that cannot change emitted C -- confirmed by the byte-identical decompile-all sweep, not assumed.",
-    "The free riders the refutation predicted are structurally un-blinded too: kuna_poolref and kuna_picbase read the same `mapped` and are inert while it is empty, so a section-less ARM image's literal-pool references and a section-less i386 PIC image's GOT-relative ones now have a range list to be classified against. Neither swept image exercises them -- KataVM_L1 is x86-64 and the trace-p crackme is a non-PIE i386 ET_EXEC -- so the un-blinding is claimed as reachability, not as a measured gain.",
+    "The free riders the refutation predicted are structurally un-blinded too: unlace_poolref and unlace_picbase read the same `mapped` and are inert while it is empty, so a section-less ARM image's literal-pool references and a section-less i386 PIC image's GOT-relative ones now have a range list to be classified against. Neither swept image exercises them -- KataVM_L1 is x86-64 and the trace-p crackme is a non-PIE i386 ET_EXEC -- so the un-blinding is claimed as reachability, not as a measured gain.",
     "The acceptance was retargeted from the dataset witness to a vendored twin before promotion, following corrupt-elf-section-table. It was run and passed against the dataset original first, so the retarget trades reach for portability and not for a weaker claim."
   ],
   "pr": "https://github.com/Noelo-Lab/kuna/pull/451"

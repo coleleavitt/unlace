@@ -49,11 +49,11 @@ tail-call absorption).
 
 ## 4. Registration
 
-* `Architecture::analysis_cortexmvectors` (field, `reset_defaults` = false, `set_kuna_option`
+* `Architecture::analysis_cortexmvectors` (field, `reset_defaults` = false, `set_unlace_option`
   arm).
-* `p0_knowledge/options.rs` `KUNA_OPTION_NAMES`.
+* `p0_knowledge/options.rs` `UNLACE_OPTION_NAMES`.
 * `phases.toml` `[[settable]]` row, every field populated,
-  `source_decompiler = "kuna"` (this came from kuna's own recall measurement, not a rival),
+  `source_decompiler = "unlace"` (this came from unlace's own recall measurement, not a rival),
   `inspiration` prefixed `decbench:`.
 * Hard-coded catalog counts: `phases/tests.rs` (settable 83->84, analysis tier 25->26,
   the `PASS_GATES` list, the JSON row count 82->83) and `catalog_bytecompat.rs`
@@ -78,11 +78,11 @@ tail-call absorption).
 raw `<bytechunk>`s and never constructs an `ObjectLoadImage`, so the option is unobservable
 on that path. Every sibling analysis-tier discovery flag (`funcstart_patterns`, `aif`,
 `eh_frame_full`, `i386_pie_plt`) is gated the same way. Consequently
-`kuna-base/src/xml.rs`' corpus file count and `docs/baseline-stages.json` are untouched.
+`unlace-base/src/xml.rs`' corpus file count and `docs/baseline-stages.json` are untouched.
 
 ## 6. Fixture
 
-`decompiler/crates/kuna-analysis/tests/fixtures/cortexm_ccm_vectors_le32` (357 bytes) plus
+`decompiler/crates/unlace-analysis/tests/fixtures/cortexm_ccm_vectors_le32` (357 bytes) plus
 its generator `cortexm_ccm_vectors_le32.py` and a fixtures-README row. Hand-assembled
 because no cross toolchain on this host emits a bare-metal STM32 link layout; it fails all
 three shipped predicates at once, so one fixture covers all four affected projects' shapes.

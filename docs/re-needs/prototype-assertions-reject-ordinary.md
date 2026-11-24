@@ -50,7 +50,7 @@ Use standard C parameter types in prototype assertions.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_140004dcc",
@@ -91,7 +91,7 @@ Use standard C parameter types in prototype assertions.
   "probe_id": "a-e9643c3e9aaa",
   "kind": "cli",
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "authenticate",

@@ -939,7 +939,7 @@ fn ingest_dwarf(prog: &mut ConsoleProgram) {
 fn refuse(prog: &ConsoleProgram, reason: &str) {
     unlace_base::notes::say_once(
         prog.description(),
-        &format!("[kuna callwide] no promotion: {reason}"),
+        &format!("[unlace callwide] no promotion: {reason}"),
     );
 }
 

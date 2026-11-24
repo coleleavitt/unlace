@@ -31,7 +31,7 @@ const DOS_DATE = ((2026 - 1980) << 9) | (1 << 5) | 1; // (year-1980)<<9 | month<
 /**
  * Build a STORE-only zip from `entries` = [{name, data}], where `data` is a
  * string (UTF-8 encoded) or a Uint8Array. Names may contain '/' to nest
- * (e.g. 'proj.kuna/proj.c'). Returns the archive as a Uint8Array.
+ * (e.g. 'proj.unlace/proj.c'). Returns the archive as a Uint8Array.
  */
 export function makeZip(entries) {
   const enc = new TextEncoder();

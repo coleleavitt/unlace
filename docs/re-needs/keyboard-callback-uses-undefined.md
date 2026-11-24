@@ -38,7 +38,7 @@ A decompilation whose signature includes the Wayland callback event arguments us
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x6500",
@@ -70,7 +70,7 @@ A decompilation whose signature includes the Wayland callback event arguments us
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x6500",
@@ -136,7 +136,7 @@ _none recorded_
 - round 2 T_TRIAGE (captain): scope small -> LARGE. The values arrive in R9D/R8D of a callback only ever reached through a registration site, so recovering them means inferring a prototype from that registration -- a real feature. Note the cheaper path this need is evidence FOR: if the CLI could carry a prototype override (need no-cli-rename-or-prototype-override) an agent could state the signature itself and would not need the inference at all. That makes this a demand witness for the no-cli-* family, which is exactly the independent tester evidence those captain-seeded needs were missing.
 
 - round 2 B_PLAN wave 58 (captain): **DISPATCHED, attempt 1, with the briefing below.** Everything
-  in it was MEASURED this tick at `57ebfd2b` on `.kuna-repipe/probebin/8ea3c454dfcea5d5/lugosiii`,
+  in it was MEASURED this tick at `57ebfd2b` on `.unlace-repipe/probebin/8ea3c454dfcea5d5/lugosiii`,
   not inherited from an earlier wave.
 - round 2 B_PLAN wave 58 (captain): briefing.
   (a) THE DEFECT REPRODUCES EXACTLY AND IS SMALL NOW. `unlace decompile <bin> 0x6500 --addr` -> rc 0,
@@ -168,7 +168,7 @@ _none recorded_
   (e) EVIDENCE THAT BEARS ON THE FILED HYPOTHESIS (which is advisory and unrefuted --
   `hypothesis_status` stays `inconclusive`, that field is a refuter's). #395 left an in-repo
   Wayland-shaped fixture, `crates/unlace-analysis/tests/fixtures/tailcallframe_x86_64`,
-  whose `on_key` at 0x11b0 is ALSO reachable only through a listener[] pointer table. kuna emits
+  whose `on_key` at 0x11b0 is ALSO reachable only through a listener[] pointer table. unlace emits
   `void sub_11b0(int *a0,int a1)` there -- i.e. live-in registers from a pointer-table-only
   callback with no prototype evidence ARE promoted when they are CONTIGUOUS (rdi, rsi). The filed
   hypothesis ("no prototype evidence, so live-in R8D/R9D are not promoted") does not explain that

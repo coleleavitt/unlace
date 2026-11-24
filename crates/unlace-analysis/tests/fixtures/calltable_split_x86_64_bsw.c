@@ -1,4 +1,4 @@
-/* (kuna) Fixture calltable_split_x86_64, file 2 of 3: a range-checked switch
+/* (unlace) Fixture calltable_split_x86_64, file 2 of 3: a range-checked switch
  * reached only through file 1's `ops`; `bsw_end` closes its table. */
 extern volatile int sink;
 const long bsw_end = 0x1234;

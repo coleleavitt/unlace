@@ -3,7 +3,7 @@
 ## Scope
 
 One change: 333 rows appended to `LIBC_EXT` in
-`decompiler/crates/kuna-analysis/src/analyzers/protos/libcsigs.rs`. No new
+`decompiler/crates/unlace-analysis/src/analyzers/protos/libcsigs.rs`. No new
 module, no new inference, no new option -- `libcsigs` already gates the table and
 its `off` arm declares exactly the names the 28-entry base table carries. The
 call-site placeholder strip that came with it is ungated and runs in both arms.
@@ -22,14 +22,14 @@ call-site placeholder strip that came with it is ungated and runs in both arms.
 4. Test: `tests/stages/libcwiden.toml` (two passes over one real ELF, with
    `option libcsigs off` in pass 1) plus three table-invariant unit tests.
 5. Gates: `make test`, `make test-stages`, `make test-cli`, `make check-spec`
-   (+ `--strict`), `kuna catalog --check`, `counters --check`, `make rust-test`.
+   (+ `--strict`), `unlace catalog --check`, `counters --check`, `make rust-test`.
 
 ## Decisions taken
 
 * **No new option.** Section 5 of `analysis.md`.
 * **No new `Ty`.** `strtoll`, `strtoull`, `strtoimax`, `strtoumax` and `llabs`
   stay out, pinned absent by a unit test. A fixed-width 64-bit member of `Ty` is
-  a separate PR with its own argument about every compiler spec kuna ships.
+  a separate PR with its own argument about every compiler spec unlace ships.
 * **The `*64` LFS aliases go in as `void *`**, not as `libctypes` named
   pointees. `stat64` filling a `void *` is honest and better than an integer;
   naming it `stat *` belongs in `LIBC_EXT_NAMED`, which is the `libctypes`
@@ -43,7 +43,7 @@ call-site placeholder strip that came with it is ungated and runs in both arms.
 
 1. The variadic save area (above), the next ranked lever.
 2. A fixed-width 64-bit `Ty`, which unlocks the two most widely imported names
-   kuna still cannot type.
+   unlace still cannot type.
 3. `LIBC_EXT_NAMED` rows for the `*64` aliases and for the new names whose
    `void *` slots have a libc aggregate behind them (`getmntent`, `statvfs`,
    `utimensat`, `select`).

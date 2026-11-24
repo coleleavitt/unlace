@@ -1,4 +1,4 @@
-# kuna GH-271: "15-byte multi-prefix NOP fails SLEIGH decode: body dropped,
+# unlace GH-271: "15-byte multi-prefix NOP fails SLEIGH decode: body dropped,
 # guard inverted"
 #
 # clang emits a 15-byte NOP as loop-alignment padding at -O2: six 0x66
@@ -9,13 +9,13 @@
 # walks a pattern in 4-byte chunks whatever its real width, so matching a
 # 15-byte instruction issues a 4-byte read at offset 13, one byte past the
 # buffer.  Upstream reads adjacent struct memory there (UB) and the caller's
-# mask discards it; kuna raised BadData, so `FlowInfo` planted an artificial
+# mask discards it; unlace raised BadData, so `FlowInfo` planted an artificial
 # halt at the NOP address and truncated the rest of the function.  With the
 # padding sitting ahead of a loop head, everything after it (the loop, the
 # stores, and any parameter only the loop reads) vanished from the emitted C,
 # leaving a bare early-exit shell.
 #
-# Fix (kuna GH-271): instruction bytes past the buffer read as 0, the
+# Fix (unlace GH-271): instruction bytes past the buffer read as 0, the
 # deterministic equivalent of the masked-off garbage C++ reads.  The start-byte
 # guard is untouched, so a genuinely over-length encoding still errors (pinned
 # by crates/unlace-sleigh/tests/x86_maxlen_nop_regression.rs).

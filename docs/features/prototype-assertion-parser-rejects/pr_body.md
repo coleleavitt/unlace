@@ -6,7 +6,7 @@ syntax. Every Windows API declaration worth pasting carries one, and the
 for:
 
 ```bash
-kuna decompile ./Cube.exe sub_401ba0 --assert-strict \
+unlace decompile ./Cube.exe sub_401ba0 --assert-strict \
   --assert 'prototype 0x4050a6 void * __stdcall LoadLibraryExW(unsigned short *n,void *f,unsigned int g)'
 ```
 
@@ -17,7 +17,7 @@ $ echo $?
 ```
 
 Dropping `__stdcall` from the same declaration is accepted, so the convention is
-the only thing in the way — and nothing in `kuna docs`, the assertion reference
+the only thing in the way — and nothing in `unlace docs`, the assertion reference
 or the option catalog offers another way to state one.
 
 ## The fix
@@ -50,6 +50,6 @@ acceptance, and `prototype-convention-is-honored.json` is the anti-swallow guard
 — declaring `accepted()` `MSABI` renders `accepted(a3)` instead of
 `accepted((int)v4)`, which a fix that lexed the keyword and dropped it would
 fail. Gates: `make test` 675/675 PARITY OK, `make test-stages` 677/677 PARITY
-OK, `make test-cli` 70/70, `make check-spec` OK, `kuna catalog --check` OK.
+OK, `make test-cli` 70/70, `make check-spec` OK, `unlace catalog --check` OK.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

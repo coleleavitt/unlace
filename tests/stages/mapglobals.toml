@@ -4,7 +4,7 @@
 # coverVarnodes) and printc.cc (PrintC::pushMismatchSymbol). When the
 # persistent Varnodes at an address run past the end of the global Symbol
 # there, upstream warns, names each uncovered interior Varnode after the
-# Symbol (`small_4`), and prints the wide read as `_small`. kuna's
+# Symbol (`small_4`), and prints the wide read as `_small`. unlace's
 # ActionMapGlobals did nothing, so the wide read printed as the Symbol
 # itself or as `dat_200000`, and no warning was given.
 #

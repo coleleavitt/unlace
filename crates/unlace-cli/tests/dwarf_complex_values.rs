@@ -16,17 +16,17 @@ void touch_pair(float complex *z) { *z=__builtin_complex(cimagf(*z),crealf(*z));
 float local_pair(float x,float y) { float complex z=__builtin_complex(x,y); touch_pair(&z); return crealf(z)+cimagf(z); }
 "#;
 const DRIVER: &str = r#"
-extern kuna_complex_float exp_pair(kuna_complex_float);
-extern kuna_complex_double exp_wide(kuna_complex_double);
+extern unlace_complex_float exp_pair(unlace_complex_float);
+extern unlace_complex_double exp_wide(unlace_complex_double);
 int main(void) {
     uint32_t fbits[] = {0,0x80000000u,0x3f000000u,0xbf800000u,0x7f800000u,0x7fc01234u,1};
     uint64_t dbits[] = {0,0x8000000000000000ull,0x3fe0000000000000ull,0xbff0000000000000ull,0x7ff0000000000000ull,0x7ff8000000001234ull,1};
     for (unsigned i=0;i<7;i++) for(unsigned j=0;j<7;j++) {
-        kuna_complex_float input, result;
+        unlace_complex_float input, result;
         memcpy(&input.real,&fbits[i],4); memcpy(&input.imag,&fbits[j],4);
         if (i < 4 && j < 4) {
             if (recovered_local_pair(input.real,input.imag) != input.real+input.imag) return 7;
-            kuna_complex_float actual = recovered_exp_pair(input), expected = exp_pair(input);
+            unlace_complex_float actual = recovered_exp_pair(input), expected = exp_pair(input);
             if (memcmp(&actual, &expected, sizeof actual)) return 6;
         }
         result=recovered_pass_pair(input);
@@ -37,10 +37,10 @@ int main(void) {
         if(memcmp(&input,&result,8)) return 3;
         float r=recovered_pair_real(input), im=recovered_pair_imag(input);
         if(memcmp(&r,&input.real,4)||memcmp(&im,&input.imag,4)) return 4;
-        kuna_complex_double wide, wresult;
+        unlace_complex_double wide, wresult;
         memcpy(&wide.real,&dbits[i],8); memcpy(&wide.imag,&dbits[j],8);
         if (i < 4 && j < 4) {
-            kuna_complex_double actual=recovered_exp_wide(wide), expected=exp_wide(wide);
+            unlace_complex_double actual=recovered_exp_wide(wide), expected=exp_wide(wide);
             if (memcmp(&actual,&expected,sizeof actual)) return 8;
         }
         wresult=recovered_pass_wide(wide);
@@ -72,7 +72,7 @@ fn complex_values_and_imported_exponential_round_trip() {
         String::from_utf8_lossy(&output.stderr)
     );
     let mut code = String::from(
-        "#include <string.h>\n#include <stdint.h>\ntypedef struct { float real,imag; } kuna_complex_float;\ntypedef struct { double real,imag; } kuna_complex_double;\nextern kuna_complex_float cexpf(kuna_complex_float);\nextern kuna_complex_double cexp(kuna_complex_double);\nextern void touch_pair(kuna_complex_float *);\n",
+        "#include <string.h>\n#include <stdint.h>\ntypedef struct { float real,imag; } unlace_complex_float;\ntypedef struct { double real,imag; } unlace_complex_double;\nextern unlace_complex_float cexpf(unlace_complex_float);\nextern unlace_complex_double cexp(unlace_complex_double);\nextern void touch_pair(unlace_complex_float *);\n",
     );
     for name in [
         "pass_pair",
@@ -147,8 +147,8 @@ fn pe_complex_values_keep_their_complete_types() {
             String::from_utf8_lossy(&output.stderr)
         );
         for (name, expected) in [
-            ("pass_pair", "kuna_complex_float"),
-            ("pass_wide", "kuna_complex_double"),
+            ("pass_pair", "unlace_complex_float"),
+            ("pass_wide", "unlace_complex_double"),
         ] {
             if compiler == "i686-w64-mingw32-gcc" && name == "pass_wide" {
                 continue;
@@ -165,7 +165,10 @@ fn pe_complex_values_keep_their_complete_types() {
         let (body, err, status) =
             common::run_unlace(&["decompile", binary.to_str().unwrap(), "local_pair"]);
         assert_eq!(status, 0, "{err}");
-        assert!(body.contains("kuna_complex_float z;"), "{compiler}: {body}");
+        assert!(
+            body.contains("unlace_complex_float z;"),
+            "{compiler}: {body}"
+        );
         assert!(!body.contains("((float *)&z)[1]"), "{compiler}: {body}");
         std::fs::remove_file(source).unwrap();
         std::fs::remove_file(binary).unwrap();

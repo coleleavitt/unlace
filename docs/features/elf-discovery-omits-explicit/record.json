@@ -2,15 +2,15 @@
   "need_id": "elf-discovery-omits-explicit",
   "track": "loader",
   "scope": "small",
-  "opportunity": "RE-need elf-discovery-omits-explicit — `kuna functions` on a stripped non-PIE x86-64 crackme reported 34 entries and omitted `main` at 0x11a9b, which _start names explicitly (crackmes.one 67f9bdc38f555589f3530a85 bin/WeeperVM--Level_1, round 12).",
-  "test_name": "kuna functions inventory, witness + 1,919-binary x86-64 ELF A/B sweep + 43-binary RE-dataset sweep",
-  "binary": "decompiler/crates/kuna-analysis/tests/fixtures/funcstart_patterns_x86_64",
+  "opportunity": "RE-need elf-discovery-omits-explicit — `unlace functions` on a stripped non-PIE x86-64 crackme reported 34 entries and omitted `main` at 0x11a9b, which _start names explicitly (crackmes.one 67f9bdc38f555589f3530a85 bin/WeeperVM--Level_1, round 12).",
+  "test_name": "unlace functions inventory, witness + 1,919-binary x86-64 ELF A/B sweep + 43-binary RE-dataset sweep",
+  "binary": "decompiler/crates/unlace-analysis/tests/fixtures/funcstart_patterns_x86_64",
   "selector": "0x401020",
   "option": null,
   "flag": null,
   "change_kind": "analysis-decode",
   "tier": "analysis",
-  "source_decompiler": "kuna",
+  "source_decompiler": "unlace",
   "default_on": true,
   "div_row": null,
   "decisions": [
@@ -34,7 +34,7 @@
   "promoted_probe": {
     "path": "tests/cli/elf-discovery-omits-explicit.json",
     "retargeted_from": "dataset challenges/67f9bdc38f555589f3530a85/bin/WeeperVM--Level_1 (14112 bytes)",
-    "retargeted_to": "decompiler/crates/kuna-analysis/tests/fixtures/funcstart_patterns_x86_64 (14296 bytes, already vendored)",
+    "retargeted_to": "decompiler/crates/unlace-analysis/tests/fixtures/funcstart_patterns_x86_64 (14296 bytes, already vendored)",
     "why": "`verify --promote` refuses a dataset target (CI has no dataset) and the witness is a third-party crackme. The already-vendored fixture is the same shape and carried the same defect: stripped non-PIE x86-64, `_start` at 0x401040 handing `main` over as `mov rdi,0x401020` before `call [rip+d32]`, and `main` reachable from no other oracle. No new binary was added.",
     "verified_on_witness": true
   },
@@ -59,7 +59,7 @@
       "inventories_changed": 2,
       "changed": [
         "/usr/bin/busybox: 2116 -> 2164 functions, main 0x525a1d recovered (endbr64; push rbp)",
-        "decompiler/crates/kuna-analysis/tests/fixtures/funcstart_patterns_x86_64: 8 -> 9, main 0x401020 recovered"
+        "decompiler/crates/unlace-analysis/tests/fixtures/funcstart_patterns_x86_64: 8 -> 9, main 0x401020 recovered"
       ],
       "entries_lost": 0
     },
@@ -75,7 +75,7 @@
     "every_new_entry_verified_by_disassembly": true
   },
   "speed": {
-    "method": "3 runs each of `kuna functions <bin> --json`, before/after binaries built from the same tree",
+    "method": "3 runs each of `unlace functions <bin> --json`, before/after binaries built from the same tree",
     "witness_s": {"before": [0.15, 0.14, 0.15], "after": [0.16, 0.15, 0.16]},
     "busybox_s": {"before": [1.66, 1.31, 1.83], "after": [1.56, 1.61, 1.69]},
     "verdict": "no measurable cost; the fallback runs only when the lea scan misses, and the extra work is one 64-byte rescan plus the walk over a genuinely larger call tree"
@@ -86,10 +86,10 @@
     "make rust-test": "green",
     "make check-spec": "green",
     "make test-cli": "109/109",
-    "kuna catalog --check": "catalog OK"
+    "unlace catalog --check": "catalog OK"
   },
   "files": [
-    "decompiler/crates/kuna-analysis/src/analyzers/entry/mod.rs",
+    "decompiler/crates/unlace-analysis/src/analyzers/entry/mod.rs",
     "docs/spec/01-program-prep.md",
     "tests/cli/elf-discovery-omits-explicit.json"
   ]

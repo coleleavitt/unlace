@@ -1,11 +1,11 @@
 from pathlib import Path
 import hashlib,json,os,subprocess,shutil
 
-r=Path('/home/mahaloz/kwt/angr-fnptr-namespace');base=Path('/home/mahaloz/kwt/angr-base-4a9c');w=Path('/tmp/kuna-fnptr-namespace');out=w/'native-proof';out.mkdir(exist_ok=False)
+r=Path('/home/mahaloz/kwt/angr-fnptr-namespace');base=Path('/home/mahaloz/kwt/angr-base-4a9c');w=Path('/tmp/unlace-fnptr-namespace');out=w/'native-proof';out.mkdir(exist_ok=False)
 sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
-build=json.loads((w/'build.json').read_text());env=os.environ|{'KUNA_SPECS':str(r/'specs'),'SLEIGHHOME':str(r/'specs')}
-assert sha(r/'decompiler/target/release/kuna')==build['new_cli_sha256'];assert sha(base/'decompiler/target/release/kuna')==build['parent_cli_sha256']
-fixtures=r/'decompiler/crates/kuna-analysis/tests/fixtures';fixture=fixtures/'function_pointer_namespaces_x86_64'
+build=json.loads((w/'build.json').read_text());env=os.environ|{'UNLACE_SPECS':str(r/'specs'),'SLEIGHHOME':str(r/'specs')}
+assert sha(r/'decompiler/target/release/unlace')==build['new_cli_sha256'];assert sha(base/'decompiler/target/release/unlace')==build['parent_cli_sha256']
+fixtures=r/'decompiler/crates/unlace-analysis/tests/fixtures';fixture=fixtures/'function_pointer_namespaces_x86_64'
 shutil.copy2(fixtures/'function_pointer_namespaces.cpp',out/'function_pointer_namespaces.cpp')
 names=['left::same_address','right::cross_address','foreign_address','nested_address','right_address','global_shadow','scope_shadow']
 inputs=[0,1,7,12345,0x7fffffff,0x80000000,0xffffffd7,0xfffffff5,0xffffffff]
@@ -31,7 +31,7 @@ int main() {
 records=[];captures={}
 for arm,root in [('parent',base),('candidate',r)]:
  for strategy in ['none','minimal','all']:
-  cmd=[str(root/'decompiler/target/release/kuna'),'decompile-all',str(fixture),'--json','--language','c','--assert-strict','--assert',f'@{fixtures / "function_pointer_namespaces.kuna"}','--option','namespacestrategy',strategy,'--functions',','.join(names+['interior_address','data_address'])]
+  cmd=[str(root/'decompiler/target/release/unlace'),'decompile-all',str(fixture),'--json','--language','c','--assert-strict','--assert',f'@{fixtures / "function_pointer_namespaces.unlace"}','--option','namespacestrategy',strategy,'--functions',','.join(names+['interior_address','data_address'])]
   result=subprocess.run(cmd,cwd=r,env=env,capture_output=True,text=True,check=True);doc=json.loads(result.stdout);assert len(doc['functions'])==9 and all(not f.get('error')for f in doc['functions'])
   (out/f'{arm}-{strategy}.json').write_text(result.stdout);(out/f'{arm}-{strategy}.log').write_text(result.stderr);captures[(arm,strategy)]={f['name']:f for f in doc['functions']}
   if strategy=='none':continue

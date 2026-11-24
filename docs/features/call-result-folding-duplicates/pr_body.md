@@ -1,12 +1,12 @@
 ## The problem
 
 “Call-result folding duplicates a random-number call inside the uniqueness loop”
-was observed in one RE-friction instance. The binary calls once, but kuna printed
+was observed in one RE-friction instance. The binary calls once, but unlace printed
 the call in both the loop comparison and the later store.
 
 ```console
-$ decompiler/target/release/kuna decompile \
-    decompiler/crates/kuna-analysis/tests/fixtures/callretmulti_x86_64 \
+$ decompiler/target/release/unlace decompile \
+    decompiler/crates/unlace-analysis/tests/fixtures/callretmulti_x86_64 \
     sub_140002930
 if (v3[v1] == (unsigned short)helper()) goto label_40100d;
 v3[v2] = (unsigned short)helper();

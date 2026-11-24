@@ -53,7 +53,7 @@ ones (`ac1`..`ac4`): the ops that were lifted as `INT_ZEXT` were rewritten in
 place into `CPUI_PIECE`.
 
 The rewriter is `RulePieceStructure`
-(`decompiler/crates/kuna-decomp/src/p3_dataflow/ruleaction_6.rs`, C++
+(`decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_6.rs`, C++
 `ruleaction.cc:7488`). It asks `determine_datatype` for the extension output's
 *structured* type; that resolves to the Varnode's own data-type when no Symbol
 covers it, and a 16-byte Varnode has no primitive type, so
@@ -68,7 +68,7 @@ halves as `._0_8_` / `._8_8_`.
 
 The signed sibling is untouched by all of this. `IMUL rm64` lowers through
 `sext` (`ia.sinc:3604`), `CPUI_INT_SEXT` is not in `RulePieceStructure`'s
-`get_op_list`, and kuna has always printed `SUB168(SEXT816(x) * SEXT816(y),8)`
+`get_op_list`, and unlace has always printed `SUB168(SEXT816(x) * SEXT816(y),8)`
 for it — the exact rendering the unsigned form should have.
 
 ## The options considered
@@ -84,7 +84,7 @@ addr-tied ZEXT/PIECE arms.** Rejected as a fix for *this*: those arms are about
 addr-tied Varnodes, and these operands live in the unique space. Upstream prints
 the same blobs, so there is no upstream behaviour to inherit here.
 
-(c) **Print the product as `(unsigned __int128)x * y`.** Rejected: kuna has no
+(c) **Print the product as `(unsigned __int128)x * y`.** Rejected: unlace has no
 128-bit integer type, and inventing one at the printer would make a rendering
 that no type in the model backs.
 

@@ -1,4 +1,4 @@
-// Fixture for loader/kuna_machodataincode.rs: a dense switch whose jump table
+// Fixture for loader/unlace_machodataincode.rs: a dense switch whose jump table
 // clang places inside __text and records in LC_DATA_IN_CODE.
 //   clang -O2 -target x86_64-apple-macos12 -c macho_dataincode.c -o macho_dataincode_x86_64.o
 //   clang -O2 -target armv7-apple-ios9 -mthumb -c macho_dataincode.c -o macho_dataincode_armv7.o

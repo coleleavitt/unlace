@@ -1,6 +1,6 @@
 # Footprint of `option indexaliasguard global` (issue #792)
 
-`kuna decompile-all` on stripped decbench binaries, every function compared
+`unlace decompile-all` on stripped decbench binaries, every function compared
 after renaming the `vN` variables and the synthesized `struct_N` numbers to a
 common numbering.
 
@@ -141,7 +141,7 @@ which main folded away), and a store the global overwrites later
 
 ## Loads across a store on a branch or in a loop
 
-`kuna_loadorder` first counted only an op whose own output is the global's
+`unlace_loadorder` first counted only an op whose own output is the global's
 varnode, so a store on a branch or in a loop, which reaches the global
 through a `MULTIEQUAL`, did not keep a load explicit (`x = *p; if (c) gi = b;
 return x + c;` printed `if (a2) gi = a1; return *a0 + a2;`). It now counts an

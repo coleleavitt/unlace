@@ -227,10 +227,10 @@ pub fn identifier(name: &str) -> String {
             | "math"
             | "unsafe"
     );
-    if valid && !keyword && name != "_" && !name.starts_with("_kuna_ident_") {
+    if valid && !keyword && name != "_" && !name.starts_with("_unlace_ident_") {
         return name.to_string();
     }
-    let mut result = "_kuna_ident_".to_string();
+    let mut result = "_unlace_ident_".to_string();
     for byte in name.bytes() {
         use std::fmt::Write;
         let _ = write!(result, "{byte:02x}");

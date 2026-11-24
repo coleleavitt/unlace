@@ -1,5 +1,5 @@
 # A parameter the calling convention passes in a floating-point register is
-# a float of that register's width (kuna_floatreg.rs, float_input_vote).
+# a float of that register's width (unlace_floatreg.rs, float_input_vote).
 # A strict correction: there is no option, and the one pass is the fix.
 #
 # The XML wrapper only provides the harness architecture. The script loads

@@ -2,11 +2,11 @@
 
 ## The opportunity
 
-kuna declares an optimized loop counter `unsigned int` and then casts it back to
+unlace declares an optimized loop counter `unsigned int` and then casts it back to
 `int` at every comparison:
 
 ```
-$ kuna decompile-all fmt --addr 0x3060
+$ unlace decompile-all fmt --addr 0x3060
   unsigned int v1;
   ...
   if (0 <= (int)v1)
@@ -20,12 +20,12 @@ comparison. Nothing in the function reads it as unsigned.
 
 `Datatype::type_order` ranks the sub-metatypes
 `... SUB_UINT_PLAIN (16) < SUB_INT_PLAIN (17) ...`
-(`decompiler/crates/kuna-decomp/src/substrate/dtype.rs`), and lower is *more
+(`decompiler/crates/unlace-decomp/src/substrate/dtype.rs`), and lower is *more
 specific*. `get_local_type`'s fold keeps the most specific seed
 (`p5_types/coreaction_infertypes.rs`), and every propagation edge adopts the
 lower sub-metatype, so **one `uint` vote outranks every `int` vote on the same
 Varnode** and no later phase re-decides: `HighVariable::get_type_representative`
-and `kuna_declhightype` both order with `type_order_formal`, which only demotes
+and `unlace_declhightype` both order with `type_order_formal`, which only demotes
 `PARTIALUNION` and `BOOL`.
 
 On `-O2` x86-64 the `uint` votes are structural rather than semantic:
@@ -52,7 +52,7 @@ TRex (Bosamiya, Woo, Parno, USENIX Security 2025) makes exactly that split. Its
 accumulated set of size-tagged operations a value participates in, and §5.1 adds
 a flag that prefers signed for the ambiguous case, "since C programmers write
 `int` when signedness does not matter". `signedness` is that decision, applied at
-kuna's declaration seam.
+unlace's declaration seam.
 
 ## The correctness question
 
@@ -68,7 +68,7 @@ an assignment, a call argument, a `return`, a stored value, a truncation and a
 concatenation all produce the same bits under either declaration at a fixed
 width, so a flip is written only when every op that is not on that list agrees.
 
-kuna's own cast strategy draws the line in the same place, which corroborates the
+unlace's own cast strategy draws the line in the same place, which corroborates the
 split rather than establishing it. `care_uint_int = true` is passed by
 `INT_SLESS`/`INT_SLESSEQUAL`, `INT_LESS`/`INT_LESSEQUAL`, `INT_SDIV`/`INT_SREM`,
 `INT_DIV`/`INT_REM`, `INT_SRIGHT`/`INT_RIGHT` and `INT_ZEXT`/`INT_SEXT`, and
@@ -222,7 +222,7 @@ width guard, the same ownership guard, and the operation walk deleted. It is wha
 `prefer-signed` would collapse to if the rounding were dropped and only the
 tie-break kept, and it is the row that says whether the walk earns its keep. It
 is built from the same source through a measurement-only escape hatch
-(`KUNA_MEAS_ALLSIGNED`) that exists in `.scratch/measbin/kuna` and in no
+(`UNLACE_MEAS_ALLSIGNED`) that exists in `.scratch/measbin/unlace` and in no
 committed file; that binary is byte-identical to the shipped one with the
 variable unset (verified on 32 whole-image dumps).
 
@@ -235,7 +235,7 @@ variable unset (verified on 32 whole-image dumps).
 | *control:* all-signed, no walk | 15,136 | 5810/6259 = **92.8%** | 98.9% | **59.2%** | 790 | 376 | 414 |
 
 **Read the last three columns before the first three.** The oracle can only score
-a declaration kuna names the same way DWARF does in the same function, and those
+a declaration unlace names the same way DWARF does in the same function, and those
 are overwhelmingly stack locals, i.e. `-O0`: of the 6,259 comparable rows,
 **5,308 are `-O0` and 951 are `-O2`**. The flips are the other way round — the
 defect this option exists for is an `-O2` register local, which the oracle
@@ -297,7 +297,7 @@ off the target from one read off the reader. The 16-bit stage test is what
 distinguishes them.
 
 **What the method does not see.** Only names DWARF knows in the same function
-are compared. kuna also names some register locals after the parameter of the
+are compared. unlace also names some register locals after the parameter of the
 function they feed, and there the ground truth can be genuinely ambiguous: `ls`
 and `du` `save_abbr` get an `unsigned long abbr_size` that `auto` declares
 `long`, and `abbr_size` is `extend_abbrs`'s `size_t` parameter — but the value's

@@ -1,6 +1,6 @@
 ---
 need_id: local-type-assertion-target
-title: Local type assertion cannot target the register temporary printed by kuna
+title: Local type assertion cannot target the register temporary printed by unlace
 track: tooling
 status: open
 severity: major
@@ -27,7 +27,7 @@ reject_reason: null
 
 Repair the VM temporary through the documented --assert type interface.
 
-> **Local type assertion cannot target the register temporary printed by kuna** (major, `69761b7a39e9c4d85c2f9fc1`)
+> **Local type assertion cannot target the register temporary printed by unlace** (major, `69761b7a39e9c4d85c2f9fc1`)
 > The emitted temporary v6 is absent from the variables inventory. Its type assertion is rejected with No symbol named. Switching to namestyle ghidra and targeting the emitted uVar6 also fails.
 
 ## Reproduction
@@ -38,7 +38,7 @@ Repair the VM temporary through the documented --assert type interface.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_1005350",
@@ -84,7 +84,7 @@ Repair the VM temporary through the documented --assert type interface.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_1005350",
@@ -143,7 +143,7 @@ _none recorded_
 ## Decision log
 
 - filed by cluster.py from 1 observation(s)
-- split by captain at T_DEDUP from round 12's `missing-capability|decompile|exit_code,json,stderr_absent` bucket: cluster.py's signature (kind|subcommand|clause-shape) collapsed unrelated defects, so the crop was hand-partitioned one observation per need and filed via `--from-file`. See `.kuna-repipe/rounds/12/dedup/MARKER.json`; do NOT run `cluster --round 12` bare.
+- split by captain at T_DEDUP from round 12's `missing-capability|decompile|exit_code,json,stderr_absent` bucket: cluster.py's signature (kind|subcommand|clause-shape) collapsed unrelated defects, so the crop was hand-partitioned one observation per need and filed via `--from-file`. See `.unlace-repipe/rounds/12/dedup/MARKER.json`; do NOT run `cluster --round 12` bare.
 - round 12 REFUTER: hypothesis **upheld** (was inconclusive). round 12 REFUTER (captain, tick 05:3xZ) -- VERDICT UPHELD, and the control run pins the namespace boundary exactly. Refuted jointly with vm-temporary-declared-as (same challenge, same function sub_1005350, one shared measurement); read that need's log for the type half.
 
 THE CONTROL, on aa18e56d, seven single-assert runs of unlace decompile <graphy> sub_1005350 --assert "<D>" --json, all exit 0:
@@ -159,7 +159,7 @@ That is the whole boundary in one table. Everything the local scope backs with a
 THE DOCUMENTATION ALREADY PROMISES THE CAPABILITY, which raises this above a missing-feature ask. unlace decompile --help gives as its worked examples of the assert vocabulary, verbatim: "type v2 char[16]" and "name v2 credbuf". In this function v2 is a register temporary and BOTH of those exact forms are rejected. The help text teaches the failing form. Whoever takes this should treat the help text as the specification the code must meet, not as prose to be edited down to match the code.
 
 TWO CORRECTIONS TO THE FILED SYMPTOM, both measured, neither fatal to it:
-1. "The emitted temporary v6 is absent from the variables inventory" is TRUE and is stronger than filed: the --json variables array for this function holds 12 entries -- 3 args and 9 stack slots -- and contains ZERO register variables. v1 through v9 and v11, every register temporary the C body declares, are all absent. So this is not v6 specifically; kuna exports no handle for any register-resident local in any function.
+1. "The emitted temporary v6 is absent from the variables inventory" is TRUE and is stronger than filed: the --json variables array for this function holds 12 entries -- 3 args and 9 stack slots -- and contains ZERO register variables. v1 through v9 and v11, every register temporary the C body declares, are all absent. So this is not v6 specifically; unlace exports no handle for any register-resident local in any function.
 2. But the inventory is NOT the resolver's namespace, and a builder who assumes it is will build the wrong thing. local_30 IS in the JSON inventory and is still rejected, while a0 is NOT in the JSON inventory under that name (the JSON calls the three parameters param_1, param_2, param_3 while the C body prints them a0, a1, a2) and resolves fine. There are three distinct name spaces here -- what the C body prints, what --json reports, and what --assert resolves -- and no two of them agree. Exporting the register temps into the JSON inventory alone will NOT make them assertable.
 
 WHAT THE FIX HAS TO BE, since the two above rule out the cheap versions: the assert resolver has to be able to name a HighVariable that has no backing Symbol, either by adopting the emitter's printed identifier as a lookup key or by accepting a storage-based target form. There is no such form today -- the vocabulary line in --help is function, typedef, prototype, data, param, return, name, type, comment, flow, readonly, volatile, and none of them takes a register or an SSA site. Doing this by minting a real ScopeLocal Symbol for each register high is the obvious route and is also the risky one: it changes what p6 believes about the local scope, which is the merge machinery this round has repeatedly warned builders away from.

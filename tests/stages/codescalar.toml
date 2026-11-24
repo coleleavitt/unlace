@@ -23,7 +23,7 @@
 # back-end.  The store then demands a cast back to the pointee, which prints
 # `(void)`.
 #
-# Stage / sub-stage: P5 "type-propagation".  kuna_codescalar.rs (always on)
+# Stage / sub-stage: P5 "type-propagation".  unlace_codescalar.rs (always on)
 # refuses a `code` pointee as the type of a dereferenced value.
 #
 # The fixture is the same construct on SysV x86-64.  Both functions take a

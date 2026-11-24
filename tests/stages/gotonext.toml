@@ -1,4 +1,4 @@
-# kuna `gotonext`: a `goto` whose target is the statement that runs next
+# unlace `gotonext`: a `goto` whose target is the statement that runs next
 # anyway is left out (upstream `BlockGoto::gotoPrints`), a `goto` to the
 # statement after the innermost enclosing loop or switch prints as
 # `break;`, and the label only those gotos reached goes with them.  A switch

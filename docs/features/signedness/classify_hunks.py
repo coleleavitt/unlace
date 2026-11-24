@@ -3,8 +3,8 @@
 
 Usage:
 
-    kuna decompile-all <bin>                            > DUMPS/<bin>.<opt>.auto.c
-    kuna decompile-all <bin> --option signedness upstream > DUMPS/<bin>.<opt>.upstream.c
+    unlace decompile-all <bin>                            > DUMPS/<bin>.<opt>.auto.c
+    unlace decompile-all <bin> --option signedness upstream > DUMPS/<bin>.<opt>.upstream.c
     python3 classify_hunks.py DUMPS <bin>[,<bin>...] <opt>[,<opt>...]
 
 Every changed line-pair is a `decl-signedness` flip (same declaration, same name,

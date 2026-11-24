@@ -2,7 +2,7 @@
   "schema": "re-probe/1",
   "kind": "cli",
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile-all",
     "{{BIN}}"
   ],
@@ -33,6 +33,6 @@
       "cb\\(unsigned char a0"
     ]
   },
-  "notes": "cb is called with bytes and also through offsets relative to a table and to another function, with a whole word; kuna resolves that indirect call to cb, so its callers cannot all be listed and the parameter keeps its width.",
+  "notes": "cb is called with bytes and also through offsets relative to a table and to another function, with a whole word; unlace resolves that indirect call to cb, so its callers cannot all be listed and the parameter keeps its width.",
   "probe_id": "p-fdb89e4d983c"
 }

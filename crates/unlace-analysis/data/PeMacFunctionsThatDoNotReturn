@@ -6,7 +6,7 @@
 # the same family the ELF list carries; this list adds the Windows-CRT- and
 # macOS-specific no-return functions that the ELF list does not name.
 #
-# Selected for a PE/COFF/Mach-O object in s1_loader/noreturn.rs (the kuna analog
+# Selected for a PE/COFF/Mach-O object in s1_loader/noreturn.rs (the unlace analog
 # of noReturnFunctionConstraints.xml selecting a list per executable format).
 exit
 quick_exit
@@ -22,7 +22,7 @@ invalid_parameter_noinfo_noreturn
 terminate
 abort_handler4
 
-# (kuna) Darwin no-return declarations from the iPhoneOS 16.5 SDK's public
+# (unlace) Darwin no-return declarations from the iPhoneOS 16.5 SDK's public
 # headers (usr/include): stdlib.h `_Exit`, setjmp.h `longjmp`/`_longjmp`/
 # `siglongjmp`, pthread/pthread.h `pthread_exit`, err.h `err`/`verr`/`errc`/
 # `verrc`/`errx`/`verrx` (all `__dead2`), assert.h `__assert_rtn`,
@@ -81,7 +81,7 @@ ZNSt3__120__throw_bad_weak_ptr*
 ZNSt3__119__throw_regex_error*
 ZNSt3__122__libcpp_verbose_abort*
 
-# (kuna, #28) The C++ unwind and stack-protector entry points, Darwin's
+# (unlace, #28) The C++ unwind and stack-protector entry points, Darwin's
 # abort-with-reason calls and the CPython fatal exits, missing above.
 # `_Unwind_Resume`/`_Unwind_SjLj_Resume` (Itanium ABI: does not return; armv7
 # iOS unwinds SjLj), libc++abi/libsupc++ `__cxa_call_unexpected`/

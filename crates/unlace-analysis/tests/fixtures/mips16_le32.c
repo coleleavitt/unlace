@@ -3,7 +3,7 @@
    `m16_square` is compiled as MIPS16 (the `mips16` function attribute), so the
    linker records its STT_FUNC symbol at `entry|1` (the LSB-set odd-address
    convention, exactly like ARM Thumb).  Everything else stays MIPS32
-   (`nomips16`).  The kuna `mips_isa` pass paints ISA_MODE=1 at the (even) entry
+   (`nomips16`).  The unlace `mips_isa` pass paints ISA_MODE=1 at the (even) entry
    so the body decodes as MIPS16 instead of being misdecoded as MIPS32.
 
    Freestanding (no libc): the container has the MIPS *runtime* libc but no

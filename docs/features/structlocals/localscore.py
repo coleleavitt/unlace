@@ -14,7 +14,7 @@ sys.path.insert(0, os.environ.get("PINDB_DIR", str(Path(__file__).resolve().pare
 import pindb; pindb.pin()
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from scripts.decbench import structscore as SS
-RES = Path(os.environ.get("KUNA_DECBENCH_RESULTS", "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11"))
+RES = Path(os.environ.get("UNLACE_DECBENCH_RESULTS", "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11"))
 
 def insns(binary):
     out = {}
@@ -161,7 +161,7 @@ def one(job):
     SS.header_layouts = raw
     fr = SS.measure_layout(payload, header, fns)
     rows.append({"param_layout": fo["layout"], "param_nesting": fr["nesting"], "structs": fr["structs_in_header"],
-                 "typed_params": fr["params_kuna_typed_as_a_struct"]})
+                 "typed_params": fr["params_unlace_typed_as_a_struct"]})
     return (f"{b} {o}", arm, rows)
 
 if __name__ == "__main__":

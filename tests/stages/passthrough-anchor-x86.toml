@@ -17,7 +17,7 @@
 # `xprintf(msg,a1,a2,a3,a4,a5,f1,f2,f3,f4)` and d3 gained five parameters.
 # With every argument register in front of it forwarded, a stack slot holding
 # a constant the function stored is a local, not an argument the forwarded
-# registers lead up to (kuna_passthrough.rs, ends_rescued_run); where the
+# registers lead up to (unlace_passthrough.rs, ends_rescued_run); where the
 # reload is already linked to the slot, as in mirai, survives_call says so
 # as well.  `xprintf` saves rsi..r9 for its va_list and `take` is outside
 # the image.

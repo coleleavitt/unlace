@@ -7,11 +7,11 @@ the numbers behind it.
 
 | file | change |
 |---|---|
-| `decompiler/crates/kuna-decomp/src/p6_variables/undefname.rs` | **new** -- the whole fix: `finish_undefined_names` = `assign_scope_default_names` + `refresh_placeholder_high_names` |
-| `decompiler/crates/kuna-decomp/src/p6_variables/mod.rs` | declare the module |
-| `decompiler/crates/kuna-decomp/src/p6_variables/varmap.rs` | `ScopeLocal::assign_default_names`, a one-line accessor onto the already-ported `Database::assign_default_names` |
-| `decompiler/crates/kuna-decomp/src/p6_variables/coreaction_cleanup.rs` | one call at the tail of `name_local_highs_angr`, after the spacebase attach pass |
-| `decompiler/crates/kuna-base/src/xml.rs` | corpus file count 190 -> 191 (counted from disk, not arithmetic) |
+| `decompiler/crates/unlace-decomp/src/p6_variables/undefname.rs` | **new** -- the whole fix: `finish_undefined_names` = `assign_scope_default_names` + `refresh_placeholder_high_names` |
+| `decompiler/crates/unlace-decomp/src/p6_variables/mod.rs` | declare the module |
+| `decompiler/crates/unlace-decomp/src/p6_variables/varmap.rs` | `ScopeLocal::assign_default_names`, a one-line accessor onto the already-ported `Database::assign_default_names` |
+| `decompiler/crates/unlace-decomp/src/p6_variables/coreaction_cleanup.rs` | one call at the tail of `name_local_highs_angr`, after the spacebase attach pass |
+| `decompiler/crates/unlace-base/src/xml.rs` | corpus file count 190 -> 191 (counted from disk, not arithmetic) |
 | `tests/stages/ghdec-undefname.toml` | **new** -- two witnesses, two passes, 8 assertions |
 | `docs/baseline-stages.json` | re-recorded from a live run: 386 -> 394 keys, purely the 8 new ones |
 | `docs/spec/06-variables-and-merge.md` | section 6.1, "Closing out the undefined names" |
@@ -47,7 +47,7 @@ is not valid C under any naming policy, so there is no decision to expose.
 
 ## Ablation
 
-`kuna test --all --baseline docs/baseline.json` -> **PARITY OK, 675/675**, with the fix
+`unlace test --all --baseline docs/baseline.json` -> **PARITY OK, 675/675**, with the fix
 unconditionally on and `docs/baseline.json` untouched. `make test-stages` -> **PARITY
 OK, 394/394**, the stages baseline re-recorded only to add this test's 8 keys (the diff
 is 8 added lines and the footer count; no existing key moved).

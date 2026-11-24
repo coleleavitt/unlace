@@ -9,7 +9,7 @@ contract; current behavior, corpus recall limitations, and evidence are in
 ## Scope
 
 Add one P1 analysis option, `x86listingswitch`, initially default off, and one
-owning module, `kuna-analysis/src/listing/x86listingswitch.rs`. Its first
+owning module, `unlace-analysis/src/listing/x86listingswitch.rs`. Its first
 scope is linked i386 ELF and PE absolute-pointer switches whose index range can
 be proved locally. It supplies same-function successors to the Listing used by
 entry discovery. Cases are never directly promoted to function entries; calls
@@ -119,10 +119,10 @@ parallel reconciliation; it is more than a thin reader call.
 
 | Path | Functions / responsibility |
 |---|---|
-| `kuna-analysis/src/listing/x86listingswitch.rs` (new) | proof, bounded read, unresolved-dispatch records, deterministic reconciliation |
-| `kuna-analysis/src/listing/mod.rs` | module registration; `Listing::build_resuming` and resume integration |
-| `kuna-analysis/src/listing/walk.rs` | `StepCtx`, `walk`, `step`: common same-function successor seam |
-| `kuna-analysis/src/listing/poolref.rs` | explicit complete bounded-read interface; existing reader behavior preserved |
+| `unlace-analysis/src/listing/x86listingswitch.rs` (new) | proof, bounded read, unresolved-dispatch records, deterministic reconciliation |
+| `unlace-analysis/src/listing/mod.rs` | module registration; `Listing::build_resuming` and resume integration |
+| `unlace-analysis/src/listing/walk.rs` | `StepCtx`, `walk`, `step`: common same-function successor seam |
+| `unlace-analysis/src/listing/poolref.rs` | explicit complete bounded-read interface; existing reader behavior preserved |
 
 Paths above are relative to `decompiler/crates/`. Do not change the separate
 xrefs walk's policy in this PR; its demonstrated overread needs its own scoped

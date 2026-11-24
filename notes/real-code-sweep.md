@@ -168,7 +168,7 @@ Real artifacts decompiled one function or code object at a time with the pinned
 | `Lua:LE:32:5.1` | every prototype of the Lua 5.1 test suite, luac 5.1.5 | 371 | 371 | none | none |
 | `Lua:LE:32:5.2` | Lua 5.2.2 test suite, luac 5.2.4 | 529 | 529 | none | none |
 | `Lua:LE:32:5.3` | Lua 5.3.4 test suite, luac 5.3.6 | 666 | 666 | none | none |
-| `Lua:LE:32:5.4` | Lua 5.4.6 test suite, luac 5.4.8 | 1034 | 1033 | none | #688 (kuna_selectdiv overflow on bitwise.lua's main chunk) |
+| `Lua:LE:32:5.4` | Lua 5.4.6 test suite, luac 5.4.8 | 1034 | 1033 | none | #688 (unlace_selectdiv overflow on bitwise.lua's main chunk) |
 | `V8Ignition:LE:32:13.6` | `node --no-lazy --print-bytecode` of npm's semver package and the Node internals it loads | 682 | 682 | none | none |
 | `EVM:BE:32:Cancun` | solc 0.8.24 runtime code of an ERC-20 and a vault (mapping, array, call, selfdestruct), optimizer off and on | 4 | 2 | none | #687 (jump-table shift overflow on the ERC-20 runtimes, fixed by #709); readability: option `evmcalls` (see below) |
 | `AMDGPU:LE:64:GFX9/10/11` | 8 OpenCL kernels (matmul, tiled matmul, histogram, LDS scan, float4 saxpy, clamp, f64 math, string scan) at -O2/-O3 for gfx900, gfx1030, gfx1100 | 96 | 82, then 96 after #685 | #685: v_div_scale/fmas/fixup_f64, v_cmp_class_f64/f32, gfx11 s_sendmsg_rtn_b32; f64 literals are the high half on GFX10/11. #702: RDNA v_cmpx writes only EXEC (it also wrote VCC), and restores #663's aperture operands and `v_swap_b32`, which #685 had dropped; the same 96 functions pass on GFX10-W64/GFX11-W64 | none |

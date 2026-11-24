@@ -18,7 +18,7 @@
 # function, so this pins the round trip as well as the bound. The scope path
 # keeps its first 255 components and folds the remaining 745 into ONE synthetic
 # component carrying an FNV-1a 64 hash of the exact dropped byte range. The
-# hash is written out in `kuna_symbolnamebound` rather than taken from
+# hash is written out in `unlace_symbolnamebound` rather than taken from
 # `DefaultHasher`, whose per-process seed would make the folded spelling differ
 # between runs; assertion #4 pins the exact digits, so a non-deterministic hash
 # fails here rather than becoming golden-diff noise.

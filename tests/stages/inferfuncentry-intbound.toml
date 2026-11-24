@@ -1,4 +1,4 @@
-# kuna strict fix (P5, ActionConstantPtr::isPointer function-entry escape; no
+# unlace strict fix (P5, ActionConstantPtr::isPointer function-entry escape; no
 # option).
 #
 # The function-entry escape (GH-6930, gh6930-inferfuncentry.xml) lifts the

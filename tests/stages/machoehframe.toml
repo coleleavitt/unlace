@@ -2,11 +2,11 @@
 #
 # A Mach-O falls back to a DWARF FDE in __TEXT,__eh_frame for a function its
 # compact unwind encoding cannot describe. Every FDE pcBegin is a function
-# start, as on ELF, where kuna reads .eh_frame in its always-on entry
+# start, as on ELF, where unlace reads .eh_frame in its always-on entry
 # discovery; until this option, the Mach-O __eh_frame was never read.
 #
 # Stage / sub-stage: P1 code-data-partition, the Mach-O entry-discovery
-# oracles (`unlace-analysis/src/analyzers/entry/kuna_machoehframe.rs`),
+# oracles (`unlace-analysis/src/analyzers/entry/unlace_machoehframe.rs`),
 # committed at `read symbols`.
 #
 # P0 assertion: `option machoehframe on|off`, set after `load file` and

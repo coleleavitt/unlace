@@ -1,4 +1,4 @@
-# tests/stages/kuna-argclobber.toml's caller, as a real program so that
+# tests/stages/unlace-argclobber.toml's caller, as a real program so that
 # `decompile-all` decompiles `target` before `caller` and `target`'s recovered
 # prototype is on the table when the call site is scored.
 #

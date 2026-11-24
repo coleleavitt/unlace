@@ -28,8 +28,8 @@ use std::path::Path;
 use unlace_decomp::uefiprotocols::InstalledInterface;
 
 /// The index file's name inside the unpack directory.
-pub const FILE_NAME: &str = "kuna-uefi.index";
-const HEADER: &str = "kuna-uefi-index 1";
+pub const FILE_NAME: &str = "unlace-uefi.index";
+const HEADER: &str = "unlace-uefi-index 1";
 const MAX_BYTES: u64 = 16 << 20;
 const MAX_NOTED: usize = 3;
 
@@ -295,7 +295,7 @@ mod tests {
             None
         );
         assert!(Index::parse("garbage\nmodule A 07\n").is_none());
-        let hostile = "kuna-uefi-index 1\ninstall A zz 1 X\nmodule\nstruct\nmodule a*/b.efi 06\ninstall B.efi 00112233445566778899aabbccddeeff 10 X*/\n";
+        let hostile = "unlace-uefi-index 1\ninstall A zz 1 X\nmodule\nstruct\nmodule a*/b.efi 06\ninstall B.efi 00112233445566778899aabbccddeeff 10 X*/\n";
         let index = Index::parse(hostile).expect("the header is right");
         assert!(index.modules.is_empty() && index.installs.is_empty());
     }

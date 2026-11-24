@@ -36,7 +36,7 @@ fn specs() -> String {
 /// A unique per-test output directory under the system temp dir.
 fn out_dir(tag: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!(
-        "kuna_decompile_project_{tag}_{}_{}",
+        "unlace_decompile_project_{tag}_{}_{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -51,7 +51,7 @@ fn run_unlace(args: &[&str]) -> (String, String, bool) {
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .output()
-        .expect("failed to spawn the kuna binary");
+        .expect("failed to spawn the unlace binary");
     (
         String::from_utf8_lossy(&out.stdout).into_owned(),
         String::from_utf8_lossy(&out.stderr).into_owned(),
@@ -329,7 +329,7 @@ fn header_syntax_checks_with_cc() {
     std::fs::write(
         &stub,
         format!(
-            "#define main kuna_recovered_main\n#include \"{}\"\nint stub_entry(void){{return 0;}}\n",
+            "#define main unlace_recovered_main\n#include \"{}\"\nint stub_entry(void){{return 0;}}\n",
             h.display()
         ),
     )
@@ -394,7 +394,7 @@ fn header_syntax_checks_when_a_type_shares_a_name_with_a_function() {
         std::fs::write(
             &stub,
             format!(
-                "#define main kuna_recovered_main\n#include \"{}\"\nint stub_entry(void){{return 0;}}\n",
+                "#define main unlace_recovered_main\n#include \"{}\"\nint stub_entry(void){{return 0;}}\n",
                 h.display()
             ),
         )
@@ -812,7 +812,7 @@ fn jobs_project_names_synthesized_structs_as_the_serial_export_does() {
                     .args(&args)
                     .envs(env.iter().copied())
                     .output()
-                    .expect("failed to spawn the kuna binary");
+                    .expect("failed to spawn the unlace binary");
                 (
                     dir,
                     String::from_utf8_lossy(&out.stderr).into_owned(),
@@ -896,7 +896,7 @@ fn jobs_project_serial_path_keeps_the_types_of_the_other_functions() {
             .args(&args)
             .envs(env.iter().copied())
             .output()
-            .expect("failed to spawn the kuna binary");
+            .expect("failed to spawn the unlace binary");
         (
             dir,
             String::from_utf8_lossy(&out.stderr).into_owned(),
@@ -1415,7 +1415,7 @@ fn a_progress_export_reports_progress_before_it_writes_the_export() {
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
-        .expect("failed to spawn the kuna binary");
+        .expect("failed to spawn the unlace binary");
 
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(300);
     let mut seen = None;
@@ -1666,7 +1666,7 @@ fn streamed_worker_panic_loses_only_the_function_that_panicked() {
         "the function that panicked runs once in its chunk and once alone:\n{stderr}"
     );
     assert!(
-        stderr.lines().any(|l| l.starts_with("[kuna --stream] ")
+        stderr.lines().any(|l| l.starts_with("[unlace --stream] ")
             && l.contains("left unfinished by a failed worker process were re-run")),
         "the streamed run must say what it recovered:\n{stderr}"
     );
@@ -1972,7 +1972,7 @@ fn a_missing_binary_creates_no_folder() {
             "a missing binary must not create a folder: {stderr}"
         );
         assert!(
-            !PathBuf::from("nope.bin.kuna").exists(),
+            !PathBuf::from("nope.bin.unlace").exists(),
             "a missing binary must not create a folder in the cwd"
         );
     }
@@ -1991,7 +1991,7 @@ fn a_missing_binary_creates_no_folder() {
             &specs,
         ])
         .output()
-        .expect("failed to spawn the kuna binary");
+        .expect("failed to spawn the unlace binary");
     let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
     assert_eq!(
         out.status.code(),
@@ -2047,7 +2047,7 @@ fn a_dead_writer_stops_a_run_at_jobs(jobs: &str) {
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
-        .expect("failed to spawn the kuna binary");
+        .expect("failed to spawn the unlace binary");
 
     // Wait until the sweep is finished and functions are the only work left,
     // then turn the `.h` the writer rewrites on its clock into a directory, so
@@ -2191,7 +2191,7 @@ fn a_sectionless_image_never_reports_a_sweeping_asm_at_jobs_1() {
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
-        .expect("failed to spawn the kuna binary");
+        .expect("failed to spawn the unlace binary");
 
     let mut seen: Vec<String> = Vec::new();
     while child.try_wait().unwrap().is_none() {

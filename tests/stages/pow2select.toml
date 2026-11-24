@@ -1,4 +1,4 @@
-# kuna `pow2select`: signed `x / 2^k` rounds toward zero, so gcc biases a
+# unlace `pow2select`: signed `x / 2^k` rounds toward zero, so gcc biases a
 # negative x by 2^k - 1 and selects the biased value with a cmov, which
 # lifts as a branch and a MULTIEQUAL: `v = x + 3; if (0 <= x) v = x;
 # return v >> 2;`.  With the option on (the default) the shift is

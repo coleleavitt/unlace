@@ -2,9 +2,9 @@
 
 ## The gap
 
-The 2026-09-23 cast census counted 596 casts, on the 4,815 functions kuna and IDA
+The 2026-09-23 cast census counted 596 casts, on the 4,815 functions unlace and IDA
 both emit, that only convert a variable to the other signedness at its own width.
-kuna declared the variable unsigned and the program reads it signed:
+unlace declared the variable unsigned and the program reads it signed:
 
 ```c
 unsigned long v1; // stack - 0x10
@@ -183,6 +183,6 @@ on.
 
 gcc -O1/-O2 compile `long f(char *s) { long i = strlen(s) - 1; while (i >= 0 &&
 s[i] == ' ') ...; return i; }` so that `rax` still holds the strlen-derived
-counter at `ret`. kuna declares that function `void` with or without this option
+counter at `ret`. unlace declares that function `void` with or without this option
 (also on `dbe854ba3`), so the printed C drops the return value. The fixture returns
 `i * 10 + 3` to keep the round trip about signedness.

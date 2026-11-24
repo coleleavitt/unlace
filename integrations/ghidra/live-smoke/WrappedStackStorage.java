@@ -1,4 +1,4 @@
-// Decode the KUNA_WRAPPED_WIRE_DUMP output from wrapped_stack_tests in stock Ghidra.
+// Decode the UNLACE_WRAPPED_WIRE_DUMP output from wrapped_stack_tests in stock Ghidra.
 import ghidra.app.script.GhidraScript;
 import ghidra.program.model.address.*;
 import ghidra.program.model.listing.VariableStorage;

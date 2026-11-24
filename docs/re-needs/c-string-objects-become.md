@@ -38,7 +38,7 @@ Readable recovery of the std::string/ostringstream values used to construct and 
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x1400011c0",
@@ -70,7 +70,7 @@ Readable recovery of the std::string/ostringstream values used to construct and 
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x1400011c0",

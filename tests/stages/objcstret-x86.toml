@@ -1,4 +1,4 @@
-# kuna calleeretpurge, ObjC: `objc_msgSend_stret` pops the hidden result
+# unlace calleeretpurge, ObjC: `objc_msgSend_stret` pops the hidden result
 # pointer.
 #
 # On i386 the ObjC message senders that return a structure in memory take

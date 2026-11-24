@@ -10,7 +10,7 @@
 # "serviceDate", and the words of the other arms stayed raw.
 #
 # Stage / sub-stage: P5 const-pointer, `RuleSwiftString`
-# (`unlace-decomp/src/p5_types/kuna_swiftstr.rs`): a register-held object word
+# (`unlace-decomp/src/p5_types/unlace_swiftstr.rs`): a register-held object word
 # is paired by data flow. Every consumer that takes it beside its count word
 # (a call or return input, a `PIECE`, a store eight bytes above) names the
 # partner, which is traced back along the same `MULTIEQUAL` arms; two

@@ -82,7 +82,7 @@ refuse crossing but cannot prove equality. Unknown early evidence, crossing
 writes and overlapping locked layouts decline the entire footprint. This
 deliberately leaves some loop, callback and cross-block shapes unchanged.
 
-Use the same positive footprint in `kuna_stackeffects::enabled_for` so an
+Use the same positive footprint in `unlace_stackeffects::enabled_for` so an
 unresolved write through an escaped/reloaded pointer starts a new memory
 version of the admitted frame bytes. Reuse existing heritage barriers without
 changing their callee-effect rules. Known literal global addresses remain
@@ -97,12 +97,12 @@ on `Funcdata::clear`/reflow, and bound storage and graph walks.
 ### Mapping and typed publication
 
 Only after the early preservation contract is established may
-`kuna_stackviews::gather` admit a local shared backing. Require the exact same
+`unlace_stackviews::gather` admit a local shared backing. Require the exact same
 fixed component, complete equal-size aggregate contracts and full coverage.
 Preserve all existing layout-lock, unresolved-index, view-count and overlap
 gates. Keep local and narrow-formal admission reasons distinct.
 
-Let existing `kuna_stackobjects` byte origins identify contents at declared
+Let existing `unlace_stackobjects` byte origins identify contents at declared
 uses. A surviving native write is evidence; an implied arithmetic source behind
 an unmarked reconstruction is not. Unknown effects stay unknown. Independent
 snapshots or names are allowed only where existing proofs show they cannot
@@ -112,7 +112,7 @@ an admitted shared address.
 Capture the receiving pointer contract at the native publication/use boundary
 before forced/speculative high-variable merges obscure the persistent receiver.
 Keep the exact original publication from propagating into INDIRECT or
-MULTIEQUAL markers, so existing `kuna_stackuses::prepare_casts` can still query
+MULTIEQUAL markers, so existing `unlace_stackuses::prepare_casts` can still query
 its receiver contract after mapping. Original raw STORE publications to exact
 literal default-data-space destinations use the existing locked STORE input
 contract before lowering; a known external frame publication without a validated
@@ -122,7 +122,7 @@ to that declared pointer type at the same byte address. A generated union
 pointer cannot be assigned to a locked `int *` merely because their bits agree.
 An ambiguous receiver contract declines automatic view binding.
 
-Keep `kuna_stackbytes`, `kuna_stackversions` and `printc`'s #1163 safeguards.
+Keep `unlace_stackbytes`, `unlace_stackversions` and `printc`'s #1163 safeguards.
 The design fixes their missing prerequisite rather than teaching them to
 resurrect arbitrary hidden arithmetic or to ignore mutable-read timing.
 
@@ -145,14 +145,14 @@ These modules define the approved implementation scope. The lift callback record
 | P0 metadata/dispatch, architecture reset, module registration | One flag, complete catalog row and supported ablation. |
 | Existing owning spec chapters 02, 03, 06 and 09 | Describe original lift evidence, preservation, local eligibility and resulting C contract. |
 
-`kuna_stackvalueorder` is a required review point: retaining an original write
+`unlace_stackvalueorder` is a required review point: retaining an original write
 must not allow its source to publish the backing before the native store.
 Exercise the existing veto with the now-retained native event. If a change is
 needed, it must be scoped to this contract and separately ablated; widening the
 old width predicate alone is already disproved. No generic merge or emitter
 bypass is authorized by this proposal.
 
-No `kuna_stackvalueorder`, cleanup or emission algorithm change was needed.
+No `unlace_stackvalueorder`, cleanup or emission algorithm change was needed.
 The reviewed memory-summary/global-proof modules are consumers of existing
 facts, not modification targets here. #1122's formal eligibility and default
 oversize exclusions remain unchanged.

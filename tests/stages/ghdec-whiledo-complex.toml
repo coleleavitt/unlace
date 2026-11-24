@@ -1,5 +1,5 @@
 # decbench campaign case O0-iproute2-ip-lookup_flag_data_by_name (F3):
-# kuna emitted syntactically INVALID C for a while loop whose condition
+# unlace emitted syntactically INVALID C for a while loop whose condition
 # block is a compound graph.
 #
 # The function is a linear-search loop (iproute2 ip, x86-64 gcc -O0):
@@ -18,7 +18,7 @@
 #
 #     while( true ) { <cond stmts>; if (<branch>) break; <body> }
 #
-# kuna's ported is_complex instead resolved EVERY block type down to its
+# unlace's ported is_complex instead resolved EVERY block type down to its
 # front BlockBasic leaf (get_front_leaf), so a compound condition whose
 # front leaf is trivial scored non-complex, overflow syntax was skipped, and
 # the whole BlockList - including the embedded return - was inlined into the

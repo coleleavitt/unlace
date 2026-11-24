@@ -23,7 +23,7 @@ fn run(command: &str, binary: &Path, args: &[&str]) -> Output {
         .args(["--mode", "fast", "--sleighpath"])
         .arg(repo_root().join("specs"))
         .output()
-        .expect("run kuna")
+        .expect("run unlace")
 }
 
 fn successful(output: Output) -> String {

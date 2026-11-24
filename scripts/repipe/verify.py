@@ -12,11 +12,11 @@ The five verdicts, in the precedence `gate()` decides them:
 
   unrunnable         an arm could not be executed at all -- target missing, sha256 of the
                      target does not match the one the probe was authored against, probe
-                     malformed, evaluator raised. No claim is made about kuna either way.
+                     malformed, evaluator raised. No claim is made about unlace either way.
   flaky              an arm disagreed with itself across its repeats. A probe that is not
                      stable is not evidence, so it neither admits nor rejects.
   not-reproducible   the probe FAILED: the bad behaviour it describes is not there.
-  already-supported  the acceptance PASSED: kuna already does the desired thing. This is
+  already-supported  the acceptance PASSED: unlace already does the desired thing. This is
                      the "the tester was wrong" ledger, and it is the honest denominator
                      for every other number on the dashboard -- an EMPTY already-supported
                      bucket means the gate is broken, not that the testers were perfect
@@ -129,17 +129,17 @@ def _sha256(path):
 # that takes the round down.
 
 def make_ctx(work=None, binary=None, tmp=None, baselines=None):
-    """The substitution context probe.check() resolves {{KUNA}}/{{BIN}}/{{WORK}}/... against.
+    """The substitution context probe.check() resolves {{UNLACE}}/{{BIN}}/{{WORK}}/... against.
 
     `baselines` maps a probe_id to an already-computed verdict, which is what a `rel_to`
     timing or memory clause reads: the perf lane's idiom is "the acceptance must be some
-    ratio of the probe's median", and the ratio is what cancels kuna's fixed cold-load cost.
+    ratio of the probe's median", and the ratio is what cancels unlace's fixed cold-load cost.
     """
     return probe.context(work=str(work) if work else None,
                          binary=str(binary) if binary else None,
                          tmp=str(tmp) if tmp else None,
                          baselines=baselines or {},
-                         kuna=str(config.kuna_bin()), specs=str(config.specs_dir()))
+                         unlace=str(config.unlace_bin()), specs=str(config.specs_dir()))
 
 
 def _probe_id(p, is_acceptance):
@@ -249,7 +249,7 @@ def gate_reps(p):
     probes get TIMING_REPS instead, because single-target timing noise on this machine
     routinely exceeds 5% -- returncopysplit's own record measured a -20%/-12% floor on
     byte-identical output. acceptance_suite() does NOT apply a floor by default: at
-    INTEGRATE it re-runs the whole suite, and kuna's worst measured case is 445 s.
+    INTEGRATE it re-runs the whole suite, and unlace's worst measured case is 445 s.
     """
     kind = p.get("kind") if isinstance(p, dict) else None
     return config.TIMING_REPS if kind in ("timing", "memory") else config.REPLAY_REPS

@@ -1,22 +1,22 @@
 ## The problem
 
 On ARM, the address of a string is not in the instruction that uses it — it is in
-a literal pool, and the code loads it PC-relatively. kuna files the read of the
+a literal pool, and the code loads it PC-relatively. unlace files the read of the
 pool word and stops there, so the string itself is referenced by nothing and
-`kuna strings` cannot say which function prints it.
+`unlace strings` cannot say which function prints it.
 
 ```
-$ kuna strings ./1337ARM.bin --filter 'FATAL: kernel too old' --json
+$ unlace strings ./1337ARM.bin --filter 'FATAL: kernel too old' --json
       "address_hex": "0x661bc",
       "text": "FATAL: kernel too old\n",
       "xrefs_count": 0,
       "functions": []
 
-$ kuna disassemble ./1337ARM.bin 0x862c-0x8634
+$ unlace disassemble ./1337ARM.bin 0x862c-0x8634
   0x862c  ldr r0,[0x86e4]
   0x8630  bl 0x95cc
 
-$ kuna read ./1337ARM.bin 0x86e4 --bytes 4
+$ unlace read ./1337ARM.bin 0x86e4 --bytes 4
   0x86e4        bc 61 06 00                    |.a..|
 ```
 
@@ -39,7 +39,7 @@ binary: `cstool arm 'b0009fe5'` is the load.)
 - The width has to come from the access, not from the address varnode: a `LOAD`'s
   address is pointer-sized whatever the access is, so `ldrh r0,[pool]` reads as a
   pointer dereference otherwise.
-- `kuna strings` now reads the function inventory once. `find_entry_at` rebuilds
+- `unlace strings` now reads the function inventory once. `find_entry_at` rebuilds
   and linearly scans it per call, which is free while no string has an owner and
   0.85 s of a 2.5 s answer once 1,792 of them do. Output is byte-identical.
 
@@ -51,16 +51,16 @@ new 735-byte vendored A32 fixture — CI has no dataset) plus
 refusals on that fixture, and unit tests for the dereference and for `data_refs`.
 Before this, the promoted probe reports `functions: []`.
 
-Sweep of `kuna strings` over 15 images: **0** attributions lost, **0** edges added
+Sweep of `unlace strings` over 15 images: **0** attributions lost, **0** edges added
 on all 7 x86-64/PE images, and on ARM 2,239 new string-to-function attributions on
 u-boot and 763 on the witness. An independent capstone+symtab oracle corroborates
 2,234 and 761 of those as real PC-relative pool loads; all 14 remaining outliers
 were checked by hand and are loads the oracle's own sweep missed, not fabricated
-edges. Speed (interleaved, min-of-7): walk +1.1%, `kuna strings` +1.6% on u-boot,
+edges. Speed (interleaved, min-of-7): walk +1.1%, `unlace strings` +1.6% on u-boot,
 +3.3% on the witness, −3.8% on an x86-64 control.
 
 Gates: `make test` 675/675 PARITY OK · `make test-stages` 635/635 PARITY OK ·
 `make rust-test` green · `make check-spec` OK · `make test-cli` 35/35 ·
-`kuna catalog --check` OK.
+`unlace catalog --check` OK.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

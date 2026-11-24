@@ -1,5 +1,5 @@
 """callbacktype census, step B: for each callback target decbench scores, what
-does the DWARF twin declare, what does kuna recover today, and what is the
+does the DWARF twin declare, what does unlace recover today, and what is the
 function's published type_match?"""
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from pathlib import Path
 sys.path.insert(0, "/home/mahaloz/kwt/callbacktype")
 sys.path.insert(0, "/home/mahaloz/kwt/callbacktype/docs/decbench/typecampaign/final-g")
 os.environ.setdefault("DECBENCH_PIN", "/home/mahaloz/kwt/_final-d/db625")
-os.environ.setdefault("KUNA_DECBENCH_RESULTS",
+os.environ.setdefault("UNLACE_DECBENCH_RESULTS",
                       "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11")
 import pindb  # noqa: E402
 
@@ -21,11 +21,11 @@ pindb.pin()
 
 from scripts.decbench import config  # noqa: E402
 
-KUNA = os.environ.get("KUNA_BIN", "/home/mahaloz/kwt/callbacktype/decompiler/target/release/kuna")
+UNLACE = os.environ.get("UNLACE_BIN", "/home/mahaloz/kwt/callbacktype/decompiler/target/release/unlace")
 
 
-def kuna_vars(stripped, options=()):
-    cmd = [KUNA, "decompile-all", str(stripped), "--json", "--max-fn-seconds", "120"]
+def unlace_vars(stripped, options=()):
+    cmd = [UNLACE, "decompile-all", str(stripped), "--json", "--max-fn-seconds", "120"]
     for n, v in options:
         cmd += ["--option", n, v]
     p = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
@@ -102,7 +102,7 @@ def work(item):
     slice_key, binpath, targets = item
     stripped = binpath
     unstripped = stripped.replace("/stripped/", "/compiled/")
-    kv = kuna_vars(stripped)
+    kv = unlace_vars(stripped)
     dw = dwarf_params(unstripped)
     rows = []
     for t, info in targets.items():
@@ -111,7 +111,7 @@ def work(item):
             "slice": slice_key, "target": t, "name": info["name"],
             "callee": info["callee"], "sig": info["sig"], "ret": info["ret"],
             "dwarf": dw.get(t),
-            "kuna": [{"n": v.get("name"), "t": v.get("type"), "k": v.get("kind"),
+            "unlace": [{"n": v.get("name"), "t": v.get("type"), "k": v.get("kind"),
                       "loc": v.get("location")} for v in (k or {}).get("vars", [])],
         })
     return rows

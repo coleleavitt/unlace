@@ -11,7 +11,7 @@
 #
 # Stage / sub-stage: P1 (the Mach-O loader's section classification,
 # `unlace-analysis/src/loader/format/macho.rs`: an `S_CSTRING_LITERALS` section
-# is read-only data) and P9 presentation (`p9_emit/kuna_oslog.rs`).
+# is read-only data) and P9 presentation (`p9_emit/unlace_oslog.rs`).
 #
 # P0 assertion: `option oslog on|off` (default on), a print-time gate.
 #

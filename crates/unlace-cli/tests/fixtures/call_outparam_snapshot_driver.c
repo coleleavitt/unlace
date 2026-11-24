@@ -16,11 +16,11 @@ uint8 read_first(const uint1 *line);
 uint1 *identity_pointer(uint1 *buffer);
 void reset_line_reader(void);
 
-#ifdef KUNA_NATIVE
+#ifdef UNLACE_NATIVE
 uint8 outparam_branch_snapshot(int4 from_file, const uint1 *alternate);
 uint8 outparam_expression_safe(uint1 *buffer);
 #else
-/* KUNA_EMITTED_CODE */
+/* UNLACE_EMITTED_CODE */
 
 static size_t line_index;
 static uint1 line_bytes[] = {3, 5};

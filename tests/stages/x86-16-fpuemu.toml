@@ -1,9 +1,9 @@
-# kuna #1288: a DOS program linked with the 8087 emulator (DAZZLE.EXE,
+# unlace #1288: a DOS program linked with the 8087 emulator (DAZZLE.EXE,
 # Turbo C) carries no x87 opcodes. The linker turns each WAIT+ESC pair into
 # a software interrupt the emulator services: INT 34h+n stands for ESC
 # D8h+n and is followed by the ModR/M and displacement, INT 3Ch by a byte
 # holding the segment override (bits 6-7: DS SS CS ES) and the ESC opcode,
-# and INT 3Dh is FWAIT. kuna decoded them as interrupts, so the operand
+# and INT 3Dh is FWAIT. unlace decoded them as interrupts, so the operand
 # bytes became garbage instructions: FLD1 (CD 35 E8) read as INT 35h and a
 # near CALL to a phantom function.
 #

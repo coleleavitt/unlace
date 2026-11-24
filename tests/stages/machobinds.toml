@@ -1,7 +1,7 @@
 # Mach-O bound pointer slots named for their import (`option machobinds
 # on|off`, default on).
 #
-# kuna named an import slot only through the LC_DYSYMTAB indirect-symbol
+# unlace named an import slot only through the LC_DYSYMTAB indirect-symbol
 # table, so a pointer slot that dyld fills through a bind record but that no
 # indirect entry lists - a C function pointer or data pointer initialized to
 # an import, an arm64e __auth_ptr, a vtable entry - read as an anonymous
@@ -9,7 +9,7 @@
 # opcodes) name every such slot.
 #
 # Stage / sub-stage: P1 environment-binding, the Mach-O bound-slot pass
-# (`unlace-analysis/src/loader/kuna_machobinds.rs (MachoBindSlotsPass)`),
+# (`unlace-analysis/src/loader/unlace_machobinds.rs (MachoBindSlotsPass)`),
 # committed at `read symbols`, so `option machobinds` is set after `load
 # file`. The names go to the symbol table only, never the function inventory.
 #

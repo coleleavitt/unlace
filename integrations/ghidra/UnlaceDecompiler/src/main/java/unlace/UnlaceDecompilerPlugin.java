@@ -1,7 +1,7 @@
-/* kuna — Ghidra extension that swaps the native decompiler core for kuna.
- * Apache-2.0. kuna is derived from Ghidra (https://github.com/NationalSecurityAgency/ghidra).
+/* unlace — Ghidra extension that swaps the native decompiler core for unlace.
+ * Apache-2.0. unlace is derived from Ghidra (https://github.com/NationalSecurityAgency/ghidra).
  */
-package kuna;
+package unlace;
 
 import docking.action.ToggleDockingAction;
 import docking.action.builder.ToggleActionBuilder;
@@ -13,11 +13,11 @@ import ghidra.framework.plugintool.PluginTool;
 import ghidra.framework.plugintool.util.PluginStatus;
 
 /**
- * Swaps Ghidra's native decompiler core for kuna, the Rust port of the Ghidra decompiler.
+ * Swaps Ghidra's native decompiler core for unlace, the Rust port of the Ghidra decompiler.
  *
- * <p>On plugin load (File → Configure → Miscellaneous → KunaDecompilerPlugin) the plugin
+ * <p>On plugin load (File → Configure → Miscellaneous → UnlaceDecompilerPlugin) the plugin
  * resolves the {@code unlace_ghidra} binary shipped in this extension's
- * {@code os/<platform>/} directory (or the {@code -Dkuna.decompiler.exe} dev override)
+ * {@code os/<platform>/} directory (or the {@code -Dunlace.decompiler.exe} dev override)
  * and installs it as the executable behind
  * {@code ghidra.app.decompiler.DecompileProcessFactory}, the single choke point through
  * which every decompiler consumer in Ghidra spawns its native process. The native
@@ -25,9 +25,9 @@ import ghidra.framework.plugintool.util.PluginStatus;
  * of the tool at startup, the swap performed at plugin init precedes the first spawn.
  * When the plugin is instead enabled mid-session (a program is already open and its
  * decompiler process already spawned), that program keeps the stock core until its
- * process respawns; new spawns pick up kuna immediately.
+ * process respawns; new spawns pick up unlace immediately.
  *
- * <p>The Tools → Kuna Decompiler → "Use Kuna Core" checkbox toggles between the kuna
+ * <p>The Tools → Unlace Decompiler → "Use Unlace Core" checkbox toggles between the unlace
  * core and the stock {@code decompile} binary at any time. Either direction only
  * affects <em>future</em> process spawns: a program whose decompiler process is already
  * running keeps it until that process restarts (reopen the program, or the process is
@@ -41,23 +41,23 @@ import ghidra.framework.plugintool.util.PluginStatus;
 	status = PluginStatus.RELEASED,
 	packageName = MiscellaneousPluginPackage.NAME,
 	category = "Decompiler",
-	shortDescription = "Use kuna as the native decompiler core",
-	description = "Swaps the native decompiler core for kuna, the Rust port of the " +
+	shortDescription = "Use unlace as the native decompiler core",
+	description = "Swaps the native decompiler core for unlace, the Rust port of the " +
 		"Ghidra decompiler: points ghidra.app.decompiler.DecompileProcessFactory at the " +
 		"unlace_ghidra binary shipped with this extension, so every decompiler consumer in " +
-		"this Ghidra session (the Decompiler window, analyzers, scripts) spawns kuna " +
-		"instead of the stock 'decompile' process. Tools -> Kuna Decompiler -> " +
-		"'Use Kuna Core' toggles between the kuna core and the stock core; " +
+		"this Ghidra session (the Decompiler window, analyzers, scripts) spawns unlace " +
+		"instead of the stock 'decompile' process. Tools -> Unlace Decompiler -> " +
+		"'Use Unlace Core' toggles between the unlace core and the stock core; " +
 		"already-running decompiler processes keep their current core until they " +
 		"respawn (program reopen, or process error/timeout). Removing the plugin " +
 		"restores the stock core for future spawns."
 )
 //@formatter:on
-public class KunaDecompilerPlugin extends Plugin {
+public class UnlaceDecompilerPlugin extends Plugin {
 
-	private ToggleDockingAction useKunaAction;
+	private ToggleDockingAction useUnlaceAction;
 
-	public KunaDecompilerPlugin(PluginTool tool) {
+	public UnlaceDecompilerPlugin(PluginTool tool) {
 		super(tool);
 	}
 
@@ -66,19 +66,19 @@ public class KunaDecompilerPlugin extends Plugin {
 		super.init();
 
 		// Perform the swap now, before the user's first decompile can spawn a process.
-		boolean kunaActive = KunaCoreSwap.swapToKuna(this);
-		if (kunaActive) {
-			KunaCoreSwap.register(this);
+		boolean unlaceActive = UnlaceCoreSwap.swapToUnlace(this);
+		if (unlaceActive) {
+			UnlaceCoreSwap.register(this);
 		}
 
-		useKunaAction = new ToggleActionBuilder("Use Kuna Core", getName())
-				.menuPath(ToolConstants.MENU_TOOLS, "Kuna Decompiler", "Use Kuna Core")
-				.description("Checked: future decompiler processes spawn the kuna core " +
+		useUnlaceAction = new ToggleActionBuilder("Use Unlace Core", getName())
+				.menuPath(ToolConstants.MENU_TOOLS, "Unlace Decompiler", "Use Unlace Core")
+				.description("Checked: future decompiler processes spawn the unlace core " +
 					"(unlace_ghidra). Unchecked: the stock 'decompile' binary. Programs " +
 					"with an already-running decompiler process keep it until that " +
 					"process restarts (reopen the program, or the process is reset " +
 					"after an error/timeout).")
-				.selected(kunaActive)
+				.selected(unlaceActive)
 				.onAction(context -> onToggle())
 				.buildAndInstall(tool);
 	}
@@ -86,20 +86,20 @@ public class KunaDecompilerPlugin extends Plugin {
 	private void onToggle() {
 		// The docking framework flips the toggle state before invoking the callback,
 		// so isSelected() is the state the user just requested.
-		if (useKunaAction.isSelected()) {
-			if (KunaCoreSwap.swapToKuna(this)) {
-				KunaCoreSwap.register(this);
+		if (useUnlaceAction.isSelected()) {
+			if (UnlaceCoreSwap.swapToUnlace(this)) {
+				UnlaceCoreSwap.register(this);
 			}
 			else {
-				useKunaAction.setSelected(false); // swap failed: reflect reality
+				useUnlaceAction.setSelected(false); // swap failed: reflect reality
 			}
 		}
 		else {
-			// This tool no longer wants kuna; restore only once the last tool leaves.
-			if (KunaCoreSwap.unregister(this) == 0) {
-				if (!KunaCoreSwap.restoreStock(this)) {
-					KunaCoreSwap.register(this); // restore failed: kuna still active
-					useKunaAction.setSelected(true);
+			// This tool no longer wants unlace; restore only once the last tool leaves.
+			if (UnlaceCoreSwap.unregister(this) == 0) {
+				if (!UnlaceCoreSwap.restoreStock(this)) {
+					UnlaceCoreSwap.register(this); // restore failed: unlace still active
+					useUnlaceAction.setSelected(true);
 				}
 			}
 		}
@@ -107,12 +107,12 @@ public class KunaDecompilerPlugin extends Plugin {
 
 	@Override
 	protected void dispose() {
-		// Leaving the tool (or being un-configured) should not silently leave kuna as
+		// Leaving the tool (or being un-configured) should not silently leave unlace as
 		// the JVM-wide core. The factory field is static, so restore only when this was
-		// the LAST tool holding the kuna core — otherwise closing one tool would revert
-		// kuna for the others still using it.
-		if (KunaCoreSwap.unregister(this) == 0 && KunaCoreSwap.isKunaActive()) {
-			KunaCoreSwap.restoreStock(this);
+		// the LAST tool holding the unlace core — otherwise closing one tool would revert
+		// unlace for the others still using it.
+		if (UnlaceCoreSwap.unregister(this) == 0 && UnlaceCoreSwap.isUnlaceActive()) {
+			UnlaceCoreSwap.restoreStock(this);
 		}
 		super.dispose();
 	}

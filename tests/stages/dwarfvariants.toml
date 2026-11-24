@@ -1,4 +1,4 @@
-# kuna infrastructure test: DWARF variant-part import (part of `option dwarf`).
+# unlace infrastructure test: DWARF variant-part import (part of `option dwarf`).
 #
 # Stage / sub-stage: P1 program-prep, external-refinement (the DWARF importer).
 #

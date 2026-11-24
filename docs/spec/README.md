@@ -1,6 +1,6 @@
-# The kuna decompiler spec
+# The unlace decompiler spec
 
-This is the **live, normative description of the algorithms kuna runs** — what each
+This is the **live, normative description of the algorithms unlace runs** — what each
 phase computes, how the simple case is decided, what the pathological-case machinery
 does, and how each phase feeds the next. It is chaptered by pipeline phase; every
 chapter is anchored to the code that implements it.
@@ -28,17 +28,17 @@ chapter is anchored to the code that implements it.
    updates the affected chapter **in the same commit/PR**. Find the chapter via its
    `Anchors:` front-matter (chapters map 1:1 onto the phase folders). A pure
    move/rename updates only anchor paths. `python3 tools/check_spec.py` enforces the basics.
-2. **Live code only.** Every claim is anchored to a kuna path plus a symbol name in
+2. **Live code only.** Every claim is anchored to a unlace path plus a symbol name in
    parentheses — `crates/unlace-middle/src/p2_lift/jumptable.rs
    (JumpBasic::recoverModel)`. **No line numbers** (they rot). Upstream citations
    (`coreaction.cc:5722`, angr `.py` paths) appear only as parenthetical
    provenance/history, never as the basis of a claim.
 3. **Provenance tags.** Untagged prose describes the Ghidra-derived port (the default
    lineage). Everything else is tagged inline at the section heading and per pass:
-   `(angr)`, `(ida)`, `(kuna)` — agreeing with `source_decompiler` in `phases.toml`
-   and `docs/features/*/record.json`. One sanctioned exception: a kuna-original
+   `(angr)`, `(ida)`, `(unlace)` — agreeing with `source_decompiler` in `phases.toml`
+   and `docs/features/*/record.json`. One sanctioned exception: a unlace-original
    implementation whose row records `ghidra-upstream` because an upstream *issue*
-   (not upstream code) inspired it may be tagged `(kuna)` with the GH issue named.
+   (not upstream code) inspired it may be tagged `(unlace)` with the GH issue named.
 4. **Depth contract.** For each algorithm: (a) the decision rule for the simple case,
    in one or two sentences of natural language; (b) the pathological-case machinery
    (restarts, fallbacks, thresholds, caps) with the *reason* each exists; (c) the

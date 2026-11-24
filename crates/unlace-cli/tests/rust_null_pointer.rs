@@ -34,7 +34,7 @@ fn records() -> serde_json::Value {
         "--functions",
         NAMES,
         "--assert",
-        &format!("@{}", common::fixture("rust_null_pointer.kuna")),
+        &format!("@{}", common::fixture("rust_null_pointer.unlace")),
     ]));
     let doc: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
     assert_eq!(doc["functions"].as_array().unwrap().len(), 4);

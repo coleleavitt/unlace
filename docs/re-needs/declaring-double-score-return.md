@@ -28,7 +28,7 @@ reject_reason: null
 Recover the score with correct double prototypes while preserving the accumulated log result.
 
 > **Declaring a double score return disconnects the log result from its accumulator** (major, `69a54bd70f5b9757a6a5f72f`)
-> With only the address-bound log prototype, kuna retains log in the accumulator but declares the score void. Adding the correct double score prototype makes log a discarded expression and leaves uninitialized XMM fragments in its consumers. Typing the cookie helper and enabling calloverlap full do not repair this. Disassembly shows CALL at 0x140003452 immediately followed by ADDSD XMM6,XMM0. The solve remains partial because the executable requires model.nli, which is absent from the supplied target.
+> With only the address-bound log prototype, unlace retains log in the accumulator but declares the score void. Adding the correct double score prototype makes log a discarded expression and leaves uninitialized XMM fragments in its consumers. Typing the cookie helper and enabling calloverlap full do not repair this. Disassembly shows CALL at 0x140003452 immediately followed by ADDSD XMM6,XMM0. The solve remains partial because the executable requires model.nli, which is absent from the supplied target.
 
 ## Reproduction
 
@@ -38,7 +38,7 @@ Recover the score with correct double prototypes while preserving the accumulate
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x140003150",
@@ -73,7 +73,7 @@ Recover the score with correct double prototypes while preserving the accumulate
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x140003150",
@@ -126,7 +126,7 @@ _not yet refuted_
 ## Decision log
 
 - filed by cluster.py from 1 observation(s)
-- round 5 REFUTER: hypothesis **overturned** (was inconclusive). REFUTED IN-TICK (captain, round 5) on .kuna-repipe/arena/5/69a54bd70f5b9757a6a5f72f/target/Release.zip.__x/PolyMLP.exe with the release kuna at 38c461d1. NINE runs, one variable changed at a time.
+- round 5 REFUTER: hypothesis **overturned** (was inconclusive). REFUTED IN-TICK (captain, round 5) on .unlace-repipe/arena/5/69a54bd70f5b9757a6a5f72f/target/Release.zip.__x/PolyMLP.exe with the release unlace at 38c461d1. NINE runs, one variable changed at a time.
 
 VERDICT: OVERTURNED. The hypothesis blames the enclosing floating return ("locking the enclosing floating return may change XMM heritage partitioning and break nested call-output recovery"). I KILLED IT BY EXPERIMENT, and the real trigger is something nobody suspected: A PROTOTYPE ASSERTION ON A THIRD, UNRELATED CALLEE.
 
@@ -145,7 +145,7 @@ WHAT IS INNOCENT — each proven by a run, do not re-test these:
   * `--option calleepreserves off` (the killed-set narrowing pass from #434). Added to the GOOD command: still intact — so that pass is not what preserves XMM6 here either.
   * THE SHAPE OF THE cookie PROTOTYPE. `unsigned long long cookie(unsigned long long c)` breaks it. `void cookie(void)` breaks it. It is not void-ness, not the return type and not the parameter list: ANY prototype assertion on 0x140008140 breaks it.
 
-WHERE TO LOOK. XMM6 is NON-VOLATILE on Windows x64 and it is the accumulator (`ADDSD XMM6,XMM0`). The unlocked call at 0x14000351f evidently leaves XMM6 alone; the locked one does not. The question to answer FIRST is whether locking a prototype replaces that call spec's effect / killedbycall set with the prototype model's default and thereby drops a preserved-register answer kuna had derived — i.e. does an asserted prototype arrive carrying an EMPTY effect list that then reads as "kills everything the model kills"? Same family as #434 (`calleepreserves`: the ABI's killed set is an answer about the CONVENTION, not about this callee), but reached through the assertion plane rather than through the cspec, and #434's own prose says "a proto carrying its own effect override is left alone" — check what an asserted proto carries.
+WHERE TO LOOK. XMM6 is NON-VOLATILE on Windows x64 and it is the accumulator (`ADDSD XMM6,XMM0`). The unlocked call at 0x14000351f evidently leaves XMM6 alone; the locked one does not. The question to answer FIRST is whether locking a prototype replaces that call spec's effect / killedbycall set with the prototype model's default and thereby drops a preserved-register answer unlace had derived — i.e. does an asserted prototype arrive carrying an EMPTY effect list that then reads as "kills everything the model kills"? Same family as #434 (`calleepreserves`: the ABI's killed set is an answer about the CONVENTION, not about this callee), but reached through the assertion plane rather than through the cspec, and #434's own prose says "a proto carrying its own effect override is left alone" — check what an asserted proto carries.
 
 WHAT THIS DOES TO THE NEED, AND IT MATTERS FOR DISPATCH:
   * IT IS MIS-TRACKED. Filed `quality`, but the defect is an ASSERTION causing wrong output elsewhere in the function — the same plane b-r5-rejected-flow-ov is live in. It is not the same cluster and not the same file, but a builder must not be sent at this while that one is mid-flight without reading its branch first. Re-track at T_TRIAGE.

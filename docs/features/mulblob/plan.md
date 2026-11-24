@@ -2,7 +2,7 @@
 
 ## Change
 
-One new module, `decompiler/crates/kuna-decomp/src/p3_dataflow/mulblob.rs`,
+One new module, `decompiler/crates/unlace-decomp/src/p3_dataflow/mulblob.rs`,
 exporting `declines_zext(&Funcdata, OpId) -> bool` plus the `OptionMulBlob`
 value parser. `RulePieceStructure` consults it at its three
 `convert_zext_to_piece` sites (the direct `INT_ZEXT` entry arm, the extension

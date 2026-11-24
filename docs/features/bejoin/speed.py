@@ -1,6 +1,6 @@
 """Interleaved min-of-N whole-binary decompile-all timing: two frozen release binaries (main vs the fix).
 
-usage: speed.py N OUT.json MAIN_KUNA FIX_KUNA   (SPEED_BINS=fmt,ls,sort,bash; SLEIGHHOME set)
+usage: speed.py N OUT.json MAIN_UNLACE FIX_UNLACE   (SPEED_BINS=fmt,ls,sort,bash; SLEIGHHOME set)
 """
 import json, os, statistics, subprocess, sys, time
 R = "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11/O2"
@@ -10,7 +10,7 @@ BINS = [(n, p) for n, p in [("fmt", f"{R}/coreutils/stripped/fmt"), ("ls", f"{R}
 ARMS = {"main": sys.argv[3], "fix": sys.argv[4]}
 SP = os.environ.get("SLEIGHHOME", "specs")
 N = int(sys.argv[1]) if len(sys.argv) > 1 else 15
-env = dict(os.environ, SLEIGHHOME=SP, KUNA_SPECS=SP)
+env = dict(os.environ, SLEIGHHOME=SP, UNLACE_SPECS=SP)
 out = {}
 for name, b in BINS:
     t = {a: [] for a in ARMS}

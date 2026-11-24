@@ -2,7 +2,7 @@
 
 ## 1. The opportunity
 
-`libcsigs` grew kuna's built-in libc prototype table from 27 entries to 206. Which
+`libcsigs` grew unlace's built-in libc prototype table from 27 entries to 206. Which
 names it took was decided by one question: *which callee, if typed, would move
 `type_match` on a case a rival decompiler already gets right?* That question is a
 good one and it is also narrow. It never asks which callees the corpus actually
@@ -13,14 +13,14 @@ inferred integer, because nothing in the program says what the pointer addresses
 and the callee has no declaration to say it either.
 
 The round-F ptr_char census (`gap.md`) measured the cost on the campaign's 444
-slices: of the 878 ground-truth `char *` variables binja gets right and kuna does
-not, **158 sit in a function that calls a libc import kuna cannot type**, across
+slices: of the 878 ground-truth `char *` variables binja gets right and unlace does
+not, **158 sit in a function that calls a libc import unlace cannot type**, across
 35 distinct names. 33 of the 35 are reachable under the existing rejection rule.
 
 A runnable witness, against an unpatched tree:
 
 ```
-$ kuna decompile-all <O0>/coreutils/stripped/ginstall --addr 0xb57a
+$ unlace decompile-all <O0>/coreutils/stripped/ginstall --addr 0xb57a
 unsigned int sub_b57a(unsigned int a0,unsigned long a1,unsigned int a2)
 {
   if ((((a2 & 0xf000) != 0xa000) && (!sub_1db12())) && (faccessat(a0,a1,2,0x200)))
@@ -39,7 +39,7 @@ The selection rule is mechanical and re-runnable (`corpus_imports.py`,
 
 > a name is admitted when it is an **undefined** `FUNC` symbol (and not also
 > defined) in **at least three** of the 665 dynamically linked binaries of the
-> frozen decbench corpus, kuna's shipped tables do not already carry it, and its
+> frozen decbench corpus, unlace's shipped tables do not already carry it, and its
 > platform declaration reduces **whole** to the width-stable `Ty` vocabulary.
 
 1,775 distinct undefined names appear across those binaries. 264 of the ones the
@@ -84,12 +84,12 @@ pointer-width on every ILP32/LP64 target. What it costs here, by corpus binaries
 | `context_*` (libselinux) | 24 | `context_t` |
 | `llabs` | 18 | returns `long long int` |
 
-`strtoll` and `strtoumax` are the two most widely imported names kuna still
+`strtoll` and `strtoumax` are the two most widely imported names unlace still
 cannot type at all, and both are rejected only for their **return**: their
 parameters (`const char *`, `char **`, `int`) are exactly the `char *` evidence
 this lane is chasing. Admitting them needs a fixed-width 64-bit member of `Ty`,
 which is a separate decision with its own risk surface (is `long long` exactly 8
-bytes on every target kuna has a compiler spec for?) and is deliberately not
+bytes on every target unlace has a compiler spec for?) and is deliberately not
 taken here. `a_sixty_four_bit_return_is_still_rejected` pins all five as absent
 so a later widening pass cannot let them drift in silently.
 

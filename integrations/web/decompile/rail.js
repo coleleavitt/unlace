@@ -61,7 +61,7 @@ function changesPart(model) {
     '<svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="3" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="13" cy="8" r="1.5"/></svg>' +
     '<span class="d2-sr">More</span></button>' +
     '<div class="d2-menu d2-changesmenu" data-menu="changes" role="menu" hidden>' +
-    `<button class="d2-mi" role="menuitem" data-act="export"${n ? '' : ' disabled'}>Export changes<small>a .kuna file the command line can replay</small></button>` +
+    `<button class="d2-mi" role="menuitem" data-act="export"${n ? '' : ' disabled'}>Export changes<small>a .unlace file the command line can replay</small></button>` +
     '<button class="d2-mi" role="menuitem" data-act="import">Import changes</button>' +
     `<button class="d2-mi" role="menuitem" data-act="copy-cli"${n ? '' : ' disabled'}>Copy command line</button>` +
     `<button class="d2-mi" role="menuitem" data-act="clear"${n ? '' : ' disabled'}>Clear all</button>` +

@@ -4,10 +4,10 @@ Usage: speed-cpu.py N <bin,bin,...> relative to the decbench results tree.
 """
 import os, resource, subprocess, sys, statistics
 R = "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11"
-K = os.environ.get("KUNA_BIN", "/home/mahaloz/kwt/callbacktype/decompiler/target/release/kuna")
+K = os.environ.get("UNLACE_BIN", "/home/mahaloz/kwt/callbacktype/decompiler/target/release/unlace")
 SP = "/home/mahaloz/kwt/callbacktype/specs"
 N = int(sys.argv[1])
-env = dict(os.environ, SLEIGHHOME=SP, KUNA_SPECS=SP)
+env = dict(os.environ, SLEIGHHOME=SP, UNLACE_SPECS=SP)
 for b in sys.argv[2].split(","):
     t = {"off": [], "on": []}
     for i in range(N):

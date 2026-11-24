@@ -19,7 +19,7 @@ for name in which:
     for i in range(N):
         order = list(ARMS) if i % 2 == 0 else list(ARMS)[::-1]
         for lab in order:
-            env = dict(os.environ, SLEIGHHOME=SP, KUNA_SPECS=SP)
+            env = dict(os.environ, SLEIGHHOME=SP, UNLACE_SPECS=SP)
             t0 = time.perf_counter()
             p = subprocess.run([K, "decompile-all", b, "--json", "--max-fn-seconds", "120"] + ARMS[lab],
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)

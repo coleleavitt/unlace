@@ -1,11 +1,11 @@
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 import subprocess,os,time,json,hashlib,signal,re,shutil
-r=Path("/home/mahaloz/kwt/angr-rust-fmt-write");w=Path("/tmp/kuna-rust-fmt-write-optin")
-env=os.environ|{'PATH':'/tmp/kuna-toolchains/go1.27.3/go/bin:'+os.environ['PATH'],'CARGO_INCREMENTAL':'0','CARGO_PROFILE_DEV_DEBUG':'0','CARGO_PROFILE_TEST_DEBUG':'0','CARGO_BUILD_JOBS':'8','RUST_TEST_THREADS':'8'}
+r=Path("/home/mahaloz/kwt/angr-rust-fmt-write");w=Path("/tmp/unlace-rust-fmt-write-optin")
+env=os.environ|{'PATH':'/tmp/unlace-toolchains/go1.27.3/go/bin:'+os.environ['PATH'],'CARGO_INCREMENTAL':'0','CARGO_PROFILE_DEV_DEBUG':'0','CARGO_PROFILE_TEST_DEBUG':'0','CARGO_BUILD_JOBS':'8','RUST_TEST_THREADS':'8'}
 def run(r,w,cmd,log,cwd=None):
  with(w/log).open('w')as f:
-  p=subprocess.Popen(cmd,cwd=cwd or r,env=env|{'KUNA_SPECS':str(r/'specs'),'SLEIGHHOME':str(r/'specs'),'PYTHONPATH':str(r)},stdout=f,stderr=subprocess.STDOUT,start_new_session=True)
+  p=subprocess.Popen(cmd,cwd=cwd or r,env=env|{'UNLACE_SPECS':str(r/'specs'),'SLEIGHHOME':str(r/'specs'),'PYTHONPATH':str(r)},stdout=f,stderr=subprocess.STDOUT,start_new_session=True)
   while p.poll()is None:
    m={s.split(':')[0]:int(s.split()[1])for s in Path('/proc/meminfo').read_text().splitlines()}
    if 1-m['MemAvailable']/m['MemTotal']>=.9:
@@ -18,13 +18,13 @@ source={p:hashlib.sha256((r/p).read_bytes()).hexdigest()for p in files if(r/p).i
 (w/'production-source-before-validation.json').write_text(json.dumps(source,indent=2)+'\n')
 def gates():
  for target,log in [('test','original.log'),('test-stages','stages.log'),('test-tools','tools.log'),('lint','lint.log'),('check-spec','spec.log')]:run(r,w,['make',target],log)
- run(r,w,['decompiler/target/release/kuna','catalog','--check'],'catalog.log')
+ run(r,w,['decompiler/target/release/unlace','catalog','--check'],'catalog.log')
  run(r,w,['python3','-m','scripts.repipe.counters','--check'],'counters.log')
 with ThreadPoolExecutor(max_workers=2)as pool:
  fs=[pool.submit(run,r,w,['make','rust-test'],'workspace-final.log'),pool.submit(gates)]
  for f in fs:f.result()
 assert all(hashlib.sha256((r/p).read_bytes()).hexdigest()==h for p,h in source.items())
 debug=r/'decompiler/target/debug';assert debug.resolve()==debug and not debug.is_symlink();shutil.rmtree(debug)
-(w/'gates-passed.json').write_text(json.dumps({'all_four_gates_passed':True,'additional_tools_lint_catalog_counters_passed':True,'original_assertions':675,'stage_assertions':3541,'production_files_unchanged':len(source),'release_sha256':hashlib.sha256((r/'decompiler/target/release/kuna').read_bytes()).hexdigest()},indent=2)+'\n')
+(w/'gates-passed.json').write_text(json.dumps({'all_four_gates_passed':True,'additional_tools_lint_catalog_counters_passed':True,'original_assertions':675,'stage_assertions':3541,'production_files_unchanged':len(source),'release_sha256':hashlib.sha256((r/'decompiler/target/release/unlace').read_bytes()).hexdigest()},indent=2)+'\n')
 print(r.name,'ALL OPT-IN GATES PASSED',flush=True)
 print("FOURTH OPT-IN ALL GATES PASSED",flush=True)

@@ -20,7 +20,7 @@
 # tests/stages/ghangr-condfold.xml by construction, and
 # tests/stages/ghangr-condfold-newbury.xml because at `wide` Rule A's budget
 # also admits its guard blocks and Rule A is tried first (measured with
-# KUNA_CONDFOLD_DEBUG=1: 2 `prefix` folds per engine, 0 `shape`).  Neither
+# UNLACE_CONDFOLD_DEBUG=1: 2 `prefix` folds per engine, 0 `shape`).  Neither
 # would notice if Rule B were deleted.  This one would.
 #
 # WHAT MAKES IT RULE-B-ONLY.  The shared printed-width budget cannot separate
@@ -65,7 +65,7 @@
 # comma-separated under modifiers::COMMA_SEPARATE.  C's short-circuit plus
 # comma sequencing therefore preserves both the order and the conditionality
 # of su_log / su_euid / su_egid, which is why predicates that call functions
-# need no purity analysis.  See p8_structure/kuna_condfold.rs.
+# need no purity analysis.  See p8_structure/unlace_condfold.rs.
 #
 # WITNESS.  Self-contained, no relocations, no data references: gcc -O2
 # output for

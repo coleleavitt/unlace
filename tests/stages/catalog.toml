@@ -1,9 +1,9 @@
-# kuna infrastructure test: the LLM-settable assertion catalog (`stage catalog`).
+# unlace infrastructure test: the LLM-settable assertion catalog (`stage catalog`).
 #
 # This is the discovery surface an external operator (human or LLM) reads to choose
 # which sub-phase assertion to flip and how (then flips it via the
-# kuna.decompile option/kassert flags). The catalog is a single C++
-# table (kuna_stages.cc settableTable) emitted as JSON; `python -m kuna.catalog`
+# unlace.decompile option/kassert flags). The catalog is a single C++
+# table (kuna_stages.cc settableTable) emitted as JSON; `python -m unlace.catalog`
 # parses it and `docs/options.md` is generated from the same registry.
 #
 # These assertions pin the JSON contract the Python tooling depends on:
@@ -49,73 +49,73 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-CATALOG #1: compareform documented with its post-DIV-2 default and P3 address'
+name = 'UNLACE-CATALOG #1: compareform documented with its post-DIV-2 default and P3 address'
 count = 1
 literal = '"option": "compareform", "values": ["canonical", "original"], "default": "original", "current": "original", "destructive_as_default": false, "phase": "P3"'
 
 [[match]]
-name = 'KUNA-CATALOG #2: arraynotation documented as default-on, P9 pointer-notation'
+name = 'UNLACE-CATALOG #2: arraynotation documented as default-on, P9 pointer-notation'
 count = 1
 literal = '"option": "arraynotation", "values": ["on", "off"], "default": "on", "current": "on", "destructive_as_default": false, "phase": "P9"'
 
 [[match]]
-name = 'KUNA-CATALOG #3: returnpair flagged destructive-as-default so an agent keeps it opt-in'
+name = 'UNLACE-CATALOG #3: returnpair flagged destructive-as-default so an agent keeps it opt-in'
 count = 2
 literal = '"option": "returnpair", "values": ["pair", "single"], "default": "pair", "current": "pair", "destructive_as_default": true'
 
 [[match]]
-name = 'KUNA-CATALOG #4: v850indirectbranch is a V850-gated default ()'
+name = 'UNLACE-CATALOG #4: v850indirectbranch is a V850-gated default ()'
 count = 1
 literal = '"option": "v850indirectbranch", "values": ["on", "off"], "default": "on", "current": "on", "destructive_as_default": false'
 
 [[match]]
-name = 'KUNA-CATALOG #5: each settable carries symptom-keyed use_when guidance for the operator'
+name = 'UNLACE-CATALOG #5: each settable carries symptom-keyed use_when guidance for the operator'
 # One per catalog row: every registry row and each of the eight single-option queries.
 count = { settables = {}, plus = 8 }
 literal = '"use_when": '
 
 [[match]]
-name = 'KUNA-CATALOG #6: angr-derived features carry source_decompiler provenance'
+name = 'UNLACE-CATALOG #6: angr-derived features carry source_decompiler provenance'
 count = { settables = { source_decompiler = "angr" } }
 literal = '"source_decompiler": "angr"'
 
 [[match]]
-name = 'KUNA-CATALOG #7: change_kind structure-recovery tags the structure reconstructors'
+name = 'UNLACE-CATALOG #7: change_kind structure-recovery tags the structure reconstructors'
 count = { settables = { change_kind = "structure-recovery" } }
 literal = '"change_kind": "structure-recovery"'
 
 [[match]]
-name = 'KUNA-CATALOG #8: the opt-in-tool change_kind counts explicitly opted transformations (one more for the returnpair query)'
+name = 'UNLACE-CATALOG #8: the opt-in-tool change_kind counts explicitly opted transformations (one more for the returnpair query)'
 count = { settables = { change_kind = "opt-in-tool" }, plus = 1 }
 literal = '"change_kind": "opt-in-tool"'
 
 [[match]]
-name = 'KUNA-CATALOG #9: every settable carries a machine-readable change_kind so an LLM can judge default-on eligibility'
+name = 'UNLACE-CATALOG #9: every settable carries a machine-readable change_kind so an LLM can judge default-on eligibility'
 count = { settables = {}, plus = 8 }
 literal = '"change_kind": '
 
 [[match]]
-name = 'KUNA-CATALOG #10: fast whole-project discovery is default-off but live-toggleable'
+name = 'UNLACE-CATALOG #10: fast whole-project discovery is default-off but live-toggleable'
 count = 1
 literal = '"option": "fast_funcdisc", "values": ["on", "off"], "default": "off", "current": "on", "destructive_as_default": false, "phase": "P1"'
 
 [[match]]
-name = 'KUNA-CATALOG #12: scalar ARM hard-float inputs are a VFP-ABI-gated default'
+name = 'UNLACE-CATALOG #12: scalar ARM hard-float inputs are a VFP-ABI-gated default'
 count = 1
 literal = '"option": "armfloatargs", "values": ["on", "off"], "default": "on", "current": "on"'
 
 [[match]]
-name = 'KUNA-CATALOG #13: validated A32 inventory frames are the default'
+name = 'UNLACE-CATALOG #13: validated A32 inventory frames are the default'
 count = 2
 literal = '"option": "armframes", "values": ["inventory", "on", "off"], "default": "inventory", "current": "inventory"'
 
 [[match]]
-name = 'KUNA-CATALOG #14: full ARM frames are explicitly enabled'
+name = 'UNLACE-CATALOG #14: full ARM frames are explicitly enabled'
 count = 1
 literal = '"option": "armframes", "values": ["inventory", "on", "off"], "default": "inventory", "current": "on"'
 
 [[match]]
-name = 'KUNA-CATALOG #15: every registry row plus eight individual queries'
+name = 'UNLACE-CATALOG #15: every registry row plus eight individual queries'
 count = { settables = {}, plus = 8 }
 literal = '"option": '
 
@@ -125,21 +125,21 @@ count = 1
 literal = '"option": "globalarrayanchor", "values": ["on", "off"], "default": "off", "current": "off"'
 
 [[match]]
-name = 'KUNA-CATALOG #16: standard C byte-array rendering is explicitly opt-in'
+name = 'UNLACE-CATALOG #16: standard C byte-array rendering is explicitly opt-in'
 count = 2
 literal = '"option": "bytearrayc", "values": ["on", "off"], "default": "off", "current": "off"'
 
 [[match]]
-name = 'KUNA-CATALOG #17: standard C byte-array rendering exposes its live state'
+name = 'UNLACE-CATALOG #17: standard C byte-array rendering exposes its live state'
 count = 1
 literal = '"option": "bytearrayc", "values": ["on", "off"], "default": "off", "current": "on"'
 
 [[match]]
-name = 'KUNA-CATALOG FID defaults off'
+name = 'UNLACE-CATALOG FID defaults off'
 count = 2
 literal = '"option": "fid", "values": ["on", "off", "strict"], "default": "off", "current": "off"'
 
 [[match]]
-name = 'KUNA-CATALOG FID strict is live'
+name = 'UNLACE-CATALOG FID strict is live'
 count = 1
 literal = '"option": "fid", "values": ["on", "off", "strict"], "default": "off", "current": "strict"'

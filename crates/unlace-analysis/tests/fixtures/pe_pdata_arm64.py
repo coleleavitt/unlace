@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Probe: a minimal ARM64 PE32+ whose .pdata holds 8-byte ARM RUNTIME_FUNCTION
 records ({BeginAddress, UnwindData}), not the 12-byte x64 form.  Used to check
-whether kuna's fixed 12-byte `pdata_begins` stride misreads an ARM64 image."""
+whether unlace's fixed 12-byte `pdata_begins` stride misreads an ARM64 image."""
 import os, struct
 IMAGE_BASE=0x140000000; SECT_ALIGN=0x1000; FILE_ALIGN=0x200
 TEXT_RVA=0x1000; PDATA_RVA=0x2000

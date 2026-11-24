@@ -11,7 +11,7 @@
 # class size is not in the name, so `msvcsig` declares `Note` only.
 #
 # Stage / sub-stage: P6 stack-pointer-flow (`StackSolver::build`'s guessed
-# equation for an unknown extrapop, `p6_variables/kuna_calleepopslot.rs`).
+# equation for an unknown extrapop, `p6_variables/unlace_calleepopslot.rs`).
 #
 # The fixture `calleepopslot_i386.exe` is the issue's clean-room repro,
 # assembled from `calleepopslot_i386.asm` (see the fixtures README).

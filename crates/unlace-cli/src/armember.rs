@@ -410,7 +410,7 @@ fn stage(archive: &str, member: &Member<'_>) -> std::io::Result<(tempfile::TempD
             .file_name()
             .map_or_else(|| fallback.into(), |n| n.to_os_string())
     };
-    let dir = tempfile::Builder::new().prefix("kuna_ar_").tempdir()?;
+    let dir = tempfile::Builder::new().prefix("unlace_ar_").tempdir()?;
     let inner = dir.path().join(base(archive, "archive"));
     std::fs::create_dir(&inner)?;
     let path = inner.join(base(&member.stored, "member.o"));
@@ -434,7 +434,7 @@ fn functions_of_all(path: &str, members: &[Member<'_>], argv: &[String]) -> i32 
     let exe = match std::env::current_exe() {
         Ok(exe) => exe,
         Err(e) => {
-            eprintln!("error: cannot re-run kuna for each member: {e}");
+            eprintln!("error: cannot re-run unlace for each member: {e}");
             return 1;
         }
     };

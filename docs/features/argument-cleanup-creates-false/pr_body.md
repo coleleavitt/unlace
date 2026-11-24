@@ -1,7 +1,7 @@
 ## The problem
 
 A cdecl function that cleans up call arguments before an internal jump is cut in
-half: kuna reads the `add esp,8` in front of the jump as a frame teardown, calls
+half: unlace reads the `add esp,8` in front of the jump as a frame teardown, calls
 the jump a tail call, and emits everything after the jump as a separate callee.
 Paste this and build it with `gcc -m32 -nostdlib -no-pie -o t t.s`:
 
@@ -30,7 +30,7 @@ classify:
 helper: movl 4(%esp), %eax; addl $0x5a5a5a, %eax; ret
 ```
 
-`kuna decompile ./t classify`:
+`unlace decompile ./t classify`:
 
 ```c
 unsigned int classify(int a0)

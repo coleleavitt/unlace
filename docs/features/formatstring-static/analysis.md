@@ -3,7 +3,7 @@
 ## The opportunity
 
 A `printf`/`scanf`-family call states the types of its variadic arguments in its
-format string. kuna could already read that — `formatstring` has shipped the
+format string. unlace could already read that — `formatstring` has shipped the
 ported Ghidra `FormatStringParser` and its per-call-site prototype override since
 the analysis tier landed — but only through Ghidra's own mechanism, which is
 `DecompilerDependent`: the format pointer is an input varnode of a lifted `CALL`,
@@ -317,7 +317,7 @@ return a + 1;` rendered `return 6;` with the prototype closed (clang `-O1` and
 up), and a `"%c %c"` pair `return 0;`.
 
 So the override is no longer installed closed
-(`decompiler/crates/kuna-decomp/src/p4_calls/formattail.rs`, spec
+(`decompiler/crates/unlace-decomp/src/p4_calls/formattail.rs`, spec
 chapter 04). The call gets its declared arguments followed by `...`
 (`first_var_arg_slot` = the declared count), is offered and scores the trials
 past them exactly as under `off`, and sheds whatever it took there, and the
@@ -539,7 +539,7 @@ Two denominators, because they answer different questions.
 **In the image** (`objdump`, every direct `call`/`jmp` whose target is the PLT
 stub of a format callee the resolver accepts) is the honest total. **Seen** is
 what the Listing/xref tier actually hands the pass — fewer, for a reason below.
-`KUNA_FMTSTATIC_DEBUG=1 kuna decompile-all <binary> --option formatstring full`
+`UNLACE_FMTSTATIC_DEBUG=1 unlace decompile-all <binary> --option formatstring full`
 traces each site the resolver considered and what it decided; the `loop-only`
 column is what the second decompile then found on top.
 
@@ -566,7 +566,7 @@ is the Listing's own walk coverage. On x86-64 the recursive descent is seeded
 from `listing_seeds` only — the `committed_entries` inventory is added as walk
 roots under the `funcstart_patterns` gate, which is off for x86-64 — so a
 function that only a load-time entry oracle found contributes no instructions and
-no edges. `gzip` is the pure case: `kuna xrefs --to 0x3520` reports all six
+no edges. `gzip` is the pure case: `unlace xrefs --to 0x3520` reports all six
 `__snprintf_chk` call sites, and `Listing::refs_to(0x3520)` reports none, so
 `gzip`'s whole-binary output is byte-identical on all three values. Widening the
 walk's seed set would lift this ceiling for every Listing consumer at once

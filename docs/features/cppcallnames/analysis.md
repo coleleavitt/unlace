@@ -1,14 +1,14 @@
-# cppcallnames — a C++ call site renders `sub_<addr>` for a name kuna already knows
+# cppcallnames — a C++ call site renders `sub_<addr>` for a name unlace already knows
 
-Filed against `kuna decompile` / `decompile-all` on unstripped C++ ELFs. The
+Filed against `unlace decompile` / `decompile-all` on unstripped C++ ELFs. The
 witness suite is a purpose-built probe (`probe.cpp`, `g++ -O0`/`-O2`) plus three
 vendored fixtures already in the tree: `cpp_noreturn_x86_64`, `cpp_mangled_x86_64`,
 `eh_lsda_x86_64`.
 
 ## The symptom
 
-kuna knows the demangled C++ names — `kuna functions <bin> --json` lists them, and
-`kuna decompile <bin> 'Account::deposit'` resolves and decompiles by that name — but
+unlace knows the demangled C++ names — `unlace functions <bin> --json` lists them, and
+`unlace decompile <bin> 'Account::deposit'` resolves and decompiles by that name — but
 the printer emitted a placeholder at every call site:
 
 ```c
@@ -28,7 +28,7 @@ IDA Pro 9.2 and Ghidra 12.1 both render the qualified names on the same binary
 demangler problem. It is not: demangling works, and a demangled name with **no
 namespace** (`_Z8topleveli` -> `toplevel`) also rendered fine.
 
-A second, independent defect on the same surface: `kuna decompile <bin> --addr
+A second, independent defect on the same surface: `unlace decompile <bin> --addr
 0x271c` printed the header as `sub_271c` even on an **unstripped** binary, while the
 by-name path printed `Account::deposit`.
 
@@ -36,15 +36,15 @@ by-name path printed `Account::deposit`.
 
 Three candidate causes were checked and all three are wrong: the name is *not*
 stored only as an alias, there is *no* identifier filter rejecting `::`, and the
-call-site path reads the *same* symbol table `kuna functions` does.
+call-site path reads the *same* symbol table `unlace functions` does.
 
 The defect is **scope shadowing introduced by the analysis commit seam**, and it is
 mode-dependent:
 
 | surface | `Account::deposit` call site |
 |---|---|
-| `kuna decompile ... --mode reliable` | `Account::deposit(a,amount)` (correct) |
-| `kuna decompile ...` (default `auto` -> `aggressive` under 500 KiB) | `sub_271c(a,amount)` (wrong) |
+| `unlace decompile ... --mode reliable` | `Account::deposit(a,amount)` (correct) |
+| `unlace decompile ...` (default `auto` -> `aggressive` under 500 KiB) | `sub_271c(a,amount)` (wrong) |
 | `--option fast_funcdisc off --option funcstart_patterns off` | `Account::deposit(a,amount)` (correct) |
 
 Turning off *either* discovery pass alone was not enough — both re-report the same
@@ -135,7 +135,7 @@ signature change, every diff exactly `-N/+N`:
   These render the symbol's **base** name unqualified, because that render path
   (`Funcdata::link_spacebase_symbol` -> `Architecture::name_for_global_varnode`) uses
   the *unscoped* helper, unlike the `ActionNameVars` global path which applies
-  `kuna_qualify_global_name`. That gap is **pre-existing and unrelated**: on `main`
+  `unlace_qualify_global_name`. That gap is **pre-existing and unrelated**: on `main`
   the same probe already emits `{virtual override thunk}` in exactly this position,
   and `void Account::~Account(void)` as a function header. This change only makes
   the path reachable for three more symbols; it is strictly more information than
@@ -175,10 +175,10 @@ project-export policy decision, not a printer fix. Recorded as a follow-up.
    (`build_header` / `build_c`).
 2. **Address-taken function names are unqualified** —
    `Funcdata::link_spacebase_symbol`
-   (`decompiler/crates/kuna-decomp/src/substrate/funcdata_varnode.rs`) binds
+   (`decompiler/crates/unlace-decomp/src/substrate/funcdata_varnode.rs`) binds
    `Architecture::name_for_global_varnode`'s *base* name onto the high, where the
    `ActionNameVars` path next to it uses `name_for_global_varnode_scoped` +
-   `kuna_qualify_global_name`. Threading the scope path through would render
+   `unlace_qualify_global_name`. Threading the scope path through would render
    `Shape::perimeter` instead of `perimeter`. Pre-existing; 3 lines in this sweep.
 3. **The two sibling commit arms** (`out.symbols`, `read_loader_symbols`) still use a
    scope-local probe. Neither was implicated by any witness — the passes that emit
@@ -188,7 +188,7 @@ project-export policy decision, not a printer fix. Recorded as a follow-up.
    Surfaced (not caused) by the `verify_multiformat_dwarf` baseline change: on
    `macho_dwarf.o` the symtab entry `_l0` is installed first, so the DWARF pass's
    `first_byte` fact is skipped by the existing overlap check and lives only in the
-   `register_symbol` stream. `kuna functions` therefore reports `first_byte` (the
+   `register_symbol` stream. `unlace functions` therefore reports `first_byte` (the
    canonical-entry ranking prefers it) while `--addr 0x0` reports `_l0` (the
    Database). Both are "a real symbol", so `entry_name_rank`'s preference and the
    Database's first-writer-wins disagree. Pre-existing on both sides of this change;

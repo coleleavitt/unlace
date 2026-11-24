@@ -9,23 +9,23 @@
   "default": "on",
   "div": "DIV-111",
   "touches": [
-    "decompiler/crates/kuna-analysis",
+    "decompiler/crates/unlace-analysis",
     "decompiler/crates/console",
-    "decompiler/crates/kuna-decomp"
+    "decompiler/crates/unlace-decomp"
   ],
   "summary": "The Mach-O LC_MAIN entry routine is named `main` through the existing entry_names overlay and declared `int main(int argc, char **argv)`, so a stripped macOS binary stops reporting the one function an agent needs first as one more sub_<addr> in an inventory of them.",
   "decisions": [
     {
       "what": "the filed hypothesis STANDS, and the address half was already there",
-      "detail": "Filed: 'entrymainproto handles CRT call-site recovery but the Mach-O LC_MAIN loader path does not label/type the entry routine.' Correct as stated. What the reproduction added is that kuna's Mach-O entry oracle 1 (macho_entry.rs) ALREADY reads LC_MAIN and already discovers __TEXT.vmaddr + entryoff as a function start -- crackme0x04's sub_100003a80 IS that address. Only the name and the prototype were missing, which is why this is a naming/prototype pass over an address the loader hands it rather than any new discovery."
+      "detail": "Filed: 'entrymainproto handles CRT call-site recovery but the Mach-O LC_MAIN loader path does not label/type the entry routine.' Correct as stated. What the reproduction added is that unlace's Mach-O entry oracle 1 (macho_entry.rs) ALREADY reads LC_MAIN and already discovers __TEXT.vmaddr + entryoff as a function start -- crackme0x04's sub_100003a80 IS that address. Only the name and the prototype were missing, which is why this is a naming/prototype pass over an address the loader hands it rather than any new discovery."
     },
     {
       "what": "default-ON is forced by the acceptance probe, and the four gates cannot vouch for it",
-      "detail": "The acceptance runs plain `kuna functions <bin> --json` with no --option, so a default-OFF option cannot close the need. The captain's B_PLAN note is right that '0/675 assertions changed' is NOT evidence here: both parity corpora are symbol-less ELF bytechunks, so no Mach-O loader/naming change can move them in either direction. The evidence supplied instead is the 23-image Mach-O sweep below, the three-test end-to-end two-pass gate in console, the four unit tests over the pure seam, and the promoted tests/cli probe on a new in-repo stripped Mach-O fixture."
+      "detail": "The acceptance runs plain `unlace functions <bin> --json` with no --option, so a default-OFF option cannot close the need. The captain's B_PLAN note is right that '0/675 assertions changed' is NOT evidence here: both parity corpora are symbol-less ELF bytechunks, so no Mach-O loader/naming change can move them in either direction. The evidence supplied instead is the 23-image Mach-O sweep below, the three-test end-to-end two-pass gate in console, the four unit tests over the pure seam, and the promoted tests/cli probe on a new in-repo stripped Mach-O fixture."
     },
     {
       "what": "the name is `main`, not `_main`",
-      "detail": "The Mach-O leading underscore is the assembler's C-symbol decoration. kuna already strips it for IMPORTS (macho_stubs::strip_leading_underscore) but not for defined symbols, which is why the unstripped twin reports `_main`. This pass mints the C name directly. Consequence worth naming: the acceptance's filed regex `name.*main` is satisfied by `_main` too, so the promoted probe tightens it to the exact `\"name\": \"main\"` line plus the absence of the pre-fix `sub_1000005b0` -- otherwise it would go green on an unstripped image that never exercised the pass."
+      "detail": "The Mach-O leading underscore is the assembler's C-symbol decoration. unlace already strips it for IMPORTS (macho_stubs::strip_leading_underscore) but not for defined symbols, which is why the unstripped twin reports `_main`. This pass mints the C name directly. Consequence worth naming: the acceptance's filed regex `name.*main` is satisfied by `_main` too, so the promoted probe tightens it to the exact `\"name\": \"main\"` line plus the absence of the pre-fix `sub_1000005b0` -- otherwise it would go green on an unstripped image that never exercised the pass."
     },
     {
       "what": "typed int/char** where entrymainproto deliberately refuses to",
@@ -41,7 +41,7 @@
     }
   ],
   "collateral_sweep": {
-    "method": "kuna decompile-all, machomain on (default) vs --option machomain off, over every Mach-O image in the RE dataset (23 files: x86_64, arm64, i386, ppc, thin and fat). Every changed line of every changed binary was read.",
+    "method": "unlace decompile-all, machomain on (default) vs --option machomain off, over every Mach-O image in the RE dataset (23 files: x86_64, arm64, i386, ppc, thin and fat). Every changed line of every changed binary was read.",
     "binaries": 23,
     "fired": 8,
     "refused": 15,
@@ -56,10 +56,10 @@
     },
     "statements_moved_deleted_or_reanchored": 0,
     "witness": "crackme0x04 0x100003a80: `unsigned long sub_100003a80(void)` -> `int main(int argc,char **argv)`",
-    "worst_case": "FallingWhale and crackme0x04 each gain one argument at a callee kuna has no prototype for -- `___chkstk_darwin(CONCAT44(v7,argc))` and `sub_100003790(CONCAT44(v11,argc))`. Declaring argc makes the first ABI argument register live at main's own entry, so an unprototyped callee reached with it renders the value. This is the standing behaviour the PE entrymainproto pass already documents and measures at 4 of its 30 firing images; the real answer is prototype coverage at the callee, not withholding the entry declaration."
+    "worst_case": "FallingWhale and crackme0x04 each gain one argument at a callee unlace has no prototype for -- `___chkstk_darwin(CONCAT44(v7,argc))` and `sub_100003790(CONCAT44(v11,argc))`. Declaring argc makes the first ABI argument register live at main's own entry, so an unprototyped callee reached with it renders the value. This is the standing behaviour the PE entrymainproto pass already documents and measures at 4 of its 30 firing images; the real answer is prototype coverage at the callee, not withholding the entry declaration."
   },
   "cost": {
-    "method": "interleaved min-of-N, 15 alternating pairs (order flipped every pair) plus 3 warmup pairs, `kuna decompile crackme0x04 --addr 0x100003a80 --option machomain on|off` -- the address form on BOTH arms so the selector is identical",
+    "method": "interleaved min-of-N, 15 alternating pairs (order flipped every pair) plus 3 warmup pairs, `unlace decompile crackme0x04 --addr 0x100003a80 --option machomain on|off` -- the address form on BOTH arms so the selector is identical",
     "speed_off_ms_min": 178.41,
     "speed_on_ms_min": 178.61,
     "speed_off_ms_median": 184.59,
@@ -74,7 +74,7 @@
   "not_closed": [
     "LC_UNIXTHREAD-only images (pre-10.8 ppc/i386 Mach-O, 3 of the 23 swept) still report their entry as sub_<addr>. That entry is the crt's `start` and NOT main, so naming it `main` would be wrong; recovering main from it means following the crt, which is a different pass.",
     "A defined Mach-O symbol still reports with its leading underscore (`_main`, `_compute`). Stripping it for defined symbols the way macho_stubs already does for imports is a separate naming-policy change and is not made here.",
-    "The old `sub_<addr>` spelling is not kept as an alias, so `kuna decompile <bin> sub_100003a80` no longer resolves on a firing image (--addr does). Ghidra and IDA behave the same way, but an agent that recorded the anonymous name before the fix will have to re-look-up.",
+    "The old `sub_<addr>` spelling is not kept as an alias, so `unlace decompile <bin> sub_100003a80` no longer resolves on a firing image (--addr does). Ghidra and IDA behave the same way, but an agent that recorded the anonymous name before the fix will have to re-look-up.",
     "envp and the fourth `apple` pointer dyld passes are not declared (see decisions).",
     "The two spurious call-site arguments are NOT fixed here -- they are a prototype-coverage gap at the callee that predates this pass."
   ]

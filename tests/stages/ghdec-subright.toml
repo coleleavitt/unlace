@@ -1,4 +1,4 @@
-# decbench campaign case novel-concat-subpiece-soup (NOVEL pool: kuna already
+# decbench campaign case novel-concat-subpiece-soup (NOVEL pool: unlace already
 # scored best of all decompilers on the panes that surfaced it and the output
 # was still not C, so no other decompiler showed us this fix).
 #
@@ -13,13 +13,13 @@
 # tail was a stub returning 0.  So every SUBPIECE with a nonzero byte offset
 # survived to the printer, which renders a non zero offset SUBPIECE as the
 # raw p-code operator SUBnn.  SUB41 / SUB84 / SUB81 are undeclared
-# identifiers (kuna emits no header defining them), so the emitted
+# identifiers (unlace emits no header defining them), so the emitted
 # function is not compilable C:
 #
 #     *a0   = SUB41(a1,3);                          <- put_u32_be
 #     return SUB84((uint8)a1 * (uint8)a0,4) >> 3;   <- mulhi_shift
 #
-# Upstream Ghidra prints the shift form for both, and so does kuna's own
+# Upstream Ghidra prints the shift form for both, and so does unlace's own
 # offset-0 SUBPIECE (a0[3] = (char)a1), which is what proves the printer was
 # never the problem.
 #

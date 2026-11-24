@@ -1,10 +1,10 @@
-# kuna: option `callresultuse` is off by default, because on most code the
+# unlace: option `callresultuse` is off by default, because on most code the
 # register an unknown callee leaves untouched is not the next call's
 # argument.
 #
 # Stage / sub-stage: P4 "active-input-trial-scoring", the ancestor walk
 # behind a call's input trials (Funcdata::ancestorOpUse,
-# p4_calls/kuna_callresultuse.rs).
+# p4_calls/unlace_callresultuse.rs).
 #
 # Source (gcc 12.2 -O2 -mthumb -march=armv7-m -mfloat-abi=soft; g and h are
 # external, linked at 0x20000 and 0x20002, `bx lr` and `bx ip`):

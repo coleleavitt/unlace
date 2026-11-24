@@ -1,5 +1,5 @@
 // Self-contained Mach-O fixture for Objective-C methods whose type encoding
-// passes or returns an aggregate by value (tests/stages/kuna-objcstructabi.toml):
+// passes or returns an aggregate by value (tests/stages/unlace-objcstructabi.toml):
 // a homogeneous floating-point aggregate (`CGRect`, `UIEdgeInsets`), an integer
 // pair (`_NSRange`), aggregates larger than 16 bytes (`CGAffineTransform`,
 // `Mixed`) as an argument and as a return, an array member (`[4d]`), a union,

@@ -6,14 +6,14 @@ reader. On the witness (`arm_kgme1`, a stripped ARM keygen-me) the prompt the
 program prints has no owner at all:
 
 ```
-$ kuna strings ./arm_kgme1 --json --filter 'Enter your key'
+$ unlace strings ./arm_kgme1 --json --filter 'Enter your key'
       "address_hex": "0x9124",
       "text": "Enter your key: \n",
       "xrefs_count": 0,
       "functions": []
 ```
 
-`kuna xrefs --to 0x9124` finds nothing either, although the disassembly loads it
+`unlace xrefs --to 0x9124` finds nothing either, although the disassembly loads it
 four instructions before the `printf` call:
 
 ```
@@ -22,7 +22,7 @@ $ cstool arm 04002de5\ 10009fe5\ 10309fe5 ...   # or, in the image:
 0x8d24   bl  0x835c           ; printf@plt
 ```
 
-`kuna functions` looks like it covers `0x8d20` — it reports `_INIT_0` at
+`unlace functions` looks like it covers `0x8d20` — it reports `_INIT_0` at
 `0x83e8` with a 3368-byte extent — but that extent is gap-fill. The walk follows
 `_INIT_0`'s real control flow and stops at the `b 0x8350` 36 bytes in, so
 everything past `0x8404` is never decoded. The function that should own the
@@ -63,7 +63,7 @@ not satisfy.
 
 Gates: `make test` 675/675 PARITY OK, `make test-stages` 677/677 PARITY OK,
 `make rust-test` green, `make check-spec` OK (strict), `make test-cli` 66/66,
-`kuna catalog --check` OK. Sweep: `kuna functions` in both arms over 143 images
+`unlace catalog --check` OK. Sweep: `unlace functions` in both arms over 143 images
 (129 repo fixtures + every ARM binary in the RE corpus) fires on 2 — the witness
 and one unrelated stripped ARM challenge — and a full `decompile-all --json` diff
 on both shows one function added and zero emitted-C hunks moved. Speed −0.17%

@@ -7,7 +7,7 @@
   `park_recovered_proto` is set), keep its recovered return (storage, width,
   type) when it has no declared prototype, the type is a pointer, an integer
   wider than a byte or a float, and every live RETURN hands back a computed
-  value (`kuna_returnuncomputed::every_return_computes_with`, globals count).
+  value (`unlace_returnuncomputed::every_return_computes_with`, globals count).
 - `p4_calls/callrettype.rs (seed)`: copy the statements for every callee
   onto the caller's `Funcdata` at `protoorder`'s two seed points, minus the
   ones `refuse` withdrew for this caller; also the loader's data ranges.
@@ -21,19 +21,19 @@
   `declared_contradicts` refuses a statement of that width at the other sign
   for a returned result, and a signed statement for a result passed in a call
   slot whose zero-extension the dead-bit trimming dropped (the
-  `FuncCallSpecs` record `kuna_truncarg` reads), following the values C
+  `FuncCallSpecs` record `unlace_truncarg` reads), following the values C
   computes from the result at its width (`widened_at_other_sign`).
-- `kuna-cli/src/decompile_all.rs (callee_vote_rounds, converge_callee_first)`:
+- `unlace-cli/src/decompile_all.rs (callee_vote_rounds, converge_callee_first)`:
   a redo the run discards puts the callee's earlier statement back
   (`statement`, `restore`).
 - `console/src/decompile_step.rs (decompile_one_prefollowed)`: after the
   drive (and the format-string redo), `contradicted` audits the finished
   function; contradicted statements are withdrawn for the caller (`refuse`,
-  `Architecture::kuna_callret_refused`) and the caller is driven once more.
+  `Architecture::unlace_callret_refused`) and the caller is driven once more.
 
 ## Evidence required (and where it is)
 
-- Value preservation: `kuna-cli/tests/decompile_all_cli.rs
+- Value preservation: `unlace-cli/tests/decompile_all_cli.rs
   a_call_result_typed_by_its_callee_round_trips_through_the_printed_c`
   compiles every printed fixture function with gcc and clang at -O0 and -O2,
   option off and on, and checks the program's output; the `cached` control

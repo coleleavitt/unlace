@@ -8,7 +8,7 @@
 # printed `((int4 *)a0)[2]` (in a framework, where the folded offset
 # variable is all that names the ivar, `((objc_object **)a0)[0x56]`).
 #
-# Fix (`analyzers/objc/kuna_objcdirect.rs`): every method symbol whose
+# Fix (`analyzers/objc/unlace_objcdirect.rs`): every method symbol whose
 # address no method list gave hints its first argument register as `self`,
 # typed `<Class> *` for an instance method under `objcivars`. The hint is
 # unlocked, so the other parameters are recovered as before.

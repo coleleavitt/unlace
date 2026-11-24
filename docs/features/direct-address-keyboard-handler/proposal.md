@@ -34,29 +34,29 @@ against that head. Re-verify rather than trust it if main has moved further.
 
 Nothing below was verified by anyone. Re-run all of it yourself:
 
-- `make test` / `make test-stages` / `make check-spec` / `kuna catalog --check` reported green on
+- `make test` / `make test-stages` / `make check-spec` / `unlace catalog --check` reported green on
   the rebased tree.
 - the acceptance probe reported flipping the output from 1,555 lines to 427.
 - a 62-binary / 377-entry sweep reported 0 firings off the witness and 0 output diffs.
 
 ## Step 3 — the rc=2 that killed attempt 1 was THE WORKTREE ENVIRONMENT, not its code
 
-`make rust-test` ended `error: 327 targets failed` across kuna-cli / kuna-sleigh / kuna-wasm and
+`make rust-test` ended `error: 327 targets failed` across unlace-cli / unlace-sleigh / unlace-wasm and
 every `--doc` target. That is the known worktree spec-resolution trap, not a regression:
 
-- `KUNA_SPECS` / `SLEIGHHOME` do NOT reach the cargo workspace suite; those targets resolve specs as
+- `UNLACE_SPECS` / `SLEIGHHOME` do NOT reach the cargo workspace suite; those targets resolve specs as
   `<repo>/specs` relative to their own crate. `worker.sh`'s setup symlinks the main tree's built
   `.sla` into this worktree — confirm it with `ls specs/*.sla | wc -l` (expect ~148) before blaming
   your code. **Never run `make specs` in a worktree.**
-- `KUNA_DECOMP_TEST` was set in attempt 1's environment and makes `rust-test` fail spuriously.
-  `unset KUNA_DECOMP_TEST` before running the suite.
+- `UNLACE_DECOMP_TEST` was set in attempt 1's environment and makes `rust-test` fail spuriously.
+  `unset UNLACE_DECOMP_TEST` before running the suite.
 - Build with `CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0` and delete
   `decompiler/target/debug` when the suite finishes.
 
 ## Step 4 — the count-sensitive paths this branch already touches
 
 `phases.toml`, `p0_knowledge/options.rs`, `phases/tests.rs`, `tests/catalog_bytecompat.rs`,
-`tests/fixtures/phase_catalog.json`, `kuna-base/src/xml.rs` (stages corpus count),
+`tests/fixtures/phase_catalog.json`, `unlace-base/src/xml.rs` (stages corpus count),
 `docs/baseline-stages.json`, `docs/options.md`, `docs/history.md` (DIV-109 — the DIV number is
 claimed on MERGE, so renumber it if another DIV landed first). Run `counters --fix` AFTER your final
 rebuild, then `mergecheck`. Regenerate `docs/options.md` from the freshly built binary.

@@ -21,7 +21,7 @@ fn decompile_fixture(name: &str, function: &str, enabled: bool) -> String {
                 "--assert-strict",
                 "--assert",
             ])
-            .arg(format!("@{fixture}.kuna"))
+            .arg(format!("@{fixture}.unlace"))
             .args([
                 "--option",
                 "stackviews",

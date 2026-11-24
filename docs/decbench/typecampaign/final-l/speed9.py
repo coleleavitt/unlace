@@ -11,9 +11,9 @@ import time
 R = "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11/O2"
 ALL = {"fmt": f"{R}/coreutils/stripped/fmt", "ls": f"{R}/coreutils/stripped/ls",
        "sort": f"{R}/coreutils/stripped/sort", "bash": f"{R}/bash/stripped/bash"}
-K = {"base": ("/home/mahaloz/kwt/_baseline/kuna", "/home/mahaloz/github/kuna/specs"),
-     "roundI": ("/home/mahaloz/kwt/_final-i/kuna", "/home/mahaloz/kwt/_final-main/specs"),
-     "roundL": ("/home/mahaloz/kwt/_final-l/kuna", "/home/mahaloz/kwt/_final-main/specs")}
+K = {"base": ("/home/mahaloz/kwt/_baseline/unlace", "/home/mahaloz/github/unlace/specs"),
+     "roundI": ("/home/mahaloz/kwt/_final-i/unlace", "/home/mahaloz/kwt/_final-main/specs"),
+     "roundL": ("/home/mahaloz/kwt/_final-l/unlace", "/home/mahaloz/kwt/_final-main/specs")}
 ARMS = ["base", "roundI", "roundL"]
 N = int(sys.argv[1]) if len(sys.argv) > 1 else 11
 outf = sys.argv[2] if len(sys.argv) > 2 else "/home/mahaloz/kwt/_final-l/speed.json"
@@ -26,7 +26,7 @@ for name in which:
         order = ARMS[i % 3:] + ARMS[:i % 3]
         for lab in order:
             kb, sp = K[lab]
-            env = dict(os.environ, SLEIGHHOME=sp, KUNA_SPECS=sp)
+            env = dict(os.environ, SLEIGHHOME=sp, UNLACE_SPECS=sp)
             t0 = time.perf_counter()
             p = subprocess.run([kb, "decompile-all", b, "--json", "--max-fn-seconds", "120"],
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)

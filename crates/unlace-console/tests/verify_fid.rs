@@ -115,11 +115,11 @@ fn run(mode: Mode) -> Run {
                 let mut records: Vec<_> = original.records().into_iter().cloned().collect();
                 records
                     .iter_mut()
-                    .find(|r| r.name == "kuna_crc32")
+                    .find(|r| r.name == "unlace_crc32")
                     .unwrap()
                     .specific_hash = 0x7488df19ec1bc03b;
                 db = std::env::temp_dir()
-                    .join(format!("kuna-fid-strict-{}.fid", std::process::id()));
+                    .join(format!("unlace-fid-strict-{}.fid", std::process::id()));
                 std::fs::write(
                     &db,
                     FidDb::from_records("x86:LE:64:default", "gcc", records).serialize(),
@@ -128,10 +128,10 @@ fn run(mode: Mode) -> Run {
                 temp_db = Some(db.clone());
             }
             // FIXME: Audit that the environment access only happens in single-threaded code.
-            unsafe { std::env::set_var("kuna_fid_db", db.to_str().unwrap()) };
+            unsafe { std::env::set_var("unlace_fid_db", db.to_str().unwrap()) };
         }
         // FIXME: Audit that the environment access only happens in single-threaded code.
-        Mode::Off => unsafe { std::env::remove_var("kuna_fid_db") },
+        Mode::Off => unsafe { std::env::remove_var("unlace_fid_db") },
     }
 
     let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
@@ -272,25 +272,25 @@ fn fid_reidentifies_stripped_crc32_by_fingerprint() {
         off.name
     );
     assert_ne!(
-        off.name, "kuna_crc32",
-        "default (FID off) must NOT name the stripped function kuna_crc32 \
+        off.name, "unlace_crc32",
+        "default (FID off) must NOT name the stripped function unlace_crc32 \
          (proves the name is not a leftover symbol)"
     );
     assert!(
-        !off.body.contains("kuna_crc32"),
-        "default (FID off) body must not render kuna_crc32:\n{}",
+        !off.body.contains("unlace_crc32"),
+        "default (FID off) body must not render unlace_crc32:\n{}",
         off.body
     );
 
     // 2. FID ON: the SAME function is now `unlace_crc32`, recovered by fingerprint —
     //    in the symbol table AND in the rendered body.
     assert_eq!(
-        on.name, "kuna_crc32",
-        "FID on must rename 0x4017c0 to kuna_crc32 by full-hash match (symbol table)"
+        on.name, "unlace_crc32",
+        "FID on must rename 0x4017c0 to unlace_crc32 by full-hash match (symbol table)"
     );
     assert!(
-        on.body.contains("kuna_crc32"),
-        "FID on body must render the re-identified name kuna_crc32:\n{}",
+        on.body.contains("unlace_crc32"),
+        "FID on body must render the re-identified name unlace_crc32:\n{}",
         on.body
     );
 
@@ -298,13 +298,13 @@ fn fid_reidentifies_stripped_crc32_by_fingerprint() {
         is_placeholder(&strict.name),
         "strict must decline the known specific-hash mismatch"
     );
-    assert!(!strict.body.contains("kuna_crc32"));
-    assert_eq!(strict_matched.name, "kuna_crc32");
+    assert!(!strict.body.contains("unlace_crc32"));
+    assert_eq!(strict_matched.name, "unlace_crc32");
 
     // 3. The symbol name changed — FID performed the rename.
     assert_ne!(
         off.name, on.name,
-        "FID must change the function's name (the placeholder -> kuna_crc32 rename)"
+        "FID must change the function's name (the placeholder -> unlace_crc32 rename)"
     );
 }
 
@@ -319,7 +319,7 @@ fn fid_off_is_the_today_baseline() {
         off.name
     );
     assert_ne!(
-        off.name, "kuna_crc32",
+        off.name, "unlace_crc32",
         "default must not re-identify the stripped function"
     );
     assert!(

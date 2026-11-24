@@ -1,21 +1,21 @@
 ## The problem
 
-`kuna functions` misses any PE function that is only ever reached through a
+`unlace functions` misses any PE function that is only ever reached through a
 stored pointer — a VM handler table, a vtable slot, a registered callback — and
 then folds it into the function ahead of it. On this x64 MSVC crackme the
 inventory lists 228 functions, and four of the 30 entries in the handler table at
 `0x1400093e0` are not among them:
 
 ```
-$ kuna functions vm.exe --json | grep -c address_hex
+$ unlace functions vm.exe --json | grep -c address_hex
 228
-$ kuna functions vm.exe --json | grep 0x140003c60
-$ kuna decompile vm.exe 0x140003c60 --addr
+$ unlace functions vm.exe --json | grep 0x140003c60
+$ unlace decompile vm.exe 0x140003c60 --addr
 void sub_140003c60(long long a0)
 {
   *(char *)(a0 + 0x48) = 0;
 }
-$ kuna functions vm.exe --json | grep -A5 '"0x140003c50"'
+$ unlace functions vm.exe --json | grep -A5 '"0x140003c50"'
       "address_hex": "0x140003c50",
       "size": 32                      <- 0x140003c50..0x140003c70: two functions
 ```
@@ -63,6 +63,6 @@ supersedes, e.g. `0x140028d1c` in `CrackVM-V2.exe`, four bytes into the
 
 Gates: `make test` 675/675 PARITY OK · `make test-stages` 725/725 PARITY OK ·
 `make rust-test` green (382 test binaries, 0 failed) · `make check-spec` OK · `make test-cli` 109/109 ·
-`kuna catalog --check` OK.
+`unlace catalog --check` OK.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

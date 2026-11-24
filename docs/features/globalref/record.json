@@ -1,7 +1,7 @@
 {
- "opportunity": "kuna printed a cast on every constant address a pointer type reaches -- sub_e4ca((struct_2 *)0x2b080) where IDA prints sub_E4CA(qword_2B080) -- 1,118 casts on the 4,815 functions kuna and IDA both emit, up from 572 at the campaign baseline (protoorder stating recovered callee parameter types to callers is 44% of the growth).",
- "test_name": "tests/stages/globalref.xml (8 two-pass assertions) + kuna-cli decompile_all_cli a_constant_address_named_as_a_global_round_trips_through_the_printed_c (gcc+clang, both arms) + 7 kuna-decomp and 3 kuna-analysis unit tests",
- "binary": "decompiler/crates/kuna-analysis/tests/fixtures/globalref_x86_64",
+ "opportunity": "unlace printed a cast on every constant address a pointer type reaches -- sub_e4ca((struct_2 *)0x2b080) where IDA prints sub_E4CA(qword_2B080) -- 1,118 casts on the 4,815 functions unlace and IDA both emit, up from 572 at the campaign baseline (protoorder stating recovered callee parameter types to callers is 44% of the growth).",
+ "test_name": "tests/stages/globalref.xml (8 two-pass assertions) + unlace-cli decompile_all_cli a_constant_address_named_as_a_global_round_trips_through_the_printed_c (gcc+clang, both arms) + 7 unlace-decomp and 3 unlace-analysis unit tests",
+ "binary": "decompiler/crates/unlace-analysis/tests/fixtures/globalref_x86_64",
  "selector": "w_struct,w_scalar,w_range,w_buffer,w_compare,w_glyph,w_direct,w_numeric,w_width,w_count",
  "option": "globalref",
  "flag": "PrintCOptions::global_ref",
@@ -61,10 +61,10 @@
   "two_types": 21,
   "code": 19,
   "numeric": 1,
-  "note": "unique (function, address, type) events, KUNA_GLOBALREF_TRACE=1, 45 binaries"
+  "note": "unique (function, address, type) events, UNLACE_GLOBALREF_TRACE=1, 45 binaries"
  },
  "header": {
-  "surface": "kuna decompile-project, 45 binaries, both arms, gcc 11 -fsyntax-only",
+  "surface": "unlace decompile-project, 45 binaries, both arms, gcc 11 -fsyntax-only",
   "declared": 891,
   "declared_with_conflict_comment": 173,
   "left_undeclared_two_direct_types": 60,
@@ -275,23 +275,23 @@
  },
  "gates": {
   "make_test": "datatests: 675/675 assertions passed; PARITY OK",
-  "make_test_stages": "datatests: 1337/1337 assertions passed; PARITY OK (baseline re-recorded: +8 KUNA-GLOBALREF keys, no other key moved)",
+  "make_test_stages": "datatests: 1337/1337 assertions passed; PARITY OK (baseline re-recorded: +8 UNLACE-GLOBALREF keys, no other key moved)",
   "make_test_cli": "tests/cli: 237/237 passed on the rebased tree (four probes accept either spelling of a typed constant; ids re-derived)",
   "make_rust_test": "RUST_TEST_RC=0 on the rebased tree: 7486 passed, 0 failed, 38 ignored (lane script)",
   "check_spec": "check-spec OK (lenient mode); check-spec OK (strict mode)",
-  "catalog_check": "catalog OK: documents exactly the registered kuna options",
+  "catalog_check": "catalog OK: documents exactly the registered unlace options",
   "counters_check": "no drift: every hard-coded site agrees with the derived truth",
   "options_md": "byte-fresh",
   "rebased_onto": "origin/main 22df4282c"
  },
  "files": [
-  "decompiler/crates/kuna-decomp/src/p9_emit/globalref.rs",
-  "decompiler/crates/kuna-decomp/src/p9_emit/globalref/tests.rs",
-  "decompiler/crates/kuna-analysis/src/loader/globalref.rs",
-  "decompiler/crates/kuna-decomp/src/p9_emit/printc.rs",
-  "decompiler/crates/kuna-decomp/src/infra/decompile_drive.rs",
+  "decompiler/crates/unlace-decomp/src/p9_emit/globalref.rs",
+  "decompiler/crates/unlace-decomp/src/p9_emit/globalref/tests.rs",
+  "decompiler/crates/unlace-analysis/src/loader/globalref.rs",
+  "decompiler/crates/unlace-decomp/src/p9_emit/printc.rs",
+  "decompiler/crates/unlace-decomp/src/infra/decompile_drive.rs",
   "decompiler/crates/console/src/project.rs",
-  "decompiler/crates/kuna-analysis/tests/fixtures/globalref_x86_64.c",
+  "decompiler/crates/unlace-analysis/tests/fixtures/globalref_x86_64.c",
   "tests/stages/globalref.xml"
  ],
  "castbench_rebased": {
@@ -368,7 +368,7 @@
   },
   "expectation_changes": [
    {
-    "test": "kuna-cli decompile_all_cli a_constant_address_named_as_a_global_round_trips_through_the_printed_c",
+    "test": "unlace-cli decompile_all_cli a_constant_address_named_as_a_global_round_trips_through_the_printed_c",
     "on": [
      "(a0 == &dat_30004060)",
      "a0 == &dat_30004060"
@@ -383,11 +383,11 @@
   "expectation_changes_castarith_castsign": "none: every round trip in decompile_all_cli, the stage test and the tests/cli probes pass unchanged on the rebased tree",
   "gates": {
    "make_test": "datatests: 675/675 assertions passed; PARITY OK",
-   "make_test_stages": "datatests: 1370/1370 assertions passed; PARITY OK (re-recorded: origin/main + 8 KUNA-GLOBALREF keys, none missing)",
+   "make_test_stages": "datatests: 1370/1370 assertions passed; PARITY OK (re-recorded: origin/main + 8 UNLACE-GLOBALREF keys, none missing)",
    "make_test_cli": "tests/cli: 237/237 passed",
    "make_rust_test": "RUST_TEST_RC=0 on the rebased tree: 422 blocks, 7522 passed, 0 failed, 38 ignored (lane script)",
    "check_spec": "check-spec OK (lenient mode); check-spec OK (strict mode)",
-   "catalog_check": "catalog OK: documents exactly the registered kuna options",
+   "catalog_check": "catalog OK: documents exactly the registered unlace options",
    "counters_check": "no drift (233 settables, tiers 75/94/64, 339 corpus files)",
    "options_md": "byte-fresh",
    "phases_toml": "parses with tomllib"

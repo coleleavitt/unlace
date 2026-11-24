@@ -3,7 +3,7 @@
  * structurer cannot fold into any structured form, so it keeps one residual
  * `goto`.  C spells that as a real `goto label_<addr>;`; the Rust back-end has
  * no form for a jump that is neither a `break` nor a `continue`, so it renders
- * the site as a comment plus a diverging `panic!("kuna: unstructured goto to
+ * the site as a comment plus a diverging `panic!("unlace: unstructured goto to
  * ...")`.  The fixture exists to hold that one rendering difference still.
  *
  * Build: gcc -O0 -no-pie -fno-pic -fno-asynchronous-unwind-tables \

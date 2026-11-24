@@ -1,4 +1,4 @@
-# (kuna) Option `coldentry`.  GCC hot/cold splitting in miniature: `check`'s two
+# (unlace) Option `coldentry`.  GCC hot/cold splitting in miniature: `check`'s two
 # unlikely paths are split into ONE `.cold` fragment with ONE FDE, laid back to
 # back, each entered by its own `jcc rel32` from the hot body.  The FDE names only
 # the first path; the second (`cold_two`) sits strictly inside the FDE body after

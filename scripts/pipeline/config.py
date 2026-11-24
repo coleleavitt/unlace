@@ -1,14 +1,14 @@
-"""Environment-driven configuration for the kuna pipeline.
+"""Environment-driven configuration for the unlace pipeline.
 
 Every knob has a sensible default for this machine but is overridable by an env var, so
 the pipeline runs today against the installed angr 9.2.213 (decbench venv) and can be
 re-pointed at a Python-3.12 exact-checkout venv (angr 9.2.222) later with no code change.
 
-    KUNA_PIPELINE_ANGR_PYTHON   interpreter that can `import angr` (default: decbench venv)
-    KUNA_PIPELINE_ANGR_REPO     the angr source checkout (for the test file)
-    KUNA_PIPELINE_BIN_ROOT      angr's test-binaries root (bin_location)
-    KUNA_PIPELINE_TEST_FILE     the reference testcase file to mine
-    KUNA_PIPELINE_STATE_DIR     runtime worker state (heartbeats/inventory), gitignored
+    UNLACE_PIPELINE_ANGR_PYTHON   interpreter that can `import angr` (default: decbench venv)
+    UNLACE_PIPELINE_ANGR_REPO     the angr source checkout (for the test file)
+    UNLACE_PIPELINE_BIN_ROOT      angr's test-binaries root (bin_location)
+    UNLACE_PIPELINE_TEST_FILE     the reference testcase file to mine
+    UNLACE_PIPELINE_STATE_DIR     runtime worker state (heartbeats/inventory), gitignored
 """
 import os
 from pathlib import Path
@@ -25,16 +25,16 @@ DEFAULT_BIN_ROOT = "/home/mahaloz/github/angr-dev/binaries"
 
 
 def angr_python() -> str:
-    return os.environ.get("KUNA_PIPELINE_ANGR_PYTHON", DEFAULT_ANGR_PYTHON)
+    return os.environ.get("UNLACE_PIPELINE_ANGR_PYTHON", DEFAULT_ANGR_PYTHON)
 
 
 def angr_repo() -> Path:
-    return Path(os.environ.get("KUNA_PIPELINE_ANGR_REPO", DEFAULT_ANGR_REPO))
+    return Path(os.environ.get("UNLACE_PIPELINE_ANGR_REPO", DEFAULT_ANGR_REPO))
 
 
 def bin_root() -> Path:
     """angr's tests.common.bin_location == <repo>/../binaries."""
-    return Path(os.environ.get("KUNA_PIPELINE_BIN_ROOT", DEFAULT_BIN_ROOT))
+    return Path(os.environ.get("UNLACE_PIPELINE_BIN_ROOT", DEFAULT_BIN_ROOT))
 
 
 def test_location() -> Path:
@@ -43,13 +43,13 @@ def test_location() -> Path:
 
 
 def test_file() -> Path:
-    env = os.environ.get("KUNA_PIPELINE_TEST_FILE")
+    env = os.environ.get("UNLACE_PIPELINE_TEST_FILE")
     if env:
         return Path(env)
     return angr_repo() / "tests" / "analyses" / "decompiler" / "test_decompiler.py"
 
 
-# --- kuna repo locations ----------------------------------------------------
+# --- unlace repo locations ----------------------------------------------------
 
 def repo_root() -> Path:
     return paths.repo_root()
@@ -60,9 +60,9 @@ def pipeline_docs_dir() -> Path:
 
     Overridable so a second pipeline can hand this selector its own ranked backlog without
     a fork: the RE-friction loop emits `opportunities.json` in exactly this shape (see
-    scripts/repipe/needs.py to_opportunities) and points KUNA_PIPELINE_DOCS_DIR at it.
+    scripts/repipe/needs.py to_opportunities) and points UNLACE_PIPELINE_DOCS_DIR at it.
     """
-    env = os.environ.get("KUNA_PIPELINE_DOCS_DIR")
+    env = os.environ.get("UNLACE_PIPELINE_DOCS_DIR")
     if env:
         return Path(env)
     return repo_root() / "docs" / "improvement-pipeline"
@@ -74,17 +74,17 @@ def features_dir() -> Path:
 
 def state_dir() -> Path:
     """Runtime worker state (gitignored): inventory + per-worker heartbeats."""
-    env = os.environ.get("KUNA_PIPELINE_STATE_DIR")
+    env = os.environ.get("UNLACE_PIPELINE_STATE_DIR")
     if env:
         return Path(env)
-    return repo_root() / ".kuna-pipeline"
+    return repo_root() / ".unlace-pipeline"
 
 
 # --- knobs ------------------------------------------------------------------
 
 # Per-call wall-clock budgets (seconds). angr is 0.2-3.6s on small ELFs; cap generously.
-ANGR_TIMEOUT = int(os.environ.get("KUNA_PIPELINE_ANGR_TIMEOUT", "180"))
-KUNA_TIMEOUT = int(os.environ.get("KUNA_PIPELINE_KUNA_TIMEOUT", "120"))
+ANGR_TIMEOUT = int(os.environ.get("UNLACE_PIPELINE_ANGR_TIMEOUT", "180"))
+UNLACE_TIMEOUT = int(os.environ.get("UNLACE_PIPELINE_UNLACE_TIMEOUT", "120"))
 
 # --- speed budget (requirement: speed is critical) --------------------------
 #
@@ -93,8 +93,8 @@ KUNA_TIMEOUT = int(os.environ.get("KUNA_PIPELINE_KUNA_TIMEOUT", "120"))
 # option's marginal cost without any engine change. A default-ON-eligible feature (0/675
 # ablation) that regresses the target beyond SPEED_BUDGET_PCT is held to default-OFF opt-in
 # instead -- the speed gate can only ever push ON -> opt-in, it never re-pins the baseline.
-SPEED_BUDGET_PCT = float(os.environ.get("KUNA_PIPELINE_SPEED_BUDGET_PCT", "5"))
-SPEED_REPEAT = int(os.environ.get("KUNA_PIPELINE_SPEED_REPEAT", "5"))
+SPEED_BUDGET_PCT = float(os.environ.get("UNLACE_PIPELINE_SPEED_BUDGET_PCT", "5"))
+SPEED_REPEAT = int(os.environ.get("UNLACE_PIPELINE_SPEED_REPEAT", "5"))
 
 # The reference structurer to pin for deterministic single-valued output (angr default).
-DEFAULT_STRUCTURER = os.environ.get("KUNA_PIPELINE_STRUCTURER", "")  # "" -> angr default (sailr)
+DEFAULT_STRUCTURER = os.environ.get("UNLACE_PIPELINE_STRUCTURER", "")  # "" -> angr default (sailr)

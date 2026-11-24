@@ -1,4 +1,4 @@
-# kuna re-bytecode-append-call-loses: a call renders with fewer arguments
+# unlace re-bytecode-append-call-loses: a call renders with fewer arguments
 # than the disassembly sets up, and the missing registers are the ones
 # written BEFORE the branch the call sits behind.
 #
@@ -34,7 +34,7 @@
 # rdi, rsi and rdx on entry, so the callee-read rule passes all three at the
 # loop control.
 #
-# Phase: P4 active input-trial scoring (kuna_exclusivearguse.rs, always on).
+# Phase: P4 active input-trial scoring (unlace_exclusivearguse.rs, always on).
 # Without the rule append_slow() renders with no arguments; all three are
 # pinned here.
 

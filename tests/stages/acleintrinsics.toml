@@ -1,4 +1,4 @@
-# Kuna #1626: on AArch64 the memory-tagging instructions lost their tag
+# Unlace #1626: on AArch64 the memory-tagging instructions lost their tag
 # effect, and barriers and hints printed under their SLEIGH instruction
 # names.  AARCH64.pspec leaves the ShowMemTag context at 0, under which
 # irg/addg/subg/gmi/ldg lift as a pointer copy or add and stg/st2g as
@@ -6,10 +6,10 @@
 # `return a0;` and `__arm_mte_set_tag(p)` to an empty `void f(void)`.
 #
 # Stage / sub-stage: P9 naming-policy (`option acleintrinsics`, AArch64
-# only, default on), with a P2 context paint (`kuna_memtag`).  On sets
+# only, default on), with a P2 context paint (`unlace_memtag`).  On sets
 # ShowMemTag to 1 before a function is lifted, so each tag instruction is
 # one user op whose result is the tagged pointer, and
-# `kuna_acleintrinsics` prints the barrier, hint and tag user ops as the
+# `unlace_acleintrinsics` prints the barrier, hint and tag user ops as the
 # ACLE intrinsics of <arm_acle.h>, recombining a barrier's domain and
 # type operands into the 4-bit CRm.
 #

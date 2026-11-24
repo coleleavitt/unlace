@@ -1,19 +1,19 @@
 ## The problem
 
-`kuna unpack` tells you a UPX-packed Windows binary is not UPX-packed. Every
+`unlace unpack` tells you a UPX-packed Windows binary is not UPX-packed. Every
 32-bit PE UPX has ever produced hits this, because the whole PE target is
 missing; the file below is a crackme from the RE loop's round-6 corpus, now
 vendored as a fixture.
 
 ```console
-$ kuna unpack decompiler/crates/kuna-analysis/tests/fixtures/upx_packed_pe_i386.exe
+$ unlace unpack decompiler/crates/unlace-analysis/tests/fixtures/upx_packed_pe_i386.exe
 error: .../upx_packed_pe_i386.exe: no UPX PackHeader found
-note: kuna unpack handles UPX-packed executables; this file is not one
-$ xxd -s 0x3e0 -l 16 decompiler/crates/kuna-analysis/tests/fixtures/upx_packed_pe_i386.exe
+note: unlace unpack handles UPX-packed executables; this file is not one
+$ xxd -s 0x3e0 -l 16 decompiler/crates/unlace-analysis/tests/fixtures/upx_packed_pe_i386.exe
 000003e0: 5550 5821 0c09 0204 f822 eecb 6910 39ab  UPX!....."..i.9.
 ```
 
-It is one. `kuna functions` on it reports 1 function, and there is nothing else
+It is one. `unlace functions` on it reports 1 function, and there is nothing else
 to do with the file until something recovers the image.
 
 ## The fix
@@ -41,12 +41,12 @@ to do with the file until something recovers the image.
 Afterwards:
 
 ```console
-$ kuna unpack .../upx_packed_pe_i386.exe -o /tmp/out.exe
+$ unlace unpack .../upx_packed_pe_i386.exe -o /tmp/out.exe
 unpacked ... -> /tmp/out.exe
   format:      9 (win32/pe)
   method:      2 (NRV2B_LE32)
   unpacked:    49152 bytes
-$ kuna functions /tmp/out.exe --json | jq .count
+$ unlace functions /tmp/out.exe --json | jq .count
 167
 ```
 
@@ -59,7 +59,7 @@ of the rebuilt directory, the relocated resource tree), the import table found
 with the data directory blanked, and two refusal cases. Plus
 `tests/cli/unpack-proceed-without-upx.json`.
 
-Swept `kuna unpack` patched-vs-stock over 156 repo fixtures, 156 dataset PEs and
+Swept `unlace unpack` patched-vs-stock over 156 repo fixtures, 156 dataset PEs and
 94 dataset ELFs: the ELF arm is byte-identical everywhere, no non-packed image
 changed answer, and one unrelated corpus binary the change was not written
 against now unpacks too (7 → 423 functions, 80 imports). Three images are named

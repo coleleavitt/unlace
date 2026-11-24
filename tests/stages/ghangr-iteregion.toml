@@ -6,7 +6,7 @@
 # The option-gated ActionIteRegion (option `iteregion`, default-OFF; ELEM 4110)
 # ports angr's ITERegionConverter: a source `?:` ternary compiles at -O0 to a
 # two-arm register-assignment DIAMOND - one arm `mov eax, A`, the other
-# `mov eax, B`, both converging on the use of the merged value. Ghidra/kuna's
+# `mov eax, B`, both converging on the use of the merged value. Ghidra/unlace's
 # collapse-based structurer renders each diamond as a literal
 # `if (c) { v = A } else { v = B }` statement pair, doubling the branch count of
 # format/print/flag code (iproute2 print_link_flags: 41 ifs / 0 ternaries ->
@@ -62,7 +62,7 @@ hex = 'f30f1efa554889e54883ec08897dfc837dfc007407b810000000eb05b82000000089c7e8c
 
 [script]
 commands = [
-    # kuna: pin the pre-sweep (DIV-13 flags-off) structuring baseline so pass 1
+    # unlace: pin the pre-sweep (DIV-13 flags-off) structuring baseline so pass 1
     # sees the canonical negated-guard if/else diamond; pass 2 enables only the
     # iteregion knob under test.
     'option gotoreduce off',
@@ -74,7 +74,7 @@ commands = [
     'option tailcalljump off',
     'option foldcallret off',
     'option branchflip off',
-    # kuna: iteregion is default-ON (DIV-17); pass 1 explicitly flips it OFF to pin
+    # unlace: iteregion is default-ON (DIV-17); pass 1 explicitly flips it OFF to pin
     # the upstream if/else baseline the pass converts, pass 2 turns it back on.
     'option iteregion off',
     'parse line extern void pick(int4 x);',

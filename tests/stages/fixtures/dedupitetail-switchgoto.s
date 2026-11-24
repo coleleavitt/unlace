@@ -1,6 +1,6 @@
 # A loop around a switch whose case 1 jumps into the start of an if's true
 # arm, with both arms ending in the same shared(y) call.  Source of the bytes
-# in kuna-dedupitetail-switchgoto.xml (as --64; objcopy -O binary -j .text).
+# in unlace-dedupitetail-switchgoto.xml (as --64; objcopy -O binary -j .text).
 #
 #   void g(int x, int y) {
 #       do { switch (pre()) { case 1: goto T; } } while (pre() == 7);

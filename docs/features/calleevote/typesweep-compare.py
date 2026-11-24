@@ -25,7 +25,7 @@ def per_fn(rows, opts):
             dd = by.get(fn, [])
             n = len(dd)
             tp = sum(1 for d in dd if d["ok"] is True)
-            cr = sum(1 for d in dd if d["ok"] is False and d["cls"] == "ptr_struct" and is_struct_ptr(d["kuna_type"]))
+            cr = sum(1 for d in dd if d["ok"] is False and d["cls"] == "ptr_struct" and is_struct_ptr(d["unlace_type"]))
             out[(k, fn)] = (val, n, tp, cr, dd)
     return out
 def main():
@@ -65,6 +65,6 @@ def main():
     print("class TP a->b:", {c: (cls[(c, 'a')], cls[(c, 'b')]) for c in sorted({c for c, _ in cls}) if cls[(c, 'a')] != cls[(c, 'b')]})
     N = int(next((x.split("=")[1] for x in sys.argv if x.startswith("--worse=")), "0"))
     for key, va, vb, da, db in worse[:N]:
-        ch = [(x["gt_name"], x["gt_type"], x["kuna_type"], y["kuna_type"]) for x, y in zip(da, db) if x["kuna_type"] != y["kuna_type"] or x["ok"] != y["ok"]]
+        ch = [(x["gt_name"], x["gt_type"], x["unlace_type"], y["unlace_type"]) for x, y in zip(da, db) if x["unlace_type"] != y["unlace_type"] or x["ok"] != y["ok"]]
         print("WORSE", key, round(va, 3), round(vb, 3), ch[:4])
 main()

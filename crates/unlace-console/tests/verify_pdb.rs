@@ -54,7 +54,7 @@ const COMPUTE_VMA: u64 = 0x140001000;
 const COMPUTE_NAME: &str = "pdb_demo_compute";
 
 /// The env var naming the `.pdb` to apply (the fid `unlace_fid_db` precedent).
-const PDB_PATH_ENV: &str = "kuna_pdb_path";
+const PDB_PATH_ENV: &str = "unlace_pdb_path";
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -70,7 +70,7 @@ fn fixtures() -> PathBuf {
 /// A scratch directory holding a copy of `pdb_prog.exe` and nothing else, so the
 /// sidecar tiers find only what a test puts there.
 fn isolated_exe(tag: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("kuna-verify-pdb-{tag}"));
+    let dir = std::env::temp_dir().join(format!("unlace-verify-pdb-{tag}"));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("create the scratch dir");
     let exe = dir.join("pdb_prog.exe");
@@ -273,7 +273,7 @@ fn pdb_explicit_path_is_tried_first_and_falls_through() {
 
     assert_eq!(
         explicit, COMPUTE_NAME,
-        "kuna_pdb_path must still reach an out-of-tree .pdb"
+        "unlace_pdb_path must still reach an out-of-tree .pdb"
     );
     assert_eq!(
         fell_through, COMPUTE_NAME,

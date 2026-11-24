@@ -2,14 +2,14 @@
 #
 # Issue: a Mach-O whose LC_FUNCTION_STARTS was stripped loses almost its whole
 # function inventory. On a 249 MB arm64 third-party iOS app with no
-# LC_FUNCTION_STARTS, kuna discovered 23 of the real __text functions; the
+# LC_FUNCTION_STARTS, unlace discovered 23 of the real __text functions; the
 # rest of its 59,222 entries were __got slots and __stubs. arm64 has no
 # default prologue sweep, so LC_MAIN, the exports, __mod_init_func and the
 # symbol table are the only seeds and nothing starts a function between them.
 # __TEXT,__unwind_info survives the strip and still records 204,800 starts.
 #
 # Stage / sub-stage: P1 code-data-partition, the Mach-O entry-discovery
-# oracles (`unlace-analysis/src/analyzers/entry/kuna_unwindinfo.rs`), committed
+# oracles (`unlace-analysis/src/analyzers/entry/unlace_unwindinfo.rs`), committed
 # at `read symbols`.
 #
 # P0 assertion: `option unwindstarts on|off` (default off). It is set after

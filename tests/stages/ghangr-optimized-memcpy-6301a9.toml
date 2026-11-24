@@ -1,12 +1,12 @@
 # angr test_decompiling_optimized_memcpy (memcpy/memmove @ 0x42cca0, an MSVC
 # CRT optimized Duff's-device copy): seven image-base-relative jump tables
-# drive the small-count tail dispatch.  angr recovers all 7 switches; kuna
+# drive the small-count tail dispatch.  angr recovers all 7 switches; unlace
 # recovers ONE and degrades the other SIX indirect jumps to
 # "Treating indirect jump as call" (an invalid / misleading computed call).
 #
 # Root cause (per docs/features/optimized-memcpy-6301a9, REVISED): the six
 # failing tables do NOT fail in JumpBasic guard analysis.  They fail earlier,
-# in the per-table partial-flow rebuild.  kuna recovers one table first
+# in the per-table partial-flow rebuild.  unlace recovers one table first
 # (switch over a 4-entry table whose case-0 body sits at 0x42ce24); then every
 # OTHER indirect jump spins up its own fresh partial clone that re-clones the
 # now-recovered table into the partial's jumpvec, and the partial's
@@ -58,7 +58,7 @@ hex = 'c3'
 
 [script]
 commands = [
-    # kuna: the 9 angr structuring/switch flags below are now default-on (DIV-13); this stage test asserts the pre-sweep (flags-off) baseline in pass 1, so pass 1 turns them all OFF (each pass-2 'option <flag> on' re-enables only the flag under test)
+    # unlace: the 9 angr structuring/switch flags below are now default-on (DIV-13); this stage test asserts the pre-sweep (flags-off) baseline in pass 1, so pass 1 turns them all OFF (each pass-2 'option <flag> on' re-enables only the flag under test)
     'option gotoreduce off',
     'option crossjumprevert off',
     'option dedupitetail off',
@@ -68,7 +68,7 @@ commands = [
     'option tailcalljump off',
     'option foldcallret off',
     'option branchflip off',
-    # kuna DIV: `jtsharepartial` is default ON and by itself removes the shape
+    # unlace DIV: `jtsharepartial` is default ON and by itself removes the shape
     # this testcase is about (one shared partial per recoverJumpTables batch is
     # built while every sibling table is still empty, so collect_edges never
     # calls target() on an undecoded case body).  Pass 1 turns it OFF to

@@ -27,7 +27,7 @@ Why it is vendored rather than built
 
 Where it came from
   The RE-friction loop's round-6 witness: challenge 5ab77f5433c5d40ad448c1cd in
-  the kuna-re-dataset crackme corpus ("end_of_the_world by ultrasound",
+  the unlace-re-dataset crackme corpus ("end_of_the_world by ultrasound",
   https://crackmes.one/crackme/5ab77f5433c5d40ad448c1cd), `bin/EndOfWorld.zip.__x/
   EndOfWorld.exe`, byte-identical. That is the binary on which a tester found
   `unlace unpack` exiting 1 with "no UPX PackHeader found" and filed

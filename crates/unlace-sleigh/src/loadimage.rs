@@ -702,7 +702,11 @@ mod tests {
     /// Write a 16-byte raw file 00 01 02 ... 0f and return its path.
     fn write_raw_file(name: &str) -> std::path::PathBuf {
         let mut path = std::env::temp_dir();
-        path.push(format!("kuna_rawloadimage_{}_{}", std::process::id(), name));
+        path.push(format!(
+            "unlace_rawloadimage_{}_{}",
+            std::process::id(),
+            name
+        ));
         let bytes: Vec<u8> = (0u8..16).collect();
         std::fs::write(&path, bytes).unwrap();
         path
@@ -858,13 +862,13 @@ mod tests {
     fn raw_load_image_open_failure_and_vma() {
         let m = manager(1);
         let ram = Rc::clone(m.get_space_by_name("ram").unwrap());
-        let mut img = RawLoadImage::new("/nonexistent/kuna_raw_image");
+        let mut img = RawLoadImage::new("/nonexistent/unlace_raw_image");
         let err = img.open().unwrap_err();
         match &err {
             UnlaceError::Lowlevel { explain } => {
                 assert_eq!(
                     explain,
-                    "Unable to open raw image file: /nonexistent/kuna_raw_image"
+                    "Unable to open raw image file: /nonexistent/unlace_raw_image"
                 );
             }
             other => panic!("expected Lowlevel, got {other:?}"),

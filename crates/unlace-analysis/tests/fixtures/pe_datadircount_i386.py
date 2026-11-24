@@ -8,7 +8,7 @@ The reported image was Invius-packed and carried 1531532893 in that field, in a
 224-byte optional header -- room for exactly the 16 directories that were there.
 Windows reads `min(declared, what fits)`; `object::File::parse` insists on the
 declared count and rejects the whole file with "Invalid PE number of RVA and
-sizes", so every kuna surface exited 1 before a byte of code was mapped. That
+sizes", so every unlace surface exited 1 before a byte of code was mapped. That
 value is reproduced verbatim here over two functions, the entry stub and the leaf
 it calls:
 

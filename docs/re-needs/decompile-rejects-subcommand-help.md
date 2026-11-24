@@ -41,7 +41,7 @@ Discover decompile flags through subcommand help.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "--help"
   ],
@@ -64,7 +64,7 @@ Discover decompile flags through subcommand help.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "--help"
   ],

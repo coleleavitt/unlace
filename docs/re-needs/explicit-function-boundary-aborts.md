@@ -28,10 +28,10 @@ reject_reason: null
 Analyze the 205-byte entry prefix with the documented warning for cut control-flow edges.
 
 > **Explicit function boundary aborts on a branch to its exclusive end** (blocker, `69d6affb110488a3205426e2`)
-> Decompilation exits 1 with code:null and Could not find op at target address. The missing target is the declared exclusive end, 0x1400010cd. Kuna disassembly confirms a conditional branch there from 0x140001054.
+> Decompilation exits 1 with code:null and Could not find op at target address. The missing target is the declared exclusive end, 0x1400010cd. Unlace disassembly confirms a conditional branch there from 0x140001054.
 
 > **Clipping cold error paths aborts instead of emitting a boundary warning** (minor, `6a0b84982b3df128c1df5c0d`)
-> The supplied end cuts cold error paths after the normal return. Kuna exits 1 with Could not find op at target address instead of producing warning-bearing C.
+> The supplied end cuts cold error paths after the normal return. Unlace exits 1 with Could not find op at target address instead of producing warning-bearing C.
 
 ## Reproduction
 
@@ -41,7 +41,7 @@ Analyze the 205-byte entry prefix with the documented warning for cut control-fl
   "kind": "cli",
   "timeout_s": 120,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x140001000",
@@ -79,7 +79,7 @@ Analyze the 205-byte entry prefix with the documented warning for cut control-fl
   "kind": "cli",
   "timeout_s": 120,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x140001000",
@@ -165,7 +165,7 @@ _none recorded_
 ## Decision log
 
 - filed by cluster.py from 2 observation(s)
-captain T_DEDUP r3: MERGED with obs22 (clipping-cold-error-paths, frz_crackme_rage_v7.exe sha256). Same mechanism on two challenges and two testers: under --define-function START-END, control reaching or passing END makes kuna hard-error `Could not find op at target address` and exit 1 instead of clipping with a warning. Verified still failing on cf5234ac (0x1400010cd == the exclusive end; 0x1400060c5 is 5 bytes past it).
+captain T_DEDUP r3: MERGED with obs22 (clipping-cold-error-paths, frz_crackme_rage_v7.exe sha256). Same mechanism on two challenges and two testers: under --define-function START-END, control reaching or passing END makes unlace hard-error `Could not find op at target address` and exit 1 instead of clipping with a warning. Verified still failing on cf5234ac (0x1400010cd == the exclusive end; 0x1400060c5 is 5 bytes past it).
 captain T_DEDUP r3: deliberately NOT merged with default-decompilation-fails-despite. That one prints the same message but for 0x08048541, an address INSIDE its declared extent -- same symptom, different trigger.
 captain T_REFUTE r3: hypothesis upheld -- see ## Refutation (measured on cf5234ac with the release binary).
 captain T_TRIAGE r3: track quality and scope small CONFIRMED; touches narrowed to p2_lift (flow/function-boundary). Upheld and narrowed at T_REFUTE: any branch target with no decoded op aborts, measured at four different --define-function ends and identical under --mode reliable and --mode fast. BUILDER: the obvious repair -- drop the unresolvable edge and warn -- is correct HERE and WRONG for default-decompilation-fails-despite, whose missing target is a real in-extent NOP deleted by a phantom entry; do not write one fix for both.

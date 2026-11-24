@@ -1,5 +1,5 @@
 # A register a callee only pushes as an alignment pad above a call's stack
-# arguments is no argument it reads (the pad rule in kuna_calleedeadarg.rs,
+# arguments is no argument it reads (the pad rule in unlace_calleedeadarg.rs,
 # always on), while one it forwards AS a stack argument is.
 #
 # The XML wrapper only provides the harness architecture; every block loads an

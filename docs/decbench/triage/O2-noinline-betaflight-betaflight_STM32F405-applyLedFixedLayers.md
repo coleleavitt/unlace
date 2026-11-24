@@ -4,7 +4,7 @@ pool: novel
 status: feature-candidate
 tier: N
 margin: 0
-fresh_verdict: structurally unchanged from the stored run and already tied-best (kuna GED 25 == ghidra 25, vs angr 42 / ida 41); the one real kuna defect in the pane is that the single 4-byte `hsvColor_t color` stack slot is declared TWICE under the SAME name (`unsigned int v12;` and `uint4 v12;`, both `// stack - 0x24`), which is invalid C
+fresh_verdict: structurally unchanged from the stored run and already tied-best (unlace GED 25 == ghidra 25, vs angr 42 / ida 41); the one real unlace defect in the pane is that the single 4-byte `hsvColor_t color` stack slot is declared TWICE under the SAME name (`unsigned int v12;` and `uint4 v12;`, both `// stack - 0x24`), which is invalid C
 option_closing: null
 feature_slug: symbol-keyed-local-decls
 scope: small
@@ -19,8 +19,8 @@ Metrics from the triage dump (identical structure across stored and fresh):
 |--------|---|---|---|---|---|---|---|
 | ghidra(stored) | 144 | 2 | 2 | 1 | 5 | 10 | 2 |
 | ida(stored) | 130 | 6 | 2 | 1 | 5 | 10 | 2 |
-| kuna(stored) | 160 | 2 | 2 | 1 | 5 | 10 | 2 |
-| kuna(fresh) | 153 | 2 | 2 | 1 | 5 | 10 | 2 |
+| unlace(stored) | 160 | 2 | 2 | 1 | 5 | 10 | 2 |
+| unlace(fresh) | 153 | 2 | 2 | 1 | 5 | 10 | 2 |
 
 **ghidra (stored)** — the whole declaration block; three stack locals, each declared once:
 
@@ -52,7 +52,7 @@ void applyLedFixedLayers(void)
   int v25; // [sp+14h] [bp-4h]
 ```
 
-**kuna (fresh, today's build, no flags == `--mode reliable` here)** — eight stack
+**unlace (fresh, today's build, no flags == `--mode reliable` here)** — eight stack
 declaration lines for the same three slots, two of them with the *same name*:
 
 ```c
@@ -75,7 +75,7 @@ void sub_8052b04(void)
   ...
 ```
 
-The stored (2026-07-27) kuna block has the identical two `v12` lines, so nothing
+The stored (2026-07-27) unlace block has the identical two `v12` lines, so nothing
 about this changed under the DIV-34..39 print-normalization wave.
 
 Flipping `--option dedupvardecls off` exposes how many HighVariables actually
@@ -127,7 +127,7 @@ static void applyLedFixedLayers(void)
 (`color.h` / `color.s` / `color.v`). Because the binary is stripped there is no
 struct type, so every decompiler reconstructs the field writes as
 CONCAT/SUBPIECE over one 4-byte slot. Ghidra: `local_24._0_3_ = CONCAT12(...)`.
-kuna: `v12 = CONCAT13(v18,v15)`. **This is the same rendering, not a kuna gap.**
+unlace: `v12 = CONCAT13(v18,v15)`. **This is the same rendering, not a unlace gap.**
 
 ## Reported symptom — FIXED (DIV-52)
 
@@ -136,7 +136,7 @@ The duplicated declaration is gone: `applyLedFixedLayers` now opens with one
 `undefined4 local_24`. The fix is the Symbol-keyed scalar collapse proposed below,
 implemented inside `option dedupvardecls` with one change of arbitration: the
 survivor takes the Symbol's own type only when that type is at least as wide as
-every access the group covers, otherwise the widest member wins — kuna's ScopeLocal
+every access the group covers, otherwise the widest member wins — unlace's ScopeLocal
 ranges are sometimes narrower than the accesses that reach them, and a 2-byte
 declaration for a slot the body writes 4 bytes into would be a new defect.
 
@@ -162,7 +162,7 @@ occurrence (`v12 = *(uint4 *)sub_80520ac(3);`, `v3 = v12 & 0xffff;`, `v12 =
 CONCAT22(v17,...)`) refers to. Ghidra emits one `undefined4 local_24;`; IDA emits
 one `int v23;`.
 
-**Root cause.** kuna's declaration emitter walks **HighVariables**, not the
+**Root cause.** unlace's declaration emitter walks **HighVariables**, not the
 `ScopeLocal` **Symbol** table, and takes each declaration's type from that high's
 own storage-representative Varnode:
 
@@ -172,14 +172,14 @@ own storage-representative Varnode:
   `v.get_type()` of the high's representative varnode (printc.rs:2754).
 * The existing "one declaration per Symbol" retain in the same function is
   deliberately restricted to composites — the key is
-  `(name, Rc::as_ptr(kuna_symbol_type))` and the comment states *"Restricting to
+  `(name, Rc::as_ptr(unlace_symbol_type))` and the comment states *"Restricting to
   composites is load-bearing: primitive types are shared by every scalar local of
   that type."* A **scalar** mapped Symbol therefore keeps the per-high behavior.
 * The scalar guard that does exist, `is_scalar_partial_piece` /
   `high_name_has_scalar_whole_sibling` (printc.rs:8074), only suppresses **strict
-  partials** (`kuna_symbol_offset() > 0 || rep_size < sym_size`). All six `v12`
+  partials** (`unlace_symbol_offset() > 0 || rep_size < sym_size`). All six `v12`
   highs are whole 4-byte covers at offset 0, so none is suppressed.
-* `kuna_dedupvardecls` (default **on**) is the last line of defence, but its
+* `unlace_dedupvardecls` (default **on**) is the last line of defence, but its
   `DeclSignature` is `(decl_type, name, array, comment)` — the *fully rendered
   line*. Its own module doc says two highs "that render the same name but a
   *different* type ... both survive (a genuine collision the reader must see)".
@@ -204,10 +204,10 @@ local name — `sub_802baf4`, `sub_804f5b4`, `sub_8052676`, `sub_8052684`,
 `sub_8052b04`. Rare, but every occurrence is invalid C.
 
 **The miner hint is disproven.** "8 CONCATs + 7 SUBPIECEs: sub-register
-reconstruction soup" is not a kuna-vs-reference gap: Ghidra's pane has the same
+reconstruction soup" is not a unlace-vs-reference gap: Ghidra's pane has the same
 count of the same forms (`CONCAT22`, `CONCAT12`, `CONCAT13`, `local_24._2_1_`,
 `local_20 >> 0x18`) because the packed `hsvColor_t` has no type in the stripped
-binary. kuna is *tied for best* on this function and its CFG shape (2 gotos,
+binary. unlace is *tied for best* on this function and its CFG shape (2 gotos,
 2 labels, 1 switch/5 cases, 10 ifs, 2 loops) matches Ghidra's exactly.
 
 **Verification performed.**
@@ -219,7 +219,7 @@ binary. kuna is *tied for best* on this function and its CFG shape (2 gotos,
   (worse: 6 × `v12`), `dedupvardecls on` (default, still 2), `realtypes off`
   (still 2: `xunknown4 v12` + `uint4 v12`), `namestyle ghidra` (still 2).
   `condfold on|wide` was **not** swept: it is a P8 goto/short-circuit lever and
-  kuna already matches Ghidra's goto/label counts on this function.
+  unlace already matches Ghidra's goto/label counts on this function.
 * Source CFG 26 nodes / 40 edges — exact GED, not approximated, not degenerate.
   Not a metric artifact.
 
@@ -228,9 +228,9 @@ binary. kuna is *tied for best* on this function and its CFG shape (2 gotos,
 1. **P4 — a stack-passed argument is dropped at this call site.** Ghidra:
    `FUN_080170e0(iVar11,0x5dc,2000,local_24 & 0xffff,local_20 & 0xffff)` (5 args,
    matching `int scaleRange(int x,int srcFrom,int srcTo,int destFrom,int destTo)`).
-   kuna: `sub_80170e0(v10,0x5dc,2000,v3)` (4 args) at **all eight** call sites in
-   this function. kuna's own recovered prototype for the callee is correct —
-   `int4 sub_80170e0(int4 a0,int4 a1,int4 a2,int4 a3,int4 a4)` — and kuna emits
+   unlace: `sub_80170e0(v10,0x5dc,2000,v3)` (4 args) at **all eight** call sites in
+   this function. unlace's own recovered prototype for the callee is correct —
+   `int4 sub_80170e0(int4 a0,int4 a1,int4 a2,int4 a3,int4 a4)` — and unlace emits
    5-argument call sites elsewhere in the same firmware (88 of them), so this is
    NOT a blanket stack-trial failure; it is a per-call-site recovery miss whose
    visible fallout is that `v20 // stack - 0x1c` is **read but never assigned**
@@ -243,7 +243,7 @@ binary. kuna is *tied for best* on this function and its CFG shape (2 gotos,
    `xVar14`, but the stack-mapped ones keep angr names (`v12`, `v19`, `v20`) and
    lose their storage comments. `varmap.rs:1548`, `:1598`, `:1718` hard-code
    `format!("v{}", *base)` with no `name_style_angr` gate, while the unmapped-local
-   path (`coreaction_cleanup.rs::kuna_default_local_name`) does gate correctly.
+   path (`coreaction_cleanup.rs::unlace_default_local_name`) does gate correctly.
 
 ## Proposed fix
 
@@ -258,14 +258,14 @@ mapped stack offset identifies exactly one `ScopeLocal` Symbol, which is the
 identity the composite path was reaching for via the interned type Rc; the module
 comment's objection ("primitive types are shared by every scalar local of that
 type") applies to the *type* key, not to the storage key. Keep the surviving
-declaration's type as the mapped Symbol's type (`h.kuna_symbol_type()`) when there
+declaration's type as the mapped Symbol's type (`h.unlace_symbol_type()`) when there
 is one — the direct analogue of C++ `emitVarDecl`'s `sym->getType()`
 (printc.cc:1719) — falling back to the widest whole-cover high's representative
 type otherwise.
 
 Equivalent narrower form, if the change is preferred inside the option that
 already owns this surface: drop `decl_type` from
-`kuna_dedupvardecls::DeclSignature` **when `comment` is `Some`** (i.e. the local
+`unlace_dedupvardecls::DeclSignature` **when `comment` is `Some`** (i.e. the local
 has a resolved storage location, so name+storage is a Symbol identity), and keep
 the full four-field key for un-mapped locals where storage cannot disambiguate.
 
@@ -291,7 +291,7 @@ a bug fix; keeping it inside `dedupvardecls` preserves the existing
   (`*(uint4 *)...`), so this is cosmetic, but it will move bytes on any datatest
   whose function has two same-named highs — run the `make test` /
   `make test-stages` gates and diff the decompiled C across fixtures before and
-  after (the `[[kuna-verify-by-code-diff]]` practice from #197: the suites did not
+  after (the `[[unlace-verify-by-code-diff]]` practice from #197: the suites did not
   catch a naming regression on their own).
 * The collapse must not fire for two *genuinely distinct* locals that happen to
   share a name — impossible for mapped locals (the storage offset differs) but the

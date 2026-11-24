@@ -1,4 +1,4 @@
-# kuna `libcnames` on Windows: a local that holds a Win32 call's result, or
+# unlace `libcnames` on Windows: a local that holds a Win32 call's result, or
 # that is handed to one whole, keeps a `vN` name although the SDK declares
 # what it is: `v1 = LoadLibraryW(a0)`, `CloseHandle(v1)`.
 #

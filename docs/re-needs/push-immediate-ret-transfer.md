@@ -38,7 +38,7 @@ See the transfer to 0x40365a after unpacking.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x4f7001",
@@ -90,7 +90,7 @@ See the transfer to 0x40365a after unpacking.
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x402000",
@@ -152,7 +152,7 @@ _none recorded_
 ## Decision log
 
 - filed by cluster.py from 1 observation(s)
-- split by captain at T_DEDUP from round 12's `wrong-output|decompile|exit_code,stdout_matches` bucket: cluster.py's signature (kind|subcommand|clause-shape) collapsed unrelated defects, so the crop was hand-partitioned one observation per need and filed via `--from-file`. See `.kuna-repipe/rounds/12/dedup/MARKER.json`; do NOT run `cluster --round 12` bare.
+- split by captain at T_DEDUP from round 12's `wrong-output|decompile|exit_code,stdout_matches` bucket: cluster.py's signature (kind|subcommand|clause-shape) collapsed unrelated defects, so the crop was hand-partitioned one observation per need and filed via `--from-file`. See `.unlace-repipe/rounds/12/dedup/MARKER.json`; do NOT run `cluster --round 12` bare.
 - sibling of `call-pop-pointer-helper` — sibling packer-stub idiom; kept separate (Jaccard 0.0), different idiom and different fix.
 - round 12 REFUTER: hypothesis **upheld** (was inconclusive). REFUTED IN-TICK (captain, round 12). NO HYPOTHESIS WAS EVER FILED (the section reads "none offered"), so there was no cause to overturn; this verdict attaches to the SYMPTOM, which is exact, and it supplies the diagnosis the need lacked. Verdict recorded as upheld rather than inconclusive deliberately: "inconclusive" IS the filed default string in this backlog, so leaving it there is indistinguishable from nobody having looked.
 

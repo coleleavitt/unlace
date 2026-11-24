@@ -7,7 +7,7 @@
 #     int d_loop(int *p, int n) { int s = 0;
 #       for (int i = 0; i < n; i++) { gi = gi + 1; s += *p; gi = gi - 1; } return s; }
 #
-# nothing reads the first store's COPY and ActionDeadCode deletes it: kuna
+# nothing reads the first store's COPY and ActionDeadCode deletes it: unlace
 # printed the loop with no store to gi at all, so with p == &gi the printed
 # loop sums 4 three times where the binary sums 5.  At `global` heritage puts
 # an addrforce COPY read of the global in front of each such LOAD, so the

@@ -1,5 +1,5 @@
 cil_hello.dll -- a managed .NET assembly for the `cil` loader
-(crates/unlace-analysis/src/loadimage_cil.rs, tests/stages/kuna-cil.toml).
+(crates/unlace-analysis/src/loadimage_cil.rs, tests/stages/unlace-cil.toml).
 
 What it is
   The console program in cil_hello.cs, built for net8.0: a top-level

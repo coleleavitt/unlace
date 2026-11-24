@@ -7,7 +7,7 @@
 # the backward one measures the `add esp,8` that discards the two arguments of
 # the `call` above it and never sees the two pushes that put them there.
 # Stage model: S2 flow classification (`xref_control_flow`, the CPUI_BRANCH
-# arm), the `kuna_tailcallsaved` predicate inside `kuna_tailcallframe`.
+# arm), the `unlace_tailcallsaved` predicate inside `unlace_tailcallframe`.
 #
 # Layout (linked flat), 32-bit cdecl:
 #   caller @ 0x100040 : push ebx; push esi          (frame = -8, saved = 8)

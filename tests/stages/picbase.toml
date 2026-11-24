@@ -1,4 +1,4 @@
-# kuna issue testcase: the i386 PIC base register folded into the
+# unlace issue testcase: the i386 PIC base register folded into the
 # cross-reference index.
 #
 # Issue:      unlace-analysis-picbase - `unlace strings` (JSON, filtered to Password)
@@ -53,6 +53,6 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-PICBASE #1: the XML path renders the source form x <= 8'
+name = 'UNLACE-PICBASE #1: the XML path renders the source form x <= 8'
 count = 1
 literal = 'if (x <= 8)'

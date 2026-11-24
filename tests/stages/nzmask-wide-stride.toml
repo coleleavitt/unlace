@@ -1,4 +1,4 @@
-# Kuna GH-1661: a bit-test guard above two RV64 tail calls panicked
+# Unlace GH-1661: a bit-test guard above two RV64 tail calls panicked
 # jump-table recovery with a shift overflow.
 #
 # `slli a1,a0,0x23; bltz a1` tests bit 28 of a 32-bit argument, so the

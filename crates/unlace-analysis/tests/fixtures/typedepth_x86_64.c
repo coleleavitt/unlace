@@ -1,4 +1,4 @@
-/* Fixture for full-depth DWARF type resolution (kuna `typedepth`).
+/* Fixture for full-depth DWARF type resolution (unlace `typedepth`).
  *
  * Every declaration here is ordinary C whose DWARF type chain is four or more
  * DIEs long, which the pre-fix mapper (a flat `MAX_TYPE_DEPTH = 3` counted over
@@ -82,7 +82,7 @@ int use_state(state_t *ps, int n)
     return total;
 }
 
-/* A typedef'd ANONYMOUS struct whose name is already taken by a kuna core type
+/* A typedef'd ANONYMOUS struct whose name is already taken by a unlace core type
    (`code`) -- zlib's `inftrees.h` does exactly this. Borrowing the alias makes
    the type factory refuse the redefinition, and the aggregate must then fall
    back to the anonymous name rather than degrade the pointer to `void *`. */

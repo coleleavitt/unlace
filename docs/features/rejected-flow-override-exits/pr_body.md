@@ -1,11 +1,11 @@
 ## The problem
 
-One `--assert 'flow ...'` that kuna cannot apply deletes the whole function and
+One `--assert 'flow ...'` that unlace cannot apply deletes the whole function and
 reports success. The text surface exits 0 with an empty stderr and a body that is
 not a body:
 
 ```console
-$ kuna decompile ./aif_gap_x86_64 --addr 0x13c9 --assert 'flow 0x1405 call'; echo "exit $?"
+$ unlace decompile ./aif_gap_x86_64 --addr 0x13c9 --assert 'flow 0x1405 call'; echo "exit $?"
 void sub_13c9(void)
 {
   /* WARNING: structured blocks unavailable (structuring declined) */
@@ -19,7 +19,7 @@ surfaces disagree about the same run, and the one a script is most likely to she
 out to is the one that lies. The `--json` assertion ledger is no better: it reports
 `"status": "applied"` for the override the engine had just thrown out.
 
-(The fixture above is `decompiler/crates/kuna-analysis/tests/fixtures/aif_gap_x86_64`,
+(The fixture above is `decompiler/crates/unlace-analysis/tests/fixtures/aif_gap_x86_64`,
 in the repo. The same three symptoms reproduce byte-for-byte on two crackmes, where
 the deleted body was 955 lines.)
 
@@ -59,7 +59,7 @@ rewritten to the new contract and a `fatal`-vs-not case added; four transcript
 unit tests cover the two new scanners.
 
 Gates: `make test` 675/675 PARITY OK, `make test-stages` 650/650 PARITY OK,
-`make check-spec` OK, `make test-cli` 56/56, `kuna catalog --check` OK. A
+`make check-spec` OK, `make test-cli` 56/56, `unlace catalog --check` OK. A
 `decompile-all` before/after sweep over 134 in-repo fixtures with
 `noreturn_error`+`listing` on — the options that generate derived flow overrides —
 differs on 0 of them.

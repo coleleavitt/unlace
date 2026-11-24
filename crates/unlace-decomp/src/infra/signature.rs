@@ -304,11 +304,11 @@ impl Signature {
                 Ok(())
             }
             SignatureKind::Varnode(_) => Err(UnlaceError::lowlevel(
-                "kuna rust port: VarnodeSignature::encode needs Varnode::encode + \
+                "unlace rust port: VarnodeSignature::encode needs Varnode::encode + \
                  PcodeOp::encode (W8 marshal surface)",
             )),
             SignatureKind::Block { .. } => Err(UnlaceError::lowlevel(
-                "kuna rust port: BlockSignature::encode needs FlowBlock::getStart \
+                "unlace rust port: BlockSignature::encode needs FlowBlock::getStart \
                  + Address::encode of block start + PcodeOp::encode (W8)",
             )),
         }

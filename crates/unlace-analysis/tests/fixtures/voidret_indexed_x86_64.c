@@ -7,7 +7,7 @@
  *
  * gnulib base_len, which grep, find and gzip carry. `len` comes back from
  * strlen in rax, is decremented in rax, indexes `name`, and is returned in
- * rax; main reads it. kuna printed `void base_len(char *a0)` with the loop and
+ * rax; main reads it. unlace printed `void base_len(char *a0)` with the loop and
  * no return.
  */
 #include <string.h>

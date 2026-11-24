@@ -1,4 +1,4 @@
-# (kuna) `callretpair` fixture -- RE-friction round 12, need
+# (unlace) `callretpair` fixture -- RE-friction round 12, need
 # `bytecode-reader-return-discarded` (challenge 673da52e9b533b4c22bd2eeb, a
 # stripped gcc 9.4 QuickJS interpreter, caller sub_9d9c0 -> sub_875e0 @0x9d9d8),
 # reduced to one call and re-spelled with explicit symbols.

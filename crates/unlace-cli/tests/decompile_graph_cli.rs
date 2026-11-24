@@ -100,8 +100,10 @@ fn the_document_carries_the_schema_and_both_arrays() {
 
 #[test]
 fn a_file_export_writes_nothing_to_stdout() {
-    let path =
-        std::env::temp_dir().join(format!("kuna-decompile-graph-{}.json", std::process::id()));
+    let path = std::env::temp_dir().join(format!(
+        "unlace-decompile-graph-{}.json",
+        std::process::id()
+    ));
     let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args([
             "decompile-graph",
@@ -246,7 +248,7 @@ fn a_sharded_graph_keeps_the_serial_structure_names() {
         let args = [&[bin.as_str(), "--max-fn-seconds", "0"][..], pool].concat();
         let (sharded, stderr) = run(&args);
         assert!(
-            stderr.contains("[kuna --jobs] structsynth: "),
+            stderr.contains("[unlace --jobs] structsynth: "),
             "{pool:?}:\n{stderr}"
         );
         assert_eq!(sharded, serial, "{pool:?} moved the document");

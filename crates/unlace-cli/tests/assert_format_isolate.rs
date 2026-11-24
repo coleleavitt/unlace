@@ -170,7 +170,7 @@ fn a_value_picks_one_of_several_constants() {
 
 #[test]
 fn a_file_of_directives_formats_and_isolates() {
-    let path = common::scratch_file("assert-format-isolate", "kuna");
+    let path = common::scratch_file("assert-format-isolate", "unlace");
     std::fs::write(
         &path,
         "# the multiplier, in octal\nformat reuse::0x14a6 oct\nisolate reuse::v1 # two variables\n",

@@ -3,10 +3,10 @@
 ## The residue
 
 After rounds I-K (`castimplied`, `castarith`, `castsign`, `globalref`, `castindex`,
-`castternary`, `callpush`), kuna printed 35,588 casts on the 4,815 functions it and
+`castternary`, `callpush`), unlace printed 35,588 casts on the 4,815 functions it and
 IDA both emit in the 45 castbench binaries (0.941x IDA's 37,821), but 29.9 per 100
 statements against IDA's 27.0, and 31.5 against 26.1 at -O2. Sign-merged, the
-largest shape kuna prints more of is the 64-bit integer cast: `(long)v` /
+largest shape unlace prints more of is the 64-bit integer cast: `(long)v` /
 `(unsigned long)v` +2,450, `(long)(expr)` +881, `(long)*p` +333, `(long)call()` +212.
 
 ## Census: what those casts are (engine-side)
@@ -34,7 +34,7 @@ Where they sit (the op reading the cast):
 |---|---:|---:|---|
 | `*` | 671 | 370 | 805 are `(long)i * K` beside an `int` literal: C computes `i * K` in `int` |
 | `+` / `-` | 371 | 648 | 687 beside an `int` literal; about 300 beside a 64-bit operand |
-| statement top (assignment) | ~130 | ~214 | 199 are globals whose declared type kuna never states (refused) |
+| statement top (assignment) | ~130 | ~214 | 199 are globals whose declared type unlace never states (refused) |
 | call argument | 95 | 65 | mostly untrusted (trial) prototypes |
 | shift, left operand | 13 | 89 | must stay |
 | comparison | 19 | 21 | must stay (`castsign`'s typing) |
@@ -42,14 +42,14 @@ Where they sit (the op reading the cast):
 | `& | ^`, `/ %`, unary `-`, stacked | ~60 | ~70 | |
 
 The largest group, 1,640 casts, is a widened operand beside an **8-byte literal**
-that kuna prints unsuffixed, so C types it `int` and the cast is what makes the
+that unlace prints unsuffixed, so C types it `int` and the cast is what makes the
 arithmetic 64-bit. IDA prints the same sites with an `LL` literal: gzip
 `gen_bitlen` -O0 `*(short *)(4LL * dword_DF200[dword_DFAF8] + v17 + 2) = 0;` where
-kuna printed `*(unsigned short *)(v6 + (long)*(int *)((long)dat_dfaf8 * 4 + 0xdf200) * 4 + 2) = 0;`;
-find `insert_exec_ok` -O0 `*(long long *)(8LL * v16 + a3)` for kuna's
+unlace printed `*(unsigned short *)(v6 + (long)*(int *)((long)dat_dfaf8 * 4 + 0xdf200) * 4 + 2) = 0;`;
+find `insert_exec_ok` -O0 `*(long long *)(8LL * v16 + a3)` for unlace's
 `*(long *)(a2 + (long)v15 * 8)`; ls `abformat_init` -O0 `128 * (k + 12LL * j)` for
-kuna's `((long)v8 * 0xc + (long)v9) * 0x80`; gzip `build_tree` -O2 `v16 = 4LL * v10;`
-for kuna's `v16 = (long)v34 * 4;`. The literal is an 8-byte constant in the IR;
+unlace's `((long)v8 * 0xc + (long)v9) * 0x80`; gzip `build_tree` -O2 `v16 = 4LL * v10;`
+for unlace's `v16 = (long)v34 * 4;`. The literal is an 8-byte constant in the IR;
 printing it with the suffix of that width is its type becoming right, and C's usual
 arithmetic conversions then perform exactly the widening the cast spelled.
 
@@ -84,7 +84,7 @@ Not removable, and left alone:
 - both factors of `(long)a * (long)b`: one goes, the survivor keeps the product
   64-bit;
 - an operand whose printed type is unknown or not the IR's (a merged variable, a
-  global kuna never declares);
+  global unlace never declares);
 - a negated literal C types as unsigned (`-0x80000000`, whose C value is +2^31).
 
 ## Two pre-existing wrong-value prints found on the way

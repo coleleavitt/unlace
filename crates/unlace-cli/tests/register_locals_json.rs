@@ -25,7 +25,7 @@ fn run_on(fixture: &str, functions: &str, jobs: &str) -> Value {
         ])
         .arg(common::repo_root().join("specs"))
         .output()
-        .expect("spawn kuna");
+        .expect("spawn unlace");
     assert!(
         output.status.success(),
         "{}",

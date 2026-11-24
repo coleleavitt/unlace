@@ -5,7 +5,7 @@ machine code that is instruction-for-instruction identical at the good sites and
 the bad ones.
 
 ```
-$ kuna decompile ./graphy sub_1002c90 --option calleearity on --option varargstackargs on
+$ unlace decompile ./graphy sub_1002c90 --option calleearity on --option varargstackargs on
     sub_1005250(&v24,(unsigned long)v16 & 0xffffffff,(unsigned long)v82 & 0xff);
     sub_1005250(&v24,(unsigned long)v16 & 0xffffffff,v8 & 0xff);
     sub_1005250(&v24,v22 & 0xffffffff,v8 & 0xff);
@@ -61,7 +61,7 @@ and five unit tests on the two decisions this module owns.
 
 Gates: `make test` PARITY OK 675/675 (0 assertions changed), `make test-stages`
 PARITY OK 644/644 (4 new, none pre-existing moved), `make rust-test` green,
-`make check-spec` green, `kuna catalog --check` OK. Whole-corpus sweep: 51
+`make check-spec` green, `unlace catalog --check` OK. Whole-corpus sweep: 51
 binaries, 9753 functions, **42 changed (0.43%), zero regressions** — every hunk an
 argument added, and the fourteen named-libc cases (`mempcpy` 2→3, `mbrtowc` 3→4,
 `__mpn_impn_mul_n` 4→5, `__aeabi_idiv` 1→2, …) all match the callee's real

@@ -1,9 +1,9 @@
-# kuna: a 64-bit value a function builds in its one return register from two
+# unlace: a 64-bit value a function builds in its one return register from two
 # 32-bit halves is returned whole, and every argument that feeds it stays a
 # parameter.
 #
 # Stage / sub-stage: P4 call and prototype model, output-prototype (the
-# return-pair repair in kuna_returnuncomputed).  A strict fix: no option.
+# return-pair repair in unlace_returnuncomputed).  A strict fix: no option.
 #
 # Source (x86-64 SysV, bytes verbatim below; the fixture binaries and the
 # compiled round trip are unlace-analysis/tests/fixtures/piecehi_*):

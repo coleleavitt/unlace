@@ -1,4 +1,4 @@
-# Synopsys ARCv2 (specs/Ghidra/Processors/ARC), kuna #1632.  Three functions
+# Synopsys ARCv2 (specs/Ghidra/Processors/ARC), unlace #1632.  Three functions
 # compiled by `arc-zephyr-elf-gcc -mcpu=em4 -O2` and linked at 0x1000.
 #
 # sum   - a zero-overhead loop: `mov lp_count,r2 ; lp 0x102a ; ld.aw ; add_s`.

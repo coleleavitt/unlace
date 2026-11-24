@@ -272,7 +272,7 @@ fn fid_candidate(
         _ => "ambiguous",
     };
     Ok(
-        json!({"binary": binary, "database": db_path, "database_format": "kuna_fid", "language": lang,
+        json!({"binary": binary, "database": db_path, "database_format": "unlace_fid", "language": lang,
         "address": format!("0x{addr:x}"), "status": status, "match_basis": "full_hash",
         "full_hash": format!("0x{:016x}", quad.full_hash), "specific_hash": format!("0x{:016x}", quad.specific_hash),
         "code_unit_size": quad.code_unit_size, "specific_hash_evidence": specific_evidence, "candidates": candidates}),

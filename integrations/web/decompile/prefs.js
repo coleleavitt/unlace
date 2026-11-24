@@ -1,5 +1,5 @@
 // prefs.js — the study view's display preferences, one versioned record in
-// localStorage (`kuna.d2.prefs`). DOM-free: the storage object is passed in.
+// localStorage (`unlace.d2.prefs`). DOM-free: the storage object is passed in.
 // The choices of the cycling ones are listed in CHOICES; `hoverDelay` -1 is off.
 // Version 1 records (the first layout) are migrated: the view and the settings a
 // student chose carry over, the columns whose defaults changed take the new ones.
@@ -7,7 +7,7 @@
 // chose); version 1 and 2 records stored `hints: true` as a default, not a
 // choice, so it does not carry over. `hintsOn` adds the `?student=` switch.
 
-export const PREFS_KEY = 'kuna.d2.prefs';
+export const PREFS_KEY = 'unlace.d2.prefs';
 
 export const DEFAULT_PREFS = Object.freeze({
   v: 3,

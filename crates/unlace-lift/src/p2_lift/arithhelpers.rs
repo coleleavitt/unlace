@@ -38,7 +38,7 @@ use unlace_base::error::UnlaceResult;
 
 /// Prefix of every `<callfixup name=...>` this module registers; the installer
 /// (`unlace_analysis::analyzers::callfixup`) skips them under `option arithhelpers off`.
-pub const FIXUP_PREFIX: &str = "kuna_arithhelper_";
+pub const FIXUP_PREFIX: &str = "unlace_arithhelper_";
 
 pub use crate::architecture::HelperAbi;
 

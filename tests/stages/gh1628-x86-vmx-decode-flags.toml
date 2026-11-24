@@ -1,4 +1,4 @@
-# Kuna #1628: "x86-64: VMREAD/VMWRITE without REX.W are bad instructions;
+# Unlace #1628: "x86-64: VMREAD/VMWRITE without REX.W are bad instructions;
 # VMX instructions do not set CF/ZF"
 # https://github.com/Noelo-Lab/kuna/issues/1628
 #

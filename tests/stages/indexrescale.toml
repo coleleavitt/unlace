@@ -45,16 +45,16 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-INDEXRESCALE #1: the selected element is an index (default)'
+name = 'UNLACE-INDEXRESCALE #1: the selected element is an index (default)'
 count = 1
 literal = 'a0[v1] = a1;'
 
 [[match]]
-name = 'KUNA-INDEXRESCALE #2: the index constants are element counts (default)'
+name = 'UNLACE-INDEXRESCALE #2: the index constants are element counts (default)'
 count = 1
 literal = 'v1 = 3;'
 
 [[match]]
-name = 'KUNA-INDEXRESCALE #3: indexrescale off keeps the byte offset'
+name = 'UNLACE-INDEXRESCALE #3: indexrescale off keeps the byte offset'
 count = 1
 literal = 'a0 + v1) = a1;'

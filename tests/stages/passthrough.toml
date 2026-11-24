@@ -1,6 +1,6 @@
 # Type-recovery campaign, gzip -O2 (stripped): `gzip_base_name` @0xd290 is
 # `endbr64; jmp last_component` - it hands its own rdi to the callee and
-# returns what the callee returns - and kuna printed
+# returns what the callee returns - and unlace printed
 #
 #     void sub_d290(void) { sub_dfd0(); } // tail-call
 #

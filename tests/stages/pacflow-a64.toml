@@ -1,4 +1,4 @@
-# Kuna #1621: on arm64e a function that only signs, authenticates or
+# Unlace #1621: on arm64e a function that only signs, authenticates or
 # strips a pointer and returns it decompiled as `void`.  AARCH64.pspec
 # leaves the ShowPAC context at 0, and every ShowPAC=0 "hide" constructor
 # in AARCH64_base_PACoptions.sinc had an empty body: `pacda x0,x16` wrote

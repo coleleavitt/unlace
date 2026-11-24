@@ -27,7 +27,7 @@
     "The literal P3 relaxation is not implementable: the constant arm's extra predecessor is a DIFFERENT CBRANCH whose boolean does not dominate the join, so folding to zext(cond) would be an SSA violation, and reconstructing the whole chain would hoist a guarded load above its guard. The re-roll is expressible only after structuring, where the chain is one BlockCondition.",
     "The condition component is REQUIRED to be a BlockCondition (a folded short-circuit chain), which is what makes the rewrite value-safe as well as shape-safe: `&&`/`||` (and the negating `!`) always yield 0/1 in C. A bare leaf condition renders truthy under DIV-37 (`if (x & 0x100)` -> `(x & 0x100)`), so `v = (x & 0x100)` would store 0x100 -- wrong code. The bare-leaf shape is also the one P3 already folds.",
     "Pointer/float/aggregate destinations are declined (they would lose the constant's own rendering).",
-    "Print-only: an addl-flag (kuna_iteboolean, 0x4000) on the condition's terminal CBRANCH; no p-code is cloned or mutated, so OFF is byte-identical."
+    "Print-only: an addl-flag (unlace_iteboolean, 0x4000) on the condition's terminal CBRANCH; no p-code is cloned or mutated, so OFF is byte-identical."
   ],
   "ged_case": "O0-bash-bash-time_command",
   "ged_recorded": 55.0,
@@ -59,6 +59,6 @@
     "make test-stages": "PARITY OK 350/350",
     "make rust-test": "green",
     "make check-spec": "OK (lenient + strict)",
-    "kuna catalog --check": "catalog OK"
+    "unlace catalog --check": "catalog OK"
   }
 }

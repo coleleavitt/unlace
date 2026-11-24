@@ -18,7 +18,7 @@
 # default-on iteboolean re-roll would collapse it to a boolean assignment before
 # the return phi earlyreturn is about ever forms.)
 #
-# Pass 1 (option earlyreturn off): kuna keeps the merged diamond - a single
+# Pass 1 (option earlyreturn off): unlace keeps the merged diamond - a single
 # trailing return reached from both arms (if (guard) { v = 0 } else { v = 1 }
 # return v;), so the token return appears exactly ONCE.
 # Pass 2 (option earlyreturn on): the constant guard arm is peeled to its own

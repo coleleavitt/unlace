@@ -38,7 +38,7 @@ A trustworthy function inventory for triaging the PE.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "functions",
     "{{BIN}}",
     "--json"
@@ -69,7 +69,7 @@ A trustworthy function inventory for triaging the PE.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "functions",
     "{{BIN}}",
     "--json"
@@ -99,7 +99,7 @@ A trustworthy function inventory for triaging the PE.
 **Hypothesis OVERTURNED (round 2 builder `b-r2-pe-function-inve`); the symptom stands.**
 
 The name is not a data-symbol alias winning canonical-name selection. `<Class>::vftable_<i>`
-is a name kuna SYNTHESISES, and it is attached to a genuine function. The `rtti` pass (R3,
+is a name unlace SYNTHESISES, and it is attached to a genuine function. The `rtti` pass (R3,
 `crates/unlace-analysis/src/analyzers/rtti/mod.rs`) walks each recovered vftable and
 emits, per slot, a `SymFact{Function}` **at the address the slot points at** — the virtual
 method itself, not the table. All 10 flagged entries on `trappy attack.exe` are real

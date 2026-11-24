@@ -1,4 +1,4 @@
-# kuna `rettriangle`: `returndup` gives each predecessor of a shared
+# unlace `rettriangle`: `returndup` gives each predecessor of a shared
 # constant-return block its own return, which recovers a source's
 # early-return guards.  At the join of a one-block `if` there is no guard to
 # recover, and the split printed `if (c) celebrate(); return 0;` as

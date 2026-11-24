@@ -1,4 +1,4 @@
-# (kuna) `RDTSC` x86-64 zero-extension fixture -- RE-friction round 11,
+# (unlace) `RDTSC` x86-64 zero-extension fixture -- RE-friction round 11,
 # need `rdtsc-timestamp-incorporates-stale`.
 #
 # Both 64-bit destination registers start with non-zero upper halves.  RDTSC

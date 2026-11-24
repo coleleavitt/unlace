@@ -9,7 +9,7 @@
   "div": "DIV-135",
   "phase": "P3",
   "subphase": "call-guard",
-  "module": "decompiler/crates/kuna-decomp/src/p3_dataflow/indirectanchor.rs",
+  "module": "decompiler/crates/unlace-decomp/src/p3_dataflow/indirectanchor.rs",
   "decisions": [
     "The filed hypothesis (incomplete imported signature / return-trial scoring) is OVERTURNED. The symptom stands; the cause is Funcdata::opInsertAfter (funcdata_op.cc:373), which carried a STUB(W3-varnode) where upstream redirects an insertion after an INDIRECT marker to the CALL that marker speaks for. RulePullsubIndirect pulls a SUBPIECE through the guard INDIRECT of the frame slot at -0x2d0 and inserted it INSIDE the call's guard run; collectOutputTrialVarnodes walks back from the CALL and stops at the first non-INDIRECT, so it stopped 18 ops short of the EAX INDIRECT creation and every output trial was marked no-use.",
     "The refuter's 'flags-only consumer of RAX' reading is also overturned: BCryptSetProperty at 0x140004721 has the identical `test eax,eax; js` consumer and recovers its return normally. What separates the two call sites is the interposed SUBPIECE, not the consumer shape.",
@@ -24,7 +24,7 @@
     "make_check_spec": "OK",
     "make_test_cli": "83/83",
     "catalog_check": "catalog OK",
-    "make_rust_test": "6054 tests passed; 1 target red -- verify_w10_proto_unlock's cpp-oracle block, which is the known KUNA_DECOMP_TEST worktree trap, not this change: the assertion wants `xunknown4 promote_compare(char *` and every kuna build prints `unsigned int`. Falsified twice -- green under `env -u KUNA_DECOMP_TEST`, and the MAIN tree's unmodified decomp_test_dbg reproduces the identical failure. CI's cargo workspace suite (full-ci label) passed in 11m43s, where the oracle binary is absent and the block is skipped.",
+    "make_rust_test": "6054 tests passed; 1 target red -- verify_w10_proto_unlock's cpp-oracle block, which is the known UNLACE_DECOMP_TEST worktree trap, not this change: the assertion wants `xunknown4 promote_compare(char *` and every unlace build prints `unsigned int`. Falsified twice -- green under `env -u UNLACE_DECOMP_TEST`, and the MAIN tree's unmodified decomp_test_dbg reproduces the identical failure. CI's cargo workspace suite (full-ci label) passed in 11m43s, where the oracle binary is absent and the block is skipped.",
     "acceptance_probe": "PASS (a-7c5a8a2de1dd, 3/3 clauses, not flaky) on the rebased tree",
     "rebased_onto": "origin/main 9703f1d1 (#502)"
   },

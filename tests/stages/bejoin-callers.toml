@@ -1,4 +1,4 @@
-# kuna option bejoin callers (the default), GH-904: a big-endian long long
+# unlace option bejoin callers (the default), GH-904: a big-endian long long
 # the callee alone cannot prove joins high word first when a caller reads
 # its second register after the call.
 #

@@ -20,7 +20,7 @@
 # unguarded rule changed 345 of 5,067 functions, most of them this way.
 #
 # Stage / sub-stage: P4 "active-input-trial-scoring", option `passthrough`
-# (kuna_passthrough.rs, neutral_in_chain / anchors_neutral_run).  `g` is
+# (unlace_passthrough.rs, neutral_in_chain / anchors_neutral_run).  `g` is
 # `bx lr` and `h` is `bx ip`, a tail jump the callee probe cannot see
 # through, so nothing about `h` says it takes no arguments; 0x20004 is
 # outside the image.  Both passes print the empty calls.

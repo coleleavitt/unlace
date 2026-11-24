@@ -7,7 +7,7 @@
 # registers are live at once -- R9B accumulates, R11B walks the bits of CL, and
 # CL itself doubles each round -- and on exit the accumulator is copied back into
 # CL, which is also R11B's initialiser.  That closes a copy cycle
-# R9B -> CL -> R11B across the outer back edge, and the merge trims kuna inserts
+# R9B -> CL -> R11B across the outer back edge, and the merge trims unlace inserts
 # to serve it re-point an op output whose Varnode is already a member of a
 # settled HighVariable.
 #

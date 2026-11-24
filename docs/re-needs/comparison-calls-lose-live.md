@@ -45,7 +45,7 @@ refutation established a different cause; see **Split disposition** below.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x140001000",
@@ -86,7 +86,7 @@ refutation established a different cause; see **Split disposition** below.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x140001000",

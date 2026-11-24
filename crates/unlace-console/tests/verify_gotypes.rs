@@ -178,7 +178,7 @@ fn stripped_go_descriptor_globals_render_in_c() {
         eprintln!("verify_gotypes: skipping (`go` not on PATH)");
         return;
     }
-    let dir = std::env::temp_dir().join(format!("kuna_gotypeglobals_{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace_gotypeglobals_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let out_bin = dir.join("go_stripped");
     if !build_go(&dir, &out_bin, "amd64") {
@@ -214,7 +214,7 @@ fn stripped_go_newobject_result_takes_descriptor_type() {
         eprintln!("verify_gotypes: skipping (`go` not on PATH)");
         return;
     }
-    let dir = std::env::temp_dir().join(format!("kuna_gonewtype_{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace_gonewtype_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let out_bin = dir.join("go_stripped");
     if !build_go(&dir, &out_bin, "amd64") {
@@ -261,7 +261,7 @@ fn no_function_declares_a_go_typedesc_parameter() {
         eprintln!("verify_gotypes: skipping (`go` not on PATH)");
         return;
     }
-    let dir = std::env::temp_dir().join(format!("kuna_anyguard_{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace_anyguard_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let out_bin = dir.join("go_stripped");
     if !build_go(&dir, &out_bin, "amd64") {
@@ -300,7 +300,7 @@ fn stripped_go_binary_yields_its_own_named_struct() {
 
 fn check_named_struct(arch: &str) {
     let width = if matches!(arch, "386" | "arm") { 4 } else { 8 };
-    let dir = std::env::temp_dir().join(format!("kuna_gotypes_{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace_gotypes_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let out_bin = dir.join("go_stripped");
     if !build_go(&dir, &out_bin, arch) {
@@ -526,7 +526,7 @@ fn gonewtype_never_asserts_a_wrong_type() {
         eprintln!("skipping gonewtype_never_asserts_a_wrong_type: `go` not on PATH");
         return;
     }
-    let dir = std::env::temp_dir().join(format!("kuna_gonewtype_safe_{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace_gonewtype_safe_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let out = dir.join("safe");
     if !build_safety_go(&dir, &out) {
@@ -620,7 +620,7 @@ fn stripped_go_itab_renders_named() {
         eprintln!("verify_gotypes: skipping (`go` not on PATH)");
         return;
     }
-    let dir = std::env::temp_dir().join(format!("kuna_itab_{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace_itab_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let out_bin = dir.join("go_stripped");
     if !build_go_src(&dir, &out_bin, "amd64", ITAB_GO) {
@@ -705,7 +705,7 @@ fn go_interface_calls_print_by_method_name() {
         eprintln!("verify_gotypes: skipping (`go` not on PATH)");
         return;
     }
-    let dir = std::env::temp_dir().join(format!("kuna_goitabcalls_{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace_goitabcalls_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let out_bin = dir.join("go_dwarf");
     if !build_go_dwarf(&dir, &out_bin) {

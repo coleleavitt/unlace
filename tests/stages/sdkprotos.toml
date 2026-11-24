@@ -8,7 +8,7 @@
 # a pointer was loose stack slots, and an enum constant was a number.
 #
 # Stage / sub-stage: P1 external-refinement.
-# `analyzers/protos/kuna_sdkprotos.rs` reads the declarations of the names the
+# `analyzers/protos/unlace_sdkprotos.rs` reads the declarations of the names the
 # image imports from the same directory: attribute macros skipped, the `#if`
 # branches the target rules out dropped, types resolved through typedefs,
 # records, the enum macros and the object macros. A by-value struct is spread

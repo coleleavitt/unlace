@@ -1,12 +1,12 @@
-# kuna issue testcase: code whose address the program takes, and that no flow
+# unlace issue testcase: code whose address the program takes, and that no flow
 # reaches, is a function entry (`option addrtakenentry on|off`, default-ON).
 #
-# Issue:      kuna GH-1039 sections 1 and 2 - a handler called only through a
+# Issue:      unlace GH-1039 sections 1 and 2 - a handler called only through a
 #             pointer that a `lea` stores is missing from the inventory and
 #             folded into the function before it, and so are handlers a
 #             relocated table names before the first RUNTIME_FUNCTION.
 # Stage:      P1 code/data partition - the Listing walk's committed function
-#             set (`aif/kuna_addrtakenentry.rs`, re-seeding the walk behind
+#             set (`aif/unlace_addrtakenentry.rs`, re-seeding the walk behind
 #             `fast_funcdisc` and `funcdisc_recursive`).
 # P0 assert:  `option addrtakenentry on|off`.
 #
@@ -75,26 +75,26 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-ADDRTAKENENTRY #1: _start, register and interp are functions in all four passes'
+name = 'UNLACE-ADDRTAKENENTRY #1: _start, register and interp are functions in all four passes'
 count = 12
 regex = '0x1400010(52|30|b0) sub_1400010(52|30|b0)'
 
 [[match]]
-name = 'KUNA-ADDRTAKENENTRY #2: pre_a, pre_b and the handler are functions only with the option on'
+name = 'UNLACE-ADDRTAKENENTRY #2: pre_a, pre_b and the handler are functions only with the option on'
 count = 6
 regex = '0x1400010[014]0 sub_1400010[014]0'
 
 [[match]]
-name = 'KUNA-ADDRTAKENENTRY #3: no look-alike is a function'
+name = 'UNLACE-ADDRTAKENENTRY #3: no look-alike is a function'
 count = 0
 regex = 'sub_1400010(20|43|50|a0|c0|d0|e0)'
 
 [[match]]
-name = 'KUNA-ADDRTAKENENTRY #4: the handler decompiles to its own body'
+name = 'UNLACE-ADDRTAKENENTRY #4: the handler decompiles to its own body'
 count = 1
 literal = 'return a0 * 0xb + -4;'
 
 [[match]]
-name = 'KUNA-ADDRTAKENENTRY #5: the catalog documents it as a default-on P1 code/data-partition option'
+name = 'UNLACE-ADDRTAKENENTRY #5: the catalog documents it as a default-on P1 code/data-partition option'
 count = 1
 literal = '"option": "addrtakenentry", "values": ["on", "off"], "default": "on", "current": "on", "destructive_as_default": false, "phase": "P1"'

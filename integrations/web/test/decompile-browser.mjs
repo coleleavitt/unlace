@@ -5,7 +5,7 @@
 // patch a byte, reload to see the session restored, the Collaborate button,
 // opening pasted base64 text (button and Ctrl+V),
 // the layout at 1024 and 820 px, and the Strings
-// list taking a search for "flag" to the code that uses it, kuna's notes
+// list taking a search for "flag" to the code that uses it, unlace's notes
 // (`// branch-flip`) kept out of the code and shown for a selected line, the
 // Bytes view opening at the selected line's bytes, the type definitions above
 // a function (folded until opened), and a rename far down a long function
@@ -265,7 +265,7 @@ try {
   await page.click('#hintsbox');
   assert.equal(await page.call(() => document.documentElement.dataset.hints), 'off', 'unticking turns hints off');
   assert.ok(!(await shown('#hint')), 'the status bar hint is hidden');
-  assert.deepEqual(await page.call(() => { const p = JSON.parse(localStorage.getItem('kuna.d2.prefs')); return [p.hints, p.hintsSet]; }), [false, true], 'and the choice is kept');
+  assert.deepEqual(await page.call(() => { const p = JSON.parse(localStorage.getItem('unlace.d2.prefs')); return [p.hints, p.hintsSet]; }), [false, true], 'and the choice is kept');
   await page.key('4');
   await sleep(200);
   if (await count('#stackframe .d2frame') > 0) {
@@ -326,10 +326,10 @@ try {
   await ready('reload ready');
   await page.call((key, stored) => {
     localStorage.clear();
-    localStorage.setItem('kuna.d2.prefs', JSON.stringify({ v: 1, tab: 'c' }));
+    localStorage.setItem('unlace.d2.prefs', JSON.stringify({ v: 1, tab: 'c' }));
     localStorage.setItem(key, stored);
     return true;
-  }, 'kuna.d2.session.' + sampleHash, JSON.stringify({ v: 1, rawSeq: 1,
+  }, 'unlace.d2.session.' + sampleHash, JSON.stringify({ v: 1, rawSeq: 1,
     records: [['raw:1', { kind: 'raw', text: 'bytes 0x10 zz' }]], bytes: [] }));
   await loadFixture();
   await page.waitFor(`document.querySelectorAll('#fnlist .fn').length > 5`, { what: 'inventory despite a bad stored directive', timeout: 60000 });
@@ -396,7 +396,7 @@ try {
   await openSample(page, 'crackme.elf');
   await page.waitFor(`/check/.test(document.getElementById('ccode').textContent)`, { what: 'crackme main', timeout: 60000 });
   await idle('crackme open');
-  assert.doesNotMatch(await text('#ccode'), /return-dupe/, 'kuna\'s notes are not in the code');
+  assert.doesNotMatch(await text('#ccode'), /return-dupe/, 'unlace\'s notes are not in the code');
   assert.equal(await text('#c-L3 .ct'), 'int main(void)', 'not even on the signature');
   await page.click('#c-L3 .ct');
   assert.match(await text('#railsel'), /^int main\(void\)\/\/ return-dupe The machine code shares one return between several paths/,

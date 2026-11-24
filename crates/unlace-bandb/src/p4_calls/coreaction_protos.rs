@@ -2068,7 +2068,7 @@ fn retrec_tree(data: &Funcdata, vn: crate::context::VarnodeId, depth: usize) {
 
 /// (unlace) `UNLACE_RETREC_TRACE`: print each output trial's state at `stage`.
 fn retrec_trace(stage: &str, data: &Funcdata, active: &crate::fspec::ParamActive) {
-    if std::env::var_os("KUNA_RETREC_TRACE").is_none() {
+    if std::env::var_os("UNLACE_RETREC_TRACE").is_none() {
         return;
     }
     for i in 0..active.get_num_trials() {
@@ -2171,7 +2171,7 @@ impl Action for ActionReturnRecovery {
                 );
                 let (realistic, solid) =
                     ancestor.execute(data, op, slot, trial_size, trial_cond, trial_killed, false);
-                if std::env::var_os("KUNA_RETREC_TRACE").is_some() {
+                if std::env::var_os("UNLACE_RETREC_TRACE").is_some() {
                     eprintln!(
                         "retrec {} ancestor trial {} {:#x}+{} realistic {} solid {}",
                         data.get_name(),
@@ -2199,7 +2199,7 @@ impl Action for ActionReturnRecovery {
                         let trial = active.get_trial_mut(i);
                         data.ancestor_op_use(maxancestor, vn, op, trial, 0, 0)
                     };
-                    if std::env::var_os("KUNA_RETREC_TRACE").is_some() {
+                    if std::env::var_os("UNLACE_RETREC_TRACE").is_some() {
                         eprintln!("retrec {} opuse trial {} only {}", data.get_name(), i, only);
                         if !only {
                             retrec_tree(data, vn, 0);

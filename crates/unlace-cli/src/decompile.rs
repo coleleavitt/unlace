@@ -680,14 +680,14 @@ fn decompile(args: &DecompileArgs) -> Result<DecompileOutcome, String> {
         by_address = true;
     }
 
-    let out_path = temp_path("kuna_c_", ".c")?;
+    let out_path = temp_path("unlace_c_", ".c")?;
     let regions_path = if args.regions {
-        Some(temp_path("kuna_regions_", ".txt")?)
+        Some(temp_path("unlace_regions_", ".txt")?)
     } else {
         None
     };
     let trace_path = if args.trace {
-        Some(temp_path("kuna_trace_", ".txt")?)
+        Some(temp_path("unlace_trace_", ".txt")?)
     } else {
         None
     };
@@ -795,9 +795,9 @@ fn decompile(args: &DecompileArgs) -> Result<DecompileOutcome, String> {
             pinned_by,
         );
         let forwarded = |line: &&str| {
-            line.starts_with("[kuna target] ")
-                || line.starts_with("[kuna] MH_FILESET: ")
-                || line.starts_with("[kuna typelib] ")
+            line.starts_with("[unlace target] ")
+                || line.starts_with("[unlace] MH_FILESET: ")
+                || line.starts_with("[unlace typelib] ")
         };
         for note in stderr_text.lines().filter(forwarded) {
             unlace_base::notes::say_once(&binary, note);
@@ -965,7 +965,7 @@ pub fn run(args: &DecompileArgs) -> i32 {
         Ok(out) => {
             let text = if args.regions {
                 format!(
-                    "{}\n\n// ==== kuna regions (S7) ====\n{}\n",
+                    "{}\n\n// ==== unlace regions (S7) ====\n{}\n",
                     out.c,
                     out.regions.unwrap_or_default()
                 )
@@ -977,7 +977,7 @@ pub fn run(args: &DecompileArgs) -> i32 {
             // worked.  Emitting first keeps the stdout-then-stderr order.
             let written = crate::output::emit(&text);
             if let Some(trace) = &out.trace {
-                eprintln!("// ==== kuna maturity trace ====\n{trace}");
+                eprintln!("// ==== unlace maturity trace ====\n{trace}");
             }
             if let Some(interior) = &out.interior {
                 eprintln!("{}", crate::interior::note(interior));
@@ -1411,7 +1411,7 @@ fn usage() {
          function declaration is the prototype of the function or import of that\n\
          name, and each struct, union, enum and typedef is defined for `type` and\n\
          `data`.  The text must be preprocessed C; --types-cpp CC runs `CC -E` over\n\
-         each header first (kuna runs no preprocessor otherwise).  A declaration\n\
+         each header first (unlace runs no preprocessor otherwise).  A declaration\n\
          that does not parse is reported with its file and line and the rest still\n\
          apply; an --assert on the same function wins over the header.\n\
          \n\
@@ -1644,8 +1644,8 @@ mod tests {
 
     #[test]
     fn temporary_output_paths_have_independent_owned_lifetimes() {
-        let first = super::temp_path("kuna_c_test_", ".c").unwrap();
-        let second = super::temp_path("kuna_c_test_", ".c").unwrap();
+        let first = super::temp_path("unlace_c_test_", ".c").unwrap();
+        let second = super::temp_path("unlace_c_test_", ".c").unwrap();
         let first_path = first.to_path_buf();
         let second_path = second.to_path_buf();
         assert_ne!(first_path, second_path);
@@ -1670,7 +1670,7 @@ mod tests {
 
     #[test]
     fn temporary_output_path_is_removed_on_unwind() {
-        let output = super::temp_path("kuna_regions_test_", ".txt").unwrap();
+        let output = super::temp_path("unlace_regions_test_", ".txt").unwrap();
         let path = output.to_path_buf();
         let result = std::panic::catch_unwind(move || {
             let _output = output;
@@ -1783,7 +1783,7 @@ mod tests {
     fn deferred_fast_funcdisc_outranks_the_preset() {
         let mut args = script_args("/x/a.out", "main");
         args.options = vec![("fast_funcdisc".into(), "on".into())];
-        let out = Path::new("/tmp/kuna_c_x.c");
+        let out = Path::new("/tmp/unlace_c_x.c");
         let script = |defer| {
             super::build_script_for_input(
                 &args,
@@ -2201,7 +2201,7 @@ Decompilation complete
                 func_decls: decls.clone(),
                 ..script_args("/tmp/a.out", "0x1400")
             },
-            Path::new("/tmp/kuna.c"),
+            Path::new("/tmp/unlace.c"),
             LISTING,
             None,
         );
@@ -2233,7 +2233,7 @@ Decompilation complete
                 assertions: directives.clone(),
                 ..script_args("/tmp/a.out", "0x401571")
             },
-            Path::new("/tmp/kuna.c"),
+            Path::new("/tmp/unlace.c"),
             LISTING,
             None,
         );
@@ -2262,7 +2262,7 @@ Decompilation complete
                     by_address,
                     ..script_args("/tmp/a.out", target)
                 },
-                Path::new("/tmp/kuna.c"),
+                Path::new("/tmp/unlace.c"),
                 LISTING,
                 None,
             )
@@ -2284,7 +2284,7 @@ Decompilation complete
                 func_decls: decls.clone(),
                 ..script_args("/tmp/a.out", "0x1400")
             },
-            Path::new("/tmp/kuna.c"),
+            Path::new("/tmp/unlace.c"),
             LISTING,
             None,
         );
@@ -2318,7 +2318,7 @@ Decompilation complete
                 assertions: directives.clone(),
                 ..script_args("/tmp/a.out", "authenticate")
             },
-            Path::new("/tmp/kuna.c"),
+            Path::new("/tmp/unlace.c"),
             LISTING,
             None,
         );
@@ -2359,7 +2359,7 @@ Decompilation complete
                 assertions: directives.clone(),
                 ..script_args("/tmp/a.out", "main")
             },
-            Path::new("/tmp/kuna.c"),
+            Path::new("/tmp/unlace.c"),
             LISTING,
             None,
         );
@@ -2465,7 +2465,7 @@ Execution error: Syntax error
     fn build_script_without_declarations_emits_no_boundary_lines() {
         let script = build_script(
             &script_args("/tmp/a.out", "main"),
-            Path::new("/tmp/kuna.c"),
+            Path::new("/tmp/unlace.c"),
             LISTING,
             None,
         );
@@ -2479,20 +2479,20 @@ Execution error: Syntax error
     fn build_script_quotes_spaced_paths() {
         let script = build_script(
             &script_args("/home/u/test dir/a.out", "main"),
-            Path::new("/tmp/out dir/kuna.c"),
+            Path::new("/tmp/out dir/unlace.c"),
             LISTING,
-            Some(Path::new("/tmp/out dir/kuna.txt")),
+            Some(Path::new("/tmp/out dir/unlace.txt")),
         );
         assert!(
             script.contains("load file \"/home/u/test dir/a.out\"\n"),
             "the image path must be one quoted argument, got:\n{script}"
         );
         assert!(
-            script.contains("openfile write \"/tmp/out dir/kuna.c\"\n"),
+            script.contains("openfile write \"/tmp/out dir/unlace.c\"\n"),
             "the C output path must be one quoted argument, got:\n{script}"
         );
         assert!(
-            script.contains("openfile write \"/tmp/out dir/kuna.txt\"\n"),
+            script.contains("openfile write \"/tmp/out dir/unlace.txt\"\n"),
             "the regions path must be one quoted argument, got:\n{script}"
         );
     }
@@ -2506,7 +2506,7 @@ Execution error: Syntax error
                 bfd_target: Some("x86:LE:64:default".into()),
                 ..script_args("/home/u/test dir/a.out", "main")
             },
-            Path::new("/tmp/kuna.c"),
+            Path::new("/tmp/unlace.c"),
             LISTING,
             None,
         );
@@ -2527,7 +2527,7 @@ Execution error: Syntax error
                 bfd_target: Some("x86:LE:64:default".into()),
                 ..script_args("/tmp/raw image.bin", "0x4000")
             },
-            Path::new("/tmp/out dir/kuna.c"),
+            Path::new("/tmp/out dir/unlace.c"),
             LISTING,
             Some(Path::new("/tmp/out dir/regions.txt")),
         );
@@ -2537,7 +2537,7 @@ Execution error: Syntax error
                 "load raw x86:LE:64:default 0x4000 0x4000 \"/tmp/raw image.bin\"\n",
                 "option errortoomanyinstructions off\noption listing on\nread symbols\n",
                 "function containing 0x4000\nfunction symbol 0x4000\nload addr 0x4000\ndecompile\n",
-                "openfile write \"/tmp/out dir/kuna.c\"\nprint C\nprint raw\nclosefile\n",
+                "openfile write \"/tmp/out dir/unlace.c\"\nprint C\nprint raw\nclosefile\n",
                 "openfile write \"/tmp/out dir/regions.txt\"\nregion blocks\nregion tree\nclosefile\nquit\n",
             )
         );
@@ -2556,7 +2556,7 @@ Execution error: Syntax error
                     bfd_target: Some("x86:LE:16:Real Mode:default".into()),
                     ..script_args("/tmp/dazzle.exe", "0x70")
                 },
-                Path::new("/tmp/kuna.c"),
+                Path::new("/tmp/unlace.c"),
                 LISTING,
                 None,
             );
@@ -2634,7 +2634,7 @@ Execution error: Syntax error
     fn the_widened_script_puts_the_bundle_before_the_commit() {
         let script = build_script(
             &script_args(&fixture("entrymain_arm"), "sub_410"),
-            Path::new("/tmp/kuna.c"),
+            Path::new("/tmp/unlace.c"),
             WIDENED,
             None,
         );
@@ -2674,7 +2674,7 @@ Execution error: Syntax error
     fn build_script_is_unchanged_for_ordinary_paths() {
         let script = build_script(
             &script_args("/home/u/a.out", "main"),
-            Path::new("/tmp/kuna.c"),
+            Path::new("/tmp/unlace.c"),
             LISTING,
             None,
         );
@@ -2683,7 +2683,7 @@ Execution error: Syntax error
             "got:\n{script}"
         );
         assert!(
-            script.contains("openfile write /tmp/kuna.c\n"),
+            script.contains("openfile write /tmp/unlace.c\n"),
             "got:\n{script}"
         );
         assert!(
@@ -2759,7 +2759,7 @@ Execution error: Syntax error
                 ],
                 ..script_args("/tmp/a.out", "sample")
             },
-            Path::new("/tmp/kuna.c"),
+            Path::new("/tmp/unlace.c"),
             LISTING,
             None,
         );
@@ -2792,7 +2792,7 @@ Execution error: Syntax error
                 assertions: vec![crate::assertdecl::parse_one("name v2 buf").unwrap()],
                 ..script_args("/tmp/a.out", "sample")
             },
-            Path::new("/tmp/kuna.c"),
+            Path::new("/tmp/unlace.c"),
             LISTING,
             None,
         );
@@ -2809,7 +2809,7 @@ Execution error: Syntax error
         let original = "/home/u/test dir/a.out";
         let script = build_script(
             &script_args(original, "main"),
-            Path::new("/tmp/kuna.c"),
+            Path::new("/tmp/unlace.c"),
             LISTING,
             None,
         );

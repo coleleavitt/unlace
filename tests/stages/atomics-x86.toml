@@ -1,4 +1,4 @@
-# kuna_atomics (option atomics, docs/spec/02-lift-and-flow.md; auto, then msvc for two functions): a locked x86-64 read-modify-write
+# unlace_atomics (option atomics, docs/spec/02-lift-and-flow.md; auto, then msvc for two functions): a locked x86-64 read-modify-write
 # lifts to one __sync builtin instead of LOCK(); load; update; store; UNLOCK();.
 # Fixed forms: xadd, add, dec, or, xchg (always locked), cmpxchg at 4, 8 and 1
 # bytes, an inc of a RIP-relative global, and two cmpxchg retry loops whose

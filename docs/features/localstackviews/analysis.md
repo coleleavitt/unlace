@@ -91,8 +91,8 @@ int main(void) {
 ```sh
 gcc -g -O2 -fno-stack-protector -fcf-protection=none -no-pie u.c helpers.c -o u_gcc
 ./u_gcc
-decompiler/target/release/kuna decompile ./u_gcc t11_branch --mode reliable --json --option structdefs on
-decompiler/target/release/kuna decompile ./u_gcc t11_branch --mode reliable --json --option structdefs on --option stackviews on
+decompiler/target/release/unlace decompile ./u_gcc t11_branch --mode reliable --json --option structdefs on
+decompiler/target/release/unlace decompile ./u_gcc t11_branch --mode reliable --json --option structdefs on --option stackviews on
 ```
 
 Both native GCC and Clang builds exit zero. Runtime `c=0` must return **67**;
@@ -154,20 +154,20 @@ The relevant decision chain is:
    default admission. `ActionDeadCode` consumes this policy, and
    `ActionVarnodeProps` consults it when clearing temporary liveness holds.
 3. Late local union admission changes the representation without restoring
-   native-write correspondence. `kuna_stackobjects::Origins::value` cannot call
+   native-write correspondence. `unlace_stackobjects::Origins::value` cannot call
    the unmarked reconstruction a physical write: the Pair object remains
    `defined=false`, while its later Handle object is defined.
 4. `p9_emit/coreaction_casts.rs::action_set_casts` runs
-   `kuna_stackversions::prepare` before view casts. Its `physical_version`
+   `unlace_stackversions::prepare` before view casts. Its `physical_version`
    classifies non-native operations into generated frame backing as memory SSA
    versions and marks them nonprinting. This hides Op238 after automatic union
    admission. With the default Pair layout it was still a printed field COPY.
 5. `printc.rs` admits a hidden statement only if the existing
-   `kuna_stackbytes::assignment` can reconstruct a safe byte transfer.
-   `kuna_stackbytes::expression` does not project an implied INT_ADD. It accepts
+   `unlace_stackbytes::assignment` can reconstruct a safe byte transfer.
+   `unlace_stackbytes::expression` does not project an implied INT_ADD. It accepts
    the constant y bytes, but correctly refuses to invent/re-read x.
 
-An isolated widening of `kuna_stackvalueorder::moves_write` was ineffective:
+An isolated widening of `unlace_stackvalueorder::moves_write` was ineffective:
 that gate requires an actual `is_stack_store()` output, which Op238 lacks.
 Allowing the already-existing P6 object/snapshot recovery for the local backing
 also left the C identical and Pair undefined. These ablations reject both narrow
@@ -188,10 +188,10 @@ write before that boundary.
 The existing fixture is runnable without external datasets:
 
 ```sh
-fixture=decompiler/crates/kuna-analysis/tests/fixtures/lifetimes_stack_x86_64
-decompiler/target/release/kuna decompile "$fixture" escaped_alias --mode reliable --json --assert "@$fixture.kuna" --assert-strict --option structdefs on
-decompiler/target/release/kuna decompile "$fixture" escaped_alias --mode reliable --json --assert "@$fixture.kuna" --assert-strict --option structdefs on --option stackviews on
-decompiler/target/release/kuna decompile "$fixture" escaped_object_reuse --mode reliable --json --assert "@$fixture.kuna" --assert-strict --option structdefs on --option stackviews on
+fixture=decompiler/crates/unlace-analysis/tests/fixtures/lifetimes_stack_x86_64
+decompiler/target/release/unlace decompile "$fixture" escaped_alias --mode reliable --json --assert "@$fixture.unlace" --assert-strict --option structdefs on
+decompiler/target/release/unlace decompile "$fixture" escaped_alias --mode reliable --json --assert "@$fixture.unlace" --assert-strict --option structdefs on --option stackviews on
+decompiler/target/release/unlace decompile "$fixture" escaped_object_reuse --mode reliable --json --assert "@$fixture.unlace" --assert-strict --option structdefs on --option stackviews on
 ```
 
 For `escaped_alias`, a frame address escapes through the locked global
@@ -212,7 +212,7 @@ locked `int4 *` receiving contract. GCC and Clang reject this under
 that warning as an error for every lifetime control; native success alone is
 not enough.
 
-`kuna_stackuses::input_contract` recognizes a persistent COPY destination or
+`unlace_stackuses::input_contract` recognizes a persistent COPY destination or
 STORE receiver, but the final publication in this trace is a register CAST
 whose high variable also contains the global. The visible source operation no
 longer exposes the original persistent receiver. A pointer-use contract must

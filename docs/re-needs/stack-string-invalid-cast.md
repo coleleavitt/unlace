@@ -38,7 +38,7 @@ Readable, valid C initializing the local message buffer, ideally from the recogn
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "_main"
@@ -71,7 +71,7 @@ Readable, valid C initializing the local message buffer, ideally from the recogn
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "_main"
@@ -108,7 +108,7 @@ _not yet refuted_
 
 ## Reference
 
-`{"tool": "strings", "command": "strings ./target/practice_2_rengr", "evidence": "It directly reports `Hello, Reverse Engineer!`, the buffer content obscured by kuna's emitted assignments."}`
+`{"tool": "strings", "command": "strings ./target/practice_2_rengr", "evidence": "It directly reports `Hello, Reverse Engineer!`, the buffer content obscured by unlace's emitted assignments."}`
 
 ## Instances
 
@@ -117,7 +117,7 @@ _not yet refuted_
 ## Decision log
 
 - round 1: gated `admitted`, NOT built (round 1 closed 12 of 23). Carried into round 2.
-- round 2 wave 20 (captain): **RESTORED FROM `.kuna-repipe/rounds/1/gate.json` + the arena
+- round 2 wave 20 (captain): **RESTORED FROM `.unlace-repipe/rounds/1/gate.json` + the arena
   report** and RE-GATED against merged main 509bb7a3. This record carried only a `## Symptom`
   stub, no probe and no acceptance, so it was undispatchable by `select` and unclosable by
   B_DONE; the two arms below existed all along in round-1 state and were never transcribed.

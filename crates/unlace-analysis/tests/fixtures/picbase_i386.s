@@ -1,5 +1,5 @@
-# (kuna) Fixture for `option picbase` -- the i386 PIC base register folded into
-# the cross-reference index (unlace-analysis/src/listing/kuna_picbase.rs).
+# (unlace) Fixture for `option picbase` -- the i386 PIC base register folded into
+# the cross-reference index (unlace-analysis/src/listing/unlace_picbase.rs).
 #
 # Reduced from crackmes.one 5ab77f6333c5d40ad448ca52 (pancrackme v1.0), where
 # `unlace strings --json --filter Password` found the prompt at 0x8049127 and
@@ -91,7 +91,7 @@ __x86.get_pc_thunk.bx:
 prompt:
 	.string	"Password: "
 banner:
-	.string	"kuna picbase fixture"
+	.string	"unlace picbase fixture"
 secret:
 	.string	"picbase must not claim this"
 trailer:

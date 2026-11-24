@@ -22,7 +22,7 @@
 # `*(unsigned long *)(v3 * 8)`.
 #
 # Stage / sub-stage: P4 "active-input-trial-scoring"
-# (kuna_calleefilledarg.rs, option calleefilledarg, default on).  At a
+# (unlace_calleefilledarg.rs, option calleefilledarg, default on).  At a
 # call to an Objective-C selector stub, a register the stub's body writes
 # on every path from its entry before anything could read it, that the
 # caller never filled, is no parameter slot: the positional rule steps over

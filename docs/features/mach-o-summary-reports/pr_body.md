@@ -1,13 +1,13 @@
 ## The problem
 
-`kuna functions --summary` reports the image entry point, and on any modern
+`unlace functions --summary` reports the image entry point, and on any modern
 Mach-O it reported a file offset where every other format reports a virtual
 address. The offset matches no function, so the name degrades to a hex string
 and the reachability count collapses to `null` — the two fields the summary
 exists to answer.
 
 ```
-$ kuna functions decompiler/crates/kuna-analysis/tests/fixtures/macho_stripped_main --summary --json
+$ unlace functions decompiler/crates/unlace-analysis/tests/fixtures/macho_stripped_main --summary --json
   "summary": {
     "entry": {
       "name": "0x5b0",
@@ -26,7 +26,7 @@ $ kuna functions decompiler/crates/kuna-analysis/tests/fixtures/macho_stripped_m
 - `object`'s `File::entry()` returns the raw header field, which is already a VMA
   for ELF `e_entry`, PE `AddressOfEntryPoint` and Mach-O `LC_UNIXTHREAD` (the
   saved thread state's PC), but is a `__TEXT`-relative file offset for `LC_MAIN`.
-  New `kuna_analysis::analyzers::entry::image_entry_vma` states that once.
+  New `unlace_analysis::analyzers::entry::image_entry_vma` states that once.
 - It rebases **only** `LC_MAIN`, through the existing `macho_main_entry_vma`,
   which answers for nothing else. Adding `__TEXT.vmaddr` by format instead would
   double-count an `LC_UNIXTHREAD` entry, which already carries it.
@@ -53,7 +53,7 @@ promotes the acceptance, re-pointed onto the in-repo `macho_stripped_main`
 fixture because CI has no dataset.
 
 `make test` 675/675 PARITY OK · `make test-stages` 635/635 PARITY OK ·
-`make check-spec` OK · `kuna catalog --check` OK · `make test-cli` 42/42.
+`make check-spec` OK · `unlace catalog --check` OK · `make test-cli` 42/42.
 No existing expectation moved.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

@@ -6,7 +6,7 @@ every input. Build the fixture this PR vendors and decompile it:
 
 ```
 $ gcc -nostdlib -static -Wl,-e,_start -o covertrim_x86_64 covertrim_x86_64.s
-$ kuna decompile ./covertrim_x86_64 gfinv
+$ unlace decompile ./covertrim_x86_64 gfinv
       v6 = 0;
       v3 = a0;
       while (a0 = v6, v7 = a0 != 0, v7) {
@@ -30,7 +30,7 @@ parameter with a fresh `node_pool` pointer and emitted the self-referential
 - `Funcdata::set_varnode_properties` re-allocates a Varnode's `Cover` after
   `op_unset_output` has dropped it. C++ does that through
   `Varnode::calcCover` → `setFlags(coverdirty)`, and `setFlags` forwards the bit
-  to `high->coverDirty()`. kuna's arena model cannot reach the HighVariable bank
+  to `high->coverDirty()`. unlace's arena model cannot reach the HighVariable bank
   from `Varnode::set_flags`, and this one reconciliation site was missing it.
 - The consequence is a member Varnode holding a *fresh, empty* `Cover` inside a
   HighVariable that still reads clean, so `HighIntersectTest::update_high` skips

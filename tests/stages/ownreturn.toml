@@ -2,7 +2,7 @@
 # return value, not leftover.
 #
 # Stage / sub-stage: P4 call and prototype model, output-prototype.
-# The rule (kuna_retinputhalf.rs) is always on.
+# The rule (unlace_retinputhalf.rs) is always on.
 #
 # Source (clang -O2 -target arm-linux-gnueabi, bytes verbatim below with each
 # `bl ext` pointed at 0x100100, where `ext` has no body):

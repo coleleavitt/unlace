@@ -9,7 +9,7 @@
   "flag": "param_copy_hoist",
   "element_id": 4120,
   "change_kind": "structure-recovery",
-  "source_decompiler": "kuna",
+  "source_decompiler": "unlace",
   "inspiration": "decbench:O0-e2fsprogs-e2fsck-save_output; O0-e2fsprogs-e2fsck-ea_refcount_free (single-trim sub-case); Merge::trimOpInput / Merge::buildDominantCopy (merge.cc)",
   "default_on": false,
   "ablation_changed": 0,
@@ -38,7 +38,7 @@
   "ged_options": [
     "paramcopyhoist=on"
   ],
-  "ged_kuna_commit": "3b7c203e",
+  "ged_unlace_commit": "3b7c203e",
   "ged_results_root": "/home/mahaloz/github/decbench/results/full_run",
   "ged_siblings": {},
   "tier": "transform",

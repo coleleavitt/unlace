@@ -5,7 +5,7 @@ this compares two BUILDS running their defaults -- the flat 32-line refusal
 against the budget that replaced it -- and classifies every function whose body
 moved.
 
-usage: budget-hunks.py <kuna-before> <kuna-after> <outdir> <bin>...
+usage: budget-hunks.py <unlace-before> <unlace-after> <outdir> <bin>...
 """
 import collections
 import json

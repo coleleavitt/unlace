@@ -35,7 +35,7 @@ sink 0x1
 a_done sees n=3
 ```
 
-kuna, default (`indirectonly` off) — the count is a register local and the slot is
+unlace, default (`indirectonly` off) — the count is a register local and the slot is
 only read:
 
 ```c
@@ -55,7 +55,7 @@ void walk(unsigned long *a0)
 }
 ```
 
-kuna, `--option indirectonly on` — r14d is merged into the slot, so the C
+unlace, `--option indirectonly on` — r14d is merged into the slot, so the C
 decrements memory that the machine never writes and hands it to `a_done`:
 
 ```c
@@ -146,8 +146,8 @@ void walk(undefined8 *param_1)
 ```
 
 Identical fabricated store. `markIndirectOnly`/`checkIndirectUse` and
-`mergeTestAdjacent` are ported opcode-for-opcode, so kuna with the option **on**
-reproduces Ghidra exactly; kuna with the option **off** — the shipped default — is
+`mergeTestAdjacent` are ported opcode-for-opcode, so unlace with the option **on**
+reproduces Ghidra exactly; unlace with the option **off** — the shipped default — is
 the arm that does not fabricate the store.
 
 ## 6. What is pinned

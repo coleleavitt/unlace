@@ -1,6 +1,6 @@
 # Valid per-architecture C type spelling (`option ctypes on|off`).
 #
-# kuna's core types are literally NAMED uint1/int4/float8/float10/code, a
+# unlace's core types are literally NAMED uint1/int4/float8/float10/code, a
 # verbatim port of upstream's no-<coretypes> fallback branch, which the real
 # Ghidra application never takes because its Java side ships its own names over
 # the wire. The printer prints those names, so none of them is valid C. The

@@ -1,4 +1,4 @@
-# The kuna site (and the in-browser decompiler)
+# The unlace site (and the in-browser decompiler)
 
 **kuna.noelo.org** — the project site and its public development visualization — and
 **decompile.run**, the decompiler that runs **entirely client-side in a web browser**: no
@@ -7,7 +7,7 @@ server, no backend, no upload. One static bundle, split into the two sites at de
 
 | URL | Page |
 |---|---|
-| `/` | **Landing** — what kuna is, a side-by-side compare section, the three project goals. Inert: no wasm, no network. |
+| `/` | **Landing** — what unlace is, a side-by-side compare section, the three project goals. Inert: no wasm, no network. |
 | `/dev-viz/` | **Development record** — phase activity, what each phase holds and the order its passes run in, commit cadence, option provenance, DecBench evidence, and the autonomous improvement loop. Generated from tracked repository evidence at build time. |
 | `/decompile/` | **The decompiler** — full screen, in plain words, in the site's Noelo palette (dark by default, light on a toggle) with its own app type: open an ELF/PE/Mach-O (the *Open file* button, or drop it anywhere) and read one function as its code (C or Rust), assembly, bytes and stack frame linked line by line, double-click a global to see its data, an Explain panel for whatever is selected, renames/retypes/prototypes/notes and byte patches the engine applies, a patched-program download, and a changes file the CLI replays. *Show hints* (off by default; `?student=true` turns it on) adds the teaching notes and the hover cards that explain what the pointer rests on. *Collaborate* starts a live session with no server: up to 8 people on one program, each other's edits, pointers and pings, the program sent to whoever joins (invite link, reply link; tabs of one browser need only the invite), on one network or, with *Connect across the internet* ticked, across it through Cloudflare's STUN server. |
 
@@ -43,7 +43,7 @@ the address for the hints and hover cards. ⋯ → **Download C code (.zip)** ex
 whole binary as a recompile-oriented project — `<name>.c` / `<name>.h` / `<name>.asm` /
 `README.md`, the `unlace decompile-project` artifacts — built into a ZIP inside the Worker;
 only the final ZIP buffer crosses back to the page. It supports whatever the CLI supports
-— every format and architecture kuna has a `.sla` for — with no per-format configuration
+— every format and architecture unlace has a `.sla` for — with no per-format configuration
 (the engine resolves each binary; the Worker fetches only the one `.sla` it needs). See
 `docs/web-integration.md` §3.
 
@@ -89,13 +89,13 @@ bundle with the decompiler at `/decompile/`, which is also what the tests serve.
 | `index.html` | The landing page: hero, the compare section, the three goals. Static — its only script wires the two dropdowns. |
 | `dev-viz/` | The development record. `generate.py` exports full git history plus tracked option, triage, feature, and baseline evidence to `data.json`, and reuses the observatory's atlas generator (`scripts/observatory/atlas.py`, `docs/observatory.md`) for per-phase source sizes and the default pass schedule, so it needs `cargo` on the path; `app.js` renders the interactive charts. The generated JSON is ignored in source and assembled into `dist/` by `build.sh`. |
 | `decompile/` | The decompiler: `index.html` + `decompile.css` (Noelo's palette as dark and light tokens, its own type and layout, no `site.css`) + `app.js` and DOM-free modules for the code and assembly panes (including the easy assembly spelling), the function list's groups, the hover card, the Explain panel, the edit session (`--assert` directives), bytes and patching, the stack frame, the Data tab (a global's data, decoded by type, and who uses it), instruction notes and help. `collab/` is *Working together*, loaded only when a session starts or an invite or reply link is opened: the controller and its dialogs, the group protocol, WebRTC and BroadcastChannel links, the shared registers, message checks and codes, pointers and pings. `docs/web-integration.md` §4.2 has the layout, the module table and *Working together*. |
-| `compare-samples.js` | Data for the compare section: `SAMPLES` (kuna's output per function) × `RIVALS` (the right-hand pane), with each sample's measured DecBench GED. Adding a comparison is a data edit; the header documents the schema. Every pane must be **verbatim** tool output — mine and vet new ones with `python3 -m scripts.decbench.showcase` (`docs/decbench-loop.md` → *Finding good kuna examples*). |
-| `assets/` | The shared design system: `css/site.css`, `fonts/` (Jost, Roboto Mono), `img/` (mark + favicon, derived from `assets/kuna.png`), `js/highlight-c.js` — the one C highlighter the landing page and the decompiler use — and `js/fnfilter.js`, the DOM-free matcher behind the /decompile function search. |
+| `compare-samples.js` | Data for the compare section: `SAMPLES` (unlace's output per function) × `RIVALS` (the right-hand pane), with each sample's measured DecBench GED. Adding a comparison is a data edit; the header documents the schema. Every pane must be **verbatim** tool output — mine and vet new ones with `python3 -m scripts.decbench.showcase` (`docs/decbench-loop.md` → *Finding good unlace examples*). |
+| `assets/` | The shared design system: `css/site.css`, `fonts/` (Jost, Roboto Mono), `img/` (mark + favicon, derived from `assets/unlace.png`), `js/highlight-c.js` — the one C highlighter the landing page and the decompiler use — and `js/fnfilter.js`, the DOM-free matcher behind the /decompile function search. |
 | `CNAME` | The custom domain (`kuna.noelo.org`); `build.sh` copies it into `dist/`. Repo *Settings → Pages → Custom domain* must agree. |
 | `decompile-run/` | What `split-sites.sh` adds to the two sites: decompile.run's `README.md` and `CNAME`, and `redirect.html`, kuna.noelo.org's `/decompile/`. |
-| `kuna-web.js` | The glue: loads the wasm, preloads the small spec bundle, lazily fetches each binary's `.sla` on demand (driven by the engine's own resolution), and runs the decompiler under the WASI shim with the automatic size-based mode policy; `list`/`decompile` return the `decompile-all --json` shape, `project` the whole-binary export. |
-| `kuna-worker.js` | The module Worker: owns the binary and WASI handle, lists first, decompiles one selected address, and builds whole-project ZIPs off the UI thread. |
-| `kuna-worker-client.js` | The page-side RPC client. Cancellation terminates/recreates its Worker and rehydrates the retained binary on the next request. |
+| `unlace-web.js` | The glue: loads the wasm, preloads the small spec bundle, lazily fetches each binary's `.sla` on demand (driven by the engine's own resolution), and runs the decompiler under the WASI shim with the automatic size-based mode policy; `list`/`decompile` return the `decompile-all --json` shape, `project` the whole-binary export. |
+| `unlace-worker.js` | The module Worker: owns the binary and WASI handle, lists first, decompiles one selected address, and builds whole-project ZIPs off the UI thread. |
+| `unlace-worker-client.js` | The page-side RPC client. Cancellation terminates/recreates its Worker and rehydrates the retained binary on the next request. |
 | `zip.js` | Dependency-free STORE-only ZIP writer (CRC-32, UTF-8 names, fixed timestamp → deterministic), invoked inside the Worker for Download Binary Source. |
 | `vendor/browser_wasi_shim/` | Vendored [`@bjorn3/browser_wasi_shim`](https://github.com/bjorn3/browser_wasi_shim) (MIT/Apache-2.0) — a pure-JS WASI **preview1** implementation. Pinned in `VERSION`. |
 
@@ -139,7 +139,7 @@ All run under Node. A through H need no browser; I and J drive headless Chrome a
 #    byte-identical to the native unlace_wasm build (the port is faithful).
 node integrations/web/test/parity.mjs
 
-# B. Browser-glue — the ACTUAL browser code path (kuna-web.js + the vendored
+# B. Browser-glue — the ACTUAL browser code path (unlace-web.js + the vendored
 #    @bjorn3 shim) decompiling over HTTP against dist/.
 node integrations/web/test/glue.mjs
 
@@ -197,7 +197,7 @@ node integrations/web/test/decompile-collab-rtc.mjs [--late 60]
 - **`parity.mjs`** proves the decompiler *runs* under a WASI runtime and matches native
   byte-for-byte across `list` + several `decompile` cases + a whole-binary `project` export,
   and checks the automatic mode immediately below and at both size boundaries.
-- **`glue.mjs`** proves the exact browser stack (the vendored WASI shim + `kuna-web.js`)
+- **`glue.mjs`** proves the exact browser stack (the vendored WASI shim + `unlace-web.js`)
   works, minus the DOM — including the lazy-`.sla` mechanism across ELF + Mach-O, x86-64 +
   AArch64, and the `project` export the download button uses.
 - **`zip.mjs`** validates `zip.js` structurally: it re-parses its own output (EOCD, central
@@ -230,7 +230,7 @@ node integrations/web/test/decompile-collab-rtc.mjs [--late 60]
   byte), the token stream and its per-line fallback, the index and the assembly rows (as
   comments and as headings, easy and exact spelling), the settings and their migration,
   the function list's groups, the edit session's
-  directives (merging, pinning, qualification, the `.kuna` file, undo), the stored
+  directives (merging, pinning, qualification, the `.unlace` file, undo), the stored
   sessions, file offsets and the patched file, no-op fills, the stack frame and the
   instruction notes. Their fixtures (`fixtures/inspect-*.json`, `list-sample.json`) are
   what the native `unlace_wasm` prints; regenerate them with
@@ -261,7 +261,7 @@ node integrations/web/test/decompile-collab-rtc.mjs [--late 60]
   directive adds one, that applying others' changes keeps the outcomes of records they do
   not change, and that a page out of a session leaves the shared slot.
 - **`decompile-replay.mjs`** exports sessions made alone and shared and replays each
-  `.kuna` through the native CLI: a type used by a later type, the later of two
+  `.unlace` through the native CLI: a type used by a later type, the later of two
   prototypes, and a rename chain all apply.
 - **`decompile-worker.mjs`** runs `inspect`, `read` and `--assert` through the shipped
   Worker (a rename applies, a size-changing retype and an unknown symbol are rejected with
@@ -304,11 +304,11 @@ happens while the status still reads `loading decompiler…`.
 ## Scope
 
 The demo supports **whatever the CLI supports** — every format (ELF/PE/Mach-O/COFF) and
-every architecture kuna ships a `.sla` for — **with nothing to configure**. `build.sh`
-ships the full runtime SLEIGH tree and bundles the small files; `kuna-web.js` preloads that
+every architecture unlace ships a `.sla` for — **with nothing to configure**. `build.sh`
+ships the full runtime SLEIGH tree and bundles the small files; `unlace-web.js` preloads that
 bundle and lazily fetches each binary's `.sla` on demand, driven by the *engine's* own
 language resolution (no `e_machine` parsing, no per-arch manifest). Adding a processor to
-kuna automatically makes it available here once its `.sla` builds. See
+unlace automatically makes it available here once its `.sla` builds. See
 `docs/web-integration.md` §3 for the mechanism.
 
 ## Payload

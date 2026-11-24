@@ -51,16 +51,16 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-VASTART #1: the prologue is one va_start call naming the last fixed argument (default)'
+name = 'UNLACE-VASTART #1: the prologue is one va_start call naming the last fixed argument (default)'
 count = 1
 regex = 'va_start\(&\w+,\w+\);'
 
 [[match]]
-name = 'KUNA-VASTART #2: vastart off sets fp_offset field by field'
+name = 'UNLACE-VASTART #2: vastart off sets fp_offset field by field'
 count = 1
 literal = '= 0x30;'
 
 [[match]]
-name = 'KUNA-VASTART #3: vastart off keeps the XMM spills under the al test'
+name = 'UNLACE-VASTART #3: vastart off keeps the XMM spills under the al test'
 count = 1
 literal = 'if ('

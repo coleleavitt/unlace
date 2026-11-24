@@ -1,4 +1,4 @@
-# kuna option bejoin evidence (the default) on ARM big-endian, which
+# unlace option bejoin evidence (the default) on ARM big-endian, which
 # returns a long long in r0:r1 with the HIGH word in r0.
 # `umull r1,r0,r1,r0` is the whole of both `(u64)a * b` and `((u64)a * b)
 # >> 32`: one instruction writes both halves whether or not the function

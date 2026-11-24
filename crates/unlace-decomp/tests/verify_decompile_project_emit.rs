@@ -342,7 +342,7 @@ fn recompile_prelude_and_type_definitions_render() {
     // trait flow (getTypeStruct + assignRawFields), then re-render.
     {
         let tf = base.types();
-        let s0 = tf.get_type_struct("kunaproj_t").expect("getTypeStruct");
+        let s0 = tf.get_type_struct("unlaceproj_t").expect("getTypeStruct");
         let i4 = tf
             .get_base(4, type_metatype::TYPE_INT)
             .expect("getBase int4");
@@ -358,34 +358,34 @@ fn recompile_prelude_and_type_definitions_render() {
             vec![],
         )
         .expect("assignRawFields");
-        tf.get_type_struct("kunaproj_opaque")
+        tf.get_type_struct("unlaceproj_opaque")
             .expect("getTypeStruct opaque");
     }
     let types = print_c_types(base);
     assert!(
-        types.contains("typedef struct kunaproj_t kunaproj_t;"),
+        types.contains("typedef struct unlaceproj_t unlaceproj_t;"),
         "forward declaration missing:\n{types}"
     );
     assert!(
-        types.contains("struct kunaproj_t {"),
+        types.contains("struct unlaceproj_t {"),
         "struct body missing:\n{types}"
     );
     assert!(types.contains("value;"), "scalar field missing:\n{types}");
     assert!(
-        types.contains("kunaproj_t *next;"),
+        types.contains("unlaceproj_t *next;"),
         "self-referential pointer field missing (needs the forward decl):\n{types}"
     );
     assert!(
-        types.contains("typedef struct kunaproj_opaque kunaproj_opaque; /* opaque */"),
+        types.contains("typedef struct unlaceproj_opaque unlaceproj_opaque; /* opaque */"),
         "incomplete struct must forward-declare as opaque:\n{types}"
     );
     assert!(
-        !types.contains("struct kunaproj_opaque {"),
+        !types.contains("struct unlaceproj_opaque {"),
         "incomplete struct must have NO body:\n{types}"
     );
     // The forward-decl block precedes the body (the self-reference guarantee).
-    let fwd = types.find("typedef struct kunaproj_t").unwrap();
-    let body = types.find("struct kunaproj_t {").unwrap();
+    let fwd = types.find("typedef struct unlaceproj_t").unwrap();
+    let body = types.find("struct unlaceproj_t {").unwrap();
     assert!(
         fwd < body,
         "forward declarations must precede bodies:\n{types}"

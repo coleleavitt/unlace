@@ -34,7 +34,7 @@
 # intersect at the entry block, so Merge::buildDominantCopy's findCommonBlock
 # lands the copy there and it renders correctly; for every later parameter the
 # intersection is the previous guard's join, so the copy sinks below that guard
-# and splits the source's single entry block into two.  kuna is internally
+# and splits the source's single entry block into two.  unlace is internally
 # inconsistent about the identical construct and upstream Ghidra sinks it the
 # same way, so this ships as an option rather than as a bug fix.
 #

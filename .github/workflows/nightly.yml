@@ -48,7 +48,7 @@ env:
   DECBENCH_REVISION: 14e14b87429043aa06f64e067847ac0a925e41a6
   RUST_JOERN_REVISION: 9fd97f50885202596b125ebd2504e64910874bcb
   SAMPLE_BINARIES: ${{ inputs.binaries || '96' }}
-  SAMPLE_SEED: kuna-nightly-v1
+  SAMPLE_SEED: unlace-nightly-v1
 
 jobs:
   tests:
@@ -151,8 +151,8 @@ jobs:
         run: |
           "$RUNNER_TEMP/venv/bin/python" -m scripts.nightly.bench \
             --sample out/sample.json --data nightly-data \
-            --kuna build/unlace --specs specs --label "$(cat build/LABEL)" \
-            --baseline-kuna base/unlace --baseline-specs base/specs \
+            --unlace build/unlace --specs specs --label "$(cat build/LABEL)" \
+            --baseline-unlace base/unlace --baseline-specs base/specs \
             --baseline-label "$(cat base/LABEL)" \
             --decbench-root "$RUNNER_TEMP/decbench" --out out --jobs "$(nproc)"
 

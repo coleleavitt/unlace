@@ -43,7 +43,7 @@
 #               reads as `uint4 *`.  Upstream's RuleExpandLoad widened the
 #               load to the 4-byte element and truncated it,
 #               `(uint2)a0[1]`, reading two bytes the program never reads;
-#               kuna never takes that form (narrowload.xml), so the
+#               unlace never takes that form (narrowload.xml), so the
 #               load is 2 bytes wide in both passes
 #     w_gpbump: steps a global `int *` by 4 bytes (`gp++`), and
 #     w_tfirst: reads the first element of a `.data` table by name: both

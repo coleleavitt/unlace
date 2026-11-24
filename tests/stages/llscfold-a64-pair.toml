@@ -1,4 +1,4 @@
-# kuna_atomics (option llscfold, docs/spec/02-lift-and-flow.md) on AArch64:
+# unlace_atomics (option llscfold, docs/spec/02-lift-and-flow.md) on AArch64:
 # the ldaxp/stlxp doubleword retry loops of a 128-bit fetch_add (adds/adc) and
 # exchange fold into one 16-byte __sync builtin; with llscfold off the monitor
 # calls stay. Needs stlxp's second store at +8 (AARCH64base.sinc). ldclr8 is

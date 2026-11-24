@@ -66,7 +66,7 @@ pub const PTRAUTH_BREAKPOINT_USEROP: &[u8] = b"SoftwareBreakpoint";
 pub const X64_SYSCALL_USEROP: &[u8] = b"syscall";
 
 /// `x87intrinsic`: the one-operand model's name, as bound by the analysis tier.
-pub const X87_UNARY_MODEL: &str = "__kuna_x87unary";
+pub const X87_UNARY_MODEL: &str = "__unlace_x87unary";
 
 /// `swiftcall`: the names of the four models.
 pub const SWIFTCALL: &str = "__swiftcall";

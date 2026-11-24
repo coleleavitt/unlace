@@ -1,9 +1,9 @@
-"""Sweep the worklist: compare the reference vs kuna across many testcases, then rank
+"""Sweep the worklist: compare the reference vs unlace across many testcases, then rank
 where the reference is better into a backlog the worker (and a human) can act on.
 
 Writes:
   - docs/improvement-pipeline/opportunities.json  -- the ranked backlog (machine-readable)
-  - docs/improvement-pipeline/matrix.md           -- the human-readable angr-vs-kuna recovery matrix
+  - docs/improvement-pipeline/matrix.md           -- the human-readable angr-vs-unlace recovery matrix
 
 The sweep is deliberately corpus-agnostic and resumable: filter by arch / confidence /
 limit, run N comparisons concurrently (each is two independent subprocesses), and tolerate
@@ -28,7 +28,7 @@ from .worklist import build_worklist
 from .compare import compare
 from .rank import rank
 
-# x86 family decompiles fastest and has the best kuna SLEIGH-spec overlap; good first pass.
+# x86 family decompiles fastest and has the best unlace SLEIGH-spec overlap; good first pass.
 _X86 = {"x86_64", "i386"}
 
 
@@ -44,11 +44,11 @@ def _run_one(entry):
             test_name=entry.test_name,
         )
         d = res.to_dict()
-        # capture comparability + the kuna-failed signal BEFORE dropping the heavy texts
-        d["comparable"] = bool(d.get("ref_text")) and bool(d.get("kuna_text"))
-        d["kuna_failed"] = bool(d.get("ref_text")) and not d.get("kuna_text")
+        # capture comparability + the unlace-failed signal BEFORE dropping the heavy texts
+        d["comparable"] = bool(d.get("ref_text")) and bool(d.get("unlace_text"))
+        d["unlace_failed"] = bool(d.get("ref_text")) and not d.get("unlace_text")
         d.pop("ref_text", None)
-        d.pop("kuna_text", None)
+        d.pop("unlace_text", None)
         d["arch"] = entry.arch or _entry_arch_family(entry)
         d["confidence"] = entry.confidence
         d["custom_options"] = entry.custom_options
@@ -57,9 +57,9 @@ def _run_one(entry):
         return {
             "test_name": entry.test_name, "selector": entry.func_selector,
             "binary": entry.binary_path, "reference": "angr",
-            "ref_text": None, "kuna_text": None,
+            "ref_text": None, "unlace_text": None,
             "ref_error": "sweep exception: %s: %s" % (type(e).__name__, e),
-            "kuna_error": None, "signals": [], "ref_metrics": {}, "kuna_metrics": {},
+            "unlace_error": None, "signals": [], "ref_metrics": {}, "unlace_metrics": {},
         }
 
 
@@ -102,15 +102,15 @@ def sweep(*, arch=None, high_confidence=False, skip_custom=False, limit=None,
 
 def to_matrix_md(ranked, ref_version):
     lines = []
-    lines.append("# angr-vs-kuna recovery matrix")
+    lines.append("# angr-vs-unlace recovery matrix")
     lines.append("")
     lines.append("**Generated** by `python -m scripts.pipeline.sweep` -- do not edit by hand.")
     lines.append("")
     lines.append("Each row is one angr testcase function. `Score` ranks where angr's "
-                 "decompilation looks structurally better than kuna's (higher = bigger "
-                 "gap = better feature candidate). `Hint` notes whether an existing kuna "
+                 "decompilation looks structurally better than unlace's (higher = bigger "
+                 "gap = better feature candidate). `Hint` notes whether an existing unlace "
                  "option may already address it. The worker turns a top row into one "
-                 "option-gated kuna feature + PR.")
+                 "option-gated unlace feature + PR.")
     lines.append("")
     lines.append("Reference: angr %s. Comparison is structural (gotos / labels / switch / "
                  "loops / loc), never raw-text." % (ref_version or "?"))
@@ -129,21 +129,21 @@ def to_matrix_md(ranked, ref_version):
             r["rank"], r["score"], r["test_name"], r["func_name"] or r["selector"],
             kinds, why, r["covered_hint"]))
     lines.append("")
-    # also list the cases where kuna failed outright (separate, high-value)
+    # also list the cases where unlace failed outright (separate, high-value)
     failed = [r for r in ranked if not r["comparable"] and r.get("ref_error") is None]
     if failed:
-        lines.append("## kuna produced no output (reference succeeded)")
+        lines.append("## unlace produced no output (reference succeeded)")
         lines.append("")
         for r in failed:
             lines.append("- `%s :: %s` -- %s" % (
-                r["test_name"], r["func_name"] or r["selector"], r.get("kuna_error") or "?"))
+                r["test_name"], r["func_name"] or r["selector"], r.get("unlace_error") or "?"))
         lines.append("")
     return "\n".join(lines)
 
 
 def main(argv=None):
     p = argparse.ArgumentParser(prog="python -m scripts.pipeline.sweep",
-                                description="Sweep angr-vs-kuna and rank the opportunities.")
+                                description="Sweep angr-vs-unlace and rank the opportunities.")
     p.add_argument("--arch", default=None, help="filter: x86 (x86_64+i386) or a family name (mips/armel/...)")
     p.add_argument("--high-confidence", action="store_true", help="only single-target high-confidence entries")
     p.add_argument("--skip-custom", action="store_true", help="skip tests that pass non-default angr options")
@@ -178,7 +178,7 @@ def main(argv=None):
     payload = {
         "reference": "angr",
         "ref_version": ref_version,
-        "note": "Ranked angr-vs-kuna opportunities. Structural comparison; reference "
+        "note": "Ranked angr-vs-unlace opportunities. Structural comparison; reference "
                 "version pinned for reproducibility. Worker re-runs compare for full text.",
         "swept": len(ranked),
         "opportunities": sum(1 for r in ranked if r["score"] > 0),

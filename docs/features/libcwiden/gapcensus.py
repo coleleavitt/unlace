@@ -1,14 +1,14 @@
 """The ptr_char gap census behind next-levers.md.
 
-Joins kuna's per-ground-truth-variable decisions (a typesweep `--dump-decisions`
+Joins unlace's per-ground-truth-variable decisions (a typesweep `--dump-decisions`
 rows.json) against binja's, ida's and ghidra's for the same variables, and splits
-the ptr_char class by storage (argument / stack / register-only), by what kuna
+the ptr_char class by storage (argument / stack / register-only), by what unlace
 spells instead, and by optimisation level.
 
     python3 gapcensus.py <rows.json> [arm] [out.json]
 
 RIVALS is the round-A rival replay (finalsweep rivals); CLSREF is any finalsweep
-kuna rows.json, used only for its per-variable `cls` (the ground-truth class),
+unlace rows.json, used only for its per-variable `cls` (the ground-truth class),
 which typesweep rows do not carry.
 """
 import collections, json, os, re, sys
@@ -70,9 +70,9 @@ def is_pc(k, d):
 
 res = {}
 pcs = {k: d for k, d in kun.items() if is_pc(k, d)}
-res["n_ptr_char_rows_kuna"] = len(pcs)
+res["n_ptr_char_rows_unlace"] = len(pcs)
 res["unjoined_rows(charlike?)"] = {str(a): n for a, n in UNJOINED.items()}
-res["kuna_tp"] = sum(d["ok"] is True for d in pcs.values())
+res["unlace_tp"] = sum(d["ok"] is True for d in pcs.values())
 gtt = collections.Counter(d["gt_type"] for d in pcs.values())
 res["gt_type"] = dict(gtt)
 # rival own totals on ptr_char
@@ -86,16 +86,16 @@ res["common_with_binja"] = len(com)
 joint = collections.Counter()
 for k in com:
     joint[(pcs[k]["ok"] is True, B[k]["ok"] is True)] += 1
-res["joint"] = {f"kuna={'T' if a else 'F'},binja={'T' if b else 'F'}": n for (a, b), n in joint.items()}
+res["joint"] = {f"unlace={'T' if a else 'F'},binja={'T' if b else 'F'}": n for (a, b), n in joint.items()}
 # storage x outcome
 st = collections.defaultdict(collections.Counter)
 for k in com:
     s = storage(pcs[k]); a = pcs[k]["ok"] is True; b = B[k]["ok"] is True
-    st[s]["n"] += 1; st[s]["kuna"] += a; st[s]["binja"] += b
-    st[s]["binja_only"] += (b and not a); st[s]["kuna_only"] += (a and not b)
+    st[s]["n"] += 1; st[s]["unlace"] += a; st[s]["binja"] += b
+    st[s]["binja_only"] += (b and not a); st[s]["unlace_only"] += (a and not b)
     st[s]["gt_void"] += pcs[k]["gt_type"] == "void"
 res["storage"] = {s: dict(c) for s, c in st.items()}
-# kuna misses: spelling bucket x storage, split by binja outcome
+# unlace misses: spelling bucket x storage, split by binja outcome
 miss = collections.defaultdict(collections.Counter)
 gap = collections.defaultdict(collections.Counter)
 gapb = collections.defaultdict(collections.Counter)
@@ -103,24 +103,24 @@ for k in com:
     d = pcs[k]
     if d["ok"] is True or d["gt_type"] == "void":
         continue
-    s = storage(d); sp = spell(d.get("kuna_type"))
+    s = storage(d); sp = spell(d.get("unlace_type"))
     miss[s][sp] += 1
     if B[k]["ok"] is True:
         gap[s][sp] += 1
-        gapb[s][B[k].get("kuna_type")] += 1
-res["kuna_miss_spelling_by_storage(matchable GT)"] = {s: dict(c.most_common()) for s, c in miss.items()}
-res["binja_TP_kuna_miss_spelling_by_storage"] = {s: dict(c.most_common()) for s, c in gap.items()}
+        gapb[s][B[k].get("unlace_type")] += 1
+res["unlace_miss_spelling_by_storage(matchable GT)"] = {s: dict(c.most_common()) for s, c in miss.items()}
+res["binja_TP_unlace_miss_spelling_by_storage"] = {s: dict(c.most_common()) for s, c in gap.items()}
 res["binja_spelling_on_gap"] = {s: dict(c.most_common(8)) for s, c in gapb.items()}
-# kuna TP binja miss: binja spelling
-kb = collections.Counter(spell(B[k].get("kuna_type")) for k in com if pcs[k]["ok"] is True and B[k]["ok"] is not True)
-res["kuna_TP_binja_miss_binja_spelling"] = dict(kb.most_common())
+# unlace TP binja miss: binja spelling
+kb = collections.Counter(spell(B[k].get("unlace_type")) for k in com if pcs[k]["ok"] is True and B[k]["ok"] is not True)
+res["unlace_TP_binja_miss_binja_spelling"] = dict(kb.most_common())
 # by opt level
 byopt = collections.defaultdict(collections.Counter)
 for k in com:
     o = k[0].split("::")[1]; a = pcs[k]["ok"] is True; b = B[k]["ok"] is True
-    byopt[o]["n"] += 1; byopt[o]["kuna"] += a; byopt[o]["binja"] += b; byopt[o]["binja_only"] += b and not a; byopt[o]["kuna_only"] += a and not b
+    byopt[o]["n"] += 1; byopt[o]["unlace"] += a; byopt[o]["binja"] += b; byopt[o]["binja_only"] += b and not a; byopt[o]["unlace_only"] += a and not b
 res["by_opt"] = {o: dict(c) for o, c in byopt.items()}
-# pass (how kuna matched it)
+# pass (how unlace matched it)
 ps = collections.Counter((storage(pcs[k]), pcs[k].get("pass")) for k in com if pcs[k]["ok"] is not True and B[k]["ok"] is True)
 res["gap_by_match_pass"] = {f"{a}/{b}": n for (a, b), n in ps.most_common()}
 json.dump(res, open(sys.argv[3] if len(sys.argv) > 3 else "/dev/stdout", "w"), indent=1)

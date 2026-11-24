@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Minimal KUNA_PY stand-in for run.sh lifetime-lock smoke tests."""
+"""Minimal UNLACE_PY stand-in for run.sh lifetime-lock smoke tests."""
 import fcntl
 import json
 import os
@@ -8,7 +8,7 @@ import sys
 import time
 
 
-state_dir = Path(os.environ["KUNA_PIPELINE_STATE_DIR"])
+state_dir = Path(os.environ["UNLACE_PIPELINE_STATE_DIR"])
 args = sys.argv[1:]
 
 

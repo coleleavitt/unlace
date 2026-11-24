@@ -1,4 +1,4 @@
-# kuna `strlenscan`: gcc 9 expands strlen inline as
+# unlace `strlenscan`: gcc 9 expands strlen inline as
 # `mov rcx,-1; mov eax,0; repnz scasb; not rcx`, and SLEIGH lifts the repeat
 # prefix as a loop inside the one instruction, so the C showed
 # `do { if (!v3) break; v3 -= 1; ... } while (v2);` and `~v3 - 1` where

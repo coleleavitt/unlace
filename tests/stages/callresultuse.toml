@@ -1,10 +1,10 @@
-# kuna: a callee's result, read untouched by the next call or by the
+# unlace: a callee's result, read untouched by the next call or by the
 # RETURN, is that call's result although the callee's prototype is unknown,
 # when one end of the hand-off says so.
 #
 # Stage / sub-stage: P4 return and parameter recovery, the ancestor walk
 # behind the trials of the next call's inputs and the function's RETURN
-# (Funcdata::ancestorOpUse, p4_calls/kuna_callresultuse.rs).  Option
+# (Funcdata::ancestorOpUse, p4_calls/unlace_callresultuse.rs).  Option
 # `callresultuse`, off|on|all, default off (callresultuse-armtail.xml);
 # the script turns it on first.
 #

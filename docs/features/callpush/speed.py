@@ -5,13 +5,13 @@ ALL = {"fmt": f"{R}/coreutils/stripped/fmt", "ls": f"{R}/coreutils/stripped/ls",
        "sort": f"{R}/coreutils/stripped/sort", "bash": f"{R}/bash/stripped/bash",
        "cp": f"{R}/coreutils/stripped/cp", "gzip": f"{R}/gzip/stripped/gzip"}
 SP = "/home/mahaloz/kwt/castslots/specs"
-K = {"main": ["/home/mahaloz/kwt/castbench/bin-c960fb18d/kuna"],
-     "on": ["/home/mahaloz/kwt/castslots/.scratch/bin-v3/kuna"],
-     "off": ["/home/mahaloz/kwt/castslots/.scratch/bin-v3/kuna", "--option", "callpush", "off"]}
+K = {"main": ["/home/mahaloz/kwt/castbench/bin-c960fb18d/unlace"],
+     "on": ["/home/mahaloz/kwt/castslots/.scratch/bin-v3/unlace"],
+     "off": ["/home/mahaloz/kwt/castslots/.scratch/bin-v3/unlace", "--option", "callpush", "off"]}
 ARMS = ["main", "on", "off"]
 N = int(sys.argv[1]); outf = sys.argv[2]; which = sys.argv[3].split(",")
 out = {}
-env = dict(os.environ, SLEIGHHOME=SP, KUNA_SPECS=SP)
+env = dict(os.environ, SLEIGHHOME=SP, UNLACE_SPECS=SP)
 for name in which:
     b = ALL[name]; t = {a: [] for a in ARMS}
     for i in range(N):

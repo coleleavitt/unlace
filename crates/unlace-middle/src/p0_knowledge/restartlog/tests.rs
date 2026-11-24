@@ -71,7 +71,7 @@ fn reason_names() {
     );
     assert_eq!(
         UnlaceRestartReason::LoweredSwitch.name(),
-        "lowered comparison-cascade switch (S2 switch model, kuna angr-port)"
+        "lowered comparison-cascade switch (S2 switch model, unlace angr-port)"
     );
 }
 

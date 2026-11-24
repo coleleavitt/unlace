@@ -4,7 +4,7 @@ The loader already recognizes these Go binaries and their functions. The
 runtime-type pass returned immediately for every 32-bit image, leaving no
 named type or Go header declarations. The angr Go tests include a 32-bit
 Go 1.18 `syscall.Iovec` recovery check; the same public ABI is now asserted in
-Kuna's real-binary `verify_gotypes` test alongside application-owned records.
+Unlace's real-binary `verify_gotypes` test alongside application-owned records.
 
 `GoImage` carries the target word size. The base runtime type is `4*p + 16`
 bytes; its kind and name-offset fields remain fixed-width values at offsets

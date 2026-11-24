@@ -2,7 +2,7 @@
 
 ## Problem
 
-kuna vendors Ghidra's Dalvik SLEIGH specs (`specs/Ghidra/Processors/Dalvik`), but
+unlace vendors Ghidra's Dalvik SLEIGH specs (`specs/Ghidra/Processors/Dalvik`), but
 it cannot open a `.dex` file. A user can only feed raw bytecode with
 `--raw-image --target Dalvik:LE:32:DEX_Android12 --base 0`, and the result shows
 what is missing below the loader too:
@@ -24,13 +24,13 @@ unsigned int sub_438(void)     // static String greet(String who)
 
 * No method names, classes or prototypes: the image has no symbols.
 * Parameters are unread locals: the Dalvik cspec's `uponentry` payload is
-  `dynamic` (Ghidra builds it in Java from the method's code item), and kuna has
+  `dynamic` (Ghidra builds it in Java from the method's code item), and unlace has
   no source for it.
 * `CPOOLREF` is never resolved: the engine has no constant pool, and
   `RuleTransformCpool`, `TypeOpCpoolref::getOutputLocal` and
   `PrintC::opCpoolRefOp` are stubs or missing.
 * `invoke-*/range` uses the `moveRangeToIV` callother-fixup, also `dynamic`.
-* `sparse-switch` lowers to the `switchAssist` jump-assist user-op; kuna has no
+* `sparse-switch` lowers to the `switchAssist` jump-assist user-op; unlace has no
   `JumpAssisted` jump-table model, so the switch has no cases.
 * There is no Java back end (`printjava.rs` is a stub).
 

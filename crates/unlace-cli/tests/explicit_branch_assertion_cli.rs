@@ -55,7 +55,7 @@ fn decompile_at(entry: &str, extra: &[&str]) -> Run {
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .output()
-        .expect("spawn kuna");
+        .expect("spawn unlace");
     let doc = String::from_utf8_lossy(&out.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
     let parsed: serde_json::Value = serde_json::from_str(&doc).expect("valid decompile JSON");

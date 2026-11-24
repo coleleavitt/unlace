@@ -136,12 +136,12 @@ mod tests {
                 .unwrap_err()
                 .contains("not a type library")
         );
-        let til = std::env::temp_dir().join(format!("kuna-typelib-{}.til", std::process::id()));
+        let til = std::env::temp_dir().join(format!("unlace-typelib-{}.til", std::process::id()));
         std::fs::write(&til, b"IDATIL\x12\0\0\0").unwrap();
         let parsed = TypeLib::parse(til.to_str().unwrap());
         std::fs::remove_file(&til).unwrap();
         assert_eq!(parsed, Ok(TypeLib::Files(vec![til.clone()])));
-        let file = std::env::temp_dir().join(format!("kuna-typelib-{}.ktl", std::process::id()));
+        let file = std::env::temp_dir().join(format!("unlace-typelib-{}.ktl", std::process::id()));
         std::fs::write(&file, "typelib 1\ntarget linux x86_64\nsource test 1\n").unwrap();
         let parsed = TypeLib::parse(file.to_str().unwrap());
         std::fs::remove_file(&file).unwrap();
@@ -155,8 +155,8 @@ mod tests {
     #[test]
     fn a_colon_list_names_several_libraries() {
         let dir = std::env::temp_dir();
-        let a = dir.join(format!("kuna-typelib-list-a-{}.til", std::process::id()));
-        let b = dir.join(format!("kuna-typelib-list-b-{}.til", std::process::id()));
+        let a = dir.join(format!("unlace-typelib-list-a-{}.til", std::process::id()));
+        let b = dir.join(format!("unlace-typelib-list-b-{}.til", std::process::id()));
         std::fs::write(&a, b"IDATIL\x12\0\0\0").unwrap();
         std::fs::write(&b, b"IDATIL\x12\0\0\0").unwrap();
         let list = format!("{}:{}", a.display(), b.display());

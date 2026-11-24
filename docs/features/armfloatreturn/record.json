@@ -2,8 +2,8 @@
   "base": "9032e73be1d9ad2ceed4d37980b68d1a406629cb",
   "option": "armfloatreturn",
   "default": "off",
-  "fixture": "decompiler/crates/kuna-analysis/tests/fixtures/armfloatreturn_armhf.o",
-  "fixture_source": "decompiler/crates/kuna-analysis/tests/fixtures/armfloatreturn_armhf.c",
+  "fixture": "decompiler/crates/unlace-analysis/tests/fixtures/armfloatreturn_armhf.o",
+  "fixture_source": "decompiler/crates/unlace-analysis/tests/fixtures/armfloatreturn_armhf.c",
   "stage_test": "tests/stages/arm-float-return.xml (22 assertions: raw image control, relocatable object and linked fmtlf_armhf with the option off and on, plus the bump/second/w2 and a3/a7/a6 cases)",
   "mode": "aggressive",
   "measurement": {

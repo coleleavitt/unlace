@@ -5,7 +5,7 @@ frame of every function containing one. Any MSVC-built PE reproduces it; here is
 the smallest one, vendored in this PR:
 
 ```
-$ kuna decompile decompiler/crates/kuna-analysis/tests/fixtures/fastfail_x86_64.exe 0x140001000 --addr
+$ unlace decompile decompiler/crates/unlace-analysis/tests/fixtures/fastfail_x86_64.exe 0x140001000 --addr
 void sub_140001000(long long *a0)
 {
   char v1 [8];

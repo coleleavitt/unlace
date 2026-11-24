@@ -15,7 +15,7 @@ confidence: high
 ## Side-by-side
 
 Only the residual region is shown; the rest of the pane matches IDA
-statement-for-statement (fresh kuna 6 `if`s vs IDA 4; the delta is exactly the two
+statement-for-statement (fresh unlace 6 `if`s vs IDA 4; the delta is exactly the two
 un-re-rolled diamonds).
 
 **IDA (stored)** — three identical boolean assignments:
@@ -30,7 +30,7 @@ un-re-rolled diamonds).
   initialize_bashopts(v4);
 ```
 
-**kuna (fresh, today's build, no flags)** — one re-rolled, two not:
+**unlace (fresh, today's build, no flags)** — one re-rolled, two not:
 
 ```c
   v1 = shell_is_restricted(shell_name);
@@ -214,14 +214,14 @@ counting residual `if (c) V = A; else { V = B; }` diamonds:
 | openssh `ssh-add` | 1032 | 6 | 6 | 16 | 15 | 1 |
 | **total** | **2444** | **41** | **23** | **112** | **52** | **53** |
 
-41 residual 0/1 diamonds against 53 successful re-rolls: **kuna leaves behind roughly
+41 residual 0/1 diamonds against 53 successful re-rolls: **unlace leaves behind roughly
 as many as it fixes.** The wider `any-arm` count (112 in 52 functions) is the
 `iteregion` half of the same predicate.
 
 ### Siblings
 
 `O2-noinline-bash-bash-shell_initialize` (margin 72) does **not** show this: at -O2
-gcc computes the boolean without a materialization diamond and kuna prints
+gcc computes the boolean without a materialization diamond and unlace prints
 `initialize_shell_options(((privileged_mode || restricted) || dat_1409d4) || v1);`
 directly. The defect is an -O0 shape, which is where it matters most (the corpus is
 one third -O0 and -O0 materializes booleans everywhere).

@@ -1,4 +1,4 @@
-# kuna stackexitanchor: the epilogue settles an unknown callee's purge.
+# unlace stackexitanchor: the epilogue settles an unknown callee's purge.
 #
 # A hand-written __stdcall caller (x86win, so every call's extrapop is
 # unknown and StackSolver runs):

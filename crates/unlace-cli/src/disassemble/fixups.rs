@@ -249,7 +249,7 @@ impl Slot {
         let what = match (self.returned, site.target) {
             (Returned::Placeholder, _) => {
                 format!(
-                    "kuna's zero placeholder for an address the loader looks up at run time; the file holds {file}"
+                    "unlace's zero placeholder for an address the loader looks up at run time; the file holds {file}"
                 )
             }
             (Returned::Applied, Some(t)) => {

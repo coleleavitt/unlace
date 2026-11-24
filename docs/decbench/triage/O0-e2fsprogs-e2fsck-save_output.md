@@ -13,11 +13,11 @@ confidence: medium
 
 ## Side-by-side
 
-Recorded: ida GED=0 (isomorphic to source), kuna GED=56, margin 56. Source CFG
+Recorded: ida GED=0 (isomorphic to source), unlace GED=56, margin 56. Source CFG
 46 nodes / 72 edges, so the GED is a real edit distance, not the >60-node
 approximation. Other panes on `ged_new.json`: binja 8, angr 14, r2dec 33,
 **ghidra 61** (the queue's `others_ged` mislabels r2dec's 33 as ghidra — ghidra
-is *worse* than kuna here, so this is not a kuna-vs-ghidra regression).
+is *worse* than unlace here, so this is not a unlace-vs-ghidra regression).
 
 Measured CFG sizes (pyjoern, same extractor decbench uses):
 
@@ -27,8 +27,8 @@ Measured CFG sizes (pyjoern, same extractor decbench uses):
 | ida (stored) | 46 / 72 | 0 |
 | binja (stored) | 48 / 73 | 8 |
 | angr (stored) | 50 / 73 | 14 |
-| kuna (stored, 2026-07-27) | 60 / 87 | 56 |
-| **kuna (fresh, today, no flags)** | **53 / 77** | **29** |
+| unlace (stored, 2026-07-27) | 60 / 87 | 56 |
+| **unlace (fresh, today, no flags)** | **53 / 77** | **29** |
 | ghidra (stored) | 61 / 90 | 61 |
 
 `--mode auto` and `--mode reliable` produce **byte-identical** output on this
@@ -64,7 +64,7 @@ FILE *save_output(char *a1, char *a2, char *a3)
   exit(0);
 ```
 
-### kuna (fresh, today) — the entry block is split into three
+### unlace (fresh, today) — the entry block is split into three
 
 ```c
   v11 = *(void *)(v4 + 0x28);
@@ -146,8 +146,8 @@ the entry basic block:
 
 ```
 4eec2: mov %rdi,-0x38(%rbp)
-4eec6: mov %rsi,-0x40(%rbp)     <- kuna prints this after the FIRST if
-4eeca: mov %rdx,-0x48(%rbp)     <- kuna prints this after the SECOND if
+4eec6: mov %rsi,-0x40(%rbp)     <- unlace prints this after the FIRST if
+4eeca: mov %rdx,-0x48(%rbp)     <- unlace prints this after the SECOND if
 4eece: mov %fs:0x28,%rax
 4eedd: cmpq $0x0,-0x38(%rbp)
 4eee2: je   4eef7               <- entry block ends here
@@ -155,14 +155,14 @@ the entry basic block:
 
 ## Analysis
 
-**The one structural symptom.** kuna splits the source's single entry basic
+**The one structural symptom.** unlace splits the source's single entry basic
 block into three by emitting the parameter -> stack-slot copy shadows
 (`v6 = a1;`, `v5 = a2;`) at the tail of each guard's *join predecessor* instead
 of at the function entry where the spill instructions actually live. Measured
 cost: +2 CFG nodes, **GED 29 -> 17** when the two lines are textually hoisted
 back to the top (semantics-preserving: `a1`/`a2` are unmodified inputs and
 `v6`/`v5` are not read before). ida hoists all three and is isomorphic to
-source; ghidra sinks them exactly like kuna and scores 61.
+source; ghidra sinks them exactly like unlace and scores 61.
 
 **Root cause / owning phase: P6 (variables — HighVariable merge).** The
 original spill stores are folded away in P3; P6's merge then has to trim a
@@ -219,16 +219,16 @@ Textual ablations against the fresh block, each measured with the real GED:
 
 * `while( true )`: pyjoern parses bare `true` as an IDENTIFIER and gives the
   loop header its own CFG block; `while (1)` folds into its predecessor. The
-  control flow is identical, and kuna's project export emits
+  control flow is identical, and unlace's project export emits
   `#include <stdbool.h>` (`infra/decompile_drive.rs:1032`), so the C is valid.
-  This is a decbench-harness penalty that hits **every** kuna and ghidra
+  This is a decbench-harness penalty that hits **every** unlace and ghidra
   function containing an unconditional loop — worth reporting upstream rather
   than "fixing" in the printer.
 * the `do_read` loop: the source writes `while (do_read(fds[0]) > 0) ;` and
   pyjoern loses the back edge of that empty-body while entirely (source block
   30 has no self-edge). ida reproduces the same text and inherits the same
-  dropped edge; kuna's faithful `do {} while` is *penalised for being correct*.
-  Residual real content: kuna never folds a single-call loop body into the loop
+  dropped edge; unlace's faithful `do {} while` is *penalised for being correct*.
+  Residual real content: unlace never folds a single-call loop body into the loop
   condition. Low value, mostly artifact.
 * `taildup` duplicating a **no-return call** tail (`exit(0)`) rather than a
   `return` tail is worth a look on its own — its documented gate is "return-call

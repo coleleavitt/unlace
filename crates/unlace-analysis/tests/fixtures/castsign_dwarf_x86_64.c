@@ -1,6 +1,6 @@
-/* (kuna castsign) A variable the source declares unsigned and the program only
+/* (unlace castsign) A variable the source declares unsigned and the program only
  * compares signed.  `castsign` re-declares such a variable when nothing says
- * what it is, but here the DWARF says `unsigned long`, and kuna locks a DWARF
+ * what it is, but here the DWARF says `unsigned long`, and unlace locks a DWARF
  * local's type: the declaration and its `(long)n` must stay.  Prints `1 2 0`.
  *
  * Built with:

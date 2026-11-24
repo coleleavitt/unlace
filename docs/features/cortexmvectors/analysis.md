@@ -87,7 +87,7 @@ harvest. Unit test: `shipped_match_wins_over_the_widened_scan`.
 ## 4. Wiring — three variants measured, the conservative one wins
 
 The widened table's facts can reach three consumers. All three combinations were built and
-measured on the full decbench ARM surface (`kuna functions`, which auto-injects
+measured on the full decbench ARM surface (`unlace functions`, which auto-injects
 `listing`+`funcstart_patterns`+`aif` on non-x86-64):
 
 | wiring | ground-truth entries recovered | new entries | of which ground truth | splits a real body | entries LOST | of which ground truth |
@@ -114,7 +114,7 @@ stash-at-load / gate-at-commit shape (`engine.rs::analysis_pass_enabled`) that
 
 ## 5. Acceptance measurement
 
-### 5.1 The default decbench surface (`kuna functions`, Listing on)
+### 5.1 The default decbench surface (`unlace functions`, Listing on)
 
 | binary | entries before | after | recall before | after | new | GT | splits | outside any body | lost |
 |---|---|---|---|---|---|---|---|---|---|
@@ -146,7 +146,7 @@ betaflight's `0x806fd24`) — real code the hardware genuinely enters, not error
 ### 5.2 Without the Listing tier (`--option listing off`)
 
 The surface used by `--mode fast`, the WASM and Ghidra front-ends, and single-function
-`kuna decompile`. Here the entry oracles are the *only* discovery source, so the widening
+`unlace decompile`. Here the entry oracles are the *only* discovery source, so the widening
 carries the whole weight:
 
 | binary | entries before | after | recall before | after |
@@ -162,7 +162,7 @@ the whole-image Thumb region paint, which only a confirmed table unlocks, is loa
 
 ### 5.3 Strict no-op elsewhere
 
-Whole-binary `kuna decompile-all --json` output is **byte-identical** (sha256) off vs on for
+Whole-binary `unlace decompile-all --json` output is **byte-identical** (sha256) off vs on for
 x86-64 (`gzip`), ARM Linux (`u-boot`), and the four Cortex-M images the shipped signature
 already detects (libopencm3 `msc.elf`, chibios `ch.elf`, freertos `RTOSDemo.out`, riot-os
 `hello-world.elf`).
@@ -173,12 +173,12 @@ Median of 3 whole-binary runs, off vs on:
 
 | surface | binary | off | on | delta |
 |---|---|---|---|---|
-| `kuna functions` | cleanflight | 3602.6 ms | 3482.7 ms | -3.33% |
-| `kuna functions` | nuttx | 1180.4 ms | 1214.4 ms | +2.88% |
-| `kuna functions` | libopencm3 msc.elf | 145.8 ms | 143.2 ms | -1.81% |
-| `kuna decompile-all` | cleanflight | 45428.0 ms | 42288.2 ms | -6.91% |
-| `kuna decompile-all` | nuttx | 13115.2 ms | 13218.6 ms | +0.79% |
-| `kuna decompile-all` | libopencm3 msc.elf | 669.4 ms | 728.8 ms | +8.87% |
+| `unlace functions` | cleanflight | 3602.6 ms | 3482.7 ms | -3.33% |
+| `unlace functions` | nuttx | 1180.4 ms | 1214.4 ms | +2.88% |
+| `unlace functions` | libopencm3 msc.elf | 145.8 ms | 143.2 ms | -1.81% |
+| `unlace decompile-all` | cleanflight | 45428.0 ms | 42288.2 ms | -6.91% |
+| `unlace decompile-all` | nuttx | 13115.2 ms | 13218.6 ms | +0.79% |
+| `unlace decompile-all` | libopencm3 msc.elf | 669.4 ms | 728.8 ms | +8.87% |
 
 The scan itself is O(sections x <=1024 slots) and unmeasurable; the deltas are the extra
 decompile work for the extra functions, against run-to-run noise. msc.elf is the
@@ -200,11 +200,11 @@ proposal step 2 defers. No DIV row: default output is byte-identical.
 
 ```bash
 # entry recall, before vs after, against DWARF ground truth
-kuna functions <stripped-cortexm-elf> --json                              # before
-kuna functions <stripped-cortexm-elf> --json --option cortexmvectors on   # after
+unlace functions <stripped-cortexm-elf> --json                              # before
+unlace functions <stripped-cortexm-elf> --json --option cortexmvectors on   # after
 # compare both against DW_AT_low_pc of the matching compiled/ binary
 
 # the strict no-op check
-kuna decompile-all <x86-64-or-already-detected-cortexm-elf> --json | sha256sum
-kuna decompile-all <same> --json --option cortexmvectors on | sha256sum
+unlace decompile-all <x86-64-or-already-detected-cortexm-elf> --json | sha256sum
+unlace decompile-all <same> --json --option cortexmvectors on | sha256sum
 ```

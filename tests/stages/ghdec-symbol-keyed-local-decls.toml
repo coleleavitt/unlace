@@ -1,12 +1,12 @@
 # decbench campaign case
 # O2-noinline-betaflight-betaflight_STM32F405-applyLedFixedLayers (NOVEL
-# pool: kuna's graph edit distance on that function already ties the best
+# pool: unlace's graph edit distance on that function already ties the best
 # reference decompiler, 25 vs ghidra 25 / angr 42 / ida 41, and the emitted
 # body still was not compilable C, so no rival decompiler surfaced this fix).
 #
 # P9 emission, declaration emission.  Upstream `PrintC::emitScopeVarDecls`
 # walks the ScopeLocal *Symbol* table (printc.cc:2667/2696), so one symbol is
-# one declaration by construction.  kuna's printer walks HighVariables
+# one declaration by construction.  unlace's printer walks HighVariables
 # instead, so a stack slot whose live ranges did not merge was declared once
 # per high.  The shared-storage naming gives every whole cover of the slot the
 # same name, and the highs recover different types, so the function opened
@@ -47,7 +47,7 @@
 # byte over the 4-byte slot and `send_bytes(port,&slot,5)` sends the slot plus
 # the trailing byte at stack - 0x14.
 #
-# The 4-byte slot at stack - 0x18 is exactly the defect: kuna maps only a
+# The 4-byte slot at stack - 0x18 is exactly the defect: unlace maps only a
 # 2-byte ScopeLocal symbol there while the body writes it 3 and 4 bytes wide,
 # so the two highs render `undefined3` and `unsigned int` and the symbol's own
 # type is too narrow to arbitrate.  The widest cover therefore wins.
@@ -59,7 +59,7 @@
 # only disables the separate Symbol-keyed and identical-line collapses. Pass 3
 # switches to Ghidra names and pins the same single-owner result there.
 #
-# (kuna GH-181: foldcallret no longer sinks a call past a read of its own
+# (unlace GH-181: foldcallret no longer sinks a call past a read of its own
 # INDIRECT output, so the checksum call is an explicit statement sequenced
 # before the CONCAT13 that reads the slot it may write; its r0 return became
 # v1 and renumbered the slot locals to v2/v3.)

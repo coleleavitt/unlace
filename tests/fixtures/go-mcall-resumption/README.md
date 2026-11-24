@@ -3,9 +3,9 @@
 Build the stripped AMD64 ELF with GNU as and ld.
 
 ```sh
-as --64 mcall.S -o /tmp/kuna-go-mcall.o
+as --64 mcall.S -o /tmp/unlace-go-mcall.o
 ld -s -m elf_x86_64 --build-id=none -e _start -Ttext=0x401000 \
-  /tmp/kuna-go-mcall.o -o mcall-elf
+  /tmp/unlace-go-mcall.o -o mcall-elf
 chmod a-x mcall-elf
 ```
 

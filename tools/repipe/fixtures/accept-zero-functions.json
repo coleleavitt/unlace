@@ -3,7 +3,7 @@
   "probe_id": "a-300e3a5af18b",
   "kind": "cli",
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "functions",
     "{{BIN}}",
     "--json"

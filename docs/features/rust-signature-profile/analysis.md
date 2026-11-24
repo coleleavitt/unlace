@@ -6,7 +6,7 @@ the compiler record names `1.89.0-nightly`. The compatible signature bank pair
 is labeled `1.88.0`. The 2023 O3 fixture matches the `1.71.0` O3 pair, and the
 2025 O0 and O3 fixtures match their respective optimization profiles.
 
-Kuna's FLIRT matcher can already compare patterns against machine code. A useful
+Unlace's FLIRT matcher can already compare patterns against machine code. A useful
 report must also account for missing banks, tied scores, executable section
 eligibility, and the provenance of the signature bytes. Treat the compiler record
 and matching result as separate observations so that a profile score never

@@ -11,7 +11,7 @@ caller measured the record itself"
 
 ## That is not what happens
 
-With `KUNA_SS_DEBUG` instrumentation on `kuna_structsynth::accepts` and the
+With `UNLACE_SS_DEBUG` instrumentation on `unlace_structsynth::accepts` and the
 install site, du -O2 gives the same answer in both arms:
 
 * 36 structures are installed in each arm, over the same bases;
@@ -26,8 +26,8 @@ parameter after the vote, so a vote cannot replace a layout the caller measured.
 
 ## What does happen
 
-The instrument reads parameter types from `kuna decompile-all --json` and the
-layouts those names refer to from the `.h` of `kuna decompile-project`. Both
+The instrument reads parameter types from `unlace decompile-all --json` and the
+layouts those names refer to from the `.h` of `unlace decompile-project`. Both
 surfaces keep a `structsynth` ledger, and the ledger numbers `struct_N` in the
 order the program is visited in. `decompile-all` decompiles callees first
 (`protoorder`, on by default); `decompile-project` kept its own address-order
@@ -93,7 +93,7 @@ that score reads `decompile-all` only), layout F1 0.2094 (round C 0.097, round B
 
 ## Speed
 
-`speed.py`, interleaved min-of-15, `kuna decompile-project --max-fn-seconds 120`,
+`speed.py`, interleaved min-of-15, `unlace decompile-project --max-fn-seconds 120`,
 contended box:
 
 | build | before min | after min | Δ min | Δ median |

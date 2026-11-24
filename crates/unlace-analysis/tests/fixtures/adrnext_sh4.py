@@ -4,7 +4,7 @@ whose ``mova`` forms the address right after a delay slot (GH #1360).
 
 No SuperH toolchain is packaged here, so the bytes are written by hand.
 Regenerate with ``python3 adrnext_sh4.py``; the output is deterministic. Read
-it with ``--target SuperH4:LE:32:default`` (kuna maps no ELF ``EM_SH``).
+it with ``--target SuperH4:LE:32:default`` (unlace maps no ELF ``EM_SH``).
 
     0x10000 rts_mova   rts ; mova @(0,pc),r0        r0 = 0x10004 (the pool word after it)
     0x10008 bts_mova   cmp/eq #0,r0 ; nop ; bt/s 0x10014 ; mova @(0,pc),r0

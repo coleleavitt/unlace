@@ -38,7 +38,7 @@ Decompile the password checker or explicitly raise its instruction budget.
   "kind": "cli",
   "timeout_s": 120,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile-all",
     "{{BIN}}",
     "--functions",
@@ -73,7 +73,7 @@ Decompile the password checker or explicitly raise its instruction budget.
   "kind": "cli",
   "timeout_s": 120,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile-all",
     "{{BIN}}",
     "--functions",

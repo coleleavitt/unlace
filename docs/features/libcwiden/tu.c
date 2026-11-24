@@ -72,4 +72,4 @@
 #include <fcntl.h>
 #include <selinux/selinux.h>
 #include <selinux/context.h>
-int kuna_tu_anchor(void) { return 0; }
+int unlace_tu_anchor(void) { return 0; }

@@ -5,7 +5,7 @@
 # passes.
 #
 # Stage / sub-stage: P1 external-refinement, `SwiftRuntimePass`
-# (`unlace-analysis/src/analyzers/swift/kuna_swiftruntime.rs`).
+# (`unlace-analysis/src/analyzers/swift/unlace_swiftruntime.rs`).
 #
 # P0 assertion: `option swiftruntime on|off` (default on).
 #

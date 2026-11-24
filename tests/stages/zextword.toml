@@ -1,4 +1,4 @@
-# kuna: a 64-bit return whose high half the function zeroes keeps its whole
+# unlace: a 64-bit return whose high half the function zeroes keeps its whole
 # register on RISC-V (GH-865).  The procedure-call standard sign-extends
 # every 32-bit return value to the register, unsigned ones too, so a
 # function that zero-extends a word it may set the sign bit of returns a
@@ -7,8 +7,8 @@
 # sign-extended what the binary zero-extends.
 #
 # Stage / sub-stage: P3 sub-variable flow, the RETURN pull
-# (p3_dataflow/subflow.rs try_return_pull, p5_types/kuna_zextreturn.rs
-# zero_extended_word), under the rule p4_calls/kuna_narrowext.rs states.
+# (p3_dataflow/subflow.rs try_return_pull, p5_types/unlace_zextreturn.rs
+# zero_extended_word), under the rule p4_calls/unlace_narrowext.rs states.
 # Two passes: option narrowext off is the compiler spec's zero extension
 # (the bug), the default abi is the fix.
 #

@@ -1,5 +1,5 @@
 """Bytes -> C walkthrough: run one real function through the engine and keep
-every intermediate artifact. Bytes and disassembly come from the kuna CLI;
+every intermediate artifact. Bytes and disassembly come from the unlace CLI;
 the p-code/IR/region/C stages from one scripted decomp_dbg run using the
 console's openfile-write redirection (no output parsing). Raw dumps land in
 observatory/walkthrough/NN-*.txt beside walkthrough.json."""
@@ -25,11 +25,11 @@ STAGES = (
 )
 
 
-def _kuna_bin(root: Path) -> Path:
-    override = os.environ.get("KUNA_BIN")
+def _unlace_bin(root: Path) -> Path:
+    override = os.environ.get("UNLACE_BIN")
     if override:
         return Path(override)
-    profile = os.environ.get("KUNA_RUST_PROFILE", "release")
+    profile = os.environ.get("UNLACE_RUST_PROFILE", "release")
     return root / "target" / profile / "unlace"
 
 
@@ -63,16 +63,16 @@ def console_script(binary: Path, function: str, out_dir: Path) -> str:
 def generate(root: Path | None = None, out: Path | None = None) -> dict:
     root = root or common.repo_root()
     binary = root / FIXTURE
-    kuna = _kuna_bin(root)
+    unlace = _unlace_bin(root)
     out_dir = (out or root / "observatory") / "walkthrough"
     out_dir.mkdir(parents=True, exist_ok=True)
     env = {**os.environ, "SLEIGHHOME": str(specs_dir())}
 
     texts = {
-        "bytes": _run([kuna, "read", FIXTURE, FUNCTION], env, root),
-        "disasm": _run([kuna, "disassemble", FIXTURE, FUNCTION], env, root),
+        "bytes": _run([unlace, "read", FIXTURE, FUNCTION], env, root),
+        "disasm": _run([unlace, "disassemble", FIXTURE, FUNCTION], env, root),
     }
-    _run([kuna, "decomp_dbg"], env, root, stdin=console_script(binary, FUNCTION, out_dir))
+    _run([unlace, "decomp_dbg"], env, root, stdin=console_script(binary, FUNCTION, out_dir))
     for stage, number, *_ in STAGES:
         path = out_dir / f"{number}-{stage}.txt"
         if stage in texts:

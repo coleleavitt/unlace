@@ -7,7 +7,7 @@
 # `a1 == 0xe700000000000000` beside `"iPod5,1"` in the call.
 #
 # Stage / sub-stage: P5 const-pointer, `RuleSwiftString`
-# (`kuna-decomp/src/p5_types/kuna_swiftstr.rs`): an object word compared by
+# (`unlace-decomp/src/p5_types/unlace_swiftstr.rs`): an object word compared by
 # `INT_EQUAL` / `INT_NOTEQUAL` is paired with the count word compared in the
 # same block or in the branch of the one block that leads to it, when the
 # two compared values are one string's two words (a call takes them as

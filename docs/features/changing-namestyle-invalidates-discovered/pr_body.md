@@ -1,22 +1,22 @@
-`kuna functions` prints a name for every function it finds; feeding one of those
-names back to `kuna decompile` stops working the moment the run also asks for a
+`unlace functions` prints a name for every function it finds; feeding one of those
+names back to `unlace decompile` stops working the moment the run also asks for a
 different naming style.
 
 ```bash
-$ kuna functions ./stripped_dynamic_x86_64 --json | grep 1249
+$ unlace functions ./stripped_dynamic_x86_64 --json | grep 1249
     {"name": "sub_1249", "address_hex": "0x1249", "aliases": [], "size": 270}
 
-$ kuna decompile ./stripped_dynamic_x86_64 sub_1249 --option namestyle ghidra
+$ unlace decompile ./stripped_dynamic_x86_64 sub_1249 --option namestyle ghidra
 error: no function "sub_1249" in ./stripped_dynamic_x86_64; for a stripped binary
 pass an address with --addr
 $ echo $?
 1
 
-$ kuna decompile ./stripped_dynamic_x86_64 func_0x00001249 --option namestyle ghidra
+$ unlace decompile ./stripped_dynamic_x86_64 func_0x00001249 --option namestyle ghidra
 void * func_0x00001249(void *param_1)          # the same function, decompiled in full
 ```
 
-(`decompiler/crates/kuna-analysis/tests/fixtures/stripped_dynamic_x86_64` is in
+(`decompiler/crates/unlace-analysis/tests/fixtures/stripped_dynamic_x86_64` is in
 the repo. Reported by an agent against a 14 KB crackme, where the name was
 `sub_15dc`.)
 
@@ -34,7 +34,7 @@ the repo. Reported by an agent against a 14 KB crackme, where the name was
   still requires mapped bytes at the address. A binary that really carries a
   symbol spelled that way still wins, `sub_deadbeef` still misses, and no name
   that already resolved can move.
-- `kuna functions` is deliberately untouched — it reports the default spelling
+- `unlace functions` is deliberately untouched — it reports the default spelling
   whatever the run asks for, and now that spelling always selects.
 
 ## Tests
@@ -47,7 +47,7 @@ that `FUN_00001170` misses under angr naming, which is the behaviour this
 changes; `func_00001170` (wrong spelling for every style) still misses in its
 place.
 
-Swept every name and alias `kuna functions` reports across all 181 vendored
+Swept every name and alias `unlace functions` reports across all 181 vendored
 fixtures, at both naming styles, on the pre- and post-fix binaries: 4,856
 selections, 3,566 identical, 1,290 exit 1 -> exit 0, 0 changed. Every unlocked
 one is a `namestyle ghidra` run; the default-style column is byte-identical.

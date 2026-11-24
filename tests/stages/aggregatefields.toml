@@ -1,7 +1,7 @@
 # Original GCC 7.3 N32 hard-float bytes: tests/fixtures/octeon-elf-abi
 # (fields.c nested_first/double_float, abi.c quad_struct). Each record is
 # returned or read whole: the whole-aggregate predicates in
-# kuna_aggregatefields.rs (always on) keep upstream's field-first
+# unlace_aggregatefields.rs (always on) keep upstream's field-first
 # resolution and concatenation rewrite from splitting or misnaming it.
 
 [image]

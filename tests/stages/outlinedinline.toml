@@ -10,7 +10,7 @@
 #
 # Stage / sub-stage: P2 inline-inject. The analysis commit flags each
 # function symbol named `OUTLINED_FUNCTION_<n>` inline
-# (`p2_lift/kuna_outlinedinline.rs`), so flow splices it into the caller; the
+# (`p2_lift/unlace_outlinedinline.rs`), so flow splices it into the caller; the
 # hard-model inliner keeps a fragment's own RETURN when the caller tail-calls
 # it or nothing follows the call.
 #

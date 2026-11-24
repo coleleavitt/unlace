@@ -1,8 +1,8 @@
 # calleearitylive — whole-corpus before/after (standing requirement 7)
 
-Method identical to `docs/features/calleearity/sweep.md`: `kuna decompile-all <bin> --json`
+Method identical to `docs/features/calleearity/sweep.md`: `unlace decompile-all <bin> --json`
 with `--option calleearitylive off` and `--option calleearitylive on`, per-function `code`
-diffed. 65 binaries from `kuna-re-dataset/challenges`, up to 6 per (format, arch) over
+diffed. 65 binaries from `unlace-re-dataset/challenges`, up to 6 per (format, arch) over
 ELF x86-64 / i386 / ARM / ARM64 / MIPS / PowerPC / SPARC, PE x86-64 / x86 / ARM and
 Mach-O x86-64 / arm64, plus the three witnesses (`graphy`, and `ObfuscationFiesta.exe` /
 `linker64`, the two regressions the `calleearity` sweep measured). 14 of the 65 are

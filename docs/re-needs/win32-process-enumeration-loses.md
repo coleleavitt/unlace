@@ -28,7 +28,7 @@ reject_reason: null
 Follow the snapshot handle and entry buffer through the anti-debug loop.
 
 > **Win32 process enumeration loses required call arguments** (major, `640a526833c5d447bc761899`)
-> Emitted CreateToolhelp32Snapshot(2), CloseHandle(), and Process32NextW(). Both argument-recovery options retained the omissions. Kuna disassembly shows the missing arguments explicitly prepared in RCX/RDX. Main additionally invents an argument to GetCurrentProcess.
+> Emitted CreateToolhelp32Snapshot(2), CloseHandle(), and Process32NextW(). Both argument-recovery options retained the omissions. Unlace disassembly shows the missing arguments explicitly prepared in RCX/RDX. Main additionally invents an argument to GetCurrentProcess.
 
 > **VirtualAlloc loses its fourth register argument** (major, `68d9ee36224c0ec5dcedc3fc`)
 > Emitted VirtualAlloc(0,0x36,0x3000), omitting 0x40 passed in R9D. Enabling calleearity and varargstackargs did not restore it. A prototype assertion did.
@@ -41,7 +41,7 @@ Follow the snapshot handle and entry buffer through the anti-debug loop.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_1400015c0",
@@ -78,7 +78,7 @@ Follow the snapshot handle and entry buffer through the anti-debug loop.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_1400015c0",

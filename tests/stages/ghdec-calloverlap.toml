@@ -1,4 +1,4 @@
-# kuna GH-275: a whole-width write to a register that holds an ABI parameter
+# unlace GH-275: a whole-width write to a register that holds an ABI parameter
 # or return entry loses the argument and the return value at the call.
 #
 # Heritage characterizes every heritaged range against each call site's
@@ -7,7 +7,7 @@
 # dedicated guards: Heritage::guardCallOverlappingInput (heritage.cc:1210) on
 # the input side, and Heritage::tryOutputOverlapGuard with
 # Heritage::guardOutputOverlap (heritage.cc:1249 and :1293) on the output
-# side.  kuna shipped BOTH as comment-only stubs, so the parameter and return
+# side.  unlace shipped BOTH as comment-only stubs, so the parameter and return
 # entries inside such a range were invisible to trial recovery.
 #
 # That range shape is routine on x86-64: the vendored ia.sinc models PXOR as

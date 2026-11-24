@@ -20,13 +20,13 @@ Optional external compilers can be absent; an installed compiler that fails is
 an error.
 
 ```sh
-cargo test --manifest-path decompiler/Cargo.toml -p kuna-cli \
+cargo test --manifest-path decompiler/Cargo.toml -p unlace-cli \
   --test conditional_register_lifetimes -- --nocapture
 
 arm-none-eabi-gcc -nostdlib -marm -march=armv5te \
   -Wl,-Ttext=0x10000 -Wl,-e,candidate \
-  docs/features/conditional-register-lifetimes/fixture.S -o /tmp/kuna-conditional.elf
-python3 docs/features/conditional-register-lifetimes/verify_arm.py /tmp/kuna-conditional.elf
+  docs/features/conditional-register-lifetimes/fixture.S -o /tmp/unlace-conditional.elf
+python3 docs/features/conditional-register-lifetimes/verify_arm.py /tmp/unlace-conditional.elf
 ```
 
 The independent ARM check requires binutils and Python Unicorn. It executes

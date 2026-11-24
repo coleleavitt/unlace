@@ -1,10 +1,10 @@
-# kuna: a 64-bit return whose high word is computed from the low word, or
+# unlace: a 64-bit return whose high word is computed from the low word, or
 # whose low word is the function's argument left in its register, returns
 # all eight bytes, not void.
 #
 # Stage / sub-stage: P4 return recovery, the output trials of the
-# function's own RETURN (ActionReturnRecovery, p4_calls/kuna_retcallhalf.rs),
-# and the late pair repair (p4_calls/kuna_returnuncomputed.rs).
+# function's own RETURN (ActionReturnRecovery, p4_calls/unlace_retcallhalf.rs),
+# and the late pair repair (p4_calls/unlace_returnuncomputed.rs).
 # A strict fix: no option.
 #
 # Source (clang -target arm-linux-gnueabi -O2, bytes verbatim below; kc0

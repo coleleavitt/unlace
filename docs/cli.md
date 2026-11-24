@@ -34,7 +34,7 @@ and what survived:
 
 ```
 $ unlace functions ./sstripped --json
-[kuna] ELF section table unusable (57007 section headers at e_shoff 0xdead run
+[unlace] ELF section table unusable (57007 section headers at e_shoff 0xdead run
 2176129 bytes past the end of a 161156-byte file); continuing from the program
 headers (entry 0x80492d0, 2 load segment(s))
 ```
@@ -56,7 +56,7 @@ fabricated one — and the run continues, printing one line on stderr:
 
 ```
 $ unlace functions ./packed.exe --json
-[kuna] PE NumberOfRvaAndSizes is 1531532893, but only 16 data directories fit in a
+[unlace] PE NumberOfRvaAndSizes is 1531532893, but only 16 data directories fit in a
 224-byte optional header; clamped to 16 (entry 0x40908e, 8 section(s))
 ```
 
@@ -70,11 +70,11 @@ never modified), and the run continues, printing one line on stderr:
 
 ```
 $ unlace functions ./UnholyDragon-150.exe --summary --json
-[kuna] PE DOS header e_magic is 0x5a15, not MZ (0x5a4d); loaded via e_lfanew 0xe8
+[unlace] PE DOS header e_magic is 0x5a15, not MZ (0x5a4d); loaded via e_lfanew 0xe8
 -> PE signature (repaired in memory; the file is unchanged)
 ```
 
-Each of these header repairs is also listed, verbatim and without the `[kuna] `
+Each of these header repairs is also listed, verbatim and without the `[unlace] `
 prefix, in the `warnings` array of `unlace functions --summary --json` (and as
 `warning<TAB>…` lines in its text form), so a caller that reads only stdout still
 learns that the image it is orienting in was repaired. A well-formed image has
@@ -98,7 +98,7 @@ output equality. Fixture provenance is in
 `crates/unlace-slacomp/tests/golden/README.md`; the retired live C++
 differential is described in `docs/history.md`.
 
-## Where kuna finds the engine and the specs
+## Where unlace finds the engine and the specs
 
 `unlace` runs two programs besides itself — the decompiler console `decomp_dbg`
 (behind `decompile`) and the SLEIGH compiler `slacomp` (behind `unlace specs`) —
@@ -126,7 +126,7 @@ A tree of SLEIGH sources is enough: the engine compiles each language's `.slaspe
 below). A `.sla` that sits beside its `.slaspec` as a regular file at least as new as its
 sources, or with no `.slaspec` at all (a release tree), is used as is.
 
-Each `UNLACE_*` variable is also read under its old `KUNA_*` name (a deprecated alias;
+Each `UNLACE_*` variable is also read under its old `UNLACE_*` name (a deprecated alias;
 `UNLACE_*` wins when both are set).
 
 | Variable | What it pins |
@@ -156,10 +156,10 @@ matches.) `unlace` passes its build identity to every `decomp_dbg` it runs (as
 answers, and `unlace` prints one warning on stderr naming both, then carries on:
 
 ```
-$ UNLACE_DECOMP_DBG=/opt/kuna-v1.329/decomp_dbg unlace decompile ./a.out main
+$ UNLACE_DECOMP_DBG=/opt/unlace-v1.329/decomp_dbg unlace decompile ./a.out main
 warning: decomp_dbg is a different build from this unlace
   unlace:     0.1.0 (source 6cbd2f1a5e1f83af) /home/me/unlace/target/release/unlace
-  decomp_dbg: 1.329 (source 91c04e7d2b3a5f60) /opt/kuna-v1.329/decomp_dbg, chosen by UNLACE_DECOMP_DBG
+  decomp_dbg: 1.329 (source 91c04e7d2b3a5f60) /opt/unlace-v1.329/decomp_dbg, chosen by UNLACE_DECOMP_DBG
 ```
 
 An identity is the version `unlace --version` prints plus a fingerprint of the
@@ -242,7 +242,7 @@ unlace decompile ./a.out main --option realtypes zzz
 
 `unlace catalog` lists each option's accepted values.
 
-**A generated name is a selector.** kuna calls a function no symbol covers
+**A generated name is a selector.** unlace calls a function no symbol covers
 `sub_<addr>`, and it prints such a name for entries the whole-binary inventory
 does not hold — a recovered tail call renders `sub_1170(a0)`, and `unlace strings`
 names a literal's owner from the reference walk's own flow attribution. Those
@@ -259,7 +259,7 @@ The name is read as the address it spells only when some naming style would
 *mint* it there, and only when that address holds mapped bytes — so it lands on
 exactly what `--addr` on the same address lands on, and a real symbol spelled
 that way still wins. All three styles count, not just the run's own, because
-`--option namestyle` decides how a generated name is *printed* and `kuna
+`--option namestyle` decides how a generated name is *printed* and `unlace
 functions` reports the default spelling whatever the run asks for:
 
 ```bash
@@ -278,7 +278,7 @@ unlace decompile ./graphy sub_deadbeef
 
 **The C spelling works on Mach-O.** Mach-O decorates a C identifier with a
 leading underscore, so `int main(void)` is stored as `_main` and the name a
-caller reads in the source is not one the image carries. kuna tries the name as
+caller reads in the source is not one the image carries. unlace tries the name as
 given first and, only on a miss, retries it decorated — so an image that really
 does carry both spellings still answers the one that was asked for, and no other
 container gains an underscore it never had.
@@ -364,7 +364,7 @@ unlace decompile ./crackme.exe main --option errortoomanyinstructions on
 ```
 
 Both options are upstream `OptionDatabase` names rather than phase-model ones, so
-they are reachable through `--option` on every surface but do not appear in `kuna
+they are reachable through `--option` on every surface but do not appear in `unlace
 catalog`. `--max-fn-seconds` (see `decompile-all` below) is the wall-clock half of
 the same budget, and `--max-fn-memory` the memory half.
 
@@ -392,18 +392,18 @@ function whose inventory extent (the `size` `unlace functions --json` reports)
 holds it, and the offset:
 
 ```bash
-unlace decompile ./kuna_repro.exe 0x140001040 --addr
+unlace decompile ./unlace_repro.exe 0x140001040 --addr
 #   int sub_140001040(int a0) { return a0 * 0xb + -4; }
 #   note: 0x140001040 is interior to sub_140001030 (0x140001030+0x10), not an entry
-#         kuna discovered; decompiled from 0x140001040 as asked (--define-function
+#         unlace discovered; decompiled from 0x140001040 as asked (--define-function
 #         0x140001040 declares a function there)
 ```
 
 Select the containing function by its name or entry address to decompile it
 whole; if a function really starts there, `--define-function <addr>` makes it an
 entry and the note goes away. The exit status is unchanged. It is the address
-the selection resolves to that is checked, so the fragment's own name (`kuna
-decompile ./kuna_repro.exe sub_140001040`), a Thumb address carrying its mode bit
+the selection resolves to that is checked, so the fragment's own name (`unlace
+decompile ./unlace_repro.exe sub_140001040`), a Thumb address carrying its mode bit
 and an object's `.text+0xOFF` answer the same way, and so do `decompile-all` and
 `decompile-project` for each target selected by `--addr` or `--functions` — one
 note per record. With `--json` the record of such a
@@ -413,10 +413,10 @@ On a DOS program, where a function's extent ends with its flow (see `size` under
 `unlace functions`), an address after that end and short of the next function is
 in no function: it has no `interior_to`, and stderr says whose flow ended before
 it (`note: 0x3a880 is past the end of sub_3a856 at 0x3a872, after the last
-instruction its flow reaches, and in no function kuna discovered; ...`).
+instruction its flow reaches, and in no function unlace discovered; ...`).
 
-**`--define-function <start[-end][=name] | @file>`** (repeatable) tells kuna where a
-function starts and ends. Every boundary kuna knows is otherwise *derived* —
+**`--define-function <start[-end][=name] | @file>`** (repeatable) tells unlace where a
+function starts and ends. Every boundary unlace knows is otherwise *derived* —
 discovery finds the entries, and the extent is the address-contiguous clip to the
 next one over an unbounded flow follow — which is the wrong answer on exactly the
 images where reverse engineering is hard. A missed entry merges two functions into
@@ -447,7 +447,7 @@ already named keeps its name unless you supply one); `end` is optional too — a
 `--define-function 0x4014a0` asserts an entry and leaves the extent natural.
 Addresses are hexadecimal with or without `0x`.
 
-A name that one of kuna's built-in libc signature tables knows also carries that
+A name that one of unlace's built-in libc signature tables knows also carries that
 signature to the entry, so declaring the callee gives its call sites a prototype
 and not just a spelling — `--define-function 0x8048968=ptrace` on a stripped,
 statically linked image turns `ptrace()` into
@@ -458,7 +458,7 @@ function still wins.
 
 A name that a call-fixup targets installs that fixup the same way:
 `--define-function 0x6519c0=__ftol2_sse` makes each `fld …; call 0x6519c0` a plain
-`(int)(…)` conversion of its x87 operand. On a PE32 i386 image kuna already
+`(int)(…)` conversion of its x87 operand. On a PE32 i386 image unlace already
 recognizes the MSVC `__ftol` family by its bytes, so this is only needed for a
 helper build it does not know.
 
@@ -493,7 +493,7 @@ section .NEOpack, which the image does not flag executable -- pass
 ```
 
 The `@file` form is the durable one: one declaration per line, `#` comments and
-blank lines skipped. kuna does not write boundaries back into the image, so the file
+blank lines skipped. unlace does not write boundaries back into the image, so the file
 is the artifact — generate it, diff it, and pass it to every invocation. The flag is
 accepted by `decompile`, `decompile-all`, `functions`, `decompile-project`,
 `decompile-graph`, `disassemble`, `read` and `raw-pcode`; a declaration is applied
@@ -526,7 +526,7 @@ use its name), but there are no bytes there to decompile or disassemble
 `declared.bytes` is `mapped` when the whole extent is in the image, `partial` when
 the entry is but the extent runs past the mapped bytes (the warning names the first
 unmapped byte), and `unmapped` when the entry itself is not mapped. Every declared
-entry carries it, so a row without `declared` is one kuna found rather than one it
+entry carries it, so a row without `declared` is one unlace found rather than one it
 was told about. Exit statuses and the C are unchanged: `functions` still lists the
 entry and exits 0, and a command that needs the bytes of an `unmapped` entry
 (`decompile`, `disassemble`) still refuses it, now after the warning that says why.
@@ -534,8 +534,8 @@ A section flagged non-executable is not a reason to warn; a declaration there is
 honored as described above.
 
 **`--assert <directive> | @file`** (repeatable) is the other half: where
-`--define-function` tells kuna where a function *is*, `--assert` tells it what
-anything *is*. Everything kuna knows it derived, and until this flag the only
+`--define-function` tells unlace where a function *is*, `--assert` tells it what
+anything *is*. Everything unlace knows it derived, and until this flag the only
 levers the `unlace` binary offered were `--option` and `--kassert` — the console has
 carried `rename`, `retype`, `map param`, `map return`, `map address`,
 `comment instruction` and `parse line extern` all along, unreachable.
@@ -566,7 +566,7 @@ One directive per `--assert`, keyed by intent rather than by phase:
 | `typedef <C declaration>` | intern a `struct`/`union`/`enum`/`typedef` so `type` can name it |
 | `data <addr> <C typedeclaration>` | a named, typed global at an address |
 | `comment [<func>::]<addr> <text>` | a comment rendered into the C at that instruction |
-| `flow [<func>::]<addr> branch\|call\|callreturn\|return` | the flow out of this instruction is not what kuna decided |
+| `flow [<func>::]<addr> branch\|call\|callreturn\|return` | the flow out of this instruction is not what unlace decided |
 | `callee [<func>::]<callsite> <name\|address>` | the indirect call at this instruction goes to this function |
 | `callproto [<func>::]<callsite> <C declaration>` | the arguments and return of the one call made by the instruction at `<callsite>` |
 | `function <start>[-<end>][=<name>]` | the `--define-function` spelling, on this plane |
@@ -587,7 +587,7 @@ including one that runs past either end. Interior named data and previous
 explicit declarations retain their mappings.
 
 **`name`/`type` reach the register locals, not just the stack ones.** A local
-kuna prints with a storage comment — `unsigned long v6; // rax` — has no symbol
+unlace prints with a storage comment — `unsigned long v6; // rax` — has no symbol
 behind it; naming one used to answer `No symbol named: v6` no matter how it was
 spelled. It now resolves. A `name` alone changes nothing but the name: the second pass
 finds the variable by its instances and names all of it, so a merged register
@@ -645,7 +645,7 @@ unlace decompile ./mode.so is_rwx --assert 'format 0x1304 oct' --assert 'format 
 #   return (a0 & 0777) == 0755;       (was: return (a0 & 0x1ff) == 0x1ed;)
 ```
 
-`isolate <symbol>` keeps a local out of the merges kuna chooses to make: a
+`isolate <symbol>` keeps a local out of the merges unlace chooses to make: a
 copy with its source, and the result of an operation with its input, which
 is what prints one variable for two values (`v1 = v1 * 3 + 1;`) or reuses a
 parameter (`a0 *= 3;`). The isolated local keeps the values it is defined
@@ -695,7 +695,7 @@ and `read_pair(&frame.replacement)`. Each native use must still match its byte
 family after replay. Packed or ambiguous writes can retain raw storage views.
 
 **Every `name`/`type` in one run reads the output you were shown.** Each
-directive's identifier is looked up in the C kuna printed before any of them
+directive's identifier is looked up in the C unlace printed before any of them
 applied, so directives on different locals work in any order, and `name v1 v2`
 with `name v2 v1` swaps the two. A later directive may also use a name an
 earlier one gave (`name v1 rc` then `type rc unsigned int`). When an identifier
@@ -723,7 +723,7 @@ repeated console decompiles.
 **Write the type in C.** The standard scalar keywords — `void`, `char`, `short`,
 `int`, `long`, `float`, `double`, `signed`, `unsigned`, `_Bool`, `wchar_t` — are
 accepted in any legal combination, in return position, in parameter position and
-as a `type`/`param`/`return`/`data` operand, so a declaration kuna emitted can be
+as a `type`/`param`/`return`/`data` operand, so a declaration unlace emitted can be
 pasted straight back at it:
 
 ```bash
@@ -738,7 +738,7 @@ constants counting on from the one before. gcc for `arm-none-eabi` defaults to
 layout, or any packed enum, with C23's underlying type, `typedef enum Mode :
 unsigned char { IDLE, RUN };`.
 
-**A parameter may be named after a type.** kuna interns a type called `code`,
+**A parameter may be named after a type.** unlace interns a type called `code`,
 and a `-g` binary interns every DWARF type name it uses, so the name you want
 for a parameter is often already a type name; the declaration still reads it as
 the parameter's name, exactly as C does:
@@ -795,7 +795,7 @@ unlace decompile ./rage.exe sub_1400055e0 \
 The declaration supplies the types and the parameter names; `sha256` names
 nothing — a prototype does not rename the function (`name` renames a local).
 The `function` directive does: add `--assert 'function 0x1400055e0=sha256'` and
-the function is `sha256` everywhere, its old name kept as an alias (`kuna
+the function is `sha256` everywhere, its old name kept as an alias (`unlace
 decompile` prints the new name when you select the function by it; the
 in-process surfaces — `decompile-all`, `decompile-project`, the browser — print
 it however you selected it).
@@ -860,7 +860,7 @@ and four on LLP64. Ghidra's sized spellings (`int4`, `uint8`, `float8`,
 knows. A combination that is not a C type (`short long`, `float int`) is rejected
 by name.
 
-**The two range directives are for memory kuna cannot classify by itself**, which
+**The two range directives are for memory unlace cannot classify by itself**, which
 on a hostile or embedded image is most of it. `--option readonly on|off` is a
 program-wide switch, not a range, and the loader's own read-only markup stops at
 what the section flags say:
@@ -901,7 +901,7 @@ unlace decompile ./crackme.exe 0x43d0c6 --addr --assert 'bytes 0x43d0c6 @notes/s
 The payload is one unbroken run of hex digits (an optional `0x` is allowed), or
 `@FILE` for raw bytes — which is what makes a whole recovered layer a single
 directive. The overlay lives in the load image, so **the file on disk is never
-touched**, and `--assert @overrides.kuna` beside a `function <start>-<end>=<name>`
+touched**, and `--assert @overrides.unlace` beside a `function <start>-<end>=<name>`
 line for each recovered function is the durable form: state the bytes and the
 boundaries once, replay them on every run.
 
@@ -910,10 +910,10 @@ ahead of the analysis commit. Two consequences worth knowing: an address no
 loaded segment maps is *rejected*, naming the span, rather than invented; and
 function discovery has already run on the file image, so functions inside a
 recovered layer are yours to declare (`function`/`--define-function`) rather than
-kuna's to find.
+unlace's to find.
 
 **`flow` is the structuring lever**, and the one directive that changes which
-bytes are even *in* the function. kuna decides at P2 whether an instruction
+bytes are even *in* the function. unlace decides at P2 whether an instruction
 branches, calls, calls-and-does-not-return, or returns; on an obfuscated or
 hand-written image it gets that wrong, and everything downstream inherits the
 mistake. Stating the right answer costs one line:
@@ -944,7 +944,7 @@ error: --assert "flow 0x1405 call" refused by the pipeline: Could not apply flow
 exit 1
 ```
 
-**`callee` states where an indirect call goes.** kuna prints a call through a
+**`callee` states where an indirect call goes.** unlace prints a call through a
 table or a function pointer as the pointer expression, because the destination
 is not in the code. When you know it, name the call instruction and the
 function, by name or by entry address:
@@ -960,7 +960,7 @@ The call is rebuilt as a direct call before the function is analysed, so the
 callee's name and prototype apply to its arguments and its result. An indirect
 jump (`jmp *%rax`) is taken as a tail call: a call to the function, then a
 return (no return after a callee that never returns); no switch is recovered
-from it. The statement outranks a destination kuna would recover itself, such
+from it. The statement outranks a destination unlace would recover itself, such
 as the import a `call *slot(%rip)` loads. The directive is rejected when the
 instruction is a direct call, when it is not a call or an indirect jump, and
 when the destination is not a function (declare one first with `function`). A
@@ -1006,7 +1006,7 @@ other thirty-nine to one stale name — and `--assert-strict` makes any rejectio
 exit non-zero.
 
 `"fatal": true` is the exception, and it exits non-zero on its own. It marks a
-directive kuna accepted and then **refused while applying it**. A rename that never
+directive unlace accepted and then **refused while applying it**. A rename that never
 bound leaves a correct body one annotation short and you can see which. A refused
 `flow` override leaves C that describes a different control-flow graph than the one
 you asked for and looks exactly like the C you wanted. A `name` or `type` that bound
@@ -1018,7 +1018,7 @@ replace. Both are reported as the run's verdict.
 `type v2 char[16]` then `name v2 credbuf` retypes and then renames, where the
 reverse leaves the second naming a symbol the first renamed away. `name` and
 `type` name a *local*, which does not exist until the function has been decompiled
-once, so kuna decompiles it twice — but only when such a directive is present, so
+once, so unlace decompiles it twice — but only when such a directive is present, so
 nothing else pays for it. A directive that names no function binds to the function
 being decompiled; on a run that decompiles more than one (`decompile-all`,
 `decompile-project`) it is rejected rather than applied to every function that
@@ -1094,10 +1094,10 @@ but a directive that is accepted and inert has no place on this plane.
 
 The `@file` form is the durable one, exactly as for `--define-function`: one
 directive per line, `#` comments and blank lines skipped, and the file is the
-artifact — kuna does not write assertions back into the image.
+artifact — unlace does not write assertions back into the image.
 
 ```bash
-cat > overrides.kuna <<'EOF'
+cat > overrides.unlace <<'EOF'
 # worked out from the strings and the xrefs
 prototype sub_401200 int check_license(char *key,int len)
 name sub_401200::v3 keylen
@@ -1107,7 +1107,7 @@ flow sub_401200::0x40123f return   # the dispatch tail never comes back
 readonly 0x601050+16   # the key table, written only by the installer
 volatile 0x40021000+4  # RCC->CR
 EOF
-unlace decompile ./a.out sub_401200 --json --assert @overrides.kuna
+unlace decompile ./a.out sub_401200 --json --assert @overrides.unlace
 ```
 
 Accepted by `decompile`, `decompile-all`, `decompile-project` and `functions`.
@@ -1115,7 +1115,7 @@ The console spellings, for a hand-driven `decomp_dbg` session, are the commands 
 the table's second column.
 
 **`--types <file.h | dir>`** (repeatable) loads C declarations from a header for
-this run, so a program built against a library kuna has no table for shows that
+this run, so a program built against a library unlace has no table for shows that
 library's types instead of bare integers. Each function declaration becomes the
 prototype of the function or import of that name, and each `struct`, `union`,
 `enum` and `typedef` is defined, so `type` and `data` directives can name it. A
@@ -1145,9 +1145,9 @@ in a header too (`int fetch(const char *url);`) to name its parameter and state
 its return type.
 
 A header's prototype has the weight of a `prototype` directive: it replaces the
-signature kuna would otherwise give that function and every call to it, the
+signature unlace would otherwise give that function and every call to it, the
 one DWARF or a built-in library table states included, and only an `--assert`
-outranks it. kuna does not check it against the code. A header from another
+outranks it. unlace does not check it against the code. A header from another
 version of the library, or one that declares a different function under a name
 the binary also uses, still gives that function the declared signature:
 arguments the code passes but the declaration lacks are dropped from the calls,
@@ -1177,11 +1177,11 @@ depends on is not available, so the entries that name it are skipped; pass the
 library that defines it instead. A file is told apart from a text library by its
 `IDATIL` header.
 
-The text must be preprocessed C. kuna runs no preprocessor on its own: it skips
+The text must be preprocessed C. unlace runs no preprocessor on its own: it skips
 `#` lines, so a header that needs its macros or its `#include`s expanded leaves
 declarations that do not parse. **`--types-cpp <cc>`** runs your preprocessor
 over each header first: the value is the command (`cc`, `clang`,
-`'cc -I include -DNDEBUG'`), kuna adds `-E` when the command does not carry it,
+`'cc -I include -DNDEBUG'`), unlace adds `-E` when the command does not carry it,
 and the header path goes last. A preprocessor that fails is an error. The
 declarations of the headers it includes are loaded as well, and a rejection is
 reported at the file and line the preprocessor's line markers give.
@@ -1254,7 +1254,7 @@ selects Java for a DEX file, Rust for a detected Rust image and C otherwise,
 including Go images.
 
 **`--language auto|c|rust|java|go`** selects the output language. **`auto` is the
-default and follows the binary**: a DEX file renders as Java, and a Rust binary renders as Rust, because kuna
+default and follows the binary**: a DEX file renders as Java, and a Rust binary renders as Rust, because unlace
 already detects one (`unlace-analysis`'s `sourcelang` pass, the port of Ghidra's
 `SourceLanguageAnalyzer`) and rendering it as C is worse in a way the reader has
 to undo by hand (DIV-80). Detection is high-precision, not heuristic; an
@@ -1270,7 +1270,7 @@ primitive spelling, `x as T` casts, `loop`/`while c {}`, and `match v { A | B =>
 compilation: the output calls functions that have no definition and does no type
 checking. Constructs Rust cannot express — an unstructured `goto` the structurer
 could not remove, a C switch fall-through — render as a comment plus a diverging
-`panic!("kuna: …")` so a lossy site is never mistaken for a translation. An
+`panic!("unlace: …")` so a lossy site is never mistaken for a translation. An
 emitted `goto` marker is also **reported**: one `note:` line on stderr naming the
 function and the count, and a per-function `unstructured_gotos` in the `--json`
 record (`0` on a C render). The run still exits `0` with a `null` `error` — the
@@ -1316,7 +1316,7 @@ objects whose machine prefix the generic object parser does not recognize.
 `--isa auto|arm|thumb` is available on `decompile`, `decompile-all`,
 `decompile-project`, `decompile-graph`, `functions`, `disassemble`/`read`,
 `strings`, and `xrefs`. It controls ARM32's per-address `TMode`
-context, which a language id alone cannot select. `auto` is the default: kuna
+context, which a language id alone cannot select. `auto` is the default: unlace
 uses ELF mapping/FUNC markers, Cortex-M metadata, and Thumb-specific PE/COFF
 machine values when the resolved decoder is ARM32. These inferred hints preserve
 an explicit non-ARM `--target`; explicit `--isa arm|thumb` still requires ARM32.
@@ -1337,7 +1337,7 @@ UEFI TE images are recognized directly on `decompile`,
 interactive console, and the browser front-end, which all load through one
 dispatcher. The TE header owns the image base, entry point, and section
 mappings; `--target` may select a compatible SLEIGH language but does not
-reinterpret those addresses. Kuna applies the TE stripped-header bias to
+reinterpret those addresses. Unlace applies the TE stripped-header bias to
 section file offsets while retaining their original loaded VMAs. Recognition reads the `VZ`
 signature, the machine word, and `StrippedSize`, so a file that merely opens
 with those two letters keeps the headerless-image guidance. The retained
@@ -1345,7 +1345,7 @@ TE header, section table, and padding are mapped read-only from
 `ImageBase + StrippedSize - 40` up to `ImageBase + BaseOfCode`; the file backs
 that region only up to the first section's adjusted raw offset, and the
 alignment slack behind it reads as zero, so an ordinary 0x200-file-aligned
-image loads. Kuna validates that the file-backed part lies inside the file and
+image loads. Unlace validates that the file-backed part lies inside the file and
 that no section's raw data starts inside the section table. It validates the two data directories and every other
 header/section/file range before allocation, and seeds the container entry as
 the initial function using the active `namestyle`. A `bytes` assertion or
@@ -1432,7 +1432,7 @@ prints by name. CDEX, ODEX, OAT and VDEX files are not supported.
 ### MS-DOS MZ executables
 
 A DOS `.EXE` (an `MZ` header that is not the stub of a PE, NE, LE or LX image)
-loads without `--raw-image`. kuna places the load module at segment 0x1000
+loads without `--raw-image`. unlace places the load module at segment 0x1000
 (linear 0x10000), applies the relocation table, and seeds discovery from the
 header's `CS:IP`, decoding as `x86:LE:16:Real Mode:default` unless `--target`
 names another language:
@@ -1454,11 +1454,11 @@ relocations (`mzsweep`): a far call counts only through a
 relocated segment word, and a call decoded among zero fill, or to a target that
 does not open with code, is data in a far data segment rather than a function.
 A file packed with PKLITE or LZEXE loads too, but its code is the
-decompressor stub and a packed body, so kuna says so on stderr; unpack it first
+decompressor stub and a packed body, so unlace says so on stderr; unpack it first
 (`unlace unpack` for PKLITE, for example `deark -m lzexe` for LZEXE).
 A program linked with Microsoft's or Borland's 8087 emulator carries its float
 instructions as `INT 34h`-`3Dh`; when the load module holds emulator code,
-kuna decodes them as the x87 instructions they stand for (`--option fpuemu
+unlace decodes them as the x87 instructions they stand for (`--option fpuemu
 off` keeps the interrupts, `on` forces the decode, for example on a
 `--raw-image` `.COM` program).
 Each function starts with DS holding the data segment the startup code loads
@@ -1477,7 +1477,7 @@ object-file view and refuse it with a capability error, as for a TE.
 ### WebAssembly modules
 
 A `.wasm` module (`\0asm`, binary version 1) loads directly. It has no addresses
-of its own, so kuna lays it out as one flat 32-bit image and lowers each
+of its own, so unlace lays it out as one flat 32-bit image and lowers each
 function body from stack form to register form at load:
 
 ```bash
@@ -1512,7 +1512,7 @@ language names, decompiles to `unsupported();`. The load says how many on
 stderr and why the first one was refused:
 
 ```
-[kuna wasm] m.wasm: 2 of 310 function bodies were not lowered and decompile to an unsupported() call; the first is function 17, which uses instruction 0xfd
+[unlace wasm] m.wasm: 2 of 310 function bodies were not lowered and decompile to an unsupported() call; the first is function 17, which uses instruction 0xfd
 ```
 
 A module decodes only as `Wasm:LE:32:default`; `--target` with another language
@@ -1551,7 +1551,7 @@ with the address it runs at. A relocatable a.out object loads at 0 with its
 m68k or i386 relocations applied; SPARC and ARM relocations are not. A PEF
 function knows its TOC at entry, so its globals resolve, but not after a call
 into another fragment, where `r2` is reloaded from the stack. A relocation or
-pattern program kuna cannot follow is cut short and reported on stderr.
+pattern program unlace cannot follow is cut short and reported on stderr.
 `decompile`, `decompile-all`, `functions`, `disassemble`/`read`,
 `decompile-project` and the console support these inputs; `strings`, `xrefs`,
 `decompile-graph` and the graph-backed `--summary`/`--reachable-from` need an
@@ -1607,7 +1607,7 @@ $ unlace functions fw.bin --json --raw-image \
 `--entry` therefore seeds the load without *selecting*: an unfiltered
 `decompile-all` decompiles the discovered inventory, not just the seed. `--addr`
 still does both, so it remains the way to narrow a raw run to named addresses; a batch run
-given only `--addr` seeds says so on stderr (`[kuna raw] --addr selects: ...`).
+given only `--addr` seeds says so on stderr (`[unlace raw] --addr selects: ...`).
 A function no direct call reaches and no seed names is still undiscovered;
 `--define-function` asserts it. Named `--functions`, section-relative selectors
 and `--slice` are rejected. Support covers `decompile` (text and JSON),
@@ -1693,7 +1693,7 @@ archives) are never probed.
 
 ```sh
 $ unlace decompile-all stm32.bin
-[kuna firmware] Cortex-M vector table: base 0x8000000, initial SP 0x20005000, 4 handlers, reset 0x8000174
+[unlace firmware] Cortex-M vector table: base 0x8000000, initial SP 0x20005000, 4 handlers, reset 0x8000174
 // Function: Default_Handler @ 0x80000e0
 ...
 ```
@@ -1762,16 +1762,16 @@ which folds only from read-only bytes). `--option esprom off` applies nothing.
 
 ```sh
 $ unlace decompile hello_world.bin 0x400d6f04 --addr
-[kuna esp] hello_world.bin: ESP application image (esp32, 6 segments, entry 0x40081220)
+[unlace esp] hello_world.bin: ESP application image (esp32, 6 segments, entry 0x40081220)
   ...
   memcpy(&v2,a1,0x10);
 ```
 
 ```sh
 $ unlace decompile-all stm32.hex --svd STM32F401.svd
-[kuna firmware] Intel HEX: 516 bytes at 0x8000000, ...
-[kuna firmware] Cortex-M vector table: base 0x8000000, ...
-[kuna firmware] SVD MINI_F4: 3 peripherals, 1 interrupts
+[unlace firmware] Intel HEX: 516 bytes at 0x8000000, ...
+[unlace firmware] Cortex-M vector table: base 0x8000000, ...
+[unlace firmware] SVD MINI_F4: 3 peripherals, 1 interrupts
 ```
 
 The registers every Cortex-M core has need no SVD: on a Cortex-M image
@@ -2117,7 +2117,7 @@ analysis retain an explicit report status instead of guessing a profile.
 
 Use `unlace rust-signatures check --json` to check a locally provisioned corpus
 without opening an image. An explicit `--manifest PATH` overrides the default
-manifest. The default is `kuna/rust-signatures/x86_64/linux/manifest.json` in
+manifest. The default is `unlace/rust-signatures/x86_64/linux/manifest.json` in
 the user data directory. On Linux this is an absolute `XDG_DATA_HOME` or
 `$HOME/.local/share`. macOS uses `$HOME/Library/Application Support` and Windows
 uses `LOCALAPPDATA`.
@@ -2170,7 +2170,7 @@ function application uses the in-process engine for text and JSON and rejects
 ```
 
 - `entry` is the **image's declared entry point** (a PE `AddressOfEntryPoint` is
-  the CRT startup, not `main`), named with kuna's best name for it, or `null`
+  the CRT startup, not `main`), named with unlace's best name for it, or `null`
   when the format declares none. Always a virtual address: a Mach-O `LC_MAIN`
   states its entry as a `__TEXT`-relative file offset, and it is rebased here
   (`0x1000005b0`, not `0x5b0`).
@@ -2192,7 +2192,7 @@ function application uses the in-process engine for text and JSON and rejects
 - `warnings` lists the loader's header repairs for this image (a dropped ELF
   section table, a repaired PE DOS `e_magic`, a clamped PE data-directory count),
   one string each, in the order they were applied — the same lines the run prints
-  on stderr, without the `[kuna] ` prefix. Empty for a well-formed image.
+  on stderr, without the `[unlace] ` prefix. Empty for a well-formed image.
 - `limits` names the selected functions a decompile would hit an engine budget
   on, measured off the same reference walk and never by decompiling.
   `instructions` counts the function's own descent: fall-through, branches and
@@ -2283,7 +2283,7 @@ otherwise, so the plain listing never pays for the walk). A record whose entry a
 not wholly mapped carries a top-level `notes` array of the stderr `warning:` sentences
 (see `--define-function` above; the `--summary` document puts them in its `warnings`).
 Neither key appears in a run that declared nothing.
-A run whose FID pass was given a database (`kuna_fid_db`) also carries a top-level
+A run whose FID pass was given a database (`unlace_fid_db`) also carries a top-level
 `fid_databases` array saying whether it was loaded or why not (see `unlace fid` below).
 `object_location` is `null` for linked images and undefined imports; for a relocatable
 definition it is `{section_index,section,offset,offset_hex}`. A record selected (`--addr` or `--functions`)
@@ -2326,7 +2326,7 @@ undefined weak symbol in a relocatable object whose null check could not be
 modeled; `structuring-declined` for a body the printer could not structure; the slug
 `warnstyle inline` prints for any other warning it abbreviates (`no-return`,
 `tail-call`, `branch-flip`, `return-dupe`, `inlined`, ...), less its ` xN`
-count; the producer tag of a kuna warning (`calltrampoline`, `overlapbranch`,
+count; the producer tag of a unlace warning (`calltrampoline`, `overlapbranch`,
 `tailcallframe`, ...); and `other` for the rest. With `--option honestgaps on`
 two losses that are otherwise silent are listed too: `notmodelled` for an
 instruction SLEIGH has no p-code for, stepped over as a no-op under the
@@ -2351,7 +2351,7 @@ spelled as the other rows spell theirs (`char[16]` for `char v1 [16];`); its
 lines in `code` to sorted, unique machine-instruction VMAs. Variable `line_numbers`
 come from the printer's `varref` tokens; variable `addresses` are the union of the
 mapped instruction addresses on those lines. Both are empty when no backed use is
-emitted. The references are captured from Kuna's markup emitter and resolved against
+emitted. The references are captured from Unlace's markup emitter and resolved against
 the live p-code IR, rather than inferred from the rendered text. The ordinary
 plain-text renderer still produces `code`, so its bytes are unchanged.
 Reported variables are joined to native varrefs by ABI or stack storage and recovered
@@ -2604,7 +2604,7 @@ Behaviors specific to `decompile-all`:
   construction, total export time, or memory. Driver policy, not a stage-model
   settable — zero output change for a function whose drive and render complete
   before expiry; the console / `decomp_dbg` parity path arms it only when given
-  `decomp_dbg --max-fn-seconds N`, which `unlace decompile` passes. On `kuna
+  `decomp_dbg --max-fn-seconds N`, which `unlace decompile` passes. On `unlace
   decompile` the budget covers the flow follow `load` made as well as the
   drive, as it does on `decompile-all`, whenever the drive adopts that follow
   (no function-scoped `--assert`/`--kassert` directive or `formatstring full`),
@@ -2736,7 +2736,7 @@ Behaviors specific to `decompile-all`:
     the serial answers. The run says so on stderr:
 
     ```text
-    [kuna --jobs] structsynth: 106 function(s) with synthesized structures named as --jobs 1 --option protoorder off names them: 100 renamed, 10 decompile(s) again
+    [unlace --jobs] structsynth: 106 function(s) with synthesized structures named as --jobs 1 --option protoorder off names them: 100 renamed, 10 decompile(s) again
     ```
 
     The line names the serial run it replayed: on `decompile-all` and
@@ -2839,8 +2839,8 @@ Behaviors specific to `decompile-all`:
     count both sides:
 
     ```
-    [kuna --jobs] 18 function(s) left unfinished by a failed worker process were re-run one at a time and recovered.
-    [kuna --jobs] warning: 1 function(s) have no result because their worker process failed (crash, OOM kill, an external signal, or the stall watchdog); they are `error` records in the output. 1 of them failed again when re-run on their own. Re-run those functions, with fewer --jobs if the machine ran out of memory.
+    [unlace --jobs] 18 function(s) left unfinished by a failed worker process were re-run one at a time and recovered.
+    [unlace --jobs] warning: 1 function(s) have no result because their worker process failed (crash, OOM kill, an external signal, or the stall watchdog); they are `error` records in the output. 1 of them failed again when re-run on their own. Re-run those functions, with fewer --jobs if the machine ran out of memory.
     ```
 
     A run where no worker dies is unchanged, byte for byte and in time. Re-runs
@@ -2858,7 +2858,7 @@ Behaviors specific to `decompile-all`:
     pool, so both combinations work there — the lanes read the parent's own
     overlaid bytes, and a raw image simply runs no discovery walk.
 
-The decbench backend (`decbench/decompilers/raw/kuna_raw.py`) shells out to
+The decbench backend (`decbench/decompilers/raw/unlace_raw.py`) shells out to
 `unlace decompile-all --json`.
 
 ### `--jobs N` — the decode lanes
@@ -2883,8 +2883,8 @@ apply to `unlace functions` — which never spawns a pool — exactly as they do
   fallback. With `--jobs > 1` the walk says which it took:
 
   ```text
-  [kuna --jobs] decode: 16 lanes, 512 intervals
-  [kuna --jobs] decode: serial (language commits context)
+  [unlace --jobs] decode: 16 lanes, 512 intervals
+  [unlace --jobs] decode: serial (language commits context)
   ```
 
   A gate refusal prints one line. A refusal *after* the lanes start prints two —
@@ -3089,7 +3089,7 @@ why not all of it:
 |---|---|
 | `chained-fixups`, `rebase-opcodes`, `dynamic-relocations`, `base-relocations` | unlace read all of that metadata; `data_refs_reason` is `null`. An empty `data_refs` means no stored pointer holds the address. |
 | `partial` | Some of the metadata could not be read (a relocation section whose `sh_link` is not the dynamic symbol table or whose size is not a whole number of entries, a table the dynamic section declares that no section covers, a PE base-relocation directory outside every section, an Android-packed table, a Mach-O fixup chain the walk could not follow to its end); the rows are what was read, and each row's `source` names the metadata. |
-| `unsupported` | The image keeps metadata kuna does not read: a MIPS or SPARC image's dynamic relocations, a relocatable object's relocations, an `--emit-relocs` executable's static ones, an image of a kernel collection or dyld shared cache (`MH_DYLIB_IN_CACHE`), whose rebases the collection's chained fixups or the cache's slide info keep (kuna applies them, but does not list them). |
+| `unsupported` | The image keeps metadata unlace does not read: a MIPS or SPARC image's dynamic relocations, a relocatable object's relocations, an `--emit-relocs` executable's static ones, an image of a kernel collection or dyld shared cache (`MH_DYLIB_IN_CACHE`), whose rebases the collection's chained fixups or the cache's slide info keep (unlace applies them, but does not list them). |
 | `none` | The image keeps no pointer-relocation metadata (a non-PIE ELF executable, a PE without `.reloc` or whose base-relocation directory has size 0): its pointers are plain words. |
 
 Under anything but a complete source, an empty `data_refs` means "not
@@ -3397,7 +3397,7 @@ The floor to fall back to when the ceiling gives way. Every RE agent that asked
 for this had already tried decompiling: a function with no recovered body, a
 dispatcher emitted as `switch(0)`, an indirect call through a stack buffer the
 program decrypts at runtime. When the pseudocode cannot answer, the instructions
-still can — and until now the only way to see one was to leave kuna for
+still can — and until now the only way to see one was to leave unlace for
 `objdump`.
 
 The target is a **name**, an **address**, or a **range**:
@@ -3605,7 +3605,7 @@ addresses it decoded from:
 ### The byte view
 
 An instruction listing is the wrong answer for a data address, and for a while it
-was the only one on offer. An agent that asked kuna for the encoded globals at
+was the only one on offer. An agent that asked unlace for the encoded globals at
 `0x100003f30` got `ADD byte ptr [RCX],AL` / `OR CL,byte ptr [RBX]` — a correct
 decode of `00 01 02 03 ..` and a lie about the program — and left for `xxd`.
 
@@ -3630,7 +3630,7 @@ $ unlace read ./crackme 0x100003f30 --addr --bytes 96
 ```
 
 Sixteen bytes a row, space-separated, with the printable-ASCII gutter — `xxd -g1`
-with kuna's own address column, so the two are diffable. `--json` replaces
+with unlace's own address column, so the two are diffable. `--json` replaces
 `instructions` with the contiguous span and its rows:
 
 ```json
@@ -3657,12 +3657,12 @@ The bytes are the **load image's**, the ones the decompiler and every other
 surface read, and that is not the file wherever a load-time fixup lands. A
 Mach-O chained-fixup rebase or an ELF `RELATIVE` slot holds the pointer the
 loader stores, not the chain word or the zero on disk; a chained **bind** holds
-a zero, kuna's placeholder for the address the loader looks up in another image
+a zero, unlace's placeholder for the address the loader looks up in another image
 at run time. So every fixup slot the span overlaps is listed whole in `fixups`:
 
 | Field | What it is |
 |---|---|
-| `kind` | `rebase` (an address in this image, which the loader slides), `bind` (a symbol's address, which the loader looks up: a chained bind, an ELF `GLOB_DAT`/`JUMP_SLOT`), or `relocation` (any other ELF dynamic relocation, which kuna does not apply). |
+| `kind` | `rebase` (an address in this image, which the loader slides), `bind` (a symbol's address, which the loader looks up: a chained bind, an ELF `GLOB_DAT`/`JUMP_SLOT`), or `relocation` (any other ELF dynamic relocation, which unlace does not apply). |
 | `symbol`, `addend` | The symbol a bind or relocation names, as the image spells it (`_malloc`), and a bind's addend; `null` where there is none. |
 | `target` | The value the loader stores, where this image alone determines it: a rebase's target, a bind to a symbol the image defines. `null` for an import. |
 | `file_bytes`, `image_bytes` | The slot's bytes in the file (`null` past the segment's file content) and in the load image. |
@@ -3677,7 +3677,7 @@ file's bytes), or `none`, where `fixups` is empty. `fixups_reason` is `null`
 otherwise. `none` is a PE at its preferred base or a classic Mach-O, whose rebased
 words are already the unslid pointers and whose bytes are the file's wherever
 `provenance` below says `file`, and a relocatable object (`.o`, `.obj`), whose
-bytes are kuna's own layout of it with the relocations it supports applied,
+bytes are unlace's own layout of it with the relocations it supports applied,
 which this list does not cover.
 `returned` says `file` where the loader keeps the file's own bytes. A span gets
 one note, naming up to three slots, when it
@@ -3687,7 +3687,7 @@ its target (a chain word, or a `RELA` slot's zero):
 
 ```
 $ unlace read ./fixture.dylib 0x4000 --addr --bytes 8
-note: these bytes overlap a load-time fixup slot: 0x4000 bind _malloc (kuna's zero
+note: these bytes overlap a load-time fixup slot: 0x4000 bind _malloc (unlace's zero
 placeholder for an address the loader looks up at run time; the file holds
 0000000000000080) -- `--json` lists each in `fixups`
 # 8 bytes at malloc @ 0x4000 (0x4000..0x4008)
@@ -3699,16 +3699,16 @@ segment's whole memory size, and the file need not back all of it: a `.bss`
 (an ELF `p_memsz` past its `p_filesz`), a Mach-O segment whose `vmsize` runs past
 its `filesize` (`__PAGEZERO`, which holds nothing in the file, or the page
 Apple's ld64 rounds `__LINKEDIT` up to), a PE section whose `VirtualSize` runs
-past its raw data. kuna reads that memory as zeroes, as the decompiler always
+past its raw data. unlace reads that memory as zeroes, as the decompiler always
 has. `provenance` cuts the span wherever the source changes, so a zero the file
-holds and a zero kuna filled in no longer look alike. The ranges tile
+holds and a zero unlace filled in no longer look alike. The ranges tile
 `[start, end)` exactly:
 
 | Field | What it is |
 |---|---|
-| `source` | `file` (the file's bytes from `file_offset` on, which are the listed bytes except at a slot `fixups` lists), `zero-fill` (memory the segment declares past the bytes the file holds for it), `repaired` (file-backed bytes kuna rewrote before parsing the image: an ELF section table it cannot read cleared, a PE's DOS magic set to `MZ`, its data-directory count clamped; the file holds other bytes at `file_offset`), or `unknown` (an image no segment of the file describes: a relocatable object, whose layout is kuna's own, or a TE or MZ image). |
+| `source` | `file` (the file's bytes from `file_offset` on, which are the listed bytes except at a slot `fixups` lists), `zero-fill` (memory the segment declares past the bytes the file holds for it), `repaired` (file-backed bytes unlace rewrote before parsing the image: an ELF section table it cannot read cleared, a PE's DOS magic set to `MZ`, its data-directory count clamped; the file holds other bytes at `file_offset`), or `unknown` (an image no segment of the file describes: a relocatable object, whose layout is unlace's own, or a TE or MZ image). |
 | `file_offset` | Where the range starts in the file, counted from the file's first byte, so a fat Mach-O's slice offset is included. `null` unless `source` is `file` or `repaired`. |
-| `segment` | The segment holding the range, as the image declares it: `index` (its 0-based entry in the table that declares it: the ELF program header table, as `readelf -l` numbers it; the Mach-O load commands, as `otool -l` does; the PE section table, as `objdump -h` does; `null` for the PE header page), `name` (the Mach-O segment or PE section; `null` for an ELF `PT_LOAD` and for the PE header page), `start`/`start_hex` and `size` (`vmaddr` and `vmsize`, `p_vaddr` and `p_memsz`, a section's address and `VirtualSize`), `file_offset` and `file_size` (the bytes kuna reads from the file for it: `filesize`, `p_filesz`, a section's raw data up to its `VirtualSize`), and `permissions`. `null` where `source` is `unknown`. |
+| `segment` | The segment holding the range, as the image declares it: `index` (its 0-based entry in the table that declares it: the ELF program header table, as `readelf -l` numbers it; the Mach-O load commands, as `otool -l` does; the PE section table, as `objdump -h` does; `null` for the PE header page), `name` (the Mach-O segment or PE section; `null` for an ELF `PT_LOAD` and for the PE header page), `start`/`start_hex` and `size` (`vmaddr` and `vmsize`, `p_vaddr` and `p_memsz`, a section's address and `VirtualSize`), `file_offset` and `file_size` (the bytes unlace reads from the file for it: `filesize`, `p_filesz`, a section's raw data up to its `VirtualSize`), and `permissions`. `null` where `source` is `unknown`. |
 | `overlaps` | Every other segment that declares the range's addresses, below; empty for nearly every image. |
 
 `permissions` is `r`, `w` and `x`, each or `-`, from Mach-O `initprot`, ELF
@@ -3722,10 +3722,10 @@ view's rows do not change:
 ```
 $ unlace read ./fixture 0x0 --addr --bytes 16
 note: zero fill, not file bytes: 0x0..0x10 in __PAGEZERO (0x0 bytes in the file,
-0x100000000 in memory) -- kuna reads a segment's memory past what the file holds
+0x100000000 in memory) -- unlace reads a segment's memory past what the file holds
 for it as zeroes; `--json` lists each range's source in `provenance`
 note: no read access: 0x0..0x10 in __PAGEZERO (permissions ---) -- the image
-declares the segment unreadable; kuna lists its bytes anyway
+declares the segment unreadable; unlace lists its bytes anyway
 # 16 bytes at Reset @ 0x0 (0x0..0x10)
 0x0           00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
 ```
@@ -3750,7 +3750,7 @@ in the order the image's table lists them, ends each one's zero fill where the
 next one starts, and reads an address from the first segment that covers it.
 So the first-listed of two segments at one address wins, a lower-starting
 segment's file bytes win over a higher-starting one's, and any segment's file
-bytes win over another's zero fill. That is kuna's static choice, not a
+bytes win over another's zero fill. That is unlace's static choice, not a
 loader's: Linux maps `PT_LOAD`s in program-header order with `MAP_FIXED`, so the
 last one wins, a whole page at a time, and Ghidra puts the later one in default
 memory and the earlier one in an overlay. The bytes and the range's `source`, `file_offset` and
@@ -3771,7 +3771,7 @@ $ unlace read ./ab.elf 0x401000 --addr --bytes 16
 note: overlapping segments: 0x401000..0x401010 is read from file offset 0x1000 in
 the PT_LOAD at 0x401000 (program header 0), and the PT_LOAD at 0x401000 (program
 header 1) maps it from file offset 0x2000 -- the image maps these addresses more
-than once; kuna orders its segments by start address, equal starts in table
+than once; unlace orders its segments by start address, equal starts in table
 order, ends each one's zero fill where the next starts, and reads the first that
 covers an address; `--json` lists the others in each range's `overlaps`
 # 16 bytes at sub_401000 @ 0x401000 (0x401000..0x401010)
@@ -3866,7 +3866,7 @@ unlace strings ./bundle --termination nul               # only the char[N] liter
 The triage query: what text is in this binary, where does it live, and — the part
 `strings(1)` cannot answer — **which function uses it**. Finding the prompt is
 never the goal; opening the routine that prints it is, and that hop is one
-command here because kuna already has both halves.
+command here because unlace already has both halves.
 
 The rows come from the analyzer tier's own matcher, not a second scanner
 (`unlace-analysis/src/analyzers/strings/`, the port of Ghidra's `StringsAnalyzer`),
@@ -3934,7 +3934,7 @@ table — `\x0cout.js\x06std\x12_0x8ec6b3`, the shape a bundled JS or bytecode
 payload carries — holds no NUL at all, so
 `--section .rodata --filter '_0x|out.js'` over a 977 KB Node bundle answered
 `count 0` where `strings -a` read 635 names. The default is therefore `strings(1)`'s
-rule over kuna's address set, and `nul` restores the pass-faithful view. Both
+rule over unlace's address set, and `nul` restores the pass-faithful view. Both
 report `nul_terminated` per row, so a C literal stays distinguishable from a
 printable fragment, and both report the policy in the `termination` field and the
 text header.
@@ -4227,11 +4227,11 @@ unlace unpack ./packed -o snake.bin --json
 unlace unpack ./stripped --raw-lzma 0x1403ea000:0x14053e47c -o payload.bin --json
 ```
 
-The first move on a packed binary, and the only one that helps: every other kuna
+The first move on a packed binary, and the only one that helps: every other unlace
 surface is honestly useless on one. A UPX-packed file contains a loader stub and a
 compressed blob, so `unlace functions` finds nothing, and decompiling the entry point
 gives you the decompressor. `unlace unpack` reconstructs the original image so the rest
-of the CLI has a program to work on — on the witness that filed this gap, `kuna
+of the CLI has a program to work on — on the witness that filed this gap, `unlace
 functions` goes from `count: 0` to 70, `main` included.
 
 Three packers are recognized, and which one is decided before anything is decoded,
@@ -4402,7 +4402,7 @@ compressed_read,unpacked_size,end_marker}`.
 
 What comes out is a payload, not a rebuilt executable — imports, relocations and a PE
 header are not reconstructed, and `end_marker: false` is the normal answer because UPX
-writes none. It is bytes to carve further, not a program to hand back to `kuna
+writes none. It is bytes to carve further, not a program to hand back to `unlace
 decompile`.
 
 That asymmetry is deliberate. A wrong unpacked binary is far more expensive than no
@@ -4431,7 +4431,7 @@ EDK2's `Decompress.c`; a standard section that fails as EFI 1.1 is retried as
 Tiano, which some vendors store there). Each module is then an ordinary EFI image for the other subcommands. A pad file (the free
 space EDK2 leaves in front of an aligned file) does not end a volume.
 
-Beside the modules `unlace unpack` writes `kuna-uefi.index`, which the `uefi`
+Beside the modules `unlace unpack` writes `unlace-uefi.index`, which the `uefi`
 pass reads when a module of that directory is loaded: each module's FFS file
 type (a PEIM and a standalone-MM module are entered differently from a DXE
 driver) and, with `--protocols`, every protocol and PPI interface each module
@@ -4470,7 +4470,7 @@ address_hex, path}]}`.
 ## `unlace decompile-project` — recompile-oriented project export
 
 ```bash
-unlace decompile-project ./a.out                         # writes ./a.out.kuna/
+unlace decompile-project ./a.out                         # writes ./a.out.unlace/
 unlace decompile-project ./a.out -o proj --functions main,parse
 unlace decompile-project ./a.out --jobs 12               # 12 processes, protoorder-off artifacts
 unlace decompile-project ./a.out --stream --jobs 12      # readable while it fills
@@ -4508,7 +4508,7 @@ verdict is taken only after the `.c`, `.h`, `.asm`, README and, under `--stream`
 `1`, and a directive the pipeline refused exits `1` on its own, again only after the
 artifacts are written.
 
-Writes a project folder — default `<binary-filename>.kuna/` next to the binary,
+Writes a project folder — default `<binary-filename>.unlace/` next to the binary,
 `-o/--output DIR` overrides — of four artifacts designed so a human or LLM can study the
 binary and attempt recompilation:
 
@@ -4532,7 +4532,7 @@ binary and attempt recompilation:
   exporter. In particular, a `main` whose return register is not recovered can appear
   as `void main(void)`, which strict C compilers reject because `main` is a reserved
   entry-point name. A syntax-only consumer can remap it while including the header
-  (`#define main kuna_recovered_main`); making it `int` would assert ABI information
+  (`#define main unlace_recovered_main`); making it `int` would assert ABI information
   the decompiler did not recover and would break the header/definition identity.
 - `<name>.asm` — labeled linear disassembly of every CODE section: labels match the `.c`
   function names, per-function `; arg:`/`; stack:` comments map decompiled variables to
@@ -4776,7 +4776,7 @@ that does not exist until it is complete. `--jobs`'s own refusals (`--assert`,
 `--raw-image` with a pool) are unchanged.
 
 **`--jobs 1` streams too.** A serial run of more than a few dozen functions prints one
-line on stderr (`[kuna --stream] serial run; --jobs auto uses every core`) and then
+line on stderr (`[unlace --stream] serial run; --jobs auto uses every core`) and then
 interleaves: the
 sweep is cut into sixteen steps alternating with decompile batches that grow from one
 function to sixty-four, so the first `.c` block lands after the first function and the
@@ -4815,7 +4815,7 @@ minute of tail for twenty minutes of head start.
 ### `--progress` — progress reporting over an ordinary export
 
 ```bash
-unlace decompile-project ./ssh -o ssh.kuna --progress --jobs 4
+unlace decompile-project ./ssh -o ssh.unlace --progress --jobs 4
 ```
 
 Two things are bundled in `--stream`: progress reporting (`.streaming` and the
@@ -5031,7 +5031,7 @@ unset or empty) and, when it is set, `$OPENCODE_CONFIG_DIR/skills` as well; the 
 additive, so installing into the override alone is enough
 ([skill discovery](https://opencode.ai/docs/skills/)). `--agent all` selects all three
 agents. Each target is reported as `installed`,
-`updated` or `current`; an existing copy that differs (another kuna version, or local edits)
+`updated` or `current`; an existing copy that differs (another unlace version, or local edits)
 is kept unless `--force` is given. A note on stderr says so when `unlace` is not on `PATH`,
 since the skill invokes it by that name.
 
@@ -5060,7 +5060,7 @@ filters the array exactly as it filters the table. It and
 every other subcommand's `--json` is an object (`{binary,...}`, `{modes:[...]}`), and each
 `--help` names its root. `--markdown` output is tier-grouped and symptom-indexed; `--check`
 cross-checks the selected catalog against this `unlace` build's
-`unlace_decomp::options::KUNA_OPTION_NAMES` in-process.
+`unlace_decomp::options::UNLACE_OPTION_NAMES` in-process.
 
 `--decomp-dbg PATH`, or a non-empty `UNLACE_DECOMP_DBG` when that flag is absent, opts
 text, JSON and check modes into the existing external console query. The flag takes
@@ -5085,7 +5085,7 @@ A thin alias for `slacomp` (same CLI as upstream's `sleigh_opt`).
 ## `--slice ARCH` — which arch of a universal Mach-O
 
 A Mach-O universal ("fat") binary is several thin images in one file, and every
-kuna surface works on exactly one of them. With no override the pick is
+unlace surface works on exactly one of them. With no override the pick is
 deterministic: x86-64, else arm64, else the first arch present. `--slice ARCH`
 names another (`x86_64`, `arm64`, `arm64e`, `i386`, `arm`, `ppc`, `ppc64`, …); a
 `--target` SLEIGH id steers it too, by its leading arch stem. A slice the file
@@ -5104,7 +5104,7 @@ same file all describe the same slice.
 ## `--image NAME` — one image of a dyld shared cache
 
 A dyld shared cache (`dyld_shared_cache_arm64e` and the sub-caches beside it)
-holds thousands of images, and every kuna surface works on the ones you name. Pass the
+holds thousands of images, and every unlace surface works on the ones you name. Pass the
 main cache file as the binary and name the image with `--image`: a full install
 name (`/usr/lib/libobjc.A.dylib`), else a unique basename (`libobjc.A.dylib`,
 `CoreFoundation`), else a unique basename without its last extension (`libobjc.A`).
@@ -5162,7 +5162,7 @@ stderr:
 
 ```
 $ unlace decompile dyld_shared_cache_arm64e --image Foundation 0x186db0400 --addr
-[kuna] 0x186db0400 is a stub for 0x1870ac53c, which lies in /System/Library/Frameworks/CoreFoundation.framework/CoreFoundation; loading that image too
+[unlace] 0x186db0400 is a stub for 0x1870ac53c, which lies in /System/Library/Frameworks/CoreFoundation.framework/CoreFoundation; loading that image too
 void __CFLogvEx3(...)
 ```
 
@@ -5179,7 +5179,7 @@ a stub island still renders as a named import of the calling image, so `xrefs
 
 An iOS or macOS kernelcache is an `MH_FILESET`: the kernel and every kext, each
 with its own Mach-O header, in one file (raw, or inside an IMG4 / IM4P
-container). kuna loads one entry: the kernel by default, or the entry
+container). unlace loads one entry: the kernel by default, or the entry
 `--option kernelcache <bundle-id>` names, by full id or a unique dotted suffix
 (`--option kernelcache list` prints them all). Like `--image`, the choice
 applies to the whole invocation: `functions`, `decompile`, `disassemble`,
@@ -5211,7 +5211,7 @@ note: 0xfffffe0007007000 is in the MH_FILESET entry com.apple.kernel, not in com
 A macOS `AuxiliaryKernelExtensions.kc` (third-party kexts) or
 `SystemKernelExtensions.kc` points into the boot collection with fixups that
 are offsets from the boot collection's base, so it cannot be resolved from its
-own bytes. kuna looks in the directory of the input for the collection whose
+own bytes. unlace looks in the directory of the input for the collection whose
 UUID the input's `__PRELINK_INFO` names (`_BootKCID`, and `_PageableKCID` for
 the System collection), rebases those pointers against it and names the kernel
 functions they reach:
@@ -5220,7 +5220,7 @@ functions they reach:
 $ ls
 AuxiliaryKernelExtensions.kc  BootKernelExtensions.kc
 $ unlace decompile AuxiliaryKernelExtensions.kc gadget_start
-[kuna] MH_FILESET: loaded com.example.driver.Gadget (entry 1 of 1, 1 chained-fixup pointers rebased, 2 pointers into the boot collection rebased from BootKernelExtensions.kc (2 functions named)); ...
+[unlace] MH_FILESET: loaded com.example.driver.Gadget (entry 1 of 1, 1 chained-fixup pointers rebased, 2 pointers into the boot collection rebased from BootKernelExtensions.kc (2 functions named)); ...
 void gadget_start(unsigned long a0)
 {
   kernel_add(a0,7);
@@ -5245,12 +5245,12 @@ missing. Like
 ## `--member NAME` — one member of an archive
 
 A static library (`libfoo.a`) is an `ar` archive of relocatable objects, and
-every kuna surface works on one of them. Pass the archive as the binary and name
+every unlace surface works on one of them. Pass the archive as the binary and name
 the member with `--member NAME`, or spell both as one path, `libfoo.a:NAME`.
 `--member` with no name after it (last, or before another flag) lists the
 members with their sizes; with `--json` the listing is
 `{archive, members: [{name, size, object}]}`, where `object` says whether the
-member is an object file kuna can load. A name the archive stores more than
+member is an object file unlace can load. A name the archive stores more than
 once (common in static libraries built from several directories) is listed and
 selected as `NAME#K`, its K-th occurrence: `--member cpu.o#2`. An argument
 that is an existing file is never split at a `:`.
@@ -5297,7 +5297,7 @@ image, so it needs a member.
 The selected member is loaded exactly as the same `.o` file is: its relocations
 are applied, and a call into another member stays an external reference,
 because members are not linked against each other. The member is written to a
-temporary file for the run (`<tmp>/kuna_ar_*/<archive>/<member>`), removed on
+temporary file for the run (`<tmp>/unlace_ar_*/<archive>/<member>`), removed on
 exit, and a `binary` field in JSON output names that file. A thin archive
 stores only member paths, so its members load from their own files: each path
 is resolved against the archive's directory as `ar` does, only a regular file
@@ -5338,7 +5338,7 @@ kernel-1	100	type=kernel	arch=arm64	os=linux	compression=gzip	load=0x80080000	en
 fdt-1	137	type=flat_dt	arch=arm64	compression=none
 $ unlace decompile-all fit.itb
 note: fit.itb: using member kernel-1 of the default configuration
-[kuna firmware] U-Boot FIT image: 100 bytes at 0x80080000, target AARCH64:LE:64:v8A, entries [8008000c]
+[unlace firmware] U-Boot FIT image: 100 bytes at 0x80080000, target AARCH64:LE:64:v8A, entries [8008000c]
 ```
 
 With no member named, a FIT loads the `kernel` (else the `firmware`) of its
@@ -5359,8 +5359,8 @@ limited to 1 GiB.
 ## `unlace fid` — function identification by fingerprint
 
 `unlace fid build <lib.a|*.o ...> -o <out.fid> --lang <id> --cspec <id> [--assert <directive | @file>]..`
-writes a kuna `.fid` database of FID fingerprints; `--option listing on --option fid on` with the
-`kuna_fid_db` environment variable naming it renames matching stripped functions
+writes a unlace `.fid` database of FID fingerprints; `--option listing on --option fid on` with the
+`unlace_fid_db` environment variable naming it renames matching stripped functions
 (see `docs/options.md`, option `fid`). Use `--option fid strict` to require
 the same record to match the specific hash and code-unit count as well. Strict
 mode can reject correct matches, and both modes leave multi-name buckets
@@ -5383,14 +5383,14 @@ defines applies to nothing. The `.ldefs` facts are not always the id's fields:
 `MIPS:BE:64:64-32addr` has a 32-bit address size, and `ARM:LEBE:32:v8LEInstruction`
 and `AARCH64:BE:64:v8A` have little-endian instructions.
 
-`unlace fid build` refuses an object whose own language, the one kuna decodes it
+`unlace fid build` refuses an object whose own language, the one unlace decodes it
 with, `--lang` does not apply to: it exits 1 without writing the database, and an
 archive member is skipped with the same reason. An archive whose object members
 `--lang` describes none of is refused the same way, rather than written as an
 empty database. `unlace fid query` exits 1 on a database that does not apply to its
 binary.
 
-When `kuna_fid_db` names a database and the FID pass runs, the run says what
+When `unlace_fid_db` names a database and the FID pass runs, the run says what
 became of it:
 
 | `status` | Meaning |
@@ -5398,7 +5398,7 @@ became of it:
 | `loaded` | Read, applies to the image, matched against. |
 | `missing` | No file at that path. |
 | `unreadable` | The path exists but cannot be read (a directory, no permission). |
-| `invalid` | Not a kuna `.fid` (bad magic, unsupported version, truncated). |
+| `invalid` | Not a unlace `.fid` (bad magic, unsupported version, truncated). |
 | `incompatible` | A valid database whose language does not apply to the image. |
 
 Every status but `loaded` is printed once on stderr (by the text `decompile` too,
@@ -5408,7 +5408,7 @@ its placeholder, and one database set for a batch of mixed-architecture images i
 expected to be incompatible with some of them.
 
 ```
-$ kuna_fid_db=$PWD/aarch64.fid unlace functions stripped --json > out.json
+$ unlace_fid_db=$PWD/aarch64.fid unlace functions stripped --json > out.json
 warning: FID database /work/aarch64.fid: database language AARCH64:LE:64:v8A (AARCH64 64-bit, little-endian instructions) does not apply to image language x86:LE:64:default (x86 64-bit, little-endian instructions): the processor differs; no function was matched against it
 ```
 
@@ -5448,7 +5448,7 @@ out, and its name is listed on stderr, whatever order the objects come in.
 ```
 $ clang -O2 -g -c fidlib.c && unlace fid build fidlib.o -o fidlib.fid --lang x86:LE:64:default --cspec gcc
 unlace fid build: wrote fidlib.fid (1 record(s), 1 with a prototype, 222 bytes)
-$ kuna_fid_db=fidlib.fid unlace decompile-all stripped --option fid on
+$ unlace_fid_db=fidlib.fid unlace decompile-all stripped --option fid on
 int parse_header(unsigned char *buf,unsigned int len,hdr *out)
 ```
 
@@ -5459,14 +5459,14 @@ replaces it. Two things drop it, each with a warning in the function's header
 (and in the `warnings` of its JSON record): a declaration that does not parse
 against the image's types, and a body that reads a parameter the prototype
 does not declare. A database with prototypes is format version 2, which an
-older kuna reports as `invalid`; one without is still written as version 1,
+older unlace reports as `invalid`; one without is still written as version 1,
 and version-1 files load unchanged.
 
 ### `unlace fid query` — candidates for an address, without renaming
 
 `unlace fid query <binary> --db <file.fid> --addr <address> [--addr <address> ...] --json`
 reports full-hash candidates without renaming. Addresses are hex, `0x` optional.
-The kuna `.fid` database must apply to the binary (see above); Ghidra `.fidbf`
+The unlace `.fid` database must apply to the binary (see above); Ghidra `.fidbf`
 is not supported.
 
 For one address, the JSON root contains `binary`, `database`, `requested_address`,
@@ -5480,7 +5480,7 @@ not proof that the address is a function entry.
 
 Status `single_candidate` means the full-hash bucket has one distinct name;
 `ambiguous` means multiple names and `no_match` an empty bucket. These three also
-carry `database_format` (`kuna_fid`), `language`, `match_basis` (`full_hash`) and
+carry `database_format` (`unlace_fid`), `language`, `match_basis` (`full_hash`) and
 the function's own `full_hash`, `specific_hash` and `code_unit_size`; each candidate
 is `{name, specific_hash, specific_hash_matches, code_unit_size, code_unit_size_matches, prototype}`, sorted by name;
 `prototype` is the record's C declaration, or `null` when it carries none.
@@ -5623,8 +5623,8 @@ already read:
   later `--project FILE` run applies them.
 
 ```sh
-unlace lumina pull ./a.out --server lumina.local:65432 --define-out names.txt --assert-out protos.kuna
-unlace decompile-all ./a.out --define-function @names.txt --assert @protos.kuna --json
+unlace lumina pull ./a.out --server lumina.local:65432 --define-out names.txt --assert-out protos.unlace
+unlace decompile-all ./a.out --define-function @names.txt --assert @protos.unlace --json
 ```
 
 **`push`** sends every function the binary names itself (a symbol, not a `sub_*` placeholder) with
@@ -5680,7 +5680,7 @@ reported in the run's `assertions` array.
 unlace project init ./a.out                       # creates ./a.out.unlace, bound to the SHA-256
 unlace project set ./a.out.unlace 'function 0x401000=main' \
     'prototype main int main(int argc,char **argv)' 'name main::v2 credbuf' 'bookmark 0x401000 start'
-unlace project set ./a.out.unlace @overrides.kuna # an --assert @file, one directive per line
+unlace project set ./a.out.unlace @overrides.unlace # an --assert @file, one directive per line
 unlace decompile ./a.out main --project ./a.out.unlace
 unlace project list ./a.out.unlace                # the directives decompile applies
 unlace project query ./a.out.unlace "SELECT printf('0x%x', address), name FROM functions" --json
@@ -5746,14 +5746,14 @@ with another hash is refused unless `--force`.
   <addr> <text>`, one line per address (`--no-comments` leaves them out). A comment that is one
   identifier is the argument name IDA writes beside each typed call's setup and is left out.
 
-The types are decoded by unlace's own TIL reader (`unlace_analysis::protos::kuna_til`, the one
+The types are decoded by unlace's own TIL reader (`unlace_analysis::protos::unlace_til`, the one
 `--option typelib` uses): the local types come from the database's type library section, rendered as
 C (a record as its definition, anything else as a `typedef`, an enum as its integer), and each
 prototype from the type string IDA keeps beside the function, with named types resolved through
 that library and the function named by its C identifier (the directive binds by address). A
 type C cannot spell here (a `__usercall` signature with arguments in named registers, a named type
 the database does not define) is left out and listed in `skipped`. A `.til` of format 0x13 or
-later (newer than kuna_til reads) contributes no types. IDA's no-return flags are stored as
+later (newer than unlace_til reads) contributes no types. IDA's no-return flags are stored as
 `noreturn <entry>` directives and listed in `noreturn`.
 
 ### Decompiling a database directly
@@ -5775,7 +5775,7 @@ selects one), `--functions` names rewritten as `--addr`es, and the database's lo
 functions and prototypes as `--assert @FILE` in a temporary file (comments are left out of a
 direct load; import them into a project for that). IDA's no-return flags are applied to the
 loaded program after the analysis commit. One line on stderr says what was loaded:
-`[kuna idb] target.i64: metapc 64-bit as x86:LE:64:default, 23 segments, 209 functions, 378 directives`.
+`[unlace idb] target.i64: metapc 64-bit as x86:LE:64:default, 23 segments, 209 functions, 378 directives`.
 `decompile` of a database always runs in-process (text or `--json`), so `--raw`, `--regions`,
 `--trace`, `--kassert` and `--decomp-dbg` are refused. `--jobs` is refused, as for any raw image.
 `unlace idb import` with neither `--project` nor `--binary` writes `<db>.unlace` bound to the database,

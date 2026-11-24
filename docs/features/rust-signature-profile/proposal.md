@@ -1,6 +1,6 @@
 # Rust signature comparison on a function summary
 
-Add `--rust-signature-manifest PATH` to `kuna functions --summary --json`.
+Add `--rust-signature-manifest PATH` to `unlace functions --summary --json`.
 The manifest supplies an explicit candidate set, corpus identity and pin,
 and an inline and no-inline FLIRT bank for each candidate. Verify each
 listed file against its SHA-256 before analysis. Compare each bank once against

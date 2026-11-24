@@ -142,7 +142,7 @@ fn unusable_inputs_are_usage_errors() {
         "--types",
         &fixture("curl.h"),
         "--types-cpp",
-        "kuna-no-such-preprocessor",
+        "unlace-no-such-preprocessor",
     ]);
     assert_ne!(code, 0);
     assert!(stderr.contains("--types-cpp"), "{stderr}");

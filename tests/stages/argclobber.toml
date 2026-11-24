@@ -1,5 +1,5 @@
 # Type-recovery campaign, coreutils `fmt` -O2 (stripped): `main` @0x26a0 calls
-# one static function three times and kuna renders three different arities,
+# one static function three times and unlace renders three different arities,
 # the longest reading a local nothing assigns.
 #
 #     unsigned long v9;  // rdx        <- never assigned

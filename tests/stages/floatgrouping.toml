@@ -1,4 +1,4 @@
-# kuna GH-641: "floating point associativity" (reported with a hand-written
+# unlace GH-641: "floating point associativity" (reported with a hand-written
 # x86-64 fixture and a native-execution witness).
 # https://github.com/Noelo-Lab/kuna/issues/641
 #
@@ -15,7 +15,7 @@
 # Stage model: P9 emit, the operator-token table and the parentheses()
 # binary case (printc.rs, printlanguage.rs).
 #
-# This is a kuna DEFAULT-FLIP, like GH-2786: emitting an expression that
+# This is a unlace DEFAULT-FLIP, like GH-2786: emitting an expression that
 # re-reads as a different computation is an unambiguous bug, so the fix is
 # unconditional rather than behind an option, and the usual
 # bug-reproduces-by-default pass is impossible by design.  Assertions #1/#3

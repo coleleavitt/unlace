@@ -16,16 +16,16 @@ stays accepted as a spelling of `full` (that is what it meant when the option wa
 
 | file | what |
 |---|---|
-| `kuna-decomp/src/p1_partition/formatstring.rs` | `FormatStringMode` + `parse_formatstring_mode` (the `cppsig` value-option idiom) |
-| `kuna-analysis/src/analyzers/formatstring/fmtstatic.rs` | `FormatStringStaticPass` — the load-time resolver |
-| `kuna-analysis/src/analyzers/protos/mod.rs` | `variadic_format_prototype` (the declaration-driven format-function predicate) + `effective_libctypes_layout` |
-| `kuna-analysis/src/analyzers/formatstring/apply.rs` | override parameters are anonymous |
-| `kuna-analysis/src/pass.rs` | `FormatSiteFact` + `AnalysisOutput::format_sites` |
-| `kuna-analysis/src/passes.rs` | the pass joins `listing_consumer_passes` |
+| `unlace-decomp/src/p1_partition/formatstring.rs` | `FormatStringMode` + `parse_formatstring_mode` (the `cppsig` value-option idiom) |
+| `unlace-analysis/src/analyzers/formatstring/fmtstatic.rs` | `FormatStringStaticPass` — the load-time resolver |
+| `unlace-analysis/src/analyzers/protos/mod.rs` | `variadic_format_prototype` (the declaration-driven format-function predicate) + `effective_libctypes_layout` |
+| `unlace-analysis/src/analyzers/formatstring/apply.rs` | override parameters are anonymous |
+| `unlace-analysis/src/pass.rs` | `FormatSiteFact` + `AnalysisOutput::format_sites` |
+| `unlace-analysis/src/passes.rs` | the pass joins `listing_consumer_passes` |
 | `console/src/engine.rs` | the commit parks the sites on the architecture, keyed by caller |
-| `kuna-decomp/src/infra/architecture.rs` | `analysis_formatstring: FormatStringMode`, `format_call_overrides` |
+| `unlace-decomp/src/infra/architecture.rs` | `analysis_formatstring: FormatStringMode`, `format_call_overrides` |
 | `console/src/decompile_step.rs` | parked overrides feed the FIRST drive; `audit_parked_format_sites` withdraws any the drive contradicts and drives once more; the loop and its read-only propagation are `full`-only |
-| `kuna-decomp/src/p0_knowledge/modes.rs` | `formatstring` leaves the `aggressive` exclusion list |
+| `unlace-decomp/src/p0_knowledge/modes.rs` | `formatstring` leaves the `aggressive` exclusion list |
 
 ## Why this can be default-ON
 

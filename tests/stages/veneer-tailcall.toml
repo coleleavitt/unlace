@@ -34,7 +34,7 @@
 # the bounded A32 form with no prototype on either side: a tail call whose
 # target register r1 = plain_helper is not an argument.  ret_veneer at
 # 0x1070 is the unbounded veneer to arm_helper with no prototype of its
-# own: a call would drop the value arm_helper returns, since kuna's own
+# own: a call would drop the value arm_helper returns, since unlace's own
 # return recovery never takes a tail call's result, so it keeps the
 # copied-in body in both passes.
 #

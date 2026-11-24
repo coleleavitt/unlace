@@ -38,7 +38,7 @@ Interactive decompilation of the program's main function, sub_140023350, fast en
   "kind": "cli",
   "timeout_s": 120,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_140023350"
@@ -70,7 +70,7 @@ Interactive decompilation of the program's main function, sub_140023350, fast en
   "timeout_s": 120,
   "repeat": 7,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_140023350"
@@ -124,7 +124,7 @@ recorded with evidence in `docs/features/decompiling-3396-byte-main/record.json`
 
 **Attempt 2 (round 2 wave 8, branch `feat/re-decompiling-3396-w8`).** The symptom
 still stands and the acceptance is still unmet: **14,437 ms** against the
-`< 10,000 ms` bar. What attempt 2 removed is the *second* flow follow — `kuna
+`< 10,000 ms` bar. What attempt 2 removed is the *second* flow follow — `unlace
 decompile` drives the console with `load function` then `decompile`, and each of
 those followed the same function's flow from scratch, jump-table
 sub-decompilation included. Interleaved 7-pair A/B: **19,703 ms -> 15,317 ms
@@ -149,9 +149,9 @@ Two things attempt 3 should inherit rather than rediscover:
 
 **Attempt 3 (round 2 wave 12, branch `feat/re-decompiling-3396-byte-main`).** The symptom still
 stands and the acceptance is still unmet: **12,437 ms** against the `< 10,000 ms` bar. What
-attempt 3 removed is not one mechanism but four, three of which are the same shape: kuna
+attempt 3 removed is not one mechanism but four, three of which are the same shape: unlace
 **re-derives, per query, a fact upstream reads off a cached pointer**. `Merge::mergeTestAdjacent`
-reads `high->getSymbol()` and its isolated bit; kuna's merged tree does not paint SymbolEntries
+reads `high->getSymbol()` and its isolated bit; unlace's merged tree does not paint SymbolEntries
 onto Varnodes before the merge group, so both reads re-ran a `findContainer` containment query
 **per member Varnode, per candidate pair** — **26,243,952 queries** in one decompile of this
 function. Interleaved 4-pair A/B: **14,565 ms -> 12,184 ms median, -16.3%** (and -16.2% re-measured on the rebased tree) (every pair a win,
@@ -199,7 +199,7 @@ whole-surface `decompile-all` across the fixture corpus and the round's probe bi
 Attempt 5 should inherit three things and re-derive none of them:
 
 - **The bar is reachable, once, by one identified change: share the jump-table
-  partial.** kuna runs the partial sub-decompilation once *per table*; C++ runs it once
+  partial.** unlace runs the partial sub-decompilation once *per table*; C++ runs it once
   per *function* (`stageJumpTable` guards the clone and the reduced pipeline behind
   `if (!partial.isJumptableRecoveryOn())`). Here that is two partials — **3,077 ms of
   action time plus 464 ms of cloning** — so sharing removes ~1.7 s, **~15%**, which with
@@ -227,10 +227,10 @@ PASSES.** `unlace decompile nikos_crack_me.exe sub_140023350` measures **9,112 m
 moved: 71.5 -> 19.4 -> 14.4 -> 11.8 -> 10.8 -> **9.1 s**. Attempt 5 implemented exactly the one
 mechanism the wave-17 brief named -- **share the jump-table partial sub-decompilation across the
 tables of one `recoverJumpTables` batch** (C++ `stageJumpTable` guards the clone and the reduced
-pipeline behind `if (!partial.isJumptableRecoveryOn())`; kuna ran it once per table). Shipped as
+pipeline behind `if (!partial.isJumptableRecoveryOn())`; unlace ran it once per table). Shipped as
 `option jtsharepartial` (`on|off`, **default on**), recorded as a **convergence** in
-`docs/history.md` rather than a DIV row, because after it kuna's default matches upstream and that
-document's rule says a fix moving kuna back onto upstream's default earns no DIV.
+`docs/history.md` rather than a DIV row, because after it unlace's default matches upstream and that
+document's rule says a fix moving unlace back onto upstream's default earns no DIV.
 
 Interleaved paired A/B with the option as the lever (same binary in both arms, so the
 `unlace decompile` -> `decomp_dbg` fork cannot time a different engine), 8 pairs:
@@ -240,7 +240,7 @@ Interleaved paired A/B with the option as the lever (same binary in both arms, s
 Two findings worth keeping beyond this need:
 
 - **The correctness half was larger than the speed half, and one recorded claim was wrong.** The
-  in-code comment asserting kuna "cannot share" the partial because sharing "loses 16 of the 17
+  in-code comment asserting unlace "cannot share" the partial because sharing "loses 16 of the 17
   switches" the `unrolledguard` testcase asserts is **refuted by measurement**: with sharing on and
   `unrolledguard` OFF the MSVC optimized-memcpy witness recovers all 16 dispatches and emits 0
   computed calls. Sharing removes the *cause* of the bug `unrolledguard` tolerates (a later table's
@@ -259,7 +259,7 @@ Two findings worth keeping beyond this need:
 **Attempt 6 (round 2 wave 40, branch `feat/re-decompiling-3396-byte-main`). The wave-39
 regression is REFUTED by the code A/B it asked for, and the acceptance passes again.** The
 brief's first job was: build `fba4ebd8` and `96224463` in two worktrees and interleave at
-reps >= 7 on the same box. Done, 8 interleaved pairs, each arm pinned with `KUNA_DECOMP_DBG`
+reps >= 7 on the same box. Done, 8 interleaved pairs, each arm pinned with `UNLACE_DECOMP_DBG`
 so the `unlace decompile` -> `decomp_dbg` fork cannot time the other arm's engine:
 
     pre  #406 (fba4ebd8)  median 9,619 ms   min 9,146   max 10,903
@@ -282,7 +282,7 @@ run-to-run spread is +/-10%. **The bar was not moved** -- five attempts took thi
 14.4 -> 11.8 -> 10.8 -> 9.2 s and the sixth did not need to.
 
 What attempt 6 leaves behind instead of a fix is the instrument every prior attempt built and
-threw away: `KUNA_ACTION_PROF=<path>` writes an exclusive-time, call-counted table of the Action
+threw away: `UNLACE_ACTION_PROF=<path>` writes an exclusive-time, call-counted table of the Action
 tree, keyed by root variant so the reduced `jumptable` pipeline is separated from the function's
 own `decompile` pass for free. Off by default, +0.89% +/- 3.84 (i.e. nothing) with the variable
 unset. The current profile of this witness, for whoever is dispatched next:
@@ -365,12 +365,12 @@ _none recorded_
   **10,816 ms** against the `< 10,000 ms` bar. Four merged, measured, output-identical attempts
   have taken this witness 71.5 -> 19.4 -> 14.4 -> 11.8 -> 10.8 s. The bar is still not moved.
   **The pre/post delta this wave's harness printed (-0.04 s) is VOID -- do not cite it.** It copied
-  the pre-merge `kuna` to /tmp and timed it against the rebuilt one, but `unlace decompile` forks
+  the pre-merge `unlace` to /tmp and timed it against the rebuilt one, but `unlace decompile` forks
   `decomp_dbg`, and `unlace-cli/src/paths.rs` resolves that sibling by `exe_dir()` then falls back to
   `repo_root()/target/release`; off /tmp the parent walk fails, `repo_root()` falls back
   to the CWD, and the "pre" binary executed the FRESHLY REBUILT engine (proven: the /tmp copy's
   `catalog --json` gained the new option across `make binaries`). Any future A/B of a decompile must
-  pin the engine too -- copy `decomp_dbg` aside and point at it with `KUNA_DECOMP_DBG`.
+  pin the engine too -- copy `decomp_dbg` aside and point at it with `UNLACE_DECOMP_DBG`.
   Attempt 5, if it is ever dispatched, is a **campaign, not a profiling run**: the post-#393 profile
   is flat (`stage_jump_table` ~31%, heritage ~23%, oppool1 ~14%, ActionDeadCode ~14%) and #396 took
   its 0.9 s out of Rc traffic on 9.5 M tree mutations, i.e. the volume, not a pass. Dispatch it
@@ -392,7 +392,7 @@ _none recorded_
   `docs/features/decompiling-3396-byte-main/record.json`.**
   1. Implement exactly one mechanism: **share the jump-table partial sub-decompilation across
      tables** (C++ `stageJumpTable` runs the clone + reduced pipeline once per function behind
-     `if (!partial.isJumptableRecoveryOn())`; kuna runs it once per table). Measured here:
+     `if (!partial.isJumptableRecoveryOn())`; unlace runs it once per table). Measured here:
      2 tables, 3,077 ms of action time + 464 ms of cloning, so ~1.7 s / ~15% off an 11.2 s witness.
   2. It changes which tables recover, so it needs a `phases.toml` row + `options.rs` registration
      + the catalog counts + a DIV row + a `tests/stages` case. **You hold all of those leases.**
@@ -406,8 +406,8 @@ _none recorded_
      10 s bar is still a success by this loop's rules, and **the bar is not moved to meet it**
      (four captains have now declined to re-cut it).
   5. Measurement, inherited: `unlace decompile` FORKS `decomp_dbg`, so an A/B that copies only
-     `kuna` aside silently times the freshly built engine — pin the engine with
-     `KUNA_DECOMP_DBG`. Interleaved paired A/B only; a sequential timeit on this box has
+     `unlace` aside silently times the freshly built engine — pin the engine with
+     `UNLACE_DECOMP_DBG`. Interleaved paired A/B only; a sequential timeit on this box has
      reported +42% on byte-identical output. `perf` is blocked (`perf_event_paranoid = 4`);
      instrument, do not sample.
 - closed: acceptance a-53d616afcb6a now PASSES at 46c373aced0c
@@ -472,15 +472,15 @@ _none recorded_
   round of this loop merges another default-ON pass into `universal_sched`, and this need is the
   canary for it. `simdshufflelane` is registered unconditionally in the `analysis` rule group
   (`infra/universalaction.rs:425`); the question is what it costs on a 3396-byte function where it
-  never fires. See [[kuna-lifter-quadratic]] for the profiling lever (`unlace decompile` forks
+  never fires. See [[unlace-lifter-quadratic]] for the profiling lever (`unlace decompile` forks
   `decomp_dbg` and eats its stderr -- profile `--json`).
 - round 2 wave 40 BUILDER (b-r2-decompiling-3396), **attempt 6: the wave-39 `regressed` flip is a
   measurement artifact and the code A/B says so.** Interleaved 8-pair A/B of `fba4ebd8` vs
-  `96224463`, engines pinned with `KUNA_DECOMP_DBG`, gave +3.00% +/- 6.77 (0.4 sigma) with
+  `96224463`, engines pinned with `UNLACE_DECOMP_DBG`, gave +3.00% +/- 6.77 (0.4 sigma) with
   byte-identical stdout across the two builds -- #406 does not fire on this function. The named
   follow-up (`simdshufflelane` in the `analysis` rule group) was ablated by deleting its `rrow!`
   line: +0.23% +/- 5.33. Per the brief's flat branch, no fix was attempted and the bar was not
-  relaxed. Shipped instead: `KUNA_ACTION_PROF`, the per-Action exclusive-time profiler attempts
+  relaxed. Shipped instead: `UNLACE_ACTION_PROF`, the per-Action exclusive-time profiler attempts
   1-5 each rebuilt and discarded, plus this witness's current profile in the prose above.
 - closed: acceptance a-53d616afcb6a now PASSES at 7cf26246655f
 - round 2 B_DONE (captain), **the close is applied to the record and nothing is promoted.**

@@ -381,7 +381,7 @@ mod tests {
 
     fn scratch_copy(tag: &str, with_pdb: bool) -> (std::path::PathBuf, std::path::PathBuf) {
         let dir =
-            std::env::temp_dir().join(format!("kuna-pdbinterior-{tag}-{}", std::process::id()));
+            std::env::temp_dir().join(format!("unlace-pdbinterior-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("scratch dir");
         for ext in if with_pdb {

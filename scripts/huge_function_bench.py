@@ -1,4 +1,4 @@
-"""Generate an x86-64 ELF stress fixture and optionally measure Kuna on it."""
+"""Generate an x86-64 ELF stress fixture and optionally measure Unlace on it."""
 
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ def escaped_locals(blocks: int) -> str:
 
 
 def measure(cmd: list[str], stem: Path, seconds: float) -> dict:
-    """Measure one process tree; enforce a wall deadline outside Kuna."""
+    """Measure one process tree; enforce a wall deadline outside Unlace."""
     start = time.monotonic()
     timed_out = False
     with stem.with_suffix(".decompile.json").open("w") as output, \
@@ -79,22 +79,22 @@ def main() -> None:
     parser.add_argument("--shape", choices=["branches", "escaped-locals"], default="branches")
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--cc", default="gcc")
-    parser.add_argument("--kuna", help="Optional path to a built Kuna binary")
+    parser.add_argument("--unlace", help="Optional path to a built Unlace binary")
     parser.add_argument("--seconds", type=int, default=30)
     parser.add_argument("--memory-mib", type=int, default=1024)
     parser.add_argument("--option", nargs=2, action="append", default=[], metavar=("NAME", "VALUE"))
     args = parser.parse_args()
     if min(args.blocks) < 1 or args.seconds < 1 or args.memory_mib < 1:
         parser.error("blocks, seconds and memory-mib must be positive")
-    kuna = shutil.which(args.kuna) if args.kuna else None
-    if args.kuna and not kuna:
-        parser.error(f"Kuna executable not found: {args.kuna}")
+    unlace = shutil.which(args.unlace) if args.unlace else None
+    if args.unlace and not unlace:
+        parser.error(f"Unlace executable not found: {args.unlace}")
     args.out.mkdir(parents=True, exist_ok=True)
     metadata = {"platform": platform.platform(), "machine": platform.machine(),
                 "compiler": subprocess.check_output([args.cc, "--version"], text=True).splitlines()[0]}
-    if kuna:
-        metadata["kuna_version"] = subprocess.check_output([kuna, "--version"], text=True).strip()
-        metadata["kuna_sha256"] = hashlib.sha256(Path(kuna).read_bytes()).hexdigest()
+    if unlace:
+        metadata["unlace_version"] = subprocess.check_output([unlace, "--version"], text=True).strip()
+        metadata["unlace_sha256"] = hashlib.sha256(Path(unlace).read_bytes()).hexdigest()
     (args.out / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
     records = []
     for blocks in args.blocks:
@@ -111,8 +111,8 @@ def main() -> None:
         record = {"shape": args.shape, "blocks": blocks, "function_bytes": int(symbol[1], 16),
                   "binary": str(stem), "build_command": build_cmd,
                   "binary_sha256": hashlib.sha256(stem.read_bytes()).hexdigest()}
-        if kuna:
-            cmd = [kuna, "decompile-all", str(stem), "--functions", "stress", "--json", "--jobs", "1",
+        if unlace:
+            cmd = [unlace, "decompile-all", str(stem), "--functions", "stress", "--json", "--jobs", "1",
                    "--max-fn-seconds", str(args.seconds),
                    "--max-fn-memory", str(args.memory_mib)]
             for name, value in args.option:

@@ -10,7 +10,7 @@
   "subphase": "heritage-guard",
   "scope": "small",
   "modules": [
-    "decompiler/crates/kuna-decomp/src/p3_dataflow/indexaliasguard.rs"
+    "decompiler/crates/unlace-decomp/src/p3_dataflow/indexaliasguard.rs"
   ],
   "anchors": [
     "heritage.cc:1194 (Heritage::guard)",
@@ -20,9 +20,9 @@
   ],
   "decisions": [
     "The filed hypothesis (stack-store liveness across the indexed XOR) and the round-8 refutation (P6 RangeHint join) are both OVERTURNED. The defect is in P3: Heritage::guard's highPtrPossible arm was a hard-coded false, so guard_loads never inserted the addrforce COPY that gives a pointer-read frame slot a reader. The refuter's P6 observation is real but is a symptom -- the three shadow scalars inside the array's extent have no readers precisely because the stores that would define them were already deleted; both disappear once guard_loads runs.",
-    "kuna already owned every other half of the machinery: discover_indexed_stack_pointers and analyze_new_load_guards build the guard windows, and handle_new_load_copies consumes exactly the load_copy_ops list that guard_loads populates (it had never been populated).",
+    "unlace already owned every other half of the machinery: discover_indexed_stack_pointers and analyze_new_load_guards build the guard windows, and handle_new_load_copies consumes exactly the load_copy_ops list that guard_loads populates (it had never been populated).",
     "Default is `load`, not upstream's `full`. Measured A/B decompile-all over 60 decbench O2 binaries: full = 232/12118 functions changed, +1166 lines, +14 gotos; load = 56/12118, -61 lines, 0 goto change, and load recovers everything full does. guardStores' INDIRECT chain accounts for the entire surplus. `full` is kept as a level because it is upstream's behaviour.",
-    "highPtrPossible is implemented as the upstream space-type test without the cspec <nohighptr> range list, which only the PIC families set and kuna does not parse."
+    "highPtrPossible is implemented as the upstream space-type test without the cspec <nohighptr> range list, which only the PIC families set and unlace does not parse."
   ],
   "sweep": {
     "corpus": "60 decbench O2 binaries (12,118 functions), decompile-all A/B off vs load",
@@ -72,14 +72,14 @@
     "make test-stages": "PARITY OK 721/721",
     "make check-spec": "OK (strict too)",
     "make test-cli": "105/105",
-    "kuna catalog --check": "catalog OK",
+    "unlace catalog --check": "catalog OK",
     "make rust-test": "green"
   },
   "acceptance": {
     "probe": "a-b49275132108",
     "passes": true,
     "promoted_to": "tests/cli/quadratic-transform-loses-four.json",
-    "fixture": "decompiler/crates/kuna-analysis/tests/fixtures/indexaliasguard_i386"
+    "fixture": "decompiler/crates/unlace-analysis/tests/fixtures/indexaliasguard_i386"
   },
   "stage_test": "tests/stages/ghdec-indexaliasguard.xml"
 }

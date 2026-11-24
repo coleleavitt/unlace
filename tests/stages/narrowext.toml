@@ -1,9 +1,9 @@
-# kuna: a declared integer argument or return value narrower than its
+# unlace: a declared integer argument or return value narrower than its
 # register is extended as the RISC-V procedure-call standard states: by the
 # sign of its type up to 32 bits, then sign-extended to the register.
 #
 # Stage / sub-stage: P4 calls, the call-output and entry-input extension
-# (p4_calls/kuna_narrowext.rs, option narrowext).  Two passes: off is the
+# (p4_calls/unlace_narrowext.rs, option narrowext).  Two passes: off is the
 # compiler spec's zero extension (the bug), the default abi is the fix.
 #
 # Source (clang -target riscv64 -march=rv64gc -O2, bytes verbatim below):

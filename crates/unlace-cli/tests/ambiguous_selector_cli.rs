@@ -33,12 +33,12 @@ fn decompile(binary: &str, args: &[&str]) -> (String, String, bool) {
     argv.extend_from_slice(&["--sleighpath", sp.as_str()]);
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .env_remove("UNLACE_DECOMP_DBG")
-        .env_remove("KUNA_DECOMP_DBG")
+        .env_remove("UNLACE_DECOMP_DBG")
         .env_remove("UNLACE_SLACOMP")
-        .env_remove("KUNA_SLACOMP")
+        .env_remove("UNLACE_SLACOMP")
         .args(&argv)
         .output()
-        .expect("run kuna");
+        .expect("run unlace");
     (
         String::from_utf8_lossy(&out.stdout).into_owned(),
         String::from_utf8_lossy(&out.stderr).into_owned(),

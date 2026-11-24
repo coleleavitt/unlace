@@ -1,4 +1,4 @@
-# kuna strict fix (P9, sub-stage cast insertion; no option).
+# unlace strict fix (P9, sub-stage cast insertion; no option).
 #
 # A caller that zero-extends a sub-int value into the argument register
 # (movzx edi,di) has its call input trimmed to the narrow value, because the

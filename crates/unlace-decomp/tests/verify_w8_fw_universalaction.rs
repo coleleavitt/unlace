@@ -162,7 +162,7 @@ fn w8_fw_universalaction_allgroups_full_order_count_head_tail() {
     );
     assert_eq!(
         nonblank, 341,
-        "full kuna schedule registration count changed"
+        "full unlace schedule registration count changed"
     );
 
     // These setup passes include groups absent from the decompile snapshot.

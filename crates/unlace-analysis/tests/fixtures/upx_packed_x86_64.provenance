@@ -19,7 +19,7 @@ Why it is vendored rather than built
 
 Where it came from
   The RE-friction loop's round-20 witness: challenge 64f1f7afd931496abf909525 in
-  the kuna-re-dataset crackme corpus, `bin/snake`, byte-identical. That is the
+  the unlace-re-dataset crackme corpus, `bin/snake`, byte-identical. That is the
   binary on which a tester found `unlace functions` returning zero functions and
   filed docs/re-needs/unpack-upx-packed-executable.md.
 

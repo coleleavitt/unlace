@@ -54,7 +54,7 @@ children = [
     child(body(0x40, 0x54, wild=range(0x47, 0x4B)), [("wrap_a", [(7, "scale_a")]), ("wrap_b", [(7, "scale_b")])]),
 ]
 tree = m2(len(children)) + b"".join(children)
-lib = b"kuna callee fixture"
+lib = b"unlace callee fixture"
 hdr = b"IDASGN" + bytes([11, 0]) + struct.pack("<IHHHHH", 0xFFFFFFFF, 0xFFFF, 0xFFFF, 0, 0, 0)
 hdr += bytes(12) + bytes([len(lib)]) + struct.pack("<HIHHB", 0, 4, 32, 0, 0) + lib
 (Path(__file__).resolve().parent / "callees.sig").write_bytes(hdr + tree)

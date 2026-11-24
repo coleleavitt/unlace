@@ -17,7 +17,7 @@
 # `checkCharacters` walks only as far as the first terminator, so for a
 # zero-length string it validates zero characters and rejects nothing.
 #
-# Fix: kuna_emptystrconst.rs (always on) declines the literal when the escaped
+# Fix: unlace_emptystrconst.rs (always on) declines the literal when the escaped
 # literal would carry no characters at all, and the constant falls through to
 # the ordinary casted-hex print.  A literal with at least one character, however
 # short, is untouched.

@@ -1,6 +1,6 @@
-# kuna: under `callresultuse on`, the Objective-C and Swift runtime's
+# unlace: under `callresultuse on`, the Objective-C and Swift runtime's
 # entry points say by their name which register they take their object in
-# (p4_calls/kuna_callresultuse.rs, runtime_entry).
+# (p4_calls/unlace_callresultuse.rs, runtime_entry).
 #
 # Stage / sub-stage: P4 parameter recovery, the evidence a hand-off of the
 # first result register needs from its next callee (takes_argument).

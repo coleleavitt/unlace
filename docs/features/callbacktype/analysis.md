@@ -2,7 +2,7 @@
 
 ## The gap
 
-kuna resolves a declared prototype at a call site. On `coreutils/cut -O0` the sort call
+unlace resolves a declared prototype at a call site. On `coreutils/cut -O0` the sort call
 already renders with the library's name and the comparator's address:
 
 ```
@@ -30,7 +30,7 @@ for a type vote to retype.
 294 callback arguments name 114 distinct functions, 50 of which decbench scores. **All 50
 DWARF declarations are exactly the slot's signature** — none contradicted, none reached
 through two slots that disagree. 67 ground-truth parameters would move, 16 of them
-parameters kuna recovers no trace of.
+parameters unlace recovers no trace of.
 
 So the claim is sound where it fires, and the question is only whether it fires where the
 address is not really a declaration of the function. That is what the refusals are for.
@@ -69,7 +69,7 @@ the value: a handler registered and then called through a phi that may also hold
 function, or whose register is also written into a global the body never reads back, is the
 same second use one carrier further on. None of these shapes occurs anywhere in the 444-slice
 corpus — all are pinned by `tests/cli` probes over
-`decompiler/crates/kuna-analysis/tests/fixtures/callbacktype_refused_x86_64`.
+`decompiler/crates/unlace-analysis/tests/fixtures/callbacktype_refused_x86_64`.
 
 Two names are deliberately out of the table. `__cxa_atexit` is how glibc's `<stdlib.h>`
 compiles `atexit(f)` — `f` is cast from `void (*)(void)` — so its declared

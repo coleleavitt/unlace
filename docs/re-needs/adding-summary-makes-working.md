@@ -38,7 +38,7 @@ A concise entry, reachability, and size summary of the VM methods.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "functions",
     "{{BIN}}",
     "--summary",
@@ -69,7 +69,7 @@ A concise entry, reachability, and size summary of the VM methods.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "functions",
     "{{BIN}}",
     "--summary",

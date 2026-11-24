@@ -1,4 +1,4 @@
-// Source of a64.o (tests/stages/kuna-reloc-families.xml):
+// Source of a64.o (tests/stages/unlace-reloc-families.xml):
 //   zig cc -target aarch64-freestanding-none -c a64.s -o a64.o
 
     .text

@@ -22,7 +22,7 @@ clang-2100.4.1.1, ld-27106.1, MacOSX SDK 27.2)
   Prebuilt because CI has no Mach-O linker.
 
 What it pins
-  tests/stages/kuna-chkstkdarwin.toml: with option chkstkdarwin off the three
+  tests/stages/unlace-chkstkdarwin.toml: with option chkstkdarwin off the three
   functions take no parameter and assign __chkstk_darwin()'s "result"; with the
   default the probe calls are removed and they take their parameters, while
   the __stubs entry's own br x16 to the probe stays a call.

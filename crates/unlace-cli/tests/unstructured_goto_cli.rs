@@ -37,7 +37,7 @@ fn run_unlace(args: &[&str]) -> (String, String, Option<i32>) {
         .env("SLEIGHHOME", repo_root().join("specs"))
         .args(args)
         .output()
-        .expect("failed to spawn the kuna binary");
+        .expect("failed to spawn the unlace binary");
     (
         String::from_utf8_lossy(&out.stdout).into_owned(),
         String::from_utf8_lossy(&out.stderr).into_owned(),
@@ -47,7 +47,7 @@ fn run_unlace(args: &[&str]) -> (String, String, Option<i32>) {
 
 /// The marker the printer emits, spelled here exactly once so a drift in
 /// `unlace_langrust` fails this file rather than passing it silently.
-const MARKER: &str = "panic!(\"kuna: unstructured goto to ";
+const MARKER: &str = "panic!(\"unlace: unstructured goto to ";
 
 /// The forked `decomp_dbg` surface: the note names the function and the count,
 /// and points at the two ways out.

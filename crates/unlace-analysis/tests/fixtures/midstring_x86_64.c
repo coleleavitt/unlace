@@ -6,7 +6,7 @@
  * `"GNU coreutils"`, so the second `sink` call gets `&banner[4]`, not its own
  * `.rodata` object.
  *
- * Before the fix, kuna typed a constant pointer only when it hit the START of a
+ * Before the fix, unlace typed a constant pointer only when it hit the START of a
  * detected string; an interior pointer fell back to the bare integer, so a real
  * coreutils binary rendered `bindtextdomain(0x68d8, ...)` where IDA shows
  * `bindtextdomain("coreutils", ...)`.

@@ -15,7 +15,7 @@ unsigned int sub_53e7(void *a0)
 
 Six casts where IDA prints three. The cast census (`castcensus/.scratch/{measure,
 engine,ida}.md`) measured this `*(T *)((long)p + K)` round trip as the largest single
-source of kuna's casts: 3,771 casts on the 4,815 functions kuna and IDA share, a shape
+source of unlace's casts: 3,771 casts on the 4,815 functions unlace and IDA share, a shape
 IDA prints 0 times. The ops are `INT_ADD` from the start (`PTRSUB -> INT_ADD` demotion
 fires 0 times): a `void *` base has no field at `K` and no element size, so P5 builds
 neither a `PTRSUB` nor a `PTRADD`, and the cast pass prices the `INT_ADD` as integer
@@ -54,14 +54,14 @@ follow-up could fold `i * sizeof T` into the index.
 
 ## 3. The change and its rendering
 
-`kuna_castarith::rewrite`, called from `action_set_casts` after the upstream
+`unlace_castarith::rewrite`, called from `action_set_casts` after the upstream
 PTRADD/PTRSUB repairs and before the op is cast, turns `INT_ADD(p, #K)` into
 `PTRADD(base, #K/sizeof T, #sizeof T)`. The printer renders it as it renders every
 PTRADD: `((unsigned int *)a0)[0x2b]` under a load or store, `&((T *)p)[k]` as a value.
 One rendering, `((T *)p)[k]`, chosen for three reasons. It is the spelling the printer
 already uses for native typed-base arithmetic (`a0[0x18a]`, `&v7[1]`), so a converted
 site reads like a native one. `arraynotation` (default on) already chose subscripts over
-`base + index` for kuna's pointer arithmetic, so `*((T *)p + k)` would be a second
+`base + index` for unlace's pointer arithmetic, so `*((T *)p + k)` would be a second
 spelling of the same op. And it needs no printer change, so `arraynotation off` still
 gives upstream's `(T *)p + k` for a value.
 
@@ -80,18 +80,18 @@ store moves the same bytes. Alignment is unchanged too: `K` is a multiple of `si
 so `p` is `T`-aligned exactly when `p + K` is. The refusals exist where the printed C
 could otherwise convert a value or cost a cast:
 
-- an enum element. kuna prints every enum as a plain `typedef enum X {...} X;`, whose
+- an enum element. unlace prints every enum as a plain `typedef enum X {...} X;`, whose
   size C leaves to the implementation (4 bytes under gcc and clang), while a packed enum,
   one compiled with `-fshort-enums`, or a C++ `enum class : uint8_t` / `: uint16_t` is 1
   or 2 bytes in the binary. `use_color(*(enum color *)((char *)p + 3))` with a packed
   `color` printed `use_color(((color *)p)[3])` before this refusal, which C reads at
-  `p + 12`: compiled with kuna's own typedef, the printed function passed 85 (`b[12]`)
+  `p + 12`: compiled with unlace's own typedef, the printed function passed 85 (`b[12]`)
   where the binary passes 22 (`b[3]`), and the value form `&((color *)p)[3]` handed on
   `p + 12`. Every enum is refused, not only the narrow ones, because C does not fix any
   enum's size. For the same reason the element must be a type the target's data model
-  (`kuna_ctypes::CDataModel`) names at exactly its width: an integer of a width the
+  (`unlace_ctypes::CDataModel`) names at exactly its width: an integer of a width the
   model has, a one-byte `bool`, `float` or `double`, or a pointer of the model's pointer
-  size (`kuna_castarith::c_sizeof_is_size`). A `long double` (`sizeof` 16, 12 or 8 by
+  size (`unlace_castarith::c_sizeof_is_size`). A `long double` (`sizeof` 16, 12 or 8 by
   target, never the value's 10 bytes) and a 16-byte integer keep the integer form. The
   stripped corpora carry no enum-typed values, so both refusals change 0 printed lines
   on castbench full and on the 156 disjoint binaries (byte-identical to the build
@@ -150,7 +150,7 @@ a_pointer_plus_whole_elements_round_trips_through_the_printed_c`, fixture
 functions: loads and stores of 1, 2, 4 and 8 bytes signed and unsigned, float and double
 loads and stores, a negative offset, a non-whole offset (kept), a pointer passed on,
 compared and stepped in a loop, a base typed as another pointer, a record base (keeps
-`->field`), a subtracted pointer (kuna types it an integer, kept), a byte widened for a
+`->field`), a subtracted pointer (unlace types it an integer, kept), a byte widened for a
 signed compare and a word widened for an index (castimplied through the subscript), an
 integer base (kept), and `far_idx`: 8-, 4- and 2-byte reads at indexes -2^31 and
 -(2^32-1) (kept), -(2^31-1) and +2^31 (converted), which `main` reads through a 48 GiB
@@ -161,7 +161,7 @@ what the binary prints.
 
 A second round trip (`an_enum_element_keeps_the_integer_form_and_round_trips`, fixture
 `castarith_enum_x86_64.c` built with `-g` at gcc -O0 and gcc -O2, option on and off)
-compiles kuna's own enum typedefs with the printed `rd_color`, `rd_mark`, `rd_level`
+compiles unlace's own enum typedefs with the printed `rd_color`, `rd_mark`, `rd_level`
 (packed 1- and 2-byte enums and a plain 4-byte one) and `pass_color` (an enum pointer
 passed on). All four arms print what the binary prints; before the enum refusal both
 `on` arms printed `color 85 | mark 23637 | set 141 | 36 200` where the binary prints
@@ -249,7 +249,7 @@ Nothing is gained or moved.
 
 ## 6. Measurements
 
-**castbench full** (45 binaries x O0/O2/O2-noinline, the 4,815 functions kuna and IDA
+**castbench full** (45 binaries x O0/O2/O2-noinline, the 4,815 functions unlace and IDA
 both emit; both arms of this build, `--option castarith off` vs default; the off arm is
 byte-identical to a build of the base):
 

@@ -107,7 +107,7 @@ fn base_relative_formations_are_references() {
         owners(&prog, &idx, BANNER),
         vec!["inherits".to_string()],
         "the banner is formed by a function that never writes the base register, \
-         so it uses the one its caller left — the case kuna's own function \
+         so it uses the one its caller left — the case unlace's own function \
          inventory forces on the filing crackme by splitting its prompt routine"
     );
     assert_eq!(

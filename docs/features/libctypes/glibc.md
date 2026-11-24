@@ -10,7 +10,7 @@ the cast that used to be there said so.
 platform publishes in an installed header and an application is meant to read.
 
 ```
-$ kuna decompile-all O2/coreutils/stripped/fmt --addr 0x2f30 --option libctypes opaque
+$ unlace decompile-all O2/coreutils/stripped/fmt --addr 0x2f30 --option libctypes opaque
 void sub_2f30(FILE *a0)
 {
   ...
@@ -20,7 +20,7 @@ void sub_2f30(FILE *a0)
   else {
     *(unsigned char **)&a0->field_0x8 = &v6[1];
 
-$ kuna decompile-all O2/coreutils/stripped/fmt --addr 0x2f30 --option libctypes glibc
+$ unlace decompile-all O2/coreutils/stripped/fmt --addr 0x2f30 --option libctypes glibc
 void sub_2f30(FILE *a0)
 {
   ...
@@ -34,7 +34,7 @@ void sub_2f30(FILE *a0)
 The second half of the value is that a loaded field carries the FIELD's type,
 not the cast's. `stat::st_size` is a signed `long`, so a wrapper that returns
 `-1` on failure stops printing its sentinel as an unsigned bit pattern
-(`decompiler/crates/kuna-analysis/tests/fixtures/libctypes_glibc_x86_64`, the
+(`decompiler/crates/unlace-analysis/tests/fixtures/libctypes_glibc_x86_64`, the
 stage fixture, console spelling):
 
 ```
@@ -195,7 +195,7 @@ bypassed:
 
 ```
 $ mipsel-linux-gnu-gcc -g -O1 -o mp2 mp2.c        # sz(const char *, struct stat *), myopen() @0x400810
-$ kuna decompile-project ./mp2 -o out --define-function 0x400810=fopen --option libctypes glibc
+$ unlace decompile-project ./mp2 -o out --define-function 0x400810=fopen --option libctypes glibc
 $ sed -n '/^struct FILE {/,/^};/p' out/mp2.h
 struct FILE {
     int _flags;
@@ -229,7 +229,7 @@ them, so the target gate is what decides.
 
 ## Whole-corpus sweep — `opaque` vs `glibc`
 
-Twenty-six binaries, whole-binary `kuna decompile-all` in both arms, in three
+Twenty-six binaries, whole-binary `unlace decompile-all` in both arms, in three
 disjoint groups: eight picked here, eight by a first adversarial review, ten by a
 second. The first sixteen are classified hunk by hunk (179 of 8,290 functions
 change text); the last ten are counted, and they are where the `PTRSUB(`
@@ -260,9 +260,9 @@ An earlier version of this table, of `record.json` and of the PR body said
 `PTRSUB(` stays 0 in both arms everywhere. **That is false.**
 
 ```
-$ kuna decompile-all O2/libselinux/stripped/libselinux.so.1 --option libctypes opaque | grep -c 'PTRSUB('
+$ unlace decompile-all O2/libselinux/stripped/libselinux.so.1 --option libctypes opaque | grep -c 'PTRSUB('
 0
-$ kuna decompile-all O2/libselinux/stripped/libselinux.so.1 --option libctypes glibc  | grep -c 'PTRSUB('
+$ unlace decompile-all O2/libselinux/stripped/libselinux.so.1 --option libctypes glibc  | grep -c 'PTRSUB('
 2
 ```
 
@@ -280,7 +280,7 @@ matching, and the printer falls back to the functional form instead of
 `&v14->_flags`. That fallback is **pre-existing engine behaviour**, reachable on
 `origin/main` today wherever a struct is DWARF-complete — the same library's
 unstripped twin, with no libctypes value involved, emits three of them
-(`kuna decompile-all O2/libselinux/compiled/libselinux.so.1 | grep -c 'PTRSUB('`
+(`unlace decompile-all O2/libselinux/compiled/libselinux.so.1 | grep -c 'PTRSUB('`
 = 3, all `PTRSUB(aeref.ae,0x30)`). What the `glibc` value does is reach that
 shape on a stripped image. It is rare — 2 sites in 26 binaries, all in one
 function of one library — but the control claim was wrong and the number is 2.
@@ -341,13 +341,13 @@ e2fsprogs `e2fsck`, `init_resource_track` @ `0x339d0` — nine of the ten sites.
 `struct resource_track *`, whose first three members happen to be `timeval`s.
 
 ```
-$ kuna decompile-all O2/e2fsprogs/stripped/e2fsck --addr 0x339d0 --option libctypes opaque
+$ unlace decompile-all O2/e2fsprogs/stripped/e2fsck --addr 0x339d0 --option libctypes opaque
   *(unsigned long *)&a0[3] = sbrk(0);
   *(unsigned long *)&a0[3].field_0x8 = 0;
   *(unsigned long *)&a0[4] = 0;
   *(unsigned long *)&a0[1] = v3;              /* and a0[1].field_0x8, a0[2], a0[2].field_0x8 */
 
-$ kuna decompile-all O2/e2fsprogs/stripped/e2fsck --addr 0x339d0 --option libctypes glibc
+$ unlace decompile-all O2/e2fsprogs/stripped/e2fsck --addr 0x339d0 --option libctypes glibc
   a0[3].tv_sec = sbrk(0);
   a0[3].tv_usec = 0;
   a0[4].tv_sec = 0;
@@ -438,7 +438,7 @@ declaration churn except the three printer respellings below. The index shapes
 
 e2fsck's `ext2fs_add_journal_inode3` @ `0x61c00` holds both a `struct stat` (for
 its `fstat`) and a `struct ext2_inode`, and the compiler gives them one stack
-slot. kuna types that slot `stat` in **both** arms — the declaration is already
+slot. unlace types that slot `stat` in **both** arms — the declaration is already
 wrong under `opaque` — but `opaque` reads the inode half as neutral offsets and
 `glibc` names them.
 
@@ -526,12 +526,12 @@ single move. `opaque` recovers a 144-byte `stat` stack symbol at `-0x218`;
 swallows it.
 
 ```
-$ kuna decompile-all O2/shadow/stripped/useradd --addr 0x6480 --option libctypes opaque
+$ unlace decompile-all O2/shadow/stripped/useradd --addr 0x6480 --option libctypes opaque
   char v45 [16];   // stack - 0x268
   long v65;        // stack - 0x258    (and v66..v68)
   stat v75;        // stack - 0x218
 
-$ kuna decompile-all O2/shadow/stripped/useradd --addr 0x6480 --option libctypes glibc
+$ unlace decompile-all O2/shadow/stripped/useradd --addr 0x6480 --option libctypes glibc
   char v44 [128];  // stack - 0x268
     v44._16_8_ = v27 / 0x15180;
     stat("/var/log/lastlog",(stat *)&v44[0x50]);
@@ -558,7 +558,7 @@ live-layout probe in. Every figure is identical — perfect 959 → 959, aggrega
 3037.05 → 3037.60, the same 9 improved / 3 worse and the same 12 moved rows.
 
 `scripts.decbench.typesweep`, decbench main's `TypeMatchMetric`,
-`DECBENCH_NO_CACHE=1`, `KUNA_BIN` pinned to this branch's release build. Base arm
+`DECBENCH_NO_CACHE=1`, `UNLACE_BIN` pinned to this branch's release build. Base arm
 is the shipped default (`opaque`), test arm `--option libctypes glibc`.
 8 projects × `O0` / `O2` / `O2 -fno-inline` = **444 slices, 10,748 scored
 functions**.
@@ -641,7 +641,7 @@ out of a type its own header says has none. `glibc` closes that: the header emit
 the real bodies, dependency-ordered, and they parse.
 
 ```
-$ kuna decompile-project <fixture> -o D --option libctypes glibc
+$ unlace decompile-project <fixture> -o D --option libctypes glibc
 $ sed -n '41,55p' D/libctypes_glibc_x86_64.h
 typedef struct FILE FILE;
 typedef struct timespec timespec;

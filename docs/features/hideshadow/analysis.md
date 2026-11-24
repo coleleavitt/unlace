@@ -2,7 +2,7 @@
 
 ## The gap
 
-`ActionHideShadow` is scheduled in kuna's merge phalanx (index 0252, immediately
+`ActionHideShadow` is scheduled in unlace's merge phalanx (index 0252, immediately
 before `copymarker`) and its engine half, `Merge::hide_shadows`, is a complete
 port of `merge.cc:1070-1100`. The action body was not: it returned 0 with the
 upstream body transcribed in a comment and three blockers named — no written
@@ -55,7 +55,7 @@ wrong-output guard:
    and unclobbered exactly where the copy is made to read it. Two copies on
    exclusive branches (the common case) fail it.
 
-kuna reads the Cover through `MergeContext::vn_cover_ref`, a plain field read,
+unlace reads the Cover through `MergeContext::vn_cover_ref`, a plain field read,
 where C++ `Varnode::getCover()` lazily re-runs `updateCover()` on a cover that
 was dirtied — and the previous iteration's `opSetInput` is exactly what dirties
 it. `hide_shadows` now calls `MergeContext::bank_update_cover(high)` before each

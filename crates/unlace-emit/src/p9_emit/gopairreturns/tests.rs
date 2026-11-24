@@ -86,7 +86,7 @@ fn ordinary_record_and_stale_metadata_never_imply_pair_results() {
     let factory = Rc::new(TypeFactoryImpl::new());
     factory.setup_sizes(Some(8), 8, 8);
     factory.set_max_basetype_size(8);
-    let ty = pair(&factory, "__kuna_go_pair_i64_u64");
+    let ty = pair(&factory, "__unlace_go_pair_i64_u64");
     let cx = SpellCtx {
         lang: OutLang::Go,
         go_pair_types: Some(Rc::clone(&factory)),

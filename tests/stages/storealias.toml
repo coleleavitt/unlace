@@ -5,7 +5,7 @@
 #     int s_param(int a, int *p, int k) { gi = a; *p = k; return gi / 16; }
 #
 # The binary loads gi again after `*p = k`.  At `indexaliasguard load` a
-# pointer STORE has no effect on a global in kuna's SSA, so that load read
+# pointer STORE has no effect on a global in unlace's SSA, so that load read
 # the COPY of `a` and printed `a0`: with p == &gi the rebuilt function
 # returns 0 where the binary returns -4.  The default `global` level puts an
 # INDIRECT on the global at every STORE into its space, so the load reads

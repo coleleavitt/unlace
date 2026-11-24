@@ -10,7 +10,7 @@
 # 0xfc5, thc0811=0xc) do NOT, so they were excluded for no reason.
 #
 # Bytes fc51 0408 (display halfwords; LE memory order 51 fc 08 04) at a Thumb
-# address decode to "mrrc2 p4,#0x0,r0,r1,c8" (kuna console renders it
+# address decode to "mrrc2 p4,#0x0,r0,r1,c8" (unlace console renders it
 # "mrrc2 p4,0x0,r0,r1,cr8").  Previously the bytes yielded a bad/undefined
 # instruction.
 #

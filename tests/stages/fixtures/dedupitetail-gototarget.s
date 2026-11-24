@@ -1,6 +1,6 @@
 # A loop that exits into the start of an if's true arm (a goto into the arm),
 # with both arms ending in the same shared(y) call.  Source of the bytes in
-# kuna-dedupitetail-gototarget.xml (as --64; objcopy -O binary -j .text).
+# unlace-dedupitetail-gototarget.xml (as --64; objcopy -O binary -j .text).
 #
 #   void g(int x, int y) {
 #       do { if (pre() == 1) goto T; } while (pre() == 2);

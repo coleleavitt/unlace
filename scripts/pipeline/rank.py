@@ -1,7 +1,7 @@
-"""Heuristic prefilter / scoring for angr-vs-kuna comparisons.
+"""Heuristic prefilter / scoring for angr-vs-unlace comparisons.
 
 This is the cheap, deterministic ranking that orders the sweep's opportunities so the
-expensive judgment (is the reference *actually* better, and what ONE kuna feature closes
+expensive judgment (is the reference *actually* better, and what ONE unlace feature closes
 the gap) can focus on the top of the list. The real decision is made by an LLM (the
 worker / decider) reading the ranked backlog -- this module only sorts.
 
@@ -13,8 +13,8 @@ from __future__ import annotations
 # Maps a signal phrase fragment to (points, opportunity-kind, hint about existing coverage).
 _WEIGHTS = [
     ("recovered a switch",       5, "switch-recovery",  "check loweredswitch / switchmodbound (S2 switch-model)"),
-    ("recovery-failure marker",  4, "recovery-failure", "kuna aborted/failed structuring here"),
-    ("fewer gotos",              3, "goto-reduction",   "uncovered: control-flow structuring (no kuna option yet)"),
+    ("recovery-failure marker",  4, "recovery-failure", "unlace aborted/failed structuring here"),
+    ("fewer gotos",              3, "goto-reduction",   "uncovered: control-flow structuring (no unlace option yet)"),
     ("recovered more loops",     3, "loop-recovery",    "uncovered: loop structuring"),
     ("fewer labels",             2, "label-reduction",  "uncovered: control-flow structuring"),
     ("cast noise",               1, "type-cleanup",     "partial: see type-facing options"),
@@ -27,7 +27,7 @@ def classify(comp: dict) -> dict:
 
     Returns {score, reasons, kinds, covered_hint, comparable}. A non-comparable result
     (one side failed) is scored 0 but tagged so the sweep can surface it separately --
-    a kuna failure where the reference succeeds is itself an opportunity.
+    a unlace failure where the reference succeeds is itself an opportunity.
     """
     sigs = comp.get("signals", []) or []
     score = 0
@@ -49,17 +49,17 @@ def classify(comp: dict) -> dict:
     if "comparable" in comp:
         comparable = bool(comp["comparable"])
     else:
-        comparable = bool(comp.get("ref_text")) and bool(comp.get("kuna_text"))
+        comparable = bool(comp.get("ref_text")) and bool(comp.get("unlace_text"))
     if not comparable:
-        # reference produced output but kuna failed entirely -> a strong, separate signal
-        kuna_failed = comp.get("kuna_failed")
-        if kuna_failed is None:
-            kuna_failed = bool(comp.get("ref_text")) and not comp.get("kuna_text")
-        if kuna_failed:
+        # reference produced output but unlace failed entirely -> a strong, separate signal
+        unlace_failed = comp.get("unlace_failed")
+        if unlace_failed is None:
+            unlace_failed = bool(comp.get("ref_text")) and not comp.get("unlace_text")
+        if unlace_failed:
             score = max(score, 4)
-            kinds.append("kuna-failed")
-            reasons.append("kuna produced no output (%s)" % (comp.get("kuna_error") or "?"))
-            hints.append("kuna could not decompile this function at all")
+            kinds.append("unlace-failed")
+            reasons.append("unlace produced no output (%s)" % (comp.get("unlace_error") or "?"))
+            hints.append("unlace could not decompile this function at all")
 
     return {
         "score": score,
@@ -98,11 +98,11 @@ def rank(comparisons):
             "func_name": comp.get("func_name"),
             "func_addr": comp.get("func_addr"),
             "binary": comp.get("binary"),
-            "kuna_mode": comp.get("kuna_mode"),
+            "unlace_mode": comp.get("unlace_mode"),
             "ref_metrics": comp.get("ref_metrics", {}),
-            "kuna_metrics": comp.get("kuna_metrics", {}),
+            "unlace_metrics": comp.get("unlace_metrics", {}),
             "signals": comp.get("signals", []),
             "ref_error": comp.get("ref_error"),
-            "kuna_error": comp.get("kuna_error"),
+            "unlace_error": comp.get("unlace_error"),
         })
     return ranked

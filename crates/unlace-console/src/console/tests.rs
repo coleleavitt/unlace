@@ -186,7 +186,7 @@ fn map_prototype_without_image_is_no_load_image_present() {
 fn stage_list_prints_the_stage_model_header_and_all_stages() {
     let out = run_one("phase list");
     assert!(
-        out.starts_with("Phases (kuna phase model, docs/phases.md):\n"),
+        out.starts_with("Phases (unlace phase model, docs/phases.md):\n"),
         "out: {out:?}"
     );
     // P0 is the orthogonal plane; P3..P6 are Band B.

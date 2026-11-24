@@ -30,12 +30,12 @@ fn specs() -> String {
 fn run(args: &[&str]) -> (String, String, bool) {
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .env_remove("UNLACE_DECOMP_DBG")
-        .env_remove("KUNA_DECOMP_DBG")
+        .env_remove("UNLACE_DECOMP_DBG")
         .env_remove("UNLACE_SLACOMP")
-        .env_remove("KUNA_SLACOMP")
+        .env_remove("UNLACE_SLACOMP")
         .args(args)
         .output()
-        .expect("run kuna");
+        .expect("run unlace");
     (
         String::from_utf8_lossy(&out.stdout).into_owned(),
         String::from_utf8_lossy(&out.stderr).into_owned(),
@@ -135,7 +135,7 @@ fn default_single_batch_and_project_surfaces_keep_the_import_argument() {
     assert!(batch.contains("printf(a0)"), "batch call lost a0:\n{batch}");
 
     let out_dir = std::env::temp_dir().join(format!(
-        "kuna_typed_macho_tail_{}_{}",
+        "unlace_typed_macho_tail_{}_{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

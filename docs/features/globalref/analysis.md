@@ -4,15 +4,15 @@ A constant address used as a pointer prints as the global it names.
 
 ## 1. The gap
 
-kuna prints a cast on a constant address that IDA never prints:
+unlace prints a cast on a constant address that IDA never prints:
 
 ```c
-sub_c240((struct_4 *)0x220c0);         // kuna main, /usr/bin/ls sub_c2e0
+sub_c240((struct_4 *)0x220c0);         // unlace main, /usr/bin/ls sub_c2e0
 sigprocmask(0,(sigset_t *)0x22780,&v1);
 sub_E4CA(qword_2B080);                  // IDA, coreutils ls -O0
 ```
 
-On the 4,815 functions kuna and IDA both emit (the castbench corpus, 45 binaries
+On the 4,815 functions unlace and IDA both emit (the castbench corpus, 45 binaries
 at O0/O2/O2-noinline), constant-address casts were 572 at the campaign baseline
 and 1,118 on main; IDA prints essentially none, because it names every
 referenced static address.
@@ -47,7 +47,7 @@ for a Symbol covering the address. A stripped image has none for most of its
 data, only the copy-relocated imports (`stdout`, `optarg`) and the `char[N]`
 string symbols the analysis tier plants. A constant that lands inside one of
 those IS linked (a pointer-typed constant may land mid-symbol), which is why the
-"inside an existing symbol" row is empty. The `dat_<addr>` kuna prints two lines
+"inside an existing symbol" row is empty. The `dat_<addr>` unlace prints two lines
 away comes from the unnamed-location leaf, which names storage, a `ram` Varnode;
 a constant is not storage, so that leaf is never reached for one. Minting a
 symbol at P0 is not a lever: every stock cspec claims the whole `ram` space as
@@ -67,7 +67,7 @@ integer.
 
 Each is a case where the name would claim something the function does not show.
 Unique (function, address, type) events on the corpus under
-`KUNA_GLOBALREF_TRACE=1`: named 1,614; outside every data section 553; storage
+`UNLACE_GLOBALREF_TRACE=1`: named 1,614; outside every data section 553; storage
 also accessed directly at another start, width or type 209; a `void *` reader
 C would not convert for 36; two pointed-to types in one function 21; a pointer
 to code 19; the value also read as a number 1.
@@ -86,7 +86,7 @@ matches only itself).
 
 `&dat_<addr>` has exactly the constant's pointer type and is the constant's
 value wherever `dat_<addr>` is placed at `<addr>`. The round trip in
-`kuna-cli/tests/decompile_all_cli.rs` places every name at its address
+`unlace-cli/tests/decompile_all_cli.rs` places every name at its address
 (`--defsym`), maps the fixture's data where the binary keeps it, and runs the
 printed callers compiled with gcc and with clang: both arms print exactly what
 the binary prints (`210 21 27 121 1 0 4 229 1 -8608764254683430263 2`). Moving

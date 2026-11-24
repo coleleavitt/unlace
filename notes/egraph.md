@@ -49,7 +49,7 @@ P-core). Wall time on the shared machine is too noisy to use.
   120 s only the two crazyflie images still hit it.
 - The worst binaries on 92c033f5ca are the libopencm3 examples (+58% to +65%) and coreutils
   `shuf` (+71%). The median binary is +0.93%.
-- The profile at #698 puts the remaining time in `kuna_mba::Expr::eval` (small-width check), the
+- The profile at #698 puts the remaining time in `unlace_mba::Expr::eval` (small-width check), the
   `mba` table lookups that seed subterms, `prove_equal`, and egg's e-matching. #758 cuts the
   first three. On 2feb8da847 it brings the total from +2.34% to +2.11%, libopencm3 from about
   +64% to +7.5% and shuf from +71% to +2.1%. It leaves the corpus wins and the changed

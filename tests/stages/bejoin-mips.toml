@@ -1,4 +1,4 @@
-# kuna option bejoin (off by default, GH-904; on here): MIPS o32 big-endian returns a long long in
+# unlace option bejoin (off by default, GH-904; on here): MIPS o32 big-endian returns a long long in
 # $2:$3 with the HIGH word in $2, the first return register.  Return
 # recovery joined $2 as the LOW word, so wide_mul printed its halves swapped:
 #     wide_mul:  return CONCAT44((int4)((int8)a0 * a1),(int4)(... >> 0x20));   (bug)

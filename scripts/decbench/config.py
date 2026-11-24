@@ -3,10 +3,10 @@
 Defaults fit this machine; every knob is overridable so the loop survives a
 venv/results move with no code change.
 
-    KUNA_DECBENCH_PYTHON   interpreter that can `import decbench` (the decbench venv)
-    KUNA_DECBENCH_REPO     the decbench checkout (for the `decbench` CLI + scripts)
-    KUNA_DECBENCH_RESULTS  the results tree the campaign mines (function_results.json)
-    KUNA_BIN               the kuna CLI binary (defaults to the release build)
+    UNLACE_DECBENCH_PYTHON   interpreter that can `import decbench` (the decbench venv)
+    UNLACE_DECBENCH_REPO     the decbench checkout (for the `decbench` CLI + scripts)
+    UNLACE_DECBENCH_RESULTS  the results tree the campaign mines (function_results.json)
+    UNLACE_BIN               the unlace CLI binary (defaults to the release build)
 """
 import os
 import re
@@ -20,11 +20,11 @@ DEFAULT_RESULTS = str(Path.home() / "github" / "decbench" / "results" / "full_ru
 
 
 def decbench_python() -> str:
-    return os.environ.get("KUNA_DECBENCH_PYTHON", DEFAULT_DECBENCH_PYTHON)
+    return os.environ.get("UNLACE_DECBENCH_PYTHON", DEFAULT_DECBENCH_PYTHON)
 
 
 def decbench_repo() -> Path:
-    return Path(os.environ.get("KUNA_DECBENCH_REPO", DEFAULT_DECBENCH_REPO))
+    return Path(os.environ.get("UNLACE_DECBENCH_REPO", DEFAULT_DECBENCH_REPO))
 
 
 def decbench_cli() -> str:
@@ -33,11 +33,11 @@ def decbench_cli() -> str:
 
 
 def results_root() -> Path:
-    return Path(os.environ.get("KUNA_DECBENCH_RESULTS", DEFAULT_RESULTS))
+    return Path(os.environ.get("UNLACE_DECBENCH_RESULTS", DEFAULT_RESULTS))
 
 
-def kuna_bin() -> str:
-    env = os.environ.get("KUNA_BIN")
+def unlace_bin() -> str:
+    env = os.environ.get("UNLACE_BIN")
     if env:
         return env
     return str(paths.repo_root() / "target" / "release" / "unlace")
@@ -93,8 +93,8 @@ def pool_paths() -> list[Path]:
 def src_sizes_path() -> Path:
     """Cache of per-function SOURCE CFG sizes (see scripts/decbench/srcsizes.py)."""
     return Path(os.environ.get(
-        "KUNA_DECBENCH_SRC_SIZES",
-        str(Path.home() / ".cache" / "decbench" / "kuna-src-sizes.json"),
+        "UNLACE_DECBENCH_SRC_SIZES",
+        str(Path.home() / ".cache" / "decbench" / "unlace-src-sizes.json"),
     ))
 
 
@@ -186,13 +186,13 @@ def _read_image_base(binary_path: str) -> int | None:
         return None
 
 
-def kuna_addr(binary_path: str | None, address: int | str | None) -> str | None:
-    """The ``kuna --addr`` (VA) form of a mined case address.
+def unlace_addr(binary_path: str | None, address: int | str | None) -> str | None:
+    """The ``unlace --addr`` (VA) form of a mined case address.
 
     decbench records PE addresses as RVAs — ``function_results.json`` and every
-    rival's ``// Function: <fn> @ 0x..`` marker do, while kuna's own artifacts
+    rival's ``// Function: <fn> @ 0x..`` marker do, while unlace's own artifacts
     use VAs — so a mined pool carries either form depending on where the address
-    came from. kuna addresses a PE by VA, so an address below the image base can
+    came from. unlace addresses a PE by VA, so an address below the image base can
     only be an RVA and is rebased; ELF (no image base) and VAs pass through.
     """
     if address is None:

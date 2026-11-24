@@ -1,4 +1,4 @@
-# Kuna (IDA 9.5 avxlifter design, SysV vector ABI): P2/P4, options
+# Unlace (IDA 9.5 avxlifter design, SysV vector ABI): P2/P4, options
 # vexzeroupper, lanefuse and vectorabi (all default on). The script loads the
 # committed vectorabi/vec_x86_64.so (gcc -O2 -mavx2 -mfma -mavx512f, source and
 # command beside it).

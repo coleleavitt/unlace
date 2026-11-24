@@ -942,7 +942,7 @@ impl Facts {
             if !goerror::storage_matches(arch, &assigned[0]) {
                 return None;
             }
-            let name = "__kuna_go_int_error_result";
+            let name = "__unlace_go_int_error_result";
             let facet = LangFacet::GoIntErrorResults;
             let outtype = match types.find_by_name(name).ok()? {
                 Some(existing) => {
@@ -976,7 +976,7 @@ impl Facts {
                 return None;
             }
             let [a, b] = signed.map(|signed| if signed { "i64" } else { "u64" });
-            let name = format!("__kuna_go_pair_{a}_{b}");
+            let name = format!("__unlace_go_pair_{a}_{b}");
             let outtype = match types.find_by_name(&name).ok()? {
                 Some(existing) => {
                     if types.unlace_lang_facet(&name).as_ref() != Some(&facet)

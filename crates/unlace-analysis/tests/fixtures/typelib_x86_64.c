@@ -1,4 +1,4 @@
-/* Fixture for `option typelib auto|off` (tests/stages/kuna-typelib.toml).
+/* Fixture for `option typelib auto|off` (tests/stages/unlace-typelib.toml).
  *
  * Built: gcc -O1 -fno-inline -o typelib_x86_64 typelib_x86_64.c
  *

@@ -1,7 +1,7 @@
 // decompile-session.mjs — the study view's edit session, from the source tree
 // with no build: how edits become `--assert` directives (merging, pinning,
 // scoping, qualification after a function rename, parameters through
-// `prototype`), byte runs, the `.kuna` file round trip, outcomes, undo, the
+// `prototype`), byte runs, the `.unlace` file round trip, outcomes, undo, the
 // C declarators behind it, and the localStorage store.
 import assert from 'node:assert/strict';
 import { Session, stripComment, shellQuote, cliCommand, isGlobalRaw } from '../decompile/session.js';
@@ -348,7 +348,7 @@ checks.push('cDeclare/validate/typeSize');
   checks.push('undo/redo');
 }
 
-// ── the .kuna file and the CLI's comment rule ──────────────────────────────
+// ── the .unlace file and the CLI's comment rule ──────────────────────────────
 assert.equal(stripComment('name v1 x # worked out from strings'), 'name v1 x');
 assert.equal(stripComment('# a comment'), '');
 assert.equal(stripComment('   # indented comment'), '');
@@ -358,8 +358,8 @@ assert.equal(stripComment('comment 0x10 see #3'), 'comment 0x10 see', 'the CLI c
 assert.equal(shellQuote('sample.elf'), 'sample.elf');
 assert.equal(shellQuote('my file.elf'), "'my file.elf'");
 assert.equal(shellQuote("it's"), "'it'\\''s'");
-assert.equal(cliCommand('sample.elf', 'main'), 'unlace decompile sample.elf main --assert @sample.elf.kuna');
-assert.equal(cliCommand('a b.exe', 'sub_401000'), "unlace decompile 'a b.exe' sub_401000 --assert @'a b.exe.kuna'");
+assert.equal(cliCommand('sample.elf', 'main'), 'unlace decompile sample.elf main --assert @sample.elf.unlace');
+assert.equal(cliCommand('a b.exe', 'sub_401000'), "unlace decompile 'a b.exe' sub_401000 --assert @'a b.exe.unlace'");
 {
   const s = new Session();
   s.setVar(MAIN, 'v1', { name: 'total', type: 'unsigned long' });
@@ -373,8 +373,8 @@ assert.equal(cliCommand('a b.exe', 'sub_401000'), "unlace decompile 'a b.exe' su
   const nameOf = (a) => s.functionName(a) || names.get(a);
   const text = s.toFileText({ binary: 'sample.elf', hash: 'sha256:ab', time: new Date(0), target: 'main', nameOf });
   const lines = text.trim().split('\n');
-  assert.equal(lines[0], '# kuna study-view session (one --assert directive per line)');
-  assert.ok(lines.includes('# replay: unlace decompile sample.elf main --assert @sample.elf.kuna'));
+  assert.equal(lines[0], '# unlace study-view session (one --assert directive per line)');
+  assert.ok(lines.includes('# replay: unlace decompile sample.elf main --assert @sample.elf.unlace'));
   assert.ok(lines.includes('# saved: 1970-01-01T00:00:00.000Z'));
   const body = lines.filter((l) => stripComment(l));
   assert.deepEqual(body, [
@@ -402,7 +402,7 @@ assert.equal(cliCommand('a b.exe', 'sub_401000'), "unlace decompile 'a b.exe' su
   const again = Session.fromJSON(JSON.parse(JSON.stringify(s.toJSON())));
   assert.deepEqual(again.allAssertions(nameOf), s.allAssertions(nameOf), 'JSON round trip (what localStorage holds)');
   assert.equal(Session.fromJSON({ v: 9 }).size, 0, 'an unknown version restores nothing');
-  checks.push('.kuna file round trip + stripComment parity + quoting + JSON');
+  checks.push('.unlace file round trip + stripComment parity + quoting + JSON');
 }
 
 // ── persistence ────────────────────────────────────────────────────────────
@@ -462,7 +462,7 @@ assert.match(legacyKey(new TextEncoder().encode('abc')), /^fnv:[0-9a-f]{16}-3$/,
     key: (i) => [...mem.keys()][i] ?? null,
     get length() { return mem.size; },
   };
-  const shared = new SessionStore(storage, { max: 5, prefix: 'kuna.d2.shared.', indexKey: 'kuna.d2.shared.index' });
+  const shared = new SessionStore(storage, { max: 5, prefix: 'unlace.d2.shared.', indexKey: 'unlace.d2.shared.index' });
   const own = new SessionStore(storage, { spare: shared });
   own.save('a', 'a.elf', 'my work on a'.padEnd(200, '.'));
   own.save('b', 'b.elf', 'my work on b'.padEnd(200, '.'));
@@ -477,11 +477,11 @@ assert.match(legacyKey(new TextEncoder().encode('abc')), /^fnv:[0-9a-f]{16}-3$/,
   assert.equal(own.loadMoving('f', big, 'f.elf'), null);
   assert.ok(performance.now() - t0 < 50, `a first-time open with nothing stored reads no bytes (${(performance.now() - t0).toFixed(1)} ms)`);
   const bytes = new TextEncoder().encode('an old program');
-  mem.set(`kuna.d2.session.${legacyKey(bytes)}`, 'saved by an earlier version');
+  mem.set(`unlace.d2.session.${legacyKey(bytes)}`, 'saved by an earlier version');
   quota = Infinity;
   assert.equal(own.loadMoving('g', bytes, 'g.elf'), 'saved by an earlier version', 'an earlier version\'s entry is still found');
   assert.equal(own.load('g'), 'saved by an earlier version', 'and moved to the current key');
-  assert.equal(mem.has(`kuna.d2.session.${legacyKey(bytes)}`), false);
+  assert.equal(mem.has(`unlace.d2.session.${legacyKey(bytes)}`), false);
   checks.push('own sessions before a session\'s copies; the old key worked out only when one is stored');
 }
 

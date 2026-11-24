@@ -33,7 +33,7 @@ Which corpus is measured, in order of precedence: ``--project``/``--opt``, then
 the record's own ``benchmark.projects`` keys (so a re-measurement covers exactly
 what the last one did), then the five projects below.
 
-The cached rows carry the provenance they were measured under — the kuna binary
+The cached rows carry the provenance they were measured under — the unlace binary
 by content, the decbench commit, the results tree and both arm values — and a
 cache that disagrees with the current run is dropped rather than mixed into it.
 Everything the block says about the corpus is derived from the rows it
@@ -62,8 +62,8 @@ DEFAULT_PROJECTS = ("grep", "diffutils", "gzip", "bzip2", "findutils")
 DEFAULT_OPTS = ("O0", "O2", "O2-noinline")
 
 WORKDIR = Path(os.environ.get(
-    "KUNA_TYPESCORE_CACHE",
-    str(Path.home() / ".cache" / "decbench" / "kuna-typescore"),
+    "UNLACE_TYPESCORE_CACHE",
+    str(Path.home() / ".cache" / "decbench" / "unlace-typescore"),
 ))
 
 
@@ -83,7 +83,7 @@ def decbench_commit() -> dict:
 
 
 def binary_identity(path: str) -> dict:
-    """Which kuna produced a row, by content — a path is not an identity.
+    """Which unlace produced a row, by content — a path is not an identity.
 
     `cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli` rewrites the same path in place, so a cache keyed on the
     path alone republishes yesterday's rows under today's binary.
@@ -101,7 +101,7 @@ def binary_identity(path: str) -> dict:
 def provenance(option: str, off: str, on: str) -> dict:
     """Everything a row's numbers depend on other than the corpus slice itself."""
     return {
-        "kuna": binary_identity(config.kuna_bin()),
+        "unlace": binary_identity(config.unlace_bin()),
         "decbench": decbench_commit(),
         "results_root": str(config.results_root()),
         "option": option, "off_value": off, "on_value": on,
@@ -223,7 +223,7 @@ def control(rows: dict, published: dict | None = None) -> dict:
     signal for a retyping option and says nothing about validity;
     ``off_arm_vs_published`` is typesweep's second control, the off arm against
     the tree's stored ``type_match`` verdict. It agrees only where the off arm
-    is what the tree was scored with, so a low rate means kuna has moved since
+    is what the tree was scored with, so a low rate means unlace has moved since
     (or the off value is not the default), not that the run is bad.
     """
     identical = identical_diff = retyped = unknown = 0
@@ -279,7 +279,7 @@ def benchmark_block(rows: dict, prov: dict, errors: list[str],
     dc = prov.get("decbench") or {}
     projects, opts = rows_corpus(rows)
     per_project, pooled = summarize(rows)
-    kuna = prov.get("kuna") or {}
+    unlace = prov.get("unlace") or {}
     return {
         "corpus": (f"decbench corpus at {prov.get('results_root')}, optimisation levels "
                    f"{', '.join(opts) or 'none'}, projects {', '.join(projects) or 'none'}, "
@@ -288,8 +288,8 @@ def benchmark_block(rows: dict, prov: dict, errors: list[str],
         "metric": prov.get("metric", "type_match"),
         "option": (f"{prov.get('option')} {prov.get('off_value')} (off arm) vs "
                    f"{prov.get('option')} {prov.get('on_value')} (on arm)"),
-        "kuna_bin": kuna.get("path"),
-        "kuna_sha256": kuna.get("sha256"),
+        "unlace_bin": unlace.get("path"),
+        "unlace_sha256": unlace.get("sha256"),
         "projects": per_project,
         "pooled": pooled,
         "control": control(rows, published),
@@ -307,7 +307,7 @@ def load_rows(cache: Path, want: dict, projects: list[str], opts: list[str],
               report_only: bool) -> tuple[dict, dict | None]:
     """Cached rows plus the provenance they were measured under.
 
-    A cache file that predates provenance, or one measured with another kuna,
+    A cache file that predates provenance, or one measured with another unlace,
     decbench or pair of arm values, is dropped rather than mixed into this run.
     On a ``--report-only`` re-report nothing is dropped — the rows are what there
     is to report — but a provenance that differs from the environment is said out
@@ -399,11 +399,11 @@ class _V:
 def provenance_checks() -> list:
     """The cache-provenance checks: the reviewer's own wrong-numbers scenario."""
     import tempfile
-    mine = {"kuna": {"path": "/tmp/new-kuna", "sha256": "bbbb", "size": 2},
+    mine = {"unlace": {"path": "/tmp/new-unlace", "sha256": "bbbb", "size": 2},
             "decbench": {"sha": "cafe", "branch": "main"},
             "results_root": "/results", "option": "libcsigs", "off_value": "off",
             "on_value": "on", "metric": "type_match"}
-    theirs = {**mine, "kuna": {"path": "/tmp/old-kuna", "sha256": "aaaa", "size": 1}}
+    theirs = {**mine, "unlace": {"path": "/tmp/old-unlace", "sha256": "aaaa", "size": 1}}
     row = {"base": {"values": {"f": 0.0}}, "test": {"values": {"f": 1.0}},
            "slice": {"project": "bzip2", "opt": "O0", "stem": "bzip2"}}
     out = []
@@ -421,15 +421,15 @@ def provenance_checks() -> list:
         block = benchmark_block(kept, stored, [])
         out += [
             ("a cache with no provenance is ignored", legacy == {}),
-            ("rows measured with another kuna are dropped, not merged", stale == {}),
+            ("rows measured with another unlace are dropped, not merged", stale == {}),
             ("--report-only reports the stored rows under the STORED provenance",
              len(kept) == 1 and stored == theirs),
             ("rows outside the requested corpus are not reported", narrowed == {}),
             ("the block names the corpus the ROWS cover, not the one requested",
              "projects bzip2" in block["corpus"] and "grep" not in block["corpus"]
              and set(block["projects"]) == {"bzip2"}),
-            ("the block names the kuna that produced the rows",
-             (block["kuna_bin"], block["kuna_sha256"]) == ("/tmp/old-kuna", "aaaa")),
+            ("the block names the unlace that produced the rows",
+             (block["unlace_bin"], block["unlace_sha256"]) == ("/tmp/old-unlace", "aaaa")),
             ("the default cache key separates two corpora",
              corpus_key(["grep"], ["O0"]) != corpus_key(["bzip2"], ["O0"])),
         ]
@@ -437,7 +437,7 @@ def provenance_checks() -> list:
 
 
 def selftest() -> int:
-    """Aggregation-only checks; they need no decbench, no corpus and no kuna."""
+    """Aggregation-only checks; they need no decbench, no corpus and no unlace."""
     rows = {
         "grep::O0::grep": {
             # `a` keeps its variables (a harness bug if it moves), `b` and `c`
@@ -499,7 +499,7 @@ def main(argv=None) -> int:
         description=__doc__.splitlines()[0],
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="A measuring run writes rows.json into --out, or into "
-               "$KUNA_TYPESCORE_CACHE (default ~/.cache/decbench/kuna-typescore/"
+               "$UNLACE_TYPESCORE_CACHE (default ~/.cache/decbench/unlace-typescore/"
                "<option>-<off>-<on>-<corpus>/) when --out is not given. Nothing "
                "is written inside the repo or the decbench results tree; only "
                "--write touches a tracked file, the --record it splices.")

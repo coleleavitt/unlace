@@ -1,4 +1,4 @@
-# Kuna DEX loader (notes/proposal-dex.md): P1 environment binding,
+# Unlace DEX loader (notes/proposal-dex.md): P1 environment binding,
 # option dexmodel, and the P2 switch model, option jumpassist (both
 # default on). The script loads the committed DEX fixture built from
 # tests/stages/fixtures/dex/Hello.java and prints Java.

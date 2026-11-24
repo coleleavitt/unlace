@@ -681,7 +681,7 @@ impl LoadImage for TeLoadImage {
     fn unlace_overlay_bytes(&mut self, addr: &Address, data: &[u8]) -> UnlaceResult<()> {
         let space = addr
             .get_space()
-            .expect("TeLoadImage::kuna_overlay_bytes: address with null space");
+            .expect("TeLoadImage::unlace_overlay_bytes: address with null space");
         if !self
             .spaceid
             .as_ref()

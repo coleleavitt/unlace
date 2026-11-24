@@ -3,7 +3,7 @@
   "probe_id": "a-a9f7e49851be",
   "kind": "cli",
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "disassemble",
     "{{BIN}}",
     "0x8048000",

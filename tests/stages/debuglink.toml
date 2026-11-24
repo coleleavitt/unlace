@@ -1,4 +1,4 @@
-# Kuna #65 (personal): P1 environment binding, separate debug files
+# Unlace #65 (personal): P1 environment binding, separate debug files
 # (option debuglink, default on, a load-time gate). Fixtures from
 # fixtures/debuglink/p.c as its header says. Both images are stripped:
 # before, the only names were the dynamic symbol `main` and the call printed
@@ -6,7 +6,7 @@
 # (CRC32 checked); its .symtab names the functions and its DWARF their
 # parameters. #3: mini carries only function symbols, as XZ-compressed
 # MiniDebugInfo in .gnu_debugdata.
-# (The build-id path, <dir>/.build-id/xx/rest.debug under KUNA_DEBUG_DIRS,
+# (The build-id path, <dir>/.build-id/xx/rest.debug under UNLACE_DEBUG_DIRS,
 # is the same lookup; a host directory cannot be pinned in a stage test.)
 
 [image]

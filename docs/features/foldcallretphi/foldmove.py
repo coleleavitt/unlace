@@ -6,7 +6,7 @@ option's soundness argument rests on: for every call whose spill statement
 `foldcallretphi` deleted, what statements stood between that statement and the
 one the call expression now lives in?
 
-For each function of a `kuna decompile-all` off/on pair it
+For each function of a `unlace decompile-all` off/on pair it
 
   1. masks every `vN` (the fold renumbers each later local, which otherwise
      swamps a textual comparison),
@@ -152,7 +152,7 @@ for b in sys.argv[2:]:
                 if i1 <= i < i2:
                     return blocks[n + 1][1] if n + 1 < len(blocks) else len(mo)
             return len(mo)
-        # Group the removed spill statements by their masked text: kuna reuses
+        # Group the removed spill statements by their masked text: unlace reuses
         # one `vN` for several calls, so the same masked line can appear more
         # than once and only the nearest one owns a given landing statement.
         spills = collections.defaultdict(list)
@@ -166,7 +166,7 @@ for b in sys.argv[2:]:
             expr = DEF.match(line).group(1)
             # The call text has to name one statement on each side, or which
             # statement is the landing is a guess.  Two spills of the same call
-            # in one function (kuna prints them at different indents, so they
+            # in one function (unlace prints them at different indents, so they
             # are different lines) is the shape that makes a text matcher point
             # at a statement far from the real landing and report everything in
             # between as a hazard.

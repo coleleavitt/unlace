@@ -2,7 +2,7 @@
  *
  * `bail` ends in a `call [__imp_ExitProcess]` — a *direct indirect* call through
  * the Import Address Table slot, the shape MSVC and `__declspec(dllimport)`
- * always emit and the shape kuna could not resolve: the CALLIND target is the
+ * always emit and the shape unlace could not resolve: the CALLIND target is the
  * contents of a global, so `ActionDeindirect` needs `Varnode::externref` to bind
  * it to the `ExitProcess` FunctionSymbol the PE loader already registered at the
  * slot.  Unbound, the call has no no-return flow effect and `bail` runs straight
@@ -12,7 +12,7 @@
  * a loop, so the overrun is visible in one line of C.
  *
  * Build (see this directory's README.md):
- *   docker run --rm -v "$PWD":/w -w /w kuna-dev bash -lc \
+ *   docker run --rm -v "$PWD":/w -w /w unlace-dev bash -lc \
  *     'x86_64-w64-mingw32-gcc -O1 -nostdlib -Wl,-e,entry \
  *        crates/unlace-analysis/tests/fixtures/pe_noreturn_import.c \
  *        -o crates/unlace-analysis/tests/fixtures/pe_noreturn_import.exe \

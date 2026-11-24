@@ -1,4 +1,4 @@
-# kuna fixture: three calls through the vtable of the object in ECX, the MSVC
+# unlace fixture: three calls through the vtable of the object in ECX, the MSVC
 # x86-32 dispatch `mov eax,[ecx]; call [eax+k]`.
 #   vcall    (0x401000): a virtual member, __thiscall: this in ECX, one push.
 #   comcall  (0x401010): a COM method, __stdcall: the interface is pushed last.

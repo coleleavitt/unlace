@@ -3,11 +3,11 @@
   "probe_id": "a-1dbc4aebc7ab",
   "kind": "cli",
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "strings",
     "{{BIN}}",
     "--filter",
-    "kuna poolref prompt",
+    "unlace poolref prompt",
     "--json"
   ],
   "cwd": "{{WORK}}",

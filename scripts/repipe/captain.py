@@ -183,8 +183,8 @@ def preflight():
         if not shutil.which(tool):
             bad.append("missing tool: %s" % tool)
     bad.extend(config.role_policy_problems())
-    if not config.kuna_bin().exists():
-        bad.append("no kuna binary at %s (run `cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli`)" % config.kuna_bin())
+    if not config.unlace_bin().exists():
+        bad.append("no unlace binary at %s (run `cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli`)" % config.unlace_bin())
     if not config.dataset_root().exists():
         bad.append("no dataset at %s" % config.dataset_root())
     if not list(config.specs_dir().rglob("*.slaspec"))[:1]:
@@ -226,7 +226,7 @@ def spawn_tester(round_n, hexid):
     env = dict(os.environ, ROUND=str(round_n), HEXID=hexid,
                REPIPE_TESTER_MODEL=config.TESTER_MODEL,
                REPIPE_TESTER_REASONING=config.TESTER_REASONING,
-               KUNA_PIPELINE_STATE_DIR=str(config.state_dir()),
+               UNLACE_PIPELINE_STATE_DIR=str(config.state_dir()),
                PYTHONPATH=str(config.repo_root()))
     log = config.logs_dir() / ("spawn-t-%s.log" % hexid[:8])
     os.makedirs(str(config.logs_dir()), exist_ok=True)
@@ -276,7 +276,7 @@ def spawn_builder(round_n, need, resources):
         WORKER_MODEL=config.BUILDER_MODEL,
         WORKER_REASONING=config.BUILDER_REASONING,
         PIPELINE_STATE_DIRNAME=config.STATE_DIRNAME,
-        KUNA_PIPELINE_STATE_DIR=str(config.state_dir()),
+        UNLACE_PIPELINE_STATE_DIR=str(config.state_dir()),
         PYTHONPATH=str(config.repo_root()),
     )
     # Provisional leases with the tick's pid, re-stamped with the worker's below. Taken before

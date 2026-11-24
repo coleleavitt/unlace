@@ -1,4 +1,4 @@
-# kuna `dirtypool`, `latecse`, `implweight` (all default off).  dirtypool
+# unlace `dirtypool`, `latecse`, `implweight` (all default off).  dirtypool
 # lets a repeated rule-pool sweep visit only the ops near the previous
 # sweep's rewrites (a speed option: lua -O0 decompiles 2.5x faster);
 # latecse merges identical pure ops reading one varnode once the rules

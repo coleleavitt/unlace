@@ -1,6 +1,6 @@
-# The kuna improvement pipeline
+# The unlace improvement pipeline
 
-**The task**: find a case where kuna's decompilation is worse than a reference (angr, the
+**The task**: find a case where unlace's decompilation is worse than a reference (angr, the
 decbench corpus, or a report), root-cause it to one phase decision, and ship ONE
 option-gated feature that closes it — verified, measured, and reviewable. This file is the
 runbook: an agent (interactive session or headless worker) should be able to execute the
@@ -9,7 +9,7 @@ human-reviewed PR.**
 
 There is a second, fully autonomous lane. `docs/re-pipeline.md` — the RE-friction loop —
 asks the other question about the same engine: not "is the emitted C worse than angr's" but
-"can an agent USE kuna to reverse-engineer a binary". Its builders **self-merge**, gated on
+"can an agent USE unlace to reverse-engineer a binary". Its builders **self-merge**, gated on
 the four gates plus `unlace catalog --check`, a re-derivation of every shared counter on the
 rebased tree, green CI with the `full-ci` label forced on, and an executable acceptance
 predicate that must flip from FAIL to PASS. Its large features still stop at a draft
@@ -19,7 +19,7 @@ opener in `tools/pipeline/` and `scripts/pipeline/`.
 
 One iteration:
 
-1. **Find** a case kuna is bad at (§1 — three routes).
+1. **Find** a case unlace is bad at (§1 — three routes).
 2. **Investigate**: reproduce it, confirm the reference is genuinely better, localize the
    decision to a phase (§2).
 3. **Implement** one option-gated feature, modelled on `loweredswitch.rs` (§3).
@@ -32,25 +32,25 @@ legitimate outcome — record it and stop (§4). Not every gap is a feature.
 ## 0. Prerequisites
 
 ```bash
-cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli      # decomp_dbg / kuna at target/release/ (specs compile on first use)
+cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli      # decomp_dbg / unlace at target/release/ (specs compile on first use)
 cd <repo-root>                   # every `python -m scripts.pipeline.<mod>` below runs from the root
 ```
 
-Environment (defaults live in `scripts/pipeline/config.py` — `KUNA_PY`'s in the
+Environment (defaults live in `scripts/pipeline/config.py` — `UNLACE_PY`'s in the
 `tools/pipeline/*.sh` drivers; they assume the Linux pipeline host — **on other machines
 export the overrides**):
 
 | Env var | Meaning (default) |
 |---|---|
-| `KUNA_PIPELINE_ANGR_PYTHON` | interpreter that can `import angr` (`~/.virtualenvs/decbench/bin/python`) |
-| `KUNA_PIPELINE_ANGR_REPO` | angr checkout for worklist/units parsing (`/home/mahaloz/github/angr-dev/angr`) |
-| `KUNA_PIPELINE_BIN_ROOT` | angr `binaries` checkout (`/home/mahaloz/github/angr-dev/binaries`) |
-| `KUNA_PY` | interpreter for the shell drivers (`~/.virtualenvs/kuna/bin/python`) |
-| `KUNA_PIPELINE_SPEED_BUDGET_PCT` | speed gate (5) |
-| `KUNA_PIPELINE_STATE_DIR` | worker state (`.kuna-pipeline/`, gitignored) |
+| `UNLACE_PIPELINE_ANGR_PYTHON` | interpreter that can `import angr` (`~/.virtualenvs/decbench/bin/python`) |
+| `UNLACE_PIPELINE_ANGR_REPO` | angr checkout for worklist/units parsing (`/home/mahaloz/github/angr-dev/angr`) |
+| `UNLACE_PIPELINE_BIN_ROOT` | angr `binaries` checkout (`/home/mahaloz/github/angr-dev/binaries`) |
+| `UNLACE_PY` | interpreter for the shell drivers (`~/.virtualenvs/unlace/bin/python`) |
+| `UNLACE_PIPELINE_SPEED_BUDGET_PCT` | speed gate (5) |
+| `UNLACE_PIPELINE_STATE_DIR` | worker state (`.unlace-pipeline/`, gitignored) |
 
-Two venvs by design: `KUNA_PY` runs the pipeline (no third-party deps — plain `python3`
-works); `KUNA_PIPELINE_ANGR_PYTHON` is only shelled out to for angr decompilation. If the
+Two venvs by design: `UNLACE_PY` runs the pipeline (no third-party deps — plain `python3`
+works); `UNLACE_PIPELINE_ANGR_PYTHON` is only shelled out to for angr decompilation. If the
 angr venv is broken, `worklist`/`units` still work (pure AST parsing); `compare`/`sweep`
 need a working `import angr` (bootstrap: any venv with `pip install angr==<ref_version>`;
 the binary corpus is the angr-dev `binaries` checkout). The angr **version that actually ran is pinned into every
@@ -59,13 +59,13 @@ result** (`ref_version`) — trust that over any doc.
 Generated backlog artifacts land in `docs/improvement-pipeline/` (created on demand):
 `worklist.json`, `opportunities.json`, `matrix.md`, `units.json`.
 
-## 1. Find a case kuna is bad at
+## 1. Find a case unlace is bad at
 
 ### Route A — the angr testcase sweep (the automated backlog)
 
 ```bash
 python3 -m scripts.pipeline.worklist --only-existing     # parse angr's test_decompiler.py → worklist.json
-python3 -m scripts.pipeline.sweep --arch x86 --jobs 6 --progress   # angr-vs-kuna over the corpus → opportunities.json + matrix.md
+python3 -m scripts.pipeline.sweep --arch x86 --jobs 6 --progress   # angr-vs-unlace over the corpus → opportunities.json + matrix.md
 python3 -m scripts.pipeline.units                        # angr peephole/optimization passes as 1-PR "small units" → units.json
 python3 -m scripts.pipeline.select --json                # the next unclaimed, highest-score opportunity
 ```
@@ -78,9 +78,9 @@ With no eligible entry, `--shell` and `--json` print nothing and exit 1.
 Unreadable or malformed backlog or inventory data instead reports an error on
 stderr and exits 2, without emitting a selection or changing the input.
 
-Ranking is structural (switch recovery=5, kuna-failed=4, fewer-gotos=3, more-loops=3,
+Ranking is structural (switch recovery=5, unlace-failed=4, fewer-gotos=3, more-loops=3,
 fewer-labels=2, cast-noise=1, shorter=1). **Signals are a prefilter, not truth** — a
-`recovery-failure`/huge-loc-delta row can be a kuna failure on a large function; you must
+`recovery-failure`/huge-loc-delta row can be a unlace failure on a large function; you must
 confirm in §2. `sweep` rebuilds the worklist in-memory each run (it does not read
 `worklist.json`), and stores no decompiled text — re-run `compare` to see the actual C.
 `select --kind small-unit|structural` balances the mix; small units (a single angr
@@ -91,14 +91,14 @@ provenance.
 
 The decbench campaign (`docs/decbench-loop.md` — read it before using this route) scores
 decompilers per-function on a compiled-project corpus with a graph-edit-distance metric
-vs the original source. `scripts.decbench.mine` mines the angr-perfect pool (`angr GED = 0, kuna GED > 0`) —
+vs the original source. `scripts.decbench.mine` mines the angr-perfect pool (`angr GED = 0, unlace GED > 0`) —
 real-world cases the testcase sweep can't see (ghidra-perfect analogs need an ad-hoc
 `decbench improvements -b ghidra` run):
 
 ```bash
 python3 -m scripts.decbench.status                        # campaign tracker
-python3 -m scripts.decbench.mine --select 28              # needs a results tree (KUNA_DECBENCH_RESULTS)
-python3 -m scripts.decbench.triage --case <id>            # stored angr + stored kuna + FRESH kuna, side by side
+python3 -m scripts.decbench.mine --select 28              # needs a results tree (UNLACE_DECBENCH_RESULTS)
+python3 -m scripts.decbench.triage --case <id>            # stored angr + stored unlace + FRESH unlace, side by side
 ```
 
 GED interpretation: 0 = perfect structural recovery; `inf` = missing/unparseable, not
@@ -136,13 +136,13 @@ investigating.
 
 1. **Reproduce** and save the evidence:
    ```bash
-   python3 -m scripts.pipeline.compare --entry <test_name> > docs/features/<slug>/angr-vs-kuna.txt
+   python3 -m scripts.pipeline.compare --entry <test_name> > docs/features/<slug>/angr-vs-unlace.txt
    ```
    (`--entry` resolves Route-A worklist test names; for Route B/C use the positional form
    `compare <binary> <selector> --reference angr`, or `scripts.decbench.triage --case <id>`.)
 2. **Confirm the reference is genuinely better.** Read both outputs. Better = structurally
    closer to plausible source (a `switch` instead of an if-cascade, a loop instead of
-   gotos, fewer labels) — not just shorter. If kuna is actually right or the difference
+   gotos, fewer labels) — not just shorter. If unlace is actually right or the difference
    is taste, record a negative result and stop.
 3. **Localize the decision to a phase.** The model is P0 (knowledge plane) + P1–P9 with
    Band B (P3–P6) as a mutual fixed point — one screen: `docs/phases.md`; per-pass
@@ -175,7 +175,7 @@ investigating.
    implementation before human approval. When the call is close, have a second
    opinion (a subagent) make it, and record its verdict verbatim in `record.json`.
 5. **Pick the slug and write the plan.** The slug becomes the option name,
-   `kuna_<slug>.rs`, `docs/features/<slug>/`, and the branch suffix (Route A: use
+   `unlace_<slug>.rs`, `docs/features/<slug>/`, and the branch suffix (Route A: use
    `select`'s `SLUG` field). Write `docs/features/<slug>/plan.md` (the design) before
    starting §3.
 
@@ -183,20 +183,20 @@ investigating.
 
 Canonical template: `crates/unlace-lift/src/p2_lift/loweredswitch.rs`
 (+ its `phases.toml` row and `tests/stages/ghangr-loweredswitch.toml`). Model the code,
-registration, and test on it. New logic lives in `kuna_<slug>.rs` inside the owning phase
+registration, and test on it. New logic lives in `unlace_<slug>.rs` inside the owning phase
 folder; edits to ported-core files only where an anchor demands it, each marked
-`// (kuna)`. Develop with the option **default-OFF** — default output stays
+`// (unlace)`. Develop with the option **default-OFF** — default output stays
 byte-identical until the ablation says otherwise.
 
 The artifact checklist (every item, or the gates fail opaquely):
 
-1. `crates/unlace-decomp/src/<phase>/kuna_<slug>.rs` — the feature, early-return
+1. `crates/unlace-decomp/src/<phase>/unlace_<slug>.rs` — the feature, early-return
    when its flag is off. Flag on the architecture struct, defaulted in its reset path.
    ElementId from the 4000+ range (grep for the current highest).
 2. `[[settable]]` row in `crates/unlace-decomp/phases.toml` — **every field**,
    including the provenance contract (§below): `summary`, `use_when`, `values`+`example`,
    `tier`, `symptoms`, `source_decompiler`, `inspiration`, `change_kind`.
-3. Option name registered in `src/p0_knowledge/options.rs` (`KUNA_OPTION_NAMES`).
+3. Option name registered in `src/p0_knowledge/options.rs` (`UNLACE_OPTION_NAMES`).
 4. **Bump the hard-coded catalog counts** (two places; grep the current total):
    `src/p0_knowledge/phases/tests.rs` (count asserts) and
    `crates/unlace-decomp/tests/catalog_bytecompat.rs` (count asserts **and** the
@@ -255,7 +255,7 @@ python3 -m scripts.pipeline.timeit --record docs/features/<slug>/record.json \
 **The PR** carries the per-feature bundle `docs/features/<slug>/`:
 
 - `analysis.md` — why the reference is better, the exact construct, the owning phase.
-- `angr-vs-kuna.txt` — the side-by-side the decision rests on.
+- `angr-vs-unlace.txt` — the side-by-side the decision rests on.
 - `plan.md` — the design (and `proposal.md` on the large route).
 - `record.json` — the machine record. The tooling reads these exact keys (`timeit`
   writes the `speed_*` block; `prdemo` reads `option/binary/selector/func_addr/
@@ -274,7 +274,7 @@ Do **not** hand-write before/after decompilation into the PR body —
 captured off/on demo (`scripts.pipeline.prdemo`) from `record.json`, so the record's
 `option/binary/selector/func_addr` must be correct — and verify the demo actually landed
 in the PR body (`open_pr.sh` degrades to a WARN and opens the PR without it if `prdemo`
-fails, e.g. on a bad `KUNA_PY`). Branch names: `feat/angr-<slug>`
+fails, e.g. on a bad `UNLACE_PY`). Branch names: `feat/angr-<slug>`
 (`feat/decbench-<slug>` for route B).
 
 **Large features** ([PROPOSAL] route): commit only `analysis.md` + `proposal.md` +
@@ -293,7 +293,7 @@ forced feature.
 Non-negotiable; the worker prompt enforces them per-feature and the orchestrator
 re-queues violations.
 
-1. **One PR per ported feature.** Exactly one `kuna_<slug>.rs` + one stage test + one
+1. **One PR per ported feature.** Exactly one `unlace_<slug>.rs` + one stage test + one
    `docs/features/<slug>/` bundle per PR, and at most one option. No drive-by changes.
 2. **End-to-end testcase.** The stage test of §3.5 over the full
    `binary → decompile(addr|func)` path: two-pass (option off = the bug, default = the fix)
@@ -312,7 +312,7 @@ re-queues violations.
    decision record and the test for each case: `docs/option-surface-study.md`. There is no
    divergence registry to update — `docs/history.md` is frozen.
 4. **Always measure + record speed (speed is critical).** Every `record.json` carries the
-   `timeit` speed block (§4). Over `KUNA_PIPELINE_SPEED_BUDGET_PCT` (default +5%) ⇒
+   `timeit` speed block (§4). Over `UNLACE_PIPELINE_SPEED_BUDGET_PCT` (default +5%) ⇒
    default-OFF opt-in. The speed gate never re-pins `docs/baseline.json`.
 5. **Large/multi-part features go through a draft `[PROPOSAL]` PR first** (§4) — an
    explicit human go/no-go before implementation.
@@ -354,12 +354,12 @@ tools/pipeline/install_gh.sh                       # one-time PR tooling (Linux 
 PIPELINE_WORKERS=1 tools/pipeline/run.sh --once    # exactly one feature
 PIPELINE_WORKERS=2 PIPELINE_HOURS=8 tools/pipeline/run.sh   # a working day, two workers
 python3 -m scripts.pipeline.status --watch         # live: workers, worktrees, PRs, proposals
-touch .kuna-pipeline/STOP                          # graceful stop; in-flight workers finish
+touch .unlace-pipeline/STOP                          # graceful stop; in-flight workers finish
 ```
 
 Mechanics an operator should know: workers claim opportunities atomically
 (`state claim`, exit code 0/1); state always lives in the **main** tree
-(`KUNA_PIPELINE_STATE_DIR`) so `status` sees worktree workers; worktrees read their own
+(`UNLACE_PIPELINE_STATE_DIR`) so `status` sees worktree workers; worktrees read their own
 `specs/` (each `.sla` compiles into the shared `.sla` cache on first use); session ids are
 recorded for review (`claude --resume` for Claude, `codex exec resume` for Codex), and Codex
 JSONL plus final output are retained beside the worker log; merged/closed-PR worktrees are
@@ -391,7 +391,7 @@ Callers retain their existing encoding, JSON layout, and permission choices.
 |---|---|
 | `scripts/pipeline/reference/` | `ReferenceDecompiler` protocol; registry `angr`, `unlace`. Add another decompiler by implementing the protocol and registering it — everything downstream is decompiler-agnostic (`compare --reference <name>`). |
 | `scripts/pipeline/worklist.py` | angr `test_decompiler.py` → `(binary, function)` targets (AST parse, never executes angr). |
-| `scripts/pipeline/compare.py` | reference vs kuna on the same function; metrics + "where the reference is better" signals. Structural, never raw-text. |
+| `scripts/pipeline/compare.py` | reference vs unlace on the same function; metrics + "where the reference is better" signals. Structural, never raw-text. |
 | `scripts/pipeline/sweep.py` + `rank.py` | `compare` across the corpus → ranked `opportunities.json` + human `matrix.md`. |
 | `scripts/pipeline/units.py` | angr peephole/optimization passes → self-contained 1-PR "small units". |
 | `scripts/pipeline/select.py` | next unclaimed, highest-score opportunity (`--shell` / `--json`). |
@@ -399,7 +399,7 @@ Callers retain their existing encoding, JSON layout, and permission choices.
 | `scripts/pipeline/prdemo.py` | real captured before/after markdown for the PR body. |
 | `scripts/pipeline/state.py` / `status.py` | flock-guarded claims/heartbeats/proposals; live observability. |
 | `scripts/decbench/` | the real-binary route: mine/triage/rescore/status/showcase (`docs/decbench-loop.md`). |
-| `scripts/port_status.py` | angr→kuna port coverage report (from `phases.toml` provenance + the sweep). |
+| `scripts/port_status.py` | angr→unlace port coverage report (from `phases.toml` provenance + the sweep). |
 | `tools/pipeline/` | headless drivers: `run.sh`, `worker.sh`, `worker_prompt.md`, `open_pr.sh`, `install_gh.sh`. |
 
 ## The provenance contract (what makes features LLM-discoverable)
@@ -421,18 +421,18 @@ from `unlace catalog --json` alone: `summary` (WHAT), `use_when` (WHEN — the s
 ## Known caveats
 
 - **Host paths**: `config.py`'s angr-checkout defaults are the Linux pipeline host's;
-  export `KUNA_PIPELINE_ANGR_REPO`/`KUNA_PIPELINE_BIN_ROOT`/`KUNA_PY` elsewhere. A
+  export `UNLACE_PIPELINE_ANGR_REPO`/`UNLACE_PIPELINE_BIN_ROOT`/`UNLACE_PY` elsewhere. A
   missing angr checkout crashes `worklist` (FileNotFoundError on `test_decompiler.py`);
   a wrong binaries root silently empties it.
 - **angr version skew**: results pin the installed venv's version (`ref_version`);
   root-cause against that version, use the checkout only for readability.
-- **Prefilter ≠ verdict**: sweep signals and decbench GED both misfire (kuna-failure
+- **Prefilter ≠ verdict**: sweep signals and decbench GED both misfire (unlace-failure
   rows, scoring artifacts) — §2's confirm step is mandatory before any implementation.
 - **Sweep scope**: run with `--arch x86` (best spec overlap, fastest) — an unfiltered
-  sweep covers every arch in the worklist; other arches work but expect more kuna-side
+  sweep covers every arch in the worklist; other arches work but expect more unlace-side
   load/spec gaps.
-- **A reference failure mutes kuna's side**: when the angr leg errors, `compare` skips
-  the kuna leg and prints "(no output)" — that is not a kuna failure; run
-  `unlace decompile` directly to see kuna's output.
+- **A reference failure mutes unlace's side**: when the angr leg errors, `compare` skips
+  the unlace leg and prints "(no output)" — that is not a unlace failure; run
+  `unlace decompile` directly to see unlace's output.
 - **`select --skip-custom` is currently a no-op** — filter custom-option testcases at
   sweep time (`sweep --skip-custom`) instead.

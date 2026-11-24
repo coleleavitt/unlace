@@ -6,13 +6,13 @@
  * link and the function can be re-identified in a stripped binary purely by
  * its instruction-stream fingerprint.
  *
- * `kuna_crc32` is the star: a distinctive loop with the magic 0xEDB88320
+ * `unlace_crc32` is the star: a distinctive loop with the magic 0xEDB88320
  * immediate (the reversed CRC-32 polynomial) that exercises the specific-hash
  * scalar path and has near-zero collision risk.
  */
 
 /* CRC-32 (the IEEE 802.3 reversed polynomial 0xEDB88320), bit-at-a-time. */
-unsigned kuna_crc32(const unsigned char *p, unsigned n) {
+unsigned unlace_crc32(const unsigned char *p, unsigned n) {
     unsigned c = ~0u;
     while (n--) {
         c ^= *p++;
@@ -23,7 +23,7 @@ unsigned kuna_crc32(const unsigned char *p, unsigned n) {
 }
 
 /* strlen, hand-rolled (no libc call). */
-unsigned long kuna_strlen(const char *s) {
+unsigned long unlace_strlen(const char *s) {
     const char *p = s;
     while (*p)
         p++;
@@ -31,7 +31,7 @@ unsigned long kuna_strlen(const char *s) {
 }
 
 /* memset, hand-rolled (no libc call). */
-void *kuna_memset(void *d, int v, unsigned long n) {
+void *unlace_memset(void *d, int v, unsigned long n) {
     unsigned char *p = d;
     while (n--)
         *p++ = (unsigned char)v;

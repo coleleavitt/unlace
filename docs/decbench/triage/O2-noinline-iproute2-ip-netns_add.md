@@ -4,7 +4,7 @@ pool: novel
 status: covered-by-option
 tier: N
 margin: 0
-fresh_verdict: reproduces on today's product default (binary is 722 KiB so `--mode auto` = `reliable`) -- kuna emits 16 phantom byte-stores INTO the read-only .rodata string on an error-return path that has no such code
+fresh_verdict: reproduces on today's product default (binary is 722 KiB so `--mode auto` = `reliable`) -- unlace emits 16 phantom byte-stores INTO the read-only .rodata string on an error-return path that has no such code
 option_closing: readonly
 feature_slug: null
 scope: small
@@ -13,9 +13,9 @@ confidence: high
 
 ## Side-by-side
 
-The case is **novel-pool**: kuna already scores best (GED 8; ida 14, binja 25, ghidra 26).
+The case is **novel-pool**: unlace already scores best (GED 8; ida 14, binja 25, ghidra 26).
 Nothing here is a score gap. The mined defect signal (`subpiece: 14`, `goto: 4`) is real
-and points at a genuine correctness bug in kuna's output.
+and points at a genuine correctness bug in unlace's output.
 
 `netns_add` inlines one `strcpy(proc_path, "/proc/self/ns/net")`, which GCC lowered to a
 single `movdqa`/`movaps` pair plus a 2-byte tail store. It occurs **exactly once** in the
@@ -27,7 +27,7 @@ machine code:
    21160:  0f 29 84 24 30 10 00 00   movaps XMMWORD PTR [rsp+0x1030],xmm0
 ```
 
-**ghidra (stored)** -- splits it byte-wise (same as kuna), but only at the one real site,
+**ghidra (stored)** -- splits it byte-wise (same as unlace), but only at the one real site,
 and the destination is the stack buffer:
 
 ```c
@@ -51,7 +51,7 @@ v33 = 116;
 *(__m128i *)special_file = _mm_load_si128((const __m128i *)&xmmword_822F0);
 ```
 
-**kuna (stored 2026-07-27 AND fresh on today's build, `--mode reliable` == today's `auto`
+**unlace (stored 2026-07-27 AND fresh on today's build, `--mode reliable` == today's `auto`
 for this 722 KiB binary)** -- the copy is emitted **twice**. The second occurrence is
 phantom, sits on the `v3 == -1` error-return path, and *writes into the read-only literal*:
 
@@ -79,7 +79,7 @@ which is an internal placeholder name leaking into the C:
         v14[1] = s_822f0[9];
 ```
 
-**kuna, `--option readonly on`** (or `--mode aggressive`, or `--option formatstring on`)
+**unlace, `--option readonly on`** (or `--mode aggressive`, or `--option formatstring on`)
 -- phantom block gone, real site collapses to two correct word assignments:
 
 ```c
@@ -102,7 +102,7 @@ The only copy in the function (ipnetns.c:914):
  }
 ```
 
-The path kuna decorates with the phantom copy (ipnetns.c:884-891) contains **no copy at
+The path unlace decorates with the phantom copy (ipnetns.c:884-891) contains **no copy at
 all**:
 
 ```c
@@ -115,7 +115,7 @@ all**:
 
 ## Analysis
 
-**The one structural symptom.** kuna emits a 16-statement block of **stores into read-only
+**The one structural symptom.** unlace emits a 16-statement block of **stores into read-only
 .rodata** (`s_822f0[0] = (char)s_822f0[0]; s_822f0[1] = SUB81(s_822f0[0],1); ...`) on the
 `lock == -1` error-return path, where the machine code is only `cmp ebp,-1 / je 20f7f /
 mov r13d,-1 / ret`. It is phantom code, it is a write to a string literal, and it is a
@@ -184,7 +184,7 @@ placeholder name in the emitted C) -- that is a **separate, secondary** symptom,
   @0x6cbf0), 42 `SUB81`s.
 
 **The option that closes it.** `--option readonly on` (Ghidra `OptionReadOnly` /
-`Architecture::readonlypropagate`, default off in both Ghidra and kuna) folds the read-only
+`Architecture::readonlypropagate`, default off in both Ghidra and unlace) folds the read-only
 LOAD to a constant *before* the split, so `SplitDatatype::generate_constants` short-circuits
 `build_in_subpieces` and no ram defs are ever created. Measured whole-binary on `ip`,
 `--mode reliable`:
@@ -197,7 +197,7 @@ LOAD to a constant *before* the split, so `SplitDatatype::generate_constants` sh
 No goto/function-count change, LOC -61, no speed cost.
 
 **Why the references win.** IDA keeps the copy as a single `_mm_load_si128` intrinsic
-assignment. Ghidra splits it byte-wise exactly like kuna but never synthesises the
+assignment. Ghidra splits it byte-wise exactly like unlace but never synthesises the
 write-back, because in Ghidra those ram-addressed SUBPIECE outputs do not come back through
 a heritage refinement pass.
 

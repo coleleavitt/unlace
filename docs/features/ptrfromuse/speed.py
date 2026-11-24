@@ -1,6 +1,6 @@
 """Interleaved min-of-N speed A/B for the `ptrfromuse` default: `off` vs `void`.
 
-    SPEED_N=15 SPEED_OUT=speed.json KUNA_BIN=<kuna> python3 docs/features/ptrfromuse/speed.py
+    SPEED_N=15 SPEED_OUT=speed.json UNLACE_BIN=<unlace> python3 docs/features/ptrfromuse/speed.py
 
 Both arms name the value explicitly, so the measurement does not depend on which
 value is the shipped default.  One (off, void) pair per round, the order swapped
@@ -10,10 +10,10 @@ equally.  The reported number is the MIN of each arm; the median is printed too.
 import json, os, subprocess, time
 
 R = "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11"
-K = os.environ.get("KUNA_BIN") or os.path.abspath("decompiler/target/release/kuna")
+K = os.environ.get("UNLACE_BIN") or os.path.abspath("decompiler/target/release/unlace")
 N = int(os.environ.get("SPEED_N", "15"))
 ON = os.environ.get("SPEED_ON", "void")
-env = dict(os.environ, SLEIGHHOME=os.path.abspath("specs"), KUNA_SPECS=os.path.abspath("specs"))
+env = dict(os.environ, SLEIGHHOME=os.path.abspath("specs"), UNLACE_SPECS=os.path.abspath("specs"))
 
 CASES = [
     ("fmt O2", f"{R}/O2/coreutils/stripped/fmt"),

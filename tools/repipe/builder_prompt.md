@@ -1,12 +1,12 @@
-# kuna RE-friction builder — close ONE need, open ONE PR, merge it
+# unlace RE-friction builder — close ONE need, open ONE PR, merge it
 
 You are an autonomous {{WORKER_AGENT}} in an isolated git worktree on
-branch `{{BRANCH}}`. Your entire job this session is to close **one** recorded way that kuna
+branch `{{BRANCH}}`. Your entire job this session is to close **one** recorded way that unlace
 is bad for reverse engineering, verify it, and land it. Then stop.
 
 - Worker id: `{{WORKER_ID}}`
 - Need: `{{OPPORTUNITY_ID}}` → `docs/re-needs/{{SLUG}}.md` — **read it first, in full.**
-- Worktree: `{{WORKTREE}}` · kuna python: `{{KUNA_PY}}` · date: `{{DATE}}`
+- Worktree: `{{WORKTREE}}` · unlace python: `{{UNLACE_PY}}` · date: `{{DATE}}`
 
 {{RESUME_PROPOSAL}}
 
@@ -21,7 +21,7 @@ The need carries two executable probes:
 you have written a test — when
 
 ```
-{{KUNA_PY}} -m scripts.repipe.verify --need {{SLUG}} --json
+{{UNLACE_PY}} -m scripts.repipe.verify --need {{SLUG}} --json
 ```
 
 reports the acceptance as PASS on a freshly built tree. Run it. If it does not pass, you are
@@ -29,7 +29,7 @@ not done, whatever else is green.
 
 The acceptance probe is then **promoted verbatim into `tests/cli/{{SLUG}}.json`** as a
 permanent regression test, so the thing you fixed cannot silently come back. Do that as part
-of your PR (`{{KUNA_PY}}` -m scripts.repipe.verify --promote {{SLUG}}`). If it refuses because
+of your PR (`{{UNLACE_PY}}` -m scripts.repipe.verify --promote {{SLUG}}`). If it refuses because
 the probe's target is not vendorable, vendor a minimal fixture binary into the repo and point
 the probe at it — CI has no dataset.
 
@@ -62,14 +62,14 @@ chapter if you changed described behaviour.
 
 ### Track `quality` — the full ritual
 
-The need is that kuna's *decompiled C* is wrong or bad for a specific function. This is the
+The need is that unlace's *decompiled C* is wrong or bad for a specific function. This is the
 existing improvement pipeline's territory and its rules apply **verbatim**. Read
 `tools/pipeline/worker_prompt.md` §§3–8 and `docs/improvement-pipeline.md` §3–4 and follow
 them exactly. First decide whether the need is a **fix** or a **feature** (worker prompt
 hard rule 4, `docs/agents.md` → *Adding features*): a strict correctness fix, whose `off`
 value would only reproduce C that is false about the program, ships always-on with NO option
 and a one-pass `tests/stages/ghdec-<slug>.xml`; a refinement of an existing option extends
-that option. Only a judgement call gets the full option ritual: one `kuna_<slug>.rs` in the
+that option. Only a judgement call gets the full option ritual: one `unlace_<slug>.rs` in the
 owning phase folder, a fully-populated `[[settable]]` row, registration in
 `option_dispatch.rs`, an Architecture flag, **all four hard-coded catalog counters**
 (`python -m scripts.repipe.counters --fix`), a two-pass `tests/stages/ghdec-<slug>.xml`, the
@@ -88,8 +88,8 @@ Two standing requirements bite hardest here and are not optional:
 
 ### When the need asks for an INTERFACE, expose — do not reinvent
 
-A large fraction of this backlog will be an agent asking to *tell kuna something* rather than
-asking kuna to guess better: define a function boundary, override a jump table, declare a
+A large fraction of this backlog will be an agent asking to *tell unlace something* rather than
+asking unlace to guess better: define a function boundary, override a jump table, declare a
 blob as data, steer structuring, fix a prototype. Before you design anything, check whether
 the capability already exists one layer down and is simply unreachable.
 
@@ -125,7 +125,7 @@ quit
 
 Two design rules for anything in this family:
 
-- **A durable assertion beats a one-shot flag.** kuna's model is `assert(phase, anchor, type,
+- **A durable assertion beats a one-shot flag.** unlace's model is `assert(phase, anchor, type,
   value, strength)` consulted on every (re-)run — not imperative mid-pipeline edits. An
   interface that survives only inside one process is barely an interface: an agent that
   renames forty functions and loses them on the next invocation has gained nothing. If you
@@ -154,13 +154,13 @@ hypothesis.
 Check the need is not already covered: sweep `unlace catalog --json` for an option whose
 `use_when`/`symptoms` match and re-run the probe with it on. If an existing option closes it,
 that is a **default-flip candidate, not a new feature** — record it, set
-`{{KUNA_PY}} -m scripts.pipeline.state update --worker {{WORKER_ID}} --status failed --note
+`{{UNLACE_PY}} -m scripts.pipeline.state update --worker {{WORKER_ID}} --status failed --note
 "covered by <option>"`, and stop without a PR.
 
 ## Heartbeat
 
 At the start of each phase run
-`{{KUNA_PY}} -m scripts.pipeline.state update --worker {{WORKER_ID}} --phase <PHASE>`
+`{{UNLACE_PY}} -m scripts.pipeline.state update --worker {{WORKER_ID}} --phase <PHASE>`
 with `<PHASE>` ∈ analyze, design, code, build, test, docs, commit, pr, merge.
 On abort: `... --status failed --note "<one line why>"`.
 
@@ -192,7 +192,7 @@ speed and risk assessment) plus a partial `record.json` with `"scope": "large"`,
 
 ```
 tools/pipeline/open_pr.sh --draft {{BRANCH}} "[AUTOMATED] [PROPOSAL] {{SLUG}}: <one line>" docs/features/{{SLUG}}/proposal.md
-{{KUNA_PY}} -m scripts.pipeline.state proposal --worker {{WORKER_ID}} --opportunity "{{OPPORTUNITY_ID}}" --pr "<url>" --branch {{BRANCH}} --slug {{SLUG}}
+{{UNLACE_PY}} -m scripts.pipeline.state proposal --worker {{WORKER_ID}} --opportunity "{{OPPORTUNITY_ID}}" --pr "<url>" --branch {{BRANCH}} --slug {{SLUG}}
 ```
 
 Then stop. The captain reviews parked proposals and re-dispatches an implementation worker on
@@ -208,7 +208,7 @@ cargo test --release -p unlace-harness --test parity   # datatests PARITY OK 675
 cargo nextest run --workspace --exclude unlace-wasm --profile ci       # the long pole; on an internal-branch PR CI SKIPS it, so you are the gate
 python3 tools/check_spec.py
 target/release/unlace catalog --check    # catalog OK
-{{KUNA_PY}} -m scripts.repipe.verify --need {{SLUG}} --json   # acceptance must be PASS
+{{UNLACE_PY}} -m scripts.repipe.verify --need {{SLUG}} --json   # acceptance must be PASS
 ```
 
 ### Backgrounding a long gate — never wait on it with `pgrep`
@@ -233,15 +233,15 @@ edit on both sides merges cleanly to `86` when the answer is `87`), re-run the g
 the rebase, and only then merge:
 
 ```
-{{KUNA_PY}} -m scripts.pipeline.state lease-acquire --resource merge --worker {{WORKER_ID}} --pid $$
+{{UNLACE_PY}} -m scripts.pipeline.state lease-acquire --resource merge --worker {{WORKER_ID}} --pid $$
 BASE=$(cat "{{WORKER_BASE_FILE}}")
 git fetch origin && git rebase --onto origin/main "$BASE"
-{{KUNA_PY}} -m scripts.repipe.counters --fix
+{{UNLACE_PY}} -m scripts.repipe.counters --fix
 git log --oneline origin/main..HEAD    # ONLY your own commits may appear here
-{{KUNA_PY}} -m scripts.repipe.mergecheck --against origin/main     # must be clean
+{{UNLACE_PY}} -m scripts.repipe.mergecheck --against origin/main     # must be clean
 # ...re-run all the gates above...
 tools/pipeline/open_pr.sh --merge {{BRANCH}}
-{{KUNA_PY}} -m scripts.pipeline.state lease-release --resource merge --worker {{WORKER_ID}}
+{{UNLACE_PY}} -m scripts.pipeline.state lease-release --resource merge --worker {{WORKER_ID}}
 ```
 
 `open_pr.sh --merge` adds the `full-ci` label (which is itself a CI trigger — without it an

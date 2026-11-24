@@ -1,4 +1,4 @@
-# Stripped PE32 i386 fixture for kuna_msvcftolsig (tests/stages/kuna-msvcftolsig.toml).
+# Stripped PE32 i386 fixture for unlace_msvcftolsig (tests/stages/unlace-msvcftolsig.toml).
 #
 # `_f` is ftolsig_pe_i386.c compiled by Visual C++ 2005 SP1 (`cl /O2 /c`); it calls
 # `__ftol2_sse`. `_g` calls `__ftol`. Both helpers below are the instruction streams

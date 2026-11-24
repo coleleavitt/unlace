@@ -169,7 +169,9 @@ pub(crate) fn guarded<T: Default>(pass: &str, run: impl FnOnce() -> T) -> T {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(run)).unwrap_or_else(|_| {
         unlace_base::notes::say_once(
             &format!("pdb-panic-{pass}"),
-            &format!("[kuna pdb] {pass}: the .pdb is malformed (its parser panicked); not applied"),
+            &format!(
+                "[unlace pdb] {pass}: the .pdb is malformed (its parser panicked); not applied"
+            ),
         );
         T::default()
     })
@@ -242,7 +244,7 @@ fn open_if_matching(
     unlace_base::notes::say_once(
         &path.display().to_string(),
         &format!(
-            "[kuna pdb] {}: age {} guid {} does not match the image's CodeView record \
+            "[unlace pdb] {}: age {} guid {} does not match the image's CodeView record \
              (age {} guid {}); not applied",
             path.display(),
             age,

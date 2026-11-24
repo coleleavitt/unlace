@@ -321,7 +321,7 @@ mod tests {
     /// buffers so CompressBuffer exercises its overflow path.
     fn sample_data(len: usize) -> Vec<u8> {
         let mut v = Vec::with_capacity(len);
-        let phrase = b"kuna sleigh spec payload ";
+        let phrase = b"unlace sleigh spec payload ";
         let mut i = 0usize;
         while v.len() < len {
             v.push(phrase[i % phrase.len()] ^ ((i / 251) as u8));
@@ -377,14 +377,14 @@ mod tests {
     /// `0x78 0x9C` exactly as C zlib does.
     #[test]
     fn test_compression_zlib_header_default_level() {
-        let comp = deflate_all(b"kuna", -1);
+        let comp = deflate_all(b"unlace", -1);
         assert_eq!(&comp[..2], &[0x78, 0x9c]);
         // Level 0 (stored blocks) is unused in-tree; miniz_oxide emits the
         // header 0x08 0x1D there (CINFO=0, a smaller declared window) where
         // C zlib emits 0x78 0x01 — a valid, decodable stream either way, so
         // only the round trip is asserted (deviation noted in LOSS-004 terms).
-        let comp0 = deflate_all(b"kuna", 0);
-        assert_eq!(inflate_all(&comp0), b"kuna");
+        let comp0 = deflate_all(b"unlace", 0);
+        assert_eq!(inflate_all(&comp0), b"unlace");
     }
 
     /// Round trip a payload larger than both 4096-byte buffers through
@@ -425,7 +425,7 @@ mod tests {
     /// wire-format interoperability per LOSS-004.
     #[test]
     fn test_compression_decompress_c_zlib_oracle_stream() {
-        let expect = b"kuna .sla payload: kuna .sla payload: kuna .sla payload!\n";
+        let expect = b"unlace .sla payload: unlace .sla payload: unlace .sla payload!\n";
         let comp: [u8; 32] = [
             0x78, 0x9c, 0xcb, 0x2e, 0xcd, 0x4b, 0x54, 0xd0, 0x2b, 0xce, 0x49, 0x54, 0x28, 0x48,
             0xac, 0xcc, 0xc9, 0x4f, 0x4c, 0xb1, 0x52, 0xc8, 0x26, 0x42, 0x48, 0x91, 0x0b, 0x00,

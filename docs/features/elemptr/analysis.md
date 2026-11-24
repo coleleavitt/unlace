@@ -5,7 +5,7 @@
 A textbook base64 decoder (`decoding_table[(unsigned char)data[i]]`, a table built
 from a constant alphabet into a `malloc`'d global, a `malloc`'d output buffer)
 decompiles on main `c960fb18d` as (gcc -O0, stripped, fixture
-`decompiler/crates/kuna-analysis/tests/fixtures/elemptr_x86_64.c` has the same
+`decompiler/crates/unlace-analysis/tests/fixtures/elemptr_x86_64.c` has the same
 shapes):
 
 ```c
@@ -67,7 +67,7 @@ through a pointer whose pointee was inferred rather than declared stays narrow
 
 ## 3. Where the casts went, and the functions with more
 
-castbench (45 binaries x O0/O2/O2-noinline, 4,815 functions kuna, IDA and main
+castbench (45 binaries x O0/O2/O2-noinline, 4,815 functions unlace, IDA and main
 share), against a build of main `f96e80805` (which already has `castindex`,
 `castternary`, `callrettype`, `castobject` and `castwiden`; the `off` arm is
 byte-identical to it on all 45 binaries): 33,289 -> 32,073 casts (0.880x -> 0.848x
@@ -311,7 +311,7 @@ it declared a wrong type without changing a value:
   what the compare reads (the reviewer's `rb.c` computed `chk1=1` where the
   binary computes 0; mydoom O0 `sub_4021bc("",1,v3)` was right only because it
   reads one byte). A callee now states which parameters and return the rule
-  typed (`kuna_elemptr::state`), and a character-pointer constant whose type
+  typed (`unlace_elemptr::state`), and a character-pointer constant whose type
   comes from the rule alone prints as its address (`&dat_66e18`). The fixture's
   `w_chk`, `w_hash` and `w_pick` are the shapes: a caller passing the table to a
   typed parameter, and the table merged with a typed parameter. Nothing in the

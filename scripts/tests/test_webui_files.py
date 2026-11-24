@@ -9,7 +9,7 @@ from scripts.repipe import webui
 
 class DashboardFileTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="kuna-webui-files-")
+        temporary = tempfile.TemporaryDirectory(prefix="unlace-webui-files-")
         self.addCleanup(temporary.cleanup)
         patches = ExitStack()
         self.addCleanup(patches.close)

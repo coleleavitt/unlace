@@ -371,7 +371,7 @@ fn a_win32_import_reads_with_its_sdk_types() {
 /// `uefi` for an EFI image, from the directory or its `pc` subdirectory.
 #[test]
 fn auto_chooses_the_til_ida_would_for_a_pe() {
-    let dir = std::env::temp_dir().join(format!("kuna-tildir-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace-tildir-{}", std::process::id()));
     std::fs::create_dir_all(dir.join("pc")).unwrap();
     for name in [
         "mssdk64_win10.til",
@@ -409,7 +409,7 @@ fn auto_chooses_the_til_ida_would_for_a_pe() {
 /// subdirectory the variable points at.
 #[test]
 fn auto_reads_the_slots_of_a_non_pe_image() {
-    let dir = std::env::temp_dir().join(format!("kuna-tilslots-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace-tilslots-{}", std::process::id()));
     std::fs::create_dir_all(dir.join("arm")).unwrap();
     for name in [
         "arm/gnulnx_arm64.til",
@@ -485,8 +485,8 @@ fn names_beyond_imports_take_one_agreed_name_per_address() {
 #[test]
 fn a_list_of_files_is_read_in_order() {
     let dir = std::env::temp_dir();
-    let a = dir.join(format!("kuna-typelib-src-a-{}.ktl", std::process::id()));
-    let b = dir.join(format!("kuna-typelib-src-b-{}.ktl", std::process::id()));
+    let a = dir.join(format!("unlace-typelib-src-a-{}.ktl", std::process::id()));
+    let b = dir.join(format!("unlace-typelib-src-b-{}.ktl", std::process::id()));
     std::fs::write(&a, SMALL).unwrap();
     std::fs::write(&b, "typelib 1\ntarget linux x86_64\nsource second 1\n").unwrap();
     let choice = TypeLib::Files(vec![a.clone(), b.clone()]);

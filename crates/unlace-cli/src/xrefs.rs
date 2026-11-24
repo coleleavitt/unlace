@@ -1868,7 +1868,7 @@ fn usage() {
          metadata lists them. data_refs_coverage names that metadata when unlace read\n\
          all of it (chained-fixups, rebase-opcodes, dynamic-relocations,\n\
          base-relocations); otherwise it is `partial` (some of it could not be read;\n\
-         the rows are the rest), `unsupported` (metadata kuna does not read, such as a\n\
+         the rows are the rest), `unsupported` (metadata unlace does not read, such as a\n\
          MIPS image's or a relocatable object's) or `none` (the image keeps none, as a\n\
          non-PIE ELF), and data_refs_reason says why. Only a complete list that is\n\
          empty means no stored pointer holds the address.\n\

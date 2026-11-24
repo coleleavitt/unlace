@@ -40,7 +40,7 @@ Seen first on a production ARM executable (GCC, `-fPIC`, linked non-PIE at 0x100
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "xrefs",
     "{{BIN}}",
     "--to",
@@ -70,7 +70,7 @@ Seen first on a production ARM executable (GCC, `-fPIC`, linked non-PIE at 0x100
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "xrefs",
     "{{BIN}}",
     "--to",

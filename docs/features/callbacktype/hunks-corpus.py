@@ -17,7 +17,7 @@ sys.path.insert(0, os.environ.get('CASTBENCH', '/home/mahaloz/kwt/castbench'))
 import castcount as CC
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
-K = os.environ.get('KUNA_BIN', '/home/mahaloz/kwt/callbacktype/decompiler/target/release/kuna')
+K = os.environ.get('UNLACE_BIN', '/home/mahaloz/kwt/callbacktype/decompiler/target/release/unlace')
 R = '/home/mahaloz/github/decbench/results/full_run_address_2026-09-11'
 BINS = [
     f'{R}/O0/coreutils/stripped/cut',
@@ -96,7 +96,7 @@ BINS = [
     f'{R}/O2/shadow/stripped/userdel',
     f'{R}/O0/shadow/stripped/chfn',
 ] + [os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..',
-                      'decompiler/crates/kuna-analysis/tests/fixtures', f))
+                      'decompiler/crates/unlace-analysis/tests/fixtures', f))
      for f in ('callbacktype_x86_64', 'callbacktype_refused_x86_64', 'callbacktype_width_x86_64',
                'callbacktype_narrow_x86_64', 'callbacktype_forward_x86_64')
 ] + [b for b in os.environ.get('HUNKS_EXTRA', '').split(':') if b]
@@ -109,7 +109,7 @@ def label(b):
 def run(b, value, trace=False):
     env = dict(os.environ)
     if trace:
-        env['KUNA_CALLBACKTYPE_TRACE'] = '1'
+        env['UNLACE_CALLBACKTYPE_TRACE'] = '1'
     p = subprocess.run([K, 'decompile-all', b, '--option', 'callbacktype', value,
                         '--max-fn-seconds', '120'],
                        capture_output=True, text=True, env=env, timeout=3600)

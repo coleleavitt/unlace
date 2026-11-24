@@ -1,4 +1,4 @@
-# kuna_atomics (option llscfold, docs/spec/02-lift-and-flow.md) on 32-bit ARM:
+# unlace_atomics (option llscfold, docs/spec/02-lift-and-flow.md) on 32-bit ARM:
 # clang's rotated compare-exchange loop (ldrex; cmp; bne fail; dmb; L: strex;
 # cmp; beq done; ldrex; cmp; beq L) and the ldrexd/strexd doubleword loops of a
 # 64-bit fetch_add (adds/adc), fetch_or and exchange fold into __sync builtins;

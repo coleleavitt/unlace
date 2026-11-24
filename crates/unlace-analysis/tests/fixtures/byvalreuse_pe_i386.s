@@ -1,4 +1,4 @@
-# kuna fixture: a 32-byte struct passed by value to a __thiscall method, copied
+# unlace fixture: a 32-byte struct passed by value to a __thiscall method, copied
 # with `rep movsd` into an outgoing block that reuses the 12 bytes an earlier
 # __cdecl call's pushes left on the stack (MSVC defers that cleanup), as VC8
 # /O2 builds it.

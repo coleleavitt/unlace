@@ -5,7 +5,7 @@ lives INSIDE its one executable code section (RE-need
 
 The reported image is a crypter whose two sections are both unnamed and whose
 first one -- characteristics 0xe0000060, i.e. CODE|EXECUTE|READ|WRITE --
-contains the whole import directory, IAT included.  Every other PE kuna sees
+contains the whole import directory, IAT included.  Every other PE unlace sees
 keeps its IAT in `.idata`/`.rdata`, so "is this address in a CODE section?" was
 enough to keep the pointer slots out of the whole-binary decompile set; here it
 is not, and 50 of the image's 56 inventory entries were import pointer words

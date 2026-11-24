@@ -1,6 +1,6 @@
 # call-pop-pointer-helper analysis
 
-The round-12 witness at `0x4f7036` is a pointer-return helper, but kuna follows
+The round-12 witness at `0x4f7036` is a pointer-return helper, but unlace follows
 its CALL fall-through into a NUL-separated import-name table and emits three
 `in(...)` operations plus writes through undefined registers. The bytes establish
 the real control flow: `call 0x4f708d` pushes `0x4f703b`; the callee executes

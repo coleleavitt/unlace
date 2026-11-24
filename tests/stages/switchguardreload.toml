@@ -1,4 +1,4 @@
-# Kuna #1028: a guarded relative jump table is read past its guard, into the
+# Unlace #1028: a guarded relative jump table is read past its guard, into the
 # table that follows it, and the extra rows send flow into the middle of
 # instructions (halt_baddata).
 #

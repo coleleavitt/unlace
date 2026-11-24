@@ -15,7 +15,7 @@
 # on both sides, so the gate declines it and Merge::markInternalCopies then
 # hides it from the printer.
 #
-# kuna's ActionStripStackGuard (option stackguard, DIV-14, default on) strips
+# unlace's ActionStripStackGuard (option stackguard, DIV-14, default on) strips
 # the stack-protector epilogue, which leaves a bare-epilogue RETURN block
 # that ActionReturnSplit node-splits.  CloneBlockOps::cloneBlock rebuilds the
 # block's ops through buildOpClone (whose flag mask does not carry
@@ -35,7 +35,7 @@
 # read-only.  A store into a read-only range is never something the program
 # performs, so this is a correctness fix and needs no option (DIV-55 in
 # docs/history.md; it is a divergence from upstream subflow.cc:2390, whose
-# precondition here is kuna's own stackguard divergence).
+# precondition here is unlace's own stackguard divergence).
 #
 # Bytes: iproute2 `ip`, -O2 -fno-inline, function __get_hz at 0x6cbf0 (433
 # bytes, verbatim), plus the 32-byte read-only literal at 0x92e50 that the

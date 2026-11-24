@@ -1,11 +1,11 @@
 {
-  // kuna dev container. The image (Dockerfile) is env-only — the repo is mounted
-  // at runtime into /workspaces/kuna, so one image serves every branch/worktree.
+  // unlace dev container. The image (Dockerfile) is env-only — the repo is mounted
+  // at runtime into /workspaces/unlace, so one image serves every branch/worktree.
   //
   // privileged + passwordless sudo are INTENTIONAL per project policy: the user
   // requires the ability to always run privileged and to `apt-get install`
   // anything (e.g. add mingw-w64/osxcross later) without rebuilding the image.
-  "name": "kuna-dev",
+  "name": "unlace-dev",
   "build": {
     "dockerfile": "Dockerfile",
     "context": "."
@@ -13,6 +13,6 @@
   "privileged": true,
   "runArgs": ["--privileged"],
   "remoteUser": "dev",
-  "workspaceFolder": "/workspaces/kuna",
+  "workspaceFolder": "/workspaces/unlace",
   "postCreateCommand": "rustc --version && cargo --version"
 }

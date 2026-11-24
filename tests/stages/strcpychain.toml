@@ -4,7 +4,7 @@
 # Source (gcc -O2 -fno-builtin, x86-64):
 #   char *dup_into(char *d, const char *s) { memcpy(d, s, strlen(s) + 1); return d; }
 #
-# Stage: P3/P4 rule RuleStrcpyChain over kuna_helperrole::role_of, which tags a
+# Stage: P3/P4 rule RuleStrcpyChain over unlace_helperrole::role_of, which tags a
 # CALL by its callee name (decorations stripped) and a CALLOTHER by its builtin
 # id. memcpy(d, s, strlen(s) + 1) becomes strcpy(d, s) and the strlen nobody
 # reads is dropped (Hex-Rays' funcrole chain in minsn_t::optimize_subtree).
@@ -39,16 +39,16 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-STRCPYCHAIN #1: memcpy(d, s, strlen(s) + 1) is strcpy(d, s) (default)'
+name = 'UNLACE-STRCPYCHAIN #1: memcpy(d, s, strlen(s) + 1) is strcpy(d, s) (default)'
 count = 1
 literal = 'strcpy(a0,a1);'
 
 [[match]]
-name = 'KUNA-STRCPYCHAIN #2: helperroles off keeps the memcpy'
+name = 'UNLACE-STRCPYCHAIN #2: helperroles off keeps the memcpy'
 count = 1
 literal = 'memcpy(a0,a1,'
 
 [[match]]
-name = 'KUNA-STRCPYCHAIN #3: the strlen survives only with helperroles off'
+name = 'UNLACE-STRCPYCHAIN #3: the strlen survives only with helperroles off'
 count = 1
 literal = '= strlen(a1)'

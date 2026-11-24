@@ -3389,7 +3389,7 @@ pub fn print_c_prototype(arch: &mut Architecture, fd: &Funcdata) -> String {
 pub fn print_c_recompile_prelude(arch: &Architecture) -> String {
     use crate::dtype::type_metatype::*;
     let mut out = String::new();
-    out.push_str("/* kuna recompile prelude (generated): core scalar typedefs */\n");
+    out.push_str("/* unlace recompile prelude (generated): core scalar typedefs */\n");
     out.push_str("#include <stdbool.h>\n");
     // A recovered aggregate can hold target pointers, and a host that compiles
     // this header for a different data model sizes them differently and moves
@@ -3458,7 +3458,7 @@ pub fn print_c_recompile_prelude(arch: &Architecture) -> String {
 
     // The fixed Ghidra/unlace `undefined` family (the anonymous-unknown
     // rendering `undefined<N>`, printc.rs `declarator_parts`).
-    out.push_str("\n/* the Ghidra/kuna `undefined` family */\n");
+    out.push_str("\n/* the Ghidra/unlace `undefined` family */\n");
     out.push_str("typedef unsigned char undefined;\n");
     out.push_str("typedef unsigned char undefined1;\n");
     out.push_str("typedef unsigned short undefined2;\n");

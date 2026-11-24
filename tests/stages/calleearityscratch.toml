@@ -28,7 +28,7 @@
 # use, so rsi's trial scores INACTIVE, and an inactive boundary is scratch.
 #
 # Stage / sub-stage: P4 "trial-finalization".  An inactive boundary ends
-# the run (kuna_calleearityscratch.rs, always on).
+# the run (unlace_calleearityscratch.rs, always on).
 #
 # The fixture is the same construct on SysV x86-64.  Every callee reads rdi and
 # then calls `sink`, so the callee-body walk is cut there and the run {rdi} has

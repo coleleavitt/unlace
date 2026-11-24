@@ -1,6 +1,6 @@
 # Loop counters and returned locals named from their shape
 # (`option contextnames on|off`, default off; stage P6 naming policy,
-# `kuna_contextnames` evidence for the `kuna_libcnames` alias walk).
+# `unlace_contextnames` evidence for the `unlace_libcnames` alias walk).
 #
 # The fixture (contextnames.c beside it, gcc -O1, stripped) has a triple
 # loop nest accumulating into a returned total, and a checksum whose

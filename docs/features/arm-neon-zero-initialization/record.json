@@ -8,7 +8,7 @@
   "div": "DIV-158",
   "phase": "P3",
   "subphase": "simplification-quiescence",
-  "module": "decompiler/crates/kuna-decomp/src/p3_dataflow/constspaceload.rs",
+  "module": "decompiler/crates/unlace-decomp/src/p3_dataflow/constspaceload.rs",
   "symptom": "ARM NEON zero initialization becomes near-null memory reads (major, 1 instance, crackmes.one 68d40081224c0ec5dcedc2d2 ARM32 ELF trap, _start_main @0x4d4)",
   "witness": {
     "binary": "crackmes.one 68d40081224c0ec5dcedc2d2 bin/trap",
@@ -28,12 +28,12 @@
   ],
   "tests": {
     "stage": "tests/stages/ghdec-constspaceload.xml (2 passes, 5 assertions)",
-    "unit": "decompiler/crates/kuna-decomp/src/p3_dataflow/constspaceload/tests.rs (6 tests)",
-    "fixture": "decompiler/crates/kuna-analysis/tests/fixtures/neonimm_arm_le32 (+ .py generator)",
+    "unit": "decompiler/crates/unlace-decomp/src/p3_dataflow/constspaceload/tests.rs (6 tests)",
+    "fixture": "decompiler/crates/unlace-analysis/tests/fixtures/neonimm_arm_le32 (+ .py generator)",
     "promoted_probe": {
       "path": "tests/cli/arm-neon-zero-initialization.json",
       "retargeted_from": "crackmes.one 68d40081224c0ec5dcedc2d2 bin/trap _start_main",
-      "retargeted_to": "decompiler/crates/kuna-analysis/tests/fixtures/neonimm_arm_le32 @0x10004",
+      "retargeted_to": "decompiler/crates/unlace-analysis/tests/fixtures/neonimm_arm_le32 @0x10004",
       "why": "the need's target is binary_source dataset and CI has no dataset; the need record keeps the dataset acceptance so every later B_VERIFY still runs the real witness",
       "verified_on_witness": true
     }
@@ -44,11 +44,11 @@
     "make test-cli": "122/122",
     "make rust-test": "green (rc=0)",
     "make check-spec": "OK",
-    "kuna catalog --check": "OK",
+    "unlace catalog --check": "OK",
     "acceptance probe": "PASS on the dataset witness"
   },
   "ablation": {
-    "method": "whole-binary `kuna decompile-all`, option off vs default, unified diff of the emitted C",
+    "method": "whole-binary `unlace decompile-all`, option off vs default, unified diff of the emitted C",
     "targets": "5 linked binaries from tests/bug-repro (betaflight_STM32F405.elf, faillog, grep, libselinux.so.1, sort) + RE-dataset challenge images",
     "total_targets": 137,
     "compared": 122,

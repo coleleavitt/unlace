@@ -31,7 +31,7 @@ for arm in ['source','parent','candidate']:
    fs=json.loads((w/f'matrix-{arm}-{lang}.json').read_text())['functions'];body='\n'.join(f['code']for f in fs)
    body={'c':chead+ctypes+chelpers,'go':ghead,'rust':rhead}[lang]+body+'\n'+{'c':charness,'go':gharness,'rust':rharness}[lang]
   path=out/f'{arm}.{dict(c="c",go="go",rust="rs")[lang]}';path.write_text(body)
-  commands=([['cc','-O0','-fwrapv','-Werror'],['cc','-O2','-fwrapv','-Werror']]if lang=='c'else [[str(Path('/tmp/kuna-toolchains')/v/'go/bin/go'),'build']for v in ['go1.22.5','go1.27.3']]if lang=='go'else [['rustc','--edition=2021','-C','opt-level=0'],['rustc','--edition=2021','-C','opt-level=2']])
+  commands=([['cc','-O0','-fwrapv','-Werror'],['cc','-O2','-fwrapv','-Werror']]if lang=='c'else [[str(Path('/tmp/unlace-toolchains')/v/'go/bin/go'),'build']for v in ['go1.22.5','go1.27.3']]if lang=='go'else [['rustc','--edition=2021','-C','opt-level=0'],['rustc','--edition=2021','-C','opt-level=2']])
   for i,cmd in enumerate(commands):
    exe=out/f'{arm}-{lang}-{i}';build=cmd+['-o',str(exe),str(path)];p=subprocess.run(build,text=True,capture_output=True);(out/f'{exe.name}-build.log').write_text(p.stdout+p.stderr);item={'arm':arm,'language':lang,'command':build,'build_exit':p.returncode}
    if p.returncode==0:

@@ -1,4 +1,4 @@
-# kuna `returndup calls`.  gcc -Os cross-jumps the tails of
+# unlace `returndup calls`.  gcc -Os cross-jumps the tails of
 # paths that end in the same call: each path sets the arguments and jumps
 # to one shared `call f` block, so the decompiler sees merged arguments
 # and prints `if (c <= 5) { b2 = 2; a = b; } return f(a, b2) + 3;`.  With

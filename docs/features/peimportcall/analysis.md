@@ -2,24 +2,24 @@
 
 Route B (decbench). Case `O0-mydoom-mydoom-mmsender_th`; triage record
 `docs/decbench/triage/O0-mydoom-mydoom-mmsender_th.md`. IDA, Ghidra and angr all
-score GED 0 on this function; kuna scored 37.
+score GED 0 on this function; unlace scored 37.
 
 ## The symptom
 
-`mmsender_th` (kuna `sub_4041e2`) is a thread entry point: bump a refcount, run the
+`mmsender_th` (unlace `sub_4041e2`) is a thread entry point: bump a refcount, run the
 worker, drop the refcount, `ExitThread(0)`. IDA emits 14 lines, two `if`s and no
-loop. kuna emitted 50 lines, four `if`s and **one loop the function does not have** --
+loop. unlace emitted 50 lines, four `if`s and **one loop the function does not have** --
 because flow did not stop at `call dword ptr [ExitThread]`, so the body absorbed the
-whole of the next function. kuna's own function list contains an entry at `0x40424c`
+whole of the next function. unlace's own function list contains an entry at `0x40424c`
 and `decompile-all` emits that body a second time as `sub_40424c`, statement for
 statement: the same code twice in one project export.
 
 The call itself rendered `(*dat_4112c4)(0)` -- an unnamed pointer -- even though
-`kuna functions mydoom.exe` already lists `0x4112c4 ExitThread`.
+`unlace functions mydoom.exe` already lists `0x4112c4 ExitThread`.
 
 ## Root cause (instrumented, not read)
 
-A `KUNA_DEBUG_DEINDIRECT` probe inside `ActionDeindirect::apply` on this function:
+A `UNLACE_DEBUG_DEINDIRECT` probe inside `ActionDeindirect::apply` on this function:
 
 ```
 [deindirect] apply ncalls=5
@@ -35,7 +35,7 @@ Every piece was already in place except two bits.
 external-reference arm on `v.is_persist() && v.is_external_ref()`. `persist` is
 painted; `varnode_flags::externref` is set **nowhere in the workspace**, because
 Ghidra sets it from an `ExternRefSymbol` (`Scope::addExternalRef` / the console
-`map externalref`), which is an `engine_unavailable` stub in kuna. So the arm was
+`map externalref`), which is an `engine_unavailable` stub in unlace. So the arm was
 dead on every PE, and the `is_constant()` arm never applies -- the target is a global
 read, not a folded constant (`--option readonly on` changes nothing, and folding
 would be wrong anyway: the on-disk IAT slot holds the RVA of the
@@ -46,7 +46,7 @@ registers the import `FunctionSymbol` at the slot VA), but the `no_return` half 
 `false` for every callee: `Database::build_global_query` never copied
 `SymbolKind::Function { no_return }` into `GlobalEntry`. Upstream `queryFunction`
 returns the callee's live `Funcdata`, so its `getFuncProto().isNoReturn()` comes for
-free; kuna's snapshot dropped it. Without it `FuncCallSpecs::deindirect` takes its
+free; unlace's snapshot dropped it. Without it `FuncCallSpecs::deindirect` takes its
 `lateRestriction` success path and returns **without scheduling a restart**, so the
 CALLIND->CALL rewrite happens in place and the *flow* -- which had already walked past
 the call -- is never recomputed. `decomp_dbg`'s `restarts` reports "No restart events
@@ -61,10 +61,10 @@ whose only caller is `ActionDeindirect` -- could never report a no-return callee
 target, not just a PE. It is the half that actually fixes the boundary; naming the call
 is necessary but not sufficient.
 
-A subordinate third gap: kuna's shipped `PeMacFunctionsThatDoNotReturn` carries only
+A subordinate third gap: unlace's shipped `PeMacFunctionsThatDoNotReturn` carries only
 eight CRT names. The Windows API exits (`ExitProcess`, `ExitThread`,
 `FreeLibraryAndExitThread`, `KeBugCheck`, `longjmp`, ...) live in upstream's separate
-`PEFunctionsThatDoNotReturn`, which kuna never vendored.
+`PEFunctionsThatDoNotReturn`, which unlace never vendored.
 
 ## Why the filed mechanism was refuted
 
@@ -80,7 +80,7 @@ callee's prototype says).
 ## Owning phase
 
 **P1 program-prep / external-refinement** -- `docs/spec/01-program-prep.md`. The new
-pass is `decompiler/crates/kuna-analysis/src/loader/peimportcall.rs`; the two
+pass is `decompiler/crates/unlace-analysis/src/loader/peimportcall.rs`; the two
 ported-core anchors it feeds are `substrate/context.rs` (`GlobalEntry` /
 `query_function`) and `p0_knowledge/database.rs` (`build_global_query`).
 `p9_emit/coreaction_render.rs` (`ActionDeindirect`) and `p4_calls/fspec.rs`

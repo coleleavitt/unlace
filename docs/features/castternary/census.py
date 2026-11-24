@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Census of casts at the top of a conditional's arm in kuna output (castbench arm)."""
+"""Census of casts at the top of a conditional's arm in unlace output (castbench arm)."""
 import collections, re, sys
 from pathlib import Path
 sys.path.insert(0, "/home/mahaloz/kwt/castbench")

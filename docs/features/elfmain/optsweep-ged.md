@@ -1,6 +1,6 @@
 # optsweep: `--option elfmain off`
 
-kuna `0147ccae` -- baseline arm = shipped defaults, variant arm = the flip. 18 slices, 1367 functions scored in both arms.
+unlace `0147ccae` -- baseline arm = shipped defaults, variant arm = the flip. 18 slices, 1367 functions scored in both arms.
 
 ## Controls
 

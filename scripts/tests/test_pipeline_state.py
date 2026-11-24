@@ -12,11 +12,11 @@ from scripts.pipeline import state
 
 class InventoryTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="kuna-inventory-test-")
+        temporary = tempfile.TemporaryDirectory(prefix="unlace-inventory-test-")
         self.addCleanup(temporary.cleanup)
         self.path = Path(temporary.name) / "inventory.json"
         environment = mock.patch.dict(os.environ, {
-            "KUNA_PIPELINE_STATE_DIR": temporary.name,
+            "UNLACE_PIPELINE_STATE_DIR": temporary.name,
         })
         environment.start()
         self.addCleanup(environment.stop)

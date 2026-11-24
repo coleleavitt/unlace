@@ -23,9 +23,9 @@ const INPUTS: &[u64] = &[
 ];
 
 fn records() -> serde_json::Value {
-    let kuna =
-        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_kuna").into());
-    let result = process::required_output(Command::new(kuna).args([
+    let unlace =
+        std::env::var_os("UNLACE_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
+    let result = process::required_output(Command::new(unlace).args([
         "decompile-all",
         &common::fixture("rust_null_pointer_x86_64"),
         "--json",
@@ -34,7 +34,7 @@ fn records() -> serde_json::Value {
         "--functions",
         NAMES,
         "--assert",
-        &format!("@{}", common::fixture("rust_null_pointer.kuna")),
+        &format!("@{}", common::fixture("rust_null_pointer.unlace")),
     ]));
     let doc: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
     assert_eq!(doc["functions"].as_array().unwrap().len(), 4);

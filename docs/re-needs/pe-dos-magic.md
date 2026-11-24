@@ -42,7 +42,7 @@ Load a PE32 whose first byte was overwritten (e_magic 0x5a15 instead of MZ) and 
   "schema": "re-probe/1",
   "kind": "cli",
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "functions",
     "{{BIN}}",
     "--summary",
@@ -82,7 +82,7 @@ Load a PE32 whose first byte was overwritten (e_magic 0x5a15 instead of MZ) and 
   "schema": "re-probe/1",
   "kind": "cli",
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "functions",
     "{{BIN}}",
     "--summary",
@@ -127,7 +127,7 @@ Load a PE32 whose first byte was overwritten (e_magic 0x5a15 instead of MZ) and 
       }
     ],
     "stderr_matches": [
-      "\\[kuna\\] PE DOS header e_magic is 0x5a15, not MZ"
+      "\\[unlace\\] PE DOS header e_magic is 0x5a15, not MZ"
     ],
     "stderr_absent": [
       "Unknown file magic"

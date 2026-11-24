@@ -1,7 +1,7 @@
 # Rust out-of-line stack probes
 
 The pinned angr general test `test_decompiling_rust_binary_rust_probestack`
-expects the Rust stack-probe helper to disappear from `create_note`. Kuna
+expects the Rust stack-probe helper to disappear from `create_note`. Unlace
 currently retains that call and recovers a live R11 result as an undefined local.
 The supplied executable is inspected statically; only authored harmless fixtures
 are executed.

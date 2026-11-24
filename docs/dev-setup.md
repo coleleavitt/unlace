@@ -57,9 +57,9 @@ cargo test -p <crate> --lib <filter>           # focused
 cargo build -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli   # dev profile
 ```
 
-Every `UNLACE_*` environment variable the Rust code reads is also read under its old `KUNA_*`
+Every `UNLACE_*` environment variable the Rust code reads is also read under its old `UNLACE_*`
 name, as a deprecated alias: `UNLACE_<NAME>` wins when both are set (`unlace_base::env`). The
-Python tools under `scripts/` and `tools/` still read only their `KUNA_*` names.
+Python tools under `scripts/` and `tools/` still read only their `UNLACE_*` names.
 
 Heavy runs (decompile-all over a corpus, `cargo test -p unlace-harness --test parity`) go through
 `tools/hooks/unlace-slot <cmd>`, which holds one of `UNLACE_SLOTS` (default 6)
@@ -145,7 +145,7 @@ milliseconds and its outcome (`pass`, `fail` or `error`), slowest first. CI uplo
 
 Other one-liners: `cargo test --release -p unlace-ghidra -- --include-ignored` (the ghidra-mode
 differential harness with its heavier breadth test), `bash scripts/version.sh` (the version CI
-tags with), `PYTHONPATH=. python3 -m scripts.observatory.generate --out observatory --kuna
+tags with), `PYTHONPATH=. python3 -m scripts.observatory.generate --out observatory --unlace
 target/release/unlace` and `bash scripts/coverage.sh` (docs/observatory.md).
 
 ### Determinism

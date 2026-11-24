@@ -6,9 +6,9 @@
 // Working together (collab/) is loaded only when a live session starts or
 // an invite or reply link is opened.
 import {
-  KunaWorkerCancelledError,
-  KunaWorkerClient,
-} from '../kuna-worker-client.js';
+  UnlaceWorkerCancelledError,
+  UnlaceWorkerClient,
+} from '../unlace-worker-client.js';
 import { escapeHtml } from '../assets/js/highlight-c.js';
 import { compileQuery, searchKey } from '../assets/js/fnfilter.js';
 import {
@@ -75,7 +75,7 @@ const storage = (() => {
 })();
 
 const state = {
-  kuna: null,
+  unlace: null,
   prefs: loadPrefs(storage),
   binary: null,
   inventory: null,
@@ -143,8 +143,8 @@ function supersede(kind, { clearSession = false } = {}) {
   if (!active) return;
   const prev = active;
   active = null;
-  if (clearSession) state.kuna.clear('superseded by a new binary');
-  else state.kuna.cancel('superseded by another operation');
+  if (clearSession) state.unlace.clear('superseded by a new binary');
+  else state.unlace.cancel('superseded by another operation');
   if (prev.kind === 'function') state.opening = null;
   prev.onCancel?.();
   if (prev.kind === 'project' && kind !== 'project') toast('The C code download was stopped. Start it again from the ⋯ menu.', { kind: 'warn' });
@@ -178,17 +178,17 @@ function drainIdle() {
 }
 
 els.cancel.addEventListener('click', () => {
-  if (!active || !state.kuna) return;
+  if (!active || !state.unlace) return;
   const cancelled = active;
   active = null;
   opSeq++;
   if (cancelled.kind === 'function') state.opening = null;
   if (cancelled.kind === 'load') {
-    state.kuna.clear('cancelled by user');
+    state.unlace.clear('cancelled by user');
     if (collab?.active) collab.leave({ why: 'You stopped opening the program, so you left the session.' });
     resetBinary();
   } else {
-    state.kuna.cancel('cancelled by user');
+    state.unlace.cancel('cancelled by user');
   }
   cancelled.explicit = true;
   cancelled.onCancel?.();
@@ -250,7 +250,7 @@ async function withDirectives(call, req) {
     try {
       return await call(list);
     } catch (e) {
-      const bad = e instanceof KunaWorkerCancelledError ? null : refusedDirective(e, list);
+      const bad = e instanceof UnlaceWorkerCancelledError ? null : refusedDirective(e, list);
       if (!bad) throw e;
       session.markRefused(bad, errorLine(e), req);
       toast('One of your changes could not be read, so it is no longer applied.', { kind: 'err', detail: `${bad} — ${errorLine(e)}` });
@@ -277,8 +277,8 @@ async function fetchFunction(fn) {
     (list) => {
       used = list;
       return state.caps.inspect
-        ? state.kuna.inspect(fn.address_hex, { assertions: list })
-        : state.kuna.decompile(fn.address_hex, { assertions: list });
+        ? state.unlace.inspect(fn.address_hex, { assertions: list })
+        : state.unlace.decompile(fn.address_hex, { assertions: list });
     },
     req,
   );
@@ -288,7 +288,7 @@ async function fetchFunction(fn) {
 // ── the session: the student's edits as --assert directives ───────────────
 
 let session = new Session();
-const sharedStore = new SessionStore(storage, { max: 5, prefix: 'kuna.d2.shared.', indexKey: 'kuna.d2.shared.index' });
+const sharedStore = new SessionStore(storage, { max: 5, prefix: 'unlace.d2.shared.', indexKey: 'unlace.d2.shared.index' });
 const store = new SessionStore(storage, { spare: sharedStore });
 let collab = null;
 
@@ -311,11 +311,11 @@ function persist() {
 // ── startup ────────────────────────────────────────────────────────────────
 
 try {
-  state.kuna = new KunaWorkerClient({
+  state.unlace = new UnlaceWorkerClient({
     wasmUrl: new URL('../unlace_wasm.wasm', import.meta.url).href,
     specRoot: new URL('../specs', import.meta.url).href,
   });
-  await state.kuna.ready();
+  await state.unlace.ready();
   setStatus('Ready. Open a program', 'ok');
   els.pick.removeAttribute('aria-disabled');
   els.welcomeOpen.disabled = false;
@@ -495,7 +495,7 @@ function markSelectedRow(addrHex) {
  * reopens the function that was showing (a mode/language change).
  */
 async function indexBinary(source, { keep = null, shared = null } = {}) {
-  if (!source || !state.kuna) return;
+  if (!source || !state.unlace) return;
   const op = beginOperation('load', { clearSession: true });
   const name = source.name || 'binary';
   setStatus(`Opening ${name}…`);
@@ -528,7 +528,7 @@ async function indexBinary(source, { keep = null, shared = null } = {}) {
     }
     state.binary = { name, bytes, format: null, hash };
     setStatus(`Finding the functions in ${name}…`, 'busy', `${bytes.length.toLocaleString()} bytes`);
-    const load = (assertions) => state.kuna.load(bytes, {
+    const load = (assertions) => state.unlace.load(bytes, {
       fileName: name, mode: els.mode.value, language: els.lang.value, assertions,
     });
     globals = listAssertions();
@@ -536,7 +536,7 @@ async function indexBinary(source, { keep = null, shared = null } = {}) {
       inventory = await withDirectives(load, globals);
     } catch (e) {
       const without = globals.texts;
-      if (!without.length || e instanceof KunaWorkerCancelledError || !isCurrent(op)) throw e;
+      if (!without.length || e instanceof UnlaceWorkerCancelledError || !isCurrent(op)) throw e;
       inventory = await load([]);
       globals = NO_DIRECTIVES;
       if (capsFrom(inventory).assert) {
@@ -546,7 +546,7 @@ async function indexBinary(source, { keep = null, shared = null } = {}) {
       }
     }
   } catch (e) {
-    if (!isCurrent(op) || e instanceof KunaWorkerCancelledError) return;
+    if (!isCurrent(op) || e instanceof UnlaceWorkerCancelledError) return;
     setStatus(`Could not open ${name}`, 'err', e.message);
     toast(`Could not open ${name}.`, { kind: 'err', detail: errorLine(e) });
     console.error(e);
@@ -657,7 +657,7 @@ function loadStrings() {
     setStatus(`Finding the strings in ${state.binary.name}…`);
     const t0 = performance.now();
     try {
-      const doc = await state.kuna.strings();
+      const doc = await state.unlace.strings();
       if (!isCurrent(op)) return;
       for (const s of doc.strings) s.address_hex = s.address_hex.toLowerCase();
       state.strings = { doc };
@@ -665,7 +665,7 @@ function loadStrings() {
       setStatus(`Found ${n.toLocaleString('en-US')} string${n === 1 ? '' : 's'} in ${state.binary.name}`, 'ok',
         `found in ${Math.round(performance.now() - t0)} ms`);
     } catch (e) {
-      if (!isCurrent(op) || e instanceof KunaWorkerCancelledError) return;
+      if (!isCurrent(op) || e instanceof UnlaceWorkerCancelledError) return;
       state.strings = { error: `Could not find the strings: ${errorLine(e)}` };
       setStatus('Could not find the strings', 'err', e.message);
     } finally {
@@ -839,7 +839,7 @@ function listAssertions() {
 
 /** Read a picked or dropped file, then open it. Reading comes first: see the input handler. */
 async function openFile(f) {
-  if (!f || !state.kuna) return;
+  if (!f || !state.unlace) return;
   if (collab && !(await collab.confirmLeave(f.name))) return;
   try {
     const bytes = new Uint8Array(await f.arrayBuffer());
@@ -896,7 +896,7 @@ window.addEventListener('drop', (e) => {
 
 /** Open `bytes` decoded from pasted base64 text. */
 async function openPasted(bytes) {
-  if (!state.kuna) return;
+  if (!state.unlace) return;
   const name = pastedName(bytes);
   if (collab && !(await collab.confirmLeave(name))) return;
   indexBinary({ name, bytes });
@@ -1020,7 +1020,7 @@ async function openFunction(fn, { push = true, replace = false, keepView = false
     if (active?.kind === 'function') {
       active = null;
       opSeq++;
-      state.kuna.cancel('superseded by a cached function');
+      state.unlace.cancel('superseded by a cached function');
       syncButtons();
       queueMicrotask(drainIdle);
     }
@@ -1053,7 +1053,7 @@ async function openFunction(fn, { push = true, replace = false, keepView = false
     setStatus(data.error ? `Could not decompile ${label}` : `Showing ${label}`, data.error ? 'err' : 'ok',
       `${fn.address_hex} · decompiled in ${dt} ms`);
   } catch (e) {
-    if (!isCurrent(op) || e instanceof KunaWorkerCancelledError) return;
+    if (!isCurrent(op) || e instanceof UnlaceWorkerCancelledError) return;
     els.ccode.innerHTML = `<div class="d2note">${escapeHtml(`Could not decompile ${label}: ${errorLine(e)}`)}</div>`;
     setStatus(`Could not decompile ${label}`, 'err', e.message);
     console.error(e);
@@ -1720,7 +1720,7 @@ function insnSelectedCard(addrHex) {
   return html;
 }
 
-/** The notes kuna left at the end of line n (`// branch-flip`), which the code does not show, each in words. */
+/** The notes unlace left at the end of line n (`// branch-flip`), which the code does not show, each in words. */
 function tagNotes(n, cls = 'x-note') {
   return (state.current.data.notes?.get(n) || []).map((t) => `<p class="${cls} x-tag"><code>// ${escapeHtml(t.tag)}</code> ${escapeHtml(t.words)}</p>`).join('');
 }
@@ -2396,7 +2396,7 @@ document.addEventListener('keydown', (e) => {
 setView(state.prefs.view);
 applyPaneClasses();
 syncButtons();
-window.addEventListener('beforeunload', () => state.kuna?.close());
+window.addEventListener('beforeunload', () => state.unlace?.close());
 
 // ── editing: dialogs, applyEdit, undo, the rail ────────────────────────────
 
@@ -2849,7 +2849,7 @@ async function reinspect({ snap = null, edit = !!snap, fresh = [], label = 'edit
     renderRail();
     return !bad;
   } catch (e) {
-    if (!isCurrent(op) || e instanceof KunaWorkerCancelledError) return false;
+    if (!isCurrent(op) || e instanceof UnlaceWorkerCancelledError) return false;
     if (collab?.shared) {
       toast(remote ? 'Could not update the code with the others\' changes.' : 'Could not update the code.', {
         kind: 'err', detail: `${errorLine(e)}${edit ? ' Your change is kept for everyone in the session; Undo takes it back.' : ''}`,
@@ -3012,7 +3012,7 @@ function renderRail() {
 
 const importEl = document.createElement('input');
 importEl.type = 'file';
-importEl.accept = '.kuna,.txt,text/plain';
+importEl.accept = '.unlace,.txt,text/plain';
 importEl.hidden = true;
 document.body.appendChild(importEl);
 /** A qualifier in a directive (a function's current or engine name) → its entry. */
@@ -3038,13 +3038,13 @@ importEl.addEventListener('change', async () => {
   }
 });
 
-/** Download a session as a `.kuna` file, its function-scoped directives qualified with that session's own names. */
+/** Download a session as a `.unlace` file, its function-scoped directives qualified with that session's own names. */
 function exportSession(s = session) {
   if (!state.binary) return;
   const nameOf = (a) => s.functionName(a) || state.byAddr.get(a)?.name || a;
   const target = state.current ? nameOf(state.current.data.address_hex) : 'main';
   const text = s.toFileText({ binary: state.binary.name, hash: state.binary.hash, target, nameOf });
-  download(new Blob([text], { type: 'text/plain' }), `${state.binary.name}.kuna`);
+  download(new Blob([text], { type: 'text/plain' }), `${state.binary.name}.unlace`);
 }
 
 /** Edit one session record from the rail, in place: its kind and its function stay. */
@@ -3254,11 +3254,11 @@ async function showDataAt(hex) {
   } else {
     const op = beginOperation('read');
     try {
-      const res = await state.kuna.read('0x' + start.toString(16), DATA_SPAN, { assertions: [] });
+      const res = await state.unlace.read('0x' + start.toString(16), DATA_SPAN, { assertions: [] });
       if (!isCurrent(op)) return;
       state.dataView = { start, focus, bytes: parseHex(res.bytes) || new Uint8Array(), source: 'the engine' };
     } catch (e) {
-      if (!isCurrent(op) || e instanceof KunaWorkerCancelledError) return;
+      if (!isCurrent(op) || e instanceof UnlaceWorkerCancelledError) return;
       toast(`Could not read the bytes at ${bare(hex)}.`, { kind: 'warn', detail: errorLine(e) });
       return;
     } finally {
@@ -3377,7 +3377,7 @@ function loadData(target, { len = null, reveal = true } = {}) {
     };
     setStatus(`Reading the data at ${bare(target)}…`);
     try {
-      const doc = await withDirectives((list) => state.kuna.data(target, len, { assertions: list }), req);
+      const doc = await withDirectives((list) => state.unlace.data(target, len, { assertions: list }), req);
       if (!isCurrent(op)) return;
       session.recordOutcomes(doc.assertions, req);
       state.data = {
@@ -3387,7 +3387,7 @@ function loadData(target, { len = null, reveal = true } = {}) {
       selectDataAt(BigInt(target), { render: false });
       setStatus(`Showing the data at ${bare(target)}`, 'ok');
     } catch (e) {
-      if (!isCurrent(op) || e instanceof KunaWorkerCancelledError) return;
+      if (!isCurrent(op) || e instanceof UnlaceWorkerCancelledError) return;
       state.data = { ...state.data, loading: false, error: `Could not read the data at ${bare(target)}: ${errorLine(e)}` };
       setStatus(`Could not read the data at ${bare(target)}`, 'err', e.message);
     } finally {
@@ -3545,11 +3545,11 @@ function loadUses() {
       if (op.explicit) renderDataBar();
     };
     try {
-      const doc = await withDirectives((list) => state.kuna.uses(start, len, { assertions: list }), req);
+      const doc = await withDirectives((list) => state.unlace.uses(start, len, { assertions: list }), req);
       if (!isCurrent(op)) return;
       d.uses = { list: doc.uses || [] };
     } catch (e) {
-      if (!isCurrent(op) || e instanceof KunaWorkerCancelledError) return;
+      if (!isCurrent(op) || e instanceof UnlaceWorkerCancelledError) return;
       d.uses = { error: errorLine(e) };
     } finally {
       finishOperation(op);
@@ -3896,13 +3896,13 @@ function loadRefs() {
     let html;
     try {
       const res = await withDirectives(
-        (list) => state.kuna.xrefs(addr, { assertions: list }),
+        (list) => state.unlace.xrefs(addr, { assertions: list }),
         state.caps.assert ? session.prepare({ func: null }) : NO_DIRECTIVES,
       );
       if (!isCurrent(op)) return;
       html = renderXrefs(res, { nameOf: refsNameOf });
     } catch (e) {
-      if (!isCurrent(op) || e instanceof KunaWorkerCancelledError) return;
+      if (!isCurrent(op) || e instanceof UnlaceWorkerCancelledError) return;
       html = renderLocalCalls(localCallees(state.current.data, state.byAddr), {
         nameOf: refsNameOf, note: `Could not find the callers: ${errorLine(e)}`,
       });
@@ -3926,7 +3926,7 @@ function fetchXrefs(addr) {
     const op = beginOperation('xrefs');
     try {
       const res = await withDirectives(
-        (list) => state.kuna.xrefs(addr, { assertions: list }),
+        (list) => state.unlace.xrefs(addr, { assertions: list }),
         state.caps.assert ? session.prepare({ func: null }) : NO_DIRECTIVES,
       );
       if (!state.xrefs.has(key) && state.byAddr.has(addr)) state.xrefs.set(key, renderXrefs(res, { nameOf: refsNameOf }));
@@ -4042,7 +4042,7 @@ function openXrefs() {
   if (!target || !state.caps.inspect) return;
   fetchXrefs(target).then(
     (res) => { if (still() && state.current?.data.address_hex === fnAddr) showXrefs(subject, res); },
-    (e) => { if (still() && !(e instanceof KunaWorkerCancelledError)) showXrefs(subject, null, errorLine(e)); },
+    (e) => { if (still() && !(e instanceof UnlaceWorkerCancelledError)) showXrefs(subject, null, errorLine(e)); },
   );
 }
 
@@ -4124,19 +4124,19 @@ els.helpDialog.addEventListener('click', (e) => {
 // ── project export ─────────────────────────────────────────────────────────
 
 els.dl.addEventListener('click', async () => {
-  if (!state.inventory || !state.kuna) return;
+  if (!state.inventory || !state.unlace) return;
   const op = beginOperation('project');
   setStatus('Preparing the C code…');
   try {
     const project = await withDirectives(
-      (list) => state.kuna.project(state.binary.name, { assertions: list }),
+      (list) => state.unlace.project(state.binary.name, { assertions: list }),
       state.caps.assert ? session.prepare({ qualify: nameOfAddr }) : NO_DIRECTIVES,
     );
     if (!isCurrent(op)) return;
     download(new Blob([project.bytes], { type: 'application/zip' }), project.downloadName);
     setStatus(`Downloaded ${project.downloadName}`, 'ok', `${project.bytes.length.toLocaleString()} bytes`);
   } catch (e) {
-    if (!isCurrent(op) || e instanceof KunaWorkerCancelledError) return;
+    if (!isCurrent(op) || e instanceof UnlaceWorkerCancelledError) return;
     setStatus('Could not prepare the C code', 'err', e.message);
     toast('Could not prepare the C code download.', { kind: 'err', detail: errorLine(e) });
     console.error(e);
@@ -4258,8 +4258,8 @@ const collabApi = {
   target: () => state.opening?.address_hex ?? state.current?.data.address_hex ?? null,
   nameOf: nameOfAddr,
   /** The engine's build id: the SHA-256 of the wasm the Worker compiled (worked out when a session first needs it). */
-  build: () => state.kuna.buildId(),
-  onBuild: (fn) => { state.kuna.onbuild = fn; },
+  build: () => state.unlace.buildId(),
+  onBuild: (fn) => { state.unlace.onbuild = fn; },
   clearUndo: () => {
     session.undoStack = [];
     session.redoStack = [];

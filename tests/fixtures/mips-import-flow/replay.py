@@ -54,7 +54,7 @@ syscall
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    for option in ['kuna', 'specs', 'cc', 'assembler', 'ld', 'qemu_be', 'qemu_le', 'out']:
+    for option in ['unlace', 'specs', 'cc', 'assembler', 'ld', 'qemu_be', 'qemu_le', 'out']:
         p.add_argument('--' + option.replace('_', '-'), required=True)
     args = p.parse_args()
     out = Path(args.out); out.mkdir(parents=True, exist_ok=True)
@@ -64,7 +64,7 @@ def main():
 
     report = {'commands': [], 'runs': [], 'tools': {
         name: identity(getattr(args, name))
-        for name in ['kuna', 'cc', 'assembler', 'ld', 'qemu_be', 'qemu_le']},
+        for name in ['unlace', 'cc', 'assembler', 'ld', 'qemu_be', 'qemu_le']},
         'sources': {name: identity(ROOT / name) for name in ['flow.c', 'replay.py']}}
 
     def run(command):
@@ -80,7 +80,7 @@ def main():
         name = image['file']
         if not (name.startswith('flow-mips32r2-') and name.endswith('ssp-stripped.so')): continue
         directory = out / name; directory.mkdir(exist_ok=True)
-        doc = json.loads(run([args.kuna, 'decompile-all', ROOT / name, '--json', '--sleighpath', args.specs]))
+        doc = json.loads(run([args.unlace, 'decompile-all', ROOT / name, '--json', '--sleighpath', args.specs]))
         function = next(f for f in doc['functions'] if f['address'] == image['symbols']['duplicate']['address'])
         assert not function['error'], function
         body = function['code']; recovered = function['name']

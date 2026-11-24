@@ -32,8 +32,8 @@ the durable need decision log records that audit.
 - `make test`: 675/675, parity OK
 - `make test-stages`: 797/797, parity OK
 - `make test-cli`: 144/144
-- `cargo test -p kuna-decomp --lib`: 2464/2464
-- full `kuna-cli` package suite: green
+- `cargo test -p unlace-decomp --lib`: 2464/2464
+- full `unlace-cli` package suite: green
 - strict spec, catalog, and options freshness: green
 - acceptance suite: 1/1 pass, no regressions
 

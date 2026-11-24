@@ -413,8 +413,9 @@ fn streaming_readme_renders_pending_facts_then_the_streamed_layout() {
     };
     let loading = render_readme_streaming(&facts, &progress, ReadmeLayout::Streamed);
     assert!(
-        loading
-            .starts_with("# fauxware — kuna project export\n\n**This export is still streaming**")
+        loading.starts_with(
+            "# fauxware — unlace project export\n\n**This export is still streaming**"
+        )
     );
     assert!(loading.contains("| Architecture | pending |\n"));
     assert!(loading.contains("| Entry point | pending |\n"));

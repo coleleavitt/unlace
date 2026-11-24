@@ -7,7 +7,7 @@
 # offset off an unknown pointer, and the creator read as a run of stores to
 # numbered locals.
 #
-# Fix: `analyzers/objc/kuna_objcblocks.rs (stack_blocks)` scans each arm64
+# Fix: `analyzers/objc/unlace_objcblocks.rs (stack_blocks)` scans each arm64
 # function with a register state (`adrp`/`adr`/`add`/`sub`/`mov`/`movz`/`movk`,
 # `ldr` immediate and literal, `str`/`stur`/`stp` of every width to `sp` or a
 # frame address): the isa's GOT load stored to the frame, the invoke and

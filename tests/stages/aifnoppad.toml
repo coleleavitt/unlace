@@ -1,11 +1,11 @@
-# kuna issue testcase: no AIF gap entry starts on nop padding (part of
+# unlace issue testcase: no AIF gap entry starts on nop padding (part of
 # `option aif`).
 #
-# Issue:      kuna GH-299 - aif plants entries that are not function starts
+# Issue:      unlace GH-299 - aif plants entries that are not function starts
 #             on large i386 PEs; most of the non-start ones are the nop runs
 #             in front of Wine's relay thunks.
 # Stage:      P1 code/data partition - the AIF gap-walk probe
-#             (`analyzers/aif/kuna_aifnoppad.rs`).
+#             (`analyzers/aif/unlace_aifnoppad.rs`).
 # The XML wrapper only provides the harness architecture.  Both passes clear
 # it and loads `aifnoppad_pe_i386.exe` (source `aifnoppad_pe_i386.asm`
 # beside it): five called stubs open with nine nops, so `nop, nop` is a
@@ -50,26 +50,26 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-AIFNOPPAD #1: hot is a function in both passes'
+name = 'UNLACE-AIFNOPPAD #1: hot is a function in both passes'
 count = 2
 literal = '0x401230 sub_401230'
 
 [[match]]
-name = 'KUNA-AIFNOPPAD #2: the padding in front of hot is never a function'
+name = 'UNLACE-AIFNOPPAD #2: the padding in front of hot is never a function'
 count = 0
 literal = '0x401228 sub_401228'
 
 [[match]]
-name = 'KUNA-AIFNOPPAD #3: the padding in front of lone is never a function'
+name = 'UNLACE-AIFNOPPAD #3: the padding in front of lone is never a function'
 count = 0
 literal = '0x401248 sub_401248'
 
 [[match]]
-name = 'KUNA-AIFNOPPAD #4: lone is found at its own address by the gap walk'
+name = 'UNLACE-AIFNOPPAD #4: lone is found at its own address by the gap walk'
 count = 1
 literal = '0x40124c sub_40124c'
 
 [[match]]
-name = 'KUNA-AIFNOPPAD #5: the mov edi,edi entry after a return stays an AIF function'
+name = 'UNLACE-AIFNOPPAD #5: the mov edi,edi entry after a return stays an AIF function'
 count = 1
 literal = '0x401239 sub_401239'

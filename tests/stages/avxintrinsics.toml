@@ -1,4 +1,4 @@
-# Kuna (IDA 9.5 avxlifter naming): P9 naming policy, option avxintrinsics
+# Unlace (IDA 9.5 avxlifter naming): P9 naming policy, option avxintrinsics
 # (default on).
 #
 #   0x1000 vadd: vpaddd ymm0,ymm0,ymm1; ret

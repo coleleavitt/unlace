@@ -27,7 +27,7 @@ reject_reason: null
 
 Locating the cipher or hash a crackme uses (the AES S-box, SHA-256's round constants, a CRC-32
 table, the TEA delta, a custom Base64 alphabet) and the function that uses it is the first triage
-hop on most crypto challenges, and kuna has no command for it. An agent falls back to hexdumping
+hop on most crypto challenges, and unlace has no command for it. An agent falls back to hexdumping
 `.rdata` with `unlace read` and grepping for `63 7c 77 7b`, then runs `unlace xrefs --to` on each
 hit by hand, which is what findcrypt does in one step.
 
@@ -43,7 +43,7 @@ hit by hand, which is what findcrypt does in one step.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "crypto",
     "{{BIN}}",
     "--json"
@@ -74,7 +74,7 @@ hit by hand, which is what findcrypt does in one step.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "crypto",
     "{{BIN}}",
     "--json"

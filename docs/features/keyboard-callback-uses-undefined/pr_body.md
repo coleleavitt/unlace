@@ -8,7 +8,7 @@ challenge `6989ca5da15272fa37a80c43`, x86-64 ELF `lugosiii`):
 > the event-type and key parameters appear uninitialized. The disassembly shows those values
 > arrive in R9D and R8D.
 
-`kuna decompile lugosiii 0x6500 --addr` opened with
+`unlace decompile lugosiii 0x6500 --addr` opened with
 
 ```c
 void sub_6500(long a0)
@@ -65,7 +65,7 @@ parameters as a matter of course.
 ## The mechanism
 
 New option **`inputparamgap`** (`on|off`, default **on**, DIV-114,
-`decompiler/crates/kuna-decomp/src/p4_calls/inputparamgap.rs`): during the function's own
+`decompiler/crates/unlace-decomp/src/p4_calls/inputparamgap.rs`): during the function's own
 input recovery, an **ACTIVE trial whose `ParamEntry` is an exclusion (register) entry is never
 demoted by `forceInactiveChain`**. The active trials past the hole survive and the rule's
 existing tail loop promotes the filler trials `buildTrialMap` had already built:
@@ -126,7 +126,7 @@ All three previously-failing clauses flipped: `stdout_matches[1]`
 `; // r9d`) are absent.
 
 `binary_source: dataset`, so `verify --promote` refuses it (CI has no dataset). Following
-#395's precedent, a new fixture `decompiler/crates/kuna-analysis/tests/fixtures/inputparamgap_x86_64`
+#395's precedent, a new fixture `decompiler/crates/unlace-analysis/tests/fixtures/inputparamgap_x86_64`
 carries **both arms** — `on_key` (three-register hole, the bug) and `on_two` (two-register
 hole, the control, identical under both settings) — with
 `tests/cli/keyboard-callback-uses-undefined.json` pinned to it and
@@ -149,7 +149,7 @@ same witness: **+0.07% min / +0.33% median**. Interleaved min-of-3 whole-binary
 | `make test-stages` | **PARITY OK — 620/620** (615 + this feature's 5) |
 | `make rust-test` | green |
 | `make check-spec` | OK |
-| `kuna catalog --check` | catalog OK |
+| `unlace catalog --check` | catalog OK |
 | `make test-cli` | 28/28 |
 | acceptance probe | **PASS** |
 

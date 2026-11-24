@@ -1,5 +1,5 @@
 from common import *
-base=Path('/home/mahaloz/kwt/angr-base-83a6f');out=w/'native-go';out.mkdir(exist_ok=False);names=['make_pair','first','second','both','forward','narrow_second','scalar','invoke_void'];tools=['/tmp/kuna-toolchains/go1.22.5/go/bin/go','/tmp/kuna-toolchains/go1.27.3/go/bin/go'];header='package main\ntype Pair struct { first int64; second int64 }\nvar calls uint64\n';record={}
+base=Path('/home/mahaloz/kwt/angr-base-83a6f');out=w/'native-go';out.mkdir(exist_ok=False);names=['make_pair','first','second','both','forward','narrow_second','scalar','invoke_void'];tools=['/tmp/unlace-toolchains/go1.22.5/go/bin/go','/tmp/unlace-toolchains/go1.27.3/go/bin/go'];header='package main\ntype Pair struct { first int64; second int64 }\nvar calls uint64\n';record={}
 harness='''
 func scalar_op(a,b int64) int64 { calls++; return a^b }
 func void_op(a,b int64) { calls++ }
@@ -16,7 +16,7 @@ func main() {
 }
 '''
 for arm,root in [('parent',base),('candidate',r)]:
- cmd=[str(root/'decompiler/target/release/kuna'),'decompile-all',str(w/'callback'),'--language','go','--functions',','.join(names),'--assert','@'+str(w/'callback.kuna'),'--json'];p=subprocess.run(cmd,env=env|{'KUNA_SPECS':str(r/'specs')},capture_output=True,text=True,check=True);(out/f'{arm}.json').write_text(p.stdout);(out/f'{arm}.log').write_text(p.stderr);d=json.loads(p.stdout);assert len(d['functions'])==8 and all(not f.get('error')for f in d['functions']);assert all(a['status']=='applied'for a in d['assertions']);fs={f['name']:f['code']for f in d['functions']};full=out/f'{arm}-all.go';full.write_text(header+'\n'.join(fs.values())+'\nfunc main(){}\n');record[arm]={}
+ cmd=[str(root/'decompiler/target/release/unlace'),'decompile-all',str(w/'callback'),'--language','go','--functions',','.join(names),'--assert','@'+str(w/'callback.unlace'),'--json'];p=subprocess.run(cmd,env=env|{'UNLACE_SPECS':str(r/'specs')},capture_output=True,text=True,check=True);(out/f'{arm}.json').write_text(p.stdout);(out/f'{arm}.log').write_text(p.stderr);d=json.loads(p.stdout);assert len(d['functions'])==8 and all(not f.get('error')for f in d['functions']);assert all(a['status']=='applied'for a in d['assertions']);fs={f['name']:f['code']for f in d['functions']};full=out/f'{arm}-all.go';full.write_text(header+'\n'.join(fs.values())+'\nfunc main(){}\n');record[arm]={}
  for tool in tools:
   version=subprocess.check_output([tool,'version'],text=True).strip();binary=out/(arm+'-all-'+Path(tool).parts[-4]);p=subprocess.run([tool,'build','-o',str(binary),str(full)],text=True,capture_output=True);(out/f'{arm}-{Path(tool).parts[-4]}-full-build.log').write_text(p.stdout+p.stderr);assert p.returncode!=0
   record[arm][version]={'all_eight_bodies_compile':False,'full_compile_exit':p.returncode}

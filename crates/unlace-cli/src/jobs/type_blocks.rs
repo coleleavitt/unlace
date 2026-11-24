@@ -27,7 +27,7 @@ pub(crate) fn merge_type_definitions(blocks: &[String], tag: &str) -> String {
     }
     let mut seen = sets.into_iter().next().unwrap_or_default();
     eprintln!(
-        "[kuna {tag}] warning: worker shards recovered different user-defined types, so the .h \
+        "[unlace {tag}] warning: worker shards recovered different user-defined types, so the .h \
          type block is their union rather than the exact --jobs 1 rendering. Re-run with \
          --jobs 1 if the ordering matters."
     );

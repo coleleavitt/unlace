@@ -1,11 +1,11 @@
-# kuna issue testcase: the target of a jump thunk is a function entry.
+# unlace issue testcase: the target of a jump thunk is a function entry.
 #
-# Issue:      kuna GH-992 - functions behind `jmp rel32` thunks are never
+# Issue:      unlace GH-992 - functions behind `jmp rel32` thunks are never
 #             function starts (MSVC /INCREMENTAL).  The Listing walk makes a
 #             function only at a CALL target, so a routine reached only
 #             through a `jmp` thunk was attributed to the thunk.
 # Stage:      P1 code/data partition - the Listing walk's committed function
-#             set (`listing/kuna_thunkentry.rs`, folded into `fast_funcdisc`
+#             set (`listing/unlace_thunkentry.rs`, folded into `fast_funcdisc`
 #             and `funcdisc_recursive`).
 #
 # The XML wrapper only provides the harness architecture.  Every pass clears
@@ -52,21 +52,21 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-THUNKENTRY #1: every thunk is a function in both passes'
+name = 'UNLACE-THUNKENTRY #1: every thunk is a function in both passes'
 count = 6
 regex = '0x40100[05a] sub_40100[05a]'
 
 [[match]]
-name = 'KUNA-THUNKENTRY #2: sum and start are functions in both passes'
+name = 'UNLACE-THUNKENTRY #2: sum and start are functions in both passes'
 count = 4
 regex = '0x4010[14]0 sub_4010[14]0'
 
 [[match]]
-name = 'KUNA-THUNKENTRY #3: leaf is a function in fast and aggressive mode'
+name = 'UNLACE-THUNKENTRY #3: leaf is a function in fast and aggressive mode'
 count = 2
 literal = '0x401030 sub_401030'
 
 [[match]]
-name = 'KUNA-THUNKENTRY #4: leaf decompiles to its own body'
+name = 'UNLACE-THUNKENTRY #4: leaf decompiles to its own body'
 count = 1
 literal = 'return a0 + 7;'

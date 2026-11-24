@@ -1,4 +1,4 @@
-# kuna issue `indirectonly-escape` (P6, sub-stage merge-aggressiveness).
+# unlace issue `indirectonly-escape` (P6, sub-stage merge-aggressiveness).
 #
 # The counterexample that keeps the `indirectonly` option OFF by default.
 #
@@ -31,7 +31,7 @@
 # the storage is still live in the SSA, and this slot's last read is the load
 # at the top, so there is no INDIRECT for it at `call sink` or at
 # `call a_done` and the cover-intersection test has nothing to intersect.
-# Stock Ghidra emits the same fabricated store on the same input, so kuna
+# Stock Ghidra emits the same fabricated store on the same input, so unlace
 # ships the port with the option off.
 #
 # Pass 1 runs the DEFAULT (no option command), so flipping the shipped default

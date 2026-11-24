@@ -38,7 +38,7 @@ Faithful initialization of the structure passed to __libc_init.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "_start_main"
@@ -68,7 +68,7 @@ Faithful initialization of the structure passed to __libc_init.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "_start_main"

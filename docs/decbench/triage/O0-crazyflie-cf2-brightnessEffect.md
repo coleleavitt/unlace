@@ -5,7 +5,7 @@ group_id: crazyflie::brightnessEffect
 status: needs-proposal
 tier: M
 margin: 68
-fresh_verdict: reproduces — the source is 18 `?:` ternaries in 4 families and kuna renders 5 of them (aggressive) / 2 (reliable) as ternaries and the rest as if/else. One family is the high-breadth `itecondlist` bug filed from the mavlink case; the other three need CHAINED (`a ? x : (b ? y : z)`) and IDENTITY-ARM (`v = c ? A : v`) ternary recovery, and the identity arm has no arm op to render, so it does not fit one module.
+fresh_verdict: reproduces — the source is 18 `?:` ternaries in 4 families and unlace renders 5 of them (aggressive) / 2 (reliable) as ternaries and the rest as if/else. One family is the high-breadth `itecondlist` bug filed from the mavlink case; the other three need CHAINED (`a ? x : (b ? y : z)`) and IDENTITY-ARM (`v = c ? A : v`) ternary recovery, and the identity arm has no arm op to render, so it does not fit one module.
 option_closing: null
 feature_slug: iteternarychain
 scope: proposal
@@ -18,11 +18,11 @@ confidence: medium
 $ ~/.virtualenvs/decbench/bin/python -m scripts.decbench.rescore \
       --case O0-crazyflie-cf2-brightnessEffect --siblings
  "ged_recorded": 68.0, "ged_before": 68.0, "ged_after": 60.0, "ged_delta": -8.0,
- "ged_perfect_after": false, "ged_kuna_commit": "9623dc27"
+ "ged_perfect_after": false, "ged_unlace_commit": "9623dc27"
  siblings: O0-crazyflie-firmware-brightnessEffect  before 60.0  after 60.0  (METRIC-DRIFT)
 ```
 
-`before` reproduces `recorded` exactly on the mined case (the stored `kuna_cf2.c` is
+`before` reproduces `recorded` exactly on the mined case (the stored `unlace_cf2.c` is
 run-era, `mtime Jul 15`), so there is no metric drift here and the -8 is a real code/mode
 move. `cf2.elf` is 491,004 B — just **under** the 500 KiB threshold — so a no-flag run
 today is `aggressive`, which is *not* what the benchmark measured:
@@ -70,7 +70,7 @@ angr (stored, GED 0) reproduces every one of them, including the identity arms:
     *((char *)(idx * 3 + a0)) = (0xff < v1 ? 255 : (v1 < 0 ? 0 : (char)v1));
 ```
 
-## kuna (fresh, `aggressive`) — 5 of 18
+## unlace (fresh, `aggressive`) — 5 of 18
 
 ```c
     if (0x201 <= v4) // branch-flip           <- (A) chained: else-arm is a 2-component if
@@ -141,7 +141,7 @@ of this function's 18 ternaries and they do not fit one module.
 
 Not an artifact. Source CFG is 30 nodes / 42 edges (real, not degenerate), not
 approximated, and Joern parses every pane; `before` reproduces the recorded 68 exactly.
-Today's 60 is real distance. ida scores 56 and ghidra 71 here, so kuna is already ahead of
+Today's 60 is real distance. ida scores 56 and ghidra 71 here, so unlace is already ahead of
 its own ancestor — the remaining distance is genuinely angr's aggressive `?:` recovery.
 (The `firmware.elf` sibling's stored artifact *does* drift, 68 recorded vs 60 recomputed —
 same binary content, so that one is the 2026-07-28 decbench GED overhaul `e6e6b0f`.)

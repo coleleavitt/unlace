@@ -197,7 +197,7 @@ On the fresh set the rule is 0.0003 behind main (81 more true fields, 93 more
 claimed); `e2fsck` O2-noinline alone adds 50 true fields of 58.
 
 `bash` O2-noinline scores nothing on either build: its `decompile-project`
-export panics in `kuna-sleigh` (`sharedbytes.rs`) on main as well, so
+export panics in `unlace-sleigh` (`sharedbytes.rs`) on main as well, so
 there is no header to read.
 
 ## Address arithmetic past a reader's end
@@ -384,7 +384,7 @@ Each rule answers one shape:
 
 ## Distinct `struct_N` names per binary
 
-`kuna decompile-all <bin> --option structsynth param --option structdefs on --json`,
+`unlace decompile-all <bin> --option structsynth param --option structdefs on --json`,
 counting the distinct synthesized names the run emits and the
 `(function, structure)` pairs behind them.
 
@@ -416,7 +416,7 @@ spellings by name, so `struct_0 *` and `struct_1 *` score alike.
 
 `scripts.decbench.typesweep --option structsynth param`, 444 slices
 (coreutils grep gzip diffutils bzip2 findutils tar shadow x × O0/O2/O2-noinline),
-`KUNA_BIN` pinned per build. With the option on by default both of the sweep's
+`UNLACE_BIN` pinned per build. With the option on by default both of the sweep's
 arms are the default output, so the comparison is between the two builds:
 
 | | main `75f832e3` | branch |
@@ -466,7 +466,7 @@ back, and the body is main's again.
 
 ## `decompile-project` round trip
 
-`kuna decompile-project <bin> --option structsynth param`, then
+`unlace decompile-project <bin> --option structsynth param`, then
 `gcc -fsyntax-only` on the export and `offsetcheck.py` on its header, on a main
 build and the branch build.
 
@@ -558,7 +558,7 @@ definition named by their prototype survives.
 
 ## Speed
 
-Interleaved main/branch, min-of-15, `kuna decompile-all` wall clock, with both
+Interleaved main/branch, min-of-15, `unlace decompile-all` wall clock, with both
 binaries frozen and the order alternating from round to round. Main is
 `75f832e3`, where `structsynth` is on by default. The machine was shared with
 other jobs.

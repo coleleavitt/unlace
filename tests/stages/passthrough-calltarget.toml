@@ -6,7 +6,7 @@
 # is `void s5(void (*fp)(void *, long), long x) { fp((void *)fp, x + 1); }`
 # (clang -O2): the target is passed to itself.  `passthrough` reads the
 # register a call jumps through as no argument of its own
-# (kuna_passthrough.rs, is_call_target), because `onlyOpUse` takes the
+# (unlace_passthrough.rs, is_call_target), because `onlyOpUse` takes the
 # call's read of the trial slot as the parameter use and never looks at
 # slot 0.  Scored definitely-not-used, that trial made forceNoUse drop every
 # argument after it too, so the call printed `(*a0)()` and lost `x + 1`.  It

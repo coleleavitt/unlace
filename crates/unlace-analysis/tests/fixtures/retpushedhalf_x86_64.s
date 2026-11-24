@@ -1,4 +1,4 @@
-# (kuna) `retpushedhalf` fixture -- RE-friction round 12, need
+# (unlace) `retpushedhalf` fixture -- RE-friction round 12, need
 # `alignment-push-pop-invents` (crackmes.one 67f9bdc38f555589f3530a85
 # WeeperVM--Level_1, sub_10e27, a four-argument XOR decryptor returning its
 # allocated buffer), reduced to the prologue/epilogue idiom that causes it.

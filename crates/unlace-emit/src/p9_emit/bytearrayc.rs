@@ -91,7 +91,7 @@ pub fn access(fd: &Funcdata, vn: VarnodeId) -> Option<Access> {
 #[doc(hidden)]
 pub fn helper(size: i32, big: bool, store: bool) -> String {
     format!(
-        "kuna_bytearray_{}{}_{}",
+        "unlace_bytearray_{}{}_{}",
         if store { "store" } else { "load" },
         size * 8,
         if big { "be" } else { "le" }
@@ -126,7 +126,7 @@ pub fn integer_array_cast(fd: &Funcdata, op: OpId) -> Option<VarnodeId> {
 pub fn preamble(size: i32, big: bool) -> String {
     let bits = size * 8;
     let endian = if big { "BE" } else { "LE" };
-    let guard = format!("KUNA_BYTEARRAY_C_{bits}_{endian}");
+    let guard = format!("UNLACE_BYTEARRAY_C_{bits}_{endian}");
     let load = helper(size, big, false);
     let store = helper(size, big, true);
     let terms = (0..size)

@@ -1,4 +1,4 @@
-/* (kuna callrettype) A call returns the type its callee's own recovery gave it.
+/* (unlace callrettype) A call returns the type its callee's own recovery gave it.
  * Each caller keeps a callee's result at the type the callee returns it as:
  * a char * kept in a char * and handed to a char * parameter, a char * found
  * by strchr and handed back, a long compared signed, a FILE * handed back from
@@ -6,7 +6,7 @@
  * variable with a signed libc result, and a void callee whose caller must not
  * start reading a result.
  * The round-trip test in unlace-cli/tests/decompile_all_cli.rs compiles the
- * functions as kuna prints them, with the option off and on, and checks both
+ * functions as unlace prints them, with the option off and on, and checks both
  * print what this program prints:
  *
  *   202 205 2

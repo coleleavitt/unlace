@@ -12,7 +12,7 @@ Generated at C++ tree rev `87016be` against the pinned architecture datatest
 
 ```bash
 cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli        # rebuild decomp_dbg after any C++ change
-~/.virtualenvs/kuna/bin/python tools/rust-port/gen_vectors.py
+~/.virtualenvs/unlace/bin/python tools/rust-port/gen_vectors.py
 ```
 
 (Equivalently at the console: `load test file tests/datatests/floatprint.xml`,

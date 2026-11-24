@@ -13,7 +13,7 @@ import re
 import subprocess
 import sys
 
-D = "/tmp/claude-1000/-home-mahaloz-github-kuna/e58fd9a6-240a-4f79-bc8d-6f268eb007bf/scratchpad/itecondlist/ab"
+D = "/tmp/claude-1000/-home-mahaloz-github-unlace/e58fd9a6-240a-4f79-bc8d-6f268eb007bf/scratchpad/itecondlist/ab"
 
 HDR = re.compile(r"^// Function: |^\S.*\)\s*(//.*)?$")
 

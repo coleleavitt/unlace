@@ -1,11 +1,11 @@
 ## The problem
 
-On a position-independent ARM binary, `kuna strings` reports every literal the
+On a position-independent ARM binary, `unlace strings` reports every literal the
 program prints as referenced by nothing — no xrefs, no owning function — even
 though the disassembly plainly shows which function loads it.
 
 ```
-$ kuna strings ./trap --json --filter 'Benar!'
+$ unlace strings ./trap --json --filter 'Benar!'
       "address_hex": "0x4ab",
       "text": "Benar! Flag: 98CTF{%s}\n",
       "xrefs_count": 0,
@@ -30,7 +30,7 @@ way, so the whole function references nothing.
   carries: the read-only pool word and the constant the `add` materialised from
   its own address. The composed address is filed as a `Data` edge from the
   `add`, which is what gives it an owning function.
-- The word is admitted as a *displacement* only where `kuna_poolref` **declined**
+- The word is admitted as a *displacement* only where `unlace_poolref` **declined**
   it as a pointer, so the two rules never claim one word.
 - The carry is keyed by the address it reaches, not held as "the previous
   instruction's state" — the walk is breadth-first, so at a conditional branch
@@ -45,8 +45,8 @@ way, so the whole function references nothing.
   entirely under 0x2828, so the floor would discard every reference in it.
 
 No option and no `phases.toml` row: the xref index is read-only, commits nothing
-into the engine, and its consumers are `kuna strings` / `kuna xrefs` /
-`kuna decompile-all`. Emitted C cannot change, which both parity gates confirm.
+into the engine, and its consumers are `unlace strings` / `unlace xrefs` /
+`unlace decompile-all`. Emitted C cannot change, which both parity gates confirm.
 
 ## The tests
 
@@ -63,7 +63,7 @@ S-box and Rcon table on a statically linked crackme; the four literals `main`
 prints plus `__atexit_handler_wrapper` on the witness; `_GLOBAL_OFFSET_TABLE_`
 on four others, landing exactly on each image's `.got` address. Zero edges on
 every x86-64, i386, ARM64 and PE image, six string references gained, none lost,
-no owner dropped. `kuna strings` on the heaviest firer is 216 ms → 219 ms
+no owner dropped. `unlace strings` on the heaviest firer is 216 ms → 219 ms
 (median of 11, warmup discarded).
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

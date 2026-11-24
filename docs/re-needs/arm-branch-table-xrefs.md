@@ -30,7 +30,7 @@ Find who registers the callback `on_read`.
 > **ARM switch cases behind an A32 jump table have no references** (major, synthetic `branchtable_arm_le32`)
 > `unlace xrefs --to on_read` reports 0 references, although a case of `add_dispatch` and a case of `ldr_dispatch` each load it from its GOT slot and pass it to `set_timeout`. The walk follows only `b default` after `addls pc,pc,rN,lsl #2` or `ldrls pc,[pc,rN,lsl #2]`, and files a jump from the dispatch to that `b`.
 
-Seen first on production ARM executables and a shared library (GCC, `-fPIC`), where the switch cases held most of the references kuna missed; `branchtable_arm_le32` reproduces both table forms from a small C source.
+Seen first on production ARM executables and a shared library (GCC, `-fPIC`), where the switch cases held most of the references unlace missed; `branchtable_arm_le32` reproduces both table forms from a small C source.
 
 ## Reproduction
 
@@ -40,7 +40,7 @@ Seen first on production ARM executables and a shared library (GCC, `-fPIC`), wh
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "xrefs",
     "{{BIN}}",
     "--to",
@@ -70,7 +70,7 @@ Seen first on production ARM executables and a shared library (GCC, `-fPIC`), wh
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "xrefs",
     "{{BIN}}",
     "--to",
@@ -123,7 +123,7 @@ Seen first on production ARM executables and a shared library (GCC, `-fPIC`), wh
 
 **Advisory — the builder is not bound by this.**
 
-- The reference walk reads a computed jump's table only through a table base the dispatch names or a register chain, and an A32 table's base is the dispatch's own PC, so neither answers. The Listing walk already follows both forms under `armframes` (`kuna_a32switch`).
+- The reference walk reads a computed jump's table only through a table base the dispatch names or a register chain, and an A32 table's base is the dispatch's own PC, so neither answers. The Listing walk already follows both forms under `armframes` (`unlace_a32switch`).
 
 ## Refutation
 

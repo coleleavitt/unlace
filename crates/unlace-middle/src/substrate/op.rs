@@ -1036,7 +1036,7 @@ impl PcodeOp {
     /// error rather than guessing a rendering.
     pub fn print_raw(&self, _s: &mut String) -> unlace_base::error::UnlaceResult<()> {
         Err(unlace_base::error::UnlaceError::lowlevel(
-            "kuna rust port: PcodeOp::printRaw requires TypeOp printing (W6)",
+            "unlace rust port: PcodeOp::printRaw requires TypeOp printing (W6)",
         ))
     }
 }

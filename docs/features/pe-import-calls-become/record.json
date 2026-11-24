@@ -4,12 +4,12 @@
   "route": "RE-friction (docs/re-pipeline.md), round 12",
   "opportunity": "pe-import-calls-become",
   "test_name": "PE import identity survives read-only propagation",
-  "binary": "decompiler/crates/kuna-analysis/tests/fixtures/pe_iatincode_readonly_i386.exe",
+  "binary": "decompiler/crates/unlace-analysis/tests/fixtures/pe_iatincode_readonly_i386.exe",
   "selector": "0x401028",
   "func_addr": "0x401028",
-  "source_decompiler": "kuna",
+  "source_decompiler": "unlace",
   "phase": "P3 (SSA and simplification, ActionVarnodeProps)",
-  "module": "decompiler/crates/kuna-decomp/src/p3_dataflow/coreaction_early.rs",
+  "module": "decompiler/crates/unlace-decomp/src/p3_dataflow/coreaction_early.rs",
   "change_kind": "correctness-fix",
   "tier": "transform",
   "option": "peimportcall",
@@ -46,8 +46,8 @@
     "unpatched_result": "fails both required call matches and emits the raw 0x10c4 call target"
   },
   "fixture": {
-    "path": "decompiler/crates/kuna-analysis/tests/fixtures/pe_iatincode_readonly_i386.exe",
-    "generator": "decompiler/crates/kuna-analysis/tests/fixtures/pe_iatincode_readonly_i386.py",
+    "path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_iatincode_readonly_i386.exe",
+    "generator": "decompiler/crates/unlace-analysis/tests/fixtures/pe_iatincode_readonly_i386.py",
     "size": 1024,
     "sha256": "9cd4f3d091d647eeb36df883e2f3f063d34ac7a508c71c9f28f26683f05ac6f6",
     "shape": "PE32 i386; code, IAT and import metadata share one allocated executable read-only section",
@@ -61,7 +61,7 @@
     "stage_test_rationale": "The premise is loader-created PE externref metadata and section permissions, which the raw XML stage corpus cannot express; the object-loader console test is the two-arm integration gate."
   },
   "regression_sweep": {
-    "method": "Compared pre-fix and fixed release builds with kuna decompile-all --json --no-vars on the real crypto4.exe witness, then repeated the comparison on the ordinary writable-IAT pe_imports.exe control.",
+    "method": "Compared pre-fix and fixed release builds with unlace decompile-all --json --no-vars on the real crypto4.exe witness, then repeated the comparison on the ordinary writable-IAT pe_imports.exe control.",
     "witness_functions": 93,
     "witness_functions_added": 0,
     "witness_functions_removed": 0,
@@ -97,9 +97,9 @@
     "make test": "675/675 PARITY OK",
     "make test-stages": "783/783 PARITY OK",
     "make test-cli": "133/133 after the final rebase",
-    "make rust-test": "green on the complete workspace with KUNA_DECOMP_TEST unset on 8d69071f; the only parent delta in the subsequent rebase to bf8c0b95 is the reviewed, disjoint prototype-routing change from PR #575, and the final tree was followed by focused, main, stage, CLI, spec, catalog, counters and mergecheck gates",
+    "make rust-test": "green on the complete workspace with UNLACE_DECOMP_TEST unset on 8d69071f; the only parent delta in the subsequent rebase to bf8c0b95 is the reviewed, disjoint prototype-routing change from PR #575, and the final tree was followed by focused, main, stage, CLI, spec, catalog, counters and mergecheck gates",
     "make check-spec": "green (lenient and strict)",
-    "kuna catalog --check": "catalog OK",
+    "unlace catalog --check": "catalog OK",
     "scripts.repipe.counters --check": "190 settables; tiers 61/70/59; 274 corpus files; no drift",
     "scripts.repipe.mergecheck": "0 rejects against origin/main; merge guards clean"
   }

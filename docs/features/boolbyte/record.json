@@ -1,5 +1,5 @@
 {
- "opportunity": "kuna declares a byte whose every use is a truth test `char`, because `TYPE_BOOL` is only ever an op's OUTPUT type and `TypeOpEqual::get_input_local` votes `get_base(1, TYPE_INT)` -- the ASCII `char` -- for the value being compared. Over the 444-slice decbench type sweep, 3,228 ground-truth variables are `_Bool`; 2,057 of them are matchable (argument index or calibrated stack offset) and 1,129 of those are misses, 866 because kuna committed the byte to `char` (700) or `unsigned char` (166).",
+ "opportunity": "unlace declares a byte whose every use is a truth test `char`, because `TYPE_BOOL` is only ever an op's OUTPUT type and `TypeOpEqual::get_input_local` votes `get_base(1, TYPE_INT)` -- the ASCII `char` -- for the value being compared. Over the 444-slice decbench type sweep, 3,228 ground-truth variables are `_Bool`; 2,057 of them are matchable (argument index or calibrated stack offset) and 1,129 of those are misses, 866 because unlace committed the byte to `char` (700) or `unsigned char` (166).",
  "test_name": "tests/stages/boolbyte.xml (10 two-pass assertions: one witness, five refusals incl. the two INDIRECT controls) + 4 unit tests on the fold order",
  "binary": "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11/O0/coreutils/stripped/basename",
  "selector": "0x2b45",
@@ -269,7 +269,7 @@
    "no statement moved, no branch changed, no call was added or removed in any of the 100.",
    "ZERO bool-typed ARRAY rows on the scored variables[] surface across all sixteen binaries -- the class of defect that produced `bool v2 [131088]` on a cronie fgets buffer.  cronie crond -O2 and crontab -O0, where it was found, now have 0 changed functions."
   ],
-  "measured_on": "the branch rebased onto main 2272403d, re-measured after the printer arm was added (kuna_boolbyte::truncation_prints_as_cast).  The basename -O0 0x2b45 witness still flips char -> bool and cronie crond -O2 0x7a20 still reads char v2 [131088] with the option on.",
+  "measured_on": "the branch rebased onto main 2272403d, re-measured after the printer arm was added (unlace_boolbyte::truncation_prints_as_cast).  The basename -O0 0x2b45 witness still flips char -> bool and cronie crond -O2 0x7a20 still reads char v2 [131088] with the option on.",
   "functions_whose_merge_shape_moved_without_a_declaration_count_change": 1,
   "functions_whose_sub_intrinsic_became_a_bool_cast": 4,
   "sub_intrinsics_off_note": "counted over the 100 functions whose C changes, not whole-binary"
@@ -368,7 +368,7 @@
   "make_test_stages": "1125/1125 PARITY OK (+12 boolbyte added, 0 removed, 0 moved)",
   "make_test_cli": "184/184 passed",
   "check_spec": "OK (lenient) + OK (strict)",
-  "kuna_catalog_check": "catalog OK",
+  "unlace_catalog_check": "catalog OK",
   "counters_check": "no drift (219 settables, tiers 69/87/63, 313 stage-corpus files)",
   "options_md": "byte-fresh",
   "make_rust_test": "RUST_TEST_RC=0 (416 test binaries, 0 failures)",
@@ -514,7 +514,7 @@
    "remeasured_on": "origin/main e1139df9 + this branch with the truncation fix: identical to the d3617d64 measurement (the fix changes printing only, and the metric scores variables[])"
   },
   "arity_phantom": {
-   "method": "per scored function, the exported variables[] of both arms: argument count (kind=arg or arg_index set), variable count, and kuna variables the metric matched to no ground-truth variable",
+   "method": "per scored function, the exported variables[] of both arms: argument count (kind=arg or arg_index set), variable count, and unlace variables the metric matched to no ground-truth variable",
    "functions": 10748,
    "arity_changed": 0,
    "arguments_off": 21815,
@@ -522,8 +522,8 @@
    "variables_off": 96666,
    "variables_on": 96666,
    "variable_count_changed": 0,
-   "unmatched_kuna_variables_off": 58515,
-   "unmatched_kuna_variables_on": 58513,
+   "unmatched_unlace_variables_off": 58515,
+   "unmatched_unlace_variables_on": 58513,
    "ground_truth_missed_off": 27533,
    "ground_truth_missed_on": 27531,
    "true_positives_off": 17965,
@@ -562,7 +562,7 @@
    "previous_classifier": "the round-1 classifier folded bool/char into one spelling, dropped byte casts and rewrote SUBnn(x,0) to (x), so it could not have seen a (bool) cast that tests bits the truncation discards; its \"type_spelling_only 95\" is replaced by the strict classes above"
   },
   "speed": {
-   "method": "one release binary, `kuna decompile-all <bin>` (default mode) vs the same with `--option boolbyte off`, the two arms interleaved run by run (order alternating), min and median of 15 after one warm-up; re-measured on origin/main e1139df9 + this branch with the truncation fix; the first pass ran while other campaign lanes and this branch's rust-test were running",
+   "method": "one release binary, `unlace decompile-all <bin>` (default mode) vs the same with `--option boolbyte off`, the two arms interleaved run by run (order alternating), min and median of 15 after one warm-up; re-measured on origin/main e1139df9 + this branch with the truncation fix; the first pass ran while other campaign lanes and this branch's rust-test were running",
    "measurements": [
     {
      "n": 15,
@@ -682,7 +682,7 @@
    "repro": "int m32(unsigned x){unsigned v=x&0x201; unsigned char c=v, d=c; printf(\"%u\\n\",v); while(d){puts(\"z\");d=0;} if(c)puts(\"q\"); return c?1:2;}",
    "before": "bool v1; ... v1 = (bool)(a0 & 0x201);  -- returns 1 and prints z, q for x = 0x200, where the source returns 2 and prints nothing",
    "after": "v1 = (bool)(unsigned char)(a0 & 0x201);  -- round-trips through gcc against the source for x in {0,1,0x200,0x201,0x100000000,0x100000001,~0}, and the 64-bit twin (x & 0x100000001) likewise",
-   "mechanism": "the literal 0 seeds d bool, propagation carries bool back through the copy to c (whose mask is 1), and the printer arm printed the truncation as (bool)x. It now prints (bool)x only when the operand mask, re-derived at print time by kuna_boolbyte::value_mask, has no bit above the byte, and (bool)(unsigned char)x otherwise",
+   "mechanism": "the literal 0 seeds d bool, propagation carries bool back through the copy to c (whose mask is 1), and the printer arm printed the truncation as (bool)x. It now prints (bool)x only when the operand mask, re-derived at print time by unlace_boolbyte::value_mask, has no bit above the byte, and (bool)(unsigned char)x otherwise",
    "corpus_effect": "none: no line in the 8-binary corpus prints (bool)(unsigned char), because all 13 cast lines have 0/1 inputs",
    "stage_assertions": "tests/stages/boolbyte.xml #13-#15 (function truncflag)"
   }

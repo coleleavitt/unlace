@@ -1,7 +1,7 @@
-/* kuna — Ghidra extension that swaps the native decompiler core for kuna.
- * Apache-2.0. kuna is derived from Ghidra (https://github.com/NationalSecurityAgency/ghidra).
+/* unlace — Ghidra extension that swaps the native decompiler core for unlace.
+ * Apache-2.0. unlace is derived from Ghidra (https://github.com/NationalSecurityAgency/ghidra).
  */
-package kuna;
+package unlace;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -15,7 +15,7 @@ import ghidra.framework.Platform;
 import ghidra.util.Msg;
 
 /**
- * The mechanism that points Ghidra's decompiler-process factory at the kuna binary,
+ * The mechanism that points Ghidra's decompiler-process factory at the unlace binary,
  * and back at the stock one.
  *
  * <p>Every decompiler consumer in Ghidra (the Decompiler window, the switch/param-id
@@ -42,20 +42,20 @@ import ghidra.util.Msg;
  * path.</li>
  * </ul>
  */
-public final class KunaCoreSwap {
+public final class UnlaceCoreSwap {
 
 	/**
 	 * The extension's module name — the directory name the extension installs under,
 	 * used to scope the two-arg {@link Application#getOSFile(String, String)} lookup
 	 * to this module's {@code os/<platform>/} directory.
 	 */
-	public static final String MODULE_NAME = "KunaDecompiler";
+	public static final String MODULE_NAME = "UnlaceDecompiler";
 
-	/** Dev override: {@code -Dkuna.decompiler.exe=/abs/path/to/unlace_ghidra}. */
-	public static final String EXE_PROPERTY = "kuna.decompiler.exe";
+	/** Dev override: {@code -Dunlace.decompiler.exe=/abs/path/to/unlace_ghidra}. */
+	public static final String EXE_PROPERTY = "unlace.decompiler.exe";
 
-	private static final String KUNA_EXECNAME = "unlace_ghidra";
-	private static final String KUNA_WIN_EXECNAME = "unlace_ghidra.exe";
+	private static final String UNLACE_EXECNAME = "unlace_ghidra";
+	private static final String UNLACE_WIN_EXECNAME = "unlace_ghidra.exe";
 
 	// Mirror DecompileProcessFactory.EXECNAME / WIN32_EXECNAME (Ghidra 12.2, :29-30)
 	private static final String STOCK_EXECNAME = "decompile";
@@ -63,24 +63,24 @@ public final class KunaCoreSwap {
 
 	private static final String EXEPATH_FIELD = "exepath";
 
-	/** The kuna path last installed by {@link #swapToKuna()}, for {@link #isKunaActive()}. */
-	private static String lastKunaPath;
+	/** The unlace path last installed by {@link #swapToUnlace()}, for {@link #isUnlaceActive()}. */
+	private static String lastUnlacePath;
 
 	/**
-	 * Live plugin instances that requested the kuna core. The {@code exepath} field is
+	 * Live plugin instances that requested the unlace core. The {@code exepath} field is
 	 * JVM-wide, so if two tools host the plugin, only the LAST one to leave should restore
-	 * the stock core — otherwise closing one tool silently reverts kuna for the other.
+	 * the stock core — otherwise closing one tool silently reverts unlace for the other.
 	 * Guarded by the class monitor (all mutators are {@code synchronized}).
 	 */
 	private static final java.util.Set<Object> ACTIVE_PLUGINS =
 		java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
 
-	private KunaCoreSwap() {
+	private UnlaceCoreSwap() {
 		// static-only
 	}
 
 	/**
-	 * Registers a plugin instance as a kuna-core user (call from the plugin's swap).
+	 * Registers a plugin instance as a unlace-core user (call from the plugin's swap).
 	 *
 	 * @return the number of live registrants after adding this one
 	 */
@@ -105,14 +105,14 @@ public final class KunaCoreSwap {
 	}
 
 	/**
-	 * Resolves the kuna decompiler binary: (1) the {@value #EXE_PROPERTY} system
+	 * Resolves the unlace decompiler binary: (1) the {@value #EXE_PROPERTY} system
 	 * property, (2) this extension's {@code os/<platform>/unlace_ghidra} via the two-arg
 	 * module-scoped {@link Application#getOSFile(String, String)}.
 	 *
 	 * @return the executable file (exists and is executable)
 	 * @throws FileNotFoundException with user-actionable instructions if not found
 	 */
-	public static File findKunaBinary() throws FileNotFoundException {
+	public static File findUnlaceBinary() throws FileNotFoundException {
 		String override = System.getProperty(EXE_PROPERTY);
 		if (override != null && !override.isBlank()) {
 			File file = new File(override);
@@ -123,15 +123,15 @@ public final class KunaCoreSwap {
 			return checkExecutable(file);
 		}
 
-		String exeName = isWindows() ? KUNA_WIN_EXECNAME : KUNA_EXECNAME;
+		String exeName = isWindows() ? UNLACE_WIN_EXECNAME : UNLACE_EXECNAME;
 		try {
 			return checkExecutable(Application.getOSFile(MODULE_NAME, exeName));
 		}
 		catch (OSFileNotFoundException e) {
-			throw new FileNotFoundException("The kuna decompiler binary '" + exeName +
+			throw new FileNotFoundException("The unlace decompiler binary '" + exeName +
 				"' was not found in the " + MODULE_NAME + " extension.\n\n" +
 				"Build it and copy it into the installed extension, then restart Ghidra:\n" +
-				"    cd <kuna-repo> && cargo build --release -p unlace-ghidra\n" +
+				"    cd <unlace-repo> && cargo build --release -p unlace-ghidra\n" +
 				"    cp target/release/" + exeName + " <ghidra user settings>/Extensions/" +
 				MODULE_NAME + "/os/" + Platform.CURRENT_PLATFORM.getDirectoryName() + "/\n\n" +
 				"Alternatively point the JVM property -D" + EXE_PROPERTY +
@@ -149,7 +149,7 @@ public final class KunaCoreSwap {
 			file.setExecutable(true, false);
 		}
 		if (!file.canExecute()) {
-			throw new FileNotFoundException("The kuna decompiler binary exists but is not " +
+			throw new FileNotFoundException("The unlace decompiler binary exists but is not " +
 				"executable: " + file.getAbsolutePath() + " (chmod +x it).");
 		}
 		return file;
@@ -203,13 +203,13 @@ public final class KunaCoreSwap {
 	}
 
 	/**
-	 * @return true if the most recent successful {@link #swapToKuna()} path is still the
+	 * @return true if the most recent successful {@link #swapToUnlace()} path is still the
 	 *         installed one (false on reflection failure)
 	 */
-	public static synchronized boolean isKunaActive() {
+	public static synchronized boolean isUnlaceActive() {
 		try {
 			String current = getInstalledExePath();
-			return current != null && current.equals(lastKunaPath);
+			return current != null && current.equals(lastUnlacePath);
 		}
 		catch (ReflectiveOperationException | SecurityException e) {
 			return false;
@@ -217,23 +217,23 @@ public final class KunaCoreSwap {
 	}
 
 	/**
-	 * Points the decompiler-process factory at the kuna binary. Shows an error dialog
+	 * Points the decompiler-process factory at the unlace binary. Shows an error dialog
 	 * (and leaves the factory untouched) if the binary cannot be resolved or the
 	 * reflective write fails.
 	 *
 	 * @param originator the object requesting the swap (for Msg attribution)
-	 * @return true if kuna is now the core for future decompiler spawns
+	 * @return true if unlace is now the core for future decompiler spawns
 	 */
-	public static synchronized boolean swapToKuna(Object originator) {
-		File kunaBinary;
+	public static synchronized boolean swapToUnlace(Object originator) {
+		File unlaceBinary;
 		try {
-			kunaBinary = findKunaBinary();
+			unlaceBinary = findUnlaceBinary();
 		}
 		catch (FileNotFoundException e) {
-			Msg.showError(originator, null, "Kuna Decompiler Binary Not Found", e.getMessage());
+			Msg.showError(originator, null, "Unlace Decompiler Binary Not Found", e.getMessage());
 			return false;
 		}
-		String path = kunaBinary.getAbsolutePath();
+		String path = unlaceBinary.getAbsolutePath();
 		try {
 			setInstalledExePath(path);
 		}
@@ -241,8 +241,8 @@ public final class KunaCoreSwap {
 			showReflectionError(originator, e);
 			return false;
 		}
-		lastKunaPath = path;
-		Msg.info(originator, "Decompiler core is now KUNA: " + path +
+		lastUnlacePath = path;
+		Msg.info(originator, "Decompiler core is now UNLACE: " + path +
 			" (already-running decompiler processes keep the previous core until they respawn)");
 		return true;
 	}
@@ -272,7 +272,7 @@ public final class KunaCoreSwap {
 			showReflectionError(originator, e);
 			return false;
 		}
-		lastKunaPath = null;
+		lastUnlacePath = null;
 		Msg.info(originator, "Decompiler core is now STOCK: " +
 			(path != null ? path : "(lazily re-resolved on next decompile)") +
 			" (already-running decompiler processes keep the previous core until they respawn)");
@@ -280,7 +280,7 @@ public final class KunaCoreSwap {
 	}
 
 	private static void showReflectionError(Object originator, Exception e) {
-		Msg.showError(originator, null, "Kuna Core Swap Failed",
+		Msg.showError(originator, null, "Unlace Core Swap Failed",
 			"Could not access ghidra.app.decompiler.DecompileProcessFactory." + EXEPATH_FIELD +
 				" by reflection. This Ghidra version (" + Application.getApplicationVersion() +
 				") may have changed the factory's field layout the " + MODULE_NAME +

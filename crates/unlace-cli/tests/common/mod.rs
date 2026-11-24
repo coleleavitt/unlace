@@ -43,11 +43,14 @@ pub fn run_unlace(args: &[&str]) -> (String, String, i32) {
     let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .output()
-        .expect("spawn kuna");
+        .expect("spawn unlace");
     (
         String::from_utf8(output.stdout).expect("UTF-8 stdout"),
         String::from_utf8(output.stderr).expect("UTF-8 stderr"),
-        output.status.code().expect("kuna exited without a signal"),
+        output
+            .status
+            .code()
+            .expect("unlace exited without a signal"),
     )
 }
 

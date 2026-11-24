@@ -14,7 +14,7 @@
 #       iVar1 = iVar1 + 1) { ... }
 #
 # Stage model: S3 "simplification-quiescence" (which algebraic/peephole rules
-# fire).  kuna's RuleSborrowGe (group "analysis", always on) recognizes the
+# fire).  unlace's RuleSborrowGe (group "analysis", always on) recognizes the
 # XNOR(N,V) tree in either De-Morgan dual form (AND-of-ORs or OR-of-ANDs)
 # with N = sign(V-K) and V = SBORROW(V,K), and rewrites the whole boolean
 # tree to INT_SLESSEQUAL(K, V) == `V s>= K`: the loop condition is the clean

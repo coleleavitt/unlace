@@ -10,7 +10,7 @@ gains is one the closed list materialized).
 import json, os, re, subprocess, sys, collections
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
-K = os.environ.get('KUNA_BIN', '/home/mahaloz/kwt/callbacktype/decompiler/target/release/kuna')
+K = os.environ.get('UNLACE_BIN', '/home/mahaloz/kwt/callbacktype/decompiler/target/release/unlace')
 
 
 def run(b, value):

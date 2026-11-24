@@ -1,4 +1,4 @@
-/* (kuna) One 8-byte union member read as a double (`movsd 0x8(%rdi)`) and as a
+/* (unlace) One 8-byte union member read as a double (`movsd 0x8(%rdi)`) and as a
  * long converted to double (`cvtsi2sdq 0x8(%rdi)`).  `structsynth` types a field
  * from its reads; a `long` field made the double read print
  * `(double)a0->field_0x8`, a value conversion of bits the binary reinterprets,

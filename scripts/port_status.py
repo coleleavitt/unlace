@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""angr -> kuna PORT STATUS: how many angr features / testcases we've ported.
+"""angr -> unlace PORT STATUS: how many angr features / testcases we've ported.
 
 Two views:
-  1. PORTED FEATURES  -- the angr passes/features implemented as kuna `--option`s.
+  1. PORTED FEATURES  -- the angr passes/features implemented as unlace `--option`s.
      AUTO-DETECTED from `phases.toml` provenance (every shipped feature records
      `source_decompiler = "angr"` + `inspiration` = the angr test/pass it came from,
      per the pipeline's standing rules). So the "which have we completed" list
      maintains ITSELF -- no hand-edited manifest to keep in sync. The only thing
      stored here is the OUTCOMES table below: the human assessment the catalog
      can't know (real win vs a faithful no-op that just matches Ghidra vs infra).
-  2. TESTCASE COVERAGE -- how many angr testcases kuna now MATCHES (no structural
-     gap), from the latest angr-vs-kuna sweep (docs/improvement-pipeline/opportunities.json),
+  2. TESTCASE COVERAGE -- how many angr testcases unlace now MATCHES (no structural
+     gap), from the latest angr-vs-unlace sweep (docs/improvement-pipeline/opportunities.json),
      plus the top remaining gaps so you can see what's left.
 
 Usage:
@@ -100,7 +100,7 @@ def parse_angr_settables():
 
 
 def sweep_coverage():
-    """Testcase coverage from the latest angr-vs-kuna sweep."""
+    """Testcase coverage from the latest angr-vs-unlace sweep."""
     if not os.path.exists(OPPS):
         return None
     ranked = json.load(open(OPPS)).get("ranked", [])
@@ -121,7 +121,7 @@ def bar(done, total, width=42):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="angr -> kuna port status")
+    ap = argparse.ArgumentParser(description="angr -> unlace port status")
     ap.add_argument("--json", action="store_true", help="machine-readable output")
     ap.add_argument("--remaining", type=int, default=15, help="how many remaining gaps to list")
     args = ap.parse_args(argv)
@@ -147,7 +147,7 @@ def main(argv=None):
         return 0
 
     print("=" * 74)
-    print("  angr  ->  kuna     PORT STATUS")
+    print("  angr  ->  unlace     PORT STATUS")
     print("=" * 74)
     print()
     print("  PORTED ANGR FEATURES: %d   (auto-detected from phases.toml provenance)" % len(ported))
@@ -171,9 +171,9 @@ def main(argv=None):
 
     if cov:
         print("-" * 74)
-        print("  TESTCASE COVERAGE   (latest angr-vs-kuna sweep, docs/improvement-pipeline/opportunities.json)")
+        print("  TESTCASE COVERAGE   (latest angr-vs-unlace sweep, docs/improvement-pipeline/opportunities.json)")
         print()
-        print("    kuna matches angr   " + bar(cov["match"], cov["comparable"]))
+        print("    unlace matches angr   " + bar(cov["match"], cov["comparable"]))
         print("    %d of %d comparable angr testcases have NO structural gap;" % (cov["match"], cov["comparable"]))
         print("    %d still show an angr advantage (the work that remains)." % len(cov["gap"]))
         print()

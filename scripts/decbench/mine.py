@@ -1,7 +1,7 @@
 """Mine the decbench results tree into the campaign backlog.
 
 Wraps ``decbench improvements`` (the offline per-function miner) and snapshots
-its output into the kuna repo so the campaign has a stable, committed signal:
+its output into the unlace repo so the campaign has a stable, committed signal:
 
     python3 -m scripts.decbench.mine                # snapshot + rank (base: angr)
     python3 -m scripts.decbench.mine --select 28    # also emit the triage queue
@@ -16,23 +16,23 @@ other base writes ``<name>-<base>`` siblings and any other metric appends
 ``-<metric>`` on top, so the GED pools are never overwritten by a type run.
 
 Outputs (all under docs/decbench/):
-    cases.json         the full base-perfect / kuna-nonzero pool, one row per
+    cases.json         the full base-perfect / unlace-nonzero pool, one row per
                        (opt, project, binary, function), enriched with the other
                        decompilers' GED, the SOURCE CFG size, a triage bucket,
                        and dedup group ids
-    cases-missing.json functions kuna produced no usable GED for (decompile
+    cases-missing.json functions unlace produced no usable GED for (decompile
                        failure or metric error) + the whole-binary failure list;
                        owned by the hang-fix workstream, not case triage
     backlog.md         human-readable ranked table, one row per dedup group
     triage-queue.json  (--select) the stratified triage picks
 
 Buckets (cross-decompiler consensus, computed vs the same function's scores):
-    kuna-specific   kuna GED > ghidra GED + 2   (regression vs kuna's ancestor)
-    inherited       |kuna - ghidra| <= 2         (Ghidra-family-wide gap)
-    ahead           unlace < ghidra - 2            (kuna already beats ghidra)
+    unlace-specific   unlace GED > ghidra GED + 2   (regression vs unlace's ancestor)
+    inherited       |unlace - ghidra| <= 2         (Ghidra-family-wide gap)
+    ahead           unlace < ghidra - 2            (unlace already beats ghidra)
     no-ghidra       ghidra has no finite score
 An ``artifact_suspect`` flag marks cases where the score is unlikely to reflect a
-real kuna deficit: kuna is no worse than the best of the other production
+real unlace deficit: unlace is no worse than the best of the other production
 decompilers while only the base scores 0, or — on ``ged`` only — the SOURCE CFG
 is degenerate (<= 1 node, nothing structural left to match; run
 ``scripts.decbench.srcsizes`` to populate that cache). A degenerate source CFG
@@ -65,7 +65,7 @@ _BUCKET_TOL = {"ged": 2.0, "type_match": 0.1}
 
 
 def _others(base: str) -> tuple[str, ...]:
-    """The production decompilers that are neither the base nor kuna."""
+    """The production decompilers that are neither the base nor unlace."""
     return tuple(d for d in PRODUCTION if d != base)
 
 
@@ -75,7 +75,7 @@ def _run_improvements(extra: list[str], base: str = "angr",
         config.decbench_cli(),
         "improvements",
         str(config.results_root()),
-        "-b", base, "-t", "kuna", "-m", metric,
+        "-b", base, "-t", "unlace", "-m", metric,
         "--limit", "0", "-f", "json",
     ] + extra
     out = subprocess.run(cmd, capture_output=True, text=True, cwd=config.decbench_repo())
@@ -89,9 +89,9 @@ def _load_function_results() -> dict:
 
 
 def _other_scores(fr: dict, base: str, metric: str) -> dict:
-    """(project, opt, binary, function) -> {dec: score} for the non-base/kuna decs."""
+    """(project, opt, binary, function) -> {dec: score} for the non-base/unlace decs."""
     table: dict[tuple, dict] = {}
-    kuna_scored: dict[tuple, int] = defaultdict(int)
+    unlace_scored: dict[tuple, int] = defaultdict(int)
     for g in fr["groups"]:
         for f in g["functions"]:
             key = (g["project"], g["opt_level"], g["binary"], f["function"])
@@ -101,34 +101,34 @@ def _other_scores(fr: dict, base: str, metric: str) -> dict:
                 if v is not None and math.isfinite(v):
                     row[dec] = v
             table[key] = row
-            kv = f["values"].get("kuna", {}).get(metric)
+            kv = f["values"].get("unlace", {}).get(metric)
             if kv is not None and math.isfinite(kv):
-                kuna_scored[(g["project"], g["opt_level"], g["binary"])] += 1
-    table["__kuna_scored__"] = kuna_scored  # type: ignore[assignment]
+                unlace_scored[(g["project"], g["opt_level"], g["binary"])] += 1
+    table["__unlace_scored__"] = unlace_scored  # type: ignore[assignment]
     return table
 
 
-def _deficit(kuna: float, other: float, metric: str) -> float:
-    """How much worse kuna is than ``other``, in the metric's own units."""
-    return kuna - other if _LOWER_IS_BETTER[metric] else other - kuna
+def _deficit(unlace: float, other: float, metric: str) -> float:
+    """How much worse unlace is than ``other``, in the metric's own units."""
+    return unlace - other if _LOWER_IS_BETTER[metric] else other - unlace
 
 
-def _bucket(kuna: float, others: dict, metric: str = "ged") -> tuple[str, bool]:
+def _bucket(unlace: float, others: dict, metric: str = "ged") -> tuple[str, bool]:
     tol = _BUCKET_TOL[metric]
     gh = others.get("ghidra")
     if gh is None:
         bucket = "no-ghidra"
-    elif _deficit(kuna, gh, metric) > tol:
-        bucket = "kuna-specific"
-    elif abs(kuna - gh) <= tol:
+    elif _deficit(unlace, gh, metric) > tol:
+        bucket = "unlace-specific"
+    elif abs(unlace - gh) <= tol:
         bucket = "inherited"
     else:
         bucket = "ahead"
     consensus = [others[d] for d in ("ghidra", "ida", "binja") if d in others]
-    # kuna is no worse than the best of the production rivals (half a tolerance
+    # unlace is no worse than the best of the production rivals (half a tolerance
     # of slack), yet only the base scored perfect -- the score is suspect.
     suspect = bool(consensus) and all(
-        _deficit(kuna, v, metric) <= tol / 2 for v in consensus)
+        _deficit(unlace, v, metric) <= tol / 2 for v in consensus)
     return bucket, suspect
 
 
@@ -136,7 +136,7 @@ def build_cases(base: str = "angr", metric: str = "ged") -> tuple[dict, dict]:
     rows = _run_improvements(["--perfect-only"], base, metric)
     fr = _load_function_results()
     others = _other_scores(fr, base, metric)
-    kuna_scored = others.pop("__kuna_scored__")
+    unlace_scored = others.pop("__unlace_scored__")
     src_sizes = config.load_src_sizes()
 
     groups: dict[str, list[dict]] = defaultdict(list)
@@ -163,7 +163,7 @@ def build_cases(base: str = "angr", metric: str = "ged") -> tuple[dict, dict]:
     for c in cases:
         c["siblings"] = [s["case_id"] for s in groups[c["group_id"]] if s["case_id"] != c["case_id"]]
 
-    # The kuna-missing pool: everything the base scored that kuna has no usable
+    # The unlace-missing pool: everything the base scored that unlace has no usable
     # GED for. Not part of case triage (the hang-fix workstream owns it).
     missing_rows = [r for r in _run_improvements(["--include-target-missing"], base, metric)
                     if r["target_missing"]]
@@ -171,7 +171,7 @@ def build_cases(base: str = "angr", metric: str = "ged") -> tuple[dict, dict]:
         f"{opt}/{proj}/{binary}"
         for g in fr["groups"]
         for (proj, opt, binary) in [(g["project"], g["opt_level"], g["binary"])]
-        if kuna_scored.get((proj, opt, binary), 0) == 0
+        if unlace_scored.get((proj, opt, binary), 0) == 0
         and any(
             v.get(metric) is not None and math.isfinite(v[metric])
             for f in g["functions"]
@@ -212,7 +212,7 @@ def write_backlog(cases_doc: dict) -> str:
     imperfect = "nonzero" if metric == "ged" else "imperfect"
     flag = "" if metric == "ged" else f" --metric {metric}"
     lines = [
-        f"# decbench backlog — {base} {label}-perfect, kuna {imperfect}",
+        f"# decbench backlog — {base} {label}-perfect, unlace {imperfect}",
         "",
         f"Generated by `python3 -m scripts.decbench.mine --base {base}{flag}` from "
         f"`{cases_doc['results_root']}`",
@@ -283,10 +283,10 @@ def select_queue(cases_doc: dict, want: int) -> list[dict]:
         per_project[proj] += 1
         return True
 
-    # Tier L: margin >= 100, kuna-specific first, cap 2/project within the tier.
+    # Tier L: margin >= 100, unlace-specific first, cap 2/project within the tier.
     l_pool = order(
         (g for g, m in gmargin.items() if m >= 100),
-        key=lambda g: (reps[g]["bucket"] != "kuna-specific", -gmargin[g], g),
+        key=lambda g: (reps[g]["bucket"] != "unlace-specific", -gmargin[g], g),
     )
     tier_proj: dict[str, int] = defaultdict(int)
     for g in l_pool:
@@ -402,7 +402,7 @@ def main(argv=None) -> None:
     note = f"({degen} degenerate-source) " if metric == "ged" else ""
     print(f"[mine] base={base} metric={metric}: {t['cases']} cases in {t['groups']} groups "
           f"{note}-> {config.cases_path(base, metric)}")
-    print(f"[mine] {missing_doc['totals']['missing_functions']} kuna-missing functions, "
+    print(f"[mine] {missing_doc['totals']['missing_functions']} unlace-missing functions, "
           f"{missing_doc['totals']['whole_binary_failures']} whole-binary failures "
           f"-> {config.missing_path(base, metric)}")
 

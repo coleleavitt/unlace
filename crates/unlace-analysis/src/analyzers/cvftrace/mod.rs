@@ -38,7 +38,7 @@ fn facts(ctx: &AnalysisCtx) -> Option<(Vec<Routine>, Vec<Line>)> {
         unlace_base::notes::say_once(
             &image,
             &format!(
-                "[kuna cvftrace] {image}: .trace exceeds the decoder's size caps; later records ignored"
+                "[unlace cvftrace] {image}: .trace exceeds the decoder's size caps; later records ignored"
             ),
         );
     }

@@ -38,7 +38,7 @@ Decompile a name returned by functions while changing the emitted naming convent
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_15dc",
@@ -71,7 +71,7 @@ Decompile a name returned by functions while changing the emitted naming convent
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_15dc",
@@ -120,7 +120,7 @@ _none recorded_
 - round 11 REFUTER: hypothesis **upheld** (was inconclusive). Refuted in-tick by the captain (round 11). VERDICT UPHELD, mechanism pinned, and one piece of BOOKKEEPING IS WRONG.
 
 SYMPTOM REPRODUCED exactly on the need's own arena binary
-(.kuna-repipe/arena/11/6927c8d12d267f28f69b8131/target/0xjam3z-evolvingsbox.zip.__x/0xJam3z-Medium):
+(.unlace-repipe/arena/11/6927c8d12d267f28f69b8131/target/0xjam3z-evolvingsbox.zip.__x/0xJam3z-Medium):
 default `unlace decompile BIN sub_15dc` = rc 0, full body; adding `--option namestyle ghidra` = rc 1,
 'no function "sub_15dc" ... pass an address with --addr'.
 
@@ -129,7 +129,7 @@ function resolves BY ITS OTHER NAME: `unlace decompile BIN func_0x000015dc --opt
 returns rc 0 and the full body. So lookup works; the synthesized name is simply regenerated in the
 upstream style (func_0x%08x, see architecture.rs and tests/verify_w4_fw_architecture.rs:79) and the
 default-style name sub_15dc is not retained as an alias. The tester's filed hypothesis is upheld.
-Do NOT guess Ghidra's own prefix: `FUN_000015dc` is rc 1 as well; kuna's upstream style is func_0x.
+Do NOT guess Ghidra's own prefix: `FUN_000015dc` is rc 1 as well; unlace's upstream style is func_0x.
 
 THE TWO SURFACES DISAGREE BY CONSTRUCTION: `unlace functions --json` ignores namestyle and always
 reports {"name": "sub_15dc", "aliases": []}. That empty `aliases` field already exists in the schema
@@ -164,7 +164,7 @@ plausible. Confirm at T_TRIAGE before the lease algebra aims a builder at one tr
   not unlace-cli: unlace-cli only translates the console's miss into its error text at decompile.rs:505,
   and a fix there would have left `disassemble`/`xrefs`/`decompile-all --functions` refusing the same
   name) by rendering the candidate in ALL THREE styles -- `minted_function_names`, one call per
-  `KunaNameStyle` arm, the same three functions `name_function` dispatches between. Both pre-existing
+  `UnlaceNameStyle` arm, the same three functions `name_function` dispatches between. Both pre-existing
   gates are untouched, so the change can only turn a MISS into a hit. The ACCEPTANCE IS UNCHANGED and
   still measures 0xJam3z-Medium (PASS on this branch); the promoted
   `tests/cli/changing-namestyle-invalidates-discovered.json` is retargeted onto the vendored

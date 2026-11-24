@@ -438,7 +438,7 @@ fn test_query_java_exception_surfaces_as_unlace_java() {
             assert_eq!(type_name, "java.lang.IllegalArgumentException");
             assert_eq!(explain, "no such register");
         }
-        other => panic!("expected KunaError::Java, got {other:?}"),
+        other => panic!("expected UnlaceError::Java, got {other:?}"),
     }
 }
 

@@ -3,12 +3,12 @@ import json, os, statistics, subprocess, sys, time
 R = "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11/O2"
 BINS = [(n, p) for n, p in [("fmt", f"{R}/coreutils/stripped/fmt"), ("ls", f"{R}/coreutils/stripped/ls"),
         ("sort", f"{R}/coreutils/stripped/sort"), ("bash", f"{R}/bash/stripped/bash")] if n in os.environ.get("SPEED_BINS", "fmt,ls,sort,bash").split(",")]
-KB = sys.argv[3] if len(sys.argv) > 3 else "decompiler/target/release/kuna"
+KB = sys.argv[3] if len(sys.argv) > 3 else "decompiler/target/release/unlace"
 SP = os.environ.get("SLEIGHHOME", "specs")
 ARMS = {"off": ["--option", "elemptr", "off"], "on": []}
 N = int(sys.argv[1]) if len(sys.argv) > 1 else 15
 out = {}
-env = dict(os.environ, SLEIGHHOME=SP, KUNA_SPECS=SP)
+env = dict(os.environ, SLEIGHHOME=SP, UNLACE_SPECS=SP)
 for name, b in BINS:
     t = {a: [] for a in ARMS}
     subprocess.run([KB, "decompile-all", b, "--json"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)

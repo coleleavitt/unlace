@@ -5,13 +5,13 @@
 RE-friction need `declaring-double-score-return` points at PolyMLP.exe
 `score` (`0x140003150`). The machine accumulates a `double` in nonvolatile XMM6,
 copies XMM6 to ABI output XMM0, calls the security-cookie checker, restores XMM6,
-and returns. With `score`, `log`, and the checker all declared, kuna discarded
+and returns. With `score`, `log`, and the checker all declared, unlace discarded
 the `log` result and returned undefined XMM fragments.
 
 The exact dataset image is SHA-256
 `01652e8b03e2bec127f5726320db4c9925d495d75583a8bb4534ac640f6ec230`
 (54,272 bytes). IDA and Ghidra server startup timed out during this run, so the
-instruction claim was checked with kuna's listing: XMM6 is accumulated, moved
+instruction claim was checked with unlace's listing: XMM6 is accumulated, moved
 to XMM0 immediately before the call at `0x140008140`, and restored afterward.
 
 ## Root cause

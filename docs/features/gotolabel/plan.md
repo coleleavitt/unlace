@@ -20,7 +20,7 @@ each drop their private copy and call it.
 
 **`substrate/block.rs (BlockGraph::mark_unstructured)`.** A `BlockGoto`'s target
 is marked whenever the node is a real goto, without the `goto_prints()` gate:
-kuna's `printc.rs (PrintC::emit_block_goto)` emits the trailing goto
+unlace's `printc.rs (PrintC::emit_block_goto)` emits the trailing goto
 unconditionally, so the mark must be at least as wide as the print. The
 redundant goto itself is left alone — suppressing a statement is a structuring
 decision, not a label fix, and would change functions that have no defect.
@@ -37,8 +37,8 @@ orphan goto may change.
 * `substrate/block/tests.rs`: the census reports a `f_goto_goto` switch arm and a
   `BlockMultiGoto` edge and ignores a structured case arm; `mark_unstructured`
   labels a goto target that is the next block in flow.
-* `tests/cli/emitted-goto-keeps-its-label.json`: `kuna decompile
-  decompiler/crates/kuna-analysis/tests/fixtures/datasyms_faillog_x86_64 0x2620
+* `tests/cli/emitted-goto-keeps-its-label.json`: `unlace decompile
+  decompiler/crates/unlace-analysis/tests/fixtures/datasyms_faillog_x86_64 0x2620
   --addr` must print both `goto label_2701;` and `label_2701:` (before the fix
   the label line is absent).
 * No stage test: the shape needs a switch arm *plus* a duplicable call-bearing

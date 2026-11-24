@@ -1,7 +1,7 @@
 [package]
 autotests = false
 name = "unlace-console"
-description = "kuna Rust port: console front-end (decomp_dbg)"
+description = "unlace Rust port: console front-end (decomp_dbg)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -49,7 +49,7 @@ path = "src/bin/decomp_dbg.rs"
 # datatest harness (`unlace_harness::testfunction`), and `unlace-harness` depends on
 # `unlace-console` (not the reverse), so the binary that needs both is produced
 # there.  It still builds to `target/<profile>/decomp_test_dbg` (the path the
-# Python `kuna/run_tests.py` resolves), unchanged.
+# Python `unlace/run_tests.py` resolves), unchanged.
 
 [[test]]
 name = "integration"

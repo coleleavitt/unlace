@@ -404,7 +404,8 @@ fn wide(text: &str) -> Vec<u8> {
 
 /// Write `bytes` under a per-test temp path and return it.
 fn temp_binary(tag: &str, bytes: &[u8]) -> PathBuf {
-    let path = std::env::temp_dir().join(format!("kuna-strings-{}-{tag}.elf", std::process::id()));
+    let path =
+        std::env::temp_dir().join(format!("unlace-strings-{}-{tag}.elf", std::process::id()));
     std::fs::write(&path, bytes).expect("write the synthetic image");
     path
 }

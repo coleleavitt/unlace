@@ -143,7 +143,7 @@ marker.
   vs the post-PR default path (`--mode aggressive`) over the C fixture corpus (must
   be 0) and the C++ corpus, every hunk classified; plus the above-threshold binaries
   (leveldb `-O0`/`-O2`, `mcount_x86_64`) at the option level.
-- **Speed**: interleaved off/on, **minimum of 15** pairs. `kuna functions` (load +
+- **Speed**: interleaved off/on, **minimum of 15** pairs. `unlace functions` (load +
   commit only) is the tightest isolation because the pass is load-time; also
   `decompile-all` end-to-end, on both a C++ RTTI binary and a plain-C control.
 - **Benchmark**: report the leveldb result honestly. It is expected to be zero and
@@ -153,7 +153,7 @@ marker.
 
 Shipping the option default-off is only half the decision. `auto` resolves to
 `aggressive` below 500 KiB, so an option absent from `AGGRESSIVE_OVERRIDES` never
-runs on the default path — `decompile-all`, the `kuna` CLI, the web front-end and the
+runs on the default path — `decompile-all`, the `unlace` CLI, the web front-end and the
 benchmark all miss it. This feature was first written in exactly that state and
 measured **0 recovered names** under `--mode aggressive`.
 

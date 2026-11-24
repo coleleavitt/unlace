@@ -28,7 +28,7 @@ fn query_functions(enabled: bool, directives: &[String], no_vars: bool, function
             "--assert-strict",
             "--assert",
         ])
-        .arg(format!("@{fixture}.kuna"))
+        .arg(format!("@{fixture}.unlace"))
         .args([
             "--option",
             "stackviews",

@@ -1,9 +1,9 @@
 # The Go boolean-return stale-high artifact (docs/multilang.md W4), ported
-# as kuna `option gobool` (P4 output-prototype, default AUTO).
+# as unlace `option gobool` (P4 output-prototype, default AUTO).
 #
 # Go's ABI materializes a bool result as 0/1 in the LOW BYTE of the return
 # register and leaves the upper bytes unspecified: the compiler emits a bare
-# `SETcc AL` with no zeroing XOR.  kuna faithfully lifts the full-register
+# `SETcc AL` with no zeroing XOR.  unlace faithfully lifts the full-register
 # dataflow, so the returned value is PIECE(stale7, bool1) and the C prints
 #
 #     v = CONCAT71((undefined7)(v >> 8), a0 == 1);

@@ -1,7 +1,7 @@
 # callpopret: flow a `call` through a callee that pops the pushed return
 # address off the stack and `ret`s through the word above it.
 #
-# CALL is a fall-through op, so kuna decodes the return address as the next
+# CALL is a fall-through op, so unlace decodes the return address as the next
 # instruction.  The oldest position-independent idiom on x86 breaks that by
 # calling over its own inline data: the callee pops the pushed return address,
 # steps past a pad byte and `ret`s, so control returns to the CALLER'S caller

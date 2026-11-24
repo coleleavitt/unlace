@@ -262,7 +262,7 @@ seven rows.
 `typeclasses.py` over the `--dump-decisions` rows classes all 1,641 decisions the
 flip changes (1,449 functions):
 
-| kuna now | ground truth | metric | decisions |
+| unlace now | ground truth | metric | decisions |
 |---|---|---|---:|
 | `struct_N *` | pointer to a named aggregate (`Hash_table` 704, `Hash_tuning` 66, `hash_entry` 44, `stat` 33, `fileinfo` 33, …) | miss → miss | 1,295 |
 | `struct_N *` | primitive pointer (`void *` 97, the `void const *` typedef `V` 204, `sharefile_handle` 6, `void` 3) | miss → miss | 310 |

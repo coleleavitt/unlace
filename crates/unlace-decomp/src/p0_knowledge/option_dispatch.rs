@@ -40,7 +40,7 @@ macro_rules! unlace_options {
                 }
                 match name {
                     $($name => $apply,)*
-                    other => Err(UnlaceError::parse(format!("Unknown kuna option: {other}"))),
+                    other => Err(UnlaceError::parse(format!("Unknown unlace option: {other}"))),
                 }
             }
         }

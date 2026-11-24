@@ -1,11 +1,11 @@
-/* (kuna castwiden) 64-bit widenings C's own conversions perform.
+/* (unlace castwiden) 64-bit widenings C's own conversions perform.
  * Each function widens a 32-bit or narrower value to 64 bits where C converts it
  * by itself: beside a 64-bit operand of `+ - * / % & | ^`, beside a literal the
  * printer can type as 64-bit, and into an assignment, a store, an argument or a
  * return of a 64-bit type.  The keep_ functions must keep their cast: a shift, a
  * comparison, an unsigned widening beside a signed operand, and a negated literal
  * whose C value is positive (`keep_neglit`, whose printed C is checked as text
- * only: kuna prints `+ -0x80000000` there with the option off too, which C reads
+ * only: unlace prints `+ -0x80000000` there with the option off too, which C reads
  * as adding 2^31).  sq, usq, sq_diff and dist read one widened value in both
  * operands of a product, which keeps both casts; par_add and par_mul put a 32-bit
  * sum or product beside a long of the same operator, which must keep its
@@ -13,7 +13,7 @@
  * operand beside a chain of the same operator, which C regroups.  The main
  * program feeds negative values, 0x80000000 .. 0xffffffff,
  * sums past 32 bits and squares past 2^32.  The round-trip test in
- * unlace-cli/tests/decompile_all_cli.rs compiles the functions as kuna prints them,
+ * unlace-cli/tests/decompile_all_cli.rs compiles the functions as unlace prints them,
  * with the option off, on and literal, and checks that each build prints what
  * this program prints:
  *

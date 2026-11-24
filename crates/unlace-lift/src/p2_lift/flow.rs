@@ -3481,7 +3481,7 @@ truncating the fall-through here"
                                 .map(|o| o.get_addr().get_offset())
                                 .unwrap_or(0);
                             eprintln!(
-                                "[kuna unrolledguard] interleaved jump table at 0x{:x}: \
+                                "[unlace unrolledguard] interleaved jump table at 0x{:x}: \
                                  skipped {} undecoded sibling-table case-target edge(s) in \
                                  the partial-flow rebuild (table recovers instead of \
                                  truncating to a computed call)",

@@ -38,7 +38,7 @@ Include the callbacks at 0x401410 and 0x401000 in the application inventory and 
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "functions",
     "{{BIN}}",
     "--json"
@@ -69,7 +69,7 @@ Include the callbacks at 0x401410 and 0x401000 in the application inventory and 
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "functions",
     "{{BIN}}",
     "--json"
@@ -104,7 +104,7 @@ The earlier extent diagnosis was overturned. The Listing's flow walk leaves 0x40
 
 ## Reference
 
-Ghidra 11.4 also omits both callbacks on this stripped witness. Recovering the stack-passed callback chain is therefore a concrete Kuna completeness advantage rather than a parity repair.
+Ghidra 11.4 also omits both callbacks on this stripped witness. Recovering the stack-passed callback chain is therefore a concrete Unlace completeness advantage rather than a parity repair.
 
 ## Instances
 

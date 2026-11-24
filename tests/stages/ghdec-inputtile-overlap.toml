@@ -1,6 +1,6 @@
 # decbench cases-missing pool: gnulib rpl_fcntl compiled at -O2 was the single
 # hard per-function failure in 48 of 267 optimized x86-64 binaries (gzip,
-# gnutls-serv, grep, tar, findutils, diffutils, 39 coreutils).  kuna emitted no
+# gnutls-serv, grep, tar, findutils, diffutils, 39 coreutils).  unlace emitted no
 # body at all:
 #
 #   rename_recurse: set_input_varnode (empty stack):
@@ -8,7 +8,7 @@
 #
 # Upstream Ghidra raises the same LowlevelError on the same function (verified
 # with Ghidra 12.1 headless on the gzip binary), so this is not a port defect;
-# the fix is a kuna divergence, DIV-50 in docs/history.md.
+# the fix is a unlace divergence, DIV-50 in docs/history.md.
 #
 # The bytes below are a reduced standalone build of the gnulib wrapper
 # (gcc -O2 -fstack-protector-strong, rpl_fcntl at 0x11d0):
@@ -51,7 +51,7 @@
 # and collides with the leftover pieces.
 #
 # Stage model: P3 dataflow, SSA renaming (heritage.rs rename_recurse ->
-# kuna_inputtile::new_tiled_input).  The leftover write-masked pieces are the
+# unlace_inputtile::new_tiled_input).  The leftover write-masked pieces are the
 # value the read wants, so the collision is reconciled with the upstream
 # Funcdata::combineInputVarnodes primitive instead of aborting.
 #

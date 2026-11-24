@@ -1,4 +1,4 @@
-# kuna option bejoin callers (the default), GH-904: MIPS PIC callers and
+# unlace option bejoin callers (the default), GH-904: MIPS PIC callers and
 # unaligned loads.
 #
 # MIPS PIC code (gcc's and clang's default for a shared object) calls

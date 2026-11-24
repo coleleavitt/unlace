@@ -146,7 +146,7 @@ impl ProgressWatch<'_> {
         *seq += results.len();
         if let Err(e) = out.write_all(lines.as_bytes()) {
             eprintln!(
-                "[kuna --stream] warning: cannot append to {INDEX_FILE}: {e}; the feed stops \
+                "[unlace --stream] warning: cannot append to {INDEX_FILE}: {e}; the feed stops \
                  here and the final index is still written at the end"
             );
             *file = None;

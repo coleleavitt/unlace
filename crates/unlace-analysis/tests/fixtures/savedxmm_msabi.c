@@ -2,7 +2,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#ifndef KUNA_EMITTED_RECT_DEFINED
+#ifndef UNLACE_EMITTED_RECT_DEFINED
 typedef struct Rect {
   float x;
   float y;

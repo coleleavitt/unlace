@@ -44,7 +44,7 @@ See the transfer to 0x40365a following the unpacker call.
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x4f7001",
@@ -85,7 +85,7 @@ See the transfer to 0x40365a following the unpacker call.
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x402000",
@@ -138,7 +138,7 @@ _not yet refuted_
 
 ## Reference
 
-- `ida-decompile decompile 0x4f7001 --binary ./target/CryptoME.zip.__x/CryptoME.exe --json` — No running server matched; subsequent backend startup failed. Kuna's own disassembly and successful flow override establish the omitted transfer.
+- `ida-decompile decompile 0x4f7001 --binary ./target/CryptoME.zip.__x/CryptoME.exe --json` — No running server matched; subsequent backend startup failed. Unlace's own disassembly and successful flow override establish the omitted transfer.
 
 ## Instances
 

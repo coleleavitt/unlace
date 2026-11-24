@@ -3623,7 +3623,7 @@ pub fn render_readme_streaming(
 /// The README of an export that failed before it created anything: what the
 /// binary was, what is actually in the folder, and why the run stopped.
 fn render_readme_stillborn(facts: &ReadmeFacts, progress: &StreamProgress) -> String {
-    let mut out = format!("# {} — kuna project export\n\n", facts.file_name);
+    let mut out = format!("# {} — unlace project export\n\n", facts.file_name);
     out.push_str(
         "**This export failed before it wrote anything.** The folder holds this file and \
          `.streaming`, which records the error; no `.c`, `.h`, `.asm` or `index.jsonl` was \
@@ -3654,7 +3654,7 @@ fn render_readme_inner(
         .map_or_else(|| "?".to_string(), |size| size.to_string());
 
     let mut out = String::new();
-    out.push_str(&format!("# {file_name} — kuna project export\n\n"));
+    out.push_str(&format!("# {file_name} — unlace project export\n\n"));
     if let Some(banner) = banner {
         out.push_str(banner);
         out.push_str("\n\n");
@@ -3719,7 +3719,7 @@ fn render_readme_inner(
     }
     out.push_str(&format!(
         "- `{file_name}.h` — recompilation aid: the generated core-typedef prelude (the\n\
-         \x20 Ghidra/kuna `undefined` family included), the user-defined type definitions\n\
+         \x20 Ghidra/unlace `undefined` family included), the user-defined type definitions\n\
          \x20 recovered during decompilation, and one prototype per decompiled function\n\
          \x20 (token-identical to its `.c` definition line). Compile it for the target's\n\
          \x20 data model — the prelude names the pointer width — or a recovered aggregate\n\

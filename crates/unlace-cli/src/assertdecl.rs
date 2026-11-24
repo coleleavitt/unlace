@@ -695,7 +695,7 @@ mod tests {
             one("bytes 43d0c6 0x8bd581c2").body,
             one("bytes 0x43d0c6 8bd581c2").body
         );
-        let dir = std::env::temp_dir().join(format!("kuna-assertbytes-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("unlace-assertbytes-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("scratch dir");
         let path = dir.join("stage1.bin");
         std::fs::write(&path, [0xb8u8, 0x2a, 0x00, 0x00, 0x00, 0xc3]).expect("write");
@@ -785,9 +785,9 @@ mod tests {
 
     #[test]
     fn a_file_holds_one_directive_per_line_with_comments() {
-        let dir = std::env::temp_dir().join(format!("kuna-assertdecl-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("unlace-assertdecl-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("scratch dir");
-        let path = dir.join("overrides.kuna");
+        let path = dir.join("overrides.unlace");
         std::fs::write(
             &path,
             "# worked out by hand\nname v2 credbuf\n\ntype v2 char[16] # the read buffer\n",
@@ -809,7 +809,10 @@ mod tests {
 
     #[test]
     fn a_missing_file_is_an_error_naming_the_path() {
-        let err = parse_flag("@/nonexistent/kuna-asserts.txt").expect_err("refuses");
-        assert!(err.contains("/nonexistent/kuna-asserts.txt"), "got {err:?}");
+        let err = parse_flag("@/nonexistent/unlace-asserts.txt").expect_err("refuses");
+        assert!(
+            err.contains("/nonexistent/unlace-asserts.txt"),
+            "got {err:?}"
+        );
     }
 }

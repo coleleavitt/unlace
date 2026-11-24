@@ -38,7 +38,7 @@ The LC_MAIN entry routine identified as main, with its conventional argc/argv pr
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "functions",
     "{{BIN}}",
     "--json"
@@ -69,7 +69,7 @@ The LC_MAIN entry routine identified as main, with its conventional argc/argv pr
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "functions",
     "{{BIN}}",
     "--json"

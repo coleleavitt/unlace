@@ -1,4 +1,4 @@
-# Fixture for `tailcallsaved` (kuna): the cdecl shape that makes a frame-teardown
+# Fixture for `tailcallsaved` (unlace): the cdecl shape that makes a frame-teardown
 # tail-call test misread argument cleanup as a teardown.  Reduced from the
 # round-8 RE-friction witness (crackmes.one 5ab77f5f33c5d40ad448c820, the
 # character classifier at 0x4010b0).

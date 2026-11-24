@@ -3,7 +3,7 @@
 “CALL/POP pointer helper decodes embedded DLL names as instructions” appeared in 1 round-12 instance. The helper should return its inline `kernel32.dll` pointer, but the fall-through lifts the string bytes as port I/O and arbitrary stores.
 
 ```sh
-decompiler/target/release/kuna decompile decompiler/crates/kuna-analysis/tests/fixtures/callpopret_i386 dllname --option callpopret off
+decompiler/target/release/unlace decompile decompiler/crates/unlace-analysis/tests/fixtures/callpopret_i386 dllname --option callpopret off
 ```
 
 ```c

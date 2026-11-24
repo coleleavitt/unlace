@@ -6,7 +6,7 @@ Branch: `apple/dyld-cache`.
 ## Problem
 
 Every Apple system library on iOS and macOS 11+ ships only inside the dyld shared
-cache. kuna cannot open one: `dyld_shared_cache_arm64e` starts with the magic
+cache. unlace cannot open one: `dyld_shared_cache_arm64e` starts with the magic
 `dyld_v1  arm64e`, which no `object` parser recognizes, so every surface fails with
 "unrecognized input format". Even a correct parse would not be enough:
 
@@ -47,7 +47,7 @@ unlace functions <cache> --image NAME
 - A cache with more than one image and no `--image` exits 2 with
   `dyld shared cache holds N images; choose one with --image (unlace unpack <cache> --list)`.
 - The selector is a load-time option, `dyldimage` (`none|<install-name>`),
-  bridged through `KUNA_DYLD_IMAGE` like every other load-time gate. So
+  bridged through `UNLACE_DYLD_IMAGE` like every other load-time gate. So
   `--option dyldimage NAME` reaches every CLI command, and the console sets it
   with `option dyldimage NAME` before `load file`. `--image NAME` is a global
   shorthand: `main.rs` removes it and sets the same variable, so it also
@@ -101,7 +101,7 @@ Listing need no cache-specific code. This is the shape Ghidra uses for its
    mapping table of whichever (sub-)cache holds it.
 3. Copy each segment's VM bytes into a new file, page-aligned, and rewrite the
    segment's and its sections' file offsets. Virtual addresses are kept, so
-   every address kuna prints is the address in the cache, and the one a crash
+   every address unlace prints is the address in the cache, and the one a crash
    log or `ipsw` shows.
 4. Apply slide info to the data pages of the copied segments with slide 0.
    Every rebased slot then holds its unslid target address; arm64e auth
@@ -136,7 +136,7 @@ addresses outside it. While the image is rebuilt:
 3. Look up names in the target image's symbol table, exports first, then the
    `.symbols` locals. Each image's table is built lazily, on its first lookup.
 4. Store the result in the rebuilt Mach-O as an `LC_NOTE` with
-   `data_owner = "kuna.dyld.xrefs"`, so `unlace unpack` output carries it too.
+   `data_owner = "unlace.dyld.xrefs"`, so `unlace unpack` output carries it too.
    `macho_stubs` reads the note back under the gate. Each call target becomes
    an import stub symbol, and each slot becomes an import slot, so
    `peimportcall` binds a call through it.
@@ -161,9 +161,9 @@ two-pass stage test.
   symbols into a standalone Mach-O. `DyldCacheExtractLoader` loads it and can add
   optional components into the same program (`TEXT_STUBS` and `CONST_DATA`
   mappings, `libobjc`).
-- kuna takes the extraction route. A whole cache is 3.3 GB on iOS 16, and kuna's
+- unlace takes the extraction route. A whole cache is 3.3 GB on iOS 16, and unlace's
   surfaces are per-image. Ghidra maps the stub islands as memory, so they
-  decompile as thunks. kuna names each island after its final target, so the
+  decompile as thunks. unlace names each island after its final target, so the
   call renders as the callee directly.
 
 ## Testing plan

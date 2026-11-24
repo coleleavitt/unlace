@@ -2,16 +2,16 @@
 the type analog of ``scripts.decbench.optsweep``.
 
 ``optsweep`` answers the same question for GED. This one answers it for the
-metric kuna is weakest on: over the whole benchmark, which functions did the
+metric unlace is weakest on: over the whole benchmark, which functions did the
 change move to a PERFECT type recovery, and which did it move off?
 
-Both arms are the SAME kuna binary over the SAME slices, one invocation per
-(slice, arm) exactly as decbench's ``kuna_raw`` backend runs it::
+Both arms are the SAME unlace binary over the SAME slices, one invocation per
+(slice, arm) exactly as decbench's ``unlace_raw`` backend runs it::
 
     unlace decompile-all <stripped> --json --max-fn-seconds 120 [--option N V ...]
 
 Each arm's JSON is rebuilt into a ``DecompilationResult`` whose function set and
-names come from the tree's own checkpoint for kuna (the addresses decbench
+names come from the tree's own checkpoint for unlace (the addresses decbench
 narrowed to, relabeled to their DWARF names -- ``run_benchmark._relabel_to_dwarf``'s
 convention) and whose ``variables`` come from the fresh run, then scored by
 ``TypeMatchMetric.compute_for_binary`` -- the SAME call ``reeval_typematch.py``
@@ -22,7 +22,7 @@ line means the numbers are wrong, not interesting:
 
 * the baseline arm is compared function-by-function against the tree's published
   ``type_match`` verdict, and the agreement rate is reported (it is < 100% only
-  by kuna-build drift since the tree was scored);
+  by unlace-build drift since the tree was scored);
 * functions whose two arms have byte-identical ``variables`` must score
   identically.
 
@@ -55,8 +55,8 @@ from pathlib import Path
 from . import config
 
 CACHE = Path(os.environ.get(
-    "KUNA_TYPESWEEP_CACHE",
-    str(Path.home() / ".cache" / "decbench" / "kuna-typesweep"),
+    "UNLACE_TYPESWEEP_CACHE",
+    str(Path.home() / ".cache" / "decbench" / "unlace-typesweep"),
 ))
 
 
@@ -83,8 +83,8 @@ def stripped_of(unstripped: Path) -> Path:
     return Path(str(unstripped).replace("/compiled/", "/stripped/"))
 
 
-def run_kuna(stripped: Path, options: list[tuple[str, str]], timeout: int) -> dict:
-    cmd = [config.kuna_bin(), "decompile-all", str(stripped), "--json",
+def run_unlace(stripped: Path, options: list[tuple[str, str]], timeout: int) -> dict:
+    cmd = [config.unlace_bin(), "decompile-all", str(stripped), "--json",
            "--max-fn-seconds", "120"]
     for k, v in options:
         cmd += ["--option", k, v]
@@ -100,7 +100,7 @@ def run_kuna(stripped: Path, options: list[tuple[str, str]], timeout: int) -> di
         p.wait(timeout=15)
         raise
     if p.returncode != 0 and not (out or "").strip():
-        raise RuntimeError(f"kuna exited {p.returncode}: {(err or '')[-400:]}")
+        raise RuntimeError(f"unlace exited {p.returncode}: {(err or '')[-400:]}")
     return json.loads(out)
 
 
@@ -144,7 +144,7 @@ def build_result(payload: dict, addr2name: dict[int, str], unstripped: Path, bas
         )
     return DecompilationResult(
         binary_path=unstripped, binary_name=unstripped.stem,
-        decompiler=DecompilerMetadata(decompiler_name="kuna", decompiler_version="sweep"),
+        decompiler=DecompilerMetadata(decompiler_name="unlace", decompiler_version="sweep"),
         functions=funcs,
     )
 
@@ -238,8 +238,8 @@ def install_decision_recorder(sink: list) -> None:
             v = decompiled.variables[di] if di is not None else None
             sink.append({
                 "fn": decompiled.name, "ok": ok, "pass": pas,
-                "kuna_type": (v.type if v else None), "kuna_size": (v.size if v else None),
-                "kuna_name": (v.name if v else None),
+                "unlace_type": (v.type if v else None), "unlace_size": (v.size if v else None),
+                "unlace_name": (v.name if v else None),
                 "gt_type": (gv.get("type") or [None])[0], "gt_size": gv.get("size"),
                 "gt_name": gv.get("name"), "gt_is_arg": bool(gv.get("is_arg")),
                 "gt_has_off": bool(gv.get("rbp_offset")), "gt_vars": n,
@@ -317,7 +317,7 @@ def score_slice(task):
         # ``scripts.decbench.typescore`` asks for an explicit off/on A/B.
         opts = arms[arm] if isinstance(arms, dict) else ([] if arm == "base" else options)
         try:
-            payload = run_kuna(stripped, opts, timeout)
+            payload = run_unlace(stripped, opts, timeout)
         except Exception as e:  # noqa: BLE001
             out[arm] = {"error": str(e)[:200]}
             continue
@@ -343,7 +343,7 @@ def score_slice(task):
 
 
 def collect_slices(results_root: Path, projects, opts):
-    """(project, opt, stem, unstripped, addr2name) for every kuna slice in the tree."""
+    """(project, opt, stem, unstripped, addr2name) for every unlace slice in the tree."""
     import decbench.decompilers  # noqa: F401
     ckpt = results_root / "checkpoints"
     out = []
@@ -361,7 +361,7 @@ def collect_slices(results_root: Path, projects, opts):
             if opts and optn not in opts:
                 continue
             for stem, decs in bins.items():
-                r = decs.get("kuna")
+                r = decs.get("unlace")
                 if r is None or not getattr(r, "functions", None):
                     continue
                 bp = Path(r.binary_path)
@@ -381,13 +381,13 @@ def collect_slices(results_root: Path, projects, opts):
 
 
 def published(results_root: Path) -> dict:
-    """kuna's published per-function type_match, keyed project::opt::stem::fn."""
+    """unlace's published per-function type_match, keyed project::opt::stem::fn."""
     doc = json.loads((results_root / "function_results.json").read_text())
     out = {}
     for g in doc.get("groups", []):
         stem = Path(g["binary"]).stem
         for f in g.get("functions", []):
-            v = (f.get("values") or {}).get("kuna") or {}
+            v = (f.get("values") or {}).get("unlace") or {}
             if v.get("type_match") is not None:
                 out[f"{g['project']}::{g['opt_level']}::{stem}::{f['function']}"] = \
                     float(v["type_match"])

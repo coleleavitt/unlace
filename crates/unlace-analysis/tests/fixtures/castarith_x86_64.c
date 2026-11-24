@@ -1,5 +1,5 @@
 /* castarith round-trip fixture: a pointer plus a whole number of elements.
- * The round trip compiles the prelude, kuna's printing of every function
+ * The round trip compiles the prelude, unlace's printing of every function
  * between the markers, and the original main, and compares its output with
  * this binary's.  Built with -std=gnu11 at gcc -O0, clang -O0 and gcc -O2. */
 #include <stdio.h>

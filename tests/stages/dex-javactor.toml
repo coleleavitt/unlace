@@ -1,4 +1,4 @@
-# Kuna DEX loader, constructors: P9 Java output, option javanew (default
+# Unlace DEX loader, constructors: P9 Java output, option javanew (default
 # on). The script loads the committed DEX fixture built from
 # tests/stages/fixtures/dex/Tries.java and Base.java and prints Java.
 #

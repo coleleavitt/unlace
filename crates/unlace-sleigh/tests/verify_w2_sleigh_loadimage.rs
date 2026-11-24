@@ -371,7 +371,7 @@ fn verify_w2loadimage_zero_length_reads_and_adjust_vma_int4_truncation() {
 
     // RawLoadImage: zero-length read far past EOF also succeeds
     let mut path = std::env::temp_dir();
-    path.push(format!("kuna_verify_loadimage_{}", std::process::id()));
+    path.push(format!("unlace_verify_loadimage_{}", std::process::id()));
     std::fs::write(&path, [1u8, 2, 3, 4]).unwrap();
     let mut raw = RawLoadImage::new(path.to_str().unwrap());
     raw.attach_to_space(Rc::clone(&ram));

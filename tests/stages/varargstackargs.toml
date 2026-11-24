@@ -26,7 +26,7 @@
 # computed it is dead code eliminated.
 #
 # Stage / sub-stage: P4 "active-input-trial-scoring".  A VARIADIC call's
-# stack tail is scored as its own fillinMap section (kuna_varargstackargs.rs,
+# stack tail is scored as its own fillinMap section (unlace_varargstackargs.rs,
 # always on), so the ABI's register hole stops being evidence about the
 # stack argument.  Non-variadic calls are untouched:
 # for a fully known prototype a hole in the register file IS evidence.

@@ -30,7 +30,7 @@ assert.ok(data.milestones.some((m) => m.date === '2026-08-31' && m.commit === '6
 assert.ok(data.options.every((o) => o.source === o.source.toLowerCase()), 'option sources must be case-normalized');
 const arch = data.architecture;
 assert.deepEqual(Object.keys(arch.phases), data.phases.map((p) => p.id));
-assert.ok(Object.values(arch.phases).every((p) => p.loc > 0 && p.kunaLoc <= p.loc && /^docs\/spec\/.+\.md$/.test(p.spec)));
+assert.ok(Object.values(arch.phases).every((p) => p.loc > 0 && p.unlaceLoc <= p.loc && /^docs\/spec\/.+\.md$/.test(p.spec)));
 assert.ok(arch.shared.some((f) => f.folder === 'substrate') && arch.shared.some((f) => f.folder === 'infra'));
 assert.ok(arch.crates.some((c) => c.name === 'unlace-decomp'));
 assert.ok(arch.schedule.passes.length > 200, 'the default schedule was not exported');
@@ -49,7 +49,7 @@ assert.equal(dailyRows(data).reduce((sum, row) => sum + row.commits, 0), data.co
 assert.ok(dailyRows(data).every((row) => row.commits > 0));
 assert.equal(sourceKey('ghidra-upstream'), sourceKey('ghidra'));
 assert.equal(sourceKey('IDA'), sourceKey('ida'));
-assert.notEqual(sourceKey('kuna'), sourceKey('ghidra'));
+assert.notEqual(sourceKey('unlace'), sourceKey('ghidra'));
 
 const serialized = JSON.stringify(data);
 assert.doesNotMatch(serialized, /\/(Users|home)\//, 'local paths leaked into public data');

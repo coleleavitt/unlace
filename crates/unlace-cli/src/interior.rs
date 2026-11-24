@@ -72,7 +72,7 @@ pub(crate) fn of_targets(prog: &ConsoleProgram, targets: &[FunctionEntry]) -> In
 /// The stderr line, one wording for every surface.
 pub(crate) fn note(i: &Interior) -> String {
     format!(
-        "note: {:#x} is interior to {} ({:#x}+{:#x}), not an entry kuna discovered; \
+        "note: {:#x} is interior to {} ({:#x}+{:#x}), not an entry unlace discovered; \
          decompiled from {:#x} as asked (--define-function {:#x} declares a function there)",
         i.addr,
         i.owner,
@@ -98,7 +98,7 @@ fn past_flow_note(prog: &ConsoleProgram, byte: u64) -> Option<String> {
 fn past_flow_line(at: u64, owner: &str, end: u64) -> String {
     format!(
         "note: {at:#x} is past the end of {owner} at {end:#x}, after the last instruction its flow \
-         reaches, and in no function kuna discovered; decompiled from {at:#x} as asked \
+         reaches, and in no function unlace discovered; decompiled from {at:#x} as asked \
          (--define-function {at:#x} declares a function there)"
     )
 }
@@ -172,7 +172,7 @@ mod tests {
         assert_eq!(
             note(&interior),
             "note: 0x140001040 is interior to sub_140001030 (0x140001030+0x10), not an entry \
-             kuna discovered; decompiled from 0x140001040 as asked (--define-function \
+             unlace discovered; decompiled from 0x140001040 as asked (--define-function \
              0x140001040 declares a function there)"
         );
         assert_eq!(

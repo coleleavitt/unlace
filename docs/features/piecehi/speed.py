@@ -7,7 +7,7 @@ ARMS = {"main": sys.argv[3], "fix": sys.argv[4]}
 SP = os.environ.get("SLEIGHHOME", "specs")
 N = int(sys.argv[1]) if len(sys.argv) > 1 else 15
 out = {}
-env = dict(os.environ, SLEIGHHOME=SP, KUNA_SPECS=SP)
+env = dict(os.environ, SLEIGHHOME=SP, UNLACE_SPECS=SP)
 for name, b in BINS:
     t = {a: [] for a in ARMS}
     for kb in ARMS.values():

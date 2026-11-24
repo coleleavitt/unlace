@@ -1,4 +1,4 @@
-# i386 ELF fixture for `option spsolve` (tests/stages/kuna-spsolve.toml).
+# i386 ELF fixture for `option spsolve` (tests/stages/unlace-spsolve.toml).
 # Build: gcc -m32 -nostdlib -static -Wl,--build-id=none -o spsolve_elf_i386 spsolve_elf_i386.s
     .text
     .globl _start

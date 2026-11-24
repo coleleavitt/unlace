@@ -1,4 +1,4 @@
-# Kuna: P1 environment binding, option dyldimage with several images
+# Unlace: P1 environment binding, option dyldimage with several images
 # (`A+B`). The script loads the committed synthetic dyld shared cache
 # (crates/unlace-analysis/tests/fixtures/dyld_cache_arm64e.py):
 # libcaller calls libcallee's callee_add through a __TEXT_STUBS island.

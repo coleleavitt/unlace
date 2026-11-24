@@ -19,13 +19,13 @@ is neutral, one below the space's pointer lower bound is a field offset.
 
 | file | what |
 |---|---|
-| `decompiler/crates/kuna-decomp/src/p5_types/ptrfromuse.rs` | the rule: `PtrFromUseMode`, `OptionPtrFromUse`, `pointer_from_use`, the descendant walk and its refusal list |
-| `decompiler/crates/kuna-decomp/src/p5_types/ptrfromuse/tests.rs` | 5 unit tests (option parse, the fold precedence in both directions, `Rc` stability) |
-| `decompiler/crates/kuna-decomp/src/p5_types/coreaction_infertypes.rs` | the one call site, in `build_localtypes` after the seed/`get_local_type` choice |
-| `decompiler/crates/kuna-decomp/src/infra/architecture.rs` | `ptr_from_use` field, default, `reset_defaults`, `set_kuna_option`, the `ArchSeam` copy |
-| `decompiler/crates/kuna-decomp/src/substrate/context.rs` | the `ArchSeam` field the pass reads |
-| `decompiler/crates/kuna-decomp/src/p0_knowledge/options.rs` | registration |
-| `decompiler/crates/kuna-decomp/phases.toml` | the `[[settable]]` row |
+| `decompiler/crates/unlace-decomp/src/p5_types/ptrfromuse.rs` | the rule: `PtrFromUseMode`, `OptionPtrFromUse`, `pointer_from_use`, the descendant walk and its refusal list |
+| `decompiler/crates/unlace-decomp/src/p5_types/ptrfromuse/tests.rs` | 5 unit tests (option parse, the fold precedence in both directions, `Rc` stability) |
+| `decompiler/crates/unlace-decomp/src/p5_types/coreaction_infertypes.rs` | the one call site, in `build_localtypes` after the seed/`get_local_type` choice |
+| `decompiler/crates/unlace-decomp/src/infra/architecture.rs` | `ptr_from_use` field, default, `reset_defaults`, `set_unlace_option`, the `ArchSeam` copy |
+| `decompiler/crates/unlace-decomp/src/substrate/context.rs` | the `ArchSeam` field the pass reads |
+| `decompiler/crates/unlace-decomp/src/p0_knowledge/options.rs` | registration |
+| `decompiler/crates/unlace-decomp/phases.toml` | the `[[settable]]` row |
 | `tests/stages/ptrfromuse.toml` | the three-pass end-to-end test (11 assertions: one witness, three controls) |
 | `docs/spec/05-types.md` | §5.2 prose, next to `ptrdepthcap` and `codescalar` |
 

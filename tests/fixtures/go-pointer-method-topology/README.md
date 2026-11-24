@@ -8,7 +8,7 @@ type in the call's scope. The ELF is a static decompiler fixture.
 
 ```sh
 p=tests/fixtures/go-pointer-method-topology
-as --64 -o /tmp/kuna-go-pointer-method.o "$p/method.S"
-ld -m elf_x86_64 --build-id=none -o "$p/method-elf" /tmp/kuna-go-pointer-method.o
+as --64 -o /tmp/unlace-go-pointer-method.o "$p/method.S"
+ld -m elf_x86_64 --build-id=none -o "$p/method-elf" /tmp/unlace-go-pointer-method.o
 chmod a-x "$p/method-elf"
 ```

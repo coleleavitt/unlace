@@ -7,7 +7,7 @@ sys.path.insert(0, os.environ.get("PINDB_DIR", str(Path(__file__).resolve().pare
 import pindb; pindb.pin()
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from scripts.decbench import structscore as SS
-RES = Path(os.environ.get("KUNA_DECBENCH_RESULTS", "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11"))
+RES = Path(os.environ.get("UNLACE_DECBENCH_RESULTS", "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11"))
 ARMS = {a: [["structsynth", a]] for a in os.environ.get("ARMS", "param,nest").split(",")}
 EXTRA = [kv.split(" ", 1) for kv in os.environ.get("EXTRA", "").split(",") if kv.strip()]
 BINS = [tuple(x.split(":")) for x in os.environ["BINS"].split(",")]

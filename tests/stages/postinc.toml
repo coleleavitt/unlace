@@ -68,26 +68,26 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-POSTINC #1: the step folds into the load (default)'
+name = 'UNLACE-POSTINC #1: the step folds into the load (default)'
 count = 1
 regex = '^      v2 \+= \(uint4\)\*a0\+\+;$'
 
 [[match]]
-name = 'KUNA-POSTINC #2: the step folds into the store (default)'
+name = 'UNLACE-POSTINC #2: the step folds into the store (default)'
 count = 1
 regex = '^    \*a0\+\+ = a2;$'
 
 [[match]]
-name = 'KUNA-POSTINC #3: a step through a copy the loop compares is left'
+name = 'UNLACE-POSTINC #3: a step through a copy the loop compares is left'
 count = 1
 regex = '^      a0 = v2;$'
 
 [[match]]
-name = 'KUNA-POSTINC #4: postinc off keeps each step as its own statement'
+name = 'UNLACE-POSTINC #4: postinc off keeps each step as its own statement'
 count = 2
 literal = 'a0 = &a0[1];'
 
 [[match]]
-name = 'KUNA-POSTINC #5: postinc off prints no post-increment'
+name = 'UNLACE-POSTINC #5: postinc off prints no post-increment'
 count = 2
 literal = '++'

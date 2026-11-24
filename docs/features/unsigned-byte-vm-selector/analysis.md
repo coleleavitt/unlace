@@ -3,7 +3,7 @@
 ## Concrete divergence
 
 The exact `KataVM_L1` function at `0x12d0` declares its dispatch selector as
-`unsigned char` and compares `AL` with opcode `0x8b`. Kuna recovered the
+`unsigned char` and compares `AL` with opcode `0x8b`. Unlace recovered the
 compiler's comparison cascade as a switch but printed `case -0x75`. Integer
 promotion makes that label unreachable from the unsigned-byte selector.
 

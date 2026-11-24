@@ -1,9 +1,9 @@
-# Kuna: option itaniumeh on ARM32 (EHABI) and with types named from a
+# Unlace: option itaniumeh on ARM32 (EHABI) and with types named from a
 # type_info name string. P1 program prep reads .ARM.exidx: every entry is a
 # function start (Thumb when decided), and a generic-model .ARM.extab entry
 # holds the LSDA, whose type-table entries are R_ARM_TARGET2 words
-# (`unlace-analysis/src/analyzers/entry/kuna_armexidx.rs`,
-# `kuna_itaniumeh.rs`). The class Odd has hidden visibility, so only its
+# (`unlace-analysis/src/analyzers/entry/unlace_armexidx.rs`,
+# `unlace_itaniumeh.rs`). The class Odd has hidden visibility, so only its
 # type_info name string names it.
 #
 # Fixtures: `crates/unlace-analysis/tests/fixtures/ehcatch_x86_64.so`,

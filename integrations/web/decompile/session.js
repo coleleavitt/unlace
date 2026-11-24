@@ -3,8 +3,8 @@
 // session IS the directive list). Records are keyed by what they describe,
 // so a rename and a retype of one local merge into one pinned `type`
 // directive, and writing a byte back to its original value removes the patch.
-// The same records export as a `.kuna` file the native CLI replays verbatim:
-//   unlace decompile <binary> <function> --assert @<binary>.kuna
+// The same records export as a `.unlace` file the native CLI replays verbatim:
+//   unlace decompile <binary> <function> --assert @<binary>.unlace
 // Directives go out grouped by kind, each kind in the order its records were
 // first made (a later edit keeps a record's place), since some depend on
 // earlier ones: a type definition on another, the later of two raw
@@ -25,14 +25,14 @@ export const CONTROL = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/;
 /**
  * Why `text` cannot go into a directive, or null: it is too long, holds a
  * control character or a line break (it would start a second directive in a
- * .kuna file), or a `#` at its start or after a space (the .kuna reader cuts
+ * .unlace file), or a `#` at its start or after a space (the .unlace reader cuts
  * the line there).
  */
 export function directiveTextProblem(text, max = TEXT_LIMITS.raw) {
   const t = String(text ?? '');
   if (t.length > max) return `that is too long (at most ${max} characters)`;
   if (CONTROL.test(t)) return 'a directive cannot hold a line break or a control character';
-  if (/(^|\s)#/.test(t)) return 'a directive cannot hold " #" or start with # (the .kuna file reads that as a comment)';
+  if (/(^|\s)#/.test(t)) return 'a directive cannot hold " #" or start with # (the .unlace file reads that as a comment)';
   return null;
 }
 
@@ -69,7 +69,7 @@ export function shellQuote(s) {
 }
 
 /** The native command that replays a session file against one function. */
-export function cliCommand(fileName, target, sessionFile = `${fileName}.kuna`) {
+export function cliCommand(fileName, target, sessionFile = `${fileName}.unlace`) {
   return `unlace decompile ${shellQuote(fileName)} ${shellQuote(target)} --assert @${shellQuote(sessionFile)}`;
 }
 
@@ -486,13 +486,13 @@ export class Session {
     return s;
   }
 
-  // ── the .kuna file ───────────────────────────────────────────────────────
+  // ── the .unlace file ───────────────────────────────────────────────────────
 
-  /** The session as an `@FILE` for `kuna ... --assert @file`. */
+  /** The session as an `@FILE` for `unlace ... --assert @file`. */
   toFileText({ binary = 'binary', hash = '', time = new Date(), target = 'main', nameOf = (a) => a } = {}) {
-    const file = `${binary}.kuna`;
+    const file = `${binary}.unlace`;
     const head = [
-      '# kuna study-view session (one --assert directive per line)',
+      '# unlace study-view session (one --assert directive per line)',
       `# binary: ${binary}`,
       hash ? `# hash: ${hash}` : null,
       `# saved: ${time.toISOString()}`,
@@ -505,7 +505,7 @@ export class Session {
   }
 
   /**
-   * Read a `.kuna` file back into records. `resolveFunc(name)` maps a
+   * Read a `.unlace` file back into records. `resolveFunc(name)` maps a
    * qualifier to a function address; `bindTo` receives unqualified
    * function-scoped directives. Returns `{added, raw, unbound}` counts.
    */

@@ -2,16 +2,16 @@
 
 ## 1. The symptom
 
-`kuna decompile-all --json` describes a recovered variable with a C type name.
+`unlace decompile-all --json` describes a recovered variable with a C type name.
 For a one-byte value the type system never committed to, that name is `char`:
 
 ```
-$ kuna decompile-all O2/coreutils/stripped/fmt --addr 0x40f0 --json
+$ unlace decompile-all O2/coreutils/stripped/fmt --addr 0x40f0 --json
 "variables": [ { "name": "param_1", "type": "char", "size": 1, "kind": "arg" } ]
 ```
 
 The ground truth for that function is
-`void close_stdout_set_ignore_EPIPE(_Bool ignore)`. kuna did not recover `char`:
+`void close_stdout_set_ignore_EPIPE(_Bool ignore)`. unlace did not recover `char`:
 it recovered *one byte it could not classify*, and the printer picked `char`
 because `char` is the one-byte C type that reads as a value. The JSON surface
 then repeats the printer's choice as if it were a recovery result.
@@ -25,7 +25,7 @@ stack symbols (2), and — under `framelayout` — the frame slots an earlier
 `printc::type_to_c_string` directly, i.e. exactly what the `.c` text says.
 
 Under the default `realtypes` the residual `TYPE_UNKNOWN` carrier of size 1
-(kuna's `xunknown1`, Ghidra's `undefined1`) renders as `char`; with `realtypes`
+(unlace's `xunknown1`, Ghidra's `undefined1`) renders as `char`; with `realtypes`
 off the same row exports the internal spelling `xunknown1`, which is not a type
 name any consumer knows. Section 3 already avoided both, through
 `frame_slot_type_name`, which reports an uncommitted slot by width
@@ -34,10 +34,10 @@ two sections of the same array.
 
 ## 3. Why the width is the better answer
 
-- It is what kuna actually knows. `undefined1` states the width and declines the
+- It is what unlace actually knows. `undefined1` states the width and declines the
   element type; `char` asserts one.
 - Every other decompiler reports it that way: Ghidra as `undefined1`, IDA as
-  `_BYTE`, and kuna's own section 3 as `undefined<N>`.
+  `_BYTE`, and unlace's own section 3 as `undefined<N>`.
 - On the decbench `type_match` metric, an uncommitted width matches a ground-truth
   `char` **and** a `_Bool` (the `_UNCOMMITTED_TYPES`/`_SIZE_SCALARS` rule), where a
   committed `char` matches only `char`. So the honest answer also scores better —

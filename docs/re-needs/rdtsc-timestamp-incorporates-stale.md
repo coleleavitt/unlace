@@ -28,7 +28,7 @@ reject_reason: null
 Reliable timestamp-dependent state updates in helper 0x140011280 and main.
 
 > **RDTSC timestamp incorporates stale upper bits from the preceding computation** (major, `69a3822f7b3cc38c80464da4`)
-> The helper merges the second argument's upper bits into the timestamp using CONCAT44. Kuna disassembly at 0x1400112f4 shows RDTSC; SHL RDX,0x20; OR RAX,RDX, which must not retain pre-RDTSC RAX bits. Similar corruption recurs throughout main; helper 0x140011940 uses an uninitialized local for those bits.
+> The helper merges the second argument's upper bits into the timestamp using CONCAT44. Unlace disassembly at 0x1400112f4 shows RDTSC; SHL RDX,0x20; OR RAX,RDX, which must not retain pre-RDTSC RAX bits. Similar corruption recurs throughout main; helper 0x140011940 uses an uninitialized local for those bits.
 
 ## Reproduction
 
@@ -38,7 +38,7 @@ Reliable timestamp-dependent state updates in helper 0x140011280 and main.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x140011280"
@@ -68,7 +68,7 @@ Reliable timestamp-dependent state updates in helper 0x140011280 and main.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "timestamp"

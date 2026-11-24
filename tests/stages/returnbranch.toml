@@ -1,4 +1,4 @@
-# kuna returnbranch: MIPS hand-written code may load a constant code address
+# unlace returnbranch: MIPS hand-written code may load a constant code address
 # into $ra and jump through it. SLEIGH marks `jr ra` as a RETURN whatever
 # the register holds, so the function ended at the jump and the store it
 # reaches was dropped.

@@ -1,7 +1,7 @@
 /* The sixth counterexample: a forwarding thunk written in plain C.
 
    `fwd` names rdi and rsi and nothing else -- it tests `a` and tail-calls
-   through `o->fn` -- so kuna recovers TWO parameters for it while the function
+   through `o->fn` -- so unlace recovers TWO parameters for it while the function
    it jumps to consumes three.  Two recovered parameters are exactly the two
    arguments the drop would leave behind, so BOTH halves of the recovered-
    prototype clause are satisfied and the forwarded rdx argument is deleted,

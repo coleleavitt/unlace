@@ -6,13 +6,13 @@
 # `<executable_format name="Portable Executable (PE)">` arm of
 # `noReturnFunctionConstraints.xml`.
 #
-# kuna merges the base PE/Mach-O no-return names into one shipped file
+# unlace merges the base PE/Mach-O no-return names into one shipped file
 # (`PeMacFunctionsThatDoNotReturn`), which carries only the shared CRT names.
 # The names below are Windows-only -- the Win32/NT API exits (`ExitProcess`,
 # `ExitThread`, `KeBugCheck`, `RpcRaiseException`), the MSVC CRT internals, and
 # the MSVC-mangled `std::_Xbad_alloc` throw family -- so they live HERE and are
 # matched ONLY against a PE/COFF object, never a Mach-O.  Selected by
-# `loader/kuna_peimportcall.rs` under `--option peimportcall`.
+# `loader/unlace_peimportcall.rs` under `--option peimportcall`.
 abort
 CxxThrowException
 CxxThrowException@8
@@ -42,7 +42,7 @@ ___report_rangecheckfailure
 ?_Xbad_function_call@std@@YAXXZ
 ?terminate@@YAXXZ
 
-# (kuna, #28) Windows names a public declaration or document marks no-return,
+# (unlace, #28) Windows names a public declaration or document marks no-return,
 # missing above.
 # MSVC CRT gs_report.c (`__declspec(noreturn)`; the /GS failure path that
 # terminates the process): `__report_gsfailure`, `__report_securityfailure`,
@@ -102,7 +102,7 @@ RtlExitUserProcess
 RtlExitUserThread
 RtlRestoreContext
 
-# (kuna) MSVC CRT and STL routines IDA 9.5's FLIRT names no-return on the
+# (unlace) MSVC CRT and STL routines IDA 9.5's FLIRT names no-return on the
 # statically linked CRT of i386 PEs (Holley EFI's SLABHIDDevice.dll,
 # CP210xManufacturing.dll, USBCAN-Driver.dll): the VC++ 2008 STL
 # `_String_base::_Xlen/_Xran/_Xinvarg` (each throws), the EH runtime's
@@ -117,7 +117,7 @@ unexpected
 ?__scrt_throw_std_bad_array_new_length@@*
 scrt_throw_std_bad_array_new_length
 
-# (kuna) ATL/MFC throw routines IDA 9.5's FLIRT names no-return on Holley EFI's
+# (unlace) ATL/MFC throw routines IDA 9.5's FLIRT names no-return on Holley EFI's
 # statically linked PEGRP32F.dll: ATL's `AtlThrowImpl` / `AtlThrowLastWin32`
 # (atlexcept.h, `ATL_NORETURN`) and `CSimpleStringT::ThrowMemoryException`, MFC's
 # `AfxThrowInternetException`, `AfxThrowLastCleanup` and `CDataExchange::Fail`

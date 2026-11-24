@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate the WIN32_NAMES rows of kuna-analysis/src/analyzers/protos/libcnames.rs.
+"""Regenerate the WIN32_NAMES rows of unlace-analysis/src/analyzers/protos/libcnames.rs.
 
 usage: python3 gen_win32_names.py MINGW_INCLUDE > rows.rs
 
@@ -17,7 +17,7 @@ as a parameter of another entry point (`hModule`, `hHeap`, `lpMem`).
 import json, os, re, subprocess, sys, tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-WIN32 = os.path.join(HERE, '../../../decompiler/crates/kuna-analysis/src/analyzers/protos/win32sigs.rs')
+WIN32 = os.path.join(HERE, '../../../decompiler/crates/unlace-analysis/src/analyzers/protos/win32sigs.rs')
 SIG = re.compile(r'\("(\w+)", Sig \{ ret: [^,]+, params: &\[([^\]]*)\], vararg: (-?\d+) \}\)')
 HEADERS = ['winsock2.h', 'windows.h', 'tlhelp32.h', 'oleauto.h', 'wincrypt.h']
 SDK = {

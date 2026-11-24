@@ -52,9 +52,9 @@ impl Catalog {
             .args(args)
             .current_dir(self.dir.path())
             .env_remove("UNLACE_DECOMP_DBG")
-            .env_remove("KUNA_DECOMP_DBG")
+            .env_remove("UNLACE_DECOMP_DBG")
             .env_remove("UNLACE_ENGINE")
-            .env_remove("KUNA_ENGINE")
+            .env_remove("UNLACE_ENGINE")
             .env("UNLACE_ROOT", self.dir.path())
             .env("UNLACE_SPECS", self.dir.path().join("missing-specs"))
             .env("SLEIGHHOME", self.dir.path().join("missing-specs"));
@@ -262,7 +262,7 @@ fn external_selection_preserves_precedence_legacy_flags_and_drift_check() {
     let stderr = String::from_utf8(out.stderr).unwrap();
     assert!(stderr.contains("catalog DRIFT:"), "{stderr}");
     assert!(
-        stderr.contains("catalog row \"external_only\" matches no registered kuna option"),
+        stderr.contains("catalog row \"external_only\" matches no registered unlace option"),
         "{stderr}"
     );
     assert!(stderr.contains("has no catalog row"), "{stderr}");

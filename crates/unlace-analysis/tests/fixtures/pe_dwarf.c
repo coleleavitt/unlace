@@ -1,7 +1,7 @@
 // Fixture source for the MinGW-PE DWARF gate (s1_dwarf on PE) — the PE analog of
 // the ELF `dwarf_stripped_x86_64`: the function NAMES live ONLY in `.debug_*`.
 //
-// Build recipe (in the `kuna-dev` container; MinGW `-g` emits standard `.debug_*`
+// Build recipe (in the `unlace-dev` container; MinGW `-g` emits standard `.debug_*`
 // DWARF sections in the PE):
 //
 //   x86_64-w64-mingw32-gcc -g -O0 pe_dwarf.c -o pe_g.exe
@@ -27,5 +27,5 @@ int add(int a, int b) {
 }
 
 int main(void) {
-    return first_byte("kuna") + add(2, 3);
+    return first_byte("unlace") + add(2, 3);
 }

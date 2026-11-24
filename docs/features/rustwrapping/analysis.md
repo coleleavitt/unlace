@@ -29,7 +29,7 @@ enabled. A separate loop harness checks 125 results and callback counts at
 each optimization level. A synthetic IR
 test pins unsigned 128-bit addition with a signed operand. That expression
 passes 36 native boundary cases at each optimization level. In a separate
-x86-64 `__int128` binary probe, Kuna still recovers 64-bit input limbs and a
+x86-64 `__int128` binary probe, Unlace still recovers 64-bit input limbs and a
 split array result. The prototype override rejects `int16` and `uint16`, so the
 128-bit check establishes emission from primitive IR.
 

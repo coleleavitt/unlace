@@ -22,7 +22,7 @@ Raw per-binary tables: `measurements.txt`.
 
 | surface | ground truth | recall before | recall after | new entries | of which GT | **splits a real body** | outside any DWARF body | **entries lost** |
 |---|---|---|---|---|---|---|---|---|
-| `kuna functions --mode aggressive` | 43,809 | 40,309 (92.0%) | **40,870 (93.3%)** | 593 | 561 (**94.6%**) | **0** | 32 | **0** |
+| `unlace functions --mode aggressive` | 43,809 | 40,309 (92.0%) | **40,870 (93.3%)** | 593 | 561 (**94.6%**) | **0** | 32 | **0** |
 | stacked on `--option ptrentry on` | 43,809 | 42,028 (95.9%) | **42,589 (97.2%)** | 593 | 561 (**94.6%**) | **0** | 32 | **0** |
 | `--option listing off` | 43,809 | 13,277 | 13,277 | 0 | — | 0 | 0 | **0** |
 
@@ -229,7 +229,7 @@ its own investigation, with its own precision model.
 
 The pass is ARM-gated, like the sibling Stage-2/3 seed scans (the mechanism is
 architecture-neutral; the evidence is not — the proposal's recommendation was
-"ARM-first, generalise on evidence"). Whole-binary `kuna decompile-all --json` is
+"ARM-first, generalise on evidence"). Whole-binary `unlace decompile-all --json` is
 **byte-identical** (sha256) off vs on for x86-64 (`gzip`), a PE binary
 (`mydoom.exe`, which matters because PR #254 changed PE flow termination), and the
 Cortex-M images with no admissible candidate (`blink.elf`, `miniblink.elf`). The
@@ -250,7 +250,7 @@ step 2 rejected when it replaced `MIN_SUBROUTINE_INSNS`. Left as measured.
 
 The pass is one pass over the decoded instruction map to collect branch targets
 plus, per surviving candidate, a bounded forward closure. See `measurements.txt`
-block 7 for the table: on the discovery surface (`kuna functions`) every delta is
+block 7 for the table: on the discovery surface (`unlace functions`) every delta is
 inside run-to-run noise on images from 144 ms to 4.9 s, and the `decompile-all`
 deltas are the extra decompile work for the extra functions, sub-proportional to
 it.
@@ -268,12 +268,12 @@ the u-boot result is representative. No DIV row: default output is byte-identica
 
 ```bash
 # entry recall, before vs after, against DWARF ground truth
-kuna functions <stripped-arm-elf> --json --mode aggressive
-kuna functions <stripped-arm-elf> --json --mode aggressive --option tailcallentry on
+unlace functions <stripped-arm-elf> --json --mode aggressive
+unlace functions <stripped-arm-elf> --json --mode aggressive --option tailcallentry on
 # compare both against DW_AT_low_pc of the matching compiled/ binary, and classify
 # each new address as ground truth / strictly inside another body / outside every body
 
 # the strict no-op check
-kuna decompile-all <x86-64-or-PE-binary> --json --mode aggressive | sha256sum
-kuna decompile-all <same> --json --mode aggressive --option tailcallentry on | sha256sum
+unlace decompile-all <x86-64-or-PE-binary> --json --mode aggressive | sha256sum
+unlace decompile-all <same> --json --mode aggressive --option tailcallentry on | sha256sum
 ```

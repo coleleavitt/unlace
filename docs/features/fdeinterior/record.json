@@ -1,7 +1,7 @@
 {
   "opportunity": "C++ exception landing pads promoted to top-level functions (campaign probe: g++ -O0 probe_try_catch [0x2acf,0x2ba7) mints sub_2b0b / sub_2b1a / sub_2b8a, each decompiling with an uninitialised rbp)",
-  "test_name": "kuna functions / decompile-all entry sweep: 72 stripped decbench x86-64 ELF binaries (O0+O2) classified against their unstripped FUNC symbols, 4 C++ probes, a static glibc image, 2 PEs, one ET_REL .o, and all 98 decbench ARM Cortex-M images",
-  "binary": "decompiler/crates/kuna-analysis/tests/fixtures/eh_lsda_x86_64",
+  "test_name": "unlace functions / decompile-all entry sweep: 72 stripped decbench x86-64 ELF binaries (O0+O2) classified against their unstripped FUNC symbols, 4 C++ probes, a static glibc image, 2 PEs, one ET_REL .o, and all 98 decbench ARM Cortex-M images",
+  "binary": "decompiler/crates/unlace-analysis/tests/fixtures/eh_lsda_x86_64",
   "selector": "sub_4012e2",
   "func_addr": "0x4012e2",
   "angr_version": null,
@@ -10,14 +10,14 @@
   "element_id": null,
   "change_kind": "analysis-enablement",
   "tier": "analysis",
-  "source_decompiler": "kuna",
+  "source_decompiler": "unlace",
   "inspiration": "IDA Pro 9.2: get_func(0x2b0b).start_ea == 0x2acf, the landing pad taken from the .eh_frame FDE range. Ghidra 12.1 returns no containing function on the same probe (its GccExceptionAnalyzer errors on this PIE), so IDA is the model.",
   "default_on": true,
   "ablation_changed": 0,
   "parity": "OK",
   "entry_sweep": {
     "x86_64_c_corpus": {
-      "surface": "kuna functions <stripped> --json (mode auto)",
+      "surface": "unlace functions <stripped> --json (mode auto)",
       "binaries": 72,
       "projects": [
         "coreutils",
@@ -241,7 +241,7 @@
     }
   },
   "tailcallentry_259_non_regression": {
-    "surface": "kuna functions --mode aggressive --option tailcallentry on",
+    "surface": "unlace functions --mode aggressive --option tailcallentry on",
     "corpus": "every ARM image in the decbench O0/O2/O2-noinline trees",
     "images": 98,
     "failed": 0,
@@ -311,22 +311,22 @@
     "make_test_stages": "PARITY OK 394/394",
     "make_rust_test": "green, 4457 tests passed / 0 failed (re-run after the #264 rebase)",
     "make_check_spec": "OK (lenient and --strict)",
-    "kuna_catalog_check": "OK"
+    "unlace_catalog_check": "OK"
   },
   "files": [
-    "decompiler/crates/kuna-analysis/src/analyzers/entry/fdeinterior.rs",
-    "decompiler/crates/kuna-analysis/src/analyzers/entry/mod.rs",
-    "decompiler/crates/kuna-analysis/src/pass.rs",
-    "decompiler/crates/kuna-analysis/src/passes.rs",
+    "decompiler/crates/unlace-analysis/src/analyzers/entry/fdeinterior.rs",
+    "decompiler/crates/unlace-analysis/src/analyzers/entry/mod.rs",
+    "decompiler/crates/unlace-analysis/src/pass.rs",
+    "decompiler/crates/unlace-analysis/src/passes.rs",
     "decompiler/crates/console/src/engine.rs",
     "decompiler/crates/console/tests/verify_fdeinterior.rs",
     "decompiler/crates/console/tests/verify_eh_frame_full.rs",
-    "decompiler/crates/kuna-decomp/phases.toml",
-    "decompiler/crates/kuna-decomp/src/infra/architecture.rs",
-    "decompiler/crates/kuna-decomp/src/p0_knowledge/options.rs",
-    "decompiler/crates/kuna-decomp/src/p0_knowledge/phases/tests.rs",
-    "decompiler/crates/kuna-decomp/tests/catalog_bytecompat.rs",
-    "decompiler/crates/kuna-decomp/tests/fixtures/phase_catalog.json",
+    "decompiler/crates/unlace-decomp/phases.toml",
+    "decompiler/crates/unlace-decomp/src/infra/architecture.rs",
+    "decompiler/crates/unlace-decomp/src/p0_knowledge/options.rs",
+    "decompiler/crates/unlace-decomp/src/p0_knowledge/phases/tests.rs",
+    "decompiler/crates/unlace-decomp/tests/catalog_bytecompat.rs",
+    "decompiler/crates/unlace-decomp/tests/fixtures/phase_catalog.json",
     "docs/options.md",
     "docs/spec/01-program-prep.md",
     "docs/history.md"

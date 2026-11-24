@@ -10,7 +10,7 @@ offset = '0x100000'
 readonly = true
 hex = '03e0000800000000'
 
-# kuna armconstshift all: a fixed 64-bit left shift of a signed operand is
+# unlace armconstshift all: a fixed 64-bit left shift of a signed operand is
 # undefined C for negative values and for bits shifted into or past the sign,
 # although every machine computes it modulo 2^64. P9 emission / cast-policy;
 # P0 assertion `option armconstshift`. Two passes over LLVM objects for x86-64,

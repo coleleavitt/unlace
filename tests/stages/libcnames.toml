@@ -1,4 +1,4 @@
-# kuna `libcnames`: a local that holds a library call's result, or that is
+# unlace `libcnames`: a local that holds a library call's result, or that is
 # handed to a library call whole, keeps a `vN` name although the library
 # declares what it is: `v1 = open(a0,0)`, `read(v1,v4,0x200)`.
 #

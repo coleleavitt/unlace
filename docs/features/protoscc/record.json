@@ -12,12 +12,12 @@
  "source_decompiler": "angr",
  "base_commit": "2888a2a94 (origin/main)",
  "modules": [
-  "decompiler/crates/kuna-cli/src/decompile_all.rs (callee_first_plan, plan_from_components, cycle_order)",
-  "decompiler/crates/kuna-decomp/src/p4_calls/protoorder.rs (ProtoOrderMode::Cycles)",
-  "decompiler/crates/kuna-decomp/src/p4_calls/protoorder.rs (forget_statements_naming, seed_protoorder_types: no function reads its own statement)",
-  "decompiler/crates/kuna-cli/src/decompile_all.rs (converge_callee_first: forget stale statements before the sweep)"
+  "decompiler/crates/unlace-cli/src/decompile_all.rs (callee_first_plan, plan_from_components, cycle_order)",
+  "decompiler/crates/unlace-decomp/src/p4_calls/protoorder.rs (ProtoOrderMode::Cycles)",
+  "decompiler/crates/unlace-decomp/src/p4_calls/protoorder.rs (forget_statements_naming, seed_protoorder_types: no function reads its own statement)",
+  "decompiler/crates/unlace-cli/src/decompile_all.rs (converge_callee_first: forget stale statements before the sweep)"
  ],
- "fixture": "decompiler/crates/kuna-analysis/tests/fixtures/protoorder_cycles_x86_64 (sha256 6a45512de067c0fb7e56097c5cd3c0dbd7c605e113c4ff3a4d23b5d5767570ff)",
+ "fixture": "decompiler/crates/unlace-analysis/tests/fixtures/protoorder_cycles_x86_64 (sha256 6a45512de067c0fb7e56097c5cd3c0dbd7c605e113c4ff3a4d23b5d5767570ff)",
  "probes": [
   "tests/cli/protoorder-cycles-types-the-callers-of-a-recursive-function.json",
   "tests/cli/protoorder-types-states-nothing-for-a-recursive-function.json"
@@ -240,7 +240,7 @@
   "fixture": "rtarget writes rdx before recursing: rtarget(a0,5,v3) -> rtarget(a0,5); rkeep forwards rdx: rkeep(a0,5,v3) in both"
  },
  "speed": {
-  "method": "docs/features/protoscc/speed.py: one build of this branch, whole-binary `kuna decompile-all --json --max-fn-seconds 120`, arms `--option protoorder types` and `--option protoorder cycles` rotated inside each iteration, min and median of 15 (box load 15-64)",
+  "method": "docs/features/protoscc/speed.py: one build of this branch, whole-binary `unlace decompile-all --json --max-fn-seconds 120`, arms `--option protoorder types` and `--option protoorder cycles` rotated inside each iteration, min and median of 15 (box load 15-64)",
   "budget_pct": 5,
   "slices": {
    "fmt -O2": {
@@ -296,12 +296,12 @@
   "make test-cli": "tests/cli: 221/221 passed (219 existing + the two new protoorder cycles/types probes)",
   "make rust-test": "RUST_TEST_RC=0 via rust-test-lane.sh: 7391 passed, 0 failed, 38 ignored",
   "check-spec": "check-spec OK (lenient mode) / check-spec OK (strict mode)",
-  "kuna catalog --check": "catalog OK: documents exactly the registered kuna options",
+  "unlace catalog --check": "catalog OK: documents exactly the registered unlace options",
   "counters --check": "no drift: every hard-coded site agrees with the derived truth",
-  "docs/options.md": "regenerated with kuna catalog --markdown",
+  "docs/options.md": "regenerated with unlace catalog --markdown",
   "phase_catalog.json": "recaptured (phase catalog, no program loaded)"
  },
- "fixture_sweep": "decompiler/crates/kuna-analysis/tests/fixtures/protoorder_cyclestruct_x86_64 (sha256 7b7ce35c2c064285d759484bb98af47a0b49b0d5590229564c0d844054f20ba0); test kuna-cli/tests/decompile_all_cli.rs a_redone_recursive_function_reads_no_statement_of_its_own (fails on d4b827902)",
+ "fixture_sweep": "decompiler/crates/unlace-analysis/tests/fixtures/protoorder_cyclestruct_x86_64 (sha256 7b7ce35c2c064285d759484bb98af47a0b49b0d5590229564c0d844054f20ba0); test unlace-cli/tests/decompile_all_cli.rs a_redone_recursive_function_reads_no_statement_of_its_own (fails on d4b827902)",
  "sweep_stale_check": {
   "finding": "review: tar -O2 make_hol (sub_3b0c0), redone by the structsynth sweep under cycles, read its own first-pass statement and passed (struct_54 *)*v22 while its prototype takes struct_59 *",
   "fix": "seed_protoorder_types skips the function's own entry; converge_callee_first forgets stated lists naming a superseded structure before any redo",

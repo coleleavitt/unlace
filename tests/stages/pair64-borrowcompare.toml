@@ -4,7 +4,7 @@
 # borrow (sbb); the result is read off the flags (setl, setb). Lifted, a
 # signed compare is the XOR of SBORROW4(ahi,bhi), SBORROW4(ahi-bhi,c) and
 # the sign of ahi-bhi-c, with c = alo < blo, and an unsigned one is
-# ahi < bhi || ahi-bhi < c. kuna_borrowcompare folds either back into one
+# ahi < bhi || ahi-bhi < c. unlace_borrowcompare folds either back into one
 # compare of the two wholes, also with a declared prototype. With no
 # prototype each long long arrived as two int parameters; option pairparam
 # joins two stack words a borrow or carry links into one parameter.

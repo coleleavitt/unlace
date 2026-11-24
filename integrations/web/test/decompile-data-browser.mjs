@@ -119,7 +119,7 @@ try {
   assert.match(await text('#databar .dv-what'), /^primes 32 bytes at 4040 in \.data/);
   assert.match(await secHead(), /^\.data data the program can change/);
   assert.equal(await rowValue('0x4020'), '"hello, data"', 'text reads as text');
-  assert.equal(await rowValue('0x4070'), '→ "kuna data tab"', 'a pointer to a string shows the string');
+  assert.equal(await rowValue('0x4070'), '→ "unlace data tab"', 'a pointer to a string shows the string');
   assert.equal(await rowValue('0x4078'), '→ twice', 'a pointer to a function names it');
   assert.equal(await rowValue('0x4080'), '→ primes + 0xc');
   await usesShown();
@@ -218,7 +218,7 @@ try {
   });
   await page.waitFor(`document.querySelector('#datalist select.dv-pick')?.selectedOptions[0]?.textContent === '.rodata' && !document.querySelector('#datalist.dv-busy')`, { what: 'the section menu goes to .rodata', timeout: 60000 });
   assert.match(await secHead(), /^\.rodata data that never changes/);
-  assert.ok(await page.evaluate(`[...document.querySelectorAll('#datalist .dv-row .dv-v')].some((v) => v.textContent === '"kuna data tab"')`), 'its strings read as text');
+  assert.ok(await page.evaluate(`[...document.querySelectorAll('#datalist .dv-row .dv-v')].some((v) => v.textContent === '"unlace data tab"')`), 'its strings read as text');
   await shot('rodata');
   await page.key('ArrowLeft', { modifiers: 1 });
   await dataShown('0x40c0', 'Back returns to scratch');

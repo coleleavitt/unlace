@@ -29,11 +29,11 @@ fn main() {
         println!("cargo:rerun-if-changed={}", path.display());
     }
     println!(
-        "cargo:rustc-env=KUNA_ENGINE_SOURCE_FINGERPRINT={:016x}",
+        "cargo:rustc-env=UNLACE_ENGINE_SOURCE_FINGERPRINT={:016x}",
         engine.value
     );
     println!(
-        "cargo:rustc-env=KUNA_HARNESS_SOURCE_FINGERPRINT={:016x}",
+        "cargo:rustc-env=UNLACE_HARNESS_SOURCE_FINGERPRINT={:016x}",
         harness.value
     );
 }

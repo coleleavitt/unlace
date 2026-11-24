@@ -19,7 +19,7 @@ HOME_URL="https://kuna.noelo.org/"
 echo ">> assembling $RUN"
 rm -rf "$RUN"
 mkdir -p "$RUN"
-for f in kuna-web.js kuna-worker.js kuna-worker-client.js zip.js sha256.js \
+for f in unlace-web.js unlace-worker.js unlace-worker-client.js zip.js sha256.js \
          unlace_wasm.wasm specs-small.json specs vendor decompile; do
   mv "$DIST/$f" "$RUN/"
 done

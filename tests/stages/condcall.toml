@@ -1,7 +1,7 @@
-# kuna issue testcase: a predicated call's fall-through is not a function
+# unlace issue testcase: a predicated call's fall-through is not a function
 # (default correctness fix, no option).
 #
-# Issue:      kuna GH-299 - mid-function entries on ARM firmware; a
+# Issue:      unlace GH-299 - mid-function entries on ARM firmware; a
 #             conditional `bl` made the instruction after it a function, and
 #             three such sites made the callee no-return.
 # Stage:      P1 code/data partition - the Listing walk's call targets
@@ -44,21 +44,21 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-CONDCALL #1: the instruction after a blgt is not a function'
+name = 'UNLACE-CONDCALL #1: the instruction after a blgt is not a function'
 count = 0
 regex = '0x81[345]0 sub_81[345]0'
 
 [[match]]
-name = 'KUNA-CONDCALL #2: the predicated callers are functions'
+name = 'UNLACE-CONDCALL #2: the predicated callers are functions'
 count = 3
 regex = '0x81[234]2 sub_81[234]2'
 
 [[match]]
-name = 'KUNA-CONDCALL #3: ext returns, so other makes both calls'
+name = 'UNLACE-CONDCALL #3: ext returns, so other makes both calls'
 count = 1
 literal = 'return sub_8164(v1 + 1) + v1;'
 
 [[match]]
-name = 'KUNA-CONDCALL #4: no call to ext is no-return'
+name = 'UNLACE-CONDCALL #4: no call to ext is no-return'
 count = 0
 literal = 'no-return'

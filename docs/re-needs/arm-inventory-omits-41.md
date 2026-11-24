@@ -44,7 +44,7 @@ Enumerate and batch-decompile the validators called by main.
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "functions",
     "{{BIN}}",
     "--json"
@@ -75,7 +75,7 @@ Enumerate and batch-decompile the validators called by main.
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "functions",
     "{{BIN}}",
     "--json"
@@ -104,7 +104,7 @@ _not yet refuted_
 
 ## Reference
 
-- `ida-decompile load ./target/armageddon` — Reference failed: server exited with status 1 before registering. No IDA inventory was obtained. Kuna direct decompilation and original-instruction emulation confirm the omitted functions.
+- `ida-decompile load ./target/armageddon` — Reference failed: server exited with status 1 before registering. No IDA inventory was obtained. Unlace direct decompilation and original-instruction emulation confirm the omitted functions.
 
 ## Instances
 
@@ -113,13 +113,13 @@ _not yet refuted_
 ## Decision log
 
 - filed by cluster.py from 1 observation(s)
-- split by captain at T_DEDUP from round 12's `silent-failure|functions|exit_code,stdout_is_json,stdout_matches` bucket: cluster.py's signature (kind|subcommand|clause-shape) collapsed unrelated defects, so the crop was hand-partitioned one observation per need and filed via `--from-file`. See `.kuna-repipe/rounds/12/dedup/MARKER.json`; do NOT run `cluster --round 12` bare.
+- split by captain at T_DEDUP from round 12's `silent-failure|functions|exit_code,stdout_is_json,stdout_matches` bucket: cluster.py's signature (kind|subcommand|clause-shape) collapsed unrelated defects, so the crop was hand-partitioned one observation per need and filed via `--from-file`. See `.unlace-repipe/rounds/12/dedup/MARKER.json`; do NOT run `cluster --round 12` bare.
 - sibling of `arm-inventory-invents-function` — opposite errors of the same ARM discovery pass (false negatives vs one false positive). Kept separate: fixing under-discovery does not fix over-discovery, and the tracks differ (loader vs quality).
 - round 12 REFUTER: hypothesis **upheld** (was inconclusive). UPHELD, and the count is exact: 42 direct BL targets in main are missing from the inventory, 41 of them real .text validators. The filed cause -- whole-binary discovery does not incorporate ARM call targets recovered by single-function analysis -- is right, and the measurement makes it unambiguous.
 
-THE DECISIVE MEASUREMENT. kuna ALREADY KNOWS 0x104f4 is a called function; only 'functions' does not. 'unlace xrefs --to 0x104f4' returns count 1 with kind 'call', instruction 'bl 0x104f4' at 0x14aa8, from_function 'main' -- and main IS in the inventory (0x14a04, size 2224). So this is not a decode failure and not a reachability failure. Disassembling main and collecting its BL targets gives 45 distinct addresses; 42 are absent from the 17-function inventory (0x104f4, 0x106d8, 0x1082c ... 0x148bc), and the 42nd is 0x59684c, outside the image entirely -- a junk-word decode, see the obfuscation note below. The remaining 41 are exactly the validators the tester reported.
+THE DECISIVE MEASUREMENT. unlace ALREADY KNOWS 0x104f4 is a called function; only 'functions' does not. 'unlace xrefs --to 0x104f4' returns count 1 with kind 'call', instruction 'bl 0x104f4' at 0x14aa8, from_function 'main' -- and main IS in the inventory (0x14a04, size 2224). So this is not a decode failure and not a reachability failure. Disassembling main and collecting its BL targets gives 45 distinct addresses; 42 are absent from the 17-function inventory (0x104f4, 0x106d8, 0x1082c ... 0x148bc), and the 42nd is 0x59684c, outside the image entirely -- a junk-word decode, see the obfuscation note below. The remaining 41 are exactly the validators the tester reported.
 
-WHY THE INVENTORY CANNOT SEE THEM. EntryDiscoveryPass (unlace-analysis/src/analyzers/entry/mod.rs) documents this as a designed LOSS in its own header: 'General undirected call-target sweep is infeasible at the analyzer tier (no Listing) -- substituted by the _start->main idiom (oracle 4) + prologue patterns (oracle 5).' On this image the substitutes cover nothing: oracle 4 fires correctly (main IS found at 0x14a04, so kuna_armlibcmain works and is NOT the defect), oracle 3 is empty because .eh_frame is 4 bytes -- a bare terminator -- and .ARM.exidx is 8 bytes, one entry, and oracle 5 is documented x86-64-only. Everything past main's own entry depends on a call sweep that does not exist. Note the mechanism is arch-neutral; ARM is where it bites because the two table oracles are empty here.
+WHY THE INVENTORY CANNOT SEE THEM. EntryDiscoveryPass (unlace-analysis/src/analyzers/entry/mod.rs) documents this as a designed LOSS in its own header: 'General undirected call-target sweep is infeasible at the analyzer tier (no Listing) -- substituted by the _start->main idiom (oracle 4) + prologue patterns (oracle 5).' On this image the substitutes cover nothing: oracle 4 fires correctly (main IS found at 0x14a04, so unlace_armlibcmain works and is NOT the defect), oracle 3 is empty because .eh_frame is 4 bytes -- a bare terminator -- and .ARM.exidx is 8 bytes, one entry, and oracle 5 is documented x86-64-only. Everything past main's own entry depends on a call sweep that does not exist. Note the mechanism is arch-neutral; ARM is where it bites because the two table oracles are empty here.
 
 DEAD LINE CLOSED, the same one as its ELF sibling: funcstart_patterns is default-OFF and is the obvious candidate, but 'decompile-all --option funcstart_patterns on' still returns 17 functions with no 0x104f4. Ablate through decompile-all -- 'unlace functions' takes no --option.
 

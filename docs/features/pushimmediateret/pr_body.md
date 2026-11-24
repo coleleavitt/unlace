@@ -1,7 +1,7 @@
 ## The problem
 
 CryptoME's i386 unpacking entry executes `call 0x4f7990; push 0x40365a;
-ret`. Kuna kept the unpacker call but treated the final RET as an ordinary
+ret`. Unlace kept the unpacker call but treated the final RET as an ordinary
 return, so dead-store removal silently erased the transfer to the original
 entry point. Two RE-friction records describe the same defect:
 `push-immediate-ret-transfer` and `entry-point-push-return`.

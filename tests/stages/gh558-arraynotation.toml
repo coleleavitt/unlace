@@ -16,7 +16,7 @@
 # Default output renders the PTRADD as `p->r + lVar` (pointer-arith form).
 #
 # Stage model: which notation a standalone PTRADD gets is an S9
-# "literal/format policy" decision (LATENT upstream).  kuna exposes it as the
+# "literal/format policy" decision (LATENT upstream).  unlace exposes it as the
 # P0 assertion `option arraynotation on|off`; when on, PrintC::opPtradd emits
 # `&base[index]` instead of `base + index`.
 #

@@ -4,7 +4,7 @@ A byte that is algebraically `'w'` split a declared string initializer into
 three statements. The checked-in fixture reproduces the original output:
 
 ```bash
-kuna decompile decompiler/crates/kuna-analysis/tests/fixtures/pe_subcommuteshift_x86_64.exe 0x1406fa160 \
+unlace decompile decompiler/crates/unlace-analysis/tests/fixtures/pe_subcommuteshift_x86_64.exe 0x1406fa160 \
   --assert 'data 0x1408f1c08 char usage[22]' --option cancelbytearithmetic off
 ```
 

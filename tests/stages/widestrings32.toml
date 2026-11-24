@@ -75,31 +75,31 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-WIDESTRINGS32 #1: off, the literal prints as its address'
+name = 'UNLACE-WIDESTRINGS32 #1: off, the literal prints as its address'
 count = 1
 literal = 'hashw(0x402004);'
 
 [[match]]
-name = 'KUNA-WIDESTRINGS32 #2: on, the literal prints as L"hellow"'
+name = 'UNLACE-WIDESTRINGS32 #2: on, the literal prints as L"hellow"'
 count = 2
 literal = 'hashw(L"hellow");'
 
 [[match]]
-name = 'KUNA-WIDESTRINGS32 #3: on, the NULL default prints as a literal'
+name = 'UNLACE-WIDESTRINGS32 #3: on, the NULL default prints as a literal'
 count = 1
 literal = '= L"(NULL)";'
 
 [[match]]
-name = 'KUNA-WIDESTRINGS32 #4: int tables of character codes keep their names'
+name = 'UNLACE-WIDESTRINGS32 #4: int tables of character codes keep their names'
 count = 2
 regex = 'sum\((codes|weeks),'
 
 [[match]]
-name = 'KUNA-WIDESTRINGS32 #5: on, clang, the literal after the switch table starts at its operand'
+name = 'UNLACE-WIDESTRINGS32 #5: on, clang, the literal after the switch table starts at its operand'
 count = 0
 literal = 'L"qhellow"'
 
 [[match]]
-name = 'KUNA-WIDESTRINGS32 #6: on, clang, the indexed switch table keeps its address'
+name = 'UNLACE-WIDESTRINGS32 #6: on, clang, the indexed switch table keeps its address'
 count = 1
 literal = 'return dat_20a0['

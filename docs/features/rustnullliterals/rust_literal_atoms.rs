@@ -1,8 +1,8 @@
 use super::*;
 use crate::context::{ArchContext, TypeOp};
 use crate::printlanguage::{Atom, SyntaxHighlight as Highlight, TagType};
-use kuna_base::address::Address;
-use kuna_base::space::{
+use unlace_base::address::Address;
+use unlace_base::space::{
     addrspace_flags, spacetype, AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace,
 };
 use std::rc::Rc;

@@ -1,4 +1,4 @@
-# Module 5 game-server port conversion; P9 kuna_partialconcat.rs (always
+# Module 5 game-server port conversion; P9 unlace_partialconcat.rs (always
 # on) preserves both halves with masked C arithmetic instead of the undefined
 # CONCAT helper.  The second case checks a 64-bit partial write; the third joins unrelated
 # operands and must keep the existing rendering.
@@ -44,21 +44,21 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-PARTIALCONCAT #1: the undefined CONCAT22 helper never prints for the 32-bit result'
+name = 'UNLACE-PARTIALCONCAT #1: the undefined CONCAT22 helper never prints for the 32-bit result'
 count = 0
 literal = 'return CONCAT22'
 
 [[match]]
-name = 'KUNA-PARTIALCONCAT #2: both halves of the 32-bit result are masked'
+name = 'UNLACE-PARTIALCONCAT #2: both halves of the 32-bit result are masked'
 count = 1
 regex = 'return .*0xffff0000.*0xffff;'
 
 [[match]]
-name = 'KUNA-PARTIALCONCAT #3: 64-bit upper bits are preserved'
+name = 'UNLACE-PARTIALCONCAT #3: 64-bit upper bits are preserved'
 count = 1
 regex = 'return .*0xffffffffffff0000.*0xffff;'
 
 [[match]]
-name = 'KUNA-PARTIALCONCAT #4: an unrelated register join stays unchanged'
+name = 'UNLACE-PARTIALCONCAT #4: an unrelated register join stays unchanged'
 count = 1
 literal = 'return CONCAT44(a0,a1);'

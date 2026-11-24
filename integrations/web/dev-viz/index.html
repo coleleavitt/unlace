@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kuna Development Visualizer</title>
-<meta name="description" content="Kuna’s development history: commits, phase activity, option sources, outside contributions, and recorded benchmark results.">
+<title>Unlace Development Visualizer</title>
+<meta name="description" content="Unlace’s development history: commits, phase activity, option sources, outside contributions, and recorded benchmark results.">
 <meta name="theme-color" content="#ffffff">
 <link rel="icon" type="image/png" href="../assets/img/favicon.png">
 <link rel="stylesheet" href="../assets/css/site.css">
@@ -16,8 +16,8 @@
 <header class="top">
   <div class="wrap">
     <a class="brand" href="../">
-      <img src="../assets/img/kuna-mark.svg" alt="">
-      <span class="wordmark">Kuna</span>
+      <img src="../assets/img/unlace-mark.svg" alt="">
+      <span class="wordmark">Unlace</span>
       <span class="at">development visualizer</span>
     </a>
     <nav class="nav" aria-label="Primary">
@@ -31,9 +31,9 @@
 <main id="main">
   <div class="wrap">
     <section class="record-hero">
-      <h1>Kuna Development Visualizer</h1>
+      <h1>Unlace Development Visualizer</h1>
       <div>
-        <p class="lede">Kuna is a decompiler developed with coding agents and human direction. This page shows its commit history, where changes happen, where ideas come from, and recorded test results. The data is collected from the repository when the site is built.</p>
+        <p class="lede">Unlace is a decompiler developed with coding agents and human direction. This page shows its commit history, where changes happen, where ideas come from, and recorded test results. The data is collected from the repository when the site is built.</p>
         <p class="snapshot" id="snapshot">Loading repository snapshot…</p>
       </div>
       <div class="hero-proof" aria-label="Repository totals">
@@ -78,7 +78,7 @@
           <p class="eyebrow">02 / phase model</p>
           <h2>Changes by phase</h2>
         </div>
-        <p>Rows are Kuna’s P0–P9 phases; columns are UTC weeks. Color shows source lines added or removed in files assigned to each phase. This measures code activity, not completion or quality.</p>
+        <p>Rows are Unlace’s P0–P9 phases; columns are UTC weeks. Color shows source lines added or removed in files assigned to each phase. This measures code activity, not completion or quality.</p>
       </div>
       <div class="heatmap-shell">
         <div class="heatmap" id="phase-heatmap" aria-label="Weekly source activity by decompiler phase"></div>
@@ -95,10 +95,10 @@
           <p class="eyebrow">03 / architecture</p>
           <h2>What each phase holds</h2>
         </div>
-        <p>Each row is one phase’s source folder at this snapshot. Red marks lines in <code>kuna_*</code> modules, where Kuna adds its own logic; the rest began as the port of Ghidra’s decompiler and has changed since. Open a row for its largest modules and the specification chapter that describes it.</p>
+        <p>Each row is one phase’s source folder at this snapshot. Red marks lines in <code>unlace_*</code> modules, where Unlace adds its own logic; the rest began as the port of Ghidra’s decompiler and has changed since. Open a row for its largest modules and the specification chapter that describes it.</p>
       </div>
       <div class="chart-legend arch-legend" aria-hidden="true">
-        <span><i class="legend-line legend-kuna"></i> lines in kuna_* modules</span>
+        <span><i class="legend-line legend-unlace"></i> lines in unlace_* modules</span>
         <span><i class="legend-ported"></i> lines from the Ghidra port, since changed</span>
       </div>
       <div class="arch-table" id="arch-table" aria-label="Source lines, options, and scheduled passes per phase"></div>
@@ -134,7 +134,7 @@
         <div class="prov-layout">
           <div>
             <div class="prov-bars" id="prov-bars" aria-label="Option provenance counts"></div>
-            <p class="fineprint">Ghidra includes both <code>ghidra</code> and <code>ghidra-upstream</code> entries. “Kuna” is the catalog’s recorded implementation source; it does not mean the idea has no prior work. These are option counts, not shares of the codebase.</p>
+            <p class="fineprint">Ghidra includes both <code>ghidra</code> and <code>ghidra-upstream</code> entries. “Unlace” is the catalog’s recorded implementation source; it does not mean the idea has no prior work. These are option counts, not shares of the codebase.</p>
           </div>
           <div class="research-counters">
             <article><strong id="decbench-options">—</strong><span>options referencing a DecBench case</span></article>
@@ -144,9 +144,9 @@
         </div>
 
         <div class="novel-strip">
-          <div><p class="eyebrow">NOVEL benchmark cases</p><h3>Changes from cases where Kuna already scored best</h3></div>
+          <div><p class="eyebrow">NOVEL benchmark cases</p><h3>Changes from cases where Unlace already scored best</h3></div>
           <div class="novel-list" id="novel-list"></div>
-          <p class="fineprint">NOVEL labels cases where Kuna scored best or tied among the available outputs but still had structural or readability problems. It is a benchmark category, not a claim of a new invention.</p>
+          <p class="fineprint">NOVEL labels cases where Unlace scored best or tied among the available outputs but still had structural or readability problems. It is a benchmark category, not a claim of a new invention.</p>
         </div>
 
         <div class="contributions">
@@ -208,8 +208,8 @@
         </article>
         <article>
           <p class="metric"><strong id="stage-count">—</strong> / <span id="stage-total">—</span></p>
-          <h3>Kuna regression baseline</h3>
-          <p>Passing assertions in Kuna’s recorded stage-test baseline. Option-gated changes include comparisons with the option disabled.</p>
+          <h3>Unlace regression baseline</h3>
+          <p>Passing assertions in Unlace’s recorded stage-test baseline. Option-gated changes include comparisons with the option disabled.</p>
         </article>
         <article>
           <p class="metric"><strong id="triage-count">—</strong> records</p>

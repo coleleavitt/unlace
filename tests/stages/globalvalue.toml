@@ -1,6 +1,6 @@
 # A value a sign-sensitive operation reads keeps its own variable instead of
 # merging into a global it is stored to, and the store stays where the binary
-# makes it (P3 kuna_globalstorekeep, P6 kuna_globalvalue).
+# makes it (P3 unlace_globalstorekeep, P6 unlace_globalvalue).
 #
 # Merge joins a register value with the global it is copied to.  The joined
 # value then prints as a read of the global, and the operation on it takes the
@@ -8,8 +8,8 @@
 #
 #     else { u = init * 3; sink = u; r = (int)(u >> 4); }
 #
-# kuna used to print `sink = init * 3; r = sink >> 4;`.  The shift is right
-# only while `sink` is unsigned, which is how kuna types it, but kuna never
+# unlace used to print `sink = init * 3; r = sink >> 4;`.  The shift is right
+# only while `sink` is unsigned, which is how unlace types it, but unlace never
 # declares the global, so a reader who gives `sink` its real type
 # (`volatile int`) turns the logical shift arithmetic: for init 0x80000000 the
 # rebuilt program returns -134217728 where the binary returns 134217728.  The
@@ -19,7 +19,7 @@
 # A short or byte compare against a constant counts even when the constant
 # only reaches the value later: a fold moves it across `+`, `-`, `~` or
 # `^` (`w_fold16`: `u + 1 == 0` becomes `u == 0xffff`), after the store's
-# fate is decided, and kuna printed `hsink = a0 * 3; v1 = hsink == -1;`.
+# fate is decided, and unlace printed `hsink = a0 * 3; v1 = hsink == -1;`.
 # RulePropagateCopy keeps the store's COPY where the binary makes it and Merge
 # refuses the copy-shadow join, so the value keeps its own type and the store
 # keeps its place, ahead of a later pointer store that may alias the global.

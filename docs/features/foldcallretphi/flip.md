@@ -25,7 +25,7 @@ with a release binary built from `main` (48 of 48 files).
 ## What it looks like
 
 ```
-$ kuna decompile decompiler/crates/kuna-analysis/tests/fixtures/fauxware authenticate
+$ unlace decompile decompiler/crates/unlace-analysis/tests/fixtures/fauxware authenticate
 ```
 
 ```diff
@@ -39,7 +39,7 @@ $ kuna decompile decompiler/crates/kuna-analysis/tests/fixtures/fauxware authent
      return 1;
 ```
 
-and in coreutils `sort` -O2 `main` (`kuna decompile-all sort`, case `0x85`):
+and in coreutils `sort` -O2 `main` (`unlace decompile-all sort`, case `0x85`):
 
 ```diff
          if (v98) {
@@ -60,7 +60,7 @@ narrower than the callee returns. `sort` -O2 `main` ends with
 ```
 
 and `sub_c5b0` is `rpl_fclose`: the binary returns `mov $0xffffffff,%eax`, and
-kuna prints it `unsigned long sub_c5b0(FILE *a0)` ending in `return 0xffffffff;`.
+unlace prints it `unsigned long sub_c5b0(FILE *a0)` ending in `return 0xffffffff;`.
 Read against that prototype, the folded compare can never be true, so the
 `close failed` path disappears. The spill's `int` declaration was the only thing
 narrowing `rax` to `eax`. Over 32 binaries the review found 9 such new
@@ -99,7 +99,7 @@ off:      v1 = big(dat_1050); if (v1 != -1) return 7; return 1;
 before:   if (big(dat_1050) != -1) return 7; return 1;     // big printed unsigned long long
 ```
 
-The binary compares `eax` alone and returns 1; read against kuna's own
+The binary compares `eax` alone and returns 1; read against unlace's own
 `unsigned long long big()` the folded form returns 7. The guard now also asks
 the model where it would return an `int` of each power-of-two size above the
 output's, up to `long long`, and declines when that storage contains the output
@@ -159,7 +159,7 @@ today's default output, so it is GH-684 and not part of this change.
 | `make test-cli` | 189/189 on `6e4f6fa5` with both new guards (185 on `e1139df9`); one probe re-pointed, see below |
 
 `tests/cli/no-cli-rename-or-prototype-override` runs
-`kuna decompile fauxware authenticate --assert 'type v2 char[16]' --assert 'name v2 credbuf'`.
+`unlace decompile fauxware authenticate --assert 'type v2 char[16]' --assert 'name v2 credbuf'`.
 The directives are about the 8-byte `read` buffer at `stack - 0x18`, and `v2`
 was that buffer's name only because `v1` was the spilled `strcmp` result. With
 the fold `if (!strcmp(pass,sneaky))` there is no `v1` spill, the buffer is `v1`,
@@ -191,7 +191,7 @@ because a spill is gone:
   asserted `unsigned int v4;` / `int4 v4;` for `open`'s fd, which is `v3` once
   the spill above it goes. It now finds the local assigned `open(...)` and
   checks that declaration's type, so it no longer depends on a number.
-* `kuna-ghidra/tests/ghidra_sim_e2e.rs` `ghidra_sim_faillog_pins`: the flattened
+* `unlace-ghidra/tests/ghidra_sim_e2e.rs` `ghidra_sim_faillog_pins`: the flattened
   C line counts of `faillog` move 287 -> 286 (`sub_2620`, `main`) and 39 -> 37
   (`sub_3320`). In `main` `fstat(fileno(dat_6298),..)` and `!fclose(dat_6298)`
   fold; in `sub_3320` `fread` and `fwrite` on `dat_6298` fold into their tests
@@ -248,7 +248,7 @@ projects are x86-64.
 
 ## (e) Speed
 
-Interleaved `--option foldcallretphi off` / default pairs of `kuna decompile-all`,
+Interleaved `--option foldcallretphi off` / default pairs of `unlace decompile-all`,
 alternating which arm runs first, **minimum of 15 pairs**, same build, guards
 in. The child's CPU time (user+sys) is recorded beside the wall clock and
 tracks it within 0.02% (`decompile-all` is one thread). The box was shared with
@@ -404,7 +404,7 @@ value and every global afterwards:
 | B `sort` O2 `main` | the default keeps `v15 = sub_c5b0(stdin), v15 == -1` | 4 |
 | F `pr` O2-noinline `main` | the default keeps `v4 = sub_60c0(stdin), v4 == -1` | 4 |
 | B' / F' the pre-guard fold `sub_c5b0(stdin) == -1` / `sub_60c0(stdin) == -1`, callee returning 0 | agree | 3 + 3 |
-| control B' / F': the same, callee returning `0xffffffff` as the binary and kuna's own callee text do | must differ | 1 + 1 |
+| control B' / F': the same, callee returning `0xffffffff` as the binary and unlace's own callee text do | must differ | 1 + 1 |
 | control K: `stages/foldcallretphi.xml` `target2` folded past `k = 42` | must differ | 1 |
 | G `cx7` z1 -O2 | `(ferror(stdin) \|\| 5 < a0)`, the call folded into the left operand | 8 |
 | G `cx7` z3 -O2 | the default keeps `v1 = fflush(stdout); (5 < a0 && !v1)` | 8 |
@@ -426,7 +426,7 @@ order guard refuses, and the skipped call the short-circuit guard refuses.
 ### What a fold can still drop
 
 The width guard keeps every narrowing of an integer up to `long long`. What a full-width unlocked output still
-carries only in the caller is its signedness: kuna types it from this function's
+carries only in the caller is its signedness: unlace types it from this function's
 own reads, so a callee printed `unsigned long` whose result the caller spilled
 into a `long` loses that conversion when folded. That matters only under a
 relational comparison, a shift or a division. Over the 32 binaries, 32 folded

@@ -887,7 +887,7 @@ fn installed_corpus_check_validates_the_default_and_explicit_paths() {
     } else {
         data.clone()
     };
-    let installed = install_base.join("kuna/rust-signatures/x86_64/linux/manifest.json");
+    let installed = install_base.join("unlace/rust-signatures/x86_64/linux/manifest.json");
     let specs = common::repo_root().join("specs");
     let run = |args: &[&str], code| {
         let result = std::process::Command::new(env!("CARGO_BIN_EXE_unlace"))

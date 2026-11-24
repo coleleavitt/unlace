@@ -13,7 +13,7 @@ readonly-byte, argument-count and output-language checks are unchanged.
 `repro.S` is a minimal synthetic Rust 1.93 ABI fixture. Assemble with
 `as --64 repro.S -o repro.o`, link with
 `ld -pie --no-dynamic-linker --no-relax -e show repro.o -o repro`, and run
-`kuna decompile repro show --language rust`. Before the fix the call is
+`unlace decompile repro show --language rust`. Before the fix the call is
 `_print(0x2000,0xd)`; after it is `println!("hello")`.
 
 The committed deterministic fixture covers stdout, stderr, an unrelated root

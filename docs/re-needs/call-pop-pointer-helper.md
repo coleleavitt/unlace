@@ -38,7 +38,7 @@ Recover the string pointer returned by the helper at 0x4f7036.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x4f7036",
@@ -71,7 +71,7 @@ Recover the string pointer returned by the helper at 0x4f7036.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "dllname"
@@ -118,11 +118,11 @@ _not yet refuted_
 ## Decision log
 
 - filed by cluster.py from 1 observation(s)
-- split by captain at T_DEDUP from round 12's `wrong-output|decompile|exit_code,stdout_absent` bucket: cluster.py's signature (kind|subcommand|clause-shape) collapsed unrelated defects, so the crop was hand-partitioned one observation per need and filed via `--from-file`. See `.kuna-repipe/rounds/12/dedup/MARKER.json`; do NOT run `cluster --round 12` bare.
+- split by captain at T_DEDUP from round 12's `wrong-output|decompile|exit_code,stdout_absent` bucket: cluster.py's signature (kind|subcommand|clause-shape) collapsed unrelated defects, so the crop was hand-partitioned one observation per need and filed via `--from-file`. See `.unlace-repipe/rounds/12/dedup/MARKER.json`; do NOT run `cluster --round 12` bare.
 - sibling of `push-immediate-ret-transfer` — both are CALL/RET-used-as-a-data-or-jump idiom on the same packer stub, but they are two different idioms (get-pc inline data vs push-imm/ret transfer) with two different fixes. Kept separate (Jaccard 0.0).
 - round 12 REFUTER: hypothesis **upheld** (was inconclusive). REFUTED IN-TICK (captain, round 12). EVERY CLAIM THE NEED MAKES IS TRUE, INCLUDING THE THREE NEGATIVE ONES; nothing to overturn. What this adds is the byte-level witness, the exact workaround directive (the need's wording is one word off), the shipped sibling option that ALMOST covers it, and an acceptance that a correct-looking fix passes while still losing what the tester asked for.
 
-THE IDIOM, FROM THE BYTES. 0x4f7036: `E8 52 00 00 00` = CALL 0x4f708d; `90` NOP; then ASCII 'kernel32.dll\0GetProcAddress\0LoadLibraryA\0VirtualAlloc\0VirtualFree\0VirtualProtect\0'. At 0x4f708d: `58 40 C3` = POP EAX; INC EAX; RET. The callee eats the pushed return address (0x4f703b, the NOP), increments past it to 0x4f703c = 'k', and RETs to its caller's caller. So 0x4f703b IS UNREACHABLE and the truth is `char *sub_4f7036(void) { return "kernel32.dll"; }`. CALL is a fall-through op, so kuna decodes the DLL names as instructions -- that is where `in(v13)` (port input) and the arbitrary memory writes come from.
+THE IDIOM, FROM THE BYTES. 0x4f7036: `E8 52 00 00 00` = CALL 0x4f708d; `90` NOP; then ASCII 'kernel32.dll\0GetProcAddress\0LoadLibraryA\0VirtualAlloc\0VirtualFree\0VirtualProtect\0'. At 0x4f708d: `58 40 C3` = POP EAX; INC EAX; RET. The callee eats the pushed return address (0x4f703b, the NOP), increments past it to 0x4f703c = 'k', and RETs to its caller's caller. So 0x4f703b IS UNREACHABLE and the truth is `char *sub_4f7036(void) { return "kernel32.dll"; }`. CALL is a fall-through op, so unlace decodes the DLL names as instructions -- that is where `in(v13)` (port input) and the arbitrary memory writes come from.
 
 THE THREE NEGATIVES ARE ALL REAL. calltrampoline is DEFAULT-ON and vacuous here in both directions (off emits the same three `in(` sites as the default). Its own summary explains why, and this is the useful part: it flows a call through 'a callee that throws the pushed return address away AND JUMPS BACK INTO THE INSTRUCTION STREAM' -- `lea esp,[esp+4]; <one insn>; jmp <back into the caller>`. This callee throws the return address away and RETs to the grandparent instead. SAME FAMILY, SECOND FLAVOUR: the JMP flavour shipped, the RET flavour did not. That is the coherent line for a builder, and it is why enabling calltrampoline could never have helped.
 

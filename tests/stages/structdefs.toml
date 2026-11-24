@@ -1,4 +1,4 @@
-# kuna structdefs: print the definitions of the composite types a function's
+# unlace structdefs: print the definitions of the composite types a function's
 # C names above the function.
 #
 # `readfields` takes a pointer to a three-field struct and adds two of the
@@ -38,26 +38,26 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-STRUCTDEFS #1: the struct definition is printed exactly once, by the ON pass'
+name = 'UNLACE-STRUCTDEFS #1: the struct definition is printed exactly once, by the ON pass'
 count = 1
 literal = 'struct mystruct {'
 
 [[match]]
-name = 'KUNA-STRUCTDEFS #2: every member of the referenced struct is spelled'
+name = 'UNLACE-STRUCTDEFS #2: every member of the referenced struct is spelled'
 count = 1
 literal = 'int4 b;'
 
 [[match]]
-name = 'KUNA-STRUCTDEFS #3: the tag gets the forward declaration the project header gives it'
+name = 'UNLACE-STRUCTDEFS #3: the tag gets the forward declaration the project header gives it'
 count = 1
 literal = 'typedef struct mystruct mystruct;'
 
 [[match]]
-name = 'KUNA-STRUCTDEFS #4: the signature is unchanged by the flip'
+name = 'UNLACE-STRUCTDEFS #4: the signature is unchanged by the flip'
 count = 2
 literal = 'int4 readfields(mystruct *p)'
 
 [[match]]
-name = 'KUNA-STRUCTDEFS #5: the body is unchanged by the flip'
+name = 'UNLACE-STRUCTDEFS #5: the body is unchanged by the flip'
 count = 2
 literal = 'return p->c + p->a;'

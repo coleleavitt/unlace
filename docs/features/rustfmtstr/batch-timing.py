@@ -2,7 +2,7 @@ from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor,as_completed
 import importlib.util,os,json,time,hashlib,subprocess,threading,multiprocessing,shutil,runpy
 
-spec=importlib.util.spec_from_file_location('timing', '/tmp/kuna-angr-reference/parallel-timing.py')
+spec=importlib.util.spec_from_file_location('timing', '/tmp/unlace-angr-reference/parallel-timing.py')
 timing=importlib.util.module_from_spec(spec);spec.loader.exec_module(timing)
 
 def worker(job):
@@ -11,7 +11,7 @@ def worker(job):
 def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 
 def main():
-    declaration=Path('/tmp/kuna-angr-reference/batch-timing-plan.json')
+    declaration=Path('/tmp/unlace-angr-reference/batch-timing-plan.json')
     batch=json.loads(declaration.read_text());allowed=os.sched_getaffinity(0)
     workdirs=[Path(p)for p in batch['workdirs']];configs=[];plans=[];jobspecs=[]
     for feature,w in enumerate(workdirs):
@@ -31,7 +31,7 @@ def main():
     idle={c:100*(b['cpus'][c][3]-a['cpus'][c][3])/sum(y-x for x,y in zip(a['cpus'][c],b['cpus'][c]))for pair in pairs for c in pair}
     selected=sorted(pairs,key=lambda p:(min(idle[c]for c in p),sum(idle[c]for c in p),p),reverse=True)[:len(jobspecs)]
     assignments={f'{feature}:{row[0]}':{'target_cpu':max(pair),'sibling_cpu':min(pair)}for(feature,index,row),pair in zip(jobspecs,selected)}
-    os.environ['KUNA_TIMING_CPU']=str(max(selected[0]));os.environ['KUNA_TIMING_MIN_IDLE']='0'
+    os.environ['UNLACE_TIMING_CPU']=str(max(selected[0]));os.environ['UNLACE_TIMING_MIN_IDLE']='0'
     runpy.run_path(str(workdirs[0]/'audit-idle.py'),run_name='__main__')
     stamp=time.strftime('%Y%m%d-%H%M%S',time.gmtime());attempts=[];digests=[]
     for feature,(w,config)in enumerate(zip(workdirs,configs)):
@@ -42,7 +42,7 @@ def main():
             if feature:shutil.copy2(workdirs[0]/name,w/name)
         shutil.copy2(declaration,attempt/declaration.name);shutil.copy2(__file__,attempt/'batch-timing.py')
         (attempt/'cpu-selection.json').write_text(json.dumps({'assignments':assignments,'idle_pct':idle},indent=2)+'\n')
-        digests.append({side:sha(Path(config[key])/'decompiler/target/release/kuna')for side,key in [('baseline','base'),('patched','root')]})
+        digests.append({side:sha(Path(config[key])/'decompiler/target/release/unlace')for side,key in [('baseline','base'),('patched','root')]})
     os.sched_setaffinity(0,allowed-{c for pair in selected for c in pair})
     telemetry=[timing.sample()];done=threading.Event()
     def monitor():
@@ -63,7 +63,7 @@ def main():
         done.set();thread.join();telemetry.append(timing.sample());raw=json.dumps(telemetry,indent=2)+'\n'
         for attempt in attempts:(attempt/'cpu-samples.json').write_text(raw)
     for feature,config in enumerate(configs):
-        assert all(sha(Path(config[key])/'decompiler/target/release/kuna')==digests[feature][side]for side,key in [('baseline','base'),('patched','root')])
+        assert all(sha(Path(config[key])/'decompiler/target/release/unlace')==digests[feature][side]for side,key in [('baseline','base'),('patched','root')])
     import statistics
     for feature,(w,config,plan,attempt)in enumerate(zip(workdirs,configs,plans,attempts)):
         results=[]

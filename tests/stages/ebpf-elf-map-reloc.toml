@@ -1,4 +1,4 @@
-# Kuna #1652: P1 loader, eBPF ELF objects (no option: a correctness fix).
+# Unlace #1652: P1 loader, eBPF ELF objects (no option: a correctness fix).
 # The script loads a clang `-target bpf -O2 -c` object (source beside the
 # fixture) and lets the loader pick the language from EM_BPF (247); the
 # big-endian twin takes eBPF:BE:64:default the same way.

@@ -1,12 +1,12 @@
 # Verify Go pointer receiver declarations
 
-Go pointer methods can print as free functions even when Kuna already
+Go pointer methods can print as free functions even when Unlace already
 recovers their receiver type and field accesses. Their direct callers
 then use a mangled namespace where Go expects a method expression.
 
 ## Reproduce
 
-Use Go 1.22.10 or 1.27.2 on Linux AMD64 with Kuna's processor specs
+Use Go 1.22.10 or 1.27.2 on Linux AMD64 with Unlace's processor specs
 available.
 
 ```sh
@@ -31,13 +31,13 @@ func main() {
 }
 GO
 CGO_ENABLED=0 go build -trimpath -o "$d/meter" "$d/main.go"
-kuna decompile-all "$d/meter" --language go --option godwarfsig on \
+unlace decompile-all "$d/meter" --language go --option godwarfsig on \
   --functions 'main.(*Meter).Apply,main.Forward'
 ```
 
 Stock emits `func Apply(m *Meter, delta uint64) uint64`, keeps the
 `Base` load and `Total` store, and calls
-`_kuna_ident_282a4d6574657229.Apply(m,delta)`. The proposed output has
+`_unlace_ident_282a4d6574657229.Apply(m,delta)`. The proposed output has
 `func (m *Meter) Apply(delta uint64) uint64` and
 `return (*Meter).Apply(m,delta)`. Both retain the receiver in RAX and
 the scalar argument in RBX.

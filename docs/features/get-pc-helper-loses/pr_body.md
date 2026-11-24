@@ -5,7 +5,7 @@ caller loaded before it disappears. `collide` from crackmes.one
 (`5ab77f5833c5d40ad448c399`), `sub_8049f20`:
 
 ```
-$ kuna decompile ./collide 0x8049f20 --addr \
+$ unlace decompile ./collide 0x8049f20 --addr \
     --assert 'prototype sub_8049f20 int4 sub_8049f20(char *path,void *buf);'
 int sub_8049f20(char *path,void *buf)
 {

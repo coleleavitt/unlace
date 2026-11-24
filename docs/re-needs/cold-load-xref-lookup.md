@@ -38,7 +38,7 @@ Iteratively query references while triaging the checker.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "xrefs",
     "{{BIN}}",
     "--to",
@@ -73,7 +73,7 @@ Iteratively query references while triaging the checker.
   "timeout_s": 60,
   "repeat": 7,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "xrefs",
     "{{BIN}}",
     "--to",
@@ -138,7 +138,7 @@ _not yet refuted_
   1039 ms median (-69.6%), byte-identical output, all four gates green -- but the acceptance clause is
   `wall_ms median < 1000` and it measures 1090-1130 ms, with a 727-1150 ms run-to-run spread on this
   machine, so even a "pass" would be a coin flip. DO NOT RELAX THE PROBE
-  ([[kuna-repipe-close-bookkeeping]]). (2) A real recall regression: dropping the Listing tier means
+  ([[unlace-repipe-close-bookkeeping]]). (2) A real recall regression: dropping the Listing tier means
   AIF's gap-walk entries stop being seeds, so `unlace xrefs --from <addr>` on an AIF-only function
   answers 0 references (betaflight Cortex-M `0x806b798` 4->0, `0x801500e` 2->0; KeyVal2.exe 1->0 twice).
   `--mode aggressive` restores it. Attempt 2 needs that trade gated, not accepted.
@@ -221,7 +221,7 @@ _not yet refuted_
 - round 2 wave 32 B_DONE (captain): **fourth phantom `regressed` refuted at 255a96d6 — and the
   quiet-box margin is now the thing to watch.** Wave 31 re-measured on a settled box at 9 reps
   (940/656/956/961/928/654/654/961/951 → median **940.4 ms**, max 961.0, flaky False, PASS,
-  transition `unchanged`; JSON `.kuna-repipe/rounds/2/coldload-remeasure-w31.json`). The bar was
+  transition `unchanged`; JSON `.unlace-repipe/rounds/2/coldload-remeasure-w31.json`). The bar was
   NOT relaxed. The new signal: the QUIET median has drifted 738 ms (wave 24) → 940 ms (wave 31),
   i.e. ~6% headroom under `< 1000`, so this probe will keep flagging and will eventually flag with
   the box quiet. That is either a probe-calibration question for **T_TRIAGE** or a real slow creep

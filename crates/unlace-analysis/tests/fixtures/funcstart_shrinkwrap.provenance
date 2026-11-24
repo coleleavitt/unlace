@@ -2,7 +2,7 @@ funcstart_shrinkwrap_el.o, funcstart_shrinkwrap_eb.o -- MIPS32 relocatable
 objects whose first function returns early and sets up its frame after the
 return, so a function-start pattern pair matches inside its sized symbol
 (crates/unlace-analysis/src/analyzers/entry/mod.rs tests,
-tests/stages/kuna-funcstart-symbolextent.toml).
+tests/stages/unlace-funcstart-symbolextent.toml).
 
 What they are
   funcstart_shrinkwrap_el.o  little-endian o32, non-PIC.

@@ -1,6 +1,6 @@
 The game client/server port conversion helper copies EDI into EAX, rotates AX
 by eight bits, then returns. Its output preserves the upper word and swaps the
-lower two bytes. Kuna emitted an undeclared CONCAT22 helper even though the
+lower two bytes. Unlace emitted an undeclared CONCAT22 helper even though the
 operation has an exact scalar C expression. A narrow return would hide the
 preserved bits the assembly actually returns.
 

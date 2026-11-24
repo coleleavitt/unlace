@@ -42,7 +42,7 @@ def arg_type(code, a):
 
 if __name__ == "__main__":
     R = "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11"
-    KUNA = sys.argv[1]
+    UNLACE = sys.argv[1]
     bucket = json.load(open(sys.argv[2]))
     outdir = sys.argv[3]
     os.makedirs(outdir, exist_ok=True)
@@ -57,7 +57,7 @@ if __name__ == "__main__":
         unstr = f"{R}/{opt}/{proj}/compiled/{binn}"
         jf = f"{outdir}/{proj}.{opt}.{binn}.json"
         if not os.path.exists(jf):
-            subprocess.run([KUNA, "decompile-all", stripped, "--json", "--max-fn-seconds", "120"], stdout=open(jf, "w"), stderr=subprocess.DEVNULL)
+            subprocess.run([UNLACE, "decompile-all", stripped, "--json", "--max-fn-seconds", "120"], stdout=open(jf, "w"), stderr=subprocess.DEVNULL)
         d = json.load(open(jf))
         byaddr = {f["address"]: f for f in d["functions"]}
         nm = subprocess.run(["nm", unstr], capture_output=True, text=True).stdout
@@ -70,7 +70,7 @@ if __name__ == "__main__":
             a = sym.get(o["fn"])
             if a is None:
                 rows.append(dict(o, err="nosym")); continue
-            x = json.loads(subprocess.run([KUNA, "xrefs", stripped, "--to", hex(a), "--json"], capture_output=True, text=True).stdout or "{}")
+            x = json.loads(subprocess.run([UNLACE, "xrefs", stripped, "--to", hex(a), "--json"], capture_output=True, text=True).stdout or "{}")
             kinds = collections.Counter(r["kind"] for r in x.get("xrefs", []))
             callers = sorted({r["from_function"]["address"] for r in x.get("xrefs", []) if r["kind"] in ("call", "jump") and r.get("from_function")})
             f = byaddr.get(a, {})

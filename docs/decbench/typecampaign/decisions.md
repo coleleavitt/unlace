@@ -5,14 +5,14 @@
    `PTRSUB(p,0x28)` on the exact sites the feature retypes; decbench's normalizer rejects the `struct X*` spelling.
 2. Named libc types outrank synthesized structs; struct synthesis declines on any named composite or type lock.
 3. bytehonest exports `undefined1` on the JSON surface for a residual TYPE_UNKNOWN byte (C text unchanged).
-   Why: it reports what kuna knows (IDA exports `_BYTE`); measured +8 perfects / 0 regressions on 6 binaries.
+   Why: it reports what unlace knows (IDA exports `_BYTE`); measured +8 perfects / 0 regressions on 6 binaries.
 4. structsynth stays default-off and OUT of `aggressive` (the decbench-scored path) — 19 currently-correct
    char*/int*/char** params would become `struct_0 *` misses.
 5. TRex taken piecewise (rounding order → signedness; Fig.6 metric → structscore; colocation/aggregate declines →
    structsynth); the StructuralType substrate is a separate XL [PROPOSAL] the user may request later.
-6. Goal 2 = correctness (phantom args via protoorder) + readability measured by varcensus; kuna is already leanest.
+6. Goal 2 = correctness (phantom args via protoorder) + readability measured by varcensus; unlace is already leanest.
 7. `unlace decompile` and `decompile-all` may disagree on a callee's types once protoorder parks recovered protos.
-8. Never write into /home/mahaloz/github/decbench/results (a dewolf run is live); baselines are kuna-side.
+8. Never write into /home/mahaloz/github/decbench/results (a dewolf run is live); baselines are unlace-side.
 9. 2026-09-17 user decision: GO on all open proposal PRs under the normal rules — no large speed hit (+5% budget)
    and accuracy relatively the same or better (444-slice typesweep). Applied as: signedness lands with default
    `auto` (the measured same-or-better arm that keeps 675/675; prefer-signed stays opt-in because it moves datatest
@@ -40,7 +40,7 @@
    records in both arms. The .8945 → .5520 drop was the campaign instrument joining parameter types
    from `decompile-all` against layouts from `decompile-project`, two surfaces that numbered
    `struct_N` in different orders (#693). With one order the round-D figure is .8709 fields-only and
-   F1 .1678, above round B on F1 and recall. Lesson kept: a measurement that joins two kuna surfaces
+   F1 .1678, above round B on F1 and recall. Lesson kept: a measurement that joins two unlace surfaces
    by a synthesized NAME has to prove the two ledgers agree before the number means anything.
 15. 2026-09-20 `argclobber` is default `on` (#689) on the strength of the callee's own recovered
    prototype, not a caller-side heuristic. It is inert wherever protoorder parks nothing — a
@@ -49,7 +49,7 @@
    these dropped arguments, and any ablation of it MUST use a whole-binary serial run.
 16. 2026-09-20 decbench#94 (the missing `DW_TAG_restrict_type` arm) is not a campaign lever. The
    4,412 GT variables it makes unmatchable are 98.2% register-only, which no decompiler scores:
-   patching a copy of the pinned metric moves kuna by 8 functions and 0.84 aggregate, and does not
+   patching a copy of the pinned metric moves unlace by 8 functions and 0.84 aggregate, and does not
    move a single function onto or off perfect. Worth fixing upstream for honesty, not for score.
 17. 2026-09-22 round E: the layout instrument scores only synthesized records, because a libc
    record is a sized shell with no members in the exported header. When libctypes names a record
@@ -61,14 +61,14 @@
    still fails `make test-cli`. The measured `char *` levers are protoorder parking the recovered
    types of recursive functions (+36 to +46 perfect) and typing `framelayout` filler slots.
 19. 2026-09-22 the O2 gap is the metric's ceiling before it is the engine's. At O2 85.8% of scored
-   functions hold a GT variable no stripped decompiler can match; on the reachable ones kuna converts
+   functions hold a GT variable no stripped decompiler can match; on the reachable ones unlace converts
    43.8%, level with O0's 43.5%. The next O2 perfects come from decbench first (inlined-callee
    variables counted as locals: 74 → 153 with no engine change), the way #93 and #94 did.
 20. 2026-09-22 `structsynth nest` ships opt-in although every default criterion passes literally:
    its gain is 2 nested fields on 10 builds, and a sharded `--jobs 8` run costs +63% because a
    nested or self field has no portable recipe. The flip waits for a request-relative recipe.
 21. 2026-09-23 `slotptr` (#710) is default on although it turns five free matches into misses. The
-   pinned metric credits an exported `undefined8` against an 8-byte integer, so a filler slot kuna
+   pinned metric credits an exported `undefined8` against an 8-byte integer, so a filler slot unlace
    says nothing about scores by luck; typing it from the pointer stored into it is +123 perfect and
    −5, and every one of the five is a body type that was already wrong (`shred::dorewind` merges
    `lseek`'s return with `__errno_location()`'s `int *`). An honest wrong type beats a lucky silence.
@@ -119,12 +119,12 @@
    rebuilding the printed C with gcc and clang and running it against the binary. `castarith`,
    `castimplied` and `castsign` go default on with 0 of 10,748 typesweep values moved and 0 functions
    with more casts.
-30. 2026-09-24 the cast headline is the COUNT on the functions kuna and IDA both emit at the same address
+30. 2026-09-24 the cast headline is the COUNT on the functions unlace and IDA both emit at the same address
    (castbench, 4,815 functions over 45 binaries), stated beside casts per 1,000 lines and per statement.
-   The three disagree because kuna prints 22% fewer lines than IDA on those functions: the final build is
+   The three disagree because unlace prints 22% fewer lines than IDA on those functions: the final build is
    1.021× IDA by count, 1.19× per statement and 1.30× per line. No single ratio is quoted alone.
 31. 2026-09-24 `castarith` prints a converted access as a subscript, `((T *)p)[k]`, not `*((T *)p + k)`,
-   because `arraynotation` already chose subscripts for kuna's native pointer arithmetic; a converted
+   because `arraynotation` already chose subscripts for unlace's native pointer arithmetic; a converted
    site should read like a native one. An enum element, a negative index of 2^31 elements or more, an
    aggregate element and an address several accesses share keep the integer form, since the printed C
    there could compute a different address.
@@ -147,7 +147,7 @@
 34. 2026-09-27 with the count at 0.848× IDA and per statement level with IDA (26.99 per 100), the cast
    headline stays the count on the shared 4,815 functions but the residue is now ranked by FAMILY with
    signedness merged (`final-l/shapes9.py`), and -O2 density (1.12× per statement) is reported beside it.
-   A family kuna prints fewer of than IDA (`(long *)(expr)`, `(int)v`) is not a target.
+   A family unlace prints fewer of than IDA (`(long *)(expr)`, `(int)v`) is not a target.
 35. 2026-09-27 the user's witness for rounds K and L came from a private binary; every public artifact
    reproduces its shape only through the repo's own fixture (`elemptr_x86_64.c`, a textbook base64
    decoder), never by name or output of the private one.

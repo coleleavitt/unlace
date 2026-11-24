@@ -2,7 +2,7 @@
 
 ## The defect
 
-A 32-bit ABI returns a 64-bit value in two registers. Every big-endian ABI kuna
+A 32-bit ABI returns a 64-bit value in two registers. Every big-endian ABI unlace
 supports puts the HIGH word in the first register, because a register pair holds
 a wide value as a load from memory would, lower address first:
 
@@ -19,7 +19,7 @@ first on a big-endian register space, and records it on the trial container
 (`ParamActive::isJoinReverse`). AVR's gcc spec, little-endian, sets the same flag
 through `reversesignif` (its `int` comes back with the high byte in `R25`, the
 first register). Return recovery (`ActionReturnRecovery::buildReturnOutput`,
-upstream too) and kuna's call-output pair ignored the flag and joined the first
+upstream too) and unlace's call-output pair ignored the flag and joined the first
 register as the LOW word, so clang `-O2 long long wide_mul(int,int)` printed its
 halves swapped on PowerPC, MIPS, SPARC and ARM big-endian, and AVR `negate`
 printed `CONCAT11(a1,a0)`.
@@ -214,7 +214,7 @@ In the witness sets (w2 to w10, `big`, `ib`, w13 to w24 and `dv`: each source
 built for PowerPC, SPARC, ARM big-endian at its default architecture, ARMv6
 and ARMv7 and MIPS with gcc, w13 to w24 also with clang for MIPS, at -O0 to
 -Os, and round-tripped with gcc and clang; the Thumb-2 big-endian builds count
-for nothing, since kuna discovers no functions in them on main or here), these
+for nothing, since unlace discovers no functions in them on main or here), these
 are the 79 builds the option turns from right to wrong (`sum_hi` 18, `sub_hi`
 9, `mulhi_k` 10, `xk_hi_add` 10, `umulh_sum` 8, `ud641` and `ud6700417` 7
 each, `hi64k` 6, `mulhi`, `mulhi_s`, `mul_hi_s` and `hi_of_mul` 1 each),
@@ -256,7 +256,7 @@ correct `int` into a wrong `long long`. A sound default needs positive
 evidence that the value is 64 bits wide (a declared, DWARF or asserted 8-byte
 return type, callers that read both registers as one value, or a 64-bit
 operation whose two halves both reach every RETURN unnarrowed).
-`kuna-cli/tests/decompile_all_cli.rs`
+`unlace-cli/tests/decompile_all_cli.rs`
 `bejoin_reads_an_ints_stale_low_half_as_the_long_long_it_matches` records both
 readings of `sum_hi`/`sum64` (PowerPC -O2) and `mulhi`/`uwide_mul` (MIPS gcc
 -O0).

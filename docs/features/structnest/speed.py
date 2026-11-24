@@ -5,9 +5,9 @@ ALL = {"fmt": f"{R}/coreutils/stripped/fmt", "ls": f"{R}/coreutils/stripped/ls",
        "sort": f"{R}/coreutils/stripped/sort", "bash": f"{R}/bash/stripped/bash"}
 SP = "/home/mahaloz/kwt/structnest/specs"
 W = "/home/mahaloz/kwt/structnest/.scratch"
-K = {"main": (f"{W}/base-bin/kuna", []),
-     "param": (f"{W}/kuna-final/kuna", ["--option", "structsynth", "param"]),
-     "nest": (f"{W}/kuna-final/kuna", ["--option", "structsynth", "nest"])}
+K = {"main": (f"{W}/base-bin/unlace", []),
+     "param": (f"{W}/unlace-final/unlace", ["--option", "structsynth", "param"]),
+     "nest": (f"{W}/unlace-final/unlace", ["--option", "structsynth", "nest"])}
 ARMS = list(K)
 N = int(sys.argv[1]); outf = sys.argv[2]; which = sys.argv[3].split(",")
 out = {}
@@ -17,7 +17,7 @@ for name in which:
         order = ARMS[i % 3:] + ARMS[:i % 3]
         for lab in order:
             kb, extra = K[lab]
-            env = dict(os.environ, SLEIGHHOME=SP, KUNA_SPECS=SP)
+            env = dict(os.environ, SLEIGHHOME=SP, UNLACE_SPECS=SP)
             t0 = time.perf_counter()
             p = subprocess.run([kb, "decompile-all", b, "--json", "--max-fn-seconds", "120"] + extra,
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)

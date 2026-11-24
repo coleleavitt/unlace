@@ -1,6 +1,6 @@
 # Missing analyses: what a standalone decompiler port does not inherit
 
-kuna ports Ghidra's **C++ decompiler** (the SLEIGH-based "deep decompiler"). The
+unlace ports Ghidra's **C++ decompiler** (the SLEIGH-based "deep decompiler"). The
 Ghidra *application* additionally runs a large body of Java **loader + analyzer**
 code that prepares a program *before* and *around* the decompiler — parsing the
 object file, naming things, discovering functions, recovering types. The
@@ -39,7 +39,7 @@ generalization of the de-facto `elf_plt` contract: a focused module that reads
 the object and produces a flat, deduplicated `AnalysisOutput` of *facts*
 (symbols, entries, no-return names, read-only ranges), never panicking and never
 failing — it only ever contributes more knowledge. Each pass's `id()` registers
-in `phases.toml` as a settable option (and in `KUNA_OPTION_NAMES`), so it appears
+in `phases.toml` as a settable option (and in `UNLACE_OPTION_NAMES`), so it appears
 in `unlace catalog --json` and is **flippable per-decompilation via `--option <id>
 on|off`** — implemented as of the analysis-port "option-gating" Increment. The
 passes are **default-on** (faithful to Ghidra's default-on analyzers), except
@@ -88,10 +88,10 @@ structurally untouched.
 
 ## Legend
 
-- ✅ **Fixed** — implemented in kuna now.
+- ✅ **Fixed** — implemented in unlace now.
 - 🟡 **Inherited** — the decompiler engine already does this (ported); no
   application analyzer needed.
-- ⛔ **Gap** — done by a Ghidra Java analyzer/loader; not in kuna. Degrades
+- ⛔ **Gap** — done by a Ghidra Java analyzer/loader; not in unlace. Degrades
   output but does not crash; a user can often supply the fact by hand.
 
 ---
@@ -103,7 +103,7 @@ structurally untouched.
 and turn each PLT stub into a thunk to an external function. The decompiler then
 sees the import name at the call site.
 
-**kuna now:** [`unlace-analysis/src/loader/elf_plt.rs`](../crates/unlace-analysis/src/loader/elf_plt.rs)
+**unlace now:** [`unlace-analysis/src/loader/elf_plt.rs`](../crates/unlace-analysis/src/loader/elf_plt.rs)
 reconstructs `got_slot → name` from the dynamic relocations and decodes each
 `.plt*` stub's GOT reference per architecture (x86-64, x86-32, AArch64, ARM32,
 RISC-V, SPARC; classic, CET `.plt.sec`, PIE, and stripped layouts). SPARC is the
@@ -146,7 +146,7 @@ object model (below) is deferred.
 - x86-32 **PIC** veneers (`jmp *disp(%ebx)`) are not statically decodable without
   the runtime `%ebx` GOT pointer — skipped.
 - The external/thunk **object model** (Ghidra's `ExternalLocation` + thunk
-  functions) is not built; kuna registers a plain named function at the stub.
+  functions) is not built; unlace registers a plain named function at the stub.
   This is invisible for ordinary call naming but matters for thunk tail-call
   inlining and external-reference rendering.
 
@@ -178,9 +178,9 @@ commit is in
 **Ghidra:** the DWARF analyzer parses `.debug_info`/`.debug_line` to recover
 function names, parameter and local names, types, and source lines.
 
-**kuna:** no DWARF parsing. Even a "not stripped with DWARF" binary yields only
+**unlace:** no DWARF parsing. Even a "not stripped with DWARF" binary yields only
 ELF symbol-table names and engine-inferred types. This is the single biggest
-naming/typing source kuna leaves on the table. A faithful port would be a
+naming/typing source unlace leaves on the table. A faithful port would be a
 substantial `.debug_*` reader feeding the symbol table and type manager.
 
 ## 4. Function-start / entry-point discovery — ⛔ Gap
@@ -189,7 +189,7 @@ substantial `.debug_*` reader feeding the symbol table and type manager.
 patterns, call targets, address-table references, and thunk detection, so the
 listing has functions even where no symbol exists.
 
-**kuna:** decompiles only entry points it is given (a symbol, or `load addr`).
+**unlace:** decompiles only entry points it is given (a symbol, or `load addr`).
 It does not hunt for unlabeled functions. For a stripped binary the user must
 supply addresses.
 
@@ -200,7 +200,7 @@ PseudoDisassembly. It is **off-by-default upstream** (`setDefaultEnablement(fals
 warns "MAY CREATE A LOT OF BAD CODE!") and requires a post-disassembly
 Listing/FunctionManager (≥20 found functions) + a PseudoDisassembler — none of which
 exist at the unlace-analysis tier (which runs before decompilation). Its sound output (new
-entries) is subsumed by `s1-entry-disc` + `s1-eh-frame` for kuna's given-entries model.
+entries) is subsumed by `s1-entry-disc` + `s1-eh-frame` for unlace's given-entries model.
 Documented ⛔ out-of-scope (see [`history/analysis-port-log.md`](history/analysis-port-log.md) Increment 4),
 the same call as `FindNoReturnFunctionsAnalyzer`.
 
@@ -208,10 +208,10 @@ the same call as `FindNoReturnFunctionsAnalyzer`.
 
 **Ghidra:** the demangler analyzers turn `_ZN3foo3barEv` → `foo::bar()`.
 
-**kuna:** emits the raw mangled `.dynstr`/`.symtab` string. (The vendored
-`beanstalk_cpp` fixture would show mangled import names.) Note: kuna's loader
+**unlace:** emits the raw mangled `.dynstr`/`.symtab` string. (The vendored
+`beanstalk_cpp` fixture would show mangled import names.) Note: unlace's loader
 splits names on `::` into namespaces, so an *already-demangled* name nests
-correctly — but kuna does no demangling itself. C imports (`puts`, `read`) are
+correctly — but unlace does no demangling itself. C imports (`puts`, `read`) are
 unaffected. **Status:** ✅ done (Increment 2 — Itanium C++ + Rust). The Rust
 *source-language* detection that gates Rust-specific behavior (e.g. the Rust
 no-return list) is a separate piece, ✅ done in Increment 4 (`s1_sourcelang`).
@@ -221,7 +221,7 @@ no-return list) is a separate piece, ✅ done in Increment 4 (`s1_sourcelang`).
 **Ghidra:** a string analyzer finds NUL-terminated strings in `.rodata` and
 types the references as `char *`, so the decompiler prints `puts("Username: ")`.
 
-**kuna:** prints the raw pointer constant (`puts(0x400915)`), because nothing has
+**unlace:** prints the raw pointer constant (`puts(0x400915)`), because nothing has
 typed `0x400915` as a string. The engine's type inference (🟡, below) can turn a
 pointer into `char *` from *usage*, but it does not materialize the literal text.
 
@@ -230,12 +230,12 @@ out-of-scope-at-tier.** Ghidra's operand-reference analyzers (`OperandReferenceA
 `DataOperandReferenceAnalyzer`, `ScalarOperandAnalyzer`, `ElfScalarOperandAnalyzer`) create
 listing *references* — strings, pointers, address tables — from disassembled operands. They
 need the disassembled Listing + ReferenceManager, neither of which exists at this tier, and
-references never reach kuna's decompiler (it reads loadimage bytes + the symbol/type tables,
+references never reach unlace's decompiler (it reads loadimage bytes + the symbol/type tables,
 not the ReferenceManager). Their products are already covered: strings → `s1-strings`
 (disabled, this section), address/switch tables → §7, function creation → §4 (`s1-entry-disc`).
 
 > **Correction — the "function creation → §4" half of that sentence was wrong, and closing it
-> was the largest single ARM recall win kuna has measured.** `OperandReferenceAnalyzer`'s
+> was the largest single ARM recall win unlace has measured.** `OperandReferenceAnalyzer`'s
 > *Subroutine References* option (default-on upstream) calls `createFunctions()` on the code
 > targets it resolves out of instruction operands (`OperandReferenceAnalyzer.java:508,614`); on
 > ARM those targets come from `ArmAnalyzer`'s constant propagation over `LDR Rx,[pc,#k]`
@@ -284,7 +284,7 @@ inherited core):**
 **Ghidra:** ships parsed C headers / data-type archives (`.gdt`) and applies them
 so imports get correct prototypes and parameter types.
 
-**kuna:** the `.gdt` format is a binary archive kuna does not vendor, so the pass
+**unlace:** the `.gdt` format is a binary archive unlace does not vendor, so the pass
 substitutes a **built-in signature table** — `libproto` (`LibProtoPass`, the
 original 27-entry minimal stand-in) plus `libcsigs` (`LibcSigsPass`, the measured
 ~200-entry extension). The libc passes retain name-keyed output where a spelling
@@ -292,7 +292,7 @@ is unambiguous and also bind known imports at every concrete address supplied by
 the format resolver, so a PE IAT slot and its same-named veneer both receive the
 signature. If the image also defines/exports that spelling, the unsafe global
 name key is omitted while those provenance-confirmed import addresses stay typed.
-Everything the table does not name still falls back to kuna's usage inference
+Everything the table does not name still falls back to unlace's usage inference
 (S4/S5, 🟡).
 Residual LOSS vs a real header archive: no
 struct/enum/typedef definitions travel with a signature (a `struct stat *` is a
@@ -303,7 +303,7 @@ table covers libc/POSIX only, not the third-party libraries a `.gdt` set would
 follow-up; the current table's derivation and rejected set are in
 `docs/features/libcsigs/`.
 
-## 9. Engine capabilities kuna *does* inherit — 🟡
+## 9. Engine capabilities unlace *does* inherit — 🟡
 
 For contrast, these need no application analyzer — they are the ported engine and
 already work:
@@ -320,7 +320,7 @@ already work:
 
 > For the analyzers declared **infeasible-at-tier**, **non-ELF**, or **huge
 > subsystem** below (AIF, the operand/reference markup family, Go pclntab, FID,
-> PE/Mach-O loaders, …), the dependency-ordered build-plan — what kuna would have
+> PE/Mach-O loaders, …), the dependency-ordered build-plan — what unlace would have
 > to BUILD first to make each feasible (notably a post-disassembly Listing tier),
 > with effort sizing and verdicts — is in
 > [`history/analysis-port-buildplan.md`](history/analysis-port-buildplan.md).
@@ -336,10 +336,10 @@ debug-format reader or a discovery loop). Vendored fixtures live in
 |---|----------|-------|------|------------------------------------------|
 | ✅ | PLT/GOT import names | S1 | done | **fauxware**: `0x400510→puts`, no symbol at `0x0`, no `@` in names (`unlace-analysis` tests + console e2e). Per-arch e2e: x86-64 (`verify_w11_elf_plt_names`), AArch64 (`verify_aarch64_plt`), RISC-V64 (`verify_riscv64_plt`), **MIPS32** (`verify_mips_plt`: `plt_mips32` `puts`/`printf` via the `.MIPS.stubs`/GOT layout — Increment 27) |
 | ✅ | **Foundation: generic commit seam** | S1 | done | `bootstrap_from_elf` runs `run_default_analyses` + `commit_analysis_output`; no funcsym regression (`cargo test -p unlace-harness --test parity datatests` PARITY OK) |
-| ✅ | **No-return detection** | S1 | done | **fauxware** `rejected` calls `exit`: no dead fall-through after `exit(1)` (5 unit tests + e2e). The vendored `ElfFunctionsThatDoNotReturn` carries two kuna divergence blocks appended in place, each fenced by its own `# (kuna divergence, DIV-nn)` comment: DIV-21's unconditional libc names and DIV-78's libstdc++ `std::__throw_*` family (mangled + demangled spellings; upstream omits it, so C++ binaries emitted the dead code after every `std::__throw_length_error`). See [`history/analysis-port-log.md`](history/analysis-port-log.md) increment 1 |
+| ✅ | **No-return detection** | S1 | done | **fauxware** `rejected` calls `exit`: no dead fall-through after `exit(1)` (5 unit tests + e2e). The vendored `ElfFunctionsThatDoNotReturn` carries two unlace divergence blocks appended in place, each fenced by its own `# (unlace divergence, DIV-nn)` comment: DIV-21's unconditional libc names and DIV-78's libstdc++ `std::__throw_*` family (mangled + demangled spellings; upstream omits it, so C++ binaries emitted the dead code after every `std::__throw_length_error`). See [`history/analysis-port-log.md`](history/analysis-port-log.md) increment 1 |
 | ✅ | **Demangling** (Itanium C++ / Rust) | S1 | done | `cpp_mangled` `main` renders `foo::Bar::baz(...)` (cpp_demangle + rustc-demangle; needed the cross-scope call-resolution fix). Increment 2 |
-| ✅ | **Library prototype seeding** | S1 | done | **fauxware** `main`: `puts("Username: ")`, `puts("Password: ")` (libproto types arg `char*`; the route that actually renders literals in kuna). Increment 3 |
-| 🟡 | String-literal detection | S1 | n/a | implemented + tested but **disabled by default**: kuna's printer renders a named `char[]` symbol as its name (`s_400915`), shadowing the literal; literals come from prototype/usage `char*` typing instead. Increment 3 |
+| ✅ | **Library prototype seeding** | S1 | done | **fauxware** `main`: `puts("Username: ")`, `puts("Password: ")` (libproto types arg `char*`; the route that actually renders literals in unlace). Increment 3 |
+| 🟡 | String-literal detection | S1 | n/a | implemented + tested but **disabled by default**: unlace's printer renders a named `char[]` symbol as its name (`s_400915`), shadowing the literal; literals come from prototype/usage `char*` typing instead. Increment 3 |
 | ✅ | **DWARF debug-info** (`DWARFAnalyzer`) | S1 | done | **cet_pie_x86_64**: `elaborate_debug_symbol`'s param recovered as `char *binary` (gimli); **dwarf_stripped**: names with no `.symtab`. Subtask-3 stack-locals deferred. Increment 6 |
 | ✅ | **Function-start / entry discovery** (`EntryPointAnalyzer`) | S1 | done | **stripped_dynamic_x86_64**: `sub_1405` (main) decompiles without `--addr` (e_entry + init arrays + `.eh_frame` FDEs + `_start`→`main` idiom + prologues). Increment 5 |
 | ✅ | **`.eh_frame` FDE starts** (`GccExceptionAnalyzer`, entry oracle) | S1 | done | **fauxware**: 7 FDE starts ⊇ the funcsyms; feeds entry discovery. Increment 5 |
@@ -360,7 +360,7 @@ debug-format reader or a discovery loop). Vendored fixtures live in
 2. ~~**Demangling**~~ — ✅ done (increment 2; needed the cross-scope call-resolution fix).
 3. ~~**String literals**~~ — ✅ achieved (increment 3) via **library-prototype seeding**
    (`char*` arg typing + readonly + StringManager), *not* via planting `char[]` data
-   symbols — kuna's printer prefers a symbol name over the literal, so the plant-a-symbol
+   symbols — unlace's printer prefers a symbol name over the literal, so the plant-a-symbol
    `StringsAnalyzer` mechanism is implemented but disabled. See
    [`history/analysis-port-log.md`](history/analysis-port-log.md) Increment 3 for the full finding.
 

@@ -189,7 +189,7 @@ impl FuncProtoOverride for PiecesProtoOverride {
     }
     fn encode(&self, _encoder: &mut dyn Encoder) -> UnlaceResult<()> {
         Err(UnlaceError::lowlevel(
-            "kuna rust port: prototype-override encode needs the W4 FuncProto::encode",
+            "unlace rust port: prototype-override encode needs the W4 FuncProto::encode",
         ))
     }
     fn print_raw(&self, s: &mut String) {

@@ -3,7 +3,7 @@
 Writes <out>/<arm>/<name>.c in castbench's per-function layout so hunkclass.py
 can classify every changed line.  hunkclass.py only recognizes a flip of a
 `vN` declaration, so re-signing a DWARF-named (locked) local shows up as OTHER.
-  python3 corpus-dwarf.py <kuna> <out> <arm> [kuna option args...]
+  python3 corpus-dwarf.py <unlace> <out> <arm> [unlace option args...]
 """
 import concurrent.futures as cf
 import json

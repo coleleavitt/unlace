@@ -796,7 +796,7 @@ impl ObjectLoadImage {
             if let Some(note) = target.and_then(|t| target_endian_note(&file, t)) {
                 unlace_base::notes::say_once(
                     filename,
-                    &format!("[kuna target] {filename}: {note}"),
+                    &format!("[unlace target] {filename}: {note}"),
                 );
             }
         }
@@ -811,7 +811,7 @@ impl ObjectLoadImage {
             ) {
                 unlace_base::notes::say_once(
                     filename,
-                    &format!("[kuna target] {filename}: {note}"),
+                    &format!("[unlace target] {filename}: {note}"),
                 );
             }
         }
@@ -823,7 +823,7 @@ impl ObjectLoadImage {
             ) {
                 unlace_base::notes::say_once(
                     filename,
-                    &format!("[kuna target] {filename}: {note}"),
+                    &format!("[unlace target] {filename}: {note}"),
                 );
             }
         }
@@ -1310,7 +1310,7 @@ impl ObjectLoadImage {
             if let (Some(source), true) = (source, added != 0) {
                 unlace_base::notes::say_once(
                     filename,
-                    &format!("[kuna debuglink] {filename}: {added} function names from {source}"),
+                    &format!("[unlace debuglink] {filename}: {added} function names from {source}"),
                 );
             }
         }
@@ -1318,7 +1318,7 @@ impl ObjectLoadImage {
             unlace_base::notes::say_once(
                 filename,
                 &format!(
-                    "[kuna] {filename}: PT_LOAD at 0x{second:x} overwrites the segment at 0x{first:x} with different file bytes"
+                    "[unlace] {filename}: PT_LOAD at 0x{second:x} overwrites the segment at 0x{first:x} with different file bytes"
                 ),
             );
         }
@@ -1426,7 +1426,10 @@ impl ObjectLoadImage {
         let fpconst = crate::loader::msvcfpconst::plan(file, &layout);
         let got_range = layout.got_range;
         for w in &fpconst.warnings {
-            unlace_base::notes::say_once(filename, &format!("[kuna msvcfpconst] {filename}: {w}"));
+            unlace_base::notes::say_once(
+                filename,
+                &format!("[unlace msvcfpconst] {filename}: {w}"),
+            );
         }
 
         // One bounded report per loader construction. Analysis-side consumers
@@ -1435,7 +1438,7 @@ impl ObjectLoadImage {
             for line in layout.diagnostics.report_lines() {
                 unlace_base::notes::say_once(
                     filename,
-                    &format!("[kuna ET_REL loader] {filename}: {line}"),
+                    &format!("[unlace ET_REL loader] {filename}: {line}"),
                 );
             }
         }
@@ -1953,7 +1956,7 @@ impl LoadImage for ObjectLoadImage {
     fn unlace_overlay_bytes(&mut self, addr: &Address, data: &[u8]) -> UnlaceResult<()> {
         let space = addr
             .get_space()
-            .expect("ObjectLoadImage::kuna_overlay_bytes: address with null space");
+            .expect("ObjectLoadImage::unlace_overlay_bytes: address with null space");
         match &self.spaceid {
             Some(sp) if Rc::ptr_eq(sp, space) => {}
             _ => {
@@ -2208,7 +2211,7 @@ fn language_id_for(
         None => {
             return Err(UnlaceError::lowlevel(format!(
                 "File: {filename} : unsupported machine {arch:?} \
-                 (no kuna SLEIGH language; pass an explicit --target language id)"
+                 (no unlace SLEIGH language; pass an explicit --target language id)"
             )));
         }
     };

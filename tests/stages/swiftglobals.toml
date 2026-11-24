@@ -6,7 +6,7 @@
 # mangled name as untyped bytes: `$s7callfix3ctrAA7CounterVvp._8_8_ = 2`.
 #
 # Stage / sub-stage: P1 external-refinement, the layout arm
-# (`kuna_swifttypes::global_variable`): a `Variable` entity's demangled
+# (`unlace_swifttypes::global_variable`): a `Variable` entity's demangled
 # type is the typed data object's type.
 #
 # P0 assertion: `option swifttypes on|off` (default on; the pass needs

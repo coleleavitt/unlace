@@ -5,11 +5,11 @@
   "scope": "small",
   "round": 2,
   "branch": "feat/re-analysis-generated-function-name",
-  "summary": "kuna decompile retries a by-name miss once with the DIV-20/DIV-68 non-x86-64 discovery bundle, so a discovery-generated name that kuna functions / kuna strings print is a name kuna decompile accepts. First attempt, and every invocation that already resolved, is byte-identical.",
+  "summary": "unlace decompile retries a by-name miss once with the DIV-20/DIV-68 non-x86-64 discovery bundle, so a discovery-generated name that unlace functions / unlace strings print is a name unlace decompile accepts. First attempt, and every invocation that already resolved, is byte-identical.",
   "decisions": [
     {
       "what": "hypothesis and T_REFUTE mechanism both OVERTURNED; symptom upheld",
-      "detail": "The filed hypothesis was 'the single-function name resolver uses a narrower symbol table'; T_REFUTE corrected that to 'sub_<hex> is a synthesized display name never registered as a symbol anywhere, so no table on the decompile path could contain it -- fold the name back to an address in kuna-cli'. Neither holds. sub_4045b0 IS a FunctionEntry name in ConsoleProgram::function_entries_canonical, and resolve_entry(Name(..)) resolves it: kuna decompile --json, kuna disassemble and kuna decompile-all all select the witness by that exact name on main today. Only the TEXT surface fails, because its decomp_dbg session never DISCOVERED the entry. kuna-cli's in-process drivers inject listing + funcstart_patterns + aif on a non-x86-64 image (load_program, DIV-20/DIV-68); build_script injected only `option listing on`. Bisected on the witness: listing alone still answers `no function matches`, listing + funcstart_patterns selects it. There is no name to fold and no table to widen -- there is an entry set to agree on."
+      "detail": "The filed hypothesis was 'the single-function name resolver uses a narrower symbol table'; T_REFUTE corrected that to 'sub_<hex> is a synthesized display name never registered as a symbol anywhere, so no table on the decompile path could contain it -- fold the name back to an address in unlace-cli'. Neither holds. sub_4045b0 IS a FunctionEntry name in ConsoleProgram::function_entries_canonical, and resolve_entry(Name(..)) resolves it: unlace decompile --json, unlace disassemble and unlace decompile-all all select the witness by that exact name on main today. Only the TEXT surface fails, because its decomp_dbg session never DISCOVERED the entry. unlace-cli's in-process drivers inject listing + funcstart_patterns + aif on a non-x86-64 image (load_program, DIV-20/DIV-68); build_script injected only `option listing on`. Bisected on the witness: listing alone still answers `no function matches`, listing + funcstart_patterns selects it. There is no name to fold and no table to widen -- there is an entry set to agree on."
     },
     {
       "what": "why two testers filed what looked like two bugs",
@@ -29,7 +29,7 @@
     }
   ],
   "collateral_sweep": {
-    "method": "kuna decompile --mode reliable <name> for EVERY name kuna functions reports, over all 33 non-x86-64 fixtures in kuna-analysis/tests/fixtures plus the witness KeyVal2.exe (250-name cap). The before arm is `--option funcstart_patterns off --option aif off`, which makes driver_default_options yield the Listing alone and the discovery list empty -- i.e. main's script, byte for byte, with no retry to make.",
+    "method": "unlace decompile --mode reliable <name> for EVERY name unlace functions reports, over all 33 non-x86-64 fixtures in unlace-analysis/tests/fixtures plus the witness KeyVal2.exe (250-name cap). The before arm is `--option funcstart_patterns off --option aif off`, which makes driver_default_options yield the Listing alone and the discovery list empty -- i.e. main's script, byte for byte, with no retry to make.",
     "targets": 34,
     "names": 723,
     "resolved_before_and_unchanged": 318,
@@ -40,14 +40,14 @@
     "x86_64": "unchanged by construction -- driver_default_options yields only the Listing there, so the discovery list is empty and there is no second attempt. Confirmed empirically on 40 x86-64 fixtures in the first (alignment) sweep: 0 differences."
   },
   "not_closed": [
-    "The non-x86-64 discovery bundle over-produces mid-function entries -- PPC64 ELFv2 local entry points and the i386 equivalent -- and funcboundflow then truncates the enclosing function to an empty husk. That is live on main TODAY in kuna functions and kuna decompile-all (plt_ppc64le __do_global_ctors_aux reports size 8 next to a sub_948 of 112) and is untouched here. It is an analyzer-tier defect and deserves a need of its own.",
-    "kuna decompile --addr and kuna decompile-all --addr still resolve the same address under different discovery configs on a non-x86-64 image, so they can render the same function differently. Pre-existing, and closing it means fixing the husk first.",
+    "The non-x86-64 discovery bundle over-produces mid-function entries -- PPC64 ELFv2 local entry points and the i386 equivalent -- and funcboundflow then truncates the enclosing function to an empty husk. That is live on main TODAY in unlace functions and unlace decompile-all (plt_ppc64le __do_global_ctors_aux reports size 8 next to a sub_948 of 112) and is untouched here. It is an analyzer-tier defect and deserves a need of its own.",
+    "unlace decompile --addr and unlace decompile-all --addr still resolve the same address under different discovery configs on a non-x86-64 image, so they can render the same function differently. Pre-existing, and closing it means fixing the husk first.",
     "A by-name miss on a non-x86-64 binary now costs two decomp_dbg runs before reporting `no function`. The error path got slower to be sure of itself; the success path did not."
   ],
   "cost": {
     "method": "3 interleaved runs each, wall clock, witness KeyVal2.exe (PE32 i386, 558,592 bytes)",
     "resolved_name_or_addr": "unchanged -- identical script",
-    "generated_name": "1.84-1.96 s, against exit 1 in 0.73-1.03 s before; the second attempt is a whole-program decode, the DIV-68 price kuna functions already pays on the same image"
+    "generated_name": "1.84-1.96 s, against exit 1 in 0.73-1.03 s before; the second attempt is a whole-program decode, the DIV-68 price unlace functions already pays on the same image"
   },
   "acceptance": {
     "acceptance_id": "a-022969ccc61d",
@@ -62,7 +62,7 @@
     "make test-stages": "PARITY OK, 597/597 assertions",
     "make rust-test": "green, 5,283 tests",
     "make check-spec": "OK (lenient mode)",
-    "kuna catalog --check": "catalog OK",
+    "unlace catalog --check": "catalog OK",
     "make test-cli": "14/14"
   }
 }

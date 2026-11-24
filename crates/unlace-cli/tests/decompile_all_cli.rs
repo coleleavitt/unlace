@@ -294,19 +294,19 @@ const DECODE_ENV: [&str; 6] = [
 fn unlace_command(env: &[(&str, &str)]) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
     cmd.env_remove("UNLACE_DECOMP_DBG")
-        .env_remove("KUNA_DECOMP_DBG")
+        .env_remove("UNLACE_DECOMP_DBG")
         .env_remove("UNLACE_SLACOMP")
-        .env_remove("KUNA_SLACOMP");
+        .env_remove("UNLACE_SLACOMP");
     // A lane fault reports itself in one line; `RUST_BACKTRACE` deliberately
     // turns the runtime's panic block back on, so it must not reach a child
     // whose whole assertion is that the block is absent.
     cmd.env_remove("RUST_BACKTRACE");
     cmd.env_remove("UNLACE_JOBS_FAULT")
-        .env_remove("KUNA_JOBS_FAULT");
+        .env_remove("UNLACE_JOBS_FAULT");
     cmd.env_remove("UNLACE_RENDER_FAULT")
-        .env_remove("KUNA_RENDER_FAULT");
+        .env_remove("UNLACE_RENDER_FAULT");
     cmd.env_remove("UNLACE_JUMPTABLE_FAULT")
-        .env_remove("KUNA_JUMPTABLE_FAULT");
+        .env_remove("UNLACE_JUMPTABLE_FAULT");
     for name in DECODE_ENV {
         cmd.env_remove(name);
     }
@@ -1179,7 +1179,7 @@ fn te_image_auto_detects_entry_mapping_and_thumb_context() {
     assert!(ok, "TE functions failed: {stderr}");
     assert!(stdout.contains("\"count\": 1"), "{stdout}");
     assert!(stdout.contains("\"address_hex\": \"0x401000\""), "{stdout}");
-    assert!(!stderr.contains("[kuna te]"), "{stderr}");
+    assert!(!stderr.contains("[unlace te]"), "{stderr}");
 
     let (stdout, stderr, ok) = run_unlace(&[
         "functions",
@@ -3378,11 +3378,11 @@ fn jobs_output_is_byte_identical_to_serial() {
             // A run that can take an hour has to say where it is, and it has to say
             // it on stderr — stdout is the document, byte-compared just above.
             assert!(
-                stderr.contains("[kuna --jobs]") && stderr.contains("worker process(es)"),
+                stderr.contains("[unlace --jobs]") && stderr.contains("worker process(es)"),
                 "--jobs {jobs} reported no plan on stderr:\n{stderr}"
             );
             assert!(
-                stderr.contains("[kuna --jobs] done:"),
+                stderr.contains("[unlace --jobs] done:"),
                 "--jobs {jobs} never reported completion:\n{stderr}"
             );
             assert!(
@@ -3820,7 +3820,7 @@ fn a_float_in_a_general_register_keeps_its_integer_uses_round_trip() {
         &["g3 ", "g5 ", "g6 ", "g9 ", "g20 ", "g22 ", "g24 "],
     );
     let dir = std::env::temp_dir().join(format!(
-        "kuna-protoorder-floatgpr-rt-{}",
+        "unlace-protoorder-floatgpr-rt-{}",
         std::process::id()
     ));
     std::fs::create_dir_all(&dir).unwrap();
@@ -3906,7 +3906,7 @@ fn round_trip_compilers() -> Vec<&'static str> {
 /// integer, or an integer to a pointer, is an error, as it is under CI's gcc 13
 /// and clang 18), run it, and return each compiler's stdout.
 fn compile_and_run_each(tag: &str, src: &str) -> Vec<(String, String)> {
-    let dir = std::env::temp_dir().join(format!("kuna-{tag}-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace-{tag}-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("rt.c");
     std::fs::write(&file, src).unwrap();
@@ -4432,7 +4432,7 @@ fn a_float_crossing_an_integer_call_round_trips() {
 /// Compile `lib` and `main` as two translation units with each of
 /// [`round_trip_compilers`], run the program, and return each compiler's stdout.
 fn compile_pair_and_run_each(tag: &str, lib: &str, main: &str) -> Vec<(String, String)> {
-    let dir = std::env::temp_dir().join(format!("kuna-{tag}-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace-{tag}-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let (lib_file, main_file) = (dir.join("lib.c"), dir.join("main.c"));
     std::fs::write(&lib_file, lib).unwrap();
@@ -5583,7 +5583,7 @@ fn a_float_pointee_keeps_the_callers_integer_stores_round_trip() {
         }
         let printed = printed_functions(&stdout, &names);
         let dir = std::env::temp_dir().join(format!(
-            "kuna-protoorder-pointee-rt-{}-{off}",
+            "unlace-protoorder-pointee-rt-{}-{off}",
             std::process::id()
         ));
         std::fs::create_dir_all(&dir).unwrap();
@@ -6089,7 +6089,7 @@ fn jobs_names_synthesized_structs_as_the_serial_run_does() {
                     "{fixture} {pool:?} never named the structures:\n{stderr}"
                 );
                 assert!(
-                    !stderr.contains("[kuna --jobs] note:"),
+                    !stderr.contains("[unlace --jobs] note:"),
                     "{fixture} {pool:?} fell back:\n{stderr}"
                 );
                 assert_eq!(
@@ -6400,9 +6400,9 @@ fn jobs_leaves_no_scratch_directory_behind() {
     let bin = fauxware();
     let mut child = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .env_remove("UNLACE_DECOMP_DBG")
-        .env_remove("KUNA_DECOMP_DBG")
+        .env_remove("UNLACE_DECOMP_DBG")
         .env_remove("UNLACE_SLACOMP")
-        .env_remove("KUNA_SLACOMP")
+        .env_remove("UNLACE_SLACOMP")
         .args([
             "decompile-all",
             &bin,
@@ -6417,11 +6417,11 @@ fn jobs_leaves_no_scratch_directory_behind() {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
-        .expect("failed to spawn the kuna binary");
+        .expect("failed to spawn the unlace binary");
     let pid = child.id();
-    let status = child.wait().expect("wait on the kuna binary");
+    let status = child.wait().expect("wait on the unlace binary");
     assert!(status.success(), "pooled decompilation failed: {status}");
-    let mine = format!("kuna-jobs-v2-{pid}-");
+    let mine = format!("unlace-jobs-v2-{pid}-");
     let left: Vec<String> = std::fs::read_dir(std::env::temp_dir())
         .into_iter()
         .flatten()
@@ -6438,8 +6438,8 @@ fn jobs_leaves_no_scratch_directory_behind() {
 #[test]
 fn jobs_preserves_live_scratch_owners_and_reaps_released_locks() {
     let base = tempfile::tempdir().unwrap();
-    let legacy = base.path().join("kuna-jobs-4294967295-live");
-    let held = base.path().join("kuna-jobs-v2-4294967295-live");
+    let legacy = base.path().join("unlace-jobs-4294967295-live");
+    let held = base.path().join("unlace-jobs-v2-4294967295-live");
     for dir in [&legacy, &held] {
         std::fs::create_dir(dir).unwrap();
         std::fs::write(dir.join("inventory.spec"), b"live inventory").unwrap();
@@ -6515,7 +6515,7 @@ fn killing_the_parent_takes_the_workers_and_the_scratch_dir_with_it() {
             .collect()
     }
     fn scratch_of(pid: u32) -> Vec<PathBuf> {
-        let mine = format!("kuna-jobs-v2-{pid}-");
+        let mine = format!("unlace-jobs-v2-{pid}-");
         std::fs::read_dir(std::env::temp_dir())
             .into_iter()
             .flatten()
@@ -6531,9 +6531,9 @@ fn killing_the_parent_takes_the_workers_and_the_scratch_dir_with_it() {
     let bin = hang_repro();
     let mut child = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .env_remove("UNLACE_DECOMP_DBG")
-        .env_remove("KUNA_DECOMP_DBG")
+        .env_remove("UNLACE_DECOMP_DBG")
         .env_remove("UNLACE_SLACOMP")
-        .env_remove("KUNA_SLACOMP")
+        .env_remove("UNLACE_SLACOMP")
         .args([
             "decompile-all",
             &bin,
@@ -6548,7 +6548,7 @@ fn killing_the_parent_takes_the_workers_and_the_scratch_dir_with_it() {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
-        .expect("failed to spawn the kuna binary");
+        .expect("failed to spawn the unlace binary");
     let pid = child.id();
 
     // Wait for the pool to be genuinely up: a worker running and the scratch
@@ -7198,7 +7198,7 @@ fn run_unlace_env(args: &[&str], env: &[(&str, &str)]) -> (String, String, bool)
     let out = unlace_command(env)
         .args(args)
         .output()
-        .expect("failed to spawn the kuna binary");
+        .expect("failed to spawn the unlace binary");
     (
         String::from_utf8_lossy(&out.stdout).into_owned(),
         String::from_utf8_lossy(&out.stderr).into_owned(),
@@ -7212,7 +7212,7 @@ fn run_unlace_env(args: &[&str], env: &[(&str, &str)]) -> (String, String, bool)
 fn without_the_plan_line(stderr: &str) -> String {
     stderr
         .lines()
-        .filter(|l| !l.starts_with("[kuna --jobs]"))
+        .filter(|l| !l.starts_with("[unlace --jobs]"))
         .map(|l| format!("{l}\n"))
         .collect()
 }
@@ -7223,12 +7223,12 @@ fn without_the_plan_line(stderr: &str) -> String {
 /// stats line, which only a completed parallel walk reaches.
 fn assert_lanes_produced_it(stderr: &str, what: &str) {
     assert!(
-        !stderr.contains("[kuna --jobs] decode: serial ("),
+        !stderr.contains("[unlace --jobs] decode: serial ("),
         "{what} fell back to the serial walk, so the comparison above is vacuous:\n{stderr}"
     );
     let stats = stderr
         .lines()
-        .find(|l| l.starts_with("[kuna --jobs] decode stats:"))
+        .find(|l| l.starts_with("[unlace --jobs] decode stats:"))
         .unwrap_or_else(|| panic!("{what} printed no stats line:\n{stderr}"));
     assert!(
         stats.contains(" rounds="),
@@ -7267,7 +7267,7 @@ fn jobs_decode_lanes_are_byte_identical_to_serial() {
         "the serial run enumerated nothing:\n{want}"
     );
     assert!(
-        !want_err.contains("[kuna --jobs]"),
+        !want_err.contains("[unlace --jobs]"),
         "`--jobs` absent must print no plan line at all:\n{want_err}"
     );
 
@@ -7291,12 +7291,12 @@ fn jobs_decode_lanes_are_byte_identical_to_serial() {
         );
         if jobs == "1" {
             assert!(
-                !stderr.contains("[kuna --jobs]"),
+                !stderr.contains("[unlace --jobs]"),
                 "`--jobs 1` is the serial path and says nothing:\n{stderr}"
             );
         } else {
             assert!(
-                stderr.contains("[kuna --jobs] decode:") && stderr.contains(" lanes, "),
+                stderr.contains("[unlace --jobs] decode:") && stderr.contains(" lanes, "),
                 "--jobs {jobs} never reached the lanes:\n{stderr}"
             );
             assert_lanes_produced_it(&stderr, &format!("--jobs {jobs}"));
@@ -7317,7 +7317,7 @@ fn jobs_decode_lanes_are_byte_identical_to_serial() {
     assert!(ok, "unlace functions --jobs 8 failed: {stderr}");
     assert_eq!(got, want, "the refused path moved the inventory");
     assert!(
-        stderr.contains("[kuna --jobs] decode: serial (executable image too small)"),
+        stderr.contains("[unlace --jobs] decode: serial (executable image too small)"),
         "a fixture under the size floor must say why it declined:\n{stderr}"
     );
 }
@@ -7340,7 +7340,7 @@ fn jobs_decode_lanes_decline_on_a_context_committing_language() {
     assert!(ok, "unlace functions --jobs 8 failed on ARM: {stderr}");
     assert_eq!(got, want, "the ARM decline moved the inventory");
     assert!(
-        stderr.contains("[kuna --jobs] decode: serial (language commits context)"),
+        stderr.contains("[unlace --jobs] decode: serial (language commits context)"),
         "ARM must decline with the language reason:\n{stderr}"
     );
 }
@@ -7381,7 +7381,7 @@ fn a_dead_lane_falls_back_to_the_serial_walk() {
             "the serial fallback moved the inventory (lane {lane})"
         );
         assert!(
-            stderr.contains("[kuna --jobs] decode: serial (lane fault)"),
+            stderr.contains("[unlace --jobs] decode: serial (lane fault)"),
             "lane {lane}'s panic must be reported as a fallback:\n{stderr}"
         );
         assert!(
@@ -7426,7 +7426,7 @@ fn jobs_decode_lanes_agree_with_serial_on_decompile_all() {
     assert!(ok, "unlace decompile-all --jobs 4 failed: {stderr}");
     assert_eq!(got, want, "--jobs 4 moved the document");
     assert!(
-        stderr.contains("[kuna --jobs] decode:") && stderr.contains(" lanes, "),
+        stderr.contains("[unlace --jobs] decode:") && stderr.contains(" lanes, "),
         "the parent's load must have run on lanes:\n{stderr}"
     );
     assert_lanes_produced_it(&stderr, "decompile-all --jobs 4");
@@ -7468,11 +7468,11 @@ fn a_refused_lane_spawn_falls_back_to_the_serial_walk() {
             "the serial fallback moved the inventory (lane {lane})"
         );
         assert!(
-            stderr.contains("[kuna --jobs] decode: 4 lanes, "),
+            stderr.contains("[unlace --jobs] decode: 4 lanes, "),
             "the plan was announced before the spawn failed:\n{stderr}"
         );
         assert!(
-            stderr.contains("[kuna --jobs] decode: serial (thread spawn failed)"),
+            stderr.contains("[unlace --jobs] decode: serial (thread spawn failed)"),
             "a refused spawn at lane {lane} must be reported as a fallback:\n{stderr}"
         );
     }
@@ -7517,7 +7517,8 @@ fn functions_takes_jobs_with_a_raw_image() {
         "the pool's raw-image refusal must not fire on a surface with no pool:\n{stderr}"
     );
     assert!(
-        stderr.contains("[kuna --jobs] decode: serial (a raw image's discovery walk has no lanes)"),
+        stderr
+            .contains("[unlace --jobs] decode: serial (a raw image's discovery walk has no lanes)"),
         "a raw image's discovery walk takes no decode lanes, and must say so rather than \
          accept the flag and do nothing:\n{stderr}"
     );
@@ -7582,7 +7583,7 @@ fn functions_takes_jobs_with_an_assert_overlay() {
         "functions --assert --jobs 4 must not be refused: {stderr}"
     );
     assert!(
-        stderr.contains("[kuna --jobs] decode: 4 lanes, "),
+        stderr.contains("[unlace --jobs] decode: 4 lanes, "),
         "the overlaid load must still reach the lanes:\n{stderr}"
     );
     assert_lanes_produced_it(&stderr, "functions --assert --jobs 4");
@@ -7642,7 +7643,7 @@ fn a_sign_contested_synthesized_field_round_trips_through_the_printed_c() {
         eprintln!("signfield round trip: no `cc`, spelling checked only");
         return;
     }
-    let dir = std::env::temp_dir().join(format!("kuna-signfield-rt-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace-signfield-rt-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let src = dir.join("rt.c");
     let exe = dir.join("rt");
@@ -7719,7 +7720,7 @@ fn a_float_and_integer_union_field_round_trips_through_the_printed_c() {
         eprintln!("unionfield round trip: no `cc`, spelling checked only");
         return;
     }
-    let dir = std::env::temp_dir().join(format!("kuna-unionfield-rt-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace-unionfield-rt-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let src = dir.join("rt.c");
     let exe = dir.join("rt");
@@ -7808,7 +7809,7 @@ fn a_zero_extended_narrow_load_round_trips_through_the_printed_c() {
             continue;
         }
         let dir = std::env::temp_dir().join(format!(
-            "kuna-expandload-rt-{}-{}",
+            "unlace-expandload-rt-{}-{}",
             std::process::id(),
             extra[1]
         ));
@@ -7959,7 +7960,7 @@ int main(void) {
             }
             for cc in &compilers {
                 let dir = std::env::temp_dir().join(format!(
-                    "kuna-castimplied-rt-{}-{fixture}-{opt}-{cc}",
+                    "unlace-castimplied-rt-{}-{fixture}-{opt}-{cc}",
                     std::process::id()
                 ));
                 std::fs::create_dir_all(&dir).unwrap();
@@ -8192,7 +8193,7 @@ int main(void) {
                 .collect();
             for cc in &compilers {
                 let dir = std::env::temp_dir().join(format!(
-                    "kuna-fieldtype-rt-{}-{fixture}-{opt}-{cc}",
+                    "unlace-fieldtype-rt-{}-{fixture}-{opt}-{cc}",
                     std::process::id()
                 ));
                 std::fs::create_dir_all(&dir).unwrap();
@@ -8410,7 +8411,7 @@ int main(void) {
             for cc in &compilers {
                 for level in ["-O0", "-O2"] {
                     let dir = std::env::temp_dir().join(format!(
-                        "kuna-castternary-rt-{}-{fixture}-{elem}-{opt}-{cc}{level}",
+                        "unlace-castternary-rt-{}-{fixture}-{elem}-{opt}-{cc}{level}",
                         std::process::id()
                     ));
                     std::fs::create_dir_all(&dir).unwrap();
@@ -8838,7 +8839,7 @@ int main(void) {
             for cc in &compilers {
                 for level in ["-O0", "-O2"] {
                     let dir = std::env::temp_dir().join(format!(
-                        "kuna-castwiden-rt-{}-{fixture}-{opt}-{cc}{level}",
+                        "unlace-castwiden-rt-{}-{fixture}-{opt}-{cc}{level}",
                         std::process::id()
                     ));
                     std::fs::create_dir_all(&dir).unwrap();
@@ -9236,7 +9237,7 @@ int main(void) {
             for cc in &compilers {
                 for level in ["-O0", "-O2"] {
                     let dir = std::env::temp_dir().join(format!(
-                        "kuna-castsign-rt-{}-{fixture}-{opt}-{cc}{level}",
+                        "unlace-castsign-rt-{}-{fixture}-{opt}-{cc}{level}",
                         std::process::id()
                     ));
                     std::fs::create_dir_all(&dir).unwrap();
@@ -9524,7 +9525,7 @@ int main(void) {
             for cc in &compilers {
                 for level in ["-O0", "-O2"] {
                     let dir = std::env::temp_dir().join(format!(
-                        "kuna-castobject-rt-{}-{fixture}-{opt}-{cc}{level}",
+                        "unlace-castobject-rt-{}-{fixture}-{opt}-{cc}{level}",
                         std::process::id()
                     ));
                     std::fs::create_dir_all(&dir).unwrap();
@@ -9691,7 +9692,7 @@ fn castsign_leaves_a_locked_declaration_alone() {
             );
         }
     }
-    let dir = std::env::temp_dir().join(format!("kuna-castsign-lock-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace-castsign-lock-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let stripped = dir.join("sign_of");
     let strip = process::optional_output(Command::new("objcopy").args([
@@ -9843,7 +9844,7 @@ fn a_pointer_plus_whole_elements_round_trips_through_the_printed_c() {
             }
             let expected = process::required_output(&mut Command::new(bin));
             let dir = std::env::temp_dir().join(format!(
-                "kuna-castarith-rt-{}-{build}-{arm}",
+                "unlace-castarith-rt-{}-{build}-{arm}",
                 std::process::id()
             ));
             std::fs::create_dir_all(&dir).unwrap();
@@ -9998,7 +9999,7 @@ fn a_variable_index_and_a_byte_pointer_difference_round_trip_through_the_printed
             }
             let expected = process::required_output(&mut Command::new(bin));
             let dir = std::env::temp_dir().join(format!(
-                "kuna-castindex-rt-{}-{build}-{elem}-{arm}",
+                "unlace-castindex-rt-{}-{build}-{elem}-{arm}",
                 std::process::id()
             ));
             std::fs::create_dir_all(&dir).unwrap();
@@ -10136,7 +10137,7 @@ fn an_enum_element_keeps_the_integer_form_and_round_trips() {
             assert_eq!(
                 types.len(),
                 3,
-                "{build} {arm}: expected kuna's color, mark and level\n{stdout}"
+                "{build} {arm}: expected unlace's color, mark and level\n{stdout}"
             );
             for w in [
                 "use_color(*(color *)((long)p + 3));",
@@ -10157,7 +10158,7 @@ fn an_enum_element_keeps_the_integer_form_and_round_trips() {
             }
             let expected = process::required_output(&mut Command::new(bin));
             let dir = std::env::temp_dir().join(format!(
-                "kuna-castarith-enum-rt-{}-{build}-{arm}",
+                "unlace-castarith-enum-rt-{}-{build}-{arm}",
                 std::process::id()
             ));
             std::fs::create_dir_all(&dir).unwrap();
@@ -10166,7 +10167,7 @@ fn an_enum_element_keeps_the_integer_form_and_round_trips() {
             std::fs::write(
                 &c,
                 format!(
-                    "#include <stdio.h>\n#define KUNA_RT\n{}\n{prelude}\n{body}\n{main}",
+                    "#include <stdio.h>\n#define UNLACE_RT\n{}\n{prelude}\n{body}\n{main}",
                     types.concat()
                 ),
             )
@@ -10499,8 +10500,10 @@ fn a_call_in_a_short_circuit_operand_round_trips_through_the_printed_c() {
             eprintln!("foldcallret short-circuit round trip: no `cc`, spelling checked only");
             continue;
         }
-        let dir =
-            std::env::temp_dir().join(format!("kuna-foldcallret-sc-{}-{name}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "unlace-foldcallret-sc-{}-{name}",
+            std::process::id()
+        ));
         std::fs::create_dir_all(&dir).unwrap();
         let src = dir.join("rt.c");
         let exe = dir.join("rt");
@@ -10613,7 +10616,7 @@ fn a_load_is_not_printed_after_a_store_into_its_bytes() {
         eprintln!("aliasoverlap round trip: no `cc`, order checked only");
         return;
     }
-    let dir = std::env::temp_dir().join(format!("kuna-aliasoverlap-rt-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace-aliasoverlap-rt-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let src = dir.join("rt.c");
     let exe = dir.join("rt");
@@ -10739,7 +10742,7 @@ fn a_split_load_is_not_moved_past_a_store_or_a_call() {
         };
         format!("*({ty} *)((char *)&{} + {}) = ", &c[1], &c[2])
     });
-    let dir = std::env::temp_dir().join(format!("kuna-splitload-rt-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace-splitload-rt-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let src = dir.join("rt.c");
     let exe = dir.join("rt");
@@ -11236,7 +11239,7 @@ int main(void) {
             for cc in &compilers {
                 for level in ["-O0", "-O2"] {
                     let dir = std::env::temp_dir().join(format!(
-                        "kuna-callrettype-rt-{}-{fixture}-{opt}-{cc}{level}",
+                        "unlace-callrettype-rt-{}-{fixture}-{opt}-{cc}{level}",
                         std::process::id()
                     ));
                     std::fs::create_dir_all(&dir).unwrap();
@@ -11871,7 +11874,7 @@ fn element_pointers_under_jobs_match_the_serial_run() {
         "{callee_first}"
     );
 
-    let dir = std::env::temp_dir().join(format!("kuna-elemptr-jobs-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace-elemptr-jobs-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let mut exports = Vec::new();
     for jobs in ["1", "4"] {
@@ -11950,7 +11953,7 @@ int main(void) {
   static const long recs[] = {2, 3, 5, 7, 11, 13};
   unsigned long n = 0;
   unsigned char *dec = w_decode("aGVsbG8gd29ybGQ=", 16, &n);
-  char *rev = @REV@ ? w_rev("kuna", 4) : (w_rev("kuna", 4), "-");
+  char *rev = @REV@ ? w_rev("unlace", 4) : (w_rev("unlace", 4), "-");
   long a = w_sbytes(hi, 6);
   long b = w_ubytes((const unsigned char *)hi, 6);
   long c = w_words(wide, 16);
@@ -12086,7 +12089,7 @@ int main(void) {
         for cc in &compilers {
             for level in ["-O0", "-O2"] {
                 let dir = std::env::temp_dir().join(format!(
-                    "kuna-piecehi-rt-{}-{fixture}-{cc}{level}",
+                    "unlace-piecehi-rt-{}-{fixture}-{cc}{level}",
                     std::process::id()
                 ));
                 std::fs::create_dir_all(&dir).unwrap();
@@ -12223,7 +12226,7 @@ fn a_value_read_by_a_sign_sensitive_op_is_not_re_read_from_a_global() {
         );
         for cc in &compilers {
             let dir = std::env::temp_dir().join(format!(
-                "kuna-globalstore-rt-{}-{fixture}-{cc}",
+                "unlace-globalstore-rt-{}-{fixture}-{cc}",
                 std::process::id()
             ));
             let _ = std::fs::remove_dir_all(&dir);
@@ -12381,7 +12384,7 @@ fn bejoin_round_trip(label: &str, src_text: &str, printed: &str) {
     for cc in &compilers {
         for level in ["-O0", "-O2"] {
             let dir = std::env::temp_dir().join(format!(
-                "kuna-bejoin-rt-{}-{label}-{cc}{level}",
+                "unlace-bejoin-rt-{}-{label}-{cc}{level}",
                 std::process::id()
             ));
             std::fs::create_dir_all(&dir).unwrap();

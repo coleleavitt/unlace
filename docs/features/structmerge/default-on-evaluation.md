@@ -51,7 +51,7 @@ default goes.
 The false merges are real and are not rare: at the agreement floor -- two shared
 claims one of which is a pointer -- two records that merely begin `{char *; long}`
 are indistinguishable (`analysis.md` **Limits** has the five-line witness, and
-`kuna_structmerge::tests
+`unlace_structmerge::tests
 two_records_that_begin_alike_are_fused_at_the_agreement_floor` pins it), and 19 of
 the 63 merges traced over sixteen builds clear the bar exactly there.
 

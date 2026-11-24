@@ -77,5 +77,5 @@ Rust back-end never sees the rewrite.
   integer form.
 - `decompile_all_cli.rs an_enum_element_keeps_the_integer_form_and_round_trips`: the
   same over `castarith_enum_x86_64.c` (packed 1- and 2-byte enums, a plain enum, an enum
-  pointer passed on; gcc -O0 and -O2 with `-g`), compiled with kuna's own enum
+  pointer passed on; gcc -O0 and -O2 with `-g`), compiled with unlace's own enum
   typedefs, plus a spelling check of the C++ `enum class` build.

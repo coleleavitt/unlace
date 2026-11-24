@@ -10,7 +10,7 @@ fn complete_go_integer_stores_match_native_source_and_call_counts() {
     {
         return;
     }
-    let declarations = std::fs::read_to_string(common::fixture("go_store_value.kuna")).unwrap();
+    let declarations = std::fs::read_to_string(common::fixture("go_store_value.unlace")).unwrap();
     let names: Vec<_> = declarations
         .lines()
         .map(|line| line.split_whitespace().nth(1).unwrap())
@@ -53,7 +53,7 @@ fn complete_go_integer_stores_match_native_source_and_call_counts() {
         "--language",
         "go",
         "--assert",
-        &format!("@{}", common::fixture("go_store_value.kuna")),
+        &format!("@{}", common::fixture("go_store_value.unlace")),
         "--option",
         "ctypes",
         "off",

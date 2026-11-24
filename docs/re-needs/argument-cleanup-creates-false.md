@@ -44,7 +44,7 @@ Preserve the shared character-classification continuation.
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x4010b0",
@@ -75,7 +75,7 @@ Preserve the shared character-classification continuation.
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x4010b0",

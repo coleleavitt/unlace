@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# One-command build + deploy for the KunaDecompiler Ghidra extension: compiles the
+# One-command build + deploy for the UnlaceDecompiler Ghidra extension: compiles the
 # `unlace_ghidra` backend binary, stages it into this extension's `os/<platform>/`
 # directory (a gitignored build artifact), and — if GHIDRA_INSTALL_DIR is set —
 # packages the installable extension zip.
@@ -13,11 +13,11 @@
 # binaries for all platforms -- grab that from the GitHub releases tab if you
 # just want to install (works airgapped, and it is the only Windows path).
 #
-# See README.md ("Run the kuna backend in a real Ghidra instance") for the full
+# See README.md ("Run the unlace backend in a real Ghidra instance") for the full
 # runbook, including the dev-checkout (`-Dghidra.external.modules`) path.
 set -euo pipefail
 
-# Resolve paths relative to this script (integrations/ghidra/KunaDecompiler/).
+# Resolve paths relative to this script (integrations/ghidra/UnlaceDecompiler/).
 EXT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$EXT_DIR/../../.." && pwd)"
 
@@ -31,8 +31,8 @@ case "$os/$arch" in
 	Darwin/arm64)         PLATFORM=mac_arm_64;   EXE=unlace_ghidra ;;
 	*)
 		echo "error: unsupported host '$os/$arch' (Windows and anything else non-Linux/mac)." >&2
-		echo "       Use the prebuilt extension zip from the kuna GitHub releases tab instead:" >&2
-		echo "       kuna-v<ver>-KunaDecompiler-ghidra_<version>.zip ships ready-to-install" >&2
+		echo "       Use the prebuilt extension zip from the unlace GitHub releases tab instead:" >&2
+		echo "       unlace-v<ver>-UnlaceDecompiler-ghidra_<version>.zip ships ready-to-install" >&2
 		echo "       binaries for all platforms (including win_x86_64/unlace_ghidra.exe)." >&2
 		echo "       Or build manually: cargo build --release -p unlace-ghidra" >&2
 		echo "       and copy the binary into os/<ghidra-platform-dir>/ yourself." >&2
@@ -55,5 +55,5 @@ else
 	echo ">> binary staged at os/$PLATFORM/$EXE."
 	echo "   - release install: set GHIDRA_INSTALL_DIR and re-run to build the installable zip; or"
 	echo "   - dev checkout: launch Ghidra with -Dghidra.external.modules=$EXT_DIR"
-	echo "     (skip staging entirely with -Dkuna.decompiler.exe=$REPO_ROOT/target/release/$EXE)."
+	echo "     (skip staging entirely with -Dunlace.decompiler.exe=$REPO_ROOT/target/release/$EXE)."
 fi

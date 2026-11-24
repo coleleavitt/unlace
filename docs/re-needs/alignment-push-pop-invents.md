@@ -38,7 +38,7 @@ Recover the four-argument XOR decryptor returning its allocated buffer.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x10e27",
@@ -79,7 +79,7 @@ Recover the four-argument XOR decryptor returning its allocated buffer.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x10e27",
@@ -125,7 +125,7 @@ _none recorded_
 ## Decision log
 
 - filed by cluster.py from 1 observation(s)
-- split by captain at T_DEDUP from round 12's `wrong-output|decompile|exit_code,stdout_absent` bucket: cluster.py's signature (kind|subcommand|clause-shape) collapsed unrelated defects, so the crop was hand-partitioned one observation per need and filed via `--from-file`. See `.kuna-repipe/rounds/12/dedup/MARKER.json`; do NOT run `cluster --round 12` bare.
+- split by captain at T_DEDUP from round 12's `wrong-output|decompile|exit_code,stdout_absent` bucket: cluster.py's signature (kind|subcommand|clause-shape) collapsed unrelated defects, so the crop was hand-partitioned one observation per need and filed via `--from-file`. See `.unlace-repipe/rounds/12/dedup/MARKER.json`; do NOT run `cluster --round 12` bare.
 - round 12 REFUTER: hypothesis **overturned** (was inconclusive). REFUTER RAN (captain, in-tick, 2026-09-09 06:2xZ). SYMPTOM STANDS, FILED CAUSE IS WRONG IN BOTH HALVES, AND THE REAL GATE IS A SHIPPED DEFAULT-ON OPTION.
 
 Filed cause: 'the incidental RDX value restored from an alignment slot is treated as a second return register'. Measured false in its specifics.
@@ -154,7 +154,7 @@ DO NOT FIX IT BY FLIPPING EITHER OPTION -- BOTH ARE MEASURED TO DESTROY GENUINE 
   default:                wide_ret undefined16 v1._8_8_=a0 / v1._0_8_=a1  CORRECT;  two_ret undefined16 both halves CORRECT
   retinputhalf off:       wide_ret -> 'unsigned long wide_ret(...){return a1;}'  HIGH HALF SILENTLY LOST;  two_ret survives (halves computed)
   returnpair single:      wide_ret -> return a1;  two_ret -> 'long two_ret(long a0){return a0*3;}'  A RETURN HALF AND A WHOLE PARAMETER GONE
-undefined16 is kuna's NORMAL, CORRECT rendering of a genuine 128-bit return -- the acceptance's stdout_absent on the literal string 'undefined16' is safe only because it is pinned to this one address. Do not read the need as 'undefined16 is wrong'.
+undefined16 is unlace's NORMAL, CORRECT rendering of a genuine 128-bit return -- the acceptance's stdout_absent on the literal string 'undefined16' is safe only because it is pinned to this one address. Do not read the need as 'undefined16 is wrong'.
 
 REDIRECT FOR THE BUILDER, the discriminator that separates every case measured here: a pop from a stack slot whose matching push sourced a DIFFERENT register is stack maintenance, not a value placement, so it must not satisfy retinputhalf's 'the function placed it there' -- equivalently, a candidate input register whose only use is a push later popped into another register is not a parameter. That rule fixes the target and cross_reg_restore, leaves same_reg_restore untouched, and cannot reach wide_ret/two_ret (no push/pop involved). dead_rdx_write is genuinely ambiguous (indistinguishable from a struct{long,long} return) and should be left alone. Caller-side RDX liveness is NOT available as a discriminator on this binary: unlace xrefs --to 0x10e27 returns 0 callers (VM/indirect dispatch).
 

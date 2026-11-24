@@ -20,8 +20,8 @@ pub(crate) fn max_size(
 
 pub(crate) fn complex_type(types: &dyn TypeFactory, size: i32) -> Option<Rc<Datatype>> {
     let name = match size {
-        8 => "kuna_complex_float",
-        16 => "kuna_complex_double",
+        8 => "unlace_complex_float",
+        16 => "unlace_complex_double",
         _ => return None,
     };
     let scalar = types.get_base(size / 2, type_metatype::TYPE_FLOAT).ok()?;
@@ -106,11 +106,11 @@ mod tests {
     #[test]
     fn user_names_are_not_reused_or_completed() {
         let types = factory();
-        let user = types.get_type_struct("kuna_complex_float").unwrap();
+        let user = types.get_type_struct("unlace_complex_float").unwrap();
         let generated = complex_type(&types, 8).unwrap();
         assert_ne!(generated.get_name(), user.get_name());
         assert!(user.is_incomplete());
-        let shell = types.get_type_struct("kuna_complex_double").unwrap();
+        let shell = types.get_type_struct("unlace_complex_double").unwrap();
         let integer = types.get_base(8, type_metatype::TYPE_UINT).unwrap();
         let user = types
             .set_fields_struct_raw(

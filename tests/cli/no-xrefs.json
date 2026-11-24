@@ -3,7 +3,7 @@
   "probe_id": "a-c9b199f423c1",
   "kind": "absence",
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "xrefs",
     "{{BIN}}",
     "--to",

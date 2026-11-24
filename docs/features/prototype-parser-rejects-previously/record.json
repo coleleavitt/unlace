@@ -19,7 +19,7 @@
     "The tag is passed to old_struct/new_struct by NAME, not as the Rc the token carried, so the existing kind check still runs. This turns `struct int4` from a syntax error into the C++ oldStruct kind error, which is the only expectation that moved: reject_struct_type_name_is_syntax_error was renamed and re-pointed.",
     "Redeclaring a completed struct is now reachable and errors with `Trying to alter definition of type` (assign_raw_fields_struct), where it used to be a syntax error. Still an error either way, so no behaviour regressed; making an identical redefinition idempotent is a separate type-factory question and was left alone.",
     "No option row: a declaration grammar that previously refused the input cannot change emitted C on any input it already accepted (tooling track).",
-    "The acceptance probe was retargeted from the dataset crackme onto the vendored fixture decompiler/crates/kuna-analysis/tests/fixtures/fauxware so it could be promoted; acceptance_id re-derived to a-907674c07f28. The fixture's `main` calls `authenticate`, so the probe asserts the struct return actually applies (`authenticate(...).payload`) rather than only that no error was printed."
+    "The acceptance probe was retargeted from the dataset crackme onto the vendored fixture decompiler/crates/unlace-analysis/tests/fixtures/fauxware so it could be promoted; acceptance_id re-derived to a-907674c07f28. The fixture's `main` calls `authenticate`, so the probe asserts the struct return actually applies (`authenticate(...).payload`) rather than only that no error was printed."
   ],
   "refutation": {
     "question": "Can the new arm produce wrong output rather than only turn an error into a success?",
@@ -36,9 +36,9 @@
   "gates": {
     "make test": "PARITY OK, 675/675 assertions",
     "make test-stages": "PARITY OK, 687/687 assertions",
-    "make rust-test": "green with `env -u KUNA_DECOMP_TEST`. The launcher-exported KUNA_DECOMP_TEST points the C++-oracle block at kuna's own decomp_test_dbg, so verify_w10_proto_unlock:202 fails asking the 'oracle' for `xunknown4 promote_compare(char *` when kuna prints `unsigned int` in every build. kuna-decomp does not depend on console, so this change cannot reach it; the target is green with the variable unset.",
+    "make rust-test": "green with `env -u UNLACE_DECOMP_TEST`. The launcher-exported UNLACE_DECOMP_TEST points the C++-oracle block at unlace's own decomp_test_dbg, so verify_w10_proto_unlock:202 fails asking the 'oracle' for `xunknown4 promote_compare(char *` when unlace prints `unsigned int` in every build. unlace-decomp does not depend on console, so this change cannot reach it; the target is green with the variable unset.",
     "make check-spec": "OK (lenient mode)",
     "make test-cli": "81/81 passed, including the promoted probe",
-    "kuna catalog --check": "catalog OK (no option added)"
+    "unlace catalog --check": "catalog OK (no option added)"
   }
 }

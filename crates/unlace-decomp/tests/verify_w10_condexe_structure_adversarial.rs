@@ -268,9 +268,9 @@ fn cpp_render(stem: &str) -> Option<String> {
         .output()
         .ok()?;
     let text = String::from_utf8_lossy(&out.stdout);
-    let begin = text.find("===KUNA_DUMP_BEGIN")?;
+    let begin = text.find("===UNLACE_DUMP_BEGIN")?;
     let after = text[begin..].find('\n')? + begin + 1;
-    let mid = text[after..].find("===KUNA_DUMP_MID===")? + after;
+    let mid = text[after..].find("===UNLACE_DUMP_MID===")? + after;
     Some(text[after..mid].to_string())
 }
 

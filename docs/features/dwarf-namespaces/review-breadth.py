@@ -1,6 +1,6 @@
 from pathlib import Path
 import copy,hashlib,json,re
-w=Path('/tmp/kuna-dwarf-namespace-p9');out=w/'breadth';sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest();complete=(out/'record.json').exists();rows=json.loads((out/'record.json').read_text())['records']if complete else [json.loads(p.read_text())for p in sorted(out.glob('*-record.json'))];reviews=[];inventory=[];counts={'changed_records':0,'qualified_comments':0,'removed_aliases':0,'unchanged_records':0,'changed_code_records':0};failures=[]
+w=Path('/tmp/unlace-dwarf-namespace-p9');out=w/'breadth';sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest();complete=(out/'record.json').exists();rows=json.loads((out/'record.json').read_text())['records']if complete else [json.loads(p.read_text())for p in sorted(out.glob('*-record.json'))];reviews=[];inventory=[];counts={'changed_records':0,'qualified_comments':0,'removed_aliases':0,'unchanged_records':0,'changed_code_records':0};failures=[]
 for row in rows:
  classified=[]
  for item in row['records']:
@@ -16,7 +16,7 @@ for row in rows:
     assert '::'not in removed,(row['fixture'],removed)
     spelling=removed
     if language=='rust':spelling=re.sub('[^A-Za-z_0-9]','_',removed)
-    elif language=='go'and not re.fullmatch('[A-Za-z_][A-Za-z_0-9]*',removed):spelling='_kuna_ident_'+removed.encode().hex()
+    elif language=='go'and not re.fullmatch('[A-Za-z_][A-Za-z_0-9]*',removed):spelling='_unlace_ident_'+removed.encode().hex()
     substitutions[spelling]=leaf
   pattern=re.compile(r'(?<![A-Za-z_0-9])(?:'+'|'.join(re.escape(x)for x in sorted(substitutions,key=len,reverse=True))+r')(?![A-Za-z_0-9])')if substitutions else None
   def normalize(code):return pattern.sub(lambda m:substitutions[m[0]],code)if pattern else code

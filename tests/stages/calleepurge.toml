@@ -1,14 +1,14 @@
-# kuna issue testcase: an x86-32 callee's stack purge, proven by its own code
-# (kuna_calleepurge, always on).
+# unlace issue testcase: an x86-32 callee's stack purge, proven by its own code
+# (unlace_calleepurge, always on).
 #
-# Issue:      kuna GH-1554 - x86win.cspec leaves the extrapop of its
+# Issue:      unlace GH-1554 - x86win.cspec leaves the extrapop of its
 #             __stdcall/__thiscall/__fastcall models unknown. A call no later
 #             merge pins gets StackSolver's guess, which for an internal
 #             callee is "pops nothing", so every stack offset after a
 #             __stdcall call is shifted by its argument bytes: later calls
 #             lose stack arguments and the caller's locals alias their
 #             outgoing-argument slots.
-# Stage:      P4 calls - ActionExtraPopSetup (`p4_calls/kuna_calleepurge.rs`).
+# Stage:      P4 calls - ActionExtraPopSetup (`p4_calls/unlace_calleepurge.rs`).
 # P0 assert:  none (a correctness fix).
 #
 # stdcallpurge_pe_i386.exe (VC8 /O2, build notes in stdcallpurge_pe_i386.s):

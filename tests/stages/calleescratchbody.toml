@@ -1,4 +1,4 @@
-# kuna calleescratchbody: a large-frame MSVC prologue loses its whole stack
+# unlace calleescratchbody: a large-frame MSVC prologue loses its whole stack
 # allocation across the out-of-line stack probe, and every local is then
 # indexed off a value the function never assigns.
 #

@@ -1,13 +1,13 @@
-# kuna hang repro — infinite loop on fully-stripped x86-64 ELF binaries
+# unlace hang repro — infinite loop on fully-stripped x86-64 ELF binaries
 
 **Status:** **FIXED** (convergence bug root-caused and fixed); **watchdog shipped**
 and kept as a defensive bound. Without a watchdog, `unlace decompile-all` hung
 **indefinitely** (100% CPU, never returns) on certain fully-stripped x86-64 ELF
-binaries. Discovered 2026-07-02 while running kuna as a backend in the `decbench`
+binaries. Discovered 2026-07-02 while running unlace as a backend in the `decbench`
 decompiler benchmark. `decompile-all` carries a per-function watchdog
 (`--max-fn-seconds N`, default 120, `0` disables). The non-convergence itself is
 fixed: the `loweredswitch` post-heritage repair
-(`Funcdata::kuna_repair_lowered_switch_inputs`) mis-classified the constant that
+(`Funcdata::unlace_repair_lowered_switch_inputs`) mis-classified the constant that
 `ActionConditionalConst` legitimately installed on the synthetic BRANCHIND as a
 broken input (its healthy test was `is_written()||is_input()`, and a constant is
 neither) and re-pointed the BRANCHIND at the register def on every heritage pass —
@@ -35,9 +35,9 @@ timeout 90 target/release/unlace decompile-all \
 
 `unlace decompile-all <binary> --json` (pre-watchdog, or with `--max-fn-seconds 0`)
 never terminates and never emits output. It pins one core at 100% CPU. In the
-benchmark, when the parent harness killed its worker after a 300s budget, the kuna
-process **orphaned and kept spinning** — we observed **9 orphaned kuna processes each
-burning ~4h16m of CPU** before they were manually killed. At the time kuna had no
+benchmark, when the parent harness killed its worker after a 300s budget, the unlace
+process **orphaned and kept spinning** — we observed **9 orphaned unlace processes each
+burning ~4h16m of CPU** before they were manually killed. At the time unlace had no
 internal watchdog for this, so it had to be killed externally (and its process
 *group* reaped, or it orphaned). The `--max-fn-seconds` watchdog (default 120s) now
 bounds this per function.
@@ -53,14 +53,14 @@ stripped: no `.symtab`, no DWARF; x86-64 PIE; from openssh-portable built at `-O
 | `ssh-pkcs11-helper` | 498312 | `b18d309908860eea…` |
 
 ```bash
-# from the kuna repo root, after `make` (binary at target/release/unlace)
+# from the unlace repo root, after `make` (binary at target/release/unlace)
 timeout 120 target/release/unlace decompile-all \
     tests/hang-repro/ssh-sk-helper --json
 # BEFORE the fix (bug): timed out at 120s (exit 124), no JSON, 100% CPU throughout.
 # AFTER the fix: whole-binary JSON in seconds.
 ```
 
-Confirmed pre-fix: kuna ran **>120s with no return** on `ssh-sk-helper`. Same for
+Confirmed pre-fix: unlace ran **>120s with no return** on `ssh-sk-helper`. Same for
 `ssh-pkcs11-helper` (its `sub_21e9b` was the same bug — post-fix it decompiles in
 ~0.2s).
 
@@ -75,8 +75,8 @@ follow the same pattern (large, stripped openssh/bash binaries).
 
 ## Root cause (as fixed)
 
-- The trigger was **stripped input** (no symbols → kuna's own function discovery)
-  *plus* the kuna-owned `loweredswitch` feature: it synthesizes a `BRANCHIND` +
+- The trigger was **stripped input** (no symbols → unlace's own function discovery)
+  *plus* the unlace-owned `loweredswitch` feature: it synthesizes a `BRANCHIND` +
   trivial `JumpTable` out of a comparison cascade, and its post-heritage repair
   hook re-pointed the BRANCHIND at the register def whenever the input was not
   `is_written()||is_input()` — which wrongly included the **constant** that

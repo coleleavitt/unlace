@@ -53,27 +53,27 @@ fn dotted_and_unregistered_operations_keep_identifiers_and_operands() {
         .unwrap();
     arch.userops
         .register_op(UserPcodeOp::new_unspecialized(
-            b"__kuna_userop_0_DPA_W_PH",
+            b"__unlace_userop_0_DPA_W_PH",
             2,
         ))
         .unwrap();
     let args = ["left", "right"];
     assert_eq!(
         render(&arch, "rust", 0, &args),
-        "__kuna_userop_0_DPA_W_PH(left,right)"
+        "__unlace_userop_0_DPA_W_PH(left,right)"
     );
     assert_eq!(
         render(&arch, "rust", 1, &args),
-        "__kuna_userop_1_DPA_W_PH(left,right)"
+        "__unlace_userop_1_DPA_W_PH(left,right)"
     );
     assert_eq!(
         render(&arch, "rust", 2, &[]),
-        "__kuna_userop_2___kuna_userop_0_DPA_W_PH()"
+        "__unlace_userop_2___unlace_userop_0_DPA_W_PH()"
     );
-    assert_eq!(render(&arch, "rust", 3, &[]), "__kuna_userop_3()");
+    assert_eq!(render(&arch, "rust", 3, &[]), "__unlace_userop_3()");
     assert_eq!(
         render(&arch, "rust", 1 << 32, &[]),
-        "__kuna_userop_100000000()"
+        "__unlace_userop_100000000()"
     );
     for lang in ["c", "go"] {
         assert_eq!(render(&arch, lang, 0, &args), "DPA.W.PH(left,right)");
@@ -84,7 +84,7 @@ fn dotted_and_unregistered_operations_keep_identifiers_and_operands() {
 #[test]
 fn unicode_operations_keep_distinct_bindings_and_all_four_operands() {
     let mut arch = bare_arch();
-    for (index, name) in ["é", "e\u{301}", "__kuna_userop_0__"].iter().enumerate() {
+    for (index, name) in ["é", "e\u{301}", "__unlace_userop_0__"].iter().enumerate() {
         arch.userops
             .register_op(UserPcodeOp::new_unspecialized(
                 name.as_bytes(),
@@ -95,15 +95,15 @@ fn unicode_operations_keep_distinct_bindings_and_all_four_operands() {
     let args = ["first", "second", "third", "fourth"];
     assert_eq!(
         render(&arch, "rust", 0, &args),
-        "__kuna_userop_0__(first,second,third,fourth)"
+        "__unlace_userop_0__(first,second,third,fourth)"
     );
     assert_eq!(
         render(&arch, "rust", 1, &args),
-        "__kuna_userop_1_e_(first,second,third,fourth)"
+        "__unlace_userop_1_e_(first,second,third,fourth)"
     );
     assert_eq!(
         render(&arch, "rust", 2, &args),
-        "__kuna_userop_2___kuna_userop_0__(first,second,third,fourth)"
+        "__unlace_userop_2___unlace_userop_0__(first,second,third,fourth)"
     );
     for lang in ["c", "go"] {
         assert_eq!(
@@ -130,7 +130,7 @@ fn acle_intrinsics_keep_precedence_for_a_resolved_userop() {
     }
     assert_eq!(
         render(&arch, "rust", 1 << 32, &[]),
-        "__kuna_userop_100000000()"
+        "__unlace_userop_100000000()"
     );
     arch.unlace_options
         .set(crate::memtag::AcleIntrinsics(false));

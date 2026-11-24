@@ -12,14 +12,14 @@
 # P9 emission.  `PrintC::pushSymbolDetail` routes a symbol-mapped access
 # through `pushPartialSymbol`, whose walk breaks out at the top on a whole
 # symbol cover (off == 0 and size == the symbol's size) and leaves the caller
-# to render.  kuna's caller has a dedicated whole-array `name[index]` branch
+# to render.  unlace's caller has a dedicated whole-array `name[index]` branch
 # computing `index = symboloff / elementAlignSize` that never consults the
 # access size, so every whole-array cover printed element zero.  A PARTIAL
 # multi-element access was already repaired - it reaches the walk's artificial
 # `._<off>_<size>_` field - so `v.._0_4_` and `v..[0]` appeared side by side in
 # one function for accesses four times apart in width.
 #
-# Fix: kuna_arraycoverwidth.rs (always on) suppresses that top-of-walk break
+# Fix: unlace_arraycoverwidth.rs (always on) suppresses that top-of-walk break
 # for an array whose element stride is smaller than the access, so the cover
 # falls to the same artificial field a partial access gets and renders
 # `v2._0_16_`.  An access that fits inside one element keeps its subscript;

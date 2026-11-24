@@ -16,7 +16,7 @@ and effects refuse. Flow overrides do not acquire a record. The record is
 cleared on restart and cannot authorize a later rendering without the final
 whole-function SSA proof described in chapter 09.
 
-**(kuna) Atomic instructions — `option atomics auto|msvc|gcc|off`, default `auto` (measured in unlace#581),
+**(unlace) Atomic instructions — `option atomics auto|msvc|gcc|off`, default `auto` (measured in unlace#581),
 `crates/unlace-lift/src/p2_lift/atomics.rs (rewrite)`.**
 SLEIGH lifts an x86 `lock`-prefixed read-modify-write as `LOCK()`, a load, an
 update, a store and `UNLOCK()`; an AArch64 LSE atomic (`ldadd`, `ldclr`,
@@ -147,7 +147,7 @@ spells no 16-byte intrinsic with these operands (`_InterlockedCompareExchange128
 returns a flag and writes the old value through a pointer), so the 16-byte forms
 keep the GCC name under every spelling.
 
-**(kuna) Load/store-exclusive loops — `option llscfold`, default on (unlace#581; it acts only with `atomics`),
+**(unlace) Load/store-exclusive loops — `option llscfold`, default on (unlace#581; it acts only with `atomics`),
 `crates/unlace-lift/src/p2_lift/atomics.rs (ActionLlscLoop)`.**
 Without LSE, AArch64 code (and all ARMv6+/Thumb-2 code) updates memory with a retry loop: `ldaxr w8, [x0];
 add w9, w8, w1; stlxr w10, w9, [x0]; cbnz w10, loop`. The store-exclusive
@@ -313,7 +313,7 @@ This is a SLEIGH correctness repair, without an inference option.
 The V850 spec decodes the instructions the RH850 (V850E3v5) cores add to
 V850E2M (`specs/Ghidra/Processors/V850/data/languages/Instructions/RH850.sinc`).
 Their encodings are undefined on V850E2M, so a function holding one used to end
-in `halt_baddata()` (Kuna #1629). `ROTL` is a rotate whose CY is bit 0 of the
+in `halt_baddata()` (Unlace #1629). `ROTL` is a rotate whose CY is bit 0 of the
 result (0 for a rotate by zero). `BINS` replaces bits `pos` to `pos + width - 1`
 of reg2 with the low bits of reg1; the mask is built from the encoded bit
 numbers, and an encoding whose top bit is below its bottom bit changes nothing.
@@ -344,7 +344,7 @@ round in the mode they name. Upstream lifts every scalar, SIMD-scalar and
 vector `FCVT{A,M,N,P,Z}{S,U}` as `TRUNC(x)`, and every `FRINT{A,I,M,N,P,X,Z}`
 and `FRINT32/64{X,Z}` as `TRUNC(x)` written into the float register, so
 `(int)floorf(x)` and `(int)ceilf(x)` lifted alike and a test of the floor
-against the ceil of one value folded away (Kuna #1535; upstream master is
+against the ceil of one value folded away (Unlace #1535; upstream master is
 unchanged as of 2026-11-10). A conversion now truncates `FLOAT_FLOOR(x)`
 (`M`), `FLOAT_CEIL(x)` (`P`), `FLOAT_ROUND(x)` (`A`: ties away from zero,
 which is what p-code's `ROUND` does), the `FLOAT_ROUNDEVEN(x)` user op (`N`),
@@ -385,7 +385,7 @@ and the decompiler models every signed pointer as already authenticated (the
 are empty, so `pacda x0,x16` wrote nothing: a function whose only write to
 `x0` is the signing had no definition of `x0` at its `ret`, return recovery
 found no result, and `return ptrauth_sign_unauthenticated(p, ..)` decompiled
-as `void f(void)` (Kuna #1621). A hidden form that writes a general register
+as `void f(void)` (Unlace #1621). A hidden form that writes a general register
 (`pac{i,d}{a,b}`, `pac{i,d}z{a,b}`, `aut{i,d}{a,b}`, `aut{i,d}z{a,b}`,
 `pac{i}{a,b}1716`, `aut{i}{a,b}1716`, `xpaci`, `xpacd`) now lifts to a copy of
 that register onto itself, `Rd = Rd`, the transparent model's own semantics:
@@ -406,7 +406,7 @@ byte-identical. This is a SLEIGH correctness repair, without an inference
 option.
 
 The AArch64 memory-tagging (MTE) instructions lift with their tag effect
-(`option acleintrinsics on|off`, default on, AArch64 only; Kuna #1626).
+(`option acleintrinsics on|off`, default on, AArch64 only; Unlace #1626).
 `AARCH64.pspec` leaves the `ShowMemTag` context at 0, and under it
 `specs/Ghidra/Processors/AARCH64/data/languages/AARCH64base.sinc` lifts
 `irg` as a copy, `addg` and `subg` as a plain add, `gmi` as a copy of its
@@ -424,7 +424,7 @@ exactly as before, and a language without the variable (every non-AArch64
 one) is left alone. `off` paints it back to 0, so one session can lift the
 same function both ways.
 
-The `ShowMemTag=1` constructors are kuna's, not upstream's. Upstream kept
+The `ShowMemTag=1` constructors are unlace's, not upstream's. Upstream kept
 the destination register an untouched copy and put the tag operation in a
 user op with no output, to keep the pointer's data flow; the output then
 still read `return a0;` after a detached `RandomizePtrTag_Exclude(a0, ..)`
@@ -536,7 +536,7 @@ is selector*0x10000 + offset, so a near branch keeps the selector and wraps the
 offset, as upstream computes it. This is a SLEIGH correctness repair, without
 an inference option.
 
-(kuna) CIL has a language of its own,
+(unlace) CIL has a language of its own,
 `specs/Ghidra/Processors/CIL/data/languages/CIL.slaspec`
 (`CIL:LE:64:default`), for the managed assemblies the `cil` loader maps
 (chapter 01). The evaluation stack is the registers `s0`..`s63`: slot *i* is
@@ -608,7 +608,7 @@ alone as a merge of memory into the register by a shift its address's low
 bits pick, so the pair reads the register it overwrites and prints as shifts
 and masks around that value: after a call, the call's dead second return word,
 which made SQLite's callers read `sqlite3PagerWrite`'s result as a 64-bit
-pair, so `kuna_voidret` saw them disagree and printed it `void`. The spec also
+pair, so `unlace_voidret` saw them disagree and printed it `void`. The spec also
 has whole-access forms for both halves, selected by the context bit
 `PAIR_INSTRUCTION_FLAG`: the half at the lower address on a big-endian target
 (the higher on a little-endian one) loads or stores the whole word, and the
@@ -702,7 +702,7 @@ observable — it fixes the SeqNum allocation every later phase keys on.
 **The dead list is a list, and the walk must treat it as one.** The C++ holds
 `std::list<PcodeOp *>::iterator`s directly (`insertiter` on each op), so
 "the op after this one", "the op before this one" and "the last op" are all
-constant-time. kuna's dead list is the same doubly-linked list, realized as
+constant-time. unlace's dead list is the same doubly-linked list, realized as
 prev/next `OpId` links on each op (`op.rs (IntrusiveList)`), and
 `op.rs (PcodeOpBank::dead_next / dead_prev / dead_front / dead_back)` read those
 links. Position must never be re-derived by scanning `iter_dead()`: the marker
@@ -971,7 +971,7 @@ that begins inside the window but runs off its end is not an error, because
 pattern matching walks a candidate pattern in fixed-width words however narrow
 the pattern really is: matching an instruction at the length limit issues a
 word-sized read straddling the end of the window. Those tail bytes are outside
-the matcher's mask and cannot affect the verdict, so kuna reads them as zero
+the matcher's mask and cannot affect the verdict, so unlace reads them as zero
 rather than rejecting the instruction (the C++ reads whatever memory follows the
 buffer). Without this an x86-64 15-byte alignment NOP — clang's `-O2` loop
 padding — failed to decode, truncating flow at the padding and dropping the loop
@@ -996,7 +996,7 @@ throw under `error_reinterpreted`). An artificial halt
 its cause (`unimplemented`/`badinstruction`/`noreturn`/`missing`), so the CFG
 always terminates cleanly and the printer can attribute the truncation.
 
-**(kuna) A decode-failure halt says so (`decodehalt.rs`, always on).**
+**(unlace) A decode-failure halt says so (`decodehalt.rs`, always on).**
 Three of the four halt causes are decode failures rather than program returns:
 `badinstruction` (the bytes at the address are not an instruction),
 `unimplemented` (SLEIGH decoded them but has no semantics for them) and
@@ -1012,7 +1012,7 @@ indistinguishable from a function that returns normally. The fourth cause,
 `noreturn`, is not a decode failure and is deliberately untouched: it is already
 reported on the call it follows.
 
-**(kuna) Silent losses named (`honestgaps.rs`, `option honestgaps`, default off).**
+**(unlace) Silent losses named (`honestgaps.rs`, `option honestgaps`, default off).**
 Under the `ignoreunimplemented` policy `handle_decode_error` steps over an
 instruction SLEIGH decodes but has no p-code for, as a no-op, and only the
 once-per-function header said the function ignored unimplemented instructions,
@@ -1060,9 +1060,9 @@ path. Each address still queued is halted the same way when it is popped, so
 the decode stops at the budget rather than running to the end of the reachable
 body; a function of 1.8 million instructions truncates in seconds instead of
 exhausting memory. The truncated function carries a warning header naming the
-budget and the option that raises it. The CLI's decompiling surfaces (`kuna
+budget and the option that raises it. The CLI's decompiling surfaces (`unlace
 decompile`, `decompile-all`, `decompile-project`, `decompile-graph`) choose the
-truncating policy (DIV-120) so an oversized function yields the body kuna did
+truncating policy (DIV-120) so an oversized function yields the body unlace did
 decode; the engine default is still upstream's throw.
 
 **Call sites.** Each CALL gets a `FuncCallSpecs` bound to the op
@@ -1071,17 +1071,17 @@ callee entry is resolved through the symbol table (`FlowEnvironment::query_call`
 the call op's input 0 is replaced by an *fspec annotation* Varnode carrying the
 spec's identity, per-call prototype overrides are applied before the query
 (`override prototype`), and a declared callee prototype is copied onto the spec
-(kuna performs the C++ `ActionDefaultParams`-time copy here, excluding inline
+(unlace performs the C++ `ActionDefaultParams`-time copy here, excluding inline
 calls, with identical observable result — the analysis path locks callee
 signatures before flow runs). A CALLIND keeps its computed target as input 0
 (`setup_callind_specs`) unless a previous decompilation pass planted an
 indirect override (de-indirection), which converts it to a direct CALL before
-the spec is built. (kuna `vtabletypes`) With that option on, the register the
+the spec is built. (unlace `vtabletypes`) With that option on, the register the
 CALLIND read its target from (`flow.rs (FlowInfo::jump_target_carrier)`) is
 recorded on the new spec, so the trial scoring of chapter 04 does not take it
 as an argument: a virtual call de-indirected through a folded vtable slot
 (chapter 05) loaded the method's address into that register only to jump
-through it. (kuna `msvcsig`) One more CALLIND is made direct there: a
+through it. (unlace `msvcsig`) One more CALLIND is made direct there: a
 call through an import slot whose MSVC-declared prototype the analysis commit
 locked onto the import symbol (01, `msvcsig`)
 (`crates/unlace-lift/src/p2_lift/msvcimportcall.rs
@@ -1106,7 +1106,7 @@ itself
 (`crates/unlace-bandb-base/src/p4_calls/calleeprotostack.rs
 (resolve_declared_extra_pop)`), so a
 `__thiscall` or `__stdcall` import pops what its declaration says instead of
-what the push run in front of it suggests. (kuna `relronoreturn`, default on)
+what the push run in front of it suggests. (unlace `relronoreturn`, default on)
 A third CALLIND can be made direct there: one whose target is the word read from
 a relocated read-only slot (an `R_*_RELATIVE` `.got` word inside the image's
 `dynreloc_const` ranges), when that word holds the entry of a function flagged
@@ -1119,7 +1119,7 @@ function; the option removes it, at the price of the second pass's other
 benefits (every other call the first pass bound is direct from its flow on),
 which is why it is not the default.
 
-(kuna `guarddispatch`, on by default) A CALLIND through a Control Flow Guard
+(unlace `guarddispatch`, on by default) A CALLIND through a Control Flow Guard
 dispatch slot calls the register the dispatch routine jumps to
 (`crates/unlace-lift/src/p2_lift/guarddispatch.rs
 (calls_through_slot)`). An image built with `/guard:cf` makes every
@@ -1127,7 +1127,7 @@ function-pointer call as `mov rax, target; call [__guard_dispatch_icall_fptr]`;
 the routine in the slot validates `rax` and jumps to it with the argument
 registers untouched. Taken literally the call prints as a call of the slot and
 the real target, which only the routine reads, drops out of the output. The PE
-load configuration names the slots (01, `kuna_peloadconfig`), and the commit
+load configuration names the slots (01, `unlace_peloadconfig`), and the commit
 records `__guard_dispatch_icall_fptr` and `__guard_xfg_dispatch_icall_fptr`.
 When the call's target is the word its own instruction reads from one of them
 (the same constant-address test as `msvcsig` above), input 0 becomes the target
@@ -1139,7 +1139,7 @@ not a call through its slot. The flag is the reading choice; `option
 guarddispatch off` prints the call through the slot as the instructions state it.
 Only a PE commit fills the slot set, so the rule is inert on every other input.
 
-(kuna `--assert callee`) The reader can plant the same indirect override. A
+(unlace `--assert callee`) The reader can plant the same indirect override. A
 front-end parks `call site -> callee entry` facts on the architecture, keyed
 by the entry of the function that holds the call, and
 `crates/unlace-lift/src/p2_lift/calleeoverride.rs (seed)`
@@ -1230,11 +1230,11 @@ recovered switch table.
   (`flow.rs (FlowInfo::inject_sub_function)`); the payload's parameter shift is
   transferred to the call spec created inside the woven body, and a nested call
   to the same fixup entry is cycle-broken (it must not re-inject).
-- **kuna-owned call fixups.** Payloads are not required to come from a spec
+- **unlace-owned call fixups.** Payloads are not required to come from a spec
   file. `crates/unlace-lift/src/p2_lift/msvcftol.rs` synthesizes
   a `<callfixup>` in Rust and registers it through the same
   `PcodeInjectLibraryBase::decode_inject` path immediately after the cspec's own
-  (`architecture.rs (decode_kuna_call_fixups)`), so the vendored spec tree stays
+  (`architecture.rs (decode_unlace_call_fixups)`), so the vendored spec tree stays
   byte-identical to upstream while `parse_inject_all` still compiles every body
   together. Its subject is the MSVC x86-32 float-to-integer CRT helper family
   (`__ftol`, `__ftol2`, `__ftol2_sse`, and the `ftol2.obj` SSE2 entries
@@ -1271,8 +1271,8 @@ recovered switch table.
   The analysis-tier call-fixup installer tags the payload onto its targets at
   `read symbols`.
 - **Arithmetic runtime helpers.** `crates/unlace-lift/src/p2_lift/arithhelpers.rs`
-  registers one more family of kuna-owned call fixups beside `kuna_msvcftol`'s,
-  through the same `decode_kuna_call_fixups` seam: the helpers a 32-bit target
+  registers one more family of unlace-owned call fixups beside `unlace_msvcftol`'s,
+  through the same `decode_unlace_call_fixups` seam: the helpers a 32-bit target
   calls for an operation it has no instruction for. Their contracts are
   documented outside any decompiler (the libgcc manual's integer library
   routines, the Arm run-time ABI, the MSVC CRT as Wine implements it), so each
@@ -1337,7 +1337,7 @@ recovered switch table.
   conforming image; flip it off for a firmware that links non-IEEE helpers
   (flush-to-zero, a fixed-point shim) under the AEABI names. The gate is on the
   install, as for `arithhelpers`. The load-time call-fixup scan
-  (`unlace_analysis::callfixup`) matches every kuna family whatever its option,
+  (`unlace_analysis::callfixup`) matches every unlace family whatever its option,
   because it runs before the run's options reach the architecture; the commit
   re-derives each fact's fixup through the gated map. Gating the scan too left a
   relocatable object's undefined `__aeabi_*` imports, which only the scan names,
@@ -1346,7 +1346,7 @@ recovered switch table.
   `maskjoin` (chapter 3).
 
 - **Objective-C ARC bookkeeping** (`crates/unlace-lift/src/p2_lift/objcarc.rs`,
-  option **`objcarc`**, default on): the second kuna-owned call-fixup family,
+  option **`objcarc`**, default on): the second unlace-owned call-fixup family,
   registered next to the one above. An ARC-compiled method is strewn with
   `objc_retain(x)`, `objc_release(x)`, `v = objc_retainAutoreleasedReturnValue(v)`
   and `objc_storeStrong(&slot, x)`, and with the runtime stubs untyped the value
@@ -1363,7 +1363,7 @@ recovered switch table.
   `x0`..`x30` resolve at an 8-byte code space, x86-64 when `RAX`/`RDI`/`RSI`/`RSP`
   do; the x86-64 bodies pop the `CALL`'s pushed return address as above). The
   install is where the gate lives: the analysis-tier call-fixup installer drops
-  every `kuna_objcarc_` payload from its map under `option objcarc off`, and —
+  every `unlace_objcarc_` payload from its map under `option objcarc off`, and —
   because a Mach-O import is a `__stubs` entry whose FunctionSymbol keeps its
   `sub_` name under a display alias — it tags the stubs by *address* from the
   `LC_DYSYMTAB` indirect-symbol walk (`analyzers/callfixup`, `CallFixupFact::addr`)
@@ -1377,7 +1377,7 @@ recovered switch table.
   `macho_objc_arc_arm64` (clang `-fobjc-arc -O2`) both ways: default,
   `-[Holder total:]` is `v1 = objc_msgSend(arg1,sel_count); v2 = objc_msgSend(arg1,sel_inner); return objc_msgSend(v2,sel_count) + v1;`
   with no release left; off, the five ARC calls are shown typed.
-- **kuna-owned callother fixups.** The same freedom applies to the user-op side.
+- **unlace-owned callother fixups.** The same freedom applies to the user-op side.
   `crates/unlace-lift/src/p2_lift/cortexmpriv.rs` supplies a
   `<callotherfixup>` body for the ARM user op `isCurrentModePrivileged`, which
   the vendored Cortex-M SLEIGH raises at twelve places. Every VERSION_7M MRS/MSR
@@ -1441,7 +1441,7 @@ most 8 cross-flow restarts before keeping the last analyzed IR.
 
 **(angr) Tail-call jumps — `option tailcalljump`, default on (DIV-14),
 `crates/unlace-lift/src/p2_lift/tailcalljump.rs
-(kuna_is_tail_call_branch)`.** At `-O2` a "call X then return" tail compiles to
+(unlace_is_tail_call_branch)`.** At `-O2` a "call X then return" tail compiles to
 a direct `jmp X`. Decision rule: a `CPUI_BRANCH` whose direct machine-address target is the
 entry of a *known function* (including a PLT thunk) that is not the current
 function's own entry is a tail call, unless the target lies inside the current
@@ -1492,10 +1492,10 @@ computed jump with exactly one destination. A linker veneer or long-branch
 stub (`ldr r1,[pc]; bx r1`, `ldr pc,[pc,#-4]`, the Thumb `ldr r3,=f; bx r3`)
 reads its target from a read-only literal, and jump-table recovery turns that
 into a table whose every entry names the same address
-(`tailcalljump.rs (kuna_sole_table_destination)`). Under `on`,
+(`tailcalljump.rs (unlace_sole_table_destination)`). Under `on`,
 `flow.rs (FlowInfo::recover_jump_tables)` turns that jump into a tail call when
 the address is another known function's entry and one of two things holds
-(`tailcalljump.rs (kuna_is_tail_call_table)`):
+(`tailcalljump.rs (unlace_is_tail_call_table)`):
 
 - following the address can only end in `halt_missing()`: it lies outside
   the function's declared extent, or the image has no bytes there (the
@@ -1555,7 +1555,7 @@ meets the out-of-bounds halt. A `flow ... branch` override cannot veto this
 per site: `override_flow` refuses `branch` on a computed jump, so the only
 switch is the option value.
 
-**(kuna) Tail calls through a GOT slot — part of `tailcalljump` (GH-904),
+**(unlace) Tail calls through a GOT slot — part of `tailcalljump` (GH-904),
 `crates/unlace-bandb/src/p4_calls/gottailcall.rs`.**
 A position-independent tail call loads its target from a GOT slot and jumps
 through it: MIPS `lw $t9,%call16(f)($gp); jr $t9`, x86-64 `-fno-plt`
@@ -1565,7 +1565,7 @@ function printed `f`'s copied-in body, or, when the slot names an extern of
 a relocatable object, `halt_missing();` with the call's arguments gone. Under
 `tailcalljump on`, the GOT-slot rule adds two cases to the `call_states_the_body`
 test that `decompile_drive.rs (ArchFlowEnv::is_tail_call_table)` hands
-`tailcalljump.rs (kuna_is_tail_call_table)`:
+`tailcalljump.rs (unlace_is_tail_call_table)`:
 
 - the destination has no bytes (the same mapped-bytes test
   `flow.rs (FlowInfo::new_address)` makes): following the table can only end
@@ -1654,11 +1654,11 @@ an unmapped non-function and a jump to the function's own code as controls,
 `tests/cli/gottailcall-*.json` pin the callee-first arm on an x86-64
 `-fno-plt` library and a MIPS PIC object.
 
-**(kuna) Frame-teardown tail jumps — `option tailcallframe`, default on
+**(unlace) Frame-teardown tail jumps — `option tailcallframe`, default on
 (DIV-109), `crates/unlace-lift/src/p2_lift/tailcallframe.rs
-(kuna_is_frame_teardown_tail_call)`.** `tailcalljump` above resolves the callee
+(unlace_is_frame_teardown_tail_call)`.** `tailcalljump` above resolves the callee
 through `query_call`, so it only fires on a target some discovery oracle already
-found. Every kuna oracle reaches a function from a symbol, from an unwind record,
+found. Every unlace oracle reaches a function from a symbol, from an unwind record,
 or from a direct `call` the recursive-descent Listing walk arrived at; a callee
 reached *only* through a code pointer in initialized data satisfies none of them,
 because the walk never enters the callback that calls it. Decompiling such a
@@ -1711,7 +1711,7 @@ and none of them fire). Deferring the decision until the flow work-stack drains,
 and then asking whether the function decoded `dest` by another path, is the sound
 fix; it is a change to the walk's ordering rather than to this predicate.
 
-**(kuna) EVM internal calls — `option evmcalls`, default on,
+**(unlace) EVM internal calls — `option evmcalls`, default on,
 `crates/unlace-lift/src/p2_lift/evmcalls.rs (classify, ActionEvmCalls)`.** The
 EVM has no call instruction for code inside a contract: solc lowers an internal call
 to `PUSH ret; <arguments>; PUSH fn; JUMP` and the callee returns with a `JUMP` to
@@ -1759,11 +1759,11 @@ decompiled is itself a callee whose call sites agree on its argument count, its
 own prototype is locked the same way, so it reads its arguments as parameters and
 returns its result.
 
-**(kuna) A teardown has to give back what the entry block saved — part of
+**(unlace) A teardown has to give back what the entry block saved — part of
 `tailcallframe` (DIV-157),
 `crates/unlace-lift/src/p2_lift/tailcallsaved.rs
-(kuna_stack_saved_bytes / kuna_stack_restored_bytes /
-kuna_teardown_restores_saves)`.** Cancelling deltas are necessary but not
+(unlace_stack_saved_bytes / unlace_stack_restored_bytes /
+unlace_teardown_restores_saves)`.** Cancelling deltas are necessary but not
 sufficient. Because both of `tailcallframe`'s scans stop at the first
 control-flow op, the backward one cannot see past a `call`, and on a cdecl caller
 what sits immediately in front of the branch is the argument cleanup for that
@@ -1793,15 +1793,15 @@ the first word back. One-directional: the rule can only decline a recovery
 `tailcallframe` would have made, never introduce one. Byte-identical on both
 parity corpora and across 803 `decompile-all` runs of the decbench corpus.
 
-**(kuna) Fall-through function bound — `option funcboundflow`, default on
+**(unlace) Fall-through function bound — `option funcboundflow`, default on
 (DIV-67), `crates/unlace-lift/src/p2_lift/funcboundflow.rs
-(kuna_should_bound_at_entry)`.** A kuna `FunctionSymbol` is an entry address with
+(unlace_should_bound_at_entry)`.** A unlace `FunctionSymbol` is an entry address with
 no extent, and CALL/CALLIND are fall-through, so flow stops only at a RETURN or a
 *known* no-return callee (`query_call_no_return`). A function whose last act is a
-`call` to a routine kuna cannot prove no-return — in a stripped, statically-linked
+`call` to a routine unlace cannot prove no-return — in a stripped, statically-linked
 binary the unnamed `exit`/`abort`/`__stack_chk_fail` bodies and the app-level
 `die()`/`throw` wrappers built on them — compiles with no trailing `ret`, just
-inter-function alignment padding, and kuna's follower runs the padding's
+inter-function alignment padding, and unlace's follower runs the padding's
 fall-through straight into the next function's entry, decoding *that* function's
 body into the current one (the following function is then emitted twice: once
 correctly, once as a garbage tail of its predecessor). Decision rule: a
@@ -1851,9 +1851,9 @@ raises `Could not find op at target address`.
 
 The same bound holds at the function's own literal pool
 (`crates/unlace-lift/src/p2_lift/funcboundflow.rs
-(kuna_should_bound_at_pool)`), on ARM32. A compiler places the PC-relative
+(unlace_should_bound_at_pool)`), on ARM32. A compiler places the PC-relative
 constants a body loads right after its last instruction, so a function that ends
-in a call kuna cannot prove no-return (an unnamed import, a call to an address
+in a call unlace cannot prove no-return (an unnamed import, a call to an address
 outside the image) is followed by its pool, not by code: armv5te `probe` ends `bl
 use; bl die`, and the walk took the second call's fall-through, decoded the first
 constants as instructions and stopped at one that decodes as nothing, printing
@@ -1865,15 +1865,15 @@ path's `return` after the call). The walk cannot be its own witness for where a
 pool is — it reaches the pool by falling through a call, and a constant that
 happens to encode a PC-relative load or a branch is then indistinguishable from
 evidence — so the pools come from the analysis tier: the Listing's trusted-reference
-extents (chapter [01](01-program-prep.md), `kuna_poolextents`), computed once over
+extents (chapter [01](01-program-prep.md), `unlace_poolextents`), computed once over
 the completed image walk and parked on the architecture before any function is
 walked. When an unconditional `CALL`/`CALLIND` (no `CBRANCH` in the instruction,
 `flow.rs (FlowInfo::ends_in_unconditional_call)`) would fall through into one of
-those extents (`funcboundflow.rs (kuna_pool_pad)`, a range lookup, in
+those extents (`funcboundflow.rs (unlace_pool_pad)`, a range lookup, in
 executable non-writable image bytes), the call does not return: the walk plants
 the no-return halt and a `funcboundflow` warning saying the fall-through is the
 literal pool. The pool may start up to one instruction past the fall-through, when
-the bytes between decode as instructions that do nothing (`kuna_is_padding_run`)
+the bytes between decode as instructions that do nothing (`unlace_is_padding_run`)
 or are zero — the alignment padding a compiler leaves before a doubleword pool, or
 after a Thumb call that ends halfway through a word. Live code never sits between a
 call and the pool it must jump over. The halt stays in the call's block, as a known
@@ -1898,9 +1898,9 @@ fall-through. This lets `target` walk across already-decoded instructions that
 generated no p-code and terminate at the proven boundary. It does not mark the
 foreign entry as decoded and does not mask a missing op before the cutoff.
 
-**(kuna) Return-address-discarding call trampolines — always on (DIV-144),
+**(unlace) Return-address-discarding call trampolines — always on (DIV-144),
 `crates/unlace-lift/src/p2_lift/calltrampoline.rs
-(kuna_trampoline_branch_target)`.** `CPUI_CALL` is a fall-through op, so the
+(unlace_trampoline_branch_target)`.** `CPUI_CALL` is a fall-through op, so the
 follower decodes the return address as the next instruction. A protector breaks
 that assumption with a fragment the caller reaches by `call`: `lea esp,[esp+4]`
 (or `add esp,4`, or a `pop`) throws the pushed return address away, one real
@@ -1914,7 +1914,7 @@ at `0x44ac4d` re-enters at exactly the return address, so the rule is written
 against the `jmp` target and never against `ra + 1`.
 
 Decision rule, over the callee's raw p-code decoded out of band (up to
-`KUNA_TRAMPOLINE_MAX_INSTRS` instructions, `KUNA_TRAMPOLINE_MAX_OPS` ops, and
+`UNLACE_TRAMPOLINE_MAX_INSTRS` instructions, `UNLACE_TRAMPOLINE_MAX_OPS` ops, and
 stopping at the first control transfer): the stack pointer must reach **exactly**
 `entrySP + <pointer size>` — the instant the pushed return address stops
 existing — and the run must then end in a direct `CPUI_BRANCH`, with no call,
@@ -1950,9 +1950,9 @@ fragment that re-enters mid-stream satisfies that by construction; a thunk to a
 discovered callee does not, and stays a `CALL` for `tailcalljump` to claim at its
 own `jmp`.
 
-**(kuna) Return-address-popping call transfers — always on (DIV-163),
+**(unlace) Return-address-popping call transfers — always on (DIV-163),
 `crates/unlace-lift/src/p2_lift/callpopret.rs
-(kuna_call_pops_return_address)`.** A second flavour of the same family ends in
+(unlace_call_pops_return_address)`.** A second flavour of the same family ends in
 `ret` instead of `jmp`: `call` jumps over inline data, the callee pops the
 pushed return address into a result register, adjusts that pointer, then `ret`s
 through the word above it. The callee therefore returns to its caller's caller;
@@ -1983,14 +1983,14 @@ attributable. Section executability is deliberately irrelevant: the witness's
 whole packer stub, both code and inline data, occupies a section without the
 executable flag.
 
-**(kuna) Immediate-stack RET tail transfers — always on (DIV-170,
+**(unlace) Immediate-stack RET tail transfers — always on (DIV-170,
 `crates/unlace-lift/src/p2_lift/pushimmediateret.rs`).** A packer can spell an unconditional terminal transfer
 as `push <immediate>; ret`. Left as RETURN, flow ends correctly but dead-store
 elimination erases the pushed destination, so emitted C loses the transfer.
 Before following the function, the shared console decompile step runs the
 bounded raw-p-code provenance walk in
 `crates/unlace-console/src/retcallchain.rs
-(kuna_push_immediate_ret)`. RETURN must load a stack slot written in the
+(unlace_push_immediate_ret)`. RETURN must load a stack slot written in the
 current straight-line run, the exact last store must carry a constant, and RET
 must advance the same affine stack base by the loaded width. The result seeds
 the existing P2 BRANCH flow override at that RET. BRANCH has no call-return
@@ -2018,7 +2018,7 @@ flow follower respects; its speculative far branches must not change another
 function's real-mode return IP. Normal flow decoding still publishes its
 segment discoveries.
 
-**(kuna) `__fastfail` is a no-return — always on (DIV-120),
+**(unlace) `__fastfail` is a no-return — always on (DIV-120),
 `crates/unlace-lift/src/p2_lift/fastfailnoreturn.rs
 (is_fastfail_callind)`.** x86 SLEIGH lifts `INT imm8` to `intloc = swi(imm8);
 call [intloc]` — a `call` with no matching push, unlike every other x86 `CALL`,
@@ -2048,7 +2048,7 @@ a Linux syscall (`option linuxsyscall`) and `int1`/`int3`/`into` carry a
 compiler-spec component of the resolved language id, since `int 0x29` is
 `__fastfail` by Windows convention alone.
 
-**(kuna) DOS exits are no-returns — always on (#1288),
+**(unlace) DOS exits are no-returns — always on (#1288),
 `crates/unlace-lift/src/p2_lift/flow.rs (FlowEnvironment::is_dos_exit_callind)`.**
 An interrupt that ends an MS-DOS program (`INT 20h`, `INT 27h`, `INT 21h` with
 AH = 00h, 31h or 4Ch) lowers to the same falling-through `swi` call, so flow
@@ -2068,7 +2068,7 @@ annotation is the only thing on the line that says the program ends there. The
 list is empty unless a real-mode raw or MZ image was discovered, so every other
 input, the XML corpus included, is byte-identical.
 
-**(kuna) The `int3` pad control ran into — `option int3pad`, default `warn`
+**(unlace) The `int3` pad control ran into — `option int3pad`, default `warn`
 (DIV-128), `crates/unlace-lift/src/p2_lift/int3pad.rs
 (is_int3_callind)`.** `INT3` lowers the same way (`intloc = swi(3); call
 [intloc]; return [0:1]`), so a decoded breakpoint byte prints as `v1 = (code
@@ -2095,11 +2095,11 @@ naming the pad does not depend on asserting that the process dies there. `option
 int3pad off` restores the unannotated rendering. Exercised by
 `tests/stages/int3pad.toml`.
 
-**(kuna) A `ud2` after a call is a no-return call site — `option trapaftercall`, default on, `crates/unlace-lift/src/p2_lift/flow.rs (trap_follows_call)`.** clang with trap-unreachable (the Darwin and rustc default) emits `ud2` after every call it knows cannot return. A stripped image gives such a callee no name, so no name list marks it no-return, and flow walks into the trap. `FlowInfo::check_for_flow_modification` checks that the instruction is a machine `call` (E8, or FF /2, after prefixes; a tail `jmp` turned into a call does not count) and reads the two bytes after it (its size is the visited record's); `0F 0B` plants the artificial halt, the same path a named no-return callee takes, and marks a direct call's spec no-return. An indirect call (rustc calls through GOT slots) gets the halt only: `ActionDeindirect` would find a no-return mark disagreeing with the resolved callee's prototype and restart the function, doubling its cost. IDA also reads two `int3` bytes (MSVC) this way; kuna does not, because anti-debug code returns into an `int3` pad on purpose (`int3pad` above). The evidence is per call site and x86 language ids only (`ctx.trap_after_call`). Exercised by `tests/stages/trapaftercall.toml`.
+**(unlace) A `ud2` after a call is a no-return call site — `option trapaftercall`, default on, `crates/unlace-lift/src/p2_lift/flow.rs (trap_follows_call)`.** clang with trap-unreachable (the Darwin and rustc default) emits `ud2` after every call it knows cannot return. A stripped image gives such a callee no name, so no name list marks it no-return, and flow walks into the trap. `FlowInfo::check_for_flow_modification` checks that the instruction is a machine `call` (E8, or FF /2, after prefixes; a tail `jmp` turned into a call does not count) and reads the two bytes after it (its size is the visited record's); `0F 0B` plants the artificial halt, the same path a named no-return callee takes, and marks a direct call's spec no-return. An indirect call (rustc calls through GOT slots) gets the halt only: `ActionDeindirect` would find a no-return mark disagreeing with the resolved callee's prototype and restart the function, doubling its cost. IDA also reads two `int3` bytes (MSVC) this way; unlace does not, because anti-debug code returns into an `int3` pad on purpose (`int3pad` above). The evidence is per call site and x86 language ids only (`ctx.trap_after_call`). Exercised by `tests/stages/trapaftercall.toml`.
 
-**(kuna) A retpoline thunk is an indirect call — `option retpolinethunk`, default on, `crates/unlace-lift/src/p2_lift/retpolinethunk.rs (thunk_register)`.** `-mretpoline` (clang) and `-mindirect-branch=thunk` (gcc) compile each indirect call into a direct call to a per-register thunk, `call 1f; 2: pause; lfence; jmp 2b; 1: mov %reg,(%rsp); ret`, which returns into the target the register holds. The cspecs model it as the `x86_indirect_thunk_<reg>` call-fixups, which the call-fixup installer tags onto functions by gcc's thunk name only; clang names its thunks `__llvm_retpoline_<reg>`, and a stripped image names neither. When the flow builder asks for a direct callee's inject id and the callee has none, the decompile driver (`decompile_drive.rs (query_call_inject_id)`) reads the callee's first bytes: an `E8` call over the `F3 90 0F AE E8 EB F9` spin to a `[REX] 89 /r 24` store of a register over the return address followed by `C3`. The register picks the `x86_indirect_thunk_<reg>` fixup, which is then injected like any other call-fixup. x86 language ids only; a register the cspec has no fixup for keeps the plain call. Exercised by `tests/stages/retpolinethunk.toml`.
+**(unlace) A retpoline thunk is an indirect call — `option retpolinethunk`, default on, `crates/unlace-lift/src/p2_lift/retpolinethunk.rs (thunk_register)`.** `-mretpoline` (clang) and `-mindirect-branch=thunk` (gcc) compile each indirect call into a direct call to a per-register thunk, `call 1f; 2: pause; lfence; jmp 2b; 1: mov %reg,(%rsp); ret`, which returns into the target the register holds. The cspecs model it as the `x86_indirect_thunk_<reg>` call-fixups, which the call-fixup installer tags onto functions by gcc's thunk name only; clang names its thunks `__llvm_retpoline_<reg>`, and a stripped image names neither. When the flow builder asks for a direct callee's inject id and the callee has none, the decompile driver (`decompile_drive.rs (query_call_inject_id)`) reads the callee's first bytes: an `E8` call over the `F3 90 0F AE E8 EB F9` spin to a `[REX] 89 /r 24` store of a register over the return address followed by `C3`. The register picks the `x86_indirect_thunk_<reg>` fixup, which is then injected like any other call-fixup. x86 language ids only; a register the cspec has no fixup for keeps the plain call. Exercised by `tests/stages/retpolinethunk.toml`.
 
-**(kuna) A compiler's AArch64 `brk` trap ends the flow — always on,
+**(unlace) A compiler's AArch64 `brk` trap ends the flow — always on,
 `crates/unlace-lift/src/p2_lift/brktrap.rs
 (is_brk_trap_branchind)`.** AArch64 SLEIGH lowers `BRK #imm16` to `pc =
 SoftwareBreakpoint(imm16, inst_next); goto [pc];` (`AARCH64base.sinc`, `:brk`):
@@ -2152,7 +2152,7 @@ the AArch64 specs define `SoftwareBreakpoint`; elsewhere the lookup of its
 user-op index fails before any op is walked. Exercised by
 `tests/stages/brktrap.toml`.
 
-**(kuna) A Linux kernel `WARN`/`BUG` site prints as the statement it is — always
+**(unlace) A Linux kernel `WARN`/`BUG` site prints as the statement it is — always
 on, `crates/unlace-lift/src/p2_lift/kernelbug.rs (rewrite)`.**
 The kernel plants a trap at every `WARN_ON`/`BUG_ON` site — `ud2` on x86, `brk
 #0x800` on AArch64 — and names it in a `__bug_table` entry whose flags say
@@ -2186,7 +2186,7 @@ its rendering, and an image with no `__bug_table` pays one empty-list test per
 BRANCHIND. The AArch64 `#0x800` the previous paragraph leaves alone is matched
 here only through a table entry. Exercised by `tests/stages/kernelbug.toml`.
 
-**(kuna) The x86-64 `SYSCALL` user-op's ABI effects — `option x64syscall`,
+**(unlace) The x86-64 `SYSCALL` user-op's ABI effects — `option x64syscall`,
 default `on`, x86-64-gated (DIV-152),
 `crates/unlace-lift/src/p2_lift/x64syscall.rs
 (ActionX64Syscall)`.** The 64-bit instruction is not an interrupt and takes none
@@ -2199,7 +2199,7 @@ collects them, and the number and every argument are erased — the op prints as
 instruction, so the `RAX` the wrapper stores afterwards is still the one it
 loaded from its own `number` parameter, and the whole body comes out as
 `syscall(); return number;`. The return value is not invented: it is correct copy
-propagation over an operation kuna has been told writes nothing, which is what
+propagation over an operation unlace has been told writes nothing, which is what
 makes the emitted C a false statement about the program rather than an incomplete
 one. `linuxsyscall` above cannot cover the native instruction — there is no
 `CALLIND` to retarget and the number is a runtime value rather than a constant
@@ -2218,7 +2218,7 @@ alone, and a user-op a compiler spec has specialized with its own
 `<callotherfixup>` carries an injection id and is dropped at seam-resolution
 time, so a spec-declared model always wins.
 
-A successful rewrite also marks the op with `kuna_x64syscall` in
+A successful rewrite also marks the op with `unlace_x64syscall` in
 `substrate/op.rs (pcodeop_addlflags)`. The mark survives dead-code removal of
 an unused RAX output; a late memory fence must still recognize a system call
 whose result the function ignores. `x64syscall.rs (guard_memory)` adds
@@ -2268,14 +2268,14 @@ controls compare prior output across default, aggressive, `on`, `abi` and `off`
 and compile the enabled output with GCC and Clang; an ordinary SysV metadata
 store remains preserved.
 
-**(kuna) The system call of ARM, AArch64, RISC-V, MIPS and PowerPC —
+**(unlace) The system call of ARM, AArch64, RISC-V, MIPS and PowerPC —
 `option syscallregs`, default `auto`,
 `crates/unlace-lift/src/p2_lift/syscallregs.rs
 (ActionSyscallRegs)`.** `svc` (ARM and AArch64), `ecall` (RISC-V), `syscall`
 (MIPS) and `sc` (PowerPC) lift to a `CALLOTHER` with no register inputs and no
 output, so the same two halves of damage follow as for x86-64. The Linux and BSD
 kernels these instructions trap into return a result in a register (`r0`, `x0`,
-`a0`, `v0`, `r3`), and kuna, told that nothing changes, hands later readers the
+`a0`, `v0`, `r3`), and unlace, told that nothing changes, hands later readers the
 value the function put there to set the call up: a wrapper that swaps its
 arguments into `r0`/`r1` returns them as a register pair, a MIPS wrapper returns
 the syscall number it loaded into `v0`, and a test of the result tests the
@@ -2377,7 +2377,7 @@ written or not, up to as many as the kernel's entry point for its number takes
 instruction, it holds the function's incoming value with no call on the path or
 a value the function wrote after the path's last call
 (`syscallregs.rs (reaches_without_call)`). The o32 ABI does not preserve
-`a0`..`a3` across a call, while kuna's call model carries them through it, so a
+`a0`..`a3` across a call, while unlace's call model carries them through it, so a
 register that crossed a call would print the value from before the call:
 `foo(1,2,3,4)` followed by a `reboot` that sets `a0`..`a2` printed the 4 set up
 for `foo` as reboot's fourth argument. The first register that fails ends the
@@ -2456,9 +2456,9 @@ registers set, so it also passes the kernel the `a2` its caller left.
 `crates/unlace-cli/tests/syscall_regs_cli.rs` loads the ARM witness as
 an object with and without a GNU ABI-tag note: the note turns the default on.
 
-**(kuna) Overlapping branch target — `option overlapbranch`, default on
+**(unlace) Overlapping branch target — `option overlapbranch`, default on
 (DIV-106), `crates/unlace-lift/src/p2_lift/overlapbranch.rs
-(kuna_overlaps_pending_branch)`.** A conditional branch pushes both successors and
+(unlace_overlaps_pending_branch)`.** A conditional branch pushes both successors and
 the follower pops the fall-through first, so the fall-through instruction is
 decoded before the branch target is ever looked at. The x86 anti-disassembly
 overlap exploits exactly that ordering: a `75 01` short JNZ hops over a junk `e8`
@@ -2473,7 +2473,7 @@ that branch's own target lies **strictly inside** its encoding (`curaddr < targe
 < curaddr + step`). Both ends are strict — `target == curaddr` is a branch to its
 own fall-through and `target == curaddr + step` is a branch over one instruction,
 both ordinary compiler output. **One legitimate overlap is excluded first**
-(`kuna_streams_reconverge`): glibc's compiler-generated conditional-`LOCK`
+(`unlace_streams_reconverge`): glibc's compiler-generated conditional-`LOCK`
 idiom (`JE` over a `LOCK` prefix byte, e.g. `malloc_consolidate` in a static
 binary) is the same instruction with its prefix taken or skipped, so the two
 decodes END AT THE SAME ADDRESS and both streams are real — truncating the
@@ -2496,12 +2496,12 @@ attributable. The conditional stays a conditional and its fall-through edge stay
 in the graph — the edge simply ends in a halt — and the pending target is then
 decoded on its own boundary by the ordinary `addrlist` walk. The halt is marked
 `badinstruction` rather than `noreturn` because a `noreturn` halt is folded into an
-empty `if (cond) { }` by `kuna_ifnoexit`, which reads as though the fall-through
+empty `if (cond) { }` by `unlace_ifnoexit`, which reads as though the fall-through
 continues. Nothing already committed to is deleted or re-anchored: the loser is
 the instruction *currently* being decoded and the winner is still pending, which
 is what keeps this out of the "repair the flow graph afterwards" class of change.
 
-**(kuna) Stack-probe loops — always on (DIV-3),
+**(unlace) Stack-probe loops — always on (DIV-3),
 `crates/unlace-lift/src/p2_lift/stackprobeloop.rs
 (RuleStackProbeLoop)` (from Ghidra issues GH-8017/6858).** gcc's
 stack-clash/`-fstack-check` prologue probes a large frame one page at a time,
@@ -2515,9 +2515,9 @@ constant and whose loop exit compares against a stack-relative limit — and
 rewrites the phi to the value the exit comparison pins:
 `INT_ADD(SP_in, limit_const - page)`. Inert on functions without a probe loop.
 
-**(kuna) V850 indirect branch — `option v850indirectbranch`, default on, V850-gated,
+**(unlace) V850 indirect branch — `option v850indirectbranch`, default on, V850-gated,
 `crates/unlace-lift/src/p2_lift/v850indbranch.rs
-(kuna_is_v850_indirect_jmp)` (from Ghidra issue GH-8817).** The V850 SLEIGH
+(unlace_is_v850_indirect_jmp)` (from Ghidra issue GH-8817).** The V850 SLEIGH
 spec lifts `jmp [reg]` to a CALLIND, so a compiler switch dispatch never
 reaches jump-table recovery (which is gated on BRANCHIND). When on, a CALLIND
 through a named non-PC hardware register is reclassified to BRANCHIND at the
@@ -2532,7 +2532,7 @@ no standalone SLEIGH engine. The backend-boundary failure and regression drive
 are recorded in
 [`docs/features/ghidra-v850-register-lookup/analysis.md`](../features/ghidra-v850-register-lookup/analysis.md).
 
-**(kuna) Computed return-register jumps — `option returnbranch`, default on,
+**(unlace) Computed return-register jumps — `option returnbranch`, default on,
 `crates/unlace-lift/src/p2_lift/returnbranch.rs (computed_target)`.**
 A SLEIGH spec marks a jump through the return register as RETURN whatever the
 register holds, so MIPS code that loads a constant code address into `$ra` and
@@ -2567,7 +2567,7 @@ missing from the output, exactly as it is for an x86-64 `jmp *%rax` of the same
 shape. A flow override at the return keeps its classification, and off restores
 the spec's RETURN.
 
-**(kuna) Re-entered indirect dispatches — `option constselectjump`, default
+**(unlace) Re-entered indirect dispatches — `option constselectjump`, default
 `reentry`, `crates/unlace-lift/src/p2_lift/flow.rs (generate_ops_with_jumptables)`.**
 A dispatcher loop jumps through one register, and each step's code loads the
 next step's address and jumps back. Flow recovers the dispatch's first target
@@ -2611,7 +2611,7 @@ always last: an early exit can reach it before the later steps are decoded.
 For such a retry the select model accepts values that are local constants or
 the incoming return, through the transfer's own mask, with its walk bounded by
 the table ceiling. The return becomes the table's last, unlabelled address: a
-synthetic RETURN that `FlowInfo::kuna_return_stub` plants one byte past the
+synthetic RETURN that `FlowInfo::unlace_return_stub` plants one byte past the
 jump, where no instruction is decoded, and that the table marks as its default
 case. If an instruction is already decoded there, the return destination is
 dropped with `Indirect jump caller return overlaps decoded code` rather than
@@ -2671,10 +2671,10 @@ table is written back keyed to the real op. **One partial is built per
 `recoverJumpTables` batch and shared by every table in it**
 (`jtsharepartial`, default on): the C++ guards the clone plus the reduced
 pipeline behind `if (!partial.isJumptableRecoveryOn())`, so upstream pays for the
-sub-decompilation once per function however many BRANCHINDs it has, and kuna now
+sub-decompilation once per function however many BRANCHINDs it has, and unlace now
 does the same. Recovery itself still runs per table against that shared partial,
 and it mutates it (the emulation walks its ops), exactly as upstream's does.
-Turning the option off restores kuna's older per-table clone, in which a later
+Turning the option off restores unlace's older per-table clone, in which a later
 table's fresh partial re-clones the siblings recovered before it; that is what
 `unrolledguard` (below) needs to see, and it is the only reason the per-table
 shape is still reachable. Sharing is worth about 16% of the wall time of a
@@ -2685,7 +2685,7 @@ The protection upstream's `ActionRestructureVarnode` gives a switch path
 (`funcdata_block.rs (Funcdata::protect_switch_path_indirects)`, C++
 `protectSwitchPathIndirects`) walks back from the BRANCHIND through ops with one
 non-constant input and marks the earliest INDIRECT `noIndirectCollapse` when the
-walk ends at a constant. (kuna) An `INT_XOR` or `INT_SUB` of a varnode with
+walk ends at a constant. (unlace) An `INT_XOR` or `INT_SUB` of a varnode with
 itself also ends the walk as a constant: MSVC zeroes a struct through
 `xor eax,eax`, and in the partial the alias pass sees neither the struct's
 address nor its pushed copy (the calls have no inputs yet), so the struct's
@@ -2694,7 +2694,7 @@ before a rule folds the `xor`. With the earliest INDIRECT kept, a switch index
 read from such a field after a call stays an unknown value instead of folding
 to the value stored before the call (#871; Ghidra reaches the same state by
 folding the `xor` before its second restructure pass).
-(kuna) Under a per-function budget (`00-overview.md`, *The watchdog*) the loop is bounded in
+(unlace) Under a per-function budget (`00-overview.md`, *The watchdog*) the loop is bounded in
 time as well: `flow.rs (FlowInfo::recover_jump_tables)` asks the drive's
 deadline before each table and after its attempt, and `jumptable.rs
 (JumpTable::recover_model)` after the basic and the default-path model. A
@@ -2702,7 +2702,7 @@ table reached once the deadline has passed is not attempted — its BRANCHIND is
 truncated like any unrecovered one, so the loop drains instead of staging more
 sub-decompilations — and the budget error names the step and the indirect
 jump's address. Without a budget each probe is one thread-local read.
-(kuna `jumptablework`, default 250000) The loop is also bounded in work.
+(unlace `jumptablework`, default 250000) The loop is also bounded in work.
 Each recovery costs the number of instructions flowed when it starts, because
 its partial decompile covers all of them, and
 `flow.rs (FlowInfo::jt_work_exhausted)` adds that to the function's sum
@@ -2717,7 +2717,7 @@ Two pre-checks bound the attempt:
 `funcdata_block.rs (Funcdata::early_jump_table_fail)` backtracks up to 8 ops
 through value-preserving arithmetic looking for a computation the recovery can
 never emulate -- but its only failing arm (the uninjected-CALLOTHER
-classification) is a stubbed loss, so in live kuna the check always passes, and `funcdata_block.rs (Funcdata::test_for_return_address)`
+classification) is a stubbed loss, so in live unlace the check always passes, and `funcdata_block.rs (Funcdata::test_for_return_address)`
 recognizes a BRANCHIND whose input chains back to the saved return address —
 that is a return, not a switch (`RecoveryMode::FailReturn`).
 
@@ -2726,7 +2726,7 @@ BRANCHIND to a RETURN (`fail_return`, warning `"Treating indirect jump as
 return"`) or to a CALLIND with an artificial RETURN after it (`fail_normal`,
 warning `"Treating indirect jump as call"`; `fail_thunk` silently; a
 CALLOTHER-computed target additionally marks the halt no-return) (unreachable today: nothing produces the CALLOTHER failure, see above).
-(kuna, #421) When the demoted CALLIND resolves to a no-return callee — an
+(unlace, #421) When the demoted CALLIND resolves to a no-return callee — an
 indirect-call override `ActionDeindirect` planted on the previous pass, an IAT
 or GOT import slot, a stated callee — the call-spec setup has already put the
 no-return halt after it, and no artificial RETURN is added. Upstream adds one
@@ -2736,7 +2736,7 @@ This is the
 failure mode every rescue below is fighting for: one unbounded table turns a
 switch into an opaque computed call.
 
-(kuna) A panic in the sub-decompilation is not one of these failures.
+(unlace) A panic in the sub-decompilation is not one of these failures.
 `decompile_drive.rs (run_jumptable_pipeline)` catches it so it cannot end the
 batch, but it does not demote the table: the panic is the function's error,
 worded as the main drive words its own (`decompile pipeline reached an
@@ -2769,7 +2769,7 @@ the case targets.
 2. **Guards.** `jumptable.rs (JumpBasicModel::analyze_guards)` walks up the
    CFG from the branch through at most 2 dominating CBRANCHes, not counting up
    to 2 that test one value for equality (`jumptable.rs (tests_one_value)`;
-   kuna: such a test removes one value, so the range check behind it still
+   unlace: such a test removes one value, so the range check behind it still
    bounds the switch, and OCaml puts `r == 0x41` between its two checks,
    `tests/stages/ocaml-eq-guard.toml`); each guard's
    branch condition is pulled back through at most 2 defining ops
@@ -2816,7 +2816,7 @@ the case targets.
    table instead of dropping its branch bodies into an unresolved interior call.
    ARM's lifted PC+8 base, the predicate's fallthrough, and actual indirect calls
    retain their existing flow semantics.
-   (kuna) When one range of an intersection has a larger step,
+   (unlace) When one range of an intersection has a larger step,
    `rangeutil.rs (CircleRange::new_stride)` moves the other's ends onto that
    phase. It reports the result empty only when the first value of the new
    phase lies outside the old range. Upstream compares the order of the two
@@ -2832,7 +2832,7 @@ the case targets.
    load image and the table has one entry.
    If that normalized variable is itself the output of a byte-sized LOAD, a
    bounded common input farther down the meld may prove a smaller, exact output
-   domain. Kuna emulates every input value through the path, with one total
+   domain. Unlace emulates every input value through the path, with one total
    budget of 65,536 values across candidates (`jumptable.rs
    (MAX_SELECTOR_INPUTS)`, or `jumptablemax` when that is larger), and accepts that
    domain only when every direct or implicit load-image read is wholly covered,
@@ -2927,12 +2927,12 @@ the case targets.
 4. **Accept or rescue.** If the chosen range exceeds `max_jumptable_size`
    (1024, `architecture.rs (reset_defaults_internal)`; settable per run as the
    catalogued `option jumptablemax <n>`: upstream's `OptionJumpTableMax`, parsed
-   strictly by `Architecture::set_kuna_option`, so anything but a positive
+   strictly by `Architecture::set_unlace_option`, so anything but a positive
    decimal count is refused; the analysis tier's switch-table read takes the
-   same field, see chapter 01) and no guard of the switch bounds it (kuna:
+   same field, see chapter 01) and no guard of the switch bounds it (unlace:
    `JumpBasicModel::guard_bounds_table` accepts a range of at most 65536
    entries, narrower than the selector's width, when `analyze_guards`
-   recorded a guard; upstream refuses every range over the cap), the four kuna bound
+   recorded a guard; upstream refuses every range over the cap), the four unlace bound
    extensions below get one chance each, in order; if none installs a bound the
    model is declined, model 2 is tried, and then recovery fails with
    `"Could not recover jumptable ... Too many branches"`
@@ -3023,7 +3023,7 @@ the case targets.
    16 values: past that the oldest is dropped, so a long run of constants
    early in a function does not hide its later tables) and names
    the table of each computed jump the fold proves reads one, sorted on the
-   function (`Funcdata::kuna_extent_tables`, shared with the recovery
+   function (`Funcdata::unlace_extent_tables`, shared with the recovery
    partial). An instruction that branches inside its own p-code (AArch64
    `csel`/`csinc` lift to a conditional branch over one copy) joins two
    values, so the fold takes what it writes after the branch as unknown,
@@ -3033,7 +3033,7 @@ the case targets.
    and the table before it runs on into it. With
    two or more tables named, the recovery runs once more: when the basic
    model finds the range unbounded and every other fallback
-   declines, `jumptable.rs (JumpBasicModel::kuna_try_extent_bound_table)`
+   declines, `jumptable.rs (JumpBasicModel::unlace_try_extent_bound_table)`
    takes the melded path's one LOAD, reads its address as a constant table
    plus an index scaled by the entry width (`switchextent.rs
    (table_read)`), and re-bounds the range to `[0, N)` on that index with
@@ -3089,17 +3089,17 @@ the case targets.
    OCaml compiles an exhaustive match the same way, so the next table's
    offsets, measured from the wrong base, became cases that land mid-instruction.
    For every unguarded table (no guard, or guards that leave its
-   selector's top open), `jumptable.rs (JumpBasicModel::kuna_next_table_rows)`
+   selector's top open), `jumptable.rs (JumpBasicModel::unlace_next_table_rows)`
    reads its table and stride as above and ends it at the lowest jump table
    above it in the same section, of this function or of the next ones, when
    that leaves at least two rows and fewer than the rows kept so far; the
    run-on cut applies when no table ends it sooner. The next functions' tables come from the flow: the sanity check
    inside the recovery partial records the table it wants
-   (`Funcdata::kuna_later_wanted`) and fails, and
+   (`Funcdata::unlace_later_wanted`) and fails, and
    `flow.rs (FlowInfo::recover_jump_tables)` decodes the extents after this
    function (`switchextent.rs (later_tables)`: function by function, at
    most 32, until one dispatches through a table above the one asked
-   about), stores their tables on the function (`Funcdata::kuna_later_tables`)
+   about), stores their tables on the function (`Funcdata::unlace_later_tables`)
    and runs the recovery once more. When no known function follows, the
    list is empty and the recovery still runs once more, so the table ends
    at the function's own next table or keeps its rows as before. The
@@ -3159,7 +3159,7 @@ last entry; a dominance check (`check_normal_dominance`) decides whether the
 normalization walk can proceed past the join.
 
 **Model 3 — the constant destination set** (`constselectjump.rs
-(JumpModelConstSelect)`, kuna, `option constselectjump`; `on` admits it for
+(JumpModelConstSelect)`, unlace, `option constselectjump`; `on` admits it for
 every table, the default `reentry` only for the re-entry retry described
 under re-entered indirect dispatches above). Both
 models above are value-range models over one switch variable, and
@@ -3169,7 +3169,7 @@ a destination computed by a conditional move — `CMOVZ R11,R10; JMP R11` over t
 variable with nothing to bound it. The destination set is not lost there, it is
 simply never promoted into the CFG: every reaching definition is already a
 literal address. When the model is admitted and both value-range models have
-declined, `constselectjump.rs (kuna_collect_const_destinations)` walks the
+declined, `constselectjump.rs (unlace_collect_const_destinations)` walks the
 MULTIEQUAL/COPY web behind the BRANCHIND input; if every reaching definition is
 a constant, the set becomes a fixed address table whose case labels are the
 target addresses themselves, and recovery proceeds as for any recovered table.
@@ -3183,7 +3183,7 @@ When the model is not admitted the branch is truncated to a `CALLIND` carrying
 `"Treating indirect jump as call"` and neither arm is ever decoded.
 
 **Model 4 — the table matched from its instructions** (`rawswitch.rs
-(JumpModelRaw)`, kuna, `option rawswitch`, default off; x86-64 only). When
+(JumpModelRaw)`, unlace, `option rawswitch`, default off; x86-64 only). When
 `jumptable.rs (JumpTable::recover_addresses)` fails with every model above, the
 bytes before the BRANCHIND are matched backward against gcc's and clang's PIC
 dispatch: `cmp $N,%idx; ja default`, `lea table(%rip),%base` (before or after
@@ -3235,11 +3235,11 @@ upstream does at `matchModel` time, a table of one address whose late model has
 more entries records a multistage hint for its jump and restarts the function
 (`jumptable.rs (JumpTable::match_model)`). On the next flow,
 `flow.rs (FlowInfo::check_multistage_jumptables)` queues the hinted table again
-and recovers it through `jumptable.rs (JumpTable::recover_multistage)`. (kuna) The
+and recovers it through `jumptable.rs (JumpTable::recover_multistage)`. (unlace) The
 second stage runs on the same kind of partial, so it can fold the index again.
 The hint therefore also carries the targets the late model built
 (`overrides.rs (Override::multistage_targets)`). A second stage that again finds
-one address adopts them (`jumptable.rs (JumpTable::kuna_adopt_multistage_targets)`),
+one address adopts them (`jumptable.rs (JumpTable::unlace_adopt_multistage_targets)`),
 so flow follows every case and the late check below labels them. Each jump is
 restarted at most once. A jump is not restarted unless every value in the
 late model's range passes the guards on its path
@@ -3254,7 +3254,7 @@ flow, and adds `Exceeded maximum restarts with more pending` to the header.
 This is a correctness repair, without an option: before it, such a switch kept
 one case, and its other indexes fell through to the code after the switch.
 
-**Guard merging** (`switchguardmerge`, default on; kuna;
+**Guard merging** (`switchguardmerge`, default on; unlace;
 `crates/unlace-lift/src/p2_lift/switchguardmerge.rs (ActionSwitchGuardMerge)`,
 run after `ActionSwitchNorm`): gcc and clang lower a switch with a far outlier
 (`case 100:` beside `case 0 ... 6:`) to a range guard around the jump table and
@@ -3271,7 +3271,7 @@ value from the chain and the switch. Each constant then becomes a case
 (`add_block_to_switch` and `push_branch`, as guard folding adds a default) and
 the guard's edge to the chain is removed. A chain that is the default ends at
 its last miss: a new block becomes the default's body; a block that is already
-a case becomes the default itself (`JumpTable::kuna_merge_out_edge`), so no
+a case becomes the default itself (`JumpTable::unlace_merge_out_edge`), so no
 empty block is left beside it. gcc -O2 `two` (cases 0..6, 100, 200) prints one
 switch instead of `if (a0 <= 6) { switch ... } if (a0 == 100) ...`; on Lua 5.4
 x86-64 five switches gain their outliers (`subexpr` `case 0x7e`, `statement`
@@ -3471,7 +3471,7 @@ strand phi state:
 - **Install** (`loweredswitch.rs (ActionLowerSwitchInstall)`) runs on the
   restart, scheduled before `ActionHeritage` and gated to heritage pass 0 —
   the pre-SSA window, where edge surgery needs no phi patching.
-  `funcdata_block.rs (Funcdata::kuna_install_lowered_switch)` replaces the
+  `funcdata_block.rs (Funcdata::unlace_install_lowered_switch)` replaces the
   cascade head's CBRANCH with a synthetic `BRANCHIND(V)`, rewires its
   out-edges to the case targets plus default, pushes a hand-built, pre-labelled
   `JumpTable` (signed labels recorded from the cascade's controlling comparisons)
@@ -3511,7 +3511,7 @@ strand phi state:
   those blocks ends in a BRANCHIND that *already* owns a recovered `JumpTable`,
   the cascade was a guard chain standing in front of a real jump table, not a
   lowered switch of its own. `funcdata_block.rs
-  (Funcdata::kuna_lowered_switch_strands_table)` walks reachability from the
+  (Funcdata::unlace_lowered_switch_strands_table)` walks reachability from the
   entry over the post-surgery successor relation before any edit and refuses the
   install in that case, so the real table's cases survive instead of being
   replaced by the (much narrower) cascade dispatch. The pre-existing guard —
@@ -3524,7 +3524,7 @@ strand phi state:
 
 One repair hook closes the loop: heritage may widen the synthetic BRANCHIND's
 storage read and null its input, so `funcdata_block.rs
-(Funcdata::kuna_repair_lowered_switch_inputs)` (driven from
+(Funcdata::unlace_repair_lowered_switch_inputs)` (driven from
 `crates/unlace-bandb/src/p3_dataflow/coreaction_early.rs`) re-points
 it at the live reaching SSA def of the recorded storage — accepting a
 heritage-known input (written, function input, *or constant*) as healthy. The
@@ -3629,7 +3629,7 @@ removes every block that the new head edges make unreachable, with whatever thos
 blocks compute for the code after the cascade (a `v = 0x8a;` on one arm before a
 shared join).
 
-`funcdata_block.rs (Funcdata::kuna_install_lowered_switch)`
+`funcdata_block.rs (Funcdata::unlace_install_lowered_switch)`
 pushes one table entry per case value, so shared bodies keep every label, and
 detection keeps a recovered record only when
 `crates/unlace-lift/src/p2_lift/loweredswitchexact.rs (record_is_exact)`
@@ -3696,7 +3696,7 @@ the first head, as before, but never introduced by a later one. A record's
 dispatch value is then subject to the value check like any other. Measured
 byte-identical on the 675-assertion datatest corpus when the check was introduced.
 
-### (kuna) Bit-test lowerings — `option loweredswitchbits`, default on
+### (unlace) Bit-test lowerings — `option loweredswitchbits`, default on
 
 clang lowers a switch over a narrow selector with clustered labels into a range
 check on an offset copy of the selector and a test of a bit of a constant mask
@@ -3766,8 +3766,8 @@ hands back to the enumeration core — at most re-deriving the path meld and
 seeding loop-invariant values (`switchsharedcase`); the enumeration core itself
 is never changed, only what counts as a bound.
 
-- **(kuna) `switchmodbound`, default off (from Ghidra issue GH-9191) —**
-  `jumptable.rs (JumpBasicModel::kuna_try_modulo_bound_table)` (option shell:
+- **(unlace) `switchmodbound`, default off (from Ghidra issue GH-9191) —**
+  `jumptable.rs (JumpBasicModel::unlace_try_modulo_bound_table)` (option shell:
   `crates/unlace-lift/src/p2_lift/switchmodbound.rs`). Accepts
   an *in-band* bound: the meld path from the BRANCHIND, through realigning ops
   and exactly one table LOAD, reaches an `INT_REM`/`INT_SREM` by a constant `N`
@@ -3776,7 +3776,7 @@ is never changed, only what counts as a bound.
   reduced modulo result. Opt-in: on a program whose indirect jump genuinely has
   no modulo bound it can over-bound an unrelated computed jump.
 - **(angr) `switchguardbound`, default off —**
-  `jumptable.rs (JumpBasicModel::kuna_try_guard_bound_table)` (option shell:
+  `jumptable.rs (JumpBasicModel::unlace_try_guard_bound_table)` (option shell:
   `crates/unlace-lift/src/p2_lift/switchguardbound.rs`).
   Accepts an *out-of-band* CBRANCH range guard that guard analysis missed —
   the GCC `sub LOW; ja DEFAULT` dispatch where, on the early partial-function
@@ -3790,7 +3790,7 @@ is never changed, only what counts as a bound.
   over-bounding reason: the guard↔index correspondence is asserted across a
   memory round-trip dataflow cannot prove.
 - **(angr) `switchsharedcase`, default on (DIV-14) —**
-  `jumptable.rs (JumpBasicModel::kuna_try_loop_carried_guard_table)` (option
+  `jumptable.rs (JumpBasicModel::unlace_try_loop_carried_guard_table)` (option
   shell: `crates/unlace-lift/src/p2_lift/switchsharedcase.rs`).
   Rescues the GCC PIC relative-offset table (`target = base +
   sext(load4(base + idx*4))`) whose `lea .rodata` base register is set *before*
@@ -3803,7 +3803,7 @@ is never changed, only what counts as a bound.
   (`emulatefunction.rs (EmulateFunction::seed_varnode_value)`). Slower on
   exactly the functions it rescues; declines restore the saved model.
 - **(angr) `switchmultipred`, default on (DIV-14) —**
-  `jumptable.rs (JumpBasicModel::kuna_try_multipred_guard_table)` (no
+  `jumptable.rs (JumpBasicModel::unlace_try_multipred_guard_table)` (no
   dedicated module; the option row lives in
   `crates/unlace-decomp/phases.toml`). Rescues the dispatch whose
   bound guard is duplicated — "unrolled" — across *multiple* predecessors of
@@ -3831,7 +3831,7 @@ is never changed, only what counts as a bound.
 analysis: a partial-flow tolerance in `flow.rs (FlowInfo::collect_edges)` for
 the MSVC optimized-memcpy shape where several *interleaved* tables' case bodies
 are only reachable as one another's case targets. With `jtsharepartial` **off**,
-kuna recovers tables one at a time, each in a fresh partial clone that re-clones
+unlace recovers tables one at a time, each in a fresh partial clone that re-clones
 already-recovered siblings; the clone's edge collection then hits a sibling case
 body that was never decoded into *this* partial's `visited` and throws
 `"Could not find op at target address"`, demoting a recoverable dispatch. With
@@ -3853,7 +3853,7 @@ width and every extension above declines. `switchextent` runs first and ends
 such a table at the function's next table; only a table it leaves unbounded
 (a function's last one) reaches this step. There, a table whose path
 holds exactly one `LOAD` has its range opened to `[0, jumptablemax)`
-(`jumptable.rs (kuna_try_trimmed_table)`). Emulation stops at the first row it
+(`jumptable.rs (unlace_try_trimmed_table)`). Emulation stops at the first row it
 cannot read instead of failing the table, and the sanity check keeps the rows
 before the first one that breaks the table's layout
 (`switchtrim.rs (trimmed_rows)`, IDA's `trim_jtable` stop rules): a row
@@ -3882,7 +3882,7 @@ it as `switch(a0 >> 0x3e)` with every case
 extent (an `.eh_frame` FDE or a Go `functab` entry: the extents the analysis tier
 hands `fdeinterior`) states where its function ends. A PE `.pdata` record is
 not used, because it can be one chunk of a chained function. A call to
-an import that kuna cannot know never returns (`call mydie@plt` as a function's
+an import that unlace cannot know never returns (`call mydie@plt` as a function's
 last instruction, `call [GOT _Unwind_Resume]` closing a cleanup rung) is taken
 to return. Flow then walks off the function's end into whatever bytes follow:
 the next cleanup rung, padding, or code no known entry names, which
@@ -4025,9 +4025,9 @@ budget is reported as a coverage note, since its import calls are then missing.
 
 ## 2.5 Arch quirks
 
-**(kuna) SPARC struct return — `option sparcstructret`, default on, SPARC-gated,
+**(unlace) SPARC struct return — `option sparcstructret`, default on, SPARC-gated,
 `crates/unlace-lift/src/p2_lift/sparcstructret.rs
-(kuna_sparc_struct_ret_trap_producer)` (from Ghidra issue GH-6882).** The SPARC ABI
+(unlace_sparc_struct_ret_trap_producer)` (from Ghidra issue GH-6882).** The SPARC ABI
 places an `unimp <structsize>` word after a call to a struct-returning function.
 SLEIGH lifts this marker to an `IllegalInstructionTrap` CALLOTHER feeding a
 BRANCHIND. Flow classification recognizes the named
@@ -4045,7 +4045,7 @@ keyed by Varnode, constants read off the IR, RAM/register reads pulled from the
 load image, and exactly *one* execution path — MULTIEQUAL inputs are selected
 by which block the previous op came from, LOADs optionally collected as table
 records, and any CALL/CALLOTHER is ignored while a nested branch op aborts the
-path (the meld guarantees straight-line evaluation). Its one (kuna) extension
+path (the meld guarantees straight-line evaluation). Its one (unlace) extension
 is the pre-seeding hook (`seed_varnode_value`) that lets `switchsharedcase`
 inject the loop-carried table base — a register value that exists in no load
 image — before each path walk.
@@ -4066,13 +4066,13 @@ normalizes to one of exactly five paths: `core::ptr::drop_in_place`,
 `core::ops::drop::Drop::drop`, `alloc::raw_vec::RawVecInner::deallocate`,
 `__rust_dealloc`, `__rustc::__rust_dealloc`. Oxidizer's list also carries
 `free`, `close` and `_close`; those are **deliberately not ported**, because
-kuna's primary corpus is C binaries and deleting `free()` from C output would
+unlace's primary corpus is C binaries and deleting `free()` from C output would
 be a catastrophically wrong answer. What remains cannot occur in a C program,
 which is what makes the pass *structurally inert* on a C binary — the reason it
 can default on without a compiler-detection channel from the loader to the
 engine (there is none).
 
-**Matching is normalize-then-compare-exactly, never `starts_with`.** kuna's
+**Matching is normalize-then-compare-exactly, never `starts_with`.** unlace's
 demangler leaves a legacy-mangled Rust symbol with its generic arguments in
 escaped form, so the names that actually arrive look like
 `core::ptr::drop_in_place$LT$std..fs..File$GT$`,
@@ -4102,7 +4102,7 @@ list is worse than a missing one.
 **The seam is pre-SSA, and that is the whole point.** The Action is registered
 at the top of `mainloop` (`infra/universalaction.rs (universal_sched)`) in the
 `deadcode` group and self-gates on `get_heritage_pass() == 0` — the same
-pre-SSA window `kuna_loweredswitch`'s install half and `kuna_outline` use, and
+pre-SSA window `unlace_loweredswitch`'s install half and `unlace_outline` use, and
 the analogue of Oxidizer's `STAGE = BEFORE_VARIABLE_RECOVERY`. Before heritage
 there are no INDIRECT call-effect ops to unpick and no MULTIEQUAL to patch;
 CALL is not a control-transfer op, so no edge moves and the CFG is untouched.
@@ -4125,7 +4125,7 @@ byte-identical to a build without the pass.
 
 ## 2.7 Linux `int 0x80` syscall naming
 
-**(kuna) `option linuxsyscall off|auto|on`, default `auto`,
+**(unlace) `option linuxsyscall off|auto|on`, default `auto`,
 `crates/unlace-lift/src/p2_lift/linuxsyscall.rs
 (ActionLinuxSyscall)`.** x86 SLEIGH lowers `INT imm8` to a black-box userop
 feeding an indirect call —
@@ -4231,7 +4231,7 @@ shellcode and raw dumps; `off` keeps the `swi` rendering.
 
 ## 2.8 Inlined MSVC `std::string` appends
 
-**(kuna) `option msvcstrappend`, default off,
+**(unlace) `option msvcstrappend`, default off,
 `crates/unlace-lift/src/p2_lift/msvcstrappend.rs
 (ActionMsvcStrAppend)`.** MSVC inlines `std::string::push_back` — which is what
 `operator+=(char)` calls — and the literal form of `append(const char *,
@@ -4425,7 +4425,7 @@ registers, which nothing sets; `bi`/`bih` are computed jumps. The DSP, FPU and
 64-bit multiply-accumulate extensions (major opcodes 6 and 7 and the
 accumulator forms of 5) and ARCompact are not decoded. Exercised by
 `tests/stages/arcv2-zeroloop.toml` and
-`kuna-sleigh/tests/arcv2_decode.rs` (one vector per instruction class and
+`unlace-sleigh/tests/arcv2_decode.rs` (one vector per instruction class and
 operand form, assembled by the GNU ARC assembler).
 
 ### TMS320C28x (#98)
@@ -5903,7 +5903,7 @@ before optimization can create indistinguishable same-address reconstructions.
 
 ### z/Architecture (s390x) processor module (GH-1635)
 
-`specs/Ghidra/Processors/s390x` is a kuna-written SLEIGH module for the 64-bit
+`specs/Ghidra/Processors/s390x` is a unlace-written SLEIGH module for the 64-bit
 IBM z/Architecture, language id `s390x:BE:64:default`. It is the first slice of
 s390x support: the general instructions through the z15 facilities, the
 binary-floating-point instructions on `f0`-`f15` (short, long, and extended in
@@ -6235,7 +6235,7 @@ Found by `tools/difffuzz --oracle qemu` (`mips64`, `mips64r6`, `mipsr6`).
 
 ## 2.9 Go stack-growth prologue folding
 
-**(kuna) `option gomorestack off|auto|always`, default auto,
+**(unlace) `option gomorestack off|auto|always`, default auto,
 `crates/unlace-lift/src/p2_lift/gomorestack.rs
 (ActionGoMorestack)`.** Every non-leaf function the Go compiler emits opens
 with a stack-growth guard: compare SP against the goroutine's stackguard
@@ -6305,7 +6305,7 @@ real stripped Go binary and proves the detection-driven `auto` path end to end.
 
 ## 2.10 Go write-barrier folding
 
-**(kuna) `option gowritebarrier off|auto|always`, default auto,
+**(unlace) `option gowritebarrier off|auto|always`, default auto,
 `crates/unlace-lift/src/p2_lift/gowritebarrier.rs
 (ActionGoWriteBarrier)`.** Every pointer store the Go garbage collector must
 see compiles to a flag-test diamond: when `runtime.writeBarrier` is set, a
@@ -6349,7 +6349,7 @@ gate, which builds a real stripped Go binary and proves the detection-driven
 
 ## 2.11 arm64e pointer-auth failure checks
 
-**(kuna) `option ptrauthtrap on|off`, default on,
+**(unlace) `option ptrauthtrap on|off`, default on,
 `crates/unlace-lift/src/p2_lift/ptrauthtrap.rs
 (ActionPtrAuthTrap)`.** The AArch64 SLEIGH spec gives every pointer-auth
 instruction a `ShowPAC` context, off in `AARCH64.pspec`, and with it off the
@@ -6463,7 +6463,7 @@ import's function symbol. `off` keeps the call.
 
 ## 2.13 MachineOutliner fragments
 
-**(kuna) `option outlinedinline on|off`, default on,
+**(unlace) `option outlinedinline on|off`, default on,
 `crates/unlace-lift/src/p2_lift/outlinedinline.rs
 (is_outlined_name)`.** At `-Oz`, and in much Swift and Apple system code,
 clang's MachineOutliner moves instruction sequences that repeat across
@@ -6518,7 +6518,7 @@ decode-table corrections with no option. Pinned by
 
 ## 2.15 Itanium exception edges
 
-**(kuna) `option itaniumeh on|off`, default on,
+**(unlace) `option itaniumeh on|off`, default on,
 `crates/unlace-lift/src/p2_lift/itaniumeh.rs`, fed by
 `crates/unlace-analysis/src/analyzers/entry/itaniumeh.rs
 (ItaniumEhPass)`.** An Itanium landing pad is reached only by the unwinder, so
@@ -6659,7 +6659,7 @@ a type named only by its `type_info` string) and
 call, the multi-clause header) and `tests/stages/itaniumeh-sharedpad.toml`
 (pads folded into a shared handler).
 
-**(kuna) MSVC x64 catch funclets as pads** (`option msvceh on`, with
+**(unlace) MSVC x64 catch funclets as pads** (`option msvceh on`, with
 `itaniumeh` on, which keeps the table; `itaniumeh.rs (define_funclet_frame,
 return_to_continuation)`, fed by
 `crates/unlace-analysis/src/analyzers/entry/msvcfuncinfo.rs (splice_sites)`).
@@ -6711,7 +6711,7 @@ becomes a no-return halt (`return_to_halt`), and the pad comment says
 `cleanup, then the exception propagates`. Under `itaniumeh catch` cleanup
 records get no edge, as Itanium cleanup pads do not.
 
-**(kuna) x64 SEH `__except` blocks as pads** (`msvceh`;
+**(unlace) x64 SEH `__except` blocks as pads** (`msvceh`;
 `crates/unlace-analysis/src/analyzers/entry/msvcseh.rs (x64_scopes)`).
 An x64 `__C_specific_handler` scope record's `__except` block lies inside
 the function, so it is an ordinary Itanium-style call-site record: range
@@ -6741,7 +6741,7 @@ take one edge per pad on the first call of a region.
 
 ## 2.13 VEX zero-upper writes and per-lane vector p-code
 
-**(kuna) `option vexzeroupper on|off`, default on,
+**(unlace) `option vexzeroupper on|off`, default on,
 `crates/unlace-lift/src/p2_lift/vexzeroupper.rs`.** A VEX- or
 EVEX-encoded instruction that writes an XMM or YMM register clears the rest
 of the ZMM register, and the x86 SLEIGH spec states that as one write of the
@@ -6764,7 +6764,7 @@ only) each `INT_ZEXT` into a 32- or 64-byte register from a 4-, 8-, 16- or
   a function computes in `xmm0` and its `ret`, and the function printed `void`
   (fixture `vexret_avx_x86_64`, which Ubuntu's gcc emits without `-mavx`).
 
-**(kuna) `option lanefuse on|off`, default on,
+**(unlace) `option lanefuse on|off`, default on,
 `crates/unlace-lift/src/p2_lift/lanefuse.rs`.** The spec writes
 many SSE/AVX instructions lane by lane: `VADDPS ymm0, ymm0, ymm1` is eight
 `FLOAT_ADD`s on 4-byte slices, so no op reads or writes a whole vector. After
@@ -6798,13 +6798,13 @@ mask is passed at the intrinsic's width (`__mmask16`), and a following
 `dst = COPY r` is folded so the op writes `dst`. `avxintrinsics` prints these
 as `_mm512_mask_add_ps(src, k, a, b)` / `_mm512_maskz_add_ps(k, a, b)`. A
 function in which either step finds a whole-register vector run is marked
-`Funcdata::kuna_vector_code`, which `vectorabi` (chapter 04) keys on.
+`Funcdata::unlace_vector_code`, which `vectorabi` (chapter 04) keys on.
 Pinned by `tests/stages/vectorabi.toml`.
 
 
 ## 2.16 DEX exception edges
 
-**(kuna) `option javatry on|off`, default on,
+**(unlace) `option javatry on|off`, default on,
 `crates/unlace-lift/src/p2_lift/javatry.rs`.** A DEX method lists
 its protected ranges and their catch clauses in its `code_item`
 (`dex/format.rs (DexFile::tries)`); nothing in the instruction stream
@@ -6853,7 +6853,7 @@ a condition list; and prefer an exit other than a handler when choosing a
 loop's exit, so a catch inside a loop stays in the loop. The printer (chapter 9)
 reads the dispatch `if` as the `try` statement.
 
-**(kuna) `option javasync on|off`, default off: catch-all idioms,
+**(unlace) `option javasync on|off`, default off: catch-all idioms,
 `crates/unlace-lift/src/p2_lift/javasync.rs`.** javac and D8 compile two
 Java constructs to a catch-all handler, and `javasync.rs (idioms)` reads
 each catch-all handler of a method (one no typed clause names) from the

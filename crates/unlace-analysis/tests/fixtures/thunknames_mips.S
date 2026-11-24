@@ -1,4 +1,4 @@
-/* kuna `thunknames`: MIPS jump thunks whose delay slot decides what they are.
+/* unlace `thunknames`: MIPS jump thunks whose delay slot decides what they are.
  * `.Lpure` is `j release_box` with a nop in its delay slot, a pure forwarder;
  * `.Ladj` is `j release_box` with `addiu $a0,$a0,16` in its delay slot, a
  * `this` adjustor that is not one. mips_caller calls both. Rebuild: see

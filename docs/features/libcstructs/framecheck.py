@@ -1,7 +1,7 @@
 """Two-arm whole-corpus frame check: split stack objects, lost named locals, extra call arguments.
 
 Usage: framecheck.py <dump-dir-A> <dump-dir-B> <keys-file> <comma-separated row names>
-Each dump dir holds one `kuna decompile-all` output per binary, named <opt>__<project>__<bin>.c.
+Each dump dir holds one `unlace decompile-all` output per binary, named <opt>__<project>__<bin>.c.
 """
 import sys, os, json, collections, re
 sys.path.insert(0, os.path.dirname(__file__))

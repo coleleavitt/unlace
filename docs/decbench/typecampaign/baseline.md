@@ -6,11 +6,11 @@ accident.
 
 ## Canonical typesweep baseline (444 slices)
 
-Captured 2026-09-16 with the pinned binary `/home/mahaloz/kwt/_baseline/kuna` (main `809712e9`, rebuilt 18:54),
+Captured 2026-09-16 with the pinned binary `/home/mahaloz/kwt/_baseline/unlace` (main `809712e9`, rebuilt 18:54),
 `scripts.decbench.typesweep --baseline-only`, `DECBENCH_NO_CACHE=1`, results tree `full_run_address_2026-09-11`,
 projects coreutils grep gzip diffutils bzip2 findutils tar shadow × O0/O2/O2-noinline = 444 slices, 10,748 scored functions.
 Control: 96.90% agreement with the tree's published per-function verdicts (10415 agree / 333 differ — the tree was scored
-by the PR#48 address-mode matcher and an older kuna, so <100% is expected). Raw rows: `/home/mahaloz/kwt/_baseline/rows.json`
+by the PR#48 address-mode matcher and an older unlace, so <100% is expected). Raw rows: `/home/mahaloz/kwt/_baseline/rows.json`
 (re-report with `typesweep --report-only --out <dir>`).
 
 | slice | functions | perfect | perfect % | mean |
@@ -59,7 +59,7 @@ by the PR#48 address-mode matcher and an older kuna, so <100% is expected). Raw 
 
 </details>
 
-Reference (E3 canonical recompute on a 14-project sample, same metric): binja 9.64% / .346, ida 7.40% / .282, kuna 6.09% / .277, ghidra 5.30% / .243.
+Reference (E3 canonical recompute on a 14-project sample, same metric): binja 9.64% / .346, ida 7.40% / .282, unlace 6.09% / .277, ghidra 5.30% / .243.
 Pre-tooling census on the same binary (fmt/ls/sort/du O2): see `/home/mahaloz/kwt/_baseline/census0.json`.
 Every campaign PR reports its typesweep block against THIS binary and THIS slice set (or a subset of it).
 
@@ -73,8 +73,8 @@ the type lanes quote.
 Pins for everything below:
 
 ```bash
-KUNA_BIN=/home/mahaloz/kwt/_baseline/kuna          # kuna main @809712e9
-SLEIGHHOME=/home/mahaloz/github/kuna/specs
+UNLACE_BIN=/home/mahaloz/kwt/_baseline/unlace          # unlace main @809712e9
+SLEIGHHOME=/home/mahaloz/github/unlace/specs
 DECBENCH_NO_CACHE=1                                 # set by typescore/structscore themselves
 decbench main @625e892
 ```
@@ -93,8 +93,8 @@ over `results/full_run` (the tree that carries every rival's column):
 
 | pool | cases | dedup groups | queue |
 |---|---|---|---|
-| ida-perfect / kuna-imperfect on `type_match` | 1,575 | 826 | 20 (3 artifact-suspect, 17 ranked) |
-| kuna-missing (no usable score) | 1,371 functions | — | 0 whole-binary failures |
+| ida-perfect / unlace-imperfect on `type_match` | 1,575 | 826 | 20 (3 artifact-suspect, 17 ranked) |
+| unlace-missing (no usable score) | 1,371 functions | — | 0 whole-binary failures |
 
 Regression control: `mine --select 30` (base angr, metric GED) writes
 `cases.json`, `cases-missing.json`, `backlog.md` and `triage-queue.json`
@@ -128,15 +128,15 @@ Control run against a block that already exists:
 | | n | perfect_off | perfect_on | mean_off | mean_on | improved | worse |
 |---|---|---|---|---|---|---|---|
 | published (libcsigs, PR-time build) | 267 | 8 | 8 | 0.2617 | 0.2712 | 8 | 0 |
-| re-measured here (kuna @809712e9) | 267 | 14 | 15 | 0.3345 | 0.3441 | 8 | 0 |
+| re-measured here (unlace @809712e9) | 267 | 14 | 15 | 0.3345 | 0.3441 | 8 | 0 |
 
-The rows this was measured from carry their own provenance (kuna
+The rows this was measured from carry their own provenance (unlace
 `sha256 9aabcce8a7fc4fdc`, decbench main @625e892, both arm values, the results
 tree); a re-report under a different binary says so and still reports the corpus
 the rows cover, not the one the re-report asked for.
 
 `n`, `improved` and `worse` reproduce exactly; the absolute levels are higher
-because the pinned kuna is ~75 commits newer than the one libcsigs was measured
+because the pinned unlace is ~75 commits newer than the one libcsigs was measured
 on. `projects` carries the projects only — `pooled` is its own top-level key, as
 in the libcsigs record — so anything summing `projects` cannot double-count.
 
@@ -146,13 +146,13 @@ The `control` block on the same run:
 |---|---|---|
 | `identical_variables_scored_differently` | **0** | the only invalidating check: both arms handed the metric byte-identical `variables[]` for 217 functions and every one scored the same |
 | `retyped_functions` | 50 | the functions the option actually rewrote — the expected signal, of which 8 improved and 0 worsened |
-| `off_arm_vs_published` | 195 / 72 (73.0%) | the off arm against the tree's stored verdict. It disagrees on purpose here: the tree was scored with `libcsigs` at its default (on) and with a kuna ~75 commits older |
+| `off_arm_vs_published` | 195 / 72 (73.0%) | the off arm against the tree's stored verdict. It disagrees on purpose here: the tree was scored with `libcsigs` at its default (on) and with a unlace ~75 commits older |
 
 ### 3. `varcensus` — declared variables
 
 `python3 -m scripts.pipeline.varcensus <binary> --json`. A declaration is a
 2-space-indented line ending in `;` with no `=` and no `(`; a *thunk* is a
-function whose body carries kuna's `jump-as-call` marker.
+function whose body carries unlace's `jump-as-call` marker.
 
 coreutils `fmt` -O2, **unstripped twin** (`compiled/fmt` — this is the run the
 design lane's numbers came from):
@@ -192,10 +192,10 @@ binary-wide calibration shift (8 on all eight binaries), the per-function shift
 only where that one aligns nothing, and decbench's type-preferring `claim()`.
 That is verified rather than asserted: replaying the same eight runs through
 decbench's own `_match_structured` (typesweep's verbatim recorder) pairs all
-9,593 ground-truth variables to the same kuna variable, 0 differing.
+9,593 ground-truth variables to the same unlace variable, 0 differing.
 
 **TRex Fig. 6 prioritized score** (mean per binary; `unpaired` is GT
-variables kuna's JSON surface has nothing to pair with, which is where the
+variables unlace's JSON surface has nothing to pair with, which is where the
 never-exported register locals land). The ground-truth signedness the last step
 needs comes from the twin's `DW_AT_encoding`, because decbench's form list has
 the qualifier stripped out of it; `mean` is the full 0–6 score and `mean 0-5`
@@ -214,7 +214,7 @@ they score 5, so `mean` is a lower bound by at most that many sixths:
 | O2 | sort | 1,214 | 672 | **1.623** | 1.503 | 21 | 542/1214 | 389/542 | 372/389 | 294/372 | 227/294 | 146/227 |
 | O2 | du | 1,177 | 673 | **1.627** | 1.511 | 22 | 504/1177 | 388/504 | 374/388 | 288/374 | 224/288 | 137/224 |
 
-An array is scored as its element type on both sides — kuna's `char[3]` against
+An array is scored as its element type on both sides — unlace's `char[3]` against
 DWARF's `char[3]` is an exact match, not a pointer-vs-`char` miss — which is
 also what `type_match` does with it (`normalize_type('char[3]')` is `{'char[3]'}`,
 which no pointer form matches). Scoring the two sides by different conventions
@@ -225,7 +225,7 @@ survive that step give 242 of it back further down (`is_c_struct` 207,
 `c_primitive` 53, less 18 recovered at `sign_ignored_primitive`).
 
 `GT vars` is the denominator the mean is taken over: the ground-truth variables
-of every DWARF function some kuna function resolves to, which is the set the
+of every DWARF function some unlace function resolves to, which is the set the
 metric scores as well. Two subprograms can carry the same name, so those
 variables are counted once per resolving address (O0: ls +3, sort +9, du +7 over
 the 1,856 / 1,501 / 1,427 in the raw DWARF map), and a subprogram the DIE walk
@@ -255,7 +255,7 @@ and (2478 − 867)/413 = 3.9007:
 **At O0 the score is lost at `is_c_pointer`** — 53–65% of every binary's loss,
 against 11–19% for `sign_ignored_primitive` and 4–8% for `c_primitive`. It is
 the same deficit the metric lane is chasing, and it is one-directional: of fmt's
-112 failures, 110 are kuna declining to be a pointer at all (`unsigned long` 68,
+112 failures, 110 are unlace declining to be a pointer at all (`unsigned long` 68,
 `undefined8` 23, `long` 17, one each of `undefined16` and `long[11]`) where
 DWARF has one — `fmt(file)` and `get_paragraph(f)` as `unsigned long` against
 `char *` and `FILE *`, `get_line(end_of_word)` as `undefined8` against
@@ -264,21 +264,21 @@ should expect a small `mean` move and no `mean 0-5` move at all, and a
 primitive-width PR is worth at most ~19% of the O0 gap.
 
 **At O2 the score is lost at `defined`** — 76–80% of the loss is GT variables
-kuna's JSON surface has nothing to pair with at all (968 of ls's 1,600), because
+unlace's JSON surface has nothing to pair with at all (968 of ls's 1,600), because
 at O2 the variable usually lives in a register and is never exported. A type PR
 measured on the O2 rows is mostly measuring the export surface; quote the O0
 rows for a typing claim. The O0→O2 drop is the same shape TRex reports for
 Ghidra (2.99→2.17).
 
 *Not comparable to the published TRex table* (different corpus, different
-pairing, different normalization) — it is a before-number for kuna, not a
+pairing, different normalization) — it is a before-number for unlace, not a
 cross-tool result.
 
-**Layout / nesting F1 vs DWARF** (pointer-to-struct parameters only). kuna
+**Layout / nesting F1 vs DWARF** (pointer-to-struct parameters only). unlace
 synthesizes no structs today, so every F1 is 0 by construction; the number to
 record is the denominator:
 
-| opt | binary | GT ptr-to-struct params | kuna params typed as a struct | GT fields | layout F1 | GT nestings | nesting F1 |
+| opt | binary | GT ptr-to-struct params | unlace params typed as a struct | GT fields | layout F1 | GT nestings | nesting F1 |
 |---|---|---|---|---|---|---|---|
 | O0 | fmt | 34 | 0 | 556 | 0.0 | 86 | 0.0 |
 | O0 | ls | 168 | 0 | 1,761 | 0.0 | 176 | 0.0 |
@@ -336,7 +336,7 @@ Three things this settles before any struct work starts:
   1,123 index-only bases that are 86% of everything the census picks up. Any
   claim sized off the combined 573 / 739 is sized off array walks.
 * **The match→miss channel is ~zero where it matters.** Exactly 1 of 82 paired
-  field-committed candidates at O0 and 0 of 69 at O2 are variables kuna already
+  field-committed candidates at O0 and 0 of 69 at O2 are variables unlace already
   types to DWARF's satisfaction, so a pass that fires on this pool spends almost
   no matches. The 23.7% / 14.0% in the second table is real but it is the price
   of retyping a `char *` that is only ever indexed — which is exactly what a
@@ -344,7 +344,7 @@ Three things this settles before any struct work starts:
 * **Field-committed candidates really are structs**: 78 of 82 paired (95.1%) at
   O0 have a pointer-to-struct ground truth, against 250 of 363 (68.9%) index-only.
   At O2 both halves fall (53.6% / 48.4%) and most of the pool stops being
-  judgeable at all — 316 of 641 index-only candidates are bases kuna never puts
+  judgeable at all — 316 of 641 index-only candidates are bases unlace never puts
   on the JSON surface, because at O2 the base is usually a register.
 
 The design lane's 637 candidates over 332 of the 1,218 O2 functions is the
@@ -354,7 +354,7 @@ bare `*B` and a negative displacement, hence 739 over 377 — and then splits it
 Reproduce (about 4 minutes for all eight binaries):
 
 ```bash
-KUNA_BIN=<release kuna> SLEIGHHOME=<specs> \
+UNLACE_BIN=<release unlace> SLEIGHHOME=<specs> \
 ~/.virtualenvs/decbench/bin/python -m scripts.decbench.structscore \
   $R/{O0,O2}/coreutils/stripped/{fmt,ls,sort,du} --all --out /tmp/structscore.json
 ```

@@ -39,8 +39,8 @@ Which options in the catalog change output at all. Measured 2026-11-24 with the 
   test fixtures:
   - gcc, clang and zig builds for x86-64, i386 MSVC, ARM, SPARC and PPC32 (one of them a
     PPC32 `.PPC.EMB.apuinfo` image).
-  - The `.fid` database and FLIRT `.sig` fixtures, through `kuna_fid_db` and
-    `KUNA_FLIRT_SIGS`.
+  - The `.fid` database and FLIRT `.sig` fixtures, through `unlace_fid_db` and
+    `UNLACE_FLIRT_SIGS`.
 
 ## The `--mode auto` trap
 
@@ -98,14 +98,14 @@ measures nothing.
   - A standalone load names a function by its whole demangled path, so there was no
     scope list to shorten.
 - **Fix.**
-  - `kuna_cppshortnames::function_name` runs `short_type` over a direct callee's name, an
+  - `unlace_cppshortnames::function_name` runs `short_type` over a direct callee's name, an
     `os_log` callee's name and the declared function's own name, when the option is on.
   - Off, the output is the same as before.
   - Spec: `docs/spec/09-emission.md`.
 
 ### The same load-time pattern, default-on gates (not fixed: `off` is probably ignored)
 
-These load-time passes read a default-on gate from `ctx.arch.kuna_options` inside
+These load-time passes read a default-on gate from `ctx.arch.unlace_options` inside
 `run()`:
 
 - `StringLiteralPass` (`codestrings`). No test of it exists.
@@ -172,9 +172,9 @@ deferred ones (`fid`, `formatstring`, `operand_refs`, `swiftmetadata`,
 | `calleeargsmsvc` | off | `calleeargsmsvc_pe_i386.dll` with `calleeargs on`: 1 |
 | `calleevote` | fields | `off` on stripped `getfacl`: 2 |
 | `dyldimage` | none | the `dyld_cache_objc` fixture: selects the image (base arm errors "choose one with --image") |
-| `fid` | off | `fid_audit_x86_64` with `kuna_fid_db=fid_audit_x86_64.fid` and `listing on`: 2 |
+| `fid` | off | `fid_audit_x86_64` with `unlace_fid_db=fid_audit_x86_64.fid` and `listing on`: 2 |
 | `fieldtype` | off | `fieldtype_gcc_O0_x86_64`: 4 |
-| `flirt` | off | `tests/fixtures/fid/callees/prog` with `KUNA_FLIRT_SIGS=flirt/callees.sig`: `functions` names 4 |
+| `flirt` | off | `tests/fixtures/fid/callees/prog` with `UNLACE_FLIRT_SIGS=flirt/callees.sig`: `functions` names 4 |
 | `gomorestack` | auto | `off` on `go-type-names/go1.26.2-amd64` `main.main`: 1 |
 | `libgccsigs` | off | zig SPARC32 `__divdi3` callers: 2 |
 | `mixedtailret` | off | `crates/unlace-cli/tests/fixtures/mixed_tail_returns.S`: 6 (the catalog already says it changes no real function) |

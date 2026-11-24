@@ -4,7 +4,7 @@
 
 The CryptoME i386 entry at `0x4f7001` executes `call 0x4f7990`, then
 `push 0x40365a; ret`. The call unpacks the original entry point and the RET
-transfers there. Default kuna emits only `sub_4f7990();`, so the terminal
+transfers there. Default unlace emits only `sub_4f7990();`, so the terminal
 transfer disappears. An explicit `flow 0x4f700b branch` proves the existing
 flow, dataflow, and emitter paths already preserve the destination as
 `(*(void *)0x40365a)();`.

@@ -73,7 +73,7 @@ How they were built
   Prebuilt so the relocation kinds do not depend on the host toolchain.
 
 What they pin
-  kuna_dataptrs lists every relocated word whose relocation stores a word with
+  unlace_dataptrs lists every relocated word whose relocation stores a word with
   coverage dynamic-relocations: RISC-V's absolute GOT words and JUMP_SLOT,
   PowerPC's RELATIVE/ADDR words and its PLT slot only where it is a word
   (secure PLT, ELFv2), and its unaligned UADDR words. `unlace xrefs` reports them

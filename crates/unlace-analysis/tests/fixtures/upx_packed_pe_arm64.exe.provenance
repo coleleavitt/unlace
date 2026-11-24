@@ -7,9 +7,9 @@ What it is
   unpacked. PackHeader at 0x1fd: version=13, format=43 (win64/arm64), method=2,
   filter=0x52.
 
-  The trailer layout is the PE32+ one kuna rebuilds for win64/pe, but the code is
+  The trailer layout is the PE32+ one unlace rebuilds for win64/pe, but the code is
   filtered with ARM64 branch tricks (0x52 under the code's bias, or the new 0x53)
-  that kuna does not reverse, so the unpacker refuses the target by name and
+  that unlace does not reverse, so the unpacker refuses the target by name and
   writes nothing; the test pins that.
 
 Where it came from

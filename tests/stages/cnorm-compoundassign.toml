@@ -1,10 +1,10 @@
-# kuna C-surface normalization: a statement of the shape `out = out OP y`
+# unlace C-surface normalization: a statement of the shape `out = out OP y`
 # (same high-level variable on both sides) renders as the C compound
 # assignment `out OP= y` (user-reported readability issue on the angr fmt
 # corpus binary: `v13 = v13 & v17;`; no upstream GH issue).
 #
 # Upstream Ghidra carries option_inplace_ops + the ten `OP=` tokens
-# (printc.cc:62-71) but never consumed the flag; kuna ports the
+# (printc.cc:62-71) but never consumed the flag; unlace ports the
 # emitInplaceOp consumer and flips the default on (DIV-35,
 # docs/history.md).  `option inplaceops off` restores the spelled-out
 # form.  Comma contexts (for-loop headers) are exempt, so upstream

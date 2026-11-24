@@ -18,7 +18,7 @@ kernel_call:
 	pop %rbp; ret
 ASM
 $ gcc -nostdlib -no-pie -e kernel_call -o w w.s
-$ kuna decompile ./w kernel_call --option x64syscall off \
+$ unlace decompile ./w kernel_call --option x64syscall off \
     --assert 'prototype 0x401000 long kernel_call(long number, long address, long length)'
 long kernel_call(long number,long address,long length)
 {
@@ -32,7 +32,7 @@ handed. `ia.sinc:4836` lowers the instruction as `RCX = inst_next; R11 = rflags;
 syscall();` — a `CALLOTHER` with no inputs and no output. No inputs, so the four
 register writes above have no reader and dead-code elimination collects them. No
 output, so nothing redefines `RAX` and returning `number` is correct copy
-propagation over an operation kuna has been told writes nothing.
+propagation over an operation unlace has been told writes nothing.
 
 ## The fix
 

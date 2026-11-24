@@ -20,7 +20,7 @@ int main(int c, char **v) { struct R r = {v[0], c, c, c}; return reader_a(&r) + 
 
 ```
 $ gcc -O1 -o two two.c && strip two
-$ kuna decompile-project ./two -o out --option structsynth param
+$ unlace decompile-project ./two -o out --option structsynth param
 $ sed -n '/^struct struct_/,/^};/p' out/two.h; grep 'struct_. \*' out/two.h
 struct struct_0 {
     char *field_0x0;
@@ -49,12 +49,12 @@ pointer-to-struct parameters, 9,443 DWARF fields, the layout instrument's own
 denominator).
 
 * The reading function dereferences **1,469** of the 9,443 fields, 15.6%. That
-  is the per-function ceiling, and kuna already claims 817 of it correctly
+  is the per-function ceiling, and unlace already claims 817 of it correctly
   (55.6%).
 * Every function taking a pointer to the same record dereferences **5,922**
   between them. 805 of the 835 parameters read a record another parameter in the
   same binary also reads.
-* **23 of the 77** ground-truth records kuna types at all are given more than one
+* **23 of the 77** ground-truth records unlace types at all are given more than one
   `struct_N`; the opposite error, one `struct_N` standing for two records, is
   **1 of 136**.
 * The layout prune costs 4 of the 1,469 reachable fields, so neither it nor the
@@ -172,17 +172,17 @@ it buys nothing for a rule that is harder to state.
   one per reader; `siblings` gives both readers the union
   `struct_1{char*;long;int@0x10;char[4];char*@0x18}`, so the `Job` reader gains
   `Conn`'s `port` and the `Conn` reader gains `Job`'s `tag`. Pinned as
-  `kuna_structmerge::tests
+  `unlace_structmerge::tests
   two_records_that_begin_alike_are_fused_at_the_agreement_floor`.
 
   The floor is where a large share of real merges sit, not a corner:
-  `KUNA_STRUCTMERGE_TRACE=1 kuna decompile-all <bin> --json --option structsynth
+  `UNLACE_STRUCTMERGE_TRACE=1 unlace decompile-all <bin> --json --option structsynth
   param --option structmerge siblings` over sixteen builds (coreutils
   `fmt`/`ls`/`sort`/`du`, `grep`, `diff`, `gzip`, `find` at -O0 and -O2) records 63
   merges, **19 at two shared claims**, 38 at three, 6 at four. Priced over 177 builds: 189 of the
   1,105 added fields are not DWARF fields, pooled precision 0.9330 -> 0.9312.
   This is the reason the option ships `off`.
-* The merge is a property of one process's ledger. `kuna decompile` numbers each
+* The merge is a property of one process's ledger. `unlace decompile` numbers each
   function's records from `struct_0` again, and a `--jobs N` worker answers
   through the shard replay, which records the layout each request measured and so
   has nothing to replay for a mint of a union neither side asked for. Both behave

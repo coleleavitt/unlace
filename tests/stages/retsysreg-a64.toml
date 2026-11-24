@@ -1,9 +1,9 @@
-# kuna: a register an AArch64 function sets for a system register is not
+# unlace: a register an AArch64 function sets for a system register is not
 # the high word of its return; a prefetch or cache op on it is no such
 # write.
 #
 # Stage / sub-stage: P4 return recovery, the output trials of the
-# function's own RETURN (ActionReturnRecovery, p4_calls/kuna_retsysreg.rs).
+# function's own RETURN (ActionReturnRecovery, p4_calls/unlace_retsysreg.rs).
 # The rule is always on.
 #
 # Source (clang -target aarch64-linux-gnu -O2 at 0x100000, bytes verbatim):

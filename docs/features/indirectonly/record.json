@@ -7,7 +7,7 @@
   "change_kind": "presentation-default",
   "source_decompiler": "ghidra",
   "default_on": false,
-  "opportunity": "varnode_flags::indirectonly has two readers in the merged tree -- HighVariable::has_name (variable.rs) and Merge::merge_test_adjacent (merge.rs) -- and NO writer: Funcdata::markIndirectOnly / checkIndirectUse (funcdata_varnode.cc:801-858) were never ported and ActionMarkIndirectOnly shipped as a documented no-op although universal_sched already scheduled it one slot ahead of ActionMergeAdjacent. So is_indirect_only() answered false everywhere and both readers took the strictly-more-conservative branch: kuna refused every speculative merge with an illegal input, including the ones upstream allows.",
+  "opportunity": "varnode_flags::indirectonly has two readers in the merged tree -- HighVariable::has_name (variable.rs) and Merge::merge_test_adjacent (merge.rs) -- and NO writer: Funcdata::markIndirectOnly / checkIndirectUse (funcdata_varnode.cc:801-858) were never ported and ActionMarkIndirectOnly shipped as a documented no-op although universal_sched already scheduled it one slot ahead of ActionMergeAdjacent. So is_indirect_only() answered false everywhere and both readers took the strictly-more-conservative branch: unlace refused every speculative merge with an illegal input, including the ones upstream allows.",
   "root_cause": "Both refusals are about an ILLEGAL INPUT -- an input Varnode ActionDirectWrite never reached, i.e. the leftover entry value of a frame slot the function overwrites before it reads. Refusing the merge is the right default (an uninitialized value must not be printed as a real one); upstream's exception is that when EVERY reader in the def-set is a plain CPUI_INDIRECT the leftover value is not read at all, so there is nothing to print wrongly. That exception needed the flag nothing wrote.",
   "inspiration": "Funcdata::markIndirectOnly / Funcdata::checkIndirectUse (funcdata_varnode.cc:801-858); HighVariable::hasName (variable.cc:731-760); Merge::mergeTestAdjacent (merge.cc:185-196)",
   "test_name": "tests/stages/indirectonly.xml (the sound direction: `take` changes off->on, the directly-read counterexample `keep` must not) + tests/stages/indirectonly-escape.xml (the unsound direction; its first pass runs the DEFAULT, so flipping the shipped default turns it red) + 8 unit tests in indirectonly/tests.rs",
@@ -16,7 +16,7 @@
   "func_addr": "0x4402",
   "element_id": null,
   "census": {
-    "method": "throwaway KUNA_IO_DEBUG instrumentation in mark_indirect_only, release build, kuna decompile-all over the decbench stripped coreutils binaries (docs/features/indirectonly/census.txt); reverted before the shipped commit",
+    "method": "throwaway UNLACE_IO_DEBUG instrumentation in mark_indirect_only, release build, unlace decompile-all over the decbench stripped coreutils binaries (docs/features/indirectonly/census.txt); reverted before the shipped commit",
     "columns": "marked / register / stack / also-unaffected",
     "fmt_O0": [
       23,
@@ -57,7 +57,7 @@
     "finding": "no flagged input is also `unaffected`, so HighVariable::has_name's indirectonly branch never fires on x86-64 ELF and removes no declaration; the live consumer is Merge::merge_test_adjacent"
   },
   "corpus_sweep": {
-    "method": "kuna decompile-all, default (off) vs --option indirectonly on; script docs/features/indirectonly/corpus-sweep.sh, classifier classify-escape.py, full output corpus-escape-classification.txt",
+    "method": "unlace decompile-all, default (off) vs --option indirectonly on; script docs/features/indirectonly/corpus-sweep.sh, classifier classify-escape.py, full output corpus-escape-classification.txt",
     "slices": 34,
     "slice_set": "ls sort grep gzip diff bzip2 find tar at O0+O2; kmod e2fsck dpkg dpkg-query dash bash at O0+O2+O2-noinline",
     "changed_slices": 15,
@@ -152,19 +152,19 @@
     "make_test_stages": "datatests 1067/1067 PARITY OK",
     "make_test_cli": "tests/cli 178/178 passed",
     "make_check_spec": "OK lenient + OK strict",
-    "kuna_catalog_check": "catalog OK",
+    "unlace_catalog_check": "catalog OK",
     "counters_check": "no drift (settables 214, corpus 304)",
     "docs_options_md": "byte-fresh against the rebuilt catalog",
     "make_rust_test": "RUST_TEST_RC=0, 415 `test result: ok`, 0 failures (lane run 2026-09-17T14:27:46Z..14:43:45Z on the final tree)"
   },
-  "default_off_reason": "The lifted merge_test_adjacent refusal is sound only when the illegal input is the DESTINATION of the copy (the machine really does store into the frame slot). When it is the SOURCE -- the machine loads an escaped frame slot into a register and mutates the register -- the merge makes the emitted C mutate the slot, fabricating a store a later call handed the enclosing object can read. A CPUI_INDIRECT is attached only where the storage is still live in the SSA, so a slot whose last read precedes the loop carries no INDIRECT at any later call and the cover-intersection test has nothing to intersect. Stock Ghidra 12.1.2 emits the same fabricated store on the same input (docs/features/indirectonly/counterexample.md), so this is an upstream defect the port inherits faithfully rather than a porting error; kuna declines to inherit it by default.",
+  "default_off_reason": "The lifted merge_test_adjacent refusal is sound only when the illegal input is the DESTINATION of the copy (the machine really does store into the frame slot). When it is the SOURCE -- the machine loads an escaped frame slot into a register and mutates the register -- the merge makes the emitted C mutate the slot, fabricating a store a later call handed the enclosing object can read. A CPUI_INDIRECT is attached only where the storage is still live in the SSA, so a slot whose last read precedes the loop carries no INDIRECT at any later call and the cover-intersection test has nothing to intersect. Stock Ghidra 12.1.2 emits the same fabricated store on the same input (docs/features/indirectonly/counterexample.md), so this is an upstream defect the port inherits faithfully rather than a porting error; unlace declines to inherit it by default.",
   "counterexample": {
     "doc": "docs/features/indirectonly/counterexample.md",
     "sources": "docs/features/indirectonly/counterexample/",
     "synthetic": "walk.S -- an object built on the frame, filled through its address by three calls, its count loaded into r14d and counted down in the register, its address then passed to a fourth call that reads the count",
     "ground_truth": "a_done sees n=3",
-    "kuna_default_off": "int v2; // r14d ; v2 = v3 + -1  (correct)",
-    "kuna_option_on": "int v2; // stack - 0x30 ; v2 -= 1  (fabricated store)",
+    "unlace_default_off": "int v2; // r14d ; v2 = v3 + -1  (correct)",
+    "unlace_option_on": "int v2; // stack - 0x30 ; v2 -= 1  (fabricated store)",
     "roundtrip": "both emitted bodies compiled against the same lib.c: walk_off prints `a_done sees n=3`, walk_on prints `a_done sees n=-1`",
     "ghidra_12_1_2": "local_30 = local_30 + -1; -- identical fabricated store (analyzeHeadless + DecompInterface)",
     "real_corpus": [

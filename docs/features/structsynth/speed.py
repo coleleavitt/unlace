@@ -6,7 +6,7 @@
 Both arms name the value explicitly, so the measurement does not depend on which
 value is the shipped default.
 
-Run from the worktree root with the release `kuna` built and the pinned decbench
+Run from the worktree root with the release `unlace` built and the pinned decbench
 results tree in place.
 
 One (off, on) pair per round, rounds interleaved so any slow drift in machine
@@ -16,10 +16,10 @@ least-contended sample); the median is printed too, for scale.
 import json, os, subprocess, sys, time
 
 R = "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11"
-K = os.environ.get("KUNA_BIN") or os.path.abspath("decompiler/target/release/kuna")
+K = os.environ.get("UNLACE_BIN") or os.path.abspath("decompiler/target/release/unlace")
 N = int(os.environ.get("SPEED_N", "15"))
 env = dict(os.environ, SLEIGHHOME=os.path.abspath("specs"),
-           KUNA_SPECS=os.path.abspath("specs"))
+           UNLACE_SPECS=os.path.abspath("specs"))
 
 FLIP_CASES = [
     ("fmt O2",  f"{R}/O2/coreutils/stripped/fmt"),

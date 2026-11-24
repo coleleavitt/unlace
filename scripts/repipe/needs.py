@@ -11,8 +11,8 @@ lines, then fixed ``##`` sections. Deliberate, because an agent that has read on
 records can read the other without being taught a second format, and because a 12-line regex
 parser is a feature -- the records stay hand-editable and diffable in review.
 
-Why the front-matter parser is hand-written: kuna's Python tooling is stdlib-only (no
-pyproject.toml, no requirements.txt, and ~/.virtualenvs/kuna has zero third-party packages),
+Why the front-matter parser is hand-written: unlace's Python tooling is stdlib-only (no
+pyproject.toml, no requirements.txt, and ~/.virtualenvs/unlace has zero third-party packages),
 so PyYAML is not available. The supported subset is exactly what a need record needs:
 
     key: value          strings, ints, floats, true/false, null (also ~), and flow lists
@@ -607,7 +607,7 @@ def rank_score(need):
     tester to hit the same wall barely moves the needle while the second one moves it a lot --
     breadth is evidence, repetition is not. distinct_challenges (floored at 1, so a need whose
     only witness is an in-repo fixture still ranks) multiplies because a friction that
-    reproduces on unrelated binaries is a property of kuna, not of one crackme. The attempt
+    reproduces on unrelated binaries is a property of unlace, not of one crackme. The attempt
     penalty demotes a need two builders have already failed on rather than looping on it, and
     the additive REGRESSION_FLOOR makes any regression outrank every fresh need outright:
     breaking something that was shipped and verified is the worst thing this loop can do.
@@ -674,7 +674,7 @@ def _opportunity_row(need, index):
         ("func_addr", None),
         ("custom_options", None),
         ("confidence", need.credibility),
-        ("kuna_mode", None),
+        ("unlace_mode", None),
         ("slug", need.need_id),
         # --- the RE-loop payload the builder prompt renders from ---------------------
         ("need_id", need.need_id),

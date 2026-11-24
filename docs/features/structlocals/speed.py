@@ -1,13 +1,13 @@
 """Interleaved min-of-N decompile-all timing: this build under param vs under the default (locals),
 optionally with a third arm for the tree before this change.
 
-    python3 speed.py <N> <out.json> fmt,ls,sort,bash <kuna> [<main-kuna>]
+    python3 speed.py <N> <out.json> fmt,ls,sort,bash <unlace> [<main-unlace>]
 """
 import json, os, statistics, subprocess, sys, time
 R = "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11/O2"
 ALL = {"fmt": f"{R}/coreutils/stripped/fmt", "ls": f"{R}/coreutils/stripped/ls",
        "sort": f"{R}/coreutils/stripped/sort", "bash": f"{R}/bash/stripped/bash"}
-SP = os.environ["KUNA_SPECS"]
+SP = os.environ["UNLACE_SPECS"]
 N = int(sys.argv[1]); outf = sys.argv[2]; which = sys.argv[3].split(",")
 K = {"param": (sys.argv[4], ["--option", "structsynth", "param"]), "locals": (sys.argv[4], [])}
 if len(sys.argv) > 5:
@@ -20,7 +20,7 @@ for name in which:
         order = ARMS[i % len(ARMS):] + ARMS[:i % len(ARMS)]
         for lab in order:
             kb, extra = K[lab]
-            env = dict(os.environ, SLEIGHHOME=SP, KUNA_SPECS=SP)
+            env = dict(os.environ, SLEIGHHOME=SP, UNLACE_SPECS=SP)
             t0 = time.perf_counter()
             p = subprocess.run([kb, "decompile-all", b, "--json", "--max-fn-seconds", "120"] + extra,
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)

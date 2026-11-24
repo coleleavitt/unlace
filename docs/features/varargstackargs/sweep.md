@@ -1,8 +1,8 @@
 # varargstackargs — whole-corpus before/after (standing requirement 7)
 
-Method: `kuna decompile-all <bin> --json` with `--option varargstackargs off`
+Method: `unlace decompile-all <bin> --json` with `--option varargstackargs off`
 and `--option varargstackargs on`, per-function `code` diffed. 57 binaries from
-`kuna-re-dataset/challenges`, stratified up to 3 per (format, arch) plus the four
+`unlace-re-dataset/challenges`, stratified up to 3 per (format, arch) plus the four
 observation witnesses and a set of libc-heavy ELF x86-64 crackmes. 11 of the 57
 fail to load identically with the option off and on (packed/DOS/SPU images) and
 are excluded from the totals.

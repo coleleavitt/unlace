@@ -1,4 +1,4 @@
-# kuna GH-866: a gcc -fstack-protector function whose canary check runs
+# unlace GH-866: a gcc -fstack-protector function whose canary check runs
 # right before a tail call kept the entry-side canary load, printing a
 # dereference of the never-assigned fs_offset input:
 #

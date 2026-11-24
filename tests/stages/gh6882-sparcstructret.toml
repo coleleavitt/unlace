@@ -43,7 +43,7 @@
 # NOTE on assertion #2's text, revision 1: it used to look for `return CONCAT44`,
 # because the recovered tail arrived as a spurious o0:o1 join, the GH-6990
 # artifact: `p` returns normally and has no struct return.
-# `kuna_returnuncomputed` now drops that passive half by default, so the tail
+# `unlace_returnuncomputed` now drops that passive half by default, so the tail
 # rendered as `return v1 + a0`.  The assertion names the expression directly: it
 # tests the thing the option is for (the tail exists at all) rather than a
 # symptom of a second, unrelated bug.
@@ -51,7 +51,7 @@
 # NOTE on assertion #2's text, revision 2 (callsitestackargs): the expected text
 # is now `return v1[0] + a0`.  THE OLD TEXT WAS WRONG, and this is not a
 # re-record of a regression.  `f` is a struct-return function, so its caller
-# passes a hidden pointer to an 8-byte return buffer.  kuna was dropping that
+# passes a hidden pointer to an 8-byte return buffer.  unlace was dropping that
 # pointer along with every other stack-passed call argument (the mis-ported
 # localrange probe in check_input_trial_use), so `p` rendered `f()` with no
 # arguments at all and the buffer degenerated to a scalar `int4 v1`.  With
@@ -81,7 +81,7 @@ hex = '9de3bfa0f007a04081c7e00c81e800009de3bf98b007bff87ffffffaf023a04000000008f
 
 [script]
 commands = [
-    # kuna: the 9 angr structuring/switch flags below are now default-on (DIV-13); this stage test asserts the pre-sweep (flags-off) baseline in pass 1, so pass 1 turns them all OFF (each pass-2 'option <flag> on' re-enables only the flag under test)
+    # unlace: the 9 angr structuring/switch flags below are now default-on (DIV-13); this stage test asserts the pre-sweep (flags-off) baseline in pass 1, so pass 1 turns them all OFF (each pass-2 'option <flag> on' re-enables only the flag under test)
     'option gotoreduce off',
     'option crossjumprevert off',
     'option dedupitetail off',

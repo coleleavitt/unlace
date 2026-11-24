@@ -1,5 +1,5 @@
 // Self-contained Mach-O fixture for Swift name demangling (`swiftdemangle`,
-// tests/stages/kuna-swiftdemangle.toml). No Swift toolchain is needed: the
+// tests/stages/unlace-swiftdemangle.toml). No Swift toolchain is needed: the
 // Objective-C root class carries a Swift runtime name through
 // `objc_runtime_name` (what swiftc emits for an @objc class `main.Greeter`),
 // and the exported C function carries a Swift 5 mangled symbol through an

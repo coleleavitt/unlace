@@ -5,10 +5,10 @@ release) and answers three questions about the day's merges:
 
 1. **Do all the gates still pass?** The `tests` job calls `tests.yml` whole, so the
    nightly runs exactly what a push to `main` runs, workspace suite included.
-2. **Did kuna's decbench scores move?** The `decbench` job decompiles a fixed sample of
+2. **Did unlace's decbench scores move?** The `decbench` job decompiles a fixed sample of
    the published [decbench dataset](https://huggingface.co/datasets/noelo-lab/decbench-dataset),
    scores it with decbench's own code, and compares every function with the night before.
-3. **Did kuna get slower?** The same run times every decompile, against last night's
+3. **Did unlace get slower?** The same run times every decompile, against last night's
    build on the same runner.
 
 The `report` job puts the verdicts side by side. The full report is the `decbench
@@ -25,16 +25,16 @@ config scores in a picked binary is scored, which is 26,596 functions (75% of th
 config) for 48% of its decompile time. Only the picked binaries and their source CFGs
 are downloaded (~190 files); the dataset ships no build, so nothing is compiled.
 
-**Fidelity to the leaderboard.** `scripts/nightly/bench.py` scores kuna the way
-decbench's own benchmark driver does: kuna gets a `strip --strip-all` copy,
+**Fidelity to the leaderboard.** `scripts/nightly/bench.py` scores unlace the way
+decbench's own benchmark driver does: unlace gets a `strip --strip-all` copy,
 `unlace decompile-all <stripped> --json --max-fn-seconds 600` in its default mode, and
-the output goes through decbench's kuna backend, its `_relabel_to_dwarf`, and its GED
+the output goes through decbench's unlace backend, its `_relabel_to_dwarf`, and its GED
 and type_match metrics, loaded from a pinned decbench checkout rather than
 reimplemented. GED compares against the dataset's published source CFGs. byte_match
 is not run: it recompiles every function with the original cross toolchains.
 
-Checked against the leaderboard: the harness run with kuna v1.515, the build the
-published kuna column was scored from, over the whole `optimized` config reproduces
+Checked against the leaderboard: the harness run with unlace v1.515, the build the
+published unlace column was scored from, over the whole `optimized` config reproduces
 99.6% of the published per-function GED values exactly (31,858 of 31,986) and 97.2%
 of the type_match values, and both perfect counts land within 0.3% of the published
 ones. Most of the GED residue is in the dataset's exported source CFGs, not the
@@ -43,13 +43,13 @@ harness: a few binaries carry another translation unit's `main` (`coreutils/[` h
 change between two nights.
 
 **Pinned inputs.** The dataset revision, the decbench commit, and the Rust Joern commit
-are pinned in the workflow's `env`, so a change between two nights is kuna's. Bumping a
+are pinned in the workflow's `env`, so a change between two nights is unlace's. Bumping a
 pin (or the sample size or seed) changes the comparison's identity; that night's report
 says the scores are not comparable, and the night after compares normally again.
 
 ## How a change is judged
 
-Scores are **paired by function**. kuna is deterministic and the sample is fixed, so
+Scores are **paired by function**. unlace is deterministic and the sample is fixed, so
 every function is measured on both nights and nothing moves by chance in the
 measurement. The question is whether the functions that did move favour one direction
 more than unrelated churn would:
@@ -59,14 +59,14 @@ more than unrelated churn would:
 - **value**: the sign test on functions whose value improved against those that
   worsened.
 
-A function decbench can measure but kuna gave no value for (not emitted, unparseable)
+A function decbench can measure but unlace gave no value for (not emitted, unparseable)
 counts as the worst value. The four p-values are Holm-adjusted together and a change
 is significant below 0.01. A significant move in the bad direction is a regression;
-so is a binary that kuna newly fails on.
+so is a binary that unlace newly fails on.
 
-**Speed** is the sample's total decompile CPU time (`user + sys` of the kuna process,
+**Speed** is the sample's total decompile CPU time (`user + sys` of the unlace process,
 one binary at a time so neighbours do not inflate it). Each binary is decompiled by
-tonight's build and by last night's (`kuna-nightly-build` artifact), back to back,
+tonight's build and by last night's (`unlace-nightly-build` artifact), back to back,
 alternating which goes first, so both arms see the same machine. The 95% interval is
 a bootstrap over binaries. A slowdown is a regression only when the interval excludes
 zero **and** the total is more than 5% slower. When last night left no build, the
@@ -99,8 +99,8 @@ retention. The report renders the last two weeks of it.
 ```bash
 python3 -m scripts.nightly.dataset --revision <dataset sha> --data data --sample-out out/sample.json
 <decbench venv>/bin/python -m scripts.nightly.bench --sample out/sample.json --data data \
-    --kuna target/release/unlace --specs specs \
-    [--baseline-kuna old/kuna --baseline-specs old/specs] \
+    --unlace target/release/unlace --specs specs \
+    [--baseline-unlace old/unlace --baseline-specs old/specs] \
     --decbench-root ~/github/decbench --out out
 python3 -m scripts.nightly.compare --current out/results.json --previous prev/results.json \
     --report out/report.md

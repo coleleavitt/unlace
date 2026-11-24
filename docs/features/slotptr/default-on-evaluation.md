@@ -54,7 +54,7 @@ metric does not.
 ### Every worse row
 
 Five functions, nine ground-truth variables. In each one the slot receives the
-type kuna's C body already gives the stored value, and that type is wrong:
+type unlace's C body already gives the stored value, and that type is wrong:
 
 | function | GT variable | now | why the body says so |
 |---|---|---|---|

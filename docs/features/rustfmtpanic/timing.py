@@ -1,9 +1,9 @@
 from pathlib import Path
 import subprocess,time,resource,statistics,json,os,hashlib,sys
-root=Path('/home/mahaloz/kwt/angr-rust-panic-main');base=Path('/home/mahaloz/kwt/angr-rust-panic-base-f874');refs=Path('/tmp/kuna-angr-reference/binaries');out=Path(os.environ.get('KUNA_TIMING_OUT','/tmp/kuna-rust-panic-f874'))
-bench_cpu=int(os.environ.get('KUNA_TIMING_CPU','77'))
-fixture=root/'decompiler/crates/kuna-analysis/tests/fixtures/rust_fmt_panic_real_x86_64'
-rows=[('scalar-c',root/'tests/fixtures/go-output/output-c','choose','c'),('panic-literal',fixture,'panic_literal','rust'),('panic-integers',fixture,'panic_reorder','rust'),('rust-large-control',refs/'rust-fmtdemo-1931','0x13df0','rust'),('go-control',Path('/tmp/kuna-go-dwarf-signatures/native1273'),'main.main','go')]
+root=Path('/home/mahaloz/kwt/angr-rust-panic-main');base=Path('/home/mahaloz/kwt/angr-rust-panic-base-f874');refs=Path('/tmp/unlace-angr-reference/binaries');out=Path(os.environ.get('UNLACE_TIMING_OUT','/tmp/unlace-rust-panic-f874'))
+bench_cpu=int(os.environ.get('UNLACE_TIMING_CPU','77'))
+fixture=root/'decompiler/crates/unlace-analysis/tests/fixtures/rust_fmt_panic_real_x86_64'
+rows=[('scalar-c',root/'tests/fixtures/go-output/output-c','choose','c'),('panic-literal',fixture,'panic_literal','rust'),('panic-integers',fixture,'panic_reorder','rust'),('rust-large-control',refs/'rust-fmtdemo-1931','0x13df0','rust'),('go-control',Path('/tmp/unlace-go-dwarf-signatures/native1273'),'main.main','go')]
 if len(sys.argv)>1:rows=[row for row in rows if row[0]in sys.argv[1:]]
 for name,binary,selector,language in rows:
  raw={k:[]for k in ['baseline','off','patched']}
@@ -11,8 +11,8 @@ for name,binary,selector,language in rows:
   checkout=base if side=='baseline'else root
   options=['--option','godwarfsig','on'] if name.startswith('go-') else []
   if side=='off':options += ['--option','rustfmtpanic','off']
-  cmd=['taskset','-c',str(bench_cpu),str(checkout/'decompiler/target/release/kuna'),'decompile',str(binary),selector,'--language',language]+options
-  r=resource.getrusage(resource.RUSAGE_CHILDREN);cpu=r.ru_utime+r.ru_stime;t=time.perf_counter();subprocess.run(cmd,cwd=root,env=os.environ|{'KUNA_SPECS':str(root/'specs')},stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,check=True);r=resource.getrusage(resource.RUSAGE_CHILDREN)
+  cmd=['taskset','-c',str(bench_cpu),str(checkout/'decompiler/target/release/unlace'),'decompile',str(binary),selector,'--language',language]+options
+  r=resource.getrusage(resource.RUSAGE_CHILDREN);cpu=r.ru_utime+r.ru_stime;t=time.perf_counter();subprocess.run(cmd,cwd=root,env=os.environ|{'UNLACE_SPECS':str(root/'specs')},stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,check=True);r=resource.getrusage(resource.RUSAGE_CHILDREN)
   return {'wall_ms':(time.perf_counter()-t)*1000,'cpu_ms':(r.ru_utime+r.ru_stime-cpu)*1000}
  for side in raw:
   for _ in range(3):run(side)

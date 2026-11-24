@@ -417,7 +417,7 @@ try {
   const spy = await tab('spy');
   await spy.navigate(`${server.base}/decompile/`);
   const seen = spy.call((id) => new Promise((resolve) => {
-    const ch = new BroadcastChannel(`kuna.d2.link.${id}`);
+    const ch = new BroadcastChannel(`unlace.d2.link.${id}`);
     ch.onmessage = ({ data }) => { if (data?.k === 'm' && data.from && data.to) resolve({ from: data.from, to: data.to }); };
     setTimeout(() => resolve(null), 15000);
   }), (await decodeCode(link1.split('#join=')[1], 'invite')).id);
@@ -433,7 +433,7 @@ try {
     JSON.stringify({ t: 'where', fn: 'main', view: 'c' }), 'x'.repeat(300 << 10), JSON.stringify({ t: 'hello', proto: 1 }),
     JSON.stringify({ t: 'ping', fn: '0x1198', view: 'c', anchor: '<img src=x onerror=alert(1)>' }), null];
   await spy.call((p, list) => {
-    const ch = new BroadcastChannel(`kuna.d2.link.${p.id}`);
+    const ch = new BroadcastChannel(`unlace.d2.link.${p.id}`);
     for (const d of list) ch.postMessage({ k: 'm', from: p.from, to: p.to, c: 'e', d: d === null ? new ArrayBuffer(64) : d });
     for (let i = 0; i < 200; i++) ch.postMessage({ k: 'm', from: p.from, to: p.to, c: 'c', d: JSON.stringify({ t: 'cur', fn: '0x1198', view: 'c', anchor: 'c:3', fx: 0, fy: 0 }) });
     return true;

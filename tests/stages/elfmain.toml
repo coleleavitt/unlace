@@ -37,7 +37,7 @@
 # `v1 = sub_1357(a1[1]); return v1;`, or the `-O0` local the binary stores
 # the element in first, `v1 = a1[1]; return sub_1357(v1);`. Which one the
 # off pass prints depends on whether the call folds into the return once the
-# shared `leave; ret` is split (kuna #1355), not on the element type the
+# shared `leave; ret` is split (unlace #1355), not on the element type the
 # assertion is about.
 
 [image]

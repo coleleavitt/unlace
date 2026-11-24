@@ -2,7 +2,7 @@
   "schema": "re-probe/1",
   "kind": "cli",
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "functions",
     "{{BIN}}",
     "--json",
@@ -12,7 +12,7 @@
   "cwd": "{{WORK}}",
   "env": {
     "SLEIGHHOME": "{{SPECS}}",
-    "KUNA_DECODE_MIN_BYTES": "0"
+    "UNLACE_DECODE_MIN_BYTES": "0"
   },
   "stdin": null,
   "timeout_s": 120,
@@ -32,10 +32,10 @@
     },
     "stdout_is_json": true,
     "stderr_matches": [
-      "\\[kuna --jobs\\] decode: serial \\(language commits context\\)"
+      "\\[unlace --jobs\\] decode: serial \\(language commits context\\)"
     ],
     "stderr_absent": [
-      "\\[kuna --jobs\\] decode: [0-9]+ lanes"
+      "\\[unlace --jobs\\] decode: [0-9]+ lanes"
     ],
     "json": [
       {

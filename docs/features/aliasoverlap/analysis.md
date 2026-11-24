@@ -4,7 +4,7 @@
 
 `inside(p, w) { unsigned v; memcpy(&v, p + 7, 4); p[8] = w; return v; }`,
 built with gcc -O2 (clang -O2 emits the same pair), is
-`mov 0x7(%rdi),%eax; mov %sil,0x8(%rdi); ret`. kuna on main prints
+`mov 0x7(%rdi),%eax; mov %sil,0x8(%rdi); ret`. unlace on main prints
 
     *(char *)(a0 + 8) = a1;
     return *(unsigned int *)(a0 + 7);

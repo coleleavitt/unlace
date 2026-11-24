@@ -1,5 +1,5 @@
 ; Clean-room repro: a caller of a stack-moving helper is not itself stack-moving
-; (kuna_calleepurge), at any depth the walk reaches it.
+; (unlace_calleepurge), at any depth the walk reaches it.
 ;
 ;   seh_prolog4      the CRT-shaped frame helper of calleeframes_pe_i386.asm: it
 ;                    lowers its caller's stack and sets EBP for it.

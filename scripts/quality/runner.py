@@ -35,7 +35,7 @@ _SHIFT_CANDIDATES = (0, 0x100000, 0x400000, 0x10000, 0x8000000, 0x100000000)
 
 
 def unlace_bin(explicit: str | None = None) -> str:
-    for cand in (explicit, os.environ.get("UNLACE_BIN"), os.environ.get("KUNA_BIN")):
+    for cand in (explicit, os.environ.get("UNLACE_BIN"), os.environ.get("UNLACE_BIN")):
         if cand:
             return cand
     root = paths.repo_root()
@@ -188,7 +188,7 @@ def project_scores(exe: str, binary: str, options, extra: list[str], timeout: in
         bad_lines = set()
         if shutil.which("clang"):
             p = subprocess.run(["clang", "-fsyntax-only", "-w", "-ferror-limit=0",
-                                "-Dmain=kuna_recovered_main", f"-I{out_dir}", str(cs[0])],
+                                "-Dmain=unlace_recovered_main", f"-I{out_dir}", str(cs[0])],
                                capture_output=True, text=True, timeout=timeout)
             for m in re.finditer(rf"^{re.escape(str(cs[0]))}:(\d+):\d+: error:", p.stderr, re.M):
                 bad_lines.add(int(m.group(1)))

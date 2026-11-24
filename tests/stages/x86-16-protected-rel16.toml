@@ -1,6 +1,6 @@
-# kuna #1288 companion to x86-16-real-rel16.xml. An x86 16-bit
+# unlace #1288 companion to x86-16-real-rel16.xml. An x86 16-bit
 # protected-mode address is selector*0x10000 + offset, and a near branch
-# wraps its offset inside the selector. kuna's GH-7418 mask dropped the
+# wraps its offset inside the selector. unlace's GH-7418 mask dropped the
 # selector, so selector 1's branches decoded into selector 0.
 #
 #     1fff0  e8 00 70     CALL 0x16ff3      ; selector 1, offset 0xfff3 + 0x7000 wraps to 0x6ff3

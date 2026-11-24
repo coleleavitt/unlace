@@ -1,4 +1,4 @@
-# kuna issue testcase: an ARM load or store through a register that holds a
+# unlace issue testcase: an ARM load or store through a register that holds a
 # datum's address files a reference in the cross-reference index.
 #
 # Issue:      unlace-analysis-armderef - `unlace xrefs` asked for the references to an ARM global
@@ -6,7 +6,7 @@
 #             GOT slot or a literal-pool word, never the `ldr`/`str
 #             [rN,#off]` that read and wrote it through that register.
 # Stage:      P1 code/data partition - the on-demand cross-reference query
-#             (`listing/xrefs.rs`, `listing/kuna_picpool.rs`).
+#             (`listing/xrefs.rs`, `listing/unlace_picpool.rs`).
 #
 # The Listing tier and the xref query are built only on the real-object
 # bootstrap path, never on the console decompile path (docs/spec/
@@ -46,11 +46,11 @@ commands = [
 ]
 
 [[match]]
-name = "KUNA-ARMDEREF #1: abs_write's second call, between its two stores through g_cfg, renders"
+name = "UNLACE-ARMDEREF #1: abs_write's second call, between its two stores through g_cfg, renders"
 count = 1
 regex = '^  sink\(1\);$'
 
 [[match]]
-name = 'KUNA-ARMDEREF #2: abs_write renders its first call'
+name = 'UNLACE-ARMDEREF #2: abs_write renders its first call'
 count = 1
 regex = '^  sink\(0\);$'

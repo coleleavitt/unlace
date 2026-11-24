@@ -1,11 +1,11 @@
-# kuna issue testcase: the frame cookie MSVC stores on the stack is no
+# unlace issue testcase: the frame cookie MSVC stores on the stack is no
 # argument of a call made below it.
 #
-# Issue:      kuna GH-1593 - the /GS cookie pushed in an SEH prologue
+# Issue:      unlace GH-1593 - the /GS cookie pushed in an SEH prologue
 #             (`mov eax,[___security_cookie]; xor eax,esp; push eax`) is
 #             printed as a stack argument of calls in the body.
 # Stage:      P4 calls - checkInputTrialUse's stack trials
-#             (`p4_calls/kuna_stackcookie.rs`, `funcdata_callsite.rs`).
+#             (`p4_calls/unlace_stackcookie.rs`, `funcdata_callsite.rs`).
 #
 # stackcookie_pe_i386.exe (clean-room, source and recipe in
 # stackcookie_pe_i386.s): gsseh (0x401000) pushes the cookie below an SEH

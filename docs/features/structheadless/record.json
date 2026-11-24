@@ -1,7 +1,7 @@
 {
- "opportunity": "structsynth requires an access at offset 0 before it believes a pointer points at a record, so a function that reads a record's later members and never its first keeps `void *` and every access costs two casts. Over the 45 castbench binaries 1,238 parameters are refused for this reason alone (965 in closed functions, 883 of them DWARF struct pointers, none `void *`), against 1,716 accepted; they carry 366 of the 1,080 `*(T *)((long)p + K)` sites over a `void *` base on the kuna-and-IDA shared set.",
- "test_name": "tests/stages/structheadless-closed-only.xml (negative control: the console never marks a function closed, so both passes read through the untyped pointer and mint no record) + tests/cli/structheadless-off-leaves-a-headless-record-untyped.json, structheadless-closed-reads-a-record-past-its-start.json and structheadless-closed-keeps-the-argv-its-caller-passes.json (decompile-all; the last fails on the build before the fix: `obsolete_count(int a0,struct_1 *a1)` and `main(int a0,struct_1 *a1)`) + unit tests kuna_structheadless::tests (3), kuna_calleevote::tests::a_callers_argument_vector_replaces_a_headless_record_only_under_the_rule and a_callers_synthesized_record_does_not_replace_a_headless_record, kuna_structsynth::tests::a_record_read_only_past_its_start_needs_the_headless_rule",
- "binary": "decompiler/crates/kuna-analysis/tests/fixtures/structheadless_x86_64 and structheadless_argv_x86_64 (gcc -O2 -fno-inline, symbols kept; sources beside them) and the decbench full_run_address_2026-09-11 tree",
+ "opportunity": "structsynth requires an access at offset 0 before it believes a pointer points at a record, so a function that reads a record's later members and never its first keeps `void *` and every access costs two casts. Over the 45 castbench binaries 1,238 parameters are refused for this reason alone (965 in closed functions, 883 of them DWARF struct pointers, none `void *`), against 1,716 accepted; they carry 366 of the 1,080 `*(T *)((long)p + K)` sites over a `void *` base on the unlace-and-IDA shared set.",
+ "test_name": "tests/stages/structheadless-closed-only.xml (negative control: the console never marks a function closed, so both passes read through the untyped pointer and mint no record) + tests/cli/structheadless-off-leaves-a-headless-record-untyped.json, structheadless-closed-reads-a-record-past-its-start.json and structheadless-closed-keeps-the-argv-its-caller-passes.json (decompile-all; the last fails on the build before the fix: `obsolete_count(int a0,struct_1 *a1)` and `main(int a0,struct_1 *a1)`) + unit tests unlace_structheadless::tests (3), unlace_calleevote::tests::a_callers_argument_vector_replaces_a_headless_record_only_under_the_rule and a_callers_synthesized_record_does_not_replace_a_headless_record, unlace_structsynth::tests::a_record_read_only_past_its_start_needs_the_headless_rule",
+ "binary": "decompiler/crates/unlace-analysis/tests/fixtures/structheadless_x86_64 and structheadless_argv_x86_64 (gcc -O2 -fno-inline, symbols kept; sources beside them) and the decbench full_run_address_2026-09-11 tree",
  "selector": "name",
  "func_addr": "mode_of, obsolete_count (fixtures); coreutils ls -O0 sub_53e7 @0x53e7 and sub_5297 @0x5297; tail -O0 parse_obsolete_option @0x90f5 and -O2-noinline @0x3bc0",
  "option": "structheadless",
@@ -11,8 +11,8 @@
  "element_id": "n/a (no new ElementId)",
  "change_kind": "structure-recovery",
  "tier": "transform",
- "source_decompiler": "kuna",
- "inspiration": "The cast census (kuna 1.19x IDA's casts on 4,815 shared functions; 1,080 sites over a void * base). angr's simple_solver struct branch takes any set of constant offsets as a record; kuna keeps its own gates and adds the closed-caller condition calleevote fields introduced for lone fields.",
+ "source_decompiler": "unlace",
+ "inspiration": "The cast census (unlace 1.19x IDA's casts on 4,815 shared functions; 1,080 sites over a void * base). angr's simple_solver struct branch takes any set of constant offsets as a record; unlace keeps its own gates and adds the closed-caller condition calleevote fields introduced for lone fields.",
  "default_on": false,
  "default_value": "off",
  "default_decision": "off: fields-only layout precision on the published instrument falls .8713 -> .8298 on the final code (gate >= .8713; 69 of the 89 added top-level misses are members at depth, and removing the other 20 would leave .843), and the typesweep has 1 improved row against 2 worse (bzip2 BZ2_bzReadClose, an opaque void * handle, kept as a priced false positive; criterion d). See default-on-evaluation.md.",
@@ -100,7 +100,7 @@
   }
  },
  "castbench": {
-  "instrument": "/home/mahaloz/kwt/castbench/castbench.py (full set, 45 binaries, 4,815 functions kuna and IDA share)",
+  "instrument": "/home/mahaloz/kwt/castbench/castbench.py (full set, 45 binaries, 4,815 functions unlace and IDA share)",
   "ida": {
    "casts": 37821,
    "per_kloc": 155.4,
@@ -335,7 +335,7 @@
   }
  },
  "speed": {
-  "method": "interleaved whole-binary `kuna decompile-all --json --max-fn-seconds 120`, --option structheadless off against closed, arms alternating, min-of-15 (speed.py), build a54805cab on c960fb18d; box shared with other campaign lanes",
+  "method": "interleaved whole-binary `unlace decompile-all --json --max-fn-seconds 120`, --option structheadless off against closed, arms alternating, min-of-15 (speed.py), build a54805cab on c960fb18d; box shared with other campaign lanes",
   "per_binary": {
    "fmt": {
     "off": {
@@ -392,12 +392,12 @@
  },
  "gates": {
   "make test": "PARITY OK, datatests: 675/675 assertions passed (build 1aa775c72 == 43e3957a3 code)",
-  "make test-stages": "PARITY OK, datatests: 1372/1372 assertions passed (baseline re-recorded on c960fb18d: +2 STRUCTHEADLESS assertions and the renamed KUNA-CATALOG #7 key, nothing moved)",
+  "make test-stages": "PARITY OK, datatests: 1372/1372 assertions passed (baseline re-recorded on c960fb18d: +2 STRUCTHEADLESS assertions and the renamed UNLACE-CATALOG #7 key, nothing moved)",
   "make test-cli": "tests/cli: 240/240 passed (an earlier run under three rust-test lanes had the two known wall_ms probes over their limit)",
   "make check-spec": "check-spec OK (lenient mode) + check-spec OK (strict mode)",
-  "kuna catalog --check": "catalog OK: documents exactly the registered kuna options",
+  "unlace catalog --check": "catalog OK: documents exactly the registered unlace options",
   "counters --check": "no drift: every hard-coded site agrees with the derived truth",
-  "docs/options.md": "byte-fresh from `kuna catalog --markdown`",
+  "docs/options.md": "byte-fresh from `unlace catalog --markdown`",
   "phases.toml": "parses with python3.14 tomllib",
   "make rust-test": "RUST_TEST_RC=0 via the lane script on 43e3957a3 (2026-09-25 03:49:21Z -> 04:16:49Z), 422 test-result blocks ok, none failed"
  },

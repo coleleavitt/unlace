@@ -3,7 +3,7 @@
 ## 1. The change
 
 One new P1 analysis pass,
-`decompiler/crates/kuna-analysis/src/analyzers/entry/elfmain.rs`
+`decompiler/crates/unlace-analysis/src/analyzers/entry/elfmain.rs`
 (`ElfMainPass`), structured like its Mach-O counterpart `machomain.rs`: the
 facts are computed at LOAD and applied at the commit boundary only when the gate
 is on, so `--option elfmain off` restores the previous output exactly.
@@ -31,7 +31,7 @@ GOT slot, which a non-PIE ARM32 executable does not carry; `armlibcmain` is the
 arm that reads the value out of the image, and it already emits the entry and the
 name `main`.
 
-So `elfmain` consults `kuna_armlibcmain::main_vma` as a second source **for the
+So `elfmain` consults `unlace_armlibcmain::main_vma` as a second source **for the
 prototype only** — `named_here == false` suppresses the entry and the name. The
 prototype is parked BY NAME, so with `--option armlibcmain off` there is no
 function called `main` for it to land on and the park is a silent no-op: that
@@ -67,7 +67,7 @@ still resolves through them.
 
 `phases.toml` `[[settable]]` row (tier `analysis`, change_kind `correctness-fix`,
 subphase `prototype-source`) · `p0_knowledge/options.rs` registration ·
-`Architecture::analysis_elfmain` + `set_kuna_option` arm + the default-ON line ·
+`Architecture::analysis_elfmain` + `set_unlace_option` arm + the default-ON line ·
 `engine.rs::analysis_pass_enabled` arm · `console.rs` live-value arm · the
 `PASS_GATES` allowlist in `phases/tests.rs` (analysis-tier gate, no
 `live_field`) · counters `--fix` (settables 205→206, analysis tier 61→62) +

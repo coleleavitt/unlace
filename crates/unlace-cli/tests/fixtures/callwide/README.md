@@ -44,7 +44,7 @@ must refuse without changing the complete records or exports.
 
 The generator only emits source copies, a linker script, assertions and an
 argument-array command manifest. It does not discover or invoke compilers,
-linkers, emulators or kuna. For example:
+linkers, emulators or unlace. For example:
 
 ```sh
 python3 crates/unlace-cli/tests/fixtures/callwide/generate.py \

@@ -10,12 +10,12 @@
   "change_kind": "presentation-default",
   "tier": "transform",
   "source_decompiler": "angr",
-  "inspiration": "angr call-return variable folding (the fold angr performs unconditionally where kuna's second gate declines); foldcallret",
+  "inspiration": "angr call-return variable folding (the fold angr performs unconditionally where unlace's second gate declines); foldcallret",
   "default_on": true,
-  "root_cause": "check_implied_cover's inflate_test arm was written for ordinary expressions and only sees call outputs because of kuna's foldcallret escape. The collision it reports is produced by the call being folded: a call may write any global, so it carries a CPUI_INDIRECT over every global it touches, and that INDIRECT's output is another instance of the argument's own HighVariable, live from the call onwards.",
+  "root_cause": "check_implied_cover's inflate_test arm was written for ordinary expressions and only sees call outputs because of unlace's foldcallret escape. The collision it reports is produced by the call being folded: a call may write any global, so it carries a CPUI_INDIRECT over every global it touches, and that INDIRECT's output is another instance of the argument's own HighVariable, live from the call onwards.",
   "hypothesis_refuted": "The E2 report's ceiling hypothesis (ActionMergeRequired runs before ActionMarkExplicit, so a force-merged call output fails num_instances()>1) is not what blocks the named witnesses: every one of them reports ninst=1 at base_explicit. num_instances()>1 does veto 141 other call outputs across the six sweep binaries, but those highs have 2-22 members from speculative datatype merges, not the single trim COPY a relaxation would need, so that ceiling is documented and left standing.",
   "census": {
-    "method": "KUNA_DBG_FCR=1 instrumented build (throwaway commit 16602ca3), decompile-all over six -O2 stripped binaries",
+    "method": "UNLACE_DBG_FCR=1 instrumented build (throwaway commit 16602ca3), decompile-all over six -O2 stripped binaries",
     "columns": "call outputs / pass call_output_foldable / folded / blocked by the self-INDIRECT inflate / blocked by cover-crosses-a-call / blocked by num_instances>1",
     "fmt": [
       206,
@@ -68,7 +68,7 @@
   },
   "corpus_sweep": {
     "corpus": "decbench full_run_address_2026-09-11, 24 binaries: x86-64 O2 (coreutils fmt/ls/sort/du, grep, gzip, bzip2, diffutils diff, findutils find, tar), x86-64 O0 (fmt, du, grep, tar), x86-64 O2-noinline (ls, fmt), ARM Cortex-M O2 (betaflight, cleanflight, chibios, crazyflie, nuttx), ARM O0 (betaflight, chibios), ARM O2-noinline (betaflight). The O0 and O2 betaflight images in this corpus are byte-identical, so that pair counts twice.",
-    "method": "kuna decompile-all off vs on, then three metrics in docs/features/foldcallretphi/: evalorder.py (the whole ordered stream of calls and memory touches per function -- needs no statement mapping, so it covers every changed function), foldmove.py (how far each folded call travelled, over the folds it can map uniquely) and callorder.py (call-to-call order). Both evalorder.py and foldmove.py flag the global-write counterexample in analysis.md when it is fed to them, so the metrics are calibrated against the defect class.",
+    "method": "unlace decompile-all off vs on, then three metrics in docs/features/foldcallretphi/: evalorder.py (the whole ordered stream of calls and memory touches per function -- needs no statement mapping, so it covers every changed function), foldmove.py (how far each folded call travelled, over the folds it can map uniquely) and callorder.py (call-to-call order). Both evalorder.py and foldmove.py flag the global-write counterexample in analysis.md when it is fed to them, so the metrics are calibrated against the defect class.",
     "functions": 32282,
     "functions_changed": 1008,
     "declared_locals": "74859 -> 74285 (-574); 585 functions lose declarations, 29 gain",
@@ -83,7 +83,7 @@
     "make test-stages": "1043/1043 PARITY OK",
     "make check-spec": "OK lenient + OK strict",
     "make test-cli": "178/178 passed",
-    "kuna catalog --check": "OK",
+    "unlace catalog --check": "OK",
     "counters --check": "no drift; docs/options.md byte-fresh; tests/fixtures/phase_catalog.json recaptured",
     "make rust-test": "RUST_TEST_RC=0, 416 test binaries, 7101 passed / 0 failed"
   },
@@ -97,15 +97,15 @@
     "rebased_onto": "origin/main f02365cc; every count re-derived with scripts.repipe.counters on the freshly built tree"
   },
   "files": [
-    "decompiler/crates/kuna-decomp/src/p6_variables/foldcallretphi.rs (new)",
-    "decompiler/crates/kuna-decomp/src/p6_variables/foldcallretphi/tests.rs (new)",
-    "decompiler/crates/kuna-decomp/src/p6_variables/coreaction_cleanup.rs",
-    "decompiler/crates/kuna-decomp/src/p6_variables/mod.rs",
-    "decompiler/crates/kuna-decomp/src/infra/architecture.rs",
-    "decompiler/crates/kuna-decomp/src/substrate/context.rs",
-    "decompiler/crates/kuna-decomp/src/p0_knowledge/options.rs",
-    "decompiler/crates/kuna-decomp/src/p0_knowledge/modes.rs (UNEVALUATED list entry)",
-    "decompiler/crates/kuna-decomp/phases.toml",
+    "decompiler/crates/unlace-decomp/src/p6_variables/foldcallretphi.rs (new)",
+    "decompiler/crates/unlace-decomp/src/p6_variables/foldcallretphi/tests.rs (new)",
+    "decompiler/crates/unlace-decomp/src/p6_variables/coreaction_cleanup.rs",
+    "decompiler/crates/unlace-decomp/src/p6_variables/mod.rs",
+    "decompiler/crates/unlace-decomp/src/infra/architecture.rs",
+    "decompiler/crates/unlace-decomp/src/substrate/context.rs",
+    "decompiler/crates/unlace-decomp/src/p0_knowledge/options.rs",
+    "decompiler/crates/unlace-decomp/src/p0_knowledge/modes.rs (UNEVALUATED list entry)",
+    "decompiler/crates/unlace-decomp/phases.toml",
     "tests/stages/foldcallretphi.xml (new)",
     "docs/spec/06-variables-and-merge.md",
     "docs/options.md",
@@ -113,8 +113,8 @@
     "docs/features/foldcallretphi/{callorder,evalorder,foldmove}.py (the three sweep metrics)"
   ],
   "speed": {
-    "method": "interleaved off/on pairs of `kuna decompile-all` on coreutils fmt -O2 (151 functions), N=21, /usr/bin/time wall clock; min and median both reported because this box is contended",
-    "workload": "kuna decompile-all fmt (O2, stripped)",
+    "method": "interleaved off/on pairs of `unlace decompile-all` on coreutils fmt -O2 (151 functions), N=21, /usr/bin/time wall clock; min and median both reported because this box is contended",
+    "workload": "unlace decompile-all fmt (O2, stripped)",
     "samples": 21,
     "min_off_s": 4.2,
     "min_on_s": 4.2,
@@ -138,25 +138,25 @@
     "verdict": "shipped default-off with the flip evidence recorded; superseded by default_on_flip"
   },
   "metric_neutrality": {
-    "method": "kuna decompile-all --json off vs on; decbench scores variables[] (args + stack symbols + framelayout slots), never register locals",
+    "method": "unlace decompile-all --json off vs on; decbench scores variables[] (args + stack symbols + framelayout slots), never register locals",
     "fmt": "151 functions, 737 variables both arms, 1 function's variables[] differs",
     "du": "320 functions, 1723 variables both arms, 5 functions differ",
     "grep": "449 functions, 2524 variables both arms, 11 functions differ",
     "what_differs": "only the vN name renumbering plus line_numbers/addresses; the (type, kind, stack_offset) multiset is identical in every changed function, so type_match cannot move"
   },
   "hidden_count_sites": [
-    "phases/tests.rs: fn-name-settables / kuna_num_settables / SETTABLE_TABLE-len / fn-name-tiers / tier-tuple / catalog-json-records (counters --fix)",
+    "phases/tests.rs: fn-name-settables / unlace_num_settables / SETTABLE_TABLE-len / fn-name-tiers / tier-tuple / catalog-json-records (counters --fix)",
     "phases/tests.rs option_values_live_value_present_for_86: a bool option with no live_field must be listed beside its sibling foldcallret",
     "tests/catalog_bytecompat.rs x4 + tests/fixtures/phase_catalog.json (recaptured with no program loaded)",
     "tests/stages/catalog.xml #6 angr bucket 32 -> 33",
-    "kuna-base/src/xml.rs corpus file count 295 -> 296",
+    "unlace-base/src/xml.rs corpus file count 295 -> 296",
     "p0_knowledge/modes.rs aggressive_carries_every_default_off_option: every default-off on|off option is in AGGRESSIVE_OVERRIDES or listed with a reason"
   ],
   "print_point_guard": {
     "defect": "The first version of the discount fired whenever the call's single use was order-safe, but `call_output_foldable` only guards the span up to that use. When the use op's own output is implied, the expression is printed wherever that implied value is finally consumed -- possibly a later block behind a branch -- and the inflate_test rejection the discount waives was the only thing holding the call in place.",
     "witness": "betaflight_STM32F405.elf (O2, stripped) sub_8051ac4 @0x8051ac4: `sub_80515b4(dat_200181a4)` was emitted after `if (dat_200019cc & 1)`, while the binary calls at 0x8051b00 and first reads 0x200019cc at 0x8051b0e.",
     "fix": "print_point() follows the implied chain from the use op to the statement the folded expression actually lands in, and print_point_is_order_safe() re-runs foldcallret's span guard (same block, strictly after, no CALL/LOAD/STORE/CALLOTHER and no read of an INDIRECT the call writes) over that whole distance.",
-    "verification": "An env-gated throwaway build (KUNA_FCRPHI_NOGUARD, reverted) reproduces the hunk exactly; with the guard the function is byte-identical to `--option foldcallretphi off`. The fmt witnesses still fold (`v11 &= sub_3700(stdin,v6);`, `if (sub_41f0(stdin))`)."
+    "verification": "An env-gated throwaway build (UNLACE_FCRPHI_NOGUARD, reverted) reproduces the hunk exactly; with the guard the function is byte-identical to `--option foldcallretphi off`. The fmt witnesses still fold (`v11 &= sub_3700(stdin,v6);`, `if (sub_41f0(stdin))`)."
   },
   "related_issue": "Noelo-Lab/kuna#657 -- the pre-existing default-on foldcallret gap: a heritage-promoted global assignment is a CPUI_COPY, so op_is_barrier lets a call sink past a write to a global the callee reads. Independent of this option (same output with it on or off).",
   "tied_write_guard": {
@@ -175,7 +175,7 @@
     "rust_test_pins_moved": {
       "console/tests/verify_assertplane.rs": "6 cases target authenticate's register local int v1 (the strcmp spill); fixture loads with foldcallretphi off",
       "console/tests/verify_libcsigs.rs callee_return_type_reaches_the_local_that_holds_it": "fd local found by its = open( assignment instead of the v4 number",
-      "kuna-ghidra/tests/ghidra_sim_e2e.rs ghidra_sim_faillog_pins": "PIN_FAILLOG_C_LINES [287,39,92] -> [286,37,92]: fstat(fileno(..)) and !fclose(dat_6298) fold in sub_2620, fread/fwrite in sub_3320; sub_3de0/sub_31a0/sub_3900/fseeko keep their spills under the width guard; CLI loses the same 1 and 2 lines"
+      "unlace-ghidra/tests/ghidra_sim_e2e.rs ghidra_sim_faillog_pins": "PIN_FAILLOG_C_LINES [287,39,92] -> [286,37,92]: fstat(fileno(..)) and !fclose(dat_6298) fold in sub_2620, fread/fwrite in sub_3320; sub_3de0/sub_31a0/sub_3900/fseeko keep their spills under the width guard; CLI loses the same 1 and 2 lines"
     },
     "typesweep": {
       "method": "scripts.decbench.typesweep --option foldcallretphi off with the flipped build (base arm = new default, test arm = off; columns written from the default's side), --opt O0 O2 O2-noinline, projects coreutils grep gzip diffutils bzip2 findutils tar shadow x (x: no slices), DECBENCH_NO_CACHE=1, --workers 12",
@@ -300,7 +300,7 @@
       "round3": "re-run on the final build: 986 -> 986 perfect, aggregate 3111.18 both arms, 0 onto/off/improved/worse, 10525 byte-identical variables functions, counters 96697/18396/19788/27531/65715 in both arms, decomp_vars equal in all 10748 functions; d96e3408 (charbyte on): 986 -> 986, 3111.18 both arms, 0 moved, same five counters in both arms, decomp_vars equal in all 10748 functions"
     },
     "speed": {
-      "method": "interleaved --option foldcallretphi off / default pairs of kuna decompile-all, alternating which arm runs first, min of 15, same build; wall and child CPU (user+sys) both recorded; final tree with the width, joined-return and short-circuit guards",
+      "method": "interleaved --option foldcallretphi off / default pairs of unlace decompile-all, alternating which arm runs first, min of 15, same build; wall and child CPU (user+sys) both recorded; final tree with the width, joined-return and short-circuit guards",
       "cases": [
         {
           "case": "fmt O2 decompile-all",
@@ -461,7 +461,7 @@
         "base": "6e4f6fa5 (final rebase)"
       },
       "at_e1139df9": {
-        "method": "interleaved --option foldcallretphi off / default pairs of kuna decompile-all, alternating which arm runs first, min of 15, same build; wall and child CPU (user+sys) both recorded; final tree with the width guard",
+        "method": "interleaved --option foldcallretphi off / default pairs of unlace decompile-all, alternating which arm runs first, min of 15, same build; wall and child CPU (user+sys) both recorded; final tree with the width guard",
         "cases": [
           {
             "case": "fmt O2 decompile-all",
@@ -635,7 +635,7 @@
     "decision": "flipped: on every base, and again with the round-3 guards, 0/675 datatest assertions, stages PARITY OK, type_match neutral (0 improved / 0 worse, counters identical), speed within +5% (worst +1.04% on d96e3408, +2.76% on 6e4f6fa5 under load), every hunk a fold / hoist / declaration, 0 narrowings of an integer up to long long dropped, no call folded into the right operand of &&/||",
     "width_guard": {
       "what": "conflict_is_self_call_effect declines unless the call's output carries the callee's whole return value: a locked output, or an unlocked one as wide as the prototype model's return entry holding it (call_output_is_full_width; ProtoModel::output_entries). An unlocked eax read out of rax keeps its spill.",
-      "why": "sort O2 main: int v15 = sub_c5b0(stdin); v15 == -1 folded to sub_c5b0(stdin) == -1, and kuna prints sub_c5b0 (rpl_fclose, binary mov $0xffffffff,%eax) as unsigned long ... return 0xffffffff; -- the compare is never true. Before the guard: 9 such new always-false -1 checks over 32 binaries, ~44/45 narrowing drops per sweep set.",
+      "why": "sort O2 main: int v15 = sub_c5b0(stdin); v15 == -1 folded to sub_c5b0(stdin) == -1, and unlace prints sub_c5b0 (rpl_fclose, binary mov $0xffffffff,%eax) as unsigned long ... return 0xffffffff; -- the compare is never true. Before the guard: 9 such new always-false -1 checks over 32 binaries, ~44/45 narrowing drops per sweep set.",
       "after": "narrowcount.py over 32 binaries: lost 0; uncast f(..) == -1 on an 8-byte callee 45 off -> 46 default, the one extra being du O0 sub_11107 getline(..) != -1 whose spill was long (correct)",
       "remaining_cost": "same-width signedness of an unlocked full-width output; over 32 binaries no folded undeclared call feeds a relational compare, shift or division (all 32 relational uses are declared libc calls or print a cast)",
       "joined_pairs": {
@@ -696,7 +696,7 @@
         ]
       }
     },
-    "rust_test": "d96e3408 (lane 02:46:31-03:01:36 after the rebased commit 02:46:17): RUST_TEST_RC=0, 416 binaries, 7204 passed, 0 failed, 38 ignored; round 3 (final tree, lane 01:39:31-01:54:57 after the last commit): RUST_TEST_RC=0, 416 binaries, 7200 passed, 0 failed, 38 ignored; earlier: make rust-test via the lane script RUST_TEST_RC=0 on every base (6e4f6fa5: 416 binaries, 7200 passed, 0 failed, 38 ignored); kuna-ghidra release --include-ignored green",
+    "rust_test": "d96e3408 (lane 02:46:31-03:01:36 after the rebased commit 02:46:17): RUST_TEST_RC=0, 416 binaries, 7204 passed, 0 failed, 38 ignored; round 3 (final tree, lane 01:39:31-01:54:57 after the last commit): RUST_TEST_RC=0, 416 binaries, 7200 passed, 0 failed, 38 ignored; earlier: make rust-test via the lane script RUST_TEST_RC=0 on every base (6e4f6fa5: 416 binaries, 7200 passed, 0 failed, 38 ignored); unlace-ghidra release --include-ignored green",
     "short_circuit_guard": {
       "what": "print_point_is_order_safe declines when the call's value reaches a BOOL_AND or BOOL_OR as its right-hand operand anywhere along the print chain (chain_reaches_short_circuit_rhs); the left-hand operand is always evaluated and the printer emits input 0 on the left",
       "why": "gcc -O2: int r = fflush(stdout); gflag = (r == 0) && (a > 5); is one block (call; test; sete; cmp; setg; and), so the span guard passed it and the default printed gflag = 5 < a0 && !fflush(stdout), skipping a call the binary always makes",

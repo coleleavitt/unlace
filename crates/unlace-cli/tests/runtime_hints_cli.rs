@@ -26,7 +26,7 @@ fn run_unlace(args: &[&str]) -> (String, String, i32) {
         .args(args)
         .env("SLEIGHHOME", specs)
         .output()
-        .expect("failed to spawn the kuna binary");
+        .expect("failed to spawn the unlace binary");
     (
         String::from_utf8_lossy(&out.stdout).into_owned(),
         String::from_utf8_lossy(&out.stderr).into_owned(),

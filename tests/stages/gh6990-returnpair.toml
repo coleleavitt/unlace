@@ -16,7 +16,7 @@
 # save/restore window to the RETURN: realistic, but passive, ancestry.
 # buildReturnOutput then emits CONCAT44(o1,o0) as an 8-byte return.
 #
-# This is now fixed BY DEFAULT, and on every architecture: kuna_returnuncomputed
+# This is now fixed BY DEFAULT, and on every architecture: unlace_returnuncomputed
 # inspects the built pair once heritage has settled and rewrites the RETURN to
 # the half that carries a value the function actually computed, dropping the
 # passive one.  The same repair is what stops x86-64 SysV rendering

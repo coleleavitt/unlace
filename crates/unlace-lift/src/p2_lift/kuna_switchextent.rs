@@ -540,14 +540,20 @@ impl Fold<'_> {
     }
 }
 
-/// Whether `vn` is an immediate below 64 KiB: an offset, never a table address.
+/// Whether `vn` is an immediate within 64 KiB of zero (`1(%rdi)`, OCaml's
+/// `-0x8(%rbx)` header byte): an offset, never a table address.
 fn small_imm(vn: Option<&VarnodeData>) -> bool {
     vn.is_some_and(|vn| {
         vn.space
             .as_ref()
             .is_some_and(|s| s.get_type() == spacetype::IPTR_CONSTANT)
-            && vn.offset < 0x1_0000
+            && is_small(vn.offset, vn.size)
     })
+}
+
+/// Whether `v`, read as a signed `size`-byte value, lies within 64 KiB of zero.
+fn is_small(v: u64, size: u32) -> bool {
+    (sign_extend(v, size) as i64).unsigned_abs() < 0x1_0000
 }
 
 fn key_of(vn: &VarnodeData) -> Option<Key> {
@@ -620,6 +626,11 @@ pub fn table_read(fd: &Funcdata, load: OpId) -> Option<(u64, u64, VarnodeId)> {
         (None, Some(t)) => (t, a),
         _ => return None,
     };
+    // A field read next to the table read (the selector byte at `8(%rax)`) adds
+    // a small displacement, not a table.
+    if is_small(table, fd.vbank().get(ptr)?.get_size() as u32) {
+        return None;
+    }
     let mut index = scaled;
     let mut stride = 1;
     loop {

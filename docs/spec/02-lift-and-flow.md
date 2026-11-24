@@ -4199,6 +4199,8 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `PIC16F153xx` | Microchip PIC16F153xx enhanced midrange | `PIC-16:LE:16:PIC-16F153xx` | aleph-void/ghidra-pic16f153xx @ `85c02a04a0`, Apache-2.0 |
 | `PicoBlaze` | Xilinx PicoBlaze (KCPSM) | `KCPSM3:BE:24:default`, `KCPSM6:BE:24:default` | aleph-void/ghidra-picoblaze-kcpsm @ `ba271a21d6`, Apache-2.0 |
 | `MC68HC16` | Motorola MC68HC16 | `68HC16:BE:24:cpu16`, `68HC16:BE:24:default`, `68HC16:BE:24:JTEC` | aleph-void/Ghidra-Processor-MC68HC16Z (fork of HausRummel/Ghidra-Processor-MC68HC16Z) @ `974d796590`, Apache-2.0 |
+| `GCDSP` | Nintendo GameCube DSP | `GCDSP:BE:16:default`, `GCDSP:BE:16:exact` | aleph-void/ghidra-gcdsp-lang (fork of Pokechu22/ghidra-gcdsp-lang) @ `4fc59950c6`, Apache-2.0 |
+||||||| e949085348
 <!-- vendor-rows -->
 
 ### WDC 65816 (#98)

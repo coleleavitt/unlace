@@ -1,0 +1,11 @@
+# sleigh specification file for GameCube DSP -- exact variant GCDSP:BE:16:exact
+#
+# Same instruction set as GCDSP.slaspec, but nothing is assumed: LRS/SRS/SRSH read $cr at run
+# time, and reads of $ac0.m/$ac1.m saturate when $sr.SXM (40-bit mode) is set.  The decompiler
+# output is noisier, so GCDSP:BE:16:default is the one to use for reading code.
+
+@define BLOOP_ONE_AFTER
+@define USE_40_BIT_SIGN_EXTENSION
+@define USE_40_BIT_SATURATION
+
+@include "GCDSP.sinc"

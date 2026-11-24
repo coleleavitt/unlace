@@ -24,6 +24,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use unlace_decomp::fspec::PrototypePieces;
 use unlace_decomp::kuna_goitabcalls::{ITAB_FUN_OFFSET_64, itab_record_name};
 
 use super::kuna_typeglobals::{global_name_ok, linker_name, reachable};
@@ -82,7 +83,7 @@ pub(super) fn interface_method_sets(
     img: &GoImage,
     meta: &TypeMeta,
     itab_interfaces: &[u64],
-) -> BTreeMap<String, Vec<String>> {
+) -> BTreeMap<String, (Vec<String>, GoType)> {
     let mut descriptors = reachable(img, meta);
     for &vma in itab_interfaces {
         if descriptors.contains_key(&vma) {
@@ -97,11 +98,13 @@ pub(super) fn interface_method_sets(
         }
     }
     let mut by_name: BTreeMap<String, BTreeSet<Vec<String>>> = BTreeMap::new();
+    let mut first: BTreeMap<String, GoType> = BTreeMap::new();
     for t in descriptors.values().filter(|t| t.kind == KIND_INTERFACE) {
         let name = linker_name(img, meta, t);
         if !global_name_ok(&name) {
             continue;
         }
+        first.entry(name.clone()).or_insert_with(|| t.clone());
         let entry = by_name.entry(name).or_default();
         match interface_methods(img, meta, t) {
             Some(methods) => {
@@ -119,7 +122,8 @@ pub(super) fn interface_method_sets(
                 return None;
             }
             let methods = sets.pop_first()?;
-            (!methods.is_empty()).then_some((name, methods))
+            let descriptor = first.remove(&name)?;
+            (!methods.is_empty()).then_some((name, (methods, descriptor)))
         })
         .collect()
 }
@@ -128,6 +132,17 @@ pub(super) fn interface_method_sets(
 /// and register its facet. An existing record of that name is left alone
 /// unless it is an empty shell. Returns whether the record is in place.
 pub(super) fn intern_record(tf: &dyn TypeFactory, interface: &str, methods: &[String]) -> bool {
+    intern_record_slots(tf, interface, methods, &[])
+}
+
+/// [`intern_record`] with a function-pointer type per method slot where
+/// `slots` holds one (a slot without keeps `code *`).
+pub(super) fn intern_record_slots(
+    tf: &dyn TypeFactory,
+    interface: &str,
+    methods: &[String],
+    slots: &[Option<Rc<Datatype>>],
+) -> bool {
     let name = itab_record_name(interface);
     let facet = LangFacet::GoItab {
         interface: interface.to_string(),
@@ -166,7 +181,12 @@ pub(super) fn intern_record(tf: &dyn TypeFactory, interface: &str, methods: &[St
             return false;
         };
         let offset = ITAB_FUN_OFFSET_64 + 8 * slot;
-        fields.push(TypeField::new(3 + slot, offset, method, Rc::clone(&fptr)));
+        let ty = slots
+            .get(i)
+            .cloned()
+            .flatten()
+            .unwrap_or_else(|| Rc::clone(&fptr));
+        fields.push(TypeField::new(3 + slot, offset, method, ty));
     }
     let Ok(size) = int4::try_from(methods.len()).map(|n| ITAB_FUN_OFFSET_64 + 8 * n) else {
         return false;
@@ -176,9 +196,145 @@ pub(super) fn intern_record(tf: &dyn TypeFactory, interface: &str, methods: &[St
         && tf.kuna_register_lang_facet(&name, facet).is_ok()
 }
 
+/// The Go register-ABI scalar a parameter or result descriptor maps to: an
+/// integer or bool of its own width, or an opaque pointer for the pointer-shaped
+/// kinds. `None` for every other kind (strings, slices, interfaces, structs,
+/// arrays and floats take more than one integer register or a float one).
+fn scalar_type(tf: &dyn TypeFactory, t: &GoType) -> Option<Rc<Datatype>> {
+    let size = int4::try_from(t.size).ok()?;
+    let sized = |meta| {
+        matches!(size, 1 | 2 | 4 | 8)
+            .then(|| tf.get_base(size, meta).ok())
+            .flatten()
+    };
+    match t.kind {
+        KIND_BOOL if size == 1 => tf.get_base(1, type_metatype::TYPE_BOOL).ok(),
+        KIND_INT | KIND_INT8 | KIND_INT16 | KIND_INT32 | KIND_INT64 => {
+            sized(type_metatype::TYPE_INT)
+        }
+        KIND_UINT | KIND_UINT8 | KIND_UINT16 | KIND_UINT32 | KIND_UINT64 | KIND_UINTPTR => {
+            sized(type_metatype::TYPE_UINT)
+        }
+        KIND_POINTER | KIND_UNSAFEPTR | KIND_CHAN | KIND_MAP | KIND_FUNC if size == 8 => {
+            tf.get_type_pointer(8, tf.get_type_void().ok()?, 1).ok()
+        }
+        _ => None,
+    }
+}
+
+/// The prototype of method `k` of interface descriptor `inter`, from its
+/// `Imethod.Typ` func descriptor: the receiver (the interface's data word, an
+/// opaque pointer) and then the parameters, each a one-register scalar
+/// ([`scalar_type`]), with at most one scalar result. `None` for a variadic
+/// method, more than eight parameters, more than one result, or any other
+/// parameter kind.
+pub(super) fn method_pieces(
+    tf: &dyn TypeFactory,
+    img: &GoImage,
+    meta: &TypeMeta,
+    inter: &GoType,
+    k: u64,
+) -> Option<PrototypePieces> {
+    let w = img.word_size;
+    let base = inter.vma.checked_add(img.type_base())?;
+    let (ptr, len) = plausible_slice(img, base.checked_add(w)?, MAX_METHODS)?;
+    if k >= len {
+        return None;
+    }
+    let raw = img.read(ptr.checked_add(k * 8 + 4)?, 4)?;
+    let typ_off = i32::from_le_bytes(raw.try_into().ok()?);
+    if typ_off <= 0 {
+        return None;
+    }
+    let func = read_type(img, meta.types, meta.etypes, typ_off as u32)?;
+    if func.kind != KIND_FUNC {
+        return None;
+    }
+    let fbase = func.vma.checked_add(img.type_base())?;
+    let counts = img.read(fbase, 4)?;
+    let inc = u64::from(u16::from_le_bytes([counts[0], counts[1]]));
+    let outc = u16::from_le_bytes([counts[2], counts[3]]);
+    if outc & 0x8000 != 0 || inc > 8 || outc > 1 {
+        return None;
+    }
+    let params = fbase
+        .checked_add(w)?
+        .checked_add(if func.tflag & TFLAG_UNCOMMON != 0 {
+            UNCOMMON_SIZE
+        } else {
+            0
+        })?;
+    let mut scalars = Vec::new();
+    for j in 0..inc + u64::from(outc) {
+        let at = word(img, params.checked_add(j * w)?)?;
+        let t = at
+            .checked_sub(meta.types)
+            .and_then(|off| u32::try_from(off).ok())
+            .and_then(|off| read_type(img, meta.types, meta.etypes, off))?;
+        scalars.push(scalar_type(tf, &t)?);
+    }
+    let outtype = if outc == 1 {
+        scalars.pop()?
+    } else {
+        tf.get_type_void().ok()?
+    };
+    let receiver = tf.get_type_pointer(8, tf.get_type_void().ok()?, 1).ok()?;
+    let mut intypes = vec![receiver];
+    intypes.extend(scalars);
+    let innames = (0..intypes.len())
+        .map(|i| {
+            if i == 0 {
+                "receiver".to_string()
+            } else {
+                format!("a{i}")
+            }
+        })
+        .collect();
+    Some(PrototypePieces {
+        name: String::new(),
+        outtype: Some(outtype),
+        intypes,
+        innames,
+        first_var_arg_slot: -1,
+        output_storage: None,
+        input_storage: Vec::new(),
+        kuna_library_names: None,
+    })
+}
+
+/// The function-pointer type of each method slot of `inter` under the Go
+/// register ABI model (`abi-internal`), `None` for a slot whose prototype
+/// [`method_pieces`] refuses or the factory cannot build.
+fn slot_types(
+    tf: &dyn TypeFactory,
+    img: &GoImage,
+    meta: &TypeMeta,
+    inter: &GoType,
+    count: usize,
+) -> Vec<Option<Rc<Datatype>>> {
+    (0..count as u64)
+        .map(|k| {
+            let pieces = method_pieces(tf, img, meta, inter, k)?;
+            let code = tf.get_type_code_proto_named(&pieces, GO_ABI_MODEL).ok()?;
+            tf.get_type_pointer(8, code, 1).ok()
+        })
+        .collect()
+}
+
+/// The prototype model of the Go register ABI.
+const GO_ABI_MODEL: &str = "abi-internal";
+
 /// Intern the itab layout of every interface the image describes (64-bit
-/// images only). Returns how many records are in place.
-pub(super) fn intern(tf: &dyn TypeFactory, img: &GoImage, meta: &TypeMeta, anchor: u64) -> usize {
+/// images only). When the image's default model is the Go register ABI
+/// (`go_abi`), each method slot whose signature is all one-register scalars
+/// also carries its prototype. Returns how many records are in place.
+pub(super) fn intern(
+    tf: &dyn TypeFactory,
+    img: &GoImage,
+    meta: &TypeMeta,
+    anchor: u64,
+    go_abi: bool,
+) -> usize {
     if img.word_size != 8 {
         return 0;
     }
@@ -190,6 +346,13 @@ pub(super) fn intern(tf: &dyn TypeFactory, img: &GoImage, meta: &TypeMeta, ancho
             .collect();
     interface_method_sets(img, meta, &itab_interfaces)
         .iter()
-        .filter(|(interface, methods)| intern_record(tf, interface, methods))
+        .filter(|(interface, (methods, descriptor))| {
+            let slots = if go_abi {
+                slot_types(tf, img, meta, descriptor, methods.len())
+            } else {
+                Vec::new()
+            };
+            intern_record_slots(tf, interface, methods, &slots)
+        })
         .count()
 }

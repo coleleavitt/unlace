@@ -6943,8 +6943,18 @@ every other binary's pass list is byte-identical to before the pass existed):
   prints a CALLIND whose target is a LOAD of a method slot of such a record
   (`PTRSUB` or `INT_ADD` of the record pointer and a constant at or past
   offset 24) as `Interface.Method(args)`, the receiver first:
-  `main.Shape.Area(s_data)`. The slots carry no prototype, so the arguments
-  are the ones the call site recovers.
+  `main.Shape.Area(s_data)`. When the image's default prototype model is
+  the Go register ABI (`abi-internal`), each slot whose method signature
+  (`crates/unlace-analysis/src/analyzers/gotypes/kuna_itabtypes.rs (method_pieces)`,
+  read from the `Imethod.Typ` func descriptor) is all one-register scalars,
+  integers and bool at their own width and the pointer-shaped kinds (pointer,
+  unsafe pointer, chan, map, func) as an opaque pointer, with at most eight
+  parameters, at most one result and no variadic tail, is a pointer to a
+  function of that prototype under that model, the receiver (the data word,
+  an opaque pointer) first; `ActionDeindirect` forces it on a call through a
+  table typed by the record, so the call passes exactly those arguments. Any
+  other slot is an untyped `code *` and the call keeps the arguments the
+  call site recovers.
   The table pointer need not be typed: the printer also follows it back
   through copies and joins whose inputs all agree to a LOAD of the first word
   of an interface-typed field of a named struct, read through a chain of

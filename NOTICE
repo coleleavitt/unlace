@@ -106,6 +106,10 @@ specs/Ghidra/Processors/C166 vendors the Infineon C166 / XC166, ST10 SLEIGH spec
 aleph-void/c166-ghidra-module (https://github.com/aleph-void/c166-ghidra-module), a fork of keyhana/c166-ghidra-module, released under the
 MIT License (its license file is in that directory).
 
+specs/Ghidra/Processors/F2MC16 vendors the Fujitsu F2MC-16L / 16LX SLEIGH specification of
+aleph-void/F2MC-16LX (https://github.com/aleph-void/F2MC-16LX), a fork of mehmooda/F2MC-16LX, released under the
+MIT License (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

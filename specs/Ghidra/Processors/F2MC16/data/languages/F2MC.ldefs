@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<language_definitions>
+  <language processor="F2MC-16LX"
+            endian="little"
+            size="24"
+            variant="default"
+            version="1.0"
+            slafile="F2MC.sla"
+            processorspec="F2MC.pspec"
+            manualindexfile="../manuals/F2MC.idx"
+            id="F2MC:LE:24:default">
+    <description>Fujitsu F2MC-16LX (MB90 series), little endian, 24-bit address space</description>
+    <compiler name="Near calls (CALL/RET)" spec="F2MC.cspec" id="default"/>
+    <compiler name="Far calls (CALLP/RETP)" spec="F2MC_far.cspec" id="far"/>
+  </language>
+</language_definitions>

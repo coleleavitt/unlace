@@ -1,0 +1,6 @@
+<opinions>
+  <!-- EM_F2MC16 (104) from the ELF machine list; no F2MC-16 ELF file was available to test it -->
+  <constraint loader="Executable and Linking Format (ELF)" compilerSpecID="default">
+    <constraint primary="104" processor="F2MC-16LX" endian="little" size="24" variant="default"/>
+  </constraint>
+</opinions>

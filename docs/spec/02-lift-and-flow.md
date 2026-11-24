@@ -4407,6 +4407,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `CDP1802` | RCA CDP1802 COSMAC | `CDP1802:BE:16:default`, `CDP1802:BE:16:SCRT` | RCA CDP1802 data sheet, User Manual MPM-201 | `unlace-cli/tests/cdp1802_raw.rs` |
 | `IQ2000` | Vitesse IQ2000 | `iq2000:BE:32:default` | binutils CGEN `cpu/iq2000.cpu` and `cpu/iq2000m.cpu`, GCC `config/iq2000` | `unlace-cli/tests/iq2000_raw.rs` |
 | `SCMP` | National SC/MP, INS8060 SC/MP II | `SCMP:LE:16:default` | National SC/MP Technical Description, INS8060 data sheet | `unlace-cli/tests/scmp_raw.rs` |
+| `KonamiCPU` | KONAMI CPU (052001/052526/053248, Konami-2) | `KONAMI:BE:16:default` | MC6809 programming manual, MAME `konami` (opcode map and postbyte) | `unlace-cli/tests/konami.rs` |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)

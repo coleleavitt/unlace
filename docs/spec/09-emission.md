@@ -4175,7 +4175,12 @@ compiles":
   carry no padding.
 
 A non-C identifier is rewritten by `printc.rs (sanitize_type_name)` (annotated
-`/* renamed from "…" */`). Within a C type definition, member and typedef
+`/* renamed from "…" */`). A C keyword (C23 with `<stdbool.h>`: `register`,
+`bool`, `typeof`, `alignof`, …) is not one either and gains a `_` suffix: zig's
+compiler_rt DWARF names a struct member `register`, and C99 code may name one
+`bool`. In C output the printer spells every member and bitfield access through
+the same rule, so a renamed member's definition and its uses agree
+(`tests/stages/c-keyword-members.toml`). Within a C type definition, member and typedef
 declarators use the name written by this rule for their named base type. This
 keeps `elm_tag *p`, `elm_tag *list[2]`, and `elm_tag (*table)[3]` tied to the
 same declared `elm_tag` alias when DWARF names the type `elm.tag`. The C

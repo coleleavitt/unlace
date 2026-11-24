@@ -1,0 +1,1025 @@
+################################################################
+# SPRUEO2B - June 2007 - Revised January 2015
+attach variables rah2 [ _ _ _ _ R0H R1H R2H R3H R4H R5H R6H R7H _ _ _ _ ];  # this is weird
+attach variables [ rah3 rbh3 rch3 rah3_8 ] [ R0H R1H R2H R3H R4H R5H R6H R7H ];
+
+# Join disjoint immediate fields with OR so Ghidra's assembler can invert them.
+# Bind the register fields in the second word alongside the low immediate bits,
+# as ; already advances the parser to the next word.
+@define fpu_imm16_add "imm6; fpu_imm10_lo & rbh3 & rah3 [ fpu_imm16 = (imm6 << 10) | fpu_imm10_lo; ]"
+@define fpu_imm16_cmp "imm3; fpu_imm13_lo & rah3 [ fpu_imm16 = (imm3 << 13) | fpu_imm13_lo; ]"
+
+# STF flags (Table 2-2 in SPRUEO2B)
+define register offset=0x124 size=1  [  STF_LV  STF_LU  STF_NF  STF_ZF  STF_NI  STF_ZI  STF_TF  ];
+
+cndf: "NEQ"  is cond0_4=0b0000 { local b:1 = (STF_ZF == 0); export b; }
+cndf: "EQ"   is cond0_4=0b0001 { local b:1 = (STF_ZF != 0); export b; }
+cndf: "GT"   is cond0_4=0b0010 { local b:1 = (STF_ZF == 0) && (STF_NF == 0); export b; }
+cndf: "GEQ"  is cond0_4=0b0011 { local b:1 = (STF_NF == 0); export b; }
+cndf: "LT"   is cond0_4=0b0100 { local b:1 = (STF_NF != 0); export b; }
+cndf: "LEQ"  is cond0_4=0b0101 { local b:1 = (STF_ZF != 0) || (STF_NF != 0); export b; }
+cndf: "TF"   is cond0_4=0b1010 { local b:1 = (STF_TF != 0); export b; }
+cndf: "NTF"  is cond0_4=0b1011 { local b:1 = (STF_TF == 0); export b; }
+cndf: "LU"   is cond0_4=0b1100 { local b:1 = (STF_LU != 0); export b; }
+cndf: "LV"   is cond0_4=0b1101 { local b:1 = (STF_LV != 0); export b; }
+cndf: "UNC"  is cond0_4=0b1110 { local b:1 = 1; export b; }                    # Unconditional
+cndf: "UNCF" is cond0_4=0b1111 { local b:1 = 1; export b; }                    # Unconditional with flag modification
+
+
+# MOVST0 FLAG is an eight-bit select mask. Give it a dedicated display field
+# because the shared imm8 field must remain numeric for other instructions.
+# TI dis2000 prints selected names in ascending mask-bit order.
+# Generated with (Python):
+# print("\n".join(map(lambda hi:" ".join(map(lambda lo:(lambda j:f'"{",".join(map(lambda x:x[1],filter(lambda x:j&(1<<x[0]),enumerate("LVF LUF NF NI ZF ZI CI TF".split()))))or"#0"}"')(hi<<3|lo),range(8))),range(32))))
+attach names [ movst0_flags ] [
+	"#0" "LVF" "LUF" "LVF,LUF" "NF" "LVF,NF" "LUF,NF" "LVF,LUF,NF"
+	"NI" "LVF,NI" "LUF,NI" "LVF,LUF,NI" "NF,NI" "LVF,NF,NI" "LUF,NF,NI" "LVF,LUF,NF,NI"
+	"ZF" "LVF,ZF" "LUF,ZF" "LVF,LUF,ZF" "NF,ZF" "LVF,NF,ZF" "LUF,NF,ZF" "LVF,LUF,NF,ZF"
+	"NI,ZF" "LVF,NI,ZF" "LUF,NI,ZF" "LVF,LUF,NI,ZF" "NF,NI,ZF" "LVF,NF,NI,ZF" "LUF,NF,NI,ZF" "LVF,LUF,NF,NI,ZF"
+	"ZI" "LVF,ZI" "LUF,ZI" "LVF,LUF,ZI" "NF,ZI" "LVF,NF,ZI" "LUF,NF,ZI" "LVF,LUF,NF,ZI"
+	"NI,ZI" "LVF,NI,ZI" "LUF,NI,ZI" "LVF,LUF,NI,ZI" "NF,NI,ZI" "LVF,NF,NI,ZI" "LUF,NF,NI,ZI" "LVF,LUF,NF,NI,ZI"
+	"ZF,ZI" "LVF,ZF,ZI" "LUF,ZF,ZI" "LVF,LUF,ZF,ZI" "NF,ZF,ZI" "LVF,NF,ZF,ZI" "LUF,NF,ZF,ZI" "LVF,LUF,NF,ZF,ZI"
+	"NI,ZF,ZI" "LVF,NI,ZF,ZI" "LUF,NI,ZF,ZI" "LVF,LUF,NI,ZF,ZI" "NF,NI,ZF,ZI" "LVF,NF,NI,ZF,ZI" "LUF,NF,NI,ZF,ZI" "LVF,LUF,NF,NI,ZF,ZI"
+	"CI" "LVF,CI" "LUF,CI" "LVF,LUF,CI" "NF,CI" "LVF,NF,CI" "LUF,NF,CI" "LVF,LUF,NF,CI"
+	"NI,CI" "LVF,NI,CI" "LUF,NI,CI" "LVF,LUF,NI,CI" "NF,NI,CI" "LVF,NF,NI,CI" "LUF,NF,NI,CI" "LVF,LUF,NF,NI,CI"
+	"ZF,CI" "LVF,ZF,CI" "LUF,ZF,CI" "LVF,LUF,ZF,CI" "NF,ZF,CI" "LVF,NF,ZF,CI" "LUF,NF,ZF,CI" "LVF,LUF,NF,ZF,CI"
+	"NI,ZF,CI" "LVF,NI,ZF,CI" "LUF,NI,ZF,CI" "LVF,LUF,NI,ZF,CI" "NF,NI,ZF,CI" "LVF,NF,NI,ZF,CI" "LUF,NF,NI,ZF,CI" "LVF,LUF,NF,NI,ZF,CI"
+	"ZI,CI" "LVF,ZI,CI" "LUF,ZI,CI" "LVF,LUF,ZI,CI" "NF,ZI,CI" "LVF,NF,ZI,CI" "LUF,NF,ZI,CI" "LVF,LUF,NF,ZI,CI"
+	"NI,ZI,CI" "LVF,NI,ZI,CI" "LUF,NI,ZI,CI" "LVF,LUF,NI,ZI,CI" "NF,NI,ZI,CI" "LVF,NF,NI,ZI,CI" "LUF,NF,NI,ZI,CI" "LVF,LUF,NF,NI,ZI,CI"
+	"ZF,ZI,CI" "LVF,ZF,ZI,CI" "LUF,ZF,ZI,CI" "LVF,LUF,ZF,ZI,CI" "NF,ZF,ZI,CI" "LVF,NF,ZF,ZI,CI" "LUF,NF,ZF,ZI,CI" "LVF,LUF,NF,ZF,ZI,CI"
+	"NI,ZF,ZI,CI" "LVF,NI,ZF,ZI,CI" "LUF,NI,ZF,ZI,CI" "LVF,LUF,NI,ZF,ZI,CI" "NF,NI,ZF,ZI,CI" "LVF,NF,NI,ZF,ZI,CI" "LUF,NF,NI,ZF,ZI,CI" "LVF,LUF,NF,NI,ZF,ZI,CI"
+	"TF" "LVF,TF" "LUF,TF" "LVF,LUF,TF" "NF,TF" "LVF,NF,TF" "LUF,NF,TF" "LVF,LUF,NF,TF"
+	"NI,TF" "LVF,NI,TF" "LUF,NI,TF" "LVF,LUF,NI,TF" "NF,NI,TF" "LVF,NF,NI,TF" "LUF,NF,NI,TF" "LVF,LUF,NF,NI,TF"
+	"ZF,TF" "LVF,ZF,TF" "LUF,ZF,TF" "LVF,LUF,ZF,TF" "NF,ZF,TF" "LVF,NF,ZF,TF" "LUF,NF,ZF,TF" "LVF,LUF,NF,ZF,TF"
+	"NI,ZF,TF" "LVF,NI,ZF,TF" "LUF,NI,ZF,TF" "LVF,LUF,NI,ZF,TF" "NF,NI,ZF,TF" "LVF,NF,NI,ZF,TF" "LUF,NF,NI,ZF,TF" "LVF,LUF,NF,NI,ZF,TF"
+	"ZI,TF" "LVF,ZI,TF" "LUF,ZI,TF" "LVF,LUF,ZI,TF" "NF,ZI,TF" "LVF,NF,ZI,TF" "LUF,NF,ZI,TF" "LVF,LUF,NF,ZI,TF"
+	"NI,ZI,TF" "LVF,NI,ZI,TF" "LUF,NI,ZI,TF" "LVF,LUF,NI,ZI,TF" "NF,NI,ZI,TF" "LVF,NF,NI,ZI,TF" "LUF,NF,NI,ZI,TF" "LVF,LUF,NF,NI,ZI,TF"
+	"ZF,ZI,TF" "LVF,ZF,ZI,TF" "LUF,ZF,ZI,TF" "LVF,LUF,ZF,ZI,TF" "NF,ZF,ZI,TF" "LVF,NF,ZF,ZI,TF" "LUF,NF,ZF,ZI,TF" "LVF,LUF,NF,ZF,ZI,TF"
+	"NI,ZF,ZI,TF" "LVF,NI,ZF,ZI,TF" "LUF,NI,ZF,ZI,TF" "LVF,LUF,NI,ZF,ZI,TF" "NF,NI,ZF,ZI,TF" "LVF,NF,NI,ZF,ZI,TF" "LUF,NF,NI,ZF,ZI,TF" "LVF,LUF,NF,NI,ZF,ZI,TF"
+	"CI,TF" "LVF,CI,TF" "LUF,CI,TF" "LVF,LUF,CI,TF" "NF,CI,TF" "LVF,NF,CI,TF" "LUF,NF,CI,TF" "LVF,LUF,NF,CI,TF"
+	"NI,CI,TF" "LVF,NI,CI,TF" "LUF,NI,CI,TF" "LVF,LUF,NI,CI,TF" "NF,NI,CI,TF" "LVF,NF,NI,CI,TF" "LUF,NF,NI,CI,TF" "LVF,LUF,NF,NI,CI,TF"
+	"ZF,CI,TF" "LVF,ZF,CI,TF" "LUF,ZF,CI,TF" "LVF,LUF,ZF,CI,TF" "NF,ZF,CI,TF" "LVF,NF,ZF,CI,TF" "LUF,NF,ZF,CI,TF" "LVF,LUF,NF,ZF,CI,TF"
+	"NI,ZF,CI,TF" "LVF,NI,ZF,CI,TF" "LUF,NI,ZF,CI,TF" "LVF,LUF,NI,ZF,CI,TF" "NF,NI,ZF,CI,TF" "LVF,NF,NI,ZF,CI,TF" "LUF,NF,NI,ZF,CI,TF" "LVF,LUF,NF,NI,ZF,CI,TF"
+	"ZI,CI,TF" "LVF,ZI,CI,TF" "LUF,ZI,CI,TF" "LVF,LUF,ZI,CI,TF" "NF,ZI,CI,TF" "LVF,NF,ZI,CI,TF" "LUF,NF,ZI,CI,TF" "LVF,LUF,NF,ZI,CI,TF"
+	"NI,ZI,CI,TF" "LVF,NI,ZI,CI,TF" "LUF,NI,ZI,CI,TF" "LVF,LUF,NI,ZI,CI,TF" "NF,NI,ZI,CI,TF" "LVF,NF,NI,ZI,CI,TF" "LUF,NF,NI,ZI,CI,TF" "LVF,LUF,NF,NI,ZI,CI,TF"
+	"ZF,ZI,CI,TF" "LVF,ZF,ZI,CI,TF" "LUF,ZF,ZI,CI,TF" "LVF,LUF,ZF,ZI,CI,TF" "NF,ZF,ZI,CI,TF" "LVF,NF,ZF,ZI,CI,TF" "LUF,NF,ZF,ZI,CI,TF" "LVF,LUF,NF,ZF,ZI,CI,TF"
+	"NI,ZF,ZI,CI,TF" "LVF,NI,ZF,ZI,CI,TF" "LUF,NI,ZF,ZI,CI,TF" "LVF,LUF,NI,ZF,ZI,CI,TF" "NF,NI,ZF,ZI,CI,TF" "LVF,NF,NI,ZF,ZI,CI,TF" "LUF,NF,NI,ZF,ZI,CI,TF" "LVF,LUF,NF,NI,ZF,ZI,CI,TF"
+];
+
+# p2_ee, p2_d3, p2_a3, p1_*, p2_rdh, p2_reh3 are defined on 'opcode' token in tms320c28.sinc
+attach variables [ p2_d3 p2_a3 p2_rdh p2_reh3 ] [ R0H R1H R2H R3H R4H R5H R6H R7H ];
+attach variables [ p1_f3 ] [ R0H R1H R2H R3H R4H R5H R6H R7H ];
+
+# All FPU instructions have ctx_objmode=1
+with : ctx_objmode=1 {
+
+macro packstf(res) {
+	local lv:4 = zext(STF_LV);
+	local lu:4 = zext(STF_LU);
+	local nf:4 = zext(STF_NF);
+	local zf:4 = zext(STF_ZF);
+	local ni:4 = zext(STF_NI);
+	local zi:4 = zext(STF_ZI);
+	local tf:4 = zext(STF_TF);
+	res = (res & 0xFFFFFF80) | lv | (lu << 1) | (nf << 2) | (zf << 3) | (ni << 4) | (zi << 5) | (tf << 6);
+}
+macro unpackstf(in) {
+	STF_LV = (in & 0x01) != 0;
+	STF_LU = (in & 0x02) != 0;
+	STF_NF = (in & 0x04) != 0;
+	STF_ZF = (in & 0x08) != 0;
+	STF_NI = (in & 0x10) != 0;
+	STF_ZI = (in & 0x20) != 0;
+	STF_TF = (in & 0x40) != 0;
+}
+macro packrb(res) {
+	local rc:4 = zext(RB_RC);
+	local re:4 = zext(RB_RE);
+	local rsz:4 = zext(RB_RSIZE);
+	local ra:4 = zext(RB_RA);
+	local ras:4 = zext(RB_RAS);
+	res = rc | (re << 16) | (rsz << 23) | (ra << 30) | (ras << 31);
+}
+macro unpackrb(in) {
+	RB_RC    = in[0,16];
+	RB_RE    = in[16,7];
+	RB_RSIZE = in[23,7];
+	RB_RA    = in[30,1];
+	RB_RAS   = in[31,1];
+}
+
+fpu_re_low: "R0H" is p2_ee=0 { export R0H; }
+fpu_re_low: "R1H" is p2_ee=1 { export R1H; }
+fpu_re_low: "R2H" is p2_ee=2 { export R2H; }
+fpu_re_low: "R3H" is p2_ee=3 { export R3H; }
+
+fpu_re_high: "R4H" is p2_ee=0 { export R4H; }
+fpu_re_high: "R5H" is p2_ee=1 { export R5H; }
+fpu_re_high: "R6H" is p2_ee=2 { export R6H; }
+fpu_re_high: "R7H" is p2_ee=3 { export R7H; }
+
+macro update_stf(res) {
+	STF_ZF = ((res & 0x7F800000) == 0);
+	STF_NF = res[31,1] && (STF_ZF == 0);
+}
+
+macro fpu_cmp_operand(out, in) {
+	local exp:4 = in & 0x7F800000;
+	local mantissa:4 = in & 0x007FFFFF;
+	local zeroish:1 = exp == 0;
+	local nan_value:1 = (exp == 0x7F800000) && (mantissa != 0);
+	local zero_mask:4 = 0 - zext(zeroish);
+	local nan_mask:4 = 0 - zext(nan_value);
+	local conditioned:4 = in & ~zero_mask;
+	out = (conditioned & ~nan_mask) | (0x7F800000 & nan_mask);
+}
+
+macro update_stf_cmp(lhs, rhs) {
+	local lhs_cmp:4;
+	local rhs_cmp:4;
+	fpu_cmp_operand(lhs_cmp, lhs);
+	fpu_cmp_operand(rhs_cmp, rhs);
+	STF_ZF = (lhs_cmp f== rhs_cmp);
+	STF_NF = (lhs_cmp f< rhs_cmp);
+}
+
+# TMU common input conditioning (SPRUHS1C section 7.5.2): negative zero
+# and either-sign denormals become positive zero; NaNs become signed infinity.
+macro tmu_condition_operand(out, in) {
+	local exp:4 = in & 0x7F800000;
+	local mantissa:4 = in & 0x007FFFFF;
+	local zeroish:1 = exp == 0;
+	local nan_value:1 = (exp == 0x7F800000) && (mantissa != 0);
+	local zero_mask:4 = 0 - zext(zeroish);
+	local nan_mask:4 = 0 - zext(nan_value);
+	local conditioned:4 = in & ~zero_mask;
+	local signed_infinity:4 = (in & 0x80000000) | 0x7F800000;
+	out = (conditioned & ~nan_mask) | (signed_infinity & nan_mask);
+}
+
+macro fpu_minmax_output(out) {
+	local exp:4 = out & 0x7F800000;
+	local mantissa:4 = out & 0x007FFFFF;
+	local denormal:1 = (exp == 0) && (mantissa != 0);
+	local nan_value:1 = (exp == 0x7F800000) && (mantissa != 0);
+	local denormal_mask:4 = 0 - zext(denormal);
+	local nan_mask:4 = 0 - zext(nan_value);
+	local conditioned:4 = out & ~denormal_mask;
+	out = (conditioned & ~nan_mask) | (0x7F800000 & nan_mask);
+}
+
+# MOV32/MOVD32 flag update: ZF/NF based on exponent field; also NI/ZI
+macro update_stf_mov(res) {
+	local zero_exp:1 = ((res & 0x7F800000) == 0);
+	STF_NI = res[31,1];
+	STF_ZI = (res == 0);
+	STF_ZF = zero_exp;
+	STF_NF = res[31,1] && !zero_exp;
+}
+
+# Parallel MOV32 store snapshots its source before the FPU side writes a possibly aliased register.
+# Parallel MOV32 instructions - e=0 (R0H-R3H)
+:addf32 p2_d3, fpu_re_low, p1_f3 "|| MOV32" loc32, p2_a3 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b00 & p1_fpu_op=0x1 & p1_f3 & p1_e=0; p2_d3 & loc32 & fpu_re_low & p2_a3 {
+	local mov_src:4 = p2_a3;
+	p2_d3 = fpu_re_low f+ p1_f3;
+	loc32 = mov_src;
+}
+:addf32 p2_d3, fpu_re_low, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0x1 & p1_f3 & p1_e=0; p2_d3 & loc32 & fpu_re_low & p2_a3 {
+	p2_d3 = fpu_re_low f+ p1_f3;
+	p2_a3 = loc32;
+	update_stf_mov(p2_a3);
+}
+
+:subf32 p2_d3, fpu_re_low, p1_f3 "|| MOV32" loc32, p2_a3 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b00 & p1_fpu_op=0x2 & p1_f3 & p1_e=0; p2_d3 & loc32 & fpu_re_low & p2_a3 {
+	local mov_src:4 = p2_a3;
+	p2_d3 = fpu_re_low f- p1_f3;
+	loc32 = mov_src;
+}
+:subf32 p2_d3, fpu_re_low, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0x2 & p1_f3 & p1_e=0; p2_d3 & loc32 & fpu_re_low & p2_a3 {
+	p2_d3 = fpu_re_low f- p1_f3;
+	p2_a3 = loc32;
+	update_stf_mov(p2_a3);
+}
+
+:mpyf32 p2_d3, fpu_re_low, p1_f3 "|| MOV32" loc32, p2_a3 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b00 & p1_fpu_op=0x0 & p1_f3 & p1_e=0; p2_d3 & loc32 & fpu_re_low & p2_a3 {
+	local mov_src:4 = p2_a3;
+	p2_d3 = fpu_re_low f* p1_f3;
+	loc32 = mov_src;
+}
+:mpyf32 p2_d3, fpu_re_low, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0x0 & p1_f3 & p1_e=0; p2_d3 & loc32 & fpu_re_low & p2_a3 {
+	p2_d3 = fpu_re_low f* p1_f3;
+	p2_a3 = loc32;
+	update_stf_mov(p2_a3);
+}
+
+:macf32 "R3H, R2H," p2_d3, fpu_re_low, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0x3 & p1_f3 & p1_e=0; p2_d3 & loc32 & fpu_re_low & p2_a3 {
+	local product:4 = fpu_re_low f* p1_f3;
+	R3H = R3H f+ R2H;
+	p2_d3 = product;
+	p2_a3 = loc32;
+	update_stf_mov(p2_a3);
+}
+:macf32 "R7H, R6H," p2_d3, fpu_re_low, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0xc & p1_f3 & p1_e=0; p2_d3 & loc32 & fpu_re_low & p2_a3 {
+	local product:4 = fpu_re_low f* p1_f3;
+	R7H = R7H f+ R6H;
+	p2_d3 = product;
+	p2_a3 = loc32;
+	update_stf_mov(p2_a3);
+}
+
+# Parallel MOV32 instructions - e=1 (R4H-R7H)
+:addf32 p2_d3, fpu_re_high, p1_f3 "|| MOV32" loc32, p2_a3 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b00 & p1_fpu_op=0x1 & p1_f3 & p1_e=1; p2_d3 & loc32 & fpu_re_high & p2_a3 {
+	local mov_src:4 = p2_a3;
+	p2_d3 = fpu_re_high f+ p1_f3;
+	loc32 = mov_src;
+}
+:addf32 p2_d3, fpu_re_high, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0x1 & p1_f3 & p1_e=1; p2_d3 & loc32 & fpu_re_high & p2_a3 {
+	p2_d3 = fpu_re_high f+ p1_f3;
+	p2_a3 = loc32;
+	update_stf_mov(p2_a3);
+}
+
+:subf32 p2_d3, fpu_re_high, p1_f3 "|| MOV32" loc32, p2_a3 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b00 & p1_fpu_op=0x2 & p1_f3 & p1_e=1; p2_d3 & loc32 & fpu_re_high & p2_a3 {
+	local mov_src:4 = p2_a3;
+	p2_d3 = fpu_re_high f- p1_f3;
+	loc32 = mov_src;
+}
+:subf32 p2_d3, fpu_re_high, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0x2 & p1_f3 & p1_e=1; p2_d3 & loc32 & fpu_re_high & p2_a3 {
+	p2_d3 = fpu_re_high f- p1_f3;
+	p2_a3 = loc32;
+	update_stf_mov(p2_a3);
+}
+
+:mpyf32 p2_d3, fpu_re_high, p1_f3 "|| MOV32" loc32, p2_a3 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b00 & p1_fpu_op=0x0 & p1_f3 & p1_e=1; p2_d3 & loc32 & fpu_re_high & p2_a3 {
+	local mov_src:4 = p2_a3;
+	p2_d3 = fpu_re_high f* p1_f3;
+	loc32 = mov_src;
+}
+:mpyf32 p2_d3, fpu_re_high, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0x0 & p1_f3 & p1_e=1; p2_d3 & loc32 & fpu_re_high & p2_a3 {
+	p2_d3 = fpu_re_high f* p1_f3;
+	p2_a3 = loc32;
+	update_stf_mov(p2_a3);
+}
+
+:macf32 "R3H, R2H," p2_d3, fpu_re_high, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0x3 & p1_f3 & p1_e=1; p2_d3 & loc32 & fpu_re_high & p2_a3 {
+	local product:4 = fpu_re_high f* p1_f3;
+	R3H = R3H f+ R2H;
+	p2_d3 = product;
+	p2_a3 = loc32;
+	update_stf_mov(p2_a3);
+}
+:macf32 "R7H, R6H," p2_d3, fpu_re_high, p1_f3 "|| MOV32" p2_a3, loc32 is p1_op15_12=0b1110 & p1_mac_sel=0 & p1_op10=0 & p1_ls=0b11 & p1_fpu_op=0xc & p1_f3 & p1_e=1; p2_d3 & loc32 & fpu_re_high & p2_a3 {
+	local product:4 = fpu_re_high f* p1_f3;
+	R7H = R7H f+ R6H;
+	p2_d3 = product;
+	p2_a3 = loc32;
+	update_stf_mov(p2_a3);
+}
+
+# p.70 — MACF32 R7H, R3H, mem32, *XAR7++
+# LSW: 1110 0010 0101 0000 (fixed), MSW: 0001 1111 mem32
+# The repeated form is selected ahead of the RPT wrapper in tms320c28.sinc.
+:macf32 "R7H, R3H," loc32^", *XAR7++" is op0_16=0b1110001001010000; op8_8=0b00011111 & loc32 {
+	R3H = R3H f+ R2H;
+	local v1:4 = loc32;
+	local v2:4 = *:4 XAR7;
+	XAR7 = XAR7 + 2;
+	R2H = v1 f* v2;
+}
+
+# Parallel MAX/MIN
+:maxf32 rah3, rbh3 "|| MOV32" rch3, p2_rdh is op0_16=0xe69c; op12_4=0 & p2_rdh & rch3 & rbh3 & rah3 {
+	# Parallel sources are read before either destination is written. RdH is allowed
+	# to alias RaH, so preserve it before MAXF32 potentially replaces RaH.
+	local move_src:4 = p2_rdh;
+	update_stf_cmp(rah3, rbh3);
+	if (!STF_NF) goto <done>;
+	rah3 = rbh3;
+	rch3 = move_src;
+	<done>
+	fpu_minmax_output(rah3);
+}
+:minf32 rah3, rbh3 "|| MOV32" rch3, p2_rdh is op0_16=0xe69d; op12_4=0 & p2_rdh & rch3 & rbh3 & rah3 {
+	# Parallel sources are read before either destination is written. RdH is allowed
+	# to alias RaH, so preserve it before MINF32 potentially replaces RaH.
+	local move_src:4 = p2_rdh;
+	update_stf_cmp(rah3, rbh3);
+	if (STF_NF) goto <done>;
+	if (STF_ZF) goto <done>;
+	rah3 = rbh3;
+	rch3 = move_src;
+	<done>
+	fpu_minmax_output(rah3);
+}
+
+# p.86 MOV32 mem32, RaH (store)
+:mov32 loc32, rah3_8 is op0_16=0b1110001000000011; ctx_amode=0 & op11_5=0b00000 & rah3_8 & loc32 {
+	loc32 = rah3_8;
+}
+
+# p.90 (MOV32 RaH, ACC), p.93 (MOV32 RaH, P), p.96 (MOV32 RaH, XARn), p.97 (MOV32 RaH, XT)
+:mov32 rah2, loc32 is op8_8=0b10111101 & loc32; op6_10=0b0000111100 & rah2 & op0_2=0b10 {
+	rah2 = loc32;
+}
+# p.36
+:absf32 rah3, rbh3 is op0_16=0b1110011010010101; op6_10=0b0000000000 & rbh3 & rah3 {
+	rah3 = rbh3 & 0x7FFFFFFF;
+	update_stf(rah3);
+}
+
+# p.41
+:addf32 rah3, rbh3, rch3 is op0_16=0b1110011100010000; op9_7=0b0000000 & rch3 & rbh3 & rah3 {
+	rah3 = rbh3 f+ rch3;
+}
+
+# p.37 / p.39 (same encoding)
+:addf32 rah3, #fpu_imm16, rbh3 is op6_10=0b1110100010 & $(fpu_imm16_add) {
+	local imm32:4 = fpu_imm16 << 16;
+	rah3 = rbh3 f+ imm32;
+}
+
+# p.47
+:cmpf32 rah3, rbh3 is op0_16=0b1110011010010100; op6_10=0b0000000000 & rbh3 & rah3 {
+	update_stf_cmp(rah3, rbh3);
+}
+
+# p.50
+:cmpf32 rah3, "#0.0" is op3_13=0b1110010110100 & rah3 {
+	local zero:4 = 0;
+	update_stf_cmp(rah3, zero);
+}
+
+# p.48
+:cmpf32 rah3, #fpu_imm16 is op3_13=0b1110100000010 & $(fpu_imm16_cmp) {
+	local imm32:4 = fpu_imm16 << 16;
+	update_stf_cmp(rah3, imm32);
+}
+
+# p.51 - no flags (only LUF/LVF, which we don't model here)
+:einvf32 rah3, rbh3 is op0_16=0b1110011010010011; op6_10=0b0000000000 & rbh3 & rah3 {
+	local one:4 = 0x3F800000;
+	rah3 = one f/ rbh3;
+}
+
+# p.53 - no flags (only LUF/LVF)
+:eisqrtf32 rah3, rbh3 is op0_16=0b1110011010010010; op6_10=0b0000000000 & rbh3 & rah3 {
+	local one:4 = 0x3F800000;
+	rah3 = one f/ sqrt(rbh3);
+}
+
+# SPRUHS1C p. 784 — TMU Type-0 multiply by the exact 1/(2*pi)
+# single-precision constant.  Publication is 2p when consumed by SINPUF32,
+# COSPUF32, or a memory store and 3p for other consumers.  The P-Code records
+# the eventual result/LUF atomically; the verified schedules do not observe the
+# destination or LUF before the documented publication point.
+:div2pif32 rah3, rbh3 is op0_16=0b1110001001110001; op6_10=0b0000000000 & rbh3 & rah3 {
+	local operand:4;
+	local operand_exp:4;
+	local scale:4 = 0x3E22F983;
+	local product:4;
+	local product_exp:4;
+
+	# Snapshot and condition the source before writing a possibly aliased RaH.
+	tmu_condition_operand(operand, rbh3);
+	operand_exp = operand & 0x7F800000;
+	product = operand f* scale;
+	product_exp = product & 0x7F800000;
+	local representable:1 = product_exp != 0;
+	local representable_mask:4 = 0 - zext(representable);
+	local underflow:1 = !representable && (operand_exp != 0);
+	rah3 = product & representable_mask;
+	STF_LU = STF_LU || underflow;
+}
+
+# SPRUHS1C pp. 785-786 — TMU Type-0 32-bit floating-point division.
+# Hardware publishes the result and sticky LVF/LUF updates on cycle five.
+# This instruction-level P-Code records the eventual architectural state
+# atomically.  The retained compiler and firmware schedules have no result or
+# LU/LV observer in the four intervening slots, so the collapse is equivalent
+# there.  Cycle-accurate early TESTTF LU/LV observations remain deliberately
+# outside this tranche; destructive STF operations in those slots are undefined.
+:divf32 rah3, rbh3, rch3 is op0_16=0b1110001001110100; op9_7=0b0000000 & rch3 & rbh3 & rah3 {
+	local numerator:4;
+	local denominator:4;
+	local numerator_exp:4;
+	local denominator_exp:4;
+	local result_sign:4;
+	local infinity:4;
+
+	# Snapshot and condition both sources before writing a possibly aliased RaH.
+	tmu_condition_operand(numerator, rbh3);
+	tmu_condition_operand(denominator, rch3);
+	numerator_exp = numerator & 0x7F800000;
+	denominator_exp = denominator & 0x7F800000;
+	result_sign = (numerator ^ denominator) & 0x80000000;
+	infinity = result_sign | 0x7F800000;
+
+	local numerator_zero:1 = numerator_exp == 0;
+	local numerator_infinity:1 = numerator_exp == 0x7F800000;
+	local numerator_normal:1 = !numerator_zero && !numerator_infinity;
+	local denominator_zero:1 = denominator_exp == 0;
+	local denominator_infinity:1 = denominator_exp == 0x7F800000;
+	local denominator_normal:1 = !denominator_zero && !denominator_infinity;
+	local normal_division:1 = numerator_normal && denominator_normal;
+	local normal_mask:4 = 0 - zext(normal_division);
+	local safe_numerator:4 = numerator & normal_mask;
+	local safe_denominator:4 = (denominator & normal_mask) | (0x3F800000 & ~normal_mask);
+	local quotient:4 = safe_numerator f/ safe_denominator;
+	local quotient_exp:4 = quotient & 0x7F800000;
+	local quotient_underflow:1 = normal_division && (quotient_exp == 0);
+	local quotient_overflow:1 = normal_division && (quotient_exp == 0x7F800000);
+
+	local infinity_result:1 = numerator_infinity
+		|| (numerator_normal && denominator_zero)
+		|| quotient_overflow;
+	local quotient_result:1 = normal_division && !quotient_underflow && !quotient_overflow;
+	local infinity_mask:4 = 0 - zext(infinity_result);
+	local quotient_mask:4 = 0 - zext(quotient_result);
+	rah3 = (infinity & infinity_mask) | (quotient & quotient_mask);
+
+	local overflow_event:1 = (numerator_zero && denominator_zero)
+		|| (numerator_infinity && !denominator_infinity)
+		|| (numerator_normal && denominator_zero)
+		|| quotient_overflow;
+	local underflow_event:1 = denominator_infinity || quotient_underflow;
+	STF_LV = STF_LV || overflow_event;
+	STF_LU = STF_LU || underflow_event;
+}
+
+# SPRUHS1C p. 787 — TMU Type-0 32-bit floating-point square root.
+# Hardware publishes the result and sticky LVF update on cycle five.  As with
+# DIVF32, this instruction-level P-Code records the eventual state atomically;
+# early flag/result observation and overlapping pending operations remain
+# outside the accepted scope.
+:sqrtf32 rah3, rbh3 is op0_16=0b1110001001110111; op6_10=0b0000000000 & rbh3 & rah3 {
+	local operand:4;
+	local operand_exp:4;
+	local negative:1;
+	local infinity_input:1;
+	local ordinary:1;
+	local ordinary_mask:4;
+	local infinity_mask:4;
+	local root:4;
+
+	# Snapshot and condition the source before writing a possibly aliased RaH.
+	tmu_condition_operand(operand, rbh3);
+	operand_exp = operand & 0x7F800000;
+	negative = (operand & 0x80000000) != 0;
+	infinity_input = operand_exp == 0x7F800000;
+	ordinary = !negative && !infinity_input;
+	ordinary_mask = 0 - zext(ordinary);
+	infinity_mask = 0 - zext(!negative && infinity_input);
+	local safe_operand:4 = operand & ordinary_mask;
+	root = sqrt(safe_operand);
+	rah3 = (root & ordinary_mask) | (0x7F800000 & infinity_mask);
+	STF_LV = STF_LV || negative || (!negative && infinity_input);
+}
+
+# SPRUHS1C pp. 790-791 — TMU Type-0 cosine with a per-unit input.
+# The range conditions and truncation-toward-zero fraction are explicit P-Code.
+# cospu_f32 is an opaque, side-effect-free floating core for cos(fraction*2*pi),
+# because standard P-Code has no trigonometric operator.  Result publication is
+# 4p and remains represented as an atomic eventual write.
+:cospuf32 rah3, rbh3 is op0_16=0b1110001001111001; op6_10=0b0000000000 & rbh3 & rah3 {
+	local operand:4;
+	local magnitude:4;
+	local integer_part:4;
+	local integer_float:4;
+	local fraction:4;
+
+	# Snapshot and condition the source before writing a possibly aliased RaH.
+	tmu_condition_operand(operand, rbh3);
+	magnitude = operand & 0x7FFFFFFF;
+	local too_small:1 = magnitude <= 0x2F000000;
+	local too_big:1 = magnitude >= 0x4A800000;
+	local outside_range:1 = too_small || too_big;
+	local outside_range_mask:4 = 0 - zext(outside_range);
+	local core_operand:4 = operand & ~outside_range_mask;
+	integer_part = trunc(core_operand);
+	integer_float = int2float(integer_part);
+	fraction = core_operand f- integer_float;
+	local cosine:4 = cospu_f32(fraction);
+	rah3 = (0x3F800000 & outside_range_mask) | (cosine & ~outside_range_mask);
+}
+
+# p.76
+:maxf32 rah3, rbh3 is op0_16=0b1110011010010110; op6_10=0b0000000000 & rbh3 & rah3 {
+	update_stf_cmp(rah3, rbh3);
+	if (!STF_NF) goto <done>;
+	rah3 = rbh3;
+	<done>
+	fpu_minmax_output(rah3);
+}
+
+# p.77
+:maxf32 rah3, #fpu_imm16 is op3_13=0b1110100000100 & $(fpu_imm16_cmp) {
+	local imm32:4 = fpu_imm16 << 16;
+	update_stf_cmp(rah3, imm32);
+	if (!STF_NF) goto <done>;
+	rah3 = imm32;
+	<done>
+	fpu_minmax_output(rah3);
+}
+
+# p.79
+:minf32 rah3, rbh3 is op0_16=0b1110011010010111; op6_10=0b0000000000 & rbh3 & rah3 {
+	update_stf_cmp(rah3, rbh3);
+	if (STF_NF) goto <done>;
+	if (STF_ZF) goto <done>;
+	rah3 = rbh3;
+	<done>
+	fpu_minmax_output(rah3);
+}
+
+# p.80
+:minf32 rah3, #fpu_imm16 is op3_13=0b1110100000110 & $(fpu_imm16_cmp) {
+	local imm32:4 = fpu_imm16 << 16;
+	update_stf_cmp(rah3, imm32);
+	if (STF_NF) goto <done>;
+	if (STF_ZF) goto <done>;
+	rah3 = imm32;
+	<done>
+	fpu_minmax_output(rah3);
+}
+
+# p.55 - no flags
+:f32toi16 rah3, rbh3 is op0_16=0b1110011010001100; op6_10=0b0000000000 & rbh3 & rah3 {
+	local t:4 = trunc(rbh3);
+	local s:2 = t[0,16];
+	rah3 = sext(s);
+}
+
+# Rounded 16-bit conversions use nearest with ties to even (SPRUEO2B pp. 56/59).
+# SLEIGH round() returns a FLOAT, and FLOAT_ROUND does not guarantee even ties.
+# Convert the floor to an integer, then select the upper neighbor only when
+# closer or when the exact tie's lower neighbor is odd. All sources are read
+# before the destination write, including when RaH and RbH are the same.
+macro fpu_round_even_integer(out, in) {
+	local lower:4 = floor(in);
+	local integer:4 = trunc(lower);
+	local fraction:4 = in f- lower;
+	local half:4 = 0x3F000000;
+	local increment:1 = (half f< fraction)
+		|| ((fraction f== half) && ((integer & 1) != 0));
+	out = integer + zext(increment);
+}
+
+# p.56 - no flags; sign-extend the converted integer, not the float's low bits
+:f32toi16r rah3, rbh3 is op0_16=0b1110011010001100; op6_10=0b1000000000 & rbh3 & rah3 {
+	local t:4;
+	fpu_round_even_integer(t, rbh3);
+	local s:2 = t[0,16];
+	rah3 = sext(s);
+}
+
+# p.57 - no flags
+:f32toi32 rah3, rbh3 is op0_16=0b1110011010001000; op6_10=0b0000000000 & rbh3 & rah3 {
+	rah3 = trunc(rbh3);
+}
+
+# p.58 - no flags; SPRUHS1C p.56 specifies saturation before conversion
+:f32toui16 rah3, rbh3 is op0_16=0b1110011010001110; op6_10=0b0000000000 & rbh3 & rah3 {
+	local zero:4 = 0;
+	if (rbh3 f< zero) goto <negative>;
+	local maximum:4 = 0x477FFF00; # 65535.0f
+	if (maximum f<= rbh3) goto <saturate>;
+	local t:4 = trunc(rbh3);
+	local s:2 = t[0,16];
+	rah3 = zext(s);
+	goto <done>;
+	<saturate>
+	rah3 = 0x0000FFFF;
+	goto <done>;
+	<negative>
+	rah3 = 0;
+	<done>
+}
+
+# p.59 - no flags; SPRUHS1C p.57 specifies saturation to the unsigned range
+:f32toui16r rah3, rbh3 is op0_16=0b1110011010001110; op6_10=0b1000000000 & rbh3 & rah3 {
+	local zero:4 = 0;
+	if (rbh3 f< zero) goto <negative>;
+	local maximum:4 = 0x477FFF00; # 65535.0f
+	if (maximum f<= rbh3) goto <saturate>;
+	local t:4;
+	fpu_round_even_integer(t, rbh3);
+	local s:2 = t[0,16];
+	rah3 = zext(s);
+	goto <done>;
+	<saturate>
+	rah3 = 0x0000FFFF;
+	goto <done>;
+	<negative>
+	rah3 = 0;
+	<done>
+}
+
+# p.60 - no flags
+:f32toui32 rah3, rbh3 is op0_16=0b1110011010001010; op6_10=0b0000000000 & rbh3 & rah3 {
+	local zero:4 = 0;
+	if (rbh3 f< zero) goto <negative>;
+	rah3 = trunc(rbh3);
+	goto <done>;
+	<negative>
+	rah3 = 0;
+	<done>
+}
+
+# p.61 - no flags
+:fracf32 rah3, rbh3 is op0_16=0b1110011011110001; op6_10=0b0000000000 & rbh3 & rah3 {
+	# Keep the integer part in floating-point format: finite binary32 values
+	# above 2^23 are already integral, including those outside int32's range.
+	local magnitude:4 = rbh3 & 0x7FFFFFFF;
+	local fraction:4 = magnitude f- floor(magnitude);
+	rah3 = fraction | (rbh3 & 0x80000000);
+}
+
+# p.62 - no flags
+:i16tof32 rah3, rbh3 is op0_16=0b1110011010001101; op6_10=0b0000000000 & rbh3 & rah3 {
+	local s:2 = rbh3[0,16];
+	local e:4 = sext(s);
+	rah3 = int2float(e);
+}
+
+# p.63 - no flags
+:i16tof32 rah3_8, loc16 is op0_16=0b1110001011001000; ctx_amode=0 & op11_5=0b00000 & rah3_8 & loc16 {
+	local e:4 = sext(loc16);
+	rah3_8 = int2float(e);
+}
+
+# p.64 - no flags
+:i32tof32 rah3_8, loc32 is op0_16=0b1110001010001000; ctx_amode=0 & op11_5=0b00000 & rah3_8 & loc32 {
+	rah3_8 = int2float(loc32);
+}
+
+# p.65 - no flags
+:i32tof32 rah3, rbh3 is op0_16=0b1110011010001001; op6_10=0b0000000000 & rbh3 & rah3 {
+	rah3 = int2float(rbh3);
+}
+
+# p.142 - zext to 32-bit makes it a non-negative signed int, int2float is exact; no flags
+:ui16tof32 rah3_8, loc16 is op0_16=0b1110001011000100; ctx_amode=0 & op11_5=0b00000 & rah3_8 & loc16 {
+	local e:4 = zext(loc16);
+	rah3_8 = int2float(e);
+}
+
+# p.143 - no flags
+:ui16tof32 rah3, rbh3 is op0_16=0b1110011010001111; op6_10=0b0000000000 & rbh3 & rah3 {
+	local s:2 = rbh3[0,16];
+	local e:4 = zext(s);
+	rah3 = int2float(e);
+}
+
+# p.144 - zero-extend to 64-bit so it stays non-negative, then narrow back to f32; no flags
+:ui32tof32 rah3_8, loc32 is op0_16=0b1110001010000100; ctx_amode=0 & op11_5=0b00000 & rah3_8 & loc32 {
+	local e:8 = zext(loc32);
+	local f:8 = int2float(e);
+	rah3_8 = float2float(f);
+}
+
+# p.145 - no flags
+:ui32tof32 rah3, rbh3 is op0_16=0b1110011010001011; op6_10=0b0000000000 & rbh3 & rah3 {
+	local e:8 = zext(rbh3);
+	local f:8 = int2float(e);
+	rah3 = float2float(f);
+}
+
+# p.82
+:mov16 loc16, rah3_8 is op0_16=0b1110001000010011; ctx_amode=0 & op11_5=0b00000 & rah3_8 & loc16 {
+	loc16 = rah3_8[0,16];
+}
+
+# p.84 (MOV32 ACC, RaH), p.89 (MOV32 P, RaH), p.99 (MOV32 XARn, RaH), p.100 (MOV32 XT, RaH)
+:mov32 ACC, rah2 is op8_8=0b10111111 & op4_4=0b1010 & reg32=9 & ACC; op6_10=0b0000111100 & rah2 & op0_2=0b10 {
+	ACC = rah2;
+	flagnz(ACC);
+}
+:mov32 loc32, rah2 is op8_8=0b10111111 & loc32; op6_10=0b0000111100 & rah2 & op0_2=0b10 {
+	loc32 = rah2;
+}
+
+# p.83 (manual gives MOV32)
+:vmov32 *(0:imm16), loc32 is op8_8=0b10111101 & loc32; imm16 {
+	local addr:4 = imm16;
+	*:4 addr = loc32;
+}
+
+# p.85 (manual gives MOV32)
+:vmov32 ACC, *(0:imm16) is op8_8=0b10111111 & op4_4=0b1010 & reg32=9 & ACC; imm16 {
+	local addr:4 = imm16;
+	ACC = *:4 addr;
+	flagnz(ACC);
+}
+:vmov32 loc32, *(0:imm16) is op8_8=0b10111111 & loc32; imm16 {
+	local addr:4 = imm16;
+	loc32 = *:4 addr;
+}
+
+# p.88
+:mov32 loc32, STF is op0_16=0b1110001000000000; ctx_amode=0 & op11_5=0b00000 & loc32 & STF {
+	packstf(STF);
+	loc32 = STF;
+}
+
+# p.98
+:mov32 STF, loc32 is op0_16=0b1110001010000000; ctx_amode=0 & op11_5=0b00000 & loc32 & STF {
+	STF = loc32;
+	unpackstf(STF);
+}
+
+# p.91 - UNCF: always moves, updates NF/ZF/NI/ZI
+:mov32 rah3_8, loc32, cndf is op4_12=0b111000101010 & cond0_4=0b1111 & cndf; ctx_amode=0 & op11_5=0b00000 & rah3_8 & loc32 {
+	rah3_8 = loc32;
+	update_stf_mov(rah3_8);
+}
+
+# p.91 - conditional (non-UNCF): no flags modified
+:mov32 rah3_8, loc32, cndf is op4_12=0b111000101010 & cndf; ctx_amode=0 & op11_5=0b00000 & rah3_8 & loc32 {
+	if (!cndf) goto <done>;
+	rah3_8 = loc32;
+	<done>
+}
+
+# p.94 - UNCF: always moves, updates NF/ZF/NI/ZI
+:mov32 rah3, rbh3, cndf is op4_12=0b111001101100 & cond0_4=0b1111 & cndf; op6_10=0b0000000000 & rbh3 & rah3 {
+	rah3 = rbh3;
+	update_stf_mov(rah3);
+}
+
+# p.94 - conditional (non-UNCF): no flags modified
+:mov32 rah3, rbh3, cndf is op4_12=0b111001101100 & cndf; op6_10=0b0000000000 & rbh3 & rah3 {
+	if (!cndf) goto <done>;
+	rah3 = rbh3;
+	<done>
+}
+
+# p.101 - load RaH from mem32, copy mem32 to mem32+2
+:movd32 rah3_8, mem32_addr is op0_16=0b1110001000100011; ctx_amode=0 & op11_5=0b00000 & rah3_8 & mem32_addr {
+	local val:4 = *:4 mem32_addr;
+	rah3_8 = val;
+	*:4 (mem32_addr + 2) = val;
+	update_stf_mov(rah3_8);
+}
+
+# p.104
+:moviz rah3, #fpu_imm16 is op3_13=0b1110100000000 & $(fpu_imm16_cmp) {
+	rah3 = fpu_imm16 << 16;
+}
+
+# p.106
+:movxi rah3, #fpu_imm16 is op3_13=0b1110100000001 & $(fpu_imm16_cmp) {
+	# MOVXI replaces only RaH[15:0]; the upper half from a preceding MOVIZ is retained.
+	rah3 = (rah3 & 0xFFFF0000) | zext(fpu_imm16:2);
+}
+
+# p.106 - copy selected STF flags to ST0; clear LUF/LVF if selected
+:movst0 movst0_flags is op8_8=0b10101101 & movst0_flags & imm8 {
+	local flag:4 = imm8;
+	# MOVST0 uses LVF/LUF/NF/NI/ZF/ZI/CI/TF mask order, not STF bit order.
+	# Snapshot all selected sources before clearing the latched flags.
+	local old_lv:1 = STF_LV;
+	local old_lu:1 = STF_LU;
+	local old_nf:1 = STF_NF;
+	local old_ni:1 = STF_NI;
+	local old_zf:1 = STF_ZF;
+	local old_zi:1 = STF_ZI;
+	local old_tf:1 = STF_TF;
+	local select_lv:1 = (flag & 0x01) != 0;
+	local select_lu:1 = (flag & 0x02) != 0;
+	local select_nf:1 = (flag & 0x04) != 0;
+	local select_ni:1 = (flag & 0x08) != 0;
+	local select_zf:1 = (flag & 0x10) != 0;
+	local select_zi:1 = (flag & 0x20) != 0;
+	local select_ci:1 = (flag & 0x40) != 0;
+	local select_tf:1 = (flag & 0x80) != 0;
+	local select_ov:1 = select_lv || select_lu;
+	local select_n:1 = select_nf || select_ni;
+	local select_z:1 = select_zf || select_zi;
+	local ov_value:1 = (select_lv && old_lv) || (select_lu && old_lu);
+	local n_value:1 = (select_nf && old_nf) || (select_ni && old_ni);
+	local z_value:1 = (select_zf && old_zf) || (select_zi && old_zi);
+	V = (V && !select_ov) || (select_ov && ov_value);
+	N = (N && !select_n) || (select_n && n_value);
+	Z = (Z && !select_z) || (select_z && z_value);
+	C = (C && !select_ci) || (select_ci && old_tf);
+	TC = (TC && !select_tf) || (select_tf && old_tf);
+	STF_LV = old_lv && !select_lv;
+	STF_LU = old_lu && !select_lu;
+}
+
+# p.109
+:mpyf32 rah3, rbh3, rch3 is op0_16=0b1110011100000000; op9_7=0b0000000 & rch3 & rbh3 & rah3 {
+	rah3 = rbh3 f* rch3;
+}
+
+# p.110/111 (same encoding)
+:mpyf32 rah3, #fpu_imm16, rbh3 is op6_10=0b1110100001 & $(fpu_imm16_add) {
+	local imm32:4 = fpu_imm16 << 16;
+	rah3 = rbh3 f* imm32;
+}
+
+# p.117 - UNCF: always negates, updates NF/ZF
+:negf32 rah3, rbh3, cndf is op4_12=0b111001101010 & cond0_4=0b1111 & cndf; op6_10=0b0000000000 & rbh3 & rah3 {
+	rah3 = rbh3 ^ 0x80000000;
+	update_stf(rah3);
+}
+
+# p.117 - conditional (non-UNCF): no flags modified
+:negf32 rah3, rbh3, cndf is op4_12=0b111001101010 & cndf; op6_10=0b0000000000 & rbh3 & rah3 {
+	local val = rbh3;
+	if (cndf) goto <true>;
+	goto <done>;
+	<true>
+	val = rbh3 ^ 0x80000000;
+	<done>
+	rah3 = val;
+}
+
+# p.134
+:subf32 rah3, rbh3, rch3 is op0_16=0b1110011100100000; op9_7=0b0000000 & rch3 & rbh3 & rah3 {
+	rah3 = rbh3 f- rch3;
+}
+
+# p.135 (same encoding as SUBF32 imm)
+:subf32 rah3, #fpu_imm16, rbh3 is op6_10=0b1110100011 & $(fpu_imm16_add) {
+	local imm32:4 = fpu_imm16 << 16;
+	rah3 = imm32 f- rbh3;
+}
+
+# p.121
+:pop RB is op0_16=0b1111111111110001 & RB {
+	pop32(RB);
+	unpackrb(RB);
+}
+
+# p.123
+:push RB is op0_16=0b1111111111110000 & RB {
+	packrb(RB);
+	push32(RB);
+}
+
+# p.125
+:restore is op0_16=0b1110010101100010 {
+	R0H = R0H_sh;
+	R1H = R1H_sh;
+	R2H = R2H_sh;
+	R3H = R3H_sh;
+	R4H = R4H_sh;
+	R5H = R5H_sh;
+	R6H = R6H_sh;
+	R7H = R7H_sh;
+	STF = STF_sh;
+	STF = STF & 0x7FFFFFFF;
+	unpackstf(STF);
+}
+
+# p.131
+:save imm6, imm11_5, imm11 is op6_10=0b1110011001 & imm6; imm11_5 & imm11 {
+	R0H_sh = R0H;
+	R1H_sh = R1H;
+	R2H_sh = R2H;
+	R3H_sh = R3H;
+	R4H_sh = R4H;
+	R5H_sh = R5H;
+	R6H_sh = R6H;
+	R7H_sh = R7H;
+	packstf(STF);
+	STF_sh = STF;
+	local f_lo:4 = imm11_5;
+	local f_hi:4 = imm6;
+	local flag:4 = (f_hi << 5) | f_lo;
+	local val:4 = imm11;
+	STF = (STF & ~flag) | (val & flag);
+	STF = STF | 0x80000000;
+	unpackstf(STF);
+}
+
+# p.140 - no flags
+:swapf rah3, rbh3, cndf is op4_12=0b111001101110 & cndf; op6_10=0b0000000000 & rbh3 & rah3 {
+	if (!cndf) goto <done>;
+	local tmp = rah3;
+	rah3 = rbh3;
+	rbh3 = tmp;
+	<done>
+}
+
+# p.141
+:testtf cndf is op4_12=0b111001011000 & cndf {
+	STF_TF = cndf;
+}
+
+# p.146 - no flags
+:zero rah3 is op3_13=0b1110010110010 & rah3 {
+	rah3 = 0;
+}
+
+# p.147
+:zeroa is op0_16=0b1110010101100011 {
+	R0H = 0;
+	R1H = 0;
+	R2H = 0;
+	R3H = 0;
+}
+
+# p.127
+rptb_end: rel is imm7 [ rel = inst_start + imm7 + 2; rptb_flag=1; globalset(rel, rptb_flag); ] { export *:4 rel; }
+:rptb rptb_end, loc16 is op8_8=0b10110101 & op7=0 & rptb_end & imm7; loc16 {
+	local rsz:1 = imm7;
+	RB_RSIZE = rsz;
+	local count:2 = loc16;
+	RB_RC = count;
+	local end_addr:4 = (inst_start + zext(rsz) + 2) & 0x7F;
+	RB_RE = end_addr[0,7];
+	RB_RA = (count != 0);
+	RB_RSTART = inst_next >> 1;
+}
+
+# p.129
+:rptb rptb_end, #imm16 is op8_8=0b10110101 & op7=1 & rptb_end & imm7; imm16 {
+	local rsz:1 = imm7;
+	RB_RSIZE = rsz;
+	local count:2 = imm16;
+	RB_RC = count;
+	local end_addr:4 = (inst_start + zext(rsz) + 2) & 0x7F;
+	RB_RE = end_addr[0,7];
+	RB_RA = (count != 0);
+	RB_RSTART = inst_next >> 1;
+}
+
+# p.133
+:setflg imm6, imm11_5, imm11 is op6_10=0b1110011000 & imm6; imm11_5 & imm11 {
+	local f_lo:4 = imm11_5;
+	local f_hi:4 = imm6;
+	local flag:4 = (f_hi << 5) | f_lo;
+	local val:4 = imm11;
+	# bit 9 = RND32 rounding mode; bits 7-8,10 reserved (ignored)
+	if ((flag & 0x200) == 0) goto <no_rnd>;
+	STF = (STF & ~0x200) | (val & 0x200);
+	<no_rnd>
+	if ((flag & 0x01) == 0) goto <s0>; STF_LV = (val & 0x01) != 0; <s0>
+	if ((flag & 0x02) == 0) goto <s1>; STF_LU = (val & 0x02) != 0; <s1>
+	if ((flag & 0x04) == 0) goto <s2>; STF_NF = (val & 0x04) != 0; <s2>
+	if ((flag & 0x08) == 0) goto <s3>; STF_ZF = (val & 0x08) != 0; <s3>
+	if ((flag & 0x10) == 0) goto <s4>; STF_NI = (val & 0x10) != 0; <s4>
+	if ((flag & 0x20) == 0) goto <s5>; STF_ZI = (val & 0x20) != 0; <s5>
+	if ((flag & 0x40) == 0) goto <s6>; STF_TF = (val & 0x40) != 0; <s6>
+}
+
+# Subtables for RfH split across words: p1_f2 (LSW bits 1:0) = high 2 bits, p2_rfh_bit (MSW bit 15) = low bit
+par_rfh_even: "R0H" is p1_f2=0 { export R0H; }
+par_rfh_even: "R2H" is p1_f2=1 { export R2H; }
+par_rfh_even: "R4H" is p1_f2=2 { export R4H; }
+par_rfh_even: "R6H" is p1_f2=3 { export R6H; }
+
+par_rfh_odd: "R1H" is p1_f2=0 { export R1H; }
+par_rfh_odd: "R3H" is p1_f2=1 { export R3H; }
+par_rfh_odd: "R5H" is p1_f2=2 { export R5H; }
+par_rfh_odd: "R7H" is p1_f2=3 { export R7H; }
+
+# p.114 MPYF32 RaH, RbH, RcH || ADDF32 RdH, ReH, RfH
+:mpyf32 rah3, rbh3, rch3 "|| ADDF32" p2_rdh, p2_reh3, par_rfh_even is op3_13=0b1110011101000 & par_rfh_even; rah3 & rbh3 & rch3 & p2_rdh & p2_reh3 & p2_rfh_bit=0 {
+	local mul_lhs:4 = rbh3;
+	local mul_rhs:4 = rch3;
+	local add_lhs:4 = p2_reh3;
+	local add_rhs:4 = par_rfh_even;
+	local mul_result:4 = mul_lhs f* mul_rhs;
+	local add_result:4 = add_lhs f+ add_rhs;
+	rah3 = mul_result;
+	p2_rdh = add_result;
+}
+
+:mpyf32 rah3, rbh3, rch3 "|| ADDF32" p2_rdh, p2_reh3, par_rfh_odd is op3_13=0b1110011101000 & par_rfh_odd; rah3 & rbh3 & rch3 & p2_rdh & p2_reh3 & p2_rfh_bit=1 {
+	local mul_lhs:4 = rbh3;
+	local mul_rhs:4 = rch3;
+	local add_lhs:4 = p2_reh3;
+	local add_rhs:4 = par_rfh_odd;
+	local mul_result:4 = mul_lhs f* mul_rhs;
+	local add_result:4 = add_lhs f+ add_rhs;
+	rah3 = mul_result;
+	p2_rdh = add_result;
+}
+
+# p.119 MPYF32 RaH, RbH, RcH || SUBF32 RdH, ReH, RfH
+:mpyf32 rah3, rbh3, rch3 "|| SUBF32" p2_rdh, p2_reh3, par_rfh_even is op3_13=0b1110011101010 & par_rfh_even; rah3 & rbh3 & rch3 & p2_rdh & p2_reh3 & p2_rfh_bit=0 {
+	local mul_lhs:4 = rbh3;
+	local mul_rhs:4 = rch3;
+	local sub_lhs:4 = p2_reh3;
+	local sub_rhs:4 = par_rfh_even;
+	local mul_result:4 = mul_lhs f* mul_rhs;
+	local sub_result:4 = sub_lhs f- sub_rhs;
+	rah3 = mul_result;
+	p2_rdh = sub_result;
+}
+
+:mpyf32 rah3, rbh3, rch3 "|| SUBF32" p2_rdh, p2_reh3, par_rfh_odd is op3_13=0b1110011101010 & par_rfh_odd; rah3 & rbh3 & rch3 & p2_rdh & p2_reh3 & p2_rfh_bit=1 {
+	local mul_lhs:4 = rbh3;
+	local mul_rhs:4 = rch3;
+	local sub_lhs:4 = p2_reh3;
+	local sub_rhs:4 = par_rfh_odd;
+	local mul_result:4 = mul_lhs f* mul_rhs;
+	local sub_result:4 = sub_lhs f- sub_rhs;
+	rah3 = mul_result;
+	p2_rdh = sub_result;
+}
+
+}

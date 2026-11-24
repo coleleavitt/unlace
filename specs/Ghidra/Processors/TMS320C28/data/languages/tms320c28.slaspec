@@ -1,0 +1,70 @@
+# sleigh specification file for Skeleton Processor
+#   >> see docs/languages/sleigh.htm or sleigh.pdf for Sleigh syntax
+# Other language modules (see Ghidra/Processors) may provide better examples
+# when creating a new language module.
+
+define endian=little;
+define alignment=2;
+
+define space ram      type=ram_space size=4 wordsize=2 default;
+define space register type=register_space size=4;
+
+# Actually, PC is 22 bits
+define register offset=0 size=4      [  ACC    XAR0      XAR1      XAR2      XAR3      XAR4      XAR5      XAR6      XAR7      P      XT    PC  RPC  ];
+define register offset=0 size=2      [  AL AH  AR0 AR0H  AR1 AR1H  AR2 AR2H  AR3 AR3H  AR4 AR4H  AR5 AR5H  AR6 AR6H  AR7 AR7H  PL PH  TL T  ];
+define register offset=0 size=1      [  AL.LSB AL.MSB AH.LSB AH.MSB  ];
+
+# ST0 fields
+define register offset=0x100 size=1  [  OVC PM V N Z C TC OVM SXM  ];
+# ST1 fields
+define register offset=0x110 size=1  [  ARP XF M0M1MAP OBJMODE AMODE IDLESTAT EALLOW LOOP SPA VMAP PAGE0 DBGM INTM  ];
+# ???
+define register offset=0x120 size=1  [  BIO  ];
+
+define register offset=0x200 size=2  [  DP  IFR  IER  DBGIER  ];
+# SP is architecturally 16-bit, but a pointer-width spacebase avoids nonstandard
+# ZEXT24 stack expressions in Ghidra.  SP16 is the overlapping encoded alias.
+define register offset=0x208 size=4  [  SP  ];
+define register offset=0x208 size=2  [  SP16  ];
+define register offset=0x20c size=2  [  ST0  ST1  ];
+define register offset=0x210 size=4  [  STF ];
+
+# FPU32 registers (32-bit IEEE-754 floating-point)
+define register offset=0x300 size=4  [  R0H  R1H  R2H  R3H  R4H  R5H  R6H  R7H  ];
+
+define register offset=0x320 size=4  [  RB  ];
+# Block start word-address register for RPTB loop-back (written by RPTB, read by ^instruction wrapper)
+define register offset=0x324 size=4  [  RB_RSTART  ];
+# Internal repeat counter loaded by RPT instruction
+define register offset=0x122 size=2  [  RPTC  ];
+
+# RB register fields (Figure 2-3 in SPRUEO2B) — defined here so tms320c28.sinc can use them
+define register offset=0x328 size=2  [  RB_RC  ];
+define register offset=0x32a size=1  [  RB_RE  RB_RSIZE  RB_RA  RB_RAS  ];
+
+# Shadow registers for SAVE/RESTORE (high-priority interrupt context)
+define register offset=0x340 size=4  [  R0H_sh  R1H_sh  R2H_sh  R3H_sh  R4H_sh  R5H_sh  R6H_sh  R7H_sh  STF_sh  ];
+
+# Define context bits (if defined, size must be multiple of 4-bytes)
+define register offset=0xf00 size=4   contextreg;
+
+define context contextreg
+	ctx_amode      = (0,0)			# ST1 AMODE address-decode context
+	ctx_objmode    = (1,1)			# ST1 OBJMODE decode context
+	rpt_active = (2,2) noflow	# set by RPT for the one following instruction
+	ctx_page0      = (4,4)			# ST1 PAGE0 address-decode context
+	switch_canonical = (5,5) noflow	# analyzer-proven canonical switch P-Code
+	ffc_return     = (6,6) noflow	# analyzer-proven FFC helper return through XAR7
+	subcul_div32   = (7,7) noflow	# analyzer-proven 32-step unsigned division
+	pm_store_noshift = (8,8) noflow	# analyzer-proven decoded PM=0 MOV loc16,P
+	ovm_zero       = (9,9) noflow	# analyzer-proven OVM=0 at this arithmetic site
+	lsrl_t_count   = (10,14) noflow	# analyzer-proven nonzero T(4:0) count
+	asr64_pair_phase = (15,16) noflow	# analyzer-proven adjacent ASR64 #16 pair
+	rptb_flag  = (3,3) noflow	# set by RPTB on the last instruction of its block
+	rpt_phase  = (31,31)		# internal: prevents recursive ^instruction matching
+;
+
+
+# Include contents of tms320c28.sinc file
+@include "tms320c28.sinc"
+@include "tms320c28_fpu.sinc"

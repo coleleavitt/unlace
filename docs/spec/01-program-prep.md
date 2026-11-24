@@ -9698,6 +9698,9 @@ both
   The order does not change the arbitration, which scores candidates rather than taking the first. When
   signature files were given and none is that runtime, the pass reports the compiler and its release on stderr.
   A signature header records no release, so a release mismatch inside the family is not reported.
+  `unlace flirt make` names the four GCC `crtstuff.c` helpers (`deregister_tm_clones`, `register_tm_clones`,
+  `__do_global_dtors_aux`, `frame_dummy`; `flirtpat::CRT_HELPERS`) from their local symbols, so a signature built from a
+  `crtbeginS.o`, `crtbegin.o` or `crtbeginT.o` names them in a stripped image. Any other local-only function still yields no pattern.
   With `flirttil on` (default off) the type libraries that the `ids` and `idsnames` files
   beside the applicable signatures name are read as sources of the `typelib` option: a line
   `<signature> <library>` autoloads `<library>.til`, from beside the `.sig` or from

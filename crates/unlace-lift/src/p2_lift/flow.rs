@@ -5166,6 +5166,16 @@ truncating the fall-through here"
             // A table that is its function's last and whose rows run on asked
             // for the next functions' tables too, on either attempt.
             let mut wanted = self.data.kuna_later_wanted.take();
+            if std::env::var_os("KUNA_SWX_DEBUG").is_some() {
+                eprintln!(
+                    "[swx] flow at {at:#x}: first mode ok={} none={} retried={} extent={} wanted={:?}",
+                    mode.is_ok(),
+                    matches!(mode, Ok(None)),
+                    retried.is_some(),
+                    self.data.kuna_extent_tables().is_some(),
+                    wanted
+                );
+            }
             let mut rounds = 0;
             while rounds < 2
                 && matches!(mode, Ok(None) | Err(RecoveryMode::FailNormal))

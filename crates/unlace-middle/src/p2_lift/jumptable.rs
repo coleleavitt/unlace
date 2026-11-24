@@ -5418,17 +5418,30 @@ impl JumpModel for JumpBasicModel {
                 self.keep_values(kept);
                 return Ok(true);
             }
-            if let Some(own) = Self::own_rows(fd, &addresstable[..i]) {
-                i = own;
-                self.run_on = true;
-            } else {
-                match self.kuna_next_table_rows(fd, &addresstable[..i]) {
-                    NextTableRows::Cut(rows) => {
-                        i = rows;
+            let own = Self::own_rows(fd, &addresstable[..i]);
+            swx_dbg(|| {
+                format!(
+                    "sanity at {:#x}: rows {} reasonable {} own {:?} later {:?} extent {:?} recovery_on {}",
+                    fd.get_address().get_offset(),
+                    addresstable.len(),
+                    i,
+                    own,
+                    fd.kuna_later_tables.as_deref(),
+                    fd.kuna_extent_tables().as_deref().map(|t| t.tables.clone()),
+                    fd.is_jumptable_recovery_on()
+                )
+            });
+            match self.kuna_next_table_rows(fd, &addresstable[..own.unwrap_or(i)]) {
+                NextTableRows::Cut(rows) => {
+                    i = rows;
+                    self.run_on = true;
+                }
+                NextTableRows::Ask => return Ok(false),
+                NextTableRows::Keep => {
+                    if let Some(own) = own {
+                        i = own;
                         self.run_on = true;
                     }
-                    NextTableRows::Ask => return Ok(false),
-                    NextTableRows::Keep => {}
                 }
             }
         }
@@ -5585,11 +5598,13 @@ impl JumpBasicModel {
         self.rebuild = true;
     }
 
-    /// (kuna `switchextent`) Where an unguarded table whose rows leave the
-    /// function and that the run-on cut keeps whole ends: at the lowest jump
+    /// (kuna `switchextent`) Where an unguarded table ends: at the lowest jump
     /// table above it, of this function or of the next ones
-    /// (`kuna_switchextent::later_tables`). A jump-table partial asks the flow
-    /// for the next functions' tables first ([`NextTableRows::Ask`]).
+    /// (`kuna_switchextent::later_tables`), when that is before `rows` end.
+    /// A byte selector bounds a table only to 256 rows, whose run past its end
+    /// may stay inside the function (csplit's regcomp, OCaml matches). A
+    /// jump-table partial asks the flow for the tables first
+    /// ([`NextTableRows::Ask`]).
     fn kuna_next_table_rows(&self, fd: &Funcdata, rows: &[Address]) -> NextTableRows {
         if !fd
             .get_arch()
@@ -5601,25 +5616,23 @@ impl JumpBasicModel {
             return NextTableRows::Keep;
         }
         let entry = fd.get_address();
-        let Some(owner) = fd.get_arch().function_owner(entry) else {
-            return NextTableRows::Keep;
-        };
-        if rows
-            .iter()
-            .all(|row| owner(row.get_offset()) == Some(entry.get_offset()))
-        {
+        if fd.get_arch().function_owner(entry).is_none() {
+            swx_dbg(|| "next_table_rows: no function owner".to_string());
             return NextTableRows::Keep;
         }
         let Some((table, stride)) = self.kuna_table_read(fd) else {
+            swx_dbg(|| "next_table_rows: no table read".to_string());
             return NextTableRows::Keep;
         };
-        let Some(later) = fd.kuna_later_tables.as_ref() else {
-            if fd.is_jumptable_recovery_on() {
-                fd.kuna_later_wanted.set(Some(table));
-                return NextTableRows::Ask;
-            }
-            return NextTableRows::Keep;
-        };
+        swx_dbg(|| format!("next_table_rows: table {table:#x} stride {stride}"));
+        if fd.kuna_later_tables.is_none() && fd.is_jumptable_recovery_on() {
+            fd.kuna_later_wanted.set(Some(table));
+            return NextTableRows::Ask;
+        }
+        let later = fd
+            .kuna_later_tables
+            .as_deref()
+            .map_or(&[][..], |t| t.as_slice());
         let own = fd
             .kuna_extent_tables()
             .as_deref()
@@ -5640,6 +5653,12 @@ impl JumpBasicModel {
                 })
             })
             .min();
+        swx_dbg(|| {
+            format!(
+                "next_table_rows: next {next:?} of own {own:x?} later {later:x?}, rows {}",
+                rows.len()
+            )
+        });
         match next.map(|next| ((next - table) / stride) as usize) {
             Some(n) if n >= 2 && n < rows.len() => NextTableRows::Cut(n),
             _ => NextTableRows::Keep,
@@ -7754,3 +7773,10 @@ crate::kuna_flag!(
 
 #[cfg(test)]
 mod tests;
+
+/// Temporary switchextent tracing (`KUNA_SWX_DEBUG`); removed before merge.
+pub(crate) fn swx_dbg(msg: impl FnOnce() -> String) {
+    if std::env::var_os("KUNA_SWX_DEBUG").is_some() {
+        eprintln!("[swx] {}", msg());
+    }
+}

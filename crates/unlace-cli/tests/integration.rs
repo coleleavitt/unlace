@@ -3,13 +3,23 @@
 mod arcv2_loops;
 #[path = "c28x_raw.rs"]
 mod c28x_raw;
+#[path = "chip8.rs"]
+mod chip8;
 mod common;
 #[path = "m32r_raw.rs"]
 mod m32r_raw;
+#[path = "ft32_raw.rs"]
+mod ft32_raw;
+#[path = "huc6280.rs"]
+mod huc6280;
 #[path = "m6800_family.rs"]
 mod m6800_family;
 #[path = "mips_elf_selection.rs"]
 mod mips_elf_selection;
+#[path = "pdp11_raw.rs"]
+mod pdp11_raw;
+#[path = "moxie_raw.rs"]
+mod moxie_raw;
 #[path = "return_branch_cli.rs"]
 mod return_branch_cli;
 #[path = "riscv_bitmanip.rs"]
@@ -22,6 +32,8 @@ mod riscv_hints;
 mod riscv_vector;
 #[path = "riscv_zabha.rs"]
 mod riscv_zabha;
+#[path = "riscv_zacas.rs"]
+mod riscv_zacas;
 #[path = "riscv_zcb.rs"]
 mod riscv_zcb;
 #[path = "riscv_zcmp.rs"]
@@ -40,6 +52,10 @@ mod stm8_raw;
 mod w65816_raw;
 #[path = "x86_amx.rs"]
 mod x86_amx;
+#[path = "aarch64_rme.rs"]
+mod aarch64_rme;
+#[path = "i4004_raw.rs"]
+mod i4004_raw;
 
 #[path = "firmware_raw.rs"]
 mod firmware_raw;

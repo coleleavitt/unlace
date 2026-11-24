@@ -4915,3 +4915,16 @@ option-off output has one `CONCAT44`, the option-on output none). Not done: a
 pair whose halves are joined through PIECEs of other variables (64-bit
 add-with-carry chains, `CONCAT44(hi - (lo1 < lo2), lo1 - lo2)`), and pairs in
 memory (`CONCAT44(dat_4, dat_0)`).
+
+
+## (unlace) Program slices — read-only query, no option
+
+`unlace-middle/src/p3_dataflow/programslice.rs` ports the two slice functions of the archived
+`ipa_slice` pass as queries over a function's SSA def-use graph. A `SliceCriterion` names a value
+and the op that reads or defines it at that point; if the op neither reads nor defines the value the
+slice is empty. `backward_slice` follows each defining op's inputs transitively through `get_def`,
+and `forward_slice` follows each reader's output transitively through `descend_iter`. Both use a
+visited set, so MULTIEQUAL cycles terminate. The slice holds the ops and values reached and never
+changes the function: no op is inserted, removed or rewritten, and the printed text is unaffected.
+The slice stops at a call's output, since the callee's body is outside this function. It has no
+pipeline caller and no option; exposing it through `decompile` output or a subcommand is the next step.

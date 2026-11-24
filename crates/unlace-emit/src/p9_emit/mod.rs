@@ -121,6 +121,7 @@ pub mod swiftstrobj; // (unlace) a Swift string object is not a pointer to the b
 pub mod truncarg;
 pub mod truthycond;
 pub mod typeround; // (unlace) the declared-signedness rounding decision
+pub mod typeshadow; // (unlace) the signedness vote re-derived as a constraint solve, measured not applied
 pub mod unknowncasts;
 pub mod unsignedread; // (unlace) an unsigned read of an expression C evaluates as signed casts it
 pub mod warnstyle;

@@ -247,6 +247,11 @@ selection: `--no-vars` and `--omit aliases,line_mappings,variables,types` behave
 do there. Without `--json` both are refused, since the C text carries none of
 those collections.
 
+`--cfg-dot` replaces the C on stdout with the function's basic-block graph as Graphviz DOT
+(`digraph`, one node per basic block labelled with its index and address range, one edge
+per CFG out-edge), so `unlace decompile BIN FUNC --cfg-dot | dot -Tsvg` renders it. The same
+dump is the `cfg dot` console command. It is refused with `--json`.
+
 `--trace` adds, on stderr after the C, the `phase status` dump for the decompiled
 function: the pipeline variant, and the maturity its last pass reached with the facts
 settled there (`maturity: complete (settled: ssa, high-variables, flow, ...)`, see

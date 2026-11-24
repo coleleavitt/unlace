@@ -9,9 +9,21 @@ true16) through tools/amdgpu_gfx11_probe.py: 'probe vop3' writes one line per VO
 with a half, '<vopc|vop1|vop2> <op> | <text>'.  The p-code is written here.
 
 usage: gen_amdgpu_gfx11_valu.py vop3_ops.txt e32_ops.txt amdgcn_gfx11.slaspec > amdgcn_gfx11_valu.sinc
+       gen_amdgpu_gfx11_valu.py --gfx9 vop3_ops.txt /dev/null amdgcn_gfx9.slaspec > amdgcn_gfx9_valu.sinc
+
+With --gfx9 the VOP3 encoding is bits 31-26 = 110100 (the table from 'amdgpu_cdna_probe.py vop3'),
+there are no VGPR halves in the text: a 16-bit operand is the low half (or, for the opcodes LLVM
+prints op_sel for, the half op_sel picks), a 16-bit result zeroes the high half unless the opcode
+takes op_sel, and a compare writes an SGPR pair (v_cmpx also EXEC).  Operand widths come from
+the mnemonic's type suffixes (v_cvt_f32_f16: a 32-bit result of a 16-bit source).
 """
 import re
 import sys
+
+GFX9 = len(sys.argv) > 1 and sys.argv[1] == '--gfx9'
+if GFX9:
+    del sys.argv[1]
+E6 = '0x34' if GFX9 else '0x35'
 
 CMP_F = {'f': '0:1', 'lt': 'a f< b', 'eq': 'a f== b', 'le': 'a f<= b', 'gt': 'a f> b', 'lg': '(a f< b) || (a f> b)',
          'ge': 'a f>= b', 'o': '!(nan(a) || nan(b))', 'u': 'nan(a) || nan(b)', 'nge': '!(a f>= b)',
@@ -55,6 +67,10 @@ SEM = {
     'v_cvt_f16_f32': 'float2float(a)', 'v_cvt_f32_f16': 'float2float(a)',
     'v_mad_u32_u16': 'zext(a) * zext(b) + c', 'v_mad_i32_i16': 'sext(a) * sext(b) + c',
     'v_alignbit_b32': 'alignbit', 'v_alignbyte_b32': 'alignbyte',
+    # GFX9 forms
+    'v_mac_f16': '(a f* b) f+ d', 'v_mad_f16': '(a f* b) f+ c', 'v_mad_legacy_f16': '(a f* b) f+ c',
+    'v_fma_legacy_f16': '(a f* b) f+ c', 'v_max_f16': 'max_f', 'v_min_f16': 'min_f', 'v_add_i32': 'a + b',
+    'v_sub_i32': 'a - b', 'v_add_i16': 'a + b', 'v_sub_i16': 'a - b', 'v_mul_legacy_f32': 'a f* b',
     # GFX12 names
     'v_min_num_f16': 'min_f', 'v_max_num_f16': 'max_f', 'v_minimum_f16': 'min_f', 'v_maximum_f16': 'max_f',
     'v_minimum_f32': 'min_f', 'v_maximum_f32': 'max_f', 'v_minimum_f64': 'min_f', 'v_maximum_f64': 'max_f',
@@ -81,6 +97,8 @@ NAMED = {  # named user operations
     'v_permlanex16_b32': 'permlane', 'v_permlane16_var_b32': 'permlane', 'v_permlanex16_var_b32': 'permlane',
     'v_med3_num_f16': 'med3', 'v_s_exp_f32': 'exp2', 'v_s_exp_f16': 'exp2', 'v_s_log_f32': 'log2', 'v_s_log_f16': 'log2',
     'v_s_rsq_f32': 'rsqrt', 'v_s_rsq_f16': 'rsqrt',
+    'v_div_fixup_legacy_f16': 'div_fixup', 'v_cvt_pkrtz_f16_f32': 'cvt_pk', 'v_cvt_pknorm_i16_f16': 'cvt_pk',
+    'v_cvt_pknorm_u16_f16': 'cvt_pk', 'v_exp_legacy_f32': 'exp2', 'v_log_legacy_f32': 'log2',
 }
 
 
@@ -206,6 +224,77 @@ def e32(path, body):
                 body.append(':%s %s is %s { %s %s }' % (mn, d, ' & '.join(parts), load, sem))
 
 
+def widths16(base, kinds):
+    """GFX9: mark the 16-bit operands of a VOP3 form, from the type suffixes of its mnemonic."""
+    types = re.findall(r'_([fiub])(8|16|32|64)(?=_|$)', base)
+    if not types:
+        return kinds
+    w = [int(t[1]) for t in types]
+    dst_w, src_w = (w[0], w[0]) if len(w) == 1 else (w[0], w[1])
+    out = list(kinds)
+    cmp = base.startswith('v_cmp')
+    for i, k in enumerate(kinds):
+        if k != 'v32':
+            continue
+        isdst = i == 0 and not cmp
+        width = dst_w if isdst else src_w
+        if base in ('v_mad_u32_u16', 'v_mad_i32_i16') and i == 3:
+            width = 32
+        if base == 'v_ldexp_f16' and i == 2:
+            width = 32
+        if base in ('v_cvt_pknorm_i16_f16', 'v_cvt_pknorm_u16_f16', 'v_pack_b32_f16') and isdst:
+            width = 32
+        if base == 'v_sat_pk_u8_i16':
+            width = 16 if isdst else 32
+        if width == 16:
+            out[i] = 'h16'
+    return out
+
+
+def e32_gfx9(path, body):
+    """GFX9 VOPC/VOP1/VOP2 forms the base lacks: 16-bit operands are the low halves, results zero
+    the high half, compares write VCC (v_cmpx also EXEC)."""
+    head = {'vopc': 'e7=0x3e ... & vopcop=%d ...', 'vop1': 'e7=0x3f ... & vop1op=%d ...',
+            'vop2': 'e1=0 ... & vop2op=%d ...'}
+    for line in open(path):
+        if '|' not in line:
+            continue
+        h, text = line.split('|', 1)
+        fmt, op = h.split()
+        mn, ops = operands(text.strip())
+        base = re.sub(r'_e32$', '', mn)
+        cmp = fmt == 'vopc'
+        if cmp and ops and ops[0] == 'vcc':
+            ops = ops[1:]
+        kinds = widths16(base, [kind(o) for o in ops])
+        if '?' in kinds or 'v128' in kinds or (not cmp and not kinds):
+            continue
+        dst, srcs = (None, kinds) if cmp else (kinds[0], kinds[1:])
+        if len(srcs) > 2 or not srcs:
+            continue
+        tabs, load = [], []
+        for i, k in enumerate(srcs):
+            t = ('V64_i0' if k == 'v64' else 'V32_i0') if i == 0 else ('i9_vp' if k == 'v64' else 'i9_vg')
+            tabs.append(t)
+            n = {'h16': 2, 'v32': 4, 'v64': 8}[k]
+            load.append('%s:%d = %s%s;' % ('ab'[i], n, t, ':2' if k == 'h16' else ''))
+        if cmp:
+            c = compare(base)
+            if c is None:
+                continue
+            sem = c + ' vcc = zext(c1);' + (' exec = zext(c1);' if base.startswith('v_cmpx') else '')
+            disp = '"vcc", ' + ', '.join(tabs)
+        else:
+            d = {'h16': 'i17_vg', 'v32': 'i17_vg', 'v64': 'i17_vp'}[dst]
+            rsz = {'h16': 2, 'v32': 4, 'v64': 8}[dst]
+            rexpr = result(base, len(tabs), rsz)
+            pre = ('d:%d = %s%s; ' % (rsz, d, ':2' if dst == 'h16' else '')) if '(a f* b) f+ d' in rexpr else ''
+            sem = '%sr:%d = 0; %s %s = %s;' % (pre, rsz, rexpr, d, 'zext(r)' if dst == 'h16' else 'r')
+            disp = d + ', ' + ', '.join(tabs)
+        pat = ' & '.join([head[fmt] % int(op)] + (['%s ...' % d] if not cmp else []) + ['%s ...' % t for t in tabs])
+        body.append(':%s %s is %s { %s %s }' % (mn, disp, pat, ' '.join(load), sem))
+
+
 def operands(text):
     m = re.match(r'(\S+)\s*(.*)$', text)
     mn, rest = m.group(1), m.group(2)
@@ -224,6 +313,8 @@ def kind(op):
         return 'v32'
     if re.match(r'(s\d+|ttmp\d+)$', op):
         return 'sdst'
+    if re.match(r'(s|ttmp)\[\d+:\d+\]$', op):
+        return 'sdst64'
     return '?'
 
 
@@ -259,9 +350,10 @@ def main():
     w('')
     for j in SRC:
         # low and high halves of a 16-bit source; op_sel in the instruction picks the table
-        w('L16_%s: %s_vg^".l" is %s_v=1 & %s_vg { t:2 = %s_vg:2; export t; }' % (j, j, j, j, j))
+        hl = ('', '') if GFX9 else ('^".l"', '^".h"')
+        w('L16_%s: %s_vg%s is %s_v=1 & %s_vg { t:2 = %s_vg:2; export t; }' % (j, j, hl[0], j, j, j))
         w('L16_%s: S32_%s is %s_v=0 ... & S32_%s ... { t:2 = S32_%s:2; export t; }' % (j, j, j, j, j))
-        w('U16_%s: %s_vg^".h" is %s_v=1 & %s_vg { t:2 = %s_vg(2); export t; }' % (j, j, j, j, j))
+        w('U16_%s: %s_vg%s is %s_v=1 & %s_vg { t:2 = %s_vg(2); export t; }' % (j, j, hl[1], j, j, j))
         w('U16_%s: S32_%s is %s_v=0 ... & S32_%s ... { t:2 = S32_%s(2); export t; }' % (j, j, j, j, j))
     for i, j in enumerate(SRC):
         # float halves with the VOP3 abs (word 0) and neg (word 1) modifiers
@@ -272,7 +364,7 @@ def main():
             w('F%s: "-"^%s is v3abs%d=0 ; v3neg%d=1 ... & %s ... { t:2 = f- %s; export t; }' % (t, t, i, i, t, t))
             w('F%s: "-|"^%s^"|" is v3abs%d=1 ; v3neg%d=1 ... & %s ... { t:2 = f- abs(%s); export t; }'
               % (t, t, i, i, t, t))
-    for s in range(128):
+    for s in range(0 if GFX9 else 128):
         w('E9: "v%d.l" is i9_vg=%d { t:2 = v%d:2; export t; }' % (s, s, s))
         w('E9: "v%d.h" is i9_vg=%d { t:2 = v%d(2); export t; }' % (s, s + 128, s))
     w('')
@@ -290,13 +382,16 @@ def main():
         kinds = [kind(o) for o in ops]
         if '?' in kinds or 'v128' in kinds:
             continue
+        opsel_ok = 'op_sel' in parts[2]
+        if GFX9:
+            kinds = widths16(base, kinds)
         flt = bool(re.search(r'_f(16|32|64)$|_f16_|_f32_|_f64_', base)) and not base.startswith('v_cvt_f16_')
         is_cmp = base.startswith('v_cmp_') or base.startswith('v_cmpx_')
         cmpx = base.startswith('v_cmpx_')
-        if cmpx:
+        if cmpx and not GFX9:
             dst, srcs = None, kinds
-        elif kinds and kinds[0] == 'sdst':
-            dst, srcs = 'sdst', kinds[1:]
+        elif kinds and kinds[0] in ('sdst', 'sdst64'):
+            dst, srcs = kinds[0], kinds[1:]
         else:
             dst, srcs = kinds[0], kinds[1:]
         tabs = []
@@ -324,7 +419,11 @@ def main():
                 expr = 'c1:1 = %s;' % CMP_I[m.group(1)].format(s='s' if m.group(2) == 'i' else '')
             else:
                 continue
-            if cmpx:
+            if GFX9:
+                sem = expr + ' i0_spd = zext(c1);' + (' exec = zext(c1);' if cmpx else '')
+                disp = 'i0_spd, ' + ', '.join(tabs)
+                pat_dst = ' & i0_h=0 & i0_spd'
+            elif cmpx:
                 sem = expr + ' exec_lo = zext(c1);'
                 disp = ', '.join(tabs)
                 pat_dst = ' & i0_x=0x7e'   # the destination field holds EXEC_LO, as in the base spec
@@ -346,20 +445,33 @@ def main():
             else:
                 rexpr = 'r = %s;' % uop(base[2:], *names[:len(tabs)])
             need_d = '(a f* b) f+ d' in rexpr
-            if dst == 'h16':
+            if dst == 'h16' and GFX9 and not opsel_ok:
+                dpre = 'd:2 = i0v8:2; ' if need_d else ''
+                variants = [('', ' & i0v8', '%s r:2 = 0; %s i0v8 = zext(r);' % (dpre, rexpr), 'i0v8, ' + ', '.join(tabs))]
+            elif dst == 'h16':
                 variants = []
                 for hi in (0, 1):
                     dexpr = 'i0v8 = (i0v8 & 0xffff0000) | zext(r);' if not hi else 'i0v8 = (i0v8 & 0xffff) | (zext(r) << 16);'
                     dpre = ('d:2 = i0v8%s; ' % (':2' if not hi else '(2)')) if need_d else ''
-                    variants.append(('^".%s"' % 'lh'[hi], '@D%d & i0v8' % hi,
+                    sfx = '' if GFX9 else '^".%s"' % 'lh'[hi]
+                    variants.append((sfx or str(hi), '@D%d & i0v8' % hi,
                                      '%s r:2 = 0; %s %s' % (dpre, rexpr, dexpr),
-                                     'i0v8^".%s", ' % 'lh'[hi] + ', '.join(tabs)))
+                                     'i0v8%s, ' % sfx + ', '.join(tabs)))
             else:
                 dfield = {'v32': 'i0v8', 'v64': 'i0vp', 'v128': 'V128_d'}[dst]
                 dpre = 'd:%d = %s; ' % (rsz, dfield) if need_d else ''
                 variants = [('', ' & %s' % dfield, '%s r:%d = 0; %s %s = r;' % (dpre, rsz, rexpr, dfield),
                              '%s, ' % dfield + ', '.join(tabs))]
         h16 = [i for i, t in enumerate(tabs) if t.startswith('H16_') or t.startswith('FH16_')]
+        if GFX9 and not opsel_ok:
+            # no op_sel: every 16-bit source is its low half
+            tabs = [('F' if t[0] == 'F' else '') + 'L16_' + t.split('_', 1)[1] if i in h16 else t
+                    for i, t in enumerate(tabs)]
+            load = ' '.join('%s:%d = %s;' % (names[i], sz[srcs[i]], t) for i, t in enumerate(tabs))
+            variants = [(s, p, x.replace('H16_', 'L16_'), d.replace('FH16_', 'FL16_').replace('H16_', 'L16_'))
+                        for s, p, x, d in variants]
+            variants = [(s, p, x, re.sub(r'\bFL16_', 'FL16_', d)) for s, p, x, d in variants]
+            h16 = []
         for suffix, pat_dst, sem, disp in variants:
             for sel in range(1 << len(h16)):
                 key = (mn, suffix, sel)
@@ -383,14 +495,14 @@ def main():
                     l2 = l2.replace(a, b, 1)
                 w1 = [t for t in dict.fromkeys(tt) if not t.startswith('F')]
                 w0 = [t for t in dict.fromkeys(tt) if t.startswith('F')]
-                pat = 'e6=0x35 & vop3op=%d%s%s' % (op, pd, opsel(fixed))
+                pat = 'e6=%s ' % E6 + '& vop3op=%d%s%s' % (op, pd, opsel(fixed))
                 if w1:
                     pat += ' ; ' + ' & '.join('%s ...' % t for t in w1)
                 if w0:
                     pat = '(%s) ... & ' % pat + ' & '.join('%s ...' % t for t in w0)
                 body.append(':%s %s is %s { %s %s }' % (mn, d2, pat, l2, sem))
     # forms with a carry/select SGPR operand
-    for hi in (0, 1):
+    for hi in (0, 1) if not GFX9 else ():
         for s0 in (0, 1):
             for s1 in (0, 1):
                 a, b = ('U16_j0' if s0 else 'L16_j0'), ('U16_j9' if s1 else 'L16_j9')
@@ -398,8 +510,11 @@ def main():
                 body.append(':v_cndmask_b16 i0v8^".%s", %s, %s, S32_j18 is e6=0x35 & vop3op=605 & i0v8%s ; %s ... & %s ... & S32_j18 ... '
                             '{ a:2 = %s; b:2 = %s; r:2 = a; if ((S32_j18 & 1) == 0) goto <k>; r = b; <k> %s }'
                             % ('lh'[hi], a, b, opsel({0: s0, 1: s1, 3: hi}), a, b, a, b, dw))
-    e32(sys.argv[2], body)
-    if not re.search(r'vop3op=765\b', open(sys.argv[3]).read()):
+    if GFX9:
+        e32_gfx9(sys.argv[2], body)
+    else:
+        e32(sys.argv[2], body)
+    if not GFX9 and not re.search(r'vop3op=765\b', open(sys.argv[3]).read()):
         body.append(':v_div_scale_f64 i0vp, i8_lo7d, F64_j0, F64_j9, F64_j18 is e6=0x35 ... & vop3op=765 ... & i0vp ... '
                     '& i8_lo7d ... & F64_j0 ... & F64_j9 ... & F64_j18 ... '
                     '{ i0vp = div_scale(F64_j0, F64_j9, F64_j18); i8_lo7d = 0; }')

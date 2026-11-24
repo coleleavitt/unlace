@@ -68,4 +68,5 @@ mod kuna_projectfunctionnames;
 mod kuna_blobdata;
 mod kuna_dataidentifiers;
 mod kuna_iokittypes;
+mod kuna_msvcclasses;
 mod kuna_stringoverlaps;

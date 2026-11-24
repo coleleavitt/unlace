@@ -600,3 +600,6 @@ mod indirect_dispatch_flow;
 
 #[path = "verify_immutable_got.rs"]
 mod verify_immutable_got;
+
+#[path = "verify_msvcvtabletypes.rs"]
+mod verify_msvcvtabletypes;

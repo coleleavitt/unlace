@@ -1,7 +1,7 @@
 # Versioning & binary releases
 
 How unlace versions itself and how the binary release CI
-(`.github/workflows/release.yml`) turns a day's work on `main` into a tagged
+(`.github/workflows/release.yml`) turns a batch of work on `main` into a tagged
 GitHub Release.
 
 ## The version scheme: MAJOR.MINOR
@@ -49,24 +49,17 @@ version.
 
 ### When it runs
 
-**One release a night, batching the day's merges** — not one per push. Three
-triggers:
-
-| Trigger | When | Why |
-|---|---|---|
-| `schedule` | 06:00 UTC daily (~02:00 America/New_York) | The normal path. Whatever landed that day ships together. |
-| `push` to `main`, `paths: [VERSION]` | A MAJOR bump lands | A major is an intentional milestone; it should not wait for the night. |
-| `workflow_dispatch` | On demand, Actions tab | Cut a release now, or re-run a failed one. |
+**On demand only.** The workflow has one trigger, `workflow_dispatch`: start it
+from the Actions tab or with `gh workflow run release.yml -R coleleavitt/unlace`.
+It also re-runs a failed release. There is no schedule and no push trigger yet, so
+a release is cut when a maintainer decides a batch of merges is ready; the release
+checklist below says what to check first.
 
 There is deliberately **no "has anything changed?" guard**, because the version
 scheme already is one: a commit that already carries a release tag reports that
-tag's version, so a nightly run on an unchanged `main` recomputes the same
+tag's version, so re-running the workflow on a released commit recomputes the same
 `MAJOR.MINOR`, the `version` job finds that tag already published, and every
-downstream job skips. A quiet day costs one
-~30-second job and publishes nothing.
-
-Before this, every push to `main` released: one busy day produced **18 releases
-and 18 tags**.
+downstream job skips.
 
 ### The jobs
 
@@ -77,8 +70,8 @@ and 18 tags**.
 2. **specs** — compiles every `.slaspec` → `.sla` once on Linux and packages
    the whole `specs/` tree as `unlace-v<ver>-specs.tar.gz`. `.sla` files are
    platform-independent, so one tree serves every OS: each **build** row
-   embeds it, and it also ships as an asset (for `UNLACE_SPECS`, and the
-   nightly's speed baseline).
+   embeds it, and it also ships as an asset (for `UNLACE_SPECS`, and as the
+   nightly's speed baseline when the previous nightly left no build).
 3. **build** (matrix, after **specs**) — lays the compiled tree over the
    checkout's `specs/`, then `cargo build --release` of `unlace-cli` (with
    `--features unlace-cli/embed-specs`) and `unlace-ghidra` for:
@@ -126,6 +119,26 @@ and 18 tags**.
    else. (It downloads only `unlace-*` artifacts — the `ghidra-bin-*` binaries
    are inter-job plumbing, not assets.)
 
+## Assets
+
+Every release publishes these assets, named from the version (`<ver>` is
+`MAJOR.MINOR`, e.g. `1.980`):
+
+| Asset | Built by |
+|---|---|
+| `unlace-v<ver>-linux-x86_64.tar.gz` | `x86_64-unknown-linux-gnu` (build) |
+| `unlace-v<ver>-linux-x86_64-musl.tar.gz` | `x86_64-unknown-linux-musl`, fully static (build) |
+| `unlace-v<ver>-linux-arm64.tar.gz` | `aarch64-unknown-linux-gnu` (build) |
+| `unlace-v<ver>-macos-arm64.tar.gz` | `aarch64-apple-darwin` (build) |
+| `unlace-v<ver>-macos-x86_64.tar.gz` | `x86_64-apple-darwin` (build) |
+| `unlace-v<ver>-windows-x86_64.zip` | `x86_64-pc-windows-msvc` (build) |
+| `unlace-v<ver>-specs.tar.gz` | the compiled SLEIGH tree (specs) |
+| `unlace-v<ver>-UnlaceDecompiler-ghidra_<ghidra-version>.zip` | the Ghidra extension (ghidra-ext) |
+
+Each archive unpacks to a directory of the same name holding `unlace` (or
+`unlace.exe`), `LICENSE` and `NOTICE`. The `unlace_ghidra` binaries are
+not assets; they only go into the Ghidra extension zip.
+
 ## Using a released binary
 
 `unlace` is the only file a release needs. It runs its own decompiler console
@@ -154,3 +167,57 @@ self-contained binary locally; its build script compiles every language through 
 The `unlace-v<ver>-UnlaceDecompiler-ghidra_<ghidra-version>.zip` asset is not an
 archive to extract — install it from inside Ghidra (**File → Install
 Extensions… → `+`**); see `integrations/ghidra/UnlaceDecompiler/README.md`.
+
+## Release checklist
+
+Run these in order. The release job does not run the test suite, so the gates are
+the maintainer's job before dispatch.
+
+### Before dispatch
+
+1. **Versioning.** Read the MAJOR: `cat VERSION`. The MINOR is never edited; it is
+   derived from the tags. To change the MAJOR, land a PR that edits `VERSION`
+   (CODEOWNERS routes it to the code owner's review); the next release
+   is then `MAJOR.0`. Compute the number the run will publish from a full clone:
+   `git fetch --tags && bash scripts/version.sh`. Confirm the tag is free:
+   `git ls-remote --tags origin "refs/tags/v<ver>"` prints nothing. If it prints a
+   line, the run skips (a re-run of a released commit).
+2. **Changelog.** There is no CHANGELOG file. The GitHub release notes are generated
+   by `gh release create --generate-notes` from the merged PR titles since the
+   previous tag, followed by the fixed notes in the workflow. List what will ship:
+   `git log --oneline v<previous>..origin/main`. If a title would mislead a user,
+   fix the release notes after publishing (`gh release edit`) rather than rewording
+   history.
+3. **Gates on `origin/main`.** Check the last CI run is green:
+   `gh run list -R coleleavitt/unlace --workflow tests.yml --branch main --limit 3`.
+   Then run the gates from [`docs/dev-setup.md` § Gates](dev-setup.md#gates) on a
+   clean checkout of `main`: the fmt check, the parity target, `check_spec`, the
+   Python unittests, the `tests/cli` probes, `catalog --check`, the determinism run,
+   clippy on `unlace-cli`, `unlace-base` and `unlace-num`, and the workspace
+   nextest suite. The gate list there is the one owner; this step only names it.
+4. **Ghidra pin.** If `GHIDRA_VERSION` or `GHIDRA_ZIP_URL` changes in
+   `release.yml`, change both together, check the URL downloads, and update the
+   version-lock sentence in `integrations/ghidra/UnlaceDecompiler/README.md`.
+
+### Dispatch
+
+5. Start the run: `gh workflow run release.yml -R coleleavitt/unlace` (or the
+   Actions tab). Watch it with `gh run watch -R coleleavitt/unlace`.
+
+### After publish
+
+6. **A failed run creates no tag**, so nothing is half-published. Fix the cause and
+   re-run the failed jobs (`gh run rerun <run-id> -R coleleavitt/unlace --failed`);
+   the version is recomputed the same way.
+7. **Assets.** `gh release view v<ver> -R coleleavitt/unlace --json assets -q '.assets[].name'`
+   must list the eight assets in [Assets](#assets).
+8. **Smoke.** Extract `unlace-v<ver>-linux-x86_64.tar.gz` and run
+   `unlace --version`; it must print `unlace <ver>`. The Ghidra zip is checked
+   for structure by CI only, so install it into a Ghidra install once when a
+   release changes the extension.
+
+### Withdrawing a release
+
+A published release is public and may already be cached or downloaded. Deleting
+one (`gh release delete v<ver> --cleanup-tag -R coleleavitt/unlace`) needs the
+owner's confirmation first; prefer publishing a fixed release.

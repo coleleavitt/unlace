@@ -1,7 +1,8 @@
 name: Release binaries
 
-# Builds the user-facing binaries (unlace + its engine siblings decomp_dbg and
-# slacomp) for Linux, macOS, and Windows, then tags the commit vMAJOR.MINOR and
+# Builds the user-facing binary (unlace, with the decompiler console and the SLEIGH
+# compiler built in as its hidden decomp_dbg and slacomp subcommands) for Linux,
+# macOS, and Windows, then tags the commit vMAJOR.MINOR and
 # publishes a GitHub Release with the archives plus a platform-independent
 # compiled SLEIGH spec tree (the engine needs .sla files at runtime). The
 # version scheme -- VERSION file = MAJOR, one past the last release tag = MINOR
@@ -11,14 +12,14 @@ name: Release binaries
 # zip with prebuilt unlace_ghidra backends for every platform (the ghidra-ext
 # job), so airgapped users can install without cargo or network access.
 #
-# Cadence: ONE release a night, batching whatever landed that day, not one per
-# merge. A busy day used to publish ~18 releases and ~18 tags.
+# Cadence: on demand (workflow_dispatch, below), one release for a batch of merges,
+# not one per merge. A busy day that published once per push produced ~18 releases
+# and ~18 tags.
 #
 # No "did anything change?" guard is needed: a commit that already carries a
-# release tag reports that tag's version, so a nightly run on an unchanged main
-# computes the same MAJOR.MINOR, the `version` job sees that tag already exists,
-# and build/specs/release all skip. Quiet days cost one 30-second job and
-# publish nothing.
+# release tag reports that tag's version, so re-running the workflow on a released
+# commit computes the same MAJOR.MINOR, the `version` job sees that tag already
+# exists, and build/specs/ghidra-ext/release all skip.
 
 # unlace: releases are cut by hand for now (no nightly schedule, no VERSION-push trigger).
 on:

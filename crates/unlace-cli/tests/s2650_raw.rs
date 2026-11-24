@@ -25,6 +25,12 @@ fn s2650_sum_loop_decompiles() {
     assert!(!lower.contains("unimplemented"), "{stdout}");
     assert!(!lower.contains("bad instruction"), "{stdout}");
     assert!(!lower.contains("halt_baddata"), "{stdout}");
-    assert!(stdout.contains("do {"), "the BDRR loop is recovered: {stdout}");
-    assert!(stdout.contains("dat_1000 = "), "the absolute store survives: {stdout}");
+    assert!(
+        stdout.contains("do {"),
+        "the BDRR loop is recovered: {stdout}"
+    );
+    assert!(
+        stdout.contains("dat_1000 = "),
+        "the absolute store survives: {stdout}"
+    );
 }

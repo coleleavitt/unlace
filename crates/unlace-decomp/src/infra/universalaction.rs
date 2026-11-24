@@ -653,6 +653,11 @@ pub fn universal_sched_hooked(
             crate::kuna_mba::RuleMbaSimplify::new("analysis")
         ),
         rrow!(
+            "egraph",
+            "analysis",
+            crate::kuna_egraph::RuleEgraphSimplify::new("analysis")
+        ),
+        rrow!(
             "simdshufflelane",
             "analysis",
             crate::kuna_simdlane::RuleSimdShuffleLane::with_group("analysis")

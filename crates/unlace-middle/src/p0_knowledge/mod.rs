@@ -22,6 +22,7 @@ pub mod kuna_ifuncfpret;
 // (kuna) arm64e Mach-O AppleSilicon spec selection option gate (load-time, env-bridged).
 pub mod kuna_macho_arm64e;
 // (kuna) PowerPC APU-note language selection option gate (load-time, env-bridged).
+pub mod kuna_delphiabi;
 pub mod kuna_ppcapu;
 // (kuna) Relocatable-object analysis-fact rebase option gate (load-time, env-bridged).
 // (kuna) Linked-image dynamic-relocation application option gate (load-time, env-bridged).

@@ -17,6 +17,7 @@ unlace-structure.workspace = true
 thiserror.workspace = true
 smallvec.workspace = true
 slotmap.workspace = true
+egg.workspace = true
 
 [lints]
 workspace = true

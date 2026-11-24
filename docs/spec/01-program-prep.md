@@ -9378,8 +9378,8 @@ the directory is left alone rather than misparsed; Ghidra logs "Exception Data
 unsupported architecture" and leaves its `functionEntries` null at the same point.
 Chained fragments are not decoded on the ARM form — Ghidra does not decode them
 either. Ghidra additionally routes an image whose load-config CHPE metadata
-pointer is set to its ARM parser regardless of `Machine`; kuna parses no load
-config, so an ARM64EC image that declares itself `AMD64` still reads at 12.
+pointer is set to its ARM parser regardless of `Machine`; kuna does not read the
+CHPE metadata, so an ARM64EC image that declares itself `AMD64` still reads at 12.
 
 (kuna) **An address-taken function is described by nothing else in a PE**, and the
 base-relocation table is what finds it
@@ -9432,6 +9432,37 @@ plausible reading for another. Measured over 150 of those images, 38 inventories
 747 starts are added and 31 removed — every removal a start the new seed supersedes,
 including `0x140028d1c` in `CrackVM-V2.exe`, which was four bytes into the
 `MOV RAX,[RSP+0x28]` that opens the function the vtable slot names.
+
+(kuna) **The load configuration lists address-taken functions outright**
+(`decompiler/crates/kuna-analysis/src/loader/kuna_peloadconfig.rs
+(function_starts)`). `IMAGE_LOAD_CONFIG_DIRECTORY` (data directory 10) carries
+two tables of function starts. An image linked with `/guard:cf` has the Control
+Flow Guard function table, `GuardCFFunctionTable`/`GuardCFFunctionCount`: one
+record for every function whose address the program takes, which the kernel
+checks indirect calls against. A record is an RVA followed by `GuardFlags >> 28`
+flag bytes, so the walk steps by that stride. A PE32 linked with `/safeseh` has
+the SafeSEH handler table, `SEHandlerTable`/`SEHandlerCount`, an RVA array of the
+exception handlers the image may register. Both name functions the other oracles
+can miss: a callback reached only through a RIP-relative `lea` leaves no base
+relocation, and a handler is reached only by the exception dispatcher. The
+structure grew field by field across Windows releases, so a field is read only
+when the directory's own `Size` covers it; a count is capped by the bytes its
+section holds, and a null table or an RVA no section covers yields nothing. The
+EH continuation and long-jump target tables are not read: their entries are
+resume points inside functions, not starts. The rule is not gated: the table is
+the linker's own list of functions, so it corrects missing output rather than
+choosing between readings. On a `/guard:cf` fixture whose `ops[]` table is read
+with a RIP-relative `lea`, the four table functions were one listed entry
+(`apply` called one directly); with the table all four are entries.
+
+The same directory names CRT data slots the code loads through, each one
+pointer wide, so the commit installs them as data symbols:
+`__security_cookie`, `__guard_check_icall_fptr`, `__guard_dispatch_icall_fptr`,
+the XFG variants of check, dispatch and table dispatch, and `__guard_memcpy_fptr`
+(the fields past `GuardEHContinuationCount` that the `object` crate does not
+model are read at their documented offsets). A zero pointer is skipped. A call
+through the dispatch slot is the call the routine guards; 02 (`guarddispatch`)
+prints it as one.
 
 The object bootstrap paints executable sections as Thumb for THUMB and ARMNT
 machine values, and retains that context through the analysis commit. Per-entry

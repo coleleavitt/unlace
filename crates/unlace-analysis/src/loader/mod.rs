@@ -70,6 +70,9 @@ pub mod pe_dosmagic;
 // (kuna) The PE header page: the `SizeOfHeaders` file bytes Windows maps
 // read-only at `ImageBase`, below the first section and outside the section walk.
 pub mod pe_headers;
+// (kuna) The PE load configuration: Control Flow Guard and SafeSEH function
+// tables, and the CRT's guard and cookie slots.
+pub(crate) mod kuna_peloadconfig;
 // (kuna) ET_REL relocatable-object (`.o`) load-layout + relocation engine.
 pub mod reloc_object;
 // Architecture-aware ELF instruction/data relocation encoders used by the

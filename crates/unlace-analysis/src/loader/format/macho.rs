@@ -221,6 +221,20 @@ impl ObjectFormat for MachOFormat {
     fn import_slots(&self, file: &object::File, bytes: &[u8]) -> Vec<(u64, u64)> {
         crate::loader::macho_stubs::resolve_macho_import_slots(file, bytes)
     }
+
+    /// An `MH_OBJECT` has relocations still to apply against its pre-link
+    /// layout, so it is laid out the way an ELF `.o` is
+    /// ([`crate::loader::reloc_object`]).
+    fn relocatable_layout(&self, file: &object::File) -> bool {
+        file.kind() == object::ObjectKind::Relocatable
+    }
+
+    /// Every section but the debug-only ones (`S_ATTR_DEBUG`: `__DWARF`,
+    /// `__LD,__compact_unwind`) occupies memory.
+    fn is_alloc_section(&self, _kind: SectionKind, flags: SectionFlags) -> bool {
+        const S_ATTR_DEBUG: u32 = 0x0200_0000;
+        matches!(flags, SectionFlags::MachO { flags } if flags & S_ATTR_DEBUG == 0)
+    }
 }
 
 #[cfg(test)]

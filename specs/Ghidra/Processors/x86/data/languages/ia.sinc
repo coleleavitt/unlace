@@ -672,6 +672,12 @@ define token sib (8)
   ymm_vsib_x	= (3,5)
   zmm_vsib		= (3,5)
   zmm_vsib_x	= (3,5)
+  xmm_vsib_v	= (3,5)
+  xmm_vsib_vx	= (3,5)
+  ymm_vsib_v	= (3,5)
+  ymm_vsib_vx	= (3,5)
+  zmm_vsib_v	= (3,5)
+  zmm_vsib_vx	= (3,5)
   base			= (0,2)
   base_x		= (0,2)
   base64		= (0,2)
@@ -735,9 +741,9 @@ attach variables [ xmmreg xmmreg1 xmmreg2 xmm_vsib ] [ XMM0 XMM1 XMM2 XMM3 XMM4 
 
 attach variables [ xmmreg_x xmmreg1_x xmmreg2_b xmm_vsib_x ] [ XMM8 XMM9 XMM10 XMM11 XMM12 XMM13 XMM14 XMM15 ];
 
-attach variables [ xmmreg1_r xmmreg2_x ] [ XMM16 XMM17 XMM18 XMM19 XMM20 XMM21 XMM22 XMM23 ];
+attach variables [ xmmreg1_r xmmreg2_x xmm_vsib_v ] [ XMM16 XMM17 XMM18 XMM19 XMM20 XMM21 XMM22 XMM23 ];
 
-attach variables [ xmmreg1_rx xmmreg2_bx ] [ XMM24 XMM25 XMM26 XMM27 XMM28 XMM29 XMM30 XMM31 ];
+attach variables [ xmmreg1_rx xmmreg2_bx xmm_vsib_vx ] [ XMM24 XMM25 XMM26 XMM27 XMM28 XMM29 XMM30 XMM31 ];
 
 attach variables [ vexVVVV_XmmReg Xmm_imm8_7_4 ] [ XMM0 XMM1 XMM2 XMM3 XMM4 XMM5 XMM6 XMM7 XMM8 XMM9 XMM10 XMM11 XMM12 XMM13 XMM14 XMM15 ];
 
@@ -765,13 +771,13 @@ attach variables [ evexOpmask opmaskreg opmaskrm evexVopmask ] [ K0  K1  K2  K3 
 
 attach variables [ ymmreg ymmreg1 ymmreg2 ymm_vsib ]			[ YMM0 YMM1  YMM2  YMM3  YMM4  YMM5  YMM6  YMM7 ];
 attach variables [ ymmreg_x ymmreg1_x ymmreg2_b ymm_vsib_x ]	[ YMM8 YMM9 YMM10 YMM11 YMM12 YMM13 YMM14 YMM15 ];
-attach variables [ ymmreg1_r ymmreg2_x ]						[ YMM16 YMM17  YMM18  YMM19  YMM20  YMM21  YMM22  YMM23 ];
-attach variables [ ymmreg1_rx ymmreg2_bx ]						[ YMM24 YMM25  YMM26  YMM27  YMM28  YMM29  YMM30  YMM31 ];
+attach variables [ ymmreg1_r ymmreg2_x ymm_vsib_v ]						[ YMM16 YMM17  YMM18  YMM19  YMM20  YMM21  YMM22  YMM23 ];
+attach variables [ ymmreg1_rx ymmreg2_bx ymm_vsib_vx ]						[ YMM24 YMM25  YMM26  YMM27  YMM28  YMM29  YMM30  YMM31 ];
 
 attach variables [ zmmreg zmmreg1 zmmreg2 zmm_vsib ]			[ ZMM0 ZMM1  ZMM2  ZMM3  ZMM4  ZMM5  ZMM6  ZMM7 ];
 attach variables [ zmmreg_x zmmreg1_x zmmreg2_b zmm_vsib_x ]	[ ZMM8 ZMM9 ZMM10 ZMM11 ZMM12 ZMM13 ZMM14 ZMM15 ];
-attach variables [ zmmreg1_r zmmreg2_x ]						[ ZMM16 ZMM17  ZMM18  ZMM19  ZMM20  ZMM21  ZMM22  ZMM23 ];
-attach variables [ zmmreg1_rx zmmreg2_bx ]						[ ZMM24 ZMM25  ZMM26  ZMM27  ZMM28  ZMM29  ZMM30  ZMM31 ];
+attach variables [ zmmreg1_r zmmreg2_x zmm_vsib_v ]						[ ZMM16 ZMM17  ZMM18  ZMM19  ZMM20  ZMM21  ZMM22  ZMM23 ];
+attach variables [ zmmreg1_rx zmmreg2_bx zmm_vsib_vx ]						[ ZMM24 ZMM25  ZMM26  ZMM27  ZMM28  ZMM29  ZMM30  ZMM31 ];
 
 attach variables [ bnd1 bnd2 ]       [ BND0 BND1 BND2 BND3 _ _ _ _ ];
 attach variables [ bnd1_lb bnd2_lb ] [ BND0_LB BND1_LB BND2_LB BND3_LB _ _ _ _ ];
@@ -917,6 +923,12 @@ Ymm_vsib:  ymm_vsib       is rexXprefix=0 & ymm_vsib                            
 Ymm_vsib:  ymm_vsib_x     is rexXprefix=1 & ymm_vsib_x                           { export ymm_vsib_x; }
 Zmm_vsib:  zmm_vsib       is rexXprefix=0 & zmm_vsib                             { export zmm_vsib; }
 Zmm_vsib:  zmm_vsib_x     is rexXprefix=1 & zmm_vsib_x                           { export zmm_vsib_x; }
+Xmm_vsib:  xmm_vsib_v     is vexMode=2 & evexVp=1 & rexXprefix=0 & xmm_vsib_v      { export xmm_vsib_v; }
+Xmm_vsib:  xmm_vsib_vx    is vexMode=2 & evexVp=1 & rexXprefix=1 & xmm_vsib_vx     { export xmm_vsib_vx; }
+Ymm_vsib:  ymm_vsib_v     is vexMode=2 & evexVp=1 & rexXprefix=0 & ymm_vsib_v      { export ymm_vsib_v; }
+Ymm_vsib:  ymm_vsib_vx    is vexMode=2 & evexVp=1 & rexXprefix=1 & ymm_vsib_vx     { export ymm_vsib_vx; }
+Zmm_vsib:  zmm_vsib_v     is vexMode=2 & evexVp=1 & rexXprefix=0 & zmm_vsib_v      { export zmm_vsib_v; }
+Zmm_vsib:  zmm_vsib_vx    is vexMode=2 & evexVp=1 & rexXprefix=1 & zmm_vsib_vx     { export zmm_vsib_vx; }
 @else
 Reg8:   reg8        is reg8                              { export reg8; }
 Reg16:  reg16       is reg16                             { export reg16; }
@@ -1025,6 +1037,22 @@ evexDisp8N: offs is evexD8Type=1 & evexTType=0xc           [ offs = 4; evexDisp8
 evexDisp8N: offs is evexD8Type=1 & evexTType=0xd & evexL=0 [ offs = 3; evexDisp8=offs; ] { export *[const]:1 offs; }
 evexDisp8N: offs is evexD8Type=1 & evexTType=0xd & evexL=1 [ offs = 5; evexDisp8=offs; ] { export *[const]:1 offs; }
 evexDisp8N: offs is evexD8Type=1 & evexTType=0xd & evexL=2 [ offs = 6; evexDisp8=offs; ] { export *[const]:1 offs; }
+
+# Rows for 16-bit broadcast elements (AVX512-FP16, AVX10.2 BF16), which the FV/HV rows above get wrong
+# (they take the broadcast size from EVEX.W): FV16 = D8Type 1 / TType 0xe, HV16 = 0xf, QV16 = D8Type 0 / TType 2.
+evexDisp8N: offs is evexD8Type=1 & evexTType=0xe & evexB=0 & evexL=0 [ offs = 4; evexDisp8=offs; ] { export *[const]:1 offs; }
+evexDisp8N: offs is evexD8Type=1 & evexTType=0xe & evexB=0 & evexL=1 [ offs = 5; evexDisp8=offs; ] { export *[const]:1 offs; }
+evexDisp8N: offs is evexD8Type=1 & evexTType=0xe & evexB=0 & evexL=2 [ offs = 6; evexDisp8=offs; ] { export *[const]:1 offs; }
+evexDisp8N: offs is evexD8Type=1 & evexTType=0xe & evexB=1 [ offs = 1; evexDisp8=offs; ] { export *[const]:1 offs; }
+evexDisp8N: offs is evexD8Type=1 & evexTType=0xf & evexB=0 & evexL=0 [ offs = 3; evexDisp8=offs; ] { export *[const]:1 offs; }
+evexDisp8N: offs is evexD8Type=1 & evexTType=0xf & evexB=0 & evexL=1 [ offs = 4; evexDisp8=offs; ] { export *[const]:1 offs; }
+evexDisp8N: offs is evexD8Type=1 & evexTType=0xf & evexB=0 & evexL=2 [ offs = 5; evexDisp8=offs; ] { export *[const]:1 offs; }
+evexDisp8N: offs is evexD8Type=1 & evexTType=0xf & evexB=1 [ offs = 1; evexDisp8=offs; ] { export *[const]:1 offs; }
+evexDisp8N: offs is evexD8Type=0 & evexTType=2 & evexB=0 & evexL=0 [ offs = 2; evexDisp8=offs; ] { export *[const]:1 offs; }
+evexDisp8N: offs is evexD8Type=0 & evexTType=2 & evexB=0 & evexL=1 [ offs = 3; evexDisp8=offs; ] { export *[const]:1 offs; }
+evexDisp8N: offs is evexD8Type=0 & evexTType=2 & evexB=0 & evexL=2 [ offs = 4; evexDisp8=offs; ] { export *[const]:1 offs; }
+evexDisp8N: offs is evexD8Type=0 & evexTType=2 & evexB=1 & rexWprefix=0 [ offs = 1; evexDisp8=offs; ] { export *[const]:1 offs; }
+evexDisp8N: offs is evexD8Type=0 & evexTType=2 & evexB=1 & rexWprefix=1 [ offs = 1; evexDisp8=offs; ] { export *[const]:1 offs; }
 
 
 simm8_16: disp8N is vexMode=2 & evexDisp8N & simm8 [ disp8N = simm8 << evexDisp8; ] { export *[const]:2 disp8N; }
@@ -1313,6 +1341,29 @@ z_vm64z: "zmmword ptr "^vMem64z is vMem64z { export vMem64z; }
 z_vm64z: "zmmword ptr "^vMem32z is vMem32z { export vMem32z; }
 @endif
 
+# AVX-512 gather/scatter element operands: the element size in the ptr text, the index register in the address.
+evd_vm32x: "dword ptr "^vMem32x is vMem32x { export vMem32x; }
+evd_vm32y: "dword ptr "^vMem32y is vMem32y { export vMem32y; }
+evd_vm32z: "dword ptr "^vMem32z is vMem32z { export vMem32z; }
+evq_vm32x: "qword ptr "^vMem32x is vMem32x { export vMem32x; }
+evq_vm32y: "qword ptr "^vMem32y is vMem32y { export vMem32y; }
+evq_vm32z: "qword ptr "^vMem32z is vMem32z { export vMem32z; }
+@ifdef IA64
+evd_vm64x: "dword ptr "^vMem64x is vMem64x { export vMem64x; }
+evd_vm64y: "dword ptr "^vMem64y is vMem64y { export vMem64y; }
+evd_vm64z: "dword ptr "^vMem64z is vMem64z { export vMem64z; }
+evq_vm64x: "qword ptr "^vMem64x is vMem64x { export vMem64x; }
+evq_vm64y: "qword ptr "^vMem64y is vMem64y { export vMem64y; }
+evq_vm64z: "qword ptr "^vMem64z is vMem64z { export vMem64z; }
+@else
+evd_vm64x: "dword ptr "^vMem32x is vMem32x { export vMem32x; }
+evd_vm64y: "dword ptr "^vMem32y is vMem32y { export vMem32y; }
+evd_vm64z: "dword ptr "^vMem32z is vMem32z { export vMem32z; }
+evq_vm64x: "qword ptr "^vMem32x is vMem32x { export vMem32x; }
+evq_vm64y: "qword ptr "^vMem32y is vMem32y { export vMem32y; }
+evq_vm64z: "qword ptr "^vMem32z is vMem32z { export vMem32z; }
+@endif
+
 Reg32_m8:     Rmr32     is mod=3 & Rmr32                     { export Rmr32; }
 Reg32_m8:     m8        is m8                                { local tmp:4 = zext(m8); export tmp; }
 Reg32_m16:    Rmr32     is mod=3 & Rmr32                     { export Rmr32; }
@@ -1342,16 +1393,16 @@ ZmmReg2_m512: m512      is m512                              { export m512; }
 XmmReg2_m128_extend: XmmReg2 is mod=3 & XmmReg2 & ZmmReg2 { ZmmReg2 = zext(XmmReg2); }
 XmmReg2_m128_extend: XmmReg2 is mod & XmmReg2 { }
 
-m16bcst32: m16   is m16 { local tmp:2 = m16; BCST4[0,16] = tmp; BCST4[16,16] = tmp; export BCST4; }
+m16bcst32: m16^"{1to2}"   is m16 { local tmp:2 = m16; BCST4[0,16] = tmp; BCST4[16,16] = tmp; export BCST4; }
 
-m16bcst64: m16   is m16 { local tmp:2 = m16; BCST8[0,16] = tmp; BCST8[16,16] = tmp; BCST8[32,16] = tmp; BCST8[48,16] = tmp; export BCST8; }
-m16bcst128: m16  is m16 {
+m16bcst64: m16^"{1to4}"   is m16 { local tmp:2 = m16; BCST8[0,16] = tmp; BCST8[16,16] = tmp; BCST8[32,16] = tmp; BCST8[48,16] = tmp; export BCST8; }
+m16bcst128: m16^"{1to8}"  is m16 {
 	local tmp:2 = m16;
 	BCST16[0,16] = tmp; BCST16[16,16] = tmp; BCST16[32,16] = tmp; BCST16[48,16] = tmp;
 	BCST16[64,16] = tmp; BCST16[80,16] = tmp; BCST16[96,16] = tmp; BCST16[112,16] = tmp;
 	export BCST16;
 }
-m16bcst256: m16  is m16 {
+m16bcst256: m16^"{1to16}"  is m16 {
 	local tmp:2 = m16;
 	BCST32[0,16] = tmp; BCST32[16,16] = tmp; BCST32[32,16] = tmp; BCST32[48,16] = tmp;
 	BCST32[64,16] = tmp; BCST32[80,16] = tmp; BCST32[96,16] = tmp; BCST32[112,16] = tmp;
@@ -1359,7 +1410,7 @@ m16bcst256: m16  is m16 {
 	BCST32[192,16] = tmp; BCST32[208,16] = tmp; BCST32[224,16] = tmp; BCST32[240,16] = tmp;
 	export BCST32;
 }
-m16bcst512: m16  is m16 {
+m16bcst512: m16^"{1to32}"  is m16 {
 	local tmp:2 = m16;
 	BCST64[0,16] = tmp; BCST64[16,16] = tmp; BCST64[32,16] = tmp; BCST64[48,16] = tmp;
 	BCST64[64,16] = tmp; BCST64[80,16] = tmp; BCST64[96,16] = tmp; BCST64[112,16] = tmp;
@@ -1372,15 +1423,15 @@ m16bcst512: m16  is m16 {
 	export BCST64;
 }
 
-m32bcst64:  m32 is m32 { local tmp:4 = m32; BCST8[0,32] = tmp; BCST8[32,32] = tmp; export BCST8; }
-m32bcst128: m32 is m32 { local tmp:4 = m32; BCST16[0,32] = tmp; BCST16[32,32] = tmp; BCST16[64,32] = tmp; BCST16[96,32] = tmp; export BCST16; }
-m32bcst256: m32 is m32 {
+m32bcst64:  m32^"{1to2}" is m32 { local tmp:4 = m32; BCST8[0,32] = tmp; BCST8[32,32] = tmp; export BCST8; }
+m32bcst128: m32^"{1to4}" is m32 { local tmp:4 = m32; BCST16[0,32] = tmp; BCST16[32,32] = tmp; BCST16[64,32] = tmp; BCST16[96,32] = tmp; export BCST16; }
+m32bcst256: m32^"{1to8}" is m32 {
 	local tmp:4 = m32;
 	BCST32[0,32]   = tmp; BCST32[32,32]  = tmp; BCST32[64,32]  = tmp; BCST32[96,32]  = tmp;
 	BCST32[128,32] = tmp; BCST32[160,32] = tmp; BCST32[192,32] = tmp; BCST32[224,32] = tmp;
 	export BCST32;
 }
-m32bcst512: m32 is m32 {
+m32bcst512: m32^"{1to16}" is m32 {
 	local tmp:4 = m32;
 	BCST64[0,32]   = tmp;  BCST64[32,32] = tmp;  BCST64[64,32] = tmp;  BCST64[96,32] = tmp;
 	BCST64[128,32] = tmp; BCST64[160,32] = tmp; BCST64[192,32] = tmp; BCST64[224,32] = tmp;
@@ -1389,9 +1440,9 @@ m32bcst512: m32 is m32 {
 	export BCST64;
 }
 
-m64bcst128: m64 is m64 { local tmp:8 = m64; BCST16[0,64] = tmp; BCST16[64,64] = tmp; export BCST16; }
-m64bcst256: m64 is m64 { local tmp:8 = m64; BCST32[0,64] = tmp; BCST32[64,64] = tmp; BCST32[128,64] = tmp; BCST32[192,64] = tmp; export BCST32; }
-m64bcst512: m64 is m64 {
+m64bcst128: m64^"{1to2}" is m64 { local tmp:8 = m64; BCST16[0,64] = tmp; BCST16[64,64] = tmp; export BCST16; }
+m64bcst256: m64^"{1to4}" is m64 { local tmp:8 = m64; BCST32[0,64] = tmp; BCST32[64,64] = tmp; BCST32[128,64] = tmp; BCST32[192,64] = tmp; export BCST32; }
+m64bcst512: m64^"{1to8}" is m64 {
 	local tmp:8 = m64;
 	BCST64[0,64] = tmp;   BCST64[64,64] = tmp;  BCST64[128,64] = tmp; BCST64[192,64] = tmp;
 	BCST64[256,64] = tmp; BCST64[320,64] = tmp; BCST64[384,64] = tmp; BCST64[448,64] = tmp;
@@ -1399,52 +1450,52 @@ m64bcst512: m64 is m64 {
 }
 
 XmmReg2_m32_m16bcst:  XmmReg2    is mod=3 & XmmReg2             { export XmmReg2; }
-XmmReg2_m32_m16bcst:  m32        is m32 & evexDisp8N                   { local tmp:16 = zext(m32); export tmp; }
-XmmReg2_m32_m16bcst:  m16bcst32  is evexB=1 & m16bcst32 & evexDisp8N   { local tmp:16 = zext(m16bcst32); export tmp; }
+XmmReg2_m32_m16bcst:  m32        is m32                   { local tmp:16 = zext(m32); export tmp; }
+XmmReg2_m32_m16bcst:  m16bcst32  is evexB=1 & m16bcst32   { local tmp:16 = zext(m16bcst32); export tmp; }
 
 XmmReg2_m64_m16bcst:  XmmReg2    is mod=3 & XmmReg2             { export XmmReg2; }
-XmmReg2_m64_m16bcst:  m64        is m64 & evexDisp8N                   { local tmp:16 = zext(m64); export tmp; }
-XmmReg2_m64_m16bcst:  m16bcst64  is evexB=1 & m16bcst64 & evexDisp8N   { local tmp:16 = zext(m16bcst64); export tmp; }
+XmmReg2_m64_m16bcst:  m64        is m64                   { local tmp:16 = zext(m64); export tmp; }
+XmmReg2_m64_m16bcst:  m16bcst64  is evexB=1 & m16bcst64   { local tmp:16 = zext(m16bcst64); export tmp; }
 
 XmmReg2_m64_m32bcst:  XmmReg2    is mod=3 & XmmReg2             { export XmmReg2; }
-XmmReg2_m64_m32bcst:  m64        is m64 & evexDisp8N                   { local tmp:16 = zext(m64); export tmp; }
-XmmReg2_m64_m32bcst:  m32bcst64  is evexB=1 & m32bcst64 & evexDisp8N   { local tmp:16 = zext(m32bcst64); export tmp; }
+XmmReg2_m64_m32bcst:  m64        is m64                   { local tmp:16 = zext(m64); export tmp; }
+XmmReg2_m64_m32bcst:  m32bcst64  is evexB=1 & m32bcst64   { local tmp:16 = zext(m32bcst64); export tmp; }
 
 XmmReg2_m128_m16bcst: XmmReg2    is mod=3 & XmmReg2             { export XmmReg2; }
-XmmReg2_m128_m16bcst: m128       is m128& evexDisp8N                   { export m128; }
-XmmReg2_m128_m16bcst: m16bcst128 is evexB=1 & m16bcst128 & evexDisp8N  { export m16bcst128; }
+XmmReg2_m128_m16bcst: m128       is m128                   { export m128; }
+XmmReg2_m128_m16bcst: m16bcst128 is evexB=1 & m16bcst128  { export m16bcst128; }
 
 XmmReg2_m128_m32bcst: XmmReg2    is mod=3 & XmmReg2             { export XmmReg2; }
-XmmReg2_m128_m32bcst: m128       is m128& evexDisp8N                   { export m128; }
-XmmReg2_m128_m32bcst: m32bcst128 is evexB=1 & m32bcst128 & evexDisp8N  { export m32bcst128; }
+XmmReg2_m128_m32bcst: m128       is m128                   { export m128; }
+XmmReg2_m128_m32bcst: m32bcst128 is evexB=1 & m32bcst128  { export m32bcst128; }
 
 XmmReg2_m128_m64bcst: XmmReg2    is mod=3 & XmmReg2             { export XmmReg2; }
-XmmReg2_m128_m64bcst: m128       is m128 & evexDisp8N                  { export m128; }
-XmmReg2_m128_m64bcst: m64bcst128 is evexB=1 & m64bcst128 & evexDisp8N  { export m64bcst128; }
+XmmReg2_m128_m64bcst: m128       is m128                  { export m128; }
+XmmReg2_m128_m64bcst: m64bcst128 is evexB=1 & m64bcst128  { export m64bcst128; }
 
 YmmReg2_m256_m16bcst: YmmReg2    is mod=3 & YmmReg2             { export YmmReg2; }
-YmmReg2_m256_m16bcst: m256       is m256 & evexDisp8N                  { export m256; }
-YmmReg2_m256_m16bcst: m16bcst256 is evexB=1 & m16bcst256 & evexDisp8N  { export m16bcst256; }
+YmmReg2_m256_m16bcst: m256       is m256                  { export m256; }
+YmmReg2_m256_m16bcst: m16bcst256 is evexB=1 & m16bcst256  { export m16bcst256; }
 
 YmmReg2_m256_m32bcst: YmmReg2    is mod=3 & YmmReg2             { export YmmReg2; }
-YmmReg2_m256_m32bcst: m256       is m256 & evexDisp8N                  { export m256; }
-YmmReg2_m256_m32bcst: m32bcst256 is evexB=1 & m32bcst256 & evexDisp8N  { export m32bcst256; }
+YmmReg2_m256_m32bcst: m256       is m256                  { export m256; }
+YmmReg2_m256_m32bcst: m32bcst256 is evexB=1 & m32bcst256  { export m32bcst256; }
 
 YmmReg2_m256_m64bcst: YmmReg2    is mod=3 & YmmReg2             { export YmmReg2; }
-YmmReg2_m256_m64bcst: m256       is m256 & evexDisp8N                  { export m256; }
-YmmReg2_m256_m64bcst: m64bcst256 is evexB=1 & m64bcst256 & evexDisp8N  { export m64bcst256; }
+YmmReg2_m256_m64bcst: m256       is m256                  { export m256; }
+YmmReg2_m256_m64bcst: m64bcst256 is evexB=1 & m64bcst256  { export m64bcst256; }
 
 ZmmReg2_m512_m16bcst: ZmmReg2    is mod=3 & ZmmReg2             { export ZmmReg2; }
-ZmmReg2_m512_m16bcst: m512       is m512 & evexDisp8N                  { export m512; }
-ZmmReg2_m512_m16bcst: m16bcst512 is evexB=1 & m16bcst512 & evexDisp8N  { export m16bcst512; }
+ZmmReg2_m512_m16bcst: m512       is m512                  { export m512; }
+ZmmReg2_m512_m16bcst: m16bcst512 is evexB=1 & m16bcst512  { export m16bcst512; }
 
 ZmmReg2_m512_m32bcst: ZmmReg2    is mod=3 & ZmmReg2             { export ZmmReg2; }
-ZmmReg2_m512_m32bcst: m512       is m512 & evexDisp8N                  { export m512; }
-ZmmReg2_m512_m32bcst: m32bcst512 is evexB=1 & m32bcst512 & evexDisp8N  { export m32bcst512; }
+ZmmReg2_m512_m32bcst: m512       is m512                  { export m512; }
+ZmmReg2_m512_m32bcst: m32bcst512 is evexB=1 & m32bcst512  { export m32bcst512; }
 
 ZmmReg2_m512_m64bcst: ZmmReg2    is mod=3 & ZmmReg2             { export ZmmReg2; }
-ZmmReg2_m512_m64bcst: m512       is m512 & evexDisp8N                  { export m512; }
-ZmmReg2_m512_m64bcst: m64bcst512 is evexB=1 & m64bcst512 & evexDisp8N  { export m64bcst512; }
+ZmmReg2_m512_m64bcst: m512       is m512                  { export m512; }
+ZmmReg2_m512_m64bcst: m64bcst512 is evexB=1 & m64bcst512  { export m64bcst512; }
 
 moffs8: seg16^[imm16]   is addrsize=0 & seg16 & imm16                   { tmp:$(SIZE) = segment(seg16,imm16:2); export *:1 tmp; }
 moffs8: segWide^[imm32]   is addrsize=1 & highseg=1 & segWide & imm32   { tmp:$(SIZE) = segWide + imm32; export *:1 tmp; }

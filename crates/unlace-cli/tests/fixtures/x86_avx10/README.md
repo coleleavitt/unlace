@@ -11,6 +11,8 @@ ld.lld -e 0 --image-base=0 --section-start=.text=0x1000 -o avx10.elf avx10.o
 TableGen (the plain, broadcast and {sae}/{rc} forms; the masked forms share
 their constructors), with the VEX AVX-VNNI-INT8/INT16 forms LLVM picks for the
 unmasked 128/256-bit dot products. `probe.txt` is the expected listing: every
-row was checked against `llvm-objdump -d -M intel` (case, spacing and the
-`{1toN}` marker aside). `gt`, `mm`, `cvt` and `mvrs` are small routines whose
+row was checked against `llvm-objdump -d -M intel` (case and spacing aside). `gt`, `mm`, `cvt` and `mvrs` are small routines whose
 decompiled C the test checks.
+
+`base_fixes.S` (assembled the same way with `-mattr=+avx512f,+avx512bw,+avx512vl,+avx512fp16`)
+holds one instruction per AVX-512 base-spec fix; its rows match `llvm-objdump`.

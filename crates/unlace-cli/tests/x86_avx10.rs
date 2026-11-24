@@ -65,3 +65,28 @@ fn avx10_functions_decompile() {
     let out = decompile("mm");
     assert!(out.contains("avx10_vminmaxpd("), "{out}");
 }
+
+const BASE_FIXES: [&str; 11] = [
+    "VPBROADCASTQ ZMM25, R10",
+    "VPBROADCASTB XMM1{K1}, EAX",
+    "VADDPS ZMM1, ZMM2, dword ptr [RAX + 0x4]{1to16}",
+    "VADDPD YMM1, YMM2, qword ptr [RAX + 0x8]{1to4}",
+    "VPGATHERDD ZMM0{K1}, dword ptr [RAX + ZMM17*0x4 + 0x40]",
+    "VGATHERQPD YMM3{K2}, qword ptr [R9 + YMM30*0x8]",
+    "VPSCATTERQD dword ptr [RAX + ZMM20*0x4 + 0x8]{K1}, YMM18",
+    "VADDPH ZMM1 , ZMM2, word ptr [RAX + 0x2]{1to32}",
+    "VCVTPH2PD ZMM1, xmmword ptr [RAX + 0x20]",
+    "VCVTPH2QQ ZMM1{K1}, word ptr [RAX + 0x2]{1to8}",
+    "RET",
+];
+
+/// AVX-512 decode fixes in the base spec: the GPR source of VPBROADCASTB/W/D/Q,
+/// the {1toN} broadcast marker, the vector index (and EVEX.V' bank) of the
+/// gathers and scatters, and Disp8*N with a 16-bit broadcast element.
+#[test]
+fn avx512_base_fixes_match_llvm() {
+    let elf = fixture("base_fixes.elf");
+    let (stdout, stderr, code) = run_kuna(&["disassemble", &elf, "base_fixes"]);
+    assert_eq!(code, 0, "{stderr}");
+    assert_eq!(rows(&stdout), BASE_FIXES, "{stdout}");
+}

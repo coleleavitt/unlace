@@ -102,16 +102,6 @@ define pcodeop avx10_vsqrtbf16;
 define pcodeop avx10_vsubbf16;
 define pcodeop avx10_vucomxsh_cmp;
 
-# Disp8*N for full- and half-vector memory operands with a 16-bit broadcast element.
-evexDisp8N: offs is evexD8Type=1 & evexTType=0xe & evexB=0 & evexL=0 [ offs = 4; evexDisp8=offs; ] { export *[const]:1 offs; }
-evexDisp8N: offs is evexD8Type=1 & evexTType=0xe & evexB=0 & evexL=1 [ offs = 5; evexDisp8=offs; ] { export *[const]:1 offs; }
-evexDisp8N: offs is evexD8Type=1 & evexTType=0xe & evexB=0 & evexL=2 [ offs = 6; evexDisp8=offs; ] { export *[const]:1 offs; }
-evexDisp8N: offs is evexD8Type=1 & evexTType=0xe & evexB=1 [ offs = 1; evexDisp8=offs; ] { export *[const]:1 offs; }
-evexDisp8N: offs is evexD8Type=1 & evexTType=0xf & evexB=0 & evexL=0 [ offs = 3; evexDisp8=offs; ] { export *[const]:1 offs; }
-evexDisp8N: offs is evexD8Type=1 & evexTType=0xf & evexB=0 & evexL=1 [ offs = 4; evexDisp8=offs; ] { export *[const]:1 offs; }
-evexDisp8N: offs is evexD8Type=1 & evexTType=0xf & evexB=0 & evexL=2 [ offs = 5; evexDisp8=offs; ] { export *[const]:1 offs; }
-evexDisp8N: offs is evexD8Type=1 & evexTType=0xf & evexB=1 [ offs = 1; evexDisp8=offs; ] { export *[const]:1 offs; }
-
 avx10CmpBf16: "VCMPEQBF16" is imm8=0 { }
 avx10CmpBf16: "VCMPLTBF16" is imm8=1 { }
 avx10CmpBf16: "VCMPLEBF16" is imm8=2 { }

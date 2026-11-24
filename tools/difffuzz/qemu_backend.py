@@ -903,6 +903,110 @@ class LaHarness:
         return regs, 0
 
 
+# ---------------------------------------------------------------- PA-RISC 1.1 (32-bit, big endian)
+
+def hp_assemble21(v):
+    a = (v >> 11) & 0x1FFFFF
+    return (a & 3) << 12 | (a & 0x7C) << 14 | (a & 0x180) << 7 | (a & 0xFFE00) >> 8 | (a & 0x100000) >> 20
+
+
+def hp_im14(x):
+    return ((x & 0x1FFF) << 1) | (1 if x < 0 else 0)
+
+
+def hp_li32(r, v):
+    """ldil L%v,r; ldo R%v(r),r."""
+    return [0x20000000 | r << 21 | hp_assemble21(v), 0x34000000 | r << 21 | r << 16 | hp_im14(v & 0x7FF)]
+
+
+def hp_ldw(t, b, off):
+    return 0x48000000 | b << 21 | t << 16 | hp_im14(off)
+
+
+def hp_stw(r, b, off):
+    return 0x68000000 | b << 21 | r << 16 | hp_im14(off)
+
+
+def hp_bl(here, target):
+    d = ((target - (here + 8)) >> 2) & 0x1FFFF
+    return 0xE8000000 | (d & 0x10000) >> 16 | (d & 0xF800) << 5 | (d & 0x400) >> 8 | (d & 0x3FF) << 3
+
+
+class HppaHarness:
+    """r1..r31 at 4*i, SAR at 128, carry (PSW CB) at 132, marker at 144. One free register holds
+    the table address (the BL's delay slot restores it); a second one detects nullification: the
+    epilogue's first instruction complements it, so it keeps its input value only when the
+    instruction under test nullified that slot."""
+    qemu = ("qemu-hppa", [])
+    machine = 15
+    big = True
+    elf32 = True
+    table_size = 152
+    marker_at = 144
+
+    def __init__(self):
+        self.s, self.n = 3, 4
+        self.scratch_names = []
+        self.n_init = 0
+
+    def choose_scratch(self, arch, regs, written):
+        free = []
+        for i in list(range(3, 20)) + [21, 22, 23, 28, 29]:
+            name = arch.gprs[i - 1][0]
+            if name in regs and not written & set(range(regs[name][0], regs[name][0] + regs[name][1])):
+                free.append(i)
+        if len(free) < 2:
+            return False
+        self.s, self.n = free[0], free[1]
+        self.scratch_names = [arch.gprs[self.s - 1][0], arch.gprs[self.n - 1][0]]
+        return True
+
+    def _t(self):
+        return next(r for r in (1, 2, 5, 6) if r not in (self.s, self.n))
+
+    def prologue(self, target):
+        s, t = self.s, self._t()
+        c = hp_li32(s, TABLES)
+        c += [hp_ldw(t, s, 128), 0x01601840 | t << 16]                    # mtsar t
+        c += [hp_ldw(t, s, 132), 0xB4000000 | t << 21 | 0x7FF]            # addi -1,t,r0: carry = (t != 0)
+        for i in range(1, 32):
+            if i != s:
+                c.append(hp_ldw(i, s, 4 * i))
+        here = PROLOGUE + 4 * len(c)
+        c += [hp_bl(here, target), hp_ldw(s, s, 4 * s)]                    # b target; ldw (delay slot)
+        return words(c, True)
+
+    def epilogue(self, dumps, marker):
+        s, n, t = self.s, self.n, self._t()
+        c = [0x08000980 | n << 21 | n]                                     # uaddcm r0,n,n (nullifiable)
+        c += hp_li32(s, OUT)
+        for i in range(1, 32):
+            if i != s:
+                c.append(hp_stw(i, s, 4 * i))
+        c += [0x016008A0 | t, hp_stw(t, s, 128)]                           # mfctl sar,t
+        c += [0x08000700 | t, hp_stw(t, s, 132)]                           # add,c r0,r0,t
+        c += hp_li32(t, marker) + [hp_stw(t, s, self.marker_at + 4)]
+        for base, size in [(OUT, self.table_size)] + [(p, PAGE) for p in dumps]:
+            c += [0x341A0002] + hp_li32(25, base) + hp_li32(24, size) + [0xE4008200, 0x34140008]  # be,l 0x100(sr2,r0); ldi 4,r20
+        c += [0x341A0000, 0xE4008200, 0x34140002]                          # exit(0)
+        return words(c, True)
+
+    def table(self, arch, init, init_vec, flagword):
+        t = bytearray(self.table_size)
+        for i, (name, _) in enumerate(arch.gprs[:31], start=1):
+            struct.pack_into(">I", t, 4 * i, init.get(name, 0) & 0xFFFFFFFF)
+        struct.pack_into(">I", t, 128, init.get("sar", 0) & 0x1F)
+        struct.pack_into(">I", t, 132, flagword & 1)
+        self.n_init = init.get(arch.gprs[self.n - 1][0], 0) & 0xFFFFFFFF
+        return bytes(t)
+
+    def parse(self, arch, out):
+        regs = {name: struct.unpack_from(">I", out, 4 * i)[0] for i, (name, _) in enumerate(arch.gprs[:31], start=1)}
+        regs["sar"] = struct.unpack_from(">I", out, 128)[0]
+        nullified = regs[arch.gprs[self.n - 1][0]] == self.n_init
+        return regs, (struct.unpack_from(">I", out, 132)[0] & 1) | (2 if nullified else 0)
+
+
 
 # ---------------------------------------------------------------- ARM / Thumb (AArch32, ELF32)
 
@@ -1012,7 +1116,7 @@ HARNESSES = {"arm": ArmHarness, "thumb": ThumbHarness, "aarch64": A64Harness, "r
              "ppc64le": lambda: PpcHarness(("qemu-ppc64le", ["-cpu", "power10"]), 21, False, True, 2),
              "ppc64-isa": lambda: PpcHarness(("qemu-ppc64", ["-cpu", "power10"]), 21, True, True, 2),
              "ppc64le-isa": lambda: PpcHarness(("qemu-ppc64le", ["-cpu", "power10"]), 21, False, True, 2),
-             "s390x": S390xHarness, "s390x-vec": S390xHarness, "m68k": M68kHarness, "loongarch64": LaHarness, "sparc64": SparcHarness, "sparc": Sparc32Harness}
+             "s390x": S390xHarness, "s390x-vec": S390xHarness, "m68k": M68kHarness, "loongarch64": LaHarness, "sparc64": SparcHarness, "sparc": Sparc32Harness, "hppa": HppaHarness}
 
 
 def qemu_path(name):

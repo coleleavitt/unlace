@@ -1003,6 +1003,7 @@ pub mod gomodlayout;
 mod gomoduledata;
 pub mod gonoreturn;
 pub mod gopcln;
+mod gostackobjects;
 
 #[cfg(test)]
 mod tests;

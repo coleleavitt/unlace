@@ -16,6 +16,7 @@ use object::{Object, ObjectSection};
 
 mod kuna_arm64;
 mod kuna_goerror;
+mod kuna_goiface;
 mod kuna_pointerreceiver;
 pub(super) use kuna_arm64::capture_compressed as capture_arm64_compressed;
 
@@ -714,6 +715,8 @@ impl Facts {
         let (mut integers, mut floats) = (0, 0);
         let mut string_inputs = 0;
         let mut string_formal = None;
+        let mut interface_inputs = 0;
+        let mut prebuilt: BTreeMap<usize, Rc<Datatype>> = BTreeMap::new();
         for (parameter, location, result) in parameters {
             if let Location::RegisterPair(registers) = location {
                 if result
@@ -731,8 +734,31 @@ impl Facts {
                 if registers != [first.0, second.0] {
                     return None;
                 }
-                let fields = self.string_input_fields(parameter.type_ref?)?;
                 let source = sanitize_symbol_name(&parameter.name, self.names);
+                if let Some(words) = self
+                    .interface_input(parameter.type_ref?)
+                    .and_then(|interface| kuna_goiface::input_types(arch, &interface))
+                {
+                    let pointer = Scalar {
+                        size: 8,
+                        meta: type_metatype::TYPE_PTR,
+                        float: false,
+                    };
+                    for ((ty, register), suffix) in words
+                        .into_iter()
+                        .zip([first.1, second.1])
+                        .zip(["tab", "data"])
+                    {
+                        prebuilt.insert(inputs.len(), ty);
+                        inputs.push((parameter.type_ref?, pointer));
+                        names.push(format!("{source}_{suffix}"));
+                        expected.push(register);
+                    }
+                    integers += 2;
+                    interface_inputs += 1;
+                    continue;
+                }
+                let fields = self.string_input_fields(parameter.type_ref?)?;
                 if string_inputs == 0 {
                     string_formal = Some((inputs.len(), source.to_string()));
                 }
@@ -807,6 +833,12 @@ impl Facts {
                 expected.push(register);
             }
         }
+        if interface_inputs != 0 {
+            let mut unique_names = BTreeSet::new();
+            if names.iter().any(|name| !unique_names.insert(name)) {
+                return None;
+            }
+        }
         if string_inputs != 0 {
             let mut unique_names = BTreeSet::new();
             if output_count > 1 || names.iter().any(|name| !unique_names.insert(name)) {
@@ -835,7 +867,11 @@ impl Facts {
         };
         let intypes = inputs
             .into_iter()
-            .map(|(offset, scalar)| materialize(offset, scalar))
+            .enumerate()
+            .map(|(index, (offset, scalar))| match prebuilt.remove(&index) {
+                Some(ty) => Some(ty),
+                None => materialize(offset, scalar),
+            })
             .collect::<Option<Vec<_>>>()?;
         let mut outtypes = [None, None];
         for (slot, output) in outtypes.iter_mut().zip(outputs) {

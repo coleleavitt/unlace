@@ -8219,3 +8219,22 @@ inspiration = "unlace issue 33: silent loss is worse than a visible gap; a reade
 change_kind = "opt-in-tool"
 tier = "core"
 symptoms = "a debug build shows a generic register name where the DWARF information names a local|a function with unimplemented instructions says so in its header but not where|the real-binary harness cannot tell which functions lost information"
+
+[[settable]]
+option = "goitabcalls"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P1"
+subphase = "external-refinement"
+strength = "HARD"
+rewind = "P1"
+issue = "unlace-25-go-interface-calls"
+summary = "Name Go interface method calls. A Go interface value is an itab pointer and a data pointer, and a method call through it loads one slot of the itab's `Fun` array and calls it with the data word as receiver, so it printed as an anonymous `(*(code **)(tab + 0x18))(data)`. The gotypes harvest (64-bit images) reads every non-empty interface descriptor's method set, the `Imethod` names in the order every itab of that interface lays out its `Fun` array, and interns one record per interface, `go.itab.` plus the interface's linker spelling (`go.itab.io.Writer`): the `inter`, `_type` and `hash` header words, then one function-pointer slot per method at offset 24 plus 8 per method, named after the method, with a language facet naming the interface; an interface spelling two descriptors give different method lists, an anonymous interface literal, or a method name that is not an ASCII identifier gets no record. Interning is output-neutral. With the option on, a Go DWARF signature (`godwarfsig`) whose formal is a nominal interface over the `runtime.iface` storage, passed in a register pair, keeps its two ABI words as two inputs, `s_tab` typed as a pointer to the interface's record and `s_data` an opaque pointer, and an indirect call whose target is a load of one method slot of such a record prints as `Interface.Method(receiver, ...)` (`main.Shape.Area(s_data)`). A function whose interface record is missing keeps the inference it had. Method signatures are not applied: the slots are untyped function pointers, so argument recovery at the call is unchanged."
+use_when = "Turn on to read interface calls in a Go binary that keeps its DWARF by method name. Off by default while the typing only reaches interface formals (stripped binaries, struct fields and type assertion results keep their anonymous calls), and because it changes the signature of every function that takes an interface. Non-Go binaries are byte-identical either way."
+example = "option goitabcalls on"
+source_decompiler = "kuna"
+inspiration = "Go internal/abi.ITab and InterfaceType (the Fun array follows the interface's sorted method list); IDA and Ghidra name itab method slots from the runtime type data"
+change_kind = "type-inference"
+tier = "transform"
+symptoms = "go interface method calls print as anonymous indirect calls through tab + 0x18|a go function taking an interface shows no method names at its calls|go itab dispatch renders as code pointer arithmetic"

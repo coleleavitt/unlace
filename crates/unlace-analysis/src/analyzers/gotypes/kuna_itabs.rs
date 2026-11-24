@@ -121,7 +121,12 @@ pub(super) fn read_itab(
 /// The located itab records' VMAs, from whichever representation this release
 /// uses. Tries the go≤1.26 `itablinks` pointer slice first, then the go1.27+
 /// `[types + itaboffset, …]` contiguous region; `None` if neither validates.
-fn locate_itabs(img: &GoImage, anchor: u64, types: u64, etypes: u64) -> Option<Vec<u64>> {
+pub(super) fn locate_itabs(
+    img: &GoImage,
+    anchor: u64,
+    types: u64,
+    etypes: u64,
+) -> Option<Vec<u64>> {
     locate_itablinks_slice(img, anchor, types, etypes)
         .or_else(|| locate_itab_region(img, anchor, types, etypes))
 }

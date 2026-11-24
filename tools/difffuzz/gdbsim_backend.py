@@ -56,6 +56,8 @@ def available(arch):
 
 def regnums(arch):
     """{gdb register name: (number, size)} for the architecture's simulator."""
+    if hasattr(arch, "sim_regnums"):
+        return arch.sim_regnums
     key = getattr(arch, "gdb_arch", arch.gdbsim)
     if key not in _REGNUMS:
         out = subprocess.run([os.path.join(bindir(), "gdb"), "-nx", "-batch", "-ex", "set architecture " + key,
@@ -72,6 +74,8 @@ def regnums(arch):
 class Session:
     def __init__(self, arch, page):
         self.arch, self.page = arch, page
+        self.code = {}
+        self.last = None
         self.dir = tempfile.mkdtemp(prefix="gdbsim-")
         img = os.path.join(self.dir, "case.elf")
         with open(img, "wb") as f:
@@ -114,10 +118,11 @@ class Session:
             num, size = tab[n]
             b = (v & ((1 << (8 * size)) - 1)).to_bytes(size, "big" if getattr(self.arch, "sim_store_big", big) else "little")
             self.cmd("S %d %s" % (num, b.hex()))
-        o = self.cmd("T")
-        reason, sig = int(o[1]), int(o[2])
-        if reason != 3 or sig not in (0, 5):          # sim_stopped by SIGTRAP after one step
-            return {"ok": False, "why": "stop %d signal %d" % (reason, sig)}
+        for _ in range(r.get("steps", 1)):
+            o = self.cmd("T")
+            reason, sig = int(o[1]), int(o[2])
+            if reason != 3 or sig not in (0, 5):          # sim_stopped by SIGTRAP after one step
+                return {"ok": False, "why": "stop %d signal %d" % (reason, sig)}
         def get(n):
             num, size = tab[n]
             h = self.cmd("G %d %d" % (num, size))[1]
@@ -132,12 +137,18 @@ class Session:
         return {"ok": True, "regs": out, "mem": mem, "pc": get(self.arch.gdb_pc)}
 
 
-def session(arch, page):
+def session(arch, page, addr=None, code=b""):
     s = _SESSIONS.get(arch.name)
-    if s is None or s.proc.poll() is not None or s.page != page:
+    # simulators that cache decoded instructions (the CGEN ones) do not see a rewrite of code
+    # they already ran, so a new instruction at an address used before gets a fresh simulator
+    stale = s is not None and any(s.code.get(addr + i, b) != b for i, b in enumerate(code))
+    if s is None or s.proc.poll() is not None or s.page != page or stale:
         if s is not None:
             s.close()
         s = _SESSIONS[arch.name] = Session(arch, page)
+    for i, b in enumerate(code):
+        s.code[addr + i] = b
+    s.last = addr
     return s
 
 
@@ -188,7 +199,7 @@ def run_case_gdbsim(arch, regs, row, cand, rng, seed, tmp):
     mem = []
     for p in pages:
         mem.append([gaddr(p), bytes(fill_byte(p + i, seed) for i in range(PAGE)).hex()])
-    mem.append([addr, bytes(cand["bytes"]).hex()])
+    mem.append([addr, (bytes(cand["bytes"]) + getattr(arch, "gdb_insn_pad", b"")).hex()])
     name = getattr(arch, "gdb_reg", lambda n: n)
     setr = {name(n): init[n] & ((1 << bits) - 1) for n, _ in arch.gprs if n in regs}
     for k, fields, word in words_:
@@ -196,11 +207,15 @@ def run_case_gdbsim(arch, regs, row, cand, rng, seed, tmp):
     setr.update(derived_in)
     read = list(setr)
     r = {"mem": mem, "regs": setr, "pc": addr, "read": read, "read_mem": [[gaddr(p), PAGE] for p in pages]}
+    # an architecture can ask to run the padding after the instruction too (sim/m32r commits a
+    # 16-bit instruction's condition bit only at the end of its word)
+    extra = arch.gdbsim_extra_steps(cand) if hasattr(arch, "gdbsim_extra_steps") else 0
+    r["steps"] = 1 + extra
     cbias = getattr(arch, "gdb_code_bias", 0)
     r["pc"] = addr + cbias
     r["mem"][-1][0] = addr + cbias
     try:
-        s = session(arch, code_page + cbias)
+        s = session(arch, code_page + cbias, addr + cbias, bytes(cand["bytes"]) + getattr(arch, "gdb_insn_pad", b""))
         res = s.ask(r)
     except (TimeoutError, OSError, RuntimeError, ValueError, IndexError) as e:
         s = _SESSIONS.pop(arch.name, None)
@@ -237,7 +252,7 @@ def run_case_gdbsim(arch, regs, row, cand, rng, seed, tmp):
         if k not in ignore and f(st) != ref[k]:
             diffs[k] = (f(st), ref[k])
     target = nxt & ((1 << bits) - 1)
-    landed = (res["pc"] - cbias) & ((1 << bits) - 1)
+    landed = (res["pc"] - cbias - extra * len(getattr(arch, "gdb_insn_pad", b""))) & ((1 << bits) - 1)
     if landed != target and "pc" not in ignore:
         diffs["pc"] = (target, landed)
     for p, blob in zip(pages, res["mem"]):

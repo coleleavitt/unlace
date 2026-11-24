@@ -46,7 +46,16 @@ is VOP3P: the packed 16-bit operations, with op_sel and op_sel_hi picking each l
 `tools/regen_amdgpu_cdna.sh`. Of the 906 VOP3 probe encodings for gfx900, 894 now decode with LLVM's mnemonic
 (374 with the same text). The rest are the VINTRP `v_interp_*` forms and `v_mqsad_u32_u8`.
 
-Gaps: SDWA and DPP operand forms, VINTRP, MIMG, MTBUF, EXP and most atomics are not decoded; VOP3
+`amdgcn_gfx9_dpp.sinc` (`tools/gen_amdgpu_gfx9_dpp.py`) clones every VOP1, VOP2 and VOPC constructor
+with 32-bit operands into its SDWA form (src0 = 0xf9) and DPP form (0xfa; VOPC has none on GFX9). SDWA reads
+each source's selected byte or word, zero- or sign-extended, with neg/abs on float operations. It writes the
+result through dst_sel and dst_unused (pad, sign-extend or preserve); a VOPC writes VCC or the SGPR pair.
+DPP reads src0 through the `dpp_mov` user-op, since the one-lane model cannot express the lane exchange.
+The row and bank masks are displayed but not modelled. Against `llvm-objdump --mcpu=gfx900`, every
+random VOPC/VOP2/VOP1 SDWA probe and every VOP2 DPP probe prints the same text. VOP1 DPP misses only the forms
+with 64-bit operands.
+
+Gaps: VINTRP, MIMG, MTBUF, EXP and most atomics are not decoded; VOP3
 clamp and output modifiers are ignored, as is op_sel outside the opcodes above; MUBUF does
 not add the buffer resource base or handle IDXEN; transcendental operations, bit reversal,
 find-first-bit and the cross-lane operations are user-ops; the wave-wide meaning of a mask
@@ -93,7 +102,12 @@ match at least as many probe encodings as the GFX9 spec does against gfx900. The
 targets list no undecoded instruction, give the same mnemonic as `llvm-objdump` at every address, and
 decompile with no bad instruction.
 
-Gaps: AGPR data operands of loads, stores and DS (the acc bit), DPP and SDWA (as on GFX9), gfx942's
+The acc bit of FLAT/GLOBAL/SCRATCH and MUBUF (word 1 bit 23) and DS (word 0 bit 25) makes the
+data and result operands AGPRs. Each GFX9 memory constructor gets an acc=0 copy and an AGPR copy, as do
+the generated atomics. The GFX9 SDWA/DPP include is spliced in, and the CDNA VOP2 additions get SDWA/DPP
+forms too.
+
+Gaps: DPP forms with 64-bit operands (including gfx90a's row_newbcast f64 DPP), gfx942's
 `global_load_lds_*` and the cbsz/abid/blgp MFMA modifiers (decoded but not displayed).
 
 ## RDNA: `AMDGPU:LE:64:GFX10` and `AMDGPU:LE:64:GFX11`

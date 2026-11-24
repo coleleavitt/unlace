@@ -70,15 +70,56 @@ pub fn is_dyld_cache_file(path: &Path) -> bool {
 /// The selected images of the dyld shared cache at `path`, rebuilt as one thin
 /// Mach-O; `None` when `path` is not a dyld shared cache. The selection is the
 /// `dyldimage` option, carried in [`unlace_decomp::kuna_dyldcache::DYLDIMAGE_ENV`].
+///
+/// One command reads the image several times (runtime hints, compiler and
+/// language policy, the engine load), so the last rebuild is kept, keyed by
+/// everything it reads: the cache file, its size and modification time, the
+/// selection and the `exporttrie` gate.
 pub fn read_selected_image(path: &Path) -> Option<Result<Vec<u8>, String>> {
     if !is_dyld_cache_file(path) {
         return None;
     }
-    Some(DyldCache::open(path).and_then(|cache| {
-        cache.extract_merged(
-            &cache.select_all(unlace_decomp::kuna_dyldcache::selected_image().as_deref())?,
-        )
-    }))
+    let selected = unlace_decomp::kuna_dyldcache::selected_image();
+    let key = ImageKey::of(path, &selected);
+    if let (Some(key), Ok(last)) = (&key, LAST_IMAGE.lock()) {
+        if let Some((k, bytes)) = last.as_ref() {
+            if k == key {
+                return Some(Ok(bytes.clone()));
+            }
+        }
+    }
+    let image = DyldCache::open(path)
+        .and_then(|cache| cache.extract_merged(&cache.select_all(selected.as_deref())?));
+    if let (Some(key), Ok(bytes), Ok(mut last)) = (key, &image, LAST_IMAGE.lock()) {
+        *last = Some((key, bytes.clone()));
+    }
+    Some(image)
+}
+
+/// The last image [`read_selected_image`] rebuilt.
+static LAST_IMAGE: std::sync::Mutex<Option<(ImageKey, Vec<u8>)>> = std::sync::Mutex::new(None);
+
+/// What a [`read_selected_image`] rebuild reads.
+#[derive(PartialEq, Eq)]
+struct ImageKey {
+    path: PathBuf,
+    len: u64,
+    modified: Option<std::time::SystemTime>,
+    selected: Option<String>,
+    exporttrie: bool,
+}
+
+impl ImageKey {
+    fn of(path: &Path, selected: &Option<String>) -> Option<ImageKey> {
+        let meta = std::fs::metadata(path).ok()?;
+        Some(ImageKey {
+            path: std::fs::canonicalize(path).ok()?,
+            len: meta.len(),
+            modified: meta.modified().ok(),
+            selected: selected.clone(),
+            exporttrie: unlace_decomp::kuna_exporttrie::exporttrie_enabled(),
+        })
+    }
 }
 
 /// The byte size the images `name` selects occupy, `__LINKEDIT` aside (the cache shares

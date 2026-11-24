@@ -131,6 +131,7 @@ pub mod kuna_gostorevalue;
 pub mod kuna_constantshift;
 pub mod kuna_fidproto; // (kuna) the prototype a .fid record carries, and its check against the body
 pub mod kuna_reglocals;
+pub mod kuna_wideconst; // (kuna `wideconst`) a constant wider than 64 bits prints as one literal
 
 pub mod kuna_widenedadd;
 

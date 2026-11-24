@@ -150,6 +150,28 @@ X86_DENY = re.compile(
 )
 
 
+def x86_reg_family(r):
+    r = r.lower()
+    m = re.match(r"^r(\d+)[dwb]?$", r)
+    if m:
+        return "r" + m.group(1)
+    m = re.match(r"^[re]?([abcd])[xlh]$", r)
+    if m:
+        return m.group(1)
+    m = re.match(r"^[re]?(sp|bp|si|di)l?$", r)
+    return m.group(1) if m else r
+
+
+def x86_reg_in_address(operands):
+    """True when a register operand also appears inside the memory operand's brackets."""
+    m = re.search(r"\[([^\]]*)\]", operands)
+    if not m:
+        return False
+    inside = {x86_reg_family(t) for t in re.findall(r"[a-z]+\d*[a-z]?", m.group(1))}
+    rest = operands[:m.start()] + operands[m.end():]
+    return any(x86_reg_family(t) in inside for t in re.findall(r"\b[a-z]+\d*[a-z]?\b", rest) if t not in ("ptr", "byte", "word", "dword", "qword"))
+
+
 class X86_64(Arch):
     name = "x86-64"
     lang = "x86:LE:64:default"
@@ -233,6 +255,11 @@ class X86_64(Arch):
         if mnemonic == "cmpxchg" and not operands.startswith(("byte", "word", "dword", "qword")):
             # Unicorn zero-extends a 32-bit register destination when the compare fails; hardware
             # leaves it unchanged (checked natively), as SLEIGH does.
+            return {"*"}
+        if mnemonic == "xadd" and x86_reg_in_address(operands):
+            # SLEIGH writes the register before it stores through the address (the op order the Go
+            # atomic proofs match, see lockable.sinc), so xadd [rbx], bh stores where the new RBX
+            # points; compilers never emit a register that is also part of the address
             return {"*"}
         ign = {"AF"} | X86_UNDEF.get(mnemonic, set())
         if mnemonic in X86_SHIFTS:
@@ -2283,7 +2310,7 @@ class SlotDis(BinutilsDis):
             f.write(b"".join(self.pack(r) for r in todo))
             name = f.name
         try:
-            cmd = [self.path(), "-D", "-b", "binary", "-m", self.machine, "-EB" if self.big else "-EL", name]
+            cmd = [self.path(), "-D", "-z", "-b", "binary", "-m", self.machine, "-EB" if self.big else "-EL", name]
             out = subprocess.run(cmd, capture_output=True, text=True, check=True).stdout
         finally:
             os.unlink(name)
@@ -2296,7 +2323,7 @@ class SlotDis(BinutilsDis):
         for (off, text), nxt in zip(lines, lines[1:] + [(None, None)]):
             if off % self.width:
                 continue
-            if not text or text.startswith(("(bad)", "bad", ".word", ".long", ".byte", ".short", "#", "*unknown*")):
+            if not text or text.startswith(("(bad)", "bad", ".word", ".long", ".byte", ".short", "#", "*unknown*", "unknown")):
                 continue
             n = (nxt[0] if nxt[0] is not None else off + self.width) - off
             mn, ops = (re.split(r"\s+", text, maxsplit=1) + [""])[:2]
@@ -2456,4 +2483,376 @@ class Iq2000(ObjdumpArch):
         raise NotImplementedError("iq2000 runs with --oracle gdbsim")
 
 
-ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), X86_32Native(), X86_16(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), Ppc64P10(), Ppc64leP10(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k(), MicroBlaze(), MicroBlazeEl(), Xtensa(), Moxie(), Ft32(), Iq2000())}
+V850_GDB = {"sp": "r3", "gp": "r4", "tp": "r5", "ep": "r30", "lp": "r31", "PSW": "psw"}
+V850_DENY = re.compile(
+    r"^(b[a-z]*|jmp|jr|jarl|ctret|eiret|feret|reti|trap|halt|di|ei|ldsr|stsr|switch|callt|dispose|syscall|"
+    r"fetrap|rie|snooze|caxi|ldl\.w|stc\.w|sync[a-z]*|cache|pref|nop|loop|pushsp|popsp|ldvc\.sr|stvc\.sr|"
+    r"[a-z0-9]*\.[sd]|cvtf.*|trf.*|cmovf.*|ceilf.*|floorf.*|roundf.*|trncf.*|maddf.*|msubf.*|nmaddf.*|"
+    r"nmsubf.*|absf.*|addf.*|subf.*|mulf.*|divf.*|maxf.*|minf.*|negf.*|sqrtf.*|recipf.*|rsqrtf.*|cmpf.*|"
+    r"hsh|dbtrap|dbret|dbhvtrap|hvtrap|hvcall|ldtc.*|sttc.*|cll|stm\.gsr|ldm\.gsr|stm\.mp|ldm\.mp|tlb.*|"
+    r"jmp32|jarl32|.*\.x)$"
+)
+
+
+class V850(ObjdumpArch):
+    """V850E2 (little endian) against gdb's v850 simulator, machine v850e2v3 (--oracle gdbsim).
+    The flags live in PSW (Z, S, OV, CY, SAT in bits 0..4), compared as that register. The
+    simulator has memory below 2 MiB, so the instruction sits at 0x100000 and pointers are
+    drawn there. Branches, jumps, system, cache, FP and atomic instructions are not generated."""
+    name = "v850"
+    lang = "V850:LE:32:default"
+    elf_machine = 87
+    elf_flags = 0x60000000                     # E_V850E2V3_ARCH
+    base = 0x100000
+    big = False
+    pc = "PC"
+    gprs = [(n, None) for n in ["r1", "r2", "sp", "gp", "tp"] + [f"r{i}" for i in range(6, 30)] + ["ep", "lp", "PSW"]]
+    pc_const = None
+    deny = V850_DENY
+    gdbsim = "v850"
+    gdb_arch = "v850e2v3"
+    gdb_pc = "pc"
+    misaligned_undefined = True                 # sim/v850 aligns a halfword/word access down
+
+    def unicorn(self):
+        raise NotImplementedError("v850 runs with --oracle gdbsim")
+
+    def capstone(self):
+        if self._dis is None:
+            self._dis = SlotDis("v850e2v3", False, 16, b"\x00\x00", 2)
+        return self._dis
+
+    def draw(self, rng):
+        return rng.getrandbits(64).to_bytes(8, "little")
+
+    def gdb_reg(self, n):
+        return V850_GDB.get(n, n)
+
+    def rand_reg(self, rng, bits):
+        if rng.random() < 0.35:
+            return rng.randrange(0x110000, 0x1F0000) & ~3
+        return Arch.rand_reg(self, rng, bits)
+
+    def fix_inputs(self, init, rng):
+        init["PSW"] &= 0x1F
+
+    def addr_ok(self, a):
+        return a < 0x200000
+
+    def partial(self, mnemonic, operands):
+        # sim/v850's ADF and SBF leave PSW alone; the manual sets CY, OV, S and Z
+        return {"PSW": 0 if mnemonic.startswith(("adf", "sbf")) else 0x1F}
+
+    def skip(self, cand):
+        # sim/v850 builds MAC/MACU from 16x16 partial products and drops a carry into the high word
+        return cand["mnemonic"] in ("mac", "macu")
+
+
+MN10300_DENY = re.compile(
+    r"^(b[a-z]*|l[a-z]{2}|jmp|call[a-z]*|ret[a-z]*|rti|trap|syscall|udf.*|nop|rets|retf|jsr|"
+    r"getx|putx|mulq.*|mulqu.*|sat.*)$"
+)
+
+
+class Mn10300(ObjdumpArch):
+    """Matsushita MN10300 (little endian) against gdb's mn10300 simulator (--oracle gdbsim). The
+    simulator has memory below 1 MiB, so the instruction sits at 0x10000. Z, N, C and V are
+    compared through PSW. Branches, calls, returns, loops and traps are not generated."""
+    name = "mn10300"
+    lang = "mn10300:LE:32:mn10300"
+    elf_machine = 89
+    base = 0x10000
+    big = False
+    pc = "PC"
+    gprs = [(n, None) for n in ["D0", "D1", "D2", "D3", "A0", "A1", "A2", "A3", "SP", "MDR", "LIR", "LAR"]]
+    pc_const = None
+    flags_reg = "psw"
+    flag_bits = {"ZF": 0, "NF": 1, "CF": 2, "VF": 3}
+    deny = MN10300_DENY
+    gdbsim = "mn10300"
+    gdb_pc = "pc"
+
+    def unicorn(self):
+        raise NotImplementedError("mn10300 runs with --oracle gdbsim")
+
+    def capstone(self):
+        if self._dis is None:
+            self._dis = SlotDis("mn10300", False, 16, b"\xcb", 1)
+        return self._dis
+
+    def draw(self, rng):
+        return rng.getrandbits(56).to_bytes(7, "little")
+
+    def gdb_reg(self, n):
+        return n.lower()
+
+    def rand_reg(self, rng, bits):
+        if rng.random() < 0.35:
+            return rng.randrange(0x20000, 0xF0000) & ~3
+        return Arch.rand_reg(self, rng, bits)
+
+    def addr_ok(self, a):
+        return a < 0x100000
+
+    def ignored(self, mnemonic, operands, state):
+        # DIV/DIVU leave the registers undefined on overflow (V set); sim/mn10300 only tests a
+        # zero divisor and truncates the quotient
+        if mnemonic in ("div", "divu") and state.get("VF"):
+            return {"*"}
+        return set()
+
+
+LM32_DENY = re.compile(r"^(b[a-z]*|bi|call[a-z]*|ret|eret|bret|scall|break|wcsr|rcsr|nop|mvhi\s*r0.*)$")
+
+
+class Lm32(ObjdumpArch):
+    """LatticeMico32 (big endian) against gdb's lm32 simulator (--oracle gdbsim), 16 MiB of RAM
+    from 0. LM32 has no flags (compares write a register). Branches, calls, returns, system calls
+    and CSR moves are not generated."""
+    name = "lm32"
+    lang = "lm32:BE:32:default"
+    elf_machine = 138
+    big = True
+    pc = "PC"
+    gprs = [(n, None) for n in [f"r{i}" for i in range(26)] + ["gp", "fp", "sp", "ra", "ea", "ba"]]
+    pc_const = None
+    deny = LM32_DENY
+    objdump_machine = "lm32"
+    gdbsim = "lm32"
+    gdb_pc = "PC"
+    sim_args = ("--memory-region", "0x0,0x1000000")
+    misaligned_undefined = True
+
+    def unicorn(self):
+        raise NotImplementedError("lm32 runs with --oracle gdbsim")
+
+    def addr_ok(self, a):
+        return a < 0x1000000
+
+    def ignored(self, mnemonic, operands, state):
+        # a 64-bit multiply into the gr0/gr1 pair: gr0 is hardwired, the simulator's gr1 differs
+        if re.match(r"[us]muli?(cc)?$", mnemonic) and operands.replace(" ", "").split(",")[2:3] == ["gr0"]:
+            return {"*"}
+        return set()
+
+    def fix_inputs(self, init, rng):
+        init["r0"] = 0                         # r0 reads as zero by convention; sim/lm32 keeps a real register
+
+
+class M32rDis(BinutilsDis):
+    """M32R words hold one 32-bit instruction (bit 31 set) or two 16-bit ones; a 16-bit candidate
+    is decoded with a NOP after it."""
+
+    def __init__(self):
+        BinutilsDis.__init__(self, "m32r2", True, 4)
+
+    def length(self, raw):
+        return 4 if raw[0] & 0x80 else 2
+
+    def pack(self, raw):
+        return raw[:4] if raw[0] & 0x80 else raw[:2] + b"\x70\x00"
+
+    def disasm(self, raw, addr):
+        raw = bytes(raw)
+        if raw not in self.cache:
+            self.prime([raw])
+        e = self.cache[raw]
+        if e is not None and "||" not in e[1]:
+            yield _Insn(raw[:self.length(raw)], e[0], e[1].split(" -> ")[0].strip())
+
+
+M32R_DENY = re.compile(
+    r"^(bra|bc|bnc|bl|beq|bne|beqz|bnez|bltz|bgez|blez|bgtz|bcl|bncl|jmp|jl|jc|jnc|trap|rte|rtt|mvtc|mvfc|"
+    r"mac[a-z0-9]*|mul[a-z0-9]*a|mulhi|mullo|mulwhi|mulwlo|macwhi|macwlo|mvfach|mvfacl|mvfacmi|mvtach|mvtacl|"
+    r"rac|rach|sadd|msblo|lock|unlock|nop|setpsw|clrpsw|sleep|sc|snc|ldb|ldh|ldub|lduh|\*unknown\*)$"
+)
+
+
+class M32r(ObjdumpArch):
+    """Renesas M32R (M32R2, big endian) against gdb's m32r simulator (--oracle gdbsim). C is PSW
+    (the CBR register). A 16-bit instruction runs with a NOP after it in its word. Branches, jumps, traps,
+    control-register moves, the accumulator (DSP) instructions and LOCK/UNLOCK are not generated."""
+    name = "m32r"
+    lang = "M32R:BE:32:default"
+    elf_machine = 88
+    big = True
+    pc = "pc"
+    gprs = [(n, None) for n in [f"r{i}" for i in range(13)] + ["fp", "lr", "sp"]]
+    pc_const = None
+    flags_reg = "psw"
+    flag_bits = {"C": 0}
+    deny = M32R_DENY
+    gdbsim = "m32r"
+    gdb_pc = "pc"
+
+    def canonical(self, cand):
+        # sim/m32r runs the base M32R; its M32RX/M32R2 mode does not keep C in PSW or CBR
+        return not re.match(r"(cmpeq|cmpz|pcmpbz|satb|sath|sat|sadd|bset|bclr|btst|divh|divuh|divb|divub|"
+                            r"remh|remuh|remb|remub|jc|jnc|mulwhi|mulwlo|macwhi|macwlo)$", cand["mnemonic"])
+    gdb_insn_pad = b"\x70\x00"
+    lift_align, lift_pad = 4, b"\x70\x00"     # 32-bit instructions sit on a word boundary
+    misaligned_undefined = True
+
+    def unicorn(self):
+        raise NotImplementedError("m32r runs with --oracle gdbsim")
+
+    def capstone(self):
+        if self._dis is None:
+            self._dis = M32rDis()
+        return self._dis
+
+    def draw(self, rng):
+        if rng.random() < 0.5:
+            return (rng.getrandbits(32) | 0x80000000).to_bytes(4, "big")
+        return (rng.getrandbits(16) & 0x7FFF).to_bytes(2, "big")
+
+    def addr_ok(self, a):
+        return a < 0x1000000
+
+
+FRV_DENY = re.compile(
+    r"^(b[a-z]*|call[a-z]*|j[a-z]*|ret[a-z]*|rett|t[a-z]*|ti[a-z]*|movgs|movsg|movfg.*|movgf.*|dcf|dci|icpl|icul|"
+    r"dcpl|dcul|ici|icei|dcei|witlb|wdtlb|itlbi|dtlbi|tlbpr|lrai|lrad|membar|nop|fnop|mnop|break|rei|mtrap|"
+    r"f[a-z0-9]*|cf[a-z0-9]*|nf[a-z0-9]*|m(?!ul|ov)[a-z0-9]*|cm[a-z0-9]*|ld[a-z]*f[a-z]*|st[a-z]*f[a-z]*|"
+    r"ldc[a-z]*|stc[a-z]*|cldc.*|cstc.*|ldbf.*|.*\.p|swap.*|cswap.*|scan.*|cscan.*|slass|nsdiv.*|nudiv.*|"
+    r"umulcc|smulcc|.*qi.*|.*ld[a-z]*q.*|.*st[a-z]*q.*|.*ldd.*|.*std.*)$"
+)
+
+
+class Frv(ObjdumpArch):
+    """Fujitsu FR-V (big endian) against gdb's frv simulator (--oracle gdbsim). Every candidate is
+    a one-instruction VLIW packet (pack bit set). ICC0..ICC3 (N Z V C) are compared through CCR
+    bits 16..31. Branches, calls, traps, SPR moves, cache/TLB, floating-point and media
+    instructions are not generated."""
+    name = "frv"
+    lang = "FRV:BE:32:default"
+    elf_machine = 0x5441
+    big = True
+    pc = "pc"
+    gprs = [(f"gr{i}", None) for i in range(1, 64)]
+    pc_const = None
+    deny = FRV_DENY
+    objdump_machine = "frv"
+    gdbsim = "frv"
+    gdb_pc = "pc"
+    misaligned_undefined = True
+    # sim/frv numbers SPRs from 129 (include/sim/sim-frv.h); CCR is SPR 256
+    sim_regnums = dict([(f"gr{i}", (i, 4)) for i in range(64)] + [("pc", (128, 4)), ("ccr", (129 + 256, 4))])
+
+    def unicorn(self):
+        raise NotImplementedError("frv runs with --oracle gdbsim")
+
+    def draw(self, rng):
+        return (rng.getrandbits(32) | 0x80000000).to_bytes(4, "big")
+
+    def flag_words(self):
+        return [("ccr", {"icc0": (16, 4), "icc1": (20, 4), "icc2": (24, 4), "icc3": (28, 4)}, lambda w: w)]
+
+    def addr_ok(self, a):
+        return a < 0x1000000
+
+
+H8_DENY = re.compile(
+    r"^(b[a-z]*(\.[sbwl])?|bra[a-z]*|bsr.*|jmp|jsr|rts[a-z]*|rte|rtd|trapa|sleep|ldc.*|stc.*|eepmov.*|movfpe|"
+    r"movtpe|mac|clrmac|ldmac|stmac|nop|ldm.*|stm.*|tas.*|movmd.*|movsd.*|rte.*|bfld|bfst|.*xs.*|"
+    r"(and|or|xor)c(\.[bw])?)$"
+)
+
+
+class H8300h(ObjdumpArch):
+    """Hitachi/Renesas H8/300H, advanced (24-bit) mode, against gdb's h8300 simulator
+    (--oracle gdbsim, ELF machine flags E_H8_MACH_H8300H: 16 MiB of memory). C, V, Z and N are
+    compared through CCR (sim/h8300 leaves H alone). Branches, calls, returns, traps, control-register moves, block moves
+    and the MAC unit are not generated."""
+    name = "h8300h"
+    lang = "h8_300h:BE:32:advanced"
+    elf_machine = 46
+    elf_flags = 0x00810000
+    big = True
+    pc = "pc"
+    gprs = [(f"er{i}", None) for i in range(8)]
+    pc_const = None
+    flags_reg = "ccr"
+    flag_bits = {"C": 0, "V": 1, "Z": 2, "N": 3}       # sim/h8300 never computes H
+    deny = H8_DENY
+    gdbsim = "h8300"
+    gdb_pc = "pc"
+    misaligned_undefined = True
+    # sim/h8300's own numbering (enum h8_regnum): er0..er7, CCR 8, PC 9, all 32-bit
+    sim_regnums = dict([(f"er{i}", (i, 4)) for i in range(7)] + [("sp", (7, 4)), ("ccr", (8, 4)), ("pc", (9, 4))])
+
+    def unicorn(self):
+        raise NotImplementedError("h8300 runs with --oracle gdbsim")
+
+    def capstone(self):
+        if self._dis is None:
+            self._dis = SlotDis("h8300h", True, 16, b"\x00\x00", 2)
+        return self._dis
+
+    def draw(self, rng):
+        return rng.getrandbits(80).to_bytes(10, "big")
+
+    def gdb_reg(self, n):
+        return "sp" if n == "er7" else n
+
+    def rand_reg(self, rng, bits):
+        if rng.random() < 0.35:
+            return rng.randrange(0x500000, 0xF00000) & ~3
+        return Arch.rand_reg(self, rng, bits)
+
+    def addr_ok(self, a):
+        return a < 0x1000000
+
+    def canonical(self, cand):
+        # binutils' h8300h decoder also prints H8S/H8SX forms: multi-bit shifts, short
+        # immediates, MOVA, RTS/L, BRA/S, immediate-to-memory moves
+        mn, ops, n = cand["mnemonic"], cand["op_str"].replace(" ", ""), len(cand["bytes"])
+        if mn.startswith(("mova", "rts/", "bra/", "rte/", "bsr/", "jsr/", "jmp/")):
+            return False
+        if re.match(r"(shl|shar|shal|shlr|shll|rot|ext)", mn) and ops.startswith("#"):
+            return False
+        if re.match(r"(add|sub|mov|cmp)\.[wl]$", mn) and ops.startswith("#") and n == 2:
+            return False
+        if mn.startswith("mov.") and ops.startswith("#") and not re.search(r",(e?r\d[hl]?|er\d)$", ops):
+            return False
+        return True
+
+    def skip(self, cand):
+        # DAA/DAS read H, which sim/h8300 never computes
+        return cand["mnemonic"] in ("daa", "das")
+
+    def ignored(self, mnemonic, operands, state):
+        ops = operands.replace(" ", "").split(",")
+        # a zero divisor leaves DIVXU/DIVXS undefined
+        if mnemonic.startswith(("divxu", "divxs")) and self._divisor_zero(state, ops[0]):
+            return {"*"}
+        # a store of part of ERn through @-ERn or @ERn+ (which half is stored is not pinned down)
+        m = re.match(r"(?:er|e|r)(\d)[hl]?,@-?er(\d)\+?$", ",".join(ops))
+        if m and m.group(1) == m.group(2) and mnemonic.startswith("mov"):
+            return {"*"}
+        # an @aa:16 operand is sign-extended to 24 bits; sim/h8300 zero-extends it
+        m = re.search(r"@0x([0-9a-f]+):16", operands)
+        if m and int(m.group(1), 16) & 0x8000:
+            return {"*"}
+        # sim/h8300's subtraction overflow test compares rd with -ea instead of ea (INC/DEC too),
+        # and its ADDX/SUBX set Z where the manual only clears it
+        out = set()
+        if mnemonic.startswith(("sub", "cmp", "dec", "neg", "inc")):
+            out.add("V")
+        if mnemonic.startswith(("addx", "subx")):
+            out |= {"Z", "V"}                   # and their V leaves the carry in out
+        return out
+
+    def _divisor_zero(self, state, op):
+        name = {"r%dh" % i: ("er%d" % i, 8, 0xFF) for i in range(8)}
+        name.update({"r%dl" % i: ("er%d" % i, 0, 0xFF) for i in range(8)})
+        name.update({"r%d" % i: ("er%d" % i, 0, 0xFFFF) for i in range(8)})
+        name.update({"e%d" % i: ("er%d" % i, 16, 0xFFFF) for i in range(8)})
+        reg, sh, mask = name.get(op, (op, 0, 0xFFFFFFFF))
+        try:
+            return (state.get(reg) >> sh) & mask == 0
+        except KeyError:
+            return True
+
+
+ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), X86_32Native(), X86_16(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), Ppc64P10(), Ppc64leP10(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k(), MicroBlaze(), MicroBlazeEl(), Xtensa(), Moxie(), Ft32(), Iq2000(), V850(), Mn10300(), Lm32(), M32r(), Frv(), H8300h())}

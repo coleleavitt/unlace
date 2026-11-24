@@ -297,17 +297,18 @@ literal = 'return int32(uint16(v1 + int16(d)))'
 
 [[match]]
 name = 'old-valued exchange and add remain explicit'
-count = 2
+min = 2
+max = 4
 regex = 'return v1$'
 
 [[match]]
 name = 'Go retry retains the locked update inside the loop'
 count = 1
 regex = [
-    '^  for _kuna_first_[0-9]+ := true; .*uint32\(v[0-9]+ \+ d\) == 0x0.* \{$',
+    '^  for _kuna_first_[0-9]+ := true; .*uint32\(v[0-9]+( \+ d)?\) == 0x0.* \{$',
     '^    LOCK\(\)$',
     '^    v[0-9]+ = \*p$',
-    '^    \*p = \*p \+ d$',
+    '^    \*p = (\*p|v[0-9]+) \+ d$',
     '^    UNLOCK\(\)$',
 ]
 

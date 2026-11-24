@@ -25,6 +25,7 @@ unlace-project.workspace = true
 unlace-idb.workspace = true
 # FID and FLIRT construction also read archive members.
 object = { workspace = true, features = ["archive"] }
+memchr.workspace = true
 regex.workspace = true
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }

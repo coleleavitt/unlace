@@ -403,6 +403,7 @@ kuna_options! { self, p1;
     "ptrfromuse" => registered!(crate::kuna_ptrfromuse::PtrFromUseMode),
     "charptr" => registered!(crate::kuna_charptr::CharPtr),
     "cstringconst" => registered!(crate::kuna_cstringconst::CstringConst),
+    "wideconst" => registered!(crate::kuna_wideconst::WideConst),
     "elemptr" => registered!(crate::kuna_elemptr::ElemPtr),
     "protoorder" => registered!(crate::kuna_protoorder::ProtoOrderMode),
     "calleevote" => registered!(crate::kuna_calleevote::CalleeVoteMode),

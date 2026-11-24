@@ -4,3 +4,4 @@
 @include "s390x_multi.sinc"
 @include "s390x_bfp.sinc"
 @include "s390x_vector.sinc"
+@include "s390x_hfpdec.sinc"

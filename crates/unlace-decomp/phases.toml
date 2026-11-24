@@ -8342,6 +8342,25 @@ change_kind = "presentation-default"
 tier = "transform"
 symptoms = "one local in a callee-saved register holds unrelated values around different calls|a variable kept across one call is reused for a different value kept across a later call|a pointer and a count share one declared local in rbx or x19"
 
+[[settable]]
+option = "coalescecap"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P6"
+subphase = "merge-aggressiveness"
+strength = "HARD"
+rewind = "P6"
+issue = "unlace-1225"
+summary = "Stop the variable merge on a very large function. Merge::mergeByDatatype (merge.cc:359-401) runs mergeLinear over each type group, and mergeLinear tests every high against the accepted stack of its group, so one pass is quadratic in the number of HighVariables and a function with thousands of locals spends minutes in it. ON compares the number of HighVariables the merge gathers in the function with a fixed limit of 5000 (coalescecap.rs (MAX_COALESCIBLE_HIGHS)); above the limit the type-group merge and the stable-name merge are skipped and every high keeps its own variable, the same fallback the original unlace cross-base coalescing took (variable_merge.rs, max_coalescible_vars). A function under the limit merges exactly as before. OFF, the default, is upstream byte-for-byte."
+use_when = "OFF by default: above the limit the merge is skipped on purpose, so the variable count of that function rises even though no merge is wrong. Turn it ON when one function takes minutes in variable merging or hits the decompile-all watchdog, or on a generated or obfuscated function with thousands of locals whose merged output is unreadable anyway. The limit is not yet measured on a corpus; a default change needs the 675 datatest assertions, the speed budget and the DecBench variable-match numbers."
+example = "option coalescecap on"
+source_decompiler = "unlace"
+inspiration = "variable_merge.rs max_coalescible_vars fallback (origin/master); Merge::mergeLinear (merge.cc:272-292)"
+change_kind = "speed"
+tier = "transform"
+symptoms = "one function takes minutes in variable merging|a decompile of one very large function hits the watchdog in the variable merge|a generated function with thousands of locals prints as a flood of one-use variables"
+
 # ---------------------------------------------------------------------------
 # (unlace) Loader-tier capability (1 row): arm64e Mach-O spec selection. Like
 # `relocobjects` above, this gates a LOAD-time decision (language_id_for), so the

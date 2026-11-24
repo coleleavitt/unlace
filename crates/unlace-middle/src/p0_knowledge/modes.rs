@@ -677,6 +677,8 @@ mod tests {
             "phiarm",
             // `calleesaved` (issue #20) landed without a corpus sweep.
             "calleesaved",
+            // `coalescecap` (issue #1225) is a speed cap, measured in its own sweep.
+            "coalescecap",
             // `swiftcallers` lands unmeasured; its Toyota/Perplexity sweep decides.
             "swiftcallers",
             // `calleeargsmsvc` landed on hand-built MSVC-shape fixtures only.

@@ -638,6 +638,9 @@ Three tiers:
 | one local in a callee-saved register holds unrelated values around different calls | [`calleesaved`](#calleesaved----on--off-default-off) |
 | a variable kept across one call is reused for a different value kept across a later call | [`calleesaved`](#calleesaved----on--off-default-off) |
 | a pointer and a count share one declared local in rbx or x19 | [`calleesaved`](#calleesaved----on--off-default-off) |
+| one function takes minutes in variable merging | [`coalescecap`](#coalescecap----on--off-default-off) |
+| a decompile of one very large function hits the watchdog in the variable merge | [`coalescecap`](#coalescecap----on--off-default-off) |
+| a generated function with thousands of locals prints as a flood of one-use variables | [`coalescecap`](#coalescecap----on--off-default-off) |
 | an inlined callee body is spliced into the caller and should read as a call | [`outline`](#outline----off----default-off-destructive-opt-in) |
 | want to pull a chosen region out of a function into a named pseudofunction | [`outline`](#outline----off----default-off-destructive-opt-in) |
 | acting on an almostregion inline-candidate report by hand or with an llm | [`outline`](#outline----off----default-off-destructive-opt-in) |
@@ -2941,6 +2944,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** OFF by default: a source variable reassigned between two calls (`p = a; f(p); p = b; g(p);`) compiles to the same two webs in the same register, and ON prints it as two variables. Turn it ON when one local declared in a callee-saved register is used for unrelated things around different calls (a buffer pointer before one call and a count after another), or when comparing variable boundaries against DWARF. Not yet measured on a corpus; a default change needs the DecBench variable-match and declaration-count numbers.
 - **Where / provenance:** P6/merge-aggressiveness · unlace · presentation-default · unlace-20
 - **Example:** `option calleesaved on`
+
+### `coalescecap` -- on | off, default `off`
+
+- **Symptoms:** one function takes minutes in variable merging; a decompile of one very large function hits the watchdog in the variable merge; a generated function with thousands of locals prints as a flood of one-use variables.
+- **What it does:** Stop the variable merge on a very large function. Merge::mergeByDatatype (merge.cc:359-401) runs mergeLinear over each type group, and mergeLinear tests every high against the accepted stack of its group, so one pass is quadratic in the number of HighVariables and a function with thousands of locals spends minutes in it. ON compares the number of HighVariables the merge gathers in the function with a fixed limit of 5000 (coalescecap.rs (MAX_COALESCIBLE_HIGHS)); above the limit the type-group merge and the stable-name merge are skipped and every high keeps its own variable, the same fallback the original unlace cross-base coalescing took (variable_merge.rs, max_coalescible_vars). A function under the limit merges exactly as before. OFF, the default, is upstream byte-for-byte.
+- **When to flip:** OFF by default: above the limit the merge is skipped on purpose, so the variable count of that function rises even though no merge is wrong. Turn it ON when one function takes minutes in variable merging or hits the decompile-all watchdog, or on a generated or obfuscated function with thousands of locals whose merged output is unreadable anyway. The limit is not yet measured on a corpus; a default change needs the 675 datatest assertions, the speed budget and the DecBench variable-match numbers.
+- **Where / provenance:** P6/merge-aggressiveness · unlace · speed · unlace-1225
+- **Example:** `option coalescecap on`
 
 ### `outline` -- off | <fn>:<head>-<exit>[;...], default `off` (destructive opt-in)
 

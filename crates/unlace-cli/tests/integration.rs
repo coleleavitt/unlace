@@ -60,6 +60,8 @@ mod sparc_prologue_start;
 mod stm8_raw;
 #[path = "upd7725.rs"]
 mod upd7725;
+#[path = "v810.rs"]
+mod v810;
 #[path = "w65816_raw.rs"]
 mod w65816_raw;
 #[path = "x86_amx.rs"]

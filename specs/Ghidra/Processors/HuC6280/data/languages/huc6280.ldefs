@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="HuC6280"
+            endian="little"
+            size="16"
+            variant="default"
+            version="1.0"
+            slafile="huc6280.sla"
+            processorspec="huc6280.pspec"
+            id="HuC6280:LE:16:default">
+    <description>Hudson Soft HuC6280 (PC Engine / TurboGrafx-16), logical address space</description>
+    <compiler name="default" spec="huc6280.cspec" id="default"/>
+  </language>
+</language_definitions>

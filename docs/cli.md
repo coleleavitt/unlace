@@ -1460,7 +1460,8 @@ two steps, `v = new(T); v.<init>(args);`. The language is `Dalvik:LE:32:DEX_Andr
 `Dalvik:` language. An APK loads directly: its `classes.dex`, `classes2.dex`, ...
 are inflated and mapped one after another, each at a 64 KiB boundary, so one
 run covers the whole app and a call from one file into a class of another
-prints by name. CDEX, ODEX, OAT and VDEX files are not supported.
+prints by name. CDEX, ODEX, OAT and VDEX files load the same way (a VDEX must be
+version 027); see `docs/spec/01-program-prep.md`.
 
 ### MS-DOS MZ executables
 

@@ -15,3 +15,5 @@
   `m68k-elf`, `or1k-elf` and `xtensa-elf` (the xtensa core built with `XCHAL_HAVE_BE 0`, windowed
   ABI). Linked with `<target>-ld -e 0 -Ttext=0x10000` and stripped with `--strip-debug`.
   `or1k.o` and `xtensa.o` are not kept, because their ET_REL relocations are not applied yet.
+- `sparc64_float.o`: `zig cc -target sparc64-freestanding -O2 -c sparc64_float.c`, single and double float
+  returns under the V9 ABI (#765).

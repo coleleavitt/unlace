@@ -94,11 +94,17 @@
         </rule>
       </input>
       <output>
-        <pentry minsize="4" maxsize="8" metatype="float">
+        <pentry minsize="4" maxsize="4" metatype="float">
+          <register name="fs0"/>  <!-- a single-precision result is in %f0; in %d0 it would be right-justified into %f1 -->
+        </pentry>
+        <pentry minsize="8" maxsize="8" metatype="float">
           <register name="fd0"/>
         </pentry>
-        <pentry minsize="4" maxsize="8" metatype="float">
+        <pentry minsize="8" maxsize="8" metatype="float">
           <register name="fd2"/>
+        </pentry>
+        <pentry minsize="16" maxsize="16" metatype="float">
+          <register name="fq0"/>
         </pentry>
         <pentry minsize="1" maxsize="8" extension="inttype">
           <register name="o0"/>
@@ -106,10 +112,6 @@
         <rule>
           <datatype name="struct"/>
 	      <hidden_return/>
-	    </rule>
-	    <rule>
-	      <datatype name="float" minsize="8" maxsize="16"/>
-	      <join storage="float"/>
 	    </rule>
       </output>
       <unaffected>

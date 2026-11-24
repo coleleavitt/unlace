@@ -427,6 +427,13 @@ SparcV9_64.cspec spelled its below-the-frame local range in 32 bits
 4 GiB, so the frame's only local range ended at the window save area and an
 open array there ran on through the parameter range. kuna's copy sign-extends
 it, as x86-64-gcc.cspec does; an array at `fp+0x7fb` now ends at the frame.
+Its default model also took every float result from `fd0` at sizes 4..8, and a
+4-byte value in a big-endian 8-byte register is its low-order half, `%f1`: the
+V9 ABI right-justifies a float *argument* there, but returns a float result in
+`%f0`, so `return v * n;` printed `return v;` (the first argument; unlace#765).
+The output list is now `fs0` (4 bytes), `fd0`/`fd2` (8), `fq0` (16), then `o0`,
+and the float `join` rule over 8..16 bytes is gone: joining from a list that
+holds `fs0` and `fd0` built a `PIECE` of two overlapping registers.
 
 The spec's **named** models are registered alongside it, in document order
 (`crates/unlace-middle/src/infra/architecture.rs (decode_named_protos,

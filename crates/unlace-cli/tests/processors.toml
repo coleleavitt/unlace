@@ -3580,3 +3580,31 @@ expect = ["g_tab["]
 test = "elfroute_xtensa_elf_pick"
 address = "pick"
 expect = ["0x2c", "scale7("]
+
+# SPARC64 (V9) float returns (#765): a single-precision result is in %f0, a double in %d0. Taken from
+# %d0 right-justified, a float result read as %f1 (the argument) and `f3` printed `return v;`.
+[[family]]
+name = "elfroute_sparc64_float"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/sparc64_float.o"
+forbid = ["halt_baddata", "return v;"]
+
+[[family.function]]
+test = "elfroute_sparc64_float_mul_int"
+address = "f3"
+expect = ["return v * (float)n;"]
+
+[[family.function]]
+test = "elfroute_sparc64_float_convert"
+address = "f4"
+expect = ["return (float)n;"]
+
+[[family.function]]
+test = "elfroute_sparc64_float_double"
+address = "d1"
+expect = ["return v * (double)n;"]
+
+[[family.function]]
+test = "elfroute_sparc64_float_two_args"
+address = "f2"
+expect = ["return v * w;"]

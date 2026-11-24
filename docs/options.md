@@ -639,7 +639,6 @@ Three tiers:
 | an if condition assigns a call result with a comma operand where the source wrote a separate statement and guard | [`orchainlive`](#orchainlive----on--off-default-off) |
 | guard clauses returning the same constant print as one && chain | [`orchainlive`](#orchainlive----on--off-default-off) |
 | guard clauses returning the same error constant print as one && /  | [`orchainbool`](#orchainbool----on--off-default-off) |
-|  | [`orchainbool`](#orchainbool----on--off-default-off) |
 |  chain | [`orchainbool`](#orchainbool----on--off-default-off) |
 | a null check and an unrelated field test are folded into one condition before a shared return -1 | [`orchainbool`](#orchainbool----on--off-default-off) |
 | rule pools spend most of their time re-testing ops nothing changed | [`dirtypool`](#dirtypool----on--off-default-off) |

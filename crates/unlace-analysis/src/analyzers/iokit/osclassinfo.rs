@@ -58,14 +58,6 @@ impl AnalysisPass for OsClassInfoPass {
         for c in &classes {
             emit(c, &mut out);
         }
-        if ctx
-            .arch
-            .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::Dextrpc>()
-            .0
-        {
-            super::kuna_dextrpc::emit(ctx, &img, &classes, &mut out);
-        }
         out
     }
 }

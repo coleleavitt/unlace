@@ -8710,8 +8710,11 @@ both
   `<Name>_Class`, `<Name>_ClassDescription` and `g<Name>MetaClass` (the global
   `metaPointer` points at), and names `New` `<Name>_New`, adding it as an
   entry. The names come from the records, so nothing is inferred from code.
-- **DriverKit IORPC dispatch types** (kuna, `dextrpc`, arm64 dexts, read
-  inside the `osclassinfo` pass, default-off;
+- **DriverKit IORPC dispatch types** (kuna, `dextrpc`, arm64 dexts, run at
+  the commit point like `com`
+  (`crates/unlace-analysis/src/passes.rs (run_dextrpc)`) when `dextrpc` and `osclassinfo` are on, because the
+  load-time pass list sees the architecture's constructor defaults rather than
+  the run's options, default-off;
   `crates/unlace-analysis/src/analyzers/iokit/kuna_dextrpc.rs (emit)`):
   every symbol the dext defines or imports that names `C::_Dispatch(C *,
   IORPC)` (`_ZN<n>C9_DispatchEPS_5IORPC`), `C::Dispatch(IORPC)`

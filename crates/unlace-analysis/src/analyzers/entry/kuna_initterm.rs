@@ -178,8 +178,8 @@ mod tests {
         code.extend_from_slice(&(0x1100u32 - 0x100f).to_le_bytes());
         let targets: HashSet<u64> = [0x1100].into_iter().collect();
         assert_eq!(
-            bounds_pushed_before_calls(0x1000, &code, &targets),
-            vec![(0x2000, 0x2010)]
+            bounds_pushed_before_calls(0x1000, &code, &targets, &|_| false),
+            vec![(0x2000, 0x2010, true)]
         );
     }
 
@@ -191,8 +191,8 @@ mod tests {
         ];
         let targets: HashSet<u64> = [0x3000].into_iter().collect();
         assert_eq!(
-            bounds_pushed_before_calls(0x1000, &code, &targets),
-            vec![(0x2000, 0x2010)]
+            bounds_pushed_before_calls(0x1000, &code, &targets, &|_| false),
+            vec![(0x2000, 0x2010, true)]
         );
     }
 

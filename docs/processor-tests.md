@@ -34,6 +34,8 @@ expect = [
 ]
 ```
 
+- `name` is unique across the manifest (a repeated name is an error); a family with two images
+  is two rows, `<family>_<image>`.
 - `fixture` is a path from the repository root; commit the image under
   `crates/unlace-cli/tests/fixtures/<family>/` with `git add -f` (`.bin` is ignored globally).
 - `image` names an entry of the manifest's `[images]` table instead: hex bytes, whitespace

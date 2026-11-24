@@ -30,16 +30,18 @@ define pcodeop mask_out;
 define pcodeop io_reset;
 define pcodeop trap;
 
-# Effective address: page zero, PC, AC2 or AC3 relative, optionally indirect
-# (one level; a set bit 15 in the pointer would continue the chain).
+# Effective address: page zero, PC, AC2 or AC3 relative, optionally indirect.
+# Register-relative sums and indirect pointers are not masked to 15 bits, so
+# stack frames stay recognisable; a pointer with bit 15 set (a further level
+# of indirection) is not followed.
 ea: disp is ind=0 & mode=0 & disp { export *[const]:2 disp; }
 ea: addr is ind=0 & mode=1 & sdisp [ addr = (inst_start + sdisp) & 0x7fff; ] { export *[const]:2 addr; }
-ea: sdisp^",2" is ind=0 & mode=2 & sdisp { local a:2 = (AC2 + sdisp) & 0x7fff; export a; }
-ea: sdisp^",3" is ind=0 & mode=3 & sdisp { local a:2 = (AC3 + sdisp) & 0x7fff; export a; }
-ea: "@"^disp is ind=1 & mode=0 & disp { local a:2 = *:2 disp:2; a = a & 0x7fff; export a; }
-ea: "@"^addr is ind=1 & mode=1 & sdisp [ addr = (inst_start + sdisp) & 0x7fff; ] { local p:2 = addr; local a:2 = *:2 p; a = a & 0x7fff; export a; }
-ea: "@"^sdisp^",2" is ind=1 & mode=2 & sdisp { local p:2 = (AC2 + sdisp) & 0x7fff; local a:2 = *:2 p; a = a & 0x7fff; export a; }
-ea: "@"^sdisp^",3" is ind=1 & mode=3 & sdisp { local p:2 = (AC3 + sdisp) & 0x7fff; local a:2 = *:2 p; a = a & 0x7fff; export a; }
+ea: sdisp^",2" is ind=0 & mode=2 & sdisp { local a:2 = AC2 + sdisp; export a; }
+ea: sdisp^",3" is ind=0 & mode=3 & sdisp { local a:2 = AC3 + sdisp; export a; }
+ea: "@"^disp is ind=1 & mode=0 & disp { local a:2 = *:2 disp:2; export a; }
+ea: "@"^addr is ind=1 & mode=1 & sdisp [ addr = (inst_start + sdisp) & 0x7fff; ] { local p:2 = addr; local a:2 = *:2 p; export a; }
+ea: "@"^sdisp^",2" is ind=1 & mode=2 & sdisp { local p:2 = AC2 + sdisp; local a:2 = *:2 p; export a; }
+ea: "@"^sdisp^",3" is ind=1 & mode=3 & sdisp { local p:2 = AC3 + sdisp; local a:2 = *:2 p; export a; }
 
 # Direct jump targets are code locations.
 jt: disp is ind=0 & mode=0 & disp { export *:2 disp; }
@@ -48,13 +50,13 @@ jt: addr is ind=0 & mode=1 & sdisp [ addr = (inst_start + sdisp) & 0x7fff; ] { e
 skipn: addr is b15 [ addr = inst_start + 2; ] { export *:2 addr; }
 
 # Memory reference
-:JMP jt is op4=0 & (mode=0 | mode=1) & ind=0 & jt { goto jt; }
-:JMP "0,3" is op4=0 & ind=0 & mode=3 & disp=0 { return [AC3]; }
-:JMP ea is op4=0 & ea { goto [ea]; }
-:JSR jt is op4=1 & (mode=0 | mode=1) & ind=0 & jt { AC3 = inst_next; call jt; }
-:JSR ea is op4=1 & ea { local t:2 = ea; AC3 = inst_next; call [t]; }
-:ISZ ea is op4=2 & ea & skipn { local a:2 = ea; local v:2 = *:2 a + 1; *:2 a = v; if (v == 0) goto skipn; }
-:DSZ ea is op4=3 & ea & skipn { local a:2 = ea; local v:2 = *:2 a - 1; *:2 a = v; if (v == 0) goto skipn; }
+:JMP jt is b15=0 & op4=0 & (mode=0 | mode=1) & ind=0 & jt { goto jt; }
+:JMP "0,3" is b15=0 & op4=0 & ind=0 & mode=3 & disp=0 { return [AC3]; }
+:JMP ea is b15=0 & op4=0 & ea { goto [ea]; }
+:JSR jt is b15=0 & op4=1 & (mode=0 | mode=1) & ind=0 & jt { AC3 = inst_next; call jt; }
+:JSR ea is b15=0 & op4=1 & ea { local t:2 = ea; AC3 = inst_next; call [t]; }
+:ISZ ea is b15=0 & op4=2 & ea & skipn { local a:2 = ea; local v:2 = *:2 a + 1; *:2 a = v; if (v == 0) goto skipn; }
+:DSZ ea is b15=0 & op4=3 & ea & skipn { local a:2 = ea; local v:2 = *:2 a - 1; *:2 a = v; if (v == 0) goto skipn; }
 :LDA ac, ea is op2=1 & b15=0 & ac & ea { local a:2 = ea; ac = *:2 a; }
 :STA ac, ea is op2=2 & b15=0 & ac & ea { local a:2 = ea; *:2 a = ac; }
 
@@ -63,10 +65,6 @@ cin: "" is cry=0 { export C; }
 cin: "Z" is cry=1 { export 0:1; }
 cin: "O" is cry=2 { export 1:1; }
 cin: "C" is cry=3 { local c:1 = C ^ 1; export c; }
-sh: "" is shf=0 { }
-sh: "L" is shf=1 { }
-sh: "R" is shf=2 { }
-sh: "S" is shf=3 { }
 ld: "" is nl=0 { }
 ld: "#" is nl=1 { }
 sk: "" is skp=0 { }
@@ -77,154 +75,391 @@ sk: ",SZR" is skp=4 { }
 sk: ",SNR" is skp=5 { }
 sk: ",SEZ" is skp=6 { }
 sk: ",SBN" is skp=7 { }
-macro doshift(s, k) {
-  local l:4 = ((s << 1) | (s >> 16)) & 0x1ffff;
-  local r:4 = ((s >> 1) | (s << 16)) & 0x1ffff;
-  local w:4 = ((s & 0xff) << 8) | ((s >> 8) & 0xff) | (s & 0x10000);
-  s = (s * zext(k == 0)) + (l * zext(k == 1)) + (r * zext(k == 2)) + (w * zext(k == 3));
-}
-:COM^cin^sh^ld acs, acd^sk is b15=1 & alu=0 & acs & acd & cin & sh & shf & ld & nl & sk & skp & skipn {
-  local s:4 = zext(acs) | (zext(cin) << 16);
-  local d:4 = zext(acd);
-  s = s ^ 0xffff;
-  local k:1 = shf;
-  doshift(s, k);
-  local res:2 = s:2;
-  local cy:1 = (s >> 16) != 0;
-  C = cy;
+# Operate: the ALU result r and carry c, then the 17-bit rotate (or byte
+# swap), then the no-load test and the skip test on the shifted carry and
+# result. One constructor per function and shift keeps the p-code flat.
+:COM^cin^""^ld acs, acd^sk is b15=1 & alu=0 & shf=0 & acs & acd & cin & ld & nl & sk & skp & skipn {
+  local r:2 = ~acs; local c:1 = cin;
   local ldf:1 = nl;
   if (ldf != 0) goto <noload>;
-  acd = res;
+  acd = r;
+  C = c;
 <noload>
   local sc:1 = skp;
-  local doskip:1 = (sc == 1) || (sc == 2 && !cy) || (sc == 3 && cy) || (sc == 4 && res == 0) || (sc == 5 && res != 0) || (sc == 6 && (!cy || res == 0)) || (sc == 7 && cy && res != 0);
+  local doskip:1 = (sc == 1) || (sc == 2 && c == 0) || (sc == 3 && c != 0) || (sc == 4 && r == 0) || (sc == 5 && r != 0) || (sc == 6 && (c == 0 || r == 0)) || (sc == 7 && c != 0 && r != 0);
   if (doskip) goto skipn;
 }
-:NEG^cin^sh^ld acs, acd^sk is b15=1 & alu=1 & acs & acd & cin & sh & shf & ld & nl & sk & skp & skipn {
-  local s:4 = zext(acs) | (zext(cin) << 16);
-  local d:4 = zext(acd);
-  s = ((s ^ 0xffff) + 1) & 0x1ffff;
-  local k:1 = shf;
-  doshift(s, k);
-  local res:2 = s:2;
-  local cy:1 = (s >> 16) != 0;
-  C = cy;
+:COM^cin^"L"^ld acs, acd^sk is b15=1 & alu=0 & shf=1 & acs & acd & cin & ld & nl & sk & skp & skipn {
+  local r:2 = ~acs; local c:1 = cin;
+  local c2:1 = r(1) >> 7; r = (r << 1) | zext(c); c = c2;
   local ldf:1 = nl;
   if (ldf != 0) goto <noload>;
-  acd = res;
+  acd = r;
+  C = c;
 <noload>
   local sc:1 = skp;
-  local doskip:1 = (sc == 1) || (sc == 2 && !cy) || (sc == 3 && cy) || (sc == 4 && res == 0) || (sc == 5 && res != 0) || (sc == 6 && (!cy || res == 0)) || (sc == 7 && cy && res != 0);
+  local doskip:1 = (sc == 1) || (sc == 2 && c == 0) || (sc == 3 && c != 0) || (sc == 4 && r == 0) || (sc == 5 && r != 0) || (sc == 6 && (c == 0 || r == 0)) || (sc == 7 && c != 0 && r != 0);
   if (doskip) goto skipn;
 }
-:MOV^cin^sh^ld acs, acd^sk is b15=1 & alu=2 & acs & acd & cin & sh & shf & ld & nl & sk & skp & skipn {
-  local s:4 = zext(acs) | (zext(cin) << 16);
-  local d:4 = zext(acd);
-  
-  local k:1 = shf;
-  doshift(s, k);
-  local res:2 = s:2;
-  local cy:1 = (s >> 16) != 0;
-  C = cy;
+:COM^cin^"R"^ld acs, acd^sk is b15=1 & alu=0 & shf=2 & acs & acd & cin & ld & nl & sk & skp & skipn {
+  local r:2 = ~acs; local c:1 = cin;
+  local c2:1 = r:1 & 1; r = (r >> 1) | (zext(c) << 15); c = c2;
   local ldf:1 = nl;
   if (ldf != 0) goto <noload>;
-  acd = res;
+  acd = r;
+  C = c;
 <noload>
   local sc:1 = skp;
-  local doskip:1 = (sc == 1) || (sc == 2 && !cy) || (sc == 3 && cy) || (sc == 4 && res == 0) || (sc == 5 && res != 0) || (sc == 6 && (!cy || res == 0)) || (sc == 7 && cy && res != 0);
+  local doskip:1 = (sc == 1) || (sc == 2 && c == 0) || (sc == 3 && c != 0) || (sc == 4 && r == 0) || (sc == 5 && r != 0) || (sc == 6 && (c == 0 || r == 0)) || (sc == 7 && c != 0 && r != 0);
   if (doskip) goto skipn;
 }
-:INC^cin^sh^ld acs, acd^sk is b15=1 & alu=3 & acs & acd & cin & sh & shf & ld & nl & sk & skp & skipn {
-  local s:4 = zext(acs) | (zext(cin) << 16);
-  local d:4 = zext(acd);
-  s = (s + 1) & 0x1ffff;
-  local k:1 = shf;
-  doshift(s, k);
-  local res:2 = s:2;
-  local cy:1 = (s >> 16) != 0;
-  C = cy;
+:COM^cin^"S"^ld acs, acd^sk is b15=1 & alu=0 & shf=3 & acs & acd & cin & ld & nl & sk & skp & skipn {
+  local r:2 = ~acs; local c:1 = cin;
+  r = (r << 8) | (r >> 8);
   local ldf:1 = nl;
   if (ldf != 0) goto <noload>;
-  acd = res;
+  acd = r;
+  C = c;
 <noload>
   local sc:1 = skp;
-  local doskip:1 = (sc == 1) || (sc == 2 && !cy) || (sc == 3 && cy) || (sc == 4 && res == 0) || (sc == 5 && res != 0) || (sc == 6 && (!cy || res == 0)) || (sc == 7 && cy && res != 0);
+  local doskip:1 = (sc == 1) || (sc == 2 && c == 0) || (sc == 3 && c != 0) || (sc == 4 && r == 0) || (sc == 5 && r != 0) || (sc == 6 && (c == 0 || r == 0)) || (sc == 7 && c != 0 && r != 0);
   if (doskip) goto skipn;
 }
-:ADC^cin^sh^ld acs, acd^sk is b15=1 & alu=4 & acs & acd & cin & sh & shf & ld & nl & sk & skp & skipn {
-  local s:4 = zext(acs) | (zext(cin) << 16);
-  local d:4 = zext(acd);
-  s = ((s ^ 0xffff) + d) & 0x1ffff;
-  local k:1 = shf;
-  doshift(s, k);
-  local res:2 = s:2;
-  local cy:1 = (s >> 16) != 0;
-  C = cy;
+:NEG^cin^""^ld acs, acd^sk is b15=1 & alu=1 & shf=0 & acs & acd & cin & ld & nl & sk & skp & skipn {
+  local r:2 = -acs; local c:1 = cin ^ (acs == 0);
   local ldf:1 = nl;
   if (ldf != 0) goto <noload>;
-  acd = res;
+  acd = r;
+  C = c;
 <noload>
   local sc:1 = skp;
-  local doskip:1 = (sc == 1) || (sc == 2 && !cy) || (sc == 3 && cy) || (sc == 4 && res == 0) || (sc == 5 && res != 0) || (sc == 6 && (!cy || res == 0)) || (sc == 7 && cy && res != 0);
+  local doskip:1 = (sc == 1) || (sc == 2 && c == 0) || (sc == 3 && c != 0) || (sc == 4 && r == 0) || (sc == 5 && r != 0) || (sc == 6 && (c == 0 || r == 0)) || (sc == 7 && c != 0 && r != 0);
   if (doskip) goto skipn;
 }
-:SUB^cin^sh^ld acs, acd^sk is b15=1 & alu=5 & acs & acd & cin & sh & shf & ld & nl & sk & skp & skipn {
-  local s:4 = zext(acs) | (zext(cin) << 16);
-  local d:4 = zext(acd);
-  s = ((s ^ 0xffff) + d + 1) & 0x1ffff;
-  local k:1 = shf;
-  doshift(s, k);
-  local res:2 = s:2;
-  local cy:1 = (s >> 16) != 0;
-  C = cy;
+:NEG^cin^"L"^ld acs, acd^sk is b15=1 & alu=1 & shf=1 & acs & acd & cin & ld & nl & sk & skp & skipn {
+  local r:2 = -acs; local c:1 = cin ^ (acs == 0);
+  local c2:1 = r(1) >> 7; r = (r << 1) | zext(c); c = c2;
   local ldf:1 = nl;
   if (ldf != 0) goto <noload>;
-  acd = res;
+  acd = r;
+  C = c;
 <noload>
   local sc:1 = skp;
-  local doskip:1 = (sc == 1) || (sc == 2 && !cy) || (sc == 3 && cy) || (sc == 4 && res == 0) || (sc == 5 && res != 0) || (sc == 6 && (!cy || res == 0)) || (sc == 7 && cy && res != 0);
+  local doskip:1 = (sc == 1) || (sc == 2 && c == 0) || (sc == 3 && c != 0) || (sc == 4 && r == 0) || (sc == 5 && r != 0) || (sc == 6 && (c == 0 || r == 0)) || (sc == 7 && c != 0 && r != 0);
   if (doskip) goto skipn;
 }
-:ADD^cin^sh^ld acs, acd^sk is b15=1 & alu=6 & acs & acd & cin & sh & shf & ld & nl & sk & skp & skipn {
-  local s:4 = zext(acs) | (zext(cin) << 16);
-  local d:4 = zext(acd);
-  s = (s + d) & 0x1ffff;
-  local k:1 = shf;
-  doshift(s, k);
-  local res:2 = s:2;
-  local cy:1 = (s >> 16) != 0;
-  C = cy;
+:NEG^cin^"R"^ld acs, acd^sk is b15=1 & alu=1 & shf=2 & acs & acd & cin & ld & nl & sk & skp & skipn {
+  local r:2 = -acs; local c:1 = cin ^ (acs == 0);
+  local c2:1 = r:1 & 1; r = (r >> 1) | (zext(c) << 15); c = c2;
   local ldf:1 = nl;
   if (ldf != 0) goto <noload>;
-  acd = res;
+  acd = r;
+  C = c;
 <noload>
   local sc:1 = skp;
-  local doskip:1 = (sc == 1) || (sc == 2 && !cy) || (sc == 3 && cy) || (sc == 4 && res == 0) || (sc == 5 && res != 0) || (sc == 6 && (!cy || res == 0)) || (sc == 7 && cy && res != 0);
+  local doskip:1 = (sc == 1) || (sc == 2 && c == 0) || (sc == 3 && c != 0) || (sc == 4 && r == 0) || (sc == 5 && r != 0) || (sc == 6 && (c == 0 || r == 0)) || (sc == 7 && c != 0 && r != 0);
   if (doskip) goto skipn;
 }
-:AND^cin^sh^ld acs, acd^sk is b15=1 & alu=7 & acs & acd & cin & sh & shf & ld & nl & sk & skp & skipn {
-  local s:4 = zext(acs) | (zext(cin) << 16);
-  local d:4 = zext(acd);
-  s = s & (d | 0x10000);
-  local k:1 = shf;
-  doshift(s, k);
-  local res:2 = s:2;
-  local cy:1 = (s >> 16) != 0;
-  C = cy;
+:NEG^cin^"S"^ld acs, acd^sk is b15=1 & alu=1 & shf=3 & acs & acd & cin & ld & nl & sk & skp & skipn {
+  local r:2 = -acs; local c:1 = cin ^ (acs == 0);
+  r = (r << 8) | (r >> 8);
   local ldf:1 = nl;
   if (ldf != 0) goto <noload>;
-  acd = res;
+  acd = r;
+  C = c;
 <noload>
   local sc:1 = skp;
-  local doskip:1 = (sc == 1) || (sc == 2 && !cy) || (sc == 3 && cy) || (sc == 4 && res == 0) || (sc == 5 && res != 0) || (sc == 6 && (!cy || res == 0)) || (sc == 7 && cy && res != 0);
+  local doskip:1 = (sc == 1) || (sc == 2 && c == 0) || (sc == 3 && c != 0) || (sc == 4 && r == 0) || (sc == 5 && r != 0) || (sc == 6 && (c == 0 || r == 0)) || (sc == 7 && c != 0 && r != 0);
+  if (doskip) goto skipn;
+}
+:MOV^cin^""^ld acs, acd^sk is b15=1 & alu=2 & shf=0 & acs & acd & cin & ld & nl & sk & skp & skipn {
+  local r:2 = acs; local c:1 = cin;
+  local ldf:1 = nl;
+  if (ldf != 0) goto <noload>;
+  acd = r;
+  C = c;
+<noload>
+  local sc:1 = skp;
+  local doskip:1 = (sc == 1) || (sc == 2 && c == 0) || (sc == 3 && c != 0) || (sc == 4 && r == 0) || (sc == 5 && r != 0) || (sc == 6 && (c == 0 || r == 0)) || (sc == 7 && c != 0 && r != 0);
+  if (doskip) goto skipn;
+}
+:MOV^cin^"L"^ld acs, acd^sk is b15=1 & alu=2 & shf=1 & acs & acd & cin & ld & nl & sk & skp & skipn {
+  local r:2 = acs; local c:1 = cin;
+  local c2:1 = r(1) >> 7; r = (r << 1) | zext(c); c = c2;
+  local ldf:1 = nl;
+  if (ldf != 0) goto <noload>;
+  acd = r;
+  C = c;
+<noload>
+  local sc:1 = skp;
+  local doskip:1 = (sc == 1) || (sc == 2 && c == 0) || (sc == 3 && c != 0) || (sc == 4 && r == 0) || (sc == 5 && r != 0) || (sc == 6 && (c == 0 || r == 0)) || (sc == 7 && c != 0 && r != 0);
+  if (doskip) goto skipn;
+}
+:MOV^cin^"R"^ld acs, acd^sk is b15=1 & alu=2 & shf=2 & acs & acd & cin & ld & nl & sk & skp & skipn {
+  local r:2 = acs; local c:1 = cin;
+  local c2:1 = r:1 & 1; r = (r >> 1) | (zext(c) << 15); c = c2;
+  local ldf:1 = nl;
+  if (ldf != 0) goto <noload>;
+  acd = r;
+  C = c;
+<noload>
+  local sc:1 = skp;
+  local doskip:1 = (sc == 1) || (sc == 2 && c == 0) || (sc == 3 && c != 0) || (sc == 4 && r == 0) || (sc == 5 && r != 0) || (sc == 6 && (c == 0 || r == 0)) || (sc == 7 && c != 0 && r != 0);
+  if (doskip) goto skipn;
+}
+:MOV^cin^"S"^ld acs, acd^sk is b15=1 & alu=2 & shf=3 & acs & acd & cin & ld & nl & sk & skp & skipn {
+  local r:2 = acs; local c:1 = cin;
+  r = (r << 8) | (r >> 8);
+  local ldf:1 = nl;
+  if (ldf != 0) goto <noload>;
+  acd = r;
+  C = c;
+<noload>
+  local sc:1 = skp;
+  local doskip:1 = (sc == 1) || (sc == 2 && c == 0) || (sc == 3 && c != 0) || (sc == 4 && r == 0) || (sc == 5 && r != 0) || (sc == 6 && (c == 0 || r == 0)) || (sc == 7 && c != 0 && r != 0);
+  if (doskip) goto skipn;
+}
+:INC^cin^""^ld acs, acd^sk is b15=1 & alu=3 & shf=0 & acs & acd & cin & ld & nl & sk & skp & skipn {
+  local r:2 = acs + 1; local c:1 = cin ^ (acs == 0xffff);
+  local ldf:1 = nl;
+  if (ldf != 0) goto <noload>;
+  acd = r;
+  C = c;
+<noload>
+  local sc:1 = skp;
+  local doskip:1 = (sc == 1) || (sc == 2 && c == 0) || (sc == 3 && c != 0) || (sc == 4 && r == 0) || (sc == 5 && r != 0) || (sc == 6 && (c == 0 || r == 0)) || (sc == 7 && c != 0 && r != 0);
+  if (doskip) goto skipn;
+}
+:INC^cin^"L"^ld acs, acd^sk is b15=1 & alu=3 & shf=1 & acs & acd & cin & ld & nl & sk & skp & skipn {
+  local r:2 = acs + 1; local c:1 = cin ^ (acs == 0xffff);
+  local c2:1 = r(1) >> 7; r = (r << 1) | zext(c); c = c2;
+  local ldf:1 = nl;
+  if (ldf != 0) goto <noload>;
+  acd = r;
+  C = c;
+<noload>
+  local sc:1 = skp;
+  local doskip:1 = (sc == 1) || (sc == 2 && c == 0) || (sc == 3 && c != 0) || (sc == 4 && r == 0) || (sc == 5 && r != 0) || (sc == 6 && (c == 0 || r == 0)) || (sc == 7 && c != 0 && r != 0);
+  if (doskip) goto skipn;
+}
+:INC^cin^"R"^ld acs, acd^sk is b15=1 & alu=3 & shf=2 & acs & acd & cin & ld & nl & sk & skp & skipn {
+  local r:2 = acs + 1; local c:1 = cin ^ (acs == 0xffff);
+  local c2:1 = r:1 & 1; r = (r >> 1) | (zext(c) << 15); c = c2;
+  local ldf:1 = nl;
+  if (ldf != 0) goto <noload>;
+  acd = r;
+  C = c;
+<noload>
+  local sc:1 = skp;
+  local doskip:1 = (sc == 1) || (sc == 2 && c == 0) || (sc == 3 && c != 0) || (sc == 4 && r == 0) || (sc == 5 && r != 0) || (sc == 6 && (c == 0 || r == 0)) || (sc == 7 && c != 0 && r != 0);
+  if (doskip) goto skipn;
+}
+:INC^cin^"S"^ld acs, acd^sk is b15=1 & alu=3 & shf=3 & acs & acd & cin & ld & nl & sk & skp & skipn {
+  local r:2 = acs + 1; local c:1 = cin ^ (acs == 0xffff);
+  r = (r << 8) | (r >> 8);
+  local ldf:1 = nl;
+  if (ldf != 0) goto <noload>;
+  acd = r;
+  C = c;
+<noload>
+  local sc:1 = skp;
+  local doskip:1 = (sc == 1) || (sc == 2 && c == 0) || (sc == 3 && c != 0) || (sc == 4 && r == 0) || (sc == 5 && r != 0) || (sc == 6 && (c == 0 || r == 0)) || (sc == 7 && c != 0 && r != 0);
+  if (doskip) goto skipn;
+}
+:ADC^cin^""^ld acs, acd^sk is b15=1 & alu=4 & shf=0 & acs & acd & cin & ld & nl & sk & skp & skipn {
+  local r:2 = ~acs + acd; local c:1 = cin ^ (acs < acd);
+  local ldf:1 = nl;
+  if (ldf != 0) goto <noload>;
+  acd = r;
+  C = c;
+<noload>
+  local sc:1 = skp;
+  local doskip:1 = (sc == 1) || (sc == 2 && c == 0) || (sc == 3 && c != 0) || (sc == 4 && r == 0) || (sc == 5 && r != 0) || (sc == 6 && (c == 0 || r == 0)) || (sc == 7 && c != 0 && r != 0);
+  if (doskip) goto skipn;
+}
+:ADC^cin^"L"^ld acs, acd^sk is b15=1 & alu=4 & shf=1 & acs & acd & cin & ld & nl & sk & skp & skipn {
+  local r:2 = ~acs + acd; local c:1 = cin ^ (acs < acd);
+  local c2:1 = r(1) >> 7; r = (r << 1) | zext(c); c = c2;
+  local ldf:1 = nl;
+  if (ldf != 0) goto <noload>;
+  acd = r;
+  C = c;
+<noload>
+  local sc:1 = skp;
+  local doskip:1 = (sc == 1) || (sc == 2 && c == 0) || (sc == 3 && c != 0) || (sc == 4 && r == 0) || (sc == 5 && r != 0) || (sc == 6 && (c == 0 || r == 0)) || (sc == 7 && c != 0 && r != 0);
+  if (doskip) goto skipn;
+}
+:ADC^cin^"R"^ld acs, acd^sk is b15=1 & alu=4 & shf=2 & acs & acd & cin & ld & nl & sk & skp & skipn {
+  local r:2 = ~acs + acd; local c:1 = cin ^ (acs < acd);
+  local c2:1 = r:1 & 1; r = (r >> 1) | (zext(c) << 15); c = c2;
+  local ldf:1 = nl;
+  if (ldf != 0) goto <noload>;
+  acd = r;
+  C = c;
+<noload>
+  local sc:1 = skp;
+  local doskip:1 = (sc == 1) || (sc == 2 && c == 0) || (sc == 3 && c != 0) || (sc == 4 && r == 0) || (sc == 5 && r != 0) || (sc == 6 && (c == 0 || r == 0)) || (sc == 7 && c != 0 && r != 0);
+  if (doskip) goto skipn;
+}
+:ADC^cin^"S"^ld acs, acd^sk is b15=1 & alu=4 & shf=3 & acs & acd & cin & ld & nl & sk & skp & skipn {
+  local r:2 = ~acs + acd; local c:1 = cin ^ (acs < acd);
+  r = (r << 8) | (r >> 8);
+  local ldf:1 = nl;
+  if (ldf != 0) goto <noload>;
+  acd = r;
+  C = c;
+<noload>
+  local sc:1 = skp;
+  local doskip:1 = (sc == 1) || (sc == 2 && c == 0) || (sc == 3 && c != 0) || (sc == 4 && r == 0) || (sc == 5 && r != 0) || (sc == 6 && (c == 0 || r == 0)) || (sc == 7 && c != 0 && r != 0);
+  if (doskip) goto skipn;
+}
+:SUB^cin^""^ld acs, acd^sk is b15=1 & alu=5 & shf=0 & acs & acd & cin & ld & nl & sk & skp & skipn {
+  local r:2 = acd - acs; local c:1 = cin ^ (acs <= acd);
+  local ldf:1 = nl;
+  if (ldf != 0) goto <noload>;
+  acd = r;
+  C = c;
+<noload>
+  local sc:1 = skp;
+  local doskip:1 = (sc == 1) || (sc == 2 && c == 0) || (sc == 3 && c != 0) || (sc == 4 && r == 0) || (sc == 5 && r != 0) || (sc == 6 && (c == 0 || r == 0)) || (sc == 7 && c != 0 && r != 0);
+  if (doskip) goto skipn;
+}
+:SUB^cin^"L"^ld acs, acd^sk is b15=1 & alu=5 & shf=1 & acs & acd & cin & ld & nl & sk & skp & skipn {
+  local r:2 = acd - acs; local c:1 = cin ^ (acs <= acd);
+  local c2:1 = r(1) >> 7; r = (r << 1) | zext(c); c = c2;
+  local ldf:1 = nl;
+  if (ldf != 0) goto <noload>;
+  acd = r;
+  C = c;
+<noload>
+  local sc:1 = skp;
+  local doskip:1 = (sc == 1) || (sc == 2 && c == 0) || (sc == 3 && c != 0) || (sc == 4 && r == 0) || (sc == 5 && r != 0) || (sc == 6 && (c == 0 || r == 0)) || (sc == 7 && c != 0 && r != 0);
+  if (doskip) goto skipn;
+}
+:SUB^cin^"R"^ld acs, acd^sk is b15=1 & alu=5 & shf=2 & acs & acd & cin & ld & nl & sk & skp & skipn {
+  local r:2 = acd - acs; local c:1 = cin ^ (acs <= acd);
+  local c2:1 = r:1 & 1; r = (r >> 1) | (zext(c) << 15); c = c2;
+  local ldf:1 = nl;
+  if (ldf != 0) goto <noload>;
+  acd = r;
+  C = c;
+<noload>
+  local sc:1 = skp;
+  local doskip:1 = (sc == 1) || (sc == 2 && c == 0) || (sc == 3 && c != 0) || (sc == 4 && r == 0) || (sc == 5 && r != 0) || (sc == 6 && (c == 0 || r == 0)) || (sc == 7 && c != 0 && r != 0);
+  if (doskip) goto skipn;
+}
+:SUB^cin^"S"^ld acs, acd^sk is b15=1 & alu=5 & shf=3 & acs & acd & cin & ld & nl & sk & skp & skipn {
+  local r:2 = acd - acs; local c:1 = cin ^ (acs <= acd);
+  r = (r << 8) | (r >> 8);
+  local ldf:1 = nl;
+  if (ldf != 0) goto <noload>;
+  acd = r;
+  C = c;
+<noload>
+  local sc:1 = skp;
+  local doskip:1 = (sc == 1) || (sc == 2 && c == 0) || (sc == 3 && c != 0) || (sc == 4 && r == 0) || (sc == 5 && r != 0) || (sc == 6 && (c == 0 || r == 0)) || (sc == 7 && c != 0 && r != 0);
+  if (doskip) goto skipn;
+}
+:ADD^cin^""^ld acs, acd^sk is b15=1 & alu=6 & shf=0 & acs & acd & cin & ld & nl & sk & skp & skipn {
+  local r:2 = acs + acd; local c:1 = cin ^ carry(acs, acd);
+  local ldf:1 = nl;
+  if (ldf != 0) goto <noload>;
+  acd = r;
+  C = c;
+<noload>
+  local sc:1 = skp;
+  local doskip:1 = (sc == 1) || (sc == 2 && c == 0) || (sc == 3 && c != 0) || (sc == 4 && r == 0) || (sc == 5 && r != 0) || (sc == 6 && (c == 0 || r == 0)) || (sc == 7 && c != 0 && r != 0);
+  if (doskip) goto skipn;
+}
+:ADD^cin^"L"^ld acs, acd^sk is b15=1 & alu=6 & shf=1 & acs & acd & cin & ld & nl & sk & skp & skipn {
+  local r:2 = acs + acd; local c:1 = cin ^ carry(acs, acd);
+  local c2:1 = r(1) >> 7; r = (r << 1) | zext(c); c = c2;
+  local ldf:1 = nl;
+  if (ldf != 0) goto <noload>;
+  acd = r;
+  C = c;
+<noload>
+  local sc:1 = skp;
+  local doskip:1 = (sc == 1) || (sc == 2 && c == 0) || (sc == 3 && c != 0) || (sc == 4 && r == 0) || (sc == 5 && r != 0) || (sc == 6 && (c == 0 || r == 0)) || (sc == 7 && c != 0 && r != 0);
+  if (doskip) goto skipn;
+}
+:ADD^cin^"R"^ld acs, acd^sk is b15=1 & alu=6 & shf=2 & acs & acd & cin & ld & nl & sk & skp & skipn {
+  local r:2 = acs + acd; local c:1 = cin ^ carry(acs, acd);
+  local c2:1 = r:1 & 1; r = (r >> 1) | (zext(c) << 15); c = c2;
+  local ldf:1 = nl;
+  if (ldf != 0) goto <noload>;
+  acd = r;
+  C = c;
+<noload>
+  local sc:1 = skp;
+  local doskip:1 = (sc == 1) || (sc == 2 && c == 0) || (sc == 3 && c != 0) || (sc == 4 && r == 0) || (sc == 5 && r != 0) || (sc == 6 && (c == 0 || r == 0)) || (sc == 7 && c != 0 && r != 0);
+  if (doskip) goto skipn;
+}
+:ADD^cin^"S"^ld acs, acd^sk is b15=1 & alu=6 & shf=3 & acs & acd & cin & ld & nl & sk & skp & skipn {
+  local r:2 = acs + acd; local c:1 = cin ^ carry(acs, acd);
+  r = (r << 8) | (r >> 8);
+  local ldf:1 = nl;
+  if (ldf != 0) goto <noload>;
+  acd = r;
+  C = c;
+<noload>
+  local sc:1 = skp;
+  local doskip:1 = (sc == 1) || (sc == 2 && c == 0) || (sc == 3 && c != 0) || (sc == 4 && r == 0) || (sc == 5 && r != 0) || (sc == 6 && (c == 0 || r == 0)) || (sc == 7 && c != 0 && r != 0);
+  if (doskip) goto skipn;
+}
+:AND^cin^""^ld acs, acd^sk is b15=1 & alu=7 & shf=0 & acs & acd & cin & ld & nl & sk & skp & skipn {
+  local r:2 = acs & acd; local c:1 = cin;
+  local ldf:1 = nl;
+  if (ldf != 0) goto <noload>;
+  acd = r;
+  C = c;
+<noload>
+  local sc:1 = skp;
+  local doskip:1 = (sc == 1) || (sc == 2 && c == 0) || (sc == 3 && c != 0) || (sc == 4 && r == 0) || (sc == 5 && r != 0) || (sc == 6 && (c == 0 || r == 0)) || (sc == 7 && c != 0 && r != 0);
+  if (doskip) goto skipn;
+}
+:AND^cin^"L"^ld acs, acd^sk is b15=1 & alu=7 & shf=1 & acs & acd & cin & ld & nl & sk & skp & skipn {
+  local r:2 = acs & acd; local c:1 = cin;
+  local c2:1 = r(1) >> 7; r = (r << 1) | zext(c); c = c2;
+  local ldf:1 = nl;
+  if (ldf != 0) goto <noload>;
+  acd = r;
+  C = c;
+<noload>
+  local sc:1 = skp;
+  local doskip:1 = (sc == 1) || (sc == 2 && c == 0) || (sc == 3 && c != 0) || (sc == 4 && r == 0) || (sc == 5 && r != 0) || (sc == 6 && (c == 0 || r == 0)) || (sc == 7 && c != 0 && r != 0);
+  if (doskip) goto skipn;
+}
+:AND^cin^"R"^ld acs, acd^sk is b15=1 & alu=7 & shf=2 & acs & acd & cin & ld & nl & sk & skp & skipn {
+  local r:2 = acs & acd; local c:1 = cin;
+  local c2:1 = r:1 & 1; r = (r >> 1) | (zext(c) << 15); c = c2;
+  local ldf:1 = nl;
+  if (ldf != 0) goto <noload>;
+  acd = r;
+  C = c;
+<noload>
+  local sc:1 = skp;
+  local doskip:1 = (sc == 1) || (sc == 2 && c == 0) || (sc == 3 && c != 0) || (sc == 4 && r == 0) || (sc == 5 && r != 0) || (sc == 6 && (c == 0 || r == 0)) || (sc == 7 && c != 0 && r != 0);
+  if (doskip) goto skipn;
+}
+:AND^cin^"S"^ld acs, acd^sk is b15=1 & alu=7 & shf=3 & acs & acd & cin & ld & nl & sk & skp & skipn {
+  local r:2 = acs & acd; local c:1 = cin;
+  r = (r << 8) | (r >> 8);
+  local ldf:1 = nl;
+  if (ldf != 0) goto <noload>;
+  acd = r;
+  C = c;
+<noload>
+  local sc:1 = skp;
+  local doskip:1 = (sc == 1) || (sc == 2 && c == 0) || (sc == 3 && c != 0) || (sc == 4 && r == 0) || (sc == 5 && r != 0) || (sc == 6 && (c == 0 || r == 0)) || (sc == 7 && c != 0 && r != 0);
   if (doskip) goto skipn;
 }
 
 # I/O on device 1 (Nova 3 stack, multiply/divide; Nova 4 bytes and signed multiply/divide)
-:MTFP ac is op2=3 & b15=0 & ac & iot=0 & pulse=0 & dev=1 { FP = ac & 0x7fff; }
-:MFFP ac is op2=3 & b15=0 & ac & iot=0 & pulse=2 & dev=1 { ac = FP & 0x7fff; }
-:MTSP ac is op2=3 & b15=0 & ac & iot=2 & pulse=0 & dev=1 { SP = ac & 0x7fff; }
-:MFSP ac is op2=3 & b15=0 & ac & iot=2 & pulse=2 & dev=1 { ac = SP & 0x7fff; }
+:MTFP ac is op2=3 & b15=0 & ac & iot=0 & pulse=0 & dev=1 { FP = ac; }
+:MFFP ac is op2=3 & b15=0 & ac & iot=0 & pulse=2 & dev=1 { ac = FP; }
+:MTSP ac is op2=3 & b15=0 & ac & iot=2 & pulse=0 & dev=1 { SP = ac; }
+:MFSP ac is op2=3 & b15=0 & ac & iot=2 & pulse=2 & dev=1 { ac = SP; }
 :PSHA ac is op2=3 & b15=0 & ac & iot=3 & pulse=0 & dev=1 { SP = SP + 1; *:2 SP = ac; }
 :POPA ac is op2=3 & b15=0 & ac & iot=3 & pulse=2 & dev=1 { ac = *:2 SP; SP = SP - 1; }
 :SAV is op2=3 & b15=0 & iot=5 & pulse=0 & dev=1 {
@@ -235,7 +470,7 @@ macro doshift(s, k) {
 :RET is op2=3 & b15=0 & iot=5 & pulse=2 & dev=1 {
   SP = FP; local w:2 = *:2 SP; C = (w >> 15) != 0; local t:2 = w & 0x7fff;
   SP = SP - 1; AC3 = *:2 SP; SP = SP - 1; AC2 = *:2 SP; SP = SP - 1; AC1 = *:2 SP; SP = SP - 1; AC0 = *:2 SP; SP = SP - 1;
-  FP = AC3 & 0x7fff;
+  FP = AC3;
   return [t];
 }
 :MUL is op2=3 & b15=0 & ac=2 & iot=6 & pulse=3 & dev=1 { local m:4 = zext(AC1) * zext(AC2) + zext(AC0); AC0 = m(2); AC1 = m:2; }
@@ -286,7 +521,7 @@ iop: "P" is pulse=3 { }
 :DOB^iop ac, dev is op2=3 & b15=0 & ac & iot=4 & iop & pulse & dev { io_transfer(4:1, pulse:1, dev:1, ac); }
 :DIC^iop ac, dev is op2=3 & b15=0 & ac & iot=5 & iop & pulse & dev { ac = io_transfer(5:1, pulse:1, dev:1); }
 :DOC^iop ac, dev is op2=3 & b15=0 & ac & iot=6 & iop & pulse & dev { io_transfer(6:1, pulse:1, dev:1, ac); }
-skc: "BN" is pulse=0 { } 
+skc: "BN" is pulse=0 { }
 skc: "BZ" is pulse=1 { }
 skc: "DN" is pulse=2 { }
 skc: "DZ" is pulse=3 { }

@@ -8,6 +8,12 @@ mod c28x_raw;
 #[path = "chip8.rs"]
 mod chip8;
 mod common;
+#[path = "epiphany_raw.rs"]
+mod epiphany_raw;
+#[path = "evm.rs"]
+mod evm;
+#[path = "frv_raw.rs"]
+mod frv_raw;
 #[path = "clipper_raw.rs"]
 mod clipper_raw;
 #[path = "fr_raw.rs"]
@@ -42,6 +48,9 @@ mod nios2_raw;
 mod pdp11_raw;
 #[path = "moxie_raw.rs"]
 mod moxie_raw;
+#[path = "rabbit_raw.rs"]
+mod rabbit_raw;
+
 #[path = "return_branch_cli.rs"]
 mod return_branch_cli;
 #[path = "riscv_bitmanip.rs"]
@@ -66,16 +75,24 @@ mod riscv_zcmp;
 mod riscv_zfa;
 #[path = "riscv_zfh.rs"]
 mod riscv_zfh;
+#[path = "romp_raw.rs"]
+mod romp_raw;
 #[path = "rust_signature_summary.rs"]
 mod rust_signature_summary;
+#[path = "sbpf.rs"]
+mod sbpf;
 #[path = "sparc_prologue_start.rs"]
 mod sparc_prologue_start;
 #[path = "stm8_raw.rs"]
 mod stm8_raw;
+#[path = "tlcs90_raw.rs"]
+mod tlcs90_raw;
 #[path = "tricore_tc18.rs"]
 mod tricore_tc18;
 #[path = "upd7725.rs"]
 mod upd7725;
+#[path = "upd7810.rs"]
+mod upd7810;
 #[path = "uxn.rs"]
 mod uxn;
 #[path = "v810.rs"]
@@ -90,16 +107,21 @@ mod x86_amx;
 mod aarch64_rme;
 #[path = "aarch64_sve2.rs"]
 mod aarch64_sve2;
+#[path = "aarch64_sme.rs"]
+mod aarch64_sme;
 #[path = "i4004_raw.rs"]
 mod i4004_raw;
 #[path = "s2650_raw.rs"]
 mod s2650_raw;
+mod sam8_raw;
 #[path = "cdp1802_raw.rs"]
 mod cdp1802_raw;
 #[path = "scmp_raw.rs"]
 mod scmp_raw;
 #[path = "tms9900_raw.rs"]
 mod tms9900_raw;
+#[path = "x86_apx.rs"]
+mod x86_apx;
 
 #[path = "firmware_raw.rs"]
 mod firmware_raw;

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="uPD7810"
+            endian="little"
+            size="16"
+            variant="default"
+            version="1.0"
+            slafile="upd7810.sla"
+            processorspec="upd7810.pspec"
+            id="uPD7810:LE:16:default">
+    <description>NEC uPD7810 / uPD7811 / uPD78C10 / uPD78C11 / uPD78C14</description>
+    <compiler name="default" spec="upd7810.cspec" id="default"/>
+  </language>
+</language_definitions>

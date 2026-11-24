@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- Dynamic C convention: the first 8/16-bit argument in L/HL, the rest on the
+     stack; results in L/HL. IX is the frame pointer and survives a call. -->
+<compiler_spec>
+  <data_organization>
+    <pointer_size value="2"/>
+    <integer_size value="2"/>
+    <long_size value="4"/>
+  </data_organization>
+  <global>
+    <range space="ram"/>
+    <range space="io"/>
+    <range space="ioe"/>
+    <range space="phys"/>
+  </global>
+  <stackpointer register="SP" space="ram" growth="negative"/>
+  <returnaddress>
+    <varnode space="stack" offset="0" size="2"/>
+  </returnaddress>
+  <default_proto>
+    <prototype name="__dynamicc" extrapop="2" stackshift="2">
+      <input>
+        <pentry minsize="1" maxsize="2">
+          <register name="HL"/>
+        </pentry>
+        <pentry minsize="1" maxsize="500" align="2">
+          <addr offset="2" space="stack"/>
+        </pentry>
+      </input>
+      <output>
+        <pentry minsize="1" maxsize="2">
+          <register name="HL"/>
+        </pentry>
+      </output>
+      <unaffected>
+        <register name="SP"/>
+        <register name="IX"/>
+      </unaffected>
+    </prototype>
+  </default_proto>
+</compiler_spec>

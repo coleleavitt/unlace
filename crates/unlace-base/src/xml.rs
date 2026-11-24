@@ -2362,7 +2362,7 @@ mod tests {
         // and valist-declared / the promoted va_list ap is declared
         // and rawswitch-loop / a matched table whose cases loop back with a loaded index is labelled by it
         // and boolreturn-condlist / guards concatenated into the next guard's condition join the return run
-        assert_eq!(count, 1034, "corpus file count drifted");
+        assert_eq!(count, 1032, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

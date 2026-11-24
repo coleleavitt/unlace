@@ -4207,6 +4207,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `SCORE7` | Sunplus S+core (SCORE7) | `SCORE7:BE:32:default`, `SCORE7:LE:32:default` | aleph-void/ghidra-score7 @ `940b07da9b`, Apache-2.0 |
 | `SHARC` | Analog Devices SHARC (ADSP-21xxx) | `SHARC:BE:32:214xx` | aleph-void/ghidra-sharc (fork of roblg/ghidra-sharc) @ `8d0c391e71`, Apache-2.0 |
 | `Si4440` | Silicon Labs Si4440 | `8051:BE:24:si4440` | aleph-void/ghidra-si4440 @ `b82633ef31`, MIT |
+| `ST7` | STMicro ST7 | `ST7:BE:16:default`, `ST72:BE:16:default` | aleph-void/ghidra-st7 @ `244cfae881`, Apache-2.0 |
 <!-- vendor-rows -->
 
 ### WDC 65816 (#98)

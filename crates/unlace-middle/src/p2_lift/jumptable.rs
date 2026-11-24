@@ -3556,8 +3556,11 @@ impl JumpBasicModel {
                     .is_some_and(|o| o.code() == OpCode::CPUI_LOAD)
             })
             .collect();
-        let [load] = loads[..] else { return false };
-        let Some((table, stride, index)) = (fd.hooks().switchextent_table_read)(fd, load) else {
+        let reads: Vec<(OpId, (u64, u64, VarnodeId))> = loads
+            .iter()
+            .filter_map(|&op| Some((op, (fd.hooks().switchextent_table_read)(fd, op)?)))
+            .collect();
+        let [(load, (table, stride, index))] = reads[..] else {
             return false;
         };
         let width = fd
@@ -5677,8 +5680,13 @@ impl JumpBasicModel {
                     .is_some_and(|o| o.code() == OpCode::CPUI_LOAD)
             })
             .collect();
-        let [load] = loads[..] else { return None };
-        let (table, stride, _) = (fd.hooks().switchextent_table_read)(fd, load)?;
+        let reads: Vec<(OpId, (u64, u64, VarnodeId))> = loads
+            .iter()
+            .filter_map(|&op| Some((op, (fd.hooks().switchextent_table_read)(fd, op)?)))
+            .collect();
+        let [(load, (table, stride, _))] = reads[..] else {
+            return None;
+        };
         let width = fd
             .obank()
             .get(load)?

@@ -98,23 +98,23 @@ pub fn message_map_handlers(bytes: &[u8]) -> Vec<u64> {
     out.into_iter().collect()
 }
 
-struct Image<'a> {
-    bytes: &'a [u8],
-    sections: &'a SectionTable<'a>,
-    relocated: BTreeSet<u32>,
+pub(super) struct Image<'a> {
+    pub(super) bytes: &'a [u8],
+    pub(super) sections: &'a SectionTable<'a>,
+    pub(super) relocated: BTreeSet<u32>,
 }
 
 impl Image<'_> {
-    fn word(&self, rva: u32) -> Option<u32> {
+    pub(super) fn word(&self, rva: u32) -> Option<u32> {
         let data = self.sections.pe_data_at(self.bytes, rva)?;
         Some(u32::from_le_bytes(data.get(..4)?.try_into().ok()?))
     }
 
-    fn rva(&self, va: u32, base: u64) -> Option<u32> {
+    pub(super) fn rva(&self, va: u32, base: u64) -> Option<u32> {
         u32::try_from(u64::from(va).checked_sub(base)?).ok()
     }
 
-    fn executable(&self, rva: u32) -> bool {
+    pub(super) fn executable(&self, rva: u32) -> bool {
         self.sections
             .section_containing(rva)
             .is_some_and(|s| s.characteristics.get(LE) & IMAGE_SCN_MEM_EXECUTE != 0)
@@ -148,7 +148,11 @@ impl Image<'_> {
 }
 
 /// The RVA of every 32-bit word the base-relocation table lists.
-fn relocated_rvas(pe: &PeFile32<'_>, bytes: &[u8], sections: &SectionTable<'_>) -> BTreeSet<u32> {
+pub(super) fn relocated_rvas(
+    pe: &PeFile32<'_>,
+    bytes: &[u8],
+    sections: &SectionTable<'_>,
+) -> BTreeSet<u32> {
     let mut out = BTreeSet::new();
     let Ok(Some(blocks)) = pe.data_directories().relocation_blocks(bytes, sections) else {
         return out;

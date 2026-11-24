@@ -4189,6 +4189,11 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
                 .get::<unlace_decomp::kuna_analysisgates::Mfcmsgmap>()
                 .0
         }
+        "msvcptrentry" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Msvcptrentry>()
+                .0
+        }
         "importvote" => {
             arch.kuna_options
                 .get::<unlace_decomp::kuna_importvote::Importvote>()

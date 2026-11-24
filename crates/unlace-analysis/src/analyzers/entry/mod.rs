@@ -105,6 +105,7 @@ pub mod kuna_machoehframe;
 pub mod kuna_mfcmsgmap;
 pub mod kuna_msvceh;
 pub mod kuna_msvcfuncinfo;
+pub mod kuna_msvcptrentry;
 pub mod kuna_msvcseh;
 pub mod kuna_pdatainterior;
 pub mod kuna_pemain;

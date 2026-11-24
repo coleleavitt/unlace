@@ -10451,6 +10451,21 @@ the walk also uses them as roots. On PEGRP32F.dll it reads 29 maps and 198
 handlers. Every handler is an IDA 9.5 function start, and 194 were missing
 from the inventory before.
 
+**(kuna) A relocated pointer to an MSVC frame prologue is a function**
+(`msvcptrentry`, default-**off**;
+`crates/unlace-analysis/src/analyzers/entry/kuna_msvcptrentry.rs`). C++ code reaches
+much of itself only through pointers: vtable slots, MFC tables, callbacks pushed for
+the Win32 API, thread procedures. On a 32-bit PE the base-relocation table lists
+every such word, in code and in data. A word whose value is an executable address
+whose bytes are `push ebp; mov ebp,esp` in MSVC's encoding (`55 8B EC`, or
+`8B FF 55 8B EC` with the hot-patch prefix) makes that address an entry, and the
+walk uses it as a root. The mid-function labels MSVC stores (switch targets, catch
+continuations, SEH handlers) do not start with a frame. GCC and MinGW encode
+`mov ebp,esp` as `89 E5`, so their SJLJ landing pads never match either; those
+are why `addrtakenentry` stays x86-64-only. On PEGRP32F.dll it finds 1,255
+targets, every one an IDA 9.5 function start, and 452 of them were missing from
+the inventory. Code built with frame-pointer omission gives it nothing.
+
 **(kuna) MSVC throw metadata is labelled** (`msvceh`, default-**off**;
 `crates/unlace-analysis/src/analyzers/entry/kuna_msvceh.rs (find_throw_infos)`).
 An MSVC `throw e;` is `_CxxThrowException(&e, &ThrowInfo)` and `throw;` is

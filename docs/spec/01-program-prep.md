@@ -7568,7 +7568,12 @@ every other binary's pass list is byte-identical to before the pass existed):
   `BTreeNode` vptr first) out of line in that shape; `PLArray::PLArray`, whose
   inlined base stores nothing, stays unnamed. The class of a member that
   is itself built from a base (`Holder`'s first member a `Derived`) shows the same
-  order, and its constructor is then named `Derived::Derived`. A
+  order, and its constructor is then named `Derived::Derived`. For a constructor the
+  walk also follows an unconditional forward jump of at most 512 bytes rather than
+  ending there: GCC lays an optimized constructor's member initializers out across
+  branches and joins them with a `jmp` ahead of its own vptr store (apfs-fuse's
+  `BTreeNodeVar(BTree &, ...)` stores the inlined `BTreeNode` vptr, branches over a
+  `shared_ptr` copy, and stores its own after the join). A
   `this` the function stores to a second frame slot is an inlined callee's
   parameter home (an always_inline constructor inlined into the function) until a
   call follows, which makes it the compiler's own spill across that call; a store

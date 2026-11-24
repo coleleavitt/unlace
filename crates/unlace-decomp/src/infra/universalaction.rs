@@ -1421,6 +1421,11 @@ pub fn universal_sched_hooked(
             // C++ adjacency (coreaction.cc:5751-5756) pinned by
             // verify_w8x_allowlist.rs.  A kuna-only pass does not get to split it.
             act!(crate::kuna_outline::ActionOutline::boxed("blockrecovery")),
+            // (kuna) armhoist (option `armhoist`, default-OFF): move the ops both
+            // arms of a branch share at their head or tail out of the arms, so
+            // structuring sees one copy. Pre-SSA like outline (self-gated on the
+            // Ssa fact) and before varnodeprops, outside its pinned adjacency.
+            act!(crate::kuna_armhoist::ActionArmHoist::boxed("blockrecovery")),
             act!(ActionVarnodeProps::boxed("base")),
             // (kuna) Install a previously-detected lowered switch BEFORE heritage
             // (coreaction.cc:5755).  `enabled` resolves the C++

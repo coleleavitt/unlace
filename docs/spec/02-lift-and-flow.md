@@ -5131,6 +5131,69 @@ block-removal primitive redirects the edge and resets structure.
 This normalization removes no computation or memory effect. The existing
 `gowritebarrier` pass independently removes the exposed runtime bookkeeping.
 
+## 2.17 Pre-structuring arm hoist
+
+**(ida) `option armhoist`, default off,
+`crates/unlace-lift/src/p2_lift/kuna_armhoist.rs (ActionArmHoist)`.** When both
+arms of a two-way branch begin or end with the same instruction, the compiler
+has emitted it twice and the structured C prints it twice:
+`if (c) { x = 1; f(x); } else { x = 2; f(x); }` where the source wrote
+`f(x)` once after the `if`. Hex-Rays moves such instructions out of the arms
+on microcode before it structures (`EXTRACT_IDENTICAL_HEAD_IF_INSNS`,
+`EXTRACT_EQUAL_IF_TAIL_INSNS`, and `REMOVE_IF_BRANCH` for an arm left empty;
+`notes/ida-hexrays-rules.md`). `dedupitetail` (chapter 8) merges equal leaves
+of the structured tree after structuring; this pass does the hoist in the
+p-code, before structuring, so the structurer, the merge and every later rule
+see one copy.
+
+**Candidates.** A basic block B ending in a CBRANCH with two distinct
+successors T and F, neither of them B, each with B as its only predecessor.
+The *head* of an arm is its first op when that op is not a flow break. When T
+and F also each have a single out-edge to the same block J, J is neither B, T
+nor F, and J has exactly the two in-edges from T and F, the branch also has a
+*tail*: the last op of each arm, skipping one closing BRANCH.
+
+**Op identity.** Two ops are the same op when their opcodes are equal, their
+outputs are both absent or name the same storage (space, offset, size), and
+each input pair names the same storage or is a pair of equal constants of
+equal size. Annotation inputs never match. The pass declines an op that reads
+or writes the unique space (a SLEIGH temporary must not cross a block) and the
+opcodes BRANCH, CBRANCH, BRANCHIND, RETURN, MULTIEQUAL, INDIRECT, NEW, CPOOLREF
+and SEGMENTOP.
+
+**The edit.** At the head, while the two first ops are the same op, the op in
+T moves to just before B's CBRANCH and the op in F is destroyed. At the tail,
+while the two last ops are the same op, the op in T moves to the start of J
+(each later one before the one moved last, so their order is kept) and the op
+in F is destroyed. A destroyed CALL loses its `FuncCallSpecs` record first
+(`Funcdata::delete_call_specs`); the moved call keeps its own. At most 16 ops
+move from each end of one branch.
+
+**Why it preserves semantics.** The pass runs in the pre-SSA window: it is
+registered in `mainloop` right after `outline` and before `varnodeprops`,
+and it returns at once when the `Ssa` maturity fact is settled. There an op is
+the storage it reads and writes; nothing links one op's output to another
+op's input, and no INDIRECT or MULTIEQUAL has to be patched. A tail op and its
+copy run right before the branch into J, and J is entered only from T and F,
+so running the op once at the start of J runs it at the same point on every
+path. A head op moves only across B's CBRANCH, which writes nothing and reads
+only its condition, so the move is sound when the op cannot change the
+condition: a pure op or LOAD must not write storage that overlaps it, and a
+CALL, CALLIND, CALLOTHER or STORE, whose effects are not limited to its output,
+moves only when the condition is a constant or a unique temporary.
+
+**What it changes downstream.** A shared call prints once after the `if`, and
+the per-arm argument setup becomes a phi at the join, so the example above
+reads `if (c) { x = 1; } else { x = 2; } f(x);`. An arm left with nothing but
+its branch is removed by the dead-control-flow passes (`ActionDoNothing`), and
+a branch with both arms emptied is folded like any other redundant CBRANCH.
+
+**The option.** `option armhoist on|off`, default **off**: it moves code across
+a branch before structuring and has not yet been measured against the 675
+datatest assertions, decbench GED or the speed budget. When off,
+`ActionArmHoist::apply` returns before reading the CFG and output is
+unchanged.
+
 ## Octeon integer targets
 
 Explicit BE Octeon/Plus/II/III language variants share the MIPS core while replacing the four CP2 load/store opcode meanings with bit-test branches. Their conditions are sampled before delay-slot execution. Integer extension arithmetic, comparisons, population counts and bitfield operations use ordinary p-code; II/III additionally expose indexed loads with exact width and signedness. Generic MIPS retains its opcode meanings and SPECIAL2 fallback; Octeon has no wildcard SPECIAL2 success.

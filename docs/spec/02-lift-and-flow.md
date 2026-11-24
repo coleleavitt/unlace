@@ -4658,6 +4658,14 @@ truncate to 64 bits and keep the low word, exact for every value below 2^32
 clamped as the instruction does; neither is a 64-bit destination's input of 2^63 or more,
 whose constructors still use the signed `trunc`.
 
+### AArch64 scalar UCVTF from a SIMD register
+
+`ucvtf` with its integer in a scalar SIMD register (`ucvtf d0, d0`, `s0, s0`, `h0, h0`;
+`AARCH64neon.sinc`) lifted as the user op `NEON_ucvtf`, which the printer prints as an
+undeclared call (tools/semantic `floats.i2d`, clang -O0). It now zero-extends the integer one
+byte wider than it is and converts that with `int2float`, as the general-register `ucvtf`
+forms beside it already do, so the conversion is unsigned and exact.
+
 ### AArch64 SVE matrix multiply and BFloat16 (#98)
 
 `AARCH64_svemm.sinc` decodes the SVE forms of FEAT_F64MM (`ld1ro*`, `fmmla .d`, the

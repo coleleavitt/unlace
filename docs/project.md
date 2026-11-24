@@ -48,7 +48,7 @@ replaces the earlier value.
 | `data` | `address`, `declaration` | `address` | `data <address> <declaration>` |
 | `prototypes` | `function`, `declaration` | `function` (a name or address, as written) | `prototype <function> <declaration>` |
 | `patches` | `address`, `bytes` (BLOB) | `address` | `bytes <address> <hex>` |
-| `assertions` | `kind`, `target`, `directive` | `kind`, `target` | the stored directive (`param`, `return`, `flow`, `format`, `readonly`, `volatile`, `register`) |
+| `assertions` | `kind`, `target`, `directive` | `kind`, `target` | the stored directive (`param`, `return`, `flow`, `format`, `readonly`, `volatile`, `register`, `noreturn`) |
 | `callsites` | `target`, `callee`, `prototype` | `target` (`[<func>::]<callsite>`) | `callee …`, `callproto …` |
 | `locals` | `target`, `name`, `type`, `isolate` | `target` (`[<func>::]<symbol>`) | `isolate …`, `type …`, `name …` |
 | `comments` | `target`, `text` | `target` (`[<func>::]<addr>`) | `comment <target> <text>` |

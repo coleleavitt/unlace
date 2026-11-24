@@ -48,6 +48,9 @@ Three tiers:
 | if (x < 10) { if (x > 20) ... } keeps the dead branch | [`rangefold`](#rangefold----on--off-default-on) |
 | x & 0xff kept on a value an earlier range check bounds below 256 | [`rangefold`](#rangefold----on--off-default-on) |
 | a range check repeated inside the branch of the same check | [`rangefold`](#rangefold----on--off-default-on) |
+| if (&a == &b) on two distinct locals prints as a live pointer test | [`addrcompare`](#addrcompare----on--off-default-off) |
+| a != test of two stack addresses keeps a compare the frame already decides | [`addrcompare`](#addrcompare----on--off-default-off) |
+| a pointer test between two local arrays prints as a live compare | [`addrcompare`](#addrcompare----on--off-default-off) |
 | v = x + 3; if (0 <= x) v = x; return v >> 2; where the source divides by 4 | [`pow2select`](#pow2select----on--off-default-on) |
 | a signed remainder by a power of two prints as a select between x & m and -(-x & m) | [`pow2select`](#pow2select----on--off-default-on) |
 | (x + ((unsigned)(x >> 31) >> 30)) >> 2 instead of x / 4 | [`pow2select`](#pow2select----on--off-default-on) |
@@ -1523,6 +1526,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** On by default: 0/675 datatest assertions move and the speed is unchanged (lua -O0: user time within run-to-run noise). Flip off to see a test that an enclosing test already decides, e.g. to compare against a listing. Measured over 4,072 functions in ten x86-64 binaries (gcc/clang -O2 and gcc -O0 builds of Lua 5.4.8 and bzip2 1.0.8, -O2 zlib 1.3.2, system libexpat and libyaml): 71 functions change; `if` statements 22,188 -> 22,043, gotos 9,853 -> 9,840, lines 184,891 -> 184,573. Most folds are -O0 binary-search switch ladders (`if (v != 0x31) { if (0x31 < v) ...` after `!(0x32 < v)`), retests of the same value after a short-circuit, and repeated null checks. Four functions gain one goto: a test the compiler duplicated into two predecessors is decided in one copy only, so the copies no longer merge.
 - **Where / provenance:** P3/simplification-quiescence · unlace · transform · rangefold
 - **Example:** `option rangefold off`
+
+### `addrcompare` -- on | off, default `off`
+
+- **Symptoms:** if (&a == &b) on two distinct locals prints as a live pointer test; a != test of two stack addresses keeps a compare the frame already decides; a pointer test between two local arrays prints as a live compare.
+- **What it does:** Fold an equality test between two stack addresses of one frame. Each address is the function's spacebase value, or a PTRSUB or INT_ADD of it with a constant, so both are one frame base plus a constant, and they are equal exactly when their offsets agree modulo the operand size. The == or != then becomes the constant it always has, and ActionDeterminedBranch removes a branch on it. Ordering comparisons, and addresses from different bases or global addresses, are not folded.
+- **When to flip:** Off by default: no datatest or real-binary measurement has run for this rule yet, so the default is not flipped. Flip on to see whether a test of two distinct local objects' addresses (IDA's optimize-away-address-comparisons) still prints as a live compare. The fold decides only tests whose outcome the frame fixes, so a function with no such compare is unchanged.
+- **Where / provenance:** P3/simplification-quiescence · unlace · transform · unlace#1168
+- **Example:** `option addrcompare on`
 
 ### `pow2select` -- on | off, default `on`
 

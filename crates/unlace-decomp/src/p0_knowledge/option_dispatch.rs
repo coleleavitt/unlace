@@ -369,6 +369,7 @@ unlace_options! { self, p1;
     "gotonext" => registered!(crate::funcdata_block::GotoNext),
     "importdata" => registered!(crate::printc::ImportData),
     "rangefold" => registered!(crate::rangefold::RangeFold),
+    "addrcompare" => registered!(crate::addrcompare::AddrCompare),
     "pow2select" => registered!(crate::selectdiv::Pow2Select),
     "satconvert" => registered!(crate::satconvert::SatConvert),
     "fpargboxed" => registered!(crate::boxedcompare::FpArgBoxed),

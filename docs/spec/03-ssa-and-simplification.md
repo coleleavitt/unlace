@@ -3888,7 +3888,11 @@ NaN-unboxing test of a RISC-V single- or half-precision register read, `SUB84(f 
 of such values. The proof is a bounded walk (64 definitions) that keeps the bits known to be 1
 through constants, `COPY`, `INT_ZEXT`, `INT_OR`, `INT_AND`, shifts by a constant, `PIECE`,
 `SUBPIECE` and `MULTIEQUAL` (every input must agree). An input, any other definition or an
-exhausted budget proves nothing, so a function's own parameters stay unproven. *Rewrite:* the
+exhausted budget proves nothing, except that under option `fpargboxed` (default on,
+RISC-V only) an FP argument register input (`fa0`..`fa7`, 8 bytes) has its upper 32 bits
+known as ones. The psABI passes a float argument narrower than FLEN NaN-boxed. Only those
+upper bits are claimed, so a test of a float's own bits is never folded, and a half-precision
+parameter's 48-bit test stays. *Rewrite:* the
 compare becomes a `COPY` of true (`==`) or false (`!=`), and the canonical-NaN branch of the
 unboxing dies. Exact, so always on.
 

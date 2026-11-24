@@ -21,7 +21,6 @@ The counters, how each is measured, and where each is hard-coded:
                             (catalog.toml computes its bucket counts from the compiled
                             catalog at test time, so it has no hard-coded bucket sites)
     stage corpus (222)      tests/datatests/*.xml + tests/stages/*.{xml,toml}, non-recursive
-                            -> unlace-base/src/xml.rs   "corpus file count drifted"
     next ElementId (4132)   max `ElementId::new(_, N)` for N >= 4000, plus one. No hard-coded
                             site: the convention is "grep for the current highest"
                             (CLAUDE.md, docs/improvement-pipeline.md).
@@ -69,7 +68,6 @@ REL_BYTECOMPAT_RS = "crates/unlace-decomp/tests/catalog_bytecompat.rs"
 REL_CATALOG_FIXTURE = "crates/unlace-decomp/tests/fixtures/phase_catalog.toml"
 REL_CATALOG_XML = "tests/stages/catalog.xml"
 REL_CATALOG_TOML = "tests/stages/catalog.toml"
-REL_BASE_XML_RS = "crates/unlace-base/src/xml.rs"
 
 TIERS = ("core", "transform", "analysis")
 
@@ -206,8 +204,6 @@ SITES = (
      r"assert_eq!\(\(core, transform, analysis\), \((\d+), (\d+), (\d+)\)\)", "tier_tuple"),
     ("phases-tests.catalog-json-records", REL_TESTS_RS,
      r'assert_eq!\(json\.matches\("\},\\n"\)\.count\(\), (\d+)\)', "settables_minus_one"),
-    ("base-xml.corpus-count", REL_BASE_XML_RS,
-     r'assert_eq!\(count, (\d+), "corpus file count drifted"\)', "corpus_files"),
 )
 
 

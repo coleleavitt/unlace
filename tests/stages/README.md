@@ -52,8 +52,7 @@ literal = 'if (8 < x)'          # a substring of one output line
   `catalog.toml` uses it for its bucket totals.
 - **A TOML test is its own baseline.** Every assertion in it must pass; its names are not in
   `docs/baseline-stages.json`, which keeps only the XML files' passing assertions. Adding a TOML
-  stage test therefore touches no baseline (the corpus count in `unlace-base/src/xml.rs` still
-  counts it). An edit to an existing `[[match]]` needs an `Assertion-change:` trailer
+  stage test therefore touches no baseline (`unlace-base/src/xml.rs` pins no corpus count). An edit to an existing `[[match]]` needs an `Assertion-change:` trailer
   (`scripts/prepr/difflint.py`).
 - Code that reads a stage test as XML (a golden corpus, a CLI test that takes bytes from a stage
   image) calls `unlace_stagefile::read_as_xml(path)` or `xml_of_toml(include_str!(..))`, which give

@@ -201,7 +201,7 @@ unclassifiable ones for a human).
 
 This queue ran up to four output-changing PRs concurrently, and every one of them touches
 the same handful of hard-coded counters (`catalog_bytecompat.rs`, `phase_catalog.toml`,
-`unlace-base/src/xml.rs`' corpus count, `docs/baseline-stages.json`, the `unlace_phases`
+`docs/baseline-stages.json`, the `unlace_phases`
 count asserts, `tests/stages/README.md`). Round 2 produced **three distinct failure
 shapes, and only one of them announced itself**:
 

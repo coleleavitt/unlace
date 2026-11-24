@@ -29,13 +29,13 @@ fn repo_root() -> PathBuf {
 }
 
 fn specs_root() -> PathBuf {
-    std::env::var_os("KUNA_SPECS")
+    unlace_base::env::var_os("UNLACE_SPECS")
         .map(PathBuf::from)
         .unwrap_or_else(|| repo_root().join("specs"))
 }
 
 fn datatests_root() -> PathBuf {
-    std::env::var_os("KUNA_DATATESTS")
+    unlace_base::env::var_os("UNLACE_DATATESTS")
         .map(PathBuf::from)
         .unwrap_or_else(|| repo_root().join("tests/datatests"))
 }
@@ -43,7 +43,7 @@ fn datatests_root() -> PathBuf {
 /// The committed Rust `decomp_test_dbg`.  Honors `KUNA_RUST_DECOMP_TEST`, else
 /// the workspace target dir for the active profile.
 fn rust_oracle() -> Option<PathBuf> {
-    if let Some(p) = std::env::var_os("KUNA_RUST_DECOMP_TEST") {
+    if let Some(p) = unlace_base::env::var_os("UNLACE_RUST_DECOMP_TEST") {
         let pb = PathBuf::from(p);
         return pb.exists().then_some(pb);
     }

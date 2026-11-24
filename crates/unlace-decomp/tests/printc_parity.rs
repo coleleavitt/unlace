@@ -181,7 +181,7 @@ fn build_registry() -> IdRegistry {
 /// Resolve the specs root: env override (so a worktree without built `.sla` can
 /// point at the main checkout), else `<repo>/specs`.
 fn specs_root() -> PathBuf {
-    if let Some(s) = std::env::var_os("KUNA_SPECS") {
+    if let Some(s) = unlace_base::env::var_os("UNLACE_SPECS") {
         PathBuf::from(s)
     } else {
         repo_root().join("specs")
@@ -271,7 +271,7 @@ fn rust_print_c(stem: &str, sym_name: &str) -> Result<String, String> {
 /// at the main checkout's binary, exactly like `kuna/paths.py`), else
 /// `<repo>/decompiler/cpp/decomp_test_dbg`.
 fn cpp_oracle() -> PathBuf {
-    if let Some(p) = std::env::var_os("KUNA_DECOMP_TEST") {
+    if let Some(p) = unlace_base::env::var_os("UNLACE_DECOMP_TEST") {
         PathBuf::from(p)
     } else {
         repo_root().join("decompiler/cpp/decomp_test_dbg")
@@ -282,7 +282,7 @@ fn cpp_oracle() -> PathBuf {
 /// `<repo>/tests/datatests`).  Pairs with `KUNA_DECOMP_TEST` so the oracle
 /// reads the same corpus the main checkout built its `.sla` against.
 fn oracle_datatests() -> PathBuf {
-    if let Some(p) = std::env::var_os("KUNA_DATATESTS") {
+    if let Some(p) = unlace_base::env::var_os("UNLACE_DATATESTS") {
         PathBuf::from(p)
     } else {
         repo_root().join("tests/datatests")

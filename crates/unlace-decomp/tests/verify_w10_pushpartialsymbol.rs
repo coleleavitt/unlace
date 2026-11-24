@@ -46,7 +46,7 @@ fn repo_root() -> PathBuf {
 }
 
 fn specs_root() -> PathBuf {
-    if let Some(p) = std::env::var_os("KUNA_SPECS") {
+    if let Some(p) = unlace_base::env::var_os("UNLACE_SPECS") {
         PathBuf::from(p)
     } else {
         repo_root().join("specs")
@@ -54,7 +54,7 @@ fn specs_root() -> PathBuf {
 }
 
 fn datatests_dir() -> PathBuf {
-    if let Some(p) = std::env::var_os("KUNA_DATATESTS") {
+    if let Some(p) = unlace_base::env::var_os("UNLACE_DATATESTS") {
         PathBuf::from(p)
     } else {
         repo_root().join("tests/datatests")
@@ -64,10 +64,11 @@ fn datatests_dir() -> PathBuf {
 /// The Rust harness binary under test (the same `decomp_test_dbg` the parity
 /// runner drives).  Honors `KUNA_DECOMP_TEST_RUST`, else the release build.
 fn rust_harness() -> PathBuf {
-    if let Some(p) = std::env::var_os("KUNA_DECOMP_TEST_RUST") {
+    if let Some(p) = unlace_base::env::var_os("UNLACE_DECOMP_TEST_RUST") {
         return PathBuf::from(p);
     }
-    let profile = std::env::var("KUNA_RUST_PROFILE").unwrap_or_else(|_| "release".to_string());
+    let profile =
+        unlace_base::env::var("UNLACE_RUST_PROFILE").unwrap_or_else(|_| "release".to_string());
     repo_root()
         .join("target")
         .join(profile)
@@ -77,7 +78,7 @@ fn rust_harness() -> PathBuf {
 /// The committed C++ oracle binary.  Honors `KUNA_DECOMP_TEST`, else the
 /// in-tree build under `decompiler/cpp/`.
 fn cpp_oracle() -> PathBuf {
-    if let Some(p) = std::env::var_os("KUNA_DECOMP_TEST") {
+    if let Some(p) = unlace_base::env::var_os("UNLACE_DECOMP_TEST") {
         return PathBuf::from(p);
     }
     repo_root().join("decompiler/cpp/decomp_test_dbg")

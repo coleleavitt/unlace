@@ -92,6 +92,8 @@ mod s2650_raw;
 mod cdp1802_raw;
 #[path = "scmp_raw.rs"]
 mod scmp_raw;
+#[path = "tms9900_raw.rs"]
+mod tms9900_raw;
 
 #[path = "firmware_raw.rs"]
 mod firmware_raw;

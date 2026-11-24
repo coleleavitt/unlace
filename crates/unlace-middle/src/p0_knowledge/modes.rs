@@ -604,6 +604,8 @@ mod tests {
             // CLI tests of other features, which run under `auto`, spell as
             // `vN`; it joins the preset once those are re-pinned.
             "contextnames",
+            // `flownames` renames locals from fields and types the same way.
+            "flownames",
             // `mapglobalsyms` makes a function's output depend on which functions
             // were decompiled before it in the same run; in the preset that would
             // make every `decompile-all` under 500 KiB order-dependent.

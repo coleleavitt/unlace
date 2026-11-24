@@ -1731,7 +1731,9 @@ gaps as reserved bytes; a `derivedFrom` peripheral reuses its base's type),
 declared at its base address as a typed global with a volatile range over its
 registers, and each `<interrupt>` names the Cortex-M handler of that IRQ
 `<NAME>_IRQHandler`. The access then reads `USART1.DR = 0x78;` instead of
-`dat_40011004 = 0x78;`.
+`dat_40011004 = 0x78;`. The peripherals are declared for an ELF or other
+object file (an ESP image, the ELF a container wraps) as well; only the handler
+names need a raw dump's vector table.
 
 ### Espressif (ESP32 / ESP8266) application images
 
@@ -5674,6 +5676,53 @@ unlace project import ./a.out.unlace a.out.project.json [--replace]
 `--json`, rows print tab-separated under a header line. `bookmark <addr> <title>` is the one
 project-only directive: it is stored and listed, never sent to the engine. Writers can run at the same
 time: each command is one transaction, and the later of two writes to the same key wins.
+
+## `unlace idb` — IDA databases (`.idb`, `.i64`)
+
+`unlace idb` reads an IDA database with [idb-rs](https://github.com/coleleavitt/idb-rs) (no IDA
+needed; IDA 6 through 9.5 formats, 32- and 64-bit) and turns what the analyst recorded there into the
+`--assert` vocabulary, so it reaches the engine the way any project row does.
+
+```sh
+unlace idb info target.i64 --json              # processor, SLEIGH target, input hashes, segments, counts
+unlace idb list target.i64 functions --jsonl   # or segments | names | comments | types | entries
+unlace idb import target.i64 --binary ./target # store it in ./target.unlace, bound to ./target
+unlace decompile-all ./target --project ./target.unlace --json
+```
+
+| command | does | `--json` document |
+|---|---|---|
+| `info <db>` | the database-wide facts | `{path, processor, target, address_bits, bitness, big_endian, version, file_format, compiler, input:{file,size,crc32,md5,sha256}, image_base, segments:[{start,end,name,class,perms,bitness,kind}], counts:{functions,named,typed,noreturn,library,names,comments,types,entry_points}, errors}` |
+| `list <db> [<kind>]` | one kind of record, `functions` by default; `--jsonl` prints one per line | `{kind, records:[...]}`; a function is `{start,end,name,named,noreturn,library,thunk,prototype,comment,tails}` |
+| `import <db> [--project FILE \| --binary BIN] [--no-types] [--no-comments] [--force]` | store the knowledge in a project file (below) | `{project, binary, target, stored, counts, noreturn, skipped_count, skipped:[{record,reason}]}` |
+
+`target` is the SLEIGH language id IDA's processor maps to (`metapc` → `x86:LE:{16,32,64}`, `ARM` →
+`ARM:LE:32:v8` or `AARCH64:LE:64:v8A`, `mipsl`/`mipsb`, `ppc`, `sparcb`, `riscv`, `68K`, `8051`, `avr`,
+`tricore`, `sh4`, `hppa`, `z80`, `m6502`, `msp430`, `xtensa`, `v850`); `null` when there is no mapping.
+
+**Where `import` writes.** `--project FILE` adds to an existing project. Otherwise it creates (or
+adds to) `<BIN>.unlace` bound to `--binary BIN`, or with neither `<db>.unlace` bound to the database
+file itself. The database records the SHA-256 of the file IDA loaded; a project bound to a binary
+with another hash is refused unless `--force`.
+
+**What it stores**, as the directives `unlace project set` would (each is checked against the
+`--assert` grammar first; one that does not parse is listed in `skipped`):
+- every local type as `typedef <declaration>` (`--no-types` leaves them out);
+- every function as `function <start>[-<end>][=<name>]`: the end of the entry chunk unless the
+  function has other chunks, the name unless IDA only has a dummy (`sub_…`) one;
+- every prototype IDA holds as `prototype <start> <declaration>`;
+- the function comments, and the regular and repeatable comments inside functions, as `comment
+  <addr> <text>`, one line per address (`--no-comments` leaves them out). A comment that is one
+  identifier is the argument name IDA writes beside each typed call's setup and is left out.
+
+IDA's C is rewritten into the engine's grammar: `__int8`…`__int64` (signed or not) and `_BYTE`,
+`_WORD`, `_DWORD`, `_QWORD`, `_BOOLn` become `int1`…`uint8`/`bool`; `__attribute__((…))`,
+`__spoils<…>`, `__noreturn`, `__cdecl` and IDA-only qualifiers (`__hidden`, `__struct_ptr`,
+`__cppobj`, `__ptr32`, …) are dropped, and `__stdcall`/`__fastcall`/`__thiscall` too unless the target
+is 32-bit x86; a bare reference to a local `struct`/`union`/`enum` tag gets its keyword; a function
+name that is not a C identifier is spelled with `_` in the declaration (the directive binds by
+address). A `__usercall`/`__userpurge` prototype (arguments in named registers) is skipped. IDA's
+no-return flags are reported in `noreturn`; the `--assert` vocabulary has no directive for them.
 
 ## Everything else
 

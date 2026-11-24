@@ -312,6 +312,11 @@ pub trait MergeContext: HighContext {
     fn vn_constant_value(&self, _vn: VarnodeId) -> Option<u64> {
         None
     }
+    /// (kuna) `vn->getAddr()` and `vn->getSize()`; `None` when the context
+    /// does not model storage (option `typemerge storage` then joins nothing).
+    fn vn_storage(&self, _vn: VarnodeId) -> Option<(unlace_base::address::Address, int4)> {
+        None
+    }
     /// (kuna) Does a load of a global `vn` was stored to read `vn` instead?
     fn vn_is_global_load(&self, _vn: VarnodeId) -> bool {
         false
@@ -1602,11 +1607,14 @@ impl Merge {
     /// `range` is the location-ordered list of Varnodes for the address range (the
     /// C++ `[startiter,enditer)`).  Highs are gathered (deduped by `setMark`),
     /// grouped by exact type identity preserving discovery order, and each group is
-    /// merged with [`merge_linear`](Self::merge_linear).
+    /// merged with [`merge_linear`](Self::merge_linear).  (kuna) `mode` (option
+    /// `typemerge`, [`crate::kuna_typemerge`]) narrows which same-typed highs
+    /// share a group; `On` is upstream.
     pub fn merge_by_datatype(
         &mut self,
         ctx: &mut dyn MergeContext,
         range: &[VarnodeId],
+        mode: crate::kuna_typemerge::TypeMergeMode,
     ) -> KunaResult<()> {
         // Gather all highs, deduped by mark.
         let mut highlist: Vec<HighVariableId> = Vec::new();
@@ -1633,19 +1641,23 @@ impl Merge {
         let gathered = highlist.clone();
 
         // Group by exact type (Rc identity) preserving order; each group -> mergeLinear.
-        let mut remaining: std::collections::VecDeque<HighVariableId> =
-            highlist.into_iter().collect();
-        while let Some(first) = remaining.pop_front() {
+        if mode == crate::kuna_typemerge::TypeMergeMode::Off {
+            highlist.clear();
+        }
+        let mut remaining: std::collections::VecDeque<_> = highlist
+            .into_iter()
+            .map(|h| (h, mode.storage_key(&*ctx, h)))
+            .collect();
+        while let Some((first, first_storage)) = remaining.pop_front() {
             let ct = ctx.high_get_type(first);
             let mut highvec = vec![first];
-            let mut rest: std::collections::VecDeque<HighVariableId> =
-                std::collections::VecDeque::new();
-            while let Some(h) = remaining.pop_front() {
+            let mut rest: std::collections::VecDeque<_> = std::collections::VecDeque::new();
+            while let Some((h, storage)) = remaining.pop_front() {
                 let t = ctx.high_get_type(h);
-                if std::rc::Rc::ptr_eq(&ct, &t) {
+                if std::rc::Rc::ptr_eq(&ct, &t) && mode.joins(&first_storage, &storage) {
                     highvec.push(h);
                 } else {
-                    rest.push_back(h);
+                    rest.push_back((h, storage));
                 }
             }
             remaining = rest;

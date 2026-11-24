@@ -411,6 +411,8 @@ mod overlapbranch_cli;
 #[path = "own_register_returns.rs"]
 mod own_register_returns;
 
+#[path = "pair_equality_compares.rs"]
+mod pair_equality_compares;
 #[path = "pair_return_halves.rs"]
 mod pair_return_halves;
 

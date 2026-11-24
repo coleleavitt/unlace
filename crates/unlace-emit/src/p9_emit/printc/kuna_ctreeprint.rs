@@ -151,6 +151,7 @@ impl PrintC {
         let Some(ids) = self.ctree.as_ref().map(|tree| tree.stmt_ids()) else {
             return;
         };
+        self.ctree_take_plans();
         let bool_return = arch.kuna_options.get::<crate::kuna_ctree::Boolreturn>().0
             && self.out_lang == crate::kuna_lang::OutLang::C;
         let ret_ternary = arch.kuna_options.get::<crate::kuna_ctree::Retternary>().0
@@ -802,6 +803,101 @@ impl PrintC {
             && vb.is_explicit()
             && va.get_high().is_some()
             && va.get_high() == vb.get_high()
+    }
+
+    /// Move the per-function print plans the tree can hold into it, so the printer reads them
+    /// from the tree: `switchmerge`'s `if`s printed as a switch become `SwitchOf`;
+    /// `gotonext`'s goto types go onto the tree's `Goto` statements, and a goto block whose
+    /// goto it drops loses its `Goto`; `voidtailreturn`'s elided `RETURN` leaves the op list of
+    /// the one leaf that holds it.
+    fn ctree_take_plans(&mut self) {
+        let ifs: Vec<(BlockId, BlockId)> = self
+            .switch_plans
+            .ifs
+            .iter()
+            .map(|(a, b)| (*a, *b))
+            .collect();
+        let Some(tree) = self.ctree.as_mut() else {
+            return;
+        };
+        for (blk, switch) in ifs {
+            if let Some(id) = tree.node_for(blk) {
+                tree.stmt_mut(id).kind = StmtKind::SwitchOf { switch };
+            }
+        }
+        for id in tree.stmt_ids() {
+            let Some(blk) = tree.stmt(id).origin else {
+                continue;
+            };
+            let jump = match &tree.stmt(id).kind {
+                StmtKind::If {
+                    then, els: None, ..
+                } => Some(*then),
+                StmtKind::Seq(list) if list.len() == 2 => Some(list[1]),
+                _ => None,
+            };
+            let Some(jump) = jump else {
+                continue;
+            };
+            let StmtKind::Goto { gototype, .. } = tree.stmt(jump).kind else {
+                continue;
+            };
+            let carrier_is_goto = matches!(tree.stmt(id).kind, StmtKind::Seq(_));
+            if carrier_is_goto && self.goto_rewrites.silent.contains(&blk) {
+                if let StmtKind::Seq(list) = &mut tree.stmt_mut(id).kind {
+                    list.truncate(1);
+                }
+                continue;
+            }
+            let mapped = self.goto_rewrites.gototype(blk, gototype);
+            if let StmtKind::Goto { gototype, .. } = &mut tree.stmt_mut(jump).kind {
+                *gototype = mapped;
+            }
+        }
+        if let Some(ret) = self.void_tail_return {
+            let holders: Vec<StmtId> = tree
+                .stmt_ids()
+                .into_iter()
+                .filter(|id| matches!(&tree.stmt(*id).kind, StmtKind::Stmts { ops, .. } if ops.contains(&ret)))
+                .collect();
+            if let [holder] = holders.as_slice() {
+                if let StmtKind::Stmts { ops, .. } = &mut tree.stmt_mut(*holder).kind {
+                    ops.retain(|op| *op != ret);
+                }
+                self.void_tail_return = None;
+            }
+        }
+    }
+
+    /// The switch the tree prints the `BlockIf` `blk` as (`switchmerge`); without a tree,
+    /// the switch plan's.
+    pub(super) fn switch_of(&self, blk: BlockId) -> Option<BlockId> {
+        let node = self
+            .ctree
+            .as_ref()
+            .and_then(|tree| Some(&tree.stmt(tree.node_for(blk)?).kind));
+        match node {
+            Some(StmtKind::SwitchOf { switch }) => Some(*switch),
+            Some(_) => None,
+            None => self.switch_plans.ifs.get(&blk).copied(),
+        }
+    }
+
+    /// The goto type the tree gives the jump of the `if`-goto or goto block `blk`: `Some(None)`
+    /// when the tree dropped the goto block's jump, `None` without a tree or a jump.
+    pub(super) fn tree_goto_type(&self, blk: BlockId) -> Option<Option<unlace_base::types::uint4>> {
+        let tree = self.ctree.as_ref()?;
+        let id = tree.stmt_for(blk)?;
+        let jump = match &tree.stmt(id).kind {
+            StmtKind::If { then, .. } => *then,
+            StmtKind::Seq(list) if list.len() == 1 => return Some(None),
+            StmtKind::Seq(list) if list.len() == 2 => list[1],
+            _ => return None,
+        };
+        match tree.stmt(jump).kind {
+            StmtKind::Goto { gototype, .. } => Some(Some(gototype)),
+            _ => None,
+        }
     }
 
     /// The `&&`/`||` chain the tree gave the condition of the `BlockIf` `blk` (`nestedand`,

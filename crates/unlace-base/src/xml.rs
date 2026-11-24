@@ -2352,7 +2352,8 @@ mod tests {
         // and unlace-guardedloop-entryconst / an unsigned counted loop's truthiness guard is its first test
         // and unlace-jvm / a Java class file and a JAR load, the constant pool names their references
         // and rawswitch / an x86-64 table matched from its cmp/ja/lea/movslq/jmp instructions (option rawswitch)
-        assert_eq!(count, 1018, "corpus file count drifted");
+        // and aarch64-fcvtzu / an unsigned AArch64 float conversion to a word stays unsigned
+        assert_eq!(count, 1021, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

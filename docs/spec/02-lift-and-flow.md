@@ -878,6 +878,26 @@ function; the option removes it, at the price of the second pass's other
 benefits (every other call the first pass bound is direct from its flow on),
 which is why it is not the default.
 
+(kuna `guarddispatch`, on by default) A CALLIND through a Control Flow Guard
+dispatch slot calls the register the dispatch routine jumps to
+(`decompiler/crates/kuna-decomp/src/p2_lift/kuna_guarddispatch.rs
+(calls_through_slot)`). An image built with `/guard:cf` makes every
+function-pointer call as `mov rax, target; call [__guard_dispatch_icall_fptr]`;
+the routine in the slot validates `rax` and jumps to it with the argument
+registers untouched. Taken literally the call prints as a call of the slot and
+the real target, which only the routine reads, drops out of the output. The PE
+load configuration names the slots (01, `kuna_peloadconfig`), and the commit
+records `__guard_dispatch_icall_fptr` and `__guard_xfg_dispatch_icall_fptr`.
+When the call's target is the word its own instruction reads from one of them
+(the same constant-address test as `msvcsig` above), input 0 becomes the target
+register, `RAX`. Only the x86-64 ABI calls through the dispatch slot; x86 and
+AArch64 call the check routine and then the target directly. The call stays indirect, so its prototype is recovered as for any call through a pointer.
+The validation itself is not shown, as with the compiler spec's
+`_guard_dispatch_icall` call-fixup, which covers a direct call of the routine but
+not a call through its slot. The flag is the reading choice; `option
+guarddispatch off` prints the call through the slot as the instructions state it.
+Only a PE commit fills the slot set, so the rule is inert on every other input.
+
 (kuna `--assert callee`) The reader can plant the same indirect override. A
 front-end parks `call site -> callee entry` facts on the architecture, keyed
 by the entry of the function that holds the call, and

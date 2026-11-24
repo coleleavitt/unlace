@@ -209,6 +209,8 @@ Three tiers:
 | two object views of one frame address become unrelated local variables | [`stackviews`](#stackviews----on--off-default-off) |
 | spurious uninitialized local (xStack_N) returned after storing through a pointer to a local | [`stackalias`](#stackalias----on--off-default-off-destructive-opt-in) |
 | store through a take-address-of-local pointer dropped as dead so the later read is garbage | [`stackalias`](#stackalias----on--off-default-off-destructive-opt-in) |
+| every function-pointer call in a /guard:cf PE prints as (*__guard_dispatch_icall_fptr)(...) | [`guarddispatch`](#guarddispatch----on--off-default-on) |
+| indirect call target dropped and the dispatch slot called instead | [`guarddispatch`](#guarddispatch----on--off-default-on) |
 | bogus (*pcVar1)() indirect call after calling a struct-returning function on sparc | [`sparcstructret`](#sparcstructret----on--off-default-on) |
 | function tail dropped after a sparc call followed by unimp | [`sparcstructret`](#sparcstructret----on--off-default-on) |
 | switch rendered as nested if/else-if compare tree over one variable | [`loweredswitch`](#loweredswitch----on--off--linear--tree--all-default-on) |
@@ -529,6 +531,10 @@ Three tiers:
 | a declared local is never written and never read anywhere in the function | [`indirectonly`](#indirectonly----on--off-default-off) |
 | a `vN = slot;` ... `slot = vN;` round-trip copy pair around a loop that only reads the slot | [`indirectonly`](#indirectonly----on--off-default-off) |
 | a call result assigned to a temporary that is immediately assigned to a stack slot | [`indirectonly`](#indirectonly----on--off-default-off) |
+| one local is assigned unrelated values in different parts of the function | [`typemerge`](#typemerge----on--storage--off-default-on) |
+| a loop counter reused later as an unrelated result or return code | [`typemerge`](#typemerge----on--storage--off-default-on) |
+| two source variables of the same type print as one name | [`typemerge`](#typemerge----on--storage--off-default-on) |
+| a saved argument and a later call result share one declared local | [`typemerge`](#typemerge----on--storage--off-default-on) |
 | an inlined callee body is spliced into the caller and should read as a call | [`outline`](#outline----off----default-off-destructive-opt-in) |
 | want to pull a chosen region out of a function into a named pseudofunction | [`outline`](#outline----off----default-off-destructive-opt-in) |
 | acting on an almostregion inline-candidate report by hand or with an llm | [`outline`](#outline----off----default-off-destructive-opt-in) |
@@ -1142,6 +1148,10 @@ Three tiers:
 | loop counters print as v5, v3, v1 instead of i, j, k | [`contextnames`](#contextnames----on--off-default-off) |
 | the accumulator a function returns keeps a vN name | [`contextnames`](#contextnames----on--off-default-off) |
 | nested loops are hard to tell apart in stripped code | [`contextnames`](#contextnames----on--off-default-off) |
+| a local loaded from a struct field keeps a vN name | [`flownames`](#flownames----on--off-default-off) |
+| v3 = p->len instead of len = p->len | [`flownames`](#flownames----on--off-default-off) |
+| a char pointer local named vN | [`flownames`](#flownames----on--off-default-off) |
+| a pointer to a named struct named vN | [`flownames`](#flownames----on--off-default-off) |
 | a double parameter stored into a global prints as unsigned long and moves ahead of the integer parameters | [`floatglobals`](#floatglobals----on--off-default-on) |
 | a float parameter copied into a global prints as unsigned int | [`floatglobals`](#floatglobals----on--off-default-on) |
 | a global passed to a float parameter prints as a union reinterpretation ((union { unsigned int from; float to; }){ .from = dat_10001d78 }).to | [`floatglobals`](#floatglobals----on--off-default-on) |
@@ -1716,6 +1726,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** Set on PER FUNCTION when a take-address-of-local + store-through-pointer returns a spurious uninitialized local (xStack_*); DESTRUCTIVE as a global default (conservatively pins stack stores live, suppressing legitimate dead-store removal).
 - **Where / provenance:** P6/alias-facets · ghidra-upstream · opt-in-tool · GH-8500
 - **Example:** `option stackalias on`
+
+### `guarddispatch` -- on | off, default `on`
+
+- **Symptoms:** every function-pointer call in a /guard:cf PE prints as (*__guard_dispatch_icall_fptr)(...); indirect call target dropped and the dispatch slot called instead.
+- **What it does:** Print a call through a Control Flow Guard dispatch slot as the indirect call it guards.
+- **When to flip:** On by default: an image built with Control Flow Guard calls a function pointer as `mov rax, target; call [__guard_dispatch_icall_fptr]`, and the dispatch routine validates `rax` and jumps to it. On, a CALLIND whose target its instruction loads from a dispatch slot the PE load configuration names (`__guard_dispatch_icall_fptr`, `__guard_xfg_dispatch_icall_fptr`) calls the target register `rax` instead (x86-64 only), so `(*__guard_dispatch_icall_fptr)(a, b)` becomes `(*f)(a, b)`. The guard check itself is not shown. Only a PE with a load configuration fills the slot set, so it is inert everywhere else (0/675). Flip off to see the call through the dispatch slot as the instructions state it.
+- **Where / provenance:** P2/flow-classification · kuna · presentation-default · kuna-pe-loadconfig
+- **Example:** `option guarddispatch off`
 
 ### `sparcstructret` -- on | off, default `on`
 
@@ -2396,6 +2414,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** OFF by default, although the body is upstream verbatim, because the merge it unlocks can fabricate a store. When the illegal input is the SOURCE of the copy -- the machine loads an escaped frame slot into a register and then mutates the register -- the merge makes the emitted C mutate the slot, and a later call that was handed the enclosing object reads a value the machine never wrote there. The heritage pass cannot catch it: an INDIRECT is only attached where the storage is still live in the SSA, so a slot whose last read is before the loop gets no INDIRECT at any call after it and the cover-intersection test has nothing to intersect. Stock Ghidra 12.1.2 emits the same fabricated store on the same input (docs/features/indirectonly/counterexample.md), so this is an upstream defect the port inherits rather than a porting error; kuna declines to inherit it by default. Turn it ON to reproduce Ghidra variable partitioning exactly, or for the merges that are sound: where the illegal input is the DESTINATION -- the machine really does store to the slot -- the value is computed into the slot instead of into a temporary that is assigned across, and the assignment, now a COPY inside one variable, is hidden by markInternalCopies; on coreutils `ls` -O2 `main` the two 8-byte loads that fill a 16-byte `struct dev_ino` on the frame stop being printed into two register locals that the following `hash_delete(..., &di)` never sees. The blast radius is small and was measured over 34 whole-binary `decompile-all` slices (ls, sort, grep, gzip, diff, bzip2, find, tar at -O0 and -O2, plus kmod, e2fsck, dpkg, dpkg-query, dash and bash at -O0, -O2 and -O2-noinline): 27 functions change and the corpus loses 19 declarations net, but 24 of the 27 write a frame slot inside an object whose address reaches a later call, so nothing in the emitted C certifies a safe subset -- of the six settled against the disassembly, four restore a store the machine really makes (`ls` -O2 `main`, `tar` -O0 `sub_429c6`, `dpkg` -O0 `sub_2019c`, `e2fsck` -O0 `sub_1680a`, three of them -O0 frames where the variable really does live in memory) while two fabricate one (`bzip2` -O2 `sub_3890`, `kmod` -O2-noinline `sub_97b0`, both -O2 where the value lives in a register for its whole lifetime).
 - **Where / provenance:** P6/merge-aggressiveness · ghidra · presentation-default · kuna-indirectonly
 - **Example:** `option indirectonly on`
+
+### `typemerge` -- on | storage | off, default `on`
+
+- **Symptoms:** one local is assigned unrelated values in different parts of the function; a loop counter reused later as an unrelated result or return code; two source variables of the same type print as one name; a saved argument and a later call result share one declared local.
+- **What it does:** Narrow which variables ActionMergeType joins. Merge::mergeByDatatype (merge.cc:359-401) gathers every HighVariable of the function, groups them by identical data-type, and lets mergeLinear join any two in a group whose lifetimes do not overlap, wherever each is stored: two distinct source variables that only share a type (two `int` counters of two loops, a saved argument and a later result) print as one reused local, and a value that crossed a call or a phi in another register becomes the same name as an unrelated one. `on` is that upstream pass byte-for-byte. `storage` keeps the type grouping but lets a high join a group only when every instance of it and every instance of the group's first high sit in one and the same storage (same space, offset and size; kuna_typemerge.rs (single_storage)), so a register or stack slot that the compiler reused for one variable still reads as one variable while values held in different registers stay apart. `off` skips the type grouping entirely. Both narrower modes leave the required merges, ActionMergeCopy, ActionMergeAdjacent, ActionDominantCopy and the prior-decompile variable groups (kuna_stablenames.rs (variable_groups)) untouched; they only drop speculative joins, so every variable they keep apart is one upstream would have printed as the same name.
+- **When to flip:** ON (upstream) by default: it is the pass that folds dozens of same-typed temporaries into a handful of reused locals, and the narrower modes print more declarations. Flip to `storage` when one local is assigned values that clearly mean different things in different parts of the function (a loop counter reused as a return code, a saved argument overwritten by an unrelated result) and you want the variables the machine kept in different places printed apart; it keeps a variable the compiler spilled to one slot or held in one register whole. Flip to `off` to see every speculative same-type join undone, at the cost of the most declarations. The narrower modes have not yet been measured against DWARF variable boundaries on a corpus, which is what a default change would need.
+- **Where / provenance:** P6/merge-aggressiveness · kuna · presentation-default · unlace-20
+- **Example:** `option typemerge storage`
 
 ### `outline` -- off | <fn>:<head>-<exit>[;...], default `off` (destructive opt-in)
 
@@ -3676,6 +3702,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **When to flip:** Turn on for readable loops in stripped code: `for (v5 = 0; ...; v5 += 1)` prints `for (i = 0; ...; i += 1)` and the accumulated return value prints `result`. Off by default because it renames locals that other features' stage assertions and CLI tests spell as `vN`.
 - **Where / provenance:** P6/naming-policy · kuna · presentation-default · kuna-contextnames
 - **Example:** `option contextnames on`
+
+### `flownames` -- on | off, default `off`
+
+- **Symptoms:** a local loaded from a struct field keeps a vN name; v3 = p->len instead of len = p->len; a char pointer local named vN; a pointer to a named struct named vN.
+- **What it does:** Name a numbered local from the structure fields and the type it meets when no declaration or library call names it. `kuna_flownames` reads two kinds of evidence for the `libcnames` alias walk: a named field the value is loaded from or stored to through a typed pointer (`len = p->len`, `p->len = len`), or copied out of or into a member of a stack structure (`size = st.st_size`), counted only when every field the local meets has the same name, leading underscores dropped (`_flags` gives `flags`); and the local's own type, `str` for a `char` pointer, `wstr` for a wide-character pointer and `p_<name>` for a pointer to a named structure (`p_passwd`, the last `::` component without template arguments for a C++ type). A field the analysis made up (`field_0x10`), padding (`__pad0`, `__glibc_reserved`, `unused`), and a structure it synthesized (`struct_3`, `astruct_1`) name nothing. A field name ranks below a library argument and above a role name (`dest`/`src`) and `result`; a type name is the weakest evidence of all. The walk numbers every local exactly as with the option off and only then prints the name, so `v4` stays the same variable in every mode, a directive may name the local by either spelling, a clash takes `_2`, `_3`, ... in evidence order, and no spelling repeats a name another variable, the scope or a callee holds. Naming a local after the parameter it is passed to is upstream's `lookForFuncParamNames` for a locked callee prototype and `libcnames` for the built-in library tables; this option adds the evidence neither has.
+- **When to flip:** Turn on for stripped code that works through typed structures: `v3 = a0->st_size;` prints `st_size = a0->st_size;`, a `char *` local prints `str` and a `struct passwd *` local `p_passwd`. Off by default because it renames locals that other features' stage assertions and CLI tests spell as `vN`, and because a type name says less than the name a reader would choose.
+- **Where / provenance:** P6/naming-policy · ida · presentation-default · kuna-flownames
+- **Example:** `option flownames on`
 
 ### `floatglobals` -- on | off, default `on`
 

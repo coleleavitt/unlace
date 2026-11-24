@@ -4212,7 +4212,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `TMS320C54x` | TI TMS320C54x | `TMS320C54x:BE:16:default` | aleph-void/ghidra-tms320c54x (fork of gabtremblay/ghidra-tms320c54x) @ `bef69d7c53`, Apache-2.0 |
 | `unSP` | Sunplus unSP | `unsp:LE:16:default` | aleph-void/ghidra-unSP (fork of SamuelWAnderson45/ghidra-unSP) @ `a609027c50`, Apache-2.0 |
 | `VideoCore4` | Broadcom VideoCore IV | `vc4:LE:32:default` | aleph-void/ghidra-videocore4 @ `db09a308c2`, Apache-2.0 |
-| `VMU` | Sega Dreamcast VMU (LC86K) | `vmu:2:default`, `vmu:2:dynamic` | aleph-void/Ghidra-VMU-Processor (fork of RossMeikleham/Ghidra-VMU-Processor) @ `7528a82f81`, MIT |
+| `VMU` | Sega Dreamcast VMU (LC86K) | `LC8670:LE:8:VMU`, `LC8670:LE:8:VMU-dynamic` | aleph-void/Ghidra-VMU-Processor (fork of RossMeikleham/Ghidra-VMU-Processor) @ `7528a82f81`, MIT |
 | `WE32100` | AT&T WE32100 | `WE32100:BE:32:default` | aleph-void/ghidra-we32100 (fork of fletto2/ghidra-we32100) @ `0324efb5cd`, MIT |
 | `WonderSwan` | NEC V30MZ (WonderSwan) | `V30MZ:LE:16:default` | aleph-void/ghidra-wonderswan (fork of JidouGhost-TL/ghidra-wonderswan) @ `f499014b08`, Apache-2.0 |
 | `XaviX` | XaviX | `XaviX:LE:24:default` | aleph-void/ghidra-xavix @ `8a94e7953b`, MIT |

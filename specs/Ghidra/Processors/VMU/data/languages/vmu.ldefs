@@ -8,7 +8,7 @@
               version="1.1"
               slafile="vmu.sla"
               processorspec="vmu.pspec"
-              id="vmu:2:default">
+              id="LC8670:LE:8:VMU">
         <description>Sanyo LC8670 (Sega Dreamcast VMU), PSW bank bits tracked as context</description>
         <compiler name="default" spec="vmu.cspec" id="default"/>
     </language>
@@ -19,7 +19,7 @@
               version="1.1"
               slafile="vmu_dyn.sla"
               processorspec="vmu.pspec"
-              id="vmu:2:dynamic">
+              id="LC8670:LE:8:VMU-dynamic">
         <description>Sanyo LC8670 (Sega Dreamcast VMU), PSW bank bits read at run time</description>
         <compiler name="default" spec="vmu.cspec" id="default"/>
     </language>

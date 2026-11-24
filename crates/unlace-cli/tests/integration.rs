@@ -44,6 +44,8 @@ mod m88k_raw;
 mod mep;
 #[path = "meta_raw.rs"]
 mod meta_raw;
+#[path = "v60.rs"]
+mod v60;
 #[path = "mips_elf_selection.rs"]
 mod mips_elf_selection;
 #[path = "moxie_raw.rs"]
@@ -111,6 +113,8 @@ mod st20_raw;
 
 #[path = "stm8_raw.rs"]
 mod stm8_raw;
+#[path = "tilegx_raw.rs"]
+mod tilegx_raw;
 #[path = "tlcs90_raw.rs"]
 mod tlcs90_raw;
 #[path = "tms320c3x_raw.rs"]

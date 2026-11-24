@@ -158,7 +158,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: parity-times
-          path: target/parity-times.json
+          path: target/parity-times.toml
           if-no-files-found: warn
 
       # One record per assertion of the datatest and stage corpora (file, name, baseline key,
@@ -168,7 +168,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: parity-ledger
-          path: target/parity-ledger.json
+          path: target/parity-ledger.toml
           if-no-files-found: warn
 
       - name: Save the .sla cache

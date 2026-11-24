@@ -65,6 +65,13 @@ afterwards. The register file is unchanged.
   sign-extends the address. Release 6 compact branches (`b*c`, `j*c`) are compared; their target
   goes to a second epilogue. Unaligned loads and stores trap on QEMU and count as reference
   exceptions.
+- MSA (`mipsr6`, `mips64r6`; the I6400 core has MSA): w0..w31 are loaded with `ld.d` and stored
+  with `st.d` at table offset 512, and MSACSR is seeded and read back with `ctcmsa`/`cfcmsa` at 1032
+  (through a general register the epilogue saves and restores). MSACSR starts with random sticky
+  Flags (bits 6:2), round-to-nearest, and no enables or cause bits, so no MSA floating-point
+  operation traps. An instruction that writes enables together with a matching cause
+  (`ctcmsa $1`) traps on QEMU and counts as a reference exception. MSA instructions SLEIGH lifts
+  to a user operation count as unmodeled.
 - Nios II (`--arch nios2`, `nios2:LE:32:R1`) has no Unicorn or Capstone support, so it runs only
   with `--oracle qemu`, and `arches.py` decodes mnemonics itself from the Nios II opcode tables.
   QEMU dropped the target after 8.2: build `qemu-nios2` from a QEMU 8.2 tree

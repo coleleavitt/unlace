@@ -226,6 +226,14 @@ def mips_ld(rt, base, off):
     return 0xDC000000 | base << 21 | rt << 16 | (off & 0xFFFF)
 
 
+def mips_lw(rt, base, off):
+    return 0x8C000000 | base << 21 | rt << 16 | (off & 0xFFFF)
+
+
+def mips_sw(rt, base, off):
+    return 0xAC000000 | base << 21 | rt << 16 | (off & 0xFFFF)
+
+
 def mips_sd(rt, base, off):
     return 0xFC000000 | base << 21 | rt << 16 | (off & 0xFFFF)
 
@@ -310,21 +318,26 @@ def msa_std(wd, base, off):
 class MipsR6Harness(MipsHarness):
     """MIPS32 Release 6 code on a MIPS64R6 core (I6400, which has MSA). R6 has no HI/LO. The MSA
     registers w0..w31 are at 512 + 16*i (doubleword 0, then doubleword 1, as ld.d/st.d move
-    them)."""
+    them), MSACSR at 1032 (moved with ctcmsa/cfcmsa through a general register the epilogue saves
+    at 1040 and restores)."""
     qemu = ("qemu-mips64", ["-cpu", "I6400"])
     flags = 0xA0000406  # EF_MIPS_ARCH_64R6 | EF_MIPS_NAN2008 | EF_MIPS_PIC | EF_MIPS_CPIC
     hilo = False
     vec_at = 512
-    table_size = 512 + 512 + 8
+    table_size = 512 + 512 + 8 + 8 + 8
     marker_at = 512 + 512
+    msacsr_at = 512 + 512 + 8
+    save_at = 512 + 512 + 16
 
     def prologue(self, target):
         code = MipsHarness.prologue(self, target)
         # the vector loads go first, while the scratch register still holds the table address
         s = self.scratch
+        t = 1 if s != 1 else 2
         head = mips_li32(s, TABLES) + [msa_ldd(i, s, self.vec_at + 16 * i) for i in range(32)]
+        head += [mips_lw(t, s, self.msacsr_at), 0x783E0059 | t << 11]          # ctcmsa $1 (MSACSR), t
         rest = code[8:]
-        n_extra = 32
+        n_extra = 34
         # rebuild with the branch displacement adjusted for the extra instructions
         c = head
         body = [int.from_bytes(rest[i:i + 4], "big") for i in range(0, len(rest), 4)]
@@ -335,7 +348,10 @@ class MipsR6Harness(MipsHarness):
 
     def epilogue(self, dumps, marker):
         s = self.scratch
+        t = 1 if s != 1 else 2
         c = mips_li32(s, OUT) + [msa_std(i, s, self.vec_at + 16 * i) for i in range(32)]
+        c += [mips_sd(t, s, self.save_at), 0x787E0019 | 1 << 11 | t << 6,       # cfcmsa t, $1 (MSACSR)
+              mips_sw(t, s, self.msacsr_at), mips_ld(t, s, self.save_at)]
         return words(c, True) + MipsHarness.epilogue(self, dumps, marker)
 
     def table(self, arch, init, init_vec, flagword):
@@ -343,6 +359,7 @@ class MipsR6Harness(MipsHarness):
         for i, (n, _) in enumerate(arch.vecs):
             v = init_vec.get(n, 0)
             struct.pack_into(">QQ", t, self.vec_at + 16 * i, v & (2 ** 64 - 1), v >> 64)
+        struct.pack_into(">I", t, self.msacsr_at, flagword & 0xFFFFFFFF)
         return bytes(t)
 
     def parse(self, arch, out):
@@ -350,7 +367,7 @@ class MipsR6Harness(MipsHarness):
         for i, (n, _) in enumerate(arch.vecs):
             lo, hi = struct.unpack_from(">QQ", out, self.vec_at + 16 * i)
             regs[n] = lo | hi << 64
-        return regs, flags
+        return regs, struct.unpack_from(">I", out, self.msacsr_at)[0]
 
 
 class Mips64R6Harness(MipsR6Harness):

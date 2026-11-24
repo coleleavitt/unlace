@@ -5246,6 +5246,12 @@ fix, so they stay inside the user operations; what is kept is the data flow
 between vector registers, scalar registers, FP registers and the memory
 addresses a load or store uses, so a vectorized function decompiles to a
 sequence of calls such as `v8 = vadd_vv(v8,v9)` instead of stopping.
+Whole-register loads, stores and moves (`vl<n>re<eew>.v`, `vs<n>r.v`, `vmv<n>r.v`)
+move `n` registers whatever `vtype` says, so for `n` = 2, 4 and 8 they read or write a
+register group: the overlapping registers `v0m2`..`v30m2`, `v0m4`..`v28m4` and
+`v0m8`..`v24m8` (64, 128 and 256 bytes, operand subtables `vdm<n>` and `vs2m<n>`), and
+`vmv<n>r.v` lifts as a copy of the group (`vmv1r.v` as a register copy). A register number not
+a multiple of `n` is reserved and, as in LLVM, not decoded.
 Exercised by `unlace-cli/tests/riscv_vector.rs`: all 1258 encoding shapes
 against LLVM's names (`fixtures/riscv_vector/probe64.txt`) and LLVM-lowered
 vector functions (load/add/store, a reduction into a scalar, an FMA with a

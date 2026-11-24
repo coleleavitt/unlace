@@ -432,16 +432,17 @@ fn arg0_scan_result(insn: &Insn) -> Option<bool> {
     insn.flow.is_call.then_some(false)
 }
 
-/// Is `insn` an alignment NOP — the trailing padding a compiler emits after a
-/// no-return call (`NOP`, `NOP word ptr CS:[...]`, …; the SLEIGH x86 mnemonic for
-/// every padding form begins `NOP`)? Such padding is unreachable after a
-/// no-return call, so it is skipped when locating the *last real* instruction.
+/// Is `insn` padding — an alignment NOP a compiler emits after a no-return call
+/// (`NOP`, `NOP word ptr CS:[...]`, …; the SLEIGH x86 mnemonic for every padding
+/// form begins `NOP`), or the `int3` trap MSVC, and clang and rustc targeting
+/// Windows, plant there? Such padding is unreachable after a no-return call, so it
+/// is skipped when locating the *last real* instruction.
 fn is_padding_nop(insn: &Insn) -> bool {
-    insn.mnemonic
-        .as_str()
-        .trim_start()
-        .get(..3)
-        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("NOP"))
+    let text = insn.mnemonic.as_str().trim();
+    text.eq_ignore_ascii_case("INT3")
+        || text
+            .get(..3)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("NOP"))
 }
 
 /// The addresses the image's imports resolve to (PLT and `.MIPS.stubs` entries,

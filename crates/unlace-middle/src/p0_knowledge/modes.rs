@@ -666,6 +666,8 @@ mod tests {
             "dwarfglobaltypes",
             // `dwarfdecls` lands as an opt-in with its decbench sweep in its catalog row.
             "dwarfdecls",
+            // `dwarfenumtypedef` lands as an opt-in beside it.
+            "dwarfenumtypedef",
             // Stack-address liveness can be incidental; synthetic regressions and
             // a local speed measurement do not justify a broad preset flip.
             "stackaddrargtrial",

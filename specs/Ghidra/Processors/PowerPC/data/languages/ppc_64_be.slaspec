@@ -9,3 +9,4 @@
 @include "ppc_common.sinc"
 @include "altivec.sinc"
 @include "g2.sinc"
+@include "isel.sinc"

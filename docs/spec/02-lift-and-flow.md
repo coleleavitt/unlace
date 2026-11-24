@@ -4417,6 +4417,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `FRV` | Fujitsu FR-V (FR400, FR450, FR500, FR550) | `FRV:BE:32:default` | written for unlace from the FR-V ISA manuals; decode table generated from binutils CGEN `frv-opc.c` (field layout and mask/value only); decode checked against `frv-elf-objdump` 2.43.1 on all 743 instructions, Apache-2.0 |
 | `Nova` | Data General Nova (Nova 1200/800/2, Nova 3, Nova 4) | `Nova:BE:16:default` | written for unlace from the DG Nova programmer's references, Apache-2.0 |
 | `SH5` | SuperH SH-5 (SHmedia) | `SH5:LE:64:SHmedia`, `SH5:BE:64:SHmedia` | written for unlace from the SH-5 CPU Core Architecture manual (SHmedia); decode checked against `sh64-elf-objdump` 2.29.1, Apache-2.0 |
+| `ND100` | Norsk Data ND-100 (NORD-10, ND-110) | `ND100:BE:16:default` | written for unlace from the ND-100 Reference Manual (ND-06.014.02), Apache-2.0 |
 <!-- vendor-rows -->
 
 ### Data General Nova (#98)
@@ -4447,6 +4448,20 @@ The decode agrees with `sh64-elf-objdump` (binutils 2.29.1) on a 6,639-word prob
 except the reserved odd FP register forms. Exercised by the `sh5` and `sh5-be`
 families of `unlace-cli/tests/processors.toml` (add, signed max, absolute load,
 direct call and float add routines built with `sh64-elf-as`).
+
+### Norsk Data ND-100 (#98)
+
+`specs/Ghidra/Processors/ND100` is a SLEIGH module written for unlace from the
+ND-100 Reference Manual (ND-06.014.02); the only prior SLEIGH carries no licence
+and was not opened: `ND100:BE:16:default`. Memory is word addressed. Memory
+reference instructions take the eight ,X / I / ,B modes relative to the
+instruction's own address; ROP is one constructor per sub-instruction code of
+the manual's table (CLD, CM1, AD1, ADC, RAD), a P destination jumps and `EXIT`
+(COPY SL DP) returns; JPL links in L. SKP tests dr - sr; the status flags are
+registers for the bit operations. The ND 48-bit floating point, I/O and system
+instructions are user ops. Exercised by the `nd100` family of
+`unlace-cli/tests/processors.toml` (hand-assembled add, signed max, P-relative
+load/store, call, shift and add-argument routines).
 
 ### IBM ROMP (#98)
 

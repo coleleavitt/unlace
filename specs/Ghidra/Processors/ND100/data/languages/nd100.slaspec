@@ -1,0 +1,662 @@
+# SLEIGH specification for the Norsk Data ND-100 (and the NORD-10/ND-110
+# instruction set it shares). Written for unlace from the ND-100 Reference
+# Manual (ND-06.014.02, 1984), chapter 3 and appendix A.
+# Memory is word addressed: every address counts 16-bit words.
+
+define endian=big;
+define alignment=1;
+
+define space ram      type=ram_space      size=2 wordsize=2 default;
+define space register type=register_space size=2;
+
+# The general registers in ROP/SKP register-code order is STS D P B L A T X;
+# T, A and D are laid out together for the double (AD) and floating (TAD)
+# accumulators.
+define register offset=0x00 size=2 [ STS P B L X T A D ];
+define register offset=0x0a size=6 [ FA ];
+define register offset=0x0c size=4 [ AD ];
+define register offset=0x20 size=1 [ PTM TG K Z Q O C M ];
+
+define token instr(16)
+	op5=(11,15)
+	mx=(10,10)
+	mi=(9,9)
+	mb=(8,8)
+	mode=(8,10)
+	disp=(0,7) signed
+	udisp=(0,7)
+	cond=(8,10)
+	b6_7=(6,7)
+	b0_5=(0,5)
+	b0_7=(0,7)
+	b0_10=(0,10)
+	b6_10=(6,10)
+	b7_10=(7,10)
+	b3_5=(3,5)
+	b4_5=(4,5)
+	b0_2=(0,2)
+	b3_7=(3,7)
+	b0_3=(0,3)
+	b4_7=(4,7)
+	b8_10=(8,10)
+	rad=(10,10)
+	rsub=(8,9)
+	cld=(6,6)
+	cm1=(7,7)
+	sub5=(6,10)
+	sr=(3,5)
+	dr=(0,2)
+	srr=(3,5)
+	drr=(0,2)
+	lvl=(3,6)
+	bopsub=(7,10)
+	bn=(3,6)
+	bnc=(3,6)
+	shreg=(7,8)
+	shtype=(9,10)
+	shcnt=(0,5) signed
+	argreg=(8,9)
+	argadd=(10,10)
+	ir=(0,3)
+;
+
+attach variables [ srr drr ] [ STS D P B L A T X ];
+
+define pcodeop io_transfer;
+define pcodeop io_transfer_t;
+define pcodeop monitor_call;
+define pcodeop wait_level;
+define pcodeop transfer_from_internal;
+define pcodeop transfer_to_internal;
+define pcodeop masked_clear_internal;
+define pcodeop masked_set_internal;
+define pcodeop inter_register_read;
+define pcodeop inter_register_write;
+define pcodeop load_register_block;
+define pcodeop store_register_block;
+define pcodeop interrupt_off;
+define pcodeop interrupt_on;
+define pcodeop paging_off;
+define pcodeop paging_on;
+define pcodeop set_extended_address;
+define pcodeop reset_extended_address;
+define pcodeop opcom;
+define pcodeop memory_examine;
+define pcodeop memory_deposit;
+define pcodeop identify_interrupt;
+define pcodeop load_control_store;
+define pcodeop execute_register;
+define pcodeop physical_load;
+define pcodeop physical_store;
+define pcodeop move_words;
+define pcodeop byte_fill;
+define pcodeop move_bytes;
+define pcodeop move_bytes_forward;
+define pcodeop decimal_op;
+define pcodeop test_and_set;
+define pcodeop read_no_cache;
+define pcodeop stack_init;
+define pcodeop stack_enter;
+define pcodeop stack_leave;
+define pcodeop stack_error_leave;
+define pcodeop page_table_op;
+define pcodeop float_add;
+define pcodeop float_sub;
+define pcodeop float_mul;
+define pcodeop float_div;
+define pcodeop float_normalize;
+define pcodeop float_denormalize;
+
+macro addflags(a, b, r) {
+	C = carry(a, b);
+	local ov:1 = scarry(a, b);
+	Q = ov;
+	O = O | ov;
+}
+
+macro subflags(a, b, r) {
+	C = a >= b;
+	local ov:1 = sborrow(a, b);
+	Q = ov;
+	O = O | ov;
+}
+
+# Effective address (bits 10 ,X, 9 I, 8 ,B; 8-bit signed displacement). P is
+# the address of the instruction itself. A direct P-relative address is a
+# constant, so globals and jump targets resolve.
+ea: addr          is mode=0 & disp [ addr = (inst_start + disp) & 0xffff; ] { export *[const]:2 addr; }
+ea: "I "^addr     is mode=2 & disp [ addr = (inst_start + disp) & 0xffff; ] { local p:2 = addr; local a:2 = *:2 p; export a; }
+ea: disp^",B"     is mode=1 & disp { local a:2 = B + disp; export a; }
+ea: "I "^disp^",B" is mode=3 & disp { local p:2 = B + disp; local a:2 = *:2 p; export a; }
+ea: disp^",X"     is mode=4 & disp { local a:2 = X + disp; export a; }
+ea: disp^",B,X"   is mode=5 & disp { local a:2 = B + disp + X; export a; }
+ea: "I "^addr^",X" is mode=6 & disp [ addr = (inst_start + disp) & 0xffff; ] { local p:2 = addr; local a:2 = *:2 p + X; export a; }
+ea: "I "^disp^",B,X" is mode=7 & disp { local p:2 = B + disp; local a:2 = *:2 p + X; export a; }
+
+# A direct P-relative jump target is a code address.
+jt: addr is mode=0 & disp [ addr = (inst_start + disp) & 0xffff; ] { export *:2 addr; }
+
+skip1: addr is epsilon [ addr = inst_start + 2; ] { export *:2 addr; }
+
+# Memory reference instructions
+:STZ ea is op5=0 & ea { local a:2 = ea; *:2 a = 0; }
+:STA ea is op5=1 & ea { local a:2 = ea; *:2 a = A; }
+:STT ea is op5=2 & ea { local a:2 = ea; *:2 a = T; }
+:STX ea is op5=3 & ea { local a:2 = ea; *:2 a = X; }
+:STD ea is op5=4 & ea { local a:2 = ea; *:4 a = AD; }
+:LDD ea is op5=5 & ea { local a:2 = ea; AD = *:4 a; }
+:STF ea is op5=6 & ea { local a:2 = ea; *:6 a = FA; }
+:LDF ea is op5=7 & ea { local a:2 = ea; FA = *:6 a; }
+:MIN ea is op5=8 & ea & skip1 { local a:2 = ea; local v:2 = *:2 a + 1; *:2 a = v; if (v == 0) goto skip1; }
+:LDA ea is op5=9 & ea { local a:2 = ea; A = *:2 a; }
+:LDT ea is op5=10 & ea { local a:2 = ea; T = *:2 a; }
+:LDX ea is op5=11 & ea { local a:2 = ea; X = *:2 a; }
+:ADD ea is op5=12 & ea { local a:2 = ea; local w:2 = *:2 a; local o:2 = A; A = o + w; addflags(o, w, A); }
+:SUB ea is op5=13 & ea { local a:2 = ea; local w:2 = *:2 a; local o:2 = A; A = o - w; subflags(o, w, A); }
+:AND ea is op5=14 & ea { local a:2 = ea; A = A & *:2 a; }
+:ORA ea is op5=15 & ea { local a:2 = ea; A = A | *:2 a; }
+:FAD ea is op5=16 & ea { local a:2 = ea; local w:6 = *:6 a; FA = float_add(FA, w); }
+:FSB ea is op5=17 & ea { local a:2 = ea; local w:6 = *:6 a; FA = float_sub(FA, w); }
+:FMU ea is op5=18 & ea { local a:2 = ea; local w:6 = *:6 a; FA = float_mul(FA, w); }
+:FDV ea is op5=19 & ea { local a:2 = ea; local w:6 = *:6 a; FA = float_div(FA, w); }
+:MPY ea is op5=20 & ea { local a:2 = ea; local w:2 = *:2 a; local p:4 = sext(A) * sext(w); A = p:2; local ov:1 = (p s> 32767) || (p s< -32768); Q = ov; O = O | ov; }
+:JMP jt is op5=21 & mode=0 & jt { goto jt; }
+:JMP ea is op5=21 & ea { goto [ea]; }
+:JPL jt is op5=23 & mode=0 & jt { L = inst_next; call jt; }
+:JPL ea is op5=23 & ea { local t:2 = ea; L = inst_next; call [t]; }
+
+# Conditional jumps, relative to the instruction
+cjt: addr is disp [ addr = (inst_start + disp) & 0xffff; ] { export *:2 addr; }
+:JAP cjt is op5=22 & cond=0 & cjt { if (A s>= 0) goto cjt; }
+:JAN cjt is op5=22 & cond=1 & cjt { if (A s< 0) goto cjt; }
+:JAZ cjt is op5=22 & cond=2 & cjt { if (A == 0) goto cjt; }
+:JAF cjt is op5=22 & cond=3 & cjt { if (A != 0) goto cjt; }
+:JPC cjt is op5=22 & cond=4 & cjt { X = X + 1; if (X s>= 0) goto cjt; }
+:JNC cjt is op5=22 & cond=5 & cjt { X = X + 1; if (X s< 0) goto cjt; }
+:JXZ cjt is op5=22 & cond=6 & cjt { if (X == 0) goto cjt; }
+:JXN cjt is op5=22 & cond=7 & cjt { if (X s< 0) goto cjt; }
+
+# Register operands of ROP, SKP and the extended register instructions: code
+# 0 reads as zero, P reads as the address of the next instruction.
+srv: "0"      is sr=0 { export 0:2; }
+srv: "SP"     is sr=2 { local p:2 = inst_next; export p; }
+srv: "S"^srr  is srr { export srr; }
+drv: "0"      is dr=0 { export 0:2; }
+drv: "DP"     is dr=2 { local p:2 = inst_next; export p; }
+drv: "D"^drr  is drr { export drr; }
+
+# SKP: the condition tests dr - sr.
+skc: "EQL"  is cond=0 { }
+skc: "GEQ"  is cond=1 { }
+skc: "GRE"  is cond=2 { }
+skc: "MGRE" is cond=3 { }
+skc: "UEQ"  is cond=4 { }
+skc: "LSS"  is cond=5 { }
+skc: "LST"  is cond=6 { }
+skc: "MLST" is cond=7 { }
+:SKP "IF" drv skc srv is op5=24 & b6_7=0 & drv & skc & cond & srv & skip1 {
+	local d:2 = drv; local s:2 = srv; local r:2 = d - s; local c:1 = cond;
+	local t:1 = ((c == 0) && (d == s)) || ((c == 1) && (r s>= 0)) || ((c == 2) && (d s>= s)) || ((c == 3) && (d >= s))
+		|| ((c == 4) && (d != s)) || ((c == 5) && (r s< 0)) || ((c == 6) && (d s< s)) || ((c == 7) && (d < s));
+	if (t) goto skip1;
+}
+
+# Extended register, byte and commercial instructions (opcode 14, bits 6-7 != 0)
+:EXR srv is op5=24 & b8_10=1 & b6_7=2 & srv & dr=0 { execute_register(srv); }
+:RMPY srv drv is op5=24 & b8_10=2 & b6_7=2 & srv & drv { local p:4 = sext(srv) * sext(drv); AD = p; }
+:RDIV srv is op5=24 & b8_10=3 & b6_7=2 & srv {
+	local n:4 = AD; local dv:4 = sext(srv);
+	Z = (dv == 0);
+	if (Z) goto <done>;
+	local q:4 = n s/ dv; local r:4 = n s% dv;
+	A = q:2; D = r:2;
+<done>
+}
+:LBYT is op5=24 & b0_10=1152 { local a:2 = T + (X >> 1); local w:2 = *:2 a; local sh:2 = 8 * (~X & 1); A = (w >> sh) & 0xff; }
+:SBYT is op5=24 & b0_10=1408 {
+	local a:2 = T + (X >> 1); local w:2 = *:2 a; local v:2 = A & 0xff; local right:1 = (X & 1) != 0;
+	w = ((w & 0xff00) | v) * zext(right) + ((w & 0x00ff) | (v << 8)) * zext(!right);
+	*:2 a = w;
+}
+:MIX3 is op5=24 & b0_10=1664 { X = (A - 1) * 3; }
+:ADDD is op5=24 & b0_10=80 { decimal_op(0:1); }
+:SUBD is op5=24 & b0_10=81 { decimal_op(1:1); }
+:COMD is op5=24 & b0_10=82 { decimal_op(2:1); }
+:TSET is op5=24 & b0_10=83 { A = test_and_set(X, T); }
+:PACK is op5=24 & b0_10=84 { decimal_op(4:1); }
+:UPACK is op5=24 & b0_10=85 { decimal_op(5:1); }
+:SHDE is op5=24 & b0_10=86 { decimal_op(6:1); }
+:RDUS is op5=24 & b0_10=87 { A = read_no_cache(X, T); }
+:BFILL is op5=24 & b0_10=88 & skip1 { byte_fill(A, X, T); goto skip1; }
+:MOVB is op5=24 & b0_10=89 & skip1 { move_bytes(A, D, X, T); goto skip1; }
+:MOVBF is op5=24 & b0_10=90 & skip1 { local ok:1 = move_bytes_forward(A, D, X, T); if (ok) goto skip1; }
+:INIT is op5=24 & b0_10=92 { stack_init(); }
+:ENTR is op5=24 & b0_10=93 { B = stack_enter(B, L); }
+:LEAVE is op5=24 & b0_10=94 { local t:2 = stack_leave(B); return [t]; }
+:ELEAV is op5=24 & b0_10=95 { local t:2 = stack_error_leave(B); return [t]; }
+:SETPT is op5=24 & b0_10=192 { page_table_op(0:1); }
+:CLEPT is op5=24 & b0_10=193 { page_table_op(1:1); }
+:CLNREENT is op5=24 & b0_10=194 { page_table_op(2:1); }
+:CHREENTPAGES is op5=24 & b0_10=195 { page_table_op(3:1); }
+:CLEPU is op5=24 & b0_10=196 { page_table_op(4:1); }
+:MOVEW b0_5 is op5=24 & b6_10=25 & b0_5 { move_words(b0_5:1); }
+:LDATX is op5=24 & b6_10=27 & b3_5=0 & dr=0 { A = physical_load(X, T, 0:1); }
+:LDXTX is op5=24 & b6_10=27 & b3_5=0 & dr=1 { X = physical_load(X, T, 1:1); }
+:LDDTX is op5=24 & b6_10=27 & b3_5=0 & dr=2 { AD = physical_load(X, T, 2:1); }
+:LDBTX is op5=24 & b6_10=27 & b3_5=0 & dr=3 { B = physical_load(X, T, 3:1); }
+:STATX is op5=24 & b6_10=27 & b3_5=0 & dr=4 { physical_store(X, T, A); }
+:STZTX is op5=24 & b6_10=27 & b3_5=0 & dr=5 { physical_store(X, T, 0:2); }
+:STDTX is op5=24 & b6_10=27 & b3_5=0 & dr=6 { physical_store(X, T, AD); }
+:LWCS is op5=24 & b0_10=1856 { load_control_store(A, D); }
+:IDENT "PL"^b0_5 is op5=24 & b6_10=30 & b0_5 { A = identify_interrupt(b0_5:1); }
+
+# ROP: <op> sr dr. Bits 6-10 are CLD, CM1, AD1, ADC and RAD; the source is
+# complemented (CM1) and the destination cleared first (CLD); RAD adds with
+# the carry and overflow rules of ADD. A P destination is a jump.
+:SWAP srv drv is op5=25 & sub5=0 & srv & drv & dr=0 & sr=0 { local s:2 = srv; local d:2 = drv; local r:2 = s; }
+:SWAP srv drv is op5=25 & sub5=0 & srv & drv & dr=0 & sr!=0 & sr!=2 & srr { local s:2 = srv; local d:2 = drv; local r:2 = s; srr = d; }
+:SWAP srv drv is op5=25 & sub5=0 & srv & drv & dr!=0 & dr!=2 & drr & sr=0 { local s:2 = srv; local d:2 = drv; local r:2 = s; drr = r; }
+:SWAP srv drv is op5=25 & sub5=0 & srv & drv & dr!=0 & dr!=2 & drr & sr!=0 & sr!=2 & srr { local s:2 = srv; local d:2 = drv; local r:2 = s; drr = r; srr = d; }
+:SWAP srv drv is op5=25 & sub5=0 & srv & drv & dr=2 & (sr=0 | sr=2) { local s:2 = srv; local d:2 = drv; local r:2 = s; goto [r]; }
+:SWAP srv drv is op5=25 & sub5=0 & srv & drv & dr=2 & sr!=0 & sr!=2 & srr { local s:2 = srv; local d:2 = drv; local r:2 = s; srr = d; goto [r]; }
+:SWAP srv drv is op5=25 & sub5=0 & srv & drv & dr!=2 & sr=2 { local s:2 = srv; local d:2 = drv; local r:2 = s; goto [d]; }
+:SWAP "CLD "^srv drv is op5=25 & sub5=1 & srv & drv & dr=0 & sr=0 { local s:2 = srv; local d:2 = 0; local r:2 = s; }
+:SWAP "CLD "^srv drv is op5=25 & sub5=1 & srv & drv & dr=0 & sr!=0 & sr!=2 & srr { local s:2 = srv; local d:2 = 0; local r:2 = s; srr = d; }
+:SWAP "CLD "^srv drv is op5=25 & sub5=1 & srv & drv & dr!=0 & dr!=2 & drr & sr=0 { local s:2 = srv; local d:2 = 0; local r:2 = s; drr = r; }
+:SWAP "CLD "^srv drv is op5=25 & sub5=1 & srv & drv & dr!=0 & dr!=2 & drr & sr!=0 & sr!=2 & srr { local s:2 = srv; local d:2 = 0; local r:2 = s; drr = r; srr = d; }
+:SWAP "CLD "^srv drv is op5=25 & sub5=1 & srv & drv & dr=2 & (sr=0 | sr=2) { local s:2 = srv; local d:2 = 0; local r:2 = s; goto [r]; }
+:SWAP "CLD "^srv drv is op5=25 & sub5=1 & srv & drv & dr=2 & sr!=0 & sr!=2 & srr { local s:2 = srv; local d:2 = 0; local r:2 = s; srr = d; goto [r]; }
+:SWAP "CLD "^srv drv is op5=25 & sub5=1 & srv & drv & dr!=2 & sr=2 { local s:2 = srv; local d:2 = 0; local r:2 = s; goto [d]; }
+:SWAP "CM1 "^srv drv is op5=25 & sub5=2 & srv & drv & dr=0 & sr=0 { local s:2 = srv; s = ~s; local d:2 = drv; local r:2 = s; }
+:SWAP "CM1 "^srv drv is op5=25 & sub5=2 & srv & drv & dr=0 & sr!=0 & sr!=2 & srr { local s:2 = srv; s = ~s; local d:2 = drv; local r:2 = s; srr = d; }
+:SWAP "CM1 "^srv drv is op5=25 & sub5=2 & srv & drv & dr!=0 & dr!=2 & drr & sr=0 { local s:2 = srv; s = ~s; local d:2 = drv; local r:2 = s; drr = r; }
+:SWAP "CM1 "^srv drv is op5=25 & sub5=2 & srv & drv & dr!=0 & dr!=2 & drr & sr!=0 & sr!=2 & srr { local s:2 = srv; s = ~s; local d:2 = drv; local r:2 = s; drr = r; srr = d; }
+:SWAP "CM1 "^srv drv is op5=25 & sub5=2 & srv & drv & dr=2 & (sr=0 | sr=2) { local s:2 = srv; s = ~s; local d:2 = drv; local r:2 = s; goto [r]; }
+:SWAP "CM1 "^srv drv is op5=25 & sub5=2 & srv & drv & dr=2 & sr!=0 & sr!=2 & srr { local s:2 = srv; s = ~s; local d:2 = drv; local r:2 = s; srr = d; goto [r]; }
+:SWAP "CM1 "^srv drv is op5=25 & sub5=2 & srv & drv & dr!=2 & sr=2 { local s:2 = srv; s = ~s; local d:2 = drv; local r:2 = s; goto [d]; }
+:SWAP "CM1 CLD "^srv drv is op5=25 & sub5=3 & srv & drv & dr=0 & sr=0 { local s:2 = srv; s = ~s; local d:2 = 0; local r:2 = s; }
+:SWAP "CM1 CLD "^srv drv is op5=25 & sub5=3 & srv & drv & dr=0 & sr!=0 & sr!=2 & srr { local s:2 = srv; s = ~s; local d:2 = 0; local r:2 = s; srr = d; }
+:SWAP "CM1 CLD "^srv drv is op5=25 & sub5=3 & srv & drv & dr!=0 & dr!=2 & drr & sr=0 { local s:2 = srv; s = ~s; local d:2 = 0; local r:2 = s; drr = r; }
+:SWAP "CM1 CLD "^srv drv is op5=25 & sub5=3 & srv & drv & dr!=0 & dr!=2 & drr & sr!=0 & sr!=2 & srr { local s:2 = srv; s = ~s; local d:2 = 0; local r:2 = s; drr = r; srr = d; }
+:SWAP "CM1 CLD "^srv drv is op5=25 & sub5=3 & srv & drv & dr=2 & (sr=0 | sr=2) { local s:2 = srv; s = ~s; local d:2 = 0; local r:2 = s; goto [r]; }
+:SWAP "CM1 CLD "^srv drv is op5=25 & sub5=3 & srv & drv & dr=2 & sr!=0 & sr!=2 & srr { local s:2 = srv; s = ~s; local d:2 = 0; local r:2 = s; srr = d; goto [r]; }
+:SWAP "CM1 CLD "^srv drv is op5=25 & sub5=3 & srv & drv & dr!=2 & sr=2 { local s:2 = srv; s = ~s; local d:2 = 0; local r:2 = s; goto [d]; }
+:RAND srv drv is op5=25 & sub5=4 & srv & drv & dr=0 {  }
+:RAND srv drv is op5=25 & sub5=4 & srv & drv & dr!=0 & dr!=2 & drr { local s:2 = srv; local d:2 = drv; local r:2 = d & s; drr = r; }
+:RAND srv drv is op5=25 & sub5=4 & srv & drv & dr=2 { local s:2 = srv; local d:2 = drv; local r:2 = d & s; goto [r]; }
+:RAND "CLD "^srv drv is op5=25 & sub5=5 & srv & drv & dr=0 {  }
+:RAND "CLD "^srv drv is op5=25 & sub5=5 & srv & drv & dr!=0 & dr!=2 & drr { local s:2 = srv; local d:2 = 0; local r:2 = d & s; drr = r; }
+:RAND "CLD "^srv drv is op5=25 & sub5=5 & srv & drv & dr=2 { local s:2 = srv; local d:2 = 0; local r:2 = d & s; goto [r]; }
+:RAND "CM1 "^srv drv is op5=25 & sub5=6 & srv & drv & dr=0 {  }
+:RAND "CM1 "^srv drv is op5=25 & sub5=6 & srv & drv & dr!=0 & dr!=2 & drr { local s:2 = srv; s = ~s; local d:2 = drv; local r:2 = d & s; drr = r; }
+:RAND "CM1 "^srv drv is op5=25 & sub5=6 & srv & drv & dr=2 { local s:2 = srv; s = ~s; local d:2 = drv; local r:2 = d & s; goto [r]; }
+:RAND "CM1 CLD "^srv drv is op5=25 & sub5=7 & srv & drv & dr=0 {  }
+:RAND "CM1 CLD "^srv drv is op5=25 & sub5=7 & srv & drv & dr!=0 & dr!=2 & drr { local s:2 = srv; s = ~s; local d:2 = 0; local r:2 = d & s; drr = r; }
+:RAND "CM1 CLD "^srv drv is op5=25 & sub5=7 & srv & drv & dr=2 { local s:2 = srv; s = ~s; local d:2 = 0; local r:2 = d & s; goto [r]; }
+:REXO srv drv is op5=25 & sub5=8 & srv & drv & dr=0 {  }
+:REXO srv drv is op5=25 & sub5=8 & srv & drv & dr!=0 & dr!=2 & drr { local s:2 = srv; local d:2 = drv; local r:2 = d ^ s; drr = r; }
+:REXO srv drv is op5=25 & sub5=8 & srv & drv & dr=2 { local s:2 = srv; local d:2 = drv; local r:2 = d ^ s; goto [r]; }
+:REXO "CLD "^srv drv is op5=25 & sub5=9 & srv & drv & dr=0 {  }
+:REXO "CLD "^srv drv is op5=25 & sub5=9 & srv & drv & dr!=0 & dr!=2 & drr { local s:2 = srv; local d:2 = 0; local r:2 = d ^ s; drr = r; }
+:REXO "CLD "^srv drv is op5=25 & sub5=9 & srv & drv & dr=2 { local s:2 = srv; local d:2 = 0; local r:2 = d ^ s; goto [r]; }
+:REXO "CM1 "^srv drv is op5=25 & sub5=10 & srv & drv & dr=0 {  }
+:REXO "CM1 "^srv drv is op5=25 & sub5=10 & srv & drv & dr!=0 & dr!=2 & drr { local s:2 = srv; s = ~s; local d:2 = drv; local r:2 = d ^ s; drr = r; }
+:REXO "CM1 "^srv drv is op5=25 & sub5=10 & srv & drv & dr=2 { local s:2 = srv; s = ~s; local d:2 = drv; local r:2 = d ^ s; goto [r]; }
+:REXO "CM1 CLD "^srv drv is op5=25 & sub5=11 & srv & drv & dr=0 {  }
+:REXO "CM1 CLD "^srv drv is op5=25 & sub5=11 & srv & drv & dr!=0 & dr!=2 & drr { local s:2 = srv; s = ~s; local d:2 = 0; local r:2 = d ^ s; drr = r; }
+:REXO "CM1 CLD "^srv drv is op5=25 & sub5=11 & srv & drv & dr=2 { local s:2 = srv; s = ~s; local d:2 = 0; local r:2 = d ^ s; goto [r]; }
+:RORA srv drv is op5=25 & sub5=12 & srv & drv & dr=0 {  }
+:RORA srv drv is op5=25 & sub5=12 & srv & drv & dr!=0 & dr!=2 & drr { local s:2 = srv; local d:2 = drv; local r:2 = d | s; drr = r; }
+:RORA srv drv is op5=25 & sub5=12 & srv & drv & dr=2 { local s:2 = srv; local d:2 = drv; local r:2 = d | s; goto [r]; }
+:RORA "CLD "^srv drv is op5=25 & sub5=13 & srv & drv & dr=0 {  }
+:RORA "CLD "^srv drv is op5=25 & sub5=13 & srv & drv & dr!=0 & dr!=2 & drr { local s:2 = srv; local d:2 = 0; local r:2 = d | s; drr = r; }
+:RORA "CLD "^srv drv is op5=25 & sub5=13 & srv & drv & dr=2 { local s:2 = srv; local d:2 = 0; local r:2 = d | s; goto [r]; }
+:RORA "CM1 "^srv drv is op5=25 & sub5=14 & srv & drv & dr=0 {  }
+:RORA "CM1 "^srv drv is op5=25 & sub5=14 & srv & drv & dr!=0 & dr!=2 & drr { local s:2 = srv; s = ~s; local d:2 = drv; local r:2 = d | s; drr = r; }
+:RORA "CM1 "^srv drv is op5=25 & sub5=14 & srv & drv & dr=2 { local s:2 = srv; s = ~s; local d:2 = drv; local r:2 = d | s; goto [r]; }
+:RORA "CM1 CLD "^srv drv is op5=25 & sub5=15 & srv & drv & dr=0 {  }
+:RORA "CM1 CLD "^srv drv is op5=25 & sub5=15 & srv & drv & dr!=0 & dr!=2 & drr { local s:2 = srv; s = ~s; local d:2 = 0; local r:2 = d | s; drr = r; }
+:RORA "CM1 CLD "^srv drv is op5=25 & sub5=15 & srv & drv & dr=2 { local s:2 = srv; s = ~s; local d:2 = 0; local r:2 = d | s; goto [r]; }
+:RADD srv drv is op5=25 & sub5=16 & srv & drv & dr=0 { C = 0; }
+:RADD srv drv is op5=25 & sub5=16 & srv & drv & dr!=0 & dr!=2 & drr { local s:2 = srv; local d:2 = drv; local r:2 = d + s; C = carry(d, s); local ov:1 = scarry(d, s); Q = ov; O = O | ov; drr = r; }
+:RADD srv drv is op5=25 & sub5=16 & srv & drv & dr=2 { local s:2 = srv; local d:2 = drv; local r:2 = d + s; C = carry(d, s); local ov:1 = scarry(d, s); Q = ov; O = O | ov; goto [r]; }
+:COPY srv drv is op5=25 & sub5=17 & srv & drv & dr=0 { C = 0; }
+:COPY srv drv is op5=25 & sub5=17 & srv & drv & dr!=0 & dr!=2 & drr { local s:2 = srv; local d:2 = 0; local r:2 = d + s; C = carry(d, s); local ov:1 = scarry(d, s); Q = ov; O = O | ov; drr = r; }
+:COPY srv drv is op5=25 & sub5=17 & srv & drv & dr=2 { local s:2 = srv; local d:2 = 0; local r:2 = d + s; C = carry(d, s); local ov:1 = scarry(d, s); Q = ov; O = O | ov; goto [r]; }
+:RADD "CM1 "^srv drv is op5=25 & sub5=18 & srv & drv & dr=0 { C = 0; }
+:RADD "CM1 "^srv drv is op5=25 & sub5=18 & srv & drv & dr!=0 & dr!=2 & drr { local s:2 = srv; s = ~s; local d:2 = drv; local r:2 = d + s; C = carry(d, s); local ov:1 = scarry(d, s); Q = ov; O = O | ov; drr = r; }
+:RADD "CM1 "^srv drv is op5=25 & sub5=18 & srv & drv & dr=2 { local s:2 = srv; s = ~s; local d:2 = drv; local r:2 = d + s; C = carry(d, s); local ov:1 = scarry(d, s); Q = ov; O = O | ov; goto [r]; }
+:COPY "CM1 "^srv drv is op5=25 & sub5=19 & srv & drv & dr=0 { C = 0; }
+:COPY "CM1 "^srv drv is op5=25 & sub5=19 & srv & drv & dr!=0 & dr!=2 & drr { local s:2 = srv; s = ~s; local d:2 = 0; local r:2 = d + s; C = carry(d, s); local ov:1 = scarry(d, s); Q = ov; O = O | ov; drr = r; }
+:COPY "CM1 "^srv drv is op5=25 & sub5=19 & srv & drv & dr=2 { local s:2 = srv; s = ~s; local d:2 = 0; local r:2 = d + s; C = carry(d, s); local ov:1 = scarry(d, s); Q = ov; O = O | ov; goto [r]; }
+:RADD "AD1 "^srv drv is op5=25 & sub5=20 & srv & drv & dr=0 { C = 0; }
+:RADD "AD1 "^srv drv is op5=25 & sub5=20 & srv & drv & dr!=0 & dr!=2 & drr { local s:2 = srv; local d:2 = drv; local t1:2 = d + s; local r:2 = t1 + 1; C = carry(d, s) || carry(t1, 1:2); local ov:1 = scarry(d, s) ^^ scarry(t1, 1:2); Q = ov; O = O | ov; drr = r; }
+:RADD "AD1 "^srv drv is op5=25 & sub5=20 & srv & drv & dr=2 { local s:2 = srv; local d:2 = drv; local t1:2 = d + s; local r:2 = t1 + 1; C = carry(d, s) || carry(t1, 1:2); local ov:1 = scarry(d, s) ^^ scarry(t1, 1:2); Q = ov; O = O | ov; goto [r]; }
+:COPY "AD1 "^srv drv is op5=25 & sub5=21 & srv & drv & dr=0 { C = 0; }
+:COPY "AD1 "^srv drv is op5=25 & sub5=21 & srv & drv & dr!=0 & dr!=2 & drr { local s:2 = srv; local d:2 = 0; local t1:2 = d + s; local r:2 = t1 + 1; C = carry(d, s) || carry(t1, 1:2); local ov:1 = scarry(d, s) ^^ scarry(t1, 1:2); Q = ov; O = O | ov; drr = r; }
+:COPY "AD1 "^srv drv is op5=25 & sub5=21 & srv & drv & dr=2 { local s:2 = srv; local d:2 = 0; local t1:2 = d + s; local r:2 = t1 + 1; C = carry(d, s) || carry(t1, 1:2); local ov:1 = scarry(d, s) ^^ scarry(t1, 1:2); Q = ov; O = O | ov; goto [r]; }
+:RSUB srv drv is op5=25 & sub5=22 & srv & drv & dr=0 { C = 0; }
+:RSUB srv drv is op5=25 & sub5=22 & srv & drv & dr!=0 & dr!=2 & drr { local s:2 = srv; s = ~s; local d:2 = drv; local t1:2 = d + s; local r:2 = t1 + 1; C = carry(d, s) || carry(t1, 1:2); local ov:1 = scarry(d, s) ^^ scarry(t1, 1:2); Q = ov; O = O | ov; drr = r; }
+:RSUB srv drv is op5=25 & sub5=22 & srv & drv & dr=2 { local s:2 = srv; s = ~s; local d:2 = drv; local t1:2 = d + s; local r:2 = t1 + 1; C = carry(d, s) || carry(t1, 1:2); local ov:1 = scarry(d, s) ^^ scarry(t1, 1:2); Q = ov; O = O | ov; goto [r]; }
+:COPY "CM2 "^srv drv is op5=25 & sub5=23 & srv & drv & dr=0 { C = 0; }
+:COPY "CM2 "^srv drv is op5=25 & sub5=23 & srv & drv & dr!=0 & dr!=2 & drr { local s:2 = srv; s = ~s; local d:2 = 0; local t1:2 = d + s; local r:2 = t1 + 1; C = carry(d, s) || carry(t1, 1:2); local ov:1 = scarry(d, s) ^^ scarry(t1, 1:2); Q = ov; O = O | ov; drr = r; }
+:COPY "CM2 "^srv drv is op5=25 & sub5=23 & srv & drv & dr=2 { local s:2 = srv; s = ~s; local d:2 = 0; local t1:2 = d + s; local r:2 = t1 + 1; C = carry(d, s) || carry(t1, 1:2); local ov:1 = scarry(d, s) ^^ scarry(t1, 1:2); Q = ov; O = O | ov; goto [r]; }
+:RADD "ADC "^srv drv is op5=25 & sub5=24 & srv & drv & dr=0 { C = 0; }
+:RADD "ADC "^srv drv is op5=25 & sub5=24 & srv & drv & dr!=0 & dr!=2 & drr { local s:2 = srv; local d:2 = drv; local cin:2 = zext(C); local t1:2 = d + s; local r:2 = t1 + cin; C = carry(d, s) || carry(t1, cin); local ov:1 = scarry(d, s) ^^ scarry(t1, cin); Q = ov; O = O | ov; drr = r; }
+:RADD "ADC "^srv drv is op5=25 & sub5=24 & srv & drv & dr=2 { local s:2 = srv; local d:2 = drv; local cin:2 = zext(C); local t1:2 = d + s; local r:2 = t1 + cin; C = carry(d, s) || carry(t1, cin); local ov:1 = scarry(d, s) ^^ scarry(t1, cin); Q = ov; O = O | ov; goto [r]; }
+:COPY "ADC "^srv drv is op5=25 & sub5=25 & srv & drv & dr=0 { C = 0; }
+:COPY "ADC "^srv drv is op5=25 & sub5=25 & srv & drv & dr!=0 & dr!=2 & drr { local s:2 = srv; local d:2 = 0; local cin:2 = zext(C); local t1:2 = d + s; local r:2 = t1 + cin; C = carry(d, s) || carry(t1, cin); local ov:1 = scarry(d, s) ^^ scarry(t1, cin); Q = ov; O = O | ov; drr = r; }
+:COPY "ADC "^srv drv is op5=25 & sub5=25 & srv & drv & dr=2 { local s:2 = srv; local d:2 = 0; local cin:2 = zext(C); local t1:2 = d + s; local r:2 = t1 + cin; C = carry(d, s) || carry(t1, cin); local ov:1 = scarry(d, s) ^^ scarry(t1, cin); Q = ov; O = O | ov; goto [r]; }
+:RADD "ADC CM1 "^srv drv is op5=25 & sub5=26 & srv & drv & dr=0 { C = 0; }
+:RADD "ADC CM1 "^srv drv is op5=25 & sub5=26 & srv & drv & dr!=0 & dr!=2 & drr { local s:2 = srv; s = ~s; local d:2 = drv; local cin:2 = zext(C); local t1:2 = d + s; local r:2 = t1 + cin; C = carry(d, s) || carry(t1, cin); local ov:1 = scarry(d, s) ^^ scarry(t1, cin); Q = ov; O = O | ov; drr = r; }
+:RADD "ADC CM1 "^srv drv is op5=25 & sub5=26 & srv & drv & dr=2 { local s:2 = srv; s = ~s; local d:2 = drv; local cin:2 = zext(C); local t1:2 = d + s; local r:2 = t1 + cin; C = carry(d, s) || carry(t1, cin); local ov:1 = scarry(d, s) ^^ scarry(t1, cin); Q = ov; O = O | ov; goto [r]; }
+:COPY "ADC CM1 "^srv drv is op5=25 & sub5=27 & srv & drv & dr=0 { C = 0; }
+:COPY "ADC CM1 "^srv drv is op5=25 & sub5=27 & srv & drv & dr!=0 & dr!=2 & drr { local s:2 = srv; s = ~s; local d:2 = 0; local cin:2 = zext(C); local t1:2 = d + s; local r:2 = t1 + cin; C = carry(d, s) || carry(t1, cin); local ov:1 = scarry(d, s) ^^ scarry(t1, cin); Q = ov; O = O | ov; drr = r; }
+:COPY "ADC CM1 "^srv drv is op5=25 & sub5=27 & srv & drv & dr=2 { local s:2 = srv; s = ~s; local d:2 = 0; local cin:2 = zext(C); local t1:2 = d + s; local r:2 = t1 + cin; C = carry(d, s) || carry(t1, cin); local ov:1 = scarry(d, s) ^^ scarry(t1, cin); Q = ov; O = O | ov; goto [r]; }
+:ROP srv drv is op5=25 & sub5=28 & srv & drv { }
+:ROP srv drv is op5=25 & sub5=29 & srv & drv { }
+:ROP srv drv is op5=25 & sub5=30 & srv & drv { }
+:ROP srv drv is op5=25 & sub5=31 & srv & drv { }
+:EXIT is op5=25 & sub5=17 & sr=4 & dr=2 { return [L]; }
+:EXIT "AD1" is op5=25 & sub5=21 & sr=4 & dr=2 { local t:2 = L + 1; return [t]; }
+
+# Shifts: register T, D, A or AD; arithmetic, rotate, zero-in or link-in (M);
+# a signed 6-bit count, negative for right. M gets the last bit shifted out.
+shc: shcnt is shcnt { }
+:SHT shc is op5=27 & shreg=0 & shtype=0 & shc & shcnt {
+	local v:2 = T; local o:2 = v; local cnt:1 = shcnt;
+	if (cnt s< 0) goto <right>;
+	local n:2 = zext(cnt);
+	if (n == 0) goto <done>;
+	v = v << n; M = ((o >> (16 - n)) & 1) != 0; goto <done>;
+<right>
+	n = zext(-cnt);
+	v = v s>> n; M = ((o >> (n - 1)) & 1) != 0; 
+<done>
+	T = v;
+}
+:SHT "ROT "^shc is op5=27 & shreg=0 & shtype=1 & shc & shcnt {
+	local v:2 = T; local o:2 = v; local cnt:1 = shcnt;
+	if (cnt s< 0) goto <right>;
+	local n:2 = zext(cnt);
+	if (n == 0) goto <done>;
+	v = (v << n) | (v >> (16 - n)); M = ((o >> (16 - n)) & 1) != 0; goto <done>;
+<right>
+	n = zext(-cnt);
+	v = (v >> n) | (v << (16 - n)); M = ((o >> (n - 1)) & 1) != 0; 
+<done>
+	T = v;
+}
+:SHT "ZIN "^shc is op5=27 & shreg=0 & shtype=2 & shc & shcnt {
+	local v:2 = T; local o:2 = v; local cnt:1 = shcnt;
+	if (cnt s< 0) goto <right>;
+	local n:2 = zext(cnt);
+	if (n == 0) goto <done>;
+	v = v << n; M = ((o >> (16 - n)) & 1) != 0; goto <done>;
+<right>
+	n = zext(-cnt);
+	v = v >> n; M = ((o >> (n - 1)) & 1) != 0; 
+<done>
+	T = v;
+}
+:SHT "LIN "^shc is op5=27 & shreg=0 & shtype=3 & shc & shcnt {
+	local v:2 = T; local o:2 = v; local cnt:1 = shcnt;
+	if (cnt s< 0) goto <right>;
+	local n:2 = zext(cnt);
+	if (n == 0) goto <done>;
+	v = (v << n) | (zext(M) * ((1 << n) - 1)); M = ((o >> (16 - n)) & 1) != 0; goto <done>;
+<right>
+	n = zext(-cnt);
+	v = (v >> n) | (zext(M) * ~(-1:2 >> n)); M = ((o >> (n - 1)) & 1) != 0; 
+<done>
+	T = v;
+}
+:SHD shc is op5=27 & shreg=1 & shtype=0 & shc & shcnt {
+	local v:2 = D; local o:2 = v; local cnt:1 = shcnt;
+	if (cnt s< 0) goto <right>;
+	local n:2 = zext(cnt);
+	if (n == 0) goto <done>;
+	v = v << n; M = ((o >> (16 - n)) & 1) != 0; goto <done>;
+<right>
+	n = zext(-cnt);
+	v = v s>> n; M = ((o >> (n - 1)) & 1) != 0; 
+<done>
+	D = v;
+}
+:SHD "ROT "^shc is op5=27 & shreg=1 & shtype=1 & shc & shcnt {
+	local v:2 = D; local o:2 = v; local cnt:1 = shcnt;
+	if (cnt s< 0) goto <right>;
+	local n:2 = zext(cnt);
+	if (n == 0) goto <done>;
+	v = (v << n) | (v >> (16 - n)); M = ((o >> (16 - n)) & 1) != 0; goto <done>;
+<right>
+	n = zext(-cnt);
+	v = (v >> n) | (v << (16 - n)); M = ((o >> (n - 1)) & 1) != 0; 
+<done>
+	D = v;
+}
+:SHD "ZIN "^shc is op5=27 & shreg=1 & shtype=2 & shc & shcnt {
+	local v:2 = D; local o:2 = v; local cnt:1 = shcnt;
+	if (cnt s< 0) goto <right>;
+	local n:2 = zext(cnt);
+	if (n == 0) goto <done>;
+	v = v << n; M = ((o >> (16 - n)) & 1) != 0; goto <done>;
+<right>
+	n = zext(-cnt);
+	v = v >> n; M = ((o >> (n - 1)) & 1) != 0; 
+<done>
+	D = v;
+}
+:SHD "LIN "^shc is op5=27 & shreg=1 & shtype=3 & shc & shcnt {
+	local v:2 = D; local o:2 = v; local cnt:1 = shcnt;
+	if (cnt s< 0) goto <right>;
+	local n:2 = zext(cnt);
+	if (n == 0) goto <done>;
+	v = (v << n) | (zext(M) * ((1 << n) - 1)); M = ((o >> (16 - n)) & 1) != 0; goto <done>;
+<right>
+	n = zext(-cnt);
+	v = (v >> n) | (zext(M) * ~(-1:2 >> n)); M = ((o >> (n - 1)) & 1) != 0; 
+<done>
+	D = v;
+}
+:SHA shc is op5=27 & shreg=2 & shtype=0 & shc & shcnt {
+	local v:2 = A; local o:2 = v; local cnt:1 = shcnt;
+	if (cnt s< 0) goto <right>;
+	local n:2 = zext(cnt);
+	if (n == 0) goto <done>;
+	v = v << n; M = ((o >> (16 - n)) & 1) != 0; goto <done>;
+<right>
+	n = zext(-cnt);
+	v = v s>> n; M = ((o >> (n - 1)) & 1) != 0; 
+<done>
+	A = v;
+}
+:SHA "ROT "^shc is op5=27 & shreg=2 & shtype=1 & shc & shcnt {
+	local v:2 = A; local o:2 = v; local cnt:1 = shcnt;
+	if (cnt s< 0) goto <right>;
+	local n:2 = zext(cnt);
+	if (n == 0) goto <done>;
+	v = (v << n) | (v >> (16 - n)); M = ((o >> (16 - n)) & 1) != 0; goto <done>;
+<right>
+	n = zext(-cnt);
+	v = (v >> n) | (v << (16 - n)); M = ((o >> (n - 1)) & 1) != 0; 
+<done>
+	A = v;
+}
+:SHA "ZIN "^shc is op5=27 & shreg=2 & shtype=2 & shc & shcnt {
+	local v:2 = A; local o:2 = v; local cnt:1 = shcnt;
+	if (cnt s< 0) goto <right>;
+	local n:2 = zext(cnt);
+	if (n == 0) goto <done>;
+	v = v << n; M = ((o >> (16 - n)) & 1) != 0; goto <done>;
+<right>
+	n = zext(-cnt);
+	v = v >> n; M = ((o >> (n - 1)) & 1) != 0; 
+<done>
+	A = v;
+}
+:SHA "LIN "^shc is op5=27 & shreg=2 & shtype=3 & shc & shcnt {
+	local v:2 = A; local o:2 = v; local cnt:1 = shcnt;
+	if (cnt s< 0) goto <right>;
+	local n:2 = zext(cnt);
+	if (n == 0) goto <done>;
+	v = (v << n) | (zext(M) * ((1 << n) - 1)); M = ((o >> (16 - n)) & 1) != 0; goto <done>;
+<right>
+	n = zext(-cnt);
+	v = (v >> n) | (zext(M) * ~(-1:2 >> n)); M = ((o >> (n - 1)) & 1) != 0; 
+<done>
+	A = v;
+}
+:SAD shc is op5=27 & shreg=3 & shtype=0 & shc & shcnt {
+	local v:4 = AD; local o:4 = v; local cnt:1 = shcnt;
+	if (cnt s< 0) goto <right>;
+	local n:4 = zext(cnt);
+	if (n == 0) goto <done>;
+	v = v << n; M = ((o >> (32 - n)) & 1) != 0; goto <done>;
+<right>
+	n = zext(-cnt);
+	v = v s>> n; M = ((o >> (n - 1)) & 1) != 0; 
+<done>
+	AD = v;
+}
+:SAD "ROT "^shc is op5=27 & shreg=3 & shtype=1 & shc & shcnt {
+	local v:4 = AD; local o:4 = v; local cnt:1 = shcnt;
+	if (cnt s< 0) goto <right>;
+	local n:4 = zext(cnt);
+	if (n == 0) goto <done>;
+	v = (v << n) | (v >> (32 - n)); M = ((o >> (32 - n)) & 1) != 0; goto <done>;
+<right>
+	n = zext(-cnt);
+	v = (v >> n) | (v << (32 - n)); M = ((o >> (n - 1)) & 1) != 0; 
+<done>
+	AD = v;
+}
+:SAD "ZIN "^shc is op5=27 & shreg=3 & shtype=2 & shc & shcnt {
+	local v:4 = AD; local o:4 = v; local cnt:1 = shcnt;
+	if (cnt s< 0) goto <right>;
+	local n:4 = zext(cnt);
+	if (n == 0) goto <done>;
+	v = v << n; M = ((o >> (32 - n)) & 1) != 0; goto <done>;
+<right>
+	n = zext(-cnt);
+	v = v >> n; M = ((o >> (n - 1)) & 1) != 0; 
+<done>
+	AD = v;
+}
+:SAD "LIN "^shc is op5=27 & shreg=3 & shtype=3 & shc & shcnt {
+	local v:4 = AD; local o:4 = v; local cnt:1 = shcnt;
+	if (cnt s< 0) goto <right>;
+	local n:4 = zext(cnt);
+	if (n == 0) goto <done>;
+	v = (v << n) | (zext(M) * ((1 << n) - 1)); M = ((o >> (32 - n)) & 1) != 0; goto <done>;
+<right>
+	n = zext(-cnt);
+	v = (v >> n) | (zext(M) * ~(-1:4 >> n)); M = ((o >> (n - 1)) & 1) != 0; 
+<done>
+	AD = v;
+}
+
+# Argument instructions: set or add a sign-extended 8-bit number to B, A, T or X.
+:SAB disp is op5=30 & argadd=0 & argreg=0 & disp { B = disp; }
+:AAB disp is op5=30 & argadd=1 & argreg=0 & disp { local o:2 = B; local w:2 = disp; B = o + w; addflags(o, w, B); }
+:SAA disp is op5=30 & argadd=0 & argreg=1 & disp { A = disp; }
+:AAA disp is op5=30 & argadd=1 & argreg=1 & disp { local o:2 = A; local w:2 = disp; A = o + w; addflags(o, w, A); }
+:SAT disp is op5=30 & argadd=0 & argreg=2 & disp { T = disp; }
+:AAT disp is op5=30 & argadd=1 & argreg=2 & disp { local o:2 = T; local w:2 = disp; T = o + w; addflags(o, w, T); }
+:SAX disp is op5=30 & argadd=0 & argreg=3 & disp { X = disp; }
+:AAX disp is op5=30 & argadd=1 & argreg=3 & disp { local o:2 = X; local w:2 = disp; X = o + w; addflags(o, w, X); }
+
+# Bit operations on bit bn of register dr (dr 0: the status register, whose
+# bits 0-7 are PTM TG K Z Q O C M).
+bnv: val is bn [ val = bn * 8; ] { }
+lvlv: val is lvl [ val = lvl * 8; ] { }
+bopbit: "SSPTM" is dr=0 & bn=0 { export PTM; }
+bopbit: "SSTG" is dr=0 & bn=1 { export TG; }
+bopbit: "SSK" is dr=0 & bn=2 { export K; }
+bopbit: "SSZ" is dr=0 & bn=3 { export Z; }
+bopbit: "SSQ" is dr=0 & bn=4 { export Q; }
+bopbit: "SSO" is dr=0 & bn=5 { export O; }
+bopbit: "SSC" is dr=0 & bn=6 { export C; }
+bopbit: "SSM" is dr=0 & bn=7 { export M; }
+:BSET "ZRO "^bopbit is op5=31 & bopsub=0 & bopbit { local b:1 = bopbit; b = 0; bopbit = b; }
+:BSET "ZRO "^bnv^","^"D"^drr is op5=31 & bopsub=0 & bn & bnv & drr & dr!=0 { local msk:2 = 1 << bn; local b:1 = (drr & msk) != 0; b = 0; drr = (drr & ~msk) | (zext(b) << bn); }
+:BSET "ZRO "^bnv^","^"STS" is op5=31 & bopsub=0 & bn & bnv & dr=0 & bnc>7 { local msk:2 = 1 << bn; local b:1 = (STS & msk) != 0; b = 0; STS = (STS & ~msk) | (zext(b) << bn); }
+:BSET "ONE "^bopbit is op5=31 & bopsub=1 & bopbit { local b:1 = bopbit; b = 1; bopbit = b; }
+:BSET "ONE "^bnv^","^"D"^drr is op5=31 & bopsub=1 & bn & bnv & drr & dr!=0 { local msk:2 = 1 << bn; local b:1 = (drr & msk) != 0; b = 1; drr = (drr & ~msk) | (zext(b) << bn); }
+:BSET "ONE "^bnv^","^"STS" is op5=31 & bopsub=1 & bn & bnv & dr=0 & bnc>7 { local msk:2 = 1 << bn; local b:1 = (STS & msk) != 0; b = 1; STS = (STS & ~msk) | (zext(b) << bn); }
+:BSET "BCM "^bopbit is op5=31 & bopsub=2 & bopbit { local b:1 = bopbit; b = !b; bopbit = b; }
+:BSET "BCM "^bnv^","^"D"^drr is op5=31 & bopsub=2 & bn & bnv & drr & dr!=0 { local msk:2 = 1 << bn; local b:1 = (drr & msk) != 0; b = !b; drr = (drr & ~msk) | (zext(b) << bn); }
+:BSET "BCM "^bnv^","^"STS" is op5=31 & bopsub=2 & bn & bnv & dr=0 & bnc>7 { local msk:2 = 1 << bn; local b:1 = (STS & msk) != 0; b = !b; STS = (STS & ~msk) | (zext(b) << bn); }
+:BSET "BAC "^bopbit is op5=31 & bopsub=3 & bopbit { local b:1 = bopbit; b = K; bopbit = b; }
+:BSET "BAC "^bnv^","^"D"^drr is op5=31 & bopsub=3 & bn & bnv & drr & dr!=0 { local msk:2 = 1 << bn; local b:1 = (drr & msk) != 0; b = K; drr = (drr & ~msk) | (zext(b) << bn); }
+:BSET "BAC "^bnv^","^"STS" is op5=31 & bopsub=3 & bn & bnv & dr=0 & bnc>7 { local msk:2 = 1 << bn; local b:1 = (STS & msk) != 0; b = K; STS = (STS & ~msk) | (zext(b) << bn); }
+:BSKP "ZRO "^bopbit is op5=31 & bopsub=4 & bopbit & skip1 { local b:1 = bopbit; if (b == 0) goto skip1; }
+:BSKP "ZRO "^bnv^","^"D"^drr is op5=31 & bopsub=4 & bn & bnv & drr & dr!=0 & skip1 { local msk:2 = 1 << bn; local b:1 = (drr & msk) != 0; if (b == 0) goto skip1; }
+:BSKP "ZRO "^bnv^","^"STS" is op5=31 & bopsub=4 & bn & bnv & dr=0 & bnc>7 & skip1 { local msk:2 = 1 << bn; local b:1 = (STS & msk) != 0; if (b == 0) goto skip1; }
+:BSKP "ONE "^bopbit is op5=31 & bopsub=5 & bopbit & skip1 { local b:1 = bopbit; if (b != 0) goto skip1; }
+:BSKP "ONE "^bnv^","^"D"^drr is op5=31 & bopsub=5 & bn & bnv & drr & dr!=0 & skip1 { local msk:2 = 1 << bn; local b:1 = (drr & msk) != 0; if (b != 0) goto skip1; }
+:BSKP "ONE "^bnv^","^"STS" is op5=31 & bopsub=5 & bn & bnv & dr=0 & bnc>7 & skip1 { local msk:2 = 1 << bn; local b:1 = (STS & msk) != 0; if (b != 0) goto skip1; }
+:BSKP "BCM "^bopbit is op5=31 & bopsub=6 & bopbit & skip1 { local b:1 = bopbit; if (b != K) goto skip1; }
+:BSKP "BCM "^bnv^","^"D"^drr is op5=31 & bopsub=6 & bn & bnv & drr & dr!=0 & skip1 { local msk:2 = 1 << bn; local b:1 = (drr & msk) != 0; if (b != K) goto skip1; }
+:BSKP "BCM "^bnv^","^"STS" is op5=31 & bopsub=6 & bn & bnv & dr=0 & bnc>7 & skip1 { local msk:2 = 1 << bn; local b:1 = (STS & msk) != 0; if (b != K) goto skip1; }
+:BSKP "BAC "^bopbit is op5=31 & bopsub=7 & bopbit & skip1 { local b:1 = bopbit; if (b == K) goto skip1; }
+:BSKP "BAC "^bnv^","^"D"^drr is op5=31 & bopsub=7 & bn & bnv & drr & dr!=0 & skip1 { local msk:2 = 1 << bn; local b:1 = (drr & msk) != 0; if (b == K) goto skip1; }
+:BSKP "BAC "^bnv^","^"STS" is op5=31 & bopsub=7 & bn & bnv & dr=0 & bnc>7 & skip1 { local msk:2 = 1 << bn; local b:1 = (STS & msk) != 0; if (b == K) goto skip1; }
+:BSTC bopbit is op5=31 & bopsub=8 & bopbit { local b:1 = bopbit; b = !K; K = 1; bopbit = b; }
+:BSTC bnv^","^"D"^drr is op5=31 & bopsub=8 & bn & bnv & drr & dr!=0 { local msk:2 = 1 << bn; local b:1 = (drr & msk) != 0; b = !K; K = 1; drr = (drr & ~msk) | (zext(b) << bn); }
+:BSTC bnv^","^"STS" is op5=31 & bopsub=8 & bn & bnv & dr=0 & bnc>7 { local msk:2 = 1 << bn; local b:1 = (STS & msk) != 0; b = !K; K = 1; STS = (STS & ~msk) | (zext(b) << bn); }
+:BSTA bopbit is op5=31 & bopsub=9 & bopbit { local b:1 = bopbit; b = K; K = 0; bopbit = b; }
+:BSTA bnv^","^"D"^drr is op5=31 & bopsub=9 & bn & bnv & drr & dr!=0 { local msk:2 = 1 << bn; local b:1 = (drr & msk) != 0; b = K; K = 0; drr = (drr & ~msk) | (zext(b) << bn); }
+:BSTA bnv^","^"STS" is op5=31 & bopsub=9 & bn & bnv & dr=0 & bnc>7 { local msk:2 = 1 << bn; local b:1 = (STS & msk) != 0; b = K; K = 0; STS = (STS & ~msk) | (zext(b) << bn); }
+:BLDC bopbit is op5=31 & bopsub=10 & bopbit { local b:1 = bopbit; K = !b; }
+:BLDC bnv^","^"D"^drr is op5=31 & bopsub=10 & bn & bnv & drr & dr!=0 { local msk:2 = 1 << bn; local b:1 = (drr & msk) != 0; K = !b; }
+:BLDC bnv^","^"STS" is op5=31 & bopsub=10 & bn & bnv & dr=0 & bnc>7 { local msk:2 = 1 << bn; local b:1 = (STS & msk) != 0; K = !b; }
+:BLDA bopbit is op5=31 & bopsub=11 & bopbit { local b:1 = bopbit; K = b; }
+:BLDA bnv^","^"D"^drr is op5=31 & bopsub=11 & bn & bnv & drr & dr!=0 { local msk:2 = 1 << bn; local b:1 = (drr & msk) != 0; K = b; }
+:BLDA bnv^","^"STS" is op5=31 & bopsub=11 & bn & bnv & dr=0 & bnc>7 { local msk:2 = 1 << bn; local b:1 = (STS & msk) != 0; K = b; }
+:BANC bopbit is op5=31 & bopsub=12 & bopbit { local b:1 = bopbit; K = K && !b; }
+:BANC bnv^","^"D"^drr is op5=31 & bopsub=12 & bn & bnv & drr & dr!=0 { local msk:2 = 1 << bn; local b:1 = (drr & msk) != 0; K = K && !b; }
+:BANC bnv^","^"STS" is op5=31 & bopsub=12 & bn & bnv & dr=0 & bnc>7 { local msk:2 = 1 << bn; local b:1 = (STS & msk) != 0; K = K && !b; }
+:BAND bopbit is op5=31 & bopsub=13 & bopbit { local b:1 = bopbit; K = K && b; }
+:BAND bnv^","^"D"^drr is op5=31 & bopsub=13 & bn & bnv & drr & dr!=0 { local msk:2 = 1 << bn; local b:1 = (drr & msk) != 0; K = K && b; }
+:BAND bnv^","^"STS" is op5=31 & bopsub=13 & bn & bnv & dr=0 & bnc>7 { local msk:2 = 1 << bn; local b:1 = (STS & msk) != 0; K = K && b; }
+:BORC bopbit is op5=31 & bopsub=14 & bopbit { local b:1 = bopbit; K = K || !b; }
+:BORC bnv^","^"D"^drr is op5=31 & bopsub=14 & bn & bnv & drr & dr!=0 { local msk:2 = 1 << bn; local b:1 = (drr & msk) != 0; K = K || !b; }
+:BORC bnv^","^"STS" is op5=31 & bopsub=14 & bn & bnv & dr=0 & bnc>7 { local msk:2 = 1 << bn; local b:1 = (STS & msk) != 0; K = K || !b; }
+:BORA bopbit is op5=31 & bopsub=15 & bopbit { local b:1 = bopbit; K = K || b; }
+:BORA bnv^","^"D"^drr is op5=31 & bopsub=15 & bn & bnv & drr & dr!=0 { local msk:2 = 1 << bn; local b:1 = (drr & msk) != 0; K = K || b; }
+:BORA bnv^","^"STS" is op5=31 & bopsub=15 & bn & bnv & dr=0 & bnc>7 { local msk:2 = 1 << bn; local b:1 = (STS & msk) != 0; K = K || b; }
+
+# System control, transfer and inter-level instructions (opcode 15)
+macro packsts(v) {
+	v = (STS & 0xff00) | zext(PTM) | (zext(TG) << 1) | (zext(K) << 2) | (zext(Z) << 3) | (zext(Q) << 4) | (zext(O) << 5) | (zext(C) << 6) | (zext(M) << 7);
+}
+:TRA "STS" is op5=26 & b6_10=0 & b4_5=0 & ir=1 { local v:2 = 0; packsts(v); A = v; }
+:TRA ir is op5=26 & b6_10=0 & b4_5=0 & ir { A = transfer_from_internal(ir:1); }
+:TRR "STS" is op5=26 & b6_10=1 & b4_5=0 & ir=1 { PTM = (A & 1) != 0; TG = (A & 2) != 0; K = (A & 4) != 0; Z = (A & 8) != 0; Q = (A & 16) != 0; O = (A & 32) != 0; C = (A & 64) != 0; M = (A & 128) != 0; STS = (STS & 0xff) | (A & 0xff00); }
+:TRR ir is op5=26 & b6_10=1 & b4_5=0 & ir { transfer_to_internal(ir:1, A); }
+:MCL ir is op5=26 & b6_10=2 & b4_5=0 & ir { masked_clear_internal(ir:1, A); }
+:MST ir is op5=26 & b6_10=3 & b4_5=0 & ir { masked_set_internal(ir:1, A); }
+:OPCOM is op5=26 & b0_10=256 { opcom(); }
+:IOF is op5=26 & b0_10=257 { interrupt_off(); }
+:ION is op5=26 & b0_10=258 { interrupt_on(); }
+:POF is op5=26 & b0_10=260 { paging_off(0:1); }
+:PIOF is op5=26 & b0_10=261 { paging_off(1:1); interrupt_off(); }
+:SEX is op5=26 & b0_10=262 { set_extended_address(); }
+:REX is op5=26 & b0_10=263 { reset_extended_address(); }
+:PON is op5=26 & b0_10=264 { paging_on(0:1); }
+:PION is op5=26 & b0_10=266 { paging_on(1:1); interrupt_on(); }
+:IOXT is op5=26 & b0_10=269 { A = io_transfer_t(T, A); }
+:EXAM is op5=26 & b0_10=270 { T = memory_examine(AD); }
+:DEPO is op5=26 & b0_10=271 { memory_deposit(AD, T); }
+:WAIT udisp is op5=26 & b8_10=2 & udisp { wait_level(udisp:1); }
+:NLZ disp is op5=26 & b8_10=3 & disp { FA = float_normalize(A, disp:1); }
+:DNZ disp is op5=26 & b8_10=4 & disp { A = float_denormalize(FA, disp:1); T = 0; D = 0; }
+:SRB lvlv is op5=26 & b7_10=10 & lvl & lvlv & b0_2=2 { store_register_block(lvl:1, X); }
+:LRB lvlv is op5=26 & b7_10=11 & lvl & lvlv & b0_2=0 { load_register_block(lvl:1, X); }
+:MON disp is op5=26 & b8_10=6 & disp { monitor_call(disp:1); }
+:IRW lvlv "D"^drr is op5=26 & b7_10=14 & lvl & lvlv & drr & dr { inter_register_write(lvl:1, dr:1, A); }
+:IRR lvlv "D"^drr is op5=26 & b7_10=15 & lvl & lvlv & drr & dr { A = inter_register_read(lvl:1, dr:1); }
+
+# Input/output
+:IOX b0_10 is op5=29 & b0_10 { A = io_transfer(b0_10:2, A); }

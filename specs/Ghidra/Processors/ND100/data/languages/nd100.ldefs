@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="ND100"
+            endian="big"
+            size="16"
+            variant="default"
+            version="1.0"
+            slafile="nd100.sla"
+            processorspec="nd100.pspec"
+            id="ND100:BE:16:default">
+    <description>Norsk Data ND-100 (NORD-10, ND-110), word addressed</description>
+    <compiler name="default" spec="nd100.cspec" id="default"/>
+  </language>
+</language_definitions>

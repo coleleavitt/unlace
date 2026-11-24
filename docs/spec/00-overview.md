@@ -1044,6 +1044,15 @@ the input's sibling `.sla`. Extra positional arguments fail before compilation.
 Both filename arguments use the same normalization rule
 (`crates/unlace-slacomp/src/bin/slacomp.rs (with_extension)`).
 
+(kuna) **Compiler exit status.** `slacomp` exits 0 only when every spec it was
+asked for compiled and its `.sla` exists. An unrecoverable error (a parse or
+consistency error, a symbol redefinition, an unwritable output) prints its
+message, writes no `.sla` and exits 2; a compiler result of 0 whose output file
+is missing is a failure too. Under `-a` every spec is still attempted, and when
+any fails the run ends with `N of M slaspec files failed to compile:` and their
+paths on stderr and exits 2. No status maps to 0 by truncation
+(`crates/unlace-slacomp/src/slacompmain.rs (main)`).
+
 The compiler's `-y` flag selects the XML debug encoding in both single-file and
 recursive (`-a`) modes. After successful parsing and compilation, the driver
 chooses the XML encoder or the default compressed binary encoder according to

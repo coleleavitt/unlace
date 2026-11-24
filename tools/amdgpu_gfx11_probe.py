@@ -4,13 +4,16 @@
 Runs llvm-objdump (LLVM 17 or newer, -mcpu=gfx1100) over synthetic encodings and writes
 plain tables of opcode numbers, mnemonics and operand shapes; nothing from LLVM's sources.
 
-  amdgpu_gfx11_probe.py vop3 amdgcn_gfx11.slaspec > vop3_ops.txt
+  amdgpu_gfx11_probe.py vop3 amdgcn_gfx11.slaspec [gfx1200] > vop3_ops.txt
       '<op> | <text, op_sel=0> | <text, op_sel=0xf>' for every VOP3 opcode the base spec
       lacks or whose LLVM form names a VGPR half (.l/.h)
-  amdgpu_gfx11_probe.py e32 > e32_ops.txt
+  amdgpu_gfx11_probe.py e32 [gfx1200] > e32_ops.txt
       '<vopc|vop1|vop2> <op> | <text>' for every VOPC, VOP1 and VOP2 opcode whose LLVM form
       names a VGPR half
   amdgpu_gfx11_probe.py mimg > mimg_ops.txt
+
+A trailing gfx12 -mcpu probes that target instead (with +real-true16, and s_nop padding after
+each encoding so a rejected one cannot shift the next).
       '<op> <mnemonic> <sampler 0/1> <dim> <dim name> <a16> <address VGPRs>' for every MIMG opcode
 """
 import os
@@ -37,17 +40,18 @@ def elf(code):
     return data + b'\0' * (off_sh - len(data)) + b'\0' * shsz + sh1 + sh2
 
 
-def objdump(insts):
-    """Disassemble a list of word lists; returns the text per instruction ('' if LLVM rejects it)."""
+def objdump(insts, mcpu='gfx1100', mattr=None, pad=False):
+    """Disassemble a list of word lists; returns the text per instruction ('' if LLVM rejects it).
+    With pad, four s_nop words follow each instruction so a rejected one cannot shift the next."""
     code, offs = b'', []
     for ws in insts:
         offs.append(0x1000 + len(code))
-        code += b''.join(w.to_bytes(4, 'little') for w in ws)
+        code += b''.join(w.to_bytes(4, 'little') for w in ws + ([0xbf800000] * 4 if pad else []))
     with tempfile.TemporaryDirectory() as d:
         p = os.path.join(d, 'probe.elf')
         open(p, 'wb').write(elf(code))
-        out = subprocess.run(['llvm-objdump', '-d', '--mcpu=gfx1100', p], capture_output=True, text=True,
-                             check=True).stdout
+        out = subprocess.run(['llvm-objdump', '-d', '--mcpu=' + mcpu] + (['--mattr=' + mattr] if mattr else [])
+                             + [p], capture_output=True, text=True, check=True).stdout
     ref = {}
     for line in out.splitlines():
         m = re.match(r'\s+(\S.*?)\s*//\s+([0-9A-F]+):((?: [0-9A-F]{8})+)', line)
@@ -61,11 +65,11 @@ def objdump(insts):
     return res
 
 
-def assembles(texts, insts):
+def assembles(texts, insts, mcpu='gfx1100'):
     """Indices of the texts llvm-mc assembles back to the same words (encodings a compiler emits)."""
     idx = [i for i, t in enumerate(texts) if t]
     src = ''.join(texts[i] + '\n' for i in idx)
-    r = subprocess.run(['llvm-mc', '-triple=amdgcn', '-mcpu=gfx1100', '-show-encoding'], input=src,
+    r = subprocess.run(['llvm-mc', '-triple=amdgcn', '-mcpu=' + mcpu, '-show-encoding'], input=src,
                        capture_output=True, text=True)
     bad = {idx[int(m) - 1] for m in re.findall(r'<stdin>:(\d+):\d+: error', r.stderr)}
     encs = [bytes(int(x, 16) for x in m.split(','))
@@ -80,11 +84,17 @@ def assembles(texts, insts):
     return good
 
 
+def cpu():
+    """The -mcpu (and -mattr) of the run: gfx1100, or the one named after the arguments."""
+    m = sys.argv[-1] if sys.argv[-1].startswith('gfx') else 'gfx1100'
+    return m, ('+real-true16' if m != 'gfx1100' else None)
+
+
 def vop3(spec):
     have = {int(x) for x in re.findall(r'e6=0x35\b[^;]*?vop3op=(\d+)', open(spec).read())}
     w1 = (256 + 2) | ((256 + 3) << 9) | ((256 + 4) << 18)
     insts = [[(0x35 << 26) | (op << 16) | (sel << 11) | 1, w1] for op in range(1024) for sel in (0, 0xf)]
-    txt = objdump(insts)
+    txt = objdump(insts, *cpu(), pad=cpu()[0] != 'gfx1100')
     for op in range(1024):
         a, b = txt[2 * op], txt[2 * op + 1]
         if a and (op not in have or re.search(r'\bv\d+\.[lh]\b', a)):
@@ -99,7 +109,7 @@ def e32():
         fmts.append(('vop2', op, (op << 25) | (0x01 << 17) | (0x03 << 9) | (256 + 2)))
     for op in range(256):
         fmts.append(('vop1', op, (0x3f << 25) | (0x01 << 17) | (op << 9) | (256 + 2)))
-    for (f, op, w), t in zip(fmts, objdump([[x[2]] for x in fmts])):
+    for (f, op, w), t in zip(fmts, objdump([[x[2]] for x in fmts], *cpu(), pad=cpu()[0] != 'gfx1100')):
         if t and re.search(r'\bv\d+\.[lh]\b', t):
             print('%s %d | %s' % (f, op, t))
 

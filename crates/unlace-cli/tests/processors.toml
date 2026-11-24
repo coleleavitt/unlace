@@ -2080,6 +2080,65 @@ test = "amdgpu_gfx11_image_ops_decompile"
 address = "0x0"
 expect = ["image_sample_d(a0,a4,a5)", "image_store(", "image_atomic_add("]
 
+# RDNA 4 (gfx1200, wave32): `fixtures/amdgpu/gfx1200_true16.cl` at -O2. Kernel arguments come in
+# through the GFX12 SMEM encoding, global accesses through VGLOBAL, and the 16-bit math uses
+# VGPR halves; `mm` is the GFX12 v_wmma_f32_16x16x16_f16 (4-VGPR A and B tiles).
+[[family]]
+name = "amdgpu_gfx12_true16"
+language = "AMDGPU:LE:64:GFX12"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx1200_true16.bin"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "amdgpu_gfx12_true16_half_math_decompiles"
+address = "0x0"
+expect = ["if (v3 < v4)", "- ABS(v4);"]
+
+[[family.function]]
+test = "amdgpu_gfx12_true16_u16_decompiles"
+address = "0x700"
+expect = ["v2 * 3 + (v3 >> 2);"]
+
+[[family.function]]
+test = "amdgpu_gfx12_wmma_decompiles"
+address = "0xb00"
+expect = ["= wmma("]
+
+# `fixtures/amdgpu/gfx1100_image.ll` built for gfx1200: VIMAGE load, store and atomic and
+# VSAMPLE sample and sample_d (the s_code_end padding after the return is s_endpgm).
+[[family]]
+name = "amdgpu_gfx12_image"
+language = "AMDGPU:LE:64:GFX12"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx1200_image.bin"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "amdgpu_gfx12_image_ops_decompile"
+address = "0x0"
+expect = ["image_sample_d(", "image_store(", "image_atomic_add_uint("]
+
+# `fixtures/amdgpu/real_kernels.cl` built with clang -O2 for gfx1200; `dbl` divides doubles.
+[[family]]
+name = "amdgpu_real_gfx1200"
+language = "AMDGPU:LE:64:GFX12"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/real_gfx1200.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "amdgpu_real_gfx1200_f64_division_decompiles"
+address = "0x2718"
+expect = ["div_fixup(", "cmp_class("]
+
+[[family.function]]
+test = "amdgpu_real_gfx1200_matmul_loop_decompiles"
+address = "0x0"
+expect = ["} while ("]
+
 # Wave64 RDNA code (clang -mwavefrontsize64): lane masks are SGPR pairs. `vote` passes a
 # ballot (v_cmp into VCC, then vcc_lo and vcc_hi as a 64-bit argument); under the wave64
 # language the high half is the compare's zero, not a stale vcc_hi.
@@ -2148,6 +2207,20 @@ forbid = ["halt_baddata"]
 test = "amdgpu_gfx11_w64_true16_half_math_decompiles"
 address = "0x0"
 expect = ["if (v2 < v3)", "- ABS(v3);"]
+
+# `fixtures/amdgpu/gfx1200_true16.cl` built with -mwavefrontsize64 -DW64 for gfx1200.
+[[family]]
+name = "amdgpu_gfx12_w64_true16"
+language = "AMDGPU:LE:64:GFX12-W64"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx1200_w64_true16.bin"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "amdgpu_gfx12_w64_true16_half_math_decompiles"
+address = "0x0"
+expect = ["if (v3 < v4)", "- ABS(v4);"]
 
 # The CPython 3.12 bytecode language decompiles a function's co_code from a raw image:
 # fast locals become parameters and variables, the value stack folds away, and objects,

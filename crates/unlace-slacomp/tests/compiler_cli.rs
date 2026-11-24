@@ -336,3 +336,14 @@ fn a_space_may_be_named_by_a_keyword() {
     );
     assert_compiled(result, &destination);
 }
+
+#[test]
+fn radix_literals_print_whole() {
+    let scratch = tempfile::tempdir().unwrap();
+    let (result, destination) = compile_body(
+        scratch.path(),
+        ":sim 0x1f is op=6 { r0 = 0; }\n\
+         :bin 0b10 is op=7 { r0 = 1; }\n",
+    );
+    assert_compiled(result, &destination);
+}

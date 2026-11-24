@@ -1,6 +1,8 @@
 # Atomic idioms: how Hex-Rays 9.5 prints them, and a plan for unlace (2026-11-24)
 
-Deepens gap 5 of `notes/ida-gaps.md`. Today unlace prints an x86 `lock`-prefixed instruction as the
+Deepens gap 5 of `notes/ida-gaps.md`.
+
+**Status (2026-11-24, later the same day):** #245 (143cc4d460) landed options `atomics` (x86 `lock` RMW, AArch64 LSE, RISC-V AMO as `__sync_*` builtins, `kuna_atomics` in unlace-lift) and `llscfold` (AArch64 `ldaxr`/`stlxr` retry loops folded into the same builtins), both default off. That covers steps 1, 3 and 5 of the plan below in GCC spelling. Still open from this note: MSVC `_Interlocked*` spelling on MSVC PE images (Hex-Rays' `auto` rule), the pair forms (`cmpxchg8b`/`cmpxchg16b`, `casp`), `_Atomic`-typed pointers (hexarm `sub_899B0`), and ARM32 `ldrex`/`strex`. The rest of this note describes the state before #245. Today unlace prints an x86 `lock`-prefixed instruction as the
 SLEIGH user-ops around plain p-code (`LOCK(); *p = *p + 1; UNLOCK();`, from `define pcodeop LOCK` in
 `specs/Ghidra/Processors/x86/data/languages/ia.sinc:783`), an AArch64 LSE `CAS` as a compare, a branch and
 a store (the `:cas` constructor in `AARCH64base.sinc` is `if (data != comparevalue) goto <skip>; *p = newvalue;`),

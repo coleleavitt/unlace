@@ -1,3 +1,8 @@
+# `kuna-storecopyeffects.toml` pins the AArch64 address-spill store across calls, repeated stores,
+# a load between calls, and a truly dead-store control. The compiled round trips in
+# `unlace-cli/tests/store_copy_effects.rs` also exercise aliasing and distinct pointers on AArch64
+# and x86-64 at `-O0` and `-O2`.
+
 [image]
 arch = 'x86:LE:64:default:gcc'
 

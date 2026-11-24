@@ -1,3 +1,10 @@
+# `probe` keeps `&frame[1]` in a saved register (ARM32 r4, PowerPC32 r29); `retype` to a 16-byte
+# `Probe *` re-laid the frame as a `Probe` record, which turned the pointer's definition into a
+# copy that was propagated into its readers: the C printed `consume(&v4)` and the retype was
+# refused. P3 copy propagation (`p3_dataflow/ruleaction_3.rs` `RulePropagateCopy`) keeps a copy
+# that is a definition the replayed retype's lock matched (`p6_variables/kuna_stablenames.rs`
+# `is_retyped_definition`) always on (`retype` directive)
+
 [image]
 arch = 'ARM:LE:32:v8:default'
 symbols = [

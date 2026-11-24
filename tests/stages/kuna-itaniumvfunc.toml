@@ -1,3 +1,7 @@
+# Authored Itanium slot naming P1 external-refinement (a virtual slot is named `<C>::vfunc_<i>`,
+# or `<C>::vfunc_for_<Base>_<i>` in a secondary sub-vtable, never after its vtable) `option
+# itaniumrtti off\ on`
+
 [image]
 arch = 'x86:LE:64:default:gcc'
 symbols = [

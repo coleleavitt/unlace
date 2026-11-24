@@ -1,3 +1,6 @@
+# `kuna-ppc32picimports-slot-clobber.toml` retains a return after an imported copy overwrites a
+# writable relocation slot, across off/on/off option toggles.
+
 [image]
 arch = 'PowerPC:BE:32:default'
 symbols = [

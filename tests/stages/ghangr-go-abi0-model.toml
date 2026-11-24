@@ -1,3 +1,8 @@
+# `ghangr-go-abi0-model.toml` checks recovery of a Go stack-input leaf and the arguments passed by
+# both call orders. It also checks the disabled option, an ordinary name lookalike, a wrapper with
+# stack results, the signal trampoline and two linked runtime functions with private or foreign
+# exits.
+
 [image]
 arch = 'x86:LE:64:default:gcc'
 symbols = [

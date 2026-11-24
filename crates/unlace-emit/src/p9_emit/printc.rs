@@ -17034,7 +17034,10 @@ impl RealTypeCtx {
             enabled: arch.unlace_options.get::<crate::printc::Realtypes>().0,
             long_is_8: arch.types().get_size_of_long() == 8,
             ctypes: arch.unlace_options.get::<crate::coreoptions::CTypes>().0,
-            model: crate::ctypes::CDataModel::from_types(&*arch.types()),
+            model: crate::ctypes::CDataModel {
+                char_signed: crate::ctypes::plain_char_signed(&arch.archid, arch.image_apple),
+                ..crate::ctypes::CDataModel::from_types(&*arch.types())
+            },
             c_type_definition: false,
             cpp_short_names: arch
                 .unlace_options

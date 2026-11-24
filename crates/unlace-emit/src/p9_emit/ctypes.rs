@@ -67,6 +67,22 @@ pub struct CDataModel {
     pub float_size: int4,
     pub double_size: int4,
     pub long_double_size: int4,
+    /// Whether the target's plain `char` is signed. Plain `char` is unsigned on
+    /// AArch64 outside Apple and Windows (AAPCS64), so a signed byte cannot be
+    /// spelled `char` there; see [`plain_char_signed`].
+    pub char_signed: bool,
+}
+
+/// Whether plain `char` is signed for the language `archid`. AArch64 under the
+/// `default` compiler spec follows AAPCS64, whose `char` is unsigned, except on
+/// Apple platforms (`image_apple`, or the AppleSilicon language), whose ABI keeps
+/// it signed. Every other target is treated as signed, the decompiler's own
+/// `char` core type.
+pub fn plain_char_signed(archid: &str, image_apple: bool) -> bool {
+    let aapcs64 = archid.starts_with("AARCH64:")
+        && archid.ends_with(":default")
+        && !archid.contains(":AppleSilicon:");
+    !(aapcs64 && !image_apple)
 }
 
 impl CDataModel {
@@ -82,6 +98,7 @@ impl CDataModel {
         float_size: 4,
         double_size: 8,
         long_double_size: 10,
+        char_signed: true,
     };
 
     /// Read the model off a bootstrapped type factory.
@@ -96,6 +113,7 @@ impl CDataModel {
             float_size: types.get_size_of_float(),
             double_size: types.get_size_of_double(),
             long_double_size: types.get_size_of_long_double(),
+            char_signed: true,
         }
     }
 

@@ -1161,6 +1161,15 @@ impl Funcdata {
                 if instobj.is_flow_break() {
                     continue;
                 }
+                if self
+                    .get_arch()
+                    .kuna_options
+                    .get::<crate::kuna_condcallpush::CondCallPush>()
+                    .0
+                    && crate::kuna_condcallpush::is_call_push(self, inst)
+                {
+                    continue;
+                }
                 statement += 1;
             } else {
                 // A calculation with output: conservative Varnode::calc_explicit.

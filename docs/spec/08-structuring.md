@@ -451,6 +451,28 @@ by a pass that runs after structuring can still vanish (`newbury::main` emits
 four `WARNING:` lines at `off` and three at `on`). Those are kuna
 annotations, never a correctness signal, and the emitted C is unaffected.
 
+**`condcallpush` — a call's return-address push is not a statement.** The
+main loop runs `ActionBlockStructure` on its first pass, and that tree is kept
+until the control-flow graph changes. On x86 a `CALL` instruction lifts to a
+stack-pointer adjust, a `STORE` of the return address and the `CALL` op, all
+at the call's address, and at that point the `STORE` is still live.
+`bb_is_complex` counts it, the call and the branch, so every block that tests
+a call result is complex and `rule_block_or`/`try_block_or` decline to fold
+it. Dead-code removal deletes the `STORE` on a later pass, but the tree still
+nests one `if` per call where the source wrote `if (a && f(x) && !g(x))`
+(DecBench O2-noinline `iproute2::invalid_name`).
+
+With `option condcallpush on` `bb_is_complex` skips a `STORE` whose block
+holds a call op at the same instruction address whose result the block's
+branch reads (`crates/unlace-middle/src/substrate/kuna_condcallpush.rs
+(is_call_push)`, a walk of at most 32 varnodes back from the `CBRANCH`
+through ops of the block, through the call's output or an `INDIRECT` it
+creates). A call made only for its effect keeps the count, so it is not pulled
+into a condition as a comma operand. Nothing else in the count changes: the
+call itself, the branch, and any value the block computes for use elsewhere
+still count. Architectures whose call does not store a return address are
+unchanged. Default **off**.
+
 **`condstmts` — a cap on what a folded operand prints before its test.** The
 opposite pressure: Ghidra's own non-complex budget can let a block fold whose
 operand then prints a long comma chain. `bb_is_complex` scores a block with the

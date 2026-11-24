@@ -630,6 +630,9 @@ Three tiers:
 | go interface method calls print as anonymous indirect calls through tab + 0x18 | [`goitabcalls`](#goitabcalls----on--off-default-off) |
 | a go function taking an interface shows no method names at its calls | [`goitabcalls`](#goitabcalls----on--off-default-off) |
 | go itab dispatch renders as code pointer arithmetic | [`goitabcalls`](#goitabcalls----on--off-default-off) |
+| nested if per call result where the source has one if (a && b && c) | [`condcallpush`](#condcallpush----on--off-default-off) |
+| an x86 test of a call result is not folded into the && chain with its neighbours | [`condcallpush`](#condcallpush----on--off-default-off) |
+| condfold on and --mode aggressive do not fold a chain of call-result tests | [`condcallpush`](#condcallpush----on--off-default-off) |
 | rule pools spend most of their time re-testing ops nothing changed | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a large function's simplification repeats full sweeps for a handful of rewrites | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a DOS program's globals print as *(short *)0x308e near-pointer dereferences instead of named globals | [`mzdgroup`](#mzdgroup----on--off-default-on) |
@@ -2716,6 +2719,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** Turn on to read Go interface calls by method name. Off by default because the typing reaches only some tables (DWARF interface formals, fields of typed structs, type assertion results and, in a stripped binary, interface parameters some caller passes a static itab for) and because it changes the signature of every function that takes an interface. Non-Go binaries are byte-identical either way.
 - **Where / provenance:** P1/external-refinement · kuna · type-inference · unlace-25-go-interface-calls
 - **Example:** `option goitabcalls on`
+
+### `condcallpush` -- on | off, default `off`
+
+- **Symptoms:** nested if per call result where the source has one if (a && b && c); an x86 test of a call result is not folded into the && chain with its neighbours; condfold on and --mode aggressive do not fold a chain of call-result tests.
+- **What it does:** Do not count a call instruction's own return-address push as a statement when BlockBasic::isComplex sizes a condition block. On x86 a CALL lifts to a stack-pointer adjust, a STORE of the return address and the CALL op, all at the call's address. The main loop builds its structure on its first pass, while that STORE is still live, so every block that tests a call result counts three statements and ruleBlockOr will not put it in an `&&`/`||` chain. Dead-code removal deletes the STORE on a later pass, but the structure is kept, so the chain prints as one nested `if` per call. With this option the STORE is skipped when its block holds a call op at the same address whose result the block's branch reads; a call made only for its effect keeps the count, so it is not pulled into the condition as a comma operand.
+- **When to flip:** Turn on to fold x86 tests of call results into the `&&`/`||` chain the source wrote: `if (*s && strlen(s) <= 0xff && !strchr(s,0x2f))` instead of one nested `if` per call. Leave off to count the push as Ghidra does (one nested `if` per call-result test). Other architectures do not push a return address and are unchanged.
+- **Where / provenance:** P8/goto-quality · kuna · structure-recovery · unlace-10-andorchain
+- **Example:** `option condcallpush on`
 
 ## Analysis & loader passes
 

@@ -47,13 +47,13 @@ fn surface_count_is_102() {
 }
 
 #[test]
-fn settable_count_is_351() {
-    assert_eq!(kuna_num_settables(), 351);
-    assert_eq!(SETTABLE_TABLE.len(), 351);
+fn settable_count_is_352() {
+    assert_eq!(kuna_num_settables(), 352);
+    assert_eq!(SETTABLE_TABLE.len(), 352);
 }
 
 #[test]
-fn tier_counts_are_70_core_176_transform_105_analysis() {
+fn tier_counts_are_70_core_177_transform_105_analysis() {
     let mut core = 0;
     let mut transform = 0;
     let mut analysis = 0;
@@ -65,7 +65,7 @@ fn tier_counts_are_70_core_176_transform_105_analysis() {
             other => panic!("invalid tier {other:?} on {}", s.option),
         }
     }
-    assert_eq!((core, transform, analysis), (70, 176, 105));
+    assert_eq!((core, transform, analysis), (70, 177, 105));
 }
 
 #[test]
@@ -1316,7 +1316,8 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // +1 for `armhoist`; its P2 row sits after `cleanupcode`.
     // Recounted from phases.toml after merging origin/main: 350 rows, 349 commas.
     // +1 for `javasync`; its P9 row sits after `javanew`: 351 rows, 350 commas.
-    assert_eq!(json.matches("},\n").count(), 350);
+    // +1 for `condcallpush`; its P8 row is last: 352 rows, 351 commas.
+    assert_eq!(json.matches("},\n").count(), 351);
 }
 
 #[test]

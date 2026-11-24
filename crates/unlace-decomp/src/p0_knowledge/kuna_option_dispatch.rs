@@ -361,6 +361,7 @@ kuna_options! { self, p1;
     "contextnames" => registered!(crate::kuna_contextnames::ContextNames),
     "flownames" => registered!(crate::kuna_flownames::FlowNames),
     "declorder" => registered!(crate::kuna_declorder::DeclOrder),
+    "cppshortnames" => registered!(crate::kuna_cppshortnames::CppShortNames),
     "castwiden" => registered!(crate::kuna_castwiden::CastWidenMode),
     "ptrdepthcap" => registered!(crate::coreaction_infertypes::Ptrdepthcap),
     "calltargettype" => registered!(crate::kuna_coreoptions::CallTargetType),

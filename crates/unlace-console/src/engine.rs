@@ -4191,6 +4191,16 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
                 .get::<unlace_decomp::kuna_analysisgates::CvfTrace>()
                 .lines
         }
+        "gopcln" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::GoPcln>()
+                .on
+        }
+        "gopcln_lines" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::GoPcln>()
+                .lines
+        }
         "addrtable" => {
             arch.kuna_options
                 .get::<unlace_decomp::kuna_analysisgates::Addrtable>()

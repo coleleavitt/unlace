@@ -47,13 +47,13 @@ fn surface_count_is_102() {
 }
 
 #[test]
-fn settable_count_is_332() {
-    assert_eq!(kuna_num_settables(), 332);
-    assert_eq!(SETTABLE_TABLE.len(), 332);
+fn settable_count_is_333() {
+    assert_eq!(kuna_num_settables(), 333);
+    assert_eq!(SETTABLE_TABLE.len(), 333);
 }
 
 #[test]
-fn tier_counts_are_67_core_165_transform_100_analysis() {
+fn tier_counts_are_67_core_165_transform_101_analysis() {
     let mut core = 0;
     let mut transform = 0;
     let mut analysis = 0;
@@ -65,7 +65,7 @@ fn tier_counts_are_67_core_165_transform_100_analysis() {
             other => panic!("invalid tier {other:?} on {}", s.option),
         }
     }
-    assert_eq!((core, transform, analysis), (67, 165, 100));
+    assert_eq!((core, transform, analysis), (67, 165, 101));
 }
 
 #[test]
@@ -376,6 +376,8 @@ fn option_values_live_value_present_for_129() {
         "dwarf",
         "dwarf_lines",
         "cvftrace",
+        // (kuna) Go pclntab source positions, read console-side like `cvftrace`.
+        "gopcln",
         "addrtable",
         "operand_refs",
         "formatstring",

@@ -289,3 +289,15 @@ fn a_subtable_display_may_start_with_a_caret() {
     );
     assert_compiled(result, &destination);
 }
+
+#[test]
+fn define_values_follow_the_java_preprocessor() {
+    let scratch = tempfile::tempdir().unwrap();
+    let (result, destination) = compile_body(
+        scratch.path(),
+        "@define SUFFIX \"\"_x\"\"\n\
+         @define MINUS_ONE -1\n\
+         :inst^$(SUFFIX) is op=2 { r0 = $(MINUS_ONE); }\n",
+    );
+    assert_compiled(result, &destination);
+}

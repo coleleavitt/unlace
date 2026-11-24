@@ -530,9 +530,9 @@ impl Override {
     /// The force-goto overrides, in [`Address`] order (C++ `applyForceGoto`'s
     /// `forcegoto` walk feeding `data.forceGoto(target, dest)`).
     ///
-    /// STUB(W5): the C++ `applyForceGoto` calls `Funcdata::forceGoto` for each
-    /// entry; the port exposes the ordered `(target, dest)` pairs so the W5 call
-    /// site drives the (already-ported) `Funcdata::force_goto`.
+    /// The C++ `applyForceGoto` calls `Funcdata::forceGoto` for each entry; the
+    /// ordered `(target, dest)` pairs are consumed by `ActionForceGoto::apply`
+    /// (`p9_emit/coreaction_render.rs`), which drives `Funcdata::force_goto`.
     pub fn force_gotos(&self) -> impl Iterator<Item = (&Address, &Address)> {
         self.forcegoto.iter()
     }

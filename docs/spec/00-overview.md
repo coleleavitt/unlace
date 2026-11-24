@@ -3772,7 +3772,10 @@ and an agent writes:
   (`crates/unlace-middle/src/substrate/funcdata.rs (clear)` resets the
   arenas and analysis state but not the override store): a mid-pipeline pass that
   discovers a decision too late writes the correction here and requests a
-  restart, and the restarted run reads it back (§0.7).
+  restart, and the restarted run reads it back (§0.7). Forced gotos are applied
+  by `ActionForceGoto` (`blockrecovery` group, `p9_emit/coreaction_render.rs`),
+  which marks each named branch edge as a goto through `Funcdata::force_goto`;
+  with no forced goto on a function the action changes nothing.
 - **The typed assertion facade** (`crates/unlace-middle/src/p0_knowledge/assert.rs
   (validate_assertion, Dispatch)`) (unlace): `kassert <phase> <subphase> …`
   validates a request against the phase registry, computes the *reported* minimal

@@ -608,15 +608,24 @@ impl Action for ActionForceGoto {
             base: self.base.clone(),
         }))
     }
-    fn apply(&mut self, _data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
+    fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:686 — ActionForceGoto::apply
         //   data.getOverride().applyForceGoto(data);
         //   return 0;
         //
-        // STUB(W8-funcdata): the `Override` store (`Funcdata::getOverride`) and
-        // `Override::applyForceGoto` (which rewrites flow per user goto overrides)
-        // are not in the merged tree.  Body transcribed; no change applied
-        // (count stays 0 — the C++ `return 0` never bumps count either).
+        // Override::applyForceGoto walks the forcegoto map in address order and
+        // calls Funcdata::forceGoto(target, dest) for each entry.  The C++ forceGoto
+        // returns void; `Funcdata::force_goto` returns whether it labeled an edge,
+        // and apply cannot return an error, so both are dropped here.  The count
+        // stays 0 (the C++ `return 0` never bumps count either).
+        let gotos: Vec<(Address, Address)> = data
+            .get_override()
+            .force_gotos()
+            .map(|(target, dest)| (target.clone(), dest.clone()))
+            .collect();
+        for (target, dest) in gotos {
+            let _ = data.force_goto(&target, &dest);
+        }
         0
     }
 }

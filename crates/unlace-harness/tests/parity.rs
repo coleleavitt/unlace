@@ -16,6 +16,11 @@
 //! corpus ([`parity_selection`]); the baseline's other keys are then not checked, and a corpus
 //! none of whose files match is skipped.
 //!
+//! A full run also writes `target/parity-ledger.json` (see [`write_parity_ledger`]): one record
+//! per assertion with its file, name, baseline key, status, class and, for an XML test, whether
+//! the baseline holds the key. It is written before the gate's assert, so a failing run leaves it
+//! too; a selected run does not write it.
+//!
 //! `cargo test -p unlace-harness --test parity` runs both, each corpus across up to eight
 //! `decomp_test_dbg -worker` processes (`UNLACE_PARITY_JOBS=N`; `1` runs it in this process). `UNLACE_BLESS=1` re-records the
 //! baselines from the run (a deliberate default change, a new stage test) instead of comparing;
@@ -40,6 +45,16 @@ fn repo_root() -> PathBuf {
         .expect("the repository root")
 }
 
+/// One assertion of a corpus run: its repository-relative file, its name, whether it passed and
+/// whether a TOML stage test (its own baseline) owns it.
+#[derive(Debug, Clone)]
+struct Assertion {
+    file: String,
+    name: String,
+    passed: bool,
+    toml: bool,
+}
+
 /// The datatest stream of one corpus run.
 #[derive(Debug, Default)]
 struct DataResult {
@@ -52,6 +67,8 @@ struct DataResult {
     succeeded: i64,
     /// Each file's repository-relative path, wall time in ms and outcome (pass, fail, error).
     times: Vec<(String, u64, &'static str)>,
+    /// Every assertion of the run in order: each file's passing ones, then its failing ones.
+    assertions: Vec<Assertion>,
 }
 
 fn parse_data(stdout: &str) -> DataResult {
@@ -104,25 +121,28 @@ fn parse_data_error(line: &str) -> Option<String> {
     None
 }
 
-/// Baseline keys in run order: `data:<name>`, the Nth repeat of a name `data:<name> @dupN`.
-fn dedup_list(prefix: &str, names: &[String]) -> Vec<String> {
-    let mut seen: BTreeMap<&str, usize> = BTreeMap::new();
-    names
-        .iter()
-        .map(|n| {
-            let count = seen.entry(n).or_insert(0);
-            *count += 1;
-            if *count == 1 {
-                format!("{prefix}{n}")
-            } else {
-                format!("{prefix}{n} @dup{count}")
-            }
-        })
-        .collect()
+/// A baseline key: `data:<name>`, the Nth repeat of a name `data:<name> @dupN`.
+fn data_key(name: &str, occurrence: usize) -> String {
+    if occurrence == 1 {
+        format!("data:{name}")
+    } else {
+        format!("data:{name} @dup{occurrence}")
+    }
 }
 
-fn dedup_keys(prefix: &str, names: &[String]) -> BTreeSet<String> {
-    dedup_list(prefix, names).into_iter().collect()
+/// Each assertion's baseline key, numbered over the whole run in order. A repeated name's `@dupN`
+/// counts every assertion of that name, failing ones included, so a repeat that fails keeps its
+/// slot and the keys match a baseline blessed from an all-passing run.
+fn assertion_keys(assertions: &[Assertion]) -> Vec<String> {
+    let mut seen: BTreeMap<&str, usize> = BTreeMap::new();
+    assertions
+        .iter()
+        .map(|a| {
+            let count = seen.entry(a.name.as_str()).or_insert(0);
+            *count += 1;
+            data_key(&a.name, *count)
+        })
+        .collect()
 }
 
 /// The baseline's passing set; a record without a string-array `passing` is an error, never empty.
@@ -140,6 +160,111 @@ fn baseline_passing(text: &str) -> Result<BTreeSet<String>, String> {
                 .ok_or("a non-string passing key".to_string())
         })
         .collect()
+}
+
+/// The `data:` keys of a baseline record, or why the text is not one.
+fn data_baseline(text: &str) -> Result<BTreeSet<String>, String> {
+    Ok(baseline_passing(text)?
+        .into_iter()
+        .filter(|k| k.starts_with("data:"))
+        .collect())
+}
+
+/// Each assertion's ledger rows for a full run: one record per assertion (corpus, file, name,
+/// baseline key, status, class, and `in_baseline` for an XML test, null for a TOML one, which is
+/// its own baseline), the file errors, and the baseline keys no assertion of the run produced
+/// (the gate counts each as regressed). The classes follow [`Classes`]: a must-pass assertion is
+/// a TOML one or a baseline key; a failing must-pass one is regressed, a failing other one is
+/// known failing, and a passing other one is newly passing.
+fn ledger_rows(
+    corpus: &str,
+    r: &DataResult,
+    keys: &[String],
+    base: &BTreeSet<String>,
+) -> (
+    Vec<serde_json::Value>,
+    Vec<serde_json::Value>,
+    Vec<serde_json::Value>,
+) {
+    let records: Vec<serde_json::Value> = r
+        .assertions
+        .iter()
+        .zip(keys)
+        .map(|(a, key)| {
+            let must_pass = a.toml || base.contains(key);
+            let class = match (a.passed, must_pass) {
+                (true, true) => "must-pass",
+                (true, false) => "newly-passing",
+                (false, true) => "regressed",
+                (false, false) => "known-failing",
+            };
+            let status = if a.passed { "pass" } else { "fail" };
+            serde_json::json!({
+                "corpus": corpus,
+                "file": a.file,
+                "name": a.name,
+                "key": key,
+                "status": status,
+                "class": class,
+                "in_baseline": (!a.toml).then(|| base.contains(key)),
+            })
+        })
+        .collect();
+    let file_errors: Vec<serde_json::Value> = r
+        .errors
+        .iter()
+        .map(|file| serde_json::json!({"corpus": corpus, "file": file}))
+        .collect();
+    let produced: BTreeSet<&str> = keys.iter().map(String::as_str).collect();
+    let absent: Vec<serde_json::Value> = base
+        .iter()
+        .filter(|k| !produced.contains(k.as_str()))
+        .map(|k| serde_json::json!({"corpus": corpus, "key": k}))
+        .collect();
+    (records, file_errors, absent)
+}
+
+/// `target/parity-ledger.json`: the ledger rows of every full corpus run (see [`ledger_rows`]).
+/// A run replaces its own corpus's rows and keeps the other's; a write failure only warns.
+fn write_parity_ledger(
+    corpus: &str,
+    rows: (
+        Vec<serde_json::Value>,
+        Vec<serde_json::Value>,
+        Vec<serde_json::Value>,
+    ),
+) {
+    let (records, file_errors, absent) = rows;
+    let Some(target) = Path::new(env!("CARGO_TARGET_TMPDIR")).parent() else {
+        return;
+    };
+    let path = target.join("parity-ledger.json");
+    let old: serde_json::Value = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or(serde_json::Value::Null);
+    let mut doc = serde_json::Map::new();
+    for (section, fresh) in [
+        ("records", records),
+        ("file_errors", file_errors),
+        ("absent_from_run", absent),
+    ] {
+        let mut rows: Vec<serde_json::Value> = old
+            .get(section)
+            .and_then(|v| v.as_array())
+            .into_iter()
+            .flatten()
+            .filter(|row| row.get("corpus").and_then(|c| c.as_str()) != Some(corpus))
+            .cloned()
+            .collect();
+        rows.extend(fresh);
+        doc.insert(section.to_string(), serde_json::Value::Array(rows));
+    }
+    let text = serde_json::to_string_pretty(&serde_json::Value::Object(doc))
+        .expect("serialize the parity ledger");
+    if let Err(e) = std::fs::create_dir_all(target).and_then(|()| std::fs::write(&path, text)) {
+        eprintln!("warning: could not write {}: {e}", path.display());
+    }
 }
 
 /// Every `*.xml` and `*.toml` test directly in `dir`, sorted (the harness's `gatherDataTests`).
@@ -291,6 +416,19 @@ fn run_corpus(root: &Path, corpus: &Path, select: Option<&[String]>) -> Option<D
         let rel = Path::new(&run.file)
             .strip_prefix(root)
             .map_or_else(|_| run.file.clone(), |p| p.to_string_lossy().into_owned());
+        let toml = run.file.ends_with(".toml");
+        r.assertions.extend(d.passing.iter().map(|name| Assertion {
+            file: rel.clone(),
+            name: name.clone(),
+            passed: true,
+            toml,
+        }));
+        r.assertions.extend(d.failing.iter().map(|name| Assertion {
+            file: rel.clone(),
+            name: name.clone(),
+            passed: false,
+            toml,
+        }));
         r.times.push((rel, run.wall_ms, outcome));
         if run.file.ends_with(".toml") {
             r.in_toml
@@ -500,14 +638,35 @@ fn parity(corpus: &str, baseline: &str) {
         return;
     };
     write_parity_times(corpus, &r);
-    let (in_toml, now): (Vec<_>, Vec<_>) = dedup_list("data:", &r.passing)
-        .into_iter()
-        .enumerate()
-        .partition(|(i, _)| r.in_toml.contains(i));
-    let now: BTreeSet<String> = now.into_iter().map(|(_, k)| k).collect();
-    let toml_keys: BTreeSet<String> = in_toml.into_iter().map(|(_, k)| k).collect();
+    let keys = assertion_keys(&r.assertions);
     let baseline_path = root.join(baseline);
     let text = std::fs::read_to_string(&baseline_path).ok();
+    let base_all = text
+        .as_deref()
+        .and_then(|t| data_baseline(t).ok())
+        .unwrap_or_default();
+    // A key a TOML test owns (left by a baseline recorded before its file was converted) is
+    // checked in place, not against the baseline.
+    let toml_keys: BTreeSet<String> = r
+        .assertions
+        .iter()
+        .zip(&keys)
+        .filter(|(a, _)| a.toml)
+        .map(|(_, k)| k.clone())
+        .collect();
+    let stale = base_all.intersection(&toml_keys).count();
+    let base: BTreeSet<String> = base_all.difference(&toml_keys).cloned().collect();
+    let now: BTreeSet<String> = r
+        .assertions
+        .iter()
+        .zip(&keys)
+        .filter(|(a, _)| a.passed && !a.toml)
+        .map(|(_, k)| k.clone())
+        .collect();
+    // A selected run covers only some files, so it never replaces the ledger.
+    if select.is_none() {
+        write_parity_ledger(corpus, ledger_rows(corpus, &r, &keys, &base));
+    }
     let broken = r.errors.len() + r.failing.len();
 
     if std::env::var_os("UNLACE_BLESS").is_some_and(|v| !v.is_empty() && v != "0") {
@@ -541,15 +700,7 @@ fn parity(corpus: &str, baseline: &str) {
         selected_report(corpus, &text, &r, &files);
         return;
     }
-    let base: BTreeSet<String> = baseline_passing(&text)
-        .unwrap_or_else(|e| panic!("{baseline} is not a baseline record: {e}"))
-        .into_iter()
-        .filter(|k| k.starts_with("data:"))
-        .collect();
-    // A key a TOML test owns (left by a baseline recorded before its file was converted) is
-    // checked in place, not against the baseline.
-    let stale = base.intersection(&toml_keys).count();
-    let base: BTreeSet<String> = base.difference(&toml_keys).cloned().collect();
+    data_baseline(&text).unwrap_or_else(|e| panic!("{baseline} is not a baseline record: {e}"));
     let classes = Classes::of(&base, &now);
     let mut report = format!(
         "{corpus}: {}/{} assertions passed ({} of them in TOML tests)\n",
@@ -755,12 +906,62 @@ fn baseline_keys_name_their_assertion() {
 }
 
 #[test]
-fn repeated_names_get_dup_keys() {
-    let names = ["A", "A", "B"].map(String::from);
-    let keys = dedup_keys("data:", &names);
+fn a_failing_repeat_keeps_its_baseline_slot() {
+    let a = |name: &str, passed: bool| Assertion {
+        file: "f.xml".into(),
+        name: name.into(),
+        passed,
+        toml: false,
+    };
+    let keys = assertion_keys(&[a("X", false), a("X", true), a("X", true), a("Y", true)]);
+    assert_eq!(keys, ["data:X", "data:X @dup2", "data:X @dup3", "data:Y"]);
+}
+
+#[test]
+fn the_ledger_classifies_each_assertion() {
+    let a = |file: &str, name: &str, passed: bool, toml: bool| Assertion {
+        file: file.into(),
+        name: name.into(),
+        passed,
+        toml,
+    };
+    let r = DataResult {
+        assertions: vec![
+            a("tests/datatests/a.xml", "A", true, false),
+            a("tests/datatests/a.xml", "B", false, false),
+            a("tests/datatests/b.xml", "C", true, false),
+            a("tests/datatests/b.xml", "D", false, false),
+            a("tests/stages/s.toml", "T", true, true),
+            a("tests/stages/s.toml", "U", false, true),
+        ],
+        ..DataResult::default()
+    };
+    let keys = assertion_keys(&r.assertions);
+    let base = BTreeSet::from(["data:A", "data:B", "data:Z"].map(String::from));
+    let (records, errors, absent) = ledger_rows("tests/datatests", &r, &keys, &base);
+    let classes: Vec<&str> = records
+        .iter()
+        .map(|x| x["class"].as_str().unwrap())
+        .collect();
     assert_eq!(
-        keys,
-        BTreeSet::from(["data:A", "data:A @dup2", "data:B"].map(String::from))
+        classes,
+        [
+            "must-pass",
+            "regressed",
+            "newly-passing",
+            "known-failing",
+            "must-pass",
+            "regressed"
+        ]
+    );
+    assert_eq!(records[0]["status"], "pass");
+    assert_eq!(records[0]["in_baseline"], true);
+    assert_eq!(records[2]["in_baseline"], false);
+    assert!(records[4]["in_baseline"].is_null());
+    assert!(errors.is_empty());
+    assert_eq!(
+        absent,
+        vec![serde_json::json!({"corpus": "tests/datatests", "key": "data:Z"})]
     );
 }
 

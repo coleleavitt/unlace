@@ -161,6 +161,16 @@ jobs:
           path: target/parity-times.json
           if-no-files-found: warn
 
+      # One record per assertion of the datatest and stage corpora (file, name, baseline key,
+      # status, class). parity.rs writes it on every full run, before the gate asserts.
+      - name: Upload the parity ledger
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parity-ledger
+          path: target/parity-ledger.json
+          if-no-files-found: warn
+
       - name: Save the .sla cache
         if: always() && steps.sla.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
         uses: actions/cache/save@v4

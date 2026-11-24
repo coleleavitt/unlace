@@ -1,0 +1,108 @@
+# Kuna: option itaniumeh on ARM32 (EHABI) and with types named from a
+# type_info name string. P1 program prep reads .ARM.exidx: every entry is a
+# function start (Thumb when decided), and a generic-model .ARM.extab entry
+# holds the LSDA, whose type-table entries are R_ARM_TARGET2 words
+# (`unlace-analysis/src/analyzers/entry/kuna_armexidx.rs`,
+# `kuna_itaniumeh.rs`). The class Odd has hidden visibility, so only its
+# type_info name string names it.
+#
+# Fixtures: `crates/unlace-analysis/tests/fixtures/ehcatch_x86_64.so`,
+# `ehcatch_arm.so` and `ehcatch_thumb_stripped.so`, three builds of
+# `ehcatch.cc` (clang 22 -O2 -fPIC -fexceptions, ld.lld -shared; the recipe
+# is in the source):
+#
+#   int guarded(int v) { try { work(v); } catch (int e) { return e; } return 0; }
+#   int sorted(int v) {
+#     try { work(v); }
+#     catch (const Odd &e) { return e.code; }
+#     catch (...) { return -1; }
+#     return twice(v);
+#   }
+#
+# `twice` is static, so the stripped Thumb build names it only through
+# .ARM.exidx (0x103f6).
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/ehcatch_x86_64.so',
+    'option itaniumeh on',
+    'read symbols',
+    'load function guarded',
+    'decompile',
+    'print C',
+    'load function sorted',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/ehcatch_arm.so',
+    'option itaniumeh on',
+    'read symbols',
+    'load function guarded',
+    'decompile',
+    'print C',
+    'load function sorted',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/ehcatch_thumb_stripped.so',
+    'option itaniumeh on',
+    'read symbols',
+    'load function guarded',
+    'decompile',
+    'print C',
+    'load function sorted',
+    'decompile',
+    'print C',
+    'load function 0x103f6',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'itaniumeh-arm #1: every guarded call prints in a try region (x86-64, ARM, Thumb)'
+count = 6
+regex = '^  try \{$'
+
+[[match]]
+name = 'itaniumeh-arm #2: the handler names the caught builtin type'
+count = 3
+literal = '} catch (int) {'
+
+[[match]]
+name = 'itaniumeh-arm #3: a hidden class is named from its type_info string, then the catch-all'
+count = 3
+literal = '} catch (Odd | ...) {'
+
+[[match]]
+name = 'itaniumeh-arm #4: ARM and Thumb: the handler returns the caught value'
+count = 2
+regex = '^    return v1;$'
+
+[[match]]
+name = 'itaniumeh-arm #5: the exception reaches __cxa_begin_catch as its void * argument'
+count = 6
+literal = '__cxa_begin_catch(eh_exception())'
+
+[[match]]
+name = 'itaniumeh-arm #6: the stripped Thumb helper decodes as Thumb'
+count = 1
+regex = '^  return a0 << 1;$'
+
+[[match]]
+name = 'itaniumeh-arm #7: no exceptional edge prints as a bare if'
+count = 0
+literal = 'eh_unwinding'

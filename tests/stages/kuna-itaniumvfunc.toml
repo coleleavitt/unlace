@@ -1,0 +1,71 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/itaniumrtti_x86_64.so',
+    'option protoorder off',
+    'option itaniumeh off',
+    'option itaniumrtti off',
+    'read symbols',
+    'option protoorder off',
+    'load function 0x182b',
+    'decompile',
+    'print C',
+    'load function probe_shapes',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/itaniumrtti_x86_64.so',
+    'option protoorder off',
+    'option itaniumeh off',
+    'option itaniumrtti on',
+    'read symbols',
+    'option protoorder off',
+    'load function 0x182b',
+    'decompile',
+    'print C',
+    'load function probe_shapes',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'itaniumvfunc #1: off: the Drawable thunk and its target are unnamed'
+count = 1
+literal = 'sub_1802(a0 + -0x10); // tail-call'
+
+[[match]]
+name = 'itaniumvfunc #2: off: the destructor slot call is unnamed'
+count = 1
+regex = '^\s*sub_152c\(v3\);'
+
+[[match]]
+name = 'itaniumvfunc #3: on: the thunk is named for its sub-vtable slot'
+count = 1
+literal = 'void shapes::Widget::vfunc_for_Drawable_2(int8 a0)'
+
+[[match]]
+name = 'itaniumvfunc #4: on: the thunk tail-calls the primary slot'
+count = 1
+literal = 'shapes::Widget::vfunc_3(a0 + -0x10); // tail-call'
+
+[[match]]
+name = 'itaniumvfunc #5: on: the destructor slot call names the class'
+count = 1
+literal = 'shapes::Circle::vfunc_0(v3);'
+
+[[match]]
+name = 'itaniumvfunc #6: no slot function is named after its vtable'
+count = 0
+regex = '::vtable_(for_\w+_)?[0-9]'

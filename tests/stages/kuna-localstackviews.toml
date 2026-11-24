@@ -1,0 +1,86 @@
+# Native Pair/Handle reuse returns 67; native CLI tests also execute runtime 67/162 branches and escaped writes.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x401000', name = 'stack_reuse' },
+    { space = 'ram', offset = '0x401039', name = 'read_pair' },
+    { space = 'ram', offset = '0x40103f', name = 'read_handle' },
+    { space = 'ram', offset = '0x4011c9', name = 'escaped_indirect_write' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401000'
+hex = '534883ec10c7042405000000c7442404070000004889e7e81d00000089c3488d05db0f0000488904244889e7e80e00000001d84883c4105bc38b07034704c3488b078b00c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x402000'
+hex = '37000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x4011c9'
+hex = '4883ec18488925340e0000c7042403000000488b15260e0000c702070000008b04244883c418c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x402008'
+hex = '0000000000000000'
+
+[script]
+commands = [
+    'parse line struct LifetimePair { int4 x; int4 y; };',
+    'parse line struct LifetimeHandle { int4 *value; };',
+    'parse line extern int4 stack_reuse(void);',
+    'parse line extern int4 read_pair(LifetimePair *pair);',
+    'parse line extern int4 read_handle(LifetimeHandle *handle);',
+    'map addr r0x402000 int4 datum',
+    'parse line extern int4 escaped_indirect_write(void);',
+    'map addr r0x402008 int4 *escaped_pointer',
+    'option stackviews off',
+    'option stackalias off',
+    'lo fu stack_reuse',
+    'decompile',
+    'print C',
+    'lo fu escaped_indirect_write',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'localstackviews never leaves the incompatible pointer assignment'
+count = 0
+regex = '^  v2\[0\] = &datum;$'
+
+[[match]]
+name = 'localstackviews uses the declared Pair view'
+count = 1
+regex = 'read_pair\(&v2.view_LifetimePair\)'
+
+[[match]]
+name = 'localstackviews writes the pointer member of the same object'
+count = 1
+regex = '^  v2.value_[0-9]+ = &datum;$'
+
+[[match]]
+name = 'localstackviews uses the declared Handle view'
+count = 1
+regex = 'read_handle\(&v2.view_LifetimeHandle\)'
+
+[[match]]
+name = 'localstackviews never folds the frame read across an escaped write'
+count = 0
+regex = '^  return 3;$'
+
+[[match]]
+name = 'localstackviews guards the frame read before heritage'
+count = 1
+regex = '^  return v1\[0\];$'
+
+[[match]]
+name = 'the indirect write is retained'
+count = 1
+regex = '^  \*escaped_pointer = 7;$'

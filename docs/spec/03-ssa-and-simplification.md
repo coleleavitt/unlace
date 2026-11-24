@@ -2934,7 +2934,7 @@ across blocks from an input at the entry, and its lanes, being unique storage,
 become temporaries read by four MULTIEQUALs. The function used to fail with
 `laned register split failed part way: Free varnode has multiple descendants`;
 it now decompiles without that split
-(`tests/stages/kuna-lanedivide-freefanout.xml`). This is a correctness repair
+(`tests/stages/kuna-lanedivide-freefanout.toml`). This is a correctness repair
 with no option.
 
 When `SplitDatatype` divides a constant, `kuna_constantbytes.rs` extracts
@@ -4598,9 +4598,9 @@ multiplier too wide means no proof and no rewrite.
 The replacement is applied only when it has fewer ops than the tree and 64
 pseudo-random full-width evaluations agree with it. The new ops go before the
 root, and the root becomes a `COPY` of the result; dead-code elimination removes
-the old tree. Pinned by `tests/stages/kuna-mba.xml` (two leaves) and
-`tests/stages/kuna-mba-groups.xml` (a four-leaf group, six leaves in three
-groups, and the polynomial) and `tests/stages/kuna-mba-solve.xml` (constant
+the old tree. Pinned by `tests/stages/kuna-mba.toml` (two leaves) and
+`tests/stages/kuna-mba-groups.toml` (a four-leaf group, six leaves in three
+groups, and the polynomial) and `tests/stages/kuna-mba-solve.toml` (constant
 operands, a shared complement, a complemented sum, a leaf plus a boolean term,
 bit logic alone). A subtree of the replacement that the old tree already
 computes reuses that varnode. Not done: a narrower op under a zero extension

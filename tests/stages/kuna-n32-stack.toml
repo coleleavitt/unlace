@@ -1,0 +1,99 @@
+# Original GCC 7.3 N32 soft-float bytes: tests/fixtures/mips-n32-stack.
+# sum_ten has no declared prototype; the getters separately assert stack
+# slot types and padding. N32 addresses are 32-bit, register values 64-bit.
+
+[image]
+arch = 'MIPS:BE:64:octeon-32addr:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'sum_ten' },
+    { space = 'ram', offset = '0x100068', name = 'pointer_ninth' },
+    { space = 'ram', offset = '0x100078', name = 'signed_ninth' },
+    { space = 'ram', offset = '0x100080', name = 'float_ninth' },
+    { space = 'ram', offset = '0x1000b0', name = 'indirect_frame' },
+    { space = 'ram', offset = '0x1001c8', name = 'pair_indirect' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'dfa20000dfa300080043102d004b582d016a582d0169582d0168582d0167582d0166582d0165582d03e000080164102d27bdffe0dfa30020ffa40010ffa30018dfa20010dfa50018ffa30008dfa300280045102dffa4000027bd002003e000080043102d000000008fa2000403e00008dc4200000000000003e000088fa2000403e000088fa20000000410000004203edc42000003e000080082102d00000000fc85000003e0000800a010250000000027bdffe000801025ffa50000dfa40000ffbf00180040f80900000000dfa30000dfbf001827bd002003e000080043102d03e000080004103e0000000000000000'
+
+# Original GCC 7.3 tail call from tests/fixtures/octeon-elf-abi/abi.c.
+[[image.bytes]]
+space = 'ram'
+offset = '0x1001c8'
+readonly = true
+hex = '27bdfff000a010250080c82500c02825004020250320000827bd0010'
+
+[script]
+commands = [
+    'option ctypes on',
+    'lo fu sum_ten',
+    'decompile',
+    'print C',
+    'parse line extern unsigned long long pointer_ninth(unsigned long long a,unsigned long long b,unsigned long long c,unsigned long long d,unsigned long long e,unsigned long long f,unsigned long long g,unsigned long long h,const unsigned long long *p);',
+    'lo fu pointer_ninth',
+    'decompile',
+    'print C',
+    'parse line extern int signed_ninth(unsigned long long a,unsigned long long b,unsigned long long c,unsigned long long d,unsigned long long e,unsigned long long f,unsigned long long g,unsigned long long h,int value);',
+    'lo fu signed_ninth',
+    'decompile',
+    'print C',
+    'parse line extern unsigned float_ninth(unsigned long long a,unsigned long long b,unsigned long long c,unsigned long long d,unsigned long long e,unsigned long long f,unsigned long long g,unsigned long long h,float value);',
+    'lo fu float_ninth',
+    'decompile',
+    'print C',
+    'lo fu indirect_frame',
+    'decompile',
+    'print C',
+    'parse line extern unsigned long long indirect_frame(unsigned long long (*callee)(unsigned long long),unsigned long long value);',
+    'lo fu indirect_frame',
+    'decompile',
+    'print C',
+    'parse line struct Pair { unsigned long long a, b; };',
+    'parse line extern struct Pair pair_indirect(struct Pair (*callee)(unsigned long long,unsigned long long),unsigned long long a,unsigned long long b);',
+    'lo fu pair_indirect',
+    'decompile',
+    'print C',
+    'option bejoin off',
+    'lo fu pair_indirect',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'N32 stack: inferred ten arguments reach addition'
+count = 1
+literal = 'return a8 + a9 + a7 + a6 + a5 + a4 + a3 + a2 + a1 + a0;'
+
+[[match]]
+name = 'N32 stack: pointer argument reaches load'
+count = 1
+literal = 'return *p;'
+
+[[match]]
+name = 'N32 stack: integer argument keeps low slot bytes'
+count = 1
+literal = 'return value;'
+
+[[match]]
+name = 'N32 stack: float argument keeps high slot bytes'
+count = 1
+literal = '.from = value'
+
+[[match]]
+name = 'N32 calls: inferred result replaces pre-call target'
+count = 1
+literal = 'return (*a0)(a1) + a1;'
+
+[[match]]
+name = 'N32 calls: declared full-width result reaches addition'
+count = 1
+literal = 'return (*callee)(value) + value;'
+
+[[match]]
+name = 'N32 calls: declared aggregate order overrides inferred joins'
+count = 2
+literal = 'return (*callee)(a,b);'

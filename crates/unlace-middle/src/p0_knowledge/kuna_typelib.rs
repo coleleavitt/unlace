@@ -6,7 +6,8 @@
 //! built into kuna for the image's target (an x86-64 Linux ELF linked against
 //! glibc or musl; no other target has one, so the option is inert there),
 //! `off` reads none, and a path reads a library file instead of the built-in
-//! one. The library is consulted when the analysis facts are committed, which
+//! one: the text format, or an IDA type library (`.til`), which is read for an
+//! image of any target. The library is consulted when the analysis facts are committed, which
 //! is after the `option` lines, so the choice is an ordinary field of the
 //! [`Architecture`](crate::architecture::Architecture) and needs no load-time
 //! bridge.
@@ -17,6 +18,9 @@ use std::path::PathBuf;
 /// The first line of every library file this build reads.
 pub const MAGIC: &str = "kuna-typelib 1\n";
 
+/// The first bytes of an IDA type library (`.til`), the other file a path may name.
+pub const TIL_MAGIC: &[u8; 6] = b"IDATIL";
+
 /// The value of the `typelib` option.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum TypeLib {
@@ -25,7 +29,8 @@ pub enum TypeLib {
     Auto,
     /// No library.
     Off,
-    /// The library in this file, for an image of the target it names.
+    /// The library in this file: a text library for an image of the target it
+    /// names, or an IDA type library for any image.
     File(PathBuf),
 }
 
@@ -46,10 +51,16 @@ impl TypeLib {
             ));
         }
         let mut magic = [0u8; MAGIC.len()];
-        let read = std::fs::File::open(&path).and_then(|mut f| f.read_exact(&mut magic));
-        if read.is_err() || magic != *MAGIC.as_bytes() {
+        let mut head = Vec::new();
+        let read = std::fs::File::open(&path)
+            .and_then(|f| f.take(magic.len() as u64).read_to_end(&mut head));
+        let n = head.len().min(magic.len());
+        magic[..n].copy_from_slice(&head[..n]);
+        let text = n == magic.len() && magic == *MAGIC.as_bytes();
+        let til = head.starts_with(TIL_MAGIC);
+        if read.is_err() || !(text || til) {
             return Err(format!(
-                "typelib: {v} is not a type library (no `{}` first line)",
+                "typelib: {v} is not a type library (no `{}` first line and no IDATIL header)",
                 MAGIC.trim_end()
             ));
         }
@@ -100,6 +111,11 @@ mod tests {
                 .unwrap_err()
                 .contains("not a type library")
         );
+        let til = std::env::temp_dir().join(format!("kuna-typelib-{}.til", std::process::id()));
+        std::fs::write(&til, b"IDATIL\x12\0\0\0").unwrap();
+        let parsed = TypeLib::parse(til.to_str().unwrap());
+        std::fs::remove_file(&til).unwrap();
+        assert_eq!(parsed, Ok(TypeLib::File(til.clone())));
         let file = std::env::temp_dir().join(format!("kuna-typelib-{}.ktl", std::process::id()));
         std::fs::write(
             &file,

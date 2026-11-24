@@ -1187,6 +1187,16 @@ or an `--assert`'s declaration of it. A record the library already defined is
 not redefined by a header: that definition is rejected with the usual warning,
 so pass `--option typelib off` when your header's layout must win.
 
+**IDA type libraries.** `--option typelib <file.til>` reads an IDA type library
+(`gnulnx_x64.til`, `mssdk64_win10.til`, one exported from your own database) the
+same way, on an image of any target: its function prototypes declare the
+imports nothing else declared, and its records, enums and typedefs come with
+them. Records are laid out from their members' sizes (a `.til` records no
+offsets); a bit-field is a hole. A type the library leaves to a base library it
+depends on is not available, so the entries that name it are skipped; pass the
+library that defines it instead. A file is told apart from a text library by its
+`IDATIL` header.
+
 The text must be preprocessed C. kuna runs no preprocessor on its own: it skips
 `#` lines, so a header that needs its macros or its `#include`s expanded leaves
 declarations that do not parse. **`--types-cpp <cc>`** runs your preprocessor

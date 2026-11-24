@@ -13987,7 +13987,9 @@ from the peripheral or device, and `<interrupt>` names. `Peripheral::c_struct`
 lays a peripheral out as a C structure, dropping a register that overlaps an
 earlier one and padding gaps. The CLI asserts the structure (`typedef`), the
 peripheral as a typed global at its base (`data`) and its register range as
-volatile, and names IRQ handlers from the interrupts.
+volatile, for an object file (an ELF, an ESP image, the ELF a container
+wraps) as for a raw image, and names the IRQ handlers a raw image's vector
+table found from the interrupts.
 
 `bundles.rs (Bundle::parse)` lists the members of the inputs that hold several
 images, without decoding them. A tar archive is recognized by its first

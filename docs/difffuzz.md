@@ -81,6 +81,19 @@ afterwards. The register file is unchanged.
   first run: `MOV.x @Rm+,Rn` with m = n keeps the loaded value (no increment), `MOV.x Rm,@-Rn`
   with m = n stores Rm's value before the decrement (QEMU's reading). Seed 3, 6000 encodings:
   13481 matches, no mismatches left.
+- Motorola 68040 (`--arch m68k`, `68000:BE:32:default`, `--oracle qemu` with `qemu-m68k -cpu m68040`):
+  integer instructions; FPU, MMU, cache, trap and privileged ones are not generated, nor PACK/UNPK
+  (QEMU 8.2 lacks them) or the reserved extension words Capstone accepts. QEMU 8.2 quirks skipped:
+  memory ASL/ASR/LSL/LSR (it reads arithmetic/logical from the EA bits), byte `-(A7)` in
+  ADDX/SUBX/ABCD/SBCD and TAS `(A7)+` (it steps A7 by 1), LINK A7. Fixed in `68000.sinc` after the
+  first runs: CMP/CMPA/CMPI/CMPM left X alone; shift V (only ASL sets it, from every bit shifted
+  through the MSB) and rotate counts past the width; ROXL/ROXR counts modulo width + 1; ADDX now
+  sets X, after the sum; SUBX V with X; NEGX C and V; DIVU.W/DIVS.W overflow (V set, register
+  kept); the -(Ay),-(Ax) forms with Ay = Ax and their byte A7 step; CMPM.B on A7; MOVEM to -(An)
+  with An in the list (68020+ stores An minus the size) and MOVEM.W's 2-byte step; a PC-relative
+  second operand counts from its own extension word; bit-field width 0 = 32, register fields wrap,
+  memory fields reach a fifth byte, BFFFO adds the offset, BFCHG/BFCLR/BFSET write the operand
+  back. Seed 13, 4000 encodings: 8152 matches, no mismatches.
 - PowerPC has no QEMU harness. `qemu-ppc64` runs in 64-bit mode (MSR.SF is not user-writable),
   where record forms set CR0 from the 64-bit result, so it is not an exact reference for
   32-bit PowerPC.

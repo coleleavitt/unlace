@@ -225,7 +225,7 @@ pub struct UnlaceRegionIdentifier {
     /// by raw id; the `(addr,ident)` ordering of the C++ map is never iterated
     /// in an output-affecting way here (only point lookups), so a raw-id key is
     /// faithful and the stored value is the order pair.
-    node_order: BTreeMap<UnlaceNodeId, (int4, int4)>,
+    node_order: Vec<Option<(int4, int4)>>,
     /// Result: the top-level region (C++ `UnlaceGraphRegion *topRegion`).
     top_region: Option<RegionPayloadId>,
     /// Result: flat per-region block address lists
@@ -257,7 +257,7 @@ impl UnlaceRegionIdentifier {
             start_node: None,
             loop_headers: Vec::new(),
             back_edges: Vec::new(),
-            node_order: BTreeMap::new(),
+            node_order: Vec::new(),
             top_region: None,
             regions_by_block_addrs: Vec::new(),
             computed: false,
@@ -703,16 +703,26 @@ impl UnlaceRegionIdentifier {
         unlace_quasi_topo_sort(&self.pool, g, &mut sorted)?;
         self.node_order.clear();
         for (i, &n) in sorted.iter().enumerate() {
-            self.node_order.insert(n, (i as int4, 0));
+            self.set_order(n, (i as int4, 0));
         }
         Ok(())
+    }
+
+    /// Record a node's order pair, growing the id-indexed table as needed.
+    fn set_order(&mut self, n: UnlaceNodeId, order: (int4, int4)) {
+        let i = n.0 as usize;
+        if self.node_order.len() <= i {
+            self.node_order.resize(i + 1, None);
+        }
+        self.node_order[i] = Some(order);
     }
 
     /// The order pair of a node, or an error if missing.
     fn order_of(&self, n: UnlaceNodeId) -> UnlaceResult<(int4, int4)> {
         self.node_order
-            .get(&n)
+            .get(n.0 as usize)
             .copied()
+            .flatten()
             .ok_or_else(|| UnlaceError::lowlevel("unlace regionid: node missing from node order"))
     }
 
@@ -1356,7 +1366,7 @@ impl UnlaceRegionIdentifier {
         let order = self.order_of(head).map_err(|_| {
             UnlaceError::lowlevel("unlace regionid: loop head missing from node order")
         })?;
-        self.node_order.insert(wrapper, order); // RI l.1099
+        self.set_order(wrapper, order); // RI l.1099
         Ok(region_id)
     }
 
@@ -1760,7 +1770,7 @@ impl UnlaceRegionIdentifier {
                 first = false;
             }
         }
-        self.node_order.insert(wrapper, mn);
+        self.set_order(wrapper, mn);
 
         for (src, _dst) in in_e {
             if !nodes_set.contains(&self.pool.key(src)) {

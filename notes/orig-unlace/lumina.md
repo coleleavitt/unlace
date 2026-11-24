@@ -1,0 +1,33 @@
+# Original unlace Lumina: what main lacks
+
+Scope: `origin/master` `crates/unlace-lumina/` (12 modules, incl. the v6 handoff `LUMINA_V6_HANDOFF.md`) and the local `research/lumina/` evidence tree (untracked; 3,942 `sub_*.c` files plus library functions from the `lumina_server` reverse-engineering). Compared against `origin/main` `crates/unlace-lumina/` and `crates/unlace-cli/src/lumina.rs`. Nothing was built or run.
+
+Main already carries the wire codec, the 35-entry `AUTH_MASK` table, HELO and HELO_RESULT, bounded frames, TLS, the calcrel key, metadata and type chunks, and a sqlite store with history, pushes and users. Two gaps matter: the server answers 5 packet ids where master answers about 46, and the privacy controls master sketched were never wired on master either. Main's `README.md` (lines 27-29) already records the decision not to carry the collaboration, public DB, JSON placeholder or sharing policy modules. This note reopens the sharing policy because it touches what a push sends.
+
+Line numbers: `master:` is `origin/master`, `main:` is `origin/main`.
+
+## Ranked techniques
+
+| # | Technique | Original (origin/master) | Main status | Port? | Size |
+|---|---|---|---|---|---|
+| 1 | Per-binary sharing policy: global switch, default-deny allowlist of binary SHA-256, author anonymised by default | `master:crates/unlace-lumina/src/privacy_client.rs:6-50` (`PrivacyPolicy`, `is_sharing_allowed`, `hash_binary`, `sanitize_for_sharing`); no caller on master, only re-exported at `lib.rs:46` | **missing.** `main:crates/unlace-cli/src/lumina.rs:220,692` pushes only to the `--server` named and honours `--dry-run`, but nothing filters what is sent. `main:crates/unlace-lumina/src/db.rs:285-300` stores the pushing user on every `funcs` row | **Yes.** Port the policy as a CLI/config gate, not the module. Owner decision: whether push stays open without a policy | S |
+| 2 | Read-only admin packets: GET_POP 18/19, SHOW_PUSHES 37/38, SHOW_HISTORY 26/27, DUMP_MD 28/29, GET_FUNC_HISTORIES 47/48 | `master:crates/unlace-lumina/src/server.rs:603-660` (dispatch), `master:src/db.rs:462-533, 629-661, 763-800` (SQL impls); test `master:src/db.rs:983` | **partial.** `main:src/server.rs:309-330` has `refusal()` (admin and feature gate) but only HELO, PULL_MD, PUSH_MD, GET_LUMINA_INFO and GET_LUMINA_STATS are answered (`main:README.md:27-28`). `main:src/db.rs:46-80` already has `history`, `pushes`, `funcs.popularity` | **Yes, selectively.** All five are read-only and let an operator of a self-hosted server see what was pushed and by whom. No admin writes | M |
+| 3 | User management: USER_OPERATION 39, SHOW_USERS 40/41, SET_PASSWORD 42, profile columns (karma, last_active, features) | `master:src/db.rs:103-120` (`ensure_user_profile_columns`), `224-300` (profile validate/upsert/update), `661-760`; `master:src/server.rs:199-222` | **partial.** `main:src/db.rs:75-80` has `users` with `is_admin`/`features`; accounts are created through `main:crates/unlace-cli/src/lumina.rs:769` (`--add-user`). No profile fields, no packet | Not yet. Only needed if IDA's own user-admin UI must talk to the server | M |
+| 4 | Telemetry sink: PUSH_TLM 34, SHOW_TLM_SESSIONS 35/36, telemetry table, feature bit 0x4 | `master:src/db.rs:90` (table), `581-629`; `master:src/server.rs:179-190` | **missing** | No. It stores uploads from clients; needs a privacy decision before any port | M |
+| 5 | Peer list and session kill: LIST_PEERS 20/21, KILL_SESSIONS 22/23 | `master:src/server.rs:131-143` (defaults answer for the active session only; the handoff notes there is no global peer registry) | **missing** | No. Needs a live multi-session registry, which a single-operator server does not have | S |
+| 6 | DECOMPILE-as-a-service, packets 32/33 | `master:src/server.rs:172` (handler hook); `master:src/server.rs` test `decompile_payload_is_strict_raw_blob`; handoff "Known weak spots" item 1 | **missing** (answered with RPC_FAIL) | No. The payload is an opaque blob whose schema was never recovered; it needs an embedding decompiler backend | L |
+| 7 | DEBUGCTL 31 (string-args acknowledgement) | `master:src/server.rs:168`, `master:src/db.rs:577` | **missing** | No. Admin debug echo with no use case | S |
+| 8 | Operational-transform collaboration: rename, comment, delete-comment, set-type; last-writer-wins | `master:crates/unlace-lumina/src/collab.rs:1-100` (`CollabOp`, `CollabDocument::apply`, `ops_since`, `transform`); no caller outside the file | **missing**, deliberately (`main:README.md:27-29`) | No. Single-user decompiler. `transform` only resolves same-address renames; everything else is LWW | S |
+| 9 | Public annotation DB keyed by (library, version, offset), with moderation states Pending, Approved, Verified, Rejected | `master:crates/unlace-lumina/src/public_db.rs:1-212`; no caller on master | **missing**, deliberately (`main:README.md:27-29`) | No. Canonical ids for OSS libraries overlap the calcrel key main already computes (`main:src/hash.rs`). The moderation enum is the only reusable part and nothing needs it yet | S |
+| 10 | Legacy JSON-over-HTTP annotation server | `master:crates/unlace-lumina/src/legacy_json.rs` (363 lines); handoff calls it a placeholder | **missing** | No | - |
+| 11 | Password check: an account with no stored hash accepts any password | `master:src/db.rs:202-205` ("test seed") | Main rejects that case and uses 100,000 salted SHA-256 rounds with a constant-time compare (`main:src/db.rs:20-21, 140, 193-200`) | **Do not port.** Main is stronger here | - |
+| 12 | Frame and primitive codec, packet ids, AUTH_MASK, ADMIN_BIT, feature bits | `master:src/wire.rs`, `master:src/protocol.rs` | **have.** `main:src/wire.rs:47-61` adds per-id payload caps (`max_payload_for`, `read_frame_limited`); `main:src/protocol.rs` has the same 35-entry table | have | - |
+| 13 | HELO handshake: first frame must be HELO; proto over 5 gets HELO_RESULT | `master:src/server.rs:476-554` (async) | **have.** `main:src/server.rs:252-303` | have | - |
+| 14 | Resource bounds: connection cap, idle timeouts | none on master (no `MAX_CONNECTIONS`) | **have.** `main:src/server.rs:32, 35, 186-209` | main ahead | - |
+| 15 | TLS, calcrel key, metadata and type chunks | none on master (handoff lists no TLS dependency) | **have.** `main:src/tls.rs`, `main:src/hash.rs`, `main:src/metadata.rs`, `main:src/tinfo.rs` | main ahead | - |
+
+## Recommendation
+
+1. Row 1 first. It is small, and it closes a real gap: any push currently sends every function's name and metadata, and the server records who sent it.
+2. Row 2 next, as a unit with row 1's policy in place, since read-only admin views expose what other users pushed.
+3. Rows 3 to 9 wait for an owner decision. Rows 6, 8, 9 and 10 should stay out.

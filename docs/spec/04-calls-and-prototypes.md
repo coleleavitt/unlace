@@ -10867,10 +10867,12 @@ stripped go1.22 hello-world 57 functions change (CONCAT71-carrying functions
 64 → 34; the remainder are mid-function assignments outside a `RETURN`, which
 this rule deliberately does not touch), with the `type:.eq.*` equality
 helpers' whole signatures improving. At `auto` the rule acts only when the
-image's source language is Go; `always` drops the language test (the
+image's source language is Go or C; `always` drops the language test (the
 stage-test bytechunk); `off` keeps the faithful concatenation. Pinned by
 `tests/stages/gobool.toml` (two-pass over a hand-assembled
-`mov %rdi,%rax; cmp $1,%rdi; sete %al; ret`).
+`mov %rdi,%rax; cmp $1,%rdi; sete %al; ret`) and by
+`tests/stages/gobool-c-default.toml` (the same bytes on a C image under the
+shipped `auto`).
 
 ### (unlace) The SysV x86-64 vector calling convention — `option vectorabi`, default on
 

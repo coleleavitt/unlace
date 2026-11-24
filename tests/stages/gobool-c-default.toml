@@ -1,0 +1,56 @@
+# The Go boolean-return stale-high artifact (docs/multilang.md W4) on a C image:
+# the shipped default `option gobool auto` narrows it when the image's source
+# language is C as well as Go (the SysV x86-64 ABI, like the Go one, fixes only
+# the low byte of a _Bool return).
+#
+# The bytes are those of tests/stages/gobool.toml: a hand-assembled x86-64
+# `int is_one(long x)` that writes RAX wide and then materializes the
+# comparison into its low byte with SETcc, so the high bytes are stale.
+#
+# The chunk has no language signal, so the test forces `option sourcelang c`
+# before the default pass, as cachereturn.toml does for Swift.
+# Pass 1 (`option gobool off`): the artifact - the return is the CONCAT71
+#   concatenation.
+# Pass 2 (`option sourcelang c`, then the shipped `option gobool auto`): the
+#   concatenation is gone and the comparison survives as the returned value.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'is_one' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '4889f84883ff010f94c0c3'
+
+[script]
+commands = [
+    'option gobool off',
+    'lo fu is_one',
+    'decompile',
+    'print C',
+    'option sourcelang c',
+    'option gobool auto',
+    'lo fu is_one',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'GOBOOL-C #1: the stale-high concatenation renders under off and narrows under the C default'
+count = 1
+literal = 'CONCAT71'
+
+[[match]]
+name = 'GOBOOL-C #2: the comparison survives both passes'
+count = 2
+literal = 'a0 == 1'
+
+[[match]]
+name = 'GOBOOL-C #3: one return per pass'
+count = 2
+literal = 'return'

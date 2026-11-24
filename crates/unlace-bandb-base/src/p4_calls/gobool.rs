@@ -20,8 +20,9 @@
 //! The high bytes' content is deliberately overwritten (zeroed) — the
 //! declared, documented intent of the option, mirroring `rustabi`'s reading
 //! of the ScalarPair ABI: at `auto` (the default) the rule acts only when the
-//! image's source language is Go, where those bytes are unspecified by the
-//! ABI; `always` drops the language test (no-signal corpora, the stage test);
+//! image's source language is Go or C, where those bytes are unspecified by the
+//! ABI (the SysV x86-64 ABI likewise fixes only the low byte of a `_Bool`
+//! return); `always` drops the language test (no-signal corpora, the stage test);
 //! `off` keeps the faithful concatenation.
 //!
 //! A function with several returns usually reaches one RETURN through a
@@ -44,7 +45,7 @@ use crate::funcdata::Funcdata;
 pub enum GoBoolMode {
     /// Keep the faithful concatenation.
     Off,
-    /// Narrow when the image's source language is Go (the shipped default).
+    /// Narrow when the image's source language is Go or C (the shipped default).
     #[default]
     Auto,
     /// Narrow whatever the detected language.
@@ -146,7 +147,10 @@ impl RuleGoBoolReturn {
 pub fn live(data: &Funcdata) -> bool {
     match data.get_arch().unlace_options.get::<GoBoolMode>() {
         GoBoolMode::Off => false,
-        GoBoolMode::Auto => data.get_arch().source_lang.is_go(),
+        GoBoolMode::Auto => {
+            let lang = data.get_arch().source_lang;
+            lang.is_go() || lang == crate::sourcelang::SourceLang::C
+        }
         GoBoolMode::Always => true,
     }
 }

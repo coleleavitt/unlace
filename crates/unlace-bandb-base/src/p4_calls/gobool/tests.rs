@@ -90,6 +90,7 @@ fn live_follows_mode_and_language() {
     for (mode, lang, want) in [
         (GoBoolMode::Off, SourceLang::Go, false),
         (GoBoolMode::Auto, SourceLang::Go, true),
+        (GoBoolMode::Auto, SourceLang::C, true),
         (GoBoolMode::Auto, SourceLang::Unknown, false),
         (GoBoolMode::Auto, SourceLang::Rust, false),
         (GoBoolMode::Always, SourceLang::Unknown, true),

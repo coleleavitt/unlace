@@ -2364,7 +2364,7 @@ mod tests {
         // and boolreturn-condlist / guards concatenated into the next guard's condition join the return run
         // and c-keyword-members / a member named with a C keyword is escaped
         // and terminatecurrent / a TerminateProcess(GetCurrentProcess()) wrapper is no-return
-        assert_eq!(count, 1034, "corpus file count drifted");
+        assert_eq!(count, 1035, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

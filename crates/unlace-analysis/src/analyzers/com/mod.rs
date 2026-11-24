@@ -127,15 +127,16 @@ pub fn methods_of(name: &str) -> Option<Vec<(&'static str, &'static str)>> {
 }
 
 /// The imported requests the pass declares: name and type letters (return
-/// first), the same vocabulary as the interface table, `g` a `GUID *`.
+/// first), the same vocabulary as the interface table, `g` a `GUID *` and
+/// `q` a `MULTI_QI *`.
 const REQUESTS: &[(&str, &str)] = &[
     ("CoCreateInstance", "hgpugp"),
     ("CoGetClassObject", "hgupgp"),
     ("CoGetObject", "hwpgp"),
-    ("CoCreateInstanceEx", "hgpupup"),
-    ("CoCreateInstanceFromApp", "hgpupup"),
-    ("CoGetInstanceFromIStorage", "hpgpupup"),
-    ("CoGetInstanceFromFile", "hpgpuuwup"),
+    ("CoCreateInstanceEx", "hgpupuq"),
+    ("CoCreateInstanceFromApp", "hgpupuq"),
+    ("CoGetInstanceFromIStorage", "hpgpupuq"),
+    ("CoGetInstanceFromFile", "hpgpuuwuq"),
     ("CoGetInterfaceAndReleaseStream", "hpgp"),
     ("CoGetObjectContext", "hgp"),
     ("CoGetCallContext", "hgp"),
@@ -190,6 +191,45 @@ impl<'a> ComTypes<'a> {
             TypeField::new(3, 8, "Data4", t.get_type_array(8, byte).ok()?),
         ];
         t.set_fields_struct_raw(&shell, fields, Vec::new(), 16, 4, 0)
+            .ok()
+    }
+
+    /// `MULTI_QI`: `pIID`, `pItf` (an `IUnknown *`), `hr`. A complete
+    /// `MULTI_QI` already in the program (a type library's) is used when its
+    /// size is three pointers.
+    pub fn multi_qi(&self) -> Option<Rc<Datatype>> {
+        if let Some(known) = self.built.borrow().get("MULTI_QI") {
+            return known.clone();
+        }
+        let built = self.build_multi_qi();
+        self.built
+            .borrow_mut()
+            .insert("MULTI_QI".to_string(), built.clone());
+        built
+    }
+
+    fn build_multi_qi(&self) -> Option<Rc<Datatype>> {
+        let t = self.types;
+        let ptr = self.ptr;
+        let shell = t.kuna_declare_record("MULTI_QI", false).ok()?;
+        if shell.get_metatype() != type_metatype::TYPE_STRUCT {
+            return None;
+        }
+        if !shell.is_incomplete() {
+            return (shell.get_size() == 3 * ptr).then_some(shell);
+        }
+        let iid = self.kind('g')?;
+        let itf = match self.interface("IUnknown") {
+            Some(u) => t.get_type_pointer(ptr, u, 1).ok()?,
+            None => self.kind('p')?,
+        };
+        let hr = self.kind('h')?;
+        let fields = vec![
+            TypeField::new(0, 0, "pIID", iid),
+            TypeField::new(1, ptr, "pItf", itf),
+            TypeField::new(2, 2 * ptr, "hr", hr),
+        ];
+        t.set_fields_struct_raw(&shell, fields, Vec::new(), 3 * ptr, ptr, 0)
             .ok()
     }
 
@@ -317,6 +357,10 @@ impl<'a> ComTypes<'a> {
             'p' => void_ptr(),
             'g' => match self.guid() {
                 Some(g) => t.get_type_pointer(ptr, g, 1).ok(),
+                None => void_ptr(),
+            },
+            'q' => match self.multi_qi() {
+                Some(m) => t.get_type_pointer(ptr, m, 1).ok(),
                 None => void_ptr(),
             },
             'w' | 's' => {
@@ -618,5 +662,9 @@ mod tests {
         }
         let create = com.pieces("CoCreateInstance", None, REQUESTS[0].1).unwrap();
         assert_eq!(create.intypes.len(), 5);
+        let qi = com.multi_qi().expect("MULTI_QI builds");
+        assert_eq!(qi.get_size(), 12);
+        let ex = com.pieces("CoCreateInstanceEx", None, "hgpupuq").unwrap();
+        assert_eq!(ex.intypes[5].get_size(), 4);
     }
 }

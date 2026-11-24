@@ -9648,7 +9648,9 @@ both
   keep its classic reference unnamed (`rand` calling an unmatched `__random`). An
   entry whose first instruction is a return is never named, nor one that returns
   right after an `endbr64`/`endbr32` or AArch64 `bti` landing pad (an empty
-  function matches every empty-function module), a name found at two
+  function matches every empty-function module), nor an entry that lies inside an
+  instruction decoded at an earlier address (a tail byte: IDA's `flirt: skip tail
+  bytes`; a Thumb entry is compared with its mode bit cleared), a name found at two
   entries goes only to the strictly best scored one or to none, and a name the
   binary already carries is not given again. A module's name is the library
   object's linkage spelling, so it is demangled the way the loader demangles an

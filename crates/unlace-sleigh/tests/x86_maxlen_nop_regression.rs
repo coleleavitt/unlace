@@ -1,7 +1,7 @@
 //! Regression gate for the instruction-buffer tail read in
 //! `ParserContext::getInstructionBytes` / `getInstructionBits` (kuna GH-271).
 //!
-//! `ParserContext` buffers `MAX_INSTRUCTION_LEN` (16) bytes, and both accessors
+//! `ParserContext` buffers `MAX_INSTRUCTION_LEN` (32) bytes, and both accessors
 //! guard only the *start* byte of a read against that bound before pulling a
 //! fixed-width run from it. C++ `PatternBlock::isInstructionMatch` walks a
 //! pattern in `sizeof(uintm)` chunks whatever the pattern's real width, so
@@ -15,7 +15,7 @@
 //! maximum), common in `-O2` output ahead of a loop head. `FlowInfo` turned the
 //! failed decode into an artificial halt, truncating every function that
 //! contained one. This test decodes it against the built `x86-64.sla`, and pins
-//! that the start-byte guard still rejects a read genuinely past 16 bytes.
+//! that the start-byte guard still rejects a read genuinely past 32 bytes.
 
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -167,9 +167,9 @@ fn x86_64_fifteen_byte_alignment_nop_decodes() {
 #[test]
 fn x86_64_over_length_encoding_still_rejected() {
     let base: u64 = 0x1000;
-    // Sixteen 0x66 prefixes push the opcode byte itself to offset 16, so the
+    // Thirty-two 0x66 prefixes push the opcode byte itself to offset 32, so the
     // read's *start* is past the buffer -- still a hard decode error.
-    let mut bytes = vec![0x66; 16];
+    let mut bytes = vec![0x66; 32];
     bytes.push(0x90);
 
     let (sleigh, addr) = x86_64_sleigh(base, bytes);
@@ -177,9 +177,9 @@ fn x86_64_over_length_encoding_still_rejected() {
     let mut text = TextEmit::default();
     let err = sleigh
         .print_assembly(&mut text, &addr)
-        .expect_err("an encoding longer than 16 bytes must not decode");
+        .expect_err("an encoding longer than 32 bytes must not decode");
     assert!(
-        err.explain().contains("more than 16 bytes"),
+        err.explain().contains("more than 32 bytes"),
         "expected the instruction-length guard, got: {}",
         err.explain()
     );

@@ -377,6 +377,22 @@
   <language processor="PowerPC"
             endian="big"
             size="32"
+            variant="e200-SPE2"
+            version="1.7"
+            slafile="ppc_32_e200_spe2_be.sla"
+            processorspec="ppc_64.pspec"
+            manualindexfile="../manuals/PowerISA.idx"
+            id="PowerPC:BE:32:e200-SPE2">
+    <description>NXP e200z4/e200z7 (Power ISA embedded, VLE) with SPE2 and EFS2, 32-bit addressing</description>
+    <truncate_space space="ram" size="4"/>
+    <compiler name="default" spec="ppc_64_32.cspec" id="default"/>
+    <external_name tool="gnu" name="powerpc:e200z4"/>
+    <external_name tool="IDA-PRO" name="ppc"/>
+    <external_name tool="DWARF.register.mapping.file" name="ppc.dwarf"/>
+  </language>
+  <language processor="PowerPC"
+            endian="big"
+            size="32"
             variant="PowerISA-VLE-Altivec-64-32addr"
             version="1.7"
             slafile="ppc_64_isa_altivec_vle_be.sla"

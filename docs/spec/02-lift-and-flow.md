@@ -4123,6 +4123,20 @@ literal append whose returned reference is used, an unprovable register-count
 append, a collapse whose continuation zeroes the changed registers, and 29 near
 misses, one defect each, that must stay unrolled in both passes.
 
+### Instruction buffer length (#98)
+
+The SLEIGH parser context buffers `MAX_INSTRUCTION_LEN` = 32 instruction bytes
+(`crates/unlace-sleigh/src/sleigh.rs`), twice upstream's 16, and `load_fill` reads
+that many at each decode. Long-operand ISAs need it: a NEC V60 Format II
+instruction with two double-displacement operands is 20 bytes, and VAX operand
+specifiers chain to well past 16. A read that starts past the buffer is still a
+`BadData` decode error ("Instruction is using more than 32 bytes"); the packed
+reads in `kuna_instructionbytes.rs` take any buffer width. A start address that
+is mapped zero-fills the rest of the read, as before, so a decode near the end of
+a segment sees the same bytes it did with 16. Valid x86 encodings stop at 15 bytes, so
+their decodes do not change; only a run of 16 to 31 redundant prefixes, which
+the CPU faults on, now decodes instead of failing.
+
 ### ARM CPSR control fields (GH-848)
 
 ARM-state `MRS CPSR` combines modeled NZCVQ flags with
@@ -4401,7 +4415,21 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `Clipper` | Fairchild/Intergraph CLIPPER C100/C300 | `clipper:LE:32:default` | written for unlace from the CLIPPER C300 data book, Apache-2.0 |
 | `ROMP` | IBM ROMP (RT PC) | `ROMP:BE:32:default` | written for unlace from the RT PC Hardware Technical Reference, Apache-2.0 |
 | `FRV` | Fujitsu FR-V (FR400, FR450, FR500, FR550) | `FRV:BE:32:default` | written for unlace from the FR-V ISA manuals; decode table generated from binutils CGEN `frv-opc.c` (field layout and mask/value only); decode checked against `frv-elf-objdump` 2.43.1 on all 743 instructions, Apache-2.0 |
+| `Nova` | Data General Nova (Nova 1200/800/2, Nova 3, Nova 4) | `Nova:BE:16:default` | written for unlace from the DG Nova programmer's references, Apache-2.0 |
 <!-- vendor-rows -->
+
+### Data General Nova (#98)
+
+`specs/Ghidra/Processors/Nova` is a SLEIGH module written for unlace from Data
+General's Nova programmer's references (no prior SLEIGH existed):
+`Nova:BE:16:default`. Memory is word addressed. An operate instruction is one
+constructor per ALU function and shift: the carry out is a comparison, the
+17-bit rotate goes through carry, and the no-load flag and the skip condition
+are tested on the shifted result, so a `SUBZ#` with a carry skip folds to a C
+comparison. `JSR` links in AC3 and `JMP 0,3` returns; the Nova 3 `SAV`/`RET`
+frame lives on an upward-growing stack. Device I/O is a user op. Exercised by
+`unlace-cli/tests/nova_raw.rs` (hand-assembled add, unsigned max, page-zero
+load/store, rotate and Nova 3 frame-call routines decompile to the expected C).
 
 ### IBM ROMP (#98)
 
@@ -4476,6 +4504,19 @@ a CFCMOV load, EGPR addressing, an NF add between a CMP and its SETcc)
 decompile to the expected C. Coverage and gaps are in
 `specs/Ghidra/Processors/x86/README.md`.
 
+The other EVEX maps reach the EGPRs too: the 64-bit EVEX prefix in `ia.sinc`
+accepts the X4 and B4 bits (inverted P1 bit 2 and P0 bit 3, which AVX-512
+required to be 1 and 0) and sets the fifth register-id bits from them and from
+EVEX.R', so AVX-512 memory operands and GPR operands can name `R16`-`R31`;
+encodings AVX-512 accepted decode as before. `apx_evex.sinc` adds the EVEX
+forms of the VEX GPR instructions (BMI1, BMI2, KMOV, the AMX tile loads and
+stores and tile configuration), with the `.NF` forms of the flag-writing BMI
+instructions, and `apx_map4.sinc` the map-4 forms of MOVDIR64B, MOVDIRI,
+INVEPT, INVVPID, INVPCID and the CET shadow-stack writes. Before, each of these
+with an EGPR was a bad instruction. Exercised by `x86_apx.rs` (an
+`evex_probe` against `llvm-objdump`, and an EVEX ANDN/SHRX routine that
+decompiles to `(~a1 & a0) >> (a2 & 0x3f)`).
+
 ### Processor modules written for unlace (#98)
 
 These processor directories hold SLEIGH written for unlace from public ISA documentation
@@ -4503,6 +4544,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `KonamiCPU` | KONAMI CPU (052001/052526/053248, Konami-2) | `KONAMI:BE:16:default` | MC6809 programming manual, MAME `konami` (opcode map and postbyte) | `unlace-cli/tests/konami.rs` |
 | `Uxn` | Uxn virtual machine (Varvara ROMs) | `Uxn:BE:16:default` | Uxntal reference (opcode table and modes) | `unlace-cli/tests/uxn.rs` |
 | `Visium` | Visium (CDS GR5/GR6) | `visium:BE:32:default` | binutils `visium` opcode table and disassembler, GCC `config/visium` | `unlace-cli/tests/visium_raw.rs` |
+| `TMS320C3x` | TI TMS320C3x (C30/C31/C32/C33) and the C3x core of the C4x | `TMS320C3x:LE:32:default` | TI TMS320C3x User's Guide (SPRU031), TMS320C4x User's Guide (SPRU063), binutils `tic4x` opcode table | `unlace-cli/tests/tms320c3x_raw.rs` |
 | `TMS9900` | TI TMS9900 | `TMS9900:BE:16:default` | TI TMS9900 Microprocessor Data Manual, TMS9900 Family System Development Manual | `unlace-cli/tests/tms9900_raw.rs` |
 | `Blackfin` | Analog Devices Blackfin (ADSP-BF5xx, BF6xx) | `Blackfin:LE:32:default` | Blackfin Processor Programming Reference rev 2.2, binutils `bfin.h` layouts; checked against `bfin-elf-objdump` | `unlace-cli/tests/blackfin_raw.rs` |
 | `Epiphany` | Adapteva Epiphany | `epiphany:LE:32:default` | Epiphany Architecture Reference, binutils CGEN `cpu/epiphany.cpu`, GCC `config/epiphany` | `unlace-cli/tests/epiphany_raw.rs` |
@@ -4512,6 +4554,15 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `SAM8` | Samsung SAM8 (S3C8/S3F8), SAM88RCRI (S3C9/S3F9) | `SAM8:BE:16:default`, `SAM88RCRI:BE:16:default` | Samsung S3C8-series user's manual ch. 6 (instruction set), S3C9454B/F9454B user's manual | `unlace-cli/tests/sam8_raw.rs` |
 | `EVM` | Ethereum Virtual Machine bytecode, Cancun opcode set | `EVM:BE:32:Cancun` | Ethereum Yellow Paper appendix H, evm.codes opcode reference, EIPs 145/1153/3855/4844/5656/7516 | `unlace-cli/tests/evm.rs` |
 | `Rabbit` | Rabbit Semiconductor Rabbit 2000 / Rabbit 3000A | `Rabbit2000:LE:16:default`, `Rabbit3000:LE:16:default` | Rabbit 2000/3000 Instruction Reference Manual (019-0098), Rabbit 2000/3000 User's Manuals, Dynamic C docs | `unlace-cli/tests/rabbit_raw.rs` |
+| `Lanai` | Lanai v11 (Myricom, Google) | `lanai:BE:32:default` | LLVM Lanai backend (`LanaiInstrFormats.td` format descriptions, `LanaiInstrInfo.td`, `LanaiCallingConv.td`) | `unlace-cli/tests/lanai_raw.rs` |
+| `META` | Imagination Technologies META (Meta 1.1, 1.2, 2.1), GP instructions | `META:LE:32:default` | binutils `include/opcode/metag.h` and `opcodes/metag-dis.c` field layouts, Linux `arch/metag` ABI; checked against `metag-linux-gnu-objdump` | `unlace-cli/tests/meta_raw.rs` |
+| `S1C` | Epson S1C17 and S1C33000 cores | `S1C17:LE:24:default`, `S1C33:LE:32:default` | Epson S1C17 Core Manual Rev. 1.2, S1C33000 Core CPU Manual, S1C17 Startup Manual, S1C33 Application Note | `unlace-cli/tests/s1c_raw.rs` |
+| `ST20` | Inmos/ST ST20-C2 and ST20-C4 integer cores | `ST20:LE:32:default` | ST20C2/C4 Core Instruction Set Reference Manual (72-TRN-273-01), transputer compiler writer's guide | `unlace-cli/tests/st20_raw.rs` |
+| `TILEGX` | Tilera TILE-Gx (TILE-Gx8000 family), parallel X/Y-mode bundles | `TILEGX:LE:64:default` | TILE-Gx ISA reference (UG401); encodings generated from the binutils `tilegx` opcode table by `tools/gen_tilegx_sleigh.py`; checked against `tilegx-linux-gnu-objdump` | `unlace-cli/tests/tilegx_raw.rs` |
+| `V60` | NEC V60 (uPD70616), V70 (uPD70632) | `V60:LE:32:default` | NEC V60/V70 user's manuals (instruction formats, addressing modes); MAME `v60` disassembler as length oracle | `unlace-cli/tests/v60.rs` |
+| `PowerPC` (SPE2) | NXP e200z4/e200z7 with SPE2 and EFS2 | `PowerPC:BE:32:e200-SPE2` | binutils PowerPC opcode table (SPE2/EFS2 rows), SPE2 intrinsic names; checked against `powerpc-elf-objdump` 2.43.1 | `unlace-cli/tests/ppc_spe2.rs` |
+| `M16C` (`M32C_80`) | Renesas M32C/80 (M16C/80 set plus `MUL.L`, `DIV*.L`, `SHANC.L`, `SHLNC.L`) | `M32C/80:LE:24:default` | Renesas M32C/80 Series Software Manual REJ09B0319; checked against `m32c-elf-as` 2.43.1 | `unlace-cli/tests/m32c_raw.rs` |
+| `Propeller` | Parallax Propeller 1 (P8X32A) cog | `propeller:LE:16:default` | Propeller Manual v1.2 assembly reference, P8X32A datasheet opcode matrix | `unlace-cli/tests/propeller_raw.rs` |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)
@@ -4687,6 +4738,27 @@ with LLVM 23's disassembler, 102 rows RV64 and 80 RV32), LLVM-selected
 `th.lrd`/`th.lrw`, `th.extu`, `th.mvnez` and `th.mula` functions, and a
 raw RV64 image. Gaps (XTheadVector, Vdot, Fmv, Int) are listed in
 `specs/Ghidra/Processors/RISCV/README.md`.
+
+### PowerPC SPE2 and EFS2 (#98)
+
+A new language `PowerPC:BE:32:e200-SPE2` (`ppc_32_e200_spe2_be.slaspec`) adds
+`SPE2.sinc` to the Power ISA embedded + VLE language: the SPE2 and EFS2
+instructions of the NXP e200z4/e200z7 cores (MPC56xx/MPC57xx), with encodings from
+the binutils opcode table and names from the SPE2 intrinsics. Every SPE2/EFS2 row
+decodes (a probe of 2428 words agrees with `objdump -M spe2 -M efs2`). Lane add,
+subtract, negate, absolute value, min and max, extends, splats, `evmar` and the
+addressing of every load and store lift exactly: immediate offsets are scaled by
+the access size with rA read as 0 for r0, the `u` forms write the address back to
+rA, the modulo `mx` forms access at rA and then advance it through `__circinc`.
+The rest are named pcodeops that read and write `ACC` as the mnemonic says (an
+`a` suffix writes it, the `aa`/`an` forms also read it, the `3` forms read rD
+instead). Under `@define SPE2` the encodings SPE2 and EFS2 reuse are left out of
+the included files (`maddhd`/`maddhdu`/`maddld`, `evmwhusiaaw`/`evmwhusianw`,
+`efdcfuid`/`efdcfsid`/`efdctuidz`/`efdctsidz`), so the other PowerPC languages are
+unchanged. A raw `evlbbsplatbx r3,r3,r4; evaddd r3,r3,r5; blr` decompiles to
+`return *(unsigned char *)(a0 + a1) * 0x101010101010101ULL + a2;`. Exercised by
+`unlace-cli/tests/ppc_spe2.rs`; gaps (record-form CR updates, encodings binutils
+rejects) in `specs/Ghidra/Processors/PowerPC/README.md`.
 
 ### RISC-V Zacas register pairs (#98)
 
@@ -5037,6 +5109,29 @@ its register, so each floating-point register is listed as its short view and
 then whole. The caller's 160-byte register save area at `0(r15)` is in the
 callee's local range, because the callee's prologue stores into it.
 Exercised by `tests/stages/kuna-s390x.xml`.
+
+### x86-64 lifter fixes from differential fuzzing
+
+`tools/difffuzz` (see `docs/difffuzz.md`) runs single x86-64 instructions through the
+SLEIGH p-code and through Unicorn from the same register state; each disagreement below was
+confirmed on hardware before the spec changed.
+
+- A 32-bit register destination clears bits 63:32 in 64-bit mode. `ia.sinc`, `lockable.sinc`,
+  `avx.sinc`, `avx512.sinc`, `avx512_manual.sinc` and `rdrand.sinc` now build
+  `check_Reg32_dest` (or `check_Rmr32_dest`) for `XADD m32,r32`, `XCHG m32,r32`,
+  `MOVBE r32,m32`, `MOVMSKPS`/`MOVMSKPD`, MMX `PEXTRW`, `LSL`, `RDRAND`/`RDSEED r32`,
+  the VEX and EVEX `VCVT[T]SS2SI`/`VCVT[T]SD2SI`/`VCVT[T]S[SDH]2USI`/`VCVT[T]SH2SI`,
+  `VMOVMSKPS`/`VMOVMSKPD`, `VPEXTRW` and `KMOV[BWD] r32`; before, `lock xadd [rdi],eax`
+  left the old upper half of RAX in place.
+- `MOV r32,Sreg` and `MOV r64,Sreg` (`8C` with a register operand) zero-extend the selector
+  into the whole register; only the 16-bit form writes 16 bits.
+- `90` with a REX prefix that lacks REX.B (`44 90`, `4C 90`, ...) is `NOP`, not
+  `XCHG EAX,EAX` (which zeroed the top of RAX).
+- The hint-NOP rows `0F 18`..`0F 1F` decode with REX.W (`NOP rm64`).
+- A repeated `66` prefix changes nothing: before, the second one toggled the operand size
+  back, so `66 66 35 imm16` decoded as a 7-byte `XOR EAX,imm32`.
+- `EXTRQ xmm,xmm` reads the bit index from bits 13:8 of the control register (it read 11:6),
+  and `EXTRQ`/`INSERTQ` treat a field length of 0 as 64, as the AMD APM defines.
 
 ## 2.9 Go stack-growth prologue folding
 

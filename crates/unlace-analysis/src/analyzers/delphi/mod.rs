@@ -41,6 +41,7 @@
 //! PE only, and only on an image that holds the `TObject` class name. The
 //! facts are committed when `--option delphi on` (default off).
 
+pub mod kuna_delphiabiimports;
 #[cfg(test)]
 mod tests;
 

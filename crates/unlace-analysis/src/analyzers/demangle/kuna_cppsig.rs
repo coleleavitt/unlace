@@ -242,7 +242,8 @@ fn hidden_return_entries(ctx: &AnalysisCtx) -> HashSet<u64> {
     out
 }
 
-/// Every defined FUNC symbol whose name is C++-mangled, as `(entry vma, raw name)`.
+/// Every defined FUNC symbol whose name is C++-mangled, as `(entry vma, raw name)`,
+/// plus the MSVC-mangled code exports of a PE ([`msvc_exported_functions`]).
 ///
 /// Both symbol tables are read: `.dynsym` is the one that survives `strip` on a
 /// shared library (and carries the whole exported C++ API), `.symtab` adds the
@@ -265,7 +266,44 @@ fn mangled_function_symbols(file: &object::File) -> Vec<(u64, String)> {
             out.push(key);
         }
     }
+    for key in msvc_exported_functions(file) {
+        if seen.insert(key.clone()) {
+            out.push(key);
+        }
+    }
     out
+}
+
+/// Every MSVC-mangled name a PE exports at an address inside a code section, as
+/// `(entry vma, raw name)`.
+///
+/// A linked PE keeps no symbol table, so on a DLL the export directory is the
+/// one place a `__declspec(dllexport)` member's declaration survives:
+/// `?SendFrame@CUsbCanDriver@@QAEHPAUcan_frame@@I@Z` names the entry AND states
+/// its `__thiscall` `this`, return and parameters. An export outside a code
+/// section (a global, a `??_7` vftable) is not a function; a forwarder has no
+/// address in this image and is not listed.
+fn msvc_exported_functions(file: &object::File) -> Vec<(u64, String)> {
+    if file.format() != object::BinaryFormat::Pe {
+        return Vec::new();
+    }
+    let Ok(exports) = file.exports() else {
+        return Vec::new();
+    };
+    let code: Vec<(u64, u64)> = file
+        .sections()
+        .filter(|s| s.kind() == object::SectionKind::Text)
+        .map(|s| (s.address(), s.address().saturating_add(s.size())))
+        .collect();
+    exports
+        .iter()
+        .filter(|e| e.name().starts_with(b"?") && e.address() != 0)
+        .filter(|e| {
+            code.iter()
+                .any(|&(lo, hi)| e.address() >= lo && e.address() < hi)
+        })
+        .filter_map(|e| Some((e.address(), std::str::from_utf8(e.name()).ok()?.to_string())))
+        .collect()
 }
 
 /// Decide the implicit object parameter for an ambiguous nested name from the

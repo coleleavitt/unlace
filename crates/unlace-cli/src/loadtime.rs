@@ -32,7 +32,7 @@ fn binding(name: &str) -> Option<(&'static str, Encoding)> {
         "ppc32picimports" => (unlace_decomp::kuna_ppc32picimports::ENV, Ppc32Pic),
         "ifuncfpret" => (kuna_ifuncfpret::IFUNCFPRET_ENV, DefaultOn),
         "ppcapu" => (kuna_ppcapu::PPCAPU_ENV, DefaultOff),
-        "delphiabi" => (kuna_delphiabi::DELPHIABI_ENV, DefaultOff),
+        "delphiabi" => (kuna_delphiabi::DELPHIABI_ENV, DefaultOn),
         "debuglink" => (kuna_debuglink::DEBUGLINK_ENV, DefaultOn),
         "kernelcache" => (kuna_kernelcache::KERNELCACHE_ENV, Kernelcache),
         "kernelcache-boot" => (

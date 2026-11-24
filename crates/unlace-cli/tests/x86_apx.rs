@@ -1,8 +1,10 @@
 //! Intel APX in the 64-bit x86 language: the extended GPRs R16-R31 under the
 //! REX2 prefix, and the legacy instructions promoted to EVEX map 4 (new data
 //! destination, no-flags, CCMP/CTEST, CFCMOVcc, SETcc.zu, PUSH2/POP2) plus
-//! JMPABS. Before, a REX2 prefix decoded as the invalid AAD and every map-4
-//! instruction was a bad instruction.
+//! JMPABS, and the EGPR forms of the EVEX-promoted VEX and map-4 system
+//! instructions. Before, a REX2 prefix decoded as the invalid AAD and every
+//! map-4 instruction, and every EVEX instruction with an EGPR, was a bad
+//! instruction.
 use crate::common;
 use common::{repo_root, run_kuna};
 
@@ -56,6 +58,28 @@ fn apx_forms_decode() {
     assert_eq!(&listing[..PROBE.len()], PROBE, "{stdout}");
 }
 
+const EVEX_PROBE: [&str; 10] = [
+    "ANDN R16, R17, R18",
+    "BLSR.NF R16, R17",
+    "SHLX R20, R21, R22",
+    "KMOVQ K1, R16",
+    "KMOVD R17D, K2",
+    "MOVDIR64B R16, zmmword ptr [R17]",
+    "WRSSQ qword ptr [R16],R17",
+    "VMOVDQU32 ZMM0, zmmword ptr [R16 + R17*0x8 + 0x40]",
+    "VPEXTRQ R16, XMM1, 0x1",
+    "TILELOADD TMM0, [R16 + R17*0x1]",
+];
+
+#[test]
+fn apx_evex_egpr_forms_decode() {
+    let elf = fixture("apx.elf");
+    let (stdout, stderr, code) = run_kuna(&["disassemble", &elf, "evex_probe"]);
+    assert_eq!(code, 0, "{stderr}");
+    let listing = rows(&stdout);
+    assert_eq!(&listing[..EVEX_PROBE.len()], EVEX_PROBE, "{stdout}");
+}
+
 fn decompile_raw(addr: &str) -> String {
     let bin = fixture("apx.bin");
     let (stdout, stderr, code) = run_kuna(&[
@@ -86,6 +110,8 @@ fn apx_functions_decompile() {
         ("0x10b0", "return a0 + 3 + a1 * 4;"),
         // {nf} add leaves the carry of the cmp for setzub
         ("0x10c0", "return a0 < a1;"),
+        // EVEX-promoted ANDN and SHRX on EGPRs
+        ("0x1120", "return (~a1 & a0) >> (a2 & 0x3f);"),
     ] {
         let out = decompile_raw(addr);
         assert!(out.contains(want), "{addr}: want {want}\n{out}");

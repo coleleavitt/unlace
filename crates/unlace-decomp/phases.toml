@@ -2113,6 +2113,25 @@ live_true = "single"
 live_false = "pair"
 
 [[settable]]
+option = "retpairpaths"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P4"
+subphase = "output-prototype"
+strength = "HARD"
+rewind = "P4"
+issue = "kuna-retpairpaths"
+summary = "Keep the second register of a model's join return pair (EDX beside EAX on i386) only when every path to the RETURN computes it. The uncomputed-half repair keeps a half when any path computes it; a phi that reaches the RETURN with the caller's own EDX on one path, or a call's clobber, then keeps the pair, and an MSVC `int __fastcall` function that returns early with EDX untouched and otherwise leaves the last call's register argument in it prints `return CONCAT44(a1,v1);`. On, that half is dropped and the function returns its EAX value. Other storage is unchanged."
+use_when = "An i386 function whose source returns int prints `unsigned long long` and `return CONCAT44(aN,vM);` where aN is a register argument or a value last passed to a call. Off by default: a fastcall function that returns its own EDX argument as the high word on one path loses that half."
+example = "option retpairpaths on"
+source_decompiler = "kuna"
+inspiration = "IDA 9.5 on SysWOW64 TpmCoreProvisioning.dll: CmdBufStartCommand 0x100a4bec is int __fastcall where unlace returned CONCAT44(a1,v1)"
+change_kind = "transform"
+tier = "transform"
+symptoms = "an i386 int function prints unsigned long long and returns CONCAT44 of a register argument and its result|return CONCAT44(a1,v1) where a1 is the EDX argument or a value last passed to a call"
+
+[[settable]]
 option = "v850indirectbranch"
 values = "on|off"
 default = "on"

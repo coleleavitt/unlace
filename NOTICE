@@ -197,6 +197,10 @@ specs/Ghidra/Processors/TMS320C54x vendors the TI TMS320C54x SLEIGH specificatio
 aleph-void/ghidra-tms320c54x (https://github.com/aleph-void/ghidra-tms320c54x), a fork of gabtremblay/ghidra-tms320c54x, released under the
 Apache License, Version 2.0 (its license file is in that directory).
 
+specs/Ghidra/Processors/unSP vendors the Sunplus unSP SLEIGH specification of
+aleph-void/ghidra-unSP (https://github.com/aleph-void/ghidra-unSP), a fork of SamuelWAnderson45/ghidra-unSP, released under the
+Apache License, Version 2.0 (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

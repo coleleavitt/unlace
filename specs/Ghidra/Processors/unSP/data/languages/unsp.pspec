@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- See Relax specification: Ghidra/Framework/SoftwareModeling/data/languages/processor_spec.rxg -->
+
+<processor_spec>
+  <programcounter register="pc_full"/>
+  <default_symbols>
+    <symbol name="BREAK_VECTOR" address="ram:fff5"/>
+    <symbol name="FIQ_VECTOR" address="ram:fff6"/>
+    <symbol name="RESET_VECTOR" address="ram:fff7"/>
+    <symbol name="IRQ0_VECTOR" address="ram:fff8"/>
+    <symbol name="IRQ1_VECTOR" address="ram:fff9"/>
+    <symbol name="IRQ2_VECTOR" address="ram:fffa"/>
+    <symbol name="IRQ3_VECTOR" address="ram:fffb"/>
+    <symbol name="IRQ4_VECTOR" address="ram:fffc"/>
+    <symbol name="IRQ5_VECTOR" address="ram:fffd"/>
+    <symbol name="IRQ6_VECTOR" address="ram:fffe"/>
+    <symbol name="IRQ7_VECTOR" address="ram:ffff"/>
+  </default_symbols>
+</processor_spec>

@@ -53,6 +53,8 @@ define context contextreg
   alu1xc = (460,461)
   mauxc = (462,463)
   lsuxc = (464,465)
+  lpend = (466,466) noflow
+  lpdist = (467,488) noflow
   alu0_0_0_15 = (80,95)
   alu0_0_0_5 = (90,95)
   alu0_0_11_11 = (84,84)
@@ -507,7 +509,6 @@ define pcodeop kvx_lniord;
 define pcodeop kvx_lniorhq;
 define pcodeop kvx_lniorw;
 define pcodeop kvx_lniorwp;
-define pcodeop kvx_loopdo;
 define pcodeop kvx_madddt;
 define pcodeop kvx_maddhq;
 define pcodeop kvx_maddhwq;
@@ -6884,7 +6885,7 @@ D_bcu: "goto" bcu_pcrel27 is bcu_0_27_30=0x2 & bcu_pcrel27 {  }
 D_bcu: "icall" bcu_registerz is bcu_0_18_30=0x3f7 & bcu_registerz { T_bcu = bcu_registerz; }
 D_bcu: "iget" bcu_registerz is bcu_0_18_30=0x3f3 & bcu_registerz { kvx_iget(bcu_registerz); }
 D_bcu: "igoto" bcu_registerz is bcu_0_18_30=0x3f6 & bcu_registerz { T_bcu = bcu_registerz; }
-D_bcu: "loopdo" bcu_registerz "," bcu_pcrel17 is bcu_0_23_30=0x1e & bcu_registerz & bcu_pcrel17 { kvx_loopdo(bcu_registerz, bcu_pcrel17); }
+D_bcu: "loopdo" bcu_registerz "," bcu_pcrel17 is bcu_0_23_30=0x1e & bcu_registerz & bcu_pcrel17 [ lpend = 1; lpdist = ((((bcu_0_6_22 $xor 0x10000) - 0x10000) << 2)) - ((nsyl + 1) << 2); globalset(bcu_pcrel17, lpend); globalset(bcu_pcrel17, lpdist); ] { T_bcu = bcu_registerz; }
 D_bcu: "mma444hbd0" bcu_registeraq "=" bcu_registerbq "," bcu_registerc "," bcu_registerd is bcu_0_12_13=0x0 & bcu_0_18_19=0x0 & bcu_0_24_30=0x4 & bcu_registeraq & bcu_registerbq & bcu_registerc & bcu_registerd { TO_bcu = kvx_mma444hbd0(bcu_registerbq, bcu_registerc, bcu_registerd); }
 D_bcu: "mma444hbd1" bcu_registeraq "=" bcu_registerbq "," bcu_registerc "," bcu_registerd is bcu_0_12_13=0x0 & bcu_0_18_19=0x1 & bcu_0_24_30=0x4 & bcu_registeraq & bcu_registerbq & bcu_registerc & bcu_registerd { TO_bcu = kvx_mma444hbd1(bcu_registerbq, bcu_registerc, bcu_registerd); }
 D_bcu: "mma444hd" bcu_registeraq "=" bcu_registerbq "," bcu_registerc "," bcu_registerd is bcu_0_12_13=0x0 & bcu_0_18_19=0x2 & bcu_0_24_30=0x4 & bcu_registeraq & bcu_registerbq & bcu_registerc & bcu_registerd { TO_bcu = kvx_mma444hd(bcu_registerbq, bcu_registerc, bcu_registerd); }
@@ -6967,7 +6968,7 @@ W_bcu: is bcu_0_27_30=0x2 & bcu_pcrel27 { goto bcu_pcrel27; }
 W_bcu: is bcu_0_18_30=0x3f7 & bcu_registerz { ra = inst_next; call [T_bcu]; }
 W_bcu: is bcu_0_18_30=0x3f3 & bcu_registerz {  }
 W_bcu: is bcu_0_18_30=0x3f6 & bcu_registerz { goto [T_bcu]; }
-W_bcu: is bcu_0_23_30=0x1e & bcu_registerz & bcu_pcrel17 {  }
+W_bcu: is bcu_0_23_30=0x1e & bcu_registerz & bcu_pcrel17 { lc = T_bcu; ls = inst_next; le = &bcu_pcrel17; }
 W_bcu: is bcu_0_12_13=0x0 & bcu_0_18_19=0x0 & bcu_0_24_30=0x4 & bcu_registeraq & bcu_registerbq & bcu_registerc & bcu_registerd { bcu_registeraq = TO_bcu; }
 W_bcu: is bcu_0_12_13=0x0 & bcu_0_18_19=0x1 & bcu_0_24_30=0x4 & bcu_registeraq & bcu_registerbq & bcu_registerc & bcu_registerd { bcu_registeraq = TO_bcu; }
 W_bcu: is bcu_0_12_13=0x0 & bcu_0_18_19=0x2 & bcu_0_24_30=0x4 & bcu_registeraq & bcu_registerbq & bcu_registerc & bcu_registerd { bcu_registeraq = TO_bcu; }
@@ -7051,7 +7052,7 @@ D_tca: "goto" tca_pcrel27 is tca_0_27_30=0x2 & tca_pcrel27 {  }
 D_tca: "icall" tca_registerz is tca_0_18_30=0x3f7 & tca_registerz { T_tca = tca_registerz; }
 D_tca: "iget" tca_registerz is tca_0_18_30=0x3f3 & tca_registerz { kvx_iget(tca_registerz); }
 D_tca: "igoto" tca_registerz is tca_0_18_30=0x3f6 & tca_registerz { T_tca = tca_registerz; }
-D_tca: "loopdo" tca_registerz "," tca_pcrel17 is tca_0_23_30=0x1e & tca_registerz & tca_pcrel17 { kvx_loopdo(tca_registerz, tca_pcrel17); }
+D_tca: "loopdo" tca_registerz "," tca_pcrel17 is tca_0_23_30=0x1e & tca_registerz & tca_pcrel17 [ lpend = 1; lpdist = ((((tca_0_6_22 $xor 0x10000) - 0x10000) << 2)) - ((nsyl + 1) << 2); globalset(tca_pcrel17, lpend); globalset(tca_pcrel17, lpdist); ] { T_tca = tca_registerz; }
 D_tca: "mma444hbd0" tca_registeraq "=" tca_registerbq "," tca_registerc "," tca_registerd is tca_0_12_13=0x0 & tca_0_18_19=0x0 & tca_0_24_30=0x4 & tca_registeraq & tca_registerbq & tca_registerc & tca_registerd { TO_tca = kvx_mma444hbd0(tca_registerbq, tca_registerc, tca_registerd); }
 D_tca: "mma444hbd1" tca_registeraq "=" tca_registerbq "," tca_registerc "," tca_registerd is tca_0_12_13=0x0 & tca_0_18_19=0x1 & tca_0_24_30=0x4 & tca_registeraq & tca_registerbq & tca_registerc & tca_registerd { TO_tca = kvx_mma444hbd1(tca_registerbq, tca_registerc, tca_registerd); }
 D_tca: "mma444hd" tca_registeraq "=" tca_registerbq "," tca_registerc "," tca_registerd is tca_0_12_13=0x0 & tca_0_18_19=0x2 & tca_0_24_30=0x4 & tca_registeraq & tca_registerbq & tca_registerc & tca_registerd { TO_tca = kvx_mma444hd(tca_registerbq, tca_registerc, tca_registerd); }
@@ -7134,7 +7135,7 @@ W_tca: is tca_0_27_30=0x2 & tca_pcrel27 { goto tca_pcrel27; }
 W_tca: is tca_0_18_30=0x3f7 & tca_registerz { ra = inst_next; call [T_tca]; }
 W_tca: is tca_0_18_30=0x3f3 & tca_registerz {  }
 W_tca: is tca_0_18_30=0x3f6 & tca_registerz { goto [T_tca]; }
-W_tca: is tca_0_23_30=0x1e & tca_registerz & tca_pcrel17 {  }
+W_tca: is tca_0_23_30=0x1e & tca_registerz & tca_pcrel17 { lc = T_tca; ls = inst_next; le = &tca_pcrel17; }
 W_tca: is tca_0_12_13=0x0 & tca_0_18_19=0x0 & tca_0_24_30=0x4 & tca_registeraq & tca_registerbq & tca_registerc & tca_registerd { tca_registeraq = TO_tca; }
 W_tca: is tca_0_12_13=0x0 & tca_0_18_19=0x1 & tca_0_24_30=0x4 & tca_registeraq & tca_registerbq & tca_registerc & tca_registerd { tca_registeraq = TO_tca; }
 W_tca: is tca_0_12_13=0x0 & tca_0_18_19=0x2 & tca_0_24_30=0x4 & tca_registeraq & tca_registerbq & tca_registerc & tca_registerd { tca_registeraq = TO_tca; }
@@ -16857,4 +16858,6 @@ B: E_bcu is par=0 & steer=2 & mauv=0 & E_bcu [ mau_0_0_31 = word; mauv = 1; notf
 B: B is par=1 & steer=1 & lsuv=0 ; B [ lsu_0_0_31 = word; lsuv = 1; notfirst = 1; nsyl = nsyl + 1; ] { build B; }
 B: E_bcu is par=0 & steer=1 & lsuv=0 & E_bcu [ lsu_0_0_31 = word; lsuv = 1; notfirst = 1; ] { build E_bcu; }
 
-:^B is B { build B; }
+LpStart: loc is lpdist [ loc = inst_start - lpdist; ] { export *[ram]:8 loc; }
+:^B is lpend=0 & B { build B; }
+:^B is lpend=1 & LpStart & B { lc = lc - 1; if (lc == 0) goto <body>; goto LpStart; <body> build B; }

@@ -59,11 +59,15 @@ committed afterwards, so the bundle reads every source before it writes
 
 - The other forms (SIMD and packed arithmetic, floating point, the TCA
   coprocessor and matrix instructions, atomics, cache and TLB management, system
-  calls, the `loopdo`/`loopgtz`/`loopnez` hardware loops) are named user
+  calls) are named user
   operations (409 for kv3-1, 579 for kv3-2) over their source operands; the
   first operand gets the result when the syntax assigns to it.
-- Hardware loops: `ls`, `le` and `lc` are plain registers; the loop-end
-  branch is not modelled.
+- Hardware loops: `loopdo rz, end` sets `lc`, `ls` (the next bundle) and `le`, and marks
+  the bundle at `le` with context (`lpend`, `lpdist` = `le - ls`). Reaching `le` counts
+  `lc` down and branches back to `ls` while it stays non-zero, so the body runs `lc`
+  times and decompiles as a `do`/`while`. An `lc` of zero on entry is not special-cased.
+  kv3 has no `loopgtz`/`loopnez`. Writes to `ls`/`le`/`lc` through `set` do not move the
+  loop end.
 - 32-bit word operations write the zero-extended result; the upper half
   convention was not checked against hardware.
 - Floating-point rounding, `.s` silent and the speculative/cached load

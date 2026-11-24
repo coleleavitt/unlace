@@ -20,6 +20,9 @@ define register offset=0x100 size=4 [ contextreg ];
 
 define context contextreg
   cplmode = (0,0)      # 1: direct addressing is SP-relative (ST1.CPL=1)
+  phase   = (1,1)
+  rbafter = (2,2) noflow
+  rbstart = (3,18) noflow
 ;
 
 define token instr(16)
@@ -276,6 +279,8 @@ lk:   "#"^ext16  is ext16  { export *[const]:2 ext16; }
 lks:  "#"^ext16s is ext16s { export *[const]:2 ext16s; }
 dmad: ext16      is ext16  { export *[data]:2 ext16; }
 pmad: ext16      is ext16  { export *[prog]:2 ext16; }
+rbnext: a        is ext16  [ a = ext16 + 1; ] { export *[prog]:2 a; }
+rbtop: is rbstart { export *[prog]:2 rbstart; }
 pa:   ext16      is ext16  { export *[io]:2 ext16; }
 target: ext16    is ext16 { export *[prog]:2 ext16; }
 # far: the 7-bit page (bits 0-6 of the opcode word) goes to XPC; program space is addressed with the 16-bit part
@@ -510,6 +515,7 @@ cond4: "BGT" is cc4=14 { local c:1 = B s> 0; export c; }
 cond4: "BLEQ" is cc4=15 { local c:1 = B s<= 0; export c; }
 
 # SSBX / RSBX
+with : phase=1 {
 :SSBX "ST0,0" is w15_0=0xf5b0 { setStatusField(0:1, 0:1); }
 :RSBX "ST0,0" is w15_0=0xf4b0 { clearStatusField(0:1, 0:1); }
 :SSBX "ST0,1" is w15_0=0xf5b1 { setStatusField(0:1, 1:1); }
@@ -822,8 +828,8 @@ macro tshift(s) { s = (T:1 << 2) s>> 2; }
 :RPT Smem is (w15_8=0x47) ... & Smem { RC = Smem; <top> delayslot(2); if (RC == 0) goto <done>; RC = RC - 1; goto <top>; <done> }
 :RPT "#"^k8u is w15_8=0xec & k8u { RC = k8u; <top> delayslot(2); if (RC == 0) goto <done>; RC = RC - 1; goto <top>; <done> }
 :RPT lk is w15_0=0xf070 ; lk { RC = lk; <top> delayslot(2); if (RC == 0) goto <done>; RC = RC - 1; goto <top>; <done> }
-:RPTB pmad is w15_0=0xf072 ; pmad { RSA = inst_next >> 1; local e:2 = &pmad; REA = e >> 1; BRAF = 1; }
-:RPTBD pmad is w15_0=0xf272 ; pmad { RSA = (inst_next >> 1); local e:2 = &pmad; REA = e >> 1; BRAF = 1; delayslot(4); }
+:RPTB pmad is w15_0=0xf072 ; pmad & rbnext [ rbafter = 1; rbstart = inst_start + 2; globalset(rbnext, rbafter); globalset(rbnext, rbstart); ] { RSA = inst_next >> 1; local e:2 = &pmad; REA = e >> 1; BRAF = 1; }
+:RPTBD pmad is w15_0=0xf272 ; pmad & rbnext [ rbafter = 1; rbstart = inst_start + 4; globalset(rbnext, rbafter); globalset(rbnext, rbstart); ] { RSA = (inst_next >> 1); local e:2 = &pmad; REA = e >> 1; BRAF = 1; delayslot(4); }
 :RPTZ dst8, lk is (w15_9=0x78 & w7_0=0x71 & dst8) ; lk { dst8 = 0; RC = lk; <top> delayslot(2); if (RC == 0) goto <done>; RC = RC - 1; goto <top>; <done> }
 
 # XC n, cond: execute the next n words only if cond is true
@@ -889,3 +895,22 @@ x6f_stl_01: e_shift is x15_5=0x6c & e_shift { export *[const]:1 e_shift; }
 :STL "A", x6f_stl_00, SmemL is ((w15_8=0x6f & ind=1 & mod>=12) ... & SmemL) ; x6f_stl_00 { local v:8 = A; local sh:1 = x6f_stl_00; ashift(v, sh); SmemL = v:2; }
 :STL "B", x6f_stl_01, SmemS is (w15_8=0x6f & (ind=0 | mod<12) & SmemS) ; x6f_stl_01 { local v:8 = B; local sh:1 = x6f_stl_01; ashift(v, sh); SmemS = v:2; }
 :STL "B", x6f_stl_01, SmemL is ((w15_8=0x6f & ind=1 & mod>=12) ... & SmemL) ; x6f_stl_01 { local v:8 = B; local sh:1 = x6f_stl_01; ashift(v, sh); SmemL = v:2; }
+
+}
+
+# Block repeat: RPTB marks the instruction after its block (REA + 1) with context. Reaching it
+# with BRAF set and BRC non-zero counts BRC down and restarts the block, so the decompiler sees
+# an ordinary loop; the block runs BRC + 1 times.
+:^instruction is phase=0 & rbafter=0 & instruction [ phase = 1; ] {
+	build instruction;
+}
+:^instruction is phase=0 & rbafter=1 & rbtop & instruction [ phase = 1; ] {
+	if (BRAF == 0) goto <body>;
+	if (BRC == 0) goto <last>;
+	BRC = BRC - 1;
+	goto rbtop;
+	<last>
+	BRAF = 0;
+	<body>
+	build instruction;
+}

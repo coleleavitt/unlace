@@ -675,7 +675,7 @@ fn unlace_shortest_path_length(
     if a == b {
         return Ok(0);
     }
-    let mut dist: BTreeMap<UnlaceNodeId, int4> = BTreeMap::new(); // Membership/lookup only
+    let mut dist: FxHashMap<UnlaceNodeId, int4> = FxHashMap::default(); // Membership/lookup only
     let mut queue: Vec<UnlaceNodeId> = Vec::new();
     dist.insert(a, 0);
     queue.push(a);

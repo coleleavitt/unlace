@@ -609,6 +609,9 @@ mod tests {
             "mba",
             // `egraph` too, and it runs a saturation per MBA tree.
             "egraph",
+            // `pairlocal` changes how 64-bit locals on 32-bit targets print; it
+            // joins a preset once its corpus measurement is in.
+            "pairlocal",
             // `contextnames` renames loop counters and returned locals that the
             // CLI tests of other features, which run under `auto`, spell as
             // `vN`; it joins the preset once those are re-pinned.

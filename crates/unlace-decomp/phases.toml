@@ -5842,6 +5842,28 @@ live_true = "on"
 live_false = "off"
 
 [[settable]]
+option = "pairlocal"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P3"
+subphase = "simplification-quiescence"
+strength = "HARD"
+rewind = "P3"
+issue = "kuna-pairlocal"
+summary = "Join a 64-bit local that a 32-bit target holds in two registers (edx:eax) where control flow merges. Heritage gives each half its own MULTIEQUAL, so the 64-bit use after the join reads PIECE(hi, lo) of two 32-bit variables and prints as CONCAT44(v13, v12), each half assigned on every path (v13 = v12 >> 0x1f; or v13 = 0; v12 = 0;). RulePairPhi matches PIECE(hi, lo) of two MULTIEQUAL outputs of one block and builds the 64-bit value each incoming edge carries: two constants are the 64-bit constant, hi = lo s>> 31 is SEXT(lo), hi = 0 is ZEXT(lo), SUBPIECE(w, 4) and SUBPIECE(w, 0) of one 8-byte w are w, and the two phis' own outputs (a loop carrying the pair) are the new phi. When every edge has one, a 64-bit MULTIEQUAL of them goes at the head of the block (an extension is computed at the end of its predecessor) and the PIECE becomes a COPY of it, so the local is one long long. The rewrite is exact; the half phis stay for other readers and go dead otherwise."
+use_when = "Off by default. Turn it on for 32-bit x86, ARM or MIPS code whose long long locals print as CONCAT44 of two variables after an if or a loop."
+example = "--option pairlocal on"
+source_decompiler = "kuna"
+inspiration = "Hex-Rays scattered register pairs (__SET_PAIR__, mba.scattered_pair_regs); Ghidra double.cc PhiForm"
+change_kind = "new-analysis"
+tier = "transform"
+symptoms = "a long long local on a 32-bit target prints as CONCAT44 of two variables|CONCAT44(v13, v12) after an if where each half is set on every path|a 64-bit sum or compare reads CONCAT44 of a sign-extended pair"
+live_field = "pairlocal"
+live_true = "on"
+live_false = "off"
+
+[[settable]]
 option = "avxintrinsics"
 values = "on|off"
 default = "on"

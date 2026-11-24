@@ -282,7 +282,70 @@ class MipsHarness:
         return regs, 0
 
 
-HARNESSES = {"aarch64": A64Harness, "riscv64": RvHarness, "mips": MipsHarness}
+def msa_ldd(wd, base, off):
+    return 0x78000023 | ((off // 8) & 0x3FF) << 16 | base << 11 | wd << 6
+
+
+def msa_std(wd, base, off):
+    return 0x78000027 | ((off // 8) & 0x3FF) << 16 | base << 11 | wd << 6
+
+
+class MipsR6Harness(MipsHarness):
+    """MIPS32 Release 6 + MSA under qemu-mips64 -cpu I6400 (MIPS64R6 with MSA). No HI/LO (R6
+    removed them). $1..$31 at 8*i, w0..w31 at 256 + 16*i (doubleword 0, then doubleword 1, as
+    ld.d/st.d move them)."""
+    qemu = ("qemu-mips64", ["-cpu", "I6400"])
+    flags = 0xA0000406  # EF_MIPS_ARCH_64R6 | EF_MIPS_NAN2008 | EF_MIPS_PIC | EF_MIPS_CPIC
+    table_size = 256 + 512 + 8
+    marker_at = 256 + 512
+
+    def prologue(self, target):
+        s = self.scratch
+        c = mips_li32(s, TABLES)
+        for i in range(32):
+            c.append(msa_ldd(i, s, 256 + 16 * i))
+        for i in range(1, 32):
+            if i != s:
+                c.append(mips_ld(i, s, 8 * i))
+        c.append(mips_ld(s, s, 8 * s))
+        here = PROLOGUE + 4 * len(c)
+        c += [0x10000000 | (((target - (here + 4)) >> 2) & 0xFFFF), 0]                            # b target; nop
+        return words(c, True)
+
+    def epilogue(self, dumps, marker):
+        s = self.scratch
+        t = 1 if s != 1 else 2
+        c = mips_li32(s, OUT)
+        for i in range(1, 32):
+            if i != s:
+                c.append(mips_sd(i, s, 8 * i))
+        for i in range(32):
+            c.append(msa_std(i, s, 256 + 16 * i))
+        c += mips_li32(t, marker) + [mips_sd(t, s, self.marker_at)]
+        for base, size in [(OUT, self.table_size)] + [(p, PAGE) for p in dumps]:
+            c += [0x24040001] + mips_li32(5, base) + mips_li32(6, size) + [0x24021389, 0x0000000C]  # a0=1; v0=5001 (write)
+        c += [0x24040000, 0x240213C2, 0x0000000C]                                                    # a0=0; v0=5058 (exit)
+        return words(c, True)
+
+    def table(self, arch, init, init_vec, flagword):
+        t = bytearray(self.table_size)
+        sx = lambda v: (v & 0xFFFFFFFF) - ((v & 0x80000000) << 1)
+        for i, (n, _) in enumerate(arch.gprs[:31], start=1):
+            struct.pack_into(">q", t, 8 * i, sx(init.get(n, 0)))
+        for i, (n, _) in enumerate(arch.vecs):
+            v = init_vec.get(n, 0)
+            struct.pack_into(">QQ", t, 256 + 16 * i, v & (2 ** 64 - 1), v >> 64)
+        return bytes(t)
+
+    def parse(self, arch, out):
+        regs = {n: struct.unpack_from(">Q", out, 8 * i)[0] for i, (n, _) in enumerate(arch.gprs[:31], start=1)}
+        for i, (n, _) in enumerate(arch.vecs):
+            lo, hi = struct.unpack_from(">QQ", out, 256 + 16 * i)
+            regs[n] = lo | hi << 64
+        return regs, 0
+
+
+HARNESSES = {"aarch64": A64Harness, "riscv64": RvHarness, "mips": MipsHarness, "mipsr6": MipsR6Harness}
 
 
 def available(arch):
@@ -338,7 +401,7 @@ def run_case_qemu(arch, regs, row, cand, rng, seed, tmp):
         return {"status": "undefined"}
 
     h = HARNESSES[arch.name]()
-    if arch.name in ("riscv64", "mips"):
+    if arch.name in ("riscv64", "mips", "mipsr6"):
         written = set()
         for o in row["ops"]:
             out = o.get("output")
@@ -403,7 +466,7 @@ def run_case_qemu(arch, regs, row, cand, rng, seed, tmp):
         why = p.stderr.decode(errors="replace").strip().splitlines()
         return {"status": "ref-exception", "why": "qemu " + (why[0][:60] if why else "exit %s" % p.returncode)}
     ref, ref_flags = h.parse(arch, p.stdout[:h.table_size])
-    if arch.name in ("riscv64", "mips"):
+    if arch.name in ("riscv64", "mips", "mipsr6"):
         ref[arch.gprs[h.scratch - 1][0]] = init[arch.gprs[h.scratch - 1][0]]
 
     diffs = {}

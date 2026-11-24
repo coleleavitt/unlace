@@ -136,7 +136,7 @@ define pcodeop special2;
 # x: 6 y: 0-7
 # x: 7 y: 0-6
 @ifndef OCTEON
-:SPECIAL2 RD, RSsrc, RTsrc, sa, fct      is $(AMODE) & prime=0x1C & sa & RD & RSsrc & RTsrc & fct {
+:SPECIAL2 RD, RSsrc, RTsrc, sa, fct      is $(AMODE) & REL6=0 & prime=0x1C & sa & RD & RSsrc & RTsrc & fct {
     tmp:1 = fct;
     tmp2:1 = sa;
     RD = special2(RSsrc, RTsrc, tmp2, tmp);
@@ -511,7 +511,7 @@ define pcodeop special2;
 	wait();
 }
 
-:pref hint, OFF_BASE            is $(AMODE) & prime=0x33 & hint & OFF_BASE {
+:pref hint, OFF_BASE            is $(AMODE) & REL6=0 & prime=0x33 & hint & OFF_BASE {
     prefetch(OFF_BASE, hint:1); 
 }
 
@@ -569,14 +569,14 @@ define pcodeop special2;
 }
 
 # 0111 00cc cccc cccc cccc cccc cc11 1111
-:sdbbp breakcode                is $(AMODE) & prime=0x1C & fct=0x3F & breakcode {
+:sdbbp breakcode                is $(AMODE) & REL6=0 & prime=0x1C & fct=0x3F & breakcode {
     signalDebugBreakpointException();
 }
 
 @ifndef COPR_C
 # 1111 10bb bbbt tttt iiii iiii iiii iiii        
 @ifndef OCTEON
-:sdc2 RTsrc, OFF_BASE           is $(AMODE) & prime=0x3E & OFF_BASE & RTsrc {
+:sdc2 RTsrc, OFF_BASE           is $(AMODE) & REL6=0 & prime=0x3E & OFF_BASE & RTsrc {
     *[ram]:8 OFF_BASE = getCopReg(2:1, RTsrc);
 }
 @endif
@@ -689,7 +689,7 @@ define pcodeop special2;
 @ifndef COPR_C
 # 1110 10bb bbbt tttt iiii iiii iiii iiii
 @ifndef OCTEON
-:swc2 hint, OFF_BASE              is $(AMODE) & prime=0x3A & OFF_BASE & hint {
+:swc2 hint, OFF_BASE              is $(AMODE) & REL6=0 & prime=0x3A & OFF_BASE & hint {
 	tmp:4 = getCopReg(2:1, hint:4);
     *[ram]:4 OFF_BASE = tmp; 
 }
@@ -1491,7 +1491,6 @@ define pcodeop SYNC;
     goto Rel16; 
 }
 
-:bad1								is $(AMODE) & REL6=1 & prime=0x06 & rs=0 & rt=0 unimpl
 :blezalc RTsrc, Rel16				is $(AMODE) & REL6=1 & prime=0x06 & rs=0 & RTsrc & Rel16 {
 	if (RTsrc s> 0) goto inst_next;
     ra = inst_next; 
@@ -1504,11 +1503,10 @@ define pcodeop SYNC;
 	call Rel16;
 }	
 
-:bgeuc RSsrc, RTsrc, Rel16			is $(AMODE) & REL6=1 & prime=0x06 & rt!=0 & rs!=rt & RSsrc & RTsrc & Rel16 {
+:bgeuc RSsrc, RTsrc, Rel16			is $(AMODE) & REL6=1 & prime=0x06 & rs!=0 & rt!=0 & rs!=rt & RSsrc & RTsrc & Rel16 {
 	if (RSsrc >= RTsrc) goto Rel16;
 }
 
-:bad2								is $(AMODE) & REL6=1 & prime=0x07 & rs=0 & rt=0 unimpl
 :bgtzalc RTsrc, Rel16				is $(AMODE) & REL6=1 & prime=0x07 & rs=0 & RTsrc & Rel16 {
 	if (RTsrc s<= 0) goto inst_next;
     ra = inst_next; 
@@ -1521,7 +1519,7 @@ define pcodeop SYNC;
 	call Rel16;
 }	
 
-:bltuc RSsrc, RTsrc, Rel16			is $(AMODE) & REL6=1 & prime=0x07 & rt!=0 & rs!=rt & RSsrc & RTsrc & Rel16 {
+:bltuc RSsrc, RTsrc, Rel16			is $(AMODE) & REL6=1 & prime=0x07 & rs!=0 & rt!=0 & rs!=rt & RSsrc & RTsrc & Rel16 {
 	if (RSsrc < RTsrc) goto Rel16;
 }
 
@@ -1575,7 +1573,7 @@ define pcodeop SYNC;
 :bgezc RTsrc, Rel16					is $(AMODE) & REL6=1 & prime=0x16 & rs=rt & rt!=0 & RTsrc & Rel16 {
 	if (RTsrc s>= 0) goto Rel16;
 }
-:bgec RSsrc, RTsrc, Rel16			is $(AMODE) & REL6=1 & prime=0x16 & RSsrc & RTsrc & Rel16 {
+:bgec RSsrc, RTsrc, Rel16			is $(AMODE) & REL6=1 & prime=0x16 & rs!=0 & rt!=0 & rs!=rt & RSsrc & RTsrc & Rel16 {
 	if (RSsrc s>= RTsrc) goto Rel16;
 }
 
@@ -1589,7 +1587,7 @@ define pcodeop SYNC;
 	if (RTsrc s< 0) goto Rel16;
 }
 
-:bltc RSsrc, RTsrc, Rel16			is $(AMODE) & REL6=1 & prime=0x17 & RSsrc & RTsrc & Rel16 {
+:bltc RSsrc, RTsrc, Rel16			is $(AMODE) & REL6=1 & prime=0x17 & rs!=0 & rt!=0 & rs!=rt & RSsrc & RTsrc & Rel16 {
 	if (RSsrc s< RTsrc) goto Rel16;
 }
 
@@ -1973,7 +1971,7 @@ svFramesize: ,val						is svrs_frame_hi=0 & svrs_frame_low=0 [val = 128; ] {expo
 svFramesize: ,val						is svrs_frame_hi & svrs_frame_low [val = ((svrs_frame_hi << 4) | svrs_frame_low) << 3;] {export *[const]:2 val;}
 
 
-:save svRa^svXsregs^svAregs^svFramesize		is $(AMODE) & prime=0x1c & fct=0x1f & save=0x01 & svRa & svXsregs & svAregs & svStat & svFramesize {
+:save svRa^svXsregs^svAregs^svFramesize		is $(AMODE) & REL6=0 & prime=0x1c & fct=0x1f & save=0x01 & svRa & svXsregs & svAregs & svStat & svFramesize {
 	tsp = sp;
 	build svAregs;
 	build svRa;
@@ -1985,7 +1983,7 @@ svFramesize: ,val						is svrs_frame_hi & svrs_frame_low [val = ((svrs_frame_hi 
 	sp = sp - zext(tmp);
 }
 
-:restore rsRa^rsXsregs^rsStat^svFramesize	is $(AMODE) & prime=0x1c & fct=0x1f & save=0x00 & rsRa & rsXsregs & rsStat & svFramesize {
+:restore rsRa^rsXsregs^rsStat^svFramesize	is $(AMODE) & REL6=0 & prime=0x1c & fct=0x1f & save=0x00 & rsRa & rsXsregs & rsStat & svFramesize {
 	build svFramesize;
 
 	tmp:2 = svFramesize;
@@ -1999,3 +1997,35 @@ svFramesize: ,val						is svrs_frame_hi & svrs_frame_low [val = ((svrs_frame_hi 
 }
 @endif
 @include "mipsfloat.sinc"
+
+# Release 6 encodings of instructions whose pre-R6 opcodes R6 removed.
+:sc RTsrc, OFF_BASER6                is $(AMODE) & REL6=1 & prime=0x1F & fct=0x26 & bit6=0 & OFF_BASER6 & RT & RTsrc {
+    *[ram]:4 OFF_BASER6 = RTsrc:$(SIZETO4);
+    RT = 1;
+}
+
+:pref hint, OFF_BASER6               is $(AMODE) & REL6=1 & prime=0x1F & fct=0x35 & bit6=0 & hint & OFF_BASER6 {
+    prefetch(OFF_BASER6, hint:1);
+}
+
+:sdbbp breakcode                     is $(AMODE) & REL6=1 & prime=0x00 & fct=0x0E & breakcode {
+    signalDebugBreakpointException();
+}
+
+:swc2 RTsrc, simmed11(baser6)        is $(AMODE) & REL6=1 & prime=0x12 & copop=0x0B & simmed11 & baser6 & RTsrc {
+	tmp:$(REGSIZE) = simmed11;
+	tmp = tmp + baser6;
+	tmpa:$(ADDRSIZE) = 0;
+	ValCast(tmpa,tmp);
+	val:4 = getCopReg(2:1, RTsrc);
+	*[ram]:4 tmpa = val;
+}
+
+:sdc2 RTsrc, simmed11(baser6)        is $(AMODE) & REL6=1 & prime=0x12 & copop=0x0F & simmed11 & baser6 & RTsrc {
+	tmp:$(REGSIZE) = simmed11;
+	tmp = tmp + baser6;
+	tmpa:$(ADDRSIZE) = 0;
+	ValCast(tmpa,tmp);
+	val:8 = getCopReg(2:1, RTsrc);
+	*[ram]:8 tmpa = val;
+}

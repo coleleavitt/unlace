@@ -461,6 +461,34 @@ class Mips32(Arch32):
         return set()
 
 
+MIPSR6_DENY = re.compile(
+    r"^(b.*|j.*|syscall|break|sdbbp|eret|deret|eretnc|wait|ssnop|ehb|pause|sync.*|cache.*|pref.*|ll.*|sc.*|lld.*|scd.*|"
+    r"tlb.*|mf[ch]0|mt[ch]0|di|ei|dvp|evp|rdhwr|rdpgpr|wrpgpr|t(eq|ge|geu|lt|ltu|ne)|sigrie|ginv.*|crc32.*|"
+    r"c\..*|cmp\..*|cfc1|ctc1|mf[ch]1|mt[ch]1|cfc2|ctc2|mf[ch]2|mt[ch]2|dmfc[12]|dmtc[12]|ldc.*|sdc.*|lwc.*|swc.*|"
+    r"cop.*|cfcmsa|ctcmsa|f.*\.[wd]|.*\.(s|ps|l))$"
+)
+
+
+class Mips32R6(Mips32):
+    """MIPS32 Release 6 with MSA, checked against qemu-mips64 -cpu I6400 (--oracle qemu)."""
+    name = "mipsr6"
+    lang = "MIPS:BE:32:R6"
+    gprs = [(n, None) for n in MIPS_NAMES[1:]]
+    vecs = [(f"w{i}", None) for i in range(32)]
+    deny = MIPSR6_DENY
+
+    def capstone(self):
+        md = cs.Cs(cs.CS_ARCH_MIPS, cs.CS_MODE_MIPS32R6 | cs.CS_MODE_BIG_ENDIAN)
+        return md
+
+    def skip(self, cand):
+        # FPU registers are not in the harness state (MSA's own f* operations are denied above).
+        return "$f" in cand["op_str"]
+
+    def ignored(self, mnemonic, operands, state):
+        return set()
+
+
 PPC_DENY = re.compile(
     r"^(sc|t[wd]i?.*|rfi|rfci|rfmci|mtmsr.*|mfmsr|mtspr|mfspr|mfsr.*|mtsr.*|mftb.*|wrtee.*|isync|sync|lwsync|eieio|"
     r"mbar|msync|dcb.*|icb.*|tlb.*|lwarx|stwcx\.|ldarx|stdcx\.|lbarx|stbcx\.|lharx|sthcx\.|b.*|"
@@ -575,4 +603,4 @@ class TriCore(Arch32):
 
 # m68k and SPARC are left out: Unicorn 2.1.4 segfaults within a few hundred cases on both, and its
 # m68k SR read does not fold in the lazily computed condition codes.
-ARCHES = {a.name: a for a in (X86_64(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Ppc32(), TriCore())}
+ARCHES = {a.name: a for a in (X86_64(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Ppc32(), TriCore(), Mips32R6())}

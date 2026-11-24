@@ -329,20 +329,41 @@ fn lower(rec: &RecExpr<Bv>, id: Id) -> Option<Expr> {
     })
 }
 
-/// Do `a` and `b` agree on every input of their `n` leaves at the widest
-/// width (at most 8 bits) with at most `2^EXHAUSTIVE_BITS` combinations? Every op is
-/// a ring or bitwise op, so truncation to that width commutes with it and the
-/// check is a necessary condition for equality at the full width.
-fn agree_exhaustive(a: &Expr, b: &Expr, n: usize) -> bool {
+/// Print why a candidate was refused, with the input that refutes it, when
+/// `UNLACE_EGRAPH_TRACE` is set. Nothing is printed otherwise.
+fn trace_refusal(f: &Expr, cand: &Expr, why: &str, witness: Option<&[u64]>) {
+    static ON: OnceLock<bool> = OnceLock::new();
+    if !*ON.get_or_init(|| unlace_base::env::var_os("UNLACE_EGRAPH_TRACE").is_some()) {
+        return;
+    }
+    let at = witness.map_or_else(String::new, |w| {
+        let parts: Vec<String> = w
+            .iter()
+            .enumerate()
+            .map(|(i, v)| format!("l{i} = {v:#x}"))
+            .collect();
+        format!(" at {}", parts.join(", "))
+    });
+    eprintln!("egraph: refused {cand:?} for {f:?}: {why}{at}");
+}
+
+/// The leaves of the first input, among the [`EXHAUSTIVE_BITS`] combinations of
+/// the `n` leaves at the widest small width (at most 8 bits), where `a` and `b`
+/// differ; `None` when they agree on all of them. Every op is a ring or bitwise
+/// op, so truncation to that width commutes with it and the check is a necessary
+/// condition for equality at the full width.
+fn exhaustive_witness(a: &Expr, b: &Expr, n: usize) -> Option<Vec<u64>> {
     let bits = (EXHAUSTIVE_BITS / n.max(1)).clamp(1, 8);
     let mask = (1u64 << bits) - 1;
     let mut leaves = [0u64; MAX_LEAVES];
-    (0..1u64 << (bits * n.min(MAX_LEAVES))).all(|p| {
-        for (i, l) in leaves.iter_mut().enumerate().take(n) {
-            *l = (p >> (bits * i)) & mask;
-        }
-        a.eval(&leaves, mask) == b.eval(&leaves, mask)
-    })
+    (0..1u64 << (bits * n.min(MAX_LEAVES)))
+        .find(|&p| {
+            for (i, l) in leaves.iter_mut().enumerate().take(n) {
+                *l = (p >> (bits * i)) & mask;
+            }
+            a.eval(&leaves, mask) != b.eval(&leaves, mask)
+        })
+        .map(|_| leaves[..n].to_vec())
 }
 
 /// The bitwise ops of `e`.
@@ -420,10 +441,11 @@ pub(crate) fn saturate(
         let root = runner.egraph.find(root);
         let (_, best) = Extractor::new(&runner.egraph, OpCount).find_best(root);
         let simple = lower(&best, best.root())?;
-        if simple.ops() >= budget
-            || bitwise_ops(&simple) >= bit_budget
-            || !mba::agree(f, &simple, n, mask)
-        {
+        if simple.ops() >= budget || bitwise_ops(&simple) >= bit_budget {
+            return None;
+        }
+        if let Some(leaves) = mba::agree_witness(f, &simple, n, mask) {
+            trace_refusal(f, &simple, "random inputs", Some(&leaves));
             return None;
         }
         // A proof at the full width makes the small-width check redundant.
@@ -432,8 +454,22 @@ pub(crate) fn saturate(
             .flatten();
         match proof {
             Some(true) => Some((simple, Proof::Proved)),
-            Some(false) => None,
-            None => agree_exhaustive(f, &simple, n).then_some((simple, Proof::Screened)),
+            Some(false) => {
+                trace_refusal(
+                    f,
+                    &simple,
+                    "a full-width proof found a reachable carry state where the bits differ",
+                    None,
+                );
+                None
+            }
+            None => match exhaustive_witness(f, &simple, n) {
+                Some(leaves) => {
+                    trace_refusal(f, &simple, "small-width check", Some(&leaves));
+                    None
+                }
+                None => Some((simple, Proof::Screened)),
+            },
         }
     };
     let quick = run(eg, mask, QUICK_NODE_LIMIT, QUICK_ITER_LIMIT);
@@ -677,8 +713,16 @@ mod tests {
     fn exhaustive_check_refutes_a_near_miss() {
         let a = Expr::Add(l(0), l(1));
         let b = Expr::Or(l(0), l(1));
-        assert!(!agree_exhaustive(&a, &b, 2));
-        assert!(agree_exhaustive(&a, &a, 2));
+        assert!(exhaustive_witness(&a, &b, 2).is_some());
+        assert!(exhaustive_witness(&a, &a, 2).is_none());
+    }
+
+    #[test]
+    fn exhaustive_witness_is_a_differing_input() {
+        let a = Expr::Add(l(0), l(1));
+        let b = Expr::Or(l(0), l(1));
+        let w = exhaustive_witness(&a, &b, 2).expect("differs");
+        assert_ne!(a.eval(&w, 0x3f), b.eval(&w, 0x3f));
     }
 
     #[test]
@@ -693,7 +737,7 @@ mod tests {
             };
             let (a, b) = (pattern_expr(lhs), pattern_expr(rhs));
             assert!(mba::agree(&a, &b, 3, u64::MAX), "rule {}", r.name);
-            assert!(agree_exhaustive(&a, &b, 3), "rule {}", r.name);
+            assert!(exhaustive_witness(&a, &b, 3).is_none(), "rule {}", r.name);
         }
     }
 

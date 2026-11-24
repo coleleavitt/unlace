@@ -4796,7 +4796,10 @@ replacement is a closed-form seed of a tree with one bitwise op (checked on
 random inputs only). A screened replacement adds one header note to the
 function, `WARNING: egraph: an MBA expression in this function was simplified
 without a full-width proof ...`, which the comment database keeps once per
-function. The marks report the checks; acceptance is unchanged.
+function. The marks report the checks; acceptance is unchanged. With
+`UNLACE_EGRAPH_TRACE` set, each refused candidate is printed to stderr with
+the input that refutes it (the random or small-width check); a refused full-width
+proof has no input to name and is reported as such.
 
 **Measured** (pinned build 54380310a5, with the once-per-tree-value
 regrouping). The corpus: functions whose return value is a 1-4 variable

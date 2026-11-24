@@ -839,13 +839,19 @@ fn splitmix(state: &mut u64) -> u64 {
     z ^ (z >> 31)
 }
 
+/// The leaves of the first of 64 pseudo-random full-width inputs on which `a`
+/// and `b` differ, `None` when they agree on all of them.
+pub(crate) fn agree_witness(a: &Expr, b: &Expr, n: usize, mask: u64) -> Option<Vec<u64>> {
+    let mut st = 0x6b75_6e61u64;
+    (0..64).find_map(|_| {
+        let leaves: Vec<u64> = (0..n).map(|_| splitmix(&mut st) & mask).collect();
+        (a.eval(&leaves, mask) != b.eval(&leaves, mask)).then_some(leaves)
+    })
+}
+
 /// Do `a` and `b` agree on 64 pseudo-random full-width inputs?
 pub(crate) fn agree(a: &Expr, b: &Expr, n: usize, mask: u64) -> bool {
-    let mut st = 0x6b75_6e61u64;
-    (0..64).all(|_| {
-        let leaves: Vec<u64> = (0..n).map(|_| splitmix(&mut st) & mask).collect();
-        a.eval(&leaves, mask) == b.eval(&leaves, mask)
-    })
+    agree_witness(a, b, n, mask).is_none()
 }
 
 pub(crate) fn is_candidate(op: OpCode) -> bool {

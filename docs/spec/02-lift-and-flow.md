@@ -4218,6 +4218,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `WonderSwan` | NEC V30MZ (WonderSwan) | `V30MZ:LE:16:default` | aleph-void/ghidra-wonderswan (fork of JidouGhost-TL/ghidra-wonderswan) @ `f499014b08`, Apache-2.0 |
 | `XaviX` | XaviX | `XaviX:LE:24:default` | aleph-void/ghidra-xavix @ `8a94e7953b`, MIT |
 | `CellSPU` | Cell SPU (PS3) | `SPU:BE:32:default` | aleph-void/GhidraSPU (fork of aerosoul94/GhidraSPU) @ `a2efc11569`, Apache-2.0 |
+| `Falcon` | NVIDIA Falcon | `falcon:LE:32:v0`, `falcon:LE:32:v3`, `falcon:LE:32:v4`, `falcon:LE:32:v5`, `falcon:LE:32:v6` | aleph-void/ghidra_falcon (fork of marysaka/ghidra_falcon) @ `d835a7c618`, ISC |
 <!-- vendor-rows -->
 
 ### WDC 65816 (#98)

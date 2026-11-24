@@ -225,6 +225,10 @@ specs/Ghidra/Processors/CellSPU vendors the Cell SPU (PS3) SLEIGH specification 
 aleph-void/GhidraSPU (https://github.com/aleph-void/GhidraSPU), a fork of aerosoul94/GhidraSPU, released under the
 Apache License, Version 2.0 (its license file is in that directory).
 
+specs/Ghidra/Processors/Falcon vendors the NVIDIA Falcon SLEIGH specification of
+aleph-void/ghidra_falcon (https://github.com/aleph-void/ghidra_falcon), a fork of marysaka/ghidra_falcon, released under the
+ISC License (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

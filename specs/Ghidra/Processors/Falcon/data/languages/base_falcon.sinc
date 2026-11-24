@@ -1,0 +1,309 @@
+# Base specification for the Nvidia Falcon
+
+define endian=little;
+define alignment=1;
+
+define space imem       type=ram_space      size=4 default;
+define space dmem       type=ram_space      size=4;
+# I/O space (iord/iowr): the unit's MMIO registers, byte-addressed as envydis prints them
+define space io         type=ram_space      size=4;
+define space register   type=register_space size=4;
+
+# general-purpose registers
+define register offset=0 size=4 [
+  # the full words (32 bits) of the GPRs
+  r0  r1  r2  r3
+  r4  r5  r6  r7
+  r8  r9  r10 r11
+  r12 r13 r14 r15
+];
+define register offset=0 size=2 [
+  # the lower halfwords (16 bits) of the GPRs
+  r0h  _ r1h  _ r2h  _ r3h  _
+  r4h  _ r5h  _ r6h  _ r7h  _
+  r8h  _ r9h  _ r10h _ r11h _
+  r12h _ r13h _ r14h _ r15h _
+];
+define register offset=0 size=1 [
+  # the lower bytes (8 bits) of the GPRs
+  r0b  _ _ _ r1b  _ _ _ r2b  _ _ _ r3b  _ _ _
+  r4b  _ _ _ r5b  _ _ _ r6b  _ _ _ r7b  _ _ _
+  r8b  _ _ _ r9b  _ _ _ r10b _ _ _ r11b _ _ _
+  r12b _ _ _ r13b _ _ _ r14b _ _ _ r15b _ _ _
+];
+
+# special-purpose registers (envytools names; csw is envytools' $flags; s2, s13-s15 are unnamed,
+# s9/s10 are cx/cauth on cores with the crypto coprocessor)
+@if defined(CRYPT_EXTENSION) && FUC_VERSION == "6"
+define register offset=0x40 size=4 [
+  iv0    iv1    s2     tv
+  sp     pc     xcbase xdbase
+  csw    cx     cauth  xtargets
+  tstatus cauth1 xcbase1 xdbase1
+];
+@elif defined(CRYPT_EXTENSION)
+define register offset=0x40 size=4 [
+  iv0    iv1    s2     tv
+  sp     pc     xcbase xdbase
+  csw    cx     cauth  xtargets
+  tstatus s13   s14    s15
+];
+@elif FUC_VERSION == "6"
+define register offset=0x40 size=4 [
+  iv0    iv1    s2     tv
+  sp     pc     xcbase xdbase
+  csw    s9     s10    xtargets
+  tstatus s13   xcbase1 xdbase1
+];
+@elif FUC_VERSION == "0"
+define register offset=0x40 size=4 [
+  iv0    iv1    s2     tv
+  sp     pc     xcbase xdbase
+  csw    s9     s10    xtargets
+  s12    s13    s14    s15
+];
+@else
+define register offset=0x40 size=4 [
+  iv0    iv1    s2     tv
+  sp     pc     xcbase xdbase
+  csw    s9     s10    xtargets
+  tstatus s13   s14    s15
+];
+@endif
+
+@if defined(CRYPT_EXTENSION)
+# crypto registers
+define register offset=0x200 size=4 [  # XXX: dirty hack; crypto regs are 133 bits in size
+  c0 c1 c2 c3 c4 c5 c6 c7
+];
+@endif
+
+# Flag bits from the CSW register.
+# TODO: Use bitrange when supported.
+#define bitrange p0=csw[0,1]
+#                p1=csw[1,1]
+#                p2=csw[2,1]
+#                p3=csw[3,1]
+#                p4=csw[4,1]
+#                p5=csw[5,1]
+#                p6=csw[6,1]
+#                p7=csw[7,1]
+#                cf=csw[8,1]
+#                of=csw[9,1]
+#                sf=csw[10,1]
+#                zf=csw[11,1]
+#                ie0=csw[16,1]
+#                ie1=csw[17,1]
+#                ie2=csw[18,1]
+#                is0=csw[20,1]
+#                is1=csw[21,1]
+#                is2=csw[22,1]
+#                ea=csw[24,1];
+
+# Flags: named bit ranges of csw, so that every write to csw (mov, bset/bclr, setp, iret) is seen
+# by the conditions and every flag write shows up in csw
+define bitrange CF=csw[8,1] OF=csw[9,1] SF=csw[10,1] ZF=csw[11,1];
+
+# TODO: define flags?
+
+@define P0_flag "csw[0, 1]"
+@define P1_flag "csw[1, 1]"
+@define P2_flag "csw[2, 1]"
+@define P3_flag "csw[3, 1]"
+@define P4_flag "csw[4, 1]"
+@define P5_flag "csw[5, 1]"
+@define P6_flag "csw[6, 1]"
+@define P7_flag "csw[7, 1]"
+@define C_flag "CF"
+@define O_flag "OF"
+@define S_flag "SF"
+@define Z_flag "ZF"
+
+# The flags live in csw itself (see the bit ranges above): nothing to pack or unpack.
+macro unpackflags(tmp) {
+}
+
+macro packflags(tmp) {
+}
+
+
+# 8 bits format & size of opcode
+define token opcode_len_format (8)
+  # raw opcode for unsized instructions
+  raw_opcode=(0, 7)
+  raw_opcode_lo=(0, 3)
+  raw_opcode_hi=(4, 7)
+  op_size=(6, 7)
+  op_format=(0, 5)
+  o1_format=(0, 3)
+  reg0=(0, 3)
+;
+
+define token opcode_byte1 (8)
+  reg2=(0, 3)
+  sreg2=(0, 3)
+  reg1=(4, 7)
+  sreg1=(4, 7)
+  subopcode2=(0, 3)
+  subopcodeb1_0_2=(0, 2)
+  subopcodeb1_0_5=(0, 5)
+  subopcodeb1_0_7=(0, 7)
+  subopcodeL=(0, 6)
+  pred1=(0, 2)
+  b1bit3=(3, 3)
+  b1hi2=(6, 7)
+;
+
+define token opcode_byte2 (8)
+  subopcode3=(0, 3)
+  reg3=(4, 7)
+
+  bitf8_0=(0,4)
+  bitf8_1=(5,7)
+
+  subopcode_crypti=(0,4)
+  b2hi3=(5,7)
+;
+
+define token opcode_byte4 (8)
+  subopcode5=(0, 3)
+  b4hi=(4, 7)
+
+  crypt_extra=(0, 1)
+  #subopcode_crypt=(2, 7)
+;
+
+@if defined(CRYPT_EXTENSION)
+# The crypto pair represents the last two bytes of a crypto command instruction.
+# It encodes data which are meant to be transferred to the SCP via an artificial
+# signal. This signal includes a crypto opcode, register notations and immediates,
+# depending on the specific command to be invoked.
+define token crypt_pair (16)
+  creg1=(0, 2)
+  creg2=(4, 6)
+
+  cimm=(4, 9)
+
+  subopcode_crypt=(10,14)
+  cpb15=(15,15)
+  cpb3=(3,3)
+  cpb7=(7,7)
+  cpb89=(8,9)
+  cpb3_9=(3,9)
+  cpimm8=(0,7)
+  cphi=(8,14)
+;
+@endif
+
+define token immediate8 (8)
+  imm8=(0, 7)
+  imm8s=(0, 7) signed
+  pred_imm=(0, 2)
+  fimm8=(0, 7)
+  fimm8s=(0, 7) signed
+;
+
+define token opcode_immediate16 (16)
+  imm16=(0, 15)
+  imm16s=(0, 15) signed
+  fimm16=(0, 15)
+  fimm16s=(0, 15) signed
+
+  bitf16_0=(0,4)
+  bitf16_1=(5,9)
+  bitf16_hi=(10,15)
+;
+
+define token opcode_immediate24 (24)
+  fimm24s=(0, 23) signed
+  fimm24=(0, 23)
+;
+
+define token opcode_immediate32 (32)
+  fimm32=(0, 31)
+;
+
+# TODO: define opcode48 (seems used for bra on fuc5)
+
+attach variables [ reg0 reg1 reg2 reg3 ]
+[
+  r0  r1  r2  r3
+  r4  r5  r6  r7
+  r8  r9  r10 r11
+  r12 r13 r14 r15
+];
+
+attach variables [ sreg1 sreg2 ]
+[
+@if defined(CRYPT_EXTENSION) && FUC_VERSION == "6"
+  iv0    iv1    s2     tv
+  sp     pc     xcbase xdbase
+  csw    cx     cauth  xtargets
+  tstatus cauth1 xcbase1 xdbase1
+@elif defined(CRYPT_EXTENSION)
+  iv0    iv1    s2     tv
+  sp     pc     xcbase xdbase
+  csw    cx     cauth  xtargets
+  tstatus s13   s14    s15
+@elif FUC_VERSION == "6"
+  iv0    iv1    s2     tv
+  sp     pc     xcbase xdbase
+  csw    s9     s10    xtargets
+  tstatus s13   xcbase1 xdbase1
+@elif FUC_VERSION == "0"
+  iv0    iv1    s2     tv
+  sp     pc     xcbase xdbase
+  csw    s9     s10    xtargets
+  s12    s13    s14    s15
+@else
+  iv0    iv1    s2     tv
+  sp     pc     xcbase xdbase
+  csw    s9     s10    xtargets
+  tstatus s13   s14    s15
+@endif
+];
+
+@if defined(CRYPT_EXTENSION)
+attach variables [ creg1 creg2 ]
+[
+  c0 c1 c2 c3 c4 c5 c6 c7
+];
+@endif
+
+rel8: target is imm8s [ target = inst_start + imm8s; ] {
+  export *[imem]:4 target;
+}
+
+rel16: target is imm16s [ target = inst_start + imm16s; ] {
+  export *[imem]:4 target;
+}
+
+addr8: imm8 is imm8 {
+  export *[imem]:4 imm8;
+}
+
+addr16: imm16 is imm16 {
+  export *[imem]:4 imm16;
+}
+
+fimm24st: target is fimm24 [ target = 0 + fimm24; ] {
+  export *[imem]:4 target;
+}
+
+define pcodeop todo;
+define pcodeop todo_flags;
+
+@include "macro.sinc"
+@include "unsized_inst.sinc"
+
+@if defined(SUPPORT_FUC5P)
+@include "fuc5_inst.sinc"
+@endif
+
+@if defined(CRYPT_EXTENSION)
+@include "crypt_inst.sinc"
+@endif
+
+@include "envydis.sinc"
+
+@include "sized.sinc"

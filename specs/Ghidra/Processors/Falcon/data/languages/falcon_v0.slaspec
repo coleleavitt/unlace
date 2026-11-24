@@ -1,0 +1,6 @@
+@define FUC_VERSION "0"
+
+@define SUPPORT_FUC0
+@define SUPPORT_FUCOLD
+
+@include "base_falcon.sinc"

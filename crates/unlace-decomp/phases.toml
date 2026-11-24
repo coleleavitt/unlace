@@ -3647,8 +3647,8 @@ symptoms = "a long long compare on i386 prints as branches over four int paramet
 
 [[settable]]
 option = "retindexuse"
-values = "on|off"
-default = "off"
+values = "off|bpf|on"
+default = "bpf"
 destructive = false
 phase = "P4"
 subphase = "output-prototype"
@@ -3656,7 +3656,7 @@ strength = "HARD"
 rewind = "P4"
 issue = "unlace-865"
 summary = "Keep a RETURN trial whose value also indexes a load. Funcdata::onlyOpUse (funcdata_varnode.cc:1851) refuses a return-register trial when any LOAD reads through a value derived from it, taking the register for a pointer the function was handed; a loop counter left in the return register falls to the same test whenever the loop indexes memory with it (while (s[n]) n++; return n; on BPF and SASS prints void). With the option on, a LOAD whose address is the walked value plus a value the walk did not reach (a base pointer, constant offsets folded) is an index use and does not refuse the trial."
-use_when = "Off by default: a scratch register that indexes a loop and is left in the return register of a void function becomes a return value too. Turn it on for BPF or SASS code, or any target whose return register is also the natural loop counter, when a counting function (strlen-like, a search that returns its index) prints void and its counter is declared with the return register's storage."
+use_when = "Default bpf: on for eBPF, whose leaf functions keep their loop counter in r0, the return register; off elsewhere. Measured on BPF, SASS, x86-64 and Thumb-2 -O2 builds of the same C (the sweep corpus, gzip, libexpat, mirai, zlib and bzip2 objects; 172 BPF functions): on BPF it gains two returns, both real, and changes nothing else; on SASS it gains none and widens one int return to a register pair; on Thumb-2 it widens nine int returns to unsigned long long and gives one void function a return. Set on to apply it everywhere (x86-64 gained four real returns), off to keep upstream's onlyOpUse test on eBPF too."
 example = "option retindexuse on"
 source_decompiler = "kuna"
 inspiration = "real-code sweep (#865): clang -O2 BPF and ptxas sm_80 str_len, the counter in r0/r4 when the function exits; upstream Funcdata::onlyOpUse (funcdata_varnode.cc:1851)"

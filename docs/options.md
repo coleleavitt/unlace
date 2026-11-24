@@ -278,8 +278,8 @@ Three tiers:
 | a 64-bit compare on 32-bit ARM prints as an SBORROW4 or CONCAT44 chain over two register parameters | [`armpairparam`](#armpairparam----on--off-default-on) |
 | a long long compare on i386 prints as branches over four int parameters that compare the high words before the low words | [`pairbranch`](#pairbranch----on--off-default-off) |
 | a long long equality prints as a0 == a2 && a1 == a3 over four int parameters | [`pairbranch`](#pairbranch----on--off-default-off) |
-| a strlen-like loop function prints void and its counter is declared with the return register's storage | [`retindexuse`](#retindexuse----on--off-default-off) |
-| a search loop that returns its index prints void on BPF or SASS | [`retindexuse`](#retindexuse----on--off-default-off) |
+| a strlen-like loop function prints void and its counter is declared with the return register's storage | [`retindexuse`](#retindexuse----off--bpf--on-default-bpf) |
+| a search loop that returns its index prints void on BPF or SASS | [`retindexuse`](#retindexuse----off--bpf--on-default-bpf) |
 | a signed char loaded with ldrsb is declared int | [`regsigned`](#regsigned----on--off-default-off) |
 | a short counter prints as int with (int)(short) casts at every use | [`regsigned`](#regsigned----on--off-default-off) |
 | an int local prints as long on x86-64 though every value is a movsxd | [`regsigned`](#regsigned----on--off-default-off) |
@@ -2019,11 +2019,11 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P4/prototype-source · kuna · new-analysis · pairparam
 - **Example:** `option pairbranch on`
 
-### `retindexuse` -- on | off, default `off`
+### `retindexuse` -- off | bpf | on, default `bpf`
 
 - **Symptoms:** a strlen-like loop function prints void and its counter is declared with the return register's storage; a search loop that returns its index prints void on BPF or SASS.
 - **What it does:** Keep a RETURN trial whose value also indexes a load. Funcdata::onlyOpUse (funcdata_varnode.cc:1851) refuses a return-register trial when any LOAD reads through a value derived from it, taking the register for a pointer the function was handed; a loop counter left in the return register falls to the same test whenever the loop indexes memory with it (while (s[n]) n++; return n; on BPF and SASS prints void). With the option on, a LOAD whose address is the walked value plus a value the walk did not reach (a base pointer, constant offsets folded) is an index use and does not refuse the trial.
-- **When to flip:** Off by default: a scratch register that indexes a loop and is left in the return register of a void function becomes a return value too. Turn it on for BPF or SASS code, or any target whose return register is also the natural loop counter, when a counting function (strlen-like, a search that returns its index) prints void and its counter is declared with the return register's storage.
+- **When to flip:** Default bpf: on for eBPF, whose leaf functions keep their loop counter in r0, the return register; off elsewhere. Measured on BPF, SASS, x86-64 and Thumb-2 -O2 builds of the same C (the sweep corpus, gzip, libexpat, mirai, zlib and bzip2 objects; 172 BPF functions): on BPF it gains two returns, both real, and changes nothing else; on SASS it gains none and widens one int return to a register pair; on Thumb-2 it widens nine int returns to unsigned long long and gives one void function a return. Set on to apply it everywhere (x86-64 gained four real returns), off to keep upstream's onlyOpUse test on eBPF too.
 - **Where / provenance:** P4/output-prototype · kuna · new-analysis · unlace-865
 - **Example:** `option retindexuse on`
 

@@ -419,7 +419,7 @@ failures either way.
 
 (kuna) **A 32-bit Delphi PE composes the `:borlanddelphi` compiler field**
 (`crates/unlace-analysis/src/loadimage_object.rs (language_id_for)`, option
-`delphiabi on|off`, default off, carried as the `KUNA_DELPHIABI` loadtime
+`delphiabi on|off`, default on, carried as the `KUNA_DELPHIABI` loadtime
 environment gate, the `goabi` pattern). The vendored `x86delphi.cspec` makes
 Delphi's `register` convention the default model: the first three arguments
 in EAX, EDX and ECX, the rest on the stack, the callee popping them, EAX the

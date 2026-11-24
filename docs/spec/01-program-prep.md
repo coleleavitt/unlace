@@ -4342,10 +4342,11 @@ moves.
   about 740 functions, and member layouts for nine records. The type library
   is the same knowledge generated: every function a platform's C library
   declares, with its prototype, and every record with the size, alignment and
-  member offsets the platform's compiler gives it. One library is built in, for
-  an x86-64 Linux ELF dynamically linked against glibc or musl (1,447
-  functions, 347 records, 190 typedefs); on every other image the option does
-  nothing. `off` reads no library and `typelib <file>` reads a library file in
+  member offsets the platform's compiler gives it. Three libraries are built
+  in: one for an x86-64 Linux ELF dynamically linked against glibc or musl
+  (1,447 functions, 347 records, 190 typedefs), and one each for an x86 and an
+  x64 PE, the Windows API (7,962 and 8,111 functions); on every other image the
+  option does nothing. `off` reads no library and `typelib <file>` reads a library file in
   place of the built-in one, for an image of the target the file names.
 
   *Format.* A library is a text file. Three header lines name the format
@@ -4382,11 +4383,47 @@ moves.
   `sysinfo` and `sigset_t`, and functions glibc does not have. 1,374 of the
   1,447 functions are offered to a glibc image.
 
+  *Windows.* `scripts/typelib/gen_windows.py` writes
+  `crates/unlace-console/typelib/windows-x86.ktl` and `windows-x86_64.ktl`
+  from IDA 9.5's shipped Windows type libraries, read from the SQLite dump of
+  them (`ida-9.5-tils.sqlite`, one row per type, member and symbol as IDA prints
+  it): for x86 the Windows 10 SDK library `mssdk_win10.til` and the Native API
+  library `ntapi_win10.til`, for x64 `mssdk64_win10.til` and
+  `ntapi64_win10.til`, the SDK library winning a name both declare. The SDK
+  declares about 28,000 functions, most of them helpers no system DLL exports,
+  so a function is kept only when one of 41 core system DLLs exports its name
+  (kernel32, kernelbase, ntdll, user32, gdi32, advapi32, ws2_32, wininet,
+  winhttp, ole32, oleaut32, shell32, shlwapi, crypt32, bcrypt and the rest
+  listed in the script); the export names come from Wine 10.0's `.spec` files,
+  and no Wine text enters the library. Every type a kept prototype reaches is
+  kept with it: typedefs, enums as integers of their width, and records with the
+  member offsets IDA measured. A record whose members all sit at their natural
+  alignment takes that alignment and is padded to it (the dump states some x64
+  sizes without their tail padding); one whose offsets show a pack takes the
+  largest alignment they allow. IDA's spellings become C (`__int16` is
+  `short`, an anonymous `Outer::$<hash>` is `Outer___<hash>`, its anonymous
+  member `field_<index>`), a bit-field is a hole, and an entry naming a type C
+  cannot spell here (`__int128`, `_UNKNOWN`) is left out. Every x86 entry is
+  a `__stdcall` function that is not variadic, the default model of an x86
+  Windows compiler spec, so the keyword is dropped and a `__cdecl`,
+  `__fastcall` or `__thiscall` export (`wsprintfA`, `DbgPrint`) is left
+  out; x64 has one convention and keeps every entry. That is 7,962 functions,
+  1,696 records and 2,703 typedefs for x86 and 8,111, 1,702 and 2,703 for x64,
+  about 1.4 MB of text each. Every entry is offered (`*`). On a PE the
+  `win32sigs` table and every other source still declare first, so the
+  library declares the rest: `CreateFileW(LPCWSTR, DWORD, DWORD,
+  LPSECURITY_ATTRIBUTES, ...)`, `ReadFile(..., LPOVERLAPPED)`,
+  `NtCreateFile(..., POBJECT_ATTRIBUTES, PIO_STATUS_BLOCK, ...)`, with
+  `_SECURITY_ATTRIBUTES`, `_OVERLAPPED` and `_OBJECT_ATTRIBUTES` laid out for
+  the image's pointer width.
+
   *Reading.* `TypeLibPass` runs at load and records only what needs the object
   file: the image's target, whether it names glibc (`libc.so.6` or a `GLIBC_`
   version in `.dynstr`) or musl (an `ld-musl` interpreter or a `libc.musl-`
-  dependency), and the imported functions with their addresses. An image that
-  names neither C library yields nothing. The library is consulted at the
+  dependency), and the imported functions with their addresses. Any other image
+  is named by its format and machine (a PE is `windows x86` or
+  `windows x86_64`), which only the Windows libraries, a library file of that
+  target or an IDA type library serve. The library is consulted at the
   analysis commit, after every other pass has contributed, and it declares only
   an import no earlier source declared: a prototype from the tables above, from
   debug information, or from a demangled name stands. Reading a prototype

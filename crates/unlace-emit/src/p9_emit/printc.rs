@@ -5505,6 +5505,9 @@ impl PrintC {
         {
             db.add_comment(w.tp, &w.func_addr, &w.addr, w.text.as_bytes());
         }
+        for (addr, text) in crate::nonnullparamhint::hints(fd, arch) {
+            db.add_comment(ct::USER2, fad, &addr, text.as_bytes());
+        }
         // option_unplaced is off by default (C++ resetDefaultsPrintC).
         if let Err(_e) = self.commsorter.setup_function_list(tp, fd, &db, false) {
             // A dead op reaching the sorter is a C++ LowlevelError; degrade to

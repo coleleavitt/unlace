@@ -7999,6 +7999,25 @@ tier = "analysis"
 symptoms = "a CVF Fortran PE32 image keeps a .trace section but its routines print as sub_<addr>|CVF source file and line comments are missing"
 
 [[settable]]
+option = "gopcln"
+values = "on|lines|off"
+default = "off"
+destructive = false
+phase = "P1"
+subphase = "external-refinement"
+strength = "HARD"
+rewind = "P1"
+issue = "kuna-gopcln"
+summary = "Go images only: read each function's source position and inline tree from the pclntab the Go runtime keeps for stack traces (it survives stripping). The function gets a header comment with its source file and line, and the first instruction of each inlined call gets a comment naming the inlined callee (outermost first when inlining nests) and the call site's file:line. Reads the go1.16 and newer table layouts."
+use_when = "Off by default (byte-identical output). Set `on` to see where each Go function was written (`source: /src/app/main.go:9`) and which calls the compiler inlined (`inlined strings.Index at main.go:10`); the comments land in the C text and so in the `code` of the JSON document. Set `lines` to also comment every change of source position (`main.go:12`), the Go counterpart of `dwarf_lines`, opt-in for the same reason. The inline markers need `moduledata.gofunc` on go1.18 and later; without it only the source positions are written. Inert on non-Go images and on the go1.2-1.15 table layout."
+example = "option gopcln on"
+source_decompiler = "kuna"
+inspiration = "IDA golang plugin FUNCDATA_InlTree and GOLANG_IMPORT_LNNUMS; Go runtime pcvalue, funcfile and inlinedCall"
+change_kind = "analysis-enablement"
+tier = "analysis"
+symptoms = "a go function has no source file or line in the output|inlined go calls are invisible in the decompiled body|want each go statement annotated with its pclntab source line"
+
+[[settable]]
 option = "typevote"
 values = "on|off"
 default = "on"

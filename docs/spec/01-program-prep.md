@@ -6906,6 +6906,43 @@ every other binary's pass list is byte-identical to before the pass existed):
   when its functab lies in read-only data. The search runs only after every
   magic-based route has failed, so an image with an intact header never pays
   for it.
+- **Go source positions and inline tree** (`gopcln`, Go-detected binaries
+  only, default `off`; `crates/unlace-analysis/src/analyzers/pclntab/kuna_gopcln.rs`):
+  the same pclntab carries, per function, the tables the runtime builds a stack
+  trace from: `pcfile` and `pcln` (the source file and line of every PC), the
+  `PCDATA_InlTreeIndex` table (which inlined call a PC belongs to, -1 for
+  none) and the `FUNCDATA_InlTree` records (`runtime.inlinedCall`). Each
+  pcvalue table is decoded as `runtime.step` does: the value starts at -1,
+  each row adds a zigzag value delta and advances the PC by a delta in
+  instruction quanta, and a zero value delta after the first row ends the
+  table; rows past the function's end (the next functab entry) are dropped. A
+  file value indexes the function's compilation unit in `cutab`, whose entry
+  is the name's offset in `filetab`. The tables are located through
+  `moduledata` (its `cutab`, `filetab` and, from go1.18, `gofunc`, three
+  words after `types`), falling back to the header's `cuOffset` and
+  `filetabOffset` when no record is found. Three layouts are read: go1.16-1.17
+  (pointer-wide entry, funcdata as absolute pointers aligned to the pointer
+  size), go1.18-1.19 (32-bit entry offset, funcdata as offsets from `gofunc`,
+  20-byte inline records) and go1.20 on (`_func.startLine`, 16-byte inline
+  records `funcID, nameOff, parentPc, startLine`); the header magic picks
+  between the last two, or the build-info release when the magic was
+  overwritten. The go1.2 layout has no `cutab` and is not read. With `on`,
+  each function gets a header comment `source: <file>:<line>` (the line is
+  `startLine` on go1.20+, else the `pcln` value at the entry), and the first
+  instruction of each inline-tree index the function's PCs reach gets
+  `inlined <outer> > ... > <callee> at <file>:<line>`: the chain is followed
+  through the index at each record's `entry + parentPc` (the instruction whose
+  position is the call site, which on every layout also gives the parent), up
+  to 64 hops, and the call site is the source position at that instruction.
+  With `lines`, a second pass (`gopcln_lines`) also comments `<file>:<line>`
+  at each PC where the position changes, the Go counterpart of `dwarf_lines`.
+  Both passes read the option themselves, so a default run decodes nothing;
+  a function is read only when its entry lies in executable bytes, and at most
+  2,000,000 comments are written per image. The comments go through the same
+  comment database as `dwarf_lines`, so they appear in the C text and in the
+  `code` and `line_mappings` of the JSON document. Without `gofunc` on
+  go1.18+ (no `moduledata` and no `go:func.*` symbol) only the source
+  positions are written.
 - **MSVC RTTI** (`rtti`, PE-only, on by default and inert elsewhere;
   `crates/unlace-analysis/src/analyzers/rtti/mod.rs`): find the shared
   `type_info` vftable, byte-search back from each `.?A…@@` TypeDescriptor to its

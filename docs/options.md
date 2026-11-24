@@ -1006,6 +1006,9 @@ Three tiers:
 | go result parameters appear as inputs | [`godwarfsig`](#godwarfsig----on--off-default-on) |
 | a CVF Fortran PE32 image keeps a .trace section but its routines print as sub_<addr> | [`cvftrace`](#cvftrace----on--lines--off-default-on) |
 | CVF source file and line comments are missing | [`cvftrace`](#cvftrace----on--lines--off-default-on) |
+| a go function has no source file or line in the output | [`gopcln`](#gopcln----on--lines--off-default-off) |
+| inlined go calls are invisible in the decompiled body | [`gopcln`](#gopcln----on--lines--off-default-off) |
+| want each go statement annotated with its pclntab source line | [`gopcln`](#gopcln----on--lines--off-default-off) |
 | a rust panic call passes a bare address as its last argument | [`panicloc`](#panicloc----on--off-default-on) |
 | panic_bounds_check shows a hex constant instead of a source location | [`panicloc`](#panicloc----on--off-default-on) |
 | rust unwrap_failed or expect_failed location argument is an unnamed address | [`panicloc`](#panicloc----on--off-default-on) |
@@ -3461,6 +3464,14 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **When to flip:** On by default (`on`): on a PE32 i386 image that carries a `.trace` section, each traced routine that kuna already discovered as a `sub_<addr>` placeholder takes its Fortran name (`FROM_TRACE` instead of `sub_10001000`). It only renames: no function is created at a traced address, a function another source named (export, COFF symbol, PDB, FID, `--define-function`) keeps its name and gains no alias, a trace name already used by any function, data symbol or alias elsewhere is skipped, and a name the trace gives two addresses (or an address it gives two names) is dropped entirely. Names must be Fortran identifiers (letters, digits, `_`, `$`; at most 127 bytes) or the whole record is declined, as it is for an unknown opcode, a file index past its table, a routine outside the record's code range, a truncated record or an incremental-link type-11 record. When a size cap (16 MiB section, 65,536 file names, 262,144 facts) stops decoding, one `[kuna cvftrace]` note goes to stderr. Set `lines` to also emit each statement's `minimal.for:7` comment, the CVF counterpart of `dwarf_lines` and opt-in for the same reason. Inert everywhere else: nothing is read unless the container is PE, the machine is i386 and a `.trace` section exists. Set `off` to keep the generic names.
 - **Where / provenance:** P1/external-refinement · kuna · analysis-enablement · kuna-cvftrace
 - **Example:** `option cvftrace lines`
+
+### `gopcln` -- on | lines | off, default `off`
+
+- **Symptoms:** a go function has no source file or line in the output; inlined go calls are invisible in the decompiled body; want each go statement annotated with its pclntab source line.
+- **What it does:** Go images only: read each function's source position and inline tree from the pclntab the Go runtime keeps for stack traces (it survives stripping). The function gets a header comment with its source file and line, and the first instruction of each inlined call gets a comment naming the inlined callee (outermost first when inlining nests) and the call site's file:line. Reads the go1.16 and newer table layouts.
+- **When to flip:** Off by default (byte-identical output). Set `on` to see where each Go function was written (`source: /src/app/main.go:9`) and which calls the compiler inlined (`inlined strings.Index at main.go:10`); the comments land in the C text and so in the `code` of the JSON document. Set `lines` to also comment every change of source position (`main.go:12`), the Go counterpart of `dwarf_lines`, opt-in for the same reason. The inline markers need `moduledata.gofunc` on go1.18 and later; without it only the source positions are written. Inert on non-Go images and on the go1.2-1.15 table layout.
+- **Where / provenance:** P1/external-refinement · kuna · analysis-enablement · kuna-gopcln
+- **Example:** `option gopcln on`
 
 ### `panicloc` -- on | off, default `on`
 

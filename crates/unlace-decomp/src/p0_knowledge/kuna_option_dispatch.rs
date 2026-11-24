@@ -528,6 +528,7 @@ kuna_options! { self, p1;
     },
     "dwarf" => registered!(crate::kuna_analysisgates::Dwarf),
     "cvftrace" => registered!(crate::kuna_analysisgates::CvfTrace),
+    "gopcln" => registered!(crate::kuna_analysisgates::GoPcln),
     "dwarf_lines" => {
         registered!(crate::kuna_analysisgates::DwarfLines)
     },

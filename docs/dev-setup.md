@@ -107,13 +107,13 @@ cargo nextest run --workspace --exclude unlace-wasm --profile ci   # the workspa
 
 The parity target (`crates/unlace-harness/tests/parity.rs`) holds two tests:
 `datatests_match_the_baseline` runs `tests/datatests` against `docs/baseline.json` (PARITY OK,
-675/675 assertions) and `stage_tests_match_the_baseline` runs `tests/stages` against
-`docs/baseline-stages.json`. Each runs its corpus in-process through the harness's datatest
+675/675 assertions) and `stage_tests_pass` runs every `tests/stages` file, requiring each assertion to pass
+(the stage corpus has no baseline file). Each runs its corpus in-process through the harness's datatest
 runner and passes only on PARITY OK; on a failure the message lists the failing assertions,
 the file errors and the regressed keys. Filter with a name (`cargo test -p unlace-harness
 --test parity datatests`). The corpora need the compiled `.sla` files in `specs/`. Re-record a
 baseline only for a sanctioned change, with `UNLACE_BLESS=1` on the same command:
-`UNLACE_BLESS=1 cargo test -p unlace-harness --test parity datatests` (stages: `stage_tests`).
+`UNLACE_BLESS=1 cargo test -p unlace-harness --test parity datatests` (stages have no baseline to bless).
 It refuses while any assertion fails.
 
 A run fails on a baseline assertion that no longer passes (listed under `REGRESSED`), on any

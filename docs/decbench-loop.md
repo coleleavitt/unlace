@@ -201,7 +201,7 @@ unclassifiable ones for a human).
 
 This queue ran up to four output-changing PRs concurrently, and every one of them touches
 the same handful of hard-coded counters (`catalog_bytecompat.rs`, `phase_catalog.toml`,
-`docs/baseline-stages.json`, the `unlace_phases`
+the `unlace_phases`
 count asserts, `tests/stages/README.md`). Round 2 produced **three distinct failure
 shapes, and only one of them announced itself**:
 
@@ -215,8 +215,7 @@ The rules that fall out, and that #255 then executed cleanly:
 
 - **Derive every shared counter from a fresh capture and a green run on the rebased tree,
   never by arithmetic.** "Base + mine + theirs" is how you get `86` when the answer is
-  `87`. Re-capture `phase_catalog.toml`, re-record `docs/baseline-stages.json`
-  (`UNLACE_BLESS=1 cargo test -p unlace-harness --test parity stage_tests`), re-count the
+  `87`. Re-capture `phase_catalog.toml`, re-count the
   corpus files, regenerate `docs/options.md`. #255 verified even the byte-identical
   outcomes rather than assuming them.
 - **Diff every keep-both resolution against `main` and assert you removed nothing *and*

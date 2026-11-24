@@ -22,7 +22,7 @@ baseline (last night) and cannot gate a PR.
 | Suite | Tier | Where it runs now |
 |---|---|---|
 | `tests/datatests` (83 files, 675 assertions) vs `docs/baseline.json`: `unlace-harness --test parity datatests_match_the_baseline` | T1 | tests.yml `gates` (every PR and push) |
-| `tests/stages` (931 files) vs `docs/baseline-stages.json` and each TOML's own assertions: `stage_tests_match_the_baseline` | T2 | tests.yml `gates` |
+| `tests/stages` (every assertion must pass): `stage_tests_pass` | T2 | tests.yml `gates` |
 | `tests/golden/vectors` (opbehavior, float, addrsort, lift CSVs), `unlace-ghidra` differential harness | T1 (operator and lift level) | workspace suite; `gates` (unlace-ghidra) |
 | `tests/cli` (334 JSON probes, `scripts.repipe.clitests`) | T2 (CLI surface) | `gates` |
 | `unlace catalog --check`, `docs/options.md` freshness, `tools/check_spec.py`, `scripts.repipe.counters` | T2 (metadata consistency) | `gates` |

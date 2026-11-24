@@ -46,7 +46,7 @@ where `<PHASE>` ∈ analyze, design, code, build, test, docs, commit, pr. If you
    action/option, a flag on the architecture struct); keep them minimal, mark each with a
    `// (unlace)` comment.
 2. **Never modify `docs/baseline.json`.** The loop must keep `cargo test --release -p unlace-harness --test parity datatests`
-   at PARITY OK without re-pinning. (You DO regenerate `docs/baseline-stages.json` to add your new stage test.)
+   at PARITY OK without re-pinning. (A new stage test needs no baseline re-record: the stage corpus owns its assertions.)
 3. **ElementId** in the 4000+ range — grep the existing `unlace_*.rs` sources and `phases.toml`
    for the highest id already used and pick the next free one.
 4. **Decide first whether this is a FEATURE or a FIX.** A feature is a judgement call --

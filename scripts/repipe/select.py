@@ -55,7 +55,6 @@ PATH_RESOURCES = [
     ("crates/unlace-decomp/tests/catalog_bytecompat.rs", "counter:catalog"),
     ("crates/unlace-base/src/xml.rs", "counter:stages-corpus"),
     ("docs/options.md", "file:docs/options.md"),
-    ("docs/baseline-stages.json", "counter:stages-corpus"),
     ("tests/stages", "counter:stages-corpus"),
 ]
 

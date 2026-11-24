@@ -84,8 +84,7 @@ Each tier only builds on the ones below it; new behavior ships behind a named op
 - **Never re-pin `docs/baseline.json` to hide a regression** — fix the code or make it opt-in.
   Sanctioned re-pins (upstream sync / deliberate default change) say so in the message
   (`UNLACE_BLESS=1 cargo test -p unlace-harness --test parity`). A new stage test is a TOML file
-  (`tests/stages/README.md`): its own baseline, so `docs/baseline-stages.json` (XML files only, now none)
-  is not re-recorded; it needs no number bump: `unlace-base/src/xml.rs` pins no corpus count.
+  (`tests/stages/README.md`): it owns its assertions and has no baseline file, so nothing is re-recorded for it; `unlace-base/src/xml.rs` pins no corpus count.
 - **Edition 2024 and rustfmt**: the workspace is edition 2024; run `cargo fmt --all`
   (2024 style, `rustfmt.toml`) before committing. CI and the `fast` gate check it.
 - **IDA/Hex-Rays material is allowed** (since 2026-11-23): unlace has diverged from upstream unlace

@@ -6,8 +6,6 @@ script and assertions; XML comments become TOML comments in place. A file conver
 every construct it uses has an exact TOML spelling and nothing outside Markdown names it; the
 rest stay XML and are listed with the reason (--list). Converting a file also:
 
-- drops its assertions from docs/baseline-stages.json (a TOML test is its own baseline; the
-  remaining XML keys, including their @dupN suffixes, do not change),
 - rewrites Markdown references to it (tests/stages/<stem>.xml, and <stem>.xml in
   tests/stages/README.md) and references in Rust // comments.
 
@@ -38,7 +36,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 STAGES = ROOT / "tests" / "stages"
-BASELINE = ROOT / "docs" / "baseline-stages.json"
 README = STAGES / "README.md"
 
 # The characters a <stringmatch> regex line treats as operators (stagetoml::escape_literal).
@@ -351,7 +348,7 @@ def check_round_trip(m: dict, text: str) -> None:
     assert len(doc["image"].get("symbols", [])) == len(m["symbols"])
 
 
-# --- references and the baseline -------------------------------------------------------------
+# --- references -------------------------------------------------------------------------
 
 # Files whose mentions of a stage test are text (fixture provenance and sources, golden records,
 # CLI test notes, the option catalog's prose): the conversion rewrites them instead of keeping the
@@ -448,26 +445,6 @@ def corpus_names() -> list[tuple[str, str]]:
     return out
 
 
-def keys_of(files: set[str]) -> set[str]:
-    """The baseline keys (data:<name> / @dupN over the whole corpus) of assertions in files."""
-    seen: dict[str, int] = {}
-    keys = set()
-    for fname, name in corpus_names():
-        seen[name] = seen.get(name, 0) + 1
-        key = "data:" + name if seen[name] == 1 else "data:{} @dup{}".format(name, seen[name])
-        if fname in files:
-            keys.add(key)
-    return keys
-
-
-def drop_from_baseline(keys: set[str]) -> int:
-    doc = json.loads(BASELINE.read_text(encoding="utf-8"))
-    before = len(doc["passing"])
-    doc["passing"] = [k for k in doc["passing"] if k not in keys]
-    BASELINE.write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    return before - len(doc["passing"])
-
-
 # --- driver ----------------------------------------------------------------------------------
 
 def survey() -> tuple[list[Path], dict[Path, str]]:
@@ -498,12 +475,10 @@ def convert(paths: list[Path]) -> None:
     names = {p.with_suffix(".toml").name for p in converted}
     for p in converted:
         subprocess.run(["git", "rm", "-q", str(p.relative_to(ROOT))], cwd=ROOT, check=True)
-    dropped = drop_from_baseline(keys_of(names))
     subprocess.run(["git", "add", "--"] + [str(p.with_suffix(".toml").relative_to(ROOT)) for p in converted],
                    cwd=ROOT, check=True)
     changed = rewrite_references({p.stem for p in converted})
-    print("converted {} files; {} baseline keys dropped; references rewritten in {} files".format(
-        len(converted), dropped, len(changed)))
+    print("converted {} files; references rewritten in {} files".format(len(converted), len(changed)))
     for rel in changed:
         print("  " + rel)
 

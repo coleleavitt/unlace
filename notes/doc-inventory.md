@@ -27,7 +27,7 @@ hand), **evidence** (a dated measurement or report behind a decision; not update
 | Path | Class | Notes |
 |---|---|---|
 | `api.md` | current | the `unlace` library crate |
-| `baseline.json`, `baseline-stages.json` | generated | parity baselines (`UNLACE_BLESS=1`) |
+| `baseline.json` | generated | parity baseline (`UNLACE_BLESS=1`) |
 | `cli.md` | current | 354 KB CLI reference; its parity section now links to dev-setup. Candidate to shrink: per-command sections repeat each command's `--help` text |
 | `decbench-loop.md` | current | decbench campaign process |
 | `dev-setup.md` | current | owner of build, gates, CI, hooks |

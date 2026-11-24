@@ -3691,3 +3691,28 @@ expect = ["return v * (double)n;"]
 test = "elfroute_sparc64_float_two_args"
 address = "f2"
 expect = ["return v * w;"]
+
+# CUDA cubin ET_REL (EM_CUDA, ELF ABI 8, sm_80) routes to SASS:LE:64:SM80 (#776); CALL.ABS targets
+# take R_CUDA_ABS47_34 (#783).
+[[family]]
+name = "elfroute_sm80_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/sm80.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_sm80_o_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_sm80_o_lookup"
+address = "lookup"
+expect = ["g_tab["]
+xfail = "the .nv.global data symbols are not named: g_tab prints as 0x400880"
+
+[[family.function]]
+test = "elfroute_sm80_o_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+xfail = "the BRX jump table is the opaque sass_BRX op"

@@ -2972,8 +2972,10 @@ name = "evm_erc20_runtime"
 language = "EVM:BE:32:Cancun"
 base = "0"
 fixture = "crates/unlace-cli/tests/fixtures/evm/erc20_runtime_opt.bin"
+args = ["--option", "evmcalls", "off"]
 
-# Runtime code of `fixtures/evm/erc20.sol`'s Token (solc 0.8.24 --optimize). Jump-table recovery
+# Runtime code of `fixtures/evm/erc20.sol`'s Token (solc 0.8.24 --optimize), with evmcalls off so
+# the dispatcher still goes through jump-table recovery. Jump-table recovery
 # ran pow2select on 32-byte words, whose `1 << (size * 8 - 1)` overflowed (#687, fixed by #709).
 [[family.function]]
 test = "evm_erc20_runtime_dispatch"

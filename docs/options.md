@@ -4496,6 +4496,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **Where / provenance:** P9/naming-policy · angr · presentation-default · angr-duplicate-decls
 - **Example:** `option dedupvardecls off`
 
+### `renumberlocals` -- on | off, default `off`
+
+- **Symptoms:** synthetic locals print as v7, v12 with gaps where Hex-Rays would print v1, v2; a function's default-named locals are numbered by the naming pass rather than read as a compact list.
+- **What it does:** Renumber the synthetic locals the naming pass spells v<N> from v1 in the order the printer collects them, so a function's default-named locals read v1, v2, ... with no gaps, the way Hex-Rays numbers them. Names that are not v<N> (parameters, recovered names, stack names) are unchanged, and a spelling another identifier of the function already holds is skipped. The renamed spelling is applied to every declaration and body reference of the local.
+- **When to flip:** Off by default: renumbering is a readability choice, not a fix, so the default keeps the naming pass's numbering, which records the order the decompiler met each local. Turn it on to read a function whose synthetic locals have gaps (v3, v7, v12) as a compact v1..vK list. The order is the collection order of the declarations, which tracks first appearance but is not a body walk, and a synthetic name the declaration list drops keeps its spelling. The Hex-Rays sole-returned-local rule (result) and the argument-register carrier rule are not implemented yet.
+- **Where / provenance:** P9/naming-policy · unlace · readability · hexrays-renumber-locals
+- **Example:** `option renumberlocals on`
+
 ### `vexzeroupper` -- on | off, default `on`
 
 - **Symptoms:** avx code reads SUB6432(zmm0,0) instead of ymm0; a ymm or xmm argument shows as a 64-byte zmm local; vector values are widened to char[64].
